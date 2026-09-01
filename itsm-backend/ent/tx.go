@@ -242,6 +242,8 @@ type Tx struct {
 	User *UserClient
 	// Vendor is the client for interacting with the Vendor builders.
 	Vendor *VendorClient
+	// WorkItemNumberSequence is the client for interacting with the WorkItemNumberSequence builders.
+	WorkItemNumberSequence *WorkItemNumberSequenceClient
 	// WorkItemRelation is the client for interacting with the WorkItemRelation builders.
 	WorkItemRelation *WorkItemRelationClient
 	// Workflow is the client for interacting with the Workflow builders.
@@ -498,6 +500,7 @@ func (tx *Tx) init() {
 	tx.ToolInvocation = NewToolInvocationClient(tx.config)
 	tx.User = NewUserClient(tx.config)
 	tx.Vendor = NewVendorClient(tx.config)
+	tx.WorkItemNumberSequence = NewWorkItemNumberSequenceClient(tx.config)
 	tx.WorkItemRelation = NewWorkItemRelationClient(tx.config)
 	tx.Workflow = NewWorkflowClient(tx.config)
 	tx.WorkflowInstance = NewWorkflowInstanceClient(tx.config)

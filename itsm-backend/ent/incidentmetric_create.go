@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/incidentmetric"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type IncidentMetricCreate struct {
 	config
 	mutation *IncidentMetricMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetIncidentID sets the "incident_id" field.
@@ -248,6 +250,7 @@ func (_c *IncidentMetricCreate) createSpec() (*IncidentMetric, *sqlgraph.CreateS
 		_node = &IncidentMetric{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(incidentmetric.Table, sqlgraph.NewFieldSpec(incidentmetric.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.MetricType(); ok {
 		_spec.SetField(incidentmetric.FieldMetricType, field.TypeString, value)
 		_node.MetricType = value
@@ -308,11 +311,485 @@ func (_c *IncidentMetricCreate) createSpec() (*IncidentMetric, *sqlgraph.CreateS
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.IncidentMetric.Create().
+//		SetIncidentID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.IncidentMetricUpsert) {
+//			SetIncidentID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *IncidentMetricCreate) OnConflict(opts ...sql.ConflictOption) *IncidentMetricUpsertOne {
+	_c.conflict = opts
+	return &IncidentMetricUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.IncidentMetric.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *IncidentMetricCreate) OnConflictColumns(columns ...string) *IncidentMetricUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &IncidentMetricUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// IncidentMetricUpsertOne is the builder for "upsert"-ing
+	//  one IncidentMetric node.
+	IncidentMetricUpsertOne struct {
+		create *IncidentMetricCreate
+	}
+
+	// IncidentMetricUpsert is the "OnConflict" setter.
+	IncidentMetricUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetIncidentID sets the "incident_id" field.
+func (u *IncidentMetricUpsert) SetIncidentID(v int) *IncidentMetricUpsert {
+	u.Set(incidentmetric.FieldIncidentID, v)
+	return u
+}
+
+// UpdateIncidentID sets the "incident_id" field to the value that was provided on create.
+func (u *IncidentMetricUpsert) UpdateIncidentID() *IncidentMetricUpsert {
+	u.SetExcluded(incidentmetric.FieldIncidentID)
+	return u
+}
+
+// SetMetricType sets the "metric_type" field.
+func (u *IncidentMetricUpsert) SetMetricType(v string) *IncidentMetricUpsert {
+	u.Set(incidentmetric.FieldMetricType, v)
+	return u
+}
+
+// UpdateMetricType sets the "metric_type" field to the value that was provided on create.
+func (u *IncidentMetricUpsert) UpdateMetricType() *IncidentMetricUpsert {
+	u.SetExcluded(incidentmetric.FieldMetricType)
+	return u
+}
+
+// SetMetricName sets the "metric_name" field.
+func (u *IncidentMetricUpsert) SetMetricName(v string) *IncidentMetricUpsert {
+	u.Set(incidentmetric.FieldMetricName, v)
+	return u
+}
+
+// UpdateMetricName sets the "metric_name" field to the value that was provided on create.
+func (u *IncidentMetricUpsert) UpdateMetricName() *IncidentMetricUpsert {
+	u.SetExcluded(incidentmetric.FieldMetricName)
+	return u
+}
+
+// SetMetricValue sets the "metric_value" field.
+func (u *IncidentMetricUpsert) SetMetricValue(v float64) *IncidentMetricUpsert {
+	u.Set(incidentmetric.FieldMetricValue, v)
+	return u
+}
+
+// UpdateMetricValue sets the "metric_value" field to the value that was provided on create.
+func (u *IncidentMetricUpsert) UpdateMetricValue() *IncidentMetricUpsert {
+	u.SetExcluded(incidentmetric.FieldMetricValue)
+	return u
+}
+
+// AddMetricValue adds v to the "metric_value" field.
+func (u *IncidentMetricUpsert) AddMetricValue(v float64) *IncidentMetricUpsert {
+	u.Add(incidentmetric.FieldMetricValue, v)
+	return u
+}
+
+// SetUnit sets the "unit" field.
+func (u *IncidentMetricUpsert) SetUnit(v string) *IncidentMetricUpsert {
+	u.Set(incidentmetric.FieldUnit, v)
+	return u
+}
+
+// UpdateUnit sets the "unit" field to the value that was provided on create.
+func (u *IncidentMetricUpsert) UpdateUnit() *IncidentMetricUpsert {
+	u.SetExcluded(incidentmetric.FieldUnit)
+	return u
+}
+
+// ClearUnit clears the value of the "unit" field.
+func (u *IncidentMetricUpsert) ClearUnit() *IncidentMetricUpsert {
+	u.SetNull(incidentmetric.FieldUnit)
+	return u
+}
+
+// SetMeasuredAt sets the "measured_at" field.
+func (u *IncidentMetricUpsert) SetMeasuredAt(v time.Time) *IncidentMetricUpsert {
+	u.Set(incidentmetric.FieldMeasuredAt, v)
+	return u
+}
+
+// UpdateMeasuredAt sets the "measured_at" field to the value that was provided on create.
+func (u *IncidentMetricUpsert) UpdateMeasuredAt() *IncidentMetricUpsert {
+	u.SetExcluded(incidentmetric.FieldMeasuredAt)
+	return u
+}
+
+// SetTags sets the "tags" field.
+func (u *IncidentMetricUpsert) SetTags(v map[string]string) *IncidentMetricUpsert {
+	u.Set(incidentmetric.FieldTags, v)
+	return u
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *IncidentMetricUpsert) UpdateTags() *IncidentMetricUpsert {
+	u.SetExcluded(incidentmetric.FieldTags)
+	return u
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *IncidentMetricUpsert) ClearTags() *IncidentMetricUpsert {
+	u.SetNull(incidentmetric.FieldTags)
+	return u
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *IncidentMetricUpsert) SetMetadata(v map[string]interface{}) *IncidentMetricUpsert {
+	u.Set(incidentmetric.FieldMetadata, v)
+	return u
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *IncidentMetricUpsert) UpdateMetadata() *IncidentMetricUpsert {
+	u.SetExcluded(incidentmetric.FieldMetadata)
+	return u
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *IncidentMetricUpsert) ClearMetadata() *IncidentMetricUpsert {
+	u.SetNull(incidentmetric.FieldMetadata)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *IncidentMetricUpsert) SetTenantID(v int) *IncidentMetricUpsert {
+	u.Set(incidentmetric.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *IncidentMetricUpsert) UpdateTenantID() *IncidentMetricUpsert {
+	u.SetExcluded(incidentmetric.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *IncidentMetricUpsert) AddTenantID(v int) *IncidentMetricUpsert {
+	u.Add(incidentmetric.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *IncidentMetricUpsert) SetCreatedAt(v time.Time) *IncidentMetricUpsert {
+	u.Set(incidentmetric.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *IncidentMetricUpsert) UpdateCreatedAt() *IncidentMetricUpsert {
+	u.SetExcluded(incidentmetric.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *IncidentMetricUpsert) SetUpdatedAt(v time.Time) *IncidentMetricUpsert {
+	u.Set(incidentmetric.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *IncidentMetricUpsert) UpdateUpdatedAt() *IncidentMetricUpsert {
+	u.SetExcluded(incidentmetric.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.IncidentMetric.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *IncidentMetricUpsertOne) UpdateNewValues() *IncidentMetricUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.IncidentMetric.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *IncidentMetricUpsertOne) Ignore() *IncidentMetricUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *IncidentMetricUpsertOne) DoNothing() *IncidentMetricUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the IncidentMetricCreate.OnConflict
+// documentation for more info.
+func (u *IncidentMetricUpsertOne) Update(set func(*IncidentMetricUpsert)) *IncidentMetricUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&IncidentMetricUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetIncidentID sets the "incident_id" field.
+func (u *IncidentMetricUpsertOne) SetIncidentID(v int) *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetIncidentID(v)
+	})
+}
+
+// UpdateIncidentID sets the "incident_id" field to the value that was provided on create.
+func (u *IncidentMetricUpsertOne) UpdateIncidentID() *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateIncidentID()
+	})
+}
+
+// SetMetricType sets the "metric_type" field.
+func (u *IncidentMetricUpsertOne) SetMetricType(v string) *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetMetricType(v)
+	})
+}
+
+// UpdateMetricType sets the "metric_type" field to the value that was provided on create.
+func (u *IncidentMetricUpsertOne) UpdateMetricType() *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateMetricType()
+	})
+}
+
+// SetMetricName sets the "metric_name" field.
+func (u *IncidentMetricUpsertOne) SetMetricName(v string) *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetMetricName(v)
+	})
+}
+
+// UpdateMetricName sets the "metric_name" field to the value that was provided on create.
+func (u *IncidentMetricUpsertOne) UpdateMetricName() *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateMetricName()
+	})
+}
+
+// SetMetricValue sets the "metric_value" field.
+func (u *IncidentMetricUpsertOne) SetMetricValue(v float64) *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetMetricValue(v)
+	})
+}
+
+// AddMetricValue adds v to the "metric_value" field.
+func (u *IncidentMetricUpsertOne) AddMetricValue(v float64) *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.AddMetricValue(v)
+	})
+}
+
+// UpdateMetricValue sets the "metric_value" field to the value that was provided on create.
+func (u *IncidentMetricUpsertOne) UpdateMetricValue() *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateMetricValue()
+	})
+}
+
+// SetUnit sets the "unit" field.
+func (u *IncidentMetricUpsertOne) SetUnit(v string) *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetUnit(v)
+	})
+}
+
+// UpdateUnit sets the "unit" field to the value that was provided on create.
+func (u *IncidentMetricUpsertOne) UpdateUnit() *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateUnit()
+	})
+}
+
+// ClearUnit clears the value of the "unit" field.
+func (u *IncidentMetricUpsertOne) ClearUnit() *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.ClearUnit()
+	})
+}
+
+// SetMeasuredAt sets the "measured_at" field.
+func (u *IncidentMetricUpsertOne) SetMeasuredAt(v time.Time) *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetMeasuredAt(v)
+	})
+}
+
+// UpdateMeasuredAt sets the "measured_at" field to the value that was provided on create.
+func (u *IncidentMetricUpsertOne) UpdateMeasuredAt() *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateMeasuredAt()
+	})
+}
+
+// SetTags sets the "tags" field.
+func (u *IncidentMetricUpsertOne) SetTags(v map[string]string) *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetTags(v)
+	})
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *IncidentMetricUpsertOne) UpdateTags() *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateTags()
+	})
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *IncidentMetricUpsertOne) ClearTags() *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.ClearTags()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *IncidentMetricUpsertOne) SetMetadata(v map[string]interface{}) *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *IncidentMetricUpsertOne) UpdateMetadata() *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *IncidentMetricUpsertOne) ClearMetadata() *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *IncidentMetricUpsertOne) SetTenantID(v int) *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *IncidentMetricUpsertOne) AddTenantID(v int) *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *IncidentMetricUpsertOne) UpdateTenantID() *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *IncidentMetricUpsertOne) SetCreatedAt(v time.Time) *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *IncidentMetricUpsertOne) UpdateCreatedAt() *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *IncidentMetricUpsertOne) SetUpdatedAt(v time.Time) *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *IncidentMetricUpsertOne) UpdateUpdatedAt() *IncidentMetricUpsertOne {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *IncidentMetricUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for IncidentMetricCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *IncidentMetricUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *IncidentMetricUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *IncidentMetricUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // IncidentMetricCreateBulk is the builder for creating many IncidentMetric entities in bulk.
 type IncidentMetricCreateBulk struct {
 	config
 	err      error
 	builders []*IncidentMetricCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the IncidentMetric entities in the database.
@@ -342,6 +819,7 @@ func (_c *IncidentMetricCreateBulk) Save(ctx context.Context) ([]*IncidentMetric
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -392,6 +870,299 @@ func (_c *IncidentMetricCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *IncidentMetricCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.IncidentMetric.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.IncidentMetricUpsert) {
+//			SetIncidentID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *IncidentMetricCreateBulk) OnConflict(opts ...sql.ConflictOption) *IncidentMetricUpsertBulk {
+	_c.conflict = opts
+	return &IncidentMetricUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.IncidentMetric.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *IncidentMetricCreateBulk) OnConflictColumns(columns ...string) *IncidentMetricUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &IncidentMetricUpsertBulk{
+		create: _c,
+	}
+}
+
+// IncidentMetricUpsertBulk is the builder for "upsert"-ing
+// a bulk of IncidentMetric nodes.
+type IncidentMetricUpsertBulk struct {
+	create *IncidentMetricCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.IncidentMetric.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *IncidentMetricUpsertBulk) UpdateNewValues() *IncidentMetricUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.IncidentMetric.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *IncidentMetricUpsertBulk) Ignore() *IncidentMetricUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *IncidentMetricUpsertBulk) DoNothing() *IncidentMetricUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the IncidentMetricCreateBulk.OnConflict
+// documentation for more info.
+func (u *IncidentMetricUpsertBulk) Update(set func(*IncidentMetricUpsert)) *IncidentMetricUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&IncidentMetricUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetIncidentID sets the "incident_id" field.
+func (u *IncidentMetricUpsertBulk) SetIncidentID(v int) *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetIncidentID(v)
+	})
+}
+
+// UpdateIncidentID sets the "incident_id" field to the value that was provided on create.
+func (u *IncidentMetricUpsertBulk) UpdateIncidentID() *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateIncidentID()
+	})
+}
+
+// SetMetricType sets the "metric_type" field.
+func (u *IncidentMetricUpsertBulk) SetMetricType(v string) *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetMetricType(v)
+	})
+}
+
+// UpdateMetricType sets the "metric_type" field to the value that was provided on create.
+func (u *IncidentMetricUpsertBulk) UpdateMetricType() *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateMetricType()
+	})
+}
+
+// SetMetricName sets the "metric_name" field.
+func (u *IncidentMetricUpsertBulk) SetMetricName(v string) *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetMetricName(v)
+	})
+}
+
+// UpdateMetricName sets the "metric_name" field to the value that was provided on create.
+func (u *IncidentMetricUpsertBulk) UpdateMetricName() *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateMetricName()
+	})
+}
+
+// SetMetricValue sets the "metric_value" field.
+func (u *IncidentMetricUpsertBulk) SetMetricValue(v float64) *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetMetricValue(v)
+	})
+}
+
+// AddMetricValue adds v to the "metric_value" field.
+func (u *IncidentMetricUpsertBulk) AddMetricValue(v float64) *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.AddMetricValue(v)
+	})
+}
+
+// UpdateMetricValue sets the "metric_value" field to the value that was provided on create.
+func (u *IncidentMetricUpsertBulk) UpdateMetricValue() *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateMetricValue()
+	})
+}
+
+// SetUnit sets the "unit" field.
+func (u *IncidentMetricUpsertBulk) SetUnit(v string) *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetUnit(v)
+	})
+}
+
+// UpdateUnit sets the "unit" field to the value that was provided on create.
+func (u *IncidentMetricUpsertBulk) UpdateUnit() *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateUnit()
+	})
+}
+
+// ClearUnit clears the value of the "unit" field.
+func (u *IncidentMetricUpsertBulk) ClearUnit() *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.ClearUnit()
+	})
+}
+
+// SetMeasuredAt sets the "measured_at" field.
+func (u *IncidentMetricUpsertBulk) SetMeasuredAt(v time.Time) *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetMeasuredAt(v)
+	})
+}
+
+// UpdateMeasuredAt sets the "measured_at" field to the value that was provided on create.
+func (u *IncidentMetricUpsertBulk) UpdateMeasuredAt() *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateMeasuredAt()
+	})
+}
+
+// SetTags sets the "tags" field.
+func (u *IncidentMetricUpsertBulk) SetTags(v map[string]string) *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetTags(v)
+	})
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *IncidentMetricUpsertBulk) UpdateTags() *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateTags()
+	})
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *IncidentMetricUpsertBulk) ClearTags() *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.ClearTags()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *IncidentMetricUpsertBulk) SetMetadata(v map[string]interface{}) *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *IncidentMetricUpsertBulk) UpdateMetadata() *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *IncidentMetricUpsertBulk) ClearMetadata() *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *IncidentMetricUpsertBulk) SetTenantID(v int) *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *IncidentMetricUpsertBulk) AddTenantID(v int) *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *IncidentMetricUpsertBulk) UpdateTenantID() *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *IncidentMetricUpsertBulk) SetCreatedAt(v time.Time) *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *IncidentMetricUpsertBulk) UpdateCreatedAt() *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *IncidentMetricUpsertBulk) SetUpdatedAt(v time.Time) *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *IncidentMetricUpsertBulk) UpdateUpdatedAt() *IncidentMetricUpsertBulk {
+	return u.Update(func(s *IncidentMetricUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *IncidentMetricUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the IncidentMetricCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for IncidentMetricCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *IncidentMetricUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/servicecatalog"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type ServiceCatalogCreate struct {
 	config
 	mutation *ServiceCatalogMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -488,6 +490,7 @@ func (_c *ServiceCatalogCreate) createSpec() (*ServiceCatalog, *sqlgraph.CreateS
 		_node = &ServiceCatalog{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(servicecatalog.Table, sqlgraph.NewFieldSpec(servicecatalog.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(servicecatalog.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -595,11 +598,1122 @@ func (_c *ServiceCatalogCreate) createSpec() (*ServiceCatalog, *sqlgraph.CreateS
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ServiceCatalog.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ServiceCatalogUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ServiceCatalogCreate) OnConflict(opts ...sql.ConflictOption) *ServiceCatalogUpsertOne {
+	_c.conflict = opts
+	return &ServiceCatalogUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ServiceCatalog.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ServiceCatalogCreate) OnConflictColumns(columns ...string) *ServiceCatalogUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ServiceCatalogUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ServiceCatalogUpsertOne is the builder for "upsert"-ing
+	//  one ServiceCatalog node.
+	ServiceCatalogUpsertOne struct {
+		create *ServiceCatalogCreate
+	}
+
+	// ServiceCatalogUpsert is the "OnConflict" setter.
+	ServiceCatalogUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *ServiceCatalogUpsert) SetName(v string) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateName() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldName)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *ServiceCatalogUpsert) SetDescription(v string) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateDescription() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ServiceCatalogUpsert) ClearDescription() *ServiceCatalogUpsert {
+	u.SetNull(servicecatalog.FieldDescription)
+	return u
+}
+
+// SetCategory sets the "category" field.
+func (u *ServiceCatalogUpsert) SetCategory(v string) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldCategory, v)
+	return u
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateCategory() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldCategory)
+	return u
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *ServiceCatalogUpsert) ClearCategory() *ServiceCatalogUpsert {
+	u.SetNull(servicecatalog.FieldCategory)
+	return u
+}
+
+// SetIcon sets the "icon" field.
+func (u *ServiceCatalogUpsert) SetIcon(v string) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldIcon, v)
+	return u
+}
+
+// UpdateIcon sets the "icon" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateIcon() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldIcon)
+	return u
+}
+
+// ClearIcon clears the value of the "icon" field.
+func (u *ServiceCatalogUpsert) ClearIcon() *ServiceCatalogUpsert {
+	u.SetNull(servicecatalog.FieldIcon)
+	return u
+}
+
+// SetServiceType sets the "service_type" field.
+func (u *ServiceCatalogUpsert) SetServiceType(v string) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldServiceType, v)
+	return u
+}
+
+// UpdateServiceType sets the "service_type" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateServiceType() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldServiceType)
+	return u
+}
+
+// SetItsmType sets the "itsm_type" field.
+func (u *ServiceCatalogUpsert) SetItsmType(v string) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldItsmType, v)
+	return u
+}
+
+// UpdateItsmType sets the "itsm_type" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateItsmType() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldItsmType)
+	return u
+}
+
+// SetTargetClass sets the "target_class" field.
+func (u *ServiceCatalogUpsert) SetTargetClass(v string) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldTargetClass, v)
+	return u
+}
+
+// UpdateTargetClass sets the "target_class" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateTargetClass() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldTargetClass)
+	return u
+}
+
+// ClearTargetClass clears the value of the "target_class" field.
+func (u *ServiceCatalogUpsert) ClearTargetClass() *ServiceCatalogUpsert {
+	u.SetNull(servicecatalog.FieldTargetClass)
+	return u
+}
+
+// SetPrice sets the "price" field.
+func (u *ServiceCatalogUpsert) SetPrice(v float64) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldPrice, v)
+	return u
+}
+
+// UpdatePrice sets the "price" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdatePrice() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldPrice)
+	return u
+}
+
+// AddPrice adds v to the "price" field.
+func (u *ServiceCatalogUpsert) AddPrice(v float64) *ServiceCatalogUpsert {
+	u.Add(servicecatalog.FieldPrice, v)
+	return u
+}
+
+// ClearPrice clears the value of the "price" field.
+func (u *ServiceCatalogUpsert) ClearPrice() *ServiceCatalogUpsert {
+	u.SetNull(servicecatalog.FieldPrice)
+	return u
+}
+
+// SetDeliveryTime sets the "delivery_time" field.
+func (u *ServiceCatalogUpsert) SetDeliveryTime(v int) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldDeliveryTime, v)
+	return u
+}
+
+// UpdateDeliveryTime sets the "delivery_time" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateDeliveryTime() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldDeliveryTime)
+	return u
+}
+
+// AddDeliveryTime adds v to the "delivery_time" field.
+func (u *ServiceCatalogUpsert) AddDeliveryTime(v int) *ServiceCatalogUpsert {
+	u.Add(servicecatalog.FieldDeliveryTime, v)
+	return u
+}
+
+// ClearDeliveryTime clears the value of the "delivery_time" field.
+func (u *ServiceCatalogUpsert) ClearDeliveryTime() *ServiceCatalogUpsert {
+	u.SetNull(servicecatalog.FieldDeliveryTime)
+	return u
+}
+
+// SetUnit sets the "unit" field.
+func (u *ServiceCatalogUpsert) SetUnit(v string) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldUnit, v)
+	return u
+}
+
+// UpdateUnit sets the "unit" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateUnit() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldUnit)
+	return u
+}
+
+// ClearUnit clears the value of the "unit" field.
+func (u *ServiceCatalogUpsert) ClearUnit() *ServiceCatalogUpsert {
+	u.SetNull(servicecatalog.FieldUnit)
+	return u
+}
+
+// SetRequiresApproval sets the "requires_approval" field.
+func (u *ServiceCatalogUpsert) SetRequiresApproval(v bool) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldRequiresApproval, v)
+	return u
+}
+
+// UpdateRequiresApproval sets the "requires_approval" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateRequiresApproval() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldRequiresApproval)
+	return u
+}
+
+// SetApprovalLevel sets the "approval_level" field.
+func (u *ServiceCatalogUpsert) SetApprovalLevel(v int) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldApprovalLevel, v)
+	return u
+}
+
+// UpdateApprovalLevel sets the "approval_level" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateApprovalLevel() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldApprovalLevel)
+	return u
+}
+
+// AddApprovalLevel adds v to the "approval_level" field.
+func (u *ServiceCatalogUpsert) AddApprovalLevel(v int) *ServiceCatalogUpsert {
+	u.Add(servicecatalog.FieldApprovalLevel, v)
+	return u
+}
+
+// SetApprovers sets the "approvers" field.
+func (u *ServiceCatalogUpsert) SetApprovers(v []int) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldApprovers, v)
+	return u
+}
+
+// UpdateApprovers sets the "approvers" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateApprovers() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldApprovers)
+	return u
+}
+
+// ClearApprovers clears the value of the "approvers" field.
+func (u *ServiceCatalogUpsert) ClearApprovers() *ServiceCatalogUpsert {
+	u.SetNull(servicecatalog.FieldApprovers)
+	return u
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ServiceCatalogUpsert) SetProcessDefinitionKey(v string) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldProcessDefinitionKey, v)
+	return u
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateProcessDefinitionKey() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldProcessDefinitionKey)
+	return u
+}
+
+// ClearProcessDefinitionKey clears the value of the "process_definition_key" field.
+func (u *ServiceCatalogUpsert) ClearProcessDefinitionKey() *ServiceCatalogUpsert {
+	u.SetNull(servicecatalog.FieldProcessDefinitionKey)
+	return u
+}
+
+// SetSLAResponseTime sets the "sla_response_time" field.
+func (u *ServiceCatalogUpsert) SetSLAResponseTime(v int) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldSLAResponseTime, v)
+	return u
+}
+
+// UpdateSLAResponseTime sets the "sla_response_time" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateSLAResponseTime() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldSLAResponseTime)
+	return u
+}
+
+// AddSLAResponseTime adds v to the "sla_response_time" field.
+func (u *ServiceCatalogUpsert) AddSLAResponseTime(v int) *ServiceCatalogUpsert {
+	u.Add(servicecatalog.FieldSLAResponseTime, v)
+	return u
+}
+
+// ClearSLAResponseTime clears the value of the "sla_response_time" field.
+func (u *ServiceCatalogUpsert) ClearSLAResponseTime() *ServiceCatalogUpsert {
+	u.SetNull(servicecatalog.FieldSLAResponseTime)
+	return u
+}
+
+// SetSLAResolutionTime sets the "sla_resolution_time" field.
+func (u *ServiceCatalogUpsert) SetSLAResolutionTime(v int) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldSLAResolutionTime, v)
+	return u
+}
+
+// UpdateSLAResolutionTime sets the "sla_resolution_time" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateSLAResolutionTime() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldSLAResolutionTime)
+	return u
+}
+
+// AddSLAResolutionTime adds v to the "sla_resolution_time" field.
+func (u *ServiceCatalogUpsert) AddSLAResolutionTime(v int) *ServiceCatalogUpsert {
+	u.Add(servicecatalog.FieldSLAResolutionTime, v)
+	return u
+}
+
+// ClearSLAResolutionTime clears the value of the "sla_resolution_time" field.
+func (u *ServiceCatalogUpsert) ClearSLAResolutionTime() *ServiceCatalogUpsert {
+	u.SetNull(servicecatalog.FieldSLAResolutionTime)
+	return u
+}
+
+// SetCiTypeID sets the "ci_type_id" field.
+func (u *ServiceCatalogUpsert) SetCiTypeID(v int) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldCiTypeID, v)
+	return u
+}
+
+// UpdateCiTypeID sets the "ci_type_id" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateCiTypeID() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldCiTypeID)
+	return u
+}
+
+// AddCiTypeID adds v to the "ci_type_id" field.
+func (u *ServiceCatalogUpsert) AddCiTypeID(v int) *ServiceCatalogUpsert {
+	u.Add(servicecatalog.FieldCiTypeID, v)
+	return u
+}
+
+// ClearCiTypeID clears the value of the "ci_type_id" field.
+func (u *ServiceCatalogUpsert) ClearCiTypeID() *ServiceCatalogUpsert {
+	u.SetNull(servicecatalog.FieldCiTypeID)
+	return u
+}
+
+// SetCloudServiceID sets the "cloud_service_id" field.
+func (u *ServiceCatalogUpsert) SetCloudServiceID(v int) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldCloudServiceID, v)
+	return u
+}
+
+// UpdateCloudServiceID sets the "cloud_service_id" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateCloudServiceID() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldCloudServiceID)
+	return u
+}
+
+// AddCloudServiceID adds v to the "cloud_service_id" field.
+func (u *ServiceCatalogUpsert) AddCloudServiceID(v int) *ServiceCatalogUpsert {
+	u.Add(servicecatalog.FieldCloudServiceID, v)
+	return u
+}
+
+// ClearCloudServiceID clears the value of the "cloud_service_id" field.
+func (u *ServiceCatalogUpsert) ClearCloudServiceID() *ServiceCatalogUpsert {
+	u.SetNull(servicecatalog.FieldCloudServiceID)
+	return u
+}
+
+// SetAvailableRegions sets the "available_regions" field.
+func (u *ServiceCatalogUpsert) SetAvailableRegions(v []string) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldAvailableRegions, v)
+	return u
+}
+
+// UpdateAvailableRegions sets the "available_regions" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateAvailableRegions() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldAvailableRegions)
+	return u
+}
+
+// ClearAvailableRegions clears the value of the "available_regions" field.
+func (u *ServiceCatalogUpsert) ClearAvailableRegions() *ServiceCatalogUpsert {
+	u.SetNull(servicecatalog.FieldAvailableRegions)
+	return u
+}
+
+// SetAvailableSpecs sets the "available_specs" field.
+func (u *ServiceCatalogUpsert) SetAvailableSpecs(v []string) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldAvailableSpecs, v)
+	return u
+}
+
+// UpdateAvailableSpecs sets the "available_specs" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateAvailableSpecs() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldAvailableSpecs)
+	return u
+}
+
+// ClearAvailableSpecs clears the value of the "available_specs" field.
+func (u *ServiceCatalogUpsert) ClearAvailableSpecs() *ServiceCatalogUpsert {
+	u.SetNull(servicecatalog.FieldAvailableSpecs)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *ServiceCatalogUpsert) SetStatus(v string) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateStatus() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldStatus)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ServiceCatalogUpsert) SetTenantID(v int) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateTenantID() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ServiceCatalogUpsert) AddTenantID(v int) *ServiceCatalogUpsert {
+	u.Add(servicecatalog.FieldTenantID, v)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *ServiceCatalogUpsert) SetIsActive(v bool) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateIsActive() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldIsActive)
+	return u
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (u *ServiceCatalogUpsert) SetSortOrder(v int) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldSortOrder, v)
+	return u
+}
+
+// UpdateSortOrder sets the "sort_order" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateSortOrder() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldSortOrder)
+	return u
+}
+
+// AddSortOrder adds v to the "sort_order" field.
+func (u *ServiceCatalogUpsert) AddSortOrder(v int) *ServiceCatalogUpsert {
+	u.Add(servicecatalog.FieldSortOrder, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ServiceCatalogUpsert) SetCreatedAt(v time.Time) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateCreatedAt() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ServiceCatalogUpsert) SetUpdatedAt(v time.Time) *ServiceCatalogUpsert {
+	u.Set(servicecatalog.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ServiceCatalogUpsert) UpdateUpdatedAt() *ServiceCatalogUpsert {
+	u.SetExcluded(servicecatalog.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ServiceCatalog.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ServiceCatalogUpsertOne) UpdateNewValues() *ServiceCatalogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ServiceCatalog.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ServiceCatalogUpsertOne) Ignore() *ServiceCatalogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ServiceCatalogUpsertOne) DoNothing() *ServiceCatalogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ServiceCatalogCreate.OnConflict
+// documentation for more info.
+func (u *ServiceCatalogUpsertOne) Update(set func(*ServiceCatalogUpsert)) *ServiceCatalogUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ServiceCatalogUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *ServiceCatalogUpsertOne) SetName(v string) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateName() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ServiceCatalogUpsertOne) SetDescription(v string) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateDescription() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ServiceCatalogUpsertOne) ClearDescription() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *ServiceCatalogUpsertOne) SetCategory(v string) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateCategory() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *ServiceCatalogUpsertOne) ClearCategory() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetIcon sets the "icon" field.
+func (u *ServiceCatalogUpsertOne) SetIcon(v string) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetIcon(v)
+	})
+}
+
+// UpdateIcon sets the "icon" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateIcon() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateIcon()
+	})
+}
+
+// ClearIcon clears the value of the "icon" field.
+func (u *ServiceCatalogUpsertOne) ClearIcon() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearIcon()
+	})
+}
+
+// SetServiceType sets the "service_type" field.
+func (u *ServiceCatalogUpsertOne) SetServiceType(v string) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetServiceType(v)
+	})
+}
+
+// UpdateServiceType sets the "service_type" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateServiceType() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateServiceType()
+	})
+}
+
+// SetItsmType sets the "itsm_type" field.
+func (u *ServiceCatalogUpsertOne) SetItsmType(v string) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetItsmType(v)
+	})
+}
+
+// UpdateItsmType sets the "itsm_type" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateItsmType() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateItsmType()
+	})
+}
+
+// SetTargetClass sets the "target_class" field.
+func (u *ServiceCatalogUpsertOne) SetTargetClass(v string) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetTargetClass(v)
+	})
+}
+
+// UpdateTargetClass sets the "target_class" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateTargetClass() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateTargetClass()
+	})
+}
+
+// ClearTargetClass clears the value of the "target_class" field.
+func (u *ServiceCatalogUpsertOne) ClearTargetClass() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearTargetClass()
+	})
+}
+
+// SetPrice sets the "price" field.
+func (u *ServiceCatalogUpsertOne) SetPrice(v float64) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetPrice(v)
+	})
+}
+
+// AddPrice adds v to the "price" field.
+func (u *ServiceCatalogUpsertOne) AddPrice(v float64) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.AddPrice(v)
+	})
+}
+
+// UpdatePrice sets the "price" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdatePrice() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdatePrice()
+	})
+}
+
+// ClearPrice clears the value of the "price" field.
+func (u *ServiceCatalogUpsertOne) ClearPrice() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearPrice()
+	})
+}
+
+// SetDeliveryTime sets the "delivery_time" field.
+func (u *ServiceCatalogUpsertOne) SetDeliveryTime(v int) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetDeliveryTime(v)
+	})
+}
+
+// AddDeliveryTime adds v to the "delivery_time" field.
+func (u *ServiceCatalogUpsertOne) AddDeliveryTime(v int) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.AddDeliveryTime(v)
+	})
+}
+
+// UpdateDeliveryTime sets the "delivery_time" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateDeliveryTime() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateDeliveryTime()
+	})
+}
+
+// ClearDeliveryTime clears the value of the "delivery_time" field.
+func (u *ServiceCatalogUpsertOne) ClearDeliveryTime() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearDeliveryTime()
+	})
+}
+
+// SetUnit sets the "unit" field.
+func (u *ServiceCatalogUpsertOne) SetUnit(v string) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetUnit(v)
+	})
+}
+
+// UpdateUnit sets the "unit" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateUnit() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateUnit()
+	})
+}
+
+// ClearUnit clears the value of the "unit" field.
+func (u *ServiceCatalogUpsertOne) ClearUnit() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearUnit()
+	})
+}
+
+// SetRequiresApproval sets the "requires_approval" field.
+func (u *ServiceCatalogUpsertOne) SetRequiresApproval(v bool) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetRequiresApproval(v)
+	})
+}
+
+// UpdateRequiresApproval sets the "requires_approval" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateRequiresApproval() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateRequiresApproval()
+	})
+}
+
+// SetApprovalLevel sets the "approval_level" field.
+func (u *ServiceCatalogUpsertOne) SetApprovalLevel(v int) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetApprovalLevel(v)
+	})
+}
+
+// AddApprovalLevel adds v to the "approval_level" field.
+func (u *ServiceCatalogUpsertOne) AddApprovalLevel(v int) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.AddApprovalLevel(v)
+	})
+}
+
+// UpdateApprovalLevel sets the "approval_level" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateApprovalLevel() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateApprovalLevel()
+	})
+}
+
+// SetApprovers sets the "approvers" field.
+func (u *ServiceCatalogUpsertOne) SetApprovers(v []int) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetApprovers(v)
+	})
+}
+
+// UpdateApprovers sets the "approvers" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateApprovers() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateApprovers()
+	})
+}
+
+// ClearApprovers clears the value of the "approvers" field.
+func (u *ServiceCatalogUpsertOne) ClearApprovers() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearApprovers()
+	})
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ServiceCatalogUpsertOne) SetProcessDefinitionKey(v string) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetProcessDefinitionKey(v)
+	})
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateProcessDefinitionKey() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateProcessDefinitionKey()
+	})
+}
+
+// ClearProcessDefinitionKey clears the value of the "process_definition_key" field.
+func (u *ServiceCatalogUpsertOne) ClearProcessDefinitionKey() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearProcessDefinitionKey()
+	})
+}
+
+// SetSLAResponseTime sets the "sla_response_time" field.
+func (u *ServiceCatalogUpsertOne) SetSLAResponseTime(v int) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetSLAResponseTime(v)
+	})
+}
+
+// AddSLAResponseTime adds v to the "sla_response_time" field.
+func (u *ServiceCatalogUpsertOne) AddSLAResponseTime(v int) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.AddSLAResponseTime(v)
+	})
+}
+
+// UpdateSLAResponseTime sets the "sla_response_time" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateSLAResponseTime() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateSLAResponseTime()
+	})
+}
+
+// ClearSLAResponseTime clears the value of the "sla_response_time" field.
+func (u *ServiceCatalogUpsertOne) ClearSLAResponseTime() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearSLAResponseTime()
+	})
+}
+
+// SetSLAResolutionTime sets the "sla_resolution_time" field.
+func (u *ServiceCatalogUpsertOne) SetSLAResolutionTime(v int) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetSLAResolutionTime(v)
+	})
+}
+
+// AddSLAResolutionTime adds v to the "sla_resolution_time" field.
+func (u *ServiceCatalogUpsertOne) AddSLAResolutionTime(v int) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.AddSLAResolutionTime(v)
+	})
+}
+
+// UpdateSLAResolutionTime sets the "sla_resolution_time" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateSLAResolutionTime() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateSLAResolutionTime()
+	})
+}
+
+// ClearSLAResolutionTime clears the value of the "sla_resolution_time" field.
+func (u *ServiceCatalogUpsertOne) ClearSLAResolutionTime() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearSLAResolutionTime()
+	})
+}
+
+// SetCiTypeID sets the "ci_type_id" field.
+func (u *ServiceCatalogUpsertOne) SetCiTypeID(v int) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetCiTypeID(v)
+	})
+}
+
+// AddCiTypeID adds v to the "ci_type_id" field.
+func (u *ServiceCatalogUpsertOne) AddCiTypeID(v int) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.AddCiTypeID(v)
+	})
+}
+
+// UpdateCiTypeID sets the "ci_type_id" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateCiTypeID() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateCiTypeID()
+	})
+}
+
+// ClearCiTypeID clears the value of the "ci_type_id" field.
+func (u *ServiceCatalogUpsertOne) ClearCiTypeID() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearCiTypeID()
+	})
+}
+
+// SetCloudServiceID sets the "cloud_service_id" field.
+func (u *ServiceCatalogUpsertOne) SetCloudServiceID(v int) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetCloudServiceID(v)
+	})
+}
+
+// AddCloudServiceID adds v to the "cloud_service_id" field.
+func (u *ServiceCatalogUpsertOne) AddCloudServiceID(v int) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.AddCloudServiceID(v)
+	})
+}
+
+// UpdateCloudServiceID sets the "cloud_service_id" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateCloudServiceID() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateCloudServiceID()
+	})
+}
+
+// ClearCloudServiceID clears the value of the "cloud_service_id" field.
+func (u *ServiceCatalogUpsertOne) ClearCloudServiceID() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearCloudServiceID()
+	})
+}
+
+// SetAvailableRegions sets the "available_regions" field.
+func (u *ServiceCatalogUpsertOne) SetAvailableRegions(v []string) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetAvailableRegions(v)
+	})
+}
+
+// UpdateAvailableRegions sets the "available_regions" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateAvailableRegions() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateAvailableRegions()
+	})
+}
+
+// ClearAvailableRegions clears the value of the "available_regions" field.
+func (u *ServiceCatalogUpsertOne) ClearAvailableRegions() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearAvailableRegions()
+	})
+}
+
+// SetAvailableSpecs sets the "available_specs" field.
+func (u *ServiceCatalogUpsertOne) SetAvailableSpecs(v []string) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetAvailableSpecs(v)
+	})
+}
+
+// UpdateAvailableSpecs sets the "available_specs" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateAvailableSpecs() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateAvailableSpecs()
+	})
+}
+
+// ClearAvailableSpecs clears the value of the "available_specs" field.
+func (u *ServiceCatalogUpsertOne) ClearAvailableSpecs() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearAvailableSpecs()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ServiceCatalogUpsertOne) SetStatus(v string) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateStatus() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ServiceCatalogUpsertOne) SetTenantID(v int) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ServiceCatalogUpsertOne) AddTenantID(v int) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateTenantID() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *ServiceCatalogUpsertOne) SetIsActive(v bool) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateIsActive() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (u *ServiceCatalogUpsertOne) SetSortOrder(v int) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetSortOrder(v)
+	})
+}
+
+// AddSortOrder adds v to the "sort_order" field.
+func (u *ServiceCatalogUpsertOne) AddSortOrder(v int) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.AddSortOrder(v)
+	})
+}
+
+// UpdateSortOrder sets the "sort_order" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateSortOrder() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateSortOrder()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ServiceCatalogUpsertOne) SetCreatedAt(v time.Time) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateCreatedAt() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ServiceCatalogUpsertOne) SetUpdatedAt(v time.Time) *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertOne) UpdateUpdatedAt() *ServiceCatalogUpsertOne {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ServiceCatalogUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ServiceCatalogCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ServiceCatalogUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ServiceCatalogUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ServiceCatalogUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ServiceCatalogCreateBulk is the builder for creating many ServiceCatalog entities in bulk.
 type ServiceCatalogCreateBulk struct {
 	config
 	err      error
 	builders []*ServiceCatalogCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ServiceCatalog entities in the database.
@@ -629,6 +1743,7 @@ func (_c *ServiceCatalogCreateBulk) Save(ctx context.Context) ([]*ServiceCatalog
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -679,6 +1794,642 @@ func (_c *ServiceCatalogCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ServiceCatalogCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ServiceCatalog.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ServiceCatalogUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ServiceCatalogCreateBulk) OnConflict(opts ...sql.ConflictOption) *ServiceCatalogUpsertBulk {
+	_c.conflict = opts
+	return &ServiceCatalogUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ServiceCatalog.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ServiceCatalogCreateBulk) OnConflictColumns(columns ...string) *ServiceCatalogUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ServiceCatalogUpsertBulk{
+		create: _c,
+	}
+}
+
+// ServiceCatalogUpsertBulk is the builder for "upsert"-ing
+// a bulk of ServiceCatalog nodes.
+type ServiceCatalogUpsertBulk struct {
+	create *ServiceCatalogCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ServiceCatalog.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ServiceCatalogUpsertBulk) UpdateNewValues() *ServiceCatalogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ServiceCatalog.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ServiceCatalogUpsertBulk) Ignore() *ServiceCatalogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ServiceCatalogUpsertBulk) DoNothing() *ServiceCatalogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ServiceCatalogCreateBulk.OnConflict
+// documentation for more info.
+func (u *ServiceCatalogUpsertBulk) Update(set func(*ServiceCatalogUpsert)) *ServiceCatalogUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ServiceCatalogUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *ServiceCatalogUpsertBulk) SetName(v string) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateName() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ServiceCatalogUpsertBulk) SetDescription(v string) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateDescription() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ServiceCatalogUpsertBulk) ClearDescription() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *ServiceCatalogUpsertBulk) SetCategory(v string) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateCategory() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *ServiceCatalogUpsertBulk) ClearCategory() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetIcon sets the "icon" field.
+func (u *ServiceCatalogUpsertBulk) SetIcon(v string) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetIcon(v)
+	})
+}
+
+// UpdateIcon sets the "icon" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateIcon() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateIcon()
+	})
+}
+
+// ClearIcon clears the value of the "icon" field.
+func (u *ServiceCatalogUpsertBulk) ClearIcon() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearIcon()
+	})
+}
+
+// SetServiceType sets the "service_type" field.
+func (u *ServiceCatalogUpsertBulk) SetServiceType(v string) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetServiceType(v)
+	})
+}
+
+// UpdateServiceType sets the "service_type" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateServiceType() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateServiceType()
+	})
+}
+
+// SetItsmType sets the "itsm_type" field.
+func (u *ServiceCatalogUpsertBulk) SetItsmType(v string) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetItsmType(v)
+	})
+}
+
+// UpdateItsmType sets the "itsm_type" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateItsmType() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateItsmType()
+	})
+}
+
+// SetTargetClass sets the "target_class" field.
+func (u *ServiceCatalogUpsertBulk) SetTargetClass(v string) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetTargetClass(v)
+	})
+}
+
+// UpdateTargetClass sets the "target_class" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateTargetClass() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateTargetClass()
+	})
+}
+
+// ClearTargetClass clears the value of the "target_class" field.
+func (u *ServiceCatalogUpsertBulk) ClearTargetClass() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearTargetClass()
+	})
+}
+
+// SetPrice sets the "price" field.
+func (u *ServiceCatalogUpsertBulk) SetPrice(v float64) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetPrice(v)
+	})
+}
+
+// AddPrice adds v to the "price" field.
+func (u *ServiceCatalogUpsertBulk) AddPrice(v float64) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.AddPrice(v)
+	})
+}
+
+// UpdatePrice sets the "price" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdatePrice() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdatePrice()
+	})
+}
+
+// ClearPrice clears the value of the "price" field.
+func (u *ServiceCatalogUpsertBulk) ClearPrice() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearPrice()
+	})
+}
+
+// SetDeliveryTime sets the "delivery_time" field.
+func (u *ServiceCatalogUpsertBulk) SetDeliveryTime(v int) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetDeliveryTime(v)
+	})
+}
+
+// AddDeliveryTime adds v to the "delivery_time" field.
+func (u *ServiceCatalogUpsertBulk) AddDeliveryTime(v int) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.AddDeliveryTime(v)
+	})
+}
+
+// UpdateDeliveryTime sets the "delivery_time" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateDeliveryTime() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateDeliveryTime()
+	})
+}
+
+// ClearDeliveryTime clears the value of the "delivery_time" field.
+func (u *ServiceCatalogUpsertBulk) ClearDeliveryTime() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearDeliveryTime()
+	})
+}
+
+// SetUnit sets the "unit" field.
+func (u *ServiceCatalogUpsertBulk) SetUnit(v string) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetUnit(v)
+	})
+}
+
+// UpdateUnit sets the "unit" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateUnit() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateUnit()
+	})
+}
+
+// ClearUnit clears the value of the "unit" field.
+func (u *ServiceCatalogUpsertBulk) ClearUnit() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearUnit()
+	})
+}
+
+// SetRequiresApproval sets the "requires_approval" field.
+func (u *ServiceCatalogUpsertBulk) SetRequiresApproval(v bool) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetRequiresApproval(v)
+	})
+}
+
+// UpdateRequiresApproval sets the "requires_approval" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateRequiresApproval() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateRequiresApproval()
+	})
+}
+
+// SetApprovalLevel sets the "approval_level" field.
+func (u *ServiceCatalogUpsertBulk) SetApprovalLevel(v int) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetApprovalLevel(v)
+	})
+}
+
+// AddApprovalLevel adds v to the "approval_level" field.
+func (u *ServiceCatalogUpsertBulk) AddApprovalLevel(v int) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.AddApprovalLevel(v)
+	})
+}
+
+// UpdateApprovalLevel sets the "approval_level" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateApprovalLevel() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateApprovalLevel()
+	})
+}
+
+// SetApprovers sets the "approvers" field.
+func (u *ServiceCatalogUpsertBulk) SetApprovers(v []int) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetApprovers(v)
+	})
+}
+
+// UpdateApprovers sets the "approvers" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateApprovers() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateApprovers()
+	})
+}
+
+// ClearApprovers clears the value of the "approvers" field.
+func (u *ServiceCatalogUpsertBulk) ClearApprovers() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearApprovers()
+	})
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ServiceCatalogUpsertBulk) SetProcessDefinitionKey(v string) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetProcessDefinitionKey(v)
+	})
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateProcessDefinitionKey() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateProcessDefinitionKey()
+	})
+}
+
+// ClearProcessDefinitionKey clears the value of the "process_definition_key" field.
+func (u *ServiceCatalogUpsertBulk) ClearProcessDefinitionKey() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearProcessDefinitionKey()
+	})
+}
+
+// SetSLAResponseTime sets the "sla_response_time" field.
+func (u *ServiceCatalogUpsertBulk) SetSLAResponseTime(v int) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetSLAResponseTime(v)
+	})
+}
+
+// AddSLAResponseTime adds v to the "sla_response_time" field.
+func (u *ServiceCatalogUpsertBulk) AddSLAResponseTime(v int) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.AddSLAResponseTime(v)
+	})
+}
+
+// UpdateSLAResponseTime sets the "sla_response_time" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateSLAResponseTime() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateSLAResponseTime()
+	})
+}
+
+// ClearSLAResponseTime clears the value of the "sla_response_time" field.
+func (u *ServiceCatalogUpsertBulk) ClearSLAResponseTime() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearSLAResponseTime()
+	})
+}
+
+// SetSLAResolutionTime sets the "sla_resolution_time" field.
+func (u *ServiceCatalogUpsertBulk) SetSLAResolutionTime(v int) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetSLAResolutionTime(v)
+	})
+}
+
+// AddSLAResolutionTime adds v to the "sla_resolution_time" field.
+func (u *ServiceCatalogUpsertBulk) AddSLAResolutionTime(v int) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.AddSLAResolutionTime(v)
+	})
+}
+
+// UpdateSLAResolutionTime sets the "sla_resolution_time" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateSLAResolutionTime() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateSLAResolutionTime()
+	})
+}
+
+// ClearSLAResolutionTime clears the value of the "sla_resolution_time" field.
+func (u *ServiceCatalogUpsertBulk) ClearSLAResolutionTime() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearSLAResolutionTime()
+	})
+}
+
+// SetCiTypeID sets the "ci_type_id" field.
+func (u *ServiceCatalogUpsertBulk) SetCiTypeID(v int) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetCiTypeID(v)
+	})
+}
+
+// AddCiTypeID adds v to the "ci_type_id" field.
+func (u *ServiceCatalogUpsertBulk) AddCiTypeID(v int) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.AddCiTypeID(v)
+	})
+}
+
+// UpdateCiTypeID sets the "ci_type_id" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateCiTypeID() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateCiTypeID()
+	})
+}
+
+// ClearCiTypeID clears the value of the "ci_type_id" field.
+func (u *ServiceCatalogUpsertBulk) ClearCiTypeID() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearCiTypeID()
+	})
+}
+
+// SetCloudServiceID sets the "cloud_service_id" field.
+func (u *ServiceCatalogUpsertBulk) SetCloudServiceID(v int) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetCloudServiceID(v)
+	})
+}
+
+// AddCloudServiceID adds v to the "cloud_service_id" field.
+func (u *ServiceCatalogUpsertBulk) AddCloudServiceID(v int) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.AddCloudServiceID(v)
+	})
+}
+
+// UpdateCloudServiceID sets the "cloud_service_id" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateCloudServiceID() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateCloudServiceID()
+	})
+}
+
+// ClearCloudServiceID clears the value of the "cloud_service_id" field.
+func (u *ServiceCatalogUpsertBulk) ClearCloudServiceID() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearCloudServiceID()
+	})
+}
+
+// SetAvailableRegions sets the "available_regions" field.
+func (u *ServiceCatalogUpsertBulk) SetAvailableRegions(v []string) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetAvailableRegions(v)
+	})
+}
+
+// UpdateAvailableRegions sets the "available_regions" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateAvailableRegions() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateAvailableRegions()
+	})
+}
+
+// ClearAvailableRegions clears the value of the "available_regions" field.
+func (u *ServiceCatalogUpsertBulk) ClearAvailableRegions() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearAvailableRegions()
+	})
+}
+
+// SetAvailableSpecs sets the "available_specs" field.
+func (u *ServiceCatalogUpsertBulk) SetAvailableSpecs(v []string) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetAvailableSpecs(v)
+	})
+}
+
+// UpdateAvailableSpecs sets the "available_specs" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateAvailableSpecs() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateAvailableSpecs()
+	})
+}
+
+// ClearAvailableSpecs clears the value of the "available_specs" field.
+func (u *ServiceCatalogUpsertBulk) ClearAvailableSpecs() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.ClearAvailableSpecs()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ServiceCatalogUpsertBulk) SetStatus(v string) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateStatus() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ServiceCatalogUpsertBulk) SetTenantID(v int) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ServiceCatalogUpsertBulk) AddTenantID(v int) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateTenantID() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *ServiceCatalogUpsertBulk) SetIsActive(v bool) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateIsActive() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (u *ServiceCatalogUpsertBulk) SetSortOrder(v int) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetSortOrder(v)
+	})
+}
+
+// AddSortOrder adds v to the "sort_order" field.
+func (u *ServiceCatalogUpsertBulk) AddSortOrder(v int) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.AddSortOrder(v)
+	})
+}
+
+// UpdateSortOrder sets the "sort_order" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateSortOrder() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateSortOrder()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ServiceCatalogUpsertBulk) SetCreatedAt(v time.Time) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateCreatedAt() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ServiceCatalogUpsertBulk) SetUpdatedAt(v time.Time) *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ServiceCatalogUpsertBulk) UpdateUpdatedAt() *ServiceCatalogUpsertBulk {
+	return u.Update(func(s *ServiceCatalogUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ServiceCatalogUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ServiceCatalogCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ServiceCatalogCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ServiceCatalogUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

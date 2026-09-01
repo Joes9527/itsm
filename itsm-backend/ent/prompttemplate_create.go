@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/prompttemplate"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type PromptTemplateCreate struct {
 	config
 	mutation *PromptTemplateMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetCreatedAt sets the "created_at" field.
@@ -193,6 +195,7 @@ func (_c *PromptTemplateCreate) createSpec() (*PromptTemplate, *sqlgraph.CreateS
 		_node = &PromptTemplate{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(prompttemplate.Table, sqlgraph.NewFieldSpec(prompttemplate.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(prompttemplate.FieldCreatedAt, field.TypeTime, value)
 		_node.CreatedAt = value
@@ -224,11 +227,329 @@ func (_c *PromptTemplateCreate) createSpec() (*PromptTemplate, *sqlgraph.CreateS
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.PromptTemplate.Create().
+//		SetCreatedAt(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.PromptTemplateUpsert) {
+//			SetCreatedAt(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *PromptTemplateCreate) OnConflict(opts ...sql.ConflictOption) *PromptTemplateUpsertOne {
+	_c.conflict = opts
+	return &PromptTemplateUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.PromptTemplate.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *PromptTemplateCreate) OnConflictColumns(columns ...string) *PromptTemplateUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &PromptTemplateUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// PromptTemplateUpsertOne is the builder for "upsert"-ing
+	//  one PromptTemplate node.
+	PromptTemplateUpsertOne struct {
+		create *PromptTemplateCreate
+	}
+
+	// PromptTemplateUpsert is the "OnConflict" setter.
+	PromptTemplateUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetCreatedAt sets the "created_at" field.
+func (u *PromptTemplateUpsert) SetCreatedAt(v time.Time) *PromptTemplateUpsert {
+	u.Set(prompttemplate.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *PromptTemplateUpsert) UpdateCreatedAt() *PromptTemplateUpsert {
+	u.SetExcluded(prompttemplate.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *PromptTemplateUpsert) SetUpdatedAt(v time.Time) *PromptTemplateUpsert {
+	u.Set(prompttemplate.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *PromptTemplateUpsert) UpdateUpdatedAt() *PromptTemplateUpsert {
+	u.SetExcluded(prompttemplate.FieldUpdatedAt)
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *PromptTemplateUpsert) SetName(v string) *PromptTemplateUpsert {
+	u.Set(prompttemplate.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *PromptTemplateUpsert) UpdateName() *PromptTemplateUpsert {
+	u.SetExcluded(prompttemplate.FieldName)
+	return u
+}
+
+// SetVersion sets the "version" field.
+func (u *PromptTemplateUpsert) SetVersion(v string) *PromptTemplateUpsert {
+	u.Set(prompttemplate.FieldVersion, v)
+	return u
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *PromptTemplateUpsert) UpdateVersion() *PromptTemplateUpsert {
+	u.SetExcluded(prompttemplate.FieldVersion)
+	return u
+}
+
+// SetTemplate sets the "template" field.
+func (u *PromptTemplateUpsert) SetTemplate(v string) *PromptTemplateUpsert {
+	u.Set(prompttemplate.FieldTemplate, v)
+	return u
+}
+
+// UpdateTemplate sets the "template" field to the value that was provided on create.
+func (u *PromptTemplateUpsert) UpdateTemplate() *PromptTemplateUpsert {
+	u.SetExcluded(prompttemplate.FieldTemplate)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *PromptTemplateUpsert) SetDescription(v string) *PromptTemplateUpsert {
+	u.Set(prompttemplate.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *PromptTemplateUpsert) UpdateDescription() *PromptTemplateUpsert {
+	u.SetExcluded(prompttemplate.FieldDescription)
+	return u
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *PromptTemplateUpsert) SetMetadata(v map[string]interface{}) *PromptTemplateUpsert {
+	u.Set(prompttemplate.FieldMetadata, v)
+	return u
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *PromptTemplateUpsert) UpdateMetadata() *PromptTemplateUpsert {
+	u.SetExcluded(prompttemplate.FieldMetadata)
+	return u
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *PromptTemplateUpsert) ClearMetadata() *PromptTemplateUpsert {
+	u.SetNull(prompttemplate.FieldMetadata)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.PromptTemplate.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *PromptTemplateUpsertOne) UpdateNewValues() *PromptTemplateUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.PromptTemplate.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *PromptTemplateUpsertOne) Ignore() *PromptTemplateUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *PromptTemplateUpsertOne) DoNothing() *PromptTemplateUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the PromptTemplateCreate.OnConflict
+// documentation for more info.
+func (u *PromptTemplateUpsertOne) Update(set func(*PromptTemplateUpsert)) *PromptTemplateUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&PromptTemplateUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *PromptTemplateUpsertOne) SetCreatedAt(v time.Time) *PromptTemplateUpsertOne {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *PromptTemplateUpsertOne) UpdateCreatedAt() *PromptTemplateUpsertOne {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *PromptTemplateUpsertOne) SetUpdatedAt(v time.Time) *PromptTemplateUpsertOne {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *PromptTemplateUpsertOne) UpdateUpdatedAt() *PromptTemplateUpsertOne {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetName sets the "name" field.
+func (u *PromptTemplateUpsertOne) SetName(v string) *PromptTemplateUpsertOne {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *PromptTemplateUpsertOne) UpdateName() *PromptTemplateUpsertOne {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetVersion sets the "version" field.
+func (u *PromptTemplateUpsertOne) SetVersion(v string) *PromptTemplateUpsertOne {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.SetVersion(v)
+	})
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *PromptTemplateUpsertOne) UpdateVersion() *PromptTemplateUpsertOne {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.UpdateVersion()
+	})
+}
+
+// SetTemplate sets the "template" field.
+func (u *PromptTemplateUpsertOne) SetTemplate(v string) *PromptTemplateUpsertOne {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.SetTemplate(v)
+	})
+}
+
+// UpdateTemplate sets the "template" field to the value that was provided on create.
+func (u *PromptTemplateUpsertOne) UpdateTemplate() *PromptTemplateUpsertOne {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.UpdateTemplate()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *PromptTemplateUpsertOne) SetDescription(v string) *PromptTemplateUpsertOne {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *PromptTemplateUpsertOne) UpdateDescription() *PromptTemplateUpsertOne {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *PromptTemplateUpsertOne) SetMetadata(v map[string]interface{}) *PromptTemplateUpsertOne {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *PromptTemplateUpsertOne) UpdateMetadata() *PromptTemplateUpsertOne {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *PromptTemplateUpsertOne) ClearMetadata() *PromptTemplateUpsertOne {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// Exec executes the query.
+func (u *PromptTemplateUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for PromptTemplateCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *PromptTemplateUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *PromptTemplateUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *PromptTemplateUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // PromptTemplateCreateBulk is the builder for creating many PromptTemplate entities in bulk.
 type PromptTemplateCreateBulk struct {
 	config
 	err      error
 	builders []*PromptTemplateCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the PromptTemplate entities in the database.
@@ -258,6 +579,7 @@ func (_c *PromptTemplateCreateBulk) Save(ctx context.Context) ([]*PromptTemplate
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -308,6 +630,215 @@ func (_c *PromptTemplateCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *PromptTemplateCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.PromptTemplate.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.PromptTemplateUpsert) {
+//			SetCreatedAt(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *PromptTemplateCreateBulk) OnConflict(opts ...sql.ConflictOption) *PromptTemplateUpsertBulk {
+	_c.conflict = opts
+	return &PromptTemplateUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.PromptTemplate.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *PromptTemplateCreateBulk) OnConflictColumns(columns ...string) *PromptTemplateUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &PromptTemplateUpsertBulk{
+		create: _c,
+	}
+}
+
+// PromptTemplateUpsertBulk is the builder for "upsert"-ing
+// a bulk of PromptTemplate nodes.
+type PromptTemplateUpsertBulk struct {
+	create *PromptTemplateCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.PromptTemplate.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *PromptTemplateUpsertBulk) UpdateNewValues() *PromptTemplateUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.PromptTemplate.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *PromptTemplateUpsertBulk) Ignore() *PromptTemplateUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *PromptTemplateUpsertBulk) DoNothing() *PromptTemplateUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the PromptTemplateCreateBulk.OnConflict
+// documentation for more info.
+func (u *PromptTemplateUpsertBulk) Update(set func(*PromptTemplateUpsert)) *PromptTemplateUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&PromptTemplateUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *PromptTemplateUpsertBulk) SetCreatedAt(v time.Time) *PromptTemplateUpsertBulk {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *PromptTemplateUpsertBulk) UpdateCreatedAt() *PromptTemplateUpsertBulk {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *PromptTemplateUpsertBulk) SetUpdatedAt(v time.Time) *PromptTemplateUpsertBulk {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *PromptTemplateUpsertBulk) UpdateUpdatedAt() *PromptTemplateUpsertBulk {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetName sets the "name" field.
+func (u *PromptTemplateUpsertBulk) SetName(v string) *PromptTemplateUpsertBulk {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *PromptTemplateUpsertBulk) UpdateName() *PromptTemplateUpsertBulk {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetVersion sets the "version" field.
+func (u *PromptTemplateUpsertBulk) SetVersion(v string) *PromptTemplateUpsertBulk {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.SetVersion(v)
+	})
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *PromptTemplateUpsertBulk) UpdateVersion() *PromptTemplateUpsertBulk {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.UpdateVersion()
+	})
+}
+
+// SetTemplate sets the "template" field.
+func (u *PromptTemplateUpsertBulk) SetTemplate(v string) *PromptTemplateUpsertBulk {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.SetTemplate(v)
+	})
+}
+
+// UpdateTemplate sets the "template" field to the value that was provided on create.
+func (u *PromptTemplateUpsertBulk) UpdateTemplate() *PromptTemplateUpsertBulk {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.UpdateTemplate()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *PromptTemplateUpsertBulk) SetDescription(v string) *PromptTemplateUpsertBulk {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *PromptTemplateUpsertBulk) UpdateDescription() *PromptTemplateUpsertBulk {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *PromptTemplateUpsertBulk) SetMetadata(v map[string]interface{}) *PromptTemplateUpsertBulk {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *PromptTemplateUpsertBulk) UpdateMetadata() *PromptTemplateUpsertBulk {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *PromptTemplateUpsertBulk) ClearMetadata() *PromptTemplateUpsertBulk {
+	return u.Update(func(s *PromptTemplateUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// Exec executes the query.
+func (u *PromptTemplateUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the PromptTemplateCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for PromptTemplateCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *PromptTemplateUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/processdefinition"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type ProcessBindingCreate struct {
 	config
 	mutation *ProcessBindingMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetBusinessType sets the "business_type" field.
@@ -429,6 +431,7 @@ func (_c *ProcessBindingCreate) createSpec() (*ProcessBinding, *sqlgraph.CreateS
 		_node = &ProcessBinding{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(processbinding.Table, sqlgraph.NewFieldSpec(processbinding.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.BusinessType(); ok {
 		_spec.SetField(processbinding.FieldBusinessType, field.TypeString, value)
 		_node.BusinessType = value
@@ -525,11 +528,836 @@ func (_c *ProcessBindingCreate) createSpec() (*ProcessBinding, *sqlgraph.CreateS
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessBinding.Create().
+//		SetBusinessType(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessBindingUpsert) {
+//			SetBusinessType(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessBindingCreate) OnConflict(opts ...sql.ConflictOption) *ProcessBindingUpsertOne {
+	_c.conflict = opts
+	return &ProcessBindingUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessBinding.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessBindingCreate) OnConflictColumns(columns ...string) *ProcessBindingUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessBindingUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ProcessBindingUpsertOne is the builder for "upsert"-ing
+	//  one ProcessBinding node.
+	ProcessBindingUpsertOne struct {
+		create *ProcessBindingCreate
+	}
+
+	// ProcessBindingUpsert is the "OnConflict" setter.
+	ProcessBindingUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetBusinessType sets the "business_type" field.
+func (u *ProcessBindingUpsert) SetBusinessType(v string) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldBusinessType, v)
+	return u
+}
+
+// UpdateBusinessType sets the "business_type" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdateBusinessType() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldBusinessType)
+	return u
+}
+
+// SetBusinessSubType sets the "business_sub_type" field.
+func (u *ProcessBindingUpsert) SetBusinessSubType(v string) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldBusinessSubType, v)
+	return u
+}
+
+// UpdateBusinessSubType sets the "business_sub_type" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdateBusinessSubType() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldBusinessSubType)
+	return u
+}
+
+// ClearBusinessSubType clears the value of the "business_sub_type" field.
+func (u *ProcessBindingUpsert) ClearBusinessSubType() *ProcessBindingUpsert {
+	u.SetNull(processbinding.FieldBusinessSubType)
+	return u
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ProcessBindingUpsert) SetProcessDefinitionKey(v string) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldProcessDefinitionKey, v)
+	return u
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdateProcessDefinitionKey() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldProcessDefinitionKey)
+	return u
+}
+
+// SetProcessVersion sets the "process_version" field.
+func (u *ProcessBindingUpsert) SetProcessVersion(v int) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldProcessVersion, v)
+	return u
+}
+
+// UpdateProcessVersion sets the "process_version" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdateProcessVersion() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldProcessVersion)
+	return u
+}
+
+// AddProcessVersion adds v to the "process_version" field.
+func (u *ProcessBindingUpsert) AddProcessVersion(v int) *ProcessBindingUpsert {
+	u.Add(processbinding.FieldProcessVersion, v)
+	return u
+}
+
+// SetIsDefault sets the "is_default" field.
+func (u *ProcessBindingUpsert) SetIsDefault(v bool) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldIsDefault, v)
+	return u
+}
+
+// UpdateIsDefault sets the "is_default" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdateIsDefault() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldIsDefault)
+	return u
+}
+
+// SetPriority sets the "priority" field.
+func (u *ProcessBindingUpsert) SetPriority(v int) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldPriority, v)
+	return u
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdatePriority() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldPriority)
+	return u
+}
+
+// AddPriority adds v to the "priority" field.
+func (u *ProcessBindingUpsert) AddPriority(v int) *ProcessBindingUpsert {
+	u.Add(processbinding.FieldPriority, v)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *ProcessBindingUpsert) SetIsActive(v bool) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdateIsActive() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldIsActive)
+	return u
+}
+
+// SetDepartmentID sets the "department_id" field.
+func (u *ProcessBindingUpsert) SetDepartmentID(v int) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldDepartmentID, v)
+	return u
+}
+
+// UpdateDepartmentID sets the "department_id" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdateDepartmentID() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldDepartmentID)
+	return u
+}
+
+// AddDepartmentID adds v to the "department_id" field.
+func (u *ProcessBindingUpsert) AddDepartmentID(v int) *ProcessBindingUpsert {
+	u.Add(processbinding.FieldDepartmentID, v)
+	return u
+}
+
+// ClearDepartmentID clears the value of the "department_id" field.
+func (u *ProcessBindingUpsert) ClearDepartmentID() *ProcessBindingUpsert {
+	u.SetNull(processbinding.FieldDepartmentID)
+	return u
+}
+
+// SetTeamID sets the "team_id" field.
+func (u *ProcessBindingUpsert) SetTeamID(v int) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldTeamID, v)
+	return u
+}
+
+// UpdateTeamID sets the "team_id" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdateTeamID() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldTeamID)
+	return u
+}
+
+// AddTeamID adds v to the "team_id" field.
+func (u *ProcessBindingUpsert) AddTeamID(v int) *ProcessBindingUpsert {
+	u.Add(processbinding.FieldTeamID, v)
+	return u
+}
+
+// ClearTeamID clears the value of the "team_id" field.
+func (u *ProcessBindingUpsert) ClearTeamID() *ProcessBindingUpsert {
+	u.SetNull(processbinding.FieldTeamID)
+	return u
+}
+
+// SetScenario sets the "scenario" field.
+func (u *ProcessBindingUpsert) SetScenario(v string) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldScenario, v)
+	return u
+}
+
+// UpdateScenario sets the "scenario" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdateScenario() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldScenario)
+	return u
+}
+
+// ClearScenario clears the value of the "scenario" field.
+func (u *ProcessBindingUpsert) ClearScenario() *ProcessBindingUpsert {
+	u.SetNull(processbinding.FieldScenario)
+	return u
+}
+
+// SetCategory sets the "category" field.
+func (u *ProcessBindingUpsert) SetCategory(v string) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldCategory, v)
+	return u
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdateCategory() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldCategory)
+	return u
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *ProcessBindingUpsert) ClearCategory() *ProcessBindingUpsert {
+	u.SetNull(processbinding.FieldCategory)
+	return u
+}
+
+// SetCategoryID sets the "category_id" field.
+func (u *ProcessBindingUpsert) SetCategoryID(v int) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldCategoryID, v)
+	return u
+}
+
+// UpdateCategoryID sets the "category_id" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdateCategoryID() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldCategoryID)
+	return u
+}
+
+// AddCategoryID adds v to the "category_id" field.
+func (u *ProcessBindingUpsert) AddCategoryID(v int) *ProcessBindingUpsert {
+	u.Add(processbinding.FieldCategoryID, v)
+	return u
+}
+
+// ClearCategoryID clears the value of the "category_id" field.
+func (u *ProcessBindingUpsert) ClearCategoryID() *ProcessBindingUpsert {
+	u.SetNull(processbinding.FieldCategoryID)
+	return u
+}
+
+// SetConditions sets the "conditions" field.
+func (u *ProcessBindingUpsert) SetConditions(v map[string]interface{}) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldConditions, v)
+	return u
+}
+
+// UpdateConditions sets the "conditions" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdateConditions() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldConditions)
+	return u
+}
+
+// ClearConditions clears the value of the "conditions" field.
+func (u *ProcessBindingUpsert) ClearConditions() *ProcessBindingUpsert {
+	u.SetNull(processbinding.FieldConditions)
+	return u
+}
+
+// SetApprovalChainID sets the "approval_chain_id" field.
+func (u *ProcessBindingUpsert) SetApprovalChainID(v string) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldApprovalChainID, v)
+	return u
+}
+
+// UpdateApprovalChainID sets the "approval_chain_id" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdateApprovalChainID() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldApprovalChainID)
+	return u
+}
+
+// ClearApprovalChainID clears the value of the "approval_chain_id" field.
+func (u *ProcessBindingUpsert) ClearApprovalChainID() *ProcessBindingUpsert {
+	u.SetNull(processbinding.FieldApprovalChainID)
+	return u
+}
+
+// SetSLAPolicyID sets the "sla_policy_id" field.
+func (u *ProcessBindingUpsert) SetSLAPolicyID(v string) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldSLAPolicyID, v)
+	return u
+}
+
+// UpdateSLAPolicyID sets the "sla_policy_id" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdateSLAPolicyID() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldSLAPolicyID)
+	return u
+}
+
+// ClearSLAPolicyID clears the value of the "sla_policy_id" field.
+func (u *ProcessBindingUpsert) ClearSLAPolicyID() *ProcessBindingUpsert {
+	u.SetNull(processbinding.FieldSLAPolicyID)
+	return u
+}
+
+// SetOverrides sets the "overrides" field.
+func (u *ProcessBindingUpsert) SetOverrides(v map[string]interface{}) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldOverrides, v)
+	return u
+}
+
+// UpdateOverrides sets the "overrides" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdateOverrides() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldOverrides)
+	return u
+}
+
+// ClearOverrides clears the value of the "overrides" field.
+func (u *ProcessBindingUpsert) ClearOverrides() *ProcessBindingUpsert {
+	u.SetNull(processbinding.FieldOverrides)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessBindingUpsert) SetTenantID(v int) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdateTenantID() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessBindingUpsert) AddTenantID(v int) *ProcessBindingUpsert {
+	u.Add(processbinding.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessBindingUpsert) SetCreatedAt(v time.Time) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdateCreatedAt() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessBindingUpsert) SetUpdatedAt(v time.Time) *ProcessBindingUpsert {
+	u.Set(processbinding.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessBindingUpsert) UpdateUpdatedAt() *ProcessBindingUpsert {
+	u.SetExcluded(processbinding.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ProcessBinding.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessBindingUpsertOne) UpdateNewValues() *ProcessBindingUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessBinding.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ProcessBindingUpsertOne) Ignore() *ProcessBindingUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessBindingUpsertOne) DoNothing() *ProcessBindingUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessBindingCreate.OnConflict
+// documentation for more info.
+func (u *ProcessBindingUpsertOne) Update(set func(*ProcessBindingUpsert)) *ProcessBindingUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessBindingUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetBusinessType sets the "business_type" field.
+func (u *ProcessBindingUpsertOne) SetBusinessType(v string) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetBusinessType(v)
+	})
+}
+
+// UpdateBusinessType sets the "business_type" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdateBusinessType() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateBusinessType()
+	})
+}
+
+// SetBusinessSubType sets the "business_sub_type" field.
+func (u *ProcessBindingUpsertOne) SetBusinessSubType(v string) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetBusinessSubType(v)
+	})
+}
+
+// UpdateBusinessSubType sets the "business_sub_type" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdateBusinessSubType() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateBusinessSubType()
+	})
+}
+
+// ClearBusinessSubType clears the value of the "business_sub_type" field.
+func (u *ProcessBindingUpsertOne) ClearBusinessSubType() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearBusinessSubType()
+	})
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ProcessBindingUpsertOne) SetProcessDefinitionKey(v string) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetProcessDefinitionKey(v)
+	})
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdateProcessDefinitionKey() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateProcessDefinitionKey()
+	})
+}
+
+// SetProcessVersion sets the "process_version" field.
+func (u *ProcessBindingUpsertOne) SetProcessVersion(v int) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetProcessVersion(v)
+	})
+}
+
+// AddProcessVersion adds v to the "process_version" field.
+func (u *ProcessBindingUpsertOne) AddProcessVersion(v int) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.AddProcessVersion(v)
+	})
+}
+
+// UpdateProcessVersion sets the "process_version" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdateProcessVersion() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateProcessVersion()
+	})
+}
+
+// SetIsDefault sets the "is_default" field.
+func (u *ProcessBindingUpsertOne) SetIsDefault(v bool) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetIsDefault(v)
+	})
+}
+
+// UpdateIsDefault sets the "is_default" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdateIsDefault() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateIsDefault()
+	})
+}
+
+// SetPriority sets the "priority" field.
+func (u *ProcessBindingUpsertOne) SetPriority(v int) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// AddPriority adds v to the "priority" field.
+func (u *ProcessBindingUpsertOne) AddPriority(v int) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.AddPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdatePriority() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *ProcessBindingUpsertOne) SetIsActive(v bool) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdateIsActive() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetDepartmentID sets the "department_id" field.
+func (u *ProcessBindingUpsertOne) SetDepartmentID(v int) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetDepartmentID(v)
+	})
+}
+
+// AddDepartmentID adds v to the "department_id" field.
+func (u *ProcessBindingUpsertOne) AddDepartmentID(v int) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.AddDepartmentID(v)
+	})
+}
+
+// UpdateDepartmentID sets the "department_id" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdateDepartmentID() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateDepartmentID()
+	})
+}
+
+// ClearDepartmentID clears the value of the "department_id" field.
+func (u *ProcessBindingUpsertOne) ClearDepartmentID() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearDepartmentID()
+	})
+}
+
+// SetTeamID sets the "team_id" field.
+func (u *ProcessBindingUpsertOne) SetTeamID(v int) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetTeamID(v)
+	})
+}
+
+// AddTeamID adds v to the "team_id" field.
+func (u *ProcessBindingUpsertOne) AddTeamID(v int) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.AddTeamID(v)
+	})
+}
+
+// UpdateTeamID sets the "team_id" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdateTeamID() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateTeamID()
+	})
+}
+
+// ClearTeamID clears the value of the "team_id" field.
+func (u *ProcessBindingUpsertOne) ClearTeamID() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearTeamID()
+	})
+}
+
+// SetScenario sets the "scenario" field.
+func (u *ProcessBindingUpsertOne) SetScenario(v string) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetScenario(v)
+	})
+}
+
+// UpdateScenario sets the "scenario" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdateScenario() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateScenario()
+	})
+}
+
+// ClearScenario clears the value of the "scenario" field.
+func (u *ProcessBindingUpsertOne) ClearScenario() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearScenario()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *ProcessBindingUpsertOne) SetCategory(v string) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdateCategory() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *ProcessBindingUpsertOne) ClearCategory() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetCategoryID sets the "category_id" field.
+func (u *ProcessBindingUpsertOne) SetCategoryID(v int) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetCategoryID(v)
+	})
+}
+
+// AddCategoryID adds v to the "category_id" field.
+func (u *ProcessBindingUpsertOne) AddCategoryID(v int) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.AddCategoryID(v)
+	})
+}
+
+// UpdateCategoryID sets the "category_id" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdateCategoryID() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateCategoryID()
+	})
+}
+
+// ClearCategoryID clears the value of the "category_id" field.
+func (u *ProcessBindingUpsertOne) ClearCategoryID() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearCategoryID()
+	})
+}
+
+// SetConditions sets the "conditions" field.
+func (u *ProcessBindingUpsertOne) SetConditions(v map[string]interface{}) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetConditions(v)
+	})
+}
+
+// UpdateConditions sets the "conditions" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdateConditions() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateConditions()
+	})
+}
+
+// ClearConditions clears the value of the "conditions" field.
+func (u *ProcessBindingUpsertOne) ClearConditions() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearConditions()
+	})
+}
+
+// SetApprovalChainID sets the "approval_chain_id" field.
+func (u *ProcessBindingUpsertOne) SetApprovalChainID(v string) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetApprovalChainID(v)
+	})
+}
+
+// UpdateApprovalChainID sets the "approval_chain_id" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdateApprovalChainID() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateApprovalChainID()
+	})
+}
+
+// ClearApprovalChainID clears the value of the "approval_chain_id" field.
+func (u *ProcessBindingUpsertOne) ClearApprovalChainID() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearApprovalChainID()
+	})
+}
+
+// SetSLAPolicyID sets the "sla_policy_id" field.
+func (u *ProcessBindingUpsertOne) SetSLAPolicyID(v string) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetSLAPolicyID(v)
+	})
+}
+
+// UpdateSLAPolicyID sets the "sla_policy_id" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdateSLAPolicyID() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateSLAPolicyID()
+	})
+}
+
+// ClearSLAPolicyID clears the value of the "sla_policy_id" field.
+func (u *ProcessBindingUpsertOne) ClearSLAPolicyID() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearSLAPolicyID()
+	})
+}
+
+// SetOverrides sets the "overrides" field.
+func (u *ProcessBindingUpsertOne) SetOverrides(v map[string]interface{}) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetOverrides(v)
+	})
+}
+
+// UpdateOverrides sets the "overrides" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdateOverrides() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateOverrides()
+	})
+}
+
+// ClearOverrides clears the value of the "overrides" field.
+func (u *ProcessBindingUpsertOne) ClearOverrides() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearOverrides()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessBindingUpsertOne) SetTenantID(v int) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessBindingUpsertOne) AddTenantID(v int) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdateTenantID() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessBindingUpsertOne) SetCreatedAt(v time.Time) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdateCreatedAt() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessBindingUpsertOne) SetUpdatedAt(v time.Time) *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessBindingUpsertOne) UpdateUpdatedAt() *ProcessBindingUpsertOne {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessBindingUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessBindingCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessBindingUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ProcessBindingUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ProcessBindingUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ProcessBindingCreateBulk is the builder for creating many ProcessBinding entities in bulk.
 type ProcessBindingCreateBulk struct {
 	config
 	err      error
 	builders []*ProcessBindingCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ProcessBinding entities in the database.
@@ -559,6 +1387,7 @@ func (_c *ProcessBindingCreateBulk) Save(ctx context.Context) ([]*ProcessBinding
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -609,6 +1438,488 @@ func (_c *ProcessBindingCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ProcessBindingCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessBinding.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessBindingUpsert) {
+//			SetBusinessType(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessBindingCreateBulk) OnConflict(opts ...sql.ConflictOption) *ProcessBindingUpsertBulk {
+	_c.conflict = opts
+	return &ProcessBindingUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessBinding.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessBindingCreateBulk) OnConflictColumns(columns ...string) *ProcessBindingUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessBindingUpsertBulk{
+		create: _c,
+	}
+}
+
+// ProcessBindingUpsertBulk is the builder for "upsert"-ing
+// a bulk of ProcessBinding nodes.
+type ProcessBindingUpsertBulk struct {
+	create *ProcessBindingCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ProcessBinding.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessBindingUpsertBulk) UpdateNewValues() *ProcessBindingUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessBinding.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ProcessBindingUpsertBulk) Ignore() *ProcessBindingUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessBindingUpsertBulk) DoNothing() *ProcessBindingUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessBindingCreateBulk.OnConflict
+// documentation for more info.
+func (u *ProcessBindingUpsertBulk) Update(set func(*ProcessBindingUpsert)) *ProcessBindingUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessBindingUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetBusinessType sets the "business_type" field.
+func (u *ProcessBindingUpsertBulk) SetBusinessType(v string) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetBusinessType(v)
+	})
+}
+
+// UpdateBusinessType sets the "business_type" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdateBusinessType() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateBusinessType()
+	})
+}
+
+// SetBusinessSubType sets the "business_sub_type" field.
+func (u *ProcessBindingUpsertBulk) SetBusinessSubType(v string) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetBusinessSubType(v)
+	})
+}
+
+// UpdateBusinessSubType sets the "business_sub_type" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdateBusinessSubType() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateBusinessSubType()
+	})
+}
+
+// ClearBusinessSubType clears the value of the "business_sub_type" field.
+func (u *ProcessBindingUpsertBulk) ClearBusinessSubType() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearBusinessSubType()
+	})
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ProcessBindingUpsertBulk) SetProcessDefinitionKey(v string) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetProcessDefinitionKey(v)
+	})
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdateProcessDefinitionKey() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateProcessDefinitionKey()
+	})
+}
+
+// SetProcessVersion sets the "process_version" field.
+func (u *ProcessBindingUpsertBulk) SetProcessVersion(v int) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetProcessVersion(v)
+	})
+}
+
+// AddProcessVersion adds v to the "process_version" field.
+func (u *ProcessBindingUpsertBulk) AddProcessVersion(v int) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.AddProcessVersion(v)
+	})
+}
+
+// UpdateProcessVersion sets the "process_version" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdateProcessVersion() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateProcessVersion()
+	})
+}
+
+// SetIsDefault sets the "is_default" field.
+func (u *ProcessBindingUpsertBulk) SetIsDefault(v bool) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetIsDefault(v)
+	})
+}
+
+// UpdateIsDefault sets the "is_default" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdateIsDefault() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateIsDefault()
+	})
+}
+
+// SetPriority sets the "priority" field.
+func (u *ProcessBindingUpsertBulk) SetPriority(v int) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// AddPriority adds v to the "priority" field.
+func (u *ProcessBindingUpsertBulk) AddPriority(v int) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.AddPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdatePriority() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *ProcessBindingUpsertBulk) SetIsActive(v bool) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdateIsActive() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetDepartmentID sets the "department_id" field.
+func (u *ProcessBindingUpsertBulk) SetDepartmentID(v int) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetDepartmentID(v)
+	})
+}
+
+// AddDepartmentID adds v to the "department_id" field.
+func (u *ProcessBindingUpsertBulk) AddDepartmentID(v int) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.AddDepartmentID(v)
+	})
+}
+
+// UpdateDepartmentID sets the "department_id" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdateDepartmentID() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateDepartmentID()
+	})
+}
+
+// ClearDepartmentID clears the value of the "department_id" field.
+func (u *ProcessBindingUpsertBulk) ClearDepartmentID() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearDepartmentID()
+	})
+}
+
+// SetTeamID sets the "team_id" field.
+func (u *ProcessBindingUpsertBulk) SetTeamID(v int) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetTeamID(v)
+	})
+}
+
+// AddTeamID adds v to the "team_id" field.
+func (u *ProcessBindingUpsertBulk) AddTeamID(v int) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.AddTeamID(v)
+	})
+}
+
+// UpdateTeamID sets the "team_id" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdateTeamID() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateTeamID()
+	})
+}
+
+// ClearTeamID clears the value of the "team_id" field.
+func (u *ProcessBindingUpsertBulk) ClearTeamID() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearTeamID()
+	})
+}
+
+// SetScenario sets the "scenario" field.
+func (u *ProcessBindingUpsertBulk) SetScenario(v string) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetScenario(v)
+	})
+}
+
+// UpdateScenario sets the "scenario" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdateScenario() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateScenario()
+	})
+}
+
+// ClearScenario clears the value of the "scenario" field.
+func (u *ProcessBindingUpsertBulk) ClearScenario() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearScenario()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *ProcessBindingUpsertBulk) SetCategory(v string) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdateCategory() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *ProcessBindingUpsertBulk) ClearCategory() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetCategoryID sets the "category_id" field.
+func (u *ProcessBindingUpsertBulk) SetCategoryID(v int) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetCategoryID(v)
+	})
+}
+
+// AddCategoryID adds v to the "category_id" field.
+func (u *ProcessBindingUpsertBulk) AddCategoryID(v int) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.AddCategoryID(v)
+	})
+}
+
+// UpdateCategoryID sets the "category_id" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdateCategoryID() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateCategoryID()
+	})
+}
+
+// ClearCategoryID clears the value of the "category_id" field.
+func (u *ProcessBindingUpsertBulk) ClearCategoryID() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearCategoryID()
+	})
+}
+
+// SetConditions sets the "conditions" field.
+func (u *ProcessBindingUpsertBulk) SetConditions(v map[string]interface{}) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetConditions(v)
+	})
+}
+
+// UpdateConditions sets the "conditions" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdateConditions() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateConditions()
+	})
+}
+
+// ClearConditions clears the value of the "conditions" field.
+func (u *ProcessBindingUpsertBulk) ClearConditions() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearConditions()
+	})
+}
+
+// SetApprovalChainID sets the "approval_chain_id" field.
+func (u *ProcessBindingUpsertBulk) SetApprovalChainID(v string) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetApprovalChainID(v)
+	})
+}
+
+// UpdateApprovalChainID sets the "approval_chain_id" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdateApprovalChainID() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateApprovalChainID()
+	})
+}
+
+// ClearApprovalChainID clears the value of the "approval_chain_id" field.
+func (u *ProcessBindingUpsertBulk) ClearApprovalChainID() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearApprovalChainID()
+	})
+}
+
+// SetSLAPolicyID sets the "sla_policy_id" field.
+func (u *ProcessBindingUpsertBulk) SetSLAPolicyID(v string) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetSLAPolicyID(v)
+	})
+}
+
+// UpdateSLAPolicyID sets the "sla_policy_id" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdateSLAPolicyID() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateSLAPolicyID()
+	})
+}
+
+// ClearSLAPolicyID clears the value of the "sla_policy_id" field.
+func (u *ProcessBindingUpsertBulk) ClearSLAPolicyID() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearSLAPolicyID()
+	})
+}
+
+// SetOverrides sets the "overrides" field.
+func (u *ProcessBindingUpsertBulk) SetOverrides(v map[string]interface{}) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetOverrides(v)
+	})
+}
+
+// UpdateOverrides sets the "overrides" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdateOverrides() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateOverrides()
+	})
+}
+
+// ClearOverrides clears the value of the "overrides" field.
+func (u *ProcessBindingUpsertBulk) ClearOverrides() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.ClearOverrides()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessBindingUpsertBulk) SetTenantID(v int) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessBindingUpsertBulk) AddTenantID(v int) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdateTenantID() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessBindingUpsertBulk) SetCreatedAt(v time.Time) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdateCreatedAt() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessBindingUpsertBulk) SetUpdatedAt(v time.Time) *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessBindingUpsertBulk) UpdateUpdatedAt() *ProcessBindingUpsertBulk {
+	return u.Update(func(s *ProcessBindingUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessBindingUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ProcessBindingCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessBindingCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessBindingUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

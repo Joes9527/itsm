@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/kaftaskactionledger"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type KafTaskActionLedgerCreate struct {
 	config
 	mutation *KafTaskActionLedgerMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTenantID sets the "tenant_id" field.
@@ -323,6 +325,7 @@ func (_c *KafTaskActionLedgerCreate) createSpec() (*KafTaskActionLedger, *sqlgra
 		_node = &KafTaskActionLedger{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(kaftaskactionledger.Table, sqlgraph.NewFieldSpec(kaftaskactionledger.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(kaftaskactionledger.FieldTenantID, field.TypeInt, value)
 		_node.TenantID = value
@@ -390,11 +393,397 @@ func (_c *KafTaskActionLedgerCreate) createSpec() (*KafTaskActionLedger, *sqlgra
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.KafTaskActionLedger.Create().
+//		SetTenantID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.KafTaskActionLedgerUpsert) {
+//			SetTenantID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *KafTaskActionLedgerCreate) OnConflict(opts ...sql.ConflictOption) *KafTaskActionLedgerUpsertOne {
+	_c.conflict = opts
+	return &KafTaskActionLedgerUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.KafTaskActionLedger.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *KafTaskActionLedgerCreate) OnConflictColumns(columns ...string) *KafTaskActionLedgerUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &KafTaskActionLedgerUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// KafTaskActionLedgerUpsertOne is the builder for "upsert"-ing
+	//  one KafTaskActionLedger node.
+	KafTaskActionLedgerUpsertOne struct {
+		create *KafTaskActionLedgerCreate
+	}
+
+	// KafTaskActionLedgerUpsert is the "OnConflict" setter.
+	KafTaskActionLedgerUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetResultStatus sets the "result_status" field.
+func (u *KafTaskActionLedgerUpsert) SetResultStatus(v string) *KafTaskActionLedgerUpsert {
+	u.Set(kaftaskactionledger.FieldResultStatus, v)
+	return u
+}
+
+// UpdateResultStatus sets the "result_status" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsert) UpdateResultStatus() *KafTaskActionLedgerUpsert {
+	u.SetExcluded(kaftaskactionledger.FieldResultStatus)
+	return u
+}
+
+// SetResultPayload sets the "result_payload" field.
+func (u *KafTaskActionLedgerUpsert) SetResultPayload(v json.RawMessage) *KafTaskActionLedgerUpsert {
+	u.Set(kaftaskactionledger.FieldResultPayload, v)
+	return u
+}
+
+// UpdateResultPayload sets the "result_payload" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsert) UpdateResultPayload() *KafTaskActionLedgerUpsert {
+	u.SetExcluded(kaftaskactionledger.FieldResultPayload)
+	return u
+}
+
+// ClearResultPayload clears the value of the "result_payload" field.
+func (u *KafTaskActionLedgerUpsert) ClearResultPayload() *KafTaskActionLedgerUpsert {
+	u.SetNull(kaftaskactionledger.FieldResultPayload)
+	return u
+}
+
+// SetLeaseOwner sets the "lease_owner" field.
+func (u *KafTaskActionLedgerUpsert) SetLeaseOwner(v string) *KafTaskActionLedgerUpsert {
+	u.Set(kaftaskactionledger.FieldLeaseOwner, v)
+	return u
+}
+
+// UpdateLeaseOwner sets the "lease_owner" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsert) UpdateLeaseOwner() *KafTaskActionLedgerUpsert {
+	u.SetExcluded(kaftaskactionledger.FieldLeaseOwner)
+	return u
+}
+
+// ClearLeaseOwner clears the value of the "lease_owner" field.
+func (u *KafTaskActionLedgerUpsert) ClearLeaseOwner() *KafTaskActionLedgerUpsert {
+	u.SetNull(kaftaskactionledger.FieldLeaseOwner)
+	return u
+}
+
+// SetLeaseExpiresAt sets the "lease_expires_at" field.
+func (u *KafTaskActionLedgerUpsert) SetLeaseExpiresAt(v time.Time) *KafTaskActionLedgerUpsert {
+	u.Set(kaftaskactionledger.FieldLeaseExpiresAt, v)
+	return u
+}
+
+// UpdateLeaseExpiresAt sets the "lease_expires_at" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsert) UpdateLeaseExpiresAt() *KafTaskActionLedgerUpsert {
+	u.SetExcluded(kaftaskactionledger.FieldLeaseExpiresAt)
+	return u
+}
+
+// ClearLeaseExpiresAt clears the value of the "lease_expires_at" field.
+func (u *KafTaskActionLedgerUpsert) ClearLeaseExpiresAt() *KafTaskActionLedgerUpsert {
+	u.SetNull(kaftaskactionledger.FieldLeaseExpiresAt)
+	return u
+}
+
+// SetLastErrorCode sets the "last_error_code" field.
+func (u *KafTaskActionLedgerUpsert) SetLastErrorCode(v string) *KafTaskActionLedgerUpsert {
+	u.Set(kaftaskactionledger.FieldLastErrorCode, v)
+	return u
+}
+
+// UpdateLastErrorCode sets the "last_error_code" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsert) UpdateLastErrorCode() *KafTaskActionLedgerUpsert {
+	u.SetExcluded(kaftaskactionledger.FieldLastErrorCode)
+	return u
+}
+
+// ClearLastErrorCode clears the value of the "last_error_code" field.
+func (u *KafTaskActionLedgerUpsert) ClearLastErrorCode() *KafTaskActionLedgerUpsert {
+	u.SetNull(kaftaskactionledger.FieldLastErrorCode)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *KafTaskActionLedgerUpsert) SetCreatedAt(v time.Time) *KafTaskActionLedgerUpsert {
+	u.Set(kaftaskactionledger.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsert) UpdateCreatedAt() *KafTaskActionLedgerUpsert {
+	u.SetExcluded(kaftaskactionledger.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *KafTaskActionLedgerUpsert) SetUpdatedAt(v time.Time) *KafTaskActionLedgerUpsert {
+	u.Set(kaftaskactionledger.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsert) UpdateUpdatedAt() *KafTaskActionLedgerUpsert {
+	u.SetExcluded(kaftaskactionledger.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.KafTaskActionLedger.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *KafTaskActionLedgerUpsertOne) UpdateNewValues() *KafTaskActionLedgerUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.TenantID(); exists {
+			s.SetIgnore(kaftaskactionledger.FieldTenantID)
+		}
+		if _, exists := u.create.mutation.TaskID(); exists {
+			s.SetIgnore(kaftaskactionledger.FieldTaskID)
+		}
+		if _, exists := u.create.mutation.RunID(); exists {
+			s.SetIgnore(kaftaskactionledger.FieldRunID)
+		}
+		if _, exists := u.create.mutation.StepID(); exists {
+			s.SetIgnore(kaftaskactionledger.FieldStepID)
+		}
+		if _, exists := u.create.mutation.Action(); exists {
+			s.SetIgnore(kaftaskactionledger.FieldAction)
+		}
+		if _, exists := u.create.mutation.IdempotencyKey(); exists {
+			s.SetIgnore(kaftaskactionledger.FieldIdempotencyKey)
+		}
+		if _, exists := u.create.mutation.CorrelationID(); exists {
+			s.SetIgnore(kaftaskactionledger.FieldCorrelationID)
+		}
+		if _, exists := u.create.mutation.ProcedureRef(); exists {
+			s.SetIgnore(kaftaskactionledger.FieldProcedureRef)
+		}
+		if _, exists := u.create.mutation.ProcedureVersion(); exists {
+			s.SetIgnore(kaftaskactionledger.FieldProcedureVersion)
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.KafTaskActionLedger.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *KafTaskActionLedgerUpsertOne) Ignore() *KafTaskActionLedgerUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *KafTaskActionLedgerUpsertOne) DoNothing() *KafTaskActionLedgerUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the KafTaskActionLedgerCreate.OnConflict
+// documentation for more info.
+func (u *KafTaskActionLedgerUpsertOne) Update(set func(*KafTaskActionLedgerUpsert)) *KafTaskActionLedgerUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&KafTaskActionLedgerUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetResultStatus sets the "result_status" field.
+func (u *KafTaskActionLedgerUpsertOne) SetResultStatus(v string) *KafTaskActionLedgerUpsertOne {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.SetResultStatus(v)
+	})
+}
+
+// UpdateResultStatus sets the "result_status" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsertOne) UpdateResultStatus() *KafTaskActionLedgerUpsertOne {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.UpdateResultStatus()
+	})
+}
+
+// SetResultPayload sets the "result_payload" field.
+func (u *KafTaskActionLedgerUpsertOne) SetResultPayload(v json.RawMessage) *KafTaskActionLedgerUpsertOne {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.SetResultPayload(v)
+	})
+}
+
+// UpdateResultPayload sets the "result_payload" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsertOne) UpdateResultPayload() *KafTaskActionLedgerUpsertOne {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.UpdateResultPayload()
+	})
+}
+
+// ClearResultPayload clears the value of the "result_payload" field.
+func (u *KafTaskActionLedgerUpsertOne) ClearResultPayload() *KafTaskActionLedgerUpsertOne {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.ClearResultPayload()
+	})
+}
+
+// SetLeaseOwner sets the "lease_owner" field.
+func (u *KafTaskActionLedgerUpsertOne) SetLeaseOwner(v string) *KafTaskActionLedgerUpsertOne {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.SetLeaseOwner(v)
+	})
+}
+
+// UpdateLeaseOwner sets the "lease_owner" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsertOne) UpdateLeaseOwner() *KafTaskActionLedgerUpsertOne {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.UpdateLeaseOwner()
+	})
+}
+
+// ClearLeaseOwner clears the value of the "lease_owner" field.
+func (u *KafTaskActionLedgerUpsertOne) ClearLeaseOwner() *KafTaskActionLedgerUpsertOne {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.ClearLeaseOwner()
+	})
+}
+
+// SetLeaseExpiresAt sets the "lease_expires_at" field.
+func (u *KafTaskActionLedgerUpsertOne) SetLeaseExpiresAt(v time.Time) *KafTaskActionLedgerUpsertOne {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.SetLeaseExpiresAt(v)
+	})
+}
+
+// UpdateLeaseExpiresAt sets the "lease_expires_at" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsertOne) UpdateLeaseExpiresAt() *KafTaskActionLedgerUpsertOne {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.UpdateLeaseExpiresAt()
+	})
+}
+
+// ClearLeaseExpiresAt clears the value of the "lease_expires_at" field.
+func (u *KafTaskActionLedgerUpsertOne) ClearLeaseExpiresAt() *KafTaskActionLedgerUpsertOne {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.ClearLeaseExpiresAt()
+	})
+}
+
+// SetLastErrorCode sets the "last_error_code" field.
+func (u *KafTaskActionLedgerUpsertOne) SetLastErrorCode(v string) *KafTaskActionLedgerUpsertOne {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.SetLastErrorCode(v)
+	})
+}
+
+// UpdateLastErrorCode sets the "last_error_code" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsertOne) UpdateLastErrorCode() *KafTaskActionLedgerUpsertOne {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.UpdateLastErrorCode()
+	})
+}
+
+// ClearLastErrorCode clears the value of the "last_error_code" field.
+func (u *KafTaskActionLedgerUpsertOne) ClearLastErrorCode() *KafTaskActionLedgerUpsertOne {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.ClearLastErrorCode()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *KafTaskActionLedgerUpsertOne) SetCreatedAt(v time.Time) *KafTaskActionLedgerUpsertOne {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsertOne) UpdateCreatedAt() *KafTaskActionLedgerUpsertOne {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *KafTaskActionLedgerUpsertOne) SetUpdatedAt(v time.Time) *KafTaskActionLedgerUpsertOne {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsertOne) UpdateUpdatedAt() *KafTaskActionLedgerUpsertOne {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *KafTaskActionLedgerUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for KafTaskActionLedgerCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *KafTaskActionLedgerUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *KafTaskActionLedgerUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *KafTaskActionLedgerUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // KafTaskActionLedgerCreateBulk is the builder for creating many KafTaskActionLedger entities in bulk.
 type KafTaskActionLedgerCreateBulk struct {
 	config
 	err      error
 	builders []*KafTaskActionLedgerCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the KafTaskActionLedger entities in the database.
@@ -424,6 +813,7 @@ func (_c *KafTaskActionLedgerCreateBulk) Save(ctx context.Context) ([]*KafTaskAc
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -474,6 +864,267 @@ func (_c *KafTaskActionLedgerCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *KafTaskActionLedgerCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.KafTaskActionLedger.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.KafTaskActionLedgerUpsert) {
+//			SetTenantID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *KafTaskActionLedgerCreateBulk) OnConflict(opts ...sql.ConflictOption) *KafTaskActionLedgerUpsertBulk {
+	_c.conflict = opts
+	return &KafTaskActionLedgerUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.KafTaskActionLedger.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *KafTaskActionLedgerCreateBulk) OnConflictColumns(columns ...string) *KafTaskActionLedgerUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &KafTaskActionLedgerUpsertBulk{
+		create: _c,
+	}
+}
+
+// KafTaskActionLedgerUpsertBulk is the builder for "upsert"-ing
+// a bulk of KafTaskActionLedger nodes.
+type KafTaskActionLedgerUpsertBulk struct {
+	create *KafTaskActionLedgerCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.KafTaskActionLedger.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *KafTaskActionLedgerUpsertBulk) UpdateNewValues() *KafTaskActionLedgerUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.TenantID(); exists {
+				s.SetIgnore(kaftaskactionledger.FieldTenantID)
+			}
+			if _, exists := b.mutation.TaskID(); exists {
+				s.SetIgnore(kaftaskactionledger.FieldTaskID)
+			}
+			if _, exists := b.mutation.RunID(); exists {
+				s.SetIgnore(kaftaskactionledger.FieldRunID)
+			}
+			if _, exists := b.mutation.StepID(); exists {
+				s.SetIgnore(kaftaskactionledger.FieldStepID)
+			}
+			if _, exists := b.mutation.Action(); exists {
+				s.SetIgnore(kaftaskactionledger.FieldAction)
+			}
+			if _, exists := b.mutation.IdempotencyKey(); exists {
+				s.SetIgnore(kaftaskactionledger.FieldIdempotencyKey)
+			}
+			if _, exists := b.mutation.CorrelationID(); exists {
+				s.SetIgnore(kaftaskactionledger.FieldCorrelationID)
+			}
+			if _, exists := b.mutation.ProcedureRef(); exists {
+				s.SetIgnore(kaftaskactionledger.FieldProcedureRef)
+			}
+			if _, exists := b.mutation.ProcedureVersion(); exists {
+				s.SetIgnore(kaftaskactionledger.FieldProcedureVersion)
+			}
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.KafTaskActionLedger.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *KafTaskActionLedgerUpsertBulk) Ignore() *KafTaskActionLedgerUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *KafTaskActionLedgerUpsertBulk) DoNothing() *KafTaskActionLedgerUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the KafTaskActionLedgerCreateBulk.OnConflict
+// documentation for more info.
+func (u *KafTaskActionLedgerUpsertBulk) Update(set func(*KafTaskActionLedgerUpsert)) *KafTaskActionLedgerUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&KafTaskActionLedgerUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetResultStatus sets the "result_status" field.
+func (u *KafTaskActionLedgerUpsertBulk) SetResultStatus(v string) *KafTaskActionLedgerUpsertBulk {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.SetResultStatus(v)
+	})
+}
+
+// UpdateResultStatus sets the "result_status" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsertBulk) UpdateResultStatus() *KafTaskActionLedgerUpsertBulk {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.UpdateResultStatus()
+	})
+}
+
+// SetResultPayload sets the "result_payload" field.
+func (u *KafTaskActionLedgerUpsertBulk) SetResultPayload(v json.RawMessage) *KafTaskActionLedgerUpsertBulk {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.SetResultPayload(v)
+	})
+}
+
+// UpdateResultPayload sets the "result_payload" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsertBulk) UpdateResultPayload() *KafTaskActionLedgerUpsertBulk {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.UpdateResultPayload()
+	})
+}
+
+// ClearResultPayload clears the value of the "result_payload" field.
+func (u *KafTaskActionLedgerUpsertBulk) ClearResultPayload() *KafTaskActionLedgerUpsertBulk {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.ClearResultPayload()
+	})
+}
+
+// SetLeaseOwner sets the "lease_owner" field.
+func (u *KafTaskActionLedgerUpsertBulk) SetLeaseOwner(v string) *KafTaskActionLedgerUpsertBulk {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.SetLeaseOwner(v)
+	})
+}
+
+// UpdateLeaseOwner sets the "lease_owner" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsertBulk) UpdateLeaseOwner() *KafTaskActionLedgerUpsertBulk {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.UpdateLeaseOwner()
+	})
+}
+
+// ClearLeaseOwner clears the value of the "lease_owner" field.
+func (u *KafTaskActionLedgerUpsertBulk) ClearLeaseOwner() *KafTaskActionLedgerUpsertBulk {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.ClearLeaseOwner()
+	})
+}
+
+// SetLeaseExpiresAt sets the "lease_expires_at" field.
+func (u *KafTaskActionLedgerUpsertBulk) SetLeaseExpiresAt(v time.Time) *KafTaskActionLedgerUpsertBulk {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.SetLeaseExpiresAt(v)
+	})
+}
+
+// UpdateLeaseExpiresAt sets the "lease_expires_at" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsertBulk) UpdateLeaseExpiresAt() *KafTaskActionLedgerUpsertBulk {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.UpdateLeaseExpiresAt()
+	})
+}
+
+// ClearLeaseExpiresAt clears the value of the "lease_expires_at" field.
+func (u *KafTaskActionLedgerUpsertBulk) ClearLeaseExpiresAt() *KafTaskActionLedgerUpsertBulk {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.ClearLeaseExpiresAt()
+	})
+}
+
+// SetLastErrorCode sets the "last_error_code" field.
+func (u *KafTaskActionLedgerUpsertBulk) SetLastErrorCode(v string) *KafTaskActionLedgerUpsertBulk {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.SetLastErrorCode(v)
+	})
+}
+
+// UpdateLastErrorCode sets the "last_error_code" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsertBulk) UpdateLastErrorCode() *KafTaskActionLedgerUpsertBulk {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.UpdateLastErrorCode()
+	})
+}
+
+// ClearLastErrorCode clears the value of the "last_error_code" field.
+func (u *KafTaskActionLedgerUpsertBulk) ClearLastErrorCode() *KafTaskActionLedgerUpsertBulk {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.ClearLastErrorCode()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *KafTaskActionLedgerUpsertBulk) SetCreatedAt(v time.Time) *KafTaskActionLedgerUpsertBulk {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsertBulk) UpdateCreatedAt() *KafTaskActionLedgerUpsertBulk {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *KafTaskActionLedgerUpsertBulk) SetUpdatedAt(v time.Time) *KafTaskActionLedgerUpsertBulk {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *KafTaskActionLedgerUpsertBulk) UpdateUpdatedAt() *KafTaskActionLedgerUpsertBulk {
+	return u.Update(func(s *KafTaskActionLedgerUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *KafTaskActionLedgerUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the KafTaskActionLedgerCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for KafTaskActionLedgerCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *KafTaskActionLedgerUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

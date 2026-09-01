@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/ticketapproval"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type TicketApprovalCreate struct {
 	config
 	mutation *TicketApprovalMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -258,6 +260,7 @@ func (_c *TicketApprovalCreate) createSpec() (*TicketApproval, *sqlgraph.CreateS
 		_node = &TicketApproval{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(ticketapproval.Table, sqlgraph.NewFieldSpec(ticketapproval.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Level(); ok {
 		_spec.SetField(ticketapproval.FieldLevel, field.TypeInt, value)
 		_node.Level = value
@@ -322,11 +325,529 @@ func (_c *TicketApprovalCreate) createSpec() (*TicketApproval, *sqlgraph.CreateS
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TicketApproval.Create().
+//		SetTicketID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TicketApprovalUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TicketApprovalCreate) OnConflict(opts ...sql.ConflictOption) *TicketApprovalUpsertOne {
+	_c.conflict = opts
+	return &TicketApprovalUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TicketApproval.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TicketApprovalCreate) OnConflictColumns(columns ...string) *TicketApprovalUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TicketApprovalUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// TicketApprovalUpsertOne is the builder for "upsert"-ing
+	//  one TicketApproval node.
+	TicketApprovalUpsertOne struct {
+		create *TicketApprovalCreate
+	}
+
+	// TicketApprovalUpsert is the "OnConflict" setter.
+	TicketApprovalUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTicketID sets the "ticket_id" field.
+func (u *TicketApprovalUpsert) SetTicketID(v int) *TicketApprovalUpsert {
+	u.Set(ticketapproval.FieldTicketID, v)
+	return u
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *TicketApprovalUpsert) UpdateTicketID() *TicketApprovalUpsert {
+	u.SetExcluded(ticketapproval.FieldTicketID)
+	return u
+}
+
+// SetLevel sets the "level" field.
+func (u *TicketApprovalUpsert) SetLevel(v int) *TicketApprovalUpsert {
+	u.Set(ticketapproval.FieldLevel, v)
+	return u
+}
+
+// UpdateLevel sets the "level" field to the value that was provided on create.
+func (u *TicketApprovalUpsert) UpdateLevel() *TicketApprovalUpsert {
+	u.SetExcluded(ticketapproval.FieldLevel)
+	return u
+}
+
+// AddLevel adds v to the "level" field.
+func (u *TicketApprovalUpsert) AddLevel(v int) *TicketApprovalUpsert {
+	u.Add(ticketapproval.FieldLevel, v)
+	return u
+}
+
+// SetLevelName sets the "level_name" field.
+func (u *TicketApprovalUpsert) SetLevelName(v string) *TicketApprovalUpsert {
+	u.Set(ticketapproval.FieldLevelName, v)
+	return u
+}
+
+// UpdateLevelName sets the "level_name" field to the value that was provided on create.
+func (u *TicketApprovalUpsert) UpdateLevelName() *TicketApprovalUpsert {
+	u.SetExcluded(ticketapproval.FieldLevelName)
+	return u
+}
+
+// SetApproverID sets the "approver_id" field.
+func (u *TicketApprovalUpsert) SetApproverID(v int) *TicketApprovalUpsert {
+	u.Set(ticketapproval.FieldApproverID, v)
+	return u
+}
+
+// UpdateApproverID sets the "approver_id" field to the value that was provided on create.
+func (u *TicketApprovalUpsert) UpdateApproverID() *TicketApprovalUpsert {
+	u.SetExcluded(ticketapproval.FieldApproverID)
+	return u
+}
+
+// AddApproverID adds v to the "approver_id" field.
+func (u *TicketApprovalUpsert) AddApproverID(v int) *TicketApprovalUpsert {
+	u.Add(ticketapproval.FieldApproverID, v)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *TicketApprovalUpsert) SetStatus(v string) *TicketApprovalUpsert {
+	u.Set(ticketapproval.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *TicketApprovalUpsert) UpdateStatus() *TicketApprovalUpsert {
+	u.SetExcluded(ticketapproval.FieldStatus)
+	return u
+}
+
+// SetAction sets the "action" field.
+func (u *TicketApprovalUpsert) SetAction(v string) *TicketApprovalUpsert {
+	u.Set(ticketapproval.FieldAction, v)
+	return u
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *TicketApprovalUpsert) UpdateAction() *TicketApprovalUpsert {
+	u.SetExcluded(ticketapproval.FieldAction)
+	return u
+}
+
+// ClearAction clears the value of the "action" field.
+func (u *TicketApprovalUpsert) ClearAction() *TicketApprovalUpsert {
+	u.SetNull(ticketapproval.FieldAction)
+	return u
+}
+
+// SetComment sets the "comment" field.
+func (u *TicketApprovalUpsert) SetComment(v string) *TicketApprovalUpsert {
+	u.Set(ticketapproval.FieldComment, v)
+	return u
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *TicketApprovalUpsert) UpdateComment() *TicketApprovalUpsert {
+	u.SetExcluded(ticketapproval.FieldComment)
+	return u
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *TicketApprovalUpsert) ClearComment() *TicketApprovalUpsert {
+	u.SetNull(ticketapproval.FieldComment)
+	return u
+}
+
+// SetDelegateToUserID sets the "delegate_to_user_id" field.
+func (u *TicketApprovalUpsert) SetDelegateToUserID(v int) *TicketApprovalUpsert {
+	u.Set(ticketapproval.FieldDelegateToUserID, v)
+	return u
+}
+
+// UpdateDelegateToUserID sets the "delegate_to_user_id" field to the value that was provided on create.
+func (u *TicketApprovalUpsert) UpdateDelegateToUserID() *TicketApprovalUpsert {
+	u.SetExcluded(ticketapproval.FieldDelegateToUserID)
+	return u
+}
+
+// AddDelegateToUserID adds v to the "delegate_to_user_id" field.
+func (u *TicketApprovalUpsert) AddDelegateToUserID(v int) *TicketApprovalUpsert {
+	u.Add(ticketapproval.FieldDelegateToUserID, v)
+	return u
+}
+
+// ClearDelegateToUserID clears the value of the "delegate_to_user_id" field.
+func (u *TicketApprovalUpsert) ClearDelegateToUserID() *TicketApprovalUpsert {
+	u.SetNull(ticketapproval.FieldDelegateToUserID)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketApprovalUpsert) SetTenantID(v int) *TicketApprovalUpsert {
+	u.Set(ticketapproval.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketApprovalUpsert) UpdateTenantID() *TicketApprovalUpsert {
+	u.SetExcluded(ticketapproval.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketApprovalUpsert) AddTenantID(v int) *TicketApprovalUpsert {
+	u.Add(ticketapproval.FieldTenantID, v)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TicketApprovalUpsert) SetUpdatedAt(v time.Time) *TicketApprovalUpsert {
+	u.Set(ticketapproval.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TicketApprovalUpsert) UpdateUpdatedAt() *TicketApprovalUpsert {
+	u.SetExcluded(ticketapproval.FieldUpdatedAt)
+	return u
+}
+
+// SetProcessedAt sets the "processed_at" field.
+func (u *TicketApprovalUpsert) SetProcessedAt(v time.Time) *TicketApprovalUpsert {
+	u.Set(ticketapproval.FieldProcessedAt, v)
+	return u
+}
+
+// UpdateProcessedAt sets the "processed_at" field to the value that was provided on create.
+func (u *TicketApprovalUpsert) UpdateProcessedAt() *TicketApprovalUpsert {
+	u.SetExcluded(ticketapproval.FieldProcessedAt)
+	return u
+}
+
+// ClearProcessedAt clears the value of the "processed_at" field.
+func (u *TicketApprovalUpsert) ClearProcessedAt() *TicketApprovalUpsert {
+	u.SetNull(ticketapproval.FieldProcessedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.TicketApproval.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TicketApprovalUpsertOne) UpdateNewValues() *TicketApprovalUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.CreatedAt(); exists {
+			s.SetIgnore(ticketapproval.FieldCreatedAt)
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TicketApproval.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *TicketApprovalUpsertOne) Ignore() *TicketApprovalUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TicketApprovalUpsertOne) DoNothing() *TicketApprovalUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TicketApprovalCreate.OnConflict
+// documentation for more info.
+func (u *TicketApprovalUpsertOne) Update(set func(*TicketApprovalUpsert)) *TicketApprovalUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TicketApprovalUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *TicketApprovalUpsertOne) SetTicketID(v int) *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *TicketApprovalUpsertOne) UpdateTicketID() *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetLevel sets the "level" field.
+func (u *TicketApprovalUpsertOne) SetLevel(v int) *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetLevel(v)
+	})
+}
+
+// AddLevel adds v to the "level" field.
+func (u *TicketApprovalUpsertOne) AddLevel(v int) *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.AddLevel(v)
+	})
+}
+
+// UpdateLevel sets the "level" field to the value that was provided on create.
+func (u *TicketApprovalUpsertOne) UpdateLevel() *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateLevel()
+	})
+}
+
+// SetLevelName sets the "level_name" field.
+func (u *TicketApprovalUpsertOne) SetLevelName(v string) *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetLevelName(v)
+	})
+}
+
+// UpdateLevelName sets the "level_name" field to the value that was provided on create.
+func (u *TicketApprovalUpsertOne) UpdateLevelName() *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateLevelName()
+	})
+}
+
+// SetApproverID sets the "approver_id" field.
+func (u *TicketApprovalUpsertOne) SetApproverID(v int) *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetApproverID(v)
+	})
+}
+
+// AddApproverID adds v to the "approver_id" field.
+func (u *TicketApprovalUpsertOne) AddApproverID(v int) *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.AddApproverID(v)
+	})
+}
+
+// UpdateApproverID sets the "approver_id" field to the value that was provided on create.
+func (u *TicketApprovalUpsertOne) UpdateApproverID() *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateApproverID()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *TicketApprovalUpsertOne) SetStatus(v string) *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *TicketApprovalUpsertOne) UpdateStatus() *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetAction sets the "action" field.
+func (u *TicketApprovalUpsertOne) SetAction(v string) *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetAction(v)
+	})
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *TicketApprovalUpsertOne) UpdateAction() *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateAction()
+	})
+}
+
+// ClearAction clears the value of the "action" field.
+func (u *TicketApprovalUpsertOne) ClearAction() *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.ClearAction()
+	})
+}
+
+// SetComment sets the "comment" field.
+func (u *TicketApprovalUpsertOne) SetComment(v string) *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetComment(v)
+	})
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *TicketApprovalUpsertOne) UpdateComment() *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateComment()
+	})
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *TicketApprovalUpsertOne) ClearComment() *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.ClearComment()
+	})
+}
+
+// SetDelegateToUserID sets the "delegate_to_user_id" field.
+func (u *TicketApprovalUpsertOne) SetDelegateToUserID(v int) *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetDelegateToUserID(v)
+	})
+}
+
+// AddDelegateToUserID adds v to the "delegate_to_user_id" field.
+func (u *TicketApprovalUpsertOne) AddDelegateToUserID(v int) *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.AddDelegateToUserID(v)
+	})
+}
+
+// UpdateDelegateToUserID sets the "delegate_to_user_id" field to the value that was provided on create.
+func (u *TicketApprovalUpsertOne) UpdateDelegateToUserID() *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateDelegateToUserID()
+	})
+}
+
+// ClearDelegateToUserID clears the value of the "delegate_to_user_id" field.
+func (u *TicketApprovalUpsertOne) ClearDelegateToUserID() *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.ClearDelegateToUserID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketApprovalUpsertOne) SetTenantID(v int) *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketApprovalUpsertOne) AddTenantID(v int) *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketApprovalUpsertOne) UpdateTenantID() *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TicketApprovalUpsertOne) SetUpdatedAt(v time.Time) *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TicketApprovalUpsertOne) UpdateUpdatedAt() *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetProcessedAt sets the "processed_at" field.
+func (u *TicketApprovalUpsertOne) SetProcessedAt(v time.Time) *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetProcessedAt(v)
+	})
+}
+
+// UpdateProcessedAt sets the "processed_at" field to the value that was provided on create.
+func (u *TicketApprovalUpsertOne) UpdateProcessedAt() *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateProcessedAt()
+	})
+}
+
+// ClearProcessedAt clears the value of the "processed_at" field.
+func (u *TicketApprovalUpsertOne) ClearProcessedAt() *TicketApprovalUpsertOne {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.ClearProcessedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TicketApprovalUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TicketApprovalCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TicketApprovalUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *TicketApprovalUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *TicketApprovalUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // TicketApprovalCreateBulk is the builder for creating many TicketApproval entities in bulk.
 type TicketApprovalCreateBulk struct {
 	config
 	err      error
 	builders []*TicketApprovalCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the TicketApproval entities in the database.
@@ -356,6 +877,7 @@ func (_c *TicketApprovalCreateBulk) Save(ctx context.Context) ([]*TicketApproval
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -406,6 +928,327 @@ func (_c *TicketApprovalCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *TicketApprovalCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TicketApproval.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TicketApprovalUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TicketApprovalCreateBulk) OnConflict(opts ...sql.ConflictOption) *TicketApprovalUpsertBulk {
+	_c.conflict = opts
+	return &TicketApprovalUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TicketApproval.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TicketApprovalCreateBulk) OnConflictColumns(columns ...string) *TicketApprovalUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TicketApprovalUpsertBulk{
+		create: _c,
+	}
+}
+
+// TicketApprovalUpsertBulk is the builder for "upsert"-ing
+// a bulk of TicketApproval nodes.
+type TicketApprovalUpsertBulk struct {
+	create *TicketApprovalCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.TicketApproval.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TicketApprovalUpsertBulk) UpdateNewValues() *TicketApprovalUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.CreatedAt(); exists {
+				s.SetIgnore(ticketapproval.FieldCreatedAt)
+			}
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TicketApproval.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *TicketApprovalUpsertBulk) Ignore() *TicketApprovalUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TicketApprovalUpsertBulk) DoNothing() *TicketApprovalUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TicketApprovalCreateBulk.OnConflict
+// documentation for more info.
+func (u *TicketApprovalUpsertBulk) Update(set func(*TicketApprovalUpsert)) *TicketApprovalUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TicketApprovalUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *TicketApprovalUpsertBulk) SetTicketID(v int) *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *TicketApprovalUpsertBulk) UpdateTicketID() *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetLevel sets the "level" field.
+func (u *TicketApprovalUpsertBulk) SetLevel(v int) *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetLevel(v)
+	})
+}
+
+// AddLevel adds v to the "level" field.
+func (u *TicketApprovalUpsertBulk) AddLevel(v int) *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.AddLevel(v)
+	})
+}
+
+// UpdateLevel sets the "level" field to the value that was provided on create.
+func (u *TicketApprovalUpsertBulk) UpdateLevel() *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateLevel()
+	})
+}
+
+// SetLevelName sets the "level_name" field.
+func (u *TicketApprovalUpsertBulk) SetLevelName(v string) *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetLevelName(v)
+	})
+}
+
+// UpdateLevelName sets the "level_name" field to the value that was provided on create.
+func (u *TicketApprovalUpsertBulk) UpdateLevelName() *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateLevelName()
+	})
+}
+
+// SetApproverID sets the "approver_id" field.
+func (u *TicketApprovalUpsertBulk) SetApproverID(v int) *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetApproverID(v)
+	})
+}
+
+// AddApproverID adds v to the "approver_id" field.
+func (u *TicketApprovalUpsertBulk) AddApproverID(v int) *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.AddApproverID(v)
+	})
+}
+
+// UpdateApproverID sets the "approver_id" field to the value that was provided on create.
+func (u *TicketApprovalUpsertBulk) UpdateApproverID() *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateApproverID()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *TicketApprovalUpsertBulk) SetStatus(v string) *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *TicketApprovalUpsertBulk) UpdateStatus() *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetAction sets the "action" field.
+func (u *TicketApprovalUpsertBulk) SetAction(v string) *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetAction(v)
+	})
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *TicketApprovalUpsertBulk) UpdateAction() *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateAction()
+	})
+}
+
+// ClearAction clears the value of the "action" field.
+func (u *TicketApprovalUpsertBulk) ClearAction() *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.ClearAction()
+	})
+}
+
+// SetComment sets the "comment" field.
+func (u *TicketApprovalUpsertBulk) SetComment(v string) *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetComment(v)
+	})
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *TicketApprovalUpsertBulk) UpdateComment() *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateComment()
+	})
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *TicketApprovalUpsertBulk) ClearComment() *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.ClearComment()
+	})
+}
+
+// SetDelegateToUserID sets the "delegate_to_user_id" field.
+func (u *TicketApprovalUpsertBulk) SetDelegateToUserID(v int) *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetDelegateToUserID(v)
+	})
+}
+
+// AddDelegateToUserID adds v to the "delegate_to_user_id" field.
+func (u *TicketApprovalUpsertBulk) AddDelegateToUserID(v int) *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.AddDelegateToUserID(v)
+	})
+}
+
+// UpdateDelegateToUserID sets the "delegate_to_user_id" field to the value that was provided on create.
+func (u *TicketApprovalUpsertBulk) UpdateDelegateToUserID() *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateDelegateToUserID()
+	})
+}
+
+// ClearDelegateToUserID clears the value of the "delegate_to_user_id" field.
+func (u *TicketApprovalUpsertBulk) ClearDelegateToUserID() *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.ClearDelegateToUserID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketApprovalUpsertBulk) SetTenantID(v int) *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketApprovalUpsertBulk) AddTenantID(v int) *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketApprovalUpsertBulk) UpdateTenantID() *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TicketApprovalUpsertBulk) SetUpdatedAt(v time.Time) *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TicketApprovalUpsertBulk) UpdateUpdatedAt() *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetProcessedAt sets the "processed_at" field.
+func (u *TicketApprovalUpsertBulk) SetProcessedAt(v time.Time) *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.SetProcessedAt(v)
+	})
+}
+
+// UpdateProcessedAt sets the "processed_at" field to the value that was provided on create.
+func (u *TicketApprovalUpsertBulk) UpdateProcessedAt() *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.UpdateProcessedAt()
+	})
+}
+
+// ClearProcessedAt clears the value of the "processed_at" field.
+func (u *TicketApprovalUpsertBulk) ClearProcessedAt() *TicketApprovalUpsertBulk {
+	return u.Update(func(s *TicketApprovalUpsert) {
+		s.ClearProcessedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TicketApprovalUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the TicketApprovalCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TicketApprovalCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TicketApprovalUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

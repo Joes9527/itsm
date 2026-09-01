@@ -14,6 +14,7 @@ import (
 	"itsm-backend/ent/team"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -23,6 +24,7 @@ type TagCreate struct {
 	config
 	mutation *TagMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -284,6 +286,7 @@ func (_c *TagCreate) createSpec() (*Tag, *sqlgraph.CreateSpec) {
 		_node = &Tag{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(tag.Table, sqlgraph.NewFieldSpec(tag.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(tag.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -395,11 +398,342 @@ func (_c *TagCreate) createSpec() (*Tag, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Tag.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TagUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TagCreate) OnConflict(opts ...sql.ConflictOption) *TagUpsertOne {
+	_c.conflict = opts
+	return &TagUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Tag.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TagCreate) OnConflictColumns(columns ...string) *TagUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TagUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// TagUpsertOne is the builder for "upsert"-ing
+	//  one Tag node.
+	TagUpsertOne struct {
+		create *TagCreate
+	}
+
+	// TagUpsert is the "OnConflict" setter.
+	TagUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *TagUpsert) SetName(v string) *TagUpsert {
+	u.Set(tag.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *TagUpsert) UpdateName() *TagUpsert {
+	u.SetExcluded(tag.FieldName)
+	return u
+}
+
+// SetCode sets the "code" field.
+func (u *TagUpsert) SetCode(v string) *TagUpsert {
+	u.Set(tag.FieldCode, v)
+	return u
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *TagUpsert) UpdateCode() *TagUpsert {
+	u.SetExcluded(tag.FieldCode)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *TagUpsert) SetDescription(v string) *TagUpsert {
+	u.Set(tag.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *TagUpsert) UpdateDescription() *TagUpsert {
+	u.SetExcluded(tag.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *TagUpsert) ClearDescription() *TagUpsert {
+	u.SetNull(tag.FieldDescription)
+	return u
+}
+
+// SetColor sets the "color" field.
+func (u *TagUpsert) SetColor(v string) *TagUpsert {
+	u.Set(tag.FieldColor, v)
+	return u
+}
+
+// UpdateColor sets the "color" field to the value that was provided on create.
+func (u *TagUpsert) UpdateColor() *TagUpsert {
+	u.SetExcluded(tag.FieldColor)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TagUpsert) SetTenantID(v int) *TagUpsert {
+	u.Set(tag.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TagUpsert) UpdateTenantID() *TagUpsert {
+	u.SetExcluded(tag.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TagUpsert) AddTenantID(v int) *TagUpsert {
+	u.Add(tag.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TagUpsert) SetCreatedAt(v time.Time) *TagUpsert {
+	u.Set(tag.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TagUpsert) UpdateCreatedAt() *TagUpsert {
+	u.SetExcluded(tag.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TagUpsert) SetUpdatedAt(v time.Time) *TagUpsert {
+	u.Set(tag.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TagUpsert) UpdateUpdatedAt() *TagUpsert {
+	u.SetExcluded(tag.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.Tag.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TagUpsertOne) UpdateNewValues() *TagUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Tag.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *TagUpsertOne) Ignore() *TagUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TagUpsertOne) DoNothing() *TagUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TagCreate.OnConflict
+// documentation for more info.
+func (u *TagUpsertOne) Update(set func(*TagUpsert)) *TagUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TagUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *TagUpsertOne) SetName(v string) *TagUpsertOne {
+	return u.Update(func(s *TagUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *TagUpsertOne) UpdateName() *TagUpsertOne {
+	return u.Update(func(s *TagUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetCode sets the "code" field.
+func (u *TagUpsertOne) SetCode(v string) *TagUpsertOne {
+	return u.Update(func(s *TagUpsert) {
+		s.SetCode(v)
+	})
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *TagUpsertOne) UpdateCode() *TagUpsertOne {
+	return u.Update(func(s *TagUpsert) {
+		s.UpdateCode()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *TagUpsertOne) SetDescription(v string) *TagUpsertOne {
+	return u.Update(func(s *TagUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *TagUpsertOne) UpdateDescription() *TagUpsertOne {
+	return u.Update(func(s *TagUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *TagUpsertOne) ClearDescription() *TagUpsertOne {
+	return u.Update(func(s *TagUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetColor sets the "color" field.
+func (u *TagUpsertOne) SetColor(v string) *TagUpsertOne {
+	return u.Update(func(s *TagUpsert) {
+		s.SetColor(v)
+	})
+}
+
+// UpdateColor sets the "color" field to the value that was provided on create.
+func (u *TagUpsertOne) UpdateColor() *TagUpsertOne {
+	return u.Update(func(s *TagUpsert) {
+		s.UpdateColor()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TagUpsertOne) SetTenantID(v int) *TagUpsertOne {
+	return u.Update(func(s *TagUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TagUpsertOne) AddTenantID(v int) *TagUpsertOne {
+	return u.Update(func(s *TagUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TagUpsertOne) UpdateTenantID() *TagUpsertOne {
+	return u.Update(func(s *TagUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TagUpsertOne) SetCreatedAt(v time.Time) *TagUpsertOne {
+	return u.Update(func(s *TagUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TagUpsertOne) UpdateCreatedAt() *TagUpsertOne {
+	return u.Update(func(s *TagUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TagUpsertOne) SetUpdatedAt(v time.Time) *TagUpsertOne {
+	return u.Update(func(s *TagUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TagUpsertOne) UpdateUpdatedAt() *TagUpsertOne {
+	return u.Update(func(s *TagUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TagUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TagCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TagUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *TagUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *TagUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // TagCreateBulk is the builder for creating many Tag entities in bulk.
 type TagCreateBulk struct {
 	config
 	err      error
 	builders []*TagCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the Tag entities in the database.
@@ -429,6 +763,7 @@ func (_c *TagCreateBulk) Save(ctx context.Context) ([]*Tag, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -479,6 +814,222 @@ func (_c *TagCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *TagCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Tag.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TagUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TagCreateBulk) OnConflict(opts ...sql.ConflictOption) *TagUpsertBulk {
+	_c.conflict = opts
+	return &TagUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Tag.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TagCreateBulk) OnConflictColumns(columns ...string) *TagUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TagUpsertBulk{
+		create: _c,
+	}
+}
+
+// TagUpsertBulk is the builder for "upsert"-ing
+// a bulk of Tag nodes.
+type TagUpsertBulk struct {
+	create *TagCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.Tag.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TagUpsertBulk) UpdateNewValues() *TagUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Tag.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *TagUpsertBulk) Ignore() *TagUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TagUpsertBulk) DoNothing() *TagUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TagCreateBulk.OnConflict
+// documentation for more info.
+func (u *TagUpsertBulk) Update(set func(*TagUpsert)) *TagUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TagUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *TagUpsertBulk) SetName(v string) *TagUpsertBulk {
+	return u.Update(func(s *TagUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *TagUpsertBulk) UpdateName() *TagUpsertBulk {
+	return u.Update(func(s *TagUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetCode sets the "code" field.
+func (u *TagUpsertBulk) SetCode(v string) *TagUpsertBulk {
+	return u.Update(func(s *TagUpsert) {
+		s.SetCode(v)
+	})
+}
+
+// UpdateCode sets the "code" field to the value that was provided on create.
+func (u *TagUpsertBulk) UpdateCode() *TagUpsertBulk {
+	return u.Update(func(s *TagUpsert) {
+		s.UpdateCode()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *TagUpsertBulk) SetDescription(v string) *TagUpsertBulk {
+	return u.Update(func(s *TagUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *TagUpsertBulk) UpdateDescription() *TagUpsertBulk {
+	return u.Update(func(s *TagUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *TagUpsertBulk) ClearDescription() *TagUpsertBulk {
+	return u.Update(func(s *TagUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetColor sets the "color" field.
+func (u *TagUpsertBulk) SetColor(v string) *TagUpsertBulk {
+	return u.Update(func(s *TagUpsert) {
+		s.SetColor(v)
+	})
+}
+
+// UpdateColor sets the "color" field to the value that was provided on create.
+func (u *TagUpsertBulk) UpdateColor() *TagUpsertBulk {
+	return u.Update(func(s *TagUpsert) {
+		s.UpdateColor()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TagUpsertBulk) SetTenantID(v int) *TagUpsertBulk {
+	return u.Update(func(s *TagUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TagUpsertBulk) AddTenantID(v int) *TagUpsertBulk {
+	return u.Update(func(s *TagUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TagUpsertBulk) UpdateTenantID() *TagUpsertBulk {
+	return u.Update(func(s *TagUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TagUpsertBulk) SetCreatedAt(v time.Time) *TagUpsertBulk {
+	return u.Update(func(s *TagUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TagUpsertBulk) UpdateCreatedAt() *TagUpsertBulk {
+	return u.Update(func(s *TagUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TagUpsertBulk) SetUpdatedAt(v time.Time) *TagUpsertBulk {
+	return u.Update(func(s *TagUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TagUpsertBulk) UpdateUpdatedAt() *TagUpsertBulk {
+	return u.Update(func(s *TagUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TagUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the TagCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TagCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TagUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

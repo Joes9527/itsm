@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent/workflowversion"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -21,6 +22,7 @@ type WorkflowCreate struct {
 	config
 	mutation *WorkflowMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -293,6 +295,7 @@ func (_c *WorkflowCreate) createSpec() (*Workflow, *sqlgraph.CreateSpec) {
 		_node = &Workflow{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(workflow.Table, sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(workflow.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -381,11 +384,433 @@ func (_c *WorkflowCreate) createSpec() (*Workflow, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Workflow.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.WorkflowUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *WorkflowCreate) OnConflict(opts ...sql.ConflictOption) *WorkflowUpsertOne {
+	_c.conflict = opts
+	return &WorkflowUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Workflow.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *WorkflowCreate) OnConflictColumns(columns ...string) *WorkflowUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &WorkflowUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// WorkflowUpsertOne is the builder for "upsert"-ing
+	//  one Workflow node.
+	WorkflowUpsertOne struct {
+		create *WorkflowCreate
+	}
+
+	// WorkflowUpsert is the "OnConflict" setter.
+	WorkflowUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *WorkflowUpsert) SetName(v string) *WorkflowUpsert {
+	u.Set(workflow.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *WorkflowUpsert) UpdateName() *WorkflowUpsert {
+	u.SetExcluded(workflow.FieldName)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *WorkflowUpsert) SetDescription(v string) *WorkflowUpsert {
+	u.Set(workflow.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *WorkflowUpsert) UpdateDescription() *WorkflowUpsert {
+	u.SetExcluded(workflow.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *WorkflowUpsert) ClearDescription() *WorkflowUpsert {
+	u.SetNull(workflow.FieldDescription)
+	return u
+}
+
+// SetType sets the "type" field.
+func (u *WorkflowUpsert) SetType(v string) *WorkflowUpsert {
+	u.Set(workflow.FieldType, v)
+	return u
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *WorkflowUpsert) UpdateType() *WorkflowUpsert {
+	u.SetExcluded(workflow.FieldType)
+	return u
+}
+
+// SetDefinition sets the "definition" field.
+func (u *WorkflowUpsert) SetDefinition(v []uint8) *WorkflowUpsert {
+	u.Set(workflow.FieldDefinition, v)
+	return u
+}
+
+// UpdateDefinition sets the "definition" field to the value that was provided on create.
+func (u *WorkflowUpsert) UpdateDefinition() *WorkflowUpsert {
+	u.SetExcluded(workflow.FieldDefinition)
+	return u
+}
+
+// SetVersion sets the "version" field.
+func (u *WorkflowUpsert) SetVersion(v string) *WorkflowUpsert {
+	u.Set(workflow.FieldVersion, v)
+	return u
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *WorkflowUpsert) UpdateVersion() *WorkflowUpsert {
+	u.SetExcluded(workflow.FieldVersion)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *WorkflowUpsert) SetIsActive(v bool) *WorkflowUpsert {
+	u.Set(workflow.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *WorkflowUpsert) UpdateIsActive() *WorkflowUpsert {
+	u.SetExcluded(workflow.FieldIsActive)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *WorkflowUpsert) SetTenantID(v int) *WorkflowUpsert {
+	u.Set(workflow.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *WorkflowUpsert) UpdateTenantID() *WorkflowUpsert {
+	u.SetExcluded(workflow.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *WorkflowUpsert) AddTenantID(v int) *WorkflowUpsert {
+	u.Add(workflow.FieldTenantID, v)
+	return u
+}
+
+// SetDepartmentID sets the "department_id" field.
+func (u *WorkflowUpsert) SetDepartmentID(v int) *WorkflowUpsert {
+	u.Set(workflow.FieldDepartmentID, v)
+	return u
+}
+
+// UpdateDepartmentID sets the "department_id" field to the value that was provided on create.
+func (u *WorkflowUpsert) UpdateDepartmentID() *WorkflowUpsert {
+	u.SetExcluded(workflow.FieldDepartmentID)
+	return u
+}
+
+// ClearDepartmentID clears the value of the "department_id" field.
+func (u *WorkflowUpsert) ClearDepartmentID() *WorkflowUpsert {
+	u.SetNull(workflow.FieldDepartmentID)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *WorkflowUpsert) SetCreatedAt(v time.Time) *WorkflowUpsert {
+	u.Set(workflow.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *WorkflowUpsert) UpdateCreatedAt() *WorkflowUpsert {
+	u.SetExcluded(workflow.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *WorkflowUpsert) SetUpdatedAt(v time.Time) *WorkflowUpsert {
+	u.Set(workflow.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *WorkflowUpsert) UpdateUpdatedAt() *WorkflowUpsert {
+	u.SetExcluded(workflow.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.Workflow.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *WorkflowUpsertOne) UpdateNewValues() *WorkflowUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Workflow.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *WorkflowUpsertOne) Ignore() *WorkflowUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *WorkflowUpsertOne) DoNothing() *WorkflowUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the WorkflowCreate.OnConflict
+// documentation for more info.
+func (u *WorkflowUpsertOne) Update(set func(*WorkflowUpsert)) *WorkflowUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&WorkflowUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *WorkflowUpsertOne) SetName(v string) *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *WorkflowUpsertOne) UpdateName() *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *WorkflowUpsertOne) SetDescription(v string) *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *WorkflowUpsertOne) UpdateDescription() *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *WorkflowUpsertOne) ClearDescription() *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *WorkflowUpsertOne) SetType(v string) *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *WorkflowUpsertOne) UpdateType() *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetDefinition sets the "definition" field.
+func (u *WorkflowUpsertOne) SetDefinition(v []uint8) *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetDefinition(v)
+	})
+}
+
+// UpdateDefinition sets the "definition" field to the value that was provided on create.
+func (u *WorkflowUpsertOne) UpdateDefinition() *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateDefinition()
+	})
+}
+
+// SetVersion sets the "version" field.
+func (u *WorkflowUpsertOne) SetVersion(v string) *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetVersion(v)
+	})
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *WorkflowUpsertOne) UpdateVersion() *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateVersion()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *WorkflowUpsertOne) SetIsActive(v bool) *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *WorkflowUpsertOne) UpdateIsActive() *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *WorkflowUpsertOne) SetTenantID(v int) *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *WorkflowUpsertOne) AddTenantID(v int) *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *WorkflowUpsertOne) UpdateTenantID() *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetDepartmentID sets the "department_id" field.
+func (u *WorkflowUpsertOne) SetDepartmentID(v int) *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetDepartmentID(v)
+	})
+}
+
+// UpdateDepartmentID sets the "department_id" field to the value that was provided on create.
+func (u *WorkflowUpsertOne) UpdateDepartmentID() *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateDepartmentID()
+	})
+}
+
+// ClearDepartmentID clears the value of the "department_id" field.
+func (u *WorkflowUpsertOne) ClearDepartmentID() *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.ClearDepartmentID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *WorkflowUpsertOne) SetCreatedAt(v time.Time) *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *WorkflowUpsertOne) UpdateCreatedAt() *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *WorkflowUpsertOne) SetUpdatedAt(v time.Time) *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *WorkflowUpsertOne) UpdateUpdatedAt() *WorkflowUpsertOne {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *WorkflowUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for WorkflowCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *WorkflowUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *WorkflowUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *WorkflowUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // WorkflowCreateBulk is the builder for creating many Workflow entities in bulk.
 type WorkflowCreateBulk struct {
 	config
 	err      error
 	builders []*WorkflowCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the Workflow entities in the database.
@@ -415,6 +840,7 @@ func (_c *WorkflowCreateBulk) Save(ctx context.Context) ([]*Workflow, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -465,6 +891,271 @@ func (_c *WorkflowCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *WorkflowCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Workflow.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.WorkflowUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *WorkflowCreateBulk) OnConflict(opts ...sql.ConflictOption) *WorkflowUpsertBulk {
+	_c.conflict = opts
+	return &WorkflowUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Workflow.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *WorkflowCreateBulk) OnConflictColumns(columns ...string) *WorkflowUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &WorkflowUpsertBulk{
+		create: _c,
+	}
+}
+
+// WorkflowUpsertBulk is the builder for "upsert"-ing
+// a bulk of Workflow nodes.
+type WorkflowUpsertBulk struct {
+	create *WorkflowCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.Workflow.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *WorkflowUpsertBulk) UpdateNewValues() *WorkflowUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Workflow.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *WorkflowUpsertBulk) Ignore() *WorkflowUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *WorkflowUpsertBulk) DoNothing() *WorkflowUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the WorkflowCreateBulk.OnConflict
+// documentation for more info.
+func (u *WorkflowUpsertBulk) Update(set func(*WorkflowUpsert)) *WorkflowUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&WorkflowUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *WorkflowUpsertBulk) SetName(v string) *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *WorkflowUpsertBulk) UpdateName() *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *WorkflowUpsertBulk) SetDescription(v string) *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *WorkflowUpsertBulk) UpdateDescription() *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *WorkflowUpsertBulk) ClearDescription() *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *WorkflowUpsertBulk) SetType(v string) *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *WorkflowUpsertBulk) UpdateType() *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetDefinition sets the "definition" field.
+func (u *WorkflowUpsertBulk) SetDefinition(v []uint8) *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetDefinition(v)
+	})
+}
+
+// UpdateDefinition sets the "definition" field to the value that was provided on create.
+func (u *WorkflowUpsertBulk) UpdateDefinition() *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateDefinition()
+	})
+}
+
+// SetVersion sets the "version" field.
+func (u *WorkflowUpsertBulk) SetVersion(v string) *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetVersion(v)
+	})
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *WorkflowUpsertBulk) UpdateVersion() *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateVersion()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *WorkflowUpsertBulk) SetIsActive(v bool) *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *WorkflowUpsertBulk) UpdateIsActive() *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *WorkflowUpsertBulk) SetTenantID(v int) *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *WorkflowUpsertBulk) AddTenantID(v int) *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *WorkflowUpsertBulk) UpdateTenantID() *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetDepartmentID sets the "department_id" field.
+func (u *WorkflowUpsertBulk) SetDepartmentID(v int) *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetDepartmentID(v)
+	})
+}
+
+// UpdateDepartmentID sets the "department_id" field to the value that was provided on create.
+func (u *WorkflowUpsertBulk) UpdateDepartmentID() *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateDepartmentID()
+	})
+}
+
+// ClearDepartmentID clears the value of the "department_id" field.
+func (u *WorkflowUpsertBulk) ClearDepartmentID() *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.ClearDepartmentID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *WorkflowUpsertBulk) SetCreatedAt(v time.Time) *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *WorkflowUpsertBulk) UpdateCreatedAt() *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *WorkflowUpsertBulk) SetUpdatedAt(v time.Time) *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *WorkflowUpsertBulk) UpdateUpdatedAt() *WorkflowUpsertBulk {
+	return u.Update(func(s *WorkflowUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *WorkflowUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the WorkflowCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for WorkflowCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *WorkflowUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

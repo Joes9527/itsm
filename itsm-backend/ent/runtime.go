@@ -122,6 +122,7 @@ import (
 	"itsm-backend/ent/workflowinstance"
 	"itsm-backend/ent/workflowtask"
 	"itsm-backend/ent/workflowversion"
+	"itsm-backend/ent/workitemnumbersequence"
 	"itsm-backend/ent/workitemrelation"
 	"time"
 )
@@ -4108,6 +4109,46 @@ func init() {
 	vendorDescUpdatedAt := vendorFields[12].Descriptor()
 	// vendor.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	vendor.DefaultUpdatedAt = vendorDescUpdatedAt.Default.(func() time.Time)
+	workitemnumbersequenceFields := schema.WorkItemNumberSequence{}.Fields()
+	_ = workitemnumbersequenceFields
+	// workitemnumbersequenceDescTenantID is the schema descriptor for tenant_id field.
+	workitemnumbersequenceDescTenantID := workitemnumbersequenceFields[0].Descriptor()
+	// workitemnumbersequence.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	workitemnumbersequence.TenantIDValidator = workitemnumbersequenceDescTenantID.Validators[0].(func(int) error)
+	// workitemnumbersequenceDescPeriod is the schema descriptor for period field.
+	workitemnumbersequenceDescPeriod := workitemnumbersequenceFields[1].Descriptor()
+	// workitemnumbersequence.PeriodValidator is a validator for the "period" field. It is called by the builders before save.
+	workitemnumbersequence.PeriodValidator = func() func(string) error {
+		validators := workitemnumbersequenceDescPeriod.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(period string) error {
+			for _, fn := range fns {
+				if err := fn(period); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// workitemnumbersequenceDescLastValue is the schema descriptor for last_value field.
+	workitemnumbersequenceDescLastValue := workitemnumbersequenceFields[2].Descriptor()
+	// workitemnumbersequence.DefaultLastValue holds the default value on creation for the last_value field.
+	workitemnumbersequence.DefaultLastValue = workitemnumbersequenceDescLastValue.Default.(int64)
+	// workitemnumbersequence.LastValueValidator is a validator for the "last_value" field. It is called by the builders before save.
+	workitemnumbersequence.LastValueValidator = workitemnumbersequenceDescLastValue.Validators[0].(func(int64) error)
+	// workitemnumbersequenceDescCreatedAt is the schema descriptor for created_at field.
+	workitemnumbersequenceDescCreatedAt := workitemnumbersequenceFields[3].Descriptor()
+	// workitemnumbersequence.DefaultCreatedAt holds the default value on creation for the created_at field.
+	workitemnumbersequence.DefaultCreatedAt = workitemnumbersequenceDescCreatedAt.Default.(func() time.Time)
+	// workitemnumbersequenceDescUpdatedAt is the schema descriptor for updated_at field.
+	workitemnumbersequenceDescUpdatedAt := workitemnumbersequenceFields[4].Descriptor()
+	// workitemnumbersequence.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	workitemnumbersequence.DefaultUpdatedAt = workitemnumbersequenceDescUpdatedAt.Default.(func() time.Time)
+	// workitemnumbersequence.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	workitemnumbersequence.UpdateDefaultUpdatedAt = workitemnumbersequenceDescUpdatedAt.UpdateDefault.(func() time.Time)
 	workitemrelationFields := schema.WorkItemRelation{}.Fields()
 	_ = workitemrelationFields
 	// workitemrelationDescTenantID is the schema descriptor for tenant_id field.

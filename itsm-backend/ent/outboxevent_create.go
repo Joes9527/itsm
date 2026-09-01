@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/outboxevent"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type OutboxEventCreate struct {
 	config
 	mutation *OutboxEventMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetEventID sets the "event_id" field.
@@ -326,6 +328,7 @@ func (_c *OutboxEventCreate) createSpec() (*OutboxEvent, *sqlgraph.CreateSpec) {
 		_node = &OutboxEvent{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(outboxevent.Table, sqlgraph.NewFieldSpec(outboxevent.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.EventID(); ok {
 		_spec.SetField(outboxevent.FieldEventID, field.TypeString, value)
 		_node.EventID = value
@@ -389,11 +392,545 @@ func (_c *OutboxEventCreate) createSpec() (*OutboxEvent, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.OutboxEvent.Create().
+//		SetEventID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.OutboxEventUpsert) {
+//			SetEventID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *OutboxEventCreate) OnConflict(opts ...sql.ConflictOption) *OutboxEventUpsertOne {
+	_c.conflict = opts
+	return &OutboxEventUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.OutboxEvent.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *OutboxEventCreate) OnConflictColumns(columns ...string) *OutboxEventUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &OutboxEventUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// OutboxEventUpsertOne is the builder for "upsert"-ing
+	//  one OutboxEvent node.
+	OutboxEventUpsertOne struct {
+		create *OutboxEventCreate
+	}
+
+	// OutboxEventUpsert is the "OnConflict" setter.
+	OutboxEventUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetEventType sets the "event_type" field.
+func (u *OutboxEventUpsert) SetEventType(v string) *OutboxEventUpsert {
+	u.Set(outboxevent.FieldEventType, v)
+	return u
+}
+
+// UpdateEventType sets the "event_type" field to the value that was provided on create.
+func (u *OutboxEventUpsert) UpdateEventType() *OutboxEventUpsert {
+	u.SetExcluded(outboxevent.FieldEventType)
+	return u
+}
+
+// SetAggregateType sets the "aggregate_type" field.
+func (u *OutboxEventUpsert) SetAggregateType(v string) *OutboxEventUpsert {
+	u.Set(outboxevent.FieldAggregateType, v)
+	return u
+}
+
+// UpdateAggregateType sets the "aggregate_type" field to the value that was provided on create.
+func (u *OutboxEventUpsert) UpdateAggregateType() *OutboxEventUpsert {
+	u.SetExcluded(outboxevent.FieldAggregateType)
+	return u
+}
+
+// SetAggregateID sets the "aggregate_id" field.
+func (u *OutboxEventUpsert) SetAggregateID(v string) *OutboxEventUpsert {
+	u.Set(outboxevent.FieldAggregateID, v)
+	return u
+}
+
+// UpdateAggregateID sets the "aggregate_id" field to the value that was provided on create.
+func (u *OutboxEventUpsert) UpdateAggregateID() *OutboxEventUpsert {
+	u.SetExcluded(outboxevent.FieldAggregateID)
+	return u
+}
+
+// SetPayload sets the "payload" field.
+func (u *OutboxEventUpsert) SetPayload(v json.RawMessage) *OutboxEventUpsert {
+	u.Set(outboxevent.FieldPayload, v)
+	return u
+}
+
+// UpdatePayload sets the "payload" field to the value that was provided on create.
+func (u *OutboxEventUpsert) UpdatePayload() *OutboxEventUpsert {
+	u.SetExcluded(outboxevent.FieldPayload)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *OutboxEventUpsert) SetStatus(v string) *OutboxEventUpsert {
+	u.Set(outboxevent.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *OutboxEventUpsert) UpdateStatus() *OutboxEventUpsert {
+	u.SetExcluded(outboxevent.FieldStatus)
+	return u
+}
+
+// SetAttemptCount sets the "attempt_count" field.
+func (u *OutboxEventUpsert) SetAttemptCount(v int) *OutboxEventUpsert {
+	u.Set(outboxevent.FieldAttemptCount, v)
+	return u
+}
+
+// UpdateAttemptCount sets the "attempt_count" field to the value that was provided on create.
+func (u *OutboxEventUpsert) UpdateAttemptCount() *OutboxEventUpsert {
+	u.SetExcluded(outboxevent.FieldAttemptCount)
+	return u
+}
+
+// AddAttemptCount adds v to the "attempt_count" field.
+func (u *OutboxEventUpsert) AddAttemptCount(v int) *OutboxEventUpsert {
+	u.Add(outboxevent.FieldAttemptCount, v)
+	return u
+}
+
+// SetNextAttemptAt sets the "next_attempt_at" field.
+func (u *OutboxEventUpsert) SetNextAttemptAt(v time.Time) *OutboxEventUpsert {
+	u.Set(outboxevent.FieldNextAttemptAt, v)
+	return u
+}
+
+// UpdateNextAttemptAt sets the "next_attempt_at" field to the value that was provided on create.
+func (u *OutboxEventUpsert) UpdateNextAttemptAt() *OutboxEventUpsert {
+	u.SetExcluded(outboxevent.FieldNextAttemptAt)
+	return u
+}
+
+// SetClaimToken sets the "claim_token" field.
+func (u *OutboxEventUpsert) SetClaimToken(v string) *OutboxEventUpsert {
+	u.Set(outboxevent.FieldClaimToken, v)
+	return u
+}
+
+// UpdateClaimToken sets the "claim_token" field to the value that was provided on create.
+func (u *OutboxEventUpsert) UpdateClaimToken() *OutboxEventUpsert {
+	u.SetExcluded(outboxevent.FieldClaimToken)
+	return u
+}
+
+// ClearClaimToken clears the value of the "claim_token" field.
+func (u *OutboxEventUpsert) ClearClaimToken() *OutboxEventUpsert {
+	u.SetNull(outboxevent.FieldClaimToken)
+	return u
+}
+
+// SetClaimExpiresAt sets the "claim_expires_at" field.
+func (u *OutboxEventUpsert) SetClaimExpiresAt(v time.Time) *OutboxEventUpsert {
+	u.Set(outboxevent.FieldClaimExpiresAt, v)
+	return u
+}
+
+// UpdateClaimExpiresAt sets the "claim_expires_at" field to the value that was provided on create.
+func (u *OutboxEventUpsert) UpdateClaimExpiresAt() *OutboxEventUpsert {
+	u.SetExcluded(outboxevent.FieldClaimExpiresAt)
+	return u
+}
+
+// ClearClaimExpiresAt clears the value of the "claim_expires_at" field.
+func (u *OutboxEventUpsert) ClearClaimExpiresAt() *OutboxEventUpsert {
+	u.SetNull(outboxevent.FieldClaimExpiresAt)
+	return u
+}
+
+// SetPublishedAt sets the "published_at" field.
+func (u *OutboxEventUpsert) SetPublishedAt(v time.Time) *OutboxEventUpsert {
+	u.Set(outboxevent.FieldPublishedAt, v)
+	return u
+}
+
+// UpdatePublishedAt sets the "published_at" field to the value that was provided on create.
+func (u *OutboxEventUpsert) UpdatePublishedAt() *OutboxEventUpsert {
+	u.SetExcluded(outboxevent.FieldPublishedAt)
+	return u
+}
+
+// ClearPublishedAt clears the value of the "published_at" field.
+func (u *OutboxEventUpsert) ClearPublishedAt() *OutboxEventUpsert {
+	u.SetNull(outboxevent.FieldPublishedAt)
+	return u
+}
+
+// SetLastError sets the "last_error" field.
+func (u *OutboxEventUpsert) SetLastError(v string) *OutboxEventUpsert {
+	u.Set(outboxevent.FieldLastError, v)
+	return u
+}
+
+// UpdateLastError sets the "last_error" field to the value that was provided on create.
+func (u *OutboxEventUpsert) UpdateLastError() *OutboxEventUpsert {
+	u.SetExcluded(outboxevent.FieldLastError)
+	return u
+}
+
+// ClearLastError clears the value of the "last_error" field.
+func (u *OutboxEventUpsert) ClearLastError() *OutboxEventUpsert {
+	u.SetNull(outboxevent.FieldLastError)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *OutboxEventUpsert) SetCreatedAt(v time.Time) *OutboxEventUpsert {
+	u.Set(outboxevent.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *OutboxEventUpsert) UpdateCreatedAt() *OutboxEventUpsert {
+	u.SetExcluded(outboxevent.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *OutboxEventUpsert) SetUpdatedAt(v time.Time) *OutboxEventUpsert {
+	u.Set(outboxevent.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *OutboxEventUpsert) UpdateUpdatedAt() *OutboxEventUpsert {
+	u.SetExcluded(outboxevent.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.OutboxEvent.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *OutboxEventUpsertOne) UpdateNewValues() *OutboxEventUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.EventID(); exists {
+			s.SetIgnore(outboxevent.FieldEventID)
+		}
+		if _, exists := u.create.mutation.TenantID(); exists {
+			s.SetIgnore(outboxevent.FieldTenantID)
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.OutboxEvent.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *OutboxEventUpsertOne) Ignore() *OutboxEventUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *OutboxEventUpsertOne) DoNothing() *OutboxEventUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the OutboxEventCreate.OnConflict
+// documentation for more info.
+func (u *OutboxEventUpsertOne) Update(set func(*OutboxEventUpsert)) *OutboxEventUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&OutboxEventUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetEventType sets the "event_type" field.
+func (u *OutboxEventUpsertOne) SetEventType(v string) *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetEventType(v)
+	})
+}
+
+// UpdateEventType sets the "event_type" field to the value that was provided on create.
+func (u *OutboxEventUpsertOne) UpdateEventType() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateEventType()
+	})
+}
+
+// SetAggregateType sets the "aggregate_type" field.
+func (u *OutboxEventUpsertOne) SetAggregateType(v string) *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetAggregateType(v)
+	})
+}
+
+// UpdateAggregateType sets the "aggregate_type" field to the value that was provided on create.
+func (u *OutboxEventUpsertOne) UpdateAggregateType() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateAggregateType()
+	})
+}
+
+// SetAggregateID sets the "aggregate_id" field.
+func (u *OutboxEventUpsertOne) SetAggregateID(v string) *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetAggregateID(v)
+	})
+}
+
+// UpdateAggregateID sets the "aggregate_id" field to the value that was provided on create.
+func (u *OutboxEventUpsertOne) UpdateAggregateID() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateAggregateID()
+	})
+}
+
+// SetPayload sets the "payload" field.
+func (u *OutboxEventUpsertOne) SetPayload(v json.RawMessage) *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetPayload(v)
+	})
+}
+
+// UpdatePayload sets the "payload" field to the value that was provided on create.
+func (u *OutboxEventUpsertOne) UpdatePayload() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdatePayload()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *OutboxEventUpsertOne) SetStatus(v string) *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *OutboxEventUpsertOne) UpdateStatus() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetAttemptCount sets the "attempt_count" field.
+func (u *OutboxEventUpsertOne) SetAttemptCount(v int) *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetAttemptCount(v)
+	})
+}
+
+// AddAttemptCount adds v to the "attempt_count" field.
+func (u *OutboxEventUpsertOne) AddAttemptCount(v int) *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.AddAttemptCount(v)
+	})
+}
+
+// UpdateAttemptCount sets the "attempt_count" field to the value that was provided on create.
+func (u *OutboxEventUpsertOne) UpdateAttemptCount() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateAttemptCount()
+	})
+}
+
+// SetNextAttemptAt sets the "next_attempt_at" field.
+func (u *OutboxEventUpsertOne) SetNextAttemptAt(v time.Time) *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetNextAttemptAt(v)
+	})
+}
+
+// UpdateNextAttemptAt sets the "next_attempt_at" field to the value that was provided on create.
+func (u *OutboxEventUpsertOne) UpdateNextAttemptAt() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateNextAttemptAt()
+	})
+}
+
+// SetClaimToken sets the "claim_token" field.
+func (u *OutboxEventUpsertOne) SetClaimToken(v string) *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetClaimToken(v)
+	})
+}
+
+// UpdateClaimToken sets the "claim_token" field to the value that was provided on create.
+func (u *OutboxEventUpsertOne) UpdateClaimToken() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateClaimToken()
+	})
+}
+
+// ClearClaimToken clears the value of the "claim_token" field.
+func (u *OutboxEventUpsertOne) ClearClaimToken() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.ClearClaimToken()
+	})
+}
+
+// SetClaimExpiresAt sets the "claim_expires_at" field.
+func (u *OutboxEventUpsertOne) SetClaimExpiresAt(v time.Time) *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetClaimExpiresAt(v)
+	})
+}
+
+// UpdateClaimExpiresAt sets the "claim_expires_at" field to the value that was provided on create.
+func (u *OutboxEventUpsertOne) UpdateClaimExpiresAt() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateClaimExpiresAt()
+	})
+}
+
+// ClearClaimExpiresAt clears the value of the "claim_expires_at" field.
+func (u *OutboxEventUpsertOne) ClearClaimExpiresAt() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.ClearClaimExpiresAt()
+	})
+}
+
+// SetPublishedAt sets the "published_at" field.
+func (u *OutboxEventUpsertOne) SetPublishedAt(v time.Time) *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetPublishedAt(v)
+	})
+}
+
+// UpdatePublishedAt sets the "published_at" field to the value that was provided on create.
+func (u *OutboxEventUpsertOne) UpdatePublishedAt() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdatePublishedAt()
+	})
+}
+
+// ClearPublishedAt clears the value of the "published_at" field.
+func (u *OutboxEventUpsertOne) ClearPublishedAt() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.ClearPublishedAt()
+	})
+}
+
+// SetLastError sets the "last_error" field.
+func (u *OutboxEventUpsertOne) SetLastError(v string) *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetLastError(v)
+	})
+}
+
+// UpdateLastError sets the "last_error" field to the value that was provided on create.
+func (u *OutboxEventUpsertOne) UpdateLastError() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateLastError()
+	})
+}
+
+// ClearLastError clears the value of the "last_error" field.
+func (u *OutboxEventUpsertOne) ClearLastError() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.ClearLastError()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *OutboxEventUpsertOne) SetCreatedAt(v time.Time) *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *OutboxEventUpsertOne) UpdateCreatedAt() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *OutboxEventUpsertOne) SetUpdatedAt(v time.Time) *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *OutboxEventUpsertOne) UpdateUpdatedAt() *OutboxEventUpsertOne {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *OutboxEventUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for OutboxEventCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *OutboxEventUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *OutboxEventUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *OutboxEventUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // OutboxEventCreateBulk is the builder for creating many OutboxEvent entities in bulk.
 type OutboxEventCreateBulk struct {
 	config
 	err      error
 	builders []*OutboxEventCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the OutboxEvent entities in the database.
@@ -423,6 +960,7 @@ func (_c *OutboxEventCreateBulk) Save(ctx context.Context) ([]*OutboxEvent, erro
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -473,6 +1011,337 @@ func (_c *OutboxEventCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *OutboxEventCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.OutboxEvent.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.OutboxEventUpsert) {
+//			SetEventID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *OutboxEventCreateBulk) OnConflict(opts ...sql.ConflictOption) *OutboxEventUpsertBulk {
+	_c.conflict = opts
+	return &OutboxEventUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.OutboxEvent.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *OutboxEventCreateBulk) OnConflictColumns(columns ...string) *OutboxEventUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &OutboxEventUpsertBulk{
+		create: _c,
+	}
+}
+
+// OutboxEventUpsertBulk is the builder for "upsert"-ing
+// a bulk of OutboxEvent nodes.
+type OutboxEventUpsertBulk struct {
+	create *OutboxEventCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.OutboxEvent.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *OutboxEventUpsertBulk) UpdateNewValues() *OutboxEventUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.EventID(); exists {
+				s.SetIgnore(outboxevent.FieldEventID)
+			}
+			if _, exists := b.mutation.TenantID(); exists {
+				s.SetIgnore(outboxevent.FieldTenantID)
+			}
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.OutboxEvent.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *OutboxEventUpsertBulk) Ignore() *OutboxEventUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *OutboxEventUpsertBulk) DoNothing() *OutboxEventUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the OutboxEventCreateBulk.OnConflict
+// documentation for more info.
+func (u *OutboxEventUpsertBulk) Update(set func(*OutboxEventUpsert)) *OutboxEventUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&OutboxEventUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetEventType sets the "event_type" field.
+func (u *OutboxEventUpsertBulk) SetEventType(v string) *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetEventType(v)
+	})
+}
+
+// UpdateEventType sets the "event_type" field to the value that was provided on create.
+func (u *OutboxEventUpsertBulk) UpdateEventType() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateEventType()
+	})
+}
+
+// SetAggregateType sets the "aggregate_type" field.
+func (u *OutboxEventUpsertBulk) SetAggregateType(v string) *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetAggregateType(v)
+	})
+}
+
+// UpdateAggregateType sets the "aggregate_type" field to the value that was provided on create.
+func (u *OutboxEventUpsertBulk) UpdateAggregateType() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateAggregateType()
+	})
+}
+
+// SetAggregateID sets the "aggregate_id" field.
+func (u *OutboxEventUpsertBulk) SetAggregateID(v string) *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetAggregateID(v)
+	})
+}
+
+// UpdateAggregateID sets the "aggregate_id" field to the value that was provided on create.
+func (u *OutboxEventUpsertBulk) UpdateAggregateID() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateAggregateID()
+	})
+}
+
+// SetPayload sets the "payload" field.
+func (u *OutboxEventUpsertBulk) SetPayload(v json.RawMessage) *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetPayload(v)
+	})
+}
+
+// UpdatePayload sets the "payload" field to the value that was provided on create.
+func (u *OutboxEventUpsertBulk) UpdatePayload() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdatePayload()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *OutboxEventUpsertBulk) SetStatus(v string) *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *OutboxEventUpsertBulk) UpdateStatus() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetAttemptCount sets the "attempt_count" field.
+func (u *OutboxEventUpsertBulk) SetAttemptCount(v int) *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetAttemptCount(v)
+	})
+}
+
+// AddAttemptCount adds v to the "attempt_count" field.
+func (u *OutboxEventUpsertBulk) AddAttemptCount(v int) *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.AddAttemptCount(v)
+	})
+}
+
+// UpdateAttemptCount sets the "attempt_count" field to the value that was provided on create.
+func (u *OutboxEventUpsertBulk) UpdateAttemptCount() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateAttemptCount()
+	})
+}
+
+// SetNextAttemptAt sets the "next_attempt_at" field.
+func (u *OutboxEventUpsertBulk) SetNextAttemptAt(v time.Time) *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetNextAttemptAt(v)
+	})
+}
+
+// UpdateNextAttemptAt sets the "next_attempt_at" field to the value that was provided on create.
+func (u *OutboxEventUpsertBulk) UpdateNextAttemptAt() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateNextAttemptAt()
+	})
+}
+
+// SetClaimToken sets the "claim_token" field.
+func (u *OutboxEventUpsertBulk) SetClaimToken(v string) *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetClaimToken(v)
+	})
+}
+
+// UpdateClaimToken sets the "claim_token" field to the value that was provided on create.
+func (u *OutboxEventUpsertBulk) UpdateClaimToken() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateClaimToken()
+	})
+}
+
+// ClearClaimToken clears the value of the "claim_token" field.
+func (u *OutboxEventUpsertBulk) ClearClaimToken() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.ClearClaimToken()
+	})
+}
+
+// SetClaimExpiresAt sets the "claim_expires_at" field.
+func (u *OutboxEventUpsertBulk) SetClaimExpiresAt(v time.Time) *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetClaimExpiresAt(v)
+	})
+}
+
+// UpdateClaimExpiresAt sets the "claim_expires_at" field to the value that was provided on create.
+func (u *OutboxEventUpsertBulk) UpdateClaimExpiresAt() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateClaimExpiresAt()
+	})
+}
+
+// ClearClaimExpiresAt clears the value of the "claim_expires_at" field.
+func (u *OutboxEventUpsertBulk) ClearClaimExpiresAt() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.ClearClaimExpiresAt()
+	})
+}
+
+// SetPublishedAt sets the "published_at" field.
+func (u *OutboxEventUpsertBulk) SetPublishedAt(v time.Time) *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetPublishedAt(v)
+	})
+}
+
+// UpdatePublishedAt sets the "published_at" field to the value that was provided on create.
+func (u *OutboxEventUpsertBulk) UpdatePublishedAt() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdatePublishedAt()
+	})
+}
+
+// ClearPublishedAt clears the value of the "published_at" field.
+func (u *OutboxEventUpsertBulk) ClearPublishedAt() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.ClearPublishedAt()
+	})
+}
+
+// SetLastError sets the "last_error" field.
+func (u *OutboxEventUpsertBulk) SetLastError(v string) *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetLastError(v)
+	})
+}
+
+// UpdateLastError sets the "last_error" field to the value that was provided on create.
+func (u *OutboxEventUpsertBulk) UpdateLastError() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateLastError()
+	})
+}
+
+// ClearLastError clears the value of the "last_error" field.
+func (u *OutboxEventUpsertBulk) ClearLastError() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.ClearLastError()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *OutboxEventUpsertBulk) SetCreatedAt(v time.Time) *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *OutboxEventUpsertBulk) UpdateCreatedAt() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *OutboxEventUpsertBulk) SetUpdatedAt(v time.Time) *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *OutboxEventUpsertBulk) UpdateUpdatedAt() *OutboxEventUpsertBulk {
+	return u.Update(func(s *OutboxEventUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *OutboxEventUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the OutboxEventCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for OutboxEventCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *OutboxEventUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

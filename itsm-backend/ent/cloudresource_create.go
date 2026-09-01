@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent/configurationitem"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -21,6 +22,7 @@ type CloudResourceCreate struct {
 	config
 	mutation *CloudResourceMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetCloudAccountID sets the "cloud_account_id" field.
@@ -333,6 +335,7 @@ func (_c *CloudResourceCreate) createSpec() (*CloudResource, *sqlgraph.CreateSpe
 		_node = &CloudResource{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(cloudresource.Table, sqlgraph.NewFieldSpec(cloudresource.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.ResourceID(); ok {
 		_spec.SetField(cloudresource.FieldResourceID, field.TypeString, value)
 		_node.ResourceID = value
@@ -438,11 +441,654 @@ func (_c *CloudResourceCreate) createSpec() (*CloudResource, *sqlgraph.CreateSpe
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.CloudResource.Create().
+//		SetCloudAccountID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.CloudResourceUpsert) {
+//			SetCloudAccountID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *CloudResourceCreate) OnConflict(opts ...sql.ConflictOption) *CloudResourceUpsertOne {
+	_c.conflict = opts
+	return &CloudResourceUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.CloudResource.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *CloudResourceCreate) OnConflictColumns(columns ...string) *CloudResourceUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &CloudResourceUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// CloudResourceUpsertOne is the builder for "upsert"-ing
+	//  one CloudResource node.
+	CloudResourceUpsertOne struct {
+		create *CloudResourceCreate
+	}
+
+	// CloudResourceUpsert is the "OnConflict" setter.
+	CloudResourceUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetCloudAccountID sets the "cloud_account_id" field.
+func (u *CloudResourceUpsert) SetCloudAccountID(v int) *CloudResourceUpsert {
+	u.Set(cloudresource.FieldCloudAccountID, v)
+	return u
+}
+
+// UpdateCloudAccountID sets the "cloud_account_id" field to the value that was provided on create.
+func (u *CloudResourceUpsert) UpdateCloudAccountID() *CloudResourceUpsert {
+	u.SetExcluded(cloudresource.FieldCloudAccountID)
+	return u
+}
+
+// SetServiceID sets the "service_id" field.
+func (u *CloudResourceUpsert) SetServiceID(v int) *CloudResourceUpsert {
+	u.Set(cloudresource.FieldServiceID, v)
+	return u
+}
+
+// UpdateServiceID sets the "service_id" field to the value that was provided on create.
+func (u *CloudResourceUpsert) UpdateServiceID() *CloudResourceUpsert {
+	u.SetExcluded(cloudresource.FieldServiceID)
+	return u
+}
+
+// SetResourceID sets the "resource_id" field.
+func (u *CloudResourceUpsert) SetResourceID(v string) *CloudResourceUpsert {
+	u.Set(cloudresource.FieldResourceID, v)
+	return u
+}
+
+// UpdateResourceID sets the "resource_id" field to the value that was provided on create.
+func (u *CloudResourceUpsert) UpdateResourceID() *CloudResourceUpsert {
+	u.SetExcluded(cloudresource.FieldResourceID)
+	return u
+}
+
+// SetResourceName sets the "resource_name" field.
+func (u *CloudResourceUpsert) SetResourceName(v string) *CloudResourceUpsert {
+	u.Set(cloudresource.FieldResourceName, v)
+	return u
+}
+
+// UpdateResourceName sets the "resource_name" field to the value that was provided on create.
+func (u *CloudResourceUpsert) UpdateResourceName() *CloudResourceUpsert {
+	u.SetExcluded(cloudresource.FieldResourceName)
+	return u
+}
+
+// ClearResourceName clears the value of the "resource_name" field.
+func (u *CloudResourceUpsert) ClearResourceName() *CloudResourceUpsert {
+	u.SetNull(cloudresource.FieldResourceName)
+	return u
+}
+
+// SetRegion sets the "region" field.
+func (u *CloudResourceUpsert) SetRegion(v string) *CloudResourceUpsert {
+	u.Set(cloudresource.FieldRegion, v)
+	return u
+}
+
+// UpdateRegion sets the "region" field to the value that was provided on create.
+func (u *CloudResourceUpsert) UpdateRegion() *CloudResourceUpsert {
+	u.SetExcluded(cloudresource.FieldRegion)
+	return u
+}
+
+// ClearRegion clears the value of the "region" field.
+func (u *CloudResourceUpsert) ClearRegion() *CloudResourceUpsert {
+	u.SetNull(cloudresource.FieldRegion)
+	return u
+}
+
+// SetZone sets the "zone" field.
+func (u *CloudResourceUpsert) SetZone(v string) *CloudResourceUpsert {
+	u.Set(cloudresource.FieldZone, v)
+	return u
+}
+
+// UpdateZone sets the "zone" field to the value that was provided on create.
+func (u *CloudResourceUpsert) UpdateZone() *CloudResourceUpsert {
+	u.SetExcluded(cloudresource.FieldZone)
+	return u
+}
+
+// ClearZone clears the value of the "zone" field.
+func (u *CloudResourceUpsert) ClearZone() *CloudResourceUpsert {
+	u.SetNull(cloudresource.FieldZone)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *CloudResourceUpsert) SetStatus(v string) *CloudResourceUpsert {
+	u.Set(cloudresource.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *CloudResourceUpsert) UpdateStatus() *CloudResourceUpsert {
+	u.SetExcluded(cloudresource.FieldStatus)
+	return u
+}
+
+// ClearStatus clears the value of the "status" field.
+func (u *CloudResourceUpsert) ClearStatus() *CloudResourceUpsert {
+	u.SetNull(cloudresource.FieldStatus)
+	return u
+}
+
+// SetTags sets the "tags" field.
+func (u *CloudResourceUpsert) SetTags(v map[string]string) *CloudResourceUpsert {
+	u.Set(cloudresource.FieldTags, v)
+	return u
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *CloudResourceUpsert) UpdateTags() *CloudResourceUpsert {
+	u.SetExcluded(cloudresource.FieldTags)
+	return u
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *CloudResourceUpsert) ClearTags() *CloudResourceUpsert {
+	u.SetNull(cloudresource.FieldTags)
+	return u
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *CloudResourceUpsert) SetMetadata(v map[string]interface{}) *CloudResourceUpsert {
+	u.Set(cloudresource.FieldMetadata, v)
+	return u
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *CloudResourceUpsert) UpdateMetadata() *CloudResourceUpsert {
+	u.SetExcluded(cloudresource.FieldMetadata)
+	return u
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *CloudResourceUpsert) ClearMetadata() *CloudResourceUpsert {
+	u.SetNull(cloudresource.FieldMetadata)
+	return u
+}
+
+// SetFirstSeenAt sets the "first_seen_at" field.
+func (u *CloudResourceUpsert) SetFirstSeenAt(v time.Time) *CloudResourceUpsert {
+	u.Set(cloudresource.FieldFirstSeenAt, v)
+	return u
+}
+
+// UpdateFirstSeenAt sets the "first_seen_at" field to the value that was provided on create.
+func (u *CloudResourceUpsert) UpdateFirstSeenAt() *CloudResourceUpsert {
+	u.SetExcluded(cloudresource.FieldFirstSeenAt)
+	return u
+}
+
+// ClearFirstSeenAt clears the value of the "first_seen_at" field.
+func (u *CloudResourceUpsert) ClearFirstSeenAt() *CloudResourceUpsert {
+	u.SetNull(cloudresource.FieldFirstSeenAt)
+	return u
+}
+
+// SetLastSeenAt sets the "last_seen_at" field.
+func (u *CloudResourceUpsert) SetLastSeenAt(v time.Time) *CloudResourceUpsert {
+	u.Set(cloudresource.FieldLastSeenAt, v)
+	return u
+}
+
+// UpdateLastSeenAt sets the "last_seen_at" field to the value that was provided on create.
+func (u *CloudResourceUpsert) UpdateLastSeenAt() *CloudResourceUpsert {
+	u.SetExcluded(cloudresource.FieldLastSeenAt)
+	return u
+}
+
+// ClearLastSeenAt clears the value of the "last_seen_at" field.
+func (u *CloudResourceUpsert) ClearLastSeenAt() *CloudResourceUpsert {
+	u.SetNull(cloudresource.FieldLastSeenAt)
+	return u
+}
+
+// SetLifecycleState sets the "lifecycle_state" field.
+func (u *CloudResourceUpsert) SetLifecycleState(v string) *CloudResourceUpsert {
+	u.Set(cloudresource.FieldLifecycleState, v)
+	return u
+}
+
+// UpdateLifecycleState sets the "lifecycle_state" field to the value that was provided on create.
+func (u *CloudResourceUpsert) UpdateLifecycleState() *CloudResourceUpsert {
+	u.SetExcluded(cloudresource.FieldLifecycleState)
+	return u
+}
+
+// ClearLifecycleState clears the value of the "lifecycle_state" field.
+func (u *CloudResourceUpsert) ClearLifecycleState() *CloudResourceUpsert {
+	u.SetNull(cloudresource.FieldLifecycleState)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CloudResourceUpsert) SetTenantID(v int) *CloudResourceUpsert {
+	u.Set(cloudresource.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CloudResourceUpsert) UpdateTenantID() *CloudResourceUpsert {
+	u.SetExcluded(cloudresource.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CloudResourceUpsert) AddTenantID(v int) *CloudResourceUpsert {
+	u.Add(cloudresource.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CloudResourceUpsert) SetCreatedAt(v time.Time) *CloudResourceUpsert {
+	u.Set(cloudresource.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CloudResourceUpsert) UpdateCreatedAt() *CloudResourceUpsert {
+	u.SetExcluded(cloudresource.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *CloudResourceUpsert) SetUpdatedAt(v time.Time) *CloudResourceUpsert {
+	u.Set(cloudresource.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *CloudResourceUpsert) UpdateUpdatedAt() *CloudResourceUpsert {
+	u.SetExcluded(cloudresource.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.CloudResource.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *CloudResourceUpsertOne) UpdateNewValues() *CloudResourceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.CloudResource.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *CloudResourceUpsertOne) Ignore() *CloudResourceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *CloudResourceUpsertOne) DoNothing() *CloudResourceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the CloudResourceCreate.OnConflict
+// documentation for more info.
+func (u *CloudResourceUpsertOne) Update(set func(*CloudResourceUpsert)) *CloudResourceUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&CloudResourceUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetCloudAccountID sets the "cloud_account_id" field.
+func (u *CloudResourceUpsertOne) SetCloudAccountID(v int) *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetCloudAccountID(v)
+	})
+}
+
+// UpdateCloudAccountID sets the "cloud_account_id" field to the value that was provided on create.
+func (u *CloudResourceUpsertOne) UpdateCloudAccountID() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateCloudAccountID()
+	})
+}
+
+// SetServiceID sets the "service_id" field.
+func (u *CloudResourceUpsertOne) SetServiceID(v int) *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetServiceID(v)
+	})
+}
+
+// UpdateServiceID sets the "service_id" field to the value that was provided on create.
+func (u *CloudResourceUpsertOne) UpdateServiceID() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateServiceID()
+	})
+}
+
+// SetResourceID sets the "resource_id" field.
+func (u *CloudResourceUpsertOne) SetResourceID(v string) *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetResourceID(v)
+	})
+}
+
+// UpdateResourceID sets the "resource_id" field to the value that was provided on create.
+func (u *CloudResourceUpsertOne) UpdateResourceID() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateResourceID()
+	})
+}
+
+// SetResourceName sets the "resource_name" field.
+func (u *CloudResourceUpsertOne) SetResourceName(v string) *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetResourceName(v)
+	})
+}
+
+// UpdateResourceName sets the "resource_name" field to the value that was provided on create.
+func (u *CloudResourceUpsertOne) UpdateResourceName() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateResourceName()
+	})
+}
+
+// ClearResourceName clears the value of the "resource_name" field.
+func (u *CloudResourceUpsertOne) ClearResourceName() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.ClearResourceName()
+	})
+}
+
+// SetRegion sets the "region" field.
+func (u *CloudResourceUpsertOne) SetRegion(v string) *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetRegion(v)
+	})
+}
+
+// UpdateRegion sets the "region" field to the value that was provided on create.
+func (u *CloudResourceUpsertOne) UpdateRegion() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateRegion()
+	})
+}
+
+// ClearRegion clears the value of the "region" field.
+func (u *CloudResourceUpsertOne) ClearRegion() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.ClearRegion()
+	})
+}
+
+// SetZone sets the "zone" field.
+func (u *CloudResourceUpsertOne) SetZone(v string) *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetZone(v)
+	})
+}
+
+// UpdateZone sets the "zone" field to the value that was provided on create.
+func (u *CloudResourceUpsertOne) UpdateZone() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateZone()
+	})
+}
+
+// ClearZone clears the value of the "zone" field.
+func (u *CloudResourceUpsertOne) ClearZone() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.ClearZone()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *CloudResourceUpsertOne) SetStatus(v string) *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *CloudResourceUpsertOne) UpdateStatus() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// ClearStatus clears the value of the "status" field.
+func (u *CloudResourceUpsertOne) ClearStatus() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.ClearStatus()
+	})
+}
+
+// SetTags sets the "tags" field.
+func (u *CloudResourceUpsertOne) SetTags(v map[string]string) *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetTags(v)
+	})
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *CloudResourceUpsertOne) UpdateTags() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateTags()
+	})
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *CloudResourceUpsertOne) ClearTags() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.ClearTags()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *CloudResourceUpsertOne) SetMetadata(v map[string]interface{}) *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *CloudResourceUpsertOne) UpdateMetadata() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *CloudResourceUpsertOne) ClearMetadata() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// SetFirstSeenAt sets the "first_seen_at" field.
+func (u *CloudResourceUpsertOne) SetFirstSeenAt(v time.Time) *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetFirstSeenAt(v)
+	})
+}
+
+// UpdateFirstSeenAt sets the "first_seen_at" field to the value that was provided on create.
+func (u *CloudResourceUpsertOne) UpdateFirstSeenAt() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateFirstSeenAt()
+	})
+}
+
+// ClearFirstSeenAt clears the value of the "first_seen_at" field.
+func (u *CloudResourceUpsertOne) ClearFirstSeenAt() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.ClearFirstSeenAt()
+	})
+}
+
+// SetLastSeenAt sets the "last_seen_at" field.
+func (u *CloudResourceUpsertOne) SetLastSeenAt(v time.Time) *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetLastSeenAt(v)
+	})
+}
+
+// UpdateLastSeenAt sets the "last_seen_at" field to the value that was provided on create.
+func (u *CloudResourceUpsertOne) UpdateLastSeenAt() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateLastSeenAt()
+	})
+}
+
+// ClearLastSeenAt clears the value of the "last_seen_at" field.
+func (u *CloudResourceUpsertOne) ClearLastSeenAt() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.ClearLastSeenAt()
+	})
+}
+
+// SetLifecycleState sets the "lifecycle_state" field.
+func (u *CloudResourceUpsertOne) SetLifecycleState(v string) *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetLifecycleState(v)
+	})
+}
+
+// UpdateLifecycleState sets the "lifecycle_state" field to the value that was provided on create.
+func (u *CloudResourceUpsertOne) UpdateLifecycleState() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateLifecycleState()
+	})
+}
+
+// ClearLifecycleState clears the value of the "lifecycle_state" field.
+func (u *CloudResourceUpsertOne) ClearLifecycleState() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.ClearLifecycleState()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CloudResourceUpsertOne) SetTenantID(v int) *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CloudResourceUpsertOne) AddTenantID(v int) *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CloudResourceUpsertOne) UpdateTenantID() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CloudResourceUpsertOne) SetCreatedAt(v time.Time) *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CloudResourceUpsertOne) UpdateCreatedAt() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *CloudResourceUpsertOne) SetUpdatedAt(v time.Time) *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *CloudResourceUpsertOne) UpdateUpdatedAt() *CloudResourceUpsertOne {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *CloudResourceUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for CloudResourceCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *CloudResourceUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *CloudResourceUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *CloudResourceUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // CloudResourceCreateBulk is the builder for creating many CloudResource entities in bulk.
 type CloudResourceCreateBulk struct {
 	config
 	err      error
 	builders []*CloudResourceCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the CloudResource entities in the database.
@@ -472,6 +1118,7 @@ func (_c *CloudResourceCreateBulk) Save(ctx context.Context) ([]*CloudResource, 
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -522,6 +1169,390 @@ func (_c *CloudResourceCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *CloudResourceCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.CloudResource.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.CloudResourceUpsert) {
+//			SetCloudAccountID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *CloudResourceCreateBulk) OnConflict(opts ...sql.ConflictOption) *CloudResourceUpsertBulk {
+	_c.conflict = opts
+	return &CloudResourceUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.CloudResource.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *CloudResourceCreateBulk) OnConflictColumns(columns ...string) *CloudResourceUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &CloudResourceUpsertBulk{
+		create: _c,
+	}
+}
+
+// CloudResourceUpsertBulk is the builder for "upsert"-ing
+// a bulk of CloudResource nodes.
+type CloudResourceUpsertBulk struct {
+	create *CloudResourceCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.CloudResource.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *CloudResourceUpsertBulk) UpdateNewValues() *CloudResourceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.CloudResource.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *CloudResourceUpsertBulk) Ignore() *CloudResourceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *CloudResourceUpsertBulk) DoNothing() *CloudResourceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the CloudResourceCreateBulk.OnConflict
+// documentation for more info.
+func (u *CloudResourceUpsertBulk) Update(set func(*CloudResourceUpsert)) *CloudResourceUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&CloudResourceUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetCloudAccountID sets the "cloud_account_id" field.
+func (u *CloudResourceUpsertBulk) SetCloudAccountID(v int) *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetCloudAccountID(v)
+	})
+}
+
+// UpdateCloudAccountID sets the "cloud_account_id" field to the value that was provided on create.
+func (u *CloudResourceUpsertBulk) UpdateCloudAccountID() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateCloudAccountID()
+	})
+}
+
+// SetServiceID sets the "service_id" field.
+func (u *CloudResourceUpsertBulk) SetServiceID(v int) *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetServiceID(v)
+	})
+}
+
+// UpdateServiceID sets the "service_id" field to the value that was provided on create.
+func (u *CloudResourceUpsertBulk) UpdateServiceID() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateServiceID()
+	})
+}
+
+// SetResourceID sets the "resource_id" field.
+func (u *CloudResourceUpsertBulk) SetResourceID(v string) *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetResourceID(v)
+	})
+}
+
+// UpdateResourceID sets the "resource_id" field to the value that was provided on create.
+func (u *CloudResourceUpsertBulk) UpdateResourceID() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateResourceID()
+	})
+}
+
+// SetResourceName sets the "resource_name" field.
+func (u *CloudResourceUpsertBulk) SetResourceName(v string) *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetResourceName(v)
+	})
+}
+
+// UpdateResourceName sets the "resource_name" field to the value that was provided on create.
+func (u *CloudResourceUpsertBulk) UpdateResourceName() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateResourceName()
+	})
+}
+
+// ClearResourceName clears the value of the "resource_name" field.
+func (u *CloudResourceUpsertBulk) ClearResourceName() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.ClearResourceName()
+	})
+}
+
+// SetRegion sets the "region" field.
+func (u *CloudResourceUpsertBulk) SetRegion(v string) *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetRegion(v)
+	})
+}
+
+// UpdateRegion sets the "region" field to the value that was provided on create.
+func (u *CloudResourceUpsertBulk) UpdateRegion() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateRegion()
+	})
+}
+
+// ClearRegion clears the value of the "region" field.
+func (u *CloudResourceUpsertBulk) ClearRegion() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.ClearRegion()
+	})
+}
+
+// SetZone sets the "zone" field.
+func (u *CloudResourceUpsertBulk) SetZone(v string) *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetZone(v)
+	})
+}
+
+// UpdateZone sets the "zone" field to the value that was provided on create.
+func (u *CloudResourceUpsertBulk) UpdateZone() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateZone()
+	})
+}
+
+// ClearZone clears the value of the "zone" field.
+func (u *CloudResourceUpsertBulk) ClearZone() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.ClearZone()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *CloudResourceUpsertBulk) SetStatus(v string) *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *CloudResourceUpsertBulk) UpdateStatus() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// ClearStatus clears the value of the "status" field.
+func (u *CloudResourceUpsertBulk) ClearStatus() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.ClearStatus()
+	})
+}
+
+// SetTags sets the "tags" field.
+func (u *CloudResourceUpsertBulk) SetTags(v map[string]string) *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetTags(v)
+	})
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *CloudResourceUpsertBulk) UpdateTags() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateTags()
+	})
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *CloudResourceUpsertBulk) ClearTags() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.ClearTags()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *CloudResourceUpsertBulk) SetMetadata(v map[string]interface{}) *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *CloudResourceUpsertBulk) UpdateMetadata() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *CloudResourceUpsertBulk) ClearMetadata() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// SetFirstSeenAt sets the "first_seen_at" field.
+func (u *CloudResourceUpsertBulk) SetFirstSeenAt(v time.Time) *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetFirstSeenAt(v)
+	})
+}
+
+// UpdateFirstSeenAt sets the "first_seen_at" field to the value that was provided on create.
+func (u *CloudResourceUpsertBulk) UpdateFirstSeenAt() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateFirstSeenAt()
+	})
+}
+
+// ClearFirstSeenAt clears the value of the "first_seen_at" field.
+func (u *CloudResourceUpsertBulk) ClearFirstSeenAt() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.ClearFirstSeenAt()
+	})
+}
+
+// SetLastSeenAt sets the "last_seen_at" field.
+func (u *CloudResourceUpsertBulk) SetLastSeenAt(v time.Time) *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetLastSeenAt(v)
+	})
+}
+
+// UpdateLastSeenAt sets the "last_seen_at" field to the value that was provided on create.
+func (u *CloudResourceUpsertBulk) UpdateLastSeenAt() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateLastSeenAt()
+	})
+}
+
+// ClearLastSeenAt clears the value of the "last_seen_at" field.
+func (u *CloudResourceUpsertBulk) ClearLastSeenAt() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.ClearLastSeenAt()
+	})
+}
+
+// SetLifecycleState sets the "lifecycle_state" field.
+func (u *CloudResourceUpsertBulk) SetLifecycleState(v string) *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetLifecycleState(v)
+	})
+}
+
+// UpdateLifecycleState sets the "lifecycle_state" field to the value that was provided on create.
+func (u *CloudResourceUpsertBulk) UpdateLifecycleState() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateLifecycleState()
+	})
+}
+
+// ClearLifecycleState clears the value of the "lifecycle_state" field.
+func (u *CloudResourceUpsertBulk) ClearLifecycleState() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.ClearLifecycleState()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CloudResourceUpsertBulk) SetTenantID(v int) *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CloudResourceUpsertBulk) AddTenantID(v int) *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CloudResourceUpsertBulk) UpdateTenantID() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CloudResourceUpsertBulk) SetCreatedAt(v time.Time) *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CloudResourceUpsertBulk) UpdateCreatedAt() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *CloudResourceUpsertBulk) SetUpdatedAt(v time.Time) *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *CloudResourceUpsertBulk) UpdateUpdatedAt() *CloudResourceUpsertBulk {
+	return u.Update(func(s *CloudResourceUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *CloudResourceUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the CloudResourceCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for CloudResourceCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *CloudResourceUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

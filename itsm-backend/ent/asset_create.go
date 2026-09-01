@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/user"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -20,6 +21,7 @@ type AssetCreate struct {
 	config
 	mutation *AssetMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetAssetNumber sets the "asset_number" field.
@@ -499,6 +501,7 @@ func (_c *AssetCreate) createSpec() (*Asset, *sqlgraph.CreateSpec) {
 		_node = &Asset{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(asset.Table, sqlgraph.NewFieldSpec(asset.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.AssetNumber(); ok {
 		_spec.SetField(asset.FieldAssetNumber, field.TypeString, value)
 		_node.AssetNumber = value
@@ -642,11 +645,1174 @@ func (_c *AssetCreate) createSpec() (*Asset, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Asset.Create().
+//		SetAssetNumber(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.AssetUpsert) {
+//			SetAssetNumber(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *AssetCreate) OnConflict(opts ...sql.ConflictOption) *AssetUpsertOne {
+	_c.conflict = opts
+	return &AssetUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Asset.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *AssetCreate) OnConflictColumns(columns ...string) *AssetUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &AssetUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// AssetUpsertOne is the builder for "upsert"-ing
+	//  one Asset node.
+	AssetUpsertOne struct {
+		create *AssetCreate
+	}
+
+	// AssetUpsert is the "OnConflict" setter.
+	AssetUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetAssetNumber sets the "asset_number" field.
+func (u *AssetUpsert) SetAssetNumber(v string) *AssetUpsert {
+	u.Set(asset.FieldAssetNumber, v)
+	return u
+}
+
+// UpdateAssetNumber sets the "asset_number" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateAssetNumber() *AssetUpsert {
+	u.SetExcluded(asset.FieldAssetNumber)
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *AssetUpsert) SetName(v string) *AssetUpsert {
+	u.Set(asset.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateName() *AssetUpsert {
+	u.SetExcluded(asset.FieldName)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *AssetUpsert) SetDescription(v string) *AssetUpsert {
+	u.Set(asset.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateDescription() *AssetUpsert {
+	u.SetExcluded(asset.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *AssetUpsert) ClearDescription() *AssetUpsert {
+	u.SetNull(asset.FieldDescription)
+	return u
+}
+
+// SetType sets the "type" field.
+func (u *AssetUpsert) SetType(v string) *AssetUpsert {
+	u.Set(asset.FieldType, v)
+	return u
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateType() *AssetUpsert {
+	u.SetExcluded(asset.FieldType)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *AssetUpsert) SetStatus(v string) *AssetUpsert {
+	u.Set(asset.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateStatus() *AssetUpsert {
+	u.SetExcluded(asset.FieldStatus)
+	return u
+}
+
+// SetCategory sets the "category" field.
+func (u *AssetUpsert) SetCategory(v string) *AssetUpsert {
+	u.Set(asset.FieldCategory, v)
+	return u
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateCategory() *AssetUpsert {
+	u.SetExcluded(asset.FieldCategory)
+	return u
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *AssetUpsert) ClearCategory() *AssetUpsert {
+	u.SetNull(asset.FieldCategory)
+	return u
+}
+
+// SetSubcategory sets the "subcategory" field.
+func (u *AssetUpsert) SetSubcategory(v string) *AssetUpsert {
+	u.Set(asset.FieldSubcategory, v)
+	return u
+}
+
+// UpdateSubcategory sets the "subcategory" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateSubcategory() *AssetUpsert {
+	u.SetExcluded(asset.FieldSubcategory)
+	return u
+}
+
+// ClearSubcategory clears the value of the "subcategory" field.
+func (u *AssetUpsert) ClearSubcategory() *AssetUpsert {
+	u.SetNull(asset.FieldSubcategory)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *AssetUpsert) SetTenantID(v int) *AssetUpsert {
+	u.Set(asset.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateTenantID() *AssetUpsert {
+	u.SetExcluded(asset.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *AssetUpsert) AddTenantID(v int) *AssetUpsert {
+	u.Add(asset.FieldTenantID, v)
+	return u
+}
+
+// SetCiID sets the "ci_id" field.
+func (u *AssetUpsert) SetCiID(v int) *AssetUpsert {
+	u.Set(asset.FieldCiID, v)
+	return u
+}
+
+// UpdateCiID sets the "ci_id" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateCiID() *AssetUpsert {
+	u.SetExcluded(asset.FieldCiID)
+	return u
+}
+
+// AddCiID adds v to the "ci_id" field.
+func (u *AssetUpsert) AddCiID(v int) *AssetUpsert {
+	u.Add(asset.FieldCiID, v)
+	return u
+}
+
+// ClearCiID clears the value of the "ci_id" field.
+func (u *AssetUpsert) ClearCiID() *AssetUpsert {
+	u.SetNull(asset.FieldCiID)
+	return u
+}
+
+// SetAssignedTo sets the "assigned_to" field.
+func (u *AssetUpsert) SetAssignedTo(v int) *AssetUpsert {
+	u.Set(asset.FieldAssignedTo, v)
+	return u
+}
+
+// UpdateAssignedTo sets the "assigned_to" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateAssignedTo() *AssetUpsert {
+	u.SetExcluded(asset.FieldAssignedTo)
+	return u
+}
+
+// AddAssignedTo adds v to the "assigned_to" field.
+func (u *AssetUpsert) AddAssignedTo(v int) *AssetUpsert {
+	u.Add(asset.FieldAssignedTo, v)
+	return u
+}
+
+// ClearAssignedTo clears the value of the "assigned_to" field.
+func (u *AssetUpsert) ClearAssignedTo() *AssetUpsert {
+	u.SetNull(asset.FieldAssignedTo)
+	return u
+}
+
+// SetLocationID sets the "location_id" field.
+func (u *AssetUpsert) SetLocationID(v int) *AssetUpsert {
+	u.Set(asset.FieldLocationID, v)
+	return u
+}
+
+// UpdateLocationID sets the "location_id" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateLocationID() *AssetUpsert {
+	u.SetExcluded(asset.FieldLocationID)
+	return u
+}
+
+// AddLocationID adds v to the "location_id" field.
+func (u *AssetUpsert) AddLocationID(v int) *AssetUpsert {
+	u.Add(asset.FieldLocationID, v)
+	return u
+}
+
+// ClearLocationID clears the value of the "location_id" field.
+func (u *AssetUpsert) ClearLocationID() *AssetUpsert {
+	u.SetNull(asset.FieldLocationID)
+	return u
+}
+
+// SetSerialNumber sets the "serial_number" field.
+func (u *AssetUpsert) SetSerialNumber(v string) *AssetUpsert {
+	u.Set(asset.FieldSerialNumber, v)
+	return u
+}
+
+// UpdateSerialNumber sets the "serial_number" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateSerialNumber() *AssetUpsert {
+	u.SetExcluded(asset.FieldSerialNumber)
+	return u
+}
+
+// ClearSerialNumber clears the value of the "serial_number" field.
+func (u *AssetUpsert) ClearSerialNumber() *AssetUpsert {
+	u.SetNull(asset.FieldSerialNumber)
+	return u
+}
+
+// SetModel sets the "model" field.
+func (u *AssetUpsert) SetModel(v string) *AssetUpsert {
+	u.Set(asset.FieldModel, v)
+	return u
+}
+
+// UpdateModel sets the "model" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateModel() *AssetUpsert {
+	u.SetExcluded(asset.FieldModel)
+	return u
+}
+
+// ClearModel clears the value of the "model" field.
+func (u *AssetUpsert) ClearModel() *AssetUpsert {
+	u.SetNull(asset.FieldModel)
+	return u
+}
+
+// SetManufacturer sets the "manufacturer" field.
+func (u *AssetUpsert) SetManufacturer(v string) *AssetUpsert {
+	u.Set(asset.FieldManufacturer, v)
+	return u
+}
+
+// UpdateManufacturer sets the "manufacturer" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateManufacturer() *AssetUpsert {
+	u.SetExcluded(asset.FieldManufacturer)
+	return u
+}
+
+// ClearManufacturer clears the value of the "manufacturer" field.
+func (u *AssetUpsert) ClearManufacturer() *AssetUpsert {
+	u.SetNull(asset.FieldManufacturer)
+	return u
+}
+
+// SetVendor sets the "vendor" field.
+func (u *AssetUpsert) SetVendor(v string) *AssetUpsert {
+	u.Set(asset.FieldVendor, v)
+	return u
+}
+
+// UpdateVendor sets the "vendor" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateVendor() *AssetUpsert {
+	u.SetExcluded(asset.FieldVendor)
+	return u
+}
+
+// ClearVendor clears the value of the "vendor" field.
+func (u *AssetUpsert) ClearVendor() *AssetUpsert {
+	u.SetNull(asset.FieldVendor)
+	return u
+}
+
+// SetPurchaseDate sets the "purchase_date" field.
+func (u *AssetUpsert) SetPurchaseDate(v string) *AssetUpsert {
+	u.Set(asset.FieldPurchaseDate, v)
+	return u
+}
+
+// UpdatePurchaseDate sets the "purchase_date" field to the value that was provided on create.
+func (u *AssetUpsert) UpdatePurchaseDate() *AssetUpsert {
+	u.SetExcluded(asset.FieldPurchaseDate)
+	return u
+}
+
+// ClearPurchaseDate clears the value of the "purchase_date" field.
+func (u *AssetUpsert) ClearPurchaseDate() *AssetUpsert {
+	u.SetNull(asset.FieldPurchaseDate)
+	return u
+}
+
+// SetPurchasePrice sets the "purchase_price" field.
+func (u *AssetUpsert) SetPurchasePrice(v float64) *AssetUpsert {
+	u.Set(asset.FieldPurchasePrice, v)
+	return u
+}
+
+// UpdatePurchasePrice sets the "purchase_price" field to the value that was provided on create.
+func (u *AssetUpsert) UpdatePurchasePrice() *AssetUpsert {
+	u.SetExcluded(asset.FieldPurchasePrice)
+	return u
+}
+
+// AddPurchasePrice adds v to the "purchase_price" field.
+func (u *AssetUpsert) AddPurchasePrice(v float64) *AssetUpsert {
+	u.Add(asset.FieldPurchasePrice, v)
+	return u
+}
+
+// ClearPurchasePrice clears the value of the "purchase_price" field.
+func (u *AssetUpsert) ClearPurchasePrice() *AssetUpsert {
+	u.SetNull(asset.FieldPurchasePrice)
+	return u
+}
+
+// SetWarrantyExpiry sets the "warranty_expiry" field.
+func (u *AssetUpsert) SetWarrantyExpiry(v string) *AssetUpsert {
+	u.Set(asset.FieldWarrantyExpiry, v)
+	return u
+}
+
+// UpdateWarrantyExpiry sets the "warranty_expiry" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateWarrantyExpiry() *AssetUpsert {
+	u.SetExcluded(asset.FieldWarrantyExpiry)
+	return u
+}
+
+// ClearWarrantyExpiry clears the value of the "warranty_expiry" field.
+func (u *AssetUpsert) ClearWarrantyExpiry() *AssetUpsert {
+	u.SetNull(asset.FieldWarrantyExpiry)
+	return u
+}
+
+// SetSupportExpiry sets the "support_expiry" field.
+func (u *AssetUpsert) SetSupportExpiry(v string) *AssetUpsert {
+	u.Set(asset.FieldSupportExpiry, v)
+	return u
+}
+
+// UpdateSupportExpiry sets the "support_expiry" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateSupportExpiry() *AssetUpsert {
+	u.SetExcluded(asset.FieldSupportExpiry)
+	return u
+}
+
+// ClearSupportExpiry clears the value of the "support_expiry" field.
+func (u *AssetUpsert) ClearSupportExpiry() *AssetUpsert {
+	u.SetNull(asset.FieldSupportExpiry)
+	return u
+}
+
+// SetLocation sets the "location" field.
+func (u *AssetUpsert) SetLocation(v string) *AssetUpsert {
+	u.Set(asset.FieldLocation, v)
+	return u
+}
+
+// UpdateLocation sets the "location" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateLocation() *AssetUpsert {
+	u.SetExcluded(asset.FieldLocation)
+	return u
+}
+
+// ClearLocation clears the value of the "location" field.
+func (u *AssetUpsert) ClearLocation() *AssetUpsert {
+	u.SetNull(asset.FieldLocation)
+	return u
+}
+
+// SetDepartment sets the "department" field.
+func (u *AssetUpsert) SetDepartment(v string) *AssetUpsert {
+	u.Set(asset.FieldDepartment, v)
+	return u
+}
+
+// UpdateDepartment sets the "department" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateDepartment() *AssetUpsert {
+	u.SetExcluded(asset.FieldDepartment)
+	return u
+}
+
+// ClearDepartment clears the value of the "department" field.
+func (u *AssetUpsert) ClearDepartment() *AssetUpsert {
+	u.SetNull(asset.FieldDepartment)
+	return u
+}
+
+// SetParentAssetID sets the "parent_asset_id" field.
+func (u *AssetUpsert) SetParentAssetID(v int) *AssetUpsert {
+	u.Set(asset.FieldParentAssetID, v)
+	return u
+}
+
+// UpdateParentAssetID sets the "parent_asset_id" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateParentAssetID() *AssetUpsert {
+	u.SetExcluded(asset.FieldParentAssetID)
+	return u
+}
+
+// AddParentAssetID adds v to the "parent_asset_id" field.
+func (u *AssetUpsert) AddParentAssetID(v int) *AssetUpsert {
+	u.Add(asset.FieldParentAssetID, v)
+	return u
+}
+
+// ClearParentAssetID clears the value of the "parent_asset_id" field.
+func (u *AssetUpsert) ClearParentAssetID() *AssetUpsert {
+	u.SetNull(asset.FieldParentAssetID)
+	return u
+}
+
+// SetSpecifications sets the "specifications" field.
+func (u *AssetUpsert) SetSpecifications(v map[string]string) *AssetUpsert {
+	u.Set(asset.FieldSpecifications, v)
+	return u
+}
+
+// UpdateSpecifications sets the "specifications" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateSpecifications() *AssetUpsert {
+	u.SetExcluded(asset.FieldSpecifications)
+	return u
+}
+
+// ClearSpecifications clears the value of the "specifications" field.
+func (u *AssetUpsert) ClearSpecifications() *AssetUpsert {
+	u.SetNull(asset.FieldSpecifications)
+	return u
+}
+
+// SetCustomFields sets the "custom_fields" field.
+func (u *AssetUpsert) SetCustomFields(v map[string]string) *AssetUpsert {
+	u.Set(asset.FieldCustomFields, v)
+	return u
+}
+
+// UpdateCustomFields sets the "custom_fields" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateCustomFields() *AssetUpsert {
+	u.SetExcluded(asset.FieldCustomFields)
+	return u
+}
+
+// ClearCustomFields clears the value of the "custom_fields" field.
+func (u *AssetUpsert) ClearCustomFields() *AssetUpsert {
+	u.SetNull(asset.FieldCustomFields)
+	return u
+}
+
+// SetTags sets the "tags" field.
+func (u *AssetUpsert) SetTags(v []string) *AssetUpsert {
+	u.Set(asset.FieldTags, v)
+	return u
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateTags() *AssetUpsert {
+	u.SetExcluded(asset.FieldTags)
+	return u
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *AssetUpsert) ClearTags() *AssetUpsert {
+	u.SetNull(asset.FieldTags)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *AssetUpsert) SetCreatedAt(v time.Time) *AssetUpsert {
+	u.Set(asset.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateCreatedAt() *AssetUpsert {
+	u.SetExcluded(asset.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *AssetUpsert) SetUpdatedAt(v time.Time) *AssetUpsert {
+	u.Set(asset.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *AssetUpsert) UpdateUpdatedAt() *AssetUpsert {
+	u.SetExcluded(asset.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.Asset.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *AssetUpsertOne) UpdateNewValues() *AssetUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Asset.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *AssetUpsertOne) Ignore() *AssetUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *AssetUpsertOne) DoNothing() *AssetUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the AssetCreate.OnConflict
+// documentation for more info.
+func (u *AssetUpsertOne) Update(set func(*AssetUpsert)) *AssetUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&AssetUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetAssetNumber sets the "asset_number" field.
+func (u *AssetUpsertOne) SetAssetNumber(v string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetAssetNumber(v)
+	})
+}
+
+// UpdateAssetNumber sets the "asset_number" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateAssetNumber() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateAssetNumber()
+	})
+}
+
+// SetName sets the "name" field.
+func (u *AssetUpsertOne) SetName(v string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateName() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *AssetUpsertOne) SetDescription(v string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateDescription() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *AssetUpsertOne) ClearDescription() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *AssetUpsertOne) SetType(v string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateType() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *AssetUpsertOne) SetStatus(v string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateStatus() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *AssetUpsertOne) SetCategory(v string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateCategory() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *AssetUpsertOne) ClearCategory() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetSubcategory sets the "subcategory" field.
+func (u *AssetUpsertOne) SetSubcategory(v string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetSubcategory(v)
+	})
+}
+
+// UpdateSubcategory sets the "subcategory" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateSubcategory() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateSubcategory()
+	})
+}
+
+// ClearSubcategory clears the value of the "subcategory" field.
+func (u *AssetUpsertOne) ClearSubcategory() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearSubcategory()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *AssetUpsertOne) SetTenantID(v int) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *AssetUpsertOne) AddTenantID(v int) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateTenantID() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCiID sets the "ci_id" field.
+func (u *AssetUpsertOne) SetCiID(v int) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetCiID(v)
+	})
+}
+
+// AddCiID adds v to the "ci_id" field.
+func (u *AssetUpsertOne) AddCiID(v int) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.AddCiID(v)
+	})
+}
+
+// UpdateCiID sets the "ci_id" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateCiID() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateCiID()
+	})
+}
+
+// ClearCiID clears the value of the "ci_id" field.
+func (u *AssetUpsertOne) ClearCiID() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearCiID()
+	})
+}
+
+// SetAssignedTo sets the "assigned_to" field.
+func (u *AssetUpsertOne) SetAssignedTo(v int) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetAssignedTo(v)
+	})
+}
+
+// AddAssignedTo adds v to the "assigned_to" field.
+func (u *AssetUpsertOne) AddAssignedTo(v int) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.AddAssignedTo(v)
+	})
+}
+
+// UpdateAssignedTo sets the "assigned_to" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateAssignedTo() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateAssignedTo()
+	})
+}
+
+// ClearAssignedTo clears the value of the "assigned_to" field.
+func (u *AssetUpsertOne) ClearAssignedTo() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearAssignedTo()
+	})
+}
+
+// SetLocationID sets the "location_id" field.
+func (u *AssetUpsertOne) SetLocationID(v int) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetLocationID(v)
+	})
+}
+
+// AddLocationID adds v to the "location_id" field.
+func (u *AssetUpsertOne) AddLocationID(v int) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.AddLocationID(v)
+	})
+}
+
+// UpdateLocationID sets the "location_id" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateLocationID() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateLocationID()
+	})
+}
+
+// ClearLocationID clears the value of the "location_id" field.
+func (u *AssetUpsertOne) ClearLocationID() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearLocationID()
+	})
+}
+
+// SetSerialNumber sets the "serial_number" field.
+func (u *AssetUpsertOne) SetSerialNumber(v string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetSerialNumber(v)
+	})
+}
+
+// UpdateSerialNumber sets the "serial_number" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateSerialNumber() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateSerialNumber()
+	})
+}
+
+// ClearSerialNumber clears the value of the "serial_number" field.
+func (u *AssetUpsertOne) ClearSerialNumber() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearSerialNumber()
+	})
+}
+
+// SetModel sets the "model" field.
+func (u *AssetUpsertOne) SetModel(v string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetModel(v)
+	})
+}
+
+// UpdateModel sets the "model" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateModel() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateModel()
+	})
+}
+
+// ClearModel clears the value of the "model" field.
+func (u *AssetUpsertOne) ClearModel() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearModel()
+	})
+}
+
+// SetManufacturer sets the "manufacturer" field.
+func (u *AssetUpsertOne) SetManufacturer(v string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetManufacturer(v)
+	})
+}
+
+// UpdateManufacturer sets the "manufacturer" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateManufacturer() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateManufacturer()
+	})
+}
+
+// ClearManufacturer clears the value of the "manufacturer" field.
+func (u *AssetUpsertOne) ClearManufacturer() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearManufacturer()
+	})
+}
+
+// SetVendor sets the "vendor" field.
+func (u *AssetUpsertOne) SetVendor(v string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetVendor(v)
+	})
+}
+
+// UpdateVendor sets the "vendor" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateVendor() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateVendor()
+	})
+}
+
+// ClearVendor clears the value of the "vendor" field.
+func (u *AssetUpsertOne) ClearVendor() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearVendor()
+	})
+}
+
+// SetPurchaseDate sets the "purchase_date" field.
+func (u *AssetUpsertOne) SetPurchaseDate(v string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetPurchaseDate(v)
+	})
+}
+
+// UpdatePurchaseDate sets the "purchase_date" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdatePurchaseDate() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdatePurchaseDate()
+	})
+}
+
+// ClearPurchaseDate clears the value of the "purchase_date" field.
+func (u *AssetUpsertOne) ClearPurchaseDate() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearPurchaseDate()
+	})
+}
+
+// SetPurchasePrice sets the "purchase_price" field.
+func (u *AssetUpsertOne) SetPurchasePrice(v float64) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetPurchasePrice(v)
+	})
+}
+
+// AddPurchasePrice adds v to the "purchase_price" field.
+func (u *AssetUpsertOne) AddPurchasePrice(v float64) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.AddPurchasePrice(v)
+	})
+}
+
+// UpdatePurchasePrice sets the "purchase_price" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdatePurchasePrice() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdatePurchasePrice()
+	})
+}
+
+// ClearPurchasePrice clears the value of the "purchase_price" field.
+func (u *AssetUpsertOne) ClearPurchasePrice() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearPurchasePrice()
+	})
+}
+
+// SetWarrantyExpiry sets the "warranty_expiry" field.
+func (u *AssetUpsertOne) SetWarrantyExpiry(v string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetWarrantyExpiry(v)
+	})
+}
+
+// UpdateWarrantyExpiry sets the "warranty_expiry" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateWarrantyExpiry() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateWarrantyExpiry()
+	})
+}
+
+// ClearWarrantyExpiry clears the value of the "warranty_expiry" field.
+func (u *AssetUpsertOne) ClearWarrantyExpiry() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearWarrantyExpiry()
+	})
+}
+
+// SetSupportExpiry sets the "support_expiry" field.
+func (u *AssetUpsertOne) SetSupportExpiry(v string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetSupportExpiry(v)
+	})
+}
+
+// UpdateSupportExpiry sets the "support_expiry" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateSupportExpiry() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateSupportExpiry()
+	})
+}
+
+// ClearSupportExpiry clears the value of the "support_expiry" field.
+func (u *AssetUpsertOne) ClearSupportExpiry() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearSupportExpiry()
+	})
+}
+
+// SetLocation sets the "location" field.
+func (u *AssetUpsertOne) SetLocation(v string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetLocation(v)
+	})
+}
+
+// UpdateLocation sets the "location" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateLocation() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateLocation()
+	})
+}
+
+// ClearLocation clears the value of the "location" field.
+func (u *AssetUpsertOne) ClearLocation() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearLocation()
+	})
+}
+
+// SetDepartment sets the "department" field.
+func (u *AssetUpsertOne) SetDepartment(v string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetDepartment(v)
+	})
+}
+
+// UpdateDepartment sets the "department" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateDepartment() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateDepartment()
+	})
+}
+
+// ClearDepartment clears the value of the "department" field.
+func (u *AssetUpsertOne) ClearDepartment() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearDepartment()
+	})
+}
+
+// SetParentAssetID sets the "parent_asset_id" field.
+func (u *AssetUpsertOne) SetParentAssetID(v int) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetParentAssetID(v)
+	})
+}
+
+// AddParentAssetID adds v to the "parent_asset_id" field.
+func (u *AssetUpsertOne) AddParentAssetID(v int) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.AddParentAssetID(v)
+	})
+}
+
+// UpdateParentAssetID sets the "parent_asset_id" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateParentAssetID() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateParentAssetID()
+	})
+}
+
+// ClearParentAssetID clears the value of the "parent_asset_id" field.
+func (u *AssetUpsertOne) ClearParentAssetID() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearParentAssetID()
+	})
+}
+
+// SetSpecifications sets the "specifications" field.
+func (u *AssetUpsertOne) SetSpecifications(v map[string]string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetSpecifications(v)
+	})
+}
+
+// UpdateSpecifications sets the "specifications" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateSpecifications() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateSpecifications()
+	})
+}
+
+// ClearSpecifications clears the value of the "specifications" field.
+func (u *AssetUpsertOne) ClearSpecifications() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearSpecifications()
+	})
+}
+
+// SetCustomFields sets the "custom_fields" field.
+func (u *AssetUpsertOne) SetCustomFields(v map[string]string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetCustomFields(v)
+	})
+}
+
+// UpdateCustomFields sets the "custom_fields" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateCustomFields() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateCustomFields()
+	})
+}
+
+// ClearCustomFields clears the value of the "custom_fields" field.
+func (u *AssetUpsertOne) ClearCustomFields() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearCustomFields()
+	})
+}
+
+// SetTags sets the "tags" field.
+func (u *AssetUpsertOne) SetTags(v []string) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetTags(v)
+	})
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateTags() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateTags()
+	})
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *AssetUpsertOne) ClearTags() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearTags()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *AssetUpsertOne) SetCreatedAt(v time.Time) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateCreatedAt() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *AssetUpsertOne) SetUpdatedAt(v time.Time) *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *AssetUpsertOne) UpdateUpdatedAt() *AssetUpsertOne {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *AssetUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for AssetCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *AssetUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *AssetUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *AssetUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // AssetCreateBulk is the builder for creating many Asset entities in bulk.
 type AssetCreateBulk struct {
 	config
 	err      error
 	builders []*AssetCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the Asset entities in the database.
@@ -676,6 +1842,7 @@ func (_c *AssetCreateBulk) Save(ctx context.Context) ([]*Asset, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -726,6 +1893,670 @@ func (_c *AssetCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *AssetCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Asset.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.AssetUpsert) {
+//			SetAssetNumber(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *AssetCreateBulk) OnConflict(opts ...sql.ConflictOption) *AssetUpsertBulk {
+	_c.conflict = opts
+	return &AssetUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Asset.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *AssetCreateBulk) OnConflictColumns(columns ...string) *AssetUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &AssetUpsertBulk{
+		create: _c,
+	}
+}
+
+// AssetUpsertBulk is the builder for "upsert"-ing
+// a bulk of Asset nodes.
+type AssetUpsertBulk struct {
+	create *AssetCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.Asset.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *AssetUpsertBulk) UpdateNewValues() *AssetUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Asset.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *AssetUpsertBulk) Ignore() *AssetUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *AssetUpsertBulk) DoNothing() *AssetUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the AssetCreateBulk.OnConflict
+// documentation for more info.
+func (u *AssetUpsertBulk) Update(set func(*AssetUpsert)) *AssetUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&AssetUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetAssetNumber sets the "asset_number" field.
+func (u *AssetUpsertBulk) SetAssetNumber(v string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetAssetNumber(v)
+	})
+}
+
+// UpdateAssetNumber sets the "asset_number" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateAssetNumber() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateAssetNumber()
+	})
+}
+
+// SetName sets the "name" field.
+func (u *AssetUpsertBulk) SetName(v string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateName() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *AssetUpsertBulk) SetDescription(v string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateDescription() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *AssetUpsertBulk) ClearDescription() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *AssetUpsertBulk) SetType(v string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateType() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *AssetUpsertBulk) SetStatus(v string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateStatus() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *AssetUpsertBulk) SetCategory(v string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateCategory() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *AssetUpsertBulk) ClearCategory() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetSubcategory sets the "subcategory" field.
+func (u *AssetUpsertBulk) SetSubcategory(v string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetSubcategory(v)
+	})
+}
+
+// UpdateSubcategory sets the "subcategory" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateSubcategory() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateSubcategory()
+	})
+}
+
+// ClearSubcategory clears the value of the "subcategory" field.
+func (u *AssetUpsertBulk) ClearSubcategory() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearSubcategory()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *AssetUpsertBulk) SetTenantID(v int) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *AssetUpsertBulk) AddTenantID(v int) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateTenantID() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCiID sets the "ci_id" field.
+func (u *AssetUpsertBulk) SetCiID(v int) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetCiID(v)
+	})
+}
+
+// AddCiID adds v to the "ci_id" field.
+func (u *AssetUpsertBulk) AddCiID(v int) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.AddCiID(v)
+	})
+}
+
+// UpdateCiID sets the "ci_id" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateCiID() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateCiID()
+	})
+}
+
+// ClearCiID clears the value of the "ci_id" field.
+func (u *AssetUpsertBulk) ClearCiID() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearCiID()
+	})
+}
+
+// SetAssignedTo sets the "assigned_to" field.
+func (u *AssetUpsertBulk) SetAssignedTo(v int) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetAssignedTo(v)
+	})
+}
+
+// AddAssignedTo adds v to the "assigned_to" field.
+func (u *AssetUpsertBulk) AddAssignedTo(v int) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.AddAssignedTo(v)
+	})
+}
+
+// UpdateAssignedTo sets the "assigned_to" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateAssignedTo() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateAssignedTo()
+	})
+}
+
+// ClearAssignedTo clears the value of the "assigned_to" field.
+func (u *AssetUpsertBulk) ClearAssignedTo() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearAssignedTo()
+	})
+}
+
+// SetLocationID sets the "location_id" field.
+func (u *AssetUpsertBulk) SetLocationID(v int) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetLocationID(v)
+	})
+}
+
+// AddLocationID adds v to the "location_id" field.
+func (u *AssetUpsertBulk) AddLocationID(v int) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.AddLocationID(v)
+	})
+}
+
+// UpdateLocationID sets the "location_id" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateLocationID() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateLocationID()
+	})
+}
+
+// ClearLocationID clears the value of the "location_id" field.
+func (u *AssetUpsertBulk) ClearLocationID() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearLocationID()
+	})
+}
+
+// SetSerialNumber sets the "serial_number" field.
+func (u *AssetUpsertBulk) SetSerialNumber(v string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetSerialNumber(v)
+	})
+}
+
+// UpdateSerialNumber sets the "serial_number" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateSerialNumber() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateSerialNumber()
+	})
+}
+
+// ClearSerialNumber clears the value of the "serial_number" field.
+func (u *AssetUpsertBulk) ClearSerialNumber() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearSerialNumber()
+	})
+}
+
+// SetModel sets the "model" field.
+func (u *AssetUpsertBulk) SetModel(v string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetModel(v)
+	})
+}
+
+// UpdateModel sets the "model" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateModel() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateModel()
+	})
+}
+
+// ClearModel clears the value of the "model" field.
+func (u *AssetUpsertBulk) ClearModel() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearModel()
+	})
+}
+
+// SetManufacturer sets the "manufacturer" field.
+func (u *AssetUpsertBulk) SetManufacturer(v string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetManufacturer(v)
+	})
+}
+
+// UpdateManufacturer sets the "manufacturer" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateManufacturer() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateManufacturer()
+	})
+}
+
+// ClearManufacturer clears the value of the "manufacturer" field.
+func (u *AssetUpsertBulk) ClearManufacturer() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearManufacturer()
+	})
+}
+
+// SetVendor sets the "vendor" field.
+func (u *AssetUpsertBulk) SetVendor(v string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetVendor(v)
+	})
+}
+
+// UpdateVendor sets the "vendor" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateVendor() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateVendor()
+	})
+}
+
+// ClearVendor clears the value of the "vendor" field.
+func (u *AssetUpsertBulk) ClearVendor() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearVendor()
+	})
+}
+
+// SetPurchaseDate sets the "purchase_date" field.
+func (u *AssetUpsertBulk) SetPurchaseDate(v string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetPurchaseDate(v)
+	})
+}
+
+// UpdatePurchaseDate sets the "purchase_date" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdatePurchaseDate() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdatePurchaseDate()
+	})
+}
+
+// ClearPurchaseDate clears the value of the "purchase_date" field.
+func (u *AssetUpsertBulk) ClearPurchaseDate() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearPurchaseDate()
+	})
+}
+
+// SetPurchasePrice sets the "purchase_price" field.
+func (u *AssetUpsertBulk) SetPurchasePrice(v float64) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetPurchasePrice(v)
+	})
+}
+
+// AddPurchasePrice adds v to the "purchase_price" field.
+func (u *AssetUpsertBulk) AddPurchasePrice(v float64) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.AddPurchasePrice(v)
+	})
+}
+
+// UpdatePurchasePrice sets the "purchase_price" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdatePurchasePrice() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdatePurchasePrice()
+	})
+}
+
+// ClearPurchasePrice clears the value of the "purchase_price" field.
+func (u *AssetUpsertBulk) ClearPurchasePrice() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearPurchasePrice()
+	})
+}
+
+// SetWarrantyExpiry sets the "warranty_expiry" field.
+func (u *AssetUpsertBulk) SetWarrantyExpiry(v string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetWarrantyExpiry(v)
+	})
+}
+
+// UpdateWarrantyExpiry sets the "warranty_expiry" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateWarrantyExpiry() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateWarrantyExpiry()
+	})
+}
+
+// ClearWarrantyExpiry clears the value of the "warranty_expiry" field.
+func (u *AssetUpsertBulk) ClearWarrantyExpiry() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearWarrantyExpiry()
+	})
+}
+
+// SetSupportExpiry sets the "support_expiry" field.
+func (u *AssetUpsertBulk) SetSupportExpiry(v string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetSupportExpiry(v)
+	})
+}
+
+// UpdateSupportExpiry sets the "support_expiry" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateSupportExpiry() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateSupportExpiry()
+	})
+}
+
+// ClearSupportExpiry clears the value of the "support_expiry" field.
+func (u *AssetUpsertBulk) ClearSupportExpiry() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearSupportExpiry()
+	})
+}
+
+// SetLocation sets the "location" field.
+func (u *AssetUpsertBulk) SetLocation(v string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetLocation(v)
+	})
+}
+
+// UpdateLocation sets the "location" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateLocation() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateLocation()
+	})
+}
+
+// ClearLocation clears the value of the "location" field.
+func (u *AssetUpsertBulk) ClearLocation() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearLocation()
+	})
+}
+
+// SetDepartment sets the "department" field.
+func (u *AssetUpsertBulk) SetDepartment(v string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetDepartment(v)
+	})
+}
+
+// UpdateDepartment sets the "department" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateDepartment() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateDepartment()
+	})
+}
+
+// ClearDepartment clears the value of the "department" field.
+func (u *AssetUpsertBulk) ClearDepartment() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearDepartment()
+	})
+}
+
+// SetParentAssetID sets the "parent_asset_id" field.
+func (u *AssetUpsertBulk) SetParentAssetID(v int) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetParentAssetID(v)
+	})
+}
+
+// AddParentAssetID adds v to the "parent_asset_id" field.
+func (u *AssetUpsertBulk) AddParentAssetID(v int) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.AddParentAssetID(v)
+	})
+}
+
+// UpdateParentAssetID sets the "parent_asset_id" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateParentAssetID() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateParentAssetID()
+	})
+}
+
+// ClearParentAssetID clears the value of the "parent_asset_id" field.
+func (u *AssetUpsertBulk) ClearParentAssetID() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearParentAssetID()
+	})
+}
+
+// SetSpecifications sets the "specifications" field.
+func (u *AssetUpsertBulk) SetSpecifications(v map[string]string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetSpecifications(v)
+	})
+}
+
+// UpdateSpecifications sets the "specifications" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateSpecifications() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateSpecifications()
+	})
+}
+
+// ClearSpecifications clears the value of the "specifications" field.
+func (u *AssetUpsertBulk) ClearSpecifications() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearSpecifications()
+	})
+}
+
+// SetCustomFields sets the "custom_fields" field.
+func (u *AssetUpsertBulk) SetCustomFields(v map[string]string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetCustomFields(v)
+	})
+}
+
+// UpdateCustomFields sets the "custom_fields" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateCustomFields() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateCustomFields()
+	})
+}
+
+// ClearCustomFields clears the value of the "custom_fields" field.
+func (u *AssetUpsertBulk) ClearCustomFields() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearCustomFields()
+	})
+}
+
+// SetTags sets the "tags" field.
+func (u *AssetUpsertBulk) SetTags(v []string) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetTags(v)
+	})
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateTags() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateTags()
+	})
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *AssetUpsertBulk) ClearTags() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.ClearTags()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *AssetUpsertBulk) SetCreatedAt(v time.Time) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateCreatedAt() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *AssetUpsertBulk) SetUpdatedAt(v time.Time) *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *AssetUpsertBulk) UpdateUpdatedAt() *AssetUpsertBulk {
+	return u.Update(func(s *AssetUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *AssetUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the AssetCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for AssetCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *AssetUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

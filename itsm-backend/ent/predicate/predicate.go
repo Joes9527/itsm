@@ -351,6 +351,9 @@ type User func(*sql.Selector)
 // Vendor is the predicate function for vendor builders.
 type Vendor func(*sql.Selector)
 
+// WorkItemNumberSequence is the predicate function for workitemnumbersequence builders.
+type WorkItemNumberSequence func(*sql.Selector)
+
 // WorkItemRelation is the predicate function for workitemrelation builders.
 type WorkItemRelation func(*sql.Selector)
 

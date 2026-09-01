@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/processcallbackoutbox"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type ProcessCallbackOutboxCreate struct {
 	config
 	mutation *ProcessCallbackOutboxMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetExecutionKey sets the "execution_key" field.
@@ -421,6 +423,7 @@ func (_c *ProcessCallbackOutboxCreate) createSpec() (*ProcessCallbackOutbox, *sq
 		_node = &ProcessCallbackOutbox{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(processcallbackoutbox.Table, sqlgraph.NewFieldSpec(processcallbackoutbox.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.ExecutionKey(); ok {
 		_spec.SetField(processcallbackoutbox.FieldExecutionKey, field.TypeString, value)
 		_node.ExecutionKey = value
@@ -508,11 +511,828 @@ func (_c *ProcessCallbackOutboxCreate) createSpec() (*ProcessCallbackOutbox, *sq
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessCallbackOutbox.Create().
+//		SetExecutionKey(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessCallbackOutboxUpsert) {
+//			SetExecutionKey(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessCallbackOutboxCreate) OnConflict(opts ...sql.ConflictOption) *ProcessCallbackOutboxUpsertOne {
+	_c.conflict = opts
+	return &ProcessCallbackOutboxUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessCallbackOutbox.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessCallbackOutboxCreate) OnConflictColumns(columns ...string) *ProcessCallbackOutboxUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessCallbackOutboxUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ProcessCallbackOutboxUpsertOne is the builder for "upsert"-ing
+	//  one ProcessCallbackOutbox node.
+	ProcessCallbackOutboxUpsertOne struct {
+		create *ProcessCallbackOutboxCreate
+	}
+
+	// ProcessCallbackOutboxUpsert is the "OnConflict" setter.
+	ProcessCallbackOutboxUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetExecutionKey sets the "execution_key" field.
+func (u *ProcessCallbackOutboxUpsert) SetExecutionKey(v string) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldExecutionKey, v)
+	return u
+}
+
+// UpdateExecutionKey sets the "execution_key" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateExecutionKey() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldExecutionKey)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessCallbackOutboxUpsert) SetTenantID(v int) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateTenantID() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessCallbackOutboxUpsert) AddTenantID(v int) *ProcessCallbackOutboxUpsert {
+	u.Add(processcallbackoutbox.FieldTenantID, v)
+	return u
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessCallbackOutboxUpsert) SetProcessInstanceID(v int) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldProcessInstanceID, v)
+	return u
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateProcessInstanceID() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldProcessInstanceID)
+	return u
+}
+
+// AddProcessInstanceID adds v to the "process_instance_id" field.
+func (u *ProcessCallbackOutboxUpsert) AddProcessInstanceID(v int) *ProcessCallbackOutboxUpsert {
+	u.Add(processcallbackoutbox.FieldProcessInstanceID, v)
+	return u
+}
+
+// SetProcessTaskID sets the "process_task_id" field.
+func (u *ProcessCallbackOutboxUpsert) SetProcessTaskID(v int) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldProcessTaskID, v)
+	return u
+}
+
+// UpdateProcessTaskID sets the "process_task_id" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateProcessTaskID() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldProcessTaskID)
+	return u
+}
+
+// AddProcessTaskID adds v to the "process_task_id" field.
+func (u *ProcessCallbackOutboxUpsert) AddProcessTaskID(v int) *ProcessCallbackOutboxUpsert {
+	u.Add(processcallbackoutbox.FieldProcessTaskID, v)
+	return u
+}
+
+// ClearProcessTaskID clears the value of the "process_task_id" field.
+func (u *ProcessCallbackOutboxUpsert) ClearProcessTaskID() *ProcessCallbackOutboxUpsert {
+	u.SetNull(processcallbackoutbox.FieldProcessTaskID)
+	return u
+}
+
+// SetTaskID sets the "task_id" field.
+func (u *ProcessCallbackOutboxUpsert) SetTaskID(v string) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldTaskID, v)
+	return u
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateTaskID() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldTaskID)
+	return u
+}
+
+// ClearTaskID clears the value of the "task_id" field.
+func (u *ProcessCallbackOutboxUpsert) ClearTaskID() *ProcessCallbackOutboxUpsert {
+	u.SetNull(processcallbackoutbox.FieldTaskID)
+	return u
+}
+
+// SetCallbackKind sets the "callback_kind" field.
+func (u *ProcessCallbackOutboxUpsert) SetCallbackKind(v string) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldCallbackKind, v)
+	return u
+}
+
+// UpdateCallbackKind sets the "callback_kind" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateCallbackKind() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldCallbackKind)
+	return u
+}
+
+// SetHandlerID sets the "handler_id" field.
+func (u *ProcessCallbackOutboxUpsert) SetHandlerID(v string) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldHandlerID, v)
+	return u
+}
+
+// UpdateHandlerID sets the "handler_id" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateHandlerID() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldHandlerID)
+	return u
+}
+
+// SetTaskType sets the "task_type" field.
+func (u *ProcessCallbackOutboxUpsert) SetTaskType(v string) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldTaskType, v)
+	return u
+}
+
+// UpdateTaskType sets the "task_type" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateTaskType() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldTaskType)
+	return u
+}
+
+// SetElementID sets the "element_id" field.
+func (u *ProcessCallbackOutboxUpsert) SetElementID(v string) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldElementID, v)
+	return u
+}
+
+// UpdateElementID sets the "element_id" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateElementID() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldElementID)
+	return u
+}
+
+// SetAction sets the "action" field.
+func (u *ProcessCallbackOutboxUpsert) SetAction(v string) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldAction, v)
+	return u
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateAction() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldAction)
+	return u
+}
+
+// ClearAction clears the value of the "action" field.
+func (u *ProcessCallbackOutboxUpsert) ClearAction() *ProcessCallbackOutboxUpsert {
+	u.SetNull(processcallbackoutbox.FieldAction)
+	return u
+}
+
+// SetConfigRef sets the "config_ref" field.
+func (u *ProcessCallbackOutboxUpsert) SetConfigRef(v string) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldConfigRef, v)
+	return u
+}
+
+// UpdateConfigRef sets the "config_ref" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateConfigRef() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldConfigRef)
+	return u
+}
+
+// ClearConfigRef clears the value of the "config_ref" field.
+func (u *ProcessCallbackOutboxUpsert) ClearConfigRef() *ProcessCallbackOutboxUpsert {
+	u.SetNull(processcallbackoutbox.FieldConfigRef)
+	return u
+}
+
+// SetVariables sets the "variables" field.
+func (u *ProcessCallbackOutboxUpsert) SetVariables(v map[string]interface{}) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldVariables, v)
+	return u
+}
+
+// UpdateVariables sets the "variables" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateVariables() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldVariables)
+	return u
+}
+
+// ClearVariables clears the value of the "variables" field.
+func (u *ProcessCallbackOutboxUpsert) ClearVariables() *ProcessCallbackOutboxUpsert {
+	u.SetNull(processcallbackoutbox.FieldVariables)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *ProcessCallbackOutboxUpsert) SetStatus(v string) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateStatus() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldStatus)
+	return u
+}
+
+// SetAttemptCount sets the "attempt_count" field.
+func (u *ProcessCallbackOutboxUpsert) SetAttemptCount(v int) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldAttemptCount, v)
+	return u
+}
+
+// UpdateAttemptCount sets the "attempt_count" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateAttemptCount() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldAttemptCount)
+	return u
+}
+
+// AddAttemptCount adds v to the "attempt_count" field.
+func (u *ProcessCallbackOutboxUpsert) AddAttemptCount(v int) *ProcessCallbackOutboxUpsert {
+	u.Add(processcallbackoutbox.FieldAttemptCount, v)
+	return u
+}
+
+// SetNextAttemptAt sets the "next_attempt_at" field.
+func (u *ProcessCallbackOutboxUpsert) SetNextAttemptAt(v time.Time) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldNextAttemptAt, v)
+	return u
+}
+
+// UpdateNextAttemptAt sets the "next_attempt_at" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateNextAttemptAt() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldNextAttemptAt)
+	return u
+}
+
+// SetLeaseOwner sets the "lease_owner" field.
+func (u *ProcessCallbackOutboxUpsert) SetLeaseOwner(v string) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldLeaseOwner, v)
+	return u
+}
+
+// UpdateLeaseOwner sets the "lease_owner" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateLeaseOwner() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldLeaseOwner)
+	return u
+}
+
+// ClearLeaseOwner clears the value of the "lease_owner" field.
+func (u *ProcessCallbackOutboxUpsert) ClearLeaseOwner() *ProcessCallbackOutboxUpsert {
+	u.SetNull(processcallbackoutbox.FieldLeaseOwner)
+	return u
+}
+
+// SetLeaseExpiresAt sets the "lease_expires_at" field.
+func (u *ProcessCallbackOutboxUpsert) SetLeaseExpiresAt(v time.Time) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldLeaseExpiresAt, v)
+	return u
+}
+
+// UpdateLeaseExpiresAt sets the "lease_expires_at" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateLeaseExpiresAt() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldLeaseExpiresAt)
+	return u
+}
+
+// ClearLeaseExpiresAt clears the value of the "lease_expires_at" field.
+func (u *ProcessCallbackOutboxUpsert) ClearLeaseExpiresAt() *ProcessCallbackOutboxUpsert {
+	u.SetNull(processcallbackoutbox.FieldLeaseExpiresAt)
+	return u
+}
+
+// SetLastErrorClass sets the "last_error_class" field.
+func (u *ProcessCallbackOutboxUpsert) SetLastErrorClass(v string) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldLastErrorClass, v)
+	return u
+}
+
+// UpdateLastErrorClass sets the "last_error_class" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateLastErrorClass() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldLastErrorClass)
+	return u
+}
+
+// ClearLastErrorClass clears the value of the "last_error_class" field.
+func (u *ProcessCallbackOutboxUpsert) ClearLastErrorClass() *ProcessCallbackOutboxUpsert {
+	u.SetNull(processcallbackoutbox.FieldLastErrorClass)
+	return u
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (u *ProcessCallbackOutboxUpsert) SetCompletedAt(v time.Time) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldCompletedAt, v)
+	return u
+}
+
+// UpdateCompletedAt sets the "completed_at" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateCompletedAt() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldCompletedAt)
+	return u
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (u *ProcessCallbackOutboxUpsert) ClearCompletedAt() *ProcessCallbackOutboxUpsert {
+	u.SetNull(processcallbackoutbox.FieldCompletedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessCallbackOutboxUpsert) SetUpdatedAt(v time.Time) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateUpdatedAt() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ProcessCallbackOutbox.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessCallbackOutboxUpsertOne) UpdateNewValues() *ProcessCallbackOutboxUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.CreatedAt(); exists {
+			s.SetIgnore(processcallbackoutbox.FieldCreatedAt)
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessCallbackOutbox.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ProcessCallbackOutboxUpsertOne) Ignore() *ProcessCallbackOutboxUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessCallbackOutboxUpsertOne) DoNothing() *ProcessCallbackOutboxUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessCallbackOutboxCreate.OnConflict
+// documentation for more info.
+func (u *ProcessCallbackOutboxUpsertOne) Update(set func(*ProcessCallbackOutboxUpsert)) *ProcessCallbackOutboxUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessCallbackOutboxUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetExecutionKey sets the "execution_key" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetExecutionKey(v string) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetExecutionKey(v)
+	})
+}
+
+// UpdateExecutionKey sets the "execution_key" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateExecutionKey() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateExecutionKey()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetTenantID(v int) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessCallbackOutboxUpsertOne) AddTenantID(v int) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateTenantID() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetProcessInstanceID(v int) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetProcessInstanceID(v)
+	})
+}
+
+// AddProcessInstanceID adds v to the "process_instance_id" field.
+func (u *ProcessCallbackOutboxUpsertOne) AddProcessInstanceID(v int) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.AddProcessInstanceID(v)
+	})
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateProcessInstanceID() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateProcessInstanceID()
+	})
+}
+
+// SetProcessTaskID sets the "process_task_id" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetProcessTaskID(v int) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetProcessTaskID(v)
+	})
+}
+
+// AddProcessTaskID adds v to the "process_task_id" field.
+func (u *ProcessCallbackOutboxUpsertOne) AddProcessTaskID(v int) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.AddProcessTaskID(v)
+	})
+}
+
+// UpdateProcessTaskID sets the "process_task_id" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateProcessTaskID() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateProcessTaskID()
+	})
+}
+
+// ClearProcessTaskID clears the value of the "process_task_id" field.
+func (u *ProcessCallbackOutboxUpsertOne) ClearProcessTaskID() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.ClearProcessTaskID()
+	})
+}
+
+// SetTaskID sets the "task_id" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetTaskID(v string) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetTaskID(v)
+	})
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateTaskID() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateTaskID()
+	})
+}
+
+// ClearTaskID clears the value of the "task_id" field.
+func (u *ProcessCallbackOutboxUpsertOne) ClearTaskID() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.ClearTaskID()
+	})
+}
+
+// SetCallbackKind sets the "callback_kind" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetCallbackKind(v string) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetCallbackKind(v)
+	})
+}
+
+// UpdateCallbackKind sets the "callback_kind" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateCallbackKind() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateCallbackKind()
+	})
+}
+
+// SetHandlerID sets the "handler_id" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetHandlerID(v string) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetHandlerID(v)
+	})
+}
+
+// UpdateHandlerID sets the "handler_id" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateHandlerID() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateHandlerID()
+	})
+}
+
+// SetTaskType sets the "task_type" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetTaskType(v string) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetTaskType(v)
+	})
+}
+
+// UpdateTaskType sets the "task_type" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateTaskType() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateTaskType()
+	})
+}
+
+// SetElementID sets the "element_id" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetElementID(v string) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetElementID(v)
+	})
+}
+
+// UpdateElementID sets the "element_id" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateElementID() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateElementID()
+	})
+}
+
+// SetAction sets the "action" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetAction(v string) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetAction(v)
+	})
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateAction() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateAction()
+	})
+}
+
+// ClearAction clears the value of the "action" field.
+func (u *ProcessCallbackOutboxUpsertOne) ClearAction() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.ClearAction()
+	})
+}
+
+// SetConfigRef sets the "config_ref" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetConfigRef(v string) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetConfigRef(v)
+	})
+}
+
+// UpdateConfigRef sets the "config_ref" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateConfigRef() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateConfigRef()
+	})
+}
+
+// ClearConfigRef clears the value of the "config_ref" field.
+func (u *ProcessCallbackOutboxUpsertOne) ClearConfigRef() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.ClearConfigRef()
+	})
+}
+
+// SetVariables sets the "variables" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetVariables(v map[string]interface{}) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetVariables(v)
+	})
+}
+
+// UpdateVariables sets the "variables" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateVariables() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateVariables()
+	})
+}
+
+// ClearVariables clears the value of the "variables" field.
+func (u *ProcessCallbackOutboxUpsertOne) ClearVariables() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.ClearVariables()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetStatus(v string) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateStatus() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetAttemptCount sets the "attempt_count" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetAttemptCount(v int) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetAttemptCount(v)
+	})
+}
+
+// AddAttemptCount adds v to the "attempt_count" field.
+func (u *ProcessCallbackOutboxUpsertOne) AddAttemptCount(v int) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.AddAttemptCount(v)
+	})
+}
+
+// UpdateAttemptCount sets the "attempt_count" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateAttemptCount() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateAttemptCount()
+	})
+}
+
+// SetNextAttemptAt sets the "next_attempt_at" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetNextAttemptAt(v time.Time) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetNextAttemptAt(v)
+	})
+}
+
+// UpdateNextAttemptAt sets the "next_attempt_at" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateNextAttemptAt() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateNextAttemptAt()
+	})
+}
+
+// SetLeaseOwner sets the "lease_owner" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetLeaseOwner(v string) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetLeaseOwner(v)
+	})
+}
+
+// UpdateLeaseOwner sets the "lease_owner" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateLeaseOwner() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateLeaseOwner()
+	})
+}
+
+// ClearLeaseOwner clears the value of the "lease_owner" field.
+func (u *ProcessCallbackOutboxUpsertOne) ClearLeaseOwner() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.ClearLeaseOwner()
+	})
+}
+
+// SetLeaseExpiresAt sets the "lease_expires_at" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetLeaseExpiresAt(v time.Time) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetLeaseExpiresAt(v)
+	})
+}
+
+// UpdateLeaseExpiresAt sets the "lease_expires_at" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateLeaseExpiresAt() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateLeaseExpiresAt()
+	})
+}
+
+// ClearLeaseExpiresAt clears the value of the "lease_expires_at" field.
+func (u *ProcessCallbackOutboxUpsertOne) ClearLeaseExpiresAt() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.ClearLeaseExpiresAt()
+	})
+}
+
+// SetLastErrorClass sets the "last_error_class" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetLastErrorClass(v string) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetLastErrorClass(v)
+	})
+}
+
+// UpdateLastErrorClass sets the "last_error_class" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateLastErrorClass() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateLastErrorClass()
+	})
+}
+
+// ClearLastErrorClass clears the value of the "last_error_class" field.
+func (u *ProcessCallbackOutboxUpsertOne) ClearLastErrorClass() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.ClearLastErrorClass()
+	})
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetCompletedAt(v time.Time) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetCompletedAt(v)
+	})
+}
+
+// UpdateCompletedAt sets the "completed_at" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateCompletedAt() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateCompletedAt()
+	})
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (u *ProcessCallbackOutboxUpsertOne) ClearCompletedAt() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.ClearCompletedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetUpdatedAt(v time.Time) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateUpdatedAt() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessCallbackOutboxUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessCallbackOutboxCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessCallbackOutboxUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ProcessCallbackOutboxUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ProcessCallbackOutboxUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ProcessCallbackOutboxCreateBulk is the builder for creating many ProcessCallbackOutbox entities in bulk.
 type ProcessCallbackOutboxCreateBulk struct {
 	config
 	err      error
 	builders []*ProcessCallbackOutboxCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ProcessCallbackOutbox entities in the database.
@@ -542,6 +1362,7 @@ func (_c *ProcessCallbackOutboxCreateBulk) Save(ctx context.Context) ([]*Process
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -592,6 +1413,488 @@ func (_c *ProcessCallbackOutboxCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ProcessCallbackOutboxCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessCallbackOutbox.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessCallbackOutboxUpsert) {
+//			SetExecutionKey(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessCallbackOutboxCreateBulk) OnConflict(opts ...sql.ConflictOption) *ProcessCallbackOutboxUpsertBulk {
+	_c.conflict = opts
+	return &ProcessCallbackOutboxUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessCallbackOutbox.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessCallbackOutboxCreateBulk) OnConflictColumns(columns ...string) *ProcessCallbackOutboxUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessCallbackOutboxUpsertBulk{
+		create: _c,
+	}
+}
+
+// ProcessCallbackOutboxUpsertBulk is the builder for "upsert"-ing
+// a bulk of ProcessCallbackOutbox nodes.
+type ProcessCallbackOutboxUpsertBulk struct {
+	create *ProcessCallbackOutboxCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ProcessCallbackOutbox.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateNewValues() *ProcessCallbackOutboxUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.CreatedAt(); exists {
+				s.SetIgnore(processcallbackoutbox.FieldCreatedAt)
+			}
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessCallbackOutbox.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ProcessCallbackOutboxUpsertBulk) Ignore() *ProcessCallbackOutboxUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessCallbackOutboxUpsertBulk) DoNothing() *ProcessCallbackOutboxUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessCallbackOutboxCreateBulk.OnConflict
+// documentation for more info.
+func (u *ProcessCallbackOutboxUpsertBulk) Update(set func(*ProcessCallbackOutboxUpsert)) *ProcessCallbackOutboxUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessCallbackOutboxUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetExecutionKey sets the "execution_key" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetExecutionKey(v string) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetExecutionKey(v)
+	})
+}
+
+// UpdateExecutionKey sets the "execution_key" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateExecutionKey() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateExecutionKey()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetTenantID(v int) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessCallbackOutboxUpsertBulk) AddTenantID(v int) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateTenantID() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetProcessInstanceID(v int) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetProcessInstanceID(v)
+	})
+}
+
+// AddProcessInstanceID adds v to the "process_instance_id" field.
+func (u *ProcessCallbackOutboxUpsertBulk) AddProcessInstanceID(v int) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.AddProcessInstanceID(v)
+	})
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateProcessInstanceID() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateProcessInstanceID()
+	})
+}
+
+// SetProcessTaskID sets the "process_task_id" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetProcessTaskID(v int) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetProcessTaskID(v)
+	})
+}
+
+// AddProcessTaskID adds v to the "process_task_id" field.
+func (u *ProcessCallbackOutboxUpsertBulk) AddProcessTaskID(v int) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.AddProcessTaskID(v)
+	})
+}
+
+// UpdateProcessTaskID sets the "process_task_id" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateProcessTaskID() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateProcessTaskID()
+	})
+}
+
+// ClearProcessTaskID clears the value of the "process_task_id" field.
+func (u *ProcessCallbackOutboxUpsertBulk) ClearProcessTaskID() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.ClearProcessTaskID()
+	})
+}
+
+// SetTaskID sets the "task_id" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetTaskID(v string) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetTaskID(v)
+	})
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateTaskID() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateTaskID()
+	})
+}
+
+// ClearTaskID clears the value of the "task_id" field.
+func (u *ProcessCallbackOutboxUpsertBulk) ClearTaskID() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.ClearTaskID()
+	})
+}
+
+// SetCallbackKind sets the "callback_kind" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetCallbackKind(v string) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetCallbackKind(v)
+	})
+}
+
+// UpdateCallbackKind sets the "callback_kind" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateCallbackKind() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateCallbackKind()
+	})
+}
+
+// SetHandlerID sets the "handler_id" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetHandlerID(v string) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetHandlerID(v)
+	})
+}
+
+// UpdateHandlerID sets the "handler_id" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateHandlerID() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateHandlerID()
+	})
+}
+
+// SetTaskType sets the "task_type" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetTaskType(v string) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetTaskType(v)
+	})
+}
+
+// UpdateTaskType sets the "task_type" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateTaskType() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateTaskType()
+	})
+}
+
+// SetElementID sets the "element_id" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetElementID(v string) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetElementID(v)
+	})
+}
+
+// UpdateElementID sets the "element_id" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateElementID() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateElementID()
+	})
+}
+
+// SetAction sets the "action" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetAction(v string) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetAction(v)
+	})
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateAction() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateAction()
+	})
+}
+
+// ClearAction clears the value of the "action" field.
+func (u *ProcessCallbackOutboxUpsertBulk) ClearAction() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.ClearAction()
+	})
+}
+
+// SetConfigRef sets the "config_ref" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetConfigRef(v string) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetConfigRef(v)
+	})
+}
+
+// UpdateConfigRef sets the "config_ref" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateConfigRef() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateConfigRef()
+	})
+}
+
+// ClearConfigRef clears the value of the "config_ref" field.
+func (u *ProcessCallbackOutboxUpsertBulk) ClearConfigRef() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.ClearConfigRef()
+	})
+}
+
+// SetVariables sets the "variables" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetVariables(v map[string]interface{}) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetVariables(v)
+	})
+}
+
+// UpdateVariables sets the "variables" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateVariables() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateVariables()
+	})
+}
+
+// ClearVariables clears the value of the "variables" field.
+func (u *ProcessCallbackOutboxUpsertBulk) ClearVariables() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.ClearVariables()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetStatus(v string) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateStatus() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetAttemptCount sets the "attempt_count" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetAttemptCount(v int) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetAttemptCount(v)
+	})
+}
+
+// AddAttemptCount adds v to the "attempt_count" field.
+func (u *ProcessCallbackOutboxUpsertBulk) AddAttemptCount(v int) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.AddAttemptCount(v)
+	})
+}
+
+// UpdateAttemptCount sets the "attempt_count" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateAttemptCount() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateAttemptCount()
+	})
+}
+
+// SetNextAttemptAt sets the "next_attempt_at" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetNextAttemptAt(v time.Time) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetNextAttemptAt(v)
+	})
+}
+
+// UpdateNextAttemptAt sets the "next_attempt_at" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateNextAttemptAt() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateNextAttemptAt()
+	})
+}
+
+// SetLeaseOwner sets the "lease_owner" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetLeaseOwner(v string) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetLeaseOwner(v)
+	})
+}
+
+// UpdateLeaseOwner sets the "lease_owner" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateLeaseOwner() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateLeaseOwner()
+	})
+}
+
+// ClearLeaseOwner clears the value of the "lease_owner" field.
+func (u *ProcessCallbackOutboxUpsertBulk) ClearLeaseOwner() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.ClearLeaseOwner()
+	})
+}
+
+// SetLeaseExpiresAt sets the "lease_expires_at" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetLeaseExpiresAt(v time.Time) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetLeaseExpiresAt(v)
+	})
+}
+
+// UpdateLeaseExpiresAt sets the "lease_expires_at" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateLeaseExpiresAt() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateLeaseExpiresAt()
+	})
+}
+
+// ClearLeaseExpiresAt clears the value of the "lease_expires_at" field.
+func (u *ProcessCallbackOutboxUpsertBulk) ClearLeaseExpiresAt() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.ClearLeaseExpiresAt()
+	})
+}
+
+// SetLastErrorClass sets the "last_error_class" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetLastErrorClass(v string) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetLastErrorClass(v)
+	})
+}
+
+// UpdateLastErrorClass sets the "last_error_class" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateLastErrorClass() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateLastErrorClass()
+	})
+}
+
+// ClearLastErrorClass clears the value of the "last_error_class" field.
+func (u *ProcessCallbackOutboxUpsertBulk) ClearLastErrorClass() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.ClearLastErrorClass()
+	})
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetCompletedAt(v time.Time) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetCompletedAt(v)
+	})
+}
+
+// UpdateCompletedAt sets the "completed_at" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateCompletedAt() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateCompletedAt()
+	})
+}
+
+// ClearCompletedAt clears the value of the "completed_at" field.
+func (u *ProcessCallbackOutboxUpsertBulk) ClearCompletedAt() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.ClearCompletedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetUpdatedAt(v time.Time) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateUpdatedAt() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessCallbackOutboxUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ProcessCallbackOutboxCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessCallbackOutboxCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessCallbackOutboxUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

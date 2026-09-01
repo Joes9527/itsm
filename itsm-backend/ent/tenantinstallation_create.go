@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/tenantinstallation"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type TenantInstallationCreate struct {
 	config
 	mutation *TenantInstallationMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTenantID sets the "tenant_id" field.
@@ -293,6 +295,7 @@ func (_c *TenantInstallationCreate) createSpec() (*TenantInstallation, *sqlgraph
 		_node = &TenantInstallation{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(tenantinstallation.Table, sqlgraph.NewFieldSpec(tenantinstallation.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(tenantinstallation.FieldTenantID, field.TypeInt, value)
 		_node.TenantID = value
@@ -361,11 +364,550 @@ func (_c *TenantInstallationCreate) createSpec() (*TenantInstallation, *sqlgraph
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TenantInstallation.Create().
+//		SetTenantID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TenantInstallationUpsert) {
+//			SetTenantID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TenantInstallationCreate) OnConflict(opts ...sql.ConflictOption) *TenantInstallationUpsertOne {
+	_c.conflict = opts
+	return &TenantInstallationUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TenantInstallation.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TenantInstallationCreate) OnConflictColumns(columns ...string) *TenantInstallationUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TenantInstallationUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// TenantInstallationUpsertOne is the builder for "upsert"-ing
+	//  one TenantInstallation node.
+	TenantInstallationUpsertOne struct {
+		create *TenantInstallationCreate
+	}
+
+	// TenantInstallationUpsert is the "OnConflict" setter.
+	TenantInstallationUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TenantInstallationUpsert) SetTenantID(v int) *TenantInstallationUpsert {
+	u.Set(tenantinstallation.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TenantInstallationUpsert) UpdateTenantID() *TenantInstallationUpsert {
+	u.SetExcluded(tenantinstallation.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TenantInstallationUpsert) AddTenantID(v int) *TenantInstallationUpsert {
+	u.Add(tenantinstallation.FieldTenantID, v)
+	return u
+}
+
+// SetItemID sets the "item_id" field.
+func (u *TenantInstallationUpsert) SetItemID(v int) *TenantInstallationUpsert {
+	u.Set(tenantinstallation.FieldItemID, v)
+	return u
+}
+
+// UpdateItemID sets the "item_id" field to the value that was provided on create.
+func (u *TenantInstallationUpsert) UpdateItemID() *TenantInstallationUpsert {
+	u.SetExcluded(tenantinstallation.FieldItemID)
+	return u
+}
+
+// SetInstalledVersion sets the "installed_version" field.
+func (u *TenantInstallationUpsert) SetInstalledVersion(v string) *TenantInstallationUpsert {
+	u.Set(tenantinstallation.FieldInstalledVersion, v)
+	return u
+}
+
+// UpdateInstalledVersion sets the "installed_version" field to the value that was provided on create.
+func (u *TenantInstallationUpsert) UpdateInstalledVersion() *TenantInstallationUpsert {
+	u.SetExcluded(tenantinstallation.FieldInstalledVersion)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *TenantInstallationUpsert) SetStatus(v tenantinstallation.Status) *TenantInstallationUpsert {
+	u.Set(tenantinstallation.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *TenantInstallationUpsert) UpdateStatus() *TenantInstallationUpsert {
+	u.SetExcluded(tenantinstallation.FieldStatus)
+	return u
+}
+
+// SetConfig sets the "config" field.
+func (u *TenantInstallationUpsert) SetConfig(v map[string]interface{}) *TenantInstallationUpsert {
+	u.Set(tenantinstallation.FieldConfig, v)
+	return u
+}
+
+// UpdateConfig sets the "config" field to the value that was provided on create.
+func (u *TenantInstallationUpsert) UpdateConfig() *TenantInstallationUpsert {
+	u.SetExcluded(tenantinstallation.FieldConfig)
+	return u
+}
+
+// ClearConfig clears the value of the "config" field.
+func (u *TenantInstallationUpsert) ClearConfig() *TenantInstallationUpsert {
+	u.SetNull(tenantinstallation.FieldConfig)
+	return u
+}
+
+// SetAutoUpgrade sets the "auto_upgrade" field.
+func (u *TenantInstallationUpsert) SetAutoUpgrade(v bool) *TenantInstallationUpsert {
+	u.Set(tenantinstallation.FieldAutoUpgrade, v)
+	return u
+}
+
+// UpdateAutoUpgrade sets the "auto_upgrade" field to the value that was provided on create.
+func (u *TenantInstallationUpsert) UpdateAutoUpgrade() *TenantInstallationUpsert {
+	u.SetExcluded(tenantinstallation.FieldAutoUpgrade)
+	return u
+}
+
+// SetInstalledBy sets the "installed_by" field.
+func (u *TenantInstallationUpsert) SetInstalledBy(v string) *TenantInstallationUpsert {
+	u.Set(tenantinstallation.FieldInstalledBy, v)
+	return u
+}
+
+// UpdateInstalledBy sets the "installed_by" field to the value that was provided on create.
+func (u *TenantInstallationUpsert) UpdateInstalledBy() *TenantInstallationUpsert {
+	u.SetExcluded(tenantinstallation.FieldInstalledBy)
+	return u
+}
+
+// ClearInstalledBy clears the value of the "installed_by" field.
+func (u *TenantInstallationUpsert) ClearInstalledBy() *TenantInstallationUpsert {
+	u.SetNull(tenantinstallation.FieldInstalledBy)
+	return u
+}
+
+// SetInstalledAt sets the "installed_at" field.
+func (u *TenantInstallationUpsert) SetInstalledAt(v time.Time) *TenantInstallationUpsert {
+	u.Set(tenantinstallation.FieldInstalledAt, v)
+	return u
+}
+
+// UpdateInstalledAt sets the "installed_at" field to the value that was provided on create.
+func (u *TenantInstallationUpsert) UpdateInstalledAt() *TenantInstallationUpsert {
+	u.SetExcluded(tenantinstallation.FieldInstalledAt)
+	return u
+}
+
+// SetLastUpdatedAt sets the "last_updated_at" field.
+func (u *TenantInstallationUpsert) SetLastUpdatedAt(v time.Time) *TenantInstallationUpsert {
+	u.Set(tenantinstallation.FieldLastUpdatedAt, v)
+	return u
+}
+
+// UpdateLastUpdatedAt sets the "last_updated_at" field to the value that was provided on create.
+func (u *TenantInstallationUpsert) UpdateLastUpdatedAt() *TenantInstallationUpsert {
+	u.SetExcluded(tenantinstallation.FieldLastUpdatedAt)
+	return u
+}
+
+// ClearLastUpdatedAt clears the value of the "last_updated_at" field.
+func (u *TenantInstallationUpsert) ClearLastUpdatedAt() *TenantInstallationUpsert {
+	u.SetNull(tenantinstallation.FieldLastUpdatedAt)
+	return u
+}
+
+// SetLastUsedAt sets the "last_used_at" field.
+func (u *TenantInstallationUpsert) SetLastUsedAt(v time.Time) *TenantInstallationUpsert {
+	u.Set(tenantinstallation.FieldLastUsedAt, v)
+	return u
+}
+
+// UpdateLastUsedAt sets the "last_used_at" field to the value that was provided on create.
+func (u *TenantInstallationUpsert) UpdateLastUsedAt() *TenantInstallationUpsert {
+	u.SetExcluded(tenantinstallation.FieldLastUsedAt)
+	return u
+}
+
+// ClearLastUsedAt clears the value of the "last_used_at" field.
+func (u *TenantInstallationUpsert) ClearLastUsedAt() *TenantInstallationUpsert {
+	u.SetNull(tenantinstallation.FieldLastUsedAt)
+	return u
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (u *TenantInstallationUpsert) SetErrorMessage(v string) *TenantInstallationUpsert {
+	u.Set(tenantinstallation.FieldErrorMessage, v)
+	return u
+}
+
+// UpdateErrorMessage sets the "error_message" field to the value that was provided on create.
+func (u *TenantInstallationUpsert) UpdateErrorMessage() *TenantInstallationUpsert {
+	u.SetExcluded(tenantinstallation.FieldErrorMessage)
+	return u
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (u *TenantInstallationUpsert) ClearErrorMessage() *TenantInstallationUpsert {
+	u.SetNull(tenantinstallation.FieldErrorMessage)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TenantInstallationUpsert) SetCreatedAt(v time.Time) *TenantInstallationUpsert {
+	u.Set(tenantinstallation.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TenantInstallationUpsert) UpdateCreatedAt() *TenantInstallationUpsert {
+	u.SetExcluded(tenantinstallation.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TenantInstallationUpsert) SetUpdatedAt(v time.Time) *TenantInstallationUpsert {
+	u.Set(tenantinstallation.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TenantInstallationUpsert) UpdateUpdatedAt() *TenantInstallationUpsert {
+	u.SetExcluded(tenantinstallation.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.TenantInstallation.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TenantInstallationUpsertOne) UpdateNewValues() *TenantInstallationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TenantInstallation.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *TenantInstallationUpsertOne) Ignore() *TenantInstallationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TenantInstallationUpsertOne) DoNothing() *TenantInstallationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TenantInstallationCreate.OnConflict
+// documentation for more info.
+func (u *TenantInstallationUpsertOne) Update(set func(*TenantInstallationUpsert)) *TenantInstallationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TenantInstallationUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TenantInstallationUpsertOne) SetTenantID(v int) *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TenantInstallationUpsertOne) AddTenantID(v int) *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TenantInstallationUpsertOne) UpdateTenantID() *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetItemID sets the "item_id" field.
+func (u *TenantInstallationUpsertOne) SetItemID(v int) *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetItemID(v)
+	})
+}
+
+// UpdateItemID sets the "item_id" field to the value that was provided on create.
+func (u *TenantInstallationUpsertOne) UpdateItemID() *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateItemID()
+	})
+}
+
+// SetInstalledVersion sets the "installed_version" field.
+func (u *TenantInstallationUpsertOne) SetInstalledVersion(v string) *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetInstalledVersion(v)
+	})
+}
+
+// UpdateInstalledVersion sets the "installed_version" field to the value that was provided on create.
+func (u *TenantInstallationUpsertOne) UpdateInstalledVersion() *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateInstalledVersion()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *TenantInstallationUpsertOne) SetStatus(v tenantinstallation.Status) *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *TenantInstallationUpsertOne) UpdateStatus() *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetConfig sets the "config" field.
+func (u *TenantInstallationUpsertOne) SetConfig(v map[string]interface{}) *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetConfig(v)
+	})
+}
+
+// UpdateConfig sets the "config" field to the value that was provided on create.
+func (u *TenantInstallationUpsertOne) UpdateConfig() *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateConfig()
+	})
+}
+
+// ClearConfig clears the value of the "config" field.
+func (u *TenantInstallationUpsertOne) ClearConfig() *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.ClearConfig()
+	})
+}
+
+// SetAutoUpgrade sets the "auto_upgrade" field.
+func (u *TenantInstallationUpsertOne) SetAutoUpgrade(v bool) *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetAutoUpgrade(v)
+	})
+}
+
+// UpdateAutoUpgrade sets the "auto_upgrade" field to the value that was provided on create.
+func (u *TenantInstallationUpsertOne) UpdateAutoUpgrade() *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateAutoUpgrade()
+	})
+}
+
+// SetInstalledBy sets the "installed_by" field.
+func (u *TenantInstallationUpsertOne) SetInstalledBy(v string) *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetInstalledBy(v)
+	})
+}
+
+// UpdateInstalledBy sets the "installed_by" field to the value that was provided on create.
+func (u *TenantInstallationUpsertOne) UpdateInstalledBy() *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateInstalledBy()
+	})
+}
+
+// ClearInstalledBy clears the value of the "installed_by" field.
+func (u *TenantInstallationUpsertOne) ClearInstalledBy() *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.ClearInstalledBy()
+	})
+}
+
+// SetInstalledAt sets the "installed_at" field.
+func (u *TenantInstallationUpsertOne) SetInstalledAt(v time.Time) *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetInstalledAt(v)
+	})
+}
+
+// UpdateInstalledAt sets the "installed_at" field to the value that was provided on create.
+func (u *TenantInstallationUpsertOne) UpdateInstalledAt() *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateInstalledAt()
+	})
+}
+
+// SetLastUpdatedAt sets the "last_updated_at" field.
+func (u *TenantInstallationUpsertOne) SetLastUpdatedAt(v time.Time) *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetLastUpdatedAt(v)
+	})
+}
+
+// UpdateLastUpdatedAt sets the "last_updated_at" field to the value that was provided on create.
+func (u *TenantInstallationUpsertOne) UpdateLastUpdatedAt() *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateLastUpdatedAt()
+	})
+}
+
+// ClearLastUpdatedAt clears the value of the "last_updated_at" field.
+func (u *TenantInstallationUpsertOne) ClearLastUpdatedAt() *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.ClearLastUpdatedAt()
+	})
+}
+
+// SetLastUsedAt sets the "last_used_at" field.
+func (u *TenantInstallationUpsertOne) SetLastUsedAt(v time.Time) *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetLastUsedAt(v)
+	})
+}
+
+// UpdateLastUsedAt sets the "last_used_at" field to the value that was provided on create.
+func (u *TenantInstallationUpsertOne) UpdateLastUsedAt() *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateLastUsedAt()
+	})
+}
+
+// ClearLastUsedAt clears the value of the "last_used_at" field.
+func (u *TenantInstallationUpsertOne) ClearLastUsedAt() *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.ClearLastUsedAt()
+	})
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (u *TenantInstallationUpsertOne) SetErrorMessage(v string) *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetErrorMessage(v)
+	})
+}
+
+// UpdateErrorMessage sets the "error_message" field to the value that was provided on create.
+func (u *TenantInstallationUpsertOne) UpdateErrorMessage() *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateErrorMessage()
+	})
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (u *TenantInstallationUpsertOne) ClearErrorMessage() *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.ClearErrorMessage()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TenantInstallationUpsertOne) SetCreatedAt(v time.Time) *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TenantInstallationUpsertOne) UpdateCreatedAt() *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TenantInstallationUpsertOne) SetUpdatedAt(v time.Time) *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TenantInstallationUpsertOne) UpdateUpdatedAt() *TenantInstallationUpsertOne {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TenantInstallationUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TenantInstallationCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TenantInstallationUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *TenantInstallationUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *TenantInstallationUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // TenantInstallationCreateBulk is the builder for creating many TenantInstallation entities in bulk.
 type TenantInstallationCreateBulk struct {
 	config
 	err      error
 	builders []*TenantInstallationCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the TenantInstallation entities in the database.
@@ -395,6 +937,7 @@ func (_c *TenantInstallationCreateBulk) Save(ctx context.Context) ([]*TenantInst
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -445,6 +988,334 @@ func (_c *TenantInstallationCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *TenantInstallationCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TenantInstallation.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TenantInstallationUpsert) {
+//			SetTenantID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TenantInstallationCreateBulk) OnConflict(opts ...sql.ConflictOption) *TenantInstallationUpsertBulk {
+	_c.conflict = opts
+	return &TenantInstallationUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TenantInstallation.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TenantInstallationCreateBulk) OnConflictColumns(columns ...string) *TenantInstallationUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TenantInstallationUpsertBulk{
+		create: _c,
+	}
+}
+
+// TenantInstallationUpsertBulk is the builder for "upsert"-ing
+// a bulk of TenantInstallation nodes.
+type TenantInstallationUpsertBulk struct {
+	create *TenantInstallationCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.TenantInstallation.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TenantInstallationUpsertBulk) UpdateNewValues() *TenantInstallationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TenantInstallation.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *TenantInstallationUpsertBulk) Ignore() *TenantInstallationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TenantInstallationUpsertBulk) DoNothing() *TenantInstallationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TenantInstallationCreateBulk.OnConflict
+// documentation for more info.
+func (u *TenantInstallationUpsertBulk) Update(set func(*TenantInstallationUpsert)) *TenantInstallationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TenantInstallationUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TenantInstallationUpsertBulk) SetTenantID(v int) *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TenantInstallationUpsertBulk) AddTenantID(v int) *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TenantInstallationUpsertBulk) UpdateTenantID() *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetItemID sets the "item_id" field.
+func (u *TenantInstallationUpsertBulk) SetItemID(v int) *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetItemID(v)
+	})
+}
+
+// UpdateItemID sets the "item_id" field to the value that was provided on create.
+func (u *TenantInstallationUpsertBulk) UpdateItemID() *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateItemID()
+	})
+}
+
+// SetInstalledVersion sets the "installed_version" field.
+func (u *TenantInstallationUpsertBulk) SetInstalledVersion(v string) *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetInstalledVersion(v)
+	})
+}
+
+// UpdateInstalledVersion sets the "installed_version" field to the value that was provided on create.
+func (u *TenantInstallationUpsertBulk) UpdateInstalledVersion() *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateInstalledVersion()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *TenantInstallationUpsertBulk) SetStatus(v tenantinstallation.Status) *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *TenantInstallationUpsertBulk) UpdateStatus() *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetConfig sets the "config" field.
+func (u *TenantInstallationUpsertBulk) SetConfig(v map[string]interface{}) *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetConfig(v)
+	})
+}
+
+// UpdateConfig sets the "config" field to the value that was provided on create.
+func (u *TenantInstallationUpsertBulk) UpdateConfig() *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateConfig()
+	})
+}
+
+// ClearConfig clears the value of the "config" field.
+func (u *TenantInstallationUpsertBulk) ClearConfig() *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.ClearConfig()
+	})
+}
+
+// SetAutoUpgrade sets the "auto_upgrade" field.
+func (u *TenantInstallationUpsertBulk) SetAutoUpgrade(v bool) *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetAutoUpgrade(v)
+	})
+}
+
+// UpdateAutoUpgrade sets the "auto_upgrade" field to the value that was provided on create.
+func (u *TenantInstallationUpsertBulk) UpdateAutoUpgrade() *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateAutoUpgrade()
+	})
+}
+
+// SetInstalledBy sets the "installed_by" field.
+func (u *TenantInstallationUpsertBulk) SetInstalledBy(v string) *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetInstalledBy(v)
+	})
+}
+
+// UpdateInstalledBy sets the "installed_by" field to the value that was provided on create.
+func (u *TenantInstallationUpsertBulk) UpdateInstalledBy() *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateInstalledBy()
+	})
+}
+
+// ClearInstalledBy clears the value of the "installed_by" field.
+func (u *TenantInstallationUpsertBulk) ClearInstalledBy() *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.ClearInstalledBy()
+	})
+}
+
+// SetInstalledAt sets the "installed_at" field.
+func (u *TenantInstallationUpsertBulk) SetInstalledAt(v time.Time) *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetInstalledAt(v)
+	})
+}
+
+// UpdateInstalledAt sets the "installed_at" field to the value that was provided on create.
+func (u *TenantInstallationUpsertBulk) UpdateInstalledAt() *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateInstalledAt()
+	})
+}
+
+// SetLastUpdatedAt sets the "last_updated_at" field.
+func (u *TenantInstallationUpsertBulk) SetLastUpdatedAt(v time.Time) *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetLastUpdatedAt(v)
+	})
+}
+
+// UpdateLastUpdatedAt sets the "last_updated_at" field to the value that was provided on create.
+func (u *TenantInstallationUpsertBulk) UpdateLastUpdatedAt() *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateLastUpdatedAt()
+	})
+}
+
+// ClearLastUpdatedAt clears the value of the "last_updated_at" field.
+func (u *TenantInstallationUpsertBulk) ClearLastUpdatedAt() *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.ClearLastUpdatedAt()
+	})
+}
+
+// SetLastUsedAt sets the "last_used_at" field.
+func (u *TenantInstallationUpsertBulk) SetLastUsedAt(v time.Time) *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetLastUsedAt(v)
+	})
+}
+
+// UpdateLastUsedAt sets the "last_used_at" field to the value that was provided on create.
+func (u *TenantInstallationUpsertBulk) UpdateLastUsedAt() *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateLastUsedAt()
+	})
+}
+
+// ClearLastUsedAt clears the value of the "last_used_at" field.
+func (u *TenantInstallationUpsertBulk) ClearLastUsedAt() *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.ClearLastUsedAt()
+	})
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (u *TenantInstallationUpsertBulk) SetErrorMessage(v string) *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetErrorMessage(v)
+	})
+}
+
+// UpdateErrorMessage sets the "error_message" field to the value that was provided on create.
+func (u *TenantInstallationUpsertBulk) UpdateErrorMessage() *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateErrorMessage()
+	})
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (u *TenantInstallationUpsertBulk) ClearErrorMessage() *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.ClearErrorMessage()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TenantInstallationUpsertBulk) SetCreatedAt(v time.Time) *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TenantInstallationUpsertBulk) UpdateCreatedAt() *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TenantInstallationUpsertBulk) SetUpdatedAt(v time.Time) *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TenantInstallationUpsertBulk) UpdateUpdatedAt() *TenantInstallationUpsertBulk {
+	return u.Update(func(s *TenantInstallationUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TenantInstallationUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the TenantInstallationCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TenantInstallationCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TenantInstallationUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

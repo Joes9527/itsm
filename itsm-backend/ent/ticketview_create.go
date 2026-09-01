@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/user"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type TicketViewCreate struct {
 	config
 	mutation *TicketViewMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -243,6 +245,7 @@ func (_c *TicketViewCreate) createSpec() (*TicketView, *sqlgraph.CreateSpec) {
 		_node = &TicketView{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(ticketview.Table, sqlgraph.NewFieldSpec(ticketview.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(ticketview.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -303,11 +306,498 @@ func (_c *TicketViewCreate) createSpec() (*TicketView, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TicketView.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TicketViewUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TicketViewCreate) OnConflict(opts ...sql.ConflictOption) *TicketViewUpsertOne {
+	_c.conflict = opts
+	return &TicketViewUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TicketView.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TicketViewCreate) OnConflictColumns(columns ...string) *TicketViewUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TicketViewUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// TicketViewUpsertOne is the builder for "upsert"-ing
+	//  one TicketView node.
+	TicketViewUpsertOne struct {
+		create *TicketViewCreate
+	}
+
+	// TicketViewUpsert is the "OnConflict" setter.
+	TicketViewUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *TicketViewUpsert) SetName(v string) *TicketViewUpsert {
+	u.Set(ticketview.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *TicketViewUpsert) UpdateName() *TicketViewUpsert {
+	u.SetExcluded(ticketview.FieldName)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *TicketViewUpsert) SetDescription(v string) *TicketViewUpsert {
+	u.Set(ticketview.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *TicketViewUpsert) UpdateDescription() *TicketViewUpsert {
+	u.SetExcluded(ticketview.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *TicketViewUpsert) ClearDescription() *TicketViewUpsert {
+	u.SetNull(ticketview.FieldDescription)
+	return u
+}
+
+// SetFilters sets the "filters" field.
+func (u *TicketViewUpsert) SetFilters(v map[string]interface{}) *TicketViewUpsert {
+	u.Set(ticketview.FieldFilters, v)
+	return u
+}
+
+// UpdateFilters sets the "filters" field to the value that was provided on create.
+func (u *TicketViewUpsert) UpdateFilters() *TicketViewUpsert {
+	u.SetExcluded(ticketview.FieldFilters)
+	return u
+}
+
+// ClearFilters clears the value of the "filters" field.
+func (u *TicketViewUpsert) ClearFilters() *TicketViewUpsert {
+	u.SetNull(ticketview.FieldFilters)
+	return u
+}
+
+// SetColumns sets the "columns" field.
+func (u *TicketViewUpsert) SetColumns(v []string) *TicketViewUpsert {
+	u.Set(ticketview.FieldColumns, v)
+	return u
+}
+
+// UpdateColumns sets the "columns" field to the value that was provided on create.
+func (u *TicketViewUpsert) UpdateColumns() *TicketViewUpsert {
+	u.SetExcluded(ticketview.FieldColumns)
+	return u
+}
+
+// ClearColumns clears the value of the "columns" field.
+func (u *TicketViewUpsert) ClearColumns() *TicketViewUpsert {
+	u.SetNull(ticketview.FieldColumns)
+	return u
+}
+
+// SetSortConfig sets the "sort_config" field.
+func (u *TicketViewUpsert) SetSortConfig(v map[string]interface{}) *TicketViewUpsert {
+	u.Set(ticketview.FieldSortConfig, v)
+	return u
+}
+
+// UpdateSortConfig sets the "sort_config" field to the value that was provided on create.
+func (u *TicketViewUpsert) UpdateSortConfig() *TicketViewUpsert {
+	u.SetExcluded(ticketview.FieldSortConfig)
+	return u
+}
+
+// ClearSortConfig clears the value of the "sort_config" field.
+func (u *TicketViewUpsert) ClearSortConfig() *TicketViewUpsert {
+	u.SetNull(ticketview.FieldSortConfig)
+	return u
+}
+
+// SetGroupConfig sets the "group_config" field.
+func (u *TicketViewUpsert) SetGroupConfig(v map[string]interface{}) *TicketViewUpsert {
+	u.Set(ticketview.FieldGroupConfig, v)
+	return u
+}
+
+// UpdateGroupConfig sets the "group_config" field to the value that was provided on create.
+func (u *TicketViewUpsert) UpdateGroupConfig() *TicketViewUpsert {
+	u.SetExcluded(ticketview.FieldGroupConfig)
+	return u
+}
+
+// ClearGroupConfig clears the value of the "group_config" field.
+func (u *TicketViewUpsert) ClearGroupConfig() *TicketViewUpsert {
+	u.SetNull(ticketview.FieldGroupConfig)
+	return u
+}
+
+// SetIsShared sets the "is_shared" field.
+func (u *TicketViewUpsert) SetIsShared(v bool) *TicketViewUpsert {
+	u.Set(ticketview.FieldIsShared, v)
+	return u
+}
+
+// UpdateIsShared sets the "is_shared" field to the value that was provided on create.
+func (u *TicketViewUpsert) UpdateIsShared() *TicketViewUpsert {
+	u.SetExcluded(ticketview.FieldIsShared)
+	return u
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *TicketViewUpsert) SetCreatedBy(v int) *TicketViewUpsert {
+	u.Set(ticketview.FieldCreatedBy, v)
+	return u
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *TicketViewUpsert) UpdateCreatedBy() *TicketViewUpsert {
+	u.SetExcluded(ticketview.FieldCreatedBy)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketViewUpsert) SetTenantID(v int) *TicketViewUpsert {
+	u.Set(ticketview.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketViewUpsert) UpdateTenantID() *TicketViewUpsert {
+	u.SetExcluded(ticketview.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketViewUpsert) AddTenantID(v int) *TicketViewUpsert {
+	u.Add(ticketview.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TicketViewUpsert) SetCreatedAt(v time.Time) *TicketViewUpsert {
+	u.Set(ticketview.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TicketViewUpsert) UpdateCreatedAt() *TicketViewUpsert {
+	u.SetExcluded(ticketview.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TicketViewUpsert) SetUpdatedAt(v time.Time) *TicketViewUpsert {
+	u.Set(ticketview.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TicketViewUpsert) UpdateUpdatedAt() *TicketViewUpsert {
+	u.SetExcluded(ticketview.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.TicketView.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TicketViewUpsertOne) UpdateNewValues() *TicketViewUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TicketView.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *TicketViewUpsertOne) Ignore() *TicketViewUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TicketViewUpsertOne) DoNothing() *TicketViewUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TicketViewCreate.OnConflict
+// documentation for more info.
+func (u *TicketViewUpsertOne) Update(set func(*TicketViewUpsert)) *TicketViewUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TicketViewUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *TicketViewUpsertOne) SetName(v string) *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *TicketViewUpsertOne) UpdateName() *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *TicketViewUpsertOne) SetDescription(v string) *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *TicketViewUpsertOne) UpdateDescription() *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *TicketViewUpsertOne) ClearDescription() *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetFilters sets the "filters" field.
+func (u *TicketViewUpsertOne) SetFilters(v map[string]interface{}) *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetFilters(v)
+	})
+}
+
+// UpdateFilters sets the "filters" field to the value that was provided on create.
+func (u *TicketViewUpsertOne) UpdateFilters() *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateFilters()
+	})
+}
+
+// ClearFilters clears the value of the "filters" field.
+func (u *TicketViewUpsertOne) ClearFilters() *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.ClearFilters()
+	})
+}
+
+// SetColumns sets the "columns" field.
+func (u *TicketViewUpsertOne) SetColumns(v []string) *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetColumns(v)
+	})
+}
+
+// UpdateColumns sets the "columns" field to the value that was provided on create.
+func (u *TicketViewUpsertOne) UpdateColumns() *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateColumns()
+	})
+}
+
+// ClearColumns clears the value of the "columns" field.
+func (u *TicketViewUpsertOne) ClearColumns() *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.ClearColumns()
+	})
+}
+
+// SetSortConfig sets the "sort_config" field.
+func (u *TicketViewUpsertOne) SetSortConfig(v map[string]interface{}) *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetSortConfig(v)
+	})
+}
+
+// UpdateSortConfig sets the "sort_config" field to the value that was provided on create.
+func (u *TicketViewUpsertOne) UpdateSortConfig() *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateSortConfig()
+	})
+}
+
+// ClearSortConfig clears the value of the "sort_config" field.
+func (u *TicketViewUpsertOne) ClearSortConfig() *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.ClearSortConfig()
+	})
+}
+
+// SetGroupConfig sets the "group_config" field.
+func (u *TicketViewUpsertOne) SetGroupConfig(v map[string]interface{}) *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetGroupConfig(v)
+	})
+}
+
+// UpdateGroupConfig sets the "group_config" field to the value that was provided on create.
+func (u *TicketViewUpsertOne) UpdateGroupConfig() *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateGroupConfig()
+	})
+}
+
+// ClearGroupConfig clears the value of the "group_config" field.
+func (u *TicketViewUpsertOne) ClearGroupConfig() *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.ClearGroupConfig()
+	})
+}
+
+// SetIsShared sets the "is_shared" field.
+func (u *TicketViewUpsertOne) SetIsShared(v bool) *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetIsShared(v)
+	})
+}
+
+// UpdateIsShared sets the "is_shared" field to the value that was provided on create.
+func (u *TicketViewUpsertOne) UpdateIsShared() *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateIsShared()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *TicketViewUpsertOne) SetCreatedBy(v int) *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *TicketViewUpsertOne) UpdateCreatedBy() *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketViewUpsertOne) SetTenantID(v int) *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketViewUpsertOne) AddTenantID(v int) *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketViewUpsertOne) UpdateTenantID() *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TicketViewUpsertOne) SetCreatedAt(v time.Time) *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TicketViewUpsertOne) UpdateCreatedAt() *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TicketViewUpsertOne) SetUpdatedAt(v time.Time) *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TicketViewUpsertOne) UpdateUpdatedAt() *TicketViewUpsertOne {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TicketViewUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TicketViewCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TicketViewUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *TicketViewUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *TicketViewUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // TicketViewCreateBulk is the builder for creating many TicketView entities in bulk.
 type TicketViewCreateBulk struct {
 	config
 	err      error
 	builders []*TicketViewCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the TicketView entities in the database.
@@ -337,6 +827,7 @@ func (_c *TicketViewCreateBulk) Save(ctx context.Context) ([]*TicketView, error)
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -387,6 +878,306 @@ func (_c *TicketViewCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *TicketViewCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.TicketView.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.TicketViewUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *TicketViewCreateBulk) OnConflict(opts ...sql.ConflictOption) *TicketViewUpsertBulk {
+	_c.conflict = opts
+	return &TicketViewUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.TicketView.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *TicketViewCreateBulk) OnConflictColumns(columns ...string) *TicketViewUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &TicketViewUpsertBulk{
+		create: _c,
+	}
+}
+
+// TicketViewUpsertBulk is the builder for "upsert"-ing
+// a bulk of TicketView nodes.
+type TicketViewUpsertBulk struct {
+	create *TicketViewCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.TicketView.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *TicketViewUpsertBulk) UpdateNewValues() *TicketViewUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.TicketView.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *TicketViewUpsertBulk) Ignore() *TicketViewUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *TicketViewUpsertBulk) DoNothing() *TicketViewUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the TicketViewCreateBulk.OnConflict
+// documentation for more info.
+func (u *TicketViewUpsertBulk) Update(set func(*TicketViewUpsert)) *TicketViewUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&TicketViewUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *TicketViewUpsertBulk) SetName(v string) *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *TicketViewUpsertBulk) UpdateName() *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *TicketViewUpsertBulk) SetDescription(v string) *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *TicketViewUpsertBulk) UpdateDescription() *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *TicketViewUpsertBulk) ClearDescription() *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetFilters sets the "filters" field.
+func (u *TicketViewUpsertBulk) SetFilters(v map[string]interface{}) *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetFilters(v)
+	})
+}
+
+// UpdateFilters sets the "filters" field to the value that was provided on create.
+func (u *TicketViewUpsertBulk) UpdateFilters() *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateFilters()
+	})
+}
+
+// ClearFilters clears the value of the "filters" field.
+func (u *TicketViewUpsertBulk) ClearFilters() *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.ClearFilters()
+	})
+}
+
+// SetColumns sets the "columns" field.
+func (u *TicketViewUpsertBulk) SetColumns(v []string) *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetColumns(v)
+	})
+}
+
+// UpdateColumns sets the "columns" field to the value that was provided on create.
+func (u *TicketViewUpsertBulk) UpdateColumns() *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateColumns()
+	})
+}
+
+// ClearColumns clears the value of the "columns" field.
+func (u *TicketViewUpsertBulk) ClearColumns() *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.ClearColumns()
+	})
+}
+
+// SetSortConfig sets the "sort_config" field.
+func (u *TicketViewUpsertBulk) SetSortConfig(v map[string]interface{}) *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetSortConfig(v)
+	})
+}
+
+// UpdateSortConfig sets the "sort_config" field to the value that was provided on create.
+func (u *TicketViewUpsertBulk) UpdateSortConfig() *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateSortConfig()
+	})
+}
+
+// ClearSortConfig clears the value of the "sort_config" field.
+func (u *TicketViewUpsertBulk) ClearSortConfig() *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.ClearSortConfig()
+	})
+}
+
+// SetGroupConfig sets the "group_config" field.
+func (u *TicketViewUpsertBulk) SetGroupConfig(v map[string]interface{}) *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetGroupConfig(v)
+	})
+}
+
+// UpdateGroupConfig sets the "group_config" field to the value that was provided on create.
+func (u *TicketViewUpsertBulk) UpdateGroupConfig() *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateGroupConfig()
+	})
+}
+
+// ClearGroupConfig clears the value of the "group_config" field.
+func (u *TicketViewUpsertBulk) ClearGroupConfig() *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.ClearGroupConfig()
+	})
+}
+
+// SetIsShared sets the "is_shared" field.
+func (u *TicketViewUpsertBulk) SetIsShared(v bool) *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetIsShared(v)
+	})
+}
+
+// UpdateIsShared sets the "is_shared" field to the value that was provided on create.
+func (u *TicketViewUpsertBulk) UpdateIsShared() *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateIsShared()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *TicketViewUpsertBulk) SetCreatedBy(v int) *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *TicketViewUpsertBulk) UpdateCreatedBy() *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *TicketViewUpsertBulk) SetTenantID(v int) *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *TicketViewUpsertBulk) AddTenantID(v int) *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *TicketViewUpsertBulk) UpdateTenantID() *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *TicketViewUpsertBulk) SetCreatedAt(v time.Time) *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *TicketViewUpsertBulk) UpdateCreatedAt() *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *TicketViewUpsertBulk) SetUpdatedAt(v time.Time) *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *TicketViewUpsertBulk) UpdateUpdatedAt() *TicketViewUpsertBulk {
+	return u.Update(func(s *TicketViewUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *TicketViewUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the TicketViewCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for TicketViewCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *TicketViewUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

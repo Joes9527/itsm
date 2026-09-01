@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/release"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type ReleaseCreate struct {
 	config
 	mutation *ReleaseMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetReleaseNumber sets the "release_number" field.
@@ -473,6 +475,7 @@ func (_c *ReleaseCreate) createSpec() (*Release, *sqlgraph.CreateSpec) {
 		_node = &Release{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(release.Table, sqlgraph.NewFieldSpec(release.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.ReleaseNumber(); ok {
 		_spec.SetField(release.FieldReleaseNumber, field.TypeString, value)
 		_node.ReleaseNumber = value
@@ -580,11 +583,1044 @@ func (_c *ReleaseCreate) createSpec() (*Release, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Release.Create().
+//		SetReleaseNumber(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ReleaseUpsert) {
+//			SetReleaseNumber(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ReleaseCreate) OnConflict(opts ...sql.ConflictOption) *ReleaseUpsertOne {
+	_c.conflict = opts
+	return &ReleaseUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Release.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ReleaseCreate) OnConflictColumns(columns ...string) *ReleaseUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ReleaseUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ReleaseUpsertOne is the builder for "upsert"-ing
+	//  one Release node.
+	ReleaseUpsertOne struct {
+		create *ReleaseCreate
+	}
+
+	// ReleaseUpsert is the "OnConflict" setter.
+	ReleaseUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetReleaseNumber sets the "release_number" field.
+func (u *ReleaseUpsert) SetReleaseNumber(v string) *ReleaseUpsert {
+	u.Set(release.FieldReleaseNumber, v)
+	return u
+}
+
+// UpdateReleaseNumber sets the "release_number" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateReleaseNumber() *ReleaseUpsert {
+	u.SetExcluded(release.FieldReleaseNumber)
+	return u
+}
+
+// SetTitle sets the "title" field.
+func (u *ReleaseUpsert) SetTitle(v string) *ReleaseUpsert {
+	u.Set(release.FieldTitle, v)
+	return u
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateTitle() *ReleaseUpsert {
+	u.SetExcluded(release.FieldTitle)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *ReleaseUpsert) SetDescription(v string) *ReleaseUpsert {
+	u.Set(release.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateDescription() *ReleaseUpsert {
+	u.SetExcluded(release.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ReleaseUpsert) ClearDescription() *ReleaseUpsert {
+	u.SetNull(release.FieldDescription)
+	return u
+}
+
+// SetType sets the "type" field.
+func (u *ReleaseUpsert) SetType(v string) *ReleaseUpsert {
+	u.Set(release.FieldType, v)
+	return u
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateType() *ReleaseUpsert {
+	u.SetExcluded(release.FieldType)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *ReleaseUpsert) SetStatus(v string) *ReleaseUpsert {
+	u.Set(release.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateStatus() *ReleaseUpsert {
+	u.SetExcluded(release.FieldStatus)
+	return u
+}
+
+// SetSeverity sets the "severity" field.
+func (u *ReleaseUpsert) SetSeverity(v string) *ReleaseUpsert {
+	u.Set(release.FieldSeverity, v)
+	return u
+}
+
+// UpdateSeverity sets the "severity" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateSeverity() *ReleaseUpsert {
+	u.SetExcluded(release.FieldSeverity)
+	return u
+}
+
+// SetEnvironment sets the "environment" field.
+func (u *ReleaseUpsert) SetEnvironment(v string) *ReleaseUpsert {
+	u.Set(release.FieldEnvironment, v)
+	return u
+}
+
+// UpdateEnvironment sets the "environment" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateEnvironment() *ReleaseUpsert {
+	u.SetExcluded(release.FieldEnvironment)
+	return u
+}
+
+// SetChangeID sets the "change_id" field.
+func (u *ReleaseUpsert) SetChangeID(v int) *ReleaseUpsert {
+	u.Set(release.FieldChangeID, v)
+	return u
+}
+
+// UpdateChangeID sets the "change_id" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateChangeID() *ReleaseUpsert {
+	u.SetExcluded(release.FieldChangeID)
+	return u
+}
+
+// AddChangeID adds v to the "change_id" field.
+func (u *ReleaseUpsert) AddChangeID(v int) *ReleaseUpsert {
+	u.Add(release.FieldChangeID, v)
+	return u
+}
+
+// ClearChangeID clears the value of the "change_id" field.
+func (u *ReleaseUpsert) ClearChangeID() *ReleaseUpsert {
+	u.SetNull(release.FieldChangeID)
+	return u
+}
+
+// SetOwnerID sets the "owner_id" field.
+func (u *ReleaseUpsert) SetOwnerID(v int) *ReleaseUpsert {
+	u.Set(release.FieldOwnerID, v)
+	return u
+}
+
+// UpdateOwnerID sets the "owner_id" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateOwnerID() *ReleaseUpsert {
+	u.SetExcluded(release.FieldOwnerID)
+	return u
+}
+
+// AddOwnerID adds v to the "owner_id" field.
+func (u *ReleaseUpsert) AddOwnerID(v int) *ReleaseUpsert {
+	u.Add(release.FieldOwnerID, v)
+	return u
+}
+
+// ClearOwnerID clears the value of the "owner_id" field.
+func (u *ReleaseUpsert) ClearOwnerID() *ReleaseUpsert {
+	u.SetNull(release.FieldOwnerID)
+	return u
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *ReleaseUpsert) SetCreatedBy(v int) *ReleaseUpsert {
+	u.Set(release.FieldCreatedBy, v)
+	return u
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateCreatedBy() *ReleaseUpsert {
+	u.SetExcluded(release.FieldCreatedBy)
+	return u
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *ReleaseUpsert) AddCreatedBy(v int) *ReleaseUpsert {
+	u.Add(release.FieldCreatedBy, v)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ReleaseUpsert) SetTenantID(v int) *ReleaseUpsert {
+	u.Set(release.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateTenantID() *ReleaseUpsert {
+	u.SetExcluded(release.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ReleaseUpsert) AddTenantID(v int) *ReleaseUpsert {
+	u.Add(release.FieldTenantID, v)
+	return u
+}
+
+// SetPlannedReleaseDate sets the "planned_release_date" field.
+func (u *ReleaseUpsert) SetPlannedReleaseDate(v time.Time) *ReleaseUpsert {
+	u.Set(release.FieldPlannedReleaseDate, v)
+	return u
+}
+
+// UpdatePlannedReleaseDate sets the "planned_release_date" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdatePlannedReleaseDate() *ReleaseUpsert {
+	u.SetExcluded(release.FieldPlannedReleaseDate)
+	return u
+}
+
+// ClearPlannedReleaseDate clears the value of the "planned_release_date" field.
+func (u *ReleaseUpsert) ClearPlannedReleaseDate() *ReleaseUpsert {
+	u.SetNull(release.FieldPlannedReleaseDate)
+	return u
+}
+
+// SetActualReleaseDate sets the "actual_release_date" field.
+func (u *ReleaseUpsert) SetActualReleaseDate(v time.Time) *ReleaseUpsert {
+	u.Set(release.FieldActualReleaseDate, v)
+	return u
+}
+
+// UpdateActualReleaseDate sets the "actual_release_date" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateActualReleaseDate() *ReleaseUpsert {
+	u.SetExcluded(release.FieldActualReleaseDate)
+	return u
+}
+
+// ClearActualReleaseDate clears the value of the "actual_release_date" field.
+func (u *ReleaseUpsert) ClearActualReleaseDate() *ReleaseUpsert {
+	u.SetNull(release.FieldActualReleaseDate)
+	return u
+}
+
+// SetPlannedStartDate sets the "planned_start_date" field.
+func (u *ReleaseUpsert) SetPlannedStartDate(v time.Time) *ReleaseUpsert {
+	u.Set(release.FieldPlannedStartDate, v)
+	return u
+}
+
+// UpdatePlannedStartDate sets the "planned_start_date" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdatePlannedStartDate() *ReleaseUpsert {
+	u.SetExcluded(release.FieldPlannedStartDate)
+	return u
+}
+
+// ClearPlannedStartDate clears the value of the "planned_start_date" field.
+func (u *ReleaseUpsert) ClearPlannedStartDate() *ReleaseUpsert {
+	u.SetNull(release.FieldPlannedStartDate)
+	return u
+}
+
+// SetPlannedEndDate sets the "planned_end_date" field.
+func (u *ReleaseUpsert) SetPlannedEndDate(v time.Time) *ReleaseUpsert {
+	u.Set(release.FieldPlannedEndDate, v)
+	return u
+}
+
+// UpdatePlannedEndDate sets the "planned_end_date" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdatePlannedEndDate() *ReleaseUpsert {
+	u.SetExcluded(release.FieldPlannedEndDate)
+	return u
+}
+
+// ClearPlannedEndDate clears the value of the "planned_end_date" field.
+func (u *ReleaseUpsert) ClearPlannedEndDate() *ReleaseUpsert {
+	u.SetNull(release.FieldPlannedEndDate)
+	return u
+}
+
+// SetReleaseNotes sets the "release_notes" field.
+func (u *ReleaseUpsert) SetReleaseNotes(v string) *ReleaseUpsert {
+	u.Set(release.FieldReleaseNotes, v)
+	return u
+}
+
+// UpdateReleaseNotes sets the "release_notes" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateReleaseNotes() *ReleaseUpsert {
+	u.SetExcluded(release.FieldReleaseNotes)
+	return u
+}
+
+// ClearReleaseNotes clears the value of the "release_notes" field.
+func (u *ReleaseUpsert) ClearReleaseNotes() *ReleaseUpsert {
+	u.SetNull(release.FieldReleaseNotes)
+	return u
+}
+
+// SetRollbackProcedure sets the "rollback_procedure" field.
+func (u *ReleaseUpsert) SetRollbackProcedure(v string) *ReleaseUpsert {
+	u.Set(release.FieldRollbackProcedure, v)
+	return u
+}
+
+// UpdateRollbackProcedure sets the "rollback_procedure" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateRollbackProcedure() *ReleaseUpsert {
+	u.SetExcluded(release.FieldRollbackProcedure)
+	return u
+}
+
+// ClearRollbackProcedure clears the value of the "rollback_procedure" field.
+func (u *ReleaseUpsert) ClearRollbackProcedure() *ReleaseUpsert {
+	u.SetNull(release.FieldRollbackProcedure)
+	return u
+}
+
+// SetValidationCriteria sets the "validation_criteria" field.
+func (u *ReleaseUpsert) SetValidationCriteria(v string) *ReleaseUpsert {
+	u.Set(release.FieldValidationCriteria, v)
+	return u
+}
+
+// UpdateValidationCriteria sets the "validation_criteria" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateValidationCriteria() *ReleaseUpsert {
+	u.SetExcluded(release.FieldValidationCriteria)
+	return u
+}
+
+// ClearValidationCriteria clears the value of the "validation_criteria" field.
+func (u *ReleaseUpsert) ClearValidationCriteria() *ReleaseUpsert {
+	u.SetNull(release.FieldValidationCriteria)
+	return u
+}
+
+// SetAffectedSystems sets the "affected_systems" field.
+func (u *ReleaseUpsert) SetAffectedSystems(v []string) *ReleaseUpsert {
+	u.Set(release.FieldAffectedSystems, v)
+	return u
+}
+
+// UpdateAffectedSystems sets the "affected_systems" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateAffectedSystems() *ReleaseUpsert {
+	u.SetExcluded(release.FieldAffectedSystems)
+	return u
+}
+
+// ClearAffectedSystems clears the value of the "affected_systems" field.
+func (u *ReleaseUpsert) ClearAffectedSystems() *ReleaseUpsert {
+	u.SetNull(release.FieldAffectedSystems)
+	return u
+}
+
+// SetAffectedComponents sets the "affected_components" field.
+func (u *ReleaseUpsert) SetAffectedComponents(v []string) *ReleaseUpsert {
+	u.Set(release.FieldAffectedComponents, v)
+	return u
+}
+
+// UpdateAffectedComponents sets the "affected_components" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateAffectedComponents() *ReleaseUpsert {
+	u.SetExcluded(release.FieldAffectedComponents)
+	return u
+}
+
+// ClearAffectedComponents clears the value of the "affected_components" field.
+func (u *ReleaseUpsert) ClearAffectedComponents() *ReleaseUpsert {
+	u.SetNull(release.FieldAffectedComponents)
+	return u
+}
+
+// SetDeploymentSteps sets the "deployment_steps" field.
+func (u *ReleaseUpsert) SetDeploymentSteps(v []string) *ReleaseUpsert {
+	u.Set(release.FieldDeploymentSteps, v)
+	return u
+}
+
+// UpdateDeploymentSteps sets the "deployment_steps" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateDeploymentSteps() *ReleaseUpsert {
+	u.SetExcluded(release.FieldDeploymentSteps)
+	return u
+}
+
+// ClearDeploymentSteps clears the value of the "deployment_steps" field.
+func (u *ReleaseUpsert) ClearDeploymentSteps() *ReleaseUpsert {
+	u.SetNull(release.FieldDeploymentSteps)
+	return u
+}
+
+// SetTags sets the "tags" field.
+func (u *ReleaseUpsert) SetTags(v []string) *ReleaseUpsert {
+	u.Set(release.FieldTags, v)
+	return u
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateTags() *ReleaseUpsert {
+	u.SetExcluded(release.FieldTags)
+	return u
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *ReleaseUpsert) ClearTags() *ReleaseUpsert {
+	u.SetNull(release.FieldTags)
+	return u
+}
+
+// SetIsEmergency sets the "is_emergency" field.
+func (u *ReleaseUpsert) SetIsEmergency(v bool) *ReleaseUpsert {
+	u.Set(release.FieldIsEmergency, v)
+	return u
+}
+
+// UpdateIsEmergency sets the "is_emergency" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateIsEmergency() *ReleaseUpsert {
+	u.SetExcluded(release.FieldIsEmergency)
+	return u
+}
+
+// SetRequiresApproval sets the "requires_approval" field.
+func (u *ReleaseUpsert) SetRequiresApproval(v bool) *ReleaseUpsert {
+	u.Set(release.FieldRequiresApproval, v)
+	return u
+}
+
+// UpdateRequiresApproval sets the "requires_approval" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateRequiresApproval() *ReleaseUpsert {
+	u.SetExcluded(release.FieldRequiresApproval)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ReleaseUpsert) SetCreatedAt(v time.Time) *ReleaseUpsert {
+	u.Set(release.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateCreatedAt() *ReleaseUpsert {
+	u.SetExcluded(release.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ReleaseUpsert) SetUpdatedAt(v time.Time) *ReleaseUpsert {
+	u.Set(release.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ReleaseUpsert) UpdateUpdatedAt() *ReleaseUpsert {
+	u.SetExcluded(release.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.Release.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ReleaseUpsertOne) UpdateNewValues() *ReleaseUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Release.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ReleaseUpsertOne) Ignore() *ReleaseUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ReleaseUpsertOne) DoNothing() *ReleaseUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ReleaseCreate.OnConflict
+// documentation for more info.
+func (u *ReleaseUpsertOne) Update(set func(*ReleaseUpsert)) *ReleaseUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ReleaseUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetReleaseNumber sets the "release_number" field.
+func (u *ReleaseUpsertOne) SetReleaseNumber(v string) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetReleaseNumber(v)
+	})
+}
+
+// UpdateReleaseNumber sets the "release_number" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateReleaseNumber() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateReleaseNumber()
+	})
+}
+
+// SetTitle sets the "title" field.
+func (u *ReleaseUpsertOne) SetTitle(v string) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetTitle(v)
+	})
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateTitle() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateTitle()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ReleaseUpsertOne) SetDescription(v string) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateDescription() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ReleaseUpsertOne) ClearDescription() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *ReleaseUpsertOne) SetType(v string) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateType() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ReleaseUpsertOne) SetStatus(v string) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateStatus() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetSeverity sets the "severity" field.
+func (u *ReleaseUpsertOne) SetSeverity(v string) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetSeverity(v)
+	})
+}
+
+// UpdateSeverity sets the "severity" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateSeverity() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateSeverity()
+	})
+}
+
+// SetEnvironment sets the "environment" field.
+func (u *ReleaseUpsertOne) SetEnvironment(v string) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetEnvironment(v)
+	})
+}
+
+// UpdateEnvironment sets the "environment" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateEnvironment() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateEnvironment()
+	})
+}
+
+// SetChangeID sets the "change_id" field.
+func (u *ReleaseUpsertOne) SetChangeID(v int) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetChangeID(v)
+	})
+}
+
+// AddChangeID adds v to the "change_id" field.
+func (u *ReleaseUpsertOne) AddChangeID(v int) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.AddChangeID(v)
+	})
+}
+
+// UpdateChangeID sets the "change_id" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateChangeID() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateChangeID()
+	})
+}
+
+// ClearChangeID clears the value of the "change_id" field.
+func (u *ReleaseUpsertOne) ClearChangeID() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearChangeID()
+	})
+}
+
+// SetOwnerID sets the "owner_id" field.
+func (u *ReleaseUpsertOne) SetOwnerID(v int) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetOwnerID(v)
+	})
+}
+
+// AddOwnerID adds v to the "owner_id" field.
+func (u *ReleaseUpsertOne) AddOwnerID(v int) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.AddOwnerID(v)
+	})
+}
+
+// UpdateOwnerID sets the "owner_id" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateOwnerID() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateOwnerID()
+	})
+}
+
+// ClearOwnerID clears the value of the "owner_id" field.
+func (u *ReleaseUpsertOne) ClearOwnerID() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearOwnerID()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *ReleaseUpsertOne) SetCreatedBy(v int) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *ReleaseUpsertOne) AddCreatedBy(v int) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.AddCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateCreatedBy() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ReleaseUpsertOne) SetTenantID(v int) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ReleaseUpsertOne) AddTenantID(v int) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateTenantID() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetPlannedReleaseDate sets the "planned_release_date" field.
+func (u *ReleaseUpsertOne) SetPlannedReleaseDate(v time.Time) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetPlannedReleaseDate(v)
+	})
+}
+
+// UpdatePlannedReleaseDate sets the "planned_release_date" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdatePlannedReleaseDate() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdatePlannedReleaseDate()
+	})
+}
+
+// ClearPlannedReleaseDate clears the value of the "planned_release_date" field.
+func (u *ReleaseUpsertOne) ClearPlannedReleaseDate() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearPlannedReleaseDate()
+	})
+}
+
+// SetActualReleaseDate sets the "actual_release_date" field.
+func (u *ReleaseUpsertOne) SetActualReleaseDate(v time.Time) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetActualReleaseDate(v)
+	})
+}
+
+// UpdateActualReleaseDate sets the "actual_release_date" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateActualReleaseDate() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateActualReleaseDate()
+	})
+}
+
+// ClearActualReleaseDate clears the value of the "actual_release_date" field.
+func (u *ReleaseUpsertOne) ClearActualReleaseDate() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearActualReleaseDate()
+	})
+}
+
+// SetPlannedStartDate sets the "planned_start_date" field.
+func (u *ReleaseUpsertOne) SetPlannedStartDate(v time.Time) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetPlannedStartDate(v)
+	})
+}
+
+// UpdatePlannedStartDate sets the "planned_start_date" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdatePlannedStartDate() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdatePlannedStartDate()
+	})
+}
+
+// ClearPlannedStartDate clears the value of the "planned_start_date" field.
+func (u *ReleaseUpsertOne) ClearPlannedStartDate() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearPlannedStartDate()
+	})
+}
+
+// SetPlannedEndDate sets the "planned_end_date" field.
+func (u *ReleaseUpsertOne) SetPlannedEndDate(v time.Time) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetPlannedEndDate(v)
+	})
+}
+
+// UpdatePlannedEndDate sets the "planned_end_date" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdatePlannedEndDate() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdatePlannedEndDate()
+	})
+}
+
+// ClearPlannedEndDate clears the value of the "planned_end_date" field.
+func (u *ReleaseUpsertOne) ClearPlannedEndDate() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearPlannedEndDate()
+	})
+}
+
+// SetReleaseNotes sets the "release_notes" field.
+func (u *ReleaseUpsertOne) SetReleaseNotes(v string) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetReleaseNotes(v)
+	})
+}
+
+// UpdateReleaseNotes sets the "release_notes" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateReleaseNotes() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateReleaseNotes()
+	})
+}
+
+// ClearReleaseNotes clears the value of the "release_notes" field.
+func (u *ReleaseUpsertOne) ClearReleaseNotes() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearReleaseNotes()
+	})
+}
+
+// SetRollbackProcedure sets the "rollback_procedure" field.
+func (u *ReleaseUpsertOne) SetRollbackProcedure(v string) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetRollbackProcedure(v)
+	})
+}
+
+// UpdateRollbackProcedure sets the "rollback_procedure" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateRollbackProcedure() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateRollbackProcedure()
+	})
+}
+
+// ClearRollbackProcedure clears the value of the "rollback_procedure" field.
+func (u *ReleaseUpsertOne) ClearRollbackProcedure() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearRollbackProcedure()
+	})
+}
+
+// SetValidationCriteria sets the "validation_criteria" field.
+func (u *ReleaseUpsertOne) SetValidationCriteria(v string) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetValidationCriteria(v)
+	})
+}
+
+// UpdateValidationCriteria sets the "validation_criteria" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateValidationCriteria() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateValidationCriteria()
+	})
+}
+
+// ClearValidationCriteria clears the value of the "validation_criteria" field.
+func (u *ReleaseUpsertOne) ClearValidationCriteria() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearValidationCriteria()
+	})
+}
+
+// SetAffectedSystems sets the "affected_systems" field.
+func (u *ReleaseUpsertOne) SetAffectedSystems(v []string) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetAffectedSystems(v)
+	})
+}
+
+// UpdateAffectedSystems sets the "affected_systems" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateAffectedSystems() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateAffectedSystems()
+	})
+}
+
+// ClearAffectedSystems clears the value of the "affected_systems" field.
+func (u *ReleaseUpsertOne) ClearAffectedSystems() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearAffectedSystems()
+	})
+}
+
+// SetAffectedComponents sets the "affected_components" field.
+func (u *ReleaseUpsertOne) SetAffectedComponents(v []string) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetAffectedComponents(v)
+	})
+}
+
+// UpdateAffectedComponents sets the "affected_components" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateAffectedComponents() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateAffectedComponents()
+	})
+}
+
+// ClearAffectedComponents clears the value of the "affected_components" field.
+func (u *ReleaseUpsertOne) ClearAffectedComponents() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearAffectedComponents()
+	})
+}
+
+// SetDeploymentSteps sets the "deployment_steps" field.
+func (u *ReleaseUpsertOne) SetDeploymentSteps(v []string) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetDeploymentSteps(v)
+	})
+}
+
+// UpdateDeploymentSteps sets the "deployment_steps" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateDeploymentSteps() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateDeploymentSteps()
+	})
+}
+
+// ClearDeploymentSteps clears the value of the "deployment_steps" field.
+func (u *ReleaseUpsertOne) ClearDeploymentSteps() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearDeploymentSteps()
+	})
+}
+
+// SetTags sets the "tags" field.
+func (u *ReleaseUpsertOne) SetTags(v []string) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetTags(v)
+	})
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateTags() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateTags()
+	})
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *ReleaseUpsertOne) ClearTags() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearTags()
+	})
+}
+
+// SetIsEmergency sets the "is_emergency" field.
+func (u *ReleaseUpsertOne) SetIsEmergency(v bool) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetIsEmergency(v)
+	})
+}
+
+// UpdateIsEmergency sets the "is_emergency" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateIsEmergency() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateIsEmergency()
+	})
+}
+
+// SetRequiresApproval sets the "requires_approval" field.
+func (u *ReleaseUpsertOne) SetRequiresApproval(v bool) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetRequiresApproval(v)
+	})
+}
+
+// UpdateRequiresApproval sets the "requires_approval" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateRequiresApproval() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateRequiresApproval()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ReleaseUpsertOne) SetCreatedAt(v time.Time) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateCreatedAt() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ReleaseUpsertOne) SetUpdatedAt(v time.Time) *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ReleaseUpsertOne) UpdateUpdatedAt() *ReleaseUpsertOne {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ReleaseUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ReleaseCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ReleaseUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ReleaseUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ReleaseUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ReleaseCreateBulk is the builder for creating many Release entities in bulk.
 type ReleaseCreateBulk struct {
 	config
 	err      error
 	builders []*ReleaseCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the Release entities in the database.
@@ -614,6 +1650,7 @@ func (_c *ReleaseCreateBulk) Save(ctx context.Context) ([]*Release, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -664,6 +1701,600 @@ func (_c *ReleaseCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ReleaseCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Release.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ReleaseUpsert) {
+//			SetReleaseNumber(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ReleaseCreateBulk) OnConflict(opts ...sql.ConflictOption) *ReleaseUpsertBulk {
+	_c.conflict = opts
+	return &ReleaseUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Release.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ReleaseCreateBulk) OnConflictColumns(columns ...string) *ReleaseUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ReleaseUpsertBulk{
+		create: _c,
+	}
+}
+
+// ReleaseUpsertBulk is the builder for "upsert"-ing
+// a bulk of Release nodes.
+type ReleaseUpsertBulk struct {
+	create *ReleaseCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.Release.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ReleaseUpsertBulk) UpdateNewValues() *ReleaseUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Release.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ReleaseUpsertBulk) Ignore() *ReleaseUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ReleaseUpsertBulk) DoNothing() *ReleaseUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ReleaseCreateBulk.OnConflict
+// documentation for more info.
+func (u *ReleaseUpsertBulk) Update(set func(*ReleaseUpsert)) *ReleaseUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ReleaseUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetReleaseNumber sets the "release_number" field.
+func (u *ReleaseUpsertBulk) SetReleaseNumber(v string) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetReleaseNumber(v)
+	})
+}
+
+// UpdateReleaseNumber sets the "release_number" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateReleaseNumber() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateReleaseNumber()
+	})
+}
+
+// SetTitle sets the "title" field.
+func (u *ReleaseUpsertBulk) SetTitle(v string) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetTitle(v)
+	})
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateTitle() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateTitle()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ReleaseUpsertBulk) SetDescription(v string) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateDescription() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ReleaseUpsertBulk) ClearDescription() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *ReleaseUpsertBulk) SetType(v string) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateType() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ReleaseUpsertBulk) SetStatus(v string) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateStatus() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetSeverity sets the "severity" field.
+func (u *ReleaseUpsertBulk) SetSeverity(v string) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetSeverity(v)
+	})
+}
+
+// UpdateSeverity sets the "severity" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateSeverity() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateSeverity()
+	})
+}
+
+// SetEnvironment sets the "environment" field.
+func (u *ReleaseUpsertBulk) SetEnvironment(v string) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetEnvironment(v)
+	})
+}
+
+// UpdateEnvironment sets the "environment" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateEnvironment() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateEnvironment()
+	})
+}
+
+// SetChangeID sets the "change_id" field.
+func (u *ReleaseUpsertBulk) SetChangeID(v int) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetChangeID(v)
+	})
+}
+
+// AddChangeID adds v to the "change_id" field.
+func (u *ReleaseUpsertBulk) AddChangeID(v int) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.AddChangeID(v)
+	})
+}
+
+// UpdateChangeID sets the "change_id" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateChangeID() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateChangeID()
+	})
+}
+
+// ClearChangeID clears the value of the "change_id" field.
+func (u *ReleaseUpsertBulk) ClearChangeID() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearChangeID()
+	})
+}
+
+// SetOwnerID sets the "owner_id" field.
+func (u *ReleaseUpsertBulk) SetOwnerID(v int) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetOwnerID(v)
+	})
+}
+
+// AddOwnerID adds v to the "owner_id" field.
+func (u *ReleaseUpsertBulk) AddOwnerID(v int) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.AddOwnerID(v)
+	})
+}
+
+// UpdateOwnerID sets the "owner_id" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateOwnerID() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateOwnerID()
+	})
+}
+
+// ClearOwnerID clears the value of the "owner_id" field.
+func (u *ReleaseUpsertBulk) ClearOwnerID() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearOwnerID()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *ReleaseUpsertBulk) SetCreatedBy(v int) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *ReleaseUpsertBulk) AddCreatedBy(v int) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.AddCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateCreatedBy() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ReleaseUpsertBulk) SetTenantID(v int) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ReleaseUpsertBulk) AddTenantID(v int) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateTenantID() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetPlannedReleaseDate sets the "planned_release_date" field.
+func (u *ReleaseUpsertBulk) SetPlannedReleaseDate(v time.Time) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetPlannedReleaseDate(v)
+	})
+}
+
+// UpdatePlannedReleaseDate sets the "planned_release_date" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdatePlannedReleaseDate() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdatePlannedReleaseDate()
+	})
+}
+
+// ClearPlannedReleaseDate clears the value of the "planned_release_date" field.
+func (u *ReleaseUpsertBulk) ClearPlannedReleaseDate() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearPlannedReleaseDate()
+	})
+}
+
+// SetActualReleaseDate sets the "actual_release_date" field.
+func (u *ReleaseUpsertBulk) SetActualReleaseDate(v time.Time) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetActualReleaseDate(v)
+	})
+}
+
+// UpdateActualReleaseDate sets the "actual_release_date" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateActualReleaseDate() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateActualReleaseDate()
+	})
+}
+
+// ClearActualReleaseDate clears the value of the "actual_release_date" field.
+func (u *ReleaseUpsertBulk) ClearActualReleaseDate() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearActualReleaseDate()
+	})
+}
+
+// SetPlannedStartDate sets the "planned_start_date" field.
+func (u *ReleaseUpsertBulk) SetPlannedStartDate(v time.Time) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetPlannedStartDate(v)
+	})
+}
+
+// UpdatePlannedStartDate sets the "planned_start_date" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdatePlannedStartDate() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdatePlannedStartDate()
+	})
+}
+
+// ClearPlannedStartDate clears the value of the "planned_start_date" field.
+func (u *ReleaseUpsertBulk) ClearPlannedStartDate() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearPlannedStartDate()
+	})
+}
+
+// SetPlannedEndDate sets the "planned_end_date" field.
+func (u *ReleaseUpsertBulk) SetPlannedEndDate(v time.Time) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetPlannedEndDate(v)
+	})
+}
+
+// UpdatePlannedEndDate sets the "planned_end_date" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdatePlannedEndDate() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdatePlannedEndDate()
+	})
+}
+
+// ClearPlannedEndDate clears the value of the "planned_end_date" field.
+func (u *ReleaseUpsertBulk) ClearPlannedEndDate() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearPlannedEndDate()
+	})
+}
+
+// SetReleaseNotes sets the "release_notes" field.
+func (u *ReleaseUpsertBulk) SetReleaseNotes(v string) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetReleaseNotes(v)
+	})
+}
+
+// UpdateReleaseNotes sets the "release_notes" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateReleaseNotes() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateReleaseNotes()
+	})
+}
+
+// ClearReleaseNotes clears the value of the "release_notes" field.
+func (u *ReleaseUpsertBulk) ClearReleaseNotes() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearReleaseNotes()
+	})
+}
+
+// SetRollbackProcedure sets the "rollback_procedure" field.
+func (u *ReleaseUpsertBulk) SetRollbackProcedure(v string) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetRollbackProcedure(v)
+	})
+}
+
+// UpdateRollbackProcedure sets the "rollback_procedure" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateRollbackProcedure() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateRollbackProcedure()
+	})
+}
+
+// ClearRollbackProcedure clears the value of the "rollback_procedure" field.
+func (u *ReleaseUpsertBulk) ClearRollbackProcedure() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearRollbackProcedure()
+	})
+}
+
+// SetValidationCriteria sets the "validation_criteria" field.
+func (u *ReleaseUpsertBulk) SetValidationCriteria(v string) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetValidationCriteria(v)
+	})
+}
+
+// UpdateValidationCriteria sets the "validation_criteria" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateValidationCriteria() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateValidationCriteria()
+	})
+}
+
+// ClearValidationCriteria clears the value of the "validation_criteria" field.
+func (u *ReleaseUpsertBulk) ClearValidationCriteria() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearValidationCriteria()
+	})
+}
+
+// SetAffectedSystems sets the "affected_systems" field.
+func (u *ReleaseUpsertBulk) SetAffectedSystems(v []string) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetAffectedSystems(v)
+	})
+}
+
+// UpdateAffectedSystems sets the "affected_systems" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateAffectedSystems() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateAffectedSystems()
+	})
+}
+
+// ClearAffectedSystems clears the value of the "affected_systems" field.
+func (u *ReleaseUpsertBulk) ClearAffectedSystems() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearAffectedSystems()
+	})
+}
+
+// SetAffectedComponents sets the "affected_components" field.
+func (u *ReleaseUpsertBulk) SetAffectedComponents(v []string) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetAffectedComponents(v)
+	})
+}
+
+// UpdateAffectedComponents sets the "affected_components" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateAffectedComponents() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateAffectedComponents()
+	})
+}
+
+// ClearAffectedComponents clears the value of the "affected_components" field.
+func (u *ReleaseUpsertBulk) ClearAffectedComponents() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearAffectedComponents()
+	})
+}
+
+// SetDeploymentSteps sets the "deployment_steps" field.
+func (u *ReleaseUpsertBulk) SetDeploymentSteps(v []string) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetDeploymentSteps(v)
+	})
+}
+
+// UpdateDeploymentSteps sets the "deployment_steps" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateDeploymentSteps() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateDeploymentSteps()
+	})
+}
+
+// ClearDeploymentSteps clears the value of the "deployment_steps" field.
+func (u *ReleaseUpsertBulk) ClearDeploymentSteps() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearDeploymentSteps()
+	})
+}
+
+// SetTags sets the "tags" field.
+func (u *ReleaseUpsertBulk) SetTags(v []string) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetTags(v)
+	})
+}
+
+// UpdateTags sets the "tags" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateTags() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateTags()
+	})
+}
+
+// ClearTags clears the value of the "tags" field.
+func (u *ReleaseUpsertBulk) ClearTags() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.ClearTags()
+	})
+}
+
+// SetIsEmergency sets the "is_emergency" field.
+func (u *ReleaseUpsertBulk) SetIsEmergency(v bool) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetIsEmergency(v)
+	})
+}
+
+// UpdateIsEmergency sets the "is_emergency" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateIsEmergency() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateIsEmergency()
+	})
+}
+
+// SetRequiresApproval sets the "requires_approval" field.
+func (u *ReleaseUpsertBulk) SetRequiresApproval(v bool) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetRequiresApproval(v)
+	})
+}
+
+// UpdateRequiresApproval sets the "requires_approval" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateRequiresApproval() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateRequiresApproval()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ReleaseUpsertBulk) SetCreatedAt(v time.Time) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateCreatedAt() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ReleaseUpsertBulk) SetUpdatedAt(v time.Time) *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ReleaseUpsertBulk) UpdateUpdatedAt() *ReleaseUpsertBulk {
+	return u.Update(func(s *ReleaseUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ReleaseUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ReleaseCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ReleaseCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ReleaseUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

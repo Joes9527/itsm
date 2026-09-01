@@ -128,6 +128,7 @@ import (
 	"itsm-backend/ent/workflowinstance"
 	"itsm-backend/ent/workflowtask"
 	"itsm-backend/ent/workflowversion"
+	"itsm-backend/ent/workitemnumbersequence"
 	"itsm-backend/ent/workitemrelation"
 	"sync"
 	"time"
@@ -260,6 +261,7 @@ const (
 	TypeToolInvocation              = "ToolInvocation"
 	TypeUser                        = "User"
 	TypeVendor                      = "Vendor"
+	TypeWorkItemNumberSequence      = "WorkItemNumberSequence"
 	TypeWorkItemRelation            = "WorkItemRelation"
 	TypeWorkflow                    = "Workflow"
 	TypeWorkflowInstance            = "WorkflowInstance"
@@ -152498,6 +152500,617 @@ func (m *VendorMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown Vendor edge %s", name)
+}
+
+// WorkItemNumberSequenceMutation represents an operation that mutates the WorkItemNumberSequence nodes in the graph.
+type WorkItemNumberSequenceMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int
+	tenant_id     *int
+	addtenant_id  *int
+	period        *string
+	last_value    *int64
+	addlast_value *int64
+	created_at    *time.Time
+	updated_at    *time.Time
+	clearedFields map[string]struct{}
+	done          bool
+	oldValue      func(context.Context) (*WorkItemNumberSequence, error)
+	predicates    []predicate.WorkItemNumberSequence
+}
+
+var _ ent.Mutation = (*WorkItemNumberSequenceMutation)(nil)
+
+// workitemnumbersequenceOption allows management of the mutation configuration using functional options.
+type workitemnumbersequenceOption func(*WorkItemNumberSequenceMutation)
+
+// newWorkItemNumberSequenceMutation creates new mutation for the WorkItemNumberSequence entity.
+func newWorkItemNumberSequenceMutation(c config, op Op, opts ...workitemnumbersequenceOption) *WorkItemNumberSequenceMutation {
+	m := &WorkItemNumberSequenceMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeWorkItemNumberSequence,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withWorkItemNumberSequenceID sets the ID field of the mutation.
+func withWorkItemNumberSequenceID(id int) workitemnumbersequenceOption {
+	return func(m *WorkItemNumberSequenceMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *WorkItemNumberSequence
+		)
+		m.oldValue = func(ctx context.Context) (*WorkItemNumberSequence, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().WorkItemNumberSequence.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withWorkItemNumberSequence sets the old WorkItemNumberSequence of the mutation.
+func withWorkItemNumberSequence(node *WorkItemNumberSequence) workitemnumbersequenceOption {
+	return func(m *WorkItemNumberSequenceMutation) {
+		m.oldValue = func(context.Context) (*WorkItemNumberSequence, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m WorkItemNumberSequenceMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m WorkItemNumberSequenceMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *WorkItemNumberSequenceMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *WorkItemNumberSequenceMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().WorkItemNumberSequence.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *WorkItemNumberSequenceMutation) SetTenantID(i int) {
+	m.tenant_id = &i
+	m.addtenant_id = nil
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *WorkItemNumberSequenceMutation) TenantID() (r int, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the WorkItemNumberSequence entity.
+// If the WorkItemNumberSequence object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkItemNumberSequenceMutation) OldTenantID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// AddTenantID adds i to the "tenant_id" field.
+func (m *WorkItemNumberSequenceMutation) AddTenantID(i int) {
+	if m.addtenant_id != nil {
+		*m.addtenant_id += i
+	} else {
+		m.addtenant_id = &i
+	}
+}
+
+// AddedTenantID returns the value that was added to the "tenant_id" field in this mutation.
+func (m *WorkItemNumberSequenceMutation) AddedTenantID() (r int, exists bool) {
+	v := m.addtenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *WorkItemNumberSequenceMutation) ResetTenantID() {
+	m.tenant_id = nil
+	m.addtenant_id = nil
+}
+
+// SetPeriod sets the "period" field.
+func (m *WorkItemNumberSequenceMutation) SetPeriod(s string) {
+	m.period = &s
+}
+
+// Period returns the value of the "period" field in the mutation.
+func (m *WorkItemNumberSequenceMutation) Period() (r string, exists bool) {
+	v := m.period
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPeriod returns the old "period" field's value of the WorkItemNumberSequence entity.
+// If the WorkItemNumberSequence object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkItemNumberSequenceMutation) OldPeriod(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPeriod is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPeriod requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPeriod: %w", err)
+	}
+	return oldValue.Period, nil
+}
+
+// ResetPeriod resets all changes to the "period" field.
+func (m *WorkItemNumberSequenceMutation) ResetPeriod() {
+	m.period = nil
+}
+
+// SetLastValue sets the "last_value" field.
+func (m *WorkItemNumberSequenceMutation) SetLastValue(i int64) {
+	m.last_value = &i
+	m.addlast_value = nil
+}
+
+// LastValue returns the value of the "last_value" field in the mutation.
+func (m *WorkItemNumberSequenceMutation) LastValue() (r int64, exists bool) {
+	v := m.last_value
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastValue returns the old "last_value" field's value of the WorkItemNumberSequence entity.
+// If the WorkItemNumberSequence object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkItemNumberSequenceMutation) OldLastValue(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastValue is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastValue requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastValue: %w", err)
+	}
+	return oldValue.LastValue, nil
+}
+
+// AddLastValue adds i to the "last_value" field.
+func (m *WorkItemNumberSequenceMutation) AddLastValue(i int64) {
+	if m.addlast_value != nil {
+		*m.addlast_value += i
+	} else {
+		m.addlast_value = &i
+	}
+}
+
+// AddedLastValue returns the value that was added to the "last_value" field in this mutation.
+func (m *WorkItemNumberSequenceMutation) AddedLastValue() (r int64, exists bool) {
+	v := m.addlast_value
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetLastValue resets all changes to the "last_value" field.
+func (m *WorkItemNumberSequenceMutation) ResetLastValue() {
+	m.last_value = nil
+	m.addlast_value = nil
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *WorkItemNumberSequenceMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *WorkItemNumberSequenceMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the WorkItemNumberSequence entity.
+// If the WorkItemNumberSequence object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkItemNumberSequenceMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *WorkItemNumberSequenceMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *WorkItemNumberSequenceMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *WorkItemNumberSequenceMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the WorkItemNumberSequence entity.
+// If the WorkItemNumberSequence object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *WorkItemNumberSequenceMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *WorkItemNumberSequenceMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// Where appends a list predicates to the WorkItemNumberSequenceMutation builder.
+func (m *WorkItemNumberSequenceMutation) Where(ps ...predicate.WorkItemNumberSequence) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the WorkItemNumberSequenceMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *WorkItemNumberSequenceMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.WorkItemNumberSequence, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *WorkItemNumberSequenceMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *WorkItemNumberSequenceMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (WorkItemNumberSequence).
+func (m *WorkItemNumberSequenceMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *WorkItemNumberSequenceMutation) Fields() []string {
+	fields := make([]string, 0, 5)
+	if m.tenant_id != nil {
+		fields = append(fields, workitemnumbersequence.FieldTenantID)
+	}
+	if m.period != nil {
+		fields = append(fields, workitemnumbersequence.FieldPeriod)
+	}
+	if m.last_value != nil {
+		fields = append(fields, workitemnumbersequence.FieldLastValue)
+	}
+	if m.created_at != nil {
+		fields = append(fields, workitemnumbersequence.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, workitemnumbersequence.FieldUpdatedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *WorkItemNumberSequenceMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case workitemnumbersequence.FieldTenantID:
+		return m.TenantID()
+	case workitemnumbersequence.FieldPeriod:
+		return m.Period()
+	case workitemnumbersequence.FieldLastValue:
+		return m.LastValue()
+	case workitemnumbersequence.FieldCreatedAt:
+		return m.CreatedAt()
+	case workitemnumbersequence.FieldUpdatedAt:
+		return m.UpdatedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *WorkItemNumberSequenceMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case workitemnumbersequence.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case workitemnumbersequence.FieldPeriod:
+		return m.OldPeriod(ctx)
+	case workitemnumbersequence.FieldLastValue:
+		return m.OldLastValue(ctx)
+	case workitemnumbersequence.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case workitemnumbersequence.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown WorkItemNumberSequence field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *WorkItemNumberSequenceMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case workitemnumbersequence.FieldTenantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case workitemnumbersequence.FieldPeriod:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPeriod(v)
+		return nil
+	case workitemnumbersequence.FieldLastValue:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastValue(v)
+		return nil
+	case workitemnumbersequence.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case workitemnumbersequence.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown WorkItemNumberSequence field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *WorkItemNumberSequenceMutation) AddedFields() []string {
+	var fields []string
+	if m.addtenant_id != nil {
+		fields = append(fields, workitemnumbersequence.FieldTenantID)
+	}
+	if m.addlast_value != nil {
+		fields = append(fields, workitemnumbersequence.FieldLastValue)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *WorkItemNumberSequenceMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case workitemnumbersequence.FieldTenantID:
+		return m.AddedTenantID()
+	case workitemnumbersequence.FieldLastValue:
+		return m.AddedLastValue()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *WorkItemNumberSequenceMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case workitemnumbersequence.FieldTenantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTenantID(v)
+		return nil
+	case workitemnumbersequence.FieldLastValue:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddLastValue(v)
+		return nil
+	}
+	return fmt.Errorf("unknown WorkItemNumberSequence numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *WorkItemNumberSequenceMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *WorkItemNumberSequenceMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *WorkItemNumberSequenceMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown WorkItemNumberSequence nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *WorkItemNumberSequenceMutation) ResetField(name string) error {
+	switch name {
+	case workitemnumbersequence.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case workitemnumbersequence.FieldPeriod:
+		m.ResetPeriod()
+		return nil
+	case workitemnumbersequence.FieldLastValue:
+		m.ResetLastValue()
+		return nil
+	case workitemnumbersequence.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case workitemnumbersequence.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown WorkItemNumberSequence field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *WorkItemNumberSequenceMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *WorkItemNumberSequenceMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *WorkItemNumberSequenceMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *WorkItemNumberSequenceMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *WorkItemNumberSequenceMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *WorkItemNumberSequenceMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *WorkItemNumberSequenceMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown WorkItemNumberSequence unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *WorkItemNumberSequenceMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown WorkItemNumberSequence edge %s", name)
 }
 
 // WorkItemRelationMutation represents an operation that mutates the WorkItemRelation nodes in the graph.

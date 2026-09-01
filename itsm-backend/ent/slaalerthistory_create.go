@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/ticket"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -20,6 +21,7 @@ type SLAAlertHistoryCreate struct {
 	config
 	mutation *SLAAlertHistoryMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -327,6 +329,7 @@ func (_c *SLAAlertHistoryCreate) createSpec() (*SLAAlertHistory, *sqlgraph.Creat
 		_node = &SLAAlertHistory{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(slaalerthistory.Table, sqlgraph.NewFieldSpec(slaalerthistory.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TicketNumber(); ok {
 		_spec.SetField(slaalerthistory.FieldTicketNumber, field.TypeString, value)
 		_node.TicketNumber = value
@@ -408,11 +411,537 @@ func (_c *SLAAlertHistoryCreate) createSpec() (*SLAAlertHistory, *sqlgraph.Creat
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SLAAlertHistory.Create().
+//		SetTicketID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SLAAlertHistoryUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SLAAlertHistoryCreate) OnConflict(opts ...sql.ConflictOption) *SLAAlertHistoryUpsertOne {
+	_c.conflict = opts
+	return &SLAAlertHistoryUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SLAAlertHistory.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SLAAlertHistoryCreate) OnConflictColumns(columns ...string) *SLAAlertHistoryUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SLAAlertHistoryUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// SLAAlertHistoryUpsertOne is the builder for "upsert"-ing
+	//  one SLAAlertHistory node.
+	SLAAlertHistoryUpsertOne struct {
+		create *SLAAlertHistoryCreate
+	}
+
+	// SLAAlertHistoryUpsert is the "OnConflict" setter.
+	SLAAlertHistoryUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTicketID sets the "ticket_id" field.
+func (u *SLAAlertHistoryUpsert) SetTicketID(v int) *SLAAlertHistoryUpsert {
+	u.Set(slaalerthistory.FieldTicketID, v)
+	return u
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsert) UpdateTicketID() *SLAAlertHistoryUpsert {
+	u.SetExcluded(slaalerthistory.FieldTicketID)
+	return u
+}
+
+// SetTicketNumber sets the "ticket_number" field.
+func (u *SLAAlertHistoryUpsert) SetTicketNumber(v string) *SLAAlertHistoryUpsert {
+	u.Set(slaalerthistory.FieldTicketNumber, v)
+	return u
+}
+
+// UpdateTicketNumber sets the "ticket_number" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsert) UpdateTicketNumber() *SLAAlertHistoryUpsert {
+	u.SetExcluded(slaalerthistory.FieldTicketNumber)
+	return u
+}
+
+// SetTicketTitle sets the "ticket_title" field.
+func (u *SLAAlertHistoryUpsert) SetTicketTitle(v string) *SLAAlertHistoryUpsert {
+	u.Set(slaalerthistory.FieldTicketTitle, v)
+	return u
+}
+
+// UpdateTicketTitle sets the "ticket_title" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsert) UpdateTicketTitle() *SLAAlertHistoryUpsert {
+	u.SetExcluded(slaalerthistory.FieldTicketTitle)
+	return u
+}
+
+// SetAlertRuleID sets the "alert_rule_id" field.
+func (u *SLAAlertHistoryUpsert) SetAlertRuleID(v int) *SLAAlertHistoryUpsert {
+	u.Set(slaalerthistory.FieldAlertRuleID, v)
+	return u
+}
+
+// UpdateAlertRuleID sets the "alert_rule_id" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsert) UpdateAlertRuleID() *SLAAlertHistoryUpsert {
+	u.SetExcluded(slaalerthistory.FieldAlertRuleID)
+	return u
+}
+
+// SetAlertRuleName sets the "alert_rule_name" field.
+func (u *SLAAlertHistoryUpsert) SetAlertRuleName(v string) *SLAAlertHistoryUpsert {
+	u.Set(slaalerthistory.FieldAlertRuleName, v)
+	return u
+}
+
+// UpdateAlertRuleName sets the "alert_rule_name" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsert) UpdateAlertRuleName() *SLAAlertHistoryUpsert {
+	u.SetExcluded(slaalerthistory.FieldAlertRuleName)
+	return u
+}
+
+// SetAlertLevel sets the "alert_level" field.
+func (u *SLAAlertHistoryUpsert) SetAlertLevel(v string) *SLAAlertHistoryUpsert {
+	u.Set(slaalerthistory.FieldAlertLevel, v)
+	return u
+}
+
+// UpdateAlertLevel sets the "alert_level" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsert) UpdateAlertLevel() *SLAAlertHistoryUpsert {
+	u.SetExcluded(slaalerthistory.FieldAlertLevel)
+	return u
+}
+
+// SetThresholdPercentage sets the "threshold_percentage" field.
+func (u *SLAAlertHistoryUpsert) SetThresholdPercentage(v int) *SLAAlertHistoryUpsert {
+	u.Set(slaalerthistory.FieldThresholdPercentage, v)
+	return u
+}
+
+// UpdateThresholdPercentage sets the "threshold_percentage" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsert) UpdateThresholdPercentage() *SLAAlertHistoryUpsert {
+	u.SetExcluded(slaalerthistory.FieldThresholdPercentage)
+	return u
+}
+
+// AddThresholdPercentage adds v to the "threshold_percentage" field.
+func (u *SLAAlertHistoryUpsert) AddThresholdPercentage(v int) *SLAAlertHistoryUpsert {
+	u.Add(slaalerthistory.FieldThresholdPercentage, v)
+	return u
+}
+
+// SetActualPercentage sets the "actual_percentage" field.
+func (u *SLAAlertHistoryUpsert) SetActualPercentage(v float64) *SLAAlertHistoryUpsert {
+	u.Set(slaalerthistory.FieldActualPercentage, v)
+	return u
+}
+
+// UpdateActualPercentage sets the "actual_percentage" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsert) UpdateActualPercentage() *SLAAlertHistoryUpsert {
+	u.SetExcluded(slaalerthistory.FieldActualPercentage)
+	return u
+}
+
+// AddActualPercentage adds v to the "actual_percentage" field.
+func (u *SLAAlertHistoryUpsert) AddActualPercentage(v float64) *SLAAlertHistoryUpsert {
+	u.Add(slaalerthistory.FieldActualPercentage, v)
+	return u
+}
+
+// SetNotificationSent sets the "notification_sent" field.
+func (u *SLAAlertHistoryUpsert) SetNotificationSent(v bool) *SLAAlertHistoryUpsert {
+	u.Set(slaalerthistory.FieldNotificationSent, v)
+	return u
+}
+
+// UpdateNotificationSent sets the "notification_sent" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsert) UpdateNotificationSent() *SLAAlertHistoryUpsert {
+	u.SetExcluded(slaalerthistory.FieldNotificationSent)
+	return u
+}
+
+// SetEscalationLevel sets the "escalation_level" field.
+func (u *SLAAlertHistoryUpsert) SetEscalationLevel(v int) *SLAAlertHistoryUpsert {
+	u.Set(slaalerthistory.FieldEscalationLevel, v)
+	return u
+}
+
+// UpdateEscalationLevel sets the "escalation_level" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsert) UpdateEscalationLevel() *SLAAlertHistoryUpsert {
+	u.SetExcluded(slaalerthistory.FieldEscalationLevel)
+	return u
+}
+
+// AddEscalationLevel adds v to the "escalation_level" field.
+func (u *SLAAlertHistoryUpsert) AddEscalationLevel(v int) *SLAAlertHistoryUpsert {
+	u.Add(slaalerthistory.FieldEscalationLevel, v)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SLAAlertHistoryUpsert) SetTenantID(v int) *SLAAlertHistoryUpsert {
+	u.Set(slaalerthistory.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsert) UpdateTenantID() *SLAAlertHistoryUpsert {
+	u.SetExcluded(slaalerthistory.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SLAAlertHistoryUpsert) AddTenantID(v int) *SLAAlertHistoryUpsert {
+	u.Add(slaalerthistory.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLAAlertHistoryUpsert) SetCreatedAt(v time.Time) *SLAAlertHistoryUpsert {
+	u.Set(slaalerthistory.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsert) UpdateCreatedAt() *SLAAlertHistoryUpsert {
+	u.SetExcluded(slaalerthistory.FieldCreatedAt)
+	return u
+}
+
+// SetResolvedAt sets the "resolved_at" field.
+func (u *SLAAlertHistoryUpsert) SetResolvedAt(v time.Time) *SLAAlertHistoryUpsert {
+	u.Set(slaalerthistory.FieldResolvedAt, v)
+	return u
+}
+
+// UpdateResolvedAt sets the "resolved_at" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsert) UpdateResolvedAt() *SLAAlertHistoryUpsert {
+	u.SetExcluded(slaalerthistory.FieldResolvedAt)
+	return u
+}
+
+// ClearResolvedAt clears the value of the "resolved_at" field.
+func (u *SLAAlertHistoryUpsert) ClearResolvedAt() *SLAAlertHistoryUpsert {
+	u.SetNull(slaalerthistory.FieldResolvedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.SLAAlertHistory.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SLAAlertHistoryUpsertOne) UpdateNewValues() *SLAAlertHistoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SLAAlertHistory.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *SLAAlertHistoryUpsertOne) Ignore() *SLAAlertHistoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SLAAlertHistoryUpsertOne) DoNothing() *SLAAlertHistoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SLAAlertHistoryCreate.OnConflict
+// documentation for more info.
+func (u *SLAAlertHistoryUpsertOne) Update(set func(*SLAAlertHistoryUpsert)) *SLAAlertHistoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SLAAlertHistoryUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *SLAAlertHistoryUpsertOne) SetTicketID(v int) *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertOne) UpdateTicketID() *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetTicketNumber sets the "ticket_number" field.
+func (u *SLAAlertHistoryUpsertOne) SetTicketNumber(v string) *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetTicketNumber(v)
+	})
+}
+
+// UpdateTicketNumber sets the "ticket_number" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertOne) UpdateTicketNumber() *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateTicketNumber()
+	})
+}
+
+// SetTicketTitle sets the "ticket_title" field.
+func (u *SLAAlertHistoryUpsertOne) SetTicketTitle(v string) *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetTicketTitle(v)
+	})
+}
+
+// UpdateTicketTitle sets the "ticket_title" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertOne) UpdateTicketTitle() *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateTicketTitle()
+	})
+}
+
+// SetAlertRuleID sets the "alert_rule_id" field.
+func (u *SLAAlertHistoryUpsertOne) SetAlertRuleID(v int) *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetAlertRuleID(v)
+	})
+}
+
+// UpdateAlertRuleID sets the "alert_rule_id" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertOne) UpdateAlertRuleID() *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateAlertRuleID()
+	})
+}
+
+// SetAlertRuleName sets the "alert_rule_name" field.
+func (u *SLAAlertHistoryUpsertOne) SetAlertRuleName(v string) *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetAlertRuleName(v)
+	})
+}
+
+// UpdateAlertRuleName sets the "alert_rule_name" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertOne) UpdateAlertRuleName() *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateAlertRuleName()
+	})
+}
+
+// SetAlertLevel sets the "alert_level" field.
+func (u *SLAAlertHistoryUpsertOne) SetAlertLevel(v string) *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetAlertLevel(v)
+	})
+}
+
+// UpdateAlertLevel sets the "alert_level" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertOne) UpdateAlertLevel() *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateAlertLevel()
+	})
+}
+
+// SetThresholdPercentage sets the "threshold_percentage" field.
+func (u *SLAAlertHistoryUpsertOne) SetThresholdPercentage(v int) *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetThresholdPercentage(v)
+	})
+}
+
+// AddThresholdPercentage adds v to the "threshold_percentage" field.
+func (u *SLAAlertHistoryUpsertOne) AddThresholdPercentage(v int) *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.AddThresholdPercentage(v)
+	})
+}
+
+// UpdateThresholdPercentage sets the "threshold_percentage" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertOne) UpdateThresholdPercentage() *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateThresholdPercentage()
+	})
+}
+
+// SetActualPercentage sets the "actual_percentage" field.
+func (u *SLAAlertHistoryUpsertOne) SetActualPercentage(v float64) *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetActualPercentage(v)
+	})
+}
+
+// AddActualPercentage adds v to the "actual_percentage" field.
+func (u *SLAAlertHistoryUpsertOne) AddActualPercentage(v float64) *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.AddActualPercentage(v)
+	})
+}
+
+// UpdateActualPercentage sets the "actual_percentage" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertOne) UpdateActualPercentage() *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateActualPercentage()
+	})
+}
+
+// SetNotificationSent sets the "notification_sent" field.
+func (u *SLAAlertHistoryUpsertOne) SetNotificationSent(v bool) *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetNotificationSent(v)
+	})
+}
+
+// UpdateNotificationSent sets the "notification_sent" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertOne) UpdateNotificationSent() *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateNotificationSent()
+	})
+}
+
+// SetEscalationLevel sets the "escalation_level" field.
+func (u *SLAAlertHistoryUpsertOne) SetEscalationLevel(v int) *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetEscalationLevel(v)
+	})
+}
+
+// AddEscalationLevel adds v to the "escalation_level" field.
+func (u *SLAAlertHistoryUpsertOne) AddEscalationLevel(v int) *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.AddEscalationLevel(v)
+	})
+}
+
+// UpdateEscalationLevel sets the "escalation_level" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertOne) UpdateEscalationLevel() *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateEscalationLevel()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SLAAlertHistoryUpsertOne) SetTenantID(v int) *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SLAAlertHistoryUpsertOne) AddTenantID(v int) *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertOne) UpdateTenantID() *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLAAlertHistoryUpsertOne) SetCreatedAt(v time.Time) *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertOne) UpdateCreatedAt() *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetResolvedAt sets the "resolved_at" field.
+func (u *SLAAlertHistoryUpsertOne) SetResolvedAt(v time.Time) *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetResolvedAt(v)
+	})
+}
+
+// UpdateResolvedAt sets the "resolved_at" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertOne) UpdateResolvedAt() *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateResolvedAt()
+	})
+}
+
+// ClearResolvedAt clears the value of the "resolved_at" field.
+func (u *SLAAlertHistoryUpsertOne) ClearResolvedAt() *SLAAlertHistoryUpsertOne {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.ClearResolvedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SLAAlertHistoryUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SLAAlertHistoryCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SLAAlertHistoryUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *SLAAlertHistoryUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *SLAAlertHistoryUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // SLAAlertHistoryCreateBulk is the builder for creating many SLAAlertHistory entities in bulk.
 type SLAAlertHistoryCreateBulk struct {
 	config
 	err      error
 	builders []*SLAAlertHistoryCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the SLAAlertHistory entities in the database.
@@ -442,6 +971,7 @@ func (_c *SLAAlertHistoryCreateBulk) Save(ctx context.Context) ([]*SLAAlertHisto
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -492,6 +1022,327 @@ func (_c *SLAAlertHistoryCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *SLAAlertHistoryCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SLAAlertHistory.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SLAAlertHistoryUpsert) {
+//			SetTicketID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SLAAlertHistoryCreateBulk) OnConflict(opts ...sql.ConflictOption) *SLAAlertHistoryUpsertBulk {
+	_c.conflict = opts
+	return &SLAAlertHistoryUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SLAAlertHistory.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SLAAlertHistoryCreateBulk) OnConflictColumns(columns ...string) *SLAAlertHistoryUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SLAAlertHistoryUpsertBulk{
+		create: _c,
+	}
+}
+
+// SLAAlertHistoryUpsertBulk is the builder for "upsert"-ing
+// a bulk of SLAAlertHistory nodes.
+type SLAAlertHistoryUpsertBulk struct {
+	create *SLAAlertHistoryCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.SLAAlertHistory.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SLAAlertHistoryUpsertBulk) UpdateNewValues() *SLAAlertHistoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SLAAlertHistory.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *SLAAlertHistoryUpsertBulk) Ignore() *SLAAlertHistoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SLAAlertHistoryUpsertBulk) DoNothing() *SLAAlertHistoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SLAAlertHistoryCreateBulk.OnConflict
+// documentation for more info.
+func (u *SLAAlertHistoryUpsertBulk) Update(set func(*SLAAlertHistoryUpsert)) *SLAAlertHistoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SLAAlertHistoryUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *SLAAlertHistoryUpsertBulk) SetTicketID(v int) *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertBulk) UpdateTicketID() *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetTicketNumber sets the "ticket_number" field.
+func (u *SLAAlertHistoryUpsertBulk) SetTicketNumber(v string) *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetTicketNumber(v)
+	})
+}
+
+// UpdateTicketNumber sets the "ticket_number" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertBulk) UpdateTicketNumber() *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateTicketNumber()
+	})
+}
+
+// SetTicketTitle sets the "ticket_title" field.
+func (u *SLAAlertHistoryUpsertBulk) SetTicketTitle(v string) *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetTicketTitle(v)
+	})
+}
+
+// UpdateTicketTitle sets the "ticket_title" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertBulk) UpdateTicketTitle() *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateTicketTitle()
+	})
+}
+
+// SetAlertRuleID sets the "alert_rule_id" field.
+func (u *SLAAlertHistoryUpsertBulk) SetAlertRuleID(v int) *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetAlertRuleID(v)
+	})
+}
+
+// UpdateAlertRuleID sets the "alert_rule_id" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertBulk) UpdateAlertRuleID() *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateAlertRuleID()
+	})
+}
+
+// SetAlertRuleName sets the "alert_rule_name" field.
+func (u *SLAAlertHistoryUpsertBulk) SetAlertRuleName(v string) *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetAlertRuleName(v)
+	})
+}
+
+// UpdateAlertRuleName sets the "alert_rule_name" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertBulk) UpdateAlertRuleName() *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateAlertRuleName()
+	})
+}
+
+// SetAlertLevel sets the "alert_level" field.
+func (u *SLAAlertHistoryUpsertBulk) SetAlertLevel(v string) *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetAlertLevel(v)
+	})
+}
+
+// UpdateAlertLevel sets the "alert_level" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertBulk) UpdateAlertLevel() *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateAlertLevel()
+	})
+}
+
+// SetThresholdPercentage sets the "threshold_percentage" field.
+func (u *SLAAlertHistoryUpsertBulk) SetThresholdPercentage(v int) *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetThresholdPercentage(v)
+	})
+}
+
+// AddThresholdPercentage adds v to the "threshold_percentage" field.
+func (u *SLAAlertHistoryUpsertBulk) AddThresholdPercentage(v int) *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.AddThresholdPercentage(v)
+	})
+}
+
+// UpdateThresholdPercentage sets the "threshold_percentage" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertBulk) UpdateThresholdPercentage() *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateThresholdPercentage()
+	})
+}
+
+// SetActualPercentage sets the "actual_percentage" field.
+func (u *SLAAlertHistoryUpsertBulk) SetActualPercentage(v float64) *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetActualPercentage(v)
+	})
+}
+
+// AddActualPercentage adds v to the "actual_percentage" field.
+func (u *SLAAlertHistoryUpsertBulk) AddActualPercentage(v float64) *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.AddActualPercentage(v)
+	})
+}
+
+// UpdateActualPercentage sets the "actual_percentage" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertBulk) UpdateActualPercentage() *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateActualPercentage()
+	})
+}
+
+// SetNotificationSent sets the "notification_sent" field.
+func (u *SLAAlertHistoryUpsertBulk) SetNotificationSent(v bool) *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetNotificationSent(v)
+	})
+}
+
+// UpdateNotificationSent sets the "notification_sent" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertBulk) UpdateNotificationSent() *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateNotificationSent()
+	})
+}
+
+// SetEscalationLevel sets the "escalation_level" field.
+func (u *SLAAlertHistoryUpsertBulk) SetEscalationLevel(v int) *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetEscalationLevel(v)
+	})
+}
+
+// AddEscalationLevel adds v to the "escalation_level" field.
+func (u *SLAAlertHistoryUpsertBulk) AddEscalationLevel(v int) *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.AddEscalationLevel(v)
+	})
+}
+
+// UpdateEscalationLevel sets the "escalation_level" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertBulk) UpdateEscalationLevel() *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateEscalationLevel()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SLAAlertHistoryUpsertBulk) SetTenantID(v int) *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SLAAlertHistoryUpsertBulk) AddTenantID(v int) *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertBulk) UpdateTenantID() *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SLAAlertHistoryUpsertBulk) SetCreatedAt(v time.Time) *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertBulk) UpdateCreatedAt() *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetResolvedAt sets the "resolved_at" field.
+func (u *SLAAlertHistoryUpsertBulk) SetResolvedAt(v time.Time) *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.SetResolvedAt(v)
+	})
+}
+
+// UpdateResolvedAt sets the "resolved_at" field to the value that was provided on create.
+func (u *SLAAlertHistoryUpsertBulk) UpdateResolvedAt() *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.UpdateResolvedAt()
+	})
+}
+
+// ClearResolvedAt clears the value of the "resolved_at" field.
+func (u *SLAAlertHistoryUpsertBulk) ClearResolvedAt() *SLAAlertHistoryUpsertBulk {
+	return u.Update(func(s *SLAAlertHistoryUpsert) {
+		s.ClearResolvedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SLAAlertHistoryUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the SLAAlertHistoryCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SLAAlertHistoryCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SLAAlertHistoryUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

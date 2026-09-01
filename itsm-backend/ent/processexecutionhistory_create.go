@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/processinstance"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type ProcessExecutionHistoryCreate struct {
 	config
 	mutation *ProcessExecutionHistoryMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetHistoryID sets the "history_id" field.
@@ -338,6 +340,7 @@ func (_c *ProcessExecutionHistoryCreate) createSpec() (*ProcessExecutionHistory,
 		_node = &ProcessExecutionHistory{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(processexecutionhistory.Table, sqlgraph.NewFieldSpec(processexecutionhistory.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.HistoryID(); ok {
 		_spec.SetField(processexecutionhistory.FieldHistoryID, field.TypeString, value)
 		_node.HistoryID = value
@@ -422,11 +425,706 @@ func (_c *ProcessExecutionHistoryCreate) createSpec() (*ProcessExecutionHistory,
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessExecutionHistory.Create().
+//		SetHistoryID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessExecutionHistoryUpsert) {
+//			SetHistoryID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessExecutionHistoryCreate) OnConflict(opts ...sql.ConflictOption) *ProcessExecutionHistoryUpsertOne {
+	_c.conflict = opts
+	return &ProcessExecutionHistoryUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessExecutionHistory.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessExecutionHistoryCreate) OnConflictColumns(columns ...string) *ProcessExecutionHistoryUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessExecutionHistoryUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ProcessExecutionHistoryUpsertOne is the builder for "upsert"-ing
+	//  one ProcessExecutionHistory node.
+	ProcessExecutionHistoryUpsertOne struct {
+		create *ProcessExecutionHistoryCreate
+	}
+
+	// ProcessExecutionHistoryUpsert is the "OnConflict" setter.
+	ProcessExecutionHistoryUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetHistoryID sets the "history_id" field.
+func (u *ProcessExecutionHistoryUpsert) SetHistoryID(v string) *ProcessExecutionHistoryUpsert {
+	u.Set(processexecutionhistory.FieldHistoryID, v)
+	return u
+}
+
+// UpdateHistoryID sets the "history_id" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsert) UpdateHistoryID() *ProcessExecutionHistoryUpsert {
+	u.SetExcluded(processexecutionhistory.FieldHistoryID)
+	return u
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessExecutionHistoryUpsert) SetProcessInstanceID(v int) *ProcessExecutionHistoryUpsert {
+	u.Set(processexecutionhistory.FieldProcessInstanceID, v)
+	return u
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsert) UpdateProcessInstanceID() *ProcessExecutionHistoryUpsert {
+	u.SetExcluded(processexecutionhistory.FieldProcessInstanceID)
+	return u
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ProcessExecutionHistoryUpsert) SetProcessDefinitionKey(v string) *ProcessExecutionHistoryUpsert {
+	u.Set(processexecutionhistory.FieldProcessDefinitionKey, v)
+	return u
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsert) UpdateProcessDefinitionKey() *ProcessExecutionHistoryUpsert {
+	u.SetExcluded(processexecutionhistory.FieldProcessDefinitionKey)
+	return u
+}
+
+// SetActivityID sets the "activity_id" field.
+func (u *ProcessExecutionHistoryUpsert) SetActivityID(v string) *ProcessExecutionHistoryUpsert {
+	u.Set(processexecutionhistory.FieldActivityID, v)
+	return u
+}
+
+// UpdateActivityID sets the "activity_id" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsert) UpdateActivityID() *ProcessExecutionHistoryUpsert {
+	u.SetExcluded(processexecutionhistory.FieldActivityID)
+	return u
+}
+
+// ClearActivityID clears the value of the "activity_id" field.
+func (u *ProcessExecutionHistoryUpsert) ClearActivityID() *ProcessExecutionHistoryUpsert {
+	u.SetNull(processexecutionhistory.FieldActivityID)
+	return u
+}
+
+// SetActivityName sets the "activity_name" field.
+func (u *ProcessExecutionHistoryUpsert) SetActivityName(v string) *ProcessExecutionHistoryUpsert {
+	u.Set(processexecutionhistory.FieldActivityName, v)
+	return u
+}
+
+// UpdateActivityName sets the "activity_name" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsert) UpdateActivityName() *ProcessExecutionHistoryUpsert {
+	u.SetExcluded(processexecutionhistory.FieldActivityName)
+	return u
+}
+
+// ClearActivityName clears the value of the "activity_name" field.
+func (u *ProcessExecutionHistoryUpsert) ClearActivityName() *ProcessExecutionHistoryUpsert {
+	u.SetNull(processexecutionhistory.FieldActivityName)
+	return u
+}
+
+// SetActivityType sets the "activity_type" field.
+func (u *ProcessExecutionHistoryUpsert) SetActivityType(v string) *ProcessExecutionHistoryUpsert {
+	u.Set(processexecutionhistory.FieldActivityType, v)
+	return u
+}
+
+// UpdateActivityType sets the "activity_type" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsert) UpdateActivityType() *ProcessExecutionHistoryUpsert {
+	u.SetExcluded(processexecutionhistory.FieldActivityType)
+	return u
+}
+
+// SetEventType sets the "event_type" field.
+func (u *ProcessExecutionHistoryUpsert) SetEventType(v string) *ProcessExecutionHistoryUpsert {
+	u.Set(processexecutionhistory.FieldEventType, v)
+	return u
+}
+
+// UpdateEventType sets the "event_type" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsert) UpdateEventType() *ProcessExecutionHistoryUpsert {
+	u.SetExcluded(processexecutionhistory.FieldEventType)
+	return u
+}
+
+// SetEventDetail sets the "event_detail" field.
+func (u *ProcessExecutionHistoryUpsert) SetEventDetail(v string) *ProcessExecutionHistoryUpsert {
+	u.Set(processexecutionhistory.FieldEventDetail, v)
+	return u
+}
+
+// UpdateEventDetail sets the "event_detail" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsert) UpdateEventDetail() *ProcessExecutionHistoryUpsert {
+	u.SetExcluded(processexecutionhistory.FieldEventDetail)
+	return u
+}
+
+// ClearEventDetail clears the value of the "event_detail" field.
+func (u *ProcessExecutionHistoryUpsert) ClearEventDetail() *ProcessExecutionHistoryUpsert {
+	u.SetNull(processexecutionhistory.FieldEventDetail)
+	return u
+}
+
+// SetVariables sets the "variables" field.
+func (u *ProcessExecutionHistoryUpsert) SetVariables(v map[string]interface{}) *ProcessExecutionHistoryUpsert {
+	u.Set(processexecutionhistory.FieldVariables, v)
+	return u
+}
+
+// UpdateVariables sets the "variables" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsert) UpdateVariables() *ProcessExecutionHistoryUpsert {
+	u.SetExcluded(processexecutionhistory.FieldVariables)
+	return u
+}
+
+// ClearVariables clears the value of the "variables" field.
+func (u *ProcessExecutionHistoryUpsert) ClearVariables() *ProcessExecutionHistoryUpsert {
+	u.SetNull(processexecutionhistory.FieldVariables)
+	return u
+}
+
+// SetUserID sets the "user_id" field.
+func (u *ProcessExecutionHistoryUpsert) SetUserID(v string) *ProcessExecutionHistoryUpsert {
+	u.Set(processexecutionhistory.FieldUserID, v)
+	return u
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsert) UpdateUserID() *ProcessExecutionHistoryUpsert {
+	u.SetExcluded(processexecutionhistory.FieldUserID)
+	return u
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (u *ProcessExecutionHistoryUpsert) ClearUserID() *ProcessExecutionHistoryUpsert {
+	u.SetNull(processexecutionhistory.FieldUserID)
+	return u
+}
+
+// SetUserName sets the "user_name" field.
+func (u *ProcessExecutionHistoryUpsert) SetUserName(v string) *ProcessExecutionHistoryUpsert {
+	u.Set(processexecutionhistory.FieldUserName, v)
+	return u
+}
+
+// UpdateUserName sets the "user_name" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsert) UpdateUserName() *ProcessExecutionHistoryUpsert {
+	u.SetExcluded(processexecutionhistory.FieldUserName)
+	return u
+}
+
+// ClearUserName clears the value of the "user_name" field.
+func (u *ProcessExecutionHistoryUpsert) ClearUserName() *ProcessExecutionHistoryUpsert {
+	u.SetNull(processexecutionhistory.FieldUserName)
+	return u
+}
+
+// SetTimestamp sets the "timestamp" field.
+func (u *ProcessExecutionHistoryUpsert) SetTimestamp(v time.Time) *ProcessExecutionHistoryUpsert {
+	u.Set(processexecutionhistory.FieldTimestamp, v)
+	return u
+}
+
+// UpdateTimestamp sets the "timestamp" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsert) UpdateTimestamp() *ProcessExecutionHistoryUpsert {
+	u.SetExcluded(processexecutionhistory.FieldTimestamp)
+	return u
+}
+
+// SetComment sets the "comment" field.
+func (u *ProcessExecutionHistoryUpsert) SetComment(v string) *ProcessExecutionHistoryUpsert {
+	u.Set(processexecutionhistory.FieldComment, v)
+	return u
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsert) UpdateComment() *ProcessExecutionHistoryUpsert {
+	u.SetExcluded(processexecutionhistory.FieldComment)
+	return u
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *ProcessExecutionHistoryUpsert) ClearComment() *ProcessExecutionHistoryUpsert {
+	u.SetNull(processexecutionhistory.FieldComment)
+	return u
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (u *ProcessExecutionHistoryUpsert) SetErrorMessage(v string) *ProcessExecutionHistoryUpsert {
+	u.Set(processexecutionhistory.FieldErrorMessage, v)
+	return u
+}
+
+// UpdateErrorMessage sets the "error_message" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsert) UpdateErrorMessage() *ProcessExecutionHistoryUpsert {
+	u.SetExcluded(processexecutionhistory.FieldErrorMessage)
+	return u
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (u *ProcessExecutionHistoryUpsert) ClearErrorMessage() *ProcessExecutionHistoryUpsert {
+	u.SetNull(processexecutionhistory.FieldErrorMessage)
+	return u
+}
+
+// SetErrorCode sets the "error_code" field.
+func (u *ProcessExecutionHistoryUpsert) SetErrorCode(v string) *ProcessExecutionHistoryUpsert {
+	u.Set(processexecutionhistory.FieldErrorCode, v)
+	return u
+}
+
+// UpdateErrorCode sets the "error_code" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsert) UpdateErrorCode() *ProcessExecutionHistoryUpsert {
+	u.SetExcluded(processexecutionhistory.FieldErrorCode)
+	return u
+}
+
+// ClearErrorCode clears the value of the "error_code" field.
+func (u *ProcessExecutionHistoryUpsert) ClearErrorCode() *ProcessExecutionHistoryUpsert {
+	u.SetNull(processexecutionhistory.FieldErrorCode)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessExecutionHistoryUpsert) SetTenantID(v int) *ProcessExecutionHistoryUpsert {
+	u.Set(processexecutionhistory.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsert) UpdateTenantID() *ProcessExecutionHistoryUpsert {
+	u.SetExcluded(processexecutionhistory.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessExecutionHistoryUpsert) AddTenantID(v int) *ProcessExecutionHistoryUpsert {
+	u.Add(processexecutionhistory.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessExecutionHistoryUpsert) SetCreatedAt(v time.Time) *ProcessExecutionHistoryUpsert {
+	u.Set(processexecutionhistory.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsert) UpdateCreatedAt() *ProcessExecutionHistoryUpsert {
+	u.SetExcluded(processexecutionhistory.FieldCreatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ProcessExecutionHistory.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessExecutionHistoryUpsertOne) UpdateNewValues() *ProcessExecutionHistoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessExecutionHistory.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ProcessExecutionHistoryUpsertOne) Ignore() *ProcessExecutionHistoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessExecutionHistoryUpsertOne) DoNothing() *ProcessExecutionHistoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessExecutionHistoryCreate.OnConflict
+// documentation for more info.
+func (u *ProcessExecutionHistoryUpsertOne) Update(set func(*ProcessExecutionHistoryUpsert)) *ProcessExecutionHistoryUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessExecutionHistoryUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetHistoryID sets the "history_id" field.
+func (u *ProcessExecutionHistoryUpsertOne) SetHistoryID(v string) *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetHistoryID(v)
+	})
+}
+
+// UpdateHistoryID sets the "history_id" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertOne) UpdateHistoryID() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateHistoryID()
+	})
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessExecutionHistoryUpsertOne) SetProcessInstanceID(v int) *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetProcessInstanceID(v)
+	})
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertOne) UpdateProcessInstanceID() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateProcessInstanceID()
+	})
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ProcessExecutionHistoryUpsertOne) SetProcessDefinitionKey(v string) *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetProcessDefinitionKey(v)
+	})
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertOne) UpdateProcessDefinitionKey() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateProcessDefinitionKey()
+	})
+}
+
+// SetActivityID sets the "activity_id" field.
+func (u *ProcessExecutionHistoryUpsertOne) SetActivityID(v string) *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetActivityID(v)
+	})
+}
+
+// UpdateActivityID sets the "activity_id" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertOne) UpdateActivityID() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateActivityID()
+	})
+}
+
+// ClearActivityID clears the value of the "activity_id" field.
+func (u *ProcessExecutionHistoryUpsertOne) ClearActivityID() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.ClearActivityID()
+	})
+}
+
+// SetActivityName sets the "activity_name" field.
+func (u *ProcessExecutionHistoryUpsertOne) SetActivityName(v string) *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetActivityName(v)
+	})
+}
+
+// UpdateActivityName sets the "activity_name" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertOne) UpdateActivityName() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateActivityName()
+	})
+}
+
+// ClearActivityName clears the value of the "activity_name" field.
+func (u *ProcessExecutionHistoryUpsertOne) ClearActivityName() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.ClearActivityName()
+	})
+}
+
+// SetActivityType sets the "activity_type" field.
+func (u *ProcessExecutionHistoryUpsertOne) SetActivityType(v string) *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetActivityType(v)
+	})
+}
+
+// UpdateActivityType sets the "activity_type" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertOne) UpdateActivityType() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateActivityType()
+	})
+}
+
+// SetEventType sets the "event_type" field.
+func (u *ProcessExecutionHistoryUpsertOne) SetEventType(v string) *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetEventType(v)
+	})
+}
+
+// UpdateEventType sets the "event_type" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertOne) UpdateEventType() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateEventType()
+	})
+}
+
+// SetEventDetail sets the "event_detail" field.
+func (u *ProcessExecutionHistoryUpsertOne) SetEventDetail(v string) *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetEventDetail(v)
+	})
+}
+
+// UpdateEventDetail sets the "event_detail" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertOne) UpdateEventDetail() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateEventDetail()
+	})
+}
+
+// ClearEventDetail clears the value of the "event_detail" field.
+func (u *ProcessExecutionHistoryUpsertOne) ClearEventDetail() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.ClearEventDetail()
+	})
+}
+
+// SetVariables sets the "variables" field.
+func (u *ProcessExecutionHistoryUpsertOne) SetVariables(v map[string]interface{}) *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetVariables(v)
+	})
+}
+
+// UpdateVariables sets the "variables" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertOne) UpdateVariables() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateVariables()
+	})
+}
+
+// ClearVariables clears the value of the "variables" field.
+func (u *ProcessExecutionHistoryUpsertOne) ClearVariables() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.ClearVariables()
+	})
+}
+
+// SetUserID sets the "user_id" field.
+func (u *ProcessExecutionHistoryUpsertOne) SetUserID(v string) *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertOne) UpdateUserID() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (u *ProcessExecutionHistoryUpsertOne) ClearUserID() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.ClearUserID()
+	})
+}
+
+// SetUserName sets the "user_name" field.
+func (u *ProcessExecutionHistoryUpsertOne) SetUserName(v string) *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetUserName(v)
+	})
+}
+
+// UpdateUserName sets the "user_name" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertOne) UpdateUserName() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateUserName()
+	})
+}
+
+// ClearUserName clears the value of the "user_name" field.
+func (u *ProcessExecutionHistoryUpsertOne) ClearUserName() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.ClearUserName()
+	})
+}
+
+// SetTimestamp sets the "timestamp" field.
+func (u *ProcessExecutionHistoryUpsertOne) SetTimestamp(v time.Time) *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetTimestamp(v)
+	})
+}
+
+// UpdateTimestamp sets the "timestamp" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertOne) UpdateTimestamp() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateTimestamp()
+	})
+}
+
+// SetComment sets the "comment" field.
+func (u *ProcessExecutionHistoryUpsertOne) SetComment(v string) *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetComment(v)
+	})
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertOne) UpdateComment() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateComment()
+	})
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *ProcessExecutionHistoryUpsertOne) ClearComment() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.ClearComment()
+	})
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (u *ProcessExecutionHistoryUpsertOne) SetErrorMessage(v string) *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetErrorMessage(v)
+	})
+}
+
+// UpdateErrorMessage sets the "error_message" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertOne) UpdateErrorMessage() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateErrorMessage()
+	})
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (u *ProcessExecutionHistoryUpsertOne) ClearErrorMessage() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.ClearErrorMessage()
+	})
+}
+
+// SetErrorCode sets the "error_code" field.
+func (u *ProcessExecutionHistoryUpsertOne) SetErrorCode(v string) *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetErrorCode(v)
+	})
+}
+
+// UpdateErrorCode sets the "error_code" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertOne) UpdateErrorCode() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateErrorCode()
+	})
+}
+
+// ClearErrorCode clears the value of the "error_code" field.
+func (u *ProcessExecutionHistoryUpsertOne) ClearErrorCode() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.ClearErrorCode()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessExecutionHistoryUpsertOne) SetTenantID(v int) *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessExecutionHistoryUpsertOne) AddTenantID(v int) *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertOne) UpdateTenantID() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessExecutionHistoryUpsertOne) SetCreatedAt(v time.Time) *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertOne) UpdateCreatedAt() *ProcessExecutionHistoryUpsertOne {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessExecutionHistoryUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessExecutionHistoryCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessExecutionHistoryUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ProcessExecutionHistoryUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ProcessExecutionHistoryUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ProcessExecutionHistoryCreateBulk is the builder for creating many ProcessExecutionHistory entities in bulk.
 type ProcessExecutionHistoryCreateBulk struct {
 	config
 	err      error
 	builders []*ProcessExecutionHistoryCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ProcessExecutionHistory entities in the database.
@@ -456,6 +1154,7 @@ func (_c *ProcessExecutionHistoryCreateBulk) Save(ctx context.Context) ([]*Proce
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -506,6 +1205,418 @@ func (_c *ProcessExecutionHistoryCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ProcessExecutionHistoryCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessExecutionHistory.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessExecutionHistoryUpsert) {
+//			SetHistoryID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessExecutionHistoryCreateBulk) OnConflict(opts ...sql.ConflictOption) *ProcessExecutionHistoryUpsertBulk {
+	_c.conflict = opts
+	return &ProcessExecutionHistoryUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessExecutionHistory.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessExecutionHistoryCreateBulk) OnConflictColumns(columns ...string) *ProcessExecutionHistoryUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessExecutionHistoryUpsertBulk{
+		create: _c,
+	}
+}
+
+// ProcessExecutionHistoryUpsertBulk is the builder for "upsert"-ing
+// a bulk of ProcessExecutionHistory nodes.
+type ProcessExecutionHistoryUpsertBulk struct {
+	create *ProcessExecutionHistoryCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ProcessExecutionHistory.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessExecutionHistoryUpsertBulk) UpdateNewValues() *ProcessExecutionHistoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessExecutionHistory.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ProcessExecutionHistoryUpsertBulk) Ignore() *ProcessExecutionHistoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessExecutionHistoryUpsertBulk) DoNothing() *ProcessExecutionHistoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessExecutionHistoryCreateBulk.OnConflict
+// documentation for more info.
+func (u *ProcessExecutionHistoryUpsertBulk) Update(set func(*ProcessExecutionHistoryUpsert)) *ProcessExecutionHistoryUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessExecutionHistoryUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetHistoryID sets the "history_id" field.
+func (u *ProcessExecutionHistoryUpsertBulk) SetHistoryID(v string) *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetHistoryID(v)
+	})
+}
+
+// UpdateHistoryID sets the "history_id" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertBulk) UpdateHistoryID() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateHistoryID()
+	})
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessExecutionHistoryUpsertBulk) SetProcessInstanceID(v int) *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetProcessInstanceID(v)
+	})
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertBulk) UpdateProcessInstanceID() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateProcessInstanceID()
+	})
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ProcessExecutionHistoryUpsertBulk) SetProcessDefinitionKey(v string) *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetProcessDefinitionKey(v)
+	})
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertBulk) UpdateProcessDefinitionKey() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateProcessDefinitionKey()
+	})
+}
+
+// SetActivityID sets the "activity_id" field.
+func (u *ProcessExecutionHistoryUpsertBulk) SetActivityID(v string) *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetActivityID(v)
+	})
+}
+
+// UpdateActivityID sets the "activity_id" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertBulk) UpdateActivityID() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateActivityID()
+	})
+}
+
+// ClearActivityID clears the value of the "activity_id" field.
+func (u *ProcessExecutionHistoryUpsertBulk) ClearActivityID() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.ClearActivityID()
+	})
+}
+
+// SetActivityName sets the "activity_name" field.
+func (u *ProcessExecutionHistoryUpsertBulk) SetActivityName(v string) *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetActivityName(v)
+	})
+}
+
+// UpdateActivityName sets the "activity_name" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertBulk) UpdateActivityName() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateActivityName()
+	})
+}
+
+// ClearActivityName clears the value of the "activity_name" field.
+func (u *ProcessExecutionHistoryUpsertBulk) ClearActivityName() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.ClearActivityName()
+	})
+}
+
+// SetActivityType sets the "activity_type" field.
+func (u *ProcessExecutionHistoryUpsertBulk) SetActivityType(v string) *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetActivityType(v)
+	})
+}
+
+// UpdateActivityType sets the "activity_type" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertBulk) UpdateActivityType() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateActivityType()
+	})
+}
+
+// SetEventType sets the "event_type" field.
+func (u *ProcessExecutionHistoryUpsertBulk) SetEventType(v string) *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetEventType(v)
+	})
+}
+
+// UpdateEventType sets the "event_type" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertBulk) UpdateEventType() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateEventType()
+	})
+}
+
+// SetEventDetail sets the "event_detail" field.
+func (u *ProcessExecutionHistoryUpsertBulk) SetEventDetail(v string) *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetEventDetail(v)
+	})
+}
+
+// UpdateEventDetail sets the "event_detail" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertBulk) UpdateEventDetail() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateEventDetail()
+	})
+}
+
+// ClearEventDetail clears the value of the "event_detail" field.
+func (u *ProcessExecutionHistoryUpsertBulk) ClearEventDetail() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.ClearEventDetail()
+	})
+}
+
+// SetVariables sets the "variables" field.
+func (u *ProcessExecutionHistoryUpsertBulk) SetVariables(v map[string]interface{}) *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetVariables(v)
+	})
+}
+
+// UpdateVariables sets the "variables" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertBulk) UpdateVariables() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateVariables()
+	})
+}
+
+// ClearVariables clears the value of the "variables" field.
+func (u *ProcessExecutionHistoryUpsertBulk) ClearVariables() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.ClearVariables()
+	})
+}
+
+// SetUserID sets the "user_id" field.
+func (u *ProcessExecutionHistoryUpsertBulk) SetUserID(v string) *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertBulk) UpdateUserID() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (u *ProcessExecutionHistoryUpsertBulk) ClearUserID() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.ClearUserID()
+	})
+}
+
+// SetUserName sets the "user_name" field.
+func (u *ProcessExecutionHistoryUpsertBulk) SetUserName(v string) *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetUserName(v)
+	})
+}
+
+// UpdateUserName sets the "user_name" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertBulk) UpdateUserName() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateUserName()
+	})
+}
+
+// ClearUserName clears the value of the "user_name" field.
+func (u *ProcessExecutionHistoryUpsertBulk) ClearUserName() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.ClearUserName()
+	})
+}
+
+// SetTimestamp sets the "timestamp" field.
+func (u *ProcessExecutionHistoryUpsertBulk) SetTimestamp(v time.Time) *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetTimestamp(v)
+	})
+}
+
+// UpdateTimestamp sets the "timestamp" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertBulk) UpdateTimestamp() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateTimestamp()
+	})
+}
+
+// SetComment sets the "comment" field.
+func (u *ProcessExecutionHistoryUpsertBulk) SetComment(v string) *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetComment(v)
+	})
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertBulk) UpdateComment() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateComment()
+	})
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *ProcessExecutionHistoryUpsertBulk) ClearComment() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.ClearComment()
+	})
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (u *ProcessExecutionHistoryUpsertBulk) SetErrorMessage(v string) *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetErrorMessage(v)
+	})
+}
+
+// UpdateErrorMessage sets the "error_message" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertBulk) UpdateErrorMessage() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateErrorMessage()
+	})
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (u *ProcessExecutionHistoryUpsertBulk) ClearErrorMessage() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.ClearErrorMessage()
+	})
+}
+
+// SetErrorCode sets the "error_code" field.
+func (u *ProcessExecutionHistoryUpsertBulk) SetErrorCode(v string) *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetErrorCode(v)
+	})
+}
+
+// UpdateErrorCode sets the "error_code" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertBulk) UpdateErrorCode() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateErrorCode()
+	})
+}
+
+// ClearErrorCode clears the value of the "error_code" field.
+func (u *ProcessExecutionHistoryUpsertBulk) ClearErrorCode() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.ClearErrorCode()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessExecutionHistoryUpsertBulk) SetTenantID(v int) *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessExecutionHistoryUpsertBulk) AddTenantID(v int) *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertBulk) UpdateTenantID() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessExecutionHistoryUpsertBulk) SetCreatedAt(v time.Time) *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessExecutionHistoryUpsertBulk) UpdateCreatedAt() *ProcessExecutionHistoryUpsertBulk {
+	return u.Update(func(s *ProcessExecutionHistoryUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessExecutionHistoryUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ProcessExecutionHistoryCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessExecutionHistoryCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessExecutionHistoryUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

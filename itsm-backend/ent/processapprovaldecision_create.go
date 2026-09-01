@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/processapprovaldecision"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type ProcessApprovalDecisionCreate struct {
 	config
 	mutation *ProcessApprovalDecisionMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetProcessInstanceID sets the "process_instance_id" field.
@@ -340,6 +342,7 @@ func (_c *ProcessApprovalDecisionCreate) createSpec() (*ProcessApprovalDecision,
 		_node = &ProcessApprovalDecision{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(processapprovaldecision.Table, sqlgraph.NewFieldSpec(processapprovaldecision.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.ProcessInstanceID(); ok {
 		_spec.SetField(processapprovaldecision.FieldProcessInstanceID, field.TypeInt, value)
 		_node.ProcessInstanceID = value
@@ -419,11 +422,776 @@ func (_c *ProcessApprovalDecisionCreate) createSpec() (*ProcessApprovalDecision,
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessApprovalDecision.Create().
+//		SetProcessInstanceID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessApprovalDecisionUpsert) {
+//			SetProcessInstanceID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessApprovalDecisionCreate) OnConflict(opts ...sql.ConflictOption) *ProcessApprovalDecisionUpsertOne {
+	_c.conflict = opts
+	return &ProcessApprovalDecisionUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessApprovalDecision.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessApprovalDecisionCreate) OnConflictColumns(columns ...string) *ProcessApprovalDecisionUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessApprovalDecisionUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ProcessApprovalDecisionUpsertOne is the builder for "upsert"-ing
+	//  one ProcessApprovalDecision node.
+	ProcessApprovalDecisionUpsertOne struct {
+		create *ProcessApprovalDecisionCreate
+	}
+
+	// ProcessApprovalDecisionUpsert is the "OnConflict" setter.
+	ProcessApprovalDecisionUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessApprovalDecisionUpsert) SetProcessInstanceID(v int) *ProcessApprovalDecisionUpsert {
+	u.Set(processapprovaldecision.FieldProcessInstanceID, v)
+	return u
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsert) UpdateProcessInstanceID() *ProcessApprovalDecisionUpsert {
+	u.SetExcluded(processapprovaldecision.FieldProcessInstanceID)
+	return u
+}
+
+// AddProcessInstanceID adds v to the "process_instance_id" field.
+func (u *ProcessApprovalDecisionUpsert) AddProcessInstanceID(v int) *ProcessApprovalDecisionUpsert {
+	u.Add(processapprovaldecision.FieldProcessInstanceID, v)
+	return u
+}
+
+// SetProcessTaskID sets the "process_task_id" field.
+func (u *ProcessApprovalDecisionUpsert) SetProcessTaskID(v int) *ProcessApprovalDecisionUpsert {
+	u.Set(processapprovaldecision.FieldProcessTaskID, v)
+	return u
+}
+
+// UpdateProcessTaskID sets the "process_task_id" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsert) UpdateProcessTaskID() *ProcessApprovalDecisionUpsert {
+	u.SetExcluded(processapprovaldecision.FieldProcessTaskID)
+	return u
+}
+
+// AddProcessTaskID adds v to the "process_task_id" field.
+func (u *ProcessApprovalDecisionUpsert) AddProcessTaskID(v int) *ProcessApprovalDecisionUpsert {
+	u.Add(processapprovaldecision.FieldProcessTaskID, v)
+	return u
+}
+
+// SetProcessInstanceKey sets the "process_instance_key" field.
+func (u *ProcessApprovalDecisionUpsert) SetProcessInstanceKey(v string) *ProcessApprovalDecisionUpsert {
+	u.Set(processapprovaldecision.FieldProcessInstanceKey, v)
+	return u
+}
+
+// UpdateProcessInstanceKey sets the "process_instance_key" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsert) UpdateProcessInstanceKey() *ProcessApprovalDecisionUpsert {
+	u.SetExcluded(processapprovaldecision.FieldProcessInstanceKey)
+	return u
+}
+
+// SetTaskID sets the "task_id" field.
+func (u *ProcessApprovalDecisionUpsert) SetTaskID(v string) *ProcessApprovalDecisionUpsert {
+	u.Set(processapprovaldecision.FieldTaskID, v)
+	return u
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsert) UpdateTaskID() *ProcessApprovalDecisionUpsert {
+	u.SetExcluded(processapprovaldecision.FieldTaskID)
+	return u
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ProcessApprovalDecisionUpsert) SetProcessDefinitionKey(v string) *ProcessApprovalDecisionUpsert {
+	u.Set(processapprovaldecision.FieldProcessDefinitionKey, v)
+	return u
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsert) UpdateProcessDefinitionKey() *ProcessApprovalDecisionUpsert {
+	u.SetExcluded(processapprovaldecision.FieldProcessDefinitionKey)
+	return u
+}
+
+// SetNodeKey sets the "node_key" field.
+func (u *ProcessApprovalDecisionUpsert) SetNodeKey(v string) *ProcessApprovalDecisionUpsert {
+	u.Set(processapprovaldecision.FieldNodeKey, v)
+	return u
+}
+
+// UpdateNodeKey sets the "node_key" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsert) UpdateNodeKey() *ProcessApprovalDecisionUpsert {
+	u.SetExcluded(processapprovaldecision.FieldNodeKey)
+	return u
+}
+
+// SetBusinessType sets the "business_type" field.
+func (u *ProcessApprovalDecisionUpsert) SetBusinessType(v string) *ProcessApprovalDecisionUpsert {
+	u.Set(processapprovaldecision.FieldBusinessType, v)
+	return u
+}
+
+// UpdateBusinessType sets the "business_type" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsert) UpdateBusinessType() *ProcessApprovalDecisionUpsert {
+	u.SetExcluded(processapprovaldecision.FieldBusinessType)
+	return u
+}
+
+// ClearBusinessType clears the value of the "business_type" field.
+func (u *ProcessApprovalDecisionUpsert) ClearBusinessType() *ProcessApprovalDecisionUpsert {
+	u.SetNull(processapprovaldecision.FieldBusinessType)
+	return u
+}
+
+// SetBusinessID sets the "business_id" field.
+func (u *ProcessApprovalDecisionUpsert) SetBusinessID(v string) *ProcessApprovalDecisionUpsert {
+	u.Set(processapprovaldecision.FieldBusinessID, v)
+	return u
+}
+
+// UpdateBusinessID sets the "business_id" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsert) UpdateBusinessID() *ProcessApprovalDecisionUpsert {
+	u.SetExcluded(processapprovaldecision.FieldBusinessID)
+	return u
+}
+
+// ClearBusinessID clears the value of the "business_id" field.
+func (u *ProcessApprovalDecisionUpsert) ClearBusinessID() *ProcessApprovalDecisionUpsert {
+	u.SetNull(processapprovaldecision.FieldBusinessID)
+	return u
+}
+
+// SetActorID sets the "actor_id" field.
+func (u *ProcessApprovalDecisionUpsert) SetActorID(v int) *ProcessApprovalDecisionUpsert {
+	u.Set(processapprovaldecision.FieldActorID, v)
+	return u
+}
+
+// UpdateActorID sets the "actor_id" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsert) UpdateActorID() *ProcessApprovalDecisionUpsert {
+	u.SetExcluded(processapprovaldecision.FieldActorID)
+	return u
+}
+
+// AddActorID adds v to the "actor_id" field.
+func (u *ProcessApprovalDecisionUpsert) AddActorID(v int) *ProcessApprovalDecisionUpsert {
+	u.Add(processapprovaldecision.FieldActorID, v)
+	return u
+}
+
+// SetActorName sets the "actor_name" field.
+func (u *ProcessApprovalDecisionUpsert) SetActorName(v string) *ProcessApprovalDecisionUpsert {
+	u.Set(processapprovaldecision.FieldActorName, v)
+	return u
+}
+
+// UpdateActorName sets the "actor_name" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsert) UpdateActorName() *ProcessApprovalDecisionUpsert {
+	u.SetExcluded(processapprovaldecision.FieldActorName)
+	return u
+}
+
+// ClearActorName clears the value of the "actor_name" field.
+func (u *ProcessApprovalDecisionUpsert) ClearActorName() *ProcessApprovalDecisionUpsert {
+	u.SetNull(processapprovaldecision.FieldActorName)
+	return u
+}
+
+// SetAction sets the "action" field.
+func (u *ProcessApprovalDecisionUpsert) SetAction(v string) *ProcessApprovalDecisionUpsert {
+	u.Set(processapprovaldecision.FieldAction, v)
+	return u
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsert) UpdateAction() *ProcessApprovalDecisionUpsert {
+	u.SetExcluded(processapprovaldecision.FieldAction)
+	return u
+}
+
+// SetDecision sets the "decision" field.
+func (u *ProcessApprovalDecisionUpsert) SetDecision(v string) *ProcessApprovalDecisionUpsert {
+	u.Set(processapprovaldecision.FieldDecision, v)
+	return u
+}
+
+// UpdateDecision sets the "decision" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsert) UpdateDecision() *ProcessApprovalDecisionUpsert {
+	u.SetExcluded(processapprovaldecision.FieldDecision)
+	return u
+}
+
+// SetComment sets the "comment" field.
+func (u *ProcessApprovalDecisionUpsert) SetComment(v string) *ProcessApprovalDecisionUpsert {
+	u.Set(processapprovaldecision.FieldComment, v)
+	return u
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsert) UpdateComment() *ProcessApprovalDecisionUpsert {
+	u.SetExcluded(processapprovaldecision.FieldComment)
+	return u
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *ProcessApprovalDecisionUpsert) ClearComment() *ProcessApprovalDecisionUpsert {
+	u.SetNull(processapprovaldecision.FieldComment)
+	return u
+}
+
+// SetDelegatedFrom sets the "delegated_from" field.
+func (u *ProcessApprovalDecisionUpsert) SetDelegatedFrom(v int) *ProcessApprovalDecisionUpsert {
+	u.Set(processapprovaldecision.FieldDelegatedFrom, v)
+	return u
+}
+
+// UpdateDelegatedFrom sets the "delegated_from" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsert) UpdateDelegatedFrom() *ProcessApprovalDecisionUpsert {
+	u.SetExcluded(processapprovaldecision.FieldDelegatedFrom)
+	return u
+}
+
+// AddDelegatedFrom adds v to the "delegated_from" field.
+func (u *ProcessApprovalDecisionUpsert) AddDelegatedFrom(v int) *ProcessApprovalDecisionUpsert {
+	u.Add(processapprovaldecision.FieldDelegatedFrom, v)
+	return u
+}
+
+// ClearDelegatedFrom clears the value of the "delegated_from" field.
+func (u *ProcessApprovalDecisionUpsert) ClearDelegatedFrom() *ProcessApprovalDecisionUpsert {
+	u.SetNull(processapprovaldecision.FieldDelegatedFrom)
+	return u
+}
+
+// SetVariablesSnapshot sets the "variables_snapshot" field.
+func (u *ProcessApprovalDecisionUpsert) SetVariablesSnapshot(v map[string]interface{}) *ProcessApprovalDecisionUpsert {
+	u.Set(processapprovaldecision.FieldVariablesSnapshot, v)
+	return u
+}
+
+// UpdateVariablesSnapshot sets the "variables_snapshot" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsert) UpdateVariablesSnapshot() *ProcessApprovalDecisionUpsert {
+	u.SetExcluded(processapprovaldecision.FieldVariablesSnapshot)
+	return u
+}
+
+// ClearVariablesSnapshot clears the value of the "variables_snapshot" field.
+func (u *ProcessApprovalDecisionUpsert) ClearVariablesSnapshot() *ProcessApprovalDecisionUpsert {
+	u.SetNull(processapprovaldecision.FieldVariablesSnapshot)
+	return u
+}
+
+// SetClientIP sets the "client_ip" field.
+func (u *ProcessApprovalDecisionUpsert) SetClientIP(v string) *ProcessApprovalDecisionUpsert {
+	u.Set(processapprovaldecision.FieldClientIP, v)
+	return u
+}
+
+// UpdateClientIP sets the "client_ip" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsert) UpdateClientIP() *ProcessApprovalDecisionUpsert {
+	u.SetExcluded(processapprovaldecision.FieldClientIP)
+	return u
+}
+
+// ClearClientIP clears the value of the "client_ip" field.
+func (u *ProcessApprovalDecisionUpsert) ClearClientIP() *ProcessApprovalDecisionUpsert {
+	u.SetNull(processapprovaldecision.FieldClientIP)
+	return u
+}
+
+// SetUserAgent sets the "user_agent" field.
+func (u *ProcessApprovalDecisionUpsert) SetUserAgent(v string) *ProcessApprovalDecisionUpsert {
+	u.Set(processapprovaldecision.FieldUserAgent, v)
+	return u
+}
+
+// UpdateUserAgent sets the "user_agent" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsert) UpdateUserAgent() *ProcessApprovalDecisionUpsert {
+	u.SetExcluded(processapprovaldecision.FieldUserAgent)
+	return u
+}
+
+// ClearUserAgent clears the value of the "user_agent" field.
+func (u *ProcessApprovalDecisionUpsert) ClearUserAgent() *ProcessApprovalDecisionUpsert {
+	u.SetNull(processapprovaldecision.FieldUserAgent)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessApprovalDecisionUpsert) SetTenantID(v int) *ProcessApprovalDecisionUpsert {
+	u.Set(processapprovaldecision.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsert) UpdateTenantID() *ProcessApprovalDecisionUpsert {
+	u.SetExcluded(processapprovaldecision.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessApprovalDecisionUpsert) AddTenantID(v int) *ProcessApprovalDecisionUpsert {
+	u.Add(processapprovaldecision.FieldTenantID, v)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ProcessApprovalDecision.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessApprovalDecisionUpsertOne) UpdateNewValues() *ProcessApprovalDecisionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.CreatedAt(); exists {
+			s.SetIgnore(processapprovaldecision.FieldCreatedAt)
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessApprovalDecision.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ProcessApprovalDecisionUpsertOne) Ignore() *ProcessApprovalDecisionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessApprovalDecisionUpsertOne) DoNothing() *ProcessApprovalDecisionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessApprovalDecisionCreate.OnConflict
+// documentation for more info.
+func (u *ProcessApprovalDecisionUpsertOne) Update(set func(*ProcessApprovalDecisionUpsert)) *ProcessApprovalDecisionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessApprovalDecisionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessApprovalDecisionUpsertOne) SetProcessInstanceID(v int) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetProcessInstanceID(v)
+	})
+}
+
+// AddProcessInstanceID adds v to the "process_instance_id" field.
+func (u *ProcessApprovalDecisionUpsertOne) AddProcessInstanceID(v int) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.AddProcessInstanceID(v)
+	})
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertOne) UpdateProcessInstanceID() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateProcessInstanceID()
+	})
+}
+
+// SetProcessTaskID sets the "process_task_id" field.
+func (u *ProcessApprovalDecisionUpsertOne) SetProcessTaskID(v int) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetProcessTaskID(v)
+	})
+}
+
+// AddProcessTaskID adds v to the "process_task_id" field.
+func (u *ProcessApprovalDecisionUpsertOne) AddProcessTaskID(v int) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.AddProcessTaskID(v)
+	})
+}
+
+// UpdateProcessTaskID sets the "process_task_id" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertOne) UpdateProcessTaskID() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateProcessTaskID()
+	})
+}
+
+// SetProcessInstanceKey sets the "process_instance_key" field.
+func (u *ProcessApprovalDecisionUpsertOne) SetProcessInstanceKey(v string) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetProcessInstanceKey(v)
+	})
+}
+
+// UpdateProcessInstanceKey sets the "process_instance_key" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertOne) UpdateProcessInstanceKey() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateProcessInstanceKey()
+	})
+}
+
+// SetTaskID sets the "task_id" field.
+func (u *ProcessApprovalDecisionUpsertOne) SetTaskID(v string) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetTaskID(v)
+	})
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertOne) UpdateTaskID() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateTaskID()
+	})
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ProcessApprovalDecisionUpsertOne) SetProcessDefinitionKey(v string) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetProcessDefinitionKey(v)
+	})
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertOne) UpdateProcessDefinitionKey() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateProcessDefinitionKey()
+	})
+}
+
+// SetNodeKey sets the "node_key" field.
+func (u *ProcessApprovalDecisionUpsertOne) SetNodeKey(v string) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetNodeKey(v)
+	})
+}
+
+// UpdateNodeKey sets the "node_key" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertOne) UpdateNodeKey() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateNodeKey()
+	})
+}
+
+// SetBusinessType sets the "business_type" field.
+func (u *ProcessApprovalDecisionUpsertOne) SetBusinessType(v string) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetBusinessType(v)
+	})
+}
+
+// UpdateBusinessType sets the "business_type" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertOne) UpdateBusinessType() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateBusinessType()
+	})
+}
+
+// ClearBusinessType clears the value of the "business_type" field.
+func (u *ProcessApprovalDecisionUpsertOne) ClearBusinessType() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.ClearBusinessType()
+	})
+}
+
+// SetBusinessID sets the "business_id" field.
+func (u *ProcessApprovalDecisionUpsertOne) SetBusinessID(v string) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetBusinessID(v)
+	})
+}
+
+// UpdateBusinessID sets the "business_id" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertOne) UpdateBusinessID() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateBusinessID()
+	})
+}
+
+// ClearBusinessID clears the value of the "business_id" field.
+func (u *ProcessApprovalDecisionUpsertOne) ClearBusinessID() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.ClearBusinessID()
+	})
+}
+
+// SetActorID sets the "actor_id" field.
+func (u *ProcessApprovalDecisionUpsertOne) SetActorID(v int) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetActorID(v)
+	})
+}
+
+// AddActorID adds v to the "actor_id" field.
+func (u *ProcessApprovalDecisionUpsertOne) AddActorID(v int) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.AddActorID(v)
+	})
+}
+
+// UpdateActorID sets the "actor_id" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertOne) UpdateActorID() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateActorID()
+	})
+}
+
+// SetActorName sets the "actor_name" field.
+func (u *ProcessApprovalDecisionUpsertOne) SetActorName(v string) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetActorName(v)
+	})
+}
+
+// UpdateActorName sets the "actor_name" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertOne) UpdateActorName() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateActorName()
+	})
+}
+
+// ClearActorName clears the value of the "actor_name" field.
+func (u *ProcessApprovalDecisionUpsertOne) ClearActorName() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.ClearActorName()
+	})
+}
+
+// SetAction sets the "action" field.
+func (u *ProcessApprovalDecisionUpsertOne) SetAction(v string) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetAction(v)
+	})
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertOne) UpdateAction() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateAction()
+	})
+}
+
+// SetDecision sets the "decision" field.
+func (u *ProcessApprovalDecisionUpsertOne) SetDecision(v string) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetDecision(v)
+	})
+}
+
+// UpdateDecision sets the "decision" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertOne) UpdateDecision() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateDecision()
+	})
+}
+
+// SetComment sets the "comment" field.
+func (u *ProcessApprovalDecisionUpsertOne) SetComment(v string) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetComment(v)
+	})
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertOne) UpdateComment() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateComment()
+	})
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *ProcessApprovalDecisionUpsertOne) ClearComment() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.ClearComment()
+	})
+}
+
+// SetDelegatedFrom sets the "delegated_from" field.
+func (u *ProcessApprovalDecisionUpsertOne) SetDelegatedFrom(v int) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetDelegatedFrom(v)
+	})
+}
+
+// AddDelegatedFrom adds v to the "delegated_from" field.
+func (u *ProcessApprovalDecisionUpsertOne) AddDelegatedFrom(v int) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.AddDelegatedFrom(v)
+	})
+}
+
+// UpdateDelegatedFrom sets the "delegated_from" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertOne) UpdateDelegatedFrom() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateDelegatedFrom()
+	})
+}
+
+// ClearDelegatedFrom clears the value of the "delegated_from" field.
+func (u *ProcessApprovalDecisionUpsertOne) ClearDelegatedFrom() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.ClearDelegatedFrom()
+	})
+}
+
+// SetVariablesSnapshot sets the "variables_snapshot" field.
+func (u *ProcessApprovalDecisionUpsertOne) SetVariablesSnapshot(v map[string]interface{}) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetVariablesSnapshot(v)
+	})
+}
+
+// UpdateVariablesSnapshot sets the "variables_snapshot" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertOne) UpdateVariablesSnapshot() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateVariablesSnapshot()
+	})
+}
+
+// ClearVariablesSnapshot clears the value of the "variables_snapshot" field.
+func (u *ProcessApprovalDecisionUpsertOne) ClearVariablesSnapshot() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.ClearVariablesSnapshot()
+	})
+}
+
+// SetClientIP sets the "client_ip" field.
+func (u *ProcessApprovalDecisionUpsertOne) SetClientIP(v string) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetClientIP(v)
+	})
+}
+
+// UpdateClientIP sets the "client_ip" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertOne) UpdateClientIP() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateClientIP()
+	})
+}
+
+// ClearClientIP clears the value of the "client_ip" field.
+func (u *ProcessApprovalDecisionUpsertOne) ClearClientIP() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.ClearClientIP()
+	})
+}
+
+// SetUserAgent sets the "user_agent" field.
+func (u *ProcessApprovalDecisionUpsertOne) SetUserAgent(v string) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetUserAgent(v)
+	})
+}
+
+// UpdateUserAgent sets the "user_agent" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertOne) UpdateUserAgent() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateUserAgent()
+	})
+}
+
+// ClearUserAgent clears the value of the "user_agent" field.
+func (u *ProcessApprovalDecisionUpsertOne) ClearUserAgent() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.ClearUserAgent()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessApprovalDecisionUpsertOne) SetTenantID(v int) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessApprovalDecisionUpsertOne) AddTenantID(v int) *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertOne) UpdateTenantID() *ProcessApprovalDecisionUpsertOne {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessApprovalDecisionUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessApprovalDecisionCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessApprovalDecisionUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ProcessApprovalDecisionUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ProcessApprovalDecisionUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ProcessApprovalDecisionCreateBulk is the builder for creating many ProcessApprovalDecision entities in bulk.
 type ProcessApprovalDecisionCreateBulk struct {
 	config
 	err      error
 	builders []*ProcessApprovalDecisionCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ProcessApprovalDecision entities in the database.
@@ -453,6 +1221,7 @@ func (_c *ProcessApprovalDecisionCreateBulk) Save(ctx context.Context) ([]*Proce
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -503,6 +1272,460 @@ func (_c *ProcessApprovalDecisionCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ProcessApprovalDecisionCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessApprovalDecision.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessApprovalDecisionUpsert) {
+//			SetProcessInstanceID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessApprovalDecisionCreateBulk) OnConflict(opts ...sql.ConflictOption) *ProcessApprovalDecisionUpsertBulk {
+	_c.conflict = opts
+	return &ProcessApprovalDecisionUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessApprovalDecision.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessApprovalDecisionCreateBulk) OnConflictColumns(columns ...string) *ProcessApprovalDecisionUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessApprovalDecisionUpsertBulk{
+		create: _c,
+	}
+}
+
+// ProcessApprovalDecisionUpsertBulk is the builder for "upsert"-ing
+// a bulk of ProcessApprovalDecision nodes.
+type ProcessApprovalDecisionUpsertBulk struct {
+	create *ProcessApprovalDecisionCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ProcessApprovalDecision.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateNewValues() *ProcessApprovalDecisionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.CreatedAt(); exists {
+				s.SetIgnore(processapprovaldecision.FieldCreatedAt)
+			}
+		}
+	}))
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessApprovalDecision.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ProcessApprovalDecisionUpsertBulk) Ignore() *ProcessApprovalDecisionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessApprovalDecisionUpsertBulk) DoNothing() *ProcessApprovalDecisionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessApprovalDecisionCreateBulk.OnConflict
+// documentation for more info.
+func (u *ProcessApprovalDecisionUpsertBulk) Update(set func(*ProcessApprovalDecisionUpsert)) *ProcessApprovalDecisionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessApprovalDecisionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessApprovalDecisionUpsertBulk) SetProcessInstanceID(v int) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetProcessInstanceID(v)
+	})
+}
+
+// AddProcessInstanceID adds v to the "process_instance_id" field.
+func (u *ProcessApprovalDecisionUpsertBulk) AddProcessInstanceID(v int) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.AddProcessInstanceID(v)
+	})
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateProcessInstanceID() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateProcessInstanceID()
+	})
+}
+
+// SetProcessTaskID sets the "process_task_id" field.
+func (u *ProcessApprovalDecisionUpsertBulk) SetProcessTaskID(v int) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetProcessTaskID(v)
+	})
+}
+
+// AddProcessTaskID adds v to the "process_task_id" field.
+func (u *ProcessApprovalDecisionUpsertBulk) AddProcessTaskID(v int) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.AddProcessTaskID(v)
+	})
+}
+
+// UpdateProcessTaskID sets the "process_task_id" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateProcessTaskID() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateProcessTaskID()
+	})
+}
+
+// SetProcessInstanceKey sets the "process_instance_key" field.
+func (u *ProcessApprovalDecisionUpsertBulk) SetProcessInstanceKey(v string) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetProcessInstanceKey(v)
+	})
+}
+
+// UpdateProcessInstanceKey sets the "process_instance_key" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateProcessInstanceKey() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateProcessInstanceKey()
+	})
+}
+
+// SetTaskID sets the "task_id" field.
+func (u *ProcessApprovalDecisionUpsertBulk) SetTaskID(v string) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetTaskID(v)
+	})
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateTaskID() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateTaskID()
+	})
+}
+
+// SetProcessDefinitionKey sets the "process_definition_key" field.
+func (u *ProcessApprovalDecisionUpsertBulk) SetProcessDefinitionKey(v string) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetProcessDefinitionKey(v)
+	})
+}
+
+// UpdateProcessDefinitionKey sets the "process_definition_key" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateProcessDefinitionKey() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateProcessDefinitionKey()
+	})
+}
+
+// SetNodeKey sets the "node_key" field.
+func (u *ProcessApprovalDecisionUpsertBulk) SetNodeKey(v string) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetNodeKey(v)
+	})
+}
+
+// UpdateNodeKey sets the "node_key" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateNodeKey() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateNodeKey()
+	})
+}
+
+// SetBusinessType sets the "business_type" field.
+func (u *ProcessApprovalDecisionUpsertBulk) SetBusinessType(v string) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetBusinessType(v)
+	})
+}
+
+// UpdateBusinessType sets the "business_type" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateBusinessType() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateBusinessType()
+	})
+}
+
+// ClearBusinessType clears the value of the "business_type" field.
+func (u *ProcessApprovalDecisionUpsertBulk) ClearBusinessType() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.ClearBusinessType()
+	})
+}
+
+// SetBusinessID sets the "business_id" field.
+func (u *ProcessApprovalDecisionUpsertBulk) SetBusinessID(v string) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetBusinessID(v)
+	})
+}
+
+// UpdateBusinessID sets the "business_id" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateBusinessID() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateBusinessID()
+	})
+}
+
+// ClearBusinessID clears the value of the "business_id" field.
+func (u *ProcessApprovalDecisionUpsertBulk) ClearBusinessID() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.ClearBusinessID()
+	})
+}
+
+// SetActorID sets the "actor_id" field.
+func (u *ProcessApprovalDecisionUpsertBulk) SetActorID(v int) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetActorID(v)
+	})
+}
+
+// AddActorID adds v to the "actor_id" field.
+func (u *ProcessApprovalDecisionUpsertBulk) AddActorID(v int) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.AddActorID(v)
+	})
+}
+
+// UpdateActorID sets the "actor_id" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateActorID() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateActorID()
+	})
+}
+
+// SetActorName sets the "actor_name" field.
+func (u *ProcessApprovalDecisionUpsertBulk) SetActorName(v string) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetActorName(v)
+	})
+}
+
+// UpdateActorName sets the "actor_name" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateActorName() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateActorName()
+	})
+}
+
+// ClearActorName clears the value of the "actor_name" field.
+func (u *ProcessApprovalDecisionUpsertBulk) ClearActorName() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.ClearActorName()
+	})
+}
+
+// SetAction sets the "action" field.
+func (u *ProcessApprovalDecisionUpsertBulk) SetAction(v string) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetAction(v)
+	})
+}
+
+// UpdateAction sets the "action" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateAction() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateAction()
+	})
+}
+
+// SetDecision sets the "decision" field.
+func (u *ProcessApprovalDecisionUpsertBulk) SetDecision(v string) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetDecision(v)
+	})
+}
+
+// UpdateDecision sets the "decision" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateDecision() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateDecision()
+	})
+}
+
+// SetComment sets the "comment" field.
+func (u *ProcessApprovalDecisionUpsertBulk) SetComment(v string) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetComment(v)
+	})
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateComment() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateComment()
+	})
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *ProcessApprovalDecisionUpsertBulk) ClearComment() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.ClearComment()
+	})
+}
+
+// SetDelegatedFrom sets the "delegated_from" field.
+func (u *ProcessApprovalDecisionUpsertBulk) SetDelegatedFrom(v int) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetDelegatedFrom(v)
+	})
+}
+
+// AddDelegatedFrom adds v to the "delegated_from" field.
+func (u *ProcessApprovalDecisionUpsertBulk) AddDelegatedFrom(v int) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.AddDelegatedFrom(v)
+	})
+}
+
+// UpdateDelegatedFrom sets the "delegated_from" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateDelegatedFrom() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateDelegatedFrom()
+	})
+}
+
+// ClearDelegatedFrom clears the value of the "delegated_from" field.
+func (u *ProcessApprovalDecisionUpsertBulk) ClearDelegatedFrom() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.ClearDelegatedFrom()
+	})
+}
+
+// SetVariablesSnapshot sets the "variables_snapshot" field.
+func (u *ProcessApprovalDecisionUpsertBulk) SetVariablesSnapshot(v map[string]interface{}) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetVariablesSnapshot(v)
+	})
+}
+
+// UpdateVariablesSnapshot sets the "variables_snapshot" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateVariablesSnapshot() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateVariablesSnapshot()
+	})
+}
+
+// ClearVariablesSnapshot clears the value of the "variables_snapshot" field.
+func (u *ProcessApprovalDecisionUpsertBulk) ClearVariablesSnapshot() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.ClearVariablesSnapshot()
+	})
+}
+
+// SetClientIP sets the "client_ip" field.
+func (u *ProcessApprovalDecisionUpsertBulk) SetClientIP(v string) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetClientIP(v)
+	})
+}
+
+// UpdateClientIP sets the "client_ip" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateClientIP() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateClientIP()
+	})
+}
+
+// ClearClientIP clears the value of the "client_ip" field.
+func (u *ProcessApprovalDecisionUpsertBulk) ClearClientIP() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.ClearClientIP()
+	})
+}
+
+// SetUserAgent sets the "user_agent" field.
+func (u *ProcessApprovalDecisionUpsertBulk) SetUserAgent(v string) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetUserAgent(v)
+	})
+}
+
+// UpdateUserAgent sets the "user_agent" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateUserAgent() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateUserAgent()
+	})
+}
+
+// ClearUserAgent clears the value of the "user_agent" field.
+func (u *ProcessApprovalDecisionUpsertBulk) ClearUserAgent() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.ClearUserAgent()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessApprovalDecisionUpsertBulk) SetTenantID(v int) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessApprovalDecisionUpsertBulk) AddTenantID(v int) *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessApprovalDecisionUpsertBulk) UpdateTenantID() *ProcessApprovalDecisionUpsertBulk {
+	return u.Update(func(s *ProcessApprovalDecisionUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessApprovalDecisionUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ProcessApprovalDecisionCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessApprovalDecisionCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessApprovalDecisionUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
