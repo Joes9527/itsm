@@ -158,6 +158,29 @@ type postgresClaimLoadBarrier struct {
 	release chan struct{}
 }
 
+type postgresTaskMutationBarrier struct {
+	arrived chan struct{}
+	release chan struct{}
+	once    sync.Once
+}
+
+func (b *postgresTaskMutationBarrier) hook() ent.Hook {
+	return func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			if _, ok := mutation.(*ent.ProcessTaskMutation); ok {
+				b.once.Do(func() {
+					close(b.arrived)
+					select {
+					case <-b.release:
+					case <-ctx.Done():
+					}
+				})
+			}
+			return next.Mutate(ctx, mutation)
+		})
+	}
+}
+
 func openBPMNPostgresIntegrationClient(t *testing.T) (*ent.Client, *sql.DB) {
 	t.Helper()
 	dsn := os.Getenv("ITSM_TEST_DB")
@@ -583,6 +606,90 @@ func TestBPMNTaskTerminalCommandsRaceWithCompletionPostgres(t *testing.T) {
 			).CountX(context.Background()))
 		})
 	}
+}
+
+func TestBPMNParticipantCompletionCASLoserAuditsAfterReassignmentPostgres(t *testing.T) {
+	setupClient, setupDB := openBPMNPostgresIntegrationClient(t)
+	require.NoError(t, setupClient.Schema.Create(context.Background()))
+	fixture := seedPostgresClaimFixture(t, setupClient, setupDB)
+	task := setupClient.ProcessTask.GetX(context.Background(), fixture.taskID)
+	task = setupClient.ProcessTask.UpdateOne(task).
+		SetAssignee(strconv.Itoa(fixture.actorIDs[0])).
+		SetStatus(common.ProcessTaskStatusAssigned).
+		SaveX(context.Background())
+	instance := setupClient.ProcessInstance.GetX(context.Background(), fixture.instanceID)
+	definition := setupClient.ProcessDefinition.GetX(context.Background(), instance.ProcessDefinitionID)
+	xml := `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="participant-reassignment-race" isExecutable="true">
+    <bpmn:startEvent id="start" />
+    <bpmn:userTask id="` + task.TaskDefinitionKey + `" name="Participant task" />
+    <bpmn:endEvent id="end" />
+    <bpmn:sequenceFlow id="to-task" sourceRef="start" targetRef="` + task.TaskDefinitionKey + `" />
+    <bpmn:sequenceFlow id="to-end" sourceRef="` + task.TaskDefinitionKey + `" targetRef="end" />
+  </bpmn:process>
+</bpmn:definitions>`
+	setupClient.ProcessDefinition.UpdateOne(definition).SetBpmnXML([]byte(xml)).SaveX(context.Background())
+
+	completionClient, _ := openBPMNPostgresIntegrationClient(t)
+	assignmentClient, _ := openBPMNPostgresIntegrationClient(t)
+	barrier := &postgresTaskMutationBarrier{arrived: make(chan struct{}), release: make(chan struct{})}
+	completionClient.ProcessTask.Use(barrier.hook())
+	completionEngine := NewCustomProcessEngine(completionClient, zap.NewNop().Sugar()).(*CustomProcessEngine)
+	assignmentEngine := NewCustomProcessEngine(assignmentClient, zap.NewNop().Sugar()).(*CustomProcessEngine)
+	participantCtx := WithBPMNAccessScope(context.Background(), BPMNAccessScope{
+		UserID: fixture.actorIDs[0], TenantID: fixture.tenantID,
+	})
+	elevatedCtx := WithBPMNAccessScope(context.Background(), BPMNAccessScope{
+		UserID: fixture.actorIDs[1], TenantID: fixture.tenantID, CanUpdateAllTasks: true,
+	})
+
+	completionResult := make(chan error, 1)
+	go func() {
+		completionResult <- completionEngine.CompleteTask(
+			participantCtx, fixture.taskKey, map[string]interface{}{"participant_completion": true},
+		)
+	}()
+	select {
+	case <-barrier.arrived:
+	case <-time.After(postgresIntegrationTimeout):
+		require.FailNow(t, "timed out waiting for participant completion task CAS")
+	}
+	require.NoError(t, assignmentEngine.TaskService().AssignTask(
+		elevatedCtx, fixture.taskKey, strconv.Itoa(fixture.actorIDs[1]),
+	))
+	close(barrier.release)
+
+	var completionErr error
+	select {
+	case completionErr = <-completionResult:
+	case <-time.After(postgresIntegrationTimeout):
+		require.FailNow(t, "timed out waiting for participant completion CAS loser")
+	}
+	var appErr *common.AppError
+	require.ErrorAs(t, completionErr, &appErr)
+	require.Equal(t, common.ErrCodeConflict, appErr.Code)
+
+	persisted := setupClient.ProcessTask.GetX(context.Background(), fixture.taskID)
+	require.Equal(t, strconv.Itoa(fixture.actorIDs[1]), persisted.Assignee)
+	require.Equal(t, common.ProcessTaskStatusAssigned, persisted.Status)
+	require.Equal(t, task.AggregationVersion+1, persisted.AggregationVersion)
+	require.NotEqual(t, true, persisted.TaskVariables["participant_completion"])
+
+	rejectionAudits := setupClient.ProcessAuditLog.Query().Where(
+		processauditlog.TenantID(fixture.tenantID),
+		processauditlog.ProcessInstanceID(fixture.instanceID),
+		processauditlog.Action(AuditActionTaskMutationRejected),
+	).AllX(context.Background())
+	require.Len(t, rejectionAudits, 1)
+	require.Equal(t, fixture.actorIDs[0], rejectionAudits[0].UserID)
+	require.Equal(t, "PostgreSQL claimant 1", rejectionAudits[0].UserName)
+	require.Equal(t, string(BPMNTaskCommandComplete), rejectionAudits[0].Metadata["command"])
+	require.Equal(t, 1, setupClient.ProcessAuditLog.Query().Where(
+		processauditlog.TenantID(fixture.tenantID),
+		processauditlog.ProcessInstanceID(fixture.instanceID),
+		processauditlog.Action(AuditActionTaskAssigned),
+	).CountX(context.Background()))
 }
 
 func TestBPMNProcessInstanceVariablesConcurrentCASPostgres(t *testing.T) {
