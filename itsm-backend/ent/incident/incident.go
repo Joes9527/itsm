@@ -14,16 +14,8 @@ const (
 	Label = "incident"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldTitle holds the string denoting the title field in the database.
-	FieldTitle = "title"
-	// FieldDescription holds the string denoting the description field in the database.
-	FieldDescription = "description"
-	// FieldStatus holds the string denoting the status field in the database.
-	FieldStatus = "status"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
-	// FieldPriority holds the string denoting the priority field in the database.
-	FieldPriority = "priority"
 	// FieldSeverity holds the string denoting the severity field in the database.
 	FieldSeverity = "severity"
 	// FieldImpact holds the string denoting the impact field in the database.
@@ -78,6 +70,8 @@ const (
 	FieldUpdatedAt = "updated_at"
 	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
 	FieldDeletedAt = "deleted_at"
+	// EdgeWorkItem holds the string denoting the work_item edge name in mutations.
+	EdgeWorkItem = "work_item"
 	// EdgeRelatedIncidents holds the string denoting the related_incidents edge name in mutations.
 	EdgeRelatedIncidents = "related_incidents"
 	// EdgeIncidentEvents holds the string denoting the incident_events edge name in mutations.
@@ -94,6 +88,13 @@ const (
 	EdgeProblems = "problems"
 	// Table holds the table name of the incident in the database.
 	Table = "incidents"
+	// WorkItemTable is the table that holds the work_item relation/edge.
+	WorkItemTable = "incidents"
+	// WorkItemInverseTable is the table name for the Ticket entity.
+	// It exists in this package in order to avoid circular dependency with the "ticket" package.
+	WorkItemInverseTable = "tickets"
+	// WorkItemColumn is the table column denoting the work_item relation/edge.
+	WorkItemColumn = "work_item_id"
 	// RelatedIncidentsTable is the table that holds the related_incidents relation/edge. The primary key declared below.
 	RelatedIncidentsTable = "incident_related_incidents"
 	// IncidentEventsTable is the table that holds the incident_events relation/edge.
@@ -134,11 +135,7 @@ const (
 // Columns holds all SQL columns for incident fields.
 var Columns = []string{
 	FieldID,
-	FieldTitle,
-	FieldDescription,
-	FieldStatus,
 	FieldType,
-	FieldPriority,
 	FieldSeverity,
 	FieldImpact,
 	FieldUrgency,
@@ -194,16 +191,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
-	// TitleValidator is a validator for the "title" field. It is called by the builders before save.
-	TitleValidator func(string) error
-	// DefaultStatus holds the default value on creation for the "status" field.
-	DefaultStatus string
 	// DefaultType holds the default value on creation for the "type" field.
 	DefaultType string
-	// DefaultPriority holds the default value on creation for the "priority" field.
-	DefaultPriority string
-	// PriorityValidator is a validator for the "priority" field. It is called by the builders before save.
-	PriorityValidator func(string) error
 	// DefaultSeverity holds the default value on creation for the "severity" field.
 	DefaultSeverity string
 	// DefaultImpact holds the default value on creation for the "impact" field.
@@ -250,29 +239,9 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
 }
 
-// ByTitle orders the results by the title field.
-func ByTitle(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTitle, opts...).ToFunc()
-}
-
-// ByDescription orders the results by the description field.
-func ByDescription(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldDescription, opts...).ToFunc()
-}
-
-// ByStatus orders the results by the status field.
-func ByStatus(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldStatus, opts...).ToFunc()
-}
-
 // ByType orders the results by the type field.
 func ByType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldType, opts...).ToFunc()
-}
-
-// ByPriority orders the results by the priority field.
-func ByPriority(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPriority, opts...).ToFunc()
 }
 
 // BySeverity orders the results by the severity field.
@@ -390,6 +359,13 @@ func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeletedAt, opts...).ToFunc()
 }
 
+// ByWorkItemField orders the results by work_item field.
+func ByWorkItemField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newWorkItemStep(), sql.OrderByField(field, opts...))
+	}
+}
+
 // ByRelatedIncidentsCount orders the results by related_incidents count.
 func ByRelatedIncidentsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -486,6 +462,13 @@ func ByProblems(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newProblemsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
+}
+func newWorkItemStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(WorkItemInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, WorkItemTable, WorkItemColumn),
+	)
 }
 func newRelatedIncidentsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(

@@ -75,7 +75,7 @@ func (s *ProblemService) CreateKnownErrorFromProblem(ctx context.Context, proble
 	// 获取问题
 	problemEntity, err := s.client.Problem.Query().
 		Where(problem.IDEQ(problemID), problem.TenantIDEQ(creator.TenantID), problem.DeletedAtIsNil()).
-		Only(ctx)
+		WithWorkItem().Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, fmt.Errorf("problem not found")
@@ -85,14 +85,14 @@ func (s *ProblemService) CreateKnownErrorFromProblem(ctx context.Context, proble
 
 	// 构建创建已知错误的请求
 	createReq := dto.KEDBCreateRequest{
-		Title:            problemEntity.Title,
-		Description:      problemEntity.Description,
+		Title:            problemEntity.Edges.WorkItem.Title,
+		Description:      problemEntity.Edges.WorkItem.Description,
 		RootCause:        problemEntity.RootCause,
 		Category:         problemEntity.Category,
-		Severity:         mapPriorityToSeverity(problemEntity.Priority),
+		Severity:         mapPriorityToSeverity(problemEntity.Edges.WorkItem.Priority),
 		AffectedProducts: []string{},
 		AffectedCIs:      []string{},
-		Keywords:         []string{problemEntity.Title},
+		Keywords:         []string{problemEntity.Edges.WorkItem.Title},
 		ProblemID:        &problemID,
 	}
 

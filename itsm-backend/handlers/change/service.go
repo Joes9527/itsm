@@ -16,6 +16,7 @@ import (
 	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
 
@@ -406,7 +407,7 @@ func (s *Service) GetCMDBImpactSummary(ctx context.Context, changeID, tenantID i
 		Where(
 			incident.TenantID(tenantID),
 			incident.ConfigurationItemIDIn(ciIDs...),
-			incident.StatusNotIn("resolved", "closed"),
+			incident.HasWorkItemWith(ticket.StatusNotIn("resolved", "closed")),
 		).
 		Count(ctx)
 	if err == nil {
@@ -907,8 +908,11 @@ func (s *Service) TransitionStatus(ctx context.Context, id, tenantID, userID int
 		}
 		defer tx.Rollback()
 
-		if _, updateErr := tx.Change.UpdateOneID(c.ID).
-			Where(change.TenantID(tenantID)).
+		if c.WorkItemID == nil || *c.WorkItemID <= 0 {
+			return nil, fmt.Errorf("change violates WorkItem creation invariant")
+		}
+		if _, updateErr := tx.Ticket.UpdateOneID(*c.WorkItemID).
+			Where(ticket.TenantID(tenantID)).
 			SetStatus(targetStatus).
 			Save(ctx); updateErr != nil {
 			return nil, fmt.Errorf("failed to update change status: %w", updateErr)

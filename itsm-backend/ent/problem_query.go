@@ -26,6 +26,7 @@ type ProblemQuery struct {
 	order         []problem.OrderOption
 	inters        []Interceptor
 	predicates    []predicate.Problem
+	withWorkItem  *TicketQuery
 	withTickets   *TicketQuery
 	withIncidents *IncidentQuery
 	withChanges   *ChangeQuery
@@ -64,6 +65,28 @@ func (_q *ProblemQuery) Unique(unique bool) *ProblemQuery {
 func (_q *ProblemQuery) Order(o ...problem.OrderOption) *ProblemQuery {
 	_q.order = append(_q.order, o...)
 	return _q
+}
+
+// QueryWorkItem chains the current query on the "work_item" edge.
+func (_q *ProblemQuery) QueryWorkItem() *TicketQuery {
+	query := (&TicketClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(problem.Table, problem.FieldID, selector),
+			sqlgraph.To(ticket.Table, ticket.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, problem.WorkItemTable, problem.WorkItemColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // QueryTickets chains the current query on the "tickets" edge.
@@ -324,6 +347,7 @@ func (_q *ProblemQuery) Clone() *ProblemQuery {
 		order:         append([]problem.OrderOption{}, _q.order...),
 		inters:        append([]Interceptor{}, _q.inters...),
 		predicates:    append([]predicate.Problem{}, _q.predicates...),
+		withWorkItem:  _q.withWorkItem.Clone(),
 		withTickets:   _q.withTickets.Clone(),
 		withIncidents: _q.withIncidents.Clone(),
 		withChanges:   _q.withChanges.Clone(),
@@ -331,6 +355,17 @@ func (_q *ProblemQuery) Clone() *ProblemQuery {
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
+}
+
+// WithWorkItem tells the query-builder to eager-load the nodes that are connected to
+// the "work_item" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *ProblemQuery) WithWorkItem(opts ...func(*TicketQuery)) *ProblemQuery {
+	query := (&TicketClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withWorkItem = query
+	return _q
 }
 
 // WithTickets tells the query-builder to eager-load the nodes that are connected to
@@ -372,12 +407,12 @@ func (_q *ProblemQuery) WithChanges(opts ...func(*ChangeQuery)) *ProblemQuery {
 // Example:
 //
 //	var v []struct {
-//		Title string `json:"title,omitempty"`
+//		Category string `json:"category,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.Problem.Query().
-//		GroupBy(problem.FieldTitle).
+//		GroupBy(problem.FieldCategory).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *ProblemQuery) GroupBy(field string, fields ...string) *ProblemGroupBy {
@@ -395,11 +430,11 @@ func (_q *ProblemQuery) GroupBy(field string, fields ...string) *ProblemGroupBy 
 // Example:
 //
 //	var v []struct {
-//		Title string `json:"title,omitempty"`
+//		Category string `json:"category,omitempty"`
 //	}
 //
 //	client.Problem.Query().
-//		Select(problem.FieldTitle).
+//		Select(problem.FieldCategory).
 //		Scan(ctx, &v)
 func (_q *ProblemQuery) Select(fields ...string) *ProblemSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)
@@ -445,7 +480,8 @@ func (_q *ProblemQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Prob
 		nodes       = []*Problem{}
 		withFKs     = _q.withFKs
 		_spec       = _q.querySpec()
-		loadedTypes = [3]bool{
+		loadedTypes = [4]bool{
+			_q.withWorkItem != nil,
 			_q.withTickets != nil,
 			_q.withIncidents != nil,
 			_q.withChanges != nil,
@@ -472,6 +508,12 @@ func (_q *ProblemQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Prob
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := _q.withWorkItem; query != nil {
+		if err := _q.loadWorkItem(ctx, query, nodes, nil,
+			func(n *Problem, e *Ticket) { n.Edges.WorkItem = e }); err != nil {
+			return nil, err
+		}
+	}
 	if query := _q.withTickets; query != nil {
 		if err := _q.loadTickets(ctx, query, nodes,
 			func(n *Problem) { n.Edges.Tickets = []*Ticket{} },
@@ -496,6 +538,35 @@ func (_q *ProblemQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Prob
 	return nodes, nil
 }
 
+func (_q *ProblemQuery) loadWorkItem(ctx context.Context, query *TicketQuery, nodes []*Problem, init func(*Problem), assign func(*Problem, *Ticket)) error {
+	ids := make([]int, 0, len(nodes))
+	nodeids := make(map[int][]*Problem)
+	for i := range nodes {
+		fk := nodes[i].WorkItemID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(ticket.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "work_item_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
 func (_q *ProblemQuery) loadTickets(ctx context.Context, query *TicketQuery, nodes []*Problem, init func(*Problem), assign func(*Problem, *Ticket)) error {
 	fks := make([]driver.Value, 0, len(nodes))
 	nodeids := make(map[int]*Problem)
@@ -674,6 +745,9 @@ func (_q *ProblemQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != problem.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if _q.withWorkItem != nil {
+			_spec.Node.AddColumnOnce(problem.FieldWorkItemID)
 		}
 	}
 	if ps := _q.predicates; len(ps) > 0 {

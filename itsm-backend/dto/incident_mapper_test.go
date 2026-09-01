@@ -15,8 +15,16 @@ func TestToIncidentResponseMapsIncidentSpecificFields(t *testing.T) {
 		Metadata:   map[string]interface{}{"monitor": "prometheus"},
 		DetectedAt: time.Now(),
 	}
+	workItem := &ent.Ticket{
+		Title: "Authoritative title", Description: "Authoritative description",
+		Status: "in_progress", Priority: "urgent",
+	}
 
-	response := ToIncidentResponse(incident)
+	response := ToIncidentResponse(incident, workItem)
+	require.Equal(t, "Authoritative title", response.Title)
+	require.Equal(t, "Authoritative description", response.Description)
+	require.Equal(t, "in_progress", response.Status)
+	require.Equal(t, "urgent", response.Priority)
 	require.Equal(t, "high", response.Impact)
 	require.Equal(t, "critical", response.Urgency)
 	require.Equal(t, "monitoring", response.Source)

@@ -1020,9 +1020,7 @@ func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow(t
 		SetTenantID(tenantID).
 		SaveX(ctx)
 	inc, err := engine.client.Incident.Create().
-		SetTitle("自动分配空态回归").
 		SetIncidentNumber("INC-AUTOASSIGN-1").
-		SetStatus("new").
 		SetReporterID(actorID).
 		SetWorkItemID(workItem.ID).
 		SetTenantID(tenantID).
@@ -1111,7 +1109,7 @@ func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_ContinuesFlow(t
 	updatedIncident, err := engine.client.Incident.Get(ctx, inc.ID)
 	require.NoError(t, err)
 	assert.Zero(t, updatedIncident.AssigneeID, "空态跳过时不得写入处理人")
-	assert.Equal(t, "new", updatedIncident.Status, "空态跳过时不得改状态")
+	assert.Equal(t, "new", requireIncidentWorkItem(t, engine.client, updatedIncident).Status, "空态跳过时不得改状态")
 }
 
 func TestProcessTask_CorrelationIDRoundTrip(t *testing.T) {

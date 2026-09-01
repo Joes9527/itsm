@@ -71,6 +71,7 @@ func createUserTaskCallbackChange(t *testing.T, client *ent.Client, ctx context.
 	t.Helper()
 	workItem := client.Ticket.Create().
 		SetTitle("User task callback change").
+		SetStatus("draft").
 		SetTicketNumber(number).
 		SetType("change").
 		SetRecordClass("change_request").
@@ -78,8 +79,6 @@ func createUserTaskCallbackChange(t *testing.T, client *ent.Client, ctx context.
 		SetTenantID(tenantID).
 		SaveX(ctx)
 	changeEntity := client.Change.Create().
-		SetTitle(workItem.Title).
-		SetStatus("draft").
 		SetCreatedBy(requesterID).
 		SetWorkItemID(workItem.ID).
 		SetTenantID(tenantID).
@@ -128,7 +127,7 @@ func TestUserTaskWithServiceTaskTypeMetadataTriggersCallback(t *testing.T) {
 
 	updated, err := client.Change.Get(ctx, ch.ID)
 	require.NoError(t, err)
-	require.Equal(t, "draft", updated.Status,
+	require.Equal(t, "draft", requireChangeWorkItem(t, client, updated).Status,
 		"完成 Activity_CABApproval 触发 ChangeServiceTaskHandler.approveChange，但该回调不改变状态（approve_change 是节点本身的固定 action，不代表审批结果），真正的状态转换发生在后续的 schedule_change/reject_change")
 }
 

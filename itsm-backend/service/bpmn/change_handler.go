@@ -9,6 +9,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
+	"itsm-backend/ent/ticket"
 
 	"go.uber.org/zap"
 )
@@ -142,25 +143,31 @@ func (h *ChangeServiceTaskHandler) updateChange(ctx context.Context, variables m
 		return nil, err
 	}
 
-	updateQuery := h.client.Change.Update().
-		Where(change.ID(changeID), change.TenantID(tenantID))
-
+	entity, err := h.client.Change.Query().Where(change.ID(changeID), change.TenantID(tenantID)).WithWorkItem().Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, fmt.Errorf("变更 %d 不存在或不属于当前租户", changeID)
+		}
+		return nil, fmt.Errorf("查询变更失败: %w", err)
+	}
+	updateQuery := h.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID))
+	changed := false
 	if title, ok := variables["title"].(string); ok && title != "" {
 		updateQuery.SetTitle(title)
+		changed = true
 	}
 	if description, ok := variables["description"].(string); ok && description != "" {
 		updateQuery.SetDescription(description)
+		changed = true
 	}
 	if status, ok := variables["status"].(string); ok && status != "" {
 		updateQuery.SetStatus(status)
+		changed = true
 	}
-
-	updated, err := updateQuery.Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("更新变更失败: %w", err)
-	}
-	if updated == 0 {
-		return nil, fmt.Errorf("变更 %d 不存在或不属于当前租户", changeID)
+	if changed {
+		if _, err := updateQuery.Save(ctx); err != nil {
+			return nil, fmt.Errorf("更新变更 WorkItem 失败: %w", err)
+		}
 	}
 
 	h.logger.Infow("Change updated via BPMN", "change_id", changeID)
@@ -249,6 +256,7 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 
 	current, err := h.client.Change.Query().
 		Where(change.ID(changeID), change.TenantID(tenantID)).
+		WithWorkItem().
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -259,7 +267,7 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 
 	// A completed first delivery leaves normal/standard changes in scheduled. A retry
 	// must never walk that desired state backwards through approved.
-	if current.Status != "approved" && current.Status != "scheduled" {
+	if current.Edges.WorkItem.Status != "approved" && current.Edges.WorkItem.Status != "scheduled" {
 		if err := h.transitionChangeStatus(ctx, tenantID, changeID, "approved"); err != nil {
 			return nil, err
 		}
@@ -267,6 +275,7 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 
 	c, err := h.client.Change.Query().
 		Where(change.ID(changeID), change.TenantID(tenantID)).
+		WithWorkItem().
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -276,7 +285,7 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 	}
 
 	// 第二跳：仅当该变更类型的状态机允许 approved -> scheduled 时才推进
-	if c.Status == "approved" && isValidChangeStatusTransition("approved", "scheduled", c.Type) {
+	if c.Edges.WorkItem.Status == "approved" && isValidChangeStatusTransition("approved", "scheduled", c.Type) {
 		if err := h.transitionChangeStatus(ctx, tenantID, changeID, "scheduled"); err != nil {
 			return nil, err
 		}
@@ -317,6 +326,7 @@ func (h *ChangeServiceTaskHandler) scheduleChange(ctx context.Context, variables
 func (h *ChangeServiceTaskHandler) transitionChangeStatus(ctx context.Context, tenantID, changeID int, targetStatus string) error {
 	c, err := h.client.Change.Query().
 		Where(change.ID(changeID), change.TenantID(tenantID)).
+		WithWorkItem().
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -324,14 +334,15 @@ func (h *ChangeServiceTaskHandler) transitionChangeStatus(ctx context.Context, t
 		}
 		return fmt.Errorf("查询变更失败: %w", err)
 	}
-	if c.Status == targetStatus {
+	currentStatus := c.Edges.WorkItem.Status
+	if currentStatus == targetStatus {
 		return nil
 	}
-	if !isValidChangeStatusTransition(c.Status, targetStatus, c.Type) {
-		return fmt.Errorf("无效的状态转换: 从 %q 到 %q", c.Status, targetStatus)
+	if !isValidChangeStatusTransition(currentStatus, targetStatus, c.Type) {
+		return fmt.Errorf("无效的状态转换: 从 %q 到 %q", currentStatus, targetStatus)
 	}
-	if _, err := h.client.Change.UpdateOneID(changeID).
-		Where(change.TenantID(tenantID)).
+	if _, err := h.client.Ticket.UpdateOneID(c.WorkItemID).
+		Where(ticket.TenantID(tenantID)).
 		SetStatus(targetStatus).
 		Save(ctx); err != nil {
 		return fmt.Errorf("更新变更状态失败: %w", err)
@@ -355,6 +366,7 @@ func (h *ChangeServiceTaskHandler) implementChange(ctx context.Context, variable
 	// 获取变更信息（带租户约束）
 	entity, err := h.client.Change.Query().
 		Where(change.ID(changeID), change.TenantID(tenantID)).
+		WithWorkItem().
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -363,25 +375,24 @@ func (h *ChangeServiceTaskHandler) implementChange(ctx context.Context, variable
 		return nil, fmt.Errorf("查询变更失败: %w", err)
 	}
 
-	if entity.Status == "in_progress" {
+	if entity.Edges.WorkItem.Status == "in_progress" {
 		return &dto.ServiceTaskResult{
 			Success: true,
 			Message: fmt.Sprintf("变更 %d 已在实施中", changeID),
 		}, nil
 	}
-	if !isValidChangeStatusTransition(entity.Status, "in_progress", entity.Type) {
-		return nil, fmt.Errorf("非法的变更状态转换: %s -> %s", entity.Status, "in_progress")
+	if !isValidChangeStatusTransition(entity.Edges.WorkItem.Status, "in_progress", entity.Type) {
+		return nil, fmt.Errorf("非法的变更状态转换: %s -> %s", entity.Edges.WorkItem.Status, "in_progress")
 	}
 
 	now := time.Now()
-	if _, err := entity.Update().
-		SetStatus("in_progress").
-		SetActualStartDate(now).
-		Save(ctx); err != nil {
+	if err := h.updateChangeState(ctx, entity, tenantID, "in_progress", func(update *ent.ChangeUpdateOne) {
+		update.SetActualStartDate(now)
+	}); err != nil {
 		return nil, fmt.Errorf("实施变更失败: %w", err)
 	}
 
-	h.logger.Infow("Change implementation started via BPMN", "change_id", changeID, "title", entity.Title)
+	h.logger.Infow("Change implementation started via BPMN", "change_id", changeID, "title", entity.Edges.WorkItem.Title)
 
 	return &dto.ServiceTaskResult{
 		Success: true,
@@ -413,6 +424,7 @@ func (h *ChangeServiceTaskHandler) verifyChange(ctx context.Context, variables m
 
 	entity, err := h.client.Change.Query().
 		Where(change.ID(changeID), change.TenantID(tenantID)).
+		WithWorkItem().
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -420,12 +432,12 @@ func (h *ChangeServiceTaskHandler) verifyChange(ctx context.Context, variables m
 		}
 		return nil, fmt.Errorf("查询变更失败: %w", err)
 	}
-	if entity.Status != newStatus && !isValidChangeStatusTransition(entity.Status, newStatus, entity.Type) {
-		return nil, fmt.Errorf("非法的变更状态转换: %s -> %s", entity.Status, newStatus)
+	if entity.Edges.WorkItem.Status != newStatus && !isValidChangeStatusTransition(entity.Edges.WorkItem.Status, newStatus, entity.Type) {
+		return nil, fmt.Errorf("非法的变更状态转换: %s -> %s", entity.Edges.WorkItem.Status, newStatus)
 	}
 
-	if entity.Status != newStatus {
-		if _, err := entity.Update().SetStatus(newStatus).Save(ctx); err != nil {
+	if entity.Edges.WorkItem.Status != newStatus {
+		if _, err := h.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID)).SetStatus(newStatus).Save(ctx); err != nil {
 			return nil, fmt.Errorf("验证变更失败: %w", err)
 		}
 	}
@@ -454,6 +466,7 @@ func (h *ChangeServiceTaskHandler) closeChange(ctx context.Context, variables ma
 
 	entity, err := h.client.Change.Query().
 		Where(change.ID(changeID), change.TenantID(tenantID)).
+		WithWorkItem().
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -462,19 +475,16 @@ func (h *ChangeServiceTaskHandler) closeChange(ctx context.Context, variables ma
 		return nil, fmt.Errorf("查询变更失败: %w", err)
 	}
 	// 关闭目标状态对齐域状态机 canonical 值 completed（旧的 "closed" 不是域状态机成员）
-	if entity.Status != "completed" && !isValidChangeStatusTransition(entity.Status, "completed", entity.Type) {
-		return nil, fmt.Errorf("非法的变更状态转换: %s -> %s", entity.Status, "completed")
+	if entity.Edges.WorkItem.Status != "completed" && !isValidChangeStatusTransition(entity.Edges.WorkItem.Status, "completed", entity.Type) {
+		return nil, fmt.Errorf("非法的变更状态转换: %s -> %s", entity.Edges.WorkItem.Status, "completed")
 	}
 
-	if entity.Status != "completed" || entity.ActualEndDate.IsZero() {
-		update := entity.Update()
-		if entity.Status != "completed" {
-			update.SetStatus("completed")
-		}
-		if entity.ActualEndDate.IsZero() {
-			update.SetActualEndDate(time.Now())
-		}
-		if _, err := update.Save(ctx); err != nil {
+	if entity.Edges.WorkItem.Status != "completed" || entity.ActualEndDate.IsZero() {
+		if err := h.updateChangeState(ctx, entity, tenantID, "completed", func(update *ent.ChangeUpdateOne) {
+			if entity.ActualEndDate.IsZero() {
+				update.SetActualEndDate(time.Now())
+			}
+		}); err != nil {
 			return nil, fmt.Errorf("关闭变更失败: %w", err)
 		}
 	}
@@ -485,6 +495,33 @@ func (h *ChangeServiceTaskHandler) closeChange(ctx context.Context, variables ma
 		Success: true,
 		Message: fmt.Sprintf("变更 %d 已关闭", changeID),
 	}, nil
+}
+
+func (h *ChangeServiceTaskHandler) updateChangeState(ctx context.Context, entity *ent.Change, tenantID int, status string, updateExtension func(*ent.ChangeUpdateOne)) error {
+	tx, err := h.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	fail := func(cause error) error {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			return fmt.Errorf("%w (rollback failed: %v)", cause, rollbackErr)
+		}
+		return cause
+	}
+	if _, err := tx.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID)).SetStatus(status).Save(ctx); err != nil {
+		return fail(err)
+	}
+	update := tx.Change.UpdateOneID(entity.ID).Where(change.TenantID(tenantID))
+	if updateExtension != nil {
+		updateExtension(update)
+	}
+	if _, err := update.Save(ctx); err != nil {
+		return fail(err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fail(err)
+	}
+	return nil
 }
 
 // assessRisk 评估变更风险
@@ -503,7 +540,7 @@ func (h *ChangeServiceTaskHandler) assessRisk(ctx context.Context, variables map
 	// 获取变更信息进行风险评估（带租户约束）
 	entity, err := h.client.Change.Query().
 		Where(change.ID(changeID), change.TenantID(tenantID)).
-		Only(ctx)
+		WithWorkItem().Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, fmt.Errorf("变更 %d 不存在或不属于当前租户", changeID)
@@ -557,6 +594,7 @@ func (h *ChangeServiceTaskHandler) notifyStakeholders(ctx context.Context, varia
 	// 获取变更信息（带租户约束）
 	entity, err := h.client.Change.Query().
 		Where(change.ID(changeID), change.TenantID(tenantID)).
+		WithWorkItem().
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -564,12 +602,15 @@ func (h *ChangeServiceTaskHandler) notifyStakeholders(ctx context.Context, varia
 		}
 		return nil, fmt.Errorf("查询变更失败: %w", err)
 	}
+	if entity.Edges.WorkItem == nil {
+		return nil, fmt.Errorf("变更 %d 缺少权威 WorkItem", changeID)
+	}
 
 	// 记录通知日志（实际应调用通知服务）
 	h.logger.Infow(
 		"Stakeholders notification via BPMN",
 		"change_id", changeID,
-		"change_title", entity.Title,
+		"change_title", entity.Edges.WorkItem.Title,
 		"notification_type", notificationType,
 	)
 

@@ -251,8 +251,7 @@ func TestIncidentDetailHasActionsButListDoesNot(t *testing.T) {
 		SetTitle("Detail WorkItem").SetTicketNumber("TKT-DETAIL").SetStatus("open").SetPriority("high").
 		SetRequesterID(user.ID).SetTenantID(tenant.ID).SetRecordClass("incident").Save(ctx)
 	require.NoError(t, err)
-	incidentEntity, err := client.Incident.Create().
-		SetTitle("Detail Incident").SetStatus(common.IncidentStatusInProgress).SetIncidentNumber("INC-DETAIL").
+	incidentEntity, err := client.Incident.Create().SetIncidentNumber("INC-DETAIL").
 		SetReporterID(user.ID).SetWorkItemID(workItem.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 

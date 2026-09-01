@@ -219,3 +219,26 @@ func TestWorkItemNumberAllocatorVerificationBindsReadyValidIndexes(t *testing.T)
 		assert.Contains(t, sql, expected)
 	}
 }
+
+func TestProfessionalExtensionsDropSharedFieldsIsVersioned(t *testing.T) {
+	const version = "022_drop_professional_extension_shared_fields"
+
+	require.Equal(t, version, RegisteredMigrations[len(RegisteredMigrations)-1].Version)
+	sql := GetMigrationSQL(version)
+	require.NotEmpty(t, sql)
+	for _, table := range []string{"incidents", "problems", "changes"} {
+		for _, column := range []string{"title", "description", "status", "priority"} {
+			assert.Contains(t, sql, "ALTER TABLE "+table+" DROP COLUMN IF EXISTS "+column)
+		}
+	}
+
+	for _, asset := range []string{
+		"20260901_drop_professional_extension_shared_fields.sql",
+		"20260901_drop_professional_extension_shared_fields_dev_reset.sql",
+		"20260901_drop_professional_extension_shared_fields_verify.sql",
+	} {
+		contents, err := os.ReadFile(filepath.Join("..", "migrations", asset))
+		require.NoError(t, err)
+		require.NotEmpty(t, contents)
+	}
+}

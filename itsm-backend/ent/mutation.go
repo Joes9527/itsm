@@ -19436,20 +19436,14 @@ type ChangeMutation struct {
 	op                    Op
 	typ                   string
 	id                    *int
-	title                 *string
-	description           *string
 	justification         *string
 	_type                 *string
-	status                *string
-	priority              *string
 	impact_scope          *string
 	risk_level            *string
 	assignee_id           *int
 	addassignee_id        *int
 	created_by            *int
 	addcreated_by         *int
-	work_item_id          *int
-	addwork_item_id       *int
 	tenant_id             *int
 	addtenant_id          *int
 	planned_start_date    *time.Time
@@ -19465,6 +19459,8 @@ type ChangeMutation struct {
 	created_at            *time.Time
 	updated_at            *time.Time
 	clearedFields         map[string]struct{}
+	work_item             *int
+	clearedwork_item      bool
 	problems              map[int]struct{}
 	removedproblems       map[int]struct{}
 	clearedproblems       bool
@@ -19574,91 +19570,6 @@ func (m *ChangeMutation) IDs(ctx context.Context) ([]int, error) {
 	}
 }
 
-// SetTitle sets the "title" field.
-func (m *ChangeMutation) SetTitle(s string) {
-	m.title = &s
-}
-
-// Title returns the value of the "title" field in the mutation.
-func (m *ChangeMutation) Title() (r string, exists bool) {
-	v := m.title
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldTitle returns the old "title" field's value of the Change entity.
-// If the Change object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ChangeMutation) OldTitle(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTitle is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTitle requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTitle: %w", err)
-	}
-	return oldValue.Title, nil
-}
-
-// ResetTitle resets all changes to the "title" field.
-func (m *ChangeMutation) ResetTitle() {
-	m.title = nil
-}
-
-// SetDescription sets the "description" field.
-func (m *ChangeMutation) SetDescription(s string) {
-	m.description = &s
-}
-
-// Description returns the value of the "description" field in the mutation.
-func (m *ChangeMutation) Description() (r string, exists bool) {
-	v := m.description
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldDescription returns the old "description" field's value of the Change entity.
-// If the Change object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ChangeMutation) OldDescription(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldDescription requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
-	}
-	return oldValue.Description, nil
-}
-
-// ClearDescription clears the value of the "description" field.
-func (m *ChangeMutation) ClearDescription() {
-	m.description = nil
-	m.clearedFields[change.FieldDescription] = struct{}{}
-}
-
-// DescriptionCleared returns if the "description" field was cleared in this mutation.
-func (m *ChangeMutation) DescriptionCleared() bool {
-	_, ok := m.clearedFields[change.FieldDescription]
-	return ok
-}
-
-// ResetDescription resets all changes to the "description" field.
-func (m *ChangeMutation) ResetDescription() {
-	m.description = nil
-	delete(m.clearedFields, change.FieldDescription)
-}
-
 // SetJustification sets the "justification" field.
 func (m *ChangeMutation) SetJustification(s string) {
 	m.justification = &s
@@ -19742,78 +19653,6 @@ func (m *ChangeMutation) OldType(ctx context.Context) (v string, err error) {
 // ResetType resets all changes to the "type" field.
 func (m *ChangeMutation) ResetType() {
 	m._type = nil
-}
-
-// SetStatus sets the "status" field.
-func (m *ChangeMutation) SetStatus(s string) {
-	m.status = &s
-}
-
-// Status returns the value of the "status" field in the mutation.
-func (m *ChangeMutation) Status() (r string, exists bool) {
-	v := m.status
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldStatus returns the old "status" field's value of the Change entity.
-// If the Change object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ChangeMutation) OldStatus(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldStatus requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
-	}
-	return oldValue.Status, nil
-}
-
-// ResetStatus resets all changes to the "status" field.
-func (m *ChangeMutation) ResetStatus() {
-	m.status = nil
-}
-
-// SetPriority sets the "priority" field.
-func (m *ChangeMutation) SetPriority(s string) {
-	m.priority = &s
-}
-
-// Priority returns the value of the "priority" field in the mutation.
-func (m *ChangeMutation) Priority() (r string, exists bool) {
-	v := m.priority
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldPriority returns the old "priority" field's value of the Change entity.
-// If the Change object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ChangeMutation) OldPriority(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldPriority is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldPriority requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldPriority: %w", err)
-	}
-	return oldValue.Priority, nil
-}
-
-// ResetPriority resets all changes to the "priority" field.
-func (m *ChangeMutation) ResetPriority() {
-	m.priority = nil
 }
 
 // SetImpactScope sets the "impact_scope" field.
@@ -20016,13 +19855,12 @@ func (m *ChangeMutation) ResetCreatedBy() {
 
 // SetWorkItemID sets the "work_item_id" field.
 func (m *ChangeMutation) SetWorkItemID(i int) {
-	m.work_item_id = &i
-	m.addwork_item_id = nil
+	m.work_item = &i
 }
 
 // WorkItemID returns the value of the "work_item_id" field in the mutation.
 func (m *ChangeMutation) WorkItemID() (r int, exists bool) {
-	v := m.work_item_id
+	v := m.work_item
 	if v == nil {
 		return
 	}
@@ -20046,42 +19884,9 @@ func (m *ChangeMutation) OldWorkItemID(ctx context.Context) (v int, err error) {
 	return oldValue.WorkItemID, nil
 }
 
-// AddWorkItemID adds i to the "work_item_id" field.
-func (m *ChangeMutation) AddWorkItemID(i int) {
-	if m.addwork_item_id != nil {
-		*m.addwork_item_id += i
-	} else {
-		m.addwork_item_id = &i
-	}
-}
-
-// AddedWorkItemID returns the value that was added to the "work_item_id" field in this mutation.
-func (m *ChangeMutation) AddedWorkItemID() (r int, exists bool) {
-	v := m.addwork_item_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ClearWorkItemID clears the value of the "work_item_id" field.
-func (m *ChangeMutation) ClearWorkItemID() {
-	m.work_item_id = nil
-	m.addwork_item_id = nil
-	m.clearedFields[change.FieldWorkItemID] = struct{}{}
-}
-
-// WorkItemIDCleared returns if the "work_item_id" field was cleared in this mutation.
-func (m *ChangeMutation) WorkItemIDCleared() bool {
-	_, ok := m.clearedFields[change.FieldWorkItemID]
-	return ok
-}
-
 // ResetWorkItemID resets all changes to the "work_item_id" field.
 func (m *ChangeMutation) ResetWorkItemID() {
-	m.work_item_id = nil
-	m.addwork_item_id = nil
-	delete(m.clearedFields, change.FieldWorkItemID)
+	m.work_item = nil
 }
 
 // SetTenantID sets the "tenant_id" field.
@@ -20636,6 +20441,33 @@ func (m *ChangeMutation) ResetUpdatedAt() {
 	m.updated_at = nil
 }
 
+// ClearWorkItem clears the "work_item" edge to the Ticket entity.
+func (m *ChangeMutation) ClearWorkItem() {
+	m.clearedwork_item = true
+	m.clearedFields[change.FieldWorkItemID] = struct{}{}
+}
+
+// WorkItemCleared reports if the "work_item" edge to the Ticket entity was cleared.
+func (m *ChangeMutation) WorkItemCleared() bool {
+	return m.clearedwork_item
+}
+
+// WorkItemIDs returns the "work_item" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// WorkItemID instead. It exists only for internal usage by the builders.
+func (m *ChangeMutation) WorkItemIDs() (ids []int) {
+	if id := m.work_item; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetWorkItem resets all changes to the "work_item" edge.
+func (m *ChangeMutation) ResetWorkItem() {
+	m.work_item = nil
+	m.clearedwork_item = false
+}
+
 // AddProblemIDs adds the "problems" edge to the Problem entity by ids.
 func (m *ChangeMutation) AddProblemIDs(ids ...int) {
 	if m.problems == nil {
@@ -20778,24 +20610,12 @@ func (m *ChangeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChangeMutation) Fields() []string {
-	fields := make([]string, 0, 22)
-	if m.title != nil {
-		fields = append(fields, change.FieldTitle)
-	}
-	if m.description != nil {
-		fields = append(fields, change.FieldDescription)
-	}
+	fields := make([]string, 0, 18)
 	if m.justification != nil {
 		fields = append(fields, change.FieldJustification)
 	}
 	if m._type != nil {
 		fields = append(fields, change.FieldType)
-	}
-	if m.status != nil {
-		fields = append(fields, change.FieldStatus)
-	}
-	if m.priority != nil {
-		fields = append(fields, change.FieldPriority)
 	}
 	if m.impact_scope != nil {
 		fields = append(fields, change.FieldImpactScope)
@@ -20809,7 +20629,7 @@ func (m *ChangeMutation) Fields() []string {
 	if m.created_by != nil {
 		fields = append(fields, change.FieldCreatedBy)
 	}
-	if m.work_item_id != nil {
+	if m.work_item != nil {
 		fields = append(fields, change.FieldWorkItemID)
 	}
 	if m.tenant_id != nil {
@@ -20853,18 +20673,10 @@ func (m *ChangeMutation) Fields() []string {
 // schema.
 func (m *ChangeMutation) Field(name string) (ent.Value, bool) {
 	switch name {
-	case change.FieldTitle:
-		return m.Title()
-	case change.FieldDescription:
-		return m.Description()
 	case change.FieldJustification:
 		return m.Justification()
 	case change.FieldType:
 		return m.GetType()
-	case change.FieldStatus:
-		return m.Status()
-	case change.FieldPriority:
-		return m.Priority()
 	case change.FieldImpactScope:
 		return m.ImpactScope()
 	case change.FieldRiskLevel:
@@ -20906,18 +20718,10 @@ func (m *ChangeMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *ChangeMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
-	case change.FieldTitle:
-		return m.OldTitle(ctx)
-	case change.FieldDescription:
-		return m.OldDescription(ctx)
 	case change.FieldJustification:
 		return m.OldJustification(ctx)
 	case change.FieldType:
 		return m.OldType(ctx)
-	case change.FieldStatus:
-		return m.OldStatus(ctx)
-	case change.FieldPriority:
-		return m.OldPriority(ctx)
 	case change.FieldImpactScope:
 		return m.OldImpactScope(ctx)
 	case change.FieldRiskLevel:
@@ -20959,20 +20763,6 @@ func (m *ChangeMutation) OldField(ctx context.Context, name string) (ent.Value, 
 // type.
 func (m *ChangeMutation) SetField(name string, value ent.Value) error {
 	switch name {
-	case change.FieldTitle:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetTitle(v)
-		return nil
-	case change.FieldDescription:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetDescription(v)
-		return nil
 	case change.FieldJustification:
 		v, ok := value.(string)
 		if !ok {
@@ -20986,20 +20776,6 @@ func (m *ChangeMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetType(v)
-		return nil
-	case change.FieldStatus:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetStatus(v)
-		return nil
-	case change.FieldPriority:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetPriority(v)
 		return nil
 	case change.FieldImpactScope:
 		v, ok := value.(string)
@@ -21127,9 +20903,6 @@ func (m *ChangeMutation) AddedFields() []string {
 	if m.addcreated_by != nil {
 		fields = append(fields, change.FieldCreatedBy)
 	}
-	if m.addwork_item_id != nil {
-		fields = append(fields, change.FieldWorkItemID)
-	}
 	if m.addtenant_id != nil {
 		fields = append(fields, change.FieldTenantID)
 	}
@@ -21145,8 +20918,6 @@ func (m *ChangeMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedAssigneeID()
 	case change.FieldCreatedBy:
 		return m.AddedCreatedBy()
-	case change.FieldWorkItemID:
-		return m.AddedWorkItemID()
 	case change.FieldTenantID:
 		return m.AddedTenantID()
 	}
@@ -21172,13 +20943,6 @@ func (m *ChangeMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddCreatedBy(v)
 		return nil
-	case change.FieldWorkItemID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddWorkItemID(v)
-		return nil
 	case change.FieldTenantID:
 		v, ok := value.(int)
 		if !ok {
@@ -21194,17 +20958,11 @@ func (m *ChangeMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *ChangeMutation) ClearedFields() []string {
 	var fields []string
-	if m.FieldCleared(change.FieldDescription) {
-		fields = append(fields, change.FieldDescription)
-	}
 	if m.FieldCleared(change.FieldJustification) {
 		fields = append(fields, change.FieldJustification)
 	}
 	if m.FieldCleared(change.FieldAssigneeID) {
 		fields = append(fields, change.FieldAssigneeID)
-	}
-	if m.FieldCleared(change.FieldWorkItemID) {
-		fields = append(fields, change.FieldWorkItemID)
 	}
 	if m.FieldCleared(change.FieldPlannedStartDate) {
 		fields = append(fields, change.FieldPlannedStartDate)
@@ -21244,17 +21002,11 @@ func (m *ChangeMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ChangeMutation) ClearField(name string) error {
 	switch name {
-	case change.FieldDescription:
-		m.ClearDescription()
-		return nil
 	case change.FieldJustification:
 		m.ClearJustification()
 		return nil
 	case change.FieldAssigneeID:
 		m.ClearAssigneeID()
-		return nil
-	case change.FieldWorkItemID:
-		m.ClearWorkItemID()
 		return nil
 	case change.FieldPlannedStartDate:
 		m.ClearPlannedStartDate()
@@ -21288,23 +21040,11 @@ func (m *ChangeMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *ChangeMutation) ResetField(name string) error {
 	switch name {
-	case change.FieldTitle:
-		m.ResetTitle()
-		return nil
-	case change.FieldDescription:
-		m.ResetDescription()
-		return nil
 	case change.FieldJustification:
 		m.ResetJustification()
 		return nil
 	case change.FieldType:
 		m.ResetType()
-		return nil
-	case change.FieldStatus:
-		m.ResetStatus()
-		return nil
-	case change.FieldPriority:
-		m.ResetPriority()
 		return nil
 	case change.FieldImpactScope:
 		m.ResetImpactScope()
@@ -21360,7 +21100,10 @@ func (m *ChangeMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *ChangeMutation) AddedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
+	if m.work_item != nil {
+		edges = append(edges, change.EdgeWorkItem)
+	}
 	if m.problems != nil {
 		edges = append(edges, change.EdgeProblems)
 	}
@@ -21374,6 +21117,10 @@ func (m *ChangeMutation) AddedEdges() []string {
 // name in this mutation.
 func (m *ChangeMutation) AddedIDs(name string) []ent.Value {
 	switch name {
+	case change.EdgeWorkItem:
+		if id := m.work_item; id != nil {
+			return []ent.Value{*id}
+		}
 	case change.EdgeProblems:
 		ids := make([]ent.Value, 0, len(m.problems))
 		for id := range m.problems {
@@ -21392,7 +21139,7 @@ func (m *ChangeMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *ChangeMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
 	if m.removedproblems != nil {
 		edges = append(edges, change.EdgeProblems)
 	}
@@ -21424,7 +21171,10 @@ func (m *ChangeMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *ChangeMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 2)
+	edges := make([]string, 0, 3)
+	if m.clearedwork_item {
+		edges = append(edges, change.EdgeWorkItem)
+	}
 	if m.clearedproblems {
 		edges = append(edges, change.EdgeProblems)
 	}
@@ -21438,6 +21188,8 @@ func (m *ChangeMutation) ClearedEdges() []string {
 // was cleared in this mutation.
 func (m *ChangeMutation) EdgeCleared(name string) bool {
 	switch name {
+	case change.EdgeWorkItem:
+		return m.clearedwork_item
 	case change.EdgeProblems:
 		return m.clearedproblems
 	case change.EdgePir:
@@ -21450,6 +21202,9 @@ func (m *ChangeMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *ChangeMutation) ClearEdge(name string) error {
 	switch name {
+	case change.EdgeWorkItem:
+		m.ClearWorkItem()
+		return nil
 	}
 	return fmt.Errorf("unknown Change unique edge %s", name)
 }
@@ -21458,6 +21213,9 @@ func (m *ChangeMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *ChangeMutation) ResetEdge(name string) error {
 	switch name {
+	case change.EdgeWorkItem:
+		m.ResetWorkItem()
+		return nil
 	case change.EdgeProblems:
 		m.ResetProblems()
 		return nil
@@ -45893,19 +45651,13 @@ type IncidentMutation struct {
 	op                         Op
 	typ                        string
 	id                         *int
-	title                      *string
-	description                *string
-	status                     *string
 	_type                      *string
-	priority                   *string
 	severity                   *string
 	impact                     *string
 	urgency                    *string
 	incident_number            *string
 	reporter_id                *int
 	addreporter_id             *int
-	work_item_id               *int
-	addwork_item_id            *int
 	assignee_id                *int
 	addassignee_id             *int
 	configuration_item_id      *int
@@ -45934,6 +45686,8 @@ type IncidentMutation struct {
 	updated_at                 *time.Time
 	deleted_at                 *time.Time
 	clearedFields              map[string]struct{}
+	work_item                  *int
+	clearedwork_item           bool
 	related_incidents          map[int]struct{}
 	removedrelated_incidents   map[int]struct{}
 	clearedrelated_incidents   bool
@@ -46058,127 +45812,6 @@ func (m *IncidentMutation) IDs(ctx context.Context) ([]int, error) {
 	}
 }
 
-// SetTitle sets the "title" field.
-func (m *IncidentMutation) SetTitle(s string) {
-	m.title = &s
-}
-
-// Title returns the value of the "title" field in the mutation.
-func (m *IncidentMutation) Title() (r string, exists bool) {
-	v := m.title
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldTitle returns the old "title" field's value of the Incident entity.
-// If the Incident object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *IncidentMutation) OldTitle(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTitle is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTitle requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTitle: %w", err)
-	}
-	return oldValue.Title, nil
-}
-
-// ResetTitle resets all changes to the "title" field.
-func (m *IncidentMutation) ResetTitle() {
-	m.title = nil
-}
-
-// SetDescription sets the "description" field.
-func (m *IncidentMutation) SetDescription(s string) {
-	m.description = &s
-}
-
-// Description returns the value of the "description" field in the mutation.
-func (m *IncidentMutation) Description() (r string, exists bool) {
-	v := m.description
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldDescription returns the old "description" field's value of the Incident entity.
-// If the Incident object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *IncidentMutation) OldDescription(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldDescription requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
-	}
-	return oldValue.Description, nil
-}
-
-// ClearDescription clears the value of the "description" field.
-func (m *IncidentMutation) ClearDescription() {
-	m.description = nil
-	m.clearedFields[incident.FieldDescription] = struct{}{}
-}
-
-// DescriptionCleared returns if the "description" field was cleared in this mutation.
-func (m *IncidentMutation) DescriptionCleared() bool {
-	_, ok := m.clearedFields[incident.FieldDescription]
-	return ok
-}
-
-// ResetDescription resets all changes to the "description" field.
-func (m *IncidentMutation) ResetDescription() {
-	m.description = nil
-	delete(m.clearedFields, incident.FieldDescription)
-}
-
-// SetStatus sets the "status" field.
-func (m *IncidentMutation) SetStatus(s string) {
-	m.status = &s
-}
-
-// Status returns the value of the "status" field in the mutation.
-func (m *IncidentMutation) Status() (r string, exists bool) {
-	v := m.status
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldStatus returns the old "status" field's value of the Incident entity.
-// If the Incident object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *IncidentMutation) OldStatus(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldStatus requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
-	}
-	return oldValue.Status, nil
-}
-
-// ResetStatus resets all changes to the "status" field.
-func (m *IncidentMutation) ResetStatus() {
-	m.status = nil
-}
-
 // SetType sets the "type" field.
 func (m *IncidentMutation) SetType(s string) {
 	m._type = &s
@@ -46213,42 +45846,6 @@ func (m *IncidentMutation) OldType(ctx context.Context) (v string, err error) {
 // ResetType resets all changes to the "type" field.
 func (m *IncidentMutation) ResetType() {
 	m._type = nil
-}
-
-// SetPriority sets the "priority" field.
-func (m *IncidentMutation) SetPriority(s string) {
-	m.priority = &s
-}
-
-// Priority returns the value of the "priority" field in the mutation.
-func (m *IncidentMutation) Priority() (r string, exists bool) {
-	v := m.priority
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldPriority returns the old "priority" field's value of the Incident entity.
-// If the Incident object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *IncidentMutation) OldPriority(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldPriority is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldPriority requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldPriority: %w", err)
-	}
-	return oldValue.Priority, nil
-}
-
-// ResetPriority resets all changes to the "priority" field.
-func (m *IncidentMutation) ResetPriority() {
-	m.priority = nil
 }
 
 // SetSeverity sets the "severity" field.
@@ -46453,13 +46050,12 @@ func (m *IncidentMutation) ResetReporterID() {
 
 // SetWorkItemID sets the "work_item_id" field.
 func (m *IncidentMutation) SetWorkItemID(i int) {
-	m.work_item_id = &i
-	m.addwork_item_id = nil
+	m.work_item = &i
 }
 
 // WorkItemID returns the value of the "work_item_id" field in the mutation.
 func (m *IncidentMutation) WorkItemID() (r int, exists bool) {
-	v := m.work_item_id
+	v := m.work_item
 	if v == nil {
 		return
 	}
@@ -46483,42 +46079,9 @@ func (m *IncidentMutation) OldWorkItemID(ctx context.Context) (v int, err error)
 	return oldValue.WorkItemID, nil
 }
 
-// AddWorkItemID adds i to the "work_item_id" field.
-func (m *IncidentMutation) AddWorkItemID(i int) {
-	if m.addwork_item_id != nil {
-		*m.addwork_item_id += i
-	} else {
-		m.addwork_item_id = &i
-	}
-}
-
-// AddedWorkItemID returns the value that was added to the "work_item_id" field in this mutation.
-func (m *IncidentMutation) AddedWorkItemID() (r int, exists bool) {
-	v := m.addwork_item_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ClearWorkItemID clears the value of the "work_item_id" field.
-func (m *IncidentMutation) ClearWorkItemID() {
-	m.work_item_id = nil
-	m.addwork_item_id = nil
-	m.clearedFields[incident.FieldWorkItemID] = struct{}{}
-}
-
-// WorkItemIDCleared returns if the "work_item_id" field was cleared in this mutation.
-func (m *IncidentMutation) WorkItemIDCleared() bool {
-	_, ok := m.clearedFields[incident.FieldWorkItemID]
-	return ok
-}
-
 // ResetWorkItemID resets all changes to the "work_item_id" field.
 func (m *IncidentMutation) ResetWorkItemID() {
-	m.work_item_id = nil
-	m.addwork_item_id = nil
-	delete(m.clearedFields, incident.FieldWorkItemID)
+	m.work_item = nil
 }
 
 // SetAssigneeID sets the "assignee_id" field.
@@ -47551,6 +47114,33 @@ func (m *IncidentMutation) ResetDeletedAt() {
 	delete(m.clearedFields, incident.FieldDeletedAt)
 }
 
+// ClearWorkItem clears the "work_item" edge to the Ticket entity.
+func (m *IncidentMutation) ClearWorkItem() {
+	m.clearedwork_item = true
+	m.clearedFields[incident.FieldWorkItemID] = struct{}{}
+}
+
+// WorkItemCleared reports if the "work_item" edge to the Ticket entity was cleared.
+func (m *IncidentMutation) WorkItemCleared() bool {
+	return m.clearedwork_item
+}
+
+// WorkItemIDs returns the "work_item" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// WorkItemID instead. It exists only for internal usage by the builders.
+func (m *IncidentMutation) WorkItemIDs() (ids []int) {
+	if id := m.work_item; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetWorkItem resets all changes to the "work_item" edge.
+func (m *IncidentMutation) ResetWorkItem() {
+	m.work_item = nil
+	m.clearedwork_item = false
+}
+
 // AddRelatedIncidentIDs adds the "related_incidents" edge to the Incident entity by ids.
 func (m *IncidentMutation) AddRelatedIncidentIDs(ids ...int) {
 	if m.related_incidents == nil {
@@ -47963,21 +47553,9 @@ func (m *IncidentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IncidentMutation) Fields() []string {
-	fields := make([]string, 0, 32)
-	if m.title != nil {
-		fields = append(fields, incident.FieldTitle)
-	}
-	if m.description != nil {
-		fields = append(fields, incident.FieldDescription)
-	}
-	if m.status != nil {
-		fields = append(fields, incident.FieldStatus)
-	}
+	fields := make([]string, 0, 28)
 	if m._type != nil {
 		fields = append(fields, incident.FieldType)
-	}
-	if m.priority != nil {
-		fields = append(fields, incident.FieldPriority)
 	}
 	if m.severity != nil {
 		fields = append(fields, incident.FieldSeverity)
@@ -47994,7 +47572,7 @@ func (m *IncidentMutation) Fields() []string {
 	if m.reporter_id != nil {
 		fields = append(fields, incident.FieldReporterID)
 	}
-	if m.work_item_id != nil {
+	if m.work_item != nil {
 		fields = append(fields, incident.FieldWorkItemID)
 	}
 	if m.assignee_id != nil {
@@ -48068,16 +47646,8 @@ func (m *IncidentMutation) Fields() []string {
 // schema.
 func (m *IncidentMutation) Field(name string) (ent.Value, bool) {
 	switch name {
-	case incident.FieldTitle:
-		return m.Title()
-	case incident.FieldDescription:
-		return m.Description()
-	case incident.FieldStatus:
-		return m.Status()
 	case incident.FieldType:
 		return m.GetType()
-	case incident.FieldPriority:
-		return m.Priority()
 	case incident.FieldSeverity:
 		return m.Severity()
 	case incident.FieldImpact:
@@ -48141,16 +47711,8 @@ func (m *IncidentMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *IncidentMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
-	case incident.FieldTitle:
-		return m.OldTitle(ctx)
-	case incident.FieldDescription:
-		return m.OldDescription(ctx)
-	case incident.FieldStatus:
-		return m.OldStatus(ctx)
 	case incident.FieldType:
 		return m.OldType(ctx)
-	case incident.FieldPriority:
-		return m.OldPriority(ctx)
 	case incident.FieldSeverity:
 		return m.OldSeverity(ctx)
 	case incident.FieldImpact:
@@ -48214,40 +47776,12 @@ func (m *IncidentMutation) OldField(ctx context.Context, name string) (ent.Value
 // type.
 func (m *IncidentMutation) SetField(name string, value ent.Value) error {
 	switch name {
-	case incident.FieldTitle:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetTitle(v)
-		return nil
-	case incident.FieldDescription:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetDescription(v)
-		return nil
-	case incident.FieldStatus:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetStatus(v)
-		return nil
 	case incident.FieldType:
 		v, ok := value.(string)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetType(v)
-		return nil
-	case incident.FieldPriority:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetPriority(v)
 		return nil
 	case incident.FieldSeverity:
 		v, ok := value.(string)
@@ -48449,9 +47983,6 @@ func (m *IncidentMutation) AddedFields() []string {
 	if m.addreporter_id != nil {
 		fields = append(fields, incident.FieldReporterID)
 	}
-	if m.addwork_item_id != nil {
-		fields = append(fields, incident.FieldWorkItemID)
-	}
 	if m.addassignee_id != nil {
 		fields = append(fields, incident.FieldAssigneeID)
 	}
@@ -48477,8 +48008,6 @@ func (m *IncidentMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case incident.FieldReporterID:
 		return m.AddedReporterID()
-	case incident.FieldWorkItemID:
-		return m.AddedWorkItemID()
 	case incident.FieldAssigneeID:
 		return m.AddedAssigneeID()
 	case incident.FieldConfigurationItemID:
@@ -48504,13 +48033,6 @@ func (m *IncidentMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddReporterID(v)
-		return nil
-	case incident.FieldWorkItemID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddWorkItemID(v)
 		return nil
 	case incident.FieldAssigneeID:
 		v, ok := value.(int)
@@ -48555,12 +48077,6 @@ func (m *IncidentMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *IncidentMutation) ClearedFields() []string {
 	var fields []string
-	if m.FieldCleared(incident.FieldDescription) {
-		fields = append(fields, incident.FieldDescription)
-	}
-	if m.FieldCleared(incident.FieldWorkItemID) {
-		fields = append(fields, incident.FieldWorkItemID)
-	}
 	if m.FieldCleared(incident.FieldAssigneeID) {
 		fields = append(fields, incident.FieldAssigneeID)
 	}
@@ -48611,12 +48127,6 @@ func (m *IncidentMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *IncidentMutation) ClearField(name string) error {
 	switch name {
-	case incident.FieldDescription:
-		m.ClearDescription()
-		return nil
-	case incident.FieldWorkItemID:
-		m.ClearWorkItemID()
-		return nil
 	case incident.FieldAssigneeID:
 		m.ClearAssigneeID()
 		return nil
@@ -48661,20 +48171,8 @@ func (m *IncidentMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *IncidentMutation) ResetField(name string) error {
 	switch name {
-	case incident.FieldTitle:
-		m.ResetTitle()
-		return nil
-	case incident.FieldDescription:
-		m.ResetDescription()
-		return nil
-	case incident.FieldStatus:
-		m.ResetStatus()
-		return nil
 	case incident.FieldType:
 		m.ResetType()
-		return nil
-	case incident.FieldPriority:
-		m.ResetPriority()
 		return nil
 	case incident.FieldSeverity:
 		m.ResetSeverity()
@@ -48763,7 +48261,10 @@ func (m *IncidentMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *IncidentMutation) AddedEdges() []string {
-	edges := make([]string, 0, 7)
+	edges := make([]string, 0, 8)
+	if m.work_item != nil {
+		edges = append(edges, incident.EdgeWorkItem)
+	}
 	if m.related_incidents != nil {
 		edges = append(edges, incident.EdgeRelatedIncidents)
 	}
@@ -48792,6 +48293,10 @@ func (m *IncidentMutation) AddedEdges() []string {
 // name in this mutation.
 func (m *IncidentMutation) AddedIDs(name string) []ent.Value {
 	switch name {
+	case incident.EdgeWorkItem:
+		if id := m.work_item; id != nil {
+			return []ent.Value{*id}
+		}
 	case incident.EdgeRelatedIncidents:
 		ids := make([]ent.Value, 0, len(m.related_incidents))
 		for id := range m.related_incidents {
@@ -48840,7 +48345,7 @@ func (m *IncidentMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *IncidentMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 7)
+	edges := make([]string, 0, 8)
 	if m.removedrelated_incidents != nil {
 		edges = append(edges, incident.EdgeRelatedIncidents)
 	}
@@ -48917,7 +48422,10 @@ func (m *IncidentMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *IncidentMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 7)
+	edges := make([]string, 0, 8)
+	if m.clearedwork_item {
+		edges = append(edges, incident.EdgeWorkItem)
+	}
 	if m.clearedrelated_incidents {
 		edges = append(edges, incident.EdgeRelatedIncidents)
 	}
@@ -48946,6 +48454,8 @@ func (m *IncidentMutation) ClearedEdges() []string {
 // was cleared in this mutation.
 func (m *IncidentMutation) EdgeCleared(name string) bool {
 	switch name {
+	case incident.EdgeWorkItem:
+		return m.clearedwork_item
 	case incident.EdgeRelatedIncidents:
 		return m.clearedrelated_incidents
 	case incident.EdgeIncidentEvents:
@@ -48968,6 +48478,9 @@ func (m *IncidentMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *IncidentMutation) ClearEdge(name string) error {
 	switch name {
+	case incident.EdgeWorkItem:
+		m.ClearWorkItem()
+		return nil
 	}
 	return fmt.Errorf("unknown Incident unique edge %s", name)
 }
@@ -48976,6 +48489,9 @@ func (m *IncidentMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *IncidentMutation) ResetEdge(name string) error {
 	switch name {
+	case incident.EdgeWorkItem:
+		m.ResetWorkItem()
+		return nil
 	case incident.EdgeRelatedIncidents:
 		m.ResetRelatedIncidents()
 		return nil
@@ -78402,10 +77918,6 @@ type ProblemMutation struct {
 	op               Op
 	typ              string
 	id               *int
-	title            *string
-	description      *string
-	status           *string
-	priority         *string
 	category         *string
 	root_cause       *string
 	workaround       *string
@@ -78415,8 +77927,6 @@ type ProblemMutation struct {
 	addassignee_id   *int
 	created_by       *int
 	addcreated_by    *int
-	work_item_id     *int
-	addwork_item_id  *int
 	tenant_id        *int
 	addtenant_id     *int
 	created_at       *time.Time
@@ -78425,6 +77935,8 @@ type ProblemMutation struct {
 	closed_at        *time.Time
 	deleted_at       *time.Time
 	clearedFields    map[string]struct{}
+	work_item        *int
+	clearedwork_item bool
 	tickets          map[int]struct{}
 	removedtickets   map[int]struct{}
 	clearedtickets   bool
@@ -78535,163 +78047,6 @@ func (m *ProblemMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
-}
-
-// SetTitle sets the "title" field.
-func (m *ProblemMutation) SetTitle(s string) {
-	m.title = &s
-}
-
-// Title returns the value of the "title" field in the mutation.
-func (m *ProblemMutation) Title() (r string, exists bool) {
-	v := m.title
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldTitle returns the old "title" field's value of the Problem entity.
-// If the Problem object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ProblemMutation) OldTitle(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTitle is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTitle requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTitle: %w", err)
-	}
-	return oldValue.Title, nil
-}
-
-// ResetTitle resets all changes to the "title" field.
-func (m *ProblemMutation) ResetTitle() {
-	m.title = nil
-}
-
-// SetDescription sets the "description" field.
-func (m *ProblemMutation) SetDescription(s string) {
-	m.description = &s
-}
-
-// Description returns the value of the "description" field in the mutation.
-func (m *ProblemMutation) Description() (r string, exists bool) {
-	v := m.description
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldDescription returns the old "description" field's value of the Problem entity.
-// If the Problem object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ProblemMutation) OldDescription(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldDescription requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
-	}
-	return oldValue.Description, nil
-}
-
-// ClearDescription clears the value of the "description" field.
-func (m *ProblemMutation) ClearDescription() {
-	m.description = nil
-	m.clearedFields[problem.FieldDescription] = struct{}{}
-}
-
-// DescriptionCleared returns if the "description" field was cleared in this mutation.
-func (m *ProblemMutation) DescriptionCleared() bool {
-	_, ok := m.clearedFields[problem.FieldDescription]
-	return ok
-}
-
-// ResetDescription resets all changes to the "description" field.
-func (m *ProblemMutation) ResetDescription() {
-	m.description = nil
-	delete(m.clearedFields, problem.FieldDescription)
-}
-
-// SetStatus sets the "status" field.
-func (m *ProblemMutation) SetStatus(s string) {
-	m.status = &s
-}
-
-// Status returns the value of the "status" field in the mutation.
-func (m *ProblemMutation) Status() (r string, exists bool) {
-	v := m.status
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldStatus returns the old "status" field's value of the Problem entity.
-// If the Problem object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ProblemMutation) OldStatus(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldStatus requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
-	}
-	return oldValue.Status, nil
-}
-
-// ResetStatus resets all changes to the "status" field.
-func (m *ProblemMutation) ResetStatus() {
-	m.status = nil
-}
-
-// SetPriority sets the "priority" field.
-func (m *ProblemMutation) SetPriority(s string) {
-	m.priority = &s
-}
-
-// Priority returns the value of the "priority" field in the mutation.
-func (m *ProblemMutation) Priority() (r string, exists bool) {
-	v := m.priority
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldPriority returns the old "priority" field's value of the Problem entity.
-// If the Problem object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ProblemMutation) OldPriority(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldPriority is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldPriority requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldPriority: %w", err)
-	}
-	return oldValue.Priority, nil
-}
-
-// ResetPriority resets all changes to the "priority" field.
-func (m *ProblemMutation) ResetPriority() {
-	m.priority = nil
 }
 
 // SetCategory sets the "category" field.
@@ -79067,13 +78422,12 @@ func (m *ProblemMutation) ResetCreatedBy() {
 
 // SetWorkItemID sets the "work_item_id" field.
 func (m *ProblemMutation) SetWorkItemID(i int) {
-	m.work_item_id = &i
-	m.addwork_item_id = nil
+	m.work_item = &i
 }
 
 // WorkItemID returns the value of the "work_item_id" field in the mutation.
 func (m *ProblemMutation) WorkItemID() (r int, exists bool) {
-	v := m.work_item_id
+	v := m.work_item
 	if v == nil {
 		return
 	}
@@ -79097,42 +78451,9 @@ func (m *ProblemMutation) OldWorkItemID(ctx context.Context) (v int, err error) 
 	return oldValue.WorkItemID, nil
 }
 
-// AddWorkItemID adds i to the "work_item_id" field.
-func (m *ProblemMutation) AddWorkItemID(i int) {
-	if m.addwork_item_id != nil {
-		*m.addwork_item_id += i
-	} else {
-		m.addwork_item_id = &i
-	}
-}
-
-// AddedWorkItemID returns the value that was added to the "work_item_id" field in this mutation.
-func (m *ProblemMutation) AddedWorkItemID() (r int, exists bool) {
-	v := m.addwork_item_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ClearWorkItemID clears the value of the "work_item_id" field.
-func (m *ProblemMutation) ClearWorkItemID() {
-	m.work_item_id = nil
-	m.addwork_item_id = nil
-	m.clearedFields[problem.FieldWorkItemID] = struct{}{}
-}
-
-// WorkItemIDCleared returns if the "work_item_id" field was cleared in this mutation.
-func (m *ProblemMutation) WorkItemIDCleared() bool {
-	_, ok := m.clearedFields[problem.FieldWorkItemID]
-	return ok
-}
-
 // ResetWorkItemID resets all changes to the "work_item_id" field.
 func (m *ProblemMutation) ResetWorkItemID() {
-	m.work_item_id = nil
-	m.addwork_item_id = nil
-	delete(m.clearedFields, problem.FieldWorkItemID)
+	m.work_item = nil
 }
 
 // SetTenantID sets the "tenant_id" field.
@@ -79410,6 +78731,33 @@ func (m *ProblemMutation) ResetDeletedAt() {
 	delete(m.clearedFields, problem.FieldDeletedAt)
 }
 
+// ClearWorkItem clears the "work_item" edge to the Ticket entity.
+func (m *ProblemMutation) ClearWorkItem() {
+	m.clearedwork_item = true
+	m.clearedFields[problem.FieldWorkItemID] = struct{}{}
+}
+
+// WorkItemCleared reports if the "work_item" edge to the Ticket entity was cleared.
+func (m *ProblemMutation) WorkItemCleared() bool {
+	return m.clearedwork_item
+}
+
+// WorkItemIDs returns the "work_item" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// WorkItemID instead. It exists only for internal usage by the builders.
+func (m *ProblemMutation) WorkItemIDs() (ids []int) {
+	if id := m.work_item; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetWorkItem resets all changes to the "work_item" edge.
+func (m *ProblemMutation) ResetWorkItem() {
+	m.work_item = nil
+	m.clearedwork_item = false
+}
+
 // AddTicketIDs adds the "tickets" edge to the Ticket entity by ids.
 func (m *ProblemMutation) AddTicketIDs(ids ...int) {
 	if m.tickets == nil {
@@ -79606,19 +78954,7 @@ func (m *ProblemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProblemMutation) Fields() []string {
-	fields := make([]string, 0, 18)
-	if m.title != nil {
-		fields = append(fields, problem.FieldTitle)
-	}
-	if m.description != nil {
-		fields = append(fields, problem.FieldDescription)
-	}
-	if m.status != nil {
-		fields = append(fields, problem.FieldStatus)
-	}
-	if m.priority != nil {
-		fields = append(fields, problem.FieldPriority)
-	}
+	fields := make([]string, 0, 14)
 	if m.category != nil {
 		fields = append(fields, problem.FieldCategory)
 	}
@@ -79640,7 +78976,7 @@ func (m *ProblemMutation) Fields() []string {
 	if m.created_by != nil {
 		fields = append(fields, problem.FieldCreatedBy)
 	}
-	if m.work_item_id != nil {
+	if m.work_item != nil {
 		fields = append(fields, problem.FieldWorkItemID)
 	}
 	if m.tenant_id != nil {
@@ -79669,14 +79005,6 @@ func (m *ProblemMutation) Fields() []string {
 // schema.
 func (m *ProblemMutation) Field(name string) (ent.Value, bool) {
 	switch name {
-	case problem.FieldTitle:
-		return m.Title()
-	case problem.FieldDescription:
-		return m.Description()
-	case problem.FieldStatus:
-		return m.Status()
-	case problem.FieldPriority:
-		return m.Priority()
 	case problem.FieldCategory:
 		return m.Category()
 	case problem.FieldRootCause:
@@ -79714,14 +79042,6 @@ func (m *ProblemMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *ProblemMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
-	case problem.FieldTitle:
-		return m.OldTitle(ctx)
-	case problem.FieldDescription:
-		return m.OldDescription(ctx)
-	case problem.FieldStatus:
-		return m.OldStatus(ctx)
-	case problem.FieldPriority:
-		return m.OldPriority(ctx)
 	case problem.FieldCategory:
 		return m.OldCategory(ctx)
 	case problem.FieldRootCause:
@@ -79759,34 +79079,6 @@ func (m *ProblemMutation) OldField(ctx context.Context, name string) (ent.Value,
 // type.
 func (m *ProblemMutation) SetField(name string, value ent.Value) error {
 	switch name {
-	case problem.FieldTitle:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetTitle(v)
-		return nil
-	case problem.FieldDescription:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetDescription(v)
-		return nil
-	case problem.FieldStatus:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetStatus(v)
-		return nil
-	case problem.FieldPriority:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetPriority(v)
-		return nil
 	case problem.FieldCategory:
 		v, ok := value.(string)
 		if !ok {
@@ -79899,9 +79191,6 @@ func (m *ProblemMutation) AddedFields() []string {
 	if m.addcreated_by != nil {
 		fields = append(fields, problem.FieldCreatedBy)
 	}
-	if m.addwork_item_id != nil {
-		fields = append(fields, problem.FieldWorkItemID)
-	}
 	if m.addtenant_id != nil {
 		fields = append(fields, problem.FieldTenantID)
 	}
@@ -79917,8 +79206,6 @@ func (m *ProblemMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedAssigneeID()
 	case problem.FieldCreatedBy:
 		return m.AddedCreatedBy()
-	case problem.FieldWorkItemID:
-		return m.AddedWorkItemID()
 	case problem.FieldTenantID:
 		return m.AddedTenantID()
 	}
@@ -79944,13 +79231,6 @@ func (m *ProblemMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddCreatedBy(v)
 		return nil
-	case problem.FieldWorkItemID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddWorkItemID(v)
-		return nil
 	case problem.FieldTenantID:
 		v, ok := value.(int)
 		if !ok {
@@ -79966,9 +79246,6 @@ func (m *ProblemMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *ProblemMutation) ClearedFields() []string {
 	var fields []string
-	if m.FieldCleared(problem.FieldDescription) {
-		fields = append(fields, problem.FieldDescription)
-	}
 	if m.FieldCleared(problem.FieldCategory) {
 		fields = append(fields, problem.FieldCategory)
 	}
@@ -79986,9 +79263,6 @@ func (m *ProblemMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(problem.FieldAssigneeID) {
 		fields = append(fields, problem.FieldAssigneeID)
-	}
-	if m.FieldCleared(problem.FieldWorkItemID) {
-		fields = append(fields, problem.FieldWorkItemID)
 	}
 	if m.FieldCleared(problem.FieldResolvedAt) {
 		fields = append(fields, problem.FieldResolvedAt)
@@ -80013,9 +79287,6 @@ func (m *ProblemMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ProblemMutation) ClearField(name string) error {
 	switch name {
-	case problem.FieldDescription:
-		m.ClearDescription()
-		return nil
 	case problem.FieldCategory:
 		m.ClearCategory()
 		return nil
@@ -80034,9 +79305,6 @@ func (m *ProblemMutation) ClearField(name string) error {
 	case problem.FieldAssigneeID:
 		m.ClearAssigneeID()
 		return nil
-	case problem.FieldWorkItemID:
-		m.ClearWorkItemID()
-		return nil
 	case problem.FieldResolvedAt:
 		m.ClearResolvedAt()
 		return nil
@@ -80054,18 +79322,6 @@ func (m *ProblemMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *ProblemMutation) ResetField(name string) error {
 	switch name {
-	case problem.FieldTitle:
-		m.ResetTitle()
-		return nil
-	case problem.FieldDescription:
-		m.ResetDescription()
-		return nil
-	case problem.FieldStatus:
-		m.ResetStatus()
-		return nil
-	case problem.FieldPriority:
-		m.ResetPriority()
-		return nil
 	case problem.FieldCategory:
 		m.ResetCategory()
 		return nil
@@ -80114,7 +79370,10 @@ func (m *ProblemMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *ProblemMutation) AddedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
+	if m.work_item != nil {
+		edges = append(edges, problem.EdgeWorkItem)
+	}
 	if m.tickets != nil {
 		edges = append(edges, problem.EdgeTickets)
 	}
@@ -80131,6 +79390,10 @@ func (m *ProblemMutation) AddedEdges() []string {
 // name in this mutation.
 func (m *ProblemMutation) AddedIDs(name string) []ent.Value {
 	switch name {
+	case problem.EdgeWorkItem:
+		if id := m.work_item; id != nil {
+			return []ent.Value{*id}
+		}
 	case problem.EdgeTickets:
 		ids := make([]ent.Value, 0, len(m.tickets))
 		for id := range m.tickets {
@@ -80155,7 +79418,7 @@ func (m *ProblemMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *ProblemMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.removedtickets != nil {
 		edges = append(edges, problem.EdgeTickets)
 	}
@@ -80196,7 +79459,10 @@ func (m *ProblemMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *ProblemMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
+	if m.clearedwork_item {
+		edges = append(edges, problem.EdgeWorkItem)
+	}
 	if m.clearedtickets {
 		edges = append(edges, problem.EdgeTickets)
 	}
@@ -80213,6 +79479,8 @@ func (m *ProblemMutation) ClearedEdges() []string {
 // was cleared in this mutation.
 func (m *ProblemMutation) EdgeCleared(name string) bool {
 	switch name {
+	case problem.EdgeWorkItem:
+		return m.clearedwork_item
 	case problem.EdgeTickets:
 		return m.clearedtickets
 	case problem.EdgeIncidents:
@@ -80227,6 +79495,9 @@ func (m *ProblemMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *ProblemMutation) ClearEdge(name string) error {
 	switch name {
+	case problem.EdgeWorkItem:
+		m.ClearWorkItem()
+		return nil
 	}
 	return fmt.Errorf("unknown Problem unique edge %s", name)
 }
@@ -80235,6 +79506,9 @@ func (m *ProblemMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *ProblemMutation) ResetEdge(name string) error {
 	switch name {
+	case problem.EdgeWorkItem:
+		m.ResetWorkItem()
+		return nil
 	case problem.EdgeTickets:
 		m.ResetTickets()
 		return nil

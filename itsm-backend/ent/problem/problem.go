@@ -14,14 +14,6 @@ const (
 	Label = "problem"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
-	// FieldTitle holds the string denoting the title field in the database.
-	FieldTitle = "title"
-	// FieldDescription holds the string denoting the description field in the database.
-	FieldDescription = "description"
-	// FieldStatus holds the string denoting the status field in the database.
-	FieldStatus = "status"
-	// FieldPriority holds the string denoting the priority field in the database.
-	FieldPriority = "priority"
 	// FieldCategory holds the string denoting the category field in the database.
 	FieldCategory = "category"
 	// FieldRootCause holds the string denoting the root_cause field in the database.
@@ -50,6 +42,8 @@ const (
 	FieldClosedAt = "closed_at"
 	// FieldDeletedAt holds the string denoting the deleted_at field in the database.
 	FieldDeletedAt = "deleted_at"
+	// EdgeWorkItem holds the string denoting the work_item edge name in mutations.
+	EdgeWorkItem = "work_item"
 	// EdgeTickets holds the string denoting the tickets edge name in mutations.
 	EdgeTickets = "tickets"
 	// EdgeIncidents holds the string denoting the incidents edge name in mutations.
@@ -58,6 +52,13 @@ const (
 	EdgeChanges = "changes"
 	// Table holds the table name of the problem in the database.
 	Table = "problems"
+	// WorkItemTable is the table that holds the work_item relation/edge.
+	WorkItemTable = "problems"
+	// WorkItemInverseTable is the table name for the Ticket entity.
+	// It exists in this package in order to avoid circular dependency with the "ticket" package.
+	WorkItemInverseTable = "tickets"
+	// WorkItemColumn is the table column denoting the work_item relation/edge.
+	WorkItemColumn = "work_item_id"
 	// TicketsTable is the table that holds the tickets relation/edge.
 	TicketsTable = "tickets"
 	// TicketsInverseTable is the table name for the Ticket entity.
@@ -80,10 +81,6 @@ const (
 // Columns holds all SQL columns for problem fields.
 var Columns = []string{
 	FieldID,
-	FieldTitle,
-	FieldDescription,
-	FieldStatus,
-	FieldPriority,
 	FieldCategory,
 	FieldRootCause,
 	FieldWorkaround,
@@ -131,12 +128,6 @@ func ValidColumn(column string) bool {
 }
 
 var (
-	// TitleValidator is a validator for the "title" field. It is called by the builders before save.
-	TitleValidator func(string) error
-	// DefaultStatus holds the default value on creation for the "status" field.
-	DefaultStatus string
-	// DefaultPriority holds the default value on creation for the "priority" field.
-	DefaultPriority string
 	// CreatedByValidator is a validator for the "created_by" field. It is called by the builders before save.
 	CreatedByValidator func(int) error
 	// TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
@@ -155,26 +146,6 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
-}
-
-// ByTitle orders the results by the title field.
-func ByTitle(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldTitle, opts...).ToFunc()
-}
-
-// ByDescription orders the results by the description field.
-func ByDescription(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldDescription, opts...).ToFunc()
-}
-
-// ByStatus orders the results by the status field.
-func ByStatus(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldStatus, opts...).ToFunc()
-}
-
-// ByPriority orders the results by the priority field.
-func ByPriority(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldPriority, opts...).ToFunc()
 }
 
 // ByCategory orders the results by the category field.
@@ -247,6 +218,13 @@ func ByDeletedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDeletedAt, opts...).ToFunc()
 }
 
+// ByWorkItemField orders the results by work_item field.
+func ByWorkItemField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newWorkItemStep(), sql.OrderByField(field, opts...))
+	}
+}
+
 // ByTicketsCount orders the results by tickets count.
 func ByTicketsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -287,6 +265,13 @@ func ByChanges(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newChangesStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
+}
+func newWorkItemStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(WorkItemInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, WorkItemTable, WorkItemColumn),
+	)
 }
 func newTicketsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(

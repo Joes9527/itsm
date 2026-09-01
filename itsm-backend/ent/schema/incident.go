@@ -18,28 +18,9 @@ type Incident struct {
 // Fields of the Incident.
 func (Incident) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("title").
-			Comment("事件标题").
-			NotEmpty(),
-		field.Text("description").
-			Comment("事件描述").
-			Optional(),
-		field.String("status").
-			Comment("状态").
-			Default("new"),
 		field.String("type").
 			Comment("事件类型").
 			Default("incident"),
-		field.String("priority").
-			Comment("优先级").
-			Validate(func(s string) error {
-				valid := map[string]bool{"low": true, "medium": true, "high": true, "critical": true}
-				if !valid[s] {
-					return fmt.Errorf("invalid priority value: %s", s)
-				}
-				return nil
-			}).
-			Default("medium"),
 		field.String("severity").
 			Comment("严重程度").
 			Default("medium"),
@@ -71,8 +52,7 @@ func (Incident) Fields() []ent.Field {
 			Comment("报告人ID").
 			Positive(),
 		field.Int("work_item_id").
-			Comment("关联的 WorkItem（tickets.id），唯一，必填——Incident 迁移到 WorkItem 后每条记录必须有且仅有一条对应的 tickets 行").
-			Optional().
+			Comment("关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入").
 			Unique(),
 		field.Int("assignee_id").
 			Comment("处理人ID").
@@ -146,6 +126,11 @@ func (Incident) Fields() []ent.Field {
 // Edges of the Incident.
 func (Incident) Edges() []ent.Edge {
 	return []ent.Edge{
+		edge.To("work_item", Ticket.Type).
+			Field("work_item_id").
+			Unique().
+			Required().
+			Comment("共享字段的唯一权威 WorkItem"),
 		edge.To("related_incidents", Incident.Type).
 			Comment("关联事件"),
 		edge.To("incident_events", IncidentEvent.Type).

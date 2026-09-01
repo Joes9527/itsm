@@ -139,7 +139,7 @@ func findMismatches(ctx context.Context, client *ent.Client, tenantID int) ([]mi
 	}
 
 	// 2) 专业扩展记录的 work_item_id 指向的 ticket 的 record_class 对不上。
-	incidents, err := queryScoped(ctx, client.Incident.Query().Where(incident.WorkItemIDNotNil()), tenantID)
+	incidents, err := queryScoped(ctx, client.Incident.Query(), tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +213,7 @@ func queryScoped(ctx context.Context, q *ent.IncidentQuery, tenantID int) ([]*en
 }
 
 func queryScopedProblem(ctx context.Context, client *ent.Client, tenantID int) ([]*ent.Problem, error) {
-	q := client.Problem.Query().Where(problem.WorkItemIDNotNil())
+	q := client.Problem.Query()
 	if tenantID > 0 {
 		q = q.Where(problem.TenantID(tenantID))
 	}
@@ -221,7 +221,7 @@ func queryScopedProblem(ctx context.Context, client *ent.Client, tenantID int) (
 }
 
 func queryScopedChange(ctx context.Context, client *ent.Client, tenantID int) ([]*ent.Change, error) {
-	q := client.Change.Query().Where(change.WorkItemIDNotNil())
+	q := client.Change.Query()
 	if tenantID > 0 {
 		q = q.Where(change.TenantID(tenantID))
 	}

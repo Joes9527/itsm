@@ -5,6 +5,7 @@ package ent
 import (
 	"fmt"
 	"itsm-backend/ent/problem"
+	"itsm-backend/ent/ticket"
 	"strings"
 	"time"
 
@@ -17,14 +18,6 @@ type Problem struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
-	// 问题标题
-	Title string `json:"title,omitempty"`
-	// 问题描述
-	Description string `json:"description,omitempty"`
-	// 状态
-	Status string `json:"status,omitempty"`
-	// 优先级
-	Priority string `json:"priority,omitempty"`
 	// 问题分类
 	Category string `json:"category,omitempty"`
 	// 根本原因
@@ -39,7 +32,7 @@ type Problem struct {
 	AssigneeID int `json:"assignee_id,omitempty"`
 	// 创建人ID
 	CreatedBy int `json:"created_by,omitempty"`
-	// 关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空
+	// 关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入
 	WorkItemID int `json:"work_item_id,omitempty"`
 	// 租户ID
 	TenantID int `json:"tenant_id,omitempty"`
@@ -62,6 +55,8 @@ type Problem struct {
 
 // ProblemEdges holds the relations/edges for other nodes in the graph.
 type ProblemEdges struct {
+	// 共享字段的唯一权威 WorkItem
+	WorkItem *Ticket `json:"work_item,omitempty"`
 	// 关联的工单
 	Tickets []*Ticket `json:"tickets,omitempty"`
 	// 关联的事件
@@ -70,13 +65,24 @@ type ProblemEdges struct {
 	Changes []*Change `json:"changes,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [3]bool
+	loadedTypes [4]bool
+}
+
+// WorkItemOrErr returns the WorkItem value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e ProblemEdges) WorkItemOrErr() (*Ticket, error) {
+	if e.WorkItem != nil {
+		return e.WorkItem, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: ticket.Label}
+	}
+	return nil, &NotLoadedError{edge: "work_item"}
 }
 
 // TicketsOrErr returns the Tickets value or an error if the edge
 // was not loaded in eager-loading.
 func (e ProblemEdges) TicketsOrErr() ([]*Ticket, error) {
-	if e.loadedTypes[0] {
+	if e.loadedTypes[1] {
 		return e.Tickets, nil
 	}
 	return nil, &NotLoadedError{edge: "tickets"}
@@ -85,7 +91,7 @@ func (e ProblemEdges) TicketsOrErr() ([]*Ticket, error) {
 // IncidentsOrErr returns the Incidents value or an error if the edge
 // was not loaded in eager-loading.
 func (e ProblemEdges) IncidentsOrErr() ([]*Incident, error) {
-	if e.loadedTypes[1] {
+	if e.loadedTypes[2] {
 		return e.Incidents, nil
 	}
 	return nil, &NotLoadedError{edge: "incidents"}
@@ -94,7 +100,7 @@ func (e ProblemEdges) IncidentsOrErr() ([]*Incident, error) {
 // ChangesOrErr returns the Changes value or an error if the edge
 // was not loaded in eager-loading.
 func (e ProblemEdges) ChangesOrErr() ([]*Change, error) {
-	if e.loadedTypes[2] {
+	if e.loadedTypes[3] {
 		return e.Changes, nil
 	}
 	return nil, &NotLoadedError{edge: "changes"}
@@ -107,7 +113,7 @@ func (*Problem) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case problem.FieldID, problem.FieldAssigneeID, problem.FieldCreatedBy, problem.FieldWorkItemID, problem.FieldTenantID:
 			values[i] = new(sql.NullInt64)
-		case problem.FieldTitle, problem.FieldDescription, problem.FieldStatus, problem.FieldPriority, problem.FieldCategory, problem.FieldRootCause, problem.FieldWorkaround, problem.FieldResolution, problem.FieldImpact:
+		case problem.FieldCategory, problem.FieldRootCause, problem.FieldWorkaround, problem.FieldResolution, problem.FieldImpact:
 			values[i] = new(sql.NullString)
 		case problem.FieldCreatedAt, problem.FieldUpdatedAt, problem.FieldResolvedAt, problem.FieldClosedAt, problem.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -134,30 +140,6 @@ func (_m *Problem) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
-		case problem.FieldTitle:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field title", values[i])
-			} else if value.Valid {
-				_m.Title = value.String
-			}
-		case problem.FieldDescription:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field description", values[i])
-			} else if value.Valid {
-				_m.Description = value.String
-			}
-		case problem.FieldStatus:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field status", values[i])
-			} else if value.Valid {
-				_m.Status = value.String
-			}
-		case problem.FieldPriority:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field priority", values[i])
-			} else if value.Valid {
-				_m.Priority = value.String
-			}
 		case problem.FieldCategory:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field category", values[i])
@@ -265,6 +247,11 @@ func (_m *Problem) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
+// QueryWorkItem queries the "work_item" edge of the Problem entity.
+func (_m *Problem) QueryWorkItem() *TicketQuery {
+	return NewProblemClient(_m.config).QueryWorkItem(_m)
+}
+
 // QueryTickets queries the "tickets" edge of the Problem entity.
 func (_m *Problem) QueryTickets() *TicketQuery {
 	return NewProblemClient(_m.config).QueryTickets(_m)
@@ -303,18 +290,6 @@ func (_m *Problem) String() string {
 	var builder strings.Builder
 	builder.WriteString("Problem(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	builder.WriteString("title=")
-	builder.WriteString(_m.Title)
-	builder.WriteString(", ")
-	builder.WriteString("description=")
-	builder.WriteString(_m.Description)
-	builder.WriteString(", ")
-	builder.WriteString("status=")
-	builder.WriteString(_m.Status)
-	builder.WriteString(", ")
-	builder.WriteString("priority=")
-	builder.WriteString(_m.Priority)
-	builder.WriteString(", ")
 	builder.WriteString("category=")
 	builder.WriteString(_m.Category)
 	builder.WriteString(", ")

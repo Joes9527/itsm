@@ -10,6 +10,7 @@ import (
 	incidentpkg "itsm-backend/ent/incident"
 	"itsm-backend/ent/incidentrule"
 	"itsm-backend/ent/incidentruleexecution"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/repository/workitemnumber"
 
 	"go.uber.org/zap"
@@ -46,7 +47,7 @@ type PriorityCondition struct {
 
 func (c *PriorityCondition) Evaluate(ctx context.Context, incident *ent.Incident) (bool, error) {
 	for _, priority := range c.Priorities {
-		if incident.Priority == priority {
+		if incident.Edges.WorkItem != nil && incident.Edges.WorkItem.Priority == priority {
 			return true, nil
 		}
 	}
@@ -74,7 +75,7 @@ type StatusCondition struct {
 
 func (c *StatusCondition) Evaluate(ctx context.Context, incident *ent.Incident) (bool, error) {
 	for _, status := range c.Statuses {
-		if incident.Status == status {
+		if incident.Edges.WorkItem != nil && incident.Edges.WorkItem.Status == status {
 			return true, nil
 		}
 	}
@@ -264,15 +265,16 @@ func (e *IncidentRuleEngine) ExecuteRule(ctx context.Context, rule *ent.Incident
 	if !rule.IsActive {
 		return fmt.Errorf("incident rule is disabled")
 	}
-	activeIncident, err := e.client.Incident.Query().
+	authoritativeIncident, err := e.client.Incident.Query().
 		Where(incidentpkg.IDEQ(incident.ID), incidentpkg.TenantIDEQ(tenantID), incidentpkg.DeletedAtIsNil()).
-		Exist(ctx)
+		WithWorkItem().Only(ctx)
 	if err != nil {
+		if ent.IsNotFound(err) {
+			return fmt.Errorf("incident not found")
+		}
 		return fmt.Errorf("failed to validate incident: %w", err)
 	}
-	if !activeIncident {
-		return fmt.Errorf("incident not found")
-	}
+	incident = authoritativeIncident
 
 	// 记录规则执行开始
 	execution, err := e.client.IncidentRuleExecution.Create().
@@ -399,7 +401,7 @@ func (e *IncidentRuleEngine) ExecuteRulesForIncident(ctx context.Context, incide
 			incidentpkg.TenantIDEQ(tenantID),
 			incidentpkg.DeletedAtIsNil(),
 		).
-		Only(ctx)
+		WithWorkItem().Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return fmt.Errorf("incident not found")
@@ -455,9 +457,9 @@ func (e *IncidentRuleEngine) ExecuteRulesForAllIncidents(ctx context.Context, te
 		Where(
 			incidentpkg.TenantIDEQ(tenantID),
 			incidentpkg.DeletedAtIsNil(),
-			incidentpkg.StatusIn("new", "acknowledged", "assigned", "triaged", "in_progress", "on_hold", "escalated"),
+			incidentpkg.HasWorkItemWith(ticket.StatusIn("new", "acknowledged", "assigned", "triaged", "in_progress", "on_hold", "escalated")),
 		).
-		All(ctx)
+		WithWorkItem().All(ctx)
 	if err != nil {
 		e.logger.Errorw("Failed to get incidents", "error", err)
 		return fmt.Errorf("failed to get incidents: %w", err)

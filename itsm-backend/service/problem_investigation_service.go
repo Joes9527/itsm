@@ -87,7 +87,7 @@ func (s *ProblemInvestigationService) GetProblemSolution(ctx context.Context, id
 func (s *ProblemInvestigationService) CreateProblemInvestigation(ctx context.Context, req *dto.CreateProblemInvestigationRequest, tenantID int) (*dto.ProblemInvestigationResponse, error) {
 	// 检查问题是否存在
 	var problemTitle string
-	err := s.db.QueryRowContext(ctx, "SELECT title FROM problems WHERE id = $1 AND tenant_id = $2", req.ProblemID, tenantID).Scan(&problemTitle)
+	err := s.db.QueryRowContext(ctx, `SELECT t.title FROM problems p JOIN tickets t ON t.id = p.work_item_id AND t.tenant_id = p.tenant_id WHERE p.id = $1 AND p.tenant_id = $2`, req.ProblemID, tenantID).Scan(&problemTitle)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("问题不存在")
@@ -126,7 +126,12 @@ func (s *ProblemInvestigationService) CreateProblemInvestigation(ctx context.Con
 	}
 
 	// 更新问题状态为"调查中"
-	_, err = s.db.ExecContext(ctx, "UPDATE problems SET status = 'in_progress' WHERE id = $1 AND tenant_id = $2", req.ProblemID, tenantID)
+	_, err = s.db.ExecContext(ctx, `
+		UPDATE tickets AS work_item SET status = 'in_progress', updated_at = NOW()
+		FROM problems AS extension
+		WHERE extension.id = $1 AND extension.tenant_id = $2
+		  AND work_item.id = extension.work_item_id AND work_item.tenant_id = extension.tenant_id
+	`, req.ProblemID, tenantID)
 	if err != nil {
 		s.logger.Warnw("Failed to update problem status", "problem_id", req.ProblemID, "error", err)
 	}
@@ -216,7 +221,12 @@ func (s *ProblemInvestigationService) UpdateProblemInvestigation(ctx context.Con
 
 	// 如果状态更新为完成，同时更新问题状态
 	if req.Status != nil && *req.Status == dto.InvestigationStatusCompleted {
-		_, err = s.db.ExecContext(ctx, "UPDATE problems SET status = 'resolved' WHERE id = $1 AND tenant_id = $2", investigation.ProblemID, tenantID)
+		_, err = s.db.ExecContext(ctx, `
+			UPDATE tickets AS work_item SET status = 'resolved', updated_at = NOW()
+			FROM problems AS extension
+			WHERE extension.id = $1 AND extension.tenant_id = $2
+			  AND work_item.id = extension.work_item_id AND work_item.tenant_id = extension.tenant_id
+		`, investigation.ProblemID, tenantID)
 		if err != nil {
 			s.logger.Warnw("Failed to update problem status", "problem_id", investigation.ProblemID, "error", err)
 		}
@@ -376,7 +386,7 @@ func (s *ProblemInvestigationService) getInvestigationStep(ctx context.Context, 
 func (s *ProblemInvestigationService) CreateRootCauseAnalysis(ctx context.Context, req *dto.CreateRootCauseAnalysisRequest, tenantID int) (*dto.RootCauseAnalysisResponse, error) {
 	// 检查问题是否存在
 	var problemTitle string
-	err := s.db.QueryRowContext(ctx, "SELECT title FROM problems WHERE id = $1 AND tenant_id = $2", req.ProblemID, tenantID).Scan(&problemTitle)
+	err := s.db.QueryRowContext(ctx, `SELECT t.title FROM problems p JOIN tickets t ON t.id = p.work_item_id AND t.tenant_id = p.tenant_id WHERE p.id = $1 AND p.tenant_id = $2`, req.ProblemID, tenantID).Scan(&problemTitle)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("问题不存在")
@@ -431,7 +441,7 @@ func (s *ProblemInvestigationService) CreateRootCauseAnalysis(ctx context.Contex
 func (s *ProblemInvestigationService) CreateProblemSolution(ctx context.Context, req *dto.CreateProblemSolutionRequest, tenantID int) (*dto.ProblemSolutionResponse, error) {
 	// 检查问题是否存在
 	var problemTitle string
-	err := s.db.QueryRowContext(ctx, "SELECT title FROM problems WHERE id = $1 AND tenant_id = $2", req.ProblemID, tenantID).Scan(&problemTitle)
+	err := s.db.QueryRowContext(ctx, `SELECT t.title FROM problems p JOIN tickets t ON t.id = p.work_item_id AND t.tenant_id = p.tenant_id WHERE p.id = $1 AND p.tenant_id = $2`, req.ProblemID, tenantID).Scan(&problemTitle)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("问题不存在")
@@ -484,7 +494,7 @@ func (s *ProblemInvestigationService) CreateProblemSolution(ctx context.Context,
 func (s *ProblemInvestigationService) GetProblemInvestigationSummary(ctx context.Context, problemID, tenantID int) (*dto.ProblemInvestigationSummaryResponse, error) {
 	// 检查问题是否存在
 	var problemTitle string
-	err := s.db.QueryRowContext(ctx, "SELECT title FROM problems WHERE id = $1 AND tenant_id = $2", problemID, tenantID).Scan(&problemTitle)
+	err := s.db.QueryRowContext(ctx, `SELECT t.title FROM problems p JOIN tickets t ON t.id = p.work_item_id AND t.tenant_id = p.tenant_id WHERE p.id = $1 AND p.tenant_id = $2`, problemID, tenantID).Scan(&problemTitle)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("问题不存在")

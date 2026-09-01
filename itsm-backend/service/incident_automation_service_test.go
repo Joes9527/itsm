@@ -28,9 +28,6 @@ func createAutomationIncident(
 ) *ent.Incident {
 	t.Helper()
 	entity, err := client.Incident.Create().
-		SetTitle("Automation incident").
-		SetStatus("new").
-		SetPriority("high").
 		SetSeverity("high").
 		SetIncidentNumber(number).
 		SetReporterID(reporterID).
@@ -38,6 +35,7 @@ func createAutomationIncident(
 		SetDetectedAt(time.Now()).
 		Save(ctx)
 	require.NoError(t, err)
+	setIncidentFixtureWorkItemFields(t, ctx, client, entity, number, "", "new", "high")
 	return entity
 }
 

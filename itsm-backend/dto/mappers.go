@@ -72,9 +72,11 @@ func ToUserDetailResponseList(users []*ent.User) []*UserDetailResponse {
 // Incident Mappers
 // ===================================
 
-// ToIncidentResponse converts an ent.Incident to IncidentResponse
-func ToIncidentResponse(incident *ent.Incident) *IncidentResponse {
-	if incident == nil {
+// ToIncidentResponse converts an Incident extension and its authoritative
+// WorkItem to the public response. Shared fields never come from the
+// professional extension.
+func ToIncidentResponse(incident *ent.Incident, workItem *ent.Ticket) *IncidentResponse {
+	if incident == nil || workItem == nil {
 		return nil
 	}
 
@@ -97,10 +99,10 @@ func ToIncidentResponse(incident *ent.Incident) *IncidentResponse {
 
 	response := &IncidentResponse{
 		ID:              incident.ID,
-		Title:           incident.Title,
-		Description:     incident.Description,
-		Status:          incident.Status,
-		Priority:        incident.Priority,
+		Title:           workItem.Title,
+		Description:     workItem.Description,
+		Status:          workItem.Status,
+		Priority:        workItem.Priority,
 		Severity:        incident.Severity,
 		Impact:          incident.Impact,
 		Urgency:         incident.Urgency,
@@ -161,20 +163,6 @@ func ToIncidentResponse(incident *ent.Incident) *IncidentResponse {
 	}
 
 	return response
-}
-
-// ToIncidentResponseList converts a slice of ent.Incident to IncidentResponse slice
-func ToIncidentResponseList(incidents []*ent.Incident) []*IncidentResponse {
-	if incidents == nil {
-		return nil
-	}
-	responses := make([]*IncidentResponse, 0, len(incidents))
-	for _, incident := range incidents {
-		if incident != nil {
-			responses = append(responses, ToIncidentResponse(incident))
-		}
-	}
-	return responses
 }
 
 // ===================================
@@ -346,110 +334,6 @@ func ToTenantResponseList(tenants []*ent.Tenant) []*TenantResponse {
 	for _, tenant := range tenants {
 		if tenant != nil {
 			responses = append(responses, ToTenantResponse(tenant))
-		}
-	}
-	return responses
-}
-
-// ===================================
-// Change Mappers
-// ===================================
-
-// ToChangeResponse converts an ent.Change to ChangeResponse
-func ToChangeResponse(change *ent.Change) *ChangeResponse {
-	if change == nil {
-		return nil
-	}
-
-	response := &ChangeResponse{
-		ID:                 change.ID,
-		Title:              change.Title,
-		Description:        change.Description,
-		Justification:      change.Justification,
-		Type:               ChangeType(change.Type),
-		Status:             ChangeStatus(change.Status),
-		Priority:           ChangePriority(change.Priority),
-		ImpactScope:        ChangeImpact(change.ImpactScope),
-		RiskLevel:          ChangeRisk(change.RiskLevel),
-		CreatedBy:          change.CreatedBy,
-		TenantID:           change.TenantID,
-		ImplementationPlan: change.ImplementationPlan,
-		RollbackPlan:       change.RollbackPlan,
-		AffectedCIs:        change.AffectedCis,
-		RelatedTickets:     change.RelatedTickets,
-		CreatedAt:          change.CreatedAt,
-		UpdatedAt:          change.UpdatedAt,
-		PlannedStartDate:   &change.PlannedStartDate,
-		PlannedEndDate:     &change.PlannedEndDate,
-		ActualStartDate:    &change.ActualStartDate,
-		ActualEndDate:      &change.ActualEndDate,
-	}
-
-	if change.AssigneeID > 0 {
-		response.AssigneeID = &change.AssigneeID
-	}
-
-	return response
-}
-
-// ToChangeResponseList converts a slice of ent.Change to ChangeResponse slice
-func ToChangeResponseList(changes []*ent.Change) []*ChangeResponse {
-	if changes == nil {
-		return nil
-	}
-	responses := make([]*ChangeResponse, 0, len(changes))
-	for _, change := range changes {
-		if change != nil {
-			responses = append(responses, ToChangeResponse(change))
-		}
-	}
-	return responses
-}
-
-// ===================================
-// Problem Mappers
-// ===================================
-
-// ToProblemResponse converts an ent.Problem to ProblemResponse
-func ToProblemResponse(problem *ent.Problem) *ProblemResponse {
-	if problem == nil {
-		return nil
-	}
-
-	response := &ProblemResponse{
-		ID:          problem.ID,
-		Title:       problem.Title,
-		Description: problem.Description,
-		Status:      problem.Status,
-		Priority:    problem.Priority,
-		Category:    problem.Category,
-		RootCause:   problem.RootCause,
-		Impact:      problem.Impact,
-		CreatedBy:   problem.CreatedBy,
-		TenantID:    problem.TenantID,
-		CreatedAt:   problem.CreatedAt,
-		UpdatedAt:   problem.UpdatedAt,
-	}
-
-	if problem.AssigneeID > 0 {
-		response.AssigneeID = &problem.AssigneeID
-	}
-	if problem.WorkItemID > 0 {
-		response.WorkItemID = &problem.WorkItemID
-	}
-
-	return response
-}
-
-// ToProblemResponseList converts a slice of ent.Problem to ProblemResponse slice
-func ToProblemResponseList(problems []*ent.Problem) []*ProblemResponse {
-	if problems == nil {
-		return nil
-	}
-	responses := make([]*ProblemResponse, 0, len(problems))
-	for _, problem := range problems {
-		if problem != nil {
-			responses = append(responses, ToProblemResponse(problem))
 		}
 	}
 	return responses

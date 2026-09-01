@@ -25,54 +25,6 @@ type ProblemCreate struct {
 	conflict []sql.ConflictOption
 }
 
-// SetTitle sets the "title" field.
-func (_c *ProblemCreate) SetTitle(v string) *ProblemCreate {
-	_c.mutation.SetTitle(v)
-	return _c
-}
-
-// SetDescription sets the "description" field.
-func (_c *ProblemCreate) SetDescription(v string) *ProblemCreate {
-	_c.mutation.SetDescription(v)
-	return _c
-}
-
-// SetNillableDescription sets the "description" field if the given value is not nil.
-func (_c *ProblemCreate) SetNillableDescription(v *string) *ProblemCreate {
-	if v != nil {
-		_c.SetDescription(*v)
-	}
-	return _c
-}
-
-// SetStatus sets the "status" field.
-func (_c *ProblemCreate) SetStatus(v string) *ProblemCreate {
-	_c.mutation.SetStatus(v)
-	return _c
-}
-
-// SetNillableStatus sets the "status" field if the given value is not nil.
-func (_c *ProblemCreate) SetNillableStatus(v *string) *ProblemCreate {
-	if v != nil {
-		_c.SetStatus(*v)
-	}
-	return _c
-}
-
-// SetPriority sets the "priority" field.
-func (_c *ProblemCreate) SetPriority(v string) *ProblemCreate {
-	_c.mutation.SetPriority(v)
-	return _c
-}
-
-// SetNillablePriority sets the "priority" field if the given value is not nil.
-func (_c *ProblemCreate) SetNillablePriority(v *string) *ProblemCreate {
-	if v != nil {
-		_c.SetPriority(*v)
-	}
-	return _c
-}
-
 // SetCategory sets the "category" field.
 func (_c *ProblemCreate) SetCategory(v string) *ProblemCreate {
 	_c.mutation.SetCategory(v)
@@ -169,14 +121,6 @@ func (_c *ProblemCreate) SetWorkItemID(v int) *ProblemCreate {
 	return _c
 }
 
-// SetNillableWorkItemID sets the "work_item_id" field if the given value is not nil.
-func (_c *ProblemCreate) SetNillableWorkItemID(v *int) *ProblemCreate {
-	if v != nil {
-		_c.SetWorkItemID(*v)
-	}
-	return _c
-}
-
 // SetTenantID sets the "tenant_id" field.
 func (_c *ProblemCreate) SetTenantID(v int) *ProblemCreate {
 	_c.mutation.SetTenantID(v)
@@ -251,6 +195,11 @@ func (_c *ProblemCreate) SetNillableDeletedAt(v *time.Time) *ProblemCreate {
 		_c.SetDeletedAt(*v)
 	}
 	return _c
+}
+
+// SetWorkItem sets the "work_item" edge to the Ticket entity.
+func (_c *ProblemCreate) SetWorkItem(v *Ticket) *ProblemCreate {
+	return _c.SetWorkItemID(v.ID)
 }
 
 // AddTicketIDs adds the "tickets" edge to the Ticket entity by IDs.
@@ -333,14 +282,6 @@ func (_c *ProblemCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *ProblemCreate) defaults() {
-	if _, ok := _c.mutation.Status(); !ok {
-		v := problem.DefaultStatus
-		_c.mutation.SetStatus(v)
-	}
-	if _, ok := _c.mutation.Priority(); !ok {
-		v := problem.DefaultPriority
-		_c.mutation.SetPriority(v)
-	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := problem.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -353,20 +294,6 @@ func (_c *ProblemCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *ProblemCreate) check() error {
-	if _, ok := _c.mutation.Title(); !ok {
-		return &ValidationError{Name: "title", err: errors.New(`ent: missing required field "Problem.title"`)}
-	}
-	if v, ok := _c.mutation.Title(); ok {
-		if err := problem.TitleValidator(v); err != nil {
-			return &ValidationError{Name: "title", err: fmt.Errorf(`ent: validator failed for field "Problem.title": %w`, err)}
-		}
-	}
-	if _, ok := _c.mutation.Status(); !ok {
-		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Problem.status"`)}
-	}
-	if _, ok := _c.mutation.Priority(); !ok {
-		return &ValidationError{Name: "priority", err: errors.New(`ent: missing required field "Problem.priority"`)}
-	}
 	if _, ok := _c.mutation.CreatedBy(); !ok {
 		return &ValidationError{Name: "created_by", err: errors.New(`ent: missing required field "Problem.created_by"`)}
 	}
@@ -374,6 +301,9 @@ func (_c *ProblemCreate) check() error {
 		if err := problem.CreatedByValidator(v); err != nil {
 			return &ValidationError{Name: "created_by", err: fmt.Errorf(`ent: validator failed for field "Problem.created_by": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.WorkItemID(); !ok {
+		return &ValidationError{Name: "work_item_id", err: errors.New(`ent: missing required field "Problem.work_item_id"`)}
 	}
 	if _, ok := _c.mutation.TenantID(); !ok {
 		return &ValidationError{Name: "tenant_id", err: errors.New(`ent: missing required field "Problem.tenant_id"`)}
@@ -388,6 +318,9 @@ func (_c *ProblemCreate) check() error {
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "Problem.updated_at"`)}
+	}
+	if len(_c.mutation.WorkItemIDs()) == 0 {
+		return &ValidationError{Name: "work_item", err: errors.New(`ent: missing required edge "Problem.work_item"`)}
 	}
 	return nil
 }
@@ -416,22 +349,6 @@ func (_c *ProblemCreate) createSpec() (*Problem, *sqlgraph.CreateSpec) {
 		_spec = sqlgraph.NewCreateSpec(problem.Table, sqlgraph.NewFieldSpec(problem.FieldID, field.TypeInt))
 	)
 	_spec.OnConflict = _c.conflict
-	if value, ok := _c.mutation.Title(); ok {
-		_spec.SetField(problem.FieldTitle, field.TypeString, value)
-		_node.Title = value
-	}
-	if value, ok := _c.mutation.Description(); ok {
-		_spec.SetField(problem.FieldDescription, field.TypeString, value)
-		_node.Description = value
-	}
-	if value, ok := _c.mutation.Status(); ok {
-		_spec.SetField(problem.FieldStatus, field.TypeString, value)
-		_node.Status = value
-	}
-	if value, ok := _c.mutation.Priority(); ok {
-		_spec.SetField(problem.FieldPriority, field.TypeString, value)
-		_node.Priority = value
-	}
 	if value, ok := _c.mutation.Category(); ok {
 		_spec.SetField(problem.FieldCategory, field.TypeString, value)
 		_node.Category = value
@@ -460,10 +377,6 @@ func (_c *ProblemCreate) createSpec() (*Problem, *sqlgraph.CreateSpec) {
 		_spec.SetField(problem.FieldCreatedBy, field.TypeInt, value)
 		_node.CreatedBy = value
 	}
-	if value, ok := _c.mutation.WorkItemID(); ok {
-		_spec.SetField(problem.FieldWorkItemID, field.TypeInt, value)
-		_node.WorkItemID = value
-	}
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(problem.FieldTenantID, field.TypeInt, value)
 		_node.TenantID = value
@@ -487,6 +400,23 @@ func (_c *ProblemCreate) createSpec() (*Problem, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DeletedAt(); ok {
 		_spec.SetField(problem.FieldDeletedAt, field.TypeTime, value)
 		_node.DeletedAt = &value
+	}
+	if nodes := _c.mutation.WorkItemIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   problem.WorkItemTable,
+			Columns: []string{problem.WorkItemColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.WorkItemID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.TicketsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -543,7 +473,7 @@ func (_c *ProblemCreate) createSpec() (*Problem, *sqlgraph.CreateSpec) {
 // of the `INSERT` statement. For example:
 //
 //	client.Problem.Create().
-//		SetTitle(v).
+//		SetCategory(v).
 //		OnConflict(
 //			// Update the row with the new values
 //			// the was proposed for insertion.
@@ -552,7 +482,7 @@ func (_c *ProblemCreate) createSpec() (*Problem, *sqlgraph.CreateSpec) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.ProblemUpsert) {
-//			SetTitle(v+v).
+//			SetCategory(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *ProblemCreate) OnConflict(opts ...sql.ConflictOption) *ProblemUpsertOne {
@@ -587,60 +517,6 @@ type (
 		*sql.UpdateSet
 	}
 )
-
-// SetTitle sets the "title" field.
-func (u *ProblemUpsert) SetTitle(v string) *ProblemUpsert {
-	u.Set(problem.FieldTitle, v)
-	return u
-}
-
-// UpdateTitle sets the "title" field to the value that was provided on create.
-func (u *ProblemUpsert) UpdateTitle() *ProblemUpsert {
-	u.SetExcluded(problem.FieldTitle)
-	return u
-}
-
-// SetDescription sets the "description" field.
-func (u *ProblemUpsert) SetDescription(v string) *ProblemUpsert {
-	u.Set(problem.FieldDescription, v)
-	return u
-}
-
-// UpdateDescription sets the "description" field to the value that was provided on create.
-func (u *ProblemUpsert) UpdateDescription() *ProblemUpsert {
-	u.SetExcluded(problem.FieldDescription)
-	return u
-}
-
-// ClearDescription clears the value of the "description" field.
-func (u *ProblemUpsert) ClearDescription() *ProblemUpsert {
-	u.SetNull(problem.FieldDescription)
-	return u
-}
-
-// SetStatus sets the "status" field.
-func (u *ProblemUpsert) SetStatus(v string) *ProblemUpsert {
-	u.Set(problem.FieldStatus, v)
-	return u
-}
-
-// UpdateStatus sets the "status" field to the value that was provided on create.
-func (u *ProblemUpsert) UpdateStatus() *ProblemUpsert {
-	u.SetExcluded(problem.FieldStatus)
-	return u
-}
-
-// SetPriority sets the "priority" field.
-func (u *ProblemUpsert) SetPriority(v string) *ProblemUpsert {
-	u.Set(problem.FieldPriority, v)
-	return u
-}
-
-// UpdatePriority sets the "priority" field to the value that was provided on create.
-func (u *ProblemUpsert) UpdatePriority() *ProblemUpsert {
-	u.SetExcluded(problem.FieldPriority)
-	return u
-}
 
 // SetCategory sets the "category" field.
 func (u *ProblemUpsert) SetCategory(v string) *ProblemUpsert {
@@ -786,18 +662,6 @@ func (u *ProblemUpsert) UpdateWorkItemID() *ProblemUpsert {
 	return u
 }
 
-// AddWorkItemID adds v to the "work_item_id" field.
-func (u *ProblemUpsert) AddWorkItemID(v int) *ProblemUpsert {
-	u.Add(problem.FieldWorkItemID, v)
-	return u
-}
-
-// ClearWorkItemID clears the value of the "work_item_id" field.
-func (u *ProblemUpsert) ClearWorkItemID() *ProblemUpsert {
-	u.SetNull(problem.FieldWorkItemID)
-	return u
-}
-
 // SetTenantID sets the "tenant_id" field.
 func (u *ProblemUpsert) SetTenantID(v int) *ProblemUpsert {
 	u.Set(problem.FieldTenantID, v)
@@ -932,69 +796,6 @@ func (u *ProblemUpsertOne) Update(set func(*ProblemUpsert)) *ProblemUpsertOne {
 		set(&ProblemUpsert{UpdateSet: update})
 	}))
 	return u
-}
-
-// SetTitle sets the "title" field.
-func (u *ProblemUpsertOne) SetTitle(v string) *ProblemUpsertOne {
-	return u.Update(func(s *ProblemUpsert) {
-		s.SetTitle(v)
-	})
-}
-
-// UpdateTitle sets the "title" field to the value that was provided on create.
-func (u *ProblemUpsertOne) UpdateTitle() *ProblemUpsertOne {
-	return u.Update(func(s *ProblemUpsert) {
-		s.UpdateTitle()
-	})
-}
-
-// SetDescription sets the "description" field.
-func (u *ProblemUpsertOne) SetDescription(v string) *ProblemUpsertOne {
-	return u.Update(func(s *ProblemUpsert) {
-		s.SetDescription(v)
-	})
-}
-
-// UpdateDescription sets the "description" field to the value that was provided on create.
-func (u *ProblemUpsertOne) UpdateDescription() *ProblemUpsertOne {
-	return u.Update(func(s *ProblemUpsert) {
-		s.UpdateDescription()
-	})
-}
-
-// ClearDescription clears the value of the "description" field.
-func (u *ProblemUpsertOne) ClearDescription() *ProblemUpsertOne {
-	return u.Update(func(s *ProblemUpsert) {
-		s.ClearDescription()
-	})
-}
-
-// SetStatus sets the "status" field.
-func (u *ProblemUpsertOne) SetStatus(v string) *ProblemUpsertOne {
-	return u.Update(func(s *ProblemUpsert) {
-		s.SetStatus(v)
-	})
-}
-
-// UpdateStatus sets the "status" field to the value that was provided on create.
-func (u *ProblemUpsertOne) UpdateStatus() *ProblemUpsertOne {
-	return u.Update(func(s *ProblemUpsert) {
-		s.UpdateStatus()
-	})
-}
-
-// SetPriority sets the "priority" field.
-func (u *ProblemUpsertOne) SetPriority(v string) *ProblemUpsertOne {
-	return u.Update(func(s *ProblemUpsert) {
-		s.SetPriority(v)
-	})
-}
-
-// UpdatePriority sets the "priority" field to the value that was provided on create.
-func (u *ProblemUpsertOne) UpdatePriority() *ProblemUpsertOne {
-	return u.Update(func(s *ProblemUpsert) {
-		s.UpdatePriority()
-	})
 }
 
 // SetCategory sets the "category" field.
@@ -1158,24 +959,10 @@ func (u *ProblemUpsertOne) SetWorkItemID(v int) *ProblemUpsertOne {
 	})
 }
 
-// AddWorkItemID adds v to the "work_item_id" field.
-func (u *ProblemUpsertOne) AddWorkItemID(v int) *ProblemUpsertOne {
-	return u.Update(func(s *ProblemUpsert) {
-		s.AddWorkItemID(v)
-	})
-}
-
 // UpdateWorkItemID sets the "work_item_id" field to the value that was provided on create.
 func (u *ProblemUpsertOne) UpdateWorkItemID() *ProblemUpsertOne {
 	return u.Update(func(s *ProblemUpsert) {
 		s.UpdateWorkItemID()
-	})
-}
-
-// ClearWorkItemID clears the value of the "work_item_id" field.
-func (u *ProblemUpsertOne) ClearWorkItemID() *ProblemUpsertOne {
-	return u.Update(func(s *ProblemUpsert) {
-		s.ClearWorkItemID()
 	})
 }
 
@@ -1426,7 +1213,7 @@ func (_c *ProblemCreateBulk) ExecX(ctx context.Context) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.ProblemUpsert) {
-//			SetTitle(v+v).
+//			SetCategory(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *ProblemCreateBulk) OnConflict(opts ...sql.ConflictOption) *ProblemUpsertBulk {
@@ -1493,69 +1280,6 @@ func (u *ProblemUpsertBulk) Update(set func(*ProblemUpsert)) *ProblemUpsertBulk 
 		set(&ProblemUpsert{UpdateSet: update})
 	}))
 	return u
-}
-
-// SetTitle sets the "title" field.
-func (u *ProblemUpsertBulk) SetTitle(v string) *ProblemUpsertBulk {
-	return u.Update(func(s *ProblemUpsert) {
-		s.SetTitle(v)
-	})
-}
-
-// UpdateTitle sets the "title" field to the value that was provided on create.
-func (u *ProblemUpsertBulk) UpdateTitle() *ProblemUpsertBulk {
-	return u.Update(func(s *ProblemUpsert) {
-		s.UpdateTitle()
-	})
-}
-
-// SetDescription sets the "description" field.
-func (u *ProblemUpsertBulk) SetDescription(v string) *ProblemUpsertBulk {
-	return u.Update(func(s *ProblemUpsert) {
-		s.SetDescription(v)
-	})
-}
-
-// UpdateDescription sets the "description" field to the value that was provided on create.
-func (u *ProblemUpsertBulk) UpdateDescription() *ProblemUpsertBulk {
-	return u.Update(func(s *ProblemUpsert) {
-		s.UpdateDescription()
-	})
-}
-
-// ClearDescription clears the value of the "description" field.
-func (u *ProblemUpsertBulk) ClearDescription() *ProblemUpsertBulk {
-	return u.Update(func(s *ProblemUpsert) {
-		s.ClearDescription()
-	})
-}
-
-// SetStatus sets the "status" field.
-func (u *ProblemUpsertBulk) SetStatus(v string) *ProblemUpsertBulk {
-	return u.Update(func(s *ProblemUpsert) {
-		s.SetStatus(v)
-	})
-}
-
-// UpdateStatus sets the "status" field to the value that was provided on create.
-func (u *ProblemUpsertBulk) UpdateStatus() *ProblemUpsertBulk {
-	return u.Update(func(s *ProblemUpsert) {
-		s.UpdateStatus()
-	})
-}
-
-// SetPriority sets the "priority" field.
-func (u *ProblemUpsertBulk) SetPriority(v string) *ProblemUpsertBulk {
-	return u.Update(func(s *ProblemUpsert) {
-		s.SetPriority(v)
-	})
-}
-
-// UpdatePriority sets the "priority" field to the value that was provided on create.
-func (u *ProblemUpsertBulk) UpdatePriority() *ProblemUpsertBulk {
-	return u.Update(func(s *ProblemUpsert) {
-		s.UpdatePriority()
-	})
 }
 
 // SetCategory sets the "category" field.
@@ -1719,24 +1443,10 @@ func (u *ProblemUpsertBulk) SetWorkItemID(v int) *ProblemUpsertBulk {
 	})
 }
 
-// AddWorkItemID adds v to the "work_item_id" field.
-func (u *ProblemUpsertBulk) AddWorkItemID(v int) *ProblemUpsertBulk {
-	return u.Update(func(s *ProblemUpsert) {
-		s.AddWorkItemID(v)
-	})
-}
-
 // UpdateWorkItemID sets the "work_item_id" field to the value that was provided on create.
 func (u *ProblemUpsertBulk) UpdateWorkItemID() *ProblemUpsertBulk {
 	return u.Update(func(s *ProblemUpsert) {
 		s.UpdateWorkItemID()
-	})
-}
-
-// ClearWorkItemID clears the value of the "work_item_id" field.
-func (u *ProblemUpsertBulk) ClearWorkItemID() *ProblemUpsertBulk {
-	return u.Update(func(s *ProblemUpsert) {
-		s.ClearWorkItemID()
 	})
 }
 

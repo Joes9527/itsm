@@ -46,9 +46,9 @@ import (
 
 // Force import usage for ent packages (use predicate functions)
 var (
-	_ = incident.TitleEQ         // Used to ensure incident package is imported
-	_ = problem.TitleEQ          // Used to ensure problem package is imported
-	_ = change.TitleEQ           // Used to ensure change package is imported
+	_ = incident.IDEQ            // Used to ensure incident package is imported
+	_ = problem.IDEQ             // Used to ensure problem package is imported
+	_ = change.IDEQ              // Used to ensure change package is imported
 	_ = knowledgearticle.TitleEQ // Used to ensure knowledgearticle package is imported
 	_ = ticketcategory.NameEQ    // Used to ensure ticketcategory package is imported
 	_ = knownerror.TitleEQ       // Used to ensure knownerror package is imported

@@ -17,24 +17,12 @@ type Change struct {
 // Fields of the Change.
 func (Change) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("title").
-			Comment("变更标题").
-			NotEmpty(),
-		field.Text("description").
-			Comment("变更描述").
-			Optional(),
 		field.Text("justification").
 			Comment("变更理由").
 			Optional(),
 		field.String("type").
 			Comment("变更类型").
 			Default("normal"),
-		field.String("status").
-			Comment("状态").
-			Default("draft"),
-		field.String("priority").
-			Comment("优先级").
-			Default("medium"),
 		field.String("impact_scope").
 			Comment("影响范围").
 			Default("medium"),
@@ -48,8 +36,7 @@ func (Change) Fields() []ent.Field {
 			Comment("创建人ID").
 			Positive(),
 		field.Int("work_item_id").
-			Comment("关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空").
-			Optional().
+			Comment("关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入").
 			Unique(),
 		field.Int("tenant_id").
 			Comment("租户ID").
@@ -91,6 +78,11 @@ func (Change) Fields() []ent.Field {
 // Edges of the Change.
 func (Change) Edges() []ent.Edge {
 	return []ent.Edge{
+		edge.To("work_item", Ticket.Type).
+			Field("work_item_id").
+			Unique().
+			Required().
+			Comment("共享字段的唯一权威 WorkItem"),
 		edge.From("problems", Problem.Type).
 			Ref("changes").
 			Comment("关联的问题"),

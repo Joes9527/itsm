@@ -72,7 +72,6 @@ func TestFindMismatches_MissingExtension(t *testing.T) {
 
 	t.Run("after_creating_matching_extension", func(t *testing.T) {
 		_, err := client.Incident.Create().
-			SetTitle("磁盘空间不足").
 			SetIncidentNumber("INC-INTEGRITY-001").
 			SetReporterID(user.ID).
 			SetWorkItemID(tk.ID).
@@ -102,7 +101,6 @@ func TestFindMismatches_MissingExtension(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = client.Incident.Create().
-			SetTitle("错误关联的事件").
 			SetIncidentNumber("INC-INTEGRITY-002").
 			SetReporterID(user.ID).
 			SetWorkItemID(wrongClassTicket.ID).
@@ -177,7 +175,7 @@ func TestFindMismatches_MissingExtension(t *testing.T) {
 	})
 }
 
-func TestFindMismatches_DanglingWorkItemID(t *testing.T) {
+func TestProfessionalExtensionRejectsDanglingWorkItemID(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
 	ctx := context.Background()
@@ -204,20 +202,12 @@ func TestFindMismatches_DanglingWorkItemID(t *testing.T) {
 	// work_item_id 指向一个不存在的 ticket id。
 	const danglingWorkItemID = 999999
 	_, err = client.Incident.Create().
-		SetTitle("孤儿事件").
 		SetIncidentNumber("INC-DANGLING-001").
 		SetReporterID(user.ID).
 		SetWorkItemID(danglingWorkItemID).
 		SetTenantID(tenant.ID).
 		Save(ctx)
-	require.NoError(t, err)
-
-	mismatches, err := findMismatches(ctx, client, tenant.ID)
-	require.NoError(t, err)
-	require.Len(t, mismatches, 1)
-	require.Equal(t, "dangling_work_item_id", mismatches[0].kind)
-	require.Equal(t, danglingWorkItemID, mismatches[0].ticketID)
-	t.Logf("SUCCESS: dangling_work_item_id correctly detected for work_item_id=%d", danglingWorkItemID)
+	require.Error(t, err, "professional extension FK must reject a dangling WorkItem reference")
 }
 
 // TestFindMismatches_TenantMismatch 覆盖 checkBackref 中新增的跨租户 work_item_id
@@ -272,7 +262,6 @@ func TestFindMismatches_TenantMismatch(t *testing.T) {
 	// 模拟数据错误导致的跨租户指向（work_item_id 只是普通 int 列，没有 DB 外键约束，
 	// 详见 ent/schema/incident.go 的注释）。
 	_, err = client.Incident.Create().
-		SetTitle("跨租户事件").
 		SetIncidentNumber("INC-TENANT-MISMATCH-001").
 		SetReporterID(userA.ID).
 		SetWorkItemID(tk.ID).

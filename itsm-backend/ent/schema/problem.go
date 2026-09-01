@@ -17,18 +17,6 @@ type Problem struct {
 // Fields of the Problem.
 func (Problem) Fields() []ent.Field {
 	return []ent.Field{
-		field.String("title").
-			Comment("问题标题").
-			NotEmpty(),
-		field.Text("description").
-			Comment("问题描述").
-			Optional(),
-		field.String("status").
-			Comment("状态").
-			Default("open"),
-		field.String("priority").
-			Comment("优先级").
-			Default("medium"),
 		field.String("category").
 			Comment("问题分类").
 			Optional(),
@@ -51,8 +39,7 @@ func (Problem) Fields() []ent.Field {
 			Comment("创建人ID").
 			Positive(),
 		field.Int("work_item_id").
-			Comment("关联的 WorkItem（tickets.id），唯一，必填——迁移完成前允许为空").
-			Optional().
+			Comment("关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入").
 			Unique(),
 		field.Int("tenant_id").
 			Comment("租户ID").
@@ -82,6 +69,11 @@ func (Problem) Fields() []ent.Field {
 // Edges of the Problem.
 func (Problem) Edges() []ent.Edge {
 	return []ent.Edge{
+		edge.To("work_item", Ticket.Type).
+			Field("work_item_id").
+			Unique().
+			Required().
+			Comment("共享字段的唯一权威 WorkItem"),
 		// 与工单的关联
 		edge.To("tickets", Ticket.Type).
 			Comment("关联的工单"),

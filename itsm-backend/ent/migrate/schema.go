@@ -695,17 +695,12 @@ var (
 	// ChangesColumns holds the columns for the "changes" table.
 	ChangesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "title", Type: field.TypeString},
-		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "justification", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "type", Type: field.TypeString, Default: "normal"},
-		{Name: "status", Type: field.TypeString, Default: "draft"},
-		{Name: "priority", Type: field.TypeString, Default: "medium"},
 		{Name: "impact_scope", Type: field.TypeString, Default: "medium"},
 		{Name: "risk_level", Type: field.TypeString, Default: "medium"},
 		{Name: "assignee_id", Type: field.TypeInt, Nullable: true},
 		{Name: "created_by", Type: field.TypeInt},
-		{Name: "work_item_id", Type: field.TypeInt, Unique: true, Nullable: true},
 		{Name: "tenant_id", Type: field.TypeInt},
 		{Name: "planned_start_date", Type: field.TypeTime, Nullable: true},
 		{Name: "planned_end_date", Type: field.TypeTime, Nullable: true},
@@ -717,6 +712,7 @@ var (
 		{Name: "related_tickets", Type: field.TypeJSON, Nullable: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "work_item_id", Type: field.TypeInt},
 		{Name: "standard_change_changes", Type: field.TypeInt, Nullable: true},
 	}
 	// ChangesTable holds the schema information for the "changes" table.
@@ -726,8 +722,14 @@ var (
 		PrimaryKey: []*schema.Column{ChangesColumns[0]},
 		ForeignKeys: []*schema.ForeignKey{
 			{
+				Symbol:     "changes_tickets_work_item",
+				Columns:    []*schema.Column{ChangesColumns[18]},
+				RefColumns: []*schema.Column{TicketsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
 				Symbol:     "changes_standard_changes_changes",
-				Columns:    []*schema.Column{ChangesColumns[23]},
+				Columns:    []*schema.Column{ChangesColumns[19]},
 				RefColumns: []*schema.Column{StandardChangesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -736,7 +738,7 @@ var (
 			{
 				Name:    "change_work_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{ChangesColumns[11]},
+				Columns: []*schema.Column{ChangesColumns[18]},
 			},
 		},
 	}
@@ -1529,17 +1531,12 @@ var (
 	// IncidentsColumns holds the columns for the "incidents" table.
 	IncidentsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "title", Type: field.TypeString},
-		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
-		{Name: "status", Type: field.TypeString, Default: "new"},
 		{Name: "type", Type: field.TypeString, Default: "incident"},
-		{Name: "priority", Type: field.TypeString, Default: "medium"},
 		{Name: "severity", Type: field.TypeString, Default: "medium"},
 		{Name: "impact", Type: field.TypeString, Default: "medium"},
 		{Name: "urgency", Type: field.TypeString, Default: "medium"},
 		{Name: "incident_number", Type: field.TypeString, Unique: true},
 		{Name: "reporter_id", Type: field.TypeInt},
-		{Name: "work_item_id", Type: field.TypeInt, Unique: true, Nullable: true},
 		{Name: "assignee_id", Type: field.TypeInt, Nullable: true},
 		{Name: "configuration_item_id", Type: field.TypeInt, Nullable: true},
 		{Name: "category", Type: field.TypeString, Nullable: true},
@@ -1561,17 +1558,26 @@ var (
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
+		{Name: "work_item_id", Type: field.TypeInt},
 	}
 	// IncidentsTable holds the schema information for the "incidents" table.
 	IncidentsTable = &schema.Table{
 		Name:       "incidents",
 		Columns:    IncidentsColumns,
 		PrimaryKey: []*schema.Column{IncidentsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "incidents_tickets_work_item",
+				Columns:    []*schema.Column{IncidentsColumns[28]},
+				RefColumns: []*schema.Column{TicketsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
 		Indexes: []*schema.Index{
 			{
 				Name:    "incident_work_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{IncidentsColumns[11]},
+				Columns: []*schema.Column{IncidentsColumns[28]},
 			},
 		},
 	}
@@ -2383,10 +2389,6 @@ var (
 	// ProblemsColumns holds the columns for the "problems" table.
 	ProblemsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "title", Type: field.TypeString},
-		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
-		{Name: "status", Type: field.TypeString, Default: "open"},
-		{Name: "priority", Type: field.TypeString, Default: "medium"},
 		{Name: "category", Type: field.TypeString, Nullable: true},
 		{Name: "root_cause", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "workaround", Type: field.TypeString, Nullable: true, Size: 2147483647},
@@ -2394,7 +2396,6 @@ var (
 		{Name: "impact", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "assignee_id", Type: field.TypeInt, Nullable: true},
 		{Name: "created_by", Type: field.TypeInt},
-		{Name: "work_item_id", Type: field.TypeInt, Unique: true, Nullable: true},
 		{Name: "tenant_id", Type: field.TypeInt},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
@@ -2402,6 +2403,7 @@ var (
 		{Name: "closed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
 		{Name: "known_error_problem", Type: field.TypeInt, Nullable: true},
+		{Name: "work_item_id", Type: field.TypeInt},
 	}
 	// ProblemsTable holds the schema information for the "problems" table.
 	ProblemsTable = &schema.Table{
@@ -2411,16 +2413,22 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "problems_known_errors_problem",
-				Columns:    []*schema.Column{ProblemsColumns[19]},
+				Columns:    []*schema.Column{ProblemsColumns[14]},
 				RefColumns: []*schema.Column{KnownErrorsColumns[0]},
 				OnDelete:   schema.SetNull,
+			},
+			{
+				Symbol:     "problems_tickets_work_item",
+				Columns:    []*schema.Column{ProblemsColumns[15]},
+				RefColumns: []*schema.Column{TicketsColumns[0]},
+				OnDelete:   schema.NoAction,
 			},
 		},
 		Indexes: []*schema.Index{
 			{
 				Name:    "problem_work_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProblemsColumns[12]},
+				Columns: []*schema.Column{ProblemsColumns[15]},
 			},
 		},
 	}
@@ -5518,7 +5526,8 @@ func init() {
 	CiRelationshipsTable.ForeignKeys[0].RefTable = ConfigurationItemsTable
 	CiRelationshipsTable.ForeignKeys[1].RefTable = ConfigurationItemsTable
 	CiTypesTable.ForeignKeys[0].RefTable = CiTypesTable
-	ChangesTable.ForeignKeys[0].RefTable = StandardChangesTable
+	ChangesTable.ForeignKeys[0].RefTable = TicketsTable
+	ChangesTable.ForeignKeys[1].RefTable = StandardChangesTable
 	ChangePiRsTable.ForeignKeys[0].RefTable = ChangesTable
 	ChangePiRsTable.ForeignKeys[1].RefTable = UsersTable
 	CloudResourcesTable.ForeignKeys[0].RefTable = CloudAccountsTable
@@ -5534,6 +5543,7 @@ func init() {
 	DiscoveryResultsTable.ForeignKeys[0].RefTable = DiscoveryJobsTable
 	FeishuTicketSyncsTable.ForeignKeys[0].RefTable = TicketsTable
 	GroupsTable.ForeignKeys[0].RefTable = UsersTable
+	IncidentsTable.ForeignKeys[0].RefTable = TicketsTable
 	IncidentAlertsTable.ForeignKeys[0].RefTable = IncidentsTable
 	IncidentEventsTable.ForeignKeys[0].RefTable = IncidentsTable
 	IncidentMetricsTable.ForeignKeys[0].RefTable = IncidentsTable
@@ -5551,6 +5561,7 @@ func init() {
 	NotificationPreferencesTable.ForeignKeys[0].RefTable = UsersTable
 	PermissionsTable.ForeignKeys[0].RefTable = RolesTable
 	ProblemsTable.ForeignKeys[0].RefTable = KnownErrorsTable
+	ProblemsTable.ForeignKeys[1].RefTable = TicketsTable
 	ProcessBindingsTable.ForeignKeys[0].RefTable = ProcessDefinitionsTable
 	ProcessDefinitionsTable.ForeignKeys[0].RefTable = ProcessDeploymentsTable
 	ProcessExecutionHistoriesTable.ForeignKeys[0].RefTable = ProcessInstancesTable

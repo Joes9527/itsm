@@ -68,9 +68,7 @@ func TestStartProcess_TrustedTenant_ServiceTaskUsesInstanceIdentity(t *testing.T
 		SetTenantID(tenantID).
 		SaveX(platformCtx)
 	inc, err := client.Incident.Create().
-		SetTitle("平台级启动测试事件").
 		SetIncidentNumber("INC-PLATFORM-1").
-		SetStatus("new").
 		SetReporterID(assignee.ID).
 		SetWorkItemID(workItem.ID).
 		SetTenantID(tenantID).
@@ -87,7 +85,7 @@ func TestStartProcess_TrustedTenant_ServiceTaskUsesInstanceIdentity(t *testing.T
 	assigned, err := client.Incident.Get(platformCtx, inc.ID)
 	require.NoError(t, err)
 	assert.Equal(t, assignee.ID, assigned.AssigneeID, "assign_incident 应以实例（定义）租户执行")
-	assert.Equal(t, "assigned", assigned.Status)
+	assert.Equal(t, "assigned", requireIncidentWorkItem(t, client, assigned).Status)
 
 	started, err := client.ProcessInstance.Get(platformCtx, instance.ID)
 	require.NoError(t, err)
@@ -110,7 +108,6 @@ func TestCompleteTask_TypedScope_CallbackUsesAuthoritativeBusinessIdentity(t *te
 		SetTenantID(tenantID).
 		SaveX(platformCtx)
 	ch := client.Change.Create().
-		SetTitle("平台回调测试变更").
 		SetCreatedBy(actor.ID).
 		SetWorkItemID(workItem.ID).
 		SetTenantID(tenantID).
@@ -133,7 +130,7 @@ func TestCompleteTask_TypedScope_CallbackUsesAuthoritativeBusinessIdentity(t *te
 
 	updated, err := client.Change.Get(platformCtx, ch.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "平台改过的标题", updated.Title, "平台完成任务的 update_change 副作用应以实例租户执行")
+	assert.Equal(t, "平台改过的标题", requireChangeWorkItem(t, client, updated).Title, "平台完成任务的 update_change 副作用应以实例租户执行")
 
 	advanced, err := client.ProcessInstance.Get(platformCtx, instance.ID)
 	require.NoError(t, err)
@@ -157,7 +154,6 @@ func TestCompleteTask_ParticipantBusinessIDCannotRetargetCallback(t *testing.T) 
 		SetType("change").SetRecordClass("change_request").SetRequesterID(otherActor.ID).
 		SetTenantID(otherTenant.ID).SaveX(platformCtx)
 	otherChange := client.Change.Create().
-		SetTitle("别家租户的变更").
 		SetCreatedBy(otherActor.ID).
 		SetWorkItemID(otherWorkItem.ID).
 		SetTenantID(otherTenant.ID).
@@ -172,7 +168,6 @@ func TestCompleteTask_ParticipantBusinessIDCannotRetargetCallback(t *testing.T) 
 		SetType("change").SetRecordClass("change_request").SetRequesterID(actor.ID).
 		SetTenantID(tenantID).SaveX(platformCtx)
 	ch := client.Change.Create().
-		SetTitle("本租户变更").
 		SetCreatedBy(actor.ID).
 		SetWorkItemID(workItem.ID).
 		SetTenantID(tenantID).
@@ -196,6 +191,6 @@ func TestCompleteTask_ParticipantBusinessIDCannotRetargetCallback(t *testing.T) 
 
 	after, err := client.Change.Get(platformCtx, otherChange.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "别家租户的变更", after.Title, "跨租户伪造 change_id 不得写入别家租户数据")
-	assert.Equal(t, "越权尝试", client.Change.GetX(platformCtx, ch.ID).Title, "回调只能写权威流程目标")
+	assert.Equal(t, "别家租户的变更", requireChangeWorkItem(t, client, after).Title, "跨租户伪造 change_id 不得写入别家租户数据")
+	assert.Equal(t, "越权尝试", requireChangeWorkItem(t, client, client.Change.GetX(platformCtx, ch.ID)).Title, "回调只能写权威流程目标")
 }

@@ -3,8 +3,6 @@
 package container
 
 import (
-	"database/sql"
-
 	"itsm-backend/config"
 	"itsm-backend/ent"
 	"itsm-backend/repository/base"
@@ -20,7 +18,6 @@ import (
 type Container struct {
 	cfg    *config.Config
 	client *ent.Client
-	db     *sql.DB
 	logger *zap.SugaredLogger
 
 	// Repositories
@@ -43,11 +40,10 @@ type Container struct {
 }
 
 // NewContainer 创建依赖容器
-func NewContainer(cfg *config.Config, client *ent.Client, db *sql.DB, logger *zap.SugaredLogger) *Container {
+func NewContainer(cfg *config.Config, client *ent.Client, logger *zap.SugaredLogger) *Container {
 	return &Container{
 		cfg:    cfg,
 		client: client,
-		db:     db,
 		logger: logger,
 	}
 }

@@ -8,6 +8,8 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/knownerror"
+	"itsm-backend/ent/problem"
+	"itsm-backend/ent/ticket"
 )
 
 // RootCauseAnalysisService 根因分析服务
@@ -40,13 +42,13 @@ func (s *RootCauseAnalysisService) Perform5WhysAnalysis(ctx context.Context, pro
 	}
 
 	// 获取问题信息
-	problem, err := s.client.Problem.Get(ctx, problemID)
+	problemEntity, err := s.client.Problem.Query().Where(problem.IDEQ(problemID)).WithWorkItem().Only(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	// 记录初始问题
-	rca.Findings = append(rca.Findings, fmt.Sprintf("问题: %s", problem.Title))
+	rca.Findings = append(rca.Findings, fmt.Sprintf("问题: %s", problemEntity.Edges.WorkItem.Title))
 
 	// 5 Whys 分析逻辑
 	// 这里可以集成AI来辅助分析
@@ -58,7 +60,7 @@ func (s *RootCauseAnalysisService) Perform5WhysAnalysis(ctx context.Context, pro
 // AnalyzeProblemFromIncidents 从关联事件分析问题根因
 func (s *RootCauseAnalysisService) AnalyzeProblemFromIncidents(ctx context.Context, problemID int) (*RCAContext, error) {
 	// 获取问题关联的事件
-	problem, err := s.client.Problem.Get(ctx, problemID)
+	problemEntity, err := s.client.Problem.Get(ctx, problemID)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +73,7 @@ func (s *RootCauseAnalysisService) AnalyzeProblemFromIncidents(ctx context.Conte
 
 	// 获取相关事件（数据库层按租户过滤，避免跨租户数据加载）
 	tenantIncidents, err := s.client.Incident.Query().
-		Where(incident.TenantIDEQ(problem.TenantID)).
+		Where(incident.TenantIDEQ(problemEntity.TenantID)).
 		All(ctx)
 	if err != nil {
 		return nil, err
@@ -159,14 +161,14 @@ func (s *RootCauseAnalysisService) AnalyzeWithAI(ctx context.Context, problemID 
 
 // GetProblemAnalysis 获取问题的根因分析
 func (s *RootCauseAnalysisService) GetProblemAnalysis(ctx context.Context, problemID int) (*RCAContext, error) {
-	problem, err := s.client.Problem.Get(ctx, problemID)
+	problemEntity, err := s.client.Problem.Get(ctx, problemID)
 	if err != nil {
 		return nil, err
 	}
 
 	rca := &RCAContext{
 		ProblemID: problemID,
-		RootCause: problem.RootCause,
+		RootCause: problemEntity.RootCause,
 	}
 
 	// 获取关联的事件
@@ -179,7 +181,7 @@ func (s *RootCauseAnalysisService) GetProblemAnalysis(ctx context.Context, probl
 
 	rca.IncidentIDs = make([]int, 0)
 	for _, inc := range incidents {
-		if inc.TenantID == problem.TenantID {
+		if inc.TenantID == problemEntity.TenantID {
 			rca.IncidentIDs = append(rca.IncidentIDs, inc.ID)
 		}
 	}
@@ -228,16 +230,21 @@ func (s *RootCauseAnalysisService) UnlinkProblemIncident(ctx context.Context, pr
 // ResolveProblemWithSolution 使用解决方案解决问题
 func (s *RootCauseAnalysisService) ResolveProblemWithSolution(ctx context.Context, problemID int, resolution string) error {
 	// 获取问题信息用于日志
-	problem, err := s.client.Problem.Get(ctx, problemID)
+	problemEntity, err := s.client.Problem.Get(ctx, problemID)
 	if err != nil {
 		return err
 	}
-	_ = problem // 问题存在性已验证
-
-	_, err = s.client.Problem.UpdateOneID(problemID).
-		SetStatus("resolved").
-		SetRootCause(resolution).
-		Save(ctx)
-
-	return err
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	if _, err = tx.Ticket.UpdateOneID(problemEntity.WorkItemID).Where(ticket.TenantIDEQ(problemEntity.TenantID)).SetStatus("resolved").Save(ctx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if _, err = tx.Problem.UpdateOneID(problemID).SetRootCause(resolution).Save(ctx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	return tx.Commit()
 }

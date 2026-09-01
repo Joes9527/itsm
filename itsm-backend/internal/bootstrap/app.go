@@ -592,9 +592,6 @@ func NewApplication() *Application {
 	// Global Search Controller (全局搜索)
 	globalSearchController := controller.NewGlobalSearchController(client)
 
-	// Standard Change Handler (标准变更模板库)
-	standardChangeHandler := standard_change.NewHandler(client, sugar)
-
 	// Known Error Handler (KEDB)
 	knownErrorHandler := known_error.NewHandler(client, sugar)
 
@@ -650,6 +647,9 @@ func NewApplication() *Application {
 	changeServiceDomain.SetProcessTriggerService(processTriggerService)
 	changeServiceDomain.SetProcessEngine(processEngine)
 	changeHandler := change.NewHandler(changeServiceDomain)
+	// Standard Change Handler reuses the authoritative Change creation service so
+	// template instantiation creates WorkItem and extension atomically.
+	standardChangeHandler := standard_change.NewHandler(client, sugar, changeServiceDomain)
 	// 注入 changeServiceDomain 到 BPMN change_service_handler，让 BPMN 自动创建的 Change
 	// 走事务化建表逻辑（同步建好 WorkItem），不再绕过——同上面 incident_service_handler
 	// 的注入方式（processEngine 的静态类型是 service.ProcessEngine 接口，未声明

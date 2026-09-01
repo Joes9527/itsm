@@ -47,6 +47,7 @@ func newConversionFixture(t *testing.T, status string, withWorkItem bool) *conve
 		workItem, err := client.Ticket.Create().
 			SetTitle("Intermittent API outage").
 			SetDescription("Requests intermittently return 503").
+			SetStatus(status).
 			SetType("incident").
 			SetRecordClass("incident").
 			SetPriority("high").
@@ -59,11 +60,7 @@ func newConversionFixture(t *testing.T, status string, withWorkItem bool) *conve
 	}
 
 	create := client.Incident.Create().
-		SetTitle("Intermittent API outage").
-		SetDescription("Requests intermittently return 503").
-		SetStatus(status).
 		SetType("incident").
-		SetPriority("high").
 		SetSeverity("high").
 		SetImpact("high").
 		SetUrgency("high").
@@ -252,15 +249,6 @@ func TestCreateFromIncidentRejectsIneligibleSourceWithoutWrites(t *testing.T) {
 
 		_, err := f.service.CreateFromIncident(f.ctx, f.tenantID, f.incidentID, f.actorID, dto.ConvertIncidentToProblemRequest{})
 		require.ErrorContains(t, err, "cancelled")
-		requireConversionCounts(t, f, before)
-	})
-
-	t.Run("missing source work item", func(t *testing.T) {
-		f := newConversionFixture(t, "new", false)
-		before := readConversionCounts(t, f)
-
-		_, err := f.service.CreateFromIncident(f.ctx, f.tenantID, f.incidentID, f.actorID, dto.ConvertIncidentToProblemRequest{})
-		require.ErrorContains(t, err, "work item")
 		requireConversionCounts(t, f, before)
 	})
 

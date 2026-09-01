@@ -52,6 +52,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_ticket_number
 DROP TABLE IF EXISTS work_item_number_sequences;
 `
 
+const professionalExtensionSharedFieldsSQL = `
+ALTER TABLE incidents DROP COLUMN IF EXISTS title;
+ALTER TABLE incidents DROP COLUMN IF EXISTS description;
+ALTER TABLE incidents DROP COLUMN IF EXISTS status;
+ALTER TABLE incidents DROP COLUMN IF EXISTS priority;
+ALTER TABLE incidents ALTER COLUMN work_item_id SET NOT NULL;
+
+ALTER TABLE problems DROP COLUMN IF EXISTS title;
+ALTER TABLE problems DROP COLUMN IF EXISTS description;
+ALTER TABLE problems DROP COLUMN IF EXISTS status;
+ALTER TABLE problems DROP COLUMN IF EXISTS priority;
+ALTER TABLE problems ALTER COLUMN work_item_id SET NOT NULL;
+
+ALTER TABLE changes DROP COLUMN IF EXISTS title;
+ALTER TABLE changes DROP COLUMN IF EXISTS description;
+ALTER TABLE changes DROP COLUMN IF EXISTS status;
+ALTER TABLE changes DROP COLUMN IF EXISTS priority;
+ALTER TABLE changes ALTER COLUMN work_item_id SET NOT NULL;
+`
+
 var RegisteredMigrations = []Migration{
 	{
 		Version:     "007_add_change_execution_tables",
@@ -136,6 +156,11 @@ var RegisteredMigrations = []Migration{
 		Version:     "020_work_item_number_allocator",
 		Description: "Create tenant/month WorkItem number sequences and replace global ticket_number uniqueness with tenant-scoped uniqueness",
 		RollbackSQL: workItemNumberAllocatorEmptyDevelopmentRollbackSQL,
+	},
+	{
+		Version:     "022_drop_professional_extension_shared_fields",
+		Description: "Drop WorkItem-owned title, description, status, and priority from Incident, Problem, and Change extensions",
+		RollbackSQL: "",
 	},
 }
 
@@ -845,6 +870,8 @@ ALTER TABLE tickets DROP CONSTRAINT IF EXISTS tickets_ticket_number_key;
 CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
     ON tickets (tenant_id, ticket_number);
 `
+	case "022_drop_professional_extension_shared_fields":
+		return professionalExtensionSharedFieldsSQL
 	default:
 		return ""
 	}
