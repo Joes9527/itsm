@@ -199,6 +199,58 @@ The disposable database was dropped and recreated before live allocator tests. N
 data was migrated. It was removed after all database gates completed, and a catalog query
 confirmed that the database no longer existed.
 
+### Migration 022 apply/verify/reset lifecycle
+
+Review-round evidence ran against `itsm-postgres-dev` through `127.0.0.1` in a fresh UUID-named
+schema. `ITSM_TEST_DB` was derived from the local container configuration without printing its
+credentials. The integration command was exactly:
+
+```text
+$ go test -tags=integration -race ./migration \
+    -run 'TestProfessionalExtensionMigration|TestProfessionalExtensionVerification' \
+    -count=1 -v
+exit=0; tests passed=5; failed=0; skipped=0
+```
+
+`TestProfessionalExtensionMigrationEnforcesOneToOneAndAssetLifecycle` executes the retained
+assets in this exact order: apply, verify, idempotent apply, verify, development reset, verify.
+The test passed under `-race` with zero skips. A separate disposable-schema `psql` execution of
+the same lifecycle recorded each boundary independently:
+
+```text
+$ PGOPTIONS='-c search_path=<uuid-schema>' psql "$ITSM_TEST_DB" \
+    -v ON_ERROR_STOP=1 -f migrations/20260901_drop_professional_extension_shared_fields.sql
+022 apply: exit=0
+
+$ PGOPTIONS='-c search_path=<uuid-schema>' psql "$ITSM_TEST_DB" \
+    -v ON_ERROR_STOP=1 -f migrations/20260901_drop_professional_extension_shared_fields_verify.sql
+022 verify after apply: exit=0
+
+$ PGOPTIONS='-c search_path=<uuid-schema>' psql "$ITSM_TEST_DB" \
+    -v ON_ERROR_STOP=1 -f migrations/20260901_drop_professional_extension_shared_fields.sql
+022 idempotent apply: exit=0
+
+$ PGOPTIONS='-c search_path=<uuid-schema>' psql "$ITSM_TEST_DB" \
+    -v ON_ERROR_STOP=1 -f migrations/20260901_drop_professional_extension_shared_fields_verify.sql
+022 verify after idempotent apply: exit=0
+
+$ PGOPTIONS='-c search_path=<uuid-schema>' psql "$ITSM_TEST_DB" \
+    -v ON_ERROR_STOP=1 -f migrations/20260901_drop_professional_extension_shared_fields_dev_reset.sql
+022 development reset: exit=0
+
+$ PGOPTIONS='-c search_path=<uuid-schema>' psql "$ITSM_TEST_DB" \
+    -v ON_ERROR_STOP=1 -f migrations/20260901_drop_professional_extension_shared_fields_verify.sql
+022 verify after development reset: exit=0
+```
+
+The 022 development reset intentionally does not restore obsolete shared columns. Its script
+reasserts the authoritative target schema for this development-only cutover, so post-reset
+verification is expected to pass. The final catalog assertions were
+`shared_columns=0` and `ready_valid_unique_indexes=3`. The UUID schema was then dropped.
+
+This lifecycle evidence is an explicit P1-A upgrade fixture result. It does not change or mask
+the canonical fresh-replay failure at migration 009, and it does not make the release approved.
+
 ## Test and build matrix
 
 ### Focused packages
