@@ -34,7 +34,7 @@ func TestProblemKnownErrorPublishingDirectService(t *testing.T) {
 	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "ke-srv")
 
 	// Create Problem
-	probRepo := NewEntRepository(client)
+	probRepo := newTestProblemRepository(client)
 	probHandlerSvc := NewService(probRepo, logger)
 	problem, err := probHandlerSvc.Create(ctx, tenant.ID, &Problem{
 		Title:       "KEDB Source Problem",
@@ -88,7 +88,7 @@ func TestProblemKnownErrorPublishingHTTPEndpoint(t *testing.T) {
 	userA := createProblemHandlerUser(t, ctx, client, tenantA.ID, "ke-http-a")
 	userB := createProblemHandlerUser(t, ctx, client, tenantB.ID, "ke-http-b")
 
-	probRepo := NewEntRepository(client)
+	probRepo := newTestProblemRepository(client)
 	probHandlerSvc := NewService(probRepo, logger)
 	problemA, err := probHandlerSvc.Create(ctx, tenantA.ID, &Problem{
 		Title:       "HTTP Source Problem Tenant A",

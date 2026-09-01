@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/repository/workitemnumber"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,8 +20,12 @@ import (
 func setupProblemHandlerTest(t *testing.T) (*ent.Client, *Service, context.Context) {
 	t.Helper()
 	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:problem-handler-%s?mode=memory&cache=shared&_fk=1", t.Name()))
-	repo := NewEntRepository(client)
+	repo := newTestProblemRepository(client)
 	return client, NewService(repo, zaptest.NewLogger(t).Sugar()), context.Background()
+}
+
+func newTestProblemRepository(client *ent.Client) *EntRepository {
+	return NewEntRepository(client, workitemnumber.NewPostgreSQLAllocator())
 }
 
 func createProblemHandlerTenant(t *testing.T, ctx context.Context, client *ent.Client, suffix string) *ent.Tenant {
@@ -78,6 +84,35 @@ func TestProblemServiceLifecycleAndTimestamps(t *testing.T) {
 
 	_, err = service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "unknown"})
 	require.ErrorContains(t, err, "invalid problem status transition")
+}
+
+func TestProblemServiceAllocatesTenantScopedWorkItemNumbers(t *testing.T) {
+	client, service, ctx := setupProblemHandlerTest(t)
+	defer client.Close()
+	tenantA := createProblemHandlerTenant(t, ctx, client, "allocator-a")
+	tenantB := createProblemHandlerTenant(t, ctx, client, "allocator-b")
+	userA := createProblemHandlerUser(t, ctx, client, tenantA.ID, "allocator-a")
+	userB := createProblemHandlerUser(t, ctx, client, tenantB.ID, "allocator-b")
+
+	first, err := service.Create(ctx, tenantA.ID, &Problem{Title: "First tenant A problem", Priority: "high", CreatedBy: userA.ID})
+	require.NoError(t, err)
+	second, err := service.Create(ctx, tenantA.ID, &Problem{Title: "Second tenant A problem", Priority: "high", CreatedBy: userA.ID})
+	require.NoError(t, err)
+	otherTenant, err := service.Create(ctx, tenantB.ID, &Problem{Title: "First tenant B problem", Priority: "high", CreatedBy: userB.ID})
+	require.NoError(t, err)
+
+	firstWorkItem, err := client.Ticket.Get(ctx, *first.WorkItemID)
+	require.NoError(t, err)
+	secondWorkItem, err := client.Ticket.Get(ctx, *second.WorkItemID)
+	require.NoError(t, err)
+	otherTenantWorkItem, err := client.Ticket.Get(ctx, *otherTenant.WorkItemID)
+	require.NoError(t, err)
+	period := time.Now().UTC().Format("200601")
+	require.Equal(t, "TKT-"+period+"-000001", firstWorkItem.TicketNumber)
+	require.Equal(t, "TKT-"+period+"-000002", secondWorkItem.TicketNumber)
+	require.Equal(t, "TKT-"+period+"-000001", otherTenantWorkItem.TicketNumber)
+	require.Equal(t, tenantA.ID, firstWorkItem.TenantID)
+	require.Equal(t, tenantB.ID, otherTenantWorkItem.TenantID)
 }
 
 func TestProblemRepositorySoftDeleteExcludedEverywhere(t *testing.T) {

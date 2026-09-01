@@ -258,11 +258,15 @@ func NewApplication() *Application {
 	// 6. 初始化服务层 & 控制器
 	// 这部分代码量较大，为了简化，我们先在这里进行组装，后续可以进一步拆分为 wires / container
 
-	// 初始化业务服务层
-	incidentService := service.NewIncidentService(client, sugar)
+	// WorkItem numbering has one process-wide allocator; PostgreSQL remains the
+	// authority for every Ticket, Incident, Problem, Change, and Requested Item path.
+	numberAllocator := workitemnumber.NewPostgreSQLAllocator()
 
-	// 初始化 Redis 序列服务（用于工单编号生成）
-	// 如果 Redis 不可用，使用数据库回退方案
+	// 初始化业务服务层
+	incidentService := service.NewIncidentService(client, sugar, numberAllocator)
+
+	// Initialize the Redis sequence service retained for Incident's professional
+	// incident_number; WorkItem ticket numbers do not use Redis or a fallback.
 	var sequenceService *service.SequenceService
 	ss := service.NewSequenceService(
 		cfg.Redis.Host,
@@ -302,9 +306,6 @@ func NewApplication() *Application {
 	processResolver := service.NewProcessResolver(client, processBindingService)
 	bpmnVersionService := service.NewBPMNVersionService(client, sugar)
 
-	// WorkItem numbering has one process-wide allocator; PostgreSQL remains the
-	// authority for every Ticket/Requested Item creation path wired below.
-	numberAllocator := workitemnumber.NewPostgreSQLAllocator()
 	// 工单仓储层（V2 Repository 模式）
 	ticketRepoImpl := repository_ticket.NewEntRepository(client, sugar, numberAllocator)
 
@@ -351,9 +352,8 @@ func NewApplication() *Application {
 		ProcessResolver:       processResolver,
 		ConnectorManager:      connectorManager,
 	})
-	_ = sequenceService // V2 内部通过 Repository.GenerateTicketNumber 使用 sequence；保留为运行时上下文依赖
-
-	// 为 IncidentService 注入序列服务
+	// SequenceService is retained solely for Incident's professional incident_number;
+	// WorkItem numbering is owned by numberAllocator above.
 	incidentService.SetSequenceService(sequenceService)
 
 	// MSP 服务初始化
@@ -433,7 +433,7 @@ func NewApplication() *Application {
 	}()
 
 	// 控制器依赖
-	incidentRuleEngine := service.NewIncidentRuleEngine(client, sugar)
+	incidentRuleEngine := service.NewIncidentRuleEngine(client, sugar, numberAllocator)
 	incidentService.SetRuleEngine(incidentRuleEngine)
 	incidentMonitoringService := service.NewIncidentMonitoringService(client, sugar)
 	incidentAlertingService := service.NewIncidentAlertingService(client, sugar)
@@ -538,8 +538,7 @@ func NewApplication() *Application {
 	}
 
 	rootCauseAnalysisService := service.NewRootCauseAnalysisService(client)
-	problemRepo := problem.NewEntRepository(client)
-	problemRepo.SetSequenceService(sequenceService)
+	problemRepo := problem.NewEntRepository(client, numberAllocator)
 	problemServiceDomain := problem.NewService(problemRepo, sugar)
 	problemHandler := problem.NewHandler(problemServiceDomain, client)
 	incidentController := controller.NewIncidentController(incidentService, incidentRuleEngine, incidentMonitoringService, incidentAlertingService, rootCauseAnalysisService, problemServiceDomain, sugar)
@@ -644,7 +643,7 @@ func NewApplication() *Application {
 	srHandler := service_request.NewHandler(srService)
 
 	// Domain: Change (DDD)
-	changeRepo := change.NewEntRepository(client, database.GetRawDB())
+	changeRepo := change.NewEntRepository(client, database.GetRawDB(), numberAllocator)
 	changeServiceDomain := change.NewService(changeRepo, client, sugar)
 	// 提交变更审批后自动启动 change_normal_flow，见 change.Service.SetProcessTriggerService 注释；
 	// CAB 审批决定/阶段流转完成 BPMN 任务需要 processEngine，见 SetProcessEngine 注释。

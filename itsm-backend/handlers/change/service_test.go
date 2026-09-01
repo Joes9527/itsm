@@ -88,7 +88,7 @@ func TestSubmitChange_TriggersBPMNProcess_Normal(t *testing.T) {
 	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
-	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, "change_submit_normal"))
+	repo := newTestChangeRepository(entClient, openChangeBPMNRawDB(t, "change_submit_normal"))
 	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
@@ -114,7 +114,7 @@ func TestSubmitChange_TriggersBPMNProcess_Emergency(t *testing.T) {
 	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("emergency").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
-	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, "change_submit_emergency"))
+	repo := newTestChangeRepository(entClient, openChangeBPMNRawDB(t, "change_submit_emergency"))
 	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
@@ -362,7 +362,7 @@ func TestGetApprovalHistory_ReadsFromProcessApprovalDecision(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	repo := NewEntRepository(entClient, nil)
+	repo := newTestChangeRepository(entClient, nil)
 	history, err := repo.GetApprovalHistory(ctx, 42, tenant.ID)
 	require.NoError(t, err)
 	require.Len(t, history, 1)
@@ -397,7 +397,7 @@ func TestGetApprovalHistory_RejectedRecordHasNoApprovedAt(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	repo := NewEntRepository(entClient, nil)
+	repo := newTestChangeRepository(entClient, nil)
 	history, err := repo.GetApprovalHistory(ctx, 43, tenant.ID)
 	require.NoError(t, err)
 	require.Len(t, history, 1)
@@ -444,7 +444,7 @@ func TestGetApprovalHistory_TenantIsolation(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	repo := NewEntRepository(entClient, nil)
+	repo := newTestChangeRepository(entClient, nil)
 	history, err := repo.GetApprovalHistory(ctx, 42, tenantA.ID)
 	require.NoError(t, err)
 	require.Len(t, history, 1)
@@ -470,7 +470,7 @@ func TestGetApprovalHistory_IncludesPendingCABTask(t *testing.T) {
 	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
-	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, "change_pending_history"))
+	repo := newTestChangeRepository(entClient, openChangeBPMNRawDB(t, "change_pending_history"))
 	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
@@ -502,7 +502,7 @@ func TestGetApprovalHistory_NoPendingEntryAfterDecisionMade(t *testing.T) {
 	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
-	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, "change_pending_history_decided"))
+	repo := newTestChangeRepository(entClient, openChangeBPMNRawDB(t, "change_pending_history_decided"))
 	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
@@ -532,7 +532,7 @@ func TestTransitionStatus_Cancel_TerminatesRunningProcessInstance(t *testing.T) 
 	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
-	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, "change_cancel_terminates_instance"))
+	repo := newTestChangeRepository(entClient, openChangeBPMNRawDB(t, "change_cancel_terminates_instance"))
 	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
@@ -570,7 +570,7 @@ func TestTransitionStatus_Cancel_NoRunningInstanceIsNoop(t *testing.T) {
 	c, err := entClient.Change.Create().SetTitle("测试变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
-	repo := NewEntRepository(entClient, nil)
+	repo := newTestChangeRepository(entClient, nil)
 	svc := NewService(repo, entClient, logger)
 	// 故意不调用 SetProcessTriggerService——覆盖"引擎没注入"这个分支，跟"引擎注入了
 	// 但确实查不到运行中实例"是两条不同的早退路径，都不应该影响业务侧终态转换。

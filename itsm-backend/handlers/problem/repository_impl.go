@@ -3,7 +3,6 @@ package problem
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"itsm-backend/common"
@@ -15,6 +14,7 @@ import (
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
 	"itsm-backend/ent/workitemrelation"
+	"itsm-backend/repository/workitemnumber"
 )
 
 // problemTicketRelationType 是 Problem 关联普通工单（record_class 未收敛的一般关联，
@@ -22,25 +22,13 @@ import (
 // relation_type。见 docs/superpowers/specs/2026-08-26-unified-work-item-model-design.md §10。
 const problemTicketRelationType = "related_to"
 
-// SequenceProvider 工单号生成接口（避免 handlers/problem 直接依赖 itsm-backend/service，
-// 与 repository/ticket.EntRepository 的 SequenceProvider 同一模式）。
-type SequenceProvider interface {
-	GetNextSequenceWithExpiry(ctx context.Context, key string, expiredAt time.Time) (int64, error)
-}
-
 type EntRepository struct {
 	client          *ent.Client
-	sequenceService SequenceProvider
+	numberAllocator workitemnumber.Allocator
 }
 
-func NewEntRepository(client *ent.Client) *EntRepository {
-	return &EntRepository{client: client}
-}
-
-// SetSequenceService 注入 Redis 原子序列服务，用于生成 WorkItem 工单编号。未注入时
-// generateWorkItemTicketNumber 总是走数据库兜底分支（与 Redis 不可用时的行为一致）。
-func (r *EntRepository) SetSequenceService(sp SequenceProvider) {
-	r.sequenceService = sp
+func NewEntRepository(client *ent.Client, numberAllocator workitemnumber.Allocator) *EntRepository {
+	return &EntRepository{client: client, numberAllocator: numberAllocator}
 }
 
 func (r *EntRepository) toDomain(e *ent.Problem) *Problem {
@@ -310,12 +298,12 @@ func (r *EntRepository) createInTx(ctx context.Context, tx *ent.Tx, p *Problem) 
 		return nil, fmt.Errorf("problem creator not found or inactive")
 	}
 
-	ticketNumber, err := r.generateWorkItemTicketNumber(ctx, tx.Client(), p.TenantID)
+	issuedAt := time.Now().UTC()
+	ticketNumber, err := r.numberAllocator.Allocate(ctx, tx.Client(), p.TenantID, issuedAt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate work item ticket number: %w", err)
+		return nil, fmt.Errorf("failed to allocate work item ticket number: %w", err)
 	}
 
-	now := time.Now()
 	workItem, err := tx.Ticket.Create().
 		SetTitle(p.Title).
 		SetDescription(p.Description).
@@ -325,8 +313,8 @@ func (r *EntRepository) createInTx(ctx context.Context, tx *ent.Tx, p *Problem) 
 		SetTicketNumber(ticketNumber).
 		SetRequesterID(p.CreatedBy).
 		SetTenantID(p.TenantID).
-		SetCreatedAt(now).
-		SetUpdatedAt(now).
+		SetCreatedAt(issuedAt).
+		SetUpdatedAt(issuedAt).
 		Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create work item: %w", err)
@@ -345,8 +333,8 @@ func (r *EntRepository) createInTx(ctx context.Context, tx *ent.Tx, p *Problem) 
 		SetCreatedBy(p.CreatedBy).
 		SetTenantID(p.TenantID).
 		SetWorkItemID(workItem.ID).
-		SetCreatedAt(now).
-		SetUpdatedAt(now)
+		SetCreatedAt(issuedAt).
+		SetUpdatedAt(issuedAt)
 
 	if p.AssigneeID != nil {
 		create.SetAssigneeID(*p.AssigneeID)
@@ -365,57 +353,6 @@ func rollbackProblemTx(tx *ent.Tx, cause error) error {
 		return fmt.Errorf("%w (rollback also failed: %v)", cause, rollbackErr)
 	}
 	return cause
-}
-
-// generateWorkItemTicketNumber 为 Problem 创建时同步建立的 WorkItem（tickets 行）生成
-// 编号，格式 TKT-YYYYMM-NNNNNN，与 IncidentService.generateWorkItemTicketNumber /
-// repository/ticket.EntRepository.GenerateTicketNumber 一致。
-//
-// 注意（核实后修正，没有照抄 IncidentService 的等价实现）：tickets.ticket_number 在
-// ent/schema/ticket.go 里是不区分租户的全局唯一索引（index.Fields("ticket_number").
-// Unique()），但 IncidentService.generateWorkItemTicketNumber 和
-// repository/ticket.EntRepository.GenerateTicketNumber 的序列 key／DB 兜底查询都是按
-// 租户维度计数（sequence:ticket:<tenant>:<yyyymm>，DB 兜底也用 TenantIDEQ 过滤）。这意味着
-// 任意两个租户各自当月第一次建单都会生成同一个 "TKT-YYYYMM-000001"，撞在全局唯一约束上——
-// 这是这两处已合入代码里已经存在的同类缺陷（没有在本次任务里修，因为
-// service/incident_service.go 和 repository/ticket/repository_impl.go 都不在这次 Problem
-// 迁移任务允许修改的文件范围内；已在交付说明里列出）。
-//
-// 这里新写的 Problem 版本不复制这个缺陷：序列计数（Redis key 和 DB 兜底查询）都不按租户
-// 维度隔离，而是与 tickets.ticket_number 的实际约束保持一致的全局维度，避免两个租户各自
-// 当月第一次创建 Problem 时互相撞号。多租户共用一个月度计数器只是让计数器"看起来不连续"，
-// 不影响正确性；tenantID 参数因此不再参与 key／过滤条件，仅保留在签名上以便未来如果
-// ticket_number 的唯一约束改成按租户维度收紧，这里能不改调用方签名地同步收紧。
-func (r *EntRepository) generateWorkItemTicketNumber(ctx context.Context, client *ent.Client, _ int) (string, error) {
-	now := time.Now()
-	year, month := now.Year(), int(now.Month())
-
-	if r.sequenceService != nil {
-		expiredAt := time.Date(year, time.Month(month)+1, 1, 0, 0, 0, 0, time.UTC)
-		key := fmt.Sprintf("sequence:ticket:%d%02d", year, month)
-		if seq, err := r.sequenceService.GetNextSequenceWithExpiry(ctx, key, expiredAt); err == nil {
-			return fmt.Sprintf("TKT-%04d%02d-%06d", year, month, seq), nil
-		}
-	}
-
-	// 备用方案：数据库查询当月已有的最大序号（全局维度，见上方注释）。非强一致，Redis
-	// 不可用/未注入时才会走到这里，同 IncidentService 的 DB 兜底路径同等的尽力而为一致性。
-	prefix := fmt.Sprintf("TKT-%04d%02d-", year, month)
-	tickets, err := client.Ticket.Query().
-		Where(ticket.TicketNumberHasPrefix(prefix)).
-		All(ctx)
-	maxSeq := 0
-	if err == nil {
-		for _, t := range tickets {
-			if idx := strings.LastIndex(t.TicketNumber, "-"); idx >= 0 {
-				var seq int
-				if _, scanErr := fmt.Sscanf(t.TicketNumber[idx+1:], "%d", &seq); scanErr == nil && seq > maxSeq {
-					maxSeq = seq
-				}
-			}
-		}
-	}
-	return fmt.Sprintf("TKT-%04d%02d-%06d", year, month, maxSeq+1), nil
 }
 
 func (r *EntRepository) Get(ctx context.Context, id int, tenantID int) (*Problem, error) {

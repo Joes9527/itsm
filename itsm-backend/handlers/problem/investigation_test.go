@@ -18,6 +18,7 @@ import (
 	"itsm-backend/ent/enttest"
 	problem "itsm-backend/handlers/problem"
 	"itsm-backend/middleware"
+	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -148,7 +149,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	user := createProblemInvestigationUser(t, ctx, client, tenant.ID, "dual-inv")
 
 	// Create problem
-	probRepo := problem.NewEntRepository(client)
+	probRepo := problem.NewEntRepository(client, workitemnumber.NewPostgreSQLAllocator())
 	probHandlerSvc := problem.NewService(probRepo, logger)
 	p, err := probHandlerSvc.Create(ctx, tenant.ID, &problem.Problem{
 		Title:       "High Latency in API Gateway",

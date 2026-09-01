@@ -27,6 +27,7 @@ import (
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/processinstance"
 	changedomain "itsm-backend/handlers/change"
+	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 
 	"go.uber.org/zap"
@@ -94,7 +95,7 @@ func main() {
 
 	processEngine := service.NewCustomProcessEngine(client, sugar)
 	processTriggerService := service.NewProcessTriggerService(client, processEngine)
-	repo := changedomain.NewEntRepository(client, database.GetRawDB())
+	repo := changedomain.NewEntRepository(client, database.GetRawDB(), workitemnumber.NewPostgreSQLAllocator())
 	svc := changedomain.NewService(repo, client, sugar)
 	svc.SetProcessTriggerService(processTriggerService)
 	svc.SetProcessEngine(processEngine)

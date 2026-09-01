@@ -6,6 +6,7 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service/bpmn"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -41,7 +42,7 @@ func setupPlatformTenantEnv(t *testing.T) (*ent.Client, ProcessEngine, context.C
 	// "incident service 未注入" 硬失败。
 	if cpe, ok := engine.(*CustomProcessEngine); ok {
 		if h, ok := cpe.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler); ok {
-			h.SetIncidentService(NewIncidentService(client, zap.NewNop().Sugar()))
+			h.SetIncidentService(NewIncidentService(client, zap.NewNop().Sugar(), workitemnumber.NewPostgreSQLAllocator()))
 		}
 	}
 

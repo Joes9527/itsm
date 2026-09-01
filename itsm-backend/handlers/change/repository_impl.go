@@ -15,6 +15,7 @@ import (
 	entticket "itsm-backend/ent/ticket"
 	entuser "itsm-backend/ent/user"
 	"itsm-backend/ent/workitemrelation"
+	"itsm-backend/repository/workitemnumber"
 
 	"go.uber.org/zap"
 )
@@ -26,14 +27,16 @@ import (
 const changeTicketRelationType = "related_to"
 
 type EntRepository struct {
-	client *ent.Client
-	db     *sql.DB
+	client          *ent.Client
+	db              *sql.DB
+	numberAllocator workitemnumber.Allocator
 }
 
-func NewEntRepository(client *ent.Client, db *sql.DB) *EntRepository {
+func NewEntRepository(client *ent.Client, db *sql.DB, numberAllocator workitemnumber.Allocator) *EntRepository {
 	return &EntRepository{
-		client: client,
-		db:     db,
+		client:          client,
+		db:              db,
+		numberAllocator: numberAllocator,
 	}
 }
 
@@ -336,12 +339,12 @@ func (r *EntRepository) Create(ctx context.Context, c *Change) (*Change, error) 
 		return rollback(fmt.Errorf("change creator not found or inactive"))
 	}
 
-	ticketNumber, err := r.generateWorkItemTicketNumber(ctx, tx.Client(), c.TenantID)
+	issuedAt := time.Now().UTC()
+	ticketNumber, err := r.numberAllocator.Allocate(ctx, tx.Client(), c.TenantID, issuedAt)
 	if err != nil {
-		return rollback(fmt.Errorf("failed to generate work item ticket number: %w", err))
+		return rollback(fmt.Errorf("failed to allocate work item ticket number: %w", err))
 	}
 
-	now := time.Now()
 	workItem, err := tx.Ticket.Create().
 		SetTitle(c.Title).
 		SetDescription(c.Description).
@@ -351,8 +354,8 @@ func (r *EntRepository) Create(ctx context.Context, c *Change) (*Change, error) 
 		SetTicketNumber(ticketNumber).
 		SetRequesterID(c.CreatedBy).
 		SetTenantID(c.TenantID).
-		SetCreatedAt(now).
-		SetUpdatedAt(now).
+		SetCreatedAt(issuedAt).
+		SetUpdatedAt(issuedAt).
 		Save(ctx)
 	if err != nil {
 		return rollback(fmt.Errorf("failed to create work item: %w", err))
@@ -375,8 +378,8 @@ func (r *EntRepository) Create(ctx context.Context, c *Change) (*Change, error) 
 		SetNillablePlannedStartDate(c.PlannedStartDate).
 		SetNillablePlannedEndDate(c.PlannedEndDate).
 		SetAffectedCis(c.AffectedCIs).
-		SetCreatedAt(now).
-		SetUpdatedAt(now)
+		SetCreatedAt(issuedAt).
+		SetUpdatedAt(issuedAt)
 
 	saved, err := create.Save(ctx)
 	if err != nil {
@@ -399,38 +402,6 @@ func (r *EntRepository) Create(ctx context.Context, c *Change) (*Change, error) 
 		return nil, err
 	}
 	return result, nil
-}
-
-// generateWorkItemTicketNumber 为 Change 创建时同步建立的 WorkItem（tickets 行）生成编号，
-// 格式 TKT-YYYYMM-NNNNNN，与 IncidentService.generateWorkItemTicketNumber /
-// handlers/problem.EntRepository.generateWorkItemTicketNumber 完全一致的按租户维度方案
-// （sequence:ticket:<tenant>:<yyyymm> key，DB 兜底同样按 TenantIDEQ 过滤）——这是一个已知的、
-// 跨 Ticket/Incident/Problem 共享的缺陷（tickets.ticket_number 是全局唯一索引，按租户维度
-// 计数会在不同租户同月第一次建单时互相撞号），根因是 schema 设计，需要专门的后续修复
-// （ent schema 变更 + 三处生成逻辑收敛成一个），不在本次 Change 迁移任务范围内。这里故意
-// 复用同一种已知限制而不是"独立发明一个不撞号的方案"——Problem 那次已经验证过独立方案会
-// 制造新的、更隐蔽的跨域撞号面（Problem 版本改成全局维度计数，反而与 Ticket/Incident
-// 的按租户维度版本不一致，见 handlers/problem/repository_impl.go 的同名函数注释）。
-func (r *EntRepository) generateWorkItemTicketNumber(ctx context.Context, client *ent.Client, _ int) (string, error) {
-	now := time.Now()
-	year, month := now.Year(), int(now.Month())
-	prefix := fmt.Sprintf("TKT-%04d%02d-", year, month)
-
-	tickets, err := client.Ticket.Query().
-		Where(entticket.TicketNumberHasPrefix(prefix)).
-		All(ctx)
-	maxSeq := 0
-	if err == nil {
-		for _, t := range tickets {
-			if idx := strings.LastIndex(t.TicketNumber, "-"); idx >= 0 {
-				var seq int
-				if _, scanErr := fmt.Sscanf(t.TicketNumber[idx+1:], "%d", &seq); scanErr == nil && seq > maxSeq {
-					maxSeq = seq
-				}
-			}
-		}
-	}
-	return fmt.Sprintf("TKT-%04d%02d-%06d", year, month, maxSeq+1), nil
 }
 
 func (r *EntRepository) Get(ctx context.Context, id int, tenantID int) (*Change, error) {

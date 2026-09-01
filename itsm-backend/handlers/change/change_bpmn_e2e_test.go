@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/handlers/change"
+	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 
 	"github.com/stretchr/testify/assert"
@@ -65,7 +66,7 @@ func TestChangeApprovalE2E_FullApproveFlow(t *testing.T) {
 	engine := newTestBPMNEngine(t, client, logger)
 	trigger := service.NewProcessTriggerService(client, engine)
 
-	repo := change.NewEntRepository(client, db)
+	repo := change.NewEntRepository(client, db, workitemnumber.NewPostgreSQLAllocator())
 	svc := change.NewService(repo, client, logger)
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
@@ -141,7 +142,7 @@ func TestChangeApprovalE2E_FullRejectFlow(t *testing.T) {
 	engine := newTestBPMNEngine(t, client, logger)
 	trigger := service.NewProcessTriggerService(client, engine)
 
-	repo := change.NewEntRepository(client, db)
+	repo := change.NewEntRepository(client, db, workitemnumber.NewPostgreSQLAllocator())
 	svc := change.NewService(repo, client, logger)
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
@@ -207,7 +208,7 @@ func TestChangeApprovalE2E_NonCMUserCannotApprove(t *testing.T) {
 	engine := newTestBPMNEngine(t, client, logger)
 	trigger := service.NewProcessTriggerService(client, engine)
 
-	repo := change.NewEntRepository(client, db)
+	repo := change.NewEntRepository(client, db, workitemnumber.NewPostgreSQLAllocator())
 	svc := change.NewService(repo, client, logger)
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)

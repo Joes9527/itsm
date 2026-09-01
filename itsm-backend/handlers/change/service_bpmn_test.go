@@ -14,6 +14,7 @@ import (
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
+	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
 
@@ -33,6 +34,10 @@ var testTicketNumberSeq int64
 func nextTestTicketNumber() string {
 	n := atomic.AddInt64(&testTicketNumberSeq, 1)
 	return fmt.Sprintf("TKT-TEST-%08d", n)
+}
+
+func newTestChangeRepository(client *ent.Client, db *sql.DB) *EntRepository {
+	return NewEntRepository(client, db, workitemnumber.NewPostgreSQLAllocator())
 }
 
 // createChangeWorkItemFixture 在给定的 ent.Client 里先建一条 tickets 行
@@ -720,7 +725,7 @@ func setupChangeForTransitionStatusTest(t *testing.T, dbName string) (*ent.Clien
 	// db=nil：TransitionStatus 的 approve/reject 路径不再触碰 ApprovalHistory/ApprovalRecord
 	// 相关的原始 SQL 方法（那些方法用 r.db），完全走 ent 的 Get/Update，所以这里不需要真的
 	// database/sql 连接。
-	repo := NewEntRepository(client, nil)
+	repo := newTestChangeRepository(client, nil)
 	svc := NewService(repo, client, logger)
 	svc.SetProcessEngine(engine)
 	svc.SetProcessTriggerService(trigger)
@@ -795,7 +800,7 @@ func TestTransitionStatus_Approve_NoRunningProcessInstanceFailsClosed(t *testing
 	// processEngine 必须非 nil，否则会在 completeChangeApprovalTask 里更早地因为
 	// "流程引擎未初始化" 返回，测不到这个用例真正要覆盖的"没有运行中流程实例"分支。
 	engine := newTestBPMNEngine(t, client, logger)
-	repo := NewEntRepository(client, nil)
+	repo := newTestChangeRepository(client, nil)
 	svc := NewService(repo, client, logger)
 	svc.SetProcessEngine(engine)
 
@@ -846,7 +851,7 @@ func TestSubmitChange_AutoCompletesAssessmentTask(t *testing.T) {
 	require.NoError(t, err)
 
 	trigger := service.NewProcessTriggerService(client, engine)
-	repo := NewEntRepository(client, db)
+	repo := newTestChangeRepository(client, db)
 	svc := NewService(repo, client, logger)
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
@@ -889,7 +894,7 @@ func TestBackfillLegacyPendingChange_CreatesInstanceAndAdvancesToCAB(t *testing.
 	c, err := client.Change.Create().SetTitle("上线前用旧流程提交的变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
-	repo := NewEntRepository(client, nil)
+	repo := newTestChangeRepository(client, nil)
 	svc := NewService(repo, client, logger)
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
@@ -934,7 +939,7 @@ func TestBackfillLegacyPendingChange_SkipsChangeWithExistingInstance(t *testing.
 	})
 	require.NoError(t, err)
 
-	repo := NewEntRepository(client, nil)
+	repo := newTestChangeRepository(client, nil)
 	svc := NewService(repo, client, logger)
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
@@ -982,7 +987,7 @@ func TestBackfillLegacyPendingChange_RetriesAfterTerminatedInstance(t *testing.T
 	require.NoError(t, err)
 	require.Equal(t, "terminated", terminated.Status, "测试前置条件：确认补偿回滚确实留下了 terminated 记录")
 
-	repo := NewEntRepository(client, nil)
+	repo := newTestChangeRepository(client, nil)
 	svc := NewService(repo, client, logger)
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
@@ -1013,7 +1018,7 @@ func TestBackfillLegacyPendingChange_RejectsNonPendingChange(t *testing.T) {
 	c, err := client.Change.Create().SetTitle("还是草稿的变更").SetType("normal").SetStatus("draft").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)
 
-	repo := NewEntRepository(client, nil)
+	repo := newTestChangeRepository(client, nil)
 	svc := NewService(repo, client, logger)
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
@@ -1041,7 +1046,7 @@ func TestChangeServiceTaskHandler_CreateChange_DelegatesToRealServiceAndCreatesW
 	logger := zaptest.NewLogger(t).Sugar()
 	tenantID, actorID := setupChangeBPMNActor(t, client, "bpmn-handler-create")
 
-	repo := NewEntRepository(client, openChangeBPMNRawDB(t, "change_bpmn_handler_create_real"))
+	repo := newTestChangeRepository(client, openChangeBPMNRawDB(t, "change_bpmn_handler_create_real"))
 	svc := NewService(repo, client, logger)
 
 	taskHandler := bpmn.NewChangeServiceTaskHandler(client, logger)

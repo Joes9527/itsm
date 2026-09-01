@@ -16,8 +16,8 @@ import (
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/incidentrule"
 	"itsm-backend/ent/processinstance"
-	entticket "itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
+	"itsm-backend/repository/workitemnumber"
 
 	"go.uber.org/zap"
 )
@@ -26,15 +26,17 @@ type IncidentService struct {
 	priorityMatrixService *PriorityMatrixService
 	client                *ent.Client
 	logger                *zap.SugaredLogger
+	numberAllocator       workitemnumber.Allocator
 	sequenceService       *SequenceService
 	processTriggerService ProcessTriggerServiceInterface
 	ruleEngine            *IncidentRuleEngine
 }
 
-func NewIncidentService(client *ent.Client, logger *zap.SugaredLogger) *IncidentService {
+func NewIncidentService(client *ent.Client, logger *zap.SugaredLogger, numberAllocator workitemnumber.Allocator) *IncidentService {
 	return &IncidentService{
-		client: client,
-		logger: logger,
+		client:          client,
+		logger:          logger,
+		numberAllocator: numberAllocator,
 	}
 }
 
@@ -139,14 +141,6 @@ func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateInc
 	if incidentType == "" {
 		incidentType = "incident"
 	}
-	// 事件的 WorkItem 编号（tickets.ticket_number）要在事务外生成——同 generateIncidentNumber
-	// 的既有做法一致：编号分配（Redis 原子自增/DB 回退扫描）本身不是这次事务要保护的不变量，
-	// 真正需要原子性的是"WorkItem 行 + Incident 行同时存在或同时不存在"，编号只是其中一个字段。
-	workItemTicketNumber, err := s.generateWorkItemTicketNumber(ctx, tenantID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate work item ticket number: %w", err)
-	}
-
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start incident transaction: %w", err)
@@ -156,6 +150,11 @@ func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateInc
 			s.logger.Errorw("Failed to rollback incident transaction", "error", rollbackErr)
 		}
 		return nil, cause
+	}
+	issuedAt := time.Now().UTC()
+	workItemTicketNumber, err := s.numberAllocator.Allocate(ctx, tx.Client(), tenantID, issuedAt)
+	if err != nil {
+		return rollback(fmt.Errorf("failed to allocate work item ticket number: %w", err))
 	}
 
 	// 统一 WorkItem 领域模型宪章 §3.2：WorkItem 创建与专业扩展记录创建必须在同一事务中完成。
@@ -174,8 +173,8 @@ func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateInc
 		SetTicketNumber(workItemTicketNumber).
 		SetRequesterID(userID).
 		SetTenantID(tenantID).
-		SetCreatedAt(time.Now()).
-		SetUpdatedAt(time.Now()).
+		SetCreatedAt(issuedAt).
+		SetUpdatedAt(issuedAt).
 		Save(ctx)
 	if err != nil {
 		return rollback(fmt.Errorf("failed to create work item for incident: %w", err))
@@ -1101,49 +1100,6 @@ func (s *IncidentService) generateIncidentNumber(ctx context.Context, tenantID i
 
 	// 备用方案：数据库查询
 	return s.generateIncidentNumberWithDB(ctx, tenantID, year, month)
-}
-
-// generateWorkItemTicketNumber 为事件创建时同步建立的 WorkItem（tickets 行）生成编号。
-// 复用与 repository/ticket.EntRepository.GenerateTicketNumber 完全相同的 Redis 序列 key
-// （sequence:ticket:<tenant>:<yyyymm>）与编号格式（TKT-YYYYMM-NNNNNN）——Incident 创建路径
-// 和普通工单创建路径写入的是同一张 tickets 表，必须共享同一个原子计数器，否则两条路径各自
-// 独立自增，会在同一租户同一月份内撞号。
-func (s *IncidentService) generateWorkItemTicketNumber(ctx context.Context, tenantID int) (string, error) {
-	now := time.Now()
-	year := now.Year()
-	month := int(now.Month())
-	expiredAt := time.Date(year, time.Month(month)+1, 1, 0, 0, 0, 0, time.UTC)
-	key := fmt.Sprintf("sequence:ticket:%d:%d%02d", tenantID, year, month)
-
-	if s.sequenceService != nil {
-		seq, err := s.sequenceService.GetNextSequenceWithExpiry(ctx, key, expiredAt)
-		if err != nil {
-			s.logger.Warnw("Redis sequence failed for work item ticket number, fallback to DB", "error", err)
-		} else {
-			return fmt.Sprintf("TKT-%04d%02d-%06d", year, month, seq), nil
-		}
-	}
-
-	// 备用方案：数据库查询当月已有的最大序号。与 generateIncidentNumberWithDB 同等的
-	// 尽力而为一致性（非强一致，Redis 不可用时才会走到这里）。
-	prefix := fmt.Sprintf("TKT-%04d%02d-", year, month)
-	tickets, err := s.client.Ticket.Query().
-		Where(entticket.TenantIDEQ(tenantID), entticket.TicketNumberHasPrefix(prefix)).
-		All(ctx)
-	maxSeq := 0
-	if err != nil {
-		s.logger.Warnw("Query work item ticket numbers failed, starting from 0", "error", err)
-	} else {
-		for _, t := range tickets {
-			if idx := strings.LastIndex(t.TicketNumber, "-"); idx >= 0 {
-				var seq int
-				if _, scanErr := fmt.Sscanf(t.TicketNumber[idx+1:], "%d", &seq); scanErr == nil && seq > maxSeq {
-					maxSeq = seq
-				}
-			}
-		}
-	}
-	return fmt.Sprintf("TKT-%04d%02d-%06d", year, month, maxSeq+1), nil
 }
 
 // generateIncidentNumberWithDB 使用数据库查询生成事件编号（备用方案）
