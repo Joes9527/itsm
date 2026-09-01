@@ -270,6 +270,7 @@ func TestStartProcessUsesTrustedRequesterFallback(t *testing.T) {
 	ctx = WithTrustedBPMNTenantContext(ctx, f.tenant.ID)
 	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket-2", "ticket", 2, map[string]interface{}{
 		"requester_id": float64(f.actor.ID),
+		"triggered_by": strconv.Itoa(f.actor.ID),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, strconv.Itoa(f.actor.ID), instance.Initiator)
@@ -281,7 +282,8 @@ func TestStartProcessUsesRequesterFallbackForZeroActor(t *testing.T) {
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, 0)
 	ctx = WithTrustedBPMNTenantContext(ctx, f.tenant.ID)
 	instance, err := f.engine.StartProcess(ctx, f.definition.Key, "ticket-3", "ticket", 3, map[string]interface{}{
-		"requesterId": f.actor.ID,
+		"requesterId":  f.actor.ID,
+		"triggered_by": strconv.Itoa(f.actor.ID),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, strconv.Itoa(f.actor.ID), instance.Initiator)

@@ -99,6 +99,7 @@ func TestBPMNTemplateService_DeployAndStartTicketUrgentFlow(t *testing.T) {
 	runCtx = WithTrustedBPMNTenantContext(runCtx, tenant.ID)
 	instance, err := engine.StartProcess(runCtx, "ticket_urgent_flow", "TICKET-URGENT-1", "", 0, map[string]interface{}{
 		"requester_id": float64(1),
+		"triggered_by": "system",
 	})
 	require.NoError(t, err, "ticket_urgent_flow 应该能成功启动流程实例，不再报'获取流程定义失败'")
 	assert.NotNil(t, instance)
@@ -149,6 +150,7 @@ func TestBPMNTemplateService_DeployAndStartChangeEmergencyFlow(t *testing.T) {
 	runCtx = WithTrustedBPMNTenantContext(runCtx, tenant.ID)
 	instance, err := engine.StartProcess(runCtx, "change_emergency_flow", "CHANGE-EMERGENCY-1", "", 0, map[string]interface{}{
 		"requester_id": float64(1),
+		"triggered_by": "system",
 	})
 	require.NoError(t, err, "change_emergency_flow 应该能成功启动流程实例，不再报'流程定义不存在'")
 	assert.NotNil(t, instance)

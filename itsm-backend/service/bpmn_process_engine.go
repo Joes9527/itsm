@@ -256,6 +256,40 @@ func resolveProcessInitiator(ctx context.Context, variables map[string]interface
 	return "system"
 }
 
+// resolveBPMNProcessStartActor resolves the durable audit actor from trusted
+// workflow context. Process-start request variables are not an HTTP identity
+// source: triggered_by is consumed only for trusted application-service starts.
+func resolveBPMNProcessStartActor(ctx context.Context, client *ent.Client, tenantID int, variables map[string]interface{}) (*ent.User, string, error) {
+	actorID := 0
+	if _, present := bpmnAccessScopeValue(ctx); present {
+		scope, err := BPMNAccessScopeFromContext(ctx)
+		if err != nil || scope.TenantID != tenantID {
+			return nil, "", common.NewForbiddenError("流程启动用户租户不一致")
+		}
+		actorID = scope.UserID
+	} else if userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int); userID > 0 {
+		actorID = userID
+	} else if triggeredBy := strings.TrimSpace(bpmn.GetStringFromVars(variables, "triggered_by")); triggeredBy == "system" {
+		return nil, "system", nil
+	} else if triggeredBy != "" {
+		parsed, err := strconv.Atoi(triggeredBy)
+		if err != nil || parsed <= 0 {
+			return nil, "", fmt.Errorf("流程启动用户无效")
+		}
+		actorID = parsed
+	} else {
+		return nil, "", fmt.Errorf("流程启动缺少权威操作用户")
+	}
+
+	actor, err := client.User.Query().Where(
+		user.ID(actorID), user.TenantID(tenantID), user.Active(true),
+	).Only(ctx)
+	if err != nil {
+		return nil, "", fmt.Errorf("获取流程启动用户失败: %w", err)
+	}
+	return actor, actor.Name, nil
+}
+
 // StartProcess 启动流程实例
 func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitionKey string, businessKey string, businessType string, businessID int, variables map[string]interface{}) (*ent.ProcessInstance, error) {
 	tenantID, err := bpmnAuthorizedTenantFromContext(ctx)
@@ -335,11 +369,13 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 		return nil, err
 	}
 
+	actor, userName, err := resolveBPMNProcessStartActor(ctx, tx.Client(), definition.TenantID, variables)
+	if err != nil {
+		return nil, err
+	}
 	userID := 0
-	userName := ""
-	if u, ok := ctx.Value("user").(*ent.User); ok {
-		userID = u.ID
-		userName = u.Name
+	if actor != nil {
+		userID = actor.ID
 	}
 	if err := txEngine.auditService.RecordProcessStarted(ctx, instance, userID, userName, variables); err != nil {
 		return nil, err
@@ -582,9 +618,6 @@ func (e *CustomProcessEngine) completionAuditActor(ctx context.Context, client *
 		if err != nil {
 			return 0, "", nil, err
 		}
-		return actor.ID, actor.Name, nil, nil
-	}
-	if actor, ok := ctx.Value("user").(*ent.User); ok && actor.ID > 0 {
 		return actor.ID, actor.Name, nil, nil
 	}
 	if userID, _ := ctx.Value(bpmn.BPMNUserIDContextKey).(int); userID > 0 {

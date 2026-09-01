@@ -2,6 +2,7 @@ package fixtures_test
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"itsm-backend/ent/enttest"
@@ -113,6 +114,7 @@ func TestEnsureSSLVPNMetadata(t *testing.T) {
 	runCtx := service.WithTrustedBPMNTenantContext(ctx, tenant.ID)
 	instance, err := engine.StartProcess(runCtx, "sslvpn_approval_flow", "TICKET-VPN-TEST-1", "", 0, map[string]interface{}{
 		"requester_id": float64(res.Users.EndUser.ID),
+		"triggered_by": strconv.Itoa(res.Users.EndUser.ID),
 	})
 	require.NoError(t, err)
 	assert.NotNil(t, instance)

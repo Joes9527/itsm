@@ -48,8 +48,12 @@ func (s *ProcessTriggerService) TriggerProcess(ctx context.Context, req *dto.Pro
 		if err != nil || scope.TenantID != req.TenantID {
 			return nil, fmt.Errorf("流程触发租户授权上下文不一致")
 		}
+		// HTTP callers cannot choose the audit actor through request JSON.
+		req.TriggeredBy = strconv.Itoa(scope.UserID)
 	} else if trustedTenantID, ok := trustedBPMNTenantFromContext(ctx); !ok || trustedTenantID != req.TenantID {
 		return nil, fmt.Errorf("流程触发缺少可信租户授权上下文")
+	} else if strings.TrimSpace(req.TriggeredBy) == "" {
+		return nil, fmt.Errorf("流程触发缺少权威操作用户")
 	}
 
 	// 2. 如果没有指定流程定义，则根据业务类型查找
@@ -286,11 +290,10 @@ func (s *ProcessTriggerService) buildProcessVariables(req *dto.ProcessTriggerReq
 		}
 	}
 
-	// 3. 添加触发者信息
-	if req.TriggeredBy != "" {
-		variables["triggered_by"] = req.TriggeredBy
-		variables["triggered_at"] = req.TriggeredAt.Format(time.RFC3339)
-	}
+	// 3. 添加可信触发者信息。HTTP 已在 TriggerProcess 中用认证 scope
+	// 覆盖该字段；可信领域调用者提供显式 TriggeredBy。
+	variables["triggered_by"] = req.TriggeredBy
+	variables["triggered_at"] = req.TriggeredAt.Format(time.RFC3339)
 
 	// 4. 添加租户信息
 	variables["tenant_id"] = req.TenantID
