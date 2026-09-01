@@ -1388,6 +1388,18 @@ func (f VendorFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, erro
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.VendorMutation", m)
 }
 
+// The WorkItemNumberSequenceFunc type is an adapter to allow the use of ordinary
+// function as WorkItemNumberSequence mutator.
+type WorkItemNumberSequenceFunc func(context.Context, *ent.WorkItemNumberSequenceMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f WorkItemNumberSequenceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.WorkItemNumberSequenceMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.WorkItemNumberSequenceMutation", m)
+}
+
 // The WorkItemRelationFunc type is an adapter to allow the use of ordinary
 // function as WorkItemRelation mutator.
 type WorkItemRelationFunc func(context.Context, *ent.WorkItemRelationMutation) (ent.Value, error)

@@ -4036,7 +4036,7 @@ var (
 		{Name: "opened_by_id", Type: field.TypeInt, Nullable: true},
 		{Name: "assignment_group_id", Type: field.TypeInt, Nullable: true},
 		{Name: "priority", Type: field.TypeString, Default: "medium"},
-		{Name: "ticket_number", Type: field.TypeString, Unique: true},
+		{Name: "ticket_number", Type: field.TypeString},
 		{Name: "creator_email", Type: field.TypeString, Nullable: true},
 		{Name: "external_message_id", Type: field.TypeString, Nullable: true},
 		{Name: "conversation_id", Type: field.TypeString, Nullable: true},
@@ -4132,9 +4132,9 @@ var (
 		},
 		Indexes: []*schema.Index{
 			{
-				Name:    "ticket_ticket_number",
+				Name:    "ticket_tenant_id_ticket_number",
 				Unique:  true,
-				Columns: []*schema.Column{TicketsColumns[10]},
+				Columns: []*schema.Column{TicketsColumns[14], TicketsColumns[10]},
 			},
 			{
 				Name:    "ticket_status",
@@ -4782,6 +4782,28 @@ var (
 		Name:       "vendors",
 		Columns:    VendorsColumns,
 		PrimaryKey: []*schema.Column{VendorsColumns[0]},
+	}
+	// WorkItemNumberSequencesColumns holds the columns for the "work_item_number_sequences" table.
+	WorkItemNumberSequencesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "tenant_id", Type: field.TypeInt},
+		{Name: "period", Type: field.TypeString, Size: 6},
+		{Name: "last_value", Type: field.TypeInt64, Default: 0},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+	}
+	// WorkItemNumberSequencesTable holds the schema information for the "work_item_number_sequences" table.
+	WorkItemNumberSequencesTable = &schema.Table{
+		Name:       "work_item_number_sequences",
+		Columns:    WorkItemNumberSequencesColumns,
+		PrimaryKey: []*schema.Column{WorkItemNumberSequencesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "workitemnumbersequence_tenant_id_period",
+				Unique:  true,
+				Columns: []*schema.Column{WorkItemNumberSequencesColumns[1], WorkItemNumberSequencesColumns[2]},
+			},
+		},
 	}
 	// WorkItemRelationsColumns holds the columns for the "work_item_relations" table.
 	WorkItemRelationsColumns = []*schema.Column{
@@ -5464,6 +5486,7 @@ var (
 		ToolInvocationsTable,
 		UsersTable,
 		VendorsTable,
+		WorkItemNumberSequencesTable,
 		WorkItemRelationsTable,
 		WorkflowsTable,
 		WorkflowInstancesTable,

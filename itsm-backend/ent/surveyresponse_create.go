@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/surveyresponse"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -20,6 +21,7 @@ type SurveyResponseCreate struct {
 	config
 	mutation *SurveyResponseMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetSurveyID sets the "survey_id" field.
@@ -211,6 +213,7 @@ func (_c *SurveyResponseCreate) createSpec() (*SurveyResponse, *sqlgraph.CreateS
 		_node = &SurveyResponse{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(surveyresponse.Table, sqlgraph.NewFieldSpec(surveyresponse.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TicketID(); ok {
 		_spec.SetField(surveyresponse.FieldTicketID, field.TypeInt, value)
 		_node.TicketID = value
@@ -259,11 +262,433 @@ func (_c *SurveyResponseCreate) createSpec() (*SurveyResponse, *sqlgraph.CreateS
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SurveyResponse.Create().
+//		SetSurveyID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SurveyResponseUpsert) {
+//			SetSurveyID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SurveyResponseCreate) OnConflict(opts ...sql.ConflictOption) *SurveyResponseUpsertOne {
+	_c.conflict = opts
+	return &SurveyResponseUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SurveyResponse.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SurveyResponseCreate) OnConflictColumns(columns ...string) *SurveyResponseUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SurveyResponseUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// SurveyResponseUpsertOne is the builder for "upsert"-ing
+	//  one SurveyResponse node.
+	SurveyResponseUpsertOne struct {
+		create *SurveyResponseCreate
+	}
+
+	// SurveyResponseUpsert is the "OnConflict" setter.
+	SurveyResponseUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetSurveyID sets the "survey_id" field.
+func (u *SurveyResponseUpsert) SetSurveyID(v int) *SurveyResponseUpsert {
+	u.Set(surveyresponse.FieldSurveyID, v)
+	return u
+}
+
+// UpdateSurveyID sets the "survey_id" field to the value that was provided on create.
+func (u *SurveyResponseUpsert) UpdateSurveyID() *SurveyResponseUpsert {
+	u.SetExcluded(surveyresponse.FieldSurveyID)
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *SurveyResponseUpsert) SetTicketID(v int) *SurveyResponseUpsert {
+	u.Set(surveyresponse.FieldTicketID, v)
+	return u
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *SurveyResponseUpsert) UpdateTicketID() *SurveyResponseUpsert {
+	u.SetExcluded(surveyresponse.FieldTicketID)
+	return u
+}
+
+// AddTicketID adds v to the "ticket_id" field.
+func (u *SurveyResponseUpsert) AddTicketID(v int) *SurveyResponseUpsert {
+	u.Add(surveyresponse.FieldTicketID, v)
+	return u
+}
+
+// ClearTicketID clears the value of the "ticket_id" field.
+func (u *SurveyResponseUpsert) ClearTicketID() *SurveyResponseUpsert {
+	u.SetNull(surveyresponse.FieldTicketID)
+	return u
+}
+
+// SetRespondentID sets the "respondent_id" field.
+func (u *SurveyResponseUpsert) SetRespondentID(v int) *SurveyResponseUpsert {
+	u.Set(surveyresponse.FieldRespondentID, v)
+	return u
+}
+
+// UpdateRespondentID sets the "respondent_id" field to the value that was provided on create.
+func (u *SurveyResponseUpsert) UpdateRespondentID() *SurveyResponseUpsert {
+	u.SetExcluded(surveyresponse.FieldRespondentID)
+	return u
+}
+
+// AddRespondentID adds v to the "respondent_id" field.
+func (u *SurveyResponseUpsert) AddRespondentID(v int) *SurveyResponseUpsert {
+	u.Add(surveyresponse.FieldRespondentID, v)
+	return u
+}
+
+// ClearRespondentID clears the value of the "respondent_id" field.
+func (u *SurveyResponseUpsert) ClearRespondentID() *SurveyResponseUpsert {
+	u.SetNull(surveyresponse.FieldRespondentID)
+	return u
+}
+
+// SetAnswers sets the "answers" field.
+func (u *SurveyResponseUpsert) SetAnswers(v []schema.Answer) *SurveyResponseUpsert {
+	u.Set(surveyresponse.FieldAnswers, v)
+	return u
+}
+
+// UpdateAnswers sets the "answers" field to the value that was provided on create.
+func (u *SurveyResponseUpsert) UpdateAnswers() *SurveyResponseUpsert {
+	u.SetExcluded(surveyresponse.FieldAnswers)
+	return u
+}
+
+// SetScore sets the "score" field.
+func (u *SurveyResponseUpsert) SetScore(v int) *SurveyResponseUpsert {
+	u.Set(surveyresponse.FieldScore, v)
+	return u
+}
+
+// UpdateScore sets the "score" field to the value that was provided on create.
+func (u *SurveyResponseUpsert) UpdateScore() *SurveyResponseUpsert {
+	u.SetExcluded(surveyresponse.FieldScore)
+	return u
+}
+
+// AddScore adds v to the "score" field.
+func (u *SurveyResponseUpsert) AddScore(v int) *SurveyResponseUpsert {
+	u.Add(surveyresponse.FieldScore, v)
+	return u
+}
+
+// SetComment sets the "comment" field.
+func (u *SurveyResponseUpsert) SetComment(v string) *SurveyResponseUpsert {
+	u.Set(surveyresponse.FieldComment, v)
+	return u
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *SurveyResponseUpsert) UpdateComment() *SurveyResponseUpsert {
+	u.SetExcluded(surveyresponse.FieldComment)
+	return u
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *SurveyResponseUpsert) ClearComment() *SurveyResponseUpsert {
+	u.SetNull(surveyresponse.FieldComment)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SurveyResponseUpsert) SetTenantID(v int) *SurveyResponseUpsert {
+	u.Set(surveyresponse.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SurveyResponseUpsert) UpdateTenantID() *SurveyResponseUpsert {
+	u.SetExcluded(surveyresponse.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SurveyResponseUpsert) AddTenantID(v int) *SurveyResponseUpsert {
+	u.Add(surveyresponse.FieldTenantID, v)
+	return u
+}
+
+// SetSubmittedAt sets the "submitted_at" field.
+func (u *SurveyResponseUpsert) SetSubmittedAt(v time.Time) *SurveyResponseUpsert {
+	u.Set(surveyresponse.FieldSubmittedAt, v)
+	return u
+}
+
+// UpdateSubmittedAt sets the "submitted_at" field to the value that was provided on create.
+func (u *SurveyResponseUpsert) UpdateSubmittedAt() *SurveyResponseUpsert {
+	u.SetExcluded(surveyresponse.FieldSubmittedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.SurveyResponse.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SurveyResponseUpsertOne) UpdateNewValues() *SurveyResponseUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SurveyResponse.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *SurveyResponseUpsertOne) Ignore() *SurveyResponseUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SurveyResponseUpsertOne) DoNothing() *SurveyResponseUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SurveyResponseCreate.OnConflict
+// documentation for more info.
+func (u *SurveyResponseUpsertOne) Update(set func(*SurveyResponseUpsert)) *SurveyResponseUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SurveyResponseUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetSurveyID sets the "survey_id" field.
+func (u *SurveyResponseUpsertOne) SetSurveyID(v int) *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.SetSurveyID(v)
+	})
+}
+
+// UpdateSurveyID sets the "survey_id" field to the value that was provided on create.
+func (u *SurveyResponseUpsertOne) UpdateSurveyID() *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.UpdateSurveyID()
+	})
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *SurveyResponseUpsertOne) SetTicketID(v int) *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// AddTicketID adds v to the "ticket_id" field.
+func (u *SurveyResponseUpsertOne) AddTicketID(v int) *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.AddTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *SurveyResponseUpsertOne) UpdateTicketID() *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// ClearTicketID clears the value of the "ticket_id" field.
+func (u *SurveyResponseUpsertOne) ClearTicketID() *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.ClearTicketID()
+	})
+}
+
+// SetRespondentID sets the "respondent_id" field.
+func (u *SurveyResponseUpsertOne) SetRespondentID(v int) *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.SetRespondentID(v)
+	})
+}
+
+// AddRespondentID adds v to the "respondent_id" field.
+func (u *SurveyResponseUpsertOne) AddRespondentID(v int) *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.AddRespondentID(v)
+	})
+}
+
+// UpdateRespondentID sets the "respondent_id" field to the value that was provided on create.
+func (u *SurveyResponseUpsertOne) UpdateRespondentID() *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.UpdateRespondentID()
+	})
+}
+
+// ClearRespondentID clears the value of the "respondent_id" field.
+func (u *SurveyResponseUpsertOne) ClearRespondentID() *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.ClearRespondentID()
+	})
+}
+
+// SetAnswers sets the "answers" field.
+func (u *SurveyResponseUpsertOne) SetAnswers(v []schema.Answer) *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.SetAnswers(v)
+	})
+}
+
+// UpdateAnswers sets the "answers" field to the value that was provided on create.
+func (u *SurveyResponseUpsertOne) UpdateAnswers() *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.UpdateAnswers()
+	})
+}
+
+// SetScore sets the "score" field.
+func (u *SurveyResponseUpsertOne) SetScore(v int) *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.SetScore(v)
+	})
+}
+
+// AddScore adds v to the "score" field.
+func (u *SurveyResponseUpsertOne) AddScore(v int) *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.AddScore(v)
+	})
+}
+
+// UpdateScore sets the "score" field to the value that was provided on create.
+func (u *SurveyResponseUpsertOne) UpdateScore() *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.UpdateScore()
+	})
+}
+
+// SetComment sets the "comment" field.
+func (u *SurveyResponseUpsertOne) SetComment(v string) *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.SetComment(v)
+	})
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *SurveyResponseUpsertOne) UpdateComment() *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.UpdateComment()
+	})
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *SurveyResponseUpsertOne) ClearComment() *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.ClearComment()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SurveyResponseUpsertOne) SetTenantID(v int) *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SurveyResponseUpsertOne) AddTenantID(v int) *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SurveyResponseUpsertOne) UpdateTenantID() *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetSubmittedAt sets the "submitted_at" field.
+func (u *SurveyResponseUpsertOne) SetSubmittedAt(v time.Time) *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.SetSubmittedAt(v)
+	})
+}
+
+// UpdateSubmittedAt sets the "submitted_at" field to the value that was provided on create.
+func (u *SurveyResponseUpsertOne) UpdateSubmittedAt() *SurveyResponseUpsertOne {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.UpdateSubmittedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SurveyResponseUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SurveyResponseCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SurveyResponseUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *SurveyResponseUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *SurveyResponseUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // SurveyResponseCreateBulk is the builder for creating many SurveyResponse entities in bulk.
 type SurveyResponseCreateBulk struct {
 	config
 	err      error
 	builders []*SurveyResponseCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the SurveyResponse entities in the database.
@@ -293,6 +718,7 @@ func (_c *SurveyResponseCreateBulk) Save(ctx context.Context) ([]*SurveyResponse
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -343,6 +769,271 @@ func (_c *SurveyResponseCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *SurveyResponseCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.SurveyResponse.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SurveyResponseUpsert) {
+//			SetSurveyID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SurveyResponseCreateBulk) OnConflict(opts ...sql.ConflictOption) *SurveyResponseUpsertBulk {
+	_c.conflict = opts
+	return &SurveyResponseUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.SurveyResponse.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SurveyResponseCreateBulk) OnConflictColumns(columns ...string) *SurveyResponseUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SurveyResponseUpsertBulk{
+		create: _c,
+	}
+}
+
+// SurveyResponseUpsertBulk is the builder for "upsert"-ing
+// a bulk of SurveyResponse nodes.
+type SurveyResponseUpsertBulk struct {
+	create *SurveyResponseCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.SurveyResponse.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SurveyResponseUpsertBulk) UpdateNewValues() *SurveyResponseUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.SurveyResponse.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *SurveyResponseUpsertBulk) Ignore() *SurveyResponseUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SurveyResponseUpsertBulk) DoNothing() *SurveyResponseUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SurveyResponseCreateBulk.OnConflict
+// documentation for more info.
+func (u *SurveyResponseUpsertBulk) Update(set func(*SurveyResponseUpsert)) *SurveyResponseUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SurveyResponseUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetSurveyID sets the "survey_id" field.
+func (u *SurveyResponseUpsertBulk) SetSurveyID(v int) *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.SetSurveyID(v)
+	})
+}
+
+// UpdateSurveyID sets the "survey_id" field to the value that was provided on create.
+func (u *SurveyResponseUpsertBulk) UpdateSurveyID() *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.UpdateSurveyID()
+	})
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *SurveyResponseUpsertBulk) SetTicketID(v int) *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// AddTicketID adds v to the "ticket_id" field.
+func (u *SurveyResponseUpsertBulk) AddTicketID(v int) *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.AddTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *SurveyResponseUpsertBulk) UpdateTicketID() *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// ClearTicketID clears the value of the "ticket_id" field.
+func (u *SurveyResponseUpsertBulk) ClearTicketID() *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.ClearTicketID()
+	})
+}
+
+// SetRespondentID sets the "respondent_id" field.
+func (u *SurveyResponseUpsertBulk) SetRespondentID(v int) *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.SetRespondentID(v)
+	})
+}
+
+// AddRespondentID adds v to the "respondent_id" field.
+func (u *SurveyResponseUpsertBulk) AddRespondentID(v int) *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.AddRespondentID(v)
+	})
+}
+
+// UpdateRespondentID sets the "respondent_id" field to the value that was provided on create.
+func (u *SurveyResponseUpsertBulk) UpdateRespondentID() *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.UpdateRespondentID()
+	})
+}
+
+// ClearRespondentID clears the value of the "respondent_id" field.
+func (u *SurveyResponseUpsertBulk) ClearRespondentID() *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.ClearRespondentID()
+	})
+}
+
+// SetAnswers sets the "answers" field.
+func (u *SurveyResponseUpsertBulk) SetAnswers(v []schema.Answer) *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.SetAnswers(v)
+	})
+}
+
+// UpdateAnswers sets the "answers" field to the value that was provided on create.
+func (u *SurveyResponseUpsertBulk) UpdateAnswers() *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.UpdateAnswers()
+	})
+}
+
+// SetScore sets the "score" field.
+func (u *SurveyResponseUpsertBulk) SetScore(v int) *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.SetScore(v)
+	})
+}
+
+// AddScore adds v to the "score" field.
+func (u *SurveyResponseUpsertBulk) AddScore(v int) *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.AddScore(v)
+	})
+}
+
+// UpdateScore sets the "score" field to the value that was provided on create.
+func (u *SurveyResponseUpsertBulk) UpdateScore() *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.UpdateScore()
+	})
+}
+
+// SetComment sets the "comment" field.
+func (u *SurveyResponseUpsertBulk) SetComment(v string) *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.SetComment(v)
+	})
+}
+
+// UpdateComment sets the "comment" field to the value that was provided on create.
+func (u *SurveyResponseUpsertBulk) UpdateComment() *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.UpdateComment()
+	})
+}
+
+// ClearComment clears the value of the "comment" field.
+func (u *SurveyResponseUpsertBulk) ClearComment() *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.ClearComment()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SurveyResponseUpsertBulk) SetTenantID(v int) *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SurveyResponseUpsertBulk) AddTenantID(v int) *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SurveyResponseUpsertBulk) UpdateTenantID() *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetSubmittedAt sets the "submitted_at" field.
+func (u *SurveyResponseUpsertBulk) SetSubmittedAt(v time.Time) *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.SetSubmittedAt(v)
+	})
+}
+
+// UpdateSubmittedAt sets the "submitted_at" field to the value that was provided on create.
+func (u *SurveyResponseUpsertBulk) UpdateSubmittedAt() *SurveyResponseUpsertBulk {
+	return u.Update(func(s *SurveyResponseUpsert) {
+		s.UpdateSubmittedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SurveyResponseUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the SurveyResponseCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SurveyResponseCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SurveyResponseUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

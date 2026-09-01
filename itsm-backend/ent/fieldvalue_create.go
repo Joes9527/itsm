@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/fieldvalue"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type FieldValueCreate struct {
 	config
 	mutation *FieldValueMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTenantID sets the "tenant_id" field.
@@ -218,6 +220,7 @@ func (_c *FieldValueCreate) createSpec() (*FieldValue, *sqlgraph.CreateSpec) {
 		_node = &FieldValue{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(fieldvalue.Table, sqlgraph.NewFieldSpec(fieldvalue.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(fieldvalue.FieldTenantID, field.TypeInt, value)
 		_node.TenantID = value
@@ -257,11 +260,446 @@ func (_c *FieldValueCreate) createSpec() (*FieldValue, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.FieldValue.Create().
+//		SetTenantID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.FieldValueUpsert) {
+//			SetTenantID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *FieldValueCreate) OnConflict(opts ...sql.ConflictOption) *FieldValueUpsertOne {
+	_c.conflict = opts
+	return &FieldValueUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.FieldValue.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *FieldValueCreate) OnConflictColumns(columns ...string) *FieldValueUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &FieldValueUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// FieldValueUpsertOne is the builder for "upsert"-ing
+	//  one FieldValue node.
+	FieldValueUpsertOne struct {
+		create *FieldValueCreate
+	}
+
+	// FieldValueUpsert is the "OnConflict" setter.
+	FieldValueUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTenantID sets the "tenant_id" field.
+func (u *FieldValueUpsert) SetTenantID(v int) *FieldValueUpsert {
+	u.Set(fieldvalue.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *FieldValueUpsert) UpdateTenantID() *FieldValueUpsert {
+	u.SetExcluded(fieldvalue.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *FieldValueUpsert) AddTenantID(v int) *FieldValueUpsert {
+	u.Add(fieldvalue.FieldTenantID, v)
+	return u
+}
+
+// SetEntityType sets the "entity_type" field.
+func (u *FieldValueUpsert) SetEntityType(v string) *FieldValueUpsert {
+	u.Set(fieldvalue.FieldEntityType, v)
+	return u
+}
+
+// UpdateEntityType sets the "entity_type" field to the value that was provided on create.
+func (u *FieldValueUpsert) UpdateEntityType() *FieldValueUpsert {
+	u.SetExcluded(fieldvalue.FieldEntityType)
+	return u
+}
+
+// SetEntityID sets the "entity_id" field.
+func (u *FieldValueUpsert) SetEntityID(v int) *FieldValueUpsert {
+	u.Set(fieldvalue.FieldEntityID, v)
+	return u
+}
+
+// UpdateEntityID sets the "entity_id" field to the value that was provided on create.
+func (u *FieldValueUpsert) UpdateEntityID() *FieldValueUpsert {
+	u.SetExcluded(fieldvalue.FieldEntityID)
+	return u
+}
+
+// AddEntityID adds v to the "entity_id" field.
+func (u *FieldValueUpsert) AddEntityID(v int) *FieldValueUpsert {
+	u.Add(fieldvalue.FieldEntityID, v)
+	return u
+}
+
+// SetFieldDefinitionID sets the "field_definition_id" field.
+func (u *FieldValueUpsert) SetFieldDefinitionID(v int) *FieldValueUpsert {
+	u.Set(fieldvalue.FieldFieldDefinitionID, v)
+	return u
+}
+
+// UpdateFieldDefinitionID sets the "field_definition_id" field to the value that was provided on create.
+func (u *FieldValueUpsert) UpdateFieldDefinitionID() *FieldValueUpsert {
+	u.SetExcluded(fieldvalue.FieldFieldDefinitionID)
+	return u
+}
+
+// AddFieldDefinitionID adds v to the "field_definition_id" field.
+func (u *FieldValueUpsert) AddFieldDefinitionID(v int) *FieldValueUpsert {
+	u.Add(fieldvalue.FieldFieldDefinitionID, v)
+	return u
+}
+
+// ClearFieldDefinitionID clears the value of the "field_definition_id" field.
+func (u *FieldValueUpsert) ClearFieldDefinitionID() *FieldValueUpsert {
+	u.SetNull(fieldvalue.FieldFieldDefinitionID)
+	return u
+}
+
+// SetFieldName sets the "field_name" field.
+func (u *FieldValueUpsert) SetFieldName(v string) *FieldValueUpsert {
+	u.Set(fieldvalue.FieldFieldName, v)
+	return u
+}
+
+// UpdateFieldName sets the "field_name" field to the value that was provided on create.
+func (u *FieldValueUpsert) UpdateFieldName() *FieldValueUpsert {
+	u.SetExcluded(fieldvalue.FieldFieldName)
+	return u
+}
+
+// SetFieldLabel sets the "field_label" field.
+func (u *FieldValueUpsert) SetFieldLabel(v string) *FieldValueUpsert {
+	u.Set(fieldvalue.FieldFieldLabel, v)
+	return u
+}
+
+// UpdateFieldLabel sets the "field_label" field to the value that was provided on create.
+func (u *FieldValueUpsert) UpdateFieldLabel() *FieldValueUpsert {
+	u.SetExcluded(fieldvalue.FieldFieldLabel)
+	return u
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (u *FieldValueUpsert) SetSortOrder(v int) *FieldValueUpsert {
+	u.Set(fieldvalue.FieldSortOrder, v)
+	return u
+}
+
+// UpdateSortOrder sets the "sort_order" field to the value that was provided on create.
+func (u *FieldValueUpsert) UpdateSortOrder() *FieldValueUpsert {
+	u.SetExcluded(fieldvalue.FieldSortOrder)
+	return u
+}
+
+// AddSortOrder adds v to the "sort_order" field.
+func (u *FieldValueUpsert) AddSortOrder(v int) *FieldValueUpsert {
+	u.Add(fieldvalue.FieldSortOrder, v)
+	return u
+}
+
+// SetValue sets the "value" field.
+func (u *FieldValueUpsert) SetValue(v json.RawMessage) *FieldValueUpsert {
+	u.Set(fieldvalue.FieldValue, v)
+	return u
+}
+
+// UpdateValue sets the "value" field to the value that was provided on create.
+func (u *FieldValueUpsert) UpdateValue() *FieldValueUpsert {
+	u.SetExcluded(fieldvalue.FieldValue)
+	return u
+}
+
+// ClearValue clears the value of the "value" field.
+func (u *FieldValueUpsert) ClearValue() *FieldValueUpsert {
+	u.SetNull(fieldvalue.FieldValue)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *FieldValueUpsert) SetCreatedAt(v time.Time) *FieldValueUpsert {
+	u.Set(fieldvalue.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *FieldValueUpsert) UpdateCreatedAt() *FieldValueUpsert {
+	u.SetExcluded(fieldvalue.FieldCreatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.FieldValue.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *FieldValueUpsertOne) UpdateNewValues() *FieldValueUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.FieldValue.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *FieldValueUpsertOne) Ignore() *FieldValueUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *FieldValueUpsertOne) DoNothing() *FieldValueUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the FieldValueCreate.OnConflict
+// documentation for more info.
+func (u *FieldValueUpsertOne) Update(set func(*FieldValueUpsert)) *FieldValueUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&FieldValueUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *FieldValueUpsertOne) SetTenantID(v int) *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *FieldValueUpsertOne) AddTenantID(v int) *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *FieldValueUpsertOne) UpdateTenantID() *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetEntityType sets the "entity_type" field.
+func (u *FieldValueUpsertOne) SetEntityType(v string) *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.SetEntityType(v)
+	})
+}
+
+// UpdateEntityType sets the "entity_type" field to the value that was provided on create.
+func (u *FieldValueUpsertOne) UpdateEntityType() *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.UpdateEntityType()
+	})
+}
+
+// SetEntityID sets the "entity_id" field.
+func (u *FieldValueUpsertOne) SetEntityID(v int) *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.SetEntityID(v)
+	})
+}
+
+// AddEntityID adds v to the "entity_id" field.
+func (u *FieldValueUpsertOne) AddEntityID(v int) *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.AddEntityID(v)
+	})
+}
+
+// UpdateEntityID sets the "entity_id" field to the value that was provided on create.
+func (u *FieldValueUpsertOne) UpdateEntityID() *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.UpdateEntityID()
+	})
+}
+
+// SetFieldDefinitionID sets the "field_definition_id" field.
+func (u *FieldValueUpsertOne) SetFieldDefinitionID(v int) *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.SetFieldDefinitionID(v)
+	})
+}
+
+// AddFieldDefinitionID adds v to the "field_definition_id" field.
+func (u *FieldValueUpsertOne) AddFieldDefinitionID(v int) *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.AddFieldDefinitionID(v)
+	})
+}
+
+// UpdateFieldDefinitionID sets the "field_definition_id" field to the value that was provided on create.
+func (u *FieldValueUpsertOne) UpdateFieldDefinitionID() *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.UpdateFieldDefinitionID()
+	})
+}
+
+// ClearFieldDefinitionID clears the value of the "field_definition_id" field.
+func (u *FieldValueUpsertOne) ClearFieldDefinitionID() *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.ClearFieldDefinitionID()
+	})
+}
+
+// SetFieldName sets the "field_name" field.
+func (u *FieldValueUpsertOne) SetFieldName(v string) *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.SetFieldName(v)
+	})
+}
+
+// UpdateFieldName sets the "field_name" field to the value that was provided on create.
+func (u *FieldValueUpsertOne) UpdateFieldName() *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.UpdateFieldName()
+	})
+}
+
+// SetFieldLabel sets the "field_label" field.
+func (u *FieldValueUpsertOne) SetFieldLabel(v string) *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.SetFieldLabel(v)
+	})
+}
+
+// UpdateFieldLabel sets the "field_label" field to the value that was provided on create.
+func (u *FieldValueUpsertOne) UpdateFieldLabel() *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.UpdateFieldLabel()
+	})
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (u *FieldValueUpsertOne) SetSortOrder(v int) *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.SetSortOrder(v)
+	})
+}
+
+// AddSortOrder adds v to the "sort_order" field.
+func (u *FieldValueUpsertOne) AddSortOrder(v int) *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.AddSortOrder(v)
+	})
+}
+
+// UpdateSortOrder sets the "sort_order" field to the value that was provided on create.
+func (u *FieldValueUpsertOne) UpdateSortOrder() *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.UpdateSortOrder()
+	})
+}
+
+// SetValue sets the "value" field.
+func (u *FieldValueUpsertOne) SetValue(v json.RawMessage) *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.SetValue(v)
+	})
+}
+
+// UpdateValue sets the "value" field to the value that was provided on create.
+func (u *FieldValueUpsertOne) UpdateValue() *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.UpdateValue()
+	})
+}
+
+// ClearValue clears the value of the "value" field.
+func (u *FieldValueUpsertOne) ClearValue() *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.ClearValue()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *FieldValueUpsertOne) SetCreatedAt(v time.Time) *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *FieldValueUpsertOne) UpdateCreatedAt() *FieldValueUpsertOne {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *FieldValueUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for FieldValueCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *FieldValueUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *FieldValueUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *FieldValueUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // FieldValueCreateBulk is the builder for creating many FieldValue entities in bulk.
 type FieldValueCreateBulk struct {
 	config
 	err      error
 	builders []*FieldValueCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the FieldValue entities in the database.
@@ -291,6 +729,7 @@ func (_c *FieldValueCreateBulk) Save(ctx context.Context) ([]*FieldValue, error)
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -341,6 +780,278 @@ func (_c *FieldValueCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *FieldValueCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.FieldValue.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.FieldValueUpsert) {
+//			SetTenantID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *FieldValueCreateBulk) OnConflict(opts ...sql.ConflictOption) *FieldValueUpsertBulk {
+	_c.conflict = opts
+	return &FieldValueUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.FieldValue.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *FieldValueCreateBulk) OnConflictColumns(columns ...string) *FieldValueUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &FieldValueUpsertBulk{
+		create: _c,
+	}
+}
+
+// FieldValueUpsertBulk is the builder for "upsert"-ing
+// a bulk of FieldValue nodes.
+type FieldValueUpsertBulk struct {
+	create *FieldValueCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.FieldValue.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *FieldValueUpsertBulk) UpdateNewValues() *FieldValueUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.FieldValue.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *FieldValueUpsertBulk) Ignore() *FieldValueUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *FieldValueUpsertBulk) DoNothing() *FieldValueUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the FieldValueCreateBulk.OnConflict
+// documentation for more info.
+func (u *FieldValueUpsertBulk) Update(set func(*FieldValueUpsert)) *FieldValueUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&FieldValueUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *FieldValueUpsertBulk) SetTenantID(v int) *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *FieldValueUpsertBulk) AddTenantID(v int) *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *FieldValueUpsertBulk) UpdateTenantID() *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetEntityType sets the "entity_type" field.
+func (u *FieldValueUpsertBulk) SetEntityType(v string) *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.SetEntityType(v)
+	})
+}
+
+// UpdateEntityType sets the "entity_type" field to the value that was provided on create.
+func (u *FieldValueUpsertBulk) UpdateEntityType() *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.UpdateEntityType()
+	})
+}
+
+// SetEntityID sets the "entity_id" field.
+func (u *FieldValueUpsertBulk) SetEntityID(v int) *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.SetEntityID(v)
+	})
+}
+
+// AddEntityID adds v to the "entity_id" field.
+func (u *FieldValueUpsertBulk) AddEntityID(v int) *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.AddEntityID(v)
+	})
+}
+
+// UpdateEntityID sets the "entity_id" field to the value that was provided on create.
+func (u *FieldValueUpsertBulk) UpdateEntityID() *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.UpdateEntityID()
+	})
+}
+
+// SetFieldDefinitionID sets the "field_definition_id" field.
+func (u *FieldValueUpsertBulk) SetFieldDefinitionID(v int) *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.SetFieldDefinitionID(v)
+	})
+}
+
+// AddFieldDefinitionID adds v to the "field_definition_id" field.
+func (u *FieldValueUpsertBulk) AddFieldDefinitionID(v int) *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.AddFieldDefinitionID(v)
+	})
+}
+
+// UpdateFieldDefinitionID sets the "field_definition_id" field to the value that was provided on create.
+func (u *FieldValueUpsertBulk) UpdateFieldDefinitionID() *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.UpdateFieldDefinitionID()
+	})
+}
+
+// ClearFieldDefinitionID clears the value of the "field_definition_id" field.
+func (u *FieldValueUpsertBulk) ClearFieldDefinitionID() *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.ClearFieldDefinitionID()
+	})
+}
+
+// SetFieldName sets the "field_name" field.
+func (u *FieldValueUpsertBulk) SetFieldName(v string) *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.SetFieldName(v)
+	})
+}
+
+// UpdateFieldName sets the "field_name" field to the value that was provided on create.
+func (u *FieldValueUpsertBulk) UpdateFieldName() *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.UpdateFieldName()
+	})
+}
+
+// SetFieldLabel sets the "field_label" field.
+func (u *FieldValueUpsertBulk) SetFieldLabel(v string) *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.SetFieldLabel(v)
+	})
+}
+
+// UpdateFieldLabel sets the "field_label" field to the value that was provided on create.
+func (u *FieldValueUpsertBulk) UpdateFieldLabel() *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.UpdateFieldLabel()
+	})
+}
+
+// SetSortOrder sets the "sort_order" field.
+func (u *FieldValueUpsertBulk) SetSortOrder(v int) *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.SetSortOrder(v)
+	})
+}
+
+// AddSortOrder adds v to the "sort_order" field.
+func (u *FieldValueUpsertBulk) AddSortOrder(v int) *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.AddSortOrder(v)
+	})
+}
+
+// UpdateSortOrder sets the "sort_order" field to the value that was provided on create.
+func (u *FieldValueUpsertBulk) UpdateSortOrder() *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.UpdateSortOrder()
+	})
+}
+
+// SetValue sets the "value" field.
+func (u *FieldValueUpsertBulk) SetValue(v json.RawMessage) *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.SetValue(v)
+	})
+}
+
+// UpdateValue sets the "value" field to the value that was provided on create.
+func (u *FieldValueUpsertBulk) UpdateValue() *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.UpdateValue()
+	})
+}
+
+// ClearValue clears the value of the "value" field.
+func (u *FieldValueUpsertBulk) ClearValue() *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.ClearValue()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *FieldValueUpsertBulk) SetCreatedAt(v time.Time) *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *FieldValueUpsertBulk) UpdateCreatedAt() *FieldValueUpsertBulk {
+	return u.Update(func(s *FieldValueUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *FieldValueUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the FieldValueCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for FieldValueCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *FieldValueUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

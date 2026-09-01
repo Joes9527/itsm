@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/surveyresponse"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -20,6 +21,7 @@ type SurveyCreate struct {
 	config
 	mutation *SurveyMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTitle sets the "title" field.
@@ -265,6 +267,7 @@ func (_c *SurveyCreate) createSpec() (*Survey, *sqlgraph.CreateSpec) {
 		_node = &Survey{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(survey.Table, sqlgraph.NewFieldSpec(survey.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Title(); ok {
 		_spec.SetField(survey.FieldTitle, field.TypeString, value)
 		_node.Title = value
@@ -324,11 +327,446 @@ func (_c *SurveyCreate) createSpec() (*Survey, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Survey.Create().
+//		SetTitle(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SurveyUpsert) {
+//			SetTitle(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SurveyCreate) OnConflict(opts ...sql.ConflictOption) *SurveyUpsertOne {
+	_c.conflict = opts
+	return &SurveyUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Survey.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SurveyCreate) OnConflictColumns(columns ...string) *SurveyUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SurveyUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// SurveyUpsertOne is the builder for "upsert"-ing
+	//  one Survey node.
+	SurveyUpsertOne struct {
+		create *SurveyCreate
+	}
+
+	// SurveyUpsert is the "OnConflict" setter.
+	SurveyUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTitle sets the "title" field.
+func (u *SurveyUpsert) SetTitle(v string) *SurveyUpsert {
+	u.Set(survey.FieldTitle, v)
+	return u
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *SurveyUpsert) UpdateTitle() *SurveyUpsert {
+	u.SetExcluded(survey.FieldTitle)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *SurveyUpsert) SetDescription(v string) *SurveyUpsert {
+	u.Set(survey.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *SurveyUpsert) UpdateDescription() *SurveyUpsert {
+	u.SetExcluded(survey.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *SurveyUpsert) ClearDescription() *SurveyUpsert {
+	u.SetNull(survey.FieldDescription)
+	return u
+}
+
+// SetSurveyType sets the "survey_type" field.
+func (u *SurveyUpsert) SetSurveyType(v string) *SurveyUpsert {
+	u.Set(survey.FieldSurveyType, v)
+	return u
+}
+
+// UpdateSurveyType sets the "survey_type" field to the value that was provided on create.
+func (u *SurveyUpsert) UpdateSurveyType() *SurveyUpsert {
+	u.SetExcluded(survey.FieldSurveyType)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *SurveyUpsert) SetIsActive(v bool) *SurveyUpsert {
+	u.Set(survey.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *SurveyUpsert) UpdateIsActive() *SurveyUpsert {
+	u.SetExcluded(survey.FieldIsActive)
+	return u
+}
+
+// SetStartDate sets the "start_date" field.
+func (u *SurveyUpsert) SetStartDate(v time.Time) *SurveyUpsert {
+	u.Set(survey.FieldStartDate, v)
+	return u
+}
+
+// UpdateStartDate sets the "start_date" field to the value that was provided on create.
+func (u *SurveyUpsert) UpdateStartDate() *SurveyUpsert {
+	u.SetExcluded(survey.FieldStartDate)
+	return u
+}
+
+// ClearStartDate clears the value of the "start_date" field.
+func (u *SurveyUpsert) ClearStartDate() *SurveyUpsert {
+	u.SetNull(survey.FieldStartDate)
+	return u
+}
+
+// SetEndDate sets the "end_date" field.
+func (u *SurveyUpsert) SetEndDate(v time.Time) *SurveyUpsert {
+	u.Set(survey.FieldEndDate, v)
+	return u
+}
+
+// UpdateEndDate sets the "end_date" field to the value that was provided on create.
+func (u *SurveyUpsert) UpdateEndDate() *SurveyUpsert {
+	u.SetExcluded(survey.FieldEndDate)
+	return u
+}
+
+// ClearEndDate clears the value of the "end_date" field.
+func (u *SurveyUpsert) ClearEndDate() *SurveyUpsert {
+	u.SetNull(survey.FieldEndDate)
+	return u
+}
+
+// SetQuestions sets the "questions" field.
+func (u *SurveyUpsert) SetQuestions(v []schema.SurveyQuestion) *SurveyUpsert {
+	u.Set(survey.FieldQuestions, v)
+	return u
+}
+
+// UpdateQuestions sets the "questions" field to the value that was provided on create.
+func (u *SurveyUpsert) UpdateQuestions() *SurveyUpsert {
+	u.SetExcluded(survey.FieldQuestions)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SurveyUpsert) SetTenantID(v int) *SurveyUpsert {
+	u.Set(survey.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SurveyUpsert) UpdateTenantID() *SurveyUpsert {
+	u.SetExcluded(survey.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SurveyUpsert) AddTenantID(v int) *SurveyUpsert {
+	u.Add(survey.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SurveyUpsert) SetCreatedAt(v time.Time) *SurveyUpsert {
+	u.Set(survey.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SurveyUpsert) UpdateCreatedAt() *SurveyUpsert {
+	u.SetExcluded(survey.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SurveyUpsert) SetUpdatedAt(v time.Time) *SurveyUpsert {
+	u.Set(survey.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SurveyUpsert) UpdateUpdatedAt() *SurveyUpsert {
+	u.SetExcluded(survey.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.Survey.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SurveyUpsertOne) UpdateNewValues() *SurveyUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Survey.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *SurveyUpsertOne) Ignore() *SurveyUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SurveyUpsertOne) DoNothing() *SurveyUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SurveyCreate.OnConflict
+// documentation for more info.
+func (u *SurveyUpsertOne) Update(set func(*SurveyUpsert)) *SurveyUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SurveyUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTitle sets the "title" field.
+func (u *SurveyUpsertOne) SetTitle(v string) *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetTitle(v)
+	})
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *SurveyUpsertOne) UpdateTitle() *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateTitle()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *SurveyUpsertOne) SetDescription(v string) *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *SurveyUpsertOne) UpdateDescription() *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *SurveyUpsertOne) ClearDescription() *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetSurveyType sets the "survey_type" field.
+func (u *SurveyUpsertOne) SetSurveyType(v string) *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetSurveyType(v)
+	})
+}
+
+// UpdateSurveyType sets the "survey_type" field to the value that was provided on create.
+func (u *SurveyUpsertOne) UpdateSurveyType() *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateSurveyType()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *SurveyUpsertOne) SetIsActive(v bool) *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *SurveyUpsertOne) UpdateIsActive() *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetStartDate sets the "start_date" field.
+func (u *SurveyUpsertOne) SetStartDate(v time.Time) *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetStartDate(v)
+	})
+}
+
+// UpdateStartDate sets the "start_date" field to the value that was provided on create.
+func (u *SurveyUpsertOne) UpdateStartDate() *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateStartDate()
+	})
+}
+
+// ClearStartDate clears the value of the "start_date" field.
+func (u *SurveyUpsertOne) ClearStartDate() *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.ClearStartDate()
+	})
+}
+
+// SetEndDate sets the "end_date" field.
+func (u *SurveyUpsertOne) SetEndDate(v time.Time) *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetEndDate(v)
+	})
+}
+
+// UpdateEndDate sets the "end_date" field to the value that was provided on create.
+func (u *SurveyUpsertOne) UpdateEndDate() *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateEndDate()
+	})
+}
+
+// ClearEndDate clears the value of the "end_date" field.
+func (u *SurveyUpsertOne) ClearEndDate() *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.ClearEndDate()
+	})
+}
+
+// SetQuestions sets the "questions" field.
+func (u *SurveyUpsertOne) SetQuestions(v []schema.SurveyQuestion) *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetQuestions(v)
+	})
+}
+
+// UpdateQuestions sets the "questions" field to the value that was provided on create.
+func (u *SurveyUpsertOne) UpdateQuestions() *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateQuestions()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SurveyUpsertOne) SetTenantID(v int) *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SurveyUpsertOne) AddTenantID(v int) *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SurveyUpsertOne) UpdateTenantID() *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SurveyUpsertOne) SetCreatedAt(v time.Time) *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SurveyUpsertOne) UpdateCreatedAt() *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SurveyUpsertOne) SetUpdatedAt(v time.Time) *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SurveyUpsertOne) UpdateUpdatedAt() *SurveyUpsertOne {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SurveyUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SurveyCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SurveyUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *SurveyUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *SurveyUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // SurveyCreateBulk is the builder for creating many Survey entities in bulk.
 type SurveyCreateBulk struct {
 	config
 	err      error
 	builders []*SurveyCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the Survey entities in the database.
@@ -358,6 +796,7 @@ func (_c *SurveyCreateBulk) Save(ctx context.Context) ([]*Survey, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -408,6 +847,278 @@ func (_c *SurveyCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *SurveyCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Survey.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.SurveyUpsert) {
+//			SetTitle(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *SurveyCreateBulk) OnConflict(opts ...sql.ConflictOption) *SurveyUpsertBulk {
+	_c.conflict = opts
+	return &SurveyUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Survey.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *SurveyCreateBulk) OnConflictColumns(columns ...string) *SurveyUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &SurveyUpsertBulk{
+		create: _c,
+	}
+}
+
+// SurveyUpsertBulk is the builder for "upsert"-ing
+// a bulk of Survey nodes.
+type SurveyUpsertBulk struct {
+	create *SurveyCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.Survey.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *SurveyUpsertBulk) UpdateNewValues() *SurveyUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Survey.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *SurveyUpsertBulk) Ignore() *SurveyUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *SurveyUpsertBulk) DoNothing() *SurveyUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the SurveyCreateBulk.OnConflict
+// documentation for more info.
+func (u *SurveyUpsertBulk) Update(set func(*SurveyUpsert)) *SurveyUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&SurveyUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTitle sets the "title" field.
+func (u *SurveyUpsertBulk) SetTitle(v string) *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetTitle(v)
+	})
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *SurveyUpsertBulk) UpdateTitle() *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateTitle()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *SurveyUpsertBulk) SetDescription(v string) *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *SurveyUpsertBulk) UpdateDescription() *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *SurveyUpsertBulk) ClearDescription() *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetSurveyType sets the "survey_type" field.
+func (u *SurveyUpsertBulk) SetSurveyType(v string) *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetSurveyType(v)
+	})
+}
+
+// UpdateSurveyType sets the "survey_type" field to the value that was provided on create.
+func (u *SurveyUpsertBulk) UpdateSurveyType() *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateSurveyType()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *SurveyUpsertBulk) SetIsActive(v bool) *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *SurveyUpsertBulk) UpdateIsActive() *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetStartDate sets the "start_date" field.
+func (u *SurveyUpsertBulk) SetStartDate(v time.Time) *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetStartDate(v)
+	})
+}
+
+// UpdateStartDate sets the "start_date" field to the value that was provided on create.
+func (u *SurveyUpsertBulk) UpdateStartDate() *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateStartDate()
+	})
+}
+
+// ClearStartDate clears the value of the "start_date" field.
+func (u *SurveyUpsertBulk) ClearStartDate() *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.ClearStartDate()
+	})
+}
+
+// SetEndDate sets the "end_date" field.
+func (u *SurveyUpsertBulk) SetEndDate(v time.Time) *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetEndDate(v)
+	})
+}
+
+// UpdateEndDate sets the "end_date" field to the value that was provided on create.
+func (u *SurveyUpsertBulk) UpdateEndDate() *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateEndDate()
+	})
+}
+
+// ClearEndDate clears the value of the "end_date" field.
+func (u *SurveyUpsertBulk) ClearEndDate() *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.ClearEndDate()
+	})
+}
+
+// SetQuestions sets the "questions" field.
+func (u *SurveyUpsertBulk) SetQuestions(v []schema.SurveyQuestion) *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetQuestions(v)
+	})
+}
+
+// UpdateQuestions sets the "questions" field to the value that was provided on create.
+func (u *SurveyUpsertBulk) UpdateQuestions() *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateQuestions()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *SurveyUpsertBulk) SetTenantID(v int) *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *SurveyUpsertBulk) AddTenantID(v int) *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *SurveyUpsertBulk) UpdateTenantID() *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *SurveyUpsertBulk) SetCreatedAt(v time.Time) *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *SurveyUpsertBulk) UpdateCreatedAt() *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *SurveyUpsertBulk) SetUpdatedAt(v time.Time) *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *SurveyUpsertBulk) UpdateUpdatedAt() *SurveyUpsertBulk {
+	return u.Update(func(s *SurveyUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *SurveyUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the SurveyCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for SurveyCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *SurveyUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

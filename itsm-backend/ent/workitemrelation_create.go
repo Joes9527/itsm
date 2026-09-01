@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/workitemrelation"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type WorkItemRelationCreate struct {
 	config
 	mutation *WorkItemRelationMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTenantID sets the "tenant_id" field.
@@ -196,6 +198,7 @@ func (_c *WorkItemRelationCreate) createSpec() (*WorkItemRelation, *sqlgraph.Cre
 		_node = &WorkItemRelation{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(workitemrelation.Table, sqlgraph.NewFieldSpec(workitemrelation.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(workitemrelation.FieldTenantID, field.TypeInt, value)
 		_node.TenantID = value
@@ -231,11 +234,420 @@ func (_c *WorkItemRelationCreate) createSpec() (*WorkItemRelation, *sqlgraph.Cre
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.WorkItemRelation.Create().
+//		SetTenantID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.WorkItemRelationUpsert) {
+//			SetTenantID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *WorkItemRelationCreate) OnConflict(opts ...sql.ConflictOption) *WorkItemRelationUpsertOne {
+	_c.conflict = opts
+	return &WorkItemRelationUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.WorkItemRelation.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *WorkItemRelationCreate) OnConflictColumns(columns ...string) *WorkItemRelationUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &WorkItemRelationUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// WorkItemRelationUpsertOne is the builder for "upsert"-ing
+	//  one WorkItemRelation node.
+	WorkItemRelationUpsertOne struct {
+		create *WorkItemRelationCreate
+	}
+
+	// WorkItemRelationUpsert is the "OnConflict" setter.
+	WorkItemRelationUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTenantID sets the "tenant_id" field.
+func (u *WorkItemRelationUpsert) SetTenantID(v int) *WorkItemRelationUpsert {
+	u.Set(workitemrelation.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *WorkItemRelationUpsert) UpdateTenantID() *WorkItemRelationUpsert {
+	u.SetExcluded(workitemrelation.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *WorkItemRelationUpsert) AddTenantID(v int) *WorkItemRelationUpsert {
+	u.Add(workitemrelation.FieldTenantID, v)
+	return u
+}
+
+// SetSourceWorkItemID sets the "source_work_item_id" field.
+func (u *WorkItemRelationUpsert) SetSourceWorkItemID(v int) *WorkItemRelationUpsert {
+	u.Set(workitemrelation.FieldSourceWorkItemID, v)
+	return u
+}
+
+// UpdateSourceWorkItemID sets the "source_work_item_id" field to the value that was provided on create.
+func (u *WorkItemRelationUpsert) UpdateSourceWorkItemID() *WorkItemRelationUpsert {
+	u.SetExcluded(workitemrelation.FieldSourceWorkItemID)
+	return u
+}
+
+// AddSourceWorkItemID adds v to the "source_work_item_id" field.
+func (u *WorkItemRelationUpsert) AddSourceWorkItemID(v int) *WorkItemRelationUpsert {
+	u.Add(workitemrelation.FieldSourceWorkItemID, v)
+	return u
+}
+
+// SetTargetWorkItemID sets the "target_work_item_id" field.
+func (u *WorkItemRelationUpsert) SetTargetWorkItemID(v int) *WorkItemRelationUpsert {
+	u.Set(workitemrelation.FieldTargetWorkItemID, v)
+	return u
+}
+
+// UpdateTargetWorkItemID sets the "target_work_item_id" field to the value that was provided on create.
+func (u *WorkItemRelationUpsert) UpdateTargetWorkItemID() *WorkItemRelationUpsert {
+	u.SetExcluded(workitemrelation.FieldTargetWorkItemID)
+	return u
+}
+
+// AddTargetWorkItemID adds v to the "target_work_item_id" field.
+func (u *WorkItemRelationUpsert) AddTargetWorkItemID(v int) *WorkItemRelationUpsert {
+	u.Add(workitemrelation.FieldTargetWorkItemID, v)
+	return u
+}
+
+// SetRelationType sets the "relation_type" field.
+func (u *WorkItemRelationUpsert) SetRelationType(v string) *WorkItemRelationUpsert {
+	u.Set(workitemrelation.FieldRelationType, v)
+	return u
+}
+
+// UpdateRelationType sets the "relation_type" field to the value that was provided on create.
+func (u *WorkItemRelationUpsert) UpdateRelationType() *WorkItemRelationUpsert {
+	u.SetExcluded(workitemrelation.FieldRelationType)
+	return u
+}
+
+// SetCreatedByID sets the "created_by_id" field.
+func (u *WorkItemRelationUpsert) SetCreatedByID(v int) *WorkItemRelationUpsert {
+	u.Set(workitemrelation.FieldCreatedByID, v)
+	return u
+}
+
+// UpdateCreatedByID sets the "created_by_id" field to the value that was provided on create.
+func (u *WorkItemRelationUpsert) UpdateCreatedByID() *WorkItemRelationUpsert {
+	u.SetExcluded(workitemrelation.FieldCreatedByID)
+	return u
+}
+
+// AddCreatedByID adds v to the "created_by_id" field.
+func (u *WorkItemRelationUpsert) AddCreatedByID(v int) *WorkItemRelationUpsert {
+	u.Add(workitemrelation.FieldCreatedByID, v)
+	return u
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *WorkItemRelationUpsert) SetMetadata(v map[string]interface{}) *WorkItemRelationUpsert {
+	u.Set(workitemrelation.FieldMetadata, v)
+	return u
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *WorkItemRelationUpsert) UpdateMetadata() *WorkItemRelationUpsert {
+	u.SetExcluded(workitemrelation.FieldMetadata)
+	return u
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *WorkItemRelationUpsert) ClearMetadata() *WorkItemRelationUpsert {
+	u.SetNull(workitemrelation.FieldMetadata)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *WorkItemRelationUpsert) SetCreatedAt(v time.Time) *WorkItemRelationUpsert {
+	u.Set(workitemrelation.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *WorkItemRelationUpsert) UpdateCreatedAt() *WorkItemRelationUpsert {
+	u.SetExcluded(workitemrelation.FieldCreatedAt)
+	return u
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (u *WorkItemRelationUpsert) SetDeletedAt(v time.Time) *WorkItemRelationUpsert {
+	u.Set(workitemrelation.FieldDeletedAt, v)
+	return u
+}
+
+// UpdateDeletedAt sets the "deleted_at" field to the value that was provided on create.
+func (u *WorkItemRelationUpsert) UpdateDeletedAt() *WorkItemRelationUpsert {
+	u.SetExcluded(workitemrelation.FieldDeletedAt)
+	return u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (u *WorkItemRelationUpsert) ClearDeletedAt() *WorkItemRelationUpsert {
+	u.SetNull(workitemrelation.FieldDeletedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.WorkItemRelation.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *WorkItemRelationUpsertOne) UpdateNewValues() *WorkItemRelationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.WorkItemRelation.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *WorkItemRelationUpsertOne) Ignore() *WorkItemRelationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *WorkItemRelationUpsertOne) DoNothing() *WorkItemRelationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the WorkItemRelationCreate.OnConflict
+// documentation for more info.
+func (u *WorkItemRelationUpsertOne) Update(set func(*WorkItemRelationUpsert)) *WorkItemRelationUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&WorkItemRelationUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *WorkItemRelationUpsertOne) SetTenantID(v int) *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *WorkItemRelationUpsertOne) AddTenantID(v int) *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *WorkItemRelationUpsertOne) UpdateTenantID() *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetSourceWorkItemID sets the "source_work_item_id" field.
+func (u *WorkItemRelationUpsertOne) SetSourceWorkItemID(v int) *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.SetSourceWorkItemID(v)
+	})
+}
+
+// AddSourceWorkItemID adds v to the "source_work_item_id" field.
+func (u *WorkItemRelationUpsertOne) AddSourceWorkItemID(v int) *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.AddSourceWorkItemID(v)
+	})
+}
+
+// UpdateSourceWorkItemID sets the "source_work_item_id" field to the value that was provided on create.
+func (u *WorkItemRelationUpsertOne) UpdateSourceWorkItemID() *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.UpdateSourceWorkItemID()
+	})
+}
+
+// SetTargetWorkItemID sets the "target_work_item_id" field.
+func (u *WorkItemRelationUpsertOne) SetTargetWorkItemID(v int) *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.SetTargetWorkItemID(v)
+	})
+}
+
+// AddTargetWorkItemID adds v to the "target_work_item_id" field.
+func (u *WorkItemRelationUpsertOne) AddTargetWorkItemID(v int) *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.AddTargetWorkItemID(v)
+	})
+}
+
+// UpdateTargetWorkItemID sets the "target_work_item_id" field to the value that was provided on create.
+func (u *WorkItemRelationUpsertOne) UpdateTargetWorkItemID() *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.UpdateTargetWorkItemID()
+	})
+}
+
+// SetRelationType sets the "relation_type" field.
+func (u *WorkItemRelationUpsertOne) SetRelationType(v string) *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.SetRelationType(v)
+	})
+}
+
+// UpdateRelationType sets the "relation_type" field to the value that was provided on create.
+func (u *WorkItemRelationUpsertOne) UpdateRelationType() *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.UpdateRelationType()
+	})
+}
+
+// SetCreatedByID sets the "created_by_id" field.
+func (u *WorkItemRelationUpsertOne) SetCreatedByID(v int) *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.SetCreatedByID(v)
+	})
+}
+
+// AddCreatedByID adds v to the "created_by_id" field.
+func (u *WorkItemRelationUpsertOne) AddCreatedByID(v int) *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.AddCreatedByID(v)
+	})
+}
+
+// UpdateCreatedByID sets the "created_by_id" field to the value that was provided on create.
+func (u *WorkItemRelationUpsertOne) UpdateCreatedByID() *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.UpdateCreatedByID()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *WorkItemRelationUpsertOne) SetMetadata(v map[string]interface{}) *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *WorkItemRelationUpsertOne) UpdateMetadata() *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *WorkItemRelationUpsertOne) ClearMetadata() *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *WorkItemRelationUpsertOne) SetCreatedAt(v time.Time) *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *WorkItemRelationUpsertOne) UpdateCreatedAt() *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (u *WorkItemRelationUpsertOne) SetDeletedAt(v time.Time) *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.SetDeletedAt(v)
+	})
+}
+
+// UpdateDeletedAt sets the "deleted_at" field to the value that was provided on create.
+func (u *WorkItemRelationUpsertOne) UpdateDeletedAt() *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.UpdateDeletedAt()
+	})
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (u *WorkItemRelationUpsertOne) ClearDeletedAt() *WorkItemRelationUpsertOne {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.ClearDeletedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *WorkItemRelationUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for WorkItemRelationCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *WorkItemRelationUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *WorkItemRelationUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *WorkItemRelationUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // WorkItemRelationCreateBulk is the builder for creating many WorkItemRelation entities in bulk.
 type WorkItemRelationCreateBulk struct {
 	config
 	err      error
 	builders []*WorkItemRelationCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the WorkItemRelation entities in the database.
@@ -265,6 +677,7 @@ func (_c *WorkItemRelationCreateBulk) Save(ctx context.Context) ([]*WorkItemRela
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -315,6 +728,264 @@ func (_c *WorkItemRelationCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *WorkItemRelationCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.WorkItemRelation.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.WorkItemRelationUpsert) {
+//			SetTenantID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *WorkItemRelationCreateBulk) OnConflict(opts ...sql.ConflictOption) *WorkItemRelationUpsertBulk {
+	_c.conflict = opts
+	return &WorkItemRelationUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.WorkItemRelation.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *WorkItemRelationCreateBulk) OnConflictColumns(columns ...string) *WorkItemRelationUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &WorkItemRelationUpsertBulk{
+		create: _c,
+	}
+}
+
+// WorkItemRelationUpsertBulk is the builder for "upsert"-ing
+// a bulk of WorkItemRelation nodes.
+type WorkItemRelationUpsertBulk struct {
+	create *WorkItemRelationCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.WorkItemRelation.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *WorkItemRelationUpsertBulk) UpdateNewValues() *WorkItemRelationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.WorkItemRelation.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *WorkItemRelationUpsertBulk) Ignore() *WorkItemRelationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *WorkItemRelationUpsertBulk) DoNothing() *WorkItemRelationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the WorkItemRelationCreateBulk.OnConflict
+// documentation for more info.
+func (u *WorkItemRelationUpsertBulk) Update(set func(*WorkItemRelationUpsert)) *WorkItemRelationUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&WorkItemRelationUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *WorkItemRelationUpsertBulk) SetTenantID(v int) *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *WorkItemRelationUpsertBulk) AddTenantID(v int) *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *WorkItemRelationUpsertBulk) UpdateTenantID() *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetSourceWorkItemID sets the "source_work_item_id" field.
+func (u *WorkItemRelationUpsertBulk) SetSourceWorkItemID(v int) *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.SetSourceWorkItemID(v)
+	})
+}
+
+// AddSourceWorkItemID adds v to the "source_work_item_id" field.
+func (u *WorkItemRelationUpsertBulk) AddSourceWorkItemID(v int) *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.AddSourceWorkItemID(v)
+	})
+}
+
+// UpdateSourceWorkItemID sets the "source_work_item_id" field to the value that was provided on create.
+func (u *WorkItemRelationUpsertBulk) UpdateSourceWorkItemID() *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.UpdateSourceWorkItemID()
+	})
+}
+
+// SetTargetWorkItemID sets the "target_work_item_id" field.
+func (u *WorkItemRelationUpsertBulk) SetTargetWorkItemID(v int) *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.SetTargetWorkItemID(v)
+	})
+}
+
+// AddTargetWorkItemID adds v to the "target_work_item_id" field.
+func (u *WorkItemRelationUpsertBulk) AddTargetWorkItemID(v int) *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.AddTargetWorkItemID(v)
+	})
+}
+
+// UpdateTargetWorkItemID sets the "target_work_item_id" field to the value that was provided on create.
+func (u *WorkItemRelationUpsertBulk) UpdateTargetWorkItemID() *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.UpdateTargetWorkItemID()
+	})
+}
+
+// SetRelationType sets the "relation_type" field.
+func (u *WorkItemRelationUpsertBulk) SetRelationType(v string) *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.SetRelationType(v)
+	})
+}
+
+// UpdateRelationType sets the "relation_type" field to the value that was provided on create.
+func (u *WorkItemRelationUpsertBulk) UpdateRelationType() *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.UpdateRelationType()
+	})
+}
+
+// SetCreatedByID sets the "created_by_id" field.
+func (u *WorkItemRelationUpsertBulk) SetCreatedByID(v int) *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.SetCreatedByID(v)
+	})
+}
+
+// AddCreatedByID adds v to the "created_by_id" field.
+func (u *WorkItemRelationUpsertBulk) AddCreatedByID(v int) *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.AddCreatedByID(v)
+	})
+}
+
+// UpdateCreatedByID sets the "created_by_id" field to the value that was provided on create.
+func (u *WorkItemRelationUpsertBulk) UpdateCreatedByID() *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.UpdateCreatedByID()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *WorkItemRelationUpsertBulk) SetMetadata(v map[string]interface{}) *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *WorkItemRelationUpsertBulk) UpdateMetadata() *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *WorkItemRelationUpsertBulk) ClearMetadata() *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *WorkItemRelationUpsertBulk) SetCreatedAt(v time.Time) *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *WorkItemRelationUpsertBulk) UpdateCreatedAt() *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (u *WorkItemRelationUpsertBulk) SetDeletedAt(v time.Time) *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.SetDeletedAt(v)
+	})
+}
+
+// UpdateDeletedAt sets the "deleted_at" field to the value that was provided on create.
+func (u *WorkItemRelationUpsertBulk) UpdateDeletedAt() *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.UpdateDeletedAt()
+	})
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (u *WorkItemRelationUpsertBulk) ClearDeletedAt() *WorkItemRelationUpsertBulk {
+	return u.Update(func(s *WorkItemRelationUpsert) {
+		s.ClearDeletedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *WorkItemRelationUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the WorkItemRelationCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for WorkItemRelationCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *WorkItemRelationUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

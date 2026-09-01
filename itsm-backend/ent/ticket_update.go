@@ -205,20 +205,6 @@ func (_u *TicketUpdate) SetNillablePriority(v *string) *TicketUpdate {
 	return _u
 }
 
-// SetTicketNumber sets the "ticket_number" field.
-func (_u *TicketUpdate) SetTicketNumber(v string) *TicketUpdate {
-	_u.mutation.SetTicketNumber(v)
-	return _u
-}
-
-// SetNillableTicketNumber sets the "ticket_number" field if the given value is not nil.
-func (_u *TicketUpdate) SetNillableTicketNumber(v *string) *TicketUpdate {
-	if v != nil {
-		_u.SetTicketNumber(*v)
-	}
-	return _u
-}
-
 // SetRequesterID sets the "requester_id" field.
 func (_u *TicketUpdate) SetRequesterID(v int) *TicketUpdate {
 	_u.mutation.SetRequesterID(v)
@@ -1402,11 +1388,6 @@ func (_u *TicketUpdate) check() error {
 			return &ValidationError{Name: "title", err: fmt.Errorf(`ent: validator failed for field "Ticket.title": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.TicketNumber(); ok {
-		if err := ticket.TicketNumberValidator(v); err != nil {
-			return &ValidationError{Name: "ticket_number", err: fmt.Errorf(`ent: validator failed for field "Ticket.ticket_number": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.RequesterID(); ok {
 		if err := ticket.RequesterIDValidator(v); err != nil {
 			return &ValidationError{Name: "requester_id", err: fmt.Errorf(`ent: validator failed for field "Ticket.requester_id": %w`, err)}
@@ -1489,9 +1470,6 @@ func (_u *TicketUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Priority(); ok {
 		_spec.SetField(ticket.FieldPriority, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.TicketNumber(); ok {
-		_spec.SetField(ticket.FieldTicketNumber, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.CreatorEmail(); ok {
 		_spec.SetField(ticket.FieldCreatorEmail, field.TypeString, value)
@@ -2508,20 +2486,6 @@ func (_u *TicketUpdateOne) SetPriority(v string) *TicketUpdateOne {
 func (_u *TicketUpdateOne) SetNillablePriority(v *string) *TicketUpdateOne {
 	if v != nil {
 		_u.SetPriority(*v)
-	}
-	return _u
-}
-
-// SetTicketNumber sets the "ticket_number" field.
-func (_u *TicketUpdateOne) SetTicketNumber(v string) *TicketUpdateOne {
-	_u.mutation.SetTicketNumber(v)
-	return _u
-}
-
-// SetNillableTicketNumber sets the "ticket_number" field if the given value is not nil.
-func (_u *TicketUpdateOne) SetNillableTicketNumber(v *string) *TicketUpdateOne {
-	if v != nil {
-		_u.SetTicketNumber(*v)
 	}
 	return _u
 }
@@ -3722,11 +3686,6 @@ func (_u *TicketUpdateOne) check() error {
 			return &ValidationError{Name: "title", err: fmt.Errorf(`ent: validator failed for field "Ticket.title": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.TicketNumber(); ok {
-		if err := ticket.TicketNumberValidator(v); err != nil {
-			return &ValidationError{Name: "ticket_number", err: fmt.Errorf(`ent: validator failed for field "Ticket.ticket_number": %w`, err)}
-		}
-	}
 	if v, ok := _u.mutation.RequesterID(); ok {
 		if err := ticket.RequesterIDValidator(v); err != nil {
 			return &ValidationError{Name: "requester_id", err: fmt.Errorf(`ent: validator failed for field "Ticket.requester_id": %w`, err)}
@@ -3826,9 +3785,6 @@ func (_u *TicketUpdateOne) sqlSave(ctx context.Context) (_node *Ticket, err erro
 	}
 	if value, ok := _u.mutation.Priority(); ok {
 		_spec.SetField(ticket.FieldPriority, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.TicketNumber(); ok {
-		_spec.SetField(ticket.FieldTicketNumber, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.CreatorEmail(); ok {
 		_spec.SetField(ticket.FieldCreatorEmail, field.TypeString, value)

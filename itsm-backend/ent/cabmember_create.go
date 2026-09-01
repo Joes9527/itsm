@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/cabmember"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type CABMemberCreate struct {
 	config
 	mutation *CABMemberMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetUserID sets the "user_id" field.
@@ -211,6 +213,7 @@ func (_c *CABMemberCreate) createSpec() (*CABMember, *sqlgraph.CreateSpec) {
 		_node = &CABMember{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(cabmember.Table, sqlgraph.NewFieldSpec(cabmember.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.UserID(); ok {
 		_spec.SetField(cabmember.FieldUserID, field.TypeInt, value)
 		_node.UserID = value
@@ -242,11 +245,342 @@ func (_c *CABMemberCreate) createSpec() (*CABMember, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.CABMember.Create().
+//		SetUserID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.CABMemberUpsert) {
+//			SetUserID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *CABMemberCreate) OnConflict(opts ...sql.ConflictOption) *CABMemberUpsertOne {
+	_c.conflict = opts
+	return &CABMemberUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.CABMember.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *CABMemberCreate) OnConflictColumns(columns ...string) *CABMemberUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &CABMemberUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// CABMemberUpsertOne is the builder for "upsert"-ing
+	//  one CABMember node.
+	CABMemberUpsertOne struct {
+		create *CABMemberCreate
+	}
+
+	// CABMemberUpsert is the "OnConflict" setter.
+	CABMemberUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetUserID sets the "user_id" field.
+func (u *CABMemberUpsert) SetUserID(v int) *CABMemberUpsert {
+	u.Set(cabmember.FieldUserID, v)
+	return u
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *CABMemberUpsert) UpdateUserID() *CABMemberUpsert {
+	u.SetExcluded(cabmember.FieldUserID)
+	return u
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *CABMemberUpsert) AddUserID(v int) *CABMemberUpsert {
+	u.Add(cabmember.FieldUserID, v)
+	return u
+}
+
+// SetType sets the "type" field.
+func (u *CABMemberUpsert) SetType(v string) *CABMemberUpsert {
+	u.Set(cabmember.FieldType, v)
+	return u
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *CABMemberUpsert) UpdateType() *CABMemberUpsert {
+	u.SetExcluded(cabmember.FieldType)
+	return u
+}
+
+// SetRole sets the "role" field.
+func (u *CABMemberUpsert) SetRole(v string) *CABMemberUpsert {
+	u.Set(cabmember.FieldRole, v)
+	return u
+}
+
+// UpdateRole sets the "role" field to the value that was provided on create.
+func (u *CABMemberUpsert) UpdateRole() *CABMemberUpsert {
+	u.SetExcluded(cabmember.FieldRole)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *CABMemberUpsert) SetIsActive(v bool) *CABMemberUpsert {
+	u.Set(cabmember.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *CABMemberUpsert) UpdateIsActive() *CABMemberUpsert {
+	u.SetExcluded(cabmember.FieldIsActive)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CABMemberUpsert) SetTenantID(v int) *CABMemberUpsert {
+	u.Set(cabmember.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CABMemberUpsert) UpdateTenantID() *CABMemberUpsert {
+	u.SetExcluded(cabmember.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CABMemberUpsert) AddTenantID(v int) *CABMemberUpsert {
+	u.Add(cabmember.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CABMemberUpsert) SetCreatedAt(v time.Time) *CABMemberUpsert {
+	u.Set(cabmember.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CABMemberUpsert) UpdateCreatedAt() *CABMemberUpsert {
+	u.SetExcluded(cabmember.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *CABMemberUpsert) SetUpdatedAt(v time.Time) *CABMemberUpsert {
+	u.Set(cabmember.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *CABMemberUpsert) UpdateUpdatedAt() *CABMemberUpsert {
+	u.SetExcluded(cabmember.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.CABMember.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *CABMemberUpsertOne) UpdateNewValues() *CABMemberUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.CABMember.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *CABMemberUpsertOne) Ignore() *CABMemberUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *CABMemberUpsertOne) DoNothing() *CABMemberUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the CABMemberCreate.OnConflict
+// documentation for more info.
+func (u *CABMemberUpsertOne) Update(set func(*CABMemberUpsert)) *CABMemberUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&CABMemberUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetUserID sets the "user_id" field.
+func (u *CABMemberUpsertOne) SetUserID(v int) *CABMemberUpsertOne {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *CABMemberUpsertOne) AddUserID(v int) *CABMemberUpsertOne {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.AddUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *CABMemberUpsertOne) UpdateUserID() *CABMemberUpsertOne {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *CABMemberUpsertOne) SetType(v string) *CABMemberUpsertOne {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *CABMemberUpsertOne) UpdateType() *CABMemberUpsertOne {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetRole sets the "role" field.
+func (u *CABMemberUpsertOne) SetRole(v string) *CABMemberUpsertOne {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.SetRole(v)
+	})
+}
+
+// UpdateRole sets the "role" field to the value that was provided on create.
+func (u *CABMemberUpsertOne) UpdateRole() *CABMemberUpsertOne {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.UpdateRole()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *CABMemberUpsertOne) SetIsActive(v bool) *CABMemberUpsertOne {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *CABMemberUpsertOne) UpdateIsActive() *CABMemberUpsertOne {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CABMemberUpsertOne) SetTenantID(v int) *CABMemberUpsertOne {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CABMemberUpsertOne) AddTenantID(v int) *CABMemberUpsertOne {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CABMemberUpsertOne) UpdateTenantID() *CABMemberUpsertOne {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CABMemberUpsertOne) SetCreatedAt(v time.Time) *CABMemberUpsertOne {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CABMemberUpsertOne) UpdateCreatedAt() *CABMemberUpsertOne {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *CABMemberUpsertOne) SetUpdatedAt(v time.Time) *CABMemberUpsertOne {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *CABMemberUpsertOne) UpdateUpdatedAt() *CABMemberUpsertOne {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *CABMemberUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for CABMemberCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *CABMemberUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *CABMemberUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *CABMemberUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // CABMemberCreateBulk is the builder for creating many CABMember entities in bulk.
 type CABMemberCreateBulk struct {
 	config
 	err      error
 	builders []*CABMemberCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the CABMember entities in the database.
@@ -276,6 +610,7 @@ func (_c *CABMemberCreateBulk) Save(ctx context.Context) ([]*CABMember, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -326,6 +661,222 @@ func (_c *CABMemberCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *CABMemberCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.CABMember.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.CABMemberUpsert) {
+//			SetUserID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *CABMemberCreateBulk) OnConflict(opts ...sql.ConflictOption) *CABMemberUpsertBulk {
+	_c.conflict = opts
+	return &CABMemberUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.CABMember.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *CABMemberCreateBulk) OnConflictColumns(columns ...string) *CABMemberUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &CABMemberUpsertBulk{
+		create: _c,
+	}
+}
+
+// CABMemberUpsertBulk is the builder for "upsert"-ing
+// a bulk of CABMember nodes.
+type CABMemberUpsertBulk struct {
+	create *CABMemberCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.CABMember.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *CABMemberUpsertBulk) UpdateNewValues() *CABMemberUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.CABMember.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *CABMemberUpsertBulk) Ignore() *CABMemberUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *CABMemberUpsertBulk) DoNothing() *CABMemberUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the CABMemberCreateBulk.OnConflict
+// documentation for more info.
+func (u *CABMemberUpsertBulk) Update(set func(*CABMemberUpsert)) *CABMemberUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&CABMemberUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetUserID sets the "user_id" field.
+func (u *CABMemberUpsertBulk) SetUserID(v int) *CABMemberUpsertBulk {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *CABMemberUpsertBulk) AddUserID(v int) *CABMemberUpsertBulk {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.AddUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *CABMemberUpsertBulk) UpdateUserID() *CABMemberUpsertBulk {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// SetType sets the "type" field.
+func (u *CABMemberUpsertBulk) SetType(v string) *CABMemberUpsertBulk {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.SetType(v)
+	})
+}
+
+// UpdateType sets the "type" field to the value that was provided on create.
+func (u *CABMemberUpsertBulk) UpdateType() *CABMemberUpsertBulk {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.UpdateType()
+	})
+}
+
+// SetRole sets the "role" field.
+func (u *CABMemberUpsertBulk) SetRole(v string) *CABMemberUpsertBulk {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.SetRole(v)
+	})
+}
+
+// UpdateRole sets the "role" field to the value that was provided on create.
+func (u *CABMemberUpsertBulk) UpdateRole() *CABMemberUpsertBulk {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.UpdateRole()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *CABMemberUpsertBulk) SetIsActive(v bool) *CABMemberUpsertBulk {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *CABMemberUpsertBulk) UpdateIsActive() *CABMemberUpsertBulk {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *CABMemberUpsertBulk) SetTenantID(v int) *CABMemberUpsertBulk {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *CABMemberUpsertBulk) AddTenantID(v int) *CABMemberUpsertBulk {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *CABMemberUpsertBulk) UpdateTenantID() *CABMemberUpsertBulk {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *CABMemberUpsertBulk) SetCreatedAt(v time.Time) *CABMemberUpsertBulk {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *CABMemberUpsertBulk) UpdateCreatedAt() *CABMemberUpsertBulk {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *CABMemberUpsertBulk) SetUpdatedAt(v time.Time) *CABMemberUpsertBulk {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *CABMemberUpsertBulk) UpdateUpdatedAt() *CABMemberUpsertBulk {
+	return u.Update(func(s *CABMemberUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *CABMemberUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the CABMemberCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for CABMemberCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *CABMemberUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

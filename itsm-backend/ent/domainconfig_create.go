@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/domainconfig"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type DomainConfigCreate struct {
 	config
 	mutation *DomainConfigMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetConfigKey sets the "config_key" field.
@@ -315,6 +317,7 @@ func (_c *DomainConfigCreate) createSpec() (*DomainConfig, *sqlgraph.CreateSpec)
 		_node = &DomainConfig{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(domainconfig.Table, sqlgraph.NewFieldSpec(domainconfig.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.ConfigKey(); ok {
 		_spec.SetField(domainconfig.FieldConfigKey, field.TypeString, value)
 		_node.ConfigKey = value
@@ -370,11 +373,563 @@ func (_c *DomainConfigCreate) createSpec() (*DomainConfig, *sqlgraph.CreateSpec)
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.DomainConfig.Create().
+//		SetConfigKey(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.DomainConfigUpsert) {
+//			SetConfigKey(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *DomainConfigCreate) OnConflict(opts ...sql.ConflictOption) *DomainConfigUpsertOne {
+	_c.conflict = opts
+	return &DomainConfigUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.DomainConfig.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *DomainConfigCreate) OnConflictColumns(columns ...string) *DomainConfigUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &DomainConfigUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// DomainConfigUpsertOne is the builder for "upsert"-ing
+	//  one DomainConfig node.
+	DomainConfigUpsertOne struct {
+		create *DomainConfigCreate
+	}
+
+	// DomainConfigUpsert is the "OnConflict" setter.
+	DomainConfigUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetConfigKey sets the "config_key" field.
+func (u *DomainConfigUpsert) SetConfigKey(v string) *DomainConfigUpsert {
+	u.Set(domainconfig.FieldConfigKey, v)
+	return u
+}
+
+// UpdateConfigKey sets the "config_key" field to the value that was provided on create.
+func (u *DomainConfigUpsert) UpdateConfigKey() *DomainConfigUpsert {
+	u.SetExcluded(domainconfig.FieldConfigKey)
+	return u
+}
+
+// SetConfigType sets the "config_type" field.
+func (u *DomainConfigUpsert) SetConfigType(v string) *DomainConfigUpsert {
+	u.Set(domainconfig.FieldConfigType, v)
+	return u
+}
+
+// UpdateConfigType sets the "config_type" field to the value that was provided on create.
+func (u *DomainConfigUpsert) UpdateConfigType() *DomainConfigUpsert {
+	u.SetExcluded(domainconfig.FieldConfigType)
+	return u
+}
+
+// SetConfigValue sets the "config_value" field.
+func (u *DomainConfigUpsert) SetConfigValue(v map[string]interface{}) *DomainConfigUpsert {
+	u.Set(domainconfig.FieldConfigValue, v)
+	return u
+}
+
+// UpdateConfigValue sets the "config_value" field to the value that was provided on create.
+func (u *DomainConfigUpsert) UpdateConfigValue() *DomainConfigUpsert {
+	u.SetExcluded(domainconfig.FieldConfigValue)
+	return u
+}
+
+// SetInheritMode sets the "inherit_mode" field.
+func (u *DomainConfigUpsert) SetInheritMode(v string) *DomainConfigUpsert {
+	u.Set(domainconfig.FieldInheritMode, v)
+	return u
+}
+
+// UpdateInheritMode sets the "inherit_mode" field to the value that was provided on create.
+func (u *DomainConfigUpsert) UpdateInheritMode() *DomainConfigUpsert {
+	u.SetExcluded(domainconfig.FieldInheritMode)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *DomainConfigUpsert) SetTenantID(v int) *DomainConfigUpsert {
+	u.Set(domainconfig.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *DomainConfigUpsert) UpdateTenantID() *DomainConfigUpsert {
+	u.SetExcluded(domainconfig.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *DomainConfigUpsert) AddTenantID(v int) *DomainConfigUpsert {
+	u.Add(domainconfig.FieldTenantID, v)
+	return u
+}
+
+// SetDepartmentID sets the "department_id" field.
+func (u *DomainConfigUpsert) SetDepartmentID(v int) *DomainConfigUpsert {
+	u.Set(domainconfig.FieldDepartmentID, v)
+	return u
+}
+
+// UpdateDepartmentID sets the "department_id" field to the value that was provided on create.
+func (u *DomainConfigUpsert) UpdateDepartmentID() *DomainConfigUpsert {
+	u.SetExcluded(domainconfig.FieldDepartmentID)
+	return u
+}
+
+// AddDepartmentID adds v to the "department_id" field.
+func (u *DomainConfigUpsert) AddDepartmentID(v int) *DomainConfigUpsert {
+	u.Add(domainconfig.FieldDepartmentID, v)
+	return u
+}
+
+// SetTeamID sets the "team_id" field.
+func (u *DomainConfigUpsert) SetTeamID(v int) *DomainConfigUpsert {
+	u.Set(domainconfig.FieldTeamID, v)
+	return u
+}
+
+// UpdateTeamID sets the "team_id" field to the value that was provided on create.
+func (u *DomainConfigUpsert) UpdateTeamID() *DomainConfigUpsert {
+	u.SetExcluded(domainconfig.FieldTeamID)
+	return u
+}
+
+// AddTeamID adds v to the "team_id" field.
+func (u *DomainConfigUpsert) AddTeamID(v int) *DomainConfigUpsert {
+	u.Add(domainconfig.FieldTeamID, v)
+	return u
+}
+
+// SetParentConfigID sets the "parent_config_id" field.
+func (u *DomainConfigUpsert) SetParentConfigID(v int) *DomainConfigUpsert {
+	u.Set(domainconfig.FieldParentConfigID, v)
+	return u
+}
+
+// UpdateParentConfigID sets the "parent_config_id" field to the value that was provided on create.
+func (u *DomainConfigUpsert) UpdateParentConfigID() *DomainConfigUpsert {
+	u.SetExcluded(domainconfig.FieldParentConfigID)
+	return u
+}
+
+// AddParentConfigID adds v to the "parent_config_id" field.
+func (u *DomainConfigUpsert) AddParentConfigID(v int) *DomainConfigUpsert {
+	u.Add(domainconfig.FieldParentConfigID, v)
+	return u
+}
+
+// ClearParentConfigID clears the value of the "parent_config_id" field.
+func (u *DomainConfigUpsert) ClearParentConfigID() *DomainConfigUpsert {
+	u.SetNull(domainconfig.FieldParentConfigID)
+	return u
+}
+
+// SetVersion sets the "version" field.
+func (u *DomainConfigUpsert) SetVersion(v int) *DomainConfigUpsert {
+	u.Set(domainconfig.FieldVersion, v)
+	return u
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *DomainConfigUpsert) UpdateVersion() *DomainConfigUpsert {
+	u.SetExcluded(domainconfig.FieldVersion)
+	return u
+}
+
+// AddVersion adds v to the "version" field.
+func (u *DomainConfigUpsert) AddVersion(v int) *DomainConfigUpsert {
+	u.Add(domainconfig.FieldVersion, v)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *DomainConfigUpsert) SetIsActive(v bool) *DomainConfigUpsert {
+	u.Set(domainconfig.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *DomainConfigUpsert) UpdateIsActive() *DomainConfigUpsert {
+	u.SetExcluded(domainconfig.FieldIsActive)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *DomainConfigUpsert) SetDescription(v string) *DomainConfigUpsert {
+	u.Set(domainconfig.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *DomainConfigUpsert) UpdateDescription() *DomainConfigUpsert {
+	u.SetExcluded(domainconfig.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *DomainConfigUpsert) ClearDescription() *DomainConfigUpsert {
+	u.SetNull(domainconfig.FieldDescription)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *DomainConfigUpsert) SetCreatedAt(v time.Time) *DomainConfigUpsert {
+	u.Set(domainconfig.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *DomainConfigUpsert) UpdateCreatedAt() *DomainConfigUpsert {
+	u.SetExcluded(domainconfig.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *DomainConfigUpsert) SetUpdatedAt(v time.Time) *DomainConfigUpsert {
+	u.Set(domainconfig.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *DomainConfigUpsert) UpdateUpdatedAt() *DomainConfigUpsert {
+	u.SetExcluded(domainconfig.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.DomainConfig.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *DomainConfigUpsertOne) UpdateNewValues() *DomainConfigUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.DomainConfig.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *DomainConfigUpsertOne) Ignore() *DomainConfigUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *DomainConfigUpsertOne) DoNothing() *DomainConfigUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the DomainConfigCreate.OnConflict
+// documentation for more info.
+func (u *DomainConfigUpsertOne) Update(set func(*DomainConfigUpsert)) *DomainConfigUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&DomainConfigUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetConfigKey sets the "config_key" field.
+func (u *DomainConfigUpsertOne) SetConfigKey(v string) *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetConfigKey(v)
+	})
+}
+
+// UpdateConfigKey sets the "config_key" field to the value that was provided on create.
+func (u *DomainConfigUpsertOne) UpdateConfigKey() *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateConfigKey()
+	})
+}
+
+// SetConfigType sets the "config_type" field.
+func (u *DomainConfigUpsertOne) SetConfigType(v string) *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetConfigType(v)
+	})
+}
+
+// UpdateConfigType sets the "config_type" field to the value that was provided on create.
+func (u *DomainConfigUpsertOne) UpdateConfigType() *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateConfigType()
+	})
+}
+
+// SetConfigValue sets the "config_value" field.
+func (u *DomainConfigUpsertOne) SetConfigValue(v map[string]interface{}) *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetConfigValue(v)
+	})
+}
+
+// UpdateConfigValue sets the "config_value" field to the value that was provided on create.
+func (u *DomainConfigUpsertOne) UpdateConfigValue() *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateConfigValue()
+	})
+}
+
+// SetInheritMode sets the "inherit_mode" field.
+func (u *DomainConfigUpsertOne) SetInheritMode(v string) *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetInheritMode(v)
+	})
+}
+
+// UpdateInheritMode sets the "inherit_mode" field to the value that was provided on create.
+func (u *DomainConfigUpsertOne) UpdateInheritMode() *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateInheritMode()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *DomainConfigUpsertOne) SetTenantID(v int) *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *DomainConfigUpsertOne) AddTenantID(v int) *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *DomainConfigUpsertOne) UpdateTenantID() *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetDepartmentID sets the "department_id" field.
+func (u *DomainConfigUpsertOne) SetDepartmentID(v int) *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetDepartmentID(v)
+	})
+}
+
+// AddDepartmentID adds v to the "department_id" field.
+func (u *DomainConfigUpsertOne) AddDepartmentID(v int) *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.AddDepartmentID(v)
+	})
+}
+
+// UpdateDepartmentID sets the "department_id" field to the value that was provided on create.
+func (u *DomainConfigUpsertOne) UpdateDepartmentID() *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateDepartmentID()
+	})
+}
+
+// SetTeamID sets the "team_id" field.
+func (u *DomainConfigUpsertOne) SetTeamID(v int) *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetTeamID(v)
+	})
+}
+
+// AddTeamID adds v to the "team_id" field.
+func (u *DomainConfigUpsertOne) AddTeamID(v int) *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.AddTeamID(v)
+	})
+}
+
+// UpdateTeamID sets the "team_id" field to the value that was provided on create.
+func (u *DomainConfigUpsertOne) UpdateTeamID() *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateTeamID()
+	})
+}
+
+// SetParentConfigID sets the "parent_config_id" field.
+func (u *DomainConfigUpsertOne) SetParentConfigID(v int) *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetParentConfigID(v)
+	})
+}
+
+// AddParentConfigID adds v to the "parent_config_id" field.
+func (u *DomainConfigUpsertOne) AddParentConfigID(v int) *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.AddParentConfigID(v)
+	})
+}
+
+// UpdateParentConfigID sets the "parent_config_id" field to the value that was provided on create.
+func (u *DomainConfigUpsertOne) UpdateParentConfigID() *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateParentConfigID()
+	})
+}
+
+// ClearParentConfigID clears the value of the "parent_config_id" field.
+func (u *DomainConfigUpsertOne) ClearParentConfigID() *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.ClearParentConfigID()
+	})
+}
+
+// SetVersion sets the "version" field.
+func (u *DomainConfigUpsertOne) SetVersion(v int) *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetVersion(v)
+	})
+}
+
+// AddVersion adds v to the "version" field.
+func (u *DomainConfigUpsertOne) AddVersion(v int) *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.AddVersion(v)
+	})
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *DomainConfigUpsertOne) UpdateVersion() *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateVersion()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *DomainConfigUpsertOne) SetIsActive(v bool) *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *DomainConfigUpsertOne) UpdateIsActive() *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *DomainConfigUpsertOne) SetDescription(v string) *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *DomainConfigUpsertOne) UpdateDescription() *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *DomainConfigUpsertOne) ClearDescription() *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *DomainConfigUpsertOne) SetCreatedAt(v time.Time) *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *DomainConfigUpsertOne) UpdateCreatedAt() *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *DomainConfigUpsertOne) SetUpdatedAt(v time.Time) *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *DomainConfigUpsertOne) UpdateUpdatedAt() *DomainConfigUpsertOne {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *DomainConfigUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for DomainConfigCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *DomainConfigUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *DomainConfigUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *DomainConfigUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // DomainConfigCreateBulk is the builder for creating many DomainConfig entities in bulk.
 type DomainConfigCreateBulk struct {
 	config
 	err      error
 	builders []*DomainConfigCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the DomainConfig entities in the database.
@@ -404,6 +959,7 @@ func (_c *DomainConfigCreateBulk) Save(ctx context.Context) ([]*DomainConfig, er
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -454,6 +1010,341 @@ func (_c *DomainConfigCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *DomainConfigCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.DomainConfig.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.DomainConfigUpsert) {
+//			SetConfigKey(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *DomainConfigCreateBulk) OnConflict(opts ...sql.ConflictOption) *DomainConfigUpsertBulk {
+	_c.conflict = opts
+	return &DomainConfigUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.DomainConfig.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *DomainConfigCreateBulk) OnConflictColumns(columns ...string) *DomainConfigUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &DomainConfigUpsertBulk{
+		create: _c,
+	}
+}
+
+// DomainConfigUpsertBulk is the builder for "upsert"-ing
+// a bulk of DomainConfig nodes.
+type DomainConfigUpsertBulk struct {
+	create *DomainConfigCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.DomainConfig.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *DomainConfigUpsertBulk) UpdateNewValues() *DomainConfigUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.DomainConfig.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *DomainConfigUpsertBulk) Ignore() *DomainConfigUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *DomainConfigUpsertBulk) DoNothing() *DomainConfigUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the DomainConfigCreateBulk.OnConflict
+// documentation for more info.
+func (u *DomainConfigUpsertBulk) Update(set func(*DomainConfigUpsert)) *DomainConfigUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&DomainConfigUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetConfigKey sets the "config_key" field.
+func (u *DomainConfigUpsertBulk) SetConfigKey(v string) *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetConfigKey(v)
+	})
+}
+
+// UpdateConfigKey sets the "config_key" field to the value that was provided on create.
+func (u *DomainConfigUpsertBulk) UpdateConfigKey() *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateConfigKey()
+	})
+}
+
+// SetConfigType sets the "config_type" field.
+func (u *DomainConfigUpsertBulk) SetConfigType(v string) *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetConfigType(v)
+	})
+}
+
+// UpdateConfigType sets the "config_type" field to the value that was provided on create.
+func (u *DomainConfigUpsertBulk) UpdateConfigType() *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateConfigType()
+	})
+}
+
+// SetConfigValue sets the "config_value" field.
+func (u *DomainConfigUpsertBulk) SetConfigValue(v map[string]interface{}) *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetConfigValue(v)
+	})
+}
+
+// UpdateConfigValue sets the "config_value" field to the value that was provided on create.
+func (u *DomainConfigUpsertBulk) UpdateConfigValue() *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateConfigValue()
+	})
+}
+
+// SetInheritMode sets the "inherit_mode" field.
+func (u *DomainConfigUpsertBulk) SetInheritMode(v string) *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetInheritMode(v)
+	})
+}
+
+// UpdateInheritMode sets the "inherit_mode" field to the value that was provided on create.
+func (u *DomainConfigUpsertBulk) UpdateInheritMode() *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateInheritMode()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *DomainConfigUpsertBulk) SetTenantID(v int) *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *DomainConfigUpsertBulk) AddTenantID(v int) *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *DomainConfigUpsertBulk) UpdateTenantID() *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetDepartmentID sets the "department_id" field.
+func (u *DomainConfigUpsertBulk) SetDepartmentID(v int) *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetDepartmentID(v)
+	})
+}
+
+// AddDepartmentID adds v to the "department_id" field.
+func (u *DomainConfigUpsertBulk) AddDepartmentID(v int) *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.AddDepartmentID(v)
+	})
+}
+
+// UpdateDepartmentID sets the "department_id" field to the value that was provided on create.
+func (u *DomainConfigUpsertBulk) UpdateDepartmentID() *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateDepartmentID()
+	})
+}
+
+// SetTeamID sets the "team_id" field.
+func (u *DomainConfigUpsertBulk) SetTeamID(v int) *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetTeamID(v)
+	})
+}
+
+// AddTeamID adds v to the "team_id" field.
+func (u *DomainConfigUpsertBulk) AddTeamID(v int) *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.AddTeamID(v)
+	})
+}
+
+// UpdateTeamID sets the "team_id" field to the value that was provided on create.
+func (u *DomainConfigUpsertBulk) UpdateTeamID() *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateTeamID()
+	})
+}
+
+// SetParentConfigID sets the "parent_config_id" field.
+func (u *DomainConfigUpsertBulk) SetParentConfigID(v int) *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetParentConfigID(v)
+	})
+}
+
+// AddParentConfigID adds v to the "parent_config_id" field.
+func (u *DomainConfigUpsertBulk) AddParentConfigID(v int) *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.AddParentConfigID(v)
+	})
+}
+
+// UpdateParentConfigID sets the "parent_config_id" field to the value that was provided on create.
+func (u *DomainConfigUpsertBulk) UpdateParentConfigID() *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateParentConfigID()
+	})
+}
+
+// ClearParentConfigID clears the value of the "parent_config_id" field.
+func (u *DomainConfigUpsertBulk) ClearParentConfigID() *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.ClearParentConfigID()
+	})
+}
+
+// SetVersion sets the "version" field.
+func (u *DomainConfigUpsertBulk) SetVersion(v int) *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetVersion(v)
+	})
+}
+
+// AddVersion adds v to the "version" field.
+func (u *DomainConfigUpsertBulk) AddVersion(v int) *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.AddVersion(v)
+	})
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *DomainConfigUpsertBulk) UpdateVersion() *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateVersion()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *DomainConfigUpsertBulk) SetIsActive(v bool) *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *DomainConfigUpsertBulk) UpdateIsActive() *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *DomainConfigUpsertBulk) SetDescription(v string) *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *DomainConfigUpsertBulk) UpdateDescription() *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *DomainConfigUpsertBulk) ClearDescription() *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *DomainConfigUpsertBulk) SetCreatedAt(v time.Time) *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *DomainConfigUpsertBulk) UpdateCreatedAt() *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *DomainConfigUpsertBulk) SetUpdatedAt(v time.Time) *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *DomainConfigUpsertBulk) UpdateUpdatedAt() *DomainConfigUpsertBulk {
+	return u.Update(func(s *DomainConfigUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *DomainConfigUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the DomainConfigCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for DomainConfigCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *DomainConfigUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

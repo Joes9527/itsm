@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/incidentevent"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type IncidentEventCreate struct {
 	config
 	mutation *IncidentEventMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetIncidentID sets the "incident_id" field.
@@ -316,6 +318,7 @@ func (_c *IncidentEventCreate) createSpec() (*IncidentEvent, *sqlgraph.CreateSpe
 		_node = &IncidentEvent{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(incidentevent.Table, sqlgraph.NewFieldSpec(incidentevent.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.EventType(); ok {
 		_spec.SetField(incidentevent.FieldEventType, field.TypeString, value)
 		_node.EventType = value
@@ -388,11 +391,576 @@ func (_c *IncidentEventCreate) createSpec() (*IncidentEvent, *sqlgraph.CreateSpe
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.IncidentEvent.Create().
+//		SetIncidentID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.IncidentEventUpsert) {
+//			SetIncidentID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *IncidentEventCreate) OnConflict(opts ...sql.ConflictOption) *IncidentEventUpsertOne {
+	_c.conflict = opts
+	return &IncidentEventUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.IncidentEvent.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *IncidentEventCreate) OnConflictColumns(columns ...string) *IncidentEventUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &IncidentEventUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// IncidentEventUpsertOne is the builder for "upsert"-ing
+	//  one IncidentEvent node.
+	IncidentEventUpsertOne struct {
+		create *IncidentEventCreate
+	}
+
+	// IncidentEventUpsert is the "OnConflict" setter.
+	IncidentEventUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetIncidentID sets the "incident_id" field.
+func (u *IncidentEventUpsert) SetIncidentID(v int) *IncidentEventUpsert {
+	u.Set(incidentevent.FieldIncidentID, v)
+	return u
+}
+
+// UpdateIncidentID sets the "incident_id" field to the value that was provided on create.
+func (u *IncidentEventUpsert) UpdateIncidentID() *IncidentEventUpsert {
+	u.SetExcluded(incidentevent.FieldIncidentID)
+	return u
+}
+
+// SetEventType sets the "event_type" field.
+func (u *IncidentEventUpsert) SetEventType(v string) *IncidentEventUpsert {
+	u.Set(incidentevent.FieldEventType, v)
+	return u
+}
+
+// UpdateEventType sets the "event_type" field to the value that was provided on create.
+func (u *IncidentEventUpsert) UpdateEventType() *IncidentEventUpsert {
+	u.SetExcluded(incidentevent.FieldEventType)
+	return u
+}
+
+// SetEventName sets the "event_name" field.
+func (u *IncidentEventUpsert) SetEventName(v string) *IncidentEventUpsert {
+	u.Set(incidentevent.FieldEventName, v)
+	return u
+}
+
+// UpdateEventName sets the "event_name" field to the value that was provided on create.
+func (u *IncidentEventUpsert) UpdateEventName() *IncidentEventUpsert {
+	u.SetExcluded(incidentevent.FieldEventName)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *IncidentEventUpsert) SetDescription(v string) *IncidentEventUpsert {
+	u.Set(incidentevent.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *IncidentEventUpsert) UpdateDescription() *IncidentEventUpsert {
+	u.SetExcluded(incidentevent.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *IncidentEventUpsert) ClearDescription() *IncidentEventUpsert {
+	u.SetNull(incidentevent.FieldDescription)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *IncidentEventUpsert) SetStatus(v string) *IncidentEventUpsert {
+	u.Set(incidentevent.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *IncidentEventUpsert) UpdateStatus() *IncidentEventUpsert {
+	u.SetExcluded(incidentevent.FieldStatus)
+	return u
+}
+
+// SetSeverity sets the "severity" field.
+func (u *IncidentEventUpsert) SetSeverity(v string) *IncidentEventUpsert {
+	u.Set(incidentevent.FieldSeverity, v)
+	return u
+}
+
+// UpdateSeverity sets the "severity" field to the value that was provided on create.
+func (u *IncidentEventUpsert) UpdateSeverity() *IncidentEventUpsert {
+	u.SetExcluded(incidentevent.FieldSeverity)
+	return u
+}
+
+// SetData sets the "data" field.
+func (u *IncidentEventUpsert) SetData(v map[string]interface{}) *IncidentEventUpsert {
+	u.Set(incidentevent.FieldData, v)
+	return u
+}
+
+// UpdateData sets the "data" field to the value that was provided on create.
+func (u *IncidentEventUpsert) UpdateData() *IncidentEventUpsert {
+	u.SetExcluded(incidentevent.FieldData)
+	return u
+}
+
+// ClearData clears the value of the "data" field.
+func (u *IncidentEventUpsert) ClearData() *IncidentEventUpsert {
+	u.SetNull(incidentevent.FieldData)
+	return u
+}
+
+// SetOccurredAt sets the "occurred_at" field.
+func (u *IncidentEventUpsert) SetOccurredAt(v time.Time) *IncidentEventUpsert {
+	u.Set(incidentevent.FieldOccurredAt, v)
+	return u
+}
+
+// UpdateOccurredAt sets the "occurred_at" field to the value that was provided on create.
+func (u *IncidentEventUpsert) UpdateOccurredAt() *IncidentEventUpsert {
+	u.SetExcluded(incidentevent.FieldOccurredAt)
+	return u
+}
+
+// SetUserID sets the "user_id" field.
+func (u *IncidentEventUpsert) SetUserID(v int) *IncidentEventUpsert {
+	u.Set(incidentevent.FieldUserID, v)
+	return u
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *IncidentEventUpsert) UpdateUserID() *IncidentEventUpsert {
+	u.SetExcluded(incidentevent.FieldUserID)
+	return u
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *IncidentEventUpsert) AddUserID(v int) *IncidentEventUpsert {
+	u.Add(incidentevent.FieldUserID, v)
+	return u
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (u *IncidentEventUpsert) ClearUserID() *IncidentEventUpsert {
+	u.SetNull(incidentevent.FieldUserID)
+	return u
+}
+
+// SetSource sets the "source" field.
+func (u *IncidentEventUpsert) SetSource(v string) *IncidentEventUpsert {
+	u.Set(incidentevent.FieldSource, v)
+	return u
+}
+
+// UpdateSource sets the "source" field to the value that was provided on create.
+func (u *IncidentEventUpsert) UpdateSource() *IncidentEventUpsert {
+	u.SetExcluded(incidentevent.FieldSource)
+	return u
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *IncidentEventUpsert) SetMetadata(v map[string]interface{}) *IncidentEventUpsert {
+	u.Set(incidentevent.FieldMetadata, v)
+	return u
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *IncidentEventUpsert) UpdateMetadata() *IncidentEventUpsert {
+	u.SetExcluded(incidentevent.FieldMetadata)
+	return u
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *IncidentEventUpsert) ClearMetadata() *IncidentEventUpsert {
+	u.SetNull(incidentevent.FieldMetadata)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *IncidentEventUpsert) SetTenantID(v int) *IncidentEventUpsert {
+	u.Set(incidentevent.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *IncidentEventUpsert) UpdateTenantID() *IncidentEventUpsert {
+	u.SetExcluded(incidentevent.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *IncidentEventUpsert) AddTenantID(v int) *IncidentEventUpsert {
+	u.Add(incidentevent.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *IncidentEventUpsert) SetCreatedAt(v time.Time) *IncidentEventUpsert {
+	u.Set(incidentevent.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *IncidentEventUpsert) UpdateCreatedAt() *IncidentEventUpsert {
+	u.SetExcluded(incidentevent.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *IncidentEventUpsert) SetUpdatedAt(v time.Time) *IncidentEventUpsert {
+	u.Set(incidentevent.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *IncidentEventUpsert) UpdateUpdatedAt() *IncidentEventUpsert {
+	u.SetExcluded(incidentevent.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.IncidentEvent.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *IncidentEventUpsertOne) UpdateNewValues() *IncidentEventUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.IncidentEvent.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *IncidentEventUpsertOne) Ignore() *IncidentEventUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *IncidentEventUpsertOne) DoNothing() *IncidentEventUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the IncidentEventCreate.OnConflict
+// documentation for more info.
+func (u *IncidentEventUpsertOne) Update(set func(*IncidentEventUpsert)) *IncidentEventUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&IncidentEventUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetIncidentID sets the "incident_id" field.
+func (u *IncidentEventUpsertOne) SetIncidentID(v int) *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetIncidentID(v)
+	})
+}
+
+// UpdateIncidentID sets the "incident_id" field to the value that was provided on create.
+func (u *IncidentEventUpsertOne) UpdateIncidentID() *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateIncidentID()
+	})
+}
+
+// SetEventType sets the "event_type" field.
+func (u *IncidentEventUpsertOne) SetEventType(v string) *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetEventType(v)
+	})
+}
+
+// UpdateEventType sets the "event_type" field to the value that was provided on create.
+func (u *IncidentEventUpsertOne) UpdateEventType() *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateEventType()
+	})
+}
+
+// SetEventName sets the "event_name" field.
+func (u *IncidentEventUpsertOne) SetEventName(v string) *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetEventName(v)
+	})
+}
+
+// UpdateEventName sets the "event_name" field to the value that was provided on create.
+func (u *IncidentEventUpsertOne) UpdateEventName() *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateEventName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *IncidentEventUpsertOne) SetDescription(v string) *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *IncidentEventUpsertOne) UpdateDescription() *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *IncidentEventUpsertOne) ClearDescription() *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *IncidentEventUpsertOne) SetStatus(v string) *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *IncidentEventUpsertOne) UpdateStatus() *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetSeverity sets the "severity" field.
+func (u *IncidentEventUpsertOne) SetSeverity(v string) *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetSeverity(v)
+	})
+}
+
+// UpdateSeverity sets the "severity" field to the value that was provided on create.
+func (u *IncidentEventUpsertOne) UpdateSeverity() *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateSeverity()
+	})
+}
+
+// SetData sets the "data" field.
+func (u *IncidentEventUpsertOne) SetData(v map[string]interface{}) *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetData(v)
+	})
+}
+
+// UpdateData sets the "data" field to the value that was provided on create.
+func (u *IncidentEventUpsertOne) UpdateData() *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateData()
+	})
+}
+
+// ClearData clears the value of the "data" field.
+func (u *IncidentEventUpsertOne) ClearData() *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.ClearData()
+	})
+}
+
+// SetOccurredAt sets the "occurred_at" field.
+func (u *IncidentEventUpsertOne) SetOccurredAt(v time.Time) *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetOccurredAt(v)
+	})
+}
+
+// UpdateOccurredAt sets the "occurred_at" field to the value that was provided on create.
+func (u *IncidentEventUpsertOne) UpdateOccurredAt() *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateOccurredAt()
+	})
+}
+
+// SetUserID sets the "user_id" field.
+func (u *IncidentEventUpsertOne) SetUserID(v int) *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *IncidentEventUpsertOne) AddUserID(v int) *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.AddUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *IncidentEventUpsertOne) UpdateUserID() *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (u *IncidentEventUpsertOne) ClearUserID() *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.ClearUserID()
+	})
+}
+
+// SetSource sets the "source" field.
+func (u *IncidentEventUpsertOne) SetSource(v string) *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetSource(v)
+	})
+}
+
+// UpdateSource sets the "source" field to the value that was provided on create.
+func (u *IncidentEventUpsertOne) UpdateSource() *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateSource()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *IncidentEventUpsertOne) SetMetadata(v map[string]interface{}) *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *IncidentEventUpsertOne) UpdateMetadata() *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *IncidentEventUpsertOne) ClearMetadata() *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *IncidentEventUpsertOne) SetTenantID(v int) *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *IncidentEventUpsertOne) AddTenantID(v int) *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *IncidentEventUpsertOne) UpdateTenantID() *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *IncidentEventUpsertOne) SetCreatedAt(v time.Time) *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *IncidentEventUpsertOne) UpdateCreatedAt() *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *IncidentEventUpsertOne) SetUpdatedAt(v time.Time) *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *IncidentEventUpsertOne) UpdateUpdatedAt() *IncidentEventUpsertOne {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *IncidentEventUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for IncidentEventCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *IncidentEventUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *IncidentEventUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *IncidentEventUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // IncidentEventCreateBulk is the builder for creating many IncidentEvent entities in bulk.
 type IncidentEventCreateBulk struct {
 	config
 	err      error
 	builders []*IncidentEventCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the IncidentEvent entities in the database.
@@ -422,6 +990,7 @@ func (_c *IncidentEventCreateBulk) Save(ctx context.Context) ([]*IncidentEvent, 
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -472,6 +1041,348 @@ func (_c *IncidentEventCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *IncidentEventCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.IncidentEvent.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.IncidentEventUpsert) {
+//			SetIncidentID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *IncidentEventCreateBulk) OnConflict(opts ...sql.ConflictOption) *IncidentEventUpsertBulk {
+	_c.conflict = opts
+	return &IncidentEventUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.IncidentEvent.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *IncidentEventCreateBulk) OnConflictColumns(columns ...string) *IncidentEventUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &IncidentEventUpsertBulk{
+		create: _c,
+	}
+}
+
+// IncidentEventUpsertBulk is the builder for "upsert"-ing
+// a bulk of IncidentEvent nodes.
+type IncidentEventUpsertBulk struct {
+	create *IncidentEventCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.IncidentEvent.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *IncidentEventUpsertBulk) UpdateNewValues() *IncidentEventUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.IncidentEvent.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *IncidentEventUpsertBulk) Ignore() *IncidentEventUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *IncidentEventUpsertBulk) DoNothing() *IncidentEventUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the IncidentEventCreateBulk.OnConflict
+// documentation for more info.
+func (u *IncidentEventUpsertBulk) Update(set func(*IncidentEventUpsert)) *IncidentEventUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&IncidentEventUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetIncidentID sets the "incident_id" field.
+func (u *IncidentEventUpsertBulk) SetIncidentID(v int) *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetIncidentID(v)
+	})
+}
+
+// UpdateIncidentID sets the "incident_id" field to the value that was provided on create.
+func (u *IncidentEventUpsertBulk) UpdateIncidentID() *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateIncidentID()
+	})
+}
+
+// SetEventType sets the "event_type" field.
+func (u *IncidentEventUpsertBulk) SetEventType(v string) *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetEventType(v)
+	})
+}
+
+// UpdateEventType sets the "event_type" field to the value that was provided on create.
+func (u *IncidentEventUpsertBulk) UpdateEventType() *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateEventType()
+	})
+}
+
+// SetEventName sets the "event_name" field.
+func (u *IncidentEventUpsertBulk) SetEventName(v string) *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetEventName(v)
+	})
+}
+
+// UpdateEventName sets the "event_name" field to the value that was provided on create.
+func (u *IncidentEventUpsertBulk) UpdateEventName() *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateEventName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *IncidentEventUpsertBulk) SetDescription(v string) *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *IncidentEventUpsertBulk) UpdateDescription() *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *IncidentEventUpsertBulk) ClearDescription() *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *IncidentEventUpsertBulk) SetStatus(v string) *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *IncidentEventUpsertBulk) UpdateStatus() *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetSeverity sets the "severity" field.
+func (u *IncidentEventUpsertBulk) SetSeverity(v string) *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetSeverity(v)
+	})
+}
+
+// UpdateSeverity sets the "severity" field to the value that was provided on create.
+func (u *IncidentEventUpsertBulk) UpdateSeverity() *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateSeverity()
+	})
+}
+
+// SetData sets the "data" field.
+func (u *IncidentEventUpsertBulk) SetData(v map[string]interface{}) *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetData(v)
+	})
+}
+
+// UpdateData sets the "data" field to the value that was provided on create.
+func (u *IncidentEventUpsertBulk) UpdateData() *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateData()
+	})
+}
+
+// ClearData clears the value of the "data" field.
+func (u *IncidentEventUpsertBulk) ClearData() *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.ClearData()
+	})
+}
+
+// SetOccurredAt sets the "occurred_at" field.
+func (u *IncidentEventUpsertBulk) SetOccurredAt(v time.Time) *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetOccurredAt(v)
+	})
+}
+
+// UpdateOccurredAt sets the "occurred_at" field to the value that was provided on create.
+func (u *IncidentEventUpsertBulk) UpdateOccurredAt() *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateOccurredAt()
+	})
+}
+
+// SetUserID sets the "user_id" field.
+func (u *IncidentEventUpsertBulk) SetUserID(v int) *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetUserID(v)
+	})
+}
+
+// AddUserID adds v to the "user_id" field.
+func (u *IncidentEventUpsertBulk) AddUserID(v int) *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.AddUserID(v)
+	})
+}
+
+// UpdateUserID sets the "user_id" field to the value that was provided on create.
+func (u *IncidentEventUpsertBulk) UpdateUserID() *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateUserID()
+	})
+}
+
+// ClearUserID clears the value of the "user_id" field.
+func (u *IncidentEventUpsertBulk) ClearUserID() *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.ClearUserID()
+	})
+}
+
+// SetSource sets the "source" field.
+func (u *IncidentEventUpsertBulk) SetSource(v string) *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetSource(v)
+	})
+}
+
+// UpdateSource sets the "source" field to the value that was provided on create.
+func (u *IncidentEventUpsertBulk) UpdateSource() *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateSource()
+	})
+}
+
+// SetMetadata sets the "metadata" field.
+func (u *IncidentEventUpsertBulk) SetMetadata(v map[string]interface{}) *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetMetadata(v)
+	})
+}
+
+// UpdateMetadata sets the "metadata" field to the value that was provided on create.
+func (u *IncidentEventUpsertBulk) UpdateMetadata() *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateMetadata()
+	})
+}
+
+// ClearMetadata clears the value of the "metadata" field.
+func (u *IncidentEventUpsertBulk) ClearMetadata() *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.ClearMetadata()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *IncidentEventUpsertBulk) SetTenantID(v int) *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *IncidentEventUpsertBulk) AddTenantID(v int) *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *IncidentEventUpsertBulk) UpdateTenantID() *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *IncidentEventUpsertBulk) SetCreatedAt(v time.Time) *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *IncidentEventUpsertBulk) UpdateCreatedAt() *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *IncidentEventUpsertBulk) SetUpdatedAt(v time.Time) *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *IncidentEventUpsertBulk) UpdateUpdatedAt() *IncidentEventUpsertBulk {
+	return u.Update(func(s *IncidentEventUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *IncidentEventUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the IncidentEventCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for IncidentEventCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *IncidentEventUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

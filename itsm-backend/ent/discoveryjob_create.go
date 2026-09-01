@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/discoverysource"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -20,6 +21,7 @@ type DiscoveryJobCreate struct {
 	config
 	mutation *DiscoveryJobMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetSourceID sets the "source_id" field.
@@ -235,6 +237,7 @@ func (_c *DiscoveryJobCreate) createSpec() (*DiscoveryJob, *sqlgraph.CreateSpec)
 		_node = &DiscoveryJob{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(discoveryjob.Table, sqlgraph.NewFieldSpec(discoveryjob.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(discoveryjob.FieldStatus, field.TypeString, value)
 		_node.Status = value
@@ -299,11 +302,394 @@ func (_c *DiscoveryJobCreate) createSpec() (*DiscoveryJob, *sqlgraph.CreateSpec)
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.DiscoveryJob.Create().
+//		SetSourceID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.DiscoveryJobUpsert) {
+//			SetSourceID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *DiscoveryJobCreate) OnConflict(opts ...sql.ConflictOption) *DiscoveryJobUpsertOne {
+	_c.conflict = opts
+	return &DiscoveryJobUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.DiscoveryJob.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *DiscoveryJobCreate) OnConflictColumns(columns ...string) *DiscoveryJobUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &DiscoveryJobUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// DiscoveryJobUpsertOne is the builder for "upsert"-ing
+	//  one DiscoveryJob node.
+	DiscoveryJobUpsertOne struct {
+		create *DiscoveryJobCreate
+	}
+
+	// DiscoveryJobUpsert is the "OnConflict" setter.
+	DiscoveryJobUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetSourceID sets the "source_id" field.
+func (u *DiscoveryJobUpsert) SetSourceID(v string) *DiscoveryJobUpsert {
+	u.Set(discoveryjob.FieldSourceID, v)
+	return u
+}
+
+// UpdateSourceID sets the "source_id" field to the value that was provided on create.
+func (u *DiscoveryJobUpsert) UpdateSourceID() *DiscoveryJobUpsert {
+	u.SetExcluded(discoveryjob.FieldSourceID)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *DiscoveryJobUpsert) SetStatus(v string) *DiscoveryJobUpsert {
+	u.Set(discoveryjob.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *DiscoveryJobUpsert) UpdateStatus() *DiscoveryJobUpsert {
+	u.SetExcluded(discoveryjob.FieldStatus)
+	return u
+}
+
+// SetStartedAt sets the "started_at" field.
+func (u *DiscoveryJobUpsert) SetStartedAt(v time.Time) *DiscoveryJobUpsert {
+	u.Set(discoveryjob.FieldStartedAt, v)
+	return u
+}
+
+// UpdateStartedAt sets the "started_at" field to the value that was provided on create.
+func (u *DiscoveryJobUpsert) UpdateStartedAt() *DiscoveryJobUpsert {
+	u.SetExcluded(discoveryjob.FieldStartedAt)
+	return u
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (u *DiscoveryJobUpsert) ClearStartedAt() *DiscoveryJobUpsert {
+	u.SetNull(discoveryjob.FieldStartedAt)
+	return u
+}
+
+// SetFinishedAt sets the "finished_at" field.
+func (u *DiscoveryJobUpsert) SetFinishedAt(v time.Time) *DiscoveryJobUpsert {
+	u.Set(discoveryjob.FieldFinishedAt, v)
+	return u
+}
+
+// UpdateFinishedAt sets the "finished_at" field to the value that was provided on create.
+func (u *DiscoveryJobUpsert) UpdateFinishedAt() *DiscoveryJobUpsert {
+	u.SetExcluded(discoveryjob.FieldFinishedAt)
+	return u
+}
+
+// ClearFinishedAt clears the value of the "finished_at" field.
+func (u *DiscoveryJobUpsert) ClearFinishedAt() *DiscoveryJobUpsert {
+	u.SetNull(discoveryjob.FieldFinishedAt)
+	return u
+}
+
+// SetSummary sets the "summary" field.
+func (u *DiscoveryJobUpsert) SetSummary(v map[string]interface{}) *DiscoveryJobUpsert {
+	u.Set(discoveryjob.FieldSummary, v)
+	return u
+}
+
+// UpdateSummary sets the "summary" field to the value that was provided on create.
+func (u *DiscoveryJobUpsert) UpdateSummary() *DiscoveryJobUpsert {
+	u.SetExcluded(discoveryjob.FieldSummary)
+	return u
+}
+
+// ClearSummary clears the value of the "summary" field.
+func (u *DiscoveryJobUpsert) ClearSummary() *DiscoveryJobUpsert {
+	u.SetNull(discoveryjob.FieldSummary)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *DiscoveryJobUpsert) SetTenantID(v int) *DiscoveryJobUpsert {
+	u.Set(discoveryjob.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *DiscoveryJobUpsert) UpdateTenantID() *DiscoveryJobUpsert {
+	u.SetExcluded(discoveryjob.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *DiscoveryJobUpsert) AddTenantID(v int) *DiscoveryJobUpsert {
+	u.Add(discoveryjob.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *DiscoveryJobUpsert) SetCreatedAt(v time.Time) *DiscoveryJobUpsert {
+	u.Set(discoveryjob.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *DiscoveryJobUpsert) UpdateCreatedAt() *DiscoveryJobUpsert {
+	u.SetExcluded(discoveryjob.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *DiscoveryJobUpsert) SetUpdatedAt(v time.Time) *DiscoveryJobUpsert {
+	u.Set(discoveryjob.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *DiscoveryJobUpsert) UpdateUpdatedAt() *DiscoveryJobUpsert {
+	u.SetExcluded(discoveryjob.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.DiscoveryJob.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *DiscoveryJobUpsertOne) UpdateNewValues() *DiscoveryJobUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.DiscoveryJob.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *DiscoveryJobUpsertOne) Ignore() *DiscoveryJobUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *DiscoveryJobUpsertOne) DoNothing() *DiscoveryJobUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the DiscoveryJobCreate.OnConflict
+// documentation for more info.
+func (u *DiscoveryJobUpsertOne) Update(set func(*DiscoveryJobUpsert)) *DiscoveryJobUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&DiscoveryJobUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetSourceID sets the "source_id" field.
+func (u *DiscoveryJobUpsertOne) SetSourceID(v string) *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.SetSourceID(v)
+	})
+}
+
+// UpdateSourceID sets the "source_id" field to the value that was provided on create.
+func (u *DiscoveryJobUpsertOne) UpdateSourceID() *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.UpdateSourceID()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *DiscoveryJobUpsertOne) SetStatus(v string) *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *DiscoveryJobUpsertOne) UpdateStatus() *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetStartedAt sets the "started_at" field.
+func (u *DiscoveryJobUpsertOne) SetStartedAt(v time.Time) *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.SetStartedAt(v)
+	})
+}
+
+// UpdateStartedAt sets the "started_at" field to the value that was provided on create.
+func (u *DiscoveryJobUpsertOne) UpdateStartedAt() *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.UpdateStartedAt()
+	})
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (u *DiscoveryJobUpsertOne) ClearStartedAt() *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.ClearStartedAt()
+	})
+}
+
+// SetFinishedAt sets the "finished_at" field.
+func (u *DiscoveryJobUpsertOne) SetFinishedAt(v time.Time) *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.SetFinishedAt(v)
+	})
+}
+
+// UpdateFinishedAt sets the "finished_at" field to the value that was provided on create.
+func (u *DiscoveryJobUpsertOne) UpdateFinishedAt() *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.UpdateFinishedAt()
+	})
+}
+
+// ClearFinishedAt clears the value of the "finished_at" field.
+func (u *DiscoveryJobUpsertOne) ClearFinishedAt() *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.ClearFinishedAt()
+	})
+}
+
+// SetSummary sets the "summary" field.
+func (u *DiscoveryJobUpsertOne) SetSummary(v map[string]interface{}) *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.SetSummary(v)
+	})
+}
+
+// UpdateSummary sets the "summary" field to the value that was provided on create.
+func (u *DiscoveryJobUpsertOne) UpdateSummary() *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.UpdateSummary()
+	})
+}
+
+// ClearSummary clears the value of the "summary" field.
+func (u *DiscoveryJobUpsertOne) ClearSummary() *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.ClearSummary()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *DiscoveryJobUpsertOne) SetTenantID(v int) *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *DiscoveryJobUpsertOne) AddTenantID(v int) *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *DiscoveryJobUpsertOne) UpdateTenantID() *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *DiscoveryJobUpsertOne) SetCreatedAt(v time.Time) *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *DiscoveryJobUpsertOne) UpdateCreatedAt() *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *DiscoveryJobUpsertOne) SetUpdatedAt(v time.Time) *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *DiscoveryJobUpsertOne) UpdateUpdatedAt() *DiscoveryJobUpsertOne {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *DiscoveryJobUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for DiscoveryJobCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *DiscoveryJobUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *DiscoveryJobUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *DiscoveryJobUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // DiscoveryJobCreateBulk is the builder for creating many DiscoveryJob entities in bulk.
 type DiscoveryJobCreateBulk struct {
 	config
 	err      error
 	builders []*DiscoveryJobCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the DiscoveryJob entities in the database.
@@ -333,6 +719,7 @@ func (_c *DiscoveryJobCreateBulk) Save(ctx context.Context) ([]*DiscoveryJob, er
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -383,6 +770,250 @@ func (_c *DiscoveryJobCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *DiscoveryJobCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.DiscoveryJob.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.DiscoveryJobUpsert) {
+//			SetSourceID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *DiscoveryJobCreateBulk) OnConflict(opts ...sql.ConflictOption) *DiscoveryJobUpsertBulk {
+	_c.conflict = opts
+	return &DiscoveryJobUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.DiscoveryJob.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *DiscoveryJobCreateBulk) OnConflictColumns(columns ...string) *DiscoveryJobUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &DiscoveryJobUpsertBulk{
+		create: _c,
+	}
+}
+
+// DiscoveryJobUpsertBulk is the builder for "upsert"-ing
+// a bulk of DiscoveryJob nodes.
+type DiscoveryJobUpsertBulk struct {
+	create *DiscoveryJobCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.DiscoveryJob.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *DiscoveryJobUpsertBulk) UpdateNewValues() *DiscoveryJobUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.DiscoveryJob.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *DiscoveryJobUpsertBulk) Ignore() *DiscoveryJobUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *DiscoveryJobUpsertBulk) DoNothing() *DiscoveryJobUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the DiscoveryJobCreateBulk.OnConflict
+// documentation for more info.
+func (u *DiscoveryJobUpsertBulk) Update(set func(*DiscoveryJobUpsert)) *DiscoveryJobUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&DiscoveryJobUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetSourceID sets the "source_id" field.
+func (u *DiscoveryJobUpsertBulk) SetSourceID(v string) *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.SetSourceID(v)
+	})
+}
+
+// UpdateSourceID sets the "source_id" field to the value that was provided on create.
+func (u *DiscoveryJobUpsertBulk) UpdateSourceID() *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.UpdateSourceID()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *DiscoveryJobUpsertBulk) SetStatus(v string) *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *DiscoveryJobUpsertBulk) UpdateStatus() *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetStartedAt sets the "started_at" field.
+func (u *DiscoveryJobUpsertBulk) SetStartedAt(v time.Time) *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.SetStartedAt(v)
+	})
+}
+
+// UpdateStartedAt sets the "started_at" field to the value that was provided on create.
+func (u *DiscoveryJobUpsertBulk) UpdateStartedAt() *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.UpdateStartedAt()
+	})
+}
+
+// ClearStartedAt clears the value of the "started_at" field.
+func (u *DiscoveryJobUpsertBulk) ClearStartedAt() *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.ClearStartedAt()
+	})
+}
+
+// SetFinishedAt sets the "finished_at" field.
+func (u *DiscoveryJobUpsertBulk) SetFinishedAt(v time.Time) *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.SetFinishedAt(v)
+	})
+}
+
+// UpdateFinishedAt sets the "finished_at" field to the value that was provided on create.
+func (u *DiscoveryJobUpsertBulk) UpdateFinishedAt() *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.UpdateFinishedAt()
+	})
+}
+
+// ClearFinishedAt clears the value of the "finished_at" field.
+func (u *DiscoveryJobUpsertBulk) ClearFinishedAt() *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.ClearFinishedAt()
+	})
+}
+
+// SetSummary sets the "summary" field.
+func (u *DiscoveryJobUpsertBulk) SetSummary(v map[string]interface{}) *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.SetSummary(v)
+	})
+}
+
+// UpdateSummary sets the "summary" field to the value that was provided on create.
+func (u *DiscoveryJobUpsertBulk) UpdateSummary() *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.UpdateSummary()
+	})
+}
+
+// ClearSummary clears the value of the "summary" field.
+func (u *DiscoveryJobUpsertBulk) ClearSummary() *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.ClearSummary()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *DiscoveryJobUpsertBulk) SetTenantID(v int) *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *DiscoveryJobUpsertBulk) AddTenantID(v int) *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *DiscoveryJobUpsertBulk) UpdateTenantID() *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *DiscoveryJobUpsertBulk) SetCreatedAt(v time.Time) *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *DiscoveryJobUpsertBulk) UpdateCreatedAt() *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *DiscoveryJobUpsertBulk) SetUpdatedAt(v time.Time) *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *DiscoveryJobUpsertBulk) UpdateUpdatedAt() *DiscoveryJobUpsertBulk {
+	return u.Update(func(s *DiscoveryJobUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *DiscoveryJobUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the DiscoveryJobCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for DiscoveryJobCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *DiscoveryJobUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

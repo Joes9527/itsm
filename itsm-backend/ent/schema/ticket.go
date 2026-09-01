@@ -47,7 +47,7 @@ func (Ticket) Fields() []ent.Field {
 			Default("medium"),
 		field.String("ticket_number").
 			Comment("工单编号").
-			Unique().
+			Immutable().
 			NotEmpty(),
 		field.Int("requester_id").
 			Comment("申请人ID").
@@ -183,7 +183,7 @@ func (Ticket) Edges() []ent.Edge {
 // Indexes of the Ticket.
 func (Ticket) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("ticket_number").Unique(),
+		index.Fields("tenant_id", "ticket_number").Unique(),
 		index.Fields("status"),
 		index.Fields("priority"),
 		index.Fields("type"), // Added index for type

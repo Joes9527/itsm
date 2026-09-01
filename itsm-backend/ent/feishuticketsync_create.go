@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/ticket"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type FeishuTicketSyncCreate struct {
 	config
 	mutation *FeishuTicketSyncMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTenantID sets the "tenant_id" field.
@@ -255,6 +257,7 @@ func (_c *FeishuTicketSyncCreate) createSpec() (*FeishuTicketSync, *sqlgraph.Cre
 		_node = &FeishuTicketSync{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(feishuticketsync.Table, sqlgraph.NewFieldSpec(feishuticketsync.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(feishuticketsync.FieldTenantID, field.TypeInt, value)
 		_node.TenantID = value
@@ -311,11 +314,459 @@ func (_c *FeishuTicketSyncCreate) createSpec() (*FeishuTicketSync, *sqlgraph.Cre
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.FeishuTicketSync.Create().
+//		SetTenantID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.FeishuTicketSyncUpsert) {
+//			SetTenantID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *FeishuTicketSyncCreate) OnConflict(opts ...sql.ConflictOption) *FeishuTicketSyncUpsertOne {
+	_c.conflict = opts
+	return &FeishuTicketSyncUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.FeishuTicketSync.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *FeishuTicketSyncCreate) OnConflictColumns(columns ...string) *FeishuTicketSyncUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &FeishuTicketSyncUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// FeishuTicketSyncUpsertOne is the builder for "upsert"-ing
+	//  one FeishuTicketSync node.
+	FeishuTicketSyncUpsertOne struct {
+		create *FeishuTicketSyncCreate
+	}
+
+	// FeishuTicketSyncUpsert is the "OnConflict" setter.
+	FeishuTicketSyncUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTenantID sets the "tenant_id" field.
+func (u *FeishuTicketSyncUpsert) SetTenantID(v int) *FeishuTicketSyncUpsert {
+	u.Set(feishuticketsync.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsert) UpdateTenantID() *FeishuTicketSyncUpsert {
+	u.SetExcluded(feishuticketsync.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *FeishuTicketSyncUpsert) AddTenantID(v int) *FeishuTicketSyncUpsert {
+	u.Add(feishuticketsync.FieldTenantID, v)
+	return u
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *FeishuTicketSyncUpsert) SetTicketID(v int) *FeishuTicketSyncUpsert {
+	u.Set(feishuticketsync.FieldTicketID, v)
+	return u
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsert) UpdateTicketID() *FeishuTicketSyncUpsert {
+	u.SetExcluded(feishuticketsync.FieldTicketID)
+	return u
+}
+
+// SetFeishuTaskID sets the "feishu_task_id" field.
+func (u *FeishuTicketSyncUpsert) SetFeishuTaskID(v string) *FeishuTicketSyncUpsert {
+	u.Set(feishuticketsync.FieldFeishuTaskID, v)
+	return u
+}
+
+// UpdateFeishuTaskID sets the "feishu_task_id" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsert) UpdateFeishuTaskID() *FeishuTicketSyncUpsert {
+	u.SetExcluded(feishuticketsync.FieldFeishuTaskID)
+	return u
+}
+
+// SetFeishuTaskGUID sets the "feishu_task_guid" field.
+func (u *FeishuTicketSyncUpsert) SetFeishuTaskGUID(v string) *FeishuTicketSyncUpsert {
+	u.Set(feishuticketsync.FieldFeishuTaskGUID, v)
+	return u
+}
+
+// UpdateFeishuTaskGUID sets the "feishu_task_guid" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsert) UpdateFeishuTaskGUID() *FeishuTicketSyncUpsert {
+	u.SetExcluded(feishuticketsync.FieldFeishuTaskGUID)
+	return u
+}
+
+// ClearFeishuTaskGUID clears the value of the "feishu_task_guid" field.
+func (u *FeishuTicketSyncUpsert) ClearFeishuTaskGUID() *FeishuTicketSyncUpsert {
+	u.SetNull(feishuticketsync.FieldFeishuTaskGUID)
+	return u
+}
+
+// SetSyncStatus sets the "sync_status" field.
+func (u *FeishuTicketSyncUpsert) SetSyncStatus(v string) *FeishuTicketSyncUpsert {
+	u.Set(feishuticketsync.FieldSyncStatus, v)
+	return u
+}
+
+// UpdateSyncStatus sets the "sync_status" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsert) UpdateSyncStatus() *FeishuTicketSyncUpsert {
+	u.SetExcluded(feishuticketsync.FieldSyncStatus)
+	return u
+}
+
+// SetLastSyncDirection sets the "last_sync_direction" field.
+func (u *FeishuTicketSyncUpsert) SetLastSyncDirection(v string) *FeishuTicketSyncUpsert {
+	u.Set(feishuticketsync.FieldLastSyncDirection, v)
+	return u
+}
+
+// UpdateLastSyncDirection sets the "last_sync_direction" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsert) UpdateLastSyncDirection() *FeishuTicketSyncUpsert {
+	u.SetExcluded(feishuticketsync.FieldLastSyncDirection)
+	return u
+}
+
+// ClearLastSyncDirection clears the value of the "last_sync_direction" field.
+func (u *FeishuTicketSyncUpsert) ClearLastSyncDirection() *FeishuTicketSyncUpsert {
+	u.SetNull(feishuticketsync.FieldLastSyncDirection)
+	return u
+}
+
+// SetLastSyncedAt sets the "last_synced_at" field.
+func (u *FeishuTicketSyncUpsert) SetLastSyncedAt(v time.Time) *FeishuTicketSyncUpsert {
+	u.Set(feishuticketsync.FieldLastSyncedAt, v)
+	return u
+}
+
+// UpdateLastSyncedAt sets the "last_synced_at" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsert) UpdateLastSyncedAt() *FeishuTicketSyncUpsert {
+	u.SetExcluded(feishuticketsync.FieldLastSyncedAt)
+	return u
+}
+
+// ClearLastSyncedAt clears the value of the "last_synced_at" field.
+func (u *FeishuTicketSyncUpsert) ClearLastSyncedAt() *FeishuTicketSyncUpsert {
+	u.SetNull(feishuticketsync.FieldLastSyncedAt)
+	return u
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (u *FeishuTicketSyncUpsert) SetErrorMessage(v string) *FeishuTicketSyncUpsert {
+	u.Set(feishuticketsync.FieldErrorMessage, v)
+	return u
+}
+
+// UpdateErrorMessage sets the "error_message" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsert) UpdateErrorMessage() *FeishuTicketSyncUpsert {
+	u.SetExcluded(feishuticketsync.FieldErrorMessage)
+	return u
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (u *FeishuTicketSyncUpsert) ClearErrorMessage() *FeishuTicketSyncUpsert {
+	u.SetNull(feishuticketsync.FieldErrorMessage)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *FeishuTicketSyncUpsert) SetCreatedAt(v time.Time) *FeishuTicketSyncUpsert {
+	u.Set(feishuticketsync.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsert) UpdateCreatedAt() *FeishuTicketSyncUpsert {
+	u.SetExcluded(feishuticketsync.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *FeishuTicketSyncUpsert) SetUpdatedAt(v time.Time) *FeishuTicketSyncUpsert {
+	u.Set(feishuticketsync.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsert) UpdateUpdatedAt() *FeishuTicketSyncUpsert {
+	u.SetExcluded(feishuticketsync.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.FeishuTicketSync.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *FeishuTicketSyncUpsertOne) UpdateNewValues() *FeishuTicketSyncUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.FeishuTicketSync.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *FeishuTicketSyncUpsertOne) Ignore() *FeishuTicketSyncUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *FeishuTicketSyncUpsertOne) DoNothing() *FeishuTicketSyncUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the FeishuTicketSyncCreate.OnConflict
+// documentation for more info.
+func (u *FeishuTicketSyncUpsertOne) Update(set func(*FeishuTicketSyncUpsert)) *FeishuTicketSyncUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&FeishuTicketSyncUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *FeishuTicketSyncUpsertOne) SetTenantID(v int) *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *FeishuTicketSyncUpsertOne) AddTenantID(v int) *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertOne) UpdateTenantID() *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *FeishuTicketSyncUpsertOne) SetTicketID(v int) *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertOne) UpdateTicketID() *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetFeishuTaskID sets the "feishu_task_id" field.
+func (u *FeishuTicketSyncUpsertOne) SetFeishuTaskID(v string) *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetFeishuTaskID(v)
+	})
+}
+
+// UpdateFeishuTaskID sets the "feishu_task_id" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertOne) UpdateFeishuTaskID() *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateFeishuTaskID()
+	})
+}
+
+// SetFeishuTaskGUID sets the "feishu_task_guid" field.
+func (u *FeishuTicketSyncUpsertOne) SetFeishuTaskGUID(v string) *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetFeishuTaskGUID(v)
+	})
+}
+
+// UpdateFeishuTaskGUID sets the "feishu_task_guid" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertOne) UpdateFeishuTaskGUID() *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateFeishuTaskGUID()
+	})
+}
+
+// ClearFeishuTaskGUID clears the value of the "feishu_task_guid" field.
+func (u *FeishuTicketSyncUpsertOne) ClearFeishuTaskGUID() *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.ClearFeishuTaskGUID()
+	})
+}
+
+// SetSyncStatus sets the "sync_status" field.
+func (u *FeishuTicketSyncUpsertOne) SetSyncStatus(v string) *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetSyncStatus(v)
+	})
+}
+
+// UpdateSyncStatus sets the "sync_status" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertOne) UpdateSyncStatus() *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateSyncStatus()
+	})
+}
+
+// SetLastSyncDirection sets the "last_sync_direction" field.
+func (u *FeishuTicketSyncUpsertOne) SetLastSyncDirection(v string) *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetLastSyncDirection(v)
+	})
+}
+
+// UpdateLastSyncDirection sets the "last_sync_direction" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertOne) UpdateLastSyncDirection() *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateLastSyncDirection()
+	})
+}
+
+// ClearLastSyncDirection clears the value of the "last_sync_direction" field.
+func (u *FeishuTicketSyncUpsertOne) ClearLastSyncDirection() *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.ClearLastSyncDirection()
+	})
+}
+
+// SetLastSyncedAt sets the "last_synced_at" field.
+func (u *FeishuTicketSyncUpsertOne) SetLastSyncedAt(v time.Time) *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetLastSyncedAt(v)
+	})
+}
+
+// UpdateLastSyncedAt sets the "last_synced_at" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertOne) UpdateLastSyncedAt() *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateLastSyncedAt()
+	})
+}
+
+// ClearLastSyncedAt clears the value of the "last_synced_at" field.
+func (u *FeishuTicketSyncUpsertOne) ClearLastSyncedAt() *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.ClearLastSyncedAt()
+	})
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (u *FeishuTicketSyncUpsertOne) SetErrorMessage(v string) *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetErrorMessage(v)
+	})
+}
+
+// UpdateErrorMessage sets the "error_message" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertOne) UpdateErrorMessage() *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateErrorMessage()
+	})
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (u *FeishuTicketSyncUpsertOne) ClearErrorMessage() *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.ClearErrorMessage()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *FeishuTicketSyncUpsertOne) SetCreatedAt(v time.Time) *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertOne) UpdateCreatedAt() *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *FeishuTicketSyncUpsertOne) SetUpdatedAt(v time.Time) *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertOne) UpdateUpdatedAt() *FeishuTicketSyncUpsertOne {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *FeishuTicketSyncUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for FeishuTicketSyncCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *FeishuTicketSyncUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *FeishuTicketSyncUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *FeishuTicketSyncUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // FeishuTicketSyncCreateBulk is the builder for creating many FeishuTicketSync entities in bulk.
 type FeishuTicketSyncCreateBulk struct {
 	config
 	err      error
 	builders []*FeishuTicketSyncCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the FeishuTicketSync entities in the database.
@@ -345,6 +796,7 @@ func (_c *FeishuTicketSyncCreateBulk) Save(ctx context.Context) ([]*FeishuTicket
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -395,6 +847,285 @@ func (_c *FeishuTicketSyncCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *FeishuTicketSyncCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.FeishuTicketSync.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.FeishuTicketSyncUpsert) {
+//			SetTenantID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *FeishuTicketSyncCreateBulk) OnConflict(opts ...sql.ConflictOption) *FeishuTicketSyncUpsertBulk {
+	_c.conflict = opts
+	return &FeishuTicketSyncUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.FeishuTicketSync.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *FeishuTicketSyncCreateBulk) OnConflictColumns(columns ...string) *FeishuTicketSyncUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &FeishuTicketSyncUpsertBulk{
+		create: _c,
+	}
+}
+
+// FeishuTicketSyncUpsertBulk is the builder for "upsert"-ing
+// a bulk of FeishuTicketSync nodes.
+type FeishuTicketSyncUpsertBulk struct {
+	create *FeishuTicketSyncCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.FeishuTicketSync.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *FeishuTicketSyncUpsertBulk) UpdateNewValues() *FeishuTicketSyncUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.FeishuTicketSync.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *FeishuTicketSyncUpsertBulk) Ignore() *FeishuTicketSyncUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *FeishuTicketSyncUpsertBulk) DoNothing() *FeishuTicketSyncUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the FeishuTicketSyncCreateBulk.OnConflict
+// documentation for more info.
+func (u *FeishuTicketSyncUpsertBulk) Update(set func(*FeishuTicketSyncUpsert)) *FeishuTicketSyncUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&FeishuTicketSyncUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *FeishuTicketSyncUpsertBulk) SetTenantID(v int) *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *FeishuTicketSyncUpsertBulk) AddTenantID(v int) *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertBulk) UpdateTenantID() *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetTicketID sets the "ticket_id" field.
+func (u *FeishuTicketSyncUpsertBulk) SetTicketID(v int) *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetTicketID(v)
+	})
+}
+
+// UpdateTicketID sets the "ticket_id" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertBulk) UpdateTicketID() *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateTicketID()
+	})
+}
+
+// SetFeishuTaskID sets the "feishu_task_id" field.
+func (u *FeishuTicketSyncUpsertBulk) SetFeishuTaskID(v string) *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetFeishuTaskID(v)
+	})
+}
+
+// UpdateFeishuTaskID sets the "feishu_task_id" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertBulk) UpdateFeishuTaskID() *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateFeishuTaskID()
+	})
+}
+
+// SetFeishuTaskGUID sets the "feishu_task_guid" field.
+func (u *FeishuTicketSyncUpsertBulk) SetFeishuTaskGUID(v string) *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetFeishuTaskGUID(v)
+	})
+}
+
+// UpdateFeishuTaskGUID sets the "feishu_task_guid" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertBulk) UpdateFeishuTaskGUID() *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateFeishuTaskGUID()
+	})
+}
+
+// ClearFeishuTaskGUID clears the value of the "feishu_task_guid" field.
+func (u *FeishuTicketSyncUpsertBulk) ClearFeishuTaskGUID() *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.ClearFeishuTaskGUID()
+	})
+}
+
+// SetSyncStatus sets the "sync_status" field.
+func (u *FeishuTicketSyncUpsertBulk) SetSyncStatus(v string) *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetSyncStatus(v)
+	})
+}
+
+// UpdateSyncStatus sets the "sync_status" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertBulk) UpdateSyncStatus() *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateSyncStatus()
+	})
+}
+
+// SetLastSyncDirection sets the "last_sync_direction" field.
+func (u *FeishuTicketSyncUpsertBulk) SetLastSyncDirection(v string) *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetLastSyncDirection(v)
+	})
+}
+
+// UpdateLastSyncDirection sets the "last_sync_direction" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertBulk) UpdateLastSyncDirection() *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateLastSyncDirection()
+	})
+}
+
+// ClearLastSyncDirection clears the value of the "last_sync_direction" field.
+func (u *FeishuTicketSyncUpsertBulk) ClearLastSyncDirection() *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.ClearLastSyncDirection()
+	})
+}
+
+// SetLastSyncedAt sets the "last_synced_at" field.
+func (u *FeishuTicketSyncUpsertBulk) SetLastSyncedAt(v time.Time) *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetLastSyncedAt(v)
+	})
+}
+
+// UpdateLastSyncedAt sets the "last_synced_at" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertBulk) UpdateLastSyncedAt() *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateLastSyncedAt()
+	})
+}
+
+// ClearLastSyncedAt clears the value of the "last_synced_at" field.
+func (u *FeishuTicketSyncUpsertBulk) ClearLastSyncedAt() *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.ClearLastSyncedAt()
+	})
+}
+
+// SetErrorMessage sets the "error_message" field.
+func (u *FeishuTicketSyncUpsertBulk) SetErrorMessage(v string) *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetErrorMessage(v)
+	})
+}
+
+// UpdateErrorMessage sets the "error_message" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertBulk) UpdateErrorMessage() *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateErrorMessage()
+	})
+}
+
+// ClearErrorMessage clears the value of the "error_message" field.
+func (u *FeishuTicketSyncUpsertBulk) ClearErrorMessage() *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.ClearErrorMessage()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *FeishuTicketSyncUpsertBulk) SetCreatedAt(v time.Time) *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertBulk) UpdateCreatedAt() *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *FeishuTicketSyncUpsertBulk) SetUpdatedAt(v time.Time) *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *FeishuTicketSyncUpsertBulk) UpdateUpdatedAt() *FeishuTicketSyncUpsertBulk {
+	return u.Update(func(s *FeishuTicketSyncUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *FeishuTicketSyncUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the FeishuTicketSyncCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for FeishuTicketSyncCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *FeishuTicketSyncUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

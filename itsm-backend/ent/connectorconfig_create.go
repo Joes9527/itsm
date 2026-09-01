@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/connectorconfig"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type ConnectorConfigCreate struct {
 	config
 	mutation *ConnectorConfigMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTenantID sets the "tenant_id" field.
@@ -232,6 +234,7 @@ func (_c *ConnectorConfigCreate) createSpec() (*ConnectorConfig, *sqlgraph.Creat
 		_node = &ConnectorConfig{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(connectorconfig.Table, sqlgraph.NewFieldSpec(connectorconfig.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.TenantID(); ok {
 		_spec.SetField(connectorconfig.FieldTenantID, field.TypeInt, value)
 		_node.TenantID = value
@@ -271,11 +274,420 @@ func (_c *ConnectorConfigCreate) createSpec() (*ConnectorConfig, *sqlgraph.Creat
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ConnectorConfig.Create().
+//		SetTenantID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ConnectorConfigUpsert) {
+//			SetTenantID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ConnectorConfigCreate) OnConflict(opts ...sql.ConflictOption) *ConnectorConfigUpsertOne {
+	_c.conflict = opts
+	return &ConnectorConfigUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ConnectorConfig.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ConnectorConfigCreate) OnConflictColumns(columns ...string) *ConnectorConfigUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ConnectorConfigUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ConnectorConfigUpsertOne is the builder for "upsert"-ing
+	//  one ConnectorConfig node.
+	ConnectorConfigUpsertOne struct {
+		create *ConnectorConfigCreate
+	}
+
+	// ConnectorConfigUpsert is the "OnConflict" setter.
+	ConnectorConfigUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ConnectorConfigUpsert) SetTenantID(v int) *ConnectorConfigUpsert {
+	u.Set(connectorconfig.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ConnectorConfigUpsert) UpdateTenantID() *ConnectorConfigUpsert {
+	u.SetExcluded(connectorconfig.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ConnectorConfigUpsert) AddTenantID(v int) *ConnectorConfigUpsert {
+	u.Add(connectorconfig.FieldTenantID, v)
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *ConnectorConfigUpsert) SetName(v string) *ConnectorConfigUpsert {
+	u.Set(connectorconfig.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ConnectorConfigUpsert) UpdateName() *ConnectorConfigUpsert {
+	u.SetExcluded(connectorconfig.FieldName)
+	return u
+}
+
+// SetProvider sets the "provider" field.
+func (u *ConnectorConfigUpsert) SetProvider(v string) *ConnectorConfigUpsert {
+	u.Set(connectorconfig.FieldProvider, v)
+	return u
+}
+
+// UpdateProvider sets the "provider" field to the value that was provided on create.
+func (u *ConnectorConfigUpsert) UpdateProvider() *ConnectorConfigUpsert {
+	u.SetExcluded(connectorconfig.FieldProvider)
+	return u
+}
+
+// SetEnabled sets the "enabled" field.
+func (u *ConnectorConfigUpsert) SetEnabled(v bool) *ConnectorConfigUpsert {
+	u.Set(connectorconfig.FieldEnabled, v)
+	return u
+}
+
+// UpdateEnabled sets the "enabled" field to the value that was provided on create.
+func (u *ConnectorConfigUpsert) UpdateEnabled() *ConnectorConfigUpsert {
+	u.SetExcluded(connectorconfig.FieldEnabled)
+	return u
+}
+
+// SetCredentials sets the "credentials" field.
+func (u *ConnectorConfigUpsert) SetCredentials(v string) *ConnectorConfigUpsert {
+	u.Set(connectorconfig.FieldCredentials, v)
+	return u
+}
+
+// UpdateCredentials sets the "credentials" field to the value that was provided on create.
+func (u *ConnectorConfigUpsert) UpdateCredentials() *ConnectorConfigUpsert {
+	u.SetExcluded(connectorconfig.FieldCredentials)
+	return u
+}
+
+// ClearCredentials clears the value of the "credentials" field.
+func (u *ConnectorConfigUpsert) ClearCredentials() *ConnectorConfigUpsert {
+	u.SetNull(connectorconfig.FieldCredentials)
+	return u
+}
+
+// SetSettings sets the "settings" field.
+func (u *ConnectorConfigUpsert) SetSettings(v string) *ConnectorConfigUpsert {
+	u.Set(connectorconfig.FieldSettings, v)
+	return u
+}
+
+// UpdateSettings sets the "settings" field to the value that was provided on create.
+func (u *ConnectorConfigUpsert) UpdateSettings() *ConnectorConfigUpsert {
+	u.SetExcluded(connectorconfig.FieldSettings)
+	return u
+}
+
+// ClearSettings clears the value of the "settings" field.
+func (u *ConnectorConfigUpsert) ClearSettings() *ConnectorConfigUpsert {
+	u.SetNull(connectorconfig.FieldSettings)
+	return u
+}
+
+// SetLabels sets the "labels" field.
+func (u *ConnectorConfigUpsert) SetLabels(v string) *ConnectorConfigUpsert {
+	u.Set(connectorconfig.FieldLabels, v)
+	return u
+}
+
+// UpdateLabels sets the "labels" field to the value that was provided on create.
+func (u *ConnectorConfigUpsert) UpdateLabels() *ConnectorConfigUpsert {
+	u.SetExcluded(connectorconfig.FieldLabels)
+	return u
+}
+
+// ClearLabels clears the value of the "labels" field.
+func (u *ConnectorConfigUpsert) ClearLabels() *ConnectorConfigUpsert {
+	u.SetNull(connectorconfig.FieldLabels)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ConnectorConfigUpsert) SetCreatedAt(v time.Time) *ConnectorConfigUpsert {
+	u.Set(connectorconfig.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ConnectorConfigUpsert) UpdateCreatedAt() *ConnectorConfigUpsert {
+	u.SetExcluded(connectorconfig.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ConnectorConfigUpsert) SetUpdatedAt(v time.Time) *ConnectorConfigUpsert {
+	u.Set(connectorconfig.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ConnectorConfigUpsert) UpdateUpdatedAt() *ConnectorConfigUpsert {
+	u.SetExcluded(connectorconfig.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ConnectorConfig.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ConnectorConfigUpsertOne) UpdateNewValues() *ConnectorConfigUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ConnectorConfig.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ConnectorConfigUpsertOne) Ignore() *ConnectorConfigUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ConnectorConfigUpsertOne) DoNothing() *ConnectorConfigUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ConnectorConfigCreate.OnConflict
+// documentation for more info.
+func (u *ConnectorConfigUpsertOne) Update(set func(*ConnectorConfigUpsert)) *ConnectorConfigUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ConnectorConfigUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ConnectorConfigUpsertOne) SetTenantID(v int) *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ConnectorConfigUpsertOne) AddTenantID(v int) *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ConnectorConfigUpsertOne) UpdateTenantID() *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetName sets the "name" field.
+func (u *ConnectorConfigUpsertOne) SetName(v string) *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ConnectorConfigUpsertOne) UpdateName() *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetProvider sets the "provider" field.
+func (u *ConnectorConfigUpsertOne) SetProvider(v string) *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.SetProvider(v)
+	})
+}
+
+// UpdateProvider sets the "provider" field to the value that was provided on create.
+func (u *ConnectorConfigUpsertOne) UpdateProvider() *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.UpdateProvider()
+	})
+}
+
+// SetEnabled sets the "enabled" field.
+func (u *ConnectorConfigUpsertOne) SetEnabled(v bool) *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.SetEnabled(v)
+	})
+}
+
+// UpdateEnabled sets the "enabled" field to the value that was provided on create.
+func (u *ConnectorConfigUpsertOne) UpdateEnabled() *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.UpdateEnabled()
+	})
+}
+
+// SetCredentials sets the "credentials" field.
+func (u *ConnectorConfigUpsertOne) SetCredentials(v string) *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.SetCredentials(v)
+	})
+}
+
+// UpdateCredentials sets the "credentials" field to the value that was provided on create.
+func (u *ConnectorConfigUpsertOne) UpdateCredentials() *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.UpdateCredentials()
+	})
+}
+
+// ClearCredentials clears the value of the "credentials" field.
+func (u *ConnectorConfigUpsertOne) ClearCredentials() *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.ClearCredentials()
+	})
+}
+
+// SetSettings sets the "settings" field.
+func (u *ConnectorConfigUpsertOne) SetSettings(v string) *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.SetSettings(v)
+	})
+}
+
+// UpdateSettings sets the "settings" field to the value that was provided on create.
+func (u *ConnectorConfigUpsertOne) UpdateSettings() *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.UpdateSettings()
+	})
+}
+
+// ClearSettings clears the value of the "settings" field.
+func (u *ConnectorConfigUpsertOne) ClearSettings() *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.ClearSettings()
+	})
+}
+
+// SetLabels sets the "labels" field.
+func (u *ConnectorConfigUpsertOne) SetLabels(v string) *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.SetLabels(v)
+	})
+}
+
+// UpdateLabels sets the "labels" field to the value that was provided on create.
+func (u *ConnectorConfigUpsertOne) UpdateLabels() *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.UpdateLabels()
+	})
+}
+
+// ClearLabels clears the value of the "labels" field.
+func (u *ConnectorConfigUpsertOne) ClearLabels() *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.ClearLabels()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ConnectorConfigUpsertOne) SetCreatedAt(v time.Time) *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ConnectorConfigUpsertOne) UpdateCreatedAt() *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ConnectorConfigUpsertOne) SetUpdatedAt(v time.Time) *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ConnectorConfigUpsertOne) UpdateUpdatedAt() *ConnectorConfigUpsertOne {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ConnectorConfigUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ConnectorConfigCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ConnectorConfigUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ConnectorConfigUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ConnectorConfigUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ConnectorConfigCreateBulk is the builder for creating many ConnectorConfig entities in bulk.
 type ConnectorConfigCreateBulk struct {
 	config
 	err      error
 	builders []*ConnectorConfigCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ConnectorConfig entities in the database.
@@ -305,6 +717,7 @@ func (_c *ConnectorConfigCreateBulk) Save(ctx context.Context) ([]*ConnectorConf
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -355,6 +768,264 @@ func (_c *ConnectorConfigCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ConnectorConfigCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ConnectorConfig.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ConnectorConfigUpsert) {
+//			SetTenantID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ConnectorConfigCreateBulk) OnConflict(opts ...sql.ConflictOption) *ConnectorConfigUpsertBulk {
+	_c.conflict = opts
+	return &ConnectorConfigUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ConnectorConfig.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ConnectorConfigCreateBulk) OnConflictColumns(columns ...string) *ConnectorConfigUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ConnectorConfigUpsertBulk{
+		create: _c,
+	}
+}
+
+// ConnectorConfigUpsertBulk is the builder for "upsert"-ing
+// a bulk of ConnectorConfig nodes.
+type ConnectorConfigUpsertBulk struct {
+	create *ConnectorConfigCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ConnectorConfig.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ConnectorConfigUpsertBulk) UpdateNewValues() *ConnectorConfigUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ConnectorConfig.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ConnectorConfigUpsertBulk) Ignore() *ConnectorConfigUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ConnectorConfigUpsertBulk) DoNothing() *ConnectorConfigUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ConnectorConfigCreateBulk.OnConflict
+// documentation for more info.
+func (u *ConnectorConfigUpsertBulk) Update(set func(*ConnectorConfigUpsert)) *ConnectorConfigUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ConnectorConfigUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ConnectorConfigUpsertBulk) SetTenantID(v int) *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ConnectorConfigUpsertBulk) AddTenantID(v int) *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ConnectorConfigUpsertBulk) UpdateTenantID() *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetName sets the "name" field.
+func (u *ConnectorConfigUpsertBulk) SetName(v string) *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ConnectorConfigUpsertBulk) UpdateName() *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetProvider sets the "provider" field.
+func (u *ConnectorConfigUpsertBulk) SetProvider(v string) *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.SetProvider(v)
+	})
+}
+
+// UpdateProvider sets the "provider" field to the value that was provided on create.
+func (u *ConnectorConfigUpsertBulk) UpdateProvider() *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.UpdateProvider()
+	})
+}
+
+// SetEnabled sets the "enabled" field.
+func (u *ConnectorConfigUpsertBulk) SetEnabled(v bool) *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.SetEnabled(v)
+	})
+}
+
+// UpdateEnabled sets the "enabled" field to the value that was provided on create.
+func (u *ConnectorConfigUpsertBulk) UpdateEnabled() *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.UpdateEnabled()
+	})
+}
+
+// SetCredentials sets the "credentials" field.
+func (u *ConnectorConfigUpsertBulk) SetCredentials(v string) *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.SetCredentials(v)
+	})
+}
+
+// UpdateCredentials sets the "credentials" field to the value that was provided on create.
+func (u *ConnectorConfigUpsertBulk) UpdateCredentials() *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.UpdateCredentials()
+	})
+}
+
+// ClearCredentials clears the value of the "credentials" field.
+func (u *ConnectorConfigUpsertBulk) ClearCredentials() *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.ClearCredentials()
+	})
+}
+
+// SetSettings sets the "settings" field.
+func (u *ConnectorConfigUpsertBulk) SetSettings(v string) *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.SetSettings(v)
+	})
+}
+
+// UpdateSettings sets the "settings" field to the value that was provided on create.
+func (u *ConnectorConfigUpsertBulk) UpdateSettings() *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.UpdateSettings()
+	})
+}
+
+// ClearSettings clears the value of the "settings" field.
+func (u *ConnectorConfigUpsertBulk) ClearSettings() *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.ClearSettings()
+	})
+}
+
+// SetLabels sets the "labels" field.
+func (u *ConnectorConfigUpsertBulk) SetLabels(v string) *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.SetLabels(v)
+	})
+}
+
+// UpdateLabels sets the "labels" field to the value that was provided on create.
+func (u *ConnectorConfigUpsertBulk) UpdateLabels() *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.UpdateLabels()
+	})
+}
+
+// ClearLabels clears the value of the "labels" field.
+func (u *ConnectorConfigUpsertBulk) ClearLabels() *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.ClearLabels()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ConnectorConfigUpsertBulk) SetCreatedAt(v time.Time) *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ConnectorConfigUpsertBulk) UpdateCreatedAt() *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ConnectorConfigUpsertBulk) SetUpdatedAt(v time.Time) *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ConnectorConfigUpsertBulk) UpdateUpdatedAt() *ConnectorConfigUpsertBulk {
+	return u.Update(func(s *ConnectorConfigUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ConnectorConfigUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ConnectorConfigCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ConnectorConfigCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ConnectorConfigUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

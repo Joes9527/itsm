@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/relationshiptype"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -18,6 +19,7 @@ type RelationshipTypeCreate struct {
 	config
 	mutation *RelationshipTypeMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetName sets the "name" field.
@@ -204,6 +206,7 @@ func (_c *RelationshipTypeCreate) createSpec() (*RelationshipType, *sqlgraph.Cre
 		_node = &RelationshipType{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(relationshiptype.Table, sqlgraph.NewFieldSpec(relationshiptype.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Name(); ok {
 		_spec.SetField(relationshiptype.FieldName, field.TypeString, value)
 		_node.Name = value
@@ -235,11 +238,355 @@ func (_c *RelationshipTypeCreate) createSpec() (*RelationshipType, *sqlgraph.Cre
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.RelationshipType.Create().
+//		SetName(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.RelationshipTypeUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *RelationshipTypeCreate) OnConflict(opts ...sql.ConflictOption) *RelationshipTypeUpsertOne {
+	_c.conflict = opts
+	return &RelationshipTypeUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.RelationshipType.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *RelationshipTypeCreate) OnConflictColumns(columns ...string) *RelationshipTypeUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &RelationshipTypeUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// RelationshipTypeUpsertOne is the builder for "upsert"-ing
+	//  one RelationshipType node.
+	RelationshipTypeUpsertOne struct {
+		create *RelationshipTypeCreate
+	}
+
+	// RelationshipTypeUpsert is the "OnConflict" setter.
+	RelationshipTypeUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetName sets the "name" field.
+func (u *RelationshipTypeUpsert) SetName(v string) *RelationshipTypeUpsert {
+	u.Set(relationshiptype.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *RelationshipTypeUpsert) UpdateName() *RelationshipTypeUpsert {
+	u.SetExcluded(relationshiptype.FieldName)
+	return u
+}
+
+// SetDirectional sets the "directional" field.
+func (u *RelationshipTypeUpsert) SetDirectional(v bool) *RelationshipTypeUpsert {
+	u.Set(relationshiptype.FieldDirectional, v)
+	return u
+}
+
+// UpdateDirectional sets the "directional" field to the value that was provided on create.
+func (u *RelationshipTypeUpsert) UpdateDirectional() *RelationshipTypeUpsert {
+	u.SetExcluded(relationshiptype.FieldDirectional)
+	return u
+}
+
+// SetReverseName sets the "reverse_name" field.
+func (u *RelationshipTypeUpsert) SetReverseName(v string) *RelationshipTypeUpsert {
+	u.Set(relationshiptype.FieldReverseName, v)
+	return u
+}
+
+// UpdateReverseName sets the "reverse_name" field to the value that was provided on create.
+func (u *RelationshipTypeUpsert) UpdateReverseName() *RelationshipTypeUpsert {
+	u.SetExcluded(relationshiptype.FieldReverseName)
+	return u
+}
+
+// ClearReverseName clears the value of the "reverse_name" field.
+func (u *RelationshipTypeUpsert) ClearReverseName() *RelationshipTypeUpsert {
+	u.SetNull(relationshiptype.FieldReverseName)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *RelationshipTypeUpsert) SetDescription(v string) *RelationshipTypeUpsert {
+	u.Set(relationshiptype.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *RelationshipTypeUpsert) UpdateDescription() *RelationshipTypeUpsert {
+	u.SetExcluded(relationshiptype.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *RelationshipTypeUpsert) ClearDescription() *RelationshipTypeUpsert {
+	u.SetNull(relationshiptype.FieldDescription)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *RelationshipTypeUpsert) SetTenantID(v int) *RelationshipTypeUpsert {
+	u.Set(relationshiptype.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *RelationshipTypeUpsert) UpdateTenantID() *RelationshipTypeUpsert {
+	u.SetExcluded(relationshiptype.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *RelationshipTypeUpsert) AddTenantID(v int) *RelationshipTypeUpsert {
+	u.Add(relationshiptype.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *RelationshipTypeUpsert) SetCreatedAt(v time.Time) *RelationshipTypeUpsert {
+	u.Set(relationshiptype.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *RelationshipTypeUpsert) UpdateCreatedAt() *RelationshipTypeUpsert {
+	u.SetExcluded(relationshiptype.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *RelationshipTypeUpsert) SetUpdatedAt(v time.Time) *RelationshipTypeUpsert {
+	u.Set(relationshiptype.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *RelationshipTypeUpsert) UpdateUpdatedAt() *RelationshipTypeUpsert {
+	u.SetExcluded(relationshiptype.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.RelationshipType.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *RelationshipTypeUpsertOne) UpdateNewValues() *RelationshipTypeUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.RelationshipType.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *RelationshipTypeUpsertOne) Ignore() *RelationshipTypeUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *RelationshipTypeUpsertOne) DoNothing() *RelationshipTypeUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the RelationshipTypeCreate.OnConflict
+// documentation for more info.
+func (u *RelationshipTypeUpsertOne) Update(set func(*RelationshipTypeUpsert)) *RelationshipTypeUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&RelationshipTypeUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *RelationshipTypeUpsertOne) SetName(v string) *RelationshipTypeUpsertOne {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *RelationshipTypeUpsertOne) UpdateName() *RelationshipTypeUpsertOne {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDirectional sets the "directional" field.
+func (u *RelationshipTypeUpsertOne) SetDirectional(v bool) *RelationshipTypeUpsertOne {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.SetDirectional(v)
+	})
+}
+
+// UpdateDirectional sets the "directional" field to the value that was provided on create.
+func (u *RelationshipTypeUpsertOne) UpdateDirectional() *RelationshipTypeUpsertOne {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.UpdateDirectional()
+	})
+}
+
+// SetReverseName sets the "reverse_name" field.
+func (u *RelationshipTypeUpsertOne) SetReverseName(v string) *RelationshipTypeUpsertOne {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.SetReverseName(v)
+	})
+}
+
+// UpdateReverseName sets the "reverse_name" field to the value that was provided on create.
+func (u *RelationshipTypeUpsertOne) UpdateReverseName() *RelationshipTypeUpsertOne {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.UpdateReverseName()
+	})
+}
+
+// ClearReverseName clears the value of the "reverse_name" field.
+func (u *RelationshipTypeUpsertOne) ClearReverseName() *RelationshipTypeUpsertOne {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.ClearReverseName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *RelationshipTypeUpsertOne) SetDescription(v string) *RelationshipTypeUpsertOne {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *RelationshipTypeUpsertOne) UpdateDescription() *RelationshipTypeUpsertOne {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *RelationshipTypeUpsertOne) ClearDescription() *RelationshipTypeUpsertOne {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *RelationshipTypeUpsertOne) SetTenantID(v int) *RelationshipTypeUpsertOne {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *RelationshipTypeUpsertOne) AddTenantID(v int) *RelationshipTypeUpsertOne {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *RelationshipTypeUpsertOne) UpdateTenantID() *RelationshipTypeUpsertOne {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *RelationshipTypeUpsertOne) SetCreatedAt(v time.Time) *RelationshipTypeUpsertOne {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *RelationshipTypeUpsertOne) UpdateCreatedAt() *RelationshipTypeUpsertOne {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *RelationshipTypeUpsertOne) SetUpdatedAt(v time.Time) *RelationshipTypeUpsertOne {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *RelationshipTypeUpsertOne) UpdateUpdatedAt() *RelationshipTypeUpsertOne {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *RelationshipTypeUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for RelationshipTypeCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *RelationshipTypeUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *RelationshipTypeUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *RelationshipTypeUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // RelationshipTypeCreateBulk is the builder for creating many RelationshipType entities in bulk.
 type RelationshipTypeCreateBulk struct {
 	config
 	err      error
 	builders []*RelationshipTypeCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the RelationshipType entities in the database.
@@ -269,6 +616,7 @@ func (_c *RelationshipTypeCreateBulk) Save(ctx context.Context) ([]*Relationship
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -319,6 +667,229 @@ func (_c *RelationshipTypeCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *RelationshipTypeCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.RelationshipType.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.RelationshipTypeUpsert) {
+//			SetName(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *RelationshipTypeCreateBulk) OnConflict(opts ...sql.ConflictOption) *RelationshipTypeUpsertBulk {
+	_c.conflict = opts
+	return &RelationshipTypeUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.RelationshipType.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *RelationshipTypeCreateBulk) OnConflictColumns(columns ...string) *RelationshipTypeUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &RelationshipTypeUpsertBulk{
+		create: _c,
+	}
+}
+
+// RelationshipTypeUpsertBulk is the builder for "upsert"-ing
+// a bulk of RelationshipType nodes.
+type RelationshipTypeUpsertBulk struct {
+	create *RelationshipTypeCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.RelationshipType.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *RelationshipTypeUpsertBulk) UpdateNewValues() *RelationshipTypeUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.RelationshipType.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *RelationshipTypeUpsertBulk) Ignore() *RelationshipTypeUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *RelationshipTypeUpsertBulk) DoNothing() *RelationshipTypeUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the RelationshipTypeCreateBulk.OnConflict
+// documentation for more info.
+func (u *RelationshipTypeUpsertBulk) Update(set func(*RelationshipTypeUpsert)) *RelationshipTypeUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&RelationshipTypeUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *RelationshipTypeUpsertBulk) SetName(v string) *RelationshipTypeUpsertBulk {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *RelationshipTypeUpsertBulk) UpdateName() *RelationshipTypeUpsertBulk {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDirectional sets the "directional" field.
+func (u *RelationshipTypeUpsertBulk) SetDirectional(v bool) *RelationshipTypeUpsertBulk {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.SetDirectional(v)
+	})
+}
+
+// UpdateDirectional sets the "directional" field to the value that was provided on create.
+func (u *RelationshipTypeUpsertBulk) UpdateDirectional() *RelationshipTypeUpsertBulk {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.UpdateDirectional()
+	})
+}
+
+// SetReverseName sets the "reverse_name" field.
+func (u *RelationshipTypeUpsertBulk) SetReverseName(v string) *RelationshipTypeUpsertBulk {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.SetReverseName(v)
+	})
+}
+
+// UpdateReverseName sets the "reverse_name" field to the value that was provided on create.
+func (u *RelationshipTypeUpsertBulk) UpdateReverseName() *RelationshipTypeUpsertBulk {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.UpdateReverseName()
+	})
+}
+
+// ClearReverseName clears the value of the "reverse_name" field.
+func (u *RelationshipTypeUpsertBulk) ClearReverseName() *RelationshipTypeUpsertBulk {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.ClearReverseName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *RelationshipTypeUpsertBulk) SetDescription(v string) *RelationshipTypeUpsertBulk {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *RelationshipTypeUpsertBulk) UpdateDescription() *RelationshipTypeUpsertBulk {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *RelationshipTypeUpsertBulk) ClearDescription() *RelationshipTypeUpsertBulk {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *RelationshipTypeUpsertBulk) SetTenantID(v int) *RelationshipTypeUpsertBulk {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *RelationshipTypeUpsertBulk) AddTenantID(v int) *RelationshipTypeUpsertBulk {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *RelationshipTypeUpsertBulk) UpdateTenantID() *RelationshipTypeUpsertBulk {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *RelationshipTypeUpsertBulk) SetCreatedAt(v time.Time) *RelationshipTypeUpsertBulk {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *RelationshipTypeUpsertBulk) UpdateCreatedAt() *RelationshipTypeUpsertBulk {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *RelationshipTypeUpsertBulk) SetUpdatedAt(v time.Time) *RelationshipTypeUpsertBulk {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *RelationshipTypeUpsertBulk) UpdateUpdatedAt() *RelationshipTypeUpsertBulk {
+	return u.Update(func(s *RelationshipTypeUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *RelationshipTypeUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the RelationshipTypeCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for RelationshipTypeCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *RelationshipTypeUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

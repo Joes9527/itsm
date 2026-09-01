@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/processvariable"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -19,6 +20,7 @@ type ProcessVariableCreate struct {
 	config
 	mutation *ProcessVariableMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetVariableID sets the "variable_id" field.
@@ -304,6 +306,7 @@ func (_c *ProcessVariableCreate) createSpec() (*ProcessVariable, *sqlgraph.Creat
 		_node = &ProcessVariable{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(processvariable.Table, sqlgraph.NewFieldSpec(processvariable.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.VariableID(); ok {
 		_spec.SetField(processvariable.FieldVariableID, field.TypeString, value)
 		_node.VariableID = value
@@ -368,11 +371,485 @@ func (_c *ProcessVariableCreate) createSpec() (*ProcessVariable, *sqlgraph.Creat
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessVariable.Create().
+//		SetVariableID(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessVariableUpsert) {
+//			SetVariableID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessVariableCreate) OnConflict(opts ...sql.ConflictOption) *ProcessVariableUpsertOne {
+	_c.conflict = opts
+	return &ProcessVariableUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessVariable.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessVariableCreate) OnConflictColumns(columns ...string) *ProcessVariableUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessVariableUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ProcessVariableUpsertOne is the builder for "upsert"-ing
+	//  one ProcessVariable node.
+	ProcessVariableUpsertOne struct {
+		create *ProcessVariableCreate
+	}
+
+	// ProcessVariableUpsert is the "OnConflict" setter.
+	ProcessVariableUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetVariableID sets the "variable_id" field.
+func (u *ProcessVariableUpsert) SetVariableID(v string) *ProcessVariableUpsert {
+	u.Set(processvariable.FieldVariableID, v)
+	return u
+}
+
+// UpdateVariableID sets the "variable_id" field to the value that was provided on create.
+func (u *ProcessVariableUpsert) UpdateVariableID() *ProcessVariableUpsert {
+	u.SetExcluded(processvariable.FieldVariableID)
+	return u
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessVariableUpsert) SetProcessInstanceID(v int) *ProcessVariableUpsert {
+	u.Set(processvariable.FieldProcessInstanceID, v)
+	return u
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessVariableUpsert) UpdateProcessInstanceID() *ProcessVariableUpsert {
+	u.SetExcluded(processvariable.FieldProcessInstanceID)
+	return u
+}
+
+// SetTaskID sets the "task_id" field.
+func (u *ProcessVariableUpsert) SetTaskID(v string) *ProcessVariableUpsert {
+	u.Set(processvariable.FieldTaskID, v)
+	return u
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *ProcessVariableUpsert) UpdateTaskID() *ProcessVariableUpsert {
+	u.SetExcluded(processvariable.FieldTaskID)
+	return u
+}
+
+// ClearTaskID clears the value of the "task_id" field.
+func (u *ProcessVariableUpsert) ClearTaskID() *ProcessVariableUpsert {
+	u.SetNull(processvariable.FieldTaskID)
+	return u
+}
+
+// SetVariableName sets the "variable_name" field.
+func (u *ProcessVariableUpsert) SetVariableName(v string) *ProcessVariableUpsert {
+	u.Set(processvariable.FieldVariableName, v)
+	return u
+}
+
+// UpdateVariableName sets the "variable_name" field to the value that was provided on create.
+func (u *ProcessVariableUpsert) UpdateVariableName() *ProcessVariableUpsert {
+	u.SetExcluded(processvariable.FieldVariableName)
+	return u
+}
+
+// SetVariableType sets the "variable_type" field.
+func (u *ProcessVariableUpsert) SetVariableType(v string) *ProcessVariableUpsert {
+	u.Set(processvariable.FieldVariableType, v)
+	return u
+}
+
+// UpdateVariableType sets the "variable_type" field to the value that was provided on create.
+func (u *ProcessVariableUpsert) UpdateVariableType() *ProcessVariableUpsert {
+	u.SetExcluded(processvariable.FieldVariableType)
+	return u
+}
+
+// SetVariableValue sets the "variable_value" field.
+func (u *ProcessVariableUpsert) SetVariableValue(v string) *ProcessVariableUpsert {
+	u.Set(processvariable.FieldVariableValue, v)
+	return u
+}
+
+// UpdateVariableValue sets the "variable_value" field to the value that was provided on create.
+func (u *ProcessVariableUpsert) UpdateVariableValue() *ProcessVariableUpsert {
+	u.SetExcluded(processvariable.FieldVariableValue)
+	return u
+}
+
+// ClearVariableValue clears the value of the "variable_value" field.
+func (u *ProcessVariableUpsert) ClearVariableValue() *ProcessVariableUpsert {
+	u.SetNull(processvariable.FieldVariableValue)
+	return u
+}
+
+// SetScope sets the "scope" field.
+func (u *ProcessVariableUpsert) SetScope(v string) *ProcessVariableUpsert {
+	u.Set(processvariable.FieldScope, v)
+	return u
+}
+
+// UpdateScope sets the "scope" field to the value that was provided on create.
+func (u *ProcessVariableUpsert) UpdateScope() *ProcessVariableUpsert {
+	u.SetExcluded(processvariable.FieldScope)
+	return u
+}
+
+// SetIsTransient sets the "is_transient" field.
+func (u *ProcessVariableUpsert) SetIsTransient(v bool) *ProcessVariableUpsert {
+	u.Set(processvariable.FieldIsTransient, v)
+	return u
+}
+
+// UpdateIsTransient sets the "is_transient" field to the value that was provided on create.
+func (u *ProcessVariableUpsert) UpdateIsTransient() *ProcessVariableUpsert {
+	u.SetExcluded(processvariable.FieldIsTransient)
+	return u
+}
+
+// SetSerializationFormat sets the "serialization_format" field.
+func (u *ProcessVariableUpsert) SetSerializationFormat(v string) *ProcessVariableUpsert {
+	u.Set(processvariable.FieldSerializationFormat, v)
+	return u
+}
+
+// UpdateSerializationFormat sets the "serialization_format" field to the value that was provided on create.
+func (u *ProcessVariableUpsert) UpdateSerializationFormat() *ProcessVariableUpsert {
+	u.SetExcluded(processvariable.FieldSerializationFormat)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessVariableUpsert) SetTenantID(v int) *ProcessVariableUpsert {
+	u.Set(processvariable.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessVariableUpsert) UpdateTenantID() *ProcessVariableUpsert {
+	u.SetExcluded(processvariable.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessVariableUpsert) AddTenantID(v int) *ProcessVariableUpsert {
+	u.Add(processvariable.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessVariableUpsert) SetCreatedAt(v time.Time) *ProcessVariableUpsert {
+	u.Set(processvariable.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessVariableUpsert) UpdateCreatedAt() *ProcessVariableUpsert {
+	u.SetExcluded(processvariable.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessVariableUpsert) SetUpdatedAt(v time.Time) *ProcessVariableUpsert {
+	u.Set(processvariable.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessVariableUpsert) UpdateUpdatedAt() *ProcessVariableUpsert {
+	u.SetExcluded(processvariable.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ProcessVariable.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessVariableUpsertOne) UpdateNewValues() *ProcessVariableUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessVariable.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ProcessVariableUpsertOne) Ignore() *ProcessVariableUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessVariableUpsertOne) DoNothing() *ProcessVariableUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessVariableCreate.OnConflict
+// documentation for more info.
+func (u *ProcessVariableUpsertOne) Update(set func(*ProcessVariableUpsert)) *ProcessVariableUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessVariableUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetVariableID sets the "variable_id" field.
+func (u *ProcessVariableUpsertOne) SetVariableID(v string) *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetVariableID(v)
+	})
+}
+
+// UpdateVariableID sets the "variable_id" field to the value that was provided on create.
+func (u *ProcessVariableUpsertOne) UpdateVariableID() *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateVariableID()
+	})
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessVariableUpsertOne) SetProcessInstanceID(v int) *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetProcessInstanceID(v)
+	})
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessVariableUpsertOne) UpdateProcessInstanceID() *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateProcessInstanceID()
+	})
+}
+
+// SetTaskID sets the "task_id" field.
+func (u *ProcessVariableUpsertOne) SetTaskID(v string) *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetTaskID(v)
+	})
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *ProcessVariableUpsertOne) UpdateTaskID() *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateTaskID()
+	})
+}
+
+// ClearTaskID clears the value of the "task_id" field.
+func (u *ProcessVariableUpsertOne) ClearTaskID() *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.ClearTaskID()
+	})
+}
+
+// SetVariableName sets the "variable_name" field.
+func (u *ProcessVariableUpsertOne) SetVariableName(v string) *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetVariableName(v)
+	})
+}
+
+// UpdateVariableName sets the "variable_name" field to the value that was provided on create.
+func (u *ProcessVariableUpsertOne) UpdateVariableName() *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateVariableName()
+	})
+}
+
+// SetVariableType sets the "variable_type" field.
+func (u *ProcessVariableUpsertOne) SetVariableType(v string) *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetVariableType(v)
+	})
+}
+
+// UpdateVariableType sets the "variable_type" field to the value that was provided on create.
+func (u *ProcessVariableUpsertOne) UpdateVariableType() *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateVariableType()
+	})
+}
+
+// SetVariableValue sets the "variable_value" field.
+func (u *ProcessVariableUpsertOne) SetVariableValue(v string) *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetVariableValue(v)
+	})
+}
+
+// UpdateVariableValue sets the "variable_value" field to the value that was provided on create.
+func (u *ProcessVariableUpsertOne) UpdateVariableValue() *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateVariableValue()
+	})
+}
+
+// ClearVariableValue clears the value of the "variable_value" field.
+func (u *ProcessVariableUpsertOne) ClearVariableValue() *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.ClearVariableValue()
+	})
+}
+
+// SetScope sets the "scope" field.
+func (u *ProcessVariableUpsertOne) SetScope(v string) *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetScope(v)
+	})
+}
+
+// UpdateScope sets the "scope" field to the value that was provided on create.
+func (u *ProcessVariableUpsertOne) UpdateScope() *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateScope()
+	})
+}
+
+// SetIsTransient sets the "is_transient" field.
+func (u *ProcessVariableUpsertOne) SetIsTransient(v bool) *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetIsTransient(v)
+	})
+}
+
+// UpdateIsTransient sets the "is_transient" field to the value that was provided on create.
+func (u *ProcessVariableUpsertOne) UpdateIsTransient() *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateIsTransient()
+	})
+}
+
+// SetSerializationFormat sets the "serialization_format" field.
+func (u *ProcessVariableUpsertOne) SetSerializationFormat(v string) *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetSerializationFormat(v)
+	})
+}
+
+// UpdateSerializationFormat sets the "serialization_format" field to the value that was provided on create.
+func (u *ProcessVariableUpsertOne) UpdateSerializationFormat() *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateSerializationFormat()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessVariableUpsertOne) SetTenantID(v int) *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessVariableUpsertOne) AddTenantID(v int) *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessVariableUpsertOne) UpdateTenantID() *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessVariableUpsertOne) SetCreatedAt(v time.Time) *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessVariableUpsertOne) UpdateCreatedAt() *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessVariableUpsertOne) SetUpdatedAt(v time.Time) *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessVariableUpsertOne) UpdateUpdatedAt() *ProcessVariableUpsertOne {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessVariableUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessVariableCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessVariableUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ProcessVariableUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ProcessVariableUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ProcessVariableCreateBulk is the builder for creating many ProcessVariable entities in bulk.
 type ProcessVariableCreateBulk struct {
 	config
 	err      error
 	builders []*ProcessVariableCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ProcessVariable entities in the database.
@@ -402,6 +879,7 @@ func (_c *ProcessVariableCreateBulk) Save(ctx context.Context) ([]*ProcessVariab
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -452,6 +930,299 @@ func (_c *ProcessVariableCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ProcessVariableCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessVariable.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessVariableUpsert) {
+//			SetVariableID(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessVariableCreateBulk) OnConflict(opts ...sql.ConflictOption) *ProcessVariableUpsertBulk {
+	_c.conflict = opts
+	return &ProcessVariableUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessVariable.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessVariableCreateBulk) OnConflictColumns(columns ...string) *ProcessVariableUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessVariableUpsertBulk{
+		create: _c,
+	}
+}
+
+// ProcessVariableUpsertBulk is the builder for "upsert"-ing
+// a bulk of ProcessVariable nodes.
+type ProcessVariableUpsertBulk struct {
+	create *ProcessVariableCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ProcessVariable.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessVariableUpsertBulk) UpdateNewValues() *ProcessVariableUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessVariable.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ProcessVariableUpsertBulk) Ignore() *ProcessVariableUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessVariableUpsertBulk) DoNothing() *ProcessVariableUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessVariableCreateBulk.OnConflict
+// documentation for more info.
+func (u *ProcessVariableUpsertBulk) Update(set func(*ProcessVariableUpsert)) *ProcessVariableUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessVariableUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetVariableID sets the "variable_id" field.
+func (u *ProcessVariableUpsertBulk) SetVariableID(v string) *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetVariableID(v)
+	})
+}
+
+// UpdateVariableID sets the "variable_id" field to the value that was provided on create.
+func (u *ProcessVariableUpsertBulk) UpdateVariableID() *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateVariableID()
+	})
+}
+
+// SetProcessInstanceID sets the "process_instance_id" field.
+func (u *ProcessVariableUpsertBulk) SetProcessInstanceID(v int) *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetProcessInstanceID(v)
+	})
+}
+
+// UpdateProcessInstanceID sets the "process_instance_id" field to the value that was provided on create.
+func (u *ProcessVariableUpsertBulk) UpdateProcessInstanceID() *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateProcessInstanceID()
+	})
+}
+
+// SetTaskID sets the "task_id" field.
+func (u *ProcessVariableUpsertBulk) SetTaskID(v string) *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetTaskID(v)
+	})
+}
+
+// UpdateTaskID sets the "task_id" field to the value that was provided on create.
+func (u *ProcessVariableUpsertBulk) UpdateTaskID() *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateTaskID()
+	})
+}
+
+// ClearTaskID clears the value of the "task_id" field.
+func (u *ProcessVariableUpsertBulk) ClearTaskID() *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.ClearTaskID()
+	})
+}
+
+// SetVariableName sets the "variable_name" field.
+func (u *ProcessVariableUpsertBulk) SetVariableName(v string) *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetVariableName(v)
+	})
+}
+
+// UpdateVariableName sets the "variable_name" field to the value that was provided on create.
+func (u *ProcessVariableUpsertBulk) UpdateVariableName() *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateVariableName()
+	})
+}
+
+// SetVariableType sets the "variable_type" field.
+func (u *ProcessVariableUpsertBulk) SetVariableType(v string) *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetVariableType(v)
+	})
+}
+
+// UpdateVariableType sets the "variable_type" field to the value that was provided on create.
+func (u *ProcessVariableUpsertBulk) UpdateVariableType() *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateVariableType()
+	})
+}
+
+// SetVariableValue sets the "variable_value" field.
+func (u *ProcessVariableUpsertBulk) SetVariableValue(v string) *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetVariableValue(v)
+	})
+}
+
+// UpdateVariableValue sets the "variable_value" field to the value that was provided on create.
+func (u *ProcessVariableUpsertBulk) UpdateVariableValue() *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateVariableValue()
+	})
+}
+
+// ClearVariableValue clears the value of the "variable_value" field.
+func (u *ProcessVariableUpsertBulk) ClearVariableValue() *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.ClearVariableValue()
+	})
+}
+
+// SetScope sets the "scope" field.
+func (u *ProcessVariableUpsertBulk) SetScope(v string) *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetScope(v)
+	})
+}
+
+// UpdateScope sets the "scope" field to the value that was provided on create.
+func (u *ProcessVariableUpsertBulk) UpdateScope() *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateScope()
+	})
+}
+
+// SetIsTransient sets the "is_transient" field.
+func (u *ProcessVariableUpsertBulk) SetIsTransient(v bool) *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetIsTransient(v)
+	})
+}
+
+// UpdateIsTransient sets the "is_transient" field to the value that was provided on create.
+func (u *ProcessVariableUpsertBulk) UpdateIsTransient() *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateIsTransient()
+	})
+}
+
+// SetSerializationFormat sets the "serialization_format" field.
+func (u *ProcessVariableUpsertBulk) SetSerializationFormat(v string) *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetSerializationFormat(v)
+	})
+}
+
+// UpdateSerializationFormat sets the "serialization_format" field to the value that was provided on create.
+func (u *ProcessVariableUpsertBulk) UpdateSerializationFormat() *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateSerializationFormat()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessVariableUpsertBulk) SetTenantID(v int) *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessVariableUpsertBulk) AddTenantID(v int) *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessVariableUpsertBulk) UpdateTenantID() *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessVariableUpsertBulk) SetCreatedAt(v time.Time) *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessVariableUpsertBulk) UpdateCreatedAt() *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessVariableUpsertBulk) SetUpdatedAt(v time.Time) *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessVariableUpsertBulk) UpdateUpdatedAt() *ProcessVariableUpsertBulk {
+	return u.Update(func(s *ProcessVariableUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessVariableUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ProcessVariableCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessVariableCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessVariableUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

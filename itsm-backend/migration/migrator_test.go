@@ -242,3 +242,32 @@ func TestKafExecutionIntegrityTablesHaveRegisteredTenantRLS(t *testing.T) {
 	}
 	assert.Equal(t, checksumSQL(sql), checksumSQL(GetMigrationSQL("019_kaf_execution_integrity_rls")))
 }
+
+func TestWorkItemNumberAllocatorIsVersioned(t *testing.T) {
+	const version = "020_work_item_number_allocator"
+
+	var registered *Migration
+	for i := range RegisteredMigrations {
+		if RegisteredMigrations[i].Version == version {
+			registered = &RegisteredMigrations[i]
+			break
+		}
+	}
+	require.NotNil(t, registered)
+	assert.Equal(t,
+		"Create tenant/month WorkItem number sequences and replace global ticket_number uniqueness with tenant-scoped uniqueness",
+		registered.Description,
+	)
+	assert.Contains(t, registered.RollbackSQL, "rollback requires an empty tickets table")
+	assert.Contains(t, registered.RollbackSQL, "DROP INDEX IF EXISTS ticket_tenant_id_ticket_number")
+	assert.Contains(t, registered.RollbackSQL, "CREATE UNIQUE INDEX IF NOT EXISTS ticket_ticket_number")
+	assert.Contains(t, registered.RollbackSQL, "DROP TABLE IF EXISTS work_item_number_sequences")
+
+	sql := GetMigrationSQL(version)
+	require.NotEmpty(t, sql)
+	assert.Contains(t, sql, "CREATE TABLE IF NOT EXISTS work_item_number_sequences")
+	assert.Contains(t, sql, "work_item_number_sequences_period_check")
+	assert.Contains(t, sql, "work_item_number_sequences_last_value_check")
+	assert.Contains(t, sql, "CREATE UNIQUE INDEX IF NOT EXISTS workitemnumbersequence_tenant_id_period")
+	assert.Contains(t, sql, "CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number")
+}

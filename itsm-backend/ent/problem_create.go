@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent/ticket"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -21,6 +22,7 @@ type ProblemCreate struct {
 	config
 	mutation *ProblemMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetTitle sets the "title" field.
@@ -413,6 +415,7 @@ func (_c *ProblemCreate) createSpec() (*Problem, *sqlgraph.CreateSpec) {
 		_node = &Problem{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(problem.Table, sqlgraph.NewFieldSpec(problem.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Title(); ok {
 		_spec.SetField(problem.FieldTitle, field.TypeString, value)
 		_node.Title = value
@@ -536,11 +539,797 @@ func (_c *ProblemCreate) createSpec() (*Problem, *sqlgraph.CreateSpec) {
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Problem.Create().
+//		SetTitle(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProblemUpsert) {
+//			SetTitle(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProblemCreate) OnConflict(opts ...sql.ConflictOption) *ProblemUpsertOne {
+	_c.conflict = opts
+	return &ProblemUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Problem.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProblemCreate) OnConflictColumns(columns ...string) *ProblemUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProblemUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ProblemUpsertOne is the builder for "upsert"-ing
+	//  one Problem node.
+	ProblemUpsertOne struct {
+		create *ProblemCreate
+	}
+
+	// ProblemUpsert is the "OnConflict" setter.
+	ProblemUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetTitle sets the "title" field.
+func (u *ProblemUpsert) SetTitle(v string) *ProblemUpsert {
+	u.Set(problem.FieldTitle, v)
+	return u
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *ProblemUpsert) UpdateTitle() *ProblemUpsert {
+	u.SetExcluded(problem.FieldTitle)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *ProblemUpsert) SetDescription(v string) *ProblemUpsert {
+	u.Set(problem.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ProblemUpsert) UpdateDescription() *ProblemUpsert {
+	u.SetExcluded(problem.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ProblemUpsert) ClearDescription() *ProblemUpsert {
+	u.SetNull(problem.FieldDescription)
+	return u
+}
+
+// SetStatus sets the "status" field.
+func (u *ProblemUpsert) SetStatus(v string) *ProblemUpsert {
+	u.Set(problem.FieldStatus, v)
+	return u
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ProblemUpsert) UpdateStatus() *ProblemUpsert {
+	u.SetExcluded(problem.FieldStatus)
+	return u
+}
+
+// SetPriority sets the "priority" field.
+func (u *ProblemUpsert) SetPriority(v string) *ProblemUpsert {
+	u.Set(problem.FieldPriority, v)
+	return u
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *ProblemUpsert) UpdatePriority() *ProblemUpsert {
+	u.SetExcluded(problem.FieldPriority)
+	return u
+}
+
+// SetCategory sets the "category" field.
+func (u *ProblemUpsert) SetCategory(v string) *ProblemUpsert {
+	u.Set(problem.FieldCategory, v)
+	return u
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *ProblemUpsert) UpdateCategory() *ProblemUpsert {
+	u.SetExcluded(problem.FieldCategory)
+	return u
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *ProblemUpsert) ClearCategory() *ProblemUpsert {
+	u.SetNull(problem.FieldCategory)
+	return u
+}
+
+// SetRootCause sets the "root_cause" field.
+func (u *ProblemUpsert) SetRootCause(v string) *ProblemUpsert {
+	u.Set(problem.FieldRootCause, v)
+	return u
+}
+
+// UpdateRootCause sets the "root_cause" field to the value that was provided on create.
+func (u *ProblemUpsert) UpdateRootCause() *ProblemUpsert {
+	u.SetExcluded(problem.FieldRootCause)
+	return u
+}
+
+// ClearRootCause clears the value of the "root_cause" field.
+func (u *ProblemUpsert) ClearRootCause() *ProblemUpsert {
+	u.SetNull(problem.FieldRootCause)
+	return u
+}
+
+// SetWorkaround sets the "workaround" field.
+func (u *ProblemUpsert) SetWorkaround(v string) *ProblemUpsert {
+	u.Set(problem.FieldWorkaround, v)
+	return u
+}
+
+// UpdateWorkaround sets the "workaround" field to the value that was provided on create.
+func (u *ProblemUpsert) UpdateWorkaround() *ProblemUpsert {
+	u.SetExcluded(problem.FieldWorkaround)
+	return u
+}
+
+// ClearWorkaround clears the value of the "workaround" field.
+func (u *ProblemUpsert) ClearWorkaround() *ProblemUpsert {
+	u.SetNull(problem.FieldWorkaround)
+	return u
+}
+
+// SetResolution sets the "resolution" field.
+func (u *ProblemUpsert) SetResolution(v string) *ProblemUpsert {
+	u.Set(problem.FieldResolution, v)
+	return u
+}
+
+// UpdateResolution sets the "resolution" field to the value that was provided on create.
+func (u *ProblemUpsert) UpdateResolution() *ProblemUpsert {
+	u.SetExcluded(problem.FieldResolution)
+	return u
+}
+
+// ClearResolution clears the value of the "resolution" field.
+func (u *ProblemUpsert) ClearResolution() *ProblemUpsert {
+	u.SetNull(problem.FieldResolution)
+	return u
+}
+
+// SetImpact sets the "impact" field.
+func (u *ProblemUpsert) SetImpact(v string) *ProblemUpsert {
+	u.Set(problem.FieldImpact, v)
+	return u
+}
+
+// UpdateImpact sets the "impact" field to the value that was provided on create.
+func (u *ProblemUpsert) UpdateImpact() *ProblemUpsert {
+	u.SetExcluded(problem.FieldImpact)
+	return u
+}
+
+// ClearImpact clears the value of the "impact" field.
+func (u *ProblemUpsert) ClearImpact() *ProblemUpsert {
+	u.SetNull(problem.FieldImpact)
+	return u
+}
+
+// SetAssigneeID sets the "assignee_id" field.
+func (u *ProblemUpsert) SetAssigneeID(v int) *ProblemUpsert {
+	u.Set(problem.FieldAssigneeID, v)
+	return u
+}
+
+// UpdateAssigneeID sets the "assignee_id" field to the value that was provided on create.
+func (u *ProblemUpsert) UpdateAssigneeID() *ProblemUpsert {
+	u.SetExcluded(problem.FieldAssigneeID)
+	return u
+}
+
+// AddAssigneeID adds v to the "assignee_id" field.
+func (u *ProblemUpsert) AddAssigneeID(v int) *ProblemUpsert {
+	u.Add(problem.FieldAssigneeID, v)
+	return u
+}
+
+// ClearAssigneeID clears the value of the "assignee_id" field.
+func (u *ProblemUpsert) ClearAssigneeID() *ProblemUpsert {
+	u.SetNull(problem.FieldAssigneeID)
+	return u
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *ProblemUpsert) SetCreatedBy(v int) *ProblemUpsert {
+	u.Set(problem.FieldCreatedBy, v)
+	return u
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *ProblemUpsert) UpdateCreatedBy() *ProblemUpsert {
+	u.SetExcluded(problem.FieldCreatedBy)
+	return u
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *ProblemUpsert) AddCreatedBy(v int) *ProblemUpsert {
+	u.Add(problem.FieldCreatedBy, v)
+	return u
+}
+
+// SetWorkItemID sets the "work_item_id" field.
+func (u *ProblemUpsert) SetWorkItemID(v int) *ProblemUpsert {
+	u.Set(problem.FieldWorkItemID, v)
+	return u
+}
+
+// UpdateWorkItemID sets the "work_item_id" field to the value that was provided on create.
+func (u *ProblemUpsert) UpdateWorkItemID() *ProblemUpsert {
+	u.SetExcluded(problem.FieldWorkItemID)
+	return u
+}
+
+// AddWorkItemID adds v to the "work_item_id" field.
+func (u *ProblemUpsert) AddWorkItemID(v int) *ProblemUpsert {
+	u.Add(problem.FieldWorkItemID, v)
+	return u
+}
+
+// ClearWorkItemID clears the value of the "work_item_id" field.
+func (u *ProblemUpsert) ClearWorkItemID() *ProblemUpsert {
+	u.SetNull(problem.FieldWorkItemID)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProblemUpsert) SetTenantID(v int) *ProblemUpsert {
+	u.Set(problem.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProblemUpsert) UpdateTenantID() *ProblemUpsert {
+	u.SetExcluded(problem.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProblemUpsert) AddTenantID(v int) *ProblemUpsert {
+	u.Add(problem.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProblemUpsert) SetCreatedAt(v time.Time) *ProblemUpsert {
+	u.Set(problem.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProblemUpsert) UpdateCreatedAt() *ProblemUpsert {
+	u.SetExcluded(problem.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProblemUpsert) SetUpdatedAt(v time.Time) *ProblemUpsert {
+	u.Set(problem.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProblemUpsert) UpdateUpdatedAt() *ProblemUpsert {
+	u.SetExcluded(problem.FieldUpdatedAt)
+	return u
+}
+
+// SetResolvedAt sets the "resolved_at" field.
+func (u *ProblemUpsert) SetResolvedAt(v time.Time) *ProblemUpsert {
+	u.Set(problem.FieldResolvedAt, v)
+	return u
+}
+
+// UpdateResolvedAt sets the "resolved_at" field to the value that was provided on create.
+func (u *ProblemUpsert) UpdateResolvedAt() *ProblemUpsert {
+	u.SetExcluded(problem.FieldResolvedAt)
+	return u
+}
+
+// ClearResolvedAt clears the value of the "resolved_at" field.
+func (u *ProblemUpsert) ClearResolvedAt() *ProblemUpsert {
+	u.SetNull(problem.FieldResolvedAt)
+	return u
+}
+
+// SetClosedAt sets the "closed_at" field.
+func (u *ProblemUpsert) SetClosedAt(v time.Time) *ProblemUpsert {
+	u.Set(problem.FieldClosedAt, v)
+	return u
+}
+
+// UpdateClosedAt sets the "closed_at" field to the value that was provided on create.
+func (u *ProblemUpsert) UpdateClosedAt() *ProblemUpsert {
+	u.SetExcluded(problem.FieldClosedAt)
+	return u
+}
+
+// ClearClosedAt clears the value of the "closed_at" field.
+func (u *ProblemUpsert) ClearClosedAt() *ProblemUpsert {
+	u.SetNull(problem.FieldClosedAt)
+	return u
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (u *ProblemUpsert) SetDeletedAt(v time.Time) *ProblemUpsert {
+	u.Set(problem.FieldDeletedAt, v)
+	return u
+}
+
+// UpdateDeletedAt sets the "deleted_at" field to the value that was provided on create.
+func (u *ProblemUpsert) UpdateDeletedAt() *ProblemUpsert {
+	u.SetExcluded(problem.FieldDeletedAt)
+	return u
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (u *ProblemUpsert) ClearDeletedAt() *ProblemUpsert {
+	u.SetNull(problem.FieldDeletedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.Problem.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProblemUpsertOne) UpdateNewValues() *ProblemUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Problem.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ProblemUpsertOne) Ignore() *ProblemUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProblemUpsertOne) DoNothing() *ProblemUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProblemCreate.OnConflict
+// documentation for more info.
+func (u *ProblemUpsertOne) Update(set func(*ProblemUpsert)) *ProblemUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProblemUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTitle sets the "title" field.
+func (u *ProblemUpsertOne) SetTitle(v string) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetTitle(v)
+	})
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *ProblemUpsertOne) UpdateTitle() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateTitle()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ProblemUpsertOne) SetDescription(v string) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ProblemUpsertOne) UpdateDescription() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ProblemUpsertOne) ClearDescription() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ProblemUpsertOne) SetStatus(v string) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ProblemUpsertOne) UpdateStatus() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetPriority sets the "priority" field.
+func (u *ProblemUpsertOne) SetPriority(v string) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *ProblemUpsertOne) UpdatePriority() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *ProblemUpsertOne) SetCategory(v string) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *ProblemUpsertOne) UpdateCategory() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *ProblemUpsertOne) ClearCategory() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetRootCause sets the "root_cause" field.
+func (u *ProblemUpsertOne) SetRootCause(v string) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetRootCause(v)
+	})
+}
+
+// UpdateRootCause sets the "root_cause" field to the value that was provided on create.
+func (u *ProblemUpsertOne) UpdateRootCause() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateRootCause()
+	})
+}
+
+// ClearRootCause clears the value of the "root_cause" field.
+func (u *ProblemUpsertOne) ClearRootCause() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearRootCause()
+	})
+}
+
+// SetWorkaround sets the "workaround" field.
+func (u *ProblemUpsertOne) SetWorkaround(v string) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetWorkaround(v)
+	})
+}
+
+// UpdateWorkaround sets the "workaround" field to the value that was provided on create.
+func (u *ProblemUpsertOne) UpdateWorkaround() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateWorkaround()
+	})
+}
+
+// ClearWorkaround clears the value of the "workaround" field.
+func (u *ProblemUpsertOne) ClearWorkaround() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearWorkaround()
+	})
+}
+
+// SetResolution sets the "resolution" field.
+func (u *ProblemUpsertOne) SetResolution(v string) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetResolution(v)
+	})
+}
+
+// UpdateResolution sets the "resolution" field to the value that was provided on create.
+func (u *ProblemUpsertOne) UpdateResolution() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateResolution()
+	})
+}
+
+// ClearResolution clears the value of the "resolution" field.
+func (u *ProblemUpsertOne) ClearResolution() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearResolution()
+	})
+}
+
+// SetImpact sets the "impact" field.
+func (u *ProblemUpsertOne) SetImpact(v string) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetImpact(v)
+	})
+}
+
+// UpdateImpact sets the "impact" field to the value that was provided on create.
+func (u *ProblemUpsertOne) UpdateImpact() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateImpact()
+	})
+}
+
+// ClearImpact clears the value of the "impact" field.
+func (u *ProblemUpsertOne) ClearImpact() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearImpact()
+	})
+}
+
+// SetAssigneeID sets the "assignee_id" field.
+func (u *ProblemUpsertOne) SetAssigneeID(v int) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetAssigneeID(v)
+	})
+}
+
+// AddAssigneeID adds v to the "assignee_id" field.
+func (u *ProblemUpsertOne) AddAssigneeID(v int) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.AddAssigneeID(v)
+	})
+}
+
+// UpdateAssigneeID sets the "assignee_id" field to the value that was provided on create.
+func (u *ProblemUpsertOne) UpdateAssigneeID() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateAssigneeID()
+	})
+}
+
+// ClearAssigneeID clears the value of the "assignee_id" field.
+func (u *ProblemUpsertOne) ClearAssigneeID() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearAssigneeID()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *ProblemUpsertOne) SetCreatedBy(v int) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *ProblemUpsertOne) AddCreatedBy(v int) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.AddCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *ProblemUpsertOne) UpdateCreatedBy() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetWorkItemID sets the "work_item_id" field.
+func (u *ProblemUpsertOne) SetWorkItemID(v int) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetWorkItemID(v)
+	})
+}
+
+// AddWorkItemID adds v to the "work_item_id" field.
+func (u *ProblemUpsertOne) AddWorkItemID(v int) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.AddWorkItemID(v)
+	})
+}
+
+// UpdateWorkItemID sets the "work_item_id" field to the value that was provided on create.
+func (u *ProblemUpsertOne) UpdateWorkItemID() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateWorkItemID()
+	})
+}
+
+// ClearWorkItemID clears the value of the "work_item_id" field.
+func (u *ProblemUpsertOne) ClearWorkItemID() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearWorkItemID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProblemUpsertOne) SetTenantID(v int) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProblemUpsertOne) AddTenantID(v int) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProblemUpsertOne) UpdateTenantID() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProblemUpsertOne) SetCreatedAt(v time.Time) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProblemUpsertOne) UpdateCreatedAt() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProblemUpsertOne) SetUpdatedAt(v time.Time) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProblemUpsertOne) UpdateUpdatedAt() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetResolvedAt sets the "resolved_at" field.
+func (u *ProblemUpsertOne) SetResolvedAt(v time.Time) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetResolvedAt(v)
+	})
+}
+
+// UpdateResolvedAt sets the "resolved_at" field to the value that was provided on create.
+func (u *ProblemUpsertOne) UpdateResolvedAt() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateResolvedAt()
+	})
+}
+
+// ClearResolvedAt clears the value of the "resolved_at" field.
+func (u *ProblemUpsertOne) ClearResolvedAt() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearResolvedAt()
+	})
+}
+
+// SetClosedAt sets the "closed_at" field.
+func (u *ProblemUpsertOne) SetClosedAt(v time.Time) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetClosedAt(v)
+	})
+}
+
+// UpdateClosedAt sets the "closed_at" field to the value that was provided on create.
+func (u *ProblemUpsertOne) UpdateClosedAt() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateClosedAt()
+	})
+}
+
+// ClearClosedAt clears the value of the "closed_at" field.
+func (u *ProblemUpsertOne) ClearClosedAt() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearClosedAt()
+	})
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (u *ProblemUpsertOne) SetDeletedAt(v time.Time) *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetDeletedAt(v)
+	})
+}
+
+// UpdateDeletedAt sets the "deleted_at" field to the value that was provided on create.
+func (u *ProblemUpsertOne) UpdateDeletedAt() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateDeletedAt()
+	})
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (u *ProblemUpsertOne) ClearDeletedAt() *ProblemUpsertOne {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearDeletedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProblemUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProblemCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProblemUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ProblemUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ProblemUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ProblemCreateBulk is the builder for creating many Problem entities in bulk.
 type ProblemCreateBulk struct {
 	config
 	err      error
 	builders []*ProblemCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the Problem entities in the database.
@@ -570,6 +1359,7 @@ func (_c *ProblemCreateBulk) Save(ctx context.Context) ([]*Problem, error) {
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -620,6 +1410,467 @@ func (_c *ProblemCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ProblemCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.Problem.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProblemUpsert) {
+//			SetTitle(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProblemCreateBulk) OnConflict(opts ...sql.ConflictOption) *ProblemUpsertBulk {
+	_c.conflict = opts
+	return &ProblemUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.Problem.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProblemCreateBulk) OnConflictColumns(columns ...string) *ProblemUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProblemUpsertBulk{
+		create: _c,
+	}
+}
+
+// ProblemUpsertBulk is the builder for "upsert"-ing
+// a bulk of Problem nodes.
+type ProblemUpsertBulk struct {
+	create *ProblemCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.Problem.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProblemUpsertBulk) UpdateNewValues() *ProblemUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.Problem.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ProblemUpsertBulk) Ignore() *ProblemUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProblemUpsertBulk) DoNothing() *ProblemUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProblemCreateBulk.OnConflict
+// documentation for more info.
+func (u *ProblemUpsertBulk) Update(set func(*ProblemUpsert)) *ProblemUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProblemUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetTitle sets the "title" field.
+func (u *ProblemUpsertBulk) SetTitle(v string) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetTitle(v)
+	})
+}
+
+// UpdateTitle sets the "title" field to the value that was provided on create.
+func (u *ProblemUpsertBulk) UpdateTitle() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateTitle()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ProblemUpsertBulk) SetDescription(v string) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ProblemUpsertBulk) UpdateDescription() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ProblemUpsertBulk) ClearDescription() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetStatus sets the "status" field.
+func (u *ProblemUpsertBulk) SetStatus(v string) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetStatus(v)
+	})
+}
+
+// UpdateStatus sets the "status" field to the value that was provided on create.
+func (u *ProblemUpsertBulk) UpdateStatus() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateStatus()
+	})
+}
+
+// SetPriority sets the "priority" field.
+func (u *ProblemUpsertBulk) SetPriority(v string) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetPriority(v)
+	})
+}
+
+// UpdatePriority sets the "priority" field to the value that was provided on create.
+func (u *ProblemUpsertBulk) UpdatePriority() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdatePriority()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *ProblemUpsertBulk) SetCategory(v string) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *ProblemUpsertBulk) UpdateCategory() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// ClearCategory clears the value of the "category" field.
+func (u *ProblemUpsertBulk) ClearCategory() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearCategory()
+	})
+}
+
+// SetRootCause sets the "root_cause" field.
+func (u *ProblemUpsertBulk) SetRootCause(v string) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetRootCause(v)
+	})
+}
+
+// UpdateRootCause sets the "root_cause" field to the value that was provided on create.
+func (u *ProblemUpsertBulk) UpdateRootCause() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateRootCause()
+	})
+}
+
+// ClearRootCause clears the value of the "root_cause" field.
+func (u *ProblemUpsertBulk) ClearRootCause() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearRootCause()
+	})
+}
+
+// SetWorkaround sets the "workaround" field.
+func (u *ProblemUpsertBulk) SetWorkaround(v string) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetWorkaround(v)
+	})
+}
+
+// UpdateWorkaround sets the "workaround" field to the value that was provided on create.
+func (u *ProblemUpsertBulk) UpdateWorkaround() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateWorkaround()
+	})
+}
+
+// ClearWorkaround clears the value of the "workaround" field.
+func (u *ProblemUpsertBulk) ClearWorkaround() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearWorkaround()
+	})
+}
+
+// SetResolution sets the "resolution" field.
+func (u *ProblemUpsertBulk) SetResolution(v string) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetResolution(v)
+	})
+}
+
+// UpdateResolution sets the "resolution" field to the value that was provided on create.
+func (u *ProblemUpsertBulk) UpdateResolution() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateResolution()
+	})
+}
+
+// ClearResolution clears the value of the "resolution" field.
+func (u *ProblemUpsertBulk) ClearResolution() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearResolution()
+	})
+}
+
+// SetImpact sets the "impact" field.
+func (u *ProblemUpsertBulk) SetImpact(v string) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetImpact(v)
+	})
+}
+
+// UpdateImpact sets the "impact" field to the value that was provided on create.
+func (u *ProblemUpsertBulk) UpdateImpact() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateImpact()
+	})
+}
+
+// ClearImpact clears the value of the "impact" field.
+func (u *ProblemUpsertBulk) ClearImpact() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearImpact()
+	})
+}
+
+// SetAssigneeID sets the "assignee_id" field.
+func (u *ProblemUpsertBulk) SetAssigneeID(v int) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetAssigneeID(v)
+	})
+}
+
+// AddAssigneeID adds v to the "assignee_id" field.
+func (u *ProblemUpsertBulk) AddAssigneeID(v int) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.AddAssigneeID(v)
+	})
+}
+
+// UpdateAssigneeID sets the "assignee_id" field to the value that was provided on create.
+func (u *ProblemUpsertBulk) UpdateAssigneeID() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateAssigneeID()
+	})
+}
+
+// ClearAssigneeID clears the value of the "assignee_id" field.
+func (u *ProblemUpsertBulk) ClearAssigneeID() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearAssigneeID()
+	})
+}
+
+// SetCreatedBy sets the "created_by" field.
+func (u *ProblemUpsertBulk) SetCreatedBy(v int) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetCreatedBy(v)
+	})
+}
+
+// AddCreatedBy adds v to the "created_by" field.
+func (u *ProblemUpsertBulk) AddCreatedBy(v int) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.AddCreatedBy(v)
+	})
+}
+
+// UpdateCreatedBy sets the "created_by" field to the value that was provided on create.
+func (u *ProblemUpsertBulk) UpdateCreatedBy() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateCreatedBy()
+	})
+}
+
+// SetWorkItemID sets the "work_item_id" field.
+func (u *ProblemUpsertBulk) SetWorkItemID(v int) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetWorkItemID(v)
+	})
+}
+
+// AddWorkItemID adds v to the "work_item_id" field.
+func (u *ProblemUpsertBulk) AddWorkItemID(v int) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.AddWorkItemID(v)
+	})
+}
+
+// UpdateWorkItemID sets the "work_item_id" field to the value that was provided on create.
+func (u *ProblemUpsertBulk) UpdateWorkItemID() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateWorkItemID()
+	})
+}
+
+// ClearWorkItemID clears the value of the "work_item_id" field.
+func (u *ProblemUpsertBulk) ClearWorkItemID() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearWorkItemID()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProblemUpsertBulk) SetTenantID(v int) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProblemUpsertBulk) AddTenantID(v int) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProblemUpsertBulk) UpdateTenantID() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProblemUpsertBulk) SetCreatedAt(v time.Time) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProblemUpsertBulk) UpdateCreatedAt() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProblemUpsertBulk) SetUpdatedAt(v time.Time) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProblemUpsertBulk) UpdateUpdatedAt() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// SetResolvedAt sets the "resolved_at" field.
+func (u *ProblemUpsertBulk) SetResolvedAt(v time.Time) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetResolvedAt(v)
+	})
+}
+
+// UpdateResolvedAt sets the "resolved_at" field to the value that was provided on create.
+func (u *ProblemUpsertBulk) UpdateResolvedAt() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateResolvedAt()
+	})
+}
+
+// ClearResolvedAt clears the value of the "resolved_at" field.
+func (u *ProblemUpsertBulk) ClearResolvedAt() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearResolvedAt()
+	})
+}
+
+// SetClosedAt sets the "closed_at" field.
+func (u *ProblemUpsertBulk) SetClosedAt(v time.Time) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetClosedAt(v)
+	})
+}
+
+// UpdateClosedAt sets the "closed_at" field to the value that was provided on create.
+func (u *ProblemUpsertBulk) UpdateClosedAt() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateClosedAt()
+	})
+}
+
+// ClearClosedAt clears the value of the "closed_at" field.
+func (u *ProblemUpsertBulk) ClearClosedAt() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearClosedAt()
+	})
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (u *ProblemUpsertBulk) SetDeletedAt(v time.Time) *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.SetDeletedAt(v)
+	})
+}
+
+// UpdateDeletedAt sets the "deleted_at" field to the value that was provided on create.
+func (u *ProblemUpsertBulk) UpdateDeletedAt() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.UpdateDeletedAt()
+	})
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (u *ProblemUpsertBulk) ClearDeletedAt() *ProblemUpsertBulk {
+	return u.Update(func(s *ProblemUpsert) {
+		s.ClearDeletedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProblemUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ProblemCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProblemCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProblemUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"itsm-backend/ent/processversionchangelog"
 	"time"
 
+	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
 )
@@ -22,6 +23,7 @@ type ProcessDefinitionCreate struct {
 	config
 	mutation *ProcessDefinitionMutation
 	hooks    []Hook
+	conflict []sql.ConflictOption
 }
 
 // SetKey sets the "key" field.
@@ -388,6 +390,7 @@ func (_c *ProcessDefinitionCreate) createSpec() (*ProcessDefinition, *sqlgraph.C
 		_node = &ProcessDefinition{config: _c.config}
 		_spec = sqlgraph.NewCreateSpec(processdefinition.Table, sqlgraph.NewFieldSpec(processdefinition.FieldID, field.TypeInt))
 	)
+	_spec.OnConflict = _c.conflict
 	if value, ok := _c.mutation.Key(); ok {
 		_spec.SetField(processdefinition.FieldKey, field.TypeString, value)
 		_node.Key = value
@@ -512,11 +515,576 @@ func (_c *ProcessDefinitionCreate) createSpec() (*ProcessDefinition, *sqlgraph.C
 	return _node, _spec
 }
 
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessDefinition.Create().
+//		SetKey(v).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessDefinitionUpsert) {
+//			SetKey(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessDefinitionCreate) OnConflict(opts ...sql.ConflictOption) *ProcessDefinitionUpsertOne {
+	_c.conflict = opts
+	return &ProcessDefinitionUpsertOne{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessDefinition.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessDefinitionCreate) OnConflictColumns(columns ...string) *ProcessDefinitionUpsertOne {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessDefinitionUpsertOne{
+		create: _c,
+	}
+}
+
+type (
+	// ProcessDefinitionUpsertOne is the builder for "upsert"-ing
+	//  one ProcessDefinition node.
+	ProcessDefinitionUpsertOne struct {
+		create *ProcessDefinitionCreate
+	}
+
+	// ProcessDefinitionUpsert is the "OnConflict" setter.
+	ProcessDefinitionUpsert struct {
+		*sql.UpdateSet
+	}
+)
+
+// SetKey sets the "key" field.
+func (u *ProcessDefinitionUpsert) SetKey(v string) *ProcessDefinitionUpsert {
+	u.Set(processdefinition.FieldKey, v)
+	return u
+}
+
+// UpdateKey sets the "key" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsert) UpdateKey() *ProcessDefinitionUpsert {
+	u.SetExcluded(processdefinition.FieldKey)
+	return u
+}
+
+// SetName sets the "name" field.
+func (u *ProcessDefinitionUpsert) SetName(v string) *ProcessDefinitionUpsert {
+	u.Set(processdefinition.FieldName, v)
+	return u
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsert) UpdateName() *ProcessDefinitionUpsert {
+	u.SetExcluded(processdefinition.FieldName)
+	return u
+}
+
+// SetDescription sets the "description" field.
+func (u *ProcessDefinitionUpsert) SetDescription(v string) *ProcessDefinitionUpsert {
+	u.Set(processdefinition.FieldDescription, v)
+	return u
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsert) UpdateDescription() *ProcessDefinitionUpsert {
+	u.SetExcluded(processdefinition.FieldDescription)
+	return u
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ProcessDefinitionUpsert) ClearDescription() *ProcessDefinitionUpsert {
+	u.SetNull(processdefinition.FieldDescription)
+	return u
+}
+
+// SetVersion sets the "version" field.
+func (u *ProcessDefinitionUpsert) SetVersion(v string) *ProcessDefinitionUpsert {
+	u.Set(processdefinition.FieldVersion, v)
+	return u
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsert) UpdateVersion() *ProcessDefinitionUpsert {
+	u.SetExcluded(processdefinition.FieldVersion)
+	return u
+}
+
+// SetCategory sets the "category" field.
+func (u *ProcessDefinitionUpsert) SetCategory(v string) *ProcessDefinitionUpsert {
+	u.Set(processdefinition.FieldCategory, v)
+	return u
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsert) UpdateCategory() *ProcessDefinitionUpsert {
+	u.SetExcluded(processdefinition.FieldCategory)
+	return u
+}
+
+// SetBpmnXML sets the "bpmn_xml" field.
+func (u *ProcessDefinitionUpsert) SetBpmnXML(v []uint8) *ProcessDefinitionUpsert {
+	u.Set(processdefinition.FieldBpmnXML, v)
+	return u
+}
+
+// UpdateBpmnXML sets the "bpmn_xml" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsert) UpdateBpmnXML() *ProcessDefinitionUpsert {
+	u.SetExcluded(processdefinition.FieldBpmnXML)
+	return u
+}
+
+// SetProcessVariables sets the "process_variables" field.
+func (u *ProcessDefinitionUpsert) SetProcessVariables(v map[string]interface{}) *ProcessDefinitionUpsert {
+	u.Set(processdefinition.FieldProcessVariables, v)
+	return u
+}
+
+// UpdateProcessVariables sets the "process_variables" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsert) UpdateProcessVariables() *ProcessDefinitionUpsert {
+	u.SetExcluded(processdefinition.FieldProcessVariables)
+	return u
+}
+
+// ClearProcessVariables clears the value of the "process_variables" field.
+func (u *ProcessDefinitionUpsert) ClearProcessVariables() *ProcessDefinitionUpsert {
+	u.SetNull(processdefinition.FieldProcessVariables)
+	return u
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *ProcessDefinitionUpsert) SetIsActive(v bool) *ProcessDefinitionUpsert {
+	u.Set(processdefinition.FieldIsActive, v)
+	return u
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsert) UpdateIsActive() *ProcessDefinitionUpsert {
+	u.SetExcluded(processdefinition.FieldIsActive)
+	return u
+}
+
+// SetIsLatest sets the "is_latest" field.
+func (u *ProcessDefinitionUpsert) SetIsLatest(v bool) *ProcessDefinitionUpsert {
+	u.Set(processdefinition.FieldIsLatest, v)
+	return u
+}
+
+// UpdateIsLatest sets the "is_latest" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsert) UpdateIsLatest() *ProcessDefinitionUpsert {
+	u.SetExcluded(processdefinition.FieldIsLatest)
+	return u
+}
+
+// SetDeploymentID sets the "deployment_id" field.
+func (u *ProcessDefinitionUpsert) SetDeploymentID(v int) *ProcessDefinitionUpsert {
+	u.Set(processdefinition.FieldDeploymentID, v)
+	return u
+}
+
+// UpdateDeploymentID sets the "deployment_id" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsert) UpdateDeploymentID() *ProcessDefinitionUpsert {
+	u.SetExcluded(processdefinition.FieldDeploymentID)
+	return u
+}
+
+// SetDeploymentName sets the "deployment_name" field.
+func (u *ProcessDefinitionUpsert) SetDeploymentName(v string) *ProcessDefinitionUpsert {
+	u.Set(processdefinition.FieldDeploymentName, v)
+	return u
+}
+
+// UpdateDeploymentName sets the "deployment_name" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsert) UpdateDeploymentName() *ProcessDefinitionUpsert {
+	u.SetExcluded(processdefinition.FieldDeploymentName)
+	return u
+}
+
+// ClearDeploymentName clears the value of the "deployment_name" field.
+func (u *ProcessDefinitionUpsert) ClearDeploymentName() *ProcessDefinitionUpsert {
+	u.SetNull(processdefinition.FieldDeploymentName)
+	return u
+}
+
+// SetDeployedAt sets the "deployed_at" field.
+func (u *ProcessDefinitionUpsert) SetDeployedAt(v time.Time) *ProcessDefinitionUpsert {
+	u.Set(processdefinition.FieldDeployedAt, v)
+	return u
+}
+
+// UpdateDeployedAt sets the "deployed_at" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsert) UpdateDeployedAt() *ProcessDefinitionUpsert {
+	u.SetExcluded(processdefinition.FieldDeployedAt)
+	return u
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessDefinitionUpsert) SetTenantID(v int) *ProcessDefinitionUpsert {
+	u.Set(processdefinition.FieldTenantID, v)
+	return u
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsert) UpdateTenantID() *ProcessDefinitionUpsert {
+	u.SetExcluded(processdefinition.FieldTenantID)
+	return u
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessDefinitionUpsert) AddTenantID(v int) *ProcessDefinitionUpsert {
+	u.Add(processdefinition.FieldTenantID, v)
+	return u
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessDefinitionUpsert) SetCreatedAt(v time.Time) *ProcessDefinitionUpsert {
+	u.Set(processdefinition.FieldCreatedAt, v)
+	return u
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsert) UpdateCreatedAt() *ProcessDefinitionUpsert {
+	u.SetExcluded(processdefinition.FieldCreatedAt)
+	return u
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessDefinitionUpsert) SetUpdatedAt(v time.Time) *ProcessDefinitionUpsert {
+	u.Set(processdefinition.FieldUpdatedAt, v)
+	return u
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsert) UpdateUpdatedAt() *ProcessDefinitionUpsert {
+	u.SetExcluded(processdefinition.FieldUpdatedAt)
+	return u
+}
+
+// UpdateNewValues updates the mutable fields using the new values that were set on create.
+// Using this option is equivalent to using:
+//
+//	client.ProcessDefinition.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessDefinitionUpsertOne) UpdateNewValues() *ProcessDefinitionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessDefinition.Create().
+//	    OnConflict(sql.ResolveWithIgnore()).
+//	    Exec(ctx)
+func (u *ProcessDefinitionUpsertOne) Ignore() *ProcessDefinitionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessDefinitionUpsertOne) DoNothing() *ProcessDefinitionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessDefinitionCreate.OnConflict
+// documentation for more info.
+func (u *ProcessDefinitionUpsertOne) Update(set func(*ProcessDefinitionUpsert)) *ProcessDefinitionUpsertOne {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessDefinitionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetKey sets the "key" field.
+func (u *ProcessDefinitionUpsertOne) SetKey(v string) *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetKey(v)
+	})
+}
+
+// UpdateKey sets the "key" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertOne) UpdateKey() *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateKey()
+	})
+}
+
+// SetName sets the "name" field.
+func (u *ProcessDefinitionUpsertOne) SetName(v string) *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertOne) UpdateName() *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ProcessDefinitionUpsertOne) SetDescription(v string) *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertOne) UpdateDescription() *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ProcessDefinitionUpsertOne) ClearDescription() *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetVersion sets the "version" field.
+func (u *ProcessDefinitionUpsertOne) SetVersion(v string) *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetVersion(v)
+	})
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertOne) UpdateVersion() *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateVersion()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *ProcessDefinitionUpsertOne) SetCategory(v string) *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertOne) UpdateCategory() *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// SetBpmnXML sets the "bpmn_xml" field.
+func (u *ProcessDefinitionUpsertOne) SetBpmnXML(v []uint8) *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetBpmnXML(v)
+	})
+}
+
+// UpdateBpmnXML sets the "bpmn_xml" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertOne) UpdateBpmnXML() *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateBpmnXML()
+	})
+}
+
+// SetProcessVariables sets the "process_variables" field.
+func (u *ProcessDefinitionUpsertOne) SetProcessVariables(v map[string]interface{}) *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetProcessVariables(v)
+	})
+}
+
+// UpdateProcessVariables sets the "process_variables" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertOne) UpdateProcessVariables() *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateProcessVariables()
+	})
+}
+
+// ClearProcessVariables clears the value of the "process_variables" field.
+func (u *ProcessDefinitionUpsertOne) ClearProcessVariables() *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.ClearProcessVariables()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *ProcessDefinitionUpsertOne) SetIsActive(v bool) *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertOne) UpdateIsActive() *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetIsLatest sets the "is_latest" field.
+func (u *ProcessDefinitionUpsertOne) SetIsLatest(v bool) *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetIsLatest(v)
+	})
+}
+
+// UpdateIsLatest sets the "is_latest" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertOne) UpdateIsLatest() *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateIsLatest()
+	})
+}
+
+// SetDeploymentID sets the "deployment_id" field.
+func (u *ProcessDefinitionUpsertOne) SetDeploymentID(v int) *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetDeploymentID(v)
+	})
+}
+
+// UpdateDeploymentID sets the "deployment_id" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertOne) UpdateDeploymentID() *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateDeploymentID()
+	})
+}
+
+// SetDeploymentName sets the "deployment_name" field.
+func (u *ProcessDefinitionUpsertOne) SetDeploymentName(v string) *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetDeploymentName(v)
+	})
+}
+
+// UpdateDeploymentName sets the "deployment_name" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertOne) UpdateDeploymentName() *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateDeploymentName()
+	})
+}
+
+// ClearDeploymentName clears the value of the "deployment_name" field.
+func (u *ProcessDefinitionUpsertOne) ClearDeploymentName() *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.ClearDeploymentName()
+	})
+}
+
+// SetDeployedAt sets the "deployed_at" field.
+func (u *ProcessDefinitionUpsertOne) SetDeployedAt(v time.Time) *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetDeployedAt(v)
+	})
+}
+
+// UpdateDeployedAt sets the "deployed_at" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertOne) UpdateDeployedAt() *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateDeployedAt()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessDefinitionUpsertOne) SetTenantID(v int) *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessDefinitionUpsertOne) AddTenantID(v int) *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertOne) UpdateTenantID() *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessDefinitionUpsertOne) SetCreatedAt(v time.Time) *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertOne) UpdateCreatedAt() *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessDefinitionUpsertOne) SetUpdatedAt(v time.Time) *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertOne) UpdateUpdatedAt() *ProcessDefinitionUpsertOne {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessDefinitionUpsertOne) Exec(ctx context.Context) error {
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessDefinitionCreate.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessDefinitionUpsertOne) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// Exec executes the UPSERT query and returns the inserted/updated ID.
+func (u *ProcessDefinitionUpsertOne) ID(ctx context.Context) (id int, err error) {
+	node, err := u.create.Save(ctx)
+	if err != nil {
+		return id, err
+	}
+	return node.ID, nil
+}
+
+// IDX is like ID, but panics if an error occurs.
+func (u *ProcessDefinitionUpsertOne) IDX(ctx context.Context) int {
+	id, err := u.ID(ctx)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
 // ProcessDefinitionCreateBulk is the builder for creating many ProcessDefinition entities in bulk.
 type ProcessDefinitionCreateBulk struct {
 	config
 	err      error
 	builders []*ProcessDefinitionCreate
+	conflict []sql.ConflictOption
 }
 
 // Save creates the ProcessDefinition entities in the database.
@@ -546,6 +1114,7 @@ func (_c *ProcessDefinitionCreateBulk) Save(ctx context.Context) ([]*ProcessDefi
 					_, err = mutators[i+1].Mutate(root, _c.builders[i+1].mutation)
 				} else {
 					spec := &sqlgraph.BatchCreateSpec{Nodes: specs}
+					spec.OnConflict = _c.conflict
 					// Invoke the actual operation on the latest mutation in the chain.
 					if err = sqlgraph.BatchCreate(ctx, _c.driver, spec); err != nil {
 						if sqlgraph.IsConstraintError(err) {
@@ -596,6 +1165,348 @@ func (_c *ProcessDefinitionCreateBulk) Exec(ctx context.Context) error {
 // ExecX is like Exec, but panics if an error occurs.
 func (_c *ProcessDefinitionCreateBulk) ExecX(ctx context.Context) {
 	if err := _c.Exec(ctx); err != nil {
+		panic(err)
+	}
+}
+
+// OnConflict allows configuring the `ON CONFLICT` / `ON DUPLICATE KEY` clause
+// of the `INSERT` statement. For example:
+//
+//	client.ProcessDefinition.CreateBulk(builders...).
+//		OnConflict(
+//			// Update the row with the new values
+//			// the was proposed for insertion.
+//			sql.ResolveWithNewValues(),
+//		).
+//		// Override some of the fields with custom
+//		// update values.
+//		Update(func(u *ent.ProcessDefinitionUpsert) {
+//			SetKey(v+v).
+//		}).
+//		Exec(ctx)
+func (_c *ProcessDefinitionCreateBulk) OnConflict(opts ...sql.ConflictOption) *ProcessDefinitionUpsertBulk {
+	_c.conflict = opts
+	return &ProcessDefinitionUpsertBulk{
+		create: _c,
+	}
+}
+
+// OnConflictColumns calls `OnConflict` and configures the columns
+// as conflict target. Using this option is equivalent to using:
+//
+//	client.ProcessDefinition.Create().
+//		OnConflict(sql.ConflictColumns(columns...)).
+//		Exec(ctx)
+func (_c *ProcessDefinitionCreateBulk) OnConflictColumns(columns ...string) *ProcessDefinitionUpsertBulk {
+	_c.conflict = append(_c.conflict, sql.ConflictColumns(columns...))
+	return &ProcessDefinitionUpsertBulk{
+		create: _c,
+	}
+}
+
+// ProcessDefinitionUpsertBulk is the builder for "upsert"-ing
+// a bulk of ProcessDefinition nodes.
+type ProcessDefinitionUpsertBulk struct {
+	create *ProcessDefinitionCreateBulk
+}
+
+// UpdateNewValues updates the mutable fields using the new values that
+// were set on create. Using this option is equivalent to using:
+//
+//	client.ProcessDefinition.Create().
+//		OnConflict(
+//			sql.ResolveWithNewValues(),
+//		).
+//		Exec(ctx)
+func (u *ProcessDefinitionUpsertBulk) UpdateNewValues() *ProcessDefinitionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	return u
+}
+
+// Ignore sets each column to itself in case of conflict.
+// Using this option is equivalent to using:
+//
+//	client.ProcessDefinition.Create().
+//		OnConflict(sql.ResolveWithIgnore()).
+//		Exec(ctx)
+func (u *ProcessDefinitionUpsertBulk) Ignore() *ProcessDefinitionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWithIgnore())
+	return u
+}
+
+// DoNothing configures the conflict_action to `DO NOTHING`.
+// Supported only by SQLite and PostgreSQL.
+func (u *ProcessDefinitionUpsertBulk) DoNothing() *ProcessDefinitionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.DoNothing())
+	return u
+}
+
+// Update allows overriding fields `UPDATE` values. See the ProcessDefinitionCreateBulk.OnConflict
+// documentation for more info.
+func (u *ProcessDefinitionUpsertBulk) Update(set func(*ProcessDefinitionUpsert)) *ProcessDefinitionUpsertBulk {
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(update *sql.UpdateSet) {
+		set(&ProcessDefinitionUpsert{UpdateSet: update})
+	}))
+	return u
+}
+
+// SetKey sets the "key" field.
+func (u *ProcessDefinitionUpsertBulk) SetKey(v string) *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetKey(v)
+	})
+}
+
+// UpdateKey sets the "key" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertBulk) UpdateKey() *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateKey()
+	})
+}
+
+// SetName sets the "name" field.
+func (u *ProcessDefinitionUpsertBulk) SetName(v string) *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetName(v)
+	})
+}
+
+// UpdateName sets the "name" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertBulk) UpdateName() *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateName()
+	})
+}
+
+// SetDescription sets the "description" field.
+func (u *ProcessDefinitionUpsertBulk) SetDescription(v string) *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetDescription(v)
+	})
+}
+
+// UpdateDescription sets the "description" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertBulk) UpdateDescription() *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateDescription()
+	})
+}
+
+// ClearDescription clears the value of the "description" field.
+func (u *ProcessDefinitionUpsertBulk) ClearDescription() *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.ClearDescription()
+	})
+}
+
+// SetVersion sets the "version" field.
+func (u *ProcessDefinitionUpsertBulk) SetVersion(v string) *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetVersion(v)
+	})
+}
+
+// UpdateVersion sets the "version" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertBulk) UpdateVersion() *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateVersion()
+	})
+}
+
+// SetCategory sets the "category" field.
+func (u *ProcessDefinitionUpsertBulk) SetCategory(v string) *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetCategory(v)
+	})
+}
+
+// UpdateCategory sets the "category" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertBulk) UpdateCategory() *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateCategory()
+	})
+}
+
+// SetBpmnXML sets the "bpmn_xml" field.
+func (u *ProcessDefinitionUpsertBulk) SetBpmnXML(v []uint8) *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetBpmnXML(v)
+	})
+}
+
+// UpdateBpmnXML sets the "bpmn_xml" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertBulk) UpdateBpmnXML() *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateBpmnXML()
+	})
+}
+
+// SetProcessVariables sets the "process_variables" field.
+func (u *ProcessDefinitionUpsertBulk) SetProcessVariables(v map[string]interface{}) *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetProcessVariables(v)
+	})
+}
+
+// UpdateProcessVariables sets the "process_variables" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertBulk) UpdateProcessVariables() *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateProcessVariables()
+	})
+}
+
+// ClearProcessVariables clears the value of the "process_variables" field.
+func (u *ProcessDefinitionUpsertBulk) ClearProcessVariables() *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.ClearProcessVariables()
+	})
+}
+
+// SetIsActive sets the "is_active" field.
+func (u *ProcessDefinitionUpsertBulk) SetIsActive(v bool) *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetIsActive(v)
+	})
+}
+
+// UpdateIsActive sets the "is_active" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertBulk) UpdateIsActive() *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateIsActive()
+	})
+}
+
+// SetIsLatest sets the "is_latest" field.
+func (u *ProcessDefinitionUpsertBulk) SetIsLatest(v bool) *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetIsLatest(v)
+	})
+}
+
+// UpdateIsLatest sets the "is_latest" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertBulk) UpdateIsLatest() *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateIsLatest()
+	})
+}
+
+// SetDeploymentID sets the "deployment_id" field.
+func (u *ProcessDefinitionUpsertBulk) SetDeploymentID(v int) *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetDeploymentID(v)
+	})
+}
+
+// UpdateDeploymentID sets the "deployment_id" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertBulk) UpdateDeploymentID() *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateDeploymentID()
+	})
+}
+
+// SetDeploymentName sets the "deployment_name" field.
+func (u *ProcessDefinitionUpsertBulk) SetDeploymentName(v string) *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetDeploymentName(v)
+	})
+}
+
+// UpdateDeploymentName sets the "deployment_name" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertBulk) UpdateDeploymentName() *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateDeploymentName()
+	})
+}
+
+// ClearDeploymentName clears the value of the "deployment_name" field.
+func (u *ProcessDefinitionUpsertBulk) ClearDeploymentName() *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.ClearDeploymentName()
+	})
+}
+
+// SetDeployedAt sets the "deployed_at" field.
+func (u *ProcessDefinitionUpsertBulk) SetDeployedAt(v time.Time) *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetDeployedAt(v)
+	})
+}
+
+// UpdateDeployedAt sets the "deployed_at" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertBulk) UpdateDeployedAt() *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateDeployedAt()
+	})
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (u *ProcessDefinitionUpsertBulk) SetTenantID(v int) *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetTenantID(v)
+	})
+}
+
+// AddTenantID adds v to the "tenant_id" field.
+func (u *ProcessDefinitionUpsertBulk) AddTenantID(v int) *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.AddTenantID(v)
+	})
+}
+
+// UpdateTenantID sets the "tenant_id" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertBulk) UpdateTenantID() *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateTenantID()
+	})
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (u *ProcessDefinitionUpsertBulk) SetCreatedAt(v time.Time) *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetCreatedAt(v)
+	})
+}
+
+// UpdateCreatedAt sets the "created_at" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertBulk) UpdateCreatedAt() *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateCreatedAt()
+	})
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (u *ProcessDefinitionUpsertBulk) SetUpdatedAt(v time.Time) *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.SetUpdatedAt(v)
+	})
+}
+
+// UpdateUpdatedAt sets the "updated_at" field to the value that was provided on create.
+func (u *ProcessDefinitionUpsertBulk) UpdateUpdatedAt() *ProcessDefinitionUpsertBulk {
+	return u.Update(func(s *ProcessDefinitionUpsert) {
+		s.UpdateUpdatedAt()
+	})
+}
+
+// Exec executes the query.
+func (u *ProcessDefinitionUpsertBulk) Exec(ctx context.Context) error {
+	if u.create.err != nil {
+		return u.create.err
+	}
+	for i, b := range u.create.builders {
+		if len(b.conflict) != 0 {
+			return fmt.Errorf("ent: OnConflict was set for builder %d. Set it on the ProcessDefinitionCreateBulk instead", i)
+		}
+	}
+	if len(u.create.conflict) == 0 {
+		return errors.New("ent: missing options for ProcessDefinitionCreateBulk.OnConflict")
+	}
+	return u.create.Exec(ctx)
+}
+
+// ExecX is like Exec, but panics if an error occurs.
+func (u *ProcessDefinitionUpsertBulk) ExecX(ctx context.Context) {
+	if err := u.create.Exec(ctx); err != nil {
 		panic(err)
 	}
 }
