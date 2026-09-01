@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/mail"
 	"strconv"
 	"strings"
@@ -51,8 +50,8 @@ func (h *IncidentAlertDeliveryHandler) Deliver(ctx context.Context, event *ent.O
 		DeliveryID:              event.EventID,
 		DisableProviderFallback: true,
 	})
-	if err != nil && (errors.Is(err, errEmailGraphSend) || errors.Is(err, errEmailSMTPSend)) {
-		return blockOutboxDelivery("delivery_unknown: email transport result is ambiguous; manual reconciliation required")
+	if err != nil && emailTransportOutcomeOf(err) == emailAcceptanceUnknown {
+		return blockOutboxDelivery("delivery_unknown: email " + emailTransportStageOf(err, "transport") + " result is ambiguous; manual reconciliation required")
 	}
 	return err
 }
@@ -76,8 +75,8 @@ func validateIncidentAlertDelivery(event *ent.OutboxEvent, payload incidentAlert
 	if strings.TrimSpace(payload.Subject) == "" || strings.TrimSpace(payload.Message) == "" {
 		return "incident alert delivery content is incomplete"
 	}
-	if len(payload.Recipients) == 0 {
-		return "incident alert delivery recipient is required"
+	if len(payload.Recipients) != 1 {
+		return "incident alert delivery requires exactly one recipient"
 	}
 	for _, recipient := range payload.Recipients {
 		if _, err := mail.ParseAddress(recipient); err != nil {

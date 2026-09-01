@@ -3,6 +3,7 @@ package msgraph
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -266,6 +267,39 @@ func TestClient_SendMail(t *testing.T) {
 	assert.True(t, found, "internetMessageHeaders must include an X-Auto-Submitted header")
 	assert.True(t, foundDeliveryID, "durable delivery id must be passed to Graph")
 }
+
+func TestClient_SendMailClassifiesRejectedResponseAsNotAccepted(t *testing.T) {
+	aad := httptest.NewServer(tokenHandler())
+	defer aad.Close()
+	graph := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusServiceUnavailable) }))
+	defer graph.Close()
+	c := NewClient("test-tenant", "id", "secret", aad.URL, graph.URL)
+	err := c.SendMail(context.Background(), "support@contoso.com", "alice@contoso.com", "subject", "body", "delivery-1")
+	require.Error(t, err)
+	var outcome interface{ DeliveryOutcome() string }
+	require.ErrorAs(t, err, &outcome)
+	assert.Equal(t, "not_accepted", outcome.DeliveryOutcome())
+}
+
+func TestClient_SendMailClassifiesLostHTTPResponseAsAcceptanceUnknown(t *testing.T) {
+	aad := httptest.NewServer(tokenHandler())
+	defer aad.Close()
+	c := NewClient("test-tenant", "id", "secret", aad.URL, "http://graph.invalid")
+	_, err := c.Token(context.Background())
+	require.NoError(t, err)
+	c.hc = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return nil, errors.New("response lost after request write")
+	})}
+	err = c.SendMail(context.Background(), "support@contoso.com", "alice@contoso.com", "subject", "body", "delivery-1")
+	require.Error(t, err)
+	var outcome interface{ DeliveryOutcome() string }
+	require.ErrorAs(t, err, &outcome)
+	assert.Equal(t, "acceptance_unknown", outcome.DeliveryOutcome())
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) { return f(request) }
 
 func TestClient_ReplyMessage(t *testing.T) {
 	aad := httptest.NewServer(tokenHandler())

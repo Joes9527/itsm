@@ -13,8 +13,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -156,29 +158,49 @@ func (c *Client) getJSON(ctx context.Context, absoluteURL string, out interface{
 func (c *Client) postJSON(ctx context.Context, path string, payload interface{}) error {
 	tok, err := c.Token(ctx)
 	if err != nil {
-		return err
+		return &deliveryOutcomeError{stage: "token", outcome: "not_accepted", err: err}
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("msgraph: encode request body: %w", err)
+		return &deliveryOutcomeError{stage: "encode", outcome: "not_accepted", err: fmt.Errorf("msgraph: encode request body: %w", err)}
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.graphBaseURL+path, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return &deliveryOutcomeError{stage: "request", outcome: "not_accepted", err: err}
 	}
 	req.Header.Set("Authorization", "Bearer "+tok)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := c.hc.Do(req)
 	if err != nil {
-		return fmt.Errorf("msgraph: POST %s: %w", path, err)
+		stage, outcome := classifyGraphRequestError(err)
+		return &deliveryOutcomeError{stage: stage, outcome: outcome, err: fmt.Errorf("msgraph: POST %s: %w", path, err)}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		raw, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("msgraph: POST %s: status %d: %s", path, resp.StatusCode, string(raw))
+		return &deliveryOutcomeError{stage: "rejected", outcome: "not_accepted", err: fmt.Errorf("msgraph: POST %s: status %d: %s", path, resp.StatusCode, string(raw))}
 	}
 	return nil
 }
+
+func classifyGraphRequestError(err error) (string, string) {
+	var networkError *net.OpError
+	if errors.As(err, &networkError) && networkError.Op == "dial" {
+		return "dial", "not_accepted"
+	}
+	return "response", "acceptance_unknown"
+}
+
+type deliveryOutcomeError struct {
+	stage   string
+	outcome string
+	err     error
+}
+
+func (e *deliveryOutcomeError) Error() string           { return e.err.Error() }
+func (e *deliveryOutcomeError) Unwrap() error           { return e.err }
+func (e *deliveryOutcomeError) DeliveryOutcome() string { return e.outcome }
+func (e *deliveryOutcomeError) DeliveryStage() string   { return e.stage }
 
 // Message is a parsed inbound email, ready for ticket creation.
 type Message struct {

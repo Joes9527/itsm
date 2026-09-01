@@ -410,7 +410,7 @@ func TestEmailAndCCLogsContainOnlyFixedErrorClasses(t *testing.T) {
 		Host: "smtp.example.test", Port: 587, Username: "mailer", From: "mailer@example.test",
 	}, logger)
 	emailService.SetGraphProvider(func(int) (GraphMailSender, string, bool) {
-		return &mockGraphMailSender{err: errors.New(graphErrSentinel)}, "graph@example.test", true
+		return &mockGraphMailSender{err: newEmailTransportError("graph", "token", emailNotAccepted, errors.New(graphErrSentinel))}, "graph@example.test", true
 	})
 	smtpErr := errors.New(smtpErrSentinel)
 	emailService.smtpSend = func(context.Context, string, smtp.Auth, string, []string, []byte) error {
