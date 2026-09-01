@@ -257,7 +257,7 @@ test.describe('Ticket Search and Filter', () => {
     const priorityFilter = page.locator('.ant-select').filter({ hasText: '优先级' }).first();
     await expect(priorityFilter).toBeVisible();
     await priorityFilter.click();
-    const highOption = page.getByRole('option', { name: /高优先级/ });
+    const highOption = page.getByRole('option', { name: '高', exact: true });
     await expect(highOption).toBeVisible();
     const priorityResponse = page.waitForResponse(response => {
       const url = new URL(response.url());
