@@ -72,22 +72,6 @@ describe('ReleaseApi', () => {
     });
   });
 
-  describe('approveRelease', () => {
-    it('should approve a release', async () => {
-      mockPost.mockResolvedValue({ id: 1, status: 'scheduled' });
-      await ReleaseApi.approveRelease(1);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/releases/1/approve');
-    });
-  });
-
-  describe('rejectRelease', () => {
-    it('should reject a release', async () => {
-      mockPost.mockResolvedValue({ id: 1, status: 'cancelled' });
-      await ReleaseApi.rejectRelease(1, 'Not ready');
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/releases/1/reject', { reason: 'Not ready' });
-    });
-  });
-
   describe('rollbackRelease', () => {
     it('should rollback a release', async () => {
       mockPost.mockResolvedValue({ id: 1, status: 'rolled_back' });

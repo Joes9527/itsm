@@ -16,3 +16,10 @@ const EXACT_PUBLIC_PATHS = new Set([
 export function isPublicProxyPath(path: string): boolean {
   return EXACT_PUBLIC_PATHS.has(path);
 }
+
+export function expiredSessionCookies(secure: boolean): string[] {
+  const secureAttribute = secure ? '; Secure' : '';
+  return ['access_token', 'refresh_token'].map(
+    name => `${name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secureAttribute}`
+  );
+}

@@ -29,21 +29,22 @@ test.describe('US7: tenant_admin 租户隔离', () => {
   });
 
   test('T053 - 租户管理员能管理本租户用户', async ({ apiPost }) => {
+    const unique = Date.now();
     // 尝试创建用户（租户管理员权限）
     const response = await apiPost(token, '/api/v1/users', {
-      username: 'testuser',
-      password: 'test123',
+      username: `tenant-user-${unique}`,
+      email: `tenant-user-${unique}@example.test`,
+      password: 'test-password-123',
       name: '测试用户',
       role: 'end_user',
     });
 
-    // 实际：返回 200（成功）或 400（缺少 email/tenant_id）或 403（无权限）
-    expect([200, 400, 403].includes(response.status)).toBe(true);
+    expect(response.status).toBe(200);
   });
 
-  test('T054 - 无法创建租户', async ({ apiPost }) => {
+  test('T054 - 无法创建租户', async ({ apiPostExpectStatus }) => {
     // 尝试创建新租户
-    const response = await apiPost(token, '/api/v1/tenants', {
+    const response = await apiPostExpectStatus(token, '/api/v1/tenants', 403, {
       name: 'Test Tenant',
       code: 'test_tenant',
     });

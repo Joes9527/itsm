@@ -102,10 +102,10 @@
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_Approval" targetRef="Gateway_ApprovalResult" />
     <bpmn:sequenceFlow id="Flow_Schedule" sourceRef="Gateway_ApprovalResult" targetRef="Activity_Schedule">
-      <bpmn:conditionExpression xsi:type="bpmn:tExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><![CDATA[variables['approval_pass'] == true]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression xsi:type="bpmn:tExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><![CDATA[variables['approvalResult'] == 'approved']]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_ApprovalRejected" sourceRef="Gateway_ApprovalResult" targetRef="EndEvent_Reject">
-      <bpmn:conditionExpression xsi:type="bpmn:tExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><![CDATA[variables['approval_pass'] != true]]></bpmn:conditionExpression>
+      <bpmn:conditionExpression xsi:type="bpmn:tExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><![CDATA[variables['approvalResult'] == 'rejected']]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_4" sourceRef="Activity_Schedule" targetRef="Activity_Execute" />
     <bpmn:sequenceFlow id="Flow_5" sourceRef="Activity_Execute" targetRef="Activity_Verify" />

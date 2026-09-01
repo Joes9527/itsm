@@ -190,7 +190,7 @@ func createChangeBPMNProcessFixture(t *testing.T, client *ent.Client, tenantID i
 // NOTE: TestTransitionStatus_BridgesBPMNTask / TestTransitionStatus_BridgeFailClosed /
 // TestTransitionStatus_NoBoundInstanceFallsBack used to live here. They were deleted in
 // Track4 Task 4 because they locked in the mechanism details of a since-removed
-// bridge shim (BPMNApprovalBridge.CompleteBusinessApprovalTask), all of which this
+// removed compatibility approval path, all of which this
 // task intentionally replaces:
 //   - BridgesBPMNTask asserted a ProcessApprovalDecision row shaped by the removed
 //     bridge call (action/actorID/businessType/comment) — that call no longer exists
@@ -785,7 +785,7 @@ func TestTransitionStatus_Approve_WrongActorRejected(t *testing.T) {
 	assert.Equal(t, "pending", persistedChangeStatus(t, client, updated), "越权调用失败后不应该残留任何状态变化")
 }
 
-// TestTransitionStatus_Approve_NoRunningProcessInstanceFailsClosed 覆盖移除旧的桥接
+// TestTransitionStatus_Approve_NoRunningProcessInstanceFailsClosed 覆盖移除旧的兼容入口
 // 机制之后的行为反转：旧实现在没有关联运行中流程实例时会静默回退为纯业务审批（approve 照样成功）；
 // 新实现完全交给 completeChangeApprovalTask，没有运行中的 ProcessInstance 时必须 fail-closed，
 // 不能再有任何"没有流程就自己批"的隐藏路径。这个 change 是直接建库记录，从未跑过

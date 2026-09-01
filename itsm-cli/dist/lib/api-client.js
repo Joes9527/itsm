@@ -137,7 +137,25 @@ export class ApiClient {
             || !/(?:^|;\s*)refresh_token=/.test(cookieHeader)) {
             throw new Error('Login did not establish the required cookie session');
         }
-        const result = { user: json.data.user, tenant: json.data.tenant };
+        const user = json.data.user;
+        if (!user?.tenantId) {
+            clearCredentials();
+            throw new Error('Login response did not identify the selected tenant');
+        }
+        saveCredentials({ cookieHeader, user, tenantId: user.tenantId });
+        let tenant;
+        try {
+            const context = await this.request('GET', '/auth/tenants');
+            const selected = context.tenants.find(candidate => candidate.id === user.tenantId);
+            if (!selected)
+                throw new Error('Selected tenant is unavailable');
+            tenant = selected;
+        }
+        catch (error) {
+            clearCredentials();
+            throw error;
+        }
+        const result = { user, tenant };
         saveCredentials({
             cookieHeader,
             user: result.user,

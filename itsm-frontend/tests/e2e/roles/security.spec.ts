@@ -25,9 +25,9 @@ test.describe('US6: security 安全管理员只读审计', () => {
     expect([200, 403]).toContain(response.status);
   });
 
-  test('T048 - 安全管理员无用户管理写权限', async ({ apiPost }) => {
+  test('T048 - 安全管理员无用户管理写权限', async ({ apiPostExpectStatus }) => {
     // 尝试创建用户 - 应该被拒绝
-    const response = await apiPost(token, '/api/v1/users', {
+    const response = await apiPostExpectStatus(token, '/api/v1/users', 403, {
       username: 'hacker',
       password: 'test',
       name: 'Test',
@@ -43,13 +43,13 @@ test.describe('US6: security 安全管理员只读审计', () => {
     expect([200, 403]).toContain(response.status);
   });
 
-  test('T050 - 安全管理员无租户管理权限', async ({ apiPost }) => {
+  test('T050 - 安全管理员无租户管理权限', async ({ apiPostExpectStatus }) => {
     // 尝试创建租户 - 应该被拒绝
-    const response = await apiPost(token, '/api/v1/tenants', {
+    const response = await apiPostExpectStatus(token, '/api/v1/tenants', 403, {
       name: 'Test Tenant',
       code: 'test',
     });
 
-    expect([403, 404]).toContain(response.status);
+    expect(response.status).toBe(403);
   });
 });

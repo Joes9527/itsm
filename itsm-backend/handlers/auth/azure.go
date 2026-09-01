@@ -18,23 +18,28 @@ import (
 	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/ent"
+	"itsm-backend/ent/tenant"
 	"itsm-backend/ent/user"
 )
 
 // AzureConfig holds Azure AD OIDC configuration.
 type AzureConfig struct {
-	TenantID     string
-	ClientID     string
-	ClientSecret string
-	RedirectURI  string
+	TenantID              string
+	ClientID              string
+	ClientSecret          string
+	RedirectURI           string
+	ITSMTenantCode        string
+	AllowUserProvisioning bool
 }
 
 func LoadAzureConfig() AzureConfig {
 	return AzureConfig{
-		TenantID:     os.Getenv("AZURE_TENANT_ID"),
-		ClientID:     os.Getenv("AZURE_CLIENT_ID"),
-		ClientSecret: os.Getenv("AZURE_CLIENT_SECRET"),
-		RedirectURI:  os.Getenv("AZURE_REDIRECT_URI"),
+		TenantID:              os.Getenv("AZURE_TENANT_ID"),
+		ClientID:              os.Getenv("AZURE_CLIENT_ID"),
+		ClientSecret:          os.Getenv("AZURE_CLIENT_SECRET"),
+		RedirectURI:           os.Getenv("AZURE_REDIRECT_URI"),
+		ITSMTenantCode:        strings.TrimSpace(os.Getenv("AZURE_ITSM_TENANT_CODE")),
+		AllowUserProvisioning: strings.EqualFold(os.Getenv("AZURE_ALLOW_USER_PROVISIONING"), "true"),
 	}
 }
 
@@ -149,6 +154,39 @@ func generateState() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
+type azureOAuthState struct {
+	Nonce      string `json:"nonce"`
+	TenantCode string `json:"tenantCode"`
+}
+
+func generateTenantBoundState(tenantCode string) (string, error) {
+	nonce, err := generateState()
+	if err != nil {
+		return "", err
+	}
+	payload, err := json.Marshal(azureOAuthState{Nonce: nonce, TenantCode: strings.TrimSpace(tenantCode)})
+	if err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(payload), nil
+}
+
+func parseTenantBoundState(value string) (*azureOAuthState, error) {
+	payload, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return nil, fmt.Errorf("invalid state encoding")
+	}
+	var state azureOAuthState
+	if err := json.Unmarshal(payload, &state); err != nil {
+		return nil, fmt.Errorf("invalid state payload")
+	}
+	state.TenantCode = strings.TrimSpace(state.TenantCode)
+	if state.Nonce == "" || state.TenantCode == "" {
+		return nil, fmt.Errorf("state is not tenant bound")
+	}
+	return &state, nil
+}
+
 // AzureLoginHandler redirects to Azure AD for authentication.
 func AzureLoginHandler(cfg AzureConfig, logger *zap.SugaredLogger) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -156,7 +194,15 @@ func AzureLoginHandler(cfg AzureConfig, logger *zap.SugaredLogger) gin.HandlerFu
 			common.Fail(c, common.InternalErrorCode, "Azure AD not configured")
 			return
 		}
-		state, err := generateState()
+		tenantCode := strings.TrimSpace(c.Query("tenantCode"))
+		if tenantCode == "" {
+			tenantCode = cfg.ITSMTenantCode
+		}
+		if tenantCode == "" {
+			common.Fail(c, common.AuthFailedCode, "Azure tenant context is required")
+			return
+		}
+		state, err := generateTenantBoundState(tenantCode)
 		if err != nil {
 			common.Fail(c, common.InternalErrorCode, "failed to generate state")
 			return
@@ -185,6 +231,11 @@ func azureCallbackHandler(cfg AzureConfig, client *ent.Client, jwtSecret string,
 		cookieState, _ := c.Cookie("azure_oauth_state")
 		if state == "" || state != cookieState {
 			common.Fail(c, common.AuthFailedCode, "invalid state")
+			return
+		}
+		boundState, err := parseTenantBoundState(state)
+		if err != nil {
+			common.Fail(c, common.AuthFailedCode, "invalid tenant-bound state")
 			return
 		}
 		authentication.WriteOAuthStateCookie(c.Writer, c.Request, "", -1)
@@ -216,11 +267,25 @@ func azureCallbackHandler(cfg AzureConfig, client *ent.Client, jwtSecret string,
 			email = info.UserPrincipal
 		}
 
-		// Find or create user
+		// Resolve the explicitly selected ITSM tenant before looking up an actor.
+		// Azure identity email is never used to select or guess a tenant.
 		ctx := c.Request.Context()
-		tenantID := 1 // default tenant
-		u, err := client.User.Query().Where(user.EmailEQ(email), user.TenantIDEQ(tenantID)).First(ctx)
+		tenantEntity, err := client.Tenant.Query().Where(tenant.CodeEQ(boundState.TenantCode)).Only(ctx)
+		if err != nil {
+			logger.Warnw("azure tenant selection rejected", "tenant_code", boundState.TenantCode, "error", err)
+			common.AuthFailed(c, "selected tenant is unavailable")
+			return
+		}
+		// Email is globally unique in the authoritative User schema. Resolve one
+		// exact actor, then let the shared tenant-session policy authorize the
+		// selected tenant (native, super-admin, or allocated MSP). Never guess a
+		// tenant from the identity or provision over an existing actor.
+		u, err := client.User.Query().Where(user.EmailEQ(email)).Only(ctx)
 		if ent.IsNotFound(err) {
+			if !cfg.AllowUserProvisioning {
+				common.AuthFailed(c, "Azure user is not provisioned for the selected tenant")
+				return
+			}
 			u, err = client.User.Create().
 				SetUsername(email).
 				SetEmail(email).
@@ -228,7 +293,7 @@ func azureCallbackHandler(cfg AzureConfig, client *ent.Client, jwtSecret string,
 				SetRole("end_user").
 				SetPasswordHash("azure_oidc_no_password").
 				SetActive(true).
-				SetTenantID(tenantID).
+				SetTenantID(tenantEntity.ID).
 				Save(ctx)
 			if err != nil {
 				logger.Errorw("create azure user failed", "error", err, "email", email)
@@ -246,7 +311,7 @@ func azureCallbackHandler(cfg AzureConfig, client *ent.Client, jwtSecret string,
 			return
 		}
 
-		tenantEntity, err := authorization.AuthorizeTenantSession(ctx, client, u, u.TenantID, now())
+		tenantEntity, err = authorization.AuthorizeTenantSession(ctx, client, u, tenantEntity.ID, now())
 		if err != nil {
 			logger.Warnw("azure tenant session denied", "user_id", u.ID, "tenant_id", u.TenantID, "error", err)
 			common.AuthFailed(c, "tenant session is unavailable")
@@ -278,7 +343,7 @@ func azureCallbackHandler(cfg AzureConfig, client *ent.Client, jwtSecret string,
 		case "agent", "technician":
 			target = "/tickets"
 		case "manager", "security":
-			target = "/my-approvals"
+			target = "/approvals"
 		}
 		frontendURL := os.Getenv("FRONTEND_URL")
 		if frontendURL == "" {

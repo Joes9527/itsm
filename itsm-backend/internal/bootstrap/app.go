@@ -367,8 +367,8 @@ func NewApplication() *Application {
 	// Release & Asset Management Services
 	releaseService := service.NewReleaseService(client, sugar)
 	releaseService.SetProcessTriggerService(processTriggerService)
-	// 审批/阶段桥接必须复用这一个 processEngine：它的 CallbackRegistry 在下面被注入了
-	// TicketService/IncidentService，桥接自己造引擎会拿到空 registry，UserTask 回调静默失效。
+	// 发布命令必须复用这个已装配 CallbackRegistry 的唯一 processEngine；临时创建
+	// engine 会缺少领域服务注入并使 UserTask callback 明确失败。
 	releaseService.SetProcessEngine(processEngine)
 	assetService := service.NewAssetService(client, sugar)
 	assetLicenseService := service.NewAssetLicenseService(client, sugar)
@@ -532,6 +532,9 @@ func NewApplication() *Application {
 		// IncidentService，不再绕过领域校验（如报告人/处理人必须是租户内的活跃用户）。
 		if h, ok := cpe.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler); ok {
 			h.SetIncidentService(incidentService)
+		}
+		if h, ok := cpe.CallbackRegistry().GetHandler("release_service_handler").(*bpmn.ReleaseServiceTaskHandler); ok {
+			h.SetReleaseService(releaseService)
 		}
 	}
 

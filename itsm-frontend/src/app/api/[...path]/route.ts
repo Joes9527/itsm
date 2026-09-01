@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { hasBrowserSession } from '@/lib/auth/browser-session';
-import { isPublicProxyPath } from './proxy-policy';
+import { expiredSessionCookies, isPublicProxyPath } from './proxy-policy';
 
 const BACKEND_BASE_URL = process.env.ITSM_BACKEND_URL || 'http://localhost:8090';
 
@@ -81,6 +81,15 @@ async function proxyRequest(request: NextRequest, params: Promise<{ path: string
       // 先删除可能从 Headers 复制过来的单个 Set-Cookie（值为合并字符串，浏览器无法解析）
       responseHeaders.delete('set-cookie');
       for (const cookie of setCookies) {
+        responseHeaders.append('set-cookie', cookie);
+      }
+    }
+
+    if (response.status === 401) {
+      responseHeaders.delete('set-cookie');
+      const secure = request.nextUrl.protocol === 'https:'
+        || request.headers.get('x-forwarded-proto')?.toLowerCase() === 'https';
+      for (const cookie of expiredSessionCookies(secure)) {
         responseHeaders.append('set-cookie', cookie);
       }
     }

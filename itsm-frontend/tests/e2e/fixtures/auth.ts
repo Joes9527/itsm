@@ -21,6 +21,7 @@ interface TestFixtures {
   loginAs: (role: TestRole) => Promise<string>;
   apiGet: (role: string, path: string) => Promise<any>;
   apiPost: (role: string, path: string, body?: any) => Promise<any>;
+  apiPostExpectStatus: (role: string, path: string, expectedStatus: number, body?: any) => Promise<any>;
 }
 
 async function establishSession(request: APIRequestContext, role: TestRole) {
@@ -36,6 +37,19 @@ async function establishSession(request: APIRequestContext, role: TestRole) {
   if ('access_token' in data || 'accessToken' in data || 'refresh_token' in data || 'refreshToken' in data) {
     throw new Error(`Login response for ${role} exposed a JWT`);
   }
+}
+
+async function postWithCSRF(request: APIRequestContext, path: string, body?: unknown) {
+  const apiURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
+  const csrfResponse = await request.get(`${apiURL}/api/v1/csrf-token`);
+  if (!csrfResponse.ok()) throw new Error(`CSRF bootstrap failed: ${csrfResponse.status()}`);
+  const csrfBody = await csrfResponse.json() as { data?: { csrf_token?: string } };
+  const csrfToken = csrfBody.data?.csrf_token;
+  if (!csrfToken) throw new Error('CSRF bootstrap returned no token');
+  return request.post(`${apiURL}${path}`, {
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+    data: body,
+  });
 }
 
 export const test = base.extend<TestFixtures>({
@@ -61,17 +75,25 @@ export const test = base.extend<TestFixtures>({
   apiPost: async ({ request }, use) => {
     await use(async (role: string, path: string, body?: any) => {
       await establishSession(request, role as TestRole);
-      const apiURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
-      const response = await request.post(`${apiURL}${path}`, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        data: body,
-      });
+      const response = await postWithCSRF(request, path, body);
+      if (!response.ok()) {
+        throw new Error(`POST ${path} failed: ${response.status()} ${await response.text()}`);
+      }
       return {
         status: response.status(),
-        data: response.ok() ? await response.json() : await response.text(),
+        data: await response.json(),
       };
+    });
+  },
+
+  apiPostExpectStatus: async ({ request }, use) => {
+    await use(async (role: string, path: string, expectedStatus: number, body?: any) => {
+      await establishSession(request, role as TestRole);
+      const response = await postWithCSRF(request, path, body);
+      if (response.status() !== expectedStatus) {
+        throw new Error(`POST ${path}: expected ${expectedStatus}, got ${response.status()} ${await response.text()}`);
+      }
+      return { status: response.status(), data: await response.text() };
     });
   },
 });

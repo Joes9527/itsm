@@ -3,30 +3,26 @@ package bpmn
 import (
 	"context"
 	"fmt"
-	"strings"
-	"time"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
-	"itsm-backend/ent/release"
 
 	"go.uber.org/zap"
 )
 
-// ReleaseServiceTaskHandler 发布服务任务处理器，对应 release_approval_flow.bpmn 的 5 个
-// 用户任务节点（技术评审/发布审批/计划发布/执行发布/验证确认，metaData 都声明
-// service_task_type=release_task）。之前完全没有注册处理器，这 5 个节点走完流程
-// 对 Release 实体零真实副作用。
-//
-// 状态转换直接操作 Ent，不能调用 service/release_service.go 的
-// ReleaseService.UpdateReleaseStatus——service 包本身依赖 service/bpmn 做 callback
-// 注册（bpmn_process_engine.go 里的 callbackRegistry *bpmn.CallbackRegistry），
-// 反向依赖会导致 import 循环。状态机白名单校验规则复制自 isValidReleaseStatusTransition
-// （release_service.go），改动状态机规则时两处要一起改。
+// ReleaseServiceTaskHandler parses durable process callbacks and delegates all
+// professional persistence to ReleaseDomainService. It never writes Release
+// records directly.
 type ReleaseServiceTaskHandler struct {
 	HandlerBase
-	client *ent.Client
-	logger *zap.SugaredLogger
+	client         *ent.Client
+	logger         *zap.SugaredLogger
+	releaseService ReleaseDomainService
+}
+
+// SetReleaseService injects the owning Release application service.
+func (h *ReleaseServiceTaskHandler) SetReleaseService(service ReleaseDomainService) {
+	h.releaseService = service
 }
 
 // NewReleaseServiceTaskHandler 创建发布处理器
@@ -52,22 +48,36 @@ func (h *ReleaseServiceTaskHandler) Execute(ctx context.Context, task *ent.Proce
 	action, _ := variables["action"].(string)
 	switch action {
 	case "tech_review":
-		return h.techReview(ctx, variables)
+		comment, _ := variables["comment"].(string)
+		return h.applyDomainCommand(ctx, variables, ReleaseWorkflowCommand{
+			Action: ReleaseWorkflowActionTechReview, Comment: comment,
+		})
 	case "approval":
 		return h.approvalDecisionEffect(ctx, task, variables)
 	case "schedule":
-		return h.updateStatus(ctx, variables, string(dto.ReleaseStatusScheduled))
+		return h.applyStatus(ctx, variables, string(dto.ReleaseStatusScheduled))
 	case "execute":
-		return h.updateStatus(ctx, variables, string(dto.ReleaseStatusInProgress))
+		return h.applyStatus(ctx, variables, string(dto.ReleaseStatusInProgress))
 	case "verify":
-		return h.updateStatus(ctx, variables, string(dto.ReleaseStatusCompleted))
+		return h.applyStatus(ctx, variables, string(dto.ReleaseStatusCompleted))
 	default:
-		return nil, fmt.Errorf("不支持的发布回调动作")
+		return BlockedEffect(CallbackBlockHandlerContract, "unsupported release callback action"), nil
 	}
 }
 
 func (h *ReleaseServiceTaskHandler) approvalDecisionEffect(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
-	return persistedApprovalDecisionEffect(ctx, h.client, task, variables, "release approval decision is already recorded")
+	effect, err := persistedApprovalDecisionEffect(ctx, h.client, task, variables, "release approval decision is recorded")
+	if err != nil || effect.Status == CallbackEffectBlocked {
+		return effect, err
+	}
+	action, _ := task.TaskVariables["approvalAction"].(string)
+	if action == "approve" {
+		return effect, nil
+	}
+	if action != "reject" {
+		return BlockedEffect(CallbackBlockTargetMissing, "unsupported release approval action"), nil
+	}
+	return h.applyDomainCommand(ctx, variables, ReleaseWorkflowCommand{Action: ReleaseWorkflowActionReject})
 }
 
 func (h *ReleaseServiceTaskHandler) releaseID(variables map[string]interface{}) (int, error) {
@@ -78,44 +88,16 @@ func (h *ReleaseServiceTaskHandler) releaseID(variables map[string]interface{}) 
 	return id, nil
 }
 
-// techReview 记录技术评审意见。评审通过/不通过在这个流程设计里不对应独立的发布状态
-// （Release.status 只有 draft/scheduled/in-progress/completed/cancelled/failed/
-// rolled_back），所以这里只追加评审记录到 release_notes，不改状态。
-func (h *ReleaseServiceTaskHandler) techReview(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
-	releaseID, err := h.releaseID(variables)
-	if err != nil {
-		return nil, err
-	}
-	// fail closed：租户未知时不允许落到一条不带租户约束的全表查询上
-	tenantID, err := RequireTenantID(ctx, variables)
-	if err != nil {
-		return nil, err
-	}
-	comment, _ := variables["comment"].(string)
-
-	entity, err := h.client.Release.Query().
-		Where(release.ID(releaseID), release.TenantID(tenantID)).
-		Only(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("获取发布记录失败: %w", err)
-	}
-	notes := entity.ReleaseNotes
-	entry := fmt.Sprintf("[技术评审] %s", comment)
-	if comment == "" || strings.Contains(notes, entry) {
-		return IdempotentEffect("技术评审意见已记录", nil), nil
-	}
-	if notes != "" {
-		notes += "\n"
-	}
-	notes += entry
-	if _, err := entity.Update().SetReleaseNotes(notes).Save(ctx); err != nil {
-		return nil, fmt.Errorf("记录技术评审失败: %w", err)
-	}
-	h.logger.Infow("Release tech review recorded via BPMN", "release_id", releaseID)
-	return &CallbackEffect{Status: CallbackEffectApplied, Message: "技术评审意见已记录"}, nil
+func (h *ReleaseServiceTaskHandler) applyStatus(ctx context.Context, variables map[string]interface{}, status string) (*CallbackEffect, error) {
+	return h.applyDomainCommand(ctx, variables, ReleaseWorkflowCommand{
+		Action: ReleaseWorkflowActionStatus, TargetStatus: status,
+	})
 }
 
-func (h *ReleaseServiceTaskHandler) updateStatus(ctx context.Context, variables map[string]interface{}, status string) (*CallbackEffect, error) {
+func (h *ReleaseServiceTaskHandler) applyDomainCommand(ctx context.Context, variables map[string]interface{}, command ReleaseWorkflowCommand) (*CallbackEffect, error) {
+	if h.releaseService == nil {
+		return nil, fmt.Errorf("release service is unavailable")
+	}
 	releaseID, err := h.releaseID(variables)
 	if err != nil {
 		return nil, err
@@ -124,70 +106,20 @@ func (h *ReleaseServiceTaskHandler) updateStatus(ctx context.Context, variables 
 	if err != nil {
 		return nil, err
 	}
-
-	current, err := h.client.Release.Query().
-		Where(release.ID(releaseID), release.TenantID(tenantID)).
-		Only(ctx)
+	command.ReleaseID = releaseID
+	command.TenantID = tenantID
+	mutation, err := h.releaseService.ApplyReleaseWorkflowCallback(ctx, command)
 	if err != nil {
-		return nil, fmt.Errorf("查询发布记录失败: %w", err)
+		return nil, err
 	}
-
-	if current.Status != status && !isValidReleaseStatusTransitionForBPMN(current.Status, status) {
-		return nil, fmt.Errorf("非法的发布状态转换: %s -> %s", current.Status, status)
+	if mutation == nil {
+		return nil, fmt.Errorf("release service returned no callback outcome")
 	}
-	if current.Status == status {
-		return IdempotentEffect(fmt.Sprintf("发布 %d 已处于 %s", releaseID, status), nil), nil
+	h.logger.Infow("Release workflow callback applied", "release_id", releaseID, "action", command.Action, "changed", mutation.Changed)
+	if mutation.Changed {
+		return AppliedEffect(mutation.Message, nil), nil
 	}
-
-	update := current.Update().SetStatus(status)
-	if status == string(dto.ReleaseStatusCompleted) {
-		update = update.SetActualReleaseDate(time.Now())
-	}
-	if _, err := update.Save(ctx); err != nil {
-		return nil, fmt.Errorf("更新发布状态失败: %w", err)
-	}
-
-	h.logger.Infow("Release status updated via BPMN", "release_id", releaseID, "status", status)
-	return &CallbackEffect{Status: CallbackEffectApplied, Message: fmt.Sprintf("发布 %d 状态已更新为 %s", releaseID, status)}, nil
-}
-
-// isValidReleaseStatusTransitionForBPMN 复制自 service/release_service.go 的
-// isValidReleaseStatusTransition。service/bpmn 包不能依赖 service 包（见上方类型
-// 注释的循环依赖说明），只能在这里独立维护一份同款规则。
-func isValidReleaseStatusTransitionForBPMN(current, newStatus string) bool {
-	if current == newStatus {
-		return true
-	}
-	transitions := map[string]map[string]struct{}{
-		string(dto.ReleaseStatusDraft): {
-			string(dto.ReleaseStatusScheduled): {},
-			string(dto.ReleaseStatusCancelled): {},
-		},
-		string(dto.ReleaseStatusScheduled): {
-			string(dto.ReleaseStatusInProgress): {},
-			string(dto.ReleaseStatusCancelled):  {},
-		},
-		string(dto.ReleaseStatusInProgress): {
-			string(dto.ReleaseStatusCompleted):  {},
-			string(dto.ReleaseStatusFailed):     {},
-			string(dto.ReleaseStatusRolledBack): {},
-			string(dto.ReleaseStatusCancelled):  {},
-		},
-		string(dto.ReleaseStatusFailed): {
-			string(dto.ReleaseStatusScheduled):  {},
-			string(dto.ReleaseStatusRolledBack): {},
-			string(dto.ReleaseStatusCancelled):  {},
-		},
-		string(dto.ReleaseStatusCompleted):  {},
-		string(dto.ReleaseStatusCancelled):  {},
-		string(dto.ReleaseStatusRolledBack): {},
-	}
-	allowed, ok := transitions[current]
-	if !ok {
-		return false
-	}
-	_, ok = allowed[newStatus]
-	return ok
+	return IdempotentEffect(mutation.Message, nil), nil
 }
 
 // 确保 ReleaseServiceTaskHandler 实现了 ServiceTaskHandlerInterface

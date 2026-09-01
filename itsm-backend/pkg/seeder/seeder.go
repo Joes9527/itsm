@@ -1861,10 +1861,8 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 			"problem:read", "change:read", "change:rollback", "report:read",
 			"user:read", "department:read", "team:read",
 			"knowledge:read", "release:read", "release:approve", "release:rollback",
-			// release:approve/rollback 只让业务域 API（/releases/:id/approve 等）能调，
-			// release:read 同理必须补：光有 approve 权限但没有 read，审批人连
-			// GET /releases/:id（发布详情页）都会被 RBAC 拒 403，真实浏览器验证时
-			// 点开发布详情直接 404，approve 按钮压根摸不到。
+			// release:read 允许审批人在BPMN待办中打开专业发布详情；审批决定本身只经
+			// canonical ProcessTask decision endpoint 提交。
 			// bpmn:read/bpmn:write：审批人查看"我的待办"（/api/v1/bpmn/tasks）、提交同意/拒绝
 			// （POST /api/v1/bpmn/tasks/:id/decisions）走的是 /api/v1/bpmn/* 这组接口，实际
 			// API 访问由 middleware.RequireLegacyBPMNRoles() 固定角色 allowlist 把关，

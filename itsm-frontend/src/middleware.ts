@@ -1,51 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { hasBrowserSession } from '@/lib/auth/browser-session';
-
-// 需要认证的路由
-const protectedRoutes = [
-  '/dashboard',
-  '/tickets',
-  '/incidents',
-  '/problems',
-  '/changes',
-  '/assets',
-  '/releases',
-  '/licenses',
-  '/cmdb',
-  '/service-catalog',
-  '/knowledge-base',
-  '/knowledge',
-  '/sla',
-  '/sla-dashboard',
-  '/reports',
-  '/workflow',
-  '/users',
-  '/settings',
-  '/admin',
-  '/enterprise',
-  '/projects',
-  '/applications',
-  '/tags',
-  '/msp',
-  '/ai',
-  '/approvals',
-  '/improvements',
-  '/installations',
-  '/marketplace',
-  '/my-requests',
-  '/notifications',
-  '/profile',
-  '/service-requests',
-  '/standard-changes',
-  '/system',
-  '/teams',
-  '/templates',
-  '/agent-ops-demo',
-];
-
-// 公开路由（不需要认证）
-const publicRoutes = ['/login', '/register', '/forgot-password', '/reset-password'];
+import { authPageRedirect } from '@/lib/auth/middleware-policy';
 
 // API路由（需要特殊处理）
 const apiRoutes = ['/api'];
@@ -64,24 +20,10 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // 检查是否为受保护的路由
-  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
-
-  // 检查是否为公开路由
-  const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route));
-
   // Edge 层只做 HttpOnly cookie 存在性粗门禁；签名、过期、tenant 与 ACL
   // 都由后端 `/auth/me` 和授权策略 fail-closed 校验。
-  if (isProtectedRoute && !hasSession) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('redirect', pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  // 如果已登录用户访问公开路由，重定向到仪表盘
-  if (isPublicRoute && hasSession) {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
-  }
+  const redirect = authPageRedirect(pathname, hasSession);
+  if (redirect) return NextResponse.redirect(new URL(redirect, request.url));
 
   // 根路径：已登录跳转工作台，未登录直接跳转登录页（不再展示介绍页）
   if (pathname === '/') {

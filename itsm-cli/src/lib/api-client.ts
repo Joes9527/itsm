@@ -2,6 +2,8 @@ import { clearCredentials, loadCredentials, saveCredentials, type Credentials } 
 import type {
   LoginRequest,
   LoginResponse,
+  UserTenantsResponse,
+  TenantContext,
   User,
   Ticket,
   TicketListResponse,
@@ -28,6 +30,7 @@ const DEFAULT_BASE_URL = 'http://localhost:8090';
 const MUTATION_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 type ApiEnvelope<T> = { code: number; message: string; data: T };
+type LoginAuthResult = { user: User };
 type BackendListResponse<T> = {
   data: T[];
   pagination: { total: number; page: number; pageSize: number };
@@ -156,14 +159,30 @@ export class ApiClient {
       body: JSON.stringify(loginData),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json() as ApiEnvelope<LoginResponse>;
+    const json = await res.json() as ApiEnvelope<LoginAuthResult>;
     if (json.code !== 0) throw new Error(json.message || 'Login failed');
     const cookieHeader = mergeCookieHeader('', responseSetCookies(res.headers));
     if (!/(?:^|;\s*)access_token=/.test(cookieHeader)
       || !/(?:^|;\s*)refresh_token=/.test(cookieHeader)) {
       throw new Error('Login did not establish the required cookie session');
     }
-    const result: LoginResponse = { user: json.data.user, tenant: json.data.tenant };
+    const user = json.data.user;
+    if (!user?.tenantId) {
+      clearCredentials();
+      throw new Error('Login response did not identify the selected tenant');
+    }
+    saveCredentials({ cookieHeader, user, tenantId: user.tenantId });
+    let tenant: TenantContext;
+    try {
+      const context = await this.request<UserTenantsResponse>('GET', '/auth/tenants');
+      const selected = context.tenants.find(candidate => candidate.id === user.tenantId);
+      if (!selected) throw new Error('Selected tenant is unavailable');
+      tenant = selected;
+    } catch (error) {
+      clearCredentials();
+      throw error;
+    }
+    const result: LoginResponse = { user, tenant };
     saveCredentials({
       cookieHeader,
       user: result.user,

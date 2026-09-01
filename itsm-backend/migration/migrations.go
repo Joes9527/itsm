@@ -956,7 +956,7 @@ WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
 
 -- Enforce at most one running process instance per (tenant, business key). No domain
 -- in this codebase treats "same business key, two concurrently running instances" as
--- a legitimate state (BPMNApprovalBridge/handlers/change's SubmitChange both assume
+-- a legitimate state (canonical BPMN ProcessTask commands assume
 -- businessKey -> running instance is 1:1) — this is a data-integrity invariant that
 -- belongs at the DB layer, not just the application-level check-then-act guard.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_process_instances_running_unique

@@ -183,35 +183,8 @@ func (rc *ReleaseController) UpdateReleaseStatus(c *gin.Context) {
 	common.Success(c, release)
 }
 
-// ApproveRelease 批准发布并进入排期状态（带审批人校验，并桥接 BPMN 待办任务）
-func (rc *ReleaseController) ApproveRelease(c *gin.Context) {
-	var req struct {
-		Comment string `json:"comment"`
-	}
-	// approve 的审批意见可选，允许空请求体；非空但格式错误的请求仍应拒绝。
-	if c.Request.ContentLength != 0 {
-		if err := c.ShouldBindJSON(&req); err != nil {
-			common.Fail(c, common.BadRequestCode, "请求参数错误: "+err.Error())
-			return
-		}
-	}
-	rc.applyReleaseApproval(c, "approve", req.Comment)
-}
-
-// RejectRelease 拒绝发布（带审批人校验，并桥接 BPMN 待办任务）
-func (rc *ReleaseController) RejectRelease(c *gin.Context) {
-	var req struct {
-		Reason string `json:"reason" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, common.BadRequestCode, "拒绝原因不能为空")
-		return
-	}
-	rc.applyReleaseApproval(c, "reject", req.Reason)
-}
-
-// SubmitTechReview 提交技术评审意见（桥接 release_approval_flow 的 Activity_TechReview，
-// 无关联流程实例时回退为纯业务记录）
+// SubmitTechReview 提交技术评审意见，由 release_approval_flow 的权威
+// Activity_TechReview ProcessTask 和持久化回调执行。
 func (rc *ReleaseController) SubmitTechReview(c *gin.Context) {
 	tenantID, err := middleware.GetTenantID(c)
 	if err != nil || tenantID == 0 {
@@ -248,38 +221,6 @@ func (rc *ReleaseController) SubmitTechReview(c *gin.Context) {
 	}
 	rc.logger.Infow("Release tech review completed",
 		"release_id", releaseID, "tenant_id", tenantID, "user_id", userID)
-	common.Success(c, release)
-}
-
-// applyReleaseApproval 校验身份后委托服务层处理发布审批（含 BPMN 桥接）
-func (rc *ReleaseController) applyReleaseApproval(c *gin.Context, action, comment string) {
-	tenantID, err := middleware.GetTenantID(c)
-	if err != nil || tenantID == 0 {
-		common.Fail(c, common.UnauthorizedCode, "未授权访问")
-		return
-	}
-	userID, err := middleware.GetUserID(c)
-	if err != nil || userID == 0 {
-		common.Fail(c, common.UnauthorizedCode, "未授权访问")
-		return
-	}
-	releaseID, err := strconv.Atoi(c.Param("id"))
-	if err != nil || releaseID <= 0 {
-		common.Fail(c, common.BadRequestCode, "无效的发布ID")
-		return
-	}
-	release, err := rc.releaseService.ApplyReleaseApproval(c.Request.Context(), releaseID, tenantID, userID, action, comment)
-	if err != nil {
-		rc.logger.Errorw("Release approval failed", "error", err, "release_id", releaseID, "action", action)
-		common.Fail(c, common.InternalErrorCode, "发布审批失败: "+err.Error())
-		return
-	}
-	if release == nil {
-		common.Fail(c, common.NotFoundCode, "发布不存在")
-		return
-	}
-	rc.logger.Infow("Release approval completed",
-		"release_id", releaseID, "tenant_id", tenantID, "user_id", userID, "action", action)
 	common.Success(c, release)
 }
 

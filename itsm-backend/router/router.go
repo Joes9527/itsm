@@ -603,12 +603,6 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				tickets.DELETE("/:id/attachments/:attachment_id", middleware.RequireWorkItemRecordClassPermission("delete"), config.TicketAttachmentController.DeleteAttachment)
 			}
 
-			// 我的待审批：聚合当前用户的 BPMN 审批任务
-			// legacy ApprovalController/ApprovalWorkflow 引擎已下线（存量数据已迁移至 BPMN，见 Task 5/6）
-			if config.BPMNWorkflowController != nil {
-				tenant.GET("/my-approvals", middleware.RequirePermission("task", "read"), config.BPMNWorkflowController.ListUserTasks)
-			}
-
 			// 工单流转工作流
 			if config.TicketWorkflowController != nil {
 				tickets.POST("/workflow/accept", middleware.RequirePermission("workflow", "update"), config.TicketWorkflowController.AcceptTicket)
@@ -960,8 +954,6 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				releases.PUT("/:id", middleware.RequirePermission("release", "write"), config.ReleaseController.UpdateRelease)
 				releases.PUT("/:id/status", middleware.RequirePermission("release", "write"), config.ReleaseController.UpdateReleaseStatus)
 				releases.POST("/:id/tech-review", middleware.RequirePermission("release", "write"), config.ReleaseController.SubmitTechReview)
-				releases.POST("/:id/approve", middleware.RequirePermission("release", "approve"), config.ReleaseController.ApproveRelease)
-				releases.POST("/:id/reject", middleware.RequirePermission("release", "approve"), config.ReleaseController.RejectRelease)
 				releases.POST("/:id/rollback", middleware.RequirePermission("release", "rollback"), config.ReleaseController.RollbackRelease)
 				releases.DELETE("/:id", middleware.RequirePermission("release", "delete"), config.ReleaseController.DeleteRelease)
 			}

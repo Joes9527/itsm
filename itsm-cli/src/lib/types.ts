@@ -21,6 +21,10 @@ export interface LoginResponse {
   tenant: TenantContext;
 }
 
+export interface UserTenantsResponse {
+  tenants: TenantContext[];
+}
+
 export interface TenantContext {
   id: number;
   name: string;

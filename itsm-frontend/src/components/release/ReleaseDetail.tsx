@@ -21,7 +21,7 @@ import {
   Modal,
   Input,
 } from 'antd';
-import { ArrowLeft, Clock, CheckCircle, XCircle, Rocket, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Clock, CheckCircle, Rocket, RotateCcw } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
@@ -107,35 +107,30 @@ const ReleaseDetail: React.FC = () => {
     });
   };
 
-  const requestReason = (action: 'reject' | 'rollback') => {
+  const requestRollback = () => {
     let reason = '';
-    const isReject = action === 'reject';
     Modal.confirm({
-      title: isReject ? '拒绝发布' : '回滚发布',
+      title: '回滚发布',
       content: (
         <Input.TextArea
           autoFocus
           rows={4}
-          placeholder={isReject ? '请输入拒绝原因' : '请输入回滚原因'}
+          placeholder='请输入回滚原因'
           onChange={(event) => {
             reason = event.target.value.trim();
           }}
         />
       ),
-      okText: isReject ? '确认拒绝' : '确认回滚',
+      okText: '确认回滚',
       okButtonProps: { danger: true },
       cancelText: '取消',
       onOk: async () => {
         if (!reason) {
-          message.warning(isReject ? '请输入拒绝原因' : '请输入回滚原因');
+          message.warning('请输入回滚原因');
           return Promise.reject();
         }
-        if (isReject) {
-          await ReleaseApi.rejectRelease(Number(id), reason);
-        } else {
-          await ReleaseApi.rollbackRelease(Number(id), reason);
-        }
-        message.success(isReject ? '发布已拒绝' : '发布已回滚');
+        await ReleaseApi.rollbackRelease(Number(id), reason);
+        message.success('发布已回滚');
         await loadDetail();
       },
     });
@@ -339,28 +334,6 @@ const ReleaseDetail: React.FC = () => {
               技术评审
             </Button>
           )}
-          {release.status === 'draft' && (
-            <Button
-              type="primary"
-              icon={<CheckCircle />}
-              onClick={async () => {
-                try {
-                  await ReleaseApi.approveRelease(release.id);
-                  message.success('发布已批准');
-                  await loadDetail();
-                } catch (error) {
-                  message.error('批准发布失败');
-                }
-              }}
-            >
-              批准
-            </Button>
-          )}
-          {release.status === 'draft' && (
-            <Button danger icon={<XCircle />} onClick={() => requestReason('reject')}>
-              拒绝
-            </Button>
-          )}
           {release.status === 'draft' && !release.requiresApproval && (
             <Button
               onClick={async () => {
@@ -405,7 +378,7 @@ const ReleaseDetail: React.FC = () => {
             </Button>
           )}
           {['in-progress', 'completed', 'failed'].includes(release.status) && (
-            <Button danger icon={<RotateCcw />} onClick={() => requestReason('rollback')}>
+            <Button danger icon={<RotateCcw />} onClick={requestRollback}>
               回滚
             </Button>
           )}

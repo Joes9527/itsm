@@ -14,6 +14,7 @@ test('CLI uses one persistent cookie session with CSRF, refresh rotation and log
   let sawRotatedSession = false;
   let sawLogoutCSRF = false;
   let sawCanonicalBPMNDecision = false;
+  let tenantContextGets = 0;
 
   const server = createServer((request, response) => {
     assert.equal(request.headers.authorization, undefined);
@@ -29,8 +30,18 @@ test('CLI uses one persistent cookie session with CSRF, refresh rotation and log
         message: 'success',
         data: {
           user: { id: 7, username: 'admin', name: 'Admin', email: 'a@example.com', role: 'super_admin', tenantId: 3 },
-          tenant: { id: 3, name: 'Tenant A', code: 'tenant-a' },
         },
+      }));
+      return;
+    }
+
+    if (request.url === '/api/v1/auth/tenants' && request.method === 'GET') {
+      tenantContextGets += 1;
+      assert.match(request.headers.cookie ?? '', /access_token=access-one/);
+      response.end(JSON.stringify({
+        code: 0,
+        message: 'success',
+        data: { tenants: [{ id: 3, name: 'Tenant A', code: 'tenant-a' }] },
       }));
       return;
     }
@@ -115,6 +126,8 @@ test('CLI uses one persistent cookie session with CSRF, refresh rotation and log
 
   const login = await client.login({ username: 'admin', password: 'admin123' });
   assert.equal(login.user.username, 'admin');
+  assert.equal(login.tenant.id, login.user.tenantId);
+  assert.equal(tenantContextGets, 1);
   assert.equal('token' in login, false);
   assert.equal('access_token' in login, false);
   assert.equal('refresh_token' in login, false);

@@ -16,7 +16,7 @@ import (
 // TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd 是阶段流转原生化（Track4
 // 收尾）的 change 侧端到端回归：change_normal_flow 的排期/实施/验证/关闭节点此前只能靠
 // approvalBridge 完成，现在 completeChangeStageTasks 直接用 processEngine 完成同样的节点，
-// 不再经过 BPMNApprovalBridge。
+// 不再经过已删除的独立审批入口。
 //
 //	TransitionStatus(in_progress) → 原生完成 Activity_Schedule + Activity_Implement
 //	TransitionStatus(completed)   → 原生完成 Activity_Verify（带 verify_passed）+ Activity_Close

@@ -2,10 +2,14 @@ package service
 
 import (
 	"context"
+	"strconv"
+	"strings"
+	"sync"
 	"testing"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/service/bpmn"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -155,7 +159,7 @@ func TestReleaseService_GetReleaseByID(t *testing.T) {
 	})
 }
 
-func TestReleaseService_UpdateReleaseStatus(t *testing.T) {
+func TestReleaseService_UpdateReleaseStatusFailsClosedWithoutAuthoritativeWorkflow(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
 
@@ -192,28 +196,112 @@ func TestReleaseService_UpdateReleaseStatus(t *testing.T) {
 	}, testUser.ID, testTenant.ID)
 	require.NoError(t, err)
 
-	// 测试更新状态
-	t.Run("更新为已计划状态", func(t *testing.T) {
-		result, err := releaseService.UpdateReleaseStatus(ctx, release.ID, testTenant.ID, testUser.ID, "scheduled")
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-		assert.Equal(t, "scheduled", result.Status)
-	})
+	_, err = releaseService.UpdateReleaseStatus(ctx, release.ID, testTenant.ID, testUser.ID, "scheduled")
+	require.ErrorContains(t, err, "workflow engine is unavailable")
+	require.Equal(t, "draft", client.Release.GetX(ctx, release.ID).Status)
 
-	t.Run("更新为进行中状态", func(t *testing.T) {
-		result, err := releaseService.UpdateReleaseStatus(ctx, release.ID, testTenant.ID, testUser.ID, "in-progress")
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-		assert.Equal(t, "in-progress", result.Status)
-	})
+	engine := NewCustomProcessEngine(client, logger)
+	releaseService.SetProcessEngine(engine)
+	_, err = releaseService.UpdateReleaseStatus(ctx, release.ID, testTenant.ID, testUser.ID, "scheduled")
+	require.ErrorContains(t, err, "workflow instance not found")
+	require.Equal(t, "draft", client.Release.GetX(ctx, release.ID).Status)
 
-	t.Run("更新为已完成状态", func(t *testing.T) {
-		result, err := releaseService.UpdateReleaseStatus(ctx, release.ID, testTenant.ID, testUser.ID, "completed")
-		assert.NoError(t, err)
-		assert.NotNil(t, result)
-		assert.Equal(t, "completed", result.Status)
-		assert.NotNil(t, result.ActualReleaseDate)
+	_, err = NewBPMNTemplateService(client).LoadAndDeployTemplates(ctx, testTenant.ID)
+	require.NoError(t, err)
+	workflowCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, testTenant.ID)
+	workflowCtx = WithTrustedBPMNTenantContext(workflowCtx, testTenant.ID)
+	_, err = engine.StartProcess(
+		workflowCtx, "release_approval_flow", "release:"+strconv.Itoa(release.ID),
+		string(dto.BusinessTypeRelease), release.ID, map[string]interface{}{"triggered_by": strconv.Itoa(testUser.ID)},
+	)
+	require.NoError(t, err)
+	_, err = releaseService.UpdateReleaseStatus(ctx, release.ID, testTenant.ID, testUser.ID, "scheduled")
+	require.ErrorContains(t, err, "workflow task Activity_Schedule not found")
+	require.Equal(t, "draft", client.Release.GetX(ctx, release.ID).Status)
+}
+
+func TestReleaseService_ApplyReleaseWorkflowCallbackOwnsLifecycleMutation(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", testDSN())
+	t.Cleanup(func() { _ = client.Close() })
+	ctx := context.Background()
+	tenant := client.Tenant.Create().
+		SetName("Release callback tenant").SetCode("release-callback").
+		SetDomain("release-callback.example.com").SetStatus("active").SaveX(ctx)
+	user := client.User.Create().
+		SetUsername("release-callback-user").SetEmail("release-callback@example.com").
+		SetName("Release callback user").SetPasswordHash("x").SetActive(true).
+		SetTenantID(tenant.ID).SaveX(ctx)
+	entity := client.Release.Create().
+		SetReleaseNumber("REL-CALLBACK-1").SetTitle("Callback authority").
+		SetStatus(string(dto.ReleaseStatusDraft)).SetCreatedBy(user.ID).SetTenantID(tenant.ID).
+		SaveX(ctx)
+	svc := NewReleaseService(client, zaptest.NewLogger(t).Sugar())
+
+	first, err := svc.ApplyReleaseWorkflowCallback(ctx, bpmn.ReleaseWorkflowCommand{
+		ReleaseID: entity.ID, TenantID: tenant.ID,
+		Action: bpmn.ReleaseWorkflowActionTechReview, Comment: "通过",
 	})
+	require.NoError(t, err)
+	assert.True(t, first.Changed)
+
+	retry, err := svc.ApplyReleaseWorkflowCallback(ctx, bpmn.ReleaseWorkflowCommand{
+		ReleaseID: entity.ID, TenantID: tenant.ID,
+		Action: bpmn.ReleaseWorkflowActionTechReview, Comment: "通过",
+	})
+	require.NoError(t, err)
+	assert.False(t, retry.Changed)
+	assert.Equal(t, 1, strings.Count(client.Release.GetX(ctx, entity.ID).ReleaseNotes, "[技术评审] 通过"))
+
+	_, err = svc.ApplyReleaseWorkflowCallback(ctx, bpmn.ReleaseWorkflowCommand{
+		ReleaseID: entity.ID, TenantID: tenant.ID,
+		Action: bpmn.ReleaseWorkflowActionStatus, TargetStatus: string(dto.ReleaseStatusCompleted),
+	})
+	require.ErrorContains(t, err, "非法的发布状态转换")
+	assert.Equal(t, string(dto.ReleaseStatusDraft), client.Release.GetX(ctx, entity.ID).Status)
+}
+
+func TestReleaseService_ApplyReleaseWorkflowCallbackConcurrentTerminalTransitionsUseCAS(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", testDSN())
+	t.Cleanup(func() { _ = client.Close() })
+	ctx := context.Background()
+	tenant := client.Tenant.Create().
+		SetName("Release CAS tenant").SetCode("release-cas").
+		SetDomain("release-cas.example.com").SetStatus("active").SaveX(ctx)
+	user := client.User.Create().
+		SetUsername("release-cas-user").SetEmail("release-cas@example.com").
+		SetName("Release CAS user").SetPasswordHash("x").SetActive(true).
+		SetTenantID(tenant.ID).SaveX(ctx)
+	entity := client.Release.Create().
+		SetReleaseNumber("REL-CAS-1").SetTitle("CAS authority").
+		SetStatus(string(dto.ReleaseStatusInProgress)).SetCreatedBy(user.ID).SetTenantID(tenant.ID).
+		SaveX(ctx)
+	svc := NewReleaseService(client, zaptest.NewLogger(t).Sugar())
+
+	statuses := []string{string(dto.ReleaseStatusCompleted), string(dto.ReleaseStatusFailed)}
+	errs := make(chan error, len(statuses))
+	var start sync.WaitGroup
+	start.Add(1)
+	for _, status := range statuses {
+		status := status
+		go func() {
+			start.Wait()
+			_, err := svc.ApplyReleaseWorkflowCallback(ctx, bpmn.ReleaseWorkflowCommand{
+				ReleaseID: entity.ID, TenantID: tenant.ID,
+				Action: bpmn.ReleaseWorkflowActionStatus, TargetStatus: status,
+			})
+			errs <- err
+		}()
+	}
+	start.Done()
+
+	successes := 0
+	for range statuses {
+		if err := <-errs; err == nil {
+			successes++
+		}
+	}
+	assert.Equal(t, 1, successes, "competing terminal transitions must not both commit")
+	assert.Contains(t, statuses, client.Release.GetX(ctx, entity.ID).Status)
 }
 
 func TestReleaseService_GetReleaseStats(t *testing.T) {

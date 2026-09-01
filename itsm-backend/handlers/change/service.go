@@ -225,7 +225,7 @@ func (s *Service) SubmitChange(ctx context.Context, changeID, tenantID, submitte
 		}
 
 		// 幂等保护：同一个 change 不应该有两个并行的运行中流程实例（比如重复点击提交、
-		// 或者前端重试）。businessKey 的约定跟 BPMNApprovalBridge.findPendingApprovalTask
+		// 或者前端重试）。businessKey 的约定跟 canonical ProcessTask lookup
 		// 保持一致（"change:{workItemID}"），查询逻辑复用 ent 直接查，不新增一层抽象。
 		businessKey := fmt.Sprintf("change:%d", workItemID)
 		exists, err := s.entClient.ProcessInstance.Query().
@@ -880,8 +880,8 @@ func changeStageTasks(targetStatus string) []changeStageTask {
 
 // completeChangeStageTasks 变更阶段流转（start/complete）的原生 BPMN 完成：依次完成
 // change_normal_flow 里排期/实施/验证/关闭节点，让流程随域状态推进——不经
-// BPMNApprovalBridge，直接用 processEngine，跟 completeChangeApprovalTask 同一套
-// 引擎依赖。语义特意保持跟旧桥接一致：变更没有关联的运行中流程实例、或指定节点当前
+// canonical ProcessTask command，直接使用注入的 processEngine，跟 completeChangeApprovalTask 同一套
+// 引擎依赖。变更没有关联的运行中流程实例、或指定节点当前
 // 不是待办任务（已完成/流程走了别的分支），都不是错误，跳过继续下一个节点；节点存在
 // 但 CompleteTask 调用失败才中止转换，避免变更状态和流程状态分叉。
 func (s *Service) completeChangeStageTasks(ctx context.Context, tenantID, actorUserID, changeID int, targetStatus string) error {

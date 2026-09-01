@@ -231,38 +231,6 @@ func TestTaskServiceCompleteTaskByID_DispatchesToInjectedTicketService(t *testin
 		"CompleteTaskByID（HTTP 完成任务接口的实际入口）同样必须复用注入过的引擎")
 }
 
-// TestBPMNApprovalBridge_DispatchesToInjectedTicketService 覆盖 Critical 的另一半：
-// BPMNApprovalBridge 此前也在三个方法里各自 NewCustomProcessEngine，业务侧审批/阶段
-// 桥接完成 UserTask 时同样拿不到注入过的 registry。
-func TestBPMNApprovalBridge_DispatchesToInjectedTicketService(t *testing.T) {
-	client, engine, ctx, tenantID := setupTicketCallbackEngine(t)
-	requesterID := createRequester(t, client, ctx, tenantID, "ts-scope-3")
-	ctx = WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: requesterID, TenantID: tenantID, CanUpdateAllTasks: true})
-
-	tkt, err := client.Ticket.Create().
-		SetTitle("审批桥接注入回归").
-		SetTicketNumber("T-TS-SCOPE-3").
-		SetStatus("open").
-		SetRequesterID(requesterID).
-		SetTenantID(tenantID).
-		Save(ctx)
-	require.NoError(t, err)
-
-	driveTicketFlowToHandleTask(t, client, engine, ctx, tkt.ID)
-
-	// 与 bootstrap 一致：桥接拿到的是同一个已装配的引擎。
-	bridge := NewBPMNApprovalBridge(client, zap.NewNop().Sugar(), engine)
-	handled, err := bridge.CompleteBusinessStageTask(ctx, tenantID, requesterID, "ticket", tkt.ID,
-		"Activity_Handle", map[string]interface{}{"new_status": "in_progress"})
-	require.NoError(t, err)
-	require.True(t, handled, "存在待办的 Activity_Handle 任务时桥接必须接管")
-
-	updated, err := client.Ticket.Get(ctx, tkt.ID)
-	require.NoError(t, err)
-	require.Equal(t, "in_progress", updated.Status,
-		"审批/阶段桥接完成 UserTask 时必须复用注入过的引擎，否则业务副作用被静默丢弃")
-}
-
 // TestTaskService_ReusesEngineInstanceAndRegistry 是结构性回归：TaskService() 必须
 // 返回引擎自身持有的那个任务服务实例，并且它推进流程时用的就是这个引擎的
 // CallbackRegistry。这条断言同时覆盖 Incident 侧的注入——

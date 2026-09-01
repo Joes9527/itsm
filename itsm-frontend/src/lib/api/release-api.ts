@@ -141,17 +141,9 @@ export class ReleaseApi {
     return httpClient.put<Release>(`/api/v1/releases/${id}/status`, { status });
   }
 
-  static async approveRelease(id: number): Promise<Release> {
-    return httpClient.post<Release>(`/api/v1/releases/${id}/approve`);
-  }
-
-  // 提交技术评审意见（桥接 release_approval_flow 的技术评审节点）
+  // 提交 release_approval_flow 的唯一技术评审任务
   static async submitTechReview(id: number, comment: string): Promise<Release> {
     return httpClient.post<Release>(`/api/v1/releases/${id}/tech-review`, { comment });
-  }
-
-  static async rejectRelease(id: number, reason: string): Promise<Release> {
-    return httpClient.post<Release>(`/api/v1/releases/${id}/reject`, { reason });
   }
 
   static async rollbackRelease(id: number, reason: string): Promise<Release> {
