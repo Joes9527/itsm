@@ -4,6 +4,7 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { loginAndReturn } from './auth-utils';
 
 test.describe('公开页面 - 无需认证', () => {
   test('should show login page', async ({ page }) => {
@@ -19,15 +20,7 @@ test.describe('公开页面 - 无需认证', () => {
 
 test.describe('导航测试 - 需要登录', () => {
   test.beforeEach(async ({ page }) => {
-    // 登录
-    await page.goto('/login');
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForSelector('.ant-input, input.ant-input', { timeout: 15000 });
-    const inputs = page.locator('input.ant-input');
-    await inputs.nth(0).fill('admin');
-    await inputs.nth(1).fill('admin123');
-    await page.click('button[type="submit"]');
-    await page.waitForURL(/\/(dashboard|tickets|incidents)/, { timeout: 20000 });
+    await loginAndReturn(page);
   });
 
   test('should have sidebar navigation menu', async ({ page }) => {
@@ -64,14 +57,7 @@ test.describe('导航测试 - 需要登录', () => {
 
 test.describe('响应式设计 - 需要登录', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/login');
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForSelector('.ant-input, input.ant-input', { timeout: 15000 });
-    const inputs = page.locator('input.ant-input');
-    await inputs.nth(0).fill('admin');
-    await inputs.nth(1).fill('admin123');
-    await page.click('button[type="submit"]');
-    await page.waitForURL(/\/(dashboard|tickets|incidents)/, { timeout: 20000 });
+    await loginAndReturn(page);
   });
 
   test('should display correctly on desktop', async ({ page }) => {

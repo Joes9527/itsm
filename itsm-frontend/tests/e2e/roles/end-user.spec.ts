@@ -52,7 +52,7 @@ test.describe('US1: end_user 提单到关闭闭环', () => {
     });
 
     const ticketId = createResp.data.data?.id;
-    expect(ticketId).toBeDefined();
+    expect(ticketId).toBeGreaterThan(0);
 
     // 获取详情
     const detailResp = await apiGet(role, `/api/v1/tickets/${ticketId}`);

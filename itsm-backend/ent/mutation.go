@@ -98607,7 +98607,6 @@ type ReleaseMutation struct {
 	tags                      *[]string
 	appendtags                []string
 	is_emergency              *bool
-	requires_approval         *bool
 	created_at                *time.Time
 	updated_at                *time.Time
 	clearedFields             map[string]struct{}
@@ -99870,42 +99869,6 @@ func (m *ReleaseMutation) ResetIsEmergency() {
 	m.is_emergency = nil
 }
 
-// SetRequiresApproval sets the "requires_approval" field.
-func (m *ReleaseMutation) SetRequiresApproval(b bool) {
-	m.requires_approval = &b
-}
-
-// RequiresApproval returns the value of the "requires_approval" field in the mutation.
-func (m *ReleaseMutation) RequiresApproval() (r bool, exists bool) {
-	v := m.requires_approval
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldRequiresApproval returns the old "requires_approval" field's value of the Release entity.
-// If the Release object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ReleaseMutation) OldRequiresApproval(ctx context.Context) (v bool, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldRequiresApproval is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldRequiresApproval requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldRequiresApproval: %w", err)
-	}
-	return oldValue.RequiresApproval, nil
-}
-
-// ResetRequiresApproval resets all changes to the "requires_approval" field.
-func (m *ReleaseMutation) ResetRequiresApproval() {
-	m.requires_approval = nil
-}
-
 // SetCreatedAt sets the "created_at" field.
 func (m *ReleaseMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -100012,7 +99975,7 @@ func (m *ReleaseMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ReleaseMutation) Fields() []string {
-	fields := make([]string, 0, 26)
+	fields := make([]string, 0, 25)
 	if m.release_number != nil {
 		fields = append(fields, release.FieldReleaseNumber)
 	}
@@ -100082,9 +100045,6 @@ func (m *ReleaseMutation) Fields() []string {
 	if m.is_emergency != nil {
 		fields = append(fields, release.FieldIsEmergency)
 	}
-	if m.requires_approval != nil {
-		fields = append(fields, release.FieldRequiresApproval)
-	}
 	if m.created_at != nil {
 		fields = append(fields, release.FieldCreatedAt)
 	}
@@ -100145,8 +100105,6 @@ func (m *ReleaseMutation) Field(name string) (ent.Value, bool) {
 		return m.Tags()
 	case release.FieldIsEmergency:
 		return m.IsEmergency()
-	case release.FieldRequiresApproval:
-		return m.RequiresApproval()
 	case release.FieldCreatedAt:
 		return m.CreatedAt()
 	case release.FieldUpdatedAt:
@@ -100206,8 +100164,6 @@ func (m *ReleaseMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldTags(ctx)
 	case release.FieldIsEmergency:
 		return m.OldIsEmergency(ctx)
-	case release.FieldRequiresApproval:
-		return m.OldRequiresApproval(ctx)
 	case release.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case release.FieldUpdatedAt:
@@ -100381,13 +100337,6 @@ func (m *ReleaseMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetIsEmergency(v)
-		return nil
-	case release.FieldRequiresApproval:
-		v, ok := value.(bool)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetRequiresApproval(v)
 		return nil
 	case release.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -100658,9 +100607,6 @@ func (m *ReleaseMutation) ResetField(name string) error {
 		return nil
 	case release.FieldIsEmergency:
 		m.ResetIsEmergency()
-		return nil
-	case release.FieldRequiresApproval:
-		m.ResetRequiresApproval()
 		return nil
 	case release.FieldCreatedAt:
 		m.ResetCreatedAt()

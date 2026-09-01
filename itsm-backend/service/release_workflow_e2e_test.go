@@ -7,7 +7,6 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/processapprovaldecision"
-	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
@@ -68,10 +67,9 @@ func TestReleaseFlow_ProcessTaskDecisionDrivesLifecycleEndToEnd(t *testing.T) {
 		GetHandler("release_service_handler").(*bpmn.ReleaseServiceTaskHandler).
 		SetReleaseService(releaseService)
 	releaseEntity, err := releaseService.CreateRelease(ctx, &dto.CreateReleaseRequest{
-		ReleaseNumber:    "REL-BRIDGE-1",
-		Title:            "流程端到端发布",
-		Type:             "minor",
-		RequiresApproval: true,
+		ReleaseNumber: "REL-BRIDGE-1",
+		Title:         "流程端到端发布",
+		Type:          "minor",
 	}, creator.ID, tenant.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "draft", releaseEntity.Status)
@@ -188,10 +186,9 @@ func TestReleaseFlow_RejectApproval_EndsFlowAndCancelsRelease(t *testing.T) {
 		GetHandler("release_service_handler").(*bpmn.ReleaseServiceTaskHandler).
 		SetReleaseService(releaseService)
 	releaseEntity, err := releaseService.CreateRelease(ctx, &dto.CreateReleaseRequest{
-		ReleaseNumber:    "REL-REJECT-1",
-		Title:            "拒绝路径发布",
-		Type:             "minor",
-		RequiresApproval: true,
+		ReleaseNumber: "REL-REJECT-1",
+		Title:         "拒绝路径发布",
+		Type:          "minor",
 	}, creator.ID, tenant.ID)
 	require.NoError(t, err)
 
@@ -255,10 +252,9 @@ func TestReleaseService_CreateRelease_TriggersWorkflow(t *testing.T) {
 	releaseService.SetProcessTriggerService(triggerSvc)
 
 	releaseEntity, err := releaseService.CreateRelease(ctx, &dto.CreateReleaseRequest{
-		ReleaseNumber:    "REL-TRIGGER-1",
-		Title:            "自动触发发布",
-		Type:             "minor",
-		RequiresApproval: true,
+		ReleaseNumber: "REL-TRIGGER-1",
+		Title:         "自动触发发布",
+		Type:          "minor",
 	}, creator.ID, tenant.ID)
 	require.NoError(t, err)
 
@@ -270,11 +266,11 @@ func TestReleaseService_CreateRelease_TriggersWorkflow(t *testing.T) {
 	assert.Equal(t, "release_approval_flow", instance.ProcessDefinitionKey)
 	assert.Equal(t, "Activity_TechReview", instance.CurrentActivityID,
 		"流程应停在第一个节点（技术评审）")
-	assert.Equal(t, true, instance.Variables["requires_approval"],
-		"requiresApproval must be a typed BPMN routing variable")
+	assert.NotContains(t, instance.Variables, "requires_approval",
+		"release approval routing must be owned by the BPMN definition")
 }
 
-func TestReleaseFlow_NoApprovalUsesExplicitBPMNGatewayToSchedule(t *testing.T) {
+func TestReleaseFlow_BPMNDefinitionAlwaysCreatesApprovalTask(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	t.Cleanup(func() { _ = client.Close() })
 	ctx := context.Background()
@@ -297,28 +293,22 @@ func TestReleaseFlow_NoApprovalUsesExplicitBPMNGatewayToSchedule(t *testing.T) {
 		GetHandler("release_service_handler").(*bpmn.ReleaseServiceTaskHandler).SetReleaseService(svc)
 
 	created, err := svc.CreateRelease(ctx, &dto.CreateReleaseRequest{
-		ReleaseNumber: "REL-NO-APPROVAL", Title: "BPMN optional approval", Type: "minor",
-		RequiresApproval: false,
+		ReleaseNumber: "REL-BPMN-APPROVAL", Title: "BPMN authoritative approval", Type: "minor",
 	}, creator.ID, tenant.ID)
 	require.NoError(t, err)
 	instance := client.ProcessInstance.Query().Where(
 		processinstance.BusinessType("release"), processinstance.BusinessID(created.ID),
 	).OnlyX(ctx)
-	require.Equal(t, false, instance.Variables["requires_approval"])
+	require.NotContains(t, instance.Variables, "requires_approval")
 
 	_, err = svc.ApplyReleaseTechReview(ctx, created.ID, tenant.ID, creator.ID, "无需人工审批")
 	require.NoError(t, err)
 	instance = client.ProcessInstance.GetX(ctx, instance.ID)
-	require.Equal(t, "Activity_Schedule", instance.CurrentActivityID)
-	require.False(t, client.ProcessTask.Query().Where(
-		processtask.ProcessInstanceID(instance.ID), processtask.TaskDefinitionKey("Activity_Approval"),
-	).ExistX(ctx), "BPMN false branch must not create an approval task")
+	require.Equal(t, "Activity_Approval", instance.CurrentActivityID)
 	require.True(t, client.ProcessTask.Query().Where(
+		processtask.ProcessInstanceID(instance.ID), processtask.TaskDefinitionKey("Activity_Approval"),
+	).ExistX(ctx), "the BPMN definition must expose the canonical approval task")
+	require.False(t, client.ProcessTask.Query().Where(
 		processtask.ProcessInstanceID(instance.ID), processtask.TaskDefinitionKey("Activity_Schedule"),
-	).ExistX(ctx), "BPMN false branch must expose the canonical schedule command")
-	require.True(t, client.ProcessAuditLog.Query().Where(
-		processauditlog.ProcessInstanceID(instance.ID),
-		processauditlog.Action(AuditActionOptionalStepSkipped),
-		processauditlog.ActivityID("Flow_ApprovalSkipped"),
-	).ExistX(ctx), "definition-declared optional approval skip must be observable")
+	).ExistX(ctx), "schedule is unavailable until the BPMN approval decision completes")
 }

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { loginAndReturn } from './auth-utils';
+import { DEFAULT_LOGIN, loginAndReturn } from './auth-utils';
 
 function getNumberEnv(name: string, fallback: number) {
   const raw = process.env[name];
@@ -9,13 +9,11 @@ function getNumberEnv(name: string, fallback: number) {
 }
 
 async function getHeapUsedBytes(page: import('@playwright/test').Page) {
-  const result = await page
-    .evaluate(() => {
-      const perf: any = performance as any;
-      const mem = perf && perf.memory ? perf.memory : null;
-      return mem ? { usedJSHeapSize: mem.usedJSHeapSize, totalJSHeapSize: mem.totalJSHeapSize } : null;
-    })
-    .catch(() => null);
+  const result = await page.evaluate(() => {
+    const perf: any = performance as any;
+    const mem = perf && perf.memory ? perf.memory : null;
+    return mem ? { usedJSHeapSize: mem.usedJSHeapSize, totalJSHeapSize: mem.totalJSHeapSize } : null;
+  });
   return result?.usedJSHeapSize ?? null;
 }
 
@@ -27,7 +25,7 @@ test.describe('Stability - Soak', () => {
     const maxGrowthMb = getNumberEnv('SOAK_MAX_HEAP_GROWTH_MB', 50);
     const deadline = Date.now() + minutes * 60_000;
 
-    await loginAndReturn(page, 'admin', 'admin123');
+    await loginAndReturn(page, DEFAULT_LOGIN);
     await page.waitForLoadState('networkidle');
 
     const startHeap = await getHeapUsedBytes(page);
@@ -42,7 +40,7 @@ test.describe('Stability - Soak', () => {
 
       const firstRow = page.locator('.ant-table-row, table tbody tr').first();
       if (await firstRow.count()) {
-        await firstRow.click().catch(() => {});
+        await firstRow.click();
         await page.waitForLoadState('networkidle');
       }
 

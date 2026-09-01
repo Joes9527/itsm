@@ -4,54 +4,12 @@
  */
 
 import { test, expect } from '@playwright/test';
-
-/**
- * 辅助函数：执行登录
- */
-async function login(page: any) {
-  await page.goto('/login');
-  await page.waitForLoadState('domcontentloaded');
-  await page.waitForSelector('.ant-input, input.ant-input', { timeout: 15000 });
-  const inputs = page.locator('input.ant-input');
-  await inputs.nth(0).fill('admin');
-  await inputs.nth(1).fill('admin123');
-  await page.click('button[type="submit"]');
-
-  // 等待页面跳转或 dashboard 出现
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(1000);
-
-  await page.waitForURL(/\/(dashboard|tickets|incidents)/, { timeout: 20000 }).catch(() => {
-    // 如果超时，检查是否仍在登录页
-    if (page.url().includes('/login')) {
-      throw new Error('登录失败，仍在登录页');
-    }
-  });
-}
+import { loginAndReturn } from './auth-utils';
 
 test.describe('ITSM 全流程测试 - 需要登录', () => {
   // 使用 beforeEach 进行登录，确保每个测试都是独立认证状态
   test.beforeEach(async ({ page }) => {
-    // 先导航到登录页，确保在正确的上下文中
-    await page.goto('/login');
-    await page.waitForLoadState('domcontentloaded');
-
-    // 清除之前的认证状态
-    await page.context().clearCookies();
-    await page.evaluate(() => {
-      try {
-        localStorage.clear();
-        document.cookie.split(';').forEach(c => {
-          const name = c.replace(/^ +/, '').replace(/=.*/, '');
-          if (name) {
-            document.cookie = name + '=;expires=' + new Date().toUTCString() + ';path=/';
-          }
-        });
-      } catch (e) {
-        // Ignore storage errors
-      }
-    });
-    await login(page);
+    await loginAndReturn(page);
   });
 
   test('should login successfully and redirect to dashboard', async ({ page }) => {

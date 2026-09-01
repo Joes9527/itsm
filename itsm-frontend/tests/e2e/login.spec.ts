@@ -4,6 +4,7 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { DEFAULT_LOGIN, loginThroughForm } from './auth-utils';
 
 test.describe('Login Page - 无需认证', () => {
   test.beforeEach(async ({ page }) => {
@@ -43,23 +44,7 @@ test.describe('Login Page - 无需认证', () => {
   });
 
   test('should redirect to dashboard on successful login', async ({ page }) => {
-    // Ant Design v5 Input 使用 React synthetic onChange，Playwright fill/pressSequentially
-    // 无法触发 React fiber 事件。使用 fetch 直接调用 API，验证完整登录流程。
-    const loginResp = await page.evaluate(async () => {
-      const resp = await fetch('http://localhost:3000/api/v1/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: 'tenant1admin', password: 'ta123456' }),
-        credentials: 'include',
-      });
-      return { status: resp.status, ok: resp.ok };
-    });
-
-    expect(loginResp.ok).toBe(true);
-    expect(loginResp.status).toBe(200);
-
-    // 登录成功后，跳转到 dashboard
-    await page.goto('/dashboard');
+    await loginThroughForm(page, DEFAULT_LOGIN);
 
     // 验证 dashboard 页面正常加载（不在登录页）
     await expect(page).not.toHaveURL(/\/login/, { timeout: 20000 });
@@ -76,24 +61,7 @@ test.describe('Dashboard Page - 需要认证', () => {
   });
 
   test('should display dashboard after login', async ({ page }) => {
-    // 先导航到登录页，建立浏览器上下文，再调用 API
-    await page.goto('http://localhost:3000/login');
-
-    // 直接调用登录 API（绕过 Ant Design v5 表单的 React synthetic onChange 限制）
-    const loginResp = await page.evaluate(async () => {
-      const resp = await fetch('http://localhost:3000/api/v1/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: 'tenant1admin', password: 'ta123456' }),
-        credentials: 'include',
-      });
-      return { status: resp.status, ok: resp.ok };
-    });
-
-    expect(loginResp.ok).toBe(true);
-    expect(loginResp.status).toBe(200);
-
-    // 登录后访问 dashboard
+    await loginThroughForm(page, DEFAULT_LOGIN);
     await page.goto('/dashboard');
     await page.waitForLoadState('networkidle');
 

@@ -1063,36 +1063,6 @@ func (e *CustomProcessEngine) executeStep(ctx context.Context, instance *ent.Pro
 		)
 	}
 
-	if skippedStep := selectedFlow.OptionalSkip(); skippedStep != "" {
-		actorID, _ := numericInt(instance.Variables["triggered_by"])
-		if err := e.auditService.RecordAudit(ctx, &AuditContext{
-			ProcessInstanceID:    instance.ID,
-			ProcessInstanceKey:   instance.ProcessInstanceID,
-			ProcessDefinitionKey: instance.ProcessDefinitionKey,
-			ProcessDefinitionID:  instance.ProcessDefinitionID,
-			ActivityID:           selectedFlow.ID,
-			ActivityName:         skippedStep,
-			ActivityType:         ActivityTypeGateway,
-			Action:               AuditActionOptionalStepSkipped,
-			UserID:               actorID,
-			VariablesAfter:       variables,
-			Comment:              "BPMN definition declared this step optional",
-			TenantID:             instance.TenantID,
-			Metadata: map[string]interface{}{
-				"skipped_step": skippedStep,
-				"source_ref":   selectedFlow.SourceRef,
-				"target_ref":   selectedFlow.TargetRef,
-			},
-		}); err != nil {
-			return fmt.Errorf("record optional BPMN step skip: %w", err)
-		}
-		e.logger.Warnw("BPMN optional step skipped by declared sequence flow",
-			"process_instance_id", instance.ProcessInstanceID,
-			"flow_id", selectedFlow.ID,
-			"skipped_step", skippedStep,
-		)
-	}
-
 	return e.handleElement(ctx, instance, process, selectedFlow.TargetRef)
 }
 

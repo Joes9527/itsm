@@ -6,14 +6,13 @@
  * npx playwright test --config=playwright.screenshot.config.ts
  */
 
-import { test, devices, chromium } from '@playwright/test';
+import { test } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
+import { DEFAULT_LOGIN, loginThroughForm } from './auth-utils';
 
 const CONFIG = {
   baseURL: 'http://localhost:3000',
-  username: 'admin',
-  password: 'admin123',
   outputDir: path.join(__dirname, '..', '..', 'docs', 'images'),
 };
 
@@ -49,13 +48,7 @@ test.describe('ITSM Screenshots', () => {
   });
 
   test('capture dashboard', async ({ page }) => {
-    // Login first
-    await page.goto(`${CONFIG.baseURL}/login`);
-    await page.waitForLoadState('networkidle');
-    await page.fill('input[type="text"], input[name="username"]', CONFIG.username);
-    await page.fill('input[type="password"]', CONFIG.password);
-    await page.click('button[type="submit"]');
-    await page.waitForURL('**/dashboard', { timeout: 10000 });
+    await loginThroughForm(page, DEFAULT_LOGIN);
 
     // Capture dashboard
     await page.goto(`${CONFIG.baseURL}/dashboard`);

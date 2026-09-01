@@ -36,7 +36,7 @@ import {
 } from 'antd';
 import { UserApi, type User } from '@/lib/api/user-api';
 import { RoleAPI } from '@/lib/api/role-api';
-import { useAuthStore, useAuthStoreHydration } from '@/lib/store/auth-store';
+import { useAuthStore } from '@/lib/store/auth-store';
 import { departmentService, type Department } from '@/lib/services/department-service';
 import OrgDepartmentTree, { findDepartmentById, buildDeptTreeSelectData } from '@/components/common/OrgDepartmentTree';
 
@@ -47,8 +47,6 @@ const UserManagement: React.FC = () => {
   const { token } = theme.useToken();
   const { message } = App.useApp();
   const { currentTenant } = useAuthStore();
-  useAuthStoreHydration();
-
   // 状态管理
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);

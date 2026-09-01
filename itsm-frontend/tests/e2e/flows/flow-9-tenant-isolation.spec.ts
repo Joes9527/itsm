@@ -34,7 +34,7 @@ test.describe('FLOW-9: 多租户隔离验证', () => {
 
     expect(createResp.status).toBe(200);
     const ticketId = createResp.data.data?.id;
-    expect(ticketId).toBeDefined();
+    expect(ticketId).toBeGreaterThan(0);
 
     // Step 4: 客户端 tenant_id 不能覆盖认证租户。
     const crossTenantResp = await apiGet(tenantAdminRole, `/api/v1/tickets?tenant_id=99999`);

@@ -1,20 +1,12 @@
 // itsm-frontend/tests/e2e/business-flows/ticket-lifecycle.spec.ts
 import { test, expect } from '@playwright/test';
-import { loginAs, logout } from '../utils/test-utils';
+import { loginAs } from '../utils/test-utils';
 import { TicketPage } from '../utils/page-objects/TicketPage';
 
 test.describe('工单完整生命周期测试', () => {
 
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/login');
-    await logout(page).catch(() => {});
-  });
-
   test('工单创建页面加载', async ({ page }) => {
     await loginAs(page, 'admin');
-
-    // 等待登录完成
-    await page.waitForURL(/\/(dashboard|tickets|incidents|\/)$/, { timeout: 15000 }).catch(() => {});
 
     // 导航到创建页面
     await page.goto('/tickets/create');
@@ -41,7 +33,7 @@ test.describe('工单完整生命周期测试', () => {
     await ticketPage.goto();
 
     // 检查表格是否存在
-    const tableExists = await page.locator('table').isVisible().catch(() => false);
+    const tableExists = await page.locator('table').isVisible();
     if (!tableExists) {
       test.skip();
       return;

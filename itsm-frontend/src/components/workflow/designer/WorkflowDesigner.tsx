@@ -11,7 +11,6 @@ import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 import { UserApi } from '@/lib/api/user-api';
 import { RoleAPI } from '@/lib/api/role-api';
 import { GroupAPI } from '@/lib/api/group-api';
-import { httpClient } from '@/lib/api/http-client';
 
 import { WorkflowDesignerContext } from './WorkflowContext';
 import WorkflowToolbar from './WorkflowToolbar';
@@ -235,8 +234,7 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
   const loadGroupList = async () => {
     setLoadingGroups(true);
     try {
-      const tenantId = httpClient.getTenantId() || 1;
-      const response = await GroupAPI.getGroups({ page: 1, pageSize: 100, tenantId: tenantId });
+      const response = await GroupAPI.getGroups({ page: 1, pageSize: 100 });
       const groups = (response.groups || []).map((g: any) => ({
         id: g.id,
         name: g.name || '未命名组',

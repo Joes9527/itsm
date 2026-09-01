@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"itsm-backend/dto"
@@ -13,9 +14,32 @@ import (
 // transaction. The callback is guarded so a caller cannot execute it twice;
 // durable outbox recovery remains authoritative if the inline attempt fails.
 type TransactionalProcessStart struct {
-	Response    *dto.ProcessTriggerResponse
-	afterCommit func(context.Context)
-	once        sync.Once
+	response     *dto.ProcessTriggerResponse
+	businessType dto.BusinessType
+	businessID   int
+	tenantID     int
+	afterCommit  func(context.Context)
+	once         sync.Once
+}
+
+func newTransactionalProcessStart(response *dto.ProcessTriggerResponse, businessType dto.BusinessType, businessID, tenantID int, afterCommit func(context.Context)) *TransactionalProcessStart {
+	return &TransactionalProcessStart{
+		response: response, businessType: businessType, businessID: businessID, tenantID: tenantID, afterCommit: afterCommit,
+	}
+}
+
+func (s *TransactionalProcessStart) validateIdentity(businessType dto.BusinessType, businessID, tenantID int) error {
+	if s == nil || s.response == nil || s.response.ProcessInstanceID <= 0 {
+		return fmt.Errorf("missing durable process instance")
+	}
+	if s.businessType != businessType || s.businessID != businessID || s.tenantID != tenantID {
+		return fmt.Errorf("workflow identity mismatch")
+	}
+	expectedBusinessKey := fmt.Sprintf("%s:%d", businessType, businessID)
+	if s.response.BusinessKey != expectedBusinessKey {
+		return fmt.Errorf("workflow business key mismatch")
+	}
+	return nil
 }
 
 func (s *TransactionalProcessStart) DeliverCommittedCallbacks(ctx context.Context) {

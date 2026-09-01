@@ -25,7 +25,7 @@ test.describe('FLOW-2: 标准变更流程', () => {
 
     expect(changeResp.status).toBe(200);
     expect(changeResp.data).toHaveProperty('code', 0);
-    expect(changeResp.data.data?.id).toBeDefined();
+    expect(changeResp.data.data?.id).toBeGreaterThan(0);
   });
 });
 
@@ -47,7 +47,7 @@ test.describe('FLOW-5: 紧急变更流程', () => {
 
     expect(changeResp.status).toBe(200);
     expect(changeResp.data).toHaveProperty('code', 0);
-    expect(changeResp.data.data?.id).toBeDefined();
+    expect(changeResp.data.data?.id).toBeGreaterThan(0);
   });
 });
 
@@ -68,7 +68,7 @@ test.describe('FLOW-6: AI 工单建议接受', () => {
     });
 
     const ticketId = ticketResp.data.data?.id;
-    expect(ticketId).toBeDefined();
+    expect(ticketId).toBeGreaterThan(0);
 
     // 记录 AI 审计
     if (ticketId) {

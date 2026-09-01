@@ -5,6 +5,7 @@
 
 import { test, expect } from '@playwright/test';
 import { TEST_USERS } from './utils/test-utils';
+import { loginAndReturn } from './auth-utils';
 
 // Increase timeout for ticket flow tests
 test.describe.configure({ timeout: 90000 });
@@ -13,15 +14,7 @@ test.describe('Ticket Lifecycle - End User Creates Ticket', () => {
   test('end user should be able to create a ticket', async ({ page }) => {
     // Step 1: Login as end user
     await test.step('Login as end_user', async () => {
-      await page.goto('/login');
-      await page.waitForSelector('.ant-input', { timeout: 15000 });
-
-      const inputs = page.locator('input.ant-input');
-      await inputs.nth(0).fill(TEST_USERS.end_user.username);
-      await inputs.nth(1).fill(TEST_USERS.end_user.password);
-
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/(dashboard|tickets|incidents|problems|changes)/, { timeout: 30000 });
+      await loginAndReturn(page, TEST_USERS.end_user);
     });
 
     // Step 2: Navigate to create ticket page
@@ -78,14 +71,7 @@ test.describe('Ticket Lifecycle - End User Creates Ticket', () => {
 
     // Step 5: Verify ticket created (check URL or success message)
     await test.step('Verify ticket created', async () => {
-      const currentUrl = page.url();
-      const successMessage = page.locator('text=成功, text=success, .ant-message-success');
-
-      // Either redirected to ticket detail or success message shown
-      const redirectedToDetail = currentUrl.includes('/tickets/') && !currentUrl.includes('/new');
-      const hasSuccess = await successMessage.count() > 0;
-
-      expect(redirectedToDetail || hasSuccess || currentUrl.includes('/tickets')).toBeTruthy();
+      await expect(page).toHaveURL(/\/tickets\/\d+$/);
     });
   });
 });
@@ -94,15 +80,7 @@ test.describe('Ticket Lifecycle - Agent Processes Ticket', () => {
   test('agent should be able to view and update ticket status', async ({ page }) => {
     // Step 1: Login as agent
     await test.step('Login as agent', async () => {
-      await page.goto('/login');
-      await page.waitForSelector('.ant-input', { timeout: 15000 });
-
-      const inputs = page.locator('input.ant-input');
-      await inputs.nth(0).fill(TEST_USERS.agent.username);
-      await inputs.nth(1).fill(TEST_USERS.agent.password);
-
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/(dashboard|tickets|incidents|problems|changes)/, { timeout: 30000 });
+      await loginAndReturn(page, TEST_USERS.agent);
     });
 
     // Step 2: Navigate to tickets list
@@ -151,15 +129,7 @@ test.describe('Ticket Lifecycle - Admin Manages Tickets', () => {
   test('admin should be able to view and manage all tickets', async ({ page }) => {
     // Step 1: Login as admin
     await test.step('Login as admin', async () => {
-      await page.goto('/login');
-      await page.waitForSelector('.ant-input', { timeout: 15000 });
-
-      const inputs = page.locator('input.ant-input');
-      await inputs.nth(0).fill(TEST_USERS.admin.username);
-      await inputs.nth(1).fill(TEST_USERS.admin.password);
-
-      await page.click('button[type="submit"]');
-      await page.waitForURL(/\/(dashboard|tickets|incidents|problems|changes)/, { timeout: 30000 });
+      await loginAndReturn(page, TEST_USERS.admin);
     });
 
     // Step 2: Navigate to tickets
@@ -217,15 +187,7 @@ test.describe('Ticket Lifecycle - Admin Manages Tickets', () => {
 test.describe('Ticket Search and Filter', () => {
   test.beforeEach(async ({ page }) => {
     // Login as admin to have access to all tickets
-    await page.goto('/login');
-    await page.waitForSelector('.ant-input', { timeout: 15000 });
-
-    const inputs = page.locator('input.ant-input');
-    await inputs.nth(0).fill(TEST_USERS.admin.username);
-    await inputs.nth(1).fill(TEST_USERS.admin.password);
-
-    await page.click('button[type="submit"]');
-    await page.waitForURL(/\/(dashboard|tickets)/, { timeout: 20000 });
+    await loginAndReturn(page, TEST_USERS.admin);
   });
 
   test('should search tickets by keyword', async ({ page }) => {

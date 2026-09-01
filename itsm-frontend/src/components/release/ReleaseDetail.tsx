@@ -246,9 +246,6 @@ const ReleaseDetail: React.FC = () => {
           <Descriptions.Item label="紧急发布">
             {release.isEmergency ? <Tag color="red">是</Tag> : <Tag>否</Tag>}
           </Descriptions.Item>
-          <Descriptions.Item label="需要审批">
-            {release.requiresApproval ? <Tag color="blue">是</Tag> : <Tag>否</Tag>}
-          </Descriptions.Item>
           <Descriptions.Item label="负责人">{release.ownerName || '-'}</Descriptions.Item>
           <Descriptions.Item label="计划发布日期">
             {release.plannedReleaseDate

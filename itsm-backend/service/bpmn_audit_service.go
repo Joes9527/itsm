@@ -67,7 +67,6 @@ const (
 	AuditActionVariableChanged      = "variable_changed"
 	AuditActionActivityStarted      = "activity_started"
 	AuditActionActivityCompleted    = "activity_completed"
-	AuditActionOptionalStepSkipped  = "optional_step_skipped"
 )
 
 // ActivityType 活动类型

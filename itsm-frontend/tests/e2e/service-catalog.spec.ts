@@ -36,7 +36,7 @@ test.describe('Service Catalog - 服务目录', () => {
       await page.waitForLoadState('networkidle');
       // 点击云资源服务分类
       const categoryTab = page.locator('text=云资源服务').first();
-      if (await categoryTab.isVisible().catch(() => false)) {
+      if (await categoryTab.isVisible()) {
         await categoryTab.click();
         await page.waitForTimeout(500);
       }

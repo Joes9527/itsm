@@ -238,12 +238,11 @@ func (s *ProcessTriggerService) TriggerByBusinessTypeWithClient(
 		return nil, err
 	}
 	keys := append([]string(nil), executionKeys...)
-	return &TransactionalProcessStart{
-		Response: response,
-		afterCommit: func(callbackCtx context.Context) {
+	return newTransactionalProcessStart(response, businessType, businessID, tenantID,
+		func(callbackCtx context.Context) {
 			engine.processCommittedCallbackKeys(callbackCtx, tenantID, keys)
 		},
-	}, nil
+	), nil
 }
 
 // CancelProcess 取消流程

@@ -10,7 +10,7 @@
 
 import type { Page } from '@playwright/test';
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin } from './test-utils';
+import { loginAndReturn as loginAsAdmin } from './auth-utils';
 
 const BASE = 'http://localhost:3000';
 const API = 'http://localhost:8090';
@@ -305,7 +305,7 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
 
     // 8.2 验证 KPI 指标
     if (overviewJson.data.kpiMetrics) {
-      expect(Array.isArray(overviewJson.data.kpiMetrics)).toBeTruthy();
+      expect(overviewJson.data.kpiMetrics).toEqual(expect.any(Array));
     }
 
     console.log(`✅ Dashboard Happy Path 完成`);

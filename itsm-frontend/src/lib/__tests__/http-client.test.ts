@@ -45,15 +45,6 @@ jest.mock('@/lib/env', () => ({
   },
 }));
 
-// Mock tenant-context module
-jest.mock('@/lib/auth/tenant-context', () => ({
-  getTenantId: jest.fn().mockReturnValue(null),
-  getTenantCode: jest.fn().mockReturnValue(null),
-  setTenantId: jest.fn(),
-  setTenantCode: jest.fn(),
-  clearTenantContext: jest.fn(),
-}));
-
 // 延迟导入以确保 mock 生效
 import HttpClient from '../api/http-client';
 

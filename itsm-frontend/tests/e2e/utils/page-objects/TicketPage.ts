@@ -17,7 +17,7 @@ export class TicketPage extends BasePage {
 
   async goto(): Promise<void> {
     await this.page.goto(`${this.baseUrl}${this.url}`);
-    await this.ticketTable.waitFor({ state: 'visible' }).catch(() => {});
+    await this.ticketTable.waitFor({ state: 'visible' });
   }
 
   async createTicket(data: {
@@ -28,7 +28,7 @@ export class TicketPage extends BasePage {
   }): Promise<number> {
     // 直接导航，不等待networkidle
     await this.page.goto(`${this.baseUrl}/tickets/create`);
-    await this.page.waitForSelector('form, [data-testid="ticket-form"]', { timeout: 10000 }).catch(() => {});
+    await this.page.waitForSelector('form, [data-testid="ticket-form"]', { timeout: 10000 });
 
     // 填写标题
     const titleInput = this.page.locator('[data-testid="ticket-title-input"], input[placeholder*="VPN"], #title').first();
@@ -43,7 +43,7 @@ export class TicketPage extends BasePage {
     await submitBtn.click();
 
     // 等待跳转
-    await this.page.waitForURL(/\/tickets\/\d+/, { timeout: 15000 }).catch(() => {});
+    await this.page.waitForURL(/\/tickets\/\d+/, { timeout: 15000 });
 
     const url = this.page.url();
     const match = url.match(/\/tickets\/(\d+)/);
@@ -54,7 +54,7 @@ export class TicketPage extends BasePage {
     await this.searchInput.clear();
     await this.searchInput.fill(keyword);
     await this.searchInput.press('Enter');
-    await this.page.waitForResponse(/\/api\/v1\/tickets/, { timeout: 5000 }).catch(() => {});
+    await this.page.waitForResponse(/\/api\/v1\/tickets/, { timeout: 5000 });
   }
 
   async getFirstTicketId(): Promise<number | null> {
@@ -73,7 +73,7 @@ export class TicketPage extends BasePage {
     } else {
       await row.click();
     }
-    await this.page.waitForURL(new RegExp(`/tickets/${id}|/tickets/\\d+`), { timeout: 10000 }).catch(() => {});
+    await this.page.waitForURL(new RegExp(`/tickets/${id}|/tickets/\\d+`), { timeout: 10000 });
   }
 
   async updateTicketStatus(status: string): Promise<void> {
@@ -87,14 +87,12 @@ export class TicketPage extends BasePage {
     const assignButton = this.page.getByRole('button', { name: /分配|Assign/i });
     if (await assignButton.isVisible()) {
       await assignButton.click();
-      await this.page.waitForSelector('.ant-select, .ant-modal', { timeout: 5000 }).catch(() => {});
+      await this.page.waitForSelector('.ant-select, .ant-modal', { timeout: 5000 });
 
       const assigneeSelect = this.page.locator('.ant-select-selector').first();
       if (await assigneeSelect.isVisible()) {
         await assigneeSelect.click();
-        await this.page.getByTitle(assignee).click().catch(() =>
-          this.page.getByText(assignee).click()
-        );
+        await this.page.getByText(assignee, { exact: true }).click();
       }
 
       const confirmButton = this.page.getByRole('button', { name: /确定|OK|Assign|确认/i });

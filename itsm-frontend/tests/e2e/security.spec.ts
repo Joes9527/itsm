@@ -1,17 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { loginAndReturn } from './auth-utils';
+import { DEFAULT_LOGIN, loginAndReturn, loginThroughForm } from './auth-utils';
 
 test.describe('Security - 浏览器侧安全验证', () => {
   test('RBAC should block non-admin from admin pages', async ({ page }) => {
-    await loginAndReturn(page, 'employee', 'admin123');
-    await page.goto('/admin/users');
-    await page.waitForLoadState('networkidle');
-
-    const forbidden = page.locator(
-      'text=403, text=Forbidden, text=无权限, text=Access Denied, .ant-result-403, .ant-alert-error'
-    );
-    const blocked = !page.url().includes('/admin/users') || (await forbidden.count()) > 0;
-    expect(blocked).toBeTruthy();
+    await loginAndReturn(page, { ...DEFAULT_LOGIN, username: 'employee', password: 'admin123' });
+    const response = await page.request.get('/api/v1/users');
+    expect(response.status()).toBe(403);
   });
 
   test('XSS payload should not execute when rendered in ticket detail', async ({ page }) => {
@@ -22,7 +16,7 @@ test.describe('Security - 浏览器侧安全验证', () => {
       };
     });
 
-    await loginAndReturn(page, 'end_user', 'admin123');
+    await loginAndReturn(page, { ...DEFAULT_LOGIN, username: 'end_user', password: 'admin123' });
     await page.goto('/tickets/create');
     await page.waitForSelector('form, [data-testid="ticket-form"]', { timeout: 15000 });
 
@@ -38,12 +32,10 @@ test.describe('Security - 浏览器侧安全验证', () => {
       .first()
       .fill(payload);
 
-    const createResp = page
-      .waitForResponse(
-        resp => resp.url().includes('/api/v1/tickets') && resp.request().method() === 'POST',
-        { timeout: 15000 }
-      )
-      .catch(() => null);
+    const createResp = page.waitForResponse(
+      resp => resp.url().includes('/api/v1/tickets') && resp.request().method() === 'POST',
+      { timeout: 15000 }
+    );
 
     await page
       .locator(
@@ -51,7 +43,7 @@ test.describe('Security - 浏览器侧安全验证', () => {
       )
       .first()
       .click();
-    await createResp;
+    expect((await createResp).status()).toBe(200);
 
     await page.waitForLoadState('networkidle');
     const xss = await page.evaluate(() => (window as any).__xss_executed);
@@ -59,14 +51,7 @@ test.describe('Security - 浏览器侧安全验证', () => {
   });
 
   test('Sensitive data should not be sent via URL query on login', async ({ page }) => {
-    await page.goto('/login');
-    await page.waitForSelector('input.ant-input', { timeout: 15000 });
-
-    const inputs = page.locator('input.ant-input');
-    await inputs.nth(0).fill('admin');
-    await inputs.nth(1).fill('admin123');
-    await page.click('button[type="submit"]');
-    await page.waitForLoadState('domcontentloaded');
+    await loginThroughForm(page, DEFAULT_LOGIN);
 
     expect(page.url()).not.toContain('admin123');
     expect(page.url()).not.toMatch(/password=/i);

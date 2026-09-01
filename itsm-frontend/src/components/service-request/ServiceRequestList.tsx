@@ -13,7 +13,7 @@ import { Eye, RefreshCw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
 
-import { ServiceRequestApi } from '@/lib/api/';
+import { serviceRequestAPI } from '@/lib/api/service-request-api';
 import { ServiceRequestStatus } from '@/constants/service-request';
 import type { ServiceRequest, ServiceRequestQuery } from '@/types/biz/service-request';
 
@@ -47,9 +47,10 @@ const ServiceRequestList: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const resp = await ServiceRequestApi.getServiceRequests({
-        ...query,
-        scope: 'me',
+      const resp = await serviceRequestAPI.getUserServiceRequests({
+        page: query.page,
+        size: query.size,
+        status: query.status,
       });
       setData((resp.requests || []) as unknown as ServiceRequest[]);
       setTotal(resp?.total ?? 0);

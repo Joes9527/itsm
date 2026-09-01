@@ -44,7 +44,6 @@ export interface ReleaseRequest {
   deploymentSteps?: string[];
   tags?: string[];
   isEmergency?: boolean;
-  requiresApproval?: boolean;
 }
 
 // 发布响应接口
@@ -75,7 +74,6 @@ export interface Release {
   deploymentSteps?: string[];
   tags?: string[];
   isEmergency: boolean;
-  requiresApproval: boolean;
   createdAt: string;
   updatedAt: string;
 }

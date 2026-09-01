@@ -9,11 +9,11 @@ import { serviceRequestAPI } from '@/lib/api/service-request-api';
 // wave) — this locks in that only "我的请求" remains.
 jest.mock('@/lib/api/service-request-api', () => ({
   serviceRequestAPI: {
-    getServiceRequests: jest.fn(),
+    getUserServiceRequests: jest.fn(),
   },
 }));
 
-const mockGetServiceRequests = serviceRequestAPI.getServiceRequests as jest.Mock;
+const mockGetServiceRequests = serviceRequestAPI.getUserServiceRequests as jest.Mock;
 
 describe('ServiceRequestList', () => {
   beforeEach(() => {

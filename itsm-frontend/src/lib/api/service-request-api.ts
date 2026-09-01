@@ -1,5 +1,4 @@
-import { API_BASE_URL } from '@/lib/api/api-config';
-import { getTenantCode } from '@/lib/auth/token-storage';
+import { httpClient } from '@/lib/api/http-client';
 
 export interface ServiceRequest {
   id: number;
@@ -71,95 +70,23 @@ export interface CreateServiceRequestRequest {
 }
 
 class ServiceRequestAPI {
-  private baseURL: string;
-
-  constructor() {
-    this.baseURL = API_BASE_URL;
-  }
-
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const tenantCode = getTenantCode();
-
-    try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
-        ...options,
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(tenantCode && { 'X-Tenant-Code': tenantCode }),
-          ...options.headers,
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API Error: ${response.status} ${response.statusText} - ${errorText}`);
-      }
-
-      const data = await response.json();
-
-      // Check backend response code field
-      if (data.code !== 0) {
-        throw new Error(data.message || 'Request failed');
-      }
-
-      return data.data; // Backend response format: { code, message, data }
-    } catch (error) {
-      // console.error('API request failed:', error);
-      throw error;
-    }
-  }
-
-  private normalizeRequest(raw: any): ServiceRequest {
-    const catalogId = raw?.catalogId;
-    const requesterId = raw?.requesterId;
-    const createdAt = raw?.createdAt;
-    const updatedAt = raw?.updatedAt;
+  private normalizeRequest(raw: ServiceRequest): ServiceRequest {
     return {
       ...raw,
-      catalogId,
-      requesterId,
-      ciId: raw?.ciId,
       formData: raw?.formData ?? {},
-      costCenter: raw?.costCenter,
-      dataClassification: raw?.dataClassification,
-      needsPublicIp: raw?.needsPublicIp ?? raw?.needsPublicIP,
-      sourceIpWhitelist: raw?.sourceIpWhitelist ?? raw?.sourceIPWhitelist,
-      expireAt: raw?.expireAt,
-      complianceAck: raw?.complianceAck,
-      currentLevel: raw?.currentLevel,
-      totalLevels: raw?.totalLevels,
-      createdAt,
-      updatedAt,
-      catalog: raw?.catalog || {
-        id: catalogId,
-        name: raw?.serviceName || (catalogId ? `服务 #${catalogId}` : '未知服务'),
-        category: raw?.category || '',
-        description: raw?.reason || '',
-        deliveryTime: raw?.deliveryTime || raw?.deliveryTime || '',
-      },
-      requester: raw?.requester || {
-        id: requesterId,
-        username: raw?.requesterName || raw?.requestedByName || '',
-        name:
-          raw?.requesterName ||
-          raw?.requestedByName ||
-          (requesterId ? `用户 #${requesterId}` : '-'),
-        email: raw?.requestedByEmail || '',
-        department: '',
-      },
-    } as ServiceRequest;
+    };
   }
 
   private normalizeList(raw: ServiceRequestListResponse): ServiceRequestListResponse {
-    const requests = (raw.requests || (raw as any).items || []).map(item =>
-      this.normalizeRequest(item)
-    );
+    if (!Array.isArray(raw.requests)) {
+      throw new Error('Invalid service request list contract: requests is required');
+    }
+    const requests = raw.requests.map(item => this.normalizeRequest(item));
     return {
       requests,
-      total: raw.total || 0,
-      page: raw.page || 1,
-      size: raw.size || (raw as any).pageSize || requests.length,
+      total: raw.total,
+      page: raw.page,
+      size: raw.size,
     };
   }
 
@@ -177,7 +104,7 @@ class ServiceRequestAPI {
     if (params.size) searchParams.append('size', params.size.toString());
     if (params.status && params.status !== 'all') searchParams.append('status', params.status);
 
-    const resp = await this.request<ServiceRequestListResponse>(
+    const resp = await httpClient.get<ServiceRequestListResponse>(
       `/api/v1/service-requests/me?${searchParams.toString()}`
     );
     return this.normalizeList(resp);
@@ -185,62 +112,43 @@ class ServiceRequestAPI {
 
   // Get service request details
   async getServiceRequestDetails(id: number): Promise<ServiceRequest> {
-    const resp = await this.request<ServiceRequest>(`/api/v1/service-requests/${id}`);
+    const resp = await httpClient.get<ServiceRequest>(`/api/v1/service-requests/${id}`);
     return this.normalizeRequest(resp);
   }
 
   // Create service request
   async createServiceRequest(data: CreateServiceRequestRequest): Promise<ServiceRequest> {
-    const resp = await this.request<ServiceRequest>('/api/v1/service-requests', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
+    const resp = await httpClient.post<ServiceRequest>('/api/v1/service-requests', data);
     return this.normalizeRequest(resp);
   }
 
   // Health check
   async healthCheck(): Promise<{ status: string }> {
     // backend exposes public health endpoint under /api/v1/health
-    return this.request<{ status: string }>('/api/v1/health');
+    return httpClient.get<{ status: string }>('/api/v1/health');
   }
 
   // ==================== Provisioning Tasks ====================
 
   // Start provisioning for a service request
   async startProvisioning(serviceRequestId: number): Promise<{ task: ProvisioningTask }> {
-    return this.request<{ task: ProvisioningTask }>(
-      `/api/v1/service-requests/${serviceRequestId}/provision`,
-      {
-        method: 'POST',
-      }
+    return httpClient.post<{ task: ProvisioningTask }>(
+      `/api/v1/service-requests/${serviceRequestId}/provision`, {}
     );
   }
 
   // List provisioning tasks for a service request
   async listProvisioningTasks(serviceRequestId: number): Promise<ProvisioningTask[]> {
-    return this.request<ProvisioningTask[]>(
+    return httpClient.get<ProvisioningTask[]>(
       `/api/v1/service-requests/${serviceRequestId}/provisioning-tasks`
     );
   }
 
   // Execute a provisioning task
   async executeProvisioningTask(taskId: number): Promise<ProvisioningTask> {
-    return this.request<ProvisioningTask>(`/api/v1/provisioning-tasks/${taskId}/execute`, {
-      method: 'POST',
-    });
+    return httpClient.post<ProvisioningTask>(`/api/v1/provisioning-tasks/${taskId}/execute`, {});
   }
 
-  // ==================== 兼容别名 ====================
-
-  /** @deprecated 使用 getUserServiceRequests */
-  async getServiceRequests(params?: any): Promise<ServiceRequestListResponse> {
-    return this.getUserServiceRequests(params);
-  }
-
-  /** @deprecated 使用 getUserServiceRequests */
-  async getServiceRequest(id: number): Promise<ServiceRequest> {
-    return this.getServiceRequestDetails(id);
-  }
 }
 
 export interface ProvisioningTask {

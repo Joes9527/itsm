@@ -1,47 +1,39 @@
 import { serviceRequestAPI } from '@/lib/api/service-request-api';
 
-jest.mock('@/lib/api/api-config', () => ({
-  API_BASE_URL: 'http://localhost:8090',
+const mockGet = jest.fn();
+const mockPost = jest.fn();
+jest.mock('@/lib/api/http-client', () => ({
+  httpClient: {
+    get: (...args: unknown[]) => mockGet(...args),
+    post: (...args: unknown[]) => mockPost(...args),
+  },
 }));
-
-jest.mock('@/lib/auth/token-storage', () => ({
-  getTenantCode: jest.fn().mockReturnValue('test-tenant'),
-}));
-
-// Mock global fetch
-global.fetch = jest.fn();
-const mockFetch = global.fetch as jest.Mock;
 
 describe('ServiceRequestAPI', () => {
   beforeEach(() => { jest.clearAllMocks(); });
 
-  const mockSuccessResponse = (data: unknown) => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: async () => ({ code: 0, message: 'success', data }),
-    });
-  };
-
   describe('getUserServiceRequests', () => {
     it('should get user service requests', async () => {
-      mockSuccessResponse({ requests: [{ id: 1 }], total: 1, page: 1, size: 10 });
+      mockGet.mockResolvedValue({ requests: [{ id: 1 }], total: 1, page: 1, size: 10 });
       const result = await serviceRequestAPI.getUserServiceRequests({ page: 1, size: 10 });
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/service-requests/me'),
-        expect.any(Object)
-      );
+      expect(mockGet).toHaveBeenCalledWith(expect.stringContaining('/api/v1/service-requests/me'));
       expect(result.requests).toHaveLength(1);
+    });
+
+    it('fails closed instead of reading a legacy items fallback', async () => {
+      mockGet.mockResolvedValue({ items: [{ id: 1 }], total: 1, page: 1, size: 10 });
+
+      await expect(serviceRequestAPI.getUserServiceRequests()).rejects.toThrow(
+        'Invalid service request list contract'
+      );
     });
   });
 
   describe('getServiceRequestDetails', () => {
     it('should get service request details', async () => {
-      mockSuccessResponse({ id: 1, catalogId: 2, requesterId: 3, status: 'submitted', version: 1, createdAt: '' });
+      mockGet.mockResolvedValue({ id: 1, catalogId: 2, requesterId: 3, status: 'submitted', version: 1, createdAt: '' });
       const result = await serviceRequestAPI.getServiceRequestDetails(1);
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/service-requests/1'),
-        expect.any(Object)
-      );
+      expect(mockGet).toHaveBeenCalledWith('/api/v1/service-requests/1');
       expect(result.id).toBe(1);
     });
   });
@@ -49,34 +41,28 @@ describe('ServiceRequestAPI', () => {
   describe('createServiceRequest', () => {
     it('should create a service request', async () => {
       const data = { catalogId: 1, complianceAck: true };
-      mockSuccessResponse({ id: 10, ...data, status: 'submitted', version: 1, createdAt: '' });
+      mockPost.mockResolvedValue({ id: 10, ...data, status: 'submitted', version: 1, createdAt: '' });
       const result = await serviceRequestAPI.createServiceRequest(data);
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/service-requests'),
-        expect.objectContaining({ method: 'POST' })
-      );
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/service-requests', data);
+      expect(result.id).toBe(10);
     });
   });
 
   describe('startProvisioning', () => {
     it('should start provisioning', async () => {
-      mockSuccessResponse({ task: { id: 1, status: 'pending' } });
+      mockPost.mockResolvedValue({ task: { id: 1, status: 'pending' } });
       const result = await serviceRequestAPI.startProvisioning(1);
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/service-requests/1/provision'),
-        expect.objectContaining({ method: 'POST' })
-      );
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/service-requests/1/provision', {});
+      expect(result.task.id).toBe(1);
     });
   });
 
   describe('healthCheck', () => {
     it('should check health', async () => {
-      mockSuccessResponse({ status: 'ok' });
+      mockGet.mockResolvedValue({ status: 'ok' });
       const result = await serviceRequestAPI.healthCheck();
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/health'),
-        expect.any(Object)
-      );
+      expect(mockGet).toHaveBeenCalledWith('/api/v1/health');
+      expect(result.status).toBe('ok');
     });
   });
 });

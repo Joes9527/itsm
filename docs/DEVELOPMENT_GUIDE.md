@@ -100,12 +100,12 @@ DB_PASSWORD=your_password
 JWT_SECRET=your-jwt-secret
 ADMIN_PASSWORD=admin123
 
-# Azure AD OIDC（可选；前三项和回调地址必须同时配置）
+# Azure AD OIDC（可选；启用时下列五项必须同时配置）
 AZURE_TENANT_ID=
 AZURE_CLIENT_ID=
 AZURE_CLIENT_SECRET=
 AZURE_REDIRECT_URI=http://localhost:8090/api/v1/auth/azure/callback
-# 可配置默认 ITSM 租户；为空时用户必须在登录页显式输入租户代码
+# Azure 用户唯一允许进入的 ITSM 租户；部署配置是授权边界
 AZURE_ITSM_TENANT_CODE=
 # 仅在明确允许 Azure 首次登录创建本地用户时启用
 AZURE_ALLOW_USER_PROVISIONING=false
@@ -114,10 +114,10 @@ AZURE_ALLOW_USER_PROVISIONING=false
 NEXT_PUBLIC_API_URL=http://localhost:8090
 ```
 
-Azure 登录请求将所选 `tenantCode` 绑定进一次性 OAuth state，并在 callback
-重新校验。没有页面选择且未配置 `AZURE_ITSM_TENANT_CODE` 时请求会明确失败；
-不会回退到固定租户或按邮箱跨租户匹配。`AZURE_REDIRECT_URI` 缺失时 Azure
-路由不注册。
+Azure 登录只接受部署配置 `AZURE_ITSM_TENANT_CODE`，并将该值绑定进一次性
+OAuth state 后在 callback 重新校验。浏览器不能选择或覆盖租户；配置缺失、
+state 租户不一致、邮箱为空或租户内邮箱不唯一时均明确失败。系统不会回退到
+固定租户，也不会按邮箱跨租户匹配。任一必需配置缺失时 Azure 路由不注册。
 
 ### 开发环境拓扑（多机协作）
 

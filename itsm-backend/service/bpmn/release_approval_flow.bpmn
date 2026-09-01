@@ -40,15 +40,9 @@
         <bpmn:metaData name="service_task_type">release_task</bpmn:metaData>
         <bpmn:metaData name="action">approval</bpmn:metaData>
       </bpmn:extensionElements>
-      <bpmn:incoming>Flow_ApprovalRequired</bpmn:incoming>
+      <bpmn:incoming>Flow_Approval</bpmn:incoming>
       <bpmn:outgoing>Flow_3</bpmn:outgoing>
     </bpmn:userTask>
-
-    <bpmn:exclusiveGateway id="Gateway_ApprovalRequired" name="需要人工审批?">
-      <bpmn:incoming>Flow_Approval</bpmn:incoming>
-      <bpmn:outgoing>Flow_ApprovalRequired</bpmn:outgoing>
-      <bpmn:outgoing>Flow_ApprovalSkipped</bpmn:outgoing>
-    </bpmn:exclusiveGateway>
 
     <!-- 审批结果判断 -->
     <bpmn:exclusiveGateway id="Gateway_ApprovalResult" name="审批结果?">
@@ -64,7 +58,6 @@
         <bpmn:metaData name="action">schedule</bpmn:metaData>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_Schedule</bpmn:incoming>
-      <bpmn:incoming>Flow_ApprovalSkipped</bpmn:incoming>
       <bpmn:outgoing>Flow_4</bpmn:outgoing>
     </bpmn:userTask>
 
@@ -101,20 +94,11 @@
     <!-- 连线定义 -->
     <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Activity_TechReview" />
     <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_TechReview" targetRef="Gateway_TechResult" />
-    <bpmn:sequenceFlow id="Flow_Approval" sourceRef="Gateway_TechResult" targetRef="Gateway_ApprovalRequired">
+    <bpmn:sequenceFlow id="Flow_Approval" sourceRef="Gateway_TechResult" targetRef="Activity_Approval">
       <bpmn:conditionExpression xsi:type="bpmn:tExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><![CDATA[variables['tech_review_pass'] == true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_Reject" sourceRef="Gateway_TechResult" targetRef="EndEvent_Reject">
       <bpmn:conditionExpression xsi:type="bpmn:tExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><![CDATA[variables['tech_review_pass'] != true]]></bpmn:conditionExpression>
-    </bpmn:sequenceFlow>
-    <bpmn:sequenceFlow id="Flow_ApprovalRequired" sourceRef="Gateway_ApprovalRequired" targetRef="Activity_Approval">
-      <bpmn:conditionExpression xsi:type="bpmn:tExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><![CDATA[variables['requires_approval'] == true]]></bpmn:conditionExpression>
-    </bpmn:sequenceFlow>
-    <bpmn:sequenceFlow id="Flow_ApprovalSkipped" sourceRef="Gateway_ApprovalRequired" targetRef="Activity_Schedule">
-      <bpmn:extensionElements>
-        <bpmn:metaData name="optional_skip">release_approval</bpmn:metaData>
-      </bpmn:extensionElements>
-      <bpmn:conditionExpression xsi:type="bpmn:tExpression" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><![CDATA[variables['requires_approval'] != true]]></bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_Approval" targetRef="Gateway_ApprovalResult" />
     <bpmn:sequenceFlow id="Flow_Schedule" sourceRef="Gateway_ApprovalResult" targetRef="Activity_Schedule">

@@ -2,9 +2,6 @@
  * 模板库导出
  */
 
-// 状态管理
-export * from './store';
-
 // 数据查询
 export * from './query';
 

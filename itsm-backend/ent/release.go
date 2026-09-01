@@ -64,8 +64,6 @@ type Release struct {
 	Tags []string `json:"tags,omitempty"`
 	// 是否紧急发布
 	IsEmergency bool `json:"is_emergency,omitempty"`
-	// 是否需要审批
-	RequiresApproval bool `json:"requires_approval,omitempty"`
 	// 创建时间
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// 更新时间
@@ -80,7 +78,7 @@ func (*Release) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case release.FieldAffectedSystems, release.FieldAffectedComponents, release.FieldDeploymentSteps, release.FieldTags:
 			values[i] = new([]byte)
-		case release.FieldIsEmergency, release.FieldRequiresApproval:
+		case release.FieldIsEmergency:
 			values[i] = new(sql.NullBool)
 		case release.FieldID, release.FieldChangeID, release.FieldOwnerID, release.FieldCreatedBy, release.FieldTenantID:
 			values[i] = new(sql.NullInt64)
@@ -257,12 +255,6 @@ func (_m *Release) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.IsEmergency = value.Bool
 			}
-		case release.FieldRequiresApproval:
-			if value, ok := values[i].(*sql.NullBool); !ok {
-				return fmt.Errorf("unexpected type %T for field requires_approval", values[i])
-			} else if value.Valid {
-				_m.RequiresApproval = value.Bool
-			}
 		case release.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -383,9 +375,6 @@ func (_m *Release) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("is_emergency=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IsEmergency))
-	builder.WriteString(", ")
-	builder.WriteString("requires_approval=")
-	builder.WriteString(fmt.Sprintf("%v", _m.RequiresApproval))
 	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))

@@ -1,6 +1,6 @@
 // itsm-frontend/tests/e2e/business-flows/smoke-test.spec.ts
 import { test, expect } from '@playwright/test';
-import { loginAs, logout } from '../utils/test-utils';
+import { loginAs } from '../utils/test-utils';
 
 const PAGES_TO_TEST = [
   { name: 'Dashboard', url: '/dashboard' },
@@ -15,20 +15,11 @@ const PAGES_TO_TEST = [
 
 test.describe('冒烟测试 - 快速验证所有主要页面', () => {
 
-  test.beforeEach(async ({ page }) => {
-    // 先导航到登录页面确保页面已加载
-    await page.goto('/login');
-    // 每次测试前确保已登出
-    await logout(page).catch(() => {
-      // 忽略登出错误，继续测试
-    });
-  });
-
   test('登录功能正常', async ({ page }) => {
     await loginAs(page, 'admin');
 
     // 验证登录成功 - 检查是否不在登录页或能看到主要内容
-    await page.waitForURL(/\/(dashboard|tickets|incidents|\/)$/, { timeout: 15000 }).catch(() => {});
+    await expect(page).toHaveURL(/\/dashboard$/, { timeout: 15000 });
 
     // 检查页面是否已加载主要内容
     const bodyContent = await page.locator('body').textContent();
@@ -101,18 +92,11 @@ test.describe('冒烟测试 - 快速验证所有主要页面', () => {
       await page.goto(`${baseUrl}${pageInfo.url}`);
 
       // 等待页面加载完成
-      await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {
-        console.log(`  ${pageInfo.url} 网络请求未完全完成，继续检查`);
-      });
+      await page.waitForLoadState('networkidle', { timeout: 15000 });
 
       // 验证页面没有崩溃（检查是否有错误提示）
       const errorText = page.locator('.ant-result-error, .ant-alert-error, [class*="error-page"]').first();
-      const hasError = await errorText.isVisible().catch(() => false);
-
-      if (hasError) {
-        const errorContent = await errorText.textContent();
-        console.log(`  ${pageInfo.name} 显示错误: ${errorContent}`);
-      }
+      await expect(errorText).toHaveCount(0);
 
       // 验证页面主要内容加载
       const bodyContent = await page.locator('body').textContent();
@@ -136,9 +120,7 @@ test.describe('冒烟测试 - 快速验证所有主要页面', () => {
     // 测试工单列表
     await page.goto(`${baseUrl}/tickets`);
     await page.waitForLoadState('networkidle', { timeout: 15000 });
-    await expect(page.locator('table')).toBeVisible({ timeout: 10000 }).catch(() => {
-      console.log('工单列表表格未找到，可能数据为空');
-    });
+    await expect(page.locator('table')).toBeVisible({ timeout: 10000 });
     console.log('✓ 工单列表加载正常');
   });
 
@@ -156,9 +138,7 @@ test.describe('冒烟测试 - 快速验证所有主要页面', () => {
 
     // 检查侧边栏或导航菜单存在
     const navMenu = page.locator('.ant-menu, [class*="sidebar"], [class*="nav-menu"], nav').first();
-    await expect(navMenu).toBeVisible({ timeout: 10000 }).catch(() => {
-      console.log('导航菜单未找到');
-    });
+    await expect(navMenu).toBeVisible({ timeout: 10000 });
 
     // 尝试点击菜单项导航
     const menuItem = page.locator('.ant-menu-item, [class*="menu-item"]').first();
@@ -173,8 +153,6 @@ test.describe('冒烟测试 - 快速验证所有主要页面', () => {
 
     // 检查用户头像或用户名显示
     const userAvatar = page.locator('.ant-avatar, [class*="avatar"], [class*="user-menu"]').first();
-    await expect(userAvatar).toBeVisible({ timeout: 10000 }).catch(() => {
-      console.log('用户头像未找到');
-    });
+    await expect(userAvatar).toBeVisible({ timeout: 10000 });
   });
 });

@@ -35,7 +35,7 @@ test.describe('US2: engineer 处理人全生命周期', () => {
     });
 
     const ticketId = createResp.data.data?.id;
-    expect(ticketId).toBeDefined();
+    expect(ticketId).toBeGreaterThan(0);
 
     // 更新为处理中
     const updateResp = await apiPost(role, `/api/v1/tickets/${ticketId}/status`, {
@@ -54,7 +54,7 @@ test.describe('US2: engineer 处理人全生命周期', () => {
     });
 
     const ticketId = createResp.data.data?.id;
-    expect(ticketId).toBeDefined();
+    expect(ticketId).toBeGreaterThan(0);
 
     // 添加处理记录（使用 update status + note）
     const noteResp = await apiPost(role, `/api/v1/tickets/${ticketId}/status`, {
@@ -73,7 +73,7 @@ test.describe('US2: engineer 处理人全生命周期', () => {
     });
 
     const ticketId = createResp.data.data?.id;
-    expect(ticketId).toBeDefined();
+    expect(ticketId).toBeGreaterThan(0);
 
     // 标记为已解决
     const resolveResp = await apiPost(role, `/api/v1/tickets/${ticketId}/resolve`, {
@@ -93,7 +93,7 @@ test.describe('US2: engineer 处理人全生命周期', () => {
     });
 
     const ticketId = createResp.data.data?.id;
-    expect(ticketId).toBeDefined();
+    expect(ticketId).toBeGreaterThan(0);
 
     // 查看历史
     const historyResp = await apiGet(role, `/api/v1/tickets/${ticketId}/workflow-history`);

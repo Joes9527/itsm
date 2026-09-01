@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { DEFAULT_LOGIN, loginThroughForm } from './auth-utils';
 
 test.describe('Register + Login Flow - 注册登录流程', () => {
   test('should register a new user and then login', async ({ page }) => {
@@ -52,23 +53,6 @@ test.describe('Register + Login Flow - 注册登录流程', () => {
 
     await expect(page).toHaveURL(/\/login/, { timeout: 30000 });
 
-    await page.waitForSelector('input.ant-input', { timeout: 15000 });
-    const loginInputs = page.locator('input.ant-input');
-    await loginInputs.nth(0).fill(username);
-    await loginInputs.nth(1).fill(password);
-
-    const loginResponsePromise = page.waitForResponse(
-      resp => resp.url().includes('/api/v1/auth/login') && resp.request().method() === 'POST',
-      { timeout: 30000 }
-    );
-
-    await page.click('button[type="submit"]');
-
-    const loginResponse = await loginResponsePromise;
-    expect(loginResponse.status()).toBe(200);
-
-    await page.waitForURL(/\/(dashboard|tickets|incidents|problems|changes|service-catalog)/, {
-      timeout: 30000,
-    });
+    await loginThroughForm(page, { ...DEFAULT_LOGIN, username, password });
   });
 });

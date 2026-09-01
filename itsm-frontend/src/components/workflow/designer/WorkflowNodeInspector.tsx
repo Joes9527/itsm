@@ -21,7 +21,6 @@ interface BpmnEventDefinition {
 import { UserApi, type User as ApiUser } from '@/lib/api/user-api';
 import { RoleAPI } from '@/lib/api/role-api';
 import { departmentService, type Department } from '@/lib/services/department-service';
-import { httpClient } from '@/lib/api/http-client';
 import type { BpmnNodeSelection } from '../BPMNDesigner';
 
 const { Text } = Typography;
@@ -110,8 +109,7 @@ export default function WorkflowNodeInspector({
     const loadGroups = async () => {
       setLoadingGroups(true);
       try {
-        const tenantId = httpClient.getTenantId() || 1;
-        const resp = await GroupAPI.getGroups({ page: 1, pageSize: 100, tenantId: tenantId });
+        const resp = await GroupAPI.getGroups({ page: 1, pageSize: 100 });
         if (!cancelled) setGroups(resp.groups || []);
       } catch (err) {
         console.error('加载组列表失败:', err);

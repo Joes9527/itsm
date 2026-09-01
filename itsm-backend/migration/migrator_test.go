@@ -338,6 +338,7 @@ func TestProfessionalExtensionsDropSharedFieldsIsVersioned(t *testing.T) {
 		"legacy ticket_approvals table still exists",
 		"'workflows', 'workflow_instances', 'workflow_tasks', 'workflow_versions'",
 		"legacy % table still exists",
+		"release approval routing column releases.requires_approval still exists",
 		"legacy ticket_categories.workflow_id column still exists",
 	} {
 		require.Contains(t, string(verificationSQL), expected)

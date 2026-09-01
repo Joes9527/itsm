@@ -44,7 +44,7 @@ func LoadAzureConfig() AzureConfig {
 }
 
 func (c AzureConfig) IsConfigured() bool {
-	return c.TenantID != "" && c.ClientID != "" && c.ClientSecret != "" && c.RedirectURI != ""
+	return c.TenantID != "" && c.ClientID != "" && c.ClientSecret != "" && c.RedirectURI != "" && c.ITSMTenantCode != ""
 }
 
 func (c AzureConfig) AuthorizeURL(state string) string {
@@ -194,15 +194,11 @@ func AzureLoginHandler(cfg AzureConfig, logger *zap.SugaredLogger) gin.HandlerFu
 			common.Fail(c, common.InternalErrorCode, "Azure AD not configured")
 			return
 		}
-		tenantCode := strings.TrimSpace(c.Query("tenantCode"))
-		if tenantCode == "" {
-			tenantCode = cfg.ITSMTenantCode
-		}
-		if tenantCode == "" {
-			common.Fail(c, common.AuthFailedCode, "Azure tenant context is required")
+		if _, supplied := c.GetQuery("tenantCode"); supplied {
+			common.Fail(c, common.BadRequestCode, "Azure tenant override is not supported")
 			return
 		}
-		state, err := generateTenantBoundState(tenantCode)
+		state, err := generateTenantBoundState(cfg.ITSMTenantCode)
 		if err != nil {
 			common.Fail(c, common.InternalErrorCode, "failed to generate state")
 			return
@@ -238,6 +234,10 @@ func azureCallbackHandler(cfg AzureConfig, client *ent.Client, jwtSecret string,
 			common.Fail(c, common.AuthFailedCode, "invalid tenant-bound state")
 			return
 		}
+		if !strings.EqualFold(boundState.TenantCode, cfg.ITSMTenantCode) {
+			common.AuthFailed(c, "Azure tenant state does not match deployment configuration")
+			return
+		}
 		authentication.WriteOAuthStateCookie(c.Writer, c.Request, "", -1)
 
 		code := c.Query("code")
@@ -262,12 +262,17 @@ func azureCallbackHandler(cfg AzureConfig, client *ent.Client, jwtSecret string,
 			return
 		}
 
-		email := info.Mail
+		email := strings.TrimSpace(info.Mail)
 		if email == "" {
-			email = info.UserPrincipal
+			email = strings.TrimSpace(info.UserPrincipal)
 		}
+		if email == "" {
+			common.AuthFailed(c, "Azure identity email is required")
+			return
+		}
+		email = strings.ToLower(email)
 
-		// Resolve the explicitly selected ITSM tenant before looking up an actor.
+		// Resolve the deployment-authorized ITSM tenant before looking up an actor.
 		// Azure identity email is never used to select or guess a tenant.
 		ctx := c.Request.Context()
 		tenantEntity, err := client.Tenant.Query().Where(tenant.CodeEQ(boundState.TenantCode)).Only(ctx)
@@ -278,9 +283,9 @@ func azureCallbackHandler(cfg AzureConfig, client *ent.Client, jwtSecret string,
 		}
 		// Email is globally unique in the authoritative User schema. Resolve one
 		// exact actor, then let the shared tenant-session policy authorize the
-		// selected tenant (native, super-admin, or allocated MSP). Never guess a
+		// configured tenant (native, super-admin, or allocated MSP). Never guess a
 		// tenant from the identity or provision over an existing actor.
-		u, err := client.User.Query().Where(user.EmailEQ(email)).Only(ctx)
+		u, err := client.User.Query().Where(user.EmailEqualFold(email)).Only(ctx)
 		if ent.IsNotFound(err) {
 			if !cfg.AllowUserProvisioning {
 				common.AuthFailed(c, "Azure user is not provisioned for the selected tenant")

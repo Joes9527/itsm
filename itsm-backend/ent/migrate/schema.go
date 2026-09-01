@@ -3346,7 +3346,6 @@ var (
 		{Name: "deployment_steps", Type: field.TypeJSON, Nullable: true},
 		{Name: "tags", Type: field.TypeJSON, Nullable: true},
 		{Name: "is_emergency", Type: field.TypeBool, Default: false},
-		{Name: "requires_approval", Type: field.TypeBool, Default: true},
 		{Name: "created_at", Type: field.TypeTime},
 		{Name: "updated_at", Type: field.TypeTime},
 	}

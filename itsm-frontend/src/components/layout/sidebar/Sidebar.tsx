@@ -8,7 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import { App, Layout, theme } from 'antd';
 import { useRouter, usePathname } from 'next/navigation';
-import { useAuthStore, useAuthStoreHydration } from '@/lib/store/auth-store';
+import { useAuthStore } from '@/lib/store/auth-store';
 import { LAYOUT_CONFIG } from '@/config/layout.config';
 import styles from './Sidebar.module.css';
 import { getMenuConfig, type MenuItem } from './menu-config';
@@ -58,9 +58,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, mobile 
   const router = useRouter();
   const pathname = usePathname();
   const { user } = useAuthStore();
-
-  // 触发 auth store 的 hydration
-  useAuthStoreHydration();
 
   // 动态菜单状态
   const [dynamicMenus, setDynamicMenus] = useState<MenuTreeResponse | null>(null);

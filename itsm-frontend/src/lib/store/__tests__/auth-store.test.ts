@@ -6,28 +6,13 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { act } from '@testing-library/react';
 
-// Mock 依赖
-jest.mock('@/lib/auth/token-storage', () => ({
-  clearAuthStorage: jest.fn(),
-}));
-
-jest.mock('@/lib/auth/tenant-context', () => ({
-  setTenant: jest.fn(),
-  clearTenant: jest.fn(),
-}));
-
 jest.mock('@/lib/api/http-client', () => ({
-  httpClient: {
-    setTenantId: jest.fn(),
-    setTenantCode: jest.fn(),
-  },
+  httpClient: {},
 }));
 
 describe('useAuthStore', () => {
   beforeEach(() => {
     jest.resetModules();
-    // 清理 localStorage
-    window.localStorage.clear();
   });
 
   // ============================================
@@ -191,59 +176,6 @@ describe('useAuthStore', () => {
       });
 
       expect(useAuthStore.getState().isLoading).toBe(false);
-    });
-  });
-
-  // ============================================
-  // 租户管理测试
-  // ============================================
-  describe('setCurrentTenant', () => {
-    it('应设置当前租户', async () => {
-      const { useAuthStore } = await import('../auth-store');
-
-      const mockTenant = {
-        id: 1,
-        name: 'Test Tenant',
-        code: 'test',
-        type: 'standard' as const,
-        status: 'active' as const,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      act(() => {
-        useAuthStore.getState().setCurrentTenant(mockTenant);
-      });
-
-      const state = useAuthStore.getState();
-      expect(state.currentTenant).toEqual(mockTenant);
-    });
-  });
-
-  describe('clearTenant', () => {
-    it('应清除租户', async () => {
-      const { useAuthStore } = await import('../auth-store');
-
-      const mockTenant = {
-        id: 1,
-        name: 'Test Tenant',
-        code: 'test',
-        type: 'standard' as const,
-        status: 'active' as const,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      act(() => {
-        useAuthStore.getState().setCurrentTenant(mockTenant);
-      });
-
-      act(() => {
-        useAuthStore.getState().clearTenant();
-      });
-
-      const state = useAuthStore.getState();
-      expect(state.currentTenant).toBeNull();
     });
   });
 

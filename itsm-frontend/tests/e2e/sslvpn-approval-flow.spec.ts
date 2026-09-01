@@ -19,25 +19,29 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { loginAndReturn } from './auth-utils';
+import { establishSession, loginAndReturn } from './auth-utils';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
+const TENANT_CODE = process.env.PLAYWRIGHT_TENANT_CODE || 'default';
 
 // 测试账号配置
 const USERS = {
   endUser: {
+    tenantCode: TENANT_CODE,
     username: 'end_user_test',
     password: 'Password123!',
     role: 'end_user',
     name: '侯艾华',
   },
   supervisor: {
+    tenantCode: TENANT_CODE,
     username: 'supervisor_test',
     password: 'Password123!',
     role: 'dept_manager',
     name: '主管初审测试账号',
   },
   lixin: {
+    tenantCode: TENANT_CODE,
     username: 'lixin_test',
     password: 'Password123!',
     role: 'network_eng',
@@ -65,26 +69,17 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
 
   test.beforeAll(async ({ request }) => {
     // 确保通过 API 能够获取到 SSL-VPN 远程办公访问权限申请 的 catalog ID
-    const loginResp = await request.post(`${API_BASE}/api/v1/auth/login`, {
-      data: {
-        username: USERS.endUser.username,
-        password: USERS.endUser.password,
-      },
-    });
-
-    if (loginResp.ok()) {
-        const catResp = await request.get(`${API_BASE}/api/v1/service-catalogs?page=1&size=100`);
-        if (catResp.ok()) {
-          const catData = await catResp.json();
-          const items = catData.data?.items || catData.items || [];
-          const sslvpnItem = items.find((item: any) =>
-            item.name?.includes('SSL-VPN') || item.processDefinitionKey === 'sslvpn_approval_flow'
-          );
-          if (sslvpnItem) {
-            catalogId = sslvpnItem.id;
-          }
-        }
-    }
+    await establishSession(request, USERS.endUser, API_BASE);
+    const catResp = await request.get(`${API_BASE}/api/v1/service-catalogs?page=1&size=100`);
+    expect(catResp.status()).toBe(200);
+    const catData = await catResp.json();
+    expect(catData.code).toBe(0);
+    const items = catData.data?.items ?? catData.items ?? [];
+    const sslvpnItem = items.find((item: any) =>
+      item.name?.includes('SSL-VPN') || item.processDefinitionKey === 'sslvpn_approval_flow'
+    );
+    expect(sslvpnItem?.id, 'SSL-VPN catalog item must be seeded').toBeGreaterThan(0);
+    catalogId = sslvpnItem!.id;
   });
 
   // =========================================================================
@@ -92,7 +87,7 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
   // =========================================================================
   test('Step 1: 申请人 (end_user_test) 浏览服务目录并填写 8 个自定义字段提交申请', async ({ page }) => {
     // 1.1 登录申请人账号
-    await loginAndReturn(page, USERS.endUser.username, USERS.endUser.password, '/service-catalog');
+    await loginAndReturn(page, USERS.endUser, '/service-catalog');
     await page.waitForLoadState('domcontentloaded');
 
     // 1.2 浏览服务目录并定位到 SSL-VPN 目录项
@@ -114,7 +109,7 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
       await page.goto(`/service-catalog/request/${catalogId}`);
     }
 
-    await page.waitForURL(/\/service-catalog\/request\/\d+/, { timeout: 15000 }).catch(() => {});
+    await page.waitForURL(/\/service-catalog\/request\/\d+/, { timeout: 15000 });
     const currentUrl = page.url();
     const urlMatch = currentUrl.match(/\/service-catalog\/request\/(\d+)/);
     if (urlMatch) {
@@ -204,7 +199,7 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
   // =========================================================================
   test('Step 2: 上级领导 (supervisor_test) 登录待办审批中心完成一级初审', async ({ page }) => {
     // 2.1 登录主管账号
-    await loginAndReturn(page, USERS.supervisor.username, USERS.supervisor.password, '/approvals');
+    await loginAndReturn(page, USERS.supervisor, '/approvals');
     await page.waitForLoadState('domcontentloaded');
 
     // 2.2 验证在待办中心能看到对应的待办任务
@@ -248,7 +243,7 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
   // =========================================================================
   test('Step 3: 李昕 / L2网络运维 (lixin_test) 登录待办审批中心完成二级复审与移交', async ({ page }) => {
     // 3.1 登录李昕账号
-    await loginAndReturn(page, USERS.lixin.username, USERS.lixin.password, '/approvals');
+    await loginAndReturn(page, USERS.lixin, '/approvals');
     await page.waitForLoadState('domcontentloaded');
 
     // 3.2 验证在待办中心看到流转过来的第二级技术复审任务

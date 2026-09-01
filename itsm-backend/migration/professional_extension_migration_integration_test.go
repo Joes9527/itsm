@@ -46,6 +46,7 @@ func TestProfessionalExtensionMigrationEnforcesOneToOneAndAssetLifecycle(t *test
 		CREATE TABLE workflow_instances (id BIGSERIAL PRIMARY KEY, workflow_id BIGINT REFERENCES workflows(id));
 		CREATE TABLE workflow_tasks (id BIGSERIAL PRIMARY KEY, instance_id BIGINT REFERENCES workflow_instances(id));
 		CREATE TABLE workflow_versions (id BIGSERIAL PRIMARY KEY, workflow_id BIGINT REFERENCES workflows(id));
+		CREATE TABLE releases (id BIGSERIAL PRIMARY KEY, requires_approval BOOLEAN NOT NULL DEFAULT TRUE);
 		ALTER TABLE ticket_categories ADD COLUMN workflow_id BIGINT REFERENCES workflows(id);
 		INSERT INTO tickets (id, tenant_id, record_class) VALUES
 			(1, 101, 'incident'), (2, 101, 'problem'), (3, 101, 'change_request');
@@ -69,7 +70,8 @@ func TestProfessionalExtensionMigrationEnforcesOneToOneAndAssetLifecycle(t *test
 		CREATE TABLE "%s".workflow_tasks (id BIGINT);
 		CREATE TABLE "%s".workflow_versions (id BIGINT);
 		CREATE TABLE "%s".ticket_categories (workflow_id BIGINT);
-	`, decoySchema, decoySchema, decoySchema, decoySchema, decoySchema, decoySchema, decoySchema, decoySchema))
+		CREATE TABLE "%s".releases (id BIGINT, requires_approval BOOLEAN);
+	`, decoySchema, decoySchema, decoySchema, decoySchema, decoySchema, decoySchema, decoySchema, decoySchema, decoySchema))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		_, _ = db.ExecContext(context.Background(), fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, decoySchema))
@@ -105,6 +107,18 @@ func TestProfessionalExtensionMigrationEnforcesOneToOneAndAssetLifecycle(t *test
 		WHERE table_schema = $1 AND table_name = 'ticket_categories' AND column_name = 'workflow_id'
 	`, decoySchema).Scan(&decoyCategoryWorkflowColumns))
 	require.Equal(t, 1, decoyCategoryWorkflowColumns, "migration must not mutate decoy ticket category")
+	var releaseApprovalColumns int
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM information_schema.columns
+		WHERE table_schema = current_schema() AND table_name = 'releases' AND column_name = 'requires_approval'
+	`).Scan(&releaseApprovalColumns))
+	require.Zero(t, releaseApprovalColumns, "release approval routing must be owned only by BPMN")
+	var decoyReleaseApprovalColumns int
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM information_schema.columns
+		WHERE table_schema = $1 AND table_name = 'releases' AND column_name = 'requires_approval'
+	`, decoySchema).Scan(&decoyReleaseApprovalColumns))
+	require.Equal(t, 1, decoyReleaseApprovalColumns, "migration must not mutate decoy release table")
 	for tableName, removedColumns := range map[string][]string{
 		"incidents": {"reporter_id", "assignee_id", "category", "subcategory", "source", "tenant_id", "version", "created_at", "updated_at", "resolved_at", "closed_at", "deleted_at"},
 		"problems":  {"category", "assignee_id", "created_by", "tenant_id", "created_at", "updated_at", "resolved_at", "closed_at", "deleted_at"},

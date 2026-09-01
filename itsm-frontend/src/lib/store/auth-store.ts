@@ -1,13 +1,10 @@
 /**
  * 统一的认证状态管理 Store
  * 合并了 tenant 支持和 permissions 系统
- * 使用 Zustand 进行全局状态管理，支持持久化存储
+ * 使用 Zustand 管理当前页面内由 `/auth/me` 验证的会话投影。
  */
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { clearAuthStorage } from '@/lib/auth/token-storage';
-import { setTenant, clearTenant } from '@/lib/auth/tenant-context';
 import type { User, Tenant } from '@/lib/api/api-config';
 
 // ===================================
@@ -29,10 +26,6 @@ interface AuthState {
   updateUser: (user: Partial<User>) => void;
   setLoading: (loading: boolean) => void;
 
-  // 租户操作
-  setCurrentTenant: (tenant: Tenant) => void;
-  clearTenant: () => void;
-
   // 权限检查
   hasPermission: (permission: string) => boolean;
   hasRole: (role: string) => boolean;
@@ -43,9 +36,7 @@ interface AuthState {
 // Store 定义
 // ===================================
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
+export const useAuthStore = create<AuthState>()((set, get) => ({
       // 初始状态
       user: null,
       currentTenant: null,
@@ -62,10 +53,6 @@ export const useAuthStore = create<AuthState>()(
           currentTenant: tenant || null,
         });
 
-        // 只设置租户信息（不存储 token）
-        if (tenant) {
-          setTenant(tenant.id, tenant.code);
-        }
       },
 
       // 登出操作
@@ -76,11 +63,6 @@ export const useAuthStore = create<AuthState>()(
           isLoading: false,
           currentTenant: null,
         });
-
-        // 清除所有认证信息（使用统一的清理函数，包含历史键名）
-        clearAuthStorage();
-
-        clearTenant();
       },
 
       // 更新用户信息
@@ -96,28 +78,6 @@ export const useAuthStore = create<AuthState>()(
       // 设置加载状态
       setLoading: (loading: boolean) => {
         set({ isLoading: loading });
-      },
-
-      // 设置当前租户
-      setCurrentTenant: (tenant: Tenant) => {
-        set({ currentTenant: tenant });
-        setTenant(tenant.id, tenant.code);
-
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('current_tenant_id', tenant.id.toString());
-          localStorage.setItem('current_tenant_code', tenant.code);
-        }
-      },
-
-      // 清除租户
-      clearTenant: () => {
-        set({ currentTenant: null });
-        clearTenant();
-
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('current_tenant_id');
-          localStorage.removeItem('current_tenant_code');
-        }
       },
 
       // 检查用户权限
@@ -137,26 +97,7 @@ export const useAuthStore = create<AuthState>()(
         const { user } = get();
         return user?.role === 'admin' || user?.role === 'super_admin';
       },
-    }),
-    {
-      name: 'auth-storage',
-      partialize: state => ({
-        // 安全：不持久化 user（含 PII/permissions），避免 XSS 读取与跨用户残留
-        currentTenant: state.currentTenant,
-        // 不持久化 isAuthenticated/user，由启动时的 /api/v1/auth/me 探活接口决定
-        // 避免 cookie 过期后前端仍显示已登录的伪登录态
-      }),
-      skipHydration: true, // 手动处理 SSR hydration
-      onRehydrateStorage: () => state => {
-        // hydration 完成后，强制将 isAuthenticated 设为 false
-        // 后续通过 /api/v1/auth/me 接口验证真实登录状态
-        if (state) {
-          state.isAuthenticated = false;
-        }
-      },
-    }
-  )
-);
+    }));
 
 // ===================================
 // 租户管理 Store
@@ -286,27 +227,4 @@ export const usePermissions = () => {
   };
 };
 
-// ===================================
-// 导出兼容性别名
-// ===================================
-
-// 导出 store 以便手动 hydration
-export { useAuthStore as authStore };
-
-// Hydration hook - 在客户端组件中使用
-import { useEffect } from 'react';
-
-export const useAuthStoreHydration = () => {
-  useEffect(() => {
-    // 触发 persist hydration - rehydrate may return void or Promise
-    const result = useAuthStore.persist.rehydrate();
-    if (result instanceof Promise) {
-      result.catch((err: unknown) => {
-        console.error('Auth store hydration failed:', err);
-      });
-    }
-  }, []);
-};
-
-// 为了向后兼容，导出类型
 export type { AuthState, TenantState };

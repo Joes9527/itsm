@@ -14,7 +14,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { loginAsAdmin } from './test-utils';
+import { DEFAULT_LOGIN, establishSession, loginAndReturn as loginAsAdmin } from './auth-utils';
 
 const BASE = 'http://localhost:3000';
 const API = 'http://localhost:8090';
@@ -91,7 +91,7 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
 
     // 详情页渲染 - 等待 ticket 数据加载完成
     await page.goto(`${BASE}/tickets/${ticketId}`);
-    await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
+    await page.waitForLoadState('networkidle', { timeout: 15000 });
     // 验证 ticket 详情 API 返回了 closed 状态
     const detailCheck = await page.request.get(`${API}/api/v1/tickets/${ticketId}`);
     const detailJson = await detailCheck.json();
@@ -302,10 +302,7 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
   // ===== 9. 多角色权限 =====
   test('9.1 user1（end_user）权限边界', async ({ page }) => {
     // 直接以 user1 身份建立 cookie 会话（无需 UI 登录）
-    const loginResp = await page.request.post(`${API}/api/v1/auth/login`, {
-      data: { username: 'user1', password: 'user123' },
-    });
-    expect(loginResp.status()).toBe(200);
+    await establishSession(page.request, { ...DEFAULT_LOGIN, username: 'user1', password: 'user123' }, API);
 
     // 可读 tickets
     const ticketsResp = await page.request.get(`${API}/api/v1/tickets?page=1&page_size=3`);
@@ -321,10 +318,7 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
   });
 
   test('9.2 security1（security）权限边界', async ({ page }) => {
-    const loginResp = await page.request.post(`${API}/api/v1/auth/login`, {
-      data: { username: 'security1', password: 'security123' },
-    });
-    expect(loginResp.status()).toBe(200);
+    await establishSession(page.request, { ...DEFAULT_LOGIN, username: 'security1', password: 'security123' }, API);
 
     // 可读 incidents
     const incResp = await page.request.get(`${API}/api/v1/incidents?page=1&page_size=3`);

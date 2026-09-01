@@ -5,27 +5,31 @@
 
 import type { Page} from '@playwright/test';
 import { expect } from '@playwright/test';
-import { loginAndReturn } from '../auth-utils';
+import { loginAndReturn, logoutSession } from '../auth-utils';
 
 // Test user credentials from seed data (see itsm-backend/pkg/seeder/seeder.go)
 export const TEST_USERS = {
   admin: {
+    tenantCode: process.env.PLAYWRIGHT_TENANT_CODE || 'default',
     username: 'admin',
     password: 'admin123',
     role: 'admin',
   },
   end_user: {
+    tenantCode: process.env.PLAYWRIGHT_TENANT_CODE || 'default',
     username: 'user1',
     password: 'user123',
     role: 'end_user',
   },
   security: {
+    tenantCode: process.env.PLAYWRIGHT_TENANT_CODE || 'default',
     username: 'security1',
     password: 'security123',
     role: 'security',
   },
   // Agent uses security1 user (has agent-like permissions)
   agent: {
+    tenantCode: process.env.PLAYWRIGHT_TENANT_CODE || 'default',
     username: 'security1',
     password: 'security123',
     role: 'agent',
@@ -39,47 +43,14 @@ export type TestUserRole = keyof typeof TEST_USERS;
  */
 export async function loginAs(page: Page, role: TestUserRole): Promise<void> {
   const user = TEST_USERS[role];
-  await loginAndReturn(page, user.username, user.password);
-}
-
-/**
- * Login via API (more reliable for E2E tests)
- */
-export async function loginViaApi(page: Page, role: TestUserRole): Promise<void> {
-  await loginAs(page, role);
+  await loginAndReturn(page, user);
 }
 
 /**
  * Logout current user
  */
 export async function logout(page: Page): Promise<void> {
-  // Ensure page is valid
-  const currentUrl = page.url();
-  if (!currentUrl || currentUrl === 'about:blank') {
-    await page.goto('/login');
-  }
-
-  // Click user menu or logout button
-  const logoutButton = page.locator(
-    'button:has-text("退出"), button:has-text("注销"), [class*="logout"], [data-testid="logout"]'
-  );
-
-  if (await logoutButton.isVisible().catch(() => false)) {
-    await logoutButton.click();
-  }
-
-  // Clear auth storage with error handling
-  await page.evaluate(() => {
-    try {
-      localStorage.clear();
-      sessionStorage.clear();
-      document.cookie.split(';').forEach(c => {
-        document.cookie = c.replace(/^ +/, '').replace(/=.*/, '=;expires=' + new Date().toUTCString() + ';path=/');
-      });
-    } catch {
-      // Ignore storage errors
-    }
-  }).catch(() => {});
+  await logoutSession(page);
 }
 
 /**
@@ -130,16 +101,6 @@ export async function createTicketViaApi(
 /**
  * Get current user info
  */
-export async function getCurrentUser(page: Page): Promise<{ username: string; role: string } | null> {
-  return await page.evaluate(() => {
-    const userStr = localStorage.getItem('user');
-    if (userStr) {
-      return JSON.parse(userStr);
-    }
-    return null;
-  });
-}
-
 /**
  * Take a screenshot with name
  */

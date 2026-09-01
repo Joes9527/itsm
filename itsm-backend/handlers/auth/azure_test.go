@@ -12,6 +12,7 @@ import (
 	"itsm-backend/authentication"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/user"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -49,6 +50,11 @@ func TestAzureConfigRequiresCallbackURI(t *testing.T) {
 	require.False(t, cfg.IsConfigured())
 }
 
+func TestAzureConfigRequiresDeploymentTenant(t *testing.T) {
+	cfg := azureTestConfig("")
+	require.False(t, cfg.IsConfigured())
+}
+
 func TestAzureLoginStateCookieUsesCanonicalSecurePolicy(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
@@ -79,18 +85,89 @@ func TestAzureLoginFailsClosedWithoutExplicitITSMTenant(t *testing.T) {
 	require.Nil(t, findCookie(rec.Result().Cookies(), "azure_oauth_state"))
 }
 
-func TestAzureLoginBindsExplicitUserSelectedTenant(t *testing.T) {
+func TestAzureLoginRejectsTenantQueryOverride(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.GET("/login", AzureLoginHandler(azureTestConfig("configured-default"), zap.NewNop().Sugar()))
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/login?tenantCode=selected-customer", nil))
-	require.Equal(t, http.StatusTemporaryRedirect, rec.Code)
-	state := findCookie(rec.Result().Cookies(), "azure_oauth_state")
-	require.NotNil(t, state)
-	bound, err := parseTenantBoundState(state.Value)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	require.Nil(t, findCookie(rec.Result().Cookies(), "azure_oauth_state"))
+}
+
+func TestAzureCallbackRejectsStateBoundToDifferentDeploymentTenant(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	client := azureTestClient(t)
+	configured := client.Tenant.Create().SetName("Configured").SetCode("configured-tenant").SetType("standard").SetStatus("active").SaveX(t.Context())
+	attacker := client.Tenant.Create().SetName("Attacker").SetCode("attacker-selected-tenant").SetType("standard").SetStatus("active").SaveX(t.Context())
+	cfg := azureTestConfig(configured.Code)
+	cfg.AllowUserProvisioning = true
+	handler := azureCallbackHandler(cfg, client, "secret", zap.NewNop().Sugar(), stubAzureProvider{
+		identity: &azureUserInfo{Mail: "nobody@example.test", DisplayName: "Nobody"},
+	}, time.Now)
+	router := gin.New()
+	router.GET("/callback", handler)
+	state, err := generateTenantBoundState("attacker-selected-tenant")
 	require.NoError(t, err)
-	require.Equal(t, "selected-customer", bound.TenantCode)
+	req := httptest.NewRequest(http.MethodGet, "/callback?code=ok&state="+state, nil)
+	req.AddCookie(&http.Cookie{Name: "azure_oauth_state", Value: state})
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+	require.Nil(t, findCookie(rec.Result().Cookies(), "access_token"))
+	require.Nil(t, findCookie(rec.Result().Cookies(), "refresh_token"))
+	require.False(t, client.User.Query().Where(user.TenantIDEQ(attacker.ID)).ExistX(t.Context()))
+}
+
+func TestAzureCallbackRejectsEmptyIdentityEmailBeforeProvisioning(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	client := azureTestClient(t)
+	tenantEntity := client.Tenant.Create().SetName("Configured").SetCode("empty-email").SetType("standard").SetStatus("active").SaveX(t.Context())
+	cfg := azureTestConfig(tenantEntity.Code)
+	cfg.AllowUserProvisioning = true
+	handler := azureCallbackHandler(cfg, client, "secret", zap.NewNop().Sugar(), stubAzureProvider{
+		identity: &azureUserInfo{Mail: "  ", UserPrincipal: "\t"},
+	}, time.Now)
+	router := gin.New()
+	router.GET("/callback", handler)
+	state, err := generateTenantBoundState(tenantEntity.Code)
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodGet, "/callback?code=ok&state="+state, nil)
+	req.AddCookie(&http.Cookie{Name: "azure_oauth_state", Value: state})
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+	require.Zero(t, client.User.Query().CountX(t.Context()))
+	require.Nil(t, findCookie(rec.Result().Cookies(), "access_token"))
+}
+
+func TestAzureCallbackMatchesConfiguredTenantActorEmailCaseInsensitively(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	client := azureTestClient(t)
+	tenantEntity := client.Tenant.Create().SetName("Configured").SetCode("case-email").SetType("standard").SetStatus("active").SaveX(t.Context())
+	actor := client.User.Create().SetUsername("azure-case").SetEmail("Azure.Case@Example.Test").SetName("Azure Case").
+		SetPasswordHash("oidc").SetRole("end_user").SetTenantID(tenantEntity.ID).SetActive(true).SaveX(t.Context())
+	handler := azureCallbackHandler(azureTestConfig(tenantEntity.Code), client, "secret", zap.NewNop().Sugar(), stubAzureProvider{
+		identity: &azureUserInfo{Mail: "  azure.case@example.test  "},
+	}, time.Now)
+	router := gin.New()
+	router.GET("/callback", handler)
+	state, err := generateTenantBoundState(tenantEntity.Code)
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodGet, "/callback?code=ok&state="+state, nil)
+	req.AddCookie(&http.Cookie{Name: "azure_oauth_state", Value: state})
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusTemporaryRedirect, rec.Code)
+	require.Equal(t, 1, client.User.Query().CountX(t.Context()))
+	refresh := findCookie(rec.Result().Cookies(), "refresh_token")
+	require.NotNil(t, refresh)
+	claims, err := authentication.NewRefreshTokenConsumer("secret", nil).Validate(refresh.Value)
+	require.NoError(t, err)
+	require.Equal(t, actor.ID, claims.Identity().UserID)
 }
 
 func TestAzureCallbackIssuesCanonicalTenantBoundCookieSession(t *testing.T) {

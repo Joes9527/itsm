@@ -64,7 +64,6 @@ func ToReleaseResponse(release *ent.Release) *ReleaseResponse {
 		DeploymentSteps:    release.DeploymentSteps,
 		Tags:               release.Tags,
 		IsEmergency:        release.IsEmergency,
-		RequiresApproval:   release.RequiresApproval,
 		CreatedAt:          release.CreatedAt,
 		UpdatedAt:          release.UpdatedAt,
 	}

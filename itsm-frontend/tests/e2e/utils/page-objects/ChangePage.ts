@@ -15,7 +15,7 @@ export class ChangePage extends BasePage {
 
   async goto(): Promise<void> {
     await this.page.goto(`${this.baseUrl}${this.url}`, { waitUntil: 'domcontentloaded' });
-    await this.changeTable.waitFor({ state: 'visible' }).catch(() => {});
+    await this.changeTable.waitFor({ state: 'visible' });
   }
 
   async createChange(data: {
@@ -55,7 +55,7 @@ export class ChangePage extends BasePage {
     await this.page.getByRole('button', { name: /提交|Submit|创建|Create/i }).first().click();
 
     // 等待跳转
-    await this.page.waitForURL(/\/changes\/\d+|\/changes/, { timeout: 15000 }).catch(() => {});
+    await this.page.waitForURL(/\/changes\/\d+/, { timeout: 15000 });
 
     const url = this.page.url();
     const match = url.match(/\/changes\/(\d+)/);
@@ -69,7 +69,7 @@ export class ChangePage extends BasePage {
     const approveButton = this.page.getByRole('button', { name: /审批|Approve|批准/i });
     if (await approveButton.isVisible()) {
       await approveButton.click();
-      await this.page.waitForSelector('.ant-modal', { timeout: 5000 }).catch(() => {});
+      await this.page.waitForSelector('.ant-modal', { timeout: 5000 });
 
       const commentInput = this.page.locator('textarea[id*="comment"], textarea[placeholder*="意见"]').first();
       if (await commentInput.isVisible()) {
@@ -90,7 +90,7 @@ export class ChangePage extends BasePage {
     const rejectButton = this.page.getByRole('button', { name: /拒绝|Reject/i });
     if (await rejectButton.isVisible()) {
       await rejectButton.click();
-      await this.page.waitForSelector('.ant-modal', { timeout: 5000 }).catch(() => {});
+      await this.page.waitForSelector('.ant-modal', { timeout: 5000 });
 
       const reasonInput = this.page.locator('textarea[id*="reason"], textarea[placeholder*="原因"]').first();
       if (await reasonInput.isVisible()) {
@@ -112,6 +112,6 @@ export class ChangePage extends BasePage {
     } else {
       await row.click();
     }
-    await this.page.waitForURL(new RegExp(`/changes/${id}|/changes/\\d+`), { timeout: 10000 }).catch(() => {});
+    await this.page.waitForURL(new RegExp(`/changes/${id}|/changes/\\d+`), { timeout: 10000 });
   }
 }

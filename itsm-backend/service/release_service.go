@@ -81,7 +81,6 @@ func (s *ReleaseService) CreateRelease(ctx context.Context, req *dto.CreateRelea
 		SetRollbackProcedure(req.RollbackProcedure).
 		SetValidationCriteria(req.ValidationCriteria).
 		SetIsEmergency(req.IsEmergency).
-		SetRequiresApproval(req.RequiresApproval).
 		Save(ctx)
 	if err != nil {
 		s.logger.Errorw("Failed to create release", "error", err, "tenant_id", tenantID)
@@ -126,14 +125,14 @@ func (s *ReleaseService) CreateRelease(ctx context.Context, req *dto.CreateRelea
 	triggerCtx := WithTrustedBPMNTenantContext(ctx, tenantID)
 	processStart, err := transactionalTrigger.TriggerByBusinessTypeWithClient(
 		triggerCtx, txClient, dto.BusinessTypeRelease, releaseEntity.ID,
-		map[string]interface{}{"requires_approval": req.RequiresApproval},
+		nil,
 		strconv.Itoa(createdBy), tenantID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("start release workflow atomically: %w", err)
 	}
-	if processStart == nil {
-		return nil, fmt.Errorf("start release workflow atomically: missing transactional start result")
+	if err := processStart.validateIdentity(dto.BusinessTypeRelease, releaseEntity.ID, tenantID); err != nil {
+		return nil, fmt.Errorf("invalid workflow start: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("commit release and workflow: %w", err)
@@ -280,10 +279,6 @@ func (s *ReleaseService) UpdateRelease(ctx context.Context, id, tenantID int, re
 	if req.IsEmergency != nil {
 		update.SetIsEmergency(*req.IsEmergency)
 	}
-	if req.RequiresApproval != nil {
-		update.SetRequiresApproval(*req.RequiresApproval)
-	}
-
 	if len(req.AffectedSystems) > 0 {
 		update.SetAffectedSystems(req.AffectedSystems)
 	}

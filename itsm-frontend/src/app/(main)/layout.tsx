@@ -15,7 +15,6 @@ import PageTransition from '@/components/common/PageTransition';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { usePersonaStore } from '@/lib/store/persona-store';
 import { PERSONAS, getRolePersonaConfig, getPersonaByPath } from '@/config/persona/persona-config';
-import type { Tenant } from '@/lib/api/api-config';
 
 const { Content } = Layout;
 
@@ -42,7 +41,7 @@ export default function MainLayout({
   useEffect(() => {
     setMounted(true);
     const checkAuth = async () => {
-      const { login, logout, setCurrentTenant } = useAuthStore.getState();
+      const { login, logout } = useAuthStore.getState();
       let userInfo: any;
       try {
         userInfo = await httpClient.get<any>('/api/v1/auth/me');
@@ -67,7 +66,10 @@ export default function MainLayout({
       }
 
       const tenants = Array.isArray(tenantInfo?.tenants) ? tenantInfo.tenants : [];
-      const currentTenant = tenants[0];
+      const sessionTenantId = Number(userInfo?.tenantId);
+      const currentTenant = Number.isInteger(sessionTenantId)
+        ? tenants.find((candidate: { id?: number }) => Number(candidate.id) === sessionTenantId)
+        : undefined;
       const roleCode = String(userInfo?.role || 'end_user');
 
       login(
@@ -95,19 +97,6 @@ export default function MainLayout({
             }
           : undefined
       );
-
-      if (currentTenant) {
-        const tenantData: Tenant = {
-          id: Number(currentTenant.id),
-          name: String(currentTenant.name),
-          code: String(currentTenant.code),
-          type: currentTenant.type || 'standard',
-          status: currentTenant.status || 'active',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        setCurrentTenant(tenantData);
-      }
 
       // 初始化 Persona——带上 userId，跨账号登录时才能正确重置，见 persona-store.ts 注释。
       initPersonaByRole(roleCode, Number(userInfo?.id || 0));

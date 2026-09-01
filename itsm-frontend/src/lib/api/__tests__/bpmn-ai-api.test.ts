@@ -5,7 +5,6 @@ jest.mock('@/lib/api/http-client', () => ({
   httpClient: {
     get: jest.fn(),
     post: jest.fn(),
-    getTenantId: jest.fn().mockReturnValue(42),
   },
 }));
 
@@ -43,7 +42,6 @@ describe('BPMNAIApi', () => {
       includeSla: true,
       includeNotifications: true,
       includeApprovals: false,
-      tenantId: 42,
     });
     expect(result).toBe(mockResponse);
   });

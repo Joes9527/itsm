@@ -29,7 +29,7 @@ test.describe('FLOW-10: 知识库全流程', () => {
     expect(draftResp.status).toBe(200);
     expect(draftResp.data).toHaveProperty('code', 0);
     const articleId = draftResp.data.data?.id;
-    expect(articleId).toBeDefined();
+    expect(articleId).toBeGreaterThan(0);
 
     // Step 2: admin 发布文章
     if (articleId) {

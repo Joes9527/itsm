@@ -27,7 +27,7 @@ test.describe('Ticket List Page', () => {
 
   test('should navigate to ticket detail (if any row exists)', async ({ page }) => {
     const row = page.locator('table tbody tr').first();
-    if (!(await row.isVisible().catch(() => false))) {
+    if (!(await row.isVisible())) {
       test.skip();
       return;
     }
@@ -39,7 +39,7 @@ test.describe('Ticket List Page', () => {
       const viewButton = page
         .locator('a[href*="/tickets/"], button:has-text("查看"), button:has-text("详情")')
         .first();
-      if (await viewButton.isVisible().catch(() => false)) {
+      if (await viewButton.isVisible()) {
         await viewButton.click();
       }
     }
@@ -57,7 +57,7 @@ test.describe('Ticket Detail Page', () => {
     await page.goto('/tickets', { waitUntil: 'domcontentloaded' });
 
     const row = page.locator('table tbody tr').first();
-    if (!(await row.isVisible().catch(() => false))) {
+    if (!(await row.isVisible())) {
       test.skip();
       return;
     }

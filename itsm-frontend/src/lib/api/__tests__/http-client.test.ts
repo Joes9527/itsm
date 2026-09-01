@@ -17,14 +17,12 @@
  *   - `batchOperation` wraps data in `{ operation, data }`
  *   - CSRF token is added to mutating requests but not GET
  *   - Browser credentials are included and no Authorization header is synthesized
- *   - Tenant headers (X-Tenant-ID, X-Tenant-Code) are added when the
- *     TenantContext is populated
+ *   - Browser state never synthesizes tenant authority headers
  *   - Missing code field is tolerated (BPMN controller quirk)
  */
 
 import { httpClient } from '../http-client';
 import { security } from '@/lib/security';
-import { setTenantId, setTenantCode, clearTenant } from '@/lib/auth/tenant-context';
 
 jest.mock('@/lib/security', () => ({
   security: {
@@ -69,7 +67,6 @@ function jsonResponse(body: unknown, init: { status?: number; ok?: boolean } = {
 describe('httpClient', () => {
   beforeEach(() => {
     fetchMock.mockReset();
-    clearTenant();
     // jsdom has no auth cookie by default — clear it explicitly.
     document.cookie = 'access_token=; path=/; max-age=-1;';
     document.cookie = 'refresh_token=; path=/; max-age=-1;';
@@ -306,16 +303,14 @@ describe('httpClient', () => {
       expect(init.headers['Authorization']).toBeUndefined();
     });
 
-    it('adds tenant headers when TenantContext is populated', async () => {
-      setTenantId(42);
-      setTenantCode('acme');
+    it('does not synthesize tenant authority headers', async () => {
       fetchMock.mockResolvedValueOnce(jsonResponse({ code: 0, message: 'ok', data: {} }));
 
       await httpClient.get('/api/v1/tickets');
 
       const [, init] = fetchMock.mock.calls[0];
-      expect(init.headers['X-Tenant-ID']).toBe('42');
-      expect(init.headers['X-Tenant-Code']).toBe('acme');
+      expect(init.headers['X-Tenant-ID']).toBeUndefined();
+      expect(init.headers['X-Tenant-Code']).toBeUndefined();
     });
 
     it('does not add tenant headers when TenantContext is empty', async () => {

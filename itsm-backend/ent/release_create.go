@@ -280,20 +280,6 @@ func (_c *ReleaseCreate) SetNillableIsEmergency(v *bool) *ReleaseCreate {
 	return _c
 }
 
-// SetRequiresApproval sets the "requires_approval" field.
-func (_c *ReleaseCreate) SetRequiresApproval(v bool) *ReleaseCreate {
-	_c.mutation.SetRequiresApproval(v)
-	return _c
-}
-
-// SetNillableRequiresApproval sets the "requires_approval" field if the given value is not nil.
-func (_c *ReleaseCreate) SetNillableRequiresApproval(v *bool) *ReleaseCreate {
-	if v != nil {
-		_c.SetRequiresApproval(*v)
-	}
-	return _c
-}
-
 // SetCreatedAt sets the "created_at" field.
 func (_c *ReleaseCreate) SetCreatedAt(v time.Time) *ReleaseCreate {
 	_c.mutation.SetCreatedAt(v)
@@ -377,10 +363,6 @@ func (_c *ReleaseCreate) defaults() {
 		v := release.DefaultIsEmergency
 		_c.mutation.SetIsEmergency(v)
 	}
-	if _, ok := _c.mutation.RequiresApproval(); !ok {
-		v := release.DefaultRequiresApproval
-		_c.mutation.SetRequiresApproval(v)
-	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		v := release.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
@@ -439,9 +421,6 @@ func (_c *ReleaseCreate) check() error {
 	}
 	if _, ok := _c.mutation.IsEmergency(); !ok {
 		return &ValidationError{Name: "is_emergency", err: errors.New(`ent: missing required field "Release.is_emergency"`)}
-	}
-	if _, ok := _c.mutation.RequiresApproval(); !ok {
-		return &ValidationError{Name: "requires_approval", err: errors.New(`ent: missing required field "Release.requires_approval"`)}
 	}
 	if _, ok := _c.mutation.CreatedAt(); !ok {
 		return &ValidationError{Name: "created_at", err: errors.New(`ent: missing required field "Release.created_at"`)}
@@ -567,10 +546,6 @@ func (_c *ReleaseCreate) createSpec() (*Release, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.IsEmergency(); ok {
 		_spec.SetField(release.FieldIsEmergency, field.TypeBool, value)
 		_node.IsEmergency = value
-	}
-	if value, ok := _c.mutation.RequiresApproval(); ok {
-		_spec.SetField(release.FieldRequiresApproval, field.TypeBool, value)
-		_node.RequiresApproval = value
 	}
 	if value, ok := _c.mutation.CreatedAt(); ok {
 		_spec.SetField(release.FieldCreatedAt, field.TypeTime, value)
@@ -1013,18 +988,6 @@ func (u *ReleaseUpsert) SetIsEmergency(v bool) *ReleaseUpsert {
 // UpdateIsEmergency sets the "is_emergency" field to the value that was provided on create.
 func (u *ReleaseUpsert) UpdateIsEmergency() *ReleaseUpsert {
 	u.SetExcluded(release.FieldIsEmergency)
-	return u
-}
-
-// SetRequiresApproval sets the "requires_approval" field.
-func (u *ReleaseUpsert) SetRequiresApproval(v bool) *ReleaseUpsert {
-	u.Set(release.FieldRequiresApproval, v)
-	return u
-}
-
-// UpdateRequiresApproval sets the "requires_approval" field to the value that was provided on create.
-func (u *ReleaseUpsert) UpdateRequiresApproval() *ReleaseUpsert {
-	u.SetExcluded(release.FieldRequiresApproval)
 	return u
 }
 
@@ -1537,20 +1500,6 @@ func (u *ReleaseUpsertOne) SetIsEmergency(v bool) *ReleaseUpsertOne {
 func (u *ReleaseUpsertOne) UpdateIsEmergency() *ReleaseUpsertOne {
 	return u.Update(func(s *ReleaseUpsert) {
 		s.UpdateIsEmergency()
-	})
-}
-
-// SetRequiresApproval sets the "requires_approval" field.
-func (u *ReleaseUpsertOne) SetRequiresApproval(v bool) *ReleaseUpsertOne {
-	return u.Update(func(s *ReleaseUpsert) {
-		s.SetRequiresApproval(v)
-	})
-}
-
-// UpdateRequiresApproval sets the "requires_approval" field to the value that was provided on create.
-func (u *ReleaseUpsertOne) UpdateRequiresApproval() *ReleaseUpsertOne {
-	return u.Update(func(s *ReleaseUpsert) {
-		s.UpdateRequiresApproval()
 	})
 }
 
@@ -2231,20 +2180,6 @@ func (u *ReleaseUpsertBulk) SetIsEmergency(v bool) *ReleaseUpsertBulk {
 func (u *ReleaseUpsertBulk) UpdateIsEmergency() *ReleaseUpsertBulk {
 	return u.Update(func(s *ReleaseUpsert) {
 		s.UpdateIsEmergency()
-	})
-}
-
-// SetRequiresApproval sets the "requires_approval" field.
-func (u *ReleaseUpsertBulk) SetRequiresApproval(v bool) *ReleaseUpsertBulk {
-	return u.Update(func(s *ReleaseUpsert) {
-		s.SetRequiresApproval(v)
-	})
-}
-
-// UpdateRequiresApproval sets the "requires_approval" field to the value that was provided on create.
-func (u *ReleaseUpsertBulk) UpdateRequiresApproval() *ReleaseUpsertBulk {
-	return u.Update(func(s *ReleaseUpsert) {
-		s.UpdateRequiresApproval()
 	})
 }
 

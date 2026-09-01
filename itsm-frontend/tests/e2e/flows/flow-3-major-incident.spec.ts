@@ -28,7 +28,7 @@ test.describe('FLOW-3: 重大事件多角色协作', () => {
 
     expect(incidentResp.status).toBe(200);
     const incidentId = incidentResp.data.data?.id;
-    expect(incidentId).toBeDefined();
+    expect(incidentId).toBeGreaterThan(0);
 
     // Step 2: manager 确认为重大事件
     if (incidentId) {

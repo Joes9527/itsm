@@ -16,7 +16,6 @@ jest.mock('../http-client', () => ({
     put: jest.fn(),
     delete: jest.fn(),
     getBaseURL: jest.fn(() => 'http://localhost:3000'),
-    getTenantId: jest.fn(() => 1),
   },
 }));
 

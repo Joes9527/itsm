@@ -4,18 +4,11 @@
  */
 
 import { test, expect } from '@playwright/test';
+import { loginAndReturn } from './auth-utils';
 
 test.describe('License/Certificate Management - 许可证管理', () => {
   test.beforeEach(async ({ page }) => {
-    // 先登录
-    await page.goto('/login');
-    await page.waitForLoadState('domcontentloaded');
-    await page.waitForSelector('.ant-input, input.ant-input', { timeout: 15000 });
-    const inputs = page.locator('input.ant-input');
-    await inputs.nth(0).fill('admin');
-    await inputs.nth(1).fill('admin123');
-    await page.click('button[type="submit"]');
-    await page.waitForURL(/\/(dashboard|tickets|incidents)/, { timeout: 20000 });
+    await loginAndReturn(page);
   });
 
   test.describe('License List - 许可证列表', () => {

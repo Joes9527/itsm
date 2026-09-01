@@ -49,7 +49,7 @@ import { UserApi } from '@/lib/api/user-api';
 import { TicketApi } from '@/lib/api/ticket-api';
 import { NotificationPreferenceApi, NotificationEventType } from '@/lib/api/notification-preference-api';
 import { useI18n } from '@/lib/i18n';
-import { useAuthStore, useAuthStoreHydration } from '@/lib/store/auth-store';
+import { useAuthStore } from '@/lib/store/auth-store';
 
 const { Title, Text } = Typography;
 
@@ -133,8 +133,6 @@ const DEFAULT_NOTIFICATION_EVENT_TYPES: NotificationEventType[] = [
 export default function ProfilePage() {
   const { t } = useI18n();
   const { user } = useAuthStore();
-  useAuthStoreHydration();
-
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);

@@ -77,6 +77,9 @@ BEGIN
 	EXECUTE format('DROP TABLE IF EXISTS %I.workflow_instances CASCADE', current_schema());
 	EXECUTE format('DROP TABLE IF EXISTS %I.workflow_versions CASCADE', current_schema());
 	EXECUTE format('DROP TABLE IF EXISTS %I.workflows CASCADE', current_schema());
+	IF to_regclass(format('%I.releases', current_schema())) IS NOT NULL THEN
+		EXECUTE format('ALTER TABLE %I.releases DROP COLUMN IF EXISTS requires_approval', current_schema());
+	END IF;
 	IF to_regclass(format('%I.ticket_categories', current_schema())) IS NOT NULL THEN
 		EXECUTE format('ALTER TABLE %I.ticket_categories DROP COLUMN IF EXISTS workflow_id', current_schema());
 	END IF;

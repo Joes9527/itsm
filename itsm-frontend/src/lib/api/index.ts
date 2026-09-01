@@ -57,8 +57,6 @@ export { ProblemApi } from './problem-api';
 
 // 服务请求
 export { serviceRequestAPI } from './service-request-api';
-// 兼容别名
-export { serviceRequestAPI as ServiceRequestApi } from './service-request-api';
 export { ServiceCatalogApi } from './service-catalog-api';
 
 // 知识库

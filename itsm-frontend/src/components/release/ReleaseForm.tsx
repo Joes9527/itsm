@@ -49,7 +49,6 @@ interface ReleaseFormValues {
   deploymentSteps?: string;
   tags?: string[];
   isEmergency?: boolean;
-  requiresApproval?: boolean;
 }
 
 const splitLines = (value?: string): string[] | undefined => {
@@ -133,7 +132,6 @@ const ReleaseForm: React.FC = () => {
         deploymentSteps: splitLines(values.deploymentSteps),
         tags: values.tags,
         isEmergency: values.isEmergency,
-        requiresApproval: values.requiresApproval,
       };
 
       if (isEdit) {
@@ -181,7 +179,6 @@ const ReleaseForm: React.FC = () => {
           environment: 'staging',
           severity: 'medium',
           isEmergency: false,
-          requiresApproval: true,
         }}
       >
         <div style={{ marginBottom: 16 }}>
@@ -286,10 +283,6 @@ const ReleaseForm: React.FC = () => {
         <Divider>其他选项</Divider>
 
         <Form.Item name="isEmergency" label="紧急发布" valuePropName="checked">
-          <Switch />
-        </Form.Item>
-
-        <Form.Item name="requiresApproval" label="需要审批" valuePropName="checked">
           <Switch />
         </Form.Item>
 

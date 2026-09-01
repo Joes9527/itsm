@@ -15,7 +15,7 @@ export class ProblemPage extends BasePage {
 
   async goto(): Promise<void> {
     await this.page.goto(`${this.baseUrl}${this.url}`);
-    await this.problemTable.waitFor({ state: 'visible' }).catch(() => {});
+    await this.problemTable.waitFor({ state: 'visible' });
   }
 
   async createProblem(data: {
@@ -61,7 +61,7 @@ export class ProblemPage extends BasePage {
     await this.page.getByRole('button', { name: /提交|Submit|创建|Create/i }).first().click();
 
     // 等待跳转
-    await this.page.waitForURL(/\/problems\/\d+|\/problems/, { timeout: 15000 }).catch(() => {});
+    await this.page.waitForURL(/\/problems\/\d+/, { timeout: 15000 });
 
     const url = this.page.url();
     const match = url.match(/\/problems\/(\d+)/);
@@ -75,7 +75,7 @@ export class ProblemPage extends BasePage {
     const linkButton = this.page.getByRole('button', { name: /关联事件|Link Incident|关联/i });
     if (await linkButton.isVisible()) {
       await linkButton.click();
-      await this.page.waitForSelector('.ant-modal, .ant-drawer', { timeout: 5000 }).catch(() => {});
+      await this.page.waitForSelector('.ant-modal, .ant-drawer', { timeout: 5000 });
 
       const incidentInput = this.page.getByPlaceholder(/输入事件ID|Enter Incident ID|事件ID/i);
       if (await incidentInput.isVisible()) {
@@ -97,6 +97,6 @@ export class ProblemPage extends BasePage {
     } else {
       await row.click();
     }
-    await this.page.waitForURL(new RegExp(`/problems/${id}|/problems/\\d+`), { timeout: 10000 }).catch(() => {});
+    await this.page.waitForURL(new RegExp(`/problems/${id}|/problems/\\d+`), { timeout: 10000 });
   }
 }

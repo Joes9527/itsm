@@ -73,7 +73,9 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
             return;
           }
 
-          const currentTenant = tenantsResponse?.tenants?.[0];
+          const currentTenant = tenantsResponse?.tenants?.find(
+            candidate => Number(candidate.id) === Number(userResponse.tenantId)
+          );
           const { login } = useAuthStore.getState();
           login(
             {

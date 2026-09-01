@@ -20,7 +20,7 @@ import { Typography, Alert, ConfigProvider, Form, Input, Button, Flex, Tooltip }
 import { antdTheme } from '@/lib/antd-theme';
 import { AuthService } from '@/lib/services/auth-service';
 import { logger } from '@/lib/env';
-import { useAuthStoreHydration, useAuthStore } from '@/lib/store/auth-store';
+import { useAuthStore } from '@/lib/store/auth-store';
 import { getDefaultRoute } from '@/lib/utils/role-routes';
 import { buildAzureLoginURL } from './azure-login-url';
 
@@ -42,9 +42,6 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const { t } = useI18n();
   const [form] = Form.useForm();
-
-  // Hydrate auth store
-  useAuthStoreHydration();
 
   // Input.Password 在部分 antd 版本下不会正确响应 Form 的 initialValues，
   // 显式 setFieldsValue 确保默认账号密码都能回显
@@ -222,7 +219,7 @@ function LoginForm() {
         onClick={() => {
           try {
             const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
-            window.location.href = buildAzureLoginURL(apiUrl, form.getFieldValue('tenantCode'));
+            window.location.href = buildAzureLoginURL(apiUrl);
           } catch {
             setError('请先输入租户代码');
           }

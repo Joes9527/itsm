@@ -65,7 +65,6 @@ type CreateReleaseRequest struct {
 	DeploymentSteps    []string   `json:"deploymentSteps"`                  // 部署步骤
 	Tags               []string   `json:"tags"`                             // 标签
 	IsEmergency        bool       `json:"isEmergency"`                      // 是否紧急发布
-	RequiresApproval   bool       `json:"requiresApproval"`                 // 是否需要审批
 }
 
 // UpdateReleaseRequest 更新发布请求
@@ -89,7 +88,6 @@ type UpdateReleaseRequest struct {
 	DeploymentSteps    []string   `json:"deploymentSteps"`    // 部署步骤
 	Tags               []string   `json:"tags"`               // 标签
 	IsEmergency        *bool      `json:"isEmergency"`        // 是否紧急发布
-	RequiresApproval   *bool      `json:"requiresApproval"`   // 是否需要审批
 }
 
 // ReleaseResponse 发布响应
@@ -120,7 +118,6 @@ type ReleaseResponse struct {
 	DeploymentSteps    []string   `json:"deploymentSteps"`    // 部署步骤
 	Tags               []string   `json:"tags"`               // 标签
 	IsEmergency        bool       `json:"isEmergency"`        // 是否紧急发布
-	RequiresApproval   bool       `json:"requiresApproval"`   // 是否需要审批
 	CreatedAt          time.Time  `json:"createdAt"`          // 创建时间
 	UpdatedAt          time.Time  `json:"updatedAt"`          // 更新时间
 }

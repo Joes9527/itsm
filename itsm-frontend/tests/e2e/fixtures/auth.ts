@@ -1,17 +1,18 @@
 import { test as base } from '@playwright/test';
 import type { APIRequestContext } from '@playwright/test';
+import { establishSession } from '../auth-utils';
 
 /**
  * 角色测试账号映射
  * 与 seeder.go 中 seedRoleTestAccounts 保持一致
  */
 export const TEST_ACCOUNTS = {
-  admin: { username: 'admin', password: 'admin123', role: 'admin' },
-  user1: { username: 'user1', password: 'user123', role: 'end_user' },
-  security1: { username: 'security1', password: 'security123', role: 'security' },
-  engineer1: { username: 'engineer1', password: 'eng123', role: 'technician' },
-  manager1: { username: 'manager1', password: 'mgr123', role: 'manager' },
-  tenant1admin: { username: 'tenant1admin', password: 'ta123', role: 'admin' },
+  admin: { tenantCode: process.env.PLAYWRIGHT_TENANT_CODE || 'default', username: 'admin', password: 'admin123', role: 'admin' },
+  user1: { tenantCode: process.env.PLAYWRIGHT_TENANT_CODE || 'default', username: 'user1', password: 'user123', role: 'end_user' },
+  security1: { tenantCode: process.env.PLAYWRIGHT_TENANT_CODE || 'default', username: 'security1', password: 'security123', role: 'security' },
+  engineer1: { tenantCode: process.env.PLAYWRIGHT_TENANT_CODE || 'default', username: 'engineer1', password: 'eng123', role: 'technician' },
+  manager1: { tenantCode: process.env.PLAYWRIGHT_TENANT_CODE || 'default', username: 'manager1', password: 'mgr123', role: 'manager' },
+  tenant1admin: { tenantCode: process.env.PLAYWRIGHT_TENANT_CODE || 'default', username: 'tenant1admin', password: 'ta123', role: 'admin' },
 } as const;
 
 export type TestRole = keyof typeof TEST_ACCOUNTS;
@@ -24,19 +25,10 @@ interface TestFixtures {
   apiPostExpectStatus: (role: string, path: string, expectedStatus: number, body?: any) => Promise<any>;
 }
 
-async function establishSession(request: APIRequestContext, role: TestRole) {
+async function establishRoleSession(request: APIRequestContext, role: TestRole) {
   const account = TEST_ACCOUNTS[role];
   const apiURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
-  const response = await request.post(`${apiURL}/api/v1/auth/login`, {
-    data: { username: account.username, password: account.password },
-  });
-  if (!response.ok()) throw new Error(`Login failed for ${role}: ${response.status()}`);
-
-  const json = (await response.json()) as { data?: Record<string, unknown> };
-  const data = json.data ?? {};
-  if ('access_token' in data || 'accessToken' in data || 'refresh_token' in data || 'refreshToken' in data) {
-    throw new Error(`Login response for ${role} exposed a JWT`);
-  }
+  await establishSession(request, account, apiURL);
 }
 
 async function postWithCSRF(request: APIRequestContext, path: string, body?: unknown) {
@@ -55,14 +47,14 @@ async function postWithCSRF(request: APIRequestContext, path: string, body?: unk
 export const test = base.extend<TestFixtures>({
   loginAs: async ({ request }, use) => {
     await use(async (role: TestRole) => {
-      await establishSession(request, role);
+      await establishRoleSession(request, role);
       return role;
     });
   },
 
   apiGet: async ({ request }, use) => {
     await use(async (role: string, path: string) => {
-      await establishSession(request, role as TestRole);
+      await establishRoleSession(request, role as TestRole);
       const apiURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
       const response = await request.get(`${apiURL}${path}`);
       return {
@@ -74,7 +66,7 @@ export const test = base.extend<TestFixtures>({
 
   apiPost: async ({ request }, use) => {
     await use(async (role: string, path: string, body?: any) => {
-      await establishSession(request, role as TestRole);
+      await establishRoleSession(request, role as TestRole);
       const response = await postWithCSRF(request, path, body);
       if (!response.ok()) {
         throw new Error(`POST ${path} failed: ${response.status()} ${await response.text()}`);
@@ -88,7 +80,7 @@ export const test = base.extend<TestFixtures>({
 
   apiPostExpectStatus: async ({ request }, use) => {
     await use(async (role: string, path: string, expectedStatus: number, body?: any) => {
-      await establishSession(request, role as TestRole);
+      await establishRoleSession(request, role as TestRole);
       const response = await postWithCSRF(request, path, body);
       if (response.status() !== expectedStatus) {
         throw new Error(`POST ${path}: expected ${expectedStatus}, got ${response.status()} ${await response.text()}`);

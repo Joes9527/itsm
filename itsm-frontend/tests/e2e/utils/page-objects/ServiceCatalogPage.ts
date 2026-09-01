@@ -15,15 +15,13 @@ export class ServiceCatalogPage extends BasePage {
 
   async goto(): Promise<void> {
     await this.page.goto(`${this.baseUrl}${this.url}`);
-    await this.serviceList.first().waitFor({ state: 'visible', timeout: 10000 }).catch(() => {
-      // 页面可能没有服务卡片数据
-    });
+    await this.serviceList.first().waitFor({ state: 'visible', timeout: 10000 });
   }
 
   async requestService(serviceName: string, justification: string): Promise<number> {
     // 点击服务卡片
     await this.page.getByText(serviceName).first().click();
-    await this.page.waitForSelector('.ant-drawer, .ant-modal', { timeout: 5000 }).catch(() => {});
+    await this.page.waitForSelector('.ant-drawer, .ant-modal', { timeout: 5000 });
 
     // 点击申请按钮
     const requestBtn = this.requestButton.first();
@@ -41,7 +39,7 @@ export class ServiceCatalogPage extends BasePage {
     await this.page.getByRole('button', { name: /提交|Submit/i }).first().click();
 
     // 等待跳转到工单页面
-    await this.page.waitForURL(/\/tickets\/\d+|\/service-requests\/\d+/, { timeout: 15000 }).catch(() => {});
+    await this.page.waitForURL(/\/tickets\/\d+|\/service-requests\/\d+/, { timeout: 15000 });
 
     const url = this.page.url();
     const match = url.match(/\/(tickets|service-requests)\/(\d+)/);

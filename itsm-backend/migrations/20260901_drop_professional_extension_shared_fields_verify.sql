@@ -27,6 +27,14 @@ BEGIN
 	IF EXISTS (
 		SELECT 1 FROM information_schema.columns
 		WHERE table_schema = current_schema()
+		  AND table_name = 'releases'
+		  AND column_name = 'requires_approval'
+	) THEN
+		RAISE EXCEPTION 'release approval routing column releases.requires_approval still exists in schema %', current_schema();
+	END IF;
+	IF EXISTS (
+		SELECT 1 FROM information_schema.columns
+		WHERE table_schema = current_schema()
 		  AND table_name = 'ticket_categories'
 		  AND column_name = 'workflow_id'
 	) THEN

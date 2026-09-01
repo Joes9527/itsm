@@ -29,7 +29,7 @@ test.describe('Problem List - 问题列表', () => {
 
   test('should navigate to problem detail', async ({ page }) => {
     const viewBtn = page.locator('button.ant-btn').filter({ has: page.locator('.lucide-eye') }).first();
-    if (!(await viewBtn.isVisible().catch(() => false))) {
+    if (!(await viewBtn.isVisible())) {
       test.skip();
       return;
     }
@@ -55,9 +55,9 @@ test.describe('Problem Create - 创建问题', () => {
     const submitBtn = page.locator('button[type="submit"]').first();
 
     if (
-      !(await titleInput.isVisible().catch(() => false)) ||
-      !(await descInput.isVisible().catch(() => false)) ||
-      !(await submitBtn.isVisible().catch(() => false))
+      !(await titleInput.isVisible()) ||
+      !(await descInput.isVisible()) ||
+      !(await submitBtn.isVisible())
     ) {
       test.skip();
       return;
@@ -82,7 +82,7 @@ test.describe('Problem Detail - 问题详情', () => {
     await page.goto('/problems', { waitUntil: 'domcontentloaded' });
 
     const viewBtn = page.locator('button.ant-btn').filter({ has: page.locator('.lucide-eye') }).first();
-    if (!(await viewBtn.isVisible().catch(() => false))) {
+    if (!(await viewBtn.isVisible())) {
       test.skip();
       return;
     }

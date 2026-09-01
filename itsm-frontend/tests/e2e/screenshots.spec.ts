@@ -5,23 +5,13 @@
 
 import { test, expect } from '@playwright/test';
 import path from 'path';
+import { loginAndReturn } from './auth-utils';
 
 const SCREENSHOT_DIR = path.join(__dirname, '..', '..', '..', 'docs', 'images');
 
 // 辅助函数：登录并截图
 async function loginAndScreenshot(page: any, pagePath: string, name: string) {
-  // 访问登录页
-  await page.goto('/login');
-  await page.waitForSelector('.ant-input', { timeout: 15000 });
-
-  // 登录
-  const inputs = page.locator('input.ant-input');
-  await inputs.nth(0).fill('admin');
-  await inputs.nth(1).fill('admin123');
-  await page.click('button[type="submit"]');
-
-  // 等待跳转
-  await page.waitForURL(/\/(dashboard|tickets)/, { timeout: 20000 });
+  await loginAndReturn(page);
   await page.waitForTimeout(2000);
 
   // 访问目标页面

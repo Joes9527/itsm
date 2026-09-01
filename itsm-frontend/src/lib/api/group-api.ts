@@ -24,7 +24,6 @@ export interface UpdateGroupRequest {
 export interface GetGroupsParams {
   page?: number;
   pageSize?: number;
-  tenantId?: number;
   search?: string;
 }
 

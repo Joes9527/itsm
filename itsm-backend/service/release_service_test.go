@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,6 +24,25 @@ type failingReleaseProcessTrigger struct {
 	err error
 }
 
+type emptyReleaseProcessTrigger struct {
+	ProcessTriggerServiceInterface
+}
+
+type mismatchedReleaseProcessTrigger struct {
+	ProcessTriggerServiceInterface
+}
+
+func (*mismatchedReleaseProcessTrigger) TriggerByBusinessTypeWithClient(context.Context, *ent.Client, dto.BusinessType, int, map[string]interface{}, string, int) (*TransactionalProcessStart, error) {
+	return newTransactionalProcessStart(&dto.ProcessTriggerResponse{
+		ProcessInstanceID: 99,
+		BusinessKey:       "release:999",
+	}, dto.BusinessTypeRelease, 999, 1, nil), nil
+}
+
+func (*emptyReleaseProcessTrigger) TriggerByBusinessTypeWithClient(context.Context, *ent.Client, dto.BusinessType, int, map[string]interface{}, string, int) (*TransactionalProcessStart, error) {
+	return &TransactionalProcessStart{}, nil
+}
+
 func (f *failingReleaseProcessTrigger) TriggerByBusinessType(context.Context, dto.BusinessType, int, map[string]interface{}, string, int) (*dto.ProcessTriggerResponse, error) {
 	return nil, f.err
 }
@@ -38,11 +58,11 @@ type commitObservingReleaseProcessTrigger struct {
 	businessID int
 }
 
-func (f *commitObservingReleaseProcessTrigger) TriggerByBusinessTypeWithClient(_ context.Context, _ *ent.Client, _ dto.BusinessType, businessID int, _ map[string]interface{}, _ string, _ int) (*TransactionalProcessStart, error) {
+func (f *commitObservingReleaseProcessTrigger) TriggerByBusinessTypeWithClient(_ context.Context, _ *ent.Client, businessType dto.BusinessType, businessID int, _ map[string]interface{}, _ string, tenantID int) (*TransactionalProcessStart, error) {
 	f.businessID = businessID
-	return &TransactionalProcessStart{afterCommit: func(ctx context.Context) {
+	return newTransactionalProcessStart(&dto.ProcessTriggerResponse{ProcessInstanceID: 1, BusinessKey: fmt.Sprintf("%s:%d", businessType, businessID)}, businessType, businessID, tenantID, func(ctx context.Context) {
 		f.observed = f.client.Release.GetX(ctx, businessID) != nil
-	}}, nil
+	}), nil
 }
 
 func TestReleaseService_CreateReleaseFailsClosedWithoutWorkflowDependencies(t *testing.T) {
@@ -78,6 +98,45 @@ func TestReleaseService_CreateReleaseRollsBackWhenWorkflowStartFails(t *testing.
 	require.ErrorContains(t, err, "binding unavailable")
 	require.Zero(t, client.Release.Query().CountX(ctx), "trigger failure must roll back the release")
 	require.Zero(t, client.ProcessInstance.Query().CountX(ctx), "trigger failure must not leave a process instance")
+}
+
+func TestReleaseService_CreateReleaseRollsBackWhenWorkflowReturnsEmptySuccess(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", testDSN())
+	t.Cleanup(func() { _ = client.Close() })
+	ctx := context.Background()
+	tenant := client.Tenant.Create().SetName("Empty workflow").SetCode("empty-workflow").SetDomain("empty-workflow.test").SetStatus("active").SaveX(ctx)
+	actor := client.User.Create().SetUsername("empty-workflow").SetEmail("empty-workflow@test").SetName("Empty workflow").SetPasswordHash("x").SetActive(true).SetTenantID(tenant.ID).SaveX(ctx)
+
+	svc := NewReleaseService(client, zaptest.NewLogger(t).Sugar())
+	svc.SetProcessEngine(NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar()))
+	svc.SetProcessTriggerService(&emptyReleaseProcessTrigger{})
+	result, err := svc.CreateRelease(ctx, &dto.CreateReleaseRequest{
+		ReleaseNumber: "REL-EMPTY-START", Title: "rollback empty workflow start", Type: "minor",
+	}, actor.ID, tenant.ID)
+
+	require.Nil(t, result)
+	require.ErrorContains(t, err, "invalid workflow start")
+	require.Zero(t, client.Release.Query().CountX(ctx), "empty workflow success must roll back the release")
+	require.Zero(t, client.ProcessInstance.Query().CountX(ctx), "empty workflow success must not leave a process instance")
+}
+
+func TestReleaseService_CreateReleaseRollsBackWhenWorkflowIdentityMismatches(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", testDSN())
+	t.Cleanup(func() { _ = client.Close() })
+	ctx := context.Background()
+	tenant := client.Tenant.Create().SetName("Wrong workflow").SetCode("wrong-workflow").SetDomain("wrong-workflow.test").SetStatus("active").SaveX(ctx)
+	actor := client.User.Create().SetUsername("wrong-workflow").SetEmail("wrong-workflow@test").SetName("Wrong workflow").SetPasswordHash("x").SetActive(true).SetTenantID(tenant.ID).SaveX(ctx)
+
+	svc := NewReleaseService(client, zaptest.NewLogger(t).Sugar())
+	svc.SetProcessEngine(NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar()))
+	svc.SetProcessTriggerService(&mismatchedReleaseProcessTrigger{})
+	result, err := svc.CreateRelease(ctx, &dto.CreateReleaseRequest{
+		ReleaseNumber: "REL-WRONG-START", Title: "rollback mismatched workflow start", Type: "minor",
+	}, actor.ID, tenant.ID)
+
+	require.Nil(t, result)
+	require.ErrorContains(t, err, "invalid workflow start")
+	require.Zero(t, client.Release.Query().CountX(ctx))
 }
 
 func TestReleaseService_DeliversTransactionalWorkflowCallbacksOnlyAfterCommit(t *testing.T) {

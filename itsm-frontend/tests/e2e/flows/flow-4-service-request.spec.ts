@@ -38,8 +38,8 @@ test.describe('FLOW-4: 服务请求完整流程', () => {
     expect(requestResp.data).toHaveProperty('code', 0);
     const requestId = requestResp.data.data?.id;
     const workItemId = requestResp.data.data?.ticketId;
-    expect(requestId).toBeDefined();
-    expect(workItemId).toBeDefined();
+    expect(requestId).toBeGreaterThan(0);
+    expect(workItemId).toBeGreaterThan(0);
 
     // Step 3: manager 只通过 canonical ProcessTask decision command 审批。
     const tasksResp = await apiGet(

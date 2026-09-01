@@ -39,7 +39,6 @@ jest.mock('@/lib/api/role-api', () => ({
 
 jest.mock('@/lib/api/http-client', () => ({
   httpClient: {
-    getTenantId: () => 1,
   },
 }));
 

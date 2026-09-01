@@ -53,7 +53,7 @@ test.describe('US4: approver 审批人多级审批', () => {
     const tasks = tasksResp.data?.data?.data || [];
     expect(tasks.length).toBeGreaterThan(0);
     const processInstanceId = tasks[0]?.processInstanceId;
-    expect(processInstanceId).toBeTruthy();
+    expect(processInstanceId).toBeGreaterThan(0);
     const historyResp = await apiGet(role, `/api/v1/bpmn/process-instances/${processInstanceId}/approval-history`);
     expect(historyResp.status).toBe(200);
   });

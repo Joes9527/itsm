@@ -42,11 +42,14 @@ export default function BPMNDashboardPage() {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>([dayjs().subtract(7, 'day'), dayjs()]);
 
-  // 优先使用当前登录租户；未登录时回退到默认 1
-  // TODO: 待接入用户/租户选择器后移除硬编码回退值，避免未登录态误指向租户 1
-  const tenantId = currentTenant?.id ?? 1;
+  const tenantId = currentTenant?.id;
 
   const fetchMetrics = async () => {
+    if (!tenantId) {
+      setMetrics(null);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const data = await BPMNDashboardApi.getDashboardMetrics(
@@ -64,7 +67,7 @@ export default function BPMNDashboardPage() {
 
   useEffect(() => {
     fetchMetrics();
-  }, [dateRange]);
+  }, [dateRange, tenantId]);
 
   const getHealthColor = (score: number) => {
     if (score >= 80) return 'green';

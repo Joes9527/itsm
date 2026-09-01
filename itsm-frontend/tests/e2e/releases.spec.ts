@@ -1,12 +1,12 @@
 import { expect, test } from '@playwright/test';
-import { loginAndReturn } from './auth-utils';
+import { DEFAULT_LOGIN, loginAndReturn } from './auth-utils';
 
 test.describe('发布管理页面功能', () => {
   test.describe.configure({ timeout: 60_000 });
 
   test.beforeEach(async ({ page }) => {
     test.slow();
-    await loginAndReturn(page, 'admin', 'admin123', '/releases');
+    await loginAndReturn(page, DEFAULT_LOGIN, '/releases');
   });
 
   test('发布经理可以创建发布并在刷新后查看记录', async ({ page }) => {
@@ -31,7 +31,7 @@ test.describe('发布管理页面功能', () => {
         response.request().method() === 'POST'
     );
     await page.getByTestId('release-submit-button').click();
-    expect((await createResponse).ok()).toBeTruthy();
+    expect((await createResponse).status()).toBe(200);
     await expect(page).toHaveURL(/\/releases$/);
     await expect(page.getByText(releaseNumber)).toBeVisible({ timeout: 15_000 });
 
@@ -41,7 +41,7 @@ test.describe('发布管理页面功能', () => {
         response.request().method() === 'GET'
     );
     await page.reload({ waitUntil: 'domcontentloaded' });
-    expect((await reloadResponse).ok()).toBeTruthy();
+    expect((await reloadResponse).status()).toBe(200);
     await expect(page.getByText(releaseNumber)).toBeVisible({ timeout: 15_000 });
   });
 

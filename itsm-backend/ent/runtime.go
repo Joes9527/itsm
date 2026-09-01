@@ -2733,16 +2733,12 @@ func init() {
 	releaseDescIsEmergency := releaseFields[22].Descriptor()
 	// release.DefaultIsEmergency holds the default value on creation for the is_emergency field.
 	release.DefaultIsEmergency = releaseDescIsEmergency.Default.(bool)
-	// releaseDescRequiresApproval is the schema descriptor for requires_approval field.
-	releaseDescRequiresApproval := releaseFields[23].Descriptor()
-	// release.DefaultRequiresApproval holds the default value on creation for the requires_approval field.
-	release.DefaultRequiresApproval = releaseDescRequiresApproval.Default.(bool)
 	// releaseDescCreatedAt is the schema descriptor for created_at field.
-	releaseDescCreatedAt := releaseFields[24].Descriptor()
+	releaseDescCreatedAt := releaseFields[23].Descriptor()
 	// release.DefaultCreatedAt holds the default value on creation for the created_at field.
 	release.DefaultCreatedAt = releaseDescCreatedAt.Default.(func() time.Time)
 	// releaseDescUpdatedAt is the schema descriptor for updated_at field.
-	releaseDescUpdatedAt := releaseFields[25].Descriptor()
+	releaseDescUpdatedAt := releaseFields[24].Descriptor()
 	// release.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	release.DefaultUpdatedAt = releaseDescUpdatedAt.Default.(func() time.Time)
 	// release.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

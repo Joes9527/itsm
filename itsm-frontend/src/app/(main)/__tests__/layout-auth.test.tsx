@@ -7,7 +7,6 @@ import { useAuthStore } from '@/lib/store/auth-store';
 const push = jest.fn();
 const login = jest.fn();
 const logout = jest.fn();
-const setCurrentTenant = jest.fn();
 const initPersonaByRole = jest.fn();
 const setActivePersona = jest.fn();
 const setCollapsed = jest.fn();
@@ -50,7 +49,7 @@ describe('MainLayout authentication bootstrap', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(console, 'error').mockImplementation(() => {});
-    (useAuthStore.getState as jest.Mock).mockReturnValue({ login, logout, setCurrentTenant });
+    (useAuthStore.getState as jest.Mock).mockReturnValue({ login, logout });
   });
 
   it('fails closed immediately when /auth/me fails and never loads tenants', async () => {
@@ -74,5 +73,25 @@ describe('MainLayout authentication bootstrap', () => {
     expect(logout).toHaveBeenCalledTimes(1);
     expect(httpClient.get).toHaveBeenCalledTimes(1);
     expect(login).not.toHaveBeenCalled();
+  });
+
+  it('projects only the tenant selected by the authenticated session', async () => {
+    (httpClient.get as jest.Mock)
+      .mockResolvedValueOnce({ id: 7, username: 'operator', role: 'manager', tenantId: 22 })
+      .mockResolvedValueOnce({
+        tenants: [
+          { id: 11, name: 'Other', code: 'other', type: 'standard', status: 'active' },
+          { id: 22, name: 'Selected', code: 'selected', type: 'standard', status: 'active' },
+        ],
+      });
+
+    render(<MainLayout><div>protected</div></MainLayout>);
+
+    await waitFor(() => expect(login).toHaveBeenCalled());
+    expect(login.mock.calls[0][1]).toEqual(expect.objectContaining({ id: 22, code: 'selected' }));
+    expect(login).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 7, tenantId: 22 }),
+      expect.objectContaining({ id: 22, code: 'selected' })
+    );
   });
 });

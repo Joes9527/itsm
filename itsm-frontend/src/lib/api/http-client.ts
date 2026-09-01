@@ -1,7 +1,6 @@
 import { API_BASE_URL } from '@/lib/api/api-config';
 import { security } from '@/lib/security';
 import { logger } from '@/lib/env';
-import { getTenantId, getTenantCode, subscribe } from '@/lib/auth/tenant-context';
 
 // 递归将对象的 key 从 snake_case 转换为 camelCase
 const toCamelCase = (obj: unknown): unknown => {
@@ -65,15 +64,6 @@ class HttpClient {
     this.timeout = parseInt(process.env.NEXT_PUBLIC_API_TIMEOUT || '30000');
   }
 
-  // Get tenant code — now reads from TenantContext (single source of truth)
-  getTenantCode(): string | null {
-    return getTenantCode();
-  }
-
-  getTenantId(): number | null {
-    return getTenantId();
-  }
-
   getBaseURL(): string {
     return this.baseURL;
   }
@@ -83,17 +73,6 @@ class HttpClient {
     const headers: Record<string, string> = {
       ...security.network.getSecureHeaders(),
     };
-
-    // Tenant state — read from TenantContext (single source of truth)
-    const currentTenantId = getTenantId();
-    const currentTenantCode = getTenantCode();
-
-    if (currentTenantId) {
-      headers['X-Tenant-ID'] = currentTenantId.toString();
-    }
-    if (currentTenantCode) {
-      headers['X-Tenant-Code'] = currentTenantCode;
-    }
 
     return headers;
   }
@@ -154,8 +133,7 @@ class HttpClient {
       if (response?.ok) {
         const data = await response.json();
         if (data.code === 0) {
-          // Token is stored in httpOnly cookie by backend
-          // Nothing to update in localStorage
+          // The backend rotated the HttpOnly session cookies.
           return true;
         }
       }

@@ -28,7 +28,7 @@ test.describe('FLOW-1: Incident → Problem → Change', () => {
 
     expect(incidentResp.status).toBe(200);
     const incidentId = incidentResp.data.data?.id;
-    expect(incidentId).toBeDefined();
+    expect(incidentId).toBeGreaterThan(0);
 
     // Step 2: engineer 接受并解决事件
     const resolveResp = await apiPost(engineerToken, `/api/v1/incidents/${incidentId}`, {
