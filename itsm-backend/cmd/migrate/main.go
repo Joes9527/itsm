@@ -9,15 +9,17 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 	"regexp"
 	"sort"
+	"strings"
 
 	"itsm-backend/config"
 	"itsm-backend/database"
 	"itsm-backend/migration"
 	"itsm-backend/pkg/seeder"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 	"go.uber.org/zap"
 )
 
@@ -38,7 +40,7 @@ func main() {
 	list := flag.Bool("list", false, "List all available migrations")
 	rollbackVersion := flag.String("rollback-to", "", "Rollback to a specific version")
 	dryRun := flag.Bool("dry-run", false, "Show SQL without executing")
-	fresh := flag.Bool("fresh", false, "Drop and recreate database, then run migrations and seed")
+	fresh := flag.Bool("fresh", false, "Development-only: recreate the explicitly confirmed database, create Ent schema, apply post-schema migrations, and seed")
 	seed := flag.Bool("seed", false, "Seed database with initial data")
 	seedOnly := flag.Bool("seed-only", false, "Only seed data without running migrations")
 	version := flag.Bool("version", false, "Show current database version")
@@ -58,7 +60,14 @@ func main() {
 	}
 	sugar := logger.Sugar()
 
-	// Initialize database
+	ctx := context.Background()
+	if *fresh {
+		freshDatabase(cfg, sugar)
+		return
+	}
+
+	// -up applies only registered post-schema migrations to a database whose
+	// Ent schema is already managed by the deployment/bootstrap policy.
 	db, err := database.InitDB(&cfg.Database)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
@@ -66,8 +75,6 @@ func main() {
 	defer db.Close()
 
 	migrator := migration.NewMigrator(db, sugar)
-	ctx := context.Background()
-
 	// Ensure migrations table exists
 	if err := migrator.EnsureMigrationsTable(ctx); err != nil {
 		log.Fatalf("Failed to ensure migrations table: %v", err)
@@ -75,11 +82,6 @@ func main() {
 
 	// Get available migrations
 	available := getAvailableMigrations()
-
-	if *fresh {
-		freshDatabase(migrator, sugar)
-		return
-	}
 
 	if *seed {
 		seedData(sugar)
@@ -103,7 +105,8 @@ func main() {
 
 	if *dryRun {
 		ctx := context.Background()
-		fmt.Println("=== Dry Run Mode - No changes will be made ===\n")
+		fmt.Println("=== Dry Run Mode - No changes will be made ===")
+		fmt.Println()
 		for _, mig := range available {
 			sql, err := migrator.DryRun(ctx, mig)
 			if err != nil {
@@ -152,7 +155,7 @@ func main() {
 	fmt.Println("Migration CLI for ITSM Backend")
 	fmt.Println("")
 	fmt.Println("Usage:")
-	fmt.Println("  go run -tags migrate cmd/migrate/main.go -up              Apply all pending migrations")
+	fmt.Println("  go run -tags migrate cmd/migrate/main.go -up              Apply pending post-schema migrations to an Ent-schema-ready database")
 	fmt.Println("  go run -tags migrate cmd/migrate/main.go -down            Rollback the last migration")
 	fmt.Println("  go run -tags migrate cmd/migrate/main.go -rollback-to v2  Rollback to version v2")
 	fmt.Println("  go run -tags migrate cmd/migrate/main.go -status         Show migration status")
@@ -276,13 +279,29 @@ func seedData(sugar *zap.SugaredLogger) {
 	fmt.Println("Seed completed successfully")
 }
 
-func freshDatabase(migrator *migration.Migrator, sugar *zap.SugaredLogger) {
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
+func validateFreshTarget(cfg *config.Config) error {
+	if cfg == nil {
+		return fmt.Errorf("fresh bootstrap configuration is required")
+	}
+	mode := strings.ToLower(strings.TrimSpace(cfg.Deployment.Mode))
+	if mode != "development" && mode != "dev" && mode != "test" && mode != "local" {
+		return fmt.Errorf("-fresh is development-only; deployment mode %q is not allowed", cfg.Deployment.Mode)
+	}
+	if os.Getenv("ITSM_ALLOW_DESTRUCTIVE_FRESH") != "true" {
+		return fmt.Errorf("-fresh requires ITSM_ALLOW_DESTRUCTIVE_FRESH=true")
+	}
+	if os.Getenv("ITSM_FRESH_DATABASE") != cfg.Database.DBName {
+		return fmt.Errorf("-fresh requires ITSM_FRESH_DATABASE to equal the exact configured database %q", cfg.Database.DBName)
 	}
 	if err := validateDatabaseName(cfg.Database.DBName); err != nil {
-		log.Fatalf("Failed to reset database: %v", err)
+		return fmt.Errorf("invalid fresh database target: %w", err)
+	}
+	return nil
+}
+
+func freshDatabase(cfg *config.Config, sugar *zap.SugaredLogger) {
+	if err := validateFreshTarget(cfg); err != nil {
+		log.Fatalf("Refusing fresh bootstrap: %v", err)
 	}
 
 	// Connect to postgres to drop/create database
@@ -296,13 +315,14 @@ func freshDatabase(migrator *migration.Migrator, sugar *zap.SugaredLogger) {
 	defer postgresDB.Close()
 
 	fmt.Printf("Dropping database %s...\n", cfg.Database.DBName)
-	_, err = postgresDB.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", cfg.Database.DBName))
+	target := pq.QuoteIdentifier(cfg.Database.DBName)
+	_, err = postgresDB.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", target))
 	if err != nil {
 		log.Fatalf("Failed to drop database: %v", err)
 	}
 
 	fmt.Printf("Creating database %s...\n", cfg.Database.DBName)
-	_, err = postgresDB.Exec(fmt.Sprintf("CREATE DATABASE %s", cfg.Database.DBName))
+	_, err = postgresDB.Exec(fmt.Sprintf("CREATE DATABASE %s", target))
 	if err != nil {
 		log.Fatalf("Failed to create database: %v", err)
 	}
@@ -316,29 +336,23 @@ func freshDatabase(migrator *migration.Migrator, sugar *zap.SugaredLogger) {
 	}
 	defer db.Close()
 
-	// Update migrator with new connection
-	*migrator = *migration.NewMigrator(db, sugar)
-
 	ctx := context.Background()
-	if err := migrator.EnsureMigrationsTable(ctx); err != nil {
-		log.Fatalf("Failed to ensure migrations table: %v", err)
-	}
-
-	available := getAvailableMigrations()
-	count, err := migrator.RunMigrations(ctx, available)
-	if err != nil {
-		log.Fatalf("Migration failed: %v", err)
-	}
-	fmt.Printf("Applied %d migration(s)\n", count)
-
-	// Seed data
 	client, err := database.InitDatabase(&cfg.Database)
 	if err != nil {
-		log.Fatalf("Failed to connect for seeding: %v", err)
+		log.Fatalf("Failed to connect for canonical bootstrap: %v", err)
 	}
 	defer client.Close()
-	seederInstance := seeder.NewSeeder(client, sugar, cfg)
-	seederInstance.SeedAll(context.Background())
+	migrator := migration.NewMigrator(db, sugar)
+	if err := migration.RunCanonicalBootstrap(ctx, migration.CanonicalBootstrap{
+		CreateSchema: func(ctx context.Context) error { return client.Schema.Create(ctx) },
+		Migrator:     migrator,
+		Seed: func(ctx context.Context) error {
+			seeder.NewSeeder(client, sugar, cfg).SeedAll(ctx)
+			return nil
+		},
+	}); err != nil {
+		log.Fatalf("Canonical fresh bootstrap failed: %v", err)
+	}
 
 	fmt.Println("Fresh reset completed successfully")
 }

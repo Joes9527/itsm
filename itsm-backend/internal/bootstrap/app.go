@@ -965,92 +965,108 @@ func InitializeStorage(cfg *config.Config, client *ent.Client, sugar *zap.Sugare
 		"schema migration and default seed at process boot")
 
 	if cfg.Deployment.AutoMigrate {
-		if err := prepareTicketCCIndexMigration(ctx, database.GetRawDB(), sugar); err != nil {
-			return fmt.Errorf("prepare TicketCC index migration: %w", err)
-		}
-		if err := prepareTicketNotificationMigration(ctx, database.GetRawDB(), sugar); err != nil {
-			return fmt.Errorf("prepare ticket notification migration: %w", err)
-		}
-		if err := prepareRolePermissionTenantMigration(ctx, database.GetRawDB(), sugar); err != nil {
-			return fmt.Errorf("prepare role permission tenant migration: %w", err)
-		}
-		if err := prepareCMDBModelMigration(ctx, database.GetRawDB(), sugar); err != nil {
-			return fmt.Errorf("prepare CMDB model migration: %w", err)
-		}
-		if err := prepareIncidentProblemRelationMigration(ctx, database.GetRawDB(), sugar); err != nil {
-			return fmt.Errorf("prepare incident/problem relation migration: %w", err)
-		}
-		if err := prepareServiceRequestTicketMigration(ctx, database.GetRawDB(), sugar); err != nil {
-			return fmt.Errorf("prepare service_request ticket migration: %w", err)
-		}
-		if err := client.Schema.Create(ctx); err != nil {
-			return fmt.Errorf("create schema resources: %w", err)
-		}
 		migrator := migration.NewMigrator(database.GetRawDB(), sugar)
-		if err := runPostSchemaMigrations(ctx, migrator); err != nil {
-			return fmt.Errorf("apply versioned post-schema migrations: %w", err)
+		bootstrap := migration.CanonicalBootstrap{
+			Prepare: func(ctx context.Context) error {
+				if err := prepareTicketCCIndexMigration(ctx, database.GetRawDB(), sugar); err != nil {
+					return fmt.Errorf("prepare TicketCC index migration: %w", err)
+				}
+				if err := prepareTicketNotificationMigration(ctx, database.GetRawDB(), sugar); err != nil {
+					return fmt.Errorf("prepare ticket notification migration: %w", err)
+				}
+				if err := prepareRolePermissionTenantMigration(ctx, database.GetRawDB(), sugar); err != nil {
+					return fmt.Errorf("prepare role permission tenant migration: %w", err)
+				}
+				if err := prepareCMDBModelMigration(ctx, database.GetRawDB(), sugar); err != nil {
+					return fmt.Errorf("prepare CMDB model migration: %w", err)
+				}
+				if err := prepareIncidentProblemRelationMigration(ctx, database.GetRawDB(), sugar); err != nil {
+					return fmt.Errorf("prepare incident/problem relation migration: %w", err)
+				}
+				if err := prepareServiceRequestTicketMigration(ctx, database.GetRawDB(), sugar); err != nil {
+					return fmt.Errorf("prepare service_request ticket migration: %w", err)
+				}
+				return nil
+			},
+			CreateSchema: func(ctx context.Context) error { return client.Schema.Create(ctx) },
+			Migrator:     migrator,
+		}
+		if cfg.Deployment.AutoSeed {
+			bootstrap.Seed = func(ctx context.Context) error {
+				return runBootstrapSeed(ctx, cfg, client, sugar)
+			}
+		}
+		if err := migration.RunCanonicalBootstrap(ctx, bootstrap); err != nil {
+			return fmt.Errorf("run canonical schema bootstrap: %w", err)
 		}
 		sugar.Infow("database schema ensured", "deployment_mode", cfg.Deployment.Mode)
 	}
 
-	if cfg.Deployment.AutoSeed {
-		needsAdmin, err := needsBootstrapAdmin(ctx, client)
-		if err != nil {
-			return fmt.Errorf("check bootstrap administrator: %w", err)
+	if cfg.Deployment.AutoSeed && !cfg.Deployment.AutoMigrate {
+		if err := runBootstrapSeed(ctx, cfg, client, sugar); err != nil {
+			return err
 		}
-		if needsAdmin {
-			for _, risk := range GuardBootstrapAdminCredentials(
-				cfg.Deployment.Mode,
-				os.Getenv("ADMIN_PASSWORD"),
-			) {
-				if risk.Severity == "fatal" {
-					return fmt.Errorf("bootstrap credential rejected [%s]: %s", risk.Code, risk.Message)
-				}
-				sugar.Warnw("bootstrap credential risk detected", "code", risk.Code, "message", risk.Message)
-			}
-		}
-		s := seeder.NewSeeder(client, sugar, cfg)
-		components, err := seeder.ProductionInitializers(s)
-		if err != nil {
-			return fmt.Errorf("create production initializers: %w", err)
-		}
-		store, err := initialization.NewSQLStore(database.GetRawDB())
-		if err != nil {
-			return fmt.Errorf("create initialization store: %w", err)
-		}
-		engine, err := initialization.NewEngine(
-			store,
-			components,
-			30*time.Second,
-		)
-		if err != nil {
-			return fmt.Errorf("create initialization engine: %w", err)
-		}
-		executorID, err := os.Hostname()
-		if err != nil {
-			executorID = "bootstrap-job"
-		}
-		executorID, err = initialization.NewExecutorID(executorID)
-		if err != nil {
-			return fmt.Errorf("create initialization executor id: %w", err)
-		}
-		releaseVersion := strings.TrimSpace(os.Getenv("ITSM_RELEASE_VERSION"))
-		if releaseVersion == "" {
-			releaseVersion = "unversioned"
-		}
-		runID, err := engine.Apply(ctx, initialization.Request{
-			Scope:          initialization.Scope{Type: "platform", ID: 0},
-			TargetVersion:  seeder.CurrentTenantTemplateVersion,
-			ReleaseVersion: releaseVersion,
-			RequestedBy:    "bootstrap-job",
-			ExecutorID:     executorID,
-		})
-		if err != nil {
-			return fmt.Errorf("initialize production defaults (run %d): %w", runID, err)
-		}
-		sugar.Infow("seed completed", "deployment_mode", cfg.Deployment.Mode, "initialization_run_id", runID)
 	}
 
+	return nil
+}
+
+func runBootstrapSeed(ctx context.Context, cfg *config.Config, client *ent.Client, sugar *zap.SugaredLogger) error {
+	needsAdmin, err := needsBootstrapAdmin(ctx, client)
+	if err != nil {
+		return fmt.Errorf("check bootstrap administrator: %w", err)
+	}
+	if needsAdmin {
+		for _, risk := range GuardBootstrapAdminCredentials(
+			cfg.Deployment.Mode,
+			os.Getenv("ADMIN_PASSWORD"),
+		) {
+			if risk.Severity == "fatal" {
+				return fmt.Errorf("bootstrap credential rejected [%s]: %s", risk.Code, risk.Message)
+			}
+			sugar.Warnw("bootstrap credential risk detected", "code", risk.Code, "message", risk.Message)
+		}
+	}
+	s := seeder.NewSeeder(client, sugar, cfg)
+	components, err := seeder.ProductionInitializers(s)
+	if err != nil {
+		return fmt.Errorf("create production initializers: %w", err)
+	}
+	store, err := initialization.NewSQLStore(database.GetRawDB())
+	if err != nil {
+		return fmt.Errorf("create initialization store: %w", err)
+	}
+	engine, err := initialization.NewEngine(
+		store,
+		components,
+		30*time.Second,
+	)
+	if err != nil {
+		return fmt.Errorf("create initialization engine: %w", err)
+	}
+	executorID, err := os.Hostname()
+	if err != nil {
+		executorID = "bootstrap-job"
+	}
+	executorID, err = initialization.NewExecutorID(executorID)
+	if err != nil {
+		return fmt.Errorf("create initialization executor id: %w", err)
+	}
+	releaseVersion := strings.TrimSpace(os.Getenv("ITSM_RELEASE_VERSION"))
+	if releaseVersion == "" {
+		releaseVersion = "unversioned"
+	}
+	runID, err := engine.Apply(ctx, initialization.Request{
+		Scope:          initialization.Scope{Type: "platform", ID: 0},
+		TargetVersion:  seeder.CurrentTenantTemplateVersion,
+		ReleaseVersion: releaseVersion,
+		RequestedBy:    "bootstrap-job",
+		ExecutorID:     executorID,
+	})
+	if err != nil {
+		return fmt.Errorf("initialize production defaults (run %d): %w", runID, err)
+	}
+	sugar.Infow("seed completed", "deployment_mode", cfg.Deployment.Mode, "initialization_run_id", runID)
 	return nil
 }
 
@@ -1060,16 +1076,7 @@ type postSchemaMigrator interface {
 }
 
 func runPostSchemaMigrations(ctx context.Context, migrator postSchemaMigrator) error {
-	if migrator == nil {
-		return fmt.Errorf("migration runner is required")
-	}
-	if err := migrator.EnsureMigrationsTable(ctx); err != nil {
-		return fmt.Errorf("ensure migration ledger: %w", err)
-	}
-	if _, err := migrator.RunMigrations(ctx, migration.PostSchemaMigrations()); err != nil {
-		return fmt.Errorf("run post-schema migrations: %w", err)
-	}
-	return nil
+	return migration.RunPostSchemaMigrations(ctx, migrator)
 }
 
 func RunInitialization() {

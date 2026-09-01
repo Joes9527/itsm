@@ -108,6 +108,37 @@ func TestPostSchemaMigrationsStartsAtUnifiedVersion(t *testing.T) {
 	}
 }
 
+func TestTenantRLSReconcilerUsesTheCurrentSchemaAndRuntimeGUC(t *testing.T) {
+	sql := GetMigrationSQL("009_enable_rls_tenant_isolation")
+	require.NotEmpty(t, sql)
+	assert.Contains(t, sql, "pg_class")
+	assert.Contains(t, sql, "pg_namespace")
+	assert.Contains(t, sql, "pg_attribute")
+	assert.Contains(t, sql, "relkind = 'r'")
+	assert.Contains(t, sql, "schema.oid = current_schema()::regnamespace")
+	assert.Contains(t, sql, "tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint")
+	assert.Contains(t, sql, "DROP POLICY IF EXISTS %I ON %I.%I")
+	assert.Contains(t, sql, "DROP FUNCTION IF EXISTS get_current_tenant_id()")
+	assert.NotContains(t, sql, "sla_policies")
+	assert.NotContains(t, sql, "approval_workflows")
+	assert.NotContains(t, sql, "app.current_tenant_id")
+	assert.NotContains(t, sql, "FORCE ROW LEVEL SECURITY")
+}
+
+func TestTicketTypesMigrationIsRetiredFromTheActivePostSchemaStream(t *testing.T) {
+	for _, migration := range RegisteredMigrations {
+		assert.NotEqual(t, "010_add_ticket_types", migration.Version)
+	}
+	recorded := false
+	for _, migration := range LegacyMigrations {
+		if migration.Version == "010_add_ticket_types" {
+			recorded = true
+		}
+	}
+	assert.True(t, recorded)
+	assert.NotEmpty(t, GetMigrationSQL("010_add_ticket_types"))
+}
+
 func TestInitializationLedgerIsVersioned(t *testing.T) {
 	sql := GetMigrationSQL("008_add_initialization_ledger")
 	assert.NotEmpty(t, sql)

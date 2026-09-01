@@ -53,8 +53,14 @@ itsm/
 ```bash
 cd itsm-backend
 
-# Database migration
-go run -tags migrate main.go
+# Apply registered post-schema migrations to a database whose Ent schema was
+# created by the deployment/bootstrap job.
+go run -tags migrate ./cmd/migrate -up
+
+# A destructive local-only rebuild is explicit and guarded. Never use it
+# against a shared or production database.
+ITSM_ALLOW_DESTRUCTIVE_FRESH=true ITSM_FRESH_DATABASE="$DB_NAME" \
+  go run -tags migrate ./cmd/migrate -fresh
 
 # Run with hot reload
 go install github.com/air-verse/air@latest
@@ -165,8 +171,8 @@ cd itsm-backend
 # Create migration
 go generate ent new MigrationName
 
-# Apply migrations
-go run -tags migrate main.go
+# Apply registered post-schema migrations after Ent Schema.Create
+go run -tags migrate ./cmd/migrate -up
 
 # Rollback (manual)
 psql -U itsm -d itsm -f scripts/down.sql

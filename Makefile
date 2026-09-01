@@ -102,8 +102,8 @@ verify-scripts:    ## Validate build/start scripts without starting services
 	node --test scripts/__tests__/build-start-scripts.test.js
 
 # Database
-db-migrate:         ## Run database migrations
-	cd itsm-backend && go run -tags migrate main.go
+db-migrate:         ## Apply registered post-schema migrations to an Ent-schema-ready database
+	cd itsm-backend && go run -tags migrate ./cmd/migrate -up
 
 db-seed:            ## Seed database with test data
 	cd itsm-backend && go run -tags create_user main.go

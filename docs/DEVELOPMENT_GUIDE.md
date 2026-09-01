@@ -30,8 +30,11 @@ go run main.go           # 启动本地服务 (http://localhost:8090)
 go build -o itsm-backend main.go # 编译二进制
 ./itsm-backend           # 运行二进制
 go test ./...            # 运行全量单元与集成测试
-# 数据库迁移与初始化 (使用 build tags)
-go run -tags migrate main.go
+# 已有 Ent schema 的部署：只运行已注册的 post-schema migrations。
+go run -tags migrate ./cmd/migrate -up
+# 仅 disposable development/test 数据库：完整且破坏性的 fresh bootstrap。
+ITSM_ALLOW_DESTRUCTIVE_FRESH=true ITSM_FRESH_DATABASE="$DB_NAME" \
+  go run -tags migrate ./cmd/migrate -fresh
 go run -tags create_user main.go
 ```
 

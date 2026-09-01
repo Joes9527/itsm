@@ -60,22 +60,21 @@ go run -tags create_user main.go
 
 ### Database Migrations
 
-⚠️ `go run -tags migrate main.go` (or `go run -tags migrate .`) does **not** run incremental
-migrations — it runs `migrate_fresh.go`, which unconditionally does `DROP DATABASE IF EXISTS`
-and rebuilds from scratch. Running it against any database with real data (including a shared
-dev database) destroys it. It only exists for throwaway local resets. See
-[DEVELOPMENT_GUIDE.md § 开发环境拓扑](docs/DEVELOPMENT_GUIDE.md) for which physical host actually
-holds the shared dev database in the current multi-machine setup — it is not always your local machine.
-
-For actual incremental migrations, use `cmd/migrate` instead:
+Use the canonical `cmd/migrate` entry point. `-up` only applies registered
+post-schema migrations to a database whose Ent schema is already managed by the
+deployment/bootstrap job:
 
 ```bash
 cd itsm-backend
 go run -tags migrate ./cmd/migrate -status   # show pending/applied migrations
 go run -tags migrate ./cmd/migrate -up       # apply pending migrations
 go run -tags migrate ./cmd/migrate -dry-run  # preview SQL without executing
-# -fresh on this tool is the explicit, opt-in destructive drop+recreate+seed path
+# -fresh is development/test-only and requires both explicit confirmations:
+ITSM_ALLOW_DESTRUCTIVE_FRESH=true ITSM_FRESH_DATABASE="$DB_NAME" \
+  go run -tags migrate ./cmd/migrate -fresh
 ```
+
+Never use `-fresh` for a shared or production database.
 
 ### Environment Setup
 
