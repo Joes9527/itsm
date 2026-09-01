@@ -84,3 +84,21 @@ The shared worker is configured through:
 - `OUTBOX_DELIVERY_MAX_ATTEMPTS` (default `5`)
 
 These are documented in `docs/configuration.md`. No apply/reset/verify script was added or changed because the existing schema is sufficient.
+
+## Independent-review remediation
+
+The follow-up review found four contracts that the first implementation had not fully closed. They are now resolved without another outbox or migration:
+
+1. The duplicate `IncidentService.CreateIncidentAlert` writer was deleted. `IncidentService`, incident rule actions, and escalation processing depend on the single `IncidentAlertCreator` port implemented by `IncidentAlertingService`; bootstrap injects that authority explicitly. The former escalation log-only notification path was removed.
+2. `OutboxEventTypeRegistry` is now the authoritative registry for the shared table. It contains generic handlers and reserves `kaf_delegate_requested` for the specialised KAF dispatcher. Due unknown event types are atomically moved from `pending` to `blocked` with audit evidence; KAF events are neither claimed nor blocked by the generic worker.
+3. The worker writes a durable delivery-attempt marker before entering an external handler. If the process exits after a possible side effect but before `published`, lease recovery moves the event to observable `delivery_unknown`/`blocked` with audit evidence and does not resend. Graph and SMTP receive the stable outbox event ID (`X-ITSM-Delivery-ID`; SMTP also receives `Message-ID`). Durable Graph delivery disables Graph-to-SMTP fallback after an ambiguous Graph result. This is deliberately conservative at-least-once/ambiguous handling, not a claim of SMTP exactly-once delivery.
+4. Incident alert capabilities are registry-driven (`email`, `in_app`). Incident alert requests, automation notification actions, escalation-rule create/update, and SLA alert-rule create/update reject unsupported capabilities before persistence/execution. Built-in alert defaults were converged to registered email delivery.
+
+Additional green evidence:
+
+- unknown event blocked + audited while reserved KAF remains pending;
+- simulated crash-after-send/lease-expiry becomes `delivery_unknown` and the restarted worker performs zero sends;
+- Graph and SMTP both carry the stable delivery marker;
+- durable Graph ambiguity performs no SMTP fallback;
+- unsupported rule channels fail before persistence;
+- focused race suite for repository/worker/email/channel contracts passes.

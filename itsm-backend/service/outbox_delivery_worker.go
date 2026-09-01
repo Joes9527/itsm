@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -41,7 +40,7 @@ func blockOutboxDelivery(reason string) error {
 type OutboxDeliveryWorker struct {
 	repository *OutboxEventRepository
 	config     OutboxDeliveryWorkerConfig
-	handlers   map[string]OutboxDeliveryHandler
+	registry   *OutboxEventTypeRegistry
 	eventTypes []string
 	logger     *zap.SugaredLogger
 	now        func() time.Time
@@ -51,7 +50,7 @@ func NewOutboxDeliveryWorker(
 	repository *OutboxEventRepository,
 	config OutboxDeliveryWorkerConfig,
 	logger *zap.SugaredLogger,
-	handlers ...OutboxDeliveryHandler,
+	registry *OutboxEventTypeRegistry,
 ) (*OutboxDeliveryWorker, error) {
 	if repository == nil {
 		return nil, fmt.Errorf("outbox repository is required")
@@ -65,44 +64,34 @@ func NewOutboxDeliveryWorker(
 	if logger == nil {
 		return nil, fmt.Errorf("outbox worker logger is required")
 	}
-	registry := make(map[string]OutboxDeliveryHandler, len(handlers))
-	eventTypes := make([]string, 0, len(handlers))
-	for _, handler := range handlers {
-		if handler == nil {
-			return nil, fmt.Errorf("outbox delivery handler is required")
-		}
-		eventType := strings.TrimSpace(handler.EventType())
-		if eventType == "" {
-			return nil, fmt.Errorf("outbox delivery handler event type is required")
-		}
-		if _, exists := registry[eventType]; exists {
-			return nil, fmt.Errorf("duplicate outbox delivery handler: %s", eventType)
-		}
-		registry[eventType] = handler
-		eventTypes = append(eventTypes, eventType)
+	if registry == nil {
+		return nil, fmt.Errorf("outbox event type registry is required")
 	}
-	if len(registry) == 0 {
-		return nil, fmt.Errorf("at least one outbox delivery handler is required")
-	}
-	sort.Strings(eventTypes)
 	return &OutboxDeliveryWorker{
 		repository: repository,
 		config:     config,
-		handlers:   registry,
-		eventTypes: eventTypes,
+		registry:   registry,
+		eventTypes: registry.HandlerTypes(),
 		logger:     logger,
 		now:        time.Now,
 	}, nil
 }
 
 func (w *OutboxDeliveryWorker) DispatchOnce(ctx context.Context) error {
+	blocked, err := w.repository.BlockUnknownPendingEventTypes(ctx, w.now().UTC(), w.config.BatchSize, w.registry.KnownTypes())
+	if err != nil {
+		return fmt.Errorf("block unknown outbox event types: %w", err)
+	}
+	if blocked > 0 {
+		w.logger.Errorw("unknown outbox event types blocked", "count", blocked)
+	}
 	for _, eventType := range w.eventTypes {
 		events, err := w.repository.ClaimDueByEventType(ctx, w.now().UTC(), w.config.BatchSize, eventType)
 		if err != nil {
 			return fmt.Errorf("claim %s outbox deliveries: %w", eventType, err)
 		}
 		for _, event := range events {
-			if err := w.dispatch(ctx, w.handlers[eventType], event); err != nil {
+			if err := w.dispatch(ctx, w.registry.Handler(eventType), event); err != nil {
 				return err
 			}
 		}
@@ -111,6 +100,9 @@ func (w *OutboxDeliveryWorker) DispatchOnce(ctx context.Context) error {
 }
 
 func (w *OutboxDeliveryWorker) dispatch(ctx context.Context, handler OutboxDeliveryHandler, event *ent.OutboxEvent) error {
+	if err := w.repository.MarkDeliveryAttemptStarted(ctx, event.ID, event.ClaimToken, event.EventID); err != nil {
+		return fmt.Errorf("mark outbox delivery attempt %s: %w", event.EventID, err)
+	}
 	handlerCtx, cancel := context.WithTimeout(ctx, w.config.HandlerTimeout)
 	err := handler.Deliver(handlerCtx, event)
 	cancel()

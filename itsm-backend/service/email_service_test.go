@@ -459,12 +459,12 @@ func TestEmailService_HelperFunctions(t *testing.T) {
 // ==================== Graph 发信后端测试 ====================
 
 type mockGraphMailSender struct {
-	calls []struct{ mailbox, to, subject, body string }
+	calls []struct{ mailbox, to, subject, body, deliveryID string }
 	err   error
 }
 
-func (m *mockGraphMailSender) SendMail(_ context.Context, mailbox, to, subject, body string) error {
-	m.calls = append(m.calls, struct{ mailbox, to, subject, body string }{mailbox, to, subject, body})
+func (m *mockGraphMailSender) SendMail(_ context.Context, mailbox, to, subject, body, deliveryID string) error {
+	m.calls = append(m.calls, struct{ mailbox, to, subject, body, deliveryID string }{mailbox, to, subject, body, deliveryID})
 	return m.err
 }
 
@@ -564,6 +564,34 @@ func TestEmailServiceFallsBackToSMTPAfterGraphRuntimeFailure(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, graph.calls, 1)
 	require.Equal(t, 1, smtpCalls)
+}
+
+func TestEmailServiceDurableDeliveryDoesNotFallbackAfterAmbiguousGraphFailure(t *testing.T) {
+	graph := &mockGraphMailSender{err: errors.New("transport result unknown")}
+	svc := NewEmailService(EmailConfig{Host: "smtp.example.test", Port: 587, Username: "mailer", From: "mailer@example.test"}, zaptest.NewLogger(t).Sugar())
+	svc.SetGraphProvider(func(int) (GraphMailSender, string, bool) { return graph, "graph@example.test", true })
+	smtpCalls := 0
+	svc.smtpSend = func(context.Context, string, smtp.Auth, string, []string, []byte) error { smtpCalls++; return nil }
+	err := svc.SendForTenant(context.Background(), 42, &EmailMessage{
+		To: []string{"recipient@example.test"}, Subject: "durable", BodyText: "body",
+		DeliveryID: "evt-42", DisableProviderFallback: true,
+	})
+	require.ErrorIs(t, err, errEmailGraphSend)
+	assert.Zero(t, smtpCalls)
+	require.Len(t, graph.calls, 1)
+	assert.Equal(t, "evt-42", graph.calls[0].deliveryID)
+}
+
+func TestEmailServiceSMTPIncludesDurableDeliveryMarker(t *testing.T) {
+	svc := NewEmailService(EmailConfig{Host: "smtp.example.test", Port: 587, Username: "mailer", From: "mailer@example.test"}, zaptest.NewLogger(t).Sugar())
+	var captured []byte
+	svc.smtpSend = func(_ context.Context, _ string, _ smtp.Auth, _ string, _ []string, body []byte) error {
+		captured = append([]byte(nil), body...)
+		return nil
+	}
+	require.NoError(t, svc.Send(context.Background(), &EmailMessage{To: []string{"recipient@example.test"}, Subject: "durable", BodyText: "body", DeliveryID: "evt-42"}))
+	assert.Contains(t, string(captured), "Message-ID: <evt-42@itsm.local>")
+	assert.Contains(t, string(captured), "X-ITSM-Delivery-ID: evt-42")
 }
 
 func TestEmailServiceLegacySendDoesNotConsultTenantGraphProvider(t *testing.T) {

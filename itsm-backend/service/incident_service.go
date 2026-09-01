@@ -32,6 +32,11 @@ type IncidentService struct {
 	sequenceService       *SequenceService
 	processTriggerService ProcessTriggerServiceInterface
 	ruleEngine            *IncidentRuleEngine
+	alertCreator          IncidentAlertCreator
+}
+
+type IncidentAlertCreator interface {
+	CreateIncidentAlert(context.Context, *dto.CreateIncidentAlertRequest, int) (*dto.IncidentAlertResponse, error)
 }
 
 func NewIncidentService(client *ent.Client, logger *zap.SugaredLogger, numberAllocator workitemnumber.Allocator) *IncidentService {
@@ -52,6 +57,11 @@ func (s *IncidentService) RuleEngine() *IncidentRuleEngine {
 // SetProcessTriggerService 设置流程触发服务
 func (s *IncidentService) SetProcessTriggerService(triggerService ProcessTriggerServiceInterface) {
 	s.processTriggerService = triggerService
+}
+
+func (s *IncidentService) SetAlertCreator(creator IncidentAlertCreator) {
+	s.alertCreator = creator
+	s.ruleEngine.alertCreator = creator
 }
 
 // SetSequenceService 设置序列服务（用于 incident_number 生成）
@@ -809,42 +819,6 @@ func (s *IncidentService) CreateIncidentEvent(ctx context.Context, req *dto.Crea
 	return s.toIncidentEventResponse(event), nil
 }
 
-// CreateIncidentAlert 创建事件告警
-func (s *IncidentService) CreateIncidentAlert(ctx context.Context, req *dto.CreateIncidentAlertRequest, tenantID int) (*dto.IncidentAlertResponse, error) {
-	s.logger.Infow("Creating incident alert", "incident_id", req.IncidentID, "type", req.AlertType)
-	if err := s.ensureActiveIncident(ctx, req.IncidentID, tenantID); err != nil {
-		return nil, err
-	}
-
-	triggeredAt := time.Now()
-	if req.TriggeredAt != nil {
-		triggeredAt = *req.TriggeredAt
-	}
-
-	alert, err := s.client.IncidentAlert.Create().
-		SetIncidentID(req.IncidentID).
-		SetAlertType(req.AlertType).
-		SetAlertName(req.AlertName).
-		SetMessage(req.Message).
-		SetSeverity(req.Severity).
-		SetStatus("active").
-		SetChannels(req.Channels).
-		SetRecipients(req.Recipients).
-		SetTriggeredAt(triggeredAt).
-		SetMetadata(req.Metadata).
-		SetTenantID(tenantID).
-		SetCreatedAt(time.Now()).
-		SetUpdatedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		s.logger.Errorw("Failed to create incident alert", "error", err)
-		return nil, fmt.Errorf("failed to create incident alert: %w", err)
-	}
-
-	s.logger.Infow("Incident alert created successfully", "id", alert.ID)
-	return s.toIncidentAlertResponse(alert), nil
-}
-
 // CreateIncidentMetric 创建事件指标
 func (s *IncidentService) CreateIncidentMetric(ctx context.Context, req *dto.CreateIncidentMetricRequest, tenantID int) (*dto.IncidentMetricResponse, error) {
 	s.logger.Infow("Creating incident metric", "incident_id", req.IncidentID, "type", req.MetricType)
@@ -1073,13 +1047,16 @@ func (s *IncidentService) EscalateIncident(ctx context.Context, req *dto.Inciden
 	}
 
 	// 创建升级告警
-	_, err = s.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
+	if s.alertCreator == nil {
+		return nil, fmt.Errorf("incident alerting service is not configured")
+	}
+	_, err = s.alertCreator.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
 		IncidentID: req.IncidentID,
 		AlertType:  "escalation",
 		AlertName:  "事件升级告警",
 		Message:    fmt.Sprintf("事件 %s 已升级到级别 %d", incidentEntity.IncidentNumber, req.EscalationLevel),
 		Severity:   "high",
-		Channels:   []string{"email", "sms"},
+		Channels:   []string{"email"},
 		Recipients: []string{"manager@company.com"},
 		Metadata: map[string]interface{}{
 			"escalation_level": req.EscalationLevel,
@@ -1087,7 +1064,7 @@ func (s *IncidentService) EscalateIncident(ctx context.Context, req *dto.Inciden
 		},
 	}, tenantID)
 	if err != nil {
-		s.logger.Errorw("Failed to create escalation alert", "error", err)
+		return nil, fmt.Errorf("create escalation alert: %w", err)
 	}
 
 	// 构建响应

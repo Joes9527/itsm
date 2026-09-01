@@ -235,7 +235,7 @@ func TestClient_SendMail(t *testing.T) {
 	defer graph.Close()
 
 	c := NewClient("test-tenant", "id", "secret", aad.URL, graph.URL)
-	err := c.SendMail(context.Background(), "support@contoso.com", "alice@contoso.com", "Re: Help", "We got it, ticket #123")
+	err := c.SendMail(context.Background(), "support@contoso.com", "alice@contoso.com", "Re: Help", "We got it, ticket #123", "delivery-123")
 	require.NoError(t, err)
 
 	message := captured["message"].(map[string]interface{})
@@ -251,15 +251,20 @@ func TestClient_SendMail(t *testing.T) {
 	// which would otherwise create a mail loop.
 	headers, ok := message["internetMessageHeaders"].([]interface{})
 	require.True(t, ok, "message must include internetMessageHeaders")
-	var found bool
+	var found, foundDeliveryID bool
 	for _, h := range headers {
 		hm := h.(map[string]interface{})
 		if hm["name"] == "X-Auto-Submitted" {
 			found = true
 			assert.Equal(t, "auto-replied", hm["value"])
 		}
+		if hm["name"] == "X-ITSM-Delivery-ID" {
+			foundDeliveryID = true
+			assert.Equal(t, "delivery-123", hm["value"])
+		}
 	}
 	assert.True(t, found, "internetMessageHeaders must include an X-Auto-Submitted header")
+	assert.True(t, foundDeliveryID, "durable delivery id must be passed to Graph")
 }
 
 func TestClient_ReplyMessage(t *testing.T) {

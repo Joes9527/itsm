@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/mail"
 	"strconv"
 	"strings"
@@ -43,11 +44,17 @@ func (h *IncidentAlertDeliveryHandler) Deliver(ctx context.Context, event *ent.O
 	if h.emailSender == nil {
 		return blockOutboxDelivery("incident alert email delivery is not configured")
 	}
-	return h.emailSender.SendForTenant(ctx, payload.TenantID, &EmailMessage{
-		To:       append([]string(nil), payload.Recipients...),
-		Subject:  "[ITSM Alert] " + payload.Subject,
-		BodyText: payload.Message,
+	err := h.emailSender.SendForTenant(ctx, payload.TenantID, &EmailMessage{
+		To:                      append([]string(nil), payload.Recipients...),
+		Subject:                 "[ITSM Alert] " + payload.Subject,
+		BodyText:                payload.Message,
+		DeliveryID:              event.EventID,
+		DisableProviderFallback: true,
 	})
+	if err != nil && (errors.Is(err, errEmailGraphSend) || errors.Is(err, errEmailSMTPSend)) {
+		return blockOutboxDelivery("delivery_unknown: email transport result is ambiguous; manual reconciliation required")
+	}
+	return err
 }
 
 func validateIncidentAlertDelivery(event *ent.OutboxEvent, payload incidentAlertDeliveryPayload) string {

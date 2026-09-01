@@ -33,7 +33,7 @@ type durableNotificationGraphSender struct {
 	calls   []string
 }
 
-func (s *durableNotificationGraphSender) SendMail(_ context.Context, _ string, to, _, _ string) error {
+func (s *durableNotificationGraphSender) SendMail(_ context.Context, _ string, to, _, _, _ string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.calls = append(s.calls, to)

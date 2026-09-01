@@ -340,6 +340,13 @@ func NewApplication() *Application {
 	// 延迟绑定 Graph 发信：发信时只查询当前租户的 msgraph 连接器。
 	emailService.SetGraphProvider(newTenantGraphProvider(connectorManager))
 	ticketNotificationService.SetEmailService(emailService)
+	outboxRegistry, err := service.NewOutboxEventTypeRegistry(
+		[]service.OutboxDeliveryHandler{service.NewIncidentAlertDeliveryHandler(emailService)},
+		service.KafDelegateRequestedEventType,
+	)
+	if err != nil {
+		log.Fatalf("Invalid outbox event type registry: %v", err)
+	}
 	outboxDeliveryWorker, err := service.NewOutboxDeliveryWorker(
 		service.NewOutboxEventRepository(client),
 		service.OutboxDeliveryWorkerConfig{
@@ -349,7 +356,7 @@ func NewApplication() *Application {
 			MaxAttempts:    cfg.OutboxDelivery.MaxAttempts,
 		},
 		sugar,
-		service.NewIncidentAlertDeliveryHandler(emailService),
+		outboxRegistry,
 	)
 	if err != nil {
 		log.Fatalf("Invalid outbox delivery worker configuration: %v", err)
@@ -452,6 +459,7 @@ func NewApplication() *Application {
 	// 控制器依赖
 	incidentMonitoringService := service.NewIncidentMonitoringService(client, sugar)
 	incidentAlertingService := service.NewIncidentAlertingService(client, sugar)
+	incidentService.SetAlertCreator(incidentAlertingService)
 	ticketDependencyService := service.NewTicketDependencyService(client, sugar)
 	analyticsService := service.NewAnalyticsService(client, sugar)
 	predictionService := service.NewPredictionService(client, sugar)
