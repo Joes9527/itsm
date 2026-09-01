@@ -813,3 +813,52 @@ func TestCallbackWorkerRunsImmediateSweepAndStopsOnCancellation(t *testing.T) {
 		t.Fatal("callback worker did not stop after cancellation")
 	}
 }
+
+func TestCallbackRecoveryNeverReclaimsRequiredBlockedOutcome(t *testing.T) {
+	client := openBPMNCallbackOutboxClient(t)
+	now := time.Date(2026, 9, 1, 13, 0, 0, 0, time.UTC)
+	blockingExecutor := &fakeBPMNCallbackExecutor{
+		effect:    bpmn.BlockedEffect(bpmn.CallbackBlockTargetMissing, "target-secret"),
+		effectSet: true,
+	}
+	firstWorker := newBPMNCallbackOutboxForTest(client, blockingExecutor, now)
+	row := enqueueBPMNCallbackOutboxForTest(t, firstWorker, "callback-recovery-blocked")
+
+	processed, err := firstWorker.processPending(context.Background(), "first-worker", 1)
+	require.NoError(t, err)
+	require.Zero(t, processed)
+	saved := client.ProcessCallbackOutbox.GetX(context.Background(), row.ID)
+	require.Equal(t, bpmnCallbackStatusBlocked, saved.Status)
+
+	restartExecutor := &fakeBPMNCallbackExecutor{}
+	restartedWorker := newBPMNCallbackOutboxForTest(client, restartExecutor, now.Add(24*time.Hour))
+	processed, err = restartedWorker.processPending(context.Background(), "restarted-worker", 10)
+	require.NoError(t, err)
+	require.Zero(t, processed)
+	require.Empty(t, restartExecutor.keys)
+	saved = client.ProcessCallbackOutbox.GetX(context.Background(), row.ID)
+	assert.Equal(t, bpmnCallbackStatusBlocked, saved.Status)
+	assert.Equal(t, string(bpmn.CallbackBlockTargetMissing), saved.LastErrorClass)
+}
+
+func TestCallbackRecoveryIdempotentEffectCompletesOnlyOnce(t *testing.T) {
+	client := openBPMNCallbackOutboxClient(t)
+	now := time.Date(2026, 9, 1, 14, 0, 0, 0, time.UTC)
+	executor := &fakeBPMNCallbackExecutor{
+		effect:    bpmn.IdempotentEffect("delivery already exists", nil),
+		effectSet: true,
+	}
+	outbox := newBPMNCallbackOutboxForTest(client, executor, now)
+	row := enqueueBPMNCallbackOutboxForTest(t, outbox, "callback-recovery-idempotent")
+
+	processed, err := outbox.processPending(context.Background(), "first-worker", 1)
+	require.NoError(t, err)
+	require.Equal(t, 1, processed)
+	saved := client.ProcessCallbackOutbox.GetX(context.Background(), row.ID)
+	require.Equal(t, bpmnCallbackStatusCompleted, saved.Status)
+
+	processed, err = outbox.processPending(context.Background(), "restarted-worker", 10)
+	require.NoError(t, err)
+	require.Zero(t, processed)
+	require.Len(t, executor.keys, 1)
+}

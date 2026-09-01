@@ -9,15 +9,18 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/processcallbackoutbox"
+	"itsm-backend/metrics"
 	"itsm-backend/service/bpmn"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 const (
 	bpmnCallbackStatusPending    = "pending"
 	bpmnCallbackStatusProcessing = "processing"
 	bpmnCallbackStatusCompleted  = "completed"
+	bpmnCallbackStatusBlocked    = "blocked"
 	bpmnCallbackLeaseDuration    = 60 * time.Second
 )
 
@@ -42,6 +45,7 @@ type bpmnCallbackExecutor interface {
 
 type bpmnCallbackExecutionResult struct {
 	CompletionCommitted bool
+	Effect              *bpmn.CallbackEffect
 }
 
 // bpmnCallbackExecutionError carries only an allowlisted operational class.
@@ -184,12 +188,16 @@ func (o *bpmnCallbackOutbox) processPending(ctx context.Context, workerID string
 			continue
 		}
 
-		completedRow, completeErr := o.complete(ctx, workerID, &claimedRow)
-		if completeErr != nil || !completedRow {
+		outcome := bpmn.ResolveCallbackOutcome(executionResult.Effect, claimedRow.OptionalDeclared)
+		persisted, persistErr := o.persistCallbackOutcome(ctx, workerID, &claimedRow, outcome)
+		if persistErr != nil || !persisted {
 			failed = true
+			_ = o.retry(ctx, workerID, &claimedRow, "unknown_error")
 			continue
 		}
-		completed++
+		if outcome.Advance {
+			completed++
+		}
 	}
 	if failed {
 		return completed, fmt.Errorf("one or more bpmn callbacks were not completed")
@@ -258,12 +266,16 @@ func (o *bpmnCallbackOutbox) processExecutionKeys(ctx context.Context, workerID 
 			completed++
 			continue
 		}
-		completedRow, completeErr := o.complete(ctx, workerID, &claimedRow)
-		if completeErr != nil || !completedRow {
+		outcome := bpmn.ResolveCallbackOutcome(executionResult.Effect, claimedRow.OptionalDeclared)
+		persisted, persistErr := o.persistCallbackOutcome(ctx, workerID, &claimedRow, outcome)
+		if persistErr != nil || !persisted {
 			failed = true
+			_ = o.retry(ctx, workerID, &claimedRow, "unknown_error")
 			continue
 		}
-		completed++
+		if outcome.Advance {
+			completed++
+		}
 	}
 	if failed {
 		return completed, fmt.Errorf("one or more bpmn callbacks were not completed")
@@ -324,6 +336,74 @@ func (o *bpmnCallbackOutbox) completeWithClient(ctx context.Context, client *ent
 		return false, fmt.Errorf("bpmn callback completion failed")
 	}
 	return affected == 1, nil
+}
+
+// persistCallbackOutcome atomically makes a handler effect terminal and, for
+// blocked outcomes, stores only sanitized audit metadata. A blocked row cannot
+// be reclaimed because neither the candidate scan nor claim predicate selects
+// the terminal blocked status.
+func (o *bpmnCallbackOutbox) persistCallbackOutcome(ctx context.Context, workerID string, row *ent.ProcessCallbackOutbox, outcome bpmn.CallbackOutcome) (bool, error) {
+	if err := validateBPMNCallbackWorkerID(workerID); err != nil {
+		return false, err
+	}
+	if row == nil || row.TenantID <= 0 {
+		return false, fmt.Errorf("bpmn callback row is missing tenant")
+	}
+	if outcome.OutboxStatus != bpmn.CallbackOutboxCompleted && outcome.OutboxStatus != bpmn.CallbackOutboxBlocked {
+		return false, fmt.Errorf("bpmn callback outcome status is invalid")
+	}
+	if outcome.OutboxStatus == bpmn.CallbackOutboxBlocked && !bpmn.IsAllowedCallbackBlockCode(outcome.LastErrorClass) {
+		return false, fmt.Errorf("bpmn callback block code is invalid")
+	}
+
+	tx, err := o.client.Tx(ctx)
+	if err != nil {
+		return false, fmt.Errorf("bpmn callback outcome transaction failed")
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	update := tx.Client().ProcessCallbackOutbox.Update().
+		Where(
+			processcallbackoutbox.ID(row.ID),
+			processcallbackoutbox.TenantID(row.TenantID),
+			processcallbackoutbox.StatusEQ(bpmnCallbackStatusProcessing),
+			processcallbackoutbox.LeaseOwner(workerID),
+		).
+		SetStatus(outcome.OutboxStatus).
+		SetCompletedAt(o.clock()).
+		ClearLeaseOwner().
+		ClearLeaseExpiresAt().
+		ClearLastErrorClass()
+	if outcome.OutboxStatus == bpmn.CallbackOutboxBlocked {
+		update.SetLastErrorClass(string(outcome.LastErrorClass))
+	}
+	affected, err := update.Save(ctx)
+	if err != nil {
+		return false, fmt.Errorf("bpmn callback outcome persistence failed")
+	}
+	if affected != 1 {
+		return false, fmt.Errorf("bpmn callback lease lost")
+	}
+
+	if outcome.AuditAction != "" {
+		audit := NewBPMNAuditService(tx.Client(), zap.NewNop().Sugar())
+		switch outcome.AuditAction {
+		case bpmn.CallbackAuditActionBlocked:
+			err = audit.RecordCallbackBlocked(ctx, row, outcome.BlockCode)
+		case bpmn.CallbackAuditActionSkippedOptional:
+			err = audit.RecordCallbackSkippedOptional(ctx, row, outcome.BlockCode)
+		default:
+			return false, fmt.Errorf("bpmn callback audit action is invalid")
+		}
+		if err != nil {
+			return false, fmt.Errorf("bpmn callback audit persistence failed")
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("bpmn callback outcome commit failed")
+	}
+	metrics.RecordBPMNCallbackEffect(row.HandlerID, row.Action, string(outcome.MetricEffect))
+	return true, nil
 }
 
 func (o *bpmnCallbackOutbox) completionPersisted(ctx context.Context, row *ent.ProcessCallbackOutbox) (bool, error) {

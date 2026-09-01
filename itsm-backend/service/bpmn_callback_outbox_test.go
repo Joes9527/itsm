@@ -8,6 +8,7 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/service/bpmn"
 
@@ -19,6 +20,8 @@ type fakeBPMNCallbackExecutor struct {
 	keys                []string
 	vars                []map[string]interface{}
 	completionCommitted bool
+	effect              *bpmn.CallbackEffect
+	effectSet           bool
 }
 
 func (e *fakeBPMNCallbackExecutor) executeClaimedCallback(ctx context.Context, _ string, row *ent.ProcessCallbackOutbox) (bpmnCallbackExecutionResult, error) {
@@ -28,7 +31,11 @@ func (e *fakeBPMNCallbackExecutor) executeClaimedCallback(ctx context.Context, _
 	}
 	e.keys = append(e.keys, key)
 	e.vars = append(e.vars, row.Variables)
-	return bpmnCallbackExecutionResult{CompletionCommitted: e.completionCommitted}, e.err
+	effect := e.effect
+	if !e.effectSet {
+		effect = bpmn.AppliedEffect("test callback applied", nil)
+	}
+	return bpmnCallbackExecutionResult{CompletionCommitted: e.completionCommitted, Effect: effect}, e.err
 }
 
 func openBPMNCallbackOutboxClient(t *testing.T) *ent.Client {
@@ -49,10 +56,28 @@ func newBPMNCallbackOutboxForTest(client *ent.Client, executor bpmnCallbackExecu
 
 func enqueueBPMNCallbackOutboxForTest(t *testing.T, outbox *bpmnCallbackOutbox, key string) *ent.ProcessCallbackOutbox {
 	t.Helper()
+	deployment := outbox.client.ProcessDeployment.Create().
+		SetDeploymentID("deployment-" + key).
+		SetDeploymentName("Deployment " + key).
+		SetTenantID(7).
+		SaveX(context.Background())
+	definition := outbox.client.ProcessDefinition.Create().
+		SetKey("definition-" + key).
+		SetName("Definition " + key).
+		SetBpmnXML([]byte("<definitions/>")).
+		SetDeploymentID(deployment.ID).
+		SetTenantID(7).
+		SaveX(context.Background())
+	instance := outbox.client.ProcessInstance.Create().
+		SetProcessInstanceID("instance-" + key).
+		SetProcessDefinitionKey(definition.Key).
+		SetProcessDefinitionID(definition.ID).
+		SetTenantID(7).
+		SaveX(context.Background())
 	row, err := outbox.enqueue(context.Background(), outbox.client, bpmnCallbackEnqueueRequest{
 		ExecutionKey:      key,
 		TenantID:          7,
-		ProcessInstanceID: 101,
+		ProcessInstanceID: instance.ID,
 		ProcessTaskID:     202,
 		TaskID:            "task-202",
 		CallbackKind:      "service_task",
@@ -63,6 +88,73 @@ func enqueueBPMNCallbackOutboxForTest(t *testing.T, outbox *bpmnCallbackOutbox, 
 	})
 	require.NoError(t, err)
 	return row
+}
+
+func TestBPMNCallbackOutboxRequiredBlockedEffectIsTerminalAndAudited(t *testing.T) {
+	client := openBPMNCallbackOutboxClient(t)
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	executor := &fakeBPMNCallbackExecutor{effect: bpmn.BlockedEffect(bpmn.CallbackBlockTargetMissing, "target-secret"), effectSet: true}
+	outbox := newBPMNCallbackOutboxForTest(client, executor, now)
+	row := enqueueBPMNCallbackOutboxForTest(t, outbox, "callback-required-block")
+
+	processed, err := outbox.processPending(context.Background(), "worker-a", 1)
+	require.NoError(t, err)
+	require.Zero(t, processed)
+	saved := client.ProcessCallbackOutbox.GetX(context.Background(), row.ID)
+	require.Equal(t, bpmnCallbackStatusBlocked, saved.Status)
+	require.Equal(t, string(bpmn.CallbackBlockTargetMissing), saved.LastErrorClass)
+	require.Equal(t, now, saved.CompletedAt)
+	require.Empty(t, saved.LeaseOwner)
+
+	processed, err = outbox.processPending(context.Background(), "worker-b", 1)
+	require.NoError(t, err)
+	require.Zero(t, processed)
+	require.Len(t, executor.keys, 1)
+	require.Equal(t, 1, client.ProcessAuditLog.Query().Where(
+		processauditlog.ProcessInstanceID(saved.ProcessInstanceID),
+		processauditlog.Action(bpmn.CallbackAuditActionBlocked),
+	).CountX(context.Background()))
+}
+
+func TestBPMNCallbackOutboxOptionalBlockedEffectCompletesOnce(t *testing.T) {
+	client := openBPMNCallbackOutboxClient(t)
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	executor := &fakeBPMNCallbackExecutor{effect: bpmn.BlockedEffect(bpmn.CallbackBlockTargetMissing, "target-secret"), effectSet: true}
+	outbox := newBPMNCallbackOutboxForTest(client, executor, now)
+	row := enqueueBPMNCallbackOutboxForTest(t, outbox, "callback-optional-block")
+	require.NoError(t, client.ProcessCallbackOutbox.UpdateOne(row).SetOptionalDeclared(true).Exec(context.Background()))
+
+	processed, err := outbox.processPending(context.Background(), "worker-a", 1)
+	require.NoError(t, err)
+	require.Equal(t, 1, processed)
+	saved := client.ProcessCallbackOutbox.GetX(context.Background(), row.ID)
+	require.Equal(t, bpmnCallbackStatusCompleted, saved.Status)
+	require.Empty(t, saved.LastErrorClass)
+	require.Equal(t, now, saved.CompletedAt)
+
+	processed, err = outbox.processPending(context.Background(), "worker-b", 1)
+	require.NoError(t, err)
+	require.Zero(t, processed)
+	require.Len(t, executor.keys, 1)
+	require.Equal(t, 1, client.ProcessAuditLog.Query().Where(
+		processauditlog.ProcessInstanceID(saved.ProcessInstanceID),
+		processauditlog.Action(bpmn.CallbackAuditActionSkippedOptional),
+	).CountX(context.Background()))
+}
+
+func TestBPMNCallbackOutboxMalformedEffectBlocksWithoutAdvancing(t *testing.T) {
+	client := openBPMNCallbackOutboxClient(t)
+	now := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	executor := &fakeBPMNCallbackExecutor{effect: &bpmn.CallbackEffect{Status: bpmn.CallbackEffectSkippedOptional}, effectSet: true}
+	outbox := newBPMNCallbackOutboxForTest(client, executor, now)
+	row := enqueueBPMNCallbackOutboxForTest(t, outbox, "callback-malformed-effect")
+
+	processed, err := outbox.processPending(context.Background(), "worker-a", 1)
+	require.NoError(t, err)
+	require.Zero(t, processed)
+	saved := client.ProcessCallbackOutbox.GetX(context.Background(), row.ID)
+	require.Equal(t, bpmnCallbackStatusBlocked, saved.Status)
+	require.Equal(t, string(bpmn.CallbackBlockHandlerContract), saved.LastErrorClass)
 }
 
 func TestBPMNCallbackOutboxClaimUsesCAS(t *testing.T) {

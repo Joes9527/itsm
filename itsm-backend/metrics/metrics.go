@@ -115,6 +115,17 @@ var (
 		[]string{"process_definition", "tenant_id"},
 	)
 
+	// BPMNCallbackEffectsTotal records only contract-declared callback outcome
+	// effects. Tenant, task identity, free-form errors, and block codes are
+	// deliberately excluded to keep label cardinality bounded.
+	BPMNCallbackEffectsTotal = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "itsm_bpmn_callback_effects_total",
+			Help: "Total BPMN callback effects by handler, action, and effect",
+		},
+		[]string{"handler_id", "action", "effect"},
+	)
+
 	BPMNPendingInstances = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "itsm_bpmn_pending_instances",
@@ -141,3 +152,16 @@ var (
 		[]string{"method", "path", "status"},
 	)
 )
+
+// RecordBPMNCallbackEffect increments only the four declared callback effect
+// values. The caller supplies handler and action from the validated callback
+// contract, never tenant, task, diagnostics, or a block code.
+func RecordBPMNCallbackEffect(handlerID, action, effect string) bool {
+	switch effect {
+	case "applied", "idempotent", "skipped_optional", "blocked":
+		BPMNCallbackEffectsTotal.WithLabelValues(handlerID, action, effect).Inc()
+		return true
+	default:
+		return false
+	}
+}
