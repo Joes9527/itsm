@@ -31,15 +31,19 @@ func NewBPMNProcessTriggerController(triggerService *service.ProcessTriggerServi
 func (c *BPMNProcessTriggerController) RegisterRoutes(r *gin.RouterGroup) {
 	bpmnRoleGate := middleware.RequireLegacyBPMNRoles()
 
-	// 流程触发 — matches the /api/v1/bpmn/* wildcard's current role set.
+	// Process creation retains the legacy coarse role gate. Object reads and
+	// mutations are authorized by the ProcessInstanceService scope instead.
 	trigger := r.Group("/process-trigger")
 	trigger.Use(bpmnRoleGate)
 	{
 		trigger.POST("", c.TriggerProcess)
-		trigger.GET("/status/:instance_id", c.GetProcessStatus)
-		trigger.POST("/cancel/:instance_id", c.CancelProcess)
-		trigger.POST("/suspend/:instance_id", c.SuspendProcess)
-		trigger.POST("/resume/:instance_id", c.ResumeProcess)
+	}
+	instanceTrigger := r.Group("/process-trigger")
+	{
+		instanceTrigger.GET("/status/:instance_id", c.GetProcessStatus)
+		instanceTrigger.POST("/cancel/:instance_id", c.CancelProcess)
+		instanceTrigger.POST("/suspend/:instance_id", c.SuspendProcess)
+		instanceTrigger.POST("/resume/:instance_id", c.ResumeProcess)
 	}
 
 	// 流程绑定管理 — read/create match the bpmn:* wildcard's role set, but
@@ -115,12 +119,12 @@ func (c *BPMNProcessTriggerController) GetProcessStatus(ctx *gin.Context) {
 		return
 	}
 
-	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	workflowCtx, _, ok := getBPMNTenantContext(ctx)
 	if !ok {
 		return
 	}
 
-	result, err := c.triggerService.GetProcessStatus(workflowCtx, instanceID, tenantID)
+	result, err := c.triggerService.GetProcessStatus(workflowCtx, instanceID)
 	if err != nil {
 		respondBPMNError(ctx, err, "获取流程状态失败")
 		return
@@ -142,12 +146,12 @@ func (c *BPMNProcessTriggerController) CancelProcess(ctx *gin.Context) {
 	}
 	ctx.ShouldBindJSON(&req)
 
-	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	workflowCtx, _, ok := getBPMNTenantContext(ctx)
 	if !ok {
 		return
 	}
 
-	err = c.triggerService.CancelProcess(workflowCtx, instanceID, req.Reason, tenantID)
+	err = c.triggerService.CancelProcess(workflowCtx, instanceID, req.Reason)
 	if err != nil {
 		respondBPMNError(ctx, err, "取消流程失败")
 		return
@@ -169,12 +173,12 @@ func (c *BPMNProcessTriggerController) SuspendProcess(ctx *gin.Context) {
 	}
 	ctx.ShouldBindJSON(&req)
 
-	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	workflowCtx, _, ok := getBPMNTenantContext(ctx)
 	if !ok {
 		return
 	}
 
-	err = c.triggerService.SuspendProcess(workflowCtx, instanceID, req.Reason, tenantID)
+	err = c.triggerService.SuspendProcess(workflowCtx, instanceID, req.Reason)
 	if err != nil {
 		respondBPMNError(ctx, err, "暂停流程失败")
 		return
@@ -191,12 +195,12 @@ func (c *BPMNProcessTriggerController) ResumeProcess(ctx *gin.Context) {
 		return
 	}
 
-	workflowCtx, tenantID, ok := getBPMNTenantContext(ctx)
+	workflowCtx, _, ok := getBPMNTenantContext(ctx)
 	if !ok {
 		return
 	}
 
-	err = c.triggerService.ResumeProcess(workflowCtx, instanceID, tenantID)
+	err = c.triggerService.ResumeProcess(workflowCtx, instanceID)
 	if err != nil {
 		respondBPMNError(ctx, err, "恢复流程失败")
 		return
