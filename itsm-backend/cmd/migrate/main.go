@@ -9,9 +9,11 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/netip"
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"itsm-backend/config"
@@ -290,19 +292,65 @@ func validateFreshTarget(cfg *config.Config) error {
 	if os.Getenv("ITSM_ALLOW_DESTRUCTIVE_FRESH") != "true" {
 		return fmt.Errorf("-fresh requires ITSM_ALLOW_DESTRUCTIVE_FRESH=true")
 	}
-	if os.Getenv("ITSM_FRESH_DATABASE") != cfg.Database.DBName {
-		return fmt.Errorf("-fresh requires ITSM_FRESH_DATABASE to equal the exact configured database %q", cfg.Database.DBName)
+	host, err := normalizeFreshHost(cfg.Database.Host)
+	if err != nil {
+		return err
 	}
-	if err := validateDatabaseName(cfg.Database.DBName); err != nil {
+	databaseName := strings.TrimSpace(cfg.Database.DBName)
+	if cfg.Database.Port < 1 || cfg.Database.Port > 65535 {
+		return fmt.Errorf("invalid fresh database port %d", cfg.Database.Port)
+	}
+	if err := validateDatabaseName(databaseName); err != nil {
 		return fmt.Errorf("invalid fresh database target: %w", err)
 	}
+	if isSystemDatabase(databaseName) {
+		return fmt.Errorf("-fresh refuses system database %q", databaseName)
+	}
+	if host == "192.168.31.66" {
+		return fmt.Errorf("-fresh refuses shared host %q", host)
+	}
+	if os.Getenv("ITSM_FRESH_DATABASE") != databaseName {
+		return fmt.Errorf("-fresh requires ITSM_FRESH_DATABASE to equal the exact configured database %q", cfg.Database.DBName)
+	}
+	if strings.TrimSpace(os.Getenv("ITSM_FRESH_HOST")) != host {
+		return fmt.Errorf("-fresh requires ITSM_FRESH_HOST to equal the exact configured host %q", host)
+	}
+	if strings.TrimSpace(os.Getenv("ITSM_FRESH_PORT")) != strconv.Itoa(cfg.Database.Port) {
+		return fmt.Errorf("-fresh requires ITSM_FRESH_PORT to equal the exact configured port %d", cfg.Database.Port)
+	}
 	return nil
+}
+
+func normalizeFreshHost(value string) (string, error) {
+	host := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(value)), ".")
+	if host == "" {
+		return "", fmt.Errorf("-fresh configured host is required")
+	}
+	if address, err := netip.ParseAddr(host); err == nil {
+		return address.String(), nil
+	}
+	return host, nil
+}
+
+func isSystemDatabase(name string) bool {
+	switch strings.ToLower(name) {
+	case "postgres", "template0", "template1":
+		return true
+	default:
+		return false
+	}
 }
 
 func freshDatabase(cfg *config.Config, sugar *zap.SugaredLogger) {
 	if err := validateFreshTarget(cfg); err != nil {
 		log.Fatalf("Refusing fresh bootstrap: %v", err)
 	}
+	normalized := *cfg
+	normalized.Database = cfg.Database
+	normalizedHost, _ := normalizeFreshHost(cfg.Database.Host)
+	normalized.Database.Host = normalizedHost
+	normalized.Database.DBName = strings.TrimSpace(cfg.Database.DBName)
+	cfg = &normalized
 
 	// Connect to postgres to drop/create database
 	postgresDSN := fmt.Sprintf("host=%s port=%d user=%s dbname=postgres sslmode=%s password=%s",
@@ -344,11 +392,13 @@ func freshDatabase(cfg *config.Config, sugar *zap.SugaredLogger) {
 	defer client.Close()
 	migrator := migration.NewMigrator(db, sugar)
 	if err := migration.RunCanonicalBootstrap(ctx, migration.CanonicalBootstrap{
+		Prepare: func(ctx context.Context) error {
+			return database.PrepareBootstrapInfrastructure(ctx, db)
+		},
 		CreateSchema: func(ctx context.Context) error { return client.Schema.Create(ctx) },
 		Migrator:     migrator,
 		Seed: func(ctx context.Context) error {
-			seeder.NewSeeder(client, sugar, cfg).SeedAll(ctx)
-			return nil
+			return seeder.NewSeeder(client, sugar, cfg).SeedProduction(ctx)
 		},
 	}); err != nil {
 		log.Fatalf("Canonical fresh bootstrap failed: %v", err)

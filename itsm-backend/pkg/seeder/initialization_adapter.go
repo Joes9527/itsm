@@ -19,6 +19,7 @@ import (
 	"itsm-backend/ent/sladefinition"
 	"itsm-backend/ent/standardchange"
 	"itsm-backend/ent/tenant"
+	"itsm-backend/ent/tickettype"
 	"itsm-backend/ent/user"
 	"itsm-backend/internal/initialization"
 	"itsm-backend/service"
@@ -307,6 +308,10 @@ func (s *Seeder) verifyITILTemplates(ctx context.Context) error {
 	count, err := s.client.StandardChange.Query().Where(standardchange.TenantIDEQ(tenantID)).Count(ctx)
 	if err != nil || count < len(s.config.StandardChanges) {
 		return fmt.Errorf("verify standard changes: expected>=%d actual=%d err=%w", len(s.config.StandardChanges), count, err)
+	}
+	ticketTypeCount, err := s.client.TicketType.Query().Where(tickettype.TenantIDEQ(int64(tenantID))).Count(ctx)
+	if err != nil || ticketTypeCount < 12 {
+		return fmt.Errorf("verify ticket types: expected>=12 actual=%d err=%w", ticketTypeCount, err)
 	}
 	return nil
 }

@@ -968,6 +968,9 @@ func InitializeStorage(cfg *config.Config, client *ent.Client, sugar *zap.Sugare
 		migrator := migration.NewMigrator(database.GetRawDB(), sugar)
 		bootstrap := migration.CanonicalBootstrap{
 			Prepare: func(ctx context.Context) error {
+				if err := database.PrepareBootstrapInfrastructure(ctx, database.GetRawDB()); err != nil {
+					return fmt.Errorf("prepare canonical infrastructure: %w", err)
+				}
 				if err := prepareTicketCCIndexMigration(ctx, database.GetRawDB(), sugar); err != nil {
 					return fmt.Errorf("prepare TicketCC index migration: %w", err)
 				}

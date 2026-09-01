@@ -32,12 +32,12 @@ import (
 	"itsm-backend/ent/tenant"
 	"itsm-backend/ent/ticketcategory"
 	"itsm-backend/ent/tickettemplate"
+	"itsm-backend/ent/tickettype"
 	"itsm-backend/ent/ticketview"
 	"itsm-backend/ent/user"
 	"itsm-backend/service"
 
 	"itsm-backend/config"
-	"itsm-backend/database"
 	"itsm-backend/pkg/tenantmode"
 
 	"go.uber.org/zap"
@@ -2133,24 +2133,7 @@ func (s *Seeder) seedTicketTypes(ctx context.Context) {
 		return
 	}
 
-	// 检查ticket_types表是否存在
-	rawDB := database.GetRawDB()
-	if rawDB == nil {
-		s.sugar.Warnw("rawDB not available; skip ticket types seed")
-		return
-	}
-
-	// 检查 ticket_types 表是否存在
-	var tableExists bool
-	err = rawDB.QueryRowContext(ctx, "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'ticket_types')").Scan(&tableExists)
-	if err != nil || !tableExists {
-		s.sugar.Infow("ticket_types table does not exist; skip seed")
-		return
-	}
-
-	// 检查是否已有工单类型
-	var count int
-	err = rawDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM ticket_types WHERE tenant_id = $1", t.ID).Scan(&count)
+	count, err := s.client.TicketType.Query().Where(tickettype.TenantIDEQ(int64(t.ID))).Count(ctx)
 	if err != nil {
 		s.sugar.Warnw("check existing ticket types failed", "error", err)
 		return
@@ -2183,22 +2166,25 @@ func (s *Seeder) seedTicketTypes(ctx context.Context) {
 	}
 
 	for _, tt := range ticketTypes {
-		_, err := rawDB.ExecContext(
-			ctx, `
-			INSERT INTO ticket_types (
-				code, name, description, icon, color, status,
-				custom_fields, approval_enabled, approval_chain,
-				sla_enabled, auto_assign_enabled, assignment_rules,
-				notification_config, permission_config,
-				created_by, tenant_id, created_at, updated_at, usage_count
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 0)
-		`,
-			tt.Code, tt.Name, tt.Description, tt.Icon, tt.Color, "active",
-			"[]", false, "[]",
-			false, false, "[]",
-			"{}", "{}",
-			admin.ID, t.ID, time.Now(), time.Now(),
-		)
+		_, err := s.client.TicketType.Create().
+			SetCode(tt.Code).
+			SetName(tt.Name).
+			SetDescription(tt.Description).
+			SetIcon(tt.Icon).
+			SetColor(tt.Color).
+			SetStatus("active").
+			SetApprovalEnabled(false).
+			SetSLAEnabled(false).
+			SetAutoAssignEnabled(false).
+			SetAssignmentRules([]interface{}{}).
+			SetNotificationConfig(map[string]interface{}{}).
+			SetPermissionConfig(map[string]interface{}{}).
+			SetCreatedBy(int64(admin.ID)).
+			SetTenantID(int64(t.ID)).
+			SetCreatedAt(time.Now()).
+			SetUpdatedAt(time.Now()).
+			SetUsageCount(0).
+			Save(ctx)
 		if err != nil {
 			s.sugar.Warnw("seed ticket type failed", "error", err, "code", tt.Code)
 		}

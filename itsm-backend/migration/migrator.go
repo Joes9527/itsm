@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -89,21 +90,23 @@ func (m *Migrator) GetAppliedMigrations(ctx context.Context) ([]Migration, error
 
 // GetPendingMigrations returns migrations that haven't been applied yet
 func (m *Migrator) GetPendingMigrations(ctx context.Context, available []Migration) ([]Migration, error) {
+	if err := validateMigrationCatalog(RegisteredMigrations, LegacyMigrations, GetMigrationSQL); err != nil {
+		return nil, fmt.Errorf("validate migration catalog: %w", err)
+	}
+	if err := validateAvailableMigrations(available); err != nil {
+		return nil, err
+	}
 	applied, err := m.GetAppliedMigrations(ctx)
 	if err != nil {
 		return nil, err
 	}
 
+	if err := validateMigrationLedger(applied); err != nil {
+		return nil, err
+	}
 	appliedVersions := make(map[string]bool)
 	for _, mig := range applied {
 		appliedVersions[mig.Version] = true
-		expected := checksumSQL(GetMigrationSQL(mig.Version))
-		if mig.Checksum != "" && expected != "" && mig.Checksum != expected {
-			return nil, fmt.Errorf(
-				"migration checksum mismatch for %s: applied=%s current=%s",
-				mig.Version, mig.Checksum, expected,
-			)
-		}
 	}
 
 	var pending []Migration
@@ -117,18 +120,10 @@ func (m *Migrator) GetPendingMigrations(ctx context.Context, available []Migrati
 
 // ApplyMigration applies a single migration
 func (m *Migrator) ApplyMigration(ctx context.Context, mig Migration) error {
-	// Skip migrations without SQL (like initial schema handled by Ent)
-	if mig.Version == "001_initial_schema" {
-		m.logger.Infow("Skipping initial schema migration (handled by Ent)", "version", mig.Version)
-		return nil
+	if err := validateActiveMigration(mig); err != nil {
+		return err
 	}
-
-	// Get the SQL to execute
 	sql := GetMigrationSQL(mig.Version)
-	if sql == "" {
-		m.logger.Infow("No SQL to execute for migration", "version", mig.Version)
-		return nil
-	}
 
 	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -162,6 +157,113 @@ func (m *Migrator) ApplyMigration(ctx context.Context, mig Migration) error {
 
 	m.logger.Infow("Migration applied successfully", "version", mig.Version)
 	return nil
+}
+
+func validateMigrationCatalog(active, legacy []Migration, sqlForVersion func(string) string) error {
+	if sqlForVersion == nil {
+		return fmt.Errorf("migration SQL resolver is required")
+	}
+	seen := make(map[string]string, len(active)+len(legacy))
+	validateSet := func(kind string, migrations []Migration, requireSQL bool) error {
+		previous := ""
+		for _, migration := range migrations {
+			if strings.TrimSpace(migration.Version) == "" || strings.TrimSpace(migration.Description) == "" {
+				return fmt.Errorf("%s migration must have version and description", kind)
+			}
+			if previousKind, exists := seen[migration.Version]; exists {
+				return fmt.Errorf("duplicate migration version %q in %s and %s catalogs", migration.Version, previousKind, kind)
+			}
+			if previous != "" && migration.Version <= previous {
+				return fmt.Errorf("%s migrations must be strictly ordered: %q follows %q", kind, migration.Version, previous)
+			}
+			if requireSQL && strings.TrimSpace(sqlForVersion(migration.Version)) == "" {
+				return fmt.Errorf("active migration %q has empty SQL", migration.Version)
+			}
+			seen[migration.Version] = kind
+			previous = migration.Version
+		}
+		return nil
+	}
+	if err := validateSet("legacy", legacy, false); err != nil {
+		return err
+	}
+	return validateSet("active", active, true)
+}
+
+func allKnownMigrations() map[string]Migration {
+	known := make(map[string]Migration, len(RegisteredMigrations)+len(LegacyMigrations))
+	for _, migration := range LegacyMigrations {
+		known[migration.Version] = migration
+	}
+	for _, migration := range RegisteredMigrations {
+		known[migration.Version] = migration
+	}
+	return known
+}
+
+func validateMigrationLedger(applied []Migration) error {
+	known := allKnownMigrations()
+	seen := make(map[string]struct{}, len(applied))
+	for _, migration := range applied {
+		knownMigration, ok := known[migration.Version]
+		if !ok {
+			return fmt.Errorf("migration ledger contains unknown version %q", migration.Version)
+		}
+		if _, duplicate := seen[migration.Version]; duplicate {
+			return fmt.Errorf("migration ledger contains duplicate version %q", migration.Version)
+		}
+		expected := checksumSQL(GetMigrationSQL(knownMigration.Version))
+		if migration.Checksum != expected {
+			return fmt.Errorf("migration checksum mismatch for %s: applied=%s current=%s", migration.Version, migration.Checksum, expected)
+		}
+		seen[migration.Version] = struct{}{}
+	}
+	return nil
+}
+
+func validateAvailableMigrations(available []Migration) error {
+	if len(available) != len(RegisteredMigrations) {
+		return fmt.Errorf("active migration stream is incomplete: got %d migrations, want %d", len(available), len(RegisteredMigrations))
+	}
+	active := make(map[string]Migration, len(RegisteredMigrations))
+	for _, migration := range RegisteredMigrations {
+		active[migration.Version] = migration
+	}
+	seen := make(map[string]struct{}, len(available))
+	for _, migration := range available {
+		expected, ok := active[migration.Version]
+		if !ok {
+			return fmt.Errorf("unknown active migration %q", migration.Version)
+		}
+		if _, duplicate := seen[migration.Version]; duplicate {
+			return fmt.Errorf("duplicate active migration %q", migration.Version)
+		}
+		if expected.Description != migration.Description || expected.RollbackSQL != migration.RollbackSQL {
+			return fmt.Errorf("active migration %q does not match the registered catalog", migration.Version)
+		}
+		seen[migration.Version] = struct{}{}
+	}
+	for _, migration := range RegisteredMigrations {
+		if _, present := seen[migration.Version]; !present {
+			return fmt.Errorf("active migration stream omits registered migration %q", migration.Version)
+		}
+	}
+	return nil
+}
+
+func validateActiveMigration(migration Migration) error {
+	if err := validateMigrationCatalog(RegisteredMigrations, LegacyMigrations, GetMigrationSQL); err != nil {
+		return fmt.Errorf("validate migration catalog: %w", err)
+	}
+	for _, registered := range RegisteredMigrations {
+		if registered.Version == migration.Version {
+			if registered.Description != migration.Description || registered.RollbackSQL != migration.RollbackSQL {
+				return fmt.Errorf("active migration %q does not match the registered catalog", migration.Version)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("migration %q is not in the active catalog", migration.Version)
 }
 
 func checksumSQL(sql string) string {

@@ -63,3 +63,40 @@ All passed. `go vet ./internal/bootstrap` was also attempted and retains a pre-e
 ## Self-review and concerns
 
 No `sla_policies` compatibility table, no `IF EXISTS` skip for the stale target, and no dual GUC/policy path were added. 009 is schema-bound and non-forced; broad forced RLS, role separation, and the RLS-aware Unit of Work remain Phase-2 work. 019 remains the only specialized forced policy in this scope.
+
+## Review round 1 remediation
+
+### Implementation
+
+- `-fresh` now normalizes and explicitly reconfirms its host, port, and database target. It rejects invalid ports, `postgres`, `template0`, `template1`, and the known shared `192.168.31.66` host before opening the maintenance connection. The normalized target is also the one used for the subsequent drop/create/bootstrap.
+- `seedTicketTypes` now uses only the current Ent `TicketType` descriptor. The retired `custom_fields` and `approval_chain` writes and the raw-DB/table-exists skip path are gone. `verifyITILTemplates` requires at least 12 tenant ticket types; CLI `-fresh` uses `SeedProduction`, so any missing administrator or ticket-type seed causes the canonical bootstrap to fail.
+- `database.InitDatabase` is connection/client construction only. All pgvector, vectors, and AI-feedback DDL lives in `database.PrepareBootstrapInfrastructure`, which returns every error. Both the bootstrap job and CLI fresh invoke it through the same `CanonicalBootstrap.Prepare` phase. The marketplace default and legacy knowledge-author compatibility ALTER paths were deleted.
+- Migration catalog validation now fails closed for missing identity, duplicate versions, ordering violations, and active empty SQL. The actual ledger rejects unknown/duplicate versions and every checksum mismatch. The executable stream must be exactly the registered active stream; `ApplyMigration` refuses any legacy, unknown, or non-executable phase instead of silently returning success.
+
+### RED / GREEN evidence
+
+RED was observed with the new focused tests before the implementation: fresh target validation accepted a host/port mismatch and the catalog validator did not exist. The first strict fresh run without `ADMIN_PASSWORD` also stopped at `seed bootstrap data: verify administrator: required production seed is missing`, proving the CLI no longer reports a partial seed as success.
+
+GREEN focused verification:
+
+```bash
+go test -tags migrate ./cmd/migrate
+go test ./migration ./database ./pkg/seeder ./internal/bootstrap
+go vet ./migration ./database ./pkg/seeder
+go vet -tags migrate ./cmd/migrate
+git diff --check
+```
+
+The test commands and applicable vet checks passed. `go vet ./internal/bootstrap` still reports the pre-existing unrelated copylock warning at `internal/bootstrap/ticket_cc_index_migration_test.go:354`.
+
+`go test ./... -count=1`, `go build ./...`, and `go build -tags migrate ./cmd/migrate` also passed after the fix. A separately started broad `-race` command was stopped during its slow unrelated service/controller compilation; it is not used as verification evidence for this migration-focused task.
+
+### Live disposable PostgreSQL
+
+Using only local `127.0.0.1:5432`, a generated disposable database was passed through `-fresh` with the development guard and all three explicit target confirmations. It completed with `12` ticket types, `12` migration-ledger rows (`007,008,009,011-019`), and `118` direct-tenant RLS policies. A second `-up` printed `Applied 0 migration(s)` and status reported no pending migrations. The generated database was dropped after verification. No shared host or credential persistence was used.
+
+An adverse CLI probe set `DB_HOST` and `ITSM_FRESH_HOST` to `192.168.31.66`; it exited `1` with `Refusing fresh bootstrap: -fresh refuses shared host` before any connection or DDL. A separate fresh local database accepted an injected `999_unknown_probe` ledger row only long enough to verify `-status` exited `1` with `migration ledger contains unknown version`; that database was also dropped.
+
+### Concerns
+
+The first live strict-seed attempt intentionally lacked the required production administrator password and failed closed; the succeeding disposable run provided a temporary non-persisted administrator password. Existing `go vet ./internal/bootstrap` copylock noise is outside this change. No 021/022 registration, allocator authority change, compatibility table, or policy dual path was introduced.

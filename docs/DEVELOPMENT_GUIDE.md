@@ -33,7 +33,8 @@ go test ./...            # 运行全量单元与集成测试
 # 已有 Ent schema 的部署：只运行已注册的 post-schema migrations。
 go run -tags migrate ./cmd/migrate -up
 # 仅 disposable development/test 数据库：完整且破坏性的 fresh bootstrap。
-ITSM_ALLOW_DESTRUCTIVE_FRESH=true ITSM_FRESH_DATABASE="$DB_NAME" \
+ITSM_ALLOW_DESTRUCTIVE_FRESH=true ITSM_FRESH_HOST="$DB_HOST" \
+  ITSM_FRESH_PORT="$DB_PORT" ITSM_FRESH_DATABASE="$DB_NAME" \
   go run -tags migrate ./cmd/migrate -fresh
 go run -tags create_user main.go
 ```

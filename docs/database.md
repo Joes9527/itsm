@@ -44,11 +44,13 @@ go run -tags migrate ./cmd/migrate -up
 
 For a disposable development or test database only, `-fresh` performs the
 canonical order: create the Ent schema, apply the post-schema stream, then
-seed. It requires both an allowed development mode and exact confirmation of
-the configured database name:
+seed. It requires an allowed development mode plus exact confirmation of the
+normalized configured host, port, and database name. System databases and the
+shared `192.168.31.66` host are refused:
 
 ```bash
-ITSM_ALLOW_DESTRUCTIVE_FRESH=true ITSM_FRESH_DATABASE="$DB_NAME" \
+ITSM_ALLOW_DESTRUCTIVE_FRESH=true ITSM_FRESH_HOST="$DB_HOST" \
+  ITSM_FRESH_PORT="$DB_PORT" ITSM_FRESH_DATABASE="$DB_NAME" \
   go run -tags migrate ./cmd/migrate -fresh
 ```
 

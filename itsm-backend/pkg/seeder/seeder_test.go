@@ -303,6 +303,9 @@ func TestProductionInitializersApplyAndVerifyCompleteDAG(t *testing.T) {
 		require.NoError(t, err, component.Name())
 		require.NoError(t, component.Verify(ctx, scope, plan), component.Name())
 	}
+	ticketTypeCount, err := seeder.client.TicketType.Query().Count(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 12, ticketTypeCount)
 }
 
 func TestProductionComponentRollsBackWhenTransactionalVerificationFails(t *testing.T) {

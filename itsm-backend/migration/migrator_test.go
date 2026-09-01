@@ -53,6 +53,34 @@ func TestRegisteredMigrations(t *testing.T) {
 	assert.Equal(t, "001_initial_schema", LegacyMigrations[0].Version)
 }
 
+func TestValidateMigrationCatalogRejectsInvalidActiveAndLegacyCatalogs(t *testing.T) {
+	validActive := []Migration{{Version: "100_active", Description: "active"}}
+	validLegacy := []Migration{{Version: "001_history", Description: "history"}}
+	require.NoError(t, validateMigrationCatalog(validActive, validLegacy, func(version string) string {
+		if version == "100_active" {
+			return "SELECT 1;"
+		}
+		return ""
+	}))
+
+	require.ErrorContains(t, validateMigrationCatalog([]Migration{{Version: "200", Description: "late"}, {Version: "100", Description: "early"}}, validLegacy, func(string) string { return "SELECT 1;" }), "ordered")
+	require.ErrorContains(t, validateMigrationCatalog([]Migration{{Version: "100", Description: "one"}, {Version: "100", Description: "two"}}, validLegacy, func(string) string { return "SELECT 1;" }), "duplicate")
+	invalidAvailable := PostSchemaMigrations()
+	invalidAvailable[0] = LegacyMigrations[0]
+	require.ErrorContains(t, validateAvailableMigrations(invalidAvailable), "unknown active migration")
+	require.ErrorContains(t, validateAvailableMigrations(nil), "incomplete")
+	require.ErrorContains(t, validateMigrationCatalog(validActive, validLegacy, func(string) string { return "" }), "empty SQL")
+}
+
+func TestValidateMigrationLedgerFailsClosedForUnknownDuplicateAndChecksumDrift(t *testing.T) {
+	require.ErrorContains(t, validateMigrationLedger([]Migration{{Version: "999_unknown"}}), "unknown version")
+	known := RegisteredMigrations[0]
+	require.ErrorContains(t, validateMigrationLedger([]Migration{{Version: known.Version, Checksum: "wrong"}}), "checksum mismatch")
+	checksum := checksumSQL(GetMigrationSQL(known.Version))
+	require.ErrorContains(t, validateMigrationLedger([]Migration{{Version: known.Version, Checksum: checksum}, {Version: known.Version, Checksum: checksum}}), "duplicate")
+	require.NoError(t, validateMigrationLedger([]Migration{{Version: known.Version, Checksum: checksum}}))
+}
+
 func TestGetMigrationSQL(t *testing.T) {
 	// Test GetMigrationSQL returns SQL for known migrations
 	sql := GetMigrationSQL("002_add_notification_preferences")
