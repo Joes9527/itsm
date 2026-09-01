@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from '@/lib/test-utils';
 import PendingApprovalsPage from '../page';
-import { WorkflowApi } from '@/lib/api/workflow-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 
 // This page used to have a "服务请求审批" tab that called
 // serviceRequestAPI.getPendingApprovals/applyApprovalAction directly against
@@ -8,15 +8,15 @@ import { WorkflowApi } from '@/lib/api/workflow-api';
 // through the linked ticket's own BPMN process, i.e. the "我作为候选组员（BPMN）" tab below,
 // which is unchanged and already correct). That tab was removed — this locks in that the page
 // renders the BPMN task list directly with no dead tab left over.
-jest.mock('@/lib/api/workflow-api', () => ({
-  WorkflowApi: {
-    listMyTasks: jest.fn(),
-    claimMyTask: jest.fn(),
-    submitTaskDecision: jest.fn(),
+jest.mock('@/lib/api/bpmn-workflow-api', () => ({
+  BPMNWorkflowApi: {
+    listUserTasks: jest.fn(),
+    claimTask: jest.fn(),
+    submitApprovalDecision: jest.fn(),
   },
 }));
 
-const mockListMyTasks = WorkflowApi.listMyTasks as jest.Mock;
+const mockListMyTasks = BPMNWorkflowApi.listUserTasks as jest.Mock;
 
 describe('PendingApprovalsPage', () => {
   beforeEach(() => {
@@ -27,17 +27,18 @@ describe('PendingApprovalsPage', () => {
     mockListMyTasks.mockResolvedValue({
       items: [
         {
-          id: 't1',
-          nodeName: '经理审批',
-          instanceId: 'inst-1',
+          id: 1,
+          taskName: '经理审批',
+          taskPurpose: 'approval',
+          processInstanceId: 1,
           status: 'pending',
           assignee: '',
-          createdAt: '2026-08-01T00:00:00Z',
+          createdTime: '2026-08-01T00:00:00Z',
         },
       ],
       total: 1,
       page: 1,
-      size: 10,
+      pageSize: 10,
     });
 
     render(<PendingApprovalsPage />);

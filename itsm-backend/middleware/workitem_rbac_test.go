@@ -26,10 +26,8 @@ func TestResourceForRecordClass(t *testing.T) {
 		{"problem", "problem"},
 		{"change_request", "change"},
 		{"generic", "ticket"},
-		{"service_request_item", "ticket"},
-		{"catalog_task", "ticket"},
-		{"", "ticket"},
-		{"some_future_value", "ticket"},
+		{"service_request_item", "service_request"},
+		{"catalog_task", "service_request"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.recordClass, func(t *testing.T) {
@@ -37,6 +35,15 @@ func TestResourceForRecordClass(t *testing.T) {
 			if got != tc.want {
 				t.Errorf("resourceForRecordClass(%q) = %q, want %q", tc.recordClass, got, tc.want)
 			}
+		})
+	}
+}
+
+func TestResolveWorkItemPermissionRejectsUnknownRecordClass(t *testing.T) {
+	for _, recordClass := range []string{"", "some_future_value"} {
+		t.Run(recordClass, func(t *testing.T) {
+			_, _, err := resolveWorkItemPermission(recordClass, "read")
+			require.Error(t, err)
 		})
 	}
 }
@@ -72,7 +79,8 @@ func TestResolveWorkItemPermission(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotResource, gotAction := resolveWorkItemPermission(tc.recordClass, tc.action)
+			gotResource, gotAction, err := resolveWorkItemPermission(tc.recordClass, tc.action)
+			require.NoError(t, err)
 			require.Equal(t, tc.wantResource, gotResource)
 			require.Equal(t, tc.wantAction, gotAction)
 		})

@@ -24,7 +24,6 @@ import (
 	"itsm-backend/ent/rolepermission"
 	"itsm-backend/ent/ticketassignmentrule"
 	"itsm-backend/ent/user"
-	"itsm-backend/ent/workflowtask"
 	"itsm-backend/metrics"
 	"itsm-backend/service/approver"
 	"itsm-backend/service/bpmn"
@@ -166,10 +165,15 @@ func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger) Proce
 func (e *CustomProcessEngine) registerProcessFunctions() {
 	// 获取任务列表
 	e.exprEngine.RegisterFunction("getTasks", func(ctx context.Context, assignee string) []interface{} {
-		// 从数据库查询任务
-		tasks, err := e.client.WorkflowTask.Query().
-			Where(workflowtask.Assignee(assignee)).
-			Where(workflowtask.CompletedAtIsNil()).
+		tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
+		if tenantID <= 0 {
+			e.logger.Warnw("Failed to query tasks: tenant context is required")
+			return []interface{}{}
+		}
+		tasks, err := e.client.ProcessTask.Query().
+			Where(processtask.Assignee(assignee)).
+			Where(processtask.TenantID(tenantID)).
+			Where(processtask.StatusNotIn(common.ProcessTaskStatusCompleted, common.ProcessTaskStatusCancelled)).
 			All(ctx)
 		if err != nil {
 			e.logger.Warnw("Failed to query tasks", "error", err)
@@ -179,8 +183,8 @@ func (e *CustomProcessEngine) registerProcessFunctions() {
 		for i, task := range tasks {
 			result[i] = map[string]interface{}{
 				"id":          task.TaskID,
-				"name":        task.Name,
-				"instance_id": task.InstanceID,
+				"name":        task.TaskName,
+				"instance_id": task.ProcessInstanceID,
 			}
 		}
 		return result

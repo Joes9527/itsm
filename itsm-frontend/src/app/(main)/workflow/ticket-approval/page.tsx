@@ -43,6 +43,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import BPMNDesigner from '@/components/workflow/BPMNDesigner';
 import { useI18n } from '@/lib/i18n';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 
 const { Title, Text } = Typography;
 // 获取节点类型颜色
@@ -97,6 +98,7 @@ interface WorkflowNode {
 
 interface TicketApprovalWorkflow {
   id?: number;
+  key?: string;
   name: string;
   description: string;
   type: string;
@@ -177,8 +179,7 @@ const TicketApprovalWorkflowPage = () => {
 
   const loadWorkflow = async (id: string) => {
     try {
-      const { WorkflowAPI } = await import('@/lib/api/workflow-api');
-      const response = (await WorkflowAPI.getProcessDefinition(id)) as any;
+      const response = await BPMNWorkflowApi.getProcessDefinition(id);
 
       if (response?.bpmnXml) {
         let xmlContent = response.bpmnXml;
@@ -194,7 +195,8 @@ const TicketApprovalWorkflowPage = () => {
       }
 
       setWorkflow({
-        id: parseInt(id),
+        id: response.id,
+        key: response.key,
         name: response.name || t('workflow.ticketApprovalProcess'),
         description: response.description || '',
         type: response.category || 'approval',
@@ -254,23 +256,24 @@ const TicketApprovalWorkflowPage = () => {
       const values = await form.validateFields();
       setLoading(true);
 
-      const { WorkflowAPI } = await import('@/lib/api/workflow-api');
-
-      // 构建保存数据
+      const key = workflow?.key || `ticket_approval_${Date.now()}`;
       const workflowData = {
-        code: workflow?.id ? `ticket_approval_${workflow.id}` : `ticket_approval_${Date.now()}`,
         name: values.name || t('workflow.ticketApprovalProcess'),
         description: values.description || '',
-        type: values.category || 'approval',
+        category: values.category || 'approval',
         bpmnXml: currentXML,
       };
 
-      if (workflow?.id) {
+      if (workflow?.key) {
         // 更新已有工作流
-        await WorkflowAPI.updateWorkflow(workflow.id.toString(), workflowData);
+        await BPMNWorkflowApi.updateProcessDefinition(
+          workflow.key,
+          workflow.metadata.version,
+          workflowData
+        );
       } else {
         // 创建新工作流
-        await WorkflowAPI.createWorkflow(workflowData);
+        await BPMNWorkflowApi.createProcessDefinition({ key, ...workflowData });
       }
 
       message.success(t('workflow.ticketApprovalSaveSuccess'));
@@ -278,7 +281,7 @@ const TicketApprovalWorkflowPage = () => {
 
       // 保存成功后返回工作流列表
       setTimeout(() => {
-        router.push('/workflow');
+        router.push('/admin/workflows');
       }, 1000);
     } catch (error) {
       console.error('保存工作流失败:', error);
@@ -296,7 +299,7 @@ const TicketApprovalWorkflowPage = () => {
       cancelText: t('workflow.continueEdit'),
       okType: 'danger',
       onOk: () => {
-        router.push('/workflow');
+        router.push('/admin/workflows');
       },
     });
   };

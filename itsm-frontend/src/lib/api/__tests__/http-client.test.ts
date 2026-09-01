@@ -293,11 +293,11 @@ describe('httpClient', () => {
 
     it('surfaces the backend message for any non-2xx JSON error response, not just 403s', async () => {
       fetchMock.mockResolvedValueOnce(
-        jsonResponse({ code: 2003, message: '旧审批工作流系统已下线，请使用 BPMN 流程设计器' }, { status: 403, ok: false })
+        jsonResponse({ code: 2003, message: '流程定义不可修改' }, { status: 403, ok: false })
       );
 
-      await expect(httpClient.put('/api/v1/approval-workflows/1', { name: 'x' })).rejects.toThrow(
-        '旧审批工作流系统已下线，请使用 BPMN 流程设计器'
+      await expect(httpClient.put('/api/v1/bpmn/process-definitions/locked?version=1.0.0', { name: 'x' })).rejects.toThrow(
+        '流程定义不可修改'
       );
     });
 

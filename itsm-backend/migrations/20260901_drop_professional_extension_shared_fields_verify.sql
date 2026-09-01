@@ -1,6 +1,7 @@
 DO $verification$
 DECLARE
     extension_table TEXT;
+	legacy_workflow_table TEXT;
     extension_index TEXT;
     extension_constraint TEXT;
     expected_record_class TEXT;
@@ -18,6 +19,19 @@ BEGIN
     IF to_regclass(format('%I.ticket_approvals', current_schema())) IS NOT NULL THEN
         RAISE EXCEPTION 'legacy ticket_approvals table still exists in schema %', current_schema();
     END IF;
+	FOR legacy_workflow_table IN SELECT unnest(ARRAY['workflows', 'workflow_instances', 'workflow_tasks', 'workflow_versions']) LOOP
+		IF to_regclass(format('%I.%I', current_schema(), legacy_workflow_table)) IS NOT NULL THEN
+			RAISE EXCEPTION 'legacy % table still exists in schema %', legacy_workflow_table, current_schema();
+		END IF;
+	END LOOP;
+	IF EXISTS (
+		SELECT 1 FROM information_schema.columns
+		WHERE table_schema = current_schema()
+		  AND table_name = 'ticket_categories'
+		  AND column_name = 'workflow_id'
+	) THEN
+		RAISE EXCEPTION 'legacy ticket_categories.workflow_id column still exists in schema %', current_schema();
+	END IF;
 
     FOR extension_table, extension_index, extension_constraint, expected_record_class IN
         SELECT * FROM (VALUES

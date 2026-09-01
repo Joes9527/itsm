@@ -1057,15 +1057,14 @@ func TestTicketWorkflowService_GetApprovalDecisions_ReturnsOrderedByCreatedAt(t 
 	require.NoError(t, err)
 
 	svc := NewTicketWorkflowService(client, zaptest.NewLogger(t).Sugar())
-	decisions, err := svc.GetApprovalDecisions(ctx, tkt.ID, tenant.ID)
+	decisions, err := svc.GetApprovalDecisions(ctx, tkt.ID, ActionActor{TenantID: tenant.ID, UserID: actor.ID, Role: "super_admin"})
 	require.NoError(t, err)
 	require.Len(t, decisions, 2, "跨租户的同 business_id 决策不应该混进来")
 	assert.Equal(t, older.ID, decisions[0].ID, "应该按 created_at 升序返回")
 	assert.Equal(t, newer.ID, decisions[1].ID)
 
-	// 反向验证：用租户2的ID查询，只能看到租户2自己的决策，看不到租户1的。
-	decisionsTenant2, err := svc.GetApprovalDecisions(ctx, tkt.ID, tenant2.ID)
-	require.NoError(t, err)
-	require.Len(t, decisionsTenant2, 1)
-	assert.Equal(t, actor2.ID, decisionsTenant2[0].ActorID)
+	// 反向验证：即使租户2存在相同 business_id 的决策，没有租户2自己的 WorkItem
+	// 也必须在读取审批历史前 fail closed，不能只凭 decision 表命中就泄露。
+	_, err = svc.GetApprovalDecisions(ctx, tkt.ID, ActionActor{TenantID: tenant2.ID, UserID: actor2.ID, Role: "super_admin"})
+	require.Error(t, err)
 }

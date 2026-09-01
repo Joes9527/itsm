@@ -35,7 +35,6 @@ import {
 } from 'lucide-react';
 import { LoadingSkeleton } from '@/components/ui/LoadingSkeleton';
 import { TicketCategoryApi } from '@/lib/api/ticket-category-api';
-import { WorkflowApi } from '@/lib/api/workflow-api';
 import { CommonApi } from '@/lib/api/common-api';
 import { buildCategoryTree, collectDescendantIds } from './categoryTreeUtils';
 
@@ -51,7 +50,6 @@ interface TicketCategory {
   level: number;
   sortOrder: number;
   isActive: boolean;
-  workflowId: number | null;
   departmentId: number | null;
   createdAt: string;
   updatedAt: string;
@@ -84,13 +82,7 @@ interface CategoryFormValues {
   parentId?: number;
   sortOrder?: number;
   isActive?: boolean;
-  workflowId?: number;
   departmentId?: number;
-}
-
-interface WorkflowOption {
-  id: number;
-  name: string;
 }
 
 interface DepartmentOption {
@@ -100,7 +92,6 @@ interface DepartmentOption {
 
 const TicketCategoryManagementPage = () => {
   const [categories, setCategories] = useState<TicketCategory[]>([]);
-  const [workflows, setWorkflows] = useState<WorkflowOption[]>([]);
   const [departments, setDepartments] = useState<DepartmentOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -111,7 +102,7 @@ const TicketCategoryManagementPage = () => {
 
   useEffect(() => {
     loadCategories();
-    loadBindingOptions();
+    loadDepartments();
   }, []);
 
   const loadCategories = async () => {
@@ -129,25 +120,15 @@ const TicketCategoryManagementPage = () => {
     }
   };
 
-  const loadBindingOptions = async () => {
+  const loadDepartments = async () => {
     try {
-      const [workflowRes, departmentRes] = await Promise.allSettled([
-        WorkflowApi.getWorkflows({ page: 1, pageSize: 100 }),
-        CommonApi.getDepartments(),
-      ]);
-      if (workflowRes.status === 'fulfilled') {
-        setWorkflows(
-          (workflowRes.value?.workflows || []).map(w => ({ id: Number(w.id), name: w.name }))
-        );
-      }
-      if (departmentRes.status === 'fulfilled') {
-        const list = Array.isArray(departmentRes.value) ? departmentRes.value : [];
-        setDepartments(
-          list
-            .filter((d: { id?: number; name?: string }) => d?.id && d?.name)
-            .map((d: { id: number; name: string }) => ({ id: d.id, name: d.name }))
-        );
-      }
+      const response = await CommonApi.getDepartments();
+      const list = Array.isArray(response) ? response : [];
+      setDepartments(
+        list
+          .filter((d: { id?: number; name?: string }) => d?.id && d?.name)
+          .map((d: { id: number; name: string }) => ({ id: d.id, name: d.name }))
+      );
     } catch (error) {
       // 绑定选项加载失败不阻塞分类管理主流程
       console.error('Failed to load binding options:', error);
@@ -163,7 +144,6 @@ const TicketCategoryManagementPage = () => {
     level: category.level || 1,
     sortOrder: category.sortOrder ?? 0,
     isActive: category.isActive ?? true,
-    workflowId: category.workflowId ?? null,
     departmentId: category.departmentId ?? null,
     createdAt: category.createdAt || '',
     updatedAt: category.updatedAt || '',
@@ -202,7 +182,6 @@ const TicketCategoryManagementPage = () => {
       parentId: category.parentId ?? undefined,
       sortOrder: category.sortOrder,
       isActive: category.isActive,
-      workflowId: category.workflowId ?? undefined,
       departmentId: category.departmentId ?? undefined,
     });
     setModalVisible(true);
@@ -217,7 +196,6 @@ const TicketCategoryManagementPage = () => {
         parentId: category.parentId || undefined,
         sortOrder: category.sortOrder,
         isActive: category.isActive,
-        workflowId: category.workflowId || undefined,
         departmentId: category.departmentId || undefined,
       });
       message.success('分类复制成功');
@@ -254,7 +232,6 @@ const TicketCategoryManagementPage = () => {
           parentId: values.parentId ?? 0,
           sortOrder: values.sortOrder,
           isActive: values.isActive,
-          workflowId: values.workflowId ?? 0,
           departmentId: values.departmentId ?? 0,
         });
         message.success('分类更新成功');
@@ -266,7 +243,6 @@ const TicketCategoryManagementPage = () => {
           parentId: values.parentId,
           sortOrder: values.sortOrder,
           isActive: values.isActive ?? true,
-          workflowId: values.workflowId,
           departmentId: values.departmentId,
         });
         message.success('分类创建成功');
@@ -298,8 +274,6 @@ const TicketCategoryManagementPage = () => {
     }
   };
 
-  const workflowNameOf = (id: number | null) =>
-    id ? workflows.find(w => w.id === id)?.name || `工作流 #${id}` : null;
   const departmentNameOf = (id: number | null) =>
     id ? departments.find(d => d.id === id)?.name || `部门 #${id}` : null;
 
@@ -320,10 +294,6 @@ const TicketCategoryManagementPage = () => {
           <p>
             <Text strong>描述：</Text>
             {category.description || '-'}
-          </p>
-          <p>
-            <Text strong>关联工作流：</Text>
-            {workflowNameOf(category.workflowId) || '-'}
           </p>
           <p>
             <Text strong>所属部门：</Text>
@@ -378,15 +348,6 @@ const TicketCategoryManagementPage = () => {
           <span>{order}</span>
         </div>
       ),
-    },
-    {
-      title: '关联工作流',
-      dataIndex: 'workflowId',
-      key: 'workflowId',
-      render: (workflowId: number | null) => {
-        const name = workflowNameOf(workflowId);
-        return name ? <Tag color="purple">{name}</Tag> : <Text type="secondary">-</Text>;
-      },
     },
     {
       title: '所属部门',
@@ -613,18 +574,9 @@ const TicketCategoryManagementPage = () => {
             <TextArea rows={3} placeholder="请输入分类描述" />
           </Form.Item>
 
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="workflowId" label="关联工作流" tooltip="该分类下的工单将默认走此工作流">
-                <Select placeholder="请选择工作流（可选）" allowClear showSearch optionFilterProp="children" options={workflows.map(w => ({ value: w.id, label: w.name }))} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="departmentId" label="所属部门">
-                <Select placeholder="请选择部门（可选）" allowClear showSearch optionFilterProp="children" options={departments.map(d => ({ value: d.id, label: d.name }))} />
-              </Form.Item>
-            </Col>
-          </Row>
+          <Form.Item name="departmentId" label="所属部门">
+            <Select placeholder="请选择部门（可选）" allowClear showSearch optionFilterProp="children" options={departments.map(d => ({ value: d.id, label: d.name }))} />
+          </Form.Item>
 
           <Row gutter={16}>
             <Col span={12}>

@@ -41,7 +41,7 @@ import {
   Alert,
   Empty,
 } from 'antd';
-import { WorkflowAPI } from '@/lib/api/workflow-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 const { Title, Text } = Typography;
 
 // 工作流状态枚举
@@ -63,6 +63,7 @@ const WORKFLOW_TYPES = {
 // 工作流数据类型
 interface Workflow {
   id: number;
+  key: string;
   name: string;
   description: string;
   type: string;
@@ -143,22 +144,21 @@ const WorkflowManagement = () => {
   const loadWorkflows = async () => {
     setLoading(true);
     try {
-      const response = await WorkflowAPI.getWorkflows({});
-      // 转换API数据格式
-       
-      const workflowList = (response.workflows || []).map((w: any) => ({
+      const response = await BPMNWorkflowApi.listProcessDefinitions({ page: 1, pageSize: 100 });
+      const workflowList = response.items.map(w => ({
         id: w.id,
-        name: w.name || w.key || '',
+        key: w.key,
+        name: w.name,
         description: w.description || '',
-        type: w.category || 'default',
-        status: w.isDeployed ? 'active' : 'draft',
-        version: String(w.version || '1.0'),
-        createdBy: w.createdBy || '系统',
-        createdAt: w.createdAt || new Date().toISOString(),
-        lastModified: w.updatedAt || w.createdAt || new Date().toISOString(),
-        stepsCount: w.stepCount || 0,
-        activeInstances: w.runningInstances || 0,
-        completedInstances: w.completedInstances || 0,
+        type: w.category || WORKFLOW_TYPES.APPROVAL,
+        status: w.isActive ? WORKFLOW_STATUS.ACTIVE : WORKFLOW_STATUS.DRAFT,
+        version: w.version,
+        createdBy: '系统',
+        createdAt: w.createdAt,
+        lastModified: w.updatedAt,
+        stepsCount: 0,
+        activeInstances: 0,
+        completedInstances: 0,
       }));
       setWorkflows(workflowList);
     } catch (error) {
@@ -217,9 +217,9 @@ const WorkflowManagement = () => {
     try {
       // 调用 API 更新状态
       if (newStatus === WORKFLOW_STATUS.ACTIVE) {
-        await WorkflowAPI.activateWorkflow(String(workflowId));
+        await BPMNWorkflowApi.setProcessDefinitionActive(workflow.key, workflow.version, true);
       } else {
-        await WorkflowAPI.deactivateWorkflow(String(workflowId));
+        await BPMNWorkflowApi.setProcessDefinitionActive(workflow.key, workflow.version, false);
       }
 
       // 更新本地状态
@@ -246,13 +246,10 @@ const WorkflowManagement = () => {
   const handleDuplicate = async (workflow: Workflow) => {
     try {
       setLoading(true);
-      await WorkflowAPI.createWorkflow({
-        code: `${workflow.name}-copy-${Date.now()}`,
-        name: `${workflow.name} (副本)`,
-        description: workflow.description,
-        type: (workflow.type as 'approval') || 'approval',
-        status: 'draft',
-      } as never);
+      await BPMNWorkflowApi.cloneProcessDefinition(workflow.key, workflow.version, {
+        newKey: `${workflow.key}-copy-${Date.now()}`,
+        newName: `${workflow.name} (副本)`,
+      });
       message.success('工作流已复制');
       loadWorkflows();
     } catch (error) {
@@ -267,7 +264,9 @@ const WorkflowManagement = () => {
   const handleDelete = async (workflowId: number) => {
     try {
       setLoading(true);
-      await WorkflowAPI.deleteWorkflow(String(workflowId));
+      const workflow = workflows.find(item => item.id === workflowId);
+      if (!workflow) throw new Error('流程定义不存在');
+      await BPMNWorkflowApi.deleteProcessDefinition(workflow.key, workflow.version);
       message.success('工作流已删除');
       loadWorkflows();
     } catch (error) {
@@ -283,7 +282,11 @@ const WorkflowManagement = () => {
     try {
       setLoading(true);
       await Promise.all(
-        selectedRowKeys.map(id => WorkflowAPI.deleteWorkflow(String(id)))
+        selectedRowKeys.map(id => {
+          const workflow = workflows.find(item => item.id === Number(id));
+          if (!workflow) throw new Error(`流程定义 ${String(id)} 不存在`);
+          return BPMNWorkflowApi.deleteProcessDefinition(workflow.key, workflow.version);
+        })
       );
       message.success(`已删除 ${selectedRowKeys.length} 个工作流`);
       setSelectedRowKeys([]);
@@ -310,36 +313,20 @@ const WorkflowManagement = () => {
 
       if (selectedWorkflow) {
         // 编辑
-        await WorkflowAPI.updateWorkflow(String(selectedWorkflow.id), {
-          name: values.name,
-          description: values.description,
-          category: values.type,
-        } as never);
+        await BPMNWorkflowApi.updateProcessDefinition(
+          selectedWorkflow.key,
+          selectedWorkflow.version,
+          {
+            name: values.name,
+            description: values.description,
+            category: values.type,
+          }
+        );
         message.success('工作流更新成功');
       } else {
         // 新建
-        const created = await WorkflowAPI.createWorkflow({
-          code: values.name,
-          name: values.name,
-          description: values.description,
-          type: (values.type as 'approval') || 'approval',
-          status: 'draft',
-        } as never);
-        message.success('工作流创建成功');
-
-        // 创建成功后引导进入设计器编排流程
-        const createdId = (created as { id?: number | string } | undefined)?.id;
-        if (createdId) {
-          Modal.confirm({
-            title: '是否立即进入设计器编排流程？',
-            content: '工作流已创建为草稿，需要在设计器中编排节点后才能启用。',
-            okText: '进入设计器',
-            cancelText: '稍后再说',
-            onOk: () => {
-              router.push(`/workflow/designer?id=${createdId}`);
-            },
-          });
-        }
+        message.info('新流程必须包含 BPMN 定义，正在进入设计器');
+        router.push('/workflow/designer');
       }
 
       setShowCreateModal(false);
@@ -490,7 +477,7 @@ const WorkflowManagement = () => {
             <Button
               type="text"
               icon={<GitBranch className="w-4 h-4" />}
-              onClick={() => router.push(`/workflow/designer?id=${record.id}`)}
+              onClick={() => router.push(`/workflow/designer?id=${record.key}`)}
             />
           </Tooltip>
           <Tooltip title="编辑元数据">
@@ -869,7 +856,7 @@ const WorkflowManagement = () => {
                 type="primary"
                 icon={<GitBranch />}
                 onClick={() => {
-                  window.open(`/workflow/designer?id=${selectedWorkflow.id}`, '_blank');
+                  window.open(`/workflow/designer?id=${selectedWorkflow.key}`, '_blank');
                 }}
               >
                 打开工作流设计器

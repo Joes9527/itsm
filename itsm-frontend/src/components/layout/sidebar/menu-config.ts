@@ -327,17 +327,10 @@ export function getMenuConfig(): MenuConfig {
         key: '/workflow',
         icon: getIconByName('GitMerge')!,
         label: '工作流',
-        path: '/workflow',
+        path: '/workflow/designer',
         permission: 'workflow:read',
         description: '工作流自动化',
         children: [
-          {
-            key: '/workflow/list',
-            icon: getIconByName('List')!,
-            label: '工作流列表',
-            path: '/workflow',
-            permission: 'workflow:read',
-          },
           {
             key: '/workflow/designer',
             icon: getIconByName('Edit')!,
@@ -365,13 +358,6 @@ export function getMenuConfig(): MenuConfig {
             label: '监控仪表盘',
             path: '/workflow/dashboard',
             permission: 'workflow:read',
-          },
-          {
-            key: '/workflow/automation',
-            icon: getIconByName('Zap')!,
-            label: '自动化规则',
-            path: '/workflow/automation',
-            permission: 'workflow:write',
           },
         ],
       },

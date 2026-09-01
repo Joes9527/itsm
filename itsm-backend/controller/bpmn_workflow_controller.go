@@ -182,22 +182,6 @@ func (c *BPMNWorkflowController) RegisterRoutes(r *gin.RouterGroup) {
 	}
 }
 
-// RegisterWorkflowAliasRoutes registers the stricter permission-gated workflow aliases.
-func (c *BPMNWorkflowController) RegisterWorkflowAliasRoutes(r *gin.RouterGroup) {
-	workflow := r.Group("/workflow")
-	{
-		workflow.GET("/instances", middleware.RequirePermission("process_instance", "read"), c.ListProcessInstances)
-		workflow.GET("/instances/:id", middleware.RequirePermission("process_instance", "read"), c.GetProcessInstance)
-		workflow.POST("/instances", middleware.RequirePermission("process_instance", "create"), c.StartProcess)
-		workflow.PUT("/instances/:id/terminate", middleware.RequirePermission("process_instance", "update"), c.TerminateProcess)
-		workflow.PUT("/instances/:id/suspend", middleware.RequirePermission("process_instance", "update"), c.SuspendProcess)
-		workflow.PUT("/instances/:id/resume", middleware.RequirePermission("process_instance", "update"), c.ResumeProcess)
-		workflow.GET("/tasks", middleware.RequirePermission("task", "read"), c.ListUserTasks)
-		workflow.PUT("/tasks/:id/complete", middleware.RequirePermission("task", "update"), c.CompleteTask)
-		workflow.POST("/tasks/:id/claim", middleware.RequirePermission("task", "update"), c.ClaimTask)
-	}
-}
-
 func (c *BPMNWorkflowController) GetApprovalHistory(ctx *gin.Context) {
 	workflowCtx, _, ok := getBPMNTenantContext(ctx)
 	if !ok {

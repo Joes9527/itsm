@@ -75,7 +75,7 @@ func TestFilterMenusByPermissionRestrictsLowPrivilegeAdminMenus(t *testing.T) {
 	svc := &MenuService{}
 	menus := []*ent.Menu{
 		{Name: "事件管理", Path: "/incidents", PermissionCode: "incident:read"},
-		{Name: "工作流", Path: "/workflow", PermissionCode: "workflow:read"},
+		{Name: "工作流", Path: "/admin/workflows", PermissionCode: "workflow:read"},
 		{Name: "用户管理", Path: "/admin/users", PermissionCode: "user:read"},
 	}
 

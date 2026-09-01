@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"context"
+	"fmt"
 	"strconv"
 
 	"itsm-backend/common"
@@ -13,8 +15,7 @@ import (
 
 // resourceForRecordClass 把 tickets.record_class 映射到 RBAC 资源名，供
 // RequireWorkItemRecordClassPermission 使用。除 incident/problem/change_request 三个专业域外，
-// 其余 record_class（generic/service_request_item/catalog_task，以及未来任何新值）统一映射到
-// "ticket"——这三个是本设计新引入的专业资源名，其余都是 Ticket 自己的记录类型。
+// service_request_item/catalog_task 走 service_request 专业域权限；未知类型 fail closed。
 func resourceForRecordClass(recordClass string) string {
 	switch recordClass {
 	case "incident":
@@ -23,8 +24,12 @@ func resourceForRecordClass(recordClass string) string {
 		return "problem"
 	case "change_request":
 		return "change"
-	default:
+	case "service_request_item", "catalog_task":
+		return "service_request"
+	case "generic":
 		return "ticket"
+	default:
+		return ""
 	}
 }
 
@@ -35,17 +40,47 @@ func resourceForRecordClass(recordClass string) string {
 // inc.POST("/:id/comments", ..., RequirePermission("incident", "write"), ...)），所以这里把
 // create/update 归一化成 write，不引入第二套动作词表。ticket 资源保留原有的细分动作
 // （ticket:create/ticket:update 都是真实存在的权限码），不做任何归一化。
-func resolveWorkItemPermission(recordClass, action string) (resource string, resolvedAction string) {
+func resolveWorkItemPermission(recordClass, action string) (resource string, resolvedAction string, err error) {
 	resource = resourceForRecordClass(recordClass)
-	if resource == "ticket" {
-		return resource, action
+	if resource == "" {
+		return "", "", fmt.Errorf("unsupported WorkItem record class %q", recordClass)
+	}
+	if resource == "ticket" || resource == "service_request" {
+		return resource, action, nil
 	}
 	switch action {
 	case "create", "update":
-		return resource, "write"
+		return resource, "write", nil
 	default:
-		return resource, action
+		return resource, action, nil
 	}
+}
+
+// AuthorizeWorkItemRecordClassPermission is the shared WorkItem object-level
+// policy used by HTTP middleware and application services. It first resolves a
+// live tenant-scoped WorkItem, then checks the immutable recordClass against
+// the owning professional domain's RBAC resource.
+func AuthorizeWorkItemRecordClassPermission(ctx context.Context, client *ent.Client, workItemID, tenantID int, role, action string) (*ent.Ticket, error) {
+	if client == nil {
+		return nil, common.NewInternalError("WorkItem authorization client is unavailable", nil)
+	}
+	workItem, err := client.Ticket.Query().
+		Where(ticket.ID(workItemID), ticket.TenantID(tenantID), ticket.DeletedAtIsNil()).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return nil, common.NewNotFoundError("work item")
+		}
+		return nil, common.NewInternalError("query WorkItem for authorization", err)
+	}
+	resource, resolvedAction, err := resolveWorkItemPermission(workItem.RecordClass, action)
+	if err != nil {
+		return nil, common.NewForbiddenError("unsupported WorkItem record class")
+	}
+	if !hasResourcePermission(client, role, resource, resolvedAction, tenantID) {
+		return nil, common.NewForbiddenError("insufficient WorkItem permission")
+	}
+	return workItem, nil
 }
 
 // RequireWorkItemRecordClassPermission 按路径参数 :id 对应 tickets 行的实际 record_class
@@ -88,11 +123,10 @@ func RequireWorkItemRecordClassPermission(action string) gin.HandlerFunc {
 			return
 		}
 
-		t, err := client.Ticket.Query().
-			Where(ticket.ID(id), ticket.TenantID(tenantID), ticket.DeletedAtIsNil()).
-			Only(c.Request.Context())
+		_, err = AuthorizeWorkItemRecordClassPermission(c.Request.Context(), client, id, tenantID, role.(string), action)
 		if err != nil {
-			if !ent.IsNotFound(err) {
+			appErr, ok := err.(*common.AppError)
+			if !ok || appErr.Code == common.ErrCodeInternal {
 				// 真正的 DB 故障（连接断开、超时……）不能和"工单不存在"混为一谈——否则一次
 				// 数据库中断会被误读成一堆正常的 404，掩盖真实的可观测性信号。
 				zap.S().Warnw(
@@ -109,20 +143,11 @@ func RequireWorkItemRecordClassPermission(action string) gin.HandlerFunc {
 			// 差异变成一个可以探测其它租户 ID 是否存在的信号；DeletedAtIsNil() 与
 			// repository/ticket/repository_impl.go 的 EntRepository.GetByID 保持一致，
 			// 避免软删除的工单还能通过这条共享路由的 RBAC 网关被访问。
-			common.Fail(c, common.NotFoundCode, "工单不存在")
-			c.Abort()
-			return
-		}
-
-		resource, resolvedAction := resolveWorkItemPermission(t.RecordClass, action)
-		if !hasResourcePermission(client, role.(string), resource, resolvedAction, tenantID) {
-			zap.S().Warnw(
-				"RequireWorkItemRecordClassPermission: permission denied",
-				"role", role,
-				"resource", resource,
-				"resolved_action", resolvedAction,
-				"ticket_id", t.ID,
-			)
+			if appErr.Code == common.ErrCodeNotFound {
+				common.Fail(c, common.NotFoundCode, "工单不存在")
+				c.Abort()
+				return
+			}
 			common.Fail(c, common.ForbiddenCode, "权限不足")
 			c.Abort()
 			return

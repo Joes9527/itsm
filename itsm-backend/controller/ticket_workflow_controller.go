@@ -358,8 +358,29 @@ func (tc *TicketWorkflowController) GetApprovalDecisions(ctx *gin.Context) {
 		return
 	}
 	tenantID := ctx.GetInt("tenant_id")
-	decisions, err := tc.workflowService.GetApprovalDecisions(ctx.Request.Context(), ticketID, tenantID)
+	userID := ctx.GetInt("user_id")
+	role := ctx.GetString("role")
+	if tenantID <= 0 || userID <= 0 || role == "" {
+		common.AuthFailed(ctx, "认证信息缺失")
+		return
+	}
+	decisions, err := tc.workflowService.GetApprovalDecisions(ctx.Request.Context(), ticketID, service.ActionActor{
+		TenantID: tenantID,
+		UserID:   userID,
+		Role:     role,
+	})
 	if err != nil {
+		if appErr, ok := common.AsAppError(err); ok {
+			switch appErr.Code {
+			case common.ErrCodeNotFound:
+				common.NotFound(ctx, "工单不存在")
+			case common.ErrCodeForbidden:
+				common.Forbidden(ctx, "权限不足")
+			default:
+				common.InternalError(ctx, "获取审批记录失败")
+			}
+			return
+		}
 		common.InternalError(ctx, "获取审批记录失败: "+err.Error())
 		return
 	}

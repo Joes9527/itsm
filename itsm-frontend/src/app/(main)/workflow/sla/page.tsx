@@ -22,7 +22,7 @@ import type { SLAViolation, ProcessMetrics } from '@/lib/api/bpmn-dashboard-api'
 import BPMNDashboardApi from '@/lib/api/bpmn-dashboard-api';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { useI18n } from '@/lib/i18n';
-import { WorkflowApi } from '@/lib/api/workflow-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 
 const { RangePicker } = DatePicker;
 
@@ -42,11 +42,11 @@ export default function SLAMonitoringPage() {
 
   const fetchProcesses = async () => {
     try {
-      const data = await WorkflowApi.getWorkflows({ page: 1, pageSize: 100 });
+      const data = await BPMNWorkflowApi.listProcessDefinitions({ page: 1, pageSize: 100 });
       setProcesses(
-        data.workflows.map(workflow => ({
-          key: workflow.code,
-          name: workflow.name || workflow.code,
+        data.items.map(workflow => ({
+          key: workflow.key,
+          name: workflow.name || workflow.key,
         }))
       );
     } catch (error) {

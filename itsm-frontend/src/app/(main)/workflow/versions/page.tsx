@@ -2,20 +2,20 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { App, Button, Card, Descriptions, Modal, Select, Space, Table, Tag } from 'antd';
-import { Diff, Download, Eye, PlayCircle, RefreshCw, RotateCcw, Trash2 } from 'lucide-react';
+import { Diff, Download, Eye, PlayCircle, RefreshCw, RotateCcw } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 
 import { FilterToolbarCard } from '@/components/ui/FilterToolbarCard';
 import { LoadingEmptyError } from '@/components/ui/LoadingEmptyError';
 import { ManagementNotice, ManagementPageHeader } from '@/components/ui/ManagementPageHeader';
 import { StatsOverview } from '@/components/ui/StatsOverview';
-import { WorkflowAPI } from '@/lib/api/workflow-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 
 type VersionRow = {
   id: string;
   processKey: string;
   name: string;
-  version: number;
+  version: string;
   status: string;
   description?: string;
   createdAt: string;
@@ -54,19 +54,17 @@ export default function WorkflowVersionsPage() {
 
     try {
       setLoading(true);
-      const response = await WorkflowAPI.getWorkflowVersions(processKey);
+      const response = await BPMNWorkflowApi.listVersions(processKey);
       setVersions(
         response.map(item => ({
           id: item.id,
-          processKey: item.code,
+          processKey: item.processDefinitionKey,
           name: item.name,
-          version: Number(item.version || 1),
-          status: String(item.status),
+          version: item.version,
+          status: item.isActive ? 'active' : 'draft',
           description: item.description,
-          createdAt:
-            item.createdAt instanceof Date ? item.createdAt.toISOString() : new Date().toISOString(),
-          updatedAt:
-            item.updatedAt instanceof Date ? item.updatedAt.toISOString() : new Date().toISOString(),
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
         }))
       );
     } catch (error) {
@@ -88,7 +86,7 @@ export default function WorkflowVersionsPage() {
         title: '版本',
         dataIndex: 'version',
         key: 'version',
-        render: (value: number) => <span className="font-mono text-sm">v{value}</span>,
+        render: (value: string) => <span className="font-mono text-sm">v{value}</span>,
       },
       {
         title: '名称',
@@ -133,7 +131,7 @@ export default function WorkflowVersionsPage() {
                   cancelText: '取消',
                   onOk: async () => {
                     try {
-                      await WorkflowAPI.activateVersion(record.processKey, record.version);
+                      await BPMNWorkflowApi.activateVersion(record.processKey, record.version);
                       message.success(`已激活版本 v${record.version}`);
                       loadVersions();
                     } catch {
@@ -156,7 +154,7 @@ export default function WorkflowVersionsPage() {
                   cancelText: '取消',
                   onOk: async () => {
                     try {
-                      await WorkflowAPI.rollbackVersion(record.processKey, record.version, '前端回滚');
+                      await BPMNWorkflowApi.rollbackVersion(record.processKey, record.version, '前端回滚');
                       message.success(`已回滚到版本 v${record.version}`);
                       loadVersions();
                     } catch {
@@ -178,7 +176,7 @@ export default function WorkflowVersionsPage() {
                   return;
                 }
                 try {
-                  const result = await WorkflowAPI.compareVersions(
+                  const result = await BPMNWorkflowApi.compareVersions(
                     record.processKey,
                     latestVersion.version,
                     record.version
@@ -188,30 +186,6 @@ export default function WorkflowVersionsPage() {
                 } catch {
                   message.error('版本比较失败');
                 }
-              }}
-            />
-            <Button
-              type="text"
-              danger
-              icon={<Trash2 className="h-4 w-4" />}
-              aria-label={`删除版本 v${record.version}`}
-              onClick={() => {
-                modal.confirm({
-                  title: '删除版本',
-                  content: `确定要删除版本 v${record.version} 吗？删除后不可恢复。`,
-                  okText: '删除',
-                  okType: 'danger',
-                  cancelText: '取消',
-                  onOk: async () => {
-                    try {
-                      await WorkflowAPI.deleteVersion(record.processKey, record.version);
-                      message.success(`已删除版本 v${record.version}`);
-                      loadVersions();
-                    } catch {
-                      message.error('删除版本失败');
-                    }
-                  },
-                });
               }}
             />
           </Space>

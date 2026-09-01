@@ -127,7 +127,7 @@ export default function WorkflowToolbar({
         <Breadcrumb
           items={[
             {
-              title: <Link href="/workflow">工作流管理</Link>,
+              title: <Link href="/admin/workflows">工作流管理</Link>,
             },
             {
               title: workflow?.name || '新工作流设计',

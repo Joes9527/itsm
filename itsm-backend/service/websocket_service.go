@@ -425,15 +425,6 @@ func (s *WebSocketService) NotifySLABreached(tenantID int, ticket *dto.TicketRes
 	s.hub.SendToUser(ticket.RequesterID, msg)
 }
 
-// NotifyWorkflowTask 通知工作流任务
-func (s *WebSocketService) NotifyWorkflowTask(tenantID int, userID int, task map[string]interface{}) {
-	msg := WebSocketMessage{
-		Type:    "workflow_task",
-		Payload: task,
-	}
-	s.hub.SendToUser(userID, msg)
-}
-
 // NotifyApprovalRequired 通知需要审批
 func (s *WebSocketService) NotifyApprovalRequired(tenantID int, userID int, approvalInfo map[string]interface{}) {
 	msg := WebSocketMessage{

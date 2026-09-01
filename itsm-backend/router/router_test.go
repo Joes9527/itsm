@@ -420,11 +420,11 @@ func TestRouterConfig_ZeroValue(t *testing.T) {
 }
 
 // =====================================================================
-// Routes exist for legacy compatibility stubs
+// Retired workflow compatibility endpoints must not remain callable. The
+// canonical contract is /api/v1/bpmn/process-*.
 // =====================================================================
 
-func TestSetupRoutes_LegacyStubs(t *testing.T) {
-	// Legacy stubs should return BadRequestCode (400-ish), not 500
+func TestSetupRoutes_DoesNotExposeRetiredWorkflowAliases(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:router_legacy?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 	logger := zaptest.NewLogger(t).Sugar()
@@ -440,21 +440,23 @@ func TestSetupRoutes_LegacyStubs(t *testing.T) {
 	r := gin.New()
 	SetupRoutes(r, cfg)
 
-	// These paths have stub handlers in the router
-	stubPaths := []string{
-		"/api/v1/workflows",
-		"/api/v1/ticket-types",
-		"/api/v1/services",
-		"/api/v1/slas",
-		"/api/v1/knowledge",
+	retired := map[string]bool{
+		"GET /api/v1/workflows":                        true,
+		"POST /api/v1/workflows":                       true,
+		"GET /api/v1/bpmn/definitions":                 true,
+		"POST /api/v1/bpmn/definitions":                true,
+		"GET /api/v1/workflow/instances":               true,
+		"GET /api/v1/workflow/instances/:id":           true,
+		"POST /api/v1/workflow/instances":              true,
+		"PUT /api/v1/workflow/instances/:id/terminate": true,
+		"PUT /api/v1/workflow/instances/:id/suspend":   true,
+		"PUT /api/v1/workflow/instances/:id/resume":    true,
+		"GET /api/v1/workflow/tasks":                   true,
+		"PUT /api/v1/workflow/tasks/:id/complete":      true,
+		"POST /api/v1/workflow/tasks/:id/claim":        true,
 	}
-
-	for _, path := range stubPaths {
-		req := httptest.NewRequest(http.MethodGet, path, nil)
-		// Add auth header to pass through middleware
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-		// Should not panic or 500
-		assert.NotEqual(t, http.StatusInternalServerError, w.Code, "path %s should not 500", path)
+	for _, route := range r.Routes() {
+		key := route.Method + " " + route.Path
+		assert.False(t, retired[key], "retired workflow alias remains registered: %s", key)
 	}
 }

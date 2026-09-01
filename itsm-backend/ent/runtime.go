@@ -116,10 +116,6 @@ import (
 	"itsm-backend/ent/toolinvocation"
 	"itsm-backend/ent/user"
 	"itsm-backend/ent/vendor"
-	"itsm-backend/ent/workflow"
-	"itsm-backend/ent/workflowinstance"
-	"itsm-backend/ent/workflowtask"
-	"itsm-backend/ent/workflowversion"
 	"itsm-backend/ent/workitemnumbersequence"
 	"itsm-backend/ent/workitemrelation"
 	"time"
@@ -3620,15 +3616,15 @@ func init() {
 	// ticketcategory.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	ticketcategory.TenantIDValidator = ticketcategoryDescTenantID.Validators[0].(func(int) error)
 	// ticketcategoryDescIsUserFacing is the schema descriptor for is_user_facing field.
-	ticketcategoryDescIsUserFacing := ticketcategoryFields[14].Descriptor()
+	ticketcategoryDescIsUserFacing := ticketcategoryFields[13].Descriptor()
 	// ticketcategory.DefaultIsUserFacing holds the default value on creation for the is_user_facing field.
 	ticketcategory.DefaultIsUserFacing = ticketcategoryDescIsUserFacing.Default.(bool)
 	// ticketcategoryDescCreatedAt is the schema descriptor for created_at field.
-	ticketcategoryDescCreatedAt := ticketcategoryFields[15].Descriptor()
+	ticketcategoryDescCreatedAt := ticketcategoryFields[14].Descriptor()
 	// ticketcategory.DefaultCreatedAt holds the default value on creation for the created_at field.
 	ticketcategory.DefaultCreatedAt = ticketcategoryDescCreatedAt.Default.(func() time.Time)
 	// ticketcategoryDescUpdatedAt is the schema descriptor for updated_at field.
-	ticketcategoryDescUpdatedAt := ticketcategoryFields[16].Descriptor()
+	ticketcategoryDescUpdatedAt := ticketcategoryFields[15].Descriptor()
 	// ticketcategory.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	ticketcategory.DefaultUpdatedAt = ticketcategoryDescUpdatedAt.Default.(func() time.Time)
 	// ticketcategory.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -4057,148 +4053,4 @@ func init() {
 	workitemrelationDescCreatedAt := workitemrelationFields[6].Descriptor()
 	// workitemrelation.DefaultCreatedAt holds the default value on creation for the created_at field.
 	workitemrelation.DefaultCreatedAt = workitemrelationDescCreatedAt.Default.(func() time.Time)
-	workflowFields := schema.Workflow{}.Fields()
-	_ = workflowFields
-	// workflowDescName is the schema descriptor for name field.
-	workflowDescName := workflowFields[0].Descriptor()
-	// workflow.NameValidator is a validator for the "name" field. It is called by the builders before save.
-	workflow.NameValidator = workflowDescName.Validators[0].(func(string) error)
-	// workflowDescType is the schema descriptor for type field.
-	workflowDescType := workflowFields[2].Descriptor()
-	// workflow.DefaultType holds the default value on creation for the type field.
-	workflow.DefaultType = workflowDescType.Default.(string)
-	// workflowDescVersion is the schema descriptor for version field.
-	workflowDescVersion := workflowFields[4].Descriptor()
-	// workflow.DefaultVersion holds the default value on creation for the version field.
-	workflow.DefaultVersion = workflowDescVersion.Default.(string)
-	// workflowDescIsActive is the schema descriptor for is_active field.
-	workflowDescIsActive := workflowFields[5].Descriptor()
-	// workflow.DefaultIsActive holds the default value on creation for the is_active field.
-	workflow.DefaultIsActive = workflowDescIsActive.Default.(bool)
-	// workflowDescTenantID is the schema descriptor for tenant_id field.
-	workflowDescTenantID := workflowFields[6].Descriptor()
-	// workflow.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	workflow.TenantIDValidator = workflowDescTenantID.Validators[0].(func(int) error)
-	// workflowDescCreatedAt is the schema descriptor for created_at field.
-	workflowDescCreatedAt := workflowFields[8].Descriptor()
-	// workflow.DefaultCreatedAt holds the default value on creation for the created_at field.
-	workflow.DefaultCreatedAt = workflowDescCreatedAt.Default.(func() time.Time)
-	// workflowDescUpdatedAt is the schema descriptor for updated_at field.
-	workflowDescUpdatedAt := workflowFields[9].Descriptor()
-	// workflow.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	workflow.DefaultUpdatedAt = workflowDescUpdatedAt.Default.(func() time.Time)
-	// workflow.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	workflow.UpdateDefaultUpdatedAt = workflowDescUpdatedAt.UpdateDefault.(func() time.Time)
-	workflowinstanceFields := schema.WorkflowInstance{}.Fields()
-	_ = workflowinstanceFields
-	// workflowinstanceDescStatus is the schema descriptor for status field.
-	workflowinstanceDescStatus := workflowinstanceFields[0].Descriptor()
-	// workflowinstance.DefaultStatus holds the default value on creation for the status field.
-	workflowinstance.DefaultStatus = workflowinstanceDescStatus.Default.(string)
-	// workflowinstanceDescWorkflowID is the schema descriptor for workflow_id field.
-	workflowinstanceDescWorkflowID := workflowinstanceFields[3].Descriptor()
-	// workflowinstance.WorkflowIDValidator is a validator for the "workflow_id" field. It is called by the builders before save.
-	workflowinstance.WorkflowIDValidator = workflowinstanceDescWorkflowID.Validators[0].(func(int) error)
-	// workflowinstanceDescEntityID is the schema descriptor for entity_id field.
-	workflowinstanceDescEntityID := workflowinstanceFields[4].Descriptor()
-	// workflowinstance.EntityIDValidator is a validator for the "entity_id" field. It is called by the builders before save.
-	workflowinstance.EntityIDValidator = workflowinstanceDescEntityID.Validators[0].(func(int) error)
-	// workflowinstanceDescEntityType is the schema descriptor for entity_type field.
-	workflowinstanceDescEntityType := workflowinstanceFields[5].Descriptor()
-	// workflowinstance.DefaultEntityType holds the default value on creation for the entity_type field.
-	workflowinstance.DefaultEntityType = workflowinstanceDescEntityType.Default.(string)
-	// workflowinstanceDescTenantID is the schema descriptor for tenant_id field.
-	workflowinstanceDescTenantID := workflowinstanceFields[6].Descriptor()
-	// workflowinstance.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	workflowinstance.TenantIDValidator = workflowinstanceDescTenantID.Validators[0].(func(int) error)
-	// workflowinstanceDescStartedAt is the schema descriptor for started_at field.
-	workflowinstanceDescStartedAt := workflowinstanceFields[7].Descriptor()
-	// workflowinstance.DefaultStartedAt holds the default value on creation for the started_at field.
-	workflowinstance.DefaultStartedAt = workflowinstanceDescStartedAt.Default.(func() time.Time)
-	// workflowinstanceDescCreatedAt is the schema descriptor for created_at field.
-	workflowinstanceDescCreatedAt := workflowinstanceFields[9].Descriptor()
-	// workflowinstance.DefaultCreatedAt holds the default value on creation for the created_at field.
-	workflowinstance.DefaultCreatedAt = workflowinstanceDescCreatedAt.Default.(func() time.Time)
-	// workflowinstanceDescUpdatedAt is the schema descriptor for updated_at field.
-	workflowinstanceDescUpdatedAt := workflowinstanceFields[10].Descriptor()
-	// workflowinstance.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	workflowinstance.DefaultUpdatedAt = workflowinstanceDescUpdatedAt.Default.(func() time.Time)
-	// workflowinstance.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	workflowinstance.UpdateDefaultUpdatedAt = workflowinstanceDescUpdatedAt.UpdateDefault.(func() time.Time)
-	workflowtaskFields := schema.WorkflowTask{}.Fields()
-	_ = workflowtaskFields
-	// workflowtaskDescTaskID is the schema descriptor for task_id field.
-	workflowtaskDescTaskID := workflowtaskFields[0].Descriptor()
-	// workflowtask.TaskIDValidator is a validator for the "task_id" field. It is called by the builders before save.
-	workflowtask.TaskIDValidator = workflowtaskDescTaskID.Validators[0].(func(string) error)
-	// workflowtaskDescInstanceID is the schema descriptor for instance_id field.
-	workflowtaskDescInstanceID := workflowtaskFields[1].Descriptor()
-	// workflowtask.InstanceIDValidator is a validator for the "instance_id" field. It is called by the builders before save.
-	workflowtask.InstanceIDValidator = workflowtaskDescInstanceID.Validators[0].(func(int) error)
-	// workflowtaskDescActivityID is the schema descriptor for activity_id field.
-	workflowtaskDescActivityID := workflowtaskFields[2].Descriptor()
-	// workflowtask.ActivityIDValidator is a validator for the "activity_id" field. It is called by the builders before save.
-	workflowtask.ActivityIDValidator = workflowtaskDescActivityID.Validators[0].(func(string) error)
-	// workflowtaskDescName is the schema descriptor for name field.
-	workflowtaskDescName := workflowtaskFields[3].Descriptor()
-	// workflowtask.NameValidator is a validator for the "name" field. It is called by the builders before save.
-	workflowtask.NameValidator = workflowtaskDescName.Validators[0].(func(string) error)
-	// workflowtaskDescType is the schema descriptor for type field.
-	workflowtaskDescType := workflowtaskFields[4].Descriptor()
-	// workflowtask.DefaultType holds the default value on creation for the type field.
-	workflowtask.DefaultType = workflowtaskDescType.Default.(string)
-	// workflowtaskDescStatus is the schema descriptor for status field.
-	workflowtaskDescStatus := workflowtaskFields[8].Descriptor()
-	// workflowtask.DefaultStatus holds the default value on creation for the status field.
-	workflowtask.DefaultStatus = workflowtaskDescStatus.Default.(string)
-	// workflowtaskDescPriority is the schema descriptor for priority field.
-	workflowtaskDescPriority := workflowtaskFields[9].Descriptor()
-	// workflowtask.DefaultPriority holds the default value on creation for the priority field.
-	workflowtask.DefaultPriority = workflowtaskDescPriority.Default.(string)
-	// workflowtaskDescTenantID is the schema descriptor for tenant_id field.
-	workflowtaskDescTenantID := workflowtaskFields[13].Descriptor()
-	// workflowtask.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	workflowtask.TenantIDValidator = workflowtaskDescTenantID.Validators[0].(func(int) error)
-	// workflowtaskDescCreatedAt is the schema descriptor for created_at field.
-	workflowtaskDescCreatedAt := workflowtaskFields[15].Descriptor()
-	// workflowtask.DefaultCreatedAt holds the default value on creation for the created_at field.
-	workflowtask.DefaultCreatedAt = workflowtaskDescCreatedAt.Default.(func() time.Time)
-	// workflowtaskDescUpdatedAt is the schema descriptor for updated_at field.
-	workflowtaskDescUpdatedAt := workflowtaskFields[16].Descriptor()
-	// workflowtask.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	workflowtask.DefaultUpdatedAt = workflowtaskDescUpdatedAt.Default.(func() time.Time)
-	// workflowtask.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	workflowtask.UpdateDefaultUpdatedAt = workflowtaskDescUpdatedAt.UpdateDefault.(func() time.Time)
-	workflowversionFields := schema.WorkflowVersion{}.Fields()
-	_ = workflowversionFields
-	// workflowversionDescWorkflowID is the schema descriptor for workflow_id field.
-	workflowversionDescWorkflowID := workflowversionFields[0].Descriptor()
-	// workflowversion.WorkflowIDValidator is a validator for the "workflow_id" field. It is called by the builders before save.
-	workflowversion.WorkflowIDValidator = workflowversionDescWorkflowID.Validators[0].(func(int) error)
-	// workflowversionDescVersion is the schema descriptor for version field.
-	workflowversionDescVersion := workflowversionFields[1].Descriptor()
-	// workflowversion.VersionValidator is a validator for the "version" field. It is called by the builders before save.
-	workflowversion.VersionValidator = workflowversionDescVersion.Validators[0].(func(string) error)
-	// workflowversionDescStatus is the schema descriptor for status field.
-	workflowversionDescStatus := workflowversionFields[4].Descriptor()
-	// workflowversion.DefaultStatus holds the default value on creation for the status field.
-	workflowversion.DefaultStatus = workflowversionDescStatus.Default.(string)
-	// workflowversionDescIsCurrent is the schema descriptor for is_current field.
-	workflowversionDescIsCurrent := workflowversionFields[7].Descriptor()
-	// workflowversion.DefaultIsCurrent holds the default value on creation for the is_current field.
-	workflowversion.DefaultIsCurrent = workflowversionDescIsCurrent.Default.(bool)
-	// workflowversionDescTenantID is the schema descriptor for tenant_id field.
-	workflowversionDescTenantID := workflowversionFields[8].Descriptor()
-	// workflowversion.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	workflowversion.TenantIDValidator = workflowversionDescTenantID.Validators[0].(func(int) error)
-	// workflowversionDescCreatedAt is the schema descriptor for created_at field.
-	workflowversionDescCreatedAt := workflowversionFields[9].Descriptor()
-	// workflowversion.DefaultCreatedAt holds the default value on creation for the created_at field.
-	workflowversion.DefaultCreatedAt = workflowversionDescCreatedAt.Default.(func() time.Time)
-	// workflowversionDescUpdatedAt is the schema descriptor for updated_at field.
-	workflowversionDescUpdatedAt := workflowversionFields[10].Descriptor()
-	// workflowversion.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	workflowversion.DefaultUpdatedAt = workflowversionDescUpdatedAt.Default.(func() time.Time)
-	// workflowversion.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	workflowversion.UpdateDefaultUpdatedAt = workflowversionDescUpdatedAt.UpdateDefault.(func() time.Time)
 }

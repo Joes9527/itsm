@@ -84,7 +84,6 @@ export { SLAApi } from './sla-api';
 
 // ==================== 工作流API ====================
 
-export { WorkflowApi } from './workflow-api';
 export { BPMNAIApi } from './bpmn-ai-api';
 export { BPMNWorkflowApi } from './bpmn-workflow-api';
 export { BPMNMonitoringApi } from './bpmn-monitoring-api';
@@ -96,15 +95,12 @@ export type {
   ProcessInstanceListResponse,
   UserTask,
   UserTaskListResponse,
-  CounterSignTask,
-  CounterSignStatusResponse,
+  CounterSignStatus,
   ProcessVersion,
-  ProcessVersionListResponse,
-  VersionCompareResponse,
+  VersionComparison,
   InstanceStats,
   TaskStats,
   VersionChangeLog,
-  ChangeLogListResponse,
 } from './bpmn-workflow-api';
 export type {
   ProcessMetrics,

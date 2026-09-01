@@ -39,7 +39,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { httpClient } from '@/lib/api/http-client';
-import { WorkflowApi, type BpmnMyTask } from '@/lib/api/workflow-api';
+import { BPMNWorkflowApi, type UserTask } from '@/lib/api/bpmn-workflow-api';
 import { useAuthStore } from '@/lib/store/auth-store';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -73,7 +73,7 @@ const businessTypeMap: Record<string, { label: string; url: (id: number) => stri
   release: { label: '发布', url: (id) => `/releases/${id}` },
 };
 
-function getBusinessLink(task: BpmnMyTask): { label: string; url: string } | null {
+function getBusinessLink(task: UserTask): { label: string; url: string } | null {
   if (task.businessType && task.businessId) {
     const meta = businessTypeMap[task.businessType];
     if (meta) {
@@ -112,10 +112,10 @@ export default function ApprovalsCenterPage() {
 
   // BPMN 待办
   const [taskLoading, setTaskLoading] = useState(false);
-  const [tasks, setTasks] = useState<BpmnMyTask[]>([]);
+  const [tasks, setTasks] = useState<UserTask[]>([]);
   const [claiming, setClaiming] = useState<number | null>(null);
   const [decision, setDecision] = useState<{
-    task: BpmnMyTask;
+    task: UserTask;
     action: 'approve' | 'reject';
   } | null>(null);
   const [decisionComment, setDecisionComment] = useState('');
@@ -129,7 +129,7 @@ export default function ApprovalsCenterPage() {
   const loadTasks = useCallback(async () => {
     setTaskLoading(true);
     try {
-      const res = await WorkflowApi.listMyApprovalTasks({ page: 1, pageSize: 100 });
+      const res = await BPMNWorkflowApi.listUserTasks({ page: 1, pageSize: 100 });
       // 后端仅支持单状态过滤，这里客户端过滤出待处理任务
       setTasks(res.items.filter((t) => PENDING_TASK_STATUSES.has((t.status || '').toLowerCase())));
     } catch {
@@ -198,10 +198,10 @@ export default function ApprovalsCenterPage() {
   };
 
   // 领取任务（无负责人时）
-  const handleClaim = async (task: BpmnMyTask) => {
+  const handleClaim = async (task: UserTask) => {
     setClaiming(task.id);
     try {
-      await WorkflowApi.claimMyTask(task.id);
+      await BPMNWorkflowApi.claimTask(task.id);
       message.success('任务已领取');
       loadTasks();
     } catch (e) {
@@ -212,7 +212,7 @@ export default function ApprovalsCenterPage() {
   };
 
   // 打开审批决策弹窗
-  const openDecision = (task: BpmnMyTask, action: 'approve' | 'reject') => {
+  const openDecision = (task: UserTask, action: 'approve' | 'reject') => {
     setDecisionComment('');
     setDecision({ task, action });
   };
@@ -227,7 +227,7 @@ export default function ApprovalsCenterPage() {
     }
     setSubmitting(true);
     try {
-      await WorkflowApi.submitTaskDecision(decision.task.id, {
+      await BPMNWorkflowApi.submitApprovalDecision(decision.task.id, {
         action: decision.action,
         comment,
       });
@@ -248,7 +248,7 @@ export default function ApprovalsCenterPage() {
       title: '任务',
       dataIndex: 'taskName',
       key: 'taskName',
-      render: (text: string, record: BpmnMyTask) => (
+      render: (text: string, record: UserTask) => (
         <div>
           <div className="font-medium text-gray-900">{text || record.taskDefinitionKey}</div>
           {record.taskPurpose && (
@@ -261,7 +261,7 @@ export default function ApprovalsCenterPage() {
       title: '业务单据',
       key: 'business',
       width: 180,
-      render: (_: unknown, record: BpmnMyTask) => {
+      render: (_: unknown, record: UserTask) => {
         const link = getBusinessLink(record);
         if (!link) return <Text type="secondary">-</Text>;
         return (
@@ -314,7 +314,7 @@ export default function ApprovalsCenterPage() {
       title: '操作',
       key: 'action',
       width: 220,
-      render: (_: unknown, record: BpmnMyTask) => (
+      render: (_: unknown, record: UserTask) => (
         <Space size="small">
           {!record.assignee && (
             <Button

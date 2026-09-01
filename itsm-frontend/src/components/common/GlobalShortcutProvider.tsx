@@ -17,7 +17,7 @@ const SHORTCUTS = [
       { key: 'g t', description: '跳转到工单列表', action: '/tickets' },
       { key: 'g c', description: '跳转到CMDB', action: '/cmdb' },
       { key: 'g k', description: '跳转到知识库', action: '/knowledge' },
-      { key: 'g w', description: '跳转到工作流', action: '/workflows' },
+      { key: 'g w', description: '跳转到工作流', action: '/admin/workflows' },
     ],
   },
   {
@@ -69,7 +69,7 @@ export default function GlobalShortcutProvider({ children }: GlobalShortcutProvi
   useHotkeys('g t', () => router.push('/tickets'), { preventDefault: true });
   useHotkeys('g c', () => router.push('/cmdb'), { preventDefault: true });
   useHotkeys('g k', () => router.push('/knowledge'), { preventDefault: true });
-  useHotkeys('g w', () => router.push('/workflows'), { preventDefault: true });
+  useHotkeys('g w', () => router.push('/admin/workflows'), { preventDefault: true });
   useHotkeys('ctrl+n, cmd+n', () => router.push('/tickets/new'), { preventDefault: true });
   useHotkeys('ctrl+k, cmd+k', openSearch, { preventDefault: true });
   useHotkeys('ctrl+b, cmd+b', toggleSidebar, { preventDefault: true });

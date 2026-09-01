@@ -317,32 +317,6 @@ export interface KnowledgeArticle {
   updatedAt: string;
 }
 
-// ==================== 工作流相关类型 ====================
-
-export interface WorkflowDefinition {
-  id: number;
-  name: string;
-  description?: string;
-  xmlContent: string;
-  version: number;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface WorkflowInstance {
-  id: number;
-  workflowId: number;
-  workflow?: WorkflowDefinition;
-  entityType: string;
-  entityId: number;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
-  currentNodeId?: string;
-  startedAt?: string;
-  completedAt?: string;
-  createdAt: string;
-}
-
 // ==================== 通知相关类型 ====================
 
 export interface Notification {

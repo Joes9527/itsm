@@ -49,5 +49,4 @@ export const DISABLED_API_CONTRACTS: readonly DisabledApiContract[] = [
   { capability: 'genericTemplateMarketplace', file: 'template-api.ts', reason: 'Generic template marketplace is not registered; ticket templates use a separate supported API' },
   { capability: 'advancedTicketRelations', file: 'ticket-relations-api.ts', reason: 'Advanced relation analytics and batch routes are not registered' },
   { capability: 'rootCauseWorkflowActions', file: 'ticket-root-cause-api.ts', reason: 'Root-cause confirm/resolve routes are not registered' },
-  { capability: 'workflowAnalytics', file: 'workflow-api.ts', path: /\/(workflow-templates|stats|node-stats|bottlenecks)(?:\/|$)/, reason: 'Workflow template and analytics routes are not registered' },
 ] as const;

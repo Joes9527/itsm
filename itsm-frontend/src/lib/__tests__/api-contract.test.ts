@@ -3,9 +3,8 @@
  * has a matching route registered in `itsm-backend/router/router.go`.
  *
  * Why this exists (L2.1):
- *   The bug we fixed in L1.1 (`/api/v1/tickets/approval-workflows` vs
- *   `/api/v1/approval-workflows`) was masked by `expect.stringContaining` in
- *   `ticket-approval.test.ts`. This test is a coarser but stricter guard: it
+ *   Endpoint drift can be masked by loose string assertions in client tests.
+ *   This test is a coarser but stricter guard: it
  *   scans all API files and asserts each declared path has a matching backend
  *   route. It runs as part of `npm test`, so a wrong path fails CI loudly.
  *

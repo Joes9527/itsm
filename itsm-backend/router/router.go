@@ -623,7 +623,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				tickets.GET("/:id/workflow/state", middleware.RequirePermission("ticket", "read"), config.TicketWorkflowController.GetTicketWorkflowState)
 				tickets.GET("/:id/workflow-history", middleware.RequirePermission("ticket", "read"), config.TicketWorkflowController.GetTicketWorkflowHistory)
 				tickets.GET("/:id/workflow_records", middleware.RequirePermission("ticket", "read"), config.TicketWorkflowController.GetTicketWorkflowHistory)
-				tickets.GET("/:id/approval-decisions", middleware.RequirePermission("ticket", "read"), config.TicketWorkflowController.GetApprovalDecisions)
+				tickets.GET("/:id/approval-decisions", middleware.RequireWorkItemRecordClassPermission("read"), config.TicketWorkflowController.GetApprovalDecisions)
 			}
 
 			// 工单自动化规则
@@ -1391,7 +1391,6 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 		// ==================== BPMN Workflow ====================
 		if config.BPMNWorkflowController != nil {
 			config.BPMNWorkflowController.RegisterRoutes(tenant.(*gin.RouterGroup))
-			config.BPMNWorkflowController.RegisterWorkflowAliasRoutes(tenant.(*gin.RouterGroup))
 		}
 
 		// BPMN Process Trigger Controller (统一流程触发接口)
@@ -1661,34 +1660,6 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 					cloudResources.DELETE("/:id", middleware.RequirePermission("cloud_resource", "delete"), config.CloudController.DeleteCloudResource)
 				}
 			}
-		}
-
-		// ==================== Legacy Compatibility Routes ====================
-		// These old paths are kept only to return explicit guidance. They must
-		// not pretend that writes succeeded before a real backend is wired.
-		tenant.GET("/workflows", middleware.RequirePermission("workflow", "read"), func(c *gin.Context) {
-			common.Fail(c, common.BadRequestCode, "兼容接口未接入真实数据，请使用 /api/v1/bpmn/process-definitions")
-		})
-		tenant.POST("/workflows", middleware.RequirePermission("workflow", "create"), func(c *gin.Context) {
-			common.Fail(c, common.BadRequestCode, "兼容接口不支持写入，请使用 /api/v1/bpmn/process-definitions")
-		})
-
-		// Legacy /api/v1/bpmn/definitions path; canonical BPMN APIs are
-		// registered by BPMNWorkflowController under /api/v1/bpmn/process-*.
-		bpmn := tenant.(*gin.RouterGroup).Group("/bpmn")
-		{
-			bpmn.GET("/definitions", middleware.RequirePermission("workflow", "read"), func(c *gin.Context) {
-				common.Fail(c, common.BadRequestCode, "兼容接口未接入真实数据，请使用 /api/v1/bpmn/process-definitions")
-			})
-			bpmn.POST("/definitions", middleware.RequirePermission("workflow", "create"), func(c *gin.Context) {
-				common.Fail(c, common.BadRequestCode, "兼容接口不支持写入，请使用 /api/v1/bpmn/process-definitions")
-			})
-			bpmn.GET("/definitions/:id", middleware.RequirePermission("workflow", "read"), func(c *gin.Context) {
-				common.Fail(c, common.BadRequestCode, "兼容接口未接入真实数据，请使用 /api/v1/bpmn/process-definitions/"+c.Param("id"))
-			})
-			bpmn.PUT("/definitions/:id", middleware.RequirePermission("workflow", "update"), func(c *gin.Context) {
-				common.Fail(c, common.BadRequestCode, "兼容接口不支持写入，请使用 /api/v1/bpmn/process-definitions/"+c.Param("id"))
-			})
 		}
 
 		// Legacy service catalog path. Canonical APIs are /service-catalogs and

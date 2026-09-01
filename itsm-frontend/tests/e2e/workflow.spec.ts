@@ -21,7 +21,7 @@ test.describe('Workflow Management - 工作流管理', () => {
 
   test.describe('Workflow List - 工作流列表', () => {
     test('should navigate to workflow page', async ({ page }) => {
-      await openWorkflowPage(page, '/workflow');
+      await openWorkflowPage(page, '/admin/workflows');
       await expect(page.getByRole('heading', { name: '工作流管理' })).toBeVisible({
         timeout: 30_000,
       });
@@ -31,8 +31,8 @@ test.describe('Workflow Management - 工作流管理', () => {
     });
 
     test('should display workflow list', async ({ page }) => {
-      await openWorkflowPage(page, '/workflow');
-      await expect(page.getByText('统一管理工作流定义')).toBeVisible({ timeout: 30_000 });
+      await openWorkflowPage(page, '/admin/workflows');
+      await expect(page.getByRole('heading', { name: '工作流管理' })).toBeVisible({ timeout: 30_000 });
       await expect(page.locator('.ant-table')).toBeVisible({ timeout: 30_000 });
       await expect(page.getByRole('row', { name: /工单|流程|flow/i }).first()).toBeVisible({
         timeout: 30_000,

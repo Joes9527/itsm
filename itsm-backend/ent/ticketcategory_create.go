@@ -9,7 +9,6 @@ import (
 	"itsm-backend/ent/department"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcategory"
-	"itsm-backend/ent/workflow"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -123,20 +122,6 @@ func (_c *TicketCategoryCreate) SetDepartmentID(v int) *TicketCategoryCreate {
 func (_c *TicketCategoryCreate) SetNillableDepartmentID(v *int) *TicketCategoryCreate {
 	if v != nil {
 		_c.SetDepartmentID(*v)
-	}
-	return _c
-}
-
-// SetWorkflowID sets the "workflow_id" field.
-func (_c *TicketCategoryCreate) SetWorkflowID(v int) *TicketCategoryCreate {
-	_c.mutation.SetWorkflowID(v)
-	return _c
-}
-
-// SetNillableWorkflowID sets the "workflow_id" field if the given value is not nil.
-func (_c *TicketCategoryCreate) SetNillableWorkflowID(v *int) *TicketCategoryCreate {
-	if v != nil {
-		_c.SetWorkflowID(*v)
 	}
 	return _c
 }
@@ -277,11 +262,6 @@ func (_c *TicketCategoryCreate) SetParent(v *TicketCategory) *TicketCategoryCrea
 // SetDepartment sets the "department" edge to the Department entity.
 func (_c *TicketCategoryCreate) SetDepartment(v *Department) *TicketCategoryCreate {
 	return _c.SetDepartmentID(v.ID)
-}
-
-// SetWorkflow sets the "workflow" edge to the Workflow entity.
-func (_c *TicketCategoryCreate) SetWorkflow(v *Workflow) *TicketCategoryCreate {
-	return _c.SetWorkflowID(v.ID)
 }
 
 // Mutation returns the TicketCategoryMutation object of the builder.
@@ -538,23 +518,6 @@ func (_c *TicketCategoryCreate) createSpec() (*TicketCategory, *sqlgraph.CreateS
 		_node.DepartmentID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
-	if nodes := _c.mutation.WorkflowIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2O,
-			Inverse: false,
-			Table:   ticketcategory.WorkflowTable,
-			Columns: []string{ticketcategory.WorkflowColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(workflow.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_node.WorkflowID = nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
-	}
 	return _node, _spec
 }
 
@@ -748,24 +711,6 @@ func (u *TicketCategoryUpsert) UpdateDepartmentID() *TicketCategoryUpsert {
 // ClearDepartmentID clears the value of the "department_id" field.
 func (u *TicketCategoryUpsert) ClearDepartmentID() *TicketCategoryUpsert {
 	u.SetNull(ticketcategory.FieldDepartmentID)
-	return u
-}
-
-// SetWorkflowID sets the "workflow_id" field.
-func (u *TicketCategoryUpsert) SetWorkflowID(v int) *TicketCategoryUpsert {
-	u.Set(ticketcategory.FieldWorkflowID, v)
-	return u
-}
-
-// UpdateWorkflowID sets the "workflow_id" field to the value that was provided on create.
-func (u *TicketCategoryUpsert) UpdateWorkflowID() *TicketCategoryUpsert {
-	u.SetExcluded(ticketcategory.FieldWorkflowID)
-	return u
-}
-
-// ClearWorkflowID clears the value of the "workflow_id" field.
-func (u *TicketCategoryUpsert) ClearWorkflowID() *TicketCategoryUpsert {
-	u.SetNull(ticketcategory.FieldWorkflowID)
 	return u
 }
 
@@ -1082,27 +1027,6 @@ func (u *TicketCategoryUpsertOne) UpdateDepartmentID() *TicketCategoryUpsertOne 
 func (u *TicketCategoryUpsertOne) ClearDepartmentID() *TicketCategoryUpsertOne {
 	return u.Update(func(s *TicketCategoryUpsert) {
 		s.ClearDepartmentID()
-	})
-}
-
-// SetWorkflowID sets the "workflow_id" field.
-func (u *TicketCategoryUpsertOne) SetWorkflowID(v int) *TicketCategoryUpsertOne {
-	return u.Update(func(s *TicketCategoryUpsert) {
-		s.SetWorkflowID(v)
-	})
-}
-
-// UpdateWorkflowID sets the "workflow_id" field to the value that was provided on create.
-func (u *TicketCategoryUpsertOne) UpdateWorkflowID() *TicketCategoryUpsertOne {
-	return u.Update(func(s *TicketCategoryUpsert) {
-		s.UpdateWorkflowID()
-	})
-}
-
-// ClearWorkflowID clears the value of the "workflow_id" field.
-func (u *TicketCategoryUpsertOne) ClearWorkflowID() *TicketCategoryUpsertOne {
-	return u.Update(func(s *TicketCategoryUpsert) {
-		s.ClearWorkflowID()
 	})
 }
 
@@ -1601,27 +1525,6 @@ func (u *TicketCategoryUpsertBulk) UpdateDepartmentID() *TicketCategoryUpsertBul
 func (u *TicketCategoryUpsertBulk) ClearDepartmentID() *TicketCategoryUpsertBulk {
 	return u.Update(func(s *TicketCategoryUpsert) {
 		s.ClearDepartmentID()
-	})
-}
-
-// SetWorkflowID sets the "workflow_id" field.
-func (u *TicketCategoryUpsertBulk) SetWorkflowID(v int) *TicketCategoryUpsertBulk {
-	return u.Update(func(s *TicketCategoryUpsert) {
-		s.SetWorkflowID(v)
-	})
-}
-
-// UpdateWorkflowID sets the "workflow_id" field to the value that was provided on create.
-func (u *TicketCategoryUpsertBulk) UpdateWorkflowID() *TicketCategoryUpsertBulk {
-	return u.Update(func(s *TicketCategoryUpsert) {
-		s.UpdateWorkflowID()
-	})
-}
-
-// ClearWorkflowID clears the value of the "workflow_id" field.
-func (u *TicketCategoryUpsertBulk) ClearWorkflowID() *TicketCategoryUpsertBulk {
-	return u.Update(func(s *TicketCategoryUpsert) {
-		s.ClearWorkflowID()
 	})
 }
 

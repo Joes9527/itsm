@@ -188,7 +188,6 @@ INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, ten
 SELECT '工单自动化', '/workflow/ticket-approval', 'Zap', id, 'workflow:write', 127, 1, true, true FROM menus WHERE path = '/workflow';
 
 INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, tenant_id, is_visible, is_enabled)
-SELECT '自动化规则', '/workflow/automation', 'Settings', id, 'workflow:write', 128, 1, true, true FROM menus WHERE path = '/workflow';
 
 -- ============================================
 -- 14. 子菜单 - 客户管理 (原MSP)

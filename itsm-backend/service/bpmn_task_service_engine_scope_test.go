@@ -109,7 +109,7 @@ func setupTicketCallbackEngine(t *testing.T) (*ent.Client, *CustomProcessEngine,
 	logger := zap.NewNop().Sugar()
 	engine := NewCustomProcessEngine(client, logger).(*CustomProcessEngine)
 
-	// 用引擎自身的流程定义服务部署夹具（和管理端 /bpmn/definitions 走同一条路径），
+	// 用引擎自身的流程定义服务部署夹具（和管理端 /bpmn/process-definitions 走同一条路径），
 	// 而不是手写 ent 插入，保证 definition/deployment 行的形状与生产一致。
 	definitionCtx := WithTrustedBPMNTenantContext(ctx, tenant.ID)
 	_, err = engine.ProcessDefinitionService().CreateProcessDefinition(definitionCtx, &CreateProcessDefinitionRequest{

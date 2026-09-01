@@ -2,7 +2,7 @@ import { render, screen } from '@/lib/test-utils';
 import userEvent from '@testing-library/user-event';
 import PortalPage from '../page';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
-import { WorkflowApi } from '@/lib/api/workflow-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 
 const mockPush = jest.fn();
 
@@ -18,10 +18,10 @@ jest.mock('@/lib/api/service-catalog-api', () => ({
   },
 }));
 
-jest.mock('@/lib/api/workflow-api', () => ({
-  WorkflowApi: {
-    listMyApprovalTasks: jest.fn(),
-    submitTaskDecision: jest.fn(),
+jest.mock('@/lib/api/bpmn-workflow-api', () => ({
+  BPMNWorkflowApi: {
+    listUserTasks: jest.fn(),
+    submitApprovalDecision: jest.fn(),
   },
 }));
 
@@ -31,12 +31,12 @@ jest.mock('@/lib/store/auth-store', () => ({
 
 const mockGetServices = ServiceCatalogApi.getServices as jest.Mock;
 const mockGetServiceRequests = ServiceCatalogApi.getServiceRequests as jest.Mock;
-const mockListMyApprovalTasks = WorkflowApi.listMyApprovalTasks as jest.Mock;
+const mockListMyApprovalTasks = BPMNWorkflowApi.listUserTasks as jest.Mock;
 
 describe('PortalPage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockListMyApprovalTasks.mockResolvedValue({ items: [], total: 0, page: 1, size: 4 });
+    mockListMyApprovalTasks.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 4 });
   });
 
   it('renders real published catalogs and links each card to its own apply route', async () => {

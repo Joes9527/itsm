@@ -1514,7 +1514,7 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 		{Name: "MSP管理", Path: "/msp", Icon: "Shield", PermissionCode: "msp:read", SortOrder: 130},
 
 		// 管理菜单
-		{Name: "工作流", Path: "/workflow", Icon: "Workflow", PermissionCode: "workflow:read", SortOrder: 200},
+		{Name: "工作流", Path: "/admin/workflows", Icon: "Workflow", PermissionCode: "workflow:read", SortOrder: 200},
 		{Name: "用户管理", Path: "/admin/users", Icon: "Users", PermissionCode: "user:read", SortOrder: 210},
 		{Name: "角色管理", Path: "/admin/roles", Icon: "Shield", PermissionCode: "role:read", SortOrder: 220},
 		{Name: "组管理", Path: "/admin/groups", Icon: "Users", PermissionCode: "groups:read", SortOrder: 230},
@@ -1587,7 +1587,7 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 	menuPathFixes := map[string]string{
 		"/admin/sla":                "/admin/sla-definitions",
 		"/admin/system":             "/admin/system-config",
-		"/admin/workflows":          "/workflow",
+		"/workflow":                 "/admin/workflows",
 		"/admin/tickets/assignment": "/admin/tickets/assignment-rules",
 		"/admin/tickets/automation": "/admin/tickets/automation-rules",
 	}

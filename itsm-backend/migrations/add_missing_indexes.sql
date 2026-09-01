@@ -65,16 +65,6 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS knowledge_category_idx ON knowledge_arti
 CREATE INDEX CONCURRENTLY IF NOT EXISTS knowledge_published_idx ON knowledge_articles (is_published)
 WHERE is_published = true;
 -- =====================================================
--- 7. 工作流实例表 (Workflow Instances) 索引优化 - 中优先级
--- =====================================================
-CREATE INDEX CONCURRENTLY IF NOT EXISTS wf_instance_tenant_idx ON workflow_instances (tenant_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS wf_instance_ticket_idx ON workflow_instances (ticket_workflow_instances);
--- =====================================================
--- 8. 审批记录表 (Approval Records) 索引优化 - 中优先级
--- =====================================================
-CREATE INDEX CONCURRENTLY IF NOT EXISTS approval_record_ticket_idx ON approval_records (ticket_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS approval_record_workflow_idx ON approval_records (workflow_id);
--- =====================================================
 -- 9. 工单评论表 (Ticket Comments) 索引优化 - 中优先级
 -- =====================================================
 CREATE INDEX CONCURRENTLY IF NOT EXISTS ticket_comment_ticket_id_idx ON ticket_comments (ticket_id);

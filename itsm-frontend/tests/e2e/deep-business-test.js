@@ -333,7 +333,7 @@ async function runDeepTests() {
     { name: 'Problems', url: BASE_URL + '/problems' },
     { name: 'Changes', url: BASE_URL + '/changes' },
     { name: 'Knowledge Base', url: BASE_URL + '/knowledge' },
-    { name: 'Workflow', url: BASE_URL + '/workflow' },
+    { name: 'Workflow', url: BASE_URL + '/admin/workflows' },
     { name: 'Dashboard', url: BASE_URL + '/dashboard' },
     { name: 'SLAs', url: BASE_URL + '/sla' },
     { name: 'Service Requests', url: BASE_URL + '/service-requests' },

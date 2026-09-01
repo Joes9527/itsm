@@ -50,7 +50,7 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
     const pages = [
       '/dashboard', '/tickets', '/incidents', '/problems', '/changes',
       '/service-catalog', '/knowledge', '/cmdb', '/sla', '/sla-dashboard',
-      '/sla-monitor', '/workflow', '/workflows', '/approvals',
+      '/sla-monitor', '/admin/workflows', '/approvals',
       '/assets', '/applications', '/projects', '/licenses', '/reports',
       '/notifications', '/admin/users', '/admin/roles', '/admin/connectors',
       '/admin/sla-definitions', '/admin/overview',

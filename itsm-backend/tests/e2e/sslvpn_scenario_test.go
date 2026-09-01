@@ -455,7 +455,11 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 	require.NotEmpty(t, auditLogsStep3, "audit log for L2 task completed must exist")
 
 	// 5. Verification of all approval decisions for the ticket
-	allDecisions, err := h.workflowSvc.GetApprovalDecisions(ctx, ticketID, h.tenant.ID)
+	allDecisions, err := h.workflowSvc.GetApprovalDecisions(ctx, ticketID, service.ActionActor{
+		TenantID: h.tenant.ID,
+		UserID:   h.fixture.Users.Lixin.ID,
+		Role:     "super_admin",
+	})
 	require.NoError(t, err)
 	require.Len(t, allDecisions, 2, "ticket must have exactly 2 approval decisions in sequence")
 	assert.Equal(t, "UserTask_DeptManagerApproval", allDecisions[0].NodeKey)

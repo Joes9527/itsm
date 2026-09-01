@@ -120,10 +120,6 @@ import (
 	"itsm-backend/ent/toolinvocation"
 	"itsm-backend/ent/user"
 	"itsm-backend/ent/vendor"
-	"itsm-backend/ent/workflow"
-	"itsm-backend/ent/workflowinstance"
-	"itsm-backend/ent/workflowtask"
-	"itsm-backend/ent/workflowversion"
 	"itsm-backend/ent/workitemnumbersequence"
 	"itsm-backend/ent/workitemrelation"
 	"reflect"
@@ -308,10 +304,6 @@ func checkColumn(t, c string) error {
 			vendor.Table:                      vendor.ValidColumn,
 			workitemnumbersequence.Table:      workitemnumbersequence.ValidColumn,
 			workitemrelation.Table:            workitemrelation.ValidColumn,
-			workflow.Table:                    workflow.ValidColumn,
-			workflowinstance.Table:            workflowinstance.ValidColumn,
-			workflowtask.Table:                workflowtask.ValidColumn,
-			workflowversion.Table:             workflowversion.ValidColumn,
 		})
 	})
 	return columnCheck(t, c)

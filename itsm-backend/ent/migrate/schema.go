@@ -4339,7 +4339,6 @@ var (
 		{Name: "updated_at", Type: field.TypeTime},
 		{Name: "department_id", Type: field.TypeInt, Nullable: true},
 		{Name: "parent_id", Type: field.TypeInt, Nullable: true},
-		{Name: "workflow_id", Type: field.TypeInt, Nullable: true},
 	}
 	// TicketCategoriesTable holds the schema information for the "ticket_categories" table.
 	TicketCategoriesTable = &schema.Table{
@@ -4357,12 +4356,6 @@ var (
 				Symbol:     "ticket_categories_ticket_categories_children",
 				Columns:    []*schema.Column{TicketCategoriesColumns[16]},
 				RefColumns: []*schema.Column{TicketCategoriesColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-			{
-				Symbol:     "ticket_categories_workflows_workflow",
-				Columns:    []*schema.Column{TicketCategoriesColumns[17]},
-				RefColumns: []*schema.Column{WorkflowsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 		},
@@ -4800,129 +4793,6 @@ var (
 				Name:    "workitemrelation_tenant_id_target_work_item_id",
 				Unique:  false,
 				Columns: []*schema.Column{WorkItemRelationsColumns[1], WorkItemRelationsColumns[3]},
-			},
-		},
-	}
-	// WorkflowsColumns holds the columns for the "workflows" table.
-	WorkflowsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "name", Type: field.TypeString},
-		{Name: "description", Type: field.TypeString, Nullable: true, Size: 2147483647},
-		{Name: "type", Type: field.TypeString, Default: "ticket"},
-		{Name: "definition", Type: field.TypeJSON},
-		{Name: "version", Type: field.TypeString, Default: "1.0.0"},
-		{Name: "is_active", Type: field.TypeBool, Default: true},
-		{Name: "tenant_id", Type: field.TypeInt},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "department_id", Type: field.TypeInt, Nullable: true},
-	}
-	// WorkflowsTable holds the schema information for the "workflows" table.
-	WorkflowsTable = &schema.Table{
-		Name:       "workflows",
-		Columns:    WorkflowsColumns,
-		PrimaryKey: []*schema.Column{WorkflowsColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "workflows_departments_workflows",
-				Columns:    []*schema.Column{WorkflowsColumns[10]},
-				RefColumns: []*schema.Column{DepartmentsColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-		},
-	}
-	// WorkflowInstancesColumns holds the columns for the "workflow_instances" table.
-	WorkflowInstancesColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "status", Type: field.TypeString, Default: "running"},
-		{Name: "current_step", Type: field.TypeString, Nullable: true},
-		{Name: "context", Type: field.TypeJSON, Nullable: true},
-		{Name: "entity_id", Type: field.TypeInt},
-		{Name: "entity_type", Type: field.TypeString, Default: "ticket"},
-		{Name: "tenant_id", Type: field.TypeInt},
-		{Name: "started_at", Type: field.TypeTime},
-		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "workflow_id", Type: field.TypeInt},
-	}
-	// WorkflowInstancesTable holds the schema information for the "workflow_instances" table.
-	WorkflowInstancesTable = &schema.Table{
-		Name:       "workflow_instances",
-		Columns:    WorkflowInstancesColumns,
-		PrimaryKey: []*schema.Column{WorkflowInstancesColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "workflow_instances_workflows_workflow_instances",
-				Columns:    []*schema.Column{WorkflowInstancesColumns[11]},
-				RefColumns: []*schema.Column{WorkflowsColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
-	}
-	// WorkflowTasksColumns holds the columns for the "workflow_tasks" table.
-	WorkflowTasksColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "task_id", Type: field.TypeString},
-		{Name: "activity_id", Type: field.TypeString},
-		{Name: "name", Type: field.TypeString},
-		{Name: "type", Type: field.TypeString, Default: "user_task"},
-		{Name: "assignee", Type: field.TypeString, Nullable: true},
-		{Name: "candidate_users", Type: field.TypeString, Nullable: true},
-		{Name: "candidate_groups", Type: field.TypeString, Nullable: true},
-		{Name: "status", Type: field.TypeString, Default: "pending"},
-		{Name: "priority", Type: field.TypeString, Default: "medium"},
-		{Name: "form_data", Type: field.TypeJSON, Nullable: true},
-		{Name: "variables", Type: field.TypeJSON, Nullable: true},
-		{Name: "comment", Type: field.TypeString, Nullable: true},
-		{Name: "tenant_id", Type: field.TypeInt},
-		{Name: "due_date", Type: field.TypeTime, Nullable: true},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
-		{Name: "completed_by", Type: field.TypeString, Nullable: true},
-		{Name: "instance_id", Type: field.TypeInt},
-	}
-	// WorkflowTasksTable holds the schema information for the "workflow_tasks" table.
-	WorkflowTasksTable = &schema.Table{
-		Name:       "workflow_tasks",
-		Columns:    WorkflowTasksColumns,
-		PrimaryKey: []*schema.Column{WorkflowTasksColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "workflow_tasks_workflow_instances_workflow_tasks",
-				Columns:    []*schema.Column{WorkflowTasksColumns[19]},
-				RefColumns: []*schema.Column{WorkflowInstancesColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
-	}
-	// WorkflowVersionsColumns holds the columns for the "workflow_versions" table.
-	WorkflowVersionsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "version", Type: field.TypeString},
-		{Name: "bpmn_xml", Type: field.TypeString, Nullable: true, Size: 2147483647},
-		{Name: "process_variables", Type: field.TypeJSON, Nullable: true},
-		{Name: "status", Type: field.TypeString, Default: "draft"},
-		{Name: "change_log", Type: field.TypeString, Nullable: true},
-		{Name: "created_by", Type: field.TypeString, Nullable: true},
-		{Name: "is_current", Type: field.TypeBool, Default: false},
-		{Name: "tenant_id", Type: field.TypeInt},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "workflow_id", Type: field.TypeInt},
-	}
-	// WorkflowVersionsTable holds the schema information for the "workflow_versions" table.
-	WorkflowVersionsTable = &schema.Table{
-		Name:       "workflow_versions",
-		Columns:    WorkflowVersionsColumns,
-		PrimaryKey: []*schema.Column{WorkflowVersionsColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "workflow_versions_workflows_workflow_versions",
-				Columns:    []*schema.Column{WorkflowVersionsColumns[11]},
-				RefColumns: []*schema.Column{WorkflowsColumns[0]},
-				OnDelete:   schema.NoAction,
 			},
 		},
 	}
@@ -5419,10 +5289,6 @@ var (
 		VendorsTable,
 		WorkItemNumberSequencesTable,
 		WorkItemRelationsTable,
-		WorkflowsTable,
-		WorkflowInstancesTable,
-		WorkflowTasksTable,
-		WorkflowVersionsTable,
 		ApplicationTagsTable,
 		ConfigurationItemIncidentsTable,
 		ConfigurationItemTagsTable,
@@ -5521,7 +5387,6 @@ func init() {
 	TicketCcsTable.ForeignKeys[0].RefTable = TicketsTable
 	TicketCategoriesTable.ForeignKeys[0].RefTable = DepartmentsTable
 	TicketCategoriesTable.ForeignKeys[1].RefTable = TicketCategoriesTable
-	TicketCategoriesTable.ForeignKeys[2].RefTable = WorkflowsTable
 	TicketCommentsTable.ForeignKeys[0].RefTable = TicketsTable
 	TicketCommentsTable.ForeignKeys[1].RefTable = UsersTable
 	TicketNotificationsTable.ForeignKeys[0].RefTable = TicketsTable
@@ -5536,10 +5401,6 @@ func init() {
 	UsersTable.ForeignKeys[2].RefTable = GroupsTable
 	UsersTable.ForeignKeys[3].RefTable = TeamsTable
 	UsersTable.ForeignKeys[4].RefTable = TenantsTable
-	WorkflowsTable.ForeignKeys[0].RefTable = DepartmentsTable
-	WorkflowInstancesTable.ForeignKeys[0].RefTable = WorkflowsTable
-	WorkflowTasksTable.ForeignKeys[0].RefTable = WorkflowInstancesTable
-	WorkflowVersionsTable.ForeignKeys[0].RefTable = WorkflowsTable
 	ApplicationTagsTable.ForeignKeys[0].RefTable = ApplicationsTable
 	ApplicationTagsTable.ForeignKeys[1].RefTable = TagsTable
 	ConfigurationItemIncidentsTable.ForeignKeys[0].RefTable = ConfigurationItemsTable

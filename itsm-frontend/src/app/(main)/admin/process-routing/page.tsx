@@ -31,7 +31,7 @@ import type {
 import {
   ProcessBindingApi
 } from '@/lib/api/process-binding-api';
-import { WorkflowApi } from '@/lib/api/workflow-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 import type { Department } from '@/lib/services/department-service';
 import { departmentService } from '@/lib/services/department-service';
 import type { Team } from '@/lib/services/team-service';
@@ -95,10 +95,10 @@ export default function ProcessRoutingPage() {
 
   const loadProcessDefinitions = async () => {
     try {
-      const response = await WorkflowApi.getWorkflows({ page: 1, pageSize: 100 });
-      setProcessDefinitions(response.workflows.map(workflow => ({
-        key: workflow.code,
-        name: workflow.name,
+      const response = await BPMNWorkflowApi.listProcessDefinitions({ page: 1, pageSize: 100 });
+      setProcessDefinitions(response.items.map(definition => ({
+        key: definition.key,
+        name: definition.name,
       })));
     } catch (error) {
       console.error('Failed to load process definitions:', error);

@@ -44,9 +44,6 @@ func (TicketCategory) Fields() []ent.Field {
 		field.Int("department_id").
 			Comment("所属部门ID").
 			Optional(),
-		field.Int("workflow_id").
-			Comment("关联工作流ID").
-			Optional(),
 		field.String("itsm_type").
 			Comment("ITSM类型: Request/Incident/Change").
 			Optional(),
@@ -89,9 +86,5 @@ func (TicketCategory) Edges() []ent.Edge {
 			Field("department_id").
 			Unique().
 			Comment("所属部门"),
-		edge.To("workflow", Workflow.Type).
-			Field("workflow_id").
-			Unique().
-			Comment("关联工作流"),
 	}
 }

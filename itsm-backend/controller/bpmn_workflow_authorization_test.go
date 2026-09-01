@@ -469,12 +469,10 @@ func newBPMNHTTPAuthorizationFixture(t *testing.T) *bpmnHTTPAuthorizationFixture
 	seedBPMNRolePermissions(t, client, tenant.ID, "change_manager", "process_instance:read")
 	seedBPMNRolePermissions(t, client, tenant.ID, "dept_manager", "task:read")
 	actors := map[string]*ent.User{
-		"participant":     createUser("http.participant", "end_user", tenant.ID),
-		"outsider":        createUser("http.outsider", "end_user", tenant.ID),
-		"elevated":        createUser("http.elevated", "sysadmin", tenant.ID),
-		"instance_reader": createUser("http.instance.reader", "change_manager", tenant.ID),
-		"task_reader":     createUser("http.task.reader", "dept_manager", tenant.ID),
-		"cross_tenant":    createUser("http.cross.tenant", "sysadmin", otherTenant.ID),
+		"participant":  createUser("http.participant", "end_user", tenant.ID),
+		"outsider":     createUser("http.outsider", "end_user", tenant.ID),
+		"elevated":     createUser("http.elevated", "sysadmin", tenant.ID),
+		"cross_tenant": createUser("http.cross.tenant", "sysadmin", otherTenant.ID),
 	}
 
 	deployment, err := client.ProcessDeployment.Create().
@@ -544,7 +542,6 @@ func newBPMNHTTPAuthorizationFixture(t *testing.T) *bpmnHTTPAuthorizationFixture
 		ctx.Next()
 	})
 	controller.RegisterRoutes(api)
-	controller.RegisterWorkflowAliasRoutes(api)
 
 	return &bpmnHTTPAuthorizationFixture{
 		client: client, router: router, tenant: tenant, otherTenant: otherTenant, actors: actors, instance: instance, task: task,
@@ -722,29 +719,5 @@ func TestBPMNAuthorizationMatrix(t *testing.T) {
 				runBPMNAuthorizationMatrixCase(t, actor, operation, wantStatus)
 			})
 		}
-	}
-}
-
-func TestBPMNWorkflowAliasesRetainStricterRBAC(t *testing.T) {
-	cases := []struct {
-		name, actor, path string
-		want              int
-	}{
-		{"participant instance alias denied", "participant", "/api/v1/workflow/instances", http.StatusForbidden},
-		{"instance reader alias allowed", "instance_reader", "/api/v1/workflow/instances", http.StatusOK},
-		{"task reader cannot use instance alias", "task_reader", "/api/v1/workflow/instances", http.StatusForbidden},
-		{"participant task alias denied", "participant", "/api/v1/workflow/tasks", http.StatusForbidden},
-		{"task reader alias allowed", "task_reader", "/api/v1/workflow/tasks", http.StatusOK},
-		{"instance reader cannot use task alias", "instance_reader", "/api/v1/workflow/tasks", http.StatusForbidden},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newBPMNHTTPAuthorizationFixture(t)
-			response := f.doAsActor(t, tc.actor, http.MethodGet, tc.path, "")
-			require.Equal(t, tc.want, response.Code, response.Body.String())
-			if tc.want == http.StatusForbidden {
-				assertBPMNDenialBodyIsSafe(t, response, f.tenant.Code, f.otherTenant.Code, "sensitive-candidate-expression", "select ", "sql", "task-variable-secret", "privateVariable")
-			}
-		})
 	}
 }

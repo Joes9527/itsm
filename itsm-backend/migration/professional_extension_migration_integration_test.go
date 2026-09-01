@@ -42,6 +42,11 @@ func TestProfessionalExtensionMigrationEnforcesOneToOneAndAssetLifecycle(t *test
 
 	_, err := db.ExecContext(ctx, `
 		CREATE TABLE ticket_approvals (id BIGSERIAL PRIMARY KEY);
+		CREATE TABLE workflows (id BIGSERIAL PRIMARY KEY);
+		CREATE TABLE workflow_instances (id BIGSERIAL PRIMARY KEY, workflow_id BIGINT REFERENCES workflows(id));
+		CREATE TABLE workflow_tasks (id BIGSERIAL PRIMARY KEY, instance_id BIGINT REFERENCES workflow_instances(id));
+		CREATE TABLE workflow_versions (id BIGSERIAL PRIMARY KEY, workflow_id BIGINT REFERENCES workflows(id));
+		ALTER TABLE ticket_categories ADD COLUMN workflow_id BIGINT REFERENCES workflows(id);
 		INSERT INTO tickets (id, tenant_id, record_class) VALUES
 			(1, 101, 'incident'), (2, 101, 'problem'), (3, 101, 'change_request');
 		INSERT INTO incidents (work_item_id, tenant_id) VALUES (1, 101);
@@ -59,7 +64,12 @@ func TestProfessionalExtensionMigrationEnforcesOneToOneAndAssetLifecycle(t *test
 		CREATE SCHEMA "%s";
 		CREATE TABLE "%s".incidents (title TEXT, work_item_id BIGINT);
 		CREATE TABLE "%s".ticket_approvals (id BIGINT);
-	`, decoySchema, decoySchema, decoySchema))
+		CREATE TABLE "%s".workflows (id BIGINT);
+		CREATE TABLE "%s".workflow_instances (id BIGINT);
+		CREATE TABLE "%s".workflow_tasks (id BIGINT);
+		CREATE TABLE "%s".workflow_versions (id BIGINT);
+		CREATE TABLE "%s".ticket_categories (workflow_id BIGINT);
+	`, decoySchema, decoySchema, decoySchema, decoySchema, decoySchema, decoySchema, decoySchema, decoySchema))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		_, _ = db.ExecContext(context.Background(), fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, decoySchema))
@@ -75,6 +85,26 @@ func TestProfessionalExtensionMigrationEnforcesOneToOneAndAssetLifecycle(t *test
 	var decoyApprovalTable *string
 	require.NoError(t, db.QueryRowContext(ctx, `SELECT to_regclass($1)`, decoySchema+".ticket_approvals").Scan(&decoyApprovalTable))
 	require.NotNil(t, decoyApprovalTable, "migration must not remove same-named tables from another schema")
+	for _, tableName := range []string{"workflows", "workflow_instances", "workflow_tasks", "workflow_versions"} {
+		var currentTable *string
+		require.NoError(t, db.QueryRowContext(ctx, `SELECT to_regclass(format('%I.%I', current_schema(), $1::text))`, tableName).Scan(&currentTable))
+		require.Nil(t, currentTable, "legacy %s runtime table must be removed", tableName)
+		var decoyTable *string
+		require.NoError(t, db.QueryRowContext(ctx, `SELECT to_regclass($1)`, decoySchema+"."+tableName).Scan(&decoyTable))
+		require.NotNil(t, decoyTable, "migration must not remove decoy %s table", tableName)
+	}
+	var categoryWorkflowColumns int
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM information_schema.columns
+		WHERE table_schema = current_schema() AND table_name = 'ticket_categories' AND column_name = 'workflow_id'
+	`).Scan(&categoryWorkflowColumns))
+	require.Zero(t, categoryWorkflowColumns, "legacy ticket category workflow binding must be removed")
+	var decoyCategoryWorkflowColumns int
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT COUNT(*) FROM information_schema.columns
+		WHERE table_schema = $1 AND table_name = 'ticket_categories' AND column_name = 'workflow_id'
+	`, decoySchema).Scan(&decoyCategoryWorkflowColumns))
+	require.Equal(t, 1, decoyCategoryWorkflowColumns, "migration must not mutate decoy ticket category")
 	for tableName, removedColumns := range map[string][]string{
 		"incidents": {"reporter_id", "assignee_id", "category", "subcategory", "source", "tenant_id", "version", "created_at", "updated_at", "resolved_at", "closed_at", "deleted_at"},
 		"problems":  {"category", "assignee_id", "created_by", "tenant_id", "created_at", "updated_at", "resolved_at", "closed_at", "deleted_at"},
@@ -619,6 +649,7 @@ func openProfessionalExtensionMigrationDB(t *testing.T) *sql.DB {
 			record_class TEXT NOT NULL,
 			deleted_at TIMESTAMPTZ
 		);
+		CREATE TABLE ticket_categories (id BIGINT PRIMARY KEY);
 		CREATE TABLE incidents (
 			id BIGSERIAL PRIMARY KEY,
 			title TEXT, description TEXT, status TEXT, priority TEXT,

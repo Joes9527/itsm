@@ -244,14 +244,6 @@ type Tx struct {
 	WorkItemNumberSequence *WorkItemNumberSequenceClient
 	// WorkItemRelation is the client for interacting with the WorkItemRelation builders.
 	WorkItemRelation *WorkItemRelationClient
-	// Workflow is the client for interacting with the Workflow builders.
-	Workflow *WorkflowClient
-	// WorkflowInstance is the client for interacting with the WorkflowInstance builders.
-	WorkflowInstance *WorkflowInstanceClient
-	// WorkflowTask is the client for interacting with the WorkflowTask builders.
-	WorkflowTask *WorkflowTaskClient
-	// WorkflowVersion is the client for interacting with the WorkflowVersion builders.
-	WorkflowVersion *WorkflowVersionClient
 
 	// lazily loaded.
 	client     *Client
@@ -499,10 +491,6 @@ func (tx *Tx) init() {
 	tx.Vendor = NewVendorClient(tx.config)
 	tx.WorkItemNumberSequence = NewWorkItemNumberSequenceClient(tx.config)
 	tx.WorkItemRelation = NewWorkItemRelationClient(tx.config)
-	tx.Workflow = NewWorkflowClient(tx.config)
-	tx.WorkflowInstance = NewWorkflowInstanceClient(tx.config)
-	tx.WorkflowTask = NewWorkflowTaskClient(tx.config)
-	tx.WorkflowVersion = NewWorkflowVersionClient(tx.config)
 }
 
 // txDriver wraps the given dialect.Tx with a nop dialect.Driver implementation.

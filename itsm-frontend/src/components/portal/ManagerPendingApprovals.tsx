@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { App, Alert, Button, Input, Modal, Spin, Tag } from 'antd';
 import { CheckCircle, XCircle, Clock, ShieldCheck } from 'lucide-react';
-import { WorkflowApi, type BpmnMyTask } from '@/lib/api/workflow-api';
+import { BPMNWorkflowApi, type UserTask } from '@/lib/api/bpmn-workflow-api';
 
 interface PendingApprovalItem {
   id: number;
@@ -30,12 +30,12 @@ function formatCreatedAt(dateString?: string): string {
   });
 }
 
-function readTaskVariable(task: BpmnMyTask, key: string): string | undefined {
+function readTaskVariable(task: UserTask, key: string): string | undefined {
   const value = task.taskVariables?.[key];
   return typeof value === 'string' && value.trim() ? value : undefined;
 }
 
-function toPendingApproval(task: BpmnMyTask): PendingApprovalItem {
+function toPendingApproval(task: UserTask): PendingApprovalItem {
   return {
     id: task.id,
     title: task.taskName || task.taskDefinitionKey || '-',
@@ -50,12 +50,12 @@ function toPendingApproval(task: BpmnMyTask): PendingApprovalItem {
   };
 }
 
-async function listApprovalTasksByStatus(status: string): Promise<BpmnMyTask[]> {
-  const approvals: BpmnMyTask[] = [];
+async function listApprovalTasksByStatus(status: string): Promise<UserTask[]> {
+  const approvals: UserTask[] = [];
   let page = 1;
 
   while (approvals.length < APPROVAL_PAGE_SIZE) {
-    const result = await WorkflowApi.listMyApprovalTasks({
+    const result = await BPMNWorkflowApi.listUserTasks({
       status,
       page,
       pageSize: APPROVAL_PAGE_SIZE,
@@ -94,7 +94,7 @@ export const ManagerPendingApprovals: React.FC = () => {
       const pages = await Promise.all(
         PENDING_TASK_STATUSES.map(listApprovalTasksByStatus)
       );
-      const uniqueTasks = new Map<number, BpmnMyTask>();
+      const uniqueTasks = new Map<number, UserTask>();
       pages.forEach((tasks) => {
         tasks.forEach((task) => {
           uniqueTasks.set(task.id, task);
@@ -157,7 +157,7 @@ export const ManagerPendingApprovals: React.FC = () => {
   ) => {
     setActionLoading((prev) => ({ ...prev, [id]: true }));
     try {
-      await WorkflowApi.submitTaskDecision(id, {
+      await BPMNWorkflowApi.submitApprovalDecision(id, {
         action,
         ...(comment ? { comment } : {}),
       });

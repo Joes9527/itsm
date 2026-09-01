@@ -1400,54 +1400,6 @@ func (f WorkItemRelationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.V
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.WorkItemRelationMutation", m)
 }
 
-// The WorkflowFunc type is an adapter to allow the use of ordinary
-// function as Workflow mutator.
-type WorkflowFunc func(context.Context, *ent.WorkflowMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f WorkflowFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.WorkflowMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.WorkflowMutation", m)
-}
-
-// The WorkflowInstanceFunc type is an adapter to allow the use of ordinary
-// function as WorkflowInstance mutator.
-type WorkflowInstanceFunc func(context.Context, *ent.WorkflowInstanceMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f WorkflowInstanceFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.WorkflowInstanceMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.WorkflowInstanceMutation", m)
-}
-
-// The WorkflowTaskFunc type is an adapter to allow the use of ordinary
-// function as WorkflowTask mutator.
-type WorkflowTaskFunc func(context.Context, *ent.WorkflowTaskMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f WorkflowTaskFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.WorkflowTaskMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.WorkflowTaskMutation", m)
-}
-
-// The WorkflowVersionFunc type is an adapter to allow the use of ordinary
-// function as WorkflowVersion mutator.
-type WorkflowVersionFunc func(context.Context, *ent.WorkflowVersionMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f WorkflowVersionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.WorkflowVersionMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.WorkflowVersionMutation", m)
-}
-
 // Condition is a hook condition function.
 type Condition func(context.Context, ent.Mutation) bool
 

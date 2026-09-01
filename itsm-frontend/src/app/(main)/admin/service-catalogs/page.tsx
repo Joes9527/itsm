@@ -41,7 +41,7 @@ import {
 } from 'antd';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
 import { CMDBApi } from '@/lib/api/cmdb-api';
-import { WorkflowApi } from '@/lib/api/workflow-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 import { BatchActionBar, type BatchAction } from '@/components/business/BatchActionBar';
 import { CustomFieldsEditor } from '@/components/common/CustomFieldsEditor';
 import type {
@@ -120,12 +120,12 @@ const ServiceCatalogManagement = () => {
         const [types, services, workflows] = await Promise.all([
 		  CMDBApi.getCITypes(),
           CMDBApi.getCloudServices(),
-          WorkflowApi.getWorkflows({ page: 1, pageSize: 100 }),
+		  BPMNWorkflowApi.listProcessDefinitions({ page: 1, pageSize: 100 }),
         ]);
         setCiTypes(types || []);
         setCloudServices(services || []);
         setProcessDefinitions(
-          (workflows.workflows || []).map(w => ({ key: w.code, name: w.name }))
+          workflows.items.map(w => ({ key: w.key, name: w.name }))
         );
       } catch (error) {
         message.error('加载CMDB选项失败');

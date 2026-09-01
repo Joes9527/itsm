@@ -9,9 +9,10 @@ import { FilterToolbarCard } from '@/components/ui/FilterToolbarCard';
 import { LoadingEmptyError } from '@/components/ui/LoadingEmptyError';
 import { ManagementNotice, ManagementPageHeader } from '@/components/ui/ManagementPageHeader';
 import { StatsOverview } from '@/components/ui/StatsOverview';
-import { WorkflowApi } from '@/lib/api/workflow-api';
+import { BPMNWorkflowApi, type ProcessDefinition } from '@/lib/api/bpmn-workflow-api';
+import { userTaskToNodeInstance } from '@/lib/workflow/bpmn-view-model';
 import BPMNDashboardApi from '@/lib/api/bpmn-dashboard-api';
-import type { NodeInstance, WorkflowDefinition } from '@/types/workflow';
+import type { NodeInstance } from '@/types/workflow';
 import type { ProcessAuditLog } from '@/lib/api/bpmn-dashboard-api';
 
 type InstanceRow = {
@@ -104,7 +105,7 @@ export default function WorkflowInstancesPage() {
   // 发起流程弹窗状态
   const [startModalVisible, setStartModalVisible] = useState(false);
   const [startSubmitting, setStartSubmitting] = useState(false);
-  const [definitions, setDefinitions] = useState<WorkflowDefinition[]>([]);
+  const [definitions, setDefinitions] = useState<ProcessDefinition[]>([]);
   const [definitionsLoading, setDefinitionsLoading] = useState(false);
   const [startForm] = Form.useForm();
 
@@ -112,28 +113,24 @@ export default function WorkflowInstancesPage() {
     try {
       setLoading(true);
       const [instanceResponse, statsResponse] = await Promise.all([
-        WorkflowApi.getInstances({
-          workflowId: keyword || undefined,
+        BPMNWorkflowApi.listProcessInstances({
+          processDefinitionKey: keyword || undefined,
           status,
           page: 1,
           pageSize: 50,
         }),
-        WorkflowApi.getInstanceStats({
+        BPMNWorkflowApi.getInstanceStats({
           processDefinitionKey: keyword || undefined,
-          status,
         }),
       ]);
 
-      const rows = (instanceResponse.instances || []).map(instance => ({
-        id: instance.id,
-        businessKey:
-          (instance as unknown as Record<string, string>).businessKey ||
-          instance.workflowId ||
-          '-',
-        processDefinitionKey: instance.workflowId || '-',
+      const rows = instanceResponse.items.map(instance => ({
+        id: instance.processInstanceId,
+        businessKey: instance.businessKey || '-',
+        processDefinitionKey: instance.processDefinitionKey,
         status: String(instance.status),
-        startTime: instance.startTime?.toISOString(),
-        endTime: instance.endTime?.toISOString(),
+        startTime: instance.startTime,
+        endTime: instance.endTime,
       }));
 
       setInstances(rows);
@@ -150,12 +147,13 @@ export default function WorkflowInstancesPage() {
   const loadInstanceDetail = async (instanceId: string) => {
     try {
       setDetailLoading(true);
+      const instance = await BPMNWorkflowApi.getProcessInstance(instanceId);
       const [tasksRes, timelineRes] = await Promise.all([
-        WorkflowApi.getNodeInstances(instanceId),
+        BPMNWorkflowApi.listUserTasks({ processInstanceId: instance.id, page: 1, pageSize: 100 }),
         BPMNDashboardApi.getProcessTimeline(instanceId).catch(() => []),
       ]);
       
-      setTasks(tasksRes || []);
+      setTasks(tasksRes.items.map(userTaskToNodeInstance));
       setAuditLogs(timelineRes || []);
     } catch (error) {
       console.error('Failed to load instance detail:', error);
@@ -179,8 +177,12 @@ export default function WorkflowInstancesPage() {
     setStartModalVisible(true);
     setDefinitionsLoading(true);
     try {
-      const { workflows } = await WorkflowApi.getWorkflows({ page: 1, pageSize: 100 });
-      setDefinitions(workflows.filter(w => String(w.status) === 'active'));
+      const result = await BPMNWorkflowApi.listProcessDefinitions({
+        page: 1,
+        pageSize: 100,
+        isActive: true,
+      });
+      setDefinitions(result.items);
     } catch {
       message.error('加载流程定义失败');
       setDefinitions([]);
@@ -203,12 +205,12 @@ export default function WorkflowInstancesPage() {
         }
       }
       setStartSubmitting(true);
-      const instance = await WorkflowApi.startWorkflow({
-        workflowId: values.processDefinitionKey,
-        businessKey: values.businessKey || undefined,
+      const instance = await BPMNWorkflowApi.startProcess({
+        processDefinitionKey: values.processDefinitionKey,
+        businessKey: values.businessKey,
         variables: variables as Record<string, unknown> | undefined,
       });
-      message.success(`流程实例已启动：${instance.id}`);
+      message.success(`流程实例已启动：${instance.processInstanceId}`);
       setStartModalVisible(false);
       startForm.resetFields();
       loadData();
@@ -236,14 +238,14 @@ export default function WorkflowInstancesPage() {
     if (!instanceId) return;
     (async () => {
       try {
-        const instance = await WorkflowApi.getInstance(instanceId);
+        const instance = await BPMNWorkflowApi.getProcessInstance(instanceId);
         const row: InstanceRow = {
-          id: instance.id,
-          businessKey: (instance as unknown as Record<string, string>).businessKey || instance.workflowId || '-',
-          processDefinitionKey: instance.workflowId || '-',
+          id: instance.processInstanceId,
+          businessKey: instance.businessKey || '-',
+          processDefinitionKey: instance.processDefinitionKey,
           status: String(instance.status),
-          startTime: instance.startTime?.toISOString(),
-          endTime: instance.endTime?.toISOString(),
+          startTime: instance.startTime,
+          endTime: instance.endTime,
         };
         handleViewDetail(row);
       } catch (error) {
@@ -251,7 +253,6 @@ export default function WorkflowInstancesPage() {
         message.error('未找到该流程实例');
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   const columns = useMemo(
@@ -323,7 +324,7 @@ export default function WorkflowInstancesPage() {
                       cancelText: '取消',
                       onOk: async () => {
                         try {
-                          await WorkflowApi.suspendWorkflow(record.id);
+                          await BPMNWorkflowApi.suspendProcess(record.id, '前端暂停');
                           message.success('实例已暂停');
                           loadData();
                         } catch {
@@ -349,7 +350,7 @@ export default function WorkflowInstancesPage() {
                       cancelText: '取消',
                       onOk: async () => {
                         try {
-                          await WorkflowApi.terminateWorkflow(record.id, '前端终止');
+                          await BPMNWorkflowApi.terminateProcess(record.id, '前端终止');
                           message.success('实例已终止');
                           loadData();
                         } catch {
@@ -376,7 +377,7 @@ export default function WorkflowInstancesPage() {
                     cancelText: '取消',
                     onOk: async () => {
                       try {
-                        await WorkflowApi.resumeWorkflow(record.id);
+                        await BPMNWorkflowApi.resumeProcess(record.id);
                         message.success('实例已恢复');
                         loadData();
                       } catch {
@@ -691,14 +692,15 @@ export default function WorkflowInstancesPage() {
               showSearch
               optionFilterProp="label"
               loading={definitionsLoading}
-              options={definitions.map(w => ({ label: `${w.name} (${w.code})`, value: w.code }))}
+              options={definitions.map(w => ({ label: `${w.name} (${w.key})`, value: w.key }))}
               notFoundContent="没有已激活的流程定义，请先部署/激活"
             />
           </Form.Item>
           <Form.Item
             name="businessKey"
-            label="业务键（可选）"
-            tooltip="关联的业务单据标识，如工单号、变更号；留空将自动生成"
+            label="业务键"
+            tooltip="关联的业务单据标识，如 ticket:123 或 change:456"
+            rules={[{ required: true, message: '请输入业务键' }]}
           >
             <Input placeholder="例如 TICKET-2026-0001" />
           </Form.Item>

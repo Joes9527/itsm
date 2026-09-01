@@ -43,6 +43,70 @@ func TestBPMNProcessEngine_NewCustomProcessEngine(t *testing.T) {
 	require.NotNil(t, engine.exprEngine)
 }
 
+func TestBPMNProcessEngine_GetTasksUsesTenantScopedProcessTasks(t *testing.T) {
+	ctx := context.Background()
+	client := enttest.Open(t, "sqlite3", "file:get_tasks_process_task?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	logger := zaptest.NewLogger(t).Sugar()
+
+	deployment, err := client.ProcessDeployment.Create().
+		SetDeploymentID("get-tasks-deployment").
+		SetDeploymentName("Get Tasks").
+		SetTenantID(101).
+		Save(ctx)
+	require.NoError(t, err)
+	definition, err := client.ProcessDefinition.Create().
+		SetKey("get-tasks").
+		SetName("Get Tasks").
+		SetBpmnXML([]byte("<definitions/>")).
+		SetDeploymentID(deployment.ID).
+		SetTenantID(101).
+		Save(ctx)
+	require.NoError(t, err)
+	instance, err := client.ProcessInstance.Create().
+		SetProcessInstanceID("get-tasks-instance").
+		SetProcessDefinitionKey(definition.Key).
+		SetProcessDefinitionID(definition.ID).
+		SetTenantID(101).
+		Save(ctx)
+	require.NoError(t, err)
+
+	_, err = client.ProcessTask.Create().
+		SetTaskID("canonical-task").
+		SetProcessInstanceID(instance.ID).
+		SetProcessDefinitionKey(definition.Key).
+		SetTaskDefinitionKey("approve").
+		SetTaskName("Canonical approval").
+		SetAssignee("alice").
+		SetTenantID(101).
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = client.ProcessTask.Create().
+		SetTaskID("completed-task").
+		SetProcessInstanceID(instance.ID).
+		SetProcessDefinitionKey(definition.Key).
+		SetTaskDefinitionKey("completed").
+		SetTaskName("Completed approval").
+		SetAssignee("alice").
+		SetStatus("completed").
+		SetCompletedTime(time.Now()).
+		SetTenantID(101).
+		Save(ctx)
+	require.NoError(t, err)
+
+	engine := NewCustomProcessEngine(client, logger).(*CustomProcessEngine)
+	getTasks := engine.exprEngine.Functions["getTasks"].(func(context.Context, string) []interface{})
+	tenantCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, 101)
+	tasks := getTasks(tenantCtx, "alice")
+	require.Len(t, tasks, 1)
+	assert.Equal(t, map[string]interface{}{
+		"id":          "canonical-task",
+		"name":        "Canonical approval",
+		"instance_id": instance.ID,
+	}, tasks[0])
+	assert.Empty(t, getTasks(context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, 202), "alice"))
+}
+
 // ==================== 流程查找方法测试 ====================
 
 func TestBPMNProcessEngine_FindOutgoingFlows(t *testing.T) {

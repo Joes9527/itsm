@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Layout, Tabs, Form, Modal, Tag, Button, Space, Typography, Switch, App } from 'antd';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { History, AlertTriangle, CheckCircle, XCircle, Bug, GitCompare } from 'lucide-react';
-import { WorkflowAPI } from '@/lib/api/workflow-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 import { UserApi } from '@/lib/api/user-api';
 import { RoleAPI } from '@/lib/api/role-api';
 import { GroupAPI } from '@/lib/api/group-api';
@@ -121,7 +121,9 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
   const [workflowVersions, setWorkflowVersions] = useState<WorkflowVersion[]>([]);
   const [userList, setUserList] = useState<{ id: number; name: string; username: string }[]>([]);
   const [roleList, setRoleList] = useState<{ id: number; name: string; code: string }[]>([]);
-  const [groupList, setGroupList] = useState<{ id: number; name: string; description?: string; memberCount?: number }[]>([]);
+  const [groupList, setGroupList] = useState<
+    { id: number; name: string; description?: string; memberCount?: number }[]
+  >([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [loadingRoles, setLoadingRoles] = useState(false);
   const [loadingGroups, setLoadingGroups] = useState(false);
@@ -142,7 +144,10 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
 
   // 版本对比相关状态
   const [showVersionCompare, setShowVersionCompare] = useState(false);
-  const [compareVersions, setCompareVersions] = useState<{ version1?: WorkflowVersion; version2?: WorkflowVersion }>({});
+  const [compareVersions, setCompareVersions] = useState<{
+    version1?: WorkflowVersion;
+    version2?: WorkflowVersion;
+  }>({});
 
   // AI模态框状态
   const [showAIModal, setShowAIModal] = useState(false);
@@ -251,11 +256,11 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
     if (id === 'new' || !id) return;
 
     try {
-      const response = (await WorkflowAPI.getProcessDefinition(id)) as any;
+      const response = await BPMNWorkflowApi.getProcessDefinition(id);
 
       if (!response || (!response.key && !response.id && !response.name)) {
         message.error('加载工作流失败，该工作流可能不存在');
-        router.push('/workflow');
+        router.push('/admin/workflows');
         return;
       }
 
@@ -276,13 +281,13 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
         }
       }
 
-	  const workflowData: WorkflowDefinition = {
-		id: response.code || response.key || response.id,
+      const workflowData: WorkflowDefinition = {
+        id: response.key,
         name: response.name || '未命名工作流',
         description: response.description || '',
         version: (response.version || '1').toString(),
-        category: response.category || response.type || 'general',
-		status: response.status === 'active' || response.isActive ? 'active' : 'inactive',
+        category: response.category || 'general',
+        status: response.isActive ? 'active' : 'inactive',
         xml: xmlContent,
         createdAt: response.createdAt || new Date().toISOString(),
         updatedAt: response.updatedAt || new Date().toISOString(),
@@ -312,11 +317,11 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
     if (id === 'new') return;
 
     try {
-      const versions = await WorkflowAPI.getProcessVersions(id);
-      const normalized = (versions as any[]).map((version, index) => ({
-        id: version.id || version.key || `version-${index}`,
+      const versions = await BPMNWorkflowApi.listVersions(id);
+      const normalized = versions.map(version => ({
+        id: version.id,
         version: String(version.version ?? '1.0.0'),
-        status: version.status || (version.isActive ? 'active' : 'draft'),
+        status: version.isActive ? ('active' as const) : ('draft' as const),
         createdAt: version.createdAt || new Date().toISOString(),
         createdBy: version.createdBy || '系统',
         changeLog: version.changeLog || '',
@@ -325,32 +330,6 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
       setWorkflowVersions(normalized);
     } catch (error) {
       console.error('加载工作流版本失败:', error);
-    }
-  };
-
-  // 加载工作流配置
-  const loadWorkflowConfig = async (key: string) => {
-    try {
-      const response = (await WorkflowAPI.getProcessDefinition(key)) as any;
-      if (response) {
-        setApprovalConfig({
-          requireApproval: response.requireApproval ?? true,
-          approvalType: response.approvalType || 'sequential',
-          approvers: response.approvers || [],
-          autoApproveRoles: response.autoApproveRoles || [],
-          escalationRules: response.escalationRules || [],
-        });
-
-        const slaConfig = response.slaConfig;
-        if (slaConfig && workflow) {
-          setWorkflow({
-            ...workflow,
-            slaConfig: slaConfig,
-          });
-        }
-      }
-    } catch (error) {
-      console.error('加载工作流配置失败:', error);
     }
   };
 
@@ -367,7 +346,6 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
     if (id && id !== 'new') {
       loadWorkflow(id);
       loadWorkflowVersions(id);
-      loadWorkflowConfig(id);
     } else if (!id) {
       setShowNewWorkflowModal(true);
     }
@@ -417,11 +395,11 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
     try {
       const issues = (await api.validate()) as ValidationIssue[];
       setValidationIssues(issues);
-      
+
       if (issues.length > 0) {
         const errorCount = issues.filter((i: ValidationIssue) => i.type === 'error').length;
         const warningCount = issues.filter((i: ValidationIssue) => i.type === 'warning').length;
-        
+
         if (showSuccessMessage) {
           if (errorCount > 0) {
             message.error(`校验发现 ${errorCount} 个错误，${warningCount} 个警告`);
@@ -431,12 +409,12 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
             message.success('流程校验通过');
           }
         }
-        
+
         // 如果有错误，自动显示校验面板
         if (errorCount > 0) {
           setShowValidationPanel(true);
         }
-        
+
         return issues;
       } else {
         if (showSuccessMessage) {
@@ -470,7 +448,7 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
           cancelText: '取消',
           onOk: async () => {
             await doSave(xml);
-          }
+          },
         });
         return;
       }
@@ -486,35 +464,33 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
     setSaving(true);
     try {
       if (workflow.id === 'new') {
-        const tenantId = httpClient.getTenantId() || 1;
-        const response = (await WorkflowAPI.createProcessDefinition({
+        const key = `workflow_${Date.now()}`;
+        const response = await BPMNWorkflowApi.createProcessDefinition({
+          key,
           name: workflow.name,
           description: workflow.description,
           category: workflow.category,
           bpmnXml: xml,
-          tenantId,
-        } as any)) as any;
+        });
 
-		updateWorkflow({
-		  id: response.code || response.key || response.id,
+        updateWorkflow({
+          id: response.key,
           version: response.version || '1.0.0',
           status: 'draft',
         });
 
         message.success('工作流创建成功');
       } else {
-        const response = (await WorkflowAPI.updateProcessDefinition(
+        const response = await BPMNWorkflowApi.updateProcessDefinition(
           workflow.id,
+          workflow.version,
           {
             name: workflow.name,
             description: workflow.description,
             category: workflow.category,
             bpmnXml: xml,
-            approvalConfig: approvalConfig,
-            slaConfig: workflow.slaConfig,
-          } as any,
-          workflow.version
-        )) as any;
+          }
+        );
 
         updateWorkflow({
           version: response.version || workflow.version,
@@ -552,7 +528,7 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
 
     setDeploying(true);
     try {
-      await WorkflowAPI.deployProcessDefinition(workflow.id, workflow.version);
+      await BPMNWorkflowApi.setProcessDefinitionActive(workflow.id, workflow.version, true);
       updateWorkflow({ status: 'active' });
       message.success('工作流部署成功');
     } catch (error) {
@@ -583,28 +559,27 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
 
       if (workflow.id === 'new') {
         const createData = {
+          key: `workflow_${Date.now()}`,
           name: workflow.name,
           description: workflow.description || '',
           category: workflow.category || 'general',
           bpmnXml: xml,
-          tenantId: httpClient.getTenantId() || 1,
         };
 
-        const response = (await WorkflowAPI.createProcessDefinition(createData as any)) as any;
+        const response = await BPMNWorkflowApi.createProcessDefinition(createData);
 
         if (!response) {
           throw new Error('创建工作流失败：服务器返回空响应');
         }
 
         const newVersion = response.version || '1.0.0';
-		const newKey = response.code || response.key || response.id;
+        const newKey = response.key;
 
         if (!newKey) {
           throw new Error('创建工作流失败：未获取到工作流ID');
         }
 
-        await new Promise(resolve => setTimeout(resolve, 500));
-        await WorkflowAPI.deployProcessDefinition(newKey, newVersion);
+        await BPMNWorkflowApi.setProcessDefinitionActive(newKey, newVersion, true);
 
         updateWorkflow({
           id: newKey,
@@ -619,12 +594,10 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
           description: workflow.description || '',
           category: workflow.category || 'general',
           bpmnXml: xml,
-          approvalConfig: approvalConfig,
-          slaConfig: workflow.slaConfig,
         };
 
-        await WorkflowAPI.updateProcessDefinition(workflow.id, updateData, currentVersion);
-        await WorkflowAPI.deployProcessDefinition(workflow.id, currentVersion);
+        await BPMNWorkflowApi.updateProcessDefinition(workflow.id, currentVersion, updateData);
+        await BPMNWorkflowApi.setProcessDefinitionActive(workflow.id, currentVersion, true);
 
         updateWorkflow({ status: 'active' });
         message.success('工作流保存并部署成功');
@@ -666,14 +639,14 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
     if (!workflow) return;
 
     try {
-	  await WorkflowAPI.createWorkflowVersion({
-		processDefinitionKey: workflow.id,
-		name: workflow.name,
-		description: workflow.description,
-		bpmnXml: currentXML,
-		changeLog: '创建新版本',
-	  });
-	  await loadWorkflowVersions(workflow.id);
+      await BPMNWorkflowApi.createVersion({
+        processDefinitionKey: workflow.id,
+        name: workflow.name,
+        description: workflow.description,
+        bpmnXml: currentXML,
+        changeLog: '创建新版本',
+      });
+      await loadWorkflowVersions(workflow.id);
 
       message.success('新版本创建成功');
       setShowVersionModal(false);
@@ -692,7 +665,7 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
   // 跳转到问题元素
   const jumpToIssue = (issue: ValidationIssue) => {
     if (!issue.elementId) return;
-    
+
     const api = getBpmnDesignerApi();
     if (api) {
       api.selectElement(issue.elementId);
@@ -781,7 +754,7 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
 
   return (
     <WorkflowDesignerContext.Provider value={contextValue}>
-      <Layout className="h-screen">
+      <Layout className='h-screen'>
         {/* 工具栏 */}
         <WorkflowToolbar
           workflow={workflow}
@@ -792,22 +765,23 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
           onDeploy={handleDeploy}
           currentXML={currentXML}
           onValidate={validateWorkflow}
-          validationIssues={validationIssues} onAIClick={() => setShowAIModal(true)}
+          validationIssues={validationIssues}
+          onAIClick={() => setShowAIModal(true)}
         />
 
-        <Content className="p-4 md:p-6 bg-gray-50 overflow-hidden">
+        <Content className='p-4 md:p-6 bg-gray-50 overflow-hidden'>
           <Tabs
             activeKey={activeTab}
             onChange={handleTabChange}
-            size="small"
+            size='small'
             destroyOnHidden={false}
             items={[
               {
                 key: 'designer',
                 label: '流程设计',
                 children: (
-                  <div className="flex flex-col md:flex-row gap-2 md:gap-4 h-[calc(100vh-220px)] md:h-[calc(100vh-200px)]">
-                    <div className="flex-1 min-w-0 min-h-[300px] md:min-h-0">
+                  <div className='flex flex-col md:flex-row gap-2 md:gap-4 h-[calc(100vh-220px)] md:h-[calc(100vh-200px)]'>
+                    <div className='flex-1 min-w-0 min-h-[300px] md:min-h-0'>
                       <WorkflowCanvas
                         currentXML={currentXML}
                         onSave={handleSave}
@@ -818,7 +792,7 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
                         onSelectionChange={handleSelectionChange}
                       />
                     </div>
-                    <div className="w-full md:w-80 shrink-0 overflow-y-auto bg-white rounded-lg shadow-sm border border-gray-200">
+                    <div className='w-full md:w-80 shrink-0 overflow-y-auto bg-white rounded-lg shadow-sm border border-gray-200'>
                       <WorkflowNodeInspector
                         selection={selectedNode}
                         onUpdateProperties={handleUpdateNodeProperties}
@@ -873,71 +847,73 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
                   <span>
                     校验结果
                     {validationIssues.length > 0 && (
-                      <Tag color={validationIssues.some(i => i.type === 'error') ? 'error' : 'warning'} className="ml-1">
+                      <Tag
+                        color={validationIssues.some(i => i.type === 'error') ? 'error' : 'warning'}
+                        className='ml-1'
+                      >
                         {validationIssues.length}
                       </Tag>
                     )}
                   </span>
                 ),
                 children: (
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 h-[calc(100vh-200px)] overflow-y-auto">
-                    <div className="mb-4">
+                  <div className='bg-white rounded-lg shadow-sm border border-gray-200 p-6 h-[calc(100vh-200px)] overflow-y-auto'>
+                    <div className='mb-4'>
                       <Space>
-                        <Button 
-                          type="primary" 
-                          icon={<Bug />} 
+                        <Button
+                          type='primary'
+                          icon={<Bug />}
                           onClick={() => validateWorkflow(true)}
                           loading={validating}
                         >
                           重新校验
                         </Button>
-                        <Switch 
-                          checked={autoValidate} 
-                          onChange={setAutoValidate} 
-                          checkedChildren="自动校验开启" 
-                          unCheckedChildren="自动校验关闭"
+                        <Switch
+                          checked={autoValidate}
+                          onChange={setAutoValidate}
+                          checkedChildren='自动校验开启'
+                          unCheckedChildren='自动校验关闭'
                         />
                       </Space>
                     </div>
 
                     {validationIssues.length === 0 ? (
-                      <div className="text-center py-12">
-                        <CheckCircle className="text-4xl text-green-500 mb-2" />
+                      <div className='text-center py-12'>
+                        <CheckCircle className='text-4xl text-green-500 mb-2' />
                         <Title level={4}>流程校验通过</Title>
-                        <Text type="secondary">未发现任何问题，可以正常部署</Text>
+                        <Text type='secondary'>未发现任何问题，可以正常部署</Text>
                       </div>
                     ) : (
-                      <div className="divide-y divide-gray-100">
+                      <div className='divide-y divide-gray-100'>
                         {validationIssues.map(item => (
                           <div
                             key={`${item.elementId || 'process'}-${item.message}`}
-                            className="cursor-pointer hover:bg-gray-50 transition-colors"
+                            className='cursor-pointer hover:bg-gray-50 transition-colors'
                             onClick={() => item.elementId && jumpToIssue(item)}
                           >
-                            <div className="flex gap-3 px-4 py-3">
-                              <div className="pt-1">
-                                {
-                                item.type === 'error' ? (
-                                  <XCircle className="text-red-500 text-xl" />
+                            <div className='flex gap-3 px-4 py-3'>
+                              <div className='pt-1'>
+                                {item.type === 'error' ? (
+                                  <XCircle className='text-red-500 text-xl' />
                                 ) : item.type === 'warning' ? (
-                                  <AlertTriangle className="text-yellow-500 text-xl" />
+                                  <AlertTriangle className='text-yellow-500 text-xl' />
                                 ) : (
-                                  <CheckCircle className="text-blue-500 text-xl" />
-                                )
-                                }
+                                  <CheckCircle className='text-blue-500 text-xl' />
+                                )}
                               </div>
-                              <div className="min-w-0 flex-1">
+                              <div className='min-w-0 flex-1'>
                                 <Space wrap>
                                   <Text>{item.message}</Text>
                                   {item.elementId && (
-                                    <Tag color="blue">
-                                      {item.elementType?.replace('bpmn:', '') || '元素'}: {item.elementName || item.elementId}
+                                    <Tag color='blue'>
+                                      {item.elementType?.replace('bpmn:', '') || '元素'}:{' '}
+                                      {item.elementName || item.elementId}
                                     </Tag>
                                   )}
                                 </Space>
                                 {item.elementId && (
                                   <div>
-                                    <Text type="secondary" className="text-xs">
+                                    <Text type='secondary' className='text-xs'>
                                       点击定位到该元素
                                     </Text>
                                   </div>
@@ -961,7 +937,7 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
           onClose={() => {
             setShowNewWorkflowModal(false);
             if (!workflow) {
-              router.push('/workflow');
+              router.push('/admin/workflows');
             }
           }}
           onSelectTemplate={templateWorkflow => {
@@ -1040,7 +1016,7 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
 
         {/* 版本对比弹窗 */}
         <Modal
-          title="版本对比"
+          title='版本对比'
           open={showVersionCompare}
           onCancel={() => setShowVersionCompare(false)}
           width={900}
@@ -1048,24 +1024,24 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
         >
           {compareVersions.version1 && compareVersions.version2 ? (
             <div>
-              <div className="mb-4 flex justify-between">
-                <Tag color="blue">版本 {compareVersions.version1.version}</Tag>
-                <span className="mx-2">VS</span>
-                <Tag color="green">版本 {compareVersions.version2.version}</Tag>
+              <div className='mb-4 flex justify-between'>
+                <Tag color='blue'>版本 {compareVersions.version1.version}</Tag>
+                <span className='mx-2'>VS</span>
+                <Tag color='green'>版本 {compareVersions.version2.version}</Tag>
               </div>
-              <div className="grid grid-cols-2 gap-4 h-[600px]">
-                <div className="border border-gray-200 rounded-lg p-4 overflow-y-auto bg-gray-50 font-mono text-xs whitespace-pre-wrap">
+              <div className='grid grid-cols-2 gap-4 h-[600px]'>
+                <div className='border border-gray-200 rounded-lg p-4 overflow-y-auto bg-gray-50 font-mono text-xs whitespace-pre-wrap'>
                   {compareVersions.version1.xml}
                 </div>
-                <div className="border border-gray-200 rounded-lg p-4 overflow-y-auto bg-gray-50 font-mono text-xs whitespace-pre-wrap">
+                <div className='border border-gray-200 rounded-lg p-4 overflow-y-auto bg-gray-50 font-mono text-xs whitespace-pre-wrap'>
                   {compareVersions.version2.xml}
                 </div>
               </div>
             </div>
           ) : (
-            <div className="text-center py-12">
-              <GitCompare className="text-4xl text-gray-400 mb-2" />
-              <Text type="secondary">请选择两个版本进行对比</Text>
+            <div className='text-center py-12'>
+              <GitCompare className='text-4xl text-gray-400 mb-2' />
+              <Text type='secondary'>请选择两个版本进行对比</Text>
             </div>
           )}
         </Modal>
@@ -1076,7 +1052,7 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
           onClose={() => setShowAIModal(false)}
           currentXML={currentXML}
           workflowName={workflow?.name}
-          onApplyGeneratedProcess={(xml) => {
+          onApplyGeneratedProcess={xml => {
             setCurrentXML(xml);
             setHasChanges(true);
           }}

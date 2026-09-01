@@ -1,131 +1,115 @@
-/**
- * BPMN 流程设计器 API（完整版）
- *
- * 对应后端 controller/bpmn_workflow_controller.go
- * 路由前缀：/api/v1/bpmn
- *
- * 包含：
- * - 流程定义管理（CRUD、导入导出、克隆、激活）
- * - 流程实例管理（启动、暂停、恢复、终止）
- * - 任务管理（签收、完成、转派、取消）
- * - 会签管理（创建会签、投票、状态）
- * - 统计（实例统计、任务统计）
- * - 版本管理（创建、激活、回滚、比较）
- * - 变更日志
- */
-
+/** Canonical frontend client for controller/bpmn_workflow_controller.go. */
 import { httpClient } from './http-client';
 
-// ============================================================
-// 类型定义
-// ============================================================
+export interface Pagination {
+  total: number;
+  page: number;
+  pageSize: number;
+}
+interface BackendListResponse<T> {
+  data: T[];
+  pagination: Pagination;
+}
 
-// 流程定义
 export interface ProcessDefinition {
   id: number;
   key: string;
   name: string;
   description?: string;
-  category?: string;
-  version: number;
-  status: 'draft' | 'active' | 'suspended' | 'archived';
-  xml: string;
-  deploymentId?: number;
-  deploymentTime?: string;
-  tenantId?: number;
-  createdBy?: number;
-  createdAt?: string;
-  updatedAt?: string;
+  version: string;
+  category: string;
+  bpmnXml?: string;
+  processVariables?: Record<string, unknown>;
+  isActive: boolean;
+  isLatest: boolean;
+  deploymentId: number;
+  deploymentName?: string;
+  deployedAt?: string;
+  tenantId: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
-export interface ProcessDefinitionListResponse {
+export interface ProcessDefinitionListResponse extends Pagination {
   items: ProcessDefinition[];
-  total: number;
-  page: number;
-  pageSize: number;
 }
-
-// 流程定义请求
 export interface CreateProcessDefinitionRequest {
   key: string;
   name: string;
   description?: string;
   category?: string;
-  xml: string;
+  bpmnXml: string;
+  processVariables?: Record<string, unknown>;
 }
-
 export interface UpdateProcessDefinitionRequest {
   name?: string;
   description?: string;
   category?: string;
-  xml?: string;
+  bpmnXml?: string;
+  processVariables?: Record<string, unknown>;
+  isActive?: boolean;
 }
-
 export interface CloneProcessDefinitionRequest {
   newKey: string;
   newName: string;
-  description?: string;
 }
 
-// 流程实例
 export interface ProcessInstance {
-  id: string;
+  id: number;
+  processInstanceId: string;
   processDefinitionKey: string;
-  processDefinitionVersion?: number;
-  businessKey?: string;
+  processDefinitionId: number;
   status: 'created' | 'running' | 'completed' | 'terminated' | 'suspended';
+  currentActivityId?: string;
+  currentActivityName?: string;
+  variables?: Record<string, unknown>;
+  businessKey?: string;
+  initiator?: string;
   startTime?: string;
   endTime?: string;
-  duration?: number;
-  startUserId?: number;
-  tenantId?: number;
-  variables?: Record<string, unknown>;
+  tenantId: number;
+  createdAt: string;
+  updatedAt: string;
 }
-
-export interface ProcessInstanceListResponse {
+export interface ProcessInstanceListResponse extends Pagination {
   items: ProcessInstance[];
-  total: number;
-  page: number;
-  pageSize: number;
 }
-
 export interface StartProcessRequest {
   processDefinitionKey: string;
-  businessKey?: string;
+  businessKey: string;
   variables?: Record<string, unknown>;
 }
 
-// 任务
 export interface UserTask {
-  id: string;
-  name: string;
+  id: number;
+  taskId: string;
   taskDefinitionKey: string;
-  processInstanceId: string;
-  processDefinitionKey?: string;
-  assignee?: number;
-  assigneeName?: string;
-  candidateUsers?: number[];
-  candidateGroups?: string[];
+  taskName: string;
+  taskType: string;
+  status: string;
+  priority: string;
+  assignee: string;
+  candidateUsers: string;
+  candidateGroups: string;
+  processInstanceId: number;
+  processInstanceKey: string;
+  processDefinitionKey: string;
+  businessKey: string;
+  businessType: string;
+  businessId: number;
+  taskPurpose: string;
+  formKey?: string;
+  taskVariables?: Record<string, unknown>;
   dueDate?: string;
-  priority?: number;
-  status?: string;
-  createdTime?: string;
-  claimedTime?: string;
-  completedTime?: string;
+  createdTime: string;
 }
-
-export interface UserTaskListResponse {
+export interface UserTaskListResponse extends Pagination {
   items: UserTask[];
-  total: number;
-  page: number;
-  pageSize: number;
 }
-
 export interface CompleteTaskRequest {
   variables?: Record<string, unknown>;
   comment?: string;
 }
-
 export interface SubmitApprovalDecisionRequest {
   action: 'approve' | 'reject';
   comment?: string;
@@ -144,122 +128,87 @@ export interface ProcessApprovalDecision {
   businessId?: string;
   actorId: number;
   actorName?: string;
-  action: 'approve' | 'reject' | 'delegate' | 'transfer' | 'add_approver' | 'withdraw' | 'timeout' | 'system_decision';
+  action:
+    | 'approve'
+    | 'reject'
+    | 'delegate'
+    | 'transfer'
+    | 'add_approver'
+    | 'withdraw'
+    | 'timeout'
+    | 'system_decision';
   decision: string;
   comment?: string;
   variablesSnapshot?: Record<string, unknown>;
   createdAt: string;
 }
 
-export interface LegacyApprovalMigrationResult {
-  workflowId: number;
-  processDefinitionKey: string;
-  bpmnXml?: string;
-  skipped: boolean;
-}
-
-export interface AssignTaskRequest {
-  assignee: number;
-}
-
-// 会签
-export interface CounterSignTask {
-  id: string;
-  mainTaskId: string;
-  userId: number;
-  userName?: string;
-  status: 'pending' | 'approved' | 'rejected';
-  comment?: string;
-  createdTime?: string;
-  completedTime?: string;
-}
-
-export interface CounterSignRequest {
-  users: number[];
-  type: 'sequential' | 'parallel';
-  voteType: 'agree' | 'disagree' | 'abstain';
-}
-
-export interface CounterSignStatusResponse {
-  mainTaskId: string;
-  type: string;
-  total: number;
-  approved: number;
-  rejected: number;
-  abstained: number;
-  completed: boolean;
-  createdTime?: string;
-  completedTime?: string;
-}
-
-export interface VoteRequest {
-  vote: 'agree' | 'disagree' | 'abstain';
-  comment?: string;
-}
-
-// 版本
 export interface ProcessVersion {
-  key: string;
-  version: number;
+  id: string;
+  processDefinitionKey: string;
+  version: string;
+  name: string;
+  description: string;
+  bpmnXml: string;
+  deploymentId: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  tenantId: number;
+  changeLog: string;
+  compatibilityNotes: string;
+}
+export interface CreateVersionRequest {
+  processDefinitionKey: string;
   name: string;
   description?: string;
-  xml: string;
-  status: string;
-  isActivated: boolean;
-  createdBy?: number;
-  createdAt?: string;
+  bpmnXml: string;
+  changeLog?: string;
+  compatibilityNotes?: string;
 }
-
-export interface ProcessVersionListResponse {
-  items: ProcessVersion[];
-  total: number;
-  page: number;
-  pageSize: number;
+export interface VersionComparison {
+  baseVersion: ProcessVersion;
+  targetVersion: ProcessVersion;
+  changes: Array<Record<string, string>>;
+  breakingChanges: string[];
+  compatibility: string;
 }
-
-export interface CreateVersionRequest {
-  key: string;
-  name?: string;
-  description?: string;
-  xml: string;
-}
-
-export interface VersionCompareResponse {
-  key: string;
-  version1: number;
-  version2: number;
-  diff: {
-    added: string[];
-    removed: string[];
-    modified: string[];
-  };
-}
-
-// 统计
 export interface InstanceStats {
-  totalInstances: number;
-  runningInstances: number;
-  completedInstances: number;
-  terminatedInstances: number;
-  suspendedInstances: number;
-  avgDurationMinutes?: number;
-  completionRate?: number;
+  total: number;
+  running: number;
+  completed: number;
+  suspended: number;
+  terminated: number;
 }
-
 export interface TaskStats {
   totalTasks: number;
-  pendingTasks: number;
   completedTasks: number;
+  pendingTasks: number;
   overdueTasks: number;
-  avgCompletionTimeMinutes?: number;
-  completionRate?: number;
+  averageCompletion: number;
+  statusBreakdown: Record<string, number>;
+  assigneeBreakdown: Record<string, number>;
+  timeDistribution: Record<string, unknown>;
 }
-
-// 变更日志
+export interface CounterSignRequest {
+  approvalType: 'serial' | 'parallel';
+  approvers: string[];
+  threshold: number;
+}
+export interface CounterSignStatus {
+  parentTaskId: string;
+  total: number;
+  completed: number;
+  approved: number;
+  rejected: number;
+  pending: number;
+  status: string;
+}
 export interface VersionChangeLog {
   id: number;
   processDefinitionKey: string;
-  version: number;
+  version: string;
   changeType: string;
   changedFields: string[];
   changeDetails?: string;
@@ -267,561 +216,320 @@ export interface VersionChangeLog {
   createdAt?: string;
 }
 
-export interface ChangeLogListResponse {
-  items: VersionChangeLog[];
-  total: number;
-  page: number;
-  pageSize: number;
-}
-
-// ============================================================
-// API 类
-// ============================================================
-
 export class BPMNWorkflowApi {
   private static readonly baseUrl = '/api/v1/bpmn';
 
-  static async migrateLegacyApprovalWorkflow(workflowId: number, dryRun = true): Promise<LegacyApprovalMigrationResult> {
-    const res = await httpClient.post<{ data?: LegacyApprovalMigrationResult } | LegacyApprovalMigrationResult>(
-      `/api/v1/approval-workflows/${workflowId}/migrate-to-bpmn?dryRun=${dryRun}`,
-      {}
-    );
-    return (res as { data?: LegacyApprovalMigrationResult }).data ?? (res as LegacyApprovalMigrationResult);
-  }
-
-  // ==================== 流程定义管理 ====================
-
-  /**
-   * 创建流程定义
-   */
   static async createProcessDefinition(
     data: CreateProcessDefinitionRequest
   ): Promise<ProcessDefinition> {
-    const res = await httpClient.post<{ data?: ProcessDefinition } & ProcessDefinition>(
-      `${this.baseUrl}/process-definitions`,
-      data
-    );
-    return (res as { data?: ProcessDefinition }).data ?? (res as ProcessDefinition);
+    return httpClient.post(`${this.baseUrl}/process-definitions`, data);
   }
 
-  /**
-   * 获取流程定义列表
-   */
   static async listProcessDefinitions(params?: {
     page?: number;
     pageSize?: number;
+    key?: string;
     category?: string;
-    status?: string;
-    keyword?: string;
+    isActive?: boolean;
   }): Promise<ProcessDefinitionListResponse> {
     const query: Record<string, string> = {};
     if (params?.page) query.page = String(params.page);
     if (params?.pageSize) query.pageSize = String(params.pageSize);
+    if (params?.key) query.key = params.key;
     if (params?.category) query.category = params.category;
-    if (params?.status) query.status = params.status;
-    if (params?.keyword) query.keyword = params.keyword;
+    if (params?.isActive !== undefined) query.isActive = String(params.isActive);
+    const response = await httpClient.get<BackendListResponse<ProcessDefinition>>(
+      `${this.baseUrl}/process-definitions`,
+      query
+    );
+    return { items: response.data, ...response.pagination };
+  }
 
-    const res = await httpClient.get<
-      { data?: ProcessDefinitionListResponse } & ProcessDefinitionListResponse
-    >(`${this.baseUrl}/process-definitions`, query);
-    return (
-      (res as { data?: ProcessDefinitionListResponse }).data ??
-      (res as ProcessDefinitionListResponse)
+  static async getProcessDefinition(key: string, version?: string): Promise<ProcessDefinition> {
+    return httpClient.get(
+      `${this.baseUrl}/process-definitions/${encodeURIComponent(key)}`,
+      version ? { version } : undefined
     );
   }
 
-  /**
-   * 获取单个流程定义
-   */
-  static async getProcessDefinition(key: string): Promise<ProcessDefinition> {
-    const res = await httpClient.get<{ data?: ProcessDefinition } & ProcessDefinition>(
-      `${this.baseUrl}/process-definitions/${encodeURIComponent(key)}`
-    );
-    return (res as { data?: ProcessDefinition }).data ?? (res as ProcessDefinition);
-  }
-
-  /**
-   * 更新流程定义
-   */
   static async updateProcessDefinition(
     key: string,
+    version: string,
     data: UpdateProcessDefinitionRequest
   ): Promise<ProcessDefinition> {
-    const res = await httpClient.put<{ data?: ProcessDefinition } & ProcessDefinition>(
-      `${this.baseUrl}/process-definitions/${encodeURIComponent(key)}`,
+    return httpClient.put(
+      `${this.baseUrl}/process-definitions/${encodeURIComponent(key)}?version=${encodeURIComponent(version)}`,
       data
     );
-    return (res as { data?: ProcessDefinition }).data ?? (res as ProcessDefinition);
   }
 
-  /**
-   * 删除流程定义
-   */
-  static async deleteProcessDefinition(key: string): Promise<void> {
+  static async deleteProcessDefinition(key: string, version: string): Promise<void> {
     await httpClient.delete(
-      `${this.baseUrl}/process-definitions/${encodeURIComponent(key)}`
+      `${this.baseUrl}/process-definitions/${encodeURIComponent(key)}?version=${encodeURIComponent(version)}`
     );
   }
 
-  /**
-   * 导出流程定义 XML
-   */
-  static async exportProcessDefinition(key: string): Promise<string> {
-    const res = await httpClient.get<string>(
-      `${this.baseUrl}/process-definitions/${encodeURIComponent(key)}/export`
+  static async exportProcessDefinition(
+    key: string,
+    version?: string
+  ): Promise<{ workflow: Record<string, unknown>; exportTime: string; exportVersion: string }> {
+    return httpClient.get(
+      `${this.baseUrl}/process-definitions/${encodeURIComponent(key)}/export`,
+      version ? { version } : undefined
     );
-    return typeof res === 'string' ? res : (res as unknown as string);
   }
 
-  /**
-   * 克隆流程定义
-   */
   static async cloneProcessDefinition(
     key: string,
+    version: string,
     data: CloneProcessDefinitionRequest
   ): Promise<ProcessDefinition> {
-    const res = await httpClient.post<{ data?: ProcessDefinition } & ProcessDefinition>(
-      `${this.baseUrl}/process-definitions/${encodeURIComponent(key)}/clone`,
+    return httpClient.post(
+      `${this.baseUrl}/process-definitions/${encodeURIComponent(key)}/clone?version=${encodeURIComponent(version)}`,
       data
     );
-    return (res as { data?: ProcessDefinition }).data ?? (res as ProcessDefinition);
   }
 
-  /**
-   * 设置流程定义激活状态
-   */
   static async setProcessDefinitionActive(
     key: string,
+    version: string,
     active: boolean
-  ): Promise<ProcessDefinition> {
-    const res = await httpClient.put<{ data?: ProcessDefinition } & ProcessDefinition>(
-      `${this.baseUrl}/process-definitions/${encodeURIComponent(key)}/active`,
+  ): Promise<void> {
+    await httpClient.put(
+      `${this.baseUrl}/process-definitions/${encodeURIComponent(key)}/active?version=${encodeURIComponent(version)}`,
       { active }
     );
-    return (res as { data?: ProcessDefinition }).data ?? (res as ProcessDefinition);
   }
 
-  // ==================== 流程实例管理 ====================
-
-  /**
-   * 启动流程实例
-   */
   static async startProcess(data: StartProcessRequest): Promise<ProcessInstance> {
-    const res = await httpClient.post<{ data?: ProcessInstance } & ProcessInstance>(
-      `${this.baseUrl}/process-instances`,
-      data
-    );
-    return (res as { data?: ProcessInstance }).data ?? (res as ProcessInstance);
+    return httpClient.post(`${this.baseUrl}/process-instances`, data);
   }
 
-  /**
-   * 获取流程实例列表
-   */
   static async listProcessInstances(params?: {
     page?: number;
     pageSize?: number;
     processDefinitionKey?: string;
     status?: string;
-    startTimeFrom?: string;
-    startTimeTo?: string;
+    businessKey?: string;
   }): Promise<ProcessInstanceListResponse> {
     const query: Record<string, string> = {};
     if (params?.page) query.page = String(params.page);
     if (params?.pageSize) query.pageSize = String(params.pageSize);
-    if (params?.processDefinitionKey)
-      query.processDefinitionKey = params.processDefinitionKey;
+    if (params?.processDefinitionKey) query.processDefinitionKey = params.processDefinitionKey;
     if (params?.status) query.status = params.status;
-    if (params?.startTimeFrom) query.startTimeFrom = params.startTimeFrom;
-    if (params?.startTimeTo) query.startTimeTo = params.startTimeTo;
-
-    const res = await httpClient.get<
-      { data?: ProcessInstanceListResponse } & ProcessInstanceListResponse
-    >(`${this.baseUrl}/process-instances`, query);
-    return (
-      (res as { data?: ProcessInstanceListResponse }).data ??
-      (res as ProcessInstanceListResponse)
+    if (params?.businessKey) query.businessKey = params.businessKey;
+    const response = await httpClient.get<BackendListResponse<ProcessInstance>>(
+      `${this.baseUrl}/process-instances`,
+      query
     );
+    return { items: response.data, ...response.pagination };
   }
 
-  /**
-   * 获取单个流程实例
-   */
-  static async getProcessInstance(id: string): Promise<ProcessInstance> {
-    const res = await httpClient.get<{ data?: ProcessInstance } & ProcessInstance>(
-      `${this.baseUrl}/process-instances/${encodeURIComponent(id)}`
-    );
-    return (res as { data?: ProcessInstance }).data ?? (res as ProcessInstance);
+  static async getProcessInstance(id: string | number): Promise<ProcessInstance> {
+    return httpClient.get(`${this.baseUrl}/process-instances/${encodeURIComponent(String(id))}`);
   }
 
-  /**
-   * 设置流程实例变量
-   */
   static async setProcessInstanceVariables(
-    id: string,
+    id: string | number,
     variables: Record<string, unknown>
   ): Promise<void> {
-    // variables 的 key 由 BPMN 流程定义/handler 约定（snake_case），不能被全局
-    // camelCase 归一化改名，否则后端 handler 读不到值。
     await httpClient.put(
-      `${this.baseUrl}/process-instances/${encodeURIComponent(id)}/variables`,
+      `${this.baseUrl}/process-instances/${encodeURIComponent(String(id))}/variables`,
       { variables },
       { skipCamelCaseBody: true }
     );
   }
 
-  /**
-   * 暂停流程实例
-   */
-  static async suspendProcess(id: string): Promise<void> {
+  static async suspendProcess(id: string | number, reason: string): Promise<void> {
     await httpClient.put(
-      `${this.baseUrl}/process-instances/${encodeURIComponent(id)}/suspend`,
+      `${this.baseUrl}/process-instances/${encodeURIComponent(String(id))}/suspend`,
+      { reason }
+    );
+  }
+
+  static async resumeProcess(id: string | number): Promise<void> {
+    await httpClient.put(
+      `${this.baseUrl}/process-instances/${encodeURIComponent(String(id))}/resume`,
       {}
     );
   }
 
-  /**
-   * 恢复流程实例
-   */
-  static async resumeProcess(id: string): Promise<void> {
+  static async terminateProcess(id: string | number, reason: string): Promise<void> {
     await httpClient.put(
-      `${this.baseUrl}/process-instances/${encodeURIComponent(id)}/resume`,
-      {}
+      `${this.baseUrl}/process-instances/${encodeURIComponent(String(id))}/terminate`,
+      { reason }
     );
   }
 
-  /**
-   * 终止流程实例
-   */
-  static async terminateProcess(id: string): Promise<void> {
-    await httpClient.put(
-      `${this.baseUrl}/process-instances/${encodeURIComponent(id)}/terminate`,
-      {}
-    );
-  }
-
-  // ==================== 任务管理 ====================
-
-  /**
-   * 获取用户任务列表
-   */
   static async listUserTasks(params?: {
     page?: number;
     pageSize?: number;
-    processInstanceId?: string;
+    processInstanceId?: number;
     processDefinitionKey?: string;
-    assignee?: number;
     status?: string;
   }): Promise<UserTaskListResponse> {
     const query: Record<string, string> = {};
     if (params?.page) query.page = String(params.page);
     if (params?.pageSize) query.pageSize = String(params.pageSize);
-    if (params?.processInstanceId)
-      query.processInstanceId = params.processInstanceId;
-    if (params?.processDefinitionKey)
-      query.processDefinitionKey = params.processDefinitionKey;
-    if (params?.assignee) query.assignee = String(params.assignee);
+    if (params?.processInstanceId) query.processInstanceId = String(params.processInstanceId);
+    if (params?.processDefinitionKey) query.processDefinitionKey = params.processDefinitionKey;
     if (params?.status) query.status = params.status;
-
-    const res = await httpClient.get<{ data?: UserTaskListResponse } & UserTaskListResponse>(
+    const response = await httpClient.get<BackendListResponse<UserTask>>(
       `${this.baseUrl}/tasks`,
       query
     );
-    return (
-      (res as { data?: UserTaskListResponse }).data ?? (res as UserTaskListResponse)
-    );
+    return { items: response.data, ...response.pagination };
   }
 
-  /**
-   * 获取单个任务
-   */
-  static async getTask(id: string): Promise<UserTask> {
-    const res = await httpClient.get<{ data?: UserTask } & UserTask>(
-      `${this.baseUrl}/tasks/${encodeURIComponent(id)}`
-    );
-    return (res as { data?: UserTask }).data ?? (res as UserTask);
+  static async getTask(id: string | number): Promise<UserTask> {
+    return httpClient.get(`${this.baseUrl}/tasks/${encodeURIComponent(String(id))}`);
   }
 
-  /**
-   * 签收任务
-   */
-  static async claimTask(id: string): Promise<void> {
-    await httpClient.post(
-      `${this.baseUrl}/tasks/${encodeURIComponent(id)}/claim`,
-      {}
-    );
+  static async claimTask(id: string | number): Promise<void> {
+    await httpClient.put(`${this.baseUrl}/tasks/${encodeURIComponent(String(id))}/claim`, {});
   }
 
-  /**
-   * 指派任务
-   */
-  static async assignTask(id: string, data: AssignTaskRequest): Promise<void> {
-    await httpClient.put(
-      `${this.baseUrl}/tasks/${encodeURIComponent(id)}/assign`,
-      data
-    );
+  static async assignTask(id: string | number, assignee: string): Promise<void> {
+    await httpClient.put(`${this.baseUrl}/tasks/${encodeURIComponent(String(id))}/assign`, {
+      assignee,
+    });
   }
 
-  /**
-   * 完成任务
-   */
-  static async completeTask(id: string, data?: CompleteTaskRequest): Promise<void> {
-    await httpClient.put(
-      `${this.baseUrl}/tasks/${encodeURIComponent(id)}/complete`,
-      data ?? {}
-    );
+  static async completeTask(id: string | number, data: CompleteTaskRequest = {}): Promise<void> {
+    await httpClient.put(`${this.baseUrl}/tasks/${encodeURIComponent(String(id))}/complete`, data);
   }
 
-  /** 提交结构化审批决策。审批人身份由登录上下文确定。 */
   static async submitApprovalDecision(
-    id: string,
+    id: string | number,
     data: SubmitApprovalDecisionRequest
   ): Promise<void> {
     await httpClient.post(
-      `${this.baseUrl}/tasks/${encodeURIComponent(id)}/decisions`,
+      `${this.baseUrl}/tasks/${encodeURIComponent(String(id))}/decisions`,
       data
     );
   }
 
-  static async getApprovalHistory(processInstanceKey: string): Promise<ProcessApprovalDecision[]> {
-    const res = await httpClient.get<{ data?: ProcessApprovalDecision[] } | ProcessApprovalDecision[]>(
-      `${this.baseUrl}/process-instances/${encodeURIComponent(processInstanceKey)}/approval-history`
+  static async getApprovalHistory(
+    processInstanceId: string | number
+  ): Promise<ProcessApprovalDecision[]> {
+    return httpClient.get(
+      `${this.baseUrl}/process-instances/${encodeURIComponent(String(processInstanceId))}/approval-history`
     );
-    return (res as { data?: ProcessApprovalDecision[] }).data ?? (res as ProcessApprovalDecision[]);
   }
 
   static async getTicketApprovalDecisions(ticketId: number): Promise<ProcessApprovalDecision[]> {
-    const res = await httpClient.get<
-      { data?: ProcessApprovalDecision[] } | ProcessApprovalDecision[]
-    >(`/api/v1/tickets/${ticketId}/approval-decisions`);
-    return (res as { data?: ProcessApprovalDecision[] }).data ?? (res as ProcessApprovalDecision[]);
+    return httpClient.get(`/api/v1/tickets/${ticketId}/approval-decisions`);
   }
 
-  /**
-   * 取消任务
-   */
-  static async cancelTask(id: string): Promise<void> {
-    await httpClient.put(
-      `${this.baseUrl}/tasks/${encodeURIComponent(id)}/cancel`,
-      {}
-    );
+  static async cancelTask(id: string | number): Promise<void> {
+    await httpClient.put(`${this.baseUrl}/tasks/${encodeURIComponent(String(id))}/cancel`, {});
   }
 
-  /**
-   * 设置任务变量
-   */
   static async setTaskVariables(
-    id: string,
+    id: string | number,
     variables: Record<string, unknown>
   ): Promise<void> {
-    // variables 的 key 由 BPMN 流程定义/handler 约定（snake_case），不能被全局
-    // camelCase 归一化改名，否则后端 handler 读不到值。
     await httpClient.put(
-      `${this.baseUrl}/tasks/${encodeURIComponent(id)}/variables`,
+      `${this.baseUrl}/tasks/${encodeURIComponent(String(id))}/variables`,
       { variables },
       { skipCamelCaseBody: true }
     );
   }
 
-  // ==================== 会签管理 ====================
-
-  /**
-   * 创建会签任务
-   */
-  static async createCounterSignTask(
-    id: string,
+  static async createCounterSignTasks(
+    id: string | number,
     data: CounterSignRequest
-  ): Promise<CounterSignTask[]> {
-    const res = await httpClient.post<{ data?: CounterSignTask[] } & CounterSignTask[]>(
-      `${this.baseUrl}/tasks/${encodeURIComponent(id)}/counter-sign`,
-      data
-    );
-    return (res as { data?: CounterSignTask[] }).data ?? (res as CounterSignTask[]);
-  }
-
-  /**
-   * 获取会签状态
-   */
-  static async getCounterSignStatus(id: string): Promise<CounterSignStatusResponse> {
-    const res = await httpClient.get<
-      { data?: CounterSignStatusResponse } & CounterSignStatusResponse
-    >(`${this.baseUrl}/tasks/${encodeURIComponent(id)}/counter-sign-status`);
-    return (
-      (res as { data?: CounterSignStatusResponse }).data ??
-      (res as CounterSignStatusResponse)
-    );
-  }
-
-  /**
-   * 投票
-   */
-  static async vote(id: string, data: VoteRequest): Promise<void> {
-    await httpClient.put(
-      `${this.baseUrl}/tasks/${encodeURIComponent(id)}/vote`,
+  ): Promise<UserTask[]> {
+    return httpClient.post(
+      `${this.baseUrl}/tasks/${encodeURIComponent(String(id))}/counter-sign`,
       data
     );
   }
 
-  // ==================== 统计 ====================
+  static async getCounterSignStatus(id: string | number): Promise<CounterSignStatus> {
+    return httpClient.get(
+      `${this.baseUrl}/tasks/${encodeURIComponent(String(id))}/counter-sign-status`
+    );
+  }
 
-  /**
-   * 获取流程实例统计
-   */
+  static async vote(id: string | number, approved: boolean, comment?: string): Promise<void> {
+    await httpClient.put(`${this.baseUrl}/tasks/${encodeURIComponent(String(id))}/vote`, {
+      approved,
+      comment,
+    });
+  }
+
   static async getInstanceStats(params?: {
     processDefinitionKey?: string;
-    startTime?: string;
-    endTime?: string;
+    startDate?: string;
+    endDate?: string;
   }): Promise<InstanceStats> {
-    const query: Record<string, string> = {};
-    if (params?.processDefinitionKey)
-      query.processDefinitionKey = params.processDefinitionKey;
-    if (params?.startTime) query.startTime = params.startTime;
-    if (params?.endTime) query.endTime = params.endTime;
-
-    const res = await httpClient.get<{ data?: InstanceStats } & InstanceStats>(
-      `${this.baseUrl}/stats/instances`,
-      query
-    );
-    return (res as { data?: InstanceStats }).data ?? (res as InstanceStats);
+    return httpClient.get(`${this.baseUrl}/stats/instances`, params);
   }
 
-  /**
-   * 获取任务统计
-   */
   static async getTaskStats(params?: {
     processDefinitionKey?: string;
-    startTime?: string;
-    endTime?: string;
+    startDate?: string;
+    endDate?: string;
   }): Promise<TaskStats> {
-    const query: Record<string, string> = {};
-    if (params?.processDefinitionKey)
-      query.processDefinitionKey = params.processDefinitionKey;
-    if (params?.startTime) query.startTime = params.startTime;
-    if (params?.endTime) query.endTime = params.endTime;
-
-    const res = await httpClient.get<{ data?: TaskStats } & TaskStats>(
-      `${this.baseUrl}/stats/tasks`,
-      query
-    );
-    return (res as { data?: TaskStats }).data ?? (res as TaskStats);
+    return httpClient.get(`${this.baseUrl}/stats/tasks`, params);
   }
 
-  // ==================== 版本管理 ====================
+  static async listVersions(processDefinitionKey: string): Promise<ProcessVersion[]> {
+    return httpClient.get(`${this.baseUrl}/versions`, { process_key: processDefinitionKey });
+  }
 
-  /**
-   * 获取版本列表
-   */
-  static async listVersions(key: string, params?: {
-    page?: number;
-    pageSize?: number;
-  }): Promise<ProcessVersionListResponse> {
-    const query: Record<string, string> = {};
-    if (params?.page) query.page = String(params.page);
-    if (params?.pageSize) query.pageSize = String(params.pageSize);
-
-    const res = await httpClient.get<
-      { data?: ProcessVersionListResponse } & ProcessVersionListResponse
-    >(`${this.baseUrl}/versions`, { ...query, key });
-    return (
-      (res as { data?: ProcessVersionListResponse }).data ??
-      (res as ProcessVersionListResponse)
+  static async getVersion(key: string, version: string | number): Promise<ProcessVersion> {
+    return httpClient.get(
+      `${this.baseUrl}/versions/${encodeURIComponent(key)}/${encodeURIComponent(String(version))}`
     );
   }
 
-  /**
-   * 获取单个版本
-   */
-  static async getVersion(key: string, version: number): Promise<ProcessVersion> {
-    const res = await httpClient.get<{ data?: ProcessVersion } & ProcessVersion>(
-      `${this.baseUrl}/versions/${encodeURIComponent(key)}/${String(version)}`
-    );
-    return (res as { data?: ProcessVersion }).data ?? (res as ProcessVersion);
-  }
-
-  /**
-   * 创建新版本
-   */
   static async createVersion(data: CreateVersionRequest): Promise<ProcessVersion> {
-    const res = await httpClient.post<{ data?: ProcessVersion } & ProcessVersion>(
-      `${this.baseUrl}/versions`,
-      data
-    );
-    return (res as { data?: ProcessVersion }).data ?? (res as ProcessVersion);
+    return httpClient.post(`${this.baseUrl}/versions`, data);
   }
 
-  /**
-   * 激活版本
-   */
-  static async activateVersion(key: string, version: number): Promise<ProcessVersion> {
-    const res = await httpClient.put<{ data?: ProcessVersion } & ProcessVersion>(
-      `${this.baseUrl}/versions/${encodeURIComponent(key)}/${String(version)}/activate`,
+  static async activateVersion(key: string, version: string | number): Promise<void> {
+    await httpClient.put(
+      `${this.baseUrl}/versions/${encodeURIComponent(key)}/${encodeURIComponent(String(version))}/activate`,
       {}
     );
-    return (res as { data?: ProcessVersion }).data ?? (res as ProcessVersion);
   }
 
-  /**
-   * 回滚版本
-   */
-  static async rollbackVersion(key: string, version: number): Promise<ProcessVersion> {
-    const res = await httpClient.put<{ data?: ProcessVersion } & ProcessVersion>(
-      `${this.baseUrl}/versions/${encodeURIComponent(key)}/${String(version)}/rollback`,
-      {}
+  static async rollbackVersion(
+    key: string,
+    version: string | number,
+    reason: string
+  ): Promise<void> {
+    await httpClient.put(
+      `${this.baseUrl}/versions/${encodeURIComponent(key)}/${encodeURIComponent(String(version))}/rollback`,
+      { reason }
     );
-    return (res as { data?: ProcessVersion }).data ?? (res as ProcessVersion);
   }
 
-  /**
-   * 比较两个版本
-   */
   static async compareVersions(
     key: string,
-    version1: number,
-    version2: number
-  ): Promise<VersionCompareResponse> {
-    const res = await httpClient.get<
-      { data?: VersionCompareResponse } & VersionCompareResponse
-    >(
-      `${this.baseUrl}/versions/${encodeURIComponent(key)}/compare`,
-      { version1: String(version1), version2: String(version2) }
-    );
-    return (
-      (res as { data?: VersionCompareResponse }).data ?? (res as VersionCompareResponse)
-    );
+    baseVersion: string | number,
+    targetVersion: string | number
+  ): Promise<VersionComparison | null> {
+    return httpClient.get(`${this.baseUrl}/versions/${encodeURIComponent(key)}/compare`, {
+      base_version: String(baseVersion),
+      target_version: String(targetVersion),
+    });
   }
 
-  // ==================== 变更日志 ====================
-
-  /**
-   * 获取变更日志列表
-   */
   static async getVersionChangeLogs(
     key: string,
-    params?: {
-      page?: number;
-      pageSize?: number;
-    }
-  ): Promise<ChangeLogListResponse> {
-    const query: Record<string, string> = { key };
-    if (params?.page) query.page = String(params.page);
-    if (params?.pageSize) query.pageSize = String(params.pageSize);
-
-    const res = await httpClient.get<
-      { data?: ChangeLogListResponse } & ChangeLogListResponse
-    >(`${this.baseUrl}/process-definitions/${encodeURIComponent(key)}/changelogs`, query);
-    return (
-      (res as { data?: ChangeLogListResponse }).data ??
-      (res as ChangeLogListResponse)
+    params?: { page?: number; pageSize?: number }
+  ): Promise<VersionChangeLog[]> {
+    return httpClient.get(
+      `${this.baseUrl}/process-definitions/${encodeURIComponent(key)}/changelogs`,
+      params
     );
   }
 
-  /**
-   * 获取单个变更日志详情
-   */
   static async getVersionChangeLogById(id: number): Promise<VersionChangeLog> {
-    const res = await httpClient.get<{ data?: VersionChangeLog } & VersionChangeLog>(
-      `${this.baseUrl}/process-definitions/changelogs/${String(id)}`
-    );
-    return (res as { data?: VersionChangeLog }).data ?? (res as VersionChangeLog);
+    return httpClient.get(`${this.baseUrl}/process-definitions/changelogs/${id}`);
   }
 }
 

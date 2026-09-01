@@ -351,7 +351,7 @@ async function runDeepTests() {
     { name: 'Problems', url: '/problems' },
     { name: 'Changes', url: '/changes' },
     { name: 'Knowledge Base', url: '/knowledge' },
-    { name: 'Workflow', url: '/workflow' },
+    { name: 'Workflow', url: '/admin/workflows' },
     { name: 'Dashboard', url: '/dashboard' },
     { name: 'SLAs', url: '/sla' },
     { name: 'Service Requests', url: '/service-requests' },

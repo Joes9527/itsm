@@ -336,6 +336,9 @@ func TestProfessionalExtensionsDropSharedFieldsIsVersioned(t *testing.T) {
 		"policy.polroles", "policy.polcmd", "policy.polpermissive",
 		"policy_roles <> ARRAY[0::OID]", "policy_command <> '*'", "OR NOT policy_permissive",
 		"legacy ticket_approvals table still exists",
+		"'workflows', 'workflow_instances', 'workflow_tasks', 'workflow_versions'",
+		"legacy % table still exists",
+		"legacy ticket_categories.workflow_id column still exists",
 	} {
 		require.Contains(t, string(verificationSQL), expected)
 	}

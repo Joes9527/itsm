@@ -32,8 +32,6 @@ const (
 	FieldTenantID = "tenant_id"
 	// FieldDepartmentID holds the string denoting the department_id field in the database.
 	FieldDepartmentID = "department_id"
-	// FieldWorkflowID holds the string denoting the workflow_id field in the database.
-	FieldWorkflowID = "workflow_id"
 	// FieldItsmType holds the string denoting the itsm_type field in the database.
 	FieldItsmType = "itsm_type"
 	// FieldDefaultPriority holds the string denoting the default_priority field in the database.
@@ -56,8 +54,6 @@ const (
 	EdgeParent = "parent"
 	// EdgeDepartment holds the string denoting the department edge name in mutations.
 	EdgeDepartment = "department"
-	// EdgeWorkflow holds the string denoting the workflow edge name in mutations.
-	EdgeWorkflow = "workflow"
 	// Table holds the table name of the ticketcategory in the database.
 	Table = "ticket_categories"
 	// TicketsTable is the table that holds the tickets relation/edge.
@@ -82,13 +78,6 @@ const (
 	DepartmentInverseTable = "departments"
 	// DepartmentColumn is the table column denoting the department relation/edge.
 	DepartmentColumn = "department_id"
-	// WorkflowTable is the table that holds the workflow relation/edge.
-	WorkflowTable = "ticket_categories"
-	// WorkflowInverseTable is the table name for the Workflow entity.
-	// It exists in this package in order to avoid circular dependency with the "workflow" package.
-	WorkflowInverseTable = "workflows"
-	// WorkflowColumn is the table column denoting the workflow relation/edge.
-	WorkflowColumn = "workflow_id"
 )
 
 // Columns holds all SQL columns for ticketcategory fields.
@@ -103,7 +92,6 @@ var Columns = []string{
 	FieldIsActive,
 	FieldTenantID,
 	FieldDepartmentID,
-	FieldWorkflowID,
 	FieldItsmType,
 	FieldDefaultPriority,
 	FieldSLATier,
@@ -199,11 +187,6 @@ func ByDepartmentID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldDepartmentID, opts...).ToFunc()
 }
 
-// ByWorkflowID orders the results by the workflow_id field.
-func ByWorkflowID(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldWorkflowID, opts...).ToFunc()
-}
-
 // ByItsmType orders the results by the itsm_type field.
 func ByItsmType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldItsmType, opts...).ToFunc()
@@ -280,13 +263,6 @@ func ByDepartmentField(field string, opts ...sql.OrderTermOption) OrderOption {
 		sqlgraph.OrderByNeighborTerms(s, newDepartmentStep(), sql.OrderByField(field, opts...))
 	}
 }
-
-// ByWorkflowField orders the results by workflow field.
-func ByWorkflowField(field string, opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newWorkflowStep(), sql.OrderByField(field, opts...))
-	}
-}
 func newTicketsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
@@ -313,12 +289,5 @@ func newDepartmentStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(DepartmentInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, true, DepartmentTable, DepartmentColumn),
-	)
-}
-func newWorkflowStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(WorkflowInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2O, false, WorkflowTable, WorkflowColumn),
 	)
 }

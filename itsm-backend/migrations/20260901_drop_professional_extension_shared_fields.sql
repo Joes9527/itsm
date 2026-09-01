@@ -13,6 +13,13 @@ BEGIN
     -- Development cutover: BPMN ProcessTask/ProcessApprovalDecision are the
     -- only ticket approval runtime. No legacy row migration is supported.
     EXECUTE format('DROP TABLE IF EXISTS %I.ticket_approvals CASCADE', current_schema());
+	EXECUTE format('DROP TABLE IF EXISTS %I.workflow_tasks CASCADE', current_schema());
+	EXECUTE format('DROP TABLE IF EXISTS %I.workflow_instances CASCADE', current_schema());
+	EXECUTE format('DROP TABLE IF EXISTS %I.workflow_versions CASCADE', current_schema());
+	EXECUTE format('DROP TABLE IF EXISTS %I.workflows CASCADE', current_schema());
+	IF to_regclass(format('%I.ticket_categories', current_schema())) IS NOT NULL THEN
+		EXECUTE format('ALTER TABLE %I.ticket_categories DROP COLUMN IF EXISTS workflow_id', current_schema());
+	END IF;
 
     IF to_regclass(format('%I.tickets', current_schema())) IS NULL THEN
         RAISE EXCEPTION 'required WorkItem table tickets is missing from schema %', current_schema();

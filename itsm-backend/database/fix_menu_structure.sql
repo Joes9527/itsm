@@ -227,7 +227,6 @@ INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, ten
 SELECT '审计日志', '/workflow/audit', 'ClipboardList', id, 'workflow:read', 126, 1, true, true FROM menus WHERE path = '/workflow';
 
 INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, tenant_id, is_visible, is_enabled)
-SELECT '自动化规则', '/workflow/automation', 'Zap', id, 'workflow:write', 127, 1, true, true FROM menus WHERE path = '/workflow';
 
 -- ============================================
 -- 14. AI助手子菜单
