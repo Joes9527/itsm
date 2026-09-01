@@ -17,6 +17,7 @@ import (
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
 	entticket "itsm-backend/ent/ticket"
+	"itsm-backend/repository/workitemnumber"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,7 +29,7 @@ import (
 func setupIncidentTest(t *testing.T) (*ent.Client, *IncidentService, context.Context) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	logger := zaptest.NewLogger(t).Sugar()
-	service := NewIncidentService(client, logger)
+	service := NewIncidentService(client, logger, workitemnumber.NewPostgreSQLAllocator())
 	ctx := context.Background()
 	return client, service, ctx
 }
@@ -199,6 +200,28 @@ func TestIncidentService_CreateIncident_CreatesWorkItemInSameTransaction(t *test
 	persistedIncident, err := client.Incident.Get(ctx, response.ID)
 	require.NoError(t, err)
 	assert.Equal(t, workItem.ID, persistedIncident.WorkItemID, "incidents.work_item_id 必须指回新建的 WorkItem")
+}
+
+func TestIncidentService_CreateIncidentAllocatesSequentialWorkItemNumbers(t *testing.T) {
+	client, service, ctx := setupIncidentTest(t)
+	defer client.Close()
+
+	tenant, err := createIncidentTestTenant(ctx, client, "allocator")
+	require.NoError(t, err)
+	user, err := createIncidentTestUser(ctx, client, tenant.ID, "allocator")
+	require.NoError(t, err)
+
+	first, err := service.CreateIncident(ctx, &dto.CreateIncidentRequest{Title: "First allocated incident"}, tenant.ID, user.ID)
+	require.NoError(t, err)
+	second, err := service.CreateIncident(ctx, &dto.CreateIncidentRequest{Title: "Second allocated incident"}, tenant.ID, user.ID)
+	require.NoError(t, err)
+
+	firstWorkItem, err := client.Ticket.Get(ctx, *first.WorkItemID)
+	require.NoError(t, err)
+	secondWorkItem, err := client.Ticket.Get(ctx, *second.WorkItemID)
+	require.NoError(t, err)
+	require.Regexp(t, `^TKT-\d{6}-000001$`, firstWorkItem.TicketNumber)
+	require.Regexp(t, `^TKT-\d{6}-000002$`, secondWorkItem.TicketNumber)
 }
 
 // TestIncidentService_CreateIncident_ServiceCatalogDivertedPath_AlsoCreatesWorkItem
@@ -493,7 +516,7 @@ func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
 				})
 			})
 
-			incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar())
+			incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar(), workitemnumber.NewPostgreSQLAllocator())
 			_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, assignee.ID, tenant.ID)
 			require.Error(t, err)
 			testCase.assertErr(t, err)
@@ -547,7 +570,7 @@ func TestGetIncidentWithActionsUsesOneEntitySnapshot(t *testing.T) {
 	require.NoError(t, err)
 
 	incidentSelects = 0
-	incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar())
+	incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar(), workitemnumber.NewPostgreSQLAllocator())
 	response, err := incidentService.GetIncidentWithActions(ctx, incidentEntity.ID, ActionActor{
 		Client: client, TenantID: tenant.ID, UserID: reporter.ID, Role: "super_admin",
 	})

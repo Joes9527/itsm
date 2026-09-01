@@ -212,7 +212,7 @@ func TestSSLVPNRequest_ConflictingRecordClassVariableCannotReachKAF(t *testing.T
 func TestSSLVPNIncident_UsesSameDelegationTransportWithoutServiceRequestConversion(t *testing.T) {
 	fx := newSSLVPNDelegationFixture(t)
 	deploySSLVPNDefinition(t, fx, "incident_emergency_flow", "", sslvpnIncidentFlows)
-	incidentService := itsmservice.NewIncidentService(fx.client, zaptest.NewLogger(t).Sugar())
+	incidentService := itsmservice.NewIncidentService(fx.client, zaptest.NewLogger(t).Sugar(), workitemnumber.NewPostgreSQLAllocator())
 	incidentService.SetProcessTriggerService(itsmservice.NewProcessTriggerService(fx.client, fx.engine))
 	incidentResponse, err := incidentService.CreateIncident(fx.ctx, &dto.CreateIncidentRequest{Title: "SSLVPN connection unavailable", Description: "VPN client cannot establish a connection", Priority: "high", Severity: "high"}, fx.tenant.ID, fx.requester.ID)
 	require.NoError(t, err)

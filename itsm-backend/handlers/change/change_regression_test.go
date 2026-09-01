@@ -14,6 +14,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/middleware"
+	"itsm-backend/repository/workitemnumber"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -27,7 +28,7 @@ func setupChangeRegressionHandler(t *testing.T, dbName, actorCode string) (*gin.
 
 	entClient := newChangeBPMNEntClient(t, dbName)
 	tenantID, actorID := setupChangeBPMNActor(t, entClient, actorCode)
-	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, dbName))
+	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, dbName), workitemnumber.NewPostgreSQLAllocator())
 	handler := NewHandler(NewService(repo, entClient, zaptest.NewLogger(t).Sugar()))
 
 	r := gin.New()
@@ -44,6 +45,29 @@ func setupChangeRegressionHandler(t *testing.T, dbName, actorCode string) (*gin.
 	r.POST("/api/v1/changes/:id/rollback", handler.TransitionStatus)
 	r.GET("/api/v1/changes/calendar", handler.GetCalendar)
 	return r, repo, entClient, tenantID, actorID
+}
+
+func TestChangeRepositoryAllocatesSequentialWorkItemNumbers(t *testing.T) {
+	_, repo, client, tenantID, actorID := setupChangeRegressionHandler(t, "change_allocator", "allocator")
+	defer client.Close()
+
+	first, err := repo.Create(context.Background(), &Change{
+		Title: "First allocated change", Type: "normal", Status: "draft", Priority: "medium",
+		RiskLevel: "medium", ImpactScope: "low", TenantID: tenantID, CreatedBy: actorID,
+	})
+	require.NoError(t, err)
+	second, err := repo.Create(context.Background(), &Change{
+		Title: "Second allocated change", Type: "normal", Status: "draft", Priority: "medium",
+		RiskLevel: "medium", ImpactScope: "low", TenantID: tenantID, CreatedBy: actorID,
+	})
+	require.NoError(t, err)
+
+	firstWorkItem, err := client.Ticket.Get(context.Background(), *first.WorkItemID)
+	require.NoError(t, err)
+	secondWorkItem, err := client.Ticket.Get(context.Background(), *second.WorkItemID)
+	require.NoError(t, err)
+	require.Regexp(t, `^TKT-\d{6}-000001$`, firstWorkItem.TicketNumber)
+	require.Regexp(t, `^TKT-\d{6}-000002$`, secondWorkItem.TicketNumber)
 }
 
 // createRegressionChange 建一条固定夹具 Change，同时建好对应的 WorkItem——Wave 2 起
@@ -314,7 +338,7 @@ func TestChangeController_TransitionStatus_StartGuardByType(t *testing.T) {
 func TestEntRepository_RelatedTickets_JSONFieldBehavior(t *testing.T) {
 	ctx := context.Background()
 	entClient := newChangeBPMNEntClient(t, "change_related_tickets_regression")
-	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, "change_related_tickets_regression"))
+	repo := newTestChangeRepository(entClient, openChangeBPMNRawDB(t, "change_related_tickets_regression"))
 	tenantID, actorID := setupChangeBPMNActor(t, entClient, "related-tickets")
 
 	// createRelatedTicket 建一条真实的普通工单，供 RelatedTickets 引用——迁移后只有真实
@@ -556,7 +580,7 @@ func TestChangeController_CreateChange_RequiredFieldValidation(t *testing.T) {
 func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 	ctx := context.Background()
 	entClient := newChangeBPMNEntClient(t, "change_tenant_isolation_regression")
-	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, "change_tenant_isolation_regression"))
+	repo := newTestChangeRepository(entClient, openChangeBPMNRawDB(t, "change_tenant_isolation_regression"))
 	logger := zaptest.NewLogger(t).Sugar()
 
 	tenantA, actorA := setupChangeBPMNActor(t, entClient, "tenant-a")
@@ -738,7 +762,7 @@ func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 func TestChangeWorkItemAndRelations_TenantIsolation(t *testing.T) {
 	ctx := context.Background()
 	entClient := newChangeBPMNEntClient(t, "change_workitem_tenant_isolation")
-	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, "change_workitem_tenant_isolation"))
+	repo := newTestChangeRepository(entClient, openChangeBPMNRawDB(t, "change_workitem_tenant_isolation"))
 	logger := zaptest.NewLogger(t).Sugar()
 
 	tenantA, actorA := setupChangeBPMNActor(t, entClient, "wi-iso-a")

@@ -14,6 +14,7 @@ import (
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/workitemrelation"
 	changedomain "itsm-backend/handlers/change"
+	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
 
@@ -259,7 +260,7 @@ func TestBackfillOne_MigratesRunningProcessInstanceBusinessKey_EndToEnd(t *testi
 
 	// 5. 核心正确性证明：用真实的 handlers/change.Service.TransitionStatus 完成 CAB 审批，
 	//    必须能通过新 businessKey 找到并推进这条被迁移过的实例。
-	repo := changedomain.NewEntRepository(client, rawDB)
+	repo := changedomain.NewEntRepository(client, rawDB, workitemnumber.NewPostgreSQLAllocator())
 	svc := changedomain.NewService(repo, client, logger)
 	svc.SetProcessEngine(engine)
 

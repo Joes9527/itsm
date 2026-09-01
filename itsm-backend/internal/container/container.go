@@ -102,7 +102,7 @@ func (c *Container) initCoreServices() {
 	c.notificationService = service.NewNotificationService(c.client)
 
 	// Incident Service
-	c.incidentService = service.NewIncidentService(c.client, c.logger)
+	c.incidentService = service.NewIncidentService(c.client, c.logger, c.numberAllocator)
 	c.incidentService.SetSequenceService(c.sequenceService)
 
 	// Ticket Notification Service

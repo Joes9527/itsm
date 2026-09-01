@@ -19,6 +19,7 @@ import (
 	"itsm-backend/ent/enttest"
 	problemDomain "itsm-backend/handlers/problem"
 	"itsm-backend/middleware"
+	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -58,7 +59,7 @@ func setupTestIncidentController(t *testing.T) (*gin.Engine, *IncidentController
 	logger := zaptest.NewLogger(t).Sugar()
 
 	// 创建服务
-	incidentService := service.NewIncidentService(client, logger)
+	incidentService := service.NewIncidentService(client, logger, workitemnumber.NewPostgreSQLAllocator())
 
 	// 创建控制器
 	incidentController := NewIncidentController(incidentService, nil, nil, nil, nil, &fakeProblemConversionService{}, logger)
@@ -255,7 +256,7 @@ func TestIncidentDetailHasActionsButListDoesNot(t *testing.T) {
 		SetReporterID(user.ID).SetWorkItemID(workItem.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	controller := NewIncidentController(service.NewIncidentService(client, zaptest.NewLogger(t).Sugar()), nil, nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
+	controller := NewIncidentController(service.NewIncidentService(client, zaptest.NewLogger(t).Sugar(), workitemnumber.NewPostgreSQLAllocator()), nil, nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set("user_id", user.ID)
@@ -289,7 +290,7 @@ func TestGetIncidentRequiresAuthenticatedActionActor(t *testing.T) {
 	defer client.Close()
 	tenant, err := client.Tenant.Create().SetName("actor").SetCode("actor").SetDomain("actor.test").SetStatus("active").Save(context.Background())
 	require.NoError(t, err)
-	controller := NewIncidentController(service.NewIncidentService(client, zaptest.NewLogger(t).Sugar()), nil, nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
+	controller := NewIncidentController(service.NewIncidentService(client, zaptest.NewLogger(t).Sugar(), workitemnumber.NewPostgreSQLAllocator()), nil, nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
 
 	for _, testCase := range []struct {
 		name   string

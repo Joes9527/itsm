@@ -31,7 +31,7 @@ func strPtr(s string) *string {
 func setupProblemHTTPHandlerTest(t *testing.T) (*gin.Engine, *Handler, *Service, *ent.Client) {
 	gin.SetMode(gin.TestMode)
 	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:problem-http-%s?mode=memory&cache=shared&_fk=1", t.Name()))
-	repo := NewEntRepository(client)
+	repo := newTestProblemRepository(client)
 	service := NewService(repo, zaptest.NewLogger(t).Sugar())
 	handler := NewHandler(service, client)
 

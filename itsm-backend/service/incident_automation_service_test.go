@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/incidentruleexecution"
+	"itsm-backend/repository/workitemnumber"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -159,7 +160,7 @@ func TestIncidentRuleActionFailureMarksExecutionFailed(t *testing.T) {
 	require.NoError(t, err)
 	incidentEntity, err = client.Incident.Get(ctx, incidentEntity.ID)
 	require.NoError(t, err)
-	engine := NewIncidentRuleEngine(client, zaptest.NewLogger(t).Sugar())
+	engine := NewIncidentRuleEngine(client, zaptest.NewLogger(t).Sugar(), workitemnumber.NewPostgreSQLAllocator())
 
 	err = engine.ExecuteRule(ctx, rule, incidentEntity, tenant.ID)
 	require.ErrorContains(t, err, "rule action failed")
@@ -192,7 +193,7 @@ func TestIncidentCreationUsesFormalRuleEngine(t *testing.T) {
 		SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
-	incidentService.SetRuleEngine(NewIncidentRuleEngine(client, zaptest.NewLogger(t).Sugar()))
+	incidentService.SetRuleEngine(NewIncidentRuleEngine(client, zaptest.NewLogger(t).Sugar(), workitemnumber.NewPostgreSQLAllocator()))
 
 	created, err := incidentService.CreateIncident(ctx, &dto.CreateIncidentRequest{
 		Title: "Formal engine incident", Priority: "high", Severity: "high",

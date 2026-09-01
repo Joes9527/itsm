@@ -14,6 +14,7 @@ import (
 	"itsm-backend/ent/enttest"
 	"itsm-backend/middleware"
 	"itsm-backend/migration"
+	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -277,7 +278,7 @@ func TestAssignRouteUsesIncidentWritePermission(t *testing.T) {
 
 	const jwtSecret = "assign-route-secret"
 	logger := zaptest.NewLogger(t).Sugar()
-	incidentController := controller.NewIncidentController(service.NewIncidentService(client, logger), nil, nil, nil, nil, nil, logger)
+	incidentController := controller.NewIncidentController(service.NewIncidentService(client, logger, workitemnumber.NewPostgreSQLAllocator()), nil, nil, nil, nil, nil, logger)
 	router := gin.New()
 	SetupRoutes(router, &RouterConfig{
 		JWTSecret: jwtSecret, Logger: logger, Client: client, IncidentController: incidentController,

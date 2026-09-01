@@ -78,8 +78,7 @@ func newConversionFixture(t *testing.T, status string, withWorkItem bool) *conve
 	incident, err := create.Save(ctx)
 	require.NoError(t, err)
 
-	repo := NewEntRepository(client)
-	repo.SetSequenceService(&atomicSequenceProvider{})
+	repo := newTestProblemRepository(client)
 	return &conversionFixture{
 		client:           client,
 		service:          NewService(repo, zaptest.NewLogger(t).Sugar()),
