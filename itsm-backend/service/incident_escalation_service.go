@@ -283,8 +283,15 @@ func (s *IncidentEscalationService) escalateIncident(ctx context.Context, incide
 	_, err = tx.IncidentEvent.Create().
 		SetIncidentID(incidentEnt.ID).
 		SetEventType("escalation").
+		SetEventName("事件升级").
 		SetDescription(fmt.Sprintf("事件升级到L%d: %s", rule.EscalationLevel, rule.Name)).
+		SetStatus("active").
+		SetSeverity("high").
+		SetSource("system").
+		SetTenantID(tenantID).
+		SetOccurredAt(time.Now()).
 		SetCreatedAt(time.Now()).
+		SetUpdatedAt(time.Now()).
 		Save(ctx)
 	if err != nil {
 		return fail(err)

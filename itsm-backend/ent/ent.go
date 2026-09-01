@@ -105,7 +105,6 @@ import (
 	"itsm-backend/ent/tenant"
 	"itsm-backend/ent/tenantinstallation"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/ticketapproval"
 	"itsm-backend/ent/ticketassignmentrule"
 	"itsm-backend/ent/ticketattachment"
 	"itsm-backend/ent/ticketautomationrule"
@@ -292,7 +291,6 @@ func checkColumn(t, c string) error {
 			tenant.Table:                      tenant.ValidColumn,
 			tenantinstallation.Table:          tenantinstallation.ValidColumn,
 			ticket.Table:                      ticket.ValidColumn,
-			ticketapproval.Table:              ticketapproval.ValidColumn,
 			ticketassignmentrule.Table:        ticketassignmentrule.ValidColumn,
 			ticketattachment.Table:            ticketattachment.ValidColumn,
 			ticketautomationrule.Table:        ticketautomationrule.ValidColumn,

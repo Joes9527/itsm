@@ -301,25 +301,9 @@ func (tc *TicketController) UpdateTicketStatus(c *gin.Context) {
 	tenantID := c.GetInt("tenant_id")
 	userID := c.GetInt("user_id")
 
-	// approved/rejected 是审批决策，需要 CanApprove/CanReject 的职责分离校验；
-	// 其它状态流转（in_progress/resolved 等）不属于审批语义，不走这道门。
 	if req.Status == "approved" || req.Status == "rejected" {
-		current, err := tc.ticketService.GetTicket(c.Request.Context(), ticketID, tenantID)
-		if err != nil {
-			common.Fail(c, common.NotFoundCode, "工单不存在")
-			return
-		}
-		actor := service.ActionActor{Client: tc.client, TenantID: tenantID, UserID: userID, Role: c.GetString("role")}
-		var perm dto.ActionPermission
-		if req.Status == "approved" {
-			perm = service.CanApprove(actor, current)
-		} else {
-			perm = service.CanReject(actor, current)
-		}
-		if !perm.Allowed {
-			common.Fail(c, common.ForbiddenCode, perm.Reason)
-			return
-		}
+		common.Fail(c, common.ForbiddenCode, "审批状态只能通过 BPMN 待办任务推进")
+		return
 	}
 
 	ticket, err := tc.ticketService.UpdateTicketStatus(c.Request.Context(), ticketID, req.Status, tenantID, userID)

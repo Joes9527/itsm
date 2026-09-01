@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 
@@ -21,14 +20,13 @@ import (
 // service/incident_service.go 对应实现前的注释。
 type IncidentDomainServiceInterface interface {
 	CreateIncident(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, userID int) (*dto.IncidentResponse, error)
-	AssignIncident(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentResponse, error)
-	UpdateStatus(ctx context.Context, id int, status string, tenantID int) (*dto.IncidentResponse, error)
-	EscalateIncidentLevel(ctx context.Context, id, tenantID, level int) (*dto.IncidentResponse, error)
-	ResolveIncidentForWorkflow(ctx context.Context, id, tenantID int, resolution string) (*dto.IncidentResponse, error)
-	CloseIncidentForWorkflow(ctx context.Context, id, tenantID int, feedback string) (*dto.IncidentResponse, error)
-	AcknowledgeIncidentForWorkflow(ctx context.Context, id, tenantID int) (*dto.IncidentResponse, error)
-	UpdateIncidentForWorkflow(ctx context.Context, id, tenantID int, title, description, priority, severity, status string) (*dto.IncidentResponse, error)
-	CategorizeIncidentForWorkflow(ctx context.Context, id, tenantID int, category, subcategory string) (*dto.IncidentResponse, error)
+	AssignIncidentForWorkflow(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentMutationOutcome, error)
+	EscalateIncidentLevel(ctx context.Context, id, tenantID, level int) (*dto.IncidentMutationOutcome, error)
+	ResolveIncidentForWorkflow(ctx context.Context, id, tenantID int, resolution string) (*dto.IncidentMutationOutcome, error)
+	CloseIncidentForWorkflow(ctx context.Context, id, tenantID int, feedback string) (*dto.IncidentMutationOutcome, error)
+	AcknowledgeIncidentForWorkflow(ctx context.Context, id, tenantID int) (*dto.IncidentMutationOutcome, error)
+	UpdateIncidentForWorkflow(ctx context.Context, id, tenantID int, title, description, priority, severity, status string) (*dto.IncidentMutationOutcome, error)
+	CategorizeIncidentForWorkflow(ctx context.Context, id, tenantID int, category, subcategory string) (*dto.IncidentMutationOutcome, error)
 }
 
 // IncidentServiceTaskHandler 事件服务任务处理器
@@ -83,7 +81,7 @@ func (h *IncidentServiceTaskHandler) Execute(ctx context.Context, task *ent.Proc
 	case "categorize_incident":
 		return h.categorizeIncident(ctx, variables)
 	default:
-		return nil, fmt.Errorf("不支持的事件回调动作")
+		return BlockedEffect(CallbackBlockHandlerContract, "unsupported incident callback action"), nil
 	}
 }
 
@@ -163,18 +161,14 @@ func (h *IncidentServiceTaskHandler) assignIncident(ctx context.Context, variabl
 	if h.incidentService == nil {
 		return nil, fmt.Errorf("incident service 未注入，无法分配事件")
 	}
-	if _, err := h.incidentService.AssignIncident(ctx, incidentID, assigneeID, tenantID); err != nil {
+	outcome, err := h.incidentService.AssignIncidentForWorkflow(ctx, incidentID, assigneeID, tenantID)
+	if err != nil {
 		return nil, fmt.Errorf("分配事件失败: %w", err)
-	}
-	if _, err := h.incidentService.UpdateStatus(ctx, incidentID, common.IncidentStatusAssigned, tenantID); err != nil {
-		return nil, fmt.Errorf("更新事件状态失败: %w", err)
 	}
 
 	h.logger.Infow("Incident assigned via BPMN", "incident_id", incidentID, "assignee_id", assigneeID)
 
-	return &CallbackEffect{Status: CallbackEffectApplied,
-		Message: fmt.Sprintf("事件 %d 已分配给用户 %d", incidentID, assigneeID),
-	}, nil
+	return incidentMutationEffect(outcome, fmt.Sprintf("事件 %d 已分配给用户 %d", incidentID, assigneeID))
 }
 
 // escalateIncident 升级事件
@@ -196,16 +190,17 @@ func (h *IncidentServiceTaskHandler) escalateIncident(ctx context.Context, varia
 	if h.incidentService == nil {
 		return nil, fmt.Errorf("incident service 未注入，无法升级事件")
 	}
-	resp, err := h.incidentService.EscalateIncidentLevel(ctx, incidentID, tenantID, escalationLevel)
+	outcome, err := h.incidentService.EscalateIncidentLevel(ctx, incidentID, tenantID, escalationLevel)
 	if err != nil {
 		return nil, fmt.Errorf("升级事件失败: %w", err)
 	}
+	if outcome == nil || outcome.Incident == nil {
+		return nil, fmt.Errorf("升级事件失败: incident domain returned an empty outcome")
+	}
 
-	h.logger.Infow("Incident escalated via BPMN", "incident_id", incidentID, "escalation_level", resp.EscalationLevel, "reason", reason)
+	h.logger.Infow("Incident escalated via BPMN", "incident_id", incidentID, "escalation_level", outcome.Incident.EscalationLevel, "reason", reason)
 
-	return &CallbackEffect{Status: CallbackEffectApplied,
-		Message: fmt.Sprintf("事件 %d 已升级到第 %d 级", incidentID, resp.EscalationLevel),
-	}, nil
+	return incidentMutationEffect(outcome, fmt.Sprintf("事件 %d 已升级到第 %d 级", incidentID, outcome.Incident.EscalationLevel))
 }
 
 // resolveIncident 解决事件
@@ -225,15 +220,14 @@ func (h *IncidentServiceTaskHandler) resolveIncident(ctx context.Context, variab
 	if h.incidentService == nil {
 		return nil, fmt.Errorf("incident service 未注入，无法解决事件")
 	}
-	if _, err := h.incidentService.ResolveIncidentForWorkflow(ctx, incidentID, tenantID, resolution); err != nil {
+	outcome, err := h.incidentService.ResolveIncidentForWorkflow(ctx, incidentID, tenantID, resolution)
+	if err != nil {
 		return nil, fmt.Errorf("解决事件失败: %w", err)
 	}
 
 	h.logger.Infow("Incident resolved via BPMN", "incident_id", incidentID, "resolution", resolution)
 
-	return &CallbackEffect{Status: CallbackEffectApplied,
-		Message: fmt.Sprintf("事件 %d 已解决: %s", incidentID, resolution),
-	}, nil
+	return incidentMutationEffect(outcome, fmt.Sprintf("事件 %d 已解决: %s", incidentID, resolution))
 }
 
 // closeIncident 关闭事件
@@ -253,15 +247,14 @@ func (h *IncidentServiceTaskHandler) closeIncident(ctx context.Context, variable
 	if h.incidentService == nil {
 		return nil, fmt.Errorf("incident service 未注入，无法关闭事件")
 	}
-	if _, err := h.incidentService.CloseIncidentForWorkflow(ctx, incidentID, tenantID, feedback); err != nil {
+	outcome, err := h.incidentService.CloseIncidentForWorkflow(ctx, incidentID, tenantID, feedback)
+	if err != nil {
 		return nil, fmt.Errorf("关闭事件失败: %w", err)
 	}
 
 	h.logger.Infow("Incident closed via BPMN", "incident_id", incidentID, "feedback", feedback)
 
-	return &CallbackEffect{Status: CallbackEffectApplied,
-		Message: fmt.Sprintf("事件 %d 已关闭", incidentID),
-	}, nil
+	return incidentMutationEffect(outcome, fmt.Sprintf("事件 %d 已关闭", incidentID))
 }
 
 // updateIncident 更新事件
@@ -286,15 +279,14 @@ func (h *IncidentServiceTaskHandler) updateIncident(ctx context.Context, variabl
 	if h.incidentService == nil {
 		return nil, fmt.Errorf("incident service 未注入，无法更新事件")
 	}
-	if _, err := h.incidentService.UpdateIncidentForWorkflow(ctx, incidentID, tenantID, title, description, priority, severity, status); err != nil {
+	outcome, err := h.incidentService.UpdateIncidentForWorkflow(ctx, incidentID, tenantID, title, description, priority, severity, status)
+	if err != nil {
 		return nil, fmt.Errorf("更新事件失败: %w", err)
 	}
 
 	h.logger.Infow("Incident updated via BPMN", "incident_id", incidentID)
 
-	return &CallbackEffect{Status: CallbackEffectApplied,
-		Message: fmt.Sprintf("事件 %d 已更新", incidentID),
-	}, nil
+	return incidentMutationEffect(outcome, fmt.Sprintf("事件 %d 已更新", incidentID))
 }
 
 // acknowledgeIncident 确认事件
@@ -313,15 +305,14 @@ func (h *IncidentServiceTaskHandler) acknowledgeIncident(ctx context.Context, va
 	if h.incidentService == nil {
 		return nil, fmt.Errorf("incident service 未注入，无法确认事件")
 	}
-	if _, err := h.incidentService.AcknowledgeIncidentForWorkflow(ctx, incidentID, tenantID); err != nil {
+	outcome, err := h.incidentService.AcknowledgeIncidentForWorkflow(ctx, incidentID, tenantID)
+	if err != nil {
 		return nil, fmt.Errorf("确认事件失败: %w", err)
 	}
 
 	h.logger.Infow("Incident acknowledged via BPMN", "incident_id", incidentID)
 
-	return &CallbackEffect{Status: CallbackEffectApplied,
-		Message: fmt.Sprintf("事件 %d 已确认", incidentID),
-	}, nil
+	return incidentMutationEffect(outcome, fmt.Sprintf("事件 %d 已确认", incidentID))
 }
 
 // categorizeIncident 分类事件
@@ -342,15 +333,24 @@ func (h *IncidentServiceTaskHandler) categorizeIncident(ctx context.Context, var
 	if h.incidentService == nil {
 		return nil, fmt.Errorf("incident service 未注入，无法分类事件")
 	}
-	if _, err := h.incidentService.CategorizeIncidentForWorkflow(ctx, incidentID, tenantID, category, subcategory); err != nil {
+	outcome, err := h.incidentService.CategorizeIncidentForWorkflow(ctx, incidentID, tenantID, category, subcategory)
+	if err != nil {
 		return nil, fmt.Errorf("分类事件失败: %w", err)
 	}
 
 	h.logger.Infow("Incident categorized via BPMN", "incident_id", incidentID, "category", category, "subcategory", subcategory)
 
-	return &CallbackEffect{Status: CallbackEffectApplied,
-		Message: fmt.Sprintf("事件 %d 已分类: %s/%s", incidentID, category, subcategory),
-	}, nil
+	return incidentMutationEffect(outcome, fmt.Sprintf("事件 %d 已分类: %s/%s", incidentID, category, subcategory))
+}
+
+func incidentMutationEffect(outcome *dto.IncidentMutationOutcome, message string) (*CallbackEffect, error) {
+	if outcome == nil || outcome.Incident == nil {
+		return nil, fmt.Errorf("incident domain returned an empty mutation outcome")
+	}
+	if !outcome.Applied {
+		return IdempotentEffect(message, nil), nil
+	}
+	return AppliedEffect(message, nil), nil
 }
 
 // 确保 IncidentServiceTaskHandler 实现了 ServiceTaskHandlerInterface

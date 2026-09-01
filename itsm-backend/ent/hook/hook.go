@@ -1196,18 +1196,6 @@ func (f TicketFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, erro
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TicketMutation", m)
 }
 
-// The TicketApprovalFunc type is an adapter to allow the use of ordinary
-// function as TicketApproval mutator.
-type TicketApprovalFunc func(context.Context, *ent.TicketApprovalMutation) (ent.Value, error)
-
-// Mutate calls f(ctx, m).
-func (f TicketApprovalFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-	if mv, ok := m.(*ent.TicketApprovalMutation); ok {
-		return f(ctx, mv)
-	}
-	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.TicketApprovalMutation", m)
-}
-
 // The TicketAssignmentRuleFunc type is an adapter to allow the use of ordinary
 // function as TicketAssignmentRule mutator.
 type TicketAssignmentRuleFunc func(context.Context, *ent.TicketAssignmentRuleMutation) (ent.Value, error)

@@ -40,8 +40,8 @@ jest.mock('@/lib/api/ticket-api', () => ({
   },
 }));
 
-jest.mock('@/lib/api/ticket-approval-api', () => ({
-  TicketApprovalApi: { getApprovalDecisions: jest.fn() },
+jest.mock('@/lib/api/bpmn-workflow-api', () => ({
+  BPMNWorkflowApi: { getTicketApprovalDecisions: jest.fn() },
 }));
 
 jest.mock('@/lib/api/ticket-relations-api', () => ({
@@ -98,7 +98,7 @@ jest.mock('../KBRecommendCard', () => ({ KBRecommendCard: () => null }));
 jest.mock('@/components/common/UserSelect', () => ({ UserSelect: () => null }));
 
 import { TicketApi } from '@/lib/api/ticket-api';
-import { TicketApprovalApi } from '@/lib/api/ticket-approval-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 import { TicketRelationsApi } from '@/lib/api/ticket-relations-api';
 import { UserApi } from '@/lib/api/user-api';
 import { TicketNotificationApi } from '@/lib/api/ticket-notification-api';
@@ -106,7 +106,7 @@ import { TicketNotificationApi } from '@/lib/api/ticket-notification-api';
 const mockGetTicket = TicketApi.getTicket as jest.Mock;
 const mockGetSLA = TicketApi.getTicketSLA as jest.Mock;
 const mockGetUsers = UserApi.getUsers as jest.Mock;
-const mockGetDecisions = TicketApprovalApi.getApprovalDecisions as jest.Mock;
+const mockGetDecisions = BPMNWorkflowApi.getTicketApprovalDecisions as jest.Mock;
 const mockGetRelationStats = TicketRelationsApi.getRelationStats as jest.Mock;
 const mockGetHistory = TicketApi.getTicketHistory as jest.Mock;
 const mockGetTicketNotifications = TicketNotificationApi.getTicketNotifications as jest.Mock;
@@ -163,6 +163,17 @@ describe('TicketDetail', () => {
       expect(screen.getAllByText('已分配').length).toBeGreaterThan(0);
     });
     expect(screen.queryByText('assigned')).not.toBeInTheDocument();
+  });
+
+  it('does not expose legacy ticket approval controls even if stale action flags are present', async () => {
+    mockGetTicket.mockResolvedValueOnce({ ...baseTicket, status: 'pending_approval' });
+
+    const { container } = render(<TicketDetail />);
+
+    await screen.findByText('工单诉求与业务描述');
+    const buttonText = Array.from(container.querySelectorAll('button')).map(button => button.textContent);
+    expect(buttonText).not.toContain('批准');
+    expect(buttonText).not.toContain('拒绝');
   });
 
   it('mounts the notification section lazily for users with notification:read', async () => {

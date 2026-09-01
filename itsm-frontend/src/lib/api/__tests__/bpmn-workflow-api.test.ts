@@ -239,6 +239,18 @@ describe('BPMNWorkflowApi', () => {
     });
   });
 
+  describe('getTicketApprovalDecisions', () => {
+    it('reads ticket approval history from the BPMN decision projection', async () => {
+      const expected = [{ id: 1, action: 'approve' }];
+      mockGet.mockResolvedValue({ data: expected });
+
+      const res = await BPMNWorkflowApi.getTicketApprovalDecisions(42);
+
+      expect(mockGet).toHaveBeenCalledWith('/api/v1/tickets/42/approval-decisions');
+      expect(res).toEqual(expected);
+    });
+  });
+
   describe('cancelTask', () => {
     it('should put cancel', async () => {
       mockPut.mockResolvedValue(undefined);

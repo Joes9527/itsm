@@ -256,6 +256,7 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 		{
 			name:      "assess_risk",
 			action:    "assess_risk",
+			expected:  CallbackEffectIdempotent,
 			extraVars: map[string]interface{}{
 				// type 缺省为 normal → medium；用 emergency 验证分支
 			},
@@ -359,6 +360,36 @@ func TestChangeServiceTaskHandler_AssessRisk_EmergencyType(t *testing.T) {
 	after, err := client.Change.Get(ctx, changeEntity.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "high", after.RiskLevel)
+
+	retried, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action":    "assess_risk",
+		"change_id": changeEntity.ID,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, CallbackEffectIdempotent, retried.Status)
+}
+
+func TestChangeServiceTaskHandler_UnchangedUpdateIsIdempotent(t *testing.T) {
+	_, handler, tenantID, changeEntity := setupChangeHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+
+	effect, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action":    "update_change",
+		"change_id": changeEntity.ID,
+		"title":     "测试变更",
+	})
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectIdempotent, effect.Status)
+}
+
+func TestChangeServiceTaskHandler_UnknownActionBlocks(t *testing.T) {
+	_, handler, tenantID, _ := setupChangeHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+
+	effect, err := handler.Execute(ctx, nil, map[string]interface{}{"action": "invented_action"})
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectBlocked, effect.Status)
+	require.Equal(t, CallbackBlockHandlerContract, effect.BlockCode)
 }
 
 func TestChangeServiceTaskHandler_NotifyStakeholdersWithoutDurableDeliveryBlocks(t *testing.T) {

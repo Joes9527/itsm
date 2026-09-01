@@ -60,22 +60,6 @@ export class TicketApi {
     });
   }
 
-  // Approve ticket - 使用后端实际的 workflow/approve 端点
-  static async approveTicket(
-    id: number,
-    data: {
-      action: 'approve' | 'reject' | 'delegate';
-      comment?: string;
-      ticketId: number;
-      delegateToUserId?: number;
-    }
-  ): Promise<{
-    success: boolean;
-    message: string;
-  }> {
-    return httpClient.post(`/api/v1/tickets/workflow/approve`, data);
-  }
-
   // Add comment
   static async addComment(
     id: number,
@@ -398,11 +382,6 @@ export class TicketApi {
   // Accept ticket (接单)
   static async acceptTicket(ticketId: number): Promise<{ message: string }> {
     return httpClient.post(`/api/v1/tickets/workflow/accept`, { ticketId: ticketId });
-  }
-
-  // Reject ticket (驳回)
-  static async rejectTicket(ticketId: number, reason: string): Promise<{ message: string }> {
-    return httpClient.post(`/api/v1/tickets/workflow/reject`, { ticketId: ticketId, reason });
   }
 
   // Withdraw ticket (撤回)

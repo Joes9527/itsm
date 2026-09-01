@@ -12,7 +12,6 @@ import (
 	"itsm-backend/ent/slaalerthistory"
 	"itsm-backend/ent/slaviolation"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/ticketapproval"
 	"itsm-backend/ent/ticketattachment"
 	"itsm-backend/ent/ticketcategory"
 	"itsm-backend/ent/ticketcc"
@@ -40,7 +39,6 @@ type TicketQuery struct {
 	withAttachments       *TicketAttachmentQuery
 	withTags              *TicketTagQuery
 	withRelatedTickets    *TicketQuery
-	withApprovals         *TicketApprovalQuery
 	withWorkflowRecords   *TicketWorkflowRecordQuery
 	withNotifications     *TicketNotificationQuery
 	withCcUsers           *TicketCCQuery
@@ -169,28 +167,6 @@ func (_q *TicketQuery) QueryRelatedTickets() *TicketQuery {
 			sqlgraph.From(ticket.Table, ticket.FieldID, selector),
 			sqlgraph.To(ticket.Table, ticket.FieldID),
 			sqlgraph.Edge(sqlgraph.M2M, false, ticket.RelatedTicketsTable, ticket.RelatedTicketsPrimaryKey...),
-		)
-		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
-		return fromU, nil
-	}
-	return query
-}
-
-// QueryApprovals chains the current query on the "approvals" edge.
-func (_q *TicketQuery) QueryApprovals() *TicketApprovalQuery {
-	query := (&TicketApprovalClient{config: _q.config}).Query()
-	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
-		if err := _q.prepareQuery(ctx); err != nil {
-			return nil, err
-		}
-		selector := _q.sqlQuery(ctx)
-		if err := selector.Err(); err != nil {
-			return nil, err
-		}
-		step := sqlgraph.NewStep(
-			sqlgraph.From(ticket.Table, ticket.FieldID, selector),
-			sqlgraph.To(ticketapproval.Table, ticketapproval.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, ticket.ApprovalsTable, ticket.ApprovalsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -614,7 +590,6 @@ func (_q *TicketQuery) Clone() *TicketQuery {
 		withAttachments:       _q.withAttachments.Clone(),
 		withTags:              _q.withTags.Clone(),
 		withRelatedTickets:    _q.withRelatedTickets.Clone(),
-		withApprovals:         _q.withApprovals.Clone(),
 		withWorkflowRecords:   _q.withWorkflowRecords.Clone(),
 		withNotifications:     _q.withNotifications.Clone(),
 		withCcUsers:           _q.withCcUsers.Clone(),
@@ -672,17 +647,6 @@ func (_q *TicketQuery) WithRelatedTickets(opts ...func(*TicketQuery)) *TicketQue
 		opt(query)
 	}
 	_q.withRelatedTickets = query
-	return _q
-}
-
-// WithApprovals tells the query-builder to eager-load the nodes that are connected to
-// the "approvals" edge. The optional arguments are used to configure the query builder of the edge.
-func (_q *TicketQuery) WithApprovals(opts ...func(*TicketApprovalQuery)) *TicketQuery {
-	query := (&TicketApprovalClient{config: _q.config}).Query()
-	for _, opt := range opts {
-		opt(query)
-	}
-	_q.withApprovals = query
 	return _q
 }
 
@@ -875,12 +839,11 @@ func (_q *TicketQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Ticke
 		nodes       = []*Ticket{}
 		withFKs     = _q.withFKs
 		_spec       = _q.querySpec()
-		loadedTypes = [15]bool{
+		loadedTypes = [14]bool{
 			_q.withComments != nil,
 			_q.withAttachments != nil,
 			_q.withTags != nil,
 			_q.withRelatedTickets != nil,
-			_q.withApprovals != nil,
 			_q.withWorkflowRecords != nil,
 			_q.withNotifications != nil,
 			_q.withCcUsers != nil,
@@ -939,13 +902,6 @@ func (_q *TicketQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*Ticke
 		if err := _q.loadRelatedTickets(ctx, query, nodes,
 			func(n *Ticket) { n.Edges.RelatedTickets = []*Ticket{} },
 			func(n *Ticket, e *Ticket) { n.Edges.RelatedTickets = append(n.Edges.RelatedTickets, e) }); err != nil {
-			return nil, err
-		}
-	}
-	if query := _q.withApprovals; query != nil {
-		if err := _q.loadApprovals(ctx, query, nodes,
-			func(n *Ticket) { n.Edges.Approvals = []*TicketApproval{} },
-			func(n *Ticket, e *TicketApproval) { n.Edges.Approvals = append(n.Edges.Approvals, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -1170,36 +1126,6 @@ func (_q *TicketQuery) loadRelatedTickets(ctx context.Context, query *TicketQuer
 		for kn := range nodes {
 			assign(kn, n)
 		}
-	}
-	return nil
-}
-func (_q *TicketQuery) loadApprovals(ctx context.Context, query *TicketApprovalQuery, nodes []*Ticket, init func(*Ticket), assign func(*Ticket, *TicketApproval)) error {
-	fks := make([]driver.Value, 0, len(nodes))
-	nodeids := make(map[int]*Ticket)
-	for i := range nodes {
-		fks = append(fks, nodes[i].ID)
-		nodeids[nodes[i].ID] = nodes[i]
-		if init != nil {
-			init(nodes[i])
-		}
-	}
-	if len(query.ctx.Fields) > 0 {
-		query.ctx.AppendFieldOnce(ticketapproval.FieldTicketID)
-	}
-	query.Where(predicate.TicketApproval(func(s *sql.Selector) {
-		s.Where(sql.InValues(s.C(ticket.ApprovalsColumn), fks...))
-	}))
-	neighbors, err := query.All(ctx)
-	if err != nil {
-		return err
-	}
-	for _, n := range neighbors {
-		fk := n.TicketID
-		node, ok := nodeids[fk]
-		if !ok {
-			return fmt.Errorf(`unexpected referenced foreign-key "ticket_id" returned %v for node %v`, fk, n.ID)
-		}
-		assign(node, n)
 	}
 	return nil
 }

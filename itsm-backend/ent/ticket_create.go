@@ -11,7 +11,6 @@ import (
 	"itsm-backend/ent/slaalerthistory"
 	"itsm-backend/ent/slaviolation"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/ticketapproval"
 	"itsm-backend/ent/ticketattachment"
 	"itsm-backend/ent/ticketcategory"
 	"itsm-backend/ent/ticketcc"
@@ -629,21 +628,6 @@ func (_c *TicketCreate) AddRelatedTickets(v ...*Ticket) *TicketCreate {
 	return _c.AddRelatedTicketIDs(ids...)
 }
 
-// AddApprovalIDs adds the "approvals" edge to the TicketApproval entity by IDs.
-func (_c *TicketCreate) AddApprovalIDs(ids ...int) *TicketCreate {
-	_c.mutation.AddApprovalIDs(ids...)
-	return _c
-}
-
-// AddApprovals adds the "approvals" edges to the TicketApproval entity.
-func (_c *TicketCreate) AddApprovals(v ...*TicketApproval) *TicketCreate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _c.AddApprovalIDs(ids...)
-}
-
 // AddWorkflowRecordIDs adds the "workflow_records" edge to the TicketWorkflowRecord entity by IDs.
 func (_c *TicketCreate) AddWorkflowRecordIDs(ids ...int) *TicketCreate {
 	_c.mutation.AddWorkflowRecordIDs(ids...)
@@ -1144,22 +1128,6 @@ func (_c *TicketCreate) createSpec() (*Ticket, *sqlgraph.CreateSpec) {
 			Bidi:    true,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := _c.mutation.ApprovalsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   ticket.ApprovalsTable,
-			Columns: []string{ticket.ApprovalsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(ticketapproval.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

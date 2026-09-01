@@ -936,6 +936,9 @@ func (s *TicketService) GetTicketByNumber(ctx context.Context, ticketNumber stri
 // UpdateTicket 更新工单
 func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.UpdateTicketRequest, tenantID int) (*ticket.Ticket, error) {
 	s.logger.Infow("Updating ticket", "ticket_id", id, "tenant_id", tenantID)
+	if req.Status == "approved" || req.Status == "rejected" {
+		return nil, fmt.Errorf("审批状态只能由 BPMN 任务命令推进")
+	}
 
 	// 获取当前工单
 	current, err := s.repo.GetByID(ctx, id, tenantID)
@@ -1596,6 +1599,13 @@ func (s *TicketService) toEntTicket(t *ticket.Ticket) *ent.Ticket {
 
 // UpdateTicketStatus 更新工单状态（等价 V1.TicketService.UpdateTicketStatus）
 func (s *TicketService) UpdateTicketStatus(ctx context.Context, ticketID int, status string, tenantID int, operatorID int) (*ticket.Ticket, error) {
+	if status == "approved" || status == "rejected" {
+		return nil, fmt.Errorf("审批状态只能由 BPMN 任务命令推进")
+	}
+	return s.updateTicketStatus(ctx, ticketID, status, tenantID, operatorID)
+}
+
+func (s *TicketService) updateTicketStatus(ctx context.Context, ticketID int, status string, tenantID int, operatorID int) (*ticket.Ticket, error) {
 	s.logger.Infow("Updating ticket status", "ticket_id", ticketID, "status", status, "tenant_id", tenantID, "operator_id", operatorID)
 
 	current, err := s.repo.GetByID(ctx, ticketID, tenantID)
@@ -1681,7 +1691,7 @@ func (s *TicketService) UpdateTicketStatus(ctx context.Context, ticketID int, st
 // service/bpmn -> service 的循环依赖），所以这里只暴露一个返回 error 的签名，供
 // service/bpmn 包本地声明的接口去匹配。
 func (s *TicketService) UpdateTicketStatusForWorkflow(ctx context.Context, ticketID int, status string, tenantID int, operatorID int) error {
-	_, err := s.UpdateTicketStatus(ctx, ticketID, status, tenantID, operatorID)
+	_, err := s.updateTicketStatus(ctx, ticketID, status, tenantID, operatorID)
 	return err
 }
 

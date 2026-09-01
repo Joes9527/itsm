@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { GitBranch } from 'lucide-react';
-import { TicketApprovalApi } from '@/lib/api/ticket-approval-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 import { toApprovalSteps } from '@/components/business/detail-tabs/approvalUtils';
 import type { ApprovalStep, ApprovalStepStatus } from '@/components/business/detail-tabs/types';
 
@@ -15,18 +15,15 @@ const statusBadge: Record<ApprovalStepStatus, { text: string; className: string 
   skipped: { text: '已跳过', className: 'text-slate-500 bg-slate-100 border-slate-200' },
 };
 
-/**
- * 工单工作台审批链卡片：视觉对齐 prototype 的「服务目录审批流 (BPMN 节点)」卡片，
- * 数据与 ApprovalWorkflowPanel 同一来源（TicketApprovalApi.getApprovalDecisions）。
- */
-export const TicketApprovalCards: React.FC<{ ticketId: number }> = ({ ticketId }) => {
+/** Read-only cards projected exclusively from BPMN ProcessApprovalDecision. */
+export const ProcessApprovalDecisionCards: React.FC<{ ticketId: number }> = ({ ticketId }) => {
   const [steps, setSteps] = useState<ApprovalStep[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const decisions = await TicketApprovalApi.getApprovalDecisions(ticketId);
+      const decisions = await BPMNWorkflowApi.getTicketApprovalDecisions(ticketId);
       setSteps(toApprovalSteps(decisions ?? []));
     } catch {
       setSteps([]);
@@ -40,37 +37,46 @@ export const TicketApprovalCards: React.FC<{ ticketId: number }> = ({ ticketId }
   }, [load]);
 
   if (loading) {
-    return <div className="p-6 text-center text-xs text-slate-400">审批链加载中...</div>;
+    return <div className='p-6 text-center text-xs text-slate-400'>审批链加载中...</div>;
   }
 
   if (steps.length === 0) {
     return (
-      <div className="text-center py-6 text-slate-400">
-        <GitBranch className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-        <span className="text-xs">该工单未走审批流程</span>
+      <div className='text-center py-6 text-slate-400'>
+        <GitBranch className='w-8 h-8 mx-auto mb-2 text-slate-300' />
+        <span className='text-xs'>该工单未走审批流程</span>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3 pt-2 text-xs">
+    <div className='space-y-3 pt-2 text-xs'>
       {steps.map(step => {
         const badge = statusBadge[step.status];
         return (
-          <div key={step.id} className="p-3.5 bg-slate-50 rounded-xl border border-slate-100 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-slate-800">{step.step || `审批节点 ${step.level}`}</span>
-              <span className={`text-[11px] px-2 py-0.5 rounded font-medium border ${badge.className}`}>
+          <div
+            key={step.id}
+            className='p-3.5 bg-slate-50 rounded-xl border border-slate-100 space-y-2'
+          >
+            <div className='flex items-center justify-between'>
+              <span className='font-bold text-slate-800'>
+                {step.step || `审批节点 ${step.level}`}
+              </span>
+              <span
+                className={`text-[11px] px-2 py-0.5 rounded font-medium border ${badge.className}`}
+              >
                 {badge.text}
               </span>
             </div>
-            <div className="text-slate-600 space-y-1 text-xs">
-              <div className="flex justify-between">
+            <div className='text-slate-600 space-y-1 text-xs'>
+              <div className='flex justify-between'>
                 <span>审批人: {step.approverName || '-'}</span>
-                <span className="font-mono text-slate-400">{step.processedAt ? new Date(step.processedAt).toLocaleString('zh-CN') : ''}</span>
+                <span className='font-mono text-slate-400'>
+                  {step.processedAt ? new Date(step.processedAt).toLocaleString('zh-CN') : ''}
+                </span>
               </div>
               {step.comment && (
-                <div className="bg-white p-2.5 rounded-lg border border-slate-100 text-slate-700">
+                <div className='bg-white p-2.5 rounded-lg border border-slate-100 text-slate-700'>
                   审批意见：{step.comment}
                 </div>
               )}
@@ -82,4 +88,4 @@ export const TicketApprovalCards: React.FC<{ ticketId: number }> = ({ ticketId }
   );
 };
 
-export default TicketApprovalCards;
+export default ProcessApprovalDecisionCards;

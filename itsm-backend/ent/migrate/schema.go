@@ -4195,36 +4195,6 @@ var (
 			},
 		},
 	}
-	// TicketApprovalsColumns holds the columns for the "ticket_approvals" table.
-	TicketApprovalsColumns = []*schema.Column{
-		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "level", Type: field.TypeInt},
-		{Name: "level_name", Type: field.TypeString},
-		{Name: "approver_id", Type: field.TypeInt},
-		{Name: "status", Type: field.TypeString, Default: "pending"},
-		{Name: "action", Type: field.TypeString, Nullable: true},
-		{Name: "comment", Type: field.TypeString, Nullable: true},
-		{Name: "delegate_to_user_id", Type: field.TypeInt, Nullable: true},
-		{Name: "tenant_id", Type: field.TypeInt},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "processed_at", Type: field.TypeTime, Nullable: true},
-		{Name: "ticket_id", Type: field.TypeInt},
-	}
-	// TicketApprovalsTable holds the schema information for the "ticket_approvals" table.
-	TicketApprovalsTable = &schema.Table{
-		Name:       "ticket_approvals",
-		Columns:    TicketApprovalsColumns,
-		PrimaryKey: []*schema.Column{TicketApprovalsColumns[0]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "ticket_approvals_tickets_approvals",
-				Columns:    []*schema.Column{TicketApprovalsColumns[12]},
-				RefColumns: []*schema.Column{TicketsColumns[0]},
-				OnDelete:   schema.NoAction,
-			},
-		},
-	}
 	// TicketAssignmentRulesColumns holds the columns for the "ticket_assignment_rules" table.
 	TicketAssignmentRulesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -5432,7 +5402,6 @@ var (
 		TenantsTable,
 		TenantInstallationsTable,
 		TicketsTable,
-		TicketApprovalsTable,
 		TicketAssignmentRulesTable,
 		TicketAttachmentsTable,
 		TicketAutomationRulesTable,
@@ -5546,7 +5515,6 @@ func init() {
 	TicketsTable.ForeignKeys[6].RefTable = TicketTemplatesTable
 	TicketsTable.ForeignKeys[7].RefTable = UsersTable
 	TicketsTable.ForeignKeys[8].RefTable = UsersTable
-	TicketApprovalsTable.ForeignKeys[0].RefTable = TicketsTable
 	TicketAttachmentsTable.ForeignKeys[0].RefTable = TicketsTable
 	TicketAttachmentsTable.ForeignKeys[1].RefTable = UsersTable
 	TicketAutomationRulesTable.ForeignKeys[0].RefTable = UsersTable

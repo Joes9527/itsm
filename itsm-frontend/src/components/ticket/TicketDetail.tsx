@@ -3,13 +3,13 @@
 /**
  * 工单详情组件
  * 从 tickets/[ticketId]/page.tsx 抽取，与 IncidentDetail/ProblemDetail/ChangeDetail 域组件模式对齐
- * 包含：基本信息、SLA、审批/拒绝/分配/编辑/抄送/删除操作、详情 Tabs（评论/附件/审批链/历史/关联/通知）
+ * 包含：基本信息、SLA、分配/编辑/抄送/删除操作、详情 Tabs（评论/附件/BPMN 审批历史/历史/关联/通知）
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { TicketApi } from '@/lib/api/ticket-api';
-import { TicketApprovalApi } from '@/lib/api/ticket-approval-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 import { TicketRelationsApi } from '@/lib/api/ticket-relations-api';
 import { UserApi } from '@/lib/api/user-api';
 import type { Ticket } from '@/lib/api/api-config';
@@ -19,13 +19,11 @@ import {
   ArrowLeft,
   AlertCircle,
   XCircle,
-  CheckCircle2,
   UserCheck,
   Edit,
   Save,
   X,
   Trash2,
-  XIcon,
   Users,
   Clock,
 } from 'lucide-react';
@@ -71,7 +69,7 @@ import { KBRecommendCard } from './KBRecommendCard';
 import { TicketCommentStream } from './TicketCommentStream';
 import { TicketAttachmentGrid } from './TicketAttachmentGrid';
 import { TicketHistoryList } from './TicketHistoryList';
-import { TicketApprovalCards } from './TicketApprovalCards';
+import { ProcessApprovalDecisionCards } from './ProcessApprovalDecisionCards';
 import { TicketRelationCards } from './TicketRelationCards';
 import { TicketNotificationSection } from '@/components/business/TicketNotificationSection';
 import {
@@ -139,8 +137,6 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   const [updating, setUpdating] = useState(false);
   const [ccing, setCCing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [approving, setApproving] = useState(false);
-  const [rejecting, setRejecting] = useState(false);
   const [slaInfo, setSlaInfo] = useState<{
     slaName: string;
     responseTime: number;
@@ -234,7 +230,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
         const [comments, attachments, approvals, history, relations] = await Promise.allSettled([
           ticketCommentAdapter.list(ticketId),
           ticketAttachmentAdapter.list(ticketId),
-          TicketApprovalApi.getApprovalDecisions(ticketId),
+          BPMNWorkflowApi.getTicketApprovalDecisions(ticketId),
           TicketApi.getTicketHistory(ticketId),
           TicketRelationsApi.getRelationStats(ticketId),
         ]);
@@ -277,21 +273,6 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
     fetchUsers();
   }, [fetchUsers]);
 
-  // Handle approval (轻量版：仅改状态)
-  const handleApprove = async () => {
-    if (approving) return;
-    try {
-      setApproving(true);
-      await TicketApi.updateTicketStatus(ticketId, 'approved');
-      antMessage.success('批准成功');
-      fetchTicket();
-    } catch (error) {
-      handleError(error, 'approveTicket', '批准失败');
-    } finally {
-      setApproving(false);
-    }
-  };
-
   const handleCCSubmit = async (values: {
     ccUsers: number[];
     comment?: string;
@@ -313,21 +294,6 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       handleError(error, 'ccTicket', '抄送失败');
     } finally {
       setCCing(false);
-    }
-  };
-
-  // Handle rejection (轻量版：仅改状态)
-  const handleReject = async () => {
-    if (rejecting) return;
-    try {
-      setRejecting(true);
-      await TicketApi.updateTicketStatus(ticketId, 'rejected');
-      antMessage.success('已拒绝');
-      fetchTicket();
-    } catch (error) {
-      handleError(error, 'rejectTicket', '拒绝失败');
-    } finally {
-      setRejecting(false);
     }
   };
 
@@ -544,32 +510,6 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
           {/* 右侧：规范动作按钮控制台 */}
           <div className="flex flex-wrap items-center gap-2 self-start lg:self-center shrink-0">
-            <button
-              type="button"
-              onClick={handleApprove}
-              disabled={!ticket.actions?.approve?.allowed}
-              title={ticket.actions?.approve?.reason || ''}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white transition-colors duration-150 cursor-pointer shadow-xs disabled:opacity-50 disabled:cursor-not-allowed ${
-                !ticket.actions?.approve?.allowed ? DISABLED_ACTION_CLASS : ''
-              }`}
-            >
-              <CheckCircle2 size={13} />
-              <span>{approving ? '批准中...' : '批准'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleReject}
-              disabled={!ticket.actions?.reject?.allowed}
-              title={ticket.actions?.reject?.reason || ''}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 hover:border-slate-300 transition-colors duration-150 cursor-pointer shadow-2xs disabled:opacity-50 disabled:cursor-not-allowed ${
-                !ticket.actions?.reject?.allowed ? DISABLED_ACTION_CLASS : ''
-              }`}
-            >
-              <XIcon size={13} className="text-slate-500" />
-              <span>{rejecting ? '拒绝中...' : '拒绝'}</span>
-            </button>
-
             <button
               type="button"
               onClick={handleAssign}
@@ -1250,7 +1190,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
           {ticketSource === 'service_catalog' && (
             <ServiceCatalogApprovalChain ticketId={ticketId} />
           )}
-          <TicketApprovalCards ticketId={ticketId} />
+          <ProcessApprovalDecisionCards ticketId={ticketId} />
         </div>
       ),
     },

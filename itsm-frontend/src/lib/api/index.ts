@@ -31,7 +31,6 @@ export type {
 // 工单
 export { TicketApi } from './ticket-api';
 export { TicketCategoryApi } from './ticket-category-api';
-export { TicketApprovalApi } from './ticket-approval-api';
 export { TicketAssignmentApi } from './ticket-assignment-api';
 export { TicketAttachmentApi } from './ticket-attachment-api';
 export { TicketCommentApi } from './ticket-comment-api';

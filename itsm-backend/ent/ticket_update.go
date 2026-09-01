@@ -12,7 +12,6 @@ import (
 	"itsm-backend/ent/slaalerthistory"
 	"itsm-backend/ent/slaviolation"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/ticketapproval"
 	"itsm-backend/ent/ticketattachment"
 	"itsm-backend/ent/ticketcategory"
 	"itsm-backend/ent/ticketcc"
@@ -889,21 +888,6 @@ func (_u *TicketUpdate) AddRelatedTickets(v ...*Ticket) *TicketUpdate {
 	return _u.AddRelatedTicketIDs(ids...)
 }
 
-// AddApprovalIDs adds the "approvals" edge to the TicketApproval entity by IDs.
-func (_u *TicketUpdate) AddApprovalIDs(ids ...int) *TicketUpdate {
-	_u.mutation.AddApprovalIDs(ids...)
-	return _u
-}
-
-// AddApprovals adds the "approvals" edges to the TicketApproval entity.
-func (_u *TicketUpdate) AddApprovals(v ...*TicketApproval) *TicketUpdate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddApprovalIDs(ids...)
-}
-
 // AddWorkflowRecordIDs adds the "workflow_records" edge to the TicketWorkflowRecord entity by IDs.
 func (_u *TicketUpdate) AddWorkflowRecordIDs(ids ...int) *TicketUpdate {
 	_u.mutation.AddWorkflowRecordIDs(ids...)
@@ -1111,27 +1095,6 @@ func (_u *TicketUpdate) RemoveRelatedTickets(v ...*Ticket) *TicketUpdate {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveRelatedTicketIDs(ids...)
-}
-
-// ClearApprovals clears all "approvals" edges to the TicketApproval entity.
-func (_u *TicketUpdate) ClearApprovals() *TicketUpdate {
-	_u.mutation.ClearApprovals()
-	return _u
-}
-
-// RemoveApprovalIDs removes the "approvals" edge to TicketApproval entities by IDs.
-func (_u *TicketUpdate) RemoveApprovalIDs(ids ...int) *TicketUpdate {
-	_u.mutation.RemoveApprovalIDs(ids...)
-	return _u
-}
-
-// RemoveApprovals removes "approvals" edges to TicketApproval entities.
-func (_u *TicketUpdate) RemoveApprovals(v ...*TicketApproval) *TicketUpdate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveApprovalIDs(ids...)
 }
 
 // ClearWorkflowRecords clears all "workflow_records" edges to the TicketWorkflowRecord entity.
@@ -1778,51 +1741,6 @@ func (_u *TicketUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    true,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if _u.mutation.ApprovalsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   ticket.ApprovalsTable,
-			Columns: []string{ticket.ApprovalsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(ticketapproval.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedApprovalsIDs(); len(nodes) > 0 && !_u.mutation.ApprovalsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   ticket.ApprovalsTable,
-			Columns: []string{ticket.ApprovalsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(ticketapproval.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.ApprovalsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   ticket.ApprovalsTable,
-			Columns: []string{ticket.ApprovalsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(ticketapproval.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -3100,21 +3018,6 @@ func (_u *TicketUpdateOne) AddRelatedTickets(v ...*Ticket) *TicketUpdateOne {
 	return _u.AddRelatedTicketIDs(ids...)
 }
 
-// AddApprovalIDs adds the "approvals" edge to the TicketApproval entity by IDs.
-func (_u *TicketUpdateOne) AddApprovalIDs(ids ...int) *TicketUpdateOne {
-	_u.mutation.AddApprovalIDs(ids...)
-	return _u
-}
-
-// AddApprovals adds the "approvals" edges to the TicketApproval entity.
-func (_u *TicketUpdateOne) AddApprovals(v ...*TicketApproval) *TicketUpdateOne {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddApprovalIDs(ids...)
-}
-
 // AddWorkflowRecordIDs adds the "workflow_records" edge to the TicketWorkflowRecord entity by IDs.
 func (_u *TicketUpdateOne) AddWorkflowRecordIDs(ids ...int) *TicketUpdateOne {
 	_u.mutation.AddWorkflowRecordIDs(ids...)
@@ -3322,27 +3225,6 @@ func (_u *TicketUpdateOne) RemoveRelatedTickets(v ...*Ticket) *TicketUpdateOne {
 		ids[i] = v[i].ID
 	}
 	return _u.RemoveRelatedTicketIDs(ids...)
-}
-
-// ClearApprovals clears all "approvals" edges to the TicketApproval entity.
-func (_u *TicketUpdateOne) ClearApprovals() *TicketUpdateOne {
-	_u.mutation.ClearApprovals()
-	return _u
-}
-
-// RemoveApprovalIDs removes the "approvals" edge to TicketApproval entities by IDs.
-func (_u *TicketUpdateOne) RemoveApprovalIDs(ids ...int) *TicketUpdateOne {
-	_u.mutation.RemoveApprovalIDs(ids...)
-	return _u
-}
-
-// RemoveApprovals removes "approvals" edges to TicketApproval entities.
-func (_u *TicketUpdateOne) RemoveApprovals(v ...*TicketApproval) *TicketUpdateOne {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveApprovalIDs(ids...)
 }
 
 // ClearWorkflowRecords clears all "workflow_records" edges to the TicketWorkflowRecord entity.
@@ -4019,51 +3901,6 @@ func (_u *TicketUpdateOne) sqlSave(ctx context.Context) (_node *Ticket, err erro
 			Bidi:    true,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if _u.mutation.ApprovalsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   ticket.ApprovalsTable,
-			Columns: []string{ticket.ApprovalsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(ticketapproval.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedApprovalsIDs(); len(nodes) > 0 && !_u.mutation.ApprovalsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   ticket.ApprovalsTable,
-			Columns: []string{ticket.ApprovalsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(ticketapproval.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.ApprovalsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   ticket.ApprovalsTable,
-			Columns: []string{ticket.ApprovalsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(ticketapproval.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

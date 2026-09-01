@@ -110,7 +110,6 @@ import (
 	"itsm-backend/ent/tenant"
 	"itsm-backend/ent/tenantinstallation"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/ticketapproval"
 	"itsm-backend/ent/ticketassignmentrule"
 	"itsm-backend/ent/ticketattachment"
 	"itsm-backend/ent/ticketautomationrule"
@@ -342,8 +341,6 @@ type Client struct {
 	TenantInstallation *TenantInstallationClient
 	// Ticket is the client for interacting with the Ticket builders.
 	Ticket *TicketClient
-	// TicketApproval is the client for interacting with the TicketApproval builders.
-	TicketApproval *TicketApprovalClient
 	// TicketAssignmentRule is the client for interacting with the TicketAssignmentRule builders.
 	TicketAssignmentRule *TicketAssignmentRuleClient
 	// TicketAttachment is the client for interacting with the TicketAttachment builders.
@@ -496,7 +493,6 @@ func (c *Client) init() {
 	c.Tenant = NewTenantClient(c.config)
 	c.TenantInstallation = NewTenantInstallationClient(c.config)
 	c.Ticket = NewTicketClient(c.config)
-	c.TicketApproval = NewTicketApprovalClient(c.config)
 	c.TicketAssignmentRule = NewTicketAssignmentRuleClient(c.config)
 	c.TicketAttachment = NewTicketAttachmentClient(c.config)
 	c.TicketAutomationRule = NewTicketAutomationRuleClient(c.config)
@@ -709,7 +705,6 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Tenant:                      NewTenantClient(cfg),
 		TenantInstallation:          NewTenantInstallationClient(cfg),
 		Ticket:                      NewTicketClient(cfg),
-		TicketApproval:              NewTicketApprovalClient(cfg),
 		TicketAssignmentRule:        NewTicketAssignmentRuleClient(cfg),
 		TicketAttachment:            NewTicketAttachmentClient(cfg),
 		TicketAutomationRule:        NewTicketAutomationRuleClient(cfg),
@@ -849,7 +844,6 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Tenant:                      NewTenantClient(cfg),
 		TenantInstallation:          NewTenantInstallationClient(cfg),
 		Ticket:                      NewTicketClient(cfg),
-		TicketApproval:              NewTicketApprovalClient(cfg),
 		TicketAssignmentRule:        NewTicketAssignmentRuleClient(cfg),
 		TicketAttachment:            NewTicketAttachmentClient(cfg),
 		TicketAutomationRule:        NewTicketAutomationRuleClient(cfg),
@@ -923,7 +917,7 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Role, c.RolePermission, c.RootCauseAnalysis, c.SLAAlertHistory,
 		c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAViolation, c.ServiceCatalog,
 		c.ServiceRequest, c.StandardChange, c.Survey, c.SurveyResponse, c.SystemConfig,
-		c.Tag, c.Team, c.Tenant, c.TenantInstallation, c.Ticket, c.TicketApproval,
+		c.Tag, c.Team, c.Tenant, c.TenantInstallation, c.Ticket,
 		c.TicketAssignmentRule, c.TicketAttachment, c.TicketAutomationRule, c.TicketCC,
 		c.TicketCategory, c.TicketComment, c.TicketNotification, c.TicketTag,
 		c.TicketTemplate, c.TicketType, c.TicketView, c.TicketWorkflowRecord,
@@ -962,7 +956,7 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Role, c.RolePermission, c.RootCauseAnalysis, c.SLAAlertHistory,
 		c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAViolation, c.ServiceCatalog,
 		c.ServiceRequest, c.StandardChange, c.Survey, c.SurveyResponse, c.SystemConfig,
-		c.Tag, c.Team, c.Tenant, c.TenantInstallation, c.Ticket, c.TicketApproval,
+		c.Tag, c.Team, c.Tenant, c.TenantInstallation, c.Ticket,
 		c.TicketAssignmentRule, c.TicketAttachment, c.TicketAutomationRule, c.TicketCC,
 		c.TicketCategory, c.TicketComment, c.TicketNotification, c.TicketTag,
 		c.TicketTemplate, c.TicketType, c.TicketView, c.TicketWorkflowRecord,
@@ -1175,8 +1169,6 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.TenantInstallation.mutate(ctx, m)
 	case *TicketMutation:
 		return c.Ticket.mutate(ctx, m)
-	case *TicketApprovalMutation:
-		return c.TicketApproval.mutate(ctx, m)
 	case *TicketAssignmentRuleMutation:
 		return c.TicketAssignmentRule.mutate(ctx, m)
 	case *TicketAttachmentMutation:
@@ -16654,22 +16646,6 @@ func (c *TicketClient) QueryRelatedTickets(_m *Ticket) *TicketQuery {
 	return query
 }
 
-// QueryApprovals queries the approvals edge of a Ticket.
-func (c *TicketClient) QueryApprovals(_m *Ticket) *TicketApprovalQuery {
-	query := (&TicketApprovalClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(ticket.Table, ticket.FieldID, id),
-			sqlgraph.To(ticketapproval.Table, ticketapproval.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, ticket.ApprovalsTable, ticket.ApprovalsColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // QueryWorkflowRecords queries the workflow_records edge of a Ticket.
 func (c *TicketClient) QueryWorkflowRecords(_m *Ticket) *TicketWorkflowRecordQuery {
 	query := (&TicketWorkflowRecordClient{config: c.config}).Query()
@@ -16852,155 +16828,6 @@ func (c *TicketClient) mutate(ctx context.Context, m *TicketMutation) (Value, er
 		return (&TicketDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Ticket mutation op: %q", m.Op())
-	}
-}
-
-// TicketApprovalClient is a client for the TicketApproval schema.
-type TicketApprovalClient struct {
-	config
-}
-
-// NewTicketApprovalClient returns a client for the TicketApproval from the given config.
-func NewTicketApprovalClient(c config) *TicketApprovalClient {
-	return &TicketApprovalClient{config: c}
-}
-
-// Use adds a list of mutation hooks to the hooks stack.
-// A call to `Use(f, g, h)` equals to `ticketapproval.Hooks(f(g(h())))`.
-func (c *TicketApprovalClient) Use(hooks ...Hook) {
-	c.hooks.TicketApproval = append(c.hooks.TicketApproval, hooks...)
-}
-
-// Intercept adds a list of query interceptors to the interceptors stack.
-// A call to `Intercept(f, g, h)` equals to `ticketapproval.Intercept(f(g(h())))`.
-func (c *TicketApprovalClient) Intercept(interceptors ...Interceptor) {
-	c.inters.TicketApproval = append(c.inters.TicketApproval, interceptors...)
-}
-
-// Create returns a builder for creating a TicketApproval entity.
-func (c *TicketApprovalClient) Create() *TicketApprovalCreate {
-	mutation := newTicketApprovalMutation(c.config, OpCreate)
-	return &TicketApprovalCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// CreateBulk returns a builder for creating a bulk of TicketApproval entities.
-func (c *TicketApprovalClient) CreateBulk(builders ...*TicketApprovalCreate) *TicketApprovalCreateBulk {
-	return &TicketApprovalCreateBulk{config: c.config, builders: builders}
-}
-
-// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
-// a builder and applies setFunc on it.
-func (c *TicketApprovalClient) MapCreateBulk(slice any, setFunc func(*TicketApprovalCreate, int)) *TicketApprovalCreateBulk {
-	rv := reflect.ValueOf(slice)
-	if rv.Kind() != reflect.Slice {
-		return &TicketApprovalCreateBulk{err: fmt.Errorf("calling to TicketApprovalClient.MapCreateBulk with wrong type %T, need slice", slice)}
-	}
-	builders := make([]*TicketApprovalCreate, rv.Len())
-	for i := 0; i < rv.Len(); i++ {
-		builders[i] = c.Create()
-		setFunc(builders[i], i)
-	}
-	return &TicketApprovalCreateBulk{config: c.config, builders: builders}
-}
-
-// Update returns an update builder for TicketApproval.
-func (c *TicketApprovalClient) Update() *TicketApprovalUpdate {
-	mutation := newTicketApprovalMutation(c.config, OpUpdate)
-	return &TicketApprovalUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOne returns an update builder for the given entity.
-func (c *TicketApprovalClient) UpdateOne(_m *TicketApproval) *TicketApprovalUpdateOne {
-	mutation := newTicketApprovalMutation(c.config, OpUpdateOne, withTicketApproval(_m))
-	return &TicketApprovalUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// UpdateOneID returns an update builder for the given id.
-func (c *TicketApprovalClient) UpdateOneID(id int) *TicketApprovalUpdateOne {
-	mutation := newTicketApprovalMutation(c.config, OpUpdateOne, withTicketApprovalID(id))
-	return &TicketApprovalUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// Delete returns a delete builder for TicketApproval.
-func (c *TicketApprovalClient) Delete() *TicketApprovalDelete {
-	mutation := newTicketApprovalMutation(c.config, OpDelete)
-	return &TicketApprovalDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
-}
-
-// DeleteOne returns a builder for deleting the given entity.
-func (c *TicketApprovalClient) DeleteOne(_m *TicketApproval) *TicketApprovalDeleteOne {
-	return c.DeleteOneID(_m.ID)
-}
-
-// DeleteOneID returns a builder for deleting the given entity by its id.
-func (c *TicketApprovalClient) DeleteOneID(id int) *TicketApprovalDeleteOne {
-	builder := c.Delete().Where(ticketapproval.ID(id))
-	builder.mutation.id = &id
-	builder.mutation.op = OpDeleteOne
-	return &TicketApprovalDeleteOne{builder}
-}
-
-// Query returns a query builder for TicketApproval.
-func (c *TicketApprovalClient) Query() *TicketApprovalQuery {
-	return &TicketApprovalQuery{
-		config: c.config,
-		ctx:    &QueryContext{Type: TypeTicketApproval},
-		inters: c.Interceptors(),
-	}
-}
-
-// Get returns a TicketApproval entity by its id.
-func (c *TicketApprovalClient) Get(ctx context.Context, id int) (*TicketApproval, error) {
-	return c.Query().Where(ticketapproval.ID(id)).Only(ctx)
-}
-
-// GetX is like Get, but panics if an error occurs.
-func (c *TicketApprovalClient) GetX(ctx context.Context, id int) *TicketApproval {
-	obj, err := c.Get(ctx, id)
-	if err != nil {
-		panic(err)
-	}
-	return obj
-}
-
-// QueryTicket queries the ticket edge of a TicketApproval.
-func (c *TicketApprovalClient) QueryTicket(_m *TicketApproval) *TicketQuery {
-	query := (&TicketClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(ticketapproval.Table, ticketapproval.FieldID, id),
-			sqlgraph.To(ticket.Table, ticket.FieldID),
-			sqlgraph.Edge(sqlgraph.M2O, true, ticketapproval.TicketTable, ticketapproval.TicketColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// Hooks returns the client hooks.
-func (c *TicketApprovalClient) Hooks() []Hook {
-	return c.hooks.TicketApproval
-}
-
-// Interceptors returns the client interceptors.
-func (c *TicketApprovalClient) Interceptors() []Interceptor {
-	return c.inters.TicketApproval
-}
-
-func (c *TicketApprovalClient) mutate(ctx context.Context, m *TicketApprovalMutation) (Value, error) {
-	switch m.Op() {
-	case OpCreate:
-		return (&TicketApprovalCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdate:
-		return (&TicketApprovalUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpUpdateOne:
-		return (&TicketApprovalUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
-	case OpDelete, OpDeleteOne:
-		return (&TicketApprovalDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
-	default:
-		return nil, fmt.Errorf("ent: unknown TicketApproval mutation op: %q", m.Op())
 	}
 }
 
@@ -20525,11 +20352,11 @@ type (
 		RootCauseAnalysis, SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric,
 		SLAViolation, ServiceCatalog, ServiceRequest, StandardChange, Survey,
 		SurveyResponse, SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket,
-		TicketApproval, TicketAssignmentRule, TicketAttachment, TicketAutomationRule,
-		TicketCC, TicketCategory, TicketComment, TicketNotification, TicketTag,
-		TicketTemplate, TicketType, TicketView, TicketWorkflowRecord, ToolInvocation,
-		User, Vendor, WorkItemNumberSequence, WorkItemRelation, Workflow,
-		WorkflowInstance, WorkflowTask, WorkflowVersion []ent.Hook
+		TicketAssignmentRule, TicketAttachment, TicketAutomationRule, TicketCC,
+		TicketCategory, TicketComment, TicketNotification, TicketTag, TicketTemplate,
+		TicketType, TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor,
+		WorkItemNumberSequence, WorkItemRelation, Workflow, WorkflowInstance,
+		WorkflowTask, WorkflowVersion []ent.Hook
 	}
 	inters struct {
 		Application, ApprovalChain, Asset, AssetLicense, AuditLog, BPMNPermission,
@@ -20553,10 +20380,10 @@ type (
 		RootCauseAnalysis, SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric,
 		SLAViolation, ServiceCatalog, ServiceRequest, StandardChange, Survey,
 		SurveyResponse, SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket,
-		TicketApproval, TicketAssignmentRule, TicketAttachment, TicketAutomationRule,
-		TicketCC, TicketCategory, TicketComment, TicketNotification, TicketTag,
-		TicketTemplate, TicketType, TicketView, TicketWorkflowRecord, ToolInvocation,
-		User, Vendor, WorkItemNumberSequence, WorkItemRelation, Workflow,
-		WorkflowInstance, WorkflowTask, WorkflowVersion []ent.Interceptor
+		TicketAssignmentRule, TicketAttachment, TicketAutomationRule, TicketCC,
+		TicketCategory, TicketComment, TicketNotification, TicketTag, TicketTemplate,
+		TicketType, TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor,
+		WorkItemNumberSequence, WorkItemRelation, Workflow, WorkflowInstance,
+		WorkflowTask, WorkflowVersion []ent.Interceptor
 	}
 )

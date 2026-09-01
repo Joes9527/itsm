@@ -10,13 +10,13 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { ApprovalMiniStepper } from '../ApprovalMiniStepper';
 
-jest.mock('@/lib/api/ticket-approval-api', () => ({
-  TicketApprovalApi: { getApprovalDecisions: jest.fn() },
+jest.mock('@/lib/api/bpmn-workflow-api', () => ({
+  BPMNWorkflowApi: { getTicketApprovalDecisions: jest.fn() },
 }));
 
-import { TicketApprovalApi } from '@/lib/api/ticket-approval-api';
+import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 
-const mockGetDecisions = TicketApprovalApi.getApprovalDecisions as jest.Mock;
+const mockGetDecisions = BPMNWorkflowApi.getTicketApprovalDecisions as jest.Mock;
 
 describe('ApprovalMiniStepper', () => {
   beforeEach(() => {

@@ -65,7 +65,7 @@ func (h *ServiceRequestServiceTaskHandler) Execute(ctx context.Context, task *en
 		reason, _ := variables["cancel_reason"].(string)
 		return h.cancelRequest(ctx, variables, reason)
 	default:
-		return nil, fmt.Errorf("不支持的服务请求回调动作")
+		return BlockedEffect(CallbackBlockHandlerContract, "unsupported service request callback action"), nil
 	}
 }
 
@@ -153,7 +153,7 @@ func (h *ServiceRequestServiceTaskHandler) updateRequest(ctx context.Context, va
 		}
 	}
 	if !changed {
-		return &CallbackEffect{Status: CallbackEffectApplied, Message: fmt.Sprintf("服务请求 %d 已是目标表单状态", sr.ID)}, nil
+		return IdempotentEffect(fmt.Sprintf("服务请求 %d 已是目标表单状态", sr.ID), nil), nil
 	}
 	if _, err := update.Save(ctx); err != nil {
 		return nil, fmt.Errorf("更新服务请求失败: %w", err)
@@ -183,12 +183,17 @@ func (h *ServiceRequestServiceTaskHandler) setLinkedTicketStatus(ctx context.Con
 		return nil, fmt.Errorf("非法的关联工单状态转换: %s -> %s", current.Status, newStatus)
 	}
 	if current.Status == newStatus {
+		wrote := false
 		if note != "" && sr.CompletionNote != note {
 			if _, err := sr.Update().SetCompletionNote(note).Save(ctx); err != nil {
 				return nil, fmt.Errorf("记录服务请求备注失败: %w", err)
 			}
+			wrote = true
 		}
-		return &CallbackEffect{Status: CallbackEffectApplied, Message: fmt.Sprintf("服务请求 %d 对应工单已处于 %s", sr.ID, newStatus)}, nil
+		if wrote {
+			return AppliedEffect(fmt.Sprintf("服务请求 %d 完成备注已更新", sr.ID), nil), nil
+		}
+		return IdempotentEffect(fmt.Sprintf("服务请求 %d 对应工单已处于 %s", sr.ID, newStatus), nil), nil
 	}
 
 	update := current.Update()
@@ -224,7 +229,7 @@ func (h *ServiceRequestServiceTaskHandler) assignRequest(ctx context.Context, va
 		return nil, fmt.Errorf("无效的 assignee_id")
 	}
 	if sr.ProcessorID == assigneeID {
-		return &CallbackEffect{Status: CallbackEffectApplied, Message: fmt.Sprintf("服务请求 %d 已分配", sr.ID)}, nil
+		return IdempotentEffect(fmt.Sprintf("服务请求 %d 已分配", sr.ID), nil), nil
 	}
 	if _, err := sr.Update().SetProcessorID(assigneeID).Save(ctx); err != nil {
 		return nil, fmt.Errorf("分配服务请求失败: %w", err)
@@ -240,7 +245,7 @@ func (h *ServiceRequestServiceTaskHandler) provisionResource(ctx context.Context
 	}
 	resourceType, _ := variables["resource_type"].(string)
 	if !sr.StartedAt.IsZero() {
-		return &CallbackEffect{Status: CallbackEffectApplied, Message: fmt.Sprintf("资源 %s 已开始供应", resourceType)}, nil
+		return IdempotentEffect(fmt.Sprintf("资源 %s 已开始供应", resourceType), nil), nil
 	}
 	if _, err := sr.Update().SetStartedAt(time.Now()).Save(ctx); err != nil {
 		return nil, fmt.Errorf("记录资源开通开始时间失败: %w", err)
@@ -269,6 +274,7 @@ func (h *ServiceRequestServiceTaskHandler) completeRequest(ctx context.Context, 
 	}
 
 	completionNote, _ := variables["completion_note"].(string)
+	wrote := false
 	if sr.CompletedAt.IsZero() || (completionNote != "" && sr.CompletionNote != completionNote) {
 		update := sr.Update()
 		if sr.CompletedAt.IsZero() {
@@ -280,6 +286,7 @@ func (h *ServiceRequestServiceTaskHandler) completeRequest(ctx context.Context, 
 		if _, err := update.Save(ctx); err != nil {
 			return nil, fmt.Errorf("记录服务请求完成信息失败: %w", err)
 		}
+		wrote = true
 	}
 	if current.Status != "resolved" || current.ResolvedAt.IsZero() {
 		update := current.Update().SetStatus("resolved")
@@ -289,6 +296,10 @@ func (h *ServiceRequestServiceTaskHandler) completeRequest(ctx context.Context, 
 		if _, err := update.SetUpdatedAt(time.Now()).Save(ctx); err != nil {
 			return nil, fmt.Errorf("更新关联工单状态失败: %w", err)
 		}
+		wrote = true
+	}
+	if !wrote {
+		return IdempotentEffect(fmt.Sprintf("服务请求 %d 已完成", sr.ID), nil), nil
 	}
 	h.logger.Infow("Service request completed via BPMN", "request_id", sr.ID)
 	return &CallbackEffect{Status: CallbackEffectApplied, Message: fmt.Sprintf("服务请求 %d 已完成", sr.ID)}, nil

@@ -90,16 +90,6 @@ describe('TicketApi', () => {
     });
   });
 
-  describe('approveTicket', () => {
-    it('should approve ticket', async () => {
-      const data = { action: 'approve' as const, ticketId: 1 };
-      mockPost.mockResolvedValue({ success: true, message: 'ok' });
-      const result = await TicketApi.approveTicket(1, data);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/tickets/workflow/approve', data);
-      expect(result.success).toBe(true);
-    });
-  });
-
   describe('addComment', () => {
     it('should add comment', async () => {
       const expected = { id: 1, ticketId: 1, content: 'hello' };
@@ -326,14 +316,6 @@ describe('TicketApi', () => {
     });
   });
 
-  describe('rejectTicket', () => {
-    it('should reject ticket', async () => {
-      mockPost.mockResolvedValue({ message: 'ok' });
-      await TicketApi.rejectTicket(1, 'bad');
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/tickets/workflow/reject', { ticketId: 1, reason: 'bad' });
-    });
-  });
-
   describe('withdrawTicket', () => {
     it('should withdraw ticket', async () => {
       mockPost.mockResolvedValue({ message: 'ok' });
@@ -505,10 +487,4 @@ describe('TicketApi', () => {
     });
   });
 
-  describe('error propagation', () => {
-    it('should propagate errors from httpClient', async () => {
-      mockPost.mockRejectedValue(new Error('Network error'));
-      await expect(TicketApi.approveTicket(1, { action: 'approve', ticketId: 1 })).rejects.toThrow('Network error');
-    });
-  });
 });

@@ -13,7 +13,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { Spin, Empty, App } from 'antd';
-import { TicketApprovalApi, type ProcessApprovalDecision } from '@/lib/api/ticket-approval-api';
+import { BPMNWorkflowApi, type ProcessApprovalDecision } from '@/lib/api/bpmn-workflow-api';
 import { ApprovalTimeline } from './ApprovalTimeline';
 import { toApprovalSteps } from './approvalUtils';
 import { getErrorMessage } from '@/lib/utils/error-message-handler';
@@ -39,7 +39,7 @@ export const ApprovalWorkflowPanel: React.FC<ApprovalWorkflowPanelProps> = ({
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await TicketApprovalApi.getApprovalDecisions(ticketId);
+      const data = await BPMNWorkflowApi.getTicketApprovalDecisions(ticketId);
       setDecisions(data);
     } catch (error) {
       message.error(getErrorMessage(error) || '加载审批记录失败');

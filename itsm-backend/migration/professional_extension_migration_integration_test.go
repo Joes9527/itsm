@@ -41,6 +41,7 @@ func TestProfessionalExtensionMigrationEnforcesOneToOneAndAssetLifecycle(t *test
 	defer cancel()
 
 	_, err := db.ExecContext(ctx, `
+		CREATE TABLE ticket_approvals (id BIGSERIAL PRIMARY KEY);
 		INSERT INTO tickets (id, tenant_id, record_class) VALUES
 			(1, 101, 'incident'), (2, 101, 'problem'), (3, 101, 'change_request');
 		INSERT INTO incidents (work_item_id, tenant_id) VALUES (1, 101);
@@ -57,7 +58,8 @@ func TestProfessionalExtensionMigrationEnforcesOneToOneAndAssetLifecycle(t *test
 	_, err = db.ExecContext(ctx, fmt.Sprintf(`
 		CREATE SCHEMA "%s";
 		CREATE TABLE "%s".incidents (title TEXT, work_item_id BIGINT);
-	`, decoySchema, decoySchema))
+		CREATE TABLE "%s".ticket_approvals (id BIGINT);
+	`, decoySchema, decoySchema, decoySchema))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		_, _ = db.ExecContext(context.Background(), fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, decoySchema))
@@ -67,6 +69,12 @@ func TestProfessionalExtensionMigrationEnforcesOneToOneAndAssetLifecycle(t *test
 		_, err = db.ExecContext(ctx, statement)
 		require.NoError(t, err)
 	}
+	var legacyApprovalTable *string
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT to_regclass(format('%I.ticket_approvals', current_schema()))`).Scan(&legacyApprovalTable))
+	require.Nil(t, legacyApprovalTable, "legacy TicketApproval runtime table must be removed")
+	var decoyApprovalTable *string
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT to_regclass($1)`, decoySchema+".ticket_approvals").Scan(&decoyApprovalTable))
+	require.NotNil(t, decoyApprovalTable, "migration must not remove same-named tables from another schema")
 	for tableName, removedColumns := range map[string][]string{
 		"incidents": {"reporter_id", "assignee_id", "category", "subcategory", "source", "tenant_id", "version", "created_at", "updated_at", "resolved_at", "closed_at", "deleted_at"},
 		"problems":  {"category", "assignee_id", "created_by", "tenant_id", "created_at", "updated_at", "resolved_at", "closed_at", "deleted_at"},

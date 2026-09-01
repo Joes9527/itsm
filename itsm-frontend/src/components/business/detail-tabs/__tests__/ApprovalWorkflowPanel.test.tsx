@@ -3,9 +3,9 @@ import { render, screen, waitFor } from '@/lib/test-utils';
 
 const mockGetApprovalDecisions = jest.fn();
 
-jest.mock('@/lib/api/ticket-approval-api', () => ({
-  TicketApprovalApi: {
-    getApprovalDecisions: (...args: unknown[]) => mockGetApprovalDecisions(...args),
+jest.mock('@/lib/api/bpmn-workflow-api', () => ({
+  BPMNWorkflowApi: {
+    getTicketApprovalDecisions: (...args: unknown[]) => mockGetApprovalDecisions(...args),
   },
 }));
 

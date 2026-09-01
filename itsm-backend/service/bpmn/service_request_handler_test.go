@@ -3,6 +3,7 @@ package bpmn
 import (
 	"context"
 	"testing"
+	"time"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
@@ -126,22 +127,26 @@ func TestServiceRequestHandler_RetryPreservesFirstEffectTimestamps(t *testing.T)
 	provision := map[string]interface{}{
 		"action": "provision_resource", "request_id": sr.ID, "resource_type": "vm",
 	}
-	_, err := handler.Execute(ctx, nil, provision)
+	firstProvision, err := handler.Execute(ctx, nil, provision)
 	require.NoError(t, err)
+	require.Equal(t, CallbackEffectApplied, firstProvision.Status)
 	firstStarted := client.ServiceRequest.GetX(ctx, sr.ID).StartedAt
-	_, err = handler.Execute(ctx, nil, provision)
+	retriedProvision, err := handler.Execute(ctx, nil, provision)
 	require.NoError(t, err)
+	require.Equal(t, CallbackEffectIdempotent, retriedProvision.Status)
 	assert.Equal(t, firstStarted, client.ServiceRequest.GetX(ctx, sr.ID).StartedAt)
 
 	complete := map[string]interface{}{
 		"action": "complete_request", "request_id": sr.ID, "completion_note": "ready",
 	}
-	_, err = handler.Execute(ctx, nil, complete)
+	firstComplete, err := handler.Execute(ctx, nil, complete)
 	require.NoError(t, err)
+	require.Equal(t, CallbackEffectApplied, firstComplete.Status)
 	firstRequest := client.ServiceRequest.GetX(ctx, sr.ID)
 	firstTicket := client.Ticket.GetX(ctx, tkt.ID)
-	_, err = handler.Execute(ctx, nil, complete)
+	retriedComplete, err := handler.Execute(ctx, nil, complete)
 	require.NoError(t, err)
+	require.Equal(t, CallbackEffectIdempotent, retriedComplete.Status)
 	afterRequest := client.ServiceRequest.GetX(ctx, sr.ID)
 	afterTicket := client.Ticket.GetX(ctx, tkt.ID)
 	assert.Equal(t, firstRequest.CompletedAt, afterRequest.CompletedAt)
@@ -246,11 +251,58 @@ func TestServiceRequestHandler_CompleteRequest_Idempotent(t *testing.T) {
 		"request_id": float64(sr.ID),
 	})
 	require.NoError(t, err)
-	assert.True(t, result.Status == CallbackEffectApplied)
+	assert.Equal(t, CallbackEffectApplied, result.Status, "补记 completed_at 是真实首次写入")
+
+	retried, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action":     "complete_request",
+		"request_id": float64(sr.ID),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, CallbackEffectIdempotent, retried.Status)
 
 	after, err := client.Ticket.Get(ctx, tkt.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "resolved", after.Status, "幂等完成不得改变状态")
+}
+
+func TestServiceRequestHandler_NoWriteActionsReturnIdempotent(t *testing.T) {
+	client, handler, tenantID, tkt, sr := setupServiceRequestHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+
+	_, err := client.ServiceRequest.UpdateOne(sr).
+		SetProcessorID(42).
+		SetCostCenter("CC-001").
+		SetStartedAt(time.Now()).
+		Save(ctx)
+	require.NoError(t, err)
+	_, err = client.Ticket.UpdateOne(tkt).SetStatus("in_progress").Save(ctx)
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		name string
+		vars map[string]interface{}
+	}{
+		{name: "unchanged update", vars: map[string]interface{}{"action": "update_request", "request_id": sr.ID, "cost_center": "CC-001"}},
+		{name: "same assignee", vars: map[string]interface{}{"action": "assign_request", "request_id": sr.ID, "assignee_id": 42}},
+		{name: "already provisioning", vars: map[string]interface{}{"action": "provision_resource", "request_id": sr.ID, "resource_type": "vm"}},
+		{name: "same linked status", vars: map[string]interface{}{"action": "approve_request", "request_id": sr.ID}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			effect, execErr := handler.Execute(ctx, nil, tc.vars)
+			require.NoError(t, execErr)
+			require.Equal(t, CallbackEffectIdempotent, effect.Status)
+		})
+	}
+}
+
+func TestServiceRequestHandler_UnknownActionBlocks(t *testing.T) {
+	_, handler, tenantID, _, _ := setupServiceRequestHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+
+	effect, err := handler.Execute(ctx, nil, map[string]interface{}{"action": "invented_action"})
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectBlocked, effect.Status)
+	require.Equal(t, CallbackBlockHandlerContract, effect.BlockCode)
 }
 
 // TestServiceRequestHandler_SetLinkedTicketStatus_AlwaysTenantScoped 锁定删除

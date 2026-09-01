@@ -196,27 +196,7 @@ describe('ticketService', () => {
     });
   });
 
-  describe('approval & flow actions', () => {
-    it('approve calls POST /api/v1/tickets/workflow/approve with ticketId + action', async () => {
-      mockSuccess({ success: true, message: 'approved' });
-      await ticketService.approve(1, { action: 'approve', comment: 'lgtm' });
-
-      const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toContain('/api/v1/tickets/workflow/approve');
-      const body = JSON.parse(init.body as string);
-      expect(body.ticketId).toBe(1);
-      expect(body.action).toBe('approve');
-      expect(body.comment).toBe('lgtm');
-    });
-
-    it('reject calls POST /api/v1/tickets/workflow/reject', async () => {
-      mockSuccess({ message: 'rejected' });
-      await ticketService.reject(1, 'invalid');
-
-      const [url] = fetchMock.mock.calls[0];
-      expect(url).toContain('/api/v1/tickets/workflow/reject');
-    });
-
+  describe('flow actions', () => {
     it('accept calls POST /api/v1/tickets/workflow/accept', async () => {
       mockSuccess({ message: 'accepted' });
       await ticketService.accept(1);

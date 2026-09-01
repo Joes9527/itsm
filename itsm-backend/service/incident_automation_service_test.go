@@ -16,9 +16,13 @@ import (
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/repository/workitemnumber"
 
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 func createAutomationIncident(
@@ -108,6 +112,65 @@ func TestIncidentAlertCreationRejectsCrossTenantAndThresholdRequiresIncident(t *
 	count, err := client.IncidentAlert.Query().Count(ctx)
 	require.NoError(t, err)
 	assert.Zero(t, count)
+}
+
+func TestIncidentAlertExternalDeliveryCompletesBeforeCreateReturns(t *testing.T) {
+	client, _, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "alert-sync")
+	require.NoError(t, err)
+	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "alert-sync")
+	require.NoError(t, err)
+	incidentEntity := createAutomationIncident(t, ctx, client, tenant.ID, reporter.ID, "INC-ALERT-SYNC")
+
+	t.Setenv("GIN_MODE", "debug")
+	t.Setenv("ENABLE_EMAIL_SENDING", "false")
+	viper.Set("alerting.smtp.host", "smtp.test.invalid")
+	viper.Set("alerting.smtp.port", 2525)
+	t.Cleanup(viper.Reset)
+	core, observed := observer.New(zapcore.InfoLevel)
+	alerting := NewIncidentAlertingService(client, zap.New(core).Sugar())
+
+	_, err = alerting.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
+		IncidentID: incidentEntity.ID,
+		AlertType:  "monitoring",
+		AlertName:  "synchronous delivery",
+		Message:    "delivery must finish before return",
+		Severity:   "high",
+		Channels:   []string{"email"},
+		Recipients: []string{"operator@example.com"},
+	}, tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, 1, observed.FilterMessage("Email alert processing completed").Len(),
+		"CreateIncidentAlert must not detach delivery after its caller context ends")
+}
+
+func TestIncidentEscalationPersistsTenantScopedNamedEvent(t *testing.T) {
+	client, _, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "escalation-event")
+	require.NoError(t, err)
+	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "escalation-event")
+	require.NoError(t, err)
+	incidentEntity := createAutomationIncident(t, ctx, client, tenant.ID, reporter.ID, "INC-ESCALATION-EVENT")
+	_, err = incidentEntity.Update().SetDetectedAt(time.Now().Add(-10 * time.Minute)).Save(ctx)
+	require.NoError(t, err)
+
+	escalation := NewIncidentEscalationService(client)
+	_, err = escalation.CreateEscalationRule(ctx, dto.CreateIncidentEscalationRuleRequest{
+		Name: "L1 timeout", TriggerType: "time_based", TriggerMinutes: 1,
+		EscalationLevel: 1, TargetAssigneeType: "user", AutoEscalate: true,
+		IsActive: true, TenantID: tenant.ID,
+	})
+	require.NoError(t, err)
+
+	_, err = escalation.CheckAndEscalate(ctx, incidentEntity.ID)
+	require.NoError(t, err)
+	event, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(incidentEntity.ID)).Only(ctx)
+	require.NoError(t, err)
+	require.Equal(t, tenant.ID, event.TenantID)
+	require.Equal(t, "事件升级", event.EventName)
+	require.Equal(t, "system", event.Source)
 }
 
 func TestPrometheusMetricCorrelationDoesNotFanOut(t *testing.T) {
