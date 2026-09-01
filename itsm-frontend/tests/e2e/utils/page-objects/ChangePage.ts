@@ -1,5 +1,5 @@
 // itsm-frontend/tests/e2e/utils/page-objects/ChangePage.ts
-import type { Page, Locator } from '@playwright/test';
+import { expect, type Page, type Locator } from '@playwright/test';
 import { BasePage } from './BasePage';
 
 export class ChangePage extends BasePage {
@@ -28,31 +28,46 @@ export class ChangePage extends BasePage {
     await this.page.goto(`${this.baseUrl}/changes/new`, { waitUntil: 'domcontentloaded' });
 
     // 填写标题
-    const titleInput = this.page.locator('input[id*="title"], input[name*="title"], input[placeholder*="标题"]').first();
+    const titleInput = this.page
+      .locator('input[id*="title"], input[name*="title"], input[placeholder*="标题"]')
+      .first();
     await titleInput.fill(data.title);
 
     // 填写描述
-    const descInput = this.page.locator('textarea[id*="description"], textarea[name*="description"], textarea[placeholder*="描述"]').first();
+    const descInput = this.page
+      .locator(
+        'textarea[id*="description"], textarea[name*="description"], textarea[placeholder*="描述"]'
+      )
+      .first();
     await descInput.fill(data.description);
 
     // 选择风险级别
     if (data.riskLevel) {
       const riskSelect = this.page.locator('select[id*="risk"], select[name*="risk"]').first();
-      if (await riskSelect.isVisible()) {
+      await expect(riskSelect).toBeVisible();
+      {
         await riskSelect.selectOption({ label: data.riskLevel });
       }
     }
 
     // 填写回滚计划
     if (data.rollbackPlan) {
-      const rollbackInput = this.page.locator('textarea[id*="rollback"], textarea[name*="rollback"], textarea[placeholder*="回滚"]').first();
-      if (await rollbackInput.isVisible()) {
+      const rollbackInput = this.page
+        .locator(
+          'textarea[id*="rollback"], textarea[name*="rollback"], textarea[placeholder*="回滚"]'
+        )
+        .first();
+      await expect(rollbackInput).toBeVisible();
+      {
         await rollbackInput.fill(data.rollbackPlan);
       }
     }
 
     // 提交表单
-    await this.page.getByRole('button', { name: /提交|Submit|创建|Create/i }).first().click();
+    await this.page
+      .getByRole('button', { name: /提交|Submit|创建|Create/i })
+      .first()
+      .click();
 
     // 等待跳转
     await this.page.waitForURL(/\/changes\/\d+/, { timeout: 15000 });
@@ -67,17 +82,22 @@ export class ChangePage extends BasePage {
     await this.openChange(changeId);
 
     const approveButton = this.page.getByRole('button', { name: /审批|Approve|批准/i });
-    if (await approveButton.isVisible()) {
+    await expect(approveButton).toBeVisible();
+    {
       await approveButton.click();
       await this.page.waitForSelector('.ant-modal', { timeout: 5000 });
 
-      const commentInput = this.page.locator('textarea[id*="comment"], textarea[placeholder*="意见"]').first();
-      if (await commentInput.isVisible()) {
+      const commentInput = this.page
+        .locator('textarea[id*="comment"], textarea[placeholder*="意见"]')
+        .first();
+      await expect(commentInput).toBeVisible();
+      {
         await commentInput.fill('Approved - looks good');
       }
 
       const confirmButton = this.page.getByRole('button', { name: /通过|Approve|Confirm|确认/i });
-      if (await confirmButton.isVisible()) {
+      await expect(confirmButton).toBeVisible();
+      {
         await confirmButton.click();
       }
     }
@@ -88,17 +108,24 @@ export class ChangePage extends BasePage {
     await this.openChange(changeId);
 
     const rejectButton = this.page.getByRole('button', { name: /拒绝|Reject/i });
-    if (await rejectButton.isVisible()) {
+    await expect(rejectButton).toBeVisible();
+    {
       await rejectButton.click();
       await this.page.waitForSelector('.ant-modal', { timeout: 5000 });
 
-      const reasonInput = this.page.locator('textarea[id*="reason"], textarea[placeholder*="原因"]').first();
-      if (await reasonInput.isVisible()) {
+      const reasonInput = this.page
+        .locator('textarea[id*="reason"], textarea[placeholder*="原因"]')
+        .first();
+      await expect(reasonInput).toBeVisible();
+      {
         await reasonInput.fill(reason);
       }
 
-      const confirmButton = this.page.getByRole('button', { name: /确认拒绝|Confirm Reject|确认/i });
-      if (await confirmButton.isVisible()) {
+      const confirmButton = this.page.getByRole('button', {
+        name: /确认拒绝|Confirm Reject|确认/i,
+      });
+      await expect(confirmButton).toBeVisible();
+      {
         await confirmButton.click();
       }
     }
@@ -107,11 +134,8 @@ export class ChangePage extends BasePage {
   async openChange(id: number): Promise<void> {
     const row = this.changeTable.locator(`tbody tr:has-text("${id}")`).first();
     const link = row.locator('a').first();
-    if (await link.isVisible()) {
-      await link.click();
-    } else {
-      await row.click();
-    }
+    await expect(link).toBeVisible();
+    await link.click();
     await this.page.waitForURL(new RegExp(`/changes/${id}|/changes/\\d+`), { timeout: 10000 });
   }
 }

@@ -31,32 +31,40 @@ test.describe('FLOW-3: 重大事件多角色协作', () => {
     expect(incidentId).toBeGreaterThan(0);
 
     // Step 2: manager 确认为重大事件
-    if (incidentId) {
-      const escalateResp = await apiPost(managerRole, `/api/v1/incidents/${incidentId}/major-incident`, {
+    const escalateResp = await apiPost(
+      managerRole,
+      `/api/v1/incidents/${Number(incidentId)}/major-incident`,
+      {
         impactScope: 'critical',
         businessImpact: '核心交易系统不可用',
         communicationPlan: '每15分钟同步一次处置进展',
-      });
+      }
+    );
 
-      expect(escalateResp.status).toBe(200);
-      expect(escalateResp.data).toHaveProperty('code', 0);
-    }
+    expect(escalateResp.status).toBe(200);
+    expect(escalateResp.data).toHaveProperty('code', 0);
 
     // Step 3: engineer 处理事件
-    if (incidentId) {
-      const handleResp = await apiPost(engineerRole, `/api/v1/incidents/${incidentId}/acknowledge`, {
+    const handleResp = await apiPost(
+      engineerRole,
+      `/api/v1/incidents/${Number(incidentId)}/acknowledge`,
+      {
         comment: '正在排查问题',
-      });
+      }
+    );
 
-      expect(handleResp.status).toBe(200);
+    expect(handleResp.status).toBe(200);
 
-      // Step 4: 事件解决
-      const resolveResp = await apiPost(engineerRole, `/api/v1/incidents/${incidentId}/resolve`, {
+    // Step 4: 事件解决
+    const resolveResp = await apiPost(
+      engineerRole,
+      `/api/v1/incidents/${Number(incidentId)}/resolve`,
+      {
         resolution: '已修复核心问题，系统恢复',
         resolutionCode: 'permanent_fix',
-      });
+      }
+    );
 
-      expect(resolveResp.status).toBe(200);
-    }
+    expect(resolveResp.status).toBe(200);
   });
 });

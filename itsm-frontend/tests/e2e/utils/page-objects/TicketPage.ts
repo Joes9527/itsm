@@ -1,5 +1,5 @@
 // itsm-frontend/tests/e2e/utils/page-objects/TicketPage.ts
-import type { Page, Locator } from '@playwright/test';
+import { expect, type Page, type Locator } from '@playwright/test';
 import { BasePage } from './BasePage';
 
 export class TicketPage extends BasePage {
@@ -31,15 +31,21 @@ export class TicketPage extends BasePage {
     await this.page.waitForSelector('form, [data-testid="ticket-form"]', { timeout: 10000 });
 
     // 填写标题
-    const titleInput = this.page.locator('[data-testid="ticket-title-input"], input[placeholder*="VPN"], #title').first();
+    const titleInput = this.page
+      .locator('[data-testid="ticket-title-input"], input[placeholder*="VPN"], #title')
+      .first();
     await titleInput.fill(data.title);
 
     // 填写描述
-    const descInput = this.page.locator('[data-testid="ticket-description-input"], textarea[placeholder*="详细"]').first();
+    const descInput = this.page
+      .locator('[data-testid="ticket-description-input"], textarea[placeholder*="详细"]')
+      .first();
     await descInput.fill(data.description);
 
     // 提交表单
-    const submitBtn = this.page.locator('[data-testid="ticket-submit-button"], button:has-text("创建工单")').first();
+    const submitBtn = this.page
+      .locator('[data-testid="ticket-submit-button"], button:has-text("创建工单")')
+      .first();
     await submitBtn.click();
 
     // 等待跳转
@@ -68,35 +74,36 @@ export class TicketPage extends BasePage {
     // 点击包含工单ID的行
     const row = this.ticketTable.locator(`tbody tr:has-text("${id}")`).first();
     const link = row.locator('a').first();
-    if (await link.isVisible()) {
-      await link.click();
-    } else {
-      await row.click();
-    }
+    await expect(link).toBeVisible();
+    await link.click();
     await this.page.waitForURL(new RegExp(`/tickets/${id}|/tickets/\\d+`), { timeout: 10000 });
   }
 
   async updateTicketStatus(status: string): Promise<void> {
     const statusSelect = this.page.locator('select[id*="status"], select[name*="status"]').first();
-    if (await statusSelect.isVisible()) {
+    await expect(statusSelect).toBeVisible();
+    {
       await statusSelect.selectOption({ label: status });
     }
   }
 
   async assignTicket(assignee: string): Promise<void> {
     const assignButton = this.page.getByRole('button', { name: /分配|Assign/i });
-    if (await assignButton.isVisible()) {
+    await expect(assignButton).toBeVisible();
+    {
       await assignButton.click();
       await this.page.waitForSelector('.ant-select, .ant-modal', { timeout: 5000 });
 
       const assigneeSelect = this.page.locator('.ant-select-selector').first();
-      if (await assigneeSelect.isVisible()) {
+      await expect(assigneeSelect).toBeVisible();
+      {
         await assigneeSelect.click();
         await this.page.getByText(assignee, { exact: true }).click();
       }
 
       const confirmButton = this.page.getByRole('button', { name: /确定|OK|Assign|确认/i });
-      if (await confirmButton.isVisible()) {
+      await expect(confirmButton).toBeVisible();
+      {
         await confirmButton.click();
       }
     }

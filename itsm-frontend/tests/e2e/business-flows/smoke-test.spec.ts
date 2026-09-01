@@ -14,7 +14,6 @@ const PAGES_TO_TEST = [
 ];
 
 test.describe('冒烟测试 - 快速验证所有主要页面', () => {
-
   test('登录功能正常', async ({ page }) => {
     await loginAs(page, 'admin');
 
@@ -31,12 +30,14 @@ test.describe('冒烟测试 - 快速验证所有主要页面', () => {
     await page.goto('/tickets/create');
     await expect(page.getByRole('main', { name: '创建工单页面' })).toBeVisible({ timeout: 15000 });
 
-    const createResponsePromise = page.waitForResponse((resp) => {
+    const createResponsePromise = page.waitForResponse(resp => {
       return resp.url().includes('/api/v1/tickets') && resp.request().method() === 'POST';
     });
 
     await page.getByTestId('ticket-title-input').fill(`E2E 工单 - ${Date.now()}`);
-    await page.getByTestId('ticket-description-input').fill('这是一个用于 E2E 的创建工单测试描述，长度超过 10 个字符。');
+    await page
+      .getByTestId('ticket-description-input')
+      .fill('这是一个用于 E2E 的创建工单测试描述，长度超过 10 个字符。');
     await page.getByTestId('ticket-submit-button').click();
 
     const createResp = await createResponsePromise;
@@ -48,15 +49,26 @@ test.describe('冒烟测试 - 快速验证所有主要页面', () => {
   test('CMDB 云资源发现可触发（真实后端）', async ({ page }) => {
     await loginAs(page, 'admin');
     await page.goto('/cmdb');
-    await expect(page.getByRole('heading', { name: '配置管理数据库' })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { name: '配置管理数据库' })).toBeVisible({
+      timeout: 15000,
+    });
 
-    const statusResp = await page.waitForResponse((resp) => {
-      return resp.url().includes('/api/v1/configuration-items/discovery/status') && resp.request().method() === 'GET';
-    }, { timeout: 20000 });
+    const statusResp = await page.waitForResponse(
+      resp => {
+        return (
+          resp.url().includes('/api/v1/configuration-items/discovery/status') &&
+          resp.request().method() === 'GET'
+        );
+      },
+      { timeout: 20000 }
+    );
     expect(statusResp.status()).toBe(200);
 
-    const runPromise = page.waitForResponse((resp) => {
-      return resp.url().includes('/api/v1/configuration-items/discovery/run') && resp.request().method() === 'POST';
+    const runPromise = page.waitForResponse(resp => {
+      return (
+        resp.url().includes('/api/v1/configuration-items/discovery/run') &&
+        resp.request().method() === 'POST'
+      );
     });
     await page.getByRole('button', { name: '立即同步' }).click();
 
@@ -67,14 +79,19 @@ test.describe('冒烟测试 - 快速验证所有主要页面', () => {
   test('SLA 监控数据加载与刷新正常（真实后端）', async ({ page }) => {
     await loginAs(page, 'admin');
     await page.goto('/sla-monitor');
-    await expect(page.getByRole('heading', { name: 'SLA实时监控' })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { name: 'SLA实时监控' })).toBeVisible({
+      timeout: 15000,
+    });
 
-    const initialMonitoringResp = await page.waitForResponse((resp) => {
-      return resp.url().includes('/api/v1/sla/monitoring') && resp.request().method() === 'POST';
-    }, { timeout: 20000 });
+    const initialMonitoringResp = await page.waitForResponse(
+      resp => {
+        return resp.url().includes('/api/v1/sla/monitoring') && resp.request().method() === 'POST';
+      },
+      { timeout: 20000 }
+    );
     expect(initialMonitoringResp.status()).toBe(200);
 
-    const refreshPromise = page.waitForResponse((resp) => {
+    const refreshPromise = page.waitForResponse(resp => {
       return resp.url().includes('/api/v1/sla/monitoring') && resp.request().method() === 'POST';
     });
     await page.getByRole('button', { name: '刷新', exact: true }).click();
@@ -95,7 +112,9 @@ test.describe('冒烟测试 - 快速验证所有主要页面', () => {
       await page.waitForLoadState('networkidle', { timeout: 15000 });
 
       // 验证页面没有崩溃（检查是否有错误提示）
-      const errorText = page.locator('.ant-result-error, .ant-alert-error, [class*="error-page"]').first();
+      const errorText = page
+        .locator('.ant-result-error, .ant-alert-error, [class*="error-page"]')
+        .first();
       await expect(errorText).toHaveCount(0);
 
       // 验证页面主要内容加载
@@ -142,7 +161,8 @@ test.describe('冒烟测试 - 快速验证所有主要页面', () => {
 
     // 尝试点击菜单项导航
     const menuItem = page.locator('.ant-menu-item, [class*="menu-item"]').first();
-    if (await menuItem.isVisible()) {
+    await expect(menuItem).toBeVisible();
+    {
       await menuItem.click();
       await page.waitForLoadState('networkidle');
     }

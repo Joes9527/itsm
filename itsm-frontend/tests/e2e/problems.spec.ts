@@ -22,17 +22,18 @@ test.describe('Problem List - 问题列表', () => {
 
   test('should filter by status', async ({ page }) => {
     const statusFilter = page.locator('select[name="status"]').first();
-    if (await statusFilter.isVisible()) {
+    await expect(statusFilter).toBeVisible();
+    {
       await statusFilter.selectOption('investigation');
     }
   });
 
   test('should navigate to problem detail', async ({ page }) => {
-    const viewBtn = page.locator('button.ant-btn').filter({ has: page.locator('.lucide-eye') }).first();
-    if (!(await viewBtn.isVisible())) {
-      test.skip();
-      return;
-    }
+    const viewBtn = page
+      .locator('button.ant-btn')
+      .filter({ has: page.locator('.lucide-eye') })
+      .first();
+    await expect(viewBtn).toBeVisible();
     await viewBtn.click();
     await expect(page).toHaveURL(/\/problems\/\d+/);
   });
@@ -54,16 +55,11 @@ test.describe('Problem Create - 创建问题', () => {
     const descInput = page.locator('textarea[name="description"], textarea').first();
     const submitBtn = page.locator('button[type="submit"]').first();
 
-    if (
-      !(await titleInput.isVisible()) ||
-      !(await descInput.isVisible()) ||
-      !(await submitBtn.isVisible())
-    ) {
-      test.skip();
-      return;
-    }
+    await expect(titleInput).toBeVisible();
+    await expect(descInput).toBeVisible();
+    await expect(submitBtn).toBeVisible();
 
-    const createResponsePromise = page.waitForResponse((resp) => {
+    const createResponsePromise = page.waitForResponse(resp => {
       return resp.url().includes('/api/v1/problems') && resp.request().method() === 'POST';
     });
 
@@ -81,11 +77,11 @@ test.describe('Problem Detail - 问题详情', () => {
     await loginAndReturn(page);
     await page.goto('/problems', { waitUntil: 'domcontentloaded' });
 
-    const viewBtn = page.locator('button.ant-btn').filter({ has: page.locator('.lucide-eye') }).first();
-    if (!(await viewBtn.isVisible())) {
-      test.skip();
-      return;
-    }
+    const viewBtn = page
+      .locator('button.ant-btn')
+      .filter({ has: page.locator('.lucide-eye') })
+      .first();
+    await expect(viewBtn).toBeVisible();
     await viewBtn.click();
   });
 
@@ -95,14 +91,16 @@ test.describe('Problem Detail - 问题详情', () => {
 
   test('should display RCA section', async ({ page }) => {
     const rcaTab = page.locator('button:has-text("根因分析"), button:has-text("RCA")');
-    if (await rcaTab.isVisible()) {
+    await expect(rcaTab).toBeVisible();
+    {
       await rcaTab.click();
     }
   });
 
   test('should link to related incidents', async ({ page }) => {
     const relatedTab = page.locator('button:has-text("关联事件")');
-    if (await relatedTab.isVisible()) {
+    await expect(relatedTab).toBeVisible();
+    {
       await relatedTab.click();
       await expect(page.locator('[class*="incident"]')).toBeVisible();
     }

@@ -37,10 +37,7 @@ test.describe('Knowledge Base - 知识库', () => {
       await page.waitForLoadState('networkidle');
 
       const firstLink = page.locator('a[href^="/knowledge/"]').first();
-      if (!(await firstLink.isVisible())) {
-        test.skip();
-        return;
-      }
+      await expect(firstLink).toBeVisible();
       await firstLink.click();
       await page.waitForLoadState('domcontentloaded');
       await expect(page).toHaveURL(/\/knowledge\/\d+/);

@@ -11,9 +11,7 @@ test.describe('事件管理页面功能', () => {
   test('管理员可以查看统计、刷新列表并进入详情', async ({ page }) => {
     await expect(page.getByRole('heading', { name: '事件管理' })).toBeVisible({ timeout: 15_000 });
 
-    const statsResponse = await page.request.get(
-      'http://localhost:8090/api/v1/incidents/stats'
-    );
+    const statsResponse = await page.request.get('http://localhost:8090/api/v1/incidents/stats');
     expect(statsResponse.status()).toBe(200);
     await expect(page.getByText('总事件数', { exact: true })).toBeVisible();
 
@@ -23,7 +21,8 @@ test.describe('事件管理页面功能', () => {
     });
 
     const detailLink = page.getByRole('link', { name: /查看事件/ }).first();
-    if (await detailLink.isVisible()) {
+    await expect(detailLink).toBeVisible();
+    {
       await detailLink.click();
       await expect(page).toHaveURL(/\/incidents\/\d+$/);
     }
@@ -40,12 +39,13 @@ test.describe('事件管理页面功能', () => {
 
     const title = `E2E 事件 ${Date.now()}`;
     await page.getByTestId('incident-title-input').fill(title);
-    await page.getByTestId('incident-description-input').fill('用于验证事件创建、跳转和列表持久化。');
+    await page
+      .getByTestId('incident-description-input')
+      .fill('用于验证事件创建、跳转和列表持久化。');
 
     const createResponse = page.waitForResponse(
       response =>
-        response.url().endsWith('/api/v1/incidents') &&
-        response.request().method() === 'POST'
+        response.url().endsWith('/api/v1/incidents') && response.request().method() === 'POST'
     );
     await page.getByTestId('incident-submit-button').click();
     expect((await createResponse).status()).toBe(200);

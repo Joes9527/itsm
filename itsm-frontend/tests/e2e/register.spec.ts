@@ -46,10 +46,7 @@ test.describe('Register + Login Flow - 注册登录流程', () => {
     await page.waitForLoadState('networkidle');
 
     const failedAlert = page.locator('.ant-alert-error, .ant-message-error, text=注册失败');
-    if (await failedAlert.count()) {
-      const details = (await failedAlert.first().textContent()) || '注册失败';
-      throw new Error(details);
-    }
+    await expect(failedAlert).toHaveCount(0);
 
     await expect(page).toHaveURL(/\/login/, { timeout: 30000 });
 

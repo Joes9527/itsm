@@ -11,7 +11,8 @@ test.describe('变更管理页面功能', () => {
   test('管理员可以从列表进入变更详情', async ({ page }) => {
     await expect(page.getByRole('heading', { name: '变更管理' })).toBeVisible({ timeout: 15_000 });
     const detailLink = page.getByRole('link', { name: /查看变更/ }).first();
-    if (await detailLink.isVisible()) {
+    await expect(detailLink).toBeVisible();
+    {
       await detailLink.click();
       await expect(page).toHaveURL(/\/changes\/\d+$/);
     }
@@ -36,8 +37,7 @@ test.describe('变更管理页面功能', () => {
 
     const createResponse = page.waitForResponse(
       response =>
-        response.url().endsWith('/api/v1/changes') &&
-        response.request().method() === 'POST'
+        response.url().endsWith('/api/v1/changes') && response.request().method() === 'POST'
     );
     await page.getByTestId('change-submit-button').click();
     expect((await createResponse).status()).toBe(200);

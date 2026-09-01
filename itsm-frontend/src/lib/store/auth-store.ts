@@ -6,6 +6,7 @@
 
 import { create } from 'zustand';
 import type { User, Tenant } from '@/lib/api/api-config';
+import { httpClient } from '@/lib/api/http-client';
 
 // ===================================
 // 类型定义
@@ -21,7 +22,7 @@ interface AuthState {
   isLoading: boolean;
 
   // 认证操作
-  login: (user: User, tenant?: Tenant) => void;
+  hydrateSession: () => Promise<User>;
   logout: () => void;
   updateUser: (user: Partial<User>) => void;
   setLoading: (loading: boolean) => void;
@@ -37,67 +38,107 @@ interface AuthState {
 // ===================================
 
 export const useAuthStore = create<AuthState>()((set, get) => ({
-      // 初始状态
+  // 初始状态
+  user: null,
+  currentTenant: null,
+  isAuthenticated: false,
+  isLoading: false,
+
+  // `/auth/me` 与其精确匹配的授权租户是浏览器会话投影的唯一来源。
+  hydrateSession: async () => {
+    set({ isLoading: true });
+    try {
+      const user = await httpClient.get<User>('/api/v1/auth/me');
+      const actorID = Number(user?.id);
+      if (!Number.isInteger(actorID) || actorID <= 0 || !String(user?.username || '').trim()) {
+        throw new Error('Invalid authenticated actor response');
+      }
+      const role = String(user?.role || '').trim();
+      if (!role) {
+        throw new Error('Invalid authenticated actor role');
+      }
+
+      const tenantID = Number(user?.tenantId);
+      if (!Number.isInteger(tenantID) || tenantID <= 0) {
+        throw new Error('Invalid authenticated tenant identity');
+      }
+
+      const response = await httpClient.get<{ tenants: Tenant[] }>('/api/v1/auth/tenants');
+      const tenant = Array.isArray(response?.tenants)
+        ? response.tenants.find(candidate => Number(candidate.id) === tenantID)
+        : undefined;
+      if (!tenant || !String(tenant.code || '').trim() || tenant.status !== 'active') {
+        throw new Error('Authenticated tenant is not authorized');
+      }
+
+      const sessionUser: User = {
+        ...user,
+        id: actorID,
+        username: String(user.username).trim(),
+        role,
+        tenantId: tenantID,
+      };
+      set({
+        user: sessionUser,
+        currentTenant: tenant,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+      return sessionUser;
+    } catch (error) {
+      set({
+        user: null,
+        currentTenant: null,
+        isAuthenticated: false,
+        isLoading: false,
+      });
+      throw error;
+    }
+  },
+
+  // 登出操作
+  logout: () => {
+    set({
       user: null,
-      currentTenant: null,
       isAuthenticated: false,
       isLoading: false,
+      currentTenant: null,
+    });
+  },
 
-      // 登录操作
-      // 注意：token 存储在 httpOnly cookie 中，前端不需要存储
-      login: (user: User, tenant?: Tenant) => {
-        set({
-          user,
-          isAuthenticated: true,
-          isLoading: false,
-          currentTenant: tenant || null,
-        });
+  // 更新用户信息
+  updateUser: (userData: Partial<User>) => {
+    const { user } = get();
+    if (user) {
+      set({
+        user: { ...user, ...userData },
+      });
+    }
+  },
 
-      },
+  // 设置加载状态
+  setLoading: (loading: boolean) => {
+    set({ isLoading: loading });
+  },
 
-      // 登出操作
-      logout: () => {
-        set({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-          currentTenant: null,
-        });
-      },
+  // 检查用户权限
+  hasPermission: (permission: string) => {
+    const { user } = get();
+    return user?.permissions?.includes(permission) || false;
+  },
 
-      // 更新用户信息
-      updateUser: (userData: Partial<User>) => {
-        const { user } = get();
-        if (user) {
-          set({
-            user: { ...user, ...userData },
-          });
-        }
-      },
+  // 检查用户角色
+  hasRole: (role: string) => {
+    const { user } = get();
+    return user?.role === role;
+  },
 
-      // 设置加载状态
-      setLoading: (loading: boolean) => {
-        set({ isLoading: loading });
-      },
-
-      // 检查用户权限
-      hasPermission: (permission: string) => {
-        const { user } = get();
-        return user?.permissions?.includes(permission) || false;
-      },
-
-      // 检查用户角色
-      hasRole: (role: string) => {
-        const { user } = get();
-        return user?.role === role;
-      },
-
-      // 检查是否为管理员
-      isAdmin: () => {
-        const { user } = get();
-        return user?.role === 'admin' || user?.role === 'super_admin';
-      },
-    }));
+  // 检查是否为管理员
+  isAdmin: () => {
+    const { user } = get();
+    return user?.role === 'admin' || user?.role === 'super_admin';
+  },
+}));
 
 // ===================================
 // 租户管理 Store

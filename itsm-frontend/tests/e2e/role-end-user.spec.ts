@@ -43,11 +43,13 @@ test.describe('End User Role - Dashboard', () => {
 
     // Fill in ticket form if available
     const titleInput = page.locator('input[id*="title"], input[name*="title"]');
-    if (await titleInput.isVisible()) {
+    await expect(titleInput).toBeVisible();
+    {
       await titleInput.fill('Test Ticket from End User');
 
       const descInput = page.locator('textarea[id*="description"], textarea[name*="description"]');
-      if (await descInput.isVisible()) {
+      await expect(descInput).toBeVisible();
+      {
         await descInput.fill('This is a test ticket created by end user');
       }
     }

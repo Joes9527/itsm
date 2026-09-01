@@ -4,7 +4,6 @@ import { loginAs } from '../utils/test-utils';
 import { TicketPage } from '../utils/page-objects/TicketPage';
 
 test.describe('工单完整生命周期测试', () => {
-
   test('工单创建页面加载', async ({ page }) => {
     await loginAs(page, 'admin');
 
@@ -33,19 +32,13 @@ test.describe('工单完整生命周期测试', () => {
     await ticketPage.goto();
 
     // 检查表格是否存在
-    const tableExists = await page.locator('table').isVisible();
-    if (!tableExists) {
-      test.skip();
-      return;
-    }
+    await expect(page.locator('table')).toBeVisible();
 
     const ticketId = await ticketPage.getFirstTicketId();
-    if (!ticketId) {
-      test.skip();
-      return;
-    }
+    expect(ticketId).not.toBeNull();
+    expect(Number(ticketId)).toBeGreaterThan(0);
 
-    await ticketPage.openTicket(ticketId);
+    await ticketPage.openTicket(Number(ticketId));
     await page.waitForLoadState('domcontentloaded');
 
     // 验证详情页面加载

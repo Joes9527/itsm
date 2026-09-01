@@ -57,7 +57,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser, mockTenant);
+        useAuthStore.setState({ user: mockUser, currentTenant: mockTenant, isAuthenticated: true });
       });
 
       const state = useAuthStore.getState();
@@ -81,7 +81,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser);
+        useAuthStore.setState({ user: mockUser, currentTenant: null, isAuthenticated: true });
       });
 
       const state = useAuthStore.getState();
@@ -104,7 +104,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser);
+        useAuthStore.setState({ user: mockUser, currentTenant: null, isAuthenticated: true });
       });
 
       // 验证登录状态
@@ -136,7 +136,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser);
+        useAuthStore.setState({ user: mockUser, currentTenant: null, isAuthenticated: true });
       });
 
       act(() => {
@@ -197,7 +197,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser);
+        useAuthStore.setState({ user: mockUser, currentTenant: null, isAuthenticated: true });
       });
 
       expect(useAuthStore.getState().hasPermission('ticket:view')).toBe(true);
@@ -218,7 +218,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser);
+        useAuthStore.setState({ user: mockUser, currentTenant: null, isAuthenticated: true });
       });
 
       expect(useAuthStore.getState().hasPermission('ticket:delete')).toBe(false);
@@ -245,7 +245,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser);
+        useAuthStore.setState({ user: mockUser, currentTenant: null, isAuthenticated: true });
       });
 
       expect(useAuthStore.getState().hasRole('admin')).toBe(true);
@@ -264,7 +264,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser);
+        useAuthStore.setState({ user: mockUser, currentTenant: null, isAuthenticated: true });
       });
 
       expect(useAuthStore.getState().hasRole('admin')).toBe(false);
@@ -285,7 +285,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser);
+        useAuthStore.setState({ user: mockUser, currentTenant: null, isAuthenticated: true });
       });
 
       expect(useAuthStore.getState().isAdmin()).toBe(true);
@@ -304,7 +304,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser);
+        useAuthStore.setState({ user: mockUser, currentTenant: null, isAuthenticated: true });
       });
 
       expect(useAuthStore.getState().isAdmin()).toBe(true);
@@ -323,7 +323,7 @@ describe('useAuthStore', () => {
       };
 
       act(() => {
-        useAuthStore.getState().login(mockUser);
+        useAuthStore.setState({ user: mockUser, currentTenant: null, isAuthenticated: true });
       });
 
       expect(useAuthStore.getState().isAdmin()).toBe(false);

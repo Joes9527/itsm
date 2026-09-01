@@ -1,5 +1,5 @@
 // itsm-frontend/tests/e2e/utils/page-objects/ServiceCatalogPage.ts
-import type { Page, Locator } from '@playwright/test';
+import { expect, type Page, type Locator } from '@playwright/test';
 import { BasePage } from './BasePage';
 
 export class ServiceCatalogPage extends BasePage {
@@ -9,7 +9,9 @@ export class ServiceCatalogPage extends BasePage {
 
   constructor(page: Page) {
     super(page);
-    this.serviceList = this.page.locator('.service-card, [data-testid="service-card"], .catalog-item');
+    this.serviceList = this.page.locator(
+      '.service-card, [data-testid="service-card"], .catalog-item'
+    );
     this.requestButton = this.page.getByRole('button', { name: /申请|Request|请求/i });
   }
 
@@ -25,18 +27,27 @@ export class ServiceCatalogPage extends BasePage {
 
     // 点击申请按钮
     const requestBtn = this.requestButton.first();
-    if (await requestBtn.isVisible()) {
+    await expect(requestBtn).toBeVisible();
+    {
       await requestBtn.click();
     }
 
     // 填写申请表单
-    const justificationInput = this.page.locator('textarea[id*="justification"], textarea[placeholder*="申请理由"], textarea[placeholder*="理由"]').first();
-    if (await justificationInput.isVisible()) {
+    const justificationInput = this.page
+      .locator(
+        'textarea[id*="justification"], textarea[placeholder*="申请理由"], textarea[placeholder*="理由"]'
+      )
+      .first();
+    await expect(justificationInput).toBeVisible();
+    {
       await justificationInput.fill(justification);
     }
 
     // 提交
-    await this.page.getByRole('button', { name: /提交|Submit/i }).first().click();
+    await this.page
+      .getByRole('button', { name: /提交|Submit/i })
+      .first()
+      .click();
 
     // 等待跳转到工单页面
     await this.page.waitForURL(/\/tickets\/\d+|\/service-requests\/\d+/, { timeout: 15000 });
@@ -47,7 +58,9 @@ export class ServiceCatalogPage extends BasePage {
   }
 
   async browseCategories(): Promise<string[]> {
-    const categories = this.page.locator('.category-tab, [data-testid="category-tab"], .ant-tabs-tab');
+    const categories = this.page.locator(
+      '.category-tab, [data-testid="category-tab"], .ant-tabs-tab'
+    );
     const count = await categories.count();
     const names: string[] = [];
 

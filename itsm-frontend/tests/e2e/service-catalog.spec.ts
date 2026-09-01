@@ -36,7 +36,8 @@ test.describe('Service Catalog - 服务目录', () => {
       await page.waitForLoadState('networkidle');
       // 点击云资源服务分类
       const categoryTab = page.locator('text=云资源服务').first();
-      if (await categoryTab.isVisible()) {
+      await expect(categoryTab).toBeVisible();
+      {
         await categoryTab.click();
         await page.waitForTimeout(500);
       }
@@ -63,7 +64,8 @@ test.describe('Service Catalog - Create Service - 创建服务', () => {
 
     // 点击创建服务按钮
     const createButton = page.locator('button:has-text("创建服务")').first();
-    if (await createButton.isVisible()) {
+    await expect(createButton).toBeVisible();
+    {
       await createButton.click();
       await page.waitForTimeout(500);
     }

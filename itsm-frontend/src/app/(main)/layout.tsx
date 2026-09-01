@@ -6,7 +6,6 @@ import zhCN from 'antd/locale/zh_CN';
 import { usePathname, useRouter } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { Sidebar } from '@/components/layout/Sidebar';
-import { httpClient } from '@/lib/api/http-client';
 import { LAYOUT_CONFIG } from '@/config/layout.config';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { NetworkStatus } from '@/components/common/NetworkStatus';
@@ -41,14 +40,10 @@ export default function MainLayout({
   useEffect(() => {
     setMounted(true);
     const checkAuth = async () => {
-      const { login, logout } = useAuthStore.getState();
-      let userInfo: any;
+      const { hydrateSession, logout } = useAuthStore.getState();
+      let userInfo;
       try {
-        userInfo = await httpClient.get<any>('/api/v1/auth/me');
-        const actorId = Number(userInfo?.id);
-        if (!Number.isInteger(actorId) || actorId <= 0 || !String(userInfo?.username || '').trim()) {
-          throw new Error('Invalid authenticated actor response');
-        }
+        userInfo = await hydrateSession();
       } catch (e) {
         console.error('Failed to fetch user info:', e);
         logout();
@@ -58,45 +53,7 @@ export default function MainLayout({
         return;
       }
 
-      let tenantInfo: any = null;
-      try {
-        tenantInfo = await httpClient.get<any>('/api/v1/auth/tenants');
-      } catch (e) {
-        console.error('Failed to fetch tenant info:', e);
-      }
-
-      const tenants = Array.isArray(tenantInfo?.tenants) ? tenantInfo.tenants : [];
-      const sessionTenantId = Number(userInfo?.tenantId);
-      const currentTenant = Number.isInteger(sessionTenantId)
-        ? tenants.find((candidate: { id?: number }) => Number(candidate.id) === sessionTenantId)
-        : undefined;
-      const roleCode = String(userInfo?.role || 'end_user');
-
-      login(
-        {
-          id: Number(userInfo?.id || 0),
-          username: String(userInfo?.username || ''),
-          email: String(userInfo?.email || ''),
-          name: String(userInfo?.name || ''),
-          role: roleCode,
-          department: userInfo?.department,
-          tenantId: userInfo?.tenantId ? Number(userInfo.tenantId) : undefined,
-          permissions: userInfo?.permissions,
-          createdAt: userInfo?.createdAt,
-          updatedAt: userInfo?.updatedAt,
-        },
-        currentTenant
-          ? {
-              id: Number(currentTenant.id),
-              name: String(currentTenant.name),
-              code: String(currentTenant.code),
-              type: currentTenant.type,
-              status: currentTenant.status,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            }
-          : undefined
-      );
+      const roleCode = String(userInfo.role);
 
       // 初始化 Persona——带上 userId，跨账号登录时才能正确重置，见 persona-store.ts 注释。
       initPersonaByRole(roleCode, Number(userInfo?.id || 0));

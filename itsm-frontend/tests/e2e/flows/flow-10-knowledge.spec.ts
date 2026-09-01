@@ -32,12 +32,14 @@ test.describe('FLOW-10: 知识库全流程', () => {
     expect(articleId).toBeGreaterThan(0);
 
     // Step 2: admin 发布文章
-    if (articleId) {
-      const publishResp = await apiPost(adminRole, `/api/v1/knowledge/articles/${articleId}/publish`, {});
+    const publishResp = await apiPost(
+      adminRole,
+      `/api/v1/knowledge/articles/${Number(articleId)}/publish`,
+      {}
+    );
 
-      expect(publishResp.status).toBe(200);
-      expect(publishResp.data).toHaveProperty('code', 0);
-    }
+    expect(publishResp.status).toBe(200);
+    expect(publishResp.data).toHaveProperty('code', 0);
 
     // Step 3: end_user 查看已发布文章
     const listResp = await apiGet(endUserRole, '/api/v1/knowledge/articles');

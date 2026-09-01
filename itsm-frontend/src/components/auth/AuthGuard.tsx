@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { httpClient } from '@/lib/api/http-client';
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -34,73 +33,11 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
   useEffect(() => {
     const initializeAuth = async () => {
       try {
-        // 认证真值由后端会话接口判定；HttpOnly cookie 不在浏览器代码中读取。
-          let userResponse = null;
-          let tenantsResponse = null;
-
-          try {
-            userResponse = await httpClient.get<{
-              id: number;
-              username: string;
-              email: string;
-              name: string;
-              role: string;
-              department: string;
-              tenantId: number;
-            }>('/api/v1/auth/me');
-          } catch (e) {
-            console.error('Failed to fetch user info:', e);
-          }
-
-          try {
-            tenantsResponse = await httpClient.get<{
-              tenants: Array<{
-                id: number;
-                name: string;
-                code: string;
-                domain: string;
-                type: string;
-                status: string;
-              }>;
-            }>('/api/v1/auth/tenants');
-          } catch (e) {
-            console.error('Failed to fetch tenants:', e);
-          }
-
-          // `/auth/me` 是唯一认证探活；租户列表不能单独证明已认证。
-          if (!userResponse) {
-            setIsInitializing(false);
-            return;
-          }
-
-          const currentTenant = tenantsResponse?.tenants?.find(
-            candidate => Number(candidate.id) === Number(userResponse.tenantId)
-          );
-          const { login } = useAuthStore.getState();
-          login(
-            {
-              id: userResponse?.id || 0,
-              username: userResponse?.username || '',
-              email: userResponse?.email || '',
-              name: userResponse?.name || '',
-              role: userResponse?.role || 'end_user',
-              department: userResponse?.department,
-            },
-            currentTenant
-              ? {
-                  id: currentTenant.id,
-                  name: currentTenant.name,
-                  code: currentTenant.code,
-                  type: currentTenant.type as 'standard' | 'trial' | 'enterprise',
-                  status: currentTenant.status as 'active' | 'suspended' | 'expired',
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                }
-              : undefined
-          );
+        await useAuthStore.getState().hydrateSession();
         setIsInitializing(false);
       } catch (error) {
         console.error('Auth initialization failed:', error);
+        useAuthStore.getState().logout();
         setIsInitializing(false);
       }
     };

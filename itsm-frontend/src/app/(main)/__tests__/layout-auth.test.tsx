@@ -1,11 +1,10 @@
 import React from 'react';
 import { render, waitFor } from '@testing-library/react';
 import MainLayout from '../layout';
-import { httpClient } from '@/lib/api/http-client';
 import { useAuthStore } from '@/lib/store/auth-store';
 
 const push = jest.fn();
-const login = jest.fn();
+const hydrateSession = jest.fn();
 const logout = jest.fn();
 const initPersonaByRole = jest.fn();
 const setActivePersona = jest.fn();
@@ -17,7 +16,6 @@ jest.mock('next/navigation', () => ({
   usePathname: () => '/tickets',
   useRouter: () => router,
 }));
-jest.mock('@/lib/api/http-client', () => ({ httpClient: { get: jest.fn() } }));
 jest.mock('@/lib/store/auth-store', () => ({
   useAuthStore: { getState: jest.fn() },
 }));
@@ -35,7 +33,10 @@ jest.mock('@/components/layout/Header', () => ({ Header: () => null }));
 jest.mock('@/components/layout/Sidebar', () => ({ Sidebar: () => null }));
 jest.mock('@/components/ui/LoadingSpinner', () => ({ LoadingSpinner: () => <div>loading</div> }));
 jest.mock('@/components/common/NetworkStatus', () => ({ NetworkStatus: () => null }));
-jest.mock('@/components/common/PageTransition', () => ({ __esModule: true, default: ({ children }: { children: React.ReactNode }) => children }));
+jest.mock('@/components/common/PageTransition', () => ({
+  __esModule: true,
+  default: ({ children }: { children: React.ReactNode }) => children,
+}));
 jest.mock('antd', () => {
   const Container = ({ children }: { children: React.ReactNode }) => <>{children}</>;
   return {
@@ -49,49 +50,54 @@ describe('MainLayout authentication bootstrap', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(console, 'error').mockImplementation(() => {});
-    (useAuthStore.getState as jest.Mock).mockReturnValue({ login, logout });
+    (useAuthStore.getState as jest.Mock).mockReturnValue({ hydrateSession, logout });
   });
 
   it('fails closed immediately when /auth/me fails and never loads tenants', async () => {
-    (httpClient.get as jest.Mock).mockRejectedValueOnce(new Error('unauthorized'));
+    hydrateSession.mockRejectedValueOnce(new Error('unauthorized'));
 
-    render(<MainLayout><div>protected</div></MainLayout>);
+    render(
+      <MainLayout>
+        <div>protected</div>
+      </MainLayout>
+    );
 
     await waitFor(() => expect(push).toHaveBeenCalledWith('/login?redirect=%2Ftickets'));
     expect(logout).toHaveBeenCalledTimes(1);
-    expect(httpClient.get).toHaveBeenCalledTimes(1);
-    expect(httpClient.get).toHaveBeenCalledWith('/api/v1/auth/me');
-    expect(login).not.toHaveBeenCalled();
+    expect(hydrateSession).toHaveBeenCalledTimes(1);
   });
 
   it('fails closed when /auth/me does not return a valid actor identity', async () => {
-    (httpClient.get as jest.Mock).mockResolvedValueOnce({ role: 'super_admin' });
+    hydrateSession.mockRejectedValueOnce(new Error('Invalid authenticated actor response'));
 
-    render(<MainLayout><div>protected</div></MainLayout>);
+    render(
+      <MainLayout>
+        <div>protected</div>
+      </MainLayout>
+    );
 
     await waitFor(() => expect(push).toHaveBeenCalledWith('/login?redirect=%2Ftickets'));
     expect(logout).toHaveBeenCalledTimes(1);
-    expect(httpClient.get).toHaveBeenCalledTimes(1);
-    expect(login).not.toHaveBeenCalled();
+    expect(hydrateSession).toHaveBeenCalledTimes(1);
   });
 
   it('projects only the tenant selected by the authenticated session', async () => {
-    (httpClient.get as jest.Mock)
-      .mockResolvedValueOnce({ id: 7, username: 'operator', role: 'manager', tenantId: 22 })
-      .mockResolvedValueOnce({
-        tenants: [
-          { id: 11, name: 'Other', code: 'other', type: 'standard', status: 'active' },
-          { id: 22, name: 'Selected', code: 'selected', type: 'standard', status: 'active' },
-        ],
-      });
+    hydrateSession.mockResolvedValueOnce({
+      id: 7,
+      username: 'operator',
+      email: '',
+      name: '',
+      role: 'manager',
+      tenantId: 22,
+    });
 
-    render(<MainLayout><div>protected</div></MainLayout>);
-
-    await waitFor(() => expect(login).toHaveBeenCalled());
-    expect(login.mock.calls[0][1]).toEqual(expect.objectContaining({ id: 22, code: 'selected' }));
-    expect(login).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 7, tenantId: 22 }),
-      expect.objectContaining({ id: 22, code: 'selected' })
+    render(
+      <MainLayout>
+        <div>protected</div>
+      </MainLayout>
     );
+
+    await waitFor(() => expect(hydrateSession).toHaveBeenCalledTimes(1));
+    expect(push).not.toHaveBeenCalled();
   });
 });

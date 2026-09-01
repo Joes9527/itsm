@@ -10,7 +10,7 @@ import { TicketPage } from '../utils/page-objects/TicketPage';
 async function csrfHeaders(request: APIRequestContext, apiUrl: string) {
   const response = await request.get(`${apiUrl}/api/v1/csrf-token`);
   expect(response.status()).toBe(200);
-  const body = await response.json() as { data?: { csrf_token?: string } };
+  const body = (await response.json()) as { data?: { csrf_token?: string } };
   expect(body.data?.csrf_token).toEqual(expect.any(String));
   expect(body.data!.csrf_token!.length).toBeGreaterThan(20);
   return {
@@ -30,7 +30,6 @@ test.describe('SLA 监控完整测试', () => {
       const bodyContent = await page.locator('body').textContent();
       expect(bodyContent?.length).toBeGreaterThan(50);
     });
-
   });
 
   test.describe('SLA 定义管理', () => {
@@ -53,7 +52,6 @@ test.describe('SLA 监控完整测试', () => {
       const bodyContent = await page.locator('body').textContent();
       expect(bodyContent?.length).toBeGreaterThan(30);
     });
-
   });
 
   test.describe('SLA 监控', () => {
@@ -66,7 +64,6 @@ test.describe('SLA 监控完整测试', () => {
       const bodyContent = await page.locator('body').textContent();
       expect(bodyContent?.length).toBeGreaterThan(50);
     });
-
   });
 
   test.describe('工作流 SLA', () => {
@@ -130,28 +127,19 @@ test.describe('SLA 监控完整测试', () => {
       await ticketPage.goto();
 
       // 检查表格是否存在
-      const tableExists = await page.locator('table').isVisible();
-      if (!tableExists) {
-        test.skip();
-        return;
-      }
+      await expect(page.locator('table')).toBeVisible();
 
       const ticketId = await ticketPage.getFirstTicketId();
-      if (!ticketId) {
-        test.skip();
-        return;
-      }
+      expect(ticketId).not.toBeNull();
+      expect(Number(ticketId)).toBeGreaterThan(0);
 
       // 打开工单详情
       await ticketPage.openTicket(Number(ticketId));
       await page.waitForLoadState('domcontentloaded');
 
       // 检查是否有 SLA 相关信息
-      const pageContent = await page.locator('body').textContent();
-      const hasSLAInfo = pageContent?.includes('SLA') || pageContent?.includes('服务级别');
-      console.log('Has SLA info in ticket detail:', hasSLAInfo);
+      await expect(page.locator('body')).toContainText(/SLA|服务级别/);
     });
-
   });
 
   test.describe('SLA 报表', () => {
@@ -164,7 +152,6 @@ test.describe('SLA 监控完整测试', () => {
       const bodyContent = await page.locator('body').textContent();
       expect(bodyContent?.length).toBeGreaterThan(30);
     });
-
   });
 });
 

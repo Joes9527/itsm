@@ -5,6 +5,14 @@
 import { test, expect } from '@playwright/test';
 import { loginAndReturn } from './auth-utils';
 
+const openFirstTicket = async (page: import('@playwright/test').Page) => {
+  await page.goto('/tickets', { waitUntil: 'domcontentloaded' });
+  const detailLink = page.locator('table tbody tr a[href^="/tickets/"]').first();
+  await expect(detailLink).toBeVisible();
+  await detailLink.click();
+  await expect(page).toHaveURL(/\/tickets\/\d+/);
+};
+
 test.describe('Ticket List Page', () => {
   test.beforeEach(async ({ page }) => {
     await loginAndReturn(page);
@@ -25,26 +33,8 @@ test.describe('Ticket List Page', () => {
     await expect(filterSelect.first()).toBeVisible();
   });
 
-  test('should navigate to ticket detail (if any row exists)', async ({ page }) => {
-    const row = page.locator('table tbody tr').first();
-    if (!(await row.isVisible())) {
-      test.skip();
-      return;
-    }
-
-    await row.click();
-    await page.waitForTimeout(300);
-
-    if (!/\/tickets\/\d+/.test(page.url())) {
-      const viewButton = page
-        .locator('a[href*="/tickets/"], button:has-text("查看"), button:has-text("详情")')
-        .first();
-      if (await viewButton.isVisible()) {
-        await viewButton.click();
-      }
-    }
-
-    await expect(page).toHaveURL(/\/tickets\/\d+/);
+  test('should navigate to ticket detail', async ({ page }) => {
+    await openFirstTicket(page);
   });
 });
 
@@ -54,32 +44,21 @@ test.describe('Ticket Detail Page', () => {
   });
 
   test('should display ticket title', async ({ page }) => {
-    await page.goto('/tickets', { waitUntil: 'domcontentloaded' });
-
-    const row = page.locator('table tbody tr').first();
-    if (!(await row.isVisible())) {
-      test.skip();
-      return;
-    }
-
-    await row.click();
-    await page.waitForTimeout(300);
-    await expect(page.locator('h1, .ant-card-head-title, [data-testid="ticket-title"]')).toBeVisible();
+    await openFirstTicket(page);
+    await expect(
+      page.locator('h1, .ant-card-head-title, [data-testid="ticket-title"]')
+    ).toBeVisible();
   });
 
   test('should display ticket details', async ({ page }) => {
-    if (!/\/tickets\/\d+/.test(page.url())) {
-      test.skip();
-      return;
-    }
-    await expect(page.locator('[class*="detail"], [class*="info"], .ant-descriptions')).toBeVisible();
+    await openFirstTicket(page);
+    await expect(
+      page.locator('[class*="detail"], [class*="info"], .ant-descriptions')
+    ).toBeVisible();
   });
 
   test('should have action buttons', async ({ page }) => {
-    if (!/\/tickets\/\d+/.test(page.url())) {
-      test.skip();
-      return;
-    }
+    await openFirstTicket(page);
     const actionButtons = page.locator('button');
     await expect(actionButtons.first()).toBeVisible();
   });
@@ -95,7 +74,9 @@ test.describe('Create Ticket Flow', () => {
   test('should have required fields', async ({ page }) => {
     await loginAndReturn(page);
     await page.goto('/tickets/create');
-    const titleInput = page.locator('[data-testid="ticket-title-input"], input[id*="title"], input[name*="title"]');
+    const titleInput = page.locator(
+      '[data-testid="ticket-title-input"], input[id*="title"], input[name*="title"]'
+    );
     await expect(titleInput).toBeVisible();
   });
 });

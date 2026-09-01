@@ -1,5 +1,5 @@
 // itsm-frontend/tests/e2e/utils/page-objects/IncidentPage.ts
-import type { Page, Locator } from '@playwright/test';
+import { expect, type Page, type Locator } from '@playwright/test';
 import { BasePage } from './BasePage';
 
 export class IncidentPage extends BasePage {
@@ -31,15 +31,21 @@ export class IncidentPage extends BasePage {
     await this.page.waitForSelector('form', { timeout: 10000 });
 
     // 填写标题
-    const titleInput = this.page.locator('[data-testid="incident-title-input"], input[placeholder*="事件"]').first();
+    const titleInput = this.page
+      .locator('[data-testid="incident-title-input"], input[placeholder*="事件"]')
+      .first();
     await titleInput.fill(data.title);
 
     // 填写描述
-    const descInput = this.page.locator('[data-testid="incident-description-input"], textarea[placeholder*="详细"]').first();
+    const descInput = this.page
+      .locator('[data-testid="incident-description-input"], textarea[placeholder*="详细"]')
+      .first();
     await descInput.fill(data.description);
 
     // 提交表单
-    const submitBtn = this.page.locator('[data-testid="incident-submit-button"], button[type="submit"]').first();
+    const submitBtn = this.page
+      .locator('[data-testid="incident-submit-button"], button[type="submit"]')
+      .first();
     await submitBtn.click();
 
     // 等待跳转
@@ -55,11 +61,13 @@ export class IncidentPage extends BasePage {
     await this.openIncident(incidentId);
 
     const escalateButton = this.page.getByRole('button', { name: /升级为问题|Escalate|升级/i });
-    if (await escalateButton.isVisible()) {
+    await expect(escalateButton).toBeVisible();
+    {
       await escalateButton.click();
       await this.page.waitForSelector('.ant-modal', { timeout: 5000 });
       const confirmButton = this.page.getByRole('button', { name: /确认|Confirm|确定/i });
-      if (await confirmButton.isVisible()) {
+      await expect(confirmButton).toBeVisible();
+      {
         await confirmButton.click();
       }
     }
@@ -68,11 +76,8 @@ export class IncidentPage extends BasePage {
   async openIncident(id: number): Promise<void> {
     const row = this.incidentTable.locator(`tbody tr:has-text("${id}")`).first();
     const link = row.locator('a').first();
-    if (await link.isVisible()) {
-      await link.click();
-    } else {
-      await row.click();
-    }
+    await expect(link).toBeVisible();
+    await link.click();
     await this.page.waitForURL(new RegExp(`/incidents/${id}|/incidents/\\d+`), { timeout: 10000 });
   }
 }

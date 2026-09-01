@@ -40,7 +40,8 @@ test.describe('Agent/Security Role - Dashboard', () => {
 
     // Try to click on a Ticket if any exists
     const firstTicket = page.locator('.ant-table-row, [class*="row"], tr').first();
-    if (await firstTicket.isVisible()) {
+    await expect(firstTicket).toBeVisible();
+    {
       await firstTicket.click();
       await page.waitForLoadState('networkidle');
 

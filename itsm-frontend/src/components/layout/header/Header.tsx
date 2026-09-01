@@ -145,10 +145,15 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   // 登出处理
-  const handleLogout = () => {
-    AuthService.logout(); // calls backend to clear httpOnly cookies + clears store
-    // Use hard navigation to ensure middleware re-checks auth state
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    try {
+      await AuthService.logout();
+      // Use hard navigation to ensure middleware re-checks auth state.
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Logout failed:', error);
+      message.error('退出登录失败，请重试');
+    }
   };
 
   // 搜索处理

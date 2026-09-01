@@ -12,7 +12,9 @@ async function getHeapUsedBytes(page: import('@playwright/test').Page) {
   const result = await page.evaluate(() => {
     const perf: any = performance as any;
     const mem = perf && perf.memory ? perf.memory : null;
-    return mem ? { usedJSHeapSize: mem.usedJSHeapSize, totalJSHeapSize: mem.totalJSHeapSize } : null;
+    return mem
+      ? { usedJSHeapSize: mem.usedJSHeapSize, totalJSHeapSize: mem.totalJSHeapSize }
+      : null;
   });
   return result?.usedJSHeapSize ?? null;
 }
@@ -39,10 +41,9 @@ test.describe('Stability - Soak', () => {
       await page.locator('body').waitFor({ state: 'visible', timeout: 10000 });
 
       const firstRow = page.locator('.ant-table-row, table tbody tr').first();
-      if (await firstRow.count()) {
-        await firstRow.click();
-        await page.waitForLoadState('networkidle');
-      }
+      await expect(firstRow).toBeVisible();
+      await firstRow.click();
+      await page.waitForLoadState('networkidle');
 
       await page.goto('/incidents');
       await page.waitForLoadState('networkidle');
