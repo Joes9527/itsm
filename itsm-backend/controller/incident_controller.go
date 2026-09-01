@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"context"
 	"strconv"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	problemDomain "itsm-backend/handlers/problem"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
+	"itsm-backend/service/bpmn"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -90,7 +92,8 @@ func (c *IncidentController) CreateIncident(ctx *gin.Context) {
 		return
 	}
 
-	response, err := c.incidentService.CreateIncident(ctx.Request.Context(), &req, tenantID, userID)
+	workflowCtx := context.WithValue(ctx.Request.Context(), bpmn.BPMNUserIDContextKey, userID)
+	response, err := c.incidentService.CreateIncident(workflowCtx, &req, tenantID, userID)
 	if err != nil {
 		c.logger.Errorw("Failed to create incident", "error", err)
 		common.Fail(ctx, common.InternalErrorCode, "创建事件失败")

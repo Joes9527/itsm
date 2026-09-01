@@ -18,6 +18,7 @@ import (
 	"itsm-backend/ent/processinstance"
 	entticket "itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
+	"itsm-backend/service/bpmn"
 
 	"go.uber.org/zap"
 )
@@ -248,13 +249,21 @@ func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateInc
 
 	// 触发BPMN工作流（异步执行，不阻塞事件创建）
 	if s.processTriggerService != nil {
-		go func() {
-			workflowCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			if err := s.triggerWorkflowForIncident(workflowCtx, incidentEntity.ID, tenantID); err != nil {
-				s.logger.Warnw("Failed to trigger workflow for incident", "error", err, "incident_id", incidentEntity.ID)
-			}
-		}()
+		workflowActorID, hasWorkflowActor, err := trustedBPMNProcessStartActorID(ctx, tenantID)
+		if err != nil {
+			s.logger.Warnw("Workflow trigger skipped: invalid actor context", "error", err, "incident_id", incidentEntity.ID)
+		} else {
+			go func(actorID int, hasActor bool) {
+				workflowCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				if hasActor {
+					workflowCtx = context.WithValue(workflowCtx, bpmn.BPMNUserIDContextKey, actorID)
+				}
+				if err := s.triggerWorkflowForIncident(workflowCtx, incidentEntity.ID, tenantID); err != nil {
+					s.logger.Warnw("Failed to trigger workflow for incident", "error", err, "incident_id", incidentEntity.ID)
+				}
+			}(workflowActorID, hasWorkflowActor)
+		}
 	}
 
 	s.logger.Infow("Incident created successfully", "id", incidentEntity.ID, "number", incidentNumber)
@@ -2109,6 +2118,15 @@ func (s *IncidentService) GetIncidentMetrics(ctx context.Context, incidentID int
 
 // triggerWorkflowForIncident 为事件触发工作流
 func (s *IncidentService) triggerWorkflowForIncident(ctx context.Context, incidentID int, tenantID int) error {
+	triggeredBy, hasTriggeredBy, err := trustedBPMNProcessStartActorID(ctx, tenantID)
+	if err != nil {
+		return err
+	}
+	triggeredByValue := "system"
+	if hasTriggeredBy {
+		triggeredByValue = fmt.Sprintf("%d", triggeredBy)
+	}
+
 	// 获取事件信息
 	inc, err := s.client.Incident.Query().
 		Where(
@@ -2158,7 +2176,7 @@ func (s *IncidentService) triggerWorkflowForIncident(ctx context.Context, incide
 		BusinessID:           inc.WorkItemID,
 		ProcessDefinitionKey: processKey,
 		Variables:            variables,
-		TriggeredBy:          fmt.Sprintf("%d", inc.ReporterID),
+		TriggeredBy:          triggeredByValue,
 		TriggeredAt:          time.Now(),
 		TenantID:             tenantID,
 	}
