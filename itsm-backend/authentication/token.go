@@ -55,10 +55,6 @@ func ValidateAccessToken(ctx context.Context, tokenString, jwtSecret string) (*C
 	return claims, nil
 }
 
-func ValidateRefreshToken(tokenString, jwtSecret string) (*Claims, error) {
-	return validateToken(tokenString, jwtSecret, "refresh")
-}
-
 func GenerateAccessToken(userID int, username, role string, tenantID int, jwtSecret string, expireTime time.Duration) (string, error) {
 	claims := Claims{
 		UserID: userID, Username: username, Role: role, TenantID: tenantID, TokenType: "access",

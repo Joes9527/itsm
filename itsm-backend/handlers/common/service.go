@@ -11,55 +11,26 @@ import (
 	enttenant "itsm-backend/ent/tenant"
 	entuser "itsm-backend/ent/user"
 
-	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type Service struct {
-	repo      Repository
-	jwtSecret string
-	logger    *zap.SugaredLogger
-	client    *ent.Client // For legacy integrations if needed
-	redis     *redis.Client
+	repo          Repository
+	jwtSecret     string
+	logger        *zap.SugaredLogger
+	client        *ent.Client // Authentication audit and tenant queries.
+	refreshTokens *authentication.RefreshTokenConsumer
 }
 
-func NewService(repo Repository, jwtSecret string, logger *zap.SugaredLogger, client *ent.Client) *Service {
+func NewService(repo Repository, jwtSecret string, logger *zap.SugaredLogger, client *ent.Client, refreshTokens *authentication.RefreshTokenConsumer) *Service {
 	return &Service{
-		repo:      repo,
-		jwtSecret: jwtSecret,
-		logger:    logger,
-		client:    client,
+		repo:          repo,
+		jwtSecret:     jwtSecret,
+		logger:        logger,
+		client:        client,
+		refreshTokens: refreshTokens,
 	}
-}
-
-// SetRedis 注入 Redis 客户端；启用 refresh token 黑名单（token rotation 后旧值失效）
-func (s *Service) SetRedis(r *redis.Client) {
-	s.redis = r
-}
-
-// refreshBlacklistKey Redis key for refresh token blacklist
-func refreshBlacklistKey(token string) string { return "refresh:blacklist:" + token }
-
-// blacklistRefreshToken 将 refresh token 加入黑名单，TTL = 剩余有效期
-func (s *Service) blacklistRefreshToken(ctx context.Context, token string, expiresAt time.Time) error {
-	if s.redis == nil {
-		return nil // 未注入 redis：降级为无黑名单（记 warn 由调用方处理）
-	}
-	ttl := time.Until(expiresAt)
-	if ttl <= 0 {
-		return nil
-	}
-	return s.redis.Set(ctx, refreshBlacklistKey(token), "1", ttl).Err()
-}
-
-// isRefreshBlacklisted 检查 refresh token 是否已拉黑
-func (s *Service) isRefreshBlacklisted(ctx context.Context, token string) (bool, error) {
-	if s.redis == nil {
-		return false, nil
-	}
-	n, err := s.redis.Exists(ctx, refreshBlacklistKey(token)).Result()
-	return n > 0, err
 }
 
 // Auth
@@ -171,18 +142,9 @@ func (s *Service) Login(ctx context.Context, username, password string, tenantID
 }
 
 func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*AuthResult, error) {
-	claims, err := authentication.ValidateRefreshToken(refreshToken, s.jwtSecret)
+	claims, err := s.refreshTokens.Consume(ctx, refreshToken)
 	if err != nil {
-		return nil, fmt.Errorf("invalid refresh token")
-	}
-
-	// 黑名单检查：token rotation 后旧值不允许再使用
-	if blacklisted, chkErr := s.isRefreshBlacklisted(ctx, refreshToken); chkErr != nil {
-		s.logger.Warnw("refresh blacklist check failed, deny by default", "error", chkErr)
-		return nil, fmt.Errorf("refresh token validation failed")
-	} else if blacklisted {
-		s.logger.Warnw("refresh token replay detected", "user_id", claims.UserID)
-		return nil, fmt.Errorf("refresh token has been revoked")
+		return nil, fmt.Errorf("refresh token rejected: %w", err)
 	}
 
 	user, err := s.repo.GetUserByID(ctx, claims.UserID)
@@ -199,13 +161,6 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*AuthR
 	newRefresh, err := authentication.GenerateRefreshToken(user.ID, s.jwtSecret, 7*24*time.Hour)
 	if err != nil {
 		return nil, err
-	}
-
-	// 拉黑旧 refresh token，TTL = 剩余有效期
-	if claims.ExpiresAt != nil {
-		if bErr := s.blacklistRefreshToken(ctx, refreshToken, claims.ExpiresAt.Time); bErr != nil {
-			s.logger.Warnw("failed to blacklist old refresh token", "user_id", user.ID, "error", bErr)
-		}
 	}
 
 	return &AuthResult{

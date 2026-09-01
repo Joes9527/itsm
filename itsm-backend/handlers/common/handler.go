@@ -1,6 +1,7 @@
 package common
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -12,6 +13,17 @@ import (
 
 type Handler struct {
 	svc *Service
+}
+
+type LoginRequest struct {
+	Username   string `json:"username" binding:"required"`
+	Password   string `json:"password" binding:"required"`
+	TenantID   int    `json:"tenantId"`
+	TenantCode string `json:"tenantCode"`
+}
+
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refreshToken"`
 }
 
 func NewHandler(svc *Service) *Handler {
@@ -34,13 +46,18 @@ func cookieDomain(_ *gin.Context) string {
 
 // Auth
 
+// Login authenticates a user through the canonical common-domain path.
+// @Summary 用户登录
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param request body LoginRequest true "登录请求"
+// @Success 200 {object} common.Response{data=AuthResult}
+// @Failure 400 {object} common.Response
+// @Failure 401 {object} common.Response
+// @Router /api/v1/auth/login [post]
 func (h *Handler) Login(c *gin.Context) {
-	var req struct {
-		Username   string `json:"username" binding:"required"`
-		Password   string `json:"password" binding:"required"`
-		TenantID   int    `json:"tenantId"`
-		TenantCode string `json:"tenantCode"`
-	}
+	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		common.ParamError(c, "参数错误: "+err.Error())
 		return
@@ -69,17 +86,41 @@ func (h *Handler) Login(c *gin.Context) {
 	common.Success(c, res)
 }
 
+// RefreshToken rotates a refresh token after authoritative one-time consumption.
+// @Summary 刷新访问令牌
+// @Tags 认证
+// @Accept json
+// @Produce json
+// @Param request body RefreshTokenRequest false "非浏览器客户端的刷新令牌"
+// @Success 200 {object} common.Response{data=AuthResult}
+// @Failure 400 {object} common.Response
+// @Failure 401 {object} common.Response
+// @Failure 503 {object} common.Response
+// @Router /api/v1/auth/refresh [post]
 func (h *Handler) RefreshToken(c *gin.Context) {
-	var req struct {
-		RefreshToken string `json:"refreshToken" binding:"required"`
+	var req RefreshTokenRequest
+	if c.Request.ContentLength != 0 {
+		if err := c.ShouldBindJSON(&req); err != nil {
+			common.ParamError(c, "参数错误: "+err.Error())
+			return
+		}
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.ParamError(c, "参数错误: "+err.Error())
+	if req.RefreshToken == "" {
+		req.RefreshToken, _ = c.Cookie("refresh_token")
+	}
+	if req.RefreshToken == "" {
+		common.ParamError(c, "缺少刷新令牌")
 		return
 	}
 
 	res, err := h.svc.RefreshToken(c.Request.Context(), req.RefreshToken)
 	if err != nil {
+		var unavailable *authentication.RefreshTokenStoreUnavailableError
+		if errors.As(err, &unavailable) {
+			h.svc.logger.Errorw("authoritative refresh token store unavailable", "error", err)
+			common.ServiceUnavailable(c, "刷新服务暂不可用")
+			return
+		}
 		common.AuthFailed(c, err.Error())
 		return
 	}
@@ -98,17 +139,30 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 
 // Users
 
-// Logout clears httpOnly auth cookies and returns success.
+// Logout revokes the current access token and clears httpOnly auth cookies.
+// @Summary 用户登出
+// @Tags 认证
+// @Produce json
+// @Success 200 {object} common.Response
+// @Failure 401 {object} common.Response
+// @Failure 503 {object} common.Response
+// @Router /api/v1/auth/logout [post]
+// @Security BearerAuth
 func (h *Handler) Logout(c *gin.Context) {
 	token := c.GetString("token")
 	claims, err := authentication.ValidateAccessToken(c.Request.Context(), token, h.svc.jwtSecret)
+	if errors.Is(err, authentication.ErrAccessTokenRevocationCheck) {
+		h.svc.logger.Errorw("authoritative access token store unavailable during logout", "error", err)
+		common.ServiceUnavailable(c, "登出服务暂不可用")
+		return
+	}
 	if err != nil || claims.ExpiresAt == nil {
 		common.AuthFailed(c, "token无效")
 		return
 	}
 	if err := authentication.RevokeAccessToken(c.Request.Context(), token, claims.ExpiresAt.Time); err != nil {
 		h.svc.logger.Errorw("failed to revoke access token on logout", "error", err)
-		common.InternalError(c, "登出失败")
+		common.ServiceUnavailable(c, "登出服务暂不可用")
 		return
 	}
 

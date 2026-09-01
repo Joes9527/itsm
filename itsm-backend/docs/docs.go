@@ -791,7 +791,6 @@ const docTemplate = `{
         },
         "/api/v1/auth/login": {
             "post": {
-                "description": "使用用户名/邮箱和密码登录，通过 HttpOnly Cookie 建立会话",
                 "consumes": [
                     "application/json"
                 ],
@@ -804,34 +803,44 @@ const docTemplate = `{
                 "summary": "用户登录",
                 "parameters": [
                     {
-                        "description": "登录请求（username/email + password）",
+                        "description": "登录请求",
                         "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/dto.LoginRequest"
+                            "$ref": "#/definitions/common.LoginRequest"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "登录成功，返回用户和租户信息",
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/dto.LoginResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/common.AuthResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
-                        "description": "请求参数错误",
+                        "description": "Bad Request",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/common.Response"
                         }
                     },
                     "401": {
-                        "description": "认证失败（用户名或密码错误）",
+                        "description": "Unauthorized",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/common.Response"
                         }
                     }
                 }
@@ -844,10 +853,6 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "使当前用户的令牌失效，退出登录",
-                "consumes": [
-                    "application/json"
-                ],
                 "produces": [
                     "application/json"
                 ],
@@ -857,17 +862,21 @@ const docTemplate = `{
                 "summary": "用户登出",
                 "responses": {
                     "200": {
-                        "description": "登出成功",
+                        "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/common.Response"
                         }
                     },
                     "401": {
-                        "description": "用户未认证",
+                        "description": "Unauthorized",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/common.Response"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/common.Response"
                         }
                     }
                 }
@@ -934,7 +943,6 @@ const docTemplate = `{
         },
         "/api/v1/auth/refresh": {
             "post": {
-                "description": "使用 HttpOnly 刷新令牌 Cookie 获取新的访问令牌",
                 "consumes": [
                     "application/json"
                 ],
@@ -947,33 +955,49 @@ const docTemplate = `{
                 "summary": "刷新访问令牌",
                 "parameters": [
                     {
-                        "description": "非浏览器客户端的刷新令牌（兼容）",
+                        "description": "非浏览器客户端的刷新令牌",
                         "name": "request",
                         "in": "body",
                         "schema": {
-                            "$ref": "#/definitions/dto.RefreshTokenRequest"
+                            "$ref": "#/definitions/common.RefreshTokenRequest"
                         }
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "刷新成功，Cookie 已更新",
+                        "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/dto.RefreshTokenResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/common.AuthResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
-                        "description": "请求参数错误",
+                        "description": "Bad Request",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/common.Response"
                         }
                     },
                     "401": {
-                        "description": "刷新令牌无效或已过期",
+                        "description": "Unauthorized",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": true
+                            "$ref": "#/definitions/common.Response"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/common.Response"
                         }
                     }
                 }
@@ -11131,6 +11155,49 @@ const docTemplate = `{
                 "StrengthLow"
             ]
         },
+        "common.AuthResult": {
+            "type": "object",
+            "properties": {
+                "accessToken": {
+                    "type": "string"
+                },
+                "refreshToken": {
+                    "type": "string"
+                },
+                "user": {
+                    "$ref": "#/definitions/common.User"
+                }
+            }
+        },
+        "common.LoginRequest": {
+            "type": "object",
+            "required": [
+                "password",
+                "username"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string"
+                },
+                "tenantCode": {
+                    "type": "string"
+                },
+                "tenantId": {
+                    "type": "integer"
+                },
+                "username": {
+                    "type": "string"
+                }
+            }
+        },
+        "common.RefreshTokenRequest": {
+            "type": "object",
+            "properties": {
+                "refreshToken": {
+                    "type": "string"
+                }
+            }
+        },
         "common.Response": {
             "type": "object",
             "properties": {
@@ -11139,6 +11206,57 @@ const docTemplate = `{
                 },
                 "data": {},
                 "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "common.User": {
+            "type": "object",
+            "properties": {
+                "active": {
+                    "type": "boolean"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "department": {
+                    "type": "string"
+                },
+                "departmentId": {
+                    "type": "integer"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "mspRole": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "permissions": {
+                    "description": "用户权限列表",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "tenantId": {
+                    "type": "integer"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "username": {
                     "type": "string"
                 }
             }
@@ -15240,25 +15358,6 @@ const docTemplate = `{
                 }
             }
         },
-        "dto.LoginRequest": {
-            "type": "object",
-            "required": [
-                "password",
-                "username"
-            ],
-            "properties": {
-                "password": {
-                    "type": "string"
-                },
-                "tenantCode": {
-                    "description": "可选的租户代码",
-                    "type": "string"
-                },
-                "username": {
-                    "type": "string"
-                }
-            }
-        },
         "dto.LoginResponse": {
             "type": "object",
             "properties": {
@@ -15718,18 +15817,6 @@ const docTemplate = `{
                     "type": "string"
                 }
             }
-        },
-        "dto.RefreshTokenRequest": {
-            "type": "object",
-            "properties": {
-                "refreshToken": {
-                    "description": "Kept for non-browser clients during the migration to cookie-only browser\nsessions. Browser requests obtain this value from the HttpOnly cookie.",
-                    "type": "string"
-                }
-            }
-        },
-        "dto.RefreshTokenResponse": {
-            "type": "object"
         },
         "dto.RegisterRequest": {
             "type": "object",

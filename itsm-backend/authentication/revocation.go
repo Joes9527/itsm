@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"sync"
 	"time"
 
@@ -41,7 +42,10 @@ func currentAccessTokenRevocationStore() accessTokenRevocationStore {
 }
 
 func RevokeAccessToken(ctx context.Context, token string, expiresAt time.Time) error {
-	return currentAccessTokenRevocationStore().Revoke(ctx, token, expiresAt)
+	if err := currentAccessTokenRevocationStore().Revoke(ctx, token, expiresAt); err != nil {
+		return fmt.Errorf("%w: %v", ErrAccessTokenRevocationCheck, err)
+	}
+	return nil
 }
 
 func IsAccessTokenRevoked(ctx context.Context, token string) (bool, error) {

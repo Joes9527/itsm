@@ -32,6 +32,7 @@
 | 2001 | 认证失败 |
 | 4001 | 权限不足 |
 | 5001 | 服务器内部错误 |
+| 5003 | 认证依赖暂不可用（HTTP 503） |
 
 ## 认证接口
 
@@ -87,12 +88,18 @@ Content-Type: application/json
 }
 ```
 
+Refresh token 每次只能成功使用一次；成功后返回一对新 token。Redis
+不可用时接口返回 HTTP `503`/业务码 `5003`，不会降级为可重放刷新。
+
 ### 登出
 
 ```http
 POST /auth/logout
 Authorization: Bearer <accessToken>
 ```
+
+登出端点撤销当前 access token 并清除浏览器认证 Cookie。它不接收、也不
+声称服务器端撤销调用方未提交的 refresh token；客户端应丢弃本地 token。
 
 ### 注册
 

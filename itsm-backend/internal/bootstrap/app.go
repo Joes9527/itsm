@@ -686,8 +686,9 @@ func NewApplication() *Application {
 
 	// Common Domain
 	commonRepo := domainCommon.NewEntRepository(client)
-	commonServiceDomain := domainCommon.NewService(commonRepo, cfg.JWT.Secret, sugar, client)
-	// 注入 Redis 客户端（如果可用），启用 refresh token 黑名单
+	var refreshTokenStore authentication.RefreshTokenStore
+	// Refresh rotation depends on Redis for cross-instance, atomic one-time use.
+	// Without a healthy store, the authentication consumer rejects refreshes.
 	if cfg.Redis.Host != "" {
 		commonRedis := redis.NewClient(&redis.Options{
 			Addr:     fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
@@ -696,14 +697,19 @@ func NewApplication() *Application {
 		})
 		pingCtx, pingCancel := context.WithTimeout(context.Background(), 2*time.Second)
 		if err := commonRedis.Ping(pingCtx).Err(); err != nil {
-			sugar.Warnw("common domain redis ping failed; refresh token blacklist disabled", "error", err)
+			sugar.Warnw("authentication redis ping failed; token refresh unavailable", "error", err)
+			_ = commonRedis.Close()
 		} else {
-			commonServiceDomain.SetRedis(commonRedis)
+			refreshTokenStore = authentication.NewRedisRefreshTokenStore(commonRedis)
 			authentication.ConfigureAccessTokenRevocationRedis(commonRedis)
-			sugar.Info("refresh token blacklist enabled via redis")
+			sugar.Info("authoritative refresh token consumption enabled via redis")
 		}
 		pingCancel()
+	} else {
+		sugar.Warn("REDIS_HOST is not configured; token refresh unavailable")
 	}
+	refreshTokenConsumer := authentication.NewRefreshTokenConsumer(cfg.JWT.Secret, refreshTokenStore)
+	commonServiceDomain := domainCommon.NewService(commonRepo, cfg.JWT.Secret, sugar, client, refreshTokenConsumer)
 	commonHandler := domainCommon.NewHandler(commonServiceDomain)
 
 	// Auth Controller（装配缺失的 register / forgot-password / reset-password / validate-reset-token / switch-tenant 路由）

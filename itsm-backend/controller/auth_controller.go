@@ -5,7 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"itsm-backend/authentication"
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/service"
@@ -33,86 +32,10 @@ func setAuthCookies(c *gin.Context, accessToken, refreshToken string) {
 	}
 }
 
-func clearAuthCookies(c *gin.Context) {
-	c.SetSameSite(http.SameSiteLaxMode)
-	secure := authCookieSecure(c)
-	c.SetCookie("access_token", "", -1, "/", "", secure, true)
-	c.SetCookie("refresh_token", "", -1, "/", "", secure, true)
-}
-
 func NewAuthController(authService *service.AuthService) *AuthController {
 	return &AuthController{
 		authService: authService,
 	}
-}
-
-// Login 登录接口
-// @Summary 用户登录
-// @Description 使用用户名/邮箱和密码登录，通过 HttpOnly Cookie 建立会话
-// @Tags 认证
-// @Accept json
-// @Produce json
-// @Param request body dto.LoginRequest true "登录请求（username/email + password）"
-// @Success 200 {object} dto.LoginResponse "登录成功，返回用户和租户信息"
-// @Failure 400 {object} map[string]interface{} "请求参数错误"
-// @Failure 401 {object} map[string]interface{} "认证失败（用户名或密码错误）"
-// @Router /api/v1/auth/login [post]
-func (ac *AuthController) Login(c *gin.Context) {
-	var req dto.LoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.ParamError(c, "参数错误: "+err.Error())
-		return
-	}
-
-	ctx := authentication.WithLoginAuditRequest(c.Request.Context(), c.ClientIP(), c.Request.UserAgent())
-	response, err := ac.authService.Login(ctx, &req)
-	if err != nil {
-		common.AuthFailed(c, err.Error())
-		return
-	}
-
-	setAuthCookies(c, response.AccessToken, response.RefreshToken)
-
-	common.Success(c, response)
-}
-
-// RefreshToken 刷新 token 接口
-// @Summary 刷新访问令牌
-// @Description 使用 HttpOnly 刷新令牌 Cookie 获取新的访问令牌
-// @Tags 认证
-// @Accept json
-// @Produce json
-// @Param request body dto.RefreshTokenRequest false "非浏览器客户端的刷新令牌（兼容）"
-// @Success 200 {object} dto.RefreshTokenResponse "刷新成功，Cookie 已更新"
-// @Failure 400 {object} map[string]interface{} "请求参数错误"
-// @Failure 401 {object} map[string]interface{} "刷新令牌无效或已过期"
-// @Router /api/v1/auth/refresh [post]
-func (ac *AuthController) RefreshToken(c *gin.Context) {
-	var req dto.RefreshTokenRequest
-	if c.Request.ContentLength > 0 {
-		if err := c.ShouldBindJSON(&req); err != nil {
-			common.ParamError(c, "参数错误: "+err.Error())
-			return
-		}
-	}
-	if req.RefreshToken == "" {
-		req.RefreshToken, _ = c.Cookie("refresh_token")
-	}
-	if req.RefreshToken == "" {
-		common.ParamError(c, "缺少刷新令牌")
-		return
-	}
-
-	ctx := c.Request.Context()
-	response, err := ac.authService.RefreshToken(ctx, &req)
-	if err != nil {
-		common.AuthFailed(c, err.Error())
-		return
-	}
-
-	setAuthCookies(c, response.AccessToken, response.RefreshToken)
-
-	common.Success(c, response)
 }
 
 // GetUserTenants 获取用户可访问的租户列表
@@ -205,39 +128,6 @@ func (ac *AuthController) GetUserInfo(c *gin.Context) {
 	}
 
 	common.Success(c, response)
-}
-
-// Logout 登出接口
-// @Summary 用户登出
-// @Description 使当前用户的令牌失效，退出登录
-// @Tags 认证
-// @Accept json
-// @Produce json
-// @Success 200 {object} map[string]interface{} "登出成功"
-// @Failure 401 {object} map[string]interface{} "用户未认证"
-// @Router /api/v1/auth/logout [post]
-// @Security BearerAuth
-func (ac *AuthController) Logout(c *gin.Context) {
-	userID := c.GetInt("user_id")
-	if userID == 0 {
-		common.AuthFailed(c, "用户未认证")
-		return
-	}
-
-	ctx := c.Request.Context()
-	if err := ac.authService.RevokeAccessToken(ctx, c.GetString("token")); err != nil {
-		common.InternalError(c, "登出失败")
-		return
-	}
-	err := ac.authService.Logout(ctx, userID)
-	if err != nil {
-		common.InternalError(c, err.Error())
-		return
-	}
-
-	clearAuthCookies(c)
-
-	common.Success(c, nil)
 }
 
 // Register 用户注册接口

@@ -88,18 +88,6 @@ func newAuthFixture(t *testing.T) *authFixture {
 }
 
 // =====================================================================
-// Logout
-// =====================================================================
-
-// TestAuthService_Logout 验证 Logout 正常完成。
-func TestAuthService_Logout(t *testing.T) {
-	ctx := context.Background()
-	fx := newAuthFixture(t)
-	defer fx.client.Close()
-	assert.NoError(t, fx.service.Logout(ctx, fx.user.ID))
-}
-
-// =====================================================================
 // ValidateUser
 // =====================================================================
 
@@ -577,34 +565,6 @@ func TestGenerateResetToken_Distinct(t *testing.T) {
 		}
 		seen[tok.Token] = struct{}{}
 	}
-}
-
-// =====================================================================
-// 防御性场景：重复调用不会 panic
-// =====================================================================
-
-func TestAuthService_Register_And_Login_RoundTrip(t *testing.T) {
-	fx := newAuthFixture(t)
-	defer fx.client.Close()
-
-	req := &dto.RegisterRequest{
-		Username:   "round-trip",
-		Email:      "rt@example.com",
-		Password:   "password123",
-		FullName:   "Round Trip",
-		TenantCode: "test",
-	}
-	regResp, err := fx.service.Register(fx.ctx, req)
-	require.NoError(t, err)
-
-	loginResp, err := fx.service.Login(fx.ctx, &dto.LoginRequest{
-		Username:   regResp.Username,
-		Password:   "password123",
-		TenantCode: "test",
-	})
-	require.NoError(t, err)
-	assert.NotEmpty(t, loginResp.AccessToken)
-	assert.Equal(t, regResp.ID, loginResp.User.ID)
 }
 
 // 防止 unused import 标记

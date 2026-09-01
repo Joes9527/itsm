@@ -8,6 +8,7 @@ replace github.com/heidsoft/itsm/itsm-backend => ./
 replace itsm-backend => ./
 
 require (
+	github.com/alicebob/miniredis/v2 v2.38.0
 	entgo.io/ent v0.14.6
 	github.com/ThreeDotsLabs/watermill v1.5.2
 	github.com/ThreeDotsLabs/watermill-redisstream v1.4.5
@@ -134,6 +135,7 @@ require (
 	github.com/vmihailenco/msgpack v4.0.4+incompatible // indirect
 	github.com/xuri/efp v0.0.1 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	github.com/zclconf/go-cty v1.14.4 // indirect
 	github.com/zclconf/go-cty-yaml v1.1.0 // indirect
 	github.com/zeebo/xxh3 v1.1.0 // indirect

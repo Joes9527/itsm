@@ -6,12 +6,6 @@ import (
 	"itsm-backend/ent"
 )
 
-type LoginRequest struct {
-	Username   string `json:"username" binding:"required"`
-	Password   string `json:"password" binding:"required"`
-	TenantCode string `json:"tenantCode,omitempty"` // 可选的租户代码
-}
-
 type LoginResponse struct {
 	// Tokens are transport-only values. Controllers place them in HttpOnly
 	// cookies and must never serialize them into a browser-readable response.
@@ -37,17 +31,6 @@ type LoginUserResponse struct {
 	CreatedAt    time.Time `json:"createdAt"`
 	UpdatedAt    time.Time `json:"updatedAt"`
 	Permissions  []string  `json:"permissions"` // 用户权限列表
-}
-
-type RefreshTokenRequest struct {
-	// Kept for non-browser clients during the migration to cookie-only browser
-	// sessions. Browser requests obtain this value from the HttpOnly cookie.
-	RefreshToken string `json:"refreshToken,omitempty"`
-}
-
-type RefreshTokenResponse struct {
-	AccessToken  string `json:"-"`
-	RefreshToken string `json:"-"`
 }
 
 type UserInfo struct {

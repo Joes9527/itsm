@@ -23,6 +23,11 @@ All configuration is done via environment variables. See `.env.prod.example` for
 | `CORS_ALLOWED_ORIGINS` | CORS allowed origins (comma-separated) | No | * |
 | `ITSM_ALLOW_ALL_ORIGINS` | Allow all CORS origins | No | false |
 
+Redis is the authoritative one-time-consumption store for refresh tokens. If
+Redis is missing or unavailable, login and already-issued access tokens keep
+their normal behavior, but refresh requests fail closed with HTTP `503` and
+code `5003`; the backend never falls back to reusable refresh tokens.
+
 ### AI / LLM
 
 | Variable | Description | Required | Default |
