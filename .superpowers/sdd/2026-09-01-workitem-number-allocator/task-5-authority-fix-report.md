@@ -70,3 +70,38 @@ Observed RED before the corresponding fixes:
 - P1-D owns migration 021. Integration must register/apply `020 -> 021 -> 022`; this branch intentionally registers 022 after 020 until the branches are combined.
 - The RLS package remains a broader platform workstream, but its retained pilot policy and e2e script are no longer invalidated by the 022 schema cutover.
 - `npm ci` reported the repository lockfile's existing two audit findings (one moderate, one high); no dependency or lockfile was changed by this task.
+
+## Authority review round 1 fix
+
+### Implementation
+
+- Closed every raw-SQL Problem investigation path over the authoritative WorkItem boundary. Reads and mutations now require the caller tenant and `tickets.deleted_at IS NULL`; create statements use tenant-scoped `INSERT ... SELECT` so a soft delete or tenant mismatch cannot race a prior existence check. User references are tenant-validated as part of the same statement or before mutation.
+- Extended migration 022 in place—there is still no 023. The apply SQL now upgrades a legacy unsuffixed, direct-column Change RLS policy before dropping `changes.tenant_id`, creates the sole canonical `tenant_isolation_changes` policy through the active WorkItem, and uses only `app.current_tenant`. Apply/verify enforce the exact named, validated, non-deferrable, one-column `work_item_id -> tickets(id)` foreign key for Incident, Problem, and Change; orphans and conflicting FK shapes fail closed.
+- Aligned the retained 022 reset/verify assets, RLS pilot apply/rollback/e2e assets, and RLS integration fixture with the frozen policy naming/GUC contract. Verification rejects permissive/wrong-GUC policy shapes and requires exactly one Change policy.
+- Deleted the complete legacy `IncidentService.executeIncidentRules` implementation and its private condition/action helpers. `NewIncidentService` always owns one authoritative `IncidentRuleEngine`; bootstrap passes that same instance to the controller, and every other composition root gets it by construction. Unsupported action types are parsed by the sole engine, return an error, and persist a `failed` execution rather than `completed`.
+- Scoped both retained seed-script WorkItem-number existence checks by tenant.
+- Repaired the canonical RLS connection boundary after the new live gate proved PostgreSQL rejects a bind placeholder in `SET SESSION`. `AcquireConn` now calls parameterized `set_config('app.current_tenant', $1, false)` with a decimal-string tenant ID; no tenant value is concatenated into SQL, no second GUC exists, and `ReleaseConn` still clears the session with `DISCARD ALL`.
+
+### RED evidence
+
+- `go test ./service -run 'TestProblemInvestigationRejectsSoftDeletedWorkItemReadsAndMutations|TestIncidentCreationUnknownRuleActionNeverCompletes' -count=1` — FAIL before implementation: a soft-deleted Problem investigation was returned successfully; the legacy Incident fallback silently ignored an unregistered action and did not create the expected authoritative failed execution.
+- The initial full backend rerun exposed a real cross-dialect regression in the new tenant-safe `INSERT ... SELECT`: SQLite binds out-of-order `$n` occurrences differently from PostgreSQL, so `TestDualInvestigationEntryPoints` returned 500. The statements were rewritten with ordered-parameter input CTEs; the focused handler test then passed.
+- The first disposable-PostgreSQL RLS run failed `TestAcquireConn_TenantScopeIsolation` and `TestReleaseConn_DiscardsSessionState` with SQLSTATE `42601`, `syntax error at or near "$1"`, at `SET SESSION app.current_tenant = $1`. This isolated the failure to the connection-setting statement before any policy evaluation; the parameter-safe `set_config` call is the single root-cause fix.
+
+### GREEN evidence
+
+- `go test ./service -run 'TestProblemInvestigationRejectsSoftDeletedWorkItemReadsAndMutations|TestIncidentCreationUnknownRuleActionNeverCompletes|TestIncidentCreationUsesFormalRuleEngine' -count=1` — PASS.
+- `go test -race ./service -run 'TestProblemInvestigationRejectsSoftDeletedWorkItemReadsAndMutations|TestIncidentCreationUnknownRuleActionNeverCompletes|TestIncidentCreationUsesFormalRuleEngine|TestIncidentService_CreateIncidentAllocatesSequentialWorkItemNumbers' -count=10` — PASS.
+- `go test -race ./controller ./service ./handlers/change -count=1` — PASS on the final code (`controller 76.558s`, `service 98.447s`, `handlers/change 4.567s`), including the previously known Incident detached-work race gate.
+- `go test ./handlers/problem -run TestDualInvestigationEntryPoints -count=1` — PASS.
+- `go test -tags=integration -race ./migration -run 'TestProfessionalExtensionMigration|TestProfessionalExtensionVerification' -count=1 -v` against local `itsm-postgres-dev` with per-test UUID schemas — PASS, nine tests, zero skips. Coverage includes no-FK upgrade, all three orphan SQLSTATE `23503` rejections, legacy unsuffixed/direct policy upgrade, real non-owner-role tenant/soft-delete/`WITH CHECK` behavior, exact-one canonical policy, conflicting named FK rejection, unvalidated FK rejection, permissive policy rejection, idempotent apply, reset, and verify.
+- `go test ./... -count=1 && go build ./...` — PASS after the focused regression repair.
+- `npm run type-check` — PASS.
+- `go test ./database/rls -run 'TestAcquireConnUsesParameterSafeCanonicalTenantSetting|TestWithTenantAndRoundTrip|TestTenantMissing|TestSystemBypass' -count=1` — PASS. The recording driver proves one canonical GUC call with tenant `"42"` as a bound value.
+- `go test -tags=integration_rls -race ./database/rls -count=1 -v` against a disposable local PostgreSQL database — PASS, fifteen tests, zero skips, including Change tenant/soft-delete visibility, both KAF RLS tables, NoTenant, SystemBypass, and session DISCARD. The database was created solely for this command and dropped by its shell trap.
+- `git diff --exit-code d42a6277 -- repository/ticket/repository_impl.go repository/ticket/repository_test.go handlers/service_request/service.go` — PASS; the separately reviewed transaction implementation remains untouched.
+- `git diff --check` — PASS.
+
+### Integration note
+
+- The frozen incoming 009 contract is `tenant_isolation_<table>` plus the sole GUC `app.current_tenant`, with `ENABLE` rather than broadly applying `FORCE`. This fix uses `tenant_isolation_changes` everywhere it owns. The old 009 body visible on this isolated branch still contains the pre-existing `app.current_tenant_id` implementation and remains the already-declared fresh-replay blocker; it must be replaced by the incoming 009 owner during integration, not patched here with a dual-GUC compatibility policy.

@@ -9,7 +9,7 @@
 //
 // Prerequisites:
 //   - itsm_app / itsm_admin roles exist (see migrations/001_roles.sql)
-//   - `changes` table has rows for at least tenant_id=1
+//   - `changes` has rows whose authoritative WorkItem belongs to tenant_id=1
 //   - The connecting DB is the SAME one you migrated (see caveat below)
 //
 // Caveat on host environments:
@@ -59,11 +59,21 @@ func setupPolicy(t *testing.T, db *sql.DB) func() {
 	ctx := context.Background()
 	stmts := []string{
 		`ALTER TABLE changes ENABLE ROW LEVEL SECURITY`,
-		`ALTER TABLE changes FORCE ROW LEVEL SECURITY`,
 		`DROP POLICY IF EXISTS tenant_isolation ON changes`,
-		`CREATE POLICY tenant_isolation ON changes
-			USING       (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)
-			WITH CHECK  (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)`,
+		`DROP POLICY IF EXISTS tenant_isolation_changes ON changes`,
+		`CREATE POLICY tenant_isolation_changes ON changes
+			USING (EXISTS (
+				SELECT 1 FROM tickets work_item
+				WHERE work_item.id = changes.work_item_id
+				  AND work_item.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint
+				  AND work_item.deleted_at IS NULL
+			))
+			WITH CHECK (EXISTS (
+				SELECT 1 FROM tickets work_item
+				WHERE work_item.id = changes.work_item_id
+				  AND work_item.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint
+				  AND work_item.deleted_at IS NULL
+			))`,
 	}
 	for _, s := range stmts {
 		if _, err := db.ExecContext(ctx, s); err != nil {
@@ -73,7 +83,7 @@ func setupPolicy(t *testing.T, db *sql.DB) func() {
 	return func() {
 		teardown := []string{
 			`DROP POLICY IF EXISTS tenant_isolation ON changes`,
-			`ALTER TABLE changes NO FORCE ROW LEVEL SECURITY`,
+			`DROP POLICY IF EXISTS tenant_isolation_changes ON changes`,
 			`ALTER TABLE changes DISABLE ROW LEVEL SECURITY`,
 		}
 		for _, s := range teardown {

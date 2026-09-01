@@ -433,8 +433,6 @@ func NewApplication() *Application {
 	}()
 
 	// 控制器依赖
-	incidentRuleEngine := service.NewIncidentRuleEngine(client, sugar, numberAllocator)
-	incidentService.SetRuleEngine(incidentRuleEngine)
 	incidentMonitoringService := service.NewIncidentMonitoringService(client, sugar)
 	incidentAlertingService := service.NewIncidentAlertingService(client, sugar)
 	ticketDependencyService := service.NewTicketDependencyService(client, sugar)
@@ -541,7 +539,7 @@ func NewApplication() *Application {
 	problemRepo := problem.NewEntRepository(client, numberAllocator)
 	problemServiceDomain := problem.NewService(problemRepo, sugar)
 	problemHandler := problem.NewHandler(problemServiceDomain, client)
-	incidentController := controller.NewIncidentController(incidentService, incidentRuleEngine, incidentMonitoringService, incidentAlertingService, rootCauseAnalysisService, problemServiceDomain, sugar)
+	incidentController := controller.NewIncidentController(incidentService, incidentService.RuleEngine(), incidentMonitoringService, incidentAlertingService, rootCauseAnalysisService, problemServiceDomain, sugar)
 
 	provisioningService := service.NewProvisioningService(client, sugar)
 	provisioningController := controller.NewProvisioningController(provisioningService)

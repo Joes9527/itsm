@@ -192,8 +192,6 @@ func TestIncidentCreationUsesFormalRuleEngine(t *testing.T) {
 		SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
-	incidentService.SetRuleEngine(NewIncidentRuleEngine(client, zaptest.NewLogger(t).Sugar(), workitemnumber.NewPostgreSQLAllocator()))
-
 	created, err := incidentService.CreateIncident(ctx, &dto.CreateIncidentRequest{
 		Title: "Formal engine incident", Priority: "high", Severity: "high",
 	}, tenant.ID, reporter.ID)
@@ -210,4 +208,36 @@ func TestIncidentCreationUsesFormalRuleEngine(t *testing.T) {
 		Only(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "completed", execution.Status)
+}
+
+func TestIncidentCreationUnknownRuleActionNeverCompletes(t *testing.T) {
+	client, incidentService, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "unknown-rule-action")
+	require.NoError(t, err)
+	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "unknown-rule-action")
+	require.NoError(t, err)
+	rule, err := client.IncidentRule.Create().
+		SetName("Unsupported action").
+		SetRuleType("automation").
+		SetConditions(map[string]interface{}{"priority": []string{"high"}}).
+		SetActions([]map[string]interface{}{{"type": "not_registered"}}).
+		SetIsActive(true).
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	created, err := incidentService.CreateIncident(ctx, &dto.CreateIncidentRequest{
+		Title: "Unknown rule action", Priority: "high", Severity: "high",
+	}, tenant.ID, reporter.ID)
+	require.NoError(t, err)
+
+	execution, err := client.IncidentRuleExecution.Query().
+		Where(
+			incidentruleexecution.RuleIDEQ(rule.ID),
+			incidentruleexecution.IncidentIDEQ(created.ID),
+		).
+		Only(ctx)
+	require.NoError(t, err)
+	require.Equal(t, "failed", execution.Status)
 }

@@ -2,8 +2,8 @@
 //
 // Design (from rls-migration-proposal-2026-07-18.md):
 //  1. Middleware extracts tenant_id from JWT and stores it in gin.Context.
-//  2. When a DB connection is acquired from the pool, we execute
-//     SET SESSION app.current_tenant = <tid> on that connection.
+//  2. When a DB connection is acquired from the pool, we set the session-scoped
+//     app.current_tenant GUC with PostgreSQL's parameter-safe set_config API.
 //  3. Before the connection is returned to the pool, we RESET the variable
 //     to prevent cross-request tenant leakage.
 //
@@ -23,6 +23,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 )
 
 // tenantCtxKey is the private type used to store tenant_id in context.Context.
@@ -80,10 +81,14 @@ func AcquireConn(ctx context.Context, db *sql.DB) (*sql.Conn, error) {
 		return nil, ErrNoTenant
 	}
 
-	// SET SESSION is transactional-safe: SETting inside a tx is scoped by
-	// autocommit; we intentionally SET at connection acquire so subsequent
-	// Ent queries on the same *sql.Conn inherit it.
-	if _, err := conn.ExecContext(ctx, "SET SESSION app.current_tenant = $1", tid); err != nil {
+	// PostgreSQL SET does not accept bind parameters. set_config is the
+	// parameter-safe equivalent and false keeps the value for this session;
+	// ReleaseConn's DISCARD ALL clears it before pool reuse.
+	if _, err := conn.ExecContext(
+		ctx,
+		"SELECT set_config('app.current_tenant', $1, false)",
+		strconv.FormatInt(tid, 10),
+	); err != nil {
 		_ = conn.Close()
 		return nil, fmt.Errorf("rls: set tenant: %w", err)
 	}

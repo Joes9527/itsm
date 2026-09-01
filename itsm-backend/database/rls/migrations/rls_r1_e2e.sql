@@ -20,7 +20,7 @@
 \echo === 环境探测 ===
 SELECT current_user AS superuser_check, session_user;
 SELECT tablename, rowsecurity FROM pg_tables WHERE tablename = 'changes';
-SELECT policyname FROM pg_policies WHERE tablename = 'changes';
+SELECT policyname FROM pg_policies WHERE tablename = 'changes' AND policyname = 'tenant_isolation_changes';
 
 -- 共享字段与业务身份由 WorkItem(tickets) 权威持有。先以管理员身份创建两条探针
 -- WorkItem，随后仅用 changes.work_item_id 验证 extension 表的 RLS。
@@ -32,6 +32,13 @@ INSERT INTO tickets (title, description, status, priority, type, record_class, t
 VALUES ('rls_r1_probe_cross_tenant', 'attack', 'draft', 'low', 'change', 'change_request', 'TKT-RLS-R1-CROSS', 2, 1, NOW(), NOW())
 ON CONFLICT (tenant_id, ticket_number) DO UPDATE SET title = EXCLUDED.title
 RETURNING id AS cross_work_item_id \gset
+INSERT INTO tickets (title, description, status, priority, type, record_class, ticket_number, tenant_id, requester_id, created_at, updated_at, deleted_at)
+VALUES ('rls_r1_probe_deleted', 'deleted', 'draft', 'low', 'change', 'change_request', 'TKT-RLS-R1-DELETED', 1, 1, NOW(), NOW(), NOW())
+ON CONFLICT (tenant_id, ticket_number) DO UPDATE SET deleted_at = NOW()
+RETURNING id AS deleted_work_item_id \gset
+INSERT INTO changes (work_item_id, type, risk_level)
+VALUES (:deleted_work_item_id, 'normal', 'low')
+ON CONFLICT (work_item_id) DO NOTHING;
 
 -- =====================================================================
 -- 场景 1：切换到应用角色，验证基础隔离
@@ -43,6 +50,8 @@ SET SESSION app.current_tenant = 1;
 
 SELECT COUNT(*) AS visible_tenant_1 FROM changes;
 -- 预期：> 0（假设 dev 库 tenant=1 已有数据）
+SELECT COUNT(*) AS visible_soft_deleted_probe FROM changes WHERE work_item_id = :deleted_work_item_id;
+-- 预期：0，WorkItem 软删除后 extension 不可见
 
 \echo
 \echo === 场景 2：切换到 tenant=999 应为 0 ===
@@ -105,11 +114,12 @@ SELECT COUNT(*) AS after_cleanup FROM changes WHERE work_item_id IN (:same_work_
 \echo === 场景 9：BYPASSRLS 角色应看全部（模拟后台任务）===
 RESET ROLE;
 
-DELETE FROM tickets WHERE id IN (:same_work_item_id, :cross_work_item_id);
 SET ROLE itsm_admin;
 SELECT COUNT(*) AS admin_sees_all FROM changes;
 -- 预期：>= 13（tenant=1 全量）
 
+DELETE FROM changes WHERE work_item_id = :deleted_work_item_id;
+DELETE FROM tickets WHERE id IN (:same_work_item_id, :cross_work_item_id, :deleted_work_item_id);
 RESET ROLE;
 
 \echo

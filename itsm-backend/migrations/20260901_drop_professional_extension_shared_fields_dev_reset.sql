@@ -8,6 +8,11 @@ DECLARE
     existing_index_oid OID;
     existing_index_unique BOOLEAN;
 BEGIN
+	IF to_regclass(format('%I.changes', current_schema())) IS NOT NULL THEN
+		EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I.changes', current_schema());
+		EXECUTE format('DROP POLICY IF EXISTS tenant_isolation_changes ON %I.changes', current_schema());
+	END IF;
+
     FOR extension_table, extension_index IN
         SELECT * FROM (VALUES
             ('incidents', 'incident_work_item_id'),
@@ -149,4 +154,19 @@ BEGIN
         existing_index_oid := NULL;
         existing_index_unique := NULL;
     END LOOP;
+
+	EXECUTE format(
+		'CREATE POLICY tenant_isolation_changes ON %I.changes '
+		'USING (EXISTS (SELECT 1 FROM %I.tickets work_item '
+		'WHERE work_item.id = changes.work_item_id '
+		'AND work_item.tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint '
+		'AND work_item.deleted_at IS NULL)) '
+		'WITH CHECK (EXISTS (SELECT 1 FROM %I.tickets work_item '
+		'WHERE work_item.id = changes.work_item_id '
+		'AND work_item.tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint '
+		'AND work_item.deleted_at IS NULL))',
+		current_schema(), current_schema(), current_schema()
+	);
+	EXECUTE format('ALTER TABLE %I.changes ENABLE ROW LEVEL SECURITY', current_schema());
+	EXECUTE format('ALTER TABLE %I.changes NO FORCE ROW LEVEL SECURITY', current_schema());
 END $migration$;

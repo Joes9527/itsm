@@ -26,7 +26,7 @@ SELECT * FROM (VALUES
     ('打印机无法使用', '3楼打印机无法连接', 'resolved', 'low', 'TKT-202602-000013', 1, 5, 2, NOW(), NOW()),
     ('申请服务器资源', '需要申请2台4核8G服务器用于新项目', 'submitted', 'high', 'TKT-202602-000014', 1, 2, NULL, NOW(), NOW())
 ) AS v(title, description, status, priority, ticket_number, tenant_id, requester_id, assignee_id, created_at, updated_at)
-WHERE NOT EXISTS (SELECT 1 FROM tickets WHERE ticket_number = 'TKT-202602-000008');
+WHERE NOT EXISTS (SELECT 1 FROM tickets WHERE tenant_id = 1 AND ticket_number = 'TKT-202602-000008');
 
 -- =============================================
 -- 3. 添加更多事件测试数据（共享字段只写 WorkItem）
