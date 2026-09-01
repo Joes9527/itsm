@@ -102,31 +102,15 @@ func (s *ProblemInvestigationService) GetProblemSolution(ctx context.Context, id
 
 // CreateProblemInvestigation 创建问题调查
 func (s *ProblemInvestigationService) CreateProblemInvestigation(ctx context.Context, req *dto.CreateProblemInvestigationRequest, tenantID int) (*dto.ProblemInvestigationResponse, error) {
-	// 检查问题是否存在
-	var problemTitle string
-	err := s.db.QueryRowContext(ctx, `SELECT t.title FROM problems p JOIN tickets t ON t.id = p.work_item_id WHERE p.id = $1 AND t.tenant_id = $2 AND t.deleted_at IS NULL`, req.ProblemID, tenantID).Scan(&problemTitle)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("问题不存在")
-		}
-		return nil, fmt.Errorf("查询问题失败: %v", err)
+		return nil, fmt.Errorf("开始问题调查事务失败: %v", err)
 	}
+	defer func() { _ = tx.Rollback() }()
 
-	// 检查是否已存在调查记录
-	var existingID int
-	err = s.db.QueryRowContext(ctx, `
-		SELECT pi.id
-		FROM problem_investigations pi
-		JOIN problems p ON pi.problem_id = p.id
-		WHERE pi.problem_id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2 AND deleted_at IS NULL)
-	`, req.ProblemID, tenantID).Scan(&existingID)
-	if err == nil {
-		return nil, fmt.Errorf("该问题已存在调查记录")
-	}
-
-	// 创建调查记录
+	now := time.Now()
 	var investigationID int
-	err = s.db.QueryRowContext(ctx, `
+	err = tx.QueryRowContext(ctx, `
 		WITH input(problem_id, investigator_id, estimated_completion_date, investigation_summary, occurred_at, tenant_id) AS (
 			VALUES ($1, $2, $3, $4, $5, $6)
 		)
@@ -137,28 +121,40 @@ func (s *ProblemInvestigationService) CreateProblemInvestigation(ctx context.Con
 		JOIN tickets wi ON wi.id = p.work_item_id
 		JOIN users investigator ON investigator.id = input.investigator_id AND investigator.tenant_id = wi.tenant_id
 		WHERE wi.tenant_id = input.tenant_id AND wi.deleted_at IS NULL
+		  AND NOT EXISTS (
+			SELECT 1 FROM problem_investigations existing
+			WHERE existing.problem_id = p.id
+		  )
 		RETURNING id
-	`, req.ProblemID, req.InvestigatorID, req.EstimatedCompletionDate, req.InvestigationSummary, time.Now(), tenantID).Scan(&investigationID)
+	`, req.ProblemID, req.InvestigatorID, req.EstimatedCompletionDate, req.InvestigationSummary, now, tenantID).Scan(&investigationID)
 	if err != nil {
 		return nil, fmt.Errorf("创建问题调查失败: %v", err)
 	}
 
-	// 获取调查者姓名
 	var investigatorName string
-	err = s.db.QueryRowContext(ctx, "SELECT name FROM users WHERE id = $1 AND tenant_id = $2", req.InvestigatorID, tenantID).Scan(&investigatorName)
+	err = tx.QueryRowContext(ctx, "SELECT name FROM users WHERE id = $1 AND tenant_id = $2", req.InvestigatorID, tenantID).Scan(&investigatorName)
 	if err != nil {
-		investigatorName = "未知用户"
+		return nil, fmt.Errorf("读取调查者失败: %v", err)
 	}
 
-	// 更新问题状态为"调查中"
-	_, err = s.db.ExecContext(ctx, `
-		UPDATE tickets AS work_item SET status = 'in_progress', updated_at = NOW()
+	result, err := tx.ExecContext(ctx, `
+		UPDATE tickets AS work_item SET status = 'in_progress', updated_at = CURRENT_TIMESTAMP
 		FROM problems AS extension
 		WHERE extension.id = $1
 		  AND work_item.id = extension.work_item_id AND work_item.tenant_id = $2 AND work_item.deleted_at IS NULL
 	`, req.ProblemID, tenantID)
 	if err != nil {
-		s.logger.Warnw("Failed to update problem status", "problem_id", req.ProblemID, "error", err)
+		return nil, fmt.Errorf("更新问题状态失败: %v", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return nil, fmt.Errorf("确认问题状态更新失败: %v", err)
+	}
+	if rowsAffected != 1 {
+		return nil, fmt.Errorf("问题不存在或已删除")
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("提交问题调查事务失败: %v", err)
 	}
 
 	return &dto.ProblemInvestigationResponse{
@@ -167,11 +163,11 @@ func (s *ProblemInvestigationService) CreateProblemInvestigation(ctx context.Con
 		InvestigatorID:          req.InvestigatorID,
 		InvestigatorName:        investigatorName,
 		Status:                  dto.InvestigationStatusInProgress,
-		StartDate:               time.Now(),
+		StartDate:               now,
 		EstimatedCompletionDate: req.EstimatedCompletionDate,
 		InvestigationSummary:    &req.InvestigationSummary,
-		CreatedAt:               time.Now(),
-		UpdatedAt:               time.Now(),
+		CreatedAt:               now,
+		UpdatedAt:               now,
 	}, nil
 }
 
@@ -756,20 +752,16 @@ func (s *ProblemInvestigationService) UpdateRootCauseAnalysis(ctx context.Contex
 func (s *ProblemInvestigationService) DeleteRootCauseAnalysis(ctx context.Context, id int, tenantID int) error {
 	s.logger.Infow("Deleting root cause analysis", "id", id, "tenant_id", tenantID)
 
-	// 检查是否存在
-	var count int
-	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM problem_root_cause_analyses WHERE id = $1 AND problem_id IN (SELECT p.id FROM problems p JOIN tickets wi ON wi.id = p.work_item_id WHERE wi.tenant_id = $2 AND wi.deleted_at IS NULL)", id, tenantID).Scan(&count)
-	if err != nil {
-		return fmt.Errorf("查询根因分析失败: %v", err)
-	}
-	if count == 0 {
-		return fmt.Errorf("根因分析不存在")
-	}
-
-	// 删除
-	_, err = s.db.ExecContext(ctx, "DELETE FROM problem_root_cause_analyses WHERE id = $1 AND problem_id IN (SELECT p.id FROM problems p JOIN tickets wi ON wi.id = p.work_item_id WHERE wi.tenant_id = $2 AND wi.deleted_at IS NULL)", id, tenantID)
+	result, err := s.db.ExecContext(ctx, "DELETE FROM problem_root_cause_analyses WHERE id = $1 AND problem_id IN (SELECT p.id FROM problems p JOIN tickets wi ON wi.id = p.work_item_id WHERE wi.tenant_id = $2 AND wi.deleted_at IS NULL)", id, tenantID)
 	if err != nil {
 		return fmt.Errorf("删除根因分析失败: %v", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("确认根因分析删除失败: %v", err)
+	}
+	if rowsAffected != 1 {
+		return fmt.Errorf("根因分析不存在")
 	}
 
 	return nil
@@ -862,20 +854,16 @@ func (s *ProblemInvestigationService) UpdateProblemSolution(ctx context.Context,
 func (s *ProblemInvestigationService) DeleteProblemSolution(ctx context.Context, id int, tenantID int) error {
 	s.logger.Infow("Deleting problem solution", "id", id, "tenant_id", tenantID)
 
-	// 检查是否存在
-	var count int
-	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM problem_solutions WHERE id = $1 AND problem_id IN (SELECT p.id FROM problems p JOIN tickets wi ON wi.id = p.work_item_id WHERE wi.tenant_id = $2 AND wi.deleted_at IS NULL)", id, tenantID).Scan(&count)
-	if err != nil {
-		return fmt.Errorf("查询解决方案失败: %v", err)
-	}
-	if count == 0 {
-		return fmt.Errorf("解决方案不存在")
-	}
-
-	// 删除
-	_, err = s.db.ExecContext(ctx, "DELETE FROM problem_solutions WHERE id = $1 AND problem_id IN (SELECT p.id FROM problems p JOIN tickets wi ON wi.id = p.work_item_id WHERE wi.tenant_id = $2 AND wi.deleted_at IS NULL)", id, tenantID)
+	result, err := s.db.ExecContext(ctx, "DELETE FROM problem_solutions WHERE id = $1 AND problem_id IN (SELECT p.id FROM problems p JOIN tickets wi ON wi.id = p.work_item_id WHERE wi.tenant_id = $2 AND wi.deleted_at IS NULL)", id, tenantID)
 	if err != nil {
 		return fmt.Errorf("删除解决方案失败: %v", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("确认解决方案删除失败: %v", err)
+	}
+	if rowsAffected != 1 {
+		return fmt.Errorf("解决方案不存在")
 	}
 
 	return nil

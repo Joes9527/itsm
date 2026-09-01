@@ -67,6 +67,7 @@ DECLARE
     existing_index_oid OID;
     existing_index_unique BOOLEAN;
     existing_constraint_oid OID;
+    work_item_foreign_key_count INTEGER;
     orphan_work_item_id BIGINT;
 BEGIN
     IF to_regclass(format('%I.tickets', current_schema())) IS NULL THEN
@@ -110,6 +111,23 @@ BEGIN
         WHERE extension_schema.nspname = current_schema()
           AND extension_relation.relname = extension_table
           AND constraint_relation.conname = extension_constraint;
+
+        SELECT COUNT(*)
+        INTO work_item_foreign_key_count
+        FROM pg_constraint constraint_relation
+        JOIN pg_class extension_relation ON extension_relation.oid = constraint_relation.conrelid
+        JOIN pg_namespace extension_schema ON extension_schema.oid = extension_relation.relnamespace
+        JOIN pg_attribute extension_column
+          ON extension_column.attrelid = extension_relation.oid
+         AND extension_column.attnum = ANY (constraint_relation.conkey)
+        WHERE extension_schema.nspname = current_schema()
+          AND extension_relation.relname = extension_table
+          AND constraint_relation.contype = 'f'
+          AND extension_column.attname = 'work_item_id';
+
+        IF existing_constraint_oid IS NOT NULL AND work_item_foreign_key_count <> 1 THEN
+            RAISE EXCEPTION '%.work_item_id has an additional foreign key constraint', extension_table;
+        END IF;
 
         IF existing_constraint_oid IS NOT NULL AND NOT EXISTS (
             SELECT 1
@@ -294,6 +312,7 @@ BEGIN
         existing_index_oid := NULL;
         existing_index_unique := NULL;
         existing_constraint_oid := NULL;
+        work_item_foreign_key_count := NULL;
         orphan_work_item_id := NULL;
     END LOOP;
 

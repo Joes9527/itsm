@@ -217,7 +217,7 @@ func TestReleaseConn_DiscardsSessionState(t *testing.T) {
 	db.SetMaxIdleConns(1)
 
 	// First borrow: tenant=1
-	ctx1 := WithTenant(context.Background(), 1)
+	ctx1, cancelRequest := context.WithCancel(WithTenant(context.Background(), 1))
 	conn1, err := AcquireConn(ctx1, db)
 	if err != nil {
 		t.Fatalf("acquire 1: %v", err)
@@ -231,6 +231,7 @@ func TestReleaseConn_DiscardsSessionState(t *testing.T) {
 	if tid1.String != "1" {
 		t.Fatalf("expected tenant var '1', got %q", tid1.String)
 	}
+	cancelRequest()
 	if err := ReleaseConn(ctx1, conn1); err != nil {
 		t.Fatalf("release 1: %v", err)
 	}

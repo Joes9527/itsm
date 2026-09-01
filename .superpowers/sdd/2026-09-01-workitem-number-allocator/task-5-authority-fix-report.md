@@ -105,3 +105,37 @@ Observed RED before the corresponding fixes:
 ### Integration note
 
 - The frozen incoming 009 contract is `tenant_isolation_<table>` plus the sole GUC `app.current_tenant`, with `ENABLE` rather than broadly applying `FORCE`. This fix uses `tenant_isolation_changes` everywhere it owns. The old 009 body visible on this isolated branch still contains the pre-existing `app.current_tenant_id` implementation and remains the already-declared fresh-replay blocker; it must be replaced by the incoming 009 owner during integration, not patched here with a dual-GUC compatibility policy.
+
+## Authority review round 2 fix
+
+### Implementation
+
+- Hardened migration 022 without adding a new migration. Apply and development reset now require the authoritative WorkItem table, reject orphans, establish the exact named `work_item_id -> tickets(id)` foreign keys, validate their complete shape, and fail closed when any extension has an additional FK involving `work_item_id`. Verify independently requires exactly one such FK per extension.
+- Changed Change RLS verification from substring matching to an exact whitespace-normalized `pg_get_expr` comparison for both `USING` and `WITH CHECK`. The verifier still requires exactly one policy and the frozen `ENABLE`/no-`FORCE` table state, so `OR true`, extra branches, wrong GUCs, and additional policies fail closed.
+- Made Problem investigation creation one transaction. The tenant/active-WorkItem/investigator/existing-investigation gates are in the insert, the authoritative WorkItem status update is tenant and soft-delete scoped, `RowsAffected` must be exactly one, and every failure rolls the new investigation back. Root-cause and solution deletion are each one scoped delete with an exact `RowsAffected` check; there is no select-then-delete success window.
+- Made `ReleaseConn` run `DISCARD ALL` under an independent five-second cleanup context. If cleanup fails, the `database/sql` physical connection is marked with `driver.ErrBadConn` through `Conn.Raw` and closed, so a dirty session cannot re-enter the pool.
+
+### RED evidence
+
+- `go test ./database/rls ./service -run 'TestReleaseConn|TestCreateProblemInvestigationRollsBackWhenWorkItemIsSoftDeletedDuringMutation' -count=1` — FAIL before implementation: canceled request context prevented `DISCARD ALL`; a forced cleanup error reused the same physical connection; and the Problem create path returned success while leaving an investigation after the WorkItem became soft-deleted.
+- `go test -tags=integration ./migration -run 'TestProfessionalExtension(MigrationRejectsAdditionalForeignKey|VerificationRejectsAdditionalForeignKey|ResetEstablishesExactForeignKeys|ResetRejectsAdditionalForeignKey|VerificationRejectsCanonicalPolicyWithPermissiveBranch|VerificationRejectsAdditionalPolicy)' -count=1 -v` against local `itsm-postgres-dev` — five expected failures before implementation: canonical-plus-extra FK passed apply and verify, reset did not create FKs, reset accepted an extra FK, and canonical `OR true` passed policy verification. The existing exact-one-policy guard already rejected the extra-policy fixture.
+
+### GREEN evidence
+
+- `go test -race ./database/rls ./service -run 'TestReleaseConn|TestCreateProblemInvestigationRollsBackWhenWorkItemIsSoftDeletedDuringMutation|TestProblemInvestigationRejectsSoftDeleted' -count=1` — PASS.
+- `go test -race ./service -run 'TestCreateProblemInvestigationRollsBackWhenWorkItemIsSoftDeletedDuringMutation|TestProblemInvestigationRejectsSoftDeletedWorkItemReadsAndMutations' -count=10` — PASS (`2.414s`); repeated trigger-driven soft-delete interleavings leave no investigation and never report success.
+- `go test -tags=integration -race ./migration -run 'TestProfessionalExtensionMigration|TestProfessionalExtensionVerification' -count=1 -v` — PASS against local `itsm-postgres-dev`, thirteen tests, zero skips, including canonical-plus-extra FK rejection and exact `OR true`/extra-policy rejection.
+- `go test -tags=integration -race ./migration -run 'TestProfessionalExtensionReset' -count=1 -v` — PASS against local `itsm-postgres-dev`, two tests, zero skips; standalone reset establishes all three exact FKs and rejects canonical-plus-extra FK state.
+- `go test -tags=integration_rls -race ./database/rls -run TestReleaseConn_DiscardsSessionState -count=1 -v` — PASS against local `itsm-postgres-dev`, zero skips. The request context is canceled before release, `DISCARD ALL` still succeeds, and the next borrower sees an empty tenant GUC.
+- `go test ./service -count=1` — PASS (`28.684s`).
+- `go test ./... -count=1` — PASS.
+- `go build ./...` — PASS.
+- `go test -race ./controller ./service ./handlers/change -count=1` — PASS (`controller 80.155s`, `service 92.112s`, `handlers/change 5.954s`).
+- `npm run type-check` — PASS.
+- `go test ./migration -run 'TestProfessionalExtensionOperationalAssetsUseWorkItemAuthority|TestProfessionalExtensionMigrationRegistry' -count=1` and `git diff --check` — PASS.
+- The frozen transaction files `repository/ticket/repository_impl.go`, `repository/ticket/repository_test.go`, and `handlers/service_request/service.go` have no diff in this round.
+
+### Evidence boundary
+
+- A broad `go test -tags=integration_rls -race ./database/rls -count=1 -v` run had one environment-data failure: the pre-existing `TestAcquireConn_TenantScopeIsolation` assumes tenant 1 already owns at least one Change, but the current local dev database returned zero. All other cases passed, including the new canceled-context live cleanup test. This is recorded separately and is not represented as a clean full RLS run; the focused zero-skip release boundary above is the authoritative round-2 live evidence.
+- The earlier fresh-replay 009 integration blocker and the required `020 -> 021 -> 022` combined ordering remain unchanged.
