@@ -100,3 +100,34 @@ An adverse CLI probe set `DB_HOST` and `ITSM_FRESH_HOST` to `192.168.31.66`; it 
 ### Concerns
 
 The first live strict-seed attempt intentionally lacked the required production administrator password and failed closed; the succeeding disposable run provided a temporary non-persisted administrator password. Existing `go vet ./internal/bootstrap` copylock noise is outside this change. No 021/022 registration, allocator authority change, compatibility table, or policy dual path was introduced.
+
+## Review round 2 remediation
+
+### Implementation
+
+- The fresh guard canonicalizes IP literals with `netip.Addr.Unmap` and resolves every hostname through the injectable `lookupFreshHostIPs` boundary before opening a database connection. A direct or resolved `192.168.31.66` address rejects the run; resolution errors and malformed addresses also fail closed.
+- `VerifyProduction` now independently requires at least 12 TicketTypes in the default tenant. Therefore a swallowed per-row TicketType seed error reaches `SeedProduction` and the canonical fresh CLI as a failure.
+- Available migrations must match `RegisteredMigrations` at every index. The ledger still permits recognized legacy history, but applied active versions must be one continuous canonical prefix; a later active entry after any missing predecessor fails both status and up.
+- `CLAUDE.md` and `docs/development.md` now show the same explicit host/port/database fresh confirmation as the remaining active operational documentation.
+
+### RED / GREEN
+
+RED:
+
+```bash
+go test -tags migrate ./cmd/migrate
+go test ./migration
+go test ./pkg/seeder -run TestSeedProductionFailsClosedWhenTicketTypeWritesFail -count=1
+```
+
+Before the fix, mapped `::ffff:192.168.31.66` was accepted, a TicketType-write hook let `SeedProduction` return nil, and swapped active migrations/only `008` ledger state were accepted. After the fix, all three commands passed; hostname alias coverage is resolver-injected and deterministic.
+
+`go test ./... -count=1`, `go build ./...`, `go build -tags migrate ./cmd/migrate`, `go vet ./migration ./database ./pkg/seeder`, `go vet -tags migrate ./cmd/migrate`, and `git diff --check` passed. As in round 1, `go vet ./internal/bootstrap` retains its pre-existing copylock warning and is not attributable to this change.
+
+### Live disposable PostgreSQL
+
+The CLI mapped-address probe exited `1` before connection with `-fresh refuses shared host "192.168.31.66"`. A local disposable fresh run completed with TicketTypes=`12`, migration ledger=`12`, and direct-tenant policies=`118`; second up applied `0`. After deleting only `008_add_initialization_ledger`, `-status` exited `1` with the continuous-active-prefix error. The disposable database was dropped.
+
+### Concerns
+
+Hostname alias security coverage is deterministic through the injectable resolver; the local live guard also covers the mapped-address path. No DNS cache, string alias workaround, compatibility path, migration registration, or change to the RLS policy contract was added.

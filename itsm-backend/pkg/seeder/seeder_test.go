@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"itsm-backend/config"
+	"itsm-backend/ent"
 	"itsm-backend/ent/citype"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/menu"
@@ -306,6 +307,17 @@ func TestProductionInitializersApplyAndVerifyCompleteDAG(t *testing.T) {
 	ticketTypeCount, err := seeder.client.TicketType.Query().Count(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 12, ticketTypeCount)
+}
+
+func TestSeedProductionFailsClosedWhenTicketTypeWritesFail(t *testing.T) {
+	seeder, ctx := newTestSeeder(t, tenantmode.DeploymentModePrivate)
+	seeder.client.TicketType.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(context.Context, ent.Mutation) (ent.Value, error) {
+			return nil, errors.New("injected ticket type write failure")
+		})
+	})
+
+	require.ErrorContains(t, seeder.SeedProduction(ctx), "verify ticket types")
 }
 
 func TestProductionComponentRollsBackWhenTransactionalVerificationFails(t *testing.T) {

@@ -59,7 +59,8 @@ go run -tags migrate ./cmd/migrate -up
 
 # A destructive local-only rebuild is explicit and guarded. Never use it
 # against a shared or production database.
-ITSM_ALLOW_DESTRUCTIVE_FRESH=true ITSM_FRESH_DATABASE="$DB_NAME" \
+ITSM_ALLOW_DESTRUCTIVE_FRESH=true ITSM_FRESH_HOST="$DB_HOST" \
+  ITSM_FRESH_PORT="$DB_PORT" ITSM_FRESH_DATABASE="$DB_NAME" \
   go run -tags migrate ./cmd/migrate -fresh
 
 # Run with hot reload

@@ -594,6 +594,15 @@ func (s *Seeder) VerifyProduction(ctx context.Context) error {
 			},
 		},
 		{
+			name: "ticket types",
+			exist: func() (bool, error) {
+				count, err := s.client.TicketType.Query().
+					Where(tickettype.TenantIDEQ(int64(rootTenant.ID))).
+					Count(ctx)
+				return count >= 12, err
+			},
+		},
+		{
 			name: "roles",
 			exist: func() (bool, error) {
 				for _, expected := range s.config.Roles {

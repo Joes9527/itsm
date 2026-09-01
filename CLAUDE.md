@@ -69,8 +69,9 @@ cd itsm-backend
 go run -tags migrate ./cmd/migrate -status   # show pending/applied migrations
 go run -tags migrate ./cmd/migrate -up       # apply pending migrations
 go run -tags migrate ./cmd/migrate -dry-run  # preview SQL without executing
-# -fresh is development/test-only and requires both explicit confirmations:
-ITSM_ALLOW_DESTRUCTIVE_FRESH=true ITSM_FRESH_DATABASE="$DB_NAME" \
+# -fresh is development/test-only and requires explicit host/port/database confirmation:
+ITSM_ALLOW_DESTRUCTIVE_FRESH=true ITSM_FRESH_HOST="$DB_HOST" \
+  ITSM_FRESH_PORT="$DB_PORT" ITSM_FRESH_DATABASE="$DB_NAME" \
   go run -tags migrate ./cmd/migrate -fresh
 ```
 

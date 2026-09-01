@@ -203,7 +203,12 @@ func allKnownMigrations() map[string]Migration {
 
 func validateMigrationLedger(applied []Migration) error {
 	known := allKnownMigrations()
+	activeIndex := make(map[string]int, len(RegisteredMigrations))
+	for index, migration := range RegisteredMigrations {
+		activeIndex[migration.Version] = index
+	}
 	seen := make(map[string]struct{}, len(applied))
+	appliedActive := make(map[int]struct{}, len(RegisteredMigrations))
 	for _, migration := range applied {
 		knownMigration, ok := known[migration.Version]
 		if !ok {
@@ -216,7 +221,20 @@ func validateMigrationLedger(applied []Migration) error {
 		if migration.Checksum != expected {
 			return fmt.Errorf("migration checksum mismatch for %s: applied=%s current=%s", migration.Version, migration.Checksum, expected)
 		}
+		if index, active := activeIndex[migration.Version]; active {
+			appliedActive[index] = struct{}{}
+		}
 		seen[migration.Version] = struct{}{}
+	}
+	missingActive := false
+	for index, migration := range RegisteredMigrations {
+		if _, applied := appliedActive[index]; !applied {
+			missingActive = true
+			continue
+		}
+		if missingActive {
+			return fmt.Errorf("migration ledger active stream is not a continuous prefix: %q is applied after an earlier gap", migration.Version)
+		}
 	}
 	return nil
 }
@@ -225,27 +243,13 @@ func validateAvailableMigrations(available []Migration) error {
 	if len(available) != len(RegisteredMigrations) {
 		return fmt.Errorf("active migration stream is incomplete: got %d migrations, want %d", len(available), len(RegisteredMigrations))
 	}
-	active := make(map[string]Migration, len(RegisteredMigrations))
-	for _, migration := range RegisteredMigrations {
-		active[migration.Version] = migration
-	}
-	seen := make(map[string]struct{}, len(available))
-	for _, migration := range available {
-		expected, ok := active[migration.Version]
-		if !ok {
-			return fmt.Errorf("unknown active migration %q", migration.Version)
-		}
-		if _, duplicate := seen[migration.Version]; duplicate {
-			return fmt.Errorf("duplicate active migration %q", migration.Version)
+	for index, migration := range available {
+		expected := RegisteredMigrations[index]
+		if migration.Version != expected.Version {
+			return fmt.Errorf("active migration stream is not in canonical order at index %d: got %q want %q", index, migration.Version, expected.Version)
 		}
 		if expected.Description != migration.Description || expected.RollbackSQL != migration.RollbackSQL {
 			return fmt.Errorf("active migration %q does not match the registered catalog", migration.Version)
-		}
-		seen[migration.Version] = struct{}{}
-	}
-	for _, migration := range RegisteredMigrations {
-		if _, present := seen[migration.Version]; !present {
-			return fmt.Errorf("active migration stream omits registered migration %q", migration.Version)
 		}
 	}
 	return nil

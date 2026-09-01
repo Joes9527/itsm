@@ -67,7 +67,7 @@ func TestValidateMigrationCatalogRejectsInvalidActiveAndLegacyCatalogs(t *testin
 	require.ErrorContains(t, validateMigrationCatalog([]Migration{{Version: "100", Description: "one"}, {Version: "100", Description: "two"}}, validLegacy, func(string) string { return "SELECT 1;" }), "duplicate")
 	invalidAvailable := PostSchemaMigrations()
 	invalidAvailable[0] = LegacyMigrations[0]
-	require.ErrorContains(t, validateAvailableMigrations(invalidAvailable), "unknown active migration")
+	require.ErrorContains(t, validateAvailableMigrations(invalidAvailable), "canonical order")
 	require.ErrorContains(t, validateAvailableMigrations(nil), "incomplete")
 	require.ErrorContains(t, validateMigrationCatalog(validActive, validLegacy, func(string) string { return "" }), "empty SQL")
 }
@@ -79,6 +79,22 @@ func TestValidateMigrationLedgerFailsClosedForUnknownDuplicateAndChecksumDrift(t
 	checksum := checksumSQL(GetMigrationSQL(known.Version))
 	require.ErrorContains(t, validateMigrationLedger([]Migration{{Version: known.Version, Checksum: checksum}, {Version: known.Version, Checksum: checksum}}), "duplicate")
 	require.NoError(t, validateMigrationLedger([]Migration{{Version: known.Version, Checksum: checksum}}))
+}
+
+func TestMigrationStreamAndLedgerRequireCanonicalOrderAndActivePrefix(t *testing.T) {
+	available := PostSchemaMigrations()
+	available[0], available[1] = available[1], available[0]
+	require.ErrorContains(t, validateAvailableMigrations(available), "canonical order")
+
+	later := RegisteredMigrations[1]
+	require.ErrorContains(t, validateMigrationLedger([]Migration{{Version: later.Version, Checksum: checksumSQL(GetMigrationSQL(later.Version))}}), "continuous prefix")
+
+	legacy := LegacyMigrations[0]
+	first := RegisteredMigrations[0]
+	require.NoError(t, validateMigrationLedger([]Migration{
+		{Version: legacy.Version, Checksum: checksumSQL(GetMigrationSQL(legacy.Version))},
+		{Version: first.Version, Checksum: checksumSQL(GetMigrationSQL(first.Version))},
+	}))
 }
 
 func TestGetMigrationSQL(t *testing.T) {

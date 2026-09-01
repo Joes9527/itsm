@@ -3,6 +3,7 @@
 package main
 
 import (
+	"net"
 	"testing"
 
 	"itsm-backend/config"
@@ -26,6 +27,9 @@ func TestValidateFreshTargetRequiresDevelopmentModeAndExactConfirmation(t *testi
 }
 
 func TestValidateFreshTargetRequiresNormalizedHostPortAndNonSystemDatabase(t *testing.T) {
+	previousLookup := lookupFreshHostIPs
+	lookupFreshHostIPs = func(string) ([]net.IP, error) { return []net.IP{net.ParseIP("127.0.0.1")}, nil }
+	t.Cleanup(func() { lookupFreshHostIPs = previousLookup })
 	cfg := &config.Config{Database: config.DatabaseConfig{Host: "LOCALHOST.", Port: 5432, DBName: "itsm_fresh_test"}, Deployment: config.DeploymentConfig{Mode: "development"}}
 	t.Setenv("ITSM_ALLOW_DESTRUCTIVE_FRESH", "true")
 	t.Setenv("ITSM_FRESH_DATABASE", "itsm_fresh_test")
@@ -50,4 +54,29 @@ func TestValidateFreshTargetRequiresNormalizedHostPortAndNonSystemDatabase(t *te
 	cfg.Database.Port = 0
 	t.Setenv("ITSM_FRESH_DATABASE", cfg.Database.DBName)
 	require.ErrorContains(t, validateFreshTarget(cfg), "invalid fresh database port")
+}
+
+func TestValidateFreshTargetRejectsIPv4MappedSharedHost(t *testing.T) {
+	cfg := &config.Config{Database: config.DatabaseConfig{Host: "::ffff:192.168.31.66", Port: 5432, DBName: "itsm_fresh_test"}, Deployment: config.DeploymentConfig{Mode: "development"}}
+	t.Setenv("ITSM_ALLOW_DESTRUCTIVE_FRESH", "true")
+	t.Setenv("ITSM_FRESH_DATABASE", cfg.Database.DBName)
+	t.Setenv("ITSM_FRESH_HOST", cfg.Database.Host)
+	t.Setenv("ITSM_FRESH_PORT", "5432")
+	require.ErrorContains(t, validateFreshTarget(cfg), "shared host")
+}
+
+func TestValidateFreshTargetRejectsHostnameResolvingToSharedHost(t *testing.T) {
+	previousLookup := lookupFreshHostIPs
+	lookupFreshHostIPs = func(host string) ([]net.IP, error) {
+		require.Equal(t, "fresh-alias.internal", host)
+		return []net.IP{net.ParseIP("127.0.0.1"), net.ParseIP("192.168.31.66")}, nil
+	}
+	t.Cleanup(func() { lookupFreshHostIPs = previousLookup })
+
+	cfg := &config.Config{Database: config.DatabaseConfig{Host: "fresh-alias.internal", Port: 5432, DBName: "itsm_fresh_test"}, Deployment: config.DeploymentConfig{Mode: "development"}}
+	t.Setenv("ITSM_ALLOW_DESTRUCTIVE_FRESH", "true")
+	t.Setenv("ITSM_FRESH_DATABASE", cfg.Database.DBName)
+	t.Setenv("ITSM_FRESH_HOST", cfg.Database.Host)
+	t.Setenv("ITSM_FRESH_PORT", "5432")
+	require.ErrorContains(t, validateFreshTarget(cfg), "resolved as")
 }

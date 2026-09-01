@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/netip"
 	"os"
 	"regexp"
@@ -26,6 +27,8 @@ import (
 )
 
 var databaseNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+var lookupFreshHostIPs = net.LookupIP
 
 func validateDatabaseName(name string) error {
 	if !databaseNamePattern.MatchString(name) {
@@ -306,8 +309,8 @@ func validateFreshTarget(cfg *config.Config) error {
 	if isSystemDatabase(databaseName) {
 		return fmt.Errorf("-fresh refuses system database %q", databaseName)
 	}
-	if host == "192.168.31.66" {
-		return fmt.Errorf("-fresh refuses shared host %q", host)
+	if err := rejectSharedFreshHost(host); err != nil {
+		return err
 	}
 	if os.Getenv("ITSM_FRESH_DATABASE") != databaseName {
 		return fmt.Errorf("-fresh requires ITSM_FRESH_DATABASE to equal the exact configured database %q", cfg.Database.DBName)
@@ -327,9 +330,36 @@ func normalizeFreshHost(value string) (string, error) {
 		return "", fmt.Errorf("-fresh configured host is required")
 	}
 	if address, err := netip.ParseAddr(host); err == nil {
-		return address.String(), nil
+		return address.Unmap().String(), nil
 	}
 	return host, nil
+}
+
+func rejectSharedFreshHost(host string) error {
+	const forbidden = "192.168.31.66"
+	if parsed, err := netip.ParseAddr(host); err == nil {
+		if parsed.Unmap().String() == forbidden {
+			return fmt.Errorf("-fresh refuses shared host %q", host)
+		}
+		return nil
+	}
+	addresses, err := lookupFreshHostIPs(host)
+	if err != nil {
+		return fmt.Errorf("-fresh cannot resolve configured host %q: %w", host, err)
+	}
+	if len(addresses) == 0 {
+		return fmt.Errorf("-fresh cannot resolve configured host %q", host)
+	}
+	for _, address := range addresses {
+		parsed, ok := netip.AddrFromSlice(address)
+		if !ok {
+			return fmt.Errorf("-fresh received invalid address resolving configured host %q", host)
+		}
+		if parsed.Unmap().String() == forbidden {
+			return fmt.Errorf("-fresh refuses shared host %q resolved as %q", host, parsed.Unmap())
+		}
+	}
+	return nil
 }
 
 func isSystemDatabase(name string) bool {
