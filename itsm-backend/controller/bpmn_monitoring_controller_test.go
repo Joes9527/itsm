@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestBPMNMonitoringController_RoutesRequireBPMNRoleGate(t *testing.T) {
+func TestBPMNMonitoringController_RoutesRequireTrustedScope(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	c := &BPMNMonitoringController{}
 	r := gin.New()
@@ -23,5 +23,5 @@ func TestBPMNMonitoringController_RoutesRequireBPMNRoleGate(t *testing.T) {
 	req, _ := http.NewRequest("GET", "/api/v1/bpmn/monitoring/health", nil)
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }

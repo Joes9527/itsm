@@ -8,10 +8,12 @@ import (
 	"strconv"
 	"time"
 
+	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processexecutionhistory"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
+	"itsm-backend/service/bpmn"
 
 	"go.uber.org/zap"
 )
@@ -20,14 +22,21 @@ import (
 type BPMNMonitoringService struct {
 	client       *ent.Client
 	auditService *BPMNAuditService
+	accessPolicy *bpmnInstanceAccessPolicy
 	logger       *zap.SugaredLogger
 }
 
 // NewBPMNMonitoringService 创建BPMN监控服务实例
 func NewBPMNMonitoringService(client *ent.Client, auditService *BPMNAuditService, logger *zap.SugaredLogger) *BPMNMonitoringService {
+	groupResolver := bpmn.NewGroupResolver(client)
+	accessPolicy := newBPMNInstanceAccessPolicy(client, newBPMNParticipationResolver(client, groupResolver))
+	if auditService != nil && auditService.instanceAccessPolicy != nil {
+		accessPolicy = auditService.instanceAccessPolicy.forClient(client)
+	}
 	return &BPMNMonitoringService{
 		client:       client,
 		auditService: auditService,
+		accessPolicy: accessPolicy,
 		logger:       logger,
 	}
 }
@@ -35,6 +44,9 @@ func NewBPMNMonitoringService(client *ent.Client, auditService *BPMNAuditService
 // SetAuditService 注入审计服务（用于延迟注入，避免循环依赖）
 func (s *BPMNMonitoringService) SetAuditService(auditService *BPMNAuditService) {
 	s.auditService = auditService
+	if auditService != nil && auditService.instanceAccessPolicy != nil {
+		s.accessPolicy = auditService.instanceAccessPolicy.forClient(s.client)
+	}
 }
 
 // ProcessMetrics 流程指标
@@ -357,13 +369,10 @@ func (s *BPMNMonitoringService) getTaskMetrics(ctx context.Context, req *Process
 }
 
 // GetProcessInstanceStatus 获取流程实例状态
-func (s *BPMNMonitoringService) GetProcessInstanceStatus(ctx context.Context, processInstanceID int, tenantID int) (*ProcessInstanceStatus, error) {
-	instance, err := s.client.ProcessInstance.Query().
-		Where(processinstance.ProcessInstanceID(fmt.Sprintf("%d", processInstanceID))).
-		Where(processinstance.TenantID(tenantID)).
-		First(ctx)
+func (s *BPMNMonitoringService) GetProcessInstanceStatus(ctx context.Context, processInstanceID int) (*ProcessInstanceStatus, error) {
+	instance, err := s.accessPolicy.loadForRead(ctx, strconv.Itoa(processInstanceID))
 	if err != nil {
-		return nil, fmt.Errorf("获取流程实例失败: %w", err)
+		return nil, err
 	}
 
 	status := &ProcessInstanceStatus{
@@ -376,7 +385,8 @@ func (s *BPMNMonitoringService) GetProcessInstanceStatus(ctx context.Context, pr
 
 	// 获取当前任务
 	currentTask, err := s.client.ProcessTask.Query().
-		Where(processtask.ProcessInstanceID(processInstanceID)).
+		Where(processtask.ProcessInstanceID(instance.ID)).
+		Where(processtask.TenantID(instance.TenantID)).
 		Where(processtask.StatusIn("assigned", "in_progress")).
 		First(ctx)
 	if err == nil {
@@ -385,7 +395,7 @@ func (s *BPMNMonitoringService) GetProcessInstanceStatus(ctx context.Context, pr
 	}
 
 	// 计算进度
-	progress, err := s.calculateProcessProgress(ctx, processInstanceID)
+	progress, err := s.calculateProcessProgress(ctx, instance.ID, instance.TenantID)
 	if err == nil {
 		status.Progress = progress
 	}
@@ -394,10 +404,11 @@ func (s *BPMNMonitoringService) GetProcessInstanceStatus(ctx context.Context, pr
 }
 
 // calculateProcessProgress 计算流程进度
-func (s *BPMNMonitoringService) calculateProcessProgress(ctx context.Context, processInstanceID int) (float64, error) {
+func (s *BPMNMonitoringService) calculateProcessProgress(ctx context.Context, processInstanceID int, tenantID int) (float64, error) {
 	// 获取总任务数
 	totalTasks, err := s.client.ProcessTask.Query().
 		Where(processtask.ProcessInstanceID(processInstanceID)).
+		Where(processtask.TenantID(tenantID)).
 		Count(ctx)
 	if err != nil {
 		return 0, err
@@ -410,6 +421,7 @@ func (s *BPMNMonitoringService) calculateProcessProgress(ctx context.Context, pr
 	// 获取已完成任务数
 	completedTasks, err := s.client.ProcessTask.Query().
 		Where(processtask.ProcessInstanceID(processInstanceID)).
+		Where(processtask.TenantID(tenantID)).
 		Where(processtask.Status("completed")).
 		Count(ctx)
 	if err != nil {
@@ -422,10 +434,7 @@ func (s *BPMNMonitoringService) calculateProcessProgress(ctx context.Context, pr
 // RecordAuditLog 记录审计日志（委托给 BPMNAuditService 真实实现）
 func (s *BPMNMonitoringService) RecordAuditLog(ctx context.Context, entry *AuditLogEntry) error {
 	if s.auditService == nil {
-		if s.logger != nil {
-			s.logger.Warn("BPMNMonitoringService.RecordAuditLog: auditService 未注入，降级为 noop")
-		}
-		return nil
+		return common.NewInternalError("BPMN 审计服务未配置", nil)
 	}
 	// 转换为 BPMNAuditService.AuditContext
 	auditCtx := &AuditContext{
@@ -454,11 +463,13 @@ func (s *BPMNMonitoringService) RecordAuditLog(ctx context.Context, entry *Audit
 // GetAuditLogs 获取审计日志（委托给 BPMNAuditService 真实实现）
 func (s *BPMNMonitoringService) GetAuditLogs(ctx context.Context, req *AuditLogRequest) ([]*AuditLogEntry, int, error) {
 	if s.auditService == nil {
-		return []*AuditLogEntry{}, 0, nil
+		return nil, 0, common.NewInternalError("BPMN 审计服务未配置", nil)
+	}
+	if req == nil {
+		return nil, 0, common.NewBadRequestError("审计日志查询不能为空", nil)
 	}
 	// 转换请求格式
 	queryReq := &QueryAuditLogsRequest{
-		TenantID:  req.TenantID,
 		Page:      req.Page,
 		PageSize:  req.PageSize,
 		SortBy:    "timestamp",
@@ -502,13 +513,18 @@ func (s *BPMNMonitoringService) GetAuditLogs(ctx context.Context, req *AuditLogR
 }
 
 // GetProcessInstanceHistory 获取流程实例执行历史（来自 execution_history 表）
-func (s *BPMNMonitoringService) GetProcessInstanceHistory(ctx context.Context, processInstanceID int, tenantID int) ([]*ent.ProcessExecutionHistory, error) {
-	query := s.client.ProcessExecutionHistory.Query().
-		Where(processexecutionhistory.ProcessInstanceID(processInstanceID))
-	if tenantID > 0 {
-		query = query.Where(processexecutionhistory.TenantID(tenantID))
+func (s *BPMNMonitoringService) GetProcessInstanceHistory(ctx context.Context, processInstanceID int) ([]*ent.ProcessExecutionHistory, error) {
+	instance, err := s.accessPolicy.loadForRead(ctx, strconv.Itoa(processInstanceID))
+	if err != nil {
+		return nil, err
 	}
-	rows, err := query.Order(ent.Asc(processexecutionhistory.FieldTimestamp)).All(ctx)
+	rows, err := s.client.ProcessExecutionHistory.Query().
+		Where(
+			processexecutionhistory.ProcessInstanceID(instance.ID),
+			processexecutionhistory.TenantID(instance.TenantID),
+		).
+		Order(ent.Asc(processexecutionhistory.FieldTimestamp)).
+		All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("获取流程执行历史失败: %w", err)
 	}
@@ -516,11 +532,11 @@ func (s *BPMNMonitoringService) GetProcessInstanceHistory(ctx context.Context, p
 }
 
 // GetProcessTimeline 获取流程实例完整时间线（开始→任务→完成→结束）
-func (s *BPMNMonitoringService) GetProcessTimeline(ctx context.Context, processInstanceKey string, tenantID int) ([]*ProcessTimelineEntry, error) {
+func (s *BPMNMonitoringService) GetProcessTimeline(ctx context.Context, processInstanceKey string) ([]*ProcessTimelineEntry, error) {
 	if s.auditService == nil {
-		return []*ProcessTimelineEntry{}, nil
+		return nil, common.NewInternalError("BPMN 审计服务未配置", nil)
 	}
-	logs, err := s.auditService.GetProcessTimeline(ctx, processInstanceKey, tenantID)
+	logs, err := s.auditService.GetProcessTimeline(ctx, processInstanceKey)
 	if err != nil {
 		return nil, err
 	}
@@ -583,13 +599,16 @@ type AuditLogRequest struct {
 	ResourceID   string     `json:"resourceId,omitempty"`
 	StartTime    *time.Time `json:"startTime,omitempty"`
 	EndTime      *time.Time `json:"endTime,omitempty"`
-	TenantID     int        `json:"tenantId" binding:"required"`
 	Page         int        `json:"page"`
 	PageSize     int        `json:"pageSize"`
 }
 
 // GetSystemHealth 获取系统健康状态
-func (s *BPMNMonitoringService) GetSystemHealth(ctx context.Context, tenantID int) (map[string]interface{}, error) {
+func (s *BPMNMonitoringService) GetSystemHealth(ctx context.Context) (map[string]interface{}, error) {
+	scope, err := RequireBPMNInstanceReadAll(ctx)
+	if err != nil {
+		return nil, err
+	}
 	health := map[string]interface{}{
 		"status":           "healthy",
 		"timestamp":        time.Now(),
@@ -600,7 +619,10 @@ func (s *BPMNMonitoringService) GetSystemHealth(ctx context.Context, tenantID in
 	}
 
 	// 检查数据库连接
-	_, err := s.client.ProcessInstance.Query().Limit(1).First(ctx)
+	_, err = s.client.ProcessInstance.Query().
+		Where(processinstance.TenantID(scope.TenantID)).
+		Limit(1).
+		First(ctx)
 	if err != nil {
 		health["database"] = "disconnected"
 		health["status"] = "unhealthy"
@@ -609,7 +631,7 @@ func (s *BPMNMonitoringService) GetSystemHealth(ctx context.Context, tenantID in
 	// 获取活跃流程数量
 	activeProcesses, err := s.client.ProcessInstance.Query().
 		Where(processinstance.Status("running")).
-		Where(processinstance.TenantID(tenantID)).
+		Where(processinstance.TenantID(scope.TenantID)).
 		Count(ctx)
 	if err == nil {
 		health["active_processes"] = activeProcesses
@@ -618,7 +640,7 @@ func (s *BPMNMonitoringService) GetSystemHealth(ctx context.Context, tenantID in
 	// 获取活跃任务数量
 	activeTasks, err := s.client.ProcessTask.Query().
 		Where(processtask.StatusIn("assigned", "in_progress")).
-		Where(processtask.TenantID(tenantID)).
+		Where(processtask.TenantID(scope.TenantID)).
 		Count(ctx)
 	if err == nil {
 		health["active_tasks"] = activeTasks
@@ -628,13 +650,17 @@ func (s *BPMNMonitoringService) GetSystemHealth(ctx context.Context, tenantID in
 }
 
 // GetPerformanceAlerts 获取性能告警
-func (s *BPMNMonitoringService) GetPerformanceAlerts(ctx context.Context, tenantID int) ([]map[string]interface{}, error) {
+func (s *BPMNMonitoringService) GetPerformanceAlerts(ctx context.Context) ([]map[string]interface{}, error) {
+	scope, err := RequireBPMNInstanceReadAll(ctx)
+	if err != nil {
+		return nil, err
+	}
 	alerts := []map[string]interface{}{}
 
 	// 检查长时间运行的任务
 	longRunningTasks, err := s.client.ProcessTask.Query().
 		Where(processtask.StatusIn("assigned", "in_progress")).
-		Where(processtask.TenantID(tenantID)).
+		Where(processtask.TenantID(scope.TenantID)).
 		Where(processtask.CreatedAtLTE(time.Now().Add(-24 * time.Hour))).
 		All(ctx)
 	if err == nil && len(longRunningTasks) > 0 {
@@ -650,7 +676,7 @@ func (s *BPMNMonitoringService) GetPerformanceAlerts(ctx context.Context, tenant
 	// 检查失败的流程实例
 	failedInstances, err := s.client.ProcessInstance.Query().
 		Where(processinstance.Status("failed")).
-		Where(processinstance.TenantID(tenantID)).
+		Where(processinstance.TenantID(scope.TenantID)).
 		Where(processinstance.StartTimeGTE(time.Now().Add(-1 * time.Hour))).
 		Count(ctx)
 	if err == nil && failedInstances > 0 {
@@ -967,7 +993,11 @@ func (s *BPMNMonitoringService) calculateBottleneckSeverity(analysis *Bottleneck
 }
 
 // GetRealTimeMetrics 获取实时指标
-func (s *BPMNMonitoringService) GetRealTimeMetrics(ctx context.Context, tenantID int) (*RealTimeMetrics, error) {
+func (s *BPMNMonitoringService) GetRealTimeMetrics(ctx context.Context) (*RealTimeMetrics, error) {
+	scope, err := RequireBPMNInstanceReadAll(ctx)
+	if err != nil {
+		return nil, err
+	}
 	metrics := &RealTimeMetrics{
 		ResourceUsage: make(map[string]float64),
 		Alerts:        []*PerformanceAlert{},
@@ -976,7 +1006,7 @@ func (s *BPMNMonitoringService) GetRealTimeMetrics(ctx context.Context, tenantID
 
 	// 获取活跃实例数量
 	activeInstances, err := s.client.ProcessInstance.Query().
-		Where(processinstance.TenantID(tenantID)).
+		Where(processinstance.TenantID(scope.TenantID)).
 		Where(processinstance.Status("running")).
 		Count(ctx)
 	if err != nil {
@@ -986,7 +1016,7 @@ func (s *BPMNMonitoringService) GetRealTimeMetrics(ctx context.Context, tenantID
 
 	// 获取活跃任务数量
 	activeTasks, err := s.client.ProcessTask.Query().
-		Where(processtask.TenantID(tenantID)).
+		Where(processtask.TenantID(scope.TenantID)).
 		Where(processtask.StatusIn("waiting", "in_progress")).
 		Count(ctx)
 	if err != nil {
@@ -996,7 +1026,7 @@ func (s *BPMNMonitoringService) GetRealTimeMetrics(ctx context.Context, tenantID
 
 	// 获取队列长度
 	queueLength, err := s.client.ProcessTask.Query().
-		Where(processtask.TenantID(tenantID)).
+		Where(processtask.TenantID(scope.TenantID)).
 		Where(processtask.Status("waiting")).
 		Count(ctx)
 	if err != nil {
@@ -1007,7 +1037,7 @@ func (s *BPMNMonitoringService) GetRealTimeMetrics(ctx context.Context, tenantID
 	// 计算吞吐量（最近1小时）
 	oneHourAgo := time.Now().Add(-time.Hour)
 	recentInstances, err := s.client.ProcessInstance.Query().
-		Where(processinstance.TenantID(tenantID)).
+		Where(processinstance.TenantID(scope.TenantID)).
 		Where(processinstance.StartTimeGTE(oneHourAgo)).
 		Count(ctx)
 	if err != nil {
@@ -1017,7 +1047,7 @@ func (s *BPMNMonitoringService) GetRealTimeMetrics(ctx context.Context, tenantID
 
 	// 计算错误率
 	totalInstances, err := s.client.ProcessInstance.Query().
-		Where(processinstance.TenantID(tenantID)).
+		Where(processinstance.TenantID(scope.TenantID)).
 		Where(processinstance.StartTimeGTE(oneHourAgo)).
 		Count(ctx)
 	if err != nil {
@@ -1025,7 +1055,7 @@ func (s *BPMNMonitoringService) GetRealTimeMetrics(ctx context.Context, tenantID
 	}
 
 	failedInstances, err := s.client.ProcessInstance.Query().
-		Where(processinstance.TenantID(tenantID)).
+		Where(processinstance.TenantID(scope.TenantID)).
 		Where(processinstance.Status("failed")).
 		Where(processinstance.StartTimeGTE(oneHourAgo)).
 		Count(ctx)
@@ -1082,6 +1112,17 @@ func (s *BPMNMonitoringService) generatePerformanceAlerts(metrics *RealTimeMetri
 
 // GetProcessMetrics 获取流程指标（完整实现）
 func (s *BPMNMonitoringService) GetProcessMetrics(ctx context.Context, req *ProcessMetricsRequest) (*ProcessMetrics, error) {
+	scope, err := RequireBPMNInstanceReadAll(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if req == nil {
+		return nil, common.NewBadRequestError("流程指标查询不能为空", nil)
+	}
+	scopedRequest := *req
+	scopedRequest.TenantID = scope.TenantID
+	req = &scopedRequest
+
 	metrics := &ProcessMetrics{
 		ProcessDefinitionKey: req.ProcessDefinitionKey,
 		TotalInstances:       0,
@@ -1182,7 +1223,6 @@ func (s *BPMNMonitoringService) GetProcessMetrics(ctx context.Context, req *Proc
 
 // ListProcessInstanceStatusQuery 流程实例状态查询请求
 type ListProcessInstanceStatusQuery struct {
-	TenantID   int
 	Page       int
 	PageSize   int
 	ProcessKey string
@@ -1195,13 +1235,25 @@ type ListProcessInstanceStatusQuery struct {
 // ListProcessInstancesStatus 批量查询流程实例状态（真实实现）
 func (s *BPMNMonitoringService) ListProcessInstancesStatus(ctx context.Context, query *ListProcessInstanceStatusQuery) ([]*ProcessInstanceStatus, int, error) {
 	if query == nil {
+		return nil, 0, common.NewBadRequestError("流程实例状态查询不能为空", nil)
+	}
+	scope, err := RequireBPMNInstanceReadAll(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	authorizedInstanceIDs, err := s.accessPolicy.authorizedInstanceIDs(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(authorizedInstanceIDs) == 0 {
 		return []*ProcessInstanceStatus{}, 0, nil
 	}
 
-	dbQuery := s.client.ProcessInstance.Query()
-	if query.TenantID > 0 {
-		dbQuery = dbQuery.Where(processinstance.TenantID(query.TenantID))
-	}
+	dbQuery := s.client.ProcessInstance.Query().
+		Where(
+			processinstance.TenantID(scope.TenantID),
+			processinstance.IDIn(authorizedInstanceIDs...),
+		)
 	if query.ProcessKey != "" {
 		dbQuery = dbQuery.Where(processinstance.ProcessDefinitionKey(query.ProcessKey))
 	}
@@ -1265,6 +1317,7 @@ func (s *BPMNMonitoringService) ListProcessInstancesStatus(ctx context.Context, 
 		// 查询当前任务（状态 assigned/in_progress）
 		currentTask, err := s.client.ProcessTask.Query().
 			Where(processtask.ProcessInstanceID(inst.ID)).
+			Where(processtask.TenantID(scope.TenantID)).
 			Where(processtask.StatusIn("assigned", "in_progress")).
 			First(ctx)
 		if err == nil && currentTask != nil {
@@ -1273,7 +1326,7 @@ func (s *BPMNMonitoringService) ListProcessInstancesStatus(ctx context.Context, 
 		}
 
 		// 计算进度
-		if progress, err := s.calculateProcessProgress(ctx, inst.ID); err == nil {
+		if progress, err := s.calculateProcessProgress(ctx, inst.ID, scope.TenantID); err == nil {
 			status.Progress = progress
 		}
 
