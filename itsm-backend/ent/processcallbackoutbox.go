@@ -42,6 +42,8 @@ type ProcessCallbackOutbox struct {
 	ConfigRef string `json:"config_ref,omitempty"`
 	// 按处理器声明字段过滤后的非敏感业务载荷
 	Variables map[string]interface{} `json:"variables,omitempty"`
+	// OptionalDeclared holds the value of the "optional_declared" field.
+	OptionalDeclared bool `json:"optional_declared,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
 	// AttemptCount holds the value of the "attempt_count" field.
@@ -70,6 +72,8 @@ func (*ProcessCallbackOutbox) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case processcallbackoutbox.FieldVariables:
 			values[i] = new([]byte)
+		case processcallbackoutbox.FieldOptionalDeclared:
+			values[i] = new(sql.NullBool)
 		case processcallbackoutbox.FieldID, processcallbackoutbox.FieldTenantID, processcallbackoutbox.FieldProcessInstanceID, processcallbackoutbox.FieldProcessTaskID, processcallbackoutbox.FieldAttemptCount:
 			values[i] = new(sql.NullInt64)
 		case processcallbackoutbox.FieldExecutionKey, processcallbackoutbox.FieldTaskID, processcallbackoutbox.FieldCallbackKind, processcallbackoutbox.FieldHandlerID, processcallbackoutbox.FieldTaskType, processcallbackoutbox.FieldElementID, processcallbackoutbox.FieldAction, processcallbackoutbox.FieldConfigRef, processcallbackoutbox.FieldStatus, processcallbackoutbox.FieldLeaseOwner, processcallbackoutbox.FieldLastErrorClass:
@@ -170,6 +174,12 @@ func (_m *ProcessCallbackOutbox) assignValues(columns []string, values []any) er
 				if err := json.Unmarshal(*value, &_m.Variables); err != nil {
 					return fmt.Errorf("unmarshal field variables: %w", err)
 				}
+			}
+		case processcallbackoutbox.FieldOptionalDeclared:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field optional_declared", values[i])
+			} else if value.Valid {
+				_m.OptionalDeclared = value.Bool
 			}
 		case processcallbackoutbox.FieldStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -296,6 +306,9 @@ func (_m *ProcessCallbackOutbox) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("variables=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Variables))
+	builder.WriteString(", ")
+	builder.WriteString("optional_declared=")
+	builder.WriteString(fmt.Sprintf("%v", _m.OptionalDeclared))
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)

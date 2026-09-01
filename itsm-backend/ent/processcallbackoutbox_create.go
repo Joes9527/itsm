@@ -124,6 +124,20 @@ func (_c *ProcessCallbackOutboxCreate) SetVariables(v map[string]interface{}) *P
 	return _c
 }
 
+// SetOptionalDeclared sets the "optional_declared" field.
+func (_c *ProcessCallbackOutboxCreate) SetOptionalDeclared(v bool) *ProcessCallbackOutboxCreate {
+	_c.mutation.SetOptionalDeclared(v)
+	return _c
+}
+
+// SetNillableOptionalDeclared sets the "optional_declared" field if the given value is not nil.
+func (_c *ProcessCallbackOutboxCreate) SetNillableOptionalDeclared(v *bool) *ProcessCallbackOutboxCreate {
+	if v != nil {
+		_c.SetOptionalDeclared(*v)
+	}
+	return _c
+}
+
 // SetStatus sets the "status" field.
 func (_c *ProcessCallbackOutboxCreate) SetStatus(v string) *ProcessCallbackOutboxCreate {
 	_c.mutation.SetStatus(v)
@@ -285,6 +299,10 @@ func (_c *ProcessCallbackOutboxCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *ProcessCallbackOutboxCreate) defaults() {
+	if _, ok := _c.mutation.OptionalDeclared(); !ok {
+		v := processcallbackoutbox.DefaultOptionalDeclared
+		_c.mutation.SetOptionalDeclared(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := processcallbackoutbox.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -369,6 +387,9 @@ func (_c *ProcessCallbackOutboxCreate) check() error {
 		if err := processcallbackoutbox.ElementIDValidator(v); err != nil {
 			return &ValidationError{Name: "element_id", err: fmt.Errorf(`ent: validator failed for field "ProcessCallbackOutbox.element_id": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.OptionalDeclared(); !ok {
+		return &ValidationError{Name: "optional_declared", err: errors.New(`ent: missing required field "ProcessCallbackOutbox.optional_declared"`)}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "ProcessCallbackOutbox.status"`)}
@@ -468,6 +489,10 @@ func (_c *ProcessCallbackOutboxCreate) createSpec() (*ProcessCallbackOutbox, *sq
 	if value, ok := _c.mutation.Variables(); ok {
 		_spec.SetField(processcallbackoutbox.FieldVariables, field.TypeJSON, value)
 		_node.Variables = value
+	}
+	if value, ok := _c.mutation.OptionalDeclared(); ok {
+		_spec.SetField(processcallbackoutbox.FieldOptionalDeclared, field.TypeBool, value)
+		_node.OptionalDeclared = value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(processcallbackoutbox.FieldStatus, field.TypeString, value)

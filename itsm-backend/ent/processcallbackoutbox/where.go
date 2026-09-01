@@ -109,6 +109,11 @@ func ConfigRef(v string) predicate.ProcessCallbackOutbox {
 	return predicate.ProcessCallbackOutbox(sql.FieldEQ(FieldConfigRef, v))
 }
 
+// OptionalDeclared applies equality check predicate on the "optional_declared" field. It's identical to OptionalDeclaredEQ.
+func OptionalDeclared(v bool) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldEQ(FieldOptionalDeclared, v))
+}
+
 // Status applies equality check predicate on the "status" field. It's identical to StatusEQ.
 func Status(v string) predicate.ProcessCallbackOutbox {
 	return predicate.ProcessCallbackOutbox(sql.FieldEQ(FieldStatus, v))
@@ -842,6 +847,16 @@ func VariablesIsNil() predicate.ProcessCallbackOutbox {
 // VariablesNotNil applies the NotNil predicate on the "variables" field.
 func VariablesNotNil() predicate.ProcessCallbackOutbox {
 	return predicate.ProcessCallbackOutbox(sql.FieldNotNull(FieldVariables))
+}
+
+// OptionalDeclaredEQ applies the EQ predicate on the "optional_declared" field.
+func OptionalDeclaredEQ(v bool) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldEQ(FieldOptionalDeclared, v))
+}
+
+// OptionalDeclaredNEQ applies the NEQ predicate on the "optional_declared" field.
+func OptionalDeclaredNEQ(v bool) predicate.ProcessCallbackOutbox {
+	return predicate.ProcessCallbackOutbox(sql.FieldNEQ(FieldOptionalDeclared, v))
 }
 
 // StatusEQ applies the EQ predicate on the "status" field.

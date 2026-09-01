@@ -37,6 +37,8 @@ const (
 	FieldConfigRef = "config_ref"
 	// FieldVariables holds the string denoting the variables field in the database.
 	FieldVariables = "variables"
+	// FieldOptionalDeclared holds the string denoting the optional_declared field in the database.
+	FieldOptionalDeclared = "optional_declared"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
 	// FieldAttemptCount holds the string denoting the attempt_count field in the database.
@@ -74,6 +76,7 @@ var Columns = []string{
 	FieldAction,
 	FieldConfigRef,
 	FieldVariables,
+	FieldOptionalDeclared,
 	FieldStatus,
 	FieldAttemptCount,
 	FieldNextAttemptAt,
@@ -112,6 +115,8 @@ var (
 	TaskTypeValidator func(string) error
 	// ElementIDValidator is a validator for the "element_id" field. It is called by the builders before save.
 	ElementIDValidator func(string) error
+	// DefaultOptionalDeclared holds the default value on creation for the "optional_declared" field.
+	DefaultOptionalDeclared bool
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
 	// DefaultAttemptCount holds the default value on creation for the "attempt_count" field.
@@ -191,6 +196,11 @@ func ByAction(opts ...sql.OrderTermOption) OrderOption {
 // ByConfigRef orders the results by the config_ref field.
 func ByConfigRef(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldConfigRef, opts...).ToFunc()
+}
+
+// ByOptionalDeclared orders the results by the optional_declared field.
+func ByOptionalDeclared(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOptionalDeclared, opts...).ToFunc()
 }
 
 // ByStatus orders the results by the status field.

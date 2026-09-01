@@ -2648,6 +2648,7 @@ var (
 		{Name: "action", Type: field.TypeString, Nullable: true},
 		{Name: "config_ref", Type: field.TypeString, Nullable: true},
 		{Name: "variables", Type: field.TypeJSON, Nullable: true},
+		{Name: "optional_declared", Type: field.TypeBool, Default: false},
 		{Name: "status", Type: field.TypeString, Default: "pending"},
 		{Name: "attempt_count", Type: field.TypeInt, Default: 0},
 		{Name: "next_attempt_at", Type: field.TypeTime},
@@ -2667,17 +2668,17 @@ var (
 			{
 				Name:    "processcallbackoutbox_tenant_id_status_next_attempt_at",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[13], ProcessCallbackOutboxesColumns[15]},
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[14], ProcessCallbackOutboxesColumns[16]},
 			},
 			{
 				Name:    "processcallbackoutbox_tenant_id_status_lease_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[13], ProcessCallbackOutboxesColumns[17]},
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[14], ProcessCallbackOutboxesColumns[18]},
 			},
 			{
 				Name:    "processcallbackoutbox_tenant_id_process_instance_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[3], ProcessCallbackOutboxesColumns[13]},
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[3], ProcessCallbackOutboxesColumns[14]},
 			},
 			{
 				Name:    "processcallbackoutbox_tenant_id_process_task_id",

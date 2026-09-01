@@ -32,6 +32,7 @@ func (ProcessCallbackOutbox) Fields() []ent.Field {
 		field.JSON("variables", map[string]interface{}{}).
 			Comment("按处理器声明字段过滤后的非敏感业务载荷").
 			Optional(),
+		field.Bool("optional_declared").Default(false),
 		field.String("status").Default("pending"),
 		field.Int("attempt_count").NonNegative().Default(0),
 		field.Time("next_attempt_at").Default(time.Now),

@@ -2378,30 +2378,34 @@ func init() {
 	processcallbackoutboxDescElementID := processcallbackoutboxFields[8].Descriptor()
 	// processcallbackoutbox.ElementIDValidator is a validator for the "element_id" field. It is called by the builders before save.
 	processcallbackoutbox.ElementIDValidator = processcallbackoutboxDescElementID.Validators[0].(func(string) error)
+	// processcallbackoutboxDescOptionalDeclared is the schema descriptor for optional_declared field.
+	processcallbackoutboxDescOptionalDeclared := processcallbackoutboxFields[12].Descriptor()
+	// processcallbackoutbox.DefaultOptionalDeclared holds the default value on creation for the optional_declared field.
+	processcallbackoutbox.DefaultOptionalDeclared = processcallbackoutboxDescOptionalDeclared.Default.(bool)
 	// processcallbackoutboxDescStatus is the schema descriptor for status field.
-	processcallbackoutboxDescStatus := processcallbackoutboxFields[12].Descriptor()
+	processcallbackoutboxDescStatus := processcallbackoutboxFields[13].Descriptor()
 	// processcallbackoutbox.DefaultStatus holds the default value on creation for the status field.
 	processcallbackoutbox.DefaultStatus = processcallbackoutboxDescStatus.Default.(string)
 	// processcallbackoutboxDescAttemptCount is the schema descriptor for attempt_count field.
-	processcallbackoutboxDescAttemptCount := processcallbackoutboxFields[13].Descriptor()
+	processcallbackoutboxDescAttemptCount := processcallbackoutboxFields[14].Descriptor()
 	// processcallbackoutbox.DefaultAttemptCount holds the default value on creation for the attempt_count field.
 	processcallbackoutbox.DefaultAttemptCount = processcallbackoutboxDescAttemptCount.Default.(int)
 	// processcallbackoutbox.AttemptCountValidator is a validator for the "attempt_count" field. It is called by the builders before save.
 	processcallbackoutbox.AttemptCountValidator = processcallbackoutboxDescAttemptCount.Validators[0].(func(int) error)
 	// processcallbackoutboxDescNextAttemptAt is the schema descriptor for next_attempt_at field.
-	processcallbackoutboxDescNextAttemptAt := processcallbackoutboxFields[14].Descriptor()
+	processcallbackoutboxDescNextAttemptAt := processcallbackoutboxFields[15].Descriptor()
 	// processcallbackoutbox.DefaultNextAttemptAt holds the default value on creation for the next_attempt_at field.
 	processcallbackoutbox.DefaultNextAttemptAt = processcallbackoutboxDescNextAttemptAt.Default.(func() time.Time)
 	// processcallbackoutboxDescLastErrorClass is the schema descriptor for last_error_class field.
-	processcallbackoutboxDescLastErrorClass := processcallbackoutboxFields[17].Descriptor()
+	processcallbackoutboxDescLastErrorClass := processcallbackoutboxFields[18].Descriptor()
 	// processcallbackoutbox.LastErrorClassValidator is a validator for the "last_error_class" field. It is called by the builders before save.
 	processcallbackoutbox.LastErrorClassValidator = processcallbackoutboxDescLastErrorClass.Validators[0].(func(string) error)
 	// processcallbackoutboxDescCreatedAt is the schema descriptor for created_at field.
-	processcallbackoutboxDescCreatedAt := processcallbackoutboxFields[19].Descriptor()
+	processcallbackoutboxDescCreatedAt := processcallbackoutboxFields[20].Descriptor()
 	// processcallbackoutbox.DefaultCreatedAt holds the default value on creation for the created_at field.
 	processcallbackoutbox.DefaultCreatedAt = processcallbackoutboxDescCreatedAt.Default.(func() time.Time)
 	// processcallbackoutboxDescUpdatedAt is the schema descriptor for updated_at field.
-	processcallbackoutboxDescUpdatedAt := processcallbackoutboxFields[20].Descriptor()
+	processcallbackoutboxDescUpdatedAt := processcallbackoutboxFields[21].Descriptor()
 	// processcallbackoutbox.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	processcallbackoutbox.DefaultUpdatedAt = processcallbackoutboxDescUpdatedAt.Default.(func() time.Time)
 	// processcallbackoutbox.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

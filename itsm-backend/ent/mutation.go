@@ -85492,6 +85492,7 @@ type ProcessCallbackOutboxMutation struct {
 	action                 *string
 	config_ref             *string
 	variables              *map[string]interface{}
+	optional_declared      *bool
 	status                 *string
 	attempt_count          *int
 	addattempt_count       *int
@@ -86164,6 +86165,42 @@ func (m *ProcessCallbackOutboxMutation) ResetVariables() {
 	delete(m.clearedFields, processcallbackoutbox.FieldVariables)
 }
 
+// SetOptionalDeclared sets the "optional_declared" field.
+func (m *ProcessCallbackOutboxMutation) SetOptionalDeclared(b bool) {
+	m.optional_declared = &b
+}
+
+// OptionalDeclared returns the value of the "optional_declared" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) OptionalDeclared() (r bool, exists bool) {
+	v := m.optional_declared
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOptionalDeclared returns the old "optional_declared" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldOptionalDeclared(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOptionalDeclared is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOptionalDeclared requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOptionalDeclared: %w", err)
+	}
+	return oldValue.OptionalDeclared, nil
+}
+
+// ResetOptionalDeclared resets all changes to the "optional_declared" field.
+func (m *ProcessCallbackOutboxMutation) ResetOptionalDeclared() {
+	m.optional_declared = nil
+}
+
 // SetStatus sets the "status" field.
 func (m *ProcessCallbackOutboxMutation) SetStatus(s string) {
 	m.status = &s
@@ -86594,7 +86631,7 @@ func (m *ProcessCallbackOutboxMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProcessCallbackOutboxMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 22)
 	if m.execution_key != nil {
 		fields = append(fields, processcallbackoutbox.FieldExecutionKey)
 	}
@@ -86630,6 +86667,9 @@ func (m *ProcessCallbackOutboxMutation) Fields() []string {
 	}
 	if m.variables != nil {
 		fields = append(fields, processcallbackoutbox.FieldVariables)
+	}
+	if m.optional_declared != nil {
+		fields = append(fields, processcallbackoutbox.FieldOptionalDeclared)
 	}
 	if m.status != nil {
 		fields = append(fields, processcallbackoutbox.FieldStatus)
@@ -86690,6 +86730,8 @@ func (m *ProcessCallbackOutboxMutation) Field(name string) (ent.Value, bool) {
 		return m.ConfigRef()
 	case processcallbackoutbox.FieldVariables:
 		return m.Variables()
+	case processcallbackoutbox.FieldOptionalDeclared:
+		return m.OptionalDeclared()
 	case processcallbackoutbox.FieldStatus:
 		return m.Status()
 	case processcallbackoutbox.FieldAttemptCount:
@@ -86741,6 +86783,8 @@ func (m *ProcessCallbackOutboxMutation) OldField(ctx context.Context, name strin
 		return m.OldConfigRef(ctx)
 	case processcallbackoutbox.FieldVariables:
 		return m.OldVariables(ctx)
+	case processcallbackoutbox.FieldOptionalDeclared:
+		return m.OldOptionalDeclared(ctx)
 	case processcallbackoutbox.FieldStatus:
 		return m.OldStatus(ctx)
 	case processcallbackoutbox.FieldAttemptCount:
@@ -86851,6 +86895,13 @@ func (m *ProcessCallbackOutboxMutation) SetField(name string, value ent.Value) e
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetVariables(v)
+		return nil
+	case processcallbackoutbox.FieldOptionalDeclared:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOptionalDeclared(v)
 		return nil
 	case processcallbackoutbox.FieldStatus:
 		v, ok := value.(string)
@@ -87107,6 +87158,9 @@ func (m *ProcessCallbackOutboxMutation) ResetField(name string) error {
 		return nil
 	case processcallbackoutbox.FieldVariables:
 		m.ResetVariables()
+		return nil
+	case processcallbackoutbox.FieldOptionalDeclared:
+		m.ResetOptionalDeclared()
 		return nil
 	case processcallbackoutbox.FieldStatus:
 		m.ResetStatus()
