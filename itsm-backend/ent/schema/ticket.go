@@ -177,7 +177,9 @@ func (Ticket) Edges() []ent.Edge {
 			Field("assignee_id").
 			Unique(),
 		edge.From("category", TicketCategory.Type).
-			Ref("tickets"),
+			Ref("tickets").
+			Field("category_id").
+			Unique(),
 	}
 }
 

@@ -95,14 +95,17 @@ func (c *TimeCondition) Evaluate(ctx context.Context, incident *ent.Incident) (b
 
 	switch c.Field {
 	case "created_at":
-		targetTime = incident.CreatedAt
+		if incident.Edges.WorkItem == nil {
+			return false, fmt.Errorf("incident is missing authoritative WorkItem")
+		}
+		targetTime = incident.Edges.WorkItem.CreatedAt
 	case "detected_at":
 		targetTime = incident.DetectedAt
 	case "resolved_at":
-		if incident.ResolvedAt.IsZero() {
+		if incident.Edges.WorkItem == nil || incident.Edges.WorkItem.ResolvedAt.IsZero() {
 			return false, nil
 		}
-		targetTime = incident.ResolvedAt
+		targetTime = incident.Edges.WorkItem.ResolvedAt
 	default:
 		return false, fmt.Errorf("unknown time field: %s", c.Field)
 	}
@@ -131,8 +134,15 @@ type CategoryCondition struct {
 }
 
 func (c *CategoryCondition) Evaluate(ctx context.Context, incident *ent.Incident) (bool, error) {
+	if incident.Edges.WorkItem == nil || incident.Edges.WorkItem.Edges.Category == nil {
+		return false, nil
+	}
+	categoryName := incident.Edges.WorkItem.Edges.Category.Name
+	if parent := incident.Edges.WorkItem.Edges.Category.Edges.Parent; parent != nil {
+		categoryName = parent.Name
+	}
 	for _, category := range c.Categories {
-		if incident.Category == category {
+		if categoryName == category {
 			return true, nil
 		}
 	}
@@ -259,15 +269,15 @@ func (a *MetricCollectionAction) Execute(ctx context.Context, incident *ent.Inci
 // ExecuteRule 执行规则
 func (e *IncidentRuleEngine) ExecuteRule(ctx context.Context, rule *ent.IncidentRule, incident *ent.Incident, tenantID int) error {
 	e.logger.Infow("Executing incident rule", "rule_id", rule.ID, "incident_id", incident.ID)
-	if rule.TenantID != tenantID || incident.TenantID != tenantID {
+	if incident.Edges.WorkItem == nil || rule.TenantID != tenantID || incident.Edges.WorkItem.TenantID != tenantID {
 		return fmt.Errorf("rule or incident does not belong to current tenant")
 	}
 	if !rule.IsActive {
 		return fmt.Errorf("incident rule is disabled")
 	}
 	authoritativeIncident, err := e.client.Incident.Query().
-		Where(incidentpkg.IDEQ(incident.ID), incidentpkg.TenantIDEQ(tenantID), incidentpkg.DeletedAtIsNil()).
-		WithWorkItem().Only(ctx)
+		Where(incidentpkg.IDEQ(incident.ID), incidentTenantScope(tenantID)).
+		WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return fmt.Errorf("incident not found")
@@ -398,10 +408,9 @@ func (e *IncidentRuleEngine) ExecuteRulesForIncident(ctx context.Context, incide
 	incidentEntity, err := e.client.Incident.Query().
 		Where(
 			incidentpkg.IDEQ(incidentID),
-			incidentpkg.TenantIDEQ(tenantID),
-			incidentpkg.DeletedAtIsNil(),
+			incidentTenantScope(tenantID),
 		).
-		WithWorkItem().Only(ctx)
+		WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return fmt.Errorf("incident not found")
@@ -455,11 +464,9 @@ func (e *IncidentRuleEngine) ExecuteRulesForAllIncidents(ctx context.Context, te
 	// 获取所有需要处理的事件
 	incidents, err := e.client.Incident.Query().
 		Where(
-			incidentpkg.TenantIDEQ(tenantID),
-			incidentpkg.DeletedAtIsNil(),
-			incidentpkg.HasWorkItemWith(ticket.StatusIn("new", "acknowledged", "assigned", "triaged", "in_progress", "on_hold", "escalated")),
+			incidentTenantScope(tenantID, ticket.StatusIn("new", "acknowledged", "assigned", "triaged", "in_progress", "on_hold", "escalated")),
 		).
-		WithWorkItem().All(ctx)
+		WithWorkItem(withIncidentWorkItemProjection).All(ctx)
 	if err != nil {
 		e.logger.Errorw("Failed to get incidents", "error", err)
 		return fmt.Errorf("failed to get incidents: %w", err)

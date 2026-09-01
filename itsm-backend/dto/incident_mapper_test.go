@@ -10,14 +10,14 @@ import (
 
 func TestToIncidentResponseMapsIncidentSpecificFields(t *testing.T) {
 	incident := &ent.Incident{
-		ID: 1, Impact: "high", Urgency: "critical", Source: "monitoring",
+		ID: 1, Impact: "high", Urgency: "critical",
 		EscalationLevel: 2, IsMajorIncident: true,
 		Metadata:   map[string]interface{}{"monitor": "prometheus"},
 		DetectedAt: time.Now(),
 	}
 	workItem := &ent.Ticket{
 		Title: "Authoritative title", Description: "Authoritative description",
-		Status: "in_progress", Priority: "urgent",
+		Status: "in_progress", Priority: "urgent", Source: "monitoring",
 	}
 
 	response := ToIncidentResponse(incident, workItem)

@@ -16822,7 +16822,7 @@ func (c *TicketClient) QueryCategory(_m *Ticket) *TicketCategoryQuery {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(ticket.Table, ticket.FieldID, id),
 			sqlgraph.To(ticketcategory.Table, ticketcategory.FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, true, ticket.CategoryTable, ticket.CategoryPrimaryKey...),
+			sqlgraph.Edge(sqlgraph.M2O, true, ticket.CategoryTable, ticket.CategoryColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -17716,7 +17716,7 @@ func (c *TicketCategoryClient) QueryTickets(_m *TicketCategory) *TicketQuery {
 		step := sqlgraph.NewStep(
 			sqlgraph.From(ticketcategory.Table, ticketcategory.FieldID, id),
 			sqlgraph.To(ticket.Table, ticket.FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, false, ticketcategory.TicketsTable, ticketcategory.TicketsPrimaryKey...),
+			sqlgraph.Edge(sqlgraph.O2M, false, ticketcategory.TicketsTable, ticketcategory.TicketsColumn),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil

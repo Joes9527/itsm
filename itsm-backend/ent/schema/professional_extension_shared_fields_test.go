@@ -10,19 +10,43 @@ import (
 
 func TestProfessionalExtensionsDoNotOwnWorkItemSharedFields(t *testing.T) {
 	for _, testCase := range []struct {
-		name   string
-		fields []ent.Field
+		name         string
+		fields       []ent.Field
+		sharedFields []string
 	}{
-		{name: "incident", fields: (Incident{}).Fields()},
-		{name: "problem", fields: (Problem{}).Fields()},
-		{name: "change", fields: (Change{}).Fields()},
+		{
+			name:   "incident",
+			fields: (Incident{}).Fields(),
+			sharedFields: []string{
+				"title", "description", "status", "priority", "reporter_id", "assignee_id",
+				"category", "subcategory", "source", "tenant_id", "version", "created_at",
+				"updated_at", "resolved_at", "closed_at", "deleted_at",
+			},
+		},
+		{
+			name:   "problem",
+			fields: (Problem{}).Fields(),
+			sharedFields: []string{
+				"title", "description", "status", "priority", "category", "assignee_id",
+				"created_by", "tenant_id", "created_at", "updated_at", "resolved_at",
+				"closed_at", "deleted_at",
+			},
+		},
+		{
+			name:   "change",
+			fields: (Change{}).Fields(),
+			sharedFields: []string{
+				"title", "description", "status", "priority", "assignee_id", "created_by",
+				"tenant_id", "created_at", "updated_at", "related_tickets",
+			},
+		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			fieldNames := make([]string, 0, len(testCase.fields))
 			for _, schemaField := range testCase.fields {
 				fieldNames = append(fieldNames, schemaField.Descriptor().Name)
 			}
-			for _, sharedField := range []string{"title", "description", "status", "priority"} {
+			for _, sharedField := range testCase.sharedFields {
 				require.NotContains(t, fieldNames, sharedField,
 					"%s is WorkItem-owned and must not be stored on the %s extension", sharedField, testCase.name)
 			}

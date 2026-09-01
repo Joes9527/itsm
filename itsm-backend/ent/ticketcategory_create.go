@@ -474,10 +474,10 @@ func (_c *TicketCategoryCreate) createSpec() (*TicketCategory, *sqlgraph.CreateS
 	}
 	if nodes := _c.mutation.TicketsIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
+			Rel:     sqlgraph.O2M,
 			Inverse: false,
 			Table:   ticketcategory.TicketsTable,
-			Columns: ticketcategory.TicketsPrimaryKey,
+			Columns: []string{ticketcategory.TicketsColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),

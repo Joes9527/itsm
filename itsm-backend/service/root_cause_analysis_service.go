@@ -60,7 +60,7 @@ func (s *RootCauseAnalysisService) Perform5WhysAnalysis(ctx context.Context, pro
 // AnalyzeProblemFromIncidents 从关联事件分析问题根因
 func (s *RootCauseAnalysisService) AnalyzeProblemFromIncidents(ctx context.Context, problemID int) (*RCAContext, error) {
 	// 获取问题关联的事件
-	problemEntity, err := s.client.Problem.Get(ctx, problemID)
+	problemEntity, err := s.client.Problem.Query().Where(problem.IDEQ(problemID)).WithWorkItem().Only(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +73,8 @@ func (s *RootCauseAnalysisService) AnalyzeProblemFromIncidents(ctx context.Conte
 
 	// 获取相关事件（数据库层按租户过滤，避免跨租户数据加载）
 	tenantIncidents, err := s.client.Incident.Query().
-		Where(incident.TenantIDEQ(problemEntity.TenantID)).
+		Where(incident.HasWorkItemWith(ticket.TenantIDEQ(problemEntity.Edges.WorkItem.TenantID), ticket.DeletedAtIsNil())).
+		WithWorkItem(func(q *ent.TicketQuery) { q.WithCategory() }).
 		All(ctx)
 	if err != nil {
 		return nil, err
@@ -83,8 +84,8 @@ func (s *RootCauseAnalysisService) AnalyzeProblemFromIncidents(ctx context.Conte
 	var commonCategories []string
 
 	for _, inc := range tenantIncidents {
-		if inc.Category != "" {
-			commonCategories = append(commonCategories, inc.Category)
+		if inc.Edges.WorkItem.Edges.Category != nil {
+			commonCategories = append(commonCategories, inc.Edges.WorkItem.Edges.Category.Name)
 		}
 	}
 
@@ -161,7 +162,7 @@ func (s *RootCauseAnalysisService) AnalyzeWithAI(ctx context.Context, problemID 
 
 // GetProblemAnalysis 获取问题的根因分析
 func (s *RootCauseAnalysisService) GetProblemAnalysis(ctx context.Context, problemID int) (*RCAContext, error) {
-	problemEntity, err := s.client.Problem.Get(ctx, problemID)
+	problemEntity, err := s.client.Problem.Query().Where(problem.IDEQ(problemID)).WithWorkItem().Only(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -173,6 +174,7 @@ func (s *RootCauseAnalysisService) GetProblemAnalysis(ctx context.Context, probl
 
 	// 获取关联的事件
 	incidents, err := s.client.Incident.Query().
+		Where(incident.HasWorkItemWith(ticket.TenantIDEQ(problemEntity.Edges.WorkItem.TenantID), ticket.DeletedAtIsNil())).
 		Limit(100).
 		All(ctx)
 	if err != nil {
@@ -181,9 +183,7 @@ func (s *RootCauseAnalysisService) GetProblemAnalysis(ctx context.Context, probl
 
 	rca.IncidentIDs = make([]int, 0)
 	for _, inc := range incidents {
-		if inc.TenantID == problemEntity.TenantID {
-			rca.IncidentIDs = append(rca.IncidentIDs, inc.ID)
-		}
+		rca.IncidentIDs = append(rca.IncidentIDs, inc.ID)
 	}
 
 	return rca, nil
@@ -230,7 +230,7 @@ func (s *RootCauseAnalysisService) UnlinkProblemIncident(ctx context.Context, pr
 // ResolveProblemWithSolution 使用解决方案解决问题
 func (s *RootCauseAnalysisService) ResolveProblemWithSolution(ctx context.Context, problemID int, resolution string) error {
 	// 获取问题信息用于日志
-	problemEntity, err := s.client.Problem.Get(ctx, problemID)
+	problemEntity, err := s.client.Problem.Query().Where(problem.IDEQ(problemID)).WithWorkItem().Only(ctx)
 	if err != nil {
 		return err
 	}
@@ -238,7 +238,7 @@ func (s *RootCauseAnalysisService) ResolveProblemWithSolution(ctx context.Contex
 	if err != nil {
 		return err
 	}
-	if _, err = tx.Ticket.UpdateOneID(problemEntity.WorkItemID).Where(ticket.TenantIDEQ(problemEntity.TenantID)).SetStatus("resolved").Save(ctx); err != nil {
+	if _, err = tx.Ticket.UpdateOneID(problemEntity.WorkItemID).Where(ticket.TenantIDEQ(problemEntity.Edges.WorkItem.TenantID), ticket.DeletedAtIsNil()).SetStatus("resolved").SetResolvedAt(time.Now()).SetUpdatedAt(time.Now()).AddVersion(1).Save(ctx); err != nil {
 		_ = tx.Rollback()
 		return err
 	}

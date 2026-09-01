@@ -221,11 +221,13 @@ const (
 	AssigneeInverseTable = "users"
 	// AssigneeColumn is the table column denoting the assignee relation/edge.
 	AssigneeColumn = "assignee_id"
-	// CategoryTable is the table that holds the category relation/edge. The primary key declared below.
-	CategoryTable = "ticket_category_tickets"
+	// CategoryTable is the table that holds the category relation/edge.
+	CategoryTable = "tickets"
 	// CategoryInverseTable is the table name for the TicketCategory entity.
 	// It exists in this package in order to avoid circular dependency with the "ticketcategory" package.
 	CategoryInverseTable = "ticket_categories"
+	// CategoryColumn is the table column denoting the category relation/edge.
+	CategoryColumn = "category_id"
 )
 
 // Columns holds all SQL columns for ticket fields.
@@ -289,9 +291,6 @@ var (
 	// RelatedTicketsPrimaryKey and RelatedTicketsColumn2 are the table columns denoting the
 	// primary key for the related_tickets relation (M2M).
 	RelatedTicketsPrimaryKey = []string{"ticket_id", "related_ticket_id"}
-	// CategoryPrimaryKey and CategoryColumn2 are the table columns denoting the
-	// primary key for the category relation (M2M).
-	CategoryPrimaryKey = []string{"ticket_category_id", "ticket_id"}
 )
 
 // ValidColumn reports if the column name is valid (part of the table columns).
@@ -734,17 +733,10 @@ func ByAssigneeField(field string, opts ...sql.OrderTermOption) OrderOption {
 	}
 }
 
-// ByCategoryCount orders the results by category count.
-func ByCategoryCount(opts ...sql.OrderTermOption) OrderOption {
+// ByCategoryField orders the results by category field.
+func ByCategoryField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newCategoryStep(), opts...)
-	}
-}
-
-// ByCategory orders the results by category terms.
-func ByCategory(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newCategoryStep(), append([]sql.OrderTerm{term}, terms...)...)
+		sqlgraph.OrderByNeighborTerms(s, newCategoryStep(), sql.OrderByField(field, opts...))
 	}
 }
 func newCommentsStep() *sqlgraph.Step {
@@ -849,6 +841,6 @@ func newCategoryStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(CategoryInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2M, true, CategoryTable, CategoryPrimaryKey...),
+		sqlgraph.Edge(sqlgraph.M2O, true, CategoryTable, CategoryColumn),
 	)
 }

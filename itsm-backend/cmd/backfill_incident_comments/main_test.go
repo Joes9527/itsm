@@ -46,7 +46,7 @@ func setupIncidentWithWorkItem(t *testing.T, client *ent.Client, ctx context.Con
 		Save(ctx)
 	require.NoError(t, err)
 	inc, err := client.Incident.Create().SetIncidentNumber("INC-" + code).
-		SetReporterID(userID).SetTenantID(tenantID).SetWorkItemID(wi.ID).
+		SetWorkItemID(wi.ID).
 		Save(ctx)
 	require.NoError(t, err)
 	return inc
@@ -54,6 +54,8 @@ func setupIncidentWithWorkItem(t *testing.T, client *ent.Client, ctx context.Con
 
 func createCommentEvent(t *testing.T, client *ent.Client, ctx context.Context, inc *ent.Incident, userID int, content string, createdAt time.Time) *ent.IncidentEvent {
 	t.Helper()
+	workItem, err := client.Ticket.Get(ctx, inc.WorkItemID)
+	require.NoError(t, err)
 	event, err := client.IncidentEvent.Create().
 		SetIncidentID(inc.ID).
 		SetEventType("comment").
@@ -61,7 +63,7 @@ func createCommentEvent(t *testing.T, client *ent.Client, ctx context.Context, i
 		SetDescription(content).
 		SetUserID(userID).
 		SetSource("user").
-		SetTenantID(inc.TenantID).
+		SetTenantID(workItem.TenantID).
 		SetOccurredAt(createdAt).
 		SetCreatedAt(createdAt).
 		Save(ctx)
@@ -97,7 +99,7 @@ func TestResolvePlan_SkipsWhenIncidentSoftDeleted(t *testing.T) {
 	tenant, user := setupTenantAndUser(t, client, ctx, "del")
 	inc := setupIncidentWithWorkItem(t, client, ctx, tenant.ID, user.ID, "del")
 	event := createCommentEvent(t, client, ctx, inc, user.ID, "评论内容", time.Now())
-	_, err := client.Incident.UpdateOneID(inc.ID).SetDeletedAt(time.Now()).Save(ctx)
+	_, err := client.Ticket.UpdateOneID(inc.WorkItemID).SetDeletedAt(time.Now()).Save(ctx)
 	require.NoError(t, err)
 
 	_, ok, reason, err := resolvePlan(ctx, client, event)

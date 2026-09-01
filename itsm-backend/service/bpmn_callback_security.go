@@ -372,7 +372,7 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 		variables["ticket_id"] = workItemID
 	case "change", "change_request":
 		entity, err := e.client.Change.Query().Where(
-			change.WorkItemID(instance.BusinessID), change.TenantID(instance.TenantID),
+			change.WorkItemID(instance.BusinessID), change.HasWorkItemWith(ticket.TenantID(instance.TenantID), ticket.DeletedAtIsNil()),
 		).Only(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("权威变更目标不存在")
@@ -382,7 +382,7 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 		variables["ticket_id"] = workItemID
 	case "incident":
 		entity, err := e.client.Incident.Query().Where(
-			incident.WorkItemID(instance.BusinessID), incident.TenantID(instance.TenantID),
+			incident.WorkItemID(instance.BusinessID), incident.HasWorkItemWith(ticket.TenantID(instance.TenantID), ticket.DeletedAtIsNil()),
 		).Only(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("权威事件目标不存在")
@@ -392,7 +392,7 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 		variables["ticket_id"] = workItemID
 	case "problem":
 		entity, err := e.client.Problem.Query().Where(
-			problem.WorkItemID(instance.BusinessID), problem.TenantID(instance.TenantID),
+			problem.WorkItemID(instance.BusinessID), problem.HasWorkItemWith(ticket.TenantID(instance.TenantID), ticket.DeletedAtIsNil()),
 		).Only(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("权威问题目标不存在")

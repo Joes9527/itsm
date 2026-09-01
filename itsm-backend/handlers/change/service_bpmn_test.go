@@ -60,6 +60,7 @@ func createChangeWorkItemFixture(t *testing.T, client *ent.Client, tenantID, req
 		SetPriority("medium").
 		SetTicketNumber(nextTestTicketNumber()).
 		SetRequesterID(requesterID).
+		SetOpenedByID(requesterID).
 		SetTenantID(tenantID).
 		Save(context.Background())
 	require.NoError(t, err)
@@ -234,7 +235,7 @@ func TestCompleteChangeApprovalTask_ApproveCompletesScheduleNode(t *testing.T) {
 	require.NoError(t, err)
 
 	workItem := createChangeWorkItemFixture(t, client, tenant.ID, requester.ID, "测试变更", "pending")
-	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).SetWorkItemID(workItem.ID).Save(ctx)
+	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	engine := newTestBPMNEngine(t, client, logger)
@@ -295,7 +296,7 @@ func TestCompleteChangeApprovalTask_RejectEndsProcess(t *testing.T) {
 	require.NoError(t, err)
 
 	workItem := createChangeWorkItemFixture(t, client, tenant.ID, requester.ID, "测试变更-驳回", "pending")
-	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).SetWorkItemID(workItem.ID).Save(ctx)
+	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	engine := newTestBPMNEngine(t, client, logger)
@@ -358,7 +359,7 @@ func TestCompleteChangeApprovalTask_WrongActorRejected(t *testing.T) {
 	require.NoError(t, err)
 
 	workItem := createChangeWorkItemFixture(t, client, tenant.ID, requester.ID, "测试变更-越权", "pending")
-	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).SetWorkItemID(workItem.ID).Save(ctx)
+	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	engine := newTestBPMNEngine(t, client, logger)
@@ -415,7 +416,7 @@ func TestCompleteChangeApprovalTask_FiltersDecoyTaskByDefinitionKey(t *testing.T
 	require.NoError(t, err)
 
 	workItem := createChangeWorkItemFixture(t, client, tenant.ID, requester.ID, "测试变更-伪装任务", "pending")
-	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).SetWorkItemID(workItem.ID).Save(ctx)
+	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	engine := newTestBPMNEngine(t, client, logger)
@@ -499,7 +500,7 @@ func TestCompleteChangeApprovalTask_ResumesCascadeAfterInterruptedCall(t *testin
 	require.NoError(t, err)
 
 	workItem := createChangeWorkItemFixture(t, client, tenant.ID, requester.ID, "测试变更-续做级联", "pending")
-	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).SetWorkItemID(workItem.ID).Save(ctx)
+	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	engine := newTestBPMNEngine(t, client, logger)
@@ -574,7 +575,7 @@ func TestCompleteChangeApprovalTask_RetryAfterFullSuccessIsNoop(t *testing.T) {
 	require.NoError(t, err)
 
 	workItem := createChangeWorkItemFixture(t, client, tenant.ID, requester.ID, "测试变更-幂等重试", "pending")
-	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).SetWorkItemID(workItem.ID).Save(ctx)
+	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	engine := newTestBPMNEngine(t, client, logger)
@@ -627,7 +628,7 @@ func TestCompleteChangeApprovalTask_RetryWithMismatchedActionRejected(t *testing
 	require.NoError(t, err)
 
 	workItem := createChangeWorkItemFixture(t, client, tenant.ID, requester.ID, "测试变更-矛盾重试", "pending")
-	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).SetWorkItemID(workItem.ID).Save(ctx)
+	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	engine := newTestBPMNEngine(t, client, logger)
@@ -708,7 +709,7 @@ func setupChangeForTransitionStatusTest(t *testing.T, dbName string) (*ent.Clien
 	require.NoError(t, err)
 
 	workItem := createChangeWorkItemFixture(t, client, tenant.ID, requester.ID, "TransitionStatus 测试变更", "pending")
-	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).SetWorkItemID(workItem.ID).Save(ctx)
+	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	engine := newTestBPMNEngine(t, client, logger)
@@ -806,7 +807,7 @@ func TestTransitionStatus_Approve_NoRunningProcessInstanceFailsClosed(t *testing
 	// 直接建库记录，不走 SubmitChange/TriggerProcess——不部署模板、不触发流程，
 	// 所以这个 change 底下没有任何 ProcessInstance。
 	workItem := createChangeWorkItemFixture(t, client, tenant.ID, requester.ID, "无绑定流程实例的变更", "pending")
-	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenant.ID).SetCreatedBy(requester.ID).SetWorkItemID(workItem.ID).Save(ctx)
+	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	// processEngine 必须非 nil，否则会在 completeChangeApprovalTask 里更早地因为
@@ -886,161 +887,6 @@ func TestSubmitChange_AutoCompletesAssessmentTask(t *testing.T) {
 	// 残留状态或者错误的 task 记录，CAB 审批本身完全不受影响。
 	_, err = svc.TransitionStatus(tenantCtx, created.ID, tenant.ID, cmUser.ID, "approved", "自动推进后正常审批")
 	require.NoError(t, err)
-}
-
-// ==================== BackfillLegacyPendingChange（代码审查发现：上线切换时刻的存量
-// pending 变更没有回填路径） ====================
-
-func TestBackfillLegacyPendingChange_CreatesInstanceAndAdvancesToCAB(t *testing.T) {
-	client := newChangeBPMNEntClient(t, "backfill_legacy_pending")
-	tenantID, actorID := setupChangeBPMNActor(t, client, "backfill-legacy")
-	engine, trigger := deployRealBPMNFixture(t, client, tenantID)
-	logger := zaptest.NewLogger(t).Sugar()
-
-	// 模拟旧审批链流程下已经提交到 pending、但从来没有对应 BPMN 流程实例的变更。
-	// BackfillLegacyPendingChange 要求记录满足 WorkItem 创建不变量，因此 fixture 先在
-	// 同一有效领域状态中建立 WorkItem；缺失 WorkItem 的记录会 fail closed。
-	workItem := createChangeWorkItemFixture(t, client, tenantID, actorID, "上线前用旧流程提交的变更", "pending")
-	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
-	require.NoError(t, err)
-
-	repo := newTestChangeRepository(client, nil)
-	svc := NewService(repo, client, logger)
-	svc.SetProcessTriggerService(trigger)
-	svc.SetProcessEngine(engine)
-
-	err = svc.BackfillLegacyPendingChange(context.Background(), c.ID, tenantID)
-	require.NoError(t, err)
-
-	instance, err := client.ProcessInstance.Query().
-		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID)), processinstance.TenantID(tenantID)).
-		Only(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, "running", instance.Status)
-	assert.Equal(t, "Activity_CABApproval", instance.CurrentActivityID,
-		"回填之后应该跟正常提交一样自动推进到 CAB 审批节点，不需要额外的人工干预")
-
-	// 变更本身的状态不应该被回填动作改变——它已经是 pending，回填只是补上缺失的
-	// 流程实例，不是重新走一遍提交流程。
-	stillPending, err := client.Change.Get(context.Background(), c.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "pending", persistedChangeStatus(t, client, stillPending))
-}
-
-func TestBackfillLegacyPendingChange_SkipsChangeWithExistingInstance(t *testing.T) {
-	client := newChangeBPMNEntClient(t, "backfill_existing_instance")
-	tenantID, actorID := setupChangeBPMNActor(t, client, "backfill-existing")
-	engine, trigger := deployRealBPMNFixture(t, client, tenantID)
-	logger := zaptest.NewLogger(t).Sugar()
-
-	workItem := createChangeWorkItemFixture(t, client, tenantID, actorID, "已经有流程实例的变更", "pending")
-	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
-	require.NoError(t, err)
-
-	tenantCtx := service.WithBPMNAccessScope(context.Background(), service.BPMNAccessScope{
-		UserID: actorID, TenantID: tenantID, CanUpdateAllTasks: true,
-	})
-	_, err = trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
-		BusinessType:         dto.BusinessTypeChange,
-		BusinessID:           workItem.ID,
-		ProcessDefinitionKey: "change_normal_flow",
-		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(actorID)},
-		TenantID:             tenantID,
-	})
-	require.NoError(t, err)
-
-	repo := newTestChangeRepository(client, nil)
-	svc := NewService(repo, client, logger)
-	svc.SetProcessTriggerService(trigger)
-	svc.SetProcessEngine(engine)
-
-	err = svc.BackfillLegacyPendingChange(context.Background(), c.ID, tenantID)
-	require.Error(t, err, "已经有流程实例（不管是不是这次 Track4 之前建的）就不该重复回填")
-
-	count, err := client.ProcessInstance.Query().
-		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID)), processinstance.TenantID(tenantID)).
-		Count(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, 1, count, "不应该产生第二个流程实例")
-}
-
-func TestBackfillLegacyPendingChange_RetriesAfterTerminatedInstance(t *testing.T) {
-	client := newChangeBPMNEntClient(t, "backfill_retry_after_terminated")
-	tenantID, actorID := setupChangeBPMNActor(t, client, "backfill-retry")
-	engine, trigger := deployRealBPMNFixture(t, client, tenantID)
-	logger := zaptest.NewLogger(t).Sugar()
-
-	workItem := createChangeWorkItemFixture(t, client, tenantID, actorID, "第一次回填失败过的变更", "pending")
-	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
-	require.NoError(t, err)
-
-	// 模拟第一次回填尝试：触发流程后失败，补偿性地 CancelProcess——跟
-	// BackfillLegacyPendingChange 自己在 completeAssessmentTask 失败时做的事一样，
-	// 留下一条 terminated 的流程实例，change.status 仍然是 pending。
-	tenantCtx := service.WithBPMNAccessScope(context.Background(), service.BPMNAccessScope{
-		UserID: actorID, TenantID: tenantID, CanUpdateAllTasks: true,
-	})
-	firstAttempt, err := trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
-		BusinessType:         dto.BusinessTypeChange,
-		BusinessID:           workItem.ID,
-		ProcessDefinitionKey: "change_normal_flow",
-		Variables:            map[string]interface{}{"approval_required": true, "requester_id": float64(actorID)},
-		TenantID:             tenantID,
-	})
-	require.NoError(t, err)
-	mutationCtx := withProcessInstanceUpdateScope(tenantCtx, actorID, tenantID)
-	require.NoError(t, trigger.CancelProcess(mutationCtx, firstAttempt.ProcessInstanceID, "模拟回填第一次尝试失败后的补偿回滚", tenantID))
-
-	terminated, err := client.ProcessInstance.Query().
-		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID)), processinstance.TenantID(tenantID)).
-		Only(context.Background())
-	require.NoError(t, err)
-	require.Equal(t, "terminated", terminated.Status, "测试前置条件：确认补偿回滚确实留下了 terminated 记录")
-
-	repo := newTestChangeRepository(client, nil)
-	svc := NewService(repo, client, logger)
-	svc.SetProcessTriggerService(trigger)
-	svc.SetProcessEngine(engine)
-
-	// 重试回填：不应该被那条 terminated 的遗留记录挡住。
-	err = svc.BackfillLegacyPendingChange(context.Background(), c.ID, tenantID)
-	require.NoError(t, err, "terminated 的遗留流程实例不应该让这个变更永久无法回填")
-
-	running, err := client.ProcessInstance.Query().
-		Where(
-			processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID)),
-			processinstance.TenantID(tenantID),
-			processinstance.StatusNEQ("terminated"),
-		).
-		Only(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, "running", running.Status)
-	assert.Equal(t, "Activity_CABApproval", running.CurrentActivityID)
-}
-
-func TestBackfillLegacyPendingChange_RejectsNonPendingChange(t *testing.T) {
-	client := newChangeBPMNEntClient(t, "backfill_non_pending")
-	tenantID, actorID := setupChangeBPMNActor(t, client, "backfill-non-pending")
-	engine, trigger := deployRealBPMNFixture(t, client, tenantID)
-	logger := zaptest.NewLogger(t).Sugar()
-
-	workItem := createChangeWorkItemFixture(t, client, tenantID, actorID, "还是草稿的变更", "draft")
-	c, err := client.Change.Create().SetType("normal").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
-	require.NoError(t, err)
-
-	repo := newTestChangeRepository(client, nil)
-	svc := NewService(repo, client, logger)
-	svc.SetProcessTriggerService(trigger)
-	svc.SetProcessEngine(engine)
-
-	err = svc.BackfillLegacyPendingChange(context.Background(), c.ID, tenantID)
-	require.Error(t, err, "不是 pending 状态的变更不需要回填，应该明确拒绝而不是静默处理")
-
-	exists, err := client.ProcessInstance.Query().
-		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", workItem.ID)), processinstance.TenantID(tenantID)).
-		Exist(context.Background())
-	require.NoError(t, err)
-	assert.False(t, exists, "被拒绝的回填不应该留下任何流程实例")
 }
 
 // ==================== ChangeServiceTaskHandler.createChange 委托到真实领域服务 ====================

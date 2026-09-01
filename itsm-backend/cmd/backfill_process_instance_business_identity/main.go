@@ -19,8 +19,7 @@
 // suspended 实例会被 resume 回 running 继续产生审批决策，因此和 running 一起处理；
 // 已经结束（completed/terminated）的实例不再产生新的审批决策，不需要回填。
 //
-// 用法（跟 cmd/backfill_legacy_pending_changes 等其它一次性运维工具一样，直接 go run，
-// 不需要 build tag）：
+// 用法（直接 go run，不需要 build tag）：
 //
 //	go run ./cmd/backfill_process_instance_business_identity -dry-run=true              # 预览，不写入
 //	go run ./cmd/backfill_process_instance_business_identity -dry-run=false             # 全部租户实际回填

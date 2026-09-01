@@ -335,7 +335,6 @@ func (_u *TicketUpdate) ClearTemplateID() *TicketUpdate {
 
 // SetCategoryID sets the "category_id" field.
 func (_u *TicketUpdate) SetCategoryID(v int) *TicketUpdate {
-	_u.mutation.ResetCategoryID()
 	_u.mutation.SetCategoryID(v)
 	return _u
 }
@@ -345,12 +344,6 @@ func (_u *TicketUpdate) SetNillableCategoryID(v *int) *TicketUpdate {
 	if v != nil {
 		_u.SetCategoryID(*v)
 	}
-	return _u
-}
-
-// AddCategoryID adds value to the "category_id" field.
-func (_u *TicketUpdate) AddCategoryID(v int) *TicketUpdate {
-	_u.mutation.AddCategoryID(v)
 	return _u
 }
 
@@ -1026,19 +1019,9 @@ func (_u *TicketUpdate) SetAssignee(v *User) *TicketUpdate {
 	return _u.SetAssigneeID(v.ID)
 }
 
-// AddCategoryIDs adds the "category" edge to the TicketCategory entity by IDs.
-func (_u *TicketUpdate) AddCategoryIDs(ids ...int) *TicketUpdate {
-	_u.mutation.AddCategoryIDs(ids...)
-	return _u
-}
-
-// AddCategory adds the "category" edges to the TicketCategory entity.
-func (_u *TicketUpdate) AddCategory(v ...*TicketCategory) *TicketUpdate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddCategoryIDs(ids...)
+// SetCategory sets the "category" edge to the TicketCategory entity.
+func (_u *TicketUpdate) SetCategory(v *TicketCategory) *TicketUpdate {
+	return _u.SetCategoryID(v.ID)
 }
 
 // Mutation returns the TicketMutation object of the builder.
@@ -1310,25 +1293,10 @@ func (_u *TicketUpdate) ClearAssignee() *TicketUpdate {
 	return _u
 }
 
-// ClearCategory clears all "category" edges to the TicketCategory entity.
+// ClearCategory clears the "category" edge to the TicketCategory entity.
 func (_u *TicketUpdate) ClearCategory() *TicketUpdate {
 	_u.mutation.ClearCategory()
 	return _u
-}
-
-// RemoveCategoryIDs removes the "category" edge to TicketCategory entities by IDs.
-func (_u *TicketUpdate) RemoveCategoryIDs(ids ...int) *TicketUpdate {
-	_u.mutation.RemoveCategoryIDs(ids...)
-	return _u
-}
-
-// RemoveCategory removes "category" edges to TicketCategory entities.
-func (_u *TicketUpdate) RemoveCategory(v ...*TicketCategory) *TicketUpdate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveCategoryIDs(ids...)
 }
 
 // Save executes the query and returns the number of nodes affected by the update operation.
@@ -1486,15 +1454,6 @@ func (_u *TicketUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.TemplateIDCleared() {
 		_spec.ClearField(ticket.FieldTemplateID, field.TypeInt)
-	}
-	if value, ok := _u.mutation.CategoryID(); ok {
-		_spec.SetField(ticket.FieldCategoryID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedCategoryID(); ok {
-		_spec.AddField(ticket.FieldCategoryID, field.TypeInt, value)
-	}
-	if _u.mutation.CategoryIDCleared() {
-		_spec.ClearField(ticket.FieldCategoryID, field.TypeInt)
 	}
 	if value, ok := _u.mutation.DepartmentID(); ok {
 		_spec.SetField(ticket.FieldDepartmentID, field.TypeInt, value)
@@ -2246,39 +2205,23 @@ func (_u *TicketUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.CategoryCleared() {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
+			Rel:     sqlgraph.M2O,
 			Inverse: true,
 			Table:   ticket.CategoryTable,
-			Columns: ticket.CategoryPrimaryKey,
+			Columns: []string{ticket.CategoryColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(ticketcategory.FieldID, field.TypeInt),
 			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedCategoryIDs(); len(nodes) > 0 && !_u.mutation.CategoryCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: true,
-			Table:   ticket.CategoryTable,
-			Columns: ticket.CategoryPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(ticketcategory.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
 	if nodes := _u.mutation.CategoryIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
+			Rel:     sqlgraph.M2O,
 			Inverse: true,
 			Table:   ticket.CategoryTable,
-			Columns: ticket.CategoryPrimaryKey,
+			Columns: []string{ticket.CategoryColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(ticketcategory.FieldID, field.TypeInt),
@@ -2603,7 +2546,6 @@ func (_u *TicketUpdateOne) ClearTemplateID() *TicketUpdateOne {
 
 // SetCategoryID sets the "category_id" field.
 func (_u *TicketUpdateOne) SetCategoryID(v int) *TicketUpdateOne {
-	_u.mutation.ResetCategoryID()
 	_u.mutation.SetCategoryID(v)
 	return _u
 }
@@ -2613,12 +2555,6 @@ func (_u *TicketUpdateOne) SetNillableCategoryID(v *int) *TicketUpdateOne {
 	if v != nil {
 		_u.SetCategoryID(*v)
 	}
-	return _u
-}
-
-// AddCategoryID adds value to the "category_id" field.
-func (_u *TicketUpdateOne) AddCategoryID(v int) *TicketUpdateOne {
-	_u.mutation.AddCategoryID(v)
 	return _u
 }
 
@@ -3294,19 +3230,9 @@ func (_u *TicketUpdateOne) SetAssignee(v *User) *TicketUpdateOne {
 	return _u.SetAssigneeID(v.ID)
 }
 
-// AddCategoryIDs adds the "category" edge to the TicketCategory entity by IDs.
-func (_u *TicketUpdateOne) AddCategoryIDs(ids ...int) *TicketUpdateOne {
-	_u.mutation.AddCategoryIDs(ids...)
-	return _u
-}
-
-// AddCategory adds the "category" edges to the TicketCategory entity.
-func (_u *TicketUpdateOne) AddCategory(v ...*TicketCategory) *TicketUpdateOne {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddCategoryIDs(ids...)
+// SetCategory sets the "category" edge to the TicketCategory entity.
+func (_u *TicketUpdateOne) SetCategory(v *TicketCategory) *TicketUpdateOne {
+	return _u.SetCategoryID(v.ID)
 }
 
 // Mutation returns the TicketMutation object of the builder.
@@ -3578,25 +3504,10 @@ func (_u *TicketUpdateOne) ClearAssignee() *TicketUpdateOne {
 	return _u
 }
 
-// ClearCategory clears all "category" edges to the TicketCategory entity.
+// ClearCategory clears the "category" edge to the TicketCategory entity.
 func (_u *TicketUpdateOne) ClearCategory() *TicketUpdateOne {
 	_u.mutation.ClearCategory()
 	return _u
-}
-
-// RemoveCategoryIDs removes the "category" edge to TicketCategory entities by IDs.
-func (_u *TicketUpdateOne) RemoveCategoryIDs(ids ...int) *TicketUpdateOne {
-	_u.mutation.RemoveCategoryIDs(ids...)
-	return _u
-}
-
-// RemoveCategory removes "category" edges to TicketCategory entities.
-func (_u *TicketUpdateOne) RemoveCategory(v ...*TicketCategory) *TicketUpdateOne {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveCategoryIDs(ids...)
 }
 
 // Where appends a list predicates to the TicketUpdate builder.
@@ -3784,15 +3695,6 @@ func (_u *TicketUpdateOne) sqlSave(ctx context.Context) (_node *Ticket, err erro
 	}
 	if _u.mutation.TemplateIDCleared() {
 		_spec.ClearField(ticket.FieldTemplateID, field.TypeInt)
-	}
-	if value, ok := _u.mutation.CategoryID(); ok {
-		_spec.SetField(ticket.FieldCategoryID, field.TypeInt, value)
-	}
-	if value, ok := _u.mutation.AddedCategoryID(); ok {
-		_spec.AddField(ticket.FieldCategoryID, field.TypeInt, value)
-	}
-	if _u.mutation.CategoryIDCleared() {
-		_spec.ClearField(ticket.FieldCategoryID, field.TypeInt)
 	}
 	if value, ok := _u.mutation.DepartmentID(); ok {
 		_spec.SetField(ticket.FieldDepartmentID, field.TypeInt, value)
@@ -4544,39 +4446,23 @@ func (_u *TicketUpdateOne) sqlSave(ctx context.Context) (_node *Ticket, err erro
 	}
 	if _u.mutation.CategoryCleared() {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
+			Rel:     sqlgraph.M2O,
 			Inverse: true,
 			Table:   ticket.CategoryTable,
-			Columns: ticket.CategoryPrimaryKey,
+			Columns: []string{ticket.CategoryColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(ticketcategory.FieldID, field.TypeInt),
 			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedCategoryIDs(); len(nodes) > 0 && !_u.mutation.CategoryCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: true,
-			Table:   ticket.CategoryTable,
-			Columns: ticket.CategoryPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(ticketcategory.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
 	}
 	if nodes := _u.mutation.CategoryIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
+			Rel:     sqlgraph.M2O,
 			Inverse: true,
 			Table:   ticket.CategoryTable,
-			Columns: ticket.CategoryPrimaryKey,
+			Columns: []string{ticket.CategoryColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(ticketcategory.FieldID, field.TypeInt),

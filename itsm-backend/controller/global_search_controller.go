@@ -86,7 +86,7 @@ func (c *GlobalSearchController) Search(ctx *gin.Context) {
 	// 搜索事件
 	incidents, err := c.client.Incident.Query().
 		Where(
-			incident.TenantID(tenantID),
+			incident.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil()),
 			incident.Or(
 				incident.HasWorkItemWith(ticket.Or(ticket.TitleContainsFold(keyword), ticket.DescriptionContainsFold(keyword))),
 				incident.IncidentNumberContainsFold(keyword),
@@ -111,7 +111,7 @@ func (c *GlobalSearchController) Search(ctx *gin.Context) {
 	// 搜索问题
 	problems, err := c.client.Problem.Query().
 		Where(
-			problem.TenantID(tenantID),
+			problem.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil()),
 			problem.HasWorkItemWith(ticket.Or(ticket.TitleContainsFold(keyword), ticket.DescriptionContainsFold(keyword))),
 		).
 		WithWorkItem().
@@ -132,7 +132,7 @@ func (c *GlobalSearchController) Search(ctx *gin.Context) {
 	// 搜索变更
 	changes, err := c.client.Change.Query().
 		Where(
-			change.TenantID(tenantID),
+			change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil()),
 			change.HasWorkItemWith(ticket.Or(ticket.TitleContainsFold(keyword), ticket.DescriptionContainsFold(keyword))),
 		).
 		WithWorkItem().

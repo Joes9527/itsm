@@ -66,14 +66,14 @@ SELECT COUNT(*) AS visible_after_discard FROM changes;
 \echo
 \echo === 场景 5：WITH CHECK 拦截跨租户 INSERT ===
 SET SESSION app.current_tenant = 1;
-INSERT INTO changes (work_item_id, type, risk_level, tenant_id, created_at, updated_at, created_by)
-VALUES (:cross_work_item_id, 'normal', 'low', 2, NOW(), NOW(), 1);
+INSERT INTO changes (work_item_id, type, risk_level)
+VALUES (:cross_work_item_id, 'normal', 'low');
 -- 预期：ERROR: new row violates row-level security policy
 
 \echo
 \echo === 场景 6：WITH CHECK 允许同租户 INSERT ===
-INSERT INTO changes (work_item_id, type, risk_level, tenant_id, created_at, updated_at, created_by)
-VALUES (:same_work_item_id, 'normal', 'low', 1, NOW(), NOW(), 1);
+INSERT INTO changes (work_item_id, type, risk_level)
+VALUES (:same_work_item_id, 'normal', 'low');
 -- 预期：INSERT 0 1
 
 \echo

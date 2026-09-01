@@ -759,19 +759,9 @@ func (_c *TicketCreate) SetAssignee(v *User) *TicketCreate {
 	return _c.SetAssigneeID(v.ID)
 }
 
-// AddCategoryIDs adds the "category" edge to the TicketCategory entity by IDs.
-func (_c *TicketCreate) AddCategoryIDs(ids ...int) *TicketCreate {
-	_c.mutation.AddCategoryIDs(ids...)
-	return _c
-}
-
-// AddCategory adds the "category" edges to the TicketCategory entity.
-func (_c *TicketCreate) AddCategory(v ...*TicketCategory) *TicketCreate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _c.AddCategoryIDs(ids...)
+// SetCategory sets the "category" edge to the TicketCategory entity.
+func (_c *TicketCreate) SetCategory(v *TicketCategory) *TicketCreate {
+	return _c.SetCategoryID(v.ID)
 }
 
 // Mutation returns the TicketMutation object of the builder.
@@ -1004,10 +994,6 @@ func (_c *TicketCreate) createSpec() (*Ticket, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TemplateID(); ok {
 		_spec.SetField(ticket.FieldTemplateID, field.TypeInt, value)
 		_node.TemplateID = value
-	}
-	if value, ok := _c.mutation.CategoryID(); ok {
-		_spec.SetField(ticket.FieldCategoryID, field.TypeInt, value)
-		_node.CategoryID = value
 	}
 	if value, ok := _c.mutation.DepartmentID(); ok {
 		_spec.SetField(ticket.FieldDepartmentID, field.TypeInt, value)
@@ -1329,10 +1315,10 @@ func (_c *TicketCreate) createSpec() (*Ticket, *sqlgraph.CreateSpec) {
 	}
 	if nodes := _c.mutation.CategoryIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
+			Rel:     sqlgraph.M2O,
 			Inverse: true,
 			Table:   ticket.CategoryTable,
-			Columns: ticket.CategoryPrimaryKey,
+			Columns: []string{ticket.CategoryColumn},
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(ticketcategory.FieldID, field.TypeInt),
@@ -1341,6 +1327,7 @@ func (_c *TicketCreate) createSpec() (*Ticket, *sqlgraph.CreateSpec) {
 		for _, k := range nodes {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
+		_node.CategoryID = nodes[0]
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec
@@ -1662,12 +1649,6 @@ func (u *TicketUpsert) SetCategoryID(v int) *TicketUpsert {
 // UpdateCategoryID sets the "category_id" field to the value that was provided on create.
 func (u *TicketUpsert) UpdateCategoryID() *TicketUpsert {
 	u.SetExcluded(ticket.FieldCategoryID)
-	return u
-}
-
-// AddCategoryID adds v to the "category_id" field.
-func (u *TicketUpsert) AddCategoryID(v int) *TicketUpsert {
-	u.Add(ticket.FieldCategoryID, v)
 	return u
 }
 
@@ -2468,13 +2449,6 @@ func (u *TicketUpsertOne) ClearTemplateID() *TicketUpsertOne {
 func (u *TicketUpsertOne) SetCategoryID(v int) *TicketUpsertOne {
 	return u.Update(func(s *TicketUpsert) {
 		s.SetCategoryID(v)
-	})
-}
-
-// AddCategoryID adds v to the "category_id" field.
-func (u *TicketUpsertOne) AddCategoryID(v int) *TicketUpsertOne {
-	return u.Update(func(s *TicketUpsert) {
-		s.AddCategoryID(v)
 	})
 }
 
@@ -3522,13 +3496,6 @@ func (u *TicketUpsertBulk) ClearTemplateID() *TicketUpsertBulk {
 func (u *TicketUpsertBulk) SetCategoryID(v int) *TicketUpsertBulk {
 	return u.Update(func(s *TicketUpsert) {
 		s.SetCategoryID(v)
-	})
-}
-
-// AddCategoryID adds v to the "category_id" field.
-func (u *TicketUpsertBulk) AddCategoryID(v int) *TicketUpsertBulk {
-	return u.Update(func(s *TicketUpsert) {
-		s.AddCategoryID(v)
 	})
 }
 

@@ -70,9 +70,7 @@ func TestProblemService_CreateKnownErrorFromProblemTenantIsolation(t *testing.T)
 	require.NoError(t, err)
 	p, err := client.Problem.Create().
 		SetRootCause("Connection pool leak").
-		SetCreatedBy(userA.ID).
 		SetWorkItemID(workItem.ID).
-		SetTenantID(tenantA.ID).
 		Save(ctx)
 	require.NoError(t, err)
 	service.SetKnownErrorService(NewKnownErrorService(client, service.logger))

@@ -10,6 +10,7 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/problem"
 	"itsm-backend/repository/workitemnumber"
 
 	"github.com/stretchr/testify/assert"
@@ -53,6 +54,13 @@ func createProblemHandlerUser(t *testing.T, ctx context.Context, client *ent.Cli
 		Save(ctx)
 	require.NoError(t, err)
 	return user
+}
+
+func createProblemHandlerCategory(t *testing.T, ctx context.Context, client *ent.Client, tenantID int, name string) *ent.TicketCategory {
+	t.Helper()
+	category, err := client.TicketCategory.Create().SetName(name).SetCode(name).SetTenantID(tenantID).Save(ctx)
+	require.NoError(t, err)
+	return category
 }
 
 func createProblemHandlerProblem(t *testing.T, ctx context.Context, service *Service, tenantID, userID int) *Problem {
@@ -133,9 +141,9 @@ func TestProblemRepositorySoftDeleteExcludedEverywhere(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, stats.Total)
 
-	stored, err := client.Problem.Get(ctx, p.ID)
+	stored, err := client.Problem.Query().Where(problem.ID(p.ID)).WithWorkItem().Only(ctx)
 	require.NoError(t, err)
-	require.NotNil(t, stored.DeletedAt)
+	require.NotNil(t, stored.Edges.WorkItem.DeletedAt)
 }
 
 func TestProblemAssociationsEnforceTenantBoundary(t *testing.T) {
@@ -169,6 +177,7 @@ func TestProblemServiceCreateValidation(t *testing.T) {
 	defer client.Close()
 	tenant := createProblemHandlerTenant(t, ctx, client, "create-val")
 	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "create-val")
+	createProblemHandlerCategory(t, ctx, client, tenant.ID, "database")
 
 	// 1. Title empty or whitespace
 	_, err := service.Create(ctx, tenant.ID, &Problem{Title: "", Priority: "medium", CreatedBy: user.ID})
@@ -390,6 +399,8 @@ func TestProblemServiceListAndFilters(t *testing.T) {
 	defer client.Close()
 	tenant := createProblemHandlerTenant(t, ctx, client, "list-filter")
 	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "list-filter")
+	createProblemHandlerCategory(t, ctx, client, tenant.ID, "auth")
+	createProblemHandlerCategory(t, ctx, client, tenant.ID, "storage")
 
 	p1, err := service.Create(ctx, tenant.ID, &Problem{
 		Title: "CPU Spike in Auth Service", Priority: "critical", Category: "auth", CreatedBy: user.ID,
@@ -454,15 +465,14 @@ func TestProblemServiceAssociationsLifecycle(t *testing.T) {
 	incidentWorkItem, err := client.Ticket.Create().SetTitle("I1").SetType("incident").SetRecordClass("incident").
 		SetTicketNumber("T-INC-001").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
-	incident1, err := client.Incident.Create().SetIncidentNumber("INC-001").SetReporterID(user.ID).
-		SetTenantID(tenant.ID).SetWorkItemID(incidentWorkItem.ID).Save(ctx)
+	incident1, err := client.Incident.Create().SetIncidentNumber("INC-001").
+		SetWorkItemID(incidentWorkItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	changeWorkItem, err := client.Ticket.Create().SetTitle("C1").SetType("change").SetRecordClass("change_request").
 		SetTicketNumber("T-CHG-001").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
-	change1, err := client.Change.Create().SetCreatedBy(user.ID).SetTenantID(tenant.ID).
-		SetWorkItemID(changeWorkItem.ID).Save(ctx)
+	change1, err := client.Change.Create().SetWorkItemID(changeWorkItem.ID).Save(ctx)
 	require.NoError(t, err)
 
 	// Add associations

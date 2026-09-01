@@ -35,6 +35,7 @@ import (
 	"itsm-backend/config"
 	"itsm-backend/database"
 	"itsm-backend/ent"
+	"itsm-backend/ent/incident"
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/ticketcomment"
 
@@ -56,11 +57,11 @@ type commentPlan struct {
 // 除了查一次所属 Incident 之外不做任何写入——backfillOne 和 previewBackfill 共用它，
 // 保证"预览会跳过的行"和"实际会跳过的行"是同一套判断，不会各写一份分叉的逻辑。
 func resolvePlan(ctx context.Context, client *ent.Client, event *ent.IncidentEvent) (plan commentPlan, ok bool, reason string, err error) {
-	inc, err := client.Incident.Get(ctx, event.IncidentID)
+	inc, err := client.Incident.Query().Where(incident.IDEQ(event.IncidentID)).WithWorkItem().Only(ctx)
 	if err != nil {
 		return commentPlan{}, false, "", err
 	}
-	if inc.DeletedAt != nil {
+	if inc.Edges.WorkItem.DeletedAt != nil {
 		return commentPlan{}, false, "所属 incident 已被软删除", nil
 	}
 	if inc.WorkItemID == 0 {

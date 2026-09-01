@@ -37,7 +37,10 @@ func (s *ProblemInvestigationService) GetRootCauseAnalysis(ctx context.Context, 
 		JOIN problems p ON prca.problem_id = p.id
 		JOIN users u1 ON prca.analyst_id = u1.id
 		LEFT JOIN users u2 ON prca.reviewed_by = u2.id
-		WHERE prca.id = $1 AND p.tenant_id = $2 AND u1.tenant_id = p.tenant_id AND (u2.id IS NULL OR u2.tenant_id = p.tenant_id)
+		WHERE prca.id = $1
+		  AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2)
+		  AND u1.tenant_id = (SELECT tenant_id FROM tickets WHERE id = p.work_item_id)
+		  AND (u2.id IS NULL OR u2.tenant_id = (SELECT tenant_id FROM tickets WHERE id = p.work_item_id))
 	`, id, tenantID).Scan(
 		&analysis.ID, &analysis.ProblemID, &analysis.AnalystID, &analysis.AnalystName,
 		&analysis.AnalysisMethod, &analysis.RootCauseDescription, &analysis.ContributingFactors,
@@ -66,7 +69,10 @@ func (s *ProblemInvestigationService) GetProblemSolution(ctx context.Context, id
 		JOIN problems p ON ps.problem_id = p.id
 		JOIN users u1 ON ps.proposed_by = u1.id
 		LEFT JOIN users u2 ON ps.approved_by = u2.id
-		WHERE ps.id = $1 AND p.tenant_id = $2 AND u1.tenant_id = p.tenant_id AND (u2.id IS NULL OR u2.tenant_id = p.tenant_id)
+		WHERE ps.id = $1
+		  AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2)
+		  AND u1.tenant_id = (SELECT tenant_id FROM tickets WHERE id = p.work_item_id)
+		  AND (u2.id IS NULL OR u2.tenant_id = (SELECT tenant_id FROM tickets WHERE id = p.work_item_id))
 	`, id, tenantID).Scan(
 		&solution.ID, &solution.ProblemID, &solution.SolutionType, &solution.SolutionDescription,
 		&solution.ProposedBy, &solution.ProposedByName, &solution.ProposedDate, &solution.Status,
@@ -87,7 +93,7 @@ func (s *ProblemInvestigationService) GetProblemSolution(ctx context.Context, id
 func (s *ProblemInvestigationService) CreateProblemInvestigation(ctx context.Context, req *dto.CreateProblemInvestigationRequest, tenantID int) (*dto.ProblemInvestigationResponse, error) {
 	// 检查问题是否存在
 	var problemTitle string
-	err := s.db.QueryRowContext(ctx, `SELECT t.title FROM problems p JOIN tickets t ON t.id = p.work_item_id AND t.tenant_id = p.tenant_id WHERE p.id = $1 AND p.tenant_id = $2`, req.ProblemID, tenantID).Scan(&problemTitle)
+	err := s.db.QueryRowContext(ctx, `SELECT t.title FROM problems p JOIN tickets t ON t.id = p.work_item_id WHERE p.id = $1 AND t.tenant_id = $2`, req.ProblemID, tenantID).Scan(&problemTitle)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("问题不存在")
@@ -101,7 +107,7 @@ func (s *ProblemInvestigationService) CreateProblemInvestigation(ctx context.Con
 		SELECT pi.id
 		FROM problem_investigations pi
 		JOIN problems p ON pi.problem_id = p.id
-		WHERE pi.problem_id = $1 AND p.tenant_id = $2
+		WHERE pi.problem_id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2)
 	`, req.ProblemID, tenantID).Scan(&existingID)
 	if err == nil {
 		return nil, fmt.Errorf("该问题已存在调查记录")
@@ -129,8 +135,8 @@ func (s *ProblemInvestigationService) CreateProblemInvestigation(ctx context.Con
 	_, err = s.db.ExecContext(ctx, `
 		UPDATE tickets AS work_item SET status = 'in_progress', updated_at = NOW()
 		FROM problems AS extension
-		WHERE extension.id = $1 AND extension.tenant_id = $2
-		  AND work_item.id = extension.work_item_id AND work_item.tenant_id = extension.tenant_id
+		WHERE extension.id = $1
+		  AND work_item.id = extension.work_item_id AND work_item.tenant_id = $2
 	`, req.ProblemID, tenantID)
 	if err != nil {
 		s.logger.Warnw("Failed to update problem status", "problem_id", req.ProblemID, "error", err)
@@ -160,7 +166,7 @@ func (s *ProblemInvestigationService) GetProblemInvestigation(ctx context.Contex
 		FROM problem_investigations pi
 		JOIN users u ON pi.investigator_id = u.id
 		JOIN problems p ON pi.problem_id = p.id
-		WHERE pi.id = $1 AND p.tenant_id = $2
+		WHERE pi.id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2)
 	`, investigationID, tenantID).Scan(
 		&investigation.ID, &investigation.ProblemID, &investigation.InvestigatorID, &investigation.InvestigatorName,
 		&investigation.Status, &investigation.StartDate, &investigation.EstimatedCompletionDate,
@@ -211,7 +217,7 @@ func (s *ProblemInvestigationService) UpdateProblemInvestigation(ctx context.Con
 		argIndex++
 	}
 
-	query += fmt.Sprintf(" WHERE id = $%d AND problem_id IN (SELECT id FROM problems WHERE tenant_id = $%d)", argIndex, argIndex+1)
+	query += fmt.Sprintf(" WHERE id = $%d AND problem_id IN (SELECT p.id FROM problems p JOIN tickets wi ON wi.id = p.work_item_id WHERE wi.tenant_id = $%d)", argIndex, argIndex+1)
 	args = append(args, investigationID, tenantID)
 
 	_, err = s.db.ExecContext(ctx, query, args...)
@@ -224,8 +230,8 @@ func (s *ProblemInvestigationService) UpdateProblemInvestigation(ctx context.Con
 		_, err = s.db.ExecContext(ctx, `
 			UPDATE tickets AS work_item SET status = 'resolved', updated_at = NOW()
 			FROM problems AS extension
-			WHERE extension.id = $1 AND extension.tenant_id = $2
-			  AND work_item.id = extension.work_item_id AND work_item.tenant_id = extension.tenant_id
+			WHERE extension.id = $1
+			  AND work_item.id = extension.work_item_id AND work_item.tenant_id = $2
 		`, investigation.ProblemID, tenantID)
 		if err != nil {
 			s.logger.Warnw("Failed to update problem status", "problem_id", investigation.ProblemID, "error", err)
@@ -243,7 +249,7 @@ func (s *ProblemInvestigationService) CreateInvestigationStep(ctx context.Contex
 	err := s.db.QueryRowContext(ctx, `
 		SELECT pi.problem_id FROM problem_investigations pi
 		JOIN problems p ON pi.problem_id = p.id
-		WHERE pi.id = $1 AND p.tenant_id = $2
+		WHERE pi.id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2)
 	`, req.InvestigationID, tenantID).Scan(&problemID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -296,7 +302,7 @@ func (s *ProblemInvestigationService) UpdateInvestigationStep(ctx context.Contex
 		SELECT pis.investigation_id FROM problem_investigation_steps pis
 		JOIN problem_investigations pi ON pis.investigation_id = pi.id
 		JOIN problems p ON pi.problem_id = p.id
-		WHERE pis.id = $1 AND p.tenant_id = $2
+		WHERE pis.id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2)
 	`, stepID, tenantID).Scan(&investigationID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -368,8 +374,8 @@ func (s *ProblemInvestigationService) getInvestigationStep(ctx context.Context, 
 		FROM problem_investigation_steps pis
 		JOIN problem_investigations pi ON pis.investigation_id = pi.id
 		JOIN problems p ON pi.problem_id = p.id
-		LEFT JOIN users u ON pis.assigned_to = u.id AND u.tenant_id = p.tenant_id
-		WHERE pis.id = $1 AND p.tenant_id = $2
+		LEFT JOIN users u ON pis.assigned_to = u.id AND u.tenant_id = (SELECT tenant_id FROM tickets WHERE id = p.work_item_id)
+		WHERE pis.id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2)
 	`, stepID, tenantID).Scan(
 		&step.ID, &step.InvestigationID, &step.StepNumber, &step.StepTitle, &step.StepDescription,
 		&step.Status, &step.AssignedTo, &step.AssignedToName, &step.StartDate, &step.CompletionDate, &step.Notes,
@@ -386,7 +392,7 @@ func (s *ProblemInvestigationService) getInvestigationStep(ctx context.Context, 
 func (s *ProblemInvestigationService) CreateRootCauseAnalysis(ctx context.Context, req *dto.CreateRootCauseAnalysisRequest, tenantID int) (*dto.RootCauseAnalysisResponse, error) {
 	// 检查问题是否存在
 	var problemTitle string
-	err := s.db.QueryRowContext(ctx, `SELECT t.title FROM problems p JOIN tickets t ON t.id = p.work_item_id AND t.tenant_id = p.tenant_id WHERE p.id = $1 AND p.tenant_id = $2`, req.ProblemID, tenantID).Scan(&problemTitle)
+	err := s.db.QueryRowContext(ctx, `SELECT t.title FROM problems p JOIN tickets t ON t.id = p.work_item_id WHERE p.id = $1 AND t.tenant_id = $2`, req.ProblemID, tenantID).Scan(&problemTitle)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("问题不存在")
@@ -396,7 +402,7 @@ func (s *ProblemInvestigationService) CreateRootCauseAnalysis(ctx context.Contex
 
 	// 检查是否已存在根本原因分析
 	var existingID int
-	err = s.db.QueryRowContext(ctx, "SELECT rca.id FROM problem_root_cause_analyses rca JOIN problems p ON rca.problem_id = p.id WHERE rca.problem_id = $1 AND p.tenant_id = $2", req.ProblemID, tenantID).Scan(&existingID)
+	err = s.db.QueryRowContext(ctx, "SELECT rca.id FROM problem_root_cause_analyses rca JOIN problems p ON rca.problem_id = p.id WHERE rca.problem_id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2)", req.ProblemID, tenantID).Scan(&existingID)
 	if err == nil {
 		return nil, fmt.Errorf("该问题已存在根本原因分析")
 	}
@@ -441,7 +447,7 @@ func (s *ProblemInvestigationService) CreateRootCauseAnalysis(ctx context.Contex
 func (s *ProblemInvestigationService) CreateProblemSolution(ctx context.Context, req *dto.CreateProblemSolutionRequest, tenantID int) (*dto.ProblemSolutionResponse, error) {
 	// 检查问题是否存在
 	var problemTitle string
-	err := s.db.QueryRowContext(ctx, `SELECT t.title FROM problems p JOIN tickets t ON t.id = p.work_item_id AND t.tenant_id = p.tenant_id WHERE p.id = $1 AND p.tenant_id = $2`, req.ProblemID, tenantID).Scan(&problemTitle)
+	err := s.db.QueryRowContext(ctx, `SELECT t.title FROM problems p JOIN tickets t ON t.id = p.work_item_id WHERE p.id = $1 AND t.tenant_id = $2`, req.ProblemID, tenantID).Scan(&problemTitle)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("问题不存在")
@@ -494,7 +500,7 @@ func (s *ProblemInvestigationService) CreateProblemSolution(ctx context.Context,
 func (s *ProblemInvestigationService) GetProblemInvestigationSummary(ctx context.Context, problemID, tenantID int) (*dto.ProblemInvestigationSummaryResponse, error) {
 	// 检查问题是否存在
 	var problemTitle string
-	err := s.db.QueryRowContext(ctx, `SELECT t.title FROM problems p JOIN tickets t ON t.id = p.work_item_id AND t.tenant_id = p.tenant_id WHERE p.id = $1 AND p.tenant_id = $2`, problemID, tenantID).Scan(&problemTitle)
+	err := s.db.QueryRowContext(ctx, `SELECT t.title FROM problems p JOIN tickets t ON t.id = p.work_item_id WHERE p.id = $1 AND t.tenant_id = $2`, problemID, tenantID).Scan(&problemTitle)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("问题不存在")
@@ -506,7 +512,7 @@ func (s *ProblemInvestigationService) GetProblemInvestigationSummary(ctx context
 
 	// 获取调查记录
 	var investigationID int
-	err = s.db.QueryRowContext(ctx, "SELECT pi.id FROM problem_investigations pi JOIN problems p ON pi.problem_id = p.id WHERE pi.problem_id = $1 AND p.tenant_id = $2", problemID, tenantID).Scan(&investigationID)
+	err = s.db.QueryRowContext(ctx, "SELECT pi.id FROM problem_investigations pi JOIN problems p ON pi.problem_id = p.id WHERE pi.problem_id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2)", problemID, tenantID).Scan(&investigationID)
 	if err == nil {
 		investigation, err := s.GetProblemInvestigation(ctx, investigationID, tenantID)
 		if err == nil {
@@ -523,8 +529,8 @@ func (s *ProblemInvestigationService) GetProblemInvestigationSummary(ctx context
 			FROM problem_investigation_steps pis
 			JOIN problem_investigations pi ON pis.investigation_id = pi.id
 			JOIN problems p ON pi.problem_id = p.id
-			LEFT JOIN users u ON pis.assigned_to = u.id AND u.tenant_id = p.tenant_id
-			WHERE pis.investigation_id = $1 AND p.tenant_id = $2
+			LEFT JOIN users u ON pis.assigned_to = u.id AND u.tenant_id = (SELECT tenant_id FROM tickets WHERE id = p.work_item_id)
+			WHERE pis.investigation_id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2)
 			ORDER BY pis.step_number
 		`, investigationID, tenantID)
 		if err == nil {
@@ -545,7 +551,7 @@ func (s *ProblemInvestigationService) GetProblemInvestigationSummary(ctx context
 
 	// 获取根本原因分析
 	var analysisID int
-	err = s.db.QueryRowContext(ctx, "SELECT rca.id FROM problem_root_cause_analyses rca JOIN problems p ON rca.problem_id = p.id WHERE rca.problem_id = $1 AND p.tenant_id = $2", problemID, tenantID).Scan(&analysisID)
+	err = s.db.QueryRowContext(ctx, "SELECT rca.id FROM problem_root_cause_analyses rca JOIN problems p ON rca.problem_id = p.id WHERE rca.problem_id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2)", problemID, tenantID).Scan(&analysisID)
 	if err == nil {
 		rows, err := s.db.QueryContext(ctx, `
 			SELECT prca.id, prca.problem_id, prca.analyst_id, u1.name, prca.analysis_method,
@@ -554,9 +560,9 @@ func (s *ProblemInvestigationService) GetProblemInvestigationSummary(ctx context
 			       prca.created_at, prca.updated_at
 			FROM problem_root_cause_analyses prca
 			JOIN problems p ON prca.problem_id = p.id
-			JOIN users u1 ON prca.analyst_id = u1.id AND u1.tenant_id = p.tenant_id
-			LEFT JOIN users u2 ON prca.reviewed_by = u2.id AND (u2.id IS NULL OR u2.tenant_id = p.tenant_id)
-			WHERE prca.problem_id = $1 AND p.tenant_id = $2
+			JOIN users u1 ON prca.analyst_id = u1.id AND u1.tenant_id = (SELECT tenant_id FROM tickets WHERE id = p.work_item_id)
+			LEFT JOIN users u2 ON prca.reviewed_by = u2.id AND (u2.id IS NULL OR u2.tenant_id = (SELECT tenant_id FROM tickets WHERE id = p.work_item_id))
+			WHERE prca.problem_id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2)
 		`, problemID, tenantID)
 		if err == nil {
 			defer rows.Close()
@@ -584,9 +590,9 @@ func (s *ProblemInvestigationService) GetProblemInvestigationSummary(ctx context
 		       ps.created_at, ps.updated_at
 		FROM problem_solutions ps
 		JOIN problems p ON ps.problem_id = p.id
-		JOIN users u1 ON ps.proposed_by = u1.id AND u1.tenant_id = p.tenant_id
-		LEFT JOIN users u2 ON ps.approved_by = u2.id AND (u2.id IS NULL OR u2.tenant_id = p.tenant_id)
-		WHERE ps.problem_id = $1 AND p.tenant_id = $2
+		JOIN users u1 ON ps.proposed_by = u1.id AND u1.tenant_id = (SELECT tenant_id FROM tickets WHERE id = p.work_item_id)
+		LEFT JOIN users u2 ON ps.approved_by = u2.id AND (u2.id IS NULL OR u2.tenant_id = (SELECT tenant_id FROM tickets WHERE id = p.work_item_id))
+		WHERE ps.problem_id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2)
 		ORDER BY ps.created_at DESC
 	`, problemID, tenantID)
 	if err == nil {
@@ -624,7 +630,7 @@ func (s *ProblemInvestigationService) UpdateRootCauseAnalysis(ctx context.Contex
 		JOIN users u1 ON prca.analyst_id = u1.id
 		LEFT JOIN users u2 ON prca.reviewed_by = u2.id
 		JOIN problems p ON prca.problem_id = p.id
-		WHERE prca.id = $1 AND p.tenant_id = $2
+		WHERE prca.id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2)
 	`, id, tenantID).Scan(
 		&existingAnalysis.ID, &existingAnalysis.ProblemID, &existingAnalysis.AnalystID, &existingAnalysis.AnalystName,
 		&existingAnalysis.AnalysisMethod, &existingAnalysis.RootCauseDescription, &existingAnalysis.ContributingFactors,
@@ -675,7 +681,7 @@ func (s *ProblemInvestigationService) UpdateRootCauseAnalysis(ctx context.Contex
 		paramIndex++
 	}
 
-	updateSQL += fmt.Sprintf(" WHERE id = $%d AND problem_id IN (SELECT id FROM problems WHERE tenant_id = $%d)", paramIndex, paramIndex+1)
+	updateSQL += fmt.Sprintf(" WHERE id = $%d AND problem_id IN (SELECT p.id FROM problems p JOIN tickets wi ON wi.id = p.work_item_id WHERE wi.tenant_id = $%d)", paramIndex, paramIndex+1)
 	params = append(params, id, tenantID)
 
 	now := time.Now()
@@ -696,7 +702,7 @@ func (s *ProblemInvestigationService) DeleteRootCauseAnalysis(ctx context.Contex
 
 	// 检查是否存在
 	var count int
-	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM problem_root_cause_analyses WHERE id = $1 AND problem_id IN (SELECT id FROM problems WHERE tenant_id = $2)", id, tenantID).Scan(&count)
+	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM problem_root_cause_analyses WHERE id = $1 AND problem_id IN (SELECT p.id FROM problems p JOIN tickets wi ON wi.id = p.work_item_id WHERE wi.tenant_id = $2)", id, tenantID).Scan(&count)
 	if err != nil {
 		return fmt.Errorf("查询根因分析失败: %v", err)
 	}
@@ -705,7 +711,7 @@ func (s *ProblemInvestigationService) DeleteRootCauseAnalysis(ctx context.Contex
 	}
 
 	// 删除
-	_, err = s.db.ExecContext(ctx, "DELETE FROM problem_root_cause_analyses WHERE id = $1 AND problem_id IN (SELECT id FROM problems WHERE tenant_id = $2)", id, tenantID)
+	_, err = s.db.ExecContext(ctx, "DELETE FROM problem_root_cause_analyses WHERE id = $1 AND problem_id IN (SELECT p.id FROM problems p JOIN tickets wi ON wi.id = p.work_item_id WHERE wi.tenant_id = $2)", id, tenantID)
 	if err != nil {
 		return fmt.Errorf("删除根因分析失败: %v", err)
 	}
@@ -728,7 +734,7 @@ func (s *ProblemInvestigationService) UpdateProblemSolution(ctx context.Context,
 		JOIN users u1 ON ps.proposed_by = u1.id
 		LEFT JOIN users u2 ON ps.approved_by = u2.id
 		JOIN problems p ON ps.problem_id = p.id
-		WHERE ps.id = $1 AND p.tenant_id = $2
+		WHERE ps.id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2)
 	`, id, tenantID).Scan(
 		&existingSolution.ID, &existingSolution.ProblemID, &existingSolution.SolutionType, &existingSolution.SolutionDescription,
 		&existingSolution.ProposedBy, &existingSolution.ProposedByName, &existingSolution.ProposedDate, &existingSolution.Status,
@@ -784,7 +790,7 @@ func (s *ProblemInvestigationService) UpdateProblemSolution(ctx context.Context,
 		paramIndex++
 	}
 
-	updateSQL += fmt.Sprintf(" WHERE id = $%d AND problem_id IN (SELECT id FROM problems WHERE tenant_id = $%d)", paramIndex, paramIndex+1)
+	updateSQL += fmt.Sprintf(" WHERE id = $%d AND problem_id IN (SELECT p.id FROM problems p JOIN tickets wi ON wi.id = p.work_item_id WHERE wi.tenant_id = $%d)", paramIndex, paramIndex+1)
 	params = append(params, id, tenantID)
 
 	now := time.Now()
@@ -805,7 +811,7 @@ func (s *ProblemInvestigationService) DeleteProblemSolution(ctx context.Context,
 
 	// 检查是否存在
 	var count int
-	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM problem_solutions WHERE id = $1 AND problem_id IN (SELECT id FROM problems WHERE tenant_id = $2)", id, tenantID).Scan(&count)
+	err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM problem_solutions WHERE id = $1 AND problem_id IN (SELECT p.id FROM problems p JOIN tickets wi ON wi.id = p.work_item_id WHERE wi.tenant_id = $2)", id, tenantID).Scan(&count)
 	if err != nil {
 		return fmt.Errorf("查询解决方案失败: %v", err)
 	}
@@ -814,7 +820,7 @@ func (s *ProblemInvestigationService) DeleteProblemSolution(ctx context.Context,
 	}
 
 	// 删除
-	_, err = s.db.ExecContext(ctx, "DELETE FROM problem_solutions WHERE id = $1 AND problem_id IN (SELECT id FROM problems WHERE tenant_id = $2)", id, tenantID)
+	_, err = s.db.ExecContext(ctx, "DELETE FROM problem_solutions WHERE id = $1 AND problem_id IN (SELECT p.id FROM problems p JOIN tickets wi ON wi.id = p.work_item_id WHERE wi.tenant_id = $2)", id, tenantID)
 	if err != nil {
 		return fmt.Errorf("删除解决方案失败: %v", err)
 	}
@@ -837,7 +843,7 @@ func (s *ProblemInvestigationService) ApproveSolution(ctx context.Context, id in
 		JOIN users u1 ON ps.proposed_by = u1.id
 		LEFT JOIN users u2 ON ps.approved_by = u2.id
 		JOIN problems p ON ps.problem_id = p.id
-		WHERE ps.id = $1 AND p.tenant_id = $2
+		WHERE ps.id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2)
 	`, id, tenantID).Scan(
 		&solution.ID, &solution.ProblemID, &solution.SolutionType, &solution.SolutionDescription,
 		&solution.ProposedBy, &solution.ProposedByName, &solution.ProposedDate, &solution.Status,
@@ -862,7 +868,7 @@ func (s *ProblemInvestigationService) ApproveSolution(ctx context.Context, id in
 	_, err = s.db.ExecContext(ctx, `
 		UPDATE problem_solutions
 		SET approval_status = $1, approved_by = $2, approval_date = $3, updated_at = $3
-		WHERE id = $4 AND problem_id IN (SELECT id FROM problems WHERE tenant_id = $5)
+		WHERE id = $4 AND problem_id IN (SELECT p.id FROM problems p JOIN tickets wi ON wi.id = p.work_item_id WHERE wi.tenant_id = $5)
 	`, approvalStatus, approverID, now, id, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("更新审批状态失败: %v", err)
@@ -871,7 +877,7 @@ func (s *ProblemInvestigationService) ApproveSolution(ctx context.Context, id in
 	// 如果批准，更新解决方案状态为待实施
 	if approved {
 		_, err = s.db.ExecContext(ctx, `
-			UPDATE problem_solutions SET status = $1, updated_at = $2 WHERE id = $3 AND problem_id IN (SELECT id FROM problems WHERE tenant_id = $4)
+			UPDATE problem_solutions SET status = $1, updated_at = $2 WHERE id = $3 AND problem_id IN (SELECT p.id FROM problems p JOIN tickets wi ON wi.id = p.work_item_id WHERE wi.tenant_id = $4)
 		`, dto.SolutionStatusPendingImplementation, now, id, tenantID)
 		if err != nil {
 			s.logger.Warnw("Failed to update solution status after approval", "error", err)

@@ -29,18 +29,10 @@ type Incident struct {
 	Urgency string `json:"urgency,omitempty"`
 	// 事件编号
 	IncidentNumber string `json:"incident_number,omitempty"`
-	// 报告人ID
-	ReporterID int `json:"reporter_id,omitempty"`
 	// 关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入
 	WorkItemID int `json:"work_item_id,omitempty"`
-	// 处理人ID
-	AssigneeID int `json:"assignee_id,omitempty"`
 	// 配置项ID
 	ConfigurationItemID int `json:"configuration_item_id,omitempty"`
-	// 事件分类
-	Category string `json:"category,omitempty"`
-	// 事件子分类
-	Subcategory string `json:"subcategory,omitempty"`
 	// 影响分析
 	ImpactAnalysis map[string]interface{} `json:"impact_analysis,omitempty"`
 	// 根本原因
@@ -49,10 +41,6 @@ type Incident struct {
 	ResolutionSteps []map[string]interface{} `json:"resolution_steps,omitempty"`
 	// 检测时间
 	DetectedAt time.Time `json:"detected_at,omitempty"`
-	// 解决时间
-	ResolvedAt time.Time `json:"resolved_at,omitempty"`
-	// 关闭时间
-	ClosedAt time.Time `json:"closed_at,omitempty"`
 	// 升级时间
 	EscalatedAt time.Time `json:"escalated_at,omitempty"`
 	// 升级级别
@@ -61,20 +49,8 @@ type Incident struct {
 	IsAutomated bool `json:"is_automated,omitempty"`
 	// 是否重大事件
 	IsMajorIncident bool `json:"is_major_incident,omitempty"`
-	// 事件来源
-	Source string `json:"source,omitempty"`
 	// 元数据
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
-	// 租户ID
-	TenantID int `json:"tenant_id,omitempty"`
-	// 版本号（乐观锁）
-	Version int `json:"version,omitempty"`
-	// 创建时间
-	CreatedAt time.Time `json:"created_at,omitempty"`
-	// 更新时间
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
-	// 软删除时间
-	DeletedAt *time.Time `json:"deleted_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the IncidentQuery when eager-loading is set.
 	Edges        IncidentEdges `json:"edges"`
@@ -187,11 +163,11 @@ func (*Incident) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case incident.FieldIsAutomated, incident.FieldIsMajorIncident:
 			values[i] = new(sql.NullBool)
-		case incident.FieldID, incident.FieldReporterID, incident.FieldWorkItemID, incident.FieldAssigneeID, incident.FieldConfigurationItemID, incident.FieldEscalationLevel, incident.FieldTenantID, incident.FieldVersion:
+		case incident.FieldID, incident.FieldWorkItemID, incident.FieldConfigurationItemID, incident.FieldEscalationLevel:
 			values[i] = new(sql.NullInt64)
-		case incident.FieldType, incident.FieldSeverity, incident.FieldImpact, incident.FieldUrgency, incident.FieldIncidentNumber, incident.FieldCategory, incident.FieldSubcategory, incident.FieldSource:
+		case incident.FieldType, incident.FieldSeverity, incident.FieldImpact, incident.FieldUrgency, incident.FieldIncidentNumber:
 			values[i] = new(sql.NullString)
-		case incident.FieldDetectedAt, incident.FieldResolvedAt, incident.FieldClosedAt, incident.FieldEscalatedAt, incident.FieldCreatedAt, incident.FieldUpdatedAt, incident.FieldDeletedAt:
+		case incident.FieldDetectedAt, incident.FieldEscalatedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -244,41 +220,17 @@ func (_m *Incident) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.IncidentNumber = value.String
 			}
-		case incident.FieldReporterID:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field reporter_id", values[i])
-			} else if value.Valid {
-				_m.ReporterID = int(value.Int64)
-			}
 		case incident.FieldWorkItemID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field work_item_id", values[i])
 			} else if value.Valid {
 				_m.WorkItemID = int(value.Int64)
 			}
-		case incident.FieldAssigneeID:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field assignee_id", values[i])
-			} else if value.Valid {
-				_m.AssigneeID = int(value.Int64)
-			}
 		case incident.FieldConfigurationItemID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field configuration_item_id", values[i])
 			} else if value.Valid {
 				_m.ConfigurationItemID = int(value.Int64)
-			}
-		case incident.FieldCategory:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field category", values[i])
-			} else if value.Valid {
-				_m.Category = value.String
-			}
-		case incident.FieldSubcategory:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field subcategory", values[i])
-			} else if value.Valid {
-				_m.Subcategory = value.String
 			}
 		case incident.FieldImpactAnalysis:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -310,18 +262,6 @@ func (_m *Incident) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.DetectedAt = value.Time
 			}
-		case incident.FieldResolvedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field resolved_at", values[i])
-			} else if value.Valid {
-				_m.ResolvedAt = value.Time
-			}
-		case incident.FieldClosedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field closed_at", values[i])
-			} else if value.Valid {
-				_m.ClosedAt = value.Time
-			}
 		case incident.FieldEscalatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field escalated_at", values[i])
@@ -346,12 +286,6 @@ func (_m *Incident) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.IsMajorIncident = value.Bool
 			}
-		case incident.FieldSource:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field source", values[i])
-			} else if value.Valid {
-				_m.Source = value.String
-			}
 		case incident.FieldMetadata:
 			if value, ok := values[i].(*[]byte); !ok {
 				return fmt.Errorf("unexpected type %T for field metadata", values[i])
@@ -359,37 +293,6 @@ func (_m *Incident) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &_m.Metadata); err != nil {
 					return fmt.Errorf("unmarshal field metadata: %w", err)
 				}
-			}
-		case incident.FieldTenantID:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
-			} else if value.Valid {
-				_m.TenantID = int(value.Int64)
-			}
-		case incident.FieldVersion:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field version", values[i])
-			} else if value.Valid {
-				_m.Version = int(value.Int64)
-			}
-		case incident.FieldCreatedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field created_at", values[i])
-			} else if value.Valid {
-				_m.CreatedAt = value.Time
-			}
-		case incident.FieldUpdatedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
-			} else if value.Valid {
-				_m.UpdatedAt = value.Time
-			}
-		case incident.FieldDeletedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field deleted_at", values[i])
-			} else if value.Valid {
-				_m.DeletedAt = new(time.Time)
-				*_m.DeletedAt = value.Time
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -482,23 +385,11 @@ func (_m *Incident) String() string {
 	builder.WriteString("incident_number=")
 	builder.WriteString(_m.IncidentNumber)
 	builder.WriteString(", ")
-	builder.WriteString("reporter_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.ReporterID))
-	builder.WriteString(", ")
 	builder.WriteString("work_item_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.WorkItemID))
 	builder.WriteString(", ")
-	builder.WriteString("assignee_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.AssigneeID))
-	builder.WriteString(", ")
 	builder.WriteString("configuration_item_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ConfigurationItemID))
-	builder.WriteString(", ")
-	builder.WriteString("category=")
-	builder.WriteString(_m.Category)
-	builder.WriteString(", ")
-	builder.WriteString("subcategory=")
-	builder.WriteString(_m.Subcategory)
 	builder.WriteString(", ")
 	builder.WriteString("impact_analysis=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ImpactAnalysis))
@@ -512,12 +403,6 @@ func (_m *Incident) String() string {
 	builder.WriteString("detected_at=")
 	builder.WriteString(_m.DetectedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
-	builder.WriteString("resolved_at=")
-	builder.WriteString(_m.ResolvedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("closed_at=")
-	builder.WriteString(_m.ClosedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
 	builder.WriteString("escalated_at=")
 	builder.WriteString(_m.EscalatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
@@ -530,28 +415,8 @@ func (_m *Incident) String() string {
 	builder.WriteString("is_major_incident=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IsMajorIncident))
 	builder.WriteString(", ")
-	builder.WriteString("source=")
-	builder.WriteString(_m.Source)
-	builder.WriteString(", ")
 	builder.WriteString("metadata=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Metadata))
-	builder.WriteString(", ")
-	builder.WriteString("tenant_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.TenantID))
-	builder.WriteString(", ")
-	builder.WriteString("version=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Version))
-	builder.WriteString(", ")
-	builder.WriteString("created_at=")
-	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("updated_at=")
-	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	if v := _m.DeletedAt; v != nil {
-		builder.WriteString("deleted_at=")
-		builder.WriteString(v.Format(time.ANSIC))
-	}
 	builder.WriteByte(')')
 	return builder.String()
 }

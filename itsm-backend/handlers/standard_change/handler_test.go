@@ -22,6 +22,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/ticket"
 	changedomain "itsm-backend/handlers/change"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -458,7 +459,7 @@ func TestInstantiateStandardChange_Defaults(t *testing.T) {
 
 	// Verify the Change was created from the template with the expected mapping.
 	created, err := client.Change.Query().
-		Where(change.ID(changeID), change.TenantID(1)).
+		Where(change.ID(changeID), change.HasWorkItemWith(ticket.TenantID(1))).
 		WithWorkItem().
 		Only(context.Background())
 	require.NoError(t, err)
@@ -468,7 +469,7 @@ func TestInstantiateStandardChange_Defaults(t *testing.T) {
 	assert.Equal(t, "medium", created.Edges.WorkItem.Priority)
 	assert.Equal(t, "high", created.ImpactScope)
 	assert.Equal(t, "medium", created.RiskLevel)
-	assert.Equal(t, actor.ID, created.CreatedBy)
+	assert.Equal(t, actor.ID, created.Edges.WorkItem.OpenedByID)
 	assert.Equal(t, []string{"web"}, created.AffectedCis)
 	assert.Equal(t, "实施计划步骤", created.ImplementationPlan)
 	assert.Equal(t, "回滚计划步骤", created.RollbackPlan)
@@ -496,7 +497,7 @@ func TestInstantiateStandardChange_Overrides(t *testing.T) {
 	changeID := int(data["change_id"].(float64))
 
 	created, err := client.Change.Query().
-		Where(change.ID(changeID), change.TenantID(1)).
+		Where(change.ID(changeID), change.HasWorkItemWith(ticket.TenantID(1))).
 		WithWorkItem().
 		Only(context.Background())
 	require.NoError(t, err)

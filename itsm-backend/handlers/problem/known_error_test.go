@@ -32,6 +32,7 @@ func TestProblemKnownErrorPublishingDirectService(t *testing.T) {
 
 	tenant := createProblemHandlerTenant(t, ctx, client, "ke-srv")
 	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "ke-srv")
+	createProblemHandlerCategory(t, ctx, client, tenant.ID, "network")
 
 	// Create Problem
 	probRepo := newTestProblemRepository(client)

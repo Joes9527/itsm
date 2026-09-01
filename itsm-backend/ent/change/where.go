@@ -75,24 +75,9 @@ func RiskLevel(v string) predicate.Change {
 	return predicate.Change(sql.FieldEQ(FieldRiskLevel, v))
 }
 
-// AssigneeID applies equality check predicate on the "assignee_id" field. It's identical to AssigneeIDEQ.
-func AssigneeID(v int) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldAssigneeID, v))
-}
-
-// CreatedBy applies equality check predicate on the "created_by" field. It's identical to CreatedByEQ.
-func CreatedBy(v int) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldCreatedBy, v))
-}
-
 // WorkItemID applies equality check predicate on the "work_item_id" field. It's identical to WorkItemIDEQ.
 func WorkItemID(v int) predicate.Change {
 	return predicate.Change(sql.FieldEQ(FieldWorkItemID, v))
-}
-
-// TenantID applies equality check predicate on the "tenant_id" field. It's identical to TenantIDEQ.
-func TenantID(v int) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldTenantID, v))
 }
 
 // PlannedStartDate applies equality check predicate on the "planned_start_date" field. It's identical to PlannedStartDateEQ.
@@ -123,16 +108,6 @@ func ImplementationPlan(v string) predicate.Change {
 // RollbackPlan applies equality check predicate on the "rollback_plan" field. It's identical to RollbackPlanEQ.
 func RollbackPlan(v string) predicate.Change {
 	return predicate.Change(sql.FieldEQ(FieldRollbackPlan, v))
-}
-
-// CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
-func CreatedAt(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldCreatedAt, v))
-}
-
-// UpdatedAt applies equality check predicate on the "updated_at" field. It's identical to UpdatedAtEQ.
-func UpdatedAt(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldUpdatedAt, v))
 }
 
 // JustificationEQ applies the EQ predicate on the "justification" field.
@@ -405,96 +380,6 @@ func RiskLevelContainsFold(v string) predicate.Change {
 	return predicate.Change(sql.FieldContainsFold(FieldRiskLevel, v))
 }
 
-// AssigneeIDEQ applies the EQ predicate on the "assignee_id" field.
-func AssigneeIDEQ(v int) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldAssigneeID, v))
-}
-
-// AssigneeIDNEQ applies the NEQ predicate on the "assignee_id" field.
-func AssigneeIDNEQ(v int) predicate.Change {
-	return predicate.Change(sql.FieldNEQ(FieldAssigneeID, v))
-}
-
-// AssigneeIDIn applies the In predicate on the "assignee_id" field.
-func AssigneeIDIn(vs ...int) predicate.Change {
-	return predicate.Change(sql.FieldIn(FieldAssigneeID, vs...))
-}
-
-// AssigneeIDNotIn applies the NotIn predicate on the "assignee_id" field.
-func AssigneeIDNotIn(vs ...int) predicate.Change {
-	return predicate.Change(sql.FieldNotIn(FieldAssigneeID, vs...))
-}
-
-// AssigneeIDGT applies the GT predicate on the "assignee_id" field.
-func AssigneeIDGT(v int) predicate.Change {
-	return predicate.Change(sql.FieldGT(FieldAssigneeID, v))
-}
-
-// AssigneeIDGTE applies the GTE predicate on the "assignee_id" field.
-func AssigneeIDGTE(v int) predicate.Change {
-	return predicate.Change(sql.FieldGTE(FieldAssigneeID, v))
-}
-
-// AssigneeIDLT applies the LT predicate on the "assignee_id" field.
-func AssigneeIDLT(v int) predicate.Change {
-	return predicate.Change(sql.FieldLT(FieldAssigneeID, v))
-}
-
-// AssigneeIDLTE applies the LTE predicate on the "assignee_id" field.
-func AssigneeIDLTE(v int) predicate.Change {
-	return predicate.Change(sql.FieldLTE(FieldAssigneeID, v))
-}
-
-// AssigneeIDIsNil applies the IsNil predicate on the "assignee_id" field.
-func AssigneeIDIsNil() predicate.Change {
-	return predicate.Change(sql.FieldIsNull(FieldAssigneeID))
-}
-
-// AssigneeIDNotNil applies the NotNil predicate on the "assignee_id" field.
-func AssigneeIDNotNil() predicate.Change {
-	return predicate.Change(sql.FieldNotNull(FieldAssigneeID))
-}
-
-// CreatedByEQ applies the EQ predicate on the "created_by" field.
-func CreatedByEQ(v int) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldCreatedBy, v))
-}
-
-// CreatedByNEQ applies the NEQ predicate on the "created_by" field.
-func CreatedByNEQ(v int) predicate.Change {
-	return predicate.Change(sql.FieldNEQ(FieldCreatedBy, v))
-}
-
-// CreatedByIn applies the In predicate on the "created_by" field.
-func CreatedByIn(vs ...int) predicate.Change {
-	return predicate.Change(sql.FieldIn(FieldCreatedBy, vs...))
-}
-
-// CreatedByNotIn applies the NotIn predicate on the "created_by" field.
-func CreatedByNotIn(vs ...int) predicate.Change {
-	return predicate.Change(sql.FieldNotIn(FieldCreatedBy, vs...))
-}
-
-// CreatedByGT applies the GT predicate on the "created_by" field.
-func CreatedByGT(v int) predicate.Change {
-	return predicate.Change(sql.FieldGT(FieldCreatedBy, v))
-}
-
-// CreatedByGTE applies the GTE predicate on the "created_by" field.
-func CreatedByGTE(v int) predicate.Change {
-	return predicate.Change(sql.FieldGTE(FieldCreatedBy, v))
-}
-
-// CreatedByLT applies the LT predicate on the "created_by" field.
-func CreatedByLT(v int) predicate.Change {
-	return predicate.Change(sql.FieldLT(FieldCreatedBy, v))
-}
-
-// CreatedByLTE applies the LTE predicate on the "created_by" field.
-func CreatedByLTE(v int) predicate.Change {
-	return predicate.Change(sql.FieldLTE(FieldCreatedBy, v))
-}
-
 // WorkItemIDEQ applies the EQ predicate on the "work_item_id" field.
 func WorkItemIDEQ(v int) predicate.Change {
 	return predicate.Change(sql.FieldEQ(FieldWorkItemID, v))
@@ -513,46 +398,6 @@ func WorkItemIDIn(vs ...int) predicate.Change {
 // WorkItemIDNotIn applies the NotIn predicate on the "work_item_id" field.
 func WorkItemIDNotIn(vs ...int) predicate.Change {
 	return predicate.Change(sql.FieldNotIn(FieldWorkItemID, vs...))
-}
-
-// TenantIDEQ applies the EQ predicate on the "tenant_id" field.
-func TenantIDEQ(v int) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldTenantID, v))
-}
-
-// TenantIDNEQ applies the NEQ predicate on the "tenant_id" field.
-func TenantIDNEQ(v int) predicate.Change {
-	return predicate.Change(sql.FieldNEQ(FieldTenantID, v))
-}
-
-// TenantIDIn applies the In predicate on the "tenant_id" field.
-func TenantIDIn(vs ...int) predicate.Change {
-	return predicate.Change(sql.FieldIn(FieldTenantID, vs...))
-}
-
-// TenantIDNotIn applies the NotIn predicate on the "tenant_id" field.
-func TenantIDNotIn(vs ...int) predicate.Change {
-	return predicate.Change(sql.FieldNotIn(FieldTenantID, vs...))
-}
-
-// TenantIDGT applies the GT predicate on the "tenant_id" field.
-func TenantIDGT(v int) predicate.Change {
-	return predicate.Change(sql.FieldGT(FieldTenantID, v))
-}
-
-// TenantIDGTE applies the GTE predicate on the "tenant_id" field.
-func TenantIDGTE(v int) predicate.Change {
-	return predicate.Change(sql.FieldGTE(FieldTenantID, v))
-}
-
-// TenantIDLT applies the LT predicate on the "tenant_id" field.
-func TenantIDLT(v int) predicate.Change {
-	return predicate.Change(sql.FieldLT(FieldTenantID, v))
-}
-
-// TenantIDLTE applies the LTE predicate on the "tenant_id" field.
-func TenantIDLTE(v int) predicate.Change {
-	return predicate.Change(sql.FieldLTE(FieldTenantID, v))
 }
 
 // PlannedStartDateEQ applies the EQ predicate on the "planned_start_date" field.
@@ -913,96 +758,6 @@ func AffectedCisIsNil() predicate.Change {
 // AffectedCisNotNil applies the NotNil predicate on the "affected_cis" field.
 func AffectedCisNotNil() predicate.Change {
 	return predicate.Change(sql.FieldNotNull(FieldAffectedCis))
-}
-
-// RelatedTicketsIsNil applies the IsNil predicate on the "related_tickets" field.
-func RelatedTicketsIsNil() predicate.Change {
-	return predicate.Change(sql.FieldIsNull(FieldRelatedTickets))
-}
-
-// RelatedTicketsNotNil applies the NotNil predicate on the "related_tickets" field.
-func RelatedTicketsNotNil() predicate.Change {
-	return predicate.Change(sql.FieldNotNull(FieldRelatedTickets))
-}
-
-// CreatedAtEQ applies the EQ predicate on the "created_at" field.
-func CreatedAtEQ(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldCreatedAt, v))
-}
-
-// CreatedAtNEQ applies the NEQ predicate on the "created_at" field.
-func CreatedAtNEQ(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldNEQ(FieldCreatedAt, v))
-}
-
-// CreatedAtIn applies the In predicate on the "created_at" field.
-func CreatedAtIn(vs ...time.Time) predicate.Change {
-	return predicate.Change(sql.FieldIn(FieldCreatedAt, vs...))
-}
-
-// CreatedAtNotIn applies the NotIn predicate on the "created_at" field.
-func CreatedAtNotIn(vs ...time.Time) predicate.Change {
-	return predicate.Change(sql.FieldNotIn(FieldCreatedAt, vs...))
-}
-
-// CreatedAtGT applies the GT predicate on the "created_at" field.
-func CreatedAtGT(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldGT(FieldCreatedAt, v))
-}
-
-// CreatedAtGTE applies the GTE predicate on the "created_at" field.
-func CreatedAtGTE(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldGTE(FieldCreatedAt, v))
-}
-
-// CreatedAtLT applies the LT predicate on the "created_at" field.
-func CreatedAtLT(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldLT(FieldCreatedAt, v))
-}
-
-// CreatedAtLTE applies the LTE predicate on the "created_at" field.
-func CreatedAtLTE(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldLTE(FieldCreatedAt, v))
-}
-
-// UpdatedAtEQ applies the EQ predicate on the "updated_at" field.
-func UpdatedAtEQ(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldEQ(FieldUpdatedAt, v))
-}
-
-// UpdatedAtNEQ applies the NEQ predicate on the "updated_at" field.
-func UpdatedAtNEQ(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldNEQ(FieldUpdatedAt, v))
-}
-
-// UpdatedAtIn applies the In predicate on the "updated_at" field.
-func UpdatedAtIn(vs ...time.Time) predicate.Change {
-	return predicate.Change(sql.FieldIn(FieldUpdatedAt, vs...))
-}
-
-// UpdatedAtNotIn applies the NotIn predicate on the "updated_at" field.
-func UpdatedAtNotIn(vs ...time.Time) predicate.Change {
-	return predicate.Change(sql.FieldNotIn(FieldUpdatedAt, vs...))
-}
-
-// UpdatedAtGT applies the GT predicate on the "updated_at" field.
-func UpdatedAtGT(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldGT(FieldUpdatedAt, v))
-}
-
-// UpdatedAtGTE applies the GTE predicate on the "updated_at" field.
-func UpdatedAtGTE(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldGTE(FieldUpdatedAt, v))
-}
-
-// UpdatedAtLT applies the LT predicate on the "updated_at" field.
-func UpdatedAtLT(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldLT(FieldUpdatedAt, v))
-}
-
-// UpdatedAtLTE applies the LTE predicate on the "updated_at" field.
-func UpdatedAtLTE(v time.Time) predicate.Change {
-	return predicate.Change(sql.FieldLTE(FieldUpdatedAt, v))
 }
 
 // HasWorkItem applies the HasEdge predicate on the "work_item" edge.

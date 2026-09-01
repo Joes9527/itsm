@@ -66,8 +66,6 @@ func TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd(t *testing.T) {
 	// DB 侧真实 Change 行：handler 写侧（change_handler.go）直接操作 entClient，
 	// 状态必须与域侧一致（approved），否则 handler 状态机白名单会拒绝
 	dbChange, err := entClient.Change.Create().
-		SetCreatedBy(actorID).
-		SetTenantID(tenantID).
 		SetWorkItemID(workItem.ID).
 		Save(context.Background())
 	require.NoError(t, err)

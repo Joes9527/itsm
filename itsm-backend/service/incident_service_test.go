@@ -28,45 +28,10 @@ import (
 
 func setupIncidentTest(t *testing.T) (*ent.Client, *IncidentService, context.Context) {
 	client := enttest.Open(t, "sqlite3", testDSN())
-	installIncidentFixtureWorkItemAuthority(t, client)
 	logger := zaptest.NewLogger(t).Sugar()
 	service := NewIncidentService(client, logger, workitemnumber.NewPostgreSQLAllocator())
 	ctx := context.Background()
 	return client, service, ctx
-}
-
-// installIncidentFixtureWorkItemAuthority upgrades legacy direct-extension test
-// fixtures to the required one-to-one shape. Production writers remain explicit
-// and are covered by creation tests; this hook exists only on this test client.
-func installIncidentFixtureWorkItemAuthority(t *testing.T, client *ent.Client) {
-	t.Helper()
-	client.Incident.Use(func(next ent.Mutator) ent.Mutator {
-		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
-			m, ok := mutation.(*ent.IncidentMutation)
-			if !ok || !m.Op().Is(ent.OpCreate) {
-				return next.Mutate(ctx, mutation)
-			}
-			if workItemID, exists := m.WorkItemID(); exists && workItemID > 0 {
-				return next.Mutate(ctx, mutation)
-			}
-			tenantID, tenantOK := m.TenantID()
-			reporterID, reporterOK := m.ReporterID()
-			number, numberOK := m.IncidentNumber()
-			if !tenantOK || !reporterOK || !numberOK {
-				return next.Mutate(ctx, mutation)
-			}
-			workItem, err := client.Ticket.Create().
-				SetTitle(number).SetStatus(common.IncidentStatusNew).SetPriority("medium").
-				SetType("incident").SetRecordClass("incident").
-				SetTicketNumber("TKT-" + number).
-				SetRequesterID(reporterID).SetTenantID(tenantID).Save(ctx)
-			if err != nil {
-				return nil, err
-			}
-			m.SetWorkItemID(workItem.ID)
-			return next.Mutate(ctx, mutation)
-		})
-	})
 }
 
 func createIncidentTestTenant(ctx context.Context, client *ent.Client, suffix string) (*ent.Tenant, error) {
@@ -108,6 +73,18 @@ func setIncidentFixtureWorkItemFields(t *testing.T, ctx context.Context, client 
 	require.NoError(t, err)
 }
 
+type blockingIncidentProcessTrigger struct {
+	ProcessTriggerServiceInterface
+	entered chan struct{}
+	release chan struct{}
+}
+
+func (f *blockingIncidentProcessTrigger) TriggerProcess(context.Context, *dto.ProcessTriggerRequest) (*dto.ProcessTriggerResponse, error) {
+	close(f.entered)
+	<-f.release
+	return &dto.ProcessTriggerResponse{ProcessInstanceID: 1}, nil
+}
+
 // ==================== 创建事件测试 ====================
 
 func TestIncidentService_CreateIncident_Success(t *testing.T) {
@@ -119,6 +96,8 @@ func TestIncidentService_CreateIncident_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	testUser, err := createIncidentTestUser(ctx, client, testTenant.ID, "create")
+	require.NoError(t, err)
+	_, err = client.TicketCategory.Create().SetName("performance").SetCode("performance").SetTenantID(testTenant.ID).Save(ctx)
 	require.NoError(t, err)
 
 	// 测试创建事件
@@ -145,6 +124,42 @@ func TestIncidentService_CreateIncident_Success(t *testing.T) {
 	assert.Equal(t, testTenant.ID, response.TenantID)
 }
 
+func TestIncidentService_CreateIncidentWaitsForPostCommitWorkflow(t *testing.T) {
+	client, incidentService, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "inline-workflow")
+	require.NoError(t, err)
+	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "inline-workflow")
+	require.NoError(t, err)
+
+	trigger := &blockingIncidentProcessTrigger{entered: make(chan struct{}), release: make(chan struct{})}
+	incidentService.SetProcessTriggerService(trigger)
+	result := make(chan error, 1)
+	go func() {
+		_, createErr := incidentService.CreateIncident(ctx, &dto.CreateIncidentRequest{Title: "Inline workflow boundary"}, tenant.ID, reporter.ID)
+		result <- createErr
+	}()
+
+	select {
+	case <-trigger.entered:
+	case <-time.After(2 * time.Second):
+		t.Fatal("workflow trigger was not entered")
+	}
+	select {
+	case createErr := <-result:
+		t.Fatalf("CreateIncident returned before its post-commit workflow finished: %v", createErr)
+	default:
+	}
+
+	close(trigger.release)
+	select {
+	case createErr := <-result:
+		require.NoError(t, createErr)
+	case <-time.After(2 * time.Second):
+		t.Fatal("CreateIncident did not return after workflow completion")
+	}
+}
+
 func TestIncidentService_CreateIncident_WithOptionalFields(t *testing.T) {
 	client, service, ctx := setupIncidentTest(t)
 	defer client.Close()
@@ -156,6 +171,10 @@ func TestIncidentService_CreateIncident_WithOptionalFields(t *testing.T) {
 	require.NoError(t, err)
 
 	assignee, err := createIncidentTestUser(ctx, client, testTenant.ID, "assignee")
+	require.NoError(t, err)
+	parent, err := client.TicketCategory.Create().SetName("security").SetCode("security").SetTenantID(testTenant.ID).Save(ctx)
+	require.NoError(t, err)
+	_, err = client.TicketCategory.Create().SetName("intrusion").SetCode("intrusion").SetTenantID(testTenant.ID).SetParentID(parent.ID).Save(ctx)
 	require.NoError(t, err)
 
 	detectedAt := time.Now().Add(-1 * time.Hour)
@@ -369,9 +388,7 @@ func TestIncidentService_GetIncident_Success(t *testing.T) {
 	testIncident, err := client.Incident.Create().
 		SetSeverity("medium").
 		SetIncidentNumber("INC-202401-000001").
-		SetReporterID(testUser.ID).
 		SetWorkItemID(workItem.ID).
-		SetTenantID(testTenant.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
 	require.NoError(t, err)
@@ -409,13 +426,13 @@ func TestIncidentService_GetIncident_TenantMismatch(t *testing.T) {
 
 	testUser, err := createIncidentTestUser(ctx, client, testTenant1.ID, "tenant")
 	require.NoError(t, err)
+	workItem := createIncidentTestWorkItem(t, ctx, client, testTenant1.ID, testUser.ID, "Tenant scoped incident", common.IncidentStatusNew, "medium")
 
 	// 在 tenant1 下创建事件
 	testIncident, err := client.Incident.Create().
 		SetSeverity("medium").
 		SetIncidentNumber("INC-TENANT-001").
-		SetReporterID(testUser.ID).
-		SetTenantID(testTenant1.ID).
+		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
 	require.NoError(t, err)
@@ -436,22 +453,23 @@ func TestIncidentService_AssignIncident_ValidatesAssigneeAndReturnsUpdatedIncide
 	require.NoError(t, err)
 	assignee, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-agent")
 	require.NoError(t, err)
+	workItem := createIncidentTestWorkItem(t, ctx, client, tenant.ID, reporter.ID, "Assign incident", common.IncidentStatusNew, "high")
 
 	incidentEntity, err := client.Incident.Create().
 		SetSeverity("medium").
 		SetIncidentNumber("INC-ASSIGN-001").
-		SetReporterID(reporter.ID).
-		SetTenantID(tenant.ID).
+		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
 	require.NoError(t, err)
-	setIncidentFixtureWorkItemFields(t, ctx, client, incidentEntity, "Assign incident", "desc", common.IncidentStatusNew, "high")
+	_, err = client.Ticket.UpdateOneID(workItem.ID).SetDescription("desc").Save(ctx)
+	require.NoError(t, err)
 
 	response, err := incidentService.AssignIncident(ctx, incidentEntity.ID, assignee.ID, tenant.ID)
 	require.NoError(t, err)
 	require.NotNil(t, response.AssigneeID)
 	assert.Equal(t, assignee.ID, *response.AssigneeID)
-	assert.Equal(t, incidentEntity.Version+1, response.Version)
+	assert.Equal(t, workItem.Version+1, response.Version)
 
 	otherTenant, err := createIncidentTestTenant(ctx, client, "assign-other")
 	require.NoError(t, err)
@@ -479,18 +497,17 @@ func TestAssignIncidentRejectsTerminalStatuses(t *testing.T) {
 			require.NoError(t, err)
 			assignee, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-target-"+status)
 			require.NoError(t, err)
+			workItem := createIncidentTestWorkItem(t, ctx, client, tenant.ID, reporter.ID, "Lifecycle guarded assignment", status, "medium")
 			incidentEntity, err := client.Incident.Create().
 				SetIncidentNumber("INC-ASSIGN-" + status).
-				SetReporterID(reporter.ID).
-				SetTenantID(tenant.ID).
+				SetWorkItemID(workItem.ID).
 				Save(ctx)
 			require.NoError(t, err)
-			setIncidentFixtureWorkItemFields(t, ctx, client, incidentEntity, "Lifecycle guarded assignment", "", status, "medium")
 
 			_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, assignee.ID, tenant.ID)
 			require.ErrorContains(t, err, "cannot be reassigned")
 
-			persisted, err := client.Incident.Get(ctx, incidentEntity.ID)
+			persisted, err := client.Ticket.Get(ctx, workItem.ID)
 			require.NoError(t, err)
 			require.Zero(t, persisted.AssigneeID)
 		})
@@ -519,7 +536,11 @@ func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
 		{
 			name: "version change while status remains eligible",
 			mutateRace: func(ctx context.Context, racer *ent.Client, incidentID int) error {
-				return racer.Incident.UpdateOneID(incidentID).AddVersion(1).Exec(ctx)
+				entity, err := racer.Incident.Get(ctx, incidentID)
+				if err != nil {
+					return err
+				}
+				return racer.Ticket.UpdateOneID(entity.WorkItemID).AddVersion(1).Exec(ctx)
 			},
 			assertErr: func(t *testing.T, err error) {
 				var conflict *common.VersionConflictError
@@ -544,14 +565,12 @@ func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
 			workItem := createIncidentTestWorkItem(t, ctx, client, tenant.ID, reporter.ID, "Concurrent assignment", common.IncidentStatusNew, "medium")
 			incidentEntity, err := client.Incident.Create().
 				SetIncidentNumber("INC-ASSIGN-RACE-" + testCase.name).
-				SetReporterID(reporter.ID).
 				SetWorkItemID(workItem.ID).
-				SetTenantID(tenant.ID).
 				Save(ctx)
 			require.NoError(t, err)
 
 			raced := false
-			client.Incident.Use(func(next ent.Mutator) ent.Mutator {
+			client.Ticket.Use(func(next ent.Mutator) ent.Mutator {
 				return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
 					if !raced {
 						raced = true
@@ -567,7 +586,7 @@ func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
 			testCase.assertErr(t, err)
 			require.True(t, raced)
 
-			persisted, err := client.Incident.Get(ctx, incidentEntity.ID)
+			persisted, err := client.Ticket.Get(ctx, workItem.ID)
 			require.NoError(t, err)
 			require.Zero(t, persisted.AssigneeID)
 			eventCount, err := client.IncidentEvent.Query().
@@ -606,9 +625,7 @@ func TestGetIncidentWithActionsUsesOneEntitySnapshot(t *testing.T) {
 	require.NoError(t, err)
 	incidentEntity, err := client.Incident.Create().
 		SetIncidentNumber("INC-SNAPSHOT").
-		SetReporterID(reporter.ID).
 		SetWorkItemID(workItem.ID).
-		SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
 
@@ -637,15 +654,16 @@ func TestIncidentService_ListIncidents_Pagination(t *testing.T) {
 
 	// 创建多个测试事件
 	for i := 0; i < 15; i++ {
-		incidentEntity, err := client.Incident.Create().
+		workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, fmt.Sprintf("Test Incident %d", i+1), common.IncidentStatusNew, "medium")
+		_, err := client.Ticket.UpdateOneID(workItem.ID).SetDescription("Test description").Save(ctx)
+		require.NoError(t, err)
+		_, err = client.Incident.Create().
 			SetSeverity("low").
 			SetIncidentNumber(fmt.Sprintf("INC-LIST-%03d", i+1)).
-			SetReporterID(testUser.ID).
-			SetTenantID(testTenant.ID).
+			SetWorkItemID(workItem.ID).
 			SetDetectedAt(time.Now()).
 			Save(ctx)
 		require.NoError(t, err)
-		setIncidentFixtureWorkItemFields(t, ctx, client, incidentEntity, fmt.Sprintf("Test Incident %d", i+1), "Test description", "new", "medium")
 	}
 
 	// 测试第一页
@@ -681,9 +699,7 @@ func TestIncidentService_ListIncidents_Filters(t *testing.T) {
 			_, err := client.Incident.Create().
 				SetSeverity("medium").
 				SetIncidentNumber(fmt.Sprintf("INC-FLT-%d%d", i, j)).
-				SetReporterID(testUser.ID).
 				SetWorkItemID(workItem.ID).
-				SetTenantID(testTenant.ID).
 				SetDetectedAt(time.Now()).
 				Save(ctx)
 			require.NoError(t, err)
@@ -725,25 +741,27 @@ func TestIncidentService_ListIncidents_KeywordSearch(t *testing.T) {
 	require.NoError(t, err)
 
 	// 创建带有关键词的事件
-	databaseIncident, err := client.Incident.Create().
+	databaseWorkItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "数据库连接失败", common.IncidentStatusNew, "critical")
+	_, err = client.Ticket.UpdateOneID(databaseWorkItem.ID).SetDescription("生产环境数据库无法连接").Save(ctx)
+	require.NoError(t, err)
+	_, err = client.Incident.Create().
 		SetSeverity("high").
 		SetIncidentNumber("INC-DB-001").
-		SetReporterID(testUser.ID).
-		SetTenantID(testTenant.ID).
+		SetWorkItemID(databaseWorkItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
 	require.NoError(t, err)
-	setIncidentFixtureWorkItemFields(t, ctx, client, databaseIncident, "数据库连接失败", "生产环境数据库无法连接", "new", "critical")
 
-	networkIncident, err := client.Incident.Create().
+	networkWorkItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "网络延迟问题", common.IncidentStatusNew, "medium")
+	_, err = client.Ticket.UpdateOneID(networkWorkItem.ID).SetDescription("用户反馈网络响应缓慢").Save(ctx)
+	require.NoError(t, err)
+	_, err = client.Incident.Create().
 		SetSeverity("medium").
 		SetIncidentNumber("INC-NET-001").
-		SetReporterID(testUser.ID).
-		SetTenantID(testTenant.ID).
+		SetWorkItemID(networkWorkItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
 	require.NoError(t, err)
-	setIncidentFixtureWorkItemFields(t, ctx, client, networkIncident, "网络延迟问题", "用户反馈网络响应缓慢", "new", "medium")
 
 	// 搜索关键词 "数据库"
 	responses, total, err := service.ListIncidents(ctx, testTenant.ID, 1, 10, map[string]interface{}{
@@ -774,16 +792,16 @@ func TestIncidentService_UpdateIncident_Success(t *testing.T) {
 	testUser, err := createIncidentTestUser(ctx, client, testTenant.ID, "update")
 	require.NoError(t, err)
 
+	workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "Original Title", common.IncidentStatusNew, "low")
+	_, err = client.Ticket.UpdateOneID(workItem.ID).SetDescription("Original description").Save(ctx)
+	require.NoError(t, err)
 	testIncident, err := client.Incident.Create().
 		SetSeverity("low").
 		SetIncidentNumber("INC-UPD-001").
-		SetReporterID(testUser.ID).
-		SetTenantID(testTenant.ID).
-		SetVersion(1).
+		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
 	require.NoError(t, err)
-	setIncidentFixtureWorkItemFields(t, ctx, client, testIncident, "Original Title", "Original description", "new", "low")
 
 	// 测试更新
 	newTitle := "Updated Title"
@@ -813,16 +831,16 @@ func TestIncidentService_UpdateIncident_VersionControl(t *testing.T) {
 	testUser, err := createIncidentTestUser(ctx, client, testTenant.ID, "version")
 	require.NoError(t, err)
 
+	workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "Version Test", common.IncidentStatusNew, "medium")
+	_, err = client.Ticket.UpdateOneID(workItem.ID).SetDescription("Test description").Save(ctx)
+	require.NoError(t, err)
 	testIncident, err := client.Incident.Create().
 		SetSeverity("medium").
 		SetIncidentNumber("INC-VER-001").
-		SetReporterID(testUser.ID).
-		SetTenantID(testTenant.ID).
-		SetVersion(1).
+		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
 	require.NoError(t, err)
-	setIncidentFixtureWorkItemFields(t, ctx, client, testIncident, "Version Test", "Test description", "new", "medium")
 
 	t.Run("版本匹配时更新成功", func(t *testing.T) {
 		newTitle := "Updated with correct version"
@@ -895,15 +913,14 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("有效状态转换 new -> in_progress", func(t *testing.T) {
+		workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "Status Test 1", common.IncidentStatusNew, "medium")
 		testIncident, err := client.Incident.Create().
 			SetSeverity("medium").
 			SetIncidentNumber("INC-ST-001").
-			SetReporterID(testUser.ID).
-			SetTenantID(testTenant.ID).
+			SetWorkItemID(workItem.ID).
 			SetDetectedAt(time.Now()).
 			Save(ctx)
 		require.NoError(t, err)
-		setIncidentFixtureWorkItemFields(t, ctx, client, testIncident, "Status Test 1", "Test description", "new", "medium")
 
 		newStatus := "in_progress"
 		response, err := service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
@@ -920,15 +937,14 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 	// （见 service/incident_service.go 的 UpdateIncident 守卫）。
 	// 专用动作路径本身的行为由 TestIncidentService_DedicatedLifecyclePersistsAuditAndTimestamps 覆盖。
 	t.Run("通用更新拒绝直接转到 resolved，必须走专用动作", func(t *testing.T) {
+		workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "Status Test 2", common.IncidentStatusInProgress, "medium")
 		testIncident, err := client.Incident.Create().
 			SetSeverity("medium").
 			SetIncidentNumber("INC-ST-002").
-			SetReporterID(testUser.ID).
-			SetTenantID(testTenant.ID).
+			SetWorkItemID(workItem.ID).
 			SetDetectedAt(time.Now()).
 			Save(ctx)
 		require.NoError(t, err)
-		setIncidentFixtureWorkItemFields(t, ctx, client, testIncident, "Status Test 2", "Test description", "in_progress", "medium")
 
 		newStatus := "resolved"
 		_, err = service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
@@ -942,16 +958,16 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 
 	t.Run("通用更新拒绝直接转到 closed，必须走专用动作", func(t *testing.T) {
 		resolvedAt := time.Now().Add(-1 * time.Hour)
+		workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "Status Test 3", common.IncidentStatusResolved, "medium")
+		_, err := client.Ticket.UpdateOneID(workItem.ID).SetResolvedAt(resolvedAt).Save(ctx)
+		require.NoError(t, err)
 		testIncident, err := client.Incident.Create().
 			SetSeverity("medium").
 			SetIncidentNumber("INC-ST-003").
-			SetReporterID(testUser.ID).
-			SetTenantID(testTenant.ID).
+			SetWorkItemID(workItem.ID).
 			SetDetectedAt(time.Now()).
-			SetResolvedAt(resolvedAt).
 			Save(ctx)
 		require.NoError(t, err)
-		setIncidentFixtureWorkItemFields(t, ctx, client, testIncident, "Status Test 3", "Test description", "resolved", "medium")
 
 		newStatus := "closed"
 		_, err = service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
@@ -964,15 +980,14 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 	})
 
 	t.Run("无效状态转换", func(t *testing.T) {
+		workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "Status Test 4", common.IncidentStatusNew, "medium")
 		testIncident, err := client.Incident.Create().
 			SetSeverity("medium").
 			SetIncidentNumber("INC-ST-004").
-			SetReporterID(testUser.ID).
-			SetTenantID(testTenant.ID).
+			SetWorkItemID(workItem.ID).
 			SetDetectedAt(time.Now()).
 			Save(ctx)
 		require.NoError(t, err)
-		setIncidentFixtureWorkItemFields(t, ctx, client, testIncident, "Status Test 4", "Test description", "new", "medium")
 
 		newStatus := "closed" // new 不能直接到 closed
 		_, err = service.UpdateIncident(ctx, testIncident.ID, &dto.UpdateIncidentRequest{
@@ -996,9 +1011,7 @@ func TestIncidentService_DedicatedLifecyclePersistsAuditAndTimestamps(t *testing
 	entity, err := client.Incident.Create().
 		SetSeverity("high").
 		SetIncidentNumber("INC-LIFECYCLE-001").
-		SetReporterID(user.ID).
 		SetWorkItemID(workItem.ID).
-		SetTenantID(tenant.ID).
 		SetDetectedAt(time.Now().Add(-time.Hour)).
 		Save(ctx)
 	require.NoError(t, err)
@@ -1006,18 +1019,20 @@ func TestIncidentService_DedicatedLifecyclePersistsAuditAndTimestamps(t *testing
 	require.NoError(t, service.ResolveIncident(ctx, entity.ID, user.ID, tenant.ID, "Restarted affected service", "Memory leak"))
 	resolved, err := client.Incident.Get(ctx, entity.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "resolved", requireIncidentWorkItem(t, client, resolved).Status)
-	assert.False(t, resolved.ResolvedAt.IsZero())
+	resolvedWorkItem := requireIncidentWorkItem(t, client, resolved)
+	assert.Equal(t, "resolved", resolvedWorkItem.Status)
+	assert.NotNil(t, resolvedWorkItem.ResolvedAt)
 	assert.Equal(t, "Memory leak", resolved.RootCause["rootCause"])
 	require.NotEmpty(t, resolved.ResolutionSteps)
-	assert.Equal(t, entity.Version+1, resolved.Version)
+	assert.Equal(t, workItem.Version+1, resolvedWorkItem.Version)
 
 	require.NoError(t, service.CloseIncident(ctx, entity.ID, user.ID, tenant.ID, "Observed stable for 30 minutes"))
 	closed, err := client.Incident.Get(ctx, entity.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "closed", requireIncidentWorkItem(t, client, closed).Status)
-	assert.False(t, closed.ClosedAt.IsZero())
-	assert.Equal(t, resolved.Version+1, closed.Version)
+	closedWorkItem := requireIncidentWorkItem(t, client, closed)
+	assert.Equal(t, "closed", closedWorkItem.Status)
+	assert.NotNil(t, closedWorkItem.ClosedAt)
+	assert.Equal(t, resolvedWorkItem.Version+1, closedWorkItem.Version)
 	events, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).All(ctx)
 	require.NoError(t, err)
 	assert.Len(t, events, 2)
@@ -1034,9 +1049,7 @@ func TestIncidentService_ResolveRequiresResolutionAndStatusMachineFailsClosed(t 
 	entity, err := client.Incident.Create().
 		SetSeverity("medium").
 		SetIncidentNumber("INC-RESOLUTION-REQUIRED").
-		SetReporterID(user.ID).
 		SetWorkItemID(workItem.ID).
-		SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
 
@@ -1060,9 +1073,7 @@ func newLifecycleIncidentFixture(t *testing.T, client *ent.Client, ctx context.C
 	entity, err := client.Incident.Create().
 		SetSeverity("medium").
 		SetIncidentNumber(number).
-		SetReporterID(userID).
 		SetWorkItemID(workItem.ID).
-		SetTenantID(tenantID).
 		Save(ctx)
 	require.NoError(t, err)
 	return entity
@@ -1113,7 +1124,7 @@ func TestIncidentService_ResolveIncidentForWorkflow_SetsStatusAndAudits(t *testi
 	after, err := client.Incident.Get(ctx, entity.ID)
 	require.NoError(t, err)
 	assert.Equal(t, common.IncidentStatusResolved, requireIncidentWorkItem(t, client, after).Status)
-	assert.False(t, after.ResolvedAt.IsZero())
+	assert.NotNil(t, requireIncidentWorkItem(t, client, after).ResolvedAt)
 
 	events, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).All(ctx)
 	require.NoError(t, err)
@@ -1136,7 +1147,7 @@ func TestIncidentService_CloseIncidentForWorkflow_SetsStatusAndAudits(t *testing
 	after, err := client.Incident.Get(ctx, entity.ID)
 	require.NoError(t, err)
 	assert.Equal(t, common.IncidentStatusClosed, requireIncidentWorkItem(t, client, after).Status)
-	assert.False(t, after.ClosedAt.IsZero())
+	assert.NotNil(t, requireIncidentWorkItem(t, client, after).ClosedAt)
 
 	events, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).All(ctx)
 	require.NoError(t, err)
@@ -1193,6 +1204,10 @@ func TestIncidentService_CategorizeIncidentForWorkflow_SetsTriagedAndAudits(t *t
 	require.NoError(t, err)
 	user, err := createIncidentTestUser(ctx, client, tenant.ID, "wf-categorize")
 	require.NoError(t, err)
+	parent, err := client.TicketCategory.Create().SetName("network").SetCode("network").SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	_, err = client.TicketCategory.Create().SetName("dns").SetCode("dns").SetTenantID(tenant.ID).SetParentID(parent.ID).Save(ctx)
+	require.NoError(t, err)
 	entity := newLifecycleIncidentFixture(t, client, ctx, tenant.ID, user.ID, "INC-WF-CATEGORIZE-1")
 
 	_, err = service.CategorizeIncidentForWorkflow(ctx, entity.ID, tenant.ID, "network", "dns")
@@ -1200,9 +1215,12 @@ func TestIncidentService_CategorizeIncidentForWorkflow_SetsTriagedAndAudits(t *t
 
 	after, err := client.Incident.Get(ctx, entity.ID)
 	require.NoError(t, err)
-	assert.Equal(t, common.IncidentStatusTriaged, requireIncidentWorkItem(t, client, after).Status)
-	assert.Equal(t, "network", after.Category)
-	assert.Equal(t, "dns", after.Subcategory)
+	workItem := requireIncidentWorkItem(t, client, after)
+	assert.Equal(t, common.IncidentStatusTriaged, workItem.Status)
+	categoryEntity, err := workItem.QueryCategory().WithParent().Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "network", categoryEntity.Edges.Parent.Name)
+	assert.Equal(t, "dns", categoryEntity.Name)
 
 	events, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).All(ctx)
 	require.NoError(t, err)
@@ -1223,12 +1241,13 @@ func TestIncidentService_WorkflowRetryPreservesFirstBusinessEffect(t *testing.T)
 		_, err := incidentService.EscalateIncidentLevel(ctx, entity.ID, tenant.ID, 0)
 		require.NoError(t, err)
 		first := client.Incident.GetX(ctx, entity.ID)
+		firstWorkItem := requireIncidentWorkItem(t, client, first)
 
 		_, err = incidentService.EscalateIncidentLevel(ctx, entity.ID, tenant.ID, 0)
 		require.NoError(t, err)
 		after := client.Incident.GetX(ctx, entity.ID)
 		assert.Equal(t, 1, after.EscalationLevel)
-		assert.Equal(t, first.Version, after.Version)
+		assert.Equal(t, firstWorkItem.Version, requireIncidentWorkItem(t, client, after).Version)
 		assert.Equal(t, first.EscalatedAt, after.EscalatedAt)
 		assert.Equal(t, 1, client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).CountX(ctx))
 	})
@@ -1238,12 +1257,14 @@ func TestIncidentService_WorkflowRetryPreservesFirstBusinessEffect(t *testing.T)
 		_, err := incidentService.ResolveIncidentForWorkflow(ctx, entity.ID, tenant.ID, "restored")
 		require.NoError(t, err)
 		first := client.Incident.GetX(ctx, entity.ID)
+		firstWorkItem := requireIncidentWorkItem(t, client, first)
 
 		_, err = incidentService.ResolveIncidentForWorkflow(ctx, entity.ID, tenant.ID, "restored")
 		require.NoError(t, err)
 		after := client.Incident.GetX(ctx, entity.ID)
-		assert.Equal(t, first.Version, after.Version)
-		assert.Equal(t, first.ResolvedAt, after.ResolvedAt)
+		afterWorkItem := requireIncidentWorkItem(t, client, after)
+		assert.Equal(t, firstWorkItem.Version, afterWorkItem.Version)
+		assert.Equal(t, firstWorkItem.ResolvedAt, afterWorkItem.ResolvedAt)
 		assert.Equal(t, 1, client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(entity.ID)).CountX(ctx))
 	})
 }
@@ -1291,12 +1312,12 @@ func TestIncidentService_DeleteIncident_Success(t *testing.T) {
 
 	testUser, err := createIncidentTestUser(ctx, client, testTenant.ID, "delete")
 	require.NoError(t, err)
+	workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "Delete incident", common.IncidentStatusNew, "medium")
 
 	testIncident, err := client.Incident.Create().
 		SetSeverity("medium").
 		SetIncidentNumber("INC-DEL-001").
-		SetReporterID(testUser.ID).
-		SetTenantID(testTenant.ID).
+		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
 	require.NoError(t, err)
@@ -1319,7 +1340,7 @@ func TestIncidentService_DeleteIncident_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	// 验证已软删除，标准查询不可见但审计数据仍保留
-	stored, err := client.Incident.Get(ctx, testIncident.ID)
+	stored, err := client.Ticket.Get(ctx, workItem.ID)
 	require.NoError(t, err)
 	require.NotNil(t, stored.DeletedAt)
 	_, err = service.GetIncident(ctx, testIncident.ID, testTenant.ID)
@@ -1360,12 +1381,12 @@ func TestIncidentService_DeleteIncident_CascadeTenantIsolation(t *testing.T) {
 
 	testUser1, err := createIncidentTestUser(ctx, client, testTenant1.ID, "cascade1")
 	require.NoError(t, err)
+	workItem := createIncidentTestWorkItem(t, ctx, client, testTenant1.ID, testUser1.ID, "Cascade incident", common.IncidentStatusNew, "medium")
 
 	testIncident, err := client.Incident.Create().
 		SetSeverity("medium").
 		SetIncidentNumber("INC-CASCADE-001").
-		SetReporterID(testUser1.ID).
-		SetTenantID(testTenant1.ID).
+		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
 	require.NoError(t, err)
@@ -1411,7 +1432,7 @@ func TestIncidentService_DeleteIncident_CascadeTenantIsolation(t *testing.T) {
 	// Verify incident still exists (not deleted)
 	incident, err := client.Incident.Get(ctx, testIncident.ID)
 	require.NoError(t, err)
-	assert.Equal(t, testTenant1.ID, incident.TenantID, "Incident should still belong to Tenant 1")
+	assert.Equal(t, testTenant1.ID, requireIncidentWorkItem(t, client, incident).TenantID, "Incident should still belong to Tenant 1")
 
 	// Verify cascade records still exist
 	events, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(testIncident.ID)).All(ctx)
@@ -1438,12 +1459,12 @@ func TestIncidentService_CreateIncidentEvent_Success(t *testing.T) {
 
 	testUser, err := createIncidentTestUser(ctx, client, testTenant.ID, "event")
 	require.NoError(t, err)
+	workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "Event incident", common.IncidentStatusNew, "medium")
 
 	testIncident, err := client.Incident.Create().
 		SetSeverity("medium").
 		SetIncidentNumber("INC-EVT-001").
-		SetReporterID(testUser.ID).
-		SetTenantID(testTenant.ID).
+		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
 	require.NoError(t, err)
@@ -1497,23 +1518,22 @@ func TestIncidentService_GetIncidentStats(t *testing.T) {
 
 	for _, s := range statuses {
 		for i := 0; i < s.count; i++ {
+			workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, fmt.Sprintf("Stats Test %s %d", s.status, i), s.status, s.priority)
+			workItemUpdate := client.Ticket.UpdateOneID(workItem.ID).SetDescription("Test description")
+			if s.status == "resolved" {
+				workItemUpdate.SetResolvedAt(time.Now())
+			} else if s.status == "closed" {
+				workItemUpdate.SetResolvedAt(time.Now().Add(-time.Hour)).SetClosedAt(time.Now())
+			}
+			_, err := workItemUpdate.Save(ctx)
+			require.NoError(t, err)
 			incidentBuilder := client.Incident.Create().
 				SetSeverity(s.severity).
 				SetIncidentNumber(fmt.Sprintf("INC-STATS-%s-%d", s.status, i)).
-				SetReporterID(testUser.ID).
-				SetTenantID(testTenant.ID).
+				SetWorkItemID(workItem.ID).
 				SetDetectedAt(time.Now())
-
-			if s.status == "resolved" {
-				incidentBuilder.SetResolvedAt(time.Now())
-			} else if s.status == "closed" {
-				incidentBuilder.SetResolvedAt(time.Now().Add(-1 * time.Hour))
-				incidentBuilder.SetClosedAt(time.Now())
-			}
-
-			incidentEntity, err := incidentBuilder.Save(ctx)
+			_, err = incidentBuilder.Save(ctx)
 			require.NoError(t, err)
-			setIncidentFixtureWorkItemFields(t, ctx, client, incidentEntity, fmt.Sprintf("Stats Test %s %d", s.status, i), "Test description", s.status, s.priority)
 		}
 	}
 
@@ -1544,16 +1564,15 @@ func TestIncidentService_EscalateToMajorIncident_Success(t *testing.T) {
 	require.NoError(t, err)
 	testUser, err := createIncidentTestUser(ctx, client, testTenant.ID, "major")
 	require.NoError(t, err)
+	workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "数据库主从切换失败", common.IncidentStatusInProgress, "high")
 
 	inc, err := client.Incident.Create().
 		SetSeverity("high").
 		SetIncidentNumber("INC-MAJOR-001").
-		SetReporterID(testUser.ID).
-		SetTenantID(testTenant.ID).
+		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
 	require.NoError(t, err)
-	setIncidentFixtureWorkItemFields(t, ctx, client, inc, "数据库主从切换失败", "desc", "in_progress", "high")
 
 	req := &dto.EscalateMajorIncidentRequest{
 		ImpactScope:       "critical",
@@ -1569,7 +1588,7 @@ func TestIncidentService_EscalateToMajorIncident_Success(t *testing.T) {
 	assert.Equal(t, "critical", updated.Severity)
 	assert.Equal(t, 1, updated.EscalationLevel)
 	assert.False(t, updated.EscalatedAt.IsZero())
-	assert.Equal(t, inc.Version+1, updated.Version)
+	assert.Equal(t, workItem.Version+1, requireIncidentWorkItem(t, client, updated).Version)
 
 	majorInfo, ok := updated.ImpactAnalysis["majorIncident"].(map[string]interface{})
 	require.True(t, ok, "impact_analysis 应包含 majorIncident 评估信息")
@@ -1610,16 +1629,15 @@ func TestIncidentService_EscalateToMajorIncident_Rejections(t *testing.T) {
 	}
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "拒绝场景 "+tt.name, tt.status, "high")
 			inc, err := client.Incident.Create().
 				SetSeverity("high").
 				SetIncidentNumber(fmt.Sprintf("INC-MAJOR-REJ-%d", i)).
-				SetReporterID(testUser.ID).
-				SetTenantID(testTenant.ID).
+				SetWorkItemID(workItem.ID).
 				SetIsMajorIncident(tt.isMajor).
 				SetDetectedAt(time.Now()).
 				Save(ctx)
 			require.NoError(t, err)
-			setIncidentFixtureWorkItemFields(t, ctx, client, inc, "拒绝场景 "+tt.name, "desc", tt.status, "high")
 
 			err = service.EscalateToMajorIncident(ctx, inc.ID, testUser.ID, testTenant.ID, req)
 			require.Error(t, err)
@@ -1630,15 +1648,14 @@ func TestIncidentService_EscalateToMajorIncident_Rejections(t *testing.T) {
 	// 跨租户访问必须失败（fail closed）
 	otherTenant, err := createIncidentTestTenant(ctx, client, "majorother")
 	require.NoError(t, err)
+	workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "跨租户事件", common.IncidentStatusInProgress, "high")
 	inc, err := client.Incident.Create().
 		SetSeverity("high").
 		SetIncidentNumber("INC-MAJOR-CROSS").
-		SetReporterID(testUser.ID).
-		SetTenantID(testTenant.ID).
+		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
 	require.NoError(t, err)
-	setIncidentFixtureWorkItemFields(t, ctx, client, inc, "跨租户事件", "desc", "in_progress", "high")
 	err = service.EscalateToMajorIncident(ctx, inc.ID, testUser.ID, otherTenant.ID, req)
 	require.Error(t, err)
 }

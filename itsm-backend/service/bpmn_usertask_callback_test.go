@@ -79,9 +79,7 @@ func createUserTaskCallbackChange(t *testing.T, client *ent.Client, ctx context.
 		SetTenantID(tenantID).
 		SaveX(ctx)
 	changeEntity := client.Change.Create().
-		SetCreatedBy(requesterID).
 		SetWorkItemID(workItem.ID).
-		SetTenantID(tenantID).
 		SaveX(ctx)
 	return workItem, changeEntity
 }

@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/changepir"
+	"itsm-backend/ent/ticket"
 
 	"go.uber.org/zap"
 )
@@ -33,7 +34,7 @@ func (s *ChangePIRService) CreatePIR(ctx context.Context, req *dto.CreateChangeP
 
 	// 验证变更存在且属于该租户
 	changeEntity, err := s.client.Change.Query().
-		Where(change.ID(req.ChangeID), change.TenantID(tenantID)).
+		Where(change.ID(req.ChangeID), change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())).
 		WithWorkItem().First(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {

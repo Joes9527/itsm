@@ -31,26 +31,26 @@ WHERE NOT EXISTS (SELECT 1 FROM tickets WHERE ticket_number = 'TKT-202602-000008
 -- =============================================
 -- 3. 添加更多事件测试数据（共享字段只写 WorkItem）
 -- =============================================
-INSERT INTO tickets (title, description, status, priority, type, record_class, ticket_number, tenant_id, requester_id, created_at, updated_at)
-SELECT title, description, status, priority, 'incident', 'incident', work_item_number, tenant_id, reporter_id, NOW(), NOW()
+INSERT INTO tickets (title, description, status, priority, type, record_class, ticket_number, tenant_id, requester_id, source, created_at, updated_at)
+SELECT title, description, status, priority, 'incident', 'incident', work_item_number, tenant_id, reporter_id, source, NOW(), NOW()
 FROM (VALUES
-    ('服务器CPU 100%', 'Web服务器CPU使用率持续100%，服务响应缓慢', 'new', 'critical', 'TKT-SEED-INC-000003', 1, 1),
-    ('数据库主从延迟', '数据库主从同步延迟超过5分钟', 'investigating', 'high', 'TKT-SEED-INC-000004', 1, 1),
-    ('网站首页无法访问', '用户报告网站首页无法打开', 'confirmed', 'critical', 'TKT-SEED-INC-000005', 1, 2),
-    ('支付接口报错', '调用支付接口返回500错误', 'in_progress', 'high', 'TKT-SEED-INC-000006', 1, 3)
-) AS v(title, description, status, priority, work_item_number, tenant_id, reporter_id)
+    ('服务器CPU 100%', 'Web服务器CPU使用率持续100%，服务响应缓慢', 'new', 'critical', 'TKT-SEED-INC-000003', 1, 1, 'monitoring'),
+    ('数据库主从延迟', '数据库主从同步延迟超过5分钟', 'investigating', 'high', 'TKT-SEED-INC-000004', 1, 1, 'monitoring'),
+    ('网站首页无法访问', '用户报告网站首页无法打开', 'confirmed', 'critical', 'TKT-SEED-INC-000005', 1, 2, 'user'),
+    ('支付接口报错', '调用支付接口返回500错误', 'in_progress', 'high', 'TKT-SEED-INC-000006', 1, 3, 'user')
+) AS v(title, description, status, priority, work_item_number, tenant_id, reporter_id, source)
 ON CONFLICT DO NOTHING;
 
-INSERT INTO incidents (work_item_id, incident_number, source, type, is_major_incident, reporter_id, tenant_id, detected_at, created_at, updated_at)
-SELECT t.id, v.incident_number, v.source, 'incident', v.is_major, v.reporter_id, v.tenant_id, NOW(), NOW(), NOW()
+INSERT INTO incidents (work_item_id, incident_number, type, is_major_incident, detected_at)
+SELECT t.id, v.incident_number, 'incident', v.is_major, NOW()
 FROM (VALUES
-    ('TKT-SEED-INC-000003', 'INC-202602-000003', 'monitoring', false, 1, 1),
-    ('TKT-SEED-INC-000004', 'INC-202602-000004', 'monitoring', false, 1, 1),
-    ('TKT-SEED-INC-000005', 'INC-202602-000005', 'user', true, 2, 1),
-    ('TKT-SEED-INC-000006', 'INC-202602-000006', 'user', false, 3, 1)
-) AS v(work_item_number, incident_number, source, is_major, reporter_id, tenant_id)
+    ('TKT-SEED-INC-000003', 'INC-202602-000003', false, 1),
+    ('TKT-SEED-INC-000004', 'INC-202602-000004', false, 1),
+    ('TKT-SEED-INC-000005', 'INC-202602-000005', true, 1),
+    ('TKT-SEED-INC-000006', 'INC-202602-000006', false, 1)
+) AS v(work_item_number, incident_number, is_major, tenant_id)
 JOIN tickets t ON t.ticket_number = v.work_item_number AND t.tenant_id = v.tenant_id
-WHERE NOT EXISTS (SELECT 1 FROM incidents i WHERE i.incident_number = v.incident_number AND i.tenant_id = v.tenant_id);
+WHERE NOT EXISTS (SELECT 1 FROM incidents i WHERE i.work_item_id = t.id);
 
 -- =============================================
 -- 4. 添加更多问题测试数据
@@ -63,8 +63,8 @@ FROM (VALUES
     ('网络丢包严重', '跨机房网络经常丢包，影响服务质量', 'identified', 'medium', 'TKT-SEED-PRB-000003', 1, 1)
 ) AS v(title, description, status, priority, work_item_number, tenant_id, created_by)
 ON CONFLICT DO NOTHING;
-INSERT INTO problems (work_item_id, category, created_by, tenant_id, created_at, updated_at)
-SELECT t.id, v.category, v.created_by, v.tenant_id, NOW(), NOW()
+INSERT INTO problems (work_item_id)
+SELECT t.id
 FROM (VALUES
     ('TKT-SEED-PRB-000001', 'performance', 1, 1),
     ('TKT-SEED-PRB-000002', 'performance', 1, 1),
@@ -84,8 +84,8 @@ FROM (VALUES
     ('核心路由切换', '切换到新的核心路由器', 'in_progress', 'urgent', 'TKT-SEED-CHG-000003', 1, 1)
 ) AS v(title, description, status, priority, work_item_number, tenant_id, created_by)
 ON CONFLICT DO NOTHING;
-INSERT INTO changes (work_item_id, justification, type, risk_level, created_by, tenant_id, planned_start_date, planned_end_date, created_at, updated_at)
-SELECT t.id, v.justification, v.change_type, v.risk_level, v.created_by, v.tenant_id, v.planned_start, v.planned_end, NOW(), NOW()
+INSERT INTO changes (work_item_id, justification, type, risk_level, planned_start_date, planned_end_date)
+SELECT t.id, v.justification, v.change_type, v.risk_level, v.planned_start, v.planned_end
 FROM (VALUES
     ('TKT-SEED-CHG-000001', '提升性能和安全性', 'standard', 'medium', 1, 1, NOW() + INTERVAL '1 day', NOW() + INTERVAL '2 days'),
     ('TKT-SEED-CHG-000002', '业务增长需要', 'standard', 'low', 1, 1, NOW() + INTERVAL '3 days', NOW() + INTERVAL '4 days'),

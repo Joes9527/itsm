@@ -4,6 +4,7 @@ DECLARE
     extension_index TEXT;
     expected_record_class TEXT;
     shared_column TEXT;
+    shared_columns TEXT[];
     invalid_link_exists BOOLEAN;
 BEGIN
     FOR extension_table, extension_index, expected_record_class IN
@@ -18,7 +19,23 @@ BEGIN
                 extension_table, current_schema();
         END IF;
 
-        FOREACH shared_column IN ARRAY ARRAY['title', 'description', 'status', 'priority'] LOOP
+        shared_columns := CASE extension_table
+            WHEN 'incidents' THEN ARRAY[
+                'title', 'description', 'status', 'priority', 'reporter_id', 'assignee_id',
+                'category', 'subcategory', 'source', 'tenant_id', 'version', 'created_at',
+                'updated_at', 'resolved_at', 'closed_at', 'deleted_at'
+            ]
+            WHEN 'problems' THEN ARRAY[
+                'title', 'description', 'status', 'priority', 'category', 'assignee_id',
+                'created_by', 'tenant_id', 'created_at', 'updated_at', 'resolved_at',
+                'closed_at', 'deleted_at'
+            ]
+            ELSE ARRAY[
+                'title', 'description', 'status', 'priority', 'assignee_id', 'created_by',
+                'tenant_id', 'related_tickets', 'created_at', 'updated_at'
+            ]
+        END;
+        FOREACH shared_column IN ARRAY shared_columns LOOP
             IF EXISTS (
                 SELECT 1
                 FROM information_schema.columns
@@ -74,13 +91,11 @@ BEGIN
             'SELECT EXISTS ('
             'SELECT 1 FROM %I.%I extension '
             'LEFT JOIN %I.tickets work_item ON work_item.id = extension.work_item_id '
-            'WHERE work_item.id IS NULL '
-            'OR work_item.tenant_id <> extension.tenant_id '
-            'OR work_item.record_class <> %L)',
+            'WHERE work_item.id IS NULL OR work_item.record_class <> %L)',
             current_schema(), extension_table, current_schema(), expected_record_class
         ) INTO invalid_link_exists;
         IF invalid_link_exists THEN
-            RAISE EXCEPTION '% extension has an invalid WorkItem tenant or record-class link',
+            RAISE EXCEPTION '% extension has an invalid WorkItem record-class link',
                 extension_table;
         END IF;
     END LOOP;

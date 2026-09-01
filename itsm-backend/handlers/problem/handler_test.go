@@ -138,6 +138,7 @@ func TestProblemHTTPHandlerCreateGetList(t *testing.T) {
 
 	tenant := createProblemHandlerTenant(t, ctx, client, "http-cgl")
 	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "http-cgl")
+	createProblemHandlerCategory(t, ctx, client, tenant.ID, "backend")
 
 	// 1. Create Problem - Valid
 	createReq := dto.CreateProblemRequest{

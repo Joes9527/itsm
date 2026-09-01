@@ -107,21 +107,27 @@ func ToIncidentResponse(incident *ent.Incident, workItem *ent.Ticket) *IncidentR
 		Impact:          incident.Impact,
 		Urgency:         incident.Urgency,
 		IncidentNumber:  incident.IncidentNumber,
-		ReporterID:      incident.ReporterID,
-		Category:        incident.Category,
-		Subcategory:     incident.Subcategory,
+		ReporterID:      workItem.RequesterID,
 		ImpactAnalysis:  impactAnalysis,
 		RootCause:       rootCause,
 		ResolutionSteps: resolutionSteps,
 		EscalationLevel: incident.EscalationLevel,
 		IsAutomated:     incident.IsAutomated,
 		IsMajorIncident: incident.IsMajorIncident,
-		Source:          incident.Source,
+		Source:          workItem.Source,
 		Metadata:        incident.Metadata,
-		TenantID:        incident.TenantID,
-		Version:         incident.Version, // 乐观锁版本号
-		CreatedAt:       incident.CreatedAt,
-		UpdatedAt:       incident.UpdatedAt,
+		TenantID:        workItem.TenantID,
+		Version:         workItem.Version,
+		CreatedAt:       workItem.CreatedAt,
+		UpdatedAt:       workItem.UpdatedAt,
+	}
+	if category := workItem.Edges.Category; category != nil {
+		if parent := category.Edges.Parent; parent != nil {
+			response.Category = parent.Name
+			response.Subcategory = category.Name
+		} else {
+			response.Category = category.Name
+		}
 	}
 
 	if configurationItems := incident.Edges.ConfigurationItems; configurationItems != nil {
@@ -135,8 +141,8 @@ func ToIncidentResponse(incident *ent.Incident, workItem *ent.Ticket) *IncidentR
 	}
 
 	// Add optional fields if present
-	if incident.AssigneeID > 0 {
-		response.AssigneeID = &incident.AssigneeID
+	if workItem.AssigneeID > 0 {
+		response.AssigneeID = &workItem.AssigneeID
 	}
 	if incident.ConfigurationItemID > 0 {
 		response.ConfigurationItemID = &incident.ConfigurationItemID
@@ -154,12 +160,12 @@ func ToIncidentResponse(incident *ent.Incident, workItem *ent.Ticket) *IncidentR
 		response.EscalatedAt = &incident.EscalatedAt
 	}
 
-	if !incident.ResolvedAt.IsZero() {
-		response.ResolvedAt = &incident.ResolvedAt
+	if !workItem.ResolvedAt.IsZero() {
+		response.ResolvedAt = &workItem.ResolvedAt
 	}
 
-	if !incident.ClosedAt.IsZero() {
-		response.ClosedAt = &incident.ClosedAt
+	if workItem.ClosedAt != nil {
+		response.ClosedAt = workItem.ClosedAt
 	}
 
 	return response

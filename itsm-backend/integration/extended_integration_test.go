@@ -137,9 +137,7 @@ func TestIncidentIntegration(t *testing.T) {
 	require.NoError(t, err)
 	incident, err := client.Incident.Create().
 		SetIncidentNumber(incidentNumber).
-		SetReporterID(user.ID).
 		SetWorkItemID(incidentWorkItem.ID).
-		SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
 	logger.Info("Created incident", "incident_id", incident.ID)
@@ -185,9 +183,7 @@ func TestChangeManagementIntegration(t *testing.T) {
 	require.NoError(t, err)
 	change, err := client.Change.Create().
 		SetType("standard").
-		SetCreatedBy(user.ID).
 		SetWorkItemID(changeWorkItem.ID).
-		SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
 	logger.Info("Created change request", "change_id", change.ID)

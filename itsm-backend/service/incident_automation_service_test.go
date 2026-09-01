@@ -6,8 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/incident"
 	"itsm-backend/ent/incidentalert"
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
@@ -27,15 +29,14 @@ func createAutomationIncident(
 	number string,
 ) *ent.Incident {
 	t.Helper()
+	workItem := createIncidentTestWorkItem(t, ctx, client, tenantID, reporterID, number, common.IncidentStatusNew, "high")
 	entity, err := client.Incident.Create().
 		SetSeverity("high").
 		SetIncidentNumber(number).
-		SetReporterID(reporterID).
-		SetTenantID(tenantID).
+		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
 	require.NoError(t, err)
-	setIncidentFixtureWorkItemFields(t, ctx, client, entity, number, "", "new", "high")
 	return entity
 }
 
@@ -156,7 +157,7 @@ func TestIncidentRuleActionFailureMarksExecutionFailed(t *testing.T) {
 	require.NoError(t, err)
 	rule, err = client.IncidentRule.Get(ctx, rule.ID)
 	require.NoError(t, err)
-	incidentEntity, err = client.Incident.Get(ctx, incidentEntity.ID)
+	incidentEntity, err = client.Incident.Query().Where(incident.IDEQ(incidentEntity.ID)).WithWorkItem().Only(ctx)
 	require.NoError(t, err)
 	engine := NewIncidentRuleEngine(client, zaptest.NewLogger(t).Sugar(), workitemnumber.NewPostgreSQLAllocator())
 

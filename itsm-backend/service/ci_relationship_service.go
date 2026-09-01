@@ -447,7 +447,7 @@ func (s *CIRelationshipService) GetCIImpactAnalysis(ctx context.Context, ciID, t
 	for _, in := range incidents {
 		affectedIncidents = append(affectedIncidents, dto.AffectedIncident{
 			ID: in.ID, Title: in.Edges.WorkItem.Title, Status: in.Edges.WorkItem.Status, Severity: in.Severity,
-			CreatedAt: in.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			CreatedAt: in.Edges.WorkItem.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		})
 	}
 

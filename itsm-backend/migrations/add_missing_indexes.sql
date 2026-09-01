@@ -20,35 +20,31 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS ticket_resolved_at_idx ON tickets (resol
 WHERE resolved_at IS NOT NULL;
 -- 按部门查询
 CREATE INDEX CONCURRENTLY IF NOT EXISTS ticket_tenant_dept_idx ON tickets (tenant_id, department_id);
+-- 按处理人查询（所有专业 WorkItem 共用）
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ticket_tenant_assignee_idx ON tickets (tenant_id, assignee_id)
+WHERE assignee_id IS NOT NULL;
+-- 按请求人查询（Incident reporter / Problem or Change requester）
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ticket_tenant_requester_idx ON tickets (tenant_id, requester_id);
+-- 按权威创建时间排序
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ticket_tenant_created_at_idx ON tickets (tenant_id, created_at);
 -- =====================================================
 -- 2. 事件表 (Incidents) 索引优化 - 高优先级
 -- =====================================================
--- 多租户隔离
-CREATE INDEX CONCURRENTLY IF NOT EXISTS incident_tenant_idx ON incidents (tenant_id);
--- 状态由 WorkItem(tickets) 权威持有；复用 ticket_tenant_status_idx。
--- 按处理人查询
-CREATE INDEX CONCURRENTLY IF NOT EXISTS incident_assignee_idx ON incidents (assignee_id);
--- 按报告人查询
-CREATE INDEX CONCURRENTLY IF NOT EXISTS incident_reporter_idx ON incidents (reporter_id);
--- 按创建时间排序
-CREATE INDEX CONCURRENTLY IF NOT EXISTS incident_created_at_idx ON incidents (created_at);
+-- tenant/status/assignee/reporter/created_at 由 WorkItem(tickets) 权威持有；复用上面的 ticket 索引。
 -- 按严重程度查询
-CREATE INDEX CONCURRENTLY IF NOT EXISTS incident_tenant_severity_idx ON incidents (tenant_id, severity);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS incident_severity_idx ON incidents (severity);
 -- 重大事件标识 (部分索引)
-CREATE INDEX CONCURRENTLY IF NOT EXISTS incident_major_idx ON incidents (tenant_id, is_major_incident)
+CREATE INDEX CONCURRENTLY IF NOT EXISTS incident_major_idx ON incidents (is_major_incident)
 WHERE is_major_incident = true;
 -- =====================================================
 -- 3. 问题表 (Problems) 索引优化 - 中优先级
 -- =====================================================
-CREATE INDEX CONCURRENTLY IF NOT EXISTS problem_tenant_idx ON problems (tenant_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS problem_assignee_idx ON problems (assignee_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS problem_created_at_idx ON problems (created_at);
+-- tenant/assignee/created_at 由 WorkItem(tickets) 权威持有；复用上面的 ticket 索引。
 -- =====================================================
 -- 4. 变更表 (Changes) 索引优化 - 中优先级
 -- =====================================================
-CREATE INDEX CONCURRENTLY IF NOT EXISTS change_tenant_idx ON changes (tenant_id);
+-- tenant/assignee 由 WorkItem(tickets) 权威持有；这里只保留专业字段索引。
 CREATE INDEX CONCURRENTLY IF NOT EXISTS change_type_idx ON changes (type);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS change_assignee_idx ON changes (assignee_id);
 -- =====================================================
 -- 5. 配置项表 (Configuration Items) 索引优化 - 高优先级
 -- =====================================================

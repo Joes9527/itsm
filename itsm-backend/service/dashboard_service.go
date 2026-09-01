@@ -15,6 +15,7 @@ import (
 	"itsm-backend/ent/sladefinition"
 	"itsm-backend/ent/slaviolation"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/ent/ticketcategory"
 	"itsm-backend/ent/user"
 
 	"go.uber.org/zap"
@@ -994,8 +995,11 @@ func (s *DashboardService) getIncidentDistribution(ctx context.Context, tenantID
 	for i, category := range categories {
 		count, err := s.client.Incident.Query().
 			Where(
-				incident.TenantIDEQ(tenantID),
-				incident.CategoryEQ(category),
+				incident.HasWorkItemWith(
+					ticket.TenantIDEQ(tenantID),
+					ticket.DeletedAtIsNil(),
+					ticket.HasCategoryWith(ticketcategory.NameEQ(category)),
+				),
 			).
 			Count(ctx)
 		if err != nil {

@@ -458,8 +458,6 @@ func TestChangeCallbackBusinessEffectSurvivesAdvanceFailureWithoutReplay(t *test
 		SetType("normal").
 		SetRiskLevel("medium").
 		SetImpactScope("low").
-		SetCreatedBy(f.actor.ID).
-		SetTenantID(f.tenant.ID).
 		SetWorkItemID(workItem.ID).
 		SaveX(f.userCtx)
 

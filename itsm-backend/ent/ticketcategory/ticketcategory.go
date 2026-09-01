@@ -60,11 +60,13 @@ const (
 	EdgeWorkflow = "workflow"
 	// Table holds the table name of the ticketcategory in the database.
 	Table = "ticket_categories"
-	// TicketsTable is the table that holds the tickets relation/edge. The primary key declared below.
-	TicketsTable = "ticket_category_tickets"
+	// TicketsTable is the table that holds the tickets relation/edge.
+	TicketsTable = "tickets"
 	// TicketsInverseTable is the table name for the Ticket entity.
 	// It exists in this package in order to avoid circular dependency with the "ticket" package.
 	TicketsInverseTable = "tickets"
+	// TicketsColumn is the table column denoting the tickets relation/edge.
+	TicketsColumn = "category_id"
 	// ChildrenTable is the table that holds the children relation/edge.
 	ChildrenTable = "ticket_categories"
 	// ChildrenColumn is the table column denoting the children relation/edge.
@@ -110,12 +112,6 @@ var Columns = []string{
 	FieldCreatedAt,
 	FieldUpdatedAt,
 }
-
-var (
-	// TicketsPrimaryKey and TicketsColumn2 are the table columns denoting the
-	// primary key for the tickets relation (M2M).
-	TicketsPrimaryKey = []string{"ticket_category_id", "ticket_id"}
-)
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
@@ -295,7 +291,7 @@ func newTicketsStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(TicketsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2M, false, TicketsTable, TicketsPrimaryKey...),
+		sqlgraph.Edge(sqlgraph.O2M, false, TicketsTable, TicketsColumn),
 	)
 }
 func newChildrenStep() *sqlgraph.Step {

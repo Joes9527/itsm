@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/ent/ticketcategory"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,11 +31,25 @@ type dbBackedIncidentService struct {
 }
 
 func (s *dbBackedIncidentService) CreateIncident(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, userID int) (*dto.IncidentResponse, error) {
+	workItem, err := s.client.Ticket.Create().
+		SetTitle(req.Title).
+		SetDescription(req.Description).
+		SetStatus(common.IncidentStatusNew).
+		SetPriority(req.Priority).
+		SetType("incident").
+		SetRecordClass("incident").
+		SetTicketNumber("TKT-BPMN-INCIDENT-FIXTURE").
+		SetRequesterID(userID).
+		SetOpenedByID(userID).
+		SetTenantID(tenantID).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
 	inc, err := s.client.Incident.Create().
 		SetType(req.Type).
 		SetSeverity(req.Severity).
-		SetReporterID(userID).
-		SetTenantID(tenantID).
+		SetWorkItemID(workItem.ID).
 		Save(ctx)
 	if err != nil {
 		return nil, err
@@ -43,21 +58,18 @@ func (s *dbBackedIncidentService) CreateIncident(ctx context.Context, req *dto.C
 }
 
 func (s *dbBackedIncidentService) AssignIncident(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentResponse, error) {
-	updated, err := s.client.Incident.Update().
-		Where(incident.ID(id), incident.TenantID(tenantID)).
-		SetAssigneeID(assigneeID).
-		Save(ctx)
+	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.HasWorkItemWith(ticket.TenantID(tenantID))).Only(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if updated == 0 {
-		return nil, fmt.Errorf("incident not found")
+	if _, err := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID)).SetAssigneeID(assigneeID).SetStatus(common.IncidentStatusAssigned).Save(ctx); err != nil {
+		return nil, err
 	}
 	return &dto.IncidentResponse{ID: id}, nil
 }
 
 func (s *dbBackedIncidentService) UpdateStatus(ctx context.Context, id int, status string, tenantID int) (*dto.IncidentResponse, error) {
-	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.TenantID(tenantID)).Only(ctx)
+	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.HasWorkItemWith(ticket.TenantID(tenantID))).Only(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +85,7 @@ func (s *dbBackedIncidentService) UpdateStatus(ctx context.Context, id int, stat
 // 一节的注释），保持这个 fixture 与真实实现行为一致。
 
 func (s *dbBackedIncidentService) EscalateIncidentLevel(ctx context.Context, id, tenantID, level int) (*dto.IncidentResponse, error) {
-	current, err := s.client.Incident.Query().Where(incident.ID(id), incident.TenantID(tenantID)).Only(ctx)
+	current, err := s.client.Incident.Query().Where(incident.ID(id), incident.HasWorkItemWith(ticket.TenantID(tenantID))).Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, fmt.Errorf("incident not found")
@@ -84,7 +96,7 @@ func (s *dbBackedIncidentService) EscalateIncidentLevel(ctx context.Context, id,
 		level = current.EscalationLevel + 1
 	}
 	updated, err := s.client.Incident.UpdateOneID(id).
-		Where(incident.TenantID(tenantID)).
+		Where(incident.HasWorkItemWith(ticket.TenantID(tenantID))).
 		SetEscalationLevel(level).
 		SetEscalatedAt(time.Now()).
 		Save(ctx)
@@ -98,49 +110,29 @@ func (s *dbBackedIncidentService) EscalateIncidentLevel(ctx context.Context, id,
 }
 
 func (s *dbBackedIncidentService) ResolveIncidentForWorkflow(ctx context.Context, id, tenantID int, resolution string) (*dto.IncidentResponse, error) {
-	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.TenantID(tenantID)).Only(ctx)
+	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.HasWorkItemWith(ticket.TenantID(tenantID))).Only(ctx)
 	if err != nil {
 		return nil, err
 	}
-	updated, err := s.client.Incident.Update().
-		Where(incident.ID(id), incident.TenantID(tenantID)).
-		SetResolvedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if updated == 0 {
-		return nil, fmt.Errorf("incident not found")
-	}
-	if _, err := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID)).SetStatus(common.IncidentStatusResolved).Save(ctx); err != nil {
+	if _, err := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID)).SetStatus(common.IncidentStatusResolved).SetResolvedAt(time.Now()).Save(ctx); err != nil {
 		return nil, err
 	}
 	return &dto.IncidentResponse{ID: id}, nil
 }
 
 func (s *dbBackedIncidentService) CloseIncidentForWorkflow(ctx context.Context, id, tenantID int, feedback string) (*dto.IncidentResponse, error) {
-	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.TenantID(tenantID)).Only(ctx)
+	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.HasWorkItemWith(ticket.TenantID(tenantID))).Only(ctx)
 	if err != nil {
 		return nil, err
 	}
-	updated, err := s.client.Incident.Update().
-		Where(incident.ID(id), incident.TenantID(tenantID)).
-		SetClosedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if updated == 0 {
-		return nil, fmt.Errorf("incident not found")
-	}
-	if _, err := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID)).SetStatus(common.IncidentStatusClosed).Save(ctx); err != nil {
+	if _, err := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID)).SetStatus(common.IncidentStatusClosed).SetClosedAt(time.Now()).Save(ctx); err != nil {
 		return nil, err
 	}
 	return &dto.IncidentResponse{ID: id}, nil
 }
 
 func (s *dbBackedIncidentService) AcknowledgeIncidentForWorkflow(ctx context.Context, id, tenantID int) (*dto.IncidentResponse, error) {
-	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.TenantID(tenantID)).Only(ctx)
+	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.HasWorkItemWith(ticket.TenantID(tenantID))).Only(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -151,20 +143,17 @@ func (s *dbBackedIncidentService) AcknowledgeIncidentForWorkflow(ctx context.Con
 }
 
 func (s *dbBackedIncidentService) UpdateIncidentForWorkflow(ctx context.Context, id, tenantID int, title, description, priority, severity, status string) (*dto.IncidentResponse, error) {
-	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.TenantID(tenantID)).Only(ctx)
+	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.HasWorkItemWith(ticket.TenantID(tenantID))).Only(ctx)
 	if err != nil {
 		return nil, err
 	}
-	q := s.client.Incident.Update().Where(incident.ID(id), incident.TenantID(tenantID))
 	if severity != "" {
-		q.SetSeverity(severity)
-	}
-	updated, err := q.Save(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if updated == 0 {
-		return nil, fmt.Errorf("incident not found")
+		if _, err := s.client.Incident.UpdateOneID(id).
+			Where(incident.HasWorkItemWith(ticket.TenantID(tenantID))).
+			SetSeverity(severity).
+			Save(ctx); err != nil {
+			return nil, err
+		}
 	}
 	workItemUpdate := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID))
 	if title != "" {
@@ -186,26 +175,19 @@ func (s *dbBackedIncidentService) UpdateIncidentForWorkflow(ctx context.Context,
 }
 
 func (s *dbBackedIncidentService) CategorizeIncidentForWorkflow(ctx context.Context, id, tenantID int, category, subcategory string) (*dto.IncidentResponse, error) {
-	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.TenantID(tenantID)).Only(ctx)
+	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.HasWorkItemWith(ticket.TenantID(tenantID))).Only(ctx)
 	if err != nil {
 		return nil, err
 	}
-	q := s.client.Incident.Update().
-		Where(incident.ID(id), incident.TenantID(tenantID))
+	workItemUpdate := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID))
 	if category != "" {
-		q.SetCategory(category)
+		categoryEntity, categoryErr := s.client.TicketCategory.Query().Where(ticketcategory.TenantID(tenantID), ticketcategory.Code(category)).Only(ctx)
+		if categoryErr != nil {
+			return nil, categoryErr
+		}
+		workItemUpdate.SetCategoryID(categoryEntity.ID)
 	}
-	if subcategory != "" {
-		q.SetSubcategory(subcategory)
-	}
-	updated, err := q.Save(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if updated == 0 {
-		return nil, fmt.Errorf("incident not found")
-	}
-	if _, err := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID)).SetStatus(common.IncidentStatusTriaged).Save(ctx); err != nil {
+	if _, err := workItemUpdate.SetStatus(common.IncidentStatusTriaged).Save(ctx); err != nil {
 		return nil, err
 	}
 	return &dto.IncidentResponse{ID: id}, nil
@@ -238,12 +220,12 @@ func setupIncidentHandlerFixture(t *testing.T) (*ent.Client, *IncidentServiceTas
 	require.NoError(t, err)
 	workItem, err := client.Ticket.Create().SetTitle("测试事件").SetStatus(common.IncidentStatusNew).SetPriority("medium").SetType("incident").SetRecordClass("incident").SetTicketNumber("TKT-INCIDENT-HANDLER").SetRequesterID(reporter.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
+	_, err = client.TicketCategory.Create().SetName("Network").SetCode("network").SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
 
 	inc, err := client.Incident.Create().
 		SetIncidentNumber("INC-IH-1").
-		SetReporterID(reporter.ID).
 		SetWorkItemID(workItem.ID).
-		SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
 
@@ -290,7 +272,7 @@ func TestIncidentServiceTaskHandler_AssignIncident_NoAssignee_IsNoOp(t *testing.
 			after, err := client.Incident.Get(ctx, inc.ID)
 			require.NoError(t, err)
 			assert.Equal(t, common.IncidentStatusNew, requireHandlerIncidentWorkItem(t, client, after).Status, "空态跳过时不应该改状态")
-			assert.Zero(t, after.AssigneeID, "空态跳过时不应该写处理人")
+			assert.Zero(t, requireHandlerIncidentWorkItem(t, client, after).AssigneeID, "空态跳过时不应该写处理人")
 		})
 	}
 }
@@ -311,7 +293,7 @@ func TestIncidentServiceTaskHandler_AssignIncident_ValidAssignee(t *testing.T) {
 
 	after, err := client.Incident.Get(ctx, inc.ID)
 	require.NoError(t, err)
-	assert.Equal(t, assigneeID, after.AssigneeID)
+	assert.Equal(t, assigneeID, requireHandlerIncidentWorkItem(t, client, after).AssigneeID)
 	assert.Equal(t, common.IncidentStatusAssigned, requireHandlerIncidentWorkItem(t, client, after).Status)
 }
 
@@ -344,7 +326,7 @@ func TestIncidentServiceTaskHandler_AssignIncident_CrossTenant(t *testing.T) {
 
 	after, err := client.Incident.Get(context.Background(), inc.ID)
 	require.NoError(t, err)
-	assert.Zero(t, after.AssigneeID, "跨租户请求不得写入处理人")
+	assert.Zero(t, requireHandlerIncidentWorkItem(t, client, after).AssigneeID, "跨租户请求不得写入处理人")
 }
 
 // TestIncidentServiceTaskHandler_TenantScopedActions 覆盖 assign 之外六个动作的
@@ -376,7 +358,7 @@ func TestIncidentServiceTaskHandler_TenantScopedActions(t *testing.T) {
 				after, err := client.Incident.Get(context.Background(), incID)
 				require.NoError(t, err)
 				assert.Equal(t, common.IncidentStatusResolved, requireHandlerIncidentWorkItem(t, client, after).Status)
-				assert.False(t, after.ResolvedAt.IsZero())
+				assert.NotNil(t, requireHandlerIncidentWorkItem(t, client, after).ResolvedAt)
 			},
 		},
 		{
@@ -386,7 +368,7 @@ func TestIncidentServiceTaskHandler_TenantScopedActions(t *testing.T) {
 				after, err := client.Incident.Get(context.Background(), incID)
 				require.NoError(t, err)
 				assert.Equal(t, common.IncidentStatusClosed, requireHandlerIncidentWorkItem(t, client, after).Status)
-				assert.False(t, after.ClosedAt.IsZero())
+				assert.NotNil(t, requireHandlerIncidentWorkItem(t, client, after).ClosedAt)
 			},
 		},
 		{
@@ -408,7 +390,10 @@ func TestIncidentServiceTaskHandler_TenantScopedActions(t *testing.T) {
 				after, err := client.Incident.Get(context.Background(), incID)
 				require.NoError(t, err)
 				assert.Equal(t, common.IncidentStatusTriaged, requireHandlerIncidentWorkItem(t, client, after).Status)
-				assert.Equal(t, "network", after.Category)
+				workItem := requireHandlerIncidentWorkItem(t, client, after)
+				categoryEntity, err := workItem.QueryCategory().Only(context.Background())
+				require.NoError(t, err)
+				assert.Equal(t, "network", categoryEntity.Code)
 			},
 		},
 		{

@@ -27,14 +27,8 @@ type Change struct {
 	ImpactScope string `json:"impact_scope,omitempty"`
 	// 风险等级
 	RiskLevel string `json:"risk_level,omitempty"`
-	// 处理人ID
-	AssigneeID int `json:"assignee_id,omitempty"`
-	// 创建人ID
-	CreatedBy int `json:"created_by,omitempty"`
 	// 关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入
 	WorkItemID int `json:"work_item_id,omitempty"`
-	// 租户ID
-	TenantID int `json:"tenant_id,omitempty"`
 	// 计划开始时间
 	PlannedStartDate time.Time `json:"planned_start_date,omitempty"`
 	// 计划结束时间
@@ -49,12 +43,6 @@ type Change struct {
 	RollbackPlan string `json:"rollback_plan,omitempty"`
 	// 受影响的配置项
 	AffectedCis []string `json:"affected_cis,omitempty"`
-	// 相关工单
-	RelatedTickets []string `json:"related_tickets,omitempty"`
-	// 创建时间
-	CreatedAt time.Time `json:"created_at,omitempty"`
-	// 更新时间
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the ChangeQuery when eager-loading is set.
 	Edges                   ChangeEdges `json:"edges"`
@@ -109,13 +97,13 @@ func (*Change) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case change.FieldAffectedCis, change.FieldRelatedTickets:
+		case change.FieldAffectedCis:
 			values[i] = new([]byte)
-		case change.FieldID, change.FieldAssigneeID, change.FieldCreatedBy, change.FieldWorkItemID, change.FieldTenantID:
+		case change.FieldID, change.FieldWorkItemID:
 			values[i] = new(sql.NullInt64)
 		case change.FieldJustification, change.FieldType, change.FieldImpactScope, change.FieldRiskLevel, change.FieldImplementationPlan, change.FieldRollbackPlan:
 			values[i] = new(sql.NullString)
-		case change.FieldPlannedStartDate, change.FieldPlannedEndDate, change.FieldActualStartDate, change.FieldActualEndDate, change.FieldCreatedAt, change.FieldUpdatedAt:
+		case change.FieldPlannedStartDate, change.FieldPlannedEndDate, change.FieldActualStartDate, change.FieldActualEndDate:
 			values[i] = new(sql.NullTime)
 		case change.ForeignKeys[0]: // standard_change_changes
 			values[i] = new(sql.NullInt64)
@@ -164,29 +152,11 @@ func (_m *Change) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.RiskLevel = value.String
 			}
-		case change.FieldAssigneeID:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field assignee_id", values[i])
-			} else if value.Valid {
-				_m.AssigneeID = int(value.Int64)
-			}
-		case change.FieldCreatedBy:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field created_by", values[i])
-			} else if value.Valid {
-				_m.CreatedBy = int(value.Int64)
-			}
 		case change.FieldWorkItemID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field work_item_id", values[i])
 			} else if value.Valid {
 				_m.WorkItemID = int(value.Int64)
-			}
-		case change.FieldTenantID:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
-			} else if value.Valid {
-				_m.TenantID = int(value.Int64)
 			}
 		case change.FieldPlannedStartDate:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -231,26 +201,6 @@ func (_m *Change) assignValues(columns []string, values []any) error {
 				if err := json.Unmarshal(*value, &_m.AffectedCis); err != nil {
 					return fmt.Errorf("unmarshal field affected_cis: %w", err)
 				}
-			}
-		case change.FieldRelatedTickets:
-			if value, ok := values[i].(*[]byte); !ok {
-				return fmt.Errorf("unexpected type %T for field related_tickets", values[i])
-			} else if value != nil && len(*value) > 0 {
-				if err := json.Unmarshal(*value, &_m.RelatedTickets); err != nil {
-					return fmt.Errorf("unmarshal field related_tickets: %w", err)
-				}
-			}
-		case change.FieldCreatedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field created_at", values[i])
-			} else if value.Valid {
-				_m.CreatedAt = value.Time
-			}
-		case change.FieldUpdatedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
-			} else if value.Valid {
-				_m.UpdatedAt = value.Time
 			}
 		case change.ForeignKeys[0]:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -322,17 +272,8 @@ func (_m *Change) String() string {
 	builder.WriteString("risk_level=")
 	builder.WriteString(_m.RiskLevel)
 	builder.WriteString(", ")
-	builder.WriteString("assignee_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.AssigneeID))
-	builder.WriteString(", ")
-	builder.WriteString("created_by=")
-	builder.WriteString(fmt.Sprintf("%v", _m.CreatedBy))
-	builder.WriteString(", ")
 	builder.WriteString("work_item_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.WorkItemID))
-	builder.WriteString(", ")
-	builder.WriteString("tenant_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.TenantID))
 	builder.WriteString(", ")
 	builder.WriteString("planned_start_date=")
 	builder.WriteString(_m.PlannedStartDate.Format(time.ANSIC))
@@ -354,15 +295,6 @@ func (_m *Change) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("affected_cis=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AffectedCis))
-	builder.WriteString(", ")
-	builder.WriteString("related_tickets=")
-	builder.WriteString(fmt.Sprintf("%v", _m.RelatedTickets))
-	builder.WriteString(", ")
-	builder.WriteString("created_at=")
-	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("updated_at=")
-	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteByte(')')
 	return builder.String()
 }
