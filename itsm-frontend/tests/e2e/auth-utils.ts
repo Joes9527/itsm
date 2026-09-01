@@ -3,7 +3,7 @@
  * 会话只通过后端 Set-Cookie 建立，测试代码不读取或写入 JWT。
  */
 
-import type { APIRequestContext, Page } from '@playwright/test';
+import type { APIRequestContext, APIResponse, Page } from '@playwright/test';
 import { test as base, expect } from '@playwright/test';
 
 export interface LoginCredentials {
@@ -17,6 +17,50 @@ export const DEFAULT_LOGIN: LoginCredentials = {
   username: 'admin',
   password: 'admin123',
 };
+
+export type MutationMethod = 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+
+export interface CSRFMutationOptions {
+  data?: unknown;
+  headers?: Record<string, string>;
+  timeout?: number;
+}
+
+/**
+ * Canonical browser/API mutation boundary. The backend rotates the CSRF token
+ * after every successful mutation, so callers must never cache the header.
+ */
+export async function mutateWithCSRF(
+  request: APIRequestContext,
+  method: MutationMethod,
+  url: string,
+  options: CSRFMutationOptions = {}
+): Promise<APIResponse> {
+  const appURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
+  const targetURL = new URL(url, appURL);
+  const csrfURL = new URL('/api/v1/csrf-token', targetURL.origin);
+  const csrfResponse = await request.get(csrfURL.toString());
+  if (!csrfResponse.ok()) {
+    throw new Error(`CSRF bootstrap failed: HTTP ${csrfResponse.status()}`);
+  }
+  const csrfJSON = (await csrfResponse.json()) as {
+    code?: number;
+    data?: { csrf_token?: string };
+  };
+  const csrfToken = csrfJSON.data?.csrf_token;
+  if (csrfJSON.code !== 0 || !csrfToken) {
+    throw new Error('CSRF bootstrap returned no token');
+  }
+  return request.fetch(targetURL.toString(), {
+    method,
+    data: options.data,
+    headers: {
+      ...options.headers,
+      'X-CSRF-Token': csrfToken,
+    },
+    timeout: options.timeout,
+  });
+}
 
 export async function establishSession(
   request: APIRequestContext,
@@ -95,13 +139,7 @@ export async function establishPageSession(
 
 export async function logoutSession(page: Page): Promise<void> {
   const appURL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
-  const csrfResponse = await page.request.get(`${appURL}/api/v1/csrf-token`);
-  if (!csrfResponse.ok()) throw new Error(`CSRF bootstrap failed: HTTP ${csrfResponse.status()}`);
-  const csrfJSON = (await csrfResponse.json()) as { code?: number; data?: { csrf_token?: string } };
-  const csrfToken = csrfJSON.data?.csrf_token;
-  if (csrfJSON.code !== 0 || !csrfToken) throw new Error('CSRF bootstrap returned no token');
-  const response = await page.request.post(`${appURL}/api/v1/auth/logout`, {
-    headers: { 'X-CSRF-Token': csrfToken },
+  const response = await mutateWithCSRF(page.request, 'POST', `${appURL}/api/v1/auth/logout`, {
     data: {},
   });
   if (!response.ok()) throw new Error(`登出失败: HTTP ${response.status()}`);

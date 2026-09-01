@@ -2,22 +2,10 @@
  * SLA 监控完整 E2E 测试
  * 覆盖 SLA 定义、监控、告警、报表等核心功能
  */
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import { loginAs, TEST_USERS } from '../utils/test-utils';
-import { establishSession } from '../auth-utils';
+import { establishSession, mutateWithCSRF } from '../auth-utils';
 import { TicketPage } from '../utils/page-objects/TicketPage';
-
-async function csrfHeaders(request: APIRequestContext, apiUrl: string) {
-  const response = await request.get(`${apiUrl}/api/v1/csrf-token`);
-  expect(response.status()).toBe(200);
-  const body = (await response.json()) as { data?: { csrf_token?: string } };
-  expect(body.data?.csrf_token).toEqual(expect.any(String));
-  expect(body.data!.csrf_token!.length).toBeGreaterThan(20);
-  return {
-    'Content-Type': 'application/json',
-    'X-CSRF-Token': body.data!.csrf_token!,
-  };
-}
 
 test.describe('SLA 监控完整测试', () => {
   test('SLA monitor loads and refreshes the canonical monitoring projection', async ({ page }) => {
@@ -72,9 +60,8 @@ test.describe('SLA 监控完整测试', () => {
       await establishSession(request, TEST_USERS.admin, apiUrl);
 
       // 获取 SLA 监控数据
-      const response = await request.post(`${apiUrl}/api/v1/sla/monitoring`, {
+      const response = await mutateWithCSRF(request, 'POST', `${apiUrl}/api/v1/sla/monitoring`, {
         data: {},
-        headers: await csrfHeaders(request, apiUrl),
       });
 
       expect(response.status()).toBe(200);
@@ -141,9 +128,8 @@ test.describe('SLA 监控 API 集成测试', () => {
     expect(slaData).toHaveProperty('data');
 
     // 3. 获取 SLA 监控数据
-    const monitorResponse = await request.post(`${apiUrl}/api/v1/sla/monitoring`, {
+    const monitorResponse = await mutateWithCSRF(request, 'POST', `${apiUrl}/api/v1/sla/monitoring`, {
       data: {},
-      headers: await csrfHeaders(request, apiUrl),
     });
     expect(monitorResponse.status()).toBe(200);
     const monitorData = await monitorResponse.json();

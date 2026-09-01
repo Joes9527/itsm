@@ -14,7 +14,12 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { DEFAULT_LOGIN, establishSession, loginAndReturn as loginAsAdmin } from './auth-utils';
+import {
+  DEFAULT_LOGIN,
+  establishSession,
+  loginAndReturn as loginAsAdmin,
+  mutateWithCSRF,
+} from './auth-utils';
 
 const BASE = 'http://localhost:3000';
 const API = 'http://localhost:8090';
@@ -54,7 +59,7 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
     await loginAsAdmin(page);
 
     // 直接通过 API 创建（避免 UI 字段差异）
-    const apiResp = await page.request.post(`${API}/api/v1/tickets`, {
+    const apiResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/tickets`, {
       data: {
         title: `E2E 完整生命周期 ${Date.now()}`,
         description: 'E2E 测试工单，验证完整生命周期流程',
@@ -66,19 +71,19 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
     const ticketId = (await apiResp.json()).data.id;
 
     // Accept
-    const acceptResp = await page.request.post(`${API}/api/v1/tickets/workflow/accept`, {
+    const acceptResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/tickets/workflow/accept`, {
       data: { ticket_id: ticketId },
     });
     expect(acceptResp.status()).toBe(200);
 
     // Resolve
-    const resolveResp = await page.request.post(`${API}/api/v1/tickets/workflow/resolve`, {
+    const resolveResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/tickets/workflow/resolve`, {
       data: { ticket_id: ticketId, resolution: '已修复', resolutionCategory: 'code_defect' },
     });
     expect(resolveResp.status()).toBe(200);
 
     // Close
-    const closeResp = await page.request.post(`${API}/api/v1/tickets/workflow/close`, {
+    const closeResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/tickets/workflow/close`, {
       data: { ticket_id: ticketId, closeNotes: '测试关闭', closeReason: '完成' },
     });
     expect(closeResp.status()).toBe(200);
@@ -103,7 +108,7 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
   test('3.1 事件创建→确认→评论→根因→解决→关闭 完整闭环', async ({ page }) => {
     await loginAsAdmin(page);
 
-    const apiResp = await page.request.post(`${API}/api/v1/incidents`, {
+    const apiResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/incidents`, {
       data: {
         title: `E2E 事件 ${Date.now()}`,
         description: 'E2E 测试事件，验证完整生命周期',
@@ -117,21 +122,21 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
     const incId = (await apiResp.json()).data.id;
 
     // 4 个新端点
-    const ackResp = await page.request.post(`${API}/api/v1/incidents/${incId}/acknowledge`, { data: { comment: '已确认' } });
+    const ackResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/incidents/${incId}/acknowledge`, { data: { comment: '已确认' } });
     expect(ackResp.status()).toBe(200);
 
-    const cmtResp = await page.request.post(`${API}/api/v1/incidents/${incId}/comments`, { data: { content: '处理中', isInternal: false } });
+    const cmtResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/incidents/${incId}/comments`, { data: { content: '处理中', isInternal: false } });
     expect(cmtResp.status()).toBe(200);
 
-    const rcaResp = await page.request.put(`${API}/api/v1/incidents/${incId}/root-cause`, {
+    const rcaResp = await mutateWithCSRF(page.request, 'PUT', `${API}/api/v1/incidents/${incId}/root-cause`, {
       data: { rootCause: '连接池耗尽', causeCategory: 'resource_exhaustion' },
     });
     expect(rcaResp.status()).toBe(200);
 
-    const resResp = await page.request.post(`${API}/api/v1/incidents/${incId}/resolve`, { data: { resolution: '已恢复', resolutionCategory: 'environment' } });
+    const resResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/incidents/${incId}/resolve`, { data: { resolution: '已恢复', resolutionCategory: 'environment' } });
     expect(resResp.status()).toBe(200);
 
-    const clsResp = await page.request.post(`${API}/api/v1/incidents/${incId}/close`, { data: { comment: '已关闭' } });
+    const clsResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/incidents/${incId}/close`, { data: { comment: '已关闭' } });
     expect(clsResp.status()).toBe(200);
   });
 
@@ -140,7 +145,7 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
     await loginAsAdmin(page);
     const articleTitle = `E2E 知识 ${Date.now()}`;
 
-    const createResp = await page.request.post(`${API}/api/v1/knowledge-articles`, {
+    const createResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/knowledge-articles`, {
       data: {
         title: articleTitle,
         content: '这是 E2E 测试创建的知识库文章内容',
@@ -178,7 +183,7 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
     const catalogName = `E2E 服务目录 ${Date.now()}`;
 
     // 创建服务目录
-    const catResp = await page.request.post(`${API}/api/v1/service-catalogs`, {
+    const catResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/service-catalogs`, {
       data: {
         name: catalogName,
         description: 'E2E 测试用服务目录',
@@ -191,7 +196,7 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
     const catId = (await catResp.json()).data.id;
 
     // 申请 - 必填 compliance_ack=true, expire_at
-    const reqResp = await page.request.post(`${API}/api/v1/service-requests`, {
+    const reqResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/service-requests`, {
       data: {
         catalog_id: catId,
         title: `E2E 申请 ${Date.now()}`,
@@ -204,7 +209,7 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
     const reqId = (await reqResp.json()).data.id;
 
     // 审批
-    const appResp = await page.request.post(`${API}/api/v1/service-requests/${reqId}/approval`, {
+    const appResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/service-requests/${reqId}/approval`, {
       data: { action: 'approve', comment: '审批通过' },
     });
     expect(appResp.status()).toBe(200);
@@ -234,7 +239,7 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
     expect(names).toContain('console');
 
     // 启用 console
-    const provResp = await page.request.post(`${API}/api/v1/connectors/configs`, {
+    const provResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/connectors/configs`, {
       data: { name: 'console', enabled: true, settings: { debug_channel: 'stdout' } },
     });
     expect(provResp.status()).toBe(200);
@@ -246,7 +251,7 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
     expect(Object.keys(health).length).toBeGreaterThan(0);
 
     // 发送测试消息
-    const sendResp = await page.request.post(`${API}/api/v1/connectors/console/send`, {
+    const sendResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/connectors/console/send`, {
       data: { name: 'console', channel: 'stdout', type: 'text', content: 'E2E 测试' },
     });
     expect(sendResp.status()).toBe(200);
@@ -265,7 +270,7 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
     const statsResp = await page.request.get(`${API}/api/v1/sla/stats`);
     expect(statsResp.status()).toBe(200);
 
-    const monResp = await page.request.post(`${API}/api/v1/sla/monitoring`, { data: {} });
+    const monResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/sla/monitoring`, { data: {} });
     expect(monResp.status()).toBe(200);
     const mon = (await monResp.json()).data;
     expect(mon).toHaveProperty('active_slas');
@@ -338,7 +343,7 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
   test('10.1 变更创建 + 审批（修复 change_approvals 表后）', async ({ page }) => {
     await loginAsAdmin(page);
 
-    const chResp = await page.request.post(`${API}/api/v1/changes`, {
+    const chResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/changes`, {
       data: {
         title: `E2E 变更 ${Date.now()}`,
         description: 'E2E 测试变更',
@@ -354,7 +359,7 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
     const chId = (await chResp.json()).data.id;
 
     // 创建审批记录
-    const apResp = await page.request.post(`${API}/api/v1/changes/${chId}/approvals`, {
+    const apResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/changes/${chId}/approvals`, {
       data: { changeId: chId, approverId: 1, comment: 'E2E 审批' },
     });
     expect(apResp.status()).toBe(200);
@@ -368,14 +373,14 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
   test('11.1 AI Chat + RAG 搜索', async ({ page }) => {
     await loginAsAdmin(page);
 
-    const chatResp = await page.request.post(`${API}/api/v1/ai/chat`, {
+    const chatResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/ai/chat`, {
       data: { query: '什么是 ITSM？' },
     });
     expect(chatResp.status()).toBe(200);
     const chat = (await chatResp.json()).data;
     expect(chat).toHaveProperty('conversation_id');
 
-    const ragResp = await page.request.post(`${API}/api/v1/ai/rag/ask`, {
+    const ragResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/ai/rag/ask`, {
       data: { query: 'VPN连接', limit: 3 },
     });
     expect(ragResp.status()).toBe(200);

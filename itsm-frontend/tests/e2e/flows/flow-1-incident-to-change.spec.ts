@@ -27,7 +27,8 @@ test.describe('FLOW-1: Incident → Problem → Change', () => {
     });
 
     expect(incidentResp.status).toBe(200);
-    const incidentId = incidentResp.data.data?.id;
+    expect(incidentResp.data).toHaveProperty('code', 0);
+    const incidentId: number = incidentResp.data.data.id;
     expect(incidentId).toBeGreaterThan(0);
 
     // Step 2: engineer 接受并解决事件
@@ -47,19 +48,22 @@ test.describe('FLOW-1: Incident → Problem → Change', () => {
     });
 
     expect(problemResp.status).toBe(200);
-    const problemId = problemResp.data.data?.id;
+    expect(problemResp.data).toHaveProperty('code', 0);
+    const problemId: number = problemResp.data.data.id;
+    expect(problemId).toBeGreaterThan(0);
 
     // Step 4: engineer 基于问题创建变更
-    if (problemId) {
-      const changeResp = await apiPost(engineerToken, '/api/v1/changes', {
-        title: 'FLOW-1 预防性变更',
-        description: '修复内存泄漏问题',
-        change_type: 'normal',
-        related_problem_id: problemId,
-        priority: 'medium',
-      });
+    const changeResp = await apiPost(engineerToken, '/api/v1/changes', {
+      title: 'FLOW-1 预防性变更',
+      description: '修复内存泄漏问题',
+      change_type: 'normal',
+      related_problem_id: problemId,
+      priority: 'medium',
+    });
 
-      expect(changeResp.status).toBe(200);
-    }
+    expect(changeResp.status).toBe(200);
+    expect(changeResp.data).toHaveProperty('code', 0);
+    expect(changeResp.data.data.id).toBeGreaterThan(0);
+    expect(changeResp.data.data.title).toBe('FLOW-1 预防性变更');
   });
 });

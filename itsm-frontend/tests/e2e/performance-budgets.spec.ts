@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { DEFAULT_LOGIN, loginAndReturn, loginThroughForm } from './auth-utils';
+import { DEFAULT_LOGIN, loginAndReturn, loginThroughForm, mutateWithCSRF } from './auth-utils';
 
 function getNumberEnv(name: string, fallback: number) {
   const raw = process.env[name];
@@ -58,7 +58,9 @@ test.describe('Performance - 浏览器端关键指标', () => {
     await loginAndReturn(page, DEFAULT_LOGIN);
 
     const start = Date.now();
-    const response = await page.request.post('/api/v1/tickets/batch/export', { data: payload });
+    const response = await mutateWithCSRF(page.request, 'POST', '/api/v1/tickets/batch/export', {
+      data: payload,
+    });
     const elapsed = Date.now() - start;
 
     expect(response.status()).toBe(200);

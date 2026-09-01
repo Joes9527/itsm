@@ -1,6 +1,6 @@
 import { test as base } from '@playwright/test';
 import type { APIRequestContext } from '@playwright/test';
-import { establishSession, loginAndReturn } from '../auth-utils';
+import { establishSession, loginAndReturn, mutateWithCSRF } from '../auth-utils';
 
 /**
  * 角色测试账号映射
@@ -31,19 +31,6 @@ async function establishRoleSession(request: APIRequestContext, role: TestRole) 
   await establishSession(request, account, apiURL);
 }
 
-async function postWithCSRF(request: APIRequestContext, path: string, body?: unknown) {
-  const apiURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
-  const csrfResponse = await request.get(`${apiURL}/api/v1/csrf-token`);
-  if (!csrfResponse.ok()) throw new Error(`CSRF bootstrap failed: ${csrfResponse.status()}`);
-  const csrfBody = await csrfResponse.json() as { data?: { csrf_token?: string } };
-  const csrfToken = csrfBody.data?.csrf_token;
-  if (!csrfToken) throw new Error('CSRF bootstrap returned no token');
-  return request.post(`${apiURL}${path}`, {
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-    data: body,
-  });
-}
-
 export const test = base.extend<TestFixtures>({
   // Page-oriented login uses the canonical same-origin browser flow. API-only
   // fixtures below deliberately keep their independent backend request jar.
@@ -69,7 +56,8 @@ export const test = base.extend<TestFixtures>({
   apiPost: async ({ request }, use) => {
     await use(async (role: string, path: string, body?: any) => {
       await establishRoleSession(request, role as TestRole);
-      const response = await postWithCSRF(request, path, body);
+      const apiURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
+      const response = await mutateWithCSRF(request, 'POST', `${apiURL}${path}`, { data: body });
       if (!response.ok()) {
         throw new Error(`POST ${path} failed: ${response.status()} ${await response.text()}`);
       }
@@ -83,7 +71,8 @@ export const test = base.extend<TestFixtures>({
   apiPostExpectStatus: async ({ request }, use) => {
     await use(async (role: string, path: string, expectedStatus: number, body?: any) => {
       await establishRoleSession(request, role as TestRole);
-      const response = await postWithCSRF(request, path, body);
+      const apiURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
+      const response = await mutateWithCSRF(request, 'POST', `${apiURL}${path}`, { data: body });
       if (response.status() !== expectedStatus) {
         throw new Error(`POST ${path}: expected ${expectedStatus}, got ${response.status()} ${await response.text()}`);
       }

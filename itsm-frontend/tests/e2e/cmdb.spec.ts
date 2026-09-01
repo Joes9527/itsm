@@ -3,23 +3,11 @@
  * 配置管理数据库模块业务测试
  */
 
-import type { APIRequestContext, Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
 import { test, expect } from '@playwright/test';
-import { loginAndReturn } from './auth-utils';
+import { loginAndReturn, mutateWithCSRF } from './auth-utils';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
-
-async function csrfHeaders(request: APIRequestContext) {
-  const response = await request.get(`${API_URL}/api/v1/csrf-token`);
-  expect(response.status()).toBe(200);
-  const envelope = (await response.json()) as { code: number; data: { csrf_token: string } };
-  expect(envelope.code).toBe(0);
-  expect(envelope.data.csrf_token).toEqual(expect.any(String));
-  return {
-    'Content-Type': 'application/json',
-    'X-CSRF-Token': envelope.data.csrf_token,
-  };
-}
 
 test.describe('CMDB - 配置管理', () => {
   test.describe.configure({ timeout: 120_000 });
@@ -126,12 +114,12 @@ test.describe('CMDB - 配置管理', () => {
     page,
   }) => {
     const sourceName = `E2E discovery source ${Date.now()}`;
-    const headers = await csrfHeaders(page.request);
 
-    const createSourceResponse = await page.request.post(
+    const createSourceResponse = await mutateWithCSRF(
+      page.request,
+      'POST',
       `${API_URL}/api/v1/cmdb/discovery/sources`,
       {
-        headers,
         data: {
           name: sourceName,
           sourceType: 'manual',
@@ -147,10 +135,12 @@ test.describe('CMDB - 配置管理', () => {
     expect(sourceEnvelope.data).toMatchObject({ name: sourceName, sourceType: 'manual' });
     expect(sourceEnvelope.data.id).toEqual(expect.any(String));
 
-    const jobResponse = await page.request.post(`${API_URL}/api/v1/cmdb/discovery/jobs`, {
-      headers,
-      data: { sourceId: sourceEnvelope.data.id },
-    });
+    const jobResponse = await mutateWithCSRF(
+      page.request,
+      'POST',
+      `${API_URL}/api/v1/cmdb/discovery/jobs`,
+      { data: { sourceId: sourceEnvelope.data.id } }
+    );
     expect(jobResponse.status()).toBe(200);
     const jobEnvelope = await jobResponse.json();
     expect(jobEnvelope).toHaveProperty('code', 0);

@@ -5,7 +5,7 @@
 
 import type { Page} from '@playwright/test';
 import { expect } from '@playwright/test';
-import { loginAndReturn, logoutSession } from '../auth-utils';
+import { loginAndReturn, logoutSession, mutateWithCSRF } from '../auth-utils';
 
 // Test user credentials from seed data (see itsm-backend/pkg/seeder/seeder.go)
 export const TEST_USERS = {
@@ -80,12 +80,9 @@ export async function createTicketViaApi(
     category?: string;
   }
 ): Promise<{ id: number }> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
 
-  const response = await page.request.post(`${apiUrl}/api/v1/tickets`, {
-    headers: {
-      'Content-Type': 'application/json',
-    },
+  const response = await mutateWithCSRF(page.request, 'POST', `${apiUrl}/api/v1/tickets`, {
     data: ticketData,
   });
 

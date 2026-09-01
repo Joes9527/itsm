@@ -67,24 +67,24 @@ test.describe('FLOW-6: AI 工单建议接受', () => {
       category: 'technical',
     });
 
-    const ticketId = ticketResp.data.data?.id;
+    expect(ticketResp.status).toBe(200);
+    expect(ticketResp.data).toHaveProperty('code', 0);
+    const ticketId: number = ticketResp.data.data.id;
     expect(ticketId).toBeGreaterThan(0);
 
     // 记录 AI 审计
-    if (ticketId) {
-      const auditResp = await apiPost(engineerRole, '/api/v1/ai/audit', {
-        scenario: 'ticket_triage',
-        inputRef: `ticket:${ticketId}`,
-        promptVersion: 'e2e-v1',
-        model: 'e2e-fixture',
-        confidence: 0.9,
-        suggestion: { summary: '建议检查数据库连接池' },
-        accepted: true,
-      });
+    const auditResp = await apiPost(engineerRole, '/api/v1/ai/audit', {
+      scenario: 'ticket_triage',
+      inputRef: `ticket:${ticketId}`,
+      promptVersion: 'e2e-v1',
+      model: 'e2e-fixture',
+      confidence: 0.9,
+      suggestion: { summary: '建议检查数据库连接池' },
+      accepted: true,
+    });
 
-      expect(auditResp.status).toBe(200);
-      expect(auditResp.data).toHaveProperty('code', 0);
-    }
+    expect(auditResp.status).toBe(200);
+    expect(auditResp.data).toHaveProperty('code', 0);
   });
 });
 
