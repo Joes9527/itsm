@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"itsm-backend/common"
+	"itsm-backend/ent"
 	"itsm-backend/ent/processauditlog"
 	"itsm-backend/service/bpmn"
 
@@ -69,6 +70,99 @@ func TestBPMNKafDelegatedTaskRejectsHumanMutations(t *testing.T) {
 			assert.Equal(t, task.AggregationVersion, after.AggregationVersion)
 			assert.Zero(t, f.client.ProcessAuditLog.Query().Where(processauditlog.ProcessInstanceID(instance.ID)).CountX(f.userCtx))
 		})
+	}
+}
+
+func TestBPMNAsyncTaskRejectsKafActorNonCompletionCommands(t *testing.T) {
+	mutations := []struct {
+		command BPMNTaskCommand
+		mutate  func(*bpmnAuthorizationFixture, context.Context, string, int) error
+	}{
+		{BPMNTaskCommandAssign, func(f *bpmnAuthorizationFixture, ctx context.Context, taskID string, _ int) error {
+			return f.engine.TaskService().AssignTask(ctx, taskID, strconv.Itoa(f.outsider.ID))
+		}},
+		{BPMNTaskCommandClaim, func(f *bpmnAuthorizationFixture, ctx context.Context, taskID string, actorID int) error {
+			return f.engine.TaskService().ClaimTask(ctx, taskID, strconv.Itoa(actorID))
+		}},
+		{BPMNTaskCommandCancel, func(f *bpmnAuthorizationFixture, ctx context.Context, taskID string, _ int) error {
+			return f.engine.TaskService().CancelTask(ctx, taskID, "must reject KAF mutation")
+		}},
+		{BPMNTaskCommandDelegate, func(f *bpmnAuthorizationFixture, ctx context.Context, taskID string, _ int) error {
+			return f.engine.TaskService().DelegateTask(ctx, taskID, strconv.Itoa(f.outsider.ID))
+		}},
+		{BPMNTaskCommandSetVariables, func(f *bpmnAuthorizationFixture, ctx context.Context, taskID string, _ int) error {
+			return f.engine.TaskService().SetTaskVariables(ctx, taskID, map[string]interface{}{"changed": true})
+		}},
+		{BPMNTaskCommandCreateCounterSign, func(f *bpmnAuthorizationFixture, ctx context.Context, taskID string, _ int) error {
+			_, err := f.engine.TaskService().CreateCounterSignTasks(ctx, taskID, &CounterSignRequest{
+				Approvers: []string{strconv.Itoa(f.outsider.ID)}, ApprovalType: "parallel", Threshold: 1,
+			})
+			return err
+		}},
+		{BPMNTaskCommandVote, func(f *bpmnAuthorizationFixture, ctx context.Context, taskID string, _ int) error {
+			return f.engine.TaskService().Vote(ctx, taskID, &VoteRequest{Approved: true, Comment: "must reject KAF mutation"})
+		}},
+	}
+	taskKinds := []struct {
+		name      string
+		taskType  string
+		configure func(*bpmnAuthorizationFixture, *ent.ProcessTask) *ent.ProcessTask
+	}{
+		{
+			name:     "native_kaf_delegate",
+			taskType: bpmn.KafDelegateTaskType,
+			configure: func(_ *bpmnAuthorizationFixture, task *ent.ProcessTask) *ent.ProcessTask {
+				return task
+			},
+		},
+		{
+			name:     "registered_async_callback",
+			taskType: "async_callback_reference",
+			configure: func(f *bpmnAuthorizationFixture, task *ent.ProcessTask) *ent.ProcessTask {
+				const callbackTaskType = "async_callback_noncompletion_fence"
+				f.engine.CallbackRegistry().RegisterHandler(&fakeAsyncServiceTaskHandler{
+					taskType: callbackTaskType, handlerID: "async_callback_noncompletion_handler",
+				})
+				return f.client.ProcessTask.UpdateOne(task).SetCallbackTaskType(callbackTaskType).SaveX(f.userCtx)
+			},
+		},
+	}
+
+	for _, taskKind := range taskKinds {
+		for _, mutation := range mutations {
+			t.Run(taskKind.name+"_"+string(mutation.command), func(t *testing.T) {
+				f := newBPMNAuthorizationFixture(t)
+				kafActor := f.client.User.Create().
+					SetUsername("kaf-noncompletion").
+					SetEmail("kaf-noncompletion@example.test").
+					SetName("KAF Non-completion Actor").
+					SetPasswordHash("test").
+					SetRole(kafAutomationRole).
+					SetActive(true).
+					SetTenantID(f.tenant.ID).
+					SaveX(f.userCtx)
+				instance := f.createProcessInstance(t, f.tenant, "kaf-command-fence-"+string(mutation.command))
+				task := f.createProcessTask(t, instance, f.tenant.ID, "kaf-command-fence-"+string(mutation.command), "", "", "")
+				task = f.client.ProcessTask.UpdateOne(task).
+					SetTaskType(taskKind.taskType).
+					SetStatus(common.ProcessTaskStatusDelegated).
+					SetTaskVariables(map[string]interface{}{"preserved": true}).
+					SaveX(f.userCtx)
+				task = taskKind.configure(f, task)
+				ctx := WithBPMNAccessScope(f.userCtx, BPMNAccessScope{UserID: kafActor.ID, TenantID: f.tenant.ID})
+
+				err := mutation.mutate(f, ctx, task.TaskID, kafActor.ID)
+				requireBPMNForbidden(t, err)
+				after := f.client.ProcessTask.GetX(f.userCtx, task.ID)
+				assert.Equal(t, common.ProcessTaskStatusDelegated, after.Status)
+				assert.Equal(t, task.Assignee, after.Assignee)
+				assert.Equal(t, task.TaskVariables, after.TaskVariables)
+				assert.Equal(t, task.AggregationVersion, after.AggregationVersion)
+				assert.Zero(t, f.client.ProcessAuditLog.Query().Where(
+					processauditlog.ProcessInstanceID(instance.ID),
+				).CountX(f.userCtx))
+			})
+		}
 	}
 }
 

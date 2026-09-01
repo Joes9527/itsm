@@ -773,16 +773,21 @@ func (e *CustomProcessEngine) recordApprovalDecisionWithClient(ctx context.Conte
 // ITSM 用户身份（绑定这个角色）调用 API，走跟其他调用方相同的认证中间件。
 const kafAutomationRole = "kaf_automation"
 
-// authorizeTaskActor ensures ordinary task mutations always carry a validated,
-// tenant-bound actor scope. The narrow typed CAB cascade is the only actorless
-// exception.
+// authorizeTaskActor authorizes the dedicated completion path. Asynchronous
+// tasks intentionally expose no other mutation command to their KAF identity.
 func (e *CustomProcessEngine) authorizeTaskActor(ctx context.Context, task *ent.ProcessTask) error {
 	return e.authorizeTaskActorWithClient(ctx, e.client, task)
 }
 
 func (e *CustomProcessEngine) authorizeTaskActorWithClient(ctx context.Context, client *ent.Client, task *ent.ProcessTask) error {
-	if internal, err := authorizeInternalCascadeTask(ctx, client, task); internal {
-		return err
+	return e.authorizeTaskCommandActorWithClient(ctx, client, task, BPMNTaskCommandComplete)
+}
+
+func (e *CustomProcessEngine) authorizeTaskCommandActorWithClient(ctx context.Context, client *ent.Client, task *ent.ProcessTask, command BPMNTaskCommand) error {
+	if command == BPMNTaskCommandComplete {
+		if internal, err := authorizeInternalCascadeTask(ctx, client, task); internal {
+			return err
+		}
 	}
 	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
@@ -791,20 +796,28 @@ func (e *CustomProcessEngine) authorizeTaskActorWithClient(ctx context.Context, 
 	if scope.TenantID != task.TenantID {
 		return common.NewForbiddenError("任务不属于当前租户")
 	}
-	if task.TaskType == bpmn.KafDelegateTaskType {
-		return e.authorizeKafAutomationActorWithClient(ctx, client, task, scope)
-	}
-	callbackTaskType := task.CallbackTaskType
-	if callbackTaskType == "" {
-		callbackTaskType = task.TaskType
-	}
-	if handler := e.findHandlerByTaskType(callbackTaskType); handler != nil && isAsyncHandler(handler) {
+	if e.isAsyncProcessTask(task) {
+		if command != BPMNTaskCommandComplete {
+			return common.NewForbiddenError("异步任务仅允许通过专用完成命令变更")
+		}
 		return e.authorizeKafAutomationActorWithClient(ctx, client, task, scope)
 	}
 	if scope.CanUpdateAllTasks {
 		return nil
 	}
 	return e.authorizeTaskParticipantWithClient(ctx, client, task, scope)
+}
+
+func (e *CustomProcessEngine) isAsyncProcessTask(task *ent.ProcessTask) bool {
+	if task.TaskType == bpmn.KafDelegateTaskType {
+		return true
+	}
+	callbackTaskType := task.CallbackTaskType
+	if callbackTaskType == "" {
+		callbackTaskType = task.TaskType
+	}
+	handler := e.findHandlerByTaskType(callbackTaskType)
+	return handler != nil && isAsyncHandler(handler)
 }
 
 func bpmnTaskMutationTenant(ctx context.Context) (int, error) {
@@ -3469,7 +3482,7 @@ func (s *bpmnTaskService) AssignTask(ctx context.Context, taskID string, assigne
 		return fmt.Errorf("获取分配任务失败: %w", err)
 	}
 	txEngine := s.engine.forClient(tx.Client(), nil)
-	if err := txEngine.authorizeTaskActorWithClient(ctx, tx.Client(), task); err != nil {
+	if err := txEngine.authorizeTaskCommandActorWithClient(ctx, tx.Client(), task, BPMNTaskCommandAssign); err != nil {
 		return err
 	}
 	if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandAssign, task.Status); err != nil {
@@ -3551,7 +3564,7 @@ func (s *bpmnTaskService) claimTask(ctx context.Context, tenantID, userID int, l
 		return fmt.Errorf("获取待认领任务失败: %w", err)
 	}
 	txEngine := s.engine.forClient(tx.Client(), nil)
-	if err := txEngine.authorizeTaskActorWithClient(ctx, tx.Client(), task); err != nil {
+	if err := txEngine.authorizeTaskCommandActorWithClient(ctx, tx.Client(), task, BPMNTaskCommandClaim); err != nil {
 		return err
 	}
 	if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandClaim, task.Status); err != nil || (task.Assignee != "" && task.Assignee != "0") {
@@ -3628,7 +3641,7 @@ func (s *bpmnTaskService) CancelTask(ctx context.Context, taskID string, reason 
 		return fmt.Errorf("获取取消任务失败: %w", err)
 	}
 	txEngine := s.engine.forClient(tx.Client(), nil)
-	if err := txEngine.authorizeTaskActorWithClient(ctx, tx.Client(), task); err != nil {
+	if err := txEngine.authorizeTaskCommandActorWithClient(ctx, tx.Client(), task, BPMNTaskCommandCancel); err != nil {
 		return err
 	}
 	if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandCancel, task.Status); err != nil {
@@ -3694,7 +3707,7 @@ func (s *bpmnTaskService) SetTaskVariables(ctx context.Context, taskID string, v
 		return fmt.Errorf("获取变量任务失败: %w", err)
 	}
 	txEngine := s.engine.forClient(tx.Client(), nil)
-	if err := txEngine.authorizeTaskActorWithClient(ctx, tx.Client(), task); err != nil {
+	if err := txEngine.authorizeTaskCommandActorWithClient(ctx, tx.Client(), task, BPMNTaskCommandSetVariables); err != nil {
 		return err
 	}
 	if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandSetVariables, task.Status); err != nil {
@@ -3748,7 +3761,7 @@ func (s *bpmnTaskService) DelegateTask(ctx context.Context, taskID string, newAs
 		return fmt.Errorf("获取委派任务失败: %w", err)
 	}
 	txEngine := s.engine.forClient(tx.Client(), nil)
-	if err := txEngine.authorizeTaskActorWithClient(ctx, tx.Client(), task); err != nil {
+	if err := txEngine.authorizeTaskCommandActorWithClient(ctx, tx.Client(), task, BPMNTaskCommandDelegate); err != nil {
 		return err
 	}
 	if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandDelegate, task.Status); err != nil {
@@ -3878,7 +3891,7 @@ func (s *bpmnTaskService) CreateCounterSignTasks(ctx context.Context, parentTask
 	if err != nil {
 		return nil, err
 	}
-	if err := txTaskService.engine.authorizeTaskActorWithClient(ctx, tx.Client(), parentTask); err != nil {
+	if err := txTaskService.engine.authorizeTaskCommandActorWithClient(ctx, tx.Client(), parentTask, BPMNTaskCommandCreateCounterSign); err != nil {
 		return nil, err
 	}
 	if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandCreateCounterSign, parentTask.Status); err != nil {
@@ -4088,7 +4101,7 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 	if err != nil {
 		return fmt.Errorf("获取会签任务失败: %w", err)
 	}
-	if err := s.engine.authorizeTaskActorWithClient(ctx, tx.Client(), task); err != nil {
+	if err := s.engine.authorizeTaskCommandActorWithClient(ctx, tx.Client(), task, BPMNTaskCommandVote); err != nil {
 		return err
 	}
 	if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandVote, task.Status); err != nil {
