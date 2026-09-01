@@ -464,7 +464,10 @@ func TestChangeServiceTaskHandler_RejectCASLoserClassifiesState(t *testing.T) {
 				return ent.MutateFunc(func(mutationCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
 					if ticketMutation, ok := mutation.(*ent.TicketMutation); ok {
 						if status, exists := ticketMutation.Status(); exists && status == "rejected" && injected.CompareAndSwap(false, true) {
-							_, injectErr := client.Ticket.UpdateOneID(changeEntity.WorkItemID).SetStatus(tc.winnerStatus).AddVersion(1).Save(mutationCtx)
+							// Professional writers historically update status without
+							// incrementing WorkItem.version. Callback CAS must still
+							// reject a stale observed status.
+							_, injectErr := client.Ticket.UpdateOneID(changeEntity.WorkItemID).SetStatus(tc.winnerStatus).Save(mutationCtx)
 							require.NoError(t, injectErr)
 						}
 					}
@@ -479,6 +482,22 @@ func TestChangeServiceTaskHandler_RejectCASLoserClassifiesState(t *testing.T) {
 			require.Equal(t, tc.wantStatus, effect.Status)
 		})
 	}
+}
+
+func TestChangeServiceTaskHandler_ImplementRecoversWhenTimestampAlreadyExists(t *testing.T) {
+	client, handler, tenantID, changeEntity := setupChangeHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+	client.Ticket.UpdateOneID(changeEntity.WorkItemID).SetStatus("scheduled").ExecX(ctx)
+	startedAt := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
+	client.Change.UpdateOneID(changeEntity.ID).SetActualStartDate(startedAt).ExecX(ctx)
+
+	effect, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action": "implement_change", "change_id": changeEntity.ID,
+	})
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectApplied, effect.Status)
+	require.Equal(t, "in_progress", requireHandlerChangeWorkItem(t, client, changeEntity).Status)
+	require.Equal(t, startedAt, client.Change.GetX(ctx, changeEntity.ID).ActualStartDate)
 }
 
 func TestChangeServiceTaskHandler_ScheduleRollsBackStatusWhenDateWriteFails(t *testing.T) {

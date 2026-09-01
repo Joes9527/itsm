@@ -292,12 +292,14 @@ func TestServiceRequestHandler_CreateRequestBlocksBeforeEffect(t *testing.T) {
 	require.Equal(t, CallbackBlockHandlerContract, effect.BlockCode)
 }
 
-func TestServiceRequestHandler_InvalidRequestID_ReturnsError(t *testing.T) {
+func TestServiceRequestHandler_InvalidRequestID_Blocks(t *testing.T) {
 	_, handler, tenantID, _, _ := setupServiceRequestHandlerFixture(t)
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
 
-	_, err := handler.Execute(ctx, nil, map[string]interface{}{"action": "assign_request"})
-	assert.Error(t, err)
+	effect, err := handler.Execute(ctx, nil, map[string]interface{}{"action": "assign_request"})
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectBlocked, effect.Status)
+	require.Equal(t, CallbackBlockHandlerContract, effect.BlockCode)
 }
 
 // TestServiceRequestHandler_UpdateRequest_WritesFormFields 锁定 P2.1 的 update_request
@@ -431,6 +433,27 @@ func TestServiceRequestHandler_UnknownActionBlocks(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, CallbackEffectBlocked, effect.Status)
 	require.Equal(t, CallbackBlockHandlerContract, effect.BlockCode)
+}
+
+func TestServiceRequestHandler_DeterministicBindingFailuresBlock(t *testing.T) {
+	_, handler, tenantID, _, sr := setupServiceRequestHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+	tests := []struct {
+		name      string
+		variables map[string]interface{}
+	}{
+		{name: "missing request identity", variables: map[string]interface{}{"action": "complete_request"}},
+		{name: "malformed expiry", variables: map[string]interface{}{"action": "update_request", "request_id": sr.ID, "expire_at": "tomorrow"}},
+		{name: "invalid whitelist item", variables: map[string]interface{}{"action": "update_request", "request_id": sr.ID, "source_ip_whitelist": []interface{}{42}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			effect, err := handler.Execute(ctx, nil, tc.variables)
+			require.NoError(t, err)
+			require.Equal(t, CallbackEffectBlocked, effect.Status)
+			require.Equal(t, CallbackBlockHandlerContract, effect.BlockCode)
+		})
+	}
 }
 
 // TestServiceRequestHandler_SetLinkedTicketStatus_AlwaysTenantScoped 锁定删除
