@@ -17,20 +17,21 @@ import (
 )
 
 type Config struct {
-	Database   DatabaseConfig   `mapstructure:"database"`
-	Server     ServerConfig     `mapstructure:"server"`
-	JWT        JWTConfig        `mapstructure:"jwt"`
-	Log        LogConfig        `mapstructure:"log"`
-	LLM        LLMConfig        `mapstructure:"llm"`
-	SMS        SMSConfig        `mapstructure:"sms"`
-	SMTP       SMTPConfig       `mapstructure:"smtp"`
-	MinIO      MinIOConfig      `mapstructure:"minio"`
-	Ticket     TicketConfig     `mapstructure:"ticket"`
-	Redis      RedisConfig      `mapstructure:"redis"`
-	Security   SecurityConfig   `mapstructure:"security"`
-	Deployment DeploymentConfig `mapstructure:"deployment"`
-	RLS        RLSConfig        `mapstructure:"rls"`
-	KAFOutbox  KAFOutboxConfig
+	Database       DatabaseConfig   `mapstructure:"database"`
+	Server         ServerConfig     `mapstructure:"server"`
+	JWT            JWTConfig        `mapstructure:"jwt"`
+	Log            LogConfig        `mapstructure:"log"`
+	LLM            LLMConfig        `mapstructure:"llm"`
+	SMS            SMSConfig        `mapstructure:"sms"`
+	SMTP           SMTPConfig       `mapstructure:"smtp"`
+	MinIO          MinIOConfig      `mapstructure:"minio"`
+	Ticket         TicketConfig     `mapstructure:"ticket"`
+	Redis          RedisConfig      `mapstructure:"redis"`
+	Security       SecurityConfig   `mapstructure:"security"`
+	Deployment     DeploymentConfig `mapstructure:"deployment"`
+	RLS            RLSConfig        `mapstructure:"rls"`
+	KAFOutbox      KAFOutboxConfig
+	OutboxDelivery OutboxDeliveryConfig
 }
 
 // KAFOutboxConfig controls reliable delivery of BPMN delegation events to KAF.
@@ -40,6 +41,15 @@ type KAFOutboxConfig struct {
 	WebhookSecret string
 	BatchSize     int
 	PollInterval  time.Duration
+}
+
+// OutboxDeliveryConfig controls the shared delivery worker. Handlers may own
+// different event semantics, but they share one retry and lease policy.
+type OutboxDeliveryConfig struct {
+	BatchSize      int
+	PollInterval   time.Duration
+	HandlerTimeout time.Duration
+	MaxAttempts    int
 }
 
 // RLSConfig 控制 PostgreSQL Row-Level Security 的启用档位。
@@ -298,11 +308,16 @@ func LoadConfig() (*Config, error) {
 	config.Deployment.Mode = getEnvWithDefault("DEPLOYMENT_MODE", config.Deployment.Mode)
 	config.Deployment.AutoMigrate = getEnvBoolWithDefault("ITSM_AUTO_MIGRATE", config.Deployment.AutoMigrate)
 	config.Deployment.AutoSeed = getEnvBoolWithDefault("ITSM_AUTO_SEED", config.Deployment.AutoSeed)
-	kafOutboxConfig, err := loadKAFOutboxConfig(kafOutboxEnv)
+	kafOutboxConfig, err := loadKAFOutboxConfig(outboxEnv)
 	if err != nil {
 		return nil, err
 	}
 	config.KAFOutbox = kafOutboxConfig
+	outboxDeliveryConfig, err := loadOutboxDeliveryConfig(outboxEnv)
+	if err != nil {
+		return nil, err
+	}
+	config.OutboxDelivery = outboxDeliveryConfig
 
 	// RLS 三档开关，默认 off（零风险）。
 	config.RLS.Mode = getEnvWithDefault("RLS_MODE", config.RLS.Mode)
@@ -382,7 +397,7 @@ func getEnvBoolWithDefault(key string, defaultValue bool) bool {
 	return defaultValue
 }
 
-func kafOutboxEnv(key string) string {
+func outboxEnv(key string) string {
 	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 		return value
 	}
@@ -421,6 +436,44 @@ func loadKAFOutboxConfig(getenv func(string) string) (KAFOutboxConfig, error) {
 		if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" || parsedURL.User != nil {
 			return KAFOutboxConfig{}, fmt.Errorf("KAF_WEBHOOK_URL must be an absolute HTTP(S) URL without userinfo")
 		}
+	}
+	return config, nil
+}
+
+func loadOutboxDeliveryConfig(getenv func(string) string) (OutboxDeliveryConfig, error) {
+	config := OutboxDeliveryConfig{
+		BatchSize:      20,
+		PollInterval:   5 * time.Second,
+		HandlerTimeout: 5 * time.Second,
+		MaxAttempts:    5,
+	}
+	if value := strings.TrimSpace(getenv("OUTBOX_DELIVERY_BATCH_SIZE")); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 || parsed > 100 {
+			return OutboxDeliveryConfig{}, fmt.Errorf("OUTBOX_DELIVERY_BATCH_SIZE must be an integer from 1 through 100")
+		}
+		config.BatchSize = parsed
+	}
+	if value := strings.TrimSpace(getenv("OUTBOX_DELIVERY_POLL_INTERVAL")); value != "" {
+		parsed, err := time.ParseDuration(value)
+		if err != nil || parsed < time.Second {
+			return OutboxDeliveryConfig{}, fmt.Errorf("OUTBOX_DELIVERY_POLL_INTERVAL must be a duration of at least 1s")
+		}
+		config.PollInterval = parsed
+	}
+	if value := strings.TrimSpace(getenv("OUTBOX_DELIVERY_HANDLER_TIMEOUT")); value != "" {
+		parsed, err := time.ParseDuration(value)
+		if err != nil || parsed < time.Second || parsed >= 5*time.Minute {
+			return OutboxDeliveryConfig{}, fmt.Errorf("OUTBOX_DELIVERY_HANDLER_TIMEOUT must be at least 1s and shorter than the 5m delivery lease")
+		}
+		config.HandlerTimeout = parsed
+	}
+	if value := strings.TrimSpace(getenv("OUTBOX_DELIVERY_MAX_ATTEMPTS")); value != "" {
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 1 || parsed > 20 {
+			return OutboxDeliveryConfig{}, fmt.Errorf("OUTBOX_DELIVERY_MAX_ATTEMPTS must be an integer from 1 through 20")
+		}
+		config.MaxAttempts = parsed
 	}
 	return config, nil
 }

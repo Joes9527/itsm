@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -9,20 +10,18 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/incidentalert"
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/incidentruleexecution"
+	"itsm-backend/ent/outboxevent"
 	"itsm-backend/repository/workitemnumber"
 
-	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
-	"go.uber.org/zap/zaptest/observer"
 )
 
 func createAutomationIncident(
@@ -114,35 +113,141 @@ func TestIncidentAlertCreationRejectsCrossTenantAndThresholdRequiresIncident(t *
 	assert.Zero(t, count)
 }
 
-func TestIncidentAlertExternalDeliveryCompletesBeforeCreateReturns(t *testing.T) {
+func TestIncidentAlertCreationDurablyAcceptsEmailDelivery(t *testing.T) {
 	client, _, ctx := setupIncidentTest(t)
 	defer client.Close()
-	tenant, err := createIncidentTestTenant(ctx, client, "alert-sync")
+	tenant, err := createIncidentTestTenant(ctx, client, "alert-durable")
 	require.NoError(t, err)
-	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "alert-sync")
+	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "alert-durable")
 	require.NoError(t, err)
-	incidentEntity := createAutomationIncident(t, ctx, client, tenant.ID, reporter.ID, "INC-ALERT-SYNC")
+	incidentEntity := createAutomationIncident(t, ctx, client, tenant.ID, reporter.ID, "INC-ALERT-DURABLE")
+	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar())
 
-	t.Setenv("GIN_MODE", "debug")
-	t.Setenv("ENABLE_EMAIL_SENDING", "false")
-	viper.Set("alerting.smtp.host", "smtp.test.invalid")
-	viper.Set("alerting.smtp.port", 2525)
-	t.Cleanup(viper.Reset)
-	core, observed := observer.New(zapcore.InfoLevel)
-	alerting := NewIncidentAlertingService(client, zap.New(core).Sugar())
-
-	_, err = alerting.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
+	requestCtx := WithIncidentAlertActor(ctx, reporter.ID, "user", "request-alert-42")
+	alert, err := alerting.CreateIncidentAlert(requestCtx, &dto.CreateIncidentAlertRequest{
 		IncidentID: incidentEntity.ID,
 		AlertType:  "monitoring",
-		AlertName:  "synchronous delivery",
-		Message:    "delivery must finish before return",
+		AlertName:  "durable delivery",
+		Message:    "delivery may happen after return",
 		Severity:   "high",
 		Channels:   []string{"email"},
 		Recipients: []string{"operator@example.com"},
 	}, tenant.ID)
 	require.NoError(t, err)
-	require.Equal(t, 1, observed.FilterMessage("Email alert processing completed").Len(),
-		"CreateIncidentAlert must not detach delivery after its caller context ends")
+
+	delivery, err := client.OutboxEvent.Query().Where(
+		outboxevent.EventTypeEQ("incident_alert_delivery"),
+		outboxevent.TenantIDEQ(tenant.ID),
+		outboxevent.AggregateTypeEQ("incident_alert"),
+		outboxevent.AggregateIDEQ(fmt.Sprint(alert.ID)),
+	).Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "pending", delivery.Status)
+	assert.Equal(t, 0, delivery.AttemptCount)
+	var payload incidentAlertDeliveryPayload
+	require.NoError(t, json.Unmarshal(delivery.Payload, &payload))
+	assert.Equal(t, reporter.ID, payload.ActorID)
+	assert.Equal(t, "user", payload.Source)
+	assert.Equal(t, "request-alert-42", payload.CorrelationID)
+	audit, err := client.AuditLog.Query().Where(
+		auditlog.TenantIDEQ(tenant.ID),
+		auditlog.ActionEQ("incident_alert.delivery_accepted"),
+	).Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, reporter.ID, audit.UserID)
+	assert.Equal(t, "request-alert-42", audit.RequestID)
+}
+
+func TestIncidentAlertCreationRejectsUnsupportedDeliveryBeforePersisting(t *testing.T) {
+	client, _, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "alert-unsupported")
+	require.NoError(t, err)
+	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "alert-unsupported")
+	require.NoError(t, err)
+	incidentEntity := createAutomationIncident(t, ctx, client, tenant.ID, reporter.ID, "INC-ALERT-UNSUPPORTED")
+	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar())
+
+	_, err = alerting.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
+		IncidentID: incidentEntity.ID,
+		AlertType:  "monitoring",
+		AlertName:  "unsupported delivery",
+		Message:    "must fail closed",
+		Channels:   []string{"sms"},
+		Recipients: []string{"15500000000"},
+	}, tenant.ID)
+	require.ErrorContains(t, err, "unsupported alert channel: sms")
+	alertCount, queryErr := client.IncidentAlert.Query().Count(ctx)
+	require.NoError(t, queryErr)
+	assert.Zero(t, alertCount)
+	outboxCount, queryErr := client.OutboxEvent.Query().Count(ctx)
+	require.NoError(t, queryErr)
+	assert.Zero(t, outboxCount)
+}
+
+func TestIncidentAlertCreationCreatesOneDeliveryPerEmailRecipient(t *testing.T) {
+	client, _, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "alert-recipient-destinations")
+	require.NoError(t, err)
+	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "alert-recipient-destinations")
+	require.NoError(t, err)
+	incidentEntity := createAutomationIncident(t, ctx, client, tenant.ID, reporter.ID, "INC-ALERT-DESTINATIONS")
+	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar())
+
+	_, err = alerting.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
+		IncidentID: incidentEntity.ID,
+		AlertType:  "monitoring",
+		AlertName:  "independent destinations",
+		Message:    "each recipient owns one delivery lifecycle",
+		Channels:   []string{"email"},
+		Recipients: []string{"first@example.com", "second@example.com"},
+	}, tenant.ID)
+	require.NoError(t, err)
+	deliveries, err := client.OutboxEvent.Query().Where(
+		outboxevent.EventTypeEQ(incidentAlertDeliveryEventType),
+		outboxevent.TenantIDEQ(tenant.ID),
+	).All(ctx)
+	require.NoError(t, err)
+	require.Len(t, deliveries, 2)
+	recipients := make(map[string]struct{}, 2)
+	for _, delivery := range deliveries {
+		var payload incidentAlertDeliveryPayload
+		require.NoError(t, json.Unmarshal(delivery.Payload, &payload))
+		require.Len(t, payload.Recipients, 1)
+		recipients[payload.Recipients[0]] = struct{}{}
+	}
+	assert.Equal(t, map[string]struct{}{"first@example.com": {}, "second@example.com": {}}, recipients)
+}
+
+func TestIncidentAlertCreationRollsBackWhenDeliveryEnqueueFails(t *testing.T) {
+	client, _, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "alert-enqueue-rollback")
+	require.NoError(t, err)
+	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "alert-enqueue-rollback")
+	require.NoError(t, err)
+	incidentEntity := createAutomationIncident(t, ctx, client, tenant.ID, reporter.ID, "INC-ALERT-ROLLBACK")
+	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar())
+
+	client.OutboxEvent.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+			return nil, fmt.Errorf("forced enqueue failure")
+		})
+	})
+
+	_, err = alerting.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
+		IncidentID: incidentEntity.ID,
+		AlertType:  "monitoring",
+		AlertName:  "rollback",
+		Message:    "alert and enqueue are one transaction",
+		Channels:   []string{"email"},
+		Recipients: []string{"operator@example.com"},
+	}, tenant.ID)
+	require.ErrorContains(t, err, "enqueue incident alert delivery")
+	alertCount, queryErr := client.IncidentAlert.Query().Count(ctx)
+	require.NoError(t, queryErr)
+	assert.Zero(t, alertCount)
 }
 
 func TestIncidentEscalationPersistsTenantScopedNamedEvent(t *testing.T) {

@@ -224,8 +224,12 @@ func TestOutboxEventRepository_RejectsStaleLeaseCompletion(t *testing.T) {
 	repo.clock = func() time.Time { return recoveredAt }
 	retryErr := repo.MarkRetry(ctx, first[0].ID, first[0].ClaimToken, "stale retry", recoveredAt.Add(time.Minute))
 	publishErr := repo.MarkPublished(ctx, first[0].ID, first[0].ClaimToken, recoveredAt)
+	blockedErr := repo.MarkBlocked(ctx, first[0].ID, first[0].ClaimToken, "stale blocked")
+	deadLetterErr := repo.MarkDeadLetter(ctx, first[0].ID, first[0].ClaimToken, "stale dead letter")
 	require.ErrorIs(t, retryErr, ErrOutboxEventClaimLost)
 	require.ErrorIs(t, publishErr, ErrOutboxEventClaimLost)
+	require.ErrorIs(t, blockedErr, ErrOutboxEventClaimLost)
+	require.ErrorIs(t, deadLetterErr, ErrOutboxEventClaimLost)
 
 	event, err := client.OutboxEvent.Get(ctx, second[0].ID)
 	require.NoError(t, err)
