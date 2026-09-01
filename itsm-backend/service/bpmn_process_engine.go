@@ -28,6 +28,8 @@ import (
 	"itsm-backend/service/approver"
 	"itsm-backend/service/bpmn"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"go.uber.org/zap"
@@ -2847,10 +2849,6 @@ func (s *bpmnProcessInstanceService) GetProcessInstanceVariables(ctx context.Con
 var reservedInstanceVariableKeys = []string{"business_id", "business_type", "business_key", "tenant_id"}
 
 func (s *bpmnProcessInstanceService) SetProcessInstanceVariables(ctx context.Context, processInstanceID string, variables map[string]interface{}) error {
-	instance, err := s.accessPolicy().loadForUpdate(ctx, processInstanceID)
-	if err != nil {
-		return err
-	}
 	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
 		return err
@@ -2867,15 +2865,32 @@ func (s *bpmnProcessInstanceService) SetProcessInstanceVariables(ctx context.Con
 		return fmt.Errorf("开启流程变量事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	instance, err := s.accessPolicy().forClient(tx.Client()).loadForUpdate(ctx, processInstanceID)
+	if err != nil {
+		return err
+	}
+	if err := ValidateBPMNProcessLifecycle(BPMNProcessCommandSetVariables, instance.Status); err != nil {
+		return err
+	}
 	actor, err := loadProcessInstanceMutationActor(ctx, tx.Client(), scope)
 	if err != nil {
 		return err
 	}
-	_, err = tx.Client().ProcessInstance.UpdateOne(instance).
+	lifecyclePredicate, err := bpmnProcessLifecyclePredicate(BPMNProcessCommandSetVariables, instance.Version)
+	if err != nil {
+		return err
+	}
+	affected, err := tx.Client().ProcessInstance.Update().Where(
+		processinstance.ID(instance.ID), processinstance.TenantID(scope.TenantID), lifecyclePredicate,
+	).
 		SetVariables(variables).
+		AddVersion(1).
 		Save(ctx)
 	if err != nil {
 		return fmt.Errorf("设置流程实例变量失败: %w", err)
+	}
+	if affected != 1 {
+		return bpmnProcessLifecycleConflict(BPMNProcessCommandSetVariables)
 	}
 	if err := s.auditService.ForClient(tx.Client()).RecordAudit(ctx, &AuditContext{
 		ProcessInstanceID:    instance.ID,
@@ -3989,6 +4004,14 @@ func numericInt(value interface{}) (int, bool) {
 	}
 }
 
+func bpmnProcessTaskWriteLock() predicate.ProcessTask {
+	return func(selector *entsql.Selector) {
+		if selector.Dialect() != dialect.SQLite {
+			selector.ForUpdate()
+		}
+	}
+}
+
 // Vote 投票（完成会签任务）
 func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequest) error {
 	scope, err := BPMNAccessScopeFromContext(ctx)
@@ -4027,6 +4050,7 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 		parentTask, err = tx.Client().ProcessTask.Query().Where(
 			processtask.TaskID(task.ParentTaskID),
 			processtask.TenantID(scope.TenantID),
+			bpmnProcessTaskWriteLock(),
 		).Only(ctx)
 		if err != nil {
 			return fmt.Errorf("获取会签父任务失败: %w", err)
@@ -4034,20 +4058,6 @@ func (s *bpmnTaskService) Vote(ctx context.Context, taskID string, req *VoteRequ
 		if err := ValidateBPMNTaskLifecycle(BPMNTaskCommandComplete, parentTask.Status); err != nil {
 			return bpmnTaskLifecycleConflict(BPMNTaskCommandVote)
 		}
-		parentPredicate, err := bpmnTaskLifecyclePredicate(BPMNTaskCommandComplete, parentTask.AggregationVersion)
-		if err != nil {
-			return err
-		}
-		affected, err := tx.Client().ProcessTask.Update().Where(
-			processtask.ID(parentTask.ID), processtask.TenantID(scope.TenantID), parentPredicate,
-		).AddAggregationVersion(1).Save(ctx)
-		if err != nil {
-			return fmt.Errorf("锁定会签父任务失败: %w", err)
-		}
-		if affected != 1 {
-			return bpmnTaskLifecycleConflict(BPMNTaskCommandVote)
-		}
-		parentTask.AggregationVersion++
 	}
 	voteVariables := map[string]interface{}{
 		"approved": req.Approved,
