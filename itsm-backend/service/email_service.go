@@ -31,7 +31,7 @@ type EmailConfig struct {
 // GraphMailSender Graph sendMail 发信后端（Exchange Online）。由 msgraph
 // 连接器的 Client.SendMail 实现，service 包只依赖该接口，不依赖具体类型。
 type GraphMailSender interface {
-	SendMail(ctx context.Context, mailbox, to, subject, body string) error
+	SendMail(ctx context.Context, mailbox, to, subject, body, deliveryID string) error
 }
 
 // GraphProvider resolves the configured Graph sender for one tenant only.
@@ -67,12 +67,14 @@ type EmailService struct {
 
 // EmailMessage 邮件消息
 type EmailMessage struct {
-	To          []string          // 收件人列表
-	CC          []string          // 抄送人列表
-	Subject     string            // 邮件主题
-	Body        string            // 邮件正文（HTML）
-	BodyText    string            // 邮件正文（纯文本）
-	Attachments []EmailAttachment // 附件
+	To                      []string          // 收件人列表
+	CC                      []string          // 抄送人列表
+	Subject                 string            // 邮件主题
+	Body                    string            // 邮件正文（HTML）
+	BodyText                string            // 邮件正文（纯文本）
+	Attachments             []EmailAttachment // 附件
+	DeliveryID              string            // durable outbox correlation marker
+	DisableProviderFallback bool              // prevents ambiguous cross-provider replay
 }
 
 // EmailAttachment 邮件附件
@@ -129,6 +131,9 @@ func (s *EmailService) SendForTenant(ctx context.Context, tenantID int, msg *Ema
 				return nil
 			} else {
 				routeErrors = append(routeErrors, err)
+				if msg.DisableProviderFallback {
+					return emailDeliveryError(routeErrors...)
+				}
 			}
 		}
 	}
@@ -162,7 +167,7 @@ func (s *EmailService) sendViaGraph(ctx context.Context, sender GraphMailSender,
 		body = msg.Body
 	}
 	for _, to := range msg.To {
-		if err := sender.SendMail(ctx, mailbox, to, msg.Subject, body); err != nil {
+		if err := sender.SendMail(ctx, mailbox, to, msg.Subject, body, msg.DeliveryID); err != nil {
 			s.logger.Errorw("email Graph delivery failed", "error_class", emailErrorClassGraphSend)
 			return errEmailGraphSend
 		}
@@ -188,6 +193,10 @@ func (s *EmailService) sendViaSMTP(ctx context.Context, msg *EmailMessage) error
 		emailBody.WriteString(fmt.Sprintf("Cc: %s\r\n", strings.Join(msg.CC, ",")))
 	}
 	emailBody.WriteString(fmt.Sprintf("Subject: %s\r\n", msg.Subject))
+	if msg.DeliveryID != "" {
+		emailBody.WriteString(fmt.Sprintf("Message-ID: <%s@itsm.local>\r\n", msg.DeliveryID))
+		emailBody.WriteString(fmt.Sprintf("X-ITSM-Delivery-ID: %s\r\n", msg.DeliveryID))
+	}
 	emailBody.WriteString("MIME-Version: 1.0\r\n")
 	emailBody.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=\"%s\"\r\n", boundary))
 	emailBody.WriteString("\r\n")
@@ -319,6 +328,9 @@ func (s *EmailService) validateMessage(msg *EmailMessage) error {
 	}
 	if strings.ContainsAny(msg.Subject, "\r\n") {
 		return fmt.Errorf("email subject contains invalid characters")
+	}
+	if strings.ContainsAny(msg.DeliveryID, "\r\n") {
+		return fmt.Errorf("email delivery id contains invalid characters")
 	}
 	for _, address := range append(append([]string{}, msg.To...), msg.CC...) {
 		if _, err := mail.ParseAddress(address); err != nil {

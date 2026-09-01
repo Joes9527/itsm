@@ -64,7 +64,7 @@ func (g *GraphConnector) Send(ctx context.Context, msg *connector.Message) error
 	if g.client == nil {
 		return fmt.Errorf("msgraph: connector not initialized")
 	}
-	return g.client.SendMail(ctx, g.mailbox, msg.Channel, msg.Title, msg.Content)
+	return g.client.SendMail(ctx, g.mailbox, msg.Channel, msg.Title, msg.Content, "")
 }
 
 func (g *GraphConnector) HealthCheck(ctx context.Context) connector.HealthStatus {

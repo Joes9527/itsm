@@ -16,8 +16,13 @@ import (
 
 // IncidentEscalationService 事件升级服务
 type IncidentEscalationService struct {
-	client *ent.Client
-	logger *zap.SugaredLogger
+	client       *ent.Client
+	logger       *zap.SugaredLogger
+	alertCreator IncidentAlertCreator
+}
+
+func (s *IncidentEscalationService) SetAlertCreator(creator IncidentAlertCreator) {
+	s.alertCreator = creator
 }
 
 // NewIncidentEscalationService 创建事件升级服务
@@ -30,6 +35,9 @@ func NewIncidentEscalationService(client *ent.Client) *IncidentEscalationService
 
 // CreateEscalationRule 创建升级规则
 func (s *IncidentEscalationService) CreateEscalationRule(ctx context.Context, input dto.CreateIncidentEscalationRuleRequest) (*ent.IncidentEscalationRule, error) {
+	if err := validateIncidentNotificationConfig(input.NotificationConfig); err != nil {
+		return nil, err
+	}
 	build := s.client.IncidentEscalationRule.Create().
 		SetName(input.Name).
 		SetDescription(input.Description).
@@ -123,6 +131,9 @@ func (s *IncidentEscalationService) UpdateEscalationRule(ctx context.Context, id
 		update.SetAutoEscalate(*input.AutoEscalate)
 	}
 	if input.NotificationConfig != nil {
+		if err := validateIncidentNotificationConfig(input.NotificationConfig); err != nil {
+			return nil, err
+		}
 		update.SetNotificationConfig(input.NotificationConfig)
 	}
 	if input.IsActive != nil {
@@ -274,11 +285,6 @@ func (s *IncidentEscalationService) escalateIncident(ctx context.Context, incide
 		return fail(err)
 	}
 
-	// 发送升级通知
-	if rule.NotificationConfig != nil {
-		s.sendEscalationNotification(ctx, updatedIncident, rule)
-	}
-
 	// 记录升级日志
 	_, err = tx.IncidentEvent.Create().
 		SetIncidentID(incidentEnt.ID).
@@ -300,35 +306,28 @@ func (s *IncidentEscalationService) escalateIncident(ctx context.Context, incide
 		return fail(err)
 	}
 	updatedIncident.Edges.WorkItem = workItem
-
-	return updatedIncident, nil
-}
-
-// sendEscalationNotification 发送升级通知
-func (s *IncidentEscalationService) sendEscalationNotification(ctx context.Context, incidentEnt *ent.Incident, rule *ent.IncidentEscalationRule) {
-	// 构建通知消息
-	notificationMsg := fmt.Sprintf("事件 #%d 已升级到 L%d: %s",
-		incidentEnt.ID, rule.EscalationLevel, rule.Name)
-
-	// 记录升级通知日志（实际发送需要集成邮件/短信/站内信服务）
-	s.logger.Infow("升级通知", "事件ID", incidentEnt.ID, "级别", rule.EscalationLevel, "规则", rule.Name, "消息", notificationMsg)
-
-	// 如果有通知配置，根据配置发送通知
-	if rule.NotificationConfig != nil {
-		// 通知配置示例: {"email": true, "sms": false, "in_app": true}
-		if email, ok := rule.NotificationConfig["email"].(bool); ok && email {
-			s.logger.Infow("发送邮件通知", "事件ID", incidentEnt.ID)
-			// 实际实现: 调用 email service 发送邮件
+	channels, err := channelsFromNotificationConfig(rule.NotificationConfig)
+	if err != nil {
+		return nil, err
+	}
+	if len(channels) > 0 {
+		if s.alertCreator == nil {
+			return nil, fmt.Errorf("incident alerting service is not configured")
 		}
-		if sms, ok := rule.NotificationConfig["sms"].(bool); ok && sms {
-			s.logger.Infow("发送短信通知", "事件ID", incidentEnt.ID)
-			// 实际实现: 调用 sms service 发送短信
+		recipients, err := recipientsFromNotificationConfig(rule.NotificationConfig)
+		if err != nil {
+			return nil, err
 		}
-		if inApp, ok := rule.NotificationConfig["in_app"].(bool); ok && inApp {
-			s.logger.Infow("发送站内信通知", "事件ID", incidentEnt.ID)
-			// 实际实现: 调用 notification service 发送站内信
+		if _, err := s.alertCreator.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
+			IncidentID: incidentEnt.ID, AlertType: "escalation", AlertName: "事件升级告警",
+			Message:  fmt.Sprintf("事件 #%d 已升级到 L%d: %s", incidentEnt.ID, rule.EscalationLevel, rule.Name),
+			Severity: "high", Channels: channels, Recipients: recipients,
+		}, tenantID); err != nil {
+			return nil, fmt.Errorf("create escalation alert: %w", err)
 		}
 	}
+
+	return updatedIncident, nil
 }
 
 // ProcessEscalations 批量处理升级检查

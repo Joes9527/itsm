@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/outboxevent"
 
 	"github.com/stretchr/testify/assert"
@@ -31,6 +32,13 @@ type incidentAlertEmailDelivery struct {
 	message  EmailMessage
 }
 
+func testOutboxRegistry(t *testing.T, sender incidentAlertEmailSender) *OutboxEventTypeRegistry {
+	t.Helper()
+	registry, err := NewOutboxEventTypeRegistry([]OutboxDeliveryHandler{NewIncidentAlertDeliveryHandler(sender)}, KafDelegateRequestedEventType)
+	require.NoError(t, err)
+	return registry
+}
+
 func (s *recordingIncidentAlertEmailSender) SendForTenant(_ context.Context, tenantID int, message *EmailMessage) error {
 	if s.failuresRemaining > 0 {
 		s.failuresRemaining--
@@ -48,7 +56,7 @@ func TestOutboxDeliveryWorkerRetriesThenPublishesExactlyOnce(t *testing.T) {
 	sender := &recordingIncidentAlertEmailSender{failuresRemaining: 1}
 	worker, err := NewOutboxDeliveryWorker(repository, OutboxDeliveryWorkerConfig{
 		BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 5 * time.Second, MaxAttempts: 3,
-	}, zaptest.NewLogger(t).Sugar(), NewIncidentAlertDeliveryHandler(sender))
+	}, zaptest.NewLogger(t).Sugar(), testOutboxRegistry(t, sender))
 	require.NoError(t, err)
 	worker.now = func() time.Time { return now }
 	repository.clock = worker.now
@@ -71,6 +79,8 @@ func TestOutboxDeliveryWorkerRetriesThenPublishesExactlyOnce(t *testing.T) {
 	assert.Equal(t, 7, sender.deliveries[0].tenantID)
 	assert.Equal(t, []string{"operator@example.com"}, sender.deliveries[0].message.To)
 	assert.Equal(t, "[ITSM Alert] CPU high", sender.deliveries[0].message.Subject)
+	assert.Equal(t, eventID, sender.deliveries[0].message.DeliveryID)
+	assert.True(t, sender.deliveries[0].message.DisableProviderFallback)
 }
 
 func TestOutboxDeliveryWorkerReclaimsExpiredDeliveryAfterRestart(t *testing.T) {
@@ -85,7 +95,7 @@ func TestOutboxDeliveryWorkerReclaimsExpiredDeliveryAfterRestart(t *testing.T) {
 	sender := &recordingIncidentAlertEmailSender{}
 	restartedWorker, err := NewOutboxDeliveryWorker(repository, OutboxDeliveryWorkerConfig{
 		BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 5 * time.Second, MaxAttempts: 3,
-	}, zaptest.NewLogger(t).Sugar(), NewIncidentAlertDeliveryHandler(sender))
+	}, zaptest.NewLogger(t).Sugar(), testOutboxRegistry(t, sender))
 	require.NoError(t, err)
 	reclaimedAt := now.Add(outboxEventClaimLeaseDuration + time.Second)
 	restartedWorker.now = func() time.Time { return reclaimedAt }
@@ -98,6 +108,63 @@ func TestOutboxDeliveryWorkerReclaimsExpiredDeliveryAfterRestart(t *testing.T) {
 	require.Len(t, sender.deliveries, 1)
 }
 
+func TestOutboxDeliveryWorkerBlocksUnknownTypeButLeavesKafReserved(t *testing.T) {
+	repository, client := newOutboxRepository(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	for _, item := range []struct{ id, eventType string }{{"evt-unknown", "unregistered"}, {"evt-kaf-reserved", KafDelegateRequestedEventType}} {
+		_, err := repository.Enqueue(ctx, nil, NewOutboxEvent{EventID: item.id, EventType: item.eventType, TenantID: 7, AggregateType: "test", AggregateID: "1", Payload: json.RawMessage(`{}`), NextAttemptAt: now})
+		require.NoError(t, err)
+	}
+	sender := &recordingIncidentAlertEmailSender{}
+	worker, err := NewOutboxDeliveryWorker(repository, OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: time.Second, MaxAttempts: 3}, zaptest.NewLogger(t).Sugar(), testOutboxRegistry(t, sender))
+	require.NoError(t, err)
+	worker.now = func() time.Time { return now }
+	repository.clock = worker.now
+	require.NoError(t, worker.DispatchOnce(ctx))
+
+	unknown, err := client.OutboxEvent.Query().Where(outboxevent.EventIDEQ("evt-unknown")).Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, outboxEventStatusBlocked, unknown.Status)
+	assert.Contains(t, unknown.LastError, "unknown outbox event type")
+	kaf, err := client.OutboxEvent.Query().Where(outboxevent.EventIDEQ("evt-kaf-reserved")).Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, outboxEventStatusPending, kaf.Status)
+	audited, err := client.AuditLog.Query().Where(auditlog.RequestIDEQ("evt-unknown"), auditlog.ActionEQ("outbox.unknown_event_type")).Exist(ctx)
+	require.NoError(t, err)
+	assert.True(t, audited)
+}
+
+func TestOutboxDeliveryWorkerDoesNotResendAmbiguousExpiredAttempt(t *testing.T) {
+	repository, client := newOutboxRepository(t)
+	ctx := context.Background()
+	now := time.Now().UTC().Truncate(time.Millisecond)
+	eventID := enqueueIncidentAlertDeliveryForWorker(t, repository, now)
+	claimed, err := repository.ClaimDueByEventType(ctx, now, 1, incidentAlertDeliveryEventType)
+	require.NoError(t, err)
+	require.Len(t, claimed, 1)
+	repository.clock = func() time.Time { return now }
+	require.NoError(t, repository.MarkDeliveryAttemptStarted(ctx, claimed[0].ID, claimed[0].ClaimToken, eventID))
+	// The process crashes after the transport accepted the message and before
+	// MarkPublished. The durable attempt marker is the only surviving evidence.
+	sender := &recordingIncidentAlertEmailSender{}
+	restartedAt := now.Add(outboxEventClaimLeaseDuration + time.Second)
+	worker, err := NewOutboxDeliveryWorker(repository, OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: time.Second, MaxAttempts: 3}, zaptest.NewLogger(t).Sugar(), testOutboxRegistry(t, sender))
+	require.NoError(t, err)
+	worker.now = func() time.Time { return restartedAt }
+	repository.clock = worker.now
+	require.NoError(t, worker.DispatchOnce(ctx))
+
+	event, err := client.OutboxEvent.Query().Where(outboxevent.EventIDEQ(eventID)).Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, outboxEventStatusBlocked, event.Status)
+	assert.Contains(t, event.LastError, "delivery_unknown")
+	assert.Empty(t, sender.deliveries, "an ambiguous external side effect must not be replayed")
+	audited, err := client.AuditLog.Query().Where(auditlog.RequestIDEQ(eventID), auditlog.ActionEQ("outbox.delivery_unknown")).Exist(ctx)
+	require.NoError(t, err)
+	assert.True(t, audited)
+}
+
 func TestOutboxDeliveryWorkerBlocksUnsupportedIncidentAlertChannel(t *testing.T) {
 	repository, client := newOutboxRepository(t)
 	ctx := context.Background()
@@ -108,7 +175,7 @@ func TestOutboxDeliveryWorkerBlocksUnsupportedIncidentAlertChannel(t *testing.T)
 	sender := &recordingIncidentAlertEmailSender{}
 	worker, err := NewOutboxDeliveryWorker(repository, OutboxDeliveryWorkerConfig{
 		BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 5 * time.Second, MaxAttempts: 3,
-	}, zaptest.NewLogger(t).Sugar(), NewIncidentAlertDeliveryHandler(sender))
+	}, zaptest.NewLogger(t).Sugar(), testOutboxRegistry(t, sender))
 	require.NoError(t, err)
 	worker.now = func() time.Time { return now }
 	repository.clock = worker.now
@@ -130,7 +197,7 @@ func TestOutboxDeliveryWorkerMovesExhaustedDeliveryToDeadLetter(t *testing.T) {
 	sender := &recordingIncidentAlertEmailSender{failuresRemaining: 2}
 	worker, err := NewOutboxDeliveryWorker(repository, OutboxDeliveryWorkerConfig{
 		BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 5 * time.Second, MaxAttempts: 1,
-	}, zaptest.NewLogger(t).Sugar(), NewIncidentAlertDeliveryHandler(sender))
+	}, zaptest.NewLogger(t).Sugar(), testOutboxRegistry(t, sender))
 	require.NoError(t, err)
 	worker.now = func() time.Time { return now }
 	repository.clock = worker.now
@@ -150,7 +217,7 @@ func TestOutboxDeliveryWorkerBoundsExternalCallWithHandlerTimeout(t *testing.T) 
 	eventID := enqueueIncidentAlertDeliveryForWorker(t, repository, now)
 	worker, err := NewOutboxDeliveryWorker(repository, OutboxDeliveryWorkerConfig{
 		BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 20 * time.Millisecond, MaxAttempts: 1,
-	}, zaptest.NewLogger(t).Sugar(), NewIncidentAlertDeliveryHandler(blockingIncidentAlertEmailSender{}))
+	}, zaptest.NewLogger(t).Sugar(), testOutboxRegistry(t, blockingIncidentAlertEmailSender{}))
 	require.NoError(t, err)
 	worker.now = func() time.Time { return now }
 	repository.clock = worker.now

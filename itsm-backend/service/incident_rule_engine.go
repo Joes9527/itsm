@@ -20,6 +20,7 @@ type IncidentRuleEngine struct {
 	client          *ent.Client
 	logger          *zap.SugaredLogger
 	numberAllocator workitemnumber.Allocator
+	alertCreator    IncidentAlertCreator
 }
 
 func NewIncidentRuleEngine(client *ent.Client, logger *zap.SugaredLogger, numberAllocator workitemnumber.Allocator) *IncidentRuleEngine {
@@ -158,10 +159,12 @@ type EscalationAction struct {
 	client          *ent.Client
 	logger          *zap.SugaredLogger
 	numberAllocator workitemnumber.Allocator
+	alertCreator    IncidentAlertCreator
 }
 
 func (a *EscalationAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
 	incidentService := NewIncidentService(a.client, a.logger, a.numberAllocator)
+	incidentService.SetAlertCreator(a.alertCreator)
 
 	_, err := incidentService.EscalateIncident(ctx, &dto.IncidentEscalationRequest{
 		IncidentID:      incident.ID,
@@ -183,12 +186,14 @@ type NotificationAction struct {
 	client          *ent.Client
 	logger          *zap.SugaredLogger
 	numberAllocator workitemnumber.Allocator
+	alertCreator    IncidentAlertCreator
 }
 
 func (a *NotificationAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
-	incidentService := NewIncidentService(a.client, a.logger, a.numberAllocator)
-
-	_, err := incidentService.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
+	if a.alertCreator == nil {
+		return fmt.Errorf("incident alerting service is not configured")
+	}
+	_, err := a.alertCreator.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
 		IncidentID: incident.ID,
 		AlertType:  "notification",
 		AlertName:  "规则触发通知",
@@ -640,6 +645,7 @@ func (e *IncidentRuleEngine) parseEscalationAction(actionData map[string]interfa
 		client:          e.client,
 		logger:          e.logger,
 		numberAllocator: e.numberAllocator,
+		alertCreator:    e.alertCreator,
 	}, nil
 }
 
@@ -652,6 +658,9 @@ func (e *IncidentRuleEngine) parseNotificationAction(actionData map[string]inter
 
 	if len(channels) == 0 {
 		channels = []string{"email"}
+	}
+	if err := validateIncidentAlertChannels(channels); err != nil {
+		return nil, err
 	}
 	if len(recipients) == 0 {
 		recipients = []string{"admin@company.com"}
@@ -671,6 +680,7 @@ func (e *IncidentRuleEngine) parseNotificationAction(actionData map[string]inter
 		client:          e.client,
 		logger:          e.logger,
 		numberAllocator: e.numberAllocator,
+		alertCreator:    e.alertCreator,
 	}, nil
 }
 

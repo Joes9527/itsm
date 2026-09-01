@@ -270,7 +270,11 @@ func (c *Client) PollDelta(ctx context.Context, mailbox, deltaLink string) ([]Me
 // SendMail sends a plain-text email from the shared mailbox to an arbitrary
 // recipient. It carries no conversation threading — use ReplyMessage to reply
 // to a specific inbound message within the same conversation thread.
-func (c *Client) SendMail(ctx context.Context, mailbox, toAddress, subject, body string) error {
+func (c *Client) SendMail(ctx context.Context, mailbox, toAddress, subject, body, deliveryID string) error {
+	headers := []map[string]interface{}{{"name": "X-Auto-Submitted", "value": "auto-replied"}}
+	if deliveryID != "" {
+		headers = append(headers, map[string]interface{}{"name": "X-ITSM-Delivery-ID", "value": deliveryID})
+	}
 	payload := map[string]interface{}{
 		"message": map[string]interface{}{
 			"subject": subject,
@@ -290,9 +294,7 @@ func (c *Client) SendMail(ctx context.Context, mailbox, toAddress, subject, body
 			// loop. Note: Graph's internetMessageHeaders only accepts custom
 			// headers prefixed with "x-", so the RFC 3834 standard header
 			// "Auto-Submitted" must be sent as "X-Auto-Submitted".
-			"internetMessageHeaders": []map[string]interface{}{
-				{"name": "X-Auto-Submitted", "value": "auto-replied"},
-			},
+			"internetMessageHeaders": headers,
 		},
 		"saveToSentItems": "false",
 	}

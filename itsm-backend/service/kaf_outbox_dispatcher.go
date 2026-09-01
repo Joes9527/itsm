@@ -22,7 +22,7 @@ const kafWebhookRequestTimeout = 10 * time.Second
 
 const kafWebhookErrorBodyLimit = 1024
 
-const kafDelegateRequestedEventType = "kaf_delegate_requested"
+const KafDelegateRequestedEventType = "kaf_delegate_requested"
 
 // KafOutboxConfig contains the runtime settings needed to deliver delegated
 // task events. The application creates a dispatcher only when WebhookURL is set.
@@ -59,7 +59,7 @@ func NewKafOutboxDispatcher(repository *OutboxEventRepository, config KafOutboxC
 // DispatchOnce claims due events and finalizes a delivery only with the lease
 // token returned by the repository claim operation.
 func (d *KafOutboxDispatcher) DispatchOnce(ctx context.Context) error {
-	events, err := d.repository.ClaimDueByEventType(ctx, d.now().UTC(), d.config.BatchSize, kafDelegateRequestedEventType)
+	events, err := d.repository.ClaimDueByEventType(ctx, d.now().UTC(), d.config.BatchSize, KafDelegateRequestedEventType)
 	if err != nil {
 		return err
 	}
