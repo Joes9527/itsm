@@ -238,6 +238,18 @@ func TestProfessionalExtensionsDropSharedFieldsIsVersioned(t *testing.T) {
 			require.Equal(t, strings.TrimSpace(canonicalSQL), strings.TrimSpace(string(contents)),
 				"canonical migration and retained apply asset must not drift")
 		}
+		if asset != "20260901_drop_professional_extension_shared_fields_verify.sql" {
+			require.Contains(t, string(contents),
+				"CREATE POLICY %I ON %I.%I AS PERMISSIVE FOR ALL TO PUBLIC")
+		}
+	}
+	verificationSQL, err := os.ReadFile(filepath.Join("..", "migrations", "20260901_drop_professional_extension_shared_fields_verify.sql"))
+	require.NoError(t, err)
+	for _, expected := range []string{
+		"policy.polroles", "policy.polcmd", "policy.polpermissive",
+		"policy_roles <> ARRAY[0::OID]", "policy_command <> '*'", "OR NOT policy_permissive",
+	} {
+		require.Contains(t, string(verificationSQL), expected)
 	}
 }
 

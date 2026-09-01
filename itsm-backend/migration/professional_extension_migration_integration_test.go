@@ -134,32 +134,9 @@ func TestProfessionalExtensionMigrationUpgradesLegacyDirectChangePolicy(t *testi
 	_, err = db.ExecContext(ctx, verifySQL)
 	require.NoError(t, err)
 
-	var usingExpression, checkExpression string
-	require.NoError(t, db.QueryRowContext(ctx, `
-		SELECT pg_get_expr(policy.polqual, policy.polrelid), pg_get_expr(policy.polwithcheck, policy.polrelid)
-		FROM pg_policy policy
-		JOIN pg_class relation ON relation.oid = policy.polrelid
-		JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
-		WHERE namespace.nspname = current_schema()
-		  AND relation.relname = 'changes'
-		  AND policy.polname = 'tenant_isolation_changes'
-	`).Scan(&usingExpression, &checkExpression))
-	for _, expression := range []string{usingExpression, checkExpression} {
-		require.Contains(t, expression, "work_item.tenant_id")
-		require.Contains(t, expression, "work_item.deleted_at IS NULL")
-		require.Contains(t, expression, "app.current_tenant")
-		require.NotContains(t, expression, "app.current_tenant_id")
-		require.NotContains(t, expression, "changes.tenant_id")
+	for _, tableName := range professionalExtensionTables {
+		requireCanonicalProfessionalExtensionPolicy(t, ctx, db, tableName)
 	}
-	var policyCount int
-	require.NoError(t, db.QueryRowContext(ctx, `
-		SELECT COUNT(*)
-		FROM pg_policy policy
-		JOIN pg_class relation ON relation.oid = policy.polrelid
-		JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
-		WHERE namespace.nspname = current_schema() AND relation.relname = 'changes'
-	`).Scan(&policyCount))
-	require.Equal(t, 1, policyCount)
 
 	var schemaName string
 	require.NoError(t, db.QueryRowContext(ctx, `SELECT current_schema()`).Scan(&schemaName))
@@ -196,6 +173,90 @@ func TestProfessionalExtensionMigrationUpgradesLegacyDirectChangePolicy(t *testi
 	_, err = tx.ExecContext(ctx, `INSERT INTO changes (work_item_id) VALUES (2)`)
 	require.Error(t, err, "cross-tenant WorkItem association must be rejected by WITH CHECK")
 	require.NoError(t, tx.Rollback())
+}
+
+func TestProfessionalExtensionMigrationUpgradesFresh009DirectPoliciesForEveryExtension(t *testing.T) {
+	db := openProfessionalExtensionMigrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+	defer cancel()
+
+	for _, tableName := range professionalExtensionTables {
+		_, err := db.ExecContext(ctx, fmt.Sprintf(`
+			ALTER TABLE %s ENABLE ROW LEVEL SECURITY;
+			CREATE POLICY tenant_isolation_%s ON %s AS PERMISSIVE FOR ALL TO PUBLIC
+				USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)
+				WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint)
+		`, tableName, tableName, tableName))
+		require.NoError(t, err)
+	}
+
+	_, err := db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+	require.NoError(t, err)
+	verifySQL := readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_verify.sql")
+	_, err = db.ExecContext(ctx, verifySQL)
+	require.NoError(t, err)
+	for _, tableName := range professionalExtensionTables {
+		requireCanonicalProfessionalExtensionPolicy(t, ctx, db, tableName)
+	}
+}
+
+func TestProfessionalExtensionPoliciesEnforceWorkItemScopeForEveryExtension(t *testing.T) {
+	db := openProfessionalExtensionMigrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+	defer cancel()
+
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO tickets (id, tenant_id, record_class, deleted_at) VALUES
+			(11, 101, 'incident', NULL), (12, 202, 'incident', NULL), (13, 101, 'incident', NOW()), (14, 202, 'incident', NULL),
+			(21, 101, 'problem', NULL), (22, 202, 'problem', NULL), (23, 101, 'problem', NOW()), (24, 202, 'problem', NULL),
+			(31, 101, 'change_request', NULL), (32, 202, 'change_request', NULL), (33, 101, 'change_request', NOW()), (34, 202, 'change_request', NULL);
+		INSERT INTO incidents (work_item_id, tenant_id) VALUES (11, 101), (12, 202), (13, 101);
+		INSERT INTO problems (work_item_id, tenant_id) VALUES (21, 101), (22, 202), (23, 101);
+		INSERT INTO changes (work_item_id, tenant_id) VALUES (31, 101), (32, 202), (33, 101);
+	`)
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+	require.NoError(t, err)
+
+	var schemaName string
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT current_schema()`).Scan(&schemaName))
+	roleName := "professional_extension_all_rls_" + strings.ReplaceAll(uuid.NewString(), "-", "_")
+	_, err = db.ExecContext(ctx, fmt.Sprintf(`
+		CREATE ROLE %q NOLOGIN;
+		GRANT USAGE ON SCHEMA %q TO %q;
+		GRANT SELECT ON %q.tickets, %q.incidents, %q.problems, %q.changes TO %q;
+		GRANT INSERT ON %q.incidents, %q.problems, %q.changes TO %q;
+	`, roleName, schemaName, roleName, schemaName, schemaName, schemaName, schemaName, roleName,
+		schemaName, schemaName, schemaName, roleName))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, dropErr := db.ExecContext(context.Background(), fmt.Sprintf(`DROP OWNED BY %q; DROP ROLE IF EXISTS %q`, roleName, roleName))
+		require.NoError(t, dropErr)
+	})
+
+	for index, testCase := range []struct {
+		table               string
+		crossTenantWorkItem int
+	}{
+		{table: "incidents", crossTenantWorkItem: 14},
+		{table: "problems", crossTenantWorkItem: 24},
+		{table: "changes", crossTenantWorkItem: 34},
+	} {
+		t.Run(testCase.table, func(t *testing.T) {
+			tx, txErr := db.BeginTx(ctx, nil)
+			require.NoError(t, txErr)
+			_, txErr = tx.ExecContext(ctx, fmt.Sprintf(`SET LOCAL ROLE %q`, roleName))
+			require.NoError(t, txErr)
+			_, txErr = tx.ExecContext(ctx, `SET LOCAL app.current_tenant = '101'`)
+			require.NoError(t, txErr)
+			var visible int
+			require.NoError(t, tx.QueryRowContext(ctx, fmt.Sprintf(`SELECT COUNT(*) FROM %s`, testCase.table)).Scan(&visible))
+			require.Equal(t, 1, visible, "cross-tenant and soft-deleted WorkItems must be hidden")
+			_, txErr = tx.ExecContext(ctx, fmt.Sprintf(`INSERT INTO %s (id, work_item_id) VALUES ($1, $2)`, testCase.table), 9000+index, testCase.crossTenantWorkItem)
+			require.Error(t, txErr, "cross-tenant WorkItem association must fail WITH CHECK")
+			require.NoError(t, tx.Rollback())
+		})
+	}
 }
 
 func TestProfessionalExtensionMigrationRejectsConflictingNamedForeignKey(t *testing.T) {
@@ -287,6 +348,50 @@ func TestProfessionalExtensionResetRejectsAdditionalForeignKey(t *testing.T) {
 	require.ErrorContains(t, err, "additional foreign key")
 }
 
+func TestProfessionalExtensionApplyVerifyAndResetRejectAdditionalForeignKeyOnEveryExtension(t *testing.T) {
+	for _, testCase := range []struct {
+		table      string
+		constraint string
+	}{
+		{table: "incidents", constraint: "incidents_tickets_work_item"},
+		{table: "problems", constraint: "problems_tickets_work_item"},
+		{table: "changes", constraint: "changes_tickets_work_item"},
+	} {
+		t.Run(testCase.table, func(t *testing.T) {
+			for _, gate := range []string{"apply", "verify", "reset"} {
+				t.Run(gate, func(t *testing.T) {
+					db := openProfessionalExtensionMigrationDB(t)
+					ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+					defer cancel()
+					if gate == "verify" {
+						_, err := db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+						require.NoError(t, err)
+					} else {
+						_, err := db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE %s ADD CONSTRAINT %s FOREIGN KEY (work_item_id) REFERENCES tickets(id)`, testCase.table, testCase.constraint))
+						require.NoError(t, err)
+					}
+					_, err := db.ExecContext(ctx, `CREATE TABLE wrong_work_items (id BIGINT PRIMARY KEY)`)
+					require.NoError(t, err)
+					_, err = db.ExecContext(ctx, fmt.Sprintf(`ALTER TABLE %s ADD CONSTRAINT %s_wrong_work_item FOREIGN KEY (work_item_id) REFERENCES wrong_work_items(id)`, testCase.table, testCase.table))
+					require.NoError(t, err)
+
+					var statement string
+					switch gate {
+					case "apply":
+						statement = GetMigrationSQL("022_drop_professional_extension_shared_fields")
+					case "verify":
+						statement = readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_verify.sql")
+					default:
+						statement = readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_dev_reset.sql")
+					}
+					_, err = db.ExecContext(ctx, statement)
+					require.Error(t, err)
+				})
+			}
+		})
+	}
+}
+
 func TestProfessionalExtensionMigrationRejectsConflictingNamedIndex(t *testing.T) {
 	db := openProfessionalExtensionMigrationDB(t)
 	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
@@ -358,48 +463,127 @@ func TestProfessionalExtensionVerificationRejectsPermissivePolicyShape(t *testin
 }
 
 func TestProfessionalExtensionVerificationRejectsCanonicalPolicyWithPermissiveBranch(t *testing.T) {
-	db := openProfessionalExtensionMigrationDB(t)
-	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
-	defer cancel()
-
-	_, err := db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
-	require.NoError(t, err)
-	_, err = db.ExecContext(ctx, `
-		DROP POLICY tenant_isolation_changes ON changes;
-		CREATE POLICY tenant_isolation_changes ON changes
-			USING ((EXISTS (
-				SELECT 1 FROM tickets work_item
-				WHERE work_item.id = changes.work_item_id
-				  AND work_item.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint
-				  AND work_item.deleted_at IS NULL
-			)) OR true)
-			WITH CHECK ((EXISTS (
-				SELECT 1 FROM tickets work_item
-				WHERE work_item.id = changes.work_item_id
-				  AND work_item.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint
-				  AND work_item.deleted_at IS NULL
-			)) OR true);
-	`)
-	require.NoError(t, err)
-
-	verifySQL := readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_verify.sql")
-	_, err = db.ExecContext(ctx, verifySQL)
-	require.ErrorContains(t, err, "must use authoritative WorkItem tenant and soft-delete scope exactly")
+	for _, tableName := range professionalExtensionTables {
+		t.Run(tableName, func(t *testing.T) {
+			db := openProfessionalExtensionMigrationDB(t)
+			ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+			defer cancel()
+			_, err := db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+			require.NoError(t, err)
+			replaceCanonicalProfessionalExtensionPolicy(t, ctx, db, tableName, "AS PERMISSIVE FOR ALL TO PUBLIC", true)
+			verifySQL := readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_verify.sql")
+			_, err = db.ExecContext(ctx, verifySQL)
+			require.ErrorContains(t, err, "must use authoritative WorkItem tenant and soft-delete scope exactly")
+		})
+	}
 }
 
 func TestProfessionalExtensionVerificationRejectsAdditionalPolicy(t *testing.T) {
-	db := openProfessionalExtensionMigrationDB(t)
-	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
-	defer cancel()
+	for _, tableName := range professionalExtensionTables {
+		t.Run(tableName, func(t *testing.T) {
+			db := openProfessionalExtensionMigrationDB(t)
+			ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+			defer cancel()
+			_, err := db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+			require.NoError(t, err)
+			_, err = db.ExecContext(ctx, fmt.Sprintf(`CREATE POLICY tenant_isolation_extra ON %s USING (true) WITH CHECK (true)`, tableName))
+			require.NoError(t, err)
+			verifySQL := readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_verify.sql")
+			_, err = db.ExecContext(ctx, verifySQL)
+			require.ErrorContains(t, err, "exactly one canonical RLS policy")
+		})
+	}
+}
 
-	_, err := db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
-	require.NoError(t, err)
-	_, err = db.ExecContext(ctx, `CREATE POLICY tenant_isolation_extra ON changes USING (true) WITH CHECK (true)`)
-	require.NoError(t, err)
+func TestProfessionalExtensionVerificationRejectsMissingCanonicalPolicy(t *testing.T) {
+	for _, tableName := range professionalExtensionTables {
+		t.Run(tableName, func(t *testing.T) {
+			db := openProfessionalExtensionMigrationDB(t)
+			ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+			defer cancel()
+			_, err := db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+			require.NoError(t, err)
+			_, err = db.ExecContext(ctx, fmt.Sprintf(`DROP POLICY tenant_isolation_%s ON %s`, tableName, tableName))
+			require.NoError(t, err)
+			verifySQL := readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_verify.sql")
+			_, err = db.ExecContext(ctx, verifySQL)
+			require.ErrorContains(t, err, "must use authoritative WorkItem tenant and soft-delete scope exactly")
+		})
+	}
+}
 
-	verifySQL := readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_verify.sql")
-	_, err = db.ExecContext(ctx, verifySQL)
-	require.ErrorContains(t, err, "exactly one canonical RLS policy")
+func TestProfessionalExtensionVerificationRejectsRoleScopedCanonicalPolicy(t *testing.T) {
+	verifyProfessionalExtensionPolicyAttributeRejection(t, "AS PERMISSIVE FOR ALL TO itsm_admin")
+}
+
+func TestProfessionalExtensionVerificationRejectsCommandScopedCanonicalPolicy(t *testing.T) {
+	verifyProfessionalExtensionPolicyAttributeRejection(t, "AS PERMISSIVE FOR UPDATE TO PUBLIC")
+}
+
+func TestProfessionalExtensionVerificationRejectsRestrictiveCanonicalPolicy(t *testing.T) {
+	verifyProfessionalExtensionPolicyAttributeRejection(t, "AS RESTRICTIVE FOR ALL TO PUBLIC")
+}
+
+var professionalExtensionTables = []string{"incidents", "problems", "changes"}
+
+func verifyProfessionalExtensionPolicyAttributeRejection(t *testing.T, attributes string) {
+	t.Helper()
+	for _, tableName := range professionalExtensionTables {
+		t.Run(tableName, func(t *testing.T) {
+			db := openProfessionalExtensionMigrationDB(t)
+			ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+			defer cancel()
+			_, err := db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+			require.NoError(t, err)
+			replaceCanonicalProfessionalExtensionPolicy(t, ctx, db, tableName, attributes, false)
+			verifySQL := readProfessionalExtensionMigrationAsset(t, "20260901_drop_professional_extension_shared_fields_verify.sql")
+			_, err = db.ExecContext(ctx, verifySQL)
+			require.ErrorContains(t, err, "must have canonical PUBLIC/ALL/PERMISSIVE policy attributes")
+		})
+	}
+}
+
+func replaceCanonicalProfessionalExtensionPolicy(t *testing.T, ctx context.Context, db *sql.DB, tableName, attributes string, permissiveBranch bool) {
+	t.Helper()
+	predicate := fmt.Sprintf(`EXISTS (
+		SELECT 1 FROM tickets work_item
+		WHERE work_item.id = %s.work_item_id
+		  AND work_item.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint
+		  AND work_item.deleted_at IS NULL
+	)`, tableName)
+	if permissiveBranch {
+		predicate = "(" + predicate + " OR true)"
+	}
+	_, err := db.ExecContext(ctx, fmt.Sprintf(`
+		DROP POLICY tenant_isolation_%s ON %s;
+		CREATE POLICY tenant_isolation_%s ON %s %s USING (%s) WITH CHECK (%s);
+	`, tableName, tableName, tableName, tableName, attributes, predicate, predicate))
+	require.NoError(t, err)
+}
+
+func requireCanonicalProfessionalExtensionPolicy(t *testing.T, ctx context.Context, db *sql.DB, tableName string) {
+	t.Helper()
+	var usingExpression, checkExpression, policyCommand string
+	var policyRoles pq.Int64Array
+	var policyPermissive bool
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT pg_get_expr(policy.polqual, policy.polrelid), pg_get_expr(policy.polwithcheck, policy.polrelid),
+		       policy.polroles, policy.polcmd, policy.polpermissive
+		FROM pg_policy policy
+		JOIN pg_class relation ON relation.oid = policy.polrelid
+		JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+		WHERE namespace.nspname = current_schema() AND relation.relname = $1 AND policy.polname = $2
+	`, tableName, "tenant_isolation_"+tableName).Scan(&usingExpression, &checkExpression, &policyRoles, &policyCommand, &policyPermissive))
+	require.Equal(t, pq.Int64Array{0}, policyRoles)
+	require.Equal(t, "*", policyCommand)
+	require.True(t, policyPermissive)
+	for _, expression := range []string{usingExpression, checkExpression} {
+		require.Contains(t, expression, tableName+".work_item_id")
+		require.Contains(t, expression, "work_item.tenant_id")
+		require.Contains(t, expression, "work_item.deleted_at IS NULL")
+		require.Contains(t, expression, "app.current_tenant")
+		require.NotContains(t, expression, "app.current_tenant_id")
+	}
 }
 
 func openProfessionalExtensionMigrationDB(t *testing.T) *sql.DB {

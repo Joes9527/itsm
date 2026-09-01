@@ -16,10 +16,13 @@ BEGIN
 		RAISE EXCEPTION 'required WorkItem table tickets is missing from schema %', current_schema();
 	END IF;
 
-	IF to_regclass(format('%I.changes', current_schema())) IS NOT NULL THEN
-		EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I.changes', current_schema());
-		EXECUTE format('DROP POLICY IF EXISTS tenant_isolation_changes ON %I.changes', current_schema());
-	END IF;
+	FOR extension_table IN SELECT unnest(ARRAY['incidents', 'problems', 'changes']) LOOP
+		IF to_regclass(format('%I.%I', current_schema(), extension_table)) IS NOT NULL THEN
+			EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I.%I', current_schema(), extension_table);
+			EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I',
+				'tenant_isolation_' || extension_table, current_schema(), extension_table);
+		END IF;
+	END LOOP;
 
     FOR extension_table, extension_index, extension_constraint IN
         SELECT * FROM (VALUES
@@ -244,18 +247,21 @@ BEGIN
 		orphan_work_item_id := NULL;
     END LOOP;
 
-	EXECUTE format(
-		'CREATE POLICY tenant_isolation_changes ON %I.changes '
-		'USING (EXISTS (SELECT 1 FROM %I.tickets work_item '
-		'WHERE work_item.id = changes.work_item_id '
-		'AND work_item.tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint '
-		'AND work_item.deleted_at IS NULL)) '
-		'WITH CHECK (EXISTS (SELECT 1 FROM %I.tickets work_item '
-		'WHERE work_item.id = changes.work_item_id '
-		'AND work_item.tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint '
-		'AND work_item.deleted_at IS NULL))',
-		current_schema(), current_schema(), current_schema()
-	);
-	EXECUTE format('ALTER TABLE %I.changes ENABLE ROW LEVEL SECURITY', current_schema());
-	EXECUTE format('ALTER TABLE %I.changes NO FORCE ROW LEVEL SECURITY', current_schema());
+	FOR extension_table IN SELECT unnest(ARRAY['incidents', 'problems', 'changes']) LOOP
+		EXECUTE format(
+			'CREATE POLICY %I ON %I.%I AS PERMISSIVE FOR ALL TO PUBLIC '
+			'USING (EXISTS (SELECT 1 FROM %I.tickets work_item '
+			'WHERE work_item.id = %I.work_item_id '
+			'AND work_item.tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint '
+			'AND work_item.deleted_at IS NULL)) '
+			'WITH CHECK (EXISTS (SELECT 1 FROM %I.tickets work_item '
+			'WHERE work_item.id = %I.work_item_id '
+			'AND work_item.tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint '
+			'AND work_item.deleted_at IS NULL))',
+			'tenant_isolation_' || extension_table, current_schema(), extension_table,
+			current_schema(), extension_table, current_schema(), extension_table
+		);
+		EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', current_schema(), extension_table);
+		EXECUTE format('ALTER TABLE %I.%I NO FORCE ROW LEVEL SECURITY', current_schema(), extension_table);
+	END LOOP;
 END $migration$;
