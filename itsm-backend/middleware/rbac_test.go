@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"itsm-backend/authorization"
 	"itsm-backend/ent/enttest"
 
 	"github.com/gin-gonic/gin"
@@ -215,53 +216,53 @@ func TestRequireLegacyBPMNRoles(t *testing.T) {
 
 func TestHasResourcePermission(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	original := PermissionConfig.Mode
-	PermissionConfig.Mode = PermissionConfigModeHardcodeOnly
-	t.Cleanup(func() { PermissionConfig.Mode = original })
+	original := authorization.PermissionConfig.Mode
+	authorization.PermissionConfig.Mode = authorization.PermissionConfigModeHardcodeOnly
+	t.Cleanup(func() { authorization.PermissionConfig.Mode = original })
 
 	t.Run("Super Admin Has All Permissions", func(t *testing.T) {
-		result := hasResourcePermission(nil, "super_admin", "any_resource", "any_action", 1)
+		result := authorization.HasResourcePermission(nil, "super_admin", "any_resource", "any_action", 1)
 		assert.True(t, result)
 	})
 
 	t.Run("End User Has Ticket Read Permission", func(t *testing.T) {
-		result := hasResourcePermission(nil, "end_user", "ticket", "read", 1)
+		result := authorization.HasResourcePermission(nil, "end_user", "ticket", "read", 1)
 		assert.True(t, result)
 	})
 
 	t.Run("End User Does Not Have Ticket Delete Permission", func(t *testing.T) {
-		result := hasResourcePermission(nil, "end_user", "ticket", "delete", 1)
+		result := authorization.HasResourcePermission(nil, "end_user", "ticket", "delete", 1)
 		assert.False(t, result)
 	})
 
 	t.Run("Unknown Role Has No Permissions", func(t *testing.T) {
-		result := hasResourcePermission(nil, "unknown_role", "ticket", "read", 1)
+		result := authorization.HasResourcePermission(nil, "unknown_role", "ticket", "read", 1)
 		assert.False(t, result)
 	})
 
 	t.Run("Wildcard Permission", func(t *testing.T) {
 		// Super admin has wildcard "*" permission
-		result := hasResourcePermission(nil, "super_admin", "ticket", "delete", 1)
+		result := authorization.HasResourcePermission(nil, "super_admin", "ticket", "delete", 1)
 		assert.True(t, result)
 
-		result = hasResourcePermission(nil, "super_admin", "anything", "anything", 1)
+		result = authorization.HasResourcePermission(nil, "super_admin", "anything", "anything", 1)
 		assert.True(t, result)
 	})
 }
 
 func TestCheckPermissionMatch_ResourceAdminIncludesActions(t *testing.T) {
-	permissions := []Permission{{Resource: "ticket", Action: "admin"}}
+	permissions := []authorization.Permission{{Resource: "ticket", Action: "admin"}}
 
-	assert.True(t, checkPermissionMatch(permissions, "ticket", "assign"))
-	assert.False(t, checkPermissionMatch(permissions, "incident", "assign"))
+	assert.True(t, authorization.CheckPermissionMatch(permissions, "ticket", "assign"))
+	assert.False(t, authorization.CheckPermissionMatch(permissions, "incident", "assign"))
 }
 
 func TestDBOnlyPermissionModeDoesNotUseHardcodedFallback(t *testing.T) {
-	original := PermissionConfig.Mode
-	PermissionConfig.Mode = PermissionConfigModeDBOnly
-	t.Cleanup(func() { PermissionConfig.Mode = original })
+	original := authorization.PermissionConfig.Mode
+	authorization.PermissionConfig.Mode = authorization.PermissionConfigModeDBOnly
+	t.Cleanup(func() { authorization.PermissionConfig.Mode = original })
 
-	permissions := loadPermissionsByMode(nil, "admin", 1)
+	permissions := authorization.LoadPermissionsByMode(nil, "admin", 1)
 	assert.Empty(t, permissions)
-	assert.False(t, checkPermissionMatch(permissions, "ticket", "read"))
+	assert.False(t, authorization.CheckPermissionMatch(permissions, "ticket", "read"))
 }

@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	"itsm-backend/middleware"
 	"itsm-backend/repository/ticket"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -45,7 +45,7 @@ func seedRolePermission(t *testing.T, client *ent.Client, tenantID int, roleCode
 func TestCanAssign_NotExcludedForRequester(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
@@ -62,7 +62,7 @@ func TestCanAssign_NotExcludedForRequester(t *testing.T) {
 func TestCanCC_AllowedForRequester(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
@@ -88,7 +88,7 @@ func TestCanCC_AllowedForRequester(t *testing.T) {
 func TestCanCC_BlockedForUnrelatedUser(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
@@ -120,7 +120,7 @@ func TestCanCC_BlockedForUnrelatedUser(t *testing.T) {
 func TestCanDelete_BlockedByRunningProcessInstance(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
@@ -165,7 +165,7 @@ func TestCanDelete_BlockedByRunningProcessInstance(t *testing.T) {
 func TestCanProvision_RequesterExcludedEvenWithPermission(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
@@ -180,7 +180,7 @@ func TestCanProvision_RequesterExcludedEvenWithPermission(t *testing.T) {
 func TestCanProvision_AllowedForFulfillerNotRequester(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)
@@ -194,7 +194,7 @@ func TestCanProvision_AllowedForFulfillerNotRequester(t *testing.T) {
 func TestCanProvision_DeniedForEndUserEvenNotRequester(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 每个测试独立的权限缓存视图，避免跨测试用例的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	tenant, err := client.Tenant.Create().SetName("t").SetCode("t").SetDomain("t.com").SetStatus("active").Save(ctx)

@@ -3,17 +3,17 @@ package change
 import (
 	"errors"
 
+	"itsm-backend/authorization"
 	"itsm-backend/dto"
-	"itsm-backend/middleware"
 	"itsm-backend/service"
 )
 
 func canWriteChange(actor service.ActionActor) bool {
-	return middleware.HasResourcePermission(actor.Client, actor.Role, "change", "write", actor.TenantID)
+	return authorization.HasResourcePermission(actor.Client, actor.Role, "change", "write", actor.TenantID)
 }
 
 func canApproveChangePermission(actor service.ActionActor) bool {
-	return middleware.HasResourcePermission(actor.Client, actor.Role, "change", "approve", actor.TenantID)
+	return authorization.HasResourcePermission(actor.Client, actor.Role, "change", "approve", actor.TenantID)
 }
 
 func CanSubmitForApproval(actor service.ActionActor, c *Change) dto.ActionPermission {

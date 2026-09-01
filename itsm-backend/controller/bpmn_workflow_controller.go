@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -51,7 +52,7 @@ func getBPMNTenantContext(ctx *gin.Context) (context.Context, int, bool) {
 	clientValue, _ := ctx.Get("client")
 	client, _ := clientValue.(*ent.Client)
 	hasPermission := func(resource, action string) bool {
-		return client != nil && middleware.HasResourcePermission(client, role, resource, action, tenantID)
+		return client != nil && authorization.HasResourcePermission(client, role, resource, action, tenantID)
 	}
 	scope := service.BPMNAccessScope{
 		UserID:                userID,

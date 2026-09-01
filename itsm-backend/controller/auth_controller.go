@@ -5,9 +5,9 @@ import (
 	"os"
 	"strings"
 
+	"itsm-backend/authentication"
 	"itsm-backend/common"
 	"itsm-backend/dto"
-	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -64,7 +64,7 @@ func (ac *AuthController) Login(c *gin.Context) {
 		return
 	}
 
-	ctx := middleware.WithLoginAuditRequest(c.Request.Context(), c.ClientIP(), c.Request.UserAgent())
+	ctx := authentication.WithLoginAuditRequest(c.Request.Context(), c.ClientIP(), c.Request.UserAgent())
 	response, err := ac.authService.Login(ctx, &req)
 	if err != nil {
 		common.AuthFailed(c, err.Error())

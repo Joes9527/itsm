@@ -6,28 +6,28 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	"itsm-backend/middleware"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
 
-func withApprovalDecisionRolePermissions(t *testing.T, role string, permissions []middleware.Permission) {
+func withApprovalDecisionRolePermissions(t *testing.T, role string, permissions []authorization.Permission) {
 	t.Helper()
-	previousMode := middleware.PermissionConfig.Mode
-	previousPermissions, existed := middleware.RolePermissions[role]
-	middleware.PermissionConfig.Mode = middleware.PermissionConfigModeHardcodeOnly
-	middleware.RolePermissions[role] = permissions
+	previousMode := authorization.PermissionConfig.Mode
+	previousPermissions, existed := authorization.RolePermissions[role]
+	authorization.PermissionConfig.Mode = authorization.PermissionConfigModeHardcodeOnly
+	authorization.RolePermissions[role] = permissions
 	t.Cleanup(func() {
-		middleware.PermissionConfig.Mode = previousMode
+		authorization.PermissionConfig.Mode = previousMode
 		if existed {
-			middleware.RolePermissions[role] = previousPermissions
+			authorization.RolePermissions[role] = previousPermissions
 		} else {
-			delete(middleware.RolePermissions, role)
+			delete(authorization.RolePermissions, role)
 		}
 	})
 }
@@ -55,23 +55,39 @@ func TestTicketWorkflowServiceGetApprovalDecisionsUsesRecordClassReadPolicy(t *t
 	workflowService := NewTicketWorkflowService(client, zaptest.NewLogger(t).Sugar())
 
 	tests := []struct {
-		name        string
-		recordClass string
-		resource    string
+		name         string
+		recordClass  string
+		resource     string
+		businessType string
 	}{
-		{name: "generic", recordClass: "generic", resource: "ticket"},
-		{name: "incident", recordClass: "incident", resource: "incident"},
-		{name: "problem", recordClass: "problem", resource: "problem"},
-		{name: "change request", recordClass: "change_request", resource: "change"},
-		{name: "service request item", recordClass: "service_request_item", resource: "service_request"},
-		{name: "catalog task", recordClass: "catalog_task", resource: "service_request"},
+		{name: "generic", recordClass: "generic", resource: "ticket", businessType: "ticket"},
+		{name: "incident", recordClass: "incident", resource: "incident", businessType: "incident"},
+		{name: "problem", recordClass: "problem", resource: "problem", businessType: "problem"},
+		{name: "change request", recordClass: "change_request", resource: "change", businessType: "change"},
+		{name: "service request item", recordClass: "service_request_item", resource: "service_request", businessType: "service_request"},
+		{name: "catalog task", recordClass: "catalog_task", resource: "service_request", businessType: "service_request"},
 	}
 
 	for index, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			role := fmt.Sprintf("approval_history_reader_%d", index)
-			withApprovalDecisionRolePermissions(t, role, []middleware.Permission{{Resource: test.resource, Action: "read"}})
+			withApprovalDecisionRolePermissions(t, role, []authorization.Permission{{Resource: test.resource, Action: "read"}})
 			workItem := createApprovalDecisionWorkItem(t, client, tenant, requester, test.recordClass, fmt.Sprintf("%d", index))
+			decision, err := client.ProcessApprovalDecision.Create().
+				SetProcessInstanceID(100 + index).
+				SetProcessTaskID(100 + index).
+				SetProcessInstanceKey(fmt.Sprintf("PI-%d", index)).
+				SetTaskID(fmt.Sprintf("TASK-%d", index)).
+				SetProcessDefinitionKey("approval-history-test").
+				SetNodeKey("manager-approval").
+				SetBusinessType(test.businessType).
+				SetBusinessID(fmt.Sprintf("%d", workItem.ID)).
+				SetActorID(requester.ID).
+				SetAction("approve").
+				SetDecision("approved").
+				SetTenantID(tenant.ID).
+				Save(ctx)
+			require.NoError(t, err)
 
 			decisions, err := workflowService.GetApprovalDecisions(ctx, workItem.ID, ActionActor{
 				TenantID: tenant.ID,
@@ -79,10 +95,11 @@ func TestTicketWorkflowServiceGetApprovalDecisionsUsesRecordClassReadPolicy(t *t
 				Role:     role,
 			})
 			require.NoError(t, err)
-			require.Empty(t, decisions)
+			require.Len(t, decisions, 1)
+			require.Equal(t, decision.ID, decisions[0].ID)
 
 			wrongRole := role + "_wrong"
-			withApprovalDecisionRolePermissions(t, wrongRole, []middleware.Permission{{Resource: "unrelated", Action: "read"}})
+			withApprovalDecisionRolePermissions(t, wrongRole, []authorization.Permission{{Resource: "unrelated", Action: "read"}})
 			_, err = workflowService.GetApprovalDecisions(ctx, workItem.ID, ActionActor{
 				TenantID: tenant.ID,
 				UserID:   requester.ID,
@@ -107,7 +124,7 @@ func TestTicketWorkflowServiceGetApprovalDecisionsHidesForeignAndDeletedWorkItem
 	client.Ticket.UpdateOneID(deleted.ID).SetDeletedAt(time.Now()).ExecX(ctx)
 
 	role := "approval_visibility_reader"
-	withApprovalDecisionRolePermissions(t, role, []middleware.Permission{{Resource: "ticket", Action: "read"}})
+	withApprovalDecisionRolePermissions(t, role, []authorization.Permission{{Resource: "ticket", Action: "read"}})
 	workflowService := NewTicketWorkflowService(client, zaptest.NewLogger(t).Sugar())
 	for name, tc := range map[string]struct {
 		id       int

@@ -84,7 +84,7 @@ func TestSSLVPNRequest_ApprovalDelegationDeliveryAndCompletion(t *testing.T) {
 	assert.Equal(t, "service_request_item", workItem.RecordClass)
 	assertExclusiveSSLVPNServiceRequestClass(t, fx, workItem.ID)
 
-	instance := awaitSSLVPNInstance(t, fx, "ticket", workItem.ID)
+	instance := awaitSSLVPNInstance(t, fx, "service_request", workItem.ID)
 	completeSSLVPNApproval(t, fx, instance, "Approval_1")
 	assertNoSSLVPNDelegation(t, fx, instance)
 	completeSSLVPNApproval(t, fx, instance, "Approval_2")
@@ -106,7 +106,7 @@ func TestSSLVPNKafDelegation_OneAppliedActionAdvancesBPMNOnce(t *testing.T) {
 	deploySSLVPNDefinition(t, fx, "sslvpn_execution_integrity", fmt.Sprintf(sslvpnApprovalNodes, fx.approver.ID, fx.approver.ID), sslvpnApprovalFlows)
 
 	sr := createSSLVPNServiceRequestForDefinition(t, fx, "sslvpn_execution_integrity")
-	instance := awaitSSLVPNInstance(t, fx, "ticket", sr.TicketID)
+	instance := awaitSSLVPNInstance(t, fx, "service_request", sr.TicketID)
 	require.NoError(t, completeSSLVPNApproval(t, fx, instance, "Approval_1"))
 	require.NoError(t, completeSSLVPNApproval(t, fx, instance, "Approval_2"))
 	task := assertOneSSLVPNDelegation(t, fx, instance)
@@ -197,7 +197,7 @@ func TestSSLVPNRequest_ConflictingRecordClassVariableCannotReachKAF(t *testing.T
 	deploySSLVPNDefinition(t, fx, "sslvpn_record_class_conflict", fmt.Sprintf(sslvpnApprovalNodes, fx.approver.ID, fx.approver.ID), sslvpnApprovalFlows)
 
 	sr := createSSLVPNServiceRequestForDefinition(t, fx, "sslvpn_record_class_conflict")
-	instance := awaitSSLVPNInstance(t, fx, "ticket", sr.TicketID)
+	instance := awaitSSLVPNInstance(t, fx, "service_request", sr.TicketID)
 	require.NoError(t, completeSSLVPNApproval(t, fx, instance, "Approval_1"))
 	err := completeSSLVPNApprovalWithVariables(t, fx, instance, "Approval_2", map[string]interface{}{"approvalAction": "approve", "approvalResult": "approved", "record_class": "incident"})
 	require.ErrorContains(t, err, "record class variable conflicts")

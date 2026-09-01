@@ -144,7 +144,7 @@ func TestTicketWorkflowStartUsesScopeActorInsteadOfRequestedFor(t *testing.T) {
 
 	err := service.TriggerWorkflowForExistingTicket(
 		f.scopedCtx(false, false, false, false),
-		&ticket.Ticket{ID: 701, TicketNumber: "T-701", RequesterID: f.outsider.ID},
+		&ticket.Ticket{ID: 701, TicketNumber: "T-701", RequesterID: f.outsider.ID, RecordClass: "generic"},
 		f.tenant.ID,
 		"ticket_general_flow",
 		nil,
@@ -162,7 +162,7 @@ func TestTicketWorkflowStartUsesExplicitSystemWhenNoActorIsAvailable(t *testing.
 
 	err := service.TriggerWorkflowForExistingTicket(
 		context.Background(),
-		&ticket.Ticket{ID: 702, TicketNumber: "T-702", RequesterID: f.outsider.ID},
+		&ticket.Ticket{ID: 702, TicketNumber: "T-702", RequesterID: f.outsider.ID, RecordClass: "generic"},
 		f.tenant.ID,
 		"ticket_general_flow",
 		nil,
@@ -170,6 +170,29 @@ func TestTicketWorkflowStartUsesExplicitSystemWhenNoActorIsAvailable(t *testing.
 	require.NoError(t, err)
 	require.NotNil(t, trigger.req)
 	assert.Equal(t, "system", trigger.req.TriggeredBy)
+}
+
+func TestTicketWorkflowStartUsesRecordClassCanonicalBusinessIdentity(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	trigger := &processStartTriggerCapture{}
+	service := &TicketService{processTriggerSvc: trigger, logger: zap.NewNop().Sugar()}
+
+	err := service.TriggerWorkflowForExistingTicket(
+		f.scopedCtx(false, false, false, false),
+		&ticket.Ticket{
+			ID:           703,
+			TicketNumber: "RITM-703",
+			RequesterID:  f.outsider.ID,
+			RecordClass:  "service_request_item",
+		},
+		f.tenant.ID,
+		"service_request_flow",
+		nil,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, trigger.req)
+	assert.Equal(t, dto.BusinessTypeServiceRequest, trigger.req.BusinessType)
+	assert.Equal(t, 703, trigger.req.BusinessID)
 }
 
 func TestIncidentWorkflowStartUsesScopeActorInsteadOfReporter(t *testing.T) {

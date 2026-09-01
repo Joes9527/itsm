@@ -623,7 +623,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				tickets.GET("/:id/workflow/state", middleware.RequirePermission("ticket", "read"), config.TicketWorkflowController.GetTicketWorkflowState)
 				tickets.GET("/:id/workflow-history", middleware.RequirePermission("ticket", "read"), config.TicketWorkflowController.GetTicketWorkflowHistory)
 				tickets.GET("/:id/workflow_records", middleware.RequirePermission("ticket", "read"), config.TicketWorkflowController.GetTicketWorkflowHistory)
-				tickets.GET("/:id/approval-decisions", middleware.RequireWorkItemRecordClassPermission("read"), config.TicketWorkflowController.GetApprovalDecisions)
+				tickets.GET("/:id/approval-decisions", config.TicketWorkflowController.GetApprovalDecisions)
 			}
 
 			// 工单自动化规则

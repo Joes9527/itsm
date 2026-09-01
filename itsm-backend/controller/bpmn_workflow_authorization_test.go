@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/authentication"
+	"itsm-backend/authorization"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
@@ -144,7 +146,7 @@ func seedBPMNRolePermissions(t *testing.T, client *ent.Client, tenantID int, rol
 			Save(dbCtx)
 		require.NoError(t, createErr)
 	}
-	middleware.InvalidateAllPermissionCaches()
+	authorization.InvalidateAllPermissionCaches()
 }
 
 func TestGetBPMNTenantContextBuildsSelectiveOrdinaryRoleScope(t *testing.T) {
@@ -177,7 +179,7 @@ func TestGetBPMNTenantContextBuildsSelectiveOrdinaryRoleScope(t *testing.T) {
 			gin.SetMode(gin.TestMode)
 			client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:bpmn_scope_%d?mode=memory&cache=shared&_fk=1", time.Now().UnixNano()))
 			t.Cleanup(func() { require.NoError(t, client.Close()) })
-			t.Cleanup(middleware.InvalidateAllPermissionCaches)
+			t.Cleanup(authorization.InvalidateAllPermissionCaches)
 			dbCtx := context.Background()
 			tenant, err := client.Tenant.Create().SetCode("scope-tenant").SetName("scope-tenant").SetStatus("active").Save(dbCtx)
 			require.NoError(t, err)
@@ -235,7 +237,7 @@ func TestGetBPMNTenantContextRejectsRequestSelectedTenantForTenantlessJWT(t *tes
 	require.NoError(t, err)
 
 	const jwtSecret = "bpmn-scope-request-tenant-secret"
-	token, err := middleware.GenerateAccessToken(7, "operator", "super_admin", 0, jwtSecret, time.Hour)
+	token, err := authentication.GenerateAccessToken(7, "operator", "super_admin", 0, jwtSecret, time.Hour)
 	require.NoError(t, err)
 
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
@@ -437,8 +439,8 @@ func newBPMNHTTPAuthorizationFixture(t *testing.T) *bpmnHTTPAuthorizationFixture
 	gin.SetMode(gin.TestMode)
 	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:bpmn_http_authorization_%d?mode=memory&cache=shared&_fk=1", time.Now().UnixNano()))
 	t.Cleanup(func() { require.NoError(t, client.Close()) })
-	middleware.InvalidateAllPermissionCaches()
-	t.Cleanup(middleware.InvalidateAllPermissionCaches)
+	authorization.InvalidateAllPermissionCaches()
+	t.Cleanup(authorization.InvalidateAllPermissionCaches)
 
 	dbCtx := context.Background()
 	createTenant := func(code string) *ent.Tenant {

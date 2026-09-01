@@ -10,11 +10,12 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/authentication"
+	"itsm-backend/authorization"
 	"itsm-backend/controller"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	domainCommon "itsm-backend/handlers/common"
-	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -33,10 +34,10 @@ type ticketNotificationRouteEnv struct {
 func setupTicketNotificationRouteEnv(t *testing.T, roleCode string, permissions ...string) *ticketNotificationRouteEnv {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	middleware.InvalidateAllPermissionCaches()
+	authorization.InvalidateAllPermissionCaches()
 	client := enttest.Open(t, "sqlite3", "file:"+filepath.Join(t.TempDir(), "ticket_notification_routes.db")+"?_fk=1")
 	t.Cleanup(func() {
-		middleware.InvalidateAllPermissionCaches()
+		authorization.InvalidateAllPermissionCaches()
 		client.Close()
 	})
 
@@ -115,7 +116,7 @@ func setupTicketNotificationRouteEnv(t *testing.T, roleCode string, permissions 
 		TicketNotificationController: ticketNotifications,
 		NotificationController:       genericNotifications,
 	})
-	token, err := middleware.GenerateAccessToken(user.ID, user.Username, role.Code, tenant.ID, "ticket-notification-routes", time.Hour)
+	token, err := authentication.GenerateAccessToken(user.ID, user.Username, role.Code, tenant.ID, "ticket-notification-routes", time.Hour)
 	require.NoError(t, err)
 
 	return &ticketNotificationRouteEnv{

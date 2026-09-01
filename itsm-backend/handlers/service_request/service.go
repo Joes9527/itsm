@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	entticket "itsm-backend/ent/ticket"
 	"itsm-backend/handlers/cmdb"
 	"itsm-backend/handlers/service_catalog"
-	"itsm-backend/middleware"
 	"itsm-backend/repository/ticket"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
@@ -468,7 +468,7 @@ func (s *Service) Delete(ctx context.Context, id, tenantID, actorID int, actorRo
 
 // canManageServiceRequest 判断角色是否有 service_request:write 权限（按权限而非角色名判断）。
 func (s *Service) canManageServiceRequest(ctx context.Context, role string, tenantID int) bool {
-	return middleware.HasResourcePermission(s.client, role, "service_request", "write", tenantID)
+	return authorization.HasResourcePermission(s.client, role, "service_request", "write", tenantID)
 }
 
 // serviceRequestSystemFormDataKeys 是 handler.go normalizeCreateServiceRequest 已经从

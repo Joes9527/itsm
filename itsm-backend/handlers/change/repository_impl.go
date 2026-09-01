@@ -683,23 +683,16 @@ func (r *EntRepository) resolveWorkItemID(ctx context.Context, changeID, tenantI
 // 落一条记录），不再是 change_approvals 表——那张表的写入路径已经在
 // SubmitChange/TransitionStatus 里被下线，留着旧查询会读到空数据。
 // DTO 形状（ApprovalRecord）保持不变，前端 ChangeDetail.tsx 不用改。
-//
-// business_id 匹配两种历史格式：Wave 2（本次改动）之前记录的决策，
-// ProcessApprovalDecision.BusinessID 是 changeID 的十进制形式（因为
-// ProcessInstance.BusinessID 当时是用 changeID 触发的）；本次改动之后新记录的决策，
-// BusinessID 是 workItemID（见 Service.resolveWorkItemID 和 SubmitChange 的
-// TriggerProcess 调用）。两种都查，避免这次迁移让历史审批记录从审批历史里"消失"——
-// 这不是长期双写，是单次读路径上的向后兼容匹配，旧格式数据本身不会再新增。
 func (r *EntRepository) GetApprovalHistory(ctx context.Context, changeID int, tenantID int) ([]*ApprovalRecord, error) {
-	businessIDCandidates := []string{fmt.Sprintf("%d", changeID)}
-	if workItemID, err := r.resolveWorkItemID(ctx, changeID, tenantID); err == nil && workItemID != changeID {
-		businessIDCandidates = append(businessIDCandidates, fmt.Sprintf("%d", workItemID))
+	workItemID, err := r.resolveWorkItemID(ctx, changeID, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("解析变更 WorkItem 身份失败: %w", err)
 	}
 
 	decisions, err := r.client.ProcessApprovalDecision.Query().
 		Where(
 			processapprovaldecision.BusinessType("change"),
-			processapprovaldecision.BusinessIDIn(businessIDCandidates...),
+			processapprovaldecision.BusinessID(fmt.Sprintf("%d", workItemID)),
 			processapprovaldecision.TenantID(tenantID),
 		).
 		Order(ent.Asc(processapprovaldecision.FieldCreatedAt)).

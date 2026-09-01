@@ -374,13 +374,6 @@ export class ServiceCatalogApi {
     );
   }
 
-  // cancelServiceRequest/approveServiceRequest/rejectServiceRequest/completeServiceRequest/
-  // getPendingApprovalCount 已经移除——它们打在 Task 1 删除的
-  // /api/v1/service-requests/:id/status 和 /api/v1/service-requests/:id/approval 及
-  // /api/v1/service-requests/approvals/pending 路由上（SR 自己的审批阶段/终态操作整体退休，
-  // 状态/审批全部委托给关联 Ticket）。删除前确认过没有真实调用方：唯一的调用方
-  // src/app/(main)/service-catalog/approvals/page.tsx 已经改造成重定向到 /approvals/pending。
-
   /**
    * 获取服务请求详情（包含审批历史）
    */

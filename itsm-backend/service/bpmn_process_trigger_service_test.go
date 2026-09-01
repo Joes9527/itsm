@@ -32,6 +32,23 @@ func TestTriggerProcess_PopulatesStructuredBusinessIdentity(t *testing.T) {
 		SetStatus("active").
 		Save(ctx)
 	require.NoError(t, err)
+	requester := client.User.Create().
+		SetUsername("trigger.identity.requester").
+		SetEmail("trigger.identity.requester@example.test").
+		SetName("Trigger Identity Requester").
+		SetPasswordHash("test").
+		SetRole("change_manager").
+		SetActive(true).
+		SetTenantID(tenant.ID).
+		SaveX(ctx)
+	workItem := client.Ticket.Create().
+		SetTitle("Canonical change WorkItem").
+		SetTicketNumber("CHG-TRIGGER-IDENTITY").
+		SetType("change").
+		SetRecordClass("change_request").
+		SetRequesterID(requester.ID).
+		SetTenantID(tenant.ID).
+		SaveX(ctx)
 
 	logger := zaptest.NewLogger(t).Sugar()
 	engine := NewCustomProcessEngine(client, logger)
@@ -45,14 +62,14 @@ func TestTriggerProcess_PopulatesStructuredBusinessIdentity(t *testing.T) {
 	trigger := NewProcessTriggerService(client, engine)
 	resp, err := trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeChange,
-		BusinessID:           42,
+		BusinessID:           workItem.ID,
 		ProcessDefinitionKey: "change_normal_flow",
 		Variables:            map[string]interface{}{"approval_required": false},
 		TriggeredBy:          "system",
 		TenantID:             tenant.ID,
 	})
 	require.NoError(t, err)
-	require.Equal(t, "change:42", resp.BusinessKey)
+	require.Equal(t, fmt.Sprintf("change:%d", workItem.ID), resp.BusinessKey)
 
 	// dto.ProcessTriggerResponse.ProcessInstanceID is the ent row's integer primary
 	// key (instance.ID), not the string BPMN engine id (instance.ProcessInstanceID) —
@@ -61,7 +78,31 @@ func TestTriggerProcess_PopulatesStructuredBusinessIdentity(t *testing.T) {
 	instance, err := client.ProcessInstance.Get(ctx, resp.ProcessInstanceID)
 	require.NoError(t, err)
 	require.Equal(t, "change", instance.BusinessType)
-	require.Equal(t, 42, instance.BusinessID)
+	require.Equal(t, workItem.ID, instance.BusinessID)
+}
+
+func TestTriggerProcessRejectsBusinessTypeThatDisagreesWithWorkItemRecordClass(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:trigger_business_identity_mismatch?mode=memory&cache=shared&_fk=1")
+	t.Cleanup(func() { require.NoError(t, client.Close()) })
+	ctx := context.Background()
+	tenant := client.Tenant.Create().SetName("Identity mismatch").SetCode("identity-mismatch").SetStatus("active").SaveX(ctx)
+	requester := client.User.Create().SetUsername("identity.mismatch").SetEmail("identity.mismatch@example.test").SetName("Requester").SetPasswordHash("test").SetRole("change_manager").SetActive(true).SetTenantID(tenant.ID).SaveX(ctx)
+	workItem := client.Ticket.Create().SetTitle("Change").SetTicketNumber("CHG-IDENTITY-MISMATCH").SetType("change").SetRecordClass("change_request").SetRequesterID(requester.ID).SetTenantID(tenant.ID).SaveX(ctx)
+	tenantCtx := WithTrustedBPMNTenantContext(ctx, tenant.ID)
+	require.NoError(t, func() error {
+		_, deployErr := NewBPMNTemplateService(client).LoadAndDeployTemplates(tenantCtx, tenant.ID)
+		return deployErr
+	}())
+
+	_, err := NewProcessTriggerService(client, NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar())).TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
+		BusinessType:         dto.BusinessTypeTicket,
+		BusinessID:           workItem.ID,
+		ProcessDefinitionKey: "ticket_general_flow",
+		TriggeredBy:          "system",
+		TenantID:             tenant.ID,
+	})
+	require.ErrorContains(t, err, "business type")
+	require.Zero(t, client.ProcessInstance.Query().CountX(ctx))
 }
 
 func TestTriggerProcessScopeOverridesRequestTriggeredBy(t *testing.T) {
@@ -86,6 +127,14 @@ func TestTriggerProcessScopeOverridesRequestTriggeredBy(t *testing.T) {
 		SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
+	workItem := client.Ticket.Create().
+		SetTitle("Authenticated trigger change").
+		SetTicketNumber("CHG-AUTHENTICATED-TRIGGER").
+		SetType("change").
+		SetRecordClass("change_request").
+		SetRequesterID(actor.ID).
+		SetTenantID(tenant.ID).
+		SaveX(ctx)
 
 	workflowCtx := WithBPMNAccessScope(ctx, BPMNAccessScope{UserID: actor.ID, TenantID: tenant.ID})
 	deploySvc := NewBPMNTemplateService(client)
@@ -94,7 +143,7 @@ func TestTriggerProcessScopeOverridesRequestTriggeredBy(t *testing.T) {
 
 	resp, err := NewProcessTriggerService(client, NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar())).TriggerProcess(workflowCtx, &dto.ProcessTriggerRequest{
 		BusinessType:         dto.BusinessTypeChange,
-		BusinessID:           43,
+		BusinessID:           workItem.ID,
 		ProcessDefinitionKey: "change_normal_flow",
 		TriggeredBy:          "system",
 		TenantID:             tenant.ID,

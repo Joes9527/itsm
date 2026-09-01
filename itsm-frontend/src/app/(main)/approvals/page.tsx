@@ -2,15 +2,13 @@
 
 /**
  * 审批中心首页
- * 以 BPMN 流程待办为权威审批入口（GET /bpmn/tasks + POST /bpmn/tasks/:id/decisions），
- * 旧的工单/变更/服务请求业务列表保留为只读参考视图。
+ * 以 BPMN ProcessTask 为唯一权威审批入口。
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   App,
   Card,
-  Tabs,
   Table,
   Tag,
   Button,
@@ -21,16 +19,12 @@ import {
   Col,
   Typography,
   Tooltip,
-  Badge,
   Skeleton,
 } from 'antd';
 import {
   CheckCircle,
   Clock,
   RotateCcw,
-  FileText,
-  Wrench,
-  Headphones,
   Check,
   X,
   Hand,
@@ -38,7 +32,6 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import Link from 'next/link';
-import { httpClient } from '@/lib/api/http-client';
 import { BPMNWorkflowApi, type UserTask } from '@/lib/api/bpmn-workflow-api';
 import { useAuthStore } from '@/lib/store/auth-store';
 import dayjs from 'dayjs';
@@ -86,26 +79,6 @@ function getBusinessLink(task: UserTask): { label: string; url: string } | null 
   return null;
 }
 
-// ==================== 旧业务参考视图（只读） ====================
-
-interface LegacyPendingItem {
-  id: number | string;
-  type: 'ticket' | 'change' | 'service_request';
-  title: string;
-  status: string;
-  priority?: string;
-  createdAt: string;
-  url: string;
-  requester?: string;
-}
-
-const priorityColorMap: Record<string, string> = {
-  critical: 'red',
-  high: 'orange',
-  medium: 'blue',
-  low: 'green',
-};
-
 export default function ApprovalsCenterPage() {
   const { message, modal } = App.useApp();
   const { user } = useAuthStore();
@@ -121,11 +94,6 @@ export default function ApprovalsCenterPage() {
   const [decisionComment, setDecisionComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // 旧业务参考视图
-  const [legacyLoading, setLegacyLoading] = useState(false);
-  const [legacyItems, setLegacyItems] = useState<LegacyPendingItem[]>([]);
-  const [activeTab, setActiveTab] = useState('bpmn-tasks');
-
   const loadTasks = useCallback(async () => {
     setTaskLoading(true);
     try {
@@ -139,62 +107,12 @@ export default function ApprovalsCenterPage() {
     }
   }, [message]);
 
-  const loadLegacy = useCallback(async () => {
-    setLegacyLoading(true);
-    try {
-      const [ticketsResp, changesResp, srResp] = await Promise.all([
-        httpClient.get<{ tickets?: any[] }>('/api/v1/tickets?status=pending&page=1&page_size=20').catch(() => ({ tickets: [] })),
-        httpClient.get<{ changes?: any[] }>('/api/v1/changes?status=pending&page=1&page_size=20').catch(() => ({ changes: [] })),
-        httpClient.get<{ items?: any[] }>('/api/v1/service-requests?status=pending&page=1&page_size=20').catch(() => ({ items: [] })),
-      ]);
-      const items: LegacyPendingItem[] = [
-        ...(ticketsResp.tickets || []).map((t: any) => ({
-          id: t.id,
-          type: 'ticket' as const,
-          title: t.title || `工单 #${t.id}`,
-          status: t.status,
-          priority: t.priority,
-          createdAt: t.createdAt,
-          url: `/tickets/${t.id}`,
-          requester: t.requesterName,
-        })),
-        ...(changesResp.changes || []).map((c: any) => ({
-          id: c.id,
-          type: 'change' as const,
-          title: c.title || `变更 #${c.id}`,
-          status: c.status,
-          priority: c.priority,
-          createdAt: c.scheduledStart || c.createdAt,
-          url: `/changes/${c.id}`,
-          requester: c.requesterName,
-        })),
-        ...(srResp.items || []).map((s: any) => ({
-          id: s.id,
-          type: 'service_request' as const,
-          title: s.title || `服务请求 #${s.id}`,
-          status: s.status,
-          priority: s.priority,
-          createdAt: s.createdAt,
-          url: `/service-requests/${s.id}`,
-          requester: s.requesterName,
-        })),
-      ];
-      setLegacyItems(items);
-    } catch {
-      message.error('加载业务待审列表失败');
-    } finally {
-      setLegacyLoading(false);
-    }
-  }, [message]);
-
   useEffect(() => {
     loadTasks();
-    loadLegacy();
-  }, [loadTasks, loadLegacy]);
+  }, [loadTasks]);
 
   const handleRefresh = () => {
     loadTasks();
-    loadLegacy();
   };
 
   // 领取任务（无负责人时）
@@ -234,7 +152,6 @@ export default function ApprovalsCenterPage() {
       message.success(decision.action === 'approve' ? '已批准' : '已拒绝');
       setDecision(null);
       loadTasks();
-      loadLegacy();
     } catch (e) {
       message.error(e instanceof Error ? e.message : '提交审批决策失败');
     } finally {
@@ -348,78 +265,6 @@ export default function ApprovalsCenterPage() {
     },
   ];
 
-  // 旧业务参考视图表格列（只读，仅提供跳转）
-  const legacyColumns = [
-    {
-      title: '类型',
-      dataIndex: 'type',
-      key: 'type',
-      width: 100,
-      render: (type: LegacyPendingItem['type']) => {
-        const map: Record<LegacyPendingItem['type'], { label: string; icon: React.ReactNode }> = {
-          ticket: { label: '工单', icon: <FileText className="w-3 h-3 inline mr-1" /> },
-          change: { label: '变更', icon: <Wrench className="w-3 h-3 inline mr-1" /> },
-          service_request: { label: '服务请求', icon: <Headphones className="w-3 h-3 inline mr-1" /> },
-        };
-        return <Tag>{map[type].icon}{map[type].label}</Tag>;
-      },
-    },
-    {
-      title: '标题',
-      dataIndex: 'title',
-      key: 'title',
-      render: (text: string, record: LegacyPendingItem) => (
-        <Link href={record.url} className="font-medium text-gray-900 hover:text-blue-600 transition-colors">
-          {text}
-        </Link>
-      ),
-    },
-    {
-      title: '优先级',
-      dataIndex: 'priority',
-      key: 'priority',
-      width: 90,
-      render: (p: string) => p ? <Tag color={priorityColorMap[p] || 'default'}>{p.toUpperCase()}</Tag> : '-',
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      key: 'status',
-      width: 100,
-      render: (s: string) => <Tag color="gold">{s}</Tag>,
-    },
-    {
-      title: '申请人',
-      dataIndex: 'requester',
-      key: 'requester',
-      width: 110,
-      responsive: ['md'] as any,
-      render: (name: string) => name || '-',
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      width: 130,
-      responsive: ['lg'] as any,
-      render: (t: string) => t ? (
-        <Tooltip title={dayjs(t).format('YYYY-MM-DD HH:mm:ss')}>
-          <span className="text-gray-500">{dayjs(t).fromNow()}</span>
-        </Tooltip>
-      ) : '-',
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 90,
-      render: (_: unknown, record: LegacyPendingItem) => (
-        <Link href={record.url}>
-          <Button size="small" icon={<ExternalLink className="w-3 h-3" />}>查看</Button>
-        </Link>
-      ),
-    },
-  ];
-
   const LoadingSkeleton = () => (
     <div className="space-y-4">
       {[1, 2, 3].map((i) => (
@@ -444,9 +289,9 @@ export default function ApprovalsCenterPage() {
           </div>
         </div>
         <Button
-          icon={<RotateCcw className={taskLoading || legacyLoading ? 'animate-spin' : ''} />}
+          icon={<RotateCcw className={taskLoading ? 'animate-spin' : ''} />}
           onClick={handleRefresh}
-          loading={taskLoading || legacyLoading}
+          loading={taskLoading}
         >
           刷新
         </Button>
@@ -482,85 +327,30 @@ export default function ApprovalsCenterPage() {
             </div>
           </Card>
         </Col>
-        <Col xs={12} sm={8}>
-          <Card className="border-l-4 border-l-purple-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs md:text-sm text-gray-500">业务待审（参考）</div>
-                <div className="text-2xl md:text-3xl font-bold text-purple-600">{legacyItems.length}</div>
-              </div>
-              <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-purple-50 flex items-center justify-center">
-                <Clock className="text-lg md:text-xl text-purple-500" />
-              </div>
-            </div>
-          </Card>
-        </Col>
       </Row>
 
-      {/* Tab 内容 */}
+      {/* BPMN ProcessTask 是唯一审批数据源 */}
       <Card>
-        <Tabs
-          activeKey={activeTab}
-          onChange={setActiveTab}
-          items={[
-            {
-              key: 'bpmn-tasks',
-              label: (
-                <span className="flex items-center gap-2">
-                  <GitBranch /> 流程待办
-                  <Badge count={tasks.length} showZero={false} />
-                </span>
-              ),
-              children: taskLoading ? (
-                <LoadingSkeleton />
-              ) : (
-                <Table
-                  rowKey="id"
-                  dataSource={tasks}
-                  columns={taskColumns}
-                  pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 项` }}
-                  scroll={{ x: 900 }}
-                  locale={{
-                    emptyText: (
-                      <div className="py-12 text-center">
-                        <Clock className="mx-auto mb-3 text-gray-300 w-10 h-10" />
-                        <div className="text-gray-500 mb-1">暂无流程待办</div>
-                        <Text type="secondary" className="text-sm">当前没有分配给您或待您领取的审批任务</Text>
-                      </div>
-                    ),
-                  }}
-                />
-              ),
-            },
-            {
-              key: 'legacy',
-              label: (
-                <span className="flex items-center gap-2">
-                  <FileText /> 业务待审（参考）
-                  <Badge count={legacyItems.length} showZero={false} color="#999" />
-                </span>
-              ),
-              children: (
-                <div>
-                  <div className="mb-3 px-3 py-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-700">
-                    此视图为业务单据状态参考，审批操作请在「流程待办」中完成，以保证流程实例正常推进。
-                  </div>
-                  {legacyLoading ? (
-                    <LoadingSkeleton />
-                  ) : (
-                    <Table
-                      rowKey={(r) => `${r.type}-${r.id}`}
-                      dataSource={legacyItems}
-                      columns={legacyColumns}
-                      pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 项` }}
-                      scroll={{ x: 800 }}
-                    />
-                  )}
+        {taskLoading ? (
+          <LoadingSkeleton />
+        ) : (
+          <Table
+            rowKey="id"
+            dataSource={tasks}
+            columns={taskColumns}
+            pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 项` }}
+            scroll={{ x: 900 }}
+            locale={{
+              emptyText: (
+                <div className="py-12 text-center">
+                  <Clock className="mx-auto mb-3 text-gray-300 w-10 h-10" />
+                  <div className="text-gray-500 mb-1">暂无流程待办</div>
+                  <Text type="secondary" className="text-sm">当前没有分配给您或待您领取的审批任务</Text>
                 </div>
               ),
-            },
-          ]}
-        />
+            }}
+          />
+        )}
       </Card>
 
       {/* 审批决策弹窗 */}

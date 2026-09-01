@@ -1,34 +1,39 @@
 {
   "summary": {
-    "generatedAt": "2026-06-07T06:37:23.371Z",
-    "totalPages": 111,
+    "generatedAt": "2026-09-01T15:01:27.216Z",
+    "totalPages": 142,
     "pagesByBatch": {
-      "batch-3": 47,
-      "batch-2": 21,
-      "batch-1": 43
+      "batch-3": 64,
+      "batch-2": 30,
+      "batch-1": 48
     },
     "pagesByDomain": {
-      "admin": 20,
+      "admin": 26,
       "ai": 1,
       "applications": 1,
-      "approvals": 1,
-      "assets": 3,
-      "changes": 5,
-      "cmdb": 9,
+      "approvals": 2,
+      "assets": 4,
+      "changes": 6,
+      "cmdb": 13,
       "dashboard": 1,
       "enterprise": 2,
-      "improvements": 1,
-      "incidents": 5,
-      "knowledge": 2,
-      "licenses": 3,
+      "executive": 1,
+      "improvements": 3,
+      "incidents": 4,
+      "installations": 1,
+      "knowledge": 4,
+      "licenses": 4,
+      "manager": 1,
+      "marketplace": 2,
       "msp": 2,
       "my-requests": 2,
       "notifications": 1,
+      "portal": 1,
       "problems": 6,
       "profile": 1,
       "projects": 1,
-      "releases": 3,
-      "reports": 7,
+      "releases": 4,
+      "reports": 12,
       "service-catalog": 4,
       "service-requests": 2,
       "sla-dashboard": 1,
@@ -39,133 +44,23 @@
       "tags": 1,
       "teams": 1,
       "templates": 1,
-      "tickets": 8,
-      "workflow": 9,
-      "workflows": 1
+      "tickets": 11,
+      "workflow": 8,
+      "workspace": 1
     },
     "topPages": [
-      {
-        "path": "workflow/page.tsx",
-        "pageType": "list",
-        "batch": "batch-1",
-        "domain": "workflow",
-        "lineCount": 1160,
-        "issueCount": 5,
-        "issues": [
-          {
-            "severity": "P1",
-            "category": "实现质量",
-            "description": "超长单文件（1160 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
-            "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
-            "sharedLayer": false,
-            "blocksFollowup": true
-          },
-          {
-            "severity": "P2",
-            "category": "实现质量",
-            "description": "存在多处 any 使用（5 处），建议补齐局部类型与返回值约束。",
-            "recommendation": "补足局部类型并减少页面内 any",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          },
-          {
-            "severity": "P2",
-            "category": "交互反馈",
-            "description": "检测到 console 输出（1 处），错误反馈仍偏开发态。",
-            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          },
-          {
-            "severity": "P2",
-            "category": "实现质量",
-            "description": "存在 eslint-disable（2 处），建议回到依赖和状态模型层面修正。",
-            "recommendation": "消除临时关闭规则的依赖问题或拆分 effect / callback",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          },
-          {
-            "severity": "P3",
-            "category": "视觉一致性",
-            "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
-            "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
-            "sharedLayer": true,
-            "blocksFollowup": false
-          }
-        ]
-      },
-      {
-        "path": "tickets/templates/page.tsx",
-        "pageType": "list",
-        "batch": "batch-1",
-        "domain": "tickets",
-        "lineCount": 997,
-        "issueCount": 2,
-        "issues": [
-          {
-            "severity": "P1",
-            "category": "实现质量",
-            "description": "超长单文件（997 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
-            "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
-            "sharedLayer": false,
-            "blocksFollowup": true
-          },
-          {
-            "severity": "P2",
-            "category": "交互反馈",
-            "description": "检测到 console 输出（1 处），错误反馈仍偏开发态。",
-            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          }
-        ]
-      },
-      {
-        "path": "templates/page.tsx",
-        "pageType": "list",
-        "batch": "batch-3",
-        "domain": "templates",
-        "lineCount": 975,
-        "issueCount": 3,
-        "issues": [
-          {
-            "severity": "P1",
-            "category": "实现质量",
-            "description": "超长单文件（975 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
-            "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
-            "sharedLayer": false,
-            "blocksFollowup": true
-          },
-          {
-            "severity": "P2",
-            "category": "交互反馈",
-            "description": "检测到 console 输出（5 处），错误反馈仍偏开发态。",
-            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          },
-          {
-            "severity": "P3",
-            "category": "视觉一致性",
-            "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
-            "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
-            "sharedLayer": true,
-            "blocksFollowup": false
-          }
-        ]
-      },
       {
         "path": "profile/page.tsx",
         "pageType": "list",
         "batch": "batch-3",
         "domain": "profile",
-        "lineCount": 919,
-        "issueCount": 2,
+        "lineCount": 989,
+        "issueCount": 3,
         "issues": [
           {
             "severity": "P1",
             "category": "实现质量",
-            "description": "超长单文件（919 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+            "description": "超长单文件（989 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
             "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
             "sharedLayer": false,
             "blocksFollowup": true
@@ -174,82 +69,6 @@
             "severity": "P2",
             "category": "交互反馈",
             "description": "检测到 console 输出（7 处），错误反馈仍偏开发态。",
-            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          }
-        ]
-      },
-      {
-        "path": "admin/workflows/page.tsx",
-        "pageType": "admin",
-        "batch": "batch-3",
-        "domain": "admin",
-        "lineCount": 847,
-        "issueCount": 4,
-        "issues": [
-          {
-            "severity": "P1",
-            "category": "实现质量",
-            "description": "超长单文件（847 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
-            "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
-            "sharedLayer": false,
-            "blocksFollowup": true
-          },
-          {
-            "severity": "P2",
-            "category": "交互反馈",
-            "description": "检测到 console 输出（2 处），错误反馈仍偏开发态。",
-            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          },
-          {
-            "severity": "P2",
-            "category": "实现质量",
-            "description": "存在 eslint-disable（1 处），建议回到依赖和状态模型层面修正。",
-            "recommendation": "消除临时关闭规则的依赖问题或拆分 effect / callback",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          },
-          {
-            "severity": "P3",
-            "category": "视觉一致性",
-            "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
-            "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
-            "sharedLayer": true,
-            "blocksFollowup": false
-          }
-        ]
-      },
-      {
-        "path": "cmdb/page.tsx",
-        "pageType": "list",
-        "batch": "batch-1",
-        "domain": "cmdb",
-        "lineCount": 826,
-        "issueCount": 4,
-        "issues": [
-          {
-            "severity": "P1",
-            "category": "实现质量",
-            "description": "超长单文件（826 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
-            "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
-            "sharedLayer": false,
-            "blocksFollowup": true
-          },
-          {
-            "severity": "P1",
-            "category": "实现质量",
-            "description": "存在较多 any 使用（19 处），页面直接消费非结构化数据的风险较高。",
-            "recommendation": "迁移数据适配到 API mapper 或 hook，并补内部类型定义",
-            "sharedLayer": true,
-            "blocksFollowup": false
-          },
-          {
-            "severity": "P2",
-            "category": "交互反馈",
-            "description": "检测到 console 输出（5 处），错误反馈仍偏开发态。",
             "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
             "sharedLayer": false,
             "blocksFollowup": false
@@ -269,13 +88,219 @@
         "pageType": "admin",
         "batch": "batch-3",
         "domain": "admin",
-        "lineCount": 799,
+        "lineCount": 934,
+        "issueCount": 2,
+        "issues": [
+          {
+            "severity": "P1",
+            "category": "实现质量",
+            "description": "超长单文件（934 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+            "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
+            "sharedLayer": false,
+            "blocksFollowup": true
+          },
+          {
+            "severity": "P3",
+            "category": "视觉一致性",
+            "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
+            "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
+            "sharedLayer": true,
+            "blocksFollowup": false
+          }
+        ]
+      },
+      {
+        "path": "tickets/templates/page.tsx",
+        "pageType": "list",
+        "batch": "batch-1",
+        "domain": "tickets",
+        "lineCount": 908,
+        "issueCount": 2,
+        "issues": [
+          {
+            "severity": "P1",
+            "category": "实现质量",
+            "description": "超长单文件（908 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+            "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
+            "sharedLayer": false,
+            "blocksFollowup": true
+          },
+          {
+            "severity": "P2",
+            "category": "交互反馈",
+            "description": "检测到 console 输出（4 处），错误反馈仍偏开发态。",
+            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+            "sharedLayer": false,
+            "blocksFollowup": false
+          }
+        ]
+      },
+      {
+        "path": "tickets/prototype/page.tsx",
+        "pageType": "list",
+        "batch": "batch-1",
+        "domain": "tickets",
+        "lineCount": 874,
+        "issueCount": 1,
+        "issues": [
+          {
+            "severity": "P1",
+            "category": "实现质量",
+            "description": "超长单文件（874 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+            "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
+            "sharedLayer": false,
+            "blocksFollowup": true
+          }
+        ]
+      },
+      {
+        "path": "admin/workflows/page.tsx",
+        "pageType": "admin",
+        "batch": "batch-3",
+        "domain": "admin",
+        "lineCount": 873,
+        "issueCount": 3,
+        "issues": [
+          {
+            "severity": "P1",
+            "category": "实现质量",
+            "description": "超长单文件（873 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+            "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
+            "sharedLayer": false,
+            "blocksFollowup": true
+          },
+          {
+            "severity": "P2",
+            "category": "交互反馈",
+            "description": "检测到 console 输出（6 处），错误反馈仍偏开发态。",
+            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+            "sharedLayer": false,
+            "blocksFollowup": false
+          },
+          {
+            "severity": "P3",
+            "category": "视觉一致性",
+            "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
+            "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
+            "sharedLayer": true,
+            "blocksFollowup": false
+          }
+        ]
+      },
+      {
+        "path": "admin/users/page.tsx",
+        "pageType": "admin",
+        "batch": "batch-3",
+        "domain": "admin",
+        "lineCount": 843,
+        "issueCount": 3,
+        "issues": [
+          {
+            "severity": "P1",
+            "category": "实现质量",
+            "description": "超长单文件（843 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+            "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
+            "sharedLayer": false,
+            "blocksFollowup": true
+          },
+          {
+            "severity": "P2",
+            "category": "交互反馈",
+            "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
+            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+            "sharedLayer": false,
+            "blocksFollowup": false
+          },
+          {
+            "severity": "P3",
+            "category": "视觉一致性",
+            "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
+            "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
+            "sharedLayer": true,
+            "blocksFollowup": false
+          }
+        ]
+      },
+      {
+        "path": "notifications/page.tsx",
+        "pageType": "list",
+        "batch": "batch-3",
+        "domain": "notifications",
+        "lineCount": 821,
+        "issueCount": 2,
+        "issues": [
+          {
+            "severity": "P1",
+            "category": "实现质量",
+            "description": "超长单文件（821 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+            "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
+            "sharedLayer": false,
+            "blocksFollowup": true
+          },
+          {
+            "severity": "P2",
+            "category": "交互反馈",
+            "description": "检测到 console 输出（9 处），错误反馈仍偏开发态。",
+            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+            "sharedLayer": false,
+            "blocksFollowup": false
+          }
+        ]
+      },
+      {
+        "path": "tickets/create/page.tsx",
+        "pageType": "create",
+        "batch": "batch-1",
+        "domain": "tickets",
+        "lineCount": 750,
+        "issueCount": 4,
+        "issues": [
+          {
+            "severity": "P2",
+            "category": "实现质量",
+            "description": "文件复杂度偏高（750 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+            "recommendation": "抽出局部 section / toolbar / modal 组件",
+            "sharedLayer": false,
+            "blocksFollowup": false
+          },
+          {
+            "severity": "P2",
+            "category": "实现质量",
+            "description": "存在多处 any 使用（5 处），建议补齐局部类型与返回值约束。",
+            "recommendation": "补足局部类型并减少页面内 any",
+            "sharedLayer": false,
+            "blocksFollowup": false
+          },
+          {
+            "severity": "P2",
+            "category": "交互反馈",
+            "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
+            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+            "sharedLayer": false,
+            "blocksFollowup": false
+          },
+          {
+            "severity": "P2",
+            "category": "实现质量",
+            "description": "存在 eslint-disable（1 处），建议回到依赖和状态模型层面修正。",
+            "recommendation": "消除临时关闭规则的依赖问题或拆分 effect / callback",
+            "sharedLayer": false,
+            "blocksFollowup": false
+          }
+        ]
+      },
+      {
+        "path": "admin/escalation-rules/page.tsx",
+        "pageType": "admin",
+        "batch": "batch-3",
+        "domain": "admin",
+        "lineCount": 744,
         "issueCount": 2,
         "issues": [
           {
             "severity": "P2",
             "category": "实现质量",
-            "description": "文件复杂度偏高（799 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+            "description": "文件复杂度偏高（744 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
             "recommendation": "抽出局部 section / toolbar / modal 组件",
             "sharedLayer": false,
             "blocksFollowup": false
@@ -291,18 +316,26 @@
         ]
       },
       {
-        "path": "admin/escalation-rules/page.tsx",
-        "pageType": "admin",
-        "batch": "batch-3",
-        "domain": "admin",
-        "lineCount": 772,
-        "issueCount": 2,
+        "path": "workflow/instances/page.tsx",
+        "pageType": "list",
+        "batch": "batch-1",
+        "domain": "workflow",
+        "lineCount": 734,
+        "issueCount": 3,
         "issues": [
           {
             "severity": "P2",
             "category": "实现质量",
-            "description": "文件复杂度偏高（772 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+            "description": "文件复杂度偏高（734 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
             "recommendation": "抽出局部 section / toolbar / modal 组件",
+            "sharedLayer": false,
+            "blocksFollowup": false
+          },
+          {
+            "severity": "P2",
+            "category": "交互反馈",
+            "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
+            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
             "sharedLayer": false,
             "blocksFollowup": false
           },
@@ -321,108 +354,14 @@
         "pageType": "admin",
         "batch": "batch-3",
         "domain": "admin",
-        "lineCount": 753,
+        "lineCount": 725,
         "issueCount": 2,
         "issues": [
           {
             "severity": "P2",
             "category": "实现质量",
-            "description": "文件复杂度偏高（753 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+            "description": "文件复杂度偏高（725 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
             "recommendation": "抽出局部 section / toolbar / modal 组件",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          },
-          {
-            "severity": "P3",
-            "category": "视觉一致性",
-            "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
-            "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
-            "sharedLayer": true,
-            "blocksFollowup": false
-          }
-        ]
-      },
-      {
-        "path": "tickets/[ticketId]/page.tsx",
-        "pageType": "list",
-        "batch": "batch-1",
-        "domain": "tickets",
-        "lineCount": 753,
-        "issueCount": 2,
-        "issues": [
-          {
-            "severity": "P2",
-            "category": "实现质量",
-            "description": "文件复杂度偏高（753 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
-            "recommendation": "抽出局部 section / toolbar / modal 组件",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          },
-          {
-            "severity": "P2",
-            "category": "交互反馈",
-            "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
-            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          }
-        ]
-      },
-      {
-        "path": "notifications/page.tsx",
-        "pageType": "list",
-        "batch": "batch-3",
-        "domain": "notifications",
-        "lineCount": 752,
-        "issueCount": 3,
-        "issues": [
-          {
-            "severity": "P2",
-            "category": "实现质量",
-            "description": "文件复杂度偏高（752 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
-            "recommendation": "抽出局部 section / toolbar / modal 组件",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          },
-          {
-            "severity": "P2",
-            "category": "实现质量",
-            "description": "存在多处 any 使用（5 处），建议补齐局部类型与返回值约束。",
-            "recommendation": "补足局部类型并减少页面内 any",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          },
-          {
-            "severity": "P2",
-            "category": "交互反馈",
-            "description": "检测到 console 输出（7 处），错误反馈仍偏开发态。",
-            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          }
-        ]
-      },
-      {
-        "path": "admin/users/page.tsx",
-        "pageType": "admin",
-        "batch": "batch-3",
-        "domain": "admin",
-        "lineCount": 695,
-        "issueCount": 3,
-        "issues": [
-          {
-            "severity": "P2",
-            "category": "实现质量",
-            "description": "文件复杂度偏高（695 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
-            "recommendation": "抽出局部 section / toolbar / modal 组件",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          },
-          {
-            "severity": "P2",
-            "category": "交互反馈",
-            "description": "检测到 console 输出（1 处），错误反馈仍偏开发态。",
-            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
             "sharedLayer": false,
             "blocksFollowup": false
           },
@@ -441,13 +380,13 @@
         "pageType": "admin",
         "batch": "batch-3",
         "domain": "admin",
-        "lineCount": 675,
+        "lineCount": 720,
         "issueCount": 2,
         "issues": [
           {
             "severity": "P2",
             "category": "实现质量",
-            "description": "文件复杂度偏高（675 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+            "description": "文件复杂度偏高（720 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
             "recommendation": "抽出局部 section / toolbar / modal 组件",
             "sharedLayer": false,
             "blocksFollowup": false
@@ -463,17 +402,77 @@
         ]
       },
       {
-        "path": "tickets/create/page.tsx",
-        "pageType": "create",
-        "batch": "batch-1",
-        "domain": "tickets",
-        "lineCount": 619,
+        "path": "admin/cmdb-types/page.tsx",
+        "pageType": "admin",
+        "batch": "batch-3",
+        "domain": "admin",
+        "lineCount": 718,
         "issueCount": 2,
         "issues": [
           {
             "severity": "P2",
             "category": "实现质量",
-            "description": "文件复杂度偏高（619 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+            "description": "文件复杂度偏高（718 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+            "recommendation": "抽出局部 section / toolbar / modal 组件",
+            "sharedLayer": false,
+            "blocksFollowup": false
+          },
+          {
+            "severity": "P3",
+            "category": "视觉一致性",
+            "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
+            "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
+            "sharedLayer": true,
+            "blocksFollowup": false
+          }
+        ]
+      },
+      {
+        "path": "admin/roles/page.tsx",
+        "pageType": "admin",
+        "batch": "batch-3",
+        "domain": "admin",
+        "lineCount": 677,
+        "issueCount": 3,
+        "issues": [
+          {
+            "severity": "P2",
+            "category": "实现质量",
+            "description": "文件复杂度偏高（677 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+            "recommendation": "抽出局部 section / toolbar / modal 组件",
+            "sharedLayer": false,
+            "blocksFollowup": false
+          },
+          {
+            "severity": "P2",
+            "category": "交互反馈",
+            "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
+            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+            "sharedLayer": false,
+            "blocksFollowup": false
+          },
+          {
+            "severity": "P3",
+            "category": "视觉一致性",
+            "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
+            "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
+            "sharedLayer": true,
+            "blocksFollowup": false
+          }
+        ]
+      },
+      {
+        "path": "dashboard/page.tsx",
+        "pageType": "list",
+        "batch": "batch-3",
+        "domain": "dashboard",
+        "lineCount": 670,
+        "issueCount": 2,
+        "issues": [
+          {
+            "severity": "P2",
+            "category": "实现质量",
+            "description": "文件复杂度偏高（670 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
             "recommendation": "抽出局部 section / toolbar / modal 组件",
             "sharedLayer": false,
             "blocksFollowup": false
@@ -487,19 +486,115 @@
             "blocksFollowup": false
           }
         ]
+      }
+    ],
+    "topComponents": [
+      {
+        "path": "src/components/workflow/designer/WorkflowNodeInspector.tsx",
+        "domain": "workflow",
+        "lineCount": 1683,
+        "issueCount": 2,
+        "issues": [
+          {
+            "severity": "P1",
+            "category": "实现质量",
+            "description": "超长单文件（1683 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+            "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
+            "sharedLayer": false,
+            "blocksFollowup": true
+          },
+          {
+            "severity": "P2",
+            "category": "交互反馈",
+            "description": "检测到 console 输出（4 处），错误反馈仍偏开发态。",
+            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+            "sharedLayer": false,
+            "blocksFollowup": false
+          }
+        ]
       },
       {
-        "path": "admin/groups/page.tsx",
-        "pageType": "admin",
-        "batch": "batch-3",
-        "domain": "admin",
-        "lineCount": 617,
+        "path": "src/components/workflow/BPMNDesigner.tsx",
+        "domain": "workflow",
+        "lineCount": 1289,
+        "issueCount": 4,
+        "issues": [
+          {
+            "severity": "P1",
+            "category": "实现质量",
+            "description": "超长单文件（1289 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+            "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
+            "sharedLayer": false,
+            "blocksFollowup": true
+          },
+          {
+            "severity": "P1",
+            "category": "实现质量",
+            "description": "存在较多 any 使用（26 处），页面直接消费非结构化数据的风险较高。",
+            "recommendation": "迁移数据适配到 API mapper 或 hook，并补内部类型定义",
+            "sharedLayer": true,
+            "blocksFollowup": true
+          },
+          {
+            "severity": "P2",
+            "category": "交互反馈",
+            "description": "检测到 console 输出（13 处），错误反馈仍偏开发态。",
+            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+            "sharedLayer": false,
+            "blocksFollowup": false
+          },
+          {
+            "severity": "P2",
+            "category": "实现质量",
+            "description": "存在 eslint-disable（1 处），建议回到依赖和状态模型层面修正。",
+            "recommendation": "消除临时关闭规则的依赖问题或拆分 effect / callback",
+            "sharedLayer": false,
+            "blocksFollowup": false
+          }
+        ]
+      },
+      {
+        "path": "src/components/workflow/designer/WorkflowDesigner.tsx",
+        "domain": "workflow",
+        "lineCount": 1069,
+        "issueCount": 3,
+        "issues": [
+          {
+            "severity": "P1",
+            "category": "实现质量",
+            "description": "超长单文件（1069 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+            "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
+            "sharedLayer": false,
+            "blocksFollowup": true
+          },
+          {
+            "severity": "P2",
+            "category": "实现质量",
+            "description": "存在多处 any 使用（4 处），建议补齐局部类型与返回值约束。",
+            "recommendation": "补足局部类型并减少页面内 any",
+            "sharedLayer": false,
+            "blocksFollowup": false
+          },
+          {
+            "severity": "P2",
+            "category": "交互反馈",
+            "description": "检测到 console 输出（13 处），错误反馈仍偏开发态。",
+            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+            "sharedLayer": false,
+            "blocksFollowup": false
+          }
+        ]
+      },
+      {
+        "path": "src/components/workflow/designer/WorkflowAIModal.tsx",
+        "domain": "workflow",
+        "lineCount": 665,
         "issueCount": 2,
         "issues": [
           {
             "severity": "P2",
             "category": "实现质量",
-            "description": "文件复杂度偏高（617 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+            "description": "文件复杂度偏高（665 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
             "recommendation": "抽出局部 section / toolbar / modal 组件",
             "sharedLayer": false,
             "blocksFollowup": false
@@ -507,28 +602,50 @@
           {
             "severity": "P2",
             "category": "交互反馈",
-            "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
+            "description": "检测到 console 输出（5 处），错误反馈仍偏开发态。",
             "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
             "sharedLayer": false,
             "blocksFollowup": false
           }
         ]
-      }
-    ],
-    "topComponents": [
+      },
       {
-        "path": "src/components/workflow/WorkflowEngine.tsx",
-        "domain": "workflow",
-        "lineCount": 919,
+        "path": "src/components/cmdb/CSDMHub.tsx",
+        "domain": "cmdb",
+        "lineCount": 613,
         "issueCount": 2,
         "issues": [
           {
-            "severity": "P1",
+            "severity": "P2",
             "category": "实现质量",
-            "description": "超长单文件（919 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
-            "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
+            "description": "文件复杂度偏高（613 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+            "recommendation": "抽出局部 section / toolbar / modal 组件",
             "sharedLayer": false,
-            "blocksFollowup": true
+            "blocksFollowup": false
+          },
+          {
+            "severity": "P2",
+            "category": "实现质量",
+            "description": "存在多处 any 使用（9 处），建议补齐局部类型与返回值约束。",
+            "recommendation": "补足局部类型并减少页面内 any",
+            "sharedLayer": false,
+            "blocksFollowup": false
+          }
+        ]
+      },
+      {
+        "path": "src/components/cmdb/TopologyGraph.tsx",
+        "domain": "cmdb",
+        "lineCount": 537,
+        "issueCount": 2,
+        "issues": [
+          {
+            "severity": "P2",
+            "category": "实现质量",
+            "description": "文件复杂度偏高（537 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+            "recommendation": "抽出局部 section / toolbar / modal 组件",
+            "sharedLayer": false,
+            "blocksFollowup": false
           },
           {
             "severity": "P2",
@@ -541,86 +658,22 @@
         ]
       },
       {
-        "path": "src/components/workflow/designer/WorkflowDesigner.tsx",
-        "domain": "workflow",
-        "lineCount": 712,
-        "issueCount": 3,
-        "issues": [
-          {
-            "severity": "P2",
-            "category": "实现质量",
-            "description": "文件复杂度偏高（712 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
-            "recommendation": "抽出局部 section / toolbar / modal 组件",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          },
-          {
-            "severity": "P2",
-            "category": "实现质量",
-            "description": "存在多处 any 使用（9 处），建议补齐局部类型与返回值约束。",
-            "recommendation": "补足局部类型并减少页面内 any",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          },
-          {
-            "severity": "P2",
-            "category": "交互反馈",
-            "description": "检测到 console 输出（12 处），错误反馈仍偏开发态。",
-            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          }
-        ]
-      },
-      {
-        "path": "src/components/cmdb/TopologyGraph.tsx",
-        "domain": "cmdb",
-        "lineCount": 509,
-        "issueCount": 1,
-        "issues": [
-          {
-            "severity": "P2",
-            "category": "实现质量",
-            "description": "文件复杂度偏高（509 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
-            "recommendation": "抽出局部 section / toolbar / modal 组件",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          }
-        ]
-      },
-      {
         "path": "src/components/cmdb/CIRelationshipManager.tsx",
         "domain": "cmdb",
-        "lineCount": 430,
+        "lineCount": 480,
         "issueCount": 0,
         "issues": []
       },
       {
-        "path": "src/components/workflow/BPMNDesigner.tsx",
-        "domain": "workflow",
-        "lineCount": 337,
-        "issueCount": 1,
-        "issues": [
-          {
-            "severity": "P2",
-            "category": "交互反馈",
-            "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
-            "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-            "sharedLayer": false,
-            "blocksFollowup": false
-          }
-        ]
-      },
-      {
         "path": "src/components/cmdb/CIList.tsx",
         "domain": "cmdb",
-        "lineCount": 324,
+        "lineCount": 435,
         "issueCount": 1,
         "issues": [
           {
             "severity": "P2",
             "category": "实现质量",
-            "description": "存在多处 any 使用（5 处），建议补齐局部类型与返回值约束。",
+            "description": "存在多处 any 使用（4 处），建议补齐局部类型与返回值约束。",
             "recommendation": "补足局部类型并减少页面内 any",
             "sharedLayer": false,
             "blocksFollowup": false
@@ -628,23 +681,44 @@
         ]
       },
       {
+        "path": "src/components/cmdb/CIEditorForm.tsx",
+        "domain": "cmdb",
+        "lineCount": 400,
+        "issueCount": 0,
+        "issues": []
+      },
+      {
         "path": "src/components/workflow/designer/WorkflowProperties.tsx",
         "domain": "workflow",
-        "lineCount": 322,
+        "lineCount": 343,
         "issueCount": 0,
         "issues": []
       },
       {
         "path": "src/components/workflow/designer/WorkflowContext.tsx",
         "domain": "workflow",
-        "lineCount": 238,
+        "lineCount": 244,
         "issueCount": 0,
         "issues": []
       },
       {
-        "path": "src/components/cmdb/CIEditorForm.tsx",
-        "domain": "cmdb",
+        "path": "src/components/workflow/__tests__/WorkflowNodeInspector.test.tsx",
+        "domain": "workflow",
         "lineCount": 224,
+        "issueCount": 0,
+        "issues": []
+      },
+      {
+        "path": "src/components/cmdb/ci-editor-shared.ts",
+        "domain": "cmdb",
+        "lineCount": 215,
+        "issueCount": 0,
+        "issues": []
+      },
+      {
+        "path": "src/components/workflow/designer/WorkflowToolbar.tsx",
+        "domain": "workflow",
+        "lineCount": 197,
         "issueCount": 0,
         "issues": []
       },
@@ -652,41 +726,6 @@
         "path": "src/components/cmdb/ci-detail/sections/CIImpactAnalysisTab.tsx",
         "domain": "cmdb",
         "lineCount": 189,
-        "issueCount": 0,
-        "issues": []
-      },
-      {
-        "path": "src/components/workflow/designer/WorkflowNodePalette.tsx",
-        "domain": "workflow",
-        "lineCount": 187,
-        "issueCount": 0,
-        "issues": []
-      },
-      {
-        "path": "src/components/cmdb/ci-detail/CIDetail.tsx",
-        "domain": "cmdb",
-        "lineCount": 169,
-        "issueCount": 0,
-        "issues": []
-      },
-      {
-        "path": "src/components/workflow/designer/WorkflowToolbar.tsx",
-        "domain": "workflow",
-        "lineCount": 162,
-        "issueCount": 0,
-        "issues": []
-      },
-      {
-        "path": "src/components/cmdb/ci-detail/__tests__/CIImpactAnalysisTab.test.tsx",
-        "domain": "cmdb",
-        "lineCount": 161,
-        "issueCount": 0,
-        "issues": []
-      },
-      {
-        "path": "src/components/cmdb/ci-editor-shared.ts",
-        "domain": "cmdb",
-        "lineCount": 160,
         "issueCount": 0,
         "issues": []
       }
@@ -698,22 +737,48 @@
       "pageType": "admin",
       "batch": "batch-3",
       "domain": "admin",
-      "lineCount": 315,
+      "lineCount": 405,
       "issueCount": 0,
       "issues": []
     },
     {
-      "path": "admin/approvals/page.tsx",
+      "path": "admin/cmdb-types/page.tsx",
       "pageType": "admin",
       "batch": "batch-3",
       "domain": "admin",
-      "lineCount": 388,
+      "lineCount": 718,
+      "issueCount": 2,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "实现质量",
+          "description": "文件复杂度偏高（718 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "recommendation": "抽出局部 section / toolbar / modal 组件",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        },
+        {
+          "severity": "P3",
+          "category": "视觉一致性",
+          "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
+          "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
+          "sharedLayer": true,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
+      "path": "admin/config-inheritance/page.tsx",
+      "pageType": "admin",
+      "batch": "batch-3",
+      "domain": "admin",
+      "lineCount": 284,
       "issueCount": 2,
       "issues": [
         {
           "severity": "P2",
           "category": "交互反馈",
-          "description": "检测到 console 输出（4 处），错误反馈仍偏开发态。",
+          "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
           "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -729,18 +794,27 @@
       ]
     },
     {
-      "path": "admin/cmdb-types/page.tsx",
+      "path": "admin/connectors/page.tsx",
       "pageType": "admin",
       "batch": "batch-3",
       "domain": "admin",
-      "lineCount": 504,
+      "lineCount": 401,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "admin/department-processes/page.tsx",
+      "pageType": "admin",
+      "batch": "batch-3",
+      "domain": "admin",
+      "lineCount": 321,
       "issueCount": 2,
       "issues": [
         {
           "severity": "P2",
-          "category": "实现质量",
-          "description": "文件复杂度偏高（504 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
-          "recommendation": "抽出局部 section / toolbar / modal 组件",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
           "sharedLayer": false,
           "blocksFollowup": false
         },
@@ -759,7 +833,7 @@
       "pageType": "admin",
       "batch": "batch-3",
       "domain": "admin",
-      "lineCount": 360,
+      "lineCount": 435,
       "issueCount": 2,
       "issues": [
         {
@@ -781,17 +855,26 @@
       ]
     },
     {
+      "path": "admin/escalation-matrices/page.tsx",
+      "pageType": "admin",
+      "batch": "batch-3",
+      "domain": "admin",
+      "lineCount": 244,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
       "path": "admin/escalation-rules/page.tsx",
       "pageType": "admin",
       "batch": "batch-3",
       "domain": "admin",
-      "lineCount": 772,
+      "lineCount": 744,
       "issueCount": 2,
       "issues": [
         {
           "severity": "P2",
           "category": "实现质量",
-          "description": "文件复杂度偏高（772 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "description": "文件复杂度偏高（744 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
           "recommendation": "抽出局部 section / toolbar / modal 组件",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -811,14 +894,48 @@
       "pageType": "admin",
       "batch": "batch-3",
       "domain": "admin",
-      "lineCount": 617,
+      "lineCount": 530,
       "issueCount": 2,
       "issues": [
         {
           "severity": "P2",
           "category": "实现质量",
-          "description": "文件复杂度偏高（617 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "description": "文件复杂度偏高（530 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
           "recommendation": "抽出局部 section / toolbar / modal 组件",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        },
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（6 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
+      "path": "admin/menus/page.tsx",
+      "pageType": "admin",
+      "batch": "batch-3",
+      "domain": "admin",
+      "lineCount": 640,
+      "issueCount": 4,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "实现质量",
+          "description": "文件复杂度偏高（640 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "recommendation": "抽出局部 section / toolbar / modal 组件",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        },
+        {
+          "severity": "P2",
+          "category": "实现质量",
+          "description": "存在多处 any 使用（4 处），建议补齐局部类型与返回值约束。",
+          "recommendation": "补足局部类型并减少页面内 any",
           "sharedLayer": false,
           "blocksFollowup": false
         },
@@ -829,6 +946,14 @@
           "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
           "sharedLayer": false,
           "blocksFollowup": false
+        },
+        {
+          "severity": "P3",
+          "category": "视觉一致性",
+          "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
+          "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
+          "sharedLayer": true,
+          "blocksFollowup": false
         }
       ]
     },
@@ -837,7 +962,7 @@
       "pageType": "admin",
       "batch": "batch-3",
       "domain": "admin",
-      "lineCount": 17,
+      "lineCount": 10,
       "issueCount": 0,
       "issues": []
     },
@@ -855,13 +980,13 @@
       "pageType": "admin",
       "batch": "batch-3",
       "domain": "admin",
-      "lineCount": 675,
+      "lineCount": 720,
       "issueCount": 2,
       "issues": [
         {
           "severity": "P2",
           "category": "实现质量",
-          "description": "文件复杂度偏高（675 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "description": "文件复杂度偏高（720 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
           "recommendation": "抽出局部 section / toolbar / modal 组件",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -877,17 +1002,17 @@
       ]
     },
     {
-      "path": "admin/roles/page.tsx",
+      "path": "admin/process-routing/page.tsx",
       "pageType": "admin",
       "batch": "batch-3",
       "domain": "admin",
-      "lineCount": 599,
+      "lineCount": 517,
       "issueCount": 3,
       "issues": [
         {
           "severity": "P2",
           "category": "实现质量",
-          "description": "文件复杂度偏高（599 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "description": "文件复杂度偏高（517 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
           "recommendation": "抽出局部 section / toolbar / modal 组件",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -895,7 +1020,41 @@
         {
           "severity": "P2",
           "category": "交互反馈",
-          "description": "检测到 console 输出（1 处），错误反馈仍偏开发态。",
+          "description": "检测到 console 输出（5 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        },
+        {
+          "severity": "P3",
+          "category": "视觉一致性",
+          "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
+          "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
+          "sharedLayer": true,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
+      "path": "admin/roles/page.tsx",
+      "pageType": "admin",
+      "batch": "batch-3",
+      "domain": "admin",
+      "lineCount": 677,
+      "issueCount": 3,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "实现质量",
+          "description": "文件复杂度偏高（677 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "recommendation": "抽出局部 section / toolbar / modal 组件",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        },
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
           "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -915,16 +1074,16 @@
       "pageType": "admin",
       "batch": "batch-3",
       "domain": "admin",
-      "lineCount": 799,
+      "lineCount": 934,
       "issueCount": 2,
       "issues": [
         {
-          "severity": "P2",
+          "severity": "P1",
           "category": "实现质量",
-          "description": "文件复杂度偏高（799 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
-          "recommendation": "抽出局部 section / toolbar / modal 组件",
+          "description": "超长单文件（934 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+          "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
           "sharedLayer": false,
-          "blocksFollowup": false
+          "blocksFollowup": true
         },
         {
           "severity": "P3",
@@ -941,13 +1100,13 @@
       "pageType": "admin",
       "batch": "batch-3",
       "domain": "admin",
-      "lineCount": 753,
+      "lineCount": 725,
       "issueCount": 2,
       "issues": [
         {
           "severity": "P2",
           "category": "实现质量",
-          "description": "文件复杂度偏高（753 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "description": "文件复杂度偏高（725 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
           "recommendation": "抽出局部 section / toolbar / modal 组件",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -963,26 +1122,36 @@
       ]
     },
     {
+      "path": "admin/sla-templates/page.tsx",
+      "pageType": "admin",
+      "batch": "batch-3",
+      "domain": "admin",
+      "lineCount": 360,
+      "issueCount": 1,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
       "path": "admin/system-config/page.tsx",
       "pageType": "admin",
       "batch": "batch-3",
       "domain": "admin",
-      "lineCount": 571,
-      "issueCount": 3,
+      "lineCount": 596,
+      "issueCount": 2,
       "issues": [
         {
           "severity": "P2",
           "category": "实现质量",
-          "description": "文件复杂度偏高（571 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "description": "文件复杂度偏高（596 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
           "recommendation": "抽出局部 section / toolbar / modal 组件",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        },
-        {
-          "severity": "P2",
-          "category": "实现质量",
-          "description": "存在多处 any 使用（10 处），建议补齐局部类型与返回值约束。",
-          "recommendation": "补足局部类型并减少页面内 any",
           "sharedLayer": false,
           "blocksFollowup": false
         },
@@ -1001,7 +1170,7 @@
       "pageType": "admin",
       "batch": "batch-3",
       "domain": "admin",
-      "lineCount": 342,
+      "lineCount": 374,
       "issueCount": 2,
       "issues": [
         {
@@ -1027,9 +1196,17 @@
       "pageType": "admin",
       "batch": "batch-3",
       "domain": "admin",
-      "lineCount": 495,
-      "issueCount": 1,
+      "lineCount": 575,
+      "issueCount": 2,
       "issues": [
+        {
+          "severity": "P2",
+          "category": "实现质量",
+          "description": "文件复杂度偏高（575 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "recommendation": "抽出局部 section / toolbar / modal 组件",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        },
         {
           "severity": "P3",
           "category": "视觉一致性",
@@ -1045,16 +1222,77 @@
       "pageType": "admin",
       "batch": "batch-3",
       "domain": "admin",
-      "lineCount": 523,
+      "lineCount": 605,
       "issueCount": 3,
       "issues": [
         {
           "severity": "P2",
           "category": "实现质量",
-          "description": "文件复杂度偏高（523 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "description": "文件复杂度偏高（605 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
           "recommendation": "抽出局部 section / toolbar / modal 组件",
           "sharedLayer": false,
           "blocksFollowup": false
+        },
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（6 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        },
+        {
+          "severity": "P3",
+          "category": "视觉一致性",
+          "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
+          "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
+          "sharedLayer": true,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
+      "path": "admin/tickets/assignment-rules/page.tsx",
+      "pageType": "admin",
+      "batch": "batch-3",
+      "domain": "admin",
+      "lineCount": 408,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "admin/tickets/automation-rules/page.tsx",
+      "pageType": "admin",
+      "batch": "batch-3",
+      "domain": "admin",
+      "lineCount": 376,
+      "issueCount": 1,
+      "issues": [
+        {
+          "severity": "P3",
+          "category": "视觉一致性",
+          "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
+          "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
+          "sharedLayer": true,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
+      "path": "admin/users/page.tsx",
+      "pageType": "admin",
+      "batch": "batch-3",
+      "domain": "admin",
+      "lineCount": 843,
+      "issueCount": 3,
+      "issues": [
+        {
+          "severity": "P1",
+          "category": "实现质量",
+          "description": "超长单文件（843 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+          "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
+          "sharedLayer": false,
+          "blocksFollowup": true
         },
         {
           "severity": "P2",
@@ -1075,78 +1313,17 @@
       ]
     },
     {
-      "path": "admin/tickets/assignment-rules/page.tsx",
-      "pageType": "admin",
-      "batch": "batch-3",
-      "domain": "admin",
-      "lineCount": 30,
-      "issueCount": 0,
-      "issues": []
-    },
-    {
-      "path": "admin/tickets/automation-rules/page.tsx",
-      "pageType": "admin",
-      "batch": "batch-3",
-      "domain": "admin",
-      "lineCount": 375,
-      "issueCount": 1,
-      "issues": [
-        {
-          "severity": "P3",
-          "category": "视觉一致性",
-          "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
-          "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
-          "sharedLayer": true,
-          "blocksFollowup": false
-        }
-      ]
-    },
-    {
-      "path": "admin/users/page.tsx",
-      "pageType": "admin",
-      "batch": "batch-3",
-      "domain": "admin",
-      "lineCount": 695,
-      "issueCount": 3,
-      "issues": [
-        {
-          "severity": "P2",
-          "category": "实现质量",
-          "description": "文件复杂度偏高（695 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
-          "recommendation": "抽出局部 section / toolbar / modal 组件",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        },
-        {
-          "severity": "P2",
-          "category": "交互反馈",
-          "description": "检测到 console 输出（1 处），错误反馈仍偏开发态。",
-          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        },
-        {
-          "severity": "P3",
-          "category": "视觉一致性",
-          "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
-          "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
-          "sharedLayer": true,
-          "blocksFollowup": false
-        }
-      ]
-    },
-    {
       "path": "admin/workflows/page.tsx",
       "pageType": "admin",
       "batch": "batch-3",
       "domain": "admin",
-      "lineCount": 847,
-      "issueCount": 4,
+      "lineCount": 873,
+      "issueCount": 3,
       "issues": [
         {
           "severity": "P1",
           "category": "实现质量",
-          "description": "超长单文件（847 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+          "description": "超长单文件（873 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
           "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
           "sharedLayer": false,
           "blocksFollowup": true
@@ -1154,16 +1331,8 @@
         {
           "severity": "P2",
           "category": "交互反馈",
-          "description": "检测到 console 输出（2 处），错误反馈仍偏开发态。",
+          "description": "检测到 console 输出（6 处），错误反馈仍偏开发态。",
           "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        },
-        {
-          "severity": "P2",
-          "category": "实现质量",
-          "description": "存在 eslint-disable（1 处），建议回到依赖和状态模型层面修正。",
-          "recommendation": "消除临时关闭规则的依赖问题或拆分 effect / callback",
           "sharedLayer": false,
           "blocksFollowup": false
         },
@@ -1191,13 +1360,13 @@
       "pageType": "list",
       "batch": "batch-3",
       "domain": "applications",
-      "lineCount": 319,
+      "lineCount": 343,
       "issueCount": 2,
       "issues": [
         {
           "severity": "P2",
           "category": "交互反馈",
-          "description": "检测到 console 输出（2 处），错误反馈仍偏开发态。",
+          "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
           "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -1213,12 +1382,21 @@
       ]
     },
     {
+      "path": "approvals/page.tsx",
+      "pageType": "list",
+      "batch": "batch-3",
+      "domain": "approvals",
+      "lineCount": 406,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
       "path": "approvals/pending/page.tsx",
       "pageType": "list",
       "batch": "batch-3",
       "domain": "approvals",
-      "lineCount": 217,
-      "issueCount": 2,
+      "lineCount": 259,
+      "issueCount": 1,
       "issues": [
         {
           "severity": "P2",
@@ -1227,16 +1405,17 @@
           "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
           "sharedLayer": false,
           "blocksFollowup": false
-        },
-        {
-          "severity": "P2",
-          "category": "实现质量",
-          "description": "存在 eslint-disable（1 处），建议回到依赖和状态模型层面修正。",
-          "recommendation": "消除临时关闭规则的依赖问题或拆分 effect / callback",
-          "sharedLayer": false,
-          "blocksFollowup": false
         }
       ]
+    },
+    {
+      "path": "assets/[id]/edit/page.tsx",
+      "pageType": "edit",
+      "batch": "batch-2",
+      "domain": "assets",
+      "lineCount": 7,
+      "issueCount": 0,
+      "issues": []
     },
     {
       "path": "assets/[id]/page.tsx",
@@ -1275,20 +1454,47 @@
       ]
     },
     {
+      "path": "changes/[id]/edit/page.tsx",
+      "pageType": "edit",
+      "batch": "batch-1",
+      "domain": "changes",
+      "lineCount": 386,
+      "issueCount": 1,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（1 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
       "path": "changes/[id]/page.tsx",
       "pageType": "detail",
       "batch": "batch-1",
       "domain": "changes",
-      "lineCount": 8,
-      "issueCount": 0,
-      "issues": []
+      "lineCount": 217,
+      "issueCount": 1,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
     },
     {
       "path": "changes/[id]/pir/page.tsx",
       "pageType": "detail",
       "batch": "batch-1",
       "domain": "changes",
-      "lineCount": 388,
+      "lineCount": 372,
       "issueCount": 1,
       "issues": [
         {
@@ -1306,7 +1512,7 @@
       "pageType": "create",
       "batch": "batch-1",
       "domain": "changes",
-      "lineCount": 250,
+      "lineCount": 324,
       "issueCount": 1,
       "issues": [
         {
@@ -1324,31 +1530,23 @@
       "pageType": "list",
       "batch": "batch-1",
       "domain": "changes",
-      "lineCount": 331,
-      "issueCount": 3,
+      "lineCount": 542,
+      "issueCount": 2,
       "issues": [
         {
           "severity": "P2",
           "category": "实现质量",
-          "description": "存在多处 any 使用（6 处），建议补齐局部类型与返回值约束。",
-          "recommendation": "补足局部类型并减少页面内 any",
+          "description": "文件复杂度偏高（542 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "recommendation": "抽出局部 section / toolbar / modal 组件",
           "sharedLayer": false,
           "blocksFollowup": false
         },
         {
           "severity": "P2",
           "category": "交互反馈",
-          "description": "检测到 console 输出（2 处），错误反馈仍偏开发态。",
+          "description": "检测到 console 输出（4 处），错误反馈仍偏开发态。",
           "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
           "sharedLayer": false,
-          "blocksFollowup": false
-        },
-        {
-          "severity": "P3",
-          "category": "视觉一致性",
-          "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
-          "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
-          "sharedLayer": true,
           "blocksFollowup": false
         }
       ]
@@ -1358,7 +1556,7 @@
       "pageType": "list",
       "batch": "batch-1",
       "domain": "changes",
-      "lineCount": 356,
+      "lineCount": 349,
       "issueCount": 2,
       "issues": [
         {
@@ -1380,11 +1578,29 @@
       ]
     },
     {
+      "path": "cmdb/ci-types/page.tsx",
+      "pageType": "list",
+      "batch": "batch-1",
+      "domain": "cmdb",
+      "lineCount": 6,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "cmdb/ci/page.tsx",
+      "pageType": "list",
+      "batch": "batch-1",
+      "domain": "cmdb",
+      "lineCount": 19,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
       "path": "cmdb/cis/[id]/edit/page.tsx",
       "pageType": "edit",
       "batch": "batch-1",
       "domain": "cmdb",
-      "lineCount": 239,
+      "lineCount": 287,
       "issueCount": 0,
       "issues": []
     },
@@ -1402,7 +1618,7 @@
       "pageType": "create",
       "batch": "batch-1",
       "domain": "cmdb",
-      "lineCount": 224,
+      "lineCount": 270,
       "issueCount": 0,
       "issues": []
     },
@@ -1411,7 +1627,7 @@
       "pageType": "list",
       "batch": "batch-1",
       "domain": "cmdb",
-      "lineCount": 192,
+      "lineCount": 405,
       "issueCount": 1,
       "issues": [
         {
@@ -1429,7 +1645,7 @@
       "pageType": "list",
       "batch": "batch-1",
       "domain": "cmdb",
-      "lineCount": 287,
+      "lineCount": 478,
       "issueCount": 1,
       "issues": [
         {
@@ -1447,7 +1663,7 @@
       "pageType": "list",
       "batch": "batch-1",
       "domain": "cmdb",
-      "lineCount": 304,
+      "lineCount": 478,
       "issueCount": 1,
       "issues": [
         {
@@ -1465,55 +1681,31 @@
       "pageType": "list",
       "batch": "batch-1",
       "domain": "cmdb",
-      "lineCount": 826,
-      "issueCount": 4,
-      "issues": [
-        {
-          "severity": "P1",
-          "category": "实现质量",
-          "description": "超长单文件（826 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
-          "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
-          "sharedLayer": false,
-          "blocksFollowup": true
-        },
-        {
-          "severity": "P1",
-          "category": "实现质量",
-          "description": "存在较多 any 使用（19 处），页面直接消费非结构化数据的风险较高。",
-          "recommendation": "迁移数据适配到 API mapper 或 hook，并补内部类型定义",
-          "sharedLayer": true,
-          "blocksFollowup": false
-        },
-        {
-          "severity": "P2",
-          "category": "交互反馈",
-          "description": "检测到 console 输出（5 处），错误反馈仍偏开发态。",
-          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        },
-        {
-          "severity": "P3",
-          "category": "视觉一致性",
-          "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
-          "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
-          "sharedLayer": true,
-          "blocksFollowup": false
-        }
-      ]
+      "lineCount": 10,
+      "issueCount": 0,
+      "issues": []
     },
     {
       "path": "cmdb/reconciliation/page.tsx",
       "pageType": "list",
       "batch": "batch-1",
       "domain": "cmdb",
-      "lineCount": 264,
+      "lineCount": 274,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "cmdb/registry/page.tsx",
+      "pageType": "list",
+      "batch": "batch-1",
+      "domain": "cmdb",
+      "lineCount": 274,
       "issueCount": 1,
       "issues": [
         {
           "severity": "P2",
           "category": "实现质量",
-          "description": "存在多处 any 使用（5 处），建议补齐局部类型与返回值约束。",
+          "description": "存在多处 any 使用（4 处），建议补齐局部类型与返回值约束。",
           "recommendation": "补足局部类型并减少页面内 any",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -1521,11 +1713,20 @@
       ]
     },
     {
+      "path": "cmdb/relationships/page.tsx",
+      "pageType": "list",
+      "batch": "batch-1",
+      "domain": "cmdb",
+      "lineCount": 95,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
       "path": "cmdb/topology/page.tsx",
       "pageType": "list",
       "batch": "batch-1",
       "domain": "cmdb",
-      "lineCount": 110,
+      "lineCount": 243,
       "issueCount": 1,
       "issues": [
         {
@@ -1543,16 +1744,33 @@
       "pageType": "list",
       "batch": "batch-3",
       "domain": "dashboard",
-      "lineCount": 403,
-      "issueCount": 0,
-      "issues": []
+      "lineCount": 670,
+      "issueCount": 2,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "实现质量",
+          "description": "文件复杂度偏高（670 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "recommendation": "抽出局部 section / toolbar / modal 组件",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        },
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（2 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
     },
     {
       "path": "enterprise/departments/page.tsx",
       "pageType": "list",
       "batch": "batch-3",
       "domain": "enterprise",
-      "lineCount": 253,
+      "lineCount": 256,
       "issueCount": 2,
       "issues": [
         {
@@ -1578,7 +1796,7 @@
       "pageType": "list",
       "batch": "batch-3",
       "domain": "enterprise",
-      "lineCount": 262,
+      "lineCount": 270,
       "issueCount": 2,
       "issues": [
         {
@@ -1600,11 +1818,56 @@
       ]
     },
     {
+      "path": "executive/dashboard/page.tsx",
+      "pageType": "dashboard",
+      "batch": "batch-3",
+      "domain": "executive",
+      "lineCount": 173,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "improvements/[id]/page.tsx",
+      "pageType": "detail",
+      "batch": "batch-3",
+      "domain": "improvements",
+      "lineCount": 126,
+      "issueCount": 1,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（1 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
+      "path": "improvements/new/page.tsx",
+      "pageType": "create",
+      "batch": "batch-3",
+      "domain": "improvements",
+      "lineCount": 90,
+      "issueCount": 1,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（1 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
       "path": "improvements/page.tsx",
       "pageType": "list",
       "batch": "batch-3",
       "domain": "improvements",
-      "lineCount": 193,
+      "lineCount": 196,
       "issueCount": 1,
       "issues": [
         {
@@ -1622,7 +1885,7 @@
       "pageType": "edit",
       "batch": "batch-1",
       "domain": "incidents",
-      "lineCount": 228,
+      "lineCount": 227,
       "issueCount": 0,
       "issues": []
     },
@@ -1631,25 +1894,25 @@
       "pageType": "detail",
       "batch": "batch-1",
       "domain": "incidents",
-      "lineCount": 32,
-      "issueCount": 0,
-      "issues": []
+      "lineCount": 159,
+      "issueCount": 1,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（2 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
     },
     {
       "path": "incidents/create/page.tsx",
       "pageType": "create",
       "batch": "batch-1",
       "domain": "incidents",
-      "lineCount": 447,
-      "issueCount": 0,
-      "issues": []
-    },
-    {
-      "path": "incidents/new/page.tsx",
-      "pageType": "create",
-      "batch": "batch-1",
-      "domain": "incidents",
-      "lineCount": 24,
+      "lineCount": 474,
       "issueCount": 0,
       "issues": []
     },
@@ -1658,14 +1921,67 @@
       "pageType": "list",
       "batch": "batch-1",
       "domain": "incidents",
-      "lineCount": 312,
+      "lineCount": 527,
+      "issueCount": 2,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "实现质量",
+          "description": "文件复杂度偏高（527 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "recommendation": "抽出局部 section / toolbar / modal 组件",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        },
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（4 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
+      "path": "installations/page.tsx",
+      "pageType": "list",
+      "batch": "batch-3",
+      "domain": "installations",
+      "lineCount": 464,
       "issueCount": 1,
       "issues": [
         {
           "severity": "P2",
           "category": "交互反馈",
-          "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
+          "description": "检测到 console 输出（4 处），错误反馈仍偏开发态。",
           "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
+      "path": "knowledge/articles/[id]/page.tsx",
+      "pageType": "detail",
+      "batch": "batch-2",
+      "domain": "knowledge",
+      "lineCount": 81,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "knowledge/articles/new/page.tsx",
+      "pageType": "create",
+      "batch": "batch-2",
+      "domain": "knowledge",
+      "lineCount": 145,
+      "issueCount": 1,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "实现质量",
+          "description": "存在多处 any 使用（4 处），建议补齐局部类型与返回值约束。",
+          "recommendation": "补足局部类型并减少页面内 any",
           "sharedLayer": false,
           "blocksFollowup": false
         }
@@ -1676,13 +1992,13 @@
       "pageType": "list",
       "batch": "batch-2",
       "domain": "knowledge",
-      "lineCount": 469,
+      "lineCount": 478,
       "issueCount": 2,
       "issues": [
         {
           "severity": "P2",
           "category": "实现质量",
-          "description": "存在多处 any 使用（8 处），建议补齐局部类型与返回值约束。",
+          "description": "存在多处 any 使用（10 处），建议补齐局部类型与返回值约束。",
           "recommendation": "补足局部类型并减少页面内 any",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -1702,7 +2018,7 @@
       "pageType": "list",
       "batch": "batch-2",
       "domain": "knowledge",
-      "lineCount": 426,
+      "lineCount": 432,
       "issueCount": 2,
       "issues": [
         {
@@ -1722,6 +2038,15 @@
           "blocksFollowup": false
         }
       ]
+    },
+    {
+      "path": "licenses/[id]/edit/page.tsx",
+      "pageType": "edit",
+      "batch": "batch-2",
+      "domain": "licenses",
+      "lineCount": 7,
+      "issueCount": 0,
+      "issues": []
     },
     {
       "path": "licenses/[id]/page.tsx",
@@ -1751,17 +2076,62 @@
       "issues": []
     },
     {
+      "path": "manager/live-board/page.tsx",
+      "pageType": "list",
+      "batch": "batch-3",
+      "domain": "manager",
+      "lineCount": 203,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "marketplace/[id]/page.tsx",
+      "pageType": "detail",
+      "batch": "batch-3",
+      "domain": "marketplace",
+      "lineCount": 396,
+      "issueCount": 1,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
+      "path": "marketplace/page.tsx",
+      "pageType": "list",
+      "batch": "batch-3",
+      "domain": "marketplace",
+      "lineCount": 306,
+      "issueCount": 1,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（1 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
       "path": "msp/management/page.tsx",
       "pageType": "list",
       "batch": "batch-3",
       "domain": "msp",
-      "lineCount": 271,
+      "lineCount": 255,
       "issueCount": 2,
       "issues": [
         {
           "severity": "P2",
           "category": "实现质量",
-          "description": "存在多处 any 使用（8 处），建议补齐局部类型与返回值约束。",
+          "description": "存在多处 any 使用（5 处），建议补齐局部类型与返回值约束。",
           "recommendation": "补足局部类型并减少页面内 any",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -1781,17 +2151,9 @@
       "pageType": "list",
       "batch": "batch-3",
       "domain": "msp",
-      "lineCount": 500,
-      "issueCount": 3,
+      "lineCount": 494,
+      "issueCount": 2,
       "issues": [
-        {
-          "severity": "P2",
-          "category": "实现质量",
-          "description": "文件复杂度偏高（500 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
-          "recommendation": "抽出局部 section / toolbar / modal 组件",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        },
         {
           "severity": "P2",
           "category": "实现质量",
@@ -1815,33 +2177,16 @@
       "pageType": "list",
       "batch": "batch-3",
       "domain": "my-requests",
-      "lineCount": 410,
-      "issueCount": 2,
-      "issues": [
-        {
-          "severity": "P2",
-          "category": "交互反馈",
-          "description": "检测到 console 输出（6 处），错误反馈仍偏开发态。",
-          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        },
-        {
-          "severity": "P2",
-          "category": "实现质量",
-          "description": "存在 eslint-disable（2 处），建议回到依赖和状态模型层面修正。",
-          "recommendation": "消除临时关闭规则的依赖问题或拆分 effect / callback",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        }
-      ]
+      "lineCount": 32,
+      "issueCount": 0,
+      "issues": []
     },
     {
       "path": "my-requests/page.tsx",
       "pageType": "list",
       "batch": "batch-3",
       "domain": "my-requests",
-      "lineCount": 332,
+      "lineCount": 331,
       "issueCount": 1,
       "issues": [
         {
@@ -1859,29 +2204,21 @@
       "pageType": "list",
       "batch": "batch-3",
       "domain": "notifications",
-      "lineCount": 752,
-      "issueCount": 3,
+      "lineCount": 821,
+      "issueCount": 2,
       "issues": [
         {
-          "severity": "P2",
+          "severity": "P1",
           "category": "实现质量",
-          "description": "文件复杂度偏高（752 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
-          "recommendation": "抽出局部 section / toolbar / modal 组件",
+          "description": "超长单文件（821 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+          "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
           "sharedLayer": false,
-          "blocksFollowup": false
-        },
-        {
-          "severity": "P2",
-          "category": "实现质量",
-          "description": "存在多处 any 使用（5 处），建议补齐局部类型与返回值约束。",
-          "recommendation": "补足局部类型并减少页面内 any",
-          "sharedLayer": false,
-          "blocksFollowup": false
+          "blocksFollowup": true
         },
         {
           "severity": "P2",
           "category": "交互反馈",
-          "description": "检测到 console 输出（7 处），错误反馈仍偏开发态。",
+          "description": "检测到 console 输出（9 处），错误反馈仍偏开发态。",
           "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -1889,11 +2226,20 @@
       ]
     },
     {
+      "path": "portal/page.tsx",
+      "pageType": "list",
+      "batch": "batch-3",
+      "domain": "portal",
+      "lineCount": 288,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
       "path": "problems/[id]/edit/page.tsx",
       "pageType": "edit",
       "batch": "batch-1",
       "domain": "problems",
-      "lineCount": 199,
+      "lineCount": 179,
       "issueCount": 0,
       "issues": []
     },
@@ -1902,22 +2248,31 @@
       "pageType": "detail",
       "batch": "batch-1",
       "domain": "problems",
-      "lineCount": 30,
-      "issueCount": 0,
-      "issues": []
+      "lineCount": 172,
+      "issueCount": 1,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（2 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
     },
     {
       "path": "problems/known-errors/page.tsx",
       "pageType": "list",
       "batch": "batch-1",
       "domain": "problems",
-      "lineCount": 603,
+      "lineCount": 594,
       "issueCount": 3,
       "issues": [
         {
           "severity": "P2",
           "category": "实现质量",
-          "description": "文件复杂度偏高（603 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "description": "文件复杂度偏高（594 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
           "recommendation": "抽出局部 section / toolbar / modal 组件",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -1945,7 +2300,7 @@
       "pageType": "create",
       "batch": "batch-1",
       "domain": "problems",
-      "lineCount": 214,
+      "lineCount": 201,
       "issueCount": 1,
       "issues": [
         {
@@ -1963,23 +2318,15 @@
       "pageType": "list",
       "batch": "batch-1",
       "domain": "problems",
-      "lineCount": 312,
-      "issueCount": 2,
+      "lineCount": 373,
+      "issueCount": 1,
       "issues": [
         {
           "severity": "P2",
           "category": "交互反馈",
-          "description": "检测到 console 输出（2 处），错误反馈仍偏开发态。",
+          "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
           "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
           "sharedLayer": false,
-          "blocksFollowup": false
-        },
-        {
-          "severity": "P3",
-          "category": "视觉一致性",
-          "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
-          "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
-          "sharedLayer": true,
           "blocksFollowup": false
         }
       ]
@@ -1989,7 +2336,7 @@
       "pageType": "list",
       "batch": "batch-1",
       "domain": "problems",
-      "lineCount": 372,
+      "lineCount": 366,
       "issueCount": 2,
       "issues": [
         {
@@ -2015,13 +2362,13 @@
       "pageType": "list",
       "batch": "batch-3",
       "domain": "profile",
-      "lineCount": 919,
-      "issueCount": 2,
+      "lineCount": 989,
+      "issueCount": 3,
       "issues": [
         {
           "severity": "P1",
           "category": "实现质量",
-          "description": "超长单文件（919 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+          "description": "超长单文件（989 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
           "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
           "sharedLayer": false,
           "blocksFollowup": true
@@ -2030,24 +2377,6 @@
           "severity": "P2",
           "category": "交互反馈",
           "description": "检测到 console 输出（7 处），错误反馈仍偏开发态。",
-          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        }
-      ]
-    },
-    {
-      "path": "projects/page.tsx",
-      "pageType": "list",
-      "batch": "batch-3",
-      "domain": "projects",
-      "lineCount": 218,
-      "issueCount": 2,
-      "issues": [
-        {
-          "severity": "P2",
-          "category": "交互反馈",
-          "description": "检测到 console 输出（2 处），错误反馈仍偏开发态。",
           "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -2063,11 +2392,46 @@
       ]
     },
     {
+      "path": "projects/page.tsx",
+      "pageType": "list",
+      "batch": "batch-3",
+      "domain": "projects",
+      "lineCount": 267,
+      "issueCount": 2,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（4 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        },
+        {
+          "severity": "P3",
+          "category": "视觉一致性",
+          "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
+          "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
+          "sharedLayer": true,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
+      "path": "releases/[id]/edit/page.tsx",
+      "pageType": "edit",
+      "batch": "batch-3",
+      "domain": "releases",
+      "lineCount": 8,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
       "path": "releases/[id]/page.tsx",
       "pageType": "detail",
       "batch": "batch-3",
       "domain": "releases",
-      "lineCount": 8,
+      "lineCount": 40,
       "issueCount": 0,
       "issues": []
     },
@@ -2094,7 +2458,7 @@
       "pageType": "report",
       "batch": "batch-2",
       "domain": "reports",
-      "lineCount": 269,
+      "lineCount": 270,
       "issueCount": 1,
       "issues": [
         {
@@ -2108,17 +2472,26 @@
       ]
     },
     {
+      "path": "reports/changes/page.tsx",
+      "pageType": "report",
+      "batch": "batch-2",
+      "domain": "reports",
+      "lineCount": 8,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
       "path": "reports/cmdb-quality/page.tsx",
       "pageType": "report",
       "batch": "batch-2",
       "domain": "reports",
-      "lineCount": 226,
+      "lineCount": 266,
       "issueCount": 1,
       "issues": [
         {
           "severity": "P2",
           "category": "交互反馈",
-          "description": "检测到 console 输出（2 处），错误反馈仍偏开发态。",
+          "description": "检测到 console 输出（1 处），错误反馈仍偏开发态。",
           "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -2130,7 +2503,7 @@
       "pageType": "report",
       "batch": "batch-2",
       "domain": "reports",
-      "lineCount": 336,
+      "lineCount": 335,
       "issueCount": 2,
       "issues": [
         {
@@ -2152,29 +2525,29 @@
       ]
     },
     {
+      "path": "reports/incidents/page.tsx",
+      "pageType": "report",
+      "batch": "batch-2",
+      "domain": "reports",
+      "lineCount": 8,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
       "path": "reports/page.tsx",
       "pageType": "report",
       "batch": "batch-2",
       "domain": "reports",
-      "lineCount": 316,
-      "issueCount": 1,
-      "issues": [
-        {
-          "severity": "P2",
-          "category": "交互反馈",
-          "description": "检测到 console 输出（2 处），错误反馈仍偏开发态。",
-          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        }
-      ]
+      "lineCount": 17,
+      "issueCount": 0,
+      "issues": []
     },
     {
       "path": "reports/problem-efficiency/page.tsx",
       "pageType": "report",
       "batch": "batch-2",
       "domain": "reports",
-      "lineCount": 399,
+      "lineCount": 400,
       "issueCount": 1,
       "issues": [
         {
@@ -2188,17 +2561,26 @@
       ]
     },
     {
+      "path": "reports/problems/page.tsx",
+      "pageType": "report",
+      "batch": "batch-2",
+      "domain": "reports",
+      "lineCount": 8,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
       "path": "reports/service-catalog-usage/page.tsx",
       "pageType": "report",
       "batch": "batch-2",
       "domain": "reports",
-      "lineCount": 243,
+      "lineCount": 242,
       "issueCount": 2,
       "issues": [
         {
           "severity": "P2",
           "category": "实现质量",
-          "description": "存在多处 any 使用（9 处），建议补齐局部类型与返回值约束。",
+          "description": "存在多处 any 使用（8 处），建议补齐局部类型与返回值约束。",
           "recommendation": "补足局部类型并减少页面内 any",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -2218,7 +2600,7 @@
       "pageType": "report",
       "batch": "batch-2",
       "domain": "reports",
-      "lineCount": 277,
+      "lineCount": 354,
       "issueCount": 1,
       "issues": [
         {
@@ -2232,20 +2614,38 @@
       ]
     },
     {
-      "path": "service-catalog/approvals/page.tsx",
-      "pageType": "list",
+      "path": "reports/sla/page.tsx",
+      "pageType": "report",
       "batch": "batch-2",
-      "domain": "service-catalog",
-      "lineCount": 159,
+      "domain": "reports",
+      "lineCount": 8,
       "issueCount": 0,
       "issues": []
+    },
+    {
+      "path": "reports/tickets/page.tsx",
+      "pageType": "report",
+      "batch": "batch-2",
+      "domain": "reports",
+      "lineCount": 156,
+      "issueCount": 1,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "实现质量",
+          "description": "存在多处 any 使用（5 处），建议补齐局部类型与返回值约束。",
+          "recommendation": "补足局部类型并减少页面内 any",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
     },
     {
       "path": "service-catalog/detail/[id]/page.tsx",
       "pageType": "detail",
       "batch": "batch-2",
       "domain": "service-catalog",
-      "lineCount": 75,
+      "lineCount": 82,
       "issueCount": 0,
       "issues": []
     },
@@ -2263,14 +2663,32 @@
       "pageType": "list",
       "batch": "batch-2",
       "domain": "service-catalog",
-      "lineCount": 247,
+      "lineCount": 348,
+      "issueCount": 1,
+      "issues": [
+        {
+          "severity": "P3",
+          "category": "视觉一致性",
+          "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
+          "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
+          "sharedLayer": true,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
+      "path": "service-catalog/request/[id]/page.tsx",
+      "pageType": "detail",
+      "batch": "batch-2",
+      "domain": "service-catalog",
+      "lineCount": 350,
       "issueCount": 1,
       "issues": [
         {
           "severity": "P2",
-          "category": "交互反馈",
-          "description": "检测到 console 输出（1 处），错误反馈仍偏开发态。",
-          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "category": "实现质量",
+          "description": "存在多处 any 使用（9 处），建议补齐局部类型与返回值约束。",
+          "recommendation": "补足局部类型并减少页面内 any",
           "sharedLayer": false,
           "blocksFollowup": false
         }
@@ -2281,7 +2699,7 @@
       "pageType": "detail",
       "batch": "batch-2",
       "domain": "service-requests",
-      "lineCount": 10,
+      "lineCount": 32,
       "issueCount": 0,
       "issues": []
     },
@@ -2290,17 +2708,9 @@
       "pageType": "list",
       "batch": "batch-2",
       "domain": "service-requests",
-      "lineCount": 207,
-      "issueCount": 2,
+      "lineCount": 133,
+      "issueCount": 1,
       "issues": [
-        {
-          "severity": "P2",
-          "category": "实现质量",
-          "description": "存在多处 any 使用（7 处），建议补齐局部类型与返回值约束。",
-          "recommendation": "补足局部类型并减少页面内 any",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        },
         {
           "severity": "P2",
           "category": "交互反馈",
@@ -2316,7 +2726,7 @@
       "pageType": "list",
       "batch": "batch-3",
       "domain": "sla-dashboard",
-      "lineCount": 20,
+      "lineCount": 10,
       "issueCount": 0,
       "issues": []
     },
@@ -2325,7 +2735,7 @@
       "pageType": "list",
       "batch": "batch-3",
       "domain": "sla-monitor",
-      "lineCount": 393,
+      "lineCount": 392,
       "issueCount": 3,
       "issues": [
         {
@@ -2368,17 +2778,9 @@
       "pageType": "list",
       "batch": "batch-3",
       "domain": "sla",
-      "lineCount": 199,
-      "issueCount": 2,
+      "lineCount": 154,
+      "issueCount": 1,
       "issues": [
-        {
-          "severity": "P2",
-          "category": "实现质量",
-          "description": "存在多处 any 使用（10 处），建议补齐局部类型与返回值约束。",
-          "recommendation": "补足局部类型并减少页面内 any",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        },
         {
           "severity": "P2",
           "category": "交互反馈",
@@ -2394,13 +2796,13 @@
       "pageType": "list",
       "batch": "batch-3",
       "domain": "standard-changes",
-      "lineCount": 520,
+      "lineCount": 530,
       "issueCount": 3,
       "issues": [
         {
           "severity": "P2",
           "category": "实现质量",
-          "description": "文件复杂度偏高（520 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "description": "文件复杂度偏高（530 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
           "recommendation": "抽出局部 section / toolbar / modal 组件",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -2446,7 +2848,7 @@
       "pageType": "list",
       "batch": "batch-3",
       "domain": "tags",
-      "lineCount": 189,
+      "lineCount": 184,
       "issueCount": 1,
       "issues": [
         {
@@ -2473,60 +2875,18 @@
       "pageType": "list",
       "batch": "batch-3",
       "domain": "templates",
-      "lineCount": 975,
-      "issueCount": 3,
-      "issues": [
-        {
-          "severity": "P1",
-          "category": "实现质量",
-          "description": "超长单文件（975 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
-          "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
-          "sharedLayer": false,
-          "blocksFollowup": true
-        },
-        {
-          "severity": "P2",
-          "category": "交互反馈",
-          "description": "检测到 console 输出（5 处），错误反馈仍偏开发态。",
-          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        },
-        {
-          "severity": "P3",
-          "category": "视觉一致性",
-          "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
-          "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
-          "sharedLayer": true,
-          "blocksFollowup": false
-        }
-      ]
+      "lineCount": 9,
+      "issueCount": 0,
+      "issues": []
     },
     {
       "path": "tickets/[ticketId]/page.tsx",
       "pageType": "list",
       "batch": "batch-1",
       "domain": "tickets",
-      "lineCount": 753,
-      "issueCount": 2,
-      "issues": [
-        {
-          "severity": "P2",
-          "category": "实现质量",
-          "description": "文件复杂度偏高（753 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
-          "recommendation": "抽出局部 section / toolbar / modal 组件",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        },
-        {
-          "severity": "P2",
-          "category": "交互反馈",
-          "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
-          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        }
-      ]
+      "lineCount": 13,
+      "issueCount": 0,
+      "issues": []
     },
     {
       "path": "tickets/ai-create/page.tsx",
@@ -2542,7 +2902,7 @@
       "pageType": "list",
       "batch": "batch-1",
       "domain": "tickets",
-      "lineCount": 468,
+      "lineCount": 268,
       "issueCount": 2,
       "issues": [
         {
@@ -2564,26 +2924,51 @@
       ]
     },
     {
+      "path": "tickets/cc/page.tsx",
+      "pageType": "list",
+      "batch": "batch-1",
+      "domain": "tickets",
+      "lineCount": 148,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
       "path": "tickets/create/page.tsx",
       "pageType": "create",
       "batch": "batch-1",
       "domain": "tickets",
-      "lineCount": 619,
-      "issueCount": 2,
+      "lineCount": 750,
+      "issueCount": 4,
       "issues": [
         {
           "severity": "P2",
           "category": "实现质量",
-          "description": "文件复杂度偏高（619 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "description": "文件复杂度偏高（750 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
           "recommendation": "抽出局部 section / toolbar / modal 组件",
           "sharedLayer": false,
           "blocksFollowup": false
         },
         {
           "severity": "P2",
+          "category": "实现质量",
+          "description": "存在多处 any 使用（5 处），建议补齐局部类型与返回值约束。",
+          "recommendation": "补足局部类型并减少页面内 any",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        },
+        {
+          "severity": "P2",
           "category": "交互反馈",
-          "description": "检测到 console 输出（2 处），错误反馈仍偏开发态。",
+          "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
           "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        },
+        {
+          "severity": "P2",
+          "category": "实现质量",
+          "description": "存在 eslint-disable（1 处），建议回到依赖和状态模型层面修正。",
+          "recommendation": "消除临时关闭规则的依赖问题或拆分 effect / callback",
           "sharedLayer": false,
           "blocksFollowup": false
         }
@@ -2594,13 +2979,13 @@
       "pageType": "dashboard",
       "batch": "batch-1",
       "domain": "tickets",
-      "lineCount": 558,
+      "lineCount": 585,
       "issueCount": 3,
       "issues": [
         {
           "severity": "P2",
           "category": "实现质量",
-          "description": "文件复杂度偏高（558 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "description": "文件复杂度偏高（585 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
           "recommendation": "抽出局部 section / toolbar / modal 组件",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -2628,7 +3013,7 @@
       "pageType": "list",
       "batch": "batch-1",
       "domain": "tickets",
-      "lineCount": 306,
+      "lineCount": 330,
       "issueCount": 1,
       "issues": [
         {
@@ -2642,17 +3027,44 @@
       ]
     },
     {
+      "path": "tickets/prototype/page.tsx",
+      "pageType": "list",
+      "batch": "batch-1",
+      "domain": "tickets",
+      "lineCount": 874,
+      "issueCount": 1,
+      "issues": [
+        {
+          "severity": "P1",
+          "category": "实现质量",
+          "description": "超长单文件（874 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+          "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
+          "sharedLayer": false,
+          "blocksFollowup": true
+        }
+      ]
+    },
+    {
+      "path": "tickets/templates/[id]/page.tsx",
+      "pageType": "detail",
+      "batch": "batch-1",
+      "domain": "tickets",
+      "lineCount": 181,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
       "path": "tickets/templates/page.tsx",
       "pageType": "list",
       "batch": "batch-1",
       "domain": "tickets",
-      "lineCount": 997,
+      "lineCount": 908,
       "issueCount": 2,
       "issues": [
         {
           "severity": "P1",
           "category": "实现质量",
-          "description": "超长单文件（997 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+          "description": "超长单文件（908 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
           "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
           "sharedLayer": false,
           "blocksFollowup": true
@@ -2660,7 +3072,7 @@
         {
           "severity": "P2",
           "category": "交互反馈",
-          "description": "检测到 console 输出（1 处），错误反馈仍偏开发态。",
+          "description": "检测到 console 输出（4 处），错误反馈仍偏开发态。",
           "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -2672,7 +3084,7 @@
       "pageType": "list",
       "batch": "batch-1",
       "domain": "tickets",
-      "lineCount": 30,
+      "lineCount": 158,
       "issueCount": 0,
       "issues": []
     },
@@ -2681,7 +3093,7 @@
       "pageType": "list",
       "batch": "batch-1",
       "domain": "workflow",
-      "lineCount": 385,
+      "lineCount": 410,
       "issueCount": 2,
       "issues": [
         {
@@ -2703,21 +3115,13 @@
       ]
     },
     {
-      "path": "workflow/automation/page.tsx",
+      "path": "workflow/bottlenecks/page.tsx",
       "pageType": "list",
       "batch": "batch-1",
       "domain": "workflow",
-      "lineCount": 606,
-      "issueCount": 3,
+      "lineCount": 444,
+      "issueCount": 2,
       "issues": [
-        {
-          "severity": "P2",
-          "category": "实现质量",
-          "description": "文件复杂度偏高（606 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
-          "recommendation": "抽出局部 section / toolbar / modal 组件",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        },
         {
           "severity": "P2",
           "category": "交互反馈",
@@ -2741,7 +3145,7 @@
       "pageType": "dashboard",
       "batch": "batch-1",
       "domain": "workflow",
-      "lineCount": 320,
+      "lineCount": 316,
       "issueCount": 1,
       "issues": [
         {
@@ -2759,7 +3163,7 @@
       "pageType": "list",
       "batch": "batch-1",
       "domain": "workflow",
-      "lineCount": 28,
+      "lineCount": 30,
       "issueCount": 1,
       "issues": [
         {
@@ -2777,64 +3181,22 @@
       "pageType": "list",
       "batch": "batch-1",
       "domain": "workflow",
-      "lineCount": 269,
-      "issueCount": 2,
+      "lineCount": 734,
+      "issueCount": 3,
       "issues": [
         {
           "severity": "P2",
-          "category": "交互反馈",
-          "description": "检测到 console 输出（1 处），错误反馈仍偏开发态。",
-          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        },
-        {
-          "severity": "P3",
-          "category": "视觉一致性",
-          "description": "页面同时承载筛选、主操作和表格区，建议统一复用页面头部、筛选栏和统计卡基线。",
-          "recommendation": "收口到共享页面头部/筛选栏/统计卡组件",
-          "sharedLayer": true,
-          "blocksFollowup": false
-        }
-      ]
-    },
-    {
-      "path": "workflow/page.tsx",
-      "pageType": "list",
-      "batch": "batch-1",
-      "domain": "workflow",
-      "lineCount": 1160,
-      "issueCount": 5,
-      "issues": [
-        {
-          "severity": "P1",
           "category": "实现质量",
-          "description": "超长单文件（1160 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
-          "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
-          "sharedLayer": false,
-          "blocksFollowup": true
-        },
-        {
-          "severity": "P2",
-          "category": "实现质量",
-          "description": "存在多处 any 使用（5 处），建议补齐局部类型与返回值约束。",
-          "recommendation": "补足局部类型并减少页面内 any",
+          "description": "文件复杂度偏高（734 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "recommendation": "抽出局部 section / toolbar / modal 组件",
           "sharedLayer": false,
           "blocksFollowup": false
         },
         {
           "severity": "P2",
           "category": "交互反馈",
-          "description": "检测到 console 输出（1 处），错误反馈仍偏开发态。",
+          "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
           "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        },
-        {
-          "severity": "P2",
-          "category": "实现质量",
-          "description": "存在 eslint-disable（2 处），建议回到依赖和状态模型层面修正。",
-          "recommendation": "消除临时关闭规则的依赖问题或拆分 effect / callback",
           "sharedLayer": false,
           "blocksFollowup": false
         },
@@ -2853,7 +3215,7 @@
       "pageType": "list",
       "batch": "batch-1",
       "domain": "workflow",
-      "lineCount": 326,
+      "lineCount": 324,
       "issueCount": 2,
       "issues": [
         {
@@ -2879,13 +3241,13 @@
       "pageType": "list",
       "batch": "batch-1",
       "domain": "workflow",
-      "lineCount": 587,
+      "lineCount": 571,
       "issueCount": 2,
       "issues": [
         {
           "severity": "P2",
           "category": "实现质量",
-          "description": "文件复杂度偏高（587 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "description": "文件复杂度偏高（571 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
           "recommendation": "抽出局部 section / toolbar / modal 组件",
           "sharedLayer": false,
           "blocksFollowup": false
@@ -2905,7 +3267,7 @@
       "pageType": "list",
       "batch": "batch-1",
       "domain": "workflow",
-      "lineCount": 274,
+      "lineCount": 313,
       "issueCount": 2,
       "issues": [
         {
@@ -2927,29 +3289,173 @@
       ]
     },
     {
-      "path": "workflows/page.tsx",
+      "path": "workspace/tickets/page.tsx",
       "pageType": "list",
-      "batch": "batch-1",
-      "domain": "workflows",
-      "lineCount": 20,
+      "batch": "batch-3",
+      "domain": "workspace",
+      "lineCount": 344,
       "issueCount": 0,
       "issues": []
     }
   ],
   "complexComponents": [
     {
-      "path": "src/components/workflow/WorkflowEngine.tsx",
+      "path": "src/components/workflow/designer/WorkflowNodeInspector.tsx",
       "domain": "workflow",
-      "lineCount": 919,
+      "lineCount": 1683,
       "issueCount": 2,
       "issues": [
         {
           "severity": "P1",
           "category": "实现质量",
-          "description": "超长单文件（919 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+          "description": "超长单文件（1683 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
           "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
           "sharedLayer": false,
           "blocksFollowup": true
+        },
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（4 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
+      "path": "src/components/workflow/BPMNDesigner.tsx",
+      "domain": "workflow",
+      "lineCount": 1289,
+      "issueCount": 4,
+      "issues": [
+        {
+          "severity": "P1",
+          "category": "实现质量",
+          "description": "超长单文件（1289 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+          "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
+          "sharedLayer": false,
+          "blocksFollowup": true
+        },
+        {
+          "severity": "P1",
+          "category": "实现质量",
+          "description": "存在较多 any 使用（26 处），页面直接消费非结构化数据的风险较高。",
+          "recommendation": "迁移数据适配到 API mapper 或 hook，并补内部类型定义",
+          "sharedLayer": true,
+          "blocksFollowup": true
+        },
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（13 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        },
+        {
+          "severity": "P2",
+          "category": "实现质量",
+          "description": "存在 eslint-disable（1 处），建议回到依赖和状态模型层面修正。",
+          "recommendation": "消除临时关闭规则的依赖问题或拆分 effect / callback",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
+      "path": "src/components/workflow/designer/WorkflowDesigner.tsx",
+      "domain": "workflow",
+      "lineCount": 1069,
+      "issueCount": 3,
+      "issues": [
+        {
+          "severity": "P1",
+          "category": "实现质量",
+          "description": "超长单文件（1069 行），建议拆分页面编排、统计区、筛选区和详情/弹窗逻辑。",
+          "recommendation": "拆分为页面壳层 + section 组件 + 独立 hooks / mapper",
+          "sharedLayer": false,
+          "blocksFollowup": true
+        },
+        {
+          "severity": "P2",
+          "category": "实现质量",
+          "description": "存在多处 any 使用（4 处），建议补齐局部类型与返回值约束。",
+          "recommendation": "补足局部类型并减少页面内 any",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        },
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（13 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
+      "path": "src/components/workflow/designer/WorkflowAIModal.tsx",
+      "domain": "workflow",
+      "lineCount": 665,
+      "issueCount": 2,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "实现质量",
+          "description": "文件复杂度偏高（665 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "recommendation": "抽出局部 section / toolbar / modal 组件",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        },
+        {
+          "severity": "P2",
+          "category": "交互反馈",
+          "description": "检测到 console 输出（5 处），错误反馈仍偏开发态。",
+          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
+      "path": "src/components/cmdb/CSDMHub.tsx",
+      "domain": "cmdb",
+      "lineCount": 613,
+      "issueCount": 2,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "实现质量",
+          "description": "文件复杂度偏高（613 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "recommendation": "抽出局部 section / toolbar / modal 组件",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        },
+        {
+          "severity": "P2",
+          "category": "实现质量",
+          "description": "存在多处 any 使用（9 处），建议补齐局部类型与返回值约束。",
+          "recommendation": "补足局部类型并减少页面内 any",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
+    },
+    {
+      "path": "src/components/cmdb/TopologyGraph.tsx",
+      "domain": "cmdb",
+      "lineCount": 537,
+      "issueCount": 2,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "实现质量",
+          "description": "文件复杂度偏高（537 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
+          "recommendation": "抽出局部 section / toolbar / modal 组件",
+          "sharedLayer": false,
+          "blocksFollowup": false
         },
         {
           "severity": "P2",
@@ -2962,180 +3468,16 @@
       ]
     },
     {
-      "path": "src/components/workflow/designer/WorkflowDesigner.tsx",
-      "domain": "workflow",
-      "lineCount": 712,
-      "issueCount": 3,
-      "issues": [
-        {
-          "severity": "P2",
-          "category": "实现质量",
-          "description": "文件复杂度偏高（712 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
-          "recommendation": "抽出局部 section / toolbar / modal 组件",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        },
-        {
-          "severity": "P2",
-          "category": "实现质量",
-          "description": "存在多处 any 使用（9 处），建议补齐局部类型与返回值约束。",
-          "recommendation": "补足局部类型并减少页面内 any",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        },
-        {
-          "severity": "P2",
-          "category": "交互反馈",
-          "description": "检测到 console 输出（12 处），错误反馈仍偏开发态。",
-          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        }
-      ]
-    },
-    {
-      "path": "src/components/cmdb/TopologyGraph.tsx",
-      "domain": "cmdb",
-      "lineCount": 509,
-      "issueCount": 1,
-      "issues": [
-        {
-          "severity": "P2",
-          "category": "实现质量",
-          "description": "文件复杂度偏高（509 行），建议优先拆分筛选栏、表格列配置和模态逻辑。",
-          "recommendation": "抽出局部 section / toolbar / modal 组件",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        }
-      ]
-    },
-    {
       "path": "src/components/cmdb/CIRelationshipManager.tsx",
       "domain": "cmdb",
-      "lineCount": 430,
+      "lineCount": 480,
       "issueCount": 0,
       "issues": []
-    },
-    {
-      "path": "src/components/workflow/BPMNDesigner.tsx",
-      "domain": "workflow",
-      "lineCount": 337,
-      "issueCount": 1,
-      "issues": [
-        {
-          "severity": "P2",
-          "category": "交互反馈",
-          "description": "检测到 console 输出（3 处），错误反馈仍偏开发态。",
-          "recommendation": "统一通过 message / Alert / 错误态组件反馈，并保留结构化错误处理",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        }
-      ]
     },
     {
       "path": "src/components/cmdb/CIList.tsx",
       "domain": "cmdb",
-      "lineCount": 324,
-      "issueCount": 1,
-      "issues": [
-        {
-          "severity": "P2",
-          "category": "实现质量",
-          "description": "存在多处 any 使用（5 处），建议补齐局部类型与返回值约束。",
-          "recommendation": "补足局部类型并减少页面内 any",
-          "sharedLayer": false,
-          "blocksFollowup": false
-        }
-      ]
-    },
-    {
-      "path": "src/components/workflow/designer/WorkflowProperties.tsx",
-      "domain": "workflow",
-      "lineCount": 322,
-      "issueCount": 0,
-      "issues": []
-    },
-    {
-      "path": "src/components/workflow/designer/WorkflowContext.tsx",
-      "domain": "workflow",
-      "lineCount": 238,
-      "issueCount": 0,
-      "issues": []
-    },
-    {
-      "path": "src/components/cmdb/CIEditorForm.tsx",
-      "domain": "cmdb",
-      "lineCount": 224,
-      "issueCount": 0,
-      "issues": []
-    },
-    {
-      "path": "src/components/cmdb/ci-detail/sections/CIImpactAnalysisTab.tsx",
-      "domain": "cmdb",
-      "lineCount": 189,
-      "issueCount": 0,
-      "issues": []
-    },
-    {
-      "path": "src/components/workflow/designer/WorkflowNodePalette.tsx",
-      "domain": "workflow",
-      "lineCount": 187,
-      "issueCount": 0,
-      "issues": []
-    },
-    {
-      "path": "src/components/cmdb/ci-detail/CIDetail.tsx",
-      "domain": "cmdb",
-      "lineCount": 169,
-      "issueCount": 0,
-      "issues": []
-    },
-    {
-      "path": "src/components/workflow/designer/WorkflowToolbar.tsx",
-      "domain": "workflow",
-      "lineCount": 162,
-      "issueCount": 0,
-      "issues": []
-    },
-    {
-      "path": "src/components/cmdb/ci-detail/__tests__/CIImpactAnalysisTab.test.tsx",
-      "domain": "cmdb",
-      "lineCount": 161,
-      "issueCount": 0,
-      "issues": []
-    },
-    {
-      "path": "src/components/cmdb/ci-editor-shared.ts",
-      "domain": "cmdb",
-      "lineCount": 160,
-      "issueCount": 0,
-      "issues": []
-    },
-    {
-      "path": "src/components/cmdb/ci-detail/__tests__/CIChangeHistoryTab.test.tsx",
-      "domain": "cmdb",
-      "lineCount": 157,
-      "issueCount": 0,
-      "issues": []
-    },
-    {
-      "path": "src/components/cmdb/ci-detail/__tests__/CIBasicInfo.test.tsx",
-      "domain": "cmdb",
-      "lineCount": 156,
-      "issueCount": 0,
-      "issues": []
-    },
-    {
-      "path": "src/components/workflow/designer/WorkflowNewModal.tsx",
-      "domain": "workflow",
-      "lineCount": 146,
-      "issueCount": 0,
-      "issues": []
-    },
-    {
-      "path": "src/components/cmdb/ci-detail/hooks/useCIDetail.ts",
-      "domain": "cmdb",
-      "lineCount": 138,
+      "lineCount": 435,
       "issueCount": 1,
       "issues": [
         {
@@ -3149,30 +3491,137 @@
       ]
     },
     {
-      "path": "src/components/workflow/designer/WorkflowTypes.ts",
-      "domain": "workflow",
-      "lineCount": 127,
+      "path": "src/components/cmdb/CIEditorForm.tsx",
+      "domain": "cmdb",
+      "lineCount": 400,
       "issueCount": 0,
       "issues": []
+    },
+    {
+      "path": "src/components/workflow/designer/WorkflowProperties.tsx",
+      "domain": "workflow",
+      "lineCount": 343,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "src/components/workflow/designer/WorkflowContext.tsx",
+      "domain": "workflow",
+      "lineCount": 244,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "src/components/workflow/__tests__/WorkflowNodeInspector.test.tsx",
+      "domain": "workflow",
+      "lineCount": 224,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "src/components/cmdb/ci-editor-shared.ts",
+      "domain": "cmdb",
+      "lineCount": 215,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "src/components/workflow/designer/WorkflowToolbar.tsx",
+      "domain": "workflow",
+      "lineCount": 197,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "src/components/cmdb/ci-detail/sections/CIImpactAnalysisTab.tsx",
+      "domain": "cmdb",
+      "lineCount": 189,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "src/components/cmdb/ci-detail/__tests__/CIBasicInfo.test.tsx",
+      "domain": "cmdb",
+      "lineCount": 185,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "src/components/cmdb/ci-detail/CIDetail.tsx",
+      "domain": "cmdb",
+      "lineCount": 169,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "src/components/cmdb/ci-detail/__tests__/CIImpactAnalysisTab.test.tsx",
+      "domain": "cmdb",
+      "lineCount": 161,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "src/components/cmdb/ci-detail/__tests__/CIChangeHistoryTab.test.tsx",
+      "domain": "cmdb",
+      "lineCount": 157,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "src/components/workflow/designer/WorkflowNewModal.tsx",
+      "domain": "workflow",
+      "lineCount": 145,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "src/components/workflow/designer/WorkflowTypes.ts",
+      "domain": "workflow",
+      "lineCount": 140,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "src/components/cmdb/ci-detail/hooks/useCIDetail.ts",
+      "domain": "cmdb",
+      "lineCount": 139,
+      "issueCount": 1,
+      "issues": [
+        {
+          "severity": "P2",
+          "category": "实现质量",
+          "description": "存在多处 any 使用（4 处），建议补齐局部类型与返回值约束。",
+          "recommendation": "补足局部类型并减少页面内 any",
+          "sharedLayer": false,
+          "blocksFollowup": false
+        }
+      ]
     },
     {
       "path": "src/components/workflow/__tests__/BPMNDesigner.test.tsx",
       "domain": "workflow",
-      "lineCount": 105,
+      "lineCount": 108,
       "issueCount": 0,
       "issues": []
     },
     {
-      "path": "src/components/workflow/designer/WorkflowSettingsModal.tsx",
+      "path": "src/components/workflow/designer/__tests__/WorkflowAIModal.test.tsx",
       "domain": "workflow",
-      "lineCount": 104,
+      "lineCount": 102,
       "issueCount": 0,
       "issues": []
     },
     {
       "path": "src/components/cmdb/ci-detail/types/index.ts",
       "domain": "cmdb",
-      "lineCount": 101,
+      "lineCount": 98,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "src/components/workflow/designer/WorkflowSettingsModal.tsx",
+      "domain": "workflow",
+      "lineCount": 96,
       "issueCount": 0,
       "issues": []
     },
@@ -3191,16 +3640,30 @@
       "issues": []
     },
     {
-      "path": "src/components/cmdb/ci-detail/__tests__/CITopologyGraph.test.tsx",
-      "domain": "cmdb",
-      "lineCount": 67,
+      "path": "src/components/workflow/__tests__/BPMNDesigner.validate.test.tsx",
+      "domain": "workflow",
+      "lineCount": 78,
       "issueCount": 0,
       "issues": []
     },
     {
-      "path": "src/components/workflow/designer/WorkflowMetadataModal.tsx",
-      "domain": "workflow",
-      "lineCount": 66,
+      "path": "src/components/cmdb/ci-detail/sections/CIBasicInfo.tsx",
+      "domain": "cmdb",
+      "lineCount": 77,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "src/components/cmdb/useUnsavedChangesGuard.ts",
+      "domain": "cmdb",
+      "lineCount": 76,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "src/components/cmdb/ci-detail/__tests__/CITopologyGraph.test.tsx",
+      "domain": "cmdb",
+      "lineCount": 67,
       "issueCount": 0,
       "issues": []
     },
@@ -3212,9 +3675,9 @@
       "issues": []
     },
     {
-      "path": "src/components/cmdb/ci-detail/sections/CIBasicInfo.tsx",
-      "domain": "cmdb",
-      "lineCount": 63,
+      "path": "src/components/workflow/designer/WorkflowCanvas.tsx",
+      "domain": "workflow",
+      "lineCount": 59,
       "issueCount": 0,
       "issues": []
     },
@@ -3226,9 +3689,9 @@
       "issues": []
     },
     {
-      "path": "src/components/workflow/designer/WorkflowCanvas.tsx",
+      "path": "src/components/workflow/designer/WorkflowMetadataModal.tsx",
       "domain": "workflow",
-      "lineCount": 43,
+      "lineCount": 58,
       "issueCount": 0,
       "issues": []
     },
@@ -3247,9 +3710,16 @@
       "issues": []
     },
     {
+      "path": "src/components/workflow/itsm-moddle-descriptor.ts",
+      "domain": "workflow",
+      "lineCount": 32,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
       "path": "src/components/workflow/designer/index.ts",
       "domain": "workflow",
-      "lineCount": 31,
+      "lineCount": 30,
       "issueCount": 0,
       "issues": []
     },
@@ -3278,6 +3748,13 @@
       "path": "src/components/workflow/index.ts",
       "domain": "workflow",
       "lineCount": 16,
+      "issueCount": 0,
+      "issues": []
+    },
+    {
+      "path": "src/components/workflow/__tests__/itsm-moddle-descriptor.test.ts",
+      "domain": "workflow",
+      "lineCount": 13,
       "issueCount": 0,
       "issues": []
     }

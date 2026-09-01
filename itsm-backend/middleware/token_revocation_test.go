@@ -7,18 +7,16 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/authentication"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
 func TestAuthMiddlewareRejectsRevokedAccessToken(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	original := currentAccessTokenRevocationStore()
-	setAccessTokenRevocationStore(newMemoryAccessTokenRevocationStore())
-	t.Cleanup(func() { setAccessTokenRevocationStore(original) })
-
 	const secret = "token-revocation-test-secret"
-	token, err := GenerateAccessToken(7, "operator", "admin", 3, secret, time.Hour)
+	token, err := authentication.GenerateAccessToken(7, "operator", "admin", 3, secret, time.Hour)
 	require.NoError(t, err)
 
 	router := gin.New()
@@ -32,10 +30,10 @@ func TestAuthMiddlewareRejectsRevokedAccessToken(t *testing.T) {
 	router.ServeHTTP(first, firstRequest)
 	require.Equal(t, http.StatusNoContent, first.Code)
 
-	claims, err := ValidateAccessToken(token, secret)
+	claims, err := authentication.ValidateAccessToken(token, secret)
 	require.NoError(t, err)
 	require.NotNil(t, claims.ExpiresAt)
-	require.NoError(t, RevokeAccessToken(context.Background(), token, claims.ExpiresAt.Time))
+	require.NoError(t, authentication.RevokeAccessToken(context.Background(), token, claims.ExpiresAt.Time))
 
 	second := httptest.NewRecorder()
 	secondRequest := httptest.NewRequest(http.MethodGet, "/protected", nil)
@@ -43,11 +41,4 @@ func TestAuthMiddlewareRejectsRevokedAccessToken(t *testing.T) {
 	router.ServeHTTP(second, secondRequest)
 	require.NotEqual(t, http.StatusNoContent, second.Code)
 	require.Contains(t, second.Body.String(), "token已失效")
-}
-
-func TestAccessTokenRevocationKeyDoesNotExposeToken(t *testing.T) {
-	const token = "header.payload.signature"
-	key := accessTokenRevocationKey(token)
-	require.NotContains(t, key, token)
-	require.Contains(t, key, accessTokenRevocationPrefix)
 }

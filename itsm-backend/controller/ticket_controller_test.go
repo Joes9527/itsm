@@ -13,11 +13,11 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -37,10 +37,10 @@ func setupTestTicketController(t *testing.T) (*gin.Engine, *ent.Client, *TicketC
 	// 号码生成器按 tenant 维度查询"当月最大序号"，但唯一约束是全局的，一旦某个较早测试的租户已经
 	// 占用了当月的 000001 号，后面任何新租户创建的第一张工单都会确定性撞号重试耗尽失败。
 	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:ticketctrl_%s_%d?mode=memory&cache=shared&_fk=1", t.Name(), mathrand.Int31()))
-	// middleware.HasResourcePermission 缓存的 key 是 role+tenantID，每个测试都是全新的内存库、
+	// authorization.HasResourcePermission 缓存的 key 是 role+tenantID，每个测试都是全新的内存库、
 	// tenant 自增 ID 又会从 1 重新开始，不同测试用同一个 role 名字时会撞进同一个缓存 key，
 	// 读到另一个测试早前缓存下来的权限集。每个测试用例开始前先清一次，保证互不影响。
-	middleware.InvalidateAllPermissionCaches()
+	authorization.InvalidateAllPermissionCaches()
 
 	logger := zaptest.NewLogger(t).Sugar()
 
@@ -87,7 +87,7 @@ func setupTestTicketController(t *testing.T) (*gin.Engine, *ent.Client, *TicketC
 
 // seedTicketRolePermission grants roleCode a resource:action permission in tenantID,
 // needed now that TicketController's write-path handlers call service.CanXxx (which
-// queries role_permissions via middleware.HasResourcePermission) instead of allowing
+// queries role_permissions via authorization.HasResourcePermission) instead of allowing
 // any authenticated caller through unconditionally.
 func seedTicketRolePermission(t *testing.T, client *ent.Client, tenantID int, roleCode, resource, action string) {
 	t.Helper()

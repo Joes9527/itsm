@@ -6,13 +6,13 @@ import (
 	"regexp"
 	"strings"
 
+	"itsm-backend/authorization"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/permission"
 	"itsm-backend/ent/role"
 	"itsm-backend/ent/rolepermission"
 	"itsm-backend/ent/user"
-	"itsm-backend/middleware"
 
 	"go.uber.org/zap"
 )
@@ -258,7 +258,7 @@ func (s *RoleService) UpdateRole(ctx context.Context, id int, req *dto.UpdateRol
 		}
 	}
 
-	middleware.InvalidateRolePermissionCache(roleEntity.Code, tenantID)
+	authorization.InvalidateRolePermissionCache(roleEntity.Code, tenantID)
 
 	return s.GetRole(ctx, id, tenantID)
 }
@@ -362,7 +362,7 @@ func (s *RoleService) DeleteRole(ctx context.Context, id int, tenantID int) erro
 		return fmt.Errorf("删除角色失败: %w", err)
 	}
 
-	middleware.InvalidateRolePermissionCache(roleCode, tenantID)
+	authorization.InvalidateRolePermissionCache(roleCode, tenantID)
 
 	return nil
 }
@@ -433,7 +433,7 @@ func (s *RoleService) AssignPermissions(ctx context.Context, roleID int, permiss
 		return fmt.Errorf("提交事务失败: %w", err)
 	}
 
-	middleware.InvalidateRolePermissionCache(roleEntity.Code, tenantID)
+	authorization.InvalidateRolePermissionCache(roleEntity.Code, tenantID)
 
 	return nil
 }

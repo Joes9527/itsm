@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/domain/provisioning"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -15,7 +16,6 @@ import (
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/infrastructure/cloud"
 	cloudAlicloud "itsm-backend/infrastructure/cloud/alicloud"
-	"itsm-backend/middleware"
 
 	"go.uber.org/zap"
 )
@@ -28,7 +28,7 @@ func CanProvision(client *ent.Client, tenantID, actorUserID int, actorRole strin
 	if requesterID == actorUserID {
 		return dto.ActionPermission{Allowed: false, Reason: "申请人不能交付自己提交的服务请求"}
 	}
-	if !middleware.HasResourcePermission(client, actorRole, "service_request", "provision", tenantID) {
+	if !authorization.HasResourcePermission(client, actorRole, "service_request", "provision", tenantID) {
 		return dto.ActionPermission{Allowed: false, Reason: "无交付权限"}
 	}
 	return dto.ActionPermission{Allowed: true}

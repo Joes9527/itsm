@@ -183,12 +183,6 @@ main() {
     sla=$(api_get "$admin_token" "/api/v1/sla/definitions")
     check_contains "sla_definitions" "code" "$sla" || true
 
-    # Step 12: Approval Workflows
-    log_info "Step 12: Approval Workflows..."
-    local approvals
-    approvals=$(api_get "$admin_token" "/api/v1/approval-workflows")
-    check_contains "approval_workflows" "code" "$approvals" || true
-
     # Step 13: Configuration Items
     log_info "Step 13: Configuration Items..."
     local ci

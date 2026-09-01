@@ -1,87 +1,15 @@
 package middleware
 
 import (
-	"context"
-	"fmt"
 	"strconv"
 
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/ent"
-	"itsm-backend/ent/ticket"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
-
-// resourceForRecordClass 把 tickets.record_class 映射到 RBAC 资源名，供
-// RequireWorkItemRecordClassPermission 使用。除 incident/problem/change_request 三个专业域外，
-// service_request_item/catalog_task 走 service_request 专业域权限；未知类型 fail closed。
-func resourceForRecordClass(recordClass string) string {
-	switch recordClass {
-	case "incident":
-		return "incident"
-	case "problem":
-		return "problem"
-	case "change_request":
-		return "change"
-	case "service_request_item", "catalog_task":
-		return "service_request"
-	case "generic":
-		return "ticket"
-	default:
-		return ""
-	}
-}
-
-// resolveWorkItemPermission 把 (tickets.record_class, 路由声明的 action) 解析成
-// RBAC 实际要检查的 (resource, resolvedAction) 二元组。incident/problem/change 三个
-// 资源的权限词表只有 read/write/delete（见 pkg/seeder/seeder.go 的权限定义），没有独立的
-// create/update——历史上 Incident 自己的评论路由用的就是 incident:write（router.go 里
-// inc.POST("/:id/comments", ..., RequirePermission("incident", "write"), ...)），所以这里把
-// create/update 归一化成 write，不引入第二套动作词表。ticket 资源保留原有的细分动作
-// （ticket:create/ticket:update 都是真实存在的权限码），不做任何归一化。
-func resolveWorkItemPermission(recordClass, action string) (resource string, resolvedAction string, err error) {
-	resource = resourceForRecordClass(recordClass)
-	if resource == "" {
-		return "", "", fmt.Errorf("unsupported WorkItem record class %q", recordClass)
-	}
-	if resource == "ticket" || resource == "service_request" {
-		return resource, action, nil
-	}
-	switch action {
-	case "create", "update":
-		return resource, "write", nil
-	default:
-		return resource, action, nil
-	}
-}
-
-// AuthorizeWorkItemRecordClassPermission is the shared WorkItem object-level
-// policy used by HTTP middleware and application services. It first resolves a
-// live tenant-scoped WorkItem, then checks the immutable recordClass against
-// the owning professional domain's RBAC resource.
-func AuthorizeWorkItemRecordClassPermission(ctx context.Context, client *ent.Client, workItemID, tenantID int, role, action string) (*ent.Ticket, error) {
-	if client == nil {
-		return nil, common.NewInternalError("WorkItem authorization client is unavailable", nil)
-	}
-	workItem, err := client.Ticket.Query().
-		Where(ticket.ID(workItemID), ticket.TenantID(tenantID), ticket.DeletedAtIsNil()).
-		Only(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, common.NewNotFoundError("work item")
-		}
-		return nil, common.NewInternalError("query WorkItem for authorization", err)
-	}
-	resource, resolvedAction, err := resolveWorkItemPermission(workItem.RecordClass, action)
-	if err != nil {
-		return nil, common.NewForbiddenError("unsupported WorkItem record class")
-	}
-	if !hasResourcePermission(client, role, resource, resolvedAction, tenantID) {
-		return nil, common.NewForbiddenError("insufficient WorkItem permission")
-	}
-	return workItem, nil
-}
 
 // RequireWorkItemRecordClassPermission 按路径参数 :id 对应 tickets 行的实际 record_class
 // 动态解析资源名，再复用现有的 hasResourcePermission。用于 WorkItem 级共享接口
@@ -123,7 +51,7 @@ func RequireWorkItemRecordClassPermission(action string) gin.HandlerFunc {
 			return
 		}
 
-		_, err = AuthorizeWorkItemRecordClassPermission(c.Request.Context(), client, id, tenantID, role.(string), action)
+		_, _, err = authorization.AuthorizeWorkItem(c.Request.Context(), client, id, tenantID, role.(string), action)
 		if err != nil {
 			appErr, ok := err.(*common.AppError)
 			if !ok || appErr.Code == common.ErrCodeInternal {

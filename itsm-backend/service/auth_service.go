@@ -7,13 +7,14 @@ import (
 	"fmt"
 	"time"
 
+	"itsm-backend/authentication"
+	"itsm-backend/authorization"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/mspallocation"
 	"itsm-backend/ent/passwordresettoken"
 	"itsm-backend/ent/tenant"
 	"itsm-backend/ent/user"
-	"itsm-backend/middleware"
 	"itsm-backend/pkg/tenantmode"
 
 	"go.uber.org/zap"
@@ -62,7 +63,7 @@ func (s *AuthService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.Lo
 			First(ctx)
 		if err != nil {
 			s.logger.Warnw("Tenant not found", "tenant_code", req.TenantCode, "error", err)
-			middleware.RecordLoginAudit(ctx, s.client, 0, 0, req.Username, "LOGIN_FAILED", "用户不存在")
+			authentication.RecordLoginAudit(ctx, s.client, 0, 0, req.Username, "LOGIN_FAILED", "用户不存在")
 			return nil, fmt.Errorf("用户名或密码错误")
 		}
 		userQuery = userQuery.Where(user.TenantIDEQ(tenantEntity.ID))
@@ -71,21 +72,21 @@ func (s *AuthService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.Lo
 	userEntity, err := userQuery.First(ctx)
 	if err != nil {
 		s.logger.Warnw("User not found", "username", req.Username, "error", err)
-		middleware.RecordLoginAudit(ctx, s.client, 0, 0, req.Username, "LOGIN_FAILED", "用户不存在")
+		authentication.RecordLoginAudit(ctx, s.client, 0, 0, req.Username, "LOGIN_FAILED", "用户不存在")
 		return nil, fmt.Errorf("用户名或密码错误")
 	}
 
 	// 验证密码
 	if err := bcrypt.CompareHashAndPassword([]byte(userEntity.PasswordHash), []byte(req.Password)); err != nil {
 		s.logger.Warnw("Password verification failed", "user_id", userEntity.ID, "username", req.Username)
-		middleware.RecordLoginAudit(ctx, s.client, 0, userEntity.TenantID, req.Username, "LOGIN_FAILED", "密码错误")
+		authentication.RecordLoginAudit(ctx, s.client, 0, userEntity.TenantID, req.Username, "LOGIN_FAILED", "密码错误")
 		return nil, fmt.Errorf("用户名或密码错误")
 	}
 
 	// 检查用户是否激活
 	if !userEntity.Active {
 		s.logger.Warnw("User account is inactive", "user_id", userEntity.ID, "username", req.Username)
-		middleware.RecordLoginAudit(ctx, s.client, 0, userEntity.TenantID, req.Username, "LOGIN_FAILED", "账户锁定")
+		authentication.RecordLoginAudit(ctx, s.client, 0, userEntity.TenantID, req.Username, "LOGIN_FAILED", "账户锁定")
 		return nil, fmt.Errorf("用户已被禁用")
 	}
 
@@ -93,13 +94,13 @@ func (s *AuthService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.Lo
 	tenantEntity, err := s.client.Tenant.Get(ctx, userEntity.TenantID)
 	if err != nil {
 		s.logger.Errorw("Failed to get tenant", "tenant_id", userEntity.TenantID, "error", err)
-		middleware.RecordLoginAudit(ctx, s.client, 0, userEntity.TenantID, req.Username, "LOGIN_FAILED", "账户锁定")
+		authentication.RecordLoginAudit(ctx, s.client, 0, userEntity.TenantID, req.Username, "LOGIN_FAILED", "账户锁定")
 		return nil, fmt.Errorf("租户不存在")
 	}
 
 	if tenantEntity.Status != "active" {
 		s.logger.Warnw("Tenant is not active", "tenant_id", tenantEntity.ID, "status", tenantEntity.Status)
-		middleware.RecordLoginAudit(ctx, s.client, 0, userEntity.TenantID, req.Username, "LOGIN_FAILED", "账户锁定")
+		authentication.RecordLoginAudit(ctx, s.client, 0, userEntity.TenantID, req.Username, "LOGIN_FAILED", "账户锁定")
 		return nil, fmt.Errorf("租户已被暂停或过期")
 	}
 
@@ -107,13 +108,13 @@ func (s *AuthService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.Lo
 	// 对于 MSP 用户，需要将 MSP 角色转换为 RBAC 角色
 	roleStr := string(userEntity.Role)
 	if userEntity.MspRole != "" {
-		if rbacRole := middleware.GetMSPRBACRole(string(userEntity.MspRole)); rbacRole != "" {
+		if rbacRole := authorization.GetMSPRBACRole(string(userEntity.MspRole)); rbacRole != "" {
 			roleStr = rbacRole
 		}
 	}
 
 	// 生成access token（15分钟）
-	accessToken, err := middleware.GenerateAccessToken(
+	accessToken, err := authentication.GenerateAccessToken(
 		userEntity.ID,
 		userEntity.Username,
 		roleStr,
@@ -127,7 +128,7 @@ func (s *AuthService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.Lo
 	}
 
 	// 生成refresh token（7天）
-	refreshToken, err := middleware.GenerateRefreshToken(
+	refreshToken, err := authentication.GenerateRefreshToken(
 		userEntity.ID,
 		s.jwtSecret,
 		time.Duration(7*24)*time.Hour,
@@ -138,7 +139,7 @@ func (s *AuthService) Login(ctx context.Context, req *dto.LoginRequest) (*dto.Lo
 	}
 
 	s.logger.Infow("User login successful", "user_id", userEntity.ID, "username", userEntity.Username, "tenant_id", userEntity.TenantID)
-	middleware.RecordLoginAudit(ctx, s.client, userEntity.ID, userEntity.TenantID, userEntity.Username, "LOGIN_SUCCESS", "")
+	authentication.RecordLoginAudit(ctx, s.client, userEntity.ID, userEntity.TenantID, userEntity.Username, "LOGIN_SUCCESS", "")
 
 	// 获取用户权限列表
 	permissions := s.getUserPermissions(userEntity)
@@ -185,10 +186,10 @@ func (s *AuthService) getUserPermissions(userEntity *ent.User) []string {
 	seen := make(map[string]bool)
 
 	// 优先从数据库加载（与运行时权限校验一致）
-	rolePerms := middleware.GetRolePermissions(s.client, roleCode, userEntity.TenantID)
+	rolePerms := authorization.GetRolePermissions(s.client, roleCode, userEntity.TenantID)
 	// 数据库为空时 fallback 硬编码（MSP 角色等尚未迁入数据库）
 	if len(rolePerms) == 0 {
-		rolePerms = middleware.RolePermissions[roleCode]
+		rolePerms = authorization.RolePermissions[roleCode]
 	}
 	for _, p := range rolePerms {
 		key := p.Resource + ":" + p.Action
@@ -200,10 +201,10 @@ func (s *AuthService) getUserPermissions(userEntity *ent.User) []string {
 
 	// 对于 MSP 用户，也要合并 RBAC MSP 角色的权限
 	if userEntity.MspRole != "" {
-		if rbacRole := middleware.GetMSPRBACRole(string(userEntity.MspRole)); rbacRole != "" {
-			mspPerms := middleware.GetRolePermissions(s.client, rbacRole, userEntity.TenantID)
+		if rbacRole := authorization.GetMSPRBACRole(string(userEntity.MspRole)); rbacRole != "" {
+			mspPerms := authorization.GetRolePermissions(s.client, rbacRole, userEntity.TenantID)
 			if len(mspPerms) == 0 {
-				mspPerms = middleware.RolePermissions[rbacRole]
+				mspPerms = authorization.RolePermissions[rbacRole]
 			}
 			for _, p := range mspPerms {
 				key := p.Resource + ":" + p.Action
@@ -221,7 +222,7 @@ func (s *AuthService) getUserPermissions(userEntity *ent.User) []string {
 // RefreshToken 刷新token (实现token rotation安全机制)
 func (s *AuthService) RefreshToken(ctx context.Context, req *dto.RefreshTokenRequest) (*dto.RefreshTokenResponse, error) {
 	// 验证refresh token
-	claims, err := middleware.ValidateRefreshToken(req.RefreshToken, s.jwtSecret)
+	claims, err := authentication.ValidateRefreshToken(req.RefreshToken, s.jwtSecret)
 	if err != nil {
 		s.logger.Warnw("Invalid refresh token", "error", err)
 		return nil, fmt.Errorf("刷新令牌无效")
@@ -254,7 +255,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *dto.RefreshTokenReq
 	}
 
 	// 生成新的access token（使用数据库角色）
-	newAccessToken, err := middleware.GenerateAccessToken(
+	newAccessToken, err := authentication.GenerateAccessToken(
 		userEntity.ID,
 		userEntity.Username,
 		string(userEntity.Role),
@@ -268,7 +269,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, req *dto.RefreshTokenReq
 	}
 
 	// 生成新的refresh token（实现rotation，防止replay攻击）
-	newRefreshToken, err := middleware.GenerateRefreshToken(
+	newRefreshToken, err := authentication.GenerateRefreshToken(
 		userEntity.ID,
 		s.jwtSecret,
 		time.Duration(7*24)*time.Hour,
@@ -399,7 +400,7 @@ func (s *AuthService) SwitchTenant(ctx context.Context, userID, tenantID int) (*
 		return nil, fmt.Errorf("租户已过期")
 	}
 
-	accessToken, err := middleware.GenerateAccessToken(
+	accessToken, err := authentication.GenerateAccessToken(
 		userEntity.ID,
 		userEntity.Username,
 		string(userEntity.Role),
@@ -413,7 +414,7 @@ func (s *AuthService) SwitchTenant(ctx context.Context, userID, tenantID int) (*
 	}
 
 	// 生成新的refresh token
-	refreshToken, err := middleware.GenerateRefreshToken(
+	refreshToken, err := authentication.GenerateRefreshToken(
 		userEntity.ID,
 		s.jwtSecret,
 		time.Duration(7*24)*time.Hour,
@@ -541,14 +542,14 @@ func (s *AuthService) AddTokenToBlacklist(tokenString string, expiresAt time.Tim
 // RevokeAccessToken 撤销当前 access token。该路径同时支持进程内存储与 Redis，
 // 确保未配置 Redis 的单实例环境也不会在登出后继续接受旧 token。
 func (s *AuthService) RevokeAccessToken(ctx context.Context, tokenString string) error {
-	claims, err := middleware.ValidateAccessToken(tokenString, s.jwtSecret)
+	claims, err := authentication.ValidateAccessToken(tokenString, s.jwtSecret)
 	if err != nil {
 		return fmt.Errorf("invalid access token: %w", err)
 	}
 	if claims.ExpiresAt == nil {
 		return fmt.Errorf("access token has no expiry")
 	}
-	return middleware.RevokeAccessToken(ctx, tokenString, claims.ExpiresAt.Time)
+	return authentication.RevokeAccessToken(ctx, tokenString, claims.ExpiresAt.Time)
 }
 
 // Register 用户注册

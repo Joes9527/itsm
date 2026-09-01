@@ -189,11 +189,6 @@ export function getMenuConfig(): MenuConfig {
             path: '/tickets/create',
             permission: 'service:read',
           },
-          // "待我审批" 子菜单已经移除——原来指向的 /service-catalog/approvals 是一个直接对
-          // ServiceRequest 做 approve/reject 的独立页面，Task 1 删除了它依赖的后端路由
-          // （SR 自己的审批阶段整体退休，统一走关联 Ticket 的 BPMN 流程）。同一个目的地
-          // 已经有独立的顶层菜单项"待我审批"（/approvals/pending，见下方"扩展模块"），
-          // 这里不重复放一个指向同一页面、权限点还不一样的入口。
         ],
       },
       {

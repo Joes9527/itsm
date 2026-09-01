@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/connector"
 	feishuConnector "itsm-backend/connector/builtin/feishu"
@@ -727,9 +728,13 @@ func (s *TicketService) triggerWorkflowForTicket(ctx context.Context, tkt *ticke
 	if processKey == "" {
 		processKey = "ticket_general_flow"
 	}
+	identityPolicy, err := authorization.ResolveWorkItemPolicy(tkt.RecordClass)
+	if err != nil {
+		return fmt.Errorf("解析 WorkItem BPMN 身份失败: %w", err)
+	}
 
 	triggerReq := &dto.ProcessTriggerRequest{
-		BusinessType:         dto.BusinessTypeTicket,
+		BusinessType:         identityPolicy.BusinessType,
 		BusinessID:           tkt.ID,
 		ProcessDefinitionKey: processKey,
 		Variables:            variables,
@@ -1571,6 +1576,7 @@ func (s *TicketService) toEntTicket(t *ticket.Ticket) *ent.Ticket {
 		Description:  t.Description,
 		Status:       string(t.Status),
 		Type:         string(t.Type),
+		RecordClass:  t.RecordClass,
 		Priority:     string(t.Priority),
 		RequesterID:  t.RequesterID,
 		TenantID:     t.TenantID,

@@ -1,4 +1,4 @@
-package middleware
+package authentication
 
 import (
 	"context"
@@ -13,8 +13,8 @@ import (
 const accessTokenRevocationPrefix = "jwt:revoked:"
 
 type accessTokenRevocationStore interface {
-	IsRevoked(ctx context.Context, token string) (bool, error)
-	Revoke(ctx context.Context, token string, expiresAt time.Time) error
+	IsRevoked(context.Context, string) (bool, error)
+	Revoke(context.Context, string, time.Time) error
 }
 
 var (
@@ -22,8 +22,6 @@ var (
 	revocationStore   accessTokenRevocationStore = newMemoryAccessTokenRevocationStore()
 )
 
-// ConfigureAccessTokenRevocationRedis enables shared revocation across instances.
-// The process-local fallback still makes logout safe in single-instance setups.
 func ConfigureAccessTokenRevocationRedis(client *redis.Client) {
 	if client != nil {
 		setAccessTokenRevocationStore(&redisAccessTokenRevocationStore{client: client})
@@ -42,12 +40,11 @@ func currentAccessTokenRevocationStore() accessTokenRevocationStore {
 	return revocationStore
 }
 
-// RevokeAccessToken invalidates one access token until its JWT expiry.
 func RevokeAccessToken(ctx context.Context, token string, expiresAt time.Time) error {
 	return currentAccessTokenRevocationStore().Revoke(ctx, token, expiresAt)
 }
 
-func isAccessTokenRevoked(ctx context.Context, token string) (bool, error) {
+func IsAccessTokenRevoked(ctx context.Context, token string) (bool, error) {
 	return currentAccessTokenRevocationStore().IsRevoked(ctx, token)
 }
 
@@ -56,9 +53,7 @@ func accessTokenRevocationKey(token string) string {
 	return accessTokenRevocationPrefix + hex.EncodeToString(sum[:])
 }
 
-type redisAccessTokenRevocationStore struct {
-	client *redis.Client
-}
+type redisAccessTokenRevocationStore struct{ client *redis.Client }
 
 func (s *redisAccessTokenRevocationStore) IsRevoked(ctx context.Context, token string) (bool, error) {
 	count, err := s.client.Exists(ctx, accessTokenRevocationKey(token)).Result()

@@ -4,8 +4,8 @@ import (
 	"strconv"
 	"strings"
 
+	"itsm-backend/authentication"
 	"itsm-backend/common"
-	"itsm-backend/middleware"
 
 	"github.com/gin-gonic/gin"
 )
@@ -46,7 +46,7 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	auditCtx := middleware.WithLoginAuditRequest(c.Request.Context(), c.ClientIP(), c.Request.UserAgent())
+	auditCtx := authentication.WithLoginAuditRequest(c.Request.Context(), c.ClientIP(), c.Request.UserAgent())
 	res, err := h.svc.Login(auditCtx, req.Username, req.Password, req.TenantID, req.TenantCode)
 	if err != nil {
 		common.AuthFailed(c, err.Error())
@@ -101,12 +101,12 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 // Logout clears httpOnly auth cookies and returns success.
 func (h *Handler) Logout(c *gin.Context) {
 	token := c.GetString("token")
-	claims, err := middleware.ValidateAccessToken(token, h.svc.jwtSecret)
+	claims, err := authentication.ValidateAccessToken(token, h.svc.jwtSecret)
 	if err != nil || claims.ExpiresAt == nil {
 		common.AuthFailed(c, "token无效")
 		return
 	}
-	if err := middleware.RevokeAccessToken(c.Request.Context(), token, claims.ExpiresAt.Time); err != nil {
+	if err := authentication.RevokeAccessToken(c.Request.Context(), token, claims.ExpiresAt.Time); err != nil {
 		h.svc.logger.Errorw("failed to revoke access token on logout", "error", err)
 		common.InternalError(c, "登出失败")
 		return

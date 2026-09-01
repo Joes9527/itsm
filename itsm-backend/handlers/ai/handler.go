@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/dto"
-	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -40,7 +40,7 @@ func (h *Handler) ListTools(c *gin.Context) {
 
 	visible := make([]service.ToolDefinition, 0, len(allTools))
 	for _, t := range allTools {
-		if middleware.HasResourcePermission(h.svc.entClient, role, t.Resource, t.Action, tenantID) {
+		if authorization.HasResourcePermission(h.svc.entClient, role, t.Resource, t.Action, tenantID) {
 			visible = append(visible, t)
 		}
 	}

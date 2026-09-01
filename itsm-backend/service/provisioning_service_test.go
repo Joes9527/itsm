@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"testing"
 
+	"itsm-backend/authorization"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	"itsm-backend/middleware"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
@@ -85,7 +85,7 @@ var provisioningTestActorID = 999999
 func TestCreateTaskFromServiceRequest_RejectsWithoutApprovalDecision(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:prov_no_decision?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 避免不同测试的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 避免不同测试的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	sr, _ := provisioningTestFixture(t, client, "no-decision")
@@ -107,7 +107,7 @@ func TestCreateTaskFromServiceRequest_RejectsWithoutApprovalDecision(t *testing.
 func TestCreateTaskFromServiceRequest_SucceedsWithApprovalDecision(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:prov_decision_approved?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 避免不同测试的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 避免不同测试的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	sr, ticket := provisioningTestFixture(t, client, "approved")
@@ -148,7 +148,7 @@ func TestCreateTaskFromServiceRequest_SucceedsWithApprovalDecision(t *testing.T)
 func TestCreateTaskFromServiceRequest_CrossTenantApprovalDoesNotUnlock(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:prov_cross_tenant?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches() // 避免不同测试的租户ID复用造成缓存串号
+	authorization.InvalidateAllPermissionCaches() // 避免不同测试的租户ID复用造成缓存串号
 	ctx := context.Background()
 
 	srA, ticketA := provisioningTestFixture(t, client, "tenant-a")

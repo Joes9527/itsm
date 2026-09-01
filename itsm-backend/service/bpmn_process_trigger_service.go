@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processdefinition"
@@ -54,6 +55,9 @@ func (s *ProcessTriggerService) TriggerProcess(ctx context.Context, req *dto.Pro
 		return nil, fmt.Errorf("流程触发缺少可信租户授权上下文")
 	} else if strings.TrimSpace(req.TriggeredBy) == "" {
 		return nil, fmt.Errorf("流程触发缺少权威操作用户")
+	}
+	if err := authorization.ValidateWorkItemBusinessIdentity(ctx, s.client, req.BusinessID, req.TenantID, req.BusinessType); err != nil {
+		return nil, fmt.Errorf("校验 BPMN 业务身份失败: %w", err)
 	}
 
 	// 2. 如果没有指定流程定义，则根据业务类型查找

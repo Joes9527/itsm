@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processapprovaldecision"
@@ -15,7 +16,6 @@ import (
 	"itsm-backend/ent/ticketcc"
 	"itsm-backend/ent/ticketworkflowrecord"
 	"itsm-backend/ent/user"
-	"itsm-backend/middleware"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -339,17 +339,18 @@ func (s *TicketWorkflowService) ListTicketCCRecords(ctx context.Context, ticketI
 
 // GetApprovalDecisions 返回某个工单在 BPMN 引擎里留下的全部审批决策记录，按时间升序。
 // 工单审批状态完全由 BPMN ProcessTask/ProcessApprovalDecision 驱动。
-func (s *TicketWorkflowService) GetApprovalDecisions(ctx context.Context, ticketID int, actor ActionActor) ([]*ent.ProcessApprovalDecision, error) {
+func (s *TicketWorkflowService) GetApprovalDecisions(ctx context.Context, workItemID int, actor ActionActor) ([]*ent.ProcessApprovalDecision, error) {
 	if actor.TenantID <= 0 || actor.UserID <= 0 || strings.TrimSpace(actor.Role) == "" {
 		return nil, fmt.Errorf("invalid approval history actor")
 	}
-	if _, err := middleware.AuthorizeWorkItemRecordClassPermission(ctx, s.client, ticketID, actor.TenantID, actor.Role, "read"); err != nil {
+	_, policy, err := authorization.AuthorizeWorkItem(ctx, s.client, workItemID, actor.TenantID, actor.Role, "read")
+	if err != nil {
 		return nil, err
 	}
 	return s.client.ProcessApprovalDecision.Query().
 		Where(
-			processapprovaldecision.BusinessType("ticket"),
-			processapprovaldecision.BusinessID(strconv.Itoa(ticketID)),
+			processapprovaldecision.BusinessType(string(policy.BusinessType)),
+			processapprovaldecision.BusinessID(strconv.Itoa(workItemID)),
 			processapprovaldecision.TenantID(actor.TenantID),
 		).
 		Order(ent.Asc(processapprovaldecision.FieldCreatedAt)).

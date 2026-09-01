@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/kaftaskactionledger"
@@ -16,7 +17,6 @@ import (
 	"itsm-backend/ent/processdefinition"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
-	"itsm-backend/ent/ticket"
 	"itsm-backend/service/bpmn"
 
 	entsql "entgo.io/ent/dialect/sql"
@@ -428,22 +428,20 @@ func assertKafCompletionFence(ctx context.Context, client *ent.Client, fence kaf
 	return nil
 }
 
-func (e *CustomProcessEngine) validateTicketRecordClassInputWithClient(ctx context.Context, client *ent.Client, instance *ent.ProcessInstance, variables map[string]interface{}) error {
-	if instance.BusinessType != "ticket" {
-		return nil
-	}
+func (e *CustomProcessEngine) validateWorkItemRecordClassInputWithClient(ctx context.Context, client *ent.Client, instance *ent.ProcessInstance, variables map[string]interface{}) error {
 	provided, present := variables["record_class"]
 	if !present {
 		return nil
 	}
 	if instance.BusinessID <= 0 {
-		return fmt.Errorf("ticket process instance %d has no work item ID", instance.ID)
+		return fmt.Errorf("WorkItem process instance %d has no work item ID", instance.ID)
 	}
-	workItem, err := client.Ticket.Query().Where(
-		ticket.IDEQ(instance.BusinessID), ticket.TenantIDEQ(instance.TenantID), ticket.DeletedAtIsNil(),
-	).Only(ctx)
+	workItem, policy, err := authorization.ResolveWorkItemIdentity(ctx, client, instance.BusinessID, instance.TenantID)
 	if err != nil {
-		return fmt.Errorf("load ticket-backed work item record class: %w", err)
+		return fmt.Errorf("load WorkItem record class: %w", err)
+	}
+	if string(policy.BusinessType) != instance.BusinessType {
+		return errors.New("process business type conflicts with persisted work item record class")
 	}
 	recordClass, ok := provided.(string)
 	if !ok || recordClass != workItem.RecordClass {

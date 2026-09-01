@@ -9,10 +9,11 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/authentication"
+	"itsm-backend/authorization"
 	"itsm-backend/controller"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	"itsm-backend/middleware"
 	"itsm-backend/migration"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
@@ -252,7 +253,7 @@ func TestSetupRoutes_IncidentControllerNil(t *testing.T) {
 func TestAssignRouteUsesIncidentWritePermission(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:assign_route_write?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches()
+	authorization.InvalidateAllPermissionCaches()
 	ctx := context.Background()
 	tenant, err := client.Tenant.Create().SetName("assign-route").SetCode("assign-route").SetDomain("assign-route.test").SetStatus("active").Save(ctx)
 	require.NoError(t, err)
@@ -286,7 +287,7 @@ func TestAssignRouteUsesIncidentWritePermission(t *testing.T) {
 	SetupRoutes(router, &RouterConfig{
 		JWTSecret: jwtSecret, Logger: logger, Client: client, IncidentController: incidentController,
 	})
-	token, err := middleware.GenerateAccessToken(reporter.ID, reporter.Username, role.Code, tenant.ID, jwtSecret, time.Hour)
+	token, err := authentication.GenerateAccessToken(reporter.ID, reporter.Username, role.Code, tenant.ID, jwtSecret, time.Hour)
 	require.NoError(t, err)
 	body := []byte(fmt.Sprintf(`{"assigneeId":%d}`, assignee.ID))
 	request := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/incidents/%d/assign", incidentEntity.ID), bytes.NewReader(body))

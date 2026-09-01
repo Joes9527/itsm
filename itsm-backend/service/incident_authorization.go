@@ -4,16 +4,16 @@ import (
 	"context"
 	"fmt"
 
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/workitemrelation"
-	"itsm-backend/middleware"
 )
 
 func canWriteIncident(actor ActionActor) bool {
-	return middleware.HasResourcePermission(actor.Client, actor.Role, "incident", "write", actor.TenantID)
+	return authorization.HasResourcePermission(actor.Client, actor.Role, "incident", "write", actor.TenantID)
 }
 
 func CanEditIncident(actor ActionActor) dto.ActionPermission {

@@ -3,9 +3,9 @@ package service
 import (
 	"context"
 
+	"itsm-backend/authorization"
 	"itsm-backend/dto"
 	"itsm-backend/ent/processinstance"
-	"itsm-backend/middleware"
 	"itsm-backend/repository/ticket"
 
 	"fmt"
@@ -20,7 +20,7 @@ func CanAssign(actor ActionActor, t *ticket.Ticket) dto.ActionPermission {
 	if isFinalStatus(t.Status) {
 		return dto.ActionPermission{Allowed: false, Reason: "工单已结束，无法分配"}
 	}
-	if !middleware.HasResourcePermission(actor.Client, actor.Role, "ticket", "assign", actor.TenantID) {
+	if !authorization.HasResourcePermission(actor.Client, actor.Role, "ticket", "assign", actor.TenantID) {
 		return dto.ActionPermission{Allowed: false, Reason: "无分配权限"}
 	}
 	return dto.ActionPermission{Allowed: true}
@@ -31,7 +31,7 @@ func CanEdit(actor ActionActor, t *ticket.Ticket) dto.ActionPermission {
 	if isFinalStatus(t.Status) {
 		return dto.ActionPermission{Allowed: false, Reason: "工单已结束，无法编辑"}
 	}
-	if !middleware.HasResourcePermission(actor.Client, actor.Role, "ticket", "update", actor.TenantID) {
+	if !authorization.HasResourcePermission(actor.Client, actor.Role, "ticket", "update", actor.TenantID) {
 		return dto.ActionPermission{Allowed: false, Reason: "无编辑权限"}
 	}
 	return dto.ActionPermission{Allowed: true}
@@ -42,7 +42,7 @@ func CanDelete(ctx context.Context, actor ActionActor, t *ticket.Ticket) dto.Act
 	if isFinalStatus(t.Status) {
 		return dto.ActionPermission{Allowed: false, Reason: "工单已结束，无法删除"}
 	}
-	if !middleware.HasResourcePermission(actor.Client, actor.Role, "ticket", "delete", actor.TenantID) {
+	if !authorization.HasResourcePermission(actor.Client, actor.Role, "ticket", "delete", actor.TenantID) {
 		return dto.ActionPermission{Allowed: false, Reason: "无删除权限"}
 	}
 	running, err := actor.Client.ProcessInstance.Query().

@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
+	"itsm-backend/authorization"
 	"itsm-backend/ent"
 	"itsm-backend/handlers/ai"
-	"itsm-backend/middleware"
 	"itsm-backend/service"
 )
 
@@ -104,7 +104,7 @@ func (m *rbacMockRepo) UpdateRCA(_ context.Context, r *ai.RootCauseAnalysis) (*a
 type rbacTestEnv struct {
 	svc      *ai.Service
 	repo     *rbacMockRepo
-	prevMode middleware.PermissionConfigMode
+	prevMode authorization.PermissionConfigMode
 }
 
 func newRBACTestEnv(t *testing.T) *rbacTestEnv {
@@ -116,17 +116,17 @@ func newRBACTestEnv(t *testing.T) *rbacTestEnv {
 	// 非空 ent client（HardcodeOnly 不使用，仅满足 Gate 2 的 != nil 守卫）
 	svc.SetEntClient(&ent.Client{})
 
-	env := &rbacTestEnv{svc: svc, repo: repo, prevMode: middleware.PermissionConfig.Mode}
+	env := &rbacTestEnv{svc: svc, repo: repo, prevMode: authorization.PermissionConfig.Mode}
 	// 切换到硬编码模式：无 DB 也可判定角色权限
-	middleware.PermissionConfig.Mode = middleware.PermissionConfigModeHardcodeOnly
+	authorization.PermissionConfig.Mode = authorization.PermissionConfigModeHardcodeOnly
 	// 清空权限缓存，避免其他测试残留影响
-	middleware.InvalidateAllPermissionCaches()
+	authorization.InvalidateAllPermissionCaches()
 	// 重置 RBAC Feature Flag 的 sync.Once，允许本测试重新读取环境变量
 	ai.ResetRBACFlagForTest()
 
 	t.Cleanup(func() {
-		middleware.PermissionConfig.Mode = env.prevMode
-		middleware.InvalidateAllPermissionCaches()
+		authorization.PermissionConfig.Mode = env.prevMode
+		authorization.InvalidateAllPermissionCaches()
 		ai.ResetRBACFlagForTest()
 	})
 	return env

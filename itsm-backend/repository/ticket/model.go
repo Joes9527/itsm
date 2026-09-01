@@ -48,6 +48,7 @@ type Ticket struct {
 	Description           string
 	Status                Status
 	Type                  Type
+	RecordClass           string
 	Priority              Priority
 	RequesterID           int
 	AssigneeID            *int

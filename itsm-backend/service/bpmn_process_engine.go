@@ -513,7 +513,7 @@ func (e *CustomProcessEngine) completeAuthorizedTaskWithClient(ctx context.Conte
 		return nil, fmt.Errorf("解析BPMN失败: 流程定义不包含可执行流程")
 	}
 	process := definitions.Processes[0]
-	if err := e.validateTicketRecordClassInputWithClient(ctx, client, instance, variables); err != nil {
+	if err := e.validateWorkItemRecordClassInputWithClient(ctx, client, instance, variables); err != nil {
 		return nil, err
 	}
 	descriptor, err := e.descriptorForProcessTask(ctx, client, task, process)

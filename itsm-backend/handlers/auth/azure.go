@@ -13,11 +13,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+	"itsm-backend/authentication"
 	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/user"
-	"itsm-backend/middleware"
-	"go.uber.org/zap"
 )
 
 // AzureConfig holds Azure AD OIDC configuration.
@@ -222,7 +222,7 @@ func AzureCallbackHandler(cfg AzureConfig, client *ent.Client, jwtSecret string,
 		}
 
 		// Issue JWT (access token valid 24h)
-		tokenStr, err := middleware.GenerateAccessToken(u.ID, u.Username, string(u.Role), tenantID, jwtSecret, 24*time.Hour)
+		tokenStr, err := authentication.GenerateAccessToken(u.ID, u.Username, string(u.Role), tenantID, jwtSecret, 24*time.Hour)
 		if err != nil {
 			logger.Errorw("jwt generation failed", "error", err)
 			common.Fail(c, common.InternalErrorCode, "failed to generate token")

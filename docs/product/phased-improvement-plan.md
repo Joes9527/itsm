@@ -120,7 +120,7 @@
 **阶段设计**:
 
 - 短期：文档和 UI 上明确三套系统的定位，避免用户误解。
-- 中期：为 `approval_workflows` 增加可选 `bpmn_process_key` 或绑定表。
+- 中期：通过 BPMN `ProcessBinding` 扩展可配置的业务流程绑定。
 - 中期：审批记录可关联 `process_instance_id`。
 - 长期：服务目录、变更、工单审批统一通过 BPMN 编排，轻量审批模板作为 BPMN 节点模板来源。
 

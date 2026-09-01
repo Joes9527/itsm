@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
+	"itsm-backend/authentication"
 
 	"itsm-backend/controller"
 	"itsm-backend/dto"
@@ -139,11 +140,11 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 	srHandler := service_request.NewHandler(srService)
 
 	// Generate JWT tokens for test roles
-	userToken, err := middleware.GenerateAccessToken(fixResult.Users.EndUser.ID, fixResult.Users.EndUser.Username, fixResult.Users.EndUser.Role, tenant.ID, testJWTSecret, 24*time.Hour)
+	userToken, err := authentication.GenerateAccessToken(fixResult.Users.EndUser.ID, fixResult.Users.EndUser.Username, fixResult.Users.EndUser.Role, tenant.ID, testJWTSecret, 24*time.Hour)
 	require.NoError(t, err)
-	superToken, err := middleware.GenerateAccessToken(fixResult.Users.Supervisor.ID, fixResult.Users.Supervisor.Username, fixResult.Users.Supervisor.Role, tenant.ID, testJWTSecret, 24*time.Hour)
+	superToken, err := authentication.GenerateAccessToken(fixResult.Users.Supervisor.ID, fixResult.Users.Supervisor.Username, fixResult.Users.Supervisor.Role, tenant.ID, testJWTSecret, 24*time.Hour)
 	require.NoError(t, err)
-	lixinToken, err := middleware.GenerateAccessToken(fixResult.Users.Lixin.ID, fixResult.Users.Lixin.Username, fixResult.Users.Lixin.Role, tenant.ID, testJWTSecret, 24*time.Hour)
+	lixinToken, err := authentication.GenerateAccessToken(fixResult.Users.Lixin.ID, fixResult.Users.Lixin.Username, fixResult.Users.Lixin.Role, tenant.ID, testJWTSecret, 24*time.Hour)
 	require.NoError(t, err)
 
 	// Set up Gin Router
@@ -301,7 +302,7 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 	}
 
 	// 3. BPMN Process Instance (ACTIVE) - wait briefly for async trigger goroutine if needed
-	businessKey := fmt.Sprintf("ticket:%d", ticketID)
+	businessKey := fmt.Sprintf("service_request:%d", ticketID)
 	var processInst *ent.ProcessInstance
 	require.Eventually(t, func() bool {
 		pi, qErr := h.client.ProcessInstance.Query().

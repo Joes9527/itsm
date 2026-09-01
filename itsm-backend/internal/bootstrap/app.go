@@ -15,6 +15,8 @@ import (
 	"syscall"
 	"time"
 
+	"itsm-backend/authentication"
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/config"
@@ -697,7 +699,7 @@ func NewApplication() *Application {
 			sugar.Warnw("common domain redis ping failed; refresh token blacklist disabled", "error", err)
 		} else {
 			commonServiceDomain.SetRedis(commonRedis)
-			middleware.ConfigureAccessTokenRevocationRedis(commonRedis)
+			authentication.ConfigureAccessTokenRevocationRedis(commonRedis)
 			sugar.Info("refresh token blacklist enabled via redis")
 		}
 		pingCancel()
@@ -936,7 +938,7 @@ func configurePermissionMode(environment string) {
 	// 统一 DBOnly：数据库（seeder 初始化）为唯一运行时权限权威，开发/生产行为一致。
 	// 硬编码 RolePermissions 仅保留 super_admin 代码级放行与 end_user 防御性兜底（DBOnly 下不生效）。
 	_ = environment
-	middleware.PermissionConfig.Mode = middleware.PermissionConfigModeDBOnly
+	authorization.PermissionConfig.Mode = authorization.PermissionConfigModeDBOnly
 }
 
 // ValidateWebStartupConfig prevents schema or seed mutations from running in

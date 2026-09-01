@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"itsm-backend/authentication"
+	"itsm-backend/authorization"
 	"itsm-backend/ent"
 	enttenant "itsm-backend/ent/tenant"
 	entuser "itsm-backend/ent/user"
-	"itsm-backend/middleware"
 
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -72,8 +73,8 @@ func (s *Service) getUserPermissions(role string) []string {
 		return []string{"*"}
 	}
 
-	// 从 middleware.RolePermissions 获取角色权限
-	rolePerms, ok := middleware.RolePermissions[role]
+	// 从应用授权策略获取角色权限。
+	rolePerms, ok := authorization.RolePermissions[role]
 	if !ok {
 		return permissions
 	}
@@ -106,7 +107,7 @@ func (s *Service) Login(ctx context.Context, username, password string, tenantID
 		// Look for user by username without tenant filter
 		entUser, err = s.client.User.Query().Where(entuser.UsernameEQ(username)).Only(ctx)
 		if err != nil {
-			middleware.RecordLoginAudit(ctx, s.client, 0, tenantID, username, "LOGIN_FAILED", "用户不存在")
+			authentication.RecordLoginAudit(ctx, s.client, 0, tenantID, username, "LOGIN_FAILED", "用户不存在")
 			return nil, fmt.Errorf("invalid credentials")
 		}
 		u = toUserDomain(entUser)
@@ -115,7 +116,7 @@ func (s *Service) Login(ctx context.Context, username, password string, tenantID
 			Where(entuser.UsernameEQ(username), entuser.TenantID(tenantID)).
 			Only(ctx)
 		if err != nil {
-			middleware.RecordLoginAudit(ctx, s.client, 0, tenantID, username, "LOGIN_FAILED", "用户不存在")
+			authentication.RecordLoginAudit(ctx, s.client, 0, tenantID, username, "LOGIN_FAILED", "用户不存在")
 			return nil, fmt.Errorf("invalid credentials")
 		}
 		u = toUserDomain(entUser)
@@ -129,12 +130,12 @@ func (s *Service) Login(ctx context.Context, username, password string, tenantID
 
 	// Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(entUser.PasswordHash), []byte(password)); err != nil {
-		middleware.RecordLoginAudit(ctx, s.client, 0, entUser.TenantID, username, "LOGIN_FAILED", "密码错误")
+		authentication.RecordLoginAudit(ctx, s.client, 0, entUser.TenantID, username, "LOGIN_FAILED", "密码错误")
 		return nil, fmt.Errorf("invalid credentials")
 	}
 
 	if !u.Active {
-		middleware.RecordLoginAudit(ctx, s.client, 0, entUser.TenantID, username, "LOGIN_FAILED", "账户锁定")
+		authentication.RecordLoginAudit(ctx, s.client, 0, entUser.TenantID, username, "LOGIN_FAILED", "账户锁定")
 		return nil, fmt.Errorf("user account is inactive")
 	}
 
@@ -142,25 +143,25 @@ func (s *Service) Login(ctx context.Context, username, password string, tenantID
 	// u.Role 是数据库中存储的 RBAC 角色（MSP 用户的 Role 是 admin）
 	// 如果用户有 MSP 角色，则从 MSP 角色映射到正确的 RBAC 角色
 	if mspRoleStr != "" {
-		if mappedRole := middleware.GetMSPRBACRole(mspRoleStr); mappedRole != "" {
+		if mappedRole := authorization.GetMSPRBACRole(mspRoleStr); mappedRole != "" {
 			u.Role = mappedRole
 		}
 	}
 
 	// Generate tokens
-	accessToken, err := middleware.GenerateAccessToken(u.ID, u.Username, u.Role, u.TenantID, s.jwtSecret, 15*time.Minute)
+	accessToken, err := authentication.GenerateAccessToken(u.ID, u.Username, u.Role, u.TenantID, s.jwtSecret, 15*time.Minute)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, err := middleware.GenerateRefreshToken(u.ID, s.jwtSecret, 7*24*time.Hour)
+	refreshToken, err := authentication.GenerateRefreshToken(u.ID, s.jwtSecret, 7*24*time.Hour)
 	if err != nil {
 		return nil, err
 	}
 
 	// 获取用户权限
 	u.Permissions = s.getUserPermissions(u.Role)
-	middleware.RecordLoginAudit(ctx, s.client, entUser.ID, entUser.TenantID, username, "LOGIN_SUCCESS", "")
+	authentication.RecordLoginAudit(ctx, s.client, entUser.ID, entUser.TenantID, username, "LOGIN_SUCCESS", "")
 
 	return &AuthResult{
 		AccessToken:  accessToken,
@@ -170,7 +171,7 @@ func (s *Service) Login(ctx context.Context, username, password string, tenantID
 }
 
 func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*AuthResult, error) {
-	claims, err := middleware.ValidateRefreshToken(refreshToken, s.jwtSecret)
+	claims, err := authentication.ValidateRefreshToken(refreshToken, s.jwtSecret)
 	if err != nil {
 		return nil, fmt.Errorf("invalid refresh token")
 	}
@@ -190,12 +191,12 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*AuthR
 	}
 
 	// regenerate tokens
-	accessToken, err := middleware.GenerateAccessToken(user.ID, user.Username, user.Role, user.TenantID, s.jwtSecret, 15*time.Minute)
+	accessToken, err := authentication.GenerateAccessToken(user.ID, user.Username, user.Role, user.TenantID, s.jwtSecret, 15*time.Minute)
 	if err != nil {
 		return nil, err
 	}
 
-	newRefresh, err := middleware.GenerateRefreshToken(user.ID, s.jwtSecret, 7*24*time.Hour)
+	newRefresh, err := authentication.GenerateRefreshToken(user.ID, s.jwtSecret, 7*24*time.Hour)
 	if err != nil {
 		return nil, err
 	}

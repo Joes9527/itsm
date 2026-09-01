@@ -49,7 +49,7 @@ Production initialization currently allows writes only to:
 
 ```text
 tenants, users (bootstrap administrator only), roles, permissions,
-role_permissions, menus, departments, teams, approval_workflows,
+role_permissions, menus, departments, teams,
 process_deployments, process_definitions, process_bindings, sla_definitions,
 sla_policies, sla_alert_rules, service_catalogs, ticket_categories, tags,
 ticket_views, ci_types, standard_changes, system_configs,
@@ -72,4 +72,3 @@ by `TestSeedAllProductDefaultsDoNotCreateBusinessSamples`.
   closed and require an audited repair; they are never auto-baselined.
 - Platform readiness and tenant readiness are separate. A failed tenant is
   isolated; schema/platform-security failures make the whole instance Not Ready.
-

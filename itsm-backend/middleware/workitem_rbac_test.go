@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 
@@ -31,7 +32,9 @@ func TestResourceForRecordClass(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.recordClass, func(t *testing.T) {
-			got := resourceForRecordClass(tc.recordClass)
+			policy, err := authorization.ResolveWorkItemPolicy(tc.recordClass)
+			require.NoError(t, err)
+			got := policy.Resource
 			if got != tc.want {
 				t.Errorf("resourceForRecordClass(%q) = %q, want %q", tc.recordClass, got, tc.want)
 			}
@@ -42,7 +45,7 @@ func TestResourceForRecordClass(t *testing.T) {
 func TestResolveWorkItemPermissionRejectsUnknownRecordClass(t *testing.T) {
 	for _, recordClass := range []string{"", "some_future_value"} {
 		t.Run(recordClass, func(t *testing.T) {
-			_, _, err := resolveWorkItemPermission(recordClass, "read")
+			_, err := authorization.ResolveWorkItemPolicy(recordClass)
 			require.Error(t, err)
 		})
 	}
@@ -79,10 +82,10 @@ func TestResolveWorkItemPermission(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			gotResource, gotAction, err := resolveWorkItemPermission(tc.recordClass, tc.action)
+			policy, err := authorization.ResolveWorkItemPolicy(tc.recordClass)
 			require.NoError(t, err)
-			require.Equal(t, tc.wantResource, gotResource)
-			require.Equal(t, tc.wantAction, gotAction)
+			require.Equal(t, tc.wantResource, policy.Resource)
+			require.Equal(t, tc.wantAction, policy.ResolveAction(tc.action))
 		})
 	}
 }
@@ -90,18 +93,18 @@ func TestResolveWorkItemPermission(t *testing.T) {
 // withHardcodedPermissions 临时切到 PermissionConfigModeHardcodeOnly 并注入指定角色的权限，
 // 测试结束后恢复原有全局配置——PermissionConfig/RolePermissions 都是包级变量，直接改，
 // 用 t.Cleanup 保证不泄漏到其它测试。
-func withHardcodedPermissions(t *testing.T, role string, perms []Permission) {
+func withHardcodedPermissions(t *testing.T, role string, perms []authorization.Permission) {
 	t.Helper()
-	prevMode := PermissionConfig.Mode
-	prevPerms, hadPrev := RolePermissions[role]
-	PermissionConfig.Mode = PermissionConfigModeHardcodeOnly
-	RolePermissions[role] = perms
+	prevMode := authorization.PermissionConfig.Mode
+	prevPerms, hadPrev := authorization.RolePermissions[role]
+	authorization.PermissionConfig.Mode = authorization.PermissionConfigModeHardcodeOnly
+	authorization.RolePermissions[role] = perms
 	t.Cleanup(func() {
-		PermissionConfig.Mode = prevMode
+		authorization.PermissionConfig.Mode = prevMode
 		if hadPrev {
-			RolePermissions[role] = prevPerms
+			authorization.RolePermissions[role] = prevPerms
 		} else {
-			delete(RolePermissions, role)
+			delete(authorization.RolePermissions, role)
 		}
 	})
 }
@@ -185,18 +188,18 @@ func TestRequireWorkItemRecordClassPermission_RecordClassMatrix(t *testing.T) {
 		name       string
 		ticketID   int
 		role       string
-		perms      []Permission
+		perms      []authorization.Permission
 		action     string
 		wantStatus int
 	}{
-		{"incident viewer reads incident ticket", incidentTicket.ID, "incident_reader", []Permission{{Resource: "incident", Action: "read"}}, "read", http.StatusOK},
-		{"incident viewer blocked on problem ticket", problemTicket.ID, "incident_reader", []Permission{{Resource: "incident", Action: "read"}}, "read", http.StatusForbidden},
-		{"problem viewer reads problem ticket", problemTicket.ID, "problem_reader", []Permission{{Resource: "problem", Action: "read"}}, "read", http.StatusOK},
-		{"problem viewer blocked on change ticket", changeTicket.ID, "problem_reader", []Permission{{Resource: "problem", Action: "read"}}, "read", http.StatusForbidden},
-		{"change viewer reads change ticket", changeTicket.ID, "change_reader", []Permission{{Resource: "change", Action: "read"}}, "read", http.StatusOK},
-		{"change viewer blocked on generic ticket", genericTicket.ID, "change_reader", []Permission{{Resource: "change", Action: "read"}}, "read", http.StatusForbidden},
-		{"ticket viewer reads generic ticket", genericTicket.ID, "ticket_reader", []Permission{{Resource: "ticket", Action: "read"}}, "read", http.StatusOK},
-		{"ticket-only viewer blocked on incident ticket", incidentTicket.ID, "ticket_reader", []Permission{{Resource: "ticket", Action: "read"}}, "read", http.StatusForbidden},
+		{"incident viewer reads incident ticket", incidentTicket.ID, "incident_reader", []authorization.Permission{{Resource: "incident", Action: "read"}}, "read", http.StatusOK},
+		{"incident viewer blocked on problem ticket", problemTicket.ID, "incident_reader", []authorization.Permission{{Resource: "incident", Action: "read"}}, "read", http.StatusForbidden},
+		{"problem viewer reads problem ticket", problemTicket.ID, "problem_reader", []authorization.Permission{{Resource: "problem", Action: "read"}}, "read", http.StatusOK},
+		{"problem viewer blocked on change ticket", changeTicket.ID, "problem_reader", []authorization.Permission{{Resource: "problem", Action: "read"}}, "read", http.StatusForbidden},
+		{"change viewer reads change ticket", changeTicket.ID, "change_reader", []authorization.Permission{{Resource: "change", Action: "read"}}, "read", http.StatusOK},
+		{"change viewer blocked on generic ticket", genericTicket.ID, "change_reader", []authorization.Permission{{Resource: "change", Action: "read"}}, "read", http.StatusForbidden},
+		{"ticket viewer reads generic ticket", genericTicket.ID, "ticket_reader", []authorization.Permission{{Resource: "ticket", Action: "read"}}, "read", http.StatusOK},
+		{"ticket-only viewer blocked on incident ticket", incidentTicket.ID, "ticket_reader", []authorization.Permission{{Resource: "ticket", Action: "read"}}, "read", http.StatusForbidden},
 
 		// Fix 1 regression coverage: incident/problem/change only ever grant read/write/delete
 		// (pkg/seeder/seeder.go — there is no incident:create or incident:update permission code
@@ -204,16 +207,16 @@ func TestRequireWorkItemRecordClassPermission_RecordClassMatrix(t *testing.T) {
 		// able to pass RequireWorkItemRecordClassPermission("create") / ("update") for that
 		// record class, because the middleware normalizes create/update to write before checking.
 		// Before the fix these all 403'd for every role except super_admin.
-		{"incident writer can create via write permission (create normalizes to write)", incidentTicket.ID, "incident_writer", []Permission{{Resource: "incident", Action: "write"}}, "create", http.StatusOK},
-		{"incident writer can update via write permission (update normalizes to write)", incidentTicket.ID, "incident_writer", []Permission{{Resource: "incident", Action: "write"}}, "update", http.StatusOK},
-		{"problem writer can create via write permission (create normalizes to write)", problemTicket.ID, "problem_writer", []Permission{{Resource: "problem", Action: "write"}}, "create", http.StatusOK},
-		{"problem writer can update via write permission (update normalizes to write)", problemTicket.ID, "problem_writer", []Permission{{Resource: "problem", Action: "write"}}, "update", http.StatusOK},
-		{"change writer can create via write permission (create normalizes to write)", changeTicket.ID, "change_writer", []Permission{{Resource: "change", Action: "write"}}, "create", http.StatusOK},
-		{"change writer can update via write permission (update normalizes to write)", changeTicket.ID, "change_writer", []Permission{{Resource: "change", Action: "write"}}, "update", http.StatusOK},
+		{"incident writer can create via write permission (create normalizes to write)", incidentTicket.ID, "incident_writer", []authorization.Permission{{Resource: "incident", Action: "write"}}, "create", http.StatusOK},
+		{"incident writer can update via write permission (update normalizes to write)", incidentTicket.ID, "incident_writer", []authorization.Permission{{Resource: "incident", Action: "write"}}, "update", http.StatusOK},
+		{"problem writer can create via write permission (create normalizes to write)", problemTicket.ID, "problem_writer", []authorization.Permission{{Resource: "problem", Action: "write"}}, "create", http.StatusOK},
+		{"problem writer can update via write permission (update normalizes to write)", problemTicket.ID, "problem_writer", []authorization.Permission{{Resource: "problem", Action: "write"}}, "update", http.StatusOK},
+		{"change writer can create via write permission (create normalizes to write)", changeTicket.ID, "change_writer", []authorization.Permission{{Resource: "change", Action: "write"}}, "create", http.StatusOK},
+		{"change writer can update via write permission (update normalizes to write)", changeTicket.ID, "change_writer", []authorization.Permission{{Resource: "change", Action: "write"}}, "update", http.StatusOK},
 		// ticket resource keeps its own create/update permission codes (they really exist) and
 		// must NOT be normalized to write.
-		{"ticket writer can create generic ticket comment via ticket:create (no normalization)", genericTicket.ID, "ticket_writer", []Permission{{Resource: "ticket", Action: "create"}}, "create", http.StatusOK},
-		{"incident reader (read-only) is blocked from create despite record class match", incidentTicket.ID, "incident_reader_only", []Permission{{Resource: "incident", Action: "read"}}, "create", http.StatusForbidden},
+		{"ticket writer can create generic ticket comment via ticket:create (no normalization)", genericTicket.ID, "ticket_writer", []authorization.Permission{{Resource: "ticket", Action: "create"}}, "create", http.StatusOK},
+		{"incident reader (read-only) is blocked from create despite record class match", incidentTicket.ID, "incident_reader_only", []authorization.Permission{{Resource: "incident", Action: "read"}}, "create", http.StatusForbidden},
 	}
 
 	for _, tc := range cases {
@@ -230,7 +233,7 @@ func TestRequireWorkItemRecordClassPermission_RecordClassMatrix(t *testing.T) {
 func TestRequireWorkItemRecordClassPermission_NotFoundNotForbidden(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", "file:workitem_rbac_notfound?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
-	withHardcodedPermissions(t, "any_role", []Permission{{Resource: "ticket", Action: "read"}})
+	withHardcodedPermissions(t, "any_role", []authorization.Permission{{Resource: "ticket", Action: "read"}})
 
 	t.Run("nonexistent ticket id returns 404", func(t *testing.T) {
 		c, w := newWorkItemRBACTestContext(t, client, 999999, 1, "any_role")

@@ -3,13 +3,13 @@ package problem
 import (
 	"strings"
 
+	"itsm-backend/authorization"
 	"itsm-backend/dto"
-	"itsm-backend/middleware"
 	"itsm-backend/service"
 )
 
 func canWriteProblem(actor service.ActionActor) bool {
-	return middleware.HasResourcePermission(actor.Client, actor.Role, "problem", "write", actor.TenantID)
+	return authorization.HasResourcePermission(actor.Client, actor.Role, "problem", "write", actor.TenantID)
 }
 
 func CanEditProblem(actor service.ActionActor) dto.ActionPermission {

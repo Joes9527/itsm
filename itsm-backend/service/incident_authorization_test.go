@@ -5,10 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	"itsm-backend/middleware"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
@@ -17,7 +17,7 @@ import (
 func TestBuildIncidentActionsMirrorsIncidentCommandRules(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches()
+	authorization.InvalidateAllPermissionCaches()
 	ctx := context.Background()
 	tenant, err := createIncidentTestTenant(ctx, client, "action-rules")
 	require.NoError(t, err)
@@ -44,7 +44,7 @@ func TestBuildIncidentActionsMirrorsIncidentCommandRules(t *testing.T) {
 func TestCanConvertToProblemFailsClosed(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	t.Cleanup(func() { _ = client.Close() })
-	middleware.InvalidateAllPermissionCaches()
+	authorization.InvalidateAllPermissionCaches()
 	ctx := context.Background()
 	tenant, err := createIncidentTestTenant(ctx, client, "convert-source")
 	require.NoError(t, err)
@@ -146,7 +146,7 @@ func TestCanConvertToProblemFailsClosed(t *testing.T) {
 func TestHasIncidentProblemRelationUsesRequestContext(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
-	middleware.InvalidateAllPermissionCaches()
+	authorization.InvalidateAllPermissionCaches()
 	setupCtx := context.Background()
 	tenant, err := createIncidentTestTenant(setupCtx, client, "cancelled-context")
 	require.NoError(t, err)

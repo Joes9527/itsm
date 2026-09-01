@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
-	"itsm-backend/middleware"
 	"itsm-backend/pkg/eventbus"
 	"itsm-backend/service"
 	"itsm-backend/service/common/event"
@@ -116,7 +116,7 @@ func (s *Service) ExecuteTool(ctx context.Context, userID, tenantID int, role, n
 	}
 
 	if IsToolRBACEnabled() && s.entClient != nil && role != "" && role != "super_admin" {
-		if middleware.HasResourcePermission(s.entClient, role, toolDef.Resource, toolDef.Action, tenantID) {
+		if authorization.HasResourcePermission(s.entClient, role, toolDef.Resource, toolDef.Action, tenantID) {
 			permCheck = "passed"
 		} else {
 			permCheck = "denied"

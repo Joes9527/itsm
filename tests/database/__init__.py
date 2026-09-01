@@ -212,11 +212,6 @@ class ITSMDBClient(DatabaseClient):
 
     # ==================== 工作流相关 ====================
 
-    def get_approval_workflows(self) -> List[Dict]:
-        """获取审批工作流"""
-        query = "SELECT * FROM approval_workflows ORDER BY name"
-        return self.execute(query)
-
     def get_process_bindings(self) -> List[Dict]:
         """获取流程绑定"""
         query = "SELECT * FROM process_bindings ORDER BY business_type, priority"

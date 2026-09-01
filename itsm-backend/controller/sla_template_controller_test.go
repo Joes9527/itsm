@@ -5,8 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"itsm-backend/authorization"
 	"itsm-backend/ent/enttest"
-	"itsm-backend/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -20,7 +20,7 @@ func TestSLATemplateController_RoutesRequireSLARead(t *testing.T) {
 	defer client.Close()
 
 	// Set permission config to DBOnly mode for strict testing
-	middleware.PermissionConfig.Mode = middleware.PermissionConfigModeDBOnly
+	authorization.PermissionConfig.Mode = authorization.PermissionConfigModeDBOnly
 
 	c := &SLATemplateController{}
 	r := gin.New()
@@ -49,7 +49,7 @@ func TestSLATemplateController_InstallRequiresSLAWrite(t *testing.T) {
 	defer client.Close()
 
 	// Set permission config to DBOnly mode for strict testing
-	middleware.PermissionConfig.Mode = middleware.PermissionConfigModeDBOnly
+	authorization.PermissionConfig.Mode = authorization.PermissionConfigModeDBOnly
 
 	c := &SLATemplateController{}
 	r := gin.New()
