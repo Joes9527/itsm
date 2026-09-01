@@ -110,7 +110,8 @@ func (s *Service) applyWorkflowTransition(ctx context.Context, cmd workflowcallb
 		return workflowBlocked(fmt.Sprintf("illegal change transition %s -> %s", status, target)), nil
 	}
 	count, err := s.entClient.Ticket.Update().Where(
-		ticket.ID(current.WorkItemID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(current.Edges.WorkItem.Version),
+		ticket.ID(current.WorkItemID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(),
+		ticket.VersionEQ(current.Edges.WorkItem.Version), ticket.StatusEQ(status),
 	).SetStatus(target).SetUpdatedAt(time.Now()).AddVersion(1).Save(ctx)
 	if err != nil {
 		return workflowcallback.Result{}, err
@@ -161,7 +162,8 @@ func (s *Service) applyWorkflowSchedule(ctx context.Context, cmd workflowcallbac
 		return workflowIdempotent(fmt.Sprintf("change %d already scheduled", current.ID), nil), nil
 	}
 	count, err := tx.Ticket.Update().Where(
-		ticket.ID(current.WorkItemID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(current.Edges.WorkItem.Version),
+		ticket.ID(current.WorkItemID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(),
+		ticket.VersionEQ(current.Edges.WorkItem.Version), ticket.StatusEQ(status),
 	).SetStatus(target).SetUpdatedAt(time.Now()).AddVersion(1).Save(ctx)
 	if err != nil {
 		return rollback(err)
@@ -230,7 +232,8 @@ func (s *Service) applyWorkflowStateWithTimestamp(ctx context.Context, cmd workf
 		return workflowcallback.Result{}, cause
 	}
 	count, err := tx.Ticket.Update().Where(
-		ticket.ID(current.WorkItemID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(current.Edges.WorkItem.Version),
+		ticket.ID(current.WorkItemID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(),
+		ticket.VersionEQ(current.Edges.WorkItem.Version), ticket.StatusEQ(current.Edges.WorkItem.Status),
 	).SetStatus(target).SetUpdatedAt(time.Now()).AddVersion(1).Save(ctx)
 	if err != nil {
 		return rollback(err)
@@ -239,20 +242,21 @@ func (s *Service) applyWorkflowStateWithTimestamp(ctx context.Context, cmd workf
 		_ = tx.Rollback()
 		return s.classifyWorkflowState(ctx, cmd, target, start)
 	}
-	update := tx.Change.Update().Where(entchange.ID(current.ID), entchange.HasWorkItemWith(ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil()))
-	now := time.Now()
-	if start && current.ActualStartDate.IsZero() {
-		update.SetActualStartDate(now)
-	}
-	if !start && current.ActualEndDate.IsZero() {
-		update.SetActualEndDate(now)
-	}
-	updated, err := update.Save(ctx)
-	if err != nil {
-		return rollback(err)
-	}
-	if updated != 1 {
-		return rollback(fmt.Errorf("change timestamp extension was not updated"))
+	if !timestampSet {
+		update := tx.Change.Update().Where(entchange.ID(current.ID), entchange.HasWorkItemWith(ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil()))
+		now := time.Now()
+		if start {
+			update.SetActualStartDate(now)
+		} else {
+			update.SetActualEndDate(now)
+		}
+		updated, updateErr := update.Save(ctx)
+		if updateErr != nil {
+			return rollback(updateErr)
+		}
+		if updated != 1 {
+			return rollback(fmt.Errorf("change timestamp extension was not updated"))
+		}
 	}
 	if err := tx.Commit(); err != nil {
 		return workflowcallback.Result{}, err

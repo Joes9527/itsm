@@ -40,9 +40,9 @@ func (h *ServiceRequestServiceTaskHandler) Execute(ctx context.Context, _ *ent.P
 	if h.service == nil {
 		return nil, fmt.Errorf("service request service is not injected")
 	}
-	command, err := bindServiceRequestWorkflowCommand(ctx, action, variables)
-	if err != nil {
-		return nil, err
+	command, effect := bindServiceRequestWorkflowCommand(ctx, action, variables)
+	if effect != nil {
+		return effect, nil
 	}
 	result, err := h.service.ApplyServiceRequestWorkflowCallback(ctx, command)
 	if err != nil {
@@ -51,14 +51,14 @@ func (h *ServiceRequestServiceTaskHandler) Execute(ctx context.Context, _ *ent.P
 	return callbackEffectFromWorkflowResult(result)
 }
 
-func bindServiceRequestWorkflowCommand(ctx context.Context, action string, variables map[string]interface{}) (workflowcallback.ServiceRequestCommand, error) {
+func bindServiceRequestWorkflowCommand(ctx context.Context, action string, variables map[string]interface{}) (workflowcallback.ServiceRequestCommand, *CallbackEffect) {
 	tenantID, err := RequireTenantID(ctx, variables)
 	if err != nil {
-		return workflowcallback.ServiceRequestCommand{}, err
+		return workflowcallback.ServiceRequestCommand{}, BlockedEffect(CallbackBlockHandlerContract, err.Error())
 	}
 	command := workflowcallback.ServiceRequestCommand{Action: action, RequestID: GetIntFromVars(variables, "request_id"), TenantID: tenantID}
 	if command.RequestID <= 0 {
-		return command, fmt.Errorf("invalid service request id")
+		return command, BlockedEffect(CallbackBlockHandlerContract, "invalid service request id")
 	}
 	if action == "update_request" {
 		command.FormData, _ = variables["form_data"].(map[string]interface{})
@@ -77,7 +77,7 @@ func bindServiceRequestWorkflowCommand(ctx context.Context, action string, varia
 		if raw, ok := variables["expire_at"].(string); ok && raw != "" {
 			value, parseErr := time.Parse(time.RFC3339, raw)
 			if parseErr != nil {
-				return command, fmt.Errorf("expire_at must be RFC3339")
+				return command, BlockedEffect(CallbackBlockHandlerContract, "expire_at must be RFC3339")
 			}
 			command.ExpireAt = &value
 		}
@@ -88,7 +88,7 @@ func bindServiceRequestWorkflowCommand(ctx context.Context, action string, varia
 			for _, item := range raw {
 				value, ok := item.(string)
 				if !ok {
-					return command, fmt.Errorf("source_ip_whitelist must contain strings")
+					return command, BlockedEffect(CallbackBlockHandlerContract, "source_ip_whitelist must contain strings")
 				}
 				values = append(values, value)
 			}
