@@ -127,7 +127,7 @@ func (r *EntRepository) hydrateUsers(ctx context.Context, changes []*Change, ten
 // Change.RelatedTickets，替换旧的 changes.related_tickets JSON 列作为权威来源（该列自 Wave 2
 // 起是待清理死字段，不再被业务逻辑读写，见 repository_impl.go 顶部的迁移说明和交付说明）。
 // 返回值按目标工单的 ticket_number 字符串组装，保持 dto.ChangeResponse.RelatedTickets
-// "相关工单编号" 的既有契约不变。没有 WorkItemID 的 Change（存量未回填数据）不可能有任何
+// "相关工单编号" 的既有契约不变。没有 WorkItemID 的 Change（无效开发数据）不可能有任何
 // WorkItemRelation 指向它，直接跳过。
 func (r *EntRepository) hydrateRelatedTickets(ctx context.Context, changes []*Change, tenantID int) error {
 	sourceIDs := make([]int, 0, len(changes))
@@ -465,7 +465,7 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, page, size int, 
 
 // Update 在同一事务内更新 changes 行公共字段并把 c.RelatedTickets 描述的期望集合收敛到
 // WorkItemRelation（见 reconcileRelatedTicketRelations）——不再写 changes.related_tickets 列。
-// c.WorkItemID<=0（存量未回填数据）时跳过关系收敛：没有 WorkItem 就没有可以挂载关系的
+// c.WorkItemID<=0（无效开发数据）时跳过关系收敛：没有 WorkItem 就没有可以挂载关系的
 // source，这不是错误，静默跳过，回填工具跑完之后自然可以正常收敛。
 func (r *EntRepository) Update(ctx context.Context, c *Change) (*Change, error) {
 	tx, err := r.client.Tx(ctx)
@@ -633,10 +633,9 @@ func (r *EntRepository) MarkSubmittedForApproval(ctx context.Context, changeID, 
 
 // resolveWorkItemID 返回一个变更关联的 WorkItem ID（tickets.id）——Wave 2 起这是 BPMN
 // businessKey/ProcessApprovalDecision.BusinessID 的权威身份来源，不再是 changeID 自己。
-// 返回 0 且非 nil error 表示这条变更不存在、不属于当前租户，或者还没有关联的 WorkItem
-// （迁移前创建、还没跑 cmd/backfill_change_work_item 回填）。调用方（GetApprovalHistory/
-// pendingApprovalRecord）据此决定是否退化到只用 changeID 查询——这两处都是读路径，容忍
-// 解析失败，不是 fail closed 的安全边界。
+// 返回 0 且非 nil error 表示这条变更不存在、不属于当前租户，或者开发数据违反
+// WorkItem 创建不变量。调用方（GetApprovalHistory/pendingApprovalRecord）据此决定读路径
+// 是否有可用的 WorkItem 身份；写路径必须 fail closed。
 func (r *EntRepository) resolveWorkItemID(ctx context.Context, changeID, tenantID int) (int, error) {
 	c, err := r.client.Change.Query().
 		Where(change.ID(changeID), change.TenantID(tenantID)).

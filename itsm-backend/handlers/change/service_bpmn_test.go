@@ -885,11 +885,9 @@ func TestBackfillLegacyPendingChange_CreatesInstanceAndAdvancesToCAB(t *testing.
 	engine, trigger := deployRealBPMNFixture(t, client, tenantID)
 	logger := zaptest.NewLogger(t).Sugar()
 
-	// 模拟旧审批链流程下已经提交到 pending、但从来没有对应 BPMN 流程实例的存量变更。
-	// Wave 2 起 BackfillLegacyPendingChange 要求先有关联的 WorkItem（resolveWorkItemID
-	// fail closed），所以这里必须先建 WorkItem——现实运维顺序也是先跑
-	// cmd/backfill_change_work_item 再跑 cmd/backfill_legacy_pending_changes，见
-	// BackfillLegacyPendingChange 顶部的排期依赖说明。
+	// 模拟旧审批链流程下已经提交到 pending、但从来没有对应 BPMN 流程实例的变更。
+	// BackfillLegacyPendingChange 要求记录满足 WorkItem 创建不变量，因此 fixture 先在
+	// 同一有效领域状态中建立 WorkItem；缺失 WorkItem 的记录会 fail closed。
 	workItem := createChangeWorkItemFixture(t, client, tenantID, actorID, "上线前用旧流程提交的变更")
 	c, err := client.Change.Create().SetTitle("上线前用旧流程提交的变更").SetType("normal").SetStatus("pending").SetRiskLevel("medium").SetImpactScope("low").SetTenantID(tenantID).SetCreatedBy(actorID).SetWorkItemID(workItem.ID).Save(context.Background())
 	require.NoError(t, err)

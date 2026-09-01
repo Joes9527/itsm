@@ -150,10 +150,10 @@ func (s *Service) GetCalendarView(ctx context.Context, tenantID int, startDate, 
 // resolveWorkItemID 返回一个变更关联的 WorkItem ID（tickets.id）——Wave 2 起这是 BPMN
 // businessKey（"change:{workItemID}"）的权威身份来源，不再是 changeID 自己。查询直接打
 // s.entClient.Change（不经过 s.repo），这样无论调用方是走真实 EntRepository 还是测试里的
-// mockRepository，只要 s.entClient 里存在这条 Change 行（且已经回填 work_item_id），
+// mockRepository，只要 s.entClient 里存在这条 Change 行（且满足 work_item_id 不变量），
 // businessKey 解析就是一致的——这也是 completeChangeApprovalTask 等方法在纯 mock repo 测试
 // 里依然能正确工作的原因。返回 0 且非 nil error 表示这条变更不存在、不属于当前租户，或者
-// 还没有关联的 WorkItem（迁移前创建、还没跑 cmd/backfill_change_work_item 回填）——调用方
+// 开发数据违反 WorkItem 创建不变量——调用方
 // 必须按各自的容错策略处理：SubmitChange/completeAssessmentTask/completeChangeApprovalTask/
 // BackfillLegacyPendingChange 是显式的用户发起动作，必须 fail closed；
 // cancelRunningProcessInstance/completeChangeStageTasks 是收尾/尽力而为动作，按"没有可操作的
@@ -169,7 +169,7 @@ func (s *Service) resolveWorkItemID(ctx context.Context, tenantID, changeID int)
 		return 0, fmt.Errorf("查询变更失败: %w", err)
 	}
 	if c.WorkItemID <= 0 {
-		return 0, fmt.Errorf("变更 %d 缺少关联的 WorkItem（work_item_id 未回填），请先运行 cmd/backfill_change_work_item", changeID)
+		return 0, fmt.Errorf("变更 %d 违反 WorkItem 创建不变量：缺少 work_item_id", changeID)
 	}
 	return c.WorkItemID, nil
 }
@@ -512,7 +512,7 @@ func (s *Service) cancelRunningProcessInstance(ctx context.Context, tenantID, us
 	}
 	businessKey, err := s.changeBusinessKey(ctx, tenantID, changeID)
 	if err != nil {
-		// 没有关联的 WorkItem（存量未回填数据，或 changeID 本身查不到）——按"没有运行中
+		// 没有关联的 WorkItem（无效开发数据，或 changeID 本身查不到）——按"没有运行中
 		// 流程实例"同等对待，静默跳过。这是收尾清理，不应该因为缺 WorkItem 就报错阻塞
 		// 已经生效的业务侧终态转换。
 		return
@@ -541,14 +541,9 @@ func (s *Service) cancelRunningProcessInstance(ctx context.Context, tenantID, us
 // 这两张表已经不是权威数据源）。审批人沿用 assigneeRole=change_manager 的候选人解析，
 // 不尝试还原旧审批链里指定的具体审批人。
 //
-// ⚠️ 排期依赖（Wave 2 新增）：这个方法现在要求变更已经有关联的 WorkItem（work_item_id
-// 已回填），否则 resolveWorkItemID 会 fail closed。这意味着运维流程里
-// cmd/backfill_change_work_item 必须先于 cmd/backfill_legacy_pending_changes 运行——
-// 后者自己的 findCandidates 预过滤仍然用旧的 "change:{changeID}" 格式查重（那个文件不在
-// 本次任务允许修改的范围内），可能会把已经有 WorkItem 但旧格式查不到运行中实例的变更
-// 误判为候选，但这里的 resolveWorkItemID 会在缺 WorkItem 时正确拒绝、在有 WorkItem 时
-// 正确按新格式查重，所以不会产生错误的双重实例，只是重跑一次没有实际效果的候选而已，
-// 交付说明里有更详细的说明。
+// 本方法要求变更满足 WorkItem 创建不变量，否则 resolveWorkItemID fail closed。旧流程
+// 候选预过滤仍使用 "change:{changeID}" 格式，但最终以 WorkItem business key 查询；缺少
+// WorkItem 的无效开发记录不会得到兼容或修补路径。
 func (s *Service) BackfillLegacyPendingChange(ctx context.Context, changeID, tenantID int) error {
 	c, err := s.repo.Get(ctx, changeID, tenantID)
 	if err != nil {
@@ -563,7 +558,7 @@ func (s *Service) BackfillLegacyPendingChange(ctx context.Context, changeID, ten
 
 	workItemID, err := s.resolveWorkItemID(ctx, tenantID, changeID)
 	if err != nil {
-		return fmt.Errorf("回填旧流程前必须先有关联的 WorkItem，请先运行 cmd/backfill_change_work_item: %w", err)
+		return fmt.Errorf("旧流程记录违反 WorkItem 创建不变量: %w", err)
 	}
 
 	businessKey := fmt.Sprintf("change:%d", workItemID)
@@ -994,7 +989,7 @@ func (s *Service) completeChangeStageTasks(ctx context.Context, tenantID, actorU
 	// 或 resolveWorkItemID 失败都不应该阻塞域状态转换本身）。
 	businessKey, err := s.changeBusinessKey(ctx, tenantID, changeID)
 	if err != nil {
-		// 没有关联的 WorkItem（存量未回填数据，或 changeID 本身查不到）——按"没有可操作的
+		// 没有关联的 WorkItem（无效开发数据，或 changeID 本身查不到）——按"没有可操作的
 		// 运行中实例"同等对待，静默跳过，不阻塞已经生效的域状态转换。
 		return nil
 	}

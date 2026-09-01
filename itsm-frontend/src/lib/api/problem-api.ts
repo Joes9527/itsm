@@ -75,9 +75,8 @@ export interface Problem {
   slaStatus?: 'ok' | 'warning' | 'breached';
   responseDeadline?: string;
   resolutionDeadline?: string;
-  // workItemId 关联的 WorkItem（tickets.id）。统一 WorkItem 领域模型迁移（Wave 2）后
-  // 新建的 Problem 一定有值；迁移前创建、尚未跑 cmd/backfill_problem_work_item 回填的
-  // 存量记录可能为 undefined。与 IncidentAPI 的 Incident.workItemId 同一模式。
+  // workItemId 关联的 WorkItem（tickets.id）。后端创建事务保证该值存在；缺失表示
+  // 开发数据违反 WorkItem 创建不变量。与 IncidentAPI 的 Incident.workItemId 同一模式。
   workItemId?: number;
   actions?: Record<string, WorkItemActionState>;
 }

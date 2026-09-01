@@ -115,10 +115,9 @@ type ChangeResponse struct {
 	RelatedTickets     []string       `json:"relatedTickets"`     // 相关工单（Wave 2 起从 WorkItemRelation 动态解析，不再是存量 JSON 列的直接回显）
 	CreatedAt          time.Time      `json:"createdAt"`          // 创建时间
 	UpdatedAt          time.Time      `json:"updatedAt"`          // 更新时间
-	// WorkItemID 关联的 WorkItem（tickets.id）。统一 WorkItem 领域模型迁移（Wave 2）后新建变更
-	// 总是非空；存量记录在跑 cmd/backfill_change_work_item 之前可能为 nil。与
-	// dto.IncidentResponse.WorkItemID / dto.ProblemResponse.WorkItemID 同一模式，供前端
-	// WorkItemShell 使用。
+	// WorkItemID 关联的 WorkItem（tickets.id）。Change 创建事务保证该值存在；nil 表示
+	// 开发数据违反 WorkItem 创建不变量。与 dto.IncidentResponse.WorkItemID /
+	// dto.ProblemResponse.WorkItemID 同一模式，供前端 WorkItemShell 使用。
 	WorkItemID *int                        `json:"workItemId,omitempty"`
 	Actions    map[string]ActionPermission `json:"actions,omitempty"`
 }

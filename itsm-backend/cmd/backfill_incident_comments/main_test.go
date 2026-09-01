@@ -15,8 +15,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-// testDSN 为每个测试返回唯一的 SQLite 内存数据库 DSN，避免测试间数据库残留
-// （与 cmd/backfill_incident_work_item/main_test.go 同一做法）。
+// testDSN 为每个测试返回唯一的 SQLite 内存数据库 DSN，避免测试间数据库残留。
 var testDBCounter int64
 
 func testDSN() string {
@@ -38,8 +37,7 @@ func setupTenantAndUser(t *testing.T, client *ent.Client, ctx context.Context, c
 	return tenant, user
 }
 
-// setupIncidentWithWorkItem 创建一条已经跑过 backfill_incident_work_item 的 Incident
-// （即 work_item_id 非空），是本工具大多数测试用例的正常前置状态。
+// setupIncidentWithWorkItem 创建一条满足 WorkItem 创建不变量的 Incident。
 func setupIncidentWithWorkItem(t *testing.T, client *ent.Client, ctx context.Context, tenantID, userID int, code string) *ent.Incident {
 	t.Helper()
 	wi, err := client.Ticket.Create().
@@ -247,9 +245,8 @@ func TestBackfillOne_SkippedEventProducesNoRow(t *testing.T) {
 	require.Equal(t, 0, count)
 }
 
-// TestBackfillOne_Idempotent 验证重复运行不产生第二条 ticket_comments：跟
-// backfill_incident_work_item 的并发写入冲突（返回 error）不同，这里的"已经回填过"
-// 是预期中的正常重跑场景，应该静默 skip，不是 error。
+// TestBackfillOne_Idempotent 验证重复运行不产生第二条 ticket_comments；这里的
+// "已经回填过"是预期中的正常重跑场景，应该静默 skip，不是 error。
 func TestBackfillOne_Idempotent(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
@@ -296,8 +293,7 @@ func TestPreviewBackfill_CountsWithoutWriting(t *testing.T) {
 
 // TestPreviewBackfill_BreaksDownDistinctSkipReasons 验证不同跳过原因在 skipReasons
 // 里各自计数，而不是像旧版 wouldSkip 那样被折叠成一个笼统的总数——运维需要区分
-// "incident 尚未回填 work_item_id"（评论一旦前端切换就永久不可见，必须先跑
-// cmd/backfill_incident_work_item）和其他跳过原因，折叠后就看不出该不该优先处理。
+// WorkItem 不变量损坏和其他跳过原因，折叠后就看不出该不该优先处理无效数据。
 func TestPreviewBackfill_BreaksDownDistinctSkipReasons(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
@@ -323,6 +319,6 @@ func TestPreviewBackfill_BreaksDownDistinctSkipReasons(t *testing.T) {
 	require.Equal(t, 0, wouldCreate)
 	require.Equal(t, 0, failed)
 	require.Equal(t, 2, len(skipReasons), "两种不同的跳过原因应该产生两个独立的 map 条目")
-	require.Equal(t, 2, skipReasons["incident 尚未回填 work_item_id（先跑 cmd/backfill_incident_work_item）"])
+	require.Equal(t, 2, skipReasons["incident 违反 WorkItem 不变量：work_item_id 为空"])
 	require.Equal(t, 1, skipReasons["评论事件 description 为空"])
 }

@@ -2097,12 +2097,11 @@ func (s *IncidentService) triggerWorkflowForIncident(ctx context.Context, incide
 
 	// 统一 WorkItem 领域模型宪章 §1.4：BPMN 的 business_id 统一收敛为 WorkItem.ID
 	// （tickets.id），不再是 Incident 自己的主键。CreateIncident 现在总是在同一事务内
-	// 建好 WorkItem 并回填 work_item_id，所以新创建路径这里永远非零；如果是零，说明
-	// 走到了存量数据（迁移前创建、还没跑 cmd/backfill_incident_work_item 回填）——
+	// 建好 WorkItem 并回填 work_item_id，所以这里为零表示开发数据违反领域不变量。
 	// 宁可拒绝触发流程也不要用错误的业务身份启动，避免产生一个 business_id=0 的
-	// ProcessInstance 污染 BPMN 审批决策回查。
+	// ProcessInstance 污染 BPMN 审批决策回查；不存在运行时修补路径。
 	if inc.WorkItemID <= 0 {
-		return fmt.Errorf("事件 %d 缺少关联的 WorkItem（work_item_id 未回填），拒绝触发流程；请先运行 cmd/backfill_incident_work_item", incidentID)
+		return fmt.Errorf("事件 %d 违反 WorkItem 创建不变量：缺少 work_item_id，拒绝触发流程", incidentID)
 	}
 
 	// 构建流程变量
@@ -2164,10 +2163,10 @@ func (s *IncidentService) GetWorkflowStatus(ctx context.Context, incidentID int,
 		return nil, fmt.Errorf("failed to get incident: %w", err)
 	}
 	// businessKey 的业务身份自 Wave 2 起是 WorkItem.ID，同 triggerWorkflowForIncident；
-	// 缺失 work_item_id 的存量事件（还没跑 backfill）在这里查不到流程，返回未找到而不是
-	// 用 Incident 自己的主键去猜一个大概率查不中的旧格式 key。
+	// 缺失 work_item_id 表示开发数据违反领域不变量；fail closed 而不是用 Incident 自己
+	// 的主键猜测旧格式 key。
 	if inc.WorkItemID <= 0 {
-		return nil, fmt.Errorf("事件 %d 缺少关联的 WorkItem，无法查询流程状态；请先运行 cmd/backfill_incident_work_item", incidentID)
+		return nil, fmt.Errorf("事件 %d 违反 WorkItem 创建不变量：缺少 work_item_id，无法查询流程状态", incidentID)
 	}
 	businessKey := fmt.Sprintf("incident:%d", inc.WorkItemID)
 

@@ -19,10 +19,10 @@ type Change struct {
 	Assignee      *User
 	CreatedBy     int
 	CreatedByUser *User
-	// WorkItemID 关联的 WorkItem（tickets.id）。统一 WorkItem 领域模型宪章 §3.2：Wave 2
-	// 迁移（本次改动）后每条新建 Change 都在同一事务内建好对应的 tickets 行并回填这个字段；
-	// 迁移前创建、还没跑 cmd/backfill_change_work_item 回填的存量记录可能为 nil。与
-	// dto.IncidentResponse.WorkItemID / dto.ProblemResponse.WorkItemID 同一模式。这也是 Wave 2
+	// WorkItemID 关联的 WorkItem（tickets.id）。统一 WorkItem 领域模型宪章 §3.2 要求
+	// 每条 Change 都在同一事务内建好对应的 tickets 行并回填这个字段；nil 表示开发数据
+	// 违反 WorkItem 创建不变量。与 dto.IncidentResponse.WorkItemID /
+	// dto.ProblemResponse.WorkItemID 同一模式。这也是 Wave 2
 	// 起 BPMN businessKey/businessId 的权威身份来源，不再是 Change.ID 自己（见
 	// Service.resolveWorkItemID）。
 	WorkItemID         *int

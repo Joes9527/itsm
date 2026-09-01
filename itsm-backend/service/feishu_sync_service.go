@@ -12,17 +12,26 @@ import (
 	"itsm-backend/ent/feishuticketsync"
 	entTicket "itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
+	"itsm-backend/repository/workitemnumber"
 
 	"go.uber.org/zap"
 )
 
 type FeishuSyncService struct {
-	client *ent.Client
-	logger *zap.SugaredLogger
+	client          *ent.Client
+	logger          *zap.SugaredLogger
+	numberAllocator workitemnumber.Allocator
 }
 
-func NewFeishuSyncService(client *ent.Client, logger *zap.SugaredLogger) *FeishuSyncService {
-	return &FeishuSyncService{client: client, logger: logger}
+func NewFeishuSyncService(
+	client *ent.Client,
+	logger *zap.SugaredLogger,
+	allocator workitemnumber.Allocator,
+) *FeishuSyncService {
+	if allocator == nil {
+		panic("work item number allocator is required")
+	}
+	return &FeishuSyncService{client: client, logger: logger, numberAllocator: allocator}
 }
 
 func (s *FeishuSyncService) SyncTicketToFeishu(ctx context.Context, tenantID, ticketID int, fc *feishuConn.Feishu) (*dto.FeishuTicketSyncResponse, error) {
@@ -217,7 +226,11 @@ func (s *FeishuSyncService) createTicketFromFeishuTask(ctx context.Context, tx *
 	if err != nil {
 		return nil, err
 	}
-	ticketNumber := fmt.Sprintf("TKT-FS-%d-%d", tenantID, time.Now().UnixNano())
+	issuedAt := time.Now().UTC()
+	ticketNumber, err := s.numberAllocator.Allocate(ctx, tx.Client(), tenantID, issuedAt)
+	if err != nil {
+		return nil, fmt.Errorf("allocate work item number for feishu task: %w", err)
+	}
 	return tx.Ticket.Create().
 		SetTenantID(tenantID).
 		SetTicketNumber(ticketNumber).
@@ -227,6 +240,8 @@ func (s *FeishuSyncService) createTicketFromFeishuTask(ctx context.Context, tx *
 		SetPriority(mapFeishuPriorityToTicket(task.Priority)).
 		SetStatus(mapFeishuStatusToTicket(task.Status, task.Completed)).
 		SetRequesterID(requesterID).
+		SetCreatedAt(issuedAt).
+		SetUpdatedAt(issuedAt).
 		Save(ctx)
 }
 
@@ -363,7 +378,7 @@ func extractFeishuTaskGUID(event map[string]interface{}) string {
 
 func stripTicketNumberPrefix(name string) string {
 	parts := strings.SplitN(name, " ", 2)
-	if len(parts) == 2 && (strings.HasPrefix(parts[0], "TKT-") || strings.HasPrefix(parts[0], "TK-")) {
+	if len(parts) == 2 && strings.HasPrefix(parts[0], "TKT-") {
 		return parts[1]
 	}
 	return name
