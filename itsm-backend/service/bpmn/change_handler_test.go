@@ -514,13 +514,12 @@ func TestChangeServiceTaskHandler_RetryWithoutWriteIsIdempotent(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			client, handler, tenantID, changeEntity := setupChangeHandlerFixture(t)
 			ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
-			update := client.Change.UpdateOne(changeEntity).SetStatus(tt.status)
+			require.NoError(t, client.Ticket.UpdateOneID(changeEntity.WorkItemID).SetStatus(tt.status).Exec(ctx))
 			if tt.setup != nil {
 				entity := *changeEntity
 				tt.setup(&entity)
-				update.SetActualEndDate(entity.ActualEndDate)
+				require.NoError(t, client.Change.UpdateOne(changeEntity).SetActualEndDate(entity.ActualEndDate).Exec(ctx))
 			}
-			require.NoError(t, update.Exec(ctx))
 
 			result, err := handler.Execute(ctx, nil, map[string]interface{}{
 				"action": tt.action, "change_id": changeEntity.ID,

@@ -76,6 +76,21 @@ func TestMigration021CallbackOptionalDeclaredAssets(t *testing.T) {
 	}
 }
 
+func TestMigration021CallbackOptionalDeclaredIsRegisteredBetweenWorkItemMigrations(t *testing.T) {
+	registeredSQL := GetMigrationSQL("021_add_callback_optional_declared")
+	require.Equal(t, normalizeMigrationSQL(migration021CallbackOptionalDeclaredSQL), normalizeMigrationSQL(registeredSQL))
+
+	versions := make([]string, 0, len(RegisteredMigrations))
+	for _, migration := range RegisteredMigrations {
+		versions = append(versions, migration.Version)
+	}
+	require.Equal(t, []string{
+		"020_work_item_number_allocator",
+		"021_add_callback_optional_declared",
+		"022_drop_professional_extension_shared_fields",
+	}, versions[len(versions)-3:])
+}
+
 func TestMigration021CallbackOptionalDeclaredIsIdempotent(t *testing.T) {
 	dsn := os.Getenv("ITSM_TEST_DB")
 	if dsn == "" {

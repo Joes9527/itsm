@@ -175,20 +175,17 @@ func TestTicketWorkflowStartUsesExplicitSystemWhenNoActorIsAvailable(t *testing.
 func TestIncidentWorkflowStartUsesScopeActorInsteadOfReporter(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
 	workItem := f.client.Ticket.Create().
-		SetTitle("incident work item").
+		SetTitle("incident").
 		SetTicketNumber("INC-WI-701").
 		SetType("incident").
 		SetRecordClass("incident").
+		SetStatus("new").
 		SetRequesterID(f.outsider.ID).
 		SetTenantID(f.tenant.ID).
 		SaveX(context.Background())
 	inc := f.client.Incident.Create().
 		SetWorkItemID(workItem.ID).
-		SetTitle("incident").
 		SetIncidentNumber("INC-701").
-		SetStatus("new").
-		SetReporterID(f.outsider.ID).
-		SetTenantID(f.tenant.ID).
 		SaveX(context.Background())
 	trigger := &processStartTriggerCapture{}
 	service := &IncidentService{client: f.client, processTriggerService: trigger, logger: zap.NewNop().Sugar()}

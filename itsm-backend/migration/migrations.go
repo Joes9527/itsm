@@ -420,6 +420,11 @@ var RegisteredMigrations = []Migration{
 		RollbackSQL: workItemNumberAllocatorEmptyDevelopmentRollbackSQL,
 	},
 	{
+		Version:     "021_add_callback_optional_declared",
+		Description: "Snapshot definition-declared callback optionality in the callback outbox",
+		RollbackSQL: "ALTER TABLE process_callback_outboxes DROP COLUMN IF EXISTS optional_declared;",
+	},
+	{
 		Version:     "022_drop_professional_extension_shared_fields",
 		Description: "Remove all WorkItem-owned fields from Incident, Problem, and Change extensions",
 		RollbackSQL: "",
@@ -1060,6 +1065,9 @@ ALTER TABLE tickets DROP CONSTRAINT IF EXISTS tickets_ticket_number_key;
 CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
     ON tickets (tenant_id, ticket_number);
 `
+	case "021_add_callback_optional_declared":
+		return `ALTER TABLE process_callback_outboxes
+    ADD COLUMN IF NOT EXISTS optional_declared boolean NOT NULL DEFAULT false;`
 	case "022_drop_professional_extension_shared_fields":
 		return professionalExtensionSharedFieldsSQL
 	default:

@@ -777,6 +777,18 @@ func (u *ProcessCallbackOutboxUpsert) ClearVariables() *ProcessCallbackOutboxUps
 	return u
 }
 
+// SetOptionalDeclared sets the "optional_declared" field.
+func (u *ProcessCallbackOutboxUpsert) SetOptionalDeclared(v bool) *ProcessCallbackOutboxUpsert {
+	u.Set(processcallbackoutbox.FieldOptionalDeclared, v)
+	return u
+}
+
+// UpdateOptionalDeclared sets the "optional_declared" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsert) UpdateOptionalDeclared() *ProcessCallbackOutboxUpsert {
+	u.SetExcluded(processcallbackoutbox.FieldOptionalDeclared)
+	return u
+}
+
 // SetStatus sets the "status" field.
 func (u *ProcessCallbackOutboxUpsert) SetStatus(v string) *ProcessCallbackOutboxUpsert {
 	u.Set(processcallbackoutbox.FieldStatus, v)
@@ -1169,6 +1181,20 @@ func (u *ProcessCallbackOutboxUpsertOne) UpdateVariables() *ProcessCallbackOutbo
 func (u *ProcessCallbackOutboxUpsertOne) ClearVariables() *ProcessCallbackOutboxUpsertOne {
 	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
 		s.ClearVariables()
+	})
+}
+
+// SetOptionalDeclared sets the "optional_declared" field.
+func (u *ProcessCallbackOutboxUpsertOne) SetOptionalDeclared(v bool) *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetOptionalDeclared(v)
+	})
+}
+
+// UpdateOptionalDeclared sets the "optional_declared" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertOne) UpdateOptionalDeclared() *ProcessCallbackOutboxUpsertOne {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateOptionalDeclared()
 	})
 }
 
@@ -1751,6 +1777,20 @@ func (u *ProcessCallbackOutboxUpsertBulk) UpdateVariables() *ProcessCallbackOutb
 func (u *ProcessCallbackOutboxUpsertBulk) ClearVariables() *ProcessCallbackOutboxUpsertBulk {
 	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
 		s.ClearVariables()
+	})
+}
+
+// SetOptionalDeclared sets the "optional_declared" field.
+func (u *ProcessCallbackOutboxUpsertBulk) SetOptionalDeclared(v bool) *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.SetOptionalDeclared(v)
+	})
+}
+
+// UpdateOptionalDeclared sets the "optional_declared" field to the value that was provided on create.
+func (u *ProcessCallbackOutboxUpsertBulk) UpdateOptionalDeclared() *ProcessCallbackOutboxUpsertBulk {
+	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
+		s.UpdateOptionalDeclared()
 	})
 }
 
