@@ -32,6 +32,10 @@ func TestValidateBPMNProcessLifecycle(t *testing.T) {
 		{BPMNProcessCommandTerminate, "suspended", true},
 		{BPMNProcessCommandTerminate, "completed", false},
 		{BPMNProcessCommandTerminate, "terminated", false},
+		{BPMNProcessCommandSetVariables, "running", true},
+		{BPMNProcessCommandSetVariables, "suspended", true},
+		{BPMNProcessCommandSetVariables, "completed", false},
+		{BPMNProcessCommandSetVariables, "terminated", false},
 		{BPMNProcessCommandSuspend, "unknown", false},
 		{BPMNProcessCommand("unknown"), "running", false},
 	}
@@ -96,6 +100,8 @@ func TestBPMNProcessLifecyclePredicate(t *testing.T) {
 		{"suspend_stale_version", BPMNProcessCommandSuspend, "running", 7, 6, false},
 		{"resume_wrong_status", BPMNProcessCommandResume, "running", 7, 7, false},
 		{"terminate_suspended", BPMNProcessCommandTerminate, "suspended", 7, 7, true},
+		{"set_variables_running", BPMNProcessCommandSetVariables, "running", 7, 7, true},
+		{"set_variables_terminal", BPMNProcessCommandSetVariables, "completed", 7, 7, false},
 	}
 
 	for i, tc := range tests {

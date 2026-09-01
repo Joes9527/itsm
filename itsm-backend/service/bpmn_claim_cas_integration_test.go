@@ -110,6 +110,48 @@ type postgresTaskRaceResult struct {
 	err     error
 }
 
+type postgresProcessVariableRaceResult struct {
+	value string
+	err   error
+}
+
+type postgresProcessInstanceLoadBarrier struct {
+	instanceID int
+	worker     string
+	arrived    chan string
+	release    chan struct{}
+}
+
+func (b *postgresProcessInstanceLoadBarrier) interceptor() ent.Interceptor {
+	var waitOnce sync.Once
+	return ent.InterceptFunc(func(next ent.Querier) ent.Querier {
+		return ent.QuerierFunc(func(ctx context.Context, query ent.Query) (ent.Value, error) {
+			value, err := next.Query(ctx, query)
+			if err != nil {
+				return value, err
+			}
+			rows, ok := value.([]*ent.ProcessInstance)
+			if !ok {
+				return value, nil
+			}
+			for _, row := range rows {
+				if row.ID != b.instanceID {
+					continue
+				}
+				waitOnce.Do(func() {
+					b.arrived <- b.worker
+					select {
+					case <-b.release:
+					case <-ctx.Done():
+					}
+				})
+				break
+			}
+			return value, nil
+		})
+	})
+}
+
 type postgresClaimLoadBarrier struct {
 	taskID  int
 	arrived chan postgresClaimLoad
@@ -541,4 +583,85 @@ func TestBPMNTaskTerminalCommandsRaceWithCompletionPostgres(t *testing.T) {
 			).CountX(context.Background()))
 		})
 	}
+}
+
+func TestBPMNProcessInstanceVariablesConcurrentCASPostgres(t *testing.T) {
+	setupClient, setupDB := openBPMNPostgresIntegrationClient(t)
+	require.NoError(t, setupClient.Schema.Create(context.Background()))
+	fixture := seedPostgresClaimFixture(t, setupClient, setupDB)
+	before := setupClient.ProcessInstance.GetX(context.Background(), fixture.instanceID)
+
+	clients := [2]*ent.Client{}
+	engines := [2]*CustomProcessEngine{}
+	arrived := make(chan string, 2)
+	release := make(chan struct{})
+	for i := range clients {
+		clients[i], _ = openBPMNPostgresIntegrationClient(t)
+		worker := "variables-worker-" + strconv.Itoa(i+1)
+		clients[i].ProcessInstance.Intercept((&postgresProcessInstanceLoadBarrier{
+			instanceID: fixture.instanceID, worker: worker, arrived: arrived, release: release,
+		}).interceptor())
+		engines[i] = NewCustomProcessEngine(clients[i], zap.NewNop().Sugar()).(*CustomProcessEngine)
+	}
+
+	results := make(chan postgresProcessVariableRaceResult, 2)
+	for i := range engines {
+		go func(index int) {
+			value := "value-" + strconv.Itoa(index+1)
+			ctx := WithBPMNAccessScope(context.Background(), BPMNAccessScope{
+				UserID: fixture.actorIDs[index], TenantID: fixture.tenantID, CanUpdateAllInstances: true,
+			})
+			results <- postgresProcessVariableRaceResult{
+				value: value,
+				err: engines[index].ProcessInstanceService().SetProcessInstanceVariables(
+					ctx, before.ProcessInstanceID, map[string]interface{}{"race": value},
+				),
+			}
+		}(i)
+	}
+
+	seen := make([]string, 0, 2)
+	for len(seen) < 2 {
+		select {
+		case worker := <-arrived:
+			seen = append(seen, worker)
+		case <-time.After(postgresIntegrationTimeout):
+			require.FailNow(t, "timed out waiting for process variable load barrier")
+		}
+	}
+	require.ElementsMatch(t, []string{"variables-worker-1", "variables-worker-2"}, seen)
+	close(release)
+
+	raceResults := make([]postgresProcessVariableRaceResult, 0, 2)
+	for len(raceResults) < 2 {
+		select {
+		case result := <-results:
+			raceResults = append(raceResults, result)
+		case <-time.After(postgresIntegrationTimeout):
+			require.FailNow(t, "timed out waiting for process variable race results")
+		}
+	}
+	successes, conflicts := 0, 0
+	winner := ""
+	for _, result := range raceResults {
+		if result.err == nil {
+			successes++
+			winner = result.value
+			continue
+		}
+		var appErr *common.AppError
+		if errors.As(result.err, &appErr) && appErr.Code == common.ErrCodeConflict {
+			conflicts++
+		}
+	}
+	require.Equal(t, 1, successes, "race results: %v", raceResults)
+	require.Equal(t, 1, conflicts, "race results: %v", raceResults)
+	after := setupClient.ProcessInstance.GetX(context.Background(), fixture.instanceID)
+	require.Equal(t, before.Version+1, after.Version)
+	require.Equal(t, map[string]interface{}{"race": winner}, after.Variables)
+	require.Equal(t, 1, setupClient.ProcessAuditLog.Query().Where(
+		processauditlog.TenantID(fixture.tenantID),
+		processauditlog.ProcessInstanceID(fixture.instanceID),
+		processauditlog.Action(AuditActionVariableChanged),
+	).CountX(context.Background()))
 }

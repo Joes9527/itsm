@@ -13,9 +13,10 @@ import (
 type BPMNProcessCommand string
 
 const (
-	BPMNProcessCommandSuspend   BPMNProcessCommand = "suspend"
-	BPMNProcessCommandResume    BPMNProcessCommand = "resume"
-	BPMNProcessCommandTerminate BPMNProcessCommand = "terminate"
+	BPMNProcessCommandSuspend      BPMNProcessCommand = "suspend"
+	BPMNProcessCommandResume       BPMNProcessCommand = "resume"
+	BPMNProcessCommandTerminate    BPMNProcessCommand = "terminate"
+	BPMNProcessCommandSetVariables BPMNProcessCommand = "set_variables"
 )
 
 type BPMNTaskCommand string
@@ -32,9 +33,10 @@ const (
 )
 
 var bpmnProcessAllowedSourceStatuses = map[BPMNProcessCommand][]string{
-	BPMNProcessCommandSuspend:   {"running"},
-	BPMNProcessCommandResume:    {"suspended"},
-	BPMNProcessCommandTerminate: {"running", "suspended"},
+	BPMNProcessCommandSuspend:      {"running"},
+	BPMNProcessCommandResume:       {"suspended"},
+	BPMNProcessCommandTerminate:    {"running", "suspended"},
+	BPMNProcessCommandSetVariables: {"running", "suspended"},
 }
 
 var bpmnTaskAllowedSourceStatuses = map[BPMNTaskCommand][]string{
