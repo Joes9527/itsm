@@ -105,6 +105,7 @@ type CustomProcessEngine struct {
 	callbackRegistry      *bpmn.CallbackRegistry // 服务任务回调注册中心
 	groupResolver         *bpmn.GroupResolver    // 审批组解析器：candidateGroups → 候选用户
 	participationResolver *bpmnParticipationResolver
+	instanceAccessPolicy  *bpmnInstanceAccessPolicy
 	callbackOutbox        *bpmnCallbackOutbox
 	callbackExecutionKeys *[]string
 	transactionBound      bool
@@ -129,6 +130,7 @@ type kafCompletionFence struct {
 func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger) ProcessEngine {
 	groupResolver := bpmn.NewGroupResolver(client)
 	participationResolver := newBPMNParticipationResolver(client, groupResolver)
+	instanceAccessPolicy := newBPMNInstanceAccessPolicy(client, participationResolver)
 	engine := &CustomProcessEngine{
 		client:                client,
 		logger:                logger,
@@ -138,16 +140,18 @@ func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger) Proce
 		callbackRegistry:      bpmn.NewCallbackRegistry(client, logger),
 		groupResolver:         groupResolver,
 		participationResolver: participationResolver,
+		instanceAccessPolicy:  instanceAccessPolicy,
 	}
 	engine.auditService = NewBPMNAuditService(client, logger)
+	engine.auditService.instanceAccessPolicy = instanceAccessPolicy
 	engine.callbackOutbox = &bpmnCallbackOutbox{client: client, executor: engine}
 	engine.processDefinitionService = &bpmnProcessDefinitionService{client: client, logger: logger}
-	engine.processInstanceService = &bpmnProcessInstanceService{client: client, logger: logger, participationResolver: participationResolver, auditService: engine.auditService}
+	engine.processInstanceService = &bpmnProcessInstanceService{client: client, logger: logger, instanceAccessPolicy: instanceAccessPolicy, auditService: engine.auditService}
 	// taskService 持有 engine 自身的引用（而不是每次调用再 NewCustomProcessEngine 造一个新的）：
 	// callbackRegistry 是 engine 级别的状态，bootstrap 在各领域 service 构造完成后往
 	// 这一个 engine 的 registry 里注入 TicketService/IncidentService。任务完成路径若临时
 	// 新建 engine，持久化执行和 worker 恢复都会拿到未注入的空 registry。
-	engine.taskService = &bpmnTaskService{client: client, logger: logger, groupResolver: engine.groupResolver, participationResolver: participationResolver, engine: engine}
+	engine.taskService = &bpmnTaskService{client: client, logger: logger, groupResolver: engine.groupResolver, participationResolver: participationResolver, instanceAccessPolicy: instanceAccessPolicy, engine: engine}
 	engine.kafDelegationService = NewKafDelegationService(client)
 	// 注册流程相关的内置函数
 	engine.registerProcessFunctions()
@@ -216,10 +220,10 @@ func (e *CustomProcessEngine) ProcessDefinitionService() ProcessDefinitionServic
 // ProcessInstanceService 返回流程实例服务
 func (e *CustomProcessEngine) ProcessInstanceService() ProcessInstanceService {
 	return &bpmnProcessInstanceService{
-		client:                e.client,
-		logger:                e.logger,
-		participationResolver: e.participationResolver,
-		auditService:          e.auditService,
+		client:               e.client,
+		logger:               e.logger,
+		instanceAccessPolicy: e.instanceAccessPolicy,
+		auditService:         e.auditService,
 	}
 }
 
@@ -527,15 +531,24 @@ func (e *CustomProcessEngine) forClient(client *ent.Client, executionKeys *[]str
 	clone := *e
 	clone.client = client
 	clone.groupResolver = bpmn.NewGroupResolver(client)
-	clone.participationResolver = newBPMNParticipationResolver(client, clone.groupResolver)
+	clone.instanceAccessPolicy = e.instanceAccessPolicy.forClient(client)
+	clone.participationResolver = clone.instanceAccessPolicy.participationResolver
 	clone.auditService = e.auditService.ForClient(client)
+	clone.auditService.instanceAccessPolicy = clone.instanceAccessPolicy
 	clone.callbackExecutionKeys = executionKeys
 	clone.transactionBound = true
+	clone.processInstanceService = &bpmnProcessInstanceService{
+		client:               client,
+		logger:               clone.logger,
+		instanceAccessPolicy: clone.instanceAccessPolicy,
+		auditService:         clone.auditService,
+	}
 	clone.taskService = &bpmnTaskService{
 		client:                client,
 		logger:                clone.logger,
 		groupResolver:         clone.groupResolver,
 		participationResolver: clone.participationResolver,
+		instanceAccessPolicy:  clone.instanceAccessPolicy,
 		engine:                &clone,
 	}
 	return &clone
@@ -2096,17 +2109,6 @@ func (e *CustomProcessEngine) findServiceTask(process *BPMNProcess, id string) *
 	return nil
 }
 
-func requireProcessInstanceUpdateScope(ctx context.Context) (BPMNAccessScope, error) {
-	scope, err := BPMNAccessScopeFromContext(ctx)
-	if err != nil {
-		return BPMNAccessScope{}, err
-	}
-	if !scope.CanUpdateAllInstances {
-		return BPMNAccessScope{}, common.NewForbiddenError("无权修改流程实例")
-	}
-	return scope, nil
-}
-
 func loadProcessInstanceMutationActor(ctx context.Context, client *ent.Client, scope BPMNAccessScope) (*ent.User, error) {
 	actor, err := client.User.Query().
 		Where(
@@ -2121,11 +2123,11 @@ func loadProcessInstanceMutationActor(ctx context.Context, client *ent.Client, s
 }
 
 func (e *CustomProcessEngine) SuspendProcess(ctx context.Context, processInstanceID string, reason string) error {
-	scope, err := requireProcessInstanceUpdateScope(ctx)
+	instance, err := e.instanceAccessPolicy.loadForUpdate(ctx, processInstanceID)
 	if err != nil {
 		return err
 	}
-	instance, err := e.processInstanceService.loadProcessInstance(ctx, processInstanceID, scope.TenantID)
+	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
 		return err
 	}
@@ -2172,11 +2174,11 @@ func (e *CustomProcessEngine) SuspendProcess(ctx context.Context, processInstanc
 }
 
 func (e *CustomProcessEngine) ResumeProcess(ctx context.Context, processInstanceID string) error {
-	scope, err := requireProcessInstanceUpdateScope(ctx)
+	instance, err := e.instanceAccessPolicy.loadForUpdate(ctx, processInstanceID)
 	if err != nil {
 		return err
 	}
-	instance, err := e.processInstanceService.loadProcessInstance(ctx, processInstanceID, scope.TenantID)
+	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
 		return err
 	}
@@ -2220,11 +2222,11 @@ func (e *CustomProcessEngine) ResumeProcess(ctx context.Context, processInstance
 }
 
 func (e *CustomProcessEngine) TerminateProcess(ctx context.Context, processInstanceID string, reason string) error {
-	scope, err := requireProcessInstanceUpdateScope(ctx)
+	instance, err := e.instanceAccessPolicy.loadForUpdate(ctx, processInstanceID)
 	if err != nil {
 		return err
 	}
-	instance, err := e.processInstanceService.loadProcessInstance(ctx, processInstanceID, scope.TenantID)
+	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
 		return err
 	}
@@ -2683,73 +2685,22 @@ func (s *bpmnProcessDefinitionService) SetProcessDefinitionActive(ctx context.Co
 }
 
 type bpmnProcessInstanceService struct {
-	client                *ent.Client
-	logger                *zap.SugaredLogger
-	participationResolver *bpmnParticipationResolver
-	auditService          *BPMNAuditService
+	client               *ent.Client
+	logger               *zap.SugaredLogger
+	instanceAccessPolicy *bpmnInstanceAccessPolicy
+	auditService         *BPMNAuditService
 }
 
-func (s *bpmnProcessInstanceService) loadProcessInstance(ctx context.Context, instanceKey string, tenantID int) (*ent.ProcessInstance, error) {
-	if tenantID <= 0 {
-		return nil, common.NewForbiddenError("缺少 BPMN 实例租户上下文")
+func (s *bpmnProcessInstanceService) accessPolicy() *bpmnInstanceAccessPolicy {
+	if s.instanceAccessPolicy != nil {
+		return s.instanceAccessPolicy
 	}
-	var instancePredicate predicate.ProcessInstance
-	if id, err := strconv.Atoi(instanceKey); err == nil {
-		instancePredicate = processinstance.ID(id)
-	} else {
-		instancePredicate = processinstance.ProcessInstanceID(instanceKey)
-	}
-	instance, err := s.client.ProcessInstance.Query().
-		Where(
-			processinstance.TenantID(tenantID),
-			instancePredicate,
-		).
-		First(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("获取流程实例失败: %w", err)
-	}
-	return instance, nil
-}
-
-func (s *bpmnProcessInstanceService) authorizeProcessInstanceRead(ctx context.Context, instance *ent.ProcessInstance, scope BPMNAccessScope) error {
-	if instance == nil || instance.TenantID != scope.TenantID {
-		return common.NewForbiddenError("无权读取流程实例")
-	}
-	if scope.CanReadAllInstances || instance.Initiator == strconv.Itoa(scope.UserID) {
-		return nil
-	}
-	if s.participationResolver == nil {
-		return common.NewForbiddenError("无权读取流程实例")
-	}
-	actor, err := s.participationResolver.resolveActor(ctx, scope)
-	if err != nil {
-		return common.NewForbiddenError("无权读取流程实例")
-	}
-	instanceIDs, err := s.participationResolver.participatingInstanceIDs(ctx, actor)
-	if err != nil {
-		return fmt.Errorf("解析流程实例参与范围失败: %w", err)
-	}
-	for _, instanceID := range instanceIDs {
-		if instanceID == instance.ID {
-			return nil
-		}
-	}
-	return common.NewForbiddenError("无权读取流程实例")
+	resolver := newBPMNParticipationResolver(s.client, bpmn.NewGroupResolver(s.client))
+	return newBPMNInstanceAccessPolicy(s.client, resolver)
 }
 
 func (s *bpmnProcessInstanceService) GetProcessInstance(ctx context.Context, processInstanceID string) (*ent.ProcessInstance, error) {
-	scope, err := BPMNAccessScopeFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	instance, err := s.loadProcessInstance(ctx, processInstanceID, scope.TenantID)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.authorizeProcessInstanceRead(ctx, instance, scope); err != nil {
-		return nil, err
-	}
-	return instance, nil
+	return s.accessPolicy().loadForRead(ctx, processInstanceID)
 }
 
 func (s *bpmnProcessInstanceService) ListProcessInstances(ctx context.Context, req *ListProcessInstancesRequest) ([]*ent.ProcessInstance, int, error) {
@@ -2772,26 +2723,14 @@ func (s *bpmnProcessInstanceService) ListProcessInstances(ctx context.Context, r
 		query = query.Where(processinstance.BusinessKey(req.BusinessKey))
 	}
 	if !scope.CanReadAllInstances {
-		if s.participationResolver == nil {
-			return nil, 0, common.NewForbiddenError("无权读取流程实例")
+		authorizedIDs, authorizationErr := s.accessPolicy().authorizedInstanceIDs(ctx)
+		if authorizationErr != nil {
+			return nil, 0, authorizationErr
 		}
-		actor, resolveErr := s.participationResolver.resolveActor(ctx, scope)
-		if resolveErr != nil {
-			return nil, 0, common.NewForbiddenError("无权读取流程实例")
+		if len(authorizedIDs) == 0 {
+			return []*ent.ProcessInstance{}, 0, nil
 		}
-		participatingIDs, participationErr := s.participationResolver.participatingInstanceIDs(ctx, actor)
-		if participationErr != nil {
-			return nil, 0, fmt.Errorf("解析流程实例参与范围失败: %w", participationErr)
-		}
-		initiatorPredicate := processinstance.Initiator(strconv.Itoa(scope.UserID))
-		if len(participatingIDs) == 0 {
-			query = query.Where(initiatorPredicate)
-		} else {
-			query = query.Where(processinstance.Or(
-				initiatorPredicate,
-				processinstance.IDIn(participatingIDs...),
-			))
-		}
+		query = query.Where(processinstance.IDIn(authorizedIDs...))
 	}
 
 	total, err := query.Count(ctx)
@@ -2830,11 +2769,11 @@ func (s *bpmnProcessInstanceService) GetProcessInstanceVariables(ctx context.Con
 var reservedInstanceVariableKeys = []string{"business_id", "business_type", "business_key", "tenant_id"}
 
 func (s *bpmnProcessInstanceService) SetProcessInstanceVariables(ctx context.Context, processInstanceID string, variables map[string]interface{}) error {
-	scope, err := requireProcessInstanceUpdateScope(ctx)
+	instance, err := s.accessPolicy().loadForUpdate(ctx, processInstanceID)
 	if err != nil {
 		return err
 	}
-	instance, err := s.loadProcessInstance(ctx, processInstanceID, scope.TenantID)
+	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
 		return err
 	}
@@ -2974,6 +2913,7 @@ type bpmnTaskService struct {
 	logger                *zap.SugaredLogger
 	groupResolver         *bpmn.GroupResolver
 	participationResolver *bpmnParticipationResolver
+	instanceAccessPolicy  *bpmnInstanceAccessPolicy
 	// engine 是创建本任务服务的那个引擎实例。任何需要推进流程（CompleteTask）或复用引擎
 	// 内部鉴权/审批记录逻辑（authorizeTaskActor / recordApprovalDecision）的方法都必须用它，
 	// 不能 NewCustomProcessEngine 现造——见 NewCustomProcessEngine 里的说明。
@@ -3254,19 +3194,20 @@ func (s *bpmnTaskService) ListUserTaskViews(ctx context.Context, req *ListUserTa
 }
 
 func (s *bpmnTaskService) ListApprovalDecisions(ctx context.Context, processInstanceKey string) ([]*ent.ProcessApprovalDecision, error) {
+	policy := s.instanceAccessPolicy
+	if policy == nil {
+		resolver := s.participationResolver
+		if resolver == nil {
+			resolver = newBPMNParticipationResolver(s.client, bpmn.NewGroupResolver(s.client))
+		}
+		policy = newBPMNInstanceAccessPolicy(s.client, resolver)
+	}
+	instance, err := policy.loadForRead(ctx, processInstanceKey)
+	if err != nil {
+		return nil, err
+	}
 	scope, err := BPMNAccessScopeFromContext(ctx)
 	if err != nil {
-		return nil, err
-	}
-	instanceService := &bpmnProcessInstanceService{
-		client:                s.client,
-		participationResolver: s.participationResolver,
-	}
-	instance, err := instanceService.loadProcessInstance(ctx, processInstanceKey, scope.TenantID)
-	if err != nil {
-		return nil, err
-	}
-	if err := instanceService.authorizeProcessInstanceRead(ctx, instance, scope); err != nil {
 		return nil, err
 	}
 	return s.client.ProcessApprovalDecision.Query().

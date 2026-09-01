@@ -59,3 +59,14 @@ func BPMNAccessScopeFromContext(ctx context.Context) (BPMNAccessScope, error) {
 	}
 	return scope, nil
 }
+
+func RequireBPMNInstanceReadAll(ctx context.Context) (BPMNAccessScope, error) {
+	scope, err := BPMNAccessScopeFromContext(ctx)
+	if err != nil {
+		return BPMNAccessScope{}, err
+	}
+	if !scope.CanReadAllInstances {
+		return BPMNAccessScope{}, common.NewForbiddenError("无权读取流程实例汇总数据")
+	}
+	return scope, nil
+}
