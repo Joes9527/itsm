@@ -2,12 +2,17 @@ package service
 
 import (
 	"context"
+	stdErrors "errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"itsm-backend/dto"
+	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/service/bpmn"
 
+	"entgo.io/ent/dialect"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -55,3 +60,98 @@ func TestTriggerProcess_PopulatesStructuredBusinessIdentity(t *testing.T) {
 	require.Equal(t, "change", instance.BusinessType)
 	require.Equal(t, 42, instance.BusinessID)
 }
+
+func TestProcessTriggerResponseLooksUpDefinitionWithinInstanceTenant(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:trigger_response_tenant_%d?mode=memory&cache=shared&_fk=1", time.Now().UnixNano()))
+	t.Cleanup(func() { require.NoError(t, client.Close()) })
+	ctx := context.Background()
+
+	foreignTenant, err := client.Tenant.Create().
+		SetName("Foreign response tenant").
+		SetCode(fmt.Sprintf("foreign-response-%d", time.Now().UnixNano())).
+		SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+	instanceTenant, err := client.Tenant.Create().
+		SetName("Instance response tenant").
+		SetCode(fmt.Sprintf("instance-response-%d", time.Now().UnixNano())).
+		SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	const definitionKey = "shared-response-definition"
+	createProcessTriggerResponseDefinition(t, client, ctx, foreignTenant.ID, definitionKey, "Foreign definition")
+	instanceDefinition := createProcessTriggerResponseDefinition(t, client, ctx, instanceTenant.ID, definitionKey, "Instance tenant definition")
+
+	response, err := NewProcessTriggerService(client, nil).toProcessTriggerResponse(ctx, &ent.ProcessInstance{
+		ProcessDefinitionID:  instanceDefinition.ID,
+		ProcessDefinitionKey: definitionKey,
+		TenantID:             instanceTenant.ID,
+		Status:               "running",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "Instance tenant definition", response.ProcessDefinitionName)
+}
+
+func TestProcessTriggerResponseFallsBackToDefinitionKeyOnlyWhenDefinitionIsAbsent(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:trigger_response_not_found_%d?mode=memory&cache=shared&_fk=1", time.Now().UnixNano()))
+	t.Cleanup(func() { require.NoError(t, client.Close()) })
+
+	response, err := NewProcessTriggerService(client, nil).toProcessTriggerResponse(context.Background(), &ent.ProcessInstance{
+		ProcessDefinitionKey: "missing-definition",
+		TenantID:             1,
+		Status:               "running",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "missing-definition", response.ProcessDefinitionName)
+}
+
+func TestProcessTriggerResponsePropagatesDefinitionLookupErrors(t *testing.T) {
+	queryErr := stdErrors.New("definition database unavailable")
+	trigger := &ProcessTriggerService{client: ent.NewClient(ent.Driver(&processTriggerDefinitionQueryErrorDriver{err: queryErr}))}
+
+	response, err := trigger.toProcessTriggerResponse(context.Background(), &ent.ProcessInstance{
+		ProcessDefinitionKey: "definition-with-query-error",
+		TenantID:             1,
+		Status:               "running",
+	})
+	require.Nil(t, response)
+	require.ErrorIs(t, err, queryErr)
+}
+
+func createProcessTriggerResponseDefinition(t *testing.T, client *ent.Client, ctx context.Context, tenantID int, key, name string) *ent.ProcessDefinition {
+	t.Helper()
+	deployment, err := client.ProcessDeployment.Create().
+		SetDeploymentID(fmt.Sprintf("trigger-response-deployment-%d", time.Now().UnixNano())).
+		SetDeploymentName(name + " deployment").
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+	definition, err := client.ProcessDefinition.Create().
+		SetKey(key).
+		SetName(name).
+		SetBpmnXML([]byte("<definitions/>")).
+		SetDeploymentID(deployment.ID).
+		SetTenantID(tenantID).
+		Save(ctx)
+	require.NoError(t, err)
+	return definition
+}
+
+type processTriggerDefinitionQueryErrorDriver struct {
+	err error
+}
+
+func (d *processTriggerDefinitionQueryErrorDriver) Dialect() string { return dialect.SQLite }
+func (d *processTriggerDefinitionQueryErrorDriver) Close() error    { return nil }
+func (d *processTriggerDefinitionQueryErrorDriver) Tx(context.Context) (dialect.Tx, error) {
+	return nil, d.err
+}
+func (d *processTriggerDefinitionQueryErrorDriver) Exec(context.Context, string, any, any) error {
+	return d.err
+}
+func (d *processTriggerDefinitionQueryErrorDriver) Query(context.Context, string, any, any) error {
+	return d.err
+}
+
+var _ dialect.Driver = (*processTriggerDefinitionQueryErrorDriver)(nil)

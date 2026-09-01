@@ -294,27 +294,44 @@ func TestBPMNProcessTriggerStatusAuthorizationMatrix(t *testing.T) {
 
 func TestBPMNProcessTriggerMutationAuthorizationMatrix(t *testing.T) {
 	f := newProcessTriggerMutationHTTPFixture(t)
-	for _, tc := range []struct {
-		name, route, initialStatus, actor string
-		want                              int
+	for _, action := range []struct {
+		name, route, initialStatus, expectedStatus, auditAction string
 	}{
-		{name: "cancel-participant", route: "cancel", initialStatus: "running", actor: "participant", want: http.StatusForbidden},
-		{name: "suspend-outsider", route: "suspend", initialStatus: "running", actor: "outsider", want: http.StatusForbidden},
-		{name: "resume-elevated", route: "resume", initialStatus: "suspended", actor: "elevated", want: http.StatusOK},
-		{name: "cancel-cross-tenant", route: "cancel", initialStatus: "running", actor: "cross_tenant", want: http.StatusNotFound},
+		{name: "cancel", route: "cancel", initialStatus: "running", expectedStatus: "terminated", auditAction: service.AuditActionProcessTerminated},
+		{name: "suspend", route: "suspend", initialStatus: "running", expectedStatus: "suspended", auditAction: service.AuditActionProcessSuspended},
+		{name: "resume", route: "resume", initialStatus: "suspended", expectedStatus: "running", auditAction: service.AuditActionProcessResumed},
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			instance := f.seedInstance(t, tc.name, tc.initialStatus)
-			f.seedParticipantTask(t, instance)
-			response := f.do(tc.actor, http.MethodPost, fmt.Sprintf("/api/v1/process-trigger/%s/%d", tc.route, instance.ID), `{"reason":"maintenance"}`)
-			require.Equal(t, tc.want, response.Code, response.Body.String())
-			after, err := f.client.ProcessInstance.Get(context.Background(), instance.ID)
-			require.NoError(t, err)
-			if tc.want != http.StatusOK {
-				assert.Equal(t, tc.initialStatus, after.Status)
-				assert.Zero(t, f.client.ProcessAuditLog.Query().Where(processauditlog.ProcessInstanceID(instance.ID)).CountX(context.Background()))
-				assertBPMNDenialBodyIsSafe(t, response, "privateVariable", f.tenant.Code)
-			}
-		})
+		for _, actor := range []struct {
+			name, fixtureActor string
+			want               int
+		}{
+			{name: "participant", fixtureActor: "participant", want: http.StatusForbidden},
+			{name: "outsider", fixtureActor: "outsider", want: http.StatusForbidden},
+			{name: "elevated", fixtureActor: "elevated", want: http.StatusOK},
+			{name: "cross-tenant", fixtureActor: "cross_tenant", want: http.StatusNotFound},
+		} {
+			t.Run(action.name+"-"+actor.name, func(t *testing.T) {
+				instance := f.seedInstance(t, action.name+"-"+actor.name, action.initialStatus)
+				f.seedParticipantTask(t, instance)
+				response := f.do(actor.fixtureActor, http.MethodPost, fmt.Sprintf("/api/v1/process-trigger/%s/%d", action.route, instance.ID), `{"reason":"maintenance"}`)
+				require.Equal(t, actor.want, response.Code, response.Body.String())
+
+				after, err := f.client.ProcessInstance.Get(context.Background(), instance.ID)
+				require.NoError(t, err)
+				if actor.want != http.StatusOK {
+					assert.Equal(t, action.initialStatus, after.Status)
+					assert.Zero(t, f.client.ProcessAuditLog.Query().Where(processauditlog.ProcessInstanceID(instance.ID)).CountX(context.Background()))
+					assertBPMNDenialBodyIsSafe(t, response, "privateVariable", f.tenant.Code)
+					return
+				}
+
+				assert.Equal(t, action.expectedStatus, after.Status)
+				audit, err := f.client.ProcessAuditLog.Query().
+					Where(processauditlog.ProcessInstanceID(instance.ID)).
+					Only(context.Background())
+				require.NoError(t, err)
+				assert.Equal(t, action.auditAction, audit.Action)
+			})
+		}
 	}
 }
