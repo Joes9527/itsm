@@ -71,7 +71,7 @@ func (h *ChangeServiceTaskHandler) Execute(ctx context.Context, task *ent.Proces
 	case "update_change":
 		return h.updateChange(ctx, variables)
 	case "approve_change":
-		return h.approveChange(ctx, variables)
+		return h.approveChange(ctx, task, variables)
 	case "reject_change":
 		return h.rejectChange(ctx, variables)
 	case "schedule_change":
@@ -168,8 +168,9 @@ func (h *ChangeServiceTaskHandler) updateChange(ctx context.Context, variables m
 // approve_change 这个 action 在 CAB 审批节点（Activity_CABApproval）本身触发，
 // 不管审批结果是 approve 还是 reject 都会走到这里（节点自己的 action 是固定的，
 // 不代表审批结果）——真正的终态判定在 schedule_change/reject_change。
-// 这里不改 Change.Status，只做一次存在性确认，避免 change_id 无效时静默成功。
-func (h *ChangeServiceTaskHandler) approveChange(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
+// 这里不改 Change.Status；它只验证 Change 存在及已持久化的审批事实，避免没有
+// ProcessApprovalDecision 时静默成功。
+func (h *ChangeServiceTaskHandler) approveChange(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
 	changeID := GetIntFromVars(variables, "change_id")
 	if changeID <= 0 {
 		return nil, fmt.Errorf("无效的变更ID")
@@ -184,7 +185,8 @@ func (h *ChangeServiceTaskHandler) approveChange(ctx context.Context, variables 
 	// 固定的 approve_change，不代表审批结果是通过还是驳回；写"pending_approval"这个
 	// 中间态会跟域侧 canonical 状态机（service.IsValidChangeStatusTransition，没有
 	// pending_approval 这个成员）产生第二套状态机分叉。真正的终态判定和落库在
-	// scheduleChange（approved/scheduled）和 rejectChange（rejected）。
+	// scheduleChange（approved/scheduled）和 rejectChange（rejected）。随后必须证明
+	// 当前完成任务已持久化同 tenant/process/task/node/action 的审批事实。
 	if _, err := h.client.Change.Query().
 		Where(change.ID(changeID), change.TenantID(tenantID)).
 		Only(ctx); err != nil {
@@ -193,7 +195,7 @@ func (h *ChangeServiceTaskHandler) approveChange(ctx context.Context, variables 
 		}
 		return nil, fmt.Errorf("查询变更失败: %w", err)
 	}
-	return IdempotentEffect(fmt.Sprintf("变更 %d 审批由专业状态机处理", changeID), nil), nil
+	return persistedApprovalDecisionEffect(ctx, h.client, task, variables, fmt.Sprintf("变更 %d 审批决策已记录", changeID))
 }
 
 // rejectChange 驳回变更

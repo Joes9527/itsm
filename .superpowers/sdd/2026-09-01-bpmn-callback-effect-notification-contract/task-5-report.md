@@ -4,3 +4,5 @@ See [the shared atomic Tasks 2, 5, 7, and 8 report](task-2-report.md). Task 5 de
 
 Fix round 1 is recorded in the shared report: stakeholder logging without a
 durable delivery now blocks, and notification results remain real summaries.
+
+Fix round 2 shared callback-gate evidence is recorded in task-2-report.md.

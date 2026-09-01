@@ -61,3 +61,24 @@ Self-review: `git diff --check` is clean; Release decision predicates use only
 persisted task data and trusted tenant context, no request-derived identity.
 The retained P1-C CAS/KAF engine code was not modified. `junit.xml` remains
 unstaged.
+
+## Fix round 2
+
+Change CAB approval now uses the same shared persisted-decision proof as
+Release: it reads only the trusted tenant context and the completed
+`ProcessTask`'s persisted `approvalAction`, and requires a matching immutable
+`ProcessApprovalDecision` on tenant, process instance, task, node, and action.
+Missing task/action/fact or action mismatch returns typed `blocked`; the handler
+does not write Change status or introduce another approval lifecycle. The helper
+is a real shared fact-query boundary used by both Release and Change handlers.
+
+RED/GREEN evidence:
+
+- RED: `go test ./service/bpmn -run TestChangeServiceTaskHandler_ApproveRequiresMatchingPersistedDecision -count=1` failed because a missing decision returned `idempotent`.
+- GREEN handler: `go test ./service/bpmn -run 'Test(ChangeServiceTaskHandler_(TenantScopedActions|ApproveRequiresMatchingPersistedDecision|RetryWithoutWriteIsIdempotent)|ReleaseHandler_ApprovalRequiresMatchingPersistedDecision)' -count=1` — PASS.
+- GREEN engine/outcome/KAF/CAS: `go test ./service -run 'Test(UserTaskWithServiceTaskTypeMetadataTriggersCallback|CABApproval|BPMNCallbackOutbox.*|.*KAF.*|.*CAS.*)' -count=1` — PASS. The CAB empty-completion regression proves its persisted non-optional callback row terminates blocked without token advance; existing optional-outcome coverage continues to permit skips only from `OptionalDeclared` on the durable row.
+- `go test ./...` — PASS.
+
+Self-review: no approval state was written by either handler; tenant-scoped
+Change lookup remains fail-closed before decision proof; no KAF/CAS production
+surface changed. `itsm-frontend/test-results/junit.xml` remains unstaged.

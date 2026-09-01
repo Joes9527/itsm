@@ -176,7 +176,7 @@ func TestChangeServiceTaskHandler_TenantScopedActions(t *testing.T) {
 		{
 			name:     "approve",
 			action:   "approve_change",
-			expected: CallbackEffectIdempotent,
+			expected: CallbackEffectBlocked,
 			assertValid: func(t *testing.T, client *ent.Client, changeID int) {
 				after, err := client.Change.Get(context.Background(), changeID)
 				require.NoError(t, err)
@@ -363,6 +363,51 @@ func TestChangeServiceTaskHandler_NotifyStakeholdersWithoutDurableDeliveryBlocks
 	require.NoError(t, err)
 	assert.Equal(t, CallbackEffectBlocked, result.Status)
 	assert.Equal(t, CallbackBlockHandlerContract, result.BlockCode)
+}
+
+func TestChangeServiceTaskHandler_ApproveRequiresMatchingPersistedDecision(t *testing.T) {
+	client, handler, tenantID, changeEntity := setupChangeHandlerFixture(t)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+	actor := client.User.Query().OnlyX(ctx)
+	deployment := client.ProcessDeployment.Create().
+		SetDeploymentID("change-cab-deployment").SetDeploymentName("change CAB approval").
+		SetDeploymentTime(time.Now()).SetDeployedBy("test").SetIsActive(true).SetTenantID(tenantID).SaveX(ctx)
+	definition := client.ProcessDefinition.Create().
+		SetKey("change-cab-approval").SetName("change CAB approval").SetVersion("1").SetIsLatest(true).
+		SetBpmnXML([]byte("<definitions/> ")).SetDeploymentID(deployment.ID).SetDeployedAt(time.Now()).SetTenantID(tenantID).SaveX(ctx)
+	instance := client.ProcessInstance.Create().
+		SetProcessInstanceID("change-cab-instance").SetProcessDefinitionKey(definition.Key).
+		SetProcessDefinitionID(definition.ID).SetStatus("running").SetVariables(map[string]interface{}{}).SetTenantID(tenantID).SaveX(ctx)
+	task := client.ProcessTask.Create().
+		SetTaskID("change-cab-task").SetProcessInstanceID(instance.ID).SetProcessDefinitionKey(definition.Key).
+		SetTaskDefinitionKey("Activity_CABApproval").SetTaskName("CAB 审批").SetTaskType("user_task").
+		SetStatus("completed").SetTaskVariables(map[string]interface{}{"approvalAction": "approve"}).SetTenantID(tenantID).SaveX(ctx)
+	variables := map[string]interface{}{"action": "approve_change", "change_id": changeEntity.ID}
+
+	missing, err := handler.Execute(ctx, task, variables)
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectBlocked, missing.Status)
+	require.Equal(t, CallbackBlockTargetMissing, missing.BlockCode)
+
+	client.ProcessApprovalDecision.Create().
+		SetProcessInstanceID(instance.ID).SetProcessTaskID(task.ID).
+		SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID(task.TaskID).
+		SetProcessDefinitionKey(definition.Key).SetNodeKey(task.TaskDefinitionKey).
+		SetActorID(actor.ID).SetAction("approve").SetDecision("approved").SetTenantID(tenantID).SaveX(ctx)
+
+	task.TaskVariables["approvalAction"] = "reject"
+	mismatched, err := handler.Execute(ctx, task, variables)
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectBlocked, mismatched.Status)
+
+	task.TaskVariables["approvalAction"] = "approve"
+	matched, err := handler.Execute(ctx, task, variables)
+	require.NoError(t, err)
+	require.Equal(t, CallbackEffectIdempotent, matched.Status)
+
+	crossTenantCtx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID+1)
+	_, err = handler.Execute(crossTenantCtx, task, variables)
+	require.Error(t, err)
 }
 
 // TestChangeServiceTaskHandler_ScheduleChange_DateParsing 锁定 scheduleChange 的

@@ -6,6 +6,7 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
 
@@ -121,10 +122,27 @@ func TestUserTaskWithServiceTaskTypeMetadataTriggersCallback(t *testing.T) {
 	require.Equal(t, "Activity_CABApproval", advanced.CurrentActivityID,
 		"approval_required=true 时网关应路由到 CAB 审批节点")
 
-	// 核心断言：完成 UserTask 形态的 CAB 审批节点，必须触发
-	// ChangeServiceTaskHandler.approveChange，把 Change.Status 改成 pending_approval。
+	// Empty completion variables contain no approval action/fact. The callback
+	// row must keep the diagram-derived non-optional snapshot and block instead
+	// of advancing. Only the outbox may turn an already persisted optional
+	// snapshot into a skip.
 	cabTask := findTaskByDefinitionKey(t, client, ctx, instance.ID, "Activity_CABApproval")
 	require.NoError(t, engine.CompleteTask(ctx, cabTask.TaskID, map[string]interface{}{}))
+	row := client.ProcessCallbackOutbox.Query().Where(
+		processcallbackoutbox.ProcessInstanceID(instance.ID),
+		processcallbackoutbox.ProcessTaskID(cabTask.ID),
+	).OnlyX(ctx)
+	require.False(t, row.OptionalDeclared)
+	processed, err := engine.(*CustomProcessEngine).ProcessPendingCallbacks(ctx, "cab-empty-approval-worker", 10)
+	require.NoError(t, err)
+	require.Zero(t, processed)
+	row = client.ProcessCallbackOutbox.GetX(ctx, row.ID)
+	require.Equal(t, "blocked", row.Status)
+
+	afterCallback, err := client.ProcessInstance.Get(ctx, instance.ID)
+	require.NoError(t, err)
+	require.Equal(t, "Activity_CABApproval", afterCallback.CurrentActivityID)
+	require.Equal(t, "running", afterCallback.Status)
 
 	updated, err := client.Change.Get(ctx, ch.ID)
 	require.NoError(t, err)
