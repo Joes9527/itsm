@@ -215,15 +215,11 @@ func (s *IncidentAlertingService) validateAlertRequest(ctx context.Context, req 
 	default:
 		return fmt.Errorf("invalid alert severity: %s", req.Severity)
 	}
-	allowedChannels := map[string]struct{}{"email": {}, "in_app": {}}
+	if err := validateIncidentAlertChannels(req.Channels); err != nil {
+		return err
+	}
 	seenChannels := make(map[string]struct{}, len(req.Channels))
 	for _, channel := range req.Channels {
-		if _, ok := allowedChannels[channel]; !ok {
-			return fmt.Errorf("unsupported alert channel: %s", channel)
-		}
-		if _, duplicate := seenChannels[channel]; duplicate {
-			return fmt.Errorf("duplicate alert channel: %s", channel)
-		}
 		seenChannels[channel] = struct{}{}
 	}
 	if _, sendsEmail := seenChannels["email"]; sendsEmail {
@@ -546,17 +542,17 @@ func (s *IncidentAlertingService) ProcessEscalationAlerts(ctx context.Context, i
 	case 1:
 		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 1，需要关注", incidentEntity.IncidentNumber)
 		severity = "high"
-		channels = []string{"email", "slack"}
+		channels = []string{"email"}
 		recipients = []string{"manager@company.com", "team@company.com"}
 	case 2:
 		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 2，需要立即处理", incidentEntity.IncidentNumber)
 		severity = "critical"
-		channels = []string{"email", "sms", "slack"}
+		channels = []string{"email"}
 		recipients = []string{"director@company.com", "manager@company.com", "team@company.com"}
 	case 3:
 		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 3，需要紧急处理", incidentEntity.IncidentNumber)
 		severity = "critical"
-		channels = []string{"email", "sms", "slack", "webhook"}
+		channels = []string{"email"}
 		recipients = []string{"cto@company.com", "director@company.com", "manager@company.com", "team@company.com"}
 	default:
 		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 %d", incidentEntity.IncidentNumber, escalationLevel)
@@ -607,7 +603,7 @@ func (s *IncidentAlertingService) ProcessThresholdAlerts(ctx context.Context, in
 		AlertName:  "阈值告警",
 		Message:    alertMessage,
 		Severity:   "medium",
-		Channels:   []string{"email", "slack"},
+		Channels:   []string{"email"},
 		Recipients: []string{"monitoring@company.com", "team@company.com"},
 		Metadata: map[string]interface{}{
 			"metric_type":  metricType,
@@ -653,12 +649,12 @@ func (s *IncidentAlertingService) ProcessSLAViolationAlerts(ctx context.Context,
 	case "response_time":
 		alertMessage = fmt.Sprintf("事件 %s 响应时间超时，违反SLA", incidentEntity.IncidentNumber)
 		severity = "high"
-		channels = []string{"email", "sms", "slack"}
+		channels = []string{"email"}
 		recipients = []string{"manager@company.com", "team@company.com"}
 	case "resolution_time":
 		alertMessage = fmt.Sprintf("事件 %s 解决时间超时，违反SLA", incidentEntity.IncidentNumber)
 		severity = "critical"
-		channels = []string{"email", "sms", "slack", "webhook"}
+		channels = []string{"email"}
 		recipients = []string{"director@company.com", "manager@company.com", "team@company.com"}
 	default:
 		alertMessage = fmt.Sprintf("事件 %s 违反SLA: %s", incidentEntity.IncidentNumber, violationType)

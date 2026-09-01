@@ -44,6 +44,9 @@ func (s *SLAAlertService) SetNotificationService(notificationSvc *TicketNotifica
 // CreateAlertRule 创建SLA预警规则
 func (s *SLAAlertService) CreateAlertRule(ctx context.Context, req *dto.CreateSLAAlertRuleRequest, tenantID int) (*dto.SLAAlertRuleResponse, error) {
 	s.logger.Infow("Creating SLA alert rule", "name", req.Name, "tenant_id", tenantID)
+	if err := validateIncidentAlertChannels(req.NotificationChannels); err != nil {
+		return nil, err
+	}
 
 	// 验证SLA定义是否存在
 	_, err := s.client.SLADefinition.Query().
@@ -105,6 +108,9 @@ func (s *SLAAlertService) UpdateAlertRule(ctx context.Context, id int, req *dto.
 		update = update.SetThresholdPercentage(*req.ThresholdPercentage)
 	}
 	if req.NotificationChannels != nil {
+		if err := validateIncidentAlertChannels(*req.NotificationChannels); err != nil {
+			return nil, err
+		}
 		update = update.SetNotificationChannels(*req.NotificationChannels)
 	}
 	if req.EscalationEnabled != nil {

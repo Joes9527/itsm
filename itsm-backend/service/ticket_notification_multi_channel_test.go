@@ -21,7 +21,7 @@ type graphSenderSpy struct {
 	calls []string // 收件人列表
 }
 
-func (g *graphSenderSpy) SendMail(_ context.Context, _ string, to, _, _ string) error {
+func (g *graphSenderSpy) SendMail(_ context.Context, _ string, to, _, _, _ string) error {
 	g.calls = append(g.calls, to)
 	return nil
 }

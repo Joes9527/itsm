@@ -1043,7 +1043,7 @@ func (s *Seeder) seedSLAAlertRules(ctx context.Context) {
 		NotificationChans []string
 	}{
 		{"SLA-P0-响应告警", "SLA-P0-紧急", "warning", 50, []string{"email"}},
-		{"SLA-P0-解决告警", "SLA-P0-紧急", "critical", 80, []string{"email", "sms"}},
+		{"SLA-P0-解决告警", "SLA-P0-紧急", "critical", 80, []string{"email"}},
 		{"SLA-P1-响应告警", "SLA-P1-高", "warning", 50, []string{"email"}},
 		{"SLA-P1-解决告警", "SLA-P1-高", "warning", 80, []string{"email"}},
 		{"SLA-P2-响应告警", "SLA-P2-中", "info", 50, []string{"email"}},
