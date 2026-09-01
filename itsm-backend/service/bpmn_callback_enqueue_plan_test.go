@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"itsm-backend/dto"
@@ -15,8 +16,9 @@ import (
 func TestBuildCallbackEnqueuePlanFiltersDeclaredPayload(t *testing.T) {
 	handler := newCallbackEnqueuePlanTestHandler("test_handler", "test_task")
 	handler.contracts["apply"] = bpmn.CallbackActionContract{
-		PayloadFields:  []string{"title", "priority"},
-		RequiredFields: []string{"title"},
+		PayloadFields:     []string{"title", "priority"},
+		RequiredFields:    []string{"title"},
+		ConfigRefRequired: true,
 	}
 
 	plan, err := BuildCallbackEnqueuePlan(
@@ -34,8 +36,60 @@ func TestBuildCallbackEnqueuePlanFiltersDeclaredPayload(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Empty(t, plan.BlockCode)
+	require.Equal(t, "callback-config", plan.ConfigRef)
 	require.Equal(t, map[string]interface{}{"title": "Approved change", "priority": "high"}, plan.Payload)
 	require.True(t, plan.OptionalDeclared)
+}
+
+func TestBuildCallbackEnqueuePlanBlocksInvalidRequiredConfigRefWithoutRetainingIt(t *testing.T) {
+	handler := newCallbackEnqueuePlanTestHandler("test_handler", "test_task")
+	handler.contracts["apply"] = bpmn.CallbackActionContract{
+		PayloadFields:     []string{"title"},
+		ConfigRefRequired: true,
+	}
+
+	for _, testCase := range []struct {
+		name      string
+		configRef string
+	}{
+		{name: "missing", configRef: ""},
+		{name: "url containing secret", configRef: "https://api.example.test/?token=secret"},
+		{name: "secret-like delimiter", configRef: "connector:secret"},
+		{name: "surrounding whitespace", configRef: " config-with-whitespace "},
+		{name: "over length limit", configRef: strings.Repeat("a", maxBPMNCallbackConfigRefLength+1)},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			plan, err := BuildCallbackEnqueuePlan(
+				CallbackDescriptor{HandlerID: "test_handler", TaskType: "test_task", Action: "apply", ConfigRef: testCase.configRef},
+				map[string]interface{}{"title": "must not persist with invalid config"},
+				false,
+				callbackEnqueuePlanRegistry(handler),
+			)
+
+			require.NoError(t, err)
+			require.Equal(t, bpmn.CallbackBlockHandlerContract, plan.BlockCode)
+			require.Empty(t, plan.ConfigRef)
+			require.Empty(t, plan.Payload)
+			require.NotContains(t, plan.BlockMessage, "secret")
+		})
+	}
+}
+
+func TestBuildCallbackEnqueuePlanBlocksMalformedOptionalConfigRefWithoutRetainingIt(t *testing.T) {
+	handler := newCallbackEnqueuePlanTestHandler("test_handler", "test_task")
+	handler.contracts["apply"] = bpmn.CallbackActionContract{PayloadFields: []string{"title"}}
+
+	plan, err := BuildCallbackEnqueuePlan(
+		CallbackDescriptor{HandlerID: "test_handler", TaskType: "test_task", Action: "apply", ConfigRef: "connector/secret"},
+		map[string]interface{}{"title": "must not persist with malformed config"},
+		false,
+		callbackEnqueuePlanRegistry(handler),
+	)
+
+	require.NoError(t, err)
+	require.Equal(t, bpmn.CallbackBlockHandlerContract, plan.BlockCode)
+	require.Empty(t, plan.ConfigRef)
+	require.Empty(t, plan.Payload)
 }
 
 type callbackEnqueuePlanTestHandler struct {

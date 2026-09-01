@@ -24,6 +24,7 @@ const (
 	bpmnUnresolvedUserTaskCallbackHandlerID = "__unresolved_user_task_callback__"
 	maxBPMNParticipantVariableDepth         = 8
 	maxBPMNParticipantVariableEntries       = 1024
+	maxBPMNCallbackConfigRefLength          = 128
 )
 
 type bpmnCallbackDescriptor struct {
@@ -254,6 +255,39 @@ func validateBPMNCallbackActionContract(contract bpmn.CallbackActionContract) er
 		}
 	}
 	return nil
+}
+
+// normalizeBPMNCallbackContractConfigRef accepts only a bounded identifier-like
+// definition reference. It deliberately rejects URLs, paths, whitespace, and
+// other values that could contain transport details or credentials.
+func normalizeBPMNCallbackContractConfigRef(contract bpmn.CallbackActionContract, configRef string) (string, error) {
+	if configRef == "" {
+		if contract.ConfigRefRequired {
+			return "", fmt.Errorf("回调配置引用缺失")
+		}
+		return "", nil
+	}
+	if configRef != strings.TrimSpace(configRef) || len(configRef) > maxBPMNCallbackConfigRefLength || !isBPMNCallbackConfigRef(configRef) {
+		return "", fmt.Errorf("回调配置引用无效")
+	}
+	return configRef, nil
+}
+
+func isBPMNCallbackConfigRef(configRef string) bool {
+	for i := 0; i < len(configRef); i++ {
+		char := configRef[i]
+		isAlphaNumeric := char >= 'a' && char <= 'z' || char >= 'A' && char <= 'Z' || char >= '0' && char <= '9'
+		if i == 0 {
+			if !isAlphaNumeric {
+				return false
+			}
+			continue
+		}
+		if !isAlphaNumeric && char != '.' && char != '_' && char != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizeBPMNCallbackContractPayload(contract bpmn.CallbackActionContract, payload map[string]interface{}) (map[string]interface{}, error) {

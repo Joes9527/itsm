@@ -44,7 +44,6 @@ func BuildCallbackEnqueuePlan(
 		HandlerID:        strings.TrimSpace(descriptor.HandlerID),
 		TaskType:         strings.TrimSpace(descriptor.TaskType),
 		Action:           strings.TrimSpace(descriptor.Action),
-		ConfigRef:        strings.TrimSpace(descriptor.ConfigRef),
 		OptionalDeclared: optionalDeclared,
 	}
 	if registry == nil {
@@ -69,6 +68,11 @@ func BuildCallbackEnqueuePlan(
 	if err := validateBPMNCallbackActionContract(contract); err != nil {
 		return blockedCallbackEnqueuePlan(plan), nil
 	}
+	configRef, err := normalizeBPMNCallbackContractConfigRef(contract, descriptor.ConfigRef)
+	if err != nil {
+		return blockedCallbackEnqueuePlan(plan), nil
+	}
+	plan.ConfigRef = configRef
 
 	payloadSource := rawPayload
 	if normalizer, ok := handler.(bpmn.CallbackPayloadNormalizer); ok {
@@ -90,6 +94,7 @@ func BuildCallbackEnqueuePlan(
 }
 
 func blockedCallbackEnqueuePlan(plan CallbackEnqueuePlan) CallbackEnqueuePlan {
+	plan.ConfigRef = ""
 	plan.Payload = map[string]interface{}{}
 	plan.BlockCode = bpmn.CallbackBlockHandlerContract
 	plan.BlockMessage = "callback handler contract is invalid"

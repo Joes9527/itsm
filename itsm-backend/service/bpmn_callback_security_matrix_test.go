@@ -10,7 +10,7 @@ import (
 
 func TestCallbackEnqueuePlanFailsClosedForInvalidCallbackContracts(t *testing.T) {
 	validHandler := newCallbackEnqueuePlanTestHandler("valid_handler", "valid_task")
-	validHandler.contracts["apply"] = bpmn.CallbackActionContract{PayloadFields: []string{"title"}}
+	validHandler.contracts["apply"] = bpmn.CallbackActionContract{PayloadFields: []string{"title"}, ConfigRefRequired: true}
 	normalizerLeakHandler := newCallbackEnqueuePlanTestHandler("normalizer_handler", "normalizer_task")
 	normalizerLeakHandler.contracts["apply"] = bpmn.CallbackActionContract{PayloadFields: []string{"title"}}
 	normalizer := &normalizingCallbackEnqueuePlanTestHandler{callbackEnqueuePlanTestHandler: normalizerLeakHandler, normalize: func(string, map[string]interface{}) (map[string]interface{}, error) {
@@ -45,8 +45,18 @@ func TestCallbackEnqueuePlanFailsClosedForInvalidCallbackContracts(t *testing.T)
 			registry:   registry,
 		},
 		{
+			name:       "missing required config ref",
+			descriptor: CallbackDescriptor{HandlerID: "valid_handler", TaskType: "valid_task", Action: "apply"},
+			registry:   registry,
+		},
+		{
+			name:       "malformed config ref",
+			descriptor: CallbackDescriptor{HandlerID: "valid_handler", TaskType: "valid_task", Action: "apply", ConfigRef: "https://token:secret@example.test"},
+			registry:   registry,
+		},
+		{
 			name:       "normalizer adds undeclared value",
-			descriptor: CallbackDescriptor{HandlerID: "normalizer_handler", TaskType: "normalizer_task", Action: "apply"},
+			descriptor: CallbackDescriptor{HandlerID: "normalizer_handler", TaskType: "normalizer_task", Action: "apply", ConfigRef: "normalizer-config"},
 			registry:   registry,
 		},
 		{
@@ -68,6 +78,7 @@ func TestCallbackEnqueuePlanFailsClosedForInvalidCallbackContracts(t *testing.T)
 			}
 			require.NoError(t, err)
 			require.Equal(t, bpmn.CallbackBlockHandlerContract, plan.BlockCode)
+			require.Empty(t, plan.ConfigRef)
 			require.Empty(t, plan.Payload)
 			require.NotContains(t, plan.BlockMessage, "secret")
 		})
