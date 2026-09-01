@@ -1092,7 +1092,14 @@ func TestVoteDuplicateReturnsConflictWithoutDuplicateEffects(t *testing.T) {
 	assert.NotContains(t, err.Error(), task.TaskID)
 	assert.NotContains(t, err.Error(), f.tenant.Code)
 	assert.Equal(t, 1, f.client.ProcessApprovalDecision.Query().Where(processapprovaldecision.ProcessTaskID(task.ID)).CountX(f.userCtx))
-	assert.Equal(t, 1, f.client.ProcessAuditLog.Query().Where(processauditlog.ProcessInstanceID(instance.ID), processauditlog.ActivityID(task.TaskDefinitionKey)).CountX(f.userCtx))
+	assert.Equal(t, 1, f.client.ProcessAuditLog.Query().Where(
+		processauditlog.ProcessInstanceID(instance.ID), processauditlog.ActivityID(task.TaskDefinitionKey),
+		processauditlog.Action(AuditActionTaskCompleted),
+	).CountX(f.userCtx))
+	assert.Equal(t, 1, f.client.ProcessAuditLog.Query().Where(
+		processauditlog.ProcessInstanceID(instance.ID), processauditlog.ActivityID(task.TaskDefinitionKey),
+		processauditlog.Action(AuditActionTaskMutationRejected),
+	).CountX(f.userCtx))
 }
 
 func TestVoteConcurrentCallsCommitOnce(t *testing.T) {
@@ -1134,7 +1141,14 @@ func TestVoteConcurrentCallsCommitOnce(t *testing.T) {
 	assert.Equal(t, 1, successes, "concurrent vote errors: %v", errs)
 	assert.Equal(t, 1, conflicts, "concurrent vote errors: %v", errs)
 	assert.Equal(t, 1, f.client.ProcessApprovalDecision.Query().Where(processapprovaldecision.ProcessTaskID(task.ID)).CountX(f.userCtx))
-	assert.Equal(t, 1, f.client.ProcessAuditLog.Query().Where(processauditlog.ProcessInstanceID(instance.ID), processauditlog.ActivityID(task.TaskDefinitionKey)).CountX(f.userCtx))
+	assert.Equal(t, 1, f.client.ProcessAuditLog.Query().Where(
+		processauditlog.ProcessInstanceID(instance.ID), processauditlog.ActivityID(task.TaskDefinitionKey),
+		processauditlog.Action(AuditActionTaskCompleted),
+	).CountX(f.userCtx))
+	assert.Equal(t, 1, f.client.ProcessAuditLog.Query().Where(
+		processauditlog.ProcessInstanceID(instance.ID), processauditlog.ActivityID(task.TaskDefinitionKey),
+		processauditlog.Action(AuditActionTaskMutationRejected),
+	).CountX(f.userCtx))
 }
 
 type taskMutation func(*bpmnAuthorizationFixture, context.Context, *ent.ProcessTask) error

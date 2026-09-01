@@ -98,10 +98,12 @@ func assertAutomaticCounterSignCommit(t *testing.T, f *bpmnAuthorizationFixture,
 	).Order(ent.Asc(processtask.FieldID)).AllX(f.userCtx)
 
 	assert.Equal(t, common.ProcessTaskStatusCompleted, updatedSource.Status)
+	assert.Equal(t, source.AggregationVersion+1, updatedSource.AggregationVersion)
 	assert.Equal(t, "counter-sign", updatedInstance.CurrentActivityID)
 	assert.Equal(t, instance.Version+1, updatedInstance.Version)
 	assert.Equal(t, true, updatedInstance.Variables["approved"])
 	assert.Equal(t, common.ProcessTaskStatusCreated, parent.Status)
+	assert.Equal(t, 1, parent.AggregationVersion)
 	assert.Equal(t, approvalType, parent.TaskVariables["approval_type"])
 	total, ok := numericInt(parent.TaskVariables["total"])
 	assert.True(t, ok)
