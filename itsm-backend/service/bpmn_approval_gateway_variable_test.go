@@ -41,6 +41,7 @@ func TestApprovalGatewayReadsApplicationVariableName(t *testing.T) {
 
 	logger := zap.NewNop().Sugar()
 	engine := NewCustomProcessEngine(client, logger)
+	injectEngineChangeCallbackTestService(t, engine, client)
 
 	deploymentSvc := NewBPMNTemplateService(client)
 

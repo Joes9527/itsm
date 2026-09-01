@@ -80,7 +80,13 @@ func persistedChangeStatus(t *testing.T, client *ent.Client, changeEntity *ent.C
 // 的用法。
 func newTestBPMNEngine(t *testing.T, client *ent.Client, logger *zap.SugaredLogger) service.ProcessEngine {
 	t.Helper()
-	return service.NewCustomProcessEngine(client, logger)
+	engine := service.NewCustomProcessEngine(client, logger)
+	// Callback execution is part of process advancement, so the owning domain
+	// service must be wired before the first task can complete. Individual tests
+	// may replace this service later when exercising repository-facing methods.
+	callbackService := NewService(newMockRepository(), client, logger)
+	callbackService.SetProcessEngine(engine)
+	return engine
 }
 
 // ==================== TransitionStatus ↔ BPMN 集成测试 ====================

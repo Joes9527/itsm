@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
@@ -56,6 +57,11 @@ func (s *Service) SetProcessTriggerService(svc service.ProcessTriggerServiceInte
 // 注入，避免构造函数循环依赖。
 func (s *Service) SetProcessEngine(engine service.ProcessEngine) {
 	s.processEngine = engine
+	if customEngine, ok := engine.(*service.CustomProcessEngine); ok {
+		if handler, ok := customEngine.CallbackRegistry().GetHandler("change_service_handler").(*bpmn.ChangeServiceTaskHandler); ok {
+			handler.SetChangeService(s)
+		}
+	}
 }
 
 // Change methods
@@ -769,7 +775,7 @@ func (s *Service) TransitionStatus(ctx context.Context, id, tenantID, userID int
 	}
 
 	// Validate state transition (使用 service 包的 canonical 状态机，保证与 legacy service 一致)
-	if !service.IsValidChangeStatusTransition(c.Status, targetStatus, c.Type) {
+	if !common.IsValidChangeStatusTransition(c.Status, targetStatus, c.Type) {
 		return nil, fmt.Errorf("无效的状态转换: 从 '%s' 到 '%s'", c.Status, targetStatus)
 	}
 

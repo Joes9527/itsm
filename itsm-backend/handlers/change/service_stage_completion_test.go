@@ -92,6 +92,8 @@ func TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd(t *testing.T) {
 	started, err := entClient.ProcessInstance.Get(context.Background(), instance.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Activity_Assessment", started.CurrentActivityID, "流程启动后停在评估节点")
+	svc := NewService(repo, entClient, zap.NewNop().Sugar())
+	svc.SetProcessEngine(engine)
 
 	// 完成评估节点 → 网关按 approval_required=false 路由到排期节点
 	assessmentTask, err := entClient.ProcessTask.Query().First(context.Background())
@@ -103,9 +105,6 @@ func TestTransitionStatus_StageCompletion_AdvanceProcessEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Activity_Schedule", afterAssessment.CurrentActivityID,
 		"approval_required=false 时评估后应直达排期节点")
-
-	svc := NewService(repo, entClient, zap.NewNop().Sugar())
-	svc.SetProcessEngine(engine)
 
 	// 1. start（in_progress）：原生完成 Activity_Schedule → Activity_Implement，域写 in_progress
 	updated, err := svc.TransitionStatus(context.Background(), dbChange.ID, tenantID, actorID, "in_progress", "")
