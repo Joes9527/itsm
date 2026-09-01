@@ -1,0 +1,123 @@
+package service
+
+import (
+	"context"
+	"testing"
+
+	"itsm-backend/dto"
+	"itsm-backend/ent"
+	"itsm-backend/service/bpmn"
+
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+)
+
+func TestBuildCallbackEnqueuePlanFiltersDeclaredPayload(t *testing.T) {
+	handler := newCallbackEnqueuePlanTestHandler("test_handler", "test_task")
+	handler.contracts["apply"] = bpmn.CallbackActionContract{
+		PayloadFields:  []string{"title", "priority"},
+		RequiredFields: []string{"title"},
+	}
+
+	plan, err := BuildCallbackEnqueuePlan(
+		CallbackDescriptor{HandlerID: "test_handler", TaskType: "test_task", Action: "apply", ConfigRef: "callback-config"},
+		map[string]interface{}{
+			"title":       "Approved change",
+			"priority":    "high",
+			"password":    "must-not-persist",
+			"tenant_id":   999,
+			"business_id": 777,
+		},
+		true,
+		callbackEnqueuePlanRegistry(handler),
+	)
+
+	require.NoError(t, err)
+	require.Empty(t, plan.BlockCode)
+	require.Equal(t, map[string]interface{}{"title": "Approved change", "priority": "high"}, plan.Payload)
+	require.True(t, plan.OptionalDeclared)
+}
+
+type callbackEnqueuePlanTestHandler struct {
+	handlerID string
+	taskType  string
+	contracts map[string]bpmn.CallbackActionContract
+}
+
+func newCallbackEnqueuePlanTestHandler(handlerID, taskType string) *callbackEnqueuePlanTestHandler {
+	return &callbackEnqueuePlanTestHandler{
+		handlerID: handlerID,
+		taskType:  taskType,
+		contracts: map[string]bpmn.CallbackActionContract{},
+	}
+}
+
+func (h *callbackEnqueuePlanTestHandler) GetHandlerID() string {
+	return h.handlerID
+}
+
+func (h *callbackEnqueuePlanTestHandler) GetTaskType() string {
+	return h.taskType
+}
+
+func (h *callbackEnqueuePlanTestHandler) Execute(context.Context, *ent.ProcessTask, map[string]interface{}) (*dto.ServiceTaskResult, error) {
+	return &dto.ServiceTaskResult{}, nil
+}
+
+func (h *callbackEnqueuePlanTestHandler) Validate(context.Context, map[string]interface{}) error {
+	return nil
+}
+
+func (h *callbackEnqueuePlanTestHandler) CallbackContract(action string) (bpmn.CallbackActionContract, bool) {
+	contract, ok := h.contracts[action]
+	return contract, ok
+}
+
+type normalizingCallbackEnqueuePlanTestHandler struct {
+	*callbackEnqueuePlanTestHandler
+	normalize func(string, map[string]interface{}) (map[string]interface{}, error)
+}
+
+func (h *normalizingCallbackEnqueuePlanTestHandler) NormalizeCallbackPayload(action string, variables map[string]interface{}) (map[string]interface{}, error) {
+	return h.normalize(action, variables)
+}
+
+func callbackEnqueuePlanRegistry(handlers ...bpmn.ServiceTaskHandlerInterface) *bpmn.CallbackRegistry {
+	registry := bpmn.NewCallbackRegistry(nil, zap.NewNop().Sugar())
+	for _, handler := range handlers {
+		registry.RegisterHandler(handler)
+	}
+	return registry
+}
+
+func TestBuildCallbackEnqueuePlanCopiesOnlyParsedOptionalDeclaration(t *testing.T) {
+	handler := newCallbackEnqueuePlanTestHandler("test_handler", "test_task")
+	handler.contracts["apply"] = bpmn.CallbackActionContract{PayloadFields: []string{"title"}}
+
+	plan, err := BuildCallbackEnqueuePlan(
+		CallbackDescriptor{HandlerID: "test_handler", TaskType: "test_task", Action: "apply"},
+		map[string]interface{}{"title": "kept", "callback_optional": false},
+		true,
+		callbackEnqueuePlanRegistry(handler),
+	)
+
+	require.NoError(t, err)
+	require.True(t, plan.OptionalDeclared)
+	require.NotContains(t, plan.Payload, "callback_optional")
+}
+
+func TestBuildCallbackEnqueuePlanAllowsExplicitEmptyPayloadContract(t *testing.T) {
+	handler := newCallbackEnqueuePlanTestHandler("test_handler", "test_task")
+	handler.contracts["apply"] = bpmn.CallbackActionContract{}
+
+	plan, err := BuildCallbackEnqueuePlan(
+		CallbackDescriptor{HandlerID: "test_handler", TaskType: "test_task", Action: "apply"},
+		map[string]interface{}{"password": "must-not-persist"},
+		false,
+		callbackEnqueuePlanRegistry(handler),
+	)
+
+	require.NoError(t, err)
+	require.Empty(t, plan.BlockCode)
+	require.Empty(t, plan.Payload)
+}

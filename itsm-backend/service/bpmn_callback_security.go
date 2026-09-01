@@ -240,6 +240,85 @@ func cloneBPMNCallbackPayload(payload map[string]interface{}) (map[string]interf
 	return clonedPayload, nil
 }
 
+// validateBPMNCallbackActionContract ensures a handler's declared callback
+// contract cannot carry system-owned identity or ambiguous fields into a
+// durable callback payload.
+func validateBPMNCallbackActionContract(contract bpmn.CallbackActionContract) error {
+	allowed, err := bpmnCallbackContractFieldSet(contract.PayloadFields)
+	if err != nil {
+		return err
+	}
+	for _, field := range contract.RequiredFields {
+		if _, ok := allowed[field]; !ok {
+			return fmt.Errorf("回调必填字段未在负载契约中声明")
+		}
+	}
+	return nil
+}
+
+func normalizeBPMNCallbackContractPayload(contract bpmn.CallbackActionContract, payload map[string]interface{}) (map[string]interface{}, error) {
+	allowed, err := bpmnCallbackContractFieldSet(contract.PayloadFields)
+	if err != nil {
+		return nil, err
+	}
+
+	normalized := make(map[string]interface{}, len(allowed))
+	for _, field := range contract.PayloadFields {
+		value, exists := payload[field]
+		if !exists {
+			continue
+		}
+		cloned, err := cloneBPMNJSONValue(value, 0)
+		if err != nil {
+			return nil, fmt.Errorf("回调字段 %q 类型无效", field)
+		}
+		normalized[field] = cloned
+	}
+	for _, field := range contract.RequiredFields {
+		if _, exists := normalized[field]; !exists {
+			return nil, fmt.Errorf("回调必填字段缺失")
+		}
+	}
+	return normalized, nil
+}
+
+func validateBPMNCallbackNormalizerContractOutput(contract bpmn.CallbackActionContract, payload map[string]interface{}) error {
+	allowed, err := bpmnCallbackContractFieldSet(contract.PayloadFields)
+	if err != nil {
+		return err
+	}
+	return validateBPMNCallbackContractPayloadFields(payload, allowed)
+}
+
+func bpmnCallbackContractFieldSet(fields []string) (map[string]struct{}, error) {
+	if len(fields) > maxBPMNParticipantVariableEntries {
+		return nil, fmt.Errorf("回调负载契约字段无效")
+	}
+	allowed := make(map[string]struct{}, len(fields))
+	for _, field := range fields {
+		if field == "" || field != strings.TrimSpace(field) || len(field) > 128 || isReservedBPMNParticipantVariableKey(field) {
+			return nil, fmt.Errorf("回调负载契约字段无效")
+		}
+		if _, exists := allowed[field]; exists {
+			return nil, fmt.Errorf("回调负载契约字段重复")
+		}
+		allowed[field] = struct{}{}
+	}
+	return allowed, nil
+}
+
+func validateBPMNCallbackContractPayloadFields(payload map[string]interface{}, allowed map[string]struct{}) error {
+	if len(payload) > maxBPMNParticipantVariableEntries {
+		return fmt.Errorf("回调负载字段数量超过限制")
+	}
+	for field := range payload {
+		if _, ok := allowed[field]; !ok {
+			return fmt.Errorf("回调负载包含未声明字段")
+		}
+	}
+	return nil
+}
+
 func (e *CustomProcessEngine) callbackDescriptor(taskType, action, configRef string) bpmnCallbackDescriptor {
 	taskType = strings.TrimSpace(taskType)
 	if taskType == "" {
