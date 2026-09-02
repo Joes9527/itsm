@@ -41,7 +41,7 @@
 | `itsm-backend/handlers/service_request/service.go` | Catalog-derived Incident/Change sub-branches wired to Intake; `service_request_item` sub-branch deliberately left on its existing implementation (Task 13) |
 | `itsm-backend/service/bpmn/incident_handler.go` | `createIncident` callback wired to Intake with `reporter_id` as both actor and requester (Task 12) |
 | `itsm-backend/handlers/service_catalog/repository_impl.go`, `service.go`, `handler.go`, `dto/service_dto.go` | Stop deriving `target_class` from `itsm_type`; give catalog admins an actual API-level way to set it (it never existed before — `Service.Create` doesn't even have a parameter for it today) (Task 14) |
-| `itsm-frontend/src/lib/api/incident-api.ts`, `service-catalog-api.ts` (not `service-request-api.ts` — that file's `createServiceRequest` is not what the real Catalog request form calls), plus the two real submission pages/forms | Stable idempotency key generation per submission (Task 10) |
+| `itsm-frontend/src/lib/api/incident-api.ts`, `service-catalog-api.ts` (not `service-request-api.ts` — that file's `createServiceRequest` is not what the real Catalog request form calls), `IncidentManagement.tsx`, `useServiceCatalog.ts`, and the real submission pages/forms | Stable idempotency key generation per submission across every active caller (Task 10) |
 
 ---
 
@@ -1414,6 +1414,10 @@ git commit -m "feat(intake): add ChangeCreator, closing the professional-domain 
 - Modify: `itsm-frontend/src/lib/api/service-catalog-api.ts` (`ServiceCatalogApi.createServiceRequest` — not `service-request-api.ts`, see above)
 - Modify: `itsm-frontend/src/app/(main)/incidents/create/page.tsx` (real Incident creation form)
 - Modify: `itsm-frontend/src/app/(main)/service-catalog/request/[id]/page.tsx` (real Catalog request submission form)
+- Modify: `itsm-frontend/src/components/business/IncidentManagement.tsx` (active Incident API caller)
+- Modify: `itsm-frontend/src/lib/hooks/useServiceCatalog.ts` (React Query Catalog request mutation)
+- Modify: `itsm-frontend/src/lib/api/__tests__/incident-api.test.ts`
+- Modify: `itsm-frontend/src/lib/api/__tests__/service-catalog-api.test.ts`
 - Create: `itsm-frontend/src/lib/api/__tests__/idempotency-key.test.ts`
 - Create: `itsm-frontend/src/lib/utils/idempotencyKey.ts`
 
@@ -1534,7 +1538,25 @@ const idempotencyKeyRef = useRef<string>(generateIdempotencyKey());
 const created = await ServiceCatalogApi.createServiceRequest(payload, idempotencyKeyRef.current);
 ```
 
-- [ ] **Step 7: Add the component-level retry-reuse test**
+- [ ] **Step 7: Update the remaining active callers and API tests**
+
+`IncidentManagement.tsx` also calls `IncidentAPI.createIncident`; give its submit/retry owner a `useRef<string>(generateIdempotencyKey())` and pass that same key for the logical submission. Do not change the static API signature back to optional.
+
+`useCreateServiceRequestMutation` cannot retain `mutationFn: ServiceCatalogApi.createServiceRequest` after the API becomes binary. Define the mutation variable explicitly so the caller supplies a key generated at its submission boundary:
+
+```typescript
+type CreateServiceRequestMutationInput = {
+	request: CreateServiceRequestRequest;
+	idempotencyKey: string;
+};
+
+mutationFn: ({ request, idempotencyKey }: CreateServiceRequestMutationInput) =>
+	ServiceCatalogApi.createServiceRequest(request, idempotencyKey),
+```
+
+Update every `mutate`/`mutateAsync` caller of this hook to create one key per logical submission and retain it for an error retry. Update the Incident and Service Catalog API tests to pass a fixed key and assert that the HTTP request carries `Idempotency-Key`.
+
+- [ ] **Step 8: Add the component-level retry-reuse test**
 
 ```typescript
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -1566,7 +1588,7 @@ describe('IncidentCreatePage submission retry', () => {
 
 Adjust the label/button text selectors to match the real form's actual JSX (`role="button"` name and the title field's label) before finalizing — this test's assertions (call count, key reuse across calls) are the part that must not change; the selectors are the part that must match the real rendered form.
 
-- [ ] **Step 8: Run frontend tests and type-check**
+- [ ] **Step 9: Run frontend tests and type-check**
 
 ```bash
 cd itsm-frontend
@@ -1577,10 +1599,10 @@ npm run type-check
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 10: Commit**
 
 ```bash
-git add itsm-frontend/src/lib/utils/idempotencyKey.ts itsm-frontend/src/lib/api/incident-api.ts itsm-frontend/src/lib/api/service-catalog-api.ts itsm-frontend/src/lib/api/__tests__/idempotency-key.test.ts itsm-frontend/src/app/\(main\)/incidents/create/page.tsx itsm-frontend/src/app/\(main\)/incidents/create/__tests__ itsm-frontend/src/app/\(main\)/service-catalog/request/\[id\]/page.tsx
+git add itsm-frontend/src/lib/utils/idempotencyKey.ts itsm-frontend/src/lib/api/incident-api.ts itsm-frontend/src/lib/api/service-catalog-api.ts itsm-frontend/src/lib/api/__tests__/idempotency-key.test.ts itsm-frontend/src/lib/api/__tests__/incident-api.test.ts itsm-frontend/src/lib/api/__tests__/service-catalog-api.test.ts itsm-frontend/src/app/\(main\)/incidents/create/page.tsx itsm-frontend/src/app/\(main\)/incidents/create/__tests__ itsm-frontend/src/app/\(main\)/service-catalog/request/\[id\]/page.tsx itsm-frontend/src/components/business/IncidentManagement.tsx itsm-frontend/src/lib/hooks/useServiceCatalog.ts
 git commit -m "feat(frontend): generate and reuse a stable per-submission Idempotency-Key for the real incident and Catalog request creation forms"
 ```
 
@@ -2030,9 +2052,6 @@ In `Execute`'s switch (`incident_handler.go:66-85`), change the `create_incident
 
 ```go
 func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
-	if _, durable := BPMNCallbackExecutionKey(ctx); durable {
-		return nil, fmt.Errorf("持久化回调必须使用流程实例中的既有事件目标")
-	}
 	title, _ := variables["title"].(string)
 	if title == "" {
 		return nil, fmt.Errorf("事件标题不能为空")
@@ -2079,6 +2098,8 @@ func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, task *e
 // persisted execution identifier -- either the durable callback outbox's
 // execution key, or task.TaskID (ent/schema/process_task.go's Unique/NotEmpty
 // field, distinct from the reusable-across-instances task_definition_key).
+// A durable callback must proceed with its durable execution key: this is the
+// production redelivery path whose retry safety this function provides.
 // Fails closed rather than falling back to a non-unique or empty key: a
 // missing task_id here means this callback is not being invoked through the
 // real BPMN engine's persisted-task path, and creating an Incident anyway
@@ -2632,16 +2653,26 @@ git commit -m "fix(service-request): route Catalog-derived Incident and Change c
 ### Task 14: Retire `service_catalogs.itsm_type` Dependency
 
 **Files:**
-- Modify: `itsm-backend/handlers/service_catalog/repository_impl.go:20-40,105-125`
+- Create: `itsm-backend/migrations/024_service_catalog_target_class_authority.sql`, `_dev_reset.sql`, `_verify.sql`
+- Modify: `itsm-backend/migration/migrations.go`
+- Modify: `itsm-backend/ent/schema/servicecatalog.go` and regenerated `itsm-backend/ent/**`
+- Modify: `itsm-backend/dto/service_dto.go`
+- Modify: `itsm-backend/handlers/service_catalog/handler.go`, `service.go`, `entity.go`, `repository_impl.go:20-40,105-125,270`
 - Modify: `itsm-backend/handlers/service_catalog/repository_impl_test.go`
+- Modify: `itsm-backend/handlers/service_catalog/handler_test.go`, `service_test.go`
+- Modify: `itsm-frontend/src/lib/api/service-catalog-api.ts` and the catalog administration form(s) that create or update a catalog
 - Modify: `itsm-backend/cmd/backfill_servicecatalog_target_class/main.go` (confirm retirement eligibility)
 
 **Interfaces:**
 - Produces: `repository_impl.go`'s Create/Update writing `target_class` directly from the caller-supplied value, no longer computing it from `catalog.ITSMType`.
 
-This task must land **before** Task 2's migration `024` is applied against any real database (that migration drops the `itsm_type` column) — sequence commits accordingly even though this task is numbered after Task 2 in this plan for narrative flow; Task 2's migration file itself carries a comment noting this dependency.
+This task owns migration `024`; its code/schema deletion and migration registration must land in the same cutover commit before `024` is applied to any real database. No earlier task may register or apply `024`.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write failing repository, service, and HTTP contract tests**
+
+Add `targetClass` to both Catalog create/update DTO test payloads. Create requires it; update treats a missing value as "preserve the current value", while a supplied value must be one of `service_request_item`, `incident`, or `change_request`. Test create, update-to-change, invalid-value rejection, and preserving the existing value on an unrelated update. The Handler tests must assert the value reaches `Service.Create`/`Update`; service tests must assert it reaches the `ServiceCatalog` domain object passed to the repository.
+
+Then add the repository cases below.
 
 Follows this file's existing per-test `enttest.Open` pattern (see `TestEntRepository_Create_SyncsTargetClassFromITSMType`, which this task's Step 3 change supersedes — that test's whole premise, deriving `target_class` from `ITSMType`, goes away, so it must be replaced, not left alongside the new behavior) — the domain type constructed is `ServiceCatalog`, not a `Catalog`:
 
@@ -2684,7 +2715,21 @@ go test ./handlers/service_catalog -run 'TestEntRepository_Create_WritesTargetCl
 
 Expected: `TestEntRepository_Create_WritesTargetClassDirectlyNoITSMTypeDerivation` FAILs (current code silently derives `target_class` via `ComputeTargetClass(catalog.ITSMType)`, ignoring the caller-supplied value); `TestEntRepository_Create_RejectsMissingTargetClass` FAILs (current code never validates `target_class` is required, since it always computes a fallback).
 
-- [ ] **Step 3: Fix `Create` and `Update`**
+- [ ] **Step 3: Add the public `targetClass` write contract before making the repository strict**
+
+Add the following fields to the DTOs:
+
+```go
+// CreateServiceCatalogRequest
+TargetClass string `json:"targetClass" binding:"required,oneof=service_request_item incident change_request"`
+
+// UpdateServiceCatalogRequest
+TargetClass string `json:"targetClass,omitempty" binding:"omitempty,oneof=service_request_item incident change_request"`
+```
+
+Extend `Handler.Create` and `Service.Create` with `targetClass string`, assign it to the `ServiceCatalog` domain object, and thread it through every backend caller/test. Extend `Handler.Update` and `Service.Update` with the optional update value: load the current catalog and retain its `TargetClass` when the request omits it; otherwise validate and persist the supplied value. Update `service-catalog-api.ts` request types and the actual catalog-admin create/edit form controls so administrators can select all three supported values. Add frontend API tests that assert the field is serialized for create and update.
+
+- [ ] **Step 4: Fix `Create`, `Update`, and mapper reads**
 
 Replace both `SetTargetClass(ComputeTargetClass(catalog.ITSMType))` call sites with direct validation and use of `catalog.TargetClass`:
 
@@ -2696,9 +2741,13 @@ if catalog.TargetClass != "service_request_item" && catalog.TargetClass != "inci
 SetTargetClass(catalog.TargetClass)
 ```
 
-Delete `ComputeTargetClass` once both call sites no longer reference it — confirm with `rg ComputeTargetClass` that no other caller remains before deleting. Delete `TestEntRepository_Create_SyncsTargetClassFromITSMType` and `TestEntRepository_Update_SelfHealsTargetClassFromCurrentITSMType` (`repository_impl_test.go`) — both tests' entire premise (deriving/self-healing `target_class` from `ITSMType`) is exactly the behavior this step removes; they cannot pass once `ComputeTargetClass` is gone, and there is no dual-mode to keep them alive under.
+Delete `ComputeTargetClass` once both call sites no longer reference it — confirm with `rg ComputeTargetClass` that no other caller remains before deleting. Remove `ITSMType` from the domain mapper and schema, including the `toDomain` read of `e.ItsmType`; then run `go generate ./ent`. Delete `TestEntRepository_Create_SyncsTargetClassFromITSMType` and `TestEntRepository_Update_SelfHealsTargetClassFromCurrentITSMType` (`repository_impl_test.go`) — both tests' entire premise (deriving/self-healing `target_class` from `ITSMType`) is exactly the behavior this step removes; they cannot pass once `ComputeTargetClass` is gone, and there is no dual-mode to keep them alive under.
 
-- [ ] **Step 4: Confirm `cmd/backfill_servicecatalog_target_class` retirement**
+- [ ] **Step 5: Add and register migration `024` in the same cutover commit**
+
+Create and register `024_service_catalog_target_class_authority` immediately between registered `023` and `025`. Its apply SQL must backfill empty `target_class` values from the still-present `itsm_type`, fail when any resulting value is outside the three allowed classes, set `target_class NOT NULL`, add the CHECK constraint, and only then drop `itsm_type`. Add matching dev-reset and verify scripts. Extend `TestUnifiedIntakeMigrationsRegisteredInOrder` to assert `023 < 024 < 025`, and add a PostgreSQL migration test proving the backfill and column removal. This task commits the schema/code deletion and migration registration together; no earlier task may register `024`.
+
+- [ ] **Step 6: Confirm `cmd/backfill_servicecatalog_target_class` retirement**
 
 ```bash
 cd itsm-backend
@@ -2707,14 +2756,16 @@ rg -n "backfill_servicecatalog_target_class" --glob '*.go' .
 
 If the only references are the command's own `main.go`/tests, delete the command directory in this task (its job — backfilling `target_class` from `itsm_type` for pre-existing rows — is superseded by migration `024`'s own `UPDATE service_catalogs SET target_class = ...` statement, which covers the same backfill atomically). If other code still invokes it, leave it and record why in the commit message.
 
-- [ ] **Step 5: Run and commit**
+- [ ] **Step 7: Run and commit**
 
 ```bash
 cd itsm-backend
 go test ./handlers/service_catalog -count=1
+go test ./migration ./internal/bootstrap -count=1
+go generate ./ent
 go build ./...
-git add itsm-backend/handlers/service_catalog/repository_impl.go itsm-backend/handlers/service_catalog/repository_impl_test.go
-git commit -m "fix(service-catalog): stop deriving target_class from itsm_type, require it explicitly, ahead of migration 024's column drop"
+git add itsm-backend/migration/migrations.go itsm-backend/migrations/024_* itsm-backend/ent itsm-backend/dto/service_dto.go itsm-backend/handlers/service_catalog itsm-backend/cmd/backfill_servicecatalog_target_class itsm-frontend/src/lib/api/service-catalog-api.ts itsm-frontend/src/app/\(main\)/service-catalog
+git commit -m "fix(service-catalog): make targetClass an explicit catalog API contract and retire itsm_type with migration 024"
 ```
 
 ---
