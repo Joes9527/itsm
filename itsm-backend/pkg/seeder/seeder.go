@@ -1505,6 +1505,7 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 		{Name: "MSP管理", Path: "/msp", Icon: "Shield", PermissionCode: "msp:read", SortOrder: 130},
 
 		// 管理菜单
+		{Name: "系统概览", Path: "/admin/overview", Icon: "LayoutDashboard", PermissionCode: "system:read", SortOrder: 190},
 		{Name: "工作流", Path: "/workflow", Icon: "Workflow", PermissionCode: "workflow:read", SortOrder: 200},
 		{Name: "用户管理", Path: "/admin/users", Icon: "Users", PermissionCode: "user:read", SortOrder: 210},
 		{Name: "角色管理", Path: "/admin/roles", Icon: "Shield", PermissionCode: "role:read", SortOrder: 220},
@@ -1595,7 +1596,16 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 		}
 	}
 
-	_, err := s.client.Menu.Update().
+	// /admin 是系统管理路由命名空间，不是概览页。seedMenus 已确保规范菜单存在，
+	// 因此只删除旧 SQL 产生的同名重复记录，不触碰可能作为分组节点的其他 /admin 菜单。
+	_, err := s.client.Menu.Delete().
+		Where(menu.NameEQ("系统概览"), menu.PathEQ("/admin"), menu.TenantIDEQ(t.ID)).
+		Exec(ctx)
+	if err != nil {
+		s.sugar.Warnw("remove legacy admin overview menu failed", "error", err)
+	}
+
+	_, err = s.client.Menu.Update().
 		Where(menu.Path("/admin/groups"), menu.TenantIDEQ(t.ID)).
 		SetPermissionCode("groups:read").
 		Save(ctx)

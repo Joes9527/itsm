@@ -48,21 +48,20 @@ test.describe('ITSM Screenshots', () => {
     });
   });
 
-  test('capture dashboard', async ({ page }) => {
+  test('capture admin overview', async ({ page }) => {
     // Login first
     await page.goto(`${CONFIG.baseURL}/login`);
     await page.waitForLoadState('networkidle');
     await page.fill('input[type="text"], input[name="username"]', CONFIG.username);
     await page.fill('input[type="password"]', CONFIG.password);
     await page.click('button[type="submit"]');
-    await page.waitForURL('**/dashboard', { timeout: 10000 });
+    await page.waitForURL('**/admin/overview', { timeout: 10000 });
 
-    // Capture dashboard
-    await page.goto(`${CONFIG.baseURL}/dashboard`);
+    await page.goto(`${CONFIG.baseURL}/admin/overview`);
     await page.waitForLoadState('networkidle');
     await page.waitForTimeout(2000);
     await page.screenshot({
-      path: path.join(CONFIG.outputDir, 'dashboard.png'),
+      path: path.join(CONFIG.outputDir, 'admin-overview.png'),
       fullPage: true
     });
   });

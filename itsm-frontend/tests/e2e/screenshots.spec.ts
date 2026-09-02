@@ -21,7 +21,7 @@ async function loginAndScreenshot(page: any, pagePath: string, name: string) {
   await page.click('button[type="submit"]');
 
   // 等待跳转
-  await page.waitForURL(/\/(dashboard|tickets)/, { timeout: 20000 });
+  await page.waitForURL(/\/admin\/overview$/, { timeout: 20000 });
   await page.waitForTimeout(2000);
 
   // 访问目标页面
@@ -46,8 +46,8 @@ test.describe('Screenshots - 页面截图', () => {
     });
   });
 
-  test('02 - dashboard', async ({ page }) => {
-    await loginAndScreenshot(page, '/dashboard', 'dashboard');
+  test('02 - admin overview', async ({ page }) => {
+    await loginAndScreenshot(page, '/admin/overview', 'admin-overview');
   });
 
   test('03 - tickets', async ({ page }) => {

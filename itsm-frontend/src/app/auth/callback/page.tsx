@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Spin } from 'antd';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { httpClient } from '@/lib/api/http-client';
-import { getDefaultRoute } from '@/lib/utils/role-routes';
+import { getDefaultHomePath } from '@/config/persona/persona-config';
 
 function CallbackHandler() {
   const router = useRouter();
@@ -38,7 +38,7 @@ function CallbackHandler() {
         updatedAt: new Date().toISOString(),
         permissions: ['*'],
       } as any, token);
-      router.replace(getDefaultRoute(role));
+      router.replace(getDefaultHomePath(role));
     } catch (e) {
       console.error('Azure callback login failed:', e);
       router.replace('/login?error=azure_failed');

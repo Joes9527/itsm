@@ -27,7 +27,7 @@ test.describe('导航测试 - 需要登录', () => {
     await inputs.nth(0).fill('admin');
     await inputs.nth(1).fill('admin123');
     await page.click('button[type="submit"]');
-    await page.waitForURL(/\/(dashboard|tickets|incidents)/, { timeout: 20000 });
+    await page.waitForURL(/\/admin\/overview$/, { timeout: 20000 });
   });
 
   test('should have sidebar navigation menu', async ({ page }) => {
@@ -45,15 +45,14 @@ test.describe('导航测试 - 需要登录', () => {
     await expect(page.locator('h1, h2')).toBeVisible();
   });
 
-  test('should navigate to dashboard', async ({ page }) => {
-    // 直接通过 URL 导航到仪表盘页面
-    await page.goto('/dashboard');
-    await page.waitForURL(/\/dashboard/);
+  test('should navigate to the admin overview', async ({ page }) => {
+    await page.goto('/admin/overview');
+    await page.waitForURL(/\/admin\/overview/);
     await expect(page.locator('h1, h2')).toBeVisible();
   });
 
   test('should have proper page title', async ({ page }) => {
-    await page.goto('/dashboard');
+    await page.goto('/admin/overview');
     await page.waitForLoadState('networkidle');
 
     // 检查页面有标题
@@ -71,12 +70,12 @@ test.describe('响应式设计 - 需要登录', () => {
     await inputs.nth(0).fill('admin');
     await inputs.nth(1).fill('admin123');
     await page.click('button[type="submit"]');
-    await page.waitForURL(/\/(dashboard|tickets|incidents)/, { timeout: 20000 });
+    await page.waitForURL(/\/admin\/overview$/, { timeout: 20000 });
   });
 
   test('should display correctly on desktop', async ({ page }) => {
     await page.setViewportSize({ width: 1920, height: 1080 });
-    await page.goto('/dashboard');
+    await page.goto('/admin/overview');
     await page.waitForLoadState('networkidle');
 
     // 桌面端应该显示完整侧边栏
@@ -86,7 +85,7 @@ test.describe('响应式设计 - 需要登录', () => {
 
   test('should display correctly on tablet', async ({ page }) => {
     await page.setViewportSize({ width: 768, height: 1024 });
-    await page.goto('/dashboard');
+    await page.goto('/admin/overview');
     await page.waitForLoadState('networkidle');
 
     // 平板端应该可以折叠侧边栏

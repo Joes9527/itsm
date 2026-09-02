@@ -212,7 +212,7 @@ SELECT '新建发布', '/releases/new', 'Plus', id, 'release:write', 212, 1, tru
 -- 16. 子菜单 - 系统管理
 -- ============================================
 INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, tenant_id, is_visible, is_enabled)
-SELECT '系统概览', '/admin', 'LayoutDashboard', id, 'admin:write', 301, 1, true, true FROM menus WHERE path = '/admin';
+SELECT '系统概览', '/admin/overview', 'LayoutDashboard', id, 'system:read', 301, 1, true, true FROM menus WHERE path = '/admin';
 
 INSERT INTO menus (name, path, icon, parent_id, permission_code, sort_order, tenant_id, is_visible, is_enabled)
 SELECT '用户管理', '/admin/users', 'Users', id, 'user:read', 302, 1, true, true FROM menus WHERE path = '/admin';

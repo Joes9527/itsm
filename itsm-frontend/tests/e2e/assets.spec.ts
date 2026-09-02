@@ -15,7 +15,7 @@ test.describe('Asset Management - 资产管理', () => {
     await inputs.nth(0).fill('admin');
     await inputs.nth(1).fill('admin123');
     await page.click('button[type="submit"]');
-    await page.waitForURL(/\/(dashboard|tickets|incidents)/, { timeout: 20000 });
+    await page.waitForURL(/\/admin\/overview$/, { timeout: 20000 });
   });
 
   test.describe('Asset List - 资产列表', () => {

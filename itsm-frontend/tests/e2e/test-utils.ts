@@ -22,7 +22,7 @@ export async function loginAsAdmin(page: Page) {
   await inputs.nth(1).fill('admin123');
 
   await page.click('button[type="submit"]');
-  await page.waitForURL(/\/(dashboard|tickets|incidents)/, { timeout: 20000 });
+  await page.waitForURL(/\/admin\/overview$/, { timeout: 20000 });
 }
 
 /**

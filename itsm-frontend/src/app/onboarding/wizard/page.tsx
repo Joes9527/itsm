@@ -25,6 +25,8 @@ import {
   Alert,
 } from 'antd';
 import { LayoutGrid, CheckCircle, PlusCircle, Database, Rocket, Bot } from 'lucide-react';
+import { getDefaultHomePath } from '@/config/persona/persona-config';
+import { useAuthStore } from '@/lib/store/auth-store';
 
 const { Title, Paragraph } = Typography;
 
@@ -98,7 +100,11 @@ export default function FirstRunWizard({ initialStep, onFinish }: WizardProps) {
           {current === 'catalog' && <CatalogStep />}
           {current === 'cmdb' && <CMDBStep />}
           {current === 'ai-triage' && <AITriageStep />}
-          {current === 'done' && <DoneStep onEnterApp={() => router.push('/dashboard')} />}
+          {current === 'done' && (
+            <DoneStep
+              onEnterApp={() => router.push(getDefaultHomePath(useAuthStore.getState().user?.role))}
+            />
+          )}
         </div>
 
         {current !== 'done' && (

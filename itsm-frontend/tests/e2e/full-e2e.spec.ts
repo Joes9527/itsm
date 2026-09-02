@@ -17,11 +17,11 @@ async function login(page: any) {
   await inputs.nth(1).fill('admin123');
   await page.click('button[type="submit"]');
 
-  // 等待页面跳转或 dashboard 出现
+  // 等待管理员规范落点出现
   await page.waitForLoadState('networkidle');
   await page.waitForTimeout(1000);
 
-  await page.waitForURL(/\/(dashboard|tickets|incidents)/, { timeout: 20000 }).catch(() => {
+  await page.waitForURL(/\/admin\/overview$/, { timeout: 20000 }).catch(() => {
     // 如果超时，检查是否仍在登录页
     if (page.url().includes('/login')) {
       throw new Error('登录失败，仍在登录页');
@@ -54,11 +54,11 @@ test.describe('ITSM 全流程测试 - 需要登录', () => {
     await login(page);
   });
 
-  test('should login successfully and redirect to dashboard', async ({ page }) => {
+  test('should login successfully and redirect to the admin overview', async ({ page }) => {
     // 验证已登录（不在登录页）
     await expect(page).not.toHaveURL(/\/login/);
     // 验证 URL 包含主要页面路径
-    await expect(page).toHaveURL(/\/(dashboard|tickets|incidents)/);
+    await expect(page).toHaveURL(/\/admin\/overview$/);
   });
 
   test('should display dashboard with menu', async ({ page }) => {
@@ -101,8 +101,8 @@ test.describe('ITSM 全流程测试 - 需要登录', () => {
 
   test('should navigate to admin page', async ({ page }) => {
     // 直接导航到管理页面
-    await page.goto('/admin');
-    await page.waitForURL(/\/admin/);
+    await page.goto('/admin/overview');
+    await page.waitForURL(/\/admin\/overview/);
     await expect(page.locator('h1, h2').first()).toBeVisible();
   });
 });

@@ -159,7 +159,7 @@ test.describe('Ticket Lifecycle - Admin Manages Tickets', () => {
       await inputs.nth(1).fill(TEST_USERS.admin.password);
 
       await page.click('button[type="submit"]');
-      await page.waitForURL(/\/(dashboard|tickets|incidents|problems|changes)/, { timeout: 30000 });
+      await page.waitForURL(/\/admin\/overview$/, { timeout: 30000 });
     });
 
     // Step 2: Navigate to tickets
@@ -225,7 +225,7 @@ test.describe('Ticket Search and Filter', () => {
     await inputs.nth(1).fill(TEST_USERS.admin.password);
 
     await page.click('button[type="submit"]');
-    await page.waitForURL(/\/(dashboard|tickets)/, { timeout: 20000 });
+    await page.waitForURL(/\/admin\/overview$/, { timeout: 20000 });
   });
 
   test('should search tickets by keyword', async ({ page }) => {

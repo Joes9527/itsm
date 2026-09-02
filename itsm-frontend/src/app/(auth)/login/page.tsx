@@ -21,7 +21,7 @@ import { antdTheme } from '@/lib/antd-theme';
 import { AuthService } from '@/lib/services/auth-service';
 import { logger } from '@/lib/env';
 import { useAuthStoreHydration, useAuthStore } from '@/lib/store/auth-store';
-import { getDefaultRoute } from '@/lib/utils/role-routes';
+import { getDefaultHomePath } from '@/config/persona/persona-config';
 
 const { Text, Title } = Typography;
 
@@ -76,7 +76,7 @@ function LoginForm() {
 
       if (success) {
         logger.info('认证信息已存储，准备跳转');
-        const target = redirectPath || getDefaultRoute(useAuthStore.getState().user?.role || 'end_user');
+        const target = redirectPath || getDefaultHomePath(useAuthStore.getState().user?.role);
         router.push(target);
         logger.info('已执行跳转命令');
       } else {

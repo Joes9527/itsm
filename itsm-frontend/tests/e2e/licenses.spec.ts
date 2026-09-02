@@ -15,7 +15,7 @@ test.describe('License/Certificate Management - 许可证管理', () => {
     await inputs.nth(0).fill('admin');
     await inputs.nth(1).fill('admin123');
     await page.click('button[type="submit"]');
-    await page.waitForURL(/\/(dashboard|tickets|incidents)/, { timeout: 20000 });
+    await page.waitForURL(/\/admin\/overview$/, { timeout: 20000 });
   });
 
   test.describe('License List - 许可证列表', () => {

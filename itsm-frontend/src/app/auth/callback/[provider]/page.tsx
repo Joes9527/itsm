@@ -4,6 +4,8 @@ import React, { useEffect, useState } from 'react';
 import { Spin, message } from 'antd';
 import { useParams, useRouter } from 'next/navigation';
 import { AuthService } from '@/lib/services/auth-service';
+import { getDefaultHomePath } from '@/config/persona/persona-config';
+import { useAuthStore } from '@/lib/store/auth-store';
 
 export default function AuthCallbackPage() {
   const params = useParams();
@@ -27,8 +29,7 @@ export default function AuthCallbackPage() {
         await AuthService.thirdPartyLogin(provider, code, state);
 
         message.success('登录成功');
-        // 跳转到首页
-        router.push('/dashboard');
+        router.replace(getDefaultHomePath(useAuthStore.getState().user?.role));
       } catch (err) {
         console.error('第三方登录失败:', err);
         setError(err instanceof Error ? err.message : '登录失败，请稍后重试');

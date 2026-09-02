@@ -465,16 +465,16 @@ export function getMenuConfig(): MenuConfig {
         key: '/admin',
         icon: getIconByName('Settings')!,
         label: '系统管理',
-        path: '/admin',
-        permission: 'admin:write',
+        path: '/admin/overview',
+        permission: 'system:read',
         description: '系统管理',
         children: [
           {
-            key: '/admin',
+            key: '/admin/overview',
             icon: getIconByName('LayoutDashboard')!,
             label: '系统概览',
-            path: '/admin',
-            permission: 'admin:write',
+            path: '/admin/overview',
+            permission: 'system:read',
           },
           {
             key: '/admin/users',

@@ -23,7 +23,7 @@ test.describe('Performance - 浏览器端关键指标', () => {
 
     const start = Date.now();
     await page.click('button[type="submit"]');
-    await page.waitForURL(/\/(dashboard|tickets|incidents|problems|changes)/, { timeout: 30000 });
+    await page.waitForURL(/\/admin\/overview$/, { timeout: 30000 });
     await page.waitForLoadState('networkidle');
     const elapsed = Date.now() - start;
 

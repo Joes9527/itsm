@@ -5,11 +5,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Shield, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { Typography, Card, ConfigProvider, message, Flex } from 'antd';
 import { antdTheme } from '@/lib/antd-theme';
-import { AuthService } from '@/lib/services/auth-service';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { logger } from '@/lib/env';
 import type { Tenant } from '@/lib/api/api-config';
 import { API_BASE_URL } from '@/lib/api/api-config';
+import { getDefaultHomePath } from '@/config/persona/persona-config';
 
 const { Text, Title } = Typography;
 
@@ -114,9 +114,8 @@ function SSOCallbackContent() {
         setStatus('success');
         message.success('SSO登录成功');
 
-        // 跳转到仪表盘
         setTimeout(() => {
-          router.push('/dashboard');
+          router.replace(getDefaultHomePath(user.role));
         }, 1500);
       } catch (err) {
         logger.error('SSO回调处理失败:', err);

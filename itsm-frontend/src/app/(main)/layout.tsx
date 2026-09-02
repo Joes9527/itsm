@@ -14,7 +14,7 @@ import { useLayoutStore } from '@/lib/store/layout-store';
 import PageTransition from '@/components/common/PageTransition';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { usePersonaStore } from '@/lib/store/persona-store';
-import { PERSONAS, getRolePersonaConfig, getPersonaByPath } from '@/config/persona/persona-config';
+import { getDefaultHomePath, getPersonaByPath } from '@/config/persona/persona-config';
 import type { Tenant } from '@/lib/api/api-config';
 
 const { Content } = Layout;
@@ -113,16 +113,9 @@ export default function MainLayout({
       // 初始化 Persona——带上 userId，跨账号登录时才能正确重置，见 persona-store.ts 注释。
       initPersonaByRole(roleCode, Number(userInfo?.id || 0));
 
-      // 如果用户直接访问了根路由或 /dashboard，重定向至该角色的默认工作台。
-      // 直接查 PERSONAS[defaultPersona].homePath，不要在这里逐个 persona 手写
-      // if/else 分支——之前漏了 'admin' 分支，导致 sysadmin/super_admin 等角色
-      // 登录后一直停在 /dashboard，不会像其它角色一样跳到自己的默认落地页。
+      // 兼容用户手动访问根路由或历史 /dashboard 入口；角色落点由 Persona 配置统一解析。
       if (pathname === '/' || pathname === '/dashboard') {
-        const roleConf = getRolePersonaConfig(roleCode);
-        const homePath = PERSONAS[roleConf.defaultPersona]?.homePath;
-        if (homePath) {
-          router.replace(homePath);
-        }
+        router.replace(getDefaultHomePath(roleCode));
       }
 
       setIsAuthenticated(true);

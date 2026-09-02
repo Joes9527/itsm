@@ -20,7 +20,7 @@ test.describe('Admin Role - Dashboard', () => {
     await inputs.nth(1).fill(TEST_USERS.admin.password);
 
     await page.click('button[type="submit"]');
-    await page.waitForURL(/\/(dashboard|tickets|incidents|problems|changes)/, { timeout: 30000 });
+    await page.waitForURL(/\/admin\/overview$/, { timeout: 30000 });
   });
 
   test('should access dashboard', async ({ page }) => {
@@ -42,7 +42,7 @@ test.describe('Admin Role - Dashboard', () => {
   });
 
   test('should access admin panel', async ({ page }) => {
-    await page.goto('/admin');
+    await page.goto('/admin/overview');
     await page.waitForLoadState('networkidle');
 
     // Should display admin panel content (or redirect to login if not admin)
@@ -93,7 +93,7 @@ test.describe('Admin Role - Knowledge Base Management', () => {
     await inputs.nth(1).fill(TEST_USERS.admin.password);
 
     await page.click('button[type="submit"]');
-    await page.waitForURL(/\/(dashboard|tickets|incidents|problems|changes)/, { timeout: 30000 });
+    await page.waitForURL(/\/admin\/overview$/, { timeout: 30000 });
   });
 
   test('should access knowledge base', async ({ page }) => {
@@ -126,7 +126,7 @@ test.describe('Admin Role - ITAM Features', () => {
     await inputs.nth(1).fill(TEST_USERS.admin.password);
 
     await page.click('button[type="submit"]');
-    await page.waitForURL(/\/(dashboard|tickets|incidents|problems|changes)/, { timeout: 30000 });
+    await page.waitForURL(/\/admin\/overview$/, { timeout: 30000 });
   });
 
   test('should access CMDB', async ({ page }) => {
