@@ -134,15 +134,17 @@ Phase 2-4 只在本文档中确定边界和依赖，不在此展开实施细节�
 
 Phase 1 不能只切 HTTP 的 `/incidents`、`/service-requests`。已核实的完整入口清单：
 
+**核实澄清（写作计划阶段发现）**：`POST /service-requests` 只有一个实现函数——`Service.Create`（`handlers/service_request/service.go:72`，被 `Handler.Create` 调用），它在内部按 `catalog.target_class` 分三路：`incident`、`change_request` 走下面两行列出的分流分支，`service_request_item` 走同一函数里另一段尚未搬进 `ServiceRequestItemCreator` 的富校验逻辑（审批链解析、动态必填字段校验、云资源关联 CI）。下表"Phase 1 处理方式"只收敛 `incident`/`change_request` 两个分支；`service_request_item` 分支保留现有实现不动，是 Phase 1 明确排除的范围，不是遗漏——完整迁移它需要先把这些富校验逻辑搬进 Intake，工作量和风险都显著更大，留给后续阶段。
+
 | 入口 | 现状 | Phase 1 处理方式 |
 |---|---|---|
 | `POST /incidents`（HTTP） | 直接调用 `IncidentService.CreateIncident` | 改为经 `CreateWorkItemCommand` |
-| `POST /service-requests`（HTTP） | 直接调用 Service Request 创建逻辑 | 改为经 `CreateWorkItemCommand` |
+| `POST /service-requests`（HTTP，仅 `target_class=incident`/`change_request` 两个分支） | `Service.Create` 内部分流：`isIncidentCatalog` 判真调用 `IncidentService.CreateIncident`；`change_request` 落入通用分支构造 `ServiceRequest` 扩展 | 改为经 `CreateWorkItemCommand`；**`target_class=service_request_item` 分支保留现状不变**，不在 Phase 1 范围内 |
 | `service/bpmn/incident_handler.go:111`（BPMN 内部触发） | `createIncident` 回调把 BPMN 变量里的 `reporter_id` 直接作为 `CreateIncident` 的 `userID`——即以这个真实用户身份创建，不是系统账号代替谁 | 改为经 `CreateWorkItemCommand`，`Identity.ActorID` 与 `Identity.RequesterID` **都使用 `reporter_id`**（与现状语义一致，不引入 on-behalf-of 权限模型，`Resolver` 的 `ActorID == RequesterID` 规则不变）；`idempotencyKey` 按 5.4 第 3 点从触发上下文派生 |
 | `handlers/service_request/service.go:531`（Catalog 派生的 Incident） | 经由 Service Request service 内部创建 Incident | 同样改为经 `CreateWorkItemCommand`，`recordClass` 由 Catalog 的 `target_class` 决定 |
 | `handlers/service_request/service.go:172`（Catalog 派生的 Change，`target_class=change_request`） | 构造 `ServiceRequest` 扩展并打 `type="change"` 标签，不是真正的 Change 记录 | 改为经 `CreateWorkItemCommand`，路由到新的 Change `ProfessionalCreator`（见 5.3），创建真正的 `ent.Change` 扩展 |
 
-任何在实施过程中发现的、本清单之外的创建入口，必须先补充到本节再处理，不允许实施中临时决定"这个先不管"。
+任何在实施过程中发现的、本清单之外的创建入口，必须先补充到本节再处理，不允许实施中临时决定"这个先不管"（`service_request_item` 分支是本节已经显式记录、经用户确认的排除项，不属于这条纪律约束的"临时决定"）。
 
 ### 5.6 验收标准
 
@@ -150,8 +152,8 @@ Phase 1 不能只切 HTTP 的 `/incidents`、`/service-requests`。已核实的�
 2. 迁移 `023`/`024`/`025` 在空白 PostgreSQL 上可顺序应用；`024` 的 `service_requests`/`service_catalogs` 变更通过真实数据验证；`itsm_type` 列被删除，`target_class` 为 NOT NULL 且有 CHECK 约束；`handlers/service_catalog/repository_impl.go` 不再从 `itsm_type` 派生 `target_class`。
 3. Incident 创建的优先级和初始状态与现有 `IncidentService` 完全一致（同输入同输出，有回归测试覆盖）；`rg` 确认 `highestLevel`/硬编码 `"open"` 状态字符串在 Intake 代码里零命中；`dto.CreateIncidentRequest` 的全部字段（含 `assigneeId`/`category`/`subcategory`/`source`/`impactAnalysis`/`metadata`）按 5.3 的规则表逐一有测试覆盖，不是只测 `severity`/`impact`/`urgency`。
 4. Service Request 自定义字段创建后可通过现有详情接口读取（`entity_type="ticket"` 路径），有针对性的 HTTP 回归测试覆盖"创建 → 幂等重放 → 详情读取"全链路。
-5. `Idempotency-Key` 在所有创建入口（HTTP 与内部调用）强制生效，无缺失时静默兜底的路径；覆盖缺失 key、同 key 重放、同 key 不同 body 冲突、前端重试复用同 key 四类测试。
-6. 5.5 列出的全部创建入口都统一到 `CreateWorkItemCommand`；`rg` 确认没有遗留的、绕过该入口的领域创建调用点；`service/bpmn/incident_handler.go` 改造后有测试证明 `ActorID`/`RequesterID` 均取自 `reporter_id`。
+5. `Idempotency-Key` 在所有走 Intake 的创建入口（HTTP 与内部调用）强制生效，无缺失时静默兜底的路径；覆盖缺失 key、同 key 重放、同 key 不同 body 冲突、前端重试复用同 key 四类测试。`POST /service-requests` 的 `service_request_item` 分支不经过 Intake，本条不适用于它，其现状契约（不要求 `Idempotency-Key`）保持不变。
+6. 5.5 列出的、真正收敛到 Intake 的创建入口（`/incidents`、`/service-requests` 的 `incident`/`change_request` 两个分支、BPMN `createIncident`）都统一到 `CreateWorkItemCommand`；`rg` 确认没有遗留的、绕过该入口的领域创建调用点（`service_request_item` 分支除外——它是本文档明确排除、留给后续阶段的范围，不算"遗留绕过"）；`service/bpmn/incident_handler.go` 改造后有测试证明 `ActorID`/`RequesterID` 均取自 `reporter_id`。
 7. `target_class=change_request` 的 Catalog 项创建出真正的 `ent.Change` 扩展记录，不再是套壳 `ServiceRequest`；`resolver.go` 的白名单包含全部三个 `recordClass`。
 8. Unified Intake 原有的单元测试、PostgreSQL 集成测试（含并发/幂等/回滚）、真实 HTTP E2E 全部在归并后的代码上重新跑通，不是复用旧证据。
 9. `go test ./... -count=1`、`go build ./...`、前端 `tsc --noEmit` 全部通过。
@@ -172,6 +174,8 @@ Phase 1 不能只切 HTTP 的 `/incidents`、`/service-requests`。已核实的�
 | SLA 绑定 | 零匹配，和 W0 原始判断一致——这是 Phase 2 唯一需要真正新增的能力 | Phase 2 范围收窄为：在 `handlers/problem/service.go` `Create` 的现有事务内增加 SLA 策略解析与 `tickets.sla_definition_id` 写入，复用 Phase 1 为 Incident/Service Request/Change 建好的解析逻辑 |
 
 **Phase 2 待决策，留到其启动前的 brainstorming**：Problem 是否需要正式注册进 Intake 的 `CreateWorkItemCommand`/`ProfessionalCreator` Registry（像 Incident/Service Request/Change 那样），还是只在其现有独立创建路径上补 SLA、不接入幂等/身份交换这套机制——因为 Problem 目前没有 KAF 对话创建、没有多渠道创建的已知需求，接入 Intake 的收益不如 Incident/Service Request/Change 明确。
+
+**Phase 1 遗留的 `service_request_item` 收敛（写计划阶段发现，未编号，需其自身的 brainstorming 才能排期）**：`POST /service-requests` 的 `target_class=service_request_item` 分支（`Service.Create` 的通用逻辑）在 Phase 1 里被明确排除，理由见 5.5 的核实澄清——它还有审批链解析、动态必填字段校验、云资源关联 CI 三块逻辑没有搬进已经存在的 `ServiceRequestItemCreator`（`handlers/intake/service_request_creator.go`，其中 `ApprovalSnapshot` 字段已经定义但从未被赋值）。这不是 Phase 2/3/4 里任何一个已排期阶段的范围，是它们之外一块独立的、需要单独评估工作量和风险的收敛工作，记录在此避免被后续规划遗漏。
 
 - **Phase 2**：`ProfessionalCreator` 接口对 Problem 实现一次（Change 已并入 Phase 1，见 5.3）；SLA 绑定复用 Phase 1 为 Incident/Service Request/Change 建好的解析逻辑。不扩展到 Catalog Task/Known Error（沿用 Unified Intake 自己的非目标边界）。
 - **Phase 3**：新增 KAF 命名空间（`acp/itsm_delegate/` 或职责更清晰的等价划分，避免与现有 `acp/itsm/`——遗留紫羚系统客户端——混淆），实现身份交换 + `CreateWorkItemCommand` 调用；不改动已验收的委派/执行协议。
