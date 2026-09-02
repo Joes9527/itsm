@@ -392,6 +392,18 @@ func (f EngineerSkillFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Valu
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.EngineerSkillMutation", m)
 }
 
+// The ExternalIdentityFunc type is an adapter to allow the use of ordinary
+// function as ExternalIdentity mutator.
+type ExternalIdentityFunc func(context.Context, *ent.ExternalIdentityMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ExternalIdentityFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ExternalIdentityMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ExternalIdentityMutation", m)
+}
+
 // The FeishuTicketSyncFunc type is an adapter to allow the use of ordinary
 // function as FeishuTicketSync mutator.
 type FeishuTicketSyncFunc func(context.Context, *ent.FeishuTicketSyncMutation) (ent.Value, error)
@@ -522,6 +534,30 @@ func (f IncidentRuleExecutionFunc) Mutate(ctx context.Context, m ent.Mutation) (
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IncidentRuleExecutionMutation", m)
+}
+
+// The IntakeRequestFunc type is an adapter to allow the use of ordinary
+// function as IntakeRequest mutator.
+type IntakeRequestFunc func(context.Context, *ent.IntakeRequestMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IntakeRequestFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IntakeRequestMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IntakeRequestMutation", m)
+}
+
+// The IntakeResolutionSnapshotFunc type is an adapter to allow the use of ordinary
+// function as IntakeResolutionSnapshot mutator.
+type IntakeResolutionSnapshotFunc func(context.Context, *ent.IntakeResolutionSnapshotMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IntakeResolutionSnapshotFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IntakeResolutionSnapshotMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IntakeResolutionSnapshotMutation", m)
 }
 
 // The ItemVersionFunc type is an adapter to allow the use of ordinary

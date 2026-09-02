@@ -102,6 +102,9 @@ type EndpointACL func(*sql.Selector)
 // EngineerSkill is the predicate function for engineerskill builders.
 type EngineerSkill func(*sql.Selector)
 
+// ExternalIdentity is the predicate function for externalidentity builders.
+type ExternalIdentity func(*sql.Selector)
+
 // FeishuTicketSync is the predicate function for feishuticketsync builders.
 type FeishuTicketSync func(*sql.Selector)
 
@@ -134,6 +137,12 @@ type IncidentRule func(*sql.Selector)
 
 // IncidentRuleExecution is the predicate function for incidentruleexecution builders.
 type IncidentRuleExecution func(*sql.Selector)
+
+// IntakeRequest is the predicate function for intakerequest builders.
+type IntakeRequest func(*sql.Selector)
+
+// IntakeResolutionSnapshot is the predicate function for intakeresolutionsnapshot builders.
+type IntakeResolutionSnapshot func(*sql.Selector)
 
 // ItemVersion is the predicate function for itemversion builders.
 type ItemVersion func(*sql.Selector)

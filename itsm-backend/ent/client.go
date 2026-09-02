@@ -43,6 +43,7 @@ import (
 	"itsm-backend/ent/domainconfig"
 	"itsm-backend/ent/endpointacl"
 	"itsm-backend/ent/engineerskill"
+	"itsm-backend/ent/externalidentity"
 	"itsm-backend/ent/feishuticketsync"
 	"itsm-backend/ent/fielddefinition"
 	"itsm-backend/ent/fieldvalue"
@@ -54,6 +55,8 @@ import (
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/incidentrule"
 	"itsm-backend/ent/incidentruleexecution"
+	"itsm-backend/ent/intakerequest"
+	"itsm-backend/ent/intakeresolutionsnapshot"
 	"itsm-backend/ent/itemversion"
 	"itsm-backend/ent/kaftaskactionledger"
 	"itsm-backend/ent/kaftaskcompletionreceipt"
@@ -203,6 +206,8 @@ type Client struct {
 	EndpointACL *EndpointACLClient
 	// EngineerSkill is the client for interacting with the EngineerSkill builders.
 	EngineerSkill *EngineerSkillClient
+	// ExternalIdentity is the client for interacting with the ExternalIdentity builders.
+	ExternalIdentity *ExternalIdentityClient
 	// FeishuTicketSync is the client for interacting with the FeishuTicketSync builders.
 	FeishuTicketSync *FeishuTicketSyncClient
 	// FieldDefinition is the client for interacting with the FieldDefinition builders.
@@ -225,6 +230,10 @@ type Client struct {
 	IncidentRule *IncidentRuleClient
 	// IncidentRuleExecution is the client for interacting with the IncidentRuleExecution builders.
 	IncidentRuleExecution *IncidentRuleExecutionClient
+	// IntakeRequest is the client for interacting with the IntakeRequest builders.
+	IntakeRequest *IntakeRequestClient
+	// IntakeResolutionSnapshot is the client for interacting with the IntakeResolutionSnapshot builders.
+	IntakeResolutionSnapshot *IntakeResolutionSnapshotClient
 	// ItemVersion is the client for interacting with the ItemVersion builders.
 	ItemVersion *ItemVersionClient
 	// KafTaskActionLedger is the client for interacting with the KafTaskActionLedger builders.
@@ -414,6 +423,7 @@ func (c *Client) init() {
 	c.DomainConfig = NewDomainConfigClient(c.config)
 	c.EndpointACL = NewEndpointACLClient(c.config)
 	c.EngineerSkill = NewEngineerSkillClient(c.config)
+	c.ExternalIdentity = NewExternalIdentityClient(c.config)
 	c.FeishuTicketSync = NewFeishuTicketSyncClient(c.config)
 	c.FieldDefinition = NewFieldDefinitionClient(c.config)
 	c.FieldValue = NewFieldValueClient(c.config)
@@ -425,6 +435,8 @@ func (c *Client) init() {
 	c.IncidentMetric = NewIncidentMetricClient(c.config)
 	c.IncidentRule = NewIncidentRuleClient(c.config)
 	c.IncidentRuleExecution = NewIncidentRuleExecutionClient(c.config)
+	c.IntakeRequest = NewIntakeRequestClient(c.config)
+	c.IntakeResolutionSnapshot = NewIntakeResolutionSnapshotClient(c.config)
 	c.ItemVersion = NewItemVersionClient(c.config)
 	c.KafTaskActionLedger = NewKafTaskActionLedgerClient(c.config)
 	c.KafTaskCompletionReceipt = NewKafTaskCompletionReceiptClient(c.config)
@@ -622,6 +634,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		DomainConfig:                NewDomainConfigClient(cfg),
 		EndpointACL:                 NewEndpointACLClient(cfg),
 		EngineerSkill:               NewEngineerSkillClient(cfg),
+		ExternalIdentity:            NewExternalIdentityClient(cfg),
 		FeishuTicketSync:            NewFeishuTicketSyncClient(cfg),
 		FieldDefinition:             NewFieldDefinitionClient(cfg),
 		FieldValue:                  NewFieldValueClient(cfg),
@@ -633,6 +646,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		IncidentMetric:              NewIncidentMetricClient(cfg),
 		IncidentRule:                NewIncidentRuleClient(cfg),
 		IncidentRuleExecution:       NewIncidentRuleExecutionClient(cfg),
+		IntakeRequest:               NewIntakeRequestClient(cfg),
+		IntakeResolutionSnapshot:    NewIntakeResolutionSnapshotClient(cfg),
 		ItemVersion:                 NewItemVersionClient(cfg),
 		KafTaskActionLedger:         NewKafTaskActionLedgerClient(cfg),
 		KafTaskCompletionReceipt:    NewKafTaskCompletionReceiptClient(cfg),
@@ -757,6 +772,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		DomainConfig:                NewDomainConfigClient(cfg),
 		EndpointACL:                 NewEndpointACLClient(cfg),
 		EngineerSkill:               NewEngineerSkillClient(cfg),
+		ExternalIdentity:            NewExternalIdentityClient(cfg),
 		FeishuTicketSync:            NewFeishuTicketSyncClient(cfg),
 		FieldDefinition:             NewFieldDefinitionClient(cfg),
 		FieldValue:                  NewFieldValueClient(cfg),
@@ -768,6 +784,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		IncidentMetric:              NewIncidentMetricClient(cfg),
 		IncidentRule:                NewIncidentRuleClient(cfg),
 		IncidentRuleExecution:       NewIncidentRuleExecutionClient(cfg),
+		IntakeRequest:               NewIntakeRequestClient(cfg),
+		IntakeResolutionSnapshot:    NewIntakeResolutionSnapshotClient(cfg),
 		ItemVersion:                 NewItemVersionClient(cfg),
 		KafTaskActionLedger:         NewKafTaskActionLedgerClient(cfg),
 		KafTaskCompletionReceipt:    NewKafTaskCompletionReceiptClient(cfg),
@@ -877,9 +895,10 @@ func (c *Client) Use(hooks ...Hook) {
 		c.CloudService, c.ConfigurationItem, c.ConfigurationItemHistory,
 		c.ConnectorConfig, c.Contract, c.Conversation, c.Department, c.DiscoveryJob,
 		c.DiscoveryResult, c.DiscoverySource, c.DomainConfig, c.EndpointACL,
-		c.EngineerSkill, c.FeishuTicketSync, c.FieldDefinition, c.FieldValue, c.Group,
-		c.Incident, c.IncidentAlert, c.IncidentEscalationRule, c.IncidentEvent,
-		c.IncidentMetric, c.IncidentRule, c.IncidentRuleExecution, c.ItemVersion,
+		c.EngineerSkill, c.ExternalIdentity, c.FeishuTicketSync, c.FieldDefinition,
+		c.FieldValue, c.Group, c.Incident, c.IncidentAlert, c.IncidentEscalationRule,
+		c.IncidentEvent, c.IncidentMetric, c.IncidentRule, c.IncidentRuleExecution,
+		c.IntakeRequest, c.IntakeResolutionSnapshot, c.ItemVersion,
 		c.KafTaskActionLedger, c.KafTaskCompletionReceipt, c.KnowledgeArticle,
 		c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
 		c.KnowledgeArticleSession, c.KnowledgeArticleVersion, c.KnownError,
@@ -915,9 +934,10 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.CloudService, c.ConfigurationItem, c.ConfigurationItemHistory,
 		c.ConnectorConfig, c.Contract, c.Conversation, c.Department, c.DiscoveryJob,
 		c.DiscoveryResult, c.DiscoverySource, c.DomainConfig, c.EndpointACL,
-		c.EngineerSkill, c.FeishuTicketSync, c.FieldDefinition, c.FieldValue, c.Group,
-		c.Incident, c.IncidentAlert, c.IncidentEscalationRule, c.IncidentEvent,
-		c.IncidentMetric, c.IncidentRule, c.IncidentRuleExecution, c.ItemVersion,
+		c.EngineerSkill, c.ExternalIdentity, c.FeishuTicketSync, c.FieldDefinition,
+		c.FieldValue, c.Group, c.Incident, c.IncidentAlert, c.IncidentEscalationRule,
+		c.IncidentEvent, c.IncidentMetric, c.IncidentRule, c.IncidentRuleExecution,
+		c.IntakeRequest, c.IntakeResolutionSnapshot, c.ItemVersion,
 		c.KafTaskActionLedger, c.KafTaskCompletionReceipt, c.KnowledgeArticle,
 		c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
 		c.KnowledgeArticleSession, c.KnowledgeArticleVersion, c.KnownError,
@@ -1009,6 +1029,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.EndpointACL.mutate(ctx, m)
 	case *EngineerSkillMutation:
 		return c.EngineerSkill.mutate(ctx, m)
+	case *ExternalIdentityMutation:
+		return c.ExternalIdentity.mutate(ctx, m)
 	case *FeishuTicketSyncMutation:
 		return c.FeishuTicketSync.mutate(ctx, m)
 	case *FieldDefinitionMutation:
@@ -1031,6 +1053,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.IncidentRule.mutate(ctx, m)
 	case *IncidentRuleExecutionMutation:
 		return c.IncidentRuleExecution.mutate(ctx, m)
+	case *IntakeRequestMutation:
+		return c.IntakeRequest.mutate(ctx, m)
+	case *IntakeResolutionSnapshotMutation:
+		return c.IntakeResolutionSnapshot.mutate(ctx, m)
 	case *ItemVersionMutation:
 		return c.ItemVersion.mutate(ctx, m)
 	case *KafTaskActionLedgerMutation:
@@ -6206,6 +6232,139 @@ func (c *EngineerSkillClient) mutate(ctx context.Context, m *EngineerSkillMutati
 	}
 }
 
+// ExternalIdentityClient is a client for the ExternalIdentity schema.
+type ExternalIdentityClient struct {
+	config
+}
+
+// NewExternalIdentityClient returns a client for the ExternalIdentity from the given config.
+func NewExternalIdentityClient(c config) *ExternalIdentityClient {
+	return &ExternalIdentityClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `externalidentity.Hooks(f(g(h())))`.
+func (c *ExternalIdentityClient) Use(hooks ...Hook) {
+	c.hooks.ExternalIdentity = append(c.hooks.ExternalIdentity, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `externalidentity.Intercept(f(g(h())))`.
+func (c *ExternalIdentityClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ExternalIdentity = append(c.inters.ExternalIdentity, interceptors...)
+}
+
+// Create returns a builder for creating a ExternalIdentity entity.
+func (c *ExternalIdentityClient) Create() *ExternalIdentityCreate {
+	mutation := newExternalIdentityMutation(c.config, OpCreate)
+	return &ExternalIdentityCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ExternalIdentity entities.
+func (c *ExternalIdentityClient) CreateBulk(builders ...*ExternalIdentityCreate) *ExternalIdentityCreateBulk {
+	return &ExternalIdentityCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ExternalIdentityClient) MapCreateBulk(slice any, setFunc func(*ExternalIdentityCreate, int)) *ExternalIdentityCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ExternalIdentityCreateBulk{err: fmt.Errorf("calling to ExternalIdentityClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ExternalIdentityCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ExternalIdentityCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ExternalIdentity.
+func (c *ExternalIdentityClient) Update() *ExternalIdentityUpdate {
+	mutation := newExternalIdentityMutation(c.config, OpUpdate)
+	return &ExternalIdentityUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ExternalIdentityClient) UpdateOne(_m *ExternalIdentity) *ExternalIdentityUpdateOne {
+	mutation := newExternalIdentityMutation(c.config, OpUpdateOne, withExternalIdentity(_m))
+	return &ExternalIdentityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ExternalIdentityClient) UpdateOneID(id int) *ExternalIdentityUpdateOne {
+	mutation := newExternalIdentityMutation(c.config, OpUpdateOne, withExternalIdentityID(id))
+	return &ExternalIdentityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ExternalIdentity.
+func (c *ExternalIdentityClient) Delete() *ExternalIdentityDelete {
+	mutation := newExternalIdentityMutation(c.config, OpDelete)
+	return &ExternalIdentityDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ExternalIdentityClient) DeleteOne(_m *ExternalIdentity) *ExternalIdentityDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ExternalIdentityClient) DeleteOneID(id int) *ExternalIdentityDeleteOne {
+	builder := c.Delete().Where(externalidentity.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ExternalIdentityDeleteOne{builder}
+}
+
+// Query returns a query builder for ExternalIdentity.
+func (c *ExternalIdentityClient) Query() *ExternalIdentityQuery {
+	return &ExternalIdentityQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeExternalIdentity},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ExternalIdentity entity by its id.
+func (c *ExternalIdentityClient) Get(ctx context.Context, id int) (*ExternalIdentity, error) {
+	return c.Query().Where(externalidentity.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ExternalIdentityClient) GetX(ctx context.Context, id int) *ExternalIdentity {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ExternalIdentityClient) Hooks() []Hook {
+	return c.hooks.ExternalIdentity
+}
+
+// Interceptors returns the client interceptors.
+func (c *ExternalIdentityClient) Interceptors() []Interceptor {
+	return c.inters.ExternalIdentity
+}
+
+func (c *ExternalIdentityClient) mutate(ctx context.Context, m *ExternalIdentityMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ExternalIdentityCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ExternalIdentityUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ExternalIdentityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ExternalIdentityDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ExternalIdentity mutation op: %q", m.Op())
+	}
+}
+
 // FeishuTicketSyncClient is a client for the FeishuTicketSync schema.
 type FeishuTicketSyncClient struct {
 	config
@@ -7906,6 +8065,272 @@ func (c *IncidentRuleExecutionClient) mutate(ctx context.Context, m *IncidentRul
 		return (&IncidentRuleExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown IncidentRuleExecution mutation op: %q", m.Op())
+	}
+}
+
+// IntakeRequestClient is a client for the IntakeRequest schema.
+type IntakeRequestClient struct {
+	config
+}
+
+// NewIntakeRequestClient returns a client for the IntakeRequest from the given config.
+func NewIntakeRequestClient(c config) *IntakeRequestClient {
+	return &IntakeRequestClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `intakerequest.Hooks(f(g(h())))`.
+func (c *IntakeRequestClient) Use(hooks ...Hook) {
+	c.hooks.IntakeRequest = append(c.hooks.IntakeRequest, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `intakerequest.Intercept(f(g(h())))`.
+func (c *IntakeRequestClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IntakeRequest = append(c.inters.IntakeRequest, interceptors...)
+}
+
+// Create returns a builder for creating a IntakeRequest entity.
+func (c *IntakeRequestClient) Create() *IntakeRequestCreate {
+	mutation := newIntakeRequestMutation(c.config, OpCreate)
+	return &IntakeRequestCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IntakeRequest entities.
+func (c *IntakeRequestClient) CreateBulk(builders ...*IntakeRequestCreate) *IntakeRequestCreateBulk {
+	return &IntakeRequestCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IntakeRequestClient) MapCreateBulk(slice any, setFunc func(*IntakeRequestCreate, int)) *IntakeRequestCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IntakeRequestCreateBulk{err: fmt.Errorf("calling to IntakeRequestClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IntakeRequestCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IntakeRequestCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IntakeRequest.
+func (c *IntakeRequestClient) Update() *IntakeRequestUpdate {
+	mutation := newIntakeRequestMutation(c.config, OpUpdate)
+	return &IntakeRequestUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IntakeRequestClient) UpdateOne(_m *IntakeRequest) *IntakeRequestUpdateOne {
+	mutation := newIntakeRequestMutation(c.config, OpUpdateOne, withIntakeRequest(_m))
+	return &IntakeRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IntakeRequestClient) UpdateOneID(id int) *IntakeRequestUpdateOne {
+	mutation := newIntakeRequestMutation(c.config, OpUpdateOne, withIntakeRequestID(id))
+	return &IntakeRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IntakeRequest.
+func (c *IntakeRequestClient) Delete() *IntakeRequestDelete {
+	mutation := newIntakeRequestMutation(c.config, OpDelete)
+	return &IntakeRequestDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IntakeRequestClient) DeleteOne(_m *IntakeRequest) *IntakeRequestDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IntakeRequestClient) DeleteOneID(id int) *IntakeRequestDeleteOne {
+	builder := c.Delete().Where(intakerequest.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IntakeRequestDeleteOne{builder}
+}
+
+// Query returns a query builder for IntakeRequest.
+func (c *IntakeRequestClient) Query() *IntakeRequestQuery {
+	return &IntakeRequestQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIntakeRequest},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IntakeRequest entity by its id.
+func (c *IntakeRequestClient) Get(ctx context.Context, id int) (*IntakeRequest, error) {
+	return c.Query().Where(intakerequest.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IntakeRequestClient) GetX(ctx context.Context, id int) *IntakeRequest {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IntakeRequestClient) Hooks() []Hook {
+	return c.hooks.IntakeRequest
+}
+
+// Interceptors returns the client interceptors.
+func (c *IntakeRequestClient) Interceptors() []Interceptor {
+	return c.inters.IntakeRequest
+}
+
+func (c *IntakeRequestClient) mutate(ctx context.Context, m *IntakeRequestMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IntakeRequestCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IntakeRequestUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IntakeRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IntakeRequestDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IntakeRequest mutation op: %q", m.Op())
+	}
+}
+
+// IntakeResolutionSnapshotClient is a client for the IntakeResolutionSnapshot schema.
+type IntakeResolutionSnapshotClient struct {
+	config
+}
+
+// NewIntakeResolutionSnapshotClient returns a client for the IntakeResolutionSnapshot from the given config.
+func NewIntakeResolutionSnapshotClient(c config) *IntakeResolutionSnapshotClient {
+	return &IntakeResolutionSnapshotClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `intakeresolutionsnapshot.Hooks(f(g(h())))`.
+func (c *IntakeResolutionSnapshotClient) Use(hooks ...Hook) {
+	c.hooks.IntakeResolutionSnapshot = append(c.hooks.IntakeResolutionSnapshot, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `intakeresolutionsnapshot.Intercept(f(g(h())))`.
+func (c *IntakeResolutionSnapshotClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IntakeResolutionSnapshot = append(c.inters.IntakeResolutionSnapshot, interceptors...)
+}
+
+// Create returns a builder for creating a IntakeResolutionSnapshot entity.
+func (c *IntakeResolutionSnapshotClient) Create() *IntakeResolutionSnapshotCreate {
+	mutation := newIntakeResolutionSnapshotMutation(c.config, OpCreate)
+	return &IntakeResolutionSnapshotCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IntakeResolutionSnapshot entities.
+func (c *IntakeResolutionSnapshotClient) CreateBulk(builders ...*IntakeResolutionSnapshotCreate) *IntakeResolutionSnapshotCreateBulk {
+	return &IntakeResolutionSnapshotCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IntakeResolutionSnapshotClient) MapCreateBulk(slice any, setFunc func(*IntakeResolutionSnapshotCreate, int)) *IntakeResolutionSnapshotCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IntakeResolutionSnapshotCreateBulk{err: fmt.Errorf("calling to IntakeResolutionSnapshotClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IntakeResolutionSnapshotCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IntakeResolutionSnapshotCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IntakeResolutionSnapshot.
+func (c *IntakeResolutionSnapshotClient) Update() *IntakeResolutionSnapshotUpdate {
+	mutation := newIntakeResolutionSnapshotMutation(c.config, OpUpdate)
+	return &IntakeResolutionSnapshotUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IntakeResolutionSnapshotClient) UpdateOne(_m *IntakeResolutionSnapshot) *IntakeResolutionSnapshotUpdateOne {
+	mutation := newIntakeResolutionSnapshotMutation(c.config, OpUpdateOne, withIntakeResolutionSnapshot(_m))
+	return &IntakeResolutionSnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IntakeResolutionSnapshotClient) UpdateOneID(id int) *IntakeResolutionSnapshotUpdateOne {
+	mutation := newIntakeResolutionSnapshotMutation(c.config, OpUpdateOne, withIntakeResolutionSnapshotID(id))
+	return &IntakeResolutionSnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IntakeResolutionSnapshot.
+func (c *IntakeResolutionSnapshotClient) Delete() *IntakeResolutionSnapshotDelete {
+	mutation := newIntakeResolutionSnapshotMutation(c.config, OpDelete)
+	return &IntakeResolutionSnapshotDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IntakeResolutionSnapshotClient) DeleteOne(_m *IntakeResolutionSnapshot) *IntakeResolutionSnapshotDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IntakeResolutionSnapshotClient) DeleteOneID(id int) *IntakeResolutionSnapshotDeleteOne {
+	builder := c.Delete().Where(intakeresolutionsnapshot.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IntakeResolutionSnapshotDeleteOne{builder}
+}
+
+// Query returns a query builder for IntakeResolutionSnapshot.
+func (c *IntakeResolutionSnapshotClient) Query() *IntakeResolutionSnapshotQuery {
+	return &IntakeResolutionSnapshotQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIntakeResolutionSnapshot},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IntakeResolutionSnapshot entity by its id.
+func (c *IntakeResolutionSnapshotClient) Get(ctx context.Context, id int) (*IntakeResolutionSnapshot, error) {
+	return c.Query().Where(intakeresolutionsnapshot.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IntakeResolutionSnapshotClient) GetX(ctx context.Context, id int) *IntakeResolutionSnapshot {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *IntakeResolutionSnapshotClient) Hooks() []Hook {
+	return c.hooks.IntakeResolutionSnapshot
+}
+
+// Interceptors returns the client interceptors.
+func (c *IntakeResolutionSnapshotClient) Interceptors() []Interceptor {
+	return c.inters.IntakeResolutionSnapshot
+}
+
+func (c *IntakeResolutionSnapshotClient) mutate(ctx context.Context, m *IntakeResolutionSnapshotMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IntakeResolutionSnapshotCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IntakeResolutionSnapshotUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IntakeResolutionSnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IntakeResolutionSnapshotDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IntakeResolutionSnapshot mutation op: %q", m.Op())
 	}
 }
 
@@ -19627,9 +20052,10 @@ type (
 		CloudAccount, CloudResource, CloudService, ConfigurationItem,
 		ConfigurationItemHistory, ConnectorConfig, Contract, Conversation, Department,
 		DiscoveryJob, DiscoveryResult, DiscoverySource, DomainConfig, EndpointACL,
-		EngineerSkill, FeishuTicketSync, FieldDefinition, FieldValue, Group, Incident,
-		IncidentAlert, IncidentEscalationRule, IncidentEvent, IncidentMetric,
-		IncidentRule, IncidentRuleExecution, ItemVersion, KafTaskActionLedger,
+		EngineerSkill, ExternalIdentity, FeishuTicketSync, FieldDefinition, FieldValue,
+		Group, Incident, IncidentAlert, IncidentEscalationRule, IncidentEvent,
+		IncidentMetric, IncidentRule, IncidentRuleExecution, IntakeRequest,
+		IntakeResolutionSnapshot, ItemVersion, KafTaskActionLedger,
 		KafTaskCompletionReceipt, KnowledgeArticle, KnowledgeArticleLike,
 		KnowledgeArticleParticipant, KnowledgeArticleSession, KnowledgeArticleVersion,
 		KnownError, MSPAllocation, MarketplaceItem, Menu, Message, Microservice,
@@ -19654,9 +20080,10 @@ type (
 		CloudAccount, CloudResource, CloudService, ConfigurationItem,
 		ConfigurationItemHistory, ConnectorConfig, Contract, Conversation, Department,
 		DiscoveryJob, DiscoveryResult, DiscoverySource, DomainConfig, EndpointACL,
-		EngineerSkill, FeishuTicketSync, FieldDefinition, FieldValue, Group, Incident,
-		IncidentAlert, IncidentEscalationRule, IncidentEvent, IncidentMetric,
-		IncidentRule, IncidentRuleExecution, ItemVersion, KafTaskActionLedger,
+		EngineerSkill, ExternalIdentity, FeishuTicketSync, FieldDefinition, FieldValue,
+		Group, Incident, IncidentAlert, IncidentEscalationRule, IncidentEvent,
+		IncidentMetric, IncidentRule, IncidentRuleExecution, IntakeRequest,
+		IntakeResolutionSnapshot, ItemVersion, KafTaskActionLedger,
 		KafTaskCompletionReceipt, KnowledgeArticle, KnowledgeArticleLike,
 		KnowledgeArticleParticipant, KnowledgeArticleSession, KnowledgeArticleVersion,
 		KnownError, MSPAllocation, MarketplaceItem, Menu, Message, Microservice,

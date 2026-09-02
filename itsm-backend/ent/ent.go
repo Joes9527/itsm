@@ -38,6 +38,7 @@ import (
 	"itsm-backend/ent/domainconfig"
 	"itsm-backend/ent/endpointacl"
 	"itsm-backend/ent/engineerskill"
+	"itsm-backend/ent/externalidentity"
 	"itsm-backend/ent/feishuticketsync"
 	"itsm-backend/ent/fielddefinition"
 	"itsm-backend/ent/fieldvalue"
@@ -49,6 +50,8 @@ import (
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/incidentrule"
 	"itsm-backend/ent/incidentruleexecution"
+	"itsm-backend/ent/intakerequest"
+	"itsm-backend/ent/intakeresolutionsnapshot"
 	"itsm-backend/ent/itemversion"
 	"itsm-backend/ent/kaftaskactionledger"
 	"itsm-backend/ent/kaftaskcompletionreceipt"
@@ -220,6 +223,7 @@ func checkColumn(t, c string) error {
 			domainconfig.Table:                domainconfig.ValidColumn,
 			endpointacl.Table:                 endpointacl.ValidColumn,
 			engineerskill.Table:               engineerskill.ValidColumn,
+			externalidentity.Table:            externalidentity.ValidColumn,
 			feishuticketsync.Table:            feishuticketsync.ValidColumn,
 			fielddefinition.Table:             fielddefinition.ValidColumn,
 			fieldvalue.Table:                  fieldvalue.ValidColumn,
@@ -231,6 +235,8 @@ func checkColumn(t, c string) error {
 			incidentmetric.Table:              incidentmetric.ValidColumn,
 			incidentrule.Table:                incidentrule.ValidColumn,
 			incidentruleexecution.Table:       incidentruleexecution.ValidColumn,
+			intakerequest.Table:               intakerequest.ValidColumn,
+			intakeresolutionsnapshot.Table:    intakeresolutionsnapshot.ValidColumn,
 			itemversion.Table:                 itemversion.ValidColumn,
 			kaftaskactionledger.Table:         kaftaskactionledger.ValidColumn,
 			kaftaskcompletionreceipt.Table:    kaftaskcompletionreceipt.ValidColumn,
