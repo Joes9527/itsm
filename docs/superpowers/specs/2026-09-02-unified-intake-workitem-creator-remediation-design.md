@@ -159,6 +159,20 @@ Phase 1 不能只切 HTTP 的 `/incidents`、`/service-requests`。已核实的�
 
 ## 六、Phase 2-4 边界（不展开）
 
+### 6.1 Phase 2 已核实基线
+
+在还没有开始详细设计前，先对 Problem 域做了一次和 Incident/Service Request/Change 同等深度的代码核实，结论和 Phase 1 遇到的情况明显不同——Problem 域目前是干净的，风险面很小：
+
+| 主题 | 代码事实 | 结论 |
+|---|---|---|
+| Ent schema | `ent/schema/problem.go` 只有 `root_cause`/`workaround`/`resolution`/`impact`/`work_item_id`，没有任何共享字段重复；P1 已经把 Problem 一并收口过 | 不需要再做字段收口 |
+| 编号生成器 | `handlers/problem/repository_impl.go` 已经直接依赖 `workitemnumber.Allocator`（P1-A Task 4 的成果） | 不需要改 |
+| 创建入口 | 唯一入口是 `POST /problems` → `handlers/problem/service.go` `Service.Create` → 同一事务内 `repo.Create` 建 WorkItem + Problem 扩展；没有 BPMN 直接调用路径，没有 Catalog 派生路径，`service/problem_service.go`（旧横向分层文件）里没有 `CreateProblem`，不存在双实现 | 不存在类似 Incident 的多入口收敛问题 |
+| DTO 字段 | `dto.CreateProblemRequest` 只有 `title`/`description`/`priority`（必填，无自动计算兜底）/`category`/`rootCause`/`impact`/`impactScope`，没有 `assigneeId`/`subcategory`/`impactAnalysis`/`metadata` 等复杂字段，`priority` 不存在类似 Incident 的"矩阵计算 vs 简化算法"冲突风险 | 不存在类似 Incident 的双算法/字段丢弃风险 |
+| SLA 绑定 | 零匹配，和 W0 原始判断一致——这是 Phase 2 唯一需要真正新增的能力 | Phase 2 范围收窄为：在 `handlers/problem/service.go` `Create` 的现有事务内增加 SLA 策略解析与 `tickets.sla_definition_id` 写入，复用 Phase 1 为 Incident/Service Request/Change 建好的解析逻辑 |
+
+**Phase 2 待决策，留到其启动前的 brainstorming**：Problem 是否需要正式注册进 Intake 的 `CreateWorkItemCommand`/`ProfessionalCreator` Registry（像 Incident/Service Request/Change 那样），还是只在其现有独立创建路径上补 SLA、不接入幂等/身份交换这套机制——因为 Problem 目前没有 KAF 对话创建、没有多渠道创建的已知需求，接入 Intake 的收益不如 Incident/Service Request/Change 明确。
+
 - **Phase 2**：`ProfessionalCreator` 接口对 Problem 实现一次（Change 已并入 Phase 1，见 5.3）；SLA 绑定复用 Phase 1 为 Incident/Service Request/Change 建好的解析逻辑。不扩展到 Catalog Task/Known Error（沿用 Unified Intake 自己的非目标边界）。
 - **Phase 3**：新增 KAF 命名空间（`acp/itsm_delegate/` 或职责更清晰的等价划分，避免与现有 `acp/itsm/`——遗留紫羚系统客户端——混淆），实现身份交换 + `CreateWorkItemCommand` 调用；不改动已验收的委派/执行协议。
 - **Phase 4**：先补齐 `AssignIncident` 的状态机/版本守卫，再扩展 `ResolveIncident`/`CloseIncident`/`AssignIncident` 方法签名支持调用方 `expectedVersion`，最后接入 KAF typed action；复用而非新建 `authorizeKafAutomationActor`/`BPMNAccessScope`。
