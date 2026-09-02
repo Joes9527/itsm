@@ -170,3 +170,42 @@ func TestFieldValueService_CreateValues_AcceptsValidNumberAndSelectValues(t *tes
 	})
 	require.NoError(t, err)
 }
+
+func TestFieldValueService_CreateValues_SkipsDeactivatedFieldDefinition(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:field_value_skip_inactive?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	defSvc := NewFieldDefinitionService(client)
+	valSvc := NewFieldValueService(client)
+
+	defs, err := defSvc.ReplaceDefinitions(ctx, 1, "ticket_template", 43, []FieldDefinitionInput{
+		{Name: "office_location", Label: "办公地点", FieldType: "text", SortOrder: 0},
+		{Name: "legacy_field", Label: "旧字段", FieldType: "text", SortOrder: 1},
+	})
+	require.NoError(t, err)
+	var legacyID int
+	for _, d := range defs {
+		if d.Name == "legacy_field" {
+			legacyID = d.ID
+		}
+	}
+	require.NotZero(t, legacyID, "fixture must have created the legacy_field definition")
+	_, err = client.FieldDefinition.UpdateOneID(legacyID).SetIsActive(false).Save(ctx)
+	require.NoError(t, err)
+
+	// legacy_field 是 is_active=false 的旧字段——即便调用方在提交里带了它的值，
+	// createFieldValues 也不应该写入，因为它已经不在 (tenantID, entityType, entityID)
+	// 的当前活跃字段定义集合里了。这是对 CreateValuesTx 抽出 createFieldValues 时
+	// 意外丢失的 IsActive 过滤条件的回归测试。
+	err = valSvc.CreateValues(ctx, 1, "ticket_template", 43, "ticket", 403, map[string]interface{}{
+		"office_location": "上海",
+		"legacy_field":    "should not be written",
+	})
+	require.NoError(t, err)
+
+	values, err := valSvc.ListValues(ctx, 1, "ticket", 403)
+	require.NoError(t, err)
+	require.Len(t, values, 1, "deactivated field definition must not receive a written value")
+	assert.Equal(t, "office_location", values[0].Name)
+	assert.Equal(t, "上海", values[0].Value)
+}

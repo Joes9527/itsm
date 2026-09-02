@@ -131,7 +131,9 @@ func createFieldValues(
 			fielddefinition.TenantID(tenantID),
 			fielddefinition.EntityType(defEntityType),
 			fielddefinition.EntityID(defEntityID),
+			fielddefinition.IsActive(true),
 		).
+		Order(ent.Asc(fielddefinition.FieldSortOrder)).
 		All(ctx)
 	if err != nil {
 		return err
