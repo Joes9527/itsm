@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { DEFAULT_LOGIN } from './auth-utils';
 
 test('admin login lands directly on the canonical overview without a client exception', async ({
   page,
@@ -7,9 +8,12 @@ test('admin login lands directly on the canonical overview without a client exce
   page.on('pageerror', error => pageErrors.push(error.message));
 
   await page.goto('/login');
-  const username = page.locator('input.ant-input').first();
-  const password = page.locator('input[type="password"]');
-  const submit = page.locator('button[type="submit"]');
+  const inputs = page.locator('form input');
+  await expect(inputs).toHaveCount(3);
+  const tenantCode = inputs.nth(0);
+  const username = inputs.nth(1);
+  const password = inputs.nth(2);
+  const submit = page.getByRole('button', { name: /^登录$/ });
 
   await expect(username).toHaveValue('admin');
   await expect(password).toHaveValue('admin123');
@@ -17,12 +21,8 @@ test('admin login lands directly on the canonical overview without a client exce
     .poll(() => submit.evaluate(element => Object.keys(element).some(key => key.startsWith('__reactProps$'))))
     .toBe(true);
 
-  await username.click();
-  await username.press('Control+A');
-  await username.pressSequentially('admin');
-  await password.click();
-  await password.press('Control+A');
-  await password.pressSequentially('admin123');
+  await tenantCode.click();
+  await tenantCode.pressSequentially(DEFAULT_LOGIN.tenantCode);
 
   const loginResponse = page.waitForResponse(
     response =>
