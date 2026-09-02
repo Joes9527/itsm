@@ -62,7 +62,7 @@ func TestServicePostgresConcurrentReplayCommitsOneAuthoritativeGraph(t *testing.
 
 	resolver := NewResolver(itsmservice.NewProcessBindingService(client), PermissionCheckFunc(func(*ent.Client, Identity, string, string) bool { return true }))
 	registry := NewCreatorRegistry()
-	require.NoError(t, registry.Register(NewIncidentCreator(&postgresIncidentNumbers{}, nil)))
+	require.NoError(t, registry.Register(NewIncidentCreator(&postgresIncidentNumbers{}, nil, nil)))
 	service := NewService(client, resolver, registry, NewWorkItemCreator(&sequentialWorkItemNumbers{}))
 	identity := Identity{TenantID: tenant.ID, ActorID: actor.ID, RequesterID: actor.ID, Role: "end_user", Channel: "itsm_web", TokenID: "pg-concurrent-" + suffix}
 	command := validIncidentCommand("pg-concurrent-"+suffix, nil)

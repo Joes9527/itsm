@@ -8,14 +8,17 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/ticket"
+	itsmservice "itsm-backend/service"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zaptest"
 )
 
 type staticWorkItemNumberAllocator struct{ number string }
@@ -70,7 +73,7 @@ func newCreatorFixture(t *testing.T) (*ent.Client, *ent.Tenant, *ent.User) {
 
 func TestCreatorRegistryFailsClosedForDuplicateAndUnknownClass(t *testing.T) {
 	registry := NewCreatorRegistry()
-	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-1"}, nil)
+	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-1"}, nil, nil)
 	require.NoError(t, registry.Register(creator))
 	require.ErrorIs(t, registry.Register(creator), ErrUnsupportedRecordClass)
 	_, err := registry.Get("change_request")
@@ -95,7 +98,7 @@ func TestIncidentCreatorCreatesOneExtensionAndCreationEvent(t *testing.T) {
 		Command:     CreateWorkItemCommand{Title: "Database outage", Description: "Primary unavailable", Incident: &IncidentInput{Severity: "critical", Impact: "high", Urgency: "critical", DetectedAt: "2026-08-31T10:30:00Z"}},
 		RecordClass: RecordClassIncident,
 	}
-	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-202608-000001"}, nil)
+	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-202608-000001"}, nil, nil)
 	plan, err := creator.Prepare(ctx, tx, resolved)
 	require.NoError(t, err)
 	workItem, err := NewWorkItemCreator(staticWorkItemNumberAllocator{number: "TKT-202608-000001"}).CreateBase(ctx, tx, plan)
@@ -126,7 +129,7 @@ func TestIncidentCreatorResolvesCategoryFromStructuredCTI(t *testing.T) {
 	defer tx.Rollback()
 	generator := staticIncidentNumberGenerator{number: "INC-202609-000001"}
 	categories := &recordingCategoryResolver{}
-	creator := NewIncidentCreator(generator, categories)
+	creator := NewIncidentCreator(generator, categories, nil)
 	categoryID := 55
 
 	plan, err := creator.Prepare(context.Background(), tx, ResolvedIntake{
@@ -154,7 +157,7 @@ func TestIncidentCreatorResolvesCategoryFromFreeTextNames(t *testing.T) {
 	generator := staticIncidentNumberGenerator{number: "INC-202609-000002"}
 	resolvedCategoryID := 77
 	categories := &recordingCategoryResolver{id: &resolvedCategoryID}
-	creator := NewIncidentCreator(generator, categories)
+	creator := NewIncidentCreator(generator, categories, nil)
 
 	plan, err := creator.Prepare(context.Background(), tx, ResolvedIntake{
 		Identity: Identity{TenantID: tenant.ID, ActorID: requester.ID, RequesterID: requester.ID},
@@ -186,7 +189,7 @@ func TestIncidentCreatorRejectsSubcategoryWithoutCategory(t *testing.T) {
 		require.Equal(t, "cpu", subcategory)
 		return nil, fmt.Errorf("category is required when subcategory is supplied")
 	})
-	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-202609-000003"}, categories)
+	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-202609-000003"}, categories, nil)
 
 	_, err = creator.Prepare(context.Background(), tx, ResolvedIntake{
 		Identity: Identity{TenantID: tenant.ID, ActorID: requester.ID, RequesterID: requester.ID},
@@ -197,6 +200,30 @@ func TestIncidentCreatorRejectsSubcategoryWithoutCategory(t *testing.T) {
 	})
 
 	require.ErrorIs(t, err, ErrDomainValidationFailed)
+}
+
+func TestIncidentCreatorMatchesIncidentServicePriorityAndInitialStatus(t *testing.T) {
+	client, tenant, requester := newCreatorFixture(t)
+	tx, err := client.Tx(context.Background())
+	require.NoError(t, err)
+	defer tx.Rollback()
+	matrix := itsmservice.NewPriorityMatrixService(zaptest.NewLogger(t).Sugar())
+	require.NoError(t, matrix.SetMatrix(tenant.ID, itsmservice.PriorityMatrix{
+		"high": {"high": "critical"},
+	}))
+	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-202609-000004"}, nil, matrix)
+
+	plan, err := creator.Prepare(context.Background(), tx, ResolvedIntake{
+		Identity: Identity{TenantID: tenant.ID, ActorID: requester.ID, RequesterID: requester.ID},
+		Command: CreateWorkItemCommand{
+			Title: "VPN down", Incident: &IncidentInput{Impact: "high", Urgency: "high"},
+		},
+		RecordClass: RecordClassIncident,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, itsmservice.ResolveIncidentPriority(context.Background(), matrix, tenant.ID, "", "high", "high"), plan.WorkItem.Priority)
+	require.Equal(t, string(common.IncidentStatusNew), plan.WorkItem.Status)
 }
 
 func TestServiceRequestItemCreatorCreatesExactlyOneExtension(t *testing.T) {

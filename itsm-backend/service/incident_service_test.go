@@ -45,6 +45,23 @@ func TestGenerateIncidentNumberIsExported(t *testing.T) {
 	require.Regexp(t, `^INC-\d{6}-\d{6}$`, number)
 }
 
+func TestResolveIncidentPriorityPrefersExplicitPriority(t *testing.T) {
+	priority := ResolveIncidentPriority(context.Background(), nil, 1, "critical", "low", "low")
+
+	require.Equal(t, "critical", priority)
+}
+
+func TestResolveIncidentPriorityUsesTenantMatrix(t *testing.T) {
+	matrix := NewPriorityMatrixService(zaptest.NewLogger(t).Sugar())
+	require.NoError(t, matrix.SetMatrix(31, PriorityMatrix{
+		"high": {"high": "low"},
+	}))
+
+	priority := ResolveIncidentPriority(context.Background(), matrix, 31, "", "high", "high")
+
+	require.Equal(t, "low", priority)
+}
+
 func createIncidentTestTenant(ctx context.Context, client *ent.Client, suffix string) (*ent.Tenant, error) {
 	return client.Tenant.Create().
 		SetName("Test Tenant " + suffix).

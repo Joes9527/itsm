@@ -6,7 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common"
 	"itsm-backend/ent"
+	itsmservice "itsm-backend/service"
 )
 
 type IncidentNumberGenerator interface {
@@ -41,11 +43,12 @@ type IncidentExtensionPlan struct {
 type IncidentCreator struct {
 	numbers    IncidentNumberGenerator
 	categories CategoryResolver
+	matrix     *itsmservice.PriorityMatrixService
 	now        func() time.Time
 }
 
-func NewIncidentCreator(numbers IncidentNumberGenerator, categories CategoryResolver) *IncidentCreator {
-	return &IncidentCreator{numbers: numbers, categories: categories, now: time.Now}
+func NewIncidentCreator(numbers IncidentNumberGenerator, categories CategoryResolver, matrix *itsmservice.PriorityMatrixService) *IncidentCreator {
+	return &IncidentCreator{numbers: numbers, categories: categories, matrix: matrix, now: time.Now}
 }
 
 func (c *IncidentCreator) RecordClass() string { return RecordClassIncident }
@@ -71,6 +74,7 @@ func (c *IncidentCreator) Prepare(ctx context.Context, tx *ent.Tx, in ResolvedIn
 	severity := defaultLevel(input.Severity)
 	impact := defaultLevel(input.Impact)
 	urgency := defaultLevel(input.Urgency)
+	priority := itsmservice.ResolveIncidentPriority(ctx, c.matrix, in.Identity.TenantID, input.ExplicitPriority, impact, urgency)
 	detectedAt := c.now().UTC()
 	if input.DetectedAt != "" {
 		detectedAt, err = time.Parse(time.RFC3339, input.DetectedAt)
@@ -106,7 +110,7 @@ func (c *IncidentCreator) Prepare(ctx context.Context, tx *ent.Tx, in ResolvedIn
 		WorkItem: WorkItemDraft{
 			TenantID: in.Identity.TenantID, ActorID: in.Identity.ActorID, RequesterID: in.Identity.RequesterID,
 			RecordClass: RecordClassIncident, Title: in.Command.Title, Description: in.Command.Description,
-			Source: source, CategoryID: categoryID, SLADefinitionID: copyInt(in.SLADefinitionID),
+			Status: string(common.IncidentStatusNew), Priority: priority, Source: source, CategoryID: categoryID, SLADefinitionID: copyInt(in.SLADefinitionID),
 		},
 		ProfessionalInput: professional,
 	}, nil

@@ -73,6 +73,22 @@ func (s *IncidentService) SetSequenceService(seq *SequenceService) {
 	s.sequenceService = seq
 }
 
+// ResolveIncidentPriority is the single authority for Incident priority.
+// Explicit caller input wins; otherwise the tenant matrix determines priority.
+func ResolveIncidentPriority(ctx context.Context, matrixService *PriorityMatrixService, tenantID int, explicitPriority, impact, urgency string) string {
+	if explicitPriority != "" {
+		return explicitPriority
+	}
+	if matrixService == nil {
+		return "medium"
+	}
+	priority, err := matrixService.CalculatePriority(tenantID, impact, urgency)
+	if err != nil {
+		return "medium"
+	}
+	return priority
+}
+
 // CreateIncident 创建事件
 func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, userID int) (*dto.IncidentResponse, error) {
 	s.logger.Infow("Creating incident", "title", req.Title, "tenant_id", tenantID, "user_id", userID)
@@ -135,22 +151,7 @@ func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateInc
 		source = "manual"
 	}
 
-	// 计算优先级
-	priority := req.Priority
-	if priority == "" && s.priorityMatrixService != nil {
-		calculatedPriority, err := s.priorityMatrixService.CalculatePriority(tenantID, impact, urgency)
-		if err != nil {
-			s.logger.Warnw("Failed to calculate priority, using default medium", "error", err)
-			priority = "medium"
-		} else {
-			priority = calculatedPriority
-		}
-	}
-
-	// 如果最终priority还是空，使用默认值
-	if priority == "" {
-		priority = "medium"
-	}
+	priority := ResolveIncidentPriority(ctx, s.priorityMatrixService, tenantID, req.Priority, impact, urgency)
 
 	incidentType := req.Type
 	if incidentType == "" {

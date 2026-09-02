@@ -30,13 +30,14 @@ type SourceReference struct {
 }
 
 type IncidentInput struct {
-	Type        string `json:"type,omitempty"`
-	Severity    string `json:"severity,omitempty"`
-	Impact      string `json:"impact,omitempty"`
-	Urgency     string `json:"urgency,omitempty"`
-	Category    string `json:"category,omitempty"`
-	Subcategory string `json:"subcategory,omitempty"`
-	DetectedAt  string `json:"detectedAt,omitempty"`
+	Type             string `json:"type,omitempty"`
+	Severity         string `json:"severity,omitempty"`
+	ExplicitPriority string `json:"priority,omitempty"`
+	Impact           string `json:"impact,omitempty"`
+	Urgency          string `json:"urgency,omitempty"`
+	Category         string `json:"category,omitempty"`
+	Subcategory      string `json:"subcategory,omitempty"`
+	DetectedAt       string `json:"detectedAt,omitempty"`
 }
 
 type CreateWorkItemCommand struct {
