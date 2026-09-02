@@ -93,6 +93,21 @@ func TestCanonicalizeCommandRejectsInvalidDetectedTimestamp(t *testing.T) {
 	require.ErrorIs(t, err, ErrInvalidCommand)
 }
 
+func TestCanonicalizeCommandIncludesIncidentTypeAndCategoryFields(t *testing.T) {
+	command := validIncidentCommand("key-1", nil)
+	command.Incident.Type = "security_event"
+	command.Incident.Category = "performance"
+	command.Incident.Subcategory = "cpu"
+
+	_, digest, err := CanonicalizeCommand(command)
+	require.NoError(t, err)
+
+	command.Incident.Subcategory = "memory"
+	_, changedDigest, err := CanonicalizeCommand(command)
+	require.NoError(t, err)
+	require.NotEqual(t, digest, changedDigest)
+}
+
 func TestCanonicalDigestVersionIsStable(t *testing.T) {
 	require.Equal(t, "intake-v1", CanonicalDigestVersion)
 	_, digest, err := CanonicalizeCommand(validIncidentCommand("key-1", []int{9, 3, 9}))

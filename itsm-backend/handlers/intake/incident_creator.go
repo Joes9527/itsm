@@ -9,35 +9,43 @@ import (
 	"itsm-backend/ent"
 )
 
-type IncidentNumberAllocator interface {
-	GenerateIncidentNumberForIntake(ctx context.Context, tenantID int) (string, error)
+type IncidentNumberGenerator interface {
+	GenerateIncidentNumber(ctx context.Context, tenantID int) (string, error)
 }
 
 type IncidentNumberFunc func(ctx context.Context, tenantID int) (string, error)
 
-func (f IncidentNumberFunc) GenerateIncidentNumberForIntake(ctx context.Context, tenantID int) (string, error) {
+func (f IncidentNumberFunc) GenerateIncidentNumber(ctx context.Context, tenantID int) (string, error) {
 	return f(ctx, tenantID)
+}
+
+type CategoryResolver interface {
+	ResolveIncidentCategory(ctx context.Context, client *ent.Client, tenantID int, categoryName, subcategoryName string) (*int, error)
+}
+
+type CategoryResolverFunc func(ctx context.Context, client *ent.Client, tenantID int, categoryName, subcategoryName string) (*int, error)
+
+func (f CategoryResolverFunc) ResolveIncidentCategory(ctx context.Context, client *ent.Client, tenantID int, categoryName, subcategoryName string) (*int, error) {
+	return f(ctx, client, tenantID, categoryName, subcategoryName)
 }
 
 type IncidentExtensionPlan struct {
 	IncidentNumber string
+	Type           string
 	Severity       string
 	Impact         string
 	Urgency        string
-	Priority       string
-	Source         string
 	DetectedAt     time.Time
-	Category       string
-	Subcategory    string
 }
 
 type IncidentCreator struct {
-	numbers IncidentNumberAllocator
-	now     func() time.Time
+	numbers    IncidentNumberGenerator
+	categories CategoryResolver
+	now        func() time.Time
 }
 
-func NewIncidentCreator(numbers IncidentNumberAllocator) *IncidentCreator {
-	return &IncidentCreator{numbers: numbers, now: time.Now}
+func NewIncidentCreator(numbers IncidentNumberGenerator, categories CategoryResolver) *IncidentCreator {
+	return &IncidentCreator{numbers: numbers, categories: categories, now: time.Now}
 }
 
 func (c *IncidentCreator) RecordClass() string { return RecordClassIncident }
@@ -52,7 +60,7 @@ func (c *IncidentCreator) Prepare(ctx context.Context, tx *ent.Tx, in ResolvedIn
 	if c.numbers == nil {
 		return nil, NewInternalFailure("incident number allocator is required", nil)
 	}
-	number, err := c.numbers.GenerateIncidentNumberForIntake(ctx, in.Identity.TenantID)
+	number, err := c.numbers.GenerateIncidentNumber(ctx, in.Identity.TenantID)
 	if err != nil {
 		return nil, NewInfrastructureUnavailable("could not allocate incident number", err)
 	}
@@ -71,27 +79,34 @@ func (c *IncidentCreator) Prepare(ctx context.Context, tx *ent.Tx, in ResolvedIn
 		}
 		detectedAt = detectedAt.UTC()
 	}
-	priority := highestLevel(severity, impact, urgency)
+	incidentType := strings.TrimSpace(input.Type)
+	if incidentType == "" {
+		incidentType = "incident"
+	}
 	source := strings.TrimSpace(in.Identity.Channel)
 	if in.Command.SourceReference != nil && strings.TrimSpace(in.Command.SourceReference.Provider) != "" {
 		source = strings.TrimSpace(in.Command.SourceReference.Provider)
 	}
+	categoryID := copyInt(in.CTI.CategoryID)
+	if categoryID == nil && (strings.TrimSpace(input.Category) != "" || strings.TrimSpace(input.Subcategory) != "") {
+		if c.categories == nil {
+			return nil, NewInternalFailure("incident category resolver is required", nil)
+		}
+		categoryID, err = c.categories.ResolveIncidentCategory(ctx, tx.Client(), in.Identity.TenantID, input.Category, input.Subcategory)
+		if err != nil {
+			return nil, NewDomainValidationFailed("incident category is invalid", err)
+		}
+	}
 	professional := IncidentExtensionPlan{
-		IncidentNumber: strings.TrimSpace(number), Severity: severity, Impact: impact,
-		Urgency: urgency, Priority: priority, Source: source, DetectedAt: detectedAt,
-	}
-	if in.CTI.CategoryID != nil {
-		professional.Category = fmt.Sprint(*in.CTI.CategoryID)
-	}
-	if in.CTI.TypeID != nil {
-		professional.Subcategory = fmt.Sprint(*in.CTI.TypeID)
+		IncidentNumber: strings.TrimSpace(number), Type: incidentType, Severity: severity, Impact: impact,
+		Urgency: urgency, DetectedAt: detectedAt,
 	}
 	return &CreationPlan{
 		Resolved: in,
 		WorkItem: WorkItemDraft{
 			TenantID: in.Identity.TenantID, ActorID: in.Identity.ActorID, RequesterID: in.Identity.RequesterID,
 			RecordClass: RecordClassIncident, Title: in.Command.Title, Description: in.Command.Description,
-			Status: "open", Priority: priority, Source: source, CategoryID: copyInt(in.CTI.ItemID), SLADefinitionID: copyInt(in.SLADefinitionID),
+			Source: source, CategoryID: categoryID, SLADefinitionID: copyInt(in.SLADefinitionID),
 		},
 		ProfessionalInput: professional,
 	}, nil
@@ -107,7 +122,7 @@ func (c *IncidentCreator) CreateExtension(ctx context.Context, tx *ent.Tx, workI
 	}
 	create := tx.Incident.Create().
 		SetWorkItemID(workItem.ID).
-		SetType("incident").
+		SetType(input.Type).
 		SetSeverity(input.Severity).
 		SetImpact(input.Impact).
 		SetUrgency(input.Urgency).
@@ -147,18 +162,4 @@ func defaultLevel(value string) string {
 		return "medium"
 	}
 	return value
-}
-
-func highestLevel(values ...string) string {
-	rank := map[string]int{"low": 1, "medium": 2, "high": 3, "critical": 4}
-	highest := ""
-	for _, value := range values {
-		if rank[value] > rank[highest] {
-			highest = value
-		}
-	}
-	if highest == "" {
-		return "medium"
-	}
-	return highest
 }

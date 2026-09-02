@@ -26,10 +26,11 @@ func withIncidentWorkItemProjection(query *ent.TicketQuery) {
 	})
 }
 
-// resolveIncidentCategory resolves the existing string API into the one
+// ResolveIncidentCategory resolves the existing string API into the one
 // structured WorkItem category relation. A supplied subcategory must be an
-// active child of the supplied category in the same tenant.
-func resolveIncidentCategory(ctx context.Context, client *ent.Client, tenantID int, categoryName, subcategoryName string) (*int, error) {
+// active child of the supplied category in the same tenant. Intake uses this
+// same resolver for direct Incident requests.
+func ResolveIncidentCategory(ctx context.Context, client *ent.Client, tenantID int, categoryName, subcategoryName string) (*int, error) {
 	categoryName = strings.TrimSpace(categoryName)
 	subcategoryName = strings.TrimSpace(subcategoryName)
 	if categoryName == "" && subcategoryName == "" {

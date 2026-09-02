@@ -24,10 +24,24 @@ func (a staticWorkItemNumberAllocator) Allocate(context.Context, *ent.Client, in
 	return a.number, nil
 }
 
-type staticIncidentNumberAllocator struct{ number string }
+type staticIncidentNumberGenerator struct{ number string }
 
-func (a staticIncidentNumberAllocator) GenerateIncidentNumberForIntake(context.Context, int) (string, error) {
+func (a staticIncidentNumberGenerator) GenerateIncidentNumber(context.Context, int) (string, error) {
 	return a.number, nil
+}
+
+type recordingCategoryResolver struct {
+	id          *int
+	calls       int
+	category    string
+	subcategory string
+}
+
+func (r *recordingCategoryResolver) ResolveIncidentCategory(_ context.Context, _ *ent.Client, _ int, category, subcategory string) (*int, error) {
+	r.calls++
+	r.category = category
+	r.subcategory = subcategory
+	return r.id, nil
 }
 
 type failingProfessionalCreator struct{}
@@ -56,7 +70,7 @@ func newCreatorFixture(t *testing.T) (*ent.Client, *ent.Tenant, *ent.User) {
 
 func TestCreatorRegistryFailsClosedForDuplicateAndUnknownClass(t *testing.T) {
 	registry := NewCreatorRegistry()
-	creator := NewIncidentCreator(staticIncidentNumberAllocator{number: "INC-1"})
+	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-1"}, nil)
 	require.NoError(t, registry.Register(creator))
 	require.ErrorIs(t, registry.Register(creator), ErrUnsupportedRecordClass)
 	_, err := registry.Get("change_request")
@@ -81,7 +95,7 @@ func TestIncidentCreatorCreatesOneExtensionAndCreationEvent(t *testing.T) {
 		Command:     CreateWorkItemCommand{Title: "Database outage", Description: "Primary unavailable", Incident: &IncidentInput{Severity: "critical", Impact: "high", Urgency: "critical", DetectedAt: "2026-08-31T10:30:00Z"}},
 		RecordClass: RecordClassIncident,
 	}
-	creator := NewIncidentCreator(staticIncidentNumberAllocator{number: "INC-202608-000001"})
+	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-202608-000001"}, nil)
 	plan, err := creator.Prepare(ctx, tx, resolved)
 	require.NoError(t, err)
 	workItem, err := NewWorkItemCreator(staticWorkItemNumberAllocator{number: "TKT-202608-000001"}).CreateBase(ctx, tx, plan)
@@ -105,22 +119,84 @@ func TestIncidentCreatorCreatesOneExtensionAndCreationEvent(t *testing.T) {
 	require.Equal(t, "creation", events[0].EventType)
 }
 
-func TestIncidentCreatorCalculatesLowPriorityWithoutArtificialFloor(t *testing.T) {
+func TestIncidentCreatorResolvesCategoryFromStructuredCTI(t *testing.T) {
 	client, tenant, requester := newCreatorFixture(t)
-	ctx := context.Background()
-	tx, err := client.Tx(ctx)
+	tx, err := client.Tx(context.Background())
 	require.NoError(t, err)
-	creator := NewIncidentCreator(staticIncidentNumberAllocator{number: "INC-LOW"})
-	plan, err := creator.Prepare(ctx, tx, ResolvedIntake{
-		Identity: Identity{TenantID: tenant.ID, ActorID: requester.ID, RequesterID: requester.ID, Channel: "itsm_web"},
-		Command: CreateWorkItemCommand{Title: "Minor degradation", Incident: &IncidentInput{
-			Severity: "low", Impact: "low", Urgency: "low",
-		}},
+	defer tx.Rollback()
+	generator := staticIncidentNumberGenerator{number: "INC-202609-000001"}
+	categories := &recordingCategoryResolver{}
+	creator := NewIncidentCreator(generator, categories)
+	categoryID := 55
+
+	plan, err := creator.Prepare(context.Background(), tx, ResolvedIntake{
+		Identity:    Identity{TenantID: tenant.ID, ActorID: requester.ID, RequesterID: requester.ID},
+		Command:     CreateWorkItemCommand{Title: "VPN down"},
+		RecordClass: RecordClassIncident,
+		CTI:         ResolvedCTI{CategoryID: &categoryID},
+	})
+
+	require.NoError(t, err)
+	profession := plan.ProfessionalInput.(IncidentExtensionPlan)
+	require.NotNil(t, plan.WorkItem.CategoryID)
+	require.Equal(t, categoryID, *plan.WorkItem.CategoryID)
+	require.Equal(t, "INC-202609-000001", profession.IncidentNumber)
+	require.Equal(t, "incident", profession.Type)
+	require.Empty(t, plan.WorkItem.TicketNumber)
+	require.Zero(t, categories.calls)
+}
+
+func TestIncidentCreatorResolvesCategoryFromFreeTextNames(t *testing.T) {
+	client, tenant, requester := newCreatorFixture(t)
+	tx, err := client.Tx(context.Background())
+	require.NoError(t, err)
+	defer tx.Rollback()
+	generator := staticIncidentNumberGenerator{number: "INC-202609-000002"}
+	resolvedCategoryID := 77
+	categories := &recordingCategoryResolver{id: &resolvedCategoryID}
+	creator := NewIncidentCreator(generator, categories)
+
+	plan, err := creator.Prepare(context.Background(), tx, ResolvedIntake{
+		Identity: Identity{TenantID: tenant.ID, ActorID: requester.ID, RequesterID: requester.ID},
+		Command: CreateWorkItemCommand{
+			Title: "VPN down",
+			Incident: &IncidentInput{
+				Category: "performance", Subcategory: "cpu", Type: "security_event",
+			},
+		},
 		RecordClass: RecordClassIncident,
 	})
+
 	require.NoError(t, err)
-	require.Equal(t, "low", plan.WorkItem.Priority)
-	require.NoError(t, tx.Rollback())
+	require.NotNil(t, plan.WorkItem.CategoryID)
+	require.Equal(t, resolvedCategoryID, *plan.WorkItem.CategoryID)
+	require.Equal(t, "performance", categories.category)
+	require.Equal(t, "cpu", categories.subcategory)
+	profession := plan.ProfessionalInput.(IncidentExtensionPlan)
+	require.Equal(t, "security_event", profession.Type)
+}
+
+func TestIncidentCreatorRejectsSubcategoryWithoutCategory(t *testing.T) {
+	client, tenant, requester := newCreatorFixture(t)
+	tx, err := client.Tx(context.Background())
+	require.NoError(t, err)
+	defer tx.Rollback()
+	categories := CategoryResolverFunc(func(_ context.Context, _ *ent.Client, _ int, category, subcategory string) (*int, error) {
+		require.Empty(t, category)
+		require.Equal(t, "cpu", subcategory)
+		return nil, fmt.Errorf("category is required when subcategory is supplied")
+	})
+	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-202609-000003"}, categories)
+
+	_, err = creator.Prepare(context.Background(), tx, ResolvedIntake{
+		Identity: Identity{TenantID: tenant.ID, ActorID: requester.ID, RequesterID: requester.ID},
+		Command: CreateWorkItemCommand{
+			Title: "VPN down", Incident: &IncidentInput{Subcategory: "cpu"},
+		},
+		RecordClass: RecordClassIncident,
+	})
+
+	require.ErrorIs(t, err, ErrDomainValidationFailed)
 }
 
 func TestServiceRequestItemCreatorCreatesExactlyOneExtension(t *testing.T) {

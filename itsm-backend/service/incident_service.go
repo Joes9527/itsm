@@ -107,7 +107,7 @@ func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateInc
 	}
 
 	// 生成事件编号
-	incidentNumber, err := s.generateIncidentNumber(ctx, tenantID)
+	incidentNumber, err := s.GenerateIncidentNumber(ctx, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate incident number: %w", err)
 	}
@@ -156,7 +156,7 @@ func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateInc
 	if incidentType == "" {
 		incidentType = "incident"
 	}
-	categoryID, err := resolveIncidentCategory(ctx, s.client, tenantID, req.Category, req.Subcategory)
+	categoryID, err := ResolveIncidentCategory(ctx, s.client, tenantID, req.Category, req.Subcategory)
 	if err != nil {
 		return nil, err
 	}
@@ -495,7 +495,7 @@ func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.U
 		if req.Subcategory != nil {
 			currentSubcategory = *req.Subcategory
 		}
-		categoryID, err = resolveIncidentCategory(ctx, s.client, tenantID, currentCategory, currentSubcategory)
+		categoryID, err = ResolveIncidentCategory(ctx, s.client, tenantID, currentCategory, currentSubcategory)
 		if err != nil {
 			return nil, err
 		}
@@ -1084,8 +1084,9 @@ func (s *IncidentService) EscalateIncident(ctx context.Context, req *dto.Inciden
 	return response, nil
 }
 
-// generateIncidentNumber 生成事件编号，优先使用 Redis 序列
-func (s *IncidentService) generateIncidentNumber(ctx context.Context, tenantID int) (string, error) {
+// GenerateIncidentNumber 生成事件编号，优先使用 Redis 序列。
+// Intake uses this same authoritative generator for incident extension numbers.
+func (s *IncidentService) GenerateIncidentNumber(ctx context.Context, tenantID int) (string, error) {
 	now := time.Now()
 	year := now.Year()
 	month := int(now.Month())
@@ -1536,7 +1537,7 @@ func (s *IncidentService) CategorizeIncidentForWorkflow(ctx context.Context, id,
 	if subcategory == "" {
 		subcategory = currentResponse.Subcategory
 	}
-	categoryID, err := resolveIncidentCategory(ctx, s.client, tenantID, category, subcategory)
+	categoryID, err := ResolveIncidentCategory(ctx, s.client, tenantID, category, subcategory)
 	if err != nil {
 		return nil, err
 	}

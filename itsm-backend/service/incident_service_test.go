@@ -35,6 +35,16 @@ func setupIncidentTest(t *testing.T) (*ent.Client, *IncidentService, context.Con
 	return client, service, ctx
 }
 
+func TestGenerateIncidentNumberIsExported(t *testing.T) {
+	client, incidentService, ctx := setupIncidentTest(t)
+	defer client.Close()
+
+	number, err := incidentService.GenerateIncidentNumber(ctx, 1)
+
+	require.NoError(t, err)
+	require.Regexp(t, `^INC-\d{6}-\d{6}$`, number)
+}
+
 func createIncidentTestTenant(ctx context.Context, client *ent.Client, suffix string) (*ent.Tenant, error) {
 	return client.Tenant.Create().
 		SetName("Test Tenant " + suffix).

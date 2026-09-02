@@ -27,7 +27,7 @@ import (
 
 type postgresIncidentNumbers struct{ value atomic.Int64 }
 
-func (a *postgresIncidentNumbers) GenerateIncidentNumberForIntake(context.Context, int) (string, error) {
+func (a *postgresIncidentNumbers) GenerateIncidentNumber(context.Context, int) (string, error) {
 	return fmt.Sprintf("INC-PG-%d-%06d", time.Now().UnixNano(), a.value.Add(1)), nil
 }
 
@@ -62,7 +62,7 @@ func TestServicePostgresConcurrentReplayCommitsOneAuthoritativeGraph(t *testing.
 
 	resolver := NewResolver(itsmservice.NewProcessBindingService(client), PermissionCheckFunc(func(*ent.Client, Identity, string, string) bool { return true }))
 	registry := NewCreatorRegistry()
-	require.NoError(t, registry.Register(NewIncidentCreator(&postgresIncidentNumbers{})))
+	require.NoError(t, registry.Register(NewIncidentCreator(&postgresIncidentNumbers{}, nil)))
 	service := NewService(client, resolver, registry, NewWorkItemCreator(&sequentialWorkItemNumbers{}))
 	identity := Identity{TenantID: tenant.ID, ActorID: actor.ID, RequesterID: actor.ID, Role: "end_user", Channel: "itsm_web", TokenID: "pg-concurrent-" + suffix}
 	command := validIncidentCommand("pg-concurrent-"+suffix, nil)

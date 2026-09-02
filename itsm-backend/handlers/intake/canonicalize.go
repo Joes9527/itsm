@@ -68,10 +68,13 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 	}
 	if command.Incident != nil {
 		normalized.Incident = &IncidentInput{
-			Severity:   strings.TrimSpace(command.Incident.Severity),
-			Impact:     strings.TrimSpace(command.Incident.Impact),
-			Urgency:    strings.TrimSpace(command.Incident.Urgency),
-			DetectedAt: strings.TrimSpace(command.Incident.DetectedAt),
+			Type:        strings.TrimSpace(command.Incident.Type),
+			Severity:    strings.TrimSpace(command.Incident.Severity),
+			Impact:      strings.TrimSpace(command.Incident.Impact),
+			Urgency:     strings.TrimSpace(command.Incident.Urgency),
+			Category:    strings.TrimSpace(command.Incident.Category),
+			Subcategory: strings.TrimSpace(command.Incident.Subcategory),
+			DetectedAt:  strings.TrimSpace(command.Incident.DetectedAt),
 		}
 		if err := normalizeIncident(normalized.Incident); err != nil {
 			return CreateWorkItemCommand{}, "", err

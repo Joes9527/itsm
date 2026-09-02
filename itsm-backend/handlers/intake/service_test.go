@@ -31,7 +31,7 @@ func (a *sequentialWorkItemNumbers) Allocate(context.Context, *ent.Client, int, 
 func newServiceUnderTest(t *testing.T, fixture *resolverFixture) *Service {
 	t.Helper()
 	registry := NewCreatorRegistry()
-	require.NoError(t, registry.Register(NewIncidentCreator(staticIncidentNumberAllocator{number: "INC-INTAKE-000001"})))
+	require.NoError(t, registry.Register(NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-INTAKE-000001"}, nil)))
 	require.NoError(t, registry.Register(NewServiceRequestItemCreator()))
 	return NewService(
 		fixture.client,
