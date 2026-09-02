@@ -5,6 +5,8 @@ import { useHotkeys } from 'react-hotkeys-hook';
 import { Modal, List, Tag, Typography } from 'antd';
 import { useRouter } from 'next/navigation';
 import { useLayoutStore } from '@/lib/store/layout-store';
+import { getDefaultHomePath } from '@/config/persona/persona-config';
+import { useAuthStore } from '@/lib/store/auth-store';
 
 const { Title, Text } = Typography;
 
@@ -13,7 +15,7 @@ const SHORTCUTS = [
   {
     category: '导航',
     items: [
-      { key: 'g d', description: '跳转到仪表盘', action: '/dashboard' },
+      { key: 'g d', description: '跳转到角色首页', action: 'role-home' },
       { key: 'g t', description: '跳转到工单列表', action: '/tickets' },
       { key: 'g c', description: '跳转到CMDB', action: '/cmdb' },
       { key: 'g k', description: '跳转到知识库', action: '/knowledge' },
@@ -65,7 +67,11 @@ export default function GlobalShortcutProvider({ children }: GlobalShortcutProvi
   }, [collapsed, setCollapsed]);
 
   // 注册快捷键
-  useHotkeys('g d', () => router.push('/dashboard'), { preventDefault: true });
+  useHotkeys(
+    'g d',
+    () => router.push(getDefaultHomePath(useAuthStore.getState().user?.role)),
+    { preventDefault: true }
+  );
   useHotkeys('g t', () => router.push('/tickets'), { preventDefault: true });
   useHotkeys('g c', () => router.push('/cmdb'), { preventDefault: true });
   useHotkeys('g k', () => router.push('/knowledge'), { preventDefault: true });

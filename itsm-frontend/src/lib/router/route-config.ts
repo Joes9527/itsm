@@ -562,7 +562,7 @@ export const routes: RouteConfig[] = [
     name: 'admin',
     title: '系统管理',
     icon: 'Settings',
-    permissions: [{ resource: 'admin', action: 'read' }],
+    permissions: [{ resource: 'system', action: 'read' }],
     meta: {
       requireAuth: true,
       roles: ['admin', 'super_admin'],
@@ -570,11 +570,11 @@ export const routes: RouteConfig[] = [
     },
     children: [
       {
-        path: '/admin',
+        path: '/admin/overview',
         name: 'admin-overview',
         title: '系统概览',
         component: 'AdminDashboard',
-        permissions: [{ resource: 'admin', action: 'read' }],
+        permissions: [{ resource: 'system', action: 'read' }],
         meta: {
           requireAuth: true,
           roles: ['admin', 'super_admin'],

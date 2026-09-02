@@ -4,6 +4,8 @@ import React from 'react';
 import { Result, Button } from 'antd';
 import { LayoutDashboard, Home } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { getDefaultHomePath } from '@/config/persona/persona-config';
+import { useAuthStore } from '@/lib/store/auth-store';
 
 /**
  * 404 页面
@@ -23,7 +25,7 @@ export default function NotFound() {
             key="dashboard"
             type="primary"
             icon={<LayoutDashboard />}
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push(getDefaultHomePath(useAuthStore.getState().user?.role))}
           >
             返回仪表盘
           </Button>,

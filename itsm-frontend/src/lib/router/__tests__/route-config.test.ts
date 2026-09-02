@@ -30,6 +30,11 @@ describe('Route Configuration', () => {
     it('should have admin route with role restrictions', () => {
       const adminRoute = routes.find(r => r.name === 'admin');
       expect(adminRoute?.meta?.roles).toContain('admin');
+      expect(adminRoute?.permissions).toEqual([{ resource: 'system', action: 'read' }]);
+
+      const overviewRoute = adminRoute?.children?.find(route => route.name === 'admin-overview');
+      expect(overviewRoute?.path).toBe('/admin/overview');
+      expect(overviewRoute?.permissions).toEqual([{ resource: 'system', action: 'read' }]);
     });
   });
 

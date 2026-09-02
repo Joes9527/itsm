@@ -20,8 +20,8 @@ import { Typography, Alert, ConfigProvider, Form, Input, Button, Flex, Tooltip }
 import { antdTheme } from '@/lib/antd-theme';
 import { AuthService } from '@/lib/services/auth-service';
 import { logger } from '@/lib/env';
-import { getDefaultRoute } from '@/lib/utils/role-routes';
 import { buildAzureLoginURL } from './azure-login-url';
+import { getDefaultHomePath } from '@/config/persona/persona-config';
 
 const { Text, Title } = Typography;
 
@@ -69,7 +69,7 @@ function LoginForm() {
     try {
       const user = await AuthService.login(values.username, values.password, values.tenantCode);
       logger.info('后端会话已验证，准备跳转');
-      const target = redirectPath || getDefaultRoute(String(user.role));
+      const target = redirectPath || getDefaultHomePath(user.role);
       router.push(target);
     } catch (err) {
       logger.error('登录错误:', err);

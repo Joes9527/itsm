@@ -387,6 +387,35 @@ func TestSeedProductionRepairsPartialRBACAndMenuInitialization(t *testing.T) {
 	assert.True(t, roleExists)
 }
 
+func TestSeedProductionConvergesAdminOverviewMenuToCanonicalPath(t *testing.T) {
+	seeder, ctx := newTestSeeder(t, tenantmode.DeploymentModePrivate)
+	require.NoError(t, seeder.SeedProduction(ctx))
+	rootTenant, err := seeder.client.Tenant.Query().Where(tenant.CodeEQ("default")).Only(ctx)
+	require.NoError(t, err)
+
+	_, err = seeder.client.Menu.Create().
+		SetName("系统概览").
+		SetPath("/admin").
+		SetIcon("LayoutDashboard").
+		SetPermissionCode("admin:write").
+		SetSortOrder(301).
+		SetTenantID(rootTenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	require.NoError(t, seeder.SeedProduction(ctx))
+
+	overviewMenus, err := seeder.client.Menu.Query().
+		Where(menu.NameEQ("系统概览"), menu.TenantIDEQ(rootTenant.ID)).
+		All(ctx)
+	require.NoError(t, err)
+	require.Len(t, overviewMenus, 1)
+	assert.Equal(t, "/admin/overview", overviewMenus[0].Path)
+	assert.Equal(t, "system:read", overviewMenus[0].PermissionCode)
+	assert.True(t, overviewMenus[0].IsVisible)
+	assert.True(t, overviewMenus[0].IsEnabled)
+}
+
 func TestSeedProductionPreservesTenantOwnedGrantOnManagedRole(t *testing.T) {
 	seeder, ctx := newTestSeeder(t, tenantmode.DeploymentModePrivate)
 	require.NoError(t, seeder.SeedProduction(ctx))
@@ -445,6 +474,12 @@ func TestProvisionTenantReadinessAcrossDeploymentModes(t *testing.T) {
 			require.NoError(t, err)
 			require.Positive(t, firstRoles)
 			require.NoError(t, seeder.validateTenantReadiness(ctx, target.ID))
+			overviewMenu, err := seeder.client.Menu.Query().Where(
+				menu.PathEQ("/admin/overview"),
+				menu.TenantIDEQ(target.ID),
+			).Only(ctx)
+			require.NoError(t, err)
+			assert.Equal(t, "system:read", overviewMenu.PermissionCode)
 
 			_, err = seeder.client.Role.Create().
 				SetName("Customer Custom Role").SetCode("customer_custom").

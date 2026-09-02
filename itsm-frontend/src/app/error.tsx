@@ -4,6 +4,8 @@ import React, { useEffect } from 'react';
 import { Result, Button } from 'antd';
 import { LayoutDashboard, RotateCcw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { getDefaultHomePath } from '@/config/persona/persona-config';
+import { useAuthStore } from '@/lib/store/auth-store';
 
 /**
  * 路由级错误边界
@@ -36,7 +38,7 @@ export default function Error({
           <Button
             key="dashboard"
             icon={<LayoutDashboard />}
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push(getDefaultHomePath(useAuthStore.getState().user?.role))}
           >
             返回仪表盘
           </Button>,

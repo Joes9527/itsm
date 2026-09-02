@@ -11,7 +11,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { LAYOUT_CONFIG } from '@/config/layout.config';
 import styles from './Sidebar.module.css';
-import { getMenuConfig, type MenuItem } from './menu-config';
+import type { MenuItem } from './menu-config';
 import { getIconByName } from './icons';
 import { MenuItems, renderMenuItems } from './MenuItems';
 import {
@@ -118,16 +118,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, mobile 
     }
   };
 
-  // 转换动态菜单（当 API 返回空时使用静态配置作为 fallback）
-  const FORCE_STATIC_MENU = false;
-  const rawMainMenus =
-    dynamicMenus && !FORCE_STATIC_MENU
-      ? convertApiMenuToSidebar(dynamicMenus.main)
-      : getMenuConfig().main;
-  const rawAdminMenus =
-    dynamicMenus && !FORCE_STATIC_MENU
-      ? convertApiMenuToSidebar(dynamicMenus.admin)
-      : getMenuConfig().admin;
+  // 后端菜单是唯一运行时权限权威；未加载或失败时 fail closed，不用静态菜单推断权限。
+  const rawMainMenus = dynamicMenus ? convertApiMenuToSidebar(dynamicMenus.main) : [];
+  const rawAdminMenus = dynamicMenus ? convertApiMenuToSidebar(dynamicMenus.admin) : [];
 
   // 菜单 key 去重逻辑 — 避免后端返回重复 key 导致 React 警告
   const deduplicateMenus = (menus: MenuItem[]): MenuItem[] => {
@@ -148,8 +141,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, mobile 
 
   const mainMenus = deduplicateMenus(rawMainMenus);
   const adminMenus = deduplicateMenus(rawAdminMenus);
-
-  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
 
   return (
     <Sider
@@ -183,8 +174,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ collapsed, onCollapse, mobile 
         <MenuItems items={mainMenus} selectedKeys={[pathname]} onMenuClick={handleMenuClick} />
       </div>
 
-      {/* 管理员菜单 */}
-      {isAdmin && (
+      {/* 后端已按 RBAC 和租户过滤；前端不再二次推断角色。 */}
+      {adminMenus.length > 0 && (
         <div className={styles.adminMenuContainer}>
           {!collapsed && <div className={styles.adminMenuHeader}>管理功能</div>}
           <div className={styles.adminMenu}>
