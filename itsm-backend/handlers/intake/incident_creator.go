@@ -112,15 +112,8 @@ func (c *IncidentCreator) CreateExtension(ctx context.Context, tx *ent.Tx, workI
 		SetImpact(input.Impact).
 		SetUrgency(input.Urgency).
 		SetIncidentNumber(input.IncidentNumber).
-		SetSource(input.Source).
 		SetDetectedAt(input.DetectedAt).
 		SetIsAutomated(false)
-	if input.Category != "" {
-		create.SetCategory(input.Category)
-	}
-	if input.Subcategory != "" {
-		create.SetSubcategory(input.Subcategory)
-	}
 	created, err := create.Save(ctx)
 	if err != nil {
 		return nil, NewInfrastructureUnavailable("could not create incident extension", err)

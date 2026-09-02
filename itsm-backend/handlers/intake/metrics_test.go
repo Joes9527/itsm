@@ -2,8 +2,6 @@ package intake
 
 import (
 	"context"
-	"net/http"
-	"strings"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -69,15 +67,9 @@ func TestMetricsBoundUntrustedLabelsAndCountIdentityDenials(t *testing.T) {
 	require.Equal(t, float64(1), counterValue(t, metrics.identityExchangeTotal, "other", "denied"))
 }
 
-func TestIdentityExchangeHandlerRecordsDenialWithoutUnboundedCodeLabel(t *testing.T) {
-	metrics := NewMetrics(prometheus.NewRegistry())
-	fixture := newIdentityExchangeFixture(t, "super_admin")
-	fixture.handler.metrics = metrics
-	assertion := fixture.request
-	assertion.Signature = strings.Repeat("0", 64)
-
-	response := fixture.exchange(assertion)
-
-	require.Equal(t, http.StatusUnauthorized, response.Code)
-	require.Equal(t, float64(1), counterValue(t, metrics.identityExchangeTotal, "teams", "denied"))
-}
+// TestIdentityExchangeHandlerRecordsDenialWithoutUnboundedCodeLabel intentionally
+// removed: it exercised NewIdentityExchangeHandler's metrics wiring, which lives
+// in identity_exchange.go/identity_exchange_test.go. Those files were excluded
+// from this P1 port (see the "Excluded from this port" report note) because no
+// task in the reconciliation plan mounts intake.Handler's HTTP surface yet --
+// that lands with Phase 3. Restore this test alongside that file's return.

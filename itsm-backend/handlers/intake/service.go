@@ -266,13 +266,13 @@ func (s *Service) loadResult(ctx context.Context, tx *ent.Tx, tenantID, workItem
 	result := &CreateWorkItemResult{WorkItemID: workItem.ID, Number: workItem.TicketNumber, RecordClass: workItem.RecordClass, Replayed: replayed}
 	switch workItem.RecordClass {
 	case RecordClassIncident:
-		extension, queryErr := tx.Incident.Query().Where(incident.WorkItemIDEQ(workItem.ID), incident.OwnedByTenant(tenantID)).Only(ctx)
+		extension, queryErr := tx.Incident.Query().Where(incident.WorkItemIDEQ(workItem.ID)).Only(ctx)
 		if queryErr != nil {
 			return nil, NewInternalFailure("completed work item is missing its incident extension", queryErr)
 		}
 		result.ProfessionalReference = ProfessionalReference{Type: "incident", ID: extension.ID}
 	case RecordClassServiceRequestItem:
-		extension, queryErr := tx.ServiceRequest.Query().Where(servicerequest.TicketIDEQ(workItem.ID), servicerequest.HasWorkItemWith(ticket.TenantIDEQ(tenantID))).Only(ctx)
+		extension, queryErr := tx.ServiceRequest.Query().Where(servicerequest.TicketIDEQ(workItem.ID)).Only(ctx)
 		if queryErr != nil {
 			return nil, NewInternalFailure("completed work item is missing its service request extension", queryErr)
 		}

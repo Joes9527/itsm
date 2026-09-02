@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/ent"
 	"itsm-backend/ent/configurationitem"
 	"itsm-backend/ent/fielddefinition"
@@ -15,7 +16,6 @@ import (
 	"itsm-backend/ent/ticketcategory"
 	"itsm-backend/ent/user"
 	"itsm-backend/handlers/service_catalog"
-	"itsm-backend/middleware"
 	itsmservice "itsm-backend/service"
 )
 
@@ -34,7 +34,7 @@ func (f PermissionCheckFunc) HasPermission(client *ent.Client, identity Identity
 type defaultPermissionChecker struct{}
 
 func (defaultPermissionChecker) HasPermission(client *ent.Client, identity Identity, resource, action string) bool {
-	return middleware.HasResourcePermission(client, identity.Role, resource, action, identity.TenantID)
+	return authorization.HasResourcePermission(client, identity.Role, resource, action, identity.TenantID)
 }
 
 type IntakeWorkflowResolver interface {
@@ -108,8 +108,11 @@ func (r *Resolver) Resolve(ctx context.Context, tx *ent.Tx, identity Identity, c
 		}
 		resolved.RecordClass = catalog.TargetClass
 		resolved.Catalog = &ResolvedCatalog{
-			ID:                      catalog.ID,
-			Version:                 catalog.Version,
+			ID: catalog.ID,
+			// Version intentionally left unset -- main's ServiceCatalog domain
+			// struct (handlers/service_catalog/entity.go) has no Version field
+			// to source it from; ResolvedCatalog.Version stays the zero value
+			// until that concept exists on main.
 			TargetClass:             catalog.TargetClass,
 			ServiceType:             catalog.ServiceType,
 			DeliveryTime:            catalog.DeliveryTime,

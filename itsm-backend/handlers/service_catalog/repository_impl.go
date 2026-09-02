@@ -68,6 +68,27 @@ func (r *EntRepository) Get(ctx context.Context, tenantID int, id int) (*Service
 	return r.toDomain(res), nil
 }
 
+// GetActiveForIntake loads the authoritative catalog configuration through the
+// caller's transaction. TargetClass is read exactly as persisted; this path
+// never derives it from display labels or category metadata.
+func (r *EntRepository) GetActiveForIntake(ctx context.Context, tx *ent.Tx, tenantID int, id int) (*ServiceCatalog, error) {
+	if tx == nil {
+		return nil, fmt.Errorf("intake catalog transaction is required")
+	}
+	res, err := tx.ServiceCatalog.Query().
+		Where(
+			servicecatalog.IDEQ(id),
+			servicecatalog.TenantIDEQ(tenantID),
+			servicecatalog.IsActiveEQ(true),
+			servicecatalog.StatusIn("active", "enabled"),
+		).
+		Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return r.toDomain(res), nil
+}
+
 func (r *EntRepository) List(ctx context.Context, tenantID int, filters ListFilters) ([]*ServiceCatalog, int, error) {
 	query := r.client.ServiceCatalog.Query().
 		Where(servicecatalog.TenantID(tenantID))

@@ -20,10 +20,10 @@ func NewFieldValueService(client *ent.Client) *FieldValueService {
 	return &FieldValueService{client: client}
 }
 
-// validateFieldValue 按字段定义的 field_type 做最基本的格式/成员校验。只处理有明确
+// ValidateFieldValue 按字段定义的 field_type 做最基本的格式/成员校验。只处理有明确
 // 判定标准的类型（number 是不是数字、select/multiselect 的值在不在 options 里）；
 // text/textarea/date/boolean/file 目前没有额外格式约束，跳过。
-func validateFieldValue(def *ent.FieldDefinition, raw interface{}) error {
+func ValidateFieldValue(def *ent.FieldDefinition, raw interface{}) error {
 	switch def.FieldType {
 	case "number":
 		switch raw.(type) {
@@ -73,29 +73,66 @@ func validateFieldValue(def *ent.FieldDefinition, raw interface{}) error {
 	}
 }
 
+func validateFieldValue(def *ent.FieldDefinition, raw interface{}) error {
+	return ValidateFieldValue(def, raw)
+}
+
 // CreateValues 把提交的 values（fieldName -> 原始值）跟 (defEntityType, defEntityID) 下的
 // 字段定义匹配，快照 name/label/顺序后写入 field_values，挂在 (valueEntityType, valueEntityID) 上。
 // values 里不匹配任何字段定义的 key 会被忽略（例如 presetTypeId 这类路由元数据）。
 // 多条 insert 包在一个事务里：中途某一条失败（比如瞬时 DB 错误）不应该留下"插了一半"的
 // 半成品提交记录——field_values 代表的是一次完整的表单提交，要么整体成功要么整体不落库。
 func (s *FieldValueService) CreateValues(ctx context.Context, tenantID int, defEntityType string, defEntityID int, valueEntityType string, valueEntityID int, values map[string]interface{}) error {
+	return s.CreateValuesTx(ctx, nil, tenantID, defEntityType, defEntityID, valueEntityType, valueEntityID, values)
+}
+
+// CreateValuesTx writes dynamic field values through the caller's transaction
+// when supplied. A nil transaction preserves the standalone CreateValues
+// contract by opening and owning one transaction for the complete submission.
+func (s *FieldValueService) CreateValuesTx(
+	ctx context.Context,
+	tx *ent.Tx,
+	tenantID int,
+	defEntityType string,
+	defEntityID int,
+	valueEntityType string,
+	valueEntityID int,
+	values map[string]any,
+) error {
 	if len(values) == 0 {
 		return nil
 	}
-	defs, err := s.client.FieldDefinition.Query().
+	if tx != nil {
+		return createFieldValues(ctx, tx.Client(), tenantID, defEntityType, defEntityID, valueEntityType, valueEntityID, values)
+	}
+
+	ownedTx, err := s.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	if err := createFieldValues(ctx, ownedTx.Client(), tenantID, defEntityType, defEntityID, valueEntityType, valueEntityID, values); err != nil {
+		return rollback(ownedTx, err)
+	}
+	return ownedTx.Commit()
+}
+
+func createFieldValues(
+	ctx context.Context,
+	client *ent.Client,
+	tenantID int,
+	defEntityType string,
+	defEntityID int,
+	valueEntityType string,
+	valueEntityID int,
+	values map[string]any,
+) error {
+	defs, err := client.FieldDefinition.Query().
 		Where(
 			fielddefinition.TenantID(tenantID),
 			fielddefinition.EntityType(defEntityType),
 			fielddefinition.EntityID(defEntityID),
-			fielddefinition.IsActive(true),
 		).
-		Order(ent.Asc(fielddefinition.FieldSortOrder)).
 		All(ctx)
-	if err != nil {
-		return err
-	}
-
-	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return err
 	}
@@ -106,14 +143,14 @@ func (s *FieldValueService) CreateValues(ctx context.Context, tenantID int, defE
 			continue
 		}
 		if err := validateFieldValue(def, raw); err != nil {
-			return rollback(tx, err)
+			return err
 		}
 		encoded, err := json.Marshal(raw)
 		if err != nil {
-			return rollback(tx, err)
+			return err
 		}
 		defID := def.ID
-		_, err = tx.FieldValue.Create().
+		_, err = client.FieldValue.Create().
 			SetTenantID(tenantID).
 			SetEntityType(valueEntityType).
 			SetEntityID(valueEntityID).
@@ -124,10 +161,10 @@ func (s *FieldValueService) CreateValues(ctx context.Context, tenantID int, defE
 			SetValue(encoded).
 			Save(ctx)
 		if err != nil {
-			return rollback(tx, err)
+			return err
 		}
 	}
-	return tx.Commit()
+	return nil
 }
 
 // AdHocFieldValue 是没有对应 field_definitions 行的自描述字段值——

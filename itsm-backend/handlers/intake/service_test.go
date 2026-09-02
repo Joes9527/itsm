@@ -193,7 +193,7 @@ func assertNoIntakeGraph(t *testing.T, client *ent.Client, key, title string) {
 		"receipt":         countRows(t, client.IntakeRequest.Query().Where(intakerequest.IdempotencyKeyEQ(key))),
 		"work item":       countRows(t, client.Ticket.Query().Where(ticket.TitleEQ(title))),
 		"service request": countRows(t, client.ServiceRequest.Query()),
-		"incident":        countRows(t, client.Incident.Query().Where(incident.WorkItemTitleEQ(title))),
+		"incident":        countRows(t, client.Incident.Query().Where(incident.HasWorkItemWith(ticket.TitleEQ(title)))),
 		"incident event":  countRows(t, client.IncidentEvent.Query().Where(incidentevent.DescriptionContains("INC-INTAKE"))),
 		"field value":     countRows(t, client.FieldValue.Query()),
 		"snapshot":        countRows(t, client.IntakeResolutionSnapshot.Query()),
