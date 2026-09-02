@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Merge the Dev-verified Unified Intake implementation (`feat/kaf-delegation-transactional-delivery`) onto the merged P1 baseline (`main` at `ca29f626`) as the single authoritative creation path for Incident, Service Request, and Change, fixing every field-mapping and business-rule bug the field found along the way, with a mandatory (no-transition) `Idempotency-Key` contract and every creation entry point converged onto it.
+**Goal:** Merge the Dev-verified Unified Intake implementation (`feat/kaf-delegation-transactional-delivery`) onto the merged P1 baseline (`main` at `ca29f626`) as the single authoritative creation path for Incident and Change, and for the `service_request_item`-independent parts of Service Request, fixing every field-mapping and business-rule bug the field found along the way, with a mandatory (no-transition) `Idempotency-Key` contract on every entry point this phase converges. `service_request_item`'s own Catalog creation path is a deliberate, recorded exclusion (see Task 13 and spec section 6) — its richer approval-chain/dynamic-field/CI-linking logic is not yet ported into Intake, and converging it is out of scope for this plan.
 
-**Architecture:** `handlers/intake` becomes the one `CreateWorkItemCommand` Application Service that all HTTP controllers, the BPMN `createIncident` callback, and Catalog-derived Service Request/Incident/Change creation call into. A shared `WorkItemCreator.CreateBase` (not each domain creator) owns allocating `tickets.ticket_number` via `workitemnumber.Allocator` and building the WorkItem row. Each professional domain's `ProfessionalCreator` (`IncidentCreator`, `ServiceRequestItemCreator`, new `ChangeCreator`) receives an already-open `*ent.Tx` from the Application Service and performs only its own domain's extension write — including any extension-level identifier `incidents.incident_number` needs, which is a **separate, already-existing** concern from the WorkItem's ticket number (see Task 4).
+**Architecture:** `handlers/intake` becomes the one `CreateWorkItemCommand` Application Service that the `/incidents` HTTP controller, the BPMN `createIncident` callback, and the Incident/Change sub-branches of Catalog-derived creation call into — `service_request_item`'s Catalog sub-branch keeps calling its existing, unconverted implementation. A shared `WorkItemCreator.CreateBase` (not each domain creator) owns allocating `tickets.ticket_number` via `workitemnumber.Allocator` and building the WorkItem row, for every record class Intake creates (including `change_request` — see Task 4's note on a gap this plan's own review caught before implementation). Each professional domain's `ProfessionalCreator` (`IncidentCreator`, `ServiceRequestItemCreator`, new `ChangeCreator`) receives an already-open `*ent.Tx` from the Application Service and performs only its own domain's extension write — including any extension-level identifier `incidents.incident_number` needs, which is a **separate, already-existing** concern from the WorkItem's ticket number (see Task 4).
 
 **Tech Stack:** Go 1.25.12, Gin, Ent, PostgreSQL, SQLite enttest, Testify, Next.js/TypeScript frontend clients.
 
@@ -18,6 +18,8 @@
 - No transitional/compatibility path for any contract change. `Idempotency-Key` becomes mandatory the same day every caller (backend controllers, frontend clients, BPMN internal calls) is updated — no optional-header intermediate state.
 - Every creator's `Prepare`/`CreateExtension` methods take the caller-supplied `*ent.Tx` and never open their own transaction or call `Commit`/`Rollback`.
 - Migrations must not silently duplicate work already merged. `021_work_item_authority`'s `incidents`-table portion is superseded by the merged `022_drop_professional_extension_shared_fields` and must not be replayed.
+- An irreversible migration that drops a column/derivation a still-live code path reads must be registered in the same task that removes that code's dependency on it — never earlier. `024`'s registration lives in Task 14, not Task 2, for exactly this reason; do not "simplify" by moving it back.
+- `CanonicalizeCommand` (`handlers/intake/canonicalize.go`)'s digest must reflect every business-meaningful field of `CreateWorkItemCommand`, not just the subset the source branch happened to normalize. Any task that adds a field to `IncidentInput`/`ChangeInput`/etc. must add it to the corresponding canonicalization struct in the same task — an omitted field means two requests that differ only in that field silently collide under one Idempotency-Key (either wrongly replayed or wrongly conflicted).
 - Ent schema/generated files, `router.go`, and `internal/bootstrap/app.go` are high-conflict files — this plan's tasks touch them serially in the order given; do not run tasks 2+ out of order against a fresh worktree without task 1's migration renumbering already applied.
 - TDD: write the failing test first, verify it fails for the stated reason, implement, verify it passes, commit. Each task ends with its own focused test command passing and a commit.
 
@@ -27,9 +29,9 @@
 
 | File | Responsibility |
 |---|---|
-| `itsm-backend/migrations/023_unified_intake_rls.sql` (+ dev-reset, verify) | RLS for `intake_requests`/`intake_resolution_snapshots`/`external_identities` |
-| `itsm-backend/migrations/024_service_request_work_item_authority.sql` (+ dev-reset, verify) | `service_requests` shared-field drop, RLS rewrite, `service_catalogs.itsm_type` retirement |
-| `itsm-backend/migrations/025_external_identity_version.sql` (+ dev-reset, verify) | Optimistic-lock version column on `external_identities` |
+| `itsm-backend/migrations/023_unified_intake_rls.sql` (+ dev-reset, verify) | RLS for `intake_requests`/`intake_resolution_snapshots`/`external_identities` (Task 2) |
+| `itsm-backend/migrations/024_service_catalog_target_class_authority.sql` (+ dev-reset, verify) | `service_catalogs.itsm_type` retirement — registered by Task 14 (not Task 2), in the same task as the code that stops reading `itsm_type`, so the two never deploy out of order; the `service_requests` shared-field drop/RLS rewrite from the source branch is deferred, see spec section 6 |
+| `itsm-backend/migrations/025_external_identity_version.sql` (+ dev-reset, verify) | Optimistic-lock version column on `external_identities` (Task 2, registered before `024` inserts between it and `023`) |
 | `itsm-backend/handlers/intake/*.go` | Ported Application Service, Resolver, Registry, Identity, Idempotency, Snapshot, Outbox wiring (Task 3) |
 | `itsm-backend/handlers/intake/work_item_creator.go` | Fixed in place: `workitemnumber.Allocator` replaces the branch's own `WorkItemNumberAllocator` (Task 4) |
 | `itsm-backend/handlers/intake/incident_creator.go` | Fixed in place: correct number source, CTI mapping, priority/status reuse, full DTO field support (Tasks 5–7) |
@@ -38,8 +40,8 @@
 | `itsm-backend/controller/incident_controller.go` | `/incidents` wired to Intake (Task 11) |
 | `itsm-backend/handlers/service_request/service.go` | Catalog-derived Incident/Change sub-branches wired to Intake; `service_request_item` sub-branch deliberately left on its existing implementation (Task 13) |
 | `itsm-backend/service/bpmn/incident_handler.go` | `createIncident` callback wired to Intake with `reporter_id` as both actor and requester (Task 12) |
-| `itsm-backend/handlers/service_catalog/repository_impl.go` | Stop deriving `target_class` from `itsm_type` (Task 14) |
-| `itsm-frontend/src/lib/api/incident-api.ts`, `service-request-api.ts` | Stable idempotency key generation per submission (Task 10) |
+| `itsm-backend/handlers/service_catalog/repository_impl.go`, `service.go`, `handler.go`, `dto/service_dto.go` | Stop deriving `target_class` from `itsm_type`; give catalog admins an actual API-level way to set it (it never existed before — `Service.Create` doesn't even have a parameter for it today) (Task 14) |
+| `itsm-frontend/src/lib/api/incident-api.ts`, `service-catalog-api.ts` (not `service-request-api.ts` — that file's `createServiceRequest` is not what the real Catalog request form calls), plus the two real submission pages/forms | Stable idempotency key generation per submission (Task 10) |
 
 ---
 
@@ -95,17 +97,20 @@ git commit -m "docs: triage unified intake diff before reconciliation"
 
 ---
 
-### Task 2: Migration Reconciliation (020/021/022 → 023/024/025)
+### Task 2: Migration Reconciliation (020/021/022 → 023/025; 024 deferred to Task 14)
+
+**This task's scope changed during review.** The source branch's `021_work_item_authority` bundled three concerns: (a) an integrity check that every `service_requests` row has an authoritative `service_request_item` WorkItem, (b) `service_catalogs.target_class`/`itsm_type` backfill and retirement, (c) `DROP COLUMN` on `service_requests.requester_id`/`tenant_id`/`created_at`/`updated_at` plus an RLS policy rewrite joining through `tickets`. Concern (c) is **incompatible** with this plan's own decision (Task 13) to leave `service_request_item` creation on its existing implementation, which still calls `SetRequesterID`/`SetTenantID` on every create (`handlers/service_request/repository_impl.go:71,74`, both required/non-optional on `ent/schema/servicerequest.go:16,20` with no default) — applying (c) would break that still-live path. Concern (b) also has an ordering hazard: it drops `service_catalogs.itsm_type`, which `handlers/service_catalog/repository_impl.go` still reads until Task 14's code fix lands; registering and applying it here, ahead of Task 14, creates a window where a deployed database has the column gone but deployed code still reads it.
+
+This task therefore registers **only** `023_unified_intake_rls` and `025_external_identity_version` here. `024` (concern (b) only, renamed `024_service_catalog_target_class_authority`; concern (a) and (c) deferred to whichever future phase converges `service_request_item` onto Intake, per the spec's §6 note) is registered as the **last step of Task 14**, immediately after that task's code stops reading `itsm_type` — so the registration and the code cutover land in the same task, in the same commit sequence, with no window where one is deployed without the other.
 
 **Files:**
 - Create: `itsm-backend/migrations/023_unified_intake_rls.sql`, `_dev_reset.sql`, `_verify.sql`
-- Create: `itsm-backend/migrations/024_service_request_work_item_authority.sql`, `_dev_reset.sql`, `_verify.sql`
 - Create: `itsm-backend/migrations/025_external_identity_version.sql`, `_dev_reset.sql`, `_verify.sql`
 - Modify: `itsm-backend/migration/migrations.go`
 - Modify: `itsm-backend/internal/bootstrap/post_schema_migrations_test.go`
 
 **Interfaces:**
-- Produces: registered migrations `023_unified_intake_rls`, `024_service_request_work_item_authority`, `025_external_identity_version`.
+- Produces: registered migrations `023_unified_intake_rls`, `025_external_identity_version` (`024_service_catalog_target_class_authority` is Task 14's responsibility — it inserts between these two).
 
 - [ ] **Step 1: Write the failing registry test**
 
@@ -117,13 +122,11 @@ func TestUnifiedIntakeMigrationsRegisteredInOrder(t *testing.T) {
 		versions = append(versions, m.Version)
 	}
 	require.Contains(t, versions, "023_unified_intake_rls")
-	require.Contains(t, versions, "024_service_request_work_item_authority")
 	require.Contains(t, versions, "025_external_identity_version")
 	idx020 := indexOf(versions, "020_work_item_number_allocator")
 	idx023 := indexOf(versions, "023_unified_intake_rls")
-	idx024 := indexOf(versions, "024_service_request_work_item_authority")
 	idx025 := indexOf(versions, "025_external_identity_version")
-	require.True(t, idx020 < idx023 && idx023 < idx024 && idx024 < idx025)
+	require.True(t, idx020 < idx023 && idx023 < idx025)
 }
 
 func indexOf(s []string, v string) int {
@@ -135,6 +138,8 @@ func indexOf(s []string, v string) int {
 	return -1
 }
 ```
+
+Task 14 extends this same test with `024`'s position once it registers it — do not duplicate a second version of this test there.
 
 - [ ] **Step 2: Run to verify it fails**
 
@@ -151,9 +156,9 @@ Expected: FAIL, versions not found.
 cd /home/administrator/project/itsm
 git show feat/kaf-delegation-transactional-delivery:itsm-backend/migration/migrations.go | \
   sed -n '/case "020_unified_intake_rls":/,/case "021_work_item_authority":/p' > /tmp/020_body.txt
-git show feat/kaf-delegation-transactional-delivery:itsm-backend/migration/migrations.go | \
-  sed -n '/case "022_external_identity_version":/,/default:/p' > /tmp/022_body.txt
 ```
+
+(The `021_work_item_authority` and `022_external_identity_version` bodies are handled separately: `021`'s `service_catalogs` portion becomes Task 14's `024`, its `service_requests`/incidents portions are dropped/deferred per above; `022`'s body is extracted the same way, inline in Step 5 below.)
 
 - [ ] **Step 4: Register `023_unified_intake_rls` (unchanged content)**
 
@@ -174,74 +179,13 @@ case "023_unified_intake_rls":
 	return `<verbatim body from /tmp/020_body.txt>`
 ```
 
-- [ ] **Step 5: Register `024_service_request_work_item_authority` (incidents portion stripped)**
+- [ ] **Step 5: Register `025_external_identity_version` (unchanged content, immediately after `023` — leave the `024` slot for Task 14 to fill in between)**
 
-The source `021_work_item_authority` SQL has this exact structure — reproduce it with the `incidents`-table guard and `DROP COLUMN`/policy block removed, keeping only `service_requests` and `service_catalogs`:
-
-```go
-{
-	Version:     "024_service_request_work_item_authority",
-	Description: "Make WorkItem authoritative for Service Request shared fields, replace extension RLS with ticket joins, and retire service_catalogs.itsm_type (irreversible; forward-fix only). Must apply after the itsm_type-derivation removal lands (Task 14) -- see that task's note.",
-	RollbackSQL: "",
-},
+```bash
+cd /home/administrator/project/itsm
+git show feat/kaf-delegation-transactional-delivery:itsm-backend/migration/migrations.go | \
+  sed -n '/case "022_external_identity_version":/,/default:/p' > /tmp/022_body.txt
 ```
-
-```go
-case "024_service_request_work_item_authority":
-	return `
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM service_requests sr
-        LEFT JOIN tickets t ON t.id = sr.ticket_id
-        WHERE t.id IS NULL OR t.record_class <> 'service_request_item'
-    ) THEN
-        RAISE EXCEPTION 'service request without an authoritative service_request_item WorkItem';
-    END IF;
-END $$;
-
-UPDATE service_catalogs
-SET target_class = CASE lower(trim(itsm_type))
-    WHEN 'request' THEN 'service_request_item'
-    WHEN 'service_request' THEN 'service_request_item'
-    WHEN 'incident' THEN 'incident'
-    WHEN 'change' THEN 'change_request'
-    WHEN 'change_request' THEN 'change_request'
-    ELSE target_class
-END
-WHERE target_class IS NULL OR trim(target_class) = '';
-
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM service_catalogs
-        WHERE target_class IS NULL
-           OR target_class NOT IN ('service_request_item', 'incident', 'change_request')
-    ) THEN
-        RAISE EXCEPTION 'service catalog target_class backfill is incomplete or unsupported';
-    END IF;
-END $$;
-
-DROP POLICY IF EXISTS tenant_isolation_service_requests ON service_requests;
-DROP POLICY IF EXISTS service_requests_tenant_isolation ON service_requests;
-ALTER TABLE service_requests ALTER COLUMN ticket_id SET NOT NULL;
-ALTER TABLE service_requests DROP COLUMN IF EXISTS requester_id;
-ALTER TABLE service_requests DROP COLUMN IF EXISTS tenant_id;
-ALTER TABLE service_requests DROP COLUMN IF EXISTS created_at;
-ALTER TABLE service_requests DROP COLUMN IF EXISTS updated_at;
-CREATE POLICY tenant_isolation_service_requests ON service_requests
-    USING (EXISTS (SELECT 1 FROM tickets WHERE tickets.id = service_requests.ticket_id AND tickets.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint))
-    WITH CHECK (EXISTS (SELECT 1 FROM tickets WHERE tickets.id = service_requests.ticket_id AND tickets.tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint));
-
-ALTER TABLE service_catalogs ALTER COLUMN target_class SET NOT NULL;
-ALTER TABLE service_catalogs DROP CONSTRAINT IF EXISTS service_catalogs_target_class_check;
-ALTER TABLE service_catalogs ADD CONSTRAINT service_catalogs_target_class_check
-    CHECK (target_class IN ('service_request_item', 'incident', 'change_request'));
-ALTER TABLE service_catalogs DROP COLUMN IF EXISTS itsm_type;
-`
-```
-
-- [ ] **Step 6: Register `025_external_identity_version` (unchanged content)**
 
 ```go
 {
@@ -263,11 +207,11 @@ ALTER TABLE external_identities
 `
 ```
 
-- [ ] **Step 7: Write the three matching `.sql` files**
+- [ ] **Step 6: Write the two matching `.sql` files**
 
-For each of `023_unified_intake_rls`, `024_service_request_work_item_authority`, `025_external_identity_version`, create the plain `.sql` apply file (identical body to the `GetMigrationSQL` case above), a `_dev_reset.sql` (mirrors the pattern in the already-merged `20260901_work_item_number_allocator_dev_reset.sql` — truncate/reset only the new tables for 023 and 025; for 024, the dev-reset is a no-op with a comment explaining the column drops are one-way and dev resets happen at the database level, not per-migration), and a `_verify.sql` that raises on missing columns/constraints (mirror the style of `20260901_drop_professional_extension_shared_fields_verify.sql`).
+For each of `023_unified_intake_rls`, `025_external_identity_version`, create the plain `.sql` apply file (identical body to the `GetMigrationSQL` case above), a `_dev_reset.sql` (mirrors the pattern in the already-merged `20260901_work_item_number_allocator_dev_reset.sql` — truncate/reset only the new tables), and a `_verify.sql` that raises on missing columns/constraints (mirror the style of `20260901_drop_professional_extension_shared_fields_verify.sql`).
 
-- [ ] **Step 8: Run the registry test**
+- [ ] **Step 7: Run the registry test**
 
 ```bash
 cd itsm-backend
@@ -277,11 +221,11 @@ go test ./migration ./internal/bootstrap -count=1
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add itsm-backend/migration/migrations.go itsm-backend/migrations/023_* itsm-backend/migrations/024_* itsm-backend/migrations/025_* itsm-backend/internal/bootstrap/post_schema_migrations_test.go
-git commit -m "feat(intake): register migrations 023-025, drop superseded incidents portion of 021_work_item_authority"
+git add itsm-backend/migration/migrations.go itsm-backend/migrations/023_* itsm-backend/migrations/025_* itsm-backend/internal/bootstrap/post_schema_migrations_test.go
+git commit -m "feat(intake): register migrations 023 and 025; 024 (service_catalogs.itsm_type retirement) moves to Task 14 alongside its code cutover"
 ```
 
 ---
@@ -435,7 +379,52 @@ if draft.TicketNumber == "" {
 }
 ```
 
-Everything else in `CreateBase` (the validation, the `tx.Ticket.Create()...Save(ctx)` call) is unchanged — this task only touches the allocator dependency and the allocation call.
+**`CreateBase` also rejects `change_request` outright today — this must be fixed in the same task, not left for Task 9.** The real ported body (`work_item_creator.go:37`) is `if draft.RecordClass != RecordClassIncident && draft.RecordClass != RecordClassServiceRequestItem { return nil, NewUnsupportedRecordClass(...) }`, and separately (line 62-65) `legacyType := "service_request"; if draft.RecordClass == RecordClassIncident { legacyType = "incident" }`. A `ChangeCreator` (Task 9) plan built with `RecordClass: RecordClassChangeRequest` would be rejected by the first check before ever reaching the second — and if only the first check were widened without also fixing the second, every `change_request` WorkItem would be persisted with `tickets.type = "service_request"`, which is wrong and exactly the kind of thing `WorkItemCreator`'s own unit tests (built before `ChangeCreator` existed) could never catch. Fix both in this step:
+
+```go
+if draft.RecordClass != RecordClassIncident && draft.RecordClass != RecordClassServiceRequestItem && draft.RecordClass != RecordClassChangeRequest {
+	return nil, NewUnsupportedRecordClass("work item record class is unsupported", nil)
+}
+```
+
+```go
+legacyType := "service_request"
+switch draft.RecordClass {
+case RecordClassIncident:
+	legacyType = "incident"
+case RecordClassChangeRequest:
+	legacyType = "change"
+}
+```
+
+Add the driving test before making this change:
+
+```go
+func TestWorkItemCreatorAcceptsChangeRequestRecordClass(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:workitemcreator_change?mode=memory&cache=shared&_fk=1")
+	t.Cleanup(func() { _ = client.Close() })
+	tenant := createTestTenant(t, client)
+	requester := createTestUser(t, client, tenant.ID)
+	allocator := &stubTicketAllocator{number: "TKT-202609-000002"}
+	creator := NewWorkItemCreator(allocator)
+
+	tx, err := client.Tx(context.Background())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = tx.Rollback() })
+
+	ticket, err := creator.CreateBase(context.Background(), tx, &CreationPlan{
+		WorkItem: WorkItemDraft{
+			TenantID: tenant.ID, ActorID: requester.ID, RequesterID: requester.ID,
+			RecordClass: RecordClassChangeRequest, Title: "Upgrade router firmware",
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, RecordClassChangeRequest, ticket.RecordClass)
+	assert.Equal(t, "change", ticket.Type)
+}
+```
+
+Run it before Step 3's fix (`go test ./handlers/intake -run TestWorkItemCreatorAcceptsChangeRequestRecordClass -v`) to confirm it FAILs with `NewUnsupportedRecordClass` first, matching this being a real, previously-undetected gap — Task 9's own test never caught it because it constructs the `Ticket` row manually instead of calling `CreateBase`. Everything else in `CreateBase` (the allocator validation, the rest of the `tx.Ticket.Create()...Save(ctx)` call) is unchanged.
 
 - [ ] **Step 4: Update the Registry/Application Service wiring**
 
@@ -644,6 +633,9 @@ func (c *IncidentCreator) Prepare(ctx context.Context, tx *ent.Tx, in ResolvedIn
 	source := strings.TrimSpace(in.Identity.Channel)
 	if in.Command.SourceReference != nil && strings.TrimSpace(in.Command.SourceReference.Provider) != "" {
 		source = strings.TrimSpace(in.Command.SourceReference.Provider)
+	}
+	if explicitSource := incidentInputField(in.Command.Incident, func(i *IncidentInput) string { return i.Source }); explicitSource != "" {
+		source = explicitSource // dto.CreateIncidentRequest.source (manual|monitoring|system|user classification) wins over channel/SourceReference when the caller states it explicitly -- see Task 11's note on why this is a plain field, not routed through SourceReference
 	}
 	categoryID := copyInt(in.CTI.CategoryID)
 	if categoryID == nil {
@@ -938,8 +930,11 @@ type IncidentInput struct {
 	AssigneeID       *int                   `json:"assigneeId,omitempty"`
 	ImpactAnalysis   map[string]interface{} `json:"impactAnalysis,omitempty"`
 	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+	Source           string                 `json:"source,omitempty"`
 }
 ```
+
+`Source` carries `dto.CreateIncidentRequest.source`'s plain classification value (`manual`/`monitoring`/`system`/`user`) straight through to `WorkItemDraft.Source` — it is intentionally a plain string, not routed through `SourceReference` (that struct is for external-system provenance/dedup and requires a non-empty `EventID`; see Task 11's note on why a manual web submission must not synthesize one).
 
 This adds `AssigneeID`/`ImpactAnalysis`/`Metadata` to the `IncidentInput` Task 5 and Task 6 already established (`Category`/`Subcategory`/`Type` from Task 5, `ExplicitPriority` from Task 6) — do not drop those fields by redefining the struct from scratch. Add `ImpactAnalysis`, `Metadata` to `IncidentExtensionPlan`; add `AssigneeID *int` to `WorkItemDraft` (confirm it is not already present from the Task 3 port before adding a duplicate field).
 
@@ -1004,14 +999,94 @@ SetImpactAnalysis(input.ImpactAnalysis).
 SetMetadata(input.Metadata)
 ```
 
-- [ ] **Step 5: Run and commit**
+- [ ] **Step 5: Fix `canonicalize.go`'s digest to cover the full `IncidentInput`, not just the four fields the source branch normalized**
+
+`handlers/intake/canonicalize.go`'s `normalizeIncident`/`canonicalCommandV1` (ported in Task 3, unmodified since) only carries `Severity`/`Impact`/`Urgency`/`DetectedAt` into the idempotency digest — `IncidentInput` has since grown `Type`/`Category`/`Subcategory`/`ExplicitPriority`/`AssigneeID`/`ImpactAnalysis`/`Metadata` across this task and Tasks 5-6, none of which affect the digest today. Left unfixed, two `/incidents` submissions under the same `Idempotency-Key` that differ only in, say, `assigneeId` would compute the identical digest and either silently replay the first one's result (dropping the second assignee) or never be distinguished as a real conflict — exactly the "same key, different body, not detected" failure this plan's own Idempotency-Key contract (spec §5.4) is supposed to prevent.
+
+```go
+func TestCanonicalizeCommandDigestChangesWithFullIncidentFieldSet(t *testing.T) {
+	base := CreateWorkItemCommand{
+		IdempotencyKey: "k1", IntakeKind: IntakeKindIncident, Title: "t",
+		Incident: &IncidentInput{Severity: "high", Impact: "high", Urgency: "high"},
+	}
+	withAssignee := base
+	assignee := 9
+	withAssignee.Incident = &IncidentInput{Severity: "high", Impact: "high", Urgency: "high", AssigneeID: &assignee}
+
+	_, digestBase, err := CanonicalizeCommand(base)
+	require.NoError(t, err)
+	_, digestWithAssignee, err := CanonicalizeCommand(withAssignee)
+	require.NoError(t, err)
+	assert.NotEqual(t, digestBase, digestWithAssignee, "assigneeId must be part of the idempotency digest")
+}
+```
+
+Run it first to confirm it FAILs (`go test ./handlers/intake -run TestCanonicalizeCommandDigestChangesWithFullIncidentFieldSet -v`) — both digests come back equal today. Fix `canonicalCommandV1` and `normalizeIncident`:
+
+```go
+type canonicalIncidentInputV1 struct {
+	Type             string                 `json:"type,omitempty"`
+	Severity         string                 `json:"severity,omitempty"`
+	ExplicitPriority string                 `json:"priority,omitempty"`
+	Impact           string                 `json:"impact,omitempty"`
+	Urgency          string                 `json:"urgency,omitempty"`
+	DetectedAt       string                 `json:"detectedAt,omitempty"`
+	Category         string                 `json:"category,omitempty"`
+	Subcategory      string                 `json:"subcategory,omitempty"`
+	AssigneeID       *int                   `json:"assigneeId,omitempty"`
+	ImpactAnalysis   map[string]interface{} `json:"impactAnalysis,omitempty"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+	Source           string                 `json:"source,omitempty"`
+}
+```
+
+Replace `canonicalCommandV1.Incident`'s type from `*IncidentInput` to `*canonicalIncidentInputV1`, and in `normalizeIncident`, build the full struct instead of the four-field one:
+
+```go
+if command.Incident != nil {
+	normalized.Incident = &IncidentInput{
+		Type: strings.TrimSpace(command.Incident.Type), Severity: strings.TrimSpace(command.Incident.Severity),
+		ExplicitPriority: strings.TrimSpace(command.Incident.ExplicitPriority), Impact: strings.TrimSpace(command.Incident.Impact),
+		Urgency: strings.TrimSpace(command.Incident.Urgency), DetectedAt: strings.TrimSpace(command.Incident.DetectedAt),
+		Category: strings.TrimSpace(command.Incident.Category), Subcategory: strings.TrimSpace(command.Incident.Subcategory),
+		AssigneeID: copyInt(command.Incident.AssigneeID), ImpactAnalysis: command.Incident.ImpactAnalysis, Metadata: command.Incident.Metadata,
+		Source: strings.TrimSpace(command.Incident.Source),
+	}
+	if err := normalizeIncident(normalized.Incident); err != nil {
+		return CreateWorkItemCommand{}, "", err
+	}
+}
+```
+
+and in `CanonicalizeCommand`, build the canonical struct's `Incident` field from `normalized.Incident` instead of assigning it directly:
+
+```go
+var canonicalIncident *canonicalIncidentInputV1
+if normalized.Incident != nil {
+	canonicalIncident = &canonicalIncidentInputV1{
+		Type: normalized.Incident.Type, Severity: normalized.Incident.Severity, ExplicitPriority: normalized.Incident.ExplicitPriority,
+		Impact: normalized.Incident.Impact, Urgency: normalized.Incident.Urgency, DetectedAt: normalized.Incident.DetectedAt,
+		Category: normalized.Incident.Category, Subcategory: normalized.Incident.Subcategory, AssigneeID: normalized.Incident.AssigneeID,
+		ImpactAnalysis: normalized.Incident.ImpactAnalysis, Metadata: normalized.Incident.Metadata, Source: normalized.Incident.Source,
+	}
+}
+canonical := canonicalCommandV1{
+	IntakeKind: normalized.IntakeKind, Title: normalized.Title, Description: normalized.Description,
+	CatalogItemID: normalized.CatalogItemID, CTI: normalized.CTI, CIIDs: normalized.CIIDs,
+	FormValues: normalized.FormValues, SourceReference: normalized.SourceReference, Incident: canonicalIncident,
+}
+```
+
+`CanonicalDigestVersion` must bump from `"intake-v1"` to `"intake-v2"` in this same change — a wider digest for the same version string would make `idempotency_repository.go:88`'s `receipt.DigestVersion != digestVersion` check meaningless for rows written under the old, narrower v1 digest (they would compare a v1-computed digest already in the DB against a v2-computed digest for a retry of the same request, always mismatching); bumping the version makes any leftover v1 receipt (there won't be any in a fresh Phase 1 deployment, but this keeps the version honest for anyone testing against the ported branch's existing fixtures) fail the version check cleanly instead of comparing incompatible digests silently.
+
+- [ ] **Step 6: Run and commit**
 
 ```bash
 cd itsm-backend
 gofmt -w handlers/intake service/incident_service.go
-go test ./handlers/intake ./service -run 'TestIncidentCreator|TestIncidentService' -count=1
+go test ./handlers/intake ./service -run 'TestIncidentCreator|TestIncidentService|TestCanonicalizeCommand' -count=1
 git add itsm-backend/handlers/intake itsm-backend/service/incident_service.go itsm-backend/service/incident_service_test.go
-git commit -m "feat(intake): carry assigneeId/impactAnalysis/metadata through IncidentCreator, matching existing CreateIncidentRequest fields"
+git commit -m "feat(intake): carry assigneeId/impactAnalysis/metadata through IncidentCreator; widen the idempotency digest to cover the full IncidentInput field set"
 ```
 
 ---
@@ -1126,14 +1201,16 @@ func TestChangeCreatorCreatesRealChangeExtension(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, plan.WorkItem.TicketNumber) // WorkItemCreator allocates this, ChangeCreator does not
 
-	// WorkItemCreator.CreateBase would normally build this row; the test builds
-	// it directly to isolate ChangeCreator.CreateExtension's behavior.
-	workItem, err := f.tx.Ticket.Create().
-		SetTitle(plan.WorkItem.Title).SetType("change").SetRecordClass(RecordClassChangeRequest).
-		SetPriority("medium").SetStatus("draft").SetTicketNumber("TKT-202609-000099").
-		SetRequesterID(plan.WorkItem.RequesterID).SetOpenedByID(plan.WorkItem.ActorID).
-		SetTenantID(plan.WorkItem.TenantID).Save(context.Background())
+	// Goes through the real WorkItemCreator.CreateBase (Task 4), not a manually
+	// built Ticket row -- this is what catches CreateBase's own record-class
+	// handling being wrong for change_request, which a manually built row would
+	// silently paper over (this exact gap shipped once already: see Task 4's note).
+	workItemCreator := NewWorkItemCreator(&stubTicketAllocator{number: "TKT-202609-000099"})
+	workItem, err := workItemCreator.CreateBase(context.Background(), f.tx, plan)
 	require.NoError(t, err)
+	assert.Equal(t, RecordClassChangeRequest, workItem.RecordClass)
+	assert.Equal(t, "change", workItem.Type)
+
 	ref, err := creator.CreateExtension(context.Background(), f.tx, workItem, plan)
 	require.NoError(t, err)
 	assert.Equal(t, "change", ref.Type)
@@ -1143,6 +1220,8 @@ func TestChangeCreatorCreatesRealChangeExtension(t *testing.T) {
 	assert.Equal(t, workItem.ID, saved.WorkItemID)
 }
 ```
+
+`stubTicketAllocator` is the same test double Task 4 defines in `work_item_creator_test.go`; since Task 9's test also lives in package `intake`, it is directly reusable — do not redefine a second copy.
 
 - [ ] **Step 3: Run to verify it fails**
 
@@ -1265,23 +1344,76 @@ if catalog.TargetClass != RecordClassServiceRequestItem && catalog.TargetClass !
 
 Register `NewChangeCreator()` in the Creator Registry alongside `IncidentCreator`/`ServiceRequestItemCreator`, at the same construction site Task 4 updated for the shared `workitemnumber.Allocator` (`internal/bootstrap/app.go` or wherever the Task 3 port put Application Service assembly).
 
-- [ ] **Step 6: Run and commit**
+- [ ] **Step 6: Add `Change` to the idempotency digest — `canonicalCommandV1` has no field for it at all today**
+
+Per the Global Constraints rule this task adds a new command sub-type under, so it adds a matching canonicalization case: right now `CanonicalizeCommand` never even looks at `command.Change`, so two Catalog-derived Change submissions with the same title/catalog but different `justification`/`riskLevel`/`implementationPlan` compute the identical digest.
+
+```go
+func TestCanonicalizeCommandDigestChangesWithChangeFieldSet(t *testing.T) {
+	base := CreateWorkItemCommand{
+		IdempotencyKey: "k1", IntakeKind: IntakeKindCatalogItem, Title: "t", CatalogItemID: intPtr(1),
+		Change: &ChangeInput{RiskLevel: "low"},
+	}
+	highRisk := base
+	highRisk.Change = &ChangeInput{RiskLevel: "high"}
+
+	_, digestBase, err := CanonicalizeCommand(base)
+	require.NoError(t, err)
+	_, digestHighRisk, err := CanonicalizeCommand(highRisk)
+	require.NoError(t, err)
+	assert.NotEqual(t, digestBase, digestHighRisk, "riskLevel must be part of the idempotency digest")
+}
+```
+
+Run it first to confirm it FAILs (both digests come back equal — `Change` is silently ignored). Fix:
+
+```go
+type canonicalChangeInputV1 struct {
+	Justification, Type, ImpactScope, RiskLevel, PlannedStartDate, PlannedEndDate, ImplementationPlan, RollbackPlan string
+	AffectedCIs                                                                                                    []string
+}
+```
+
+Add `Change *canonicalChangeInputV1` to `canonicalCommandV1`. In `CanonicalizeCommand`, normalize `command.Change` the same way `SourceReference` is normalized (trim strings; sort `AffectedCIs` the same way `normalizeCIIDs` sorts CI IDs, so element order never causes a false conflict):
+
+```go
+var canonicalChange *canonicalChangeInputV1
+if command.Change != nil {
+	affected := append([]string(nil), command.Change.AffectedCIs...)
+	sort.Strings(affected)
+	canonicalChange = &canonicalChangeInputV1{
+		Justification: strings.TrimSpace(command.Change.Justification), Type: strings.TrimSpace(command.Change.Type),
+		ImpactScope: strings.TrimSpace(command.Change.ImpactScope), RiskLevel: strings.TrimSpace(command.Change.RiskLevel),
+		PlannedStartDate: strings.TrimSpace(command.Change.PlannedStartDate), PlannedEndDate: strings.TrimSpace(command.Change.PlannedEndDate),
+		ImplementationPlan: strings.TrimSpace(command.Change.ImplementationPlan), RollbackPlan: strings.TrimSpace(command.Change.RollbackPlan),
+		AffectedCIs: affected,
+	}
+}
+```
+
+and add `Change: canonicalChange` to the `canonical := canonicalCommandV1{...}` literal (Task 7 Step 5 already restructured this literal to build `Incident` from a local variable the same way — add this alongside it, do not build two separate literals). `sort` is already imported in `canonicalize.go` (used by `normalizeCIIDs`).
+
+- [ ] **Step 7: Run and commit**
 
 ```bash
 cd itsm-backend
-go test ./handlers/intake -run TestChangeCreator -v
+go test ./handlers/intake -run 'TestChangeCreator|TestCanonicalizeCommand' -v
 go build ./...
 git add itsm-backend/handlers/intake itsm-backend/internal/bootstrap/app.go
-git commit -m "feat(intake): add ChangeCreator, closing the professional-domain violation where Catalog change_request items created a ServiceRequest extension"
+git commit -m "feat(intake): add ChangeCreator, closing the professional-domain violation where Catalog change_request items created a ServiceRequest extension; widen the idempotency digest to cover Change fields"
 ```
 
 ---
 
 ### Task 10: Frontend Idempotency Key Generation
 
+**`service-request-api.ts` is the wrong file for the Service Request half of this task.** The real, actually-rendered Catalog request submission page (`itsm-frontend/src/app/(main)/service-catalog/request/[id]/page.tsx:123`) calls `ServiceCatalogApi.createServiceRequest(payload)` (`itsm-frontend/src/lib/api/service-catalog-api.ts:332-374`, which itself posts to `/api/v1/service-requests`) — not `service-request-api.ts`'s own separately-defined `createServiceRequest` (confirmed via `rg -n "createServiceRequest(" itsm-frontend/src --include=*.tsx`: the only real caller uses `ServiceCatalogApi`). An earlier draft of this task pointed at the file nothing calls; wiring idempotency into it would leave the real submission path with no header at all. This task also never listed the actual form files needed to generate-once-and-reuse a key across retries, only described them in prose (Step 4's earlier draft: "Update every call site... form component") — both are fixed below with real file paths and real code.
+
 **Files:**
-- Modify: `itsm-frontend/src/lib/api/incident-api.ts`
-- Modify: `itsm-frontend/src/lib/api/service-request-api.ts`
+- Modify: `itsm-frontend/src/lib/api/incident-api.ts` (`IncidentAPI.createIncident`)
+- Modify: `itsm-frontend/src/lib/api/service-catalog-api.ts` (`ServiceCatalogApi.createServiceRequest` — not `service-request-api.ts`, see above)
+- Modify: `itsm-frontend/src/app/(main)/incidents/create/page.tsx` (real Incident creation form)
+- Modify: `itsm-frontend/src/app/(main)/service-catalog/request/[id]/page.tsx` (real Catalog request submission form)
 - Create: `itsm-frontend/src/lib/api/__tests__/idempotency-key.test.ts`
 - Create: `itsm-frontend/src/lib/utils/idempotencyKey.ts`
 
@@ -1328,35 +1460,128 @@ export function generateIdempotencyKey(): string {
 }
 ```
 
-- [ ] **Step 4: Wire into `incident-api.ts` and `service-request-api.ts`**
+- [ ] **Step 4: Wire the header into `IncidentAPI.createIncident` and `ServiceCatalogApi.createServiceRequest`**
 
-Each create function must accept the key generated by the *caller* (the form component), not generate it internally per HTTP call — this is what makes retries idempotent. Find the current `createIncident(payload)` signature and change it to:
+`IncidentAPI.createIncident` (`incident-api.ts:395`) today is `static async createIncident(data: CreateIncidentRequest): Promise<Incident>`. Add the key as a required second parameter (the caller must always pass one — no optional/default-generated fallback, per this plan's no-transitional-path rule):
 
 ```typescript
-async createIncident(payload: CreateIncidentPayload, idempotencyKey: string): Promise<IncidentResponse> {
-  return httpClient.post('/incidents', payload, {
+static async createIncident(data: CreateIncidentRequest, idempotencyKey: string): Promise<Incident> {
+  return httpClient.post<Incident>('/api/v1/incidents', data, {
     headers: { 'Idempotency-Key': idempotencyKey },
   });
 }
 ```
 
-Apply the identical pattern to `service-request-api.ts`'s create function. Update every call site (incident creation form, service request creation form) to call `generateIdempotencyKey()` once when the form is opened/submission begins, store it in component state, and pass the same value on every retry — not regenerate it inside a retry handler.
+`ServiceCatalogApi.createServiceRequest` (`service-catalog-api.ts:332-374`) already builds `payload` and calls `httpClient.post<{ticketId: number} & Record<string, any>>('/api/v1/service-requests', payload)` at the end (line 371-374) — add the same second parameter and header, changing only that final call:
 
-- [ ] **Step 5: Run frontend tests and type-check**
+```typescript
+static async createServiceRequest(
+  request: CreateServiceRequestRequest,
+  idempotencyKey: string
+): Promise<{ ticketId: number } & Record<string, any>> {
+  // ...existing payload-building body (lines 336-369), unchanged...
+  return httpClient.post<{ ticketId: number } & Record<string, any>>(
+    '/api/v1/service-requests',
+    payload,
+    { headers: { 'Idempotency-Key': idempotencyKey } }
+  );
+}
+```
+
+- [ ] **Step 5: Generate-once-and-reuse in the real Incident creation form**
+
+`itsm-frontend/src/app/(main)/incidents/create/page.tsx:110-132`'s `handleSubmit` currently calls `IncidentAPI.createIncident({...})` with no key. Add a component-level ref that survives across a failed submission's retry (the user clicking "submit" again after an error) but is fresh on every new mount of this page (a genuinely new logical submission):
+
+```typescript
+import { generateIdempotencyKey } from '@/lib/utils/idempotencyKey';
+// ...
+const idempotencyKeyRef = useRef<string>(generateIdempotencyKey());
+
+const handleSubmit = async (values: IncidentFormValues) => {
+  setLoading(true);
+  try {
+    await IncidentAPI.createIncident({
+      title: values.title,
+      description: values.description,
+      priority: values.priority,
+      source: values.source || 'manual',
+      type: values.type || 'incident',
+      category: values.category,
+      impact: values.impact,
+      urgency: values.urgency,
+      assigneeId: values.assignedTo,
+      configurationItemIds: selectedCIs.map(ci => ci.id),
+    }, idempotencyKeyRef.current);
+    message.success('事件创建成功');
+    router.push('/incidents');
+  } catch (error) {
+    handleError(error, 'createIncident', '创建失败，请重试');
+  } finally {
+    setLoading(false);
+  }
+};
+```
+
+`useRef`'s initializer runs once per component mount, so a retry from the same failed submission (the form stays open, `handleSubmit` runs again) reuses `idempotencyKeyRef.current`; navigating away and back remounts the page and generates a new key for what is genuinely a new submission attempt. Add `useRef` to the existing `import React, { useState, useEffect } from 'react';` line.
+
+- [ ] **Step 6: Generate-once-and-reuse in the real Catalog request submission form**
+
+`itsm-frontend/src/app/(main)/service-catalog/request/[id]/page.tsx:85-123`'s `onFinish` builds `payload` and calls `ServiceCatalogApi.createServiceRequest(payload)`. Apply the identical `useRef` pattern:
+
+```typescript
+const idempotencyKeyRef = useRef<string>(generateIdempotencyKey());
+// ...
+const created = await ServiceCatalogApi.createServiceRequest(payload, idempotencyKeyRef.current);
+```
+
+- [ ] **Step 7: Add the component-level retry-reuse test**
+
+```typescript
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { IncidentAPI } from '@/lib/api/incident-api';
+import IncidentCreatePage from '../page';
+
+jest.mock('@/lib/api/incident-api');
+
+describe('IncidentCreatePage submission retry', () => {
+  it('reuses the same Idempotency-Key across a failed-then-retried submission', async () => {
+    const createIncident = IncidentAPI.createIncident as jest.Mock;
+    createIncident.mockRejectedValueOnce(new Error('network error'));
+    createIncident.mockResolvedValueOnce({ id: 1 });
+
+    render(<IncidentCreatePage />);
+    fireEvent.change(screen.getByLabelText(/标题/i), { target: { value: 'VPN down' } });
+    fireEvent.click(screen.getByRole('button', { name: /提交/i }));
+    await waitFor(() => expect(createIncident).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(screen.getByRole('button', { name: /提交/i }));
+    await waitFor(() => expect(createIncident).toHaveBeenCalledTimes(2));
+
+    const [, firstKey] = createIncident.mock.calls[0];
+    const [, secondKey] = createIncident.mock.calls[1];
+    expect(firstKey).toBe(secondKey);
+  });
+});
+```
+
+Adjust the label/button text selectors to match the real form's actual JSX (`role="button"` name and the title field's label) before finalizing — this test's assertions (call count, key reuse across calls) are the part that must not change; the selectors are the part that must match the real rendered form.
+
+- [ ] **Step 8: Run frontend tests and type-check**
 
 ```bash
 cd itsm-frontend
-npx jest src/lib/api/__tests__/idempotency-key.test.ts src/lib/api/__tests__/incident-api.test.ts src/lib/api/__tests__/service-request-api.test.ts
+npx jest src/lib/api/__tests__/idempotency-key.test.ts src/lib/api/__tests__/incident-api.test.ts src/lib/api/__tests__/service-catalog-api.test.ts
+npx jest src/app/\(main\)/incidents/create
 npm run type-check
 ```
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
-git add itsm-frontend/src/lib/utils/idempotencyKey.ts itsm-frontend/src/lib/api/incident-api.ts itsm-frontend/src/lib/api/service-request-api.ts itsm-frontend/src/lib/api/__tests__/idempotency-key.test.ts
-git commit -m "feat(frontend): generate stable per-submission Idempotency-Key for incident/service-request creation"
+git add itsm-frontend/src/lib/utils/idempotencyKey.ts itsm-frontend/src/lib/api/incident-api.ts itsm-frontend/src/lib/api/service-catalog-api.ts itsm-frontend/src/lib/api/__tests__/idempotency-key.test.ts itsm-frontend/src/app/\(main\)/incidents/create/page.tsx itsm-frontend/src/app/\(main\)/incidents/create/__tests__ itsm-frontend/src/app/\(main\)/service-catalog/request/\[id\]/page.tsx
+git commit -m "feat(frontend): generate and reuse a stable per-submission Idempotency-Key for the real incident and Catalog request creation forms"
 ```
 
 ---
@@ -1448,10 +1673,48 @@ func TestIncidentCreateMapsFullFieldSet(t *testing.T) {
 	require.NotNil(t, creator.command.Incident)
 	assert.Equal(t, "critical", creator.command.Incident.ExplicitPriority)
 	assert.Equal(t, 9, *creator.command.Incident.AssigneeID)
-	require.NotNil(t, creator.command.SourceReference)
-	assert.Equal(t, "monitoring", creator.command.SourceReference.Provider)
+	assert.Equal(t, "monitoring", creator.command.Incident.Source)
+	assert.Nil(t, creator.command.SourceReference) // manual web submissions never populate SourceReference -- see the note above
 	assert.Equal(t, "regional", creator.command.Incident.ImpactAnalysis["scope"])
 	assert.Nil(t, creator.command.CTI) // free-text category/subcategory never populates CTI on this HTTP path
+}
+
+func TestIncidentCreateRetryWithSameKeyAndBodyProducesIdenticalDigest(t *testing.T) {
+	// Regression test for the SourceReference/UnixNano bug: two requests built
+	// from the identical body under the identical Idempotency-Key must
+	// canonicalize to the identical command, so a real ApplicationService.Create
+	// treats the second call as a replay, not an IdempotencyConflict. This
+	// controller test cannot reach CanonicalizeCommand directly (that's Task 7's
+	// own test) -- what it proves is narrower but just as necessary: the
+	// controller itself must not inject any per-call-varying value (a
+	// timestamp, a random ID) into the command it builds from the same body.
+	creator := &recordingIncidentIntake{result: &intake.CreateWorkItemResult{
+		ProfessionalReference: intake.ProfessionalReference{Type: "incident", ID: 404},
+	}}
+	controller := NewIncidentController(nil, nil, nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
+	controller.intakeService = creator
+	controller.incidentCreateReader = stubIncidentCreateReader{response: &dto.IncidentResponse{ID: 404}}
+	router := incidentCreateRouter(controller)
+
+	body := `{"title":"t","source":"monitoring"}`
+	post := func() {
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/incidents", bytes.NewBufferString(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Idempotency-Key", "key-retry")
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, req)
+		require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	}
+	post()
+	firstCommand := creator.command
+	post()
+	secondCommand := creator.command
+
+	firstDigest, err := json.Marshal(firstCommand)
+	require.NoError(t, err)
+	secondDigest, err := json.Marshal(secondCommand)
+	require.NoError(t, err)
+	assert.JSONEq(t, string(firstDigest), string(secondDigest), "identical body + identical key must produce an identical command on every call")
 }
 
 func TestIncidentCreateMapsCategoryTypeAndDetectedAt(t *testing.T) {
@@ -1546,12 +1809,9 @@ func (c *IncidentController) CreateIncident(ctx *gin.Context) {
 		CIIDs:          req.ConfigurationItemIDs,
 		Incident: &intake.IncidentInput{
 			Type: req.Type, Severity: req.Severity, ExplicitPriority: req.Priority, Impact: req.Impact, Urgency: req.Urgency,
-			Category: req.Category, Subcategory: req.Subcategory, DetectedAt: detectedAt,
+			Category: req.Category, Subcategory: req.Subcategory, DetectedAt: detectedAt, Source: req.Source,
 			AssigneeID: req.AssigneeID, ImpactAnalysis: mapImpactAnalysis(req.ImpactAnalysis), Metadata: req.Metadata,
 		},
-	}
-	if strings.TrimSpace(req.Source) != "" {
-		command.SourceReference = &intake.SourceReference{Provider: req.Source, EventID: fmt.Sprintf("web-%d", time.Now().UnixNano())}
 	}
 
 	result, err := c.intakeService.Create(ctx.Request.Context(), identity, command)
@@ -1569,6 +1829,8 @@ func (c *IncidentController) CreateIncident(ctx *gin.Context) {
 ```
 
 `dto.CreateIncidentRequest` (`dto/incident_dto.go:52-68`) has no numeric category ID field at all — `Category`/`Subcategory` are both free-text `string` (not pointers), exactly matching the `IncidentInput.Category`/`Subcategory` fields Task 5 added. There is therefore no `command.CTI` to populate here: this HTTP path always goes through `IncidentCreator`'s free-text branch (`ResolveIncidentCategory`), and `command.CTI` stays nil — only the Catalog/BPMN-derived creation paths (Task 12/13, which already hold a structured CTI) populate `command.CTI.CategoryID`. `req.DetectedAt` is `*time.Time` (not a string) — it is formatted to RFC3339 above because `IncidentInput.DetectedAt` (Task 5) is a `string` field that `IncidentCreator.Prepare` parses back with `time.Parse(time.RFC3339, ...)`. `req.Type` maps straight through to `IncidentInput.Type`, matching `IncidentService.CreateIncident`'s existing `incidentType := req.Type` handling (`service/incident_service.go:155`) — dropping it here would silently discard every non-default incident type (`security_event`, `alert`) submitted through this endpoint.
+
+`req.Source` maps to `IncidentInput.Source` (Task 7), **not** `command.SourceReference` — this replaces an earlier draft of this task that built `command.SourceReference = &intake.SourceReference{Provider: req.Source, EventID: fmt.Sprintf("web-%d", time.Now().UnixNano())}`. `CanonicalizeCommand` (Task 7 Step 5) includes the full `SourceReference` struct in the idempotency digest and requires `EventID` non-empty whenever `SourceReference` is set; generating a fresh `UnixNano()` value on every call means every retry of the exact same logical submission under the same `Idempotency-Key` computes a different digest than the original attempt, so the retry is misclassified as "same key, different body" (`IdempotencyConflict`) instead of being recognized as a safe replay — defeating the whole point of the header. `SourceReference` exists for channels with a genuine external event to correlate against for dedup (BPMN/webhook-triggered creation); a human submitting a web form has no such external event, and the Idempotency-Key alone is the correct dedup mechanism for this channel. Do not populate `command.SourceReference` from this controller at all.
 
 - [ ] **Step 4: Add `respondIntakeError` and `mapImpactAnalysis` helpers**
 
@@ -1656,11 +1918,13 @@ git commit -m "feat(incident): route /incidents through CreateWorkItemCommand, r
 ### Task 12: BPMN `createIncident` Callback Wired to Intake (Actor = Requester = `reporter_id`)
 
 **Files:**
-- Modify: `itsm-backend/service/bpmn/incident_handler.go:33-128` (struct, constructor, `createIncident`)
+- Modify: `itsm-backend/service/bpmn/incident_handler.go:33-128` (struct, constructor, `Execute`'s dispatch, `createIncident`)
 - Modify: `itsm-backend/service/bpmn/incident_handler_test.go:500-526` (`TestIncidentServiceTaskHandler_CreateIncident_DelegatesToInjectedService` no longer matches the rewritten body)
 - Modify: `itsm-backend/internal/bootstrap/app.go` (wire the shared Intake `ApplicationService` into the handler; this is a *different* `app.go` call site than `srIncidentBridge`, which Task 13 removes)
 
 The real `createIncident` (`incident_handler.go:88-128`) calls `h.incidentService.CreateIncident(ctx, &dto.CreateIncidentRequest{...}, tenantID, reporterID)`, where `incidentService IncidentDomainServiceInterface` is a handler-local interface (`incident_handler.go:21-30`) also used by `assignIncident`/`escalateIncident`/etc. — those other actions keep using it unchanged; only `createIncident` stops calling `CreateIncident` on it. The existing `dto.CreateIncidentRequest` literal already carries `Type: incidentType` (from `variables["type"]`) — the earlier draft of this task dropped that field; it is restored below.
+
+**The idempotency-key derivation needs a real unique identifier, not `variables["task_id"]`.** `Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{})` (`handler_base.go`'s `ServiceTaskHandlerInterface`) receives a `task` parameter, but its dispatch switch (`case "create_incident": return h.createIncident(ctx, variables)`) drops it before calling `createIncident` — and nothing in this codebase ever populates `variables["task_id"]` for a real, live service-task execution (confirmed: `rg '"task_id"\]' service/bpmn` and `rg 'variables\["task_id"\] ='` both come back with zero production writers; the only place that string appears is a hand-written test). `ProcessTask.TaskID` (`ent/schema/process_task.go`) — a distinct field from `task_definition_key`, which *is* reused across every instance of the same process definition — is `Unique().NotEmpty()` and is the real per-execution identifier. Falling back to a never-populated map key meant every live BPMN-triggered incident creation, across every tenant and process instance, computed the identical key `"bpmn-create-incident:"` — the first ever created would deduplicate or conflict with literally every one after it. Fix by threading `task` through and deriving from `task.TaskID`, failing closed (an explicit error, not a fallback key) when neither a durable execution key nor a real task is available — this task-persisted-identifier check happens *before* the already-existing `durable` check further down, and is a distinct condition from it.
 
 **Interfaces:**
 - Consumes: `intake.ApplicationService.Create`.
@@ -1695,7 +1959,8 @@ func TestIncidentServiceTaskHandler_CreateIncident_UsesReporterAsActorAndRequest
 	handler.SetIntakeService(recorder)
 
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, 1)
-	result, err := handler.Execute(ctx, nil, map[string]interface{}{
+	task := &ent.ProcessTask{TaskID: "task-exec-1"}
+	result, err := handler.Execute(ctx, task, map[string]interface{}{
 		"action":      "create_incident",
 		"title":       "测试事件",
 		"type":        "security_event",
@@ -1707,7 +1972,46 @@ func TestIncidentServiceTaskHandler_CreateIncident_UsesReporterAsActorAndRequest
 	assert.Equal(t, 3, recorder.identity.RequesterID)
 	require.NotNil(t, recorder.command.Incident)
 	assert.Equal(t, "security_event", recorder.command.Incident.Type)
+	assert.Equal(t, "bpmn-create-incident:task-exec-1", recorder.command.IdempotencyKey)
 	assert.Equal(t, 7, result.OutputVars["incident_id"])
+}
+
+func TestIncidentServiceTaskHandler_CreateIncident_FailsClosedWithoutAPersistedTask(t *testing.T) {
+	handler := NewIncidentServiceTaskHandler(nil, zap.NewNop().Sugar())
+	recorder := &recordingIntake{result: &intake.CreateWorkItemResult{}}
+	handler.SetIntakeService(recorder)
+
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, 1)
+	_, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action": "create_incident", "title": "t", "reporter_id": 3,
+	})
+	require.Error(t, err)
+	assert.Zero(t, recorder.calls, "must not call Intake without a real idempotency key source")
+
+	emptyTask := &ent.ProcessTask{}
+	_, err = handler.Execute(ctx, emptyTask, map[string]interface{}{
+		"action": "create_incident", "title": "t", "reporter_id": 3,
+	})
+	require.Error(t, err)
+	assert.Zero(t, recorder.calls)
+}
+
+func TestIncidentServiceTaskHandler_CreateIncident_DifferentTaskExecutionsGetDifferentKeys(t *testing.T) {
+	handler := NewIncidentServiceTaskHandler(nil, zap.NewNop().Sugar())
+	recorder := &recordingIntake{result: &intake.CreateWorkItemResult{}}
+	handler.SetIntakeService(recorder)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, 1)
+	variables := map[string]interface{}{"action": "create_incident", "title": "t", "reporter_id": 3}
+
+	_, err := handler.Execute(ctx, &ent.ProcessTask{TaskID: "instance-A-task-7"}, variables)
+	require.NoError(t, err)
+	firstKey := recorder.command.IdempotencyKey
+
+	_, err = handler.Execute(ctx, &ent.ProcessTask{TaskID: "instance-B-task-7"}, variables)
+	require.NoError(t, err)
+	secondKey := recorder.command.IdempotencyKey
+
+	assert.NotEqual(t, firstKey, secondKey, "two different process instances reaching the same task_definition_key must not collide on task_id alone")
 }
 ```
 
@@ -1720,10 +2024,12 @@ go test ./service/bpmn -run TestIncidentServiceTaskHandler_CreateIncident_UsesRe
 
 Expected: FAIL — `IncidentServiceTaskHandler` has no `SetIntakeService` method or `intakeService` field yet.
 
-- [ ] **Step 3: Rewrite `createIncident`**
+- [ ] **Step 3: Thread `task` through `Execute`'s dispatch and rewrite `createIncident`**
+
+In `Execute`'s switch (`incident_handler.go:66-85`), change the `create_incident` case from `return h.createIncident(ctx, variables)` to `return h.createIncident(ctx, task, variables)` — every other case is unchanged, since only `createIncident` needs a real per-execution identifier.
 
 ```go
-func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
+func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
 	if _, durable := BPMNCallbackExecutionKey(ctx); durable {
 		return nil, fmt.Errorf("持久化回调必须使用流程实例中的既有事件目标")
 	}
@@ -1746,9 +2052,13 @@ func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, variabl
 	if h.intakeService == nil {
 		return nil, fmt.Errorf("intake service 未注入，无法创建事件")
 	}
+	idempotencyKey, err := bpmnCreateIncidentIdempotencyKey(ctx, task)
+	if err != nil {
+		return nil, err
+	}
 	identity := intake.Identity{TenantID: tenantID, ActorID: reporterID, RequesterID: reporterID, Channel: "bpmn"}
 	command := intake.CreateWorkItemCommand{
-		IdempotencyKey: bpmnCreateIncidentIdempotencyKey(ctx, variables),
+		IdempotencyKey: idempotencyKey,
 		IntakeKind:     intake.IntakeKindIncident,
 		Title:          title,
 		Description:    description,
@@ -1765,15 +2075,22 @@ func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, variabl
 	}, nil
 }
 
-// bpmnCreateIncidentIdempotencyKey derives a stable key from the BPMN
-// execution context so a retried callback (crash, redelivery) never creates
-// a second Incident for the same trigger.
-func bpmnCreateIncidentIdempotencyKey(ctx context.Context, variables map[string]interface{}) string {
+// bpmnCreateIncidentIdempotencyKey derives a stable key from a real,
+// persisted execution identifier -- either the durable callback outbox's
+// execution key, or task.TaskID (ent/schema/process_task.go's Unique/NotEmpty
+// field, distinct from the reusable-across-instances task_definition_key).
+// Fails closed rather than falling back to a non-unique or empty key: a
+// missing task_id here means this callback is not being invoked through the
+// real BPMN engine's persisted-task path, and creating an Incident anyway
+// risks colliding with every other untracked invocation.
+func bpmnCreateIncidentIdempotencyKey(ctx context.Context, task *ent.ProcessTask) (string, error) {
 	if key, ok := BPMNCallbackExecutionKey(ctx); ok && key != "" {
-		return "bpmn-create-incident:" + key
+		return "bpmn-create-incident:" + key, nil
 	}
-	taskID, _ := variables["task_id"].(string)
-	return "bpmn-create-incident:" + taskID
+	if task == nil || strings.TrimSpace(task.TaskID) == "" {
+		return "", fmt.Errorf("无法确定幂等键：既没有持久化回调执行标识，也没有关联的 ProcessTask")
+	}
+	return "bpmn-create-incident:" + strings.TrimSpace(task.TaskID), nil
 }
 ```
 
@@ -1794,11 +2111,11 @@ Add the `"itsm-backend/handlers/intake"` import. In `internal/bootstrap/app.go`,
 
 - [ ] **Step 4: Update the now-stale test and run**
 
-`TestIncidentServiceTaskHandler_CreateIncident_DelegatesToInjectedService` (`incident_handler_test.go:511-526`) asserts against `fake.lastCreateReq`/`fake.lastCreateUserID` on the old `IncidentDomainServiceInterface` path — delete it, replaced by Step 1's test above. `TestIncidentServiceTaskHandler_CreateIncident_RequiresInjectedService` (`incident_handler_test.go:500-509`) needs no change: it never calls `SetIncidentService`/`SetIntakeService`, and the rewritten `createIncident`'s nil-check on `h.intakeService` still returns an error containing `"未注入"`.
+`TestIncidentServiceTaskHandler_CreateIncident_DelegatesToInjectedService` (`incident_handler_test.go:511-526`) asserts against `fake.lastCreateReq`/`fake.lastCreateUserID` on the old `IncidentDomainServiceInterface` path — delete it, replaced by Step 1's test above. `TestIncidentServiceTaskHandler_CreateIncident_RequiresInjectedService` (`incident_handler_test.go:500-509`) needs no change: it never calls `SetIncidentService`/`SetIntakeService`, and the `h.intakeService == nil` check runs before the idempotency-key derivation, so the rewritten `createIncident` still returns an error containing `"未注入"` regardless of the `task` argument.
 
 ```bash
 cd itsm-backend
-go test ./service/bpmn -run TestIncidentServiceTaskHandler_CreateIncident -v
+go test ./service/bpmn -run 'TestIncidentServiceTaskHandler_CreateIncident' -v
 git add itsm-backend/service/bpmn/incident_handler.go itsm-backend/service/bpmn/incident_handler_test.go itsm-backend/internal/bootstrap/app.go
 git commit -m "fix(bpmn): route createIncident callback through CreateWorkItemCommand using reporter_id as both actor and requester"
 ```
@@ -1811,14 +2128,17 @@ The real production entry point is a single function, `Service.Create(ctx, tenan
 
 **Files:**
 - Modify: `itsm-backend/handlers/service_request/service.go` (dispatch, new `createFromCatalogViaIntake`, delete `IncidentCreator` interface/`incidentSvc` field/`createIncidentFromCatalog`)
-- Modify: `itsm-backend/handlers/service_request/handler.go` (thread the `Idempotency-Key` header down; `service_request_item` submissions still work without it)
+- Modify: `itsm-backend/handlers/service_request/entity.go` (add `ServiceRequest.IntakeRecordClass`)
+- Modify: `itsm-backend/handlers/service_request/handler.go` (thread the `Idempotency-Key` header down; branch the post-creation response on `IntakeRecordClass`; `service_request_item` submissions unaffected)
+- Modify: `itsm-backend/handlers/service_request/handler_test.go` (real HTTP test proving the Incident/Change diversion's response shape)
 - Modify: `itsm-backend/handlers/service_request/regression_test.go` (replace `fakeIncidentCreator`-based `TestService_Create_IncidentCatalog_NoServiceRequestRowCreated`; add the Change equivalent)
-- Modify: `itsm-backend/internal/bootstrap/app.go` (delete `srIncidentBridge`; wire the shared Intake `ApplicationService` into `service_request.NewService`)
+- Modify: `itsm-backend/handlers/change/handler.go` (export `ToDTO` alongside the existing package-private `toDTO`)
+- Modify: `itsm-backend/internal/bootstrap/app.go` (delete `srIncidentBridge`; wire the shared Intake `ApplicationService` into `service_request.NewService`; wire the new incident/change readers)
 - Modify: `itsm-backend/service/incident_service_test.go:300-310` (comment only — stop referencing the now-deleted `srIncidentBridge`/`IncidentCreator` bridge)
 
 **Interfaces:**
-- Consumes: `intake.ApplicationService.Create`, `intake.RecordClassChangeRequest`/`ChangeInput` (Task 9).
-- Produces: `Service.Create`'s new `idempotencyKey string` trailing parameter (all three call sites — `internal/bootstrap/app.go`, `tests/integration/service_catalog_fields_test.go:49`, `tests/e2e/sslvpn_scenario_test.go:139` — pass positional args; the two test call sites already pass `nil` for the old `incidentSvc` slot and need a trailing `""` added, nothing else, since SSLVPN's scenario never hits the Incident/Change branches and doesn't need a real key).
+- Consumes: `intake.ApplicationService.Create`, `intake.RecordClassChangeRequest`/`ChangeInput` (Task 9), `change.Service.GetChange` + newly-exported `change.ToDTO`.
+- Produces: `Service.Create`'s new `idempotencyKey string` trailing parameter (all three call sites — `internal/bootstrap/app.go`, `tests/integration/service_catalog_fields_test.go:49`, `tests/e2e/sslvpn_scenario_test.go:139` — pass positional args; the two test call sites already pass `nil` for the old `incidentSvc` slot and need a trailing `""` added, nothing else, since SSLVPN's scenario never hits the Incident/Change branches and doesn't need a real key); `ServiceRequest.IntakeRecordClass` (Step 5); `Handler.SetIncidentReader`/`SetChangeReader` (Step 5).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -2091,7 +2411,185 @@ Delete `createIncidentFromCatalog` (`service.go:535-557`) entirely — it is ful
 
 `ChangeInput` is intentionally left nil in `command` above: `reqData.FormData` (the generic Catalog dynamic-field bag) has no confirmed mapping to `ChangeInput`'s `Justification`/`ImpactScope`/`RiskLevel`/etc. today, the same way the Incident branch never populated `Severity`/`Impact`/`Urgency` from the Catalog form either — `ChangeCreator.Prepare`'s existing `defaultString(..., "normal"/"medium")` fallback applies, exactly as it does for a nil `Command.Change`. This is a recorded, deliberate simplification, not a gap left open to future judgment.
 
-- [ ] **Step 5: Thread the header through `Handler.Create`**
+- [ ] **Step 5: Define a real response contract for the Catalog-derived Incident/Change stub, instead of letting it fall through to `Handler.Create`'s `service_requests`-table `Get`**
+
+`Handler.Create` (`handler.go:170`) unconditionally calls `h.service.Get(ctx, created.ID, tenantID)` after every `Create`, which queries the real `service_requests` table. For the stub `*ServiceRequest` Step 4 returns from `createFromCatalogViaIntake`, `created.ID` is an Incident/Change extension ID, not a `service_requests.id` — that `Get` will not find a matching row (or, in the remote case it coincidentally matches an unrelated row, would return the wrong record). Today this silently falls into `Handler.Create`'s own existing failure branch, which responds with `h.toDTO(created)` on the near-empty stub (no title, no status, no ticket number) — a response contract nobody actually defined. Give the Incident/Change diversion its own real response path instead of letting the generic path silently degrade:
+
+```go
+type ServiceRequest struct {
+	// ...existing fields unchanged...
+	// IntakeRecordClass is set only for a stub result from
+	// createFromCatalogViaIntake (Step 4) -- "" for every real, persisted
+	// ServiceRequest. Handler.Create uses it to pick the right response
+	// builder instead of always assuming a service_requests row exists.
+	IntakeRecordClass string
+}
+```
+
+Add this field to the domain struct in `entity.go` (additive; every existing constructor/literal that doesn't set it keeps working since Go zero-values it to `""`). Update `createFromCatalogViaIntake`'s return:
+
+```go
+return &ServiceRequest{
+	ID: result.ProfessionalReference.ID, TenantID: tenantID, CatalogID: cat.ID, RequesterID: requesterID,
+	TicketID: result.WorkItemID, IntakeRecordClass: result.RecordClass,
+}, nil
+```
+
+(`TicketID` is already a real field on `ServiceRequest` — reused here to carry the WorkItem ID, the same field a persisted `service_request_item` row uses for the same purpose.)
+
+Export `handlers/change`'s existing DTO mapper — it is package-private today and `service_request` needs it:
+
+```go
+// ToDTO 是 toDTO 的导出别名，供 handlers/service_request 在 Catalog 派生 Change 创建
+// 后构建响应时复用同一个 Mapper，不新写第二个。
+func ToDTO(c *Change) *dto.ChangeResponse { return toDTO(c) }
+```
+
+Add this one-line wrapper in `handlers/change/handler.go` next to `toDTO` — do not rename `toDTO` itself, since every existing call site inside that package would need touching for no behavioral benefit.
+
+Add to `Handler` (`handler.go`), following Task 11's `incidentCreateReader` pattern exactly:
+
+```go
+type incidentReader interface {
+	GetIncident(ctx context.Context, id, tenantID int) (*dto.IncidentResponse, error)
+}
+
+type changeReader interface {
+	GetChange(ctx context.Context, id, tenantID int) (*dto.ChangeResponse, error)
+}
+
+// added to Handler struct: incidentReader incidentReader; changeReader changeReader
+
+func (h *Handler) SetIncidentReader(r incidentReader) { h.incidentReader = r }
+func (h *Handler) SetChangeReader(r changeReader)     { h.changeReader = r }
+```
+
+`changeReader`'s concrete implementation needs a small adapter, since `change.Service.GetChange` returns the domain `*Change`, not a DTO directly (unlike `IncidentService.GetIncident`, which already returns `*dto.IncidentResponse`):
+
+```go
+// changeServiceReader adapts change.Service to this package's changeReader,
+// applying change.ToDTO the same way handlers/change's own HTTP handler does.
+type changeServiceReader struct{ svc *change.Service }
+
+func (r changeServiceReader) GetChange(ctx context.Context, id, tenantID int) (*dto.ChangeResponse, error) {
+	c, err := r.svc.GetChange(ctx, id, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	return change.ToDTO(c), nil
+}
+```
+
+Place `changeServiceReader` in `internal/bootstrap/app.go` next to the other small adapters already there (`srIncidentBridge`'s replacement, etc.) — it only needs to exist where both `service_request` and `change` are already imported.
+
+Rewrite `Handler.Create`'s post-creation branch:
+
+```go
+created, err := h.service.Create(c.Request.Context(), tenantID, userID, req.CatalogID, domainReq, idempotencyKey)
+if err != nil {
+	failServiceRequest(c, err)
+	return
+}
+
+switch created.IntakeRecordClass {
+case intake.RecordClassIncident:
+	if h.incidentReader == nil {
+		common.Fail(c, common.InternalErrorCode, "incident reader not configured")
+		return
+	}
+	resp, err := h.incidentReader.GetIncident(c.Request.Context(), created.ID, tenantID)
+	if err != nil {
+		common.Fail(c, common.InternalErrorCode, "创建成功但读取事件详情失败")
+		return
+	}
+	common.Success(c, resp)
+	return
+case intake.RecordClassChangeRequest:
+	if h.changeReader == nil {
+		common.Fail(c, common.InternalErrorCode, "change reader not configured")
+		return
+	}
+	resp, err := h.changeReader.GetChange(c.Request.Context(), created.ID, tenantID)
+	if err != nil {
+		common.Fail(c, common.InternalErrorCode, "创建成功但读取变更详情失败")
+		return
+	}
+	common.Success(c, resp)
+	return
+}
+
+fullReq, err := h.service.Get(c.Request.Context(), created.ID, tenantID)
+if err != nil {
+	h.service.logger.Errorw("Create: failed to get created service request", "error", err, "id", created.ID)
+	common.Success(c, h.toDTO(created))
+	return
+}
+common.Success(c, h.toDTOWithCustomFields(fullReq, h.service.Client(), c.GetInt("user_id"), c.GetString("role")))
+```
+
+The `service_request_item` branch (the final four lines) is byte-for-byte what `Handler.Create` already does today — only the new `switch` above it is added, and it only ever matches when `created.IntakeRecordClass` is non-empty, which only Step 4's stub sets.
+
+Add the driving test proving the real response shape (not the empty stub) comes back. `handler_test.go` has no shared fixture that accepts a custom `intakeService`/readers (`srSetup`'s `NewService(...)` call hardcodes `nil` for that slot, and none of its existing callers need to override it) or that sets a request header (`srDoReq` doesn't take one) — this test builds its own router inline, following the exact same tenant/catalog/service/handler/route wiring `srSetup` uses, rather than changing `srSetup`'s signature for every existing caller over one new test's needs:
+
+```go
+func TestServiceRequestHandlerCreate_IncidentDiversionReturnsIncidentResponse(t *testing.T) {
+	dsn := "file:" + filepath.Join(t.TempDir(), "sr_incident_diversion_response.db") + "?_fk=1"
+	client := enttest.Open(t, "sqlite3", dsn)
+	logger := zaptest.NewLogger(t).Sugar()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().SetName("t").SetCode("sr-diversion-resp").SetDomain("d.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	user, err := client.User.Create().
+		SetUsername("u-" + srUID()).SetEmail("u-" + srUID() + "@test.com").SetName("U").
+		SetPasswordHash("hash").SetRole("manager").SetDepartment("IT").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	scRepo := service_catalog.NewEntRepository(client)
+	scSvc := service_catalog.NewService(scRepo, client, logger)
+	cat, err := scSvc.Create(ctx, "系统故障上报", "运维", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	require.NoError(t, err)
+	_, err = client.ServiceCatalog.UpdateOneID(cat.ID).SetTargetClass(service_catalog.TargetClassIncident).Save(ctx)
+	require.NoError(t, err)
+
+	repo := NewEntRepository(client)
+	cmdbRepo := cmdb.NewEntRepository(client)
+	ticketSvc := service.NewTicketServiceForTest(client, logger)
+	recorder := &recordingIntake{result: &intake.CreateWorkItemResult{
+		RecordClass: intake.RecordClassIncident, WorkItemID: 9,
+		ProfessionalReference: intake.ProfessionalReference{Type: "incident", ID: 404},
+	}}
+	svc := NewService(repo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, recorder)
+	h := NewHandler(svc)
+	h.SetIncidentReader(stubIncidentReaderForHandler{response: &dto.IncidentResponse{ID: 404, Title: "系统故障上报"}})
+
+	r := gin.New()
+	r.Use(srAuth(tenant.ID, user.ID))
+	r.POST("/api/v1/service-requests", h.Create)
+
+	req, err := http.NewRequest("POST", "/api/v1/service-requests", bytes.NewReader([]byte(`{"catalogId":`+strconv.Itoa(cat.ID)+`,"title":"系统故障上报"}`)))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "key-1")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "系统故障上报")
+	assert.Contains(t, w.Body.String(), `"id":404`)
+}
+
+type stubIncidentReaderForHandler struct {
+	response *dto.IncidentResponse
+	err      error
+}
+
+func (s stubIncidentReaderForHandler) GetIncident(context.Context, int, int) (*dto.IncidentResponse, error) {
+	return s.response, s.err
+}
+```
+
+- [ ] **Step 6: Thread the header through `Handler.Create`**
 
 ```go
 idempotencyKey := strings.TrimSpace(c.GetHeader("Idempotency-Key"))
@@ -2099,31 +2597,34 @@ idempotencyKey := strings.TrimSpace(c.GetHeader("Idempotency-Key"))
 created, err := h.service.Create(c.Request.Context(), tenantID, userID, req.CatalogID, domainReq, idempotencyKey)
 ```
 
-Add the `idempotencyKey` line right after `normalizeCreateServiceRequest(&req)` in `handler.go:120-178`; the rest of `Handler.Create` (binding, `failServiceRequest`, the post-create `Get`) is unchanged. This makes the header available for every `/service-requests` submission without requiring it for `service_request_item` ones (Step 3's check only fires inside the Incident/Change branch).
+Add the `idempotencyKey` line right after `normalizeCreateServiceRequest(&req)` in `handler.go:120-178`; the rest of `Handler.Create`'s binding/tenant/user resolution is unchanged — only the post-creation branch (Step 5) changes. This makes the header available for every `/service-requests` submission without requiring it for `service_request_item` ones (Step 3's check only fires inside the Incident/Change branch).
 
-- [ ] **Step 6: Fix `internal/bootstrap/app.go` wiring**
+- [ ] **Step 7: Fix `internal/bootstrap/app.go` wiring**
 
-Delete `srIncidentBridge` (`app.go:1336-1353`) and the `incidentBridge := &srIncidentBridge{svc: incidentService}` line; pass the shared Intake `ApplicationService` instance (the same one wired into `IncidentController` in Task 11 and `IncidentServiceTaskHandler` in Task 12) as `service_request.NewService`'s last argument instead:
+Delete `srIncidentBridge` (`app.go:1336-1353`) and the `incidentBridge := &srIncidentBridge{svc: incidentService}` line; pass the shared Intake `ApplicationService` instance (the same one wired into `IncidentController` in Task 11 and `IncidentServiceTaskHandler` in Task 12) as `service_request.NewService`'s last argument instead, and wire the two new readers from Step 5:
 
 ```go
 srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, numberAllocator, sugar, ticketService, chainResolver, intakeApplicationService)
+srHandler.SetIncidentReader(incidentService) // IncidentService already implements incidentReader (same GetIncident used by Task 11)
+srHandler.SetChangeReader(changeServiceReader{svc: changeServiceDomain})
 ```
 
 Update `tests/integration/service_catalog_fields_test.go:49` and `tests/e2e/sslvpn_scenario_test.go:139`: both already pass `nil` for this parameter and keep compiling unchanged (an interface parameter accepts `nil` regardless of type); add the new trailing `""` argument to every `svc.Create(...)` call in both files (SSLVPN's scenario never hits the Incident/Change branch, so an empty key is harmless there).
 
-- [ ] **Step 7: Clean up the stale comment in `incident_service_test.go`**
+- [ ] **Step 8: Clean up the stale comment in `incident_service_test.go`**
 
-`incident_service_test.go:300-310`'s comment on `TestIncidentService_CreateIncident_ServiceCatalogDivertedPath_AlsoCreatesWorkItem` describes "该路径通过 IncidentCreator 接口（生产环境由 internal/bootstrap/app.go 的 srIncidentBridge 适配）" — `srIncidentBridge` no longer exists after Step 6. Reword the comment to say the Catalog-diverted Incident path now goes through `intake.IncidentCreator` (Tasks 5-7) instead of `IncidentService.CreateIncident` directly, and that this test still independently exercises `CreateIncident`'s own WorkItem-creation behavior — it does not change what the test calls or asserts, only the comment's description of the production call path.
+`incident_service_test.go:300-310`'s comment on `TestIncidentService_CreateIncident_ServiceCatalogDivertedPath_AlsoCreatesWorkItem` describes "该路径通过 IncidentCreator 接口（生产环境由 internal/bootstrap/app.go 的 srIncidentBridge 适配）" — `srIncidentBridge` no longer exists after Step 7. Reword the comment to say the Catalog-diverted Incident path now goes through `intake.IncidentCreator` (Tasks 5-7) instead of `IncidentService.CreateIncident` directly, and that this test still independently exercises `CreateIncident`'s own WorkItem-creation behavior — it does not change what the test calls or asserts, only the comment's description of the production call path.
 
-- [ ] **Step 8: Run and commit**
+- [ ] **Step 9: Run and commit**
 
 ```bash
 cd itsm-backend
-go test ./handlers/service_request -run 'TestService_Create' -v
+go test ./handlers/service_request -run 'TestService_Create|TestServiceRequestHandlerCreate' -v
+go test ./handlers/change -run TestChangeCreator -v
 go test ./service -run TestIncidentService_CreateIncident_ServiceCatalogDivertedPath -v
 go build ./...
-git add itsm-backend/handlers/service_request/service.go itsm-backend/handlers/service_request/handler.go itsm-backend/handlers/service_request/regression_test.go itsm-backend/internal/bootstrap/app.go itsm-backend/tests/integration/service_catalog_fields_test.go itsm-backend/tests/e2e/sslvpn_scenario_test.go itsm-backend/service/incident_service_test.go
-git commit -m "fix(service-request): route Catalog-derived Incident and Change creation through CreateWorkItemCommand, creating a real ent.Change extension; service_request_item path unchanged"
+git add itsm-backend/handlers/service_request/service.go itsm-backend/handlers/service_request/handler.go itsm-backend/handlers/service_request/entity.go itsm-backend/handlers/service_request/handler_test.go itsm-backend/handlers/service_request/regression_test.go itsm-backend/handlers/change/handler.go itsm-backend/internal/bootstrap/app.go itsm-backend/tests/integration/service_catalog_fields_test.go itsm-backend/tests/e2e/sslvpn_scenario_test.go itsm-backend/service/incident_service_test.go
+git commit -m "fix(service-request): route Catalog-derived Incident and Change creation through CreateWorkItemCommand with a real per-recordClass response contract, creating a real ent.Change extension; service_request_item path unchanged"
 ```
 
 ---
