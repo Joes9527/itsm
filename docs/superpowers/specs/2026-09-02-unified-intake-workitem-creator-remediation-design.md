@@ -8,7 +8,7 @@
 
 ## 一、目的与定位
 
-本文档解决一个已确认的规划归并问题：`2026-08-30-architecture-assessment-remediation-execution-plan-design.md` 的 **W0**（WorkItemCreator + SLA policy binder + 专业域物理收口）与 `2026-08-28` 起的 KAF 委派设计线所产出的 **Unified Intake**（`handlers/intake`，已在 `feat/kaf-delegation-transactional-delivery` 分支实施并 Dev 验证），是同一个技术问题的两次独立设计——两条线彼此从未互相引用。本文档不重新设计 WorkItemCreator，而是把 Unified Intake 归并进当前已合并的 P1 代码基线，让它成为 W0 的实际交付物，并在此基础上补齐 Unified Intake 首期明确排除的 Problem/Change 两个域、KAF 侧建单客户端、以及 Incident typed actions。
+本文档解决一个已确认的规划归并问题：`2026-08-30-architecture-assessment-remediation-execution-plan-design.md` 的 **W0**（WorkItemCreator + SLA policy binder + 专业域物理收口）与 `2026-08-28` 起的 KAF 委派设计线所产出的 **Unified Intake**（`handlers/intake`，已在 `feat/kaf-delegation-transactional-delivery` 分支实施并 Dev 验证），是同一个技术问题的两次独立设计——两条线彼此从未互相引用。本文档不重新设计 WorkItemCreator，而是把 Unified Intake 归并进当前已合并的 P1 代码基线，让它成为 W0 的实际交付物，并在此基础上补齐 Unified Intake 首期明确排除的 Problem 域（Change 在归并过程中发现是专业域一对一约束的现存违规，已并入 Phase 1，见五、5.3）、KAF 侧建单客户端、以及 Incident typed actions。
 
 本文档是治理总设计，不是覆盖全部 Phase 的实施计划。只有 Phase 1 在本文档中给出足够实施细节；Phase 2-4 只定边界和依赖，各自在启动前另行 `brainstorming` 和 `writing-plans`。
 
@@ -43,20 +43,23 @@
 | `service_catalogs.itsm_type` 是活跃依赖，不是可直接删列的遗留字段（外部评审发现，已核实） | `handlers/service_catalog/repository_impl.go` 第 36、123 行在 **Create 和每次 Update** 时都用 `ComputeTargetClass(catalog.ITSMType)` 重新计算 `target_class` | Phase 1 删除 `itsm_type` 列之前，必须先把 Create/Update 改成直接接受、校验并写入 `target_class`，不再从 `itsm_type` 派生；`cmd/backfill_servicecatalog_target_class` 的角色需要一并确认（是否已可退役） |
 | 遗漏的创建入口（外部评审发现，已核实） | `service/bpmn/incident_handler.go:111` 直接调用 `incidentService.CreateIncident(...)`，完全绕开 HTTP Controller；Catalog 派生的 Incident 也经由 `handlers/service_request/service.go:531` 单独创建 | Phase 1 只切 `/incidents`、`/service-requests` 两个 HTTP 入口不够完整；必须枚举全部创建入口并逐一决定是否也接入 `CreateWorkItemCommand` |
 | Rebase 范围被低估（外部评审发现，已核实） | `feat/kaf-delegation-transactional-delivery` 相对 `main` 的 diff 不止 `handlers/intake`，还包含 Ent 生成代码、路由、配置、controller、测试和文档的大量分叉改动 | "14 个提交、冲突面更小"缺少文件级证据支撑；Phase 1 第一个任务必须先产出文件级 diff 清单，再决定整体 rebase 还是按清单精选式移植 |
+| Catalog 派生的 Change 创建违反专业域隔离（外部评审发现，已核实，已按 AGENTS.md 决策） | `resolver.go:106` 只接受 `service_request_item`/`incident`，会拒绝 `change_request`；但当前 main 的 `handlers/service_request/service.go:172` 对 `target_class=change_request` 的 Catalog 项，构造的扩展记录始终是 `ServiceRequest`（第 179 行），从来不是 `ent.Change`——只是给 Ticket 打了 `type="change"` 标签 | 这本身已经违反 AGENTS.md"Every Incident, Problem, Change Request, Requested Item, and Catalog Task must have exactly one WorkItem"（专业类一对一扩展）的约束，不是 Phase 1 要保留的合规现状。**决策**：Change 的 `ProfessionalCreator` 并入 Phase 1（不再放到 Phase 2），一次性关闭这个违规，不保留过渡期 |
+| Incident 创建 DTO 字段被静默丢弃（外部评审发现，已核实，且已有实现证据） | `feat/kaf-delegation-transactional-delivery` 上的 `controller/incident_controller.go`（第 123-125 行）已经把 `/incidents` 接到 `intake.CreateWorkItemCommand`，但只映射 `severity`/`impact`/`urgency`，且 `severity` 为空时用 `req.Priority` 兜底；`assigneeId`/`category`/`subcategory`/`source`/`impactAnalysis`/`metadata`/`type` 全部丢弃，不是假设性风险，是已经写好带测试（`incident_intake_adapter_test.go`）待归并的代码 | Phase 1 必须为 `dto.CreateIncidentRequest` 的每个字段显式定义"保留/映射/拒绝"规则（见 5.3），不能直接归并现有 adapter 实现 |
+| BPMN 创建入口的 actor/requester 边界（外部评审发现，已核实，边界已在 08-28 设计中定义） | `resolver.go:66-67` 硬性要求 `identity.ActorID == identity.RequesterID`；`service/bpmn/incident_handler.go:110-117` 的 `createIncident` 回调把 BPMN 变量里的 `reporter_id` 直接作为 `CreateIncident` 的 `userID` 参数——即"以这个真实用户的身份创建"，不是系统账号代替谁创建 | `2026-08-28` 设计 §2.1 的创建入口表格里，所有创建场景的 requester 权威来源都是"当前终端用户/操作人员"；"KAF automation 是执行 actor"这一条原文明确是**执行**场景（任务范围自动化 API），不适用于创建。**决策**：不新增 on-behalf-of 权限模型，`incident_handler.go` 接入 `CreateWorkItemCommand` 时 `ActorID`、`RequesterID` 都使用 `reporter_id`，与现有语义一致，`Resolver` 的现有规则不变 |
 
 ## 四、总体架构与 Phase 划分
 
 ```text
-Phase 1 (ITSM)  Unified Intake × P1 归并
-  └── Phase 2 (ITSM)  Problem/Change ProfessionalCreator + SLA 绑定
+Phase 1 (ITSM)  Unified Intake × P1 归并（Incident / Service Request / Change）
+  └── Phase 2 (ITSM)  Problem ProfessionalCreator + SLA 绑定
   └── Phase 3 (KAF)   对话式建单客户端（调用 /api/v1/intake/work-items）
   └── Phase 4 (ITSM)  Incident typed actions（assign/resolve/close）
 ```
 
 | Phase | 目标 | 依赖 | 代码库 |
 |---|---|---|---|
-| 1 | 归并 Unified Intake 到 P1 基线，成为 Incident/Service Request 的权威创建入口 | 无（基于已合并的 main） | itsm-backend |
-| 2 | 复用 Phase 1 的 Creator Registry，给 Problem/Change 补 ProfessionalCreator + SLA 绑定 | Phase 1 | itsm-backend |
+| 1 | 归并 Unified Intake 到 P1 基线，成为 Incident/Service Request **/Change** 的权威创建入口 | 无（基于已合并的 main） | itsm-backend |
+| 2 | 复用 Phase 1 的 Creator Registry，给 Problem 补 ProfessionalCreator + SLA 绑定 | Phase 1 | itsm-backend |
 | 3 | KAF Web/Teams/WeCom 渠道通过身份交换 + `CreateWorkItemCommand` 建单 | Phase 1（契约需先稳定） | KAF（`kaf-main`，独立仓库） |
 | 4 | `IncidentService` 支持调用方 `expectedVersion`，接入 KAF 的 `assign`/`resolve`/`close` | Phase 1（复用 S0/P1-C 的 `authorizeKafAutomationActor`/`BPMNAccessScope`） | itsm-backend |
 
@@ -68,7 +71,7 @@ Phase 2-4 只在本文档中确定边界和依赖，不在此展开实施细节�
 
 ### 5.1 目标
 
-把 `feat/kaf-delegation-transactional-delivery` 的 Unified Intake 实现（`handlers/intake` 全套）归并到当前 `main`，解决编号生成器和迁移号两处冲突，并让 ITSM 自己的 `/incidents`、`/service-requests` 入口也统一走这条创建路径。完成后，W0（WorkItemCreator + SLA policy binder，覆盖 Incident/Service Request 两个域）视为交付完成。
+把 `feat/kaf-delegation-transactional-delivery` 的 Unified Intake 实现（`handlers/intake` 全套）归并到当前 `main`，解决编号生成器和迁移号两处冲突，并让 ITSM 自己的 `/incidents`、`/service-requests` 入口也统一走这条创建路径。**范围包含 Change**：当前 Catalog 派生的 `target_class=change_request` 创建路径本身已经违反 AGENTS.md 的专业类一对一扩展约束（构造的是 `ServiceRequest` 扩展而不是 `ent.Change`），Phase 1 一并交付真正的 Change `ProfessionalCreator`，不留到 Phase 2。完成后，W0（WorkItemCreator + SLA policy binder，覆盖 Incident/Service Request/Change 三个域）视为交付完成。
 
 ### 5.2 架构决策
 
@@ -89,7 +92,7 @@ Phase 2-4 只在本文档中确定边界和依赖，不在此展开实施细节�
 
 **Schema 全量核对**：Phase 1 的第一个任务必须对整个 Ent schema 目录做一次两条线的全量 diff（不只是本文档已核实的这两张表），确认没有遗漏的表级冲突，再进入实施。
 
-### 5.3 Incident/Service Request 字段映射与业务规则收口
+### 5.3 Incident/Service Request/Change 字段映射与业务规则收口
 
 这一节是外部评审核实出的真实缺口，不是编号/迁移之外的锦上添花，是 Phase 1 能否正确落地的前提。
 
@@ -100,7 +103,23 @@ Phase 2-4 只在本文档中确定边界和依赖，不在此展开实施细节�
 
 **Incident 业务算法**：删除 `IncidentCreator` 里的 `highestLevel(severity, impact, urgency)` 优先级计算和硬编码的 `Status: "open"`；改为调用现有 `IncidentService`（或从中提炼出的共享函数）的 `priorityMatrixService.CalculatePriority(tenantID, impact, urgency)` 和 `common.IncidentStatusNew`。如果提炼共享函数需要改动 `IncidentService` 的现有方法签名或职责边界，作为本任务的一部分一起做，不留"两份实现，一份是权威、一份是待清理"的中间态。
 
+**Incident 创建 DTO 字段完整性**：`feat/kaf-delegation-transactional-delivery` 上已经写好的 `/incidents` adapter（`controller/incident_controller.go`）只映射了 `severity`/`impact`/`urgency`，其余字段静默丢弃。Phase 1 必须对 `dto.CreateIncidentRequest` 的每个字段给出显式规则，不能归并现有实现：
+
+| 现有 DTO 字段 | Phase 1 处理规则 |
+|---|---|
+| `type` | 保留，映射进 `CreateWorkItemCommand.intent.recordClass` 解析前的类型校验（沿用现有 `oneof=incident service_request security_event alert` 语义） |
+| `priority`（显式指定时） | 保留并优先于矩阵计算——通过调用现有 `IncidentService` 优先级逻辑自然满足，见上一条"Incident 业务算法" |
+| `assigneeId` | 保留，创建事务内完成指派校验（复用 `IncidentService` 现有的 assignee 校验逻辑），不允许指派到不存在或不可见的用户 |
+| `category`/`subcategory` | 按 CTI 字段映射处理（见上一条） |
+| `source` | 映射进 WorkItem 的 `source` 字段；渠道自动创建（KAF/BPMN）时按各自渠道语义设置，不使用用户可自由输入的 `source` 覆盖渠道事实 |
+| `impactAnalysis` | 保留，写入 Incident 扩展记录的 `impact_analysis` JSON 字段（该字段未被 P1 删除） |
+| `metadata` | 保留，写入 Incident 扩展记录的 `metadata` JSON 字段（该字段未被 P1 删除） |
+
+`CreateWorkItemCommand` 的 `IncidentInput` 结构需要相应扩展以承载这些字段，不是在 Controller 层丢弃后再假装契约已经统一。
+
 **Service Request 自定义字段**：`Service.writeFieldValues` 对 `service_request_item` 分支目前写 `entity_type="service_request"` + 专业扩展 ID；改为与现有 `handlers/service_request/service.go:224` 一致的 `entity_type="ticket"` + WorkItem ID，删除 Intake 里那条错误分支。
+
+**Change ProfessionalCreator（并入 Phase 1）**：为 `change_request` 实现真正的 `ProfessionalCreator`，创建 `ent.Change` 扩展记录，而不是现在这种"套壳 ServiceRequest"。范围对齐现有 `ent/schema/change.go` 已有的字段（风险、CAB/审批、实施窗口等——具体字段清单在实施时对照 schema 逐一确认，不在本文档重复列举），SLA 绑定复用 Phase 1 为 Incident/Service Request 建好的解析逻辑。`resolver.go:106` 的 `target_class` 白名单相应加入 `RecordClassChangeRequest`。
 
 ### 5.4 Idempotency-Key 契约（无过渡期，一次性切换）
 
@@ -119,26 +138,28 @@ Phase 1 不能只切 HTTP 的 `/incidents`、`/service-requests`。已核实的�
 |---|---|---|
 | `POST /incidents`（HTTP） | 直接调用 `IncidentService.CreateIncident` | 改为经 `CreateWorkItemCommand` |
 | `POST /service-requests`（HTTP） | 直接调用 Service Request 创建逻辑 | 改为经 `CreateWorkItemCommand` |
-| `service/bpmn/incident_handler.go:111`（BPMN 自动化触发） | 直接调用 `incidentService.CreateIncident(...)`，绕开 HTTP 层 | 同样改为经 `CreateWorkItemCommand`，actor 使用系统技术账号，`idempotencyKey` 按 5.4 第 3 点从触发上下文派生；不允许保留一条绕过 Intake 的平行创建路径 |
+| `service/bpmn/incident_handler.go:111`（BPMN 内部触发） | `createIncident` 回调把 BPMN 变量里的 `reporter_id` 直接作为 `CreateIncident` 的 `userID`——即以这个真实用户身份创建，不是系统账号代替谁 | 改为经 `CreateWorkItemCommand`，`Identity.ActorID` 与 `Identity.RequesterID` **都使用 `reporter_id`**（与现状语义一致，不引入 on-behalf-of 权限模型，`Resolver` 的 `ActorID == RequesterID` 规则不变）；`idempotencyKey` 按 5.4 第 3 点从触发上下文派生 |
 | `handlers/service_request/service.go:531`（Catalog 派生的 Incident） | 经由 Service Request service 内部创建 Incident | 同样改为经 `CreateWorkItemCommand`，`recordClass` 由 Catalog 的 `target_class` 决定 |
+| `handlers/service_request/service.go:172`（Catalog 派生的 Change，`target_class=change_request`） | 构造 `ServiceRequest` 扩展并打 `type="change"` 标签，不是真正的 Change 记录 | 改为经 `CreateWorkItemCommand`，路由到新的 Change `ProfessionalCreator`（见 5.3），创建真正的 `ent.Change` 扩展 |
 
 任何在实施过程中发现的、本清单之外的创建入口，必须先补充到本节再处理，不允许实施中临时决定"这个先不管"。
 
 ### 5.6 验收标准
 
-1. `workitemnumber.Allocator` 是 Incident、Service Request、Ticket 唯一编号来源；`rg` 扫描确认 `IncidentNumberAllocator`/`GenerateIncidentNumberForIntake` 零命中。
+1. `workitemnumber.Allocator` 是 Incident、Service Request、Change、Ticket 唯一编号来源；`rg` 扫描确认 `IncidentNumberAllocator`/`GenerateIncidentNumberForIntake` 零命中。
 2. 迁移 `023`/`024`/`025` 在空白 PostgreSQL 上可顺序应用；`024` 的 `service_requests`/`service_catalogs` 变更通过真实数据验证；`itsm_type` 列被删除，`target_class` 为 NOT NULL 且有 CHECK 约束；`handlers/service_catalog/repository_impl.go` 不再从 `itsm_type` 派生 `target_class`。
-3. Incident 创建的优先级和初始状态与现有 `IncidentService` 完全一致（同输入同输出，有回归测试覆盖）；`rg` 确认 `highestLevel`/硬编码 `"open"` 状态字符串在 Intake 代码里零命中。
+3. Incident 创建的优先级和初始状态与现有 `IncidentService` 完全一致（同输入同输出，有回归测试覆盖）；`rg` 确认 `highestLevel`/硬编码 `"open"` 状态字符串在 Intake 代码里零命中；`dto.CreateIncidentRequest` 的全部字段（含 `assigneeId`/`category`/`subcategory`/`source`/`impactAnalysis`/`metadata`）按 5.3 的规则表逐一有测试覆盖，不是只测 `severity`/`impact`/`urgency`。
 4. Service Request 自定义字段创建后可通过现有详情接口读取（`entity_type="ticket"` 路径），有针对性的 HTTP 回归测试覆盖"创建 → 幂等重放 → 详情读取"全链路。
 5. `Idempotency-Key` 在所有创建入口（HTTP 与内部调用）强制生效，无缺失时静默兜底的路径；覆盖缺失 key、同 key 重放、同 key 不同 body 冲突、前端重试复用同 key 四类测试。
-6. 5.5 列出的全部创建入口都统一到 `CreateWorkItemCommand`；`rg` 确认没有遗留的、绕过该入口的领域创建调用点。
-7. Unified Intake 原有的单元测试、PostgreSQL 集成测试（含并发/幂等/回滚）、真实 HTTP E2E 全部在归并后的代码上重新跑通，不是复用旧证据。
-8. `go test ./... -count=1`、`go build ./...`、前端 `tsc --noEmit` 全部通过。
-9. Ent schema 全量 diff 报告（5.2 Task 0 的产出）写入验收证据，确认无遗漏冲突。
+6. 5.5 列出的全部创建入口都统一到 `CreateWorkItemCommand`；`rg` 确认没有遗留的、绕过该入口的领域创建调用点；`service/bpmn/incident_handler.go` 改造后有测试证明 `ActorID`/`RequesterID` 均取自 `reporter_id`。
+7. `target_class=change_request` 的 Catalog 项创建出真正的 `ent.Change` 扩展记录，不再是套壳 `ServiceRequest`；`resolver.go` 的白名单包含全部三个 `recordClass`。
+8. Unified Intake 原有的单元测试、PostgreSQL 集成测试（含并发/幂等/回滚）、真实 HTTP E2E 全部在归并后的代码上重新跑通，不是复用旧证据。
+9. `go test ./... -count=1`、`go build ./...`、前端 `tsc --noEmit` 全部通过。
+10. Ent schema 全量 diff 报告（5.2 Task 0 的产出）写入验收证据，确认无遗漏冲突。
 
 ## 六、Phase 2-4 边界（不展开）
 
-- **Phase 2**：`ProfessionalCreator` 接口对 Problem、Change 各实现一次；SLA 绑定复用 Phase 1 为 Incident/Service Request 建好的解析逻辑。不扩展到 Catalog Task/Known Error（沿用 Unified Intake 自己的非目标边界）。
+- **Phase 2**：`ProfessionalCreator` 接口对 Problem 实现一次（Change 已并入 Phase 1，见 5.3）；SLA 绑定复用 Phase 1 为 Incident/Service Request/Change 建好的解析逻辑。不扩展到 Catalog Task/Known Error（沿用 Unified Intake 自己的非目标边界）。
 - **Phase 3**：新增 KAF 命名空间（`acp/itsm_delegate/` 或职责更清晰的等价划分，避免与现有 `acp/itsm/`——遗留紫羚系统客户端——混淆），实现身份交换 + `CreateWorkItemCommand` 调用；不改动已验收的委派/执行协议。
 - **Phase 4**：先补齐 `AssignIncident` 的状态机/版本守卫，再扩展 `ResolveIncident`/`CloseIncident`/`AssignIncident` 方法签名支持调用方 `expectedVersion`，最后接入 KAF typed action；复用而非新建 `authorizeKafAutomationActor`/`BPMNAccessScope`。
 
