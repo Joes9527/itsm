@@ -84,11 +84,13 @@ func TestMigration021CallbackOptionalDeclaredIsRegisteredBetweenWorkItemMigratio
 	for _, migration := range RegisteredMigrations {
 		versions = append(versions, migration.Version)
 	}
+	idx := indexOf(versions, "021_add_callback_optional_declared")
+	require.GreaterOrEqual(t, idx, 1, "021_add_callback_optional_declared must be registered")
 	require.Equal(t, []string{
 		"020_work_item_number_allocator",
 		"021_add_callback_optional_declared",
 		"022_drop_professional_extension_shared_fields",
-	}, versions[len(versions)-3:])
+	}, versions[idx-1:idx+2])
 }
 
 func TestMigration021CallbackOptionalDeclaredIsIdempotent(t *testing.T) {

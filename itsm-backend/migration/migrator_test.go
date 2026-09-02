@@ -310,7 +310,11 @@ func TestWorkItemNumberAllocatorVerificationBindsReadyValidIndexes(t *testing.T)
 func TestProfessionalExtensionsDropSharedFieldsIsVersioned(t *testing.T) {
 	const version = "022_drop_professional_extension_shared_fields"
 
-	require.Equal(t, version, RegisteredMigrations[len(RegisteredMigrations)-1].Version)
+	versions := make([]string, 0, len(RegisteredMigrations))
+	for _, migration := range RegisteredMigrations {
+		versions = append(versions, migration.Version)
+	}
+	require.GreaterOrEqual(t, indexOf(versions, version), 0, "%s must be registered", version)
 	canonicalSQL := GetMigrationSQL(version)
 	require.NotEmpty(t, canonicalSQL)
 	for _, asset := range []string{
