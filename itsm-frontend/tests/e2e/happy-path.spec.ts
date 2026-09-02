@@ -160,7 +160,8 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
   });
 
   // ===== 4. 变更 (Change) Happy Path =====
-  test('4. 变更：创建 → 提交 → 审批 → 实施 → 关闭', async ({ page }) => {
+  // 审批决策链路（approve/reject → BPMN 历史）由 itsm-backend/handlers/change/change_bpmn_e2e_test.go 覆盖，此处不重复。
+  test('4. 变更：创建 → 提交 → 风险评估 → CMDB影响', async ({ page }) => {
     // 4.1 创建变更
     const createResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/changes`, {
       data: {
@@ -186,15 +187,11 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
     });
     await verifySuccessResponse(submitResp);
 
-    // 4.3 获取审批摘要
-    const summaryResp = await page.request.get(`${API}/api/v1/changes/${changeId}/approval-summary`);
-    await verifySuccessResponse(summaryResp);
-
-    // 4.4 获取风险评估
+    // 4.3 获取风险评估
     const riskResp = await page.request.get(`${API}/api/v1/changes/${changeId}/risk-assessment`);
     await verifySuccessResponse(riskResp);
 
-    // 4.5 获取 CMDB 影响摘要
+    // 4.4 获取 CMDB 影响摘要
     const cmdbResp = await page.request.get(`${API}/api/v1/changes/${changeId}/cmdb-impact`);
     await verifySuccessResponse(cmdbResp);
 
@@ -202,7 +199,8 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
   });
 
   // ===== 5. 服务请求 (Service Request) Happy Path =====
-  test('5. 服务请求：创建目录 → 申请 → 审批', async ({ page }) => {
+  // 审批决策链路（BPMN /approvals 中心批准）由 sslvpn-approval-flow.spec.ts 覆盖，此处不重复。
+  test('5. 服务请求：创建目录 → 申请', async ({ page }) => {
     // 5.1 创建服务目录
     const catalogResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/service-catalogs`, {
       data: {
@@ -228,12 +226,6 @@ test.describe('ITSM 核心模块 Happy Path E2E', () => {
     });
     const requestJson = await verifySuccessResponse(requestResp);
     const requestId = requestJson.data.id;
-
-    // 5.3 审批请求
-    const approvalResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/service-requests/${requestId}/approval`, {
-      data: { action: 'approve', comment: '审批通过' },
-    });
-    await verifySuccessResponse(approvalResp);
 
     console.log(`✅ 服务请求 Happy Path 完成: catalogId=${catalogId}, requestId=${requestId}`);
   });

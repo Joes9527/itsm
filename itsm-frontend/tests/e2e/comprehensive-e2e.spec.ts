@@ -206,13 +206,8 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
       },
     });
     expect(reqResp.status()).toBe(200);
-    const reqId = (await reqResp.json()).data.id;
 
-    // 审批
-    const appResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/service-requests/${reqId}/approval`, {
-      data: { action: 'approve', comment: '审批通过' },
-    });
-    expect(appResp.status()).toBe(200);
+    // 审批决策链路（BPMN /approvals 中心批准）由 sslvpn-approval-flow.spec.ts 覆盖，此处不重复。
 
     // UI 申请详情页面渲染（含 compliance_ack 字段）
     await page.goto(`${BASE}/service-catalog/request/${catId}`);
@@ -339,35 +334,9 @@ test.describe('ITSM 全面 E2E 业务流测试', () => {
     expect(connResp.status()).toBe(403);
   });
 
-  // ===== 10. 变更 + 审批 =====
-  test('10.1 变更创建 + 审批（修复 change_approvals 表后）', async ({ page }) => {
-    await loginAsAdmin(page);
-
-    const chResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/changes`, {
-      data: {
-        title: `E2E 变更 ${Date.now()}`,
-        description: 'E2E 测试变更',
-        type: 'standard',
-        riskLevel: 'medium',
-        impact: 'low',
-        priority: 'medium',
-        scheduledStart: '2026-06-10T10:00:00Z',
-        scheduledEnd: '2026-06-10T12:00:00Z',
-      },
-    });
-    expect(chResp.status()).toBe(200);
-    const chId = (await chResp.json()).data.id;
-
-    // 创建审批记录
-    const apResp = await mutateWithCSRF(page.request, 'POST', `${API}/api/v1/changes/${chId}/approvals`, {
-      data: { changeId: chId, approverId: 1, comment: 'E2E 审批' },
-    });
-    expect(apResp.status()).toBe(200);
-
-    // 审批汇总
-    const sumResp = await page.request.get(`${API}/api/v1/changes/${chId}/approval-summary`);
-    expect(sumResp.status()).toBe(200);
-  });
+  // 变更创建已由 happy-path.spec.ts 的 Change Happy Path 覆盖；变更审批决策链路
+  // （approve/reject → BPMN 历史）由 itsm-backend/handlers/change/change_bpmn_e2e_test.go
+  // 覆盖，此处不再重复一条仅调用已删除 change_approvals 端点的重复用例。
 
   // ===== 11. AI 功能 =====
   test('11.1 AI Chat + RAG 搜索', async ({ page }) => {
