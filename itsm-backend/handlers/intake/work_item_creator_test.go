@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"itsm-backend/ent"
-	"itsm-backend/ent/enttest"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
@@ -24,28 +23,8 @@ func (s *stubTicketAllocator) Allocate(ctx context.Context, client *ent.Client, 
 	return s.number, s.err
 }
 
-func createTestTenant(t *testing.T, client *ent.Client) *ent.Tenant {
-	t.Helper()
-	name := "wic_" + t.Name()
-	tenant, err := client.Tenant.Create().SetName(name).SetCode(name).SetStatus("active").Save(context.Background())
-	require.NoError(t, err)
-	return tenant
-}
-
-func createTestUser(t *testing.T, client *ent.Client, tenantID int) *ent.User {
-	t.Helper()
-	name := "wic_" + t.Name()
-	user, err := client.User.Create().SetUsername(name).SetEmail(name + "@example.com").SetName("Requester").
-		SetPasswordHash("hash").SetRole("end_user").SetTenantID(tenantID).Save(context.Background())
-	require.NoError(t, err)
-	return user
-}
-
 func TestWorkItemCreatorUsesWorkItemNumberAllocator(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", "file:workitemcreator?mode=memory&cache=shared&_fk=1")
-	t.Cleanup(func() { _ = client.Close() })
-	tenant := createTestTenant(t, client)
-	requester := createTestUser(t, client, tenant.ID)
+	client, tenant, requester := newCreatorFixture(t)
 	allocator := &stubTicketAllocator{number: "TKT-202609-000001"}
 	creator := NewWorkItemCreator(allocator)
 
@@ -65,10 +44,7 @@ func TestWorkItemCreatorUsesWorkItemNumberAllocator(t *testing.T) {
 }
 
 func TestWorkItemCreatorAcceptsChangeRequestRecordClass(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", "file:workitemcreator_change?mode=memory&cache=shared&_fk=1")
-	t.Cleanup(func() { _ = client.Close() })
-	tenant := createTestTenant(t, client)
-	requester := createTestUser(t, client, tenant.ID)
+	client, tenant, requester := newCreatorFixture(t)
 	allocator := &stubTicketAllocator{number: "TKT-202609-000002"}
 	creator := NewWorkItemCreator(allocator)
 
