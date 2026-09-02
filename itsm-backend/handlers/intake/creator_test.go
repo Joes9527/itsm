@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
@@ -19,7 +20,7 @@ import (
 
 type staticWorkItemNumberAllocator struct{ number string }
 
-func (a staticWorkItemNumberAllocator) GenerateWorkItemNumber(context.Context, int) (string, error) {
+func (a staticWorkItemNumberAllocator) Allocate(context.Context, *ent.Client, int, time.Time) (string, error) {
 	return a.number, nil
 }
 

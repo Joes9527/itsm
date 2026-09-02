@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
@@ -23,7 +24,7 @@ import (
 
 type sequentialWorkItemNumbers struct{ value atomic.Int64 }
 
-func (a *sequentialWorkItemNumbers) GenerateWorkItemNumber(context.Context, int) (string, error) {
+func (a *sequentialWorkItemNumbers) Allocate(context.Context, *ent.Client, int, time.Time) (string, error) {
 	return fmt.Sprintf("TKT-INTAKE-%06d", a.value.Add(1)), nil
 }
 

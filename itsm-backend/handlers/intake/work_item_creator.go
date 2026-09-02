@@ -4,26 +4,19 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"itsm-backend/ent"
+	"itsm-backend/repository/workitemnumber"
 )
 
-type WorkItemNumberAllocator interface {
-	GenerateWorkItemNumber(ctx context.Context, tenantID int) (string, error)
-}
-
-type WorkItemNumberFunc func(ctx context.Context, tenantID int) (string, error)
-
-func (f WorkItemNumberFunc) GenerateWorkItemNumber(ctx context.Context, tenantID int) (string, error) {
-	return f(ctx, tenantID)
-}
-
 type WorkItemCreator struct {
-	numbers WorkItemNumberAllocator
+	numbers workitemnumber.Allocator
+	now     func() time.Time
 }
 
-func NewWorkItemCreator(numbers WorkItemNumberAllocator) *WorkItemCreator {
-	return &WorkItemCreator{numbers: numbers}
+func NewWorkItemCreator(numbers workitemnumber.Allocator) *WorkItemCreator {
+	return &WorkItemCreator{numbers: numbers, now: time.Now}
 }
 
 func (c *WorkItemCreator) CreateBase(ctx context.Context, tx *ent.Tx, plan *CreationPlan) (*ent.Ticket, error) {
@@ -34,14 +27,15 @@ func (c *WorkItemCreator) CreateBase(ctx context.Context, tx *ent.Tx, plan *Crea
 	if draft.TenantID <= 0 || draft.ActorID <= 0 || draft.RequesterID <= 0 || strings.TrimSpace(draft.Title) == "" {
 		return nil, NewDomainValidationFailed("work item draft is incomplete", nil)
 	}
-	if draft.RecordClass != RecordClassIncident && draft.RecordClass != RecordClassServiceRequestItem {
+	if draft.RecordClass != RecordClassIncident && draft.RecordClass != RecordClassServiceRequestItem && draft.RecordClass != RecordClassChangeRequest {
 		return nil, NewUnsupportedRecordClass("work item record class is unsupported", nil)
 	}
 	if draft.TicketNumber == "" {
 		if c.numbers == nil {
 			return nil, NewInternalFailure("work item number allocator is required", nil)
 		}
-		number, err := c.numbers.GenerateWorkItemNumber(ctx, draft.TenantID)
+		issuedAt := c.now().UTC()
+		number, err := c.numbers.Allocate(ctx, tx.Client(), draft.TenantID, issuedAt)
 		if err != nil {
 			return nil, NewInfrastructureUnavailable("could not allocate work item number", err)
 		}
@@ -60,8 +54,11 @@ func (c *WorkItemCreator) CreateBase(ctx context.Context, tx *ent.Tx, plan *Crea
 		draft.Source = "manual"
 	}
 	legacyType := "service_request"
-	if draft.RecordClass == RecordClassIncident {
+	switch draft.RecordClass {
+	case RecordClassIncident:
 		legacyType = "incident"
+	case RecordClassChangeRequest:
+		legacyType = "change"
 	}
 	create := tx.Ticket.Create().
 		SetTitle(strings.TrimSpace(draft.Title)).

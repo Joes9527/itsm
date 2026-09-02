@@ -14,6 +14,7 @@ const (
 
 	RecordClassServiceRequestItem = "service_request_item"
 	RecordClassIncident           = "incident"
+	RecordClassChangeRequest      = "change_request"
 )
 
 type CTIInput struct {
