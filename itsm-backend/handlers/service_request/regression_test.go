@@ -34,8 +34,8 @@ import (
 //   - 场景 2：form_data/field_values 双写已收敛为 field_values 单一权威，断言从"两边相等"
 //     改为"field_values 有值且 form_data 不再重复该键"（entity.go stripStructuredFieldKeys）。
 //   - 场景 4：Incident 分流判断的依据从 itsm_type 改成 target_class（entity.go
-//     isIncidentCatalog），测试 fixture 需要同时设置两个字段模拟"已跑过
-//     cmd/backfill_servicecatalog_target_class 回填"的状态。
+//     isIncidentCatalog）。Task 14 之后 itsm_type 列已被 migration 024 删除，测试 fixture
+//     只需要设置 target_class 这一个字段。
 
 // TestService_Create_FullChain_TicketStatusReflectedAfterChange 覆盖场景 1：
 // 服务目录提交表单 → Service.Create 生成 ServiceRequest → 委托生成关联 Ticket，
@@ -56,7 +56,7 @@ func TestService_Create_FullChain_TicketStatusReflectedAfterChange(t *testing.T)
 
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "云主机申请-全链路", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	catalog, err := scService.Create(ctx, "云主机申请-全链路", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "", service_catalog.TargetClassServiceRequestItem)
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
@@ -133,7 +133,7 @@ func TestService_Create_FormDataFieldValuesConsistency_FieldLevel(t *testing.T) 
 			{Name: "environment", Label: "环境", FieldType: "text"},
 			{Name: "budget_code", Label: "预算代码", FieldType: "text"},
 			{Name: "contact_note", Label: "联系备注", FieldType: "text"},
-		}, "", "")
+		}, "", "", service_catalog.TargetClassServiceRequestItem)
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
@@ -233,7 +233,7 @@ func TestService_Create_ResolvesApprovalChainIntoFormData(t *testing.T) {
 
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "云主机申请-审批链", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	catalog, err := scService.Create(ctx, "云主机申请-审批链", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "", service_catalog.TargetClassServiceRequestItem)
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
@@ -299,7 +299,7 @@ func TestService_Create_NoApprovalChainConfigured_FormDataHasNoApprovalChainKey(
 
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "云主机申请-无审批链", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	catalog, err := scService.Create(ctx, "云主机申请-无审批链", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "", service_catalog.TargetClassServiceRequestItem)
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
@@ -377,10 +377,10 @@ func TestService_Create_IncidentCatalog_RoutesThroughIntakeNoServiceRequestRow(t
 
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "系统故障上报", "运维", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	catalog, err := scService.Create(ctx, "系统故障上报", "运维", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "", service_catalog.TargetClassServiceRequestItem)
 	require.NoError(t, err)
 	_, err = client.ServiceCatalog.UpdateOneID(catalog.ID).
-		SetItsmType("Incident").SetTargetClass(service_catalog.TargetClassIncident).Save(ctx)
+		SetTargetClass(service_catalog.TargetClassIncident).Save(ctx)
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
@@ -430,7 +430,7 @@ func TestService_Create_ChangeCatalog_RoutesThroughIntakeCreatesRealChange(t *te
 
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "变更申请", "运维", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	catalog, err := scService.Create(ctx, "变更申请", "运维", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "", service_catalog.TargetClassServiceRequestItem)
 	require.NoError(t, err)
 	_, err = client.ServiceCatalog.UpdateOneID(catalog.ID).
 		SetTargetClass(service_catalog.TargetClassChangeRequest).Save(ctx)
@@ -474,7 +474,7 @@ func TestService_Create_RequiresIdempotencyKeyForIncidentAndChange(t *testing.T)
 
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "系统故障上报", "运维", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	catalog, err := scService.Create(ctx, "系统故障上报", "运维", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "", service_catalog.TargetClassServiceRequestItem)
 	require.NoError(t, err)
 	_, err = client.ServiceCatalog.UpdateOneID(catalog.ID).SetTargetClass(service_catalog.TargetClassIncident).Save(ctx)
 	require.NoError(t, err)
@@ -531,7 +531,7 @@ func TestService_Create_IncidentCatalog_RequiredFieldSucceedsWhenSuppliedAndPers
 
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "系统故障上报-必填字段", "运维", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	catalog, err := scService.Create(ctx, "系统故障上报-必填字段", "运维", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "", service_catalog.TargetClassServiceRequestItem)
 	require.NoError(t, err)
 	_, err = client.ServiceCatalog.UpdateOneID(catalog.ID).SetTargetClass(service_catalog.TargetClassIncident).Save(ctx)
 	require.NoError(t, err)
@@ -607,7 +607,7 @@ func TestService_Update_ForbiddenForNonOwnerWithoutPermission(t *testing.T) {
 
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "云主机申请-权限", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	catalog, err := scService.Create(ctx, "云主机申请-权限", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "", service_catalog.TargetClassServiceRequestItem)
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
@@ -657,7 +657,7 @@ func TestService_Update_AllowedForNonOwnerWithSuperAdminRole(t *testing.T) {
 
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalog, err := scService.Create(ctx, "云主机申请-管理员", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	catalog, err := scService.Create(ctx, "云主机申请-管理员", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "", service_catalog.TargetClassServiceRequestItem)
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
@@ -704,7 +704,7 @@ func TestService_CrossTenantIsolation_GetUpdateDelete(t *testing.T) {
 
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
-	catalogA, err := scService.Create(ctx, "云主机申请-跨租户", "云服务", "desc", 1, tenantA.ID, "enabled", 0, 0, nil, "", "")
+	catalogA, err := scService.Create(ctx, "云主机申请-跨租户", "云服务", "desc", 1, tenantA.ID, "enabled", 0, 0, nil, "", "", service_catalog.TargetClassServiceRequestItem)
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)

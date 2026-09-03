@@ -3,21 +3,22 @@
  */
 
 import { httpClient } from './http-client';
-import type {
-  ServiceItem,
-  ServiceStatus,
-  ServiceCategory,
-  ServiceRequestStatus,
-  PortalConfig,
-  ServiceFavorite,
-  ServiceRating,
-  ServiceCatalogStats,
-  ServiceAnalytics,
-  CreateServiceItemRequest,
-  UpdateServiceItemRequest,
-  CreateServiceRequestRequest,
-  ServiceQuery,
-  ServiceRequestQuery,
+import {
+  TargetClass,
+  type ServiceItem,
+  type ServiceStatus,
+  type ServiceCategory,
+  type ServiceRequestStatus,
+  type PortalConfig,
+  type ServiceFavorite,
+  type ServiceRating,
+  type ServiceCatalogStats,
+  type ServiceAnalytics,
+  type CreateServiceItemRequest,
+  type UpdateServiceItemRequest,
+  type CreateServiceRequestRequest,
+  type ServiceQuery,
+  type ServiceRequestQuery,
 } from '@/types/service-catalog';
 
 export class ServiceCatalogApi {
@@ -88,6 +89,9 @@ export class ServiceCatalogApi {
       processDefinitionKey: raw?.processDefinitionKey || undefined,
       serviceType: raw?.serviceType || undefined,
       requiresInfraFields: Boolean(raw?.requiresInfraFields),
+      // 权威取值来自后端；缺省（历史脏数据/极端情况）时回退到 service_request_item，
+      // 与后端 handlers/service_catalog 的 fail-safe 语义保持一致，不代表前端自行判断路由。
+      targetClass: (raw?.targetClass as TargetClass) || TargetClass.SERVICE_REQUEST_ITEM,
     };
   }
 
@@ -207,6 +211,8 @@ export class ServiceCatalogApi {
       fields: request.fields,
       processDefinitionKey: request.processDefinitionKey,
       serviceType: request.serviceType ? String(request.serviceType) : undefined,
+      // targetClass 创建时必填（后端 binding:"required"），不再从已退役的 itsm_type 派生。
+      targetClass: request.targetClass,
     };
     const resp = await httpClient.post<any>('/api/v1/service-catalogs', payload);
     return ServiceCatalogApi.toServiceItem(resp);
@@ -233,6 +239,11 @@ export class ServiceCatalogApi {
     }
     if (request.serviceType !== undefined) {
       payload.serviceType = String(request.serviceType);
+    }
+    // 省略 targetClass（undefined）时不下发该字段：后端把"请求体不带 targetClass"解释为
+    // "保留当前值"，不是"清空"（targetClass 是 NOT NULL 列）。
+    if (request.targetClass !== undefined) {
+      payload.targetClass = request.targetClass;
     }
     const st = ServiceCatalogApi.toBackendStatus(request.status);
     if (st) payload.status = st;

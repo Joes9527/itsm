@@ -27,7 +27,7 @@ func TestService_Create_SavesFieldDefinitions(t *testing.T) {
 		{Name: "device_count", Label: "设备数量", FieldType: "number", Required: false, SortOrder: 1},
 	}
 
-	created, err := svc.Create(ctx, "VM Service", "it_service", "virtual machine", 1, 1, "enabled", 0, 0, fields, "", "")
+	created, err := svc.Create(ctx, "VM Service", "it_service", "virtual machine", 1, 1, "enabled", 0, 0, fields, "", "", TargetClassServiceRequestItem)
 	require.NoError(t, err)
 	require.NotNil(t, created)
 
@@ -58,7 +58,7 @@ func TestService_Create_NoClient_SkipsFieldDefinitions(t *testing.T) {
 		{Name: "office_location", Label: "办公地点", FieldType: "text"},
 	}
 
-	created, err := svc.Create(ctx, "VM Service", "it_service", "virtual machine", 1, 1, "enabled", 0, 0, fields, "", "")
+	created, err := svc.Create(ctx, "VM Service", "it_service", "virtual machine", 1, 1, "enabled", 0, 0, fields, "", "", TargetClassServiceRequestItem)
 	require.NoError(t, err)
 	require.NotNil(t, created)
 	// Create 仍然把入参 fields 回填到返回对象上
@@ -75,11 +75,11 @@ func TestService_Update_NilFields_LeavesExistingDefinitionsUntouched(t *testing.
 
 	created, err := svc.Create(ctx, "VM Service", "it_service", "virtual machine", 1, 1, "enabled", 0, 0, []service.FieldDefinitionInput{
 		{Name: "office_location", Label: "办公地点", FieldType: "text"},
-	}, "", "")
+	}, "", "", TargetClassServiceRequestItem)
 	require.NoError(t, err)
 
 	// Update 时不传 fields（nil）：既有字段定义应保持不变
-	updated, err := svc.Update(ctx, 1, created.ID, "VM Service Updated", "", "", 0, "", 0, 0, nil, "", "")
+	updated, err := svc.Update(ctx, 1, created.ID, "VM Service Updated", "", "", 0, "", 0, 0, nil, "", "", TargetClassServiceRequestItem)
 	require.NoError(t, err)
 	require.NotNil(t, updated)
 
@@ -99,13 +99,13 @@ func TestService_Update_NonNilFields_ReplacesDefinitions(t *testing.T) {
 
 	created, err := svc.Create(ctx, "VM Service", "it_service", "virtual machine", 1, 1, "enabled", 0, 0, []service.FieldDefinitionInput{
 		{Name: "office_location", Label: "办公地点", FieldType: "text"},
-	}, "", "")
+	}, "", "", TargetClassServiceRequestItem)
 	require.NoError(t, err)
 
 	newFields := []service.FieldDefinitionInput{
 		{Name: "device_count", Label: "设备数量", FieldType: "number"},
 	}
-	updated, err := svc.Update(ctx, 1, created.ID, "", "", "", 0, "", 0, 0, newFields, "", "")
+	updated, err := svc.Update(ctx, 1, created.ID, "", "", "", 0, "", 0, 0, newFields, "", "", TargetClassServiceRequestItem)
 	require.NoError(t, err)
 	require.Len(t, updated.Fields, 1)
 	assert.Equal(t, "device_count", updated.Fields[0].Name)
@@ -136,7 +136,7 @@ func TestService_Create_FieldDefinitions_CrossTenantIsolation(t *testing.T) {
 
 	createdA, err := svc.Create(ctx, "VM Service A", "it_service", "tenant A catalog", 1, tenantA.ID, "enabled", 0, 0, []service.FieldDefinitionInput{
 		{Name: "office_location", Label: "办公地点", FieldType: "text", Required: true},
-	}, "", "")
+	}, "", "", TargetClassServiceRequestItem)
 	require.NoError(t, err)
 	require.Len(t, createdA.Fields, 1)
 
@@ -167,7 +167,7 @@ func TestService_CreateAndGet_PersistsFieldDefinitions(t *testing.T) {
 	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
 
 	created, err := svc.Create(ctx, "云主机申请", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text", Required: true}}, "", "")
+		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text", Required: true}}, "", "", TargetClassServiceRequestItem)
 	require.NoError(t, err)
 	require.Len(t, created.Fields, 1)
 	assert.Equal(t, "environment", created.Fields[0].Name)
@@ -189,9 +189,9 @@ func TestService_List_BatchLoadsFieldDefinitionsPerCatalog(t *testing.T) {
 	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
 
 	c1, err := svc.Create(ctx, "云主机申请", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", "")
+		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", "", TargetClassServiceRequestItem)
 	require.NoError(t, err)
-	c2, err := svc.Create(ctx, "VPN权限", "网络", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	c2, err := svc.Create(ctx, "VPN权限", "网络", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "", TargetClassServiceRequestItem)
 	require.NoError(t, err)
 
 	list, _, err := svc.List(ctx, tenant.ID, ListFilters{Page: 1, Size: 10})
@@ -220,7 +220,7 @@ func TestService_Delete_DisablesFieldDefinitions(t *testing.T) {
 	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
 
 	created, err := svc.Create(ctx, "云主机申请", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", "")
+		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", "", TargetClassServiceRequestItem)
 	require.NoError(t, err)
 
 	listedBefore, err := service.NewFieldDefinitionService(client).ListDefinitions(ctx, tenant.ID, "service_catalog", created.ID)
@@ -257,7 +257,7 @@ func TestService_Search_PopulatesFieldDefinitions(t *testing.T) {
 	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
 
 	created, err := svc.Create(ctx, "云主机申请搜索测试", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", "")
+		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", "", TargetClassServiceRequestItem)
 	require.NoError(t, err)
 
 	results, total, err := svc.Search(ctx, tenant.ID, "云主机申请搜索", ListFilters{Page: 1, Size: 10})
@@ -282,7 +282,7 @@ func TestService_Get_TenantIsolation_NoCrossTenantFieldLeak(t *testing.T) {
 	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
 
 	catalogA, err := svc.Create(ctx, "服务A", "分类", "desc", 1, tenantA.ID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "secretField", Label: "租户A专属字段", FieldType: "text"}}, "", "")
+		[]service.FieldDefinitionInput{{Name: "secretField", Label: "租户A专属字段", FieldType: "text"}}, "", "", TargetClassServiceRequestItem)
 	require.NoError(t, err)
 
 	// 租户 B 用同样的 entity_id（碰巧撞上租户 A 的 catalog.ID）查询，不应该看到租户 A 的字段定义。
@@ -290,4 +290,118 @@ func TestService_Get_TenantIsolation_NoCrossTenantFieldLeak(t *testing.T) {
 	defs, err := service.NewFieldDefinitionService(client).ListDefinitions(ctx, tenantB.ID, "service_catalog", catalogA.ID)
 	require.NoError(t, err)
 	assert.Empty(t, defs, "租户 B 不应该查到租户 A 的字段定义，即使 entity_id 相同")
+}
+
+// TestService_Create_RejectsMissingTargetClass 覆盖 Task 14 的核心契约：Create 不再从
+// itsm_type 派生 target_class，调用方必须显式提供，否则必须报错，而不是静默落一个 fail-safe
+// 默认值。
+func TestService_Create_RejectsMissingTargetClass(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sc_service_create_missing_target_class?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	repo := NewEntRepository(client)
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+
+	_, err := svc.Create(ctx, "VM Service", "it_service", "desc", 1, 1, "enabled", 0, 0, nil, "", "", "")
+	require.Error(t, err)
+}
+
+// TestService_Create_RejectsInvalidTargetClass 覆盖非法取值（不在三个受约束枚举内）同样必须
+// 被拒绝，不能悄悄落库。
+func TestService_Create_RejectsInvalidTargetClass(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sc_service_create_invalid_target_class?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	repo := NewEntRepository(client)
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+
+	_, err := svc.Create(ctx, "VM Service", "it_service", "desc", 1, 1, "enabled", 0, 0, nil, "", "", "bogus_class")
+	require.Error(t, err)
+}
+
+// TestService_Create_PersistsSuppliedTargetClass 证明调用方提供的 targetClass 原样传到
+// repository 写入的 ServiceCatalog 领域对象上（不是被某种计算覆盖）。
+func TestService_Create_PersistsSuppliedTargetClass(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sc_service_create_persists_target_class?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	repo := NewEntRepository(client)
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+
+	created, err := svc.Create(ctx, "变更申请目录", "运维", "desc", 1, 1, "enabled", 0, 0, nil, "", "", TargetClassChangeRequest)
+	require.NoError(t, err)
+	assert.Equal(t, TargetClassChangeRequest, created.TargetClass)
+
+	fetched, err := svc.Get(ctx, 1, created.ID)
+	require.NoError(t, err)
+	assert.Equal(t, TargetClassChangeRequest, fetched.TargetClass, "落库的值必须是调用方提供的值")
+}
+
+// TestService_Update_PreservesTargetClassWhenOmitted 覆盖"更新时省略 targetClass 保留当前
+// 值"的语义——这与其它可选字段（name/category/...）的"空值即保留"约定一致。
+func TestService_Update_PreservesTargetClassWhenOmitted(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sc_service_update_preserve_target_class?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	repo := NewEntRepository(client)
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+
+	created, err := svc.Create(ctx, "事件上报目录", "运维", "desc", 1, 1, "enabled", 0, 0, nil, "", "", TargetClassIncident)
+	require.NoError(t, err)
+
+	// 无关字段的更新：targetClass 传空字符串（省略），必须保留原来的 incident。
+	updated, err := svc.Update(ctx, 1, created.ID, "事件上报目录（已编辑）", "", "", 0, "", 0, 0, nil, "", "", "")
+	require.NoError(t, err)
+	assert.Equal(t, TargetClassIncident, updated.TargetClass, "省略 targetClass 时必须保留当前值，不能被清空或改写")
+
+	fetched, err := svc.Get(ctx, 1, created.ID)
+	require.NoError(t, err)
+	assert.Equal(t, TargetClassIncident, fetched.TargetClass)
+}
+
+// TestService_Update_ChangesTargetClassWhenSupplied 覆盖显式提供新值时必须替换当前值。
+func TestService_Update_ChangesTargetClassWhenSupplied(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sc_service_update_changes_target_class?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	repo := NewEntRepository(client)
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+
+	created, err := svc.Create(ctx, "服务目录", "运维", "desc", 1, 1, "enabled", 0, 0, nil, "", "", TargetClassServiceRequestItem)
+	require.NoError(t, err)
+
+	updated, err := svc.Update(ctx, 1, created.ID, "", "", "", 0, "", 0, 0, nil, "", "", TargetClassChangeRequest)
+	require.NoError(t, err)
+	assert.Equal(t, TargetClassChangeRequest, updated.TargetClass)
+
+	fetched, err := svc.Get(ctx, 1, created.ID)
+	require.NoError(t, err)
+	assert.Equal(t, TargetClassChangeRequest, fetched.TargetClass)
+}
+
+// TestService_Update_RejectsInvalidTargetClass 覆盖更新时提供了值但值不合法的拒绝路径——
+// 跟 Create 的校验规则完全一致，只是"提供了才校验"。
+func TestService_Update_RejectsInvalidTargetClass(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sc_service_update_invalid_target_class?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	repo := NewEntRepository(client)
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+
+	created, err := svc.Create(ctx, "服务目录", "运维", "desc", 1, 1, "enabled", 0, 0, nil, "", "", TargetClassServiceRequestItem)
+	require.NoError(t, err)
+
+	_, err = svc.Update(ctx, 1, created.ID, "", "", "", 0, "", 0, 0, nil, "", "", "bogus_class")
+	require.Error(t, err)
+
+	// 拒绝之后不能把已经落库的合法值改坏。
+	fetched, err := svc.Get(ctx, 1, created.ID)
+	require.NoError(t, err)
+	assert.Equal(t, TargetClassServiceRequestItem, fetched.TargetClass)
 }

@@ -185,6 +185,7 @@ const ServiceCatalogManagement = () => {
         fields,
         processDefinitionKey: values.processDefinitionKey || undefined,
         serviceType: values.serviceType || undefined,
+        targetClass: values.targetClass,
         ...(values.status ? { status: values.status } : {}),
       } as CreateServiceItemRequest;
       if (editingCatalog) {
@@ -232,6 +233,7 @@ const ServiceCatalogManagement = () => {
       fields: fieldsForForm,
       processDefinitionKey: catalog.processDefinitionKey,
       serviceType: catalog.serviceType,
+      targetClass: catalog.targetClass,
     });
     setShowModal(true);
   };
@@ -746,7 +748,7 @@ const ServiceCatalogManagement = () => {
           form={form}
           layout="vertical"
           onFinish={handleSubmit}
-          initialValues={{ status: 'enabled' }}
+          initialValues={{ status: 'enabled', targetClass: 'service_request_item' }}
         >
           <Form.Item
             name="name"
@@ -766,6 +768,19 @@ const ServiceCatalogManagement = () => {
               { value: '基础设施', label: '基础设施' },
               { value: '应用服务', label: '应用服务' },
               { value: '数据服务', label: '数据服务' },
+            ]} />
+          </Form.Item>
+
+          <Form.Item
+            name="targetClass"
+            label="目标类型"
+            tooltip="决定提交后创建的 WorkItem 类型：服务请求走普通审批链，事件/变更直接分派到对应处理流程，创建后由后端唯一权威判断路由"
+            rules={[{ required: true, message: '请选择目标类型' }]}
+          >
+            <Select placeholder="请选择目标类型" options={[
+              { value: 'service_request_item', label: '服务请求（默认）' },
+              { value: 'incident', label: '事件' },
+              { value: 'change_request', label: '变更' },
             ]} />
           </Form.Item>
 

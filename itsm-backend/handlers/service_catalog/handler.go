@@ -158,6 +158,7 @@ func (h *Handler) Create(c *gin.Context) {
 		fields,
 		req.ProcessDefinitionKey,
 		req.ServiceType,
+		req.TargetClass,
 	)
 	if err != nil {
 		failServiceCatalog(c, err)
@@ -217,6 +218,7 @@ func (h *Handler) Update(c *gin.Context) {
 		fields,
 		req.ProcessDefinitionKey,
 		req.ServiceType,
+		req.TargetClass,
 	)
 	if err != nil {
 		failServiceCatalog(c, err)

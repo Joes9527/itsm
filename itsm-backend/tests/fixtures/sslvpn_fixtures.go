@@ -84,7 +84,10 @@ func EnsureSSLVPNMetadata(ctx context.Context, client *ent.Client, tenantID int)
 			SetDescription("为员工因业务需要申请 SSL-VPN 远程接入权限，需经部门领导初审与 L2 网络运维复审。").
 			SetCategory("网络与远程访问服务").
 			SetServiceType("security").
-			SetItsmType("Request").
+			// target_class 是 NOT NULL 权威路由字段；SSL-VPN 访问申请走普通服务请求审批链，
+			// 不是事件/变更上报，取值 "service_request_item"（对应
+			// handlers/service_catalog.TargetClassServiceRequestItem）。
+			SetTargetClass("service_request_item").
 			SetRequiresApproval(true).
 			SetApprovalLevel(2).
 			SetProcessDefinitionKey("sslvpn_approval_flow").

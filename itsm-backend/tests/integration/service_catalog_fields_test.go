@@ -94,6 +94,7 @@ func TestServiceCatalogFields(t *testing.T) {
 
 	createCatalogReq := map[string]interface{}{
 		"name": "云主机申请", "category": "云服务", "description": "测试",
+		"targetClass": "service_request_item",
 		"fields": []map[string]interface{}{
 			{"name": "office_location", "label": "办公地点", "type": "text", "required": true},
 		},

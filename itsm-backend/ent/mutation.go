@@ -113679,7 +113679,6 @@ type ServiceCatalogMutation struct {
 	category                *string
 	icon                    *string
 	service_type            *string
-	itsm_type               *string
 	target_class            *string
 	price                   *float64
 	addprice                *float64
@@ -114035,42 +114034,6 @@ func (m *ServiceCatalogMutation) ResetServiceType() {
 	m.service_type = nil
 }
 
-// SetItsmType sets the "itsm_type" field.
-func (m *ServiceCatalogMutation) SetItsmType(s string) {
-	m.itsm_type = &s
-}
-
-// ItsmType returns the value of the "itsm_type" field in the mutation.
-func (m *ServiceCatalogMutation) ItsmType() (r string, exists bool) {
-	v := m.itsm_type
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldItsmType returns the old "itsm_type" field's value of the ServiceCatalog entity.
-// If the ServiceCatalog object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ServiceCatalogMutation) OldItsmType(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldItsmType is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldItsmType requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldItsmType: %w", err)
-	}
-	return oldValue.ItsmType, nil
-}
-
-// ResetItsmType resets all changes to the "itsm_type" field.
-func (m *ServiceCatalogMutation) ResetItsmType() {
-	m.itsm_type = nil
-}
-
 // SetTargetClass sets the "target_class" field.
 func (m *ServiceCatalogMutation) SetTargetClass(s string) {
 	m.target_class = &s
@@ -114102,22 +114065,9 @@ func (m *ServiceCatalogMutation) OldTargetClass(ctx context.Context) (v string, 
 	return oldValue.TargetClass, nil
 }
 
-// ClearTargetClass clears the value of the "target_class" field.
-func (m *ServiceCatalogMutation) ClearTargetClass() {
-	m.target_class = nil
-	m.clearedFields[servicecatalog.FieldTargetClass] = struct{}{}
-}
-
-// TargetClassCleared returns if the "target_class" field was cleared in this mutation.
-func (m *ServiceCatalogMutation) TargetClassCleared() bool {
-	_, ok := m.clearedFields[servicecatalog.FieldTargetClass]
-	return ok
-}
-
 // ResetTargetClass resets all changes to the "target_class" field.
 func (m *ServiceCatalogMutation) ResetTargetClass() {
 	m.target_class = nil
-	delete(m.clearedFields, servicecatalog.FieldTargetClass)
 }
 
 // SetPrice sets the "price" field.
@@ -115215,7 +115165,7 @@ func (m *ServiceCatalogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ServiceCatalogMutation) Fields() []string {
-	fields := make([]string, 0, 26)
+	fields := make([]string, 0, 25)
 	if m.name != nil {
 		fields = append(fields, servicecatalog.FieldName)
 	}
@@ -115230,9 +115180,6 @@ func (m *ServiceCatalogMutation) Fields() []string {
 	}
 	if m.service_type != nil {
 		fields = append(fields, servicecatalog.FieldServiceType)
-	}
-	if m.itsm_type != nil {
-		fields = append(fields, servicecatalog.FieldItsmType)
 	}
 	if m.target_class != nil {
 		fields = append(fields, servicecatalog.FieldTargetClass)
@@ -115312,8 +115259,6 @@ func (m *ServiceCatalogMutation) Field(name string) (ent.Value, bool) {
 		return m.Icon()
 	case servicecatalog.FieldServiceType:
 		return m.ServiceType()
-	case servicecatalog.FieldItsmType:
-		return m.ItsmType()
 	case servicecatalog.FieldTargetClass:
 		return m.TargetClass()
 	case servicecatalog.FieldPrice:
@@ -115373,8 +115318,6 @@ func (m *ServiceCatalogMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldIcon(ctx)
 	case servicecatalog.FieldServiceType:
 		return m.OldServiceType(ctx)
-	case servicecatalog.FieldItsmType:
-		return m.OldItsmType(ctx)
 	case servicecatalog.FieldTargetClass:
 		return m.OldTargetClass(ctx)
 	case servicecatalog.FieldPrice:
@@ -115458,13 +115401,6 @@ func (m *ServiceCatalogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetServiceType(v)
-		return nil
-	case servicecatalog.FieldItsmType:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetItsmType(v)
 		return nil
 	case servicecatalog.FieldTargetClass:
 		v, ok := value.(string)
@@ -115756,9 +115692,6 @@ func (m *ServiceCatalogMutation) ClearedFields() []string {
 	if m.FieldCleared(servicecatalog.FieldIcon) {
 		fields = append(fields, servicecatalog.FieldIcon)
 	}
-	if m.FieldCleared(servicecatalog.FieldTargetClass) {
-		fields = append(fields, servicecatalog.FieldTargetClass)
-	}
 	if m.FieldCleared(servicecatalog.FieldPrice) {
 		fields = append(fields, servicecatalog.FieldPrice)
 	}
@@ -115815,9 +115748,6 @@ func (m *ServiceCatalogMutation) ClearField(name string) error {
 	case servicecatalog.FieldIcon:
 		m.ClearIcon()
 		return nil
-	case servicecatalog.FieldTargetClass:
-		m.ClearTargetClass()
-		return nil
 	case servicecatalog.FieldPrice:
 		m.ClearPrice()
 		return nil
@@ -115873,9 +115803,6 @@ func (m *ServiceCatalogMutation) ResetField(name string) error {
 		return nil
 	case servicecatalog.FieldServiceType:
 		m.ResetServiceType()
-		return nil
-	case servicecatalog.FieldItsmType:
-		m.ResetItsmType()
 		return nil
 	case servicecatalog.FieldTargetClass:
 		m.ResetTargetClass()

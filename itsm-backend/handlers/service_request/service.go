@@ -92,12 +92,10 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 	}
 
 	// 1b. Incident/Change 类型：直接通过 Unified Intake ApplicationService 创建事件/变更，
-	// 跳过 SR 和审批流程。判断依据是 target_class（WorkItem 目标类），不再是 itsm_type——
-	// 见 entity.go isIncidentCatalog 的注释。这要求该 ServiceCatalog 行已经跑过
-	// cmd/backfill_servicecatalog_target_class 回填或者是 Wave 2 之后新建/编辑过的
-	// （target_class 在写入时同步计算），否则未回填的存量 Incident/Change 类型目录项会被
-	// 当成 default 落到普通 ServiceRequest 分支——这是部署顺序要求，不是代码缺陷，与
-	// Incident/Problem/Change 三次迁移要求先跑各自 backfill 命令再上线新路由代码是同一个模式。
+	// 跳过 SR 和审批流程。判断依据是 target_class（WorkItem 目标类）——见 entity.go
+	// isIncidentCatalog 的注释。target_class 现在是 service_catalogs 表的 NOT NULL 权威列
+	// （migration 024_service_catalog_target_class_authority 已经回填全部存量行并删除退役的
+	// itsm_type 列），不存在"未回填"这种中间状态。
 	if isIncidentCatalog(cat.TargetClass) || cat.TargetClass == service_catalog.TargetClassChangeRequest {
 		if strings.TrimSpace(idempotencyKey) == "" {
 			return nil, common.NewBadRequestError("Idempotency-Key header is required", nil)

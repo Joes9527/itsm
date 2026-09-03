@@ -28,9 +28,7 @@ type ServiceCatalog struct {
 	Icon string `json:"icon,omitempty"`
 	// 服务类型: vm|rds|oss|network|storage|security|custom
 	ServiceType string `json:"service_type,omitempty"`
-	// ITSM类型: Request|Incident|Change，决定审批路由
-	ItsmType string `json:"itsm_type,omitempty"`
-	// WorkItem 目标类：service_request_item|incident|change_request，Wave 2 由 itsm_type 迁移填充，本阶段只加列
+	// WorkItem 目标类：service_request_item|incident|change_request，创建/更新时由调用方显式提供并校验，唯一权威路由依据
 	TargetClass string `json:"target_class,omitempty"`
 	// 价格
 	Price float64 `json:"price,omitempty"`
@@ -86,7 +84,7 @@ func (*ServiceCatalog) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case servicecatalog.FieldID, servicecatalog.FieldDeliveryTime, servicecatalog.FieldApprovalLevel, servicecatalog.FieldSLAResponseTime, servicecatalog.FieldSLAResolutionTime, servicecatalog.FieldCiTypeID, servicecatalog.FieldCloudServiceID, servicecatalog.FieldTenantID, servicecatalog.FieldSortOrder:
 			values[i] = new(sql.NullInt64)
-		case servicecatalog.FieldName, servicecatalog.FieldDescription, servicecatalog.FieldCategory, servicecatalog.FieldIcon, servicecatalog.FieldServiceType, servicecatalog.FieldItsmType, servicecatalog.FieldTargetClass, servicecatalog.FieldUnit, servicecatalog.FieldProcessDefinitionKey, servicecatalog.FieldStatus:
+		case servicecatalog.FieldName, servicecatalog.FieldDescription, servicecatalog.FieldCategory, servicecatalog.FieldIcon, servicecatalog.FieldServiceType, servicecatalog.FieldTargetClass, servicecatalog.FieldUnit, servicecatalog.FieldProcessDefinitionKey, servicecatalog.FieldStatus:
 			values[i] = new(sql.NullString)
 		case servicecatalog.FieldCreatedAt, servicecatalog.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -140,12 +138,6 @@ func (_m *ServiceCatalog) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field service_type", values[i])
 			} else if value.Valid {
 				_m.ServiceType = value.String
-			}
-		case servicecatalog.FieldItsmType:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field itsm_type", values[i])
-			} else if value.Valid {
-				_m.ItsmType = value.String
 			}
 		case servicecatalog.FieldTargetClass:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -323,9 +315,6 @@ func (_m *ServiceCatalog) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("service_type=")
 	builder.WriteString(_m.ServiceType)
-	builder.WriteString(", ")
-	builder.WriteString("itsm_type=")
-	builder.WriteString(_m.ItsmType)
 	builder.WriteString(", ")
 	builder.WriteString("target_class=")
 	builder.WriteString(_m.TargetClass)

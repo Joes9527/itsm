@@ -2120,6 +2120,12 @@ func (s *Seeder) seedServiceCatalog(ctx context.Context) {
 			SetDeliveryTime(svc.DeliveryTime).
 			SetStatus("active").
 			SetIsActive(true).
+			// target_class 是 NOT NULL 权威路由字段（ent/schema/servicecatalog.go，migration
+			// 024_service_catalog_target_class_authority）。产品种子目录都是普通服务请求模板，
+			// 不是事件/变更上报入口，取值恒为 "service_request_item"（对应
+			// handlers/service_catalog.TargetClassServiceRequestItem，此处用字面量避免
+			// pkg/seeder 反向依赖 handlers/<domain> 包）。
+			SetTargetClass("service_request_item").
 			SetTenantID(t.ID).
 			Save(ctx)
 		if err != nil {

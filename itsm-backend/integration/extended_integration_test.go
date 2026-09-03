@@ -126,6 +126,7 @@ func TestIncidentIntegration(t *testing.T) {
 		SetName("Email Service").
 		SetDescription("Corporate email service").
 		SetStatus("active").
+		SetTargetClass("service_request_item").
 		SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
@@ -217,6 +218,7 @@ func TestServiceCatalogIntegration(t *testing.T) {
 		SetName("IT Services").
 		SetDescription("IT service offerings").
 		SetStatus("active").
+		SetTargetClass("service_request_item").
 		SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)

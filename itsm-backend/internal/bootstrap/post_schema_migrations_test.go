@@ -34,7 +34,7 @@ func TestRunPostSchemaMigrationsAppliesVersion007(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, runner.ensured)
-	require.Len(t, runner.migrations, 17)
+	require.Len(t, runner.migrations, 18)
 	require.Equal(t, "007_add_change_execution_tables", runner.migrations[0].Version)
 	require.Equal(t, "008_add_initialization_ledger", runner.migrations[1].Version)
 	require.Equal(t, "009_enable_rls_tenant_isolation", runner.migrations[2].Version)
@@ -51,7 +51,8 @@ func TestRunPostSchemaMigrationsAppliesVersion007(t *testing.T) {
 	require.Equal(t, "021_add_callback_optional_declared", runner.migrations[13].Version)
 	require.Equal(t, "022_drop_professional_extension_shared_fields", runner.migrations[14].Version)
 	require.Equal(t, "023_unified_intake_rls", runner.migrations[15].Version)
-	require.Equal(t, "025_external_identity_version", runner.migrations[16].Version)
+	require.Equal(t, "024_service_catalog_target_class_authority", runner.migrations[16].Version)
+	require.Equal(t, "025_external_identity_version", runner.migrations[17].Version)
 }
 
 func TestRunPostSchemaMigrationsFailsClosed(t *testing.T) {

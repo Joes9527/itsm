@@ -26,11 +26,15 @@ func NewService(repo Repository, client *ent.Client, logger *zap.SugaredLogger) 
 	}
 }
 
-func (s *Service) Create(ctx context.Context, name, category, description string, deliveryTime, tenantID int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput, processDefinitionKey string, serviceType string) (*ServiceCatalog, error) {
+func (s *Service) Create(ctx context.Context, name, category, description string, deliveryTime, tenantID int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput, processDefinitionKey string, serviceType string, targetClass string) (*ServiceCatalog, error) {
 	name = strings.TrimSpace(name)
 	category = strings.TrimSpace(category)
 	if name == "" || category == "" {
 		return nil, common.NewBadRequestError("Service name and category are required", nil)
+	}
+	targetClass = strings.TrimSpace(targetClass)
+	if !IsValidTargetClass(targetClass) {
+		return nil, common.NewBadRequestError("targetClass is required and must be one of service_request_item, incident, change_request", nil)
 	}
 	if deliveryTime == 0 {
 		deliveryTime = 1
@@ -68,6 +72,7 @@ func (s *Service) Create(ctx context.Context, name, category, description string
 		Status:               status,
 		TenantID:             tenantID,
 		ServiceType:          strings.TrimSpace(serviceType),
+		TargetClass:          targetClass,
 	}
 	created, err := s.repo.Create(ctx, catalog)
 	if err != nil {
@@ -141,7 +146,7 @@ func toFieldDefinitionInputsFromEnt(defs []*ent.FieldDefinition) []service.Field
 	return result
 }
 
-func (s *Service) Update(ctx context.Context, tenantID int, id int, name, category, description string, deliveryTime int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput, processDefinitionKey string, serviceType string) (*ServiceCatalog, error) {
+func (s *Service) Update(ctx context.Context, tenantID int, id int, name, category, description string, deliveryTime int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput, processDefinitionKey string, serviceType string, targetClass string) (*ServiceCatalog, error) {
 	// First check if exists
 	current, err := s.repo.Get(ctx, tenantID, id)
 	if err != nil {
@@ -152,6 +157,10 @@ func (s *Service) Update(ctx context.Context, tenantID int, id int, name, catego
 	category = strings.TrimSpace(category)
 	if deliveryTime < 0 || deliveryTime > 3650 {
 		return nil, common.NewBadRequestError("Delivery time must be between 1 and 3650 days", nil)
+	}
+	targetClass = strings.TrimSpace(targetClass)
+	if targetClass != "" && !IsValidTargetClass(targetClass) {
+		return nil, common.NewBadRequestError("targetClass must be one of service_request_item, incident, change_request", nil)
 	}
 	if status != "" && !isValidCatalogStatus(status) {
 		return nil, common.NewBadRequestError("Invalid service catalog status", nil)
@@ -210,6 +219,11 @@ func (s *Service) Update(ctx context.Context, tenantID int, id int, name, catego
 	if st := strings.TrimSpace(serviceType); st != "" {
 		current.ServiceType = st
 	}
+	if targetClass != "" {
+		current.TargetClass = targetClass
+	}
+	// targetClass == "" 时不改 current.TargetClass：current 已经是 repo.Get 读回的既有值，
+	// 省略字段的语义是"保留当前值"，不是"清空"（targetClass 是 NOT NULL 列，也不允许清空）。
 
 	updated, err := s.repo.Update(ctx, tenantID, current)
 	if err != nil {

@@ -158,11 +158,10 @@ func stripStructuredFieldKeys(formData map[string]interface{}, fieldValues map[s
 }
 
 // mapTargetClassToTicketType 将 catalog.target_class（WorkItem 目标类）映射为 Ticket.type。
-// Wave 2 之前这里读的是 catalog.itsm_type；现在 target_class 是路由的唯一权威来源
-// （design doc §7.2、AGENTS.md 禁止 itsm_type/target_class 两个字段并存做路由依据）——
-// handlers/service_catalog 在 ServiceCatalog 创建/更新时已经把 itsm_type 同步计算进
-// target_class（见 handlers/service_catalog/entity.go 的 ComputeTargetClass），这里不再
-// 重新读取或解释 itsm_type。
+// target_class 是路由的唯一权威来源（design doc §7.2）——handlers/service_catalog 在
+// ServiceCatalog 创建/更新时要求调用方显式提供并校验这个字段（历史 itsm_type 列已被
+// migration 024_service_catalog_target_class_authority 删除），这里不再重新读取或解释
+// itsm_type。
 // incident 类型不通过 Ticket 审批路径，调用方应在入此函数前用 isIncidentCatalog 分流；
 // 这里的 "incident" 分支只是防御性兜底，正常不会走到。
 // 映射规则：service_request_item → service_request, change_request → change,
@@ -174,7 +173,7 @@ func mapTargetClassToTicketType(targetClass string) string {
 	case service_catalog.TargetClassIncident:
 		return "incident"
 	default:
-		return "service_request" // service_request_item、空值（未跑回填）及兜底
+		return "service_request" // service_request_item 及防御性兜底
 	}
 }
 

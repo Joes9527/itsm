@@ -43,6 +43,22 @@ describe('ServiceCatalogApi', () => {
       const result = await ServiceCatalogApi.createService({ name: 'VPN', category: 'it_service' as any } as any);
       expect(mockPost).toHaveBeenCalledWith('/api/v1/service-catalogs', expect.objectContaining({ name: 'VPN' }));
     });
+
+    // Task 14: targetClass is now an explicit, required create-time contract field (backend
+    // binding:"required") — the API client must serialize it exactly as supplied, not drop it
+    // or derive it from something else.
+    it('serializes targetClass on create', async () => {
+      mockPost.mockResolvedValue({ id: 2, name: 'Report Outage', status: 'enabled', targetClass: 'incident' });
+      await ServiceCatalogApi.createService({
+        name: 'Report Outage',
+        category: 'it_service' as any,
+        targetClass: 'incident' as any,
+      } as any);
+      expect(mockPost).toHaveBeenCalledWith(
+        '/api/v1/service-catalogs',
+        expect.objectContaining({ targetClass: 'incident' })
+      );
+    });
   });
 
   describe('updateService', () => {
@@ -50,6 +66,27 @@ describe('ServiceCatalogApi', () => {
       mockPut.mockResolvedValue({ id: 1, name: 'Updated', status: 'enabled' });
       const result = await ServiceCatalogApi.updateService('1', { name: 'Updated' } as any);
       expect(mockPut).toHaveBeenCalledWith('/api/v1/service-catalogs/1', expect.objectContaining({ name: 'Updated' }));
+    });
+
+    // Task 14: a supplied targetClass must be serialized on update too (the value the admin
+    // picked to change the catalog's routing to).
+    it('serializes targetClass on update when supplied', async () => {
+      mockPut.mockResolvedValue({ id: 1, name: 'Updated', status: 'enabled', targetClass: 'change_request' });
+      await ServiceCatalogApi.updateService('1', { targetClass: 'change_request' as any } as any);
+      expect(mockPut).toHaveBeenCalledWith(
+        '/api/v1/service-catalogs/1',
+        expect.objectContaining({ targetClass: 'change_request' })
+      );
+    });
+
+    // Task 14: omitting targetClass on update means "preserve the current value" (backend
+    // binding:"omitempty") — the API client must not send an empty/undefined targetClass key
+    // that would be misread as an explicit clear request.
+    it('omits targetClass from the payload on update when not supplied', async () => {
+      mockPut.mockResolvedValue({ id: 1, name: 'Renamed', status: 'enabled' });
+      await ServiceCatalogApi.updateService('1', { name: 'Renamed' } as any);
+      const [, payload] = mockPut.mock.calls[0];
+      expect(payload).not.toHaveProperty('targetClass');
     });
   });
 

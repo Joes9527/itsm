@@ -8,13 +8,11 @@ import (
 )
 
 // TestUnifiedIntakeMigrationsRegisteredInOrder guards the migration numbering
-// contract for the unified intake reconciliation: 023_unified_intake_rls and
-// 025_external_identity_version must both be registered, and ordered after
-// 020_work_item_number_allocator with 023 preceding 025. The 024 slot is
-// deliberately left open here for Task 14 to fill in later (it retires
-// service_catalogs.itsm_type and must land in the same commit as the code
-// that stops reading that column) — do not duplicate a second version of
-// this test there; Task 14 extends this same test with 024's position.
+// contract for the unified intake reconciliation: 023_unified_intake_rls,
+// 024_service_catalog_target_class_authority, and 025_external_identity_version
+// must all be registered, and ordered after 020_work_item_number_allocator with
+// 023 < 024 < 025. Task 14 registered 024 in the same cutover commit as the code
+// that stops reading service_catalogs.itsm_type — do not register it earlier.
 func TestUnifiedIntakeMigrationsRegisteredInOrder(t *testing.T) {
 	migrations := PostSchemaMigrations()
 	var versions []string
@@ -22,11 +20,13 @@ func TestUnifiedIntakeMigrationsRegisteredInOrder(t *testing.T) {
 		versions = append(versions, m.Version)
 	}
 	require.Contains(t, versions, "023_unified_intake_rls")
+	require.Contains(t, versions, "024_service_catalog_target_class_authority")
 	require.Contains(t, versions, "025_external_identity_version")
 	idx020 := indexOf(versions, "020_work_item_number_allocator")
 	idx023 := indexOf(versions, "023_unified_intake_rls")
+	idx024 := indexOf(versions, "024_service_catalog_target_class_authority")
 	idx025 := indexOf(versions, "025_external_identity_version")
-	require.True(t, idx020 < idx023 && idx023 < idx025)
+	require.True(t, idx020 < idx023 && idx023 < idx024 && idx024 < idx025)
 }
 
 func indexOf(s []string, v string) int {
@@ -227,6 +227,158 @@ func TestMigration023UnifiedIntakeRLSAssets(t *testing.T) {
 func TestMigration023UnifiedIntakeRLSMatchesRegisteredSQL(t *testing.T) {
 	registeredSQL := GetMigrationSQL("023_unified_intake_rls")
 	require.Equal(t, normalizeMigrationSQL(migration023UnifiedIntakeRLSSQL), normalizeMigrationSQL(registeredSQL))
+}
+
+const migration024ServiceCatalogTargetClassAuthoritySQL = `
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'service_catalogs'
+          AND column_name = 'itsm_type'
+    ) THEN
+        UPDATE service_catalogs
+        SET target_class = CASE itsm_type
+            WHEN 'Incident' THEN 'incident'
+            WHEN 'Change' THEN 'change_request'
+            ELSE 'service_request_item'
+        END
+        WHERE target_class IS NULL
+           OR target_class NOT IN ('service_request_item', 'incident', 'change_request');
+    END IF;
+END $$;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM service_catalogs
+        WHERE target_class IS NULL
+           OR target_class NOT IN ('service_request_item', 'incident', 'change_request')
+    ) THEN
+        RAISE EXCEPTION 'service_catalogs.target_class has invalid or NULL values after backfill';
+    END IF;
+END $$;
+
+ALTER TABLE service_catalogs ALTER COLUMN target_class SET NOT NULL;
+ALTER TABLE service_catalogs DROP CONSTRAINT IF EXISTS service_catalogs_target_class_check;
+ALTER TABLE service_catalogs
+    ADD CONSTRAINT service_catalogs_target_class_check
+    CHECK (target_class IN ('service_request_item', 'incident', 'change_request'));
+
+ALTER TABLE service_catalogs DROP COLUMN IF EXISTS itsm_type;
+`
+
+const migration024ServiceCatalogTargetClassAuthorityDevResetSQL = `DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM service_catalogs LIMIT 1) THEN
+        RAISE EXCEPTION 'reset requires an empty service_catalogs table; run development reset first';
+    END IF;
+END $$;
+
+ALTER TABLE service_catalogs ADD COLUMN IF NOT EXISTS itsm_type character varying NOT NULL DEFAULT 'Request';
+ALTER TABLE service_catalogs DROP CONSTRAINT IF EXISTS service_catalogs_target_class_check;
+ALTER TABLE service_catalogs ALTER COLUMN target_class DROP NOT NULL;`
+
+const migration024ServiceCatalogTargetClassAuthorityVerifySQL = `DO $$
+BEGIN
+    IF to_regclass(format('%I.service_catalogs', current_schema())) IS NULL THEN
+        RAISE EXCEPTION 'required table service_catalogs is missing from schema %', current_schema();
+    END IF;
+
+    IF EXISTS (
+        SELECT 1
+        FROM pg_attribute column_attribute
+        JOIN pg_class table_relation ON table_relation.oid = column_attribute.attrelid
+        JOIN pg_namespace table_schema ON table_schema.oid = table_relation.relnamespace
+        WHERE table_schema.nspname = current_schema()
+          AND table_relation.relname = 'service_catalogs'
+          AND column_attribute.attname = 'itsm_type'
+          AND NOT column_attribute.attisdropped
+    ) THEN
+        RAISE EXCEPTION 'service_catalogs.itsm_type must be dropped';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_attribute column_attribute
+        JOIN pg_class table_relation ON table_relation.oid = column_attribute.attrelid
+        JOIN pg_namespace table_schema ON table_schema.oid = table_relation.relnamespace
+        WHERE table_schema.nspname = current_schema()
+          AND table_relation.relname = 'service_catalogs'
+          AND column_attribute.attname = 'target_class'
+          AND column_attribute.attnotnull
+          AND NOT column_attribute.attisdropped
+    ) THEN
+        RAISE EXCEPTION 'service_catalogs.target_class must be NOT NULL';
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint constraint_relation
+        JOIN pg_class table_relation ON table_relation.oid = constraint_relation.conrelid
+        JOIN pg_namespace table_schema ON table_schema.oid = table_relation.relnamespace
+        WHERE table_schema.nspname = current_schema()
+          AND table_relation.relname = 'service_catalogs'
+          AND constraint_relation.conname = 'service_catalogs_target_class_check'
+          AND constraint_relation.contype = 'c'
+          AND pg_get_constraintdef(constraint_relation.oid) =
+              'CHECK (((target_class)::text = ANY ((ARRAY[''service_request_item''::character varying, ''incident''::character varying, ''change_request''::character varying])::text[])))'
+    ) THEN
+        RAISE EXCEPTION 'service_catalogs_target_class_check constraint is missing or does not match the authoritative definition';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM service_catalogs
+        WHERE target_class IS NULL
+           OR target_class NOT IN ('service_request_item', 'incident', 'change_request')
+    ) THEN
+        RAISE EXCEPTION 'service_catalogs contains rows with invalid target_class values';
+    END IF;
+END $$;`
+
+// TestMigration024ServiceCatalogTargetClassAuthorityAssets guards the
+// 024_service_catalog_target_class_authority.sql, _dev_reset.sql, and
+// _verify.sql files on disk against drifting from what this test file pins
+// them to, mirroring TestMigration023UnifiedIntakeRLSAssets.
+func TestMigration024ServiceCatalogTargetClassAuthorityAssets(t *testing.T) {
+	tests := []struct {
+		name     string
+		filename string
+		want     string
+	}{
+		{
+			name:     "apply",
+			filename: "024_service_catalog_target_class_authority.sql",
+			want:     migration024ServiceCatalogTargetClassAuthoritySQL,
+		},
+		{
+			name:     "development reset",
+			filename: "024_service_catalog_target_class_authority_dev_reset.sql",
+			want:     migration024ServiceCatalogTargetClassAuthorityDevResetSQL,
+		},
+		{
+			name:     "verify",
+			filename: "024_service_catalog_target_class_authority_verify.sql",
+			want:     migration024ServiceCatalogTargetClassAuthorityVerifySQL,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			script := readUnifiedIntakeMigrationAsset(t, tt.filename)
+			require.Equal(t, normalizeMigrationSQL(tt.want), normalizeMigrationSQL(string(script)))
+		})
+	}
+}
+
+// TestMigration024ServiceCatalogTargetClassAuthorityMatchesRegisteredSQL guards
+// the other direction of the same drift: the registered GetMigrationSQL case
+// actually applied by the migrator must match the pinned apply-file content
+// above.
+func TestMigration024ServiceCatalogTargetClassAuthorityMatchesRegisteredSQL(t *testing.T) {
+	registeredSQL := GetMigrationSQL("024_service_catalog_target_class_authority")
+	require.Equal(t, normalizeMigrationSQL(migration024ServiceCatalogTargetClassAuthoritySQL), normalizeMigrationSQL(registeredSQL))
 }
 
 const migration025ExternalIdentityVersionSQL = `

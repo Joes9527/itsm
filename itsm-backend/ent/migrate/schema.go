@@ -3739,8 +3739,7 @@ var (
 		{Name: "category", Type: field.TypeString, Nullable: true},
 		{Name: "icon", Type: field.TypeString, Nullable: true},
 		{Name: "service_type", Type: field.TypeString, Default: "custom"},
-		{Name: "itsm_type", Type: field.TypeString, Default: "Request"},
-		{Name: "target_class", Type: field.TypeString, Nullable: true},
+		{Name: "target_class", Type: field.TypeString},
 		{Name: "price", Type: field.TypeFloat64, Nullable: true},
 		{Name: "delivery_time", Type: field.TypeInt, Nullable: true},
 		{Name: "unit", Type: field.TypeString, Nullable: true},
@@ -3770,12 +3769,12 @@ var (
 			{
 				Name:    "servicecatalog_ci_type_id",
 				Unique:  false,
-				Columns: []*schema.Column{ServiceCatalogsColumns[17]},
+				Columns: []*schema.Column{ServiceCatalogsColumns[16]},
 			},
 			{
 				Name:    "servicecatalog_cloud_service_id",
 				Unique:  false,
-				Columns: []*schema.Column{ServiceCatalogsColumns[18]},
+				Columns: []*schema.Column{ServiceCatalogsColumns[17]},
 			},
 			{
 				Name:    "servicecatalog_service_type",
@@ -3790,7 +3789,7 @@ var (
 			{
 				Name:    "servicecatalog_tenant_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{ServiceCatalogsColumns[22], ServiceCatalogsColumns[21]},
+				Columns: []*schema.Column{ServiceCatalogsColumns[21], ServiceCatalogsColumns[20]},
 			},
 		},
 	}

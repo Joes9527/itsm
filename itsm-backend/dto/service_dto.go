@@ -172,6 +172,9 @@ type CreateServiceCatalogRequest struct {
 	// ServiceType 决定是否需要基础设施字段，见 handlers/service_catalog.RequiresInfraFields。
 	// 取值：vm|rds|oss|network|storage|security|custom（ent schema servicecatalog.go 字段注释）。
 	ServiceType string `json:"serviceType" binding:"omitempty,max=50"`
+	// TargetClass 是该目录项对应的 WorkItem 目标类，创建时必填——不再由后端从已退役的
+	// itsm_type 派生（design doc §7.2，migration 024_service_catalog_target_class_authority）。
+	TargetClass string `json:"targetClass" binding:"required,oneof=service_request_item incident change_request"`
 }
 
 // UpdateServiceCatalogRequest 更新服务目录请求
@@ -186,4 +189,7 @@ type UpdateServiceCatalogRequest struct {
 	Status               string                   `json:"status" binding:"omitempty,oneof=enabled disabled"`
 	Fields               []map[string]interface{} `json:"fields,omitempty"`
 	ServiceType          string                   `json:"serviceType" binding:"omitempty,max=50"`
+	// TargetClass 省略时保留目录项当前值；提供时必须是三个合法取值之一
+	// （Handler.Update/Service.Update 的"保留-或-校验替换"语义，见 handler.go/service.go）。
+	TargetClass string `json:"targetClass,omitempty" binding:"omitempty,oneof=service_request_item incident change_request"`
 }

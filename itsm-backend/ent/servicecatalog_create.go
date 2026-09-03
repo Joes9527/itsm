@@ -84,31 +84,9 @@ func (_c *ServiceCatalogCreate) SetNillableServiceType(v *string) *ServiceCatalo
 	return _c
 }
 
-// SetItsmType sets the "itsm_type" field.
-func (_c *ServiceCatalogCreate) SetItsmType(v string) *ServiceCatalogCreate {
-	_c.mutation.SetItsmType(v)
-	return _c
-}
-
-// SetNillableItsmType sets the "itsm_type" field if the given value is not nil.
-func (_c *ServiceCatalogCreate) SetNillableItsmType(v *string) *ServiceCatalogCreate {
-	if v != nil {
-		_c.SetItsmType(*v)
-	}
-	return _c
-}
-
 // SetTargetClass sets the "target_class" field.
 func (_c *ServiceCatalogCreate) SetTargetClass(v string) *ServiceCatalogCreate {
 	_c.mutation.SetTargetClass(v)
-	return _c
-}
-
-// SetNillableTargetClass sets the "target_class" field if the given value is not nil.
-func (_c *ServiceCatalogCreate) SetNillableTargetClass(v *string) *ServiceCatalogCreate {
-	if v != nil {
-		_c.SetTargetClass(*v)
-	}
 	return _c
 }
 
@@ -385,10 +363,6 @@ func (_c *ServiceCatalogCreate) defaults() {
 		v := servicecatalog.DefaultServiceType
 		_c.mutation.SetServiceType(v)
 	}
-	if _, ok := _c.mutation.ItsmType(); !ok {
-		v := servicecatalog.DefaultItsmType
-		_c.mutation.SetItsmType(v)
-	}
 	if _, ok := _c.mutation.RequiresApproval(); !ok {
 		v := servicecatalog.DefaultRequiresApproval
 		_c.mutation.SetRequiresApproval(v)
@@ -432,8 +406,8 @@ func (_c *ServiceCatalogCreate) check() error {
 	if _, ok := _c.mutation.ServiceType(); !ok {
 		return &ValidationError{Name: "service_type", err: errors.New(`ent: missing required field "ServiceCatalog.service_type"`)}
 	}
-	if _, ok := _c.mutation.ItsmType(); !ok {
-		return &ValidationError{Name: "itsm_type", err: errors.New(`ent: missing required field "ServiceCatalog.itsm_type"`)}
+	if _, ok := _c.mutation.TargetClass(); !ok {
+		return &ValidationError{Name: "target_class", err: errors.New(`ent: missing required field "ServiceCatalog.target_class"`)}
 	}
 	if _, ok := _c.mutation.RequiresApproval(); !ok {
 		return &ValidationError{Name: "requires_approval", err: errors.New(`ent: missing required field "ServiceCatalog.requires_approval"`)}
@@ -510,10 +484,6 @@ func (_c *ServiceCatalogCreate) createSpec() (*ServiceCatalog, *sqlgraph.CreateS
 	if value, ok := _c.mutation.ServiceType(); ok {
 		_spec.SetField(servicecatalog.FieldServiceType, field.TypeString, value)
 		_node.ServiceType = value
-	}
-	if value, ok := _c.mutation.ItsmType(); ok {
-		_spec.SetField(servicecatalog.FieldItsmType, field.TypeString, value)
-		_node.ItsmType = value
 	}
 	if value, ok := _c.mutation.TargetClass(); ok {
 		_spec.SetField(servicecatalog.FieldTargetClass, field.TypeString, value)
@@ -725,18 +695,6 @@ func (u *ServiceCatalogUpsert) UpdateServiceType() *ServiceCatalogUpsert {
 	return u
 }
 
-// SetItsmType sets the "itsm_type" field.
-func (u *ServiceCatalogUpsert) SetItsmType(v string) *ServiceCatalogUpsert {
-	u.Set(servicecatalog.FieldItsmType, v)
-	return u
-}
-
-// UpdateItsmType sets the "itsm_type" field to the value that was provided on create.
-func (u *ServiceCatalogUpsert) UpdateItsmType() *ServiceCatalogUpsert {
-	u.SetExcluded(servicecatalog.FieldItsmType)
-	return u
-}
-
 // SetTargetClass sets the "target_class" field.
 func (u *ServiceCatalogUpsert) SetTargetClass(v string) *ServiceCatalogUpsert {
 	u.Set(servicecatalog.FieldTargetClass, v)
@@ -746,12 +704,6 @@ func (u *ServiceCatalogUpsert) SetTargetClass(v string) *ServiceCatalogUpsert {
 // UpdateTargetClass sets the "target_class" field to the value that was provided on create.
 func (u *ServiceCatalogUpsert) UpdateTargetClass() *ServiceCatalogUpsert {
 	u.SetExcluded(servicecatalog.FieldTargetClass)
-	return u
-}
-
-// ClearTargetClass clears the value of the "target_class" field.
-func (u *ServiceCatalogUpsert) ClearTargetClass() *ServiceCatalogUpsert {
-	u.SetNull(servicecatalog.FieldTargetClass)
 	return u
 }
 
@@ -1234,20 +1186,6 @@ func (u *ServiceCatalogUpsertOne) UpdateServiceType() *ServiceCatalogUpsertOne {
 	})
 }
 
-// SetItsmType sets the "itsm_type" field.
-func (u *ServiceCatalogUpsertOne) SetItsmType(v string) *ServiceCatalogUpsertOne {
-	return u.Update(func(s *ServiceCatalogUpsert) {
-		s.SetItsmType(v)
-	})
-}
-
-// UpdateItsmType sets the "itsm_type" field to the value that was provided on create.
-func (u *ServiceCatalogUpsertOne) UpdateItsmType() *ServiceCatalogUpsertOne {
-	return u.Update(func(s *ServiceCatalogUpsert) {
-		s.UpdateItsmType()
-	})
-}
-
 // SetTargetClass sets the "target_class" field.
 func (u *ServiceCatalogUpsertOne) SetTargetClass(v string) *ServiceCatalogUpsertOne {
 	return u.Update(func(s *ServiceCatalogUpsert) {
@@ -1259,13 +1197,6 @@ func (u *ServiceCatalogUpsertOne) SetTargetClass(v string) *ServiceCatalogUpsert
 func (u *ServiceCatalogUpsertOne) UpdateTargetClass() *ServiceCatalogUpsertOne {
 	return u.Update(func(s *ServiceCatalogUpsert) {
 		s.UpdateTargetClass()
-	})
-}
-
-// ClearTargetClass clears the value of the "target_class" field.
-func (u *ServiceCatalogUpsertOne) ClearTargetClass() *ServiceCatalogUpsertOne {
-	return u.Update(func(s *ServiceCatalogUpsert) {
-		s.ClearTargetClass()
 	})
 }
 
@@ -1970,20 +1901,6 @@ func (u *ServiceCatalogUpsertBulk) UpdateServiceType() *ServiceCatalogUpsertBulk
 	})
 }
 
-// SetItsmType sets the "itsm_type" field.
-func (u *ServiceCatalogUpsertBulk) SetItsmType(v string) *ServiceCatalogUpsertBulk {
-	return u.Update(func(s *ServiceCatalogUpsert) {
-		s.SetItsmType(v)
-	})
-}
-
-// UpdateItsmType sets the "itsm_type" field to the value that was provided on create.
-func (u *ServiceCatalogUpsertBulk) UpdateItsmType() *ServiceCatalogUpsertBulk {
-	return u.Update(func(s *ServiceCatalogUpsert) {
-		s.UpdateItsmType()
-	})
-}
-
 // SetTargetClass sets the "target_class" field.
 func (u *ServiceCatalogUpsertBulk) SetTargetClass(v string) *ServiceCatalogUpsertBulk {
 	return u.Update(func(s *ServiceCatalogUpsert) {
@@ -1995,13 +1912,6 @@ func (u *ServiceCatalogUpsertBulk) SetTargetClass(v string) *ServiceCatalogUpser
 func (u *ServiceCatalogUpsertBulk) UpdateTargetClass() *ServiceCatalogUpsertBulk {
 	return u.Update(func(s *ServiceCatalogUpsert) {
 		s.UpdateTargetClass()
-	})
-}
-
-// ClearTargetClass clears the value of the "target_class" field.
-func (u *ServiceCatalogUpsertBulk) ClearTargetClass() *ServiceCatalogUpsertBulk {
-	return u.Update(func(s *ServiceCatalogUpsert) {
-		s.ClearTargetClass()
 	})
 }
 

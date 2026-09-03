@@ -99,8 +99,9 @@ func TestHandler_Create_Success(t *testing.T) {
 	r, _, _ := scSetup(t)
 	uid := scUID()
 	req := dto.CreateServiceCatalogRequest{
-		Name:     "Catalog-" + uid,
-		Category: "hardware",
+		Name:        "Catalog-" + uid,
+		Category:    "hardware",
+		TargetClass: TargetClassServiceRequestItem,
 	}
 	resp := scDoReq(t, r, "POST", "/api/v1/service-catalogs", req)
 	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", mustSC(resp))
@@ -112,14 +113,14 @@ func TestHandler_Create_Success(t *testing.T) {
 
 func TestHandler_Create_MissingName(t *testing.T) {
 	r, _, _ := scSetup(t)
-	req := dto.CreateServiceCatalogRequest{Category: "hardware"}
+	req := dto.CreateServiceCatalogRequest{Category: "hardware", TargetClass: TargetClassServiceRequestItem}
 	resp := scDoReq(t, r, "POST", "/api/v1/service-catalogs", req)
 	assert.Equal(t, common.ParamErrorCode, resp.Code, "body=%s", mustSC(resp))
 }
 
 func TestHandler_Create_MissingCategory(t *testing.T) {
 	r, _, _ := scSetup(t)
-	req := dto.CreateServiceCatalogRequest{Name: "Catalog-X"}
+	req := dto.CreateServiceCatalogRequest{Name: "Catalog-X", TargetClass: TargetClassServiceRequestItem}
 	resp := scDoReq(t, r, "POST", "/api/v1/service-catalogs", req)
 	assert.Equal(t, common.ParamErrorCode, resp.Code, "body=%s", mustSC(resp))
 }
@@ -130,9 +131,43 @@ func TestHandler_Create_CloudServiceRequiresCIType(t *testing.T) {
 		Name:           "Catalog-Cld",
 		Category:       "cloud",
 		CloudServiceID: 5, // CITypeID 缺省为 0
+		TargetClass:    TargetClassServiceRequestItem,
 	}
 	resp := scDoReq(t, r, "POST", "/api/v1/service-catalogs", req)
 	assert.Equal(t, common.ParamErrorCode, resp.Code, "body=%s", mustSC(resp))
+}
+
+// TestHandler_Create_MissingTargetClass 覆盖 Task 14 的核心契约：targetClass 是创建时的
+// 必填字段，缺省必须在 DTO binding 阶段就被拒绝（ParamErrorCode），不能落到 Service 层
+// 才发现。
+func TestHandler_Create_MissingTargetClass(t *testing.T) {
+	r, _, _ := scSetup(t)
+	req := dto.CreateServiceCatalogRequest{Name: "Catalog-NoTC-" + scUID(), Category: "hardware"}
+	resp := scDoReq(t, r, "POST", "/api/v1/service-catalogs", req)
+	assert.Equal(t, common.ParamErrorCode, resp.Code, "body=%s", mustSC(resp))
+}
+
+// TestHandler_Create_InvalidTargetClass 覆盖不在三个受约束枚举内的取值必须被拒绝。
+func TestHandler_Create_InvalidTargetClass(t *testing.T) {
+	r, _, _ := scSetup(t)
+	req := map[string]interface{}{
+		"name": "Catalog-BadTC-" + scUID(), "category": "hardware", "targetClass": "bogus_class",
+	}
+	resp := scDoReq(t, r, "POST", "/api/v1/service-catalogs", req)
+	assert.Equal(t, common.ParamErrorCode, resp.Code, "body=%s", mustSC(resp))
+}
+
+// TestHandler_Create_PersistsSuppliedTargetClass 证明请求体里的 targetClass 一路传到
+// Service.Create 并且反映在响应体上——不是被某个默认值覆盖。
+func TestHandler_Create_PersistsSuppliedTargetClass(t *testing.T) {
+	r, _, _ := scSetup(t)
+	req := dto.CreateServiceCatalogRequest{
+		Name: "Catalog-Incident-" + scUID(), Category: "ops", TargetClass: TargetClassIncident,
+	}
+	resp := scDoReq(t, r, "POST", "/api/v1/service-catalogs", req)
+	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", mustSC(resp))
+	data := resp.Data.(map[string]interface{})
+	assert.Equal(t, TargetClassIncident, data["targetClass"])
 }
 
 func TestHandler_List(t *testing.T) {
@@ -140,7 +175,7 @@ func TestHandler_List(t *testing.T) {
 	// 先创建一条
 	uid := scUID()
 	create := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: "ListCat-" + uid, Category: "hw",
+		Name: "ListCat-" + uid, Category: "hw", TargetClass: TargetClassServiceRequestItem,
 	})
 	require.Equal(t, common.SuccessCode, create.Code)
 
@@ -155,7 +190,7 @@ func TestHandler_Get_Success(t *testing.T) {
 	r, _, _ := scSetup(t)
 	uid := scUID()
 	create := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: "GetCat-" + uid, Category: "hw",
+		Name: "GetCat-" + uid, Category: "hw", TargetClass: TargetClassServiceRequestItem,
 	})
 	require.Equal(t, common.SuccessCode, create.Code)
 	id := int(create.Data.(map[string]interface{})["id"].(float64))
@@ -181,7 +216,7 @@ func TestHandler_Update_Success(t *testing.T) {
 	r, _, _ := scSetup(t)
 	uid := scUID()
 	create := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: "UpdCat-" + uid, Category: "hw",
+		Name: "UpdCat-" + uid, Category: "hw", TargetClass: TargetClassServiceRequestItem,
 	})
 	require.Equal(t, common.SuccessCode, create.Code)
 	id := int(create.Data.(map[string]interface{})["id"].(float64))
@@ -192,13 +227,52 @@ func TestHandler_Update_Success(t *testing.T) {
 	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", mustSC(resp))
 	assert.Equal(t, updated, resp.Data.(map[string]interface{})["name"])
 	assert.Equal(t, "disabled", resp.Data.(map[string]interface{})["status"])
+	// 更新时省略 targetClass：必须保留创建时的值，不能被清空或改写成空字符串。
+	assert.Equal(t, TargetClassServiceRequestItem, resp.Data.(map[string]interface{})["targetClass"])
+}
+
+// TestHandler_Update_ChangesTargetClassWhenSupplied 覆盖 Update 请求体显式提供 targetClass
+// 时必须替换当前值。
+func TestHandler_Update_ChangesTargetClassWhenSupplied(t *testing.T) {
+	r, _, _ := scSetup(t)
+	uid := scUID()
+	create := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
+		Name: "UpdCatChange-" + uid, Category: "hw", TargetClass: TargetClassServiceRequestItem,
+	})
+	require.Equal(t, common.SuccessCode, create.Code)
+	id := int(create.Data.(map[string]interface{})["id"].(float64))
+
+	resp := scDoReq(t, r, "PUT", "/api/v1/service-catalogs/"+strconv.Itoa(id),
+		dto.UpdateServiceCatalogRequest{TargetClass: TargetClassChangeRequest})
+	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", mustSC(resp))
+	assert.Equal(t, TargetClassChangeRequest, resp.Data.(map[string]interface{})["targetClass"])
+}
+
+// TestHandler_Update_RejectsInvalidTargetClass 覆盖更新时提供了不合法的值必须被拒绝，且不能
+// 污染已经落库的合法值。
+func TestHandler_Update_RejectsInvalidTargetClass(t *testing.T) {
+	r, _, _ := scSetup(t)
+	uid := scUID()
+	create := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
+		Name: "UpdCatInvalid-" + uid, Category: "hw", TargetClass: TargetClassServiceRequestItem,
+	})
+	require.Equal(t, common.SuccessCode, create.Code)
+	id := int(create.Data.(map[string]interface{})["id"].(float64))
+
+	req := map[string]interface{}{"targetClass": "bogus_class"}
+	resp := scDoReq(t, r, "PUT", "/api/v1/service-catalogs/"+strconv.Itoa(id), req)
+	assert.Equal(t, common.ParamErrorCode, resp.Code, "body=%s", mustSC(resp))
+
+	after := scDoReq(t, r, "GET", "/api/v1/service-catalogs/"+strconv.Itoa(id), nil)
+	require.Equal(t, common.SuccessCode, after.Code)
+	assert.Equal(t, TargetClassServiceRequestItem, after.Data.(map[string]interface{})["targetClass"], "拒绝的更新不能改动已落库的合法值")
 }
 
 func TestHandler_Delete_Success(t *testing.T) {
 	r, _, _ := scSetup(t)
 	uid := scUID()
 	create := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: "DelCat-" + uid, Category: "hw",
+		Name: "DelCat-" + uid, Category: "hw", TargetClass: TargetClassServiceRequestItem,
 	})
 	require.Equal(t, common.SuccessCode, create.Code)
 	id := int(create.Data.(map[string]interface{})["id"].(float64))
@@ -219,15 +293,15 @@ func TestHandler_CreateRejectsDuplicateNameAndInvalidDeliveryTime(t *testing.T) 
 	r, _, _ := scSetup(t)
 	name := "Duplicate-" + scUID()
 	first := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: name, Category: "hardware",
+		Name: name, Category: "hardware", TargetClass: TargetClassServiceRequestItem,
 	})
 	require.Equal(t, common.SuccessCode, first.Code)
 	duplicate := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: strings.ToUpper(name), Category: "hardware",
+		Name: strings.ToUpper(name), Category: "hardware", TargetClass: TargetClassServiceRequestItem,
 	})
 	assert.Equal(t, common.ConflictCode, duplicate.Code)
 	invalid := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: "Invalid Delivery " + scUID(), Category: "hardware", DeliveryTime: "tomorrow",
+		Name: "Invalid Delivery " + scUID(), Category: "hardware", DeliveryTime: "tomorrow", TargetClass: TargetClassServiceRequestItem,
 	})
 	assert.Equal(t, common.ParamErrorCode, invalid.Code)
 }
@@ -248,12 +322,12 @@ func TestHandler_CreateValidatesReferencedTenantResources(t *testing.T) {
 	require.NoError(t, err)
 
 	foreignCI := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: "Foreign CI " + scUID(), Category: "cloud", CITypeID: foreignType.ID,
+		Name: "Foreign CI " + scUID(), Category: "cloud", CITypeID: foreignType.ID, TargetClass: TargetClassServiceRequestItem,
 	})
 	assert.Equal(t, common.ParamErrorCode, foreignCI.Code)
 	foreignCloudResp := scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
 		Name: "Foreign Cloud " + scUID(), Category: "cloud",
-		CITypeID: localType.ID, CloudServiceID: foreignCloud.ID,
+		CITypeID: localType.ID, CloudServiceID: foreignCloud.ID, TargetClass: TargetClassServiceRequestItem,
 	})
 	assert.Equal(t, common.ParamErrorCode, foreignCloudResp.Code)
 }
@@ -262,7 +336,7 @@ func TestHandler_Search(t *testing.T) {
 	r, _, _ := scSetup(t)
 	uid := scUID()
 	scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: "SearchCat-" + uid, Category: "hw",
+		Name: "SearchCat-" + uid, Category: "hw", TargetClass: TargetClassServiceRequestItem,
 	})
 	resp := scDoReq(t, r, "GET", "/api/v1/service-catalogs/search?q=SearchCat", nil)
 	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", mustSC(resp))
@@ -273,7 +347,7 @@ func TestHandler_Stats(t *testing.T) {
 	r, _, _ := scSetup(t)
 	uid := scUID()
 	scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: "StatsCat-" + uid, Category: "hw",
+		Name: "StatsCat-" + uid, Category: "hw", TargetClass: TargetClassServiceRequestItem,
 	})
 	resp := scDoReq(t, r, "GET", "/api/v1/service-catalogs/stats", nil)
 	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", mustSC(resp))

@@ -37,6 +37,19 @@ export enum ServiceType {
 }
 
 /**
+ * WorkItem 目标类 —— 服务目录条目提交后创建的 WorkItem 专业类型，是
+ * handlers/service_request 路由判断（是否走 Incident/Change 创建路径，还是普通
+ * ServiceRequest 审批链）的唯一权威依据。创建/编辑服务目录时必须显式选择，后端不再从
+ * 已退役的 itsm_type 派生（itsm-backend migration
+ * 024_service_catalog_target_class_authority）。
+ */
+export enum TargetClass {
+  SERVICE_REQUEST_ITEM = 'service_request_item',
+  INCIDENT = 'incident',
+  CHANGE_REQUEST = 'change_request',
+}
+
+/**
  * 服务项
  */
 export interface ServiceItem {
@@ -56,6 +69,9 @@ export interface ServiceItem {
   // （见 itsm-backend handlers/service_catalog/entity.go RequiresInfraFields）。
   // 申请表单据此决定是否渲染成本中心/数据分级/公网IP/IP白名单/过期时间/合规确认这组字段。
   requiresInfraFields?: boolean;
+
+  // WorkItem 目标类：创建/编辑服务目录时必填，见 TargetClass 枚举注释。
+  targetClass: TargetClass;
 
   // 审批配置
   requiresApproval?: boolean;
@@ -429,6 +445,9 @@ export interface CreateServiceItemRequest {
   fields?: ServiceItem['fields'];
   // 决定是否需要基础设施字段，见 ServiceItem.serviceType/requiresInfraFields 注释。
   serviceType?: ServiceType | string;
+  // WorkItem 目标类：创建时必填；更新时省略表示保留当前值（见 TargetClass 枚举注释、
+  // itsm-backend handlers/service_catalog.Service.Update 的"保留-或-校验替换"语义）。
+  targetClass: TargetClass;
 }
 
 /**

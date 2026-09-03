@@ -18,8 +18,12 @@ func (ServiceCatalog) Fields() []ent.Field {
 		field.String("category").Comment("服务分类").Optional(),
 		field.String("icon").Comment("服务图标").Optional(),
 		field.String("service_type").Comment("服务类型: vm|rds|oss|network|storage|security|custom").Default("custom"),
-		field.String("itsm_type").Comment("ITSM类型: Request|Incident|Change，决定审批路由").Default("Request"),
-		field.String("target_class").Comment("WorkItem 目标类：service_request_item|incident|change_request，Wave 2 由 itsm_type 迁移填充，本阶段只加列").Optional(),
+		// target_class 是唯一权威的 WorkItem 目标类字段：service_request_item|incident|change_request。
+		// 调用方（handlers/service_catalog.Service.Create/Update）必须显式提供并校验取值，不再从
+		// 历史 itsm_type 派生——itsm_type 列已经被 migration 024_service_catalog_target_class_authority
+		// 回填并删除（见 migrations/024_service_catalog_target_class_authority.sql）。DB 侧同时有
+		// NOT NULL + CHECK 约束；这里去掉 Optional() 让新建/编辑路径在 Ent 层也强制要求这个字段。
+		field.String("target_class").Comment("WorkItem 目标类：service_request_item|incident|change_request，创建/更新时由调用方显式提供并校验，唯一权威路由依据"),
 
 		// 价格与交付
 		field.Float("price").Comment("价格").Optional(),
