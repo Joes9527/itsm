@@ -508,21 +508,95 @@ func TestIncidentServiceTaskHandler_CreateIncident_RequiresInjectedService(t *te
 	require.Contains(t, err.Error(), "未注入")
 }
 
-func TestIncidentServiceTaskHandler_CreateIncident_DelegatesToInjectedService(t *testing.T) {
+func TestIncidentServiceTaskHandler_CreateIncident_UsesReporterAsActorAndRequester(t *testing.T) {
 	handler := NewIncidentServiceTaskHandler(nil, zap.NewNop().Sugar())
-	fake := &fakeIncidentService{createResp: &dto.IncidentResponse{ID: 7, IncidentNumber: "INC-1"}}
-	handler.SetIncidentService(fake)
+	recorder := &recordingIntake{result: &IntakeCreateWorkItemResult{
+		WorkItemID: 9,
+		Number:     "TKT-202609-000009",
+		ProfessionalReference: IntakeProfessionalReference{
+			Type: "incident",
+			ID:   7,
+		},
+	}}
+	handler.SetIntakeService(recorder)
 
 	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, 1)
-	result, err := handler.Execute(ctx, nil, map[string]interface{}{
+	result, err := handler.Execute(ctx, &ent.ProcessTask{TaskID: "task-exec-1"}, map[string]interface{}{
+		"action":      "create_incident",
+		"title":       "测试事件",
+		"type":        "security_event",
+		"reporter_id": 3,
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, recorder.calls)
+	assert.Equal(t, 3, recorder.identity.ActorID)
+	assert.Equal(t, 3, recorder.identity.RequesterID)
+	assert.Equal(t, "requester", recorder.identity.Role)
+	require.NotNil(t, recorder.command.Incident)
+	assert.Equal(t, "security_event", recorder.command.Incident.Type)
+	assert.Equal(t, "bpmn-create-incident:task-exec-1", recorder.command.IdempotencyKey)
+	require.Equal(t, 7, result.OutputVars["incident_id"])
+	require.Equal(t, "TKT-202609-000009", result.OutputVars["incident_number"])
+}
+
+func TestIncidentServiceTaskHandler_CreateIncident_PrefersDurableExecutionKey(t *testing.T) {
+	handler := NewIncidentServiceTaskHandler(nil, zap.NewNop().Sugar())
+	recorder := &recordingIntake{result: &IntakeCreateWorkItemResult{
+		ProfessionalReference: IntakeProfessionalReference{Type: "incident", ID: 7},
+	}}
+	handler.SetIntakeService(recorder)
+
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, 1)
+	ctx = WithBPMNCallbackExecutionKey(ctx, "durable-retry-1")
+	_, err := handler.Execute(ctx, &ent.ProcessTask{TaskID: "task-exec-1"}, map[string]interface{}{
 		"action":      "create_incident",
 		"title":       "测试事件",
 		"reporter_id": 3,
 	})
 	require.NoError(t, err)
-	require.Equal(t, "测试事件", fake.lastCreateReq.Title)
-	require.Equal(t, 3, fake.lastCreateUserID)
-	require.Equal(t, 7, result.OutputVars["incident_id"])
+	assert.Equal(t, "bpmn-create-incident:durable-retry-1", recorder.command.IdempotencyKey)
+}
+
+func TestIncidentServiceTaskHandler_CreateIncident_FailsClosedWithoutAPersistedTask(t *testing.T) {
+	handler := NewIncidentServiceTaskHandler(nil, zap.NewNop().Sugar())
+	recorder := &recordingIntake{result: &IntakeCreateWorkItemResult{}}
+	handler.SetIntakeService(recorder)
+
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, 1)
+	_, err := handler.Execute(ctx, nil, map[string]interface{}{
+		"action":      "create_incident",
+		"title":       "t",
+		"reporter_id": 3,
+	})
+	require.Error(t, err)
+	assert.Zero(t, recorder.calls, "must not call Intake without a real idempotency key source")
+
+	emptyTask := &ent.ProcessTask{}
+	_, err = handler.Execute(ctx, emptyTask, map[string]interface{}{
+		"action":      "create_incident",
+		"title":       "t",
+		"reporter_id": 3,
+	})
+	require.Error(t, err)
+	assert.Zero(t, recorder.calls)
+}
+
+func TestIncidentServiceTaskHandler_CreateIncident_DifferentTaskExecutionsGetDifferentKeys(t *testing.T) {
+	handler := NewIncidentServiceTaskHandler(nil, zap.NewNop().Sugar())
+	recorder := &recordingIntake{result: &IntakeCreateWorkItemResult{}}
+	handler.SetIntakeService(recorder)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, 1)
+	variables := map[string]interface{}{"action": "create_incident", "title": "t", "reporter_id": 3}
+
+	_, err := handler.Execute(ctx, &ent.ProcessTask{TaskID: "instance-A-task-7"}, variables)
+	require.NoError(t, err)
+	firstKey := recorder.command.IdempotencyKey
+
+	_, err = handler.Execute(ctx, &ent.ProcessTask{TaskID: "instance-B-task-7"}, variables)
+	require.NoError(t, err)
+	secondKey := recorder.command.IdempotencyKey
+
+	assert.NotEqual(t, firstKey, secondKey, "two different process instances reaching the same task definition must not collide")
 }
 
 func TestIncidentServiceTaskHandler_AssignIncident_DelegatesToAtomicDomainOperation(t *testing.T) {
@@ -547,6 +621,21 @@ type fakeIncidentService struct {
 	lastCreateUserID int
 	lastAssignID     int
 	lastAssigneeID   int
+}
+
+type recordingIntake struct {
+	calls    int
+	identity IntakeIdentity
+	command  IntakeCreateWorkItemCommand
+	result   *IntakeCreateWorkItemResult
+	err      error
+}
+
+func (f *recordingIntake) Create(_ context.Context, identity IntakeIdentity, command IntakeCreateWorkItemCommand) (*IntakeCreateWorkItemResult, error) {
+	f.calls++
+	f.identity = identity
+	f.command = command
+	return f.result, f.err
 }
 
 func (f *fakeIncidentService) CreateIncident(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, userID int) (*dto.IncidentResponse, error) {

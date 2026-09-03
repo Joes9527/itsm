@@ -3,6 +3,7 @@ package bpmn
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -29,12 +30,52 @@ type IncidentDomainServiceInterface interface {
 	CategorizeIncidentForWorkflow(ctx context.Context, id, tenantID int, category, subcategory string) (*dto.IncidentMutationOutcome, error)
 }
 
+const IntakeKindIncident = "incident"
+
+type IntakeIdentity struct {
+	TenantID    int
+	ActorID     int
+	RequesterID int
+	Role        string
+	Channel     string
+}
+
+type IntakeIncidentInput struct {
+	Type             string
+	Severity         string
+	ExplicitPriority string
+}
+
+type IntakeCreateWorkItemCommand struct {
+	IdempotencyKey string
+	IntakeKind     string
+	Title          string
+	Description    string
+	Incident       *IntakeIncidentInput
+}
+
+type IntakeProfessionalReference struct {
+	Type string
+	ID   int
+}
+
+type IntakeCreateWorkItemResult struct {
+	WorkItemID            int
+	Number                string
+	ProfessionalReference IntakeProfessionalReference
+}
+
+type intakeCreator interface {
+	Create(ctx context.Context, identity IntakeIdentity, command IntakeCreateWorkItemCommand) (*IntakeCreateWorkItemResult, error)
+}
+
 // IncidentServiceTaskHandler 事件服务任务处理器
 type IncidentServiceTaskHandler struct {
 	HandlerBase
 	client          *ent.Client
 	logger          *zap.SugaredLogger
 	incidentService IncidentDomainServiceInterface
+	intakeService    intakeCreator
 }
 
 // NewIncidentServiceTaskHandler 创建事件处理器
@@ -48,6 +89,11 @@ func NewIncidentServiceTaskHandler(client *ent.Client, logger *zap.SugaredLogger
 // SetIncidentService 注入事件领域服务，由 bootstrap 在 IncidentService 构造完成后调用。
 func (h *IncidentServiceTaskHandler) SetIncidentService(svc IncidentDomainServiceInterface) {
 	h.incidentService = svc
+}
+
+// SetIntakeService 注入 Unified Intake 应用服务，由 bootstrap 在其构造完成后调用。
+func (h *IncidentServiceTaskHandler) SetIntakeService(svc intakeCreator) {
+	h.intakeService = svc
 }
 
 // GetTaskType 返回任务类型
@@ -65,7 +111,7 @@ func (h *IncidentServiceTaskHandler) Execute(ctx context.Context, task *ent.Proc
 	action, _ := variables["action"].(string)
 	switch action {
 	case "create_incident":
-		return h.createIncident(ctx, variables)
+		return h.createIncident(ctx, task, variables)
 	case "assign_incident":
 		return h.assignIncident(ctx, variables)
 	case "escalate_incident":
@@ -86,11 +132,11 @@ func (h *IncidentServiceTaskHandler) Execute(ctx context.Context, task *ent.Proc
 }
 
 // createIncident 创建事件
-func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
-	if _, durable := BPMNCallbackExecutionKey(ctx); durable {
-		return nil, fmt.Errorf("持久化回调必须使用流程实例中的既有事件目标")
-	}
+func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {
 	title, _ := variables["title"].(string)
+	if title == "" {
+		return nil, fmt.Errorf("事件标题不能为空")
+	}
 	description, _ := variables["description"].(string)
 	incidentType, _ := variables["type"].(string)
 	priority, _ := variables["priority"].(string)
@@ -99,32 +145,54 @@ func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, variabl
 	if err != nil {
 		return nil, err
 	}
-
-	if title == "" {
-		return nil, fmt.Errorf("事件标题不能为空")
-	}
-
-	if h.incidentService == nil {
-		return nil, fmt.Errorf("incident service 未注入，无法创建事件")
+	if h.intakeService == nil {
+		return nil, fmt.Errorf("intake service 未注入，无法创建事件")
 	}
 	reporterID := GetIntFromVars(variables, "reporter_id")
-	resp, err := h.incidentService.CreateIncident(ctx, &dto.CreateIncidentRequest{
-		Title:       title,
-		Description: description,
-		Type:        incidentType,
-		Priority:    priority,
-		Severity:    severity,
-	}, tenantID, reporterID)
+	if reporterID <= 0 {
+		return nil, fmt.Errorf("reporter_id 缺失，无法确定创建人")
+	}
+	idempotencyKey, err := bpmnCreateIncidentIdempotencyKey(ctx, task)
+	if err != nil {
+		return nil, err
+	}
+	result, err := h.intakeService.Create(ctx, IntakeIdentity{
+		TenantID:    tenantID,
+		ActorID:     reporterID,
+		RequesterID: reporterID,
+		Role:        "requester",
+		Channel:     "bpmn",
+	}, IntakeCreateWorkItemCommand{
+		IdempotencyKey: idempotencyKey,
+		IntakeKind:     IntakeKindIncident,
+		Title:          title,
+		Description:    description,
+		Incident: &IntakeIncidentInput{
+			Type:             incidentType,
+			Severity:         severity,
+			ExplicitPriority: priority,
+		},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("创建事件失败: %w", err)
 	}
 
-	h.logger.Infow("Incident created via BPMN", "incident_id", resp.ID, "title", title)
+	h.logger.Infow("Incident created via BPMN", "work_item_id", result.WorkItemID, "title", title)
 
 	return &CallbackEffect{Status: CallbackEffectApplied,
-		Message:    fmt.Sprintf("事件 %d 已创建", resp.ID),
-		OutputVars: map[string]interface{}{"incident_id": resp.ID, "incident_number": resp.IncidentNumber},
+		Message:    fmt.Sprintf("事件 %d 已创建", result.ProfessionalReference.ID),
+		OutputVars: map[string]interface{}{"incident_id": result.ProfessionalReference.ID, "incident_number": result.Number},
 	}, nil
+}
+
+func bpmnCreateIncidentIdempotencyKey(ctx context.Context, task *ent.ProcessTask) (string, error) {
+	if key, ok := BPMNCallbackExecutionKey(ctx); ok && key != "" {
+		return "bpmn-create-incident:" + key, nil
+	}
+	if task == nil || strings.TrimSpace(task.TaskID) == "" {
+		return "", fmt.Errorf("无法确定幂等键：既没有持久化回调执行标识，也没有关联的 ProcessTask")
+	}
+	return "bpmn-create-incident:" + strings.TrimSpace(task.TaskID), nil
 }
 
 // assignIncident 分配事件。

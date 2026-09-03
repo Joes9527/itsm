@@ -78,6 +78,41 @@ type ticketNotificationWorker interface {
 	RunDeliveryWorker(context.Context, string, time.Duration)
 }
 
+type incidentTaskIntakeAdapter struct {
+	service *intake.Service
+}
+
+func (a incidentTaskIntakeAdapter) Create(ctx context.Context, identity bpmn.IntakeIdentity, command bpmn.IntakeCreateWorkItemCommand) (*bpmn.IntakeCreateWorkItemResult, error) {
+	result, err := a.service.Create(ctx, intake.Identity{
+		TenantID:    identity.TenantID,
+		ActorID:     identity.ActorID,
+		RequesterID: identity.RequesterID,
+		Role:        identity.Role,
+		Channel:     identity.Channel,
+	}, intake.CreateWorkItemCommand{
+		IdempotencyKey: command.IdempotencyKey,
+		IntakeKind:     command.IntakeKind,
+		Title:          command.Title,
+		Description:    command.Description,
+		Incident: &intake.IncidentInput{
+			Type:             command.Incident.Type,
+			Severity:         command.Incident.Severity,
+			ExplicitPriority: command.Incident.ExplicitPriority,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &bpmn.IntakeCreateWorkItemResult{
+		WorkItemID: result.WorkItemID,
+		Number:     result.Number,
+		ProfessionalReference: bpmn.IntakeProfessionalReference{
+			Type: result.ProfessionalReference.Type,
+			ID:   result.ProfessionalReference.ID,
+		},
+	}, nil
+}
+
 type Application struct {
 	Cfg                  *config.Config
 	Logger               *zap.SugaredLogger
@@ -571,6 +606,7 @@ func NewApplication() *Application {
 		// IncidentService，不再绕过领域校验（如报告人/处理人必须是租户内的活跃用户）。
 		if h, ok := cpe.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler); ok {
 			h.SetIncidentService(incidentService)
+			h.SetIntakeService(incidentTaskIntakeAdapter{service: incidentIntakeService})
 		}
 		if h, ok := cpe.CallbackRegistry().GetHandler("release_service_handler").(*bpmn.ReleaseServiceTaskHandler); ok {
 			h.SetReleaseService(releaseService)
