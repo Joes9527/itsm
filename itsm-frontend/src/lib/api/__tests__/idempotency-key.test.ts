@@ -2,12 +2,15 @@ import { generateIdempotencyKey } from '../../utils/idempotencyKey';
 
 describe('generateIdempotencyKey', () => {
   const originalCrypto = globalThis.crypto;
+  const originalMathRandom = Math.random;
 
   afterEach(() => {
     Object.defineProperty(globalThis, 'crypto', {
       configurable: true,
       value: originalCrypto,
     });
+
+    Math.random = originalMathRandom;
   });
 
   it('produces a stable-format unique key', () => {
@@ -31,5 +34,15 @@ describe('generateIdempotencyKey', () => {
     expect(firstKey).toMatch(/^[0-9a-f-]{36}$/);
     expect(secondKey).toMatch(/^[0-9a-f-]{36}$/);
     expect(mockRandomUUID).toHaveBeenCalledTimes(2);
+  });
+
+  it('falls back to a UUID-format key when crypto.randomUUID is unavailable', () => {
+    Object.defineProperty(globalThis, 'crypto', {
+      configurable: true,
+      value: originalCrypto ?? {},
+    });
+    Math.random = jest.fn(() => 0.5);
+
+    expect(generateIdempotencyKey()).toBe('88888888-8888-4888-8888-888888888888');
   });
 });
