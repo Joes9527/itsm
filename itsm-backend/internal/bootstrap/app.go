@@ -44,6 +44,7 @@ import (
 	"itsm-backend/handlers/change"
 	"itsm-backend/handlers/cmdb"
 	domainCommon "itsm-backend/handlers/common"
+	"itsm-backend/handlers/intake"
 	"itsm-backend/handlers/knowledge"
 	"itsm-backend/handlers/known_error"
 	"itsm-backend/handlers/problem"
@@ -379,6 +380,21 @@ func NewApplication() *Application {
 	// SequenceService is retained solely for Incident's professional incident_number;
 	// WorkItem numbering is owned by numberAllocator above.
 	incidentService.SetSequenceService(sequenceService)
+	incidentIntakeRegistry := intake.NewCreatorRegistry()
+	if err := incidentIntakeRegistry.Register(intake.NewIncidentCreator(
+		incidentService,
+		intake.CategoryResolverFunc(service.ResolveIncidentCategory),
+		nil,
+		incidentService,
+	)); err != nil {
+		log.Fatalf("Failed to register incident intake creator: %v", err)
+	}
+	incidentIntakeService := intake.NewService(
+		client,
+		intake.NewResolver(processBindingService, nil),
+		incidentIntakeRegistry,
+		intake.NewWorkItemCreator(numberAllocator),
+	)
 
 	// MSP 服务初始化
 	mspAllocationService := service.NewMSPAllocationService(client, sugar)
@@ -566,6 +582,8 @@ func NewApplication() *Application {
 	problemServiceDomain := problem.NewService(problemRepo, sugar)
 	problemHandler := problem.NewHandler(problemServiceDomain, client)
 	incidentController := controller.NewIncidentController(incidentService, incidentService.RuleEngine(), incidentMonitoringService, incidentAlertingService, rootCauseAnalysisService, problemServiceDomain, sugar)
+	incidentController.SetIntakeService(incidentIntakeService)
+	incidentController.SetIncidentCreateReader(incidentService)
 
 	provisioningService := service.NewProvisioningService(client, sugar)
 	provisioningController := controller.NewProvisioningController(provisioningService)

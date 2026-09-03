@@ -2,12 +2,15 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"strconv"
 	"strings"
 	"time"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
+	"itsm-backend/handlers/intake"
 	problemDomain "itsm-backend/handlers/problem"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
@@ -17,6 +20,14 @@ import (
 	"go.uber.org/zap"
 )
 
+type incidentIntakeService interface {
+	Create(context.Context, intake.Identity, intake.CreateWorkItemCommand) (*intake.CreateWorkItemResult, error)
+}
+
+type incidentCreateReader interface {
+	GetIncident(ctx context.Context, id, tenantID int) (*dto.IncidentResponse, error)
+}
+
 type IncidentController struct {
 	incidentService          *service.IncidentService
 	ruleEngine               *service.IncidentRuleEngine
@@ -24,6 +35,8 @@ type IncidentController struct {
 	alertingService          *service.IncidentAlertingService
 	rootCauseAnalysisService *service.RootCauseAnalysisService
 	problemConversionService problemDomain.ConversionService
+	intakeService            incidentIntakeService
+	incidentCreateReader     incidentCreateReader
 	logger                   *zap.SugaredLogger
 }
 
@@ -45,6 +58,14 @@ func NewIncidentController(
 		problemConversionService: problemConversionService,
 		logger:                   logger,
 	}
+}
+
+func (c *IncidentController) SetIntakeService(s incidentIntakeService) {
+	c.intakeService = s
+}
+
+func (c *IncidentController) SetIncidentCreateReader(r incidentCreateReader) {
+	c.incidentCreateReader = r
 }
 
 // CreateIncident 创建事件
@@ -73,6 +94,12 @@ func (c *IncidentController) resolveTenantID(ctx *gin.Context) (int, bool) {
 }
 
 func (c *IncidentController) CreateIncident(ctx *gin.Context) {
+	idempotencyKey := strings.TrimSpace(ctx.GetHeader("Idempotency-Key"))
+	if idempotencyKey == "" {
+		common.Fail(ctx, common.ParamErrorCode, "Idempotency-Key header is required")
+		return
+	}
+
 	var req dto.CreateIncidentRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		c.logger.Errorw("Invalid request body", "error", err)
@@ -91,16 +118,101 @@ func (c *IncidentController) CreateIncident(ctx *gin.Context) {
 		common.Fail(ctx, common.AuthFailedCode, "获取用户ID失败")
 		return
 	}
+	role := strings.TrimSpace(ctx.GetString("role"))
+	if role == "" {
+		c.logger.Error("Failed to get user role")
+		common.Fail(ctx, common.AuthFailedCode, "获取用户角色失败")
+		return
+	}
+	if c.intakeService == nil || c.incidentCreateReader == nil {
+		c.logger.Error("Incident intake service not configured")
+		common.Fail(ctx, common.InternalErrorCode, "incident intake service not configured")
+		return
+	}
+
+	identity := intake.Identity{
+		TenantID:    tenantID,
+		ActorID:     userID,
+		RequesterID: userID,
+		Role:        role,
+		Channel:     "itsm_web",
+	}
+	command := intake.CreateWorkItemCommand{
+		IdempotencyKey: idempotencyKey,
+		IntakeKind:     intake.IntakeKindIncident,
+		Title:          req.Title,
+		Description:    req.Description,
+		CIIDs:          append([]int(nil), req.ConfigurationItemIDs...),
+		Incident: &intake.IncidentInput{
+			Type:             req.Type,
+			Severity:         req.Severity,
+			ExplicitPriority: req.Priority,
+			Impact:           req.Impact,
+			Urgency:          req.Urgency,
+			Category:         req.Category,
+			Subcategory:      req.Subcategory,
+			AssigneeID:       req.AssigneeID,
+			ImpactAnalysis:   mapImpactAnalysis(req.ImpactAnalysis),
+			Metadata:         req.Metadata,
+			Source:           req.Source,
+		},
+	}
+	if req.DetectedAt != nil {
+		command.Incident.DetectedAt = req.DetectedAt.UTC().Format(time.RFC3339)
+	}
 
 	workflowCtx := context.WithValue(ctx.Request.Context(), bpmn.BPMNUserIDContextKey, userID)
-	response, err := c.incidentService.CreateIncident(workflowCtx, &req, tenantID, userID)
+	result, err := c.intakeService.Create(workflowCtx, identity, command)
 	if err != nil {
 		c.logger.Errorw("Failed to create incident", "error", err)
-		common.Fail(ctx, common.InternalErrorCode, "创建事件失败")
+		respondIntakeError(ctx, err)
+		return
+	}
+	response, err := c.incidentCreateReader.GetIncident(ctx.Request.Context(), result.ProfessionalReference.ID, tenantID)
+	if err != nil {
+		c.logger.Errorw("Incident created but detail lookup failed", "error", err, "incident_id", result.ProfessionalReference.ID)
+		common.Fail(ctx, common.InternalErrorCode, "创建成功但读取详情失败")
 		return
 	}
 
 	common.Success(ctx, response)
+}
+
+func respondIntakeError(ctx *gin.Context, err error) {
+	var appErr *intake.IntakeError
+	if errors.As(err, &appErr) {
+		switch appErr.Code {
+		case intake.AuthenticationRequired:
+			common.Fail(ctx, common.AuthFailedCode, appErr.Message)
+		case intake.PermissionDenied:
+			common.Fail(ctx, common.ForbiddenCode, appErr.Message)
+		case intake.ReferenceNotFound:
+			common.Fail(ctx, common.NotFoundCode, appErr.Message)
+		case intake.IdempotencyConflict:
+			common.Fail(ctx, common.ConflictCode, appErr.Message)
+		case intake.InvalidCommand, intake.DomainValidationFailed, intake.UnsupportedRecordClass, intake.WorkflowBindingRequired:
+			common.Fail(ctx, common.ParamErrorCode, appErr.Message)
+		case intake.InfrastructureUnavailable:
+			common.Fail(ctx, common.ServiceUnavailableCode, appErr.Message)
+		default:
+			common.Fail(ctx, common.InternalErrorCode, "创建事件失败")
+		}
+		return
+	}
+	common.Fail(ctx, common.InternalErrorCode, "创建事件失败")
+}
+
+func mapImpactAnalysis(v *dto.ImpactAnalysis) map[string]interface{} {
+	if v == nil {
+		return nil
+	}
+	out := map[string]interface{}{}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return out
+	}
+	_ = json.Unmarshal(b, &out)
+	return out
 }
 
 // GetIncident 获取事件详情
