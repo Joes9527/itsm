@@ -37,6 +37,9 @@ import {
   renderCss,
   readTokenSource,
   generate,
+  toRawName,
+  pxToRem,
+  RAW_VAR_PREFIX,
   OUTPUT_PATH,
   GENERATED_FILE_MARKER as CSS_GENERATED_FILE_MARKER,
 } from '../../../../scripts/generate-design-tokens.mjs';
@@ -354,6 +357,35 @@ describe('generate-design-tokens.mjs', () => {
     return decls;
   }
 
+  /**
+   * Resolve a name to its final literal value by following a chain of `var(--other)`
+   * forwards (e.g. `--color-brand-primary-500` -> `var(--token-color-brand-primary-500)`
+   * -> `#F06820`). Every entry in `:root`/`.dark` is either a literal raw value or a single
+   * forward to its raw counterpart, so one hop is all that's ever needed in practice, but
+   * this follows an arbitrary chain and throws on a cycle rather than looping forever.
+   */
+  function resolve(map: Map<string, string>, name: string): string | undefined {
+    let current = name;
+    const seen = new Set<string>();
+    for (;;) {
+      const value = map.get(current);
+      if (value === undefined) return undefined;
+      const varMatch = value.match(/^var\((--[a-zA-Z0-9-]+)\)$/);
+      if (!varMatch) return value;
+      if (seen.has(current)) throw new Error(`resolve(): cycle detected resolving ${name}`);
+      seen.add(current);
+      current = varMatch[1];
+    }
+  }
+
+  /** Every `--name: var(--other);` forwarding declaration anywhere in the whole generated CSS. */
+  function allVarForwards(): Array<{ name: string; ref: string }> {
+    return [...css.matchAll(/^\s*(--[a-zA-Z0-9-]+):\s*var\((--[a-zA-Z0-9-]+)\);\s*$/gm)].map(m => ({
+      name: m[1],
+      ref: m[2],
+    }));
+  }
+
   it('starts with the @generated marker inside the first 1024 bytes', () => {
     expect(CSS_GENERATED_FILE_MARKER).toBe('@generated');
     const head = css.slice(0, 1024);
@@ -361,99 +393,193 @@ describe('generate-design-tokens.mjs', () => {
     expect(head).toContain('do not edit');
   });
 
-  it('defines one canonical declaration per variable, with no duplicates, in :root', () => {
+  it('defines both a raw declaration and a forwarding theme declaration per variable, with no duplicate names, in :root', () => {
     const root = declarationsIn(':root');
-    const seen = new Set<string>();
     const rootStart = css.indexOf(':root {');
     const rootBody = css.slice(rootStart, rootStart + css.slice(rootStart).indexOf('\n}\n'));
-    const bodyLines = rootBody
-      .split('\n')
-      .map(line => line.match(/^\s*(--[a-zA-Z0-9-]+):/)?.[1])
-      .filter((name): name is string => Boolean(name));
-    bodyLines.forEach(name => {
+    const names = [...rootBody.matchAll(/^\s*(--[a-zA-Z0-9-]+):/gm)].map(m => m[1]);
+
+    const seen = new Set<string>();
+    names.forEach(name => {
       expect(seen.has(name)).toBe(false);
       seen.add(name);
     });
-    expect(root.size).toBe(bodyLines.length);
-    expect(root.size).toBeGreaterThan(100);
+    expect(root.size).toBe(names.length);
+
+    const rawNames = names.filter(n => n.startsWith(RAW_VAR_PREFIX));
+    const themeNames = names.filter(n => !n.startsWith(RAW_VAR_PREFIX));
+    expect(rawNames.length).toBeGreaterThan(100);
+    // Exactly one theme (Tailwind-facing) name per raw (value-holding) name.
+    expect(themeNames.length).toBe(rawNames.length);
+    themeNames.forEach(themeName => {
+      const rawName = toRawName(themeName);
+      expect(rawNames).toContain(rawName);
+      expect(root.get(themeName)).toBe(`var(${rawName})`);
+    });
   });
 
-  it('maps --color-brand-primary-500 to the frozen brand color in both :root and .dark', () => {
+  it('toRawName prefixes with --token- and pxToRem converts at a 16px root', () => {
+    expect(toRawName('--color-brand-primary-500')).toBe('--token-color-brand-primary-500');
+    expect(toRawName('--spacing')).toBe('--token-spacing');
+    expect(() => toRawName('color-x')).toThrow();
+
+    expect(pxToRem('4px')).toBe('0.25rem');
+    expect(pxToRem('2px')).toBe('0.125rem');
+    expect(pxToRem('16px')).toBe('1rem');
+    expect(pxToRem('0px')).toBe('0rem');
+    expect(() => pxToRem('1rem')).toThrow();
+    expect(() => pxToRem('not-a-length')).toThrow();
+  });
+
+  it('CRITICAL REGRESSION GUARD: no declaration anywhere in the generated CSS is self-referential', () => {
+    // `--x: var(--x);` is a self-referential dependency cycle. Per the CSS Custom
+    // Properties spec every property in a cycle computes to the guaranteed-invalid value,
+    // so in a production build (where an unlayered rule — such as the one Tailwind's
+    // @theme inline processing emits — beats any equally-specific layered/hand-written
+    // declaration in the cascade, regardless of source order) a self-referencing token
+    // would silently resolve to nothing. `next dev` does not expose this because it
+    // preserves @layer, so this must be asserted from the generator's own output, not
+    // eyeballed against a dev server — and it must cover every var()-forwarding
+    // declaration in the file (:root, .dark, and @theme inline alike), not just the
+    // @theme inline block, since :root/.dark also contain theme-name-forwarding
+    // declarations now (see next test for why).
+    const forwards = allVarForwards();
+    // :root theme forwards + .dark theme forwards + @theme inline forwards, all >100 each.
+    expect(forwards.length).toBeGreaterThan(300);
+    forwards.forEach(({ name, ref }) => {
+      expect(ref).not.toBe(name);
+    });
+  });
+
+  it('every @theme inline themeName forwards to a rawName that is ALSO unconditionally declared directly in :root/.dark', () => {
+    // Empirically verified against a real `npm run build`: Tailwind's @theme inline does
+    // NOT unconditionally publish a themeName as a literal CSS declaration onto :root/:host
+    // — it only reliably does so for names actually referenced by a scanned utility class.
+    // `rounded-sm` is not used anywhere in this repo, and the compiled bundle had *no*
+    // declaration of --radius-sm at all; the already-used `.rounded-md` utility compiled to
+    // `border-radius:var(--radius-md,.375rem)`, silently falling back to Tailwind's own
+    // stock default (.375rem) instead of this project's 0.25rem, because nothing else in
+    // the cascade defined --radius-md either. So the generator must not rely on @theme
+    // inline to make a themeName resolvable — it has to declare the themeName directly
+    // in :root/.dark too (see renderBlock()'s doc comment). This test locks that in.
+    const themeMatch = css.match(/@theme inline \{\n([\s\S]*?)\n\}/);
+    expect(themeMatch).not.toBeNull();
+    const entries = [...themeMatch![1].matchAll(/^\s*(--[a-zA-Z0-9-]+):\s*var\((--[a-zA-Z0-9-]+)\);\s*$/gm)].map(
+      m => ({ themeName: m[1], rawVarRef: m[2] })
+    );
+    expect(entries.length).toBeGreaterThan(100);
+
+    const root = declarationsIn(':root');
+    entries.forEach(({ themeName, rawVarRef }) => {
+      expect(rawVarRef).toBe(toRawName(themeName));
+      expect(root.get(themeName)).toBe(`var(${rawVarRef})`);
+    });
+  });
+
+  it('maps --color-brand-primary-500 to the frozen brand color in both :root and .dark, resolved through the raw name', () => {
     const root = declarationsIn(':root');
     const dark = declarationsIn('.dark');
-    expect(root.get('--color-brand-primary-500')).toBe('#F06820');
-    expect(dark.get('--color-brand-primary-500')).toBe('#F06820');
+    expect(resolve(root, '--color-brand-primary-500')).toBe('#F06820');
+    expect(resolve(dark, '--color-brand-primary-500')).toBe('#F06820');
     // Light/dark genuinely differ for other steps of the same scale.
-    expect(root.get('--color-brand-primary-50')).toBe('#fff5f0');
-    expect(dark.get('--color-brand-primary-50')).toBe('#4A1D02');
-    expect(root.get('--color-brand-charcoal')).toBe('#2A2A2A');
+    expect(resolve(root, '--color-brand-primary-50')).toBe('#fff5f0');
+    expect(resolve(dark, '--color-brand-primary-50')).toBe('#4A1D02');
+    expect(resolve(root, '--color-brand-charcoal')).toBe('#2A2A2A');
   });
 
   it('defines the semantic status variables as a single theme-independent scale', () => {
     const root = declarationsIn(':root');
     const dark = declarationsIn('.dark');
-    expect(root.get('--color-status-info-500')).toBe('#0ea5e9');
-    expect(root.get('--color-status-success-500')).toBe('#22c55e');
-    expect(root.get('--color-status-warning-500')).toBe('#f59e0b');
-    expect(root.get('--color-status-error-500')).toBe('#ef4444');
-    // Status colors are not themed: .dark must not redeclare/override them.
+    expect(resolve(root, '--color-status-info-500')).toBe('#0ea5e9');
+    expect(resolve(root, '--color-status-success-500')).toBe('#22c55e');
+    expect(resolve(root, '--color-status-warning-500')).toBe('#f59e0b');
+    expect(resolve(root, '--color-status-error-500')).toBe('#ef4444');
+    // Status colors are not themed: .dark must not redeclare/override them (neither the
+    // theme name nor its raw counterpart).
     expect(dark.has('--color-status-info-500')).toBe(false);
+    expect(dark.has(toRawName('--color-status-info-500'))).toBe(false);
     expect(dark.has('--color-status-success-500')).toBe(false);
+    expect(dark.has(toRawName('--color-status-success-500'))).toBe(false);
     expect(dark.has('--color-status-warning-500')).toBe(false);
+    expect(dark.has(toRawName('--color-status-warning-500'))).toBe(false);
     expect(dark.has('--color-status-error-500')).toBe(false);
+    expect(dark.has(toRawName('--color-status-error-500'))).toBe(false);
   });
 
   it('defines light and dark values for neutral and functional groups', () => {
     const root = declarationsIn(':root');
     const dark = declarationsIn('.dark');
-    expect(root.get('--color-neutral-50')).toBe(tokenContract.neutral.light[50]);
-    expect(dark.get('--color-neutral-50')).toBe(tokenContract.neutral.dark[50]);
-    expect(root.get('--color-background-primary')).toBe(
+    expect(resolve(root, '--color-neutral-50')).toBe(tokenContract.neutral.light[50]);
+    expect(resolve(dark, '--color-neutral-50')).toBe(tokenContract.neutral.dark[50]);
+    expect(resolve(root, '--color-background-primary')).toBe(
       tokenContract.functional.light.background.primary
     );
-    expect(dark.get('--color-background-primary')).toBe(
+    expect(resolve(dark, '--color-background-primary')).toBe(
       tokenContract.functional.dark.background.primary
     );
-    expect(root.get('--color-surface-elevated')).toBe(tokenContract.functional.light.surface.elevated);
-    expect(dark.get('--color-surface-elevated')).toBe(tokenContract.functional.dark.surface.elevated);
-    expect(root.get('--color-border-focus')).toBe(tokenContract.functional.light.border.focus);
-    expect(root.get('--color-text-primary')).toBe(tokenContract.functional.light.text.primary);
-    expect(dark.get('--color-text-primary')).toBe(tokenContract.functional.dark.text.primary);
+    expect(resolve(root, '--color-surface-elevated')).toBe(
+      tokenContract.functional.light.surface.elevated
+    );
+    expect(resolve(dark, '--color-surface-elevated')).toBe(
+      tokenContract.functional.dark.surface.elevated
+    );
+    expect(resolve(root, '--color-border-focus')).toBe(tokenContract.functional.light.border.focus);
+    expect(resolve(root, '--color-text-primary')).toBe(tokenContract.functional.light.text.primary);
+    expect(resolve(dark, '--color-text-primary')).toBe(tokenContract.functional.dark.text.primary);
   });
 
   it('defines the chart palette and user-defined fallback as theme-independent variables', () => {
     const root = declarationsIn(':root');
     const dark = declarationsIn('.dark');
     tokenContract.chart.series.forEach((value, index) => {
-      expect(root.get(`--color-chart-series-${index + 1}`)).toBe(value);
+      expect(resolve(root, `--color-chart-series-${index + 1}`)).toBe(value);
     });
     expect(dark.has('--color-chart-series-1')).toBe(false);
-    expect(root.get('--color-user-defined-fallback')).toBe(tokenContract.userDefined.fallback);
+    expect(resolve(root, '--color-user-defined-fallback')).toBe(tokenContract.userDefined.fallback);
   });
 
-  it('exposes spacing, radius, shadow and typography under Tailwind v4 theme namespaces', () => {
+  it('converts spacing/radius/text to rem in the generated CSS while token-source.json stays px', () => {
     const root = declarationsIn(':root');
-    // Tailwind v4's own `--spacing` multiplier reproduces every value in tokens.spacing
+
+    // token-source.json (Task 1's frozen contract) must remain untouched px strings —
+    // theme.tsx's getAntdTheme() still does parseInt(value, 10) on these for antd, which
+    // would silently break (parseInt('0.25rem', 10) === 0) if the source itself changed.
+    expect(tokenContract.spacing['1']).toBe('4px');
+    expect(tokenContract.radius.sm).toBe('2px');
+    expect(tokenContract.radius.md).toBe('4px');
+    expect(tokenContract.fontSize.xs).toBe('12px');
+    expect(tokenContract.fontSize.sm).toBe('14px');
+
+    // The generated CSS converts px -> rem at a 16px root only for the three Tailwind
+    // namespaces that actually govern utility-class output (--spacing/--radius-*/--text-*).
+    // Tailwind v4's own --spacing multiplier reproduces every value in tokens.spacing
     // (calc(var(--spacing) * n)); no per-key --spacing-<n> variables are generated because
     // several keys ("0.5", "1.5", "2.5", "3.5") contain a literal '.', which is not a valid
     // bare CSS custom-property-name character.
-    expect(root.get('--spacing')).toBe(tokenContract.spacing['1']);
-    expect(root.has('--spacing-0.5')).toBe(false);
+    expect(resolve(root, '--spacing')).toBe('0.25rem');
+    expect(root.has(toRawName('--spacing-0.5'))).toBe(false);
     expect(root.has('--spacing-md')).toBe(false);
 
-    expect(root.get('--radius-sm')).toBe(tokenContract.radius.sm);
-    expect(root.get('--radius-full')).toBe(tokenContract.radius.full);
-    expect(root.get('--shadow-md')).toBe(tokenContract.shadow.md);
-    expect(root.get('--shadow-none')).toBe('none');
-    // fontSize -> --text-*, not --font-size-* (Tailwind v4 namespace).
+    expect(resolve(root, '--radius-sm')).toBe('0.125rem');
+    expect(resolve(root, '--radius-md')).toBe('0.25rem');
+    expect(resolve(root, '--radius-full')).toBe(pxToRem(tokenContract.radius.full));
+    expect(resolve(root, '--text-sm')).toBe('0.875rem');
+    expect(resolve(root, '--text-xs')).toBe('0.75rem');
+    expect(resolve(root, '--text-base')).toBe('1rem');
+
+    // Shadow stays px: multi-part box-shadow strings have no single length to convert,
+    // and Tailwind v4's own default shadow scale is px-based too.
+    expect(resolve(root, '--shadow-md')).toBe(tokenContract.shadow.md);
+    expect(resolve(root, '--shadow-none')).toBe('none');
+    expect(resolve(root, '--shadow-md')).toEqual(expect.stringContaining('px'));
+
+    // lineHeight/fontWeight are unitless — unaffected by the rem conversion.
+    expect(resolve(root, '--leading-tight')).toBe(tokenContract.lineHeight.tight);
+    expect(resolve(root, '--font-weight-bold')).toBe(tokenContract.fontWeight.bold);
+
+    // Legacy px-named vars are never emitted (superseded by the Tailwind namespaces above).
     expect(root.has('--font-size-sm')).toBe(false);
-    expect(root.get('--text-sm')).toBe(tokenContract.fontSize.sm);
-    expect(root.get('--text-xs')).toBe(tokenContract.fontSize.xs);
-    // lineHeight -> --leading-*, not --line-height-*.
     expect(root.has('--line-height-tight')).toBe(false);
-    expect(root.get('--leading-tight')).toBe(tokenContract.lineHeight.tight);
-    // fontWeight namespace is unchanged from the contract.
-    expect(root.get('--font-weight-bold')).toBe(tokenContract.fontWeight.bold);
   });
 
   it('maps canonical color and typography variables into a Tailwind v4 @theme inline block', () => {
@@ -461,27 +587,32 @@ describe('generate-design-tokens.mjs', () => {
     expect(themeMatch).not.toBeNull();
     const themeBody = themeMatch![1];
 
-    expect(themeBody).toContain('--color-brand-primary-500: var(--color-brand-primary-500);');
-    expect(themeBody).toContain('--color-status-success-500: var(--color-status-success-500);');
-    expect(themeBody).toContain('--color-status-info-500: var(--color-status-info-500);');
-    expect(themeBody).toContain('--color-status-warning-500: var(--color-status-warning-500);');
-    expect(themeBody).toContain('--color-status-error-500: var(--color-status-error-500);');
-    expect(themeBody).toContain('--radius-sm: var(--radius-sm);');
-    expect(themeBody).toContain('--text-sm: var(--text-sm);');
-    expect(themeBody).toContain('--leading-tight: var(--leading-tight);');
-    expect(themeBody).toContain('--font-weight-bold: var(--font-weight-bold);');
-
-    // Every @theme inline entry must reference a name that is actually declared in :root
-    // (no orphaned Tailwind mappings pointing at an undefined custom property).
-    const root = declarationsIn(':root');
-    const themeNames = [...themeBody.matchAll(/^\s*(--[a-zA-Z0-9-]+):/gm)].map(m => m[1]);
-    expect(themeNames.length).toBeGreaterThan(100);
-    themeNames.forEach(name => expect(root.has(name)).toBe(true));
+    expect(themeBody).toContain(
+      `--color-brand-primary-500: var(${toRawName('--color-brand-primary-500')});`
+    );
+    expect(themeBody).toContain(
+      `--color-status-success-500: var(${toRawName('--color-status-success-500')});`
+    );
+    expect(themeBody).toContain(
+      `--color-status-info-500: var(${toRawName('--color-status-info-500')});`
+    );
+    expect(themeBody).toContain(
+      `--color-status-warning-500: var(${toRawName('--color-status-warning-500')});`
+    );
+    expect(themeBody).toContain(
+      `--color-status-error-500: var(${toRawName('--color-status-error-500')});`
+    );
+    expect(themeBody).toContain(`--radius-sm: var(${toRawName('--radius-sm')});`);
+    expect(themeBody).toContain(`--text-sm: var(${toRawName('--text-sm')});`);
+    expect(themeBody).toContain(`--leading-tight: var(${toRawName('--leading-tight')});`);
+    expect(themeBody).toContain(`--font-weight-bold: var(${toRawName('--font-weight-bold')});`);
   });
 
   it('does not emit legacy alias names such as --color-bg-elevated', () => {
     expect(css).not.toContain('--color-bg-elevated');
     // Other pre-existing abbreviated/legacy names that are superseded by canonical names.
+    // (None of these are substrings of the --token-* raw names either, e.g. "--token-color-
+    // brand-primary-500" does not contain the contiguous substring "--color-primary-".)
     expect(css).not.toMatch(/--color-primary-\d/); // superseded by --color-brand-primary-*
     expect(css).not.toMatch(/--color-success-\d/); // superseded by --color-status-success-*
     expect(css).not.toMatch(/--font-size-/); // superseded by --text-*
@@ -512,5 +643,41 @@ describe('generate-design-tokens.mjs', () => {
   it('the committed generated file at OUTPUT_PATH matches what the generator currently produces', () => {
     expect(fs.existsSync(OUTPUT_PATH)).toBe(true);
     expect(fs.readFileSync(OUTPUT_PATH, 'utf8')).toBe(css);
+  });
+});
+
+describe('globals.css token import wiring', () => {
+  const globalsCssPath = path.join(FRONTEND_ROOT, 'src/app/globals.css');
+  const globalsCss = fs.readFileSync(globalsCssPath, 'utf8');
+
+  // Anchored to actual `@import` statement lines (not just a bare substring search) so this
+  // isn't fooled by the descriptive comment directly above the import, which necessarily
+  // mentions "theme-variables.css" and `@import "tailwindcss"` in prose *before* the real
+  // import lines it's describing.
+  function importLineIndex(pattern: RegExp): number {
+    const match = globalsCss.match(pattern);
+    expect(match).not.toBeNull();
+    expect(match!.index).not.toBeUndefined();
+    return match!.index as number;
+  }
+
+  it('imports the generated design-tokens.css before @import "tailwindcss"', () => {
+    // Regression guard for a silent production-only failure: importing the generated file
+    // *after* `@import "tailwindcss";` builds successfully (exit code 0) but the compiled
+    // CSS in .next/static/css/*.css drops every :root/.dark declaration from the generated
+    // file entirely, leaving only the @theme inline block's now-dangling var() reference.
+    // Verified empirically against a real `npm run build`, not just dev-server behavior.
+    const generatedImportIndex = importLineIndex(/^@import url\('\.\.\/styles\/generated\/design-tokens\.css'\);$/m);
+    const tailwindImportIndex = importLineIndex(/^@import "tailwindcss";$/m);
+    expect(generatedImportIndex).toBeLessThan(tailwindImportIndex);
+  });
+
+  it('imports the generated design-tokens.css before theme-variables.css', () => {
+    // theme-variables.css's compatibility aliases forward to the canonical --color-*/
+    // --radius-*/--text-*/etc. names via var(), which Tailwind's @theme inline re-emits
+    // onto :root/.dark; the generated file's own :root/.dark block must still be reachable.
+    const generatedImportIndex = importLineIndex(/^@import url\('\.\.\/styles\/generated\/design-tokens\.css'\);$/m);
+    const themeVariablesImportIndex = importLineIndex(/^@import url\('\.\.\/styles\/theme-variables\.css'\);$/m);
+    expect(generatedImportIndex).toBeLessThan(themeVariablesImportIndex);
   });
 });

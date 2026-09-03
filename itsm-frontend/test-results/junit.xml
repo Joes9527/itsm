@@ -1,23 +1,71 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="jest tests" tests="9" failures="0" errors="0" time="1.14">
-  <testsuite name="src/lib/api/__tests__/notification-preference-api.test.ts" errors="0" failures="0" skipped="0" timestamp="2026-08-14T06:44:16" time="0.541" tests="9">
-    <testcase classname="NotificationPreferenceApi › getPreferences" name="should get preferences" time="0.004">
+<testsuites name="jest tests" tests="33" failures="0" errors="0" time="0.965">
+  <testsuite name="src/lib/design-system/__tests__/token-contract.test.ts" errors="0" failures="0" skipped="0" timestamp="2026-08-28T02:25:36" time="0.628" tests="33">
+    <testcase classname="token contract" name="exposes every token group the design system contract requires" time="0.002">
     </testcase>
-    <testcase classname="NotificationPreferenceApi › getMyPreferences" name="should get my preferences" time="0.001">
+    <testcase classname="token contract" name="defines the brand primary scale for both themes" time="0.001">
     </testcase>
-    <testcase classname="NotificationPreferenceApi › getPreferencesByUserId" name="should get preferences by user id" time="0.001">
+    <testcase classname="token contract" name="defines exactly the four semantic status colors" time="0.001">
     </testcase>
-    <testcase classname="NotificationPreferenceApi › updateMyPreferences" name="should update my preferences" time="0.001">
+    <testcase classname="token contract" name="has no second &quot;danger&quot; status color source anywhere in the contract" time="0.001">
     </testcase>
-    <testcase classname="NotificationPreferenceApi › updatePreferences" name="should update preferences for user" time="0.001">
+    <testcase classname="token contract" name="defines a chart series palette of distinct colors" time="0.001">
     </testcase>
-    <testcase classname="NotificationPreferenceApi › resetToDefault" name="should reset to default" time="0.001">
+    <testcase classname="token contract" name="validates user-defined colors instead of replacing them" time="0.001">
     </testcase>
-    <testcase classname="NotificationPreferenceApi › getTemplates" name="should get templates" time="0.001">
+    <testcase classname="token contract" name="is serializable so Node build scripts can consume it without a TypeScript loader" time="0.001">
     </testcase>
-    <testcase classname="NotificationPreferenceApi › applyTemplate" name="should apply template" time="0.001">
+    <testcase classname="token contract is the single source for colors.ts and spacing.ts" name="derives the light and dark color palettes from the contract" time="0.001">
     </testcase>
-    <testcase classname="NotificationPreferenceApi › bulkUpdate" name="should bulk update preferences" time="0.001">
+    <testcase classname="token contract is the single source for colors.ts and spacing.ts" name="derives the spacing, radius, shadow and typography scales from the contract" time="0.001">
+    </testcase>
+    <testcase classname="getTokenBaseline" name="reports the scope it used so the count is reproducible" time="0.006">
+    </testcase>
+    <testcase classname="getTokenBaseline" name="excludes build output, coverage, jest cache, vendor and generated files" time="0.008">
+    </testcase>
+    <testcase classname="getTokenBaseline" name="counts arbitrary font-size classes per value and per file" time="0.003">
+    </testcase>
+    <testcase classname="getTokenBaseline" name="counts raw color literals and classifies them against the contract" time="0.003">
+    </testcase>
+    <testcase classname="getTokenBaseline" name="honors caller-supplied include and exclude scopes" time="0.003">
+    </testcase>
+    <testcase classname="getTokenBaseline" name="is deterministic across runs" time="0.005">
+    </testcase>
+    <testcase classname="getTokenBaseline" name="excludes the token source files from the real repository baseline" time="0.232">
+    </testcase>
+    <testcase classname="generate-design-tokens.mjs" name="starts with the @generated marker inside the first 1024 bytes" time="0">
+    </testcase>
+    <testcase classname="generate-design-tokens.mjs" name="defines one raw declaration per variable, with no duplicates, in :root" time="0.015">
+    </testcase>
+    <testcase classname="generate-design-tokens.mjs" name="toRawName prefixes with --token- and pxToRem converts at a 16px root" time="0.016">
+    </testcase>
+    <testcase classname="generate-design-tokens.mjs" name="CRITICAL REGRESSION GUARD: every @theme inline themeName has a distinct rawName, never a self-reference" time="0.027">
+    </testcase>
+    <testcase classname="generate-design-tokens.mjs" name="no @theme inline themeName is ever also declared as a raw name in :root or .dark" time="0.013">
+    </testcase>
+    <testcase classname="generate-design-tokens.mjs" name="maps --color-brand-primary-500 to the frozen brand color in both :root and .dark (via raw name)" time="0.001">
+    </testcase>
+    <testcase classname="generate-design-tokens.mjs" name="defines the semantic status variables as a single theme-independent scale" time="0.002">
+    </testcase>
+    <testcase classname="generate-design-tokens.mjs" name="defines light and dark values for neutral and functional groups" time="0.001">
+    </testcase>
+    <testcase classname="generate-design-tokens.mjs" name="defines the chart palette and user-defined fallback as theme-independent variables" time="0.001">
+    </testcase>
+    <testcase classname="generate-design-tokens.mjs" name="converts spacing/radius/text to rem in the generated CSS while token-source.json stays px" time="0.002">
+    </testcase>
+    <testcase classname="generate-design-tokens.mjs" name="maps canonical color and typography variables into a Tailwind v4 @theme inline block" time="0.001">
+    </testcase>
+    <testcase classname="generate-design-tokens.mjs" name="does not emit legacy alias names such as --color-bg-elevated" time="0.001">
+    </testcase>
+    <testcase classname="generate-design-tokens.mjs" name="is a pure function of token-source.json: re-rendering produces byte-identical output" time="0.002">
+    </testcase>
+    <testcase classname="generate-design-tokens.mjs" name="generate() writes the deterministic CSS to disk and is idempotent" time="0.002">
+    </testcase>
+    <testcase classname="generate-design-tokens.mjs" name="the committed generated file at OUTPUT_PATH matches what the generator currently produces" time="0">
+    </testcase>
+    <testcase classname="globals.css token import wiring" name="imports the generated design-tokens.css before @import &quot;tailwindcss&quot;" time="0.001">
+    </testcase>
+    <testcase classname="globals.css token import wiring" name="imports the generated design-tokens.css before theme-variables.css" time="0.001">
     </testcase>
   </testsuite>
 </testsuites>
