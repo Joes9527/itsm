@@ -1,23 +1,45 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="jest tests" tests="9" failures="0" errors="0" time="1.14">
-  <testsuite name="src/lib/api/__tests__/notification-preference-api.test.ts" errors="0" failures="0" skipped="0" timestamp="2026-08-14T06:44:16" time="0.541" tests="9">
-    <testcase classname="NotificationPreferenceApi › getPreferences" name="should get preferences" time="0.004">
+<testsuites name="jest tests" tests="19" failures="0" errors="0" time="20.934">
+  <testsuite name="src/components/business/__tests__/TicketNotificationSection.test.tsx" errors="0" failures="0" skipped="0" timestamp="2026-09-01T07:44:55" time="20.542" tests="6">
+    <testcase classname="TicketNotificationSection" name="marks TicketNotification records through the dedicated API namespace" time="1.206">
     </testcase>
-    <testcase classname="NotificationPreferenceApi › getMyPreferences" name="should get my preferences" time="0.001">
+    <testcase classname="TicketNotificationSection" name="derives unread rendering and count only from readAt, not delivery status" time="0.488">
     </testcase>
-    <testcase classname="NotificationPreferenceApi › getPreferencesByUserId" name="should get preferences by user id" time="0.001">
+    <testcase classname="TicketNotificationSection" name="renders persisted readAt after marking read and again after remount" time="1.067">
     </testcase>
-    <testcase classname="NotificationPreferenceApi › updateMyPreferences" name="should update my preferences" time="0.001">
+    <testcase classname="TicketNotificationSection" name="uses only definition-provided eventType options and sends no legacy type or channel" time="6.541">
     </testcase>
-    <testcase classname="NotificationPreferenceApi › updatePreferences" name="should update preferences for user" time="0.001">
+    <testcase classname="TicketNotificationSection" name="keeps persisted UI state on delivery failure and never manufactures a notification" time="5.227">
     </testcase>
-    <testcase classname="NotificationPreferenceApi › resetToDefault" name="should reset to default" time="0.001">
+    <testcase classname="TicketNotificationSection" name="refreshes persisted notifications only after a successful delivery summary" time="4.743">
     </testcase>
-    <testcase classname="NotificationPreferenceApi › getTemplates" name="should get templates" time="0.001">
+  </testsuite>
+  <testsuite name="src/lib/api/__tests__/ticket-notification-api.test.ts" errors="0" failures="0" skipped="0" timestamp="2026-09-01T07:45:15" time="0.065" tests="13">
+    <testcase classname="TicketNotificationApi › getTicketNotifications" name="should get ticket notifications" time="0.001">
     </testcase>
-    <testcase classname="NotificationPreferenceApi › applyTemplate" name="should apply template" time="0.001">
+    <testcase classname="TicketNotificationApi › sendTicketNotification" name="should send notification" time="0.001">
     </testcase>
-    <testcase classname="NotificationPreferenceApi › bulkUpdate" name="should bulk update preferences" time="0.001">
+    <testcase classname="TicketNotificationApi › getUserNotifications" name="should get user notifications" time="0.001">
+    </testcase>
+    <testcase classname="TicketNotificationApi › markNotificationRead" name="keeps generic Notification IDs on the generic endpoint" time="0.001">
+    </testcase>
+    <testcase classname="TicketNotificationApi › markAllNotificationsRead" name="keeps generic Notification records on the generic endpoint" time="0.001">
+    </testcase>
+    <testcase classname="TicketNotificationApi › markTicketNotificationRead" name="marks a TicketNotification through the dedicated endpoint" time="0">
+    </testcase>
+    <testcase classname="TicketNotificationApi › markAllTicketNotificationsRead" name="marks TicketNotification records through the dedicated endpoint" time="0.001">
+    </testcase>
+    <testcase classname="TicketNotificationApi › deleteNotification" name="should delete a notification" time="0.001">
+    </testcase>
+    <testcase classname="TicketNotificationApi › createNotification" name="should create a notification" time="0.001">
+    </testcase>
+    <testcase classname="TicketNotificationApi › getNotificationPreferences" name="should get preferences" time="0.001">
+    </testcase>
+    <testcase classname="TicketNotificationApi › updateNotificationPreferences" name="should update preferences" time="0">
+    </testcase>
+    <testcase classname="TicketNotificationApi › resetNotificationPreferences" name="should reset preferences" time="0">
+    </testcase>
+    <testcase classname="TicketNotificationApi › initNotificationPreferences" name="should init preferences" time="0.001">
     </testcase>
   </testsuite>
 </testsuites>

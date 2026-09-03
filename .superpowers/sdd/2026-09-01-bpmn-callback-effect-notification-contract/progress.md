@@ -72,6 +72,8 @@ Atomic Tasks 2+5+7+8 fix round 1: Minor — complete notification strict-contrac
 
 Atomic Tasks 2+5+7+8 fix round 2: Critical — CAB callback still returns `idempotent` after only a Change existence check; prove the same-tenant/process/task/node/action `ProcessApprovalDecision` as for Release, block absence/mismatch, and prove a non-optional CAB node cannot advance on empty completion variables.
 
+Atomic Tasks 2+5+7+8: complete at 203177fb (independent review clean after fix rounds 1–2; typed effects, notification `eventType`, outbox advancement policy, CAB/Release approval proof, and P1-C KAF/CAS preservation approved)
+
 Atomic Tasks 2+5+7+8 fix round 1: complete pending independent review. Handlers now distinguish actual writes (`applied`), no-write redelivery (`idempotent`), and unavailable/undeclared effects (`blocked`); Release approval verifies the existing immutable decision by trusted tenant and persisted task identity; strict notification backend/frontend regressions and the non-optional engine gate are green. Full backend and frontend type-check passed. `junit.xml` remains intentionally unstaged.
 
 Atomic Tasks 2+5+7+8 fix round 2: complete pending independent review. Change CAB now shares the persisted ProcessApprovalDecision proof with Release (tenant/process/task/node/action), blocks empty/missing/mismatched evidence, and never writes approval state; a non-optional empty CAB completion terminally blocks without advancing. Focused Change/CAB/outcome/KAF/CAS and full backend tests passed. `junit.xml` remains unstaged.
