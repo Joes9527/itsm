@@ -31,6 +31,10 @@ func (f CategoryResolverFunc) ResolveIncidentCategory(ctx context.Context, clien
 	return f(ctx, client, tenantID, categoryName, subcategoryName)
 }
 
+type AssigneeValidator interface {
+	ValidateIncidentAssignee(ctx context.Context, client *ent.Client, assigneeID, tenantID int) error
+}
+
 type IncidentExtensionPlan struct {
 	IncidentNumber string
 	Type           string
@@ -38,17 +42,20 @@ type IncidentExtensionPlan struct {
 	Impact         string
 	Urgency        string
 	DetectedAt     time.Time
+	ImpactAnalysis map[string]interface{}
+	Metadata       map[string]interface{}
 }
 
 type IncidentCreator struct {
 	numbers    IncidentNumberGenerator
 	categories CategoryResolver
 	matrix     *itsmservice.PriorityMatrixService
+	assignees  AssigneeValidator
 	now        func() time.Time
 }
 
-func NewIncidentCreator(numbers IncidentNumberGenerator, categories CategoryResolver, matrix *itsmservice.PriorityMatrixService) *IncidentCreator {
-	return &IncidentCreator{numbers: numbers, categories: categories, matrix: matrix, now: time.Now}
+func NewIncidentCreator(numbers IncidentNumberGenerator, categories CategoryResolver, matrix *itsmservice.PriorityMatrixService, assignees AssigneeValidator) *IncidentCreator {
+	return &IncidentCreator{numbers: numbers, categories: categories, matrix: matrix, assignees: assignees, now: time.Now}
 }
 
 func (c *IncidentCreator) RecordClass() string { return RecordClassIncident }
@@ -83,13 +90,21 @@ func (c *IncidentCreator) Prepare(ctx context.Context, tx *ent.Tx, in ResolvedIn
 		}
 		detectedAt = detectedAt.UTC()
 	}
+	if input.AssigneeID != nil {
+		if c.assignees == nil {
+			return nil, NewInternalFailure("incident assignee validator is required", nil)
+		}
+		if err := c.assignees.ValidateIncidentAssignee(ctx, tx.Client(), *input.AssigneeID, in.Identity.TenantID); err != nil {
+			return nil, NewDomainValidationFailed("assignee is invalid", err)
+		}
+	}
 	incidentType := strings.TrimSpace(input.Type)
 	if incidentType == "" {
 		incidentType = "incident"
 	}
-	source := strings.TrimSpace(in.Identity.Channel)
-	if in.Command.SourceReference != nil && strings.TrimSpace(in.Command.SourceReference.Provider) != "" {
-		source = strings.TrimSpace(in.Command.SourceReference.Provider)
+	source := strings.TrimSpace(input.Source)
+	if source == "" {
+		source = strings.TrimSpace(in.Identity.Channel)
 	}
 	categoryID := copyInt(in.CTI.CategoryID)
 	if categoryID == nil && (strings.TrimSpace(input.Category) != "" || strings.TrimSpace(input.Subcategory) != "") {
@@ -103,14 +118,14 @@ func (c *IncidentCreator) Prepare(ctx context.Context, tx *ent.Tx, in ResolvedIn
 	}
 	professional := IncidentExtensionPlan{
 		IncidentNumber: strings.TrimSpace(number), Type: incidentType, Severity: severity, Impact: impact,
-		Urgency: urgency, DetectedAt: detectedAt,
+		Urgency: urgency, DetectedAt: detectedAt, ImpactAnalysis: input.ImpactAnalysis, Metadata: input.Metadata,
 	}
 	return &CreationPlan{
 		Resolved: in,
 		WorkItem: WorkItemDraft{
 			TenantID: in.Identity.TenantID, ActorID: in.Identity.ActorID, RequesterID: in.Identity.RequesterID,
 			RecordClass: RecordClassIncident, Title: in.Command.Title, Description: in.Command.Description,
-			Status: string(common.IncidentStatusNew), Priority: priority, Source: source, CategoryID: categoryID, SLADefinitionID: copyInt(in.SLADefinitionID),
+			Status: string(common.IncidentStatusNew), Priority: priority, Source: source, AssigneeID: copyInt(incidentAssigneeID(in.Command.Incident)), CategoryID: categoryID, SLADefinitionID: copyInt(in.SLADefinitionID),
 		},
 		ProfessionalInput: professional,
 	}, nil
@@ -131,6 +146,8 @@ func (c *IncidentCreator) CreateExtension(ctx context.Context, tx *ent.Tx, workI
 		SetImpact(input.Impact).
 		SetUrgency(input.Urgency).
 		SetIncidentNumber(input.IncidentNumber).
+		SetImpactAnalysis(input.ImpactAnalysis).
+		SetMetadata(input.Metadata).
 		SetDetectedAt(input.DetectedAt).
 		SetIsAutomated(false)
 	created, err := create.Save(ctx)
@@ -166,4 +183,11 @@ func defaultLevel(value string) string {
 		return "medium"
 	}
 	return value
+}
+
+func incidentAssigneeID(input *IncidentInput) *int {
+	if input == nil {
+		return nil
+	}
+	return input.AssigneeID
 }

@@ -72,6 +72,9 @@ func (c *WorkItemCreator) CreateBase(ctx context.Context, tx *ent.Tx, plan *Crea
 		SetRequesterID(draft.RequesterID).
 		SetOpenedByID(draft.ActorID).
 		SetTenantID(draft.TenantID)
+	if draft.AssigneeID != nil {
+		create.SetAssigneeID(*draft.AssigneeID)
+	}
 	if draft.CategoryID != nil {
 		create.SetCategoryID(*draft.CategoryID)
 	}

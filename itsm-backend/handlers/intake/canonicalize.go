@@ -10,18 +10,33 @@ import (
 	"time"
 )
 
-const CanonicalDigestVersion = "intake-v1"
+const CanonicalDigestVersion = "intake-v2"
+
+type canonicalIncidentInputV1 struct {
+	Type             string                 `json:"type,omitempty"`
+	Severity         string                 `json:"severity,omitempty"`
+	ExplicitPriority string                 `json:"priority,omitempty"`
+	Impact           string                 `json:"impact,omitempty"`
+	Urgency          string                 `json:"urgency,omitempty"`
+	DetectedAt       string                 `json:"detectedAt,omitempty"`
+	Category         string                 `json:"category,omitempty"`
+	Subcategory      string                 `json:"subcategory,omitempty"`
+	AssigneeID       *int                   `json:"assigneeId,omitempty"`
+	ImpactAnalysis   map[string]interface{} `json:"impactAnalysis,omitempty"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+	Source           string                 `json:"source,omitempty"`
+}
 
 type canonicalCommandV1 struct {
-	IntakeKind      string           `json:"intakeKind"`
-	Title           string           `json:"title"`
-	Description     string           `json:"description,omitempty"`
-	CatalogItemID   *int             `json:"catalogItemId,omitempty"`
-	CTI             *CTIInput        `json:"cti,omitempty"`
-	CIIDs           []int            `json:"ciIds,omitempty"`
-	FormValues      map[string]any   `json:"formValues,omitempty"`
-	SourceReference *SourceReference `json:"sourceReference,omitempty"`
-	Incident        *IncidentInput   `json:"incident,omitempty"`
+	IntakeKind      string                    `json:"intakeKind"`
+	Title           string                    `json:"title"`
+	Description     string                    `json:"description,omitempty"`
+	CatalogItemID   *int                      `json:"catalogItemId,omitempty"`
+	CTI             *CTIInput                 `json:"cti,omitempty"`
+	CIIDs           []int                     `json:"ciIds,omitempty"`
+	FormValues      map[string]any            `json:"formValues,omitempty"`
+	SourceReference *SourceReference          `json:"sourceReference,omitempty"`
+	Incident        *canonicalIncidentInputV1 `json:"incident,omitempty"`
 }
 
 func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, string, error) {
@@ -76,6 +91,10 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 			Category:         strings.TrimSpace(command.Incident.Category),
 			Subcategory:      strings.TrimSpace(command.Incident.Subcategory),
 			DetectedAt:       strings.TrimSpace(command.Incident.DetectedAt),
+			AssigneeID:       copyInt(command.Incident.AssigneeID),
+			ImpactAnalysis:   command.Incident.ImpactAnalysis,
+			Metadata:         command.Incident.Metadata,
+			Source:           strings.TrimSpace(command.Incident.Source),
 		}
 		if err := normalizeIncident(normalized.Incident); err != nil {
 			return CreateWorkItemCommand{}, "", err
@@ -88,6 +107,23 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 	}
 	normalized.FormValues = formValues
 
+	var canonicalIncident *canonicalIncidentInputV1
+	if normalized.Incident != nil {
+		canonicalIncident = &canonicalIncidentInputV1{
+			Type:             normalized.Incident.Type,
+			Severity:         normalized.Incident.Severity,
+			ExplicitPriority: normalized.Incident.ExplicitPriority,
+			Impact:           normalized.Incident.Impact,
+			Urgency:          normalized.Incident.Urgency,
+			DetectedAt:       normalized.Incident.DetectedAt,
+			Category:         normalized.Incident.Category,
+			Subcategory:      normalized.Incident.Subcategory,
+			AssigneeID:       normalized.Incident.AssigneeID,
+			ImpactAnalysis:   normalized.Incident.ImpactAnalysis,
+			Metadata:         normalized.Incident.Metadata,
+			Source:           normalized.Incident.Source,
+		}
+	}
 	canonical := canonicalCommandV1{
 		IntakeKind:      normalized.IntakeKind,
 		Title:           normalized.Title,
@@ -97,7 +133,7 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 		CIIDs:           normalized.CIIDs,
 		FormValues:      normalized.FormValues,
 		SourceReference: normalized.SourceReference,
-		Incident:        normalized.Incident,
+		Incident:        canonicalIncident,
 	}
 	payload, err := json.Marshal(canonical)
 	if err != nil {

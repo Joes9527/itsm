@@ -78,7 +78,7 @@ func TestIdempotencyClaimRejectsDifferentDigestOrVersion(t *testing.T) {
 		version string
 	}{
 		{name: "digest", digest: "digest-b", version: CanonicalDigestVersion},
-		{name: "version", digest: "digest-a", version: "intake-v2"},
+		{name: "version", digest: "digest-a", version: "intake-v1"},
 	} {
 		t.Run(conflict.name, func(t *testing.T) {
 			tx2 := beginIntakeTestTx(t, client)

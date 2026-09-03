@@ -17,6 +17,7 @@ import (
 	itsmservice "itsm-backend/service"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
@@ -47,6 +48,20 @@ func (r *recordingCategoryResolver) ResolveIncidentCategory(_ context.Context, _
 	return r.id, nil
 }
 
+type recordingAssigneeValidator struct {
+	calls      int
+	assigneeID int
+	tenantID   int
+	err        error
+}
+
+func (r *recordingAssigneeValidator) ValidateIncidentAssignee(_ context.Context, _ *ent.Client, assigneeID, tenantID int) error {
+	r.calls++
+	r.assigneeID = assigneeID
+	r.tenantID = tenantID
+	return r.err
+}
+
 type failingProfessionalCreator struct{}
 
 func (failingProfessionalCreator) RecordClass() string { return RecordClassIncident }
@@ -73,7 +88,7 @@ func newCreatorFixture(t *testing.T) (*ent.Client, *ent.Tenant, *ent.User) {
 
 func TestCreatorRegistryFailsClosedForDuplicateAndUnknownClass(t *testing.T) {
 	registry := NewCreatorRegistry()
-	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-1"}, nil, nil)
+	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-1"}, nil, nil, nil)
 	require.NoError(t, registry.Register(creator))
 	require.ErrorIs(t, registry.Register(creator), ErrUnsupportedRecordClass)
 	_, err := registry.Get("change_request")
@@ -98,7 +113,7 @@ func TestIncidentCreatorCreatesOneExtensionAndCreationEvent(t *testing.T) {
 		Command:     CreateWorkItemCommand{Title: "Database outage", Description: "Primary unavailable", Incident: &IncidentInput{Severity: "critical", Impact: "high", Urgency: "critical", DetectedAt: "2026-08-31T10:30:00Z"}},
 		RecordClass: RecordClassIncident,
 	}
-	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-202608-000001"}, nil, nil)
+	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-202608-000001"}, nil, nil, nil)
 	plan, err := creator.Prepare(ctx, tx, resolved)
 	require.NoError(t, err)
 	workItem, err := NewWorkItemCreator(staticWorkItemNumberAllocator{number: "TKT-202608-000001"}).CreateBase(ctx, tx, plan)
@@ -129,7 +144,7 @@ func TestIncidentCreatorResolvesCategoryFromStructuredCTI(t *testing.T) {
 	defer tx.Rollback()
 	generator := staticIncidentNumberGenerator{number: "INC-202609-000001"}
 	categories := &recordingCategoryResolver{}
-	creator := NewIncidentCreator(generator, categories, nil)
+	creator := NewIncidentCreator(generator, categories, nil, nil)
 	categoryID := 55
 
 	plan, err := creator.Prepare(context.Background(), tx, ResolvedIntake{
@@ -157,7 +172,7 @@ func TestIncidentCreatorResolvesCategoryFromFreeTextNames(t *testing.T) {
 	generator := staticIncidentNumberGenerator{number: "INC-202609-000002"}
 	resolvedCategoryID := 77
 	categories := &recordingCategoryResolver{id: &resolvedCategoryID}
-	creator := NewIncidentCreator(generator, categories, nil)
+	creator := NewIncidentCreator(generator, categories, nil, nil)
 
 	plan, err := creator.Prepare(context.Background(), tx, ResolvedIntake{
 		Identity: Identity{TenantID: tenant.ID, ActorID: requester.ID, RequesterID: requester.ID},
@@ -189,7 +204,7 @@ func TestIncidentCreatorRejectsSubcategoryWithoutCategory(t *testing.T) {
 		require.Equal(t, "cpu", subcategory)
 		return nil, fmt.Errorf("category is required when subcategory is supplied")
 	})
-	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-202609-000003"}, categories, nil)
+	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-202609-000003"}, categories, nil, nil)
 
 	_, err = creator.Prepare(context.Background(), tx, ResolvedIntake{
 		Identity: Identity{TenantID: tenant.ID, ActorID: requester.ID, RequesterID: requester.ID},
@@ -211,7 +226,7 @@ func TestIncidentCreatorMatchesIncidentServicePriorityAndInitialStatus(t *testin
 	require.NoError(t, matrix.SetMatrix(tenant.ID, itsmservice.PriorityMatrix{
 		"high": {"high": "critical"},
 	}))
-	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-202609-000004"}, nil, matrix)
+	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-202609-000004"}, nil, matrix, nil)
 
 	plan, err := creator.Prepare(context.Background(), tx, ResolvedIntake{
 		Identity: Identity{TenantID: tenant.ID, ActorID: requester.ID, RequesterID: requester.ID},
@@ -224,6 +239,54 @@ func TestIncidentCreatorMatchesIncidentServicePriorityAndInitialStatus(t *testin
 	require.NoError(t, err)
 	require.Equal(t, itsmservice.ResolveIncidentPriority(context.Background(), matrix, tenant.ID, "", "high", "high"), plan.WorkItem.Priority)
 	require.Equal(t, string(common.IncidentStatusNew), plan.WorkItem.Status)
+}
+
+func TestIncidentCreatorCarriesFullDTOFieldSet(t *testing.T) {
+	client, tenant, requester := newCreatorFixture(t)
+	ctx := context.Background()
+	otherActor, err := client.User.Create().
+		SetUsername(t.Name() + "-assignee").
+		SetEmail(t.Name() + "-assignee@example.com").
+		SetName("Assignee").
+		SetPasswordHash("hash").
+		SetRole("agent").
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+	tx, err := client.Tx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback()
+	validator := &recordingAssigneeValidator{}
+	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-202609-000005"}, nil, nil, validator)
+
+	plan, err := creator.Prepare(ctx, tx, ResolvedIntake{
+		Identity: Identity{TenantID: tenant.ID, ActorID: requester.ID, RequesterID: requester.ID},
+		Command: CreateWorkItemCommand{
+			Title: "t",
+			Incident: &IncidentInput{
+				Impact:         "high",
+				Urgency:        "high",
+				AssigneeID:     intPtr(otherActor.ID),
+				ImpactAnalysis: map[string]interface{}{"scope": "regional"},
+				Metadata:       map[string]interface{}{"source_ticket": "legacy-1"},
+			},
+		},
+		RecordClass: RecordClassIncident,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, 1, validator.calls)
+	require.Equal(t, otherActor.ID, validator.assigneeID)
+	require.Equal(t, tenant.ID, validator.tenantID)
+	require.NotNil(t, plan.WorkItem.AssigneeID)
+	assert.Equal(t, otherActor.ID, *plan.WorkItem.AssigneeID)
+	extPlan := plan.ProfessionalInput.(IncidentExtensionPlan)
+	assert.Equal(t, "regional", extPlan.ImpactAnalysis["scope"])
+	assert.Equal(t, "legacy-1", extPlan.Metadata["source_ticket"])
+}
+
+func intPtr(value int) *int {
+	return &value
 }
 
 func TestServiceRequestItemCreatorCreatesExactlyOneExtension(t *testing.T) {

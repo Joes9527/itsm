@@ -30,14 +30,18 @@ type SourceReference struct {
 }
 
 type IncidentInput struct {
-	Type             string `json:"type,omitempty"`
-	Severity         string `json:"severity,omitempty"`
-	ExplicitPriority string `json:"priority,omitempty"`
-	Impact           string `json:"impact,omitempty"`
-	Urgency          string `json:"urgency,omitempty"`
-	Category         string `json:"category,omitempty"`
-	Subcategory      string `json:"subcategory,omitempty"`
-	DetectedAt       string `json:"detectedAt,omitempty"`
+	Type             string                 `json:"type,omitempty"`
+	Severity         string                 `json:"severity,omitempty"`
+	ExplicitPriority string                 `json:"priority,omitempty"`
+	Impact           string                 `json:"impact,omitempty"`
+	Urgency          string                 `json:"urgency,omitempty"`
+	Category         string                 `json:"category,omitempty"`
+	Subcategory      string                 `json:"subcategory,omitempty"`
+	DetectedAt       string                 `json:"detectedAt,omitempty"`
+	AssigneeID       *int                   `json:"assigneeId,omitempty"`
+	ImpactAnalysis   map[string]interface{} `json:"impactAnalysis,omitempty"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+	Source           string                 `json:"source,omitempty"`
 }
 
 type CreateWorkItemCommand struct {
@@ -126,6 +130,7 @@ type WorkItemDraft struct {
 	Priority        string
 	Source          string
 	TicketNumber    string
+	AssigneeID      *int
 	CategoryID      *int
 	SLADefinitionID *int
 }

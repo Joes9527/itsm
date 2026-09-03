@@ -3,6 +3,7 @@ package intake
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -108,8 +109,35 @@ func TestCanonicalizeCommandIncludesIncidentTypeAndCategoryFields(t *testing.T) 
 	require.NotEqual(t, digest, changedDigest)
 }
 
+func TestCanonicalizeCommandDigestChangesWithFullIncidentFieldSet(t *testing.T) {
+	base := CreateWorkItemCommand{
+		IdempotencyKey: "k1",
+		IntakeKind:     IntakeKindIncident,
+		Title:          "t",
+		Incident: &IncidentInput{
+			Severity: "high",
+			Impact:   "high",
+			Urgency:  "high",
+		},
+	}
+	withAssignee := base
+	assignee := 9
+	withAssignee.Incident = &IncidentInput{
+		Severity:   "high",
+		Impact:     "high",
+		Urgency:    "high",
+		AssigneeID: &assignee,
+	}
+
+	_, digestBase, err := CanonicalizeCommand(base)
+	require.NoError(t, err)
+	_, digestWithAssignee, err := CanonicalizeCommand(withAssignee)
+	require.NoError(t, err)
+	assert.NotEqual(t, digestBase, digestWithAssignee, "assigneeId must be part of the idempotency digest")
+}
+
 func TestCanonicalDigestVersionIsStable(t *testing.T) {
-	require.Equal(t, "intake-v1", CanonicalDigestVersion)
+	require.Equal(t, "intake-v2", CanonicalDigestVersion)
 	_, digest, err := CanonicalizeCommand(validIncidentCommand("key-1", []int{9, 3, 9}))
 	require.NoError(t, err)
 	require.Equal(t, "8cd8a8c0c6c6db017300f2cc0b9e5da27ff798ed7e88137a0778522da5b5a11a", digest)

@@ -105,7 +105,7 @@ func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateInc
 		return nil, fmt.Errorf("reporter not found or inactive")
 	}
 	if req.AssigneeID != nil {
-		if err := s.validateIncidentAssignee(ctx, *req.AssigneeID, tenantID); err != nil {
+		if err := s.ValidateIncidentAssignee(ctx, s.client, *req.AssigneeID, tenantID); err != nil {
 			return nil, err
 		}
 	}
@@ -476,7 +476,7 @@ func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.U
 		}
 	}
 	if req.AssigneeID != nil {
-		if err := s.validateIncidentAssignee(ctx, *req.AssigneeID, tenantID); err != nil {
+		if err := s.ValidateIncidentAssignee(ctx, s.client, *req.AssigneeID, tenantID); err != nil {
 			return nil, err
 		}
 	}
@@ -671,7 +671,7 @@ func (s *IncidentService) assignIncident(ctx context.Context, id int, assigneeID
 		return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(current), Applied: false}, nil
 	}
 
-	if err := s.validateIncidentAssignee(ctx, assigneeID, tenantID); err != nil {
+	if err := s.ValidateIncidentAssignee(ctx, s.client, assigneeID, tenantID); err != nil {
 		return nil, err
 	}
 
@@ -728,11 +728,16 @@ func (s *IncidentService) assignIncident(ctx context.Context, id int, assigneeID
 	return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(updatedIncident), Applied: true}, nil
 }
 
-func (s *IncidentService) validateIncidentAssignee(ctx context.Context, assigneeID, tenantID int) error {
+// ValidateIncidentAssignee 校验目标处理人存在、激活且属于同一租户。Exported so
+// intake.IncidentCreator can reuse the same validation IncidentService.CreateIncident performs.
+func (s *IncidentService) ValidateIncidentAssignee(ctx context.Context, client *ent.Client, assigneeID, tenantID int) error {
 	if assigneeID <= 0 {
 		return fmt.Errorf("invalid assignee id")
 	}
-	assigneeExists, err := s.client.User.Query().
+	if client == nil {
+		return fmt.Errorf("incident client is required")
+	}
+	assigneeExists, err := client.User.Query().
 		Where(user.IDEQ(assigneeID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).
 		Exist(ctx)
 	if err != nil {
