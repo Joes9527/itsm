@@ -22,6 +22,7 @@ type resolverFixture struct {
 	user            *ent.User
 	serviceCatalog  *ent.ServiceCatalog
 	incidentCatalog *ent.ServiceCatalog
+	changeCatalog   *ent.ServiceCatalog
 	otherCatalog    *ent.ServiceCatalog
 	disabledCatalog *ent.ServiceCatalog
 	categoryID      int
@@ -53,12 +54,19 @@ func newResolverFixture(t *testing.T) *resolverFixture {
 	_, err = client.ProcessBinding.Create().SetBusinessType("ticket").SetBusinessSubType("service_request").
 		SetProcessDefinitionKey("service-request-flow").SetProcessVersion(9).SetPriority(100).SetIsActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
+	seedResolverDefinition(t, client, tenant.ID, "change-flow", "3")
+	_, err = client.ProcessBinding.Create().SetBusinessType("ticket").SetBusinessSubType("change").
+		SetProcessDefinitionKey("change-flow").SetProcessVersion(3).SetPriority(100).SetIsActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
 
 	serviceCatalog, err := client.ServiceCatalog.Create().SetName("Access request").SetStatus("enabled").SetIsActive(true).
 		SetTenantID(tenant.ID).SetTargetClass(RecordClassServiceRequestItem).Save(ctx)
 	require.NoError(t, err)
 	incidentCatalog, err := client.ServiceCatalog.Create().SetName("Report outage").SetStatus("active").SetIsActive(true).
 		SetTenantID(tenant.ID).SetTargetClass(RecordClassIncident).Save(ctx)
+	require.NoError(t, err)
+	changeCatalog, err := client.ServiceCatalog.Create().SetName("Planned network change").SetStatus("active").SetIsActive(true).
+		SetTenantID(tenant.ID).SetTargetClass(RecordClassChangeRequest).Save(ctx)
 	require.NoError(t, err)
 	otherCatalog, err := client.ServiceCatalog.Create().SetName("Other tenant request").SetStatus("active").SetIsActive(true).
 		SetTenantID(otherTenant.ID).SetTargetClass(RecordClassServiceRequestItem).Save(ctx)
@@ -92,7 +100,7 @@ func newResolverFixture(t *testing.T) *resolverFixture {
 
 	return &resolverFixture{
 		client: client, tenant: tenant, otherTenant: otherTenant, user: user,
-		serviceCatalog: serviceCatalog, incidentCatalog: incidentCatalog, otherCatalog: otherCatalog, disabledCatalog: disabledCatalog,
+		serviceCatalog: serviceCatalog, incidentCatalog: incidentCatalog, changeCatalog: changeCatalog, otherCatalog: otherCatalog, disabledCatalog: disabledCatalog,
 		categoryID: category.ID, typeID: typeCategory.ID, itemID: item.ID,
 		ciID: ci.ID, otherCIID: otherCI.ID,
 	}
@@ -141,6 +149,11 @@ func TestResolverResolvesDirectAndCatalogTargets(t *testing.T) {
 			cmd.FormValues = nil
 			return cmd
 		}, recordClass: RecordClassIncident},
+		{name: "change catalog", command: func(f *resolverFixture) CreateWorkItemCommand {
+			cmd := f.catalogCommand(f.changeCatalog.ID)
+			cmd.FormValues = nil
+			return cmd
+		}, recordClass: RecordClassChangeRequest},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			fixture := newResolverFixture(t)
@@ -251,6 +264,18 @@ func TestResolverRejectsHiddenCatalogInvalidFormAndPermissionDenial(t *testing.T
 			return !(resource == "incident" && action == "write")
 		})
 		_, err := fixture.resolver(checker).Resolve(ctx, tx, fixture.identity(), validIncidentCommand("key-4", nil))
+		require.ErrorIs(t, err, ErrPermissionDenied)
+		require.NoError(t, tx.Rollback())
+	})
+
+	t.Run("change target permission", func(t *testing.T) {
+		tx := beginIntakeTestTx(t, fixture.client)
+		checker := PermissionCheckFunc(func(_ *ent.Client, _ Identity, resource, action string) bool {
+			return !(resource == "change" && action == "write")
+		})
+		cmd := fixture.catalogCommand(fixture.changeCatalog.ID)
+		cmd.FormValues = nil
+		_, err := fixture.resolver(checker).Resolve(ctx, tx, fixture.identity(), cmd)
 		require.ErrorIs(t, err, ErrPermissionDenied)
 		require.NoError(t, tx.Rollback())
 	})

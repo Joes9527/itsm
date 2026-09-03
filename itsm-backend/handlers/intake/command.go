@@ -44,6 +44,18 @@ type IncidentInput struct {
 	Source           string                 `json:"source,omitempty"`
 }
 
+type ChangeInput struct {
+	Justification      string   `json:"justification,omitempty"`
+	Type               string   `json:"type,omitempty"`
+	ImpactScope        string   `json:"impactScope,omitempty"`
+	RiskLevel          string   `json:"riskLevel,omitempty"`
+	PlannedStartDate   string   `json:"plannedStartDate,omitempty"`
+	PlannedEndDate     string   `json:"plannedEndDate,omitempty"`
+	ImplementationPlan string   `json:"implementationPlan,omitempty"`
+	RollbackPlan       string   `json:"rollbackPlan,omitempty"`
+	AffectedCIs        []string `json:"affectedCis,omitempty"`
+}
+
 type CreateWorkItemCommand struct {
 	IdempotencyKey  string           `json:"idempotencyKey"`
 	IntakeKind      string           `json:"intakeKind"`
@@ -55,6 +67,7 @@ type CreateWorkItemCommand struct {
 	FormValues      map[string]any   `json:"formValues,omitempty"`
 	SourceReference *SourceReference `json:"sourceReference,omitempty"`
 	Incident        *IncidentInput   `json:"incident,omitempty"`
+	Change          *ChangeInput     `json:"change,omitempty"`
 }
 
 type ProfessionalReference struct {

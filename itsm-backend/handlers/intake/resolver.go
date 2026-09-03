@@ -103,7 +103,7 @@ func (r *Resolver) Resolve(ctx context.Context, tx *ent.Tx, identity Identity, c
 		if err != nil {
 			return nil, NewInfrastructureUnavailable("could not resolve service catalog item", err)
 		}
-		if catalog.TargetClass != RecordClassServiceRequestItem && catalog.TargetClass != RecordClassIncident {
+		if catalog.TargetClass != RecordClassServiceRequestItem && catalog.TargetClass != RecordClassIncident && catalog.TargetClass != RecordClassChangeRequest {
 			return nil, NewUnsupportedRecordClass("service catalog target class is unsupported", nil)
 		}
 		resolved.RecordClass = catalog.TargetClass
@@ -125,6 +125,8 @@ func (r *Resolver) Resolve(ctx context.Context, tx *ent.Tx, identity Identity, c
 	targetResource := "incident"
 	if resolved.RecordClass == RecordClassServiceRequestItem {
 		targetResource = "service_request"
+	} else if resolved.RecordClass == RecordClassChangeRequest {
+		targetResource = "change"
 	}
 	if !r.permission.HasPermission(client, identity, targetResource, "write") {
 		return nil, NewPermissionDenied("target create permission is required", nil)

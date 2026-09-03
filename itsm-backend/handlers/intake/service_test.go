@@ -51,6 +51,7 @@ func newServiceUnderTest(t *testing.T, fixture *resolverFixture) *Service {
 	t.Helper()
 	registry := NewCreatorRegistry()
 	require.NoError(t, registry.Register(NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-INTAKE-000001"}, nil, nil, nil)))
+	require.NoError(t, registry.Register(NewChangeCreator()))
 	require.NoError(t, registry.Register(NewServiceRequestItemCreator()))
 	return NewService(
 		fixture.client,

@@ -136,6 +136,24 @@ func TestCanonicalizeCommandDigestChangesWithFullIncidentFieldSet(t *testing.T) 
 	assert.NotEqual(t, digestBase, digestWithAssignee, "assigneeId must be part of the idempotency digest")
 }
 
+func TestCanonicalizeCommandDigestChangesWithChangeFieldSet(t *testing.T) {
+	base := CreateWorkItemCommand{
+		IdempotencyKey: "k1",
+		IntakeKind:     IntakeKindCatalogItem,
+		Title:          "t",
+		CatalogItemID:  intPtr(1),
+		Change:         &ChangeInput{RiskLevel: "low"},
+	}
+	highRisk := base
+	highRisk.Change = &ChangeInput{RiskLevel: "high"}
+
+	_, digestBase, err := CanonicalizeCommand(base)
+	require.NoError(t, err)
+	_, digestHighRisk, err := CanonicalizeCommand(highRisk)
+	require.NoError(t, err)
+	assert.NotEqual(t, digestBase, digestHighRisk, "riskLevel must be part of the idempotency digest")
+}
+
 func TestCanonicalDigestVersionIsStable(t *testing.T) {
 	require.Equal(t, "intake-v2", CanonicalDigestVersion)
 	_, digest, err := CanonicalizeCommand(validIncidentCommand("key-1", []int{9, 3, 9}))

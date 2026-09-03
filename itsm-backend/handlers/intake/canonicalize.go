@@ -27,6 +27,18 @@ type canonicalIncidentInputV1 struct {
 	Source           string                 `json:"source,omitempty"`
 }
 
+type canonicalChangeInputV1 struct {
+	Justification      string   `json:"justification,omitempty"`
+	Type               string   `json:"type,omitempty"`
+	ImpactScope        string   `json:"impactScope,omitempty"`
+	RiskLevel          string   `json:"riskLevel,omitempty"`
+	PlannedStartDate   string   `json:"plannedStartDate,omitempty"`
+	PlannedEndDate     string   `json:"plannedEndDate,omitempty"`
+	ImplementationPlan string   `json:"implementationPlan,omitempty"`
+	RollbackPlan       string   `json:"rollbackPlan,omitempty"`
+	AffectedCIs        []string `json:"affectedCis,omitempty"`
+}
+
 type canonicalCommandV1 struct {
 	IntakeKind      string                    `json:"intakeKind"`
 	Title           string                    `json:"title"`
@@ -37,6 +49,7 @@ type canonicalCommandV1 struct {
 	FormValues      map[string]any            `json:"formValues,omitempty"`
 	SourceReference *SourceReference          `json:"sourceReference,omitempty"`
 	Incident        *canonicalIncidentInputV1 `json:"incident,omitempty"`
+	Change          *canonicalChangeInputV1   `json:"change,omitempty"`
 }
 
 func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, string, error) {
@@ -100,6 +113,21 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 			return CreateWorkItemCommand{}, "", err
 		}
 	}
+	if command.Change != nil {
+		affectedCIs := append([]string(nil), command.Change.AffectedCIs...)
+		sort.Strings(affectedCIs)
+		normalized.Change = &ChangeInput{
+			Justification:      strings.TrimSpace(command.Change.Justification),
+			Type:               strings.TrimSpace(command.Change.Type),
+			ImpactScope:        strings.TrimSpace(command.Change.ImpactScope),
+			RiskLevel:          strings.TrimSpace(command.Change.RiskLevel),
+			PlannedStartDate:   strings.TrimSpace(command.Change.PlannedStartDate),
+			PlannedEndDate:     strings.TrimSpace(command.Change.PlannedEndDate),
+			ImplementationPlan: strings.TrimSpace(command.Change.ImplementationPlan),
+			RollbackPlan:       strings.TrimSpace(command.Change.RollbackPlan),
+			AffectedCIs:        affectedCIs,
+		}
+	}
 
 	formValues, err := cloneFormValues(command.FormValues)
 	if err != nil {
@@ -124,6 +152,20 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 			Source:           normalized.Incident.Source,
 		}
 	}
+	var canonicalChange *canonicalChangeInputV1
+	if normalized.Change != nil {
+		canonicalChange = &canonicalChangeInputV1{
+			Justification:      normalized.Change.Justification,
+			Type:               normalized.Change.Type,
+			ImpactScope:        normalized.Change.ImpactScope,
+			RiskLevel:          normalized.Change.RiskLevel,
+			PlannedStartDate:   normalized.Change.PlannedStartDate,
+			PlannedEndDate:     normalized.Change.PlannedEndDate,
+			ImplementationPlan: normalized.Change.ImplementationPlan,
+			RollbackPlan:       normalized.Change.RollbackPlan,
+			AffectedCIs:        normalized.Change.AffectedCIs,
+		}
+	}
 	canonical := canonicalCommandV1{
 		IntakeKind:      normalized.IntakeKind,
 		Title:           normalized.Title,
@@ -134,6 +176,7 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 		FormValues:      normalized.FormValues,
 		SourceReference: normalized.SourceReference,
 		Incident:        canonicalIncident,
+		Change:          canonicalChange,
 	}
 	payload, err := json.Marshal(canonical)
 	if err != nil {

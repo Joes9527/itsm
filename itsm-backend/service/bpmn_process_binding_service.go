@@ -61,6 +61,8 @@ func (s *ProcessBindingService) ResolveIntakeBinding(
 	switch recordClass {
 	case "incident":
 		subType = "incident"
+	case "change_request":
+		subType = "change"
 	case "service_request_item":
 		subType = "service_request"
 	default:
