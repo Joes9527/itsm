@@ -88,9 +88,8 @@ type ServiceCatalogResponse struct {
 	// （见 handlers/service_catalog/entity.go 的 RequiresInfraFields 函数注释）。
 	RequiresInfraFields bool `json:"requiresInfraFields"`
 	// TargetClass 是该目录项对应的 WorkItem 目标类：service_request_item|incident|change_request，
-	// 由后端根据 itsm_type 计算并在创建/更新时同步落库（见 handlers/service_catalog 的
-	// computeTargetClass），是 service_request 域路由判断（是否走 Incident 创建路径）的唯一
-	// 权威依据，itsm_type 不再承担这个职责（design doc §7.2）。
+	// 由调用方在创建/更新时显式提供并由后端校验，是 service_request 域路由判断的唯一权威
+	// 依据；已退役的 itsm_type 不再承担这个职责（design doc §7.2）。
 	TargetClass string                   `json:"targetClass,omitempty"`
 	Fields      []map[string]interface{} `json:"fields,omitempty"`
 	CreatedAt   time.Time                `json:"createdAt"`

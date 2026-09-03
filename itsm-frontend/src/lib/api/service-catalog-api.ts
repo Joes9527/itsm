@@ -64,6 +64,11 @@ export class ServiceCatalogApi {
    
   private static toServiceItem(raw: any): ServiceItem {
     // 后端 dto.ServiceCatalogResponse: {id,name,category,description,deliveryTime,status,ciTypeId,cloudServiceId,createdAt,updatedAt}
+    const targetClass = raw?.targetClass;
+    if (!Object.values(TargetClass).includes(targetClass)) {
+      throw new Error('Service catalog response contains an invalid or missing targetClass');
+    }
+
     return {
       id: String(raw?.id),
       name: String(raw?.name || ''),
@@ -89,9 +94,7 @@ export class ServiceCatalogApi {
       processDefinitionKey: raw?.processDefinitionKey || undefined,
       serviceType: raw?.serviceType || undefined,
       requiresInfraFields: Boolean(raw?.requiresInfraFields),
-      // 权威取值来自后端；缺省（历史脏数据/极端情况）时回退到 service_request_item，
-      // 与后端 handlers/service_catalog 的 fail-safe 语义保持一致，不代表前端自行判断路由。
-      targetClass: (raw?.targetClass as TargetClass) || TargetClass.SERVICE_REQUEST_ITEM,
+      targetClass,
     };
   }
 

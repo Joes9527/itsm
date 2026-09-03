@@ -94,6 +94,35 @@ func TestServiceCatalogTargetClassMigrationBackfillsAndDropsITSMType(t *testing.
 	require.Equal(t, "incident", reapplied)
 }
 
+// TestServiceCatalogTargetClassMigrationRejectsUnknownITSMType proves migration 024 fails
+// closed instead of silently treating an unsupported historical value as a service request.
+func TestServiceCatalogTargetClassMigrationRejectsUnknownITSMType(t *testing.T) {
+	db := openServiceCatalogTargetClassMigrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), serviceCatalogTargetClassMigrationIntegrationTimeout)
+	defer cancel()
+
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO service_catalogs (id, tenant_id, name, itsm_type, target_class)
+		VALUES (1, 101, 'unsupported catalog', 'Problem', NULL);
+	`)
+	require.NoError(t, err)
+
+	applySQL := string(readUnifiedIntakeMigrationAsset(t, "024_service_catalog_target_class_authority.sql"))
+	_, err = db.ExecContext(ctx, applySQL)
+	require.ErrorContains(t, err, "unsupported historical itsm_type")
+
+	var itsmTypeColumnCount int
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT count(*) FROM information_schema.columns
+		WHERE table_schema = current_schema() AND table_name = 'service_catalogs' AND column_name = 'itsm_type'
+	`).Scan(&itsmTypeColumnCount))
+	require.Equal(t, 1, itsmTypeColumnCount, "failed validation must not drop itsm_type")
+
+	var targetClass sql.NullString
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT target_class FROM service_catalogs WHERE id = 1`).Scan(&targetClass))
+	require.False(t, targetClass.Valid, "failed validation must not silently backfill an unsupported type")
+}
+
 // TestServiceCatalogTargetClassMigrationFreshSchemaIsNoOp proves the apply SQL is safe against a
 // schema where service_catalogs was already created in its final Task 14 shape (target_class NOT
 // NULL, itsm_type never existed) — the scenario Ent's Schema.Create produces on a brand new
