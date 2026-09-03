@@ -1,23 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="jest tests" tests="9" failures="0" errors="0" time="1.14">
-  <testsuite name="src/lib/api/__tests__/notification-preference-api.test.ts" errors="0" failures="0" skipped="0" timestamp="2026-08-14T06:44:16" time="0.541" tests="9">
-    <testcase classname="NotificationPreferenceApi › getPreferences" name="should get preferences" time="0.004">
+<testsuites name="jest tests" tests="3" failures="0" errors="0" time="1.82">
+  <testsuite name="src/components/work-item/__tests__/WorkItemShell.test.tsx" errors="0" failures="0" skipped="0" timestamp="2026-08-27T05:44:38" time="1.491" tests="3">
+    <testcase classname="WorkItemShell" name="renders the common fields and exposes them via useWorkItemContext to the professional panel slot" time="0.125">
     </testcase>
-    <testcase classname="NotificationPreferenceApi › getMyPreferences" name="should get my preferences" time="0.001">
+    <testcase classname="WorkItemShell" name="passes the actions map through to the professional panel via useWorkItemContext" time="0.036">
     </testcase>
-    <testcase classname="NotificationPreferenceApi › getPreferencesByUserId" name="should get preferences by user id" time="0.001">
-    </testcase>
-    <testcase classname="NotificationPreferenceApi › updateMyPreferences" name="should update my preferences" time="0.001">
-    </testcase>
-    <testcase classname="NotificationPreferenceApi › updatePreferences" name="should update preferences for user" time="0.001">
-    </testcase>
-    <testcase classname="NotificationPreferenceApi › resetToDefault" name="should reset to default" time="0.001">
-    </testcase>
-    <testcase classname="NotificationPreferenceApi › getTemplates" name="should get templates" time="0.001">
-    </testcase>
-    <testcase classname="NotificationPreferenceApi › applyTemplate" name="should apply template" time="0.001">
-    </testcase>
-    <testcase classname="NotificationPreferenceApi › bulkUpdate" name="should bulk update preferences" time="0.001">
+    <testcase classname="WorkItemShell" name="shows an error state without rendering the panel slot" time="0.028">
     </testcase>
   </testsuite>
 </testsuites>
