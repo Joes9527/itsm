@@ -285,6 +285,62 @@ func TestIncidentCreatorCarriesFullDTOFieldSet(t *testing.T) {
 	assert.Equal(t, "legacy-1", extPlan.Metadata["source_ticket"])
 }
 
+func TestIncidentCreatorPersistsFullDTOFieldSetAfterCommit(t *testing.T) {
+	client, tenant, requester := newCreatorFixture(t)
+	ctx := context.Background()
+	otherActor, err := client.User.Create().
+		SetUsername(t.Name() + "-assignee").
+		SetEmail(t.Name() + "-assignee@example.com").
+		SetName("Assignee").
+		SetPasswordHash("hash").
+		SetRole("agent").
+		SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+	tx, err := client.Tx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback()
+	validator := &recordingAssigneeValidator{}
+	creator := NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-202609-000006"}, nil, nil, validator)
+
+	plan, err := creator.Prepare(ctx, tx, ResolvedIntake{
+		Identity: Identity{TenantID: tenant.ID, ActorID: requester.ID, RequesterID: requester.ID},
+		Command: CreateWorkItemCommand{
+			Title: "t",
+			Incident: &IncidentInput{
+				Impact:         "high",
+				Urgency:        "high",
+				AssigneeID:     intPtr(otherActor.ID),
+				ImpactAnalysis: map[string]interface{}{"scope": "regional"},
+				Metadata:       map[string]interface{}{"source_ticket": "legacy-1"},
+			},
+		},
+		RecordClass: RecordClassIncident,
+	})
+	require.NoError(t, err)
+
+	workItem, err := NewWorkItemCreator(staticWorkItemNumberAllocator{number: "TKT-202609-000006"}).CreateBase(ctx, tx, plan)
+	require.NoError(t, err)
+
+	_, err = creator.CreateExtension(ctx, tx, workItem, plan)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit())
+
+	storedWorkItem, err := client.Ticket.Query().Where(ticket.IDEQ(workItem.ID)).Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, otherActor.ID, storedWorkItem.AssigneeID)
+
+	storedIncident, err := client.Incident.Query().Where(incident.WorkItemIDEQ(workItem.ID)).Only(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, map[string]interface{}{"scope": "regional"}, storedIncident.ImpactAnalysis)
+	assert.Equal(t, map[string]interface{}{"source_ticket": "legacy-1"}, storedIncident.Metadata)
+	assert.Equal(t, workItem.ID, storedIncident.WorkItemID)
+	assert.Equal(t, "INC-202609-000006", storedIncident.IncidentNumber)
+	assert.Equal(t, 1, validator.calls)
+	assert.Equal(t, otherActor.ID, validator.assigneeID)
+	assert.Equal(t, tenant.ID, validator.tenantID)
+}
+
 func intPtr(value int) *int {
 	return &value
 }
