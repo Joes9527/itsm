@@ -325,16 +325,16 @@ func TestIncidentService_CreateIncidentAllocatesSequentialWorkItemNumbers(t *tes
 }
 
 // TestIncidentService_CreateIncident_ServiceCatalogDivertedPath_AlsoCreatesWorkItem
-// 覆盖服务目录 itsm_type=Incident 的报障分流路径（handlers/service_request/service.go 的
-// isIncidentCatalog + createIncidentFromCatalog）。该路径通过 IncidentCreator 接口
-// （生产环境由 internal/bootstrap/app.go 的 srIncidentBridge 适配）最终调用的正是
-// IncidentService.CreateIncident——这里用与 srIncidentBridge.CreateIncident 完全相同的
-// 请求形状直接调用同一个函数，验证服务目录分流路径同样会产生 WorkItem，不再像 Wave 2
-// 之前那样绕开 Ticket。跨包集成的另一半（Service.Create 确实会在 isIncidentCatalog
-// 命中时委托给 IncidentCreator、且不产生 ServiceRequest 行）由
+// 覆盖服务目录 target_class=incident 的报障分流路径（handlers/service_request/service.go 的
+// isIncidentCatalog + createFromCatalogViaIntake）。该路径现在通过 Unified Intake
+// ApplicationService（handlers/intake，Task 5-7 的 intake.IncidentCreator，生产环境由
+// internal/bootstrap/app.go 共享的 incidentIntakeService 实例承载）分发，不再直接调用
+// IncidentService.CreateIncident——这里仍然直接调用 IncidentService.CreateIncident 本身，
+// 独立验证它自己的 WorkItem 创建行为（服务目录分流路径最终落到的正是这同一个函数），
+// 不依赖、也不改变 Intake 分发链路是否被命中。跨包集成的另一半（Service.Create 确实会在
+// isIncidentCatalog 命中时委托给 Intake、且不产生 ServiceRequest 行）由
 // handlers/service_request/regression_test.go 的
-// TestService_Create_IncidentCatalog_NoServiceRequestRowCreated 覆盖，该测试的注释
-// 明确把"Incident 侧完整行为"这一半留给了本任务包。
+// TestService_Create_IncidentCatalog_RoutesThroughIntakeNoServiceRequestRow 覆盖。
 func TestIncidentService_CreateIncident_ServiceCatalogDivertedPath_AlsoCreatesWorkItem(t *testing.T) {
 	client, service, ctx := setupIncidentTest(t)
 	defer client.Close()

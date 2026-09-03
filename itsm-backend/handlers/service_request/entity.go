@@ -47,6 +47,12 @@ type ServiceRequest struct {
 	// 省掉前端对每条记录再单独查一次 ticket 的往返）。Get/Create/Update 路径不填这两个字段。
 	TicketTitle  string
 	TicketStatus string
+
+	// IntakeRecordClass is set only for a stub result from
+	// createFromCatalogViaIntake (service.go) -- "" for every real, persisted
+	// ServiceRequest. Handler.Create uses it to pick the right response
+	// builder instead of always assuming a service_requests row exists.
+	IntakeRecordClass string
 }
 
 // ListFilters defines filters for listing service requests
@@ -64,7 +70,14 @@ type Repository interface {
 	List(ctx context.Context, tenantID int, filters ListFilters) ([]*ServiceRequest, int, error)
 	Update(ctx context.Context, req *ServiceRequest) error
 	Delete(ctx context.Context, req *ServiceRequest) error
-	GetUserContext(ctx context.Context, userID, tenantID int) (department, name string, err error)
+	// GetUserContext also returns the requester's role -- needed by
+	// createFromCatalogViaIntake (service.go) to populate intake.Identity.Role,
+	// which the real Intake resolver requires (both identity.ValidateCommand's
+	// non-empty check and its own RBAC permission checks key off it, the same
+	// way the existing production intake callers -- IncidentController,
+	// incidentTaskIntakeAdapter -- already source role from the caller's
+	// authenticated context).
+	GetUserContext(ctx context.Context, userID, tenantID int) (department, name, role string, err error)
 }
 
 // amount 从 FormData 中提取预估金额（float64），常见键名：amount、cost、budget。

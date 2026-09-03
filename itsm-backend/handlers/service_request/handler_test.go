@@ -20,6 +20,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/handlers/cmdb"
+	"itsm-backend/handlers/intake"
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
@@ -242,7 +243,7 @@ func TestServiceRequestCreateDefersNewCIUntilProvisioning(t *testing.T) {
 	created, err := srSvc.Create(ctx, tenant.ID, user.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck: true, DataClassification: "internal", ExpireAt: &expireAt,
 		FormData: map[string]interface{}{"title": "Production VM"},
-	})
+	}, "")
 	require.NoError(t, err)
 	assert.Zero(t, created.CiID)
 	ciCount, err := client.ConfigurationItem.Query().Count(ctx)
@@ -332,4 +333,67 @@ func TestServiceRequestHandler_Delete(t *testing.T) {
 	stored, err := client.ServiceRequest.Get(context.Background(), id)
 	require.NoError(t, err)
 	require.NotNil(t, stored.DeletedAt)
+}
+
+// TestServiceRequestHandlerCreate_IncidentDiversionReturnsIncidentResponse drives the real
+// HTTP path (Handler.Create) to prove the Incident diversion's response shape is a real
+// dto.IncidentResponse read back via incidentReader -- not the near-empty stub toDTO would
+// have produced if Handler.Create fell through to its generic service_requests-table Get
+// (Step 5 of Task 13). srSetup's shared fixture hardcodes nil for the intakeService slot and
+// has no way to set a custom Idempotency-Key header, so this test builds its own router
+// inline, mirroring srSetup's tenant/catalog/service/handler/route wiring.
+func TestServiceRequestHandlerCreate_IncidentDiversionReturnsIncidentResponse(t *testing.T) {
+	dsn := "file:" + filepath.Join(t.TempDir(), "sr_incident_diversion_response.db") + "?_fk=1"
+	client := enttest.Open(t, "sqlite3", dsn)
+	logger := zaptest.NewLogger(t).Sugar()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().SetName("t").SetCode("sr-diversion-resp").SetDomain("d.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	user, err := client.User.Create().
+		SetUsername("u-" + srUID()).SetEmail("u-" + srUID() + "@test.com").SetName("U").
+		SetPasswordHash("hash").SetRole("manager").SetDepartment("IT").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	scRepo := service_catalog.NewEntRepository(client)
+	scSvc := service_catalog.NewService(scRepo, client, logger)
+	cat, err := scSvc.Create(ctx, "系统故障上报", "运维", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	require.NoError(t, err)
+	_, err = client.ServiceCatalog.UpdateOneID(cat.ID).SetTargetClass(service_catalog.TargetClassIncident).Save(ctx)
+	require.NoError(t, err)
+
+	repo := NewEntRepository(client)
+	cmdbRepo := cmdb.NewEntRepository(client)
+	ticketSvc := service.NewTicketServiceForTest(client, logger)
+	recorder := &recordingIntake{result: &intake.CreateWorkItemResult{
+		RecordClass: intake.RecordClassIncident, WorkItemID: 9,
+		ProfessionalReference: intake.ProfessionalReference{Type: "incident", ID: 404},
+	}}
+	svc := NewService(repo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, recorder)
+	h := NewHandler(svc)
+	h.SetIncidentReader(stubIncidentReaderForHandler{response: &dto.IncidentResponse{ID: 404, Title: "系统故障上报"}})
+
+	r := gin.New()
+	r.Use(srAuth(tenant.ID, user.ID))
+	r.POST("/api/v1/service-requests", h.Create)
+
+	req, err := http.NewRequest("POST", "/api/v1/service-requests", bytes.NewReader([]byte(`{"catalogId":`+strconv.Itoa(cat.ID)+`,"title":"系统故障上报"}`)))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "key-1")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	assert.Contains(t, w.Body.String(), "系统故障上报")
+	assert.Contains(t, w.Body.String(), `"id":404`)
+}
+
+type stubIncidentReaderForHandler struct {
+	response *dto.IncidentResponse
+	err      error
+}
+
+func (s stubIncidentReaderForHandler) GetIncident(context.Context, int, int) (*dto.IncidentResponse, error) {
+	return s.response, s.err
 }

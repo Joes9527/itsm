@@ -205,14 +205,16 @@ func (r *EntRepository) Delete(ctx context.Context, req *ServiceRequest) error {
 		Exec(ctx)
 }
 
-// GetUserContext returns User department (needed for filtering)
+// GetUserContext returns User department/name/role (needed for filtering and,
+// for role, for populating intake.Identity when the requester's Catalog
+// submission diverts through createFromCatalogViaIntake).
 // Note: This leaks abstraction slightly by querying User, but practical.
-func (r *EntRepository) GetUserContext(ctx context.Context, userID, tenantID int) (string, string, error) {
+func (r *EntRepository) GetUserContext(ctx context.Context, userID, tenantID int) (string, string, string, error) {
 	u, err := r.client.User.Query().
 		Where(user.IDEQ(userID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).
 		Only(ctx)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
-	return u.Department, u.Name, nil
+	return u.Department, u.Name, u.Role, nil
 }

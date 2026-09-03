@@ -113,6 +113,18 @@ func (a incidentTaskIntakeAdapter) Create(ctx context.Context, identity bpmn.Int
 	}, nil
 }
 
+// changeServiceReader adapts change.Service to service_request's changeReader,
+// applying change.ToDTO the same way handlers/change's own HTTP handler does.
+type changeServiceReader struct{ svc *change.Service }
+
+func (r changeServiceReader) GetChange(ctx context.Context, id, tenantID int) (*dto.ChangeResponse, error) {
+	c, err := r.svc.GetChange(ctx, id, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	return change.ToDTO(c), nil
+}
+
 type Application struct {
 	Cfg                  *config.Config
 	Logger               *zap.SugaredLogger
@@ -424,6 +436,14 @@ func NewApplication() *Application {
 	).WithPostCommit(incidentService)); err != nil {
 		log.Fatalf("Failed to register incident intake creator: %v", err)
 	}
+	// Registers the Change professional creator on the same shared registry so
+	// service_request.Service's Catalog-derived change_request diversion
+	// (createFromCatalogViaIntake) resolves to a real creator instead of
+	// failing UnsupportedRecordClass -- ChangeCreator is self-contained
+	// (no post-commit hook, unlike Incident's SLA/notification wiring above).
+	if err := incidentIntakeRegistry.Register(intake.NewChangeCreator()); err != nil {
+		log.Fatalf("Failed to register change intake creator: %v", err)
+	}
 	incidentIntakeService := intake.NewService(
 		client,
 		intake.NewResolver(processBindingService, nil),
@@ -710,11 +730,13 @@ func NewApplication() *Application {
 	// Domain: Service Request (DDD)
 	srRepo := service_request.NewEntRepository(client)
 	chainResolver := service.NewApprovalChainResolver(client, sugar)
-	// incidentBridge 把 service.IncidentService（legacy 横切分层，实际接路由的 Incident 实现，
-	// 见 router.go 的 /incidents 分组）适配为 service_request.IncidentCreator 这个最小接口，
-	// 让 Service.Create 在 isIncidentCatalog 分流时不用直接依赖 IncidentService 的完整签名。
-	incidentBridge := &srIncidentBridge{svc: incidentService}
-	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, numberAllocator, sugar, ticketService, chainResolver, incidentBridge)
+	// service_request.Service routes Catalog-derived Incident/Change creation
+	// through the same shared Unified Intake ApplicationService instance wired
+	// into IncidentController (Task 11) and the BPMN incident_service_handler
+	// (Task 12) -- see service_request.Service.createFromCatalogViaIntake.
+	// srHandler.SetIncidentReader/SetChangeReader are wired later, once
+	// changeServiceDomain exists (see the Change block below).
+	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, numberAllocator, sugar, ticketService, chainResolver, incidentIntakeService)
 	srHandler := service_request.NewHandler(srService)
 
 	// Domain: Change (DDD)
@@ -740,6 +762,14 @@ func NewApplication() *Application {
 			h.SetChangeService(changeServiceDomain)
 		}
 	}
+
+	// srHandler.Create's Catalog-derived Incident/Change diversion (Step 5 of
+	// Task 13) needs to read back a real dto.IncidentResponse/dto.ChangeResponse
+	// after createFromCatalogViaIntake returns -- wired here, not next to
+	// srService's own construction above, because changeServiceReader needs
+	// changeServiceDomain, which does not exist until this Change block runs.
+	srHandler.SetIncidentReader(incidentService) // IncidentService already implements incidentReader (same GetIncident used by Task 11)
+	srHandler.SetChangeReader(changeServiceReader{svc: changeServiceDomain})
 
 	// Analytics & Prediction Controllers
 	analyticsController := controller.NewAnalyticsController(analyticsService)
@@ -1385,23 +1415,4 @@ func (app *Application) startNotificationDeliveryWorker(ctx context.Context) {
 	}
 	workerID := "ticket-notification-" + uuid.NewString()
 	go app.notificationWorker.RunDeliveryWorker(ctx, workerID, 2*time.Second)
-}
-
-// srIncidentBridge 将 service.IncidentService 适配为 service_request.IncidentCreator，
-// 使 ServiceRequest.Create 在遇到 ITSM 类型为 Incident 的 catalog 时能直接创建事件。
-type srIncidentBridge struct {
-	svc *service.IncidentService
-}
-
-func (b *srIncidentBridge) CreateIncident(ctx context.Context, tenantID, requesterID int, title, description string, catalogID int) (int, error) {
-	resp, err := b.svc.CreateIncident(ctx, &dto.CreateIncidentRequest{
-		Title:       title,
-		Description: description,
-		Type:        "incident",
-		Priority:    "medium",
-	}, tenantID, requesterID)
-	if err != nil {
-		return 0, err
-	}
-	return resp.ID, nil
 }

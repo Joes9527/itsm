@@ -67,6 +67,10 @@ func toDTO(c *Change) *dto.ChangeResponse {
 	return res
 }
 
+// ToDTO 是 toDTO 的导出别名，供 handlers/service_request 在 Catalog 派生 Change 创建
+// 后构建响应时复用同一个 Mapper，不新写第二个。
+func ToDTO(c *Change) *dto.ChangeResponse { return toDTO(c) }
+
 // CreateChange handles POST /api/v1/changes
 func (h *Handler) CreateChange(c *gin.Context) {
 	var req dto.CreateChangeRequest

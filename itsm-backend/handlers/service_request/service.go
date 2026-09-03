@@ -2,6 +2,7 @@ package service_request
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"itsm-backend/ent"
 	entticket "itsm-backend/ent/ticket"
 	"itsm-backend/handlers/cmdb"
+	"itsm-backend/handlers/intake"
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/repository/ticket"
 	"itsm-backend/repository/workitemnumber"
@@ -27,9 +29,12 @@ type TicketServiceInterface interface {
 	CreateTicket(ctx context.Context, req *dto.CreateTicketRequest, tenantID int) (*ticket.Ticket, error)
 }
 
-// IncidentCreator 是 Create 在 ITSM 类型为 Incident 时所需的最小事件创建能力。
-type IncidentCreator interface {
-	CreateIncident(ctx context.Context, tenantID, requesterID int, title, description string, catalogID int) (incidentID int, err error)
+// catalogIntakeCreator is the minimal Unified Intake ApplicationService
+// capability Create needs to divert Incident/Change-target Catalog
+// submissions through the same CreateWorkItemCommand path every other Intake
+// caller uses (Task 11's IncidentController, Task 12's BPMN callback).
+type catalogIntakeCreator interface {
+	Create(ctx context.Context, identity intake.Identity, command intake.CreateWorkItemCommand) (*intake.CreateWorkItemResult, error)
 }
 
 type Service struct {
@@ -41,10 +46,10 @@ type Service struct {
 	logger          *zap.SugaredLogger
 	ticketSvc       TicketServiceInterface
 	chainResolver   *service.ApprovalChainResolver
-	incidentSvc     IncidentCreator
+	intakeService   catalogIntakeCreator
 }
 
-func NewService(repo Repository, scRepo service_catalog.Repository, cmdbRepo cmdb.Repository, entClient *ent.Client, allocator workitemnumber.Allocator, logger *zap.SugaredLogger, ticketSvc TicketServiceInterface, chainResolver *service.ApprovalChainResolver, incidentSvc IncidentCreator) *Service {
+func NewService(repo Repository, scRepo service_catalog.Repository, cmdbRepo cmdb.Repository, entClient *ent.Client, allocator workitemnumber.Allocator, logger *zap.SugaredLogger, ticketSvc TicketServiceInterface, chainResolver *service.ApprovalChainResolver, intakeService catalogIntakeCreator) *Service {
 	if allocator == nil {
 		panic("work item number allocator is required")
 	}
@@ -57,7 +62,7 @@ func NewService(repo Repository, scRepo service_catalog.Repository, cmdbRepo cmd
 		logger:          logger,
 		ticketSvc:       ticketSvc,
 		chainResolver:   chainResolver,
-		incidentSvc:     incidentSvc,
+		intakeService:   intakeService,
 	}
 }
 
@@ -69,8 +74,9 @@ func (s *Service) Client() *ent.Client { return s.client }
 // Create submits a new service request. Its WorkItem base record and the
 // ServiceRequest extension are one aggregate and must commit together. BPMN is
 // triggered only after that transaction commits.
-func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalogID int, reqData *ServiceRequest) (*ServiceRequest, error) {
-	if _, _, err := s.repo.GetUserContext(ctx, requesterID, tenantID); err != nil {
+func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalogID int, reqData *ServiceRequest, idempotencyKey string) (*ServiceRequest, error) {
+	_, _, requesterRole, err := s.repo.GetUserContext(ctx, requesterID, tenantID)
+	if err != nil {
 		return nil, common.NewBadRequestError("Requester not found or inactive", err)
 	}
 	// 1. Validate Service Catalog
@@ -85,15 +91,18 @@ func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalog
 		return nil, common.NewBadRequestError("Service Catalog is not enabled", nil)
 	}
 
-	// 1b. Incident 类型：直接创建事件，跳过 SR 和审批流程。判断依据是 target_class
-	// （WorkItem 目标类），不再是 itsm_type——见 entity.go isIncidentCatalog 的注释。
-	// 这要求该 ServiceCatalog 行已经跑过 cmd/backfill_servicecatalog_target_class 回填
-	// 或者是 Wave 2 之后新建/编辑过的（target_class 在写入时同步计算），否则未回填的存量
-	// Incident 类型目录项会被当成 default 落到普通 ServiceRequest 分支——这是部署顺序要求，
-	// 不是代码缺陷，与 Incident/Problem/Change 三次迁移要求先跑各自 backfill 命令再上线新
-	// 路由代码是同一个模式。
-	if isIncidentCatalog(cat.TargetClass) {
-		return s.createIncidentFromCatalog(ctx, tenantID, requesterID, catalogID, reqData)
+	// 1b. Incident/Change 类型：直接通过 Unified Intake ApplicationService 创建事件/变更，
+	// 跳过 SR 和审批流程。判断依据是 target_class（WorkItem 目标类），不再是 itsm_type——
+	// 见 entity.go isIncidentCatalog 的注释。这要求该 ServiceCatalog 行已经跑过
+	// cmd/backfill_servicecatalog_target_class 回填或者是 Wave 2 之后新建/编辑过的
+	// （target_class 在写入时同步计算），否则未回填的存量 Incident/Change 类型目录项会被
+	// 当成 default 落到普通 ServiceRequest 分支——这是部署顺序要求，不是代码缺陷，与
+	// Incident/Problem/Change 三次迁移要求先跑各自 backfill 命令再上线新路由代码是同一个模式。
+	if isIncidentCatalog(cat.TargetClass) || cat.TargetClass == service_catalog.TargetClassChangeRequest {
+		if strings.TrimSpace(idempotencyKey) == "" {
+			return nil, common.NewBadRequestError("Idempotency-Key header is required", nil)
+		}
+		return s.createFromCatalogViaIntake(ctx, tenantID, requesterID, requesterRole, cat, reqData, idempotencyKey)
 	}
 
 	// 2. Validate Request Data
@@ -529,29 +538,86 @@ func extractServiceRequestFieldValues(formData map[string]interface{}) map[strin
 	return result
 }
 
-// createIncidentFromCatalog 为 ITSM 类型为 Incident 的服务目录项直接创建事件，
-// 跳过 ServiceRequest 和审批流程。返回的 "stub" ServiceRequest 仅携带 IncidentID 供
-// handler 层返回给前端，不做持久化。
-func (s *Service) createIncidentFromCatalog(ctx context.Context, tenantID, requesterID, catalogID int, reqData *ServiceRequest) (*ServiceRequest, error) {
+// createFromCatalogViaIntake routes Catalog items whose target_class is
+// incident or change_request through the Unified Intake ApplicationService,
+// which resolves the concrete ProfessionalCreator (IncidentCreator /
+// ChangeCreator) from cat.TargetClass itself (see resolver.go's
+// catalog.TargetClass -> resolved.RecordClass assignment) -- this function
+// does not need to branch on TargetClass again. service_request_item stays
+// on the existing rich Create body below, untouched by this function.
+//
+// requesterRole is threaded in (beyond the brief's literal signature) because
+// intake.Identity.Role is not optional downstream: Identity.ValidateCommand
+// rejects an empty Role outright, and Resolver.Resolve separately gates on it
+// for "intake:create" / "service_catalog:read" / "incident:write"|"change:write"
+// permission checks (handlers/intake/identity.go, resolver.go). Every existing
+// production Intake caller (IncidentController, the BPMN incidentTaskIntakeAdapter)
+// already sources Role from the authenticated actor's context for the same
+// reason -- omitting it here would make every Catalog-derived Incident/Change
+// submission fail closed with 401 against the real intake.Service, even though
+// this package's own tests (which use the recordingIntake fake, not the real
+// Resolver) would not catch that.
+func (s *Service) createFromCatalogViaIntake(ctx context.Context, tenantID, requesterID int, requesterRole string, cat *service_catalog.ServiceCatalog, reqData *ServiceRequest, idempotencyKey string) (*ServiceRequest, error) {
 	title := strings.TrimSpace(reqData.title())
 	if title == "" {
-		return nil, common.NewBadRequestError("Incident title is required", nil)
+		return nil, common.NewBadRequestError("Request title is required", nil)
 	}
 	description := reqData.reason()
 	if description == "" {
 		description = title
 	}
-
-	incidentID, err := s.incidentSvc.CreateIncident(ctx, tenantID, requesterID, title, description, catalogID)
-	if err != nil {
-		return nil, common.NewInternalError("Failed to create incident from service catalog", err)
+	if s.intakeService == nil {
+		return nil, common.NewInternalError("intake service not configured", nil)
 	}
-
-	// 返回一个非持久化的 stub ServiceRequest，仅供 handler 构建响应用。
+	identity := intake.Identity{TenantID: tenantID, ActorID: requesterID, RequesterID: requesterID, Role: requesterRole, Channel: "service_catalog"}
+	// ChangeInput is intentionally left nil: reqData.FormData (the generic Catalog
+	// dynamic-field bag) has no confirmed mapping to ChangeInput's
+	// Justification/ImpactScope/RiskLevel/etc today, the same way the Incident
+	// branch never populated Severity/Impact/Urgency from the Catalog form
+	// either -- ChangeCreator.Prepare's existing defaultString(..., "normal"/"medium")
+	// fallback applies, exactly as it does for a nil Command.Change. Recorded,
+	// deliberate simplification, not a gap left open to future judgment.
+	command := intake.CreateWorkItemCommand{
+		IdempotencyKey: idempotencyKey,
+		IntakeKind:     intake.IntakeKindCatalogItem,
+		CatalogItemID:  &cat.ID,
+		Title:          title,
+		Description:    description,
+	}
+	result, err := s.intakeService.Create(ctx, identity, command)
+	if err != nil {
+		return nil, mapIntakeErrorToAppError(err)
+	}
+	// Stub, non-persisted ServiceRequest carrying the professional reference ID
+	// in the borrowed ID field -- the same response contract
+	// createIncidentFromCatalog used, now extended to cover Change too.
 	return &ServiceRequest{
-		ID:          incidentID, // 借用 ID 字段传递 incidentID
-		TenantID:    tenantID,
-		CatalogID:   catalogID,
-		RequesterID: requesterID,
+		ID: result.ProfessionalReference.ID, TenantID: tenantID, CatalogID: cat.ID, RequesterID: requesterID,
+		TicketID: result.WorkItemID, IntakeRecordClass: result.RecordClass,
 	}, nil
+}
+
+// mapIntakeErrorToAppError translates an *intake.IntakeError into this
+// package's existing common.AppError convention so failServiceRequest (in
+// handler.go) needs no separate branch for Intake-originated errors -- one
+// error-response path, not two.
+func mapIntakeErrorToAppError(err error) error {
+	var appErr *intake.IntakeError
+	if !errors.As(err, &appErr) {
+		return common.NewInternalError("创建失败", err)
+	}
+	switch appErr.Code {
+	case intake.AuthenticationRequired:
+		return common.NewUnauthorizedError(appErr.Message)
+	case intake.PermissionDenied:
+		return common.NewForbiddenError(appErr.Message)
+	case intake.ReferenceNotFound:
+		return common.NewNotFoundError(appErr.Message)
+	case intake.IdempotencyConflict:
+		return common.NewConflictError("request", appErr.Message)
+	case intake.InvalidCommand, intake.DomainValidationFailed, intake.UnsupportedRecordClass, intake.WorkflowBindingRequired:
+		return common.NewBadRequestError(appErr.Message, nil)
+	default:
+		return common.NewInternalError("创建失败", appErr)
+	}
 }

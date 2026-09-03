@@ -41,7 +41,7 @@ func TestService_Create_CommitsWorkItemExtensionAndNumberTogether(t *testing.T) 
 	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck: true,
 		FormData:      map[string]interface{}{"title": "allocator request", "reason": "verify one aggregate"},
-	})
+	}, "")
 	require.NoError(t, err)
 
 	workItem, err := client.Ticket.Get(ctx, created.TicketID)
@@ -89,7 +89,7 @@ func TestService_Create_PersistsFieldValues(t *testing.T) {
 			"reason":      "测试",
 			"environment": "production",
 		},
-	})
+	}, "")
 	require.NoError(t, err)
 	require.Greater(t, created.TicketID, 0, "Create 必须创建关联 Ticket 并回写 TicketID")
 
@@ -127,7 +127,7 @@ func TestService_Create_SystemFormDataFieldsNotCollectedAsCustomFields(t *testin
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
 		FormData:           map[string]interface{}{"title": "VPN 权限申请", "reason": "测试", "cost_center": "CC-001"},
-	})
+	}, "")
 	require.NoError(t, err)
 
 	values, err := service.NewFieldValueService(client).ListValues(ctx, tenant.ID, "ticket", created.TicketID)
@@ -173,7 +173,7 @@ func TestService_Create_PersistsFieldValues_ArrayShapeSnakeCaseName(t *testing.T
 				map[string]interface{}{"name": "office_location", "value": "Beijing"},
 			},
 		},
-	})
+	}, "")
 	require.NoError(t, err)
 
 	values, err := service.NewFieldValueService(client).ListValues(ctx, tenant.ID, "ticket", created.TicketID)
@@ -213,7 +213,7 @@ func TestService_Create_RequiredFieldMissing_Rejected(t *testing.T) {
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
 		FormData:           map[string]interface{}{"title": "扩容申请", "reason": "测试"},
-	})
+	}, "")
 	require.Error(t, err)
 	assert.Nil(t, created)
 
@@ -258,7 +258,7 @@ func TestService_Create_LinksTicketAndDelegatesFields(t *testing.T) {
 			"title":  "申请一台云主机-Link测试",
 			"reason": "delegation test reason",
 		},
-	})
+	}, "")
 	require.NoError(t, err)
 	require.Greater(t, created.TicketID, 0, "Create 必须创建关联 Ticket 并回写 TicketID")
 
@@ -305,7 +305,7 @@ func TestService_GetByTicketID_ReturnsLinkedServiceRequest(t *testing.T) {
 			"title":  "申请一台云主机-GetByTicket",
 			"reason": "get by ticket test",
 		},
-	})
+	}, "")
 	require.NoError(t, err)
 	require.Greater(t, created.TicketID, 0)
 
@@ -351,7 +351,7 @@ func TestService_List_BatchLoadsLinkedTicketSummary(t *testing.T) {
 			"title":  "申请一台云主机-List测试",
 			"reason": "list batch load test",
 		},
-	})
+	}, "")
 	require.NoError(t, err)
 	require.Greater(t, created.TicketID, 0)
 
@@ -471,7 +471,7 @@ func TestServiceRequest_ApprovalDegradedToSingleNodeBPMN(t *testing.T) {
 			"title":  "退化审批测试申请",
 			"reason": "verify degraded single-node approval",
 		},
-	})
+	}, "")
 	require.NoError(t, err)
 
 	// Exactly one Ticket exists for this request — a single BPMN process instance carries
@@ -512,7 +512,7 @@ func TestService_Create_NonInfraCatalog_SkipsInfraValidation(t *testing.T) {
 		// 故意不设置 ComplianceAck/ExpireAt/DataClassification/NeedsPublicIP——
 		// 非基础设施类型不应该要求这些。
 		FormData: map[string]interface{}{"title": "申请 Copilot 许可证", "reason": "提升研发效率"},
-	})
+	}, "")
 	require.NoError(t, err, "custom 类型目录项不应该被要求填写基础设施字段")
 	require.Greater(t, created.TicketID, 0)
 }
@@ -545,7 +545,7 @@ func TestService_Create_InfraCatalog_StillRequiresComplianceAck(t *testing.T) {
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
 		// 故意不设置 ComplianceAck（零值 false）
 		FormData: map[string]interface{}{"title": "申请一台云主机", "reason": "测试"},
-	})
+	}, "")
 	require.Error(t, err, "vm 类型目录项仍然应该要求合规确认")
 	require.Contains(t, err.Error(), "Compliance acknowledgement required")
 }
@@ -582,7 +582,7 @@ func TestService_Create_PersistsContactAndQuantityFieldsThroughFullPath(t *testi
 		ContactEmail: "wangwu@example.com",
 		Quantity:     5,
 		ExpectedAt:   &expected,
-	})
+	}, "")
 	require.NoError(t, err)
 	require.Equal(t, "王五", created.ContactName, "Service.Create 的完整路径必须真正持久化 ContactName，不能在内部 newReq 重建时丢失")
 	require.Equal(t, "wangwu@example.com", created.ContactEmail)

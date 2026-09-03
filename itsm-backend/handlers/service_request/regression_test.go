@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/schema"
 	"itsm-backend/handlers/cmdb"
+	"itsm-backend/handlers/intake"
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
@@ -72,7 +73,7 @@ func TestService_Create_FullChain_TicketStatusReflectedAfterChange(t *testing.T)
 			"title":  "申请一台云主机-全链路",
 			"reason": "全链路回归测试",
 		},
-	})
+	}, "")
 	require.NoError(t, err)
 	require.Greater(t, created.TicketID, 0, "全链路必须委托创建关联 Ticket 并回写 TicketID")
 
@@ -159,7 +160,7 @@ func TestService_Create_FormDataFieldValuesConsistency_FieldLevel(t *testing.T) 
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
 		FormData:           formData,
-	})
+	}, "")
 	require.NoError(t, err)
 	require.Greater(t, created.TicketID, 0)
 
@@ -253,7 +254,7 @@ func TestService_Create_ResolvesApprovalChainIntoFormData(t *testing.T) {
 			"reason": "审批链回归测试",
 			"amount": float64(10000),
 		},
-	})
+	}, "")
 	require.NoError(t, err)
 
 	expectedFiltered := []schema.ApprovalChainStep{allSteps[0], allSteps[2]}
@@ -275,7 +276,7 @@ func TestService_Create_ResolvesApprovalChainIntoFormData(t *testing.T) {
 			"reason": "审批链回归测试-高金额",
 			"amount": float64(80000),
 		},
-	})
+	}, "")
 	require.NoError(t, err)
 	assertApprovalChainStepsEqual(t, allSteps, createdHighAmount.FormData["_approval_chain"])
 }
@@ -316,7 +317,7 @@ func TestService_Create_NoApprovalChainConfigured_FormDataHasNoApprovalChainKey(
 			"title":  "申请一台云主机-无审批链",
 			"reason": "无审批链回归测试",
 		},
-	})
+	}, "")
 	require.NoError(t, err)
 	_, hasKey := created.FormData["_approval_chain"]
 	assert.False(t, hasKey, "租户未配置审批链时，form_data 不应该出现 _approval_chain 键")
@@ -335,38 +336,39 @@ func assertApprovalChainStepsEqual(t *testing.T, expected []schema.ApprovalChain
 	assert.JSONEq(t, string(expectedJSON), string(actualJSON))
 }
 
-// fakeIncidentCreator 是 IncidentCreator 接口的测试替身。IncidentCreator 是
-// handlers/service_request 包自己定义的最小接口（entity.go 顶部注释所述"避免直接依赖具体
-// 实现"），生产环境由 internal/bootstrap/app.go 的 srIncidentBridge 适配真正的
-// IncidentService；测试这里只关心 Service.Create 在 isIncidentCatalog 分流时是否正确
-// 委托、以及委托之后 ServiceRequest 表是否真的没有落地行，不需要拉起完整的 Incident 域。
-type fakeIncidentCreator struct {
-	incidentID int
-	called     bool
-	gotTenant  int
-	gotCatalog int
-	gotTitle   string
+// recordingIntake 是 catalogIntakeCreator 接口的测试替身，替代已删除的
+// fakeIncidentCreator/IncidentCreator。catalogIntakeCreator 是 handlers/service_request
+// 包自己定义的最小接口（service.go 顶部注释所述"避免直接依赖具体实现"），生产环境由
+// internal/bootstrap/app.go 里与 IncidentController/BPMN 共享的同一个 intake.Service
+// 实例承载；测试这里只关心 Service.Create 在 Incident/Change 分流时是否正确调用
+// intake.ApplicationService.Create、传入的 identity/command 是否正确、以及调用之后
+// ServiceRequest 表是否真的没有落地行，不需要拉起完整的 Intake/Incident/Change 域。
+type recordingIntake struct {
+	calls    int
+	identity intake.Identity
+	command  intake.CreateWorkItemCommand
+	result   *intake.CreateWorkItemResult
+	err      error
 }
 
-func (f *fakeIncidentCreator) CreateIncident(ctx context.Context, tenantID, requesterID int, title, description string, catalogID int) (int, error) {
-	f.called = true
-	f.gotTenant = tenantID
-	f.gotCatalog = catalogID
-	f.gotTitle = title
-	return f.incidentID, nil
+func (f *recordingIntake) Create(_ context.Context, identity intake.Identity, command intake.CreateWorkItemCommand) (*intake.CreateWorkItemResult, error) {
+	f.calls++
+	f.identity = identity
+	f.command = command
+	return f.result, f.err
 }
 
-// TestService_Create_IncidentCatalog_NoServiceRequestRowCreated 覆盖场景 4：itsm_type=Incident
-// 的服务目录项在 Service.Create 里直接分流给 IncidentCreator（service.go:85-87
-// isIncidentCatalog + createIncidentFromCatalog），跳过 ServiceRequest/Ticket 的正常委托路径。
-// 按任务包要求，这里只断言"没有产生 ServiceRequest 行"这一半——Incident 侧的完整行为
-// （事件本身的字段/状态是否正确）由 Incident 任务包覆盖。
-func TestService_Create_IncidentCatalog_NoServiceRequestRowCreated(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", "file:sr_incident_diversion?mode=memory&cache=shared&_fk=1")
+// TestService_Create_IncidentCatalog_RoutesThroughIntakeNoServiceRequestRow 覆盖场景 4：
+// target_class=incident 的服务目录项在 Service.Create 里直接分流给 Unified Intake
+// ApplicationService（service.go isIncidentCatalog + createFromCatalogViaIntake），跳过
+// ServiceRequest/Ticket 的正常委托路径。按任务包要求，这里只断言"没有产生 ServiceRequest
+// 行"这一半——Incident 侧的完整行为（事件本身的字段/状态是否正确）由 Incident 任务包覆盖。
+func TestService_Create_IncidentCatalog_RoutesThroughIntakeNoServiceRequestRow(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sr_incident_intake_diversion?mode=memory&cache=shared&_fk=1")
 	defer client.Close()
 	ctx := context.Background()
 
-	tenant, err := client.Tenant.Create().SetName("t").SetCode("sr-incident-diversion").SetDomain("d.test").SetStatus("active").Save(ctx)
+	tenant, err := client.Tenant.Create().SetName("t").SetCode("sr-incident-intake").SetDomain("d.test").SetStatus("active").Save(ctx)
 	require.NoError(t, err)
 	requester, err := client.User.Create().
 		SetUsername("incident-requester").SetEmail("incident-requester@test.com").SetName("Requester").
@@ -377,41 +379,118 @@ func TestService_Create_IncidentCatalog_NoServiceRequestRowCreated(t *testing.T)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
 	catalog, err := scService.Create(ctx, "系统故障上报", "运维", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
 	require.NoError(t, err)
-	// Service.Create 没有暴露设置 itsm_type 的参数（默认 Request），直接用 ent 改成 Incident，
-	// 模拟目录项被配置为"事件类"目录。同时手动设置 target_class——路由判断（entity.go
-	// isIncidentCatalog）自 target_class 收敛改造后读的是 target_class 不是 itsm_type，
-	// 这里手动补上等价于该行已经跑过 cmd/backfill_servicecatalog_target_class 回填。
 	_, err = client.ServiceCatalog.UpdateOneID(catalog.ID).
-		SetItsmType("Incident").
-		SetTargetClass(service_catalog.TargetClassIncident).
-		Save(ctx)
+		SetItsmType("Incident").SetTargetClass(service_catalog.TargetClassIncident).Save(ctx)
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
 	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	fakeIncident := &fakeIncidentCreator{incidentID: 4242}
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, fakeIncident)
+	recorder := &recordingIntake{result: &intake.CreateWorkItemResult{
+		ProfessionalReference: intake.ProfessionalReference{Type: "incident", ID: 4242},
+	}}
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, recorder)
 
 	result, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		FormData: map[string]interface{}{"title": "生产环境服务器宕机", "reason": "紧急"},
-	})
+	}, "idem-incident-1")
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.True(t, fakeIncident.called, "Incident 类型目录项必须委托给 IncidentCreator")
-	assert.Equal(t, tenant.ID, fakeIncident.gotTenant)
-	assert.Equal(t, catalog.ID, fakeIncident.gotCatalog)
-	assert.Equal(t, "生产环境服务器宕机", fakeIncident.gotTitle)
-	assert.Equal(t, 4242, result.ID, "返回的 stub ServiceRequest 借用 ID 字段传递 incidentID（createIncidentFromCatalog 的注释）")
+	assert.Equal(t, 1, recorder.calls)
+	assert.Equal(t, intake.IntakeKindCatalogItem, recorder.command.IntakeKind)
+	require.NotNil(t, recorder.command.CatalogItemID)
+	assert.Equal(t, catalog.ID, *recorder.command.CatalogItemID)
+	assert.Equal(t, "idem-incident-1", recorder.command.IdempotencyKey)
+	assert.Equal(t, requester.ID, recorder.identity.ActorID)
+	assert.Equal(t, requester.ID, recorder.identity.RequesterID)
+	assert.Equal(t, "生产环境服务器宕机", recorder.command.Title)
+	assert.Equal(t, 4242, result.ID, "stub ServiceRequest borrows ID field to carry the professional reference ID, same contract createIncidentFromCatalog used")
 
 	_, total, err := srRepo.List(ctx, tenant.ID, ListFilters{Page: 1, Size: 10})
 	require.NoError(t, err)
-	assert.Equal(t, 0, total, "itsm_type=Incident 分流不应该产生任何 ServiceRequest 行")
+	assert.Equal(t, 0, total, "Incident diversion must not create a ServiceRequest row")
+}
 
-	ticketCount, err := client.Ticket.Query().Count(ctx)
+// TestService_Create_ChangeCatalog_RoutesThroughIntakeCreatesRealChange 覆盖 target_class=
+// change_request 的服务目录项：Service.Create 同样分流给 Unified Intake ApplicationService，
+// 不再落地成一个 type="change" 的 ServiceRequest 扩展行（该行为在本任务之前是一个已知缺陷，
+// 见 task-13-brief.md）。
+func TestService_Create_ChangeCatalog_RoutesThroughIntakeCreatesRealChange(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sr_change_intake_diversion?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().SetName("t").SetCode("sr-change-intake").SetDomain("d.test").SetStatus("active").Save(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, 0, ticketCount, "Incident 分流跳过 SR→Ticket 委托路径，不应该创建 Ticket")
+	requester, err := client.User.Create().
+		SetUsername("change-requester").SetEmail("change-requester@test.com").SetName("Requester").
+		SetPasswordHash("hash").SetRole("end_user").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	scRepo := service_catalog.NewEntRepository(client)
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	catalog, err := scService.Create(ctx, "变更申请", "运维", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	require.NoError(t, err)
+	_, err = client.ServiceCatalog.UpdateOneID(catalog.ID).
+		SetTargetClass(service_catalog.TargetClassChangeRequest).Save(ctx)
+	require.NoError(t, err)
+
+	srRepo := NewEntRepository(client)
+	cmdbRepo := cmdb.NewEntRepository(client)
+	logger := zaptest.NewLogger(t).Sugar()
+	ticketSvc := service.NewTicketServiceForTest(client, logger)
+	recorder := &recordingIntake{result: &intake.CreateWorkItemResult{
+		ProfessionalReference: intake.ProfessionalReference{Type: "change", ID: 55},
+	}}
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, recorder)
+
+	result, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+		FormData: map[string]interface{}{"title": "升级路由器固件", "reason": "计划维护"},
+	}, "idem-change-1")
+	require.NoError(t, err)
+	assert.Equal(t, intake.IntakeKindCatalogItem, recorder.command.IntakeKind)
+	assert.Equal(t, 55, result.ID)
+
+	_, total, err := srRepo.List(ctx, tenant.ID, ListFilters{Page: 1, Size: 10})
+	require.NoError(t, err)
+	assert.Equal(t, 0, total, "Change diversion must not create a ServiceRequest row")
+}
+
+// TestService_Create_RequiresIdempotencyKeyForIncidentAndChange 覆盖 service.go Create 里
+// Incident/Change 分流分支新增的 Idempotency-Key 前置校验：Intake 服务本身不应该在没有幂等键
+// 的情况下被调用——recorder.calls 必须保持 0。
+func TestService_Create_RequiresIdempotencyKeyForIncidentAndChange(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sr_intake_diversion_missing_key?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().SetName("t").SetCode("sr-missing-key").SetDomain("d.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	requester, err := client.User.Create().
+		SetUsername("requester").SetEmail("requester@test.com").SetName("Requester").
+		SetPasswordHash("hash").SetRole("end_user").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	scRepo := service_catalog.NewEntRepository(client)
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	catalog, err := scService.Create(ctx, "系统故障上报", "运维", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	require.NoError(t, err)
+	_, err = client.ServiceCatalog.UpdateOneID(catalog.ID).SetTargetClass(service_catalog.TargetClassIncident).Save(ctx)
+	require.NoError(t, err)
+
+	srRepo := NewEntRepository(client)
+	cmdbRepo := cmdb.NewEntRepository(client)
+	logger := zaptest.NewLogger(t).Sugar()
+	ticketSvc := service.NewTicketServiceForTest(client, logger)
+	recorder := &recordingIntake{}
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, recorder)
+
+	_, err = svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+		FormData: map[string]interface{}{"title": "t"},
+	}, "")
+	require.Error(t, err)
+	assert.Zero(t, recorder.calls, "Intake must never be called without an idempotency key")
 }
 
 // TestService_Update_ForbiddenForNonOwnerWithoutPermission 和
@@ -450,7 +529,7 @@ func TestService_Update_ForbiddenForNonOwnerWithoutPermission(t *testing.T) {
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
 		FormData:           map[string]interface{}{"title": "申请一台云主机-权限", "reason": "权限回归测试"},
-	})
+	}, "")
 	require.NoError(t, err)
 
 	// otherUser 既不是申请人，也没有配置 service_request:write 权限（一个干净的
@@ -500,7 +579,7 @@ func TestService_Update_AllowedForNonOwnerWithSuperAdminRole(t *testing.T) {
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
 		FormData:           map[string]interface{}{"title": "申请一台云主机-管理员", "reason": "权限回归测试-管理员"},
-	})
+	}, "")
 	require.NoError(t, err)
 
 	updated, err := svc.Update(ctx, created.ID, tenant.ID, admin.ID, "super_admin", &ServiceRequest{CostCenter: "CC-ADMIN-EDIT"})
@@ -551,7 +630,7 @@ func TestService_CrossTenantIsolation_GetUpdateDelete(t *testing.T) {
 			"title":  "申请一台云主机-跨租户隔离基线",
 			"reason": "跨租户隔离回归测试",
 		},
-	})
+	}, "")
 	require.NoError(t, err)
 
 	// 同租户能正常读到——先证明这不是配置错误导致的假阳性。

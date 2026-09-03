@@ -178,7 +178,7 @@ func TestSSLVPNRequest_CreateRollsBackWorkItemAndDoesNotStartBPMNWhenExtensionPe
 	ticketSvc.SetProcessTriggerService(itsmservice.NewProcessTriggerService(fx.client, fx.engine))
 	svc := NewService(NewEntRepository(fx.client), scRepo, cmdb.NewEntRepository(fx.client), fx.client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
 
-	_, err = svc.Create(fx.ctx, fx.tenant.ID, fx.requester.ID, catalog.ID, &ServiceRequest{ComplianceAck: true, FormData: map[string]interface{}{"title": "SSLVPN extension failure", "reason": "verify atomic creation"}})
+	_, err = svc.Create(fx.ctx, fx.tenant.ID, fx.requester.ID, catalog.ID, &ServiceRequest{ComplianceAck: true, FormData: map[string]interface{}{"title": "SSLVPN extension failure", "reason": "verify atomic creation"}}, "")
 	require.ErrorContains(t, err, "Failed to create service request")
 
 	classifiedCount, err := fx.client.Ticket.Query().Where(ticket.TenantIDEQ(fx.tenant.ID), ticket.RecordClassEQ("service_request_item")).Count(fx.ctx)
@@ -270,7 +270,7 @@ func createSSLVPNServiceRequestForDefinition(t *testing.T, fx *sslvpnDelegationF
 	ticketSvc := itsmservice.NewTicketServiceForTest(fx.client, logger)
 	ticketSvc.SetProcessTriggerService(itsmservice.NewProcessTriggerService(fx.client, fx.engine))
 	svc := NewService(NewEntRepository(fx.client), scRepo, cmdb.NewEntRepository(fx.client), fx.client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
-	created, err := svc.Create(fx.ctx, fx.tenant.ID, fx.requester.ID, catalog.ID, &ServiceRequest{ComplianceAck: true, FormData: map[string]interface{}{"title": "SSLVPN access request", "reason": "VPN profile details must stay in ITSM"}})
+	created, err := svc.Create(fx.ctx, fx.tenant.ID, fx.requester.ID, catalog.ID, &ServiceRequest{ComplianceAck: true, FormData: map[string]interface{}{"title": "SSLVPN access request", "reason": "VPN profile details must stay in ITSM"}}, "")
 	require.NoError(t, err)
 	return created
 }

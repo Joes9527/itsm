@@ -9,14 +9,34 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/handlers/intake"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
-type Handler struct {
-	service *Service
+type incidentReader interface {
+	GetIncident(ctx context.Context, id, tenantID int) (*dto.IncidentResponse, error)
 }
+
+type changeReader interface {
+	GetChange(ctx context.Context, id, tenantID int) (*dto.ChangeResponse, error)
+}
+
+type Handler struct {
+	service        *Service
+	incidentReader incidentReader
+	changeReader   changeReader
+}
+
+// SetIncidentReader wires the read-side dependency Handler.Create uses to
+// build a real dto.IncidentResponse for a Catalog-derived Incident diversion
+// (Step 5), following the same pattern as Task 11's incidentCreateReader.
+func (h *Handler) SetIncidentReader(r incidentReader) { h.incidentReader = r }
+
+// SetChangeReader wires the read-side dependency Handler.Create uses to
+// build a real dto.ChangeResponse for a Catalog-derived Change diversion.
+func (h *Handler) SetChangeReader(r changeReader) { h.changeReader = r }
 
 func failServiceRequest(c *gin.Context, err error) {
 	if appErr, ok := common.AsAppError(err); ok {
@@ -124,6 +144,7 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 	normalizeCreateServiceRequest(&req)
+	idempotencyKey := strings.TrimSpace(c.GetHeader("Idempotency-Key"))
 	if req.CatalogID == 0 {
 		common.Fail(c, 1001, "catalogId is required")
 		return
@@ -161,9 +182,42 @@ func (h *Handler) Create(c *gin.Context) {
 	domainReq.FormData["title"] = req.Title
 	domainReq.FormData["reason"] = req.Reason
 
-	created, err := h.service.Create(c.Request.Context(), tenantID, userID, req.CatalogID, domainReq)
+	created, err := h.service.Create(c.Request.Context(), tenantID, userID, req.CatalogID, domainReq, idempotencyKey)
 	if err != nil {
 		failServiceRequest(c, err)
+		return
+	}
+
+	// Incident/Change diversions (Step 4/5) return a non-persisted stub whose
+	// ID is a professional extension ID, not a service_requests.id -- the
+	// generic Get(created.ID, ...) below would not find a matching row (or,
+	// remotely, could match an unrelated one). Give those diversions their
+	// own real response path instead of letting the generic path silently
+	// degrade to the near-empty stub via toDTO.
+	switch created.IntakeRecordClass {
+	case intake.RecordClassIncident:
+		if h.incidentReader == nil {
+			common.Fail(c, common.InternalErrorCode, "incident reader not configured")
+			return
+		}
+		resp, err := h.incidentReader.GetIncident(c.Request.Context(), created.ID, tenantID)
+		if err != nil {
+			common.Fail(c, common.InternalErrorCode, "创建成功但读取事件详情失败")
+			return
+		}
+		common.Success(c, resp)
+		return
+	case intake.RecordClassChangeRequest:
+		if h.changeReader == nil {
+			common.Fail(c, common.InternalErrorCode, "change reader not configured")
+			return
+		}
+		resp, err := h.changeReader.GetChange(c.Request.Context(), created.ID, tenantID)
+		if err != nil {
+			common.Fail(c, common.InternalErrorCode, "创建成功但读取变更详情失败")
+			return
+		}
+		common.Success(c, resp)
 		return
 	}
 
