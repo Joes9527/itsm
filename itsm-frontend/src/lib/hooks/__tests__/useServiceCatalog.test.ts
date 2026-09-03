@@ -176,8 +176,17 @@ describe('useServiceCatalog hooks', () => {
     it('creates service request', async () => {
       mockApi.createServiceRequest.mockResolvedValue({ id: 1 } as any);
       const { result } = renderHook(() => useCreateServiceRequestMutation(), { wrapper: createWrapper() });
-      act(() => { result.current.mutate({ serviceId: 's1' } as any); });
+      act(() => {
+        result.current.mutate({
+          request: { serviceId: 's1' },
+          idempotencyKey: 'effb92a5-d9c5-4c1d-90be-fd681879680f',
+        } as any);
+      });
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(mockApi.createServiceRequest).toHaveBeenCalledWith(
+        { serviceId: 's1' },
+        'effb92a5-d9c5-4c1d-90be-fd681879680f'
+      );
       expect(message.success).toHaveBeenCalled();
     });
   });

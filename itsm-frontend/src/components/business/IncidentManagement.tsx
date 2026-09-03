@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { IncidentAPI, type Incident, type ListIncidentsRequest } from '@/lib/api/incident-api';
 import {
   Card,
@@ -36,6 +36,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/zh-cn';
 import { httpClient } from '@/lib/api/http-client';
 import { UserSelect } from '@/components/common/UserSelect';
+import { generateIdempotencyKey } from '@/lib/utils/idempotencyKey';
 
 dayjs.extend(relativeTime);
 dayjs.locale('zh-cn');
@@ -1046,9 +1047,11 @@ const IncidentFormModal: React.FC<{
 }> = ({ visible, incident, onClose, onSuccess }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const createIdempotencyKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (visible && incident) {
+      createIdempotencyKeyRef.current = null;
       form.setFieldsValue({
         title: incident.title,
         description: incident.description,
@@ -1058,18 +1061,26 @@ const IncidentFormModal: React.FC<{
         subcategory: incident.subcategory,
       });
     } else if (visible) {
+      if (!createIdempotencyKeyRef.current) {
+        createIdempotencyKeyRef.current = generateIdempotencyKey();
+      }
       form.resetFields();
+    } else {
+      createIdempotencyKeyRef.current = null;
     }
   }, [visible, incident, form]);
 
   const handleSubmit = async (values: any) => {
     setLoading(true);
     try {
-      const url = incident ? `/api/v1/incidents/${incident.id}` : '/api/v1/incidents';
       if (incident) {
         await IncidentAPI.updateIncident(incident.id, values);
       } else {
-        await IncidentAPI.createIncident(values);
+        const idempotencyKey =
+          createIdempotencyKeyRef.current ??
+          (createIdempotencyKeyRef.current = generateIdempotencyKey());
+        await IncidentAPI.createIncident(values, idempotencyKey);
+        createIdempotencyKeyRef.current = null;
       }
 
       message.success(incident ? '更新事件成功' : '创建事件成功');

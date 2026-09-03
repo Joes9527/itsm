@@ -330,7 +330,8 @@ export class ServiceCatalogApi {
    * /tickets/:ticketId，服务请求已经不再有独立详情页。
    */
   static async createServiceRequest(
-    request: CreateServiceRequestRequest
+    request: CreateServiceRequestRequest,
+    idempotencyKey: string
   ): Promise<{ ticketId: number } & Record<string, any>> {
     // 前端 CreateServiceRequestRequest: { serviceId, formData, ... }
     // 后端 CreateServiceRequestRequest: { catalog_id, title, reason, form_data, ... , compliance_ack }
@@ -370,7 +371,8 @@ export class ServiceCatalogApi {
 
     return httpClient.post<{ ticketId: number } & Record<string, any>>(
       '/api/v1/service-requests',
-      payload
+      payload,
+      { headers: { 'Idempotency-Key': idempotencyKey } }
     );
   }
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button, Card, Form, Input, Select, Upload, Space, Row, Col, message, Tabs, Typography, Divider, Tag, Spin } from 'antd';
 import { ArrowLeft, Search, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -10,6 +10,7 @@ import { CMDBApi } from '@/lib/api/cmdb-api';
 import type { User } from '@/lib/api/user-api';
 import { UserApi } from '@/lib/api/user-api';
 import { useErrorHandler } from '@/lib/hooks/useErrorHandler';
+import { generateIdempotencyKey } from '@/lib/utils/idempotencyKey';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -48,6 +49,7 @@ export default function CreateIncidentPage() {
   const [ciSearching, setCISearching] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  const idempotencyKeyRef = useRef<string>(generateIdempotencyKey());
   const { handleError } = useErrorHandler();
 
   // 加载用户列表
@@ -121,7 +123,7 @@ export default function CreateIncidentPage() {
         urgency: values.urgency,
         assigneeId: values.assignedTo,
         configurationItemIds: selectedCIs.map(ci => ci.id),
-      });
+      }, idempotencyKeyRef.current);
       message.success('事件创建成功');
       router.push('/incidents');
     } catch (error) {

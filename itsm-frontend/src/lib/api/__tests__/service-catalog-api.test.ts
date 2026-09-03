@@ -138,9 +138,17 @@ describe('ServiceCatalogApi', () => {
 
   describe('createServiceRequest', () => {
     it('should create service request', async () => {
+      const idempotencyKey = '2230fc4c-406a-42a4-8378-25dcf94adf8d';
       mockPost.mockResolvedValue({ id: 1 });
-      await ServiceCatalogApi.createServiceRequest({ serviceId: '5', formData: { reason: 'Need access' } } as any);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/service-requests', expect.objectContaining({ catalogId: 5 }));
+      await ServiceCatalogApi.createServiceRequest(
+        { serviceId: '5', formData: { reason: 'Need access' } } as any,
+        idempotencyKey
+      );
+      expect(mockPost).toHaveBeenCalledWith(
+        '/api/v1/service-requests',
+        expect.objectContaining({ catalogId: 5 }),
+        { headers: { 'Idempotency-Key': idempotencyKey } }
+      );
     });
 
     // 回归测试：contactName/contactEmail/quantity/expectedAt 必须原样透传到后端 payload
@@ -148,15 +156,19 @@ describe('ServiceCatalogApi', () => {
     // 在这个代码库反复出现过。这 4 个字段直接映射到新增列，不再经过 formData JSON
     // 兜底路径，所以从 request 顶层读取，而不是 request.formData。
     it('passes contactName/contactEmail/quantity/expectedAt through as top-level payload keys', async () => {
+      const idempotencyKey = '66a9ee51-6975-48ab-a477-427cd41195ce';
       mockPost.mockResolvedValue({ ticketId: 1 });
-      await ServiceCatalogApi.createServiceRequest({
-        serviceId: '5',
-        formData: { reason: 'Need a VM' },
-        contactName: 'Alice',
-        contactEmail: 'alice@example.com',
-        quantity: 3,
-        expectedAt: '2026-09-01T00:00:00.000Z',
-      } as any);
+      await ServiceCatalogApi.createServiceRequest(
+        {
+          serviceId: '5',
+          formData: { reason: 'Need a VM' },
+          contactName: 'Alice',
+          contactEmail: 'alice@example.com',
+          quantity: 3,
+          expectedAt: '2026-09-01T00:00:00.000Z',
+        } as any,
+        idempotencyKey
+      );
       expect(mockPost).toHaveBeenCalledWith(
         '/api/v1/service-requests',
         expect.objectContaining({
@@ -164,21 +176,27 @@ describe('ServiceCatalogApi', () => {
           contactEmail: 'alice@example.com',
           quantity: 3,
           expectedAt: '2026-09-01T00:00:00.000Z',
-        })
+        }),
+        { headers: { 'Idempotency-Key': idempotencyKey } }
       );
     });
 
     // 合规确认绝不能静默默认为已勾选：调用方不传 complianceAck 时，必须落到 false，
     // 而不是曾经的 `?? true` 兜底（那会让忘记传参的调用方悄悄"代签"合规确认）。
     it('defaults complianceAck to false when the caller does not pass it, never true', async () => {
+      const idempotencyKey = 'df8f034a-0722-41aa-a65f-d0d0fcdca90a';
       mockPost.mockResolvedValue({ ticketId: 1 });
-      await ServiceCatalogApi.createServiceRequest({
-        serviceId: '5',
-        formData: { reason: 'Need access' },
-      } as any);
+      await ServiceCatalogApi.createServiceRequest(
+        {
+          serviceId: '5',
+          formData: { reason: 'Need access' },
+        } as any,
+        idempotencyKey
+      );
       expect(mockPost).toHaveBeenCalledWith(
         '/api/v1/service-requests',
-        expect.objectContaining({ complianceAck: false })
+        expect.objectContaining({ complianceAck: false }),
+        { headers: { 'Idempotency-Key': idempotencyKey } }
       );
     });
   });

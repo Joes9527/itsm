@@ -5,6 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { message } from 'antd';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
+import type { CreateServiceRequestRequest } from '@/types/service-catalog';
 import type { ServiceQuery, ServiceRequestQuery } from '@/types/service-catalog';
 
 export const SERVICE_CATALOG_KEYS = {
@@ -164,8 +165,15 @@ export function usePublishServiceMutation() {
 
 export function useCreateServiceRequestMutation() {
   const queryClient = useQueryClient();
+
+  type CreateServiceRequestMutationInput = {
+    request: CreateServiceRequestRequest;
+    idempotencyKey: string;
+  };
+
   return useMutation({
-    mutationFn: ServiceCatalogApi.createServiceRequest,
+    mutationFn: ({ request, idempotencyKey }: CreateServiceRequestMutationInput) =>
+      ServiceCatalogApi.createServiceRequest(request, idempotencyKey),
     onSuccess: () => {
       message.success('服务请求已提交');
       queryClient.invalidateQueries({

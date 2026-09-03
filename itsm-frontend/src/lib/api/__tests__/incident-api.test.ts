@@ -51,9 +51,12 @@ describe('IncidentAPI', () => {
   describe('createIncident', () => {
     it('should create an incident', async () => {
       const data = { title: 'New Incident', priority: 'high', source: 'monitoring', type: 'alert' };
+      const idempotencyKey = '9f10f87b-a1cf-4896-bd4c-8fbe8da4d3fd';
       mockPost.mockResolvedValue({ id: 2, ...data });
-      const result = await IncidentAPI.createIncident(data);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents', data);
+      const result = await IncidentAPI.createIncident(data as any, idempotencyKey);
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents', data, {
+        headers: { 'Idempotency-Key': idempotencyKey },
+      });
       expect(result.title).toBe('New Incident');
     });
   });

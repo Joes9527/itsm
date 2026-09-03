@@ -6,7 +6,7 @@
  * B10 修复：表单加上 compliance_ack / expire_at / delivery_time
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Card,
@@ -31,6 +31,7 @@ import dayjs from 'dayjs';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
 import { httpClient } from '@/lib/api/http-client';
 import { useAuthStore } from '@/lib/store/auth-store';
+import { generateIdempotencyKey } from '@/lib/utils/idempotencyKey';
 
 const { Title, Text, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -44,6 +45,7 @@ export default function ServiceCatalogRequestPage() {
   const [catalog, setCatalog] = useState<any>(null);
   const [fetching, setFetching] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const idempotencyKeyRef = useRef<string>(generateIdempotencyKey());
   const user = useAuthStore(state => state.user);
 
   useEffect(() => {
@@ -120,7 +122,10 @@ export default function ServiceCatalogRequestPage() {
         },
       };
 
-      const created = await ServiceCatalogApi.createServiceRequest(payload);
+      const created = await ServiceCatalogApi.createServiceRequest(
+        payload,
+        idempotencyKeyRef.current
+      );
       message.success('申请已提交，等待审批');
       router.push(`/tickets/${created.ticketId}`);
     } catch (e: any) {

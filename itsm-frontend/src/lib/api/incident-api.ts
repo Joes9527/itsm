@@ -392,8 +392,13 @@ export class IncidentAPI {
   }
 
   // 创建事件
-  static async createIncident(data: CreateIncidentRequest): Promise<Incident> {
-    const response = await httpClient.post<Incident>(API_URLS.INCIDENTS(), data);
+  static async createIncident(
+    data: CreateIncidentRequest,
+    idempotencyKey: string
+  ): Promise<Incident> {
+    const response = await httpClient.post<Incident>(API_URLS.INCIDENTS(), data, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    });
     return response;
   }
 
