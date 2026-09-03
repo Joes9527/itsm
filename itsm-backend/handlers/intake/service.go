@@ -58,6 +58,16 @@ type outboxWriter interface {
 	Enqueue(context.Context, *ent.Tx, itsmservice.NewOutboxEvent) (*ent.OutboxEvent, error)
 }
 
+type postCommitCreator interface {
+	AfterCommit(context.Context, PostCommitInput)
+}
+
+type PostCommitInput struct {
+	Identity Identity
+	Resolved ResolvedIntake
+	Result   CreateWorkItemResult
+}
+
 // Service owns the only transactional orchestration path for WorkItem intake.
 // Its collaborators may read configuration or allocate numbers, but all
 // authoritative writes use the transaction opened here.
@@ -175,6 +185,9 @@ func (s *Service) createAttempt(ctx context.Context, identity Identity, command 
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, false, NewInfrastructureUnavailable("could not commit intake transaction", err)
+	}
+	if hook, ok := creator.(postCommitCreator); ok {
+		hook.AfterCommit(ctx, PostCommitInput{Identity: identity, Resolved: *resolved, Result: *result})
 	}
 	return result, false, nil
 }

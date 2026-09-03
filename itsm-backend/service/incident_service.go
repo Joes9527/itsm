@@ -73,6 +73,18 @@ func (s *IncidentService) SetSequenceService(seq *SequenceService) {
 	s.sequenceService = seq
 }
 
+// HandleCreatedIncident runs the single authoritative post-commit incident rule path.
+func (s *IncidentService) HandleCreatedIncident(ctx context.Context, incidentID, tenantID int) {
+	if s == nil || s.ruleEngine == nil {
+		return
+	}
+	ruleCtx, cancelRules := context.WithTimeout(ctx, 30*time.Second)
+	defer cancelRules()
+	if err := s.ruleEngine.ExecuteRulesForIncident(ruleCtx, incidentID, tenantID); err != nil {
+		s.logger.Errorw("Incident rule execution completed with failures", "error", err, "incident_id", incidentID)
+	}
+}
+
 // ResolveIncidentPriority is the single authority for Incident priority.
 // Explicit caller input wins; otherwise the tenant matrix determines priority.
 func ResolveIncidentPriority(ctx context.Context, matrixService *PriorityMatrixService, tenantID int, explicitPriority, impact, urgency string) string {
@@ -254,11 +266,7 @@ func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateInc
 
 	// Post-commit side effects run within a bounded, deterministic boundary.
 	// CreateIncident never returns while repository work still owns this service/client.
-	ruleCtx, cancelRules := context.WithTimeout(ctx, 30*time.Second)
-	if err := s.ruleEngine.ExecuteRulesForIncident(ruleCtx, incidentEntity.ID, tenantID); err != nil {
-		s.logger.Errorw("Incident rule execution completed with failures", "error", err, "incident_id", incidentEntity.ID)
-	}
-	cancelRules()
+	s.HandleCreatedIncident(ctx, incidentEntity.ID, tenantID)
 
 	if s.processTriggerService != nil {
 		workflowCtx, cancelWorkflow := context.WithTimeout(ctx, 30*time.Second)

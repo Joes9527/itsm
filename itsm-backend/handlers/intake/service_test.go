@@ -8,18 +8,22 @@ import (
 	"testing"
 	"time"
 
-	"itsm-backend/ent/change"
 	"itsm-backend/ent"
+	"itsm-backend/ent/change"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/fieldvalue"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/incidentevent"
+	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/intakerequest"
 	"itsm-backend/ent/intakeresolutionsnapshot"
 	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/repository/workitemnumber"
+	itsmservice "itsm-backend/service"
 
+	"go.uber.org/zap/zaptest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -52,6 +56,24 @@ func newServiceUnderTest(t *testing.T, fixture *resolverFixture) *Service {
 	t.Helper()
 	registry := NewCreatorRegistry()
 	require.NoError(t, registry.Register(NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-INTAKE-000001"}, nil, nil, nil)))
+	require.NoError(t, registry.Register(NewChangeCreator()))
+	require.NoError(t, registry.Register(NewServiceRequestItemCreator()))
+	return NewService(
+		fixture.client,
+		fixture.resolver(nil),
+		registry,
+		NewWorkItemCreator(&sequentialWorkItemNumbers{}),
+	)
+}
+
+func newServiceWithIncidentRuleAutomation(t *testing.T, fixture *resolverFixture) *Service {
+	t.Helper()
+	registry := NewCreatorRegistry()
+	incidentService := itsmservice.NewIncidentService(fixture.client, zaptest.NewLogger(t).Sugar(), workitemnumber.NewPostgreSQLAllocator())
+	require.NoError(t, registry.Register(
+		NewIncidentCreator(staticIncidentNumberGenerator{number: "INC-INTAKE-000001"}, nil, nil, nil).
+			WithPostCommit(incidentService),
+	))
 	require.NoError(t, registry.Register(NewChangeCreator()))
 	require.NoError(t, registry.Register(NewServiceRequestItemCreator()))
 	return NewService(
@@ -138,6 +160,47 @@ func TestServiceCreateChangeRequestCommitsAndReplaysSameProfessionalReference(t 
 	} {
 		require.Equal(t, 1, count, name)
 	}
+}
+
+func TestServiceCreateIncidentExecutesRulesAfterCommitAndDoesNotReplayThem(t *testing.T) {
+	fixture := newResolverFixture(t)
+	ctx := context.Background()
+	service := newServiceWithIncidentRuleAutomation(t, fixture)
+
+	_, err := fixture.client.IncidentRule.Create().
+		SetName("Collect intake creation metric").
+		SetRuleType("metric").
+		SetConditions(map[string]interface{}{"severity": []string{"high"}}).
+		SetActions([]map[string]interface{}{{
+			"type": "collect_metric", "metric_type": "automation", "metric_name": "intake_rule_applied",
+			"metric_value": 1.0, "unit": "count",
+		}}).
+		SetIsActive(true).
+		SetTenantID(fixture.tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	command := validIncidentCommand("intake-rule-replay", nil)
+	created, err := service.Create(ctx, fixture.identity(), command)
+	require.NoError(t, err)
+	require.False(t, created.Replayed)
+	require.Equal(t, RecordClassIncident, created.RecordClass)
+
+	executionCount, err := fixture.client.IncidentRuleExecution.Query().
+		Where(incidentruleexecution.IncidentIDEQ(created.ProfessionalReference.ID)).
+		Count(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, executionCount, "incident rules must execute once after the intake transaction commits")
+
+	replayed, err := service.Create(ctx, fixture.identity(), command)
+	require.NoError(t, err)
+	require.True(t, replayed.Replayed)
+
+	executionCount, err = fixture.client.IncidentRuleExecution.Query().
+		Where(incidentruleexecution.IncidentIDEQ(created.ProfessionalReference.ID)).
+		Count(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, executionCount, "replaying the same intake request must not execute rules twice")
 }
 
 func TestWriteFieldValuesUsesTicketEntityTypeForServiceRequest(t *testing.T) {

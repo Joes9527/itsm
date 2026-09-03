@@ -51,11 +51,21 @@ type IncidentCreator struct {
 	categories CategoryResolver
 	matrix     *itsmservice.PriorityMatrixService
 	assignees  AssigneeValidator
+	postCommit IncidentPostCommitHandler
 	now        func() time.Time
+}
+
+type IncidentPostCommitHandler interface {
+	HandleCreatedIncident(context.Context, int, int)
 }
 
 func NewIncidentCreator(numbers IncidentNumberGenerator, categories CategoryResolver, matrix *itsmservice.PriorityMatrixService, assignees AssigneeValidator) *IncidentCreator {
 	return &IncidentCreator{numbers: numbers, categories: categories, matrix: matrix, assignees: assignees, now: time.Now}
+}
+
+func (c *IncidentCreator) WithPostCommit(handler IncidentPostCommitHandler) *IncidentCreator {
+	c.postCommit = handler
+	return c
 }
 
 func (c *IncidentCreator) RecordClass() string { return RecordClassIncident }
@@ -175,6 +185,16 @@ func (c *IncidentCreator) CreateExtension(ctx context.Context, tx *ent.Tx, workI
 		return nil, NewInfrastructureUnavailable("could not create incident event", err)
 	}
 	return &ProfessionalReference{Type: "incident", ID: created.ID}, nil
+}
+
+func (c *IncidentCreator) AfterCommit(ctx context.Context, input PostCommitInput) {
+	if c == nil || c.postCommit == nil {
+		return
+	}
+	if input.Result.RecordClass != RecordClassIncident || input.Result.ProfessionalReference.Type != "incident" || input.Result.ProfessionalReference.ID <= 0 {
+		return
+	}
+	c.postCommit.HandleCreatedIncident(ctx, input.Result.ProfessionalReference.ID, input.Identity.TenantID)
 }
 
 func defaultLevel(value string) string {

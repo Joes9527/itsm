@@ -386,7 +386,7 @@ func NewApplication() *Application {
 		intake.CategoryResolverFunc(service.ResolveIncidentCategory),
 		nil,
 		incidentService,
-	)); err != nil {
+	).WithPostCommit(incidentService)); err != nil {
 		log.Fatalf("Failed to register incident intake creator: %v", err)
 	}
 	incidentIntakeService := intake.NewService(
