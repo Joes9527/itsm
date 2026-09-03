@@ -493,6 +493,98 @@ func TestService_Create_RequiresIdempotencyKeyForIncidentAndChange(t *testing.T)
 	assert.Zero(t, recorder.calls, "Intake must never be called without an idempotency key")
 }
 
+// TestService_Create_IncidentCatalog_RequiredFieldSucceedsWhenSuppliedAndPersists fixes a review
+// finding on createFromCatalogViaIntake: it originally left CreateWorkItemCommand.FormValues nil,
+// so handlers/intake's Resolver.resolveForm (which rejects any Incident/Change catalog item with
+// a required field_definition not present in FormValues) would 400 on *every* submission to a
+// catalog item with even one required custom field, with no way to supply it. This test exercises
+// the REAL intake.Service/Resolver/IncidentCreator stack (not the recordingIntake fake used
+// elsewhere in this file) because the bug only manifests once the real resolver's required-field
+// check actually runs against Command.FormValues -- proves both halves: (1) missing the required
+// field still fails closed, (2) supplying it now succeeds and the value round-trips into
+// field_values (entity_type="ticket"), matching the intent Task 8 already established for
+// service_request_item (TestService_Create_PersistsFieldValues in service_test.go).
+func TestService_Create_IncidentCatalog_RequiredFieldSucceedsWhenSuppliedAndPersists(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sr_incident_intake_required_field?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().SetName("t").SetCode("sr-incident-required").SetDomain("d.test").SetStatus("active").Save(ctx)
+	require.NoError(t, err)
+	requester, err := client.User.Create().
+		SetUsername("incident-required-requester").SetEmail("incident-required@test.com").SetName("Requester").
+		SetPasswordHash("hash").SetRole("end_user").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	// RecordClassIncident requires an active workflow binding, or Resolver.Resolve fails closed
+	// with WorkflowBindingRequired before ever reaching the form-values check this test targets.
+	deployment, err := client.ProcessDeployment.Create().SetDeploymentID("incident-required-flow-1").
+		SetDeploymentName("incident-required-flow").SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	_, err = client.ProcessDefinition.Create().SetKey("incident-required-flow").SetName("incident-required-flow").SetVersion("1").
+		SetBpmnXML([]byte("<definitions/>")).SetIsActive(true).SetIsLatest(true).
+		SetDeploymentID(deployment.ID).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	_, err = client.ProcessBinding.Create().SetBusinessType("ticket").SetBusinessSubType("incident").
+		SetProcessDefinitionKey("incident-required-flow").SetProcessVersion(1).SetPriority(100).SetIsActive(true).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+
+	scRepo := service_catalog.NewEntRepository(client)
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	catalog, err := scService.Create(ctx, "系统故障上报-必填字段", "运维", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	require.NoError(t, err)
+	_, err = client.ServiceCatalog.UpdateOneID(catalog.ID).SetTargetClass(service_catalog.TargetClassIncident).Save(ctx)
+	require.NoError(t, err)
+	_, err = client.FieldDefinition.Create().SetTenantID(tenant.ID).SetEntityType("service_catalog").
+		SetEntityID(catalog.ID).SetName("impact_area").SetLabel("影响范围").
+		SetFieldType("text").SetRequired(true).SetIsActive(true).Save(ctx)
+	require.NoError(t, err)
+
+	// The real Unified Intake ApplicationService stack, wired the same way
+	// internal/bootstrap/app.go wires it in production (minus category/matrix/post-commit
+	// extras this test does not need).
+	logger := zaptest.NewLogger(t).Sugar()
+	allocator := workitemnumber.NewPostgreSQLAllocator()
+	incidentSvc := service.NewIncidentService(client, logger, allocator)
+	registry := intake.NewCreatorRegistry()
+	require.NoError(t, registry.Register(intake.NewIncidentCreator(incidentSvc, nil, nil, incidentSvc)))
+	require.NoError(t, registry.Register(intake.NewChangeCreator()))
+	allowAll := intake.PermissionCheckFunc(func(*ent.Client, intake.Identity, string, string) bool { return true })
+	realIntake := intake.NewService(
+		client,
+		intake.NewResolver(service.NewProcessBindingService(client), allowAll),
+		registry,
+		intake.NewWorkItemCreator(allocator),
+	)
+
+	srRepo := NewEntRepository(client)
+	cmdbRepo := cmdb.NewEntRepository(client)
+	ticketSvc := service.NewTicketServiceForTest(client, logger)
+	svc := NewService(srRepo, scRepo, cmdbRepo, client, allocator, logger, ticketSvc, nil, realIntake)
+
+	// Missing the required field must still fail closed -- proves the fix does not weaken
+	// required-field enforcement while making it reachable.
+	_, err = svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+		FormData: map[string]interface{}{"title": "光纤中断"},
+	}, "idem-required-missing")
+	require.Error(t, err, "Incident catalog item with a required custom field must reject submission when that field is missing")
+
+	// Supplying it must now succeed (this would 400 with DomainValidationFailed before the fix,
+	// every time, with no way to satisfy it) and round-trip into field_values.
+	result, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+		FormData: map[string]interface{}{"title": "光纤中断", "reason": "紧急", "impact_area": "核心机房"},
+	}, "idem-required-present")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Greater(t, result.TicketID, 0, "createFromCatalogViaIntake must carry the real WorkItem ID")
+
+	values, err := service.NewFieldValueService(client).ListValues(ctx, tenant.ID, "ticket", result.TicketID)
+	require.NoError(t, err)
+	require.Len(t, values, 1, "the supplied required field must persist into field_values (entity_type=ticket), matching the service_request_item round-trip Task 8 established")
+	assert.Equal(t, "impact_area", values[0].Name)
+	assert.Equal(t, "核心机房", values[0].Value)
+}
+
 // TestService_Update_ForbiddenForNonOwnerWithoutPermission 和
 // TestService_Update_AllowedForNonOwnerWithPermission 不属于任务包 5 个必测场景，是补充覆盖：
 // canManageServiceRequest（Update/Delete 共用的权限判定）此前完全没有测试命中（0% 覆盖），

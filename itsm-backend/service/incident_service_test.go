@@ -344,7 +344,9 @@ func TestIncidentService_CreateIncident_ServiceCatalogDivertedPath_AlsoCreatesWo
 	testUser, err := createIncidentTestUser(ctx, client, testTenant.ID, "catalog")
 	require.NoError(t, err)
 
-	// 镜像 srIncidentBridge.CreateIncident 传给 IncidentService.CreateIncident 的请求形状。
+	// 直接调用 IncidentService.CreateIncident 本身做独立验证——不代表生产环境现在的实际
+	// 调用路径：生产环境的 Catalog 分流经由 intake.IncidentCreator.CreateExtension 直接
+	// 在事务内构造 ent.Incident 行，不再途经这个函数（见本函数上方的注释）。
 	response, err := service.CreateIncident(ctx, &dto.CreateIncidentRequest{
 		Title:       "服务目录报障：VPN无法连接",
 		Description: "员工反馈无法连接VPN",

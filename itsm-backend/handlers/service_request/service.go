@@ -569,6 +569,10 @@ func (s *Service) createFromCatalogViaIntake(ctx context.Context, tenantID, requ
 	if s.intakeService == nil {
 		return nil, common.NewInternalError("intake service not configured", nil)
 	}
+	formValues, err := s.catalogFormValues(ctx, tenantID, cat.ID, reqData.FormData)
+	if err != nil {
+		return nil, err
+	}
 	identity := intake.Identity{TenantID: tenantID, ActorID: requesterID, RequesterID: requesterID, Role: requesterRole, Channel: "service_catalog"}
 	// ChangeInput is intentionally left nil: reqData.FormData (the generic Catalog
 	// dynamic-field bag) has no confirmed mapping to ChangeInput's
@@ -583,6 +587,7 @@ func (s *Service) createFromCatalogViaIntake(ctx context.Context, tenantID, requ
 		CatalogItemID:  &cat.ID,
 		Title:          title,
 		Description:    description,
+		FormValues:     formValues,
 	}
 	result, err := s.intakeService.Create(ctx, identity, command)
 	if err != nil {
@@ -595,6 +600,55 @@ func (s *Service) createFromCatalogViaIntake(ctx context.Context, tenantID, requ
 		ID: result.ProfessionalReference.ID, TenantID: tenantID, CatalogID: cat.ID, RequesterID: requesterID,
 		TicketID: result.WorkItemID, IntakeRecordClass: result.RecordClass,
 	}, nil
+}
+
+// catalogFormValues extracts the submitted custom-field values from formData
+// (via the same extractServiceRequestFieldValues helper the generic path uses
+// at 2a-2 above) and filters them down to only the keys this catalog item
+// actually defines as field_definitions (entity_type="service_catalog",
+// entity_id=catalogID). This filtering is required, not optional:
+// handlers/intake's Resolver.resolveForm hard-rejects any FormValues key that
+// isn't one of the catalog's defined fields -- unlike RecordClassServiceRequestItem,
+// Incident/Change have no "professional field" allowlist
+// (isServiceRequestProfessionalField) to fall back on, so passing the raw form
+// bag through unfiltered would trade "required fields unreachable" (FormValues
+// always nil, every required field 400s) for "any extra ambient form key
+// always rejects" (e.g. a stray customFieldValues wrapper key). Reuses the
+// same ListDefinitions(..., "service_catalog", catalogID) lookup the generic
+// path's own required-field check (2b above) already performs, rather than
+// inventing a second way to load field definitions.
+//
+// A definitions-lookup failure fails the whole Create (matching 2b's own
+// common.NewInternalError precedent) instead of silently degrading to no
+// FormValues -- degrading silently would either falsely reject every required
+// field (if the omission makes them look absent) or silently drop values the
+// requester actually submitted (if there happen to be no required fields),
+// and both are worse than a clear, retryable internal error.
+func (s *Service) catalogFormValues(ctx context.Context, tenantID, catalogID int, formData map[string]interface{}) (map[string]any, error) {
+	if s.client == nil {
+		return nil, nil
+	}
+	submitted := extractServiceRequestFieldValues(formData)
+	if len(submitted) == 0 {
+		return nil, nil
+	}
+	defs, err := service.NewFieldDefinitionService(s.client).ListDefinitions(ctx, tenantID, "service_catalog", catalogID)
+	if err != nil {
+		return nil, common.NewInternalError("Failed to load service catalog fields", err)
+	}
+	if len(defs) == 0 {
+		return nil, nil
+	}
+	filtered := make(map[string]any, len(defs))
+	for _, def := range defs {
+		if v, ok := submitted[def.Name]; ok {
+			filtered[def.Name] = v
+		}
+	}
+	if len(filtered) == 0 {
+		return nil, nil
+	}
+	return filtered, nil
 }
 
 // mapIntakeErrorToAppError translates an *intake.IntakeError into this
