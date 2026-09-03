@@ -117,7 +117,7 @@ func boundedMetricChannel(value string) string {
 
 func boundedMetricRecordClass(value string) string {
 	switch value {
-	case RecordClassIncident, RecordClassServiceRequestItem:
+	case RecordClassIncident, RecordClassServiceRequestItem, RecordClassChangeRequest:
 		return value
 	default:
 		return metricRecordClassUnknown

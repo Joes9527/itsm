@@ -67,6 +67,13 @@ func TestMetricsBoundUntrustedLabelsAndCountIdentityDenials(t *testing.T) {
 	require.Equal(t, float64(1), counterValue(t, metrics.identityExchangeTotal, "other", "denied"))
 }
 
+func TestBoundedMetricRecordClassRecognizesChangeRequest(t *testing.T) {
+	require.Equal(t, RecordClassIncident, boundedMetricRecordClass(RecordClassIncident))
+	require.Equal(t, RecordClassServiceRequestItem, boundedMetricRecordClass(RecordClassServiceRequestItem))
+	require.Equal(t, RecordClassChangeRequest, boundedMetricRecordClass(RecordClassChangeRequest))
+	require.Equal(t, metricRecordClassUnknown, boundedMetricRecordClass("custom_class"))
+}
+
 // TestIdentityExchangeHandlerRecordsDenialWithoutUnboundedCodeLabel intentionally
 // removed: it exercised NewIdentityExchangeHandler's metrics wiring, which lives
 // in identity_exchange.go/identity_exchange_test.go. Those files were excluded

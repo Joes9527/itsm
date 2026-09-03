@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/ent/change"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/fieldvalue"
@@ -87,6 +88,53 @@ func TestServiceCreateCommitsOneAuthoritativeGraphAndReplays(t *testing.T) {
 		"snapshot":    countRows(t, fixture.client.IntakeResolutionSnapshot.Query().Where(intakeresolutionsnapshot.WorkItemIDEQ(created.WorkItemID))),
 		"audit":       countRows(t, fixture.client.AuditLog.Query().Where(auditlog.ResourceEQ(fmt.Sprintf("work_item:%d", created.WorkItemID)))),
 		"outbox":      countRows(t, fixture.client.OutboxEvent.Query().Where(outboxevent.AggregateIDEQ(fmt.Sprint(created.WorkItemID)), outboxevent.EventTypeEQ("workflow.start.requested"))),
+	} {
+		require.Equal(t, 1, count, name)
+	}
+}
+
+func TestServiceCreateChangeRequestCommitsAndReplaysSameProfessionalReference(t *testing.T) {
+	fixture := newResolverFixture(t)
+	ctx := context.Background()
+	service := newServiceUnderTest(t, fixture)
+	cmd := fixture.catalogCommand(fixture.changeCatalog.ID)
+	cmd.IdempotencyKey = "change-replay-key"
+	cmd.Title = "Upgrade core switch"
+	cmd.Description = "Apply approved firmware and routing changes"
+	cmd.FormValues = nil
+	cmd.Change = &ChangeInput{
+		Type:               "normal",
+		RiskLevel:          "high",
+		ImpactScope:        "network-core",
+		Justification:      "Required for vendor security fix",
+		ImplementationPlan: "Drain traffic, apply firmware, validate routing",
+		RollbackPlan:       "Reboot to prior image",
+	}
+
+	created, err := service.Create(ctx, fixture.identity(), cmd)
+	require.NoError(t, err)
+	require.False(t, created.Replayed)
+	require.Equal(t, RecordClassChangeRequest, created.RecordClass)
+	require.Equal(t, "change", created.ProfessionalReference.Type)
+	require.Equal(t, "pending", created.WorkflowStartStatus)
+
+	replayed, err := service.Create(ctx, fixture.identity(), cmd)
+	require.NoError(t, err)
+	require.True(t, replayed.Replayed)
+	require.Equal(t, created.WorkItemID, replayed.WorkItemID)
+	require.Equal(t, created.ProfessionalReference, replayed.ProfessionalReference)
+
+	storedChange, err := fixture.client.Change.Query().Where(change.WorkItemIDEQ(created.WorkItemID)).Only(ctx)
+	require.NoError(t, err)
+	require.Equal(t, storedChange.ID, created.ProfessionalReference.ID)
+
+	for name, count := range map[string]int{
+		"receipt":   countRows(t, fixture.client.IntakeRequest.Query().Where(intakerequest.WorkItemIDEQ(created.WorkItemID))),
+		"work item": countRows(t, fixture.client.Ticket.Query().Where(ticket.IDEQ(created.WorkItemID))),
+		"change":    countRows(t, fixture.client.Change.Query().Where(change.WorkItemIDEQ(created.WorkItemID))),
+		"snapshot":  countRows(t, fixture.client.IntakeResolutionSnapshot.Query().Where(intakeresolutionsnapshot.WorkItemIDEQ(created.WorkItemID))),
+		"audit":     countRows(t, fixture.client.AuditLog.Query().Where(auditlog.ResourceEQ(fmt.Sprintf("work_item:%d", created.WorkItemID)))),
+		"outbox":    countRows(t, fixture.client.OutboxEvent.Query().Where(outboxevent.AggregateIDEQ(fmt.Sprint(created.WorkItemID)), outboxevent.EventTypeEQ("workflow.start.requested"))),
 	} {
 		require.Equal(t, 1, count, name)
 	}

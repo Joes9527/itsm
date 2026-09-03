@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"itsm-backend/ent"
+	"itsm-backend/ent/change"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/intakeresolutionsnapshot"
 	"itsm-backend/ent/outboxevent"
@@ -273,6 +274,12 @@ func (s *Service) loadResult(ctx context.Context, tx *ent.Tx, tenantID, workItem
 			return nil, NewInternalFailure("completed work item is missing its service request extension", queryErr)
 		}
 		result.ProfessionalReference = ProfessionalReference{Type: "service_request", ID: extension.ID}
+	case RecordClassChangeRequest:
+		extension, queryErr := tx.Change.Query().Where(change.WorkItemIDEQ(workItem.ID)).Only(ctx)
+		if queryErr != nil {
+			return nil, NewInternalFailure("completed work item is missing its change extension", queryErr)
+		}
+		result.ProfessionalReference = ProfessionalReference{Type: "change", ID: extension.ID}
 	default:
 		return nil, NewUnsupportedRecordClass("completed work item has an unsupported record class", nil)
 	}
