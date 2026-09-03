@@ -7,6 +7,9 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/incident"
+	"itsm-backend/ent/ticket"
+	"itsm-backend/ent/user"
 
 	"go.uber.org/zap"
 )
@@ -75,7 +78,7 @@ type IncidentServiceTaskHandler struct {
 	client          *ent.Client
 	logger          *zap.SugaredLogger
 	incidentService IncidentDomainServiceInterface
-	intakeService    intakeCreator
+	intakeService   intakeCreator
 }
 
 // NewIncidentServiceTaskHandler 创建事件处理器
@@ -156,11 +159,23 @@ func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, task *e
 	if err != nil {
 		return nil, err
 	}
+	// Identity.Role is a real RBAC role name looked up by handlers/intake's
+	// Resolver (authorization.HasResourcePermission(client, identity.Role, ...)),
+	// not a free-text label -- it must be the reporter's actual role, the same
+	// way controller/incident_controller.go's HTTP CreateIncident passes the
+	// authenticated caller's real ctx.GetString("role"). Fail closed if we
+	// cannot resolve it rather than fabricate a role string that either always
+	// gets PermissionDenied (if it matches no real role) or silently grants
+	// the wrong privilege level (if it happens to collide with one).
+	reporterRole, err := h.resolveReporterRole(ctx, reporterID, tenantID)
+	if err != nil {
+		return nil, err
+	}
 	result, err := h.intakeService.Create(ctx, IntakeIdentity{
 		TenantID:    tenantID,
 		ActorID:     reporterID,
 		RequesterID: reporterID,
-		Role:        "requester",
+		Role:        reporterRole,
 		Channel:     "bpmn",
 	}, IntakeCreateWorkItemCommand{
 		IdempotencyKey: idempotencyKey,
@@ -177,12 +192,61 @@ func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, task *e
 		return nil, fmt.Errorf("创建事件失败: %w", err)
 	}
 
+	// CreateWorkItemResult.Number is tickets.ticket_number (TKT-...), not the
+	// incident's own incidents.incident_number (INC-...) -- handlers/intake's
+	// Service always populates Number from the shared WorkItem row. Read the
+	// incident back the same way controller/incident_controller.go's
+	// incidentCreateReader does (by ProfessionalReference.ID, tenant-scoped)
+	// to surface the real incident_number instead of conflating the two
+	// distinct identifiers.
+	incidentNumber, err := h.readCreatedIncidentNumber(ctx, result.ProfessionalReference.ID, tenantID)
+	if err != nil {
+		h.logger.Errorw("Incident created but reading back incident_number failed", "error", err, "incident_id", result.ProfessionalReference.ID)
+		return nil, fmt.Errorf("事件已创建但读取事件编号失败: %w", err)
+	}
+
 	h.logger.Infow("Incident created via BPMN", "work_item_id", result.WorkItemID, "title", title)
 
 	return &CallbackEffect{Status: CallbackEffectApplied,
 		Message:    fmt.Sprintf("事件 %d 已创建", result.ProfessionalReference.ID),
-		OutputVars: map[string]interface{}{"incident_id": result.ProfessionalReference.ID, "incident_number": result.Number},
+		OutputVars: map[string]interface{}{"incident_id": result.ProfessionalReference.ID, "incident_number": incidentNumber},
 	}, nil
+}
+
+// resolveReporterRole 查询 reporter_id 在当前租户下的真实 RBAC 角色名——
+// Identity.Role 被 handlers/intake/resolver.go 的 Resolve 直接传给
+// authorization.HasResourcePermission 做权限判定，不是展示用的标签，因此必须
+// 是 authorization/rbac.go 里真实存在的角色（如 end_user/msp_tech/...），
+// 不能硬编码一个虚构值。
+func (h *IncidentServiceTaskHandler) resolveReporterRole(ctx context.Context, reporterID, tenantID int) (string, error) {
+	if h.client == nil {
+		return "", fmt.Errorf("db client 未注入，无法确定创建人角色")
+	}
+	reporter, err := h.client.User.Query().
+		Where(user.ID(reporterID), user.TenantID(tenantID)).
+		Only(ctx)
+	if err != nil {
+		if ent.IsNotFound(err) {
+			return "", fmt.Errorf("reporter_id=%d 在租户 %d 下不存在，无法确定创建人角色", reporterID, tenantID)
+		}
+		return "", fmt.Errorf("查询创建人角色失败: %w", err)
+	}
+	return reporter.Role, nil
+}
+
+// readCreatedIncidentNumber 按 Intake 创建结果里的 ProfessionalReference.ID
+// 租户范围内读回刚创建的 Incident，取其真实 incident_number（INC-...）。
+func (h *IncidentServiceTaskHandler) readCreatedIncidentNumber(ctx context.Context, incidentID, tenantID int) (string, error) {
+	if h.client == nil {
+		return "", fmt.Errorf("db client 未注入，无法读取事件编号")
+	}
+	entity, err := h.client.Incident.Query().
+		Where(incident.ID(incidentID), incident.HasWorkItemWith(ticket.TenantID(tenantID))).
+		Only(ctx)
+	if err != nil {
+		return "", fmt.Errorf("读取事件 %d 失败: %w", incidentID, err)
+	}
+	return entity.IncidentNumber, nil
 }
 
 func bpmnCreateIncidentIdempotencyKey(ctx context.Context, task *ent.ProcessTask) (string, error) {

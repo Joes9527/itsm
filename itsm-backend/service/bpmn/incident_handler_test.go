@@ -3,6 +3,7 @@ package bpmn
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -508,50 +509,109 @@ func TestIncidentServiceTaskHandler_CreateIncident_RequiresInjectedService(t *te
 	require.Contains(t, err.Error(), "未注入")
 }
 
+// setupIncidentCreateFixture 为 create_incident 路径建立一个真实的 reporter
+// User（带真实 RBAC role）和一条预置的 Incident/WorkItem，模拟 recordingIntake
+// "创建成功"之后 handler 需要读回的真实记录：Critical #1 要求把 reporter 的
+// 真实角色而不是硬编码字符串传给 Identity.Role，Critical #2 要求按
+// ProfessionalReference.ID 读回真实 incident_number 而不是沿用 ticket_number。
+func setupIncidentCreateFixture(t *testing.T, dbName string, role string) (*ent.Client, *ent.User, *ent.Incident) {
+	t.Helper()
+	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:%s?mode=memory&cache=shared&_fk=1", dbName))
+	t.Cleanup(func() { client.Close() })
+	ctx := context.Background()
+
+	tenant, err := client.Tenant.Create().
+		SetName("T").SetCode(dbName).SetDomain(dbName + ".com").SetStatus("active").
+		Save(ctx)
+	require.NoError(t, err)
+
+	reporter, err := client.User.Create().
+		SetUsername("reporter-" + dbName).SetEmail("reporter-" + dbName + "@test.com").SetPasswordHash("x").
+		SetName("报告人").SetTenantID(tenant.ID).SetActive(true).SetRole(role).
+		Save(ctx)
+	require.NoError(t, err)
+
+	workItem, err := client.Ticket.Create().
+		SetTitle("测试事件").SetStatus(common.IncidentStatusNew).SetPriority("medium").
+		SetType("incident").SetRecordClass("incident").SetTicketNumber("TKT-" + strings.ToUpper(dbName)).
+		SetRequesterID(reporter.ID).SetTenantID(tenant.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	inc, err := client.Incident.Create().
+		SetIncidentNumber("INC-" + strings.ToUpper(dbName)).
+		SetWorkItemID(workItem.ID).
+		Save(ctx)
+	require.NoError(t, err)
+
+	return client, reporter, inc
+}
+
 func TestIncidentServiceTaskHandler_CreateIncident_UsesReporterAsActorAndRequester(t *testing.T) {
-	handler := NewIncidentServiceTaskHandler(nil, zap.NewNop().Sugar())
+	client, reporter, inc := setupIncidentCreateFixture(t, "ih-create-role-1", "end_user")
+	handler := NewIncidentServiceTaskHandler(client, zap.NewNop().Sugar())
 	recorder := &recordingIntake{result: &IntakeCreateWorkItemResult{
-		WorkItemID: 9,
-		Number:     "TKT-202609-000009",
+		WorkItemID: inc.WorkItemID,
+		Number:     "TKT-IH-CREATE-ROLE-1",
 		ProfessionalReference: IntakeProfessionalReference{
 			Type: "incident",
-			ID:   7,
+			ID:   inc.ID,
 		},
 	}}
 	handler.SetIntakeService(recorder)
 
-	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, 1)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, reporter.TenantID)
 	result, err := handler.Execute(ctx, &ent.ProcessTask{TaskID: "task-exec-1"}, map[string]interface{}{
 		"action":      "create_incident",
 		"title":       "测试事件",
 		"type":        "security_event",
-		"reporter_id": 3,
+		"reporter_id": reporter.ID,
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, recorder.calls)
-	assert.Equal(t, 3, recorder.identity.ActorID)
-	assert.Equal(t, 3, recorder.identity.RequesterID)
-	assert.Equal(t, "requester", recorder.identity.Role)
+	assert.Equal(t, reporter.ID, recorder.identity.ActorID)
+	assert.Equal(t, reporter.ID, recorder.identity.RequesterID)
+	assert.Equal(t, "end_user", recorder.identity.Role, "must resolve the reporter's real RBAC role, not a fabricated 'requester' label")
 	require.NotNil(t, recorder.command.Incident)
 	assert.Equal(t, "security_event", recorder.command.Incident.Type)
 	assert.Equal(t, "bpmn-create-incident:task-exec-1", recorder.command.IdempotencyKey)
-	require.Equal(t, 7, result.OutputVars["incident_id"])
-	require.Equal(t, "TKT-202609-000009", result.OutputVars["incident_number"])
+	require.Equal(t, inc.ID, result.OutputVars["incident_id"])
+	assert.Equal(t, inc.IncidentNumber, result.OutputVars["incident_number"], "must be the incident's own INC-... number, not tickets.ticket_number")
+	assert.NotEqual(t, recorder.result.Number, result.OutputVars["incident_number"], "must not conflate ticket_number with incident_number")
 }
 
-func TestIncidentServiceTaskHandler_CreateIncident_PrefersDurableExecutionKey(t *testing.T) {
-	handler := NewIncidentServiceTaskHandler(nil, zap.NewNop().Sugar())
+func TestIncidentServiceTaskHandler_CreateIncident_UnknownReporter_FailsClosed(t *testing.T) {
+	client, reporter, inc := setupIncidentCreateFixture(t, "ih-create-unknownreporter-1", "end_user")
+	handler := NewIncidentServiceTaskHandler(client, zap.NewNop().Sugar())
 	recorder := &recordingIntake{result: &IntakeCreateWorkItemResult{
-		ProfessionalReference: IntakeProfessionalReference{Type: "incident", ID: 7},
+		ProfessionalReference: IntakeProfessionalReference{Type: "incident", ID: inc.ID},
 	}}
 	handler.SetIntakeService(recorder)
 
-	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, 1)
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, reporter.TenantID)
+	_, err := handler.Execute(ctx, &ent.ProcessTask{TaskID: "task-exec-1"}, map[string]interface{}{
+		"action":      "create_incident",
+		"title":       "测试事件",
+		"reporter_id": reporter.ID + 9999,
+	})
+	require.Error(t, err, "reporter_id that does not resolve to a real user must fail closed, not fabricate a role")
+	assert.Zero(t, recorder.calls, "must not call Intake without a resolved real role")
+}
+
+func TestIncidentServiceTaskHandler_CreateIncident_PrefersDurableExecutionKey(t *testing.T) {
+	client, reporter, inc := setupIncidentCreateFixture(t, "ih-create-durable-1", "end_user")
+	handler := NewIncidentServiceTaskHandler(client, zap.NewNop().Sugar())
+	recorder := &recordingIntake{result: &IntakeCreateWorkItemResult{
+		ProfessionalReference: IntakeProfessionalReference{Type: "incident", ID: inc.ID},
+	}}
+	handler.SetIntakeService(recorder)
+
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, reporter.TenantID)
 	ctx = WithBPMNCallbackExecutionKey(ctx, "durable-retry-1")
 	_, err := handler.Execute(ctx, &ent.ProcessTask{TaskID: "task-exec-1"}, map[string]interface{}{
 		"action":      "create_incident",
 		"title":       "测试事件",
-		"reporter_id": 3,
+		"reporter_id": reporter.ID,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "bpmn-create-incident:durable-retry-1", recorder.command.IdempotencyKey)
@@ -582,11 +642,14 @@ func TestIncidentServiceTaskHandler_CreateIncident_FailsClosedWithoutAPersistedT
 }
 
 func TestIncidentServiceTaskHandler_CreateIncident_DifferentTaskExecutionsGetDifferentKeys(t *testing.T) {
-	handler := NewIncidentServiceTaskHandler(nil, zap.NewNop().Sugar())
-	recorder := &recordingIntake{result: &IntakeCreateWorkItemResult{}}
+	client, reporter, inc := setupIncidentCreateFixture(t, "ih-create-diffkeys-1", "end_user")
+	handler := NewIncidentServiceTaskHandler(client, zap.NewNop().Sugar())
+	recorder := &recordingIntake{result: &IntakeCreateWorkItemResult{
+		ProfessionalReference: IntakeProfessionalReference{Type: "incident", ID: inc.ID},
+	}}
 	handler.SetIntakeService(recorder)
-	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, 1)
-	variables := map[string]interface{}{"action": "create_incident", "title": "t", "reporter_id": 3}
+	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, reporter.TenantID)
+	variables := map[string]interface{}{"action": "create_incident", "title": "t", "reporter_id": reporter.ID}
 
 	_, err := handler.Execute(ctx, &ent.ProcessTask{TaskID: "instance-A-task-7"}, variables)
 	require.NoError(t, err)
