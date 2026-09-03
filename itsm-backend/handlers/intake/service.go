@@ -182,13 +182,9 @@ func (s *Service) writeFieldValues(ctx context.Context, tx *ent.Tx, resolved *Re
 	if resolved.Catalog == nil || len(resolved.Command.FormValues) == 0 {
 		return nil
 	}
-	valueType, valueID := "ticket", workItemID
-	if resolved.RecordClass == RecordClassServiceRequestItem {
-		valueType, valueID = "service_request", professional.ID
-	}
 	return s.fieldValues.CreateValuesTx(
 		ctx, tx, resolved.Identity.TenantID, "service_catalog", resolved.Catalog.ID,
-		valueType, valueID, resolved.Command.FormValues,
+		"ticket", workItemID, resolved.Command.FormValues,
 	)
 }
 

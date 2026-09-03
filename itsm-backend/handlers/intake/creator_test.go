@@ -374,6 +374,8 @@ func TestServiceRequestItemCreatorCreatesExactlyOneExtension(t *testing.T) {
 	require.Equal(t, 1, requestCount)
 	stored, err := client.ServiceRequest.Query().Where(servicerequest.TicketIDEQ(workItem.ID)).Only(ctx)
 	require.NoError(t, err)
+	require.Equal(t, workItem.TenantID, stored.TenantID)
+	require.Equal(t, workItem.RequesterID, stored.RequesterID)
 	require.Equal(t, 2, stored.Quantity)
 	require.Empty(t, stored.FormData, "dynamic form values are written by FieldValueService, not duplicated in the extension")
 }

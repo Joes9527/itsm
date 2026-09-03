@@ -95,8 +95,10 @@ func (c *ServiceRequestItemCreator) CreateExtension(ctx context.Context, tx *ent
 		return nil, NewDomainValidationFailed("service request creation plan is invalid", nil)
 	}
 	create := tx.ServiceRequest.Create().
+		SetTenantID(workItem.TenantID).
 		SetTicketID(workItem.ID).
 		SetCatalogID(input.CatalogID).
+		SetRequesterID(workItem.RequesterID).
 		SetCostCenter(input.CostCenter).
 		SetDataClassification(input.DataClassification).
 		SetNeedsPublicIP(input.NeedsPublicIP).

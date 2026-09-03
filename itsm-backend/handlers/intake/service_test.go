@@ -22,6 +22,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type recordingFieldValueWriter struct {
+	tenantID     int
+	definition   string
+	definitionID int
+	entityType   string
+	entityID     int
+	values       map[string]any
+}
+
+func (r *recordingFieldValueWriter) CreateValuesTx(_ context.Context, _ *ent.Tx, tenantID int, definition string, definitionID int, entityType string, entityID int, values map[string]any) error {
+	r.tenantID = tenantID
+	r.definition = definition
+	r.definitionID = definitionID
+	r.entityType = entityType
+	r.entityID = entityID
+	r.values = values
+	return nil
+}
+
 type sequentialWorkItemNumbers struct{ value atomic.Int64 }
 
 func (a *sequentialWorkItemNumbers) Allocate(context.Context, *ent.Client, int, time.Time) (string, error) {
@@ -63,13 +82,37 @@ func TestServiceCreateCommitsOneAuthoritativeGraphAndReplays(t *testing.T) {
 		"receipt":     countRows(t, fixture.client.IntakeRequest.Query().Where(intakerequest.WorkItemIDEQ(created.WorkItemID))),
 		"work item":   countRows(t, fixture.client.Ticket.Query().Where(ticket.IDEQ(created.WorkItemID))),
 		"extension":   countRows(t, fixture.client.ServiceRequest.Query().Where(servicerequest.TicketIDEQ(created.WorkItemID))),
-		"field value": countRows(t, fixture.client.FieldValue.Query().Where(fieldvalue.EntityTypeEQ("service_request"), fieldvalue.EntityIDEQ(created.ProfessionalReference.ID))),
+		"field value": countRows(t, fixture.client.FieldValue.Query().Where(fieldvalue.EntityTypeEQ("ticket"), fieldvalue.EntityIDEQ(created.WorkItemID))),
 		"snapshot":    countRows(t, fixture.client.IntakeResolutionSnapshot.Query().Where(intakeresolutionsnapshot.WorkItemIDEQ(created.WorkItemID))),
 		"audit":       countRows(t, fixture.client.AuditLog.Query().Where(auditlog.ResourceEQ(fmt.Sprintf("work_item:%d", created.WorkItemID)))),
 		"outbox":      countRows(t, fixture.client.OutboxEvent.Query().Where(outboxevent.AggregateIDEQ(fmt.Sprint(created.WorkItemID)), outboxevent.EventTypeEQ("workflow.start.requested"))),
 	} {
 		require.Equal(t, 1, count, name)
 	}
+}
+
+func TestWriteFieldValuesUsesTicketEntityTypeForServiceRequest(t *testing.T) {
+	fixture := newResolverFixture(t)
+	recorder := &recordingFieldValueWriter{}
+	service := &Service{fieldValues: recorder}
+	tx, err := fixture.client.Tx(context.Background())
+	require.NoError(t, err)
+	defer tx.Rollback()
+	resolved := &ResolvedIntake{
+		Identity:    Identity{TenantID: fixture.tenant.ID},
+		RecordClass: RecordClassServiceRequestItem,
+		Catalog:     &ResolvedCatalog{ID: fixture.serviceCatalog.ID},
+		Command:     CreateWorkItemCommand{FormValues: map[string]any{"k": "v"}},
+	}
+
+	err = service.writeFieldValues(context.Background(), tx, resolved, 101, &ProfessionalReference{Type: "service_request", ID: 202})
+	require.NoError(t, err)
+	require.Equal(t, fixture.tenant.ID, recorder.tenantID)
+	require.Equal(t, "service_catalog", recorder.definition)
+	require.Equal(t, fixture.serviceCatalog.ID, recorder.definitionID)
+	require.Equal(t, "ticket", recorder.entityType)
+	require.Equal(t, 101, recorder.entityID)
+	require.Equal(t, map[string]any{"k": "v"}, recorder.values)
 }
 
 type countQuery interface {
