@@ -103,6 +103,15 @@ func main() {
 		if err != nil {
 			log.Fatalf("Migration failed: %v", err)
 		}
+		if err := completeSchemaRelease(
+			ctx,
+			db,
+			os.Getenv,
+			migration.ApplySchemaStatePrivileges,
+			migration.PromoteSchemaState,
+		); err != nil {
+			log.Fatalf("Schema release finalization failed: %v", err)
+		}
 		fmt.Printf("Applied %d migration(s)\n", count)
 		seedData(sugar)
 		return
@@ -143,7 +152,7 @@ func main() {
 	}
 
 	if *up {
-		runMigrations(migrator, available)
+		runMigrations(migrator, available, db)
 		return
 	}
 
@@ -202,13 +211,48 @@ func showStatus(migrator *migration.Migrator, available []migration.Migration) {
 	}
 }
 
-func runMigrations(migrator *migration.Migrator, available []migration.Migration) {
+func runMigrations(migrator *migration.Migrator, available []migration.Migration, db *sql.DB) {
 	ctx := context.Background()
 	count, err := migrator.RunMigrations(ctx, available)
 	if err != nil {
 		log.Fatalf("Migration failed: %v", err)
 	}
+	if err := completeSchemaRelease(
+		ctx,
+		db,
+		os.Getenv,
+		migration.ApplySchemaStatePrivileges,
+		migration.PromoteSchemaState,
+	); err != nil {
+		log.Fatalf("Schema release finalization failed: %v", err)
+	}
 	fmt.Printf("Applied %d migration(s)\n", count)
+}
+
+type schemaStatePrivilegeApplier func(context.Context, *sql.DB, migration.SchemaStateRoles) error
+type schemaStatePromoter func(context.Context, migration.DBTX, migration.ReleaseManifest) error
+
+func completeSchemaRelease(
+	ctx context.Context,
+	db *sql.DB,
+	getenv func(string) string,
+	applyPrivileges schemaStatePrivilegeApplier,
+	promote schemaStatePromoter,
+) error {
+	roles, err := migration.LoadSchemaStateRoles(getenv)
+	if err != nil {
+		return fmt.Errorf("load schema state roles: %w", err)
+	}
+	if applyPrivileges == nil || promote == nil {
+		return fmt.Errorf("schema release finalization dependencies are required")
+	}
+	if err := applyPrivileges(ctx, db, roles); err != nil {
+		return fmt.Errorf("provision schema state privileges: %w", err)
+	}
+	if err := promote(ctx, db, migration.CurrentRelease()); err != nil {
+		return fmt.Errorf("promote schema state: %w", err)
+	}
+	return nil
 }
 
 func rollbackLast(migrator *migration.Migrator, available []migration.Migration) {
@@ -427,11 +471,20 @@ func freshDatabase(cfg *config.Config, sugar *zap.SugaredLogger) {
 		},
 		CreateSchema: func(ctx context.Context) error { return client.Schema.Create(ctx) },
 		Migrator:     migrator,
-		Seed: func(ctx context.Context) error {
-			return seeder.NewSeeder(client, sugar, cfg).SeedProduction(ctx)
-		},
 	}); err != nil {
 		log.Fatalf("Canonical fresh bootstrap failed: %v", err)
+	}
+	if err := completeSchemaRelease(
+		ctx,
+		db,
+		os.Getenv,
+		migration.ApplySchemaStatePrivileges,
+		migration.PromoteSchemaState,
+	); err != nil {
+		log.Fatalf("Schema release finalization failed: %v", err)
+	}
+	if err := seeder.NewSeeder(client, sugar, cfg).SeedProduction(ctx); err != nil {
+		log.Fatalf("Production seed failed: %v", err)
 	}
 
 	fmt.Println("Fresh reset completed successfully")

@@ -453,6 +453,11 @@ var RegisteredMigrations = []Migration{
 		Description: "Reconcile current tenant RLS policies with WorkItem authority and the runtime tenant setting",
 		RollbackSQL: "",
 	},
+	{
+		Version:     "028_schema_release_state",
+		Description: "Create the singleton authoritative schema release state",
+		RollbackSQL: "",
+	},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -1432,6 +1437,17 @@ BEGIN
 END $migration$;
 
 DROP FUNCTION IF EXISTS get_current_tenant_id();
+`
+	case "028_schema_release_state":
+		return `
+CREATE TABLE IF NOT EXISTS schema_state (
+    id SMALLINT PRIMARY KEY CHECK (id = 1),
+    release_id VARCHAR(128) NOT NULL,
+    schema_version VARCHAR(255) NOT NULL,
+    baseline_version VARCHAR(64) NOT NULL,
+    release_manifest_checksum CHAR(64) NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 `
 	default:
 		return ""

@@ -169,11 +169,15 @@ func TestValidateLedgerLineageAcceptsCurrentForwardRepairChecksums(t *testing.T)
 	}
 }
 
-func TestValidateMigrationLedgerAcceptsCompleteForwardRepairPrefix(t *testing.T) {
+func TestValidateMigrationLedgerAcceptsCompletePublishedPrefix(t *testing.T) {
 	applied := make([]Migration, 0, len(RegisteredMigrations))
 	for _, registered := range RegisteredMigrations {
 		lineage, ok := PublishedLineage(registered.Version)
-		require.True(t, ok, "registered migration %s must have published lineage", registered.Version)
+		if !ok {
+			require.Equal(t, "028_schema_release_state", registered.Version)
+			require.ErrorContains(t, validateActiveMigration(registered), "published lineage")
+			break
+		}
 		applied = append(applied, Migration{
 			Version:  registered.Version,
 			Checksum: lineage.SQLSHA256,
@@ -181,6 +185,25 @@ func TestValidateMigrationLedgerAcceptsCompleteForwardRepairPrefix(t *testing.T)
 	}
 
 	require.NoError(t, validateMigrationLedger(applied))
+}
+
+func TestSchemaReleaseMigrationPublicationBoundary(t *testing.T) {
+	var schemaRelease Migration
+	for _, registered := range RegisteredMigrations {
+		if registered.Version == "028_schema_release_state" {
+			schemaRelease = registered
+			break
+		}
+	}
+	require.Equal(t, "028_schema_release_state", schemaRelease.Version)
+
+	_, published := PublishedLineage(schemaRelease.Version)
+	err := validateActiveMigration(schemaRelease)
+	if published {
+		require.NoError(t, err)
+		return
+	}
+	require.ErrorContains(t, err, "published lineage")
 }
 
 func TestMigrationStreamAndLedgerRequireCanonicalOrderAndActivePrefix(t *testing.T) {
