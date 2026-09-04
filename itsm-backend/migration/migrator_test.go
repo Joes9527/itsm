@@ -78,9 +78,20 @@ func TestValidateMigrationLedgerFailsClosedForUnknownDuplicateAndChecksumDrift(t
 	require.ErrorContains(t, validateMigrationLedger([]Migration{{Version: "999_unknown"}}), "unknown version")
 	known := RegisteredMigrations[0]
 	require.ErrorContains(t, validateMigrationLedger([]Migration{{Version: known.Version, Checksum: "wrong"}}), "checksum mismatch")
-	checksum := checksumSQL(GetMigrationSQL(known.Version))
+	lineage, ok := PublishedLineage(known.Version)
+	require.True(t, ok)
+	checksum := lineage.SQLSHA256
 	require.ErrorContains(t, validateMigrationLedger([]Migration{{Version: known.Version, Checksum: checksum}, {Version: known.Version, Checksum: checksum}}), "duplicate")
 	require.NoError(t, validateMigrationLedger([]Migration{{Version: known.Version, Checksum: checksum}}))
+}
+
+func TestValidateMigrationLedgerAcceptsPublishedChangeExecutionChecksum(t *testing.T) {
+	const publishedChecksum = "1cf4fab4573d373957f8d22012e60652400eeffd09c1caf118ec640761b13d4a"
+
+	require.NoError(t, validateMigrationLedger([]Migration{{
+		Version:  "007_add_change_execution_tables",
+		Checksum: publishedChecksum,
+	}}))
 }
 
 func TestMigrationStreamAndLedgerRequireCanonicalOrderAndActivePrefix(t *testing.T) {
@@ -89,13 +100,19 @@ func TestMigrationStreamAndLedgerRequireCanonicalOrderAndActivePrefix(t *testing
 	require.ErrorContains(t, validateAvailableMigrations(available), "canonical order")
 
 	later := RegisteredMigrations[1]
-	require.ErrorContains(t, validateMigrationLedger([]Migration{{Version: later.Version, Checksum: checksumSQL(GetMigrationSQL(later.Version))}}), "continuous prefix")
+	laterLineage, ok := PublishedLineage(later.Version)
+	require.True(t, ok)
+	require.ErrorContains(t, validateMigrationLedger([]Migration{{Version: later.Version, Checksum: laterLineage.SQLSHA256}}), "continuous prefix")
 
-	legacy := LegacyMigrations[0]
+	legacy := LegacyMigrations[len(LegacyMigrations)-1]
 	first := RegisteredMigrations[0]
+	legacyLineage, ok := PublishedLineage(legacy.Version)
+	require.True(t, ok)
+	firstLineage, ok := PublishedLineage(first.Version)
+	require.True(t, ok)
 	require.NoError(t, validateMigrationLedger([]Migration{
-		{Version: legacy.Version, Checksum: checksumSQL(GetMigrationSQL(legacy.Version))},
-		{Version: first.Version, Checksum: checksumSQL(GetMigrationSQL(first.Version))},
+		{Version: legacy.Version, Checksum: legacyLineage.SQLSHA256},
+		{Version: first.Version, Checksum: firstLineage.SQLSHA256},
 	}))
 }
 

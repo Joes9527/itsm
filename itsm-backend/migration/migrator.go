@@ -190,41 +190,19 @@ func validateMigrationCatalog(active, legacy []Migration, sqlForVersion func(str
 	return validateSet("active", active, true)
 }
 
-func allKnownMigrations() map[string]Migration {
-	known := make(map[string]Migration, len(RegisteredMigrations)+len(LegacyMigrations))
-	for _, migration := range LegacyMigrations {
-		known[migration.Version] = migration
-	}
-	for _, migration := range RegisteredMigrations {
-		known[migration.Version] = migration
-	}
-	return known
-}
-
 func validateMigrationLedger(applied []Migration) error {
-	known := allKnownMigrations()
+	if err := ValidateLedgerLineage(applied); err != nil {
+		return err
+	}
 	activeIndex := make(map[string]int, len(RegisteredMigrations))
 	for index, migration := range RegisteredMigrations {
 		activeIndex[migration.Version] = index
 	}
-	seen := make(map[string]struct{}, len(applied))
 	appliedActive := make(map[int]struct{}, len(RegisteredMigrations))
 	for _, migration := range applied {
-		knownMigration, ok := known[migration.Version]
-		if !ok {
-			return fmt.Errorf("migration ledger contains unknown version %q", migration.Version)
-		}
-		if _, duplicate := seen[migration.Version]; duplicate {
-			return fmt.Errorf("migration ledger contains duplicate version %q", migration.Version)
-		}
-		expected := checksumSQL(GetMigrationSQL(knownMigration.Version))
-		if migration.Checksum != expected {
-			return fmt.Errorf("migration checksum mismatch for %s: applied=%s current=%s", migration.Version, migration.Checksum, expected)
-		}
 		if index, active := activeIndex[migration.Version]; active {
 			appliedActive[index] = struct{}{}
 		}
-		seen[migration.Version] = struct{}{}
 	}
 	missingActive := false
 	for index, migration := range RegisteredMigrations {

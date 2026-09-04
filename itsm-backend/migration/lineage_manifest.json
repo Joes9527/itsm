@@ -1,0 +1,224 @@
+{
+  "entries": [
+    {
+      "ledgerVersion": "002_add_notification_preferences",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "f85f63f1831d6537f7911cbe7465c7701332898f",
+      "gitBlob": "8e6ad67c2e4beadeb8a32749873324d645c16272",
+      "sqlSha256": "0ec1d18b69ccfb0659ae0e83808a936e6a6fd6e01b040e2f3ce059d3017eac19",
+      "catalog": "historical_validation_only",
+      "executable": false,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "003_add_audit_indexes",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "f85f63f1831d6537f7911cbe7465c7701332898f",
+      "gitBlob": "8e6ad67c2e4beadeb8a32749873324d645c16272",
+      "sqlSha256": "da35d6c44dc1a44d8701a8f9a4c122a5f784c44cfed28a567becca96f7dff66d",
+      "catalog": "historical_validation_only",
+      "executable": false,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "004_add_sla_calendar",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "f85f63f1831d6537f7911cbe7465c7701332898f",
+      "gitBlob": "8e6ad67c2e4beadeb8a32749873324d645c16272",
+      "sqlSha256": "4e5fae39324d29f7509f57b8d773471933be5b23683148233f8a5a6cb92dffff",
+      "catalog": "historical_validation_only",
+      "executable": false,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "005_add_external_id_mapping",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "f85f63f1831d6537f7911cbe7465c7701332898f",
+      "gitBlob": "8e6ad67c2e4beadeb8a32749873324d645c16272",
+      "sqlSha256": "7750c54cbe1aa076420e3583d4f644c0848818fb2ee4831b209f5a81368af836",
+      "catalog": "historical_validation_only",
+      "executable": false,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "006_add_change_approvals",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "d7d85e064c7e7a8e2fb81d917440415794b46ee4",
+      "gitBlob": "219eaa501fb1028feb18c01a1739c36be4e71168",
+      "sqlSha256": "1ccddf0586c9f191782f6ed7361801287901229134daec203ac84f16262c9900",
+      "catalog": "historical_validation_only",
+      "executable": false,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "007_add_change_execution_tables",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "a5370db83d89d22ac8b9a2b75e6d7afcb5b40d7b",
+      "gitBlob": "d30270e1425a57d5182366115b6dc74282524c9f",
+      "sqlSha256": "1cf4fab4573d373957f8d22012e60652400eeffd09c1caf118ec640761b13d4a",
+      "catalog": "immutable_upgrade_lineage",
+      "executable": true,
+      "forwardMigration": "023_reconcile_change_execution_tenants"
+    },
+    {
+      "ledgerVersion": "008_add_initialization_ledger",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "e834a20e32414706a1a3a84ac9d6a6bd922208de",
+      "gitBlob": "31eb77395a3a791d550bb5ca591eb703aac72788",
+      "sqlSha256": "772eeef5f6485595f13103f76bb1344aa9526f5f0a7b94f5a062b86ea227d5be",
+      "catalog": "immutable_upgrade_lineage",
+      "executable": true,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "009_enable_rls_tenant_isolation",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "ef7b16a644d94b7fe53e3fce7b519350de070180",
+      "gitBlob": "8951c874999ad205eecf866074704e645ed13f37",
+      "sqlSha256": "b88712993b527f72c945e506fecbb41da54e2aeada19317dff9bc489a94ecea0",
+      "catalog": "immutable_upgrade_lineage",
+      "executable": true,
+      "forwardMigration": "024_reconcile_current_rls_policies"
+    },
+    {
+      "ledgerVersion": "010_add_ticket_types",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "0a22220b5a3dd0368d104dc906d39dc0110470bf",
+      "gitBlob": "a91006c351ab1f25037d6abcf47f889f60a1d16e",
+      "sqlSha256": "8add8034d53c5061a3fe6b87ca98c671a3e0ce596ce332389a82bdba06f9ca6b",
+      "catalog": "historical_validation_only",
+      "executable": false,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "011_add_tool_invocation_tenant_id",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "d7662f86697ec96bbf2b18673d09d50bf415759d",
+      "gitBlob": "987a607ddc84528f9c03867380af4dfa89812209",
+      "sqlSha256": "2fa2d054c022076aa247b495172d9a8f7b6a967acd6db4063ccf68522bdf50b4",
+      "catalog": "immutable_upgrade_lineage",
+      "executable": true,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "012_drop_service_catalog_item",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "833efd166c1c2ff565f0e636c7630a120e13e4bc",
+      "gitBlob": "9950a3edda4ce14d4f48c3b6a4b8415708682fbb",
+      "sqlSha256": "3324423cc96510e30caa4671c6456db52fb8ba4d9215a837ccdc3910bcae27fc",
+      "catalog": "immutable_upgrade_lineage",
+      "executable": true,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "013_service_request_delegates_to_ticket",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "c5349878e5fa385e166d1c376cb228f3761acaa1",
+      "gitBlob": "ac94ac5a8036450b443b9760e64745f3a2684448",
+      "sqlSha256": "3710d2d730ad1982cae58b48d1dd67ab02cd85dfadee1b1a53011141501f4490",
+      "catalog": "immutable_upgrade_lineage",
+      "executable": true,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "014_drop_legacy_approval_workflow",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "07ffbc7bdfd4062be46ed62b378048d30a21655d",
+      "gitBlob": "3217f8629e3c807c1ed39a196a297d6d8924a8d9",
+      "sqlSha256": "6fdb74eeb8902f6840153df765f65a60a48b3a93995323e727cf11ca1974a8df",
+      "catalog": "immutable_upgrade_lineage",
+      "executable": true,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "015_process_instance_running_unique_guard",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "5898e2244d1534e588b4659dc867bdecc7e1deb8",
+      "gitBlob": "10c6109f3a3855e7ecff83847c97bee9e04d5a30",
+      "sqlSha256": "624c72f3fc88b299570f556742959bc1e436574881ee080b3dcd85864d1049f6",
+      "catalog": "immutable_upgrade_lineage",
+      "executable": true,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "015_add_service_request_contact_fields",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "6e52278393896d5dc13f6a60ee83c0ae00073c8f",
+      "gitBlob": "b08cce42de3482d9a9c0d90af55ba4ec87b9703b",
+      "sqlSha256": "917e74af4aca87b2f40370239ed41c61c847b9c32588ffc8680ecaaad73a0b67",
+      "catalog": "historical_validation_only",
+      "executable": false,
+      "forwardMigration": "016_add_service_request_contact_fields"
+    },
+    {
+      "ledgerVersion": "016_add_service_request_contact_fields",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "69ab3461267dc36d3d9f15004fc9b46b372565ed",
+      "gitBlob": "2ceb65781af0a188050f70a937339f656f0c4c02",
+      "sqlSha256": "917e74af4aca87b2f40370239ed41c61c847b9c32588ffc8680ecaaad73a0b67",
+      "catalog": "immutable_upgrade_lineage",
+      "executable": true,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "017_drop_ticket_type_legacy_approval_fields",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "ac0340d2a7e15d0241982eb6146cb9cf69ce3f44",
+      "gitBlob": "a139b240cda84dff398cbdc3169f66d6a66f0a7e",
+      "sqlSha256": "5992dbcc15be797e03dacf9fa12e6d9b0fce3e4953bd4d8f15d0ac4e51465be5",
+      "catalog": "immutable_upgrade_lineage",
+      "executable": true,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "018_convert_legacy_serial_ids_to_identity",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "f3690f114c40d2129f91a23615f1db870275b00c",
+      "gitBlob": "8ef21ec400d5d70e619926cd199cda60c86c5b06",
+      "sqlSha256": "c1d945e62a9f216b38f853defdf0b6bbfb55311d648114b7cc93487d94eb309c",
+      "catalog": "immutable_upgrade_lineage",
+      "executable": true,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "019_kaf_execution_integrity_rls",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "adb2b904283563203bd8cf9a7f7f0c94c545032d",
+      "gitBlob": "a7762be9ff94fd82ba643aa112cdaa81bd08fe3e",
+      "sqlSha256": "70bc70ef836a6de495edcf8eff7626c52dd185dc11da121a56dbbe283731af66",
+      "catalog": "immutable_upgrade_lineage",
+      "executable": true,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "020_work_item_number_allocator",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "e50d735551f9dc6a6d9c12b9e2e7c9ffc9ec385d",
+      "gitBlob": "1215eace05f2a6e0a09d1f1c739c97b430eb4a74",
+      "sqlSha256": "5bec8fc09daa852ba36f5b5aa96a06118a57adf3ee24a1150a856efd015159e9",
+      "catalog": "immutable_upgrade_lineage",
+      "executable": true,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "021_add_callback_optional_declared",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "a5370db83d89d22ac8b9a2b75e6d7afcb5b40d7b",
+      "gitBlob": "d30270e1425a57d5182366115b6dc74282524c9f",
+      "sqlSha256": "ead5b58943c84cd2d6ba3dfcc2da03a1ae79a1222432e90e8bfa57e3e94a746e",
+      "catalog": "immutable_upgrade_lineage",
+      "executable": true,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "022_drop_professional_extension_shared_fields",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "e50d735551f9dc6a6d9c12b9e2e7c9ffc9ec385d",
+      "gitBlob": "1215eace05f2a6e0a09d1f1c739c97b430eb4a74",
+      "sqlSha256": "20f9c60120e3b2e93a0197a121e8c32e09e34108f817f0ee62ce9cdbc3d565d9",
+      "catalog": "immutable_upgrade_lineage",
+      "executable": true,
+      "forwardMigration": ""
+    }
+  ]
+}
