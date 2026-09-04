@@ -427,15 +427,15 @@ func NewApplication() *Application {
 	ragService := service.NewRAGServiceWithAutoConfig(client, vectorStore, embedder, sugar)
 	aiTelemetryService := service.NewAITelemetryService(database.GetRawDB())
 
-	// 非阻塞初始化：向量扩展检测与 Embedding 管道预热
-	// 如果 pgvector 扩展未就绪，RAG 功能自动降级为关键字搜索
+	// 非阻塞、只读的向量能力检测。所有扩展、表和索引 DDL 均由发布门后
+	// 的迁移 bootstrap 独占；API 启动不得尝试修复数据库 schema。
 	go func() {
 		ctx := context.Background()
-		if err := vectorStore.EnsureExtension(ctx); err != nil {
+		if err := probeVectorCapability(ctx, vectorStore); err != nil {
 			sugar.Warnw("pgvector 扩展未就绪，RAG功能降级为关键字搜索", "error", err)
 			return
 		}
-		sugar.Infow("pgvector 扩展初始化成功")
+		sugar.Infow("pgvector 运行时能力检测成功")
 	}()
 
 	// 控制器依赖
@@ -953,6 +953,17 @@ func NewApplication() *Application {
 	}
 }
 
+type vectorCapabilityProbe interface {
+	CheckAvailability(context.Context) error
+}
+
+func probeVectorCapability(ctx context.Context, probe vectorCapabilityProbe) error {
+	if probe == nil {
+		return fmt.Errorf("vector capability probe is required")
+	}
+	return probe.CheckAvailability(ctx)
+}
+
 func configurePermissionMode(environment string) {
 	// 统一 DBOnly：数据库（seeder 初始化）为唯一运行时权限权威，开发/生产行为一致。
 	// 硬编码 RolePermissions 仅保留 super_admin 代码级放行与 end_user 防御性兜底（DBOnly 下不生效）。
@@ -1033,17 +1044,9 @@ func runStorageFresh(
 		return err
 	}
 	return migration.RunFreshBootstrap(ctx, migration.FreshBootstrap{
-		Lock:    lock,
-		Prepare: migration.PrepareCurrentInfrastructure,
-		CreateSchema: func(ctx context.Context, conn migration.BootstrapConnection) error {
-			pinnedClient, err := migration.NewEntClientOnConnection(conn)
-			if err != nil {
-				return err
-			}
-			defer pinnedClient.Close()
-			database.RegisterSoftDeleteInterceptors(pinnedClient)
-			return pinnedClient.Schema.Create(ctx)
-		},
+		Lock:            lock,
+		Prepare:         migration.PrepareCurrentInfrastructure,
+		CreateSchema:    migration.CreateCurrentEntSchema,
 		ApplyBaseline:   migration.ApplyCurrentBaseline,
 		VerifySchema:    migration.VerifyCurrentSchema,
 		ApplyPrivileges: migration.ApplySchemaStatePrivilegesOnConnection,

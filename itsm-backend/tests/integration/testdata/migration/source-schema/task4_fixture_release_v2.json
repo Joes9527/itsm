@@ -1,25 +1,20 @@
 {
   "kind": "source",
-  "assetId": "source-schema/028_schema_release_state.json",
+  "assetId": "source-schema/task4_fixture_release_v2.json",
   "formatVersion": 1,
   "release": {
-    "releaseId": "itsm-v1.1",
-    "schemaVersion": "028_schema_release_state",
-    "baselineVersion": "2026-09-04"
+    "releaseId": "task4-fixture-release-v2",
+    "schemaVersion": "task4_fixture_schema_v2",
+    "baselineVersion": "task4-fixture-baseline-v2"
   },
   "verifier": {
     "name": "catalog-verifier/postgres-v1.sql",
     "sha256": "e8bfb1b976bafaff86c988e00e769daa7974b417859b6e0e8696b2b88066324d"
   },
-  "platform": {
-    "postgresMajor": 17,
-    "vectorVersion": "0.8.6"
-  },
+  "platform": {"postgresMajor": 17, "vectorVersion": "0.8.6"},
   "managedSchemas": ["public"],
   "extensions": {
-    "empty": [
-      {"name": "plpgsql", "schema": "pg_catalog", "version": "1.0"}
-    ],
+    "empty": [{"name": "plpgsql", "schema": "pg_catalog", "version": "1.0"}],
     "installed": [
       {"name": "plpgsql", "schema": "pg_catalog", "version": "1.0"},
       {"name": "vector", "schema": "public", "version": "0.8.6"}
@@ -29,6 +24,6 @@
     "empty": "c59eb8c3e45adb281fe6c9a4ddcfd0762b37be4b5b98d59d6de583afec648650",
     "prepared": "509910e0ed21af2917c4c8b1cba7187145b1bebcabe0162f300f8ebffc937258",
     "entSchema": "597e598a1ca13fb132d98f90f45d61f06ca7d03d93c03723e77f73c309ff2c56",
-    "currentRelease": "ee7ae0f115b6c30ac593bb4a28f7d378f23d7d1fb4453f48ddcb7d98c957ac56"
+    "currentRelease": "8997c41b8bae3b05c27ab4826000f89b46fc44adad250b33303adafc9cbcfcf1"
   }
 }

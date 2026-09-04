@@ -85,14 +85,55 @@ func PrepareCurrentInfrastructure(ctx context.Context, db BootstrapConnection) e
 	if db == nil {
 		return fmt.Errorf("bootstrap database is required")
 	}
-	if err := VerifyFreshBootstrapTarget(ctx, db, CurrentRelease()); err != nil {
+	phase, err := verifyFreshBootstrapTargetPhase(ctx, db, CurrentRelease())
+	if err != nil {
 		return fmt.Errorf("verify fresh bootstrap target before DDL: %w", err)
+	}
+	if phase >= freshTargetPrepared {
+		return nil
 	}
 	parts, err := loadCurrentBaseline()
 	if err != nil {
 		return err
 	}
-	return applyVerifiedBaselineSection(ctx, db, "prepare infrastructure", parts.PrepareApply, parts.PrepareVerify)
+	if err := applyVerifiedBaselineSection(ctx, db, "prepare infrastructure", parts.PrepareApply, parts.PrepareVerify); err != nil {
+		return err
+	}
+	return verifyFreshPhaseCatalog(ctx, db, freshTargetPrepared)
+}
+
+// CreateCurrentEntSchema creates only the current Ent-owned objects on the
+// pinned bootstrap connection. Verified committed Ent/current phases are
+// skipped; an unprepared or drifted target is rejected before schema writes.
+func CreateCurrentEntSchema(ctx context.Context, db BootstrapConnection) error {
+	if db == nil {
+		return fmt.Errorf("bootstrap database is required")
+	}
+	phase, err := verifyFreshBootstrapTargetPhase(ctx, db, CurrentRelease())
+	if err != nil {
+		return fmt.Errorf("verify fresh Ent target before DDL: %w", err)
+	}
+	if phase >= freshTargetEntSchema {
+		return nil
+	}
+	if phase != freshTargetPrepared {
+		return fmt.Errorf("fresh Ent schema requires a verified prepared phase")
+	}
+	client, err := NewEntClientOnConnection(db)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	if err := client.Schema.Create(ctx); err != nil {
+		return fmt.Errorf("create current Ent schema: %w", err)
+	}
+	if err := VerifyFreshMigrationHistory(ctx, db); err != nil {
+		return err
+	}
+	if err := verifyFreshPhaseCatalog(ctx, db, freshTargetEntSchema); err != nil {
+		return fmt.Errorf("verify committed fresh Ent phase: %w", err)
+	}
+	return nil
 }
 
 // ApplyCurrentBaseline installs current non-Ent assets without replaying or
@@ -101,8 +142,15 @@ func ApplyCurrentBaseline(ctx context.Context, db BootstrapConnection) error {
 	if db == nil {
 		return fmt.Errorf("bootstrap database is required")
 	}
-	if err := VerifyFreshMigrationHistory(ctx, db); err != nil {
-		return err
+	phase, err := verifyFreshBootstrapTargetPhase(ctx, db, CurrentRelease())
+	if err != nil {
+		return fmt.Errorf("verify fresh baseline target before DDL: %w", err)
+	}
+	if phase == freshTargetCurrentRelease {
+		return nil
+	}
+	if phase != freshTargetEntSchema {
+		return fmt.Errorf("current baseline requires a verified Ent schema phase")
 	}
 	parts, err := loadCurrentBaseline()
 	if err != nil {
@@ -111,7 +159,13 @@ func ApplyCurrentBaseline(ctx context.Context, db BootstrapConnection) error {
 	if err := applyVerifiedBaselineSection(ctx, db, "current baseline", parts.BaselineApply, parts.BaselineVerify); err != nil {
 		return err
 	}
-	return VerifyFreshMigrationHistory(ctx, db)
+	if err := VerifyFreshMigrationHistory(ctx, db); err != nil {
+		return err
+	}
+	if err := verifyFreshPhaseCatalog(ctx, db, freshTargetCurrentRelease); err != nil {
+		return fmt.Errorf("verify committed fresh current release phase: %w", err)
+	}
+	return nil
 }
 
 func applyVerifiedBaselineSection(ctx context.Context, db BootstrapConnection, name, applySQL, verifySQL string) error {

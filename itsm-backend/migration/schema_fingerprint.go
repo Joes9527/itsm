@@ -1,11 +1,12 @@
 package migration
 
 import (
-	"bytes"
 	"context"
-	_ "embed"
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
+	"path"
 	"slices"
 	"strings"
 )
@@ -19,8 +20,8 @@ const (
 //go:embed sql/catalog/postgres-v1.sql
 var postgresCatalogFingerprintSQL string
 
-//go:embed sql/source/028_schema_release_state.json
-var currentSourceSchemaAssetJSON []byte
+//go:embed sql/source sql/transition
+var embeddedSchemaVerifierAssets embed.FS
 
 type catalogFingerprintPhases struct {
 	Empty          string `json:"empty"`
@@ -41,65 +42,93 @@ type catalogExtensionInventory struct {
 }
 
 type catalogFingerprintAsset struct {
-	FormatVersion int                       `json:"formatVersion"`
-	SchemaVersion string                    `json:"schemaVersion"`
-	Verifier      ReleaseAsset              `json:"verifier"`
-	Extensions    catalogExtensionInventory `json:"extensions"`
-	Phases        catalogFingerprintPhases  `json:"phases"`
+	Kind           string                     `json:"kind"`
+	AssetID        string                     `json:"assetId"`
+	FormatVersion  int                        `json:"formatVersion"`
+	Release        catalogReleaseIdentity     `json:"release"`
+	Verifier       ReleaseAsset               `json:"verifier"`
+	Platform       releasePlatformRequirement `json:"platform"`
+	ManagedSchemas []string                   `json:"managedSchemas"`
+	Extensions     catalogExtensionInventory  `json:"extensions"`
+	Phases         catalogFingerprintPhases   `json:"phases"`
+}
+
+type catalogReleaseIdentity struct {
+	ReleaseID       string `json:"releaseId"`
+	SchemaVersion   string `json:"schemaVersion"`
+	BaselineVersion string `json:"baselineVersion"`
+}
+
+func (identity catalogReleaseIdentity) valid() bool {
+	return strings.TrimSpace(identity.ReleaseID) != "" && strings.TrimSpace(identity.SchemaVersion) != "" &&
+		strings.TrimSpace(identity.BaselineVersion) != ""
+}
+
+func (identity catalogReleaseIdentity) matches(entry ReleaseCatalogEntry) bool {
+	return identity.ReleaseID == entry.ReleaseID && identity.SchemaVersion == entry.SchemaVersion &&
+		identity.BaselineVersion == entry.BaselineVersion
 }
 
 func currentSourceSchemaAsset() ReleaseAsset {
+	content, err := embeddedSchemaVerifierAssets.ReadFile("sql/source/028_schema_release_state.json")
+	if err != nil {
+		panic(fmt.Sprintf("read current source schema verifier asset: %v", err))
+	}
 	return ReleaseAsset{
 		Name:   CurrentSourceSchemaAssetName,
-		SHA256: checksumSQL(string(currentSourceSchemaAssetJSON)),
+		SHA256: checksumSQL(string(content)),
 	}
 }
 
 func loadCurrentCatalogFingerprintAsset() (catalogFingerprintAsset, error) {
-	decoder := json.NewDecoder(bytes.NewReader(currentSourceSchemaAssetJSON))
-	decoder.DisallowUnknownFields()
-	var asset catalogFingerprintAsset
-	if err := decoder.Decode(&asset); err != nil {
-		return catalogFingerprintAsset{}, fmt.Errorf("decode source schema fingerprint asset: %w", err)
+	registry, err := loadEmbeddedSchemaVerifierRegistry()
+	if err != nil {
+		return catalogFingerprintAsset{}, err
 	}
-	if err := ensureJSONEOF(decoder); err != nil {
-		return catalogFingerprintAsset{}, fmt.Errorf("decode source schema fingerprint asset: %w", err)
+	asset, err := registry.loadSource(currentSourceSchemaAsset())
+	if err != nil {
+		return catalogFingerprintAsset{}, err
 	}
-	if asset.FormatVersion != catalogFingerprintFormatVersion ||
-		asset.SchemaVersion != currentSchemaVersion {
+	if !asset.Release.matches(ReleaseCatalogEntry{
+		ReleaseID: currentReleaseID, SchemaVersion: currentSchemaVersion, BaselineVersion: currentBaselineVersion,
+	}) {
 		return catalogFingerprintAsset{}, fmt.Errorf("source schema fingerprint asset identity mismatch")
 	}
-	if asset.Verifier.Name != catalogFingerprintVerifierName ||
-		asset.Verifier.SHA256 != checksumSQL(postgresCatalogFingerprintSQL) {
-		return catalogFingerprintAsset{}, fmt.Errorf("source schema fingerprint verifier identity mismatch")
-	}
-	for _, digest := range []string{
-		asset.Phases.Empty,
-		asset.Phases.Prepared,
-		asset.Phases.EntSchema,
-		asset.Phases.CurrentRelease,
-	} {
-		if !sha256Pattern.MatchString(digest) {
-			return catalogFingerprintAsset{}, fmt.Errorf("source schema phase fingerprint is invalid")
-		}
-	}
-	for name, inventory := range map[string][]catalogExtensionIdentity{
-		"empty":     asset.Extensions.Empty,
-		"installed": asset.Extensions.Installed,
-	} {
-		if len(inventory) == 0 {
-			return catalogFingerprintAsset{}, fmt.Errorf("source schema %s extension inventory is required", name)
-		}
-		previous := ""
-		for _, extension := range inventory {
-			if strings.TrimSpace(extension.Name) == "" || strings.TrimSpace(extension.Schema) == "" ||
-				strings.TrimSpace(extension.Version) == "" || extension.Name <= previous {
-				return catalogFingerprintAsset{}, fmt.Errorf("source schema %s extension inventory is invalid", name)
-			}
-			previous = extension.Name
-		}
-	}
 	return asset, nil
+}
+
+func loadEmbeddedSchemaVerifierRegistry() (*SchemaVerifierRegistry, error) {
+	var files []VerifierAssetFile
+	for _, root := range []string{"sql/source", "sql/transition"} {
+		err := fs.WalkDir(embeddedSchemaVerifierAssets, root, func(filePath string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if entry.IsDir() || path.Ext(filePath) != ".json" {
+				return nil
+			}
+			content, err := embeddedSchemaVerifierAssets.ReadFile(filePath)
+			if err != nil {
+				return err
+			}
+			prefix := "source-schema"
+			if root == "sql/transition" {
+				prefix = "transition-schema"
+			}
+			files = append(files, VerifierAssetFile{Name: path.Join(prefix, path.Base(filePath)), Content: content})
+			return nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("load embedded schema verifier registry: %w", err)
+		}
+	}
+	return NewSchemaVerifierRegistry(postgresCatalogFingerprintSQL, files)
+}
+
+// EmbeddedSchemaVerifierRegistry returns an immutable registry containing all
+// source and transition assets retained by this binary.
+func EmbeddedSchemaVerifierRegistry() (*SchemaVerifierRegistry, error) {
+	return loadEmbeddedSchemaVerifierRegistry()
 }
 
 func readCatalogExtensionInventory(ctx context.Context, db DBTX) ([]catalogExtensionIdentity, error) {
@@ -150,15 +179,71 @@ func verifyCatalogExtensions(
 	return nil
 }
 
-func catalogFingerprint(ctx context.Context, db DBTX) (string, error) {
+func catalogFingerprintWithSQL(ctx context.Context, db DBTX, verifierSQL string) (string, error) {
 	if db == nil {
 		return "", fmt.Errorf("catalog fingerprint database is required")
 	}
 	var canonical string
-	if err := db.QueryRowContext(ctx, postgresCatalogFingerprintSQL).Scan(&canonical); err != nil {
+	if err := db.QueryRowContext(ctx, verifierSQL).Scan(&canonical); err != nil {
 		return "", fmt.Errorf("inspect PostgreSQL catalog fingerprint: %w", err)
 	}
 	return checksumSQL(canonical), nil
+}
+
+func catalogFingerprint(ctx context.Context, db DBTX) (string, error) {
+	return catalogFingerprintWithSQL(ctx, db, postgresCatalogFingerprintSQL)
+}
+
+// CatalogFingerprint exposes the read-only canonical hash for release tooling
+// and external integration fixtures. Production validation compares it only
+// with immutable embedded assets.
+func CatalogFingerprint(ctx context.Context, db DBTX) (string, error) {
+	return catalogFingerprint(ctx, db)
+}
+
+func verifyManagedSchemas(ctx context.Context, db DBTX, expected []string) error {
+	if len(expected) != 1 {
+		return fmt.Errorf("managed schema inventory is invalid")
+	}
+	var current string
+	if err := db.QueryRowContext(ctx, `SELECT current_schema()::text`).Scan(&current); err != nil {
+		return fmt.Errorf("inspect managed schema: %w", err)
+	}
+	if current != expected[0] {
+		return fmt.Errorf("managed schema boundary mismatch")
+	}
+	return nil
+}
+
+func (registry *SchemaVerifierRegistry) verifyFingerprint(
+	ctx context.Context,
+	db DBTX,
+	expected string,
+	extensions []catalogExtensionIdentity,
+	platform releasePlatformRequirement,
+	requireInstalled bool,
+	managedSchemas []string,
+) error {
+	if registry == nil {
+		return fmt.Errorf("schema verifier registry is required")
+	}
+	if err := verifyReleasePlatform(ctx, db, platform, requireInstalled); err != nil {
+		return err
+	}
+	if err := verifyManagedSchemas(ctx, db, managedSchemas); err != nil {
+		return err
+	}
+	if err := verifyCatalogExtensions(ctx, db, extensions); err != nil {
+		return err
+	}
+	actual, err := catalogFingerprintWithSQL(ctx, db, registry.verifierSQL)
+	if err != nil {
+		return err
+	}
+	if actual != expected {
+		return fmt.Errorf("schema fingerprint mismatch")
+	}
+	return nil
 }
 
 func expectedFreshPhaseFingerprint(asset catalogFingerprintAsset, phase freshTargetPhase) (string, string, error) {
@@ -177,7 +262,11 @@ func expectedFreshPhaseFingerprint(asset catalogFingerprintAsset, phase freshTar
 }
 
 func verifyFreshPhaseCatalog(ctx context.Context, db DBTX, phase freshTargetPhase) error {
-	asset, err := loadCurrentCatalogFingerprintAsset()
+	registry, err := loadEmbeddedSchemaVerifierRegistry()
+	if err != nil {
+		return err
+	}
+	asset, err := registry.loadSource(currentSourceSchemaAsset())
 	if err != nil {
 		return err
 	}
@@ -185,14 +274,15 @@ func verifyFreshPhaseCatalog(ctx context.Context, db DBTX, phase freshTargetPhas
 	if err != nil {
 		return err
 	}
-	if err := verifyCatalogExtensions(ctx, db, expectedFreshPhaseExtensions(asset, phase)); err != nil {
-		return fmt.Errorf("fresh target catalog does not match verified %s phase", phaseName)
-	}
-	actual, err := catalogFingerprint(ctx, db)
-	if err != nil {
-		return err
-	}
-	if actual != expected {
+	if err := registry.verifyFingerprint(
+		ctx,
+		db,
+		expected,
+		expectedFreshPhaseExtensions(asset, phase),
+		asset.Platform,
+		phase != freshTargetEmpty,
+		asset.ManagedSchemas,
+	); err != nil {
 		return fmt.Errorf("fresh target catalog does not match verified %s phase", phaseName)
 	}
 	return nil
@@ -215,19 +305,23 @@ func VerifyCatalogedUpgradeSourceSchema(ctx context.Context, db DBTX, entry Rele
 	if err != nil || !sameReleaseCatalogEntry(resolved, entry) {
 		return fmt.Errorf("unsupported upgrade source: no full-schema verifier is registered")
 	}
-	asset, err := loadCurrentCatalogFingerprintAsset()
-	if err != nil || entry.SourceSchemaAsset != currentSourceSchemaAsset() ||
-		asset.SchemaVersion != entry.SchemaVersion {
+	registry, err := loadEmbeddedSchemaVerifierRegistry()
+	if err != nil {
 		return fmt.Errorf("unsupported upgrade source: no full-schema verifier is registered")
 	}
-	if err := verifyCatalogExtensions(ctx, db, asset.Extensions.Installed); err != nil {
-		return fmt.Errorf("unsupported upgrade source: schema does not match cataloged release %s", entry.SchemaVersion)
+	asset, err := registry.loadSource(entry.SourceSchemaAsset)
+	if err != nil || !asset.Release.matches(entry) {
+		return fmt.Errorf("unsupported upgrade source: no full-schema verifier is registered")
 	}
-	actual, err := catalogFingerprint(ctx, db)
-	if err != nil {
-		return fmt.Errorf("inspect cataloged upgrade source category")
-	}
-	if actual != asset.Phases.CurrentRelease {
+	if err := registry.verifyFingerprint(
+		ctx,
+		db,
+		asset.Phases.CurrentRelease,
+		asset.Extensions.Installed,
+		asset.Platform,
+		true,
+		asset.ManagedSchemas,
+	); err != nil {
 		return fmt.Errorf("unsupported upgrade source: schema does not match cataloged release %s", entry.SchemaVersion)
 	}
 	return nil

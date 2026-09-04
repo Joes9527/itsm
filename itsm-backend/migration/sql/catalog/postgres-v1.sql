@@ -36,12 +36,81 @@ WITH target_schema AS (
         relation.relpersistence::text, relation.relrowsecurity,
         relation.relforcerowsecurity, relation.relispartition,
         relation.relhassubclass, relation.relreplident::text,
+        COALESCE(access_method.amname, ''),
+        COALESCE(tablespace.spcname, ''),
+        COALESCE((
+            SELECT array_agg(option ORDER BY option)::text
+            FROM unnest(relation.reloptions) option
+        ), ''),
         COALESCE(pg_get_viewdef(relation.oid, true), '')
     )::text
     FROM pg_class relation
     JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+    LEFT JOIN pg_am access_method ON access_method.oid = relation.relam
+    LEFT JOIN pg_tablespace tablespace ON tablespace.oid = relation.reltablespace
     WHERE namespace.nspname = (SELECT name FROM target_schema)
       AND relation.relkind IN ('r', 'p', 'v', 'm', 'f', 'c')
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'foreign-table', relation.relname, foreign_server.srvname,
+        COALESCE((
+            SELECT array_agg(option ORDER BY option)::text
+            FROM unnest(foreign_table.ftoptions) option
+        ), '')
+    )::text
+    FROM pg_foreign_table foreign_table
+    JOIN pg_class relation ON relation.oid = foreign_table.ftrelid
+    JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+    JOIN pg_foreign_server foreign_server ON foreign_server.oid = foreign_table.ftserver
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'partition-key', relation.relname,
+        partitioned_table.partstrat::text, partitioned_table.partnatts,
+        partitioned_table.partattrs::text,
+        partitioned_table.partclass::text,
+        partitioned_table.partcollation::text,
+        COALESCE(pg_get_expr(partitioned_table.partexprs, partitioned_table.partrelid), ''),
+        pg_get_partkeydef(partitioned_table.partrelid)
+    )::text
+    FROM pg_partitioned_table partitioned_table
+    JOIN pg_class relation ON relation.oid = partitioned_table.partrelid
+    JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'partition-bound', relation.relname,
+        pg_get_expr(relation.relpartbound, relation.oid, true)
+    )::text
+    FROM pg_class relation
+    JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+      AND relation.relispartition
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'publication-relation', publication.pubname, relation.relname,
+        COALESCE(pg_get_expr(publication_relation.prqual, publication_relation.prrelid), ''),
+        COALESCE((
+            SELECT array_agg(attribute.attname ORDER BY attribute_number)::text
+            FROM unnest(publication_relation.prattrs) attribute_number
+            JOIN pg_attribute attribute
+              ON attribute.attrelid = publication_relation.prrelid
+             AND attribute.attnum = attribute_number
+        ), '')
+    )::text
+    FROM pg_publication_rel publication_relation
+    JOIN pg_publication publication ON publication.oid = publication_relation.prpubid
+    JOIN pg_class relation ON relation.oid = publication_relation.prrelid
+    JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
 
     UNION ALL
 
@@ -52,6 +121,8 @@ WITH target_schema AS (
         attribute.attgenerated::text, attribute.attndims,
         COALESCE(collation_namespace.nspname, ''),
         COALESCE(collation_record.collname, ''), attribute.attstorage::text,
+        attribute.attcompression::text, attribute.attstattarget,
+        attribute.attislocal, attribute.attinhcount,
         COALESCE(pg_get_expr(default_record.adbin, default_record.adrelid), '')
     )::text
     FROM pg_attribute attribute
@@ -147,17 +218,38 @@ WITH target_schema AS (
     UNION ALL
 
     SELECT jsonb_build_array(
+        'rule', relation.relname, rewrite_record.rulename,
+        rewrite_record.ev_type::text, rewrite_record.ev_enabled::text,
+        rewrite_record.is_instead,
+        pg_get_ruledef(rewrite_record.oid, true)
+    )::text
+    FROM pg_rewrite rewrite_record
+    JOIN pg_class relation ON relation.oid = rewrite_record.ev_class
+    JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+      AND rewrite_record.rulename <> '_RETURN'
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
         'sequence', sequence_relation.relname,
         format_type(sequence_record.seqtypid, NULL),
         sequence_record.seqstart, sequence_record.seqincrement,
         sequence_record.seqmax, sequence_record.seqmin,
         sequence_record.seqcache, sequence_record.seqcycle,
+        sequence_relation.relpersistence::text,
+        COALESCE(tablespace.spcname, ''),
+        COALESCE((
+            SELECT array_agg(option ORDER BY option)::text
+            FROM unnest(sequence_relation.reloptions) option
+        ), ''),
         COALESCE(owner_relation.relname, ''),
         COALESCE(owner_attribute.attname, '')
     )::text
     FROM pg_sequence sequence_record
     JOIN pg_class sequence_relation ON sequence_relation.oid = sequence_record.seqrelid
     JOIN pg_namespace namespace ON namespace.oid = sequence_relation.relnamespace
+    LEFT JOIN pg_tablespace tablespace ON tablespace.oid = sequence_relation.reltablespace
     LEFT JOIN pg_depend ownership
       ON ownership.classid = 'pg_class'::regclass
      AND ownership.objid = sequence_relation.oid
@@ -168,6 +260,34 @@ WITH target_schema AS (
     LEFT JOIN pg_attribute owner_attribute
       ON owner_attribute.attrelid = ownership.refobjid
      AND owner_attribute.attnum = ownership.refobjsubid
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'aggregate', routine.proname,
+        pg_get_function_identity_arguments(routine.oid),
+        aggregate_record.aggkind::text,
+        aggregate_record.aggnumdirectargs,
+        aggregate_record.aggtransfn::regprocedure::text,
+        CASE WHEN aggregate_record.aggfinalfn = 0 THEN '' ELSE aggregate_record.aggfinalfn::regprocedure::text END,
+        CASE WHEN aggregate_record.aggcombinefn = 0 THEN '' ELSE aggregate_record.aggcombinefn::regprocedure::text END,
+        CASE WHEN aggregate_record.aggserialfn = 0 THEN '' ELSE aggregate_record.aggserialfn::regprocedure::text END,
+        CASE WHEN aggregate_record.aggdeserialfn = 0 THEN '' ELSE aggregate_record.aggdeserialfn::regprocedure::text END,
+        CASE WHEN aggregate_record.aggmtransfn = 0 THEN '' ELSE aggregate_record.aggmtransfn::regprocedure::text END,
+        CASE WHEN aggregate_record.aggminvtransfn = 0 THEN '' ELSE aggregate_record.aggminvtransfn::regprocedure::text END,
+        CASE WHEN aggregate_record.aggmfinalfn = 0 THEN '' ELSE aggregate_record.aggmfinalfn::regprocedure::text END,
+        aggregate_record.aggfinalextra, aggregate_record.aggmfinalextra,
+        aggregate_record.aggfinalmodify::text, aggregate_record.aggmfinalmodify::text,
+        CASE WHEN aggregate_record.aggsortop = 0 THEN '' ELSE aggregate_record.aggsortop::regoperator::text END,
+        format_type(aggregate_record.aggtranstype, NULL), aggregate_record.aggtransspace,
+        CASE WHEN aggregate_record.aggmtranstype = 0 THEN '' ELSE format_type(aggregate_record.aggmtranstype, NULL) END,
+        aggregate_record.aggmtransspace,
+        COALESCE(aggregate_record.agginitval, ''), COALESCE(aggregate_record.aggminitval, '')
+    )::text
+    FROM pg_aggregate aggregate_record
+    JOIN pg_proc routine ON routine.oid = aggregate_record.aggfnoid
+    JOIN pg_namespace namespace ON namespace.oid = routine.pronamespace
     WHERE namespace.nspname = (SELECT name FROM target_schema)
 
     UNION ALL
@@ -188,6 +308,27 @@ WITH target_schema AS (
     FROM pg_proc routine
     JOIN pg_namespace namespace ON namespace.oid = routine.pronamespace
     JOIN pg_language language ON language.oid = routine.prolang
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'range', range_type.typname,
+        format_type(range_record.rngsubtype, NULL),
+        CASE WHEN range_record.rngmultitypid = 0 THEN '' ELSE format_type(range_record.rngmultitypid, NULL) END,
+        COALESCE(collation_namespace.nspname, ''), COALESCE(collation_record.collname, ''),
+        operator_namespace.nspname, operator_class.opcname, access_method.amname,
+        CASE WHEN range_record.rngcanonical = 0 THEN '' ELSE range_record.rngcanonical::regprocedure::text END,
+        CASE WHEN range_record.rngsubdiff = 0 THEN '' ELSE range_record.rngsubdiff::regprocedure::text END
+    )::text
+    FROM pg_range range_record
+    JOIN pg_type range_type ON range_type.oid = range_record.rngtypid
+    JOIN pg_namespace namespace ON namespace.oid = range_type.typnamespace
+    JOIN pg_opclass operator_class ON operator_class.oid = range_record.rngsubopc
+    JOIN pg_namespace operator_namespace ON operator_namespace.oid = operator_class.opcnamespace
+    JOIN pg_am access_method ON access_method.oid = operator_class.opcmethod
+    LEFT JOIN pg_collation collation_record ON collation_record.oid = range_record.rngcollation
+    LEFT JOIN pg_namespace collation_namespace ON collation_namespace.oid = collation_record.collnamespace
     WHERE namespace.nspname = (SELECT name FROM target_schema)
 
     UNION ALL
@@ -241,6 +382,189 @@ WITH target_schema AS (
     JOIN pg_namespace namespace ON namespace.oid = operator_class.opcnamespace
     JOIN pg_am access_method ON access_method.oid = operator_class.opcmethod
     JOIN pg_opfamily operator_family ON operator_family.oid = operator_class.opcfamily
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'operator-family', operator_family.opfname, access_method.amname
+    )::text
+    FROM pg_opfamily operator_family
+    JOIN pg_namespace namespace ON namespace.oid = operator_family.opfnamespace
+    JOIN pg_am access_method ON access_method.oid = operator_family.opfmethod
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'operator-family-operator', operator_family.opfname,
+        access_method.amname, family_operator.amopstrategy,
+        family_operator.amoppurpose::text,
+        format_type(family_operator.amoplefttype, NULL),
+        format_type(family_operator.amoprighttype, NULL),
+        family_operator.amopopr::regoperator::text,
+        COALESCE(sort_namespace.nspname, ''), COALESCE(sort_family.opfname, '')
+    )::text
+    FROM pg_amop family_operator
+    JOIN pg_opfamily operator_family ON operator_family.oid = family_operator.amopfamily
+    JOIN pg_namespace namespace ON namespace.oid = operator_family.opfnamespace
+    JOIN pg_am access_method ON access_method.oid = operator_family.opfmethod
+    LEFT JOIN pg_opfamily sort_family ON sort_family.oid = family_operator.amopsortfamily
+    LEFT JOIN pg_namespace sort_namespace ON sort_namespace.oid = sort_family.opfnamespace
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'operator-family-function', operator_family.opfname,
+        access_method.amname, family_function.amprocnum,
+        format_type(family_function.amproclefttype, NULL),
+        format_type(family_function.amprocrighttype, NULL),
+        family_function.amproc::regprocedure::text
+    )::text
+    FROM pg_amproc family_function
+    JOIN pg_opfamily operator_family ON operator_family.oid = family_function.amprocfamily
+    JOIN pg_namespace namespace ON namespace.oid = operator_family.opfnamespace
+    JOIN pg_am access_method ON access_method.oid = operator_family.opfmethod
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'conversion', conversion_record.conname,
+        pg_encoding_to_char(conversion_record.conforencoding),
+        pg_encoding_to_char(conversion_record.contoencoding),
+        conversion_record.conproc::regprocedure::text,
+        conversion_record.condefault
+    )::text
+    FROM pg_conversion conversion_record
+    JOIN pg_namespace namespace ON namespace.oid = conversion_record.connamespace
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'cast', format_type(cast_record.castsource, NULL),
+        format_type(cast_record.casttarget, NULL),
+        CASE WHEN cast_record.castfunc = 0 THEN '' ELSE cast_record.castfunc::regprocedure::text END,
+        cast_record.castcontext::text, cast_record.castmethod::text
+    )::text
+    FROM pg_cast cast_record
+    JOIN pg_type source_type ON source_type.oid = cast_record.castsource
+    JOIN pg_namespace source_namespace ON source_namespace.oid = source_type.typnamespace
+    JOIN pg_type target_type ON target_type.oid = cast_record.casttarget
+    JOIN pg_namespace target_namespace ON target_namespace.oid = target_type.typnamespace
+    WHERE source_namespace.nspname = (SELECT name FROM target_schema)
+       OR target_namespace.nspname = (SELECT name FROM target_schema)
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'transform', format_type(transform_record.trftype, NULL),
+        language.lanname,
+        CASE WHEN transform_record.trffromsql = 0 THEN '' ELSE transform_record.trffromsql::regprocedure::text END,
+        CASE WHEN transform_record.trftosql = 0 THEN '' ELSE transform_record.trftosql::regprocedure::text END
+    )::text
+    FROM pg_transform transform_record
+    JOIN pg_type type_record ON type_record.oid = transform_record.trftype
+    JOIN pg_namespace namespace ON namespace.oid = type_record.typnamespace
+    JOIN pg_language language ON language.oid = transform_record.trflang
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'text-search-parser', parser.prsname,
+        parser.prsstart::regprocedure::text,
+        parser.prstoken::regprocedure::text,
+        parser.prsend::regprocedure::text,
+        CASE WHEN parser.prsheadline = 0 THEN '' ELSE parser.prsheadline::regprocedure::text END,
+        parser.prslextype::regprocedure::text
+    )::text
+    FROM pg_ts_parser parser
+    JOIN pg_namespace namespace ON namespace.oid = parser.prsnamespace
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'text-search-template', template.tmplname,
+        CASE WHEN template.tmplinit = 0 THEN '' ELSE template.tmplinit::regprocedure::text END,
+        template.tmpllexize::regprocedure::text
+    )::text
+    FROM pg_ts_template template
+    JOIN pg_namespace namespace ON namespace.oid = template.tmplnamespace
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'text-search-dictionary', dictionary.dictname,
+        template_namespace.nspname, template.tmplname,
+        COALESCE(dictionary.dictinitoption, '')
+    )::text
+    FROM pg_ts_dict dictionary
+    JOIN pg_namespace namespace ON namespace.oid = dictionary.dictnamespace
+    JOIN pg_ts_template template ON template.oid = dictionary.dicttemplate
+    JOIN pg_namespace template_namespace ON template_namespace.oid = template.tmplnamespace
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'text-search-configuration', configuration.cfgname,
+        parser_namespace.nspname, parser.prsname
+    )::text
+    FROM pg_ts_config configuration
+    JOIN pg_namespace namespace ON namespace.oid = configuration.cfgnamespace
+    JOIN pg_ts_parser parser ON parser.oid = configuration.cfgparser
+    JOIN pg_namespace parser_namespace ON parser_namespace.oid = parser.prsnamespace
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'text-search-configuration-map', configuration.cfgname,
+        configuration_map.maptokentype, configuration_map.mapseqno,
+        dictionary_namespace.nspname, dictionary.dictname
+    )::text
+    FROM pg_ts_config_map configuration_map
+    JOIN pg_ts_config configuration ON configuration.oid = configuration_map.mapcfg
+    JOIN pg_namespace namespace ON namespace.oid = configuration.cfgnamespace
+    JOIN pg_ts_dict dictionary ON dictionary.oid = configuration_map.mapdict
+    JOIN pg_namespace dictionary_namespace ON dictionary_namespace.oid = dictionary.dictnamespace
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'collation', collation_record.collname,
+        collation_record.collprovider::text,
+        collation_record.collisdeterministic,
+        collation_record.collencoding,
+        collation_record.collcollate,
+        collation_record.collctype,
+        COALESCE(collation_record.colllocale, ''),
+        COALESCE(collation_record.collicurules, ''),
+        COALESCE(collation_record.collversion, '')
+    )::text
+    FROM pg_collation collation_record
+    JOIN pg_namespace namespace ON namespace.oid = collation_record.collnamespace
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'extended-statistics', statistics_record.stxname,
+        relation.relname, statistics_record.stxkeys::text,
+        statistics_record.stxstattarget,
+        statistics_record.stxkind::text,
+        COALESCE(pg_get_expr(statistics_record.stxexprs, statistics_record.stxrelid), ''),
+        pg_get_statisticsobjdef(statistics_record.oid)
+    )::text
+    FROM pg_statistic_ext statistics_record
+    JOIN pg_namespace namespace ON namespace.oid = statistics_record.stxnamespace
+    JOIN pg_class relation ON relation.oid = statistics_record.stxrelid
     WHERE namespace.nspname = (SELECT name FROM target_schema)
 
     UNION ALL

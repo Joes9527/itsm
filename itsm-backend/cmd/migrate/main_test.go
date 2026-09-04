@@ -11,6 +11,38 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestValidateCommandPublicationGatesEveryMutatingFrontDoor(t *testing.T) {
+	mutating := map[string]migrationCommand{
+		"up":          {up: true},
+		"down":        {down: true},
+		"rollback-to": {rollbackVersion: "022_prior"},
+		"fresh":       {fresh: true},
+		"reset":       {reset: true},
+		"seed":        {seed: true},
+		"seed-only":   {seedOnly: true},
+	}
+	for name, command := range mutating {
+		t.Run(name, func(t *testing.T) {
+			err := validateCommandPublication(command)
+			require.ErrorContains(t, err, "release publication gate is closed")
+		})
+	}
+}
+
+func TestValidateCommandPublicationLeavesReadOnlyFrontDoorsAvailable(t *testing.T) {
+	for name, command := range map[string]migrationCommand{
+		"status":  {status: true},
+		"list":    {list: true},
+		"dry-run": {dryRun: true},
+		"version": {version: true},
+		"help":    {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			require.NoError(t, validateCommandPublication(command))
+		})
+	}
+}
+
 func TestValidateFreshTargetRequiresDevelopmentModeAndExactConfirmation(t *testing.T) {
 	cfg := &config.Config{Database: config.DatabaseConfig{Host: "127.0.0.1", Port: 5432, DBName: "itsm_fresh_test"}, Deployment: config.DeploymentConfig{Mode: "development"}}
 	t.Setenv("ITSM_ALLOW_DESTRUCTIVE_FRESH", "true")

@@ -1,0 +1,33 @@
+{
+  "kind": "transition",
+  "assetId": "transition-schema/028--task4_fixture_v2.json",
+  "formatVersion": 1,
+  "source": {
+    "releaseId": "itsm-v1.1",
+    "schemaVersion": "028_schema_release_state",
+    "baselineVersion": "2026-09-04",
+    "releaseManifestSha256": "d7f289b1cee89fb5bacd8e149d0b7afaaef10409b21e62f2422ae4849f0eb943"
+  },
+  "target": {
+    "releaseId": "task4-fixture-release-v2",
+    "schemaVersion": "task4_fixture_schema_v2",
+    "baselineVersion": "task4-fixture-baseline-v2"
+  },
+  "verifier": {
+    "name": "catalog-verifier/postgres-v1.sql",
+    "sha256": "e8bfb1b976bafaff86c988e00e769daa7974b417859b6e0e8696b2b88066324d"
+  },
+  "platform": {"postgresMajor": 17, "vectorVersion": "0.8.6"},
+  "managedSchemas": ["public"],
+  "migrations": [
+    {
+      "version": "task4_fixture_add_transition_marker",
+      "sqlSha256": "e058494a69af477b501f0d2f584ee3de9c54ec1ea41b974142a46a0f31d77768",
+      "fingerprint": "8997c41b8bae3b05c27ab4826000f89b46fc44adad250b33303adafc9cbcfcf1",
+      "extensions": [
+        {"name": "plpgsql", "schema": "pg_catalog", "version": "1.0"},
+        {"name": "vector", "schema": "public", "version": "0.8.6"}
+      ]
+    }
+  ]
+}

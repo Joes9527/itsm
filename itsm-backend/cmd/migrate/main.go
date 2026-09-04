@@ -32,6 +32,32 @@ var databaseNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 var lookupFreshHostIPs = net.LookupIP
 
+type migrationCommand struct {
+	up              bool
+	down            bool
+	status          bool
+	list            bool
+	rollbackVersion string
+	dryRun          bool
+	fresh           bool
+	seed            bool
+	seedOnly        bool
+	version         bool
+	reset           bool
+}
+
+func (command migrationCommand) mutatesStorage() bool {
+	return command.up || command.down || command.rollbackVersion != "" || command.fresh ||
+		command.seed || command.seedOnly || command.reset
+}
+
+func validateCommandPublication(command migrationCommand) error {
+	if !command.mutatesStorage() {
+		return nil
+	}
+	return migration.ValidateCurrentReleasePublicationGate()
+}
+
 func validateDatabaseName(name string) error {
 	if !databaseNamePattern.MatchString(name) {
 		return fmt.Errorf("invalid database name %q: must start with a letter or underscore and contain only letters, numbers, and underscores", name)
@@ -53,6 +79,22 @@ func main() {
 	version := flag.Bool("version", false, "Show current database version")
 	reset := flag.Bool("reset", false, "Development-only: recreate and bootstrap the explicitly confirmed database")
 	flag.Parse()
+	command := migrationCommand{
+		up:              *up,
+		down:            *down,
+		status:          *status,
+		list:            *list,
+		rollbackVersion: *rollbackVersion,
+		dryRun:          *dryRun,
+		fresh:           *fresh,
+		seed:            *seed,
+		seedOnly:        *seedOnly,
+		version:         *version,
+		reset:           *reset,
+	}
+	if err := validateCommandPublication(command); err != nil {
+		log.Fatalf("Refusing mutating migration command: %v", err)
+	}
 
 	// Load configuration
 	cfg, err := config.LoadConfig()
@@ -442,17 +484,9 @@ func freshDatabase(cfg *config.Config, sugar *zap.SugaredLogger) {
 	}
 	ctx := context.Background()
 	if err := migration.RunFreshBootstrap(ctx, migration.FreshBootstrap{
-		Lock:    lock,
-		Prepare: migration.PrepareCurrentInfrastructure,
-		CreateSchema: func(ctx context.Context, conn migration.BootstrapConnection) error {
-			client, err := migration.NewEntClientOnConnection(conn)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			database.RegisterSoftDeleteInterceptors(client)
-			return client.Schema.Create(ctx)
-		},
+		Lock:            lock,
+		Prepare:         migration.PrepareCurrentInfrastructure,
+		CreateSchema:    migration.CreateCurrentEntSchema,
 		ApplyBaseline:   migration.ApplyCurrentBaseline,
 		VerifySchema:    migration.VerifyCurrentSchema,
 		ApplyPrivileges: migration.ApplySchemaStatePrivilegesOnConnection,

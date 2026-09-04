@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"strconv"
 )
 
@@ -19,33 +18,33 @@ func (s *VectorStore) TestConnection() error {
 	return err
 }
 
-// EnsureExtension 确保 pgvector 扩展已安装，并初始化 vectors 表。
-// 如果扩展不可用，将返回错误（调用方应降级为关键字搜索）。
-func (s *VectorStore) EnsureExtension(ctx context.Context) error {
-	// 尝试创建 pgvector 扩展（幂等操作，已存在时不报错）
-	_, err := s.db.ExecContext(ctx, "CREATE EXTENSION IF NOT EXISTS vector")
-	if err != nil {
-		return fmt.Errorf("pgvector 扩展不可用: %w", err)
+// CheckAvailability is the runtime-only pgvector capability probe. Schema
+// installation belongs exclusively to the migration bootstrap, so this path
+// intentionally performs one read-only catalog query and never repairs state.
+func (s *VectorStore) CheckAvailability(ctx context.Context) error {
+	if s == nil || s.db == nil {
+		return sql.ErrConnDone
 	}
-	// 确保 vectors 表存在
-	_, err = s.db.ExecContext(ctx, `
-		CREATE TABLE IF NOT EXISTS vectors (
-			id           SERIAL PRIMARY KEY,
-			tenant_id    INT NOT NULL,
-			object_type  TEXT NOT NULL,
-			object_id    INT NOT NULL,
-			embedding    vector(1536),
-			content      TEXT,
-			source       TEXT,
-			created_at   TIMESTAMPTZ DEFAULT NOW(),
-			UNIQUE(tenant_id, object_type, object_id)
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("初始化 vectors 表失败: %w", err)
+	var available bool
+	err := s.db.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM pg_extension extension_record
+			JOIN pg_namespace namespace ON namespace.oid = extension_record.extnamespace
+			WHERE extension_record.extname = 'vector'
+			  AND to_regtype(format('%I.vector', namespace.nspname)) IS NOT NULL
+		) AND to_regclass(format('%I.vectors', current_schema())) IS NOT NULL
+	`).Scan(&available)
+	if err != nil || !available {
+		return &vectorCapabilityError{cause: err}
 	}
 	return nil
 }
+
+type vectorCapabilityError struct{ cause error }
+
+func (*vectorCapabilityError) Error() string     { return "pgvector runtime capability is unavailable" }
+func (err *vectorCapabilityError) Unwrap() error { return err.cause }
 
 func (s *VectorStore) Upsert(ctx context.Context, tenantID int, objectType string, objectID int, embedding []float32, content string, source string) error {
 	// pgx prefers []float32 -> vector; with database/sql we build string literal

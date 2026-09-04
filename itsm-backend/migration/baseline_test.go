@@ -62,6 +62,46 @@ func TestCurrentSourceSchemaAssetPinsExplicitExtensionInventory(t *testing.T) {
 	}, asset.Extensions.Installed)
 }
 
+func TestReleasePlatformRequiresExactPostgresMajorAndVectorVersion(t *testing.T) {
+	want := releasePlatformRequirement{PostgresMajor: 17, VectorVersion: "0.8.6"}
+	require.NoError(t, validateReleasePlatform(platformSnapshot{
+		PostgresMajor:           17,
+		AvailableVectorVersions: []string{"0.8.5", "0.8.6"},
+	}, want, false))
+	require.NoError(t, validateReleasePlatform(platformSnapshot{
+		PostgresMajor:           17,
+		AvailableVectorVersions: []string{"0.8.6"},
+		InstalledVectorVersion:  "0.8.6",
+	}, want, true))
+
+	for name, snapshot := range map[string]platformSnapshot{
+		"server major": {
+			PostgresMajor:           16,
+			AvailableVectorVersions: []string{"0.8.6"},
+		},
+		"unavailable vector version": {
+			PostgresMajor:           17,
+			AvailableVectorVersions: []string{"0.8.5"},
+		},
+		"installed vector version": {
+			PostgresMajor:           17,
+			AvailableVectorVersions: []string{"0.8.6"},
+			InstalledVectorVersion:  "0.8.5",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := validateReleasePlatform(snapshot, want, name == "installed vector version")
+			require.ErrorContains(t, err, "unsupported PostgreSQL platform")
+		})
+	}
+}
+
+func TestCurrentBaselinePinsVectorExtensionVersion(t *testing.T) {
+	parts, err := loadCurrentBaseline()
+	require.NoError(t, err)
+	require.Contains(t, parts.PrepareApply, "CREATE EXTENSION IF NOT EXISTS vector VERSION '0.8.6'")
+}
+
 func TestParseCurrentBaselineRequiresEveryApplyAndVerifySection(t *testing.T) {
 	_, err := parseCurrentBaseline([]byte("-- +itsm prepare apply\nSELECT 1;"))
 	require.ErrorContains(t, err, "baseline section")

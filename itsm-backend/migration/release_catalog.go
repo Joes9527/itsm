@@ -15,13 +15,14 @@ const minimumSupportedUpgradeSchemaVersion = "028_schema_release_state"
 // boundary. CoveredMigrations is a set, not a numeric interval: a migration
 // published later with a lower number is never silently swallowed by a head.
 type ReleaseCatalogEntry struct {
-	ReleaseID             string       `json:"releaseId"`
-	SchemaVersion         string       `json:"schemaVersion"`
-	BaselineVersion       string       `json:"baselineVersion"`
-	ReleaseManifestSHA256 string       `json:"releaseManifestSha256"`
-	BaselineAsset         ReleaseAsset `json:"baselineAsset"`
-	SourceSchemaAsset     ReleaseAsset `json:"sourceSchemaAsset"`
-	CoveredMigrations     []string     `json:"coveredMigrations"`
+	ReleaseID             string         `json:"releaseId"`
+	SchemaVersion         string         `json:"schemaVersion"`
+	BaselineVersion       string         `json:"baselineVersion"`
+	ReleaseManifestSHA256 string         `json:"releaseManifestSha256"`
+	BaselineAsset         ReleaseAsset   `json:"baselineAsset"`
+	SourceSchemaAsset     ReleaseAsset   `json:"sourceSchemaAsset"`
+	TransitionAssets      []ReleaseAsset `json:"transitionAssets,omitempty"`
+	CoveredMigrations     []string       `json:"coveredMigrations"`
 }
 
 type releaseCatalog struct {
@@ -37,7 +38,11 @@ type publicationGate struct {
 var releaseCatalogJSON []byte
 
 func loadReleaseCatalog() (releaseCatalog, error) {
-	decoder := json.NewDecoder(bytes.NewReader(releaseCatalogJSON))
+	return parseReleaseCatalog(releaseCatalogJSON)
+}
+
+func parseReleaseCatalog(data []byte) (releaseCatalog, error) {
+	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
 	var catalog releaseCatalog
 	if err := decoder.Decode(&catalog); err != nil {
@@ -81,7 +86,19 @@ func loadReleaseCatalog() (releaseCatalog, error) {
 			}
 			seenCovered[version] = struct{}{}
 		}
+		seenTransitions := make(map[string]struct{}, len(entry.TransitionAssets))
+		for _, asset := range entry.TransitionAssets {
+			if strings.TrimSpace(asset.Name) == "" || !sha256Pattern.MatchString(asset.SHA256) {
+				return releaseCatalog{}, fmt.Errorf("release catalog entry %d transition identity is invalid", index)
+			}
+			identity := asset.Name + "\x00" + asset.SHA256
+			if _, duplicate := seenTransitions[identity]; duplicate {
+				return releaseCatalog{}, fmt.Errorf("release catalog entry %d has duplicate transition asset", index)
+			}
+			seenTransitions[identity] = struct{}{}
+		}
 		entry.CoveredMigrations = append([]string(nil), entry.CoveredMigrations...)
+		entry.TransitionAssets = append([]ReleaseAsset(nil), entry.TransitionAssets...)
 	}
 	seenGate := make(map[string]struct{}, len(catalog.PublicationGate.MissingAllocatedMigrations))
 	for _, version := range catalog.PublicationGate.MissingAllocatedMigrations {
@@ -110,6 +127,7 @@ func CurrentReleaseCatalogEntry() (ReleaseCatalogEntry, error) {
 		if entry.ReleaseID == currentReleaseID && entry.SchemaVersion == currentSchemaVersion &&
 			entry.BaselineVersion == currentBaselineVersion {
 			entry.CoveredMigrations = append([]string(nil), entry.CoveredMigrations...)
+			entry.TransitionAssets = append([]ReleaseAsset(nil), entry.TransitionAssets...)
 			return entry, nil
 		}
 	}
@@ -132,6 +150,7 @@ func CatalogEntryForSchemaState(state SchemaState) (ReleaseCatalogEntry, error) 
 			state.BaselineVersion == entry.BaselineVersion &&
 			state.ReleaseManifestChecksum == entry.ReleaseManifestSHA256 {
 			entry.CoveredMigrations = append([]string(nil), entry.CoveredMigrations...)
+			entry.TransitionAssets = append([]ReleaseAsset(nil), entry.TransitionAssets...)
 			return entry, nil
 		}
 	}
@@ -144,6 +163,7 @@ func sameReleaseCatalogEntry(left, right ReleaseCatalogEntry) bool {
 		left.ReleaseManifestSHA256 == right.ReleaseManifestSHA256 &&
 		left.BaselineAsset == right.BaselineAsset &&
 		left.SourceSchemaAsset == right.SourceSchemaAsset &&
+		slices.Equal(left.TransitionAssets, right.TransitionAssets) &&
 		slices.Equal(left.CoveredMigrations, right.CoveredMigrations)
 }
 
@@ -152,6 +172,10 @@ func sameReleaseCatalogEntry(left, right ReleaseCatalogEntry) bool {
 // migration against separately pinned digests. It performs no database access
 // and is run before either bootstrap takes a lock or executes SQL.
 func ValidateCurrentReleaseArtifact(release ReleaseManifest) error {
+	catalog, err := loadReleaseCatalog()
+	if err != nil {
+		return fmt.Errorf("validate immutable release catalog: %w", err)
+	}
 	entry, err := CurrentReleaseCatalogEntry()
 	if err != nil {
 		return fmt.Errorf("validate immutable release catalog: %w", err)
@@ -164,13 +188,18 @@ func ValidateCurrentReleaseArtifact(release ReleaseManifest) error {
 		entry.BaselineAsset.SHA256 != checksumSQL(CurrentBaselineSQL()) {
 		return fmt.Errorf("immutable release catalog baseline identity mismatch")
 	}
-	if _, err := loadCurrentCatalogFingerprintAsset(); err != nil {
-		return fmt.Errorf("immutable release catalog source schema identity mismatch: %w", err)
+	registry, err := loadEmbeddedSchemaVerifierRegistry()
+	if err != nil {
+		return fmt.Errorf("immutable release catalog schema verifier registry mismatch: %w", err)
+	}
+	if err := verifyReleaseCatalogVerifierAssets(catalog.Entries, registry); err != nil {
+		return fmt.Errorf("immutable release catalog schema verifier identity mismatch: %w", err)
 	}
 	if entry.SourceSchemaAsset != currentSourceSchemaAsset() {
 		return fmt.Errorf("immutable release catalog source schema identity mismatch")
 	}
 	baselineMatches, sourceSchemaMatches := 0, 0
+	transitionMatches := make(map[ReleaseAsset]int, len(entry.TransitionAssets))
 	for _, asset := range release.Assets {
 		if asset.Name == entry.BaselineAsset.Name && asset.SHA256 == entry.BaselineAsset.SHA256 {
 			baselineMatches++
@@ -178,12 +207,22 @@ func ValidateCurrentReleaseArtifact(release ReleaseManifest) error {
 		if asset.Name == entry.SourceSchemaAsset.Name && asset.SHA256 == entry.SourceSchemaAsset.SHA256 {
 			sourceSchemaMatches++
 		}
+		for _, transition := range entry.TransitionAssets {
+			if asset == transition {
+				transitionMatches[transition]++
+			}
+		}
 	}
 	if baselineMatches != 1 {
 		return fmt.Errorf("immutable release catalog baseline asset manifest mismatch")
 	}
 	if sourceSchemaMatches != 1 {
 		return fmt.Errorf("immutable release catalog source schema asset manifest mismatch")
+	}
+	for _, transition := range entry.TransitionAssets {
+		if transitionMatches[transition] != 1 {
+			return fmt.Errorf("immutable release catalog transition asset manifest mismatch")
+		}
 	}
 	checksum, err := release.Checksum()
 	if err != nil {

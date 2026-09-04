@@ -67,10 +67,12 @@ func (m *Migrator) EnsureMigrationsTable(ctx context.Context) error {
 	return err
 }
 
-// GetAppliedMigrations returns all applied migrations sorted by version
+// GetAppliedMigrations returns committed migrations in ledger commit order.
+// Version is only a deterministic tie-breaker; transition-prefix validation
+// never derives execution order from version numbering.
 func (m *Migrator) GetAppliedMigrations(ctx context.Context) ([]Migration, error) {
 	query := `SELECT version, description, applied_at, rollback_sql, checksum, execution_ms, release_version
-		FROM schema_migrations ORDER BY version`
+		FROM schema_migrations ORDER BY applied_at, version`
 	rows, err := m.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query migrations: %w", err)
@@ -135,71 +137,50 @@ func (m *Migrator) PlanCurrentUpgrade(ctx context.Context, target ReleaseManifes
 	if err := ValidateCurrentReleaseArtifact(target); err != nil {
 		return nil, err
 	}
-	if err := VerifySchemaStateStorage(ctx, m.db); err != nil {
-		return nil, fmt.Errorf("unsupported upgrade source: minimum cataloged release is %s", minimumSupportedUpgradeSchemaVersion)
-	}
-	state, err := ReadSchemaState(ctx, m.db)
-	if err != nil {
-		return nil, fmt.Errorf("unsupported upgrade source: minimum cataloged release is %s", minimumSupportedUpgradeSchemaVersion)
-	}
-	entry, err := CatalogEntryForSchemaState(state)
+	catalog, err := currentUpgradeReleaseCatalog()
 	if err != nil {
 		return nil, err
 	}
-	applied, err := m.GetAppliedMigrations(ctx)
+	planned, err := m.PlanCatalogedUpgrade(ctx, target, catalog)
 	if err != nil {
-		return nil, fmt.Errorf("read upgrade migration history: %w", err)
+		return nil, fmt.Errorf(
+			"unsupported upgrade source: schema does not match cataloged release %s: %w",
+			minimumSupportedUpgradeSchemaVersion,
+			err,
+		)
 	}
-	if err := ValidateLedgerLineage(applied); err != nil {
-		return nil, err
-	}
-	if err := VerifyCatalogedUpgradeSourceSchema(ctx, m.db, entry); err != nil {
-		return nil, err
-	}
-	targetChecksum, err := target.Checksum()
-	if err != nil {
-		return nil, err
-	}
-	if state.ReleaseID == target.ReleaseID && state.SchemaVersion == target.SchemaVersion &&
-		state.BaselineVersion == target.BaselineVersion && state.ReleaseManifestChecksum == targetChecksum {
-		if err := VerifyCurrentSchema(ctx, m.db, target); err != nil {
-			return nil, fmt.Errorf(
-				"unsupported upgrade source: schema does not match cataloged release %s",
-				entry.SchemaVersion,
-			)
-		}
-	}
-	active := make(map[string]struct{}, len(RegisteredMigrations))
-	for _, migration := range RegisteredMigrations {
-		active[migration.Version] = struct{}{}
-	}
-	appliedActive := make([]string, 0, len(applied))
-	for _, migration := range applied {
-		if _, exists := active[migration.Version]; exists {
-			appliedActive = append(appliedActive, migration.Version)
-		}
-	}
-	pending, err := PlanMigrationsByExplicitCoverage(RegisteredMigrations, appliedActive, entry.CoveredMigrations)
-	if err != nil {
-		return nil, fmt.Errorf("plan baseline-aware upgrade: %w", err)
-	}
-	covered := relationSet(entry.CoveredMigrations...)
-	appliedSet := relationSet(appliedActive...)
-	gap := false
-	for _, migration := range RegisteredMigrations {
-		if _, skip := covered[migration.Version]; skip {
-			continue
-		}
-		_, committed := appliedSet[migration.Version]
-		if !committed {
-			gap = true
-			continue
-		}
-		if gap {
-			return nil, fmt.Errorf("migration ledger uncovered stream is not a continuous prefix")
-		}
+	pending := make([]Migration, 0, len(planned))
+	for _, item := range planned {
+		pending = append(pending, item.Descriptor())
 	}
 	return pending, nil
+}
+
+func currentUpgradeReleaseCatalog() (*UpgradeReleaseCatalog, error) {
+	catalog, err := loadReleaseCatalog()
+	if err != nil {
+		return nil, fmt.Errorf("load upgrade release catalog: %w", err)
+	}
+	registry, err := loadEmbeddedSchemaVerifierRegistry()
+	if err != nil {
+		return nil, fmt.Errorf("load upgrade schema verifier registry: %w", err)
+	}
+	migrations := make([]CatalogedMigration, 0, len(LegacyMigrations)+len(RegisteredMigrations))
+	for _, item := range LegacyMigrations {
+		lineage, published := PublishedLineage(item.Version)
+		if !published {
+			// Some pre-ledger bootstrap markers (notably 001) were never
+			// published as acceptable ledger rows. ValidateLedgerLineage rejects
+			// them if observed; they therefore do not belong in this planner's
+			// executable/checksum inventory.
+			continue
+		}
+		migrations = append(migrations, CatalogedMigration{Migration: item, SHA256: lineage.SQLSHA256})
+	}
+	for _, item := range RegisteredMigrations {
+		migrations = append(migrations, CatalogedMigration{Migration: item, SQL: GetMigrationSQL(item.Version)})
+	}
+	return NewUpgradeReleaseCatalog(catalog.Entries, registry, migrations)
 }
 
 // ApplyMigration applies a single migration
@@ -208,18 +189,23 @@ func (m *Migrator) ApplyMigration(ctx context.Context, mig Migration) error {
 		return err
 	}
 	sql := GetMigrationSQL(mig.Version)
+	return m.applyMigrationSQL(ctx, mig, sql, checksumSQL(sql))
+}
 
+func (m *Migrator) applyMigrationSQL(ctx context.Context, mig Migration, migrationSQL, expectedChecksum string) error {
 	tx, err := m.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
 
-	m.logger.Infow("Applying migration", "version", mig.Version, "description", mig.Description)
+	if m.logger != nil {
+		m.logger.Infow("Applying migration", "version", mig.Version, "description", mig.Description)
+	}
 
 	started := time.Now()
 	// Execute migration SQL
-	if _, err := tx.ExecContext(ctx, sql); err != nil {
+	if _, err := tx.ExecContext(ctx, migrationSQL); err != nil {
 		return fmt.Errorf("failed to execute migration SQL: %w", err)
 	}
 
@@ -230,7 +216,7 @@ func (m *Migrator) ApplyMigration(ctx context.Context, mig Migration) error {
 			(version, description, applied_at, rollback_sql, checksum, execution_ms, release_version)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`, mig.Version, mig.Description, time.Now(), mig.RollbackSQL,
-		checksumSQL(sql), executionMS, m.releaseVersion)
+		expectedChecksum, executionMS, m.releaseVersion)
 	if err != nil {
 		return fmt.Errorf("failed to record migration: %w", err)
 	}
@@ -239,7 +225,9 @@ func (m *Migrator) ApplyMigration(ctx context.Context, mig Migration) error {
 		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	m.logger.Infow("Migration applied successfully", "version", mig.Version)
+	if m.logger != nil {
+		m.logger.Infow("Migration applied successfully", "version", mig.Version)
+	}
 	return nil
 }
 

@@ -1,12 +1,38 @@
 package migration
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestParseReleaseCatalogRetainsMultipleEntriesAndExactTransitionRefs(t *testing.T) {
+	first, err := CurrentReleaseCatalogEntry()
+	require.NoError(t, err)
+	second := first
+	second.ReleaseID = "fixture-release-v2"
+	second.SchemaVersion = "fixture-schema-v2"
+	second.BaselineVersion = "fixture-baseline-v2"
+	second.ReleaseManifestSHA256 = strings.Repeat("b", 64)
+	second.SourceSchemaAsset = ReleaseAsset{Name: "source-schema/fixture-v2.json", SHA256: strings.Repeat("c", 64)}
+	second.TransitionAssets = []ReleaseAsset{{Name: "transition-schema/028--fixture-v2.json", SHA256: strings.Repeat("d", 64)}}
+	payload, err := json.Marshal(releaseCatalog{Entries: []ReleaseCatalogEntry{first, second}})
+	require.NoError(t, err)
+
+	parsed, err := parseReleaseCatalog(payload)
+	require.NoError(t, err)
+	require.Len(t, parsed.Entries, 2)
+	require.Equal(t, second.TransitionAssets, parsed.Entries[1].TransitionAssets)
+
+	second.TransitionAssets = append(second.TransitionAssets, second.TransitionAssets[0])
+	payload, err = json.Marshal(releaseCatalog{Entries: []ReleaseCatalogEntry{first, second}})
+	require.NoError(t, err)
+	_, err = parseReleaseCatalog(payload)
+	require.ErrorContains(t, err, "duplicate transition")
+}
 
 func TestCurrentReleaseCatalogPinsManifestBaselineAndExplicitCoverage(t *testing.T) {
 	entry, err := CurrentReleaseCatalogEntry()
@@ -15,14 +41,14 @@ func TestCurrentReleaseCatalogPinsManifestBaselineAndExplicitCoverage(t *testing
 	require.Equal(t, "itsm-v1.1", entry.ReleaseID)
 	require.Equal(t, "028_schema_release_state", entry.SchemaVersion)
 	require.Equal(t, "2026-09-04", entry.BaselineVersion)
-	require.Equal(t, "0746eaecff5b0fa459d3873f54d4b1123b342819f7d6ceeca463f537e4aa3efa", entry.ReleaseManifestSHA256)
+	require.Equal(t, "d7f289b1cee89fb5bacd8e149d0b7afaaef10409b21e62f2422ae4849f0eb943", entry.ReleaseManifestSHA256)
 	require.Equal(t, ReleaseAsset{
 		Name:   CurrentBaselineAssetName,
-		SHA256: "33a8977e08a37e15159b52a1505856c3c7312b0f5b400d44364985d35dadf2c5",
+		SHA256: "28ebe2d2096542d556eb94fcb42806235ebae1a33d7b6b0db5844890643d6773",
 	}, entry.BaselineAsset)
 	require.Equal(t, ReleaseAsset{
 		Name:   CurrentSourceSchemaAssetName,
-		SHA256: "bae1ba2a4759aeb1d0bd75a3ed915efa426071c7b72c735a98e368caa2a8a028",
+		SHA256: "20c0b4f2b56e3208e1ea62ccf8e9eb90fc211157ad62ed95ed9312877d4417fb",
 	}, entry.SourceSchemaAsset)
 	require.Equal(t, []string{
 		"007_add_change_execution_tables",
@@ -100,13 +126,16 @@ func TestCurrentReleaseArtifactValidationRejectsSelfConsistentBaselineTampering(
 }
 
 func TestCurrentReleaseArtifactValidationRejectsSelfConsistentSourceVerifierTampering(t *testing.T) {
-	original := append([]byte(nil), currentSourceSchemaAssetJSON...)
-	t.Cleanup(func() { currentSourceSchemaAssetJSON = original })
-	currentSourceSchemaAssetJSON = append(currentSourceSchemaAssetJSON, []byte("\n ")...)
-
-	regenerated := CurrentRelease()
-	err := ValidateCurrentReleaseArtifact(regenerated)
-	require.ErrorContains(t, err, "source schema identity mismatch")
+	content, err := embeddedSchemaVerifierAssets.ReadFile("sql/source/028_schema_release_state.json")
+	require.NoError(t, err)
+	content = append(content, []byte("\n ")...)
+	registry, err := NewSchemaVerifierRegistry(postgresCatalogFingerprintSQL, []VerifierAssetFile{{
+		Name: CurrentSourceSchemaAssetName, Content: content,
+	}})
+	require.NoError(t, err)
+	entry, err := CurrentReleaseCatalogEntry()
+	require.NoError(t, err)
+	require.ErrorContains(t, verifyReleaseCatalogVerifierAssets([]ReleaseCatalogEntry{entry}, registry), "identity mismatch")
 }
 
 func TestCurrentReleaseArtifactValidationRejectsCatalogQueryTampering(t *testing.T) {
@@ -115,7 +144,7 @@ func TestCurrentReleaseArtifactValidationRejectsCatalogQueryTampering(t *testing
 	postgresCatalogFingerprintSQL += "\n-- unpinned verifier change"
 
 	err := ValidateCurrentReleaseArtifact(CurrentRelease())
-	require.ErrorContains(t, err, "source schema identity mismatch")
+	require.ErrorContains(t, err, "schema verifier registry mismatch")
 }
 
 func TestReleasePublicationGateNamesUnmergedAllocatedVersions(t *testing.T) {

@@ -4,7 +4,10 @@ package integration
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
@@ -25,6 +28,9 @@ import (
 )
 
 const migrationBootstrapIntegrationTimeout = 5 * time.Minute
+
+//go:embed testdata/migration/source-schema/*.json testdata/migration/transition-schema/*.json
+var migrationVerifierFixtures embed.FS
 
 func TestPostgresLowLevelFreshReentryAndBaselineAwareUpgrade(t *testing.T) {
 	fixture := openDisposableMigrationDatabase(t)
@@ -133,6 +139,64 @@ func TestPostgresFreshRefusesStandaloneSchemaObjectBeforeDDL(t *testing.T) {
 	require.False(t, vectorsExists, "fresh refusal must happen before preparation DDL")
 }
 
+func TestPostgresCatalogFingerprintCoversManagedNamespaceInventory(t *testing.T) {
+	tests := []struct {
+		name   string
+		setup  string
+		mutate string
+	}{
+		{
+			name:   "collation",
+			mutate: `CREATE COLLATION public.task4_extra_collation (provider = libc, locale = 'C')`,
+		},
+		{
+			name:   "extended statistics",
+			setup:  `CREATE TABLE public.task4_statistics_probe (one integer, two integer)`,
+			mutate: `CREATE STATISTICS public.task4_extra_statistics ON one, two FROM public.task4_statistics_probe`,
+		},
+		{
+			name:   "table reloptions",
+			setup:  `CREATE TABLE public.task4_reloptions_probe (id bigint)`,
+			mutate: `ALTER TABLE public.task4_reloptions_probe SET (fillfactor = 70)`,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := openDisposableMigrationDatabase(t)
+			ctx, cancel := context.WithTimeout(context.Background(), migrationBootstrapIntegrationTimeout)
+			defer cancel()
+			if test.setup != "" {
+				_, err := fixture.target.ExecContext(ctx, test.setup)
+				require.NoError(t, err)
+			}
+			before, err := migration.CatalogFingerprint(ctx, fixture.target)
+			require.NoError(t, err)
+			_, err = fixture.target.ExecContext(ctx, test.mutate)
+			require.NoError(t, err)
+			after, err := migration.CatalogFingerprint(ctx, fixture.target)
+			require.NoError(t, err)
+			require.NotEqual(t, before, after, "managed namespace object must change the release fingerprint")
+		})
+	}
+}
+
+func TestPostgresCatalogFingerprintIgnoresExplicitlyUnmanagedSchemaObjects(t *testing.T) {
+	fixture := openDisposableMigrationDatabase(t)
+	ctx, cancel := context.WithTimeout(context.Background(), migrationBootstrapIntegrationTimeout)
+	defer cancel()
+	before, err := migration.CatalogFingerprint(ctx, fixture.target)
+	require.NoError(t, err)
+	_, err = fixture.target.ExecContext(ctx, `
+		CREATE SCHEMA operator_unmanaged;
+		CREATE TABLE operator_unmanaged.notes (id bigint PRIMARY KEY);
+		CREATE COLLATION operator_unmanaged.extra_collation (provider = libc, locale = 'C')
+	`)
+	require.NoError(t, err)
+	after, err := migration.CatalogFingerprint(ctx, fixture.target)
+	require.NoError(t, err)
+	require.Equal(t, before, after, "only public is a release-managed schema")
+}
+
 func TestPostgresFreshResumesVerifiedCommittedPreparation(t *testing.T) {
 	fixture := openDisposableMigrationDatabase(t)
 	ctx, cancel := context.WithTimeout(context.Background(), migrationBootstrapIntegrationTimeout)
@@ -146,6 +210,51 @@ func TestPostgresFreshResumesVerifiedCommittedPreparation(t *testing.T) {
 	state, err := migration.ReadSchemaState(ctx, fixture.target)
 	require.NoError(t, err)
 	require.NoError(t, migration.VerifySchemaState(state, migration.CurrentRelease()))
+}
+
+func TestPostgresFreshResumesEveryVerifiedCommittedSchemaPhase(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		stage func(context.Context, migration.BootstrapConnection) error
+	}{
+		{
+			name: "Ent schema",
+			stage: func(ctx context.Context, conn migration.BootstrapConnection) error {
+				if err := migration.PrepareCurrentInfrastructure(ctx, conn); err != nil {
+					return err
+				}
+				return migration.CreateCurrentEntSchema(ctx, conn)
+			},
+		},
+		{
+			name: "baseline before promotion",
+			stage: func(ctx context.Context, conn migration.BootstrapConnection) error {
+				if err := migration.PrepareCurrentInfrastructure(ctx, conn); err != nil {
+					return err
+				}
+				if err := migration.CreateCurrentEntSchema(ctx, conn); err != nil {
+					return err
+				}
+				return migration.ApplyCurrentBaseline(ctx, conn)
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := openDisposableMigrationDatabase(t)
+			ctx, cancel := context.WithTimeout(context.Background(), migrationBootstrapIntegrationTimeout)
+			defer cancel()
+			lock, err := migration.NewPostgresAdvisoryLock(fixture.target)
+			require.NoError(t, err)
+			require.NoError(t, lock.WithLock(ctx, func(conn migration.BootstrapConnection) error {
+				return test.stage(ctx, conn)
+			}))
+
+			runFreshWithoutPrivileges(t, ctx, fixture.target)
+			state, err := migration.ReadSchemaState(ctx, fixture.target)
+			require.NoError(t, err)
+			require.NoError(t, migration.VerifySchemaState(state, migration.CurrentRelease()))
+		})
+	}
 }
 
 func TestPostgresUnsupportedLegacyUpgradeFailsBeforeWrites(t *testing.T) {
@@ -365,6 +474,18 @@ func TestPostgresCatalogedSourceFingerprintRejectsUnrelatedDriftBeforePlanning(t
 			name:       "unrelated Ent column default",
 			corruptSQL: `ALTER TABLE applications ALTER COLUMN description SET DEFAULT 'operator-default'`,
 		},
+		{
+			name:       "extra managed collation",
+			corruptSQL: `CREATE COLLATION public.operator_extra_collation (provider = libc, locale = 'C')`,
+		},
+		{
+			name:       "extra managed extended statistics",
+			corruptSQL: `CREATE STATISTICS public.operator_extra_user_statistics ON id, tenant_id FROM public.users`,
+		},
+		{
+			name:       "managed table reloptions drift",
+			corruptSQL: `ALTER TABLE public.users SET (fillfactor = 70)`,
+		},
 	}
 
 	for _, test := range tests {
@@ -423,105 +544,118 @@ func TestPostgresFreshReentryRejectsArbitraryExtensionMemberBeforeDDL(t *testing
 	require.Equal(t, before, catalogSnapshot(t, ctx, fixture.target), "fresh re-entry refusal must precede DDL")
 }
 
-func TestPostgresUpgradeRestartDoesNotReplayCommittedForwardMigration(t *testing.T) {
+func TestPostgresCatalogedTransitionRecoversCommittedSchemaChangeWithoutReplay(t *testing.T) {
 	fixture := openDisposableMigrationDatabase(t)
 	ctx, cancel := context.WithTimeout(context.Background(), migrationBootstrapIntegrationTimeout)
 	defer cancel()
 	runFreshWithoutPrivileges(t, ctx, fixture.target)
 	stateBefore, err := migration.ReadSchemaState(ctx, fixture.target)
 	require.NoError(t, err)
-	entry, err := migration.CurrentReleaseCatalogEntry()
+	sourceEntry, err := migration.CurrentReleaseCatalogEntry()
 	require.NoError(t, err)
 
-	// Model the first migration after a fresh baseline with a real published
-	// transaction: for this test-only planning view 028 is outside coverage.
-	// The immutable catalog entry itself remains unchanged.
-	testCoverage := make([]string, 0, len(entry.CoveredMigrations)-1)
-	for _, version := range entry.CoveredMigrations {
-		if version != "028_schema_release_state" {
-			testCoverage = append(testCoverage, version)
-		}
+	const transitionSQL = `ALTER TABLE applications ADD COLUMN task4_transition_marker text NOT NULL DEFAULT 'ready'`
+	fixtureMigration := migration.CatalogedMigration{
+		Migration: migration.Migration{Version: "task4_fixture_add_transition_marker", Description: "add transition marker"},
+		SQL:       transitionSQL,
 	}
-	pending, err := migration.PlanMigrationsByExplicitCoverage(
-		migration.PostSchemaMigrations(), nil, testCoverage,
+	available := make([]migration.CatalogedMigration, 0, len(migration.PostSchemaMigrations())+1)
+	for _, item := range migration.PostSchemaMigrations() {
+		available = append(available, migration.CatalogedMigration{Migration: item, SQL: migration.GetMigrationSQL(item.Version)})
+	}
+	available = append(available, fixtureMigration)
+
+	targetSource := readVerifierFixture(t, "source-schema/task4_fixture_release_v2.json")
+	transition := readVerifierFixture(t, "transition-schema/028--task4_fixture_v2.json")
+	registry, err := migration.EmbeddedSchemaVerifierRegistry()
+	require.NoError(t, err)
+	registry, err = registry.WithAssets([]migration.VerifierAssetFile{targetSource, transition})
+	require.NoError(t, err)
+	targetRelease := migration.ReleaseManifest{
+		ReleaseID:            "task4-fixture-release-v2",
+		SchemaVersion:        "task4_fixture_schema_v2",
+		BaselineVersion:      "task4-fixture-baseline-v2",
+		EntSchemaFingerprint: strings.Repeat("d", 64),
+		Assets: []migration.ReleaseAsset{
+			{Name: targetSource.Name, SHA256: verifierFixtureChecksum(targetSource)},
+			{Name: transition.Name, SHA256: verifierFixtureChecksum(transition)},
+			{Name: fixtureMigration.Migration.Version, SHA256: verifierFixtureSQLChecksum(transitionSQL)},
+		},
+		SeedComponents: []migration.SeedComponent{{Name: "task4-fixture", Version: "v2"}},
+	}
+	targetChecksum, err := targetRelease.Checksum()
+	require.NoError(t, err)
+	targetEntry := migration.ReleaseCatalogEntry{
+		ReleaseID:             targetRelease.ReleaseID,
+		SchemaVersion:         targetRelease.SchemaVersion,
+		BaselineVersion:       targetRelease.BaselineVersion,
+		ReleaseManifestSHA256: targetChecksum,
+		BaselineAsset:         migration.ReleaseAsset{Name: "task4-fixture-baseline", SHA256: strings.Repeat("e", 64)},
+		SourceSchemaAsset:     migration.ReleaseAsset{Name: targetSource.Name, SHA256: verifierFixtureChecksum(targetSource)},
+		TransitionAssets:      []migration.ReleaseAsset{{Name: transition.Name, SHA256: verifierFixtureChecksum(transition)}},
+		CoveredMigrations:     append(append([]string(nil), sourceEntry.CoveredMigrations...), fixtureMigration.Migration.Version),
+	}
+	catalog, err := migration.NewUpgradeReleaseCatalog(
+		[]migration.ReleaseCatalogEntry{sourceEntry, targetEntry}, registry, available,
 	)
 	require.NoError(t, err)
-	require.Equal(t, []string{"028_schema_release_state"}, migrationVersions(pending))
 
 	lock, err := migration.NewPostgresAdvisoryLock(fixture.target)
 	require.NoError(t, err)
-	injected := errors.New("injected interruption after committed forward migration")
-	promotions := 0
-	err = migration.RunUpgrade(ctx, migration.UpgradeBootstrap{
-		Lock: lock,
-		PlanForwardMigrations: func(context.Context, migration.BootstrapConnection) ([]migration.Migration, error) {
-			return pending, nil
-		},
-		ApplyForwardMigrations: func(ctx context.Context, conn migration.BootstrapConnection, items []migration.Migration) error {
-			migrator := migration.NewMigratorOnConnection(conn, zap.NewNop().Sugar())
-			for _, item := range items {
-				if err := migrator.ApplyMigration(ctx, item); err != nil {
-					return err
-				}
-			}
-			return nil
-		},
-		VerifySchema: func(context.Context, migration.DBTX, migration.ReleaseManifest) error {
-			return injected
-		},
-		ApplyPrivileges: func(context.Context, migration.BootstrapConnection, migration.SchemaStateRoles) error {
-			return nil
-		},
-		PromoteState: func(context.Context, migration.DBTX, migration.ReleaseManifest) error {
-			promotions++
-			return nil
-		},
-		Release: migration.CurrentRelease(),
-		Roles:   migration.SchemaStateRoles{MigrationRole: "migration", RuntimeRole: "runtime"},
+	injected := errors.New("injected interruption after committed schema-changing migration")
+	err = lock.WithLock(ctx, func(conn migration.BootstrapConnection) error {
+		migrator := migration.NewMigratorOnConnection(conn, zap.NewNop().Sugar())
+		pending, err := migrator.PlanCatalogedUpgrade(ctx, targetRelease, catalog)
+		if err != nil {
+			return err
+		}
+		require.Len(t, pending, 1)
+		require.Equal(t, fixtureMigration.Migration.Version, pending[0].Version())
+		if err := migrator.ApplyCatalogedMigration(ctx, pending[0]); err != nil {
+			return err
+		}
+		return injected
 	})
 	require.ErrorIs(t, err, injected)
-	require.Zero(t, promotions)
 
 	stateAfterInterruption, err := migration.ReadSchemaState(ctx, fixture.target)
 	require.NoError(t, err)
 	require.Equal(t, stateBefore.UpdatedAt, stateAfterInterruption.UpdatedAt, "interruption must not promote schema state")
+	require.Equal(t, sourceEntry.ReleaseID, stateAfterInterruption.ReleaseID)
 	var committedRows int64
 	require.NoError(t, fixture.target.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM schema_migrations WHERE version = '028_schema_release_state'
+		SELECT COUNT(*) FROM schema_migrations WHERE version = 'task4_fixture_add_transition_marker'
 	`).Scan(&committedRows))
 	require.Equal(t, int64(1), committedRows)
+	var markerExists bool
+	require.NoError(t, fixture.target.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_schema = current_schema() AND table_name = 'applications'
+			  AND column_name = 'task4_transition_marker'
+		)
+	`).Scan(&markerExists))
+	require.True(t, markerExists, "fixture migration must make a real catalog change")
 
 	secondLock, err := migration.NewPostgresAdvisoryLock(fixture.target)
 	require.NoError(t, err)
-	appliedOnRestart := 0
-	err = migration.RunUpgrade(ctx, migration.UpgradeBootstrap{
-		Lock: secondLock,
-		PlanForwardMigrations: func(ctx context.Context, conn migration.BootstrapConnection) ([]migration.Migration, error) {
-			return migration.NewMigratorOnConnection(conn, zap.NewNop().Sugar()).
-				PlanCurrentUpgrade(ctx, migration.CurrentRelease())
-		},
-		ApplyForwardMigrations: func(context.Context, migration.BootstrapConnection, []migration.Migration) error {
-			appliedOnRestart++
-			return nil
-		},
-		VerifySchema: migration.VerifyCurrentSchema,
-		ApplyPrivileges: func(context.Context, migration.BootstrapConnection, migration.SchemaStateRoles) error {
-			return nil
-		},
-		PromoteState: func(ctx context.Context, db migration.DBTX, release migration.ReleaseManifest) error {
-			promotions++
-			return migration.PromoteSchemaState(ctx, db, release)
-		},
-		Release: migration.CurrentRelease(),
-		Roles:   migration.SchemaStateRoles{MigrationRole: "migration", RuntimeRole: "runtime"},
+	err = secondLock.WithLock(ctx, func(conn migration.BootstrapConnection) error {
+		migrator := migration.NewMigratorOnConnection(conn, zap.NewNop().Sugar())
+		pending, err := migrator.PlanCatalogedUpgrade(ctx, targetRelease, catalog)
+		if err != nil {
+			return err
+		}
+		require.Empty(t, pending, "verified committed prefix must not replay")
+		return migration.PromoteSchemaState(ctx, conn, targetRelease)
 	})
 	require.NoError(t, err)
-	require.Zero(t, appliedOnRestart, "committed forward migration must not be replayed")
-	require.Equal(t, 1, promotions)
 	require.NoError(t, fixture.target.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM schema_migrations WHERE version = '028_schema_release_state'
+		SELECT COUNT(*) FROM schema_migrations WHERE version = 'task4_fixture_add_transition_marker'
 	`).Scan(&committedRows))
 	require.Equal(t, int64(1), committedRows)
+	stateAfterRecovery, err := migration.ReadSchemaState(ctx, fixture.target)
+	require.NoError(t, err)
+	require.NoError(t, migration.VerifySchemaState(stateAfterRecovery, targetRelease))
 }
 
 func TestPostgresFreshRLSOffSupportsIndependentRuntimeRoleWithoutTenantGUC(t *testing.T) {
@@ -534,16 +668,9 @@ func TestPostgresFreshRLSOffSupportsIndependentRuntimeRoleWithoutTenantGUC(t *te
 	lock, err := migration.NewPostgresAdvisoryLock(fixture.target)
 	require.NoError(t, err)
 	require.NoError(t, migration.RunFreshBootstrap(ctx, migration.FreshBootstrap{
-		Lock:    lock,
-		Prepare: migration.PrepareCurrentInfrastructure,
-		CreateSchema: func(ctx context.Context, conn migration.BootstrapConnection) error {
-			client, err := migration.NewEntClientOnConnection(conn)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			return client.Schema.Create(ctx)
-		},
+		Lock:            lock,
+		Prepare:         migration.PrepareCurrentInfrastructure,
+		CreateSchema:    migration.CreateCurrentEntSchema,
 		ApplyBaseline:   migration.ApplyCurrentBaseline,
 		VerifySchema:    migration.VerifyCurrentSchema,
 		ApplyPrivileges: migration.ApplySchemaStatePrivilegesOnConnection,
@@ -645,16 +772,9 @@ func freshBootstrapForTest(t *testing.T, db *sql.DB) migration.FreshBootstrap {
 	lock, err := migration.NewPostgresAdvisoryLock(db)
 	require.NoError(t, err)
 	return migration.FreshBootstrap{
-		Lock:    lock,
-		Prepare: migration.PrepareCurrentInfrastructure,
-		CreateSchema: func(ctx context.Context, conn migration.BootstrapConnection) error {
-			client, err := migration.NewEntClientOnConnection(conn)
-			if err != nil {
-				return err
-			}
-			defer client.Close()
-			return client.Schema.Create(ctx)
-		},
+		Lock:          lock,
+		Prepare:       migration.PrepareCurrentInfrastructure,
+		CreateSchema:  migration.CreateCurrentEntSchema,
 		ApplyBaseline: migration.ApplyCurrentBaseline,
 		VerifySchema:  migration.VerifyCurrentSchema,
 		ApplyPrivileges: func(context.Context, migration.BootstrapConnection, migration.SchemaStateRoles) error {
@@ -675,6 +795,23 @@ func migrationVersions(items []migration.Migration) []string {
 		versions = append(versions, item.Version)
 	}
 	return versions
+}
+
+func readVerifierFixture(t *testing.T, logicalName string) migration.VerifierAssetFile {
+	t.Helper()
+	content, err := migrationVerifierFixtures.ReadFile("testdata/migration/" + logicalName)
+	require.NoError(t, err)
+	return migration.VerifierAssetFile{Name: logicalName, Content: content}
+}
+
+func verifierFixtureChecksum(file migration.VerifierAssetFile) string {
+	sum := sha256.Sum256(file.Content)
+	return hex.EncodeToString(sum[:])
+}
+
+func verifierFixtureSQLChecksum(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])
 }
 
 func catalogSnapshot(t *testing.T, ctx context.Context, db *sql.DB) string {
