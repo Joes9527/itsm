@@ -35,12 +35,14 @@ type Config struct {
 }
 
 // KAFOutboxConfig controls reliable delivery of BPMN delegation events to KAF.
-// An empty WebhookURL intentionally disables the dispatcher.
+// It is optional for the API process and required by the dedicated KAF worker.
 type KAFOutboxConfig struct {
 	WebhookURL    string
 	WebhookSecret string
 	BatchSize     int
 	PollInterval  time.Duration
+	MaxAttempts   int
+	HealthPort    int
 }
 
 // OutboxDeliveryConfig controls the shared delivery worker. Handlers may own
@@ -290,8 +292,20 @@ func LoadConfig() (*Config, error) {
 	}
 
 	// 后备: 如果环境变量直接设置了 ITSM_XXX，则使用它
-	config.JWT.Secret = getEnvWithDefault("JWT_SECRET", config.JWT.Secret)
-	config.Database.Password = getEnvWithDefault("DB_PASSWORD", config.Database.Password)
+	jwtSecret, err := readEnvironmentOrSecret("JWT_SECRET")
+	if err != nil {
+		return nil, err
+	}
+	if jwtSecret != "" {
+		config.JWT.Secret = jwtSecret
+	}
+	databasePassword, err := readEnvironmentOrSecret("DB_PASSWORD")
+	if err != nil {
+		return nil, err
+	}
+	if databasePassword != "" {
+		config.Database.Password = databasePassword
+	}
 	// RLS 双角色 DSN（可选）：留空则回落至默认 DB_USER/DB_PASSWORD
 	config.Database.AppRoleUser = getEnvWithDefault("DB_APP_ROLE_USER", config.Database.AppRoleUser)
 	config.Database.AppRolePassword = getEnvWithDefault("DB_APP_ROLE_PASSWORD", config.Database.AppRolePassword)
@@ -308,7 +322,11 @@ func LoadConfig() (*Config, error) {
 	config.Deployment.Mode = getEnvWithDefault("DEPLOYMENT_MODE", config.Deployment.Mode)
 	config.Deployment.AutoMigrate = getEnvBoolWithDefault("ITSM_AUTO_MIGRATE", config.Deployment.AutoMigrate)
 	config.Deployment.AutoSeed = getEnvBoolWithDefault("ITSM_AUTO_SEED", config.Deployment.AutoSeed)
-	kafOutboxConfig, err := loadKAFOutboxConfig(outboxEnv)
+	kafWebhookSecret, err := readEnvironmentOrSecret("KAF_WEBHOOK_SECRET")
+	if err != nil {
+		return nil, err
+	}
+	kafOutboxConfig, err := loadKAFOutboxConfigWithSecret(outboxEnv, kafWebhookSecret)
 	if err != nil {
 		return nil, err
 	}
@@ -375,6 +393,50 @@ func getEnvWithDefault(key, defaultValue string) string {
 	return defaultValue
 }
 
+// readEnvironmentOrSecret resolves a sensitive value from NAME or NAME_FILE.
+// ITSM_NAME and ITSM_NAME_FILE are accepted for existing deployment
+// conventions. Supplying more than one source is rejected so a secret rotation
+// cannot silently choose an unexpected credential.
+func readEnvironmentOrSecret(name string) (string, error) {
+	var directValues []string
+	var secretFiles []string
+	for _, key := range []string{name, "ITSM_" + name} {
+		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+			directValues = append(directValues, value)
+		}
+		if file := strings.TrimSpace(os.Getenv(key + "_FILE")); file != "" {
+			secretFiles = append(secretFiles, file)
+		}
+	}
+
+	if len(directValues)+len(secretFiles) > 1 {
+		return "", fmt.Errorf("%s must be set from exactly one environment or secret-file source", name)
+	}
+	if len(directValues) == 1 {
+		return directValues[0], nil
+	}
+	if len(secretFiles) == 0 {
+		return "", nil
+	}
+
+	fileInfo, err := os.Stat(secretFiles[0])
+	if err != nil {
+		return "", fmt.Errorf("read %s_FILE: %w", name, err)
+	}
+	if !fileInfo.Mode().IsRegular() {
+		return "", fmt.Errorf("%s_FILE must reference a regular file", name)
+	}
+	contents, err := os.ReadFile(secretFiles[0])
+	if err != nil {
+		return "", fmt.Errorf("read %s_FILE: %w", name, err)
+	}
+	value := strings.TrimSpace(string(contents))
+	if value == "" {
+		return "", fmt.Errorf("%s_FILE must not be empty", name)
+	}
+	return value, nil
+}
+
 func getEnvBoolWithDefault(key string, defaultValue bool) bool {
 	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 		switch strings.ToLower(value) {
@@ -405,11 +467,17 @@ func outboxEnv(key string) string {
 }
 
 func loadKAFOutboxConfig(getenv func(string) string) (KAFOutboxConfig, error) {
+	return loadKAFOutboxConfigWithSecret(getenv, getenv("KAF_WEBHOOK_SECRET"))
+}
+
+func loadKAFOutboxConfigWithSecret(getenv func(string) string, webhookSecret string) (KAFOutboxConfig, error) {
 	config := KAFOutboxConfig{
 		WebhookURL:    strings.TrimSpace(getenv("KAF_WEBHOOK_URL")),
-		WebhookSecret: strings.TrimSpace(getenv("KAF_WEBHOOK_SECRET")),
+		WebhookSecret: strings.TrimSpace(webhookSecret),
 		BatchSize:     20,
 		PollInterval:  5 * time.Second,
+		MaxAttempts:   5,
+		HealthPort:    8081,
 	}
 
 	if value := strings.TrimSpace(getenv("KAF_OUTBOX_BATCH_SIZE")); value != "" {
@@ -428,6 +496,22 @@ func loadKAFOutboxConfig(getenv func(string) string) (KAFOutboxConfig, error) {
 		config.PollInterval = pollInterval
 	}
 
+	if value := strings.TrimSpace(getenv("KAF_OUTBOX_MAX_ATTEMPTS")); value != "" {
+		maxAttempts, err := strconv.Atoi(value)
+		if err != nil || maxAttempts < 1 || maxAttempts > 20 {
+			return KAFOutboxConfig{}, fmt.Errorf("KAF_OUTBOX_MAX_ATTEMPTS must be an integer from 1 through 20")
+		}
+		config.MaxAttempts = maxAttempts
+	}
+
+	if value := strings.TrimSpace(getenv("KAF_WORKER_HEALTH_PORT")); value != "" {
+		healthPort, err := strconv.Atoi(value)
+		if err != nil || healthPort < 1 || healthPort > 65535 {
+			return KAFOutboxConfig{}, fmt.Errorf("KAF_WORKER_HEALTH_PORT must be an integer from 1 through 65535")
+		}
+		config.HealthPort = healthPort
+	}
+
 	if config.WebhookURL != "" && config.WebhookSecret == "" {
 		return KAFOutboxConfig{}, fmt.Errorf("KAF_WEBHOOK_SECRET is required when KAF_WEBHOOK_URL is configured")
 	}
@@ -438,6 +522,33 @@ func loadKAFOutboxConfig(getenv func(string) string) (KAFOutboxConfig, error) {
 		}
 	}
 	return config, nil
+}
+
+// ValidateKAFWorkerStartupConfig makes KAF delivery configuration required for
+// the dedicated Worker while keeping it optional for the API process.
+func ValidateKAFWorkerStartupConfig(cfg *Config) error {
+	if cfg == nil {
+		return fmt.Errorf("worker configuration is required")
+	}
+	if strings.TrimSpace(cfg.KAFOutbox.WebhookURL) == "" {
+		return fmt.Errorf("KAF_WEBHOOK_URL is required for the KAF worker")
+	}
+	if strings.TrimSpace(cfg.KAFOutbox.WebhookSecret) == "" {
+		return fmt.Errorf("KAF_WEBHOOK_SECRET is required for the KAF worker")
+	}
+	if cfg.KAFOutbox.BatchSize <= 0 {
+		return fmt.Errorf("KAF_OUTBOX_BATCH_SIZE must be positive for the KAF worker")
+	}
+	if cfg.KAFOutbox.PollInterval <= 0 {
+		return fmt.Errorf("KAF_OUTBOX_POLL_INTERVAL must be positive for the KAF worker")
+	}
+	if cfg.KAFOutbox.MaxAttempts <= 0 {
+		return fmt.Errorf("KAF_OUTBOX_MAX_ATTEMPTS must be positive for the KAF worker")
+	}
+	if cfg.KAFOutbox.HealthPort <= 0 || cfg.KAFOutbox.HealthPort > 65535 {
+		return fmt.Errorf("KAF_WORKER_HEALTH_PORT must be a valid port for the KAF worker")
+	}
+	return nil
 }
 
 func loadOutboxDeliveryConfig(getenv func(string) string) (OutboxDeliveryConfig, error) {

@@ -296,6 +296,10 @@ docker compose --env-file .env -f docker-compose.dev.yml --profile dev --profile
 
 # 启动监控（Prometheus + Grafana）
 docker compose --env-file .env -f docker-compose.dev.yml --profile dev --profile monitoring up -d
+
+# 启动 KAF 委派 Worker；需在 .env 中配置 KAF_WEBHOOK_URL 与 KAF_WEBHOOK_SECRET。
+# Worker 没有宿主机端口，标准验收使用两个副本。
+docker compose --env-file .env -f docker-compose.dev.yml --profile dev --profile worker up -d --scale itsm-worker=2 itsm-worker
 ```
 
 ### 4.3 生产环境
@@ -309,7 +313,20 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml down
 
 # 重新构建
 docker compose --env-file .env.prod -f docker-compose.prod.yml build --build-arg BUILDKIT_INLINE_CACHE=1
+
+# 上线前仅渲染检查：确认 Worker 无固定容器名、无 published port，且 KAF 密钥为 secret-file。
+docker compose --env-file .env.prod -f docker-compose.prod.yml config
+
+# Worker 使用同一镜像、仅消费 kaf_delegate_requested；至少启动两个副本。
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --scale itsm-worker=2 itsm-worker
 ```
+
+生产 `.env.prod` 只保存 secret 文件路径而不是密钥值：
+`ITSM_RUNTIME_DB_PASSWORD_FILE`、`ITSM_MIGRATION_DB_PASSWORD_FILE` 和
+`KAF_WEBHOOK_SECRET_FILE`。Compose 将它们只读挂载给需要该角色的容器。
+生产数据库为外部共享实例，`.env.prod` 还必须提供 `ITSM_DB_HOST`、
+`ITSM_DB_NAME`、`ITSM_RUNTIME_DB_USER` 与 `ITSM_MIGRATION_DB_USER`；不要恢复
+生产 Compose 内嵌 PostgreSQL 容器。
 
 ---
 

@@ -14,6 +14,7 @@ import (
 	"itsm-backend/controller"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	delegatedexecution "itsm-backend/handlers/delegated_execution"
 	"itsm-backend/migration"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
@@ -98,6 +99,26 @@ func TestSetupRoutes_AllControllersNil(t *testing.T) {
 
 	assert.True(t, routeMap["GET /api/v1/health"], "health should be registered")
 	assert.True(t, routeMap["GET /api/v1/version"], "version should be registered")
+}
+
+func TestSetupRoutes_DelegatedExecutionRoutesAreRegistered(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:delegated_execution_routes?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	r := gin.New()
+	SetupRoutes(r, &RouterConfig{
+		JWTSecret:                 "test-secret",
+		Logger:                    zaptest.NewLogger(t).Sugar(),
+		Client:                    client,
+		DelegatedExecutionHandler: delegatedexecution.NewHandler(delegatedexecution.NewService(client)),
+	})
+
+	routes := make(map[string]bool)
+	for _, route := range r.Routes() {
+		routes[route.Method+" "+route.Path] = true
+	}
+	assert.True(t, routes["GET /api/v1/delegated-executions"])
+	assert.True(t, routes["POST /api/v1/delegated-executions/:eventId/reconcile"])
+	assert.True(t, routes["POST /api/v1/delegated-executions/:eventId/requeue"])
 }
 
 // =====================================================================

@@ -85,6 +85,7 @@ When making architecture choices, prefer enterprise correctness, auditability, t
 Operational development procedures are maintained separately:
 
 - [Development and Operations Guide](docs/DEVELOPMENT_GUIDE.md): setup, commands, testing, API/DTO conventions, naming, deployment, troubleshooting, and review lessons.
+- [Coding Agent Engineering Governance](docs/agent-engineering-governance.md): mandatory file placement, documentation, testing, branch, worktree, and delivery rules for Coding Agents.
 - [Development Command Reference](docs/dev-commands-reference.md): detailed Make, Docker Compose, local-service, health-check, and migration commands.
 - [Code Review Guide](docs/code-review-guide.md): review workflow and quality checklist.
 - [E2E Testing Guide](docs/e2e-testing-guide.md): browser and real-path verification details.
@@ -141,5 +142,4 @@ The unified Work Item model is the shared business language for Ticket, Service 
 - Do not create a giant service or `switch recordClass` that implements every professional state machine. Shared services coordinate common behavior; professional services validate professional transitions and side effects.
 
 Operational commands, testing procedures, naming details, DTO examples, deployment operations, and troubleshooting belong in [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md).
-
 

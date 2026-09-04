@@ -1,28 +1,7 @@
 services:
-  # PostgreSQL 数据库（生产环境）
-  postgres:
-    image: pgvector/pgvector:pg17
-    container_name: itsm-postgres-prod
-    hostname: postgres
-    environment:
-      POSTGRES_DB: ${DB_NAME:-itsm_prod}
-      POSTGRES_USER: ${DB_USER:-itsm}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set}
-    ports:
-      - "127.0.0.1:5433:5432"
-    volumes:
-      - postgres_prod_data:/var/lib/postgresql/data
-      - ./backups:/backups:ro
-    networks:
-      - itsm-prod-network
-    healthcheck:
-      test:
-        ["CMD-SHELL", "pg_isready -U ${DB_USER:-itsm} -d ${DB_NAME:-itsm_prod}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-    restart: always
+  # Production PostgreSQL is an externally managed shared instance. ITSM uses
+  # its own logical database and role-scoped credentials; KAF has separate
+  # logical database/users and never writes ITSM tables directly.
 
   # Redis 缓存（生产环境）
   redis:
@@ -82,12 +61,12 @@ services:
     hostname: init
     command: ["./main"]
     environment:
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=${DB_USER:-itsm}
-      - DB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD must be set}
-      - DB_NAME=${DB_NAME:-itsm_prod}
-      - DB_SSLMODE=${DB_SSLMODE:-disable}
+      - DB_HOST=${ITSM_DB_HOST:?ITSM_DB_HOST must point to the external PostgreSQL instance}
+      - DB_PORT=${ITSM_DB_PORT:-5432}
+      - DB_USER=${ITSM_MIGRATION_DB_USER:?ITSM_MIGRATION_DB_USER must be set}
+      - DB_PASSWORD_FILE=/run/secrets/itsm_migration_db_password
+      - DB_NAME=${ITSM_DB_NAME:?ITSM_DB_NAME must be set}
+      - DB_SSLMODE=${ITSM_DB_SSLMODE:-require}
       - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD must be set}@redis:6379/0
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -103,8 +82,6 @@ services:
       - no_proxy=localhost,127.0.0.1
       - NO_PROXY=localhost,127.0.0.1
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       minio:
@@ -113,6 +90,8 @@ services:
       - ./logs:/app/logs
       - ./uploads:/app/uploads:rw
       - ./config:/app/config:ro
+    secrets:
+      - itsm_migration_db_password
     networks:
       - itsm-prod-network
     restart: "no"
@@ -126,12 +105,12 @@ services:
     container_name: itsm-backend-prod
     hostname: backend
     environment:
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=${DB_USER:-itsm}
-      - DB_PASSWORD=${DB_PASSWORD:?DB_PASSWORD must be set}
-      - DB_NAME=${DB_NAME:-itsm_prod}
-      - DB_SSLMODE=${DB_SSLMODE:-disable}
+      - DB_HOST=${ITSM_DB_HOST:?ITSM_DB_HOST must point to the external PostgreSQL instance}
+      - DB_PORT=${ITSM_DB_PORT:-5432}
+      - DB_USER=${ITSM_RUNTIME_DB_USER:?ITSM_RUNTIME_DB_USER must be set}
+      - DB_PASSWORD_FILE=/run/secrets/itsm_runtime_db_password
+      - DB_NAME=${ITSM_DB_NAME:?ITSM_DB_NAME must be set}
+      - DB_SSLMODE=${ITSM_DB_SSLMODE:-require}
 
       # Redis 配置
       - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD must be set}@redis:6379/0
@@ -194,8 +173,6 @@ services:
     ports:
       - "8090:8090"
     depends_on:
-      postgres:
-        condition: service_healthy
       redis:
         condition: service_healthy
       minio:
@@ -206,6 +183,8 @@ services:
       - ./logs:/app/logs
       - ./uploads:/app/uploads:rw
       - ./config:/app/config:ro
+    secrets:
+      - itsm_runtime_db_password
     networks:
       - itsm-prod-network
     healthcheck:
@@ -220,6 +199,54 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
+    restart: always
+
+  # KAF delegation delivery. Scale with: docker compose -f docker-compose.prod.yml up -d --scale itsm-worker=2 itsm-worker
+  # Do not add container_name or host ports: replicas claim the same fenced Outbox work.
+  itsm-worker:
+    image: itsm-backend:${VERSION:-latest}
+    build:
+      context: ./itsm-backend
+      dockerfile: Dockerfile.prod
+    command: ["./kaf-worker"]
+    environment:
+      - DB_HOST=${ITSM_DB_HOST:?ITSM_DB_HOST must point to the external PostgreSQL instance}
+      - DB_PORT=${ITSM_DB_PORT:-5432}
+      - DB_USER=${ITSM_RUNTIME_DB_USER:?ITSM_RUNTIME_DB_USER must be set}
+      - DB_PASSWORD_FILE=/run/secrets/itsm_runtime_db_password
+      - DB_NAME=${ITSM_DB_NAME:?ITSM_DB_NAME must be set}
+      - DB_SSLMODE=${ITSM_DB_SSLMODE:-require}
+      - ENV=production
+      - DEPLOYMENT_MODE=${DEPLOYMENT_MODE:-private}
+      - ITSM_AUTO_MIGRATE=false
+      - ITSM_AUTO_SEED=false
+      - KAF_WEBHOOK_URL=${KAF_WEBHOOK_URL:?KAF_WEBHOOK_URL must be set}
+      - KAF_WEBHOOK_SECRET_FILE=/run/secrets/kaf_webhook_secret
+      - KAF_OUTBOX_BATCH_SIZE=${KAF_OUTBOX_BATCH_SIZE:-20}
+      - KAF_OUTBOX_POLL_INTERVAL=${KAF_OUTBOX_POLL_INTERVAL:-5s}
+      - KAF_OUTBOX_MAX_ATTEMPTS=${KAF_OUTBOX_MAX_ATTEMPTS:-5}
+      - KAF_WORKER_HEALTH_PORT=8081
+      - LOG_LEVEL=${KAF_WORKER_LOG_LEVEL:-info}
+      - LOG_PATH=/app/logs
+      - no_proxy=localhost,127.0.0.1
+      - NO_PROXY=localhost,127.0.0.1
+    depends_on:
+      itsm-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./logs:/app/logs
+      - ./config:/app/config:ro
+    secrets:
+      - itsm_runtime_db_password
+      - kaf_webhook_secret
+    networks:
+      - itsm-prod-network
+    healthcheck:
+      test: ["CMD", "sh", "-c", "curl -fsS http://127.0.0.1:8081/readyz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     restart: always
 
   # ITSM 前端服务（生产环境）
@@ -283,12 +310,18 @@ services:
     restart: always
 
 volumes:
-  postgres_prod_data:
-    driver: local
   redis_prod_data:
     driver: local
   minio_prod_data:
     driver: local
+
+secrets:
+  itsm_runtime_db_password:
+    file: ${ITSM_RUNTIME_DB_PASSWORD_FILE:?ITSM_RUNTIME_DB_PASSWORD_FILE must point to the API and Worker database secret file}
+  itsm_migration_db_password:
+    file: ${ITSM_MIGRATION_DB_PASSWORD_FILE:?ITSM_MIGRATION_DB_PASSWORD_FILE must point to the migration database secret file}
+  kaf_webhook_secret:
+    file: ${KAF_WEBHOOK_SECRET_FILE:?KAF_WEBHOOK_SECRET_FILE must point to the Docker secret file}
 
 networks:
   itsm-prod-network:

@@ -10,6 +10,7 @@
 | 部署人员 | [部署指南](./deployment.md)、[配置参考](./configuration.md)、[运维手册](./operations.md) |
 | 后端开发 | [开发指南](./development.md)、[数据库说明](./database.md)、[后端 CI](../.github/workflows/backend-ci.yml) |
 | 前端开发 | [开发指南](./development.md)、[前端 CI](../.github/workflows/frontend-ci.yml) |
+| Coding Agent | [Agent 工程协作规范](./agent-engineering-governance.md)、[开发与运维手册](./DEVELOPMENT_GUIDE.md) |
 | 产品/方案 | [开源发布能力说明](./product/open-source-release-capability.md)、[产品文档索引](./product/README.md) |
 | 测试/QA | [角色视角测试方案](./testing/role-based-product-test-plan.md)、[测试用例目录](./testing/test-cases/README.md) |
 | 发布维护 | [Release workflow](../.github/workflows/release.yml) |

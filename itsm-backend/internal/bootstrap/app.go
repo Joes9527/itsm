@@ -44,6 +44,7 @@ import (
 	"itsm-backend/handlers/change"
 	"itsm-backend/handlers/cmdb"
 	domainCommon "itsm-backend/handlers/common"
+	"itsm-backend/handlers/delegated_execution"
 	"itsm-backend/handlers/knowledge"
 	"itsm-backend/handlers/known_error"
 	"itsm-backend/handlers/problem"
@@ -78,16 +79,16 @@ type ticketNotificationWorker interface {
 }
 
 type Application struct {
-	Cfg                  *config.Config
-	Logger               *zap.SugaredLogger
-	DBClient             *ent.Client
-	Router               *gin.Engine
-	Embedder             service.Embedder
-	VectorStore          *service.VectorStore
-	callbackWorker       bpmnCallbackWorker
-	notificationWorker   ticketNotificationWorker
-	outboxDeliveryWorker kafOutboxRunner
-	KAFOutboxDispatcher  kafOutboxRunner
+	Cfg                      *config.Config
+	Logger                   *zap.SugaredLogger
+	DBClient                 *ent.Client
+	Router                   *gin.Engine
+	Embedder                 service.Embedder
+	VectorStore              *service.VectorStore
+	callbackWorker           bpmnCallbackWorker
+	notificationWorker       ticketNotificationWorker
+	outboxDeliveryWorker     kafOutboxRunner
+	startBackgroundTasksFunc func(context.Context)
 }
 
 // prepareTicketCCIndexMigration removes the pre-partial-index definition.
@@ -239,25 +240,6 @@ func NewApplication() *Application {
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	var kafOutboxDispatcher kafOutboxRunner
-	if cfg.KAFOutbox.WebhookURL == "" {
-		sugar.Warn("KAF outbox dispatcher disabled because KAF_WEBHOOK_URL is not configured")
-	} else {
-		dispatcher, err := service.NewKafOutboxDispatcher(
-			service.NewOutboxEventRepository(client),
-			service.KafOutboxConfig{
-				WebhookURL:    cfg.KAFOutbox.WebhookURL,
-				WebhookSecret: cfg.KAFOutbox.WebhookSecret,
-				BatchSize:     cfg.KAFOutbox.BatchSize,
-				PollInterval:  cfg.KAFOutbox.PollInterval,
-			},
-		)
-		if err != nil {
-			log.Fatalf("Invalid KAF outbox configuration: %v", err)
-		}
-		kafOutboxDispatcher = dispatcher
-	}
-
 	// 6. 初始化服务层 & 控制器
 	// 这部分代码量较大，为了简化，我们先在这里进行组装，后续可以进一步拆分为 wires / container
 
@@ -652,6 +634,7 @@ func NewApplication() *Application {
 	cmdbRepo := cmdb.NewEntRepository(client)
 	cmdbServiceDomain := cmdb.NewService(cmdbRepo, sugar)
 	cmdbHandler := cmdb.NewHandler(cmdbServiceDomain)
+	delegatedExecutionHandler := delegated_execution.NewHandler(delegated_execution.NewService(client))
 
 	// Domain: Service Request (DDD)
 	srRepo := service_request.NewEntRepository(client)
@@ -877,14 +860,15 @@ func NewApplication() *Application {
 		A2UITicketController:            a2uiTicketController,
 		CMDBController:                  cmdbController,
 
-		DashboardHandler:         dashboardHandler,
-		CMDBHandler:              cmdbHandler,
-		ProjectController:        projectController,
-		ApplicationController:    applicationController,
-		TicketCategoryController: ticketCategoryController,
-		TicketTagController:      ticketTagController,
-		UserController:           userController,
-		GroupController:          groupController,
+		DashboardHandler:          dashboardHandler,
+		CMDBHandler:               cmdbHandler,
+		DelegatedExecutionHandler: delegatedExecutionHandler,
+		ProjectController:         projectController,
+		ApplicationController:     applicationController,
+		TicketCategoryController:  ticketCategoryController,
+		TicketTagController:       ticketTagController,
+		UserController:            userController,
+		GroupController:           groupController,
 
 		// Role & Permission Controllers
 		RoleController:             roleController,
@@ -966,7 +950,6 @@ func NewApplication() *Application {
 		callbackWorker:       concreteProcessEngine,
 		notificationWorker:   ticketNotificationService,
 		outboxDeliveryWorker: outboxDeliveryWorker,
-		KAFOutboxDispatcher:  kafOutboxDispatcher,
 	}
 }
 
@@ -1165,14 +1148,8 @@ func (app *Application) Run() {
 	defer app.DBClient.Close()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	waitForKAFOutbox := app.startKafOutboxDispatcher(ctx)
-	defer waitForKAFOutbox()
-	waitForOutboxDelivery := app.startOutboxDeliveryWorker(ctx)
-	defer waitForOutboxDelivery()
-
-	backgroundCtx, cancelBackground := context.WithCancel(context.Background())
-	defer cancelBackground()
-	app.startBackgroundTasks(backgroundCtx)
+	stopAPIRuntime := app.startAPIRuntime(ctx)
+	defer stopAPIRuntime()
 
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", app.Cfg.Server.Port))
 	if err != nil {
@@ -1185,18 +1162,25 @@ func (app *Application) Run() {
 	}
 }
 
-func (app *Application) startKafOutboxDispatcher(ctx context.Context) func() {
-	if app.KAFOutboxDispatcher == nil {
-		return func() {}
+// startAPIRuntime starts the background responsibilities that remain owned by
+// the API process in this release. KAF delegation delivery is deliberately
+// excluded: it has a single owner in the dedicated Worker process.
+func (app *Application) startAPIRuntime(ctx context.Context) func() {
+	waitForOutboxDelivery := app.startOutboxDeliveryWorker(ctx)
+	backgroundCtx, cancelBackground := context.WithCancel(ctx)
+	app.startBackground(backgroundCtx)
+	return func() {
+		cancelBackground()
+		waitForOutboxDelivery()
 	}
+}
 
-	var waitGroup sync.WaitGroup
-	waitGroup.Add(1)
-	go func() {
-		defer waitGroup.Done()
-		app.KAFOutboxDispatcher.Run(ctx)
-	}()
-	return waitGroup.Wait
+func (app *Application) startBackground(ctx context.Context) {
+	if app.startBackgroundTasksFunc != nil {
+		app.startBackgroundTasksFunc(ctx)
+		return
+	}
+	app.startBackgroundTasks(ctx)
 }
 
 func (app *Application) startOutboxDeliveryWorker(ctx context.Context) func() {

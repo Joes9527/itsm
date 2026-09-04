@@ -1,6 +1,6 @@
 # KAF 委派发布收口真实变更夹具
 
-> 状态：已确认测试对象与会话设计，等待书面规格审阅和实施计划批准后执行
+> 状态：已纳入 [SSLVPN 场景生产化与 KAF Worker 收敛设计](../superpowers/specs/2026-09-03-sslvpn-worker-production-readiness-design.md) 的第一阶段真实演练；仅在该 Runbook 的逐项 Go/No-Go 条件满足后执行
 > 日期：2026-08-31
 > 范围：KAF → Microsoft Graph → Azure AD Security Group 的真实成员变更
 

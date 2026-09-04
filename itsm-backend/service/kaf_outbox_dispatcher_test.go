@@ -3,16 +3,13 @@ package service
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
-	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
-	"itsm-backend/ent/hook"
 	"itsm-backend/ent/outboxevent"
 
 	"github.com/stretchr/testify/assert"
@@ -58,7 +55,7 @@ func TestKafOutboxDispatcher_DispatchesSignedEventAndMarksPublished(t *testing.T
 	assert.Equal(t, "sha256="+expectedKafDelegateHMAC(payload, "test-secret"), receivedHeader.Get("X-Webhook-Signature"))
 }
 
-func TestKafOutboxDispatcher_SchedulesRetryAfterTransportFailure(t *testing.T) {
+func TestKafOutboxDispatcher_MarksTransportOutcomeUnknown(t *testing.T) {
 	repo, client := newOutboxRepository(t)
 	event := validKafDelegateRequested()
 	payload, err := json.Marshal(event)
@@ -84,9 +81,8 @@ func TestKafOutboxDispatcher_SchedulesRetryAfterTransportFailure(t *testing.T) {
 		Where(outboxevent.EventIDEQ(event.EventID)).
 		Only(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, outboxEventStatusPending, persisted.Status)
+	assert.Equal(t, outboxEventStatusBlocked, persisted.Status)
 	assert.Equal(t, 1, persisted.AttemptCount)
-	assert.WithinDuration(t, now.Add(2*time.Second), persisted.NextAttemptAt, time.Millisecond)
 	assert.Contains(t, persisted.LastError, "deliver KAF webhook")
 }
 
@@ -102,7 +98,7 @@ func TestKafOutboxDispatcher_RejectsURLWithoutSecret(t *testing.T) {
 	require.ErrorContains(t, err, "KAF_WEBHOOK_SECRET")
 }
 
-func TestKafOutboxDispatcher_RetriesNon2xxWithoutDroppingEvent(t *testing.T) {
+func TestKafOutboxDispatcher_BlocksPermanentKAFRejection(t *testing.T) {
 	repo, client := newOutboxRepository(t)
 	event := validKafDelegateRequested()
 	payload, err := json.Marshal(event)
@@ -139,19 +135,10 @@ func TestKafOutboxDispatcher_RetriesNon2xxWithoutDroppingEvent(t *testing.T) {
 		Where(outboxevent.EventIDEQ(event.EventID)).
 		Only(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, outboxEventStatusPending, persisted.Status)
+	assert.Equal(t, outboxEventStatusBlocked, persisted.Status)
 	assert.Equal(t, 1, persisted.AttemptCount)
-	assert.WithinDuration(t, now.Add(2*time.Second), persisted.NextAttemptAt, time.Millisecond)
 	assert.Contains(t, persisted.LastError, "401")
 	assert.Contains(t, persisted.LastError, "invalid_webhook_signature")
-
-	audit, err := client.AuditLog.Query().
-		Where(auditlog.TenantIDEQ(7), auditlog.ActionEQ("kaf_outbox.delivery_rejected")).
-		Only(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusUnauthorized, audit.StatusCode)
-	assert.Equal(t, event.EventID, audit.RequestID)
-	assert.Nil(t, audit.RequestBody)
 }
 
 func TestKafOutboxDispatcher_RedactsJSONCredentialsFromClientRejection(t *testing.T) {
@@ -195,97 +182,6 @@ func TestKafOutboxDispatcher_RedactsJSONCredentialsFromClientRejection(t *testin
 	assert.NotContains(t, persisted.LastError, responseSecret)
 	assert.Contains(t, persisted.LastError, "invalid_webhook_signature")
 
-	audit, err := client.AuditLog.Query().
-		Where(auditlog.RequestIDEQ(event.EventID), auditlog.ActionEQ("kaf_outbox.delivery_rejected")).
-		Only(context.Background())
-	require.NoError(t, err)
-	assert.NotContains(t, audit.String(), responseSecret)
-	assert.Nil(t, audit.RequestBody)
-}
-
-func TestKafOutboxDispatcher_KeepsClientRejectionAuditAfterSuccessfulRetry(t *testing.T) {
-	repo, client := newOutboxRepository(t)
-	event := validKafDelegateRequested()
-	payload, err := json.Marshal(event)
-	require.NoError(t, err)
-	now := time.Now().UTC().Truncate(time.Millisecond)
-	seedPendingEventWithPayload(t, repo, event.EventID, now.Add(-time.Second), payload)
-
-	attempts := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		attempts++
-		if attempts == 1 {
-			w.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-		w.WriteHeader(http.StatusAccepted)
-	}))
-	defer server.Close()
-	dispatcher, err := NewKafOutboxDispatcher(repo, KafOutboxConfig{
-		WebhookURL:    server.URL,
-		WebhookSecret: "test-secret",
-		BatchSize:     1,
-		PollInterval:  time.Second,
-	})
-	require.NoError(t, err)
-	dispatcher.now = func() time.Time { return now }
-
-	require.NoError(t, dispatcher.DispatchOnce(context.Background()))
-	now = now.Add(2 * time.Second)
-	require.NoError(t, dispatcher.DispatchOnce(context.Background()))
-
-	persisted, err := client.OutboxEvent.Query().
-		Where(outboxevent.EventIDEQ(event.EventID)).
-		Only(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, outboxEventStatusPublished, persisted.Status)
-
-	audit, err := client.AuditLog.Query().
-		Where(auditlog.RequestIDEQ(event.EventID), auditlog.ActionEQ("kaf_outbox.delivery_rejected")).
-		Only(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, http.StatusUnauthorized, audit.StatusCode)
-	assert.Nil(t, audit.RequestBody)
-}
-
-func TestKafOutboxDispatcher_RollsBackRetryWhenClientRejectionAuditFails(t *testing.T) {
-	repo, client := newOutboxRepository(t)
-	event := validKafDelegateRequested()
-	payload, err := json.Marshal(event)
-	require.NoError(t, err)
-	now := time.Now().UTC().Truncate(time.Millisecond)
-	seedPendingEventWithPayload(t, repo, event.EventID, now.Add(-time.Second), payload)
-	client.AuditLog.Use(hook.On(hook.FixedError(errors.New("audit unavailable")), ent.OpCreate))
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusUnauthorized)
-	}))
-	defer server.Close()
-	dispatcher, err := NewKafOutboxDispatcher(repo, KafOutboxConfig{
-		WebhookURL:    server.URL,
-		WebhookSecret: "test-secret",
-		BatchSize:     1,
-		PollInterval:  time.Second,
-	})
-	require.NoError(t, err)
-	dispatcher.now = func() time.Time { return now }
-
-	err = dispatcher.DispatchOnce(context.Background())
-	require.ErrorContains(t, err, "audit unavailable")
-
-	persisted, err := client.OutboxEvent.Query().
-		Where(outboxevent.EventIDEQ(event.EventID)).
-		Only(context.Background())
-	require.NoError(t, err)
-	assert.Equal(t, outboxEventStatusPublishing, persisted.Status)
-	assert.Zero(t, persisted.AttemptCount)
-	assert.Empty(t, persisted.LastError)
-
-	auditCount, err := client.AuditLog.Query().
-		Where(auditlog.RequestIDEQ(event.EventID), auditlog.ActionEQ("kaf_outbox.delivery_rejected")).
-		Count(context.Background())
-	require.NoError(t, err)
-	assert.Zero(t, auditCount)
 }
 
 func TestKafOutboxDispatcher_RetriesServerErrorsWithoutClientErrorAudit(t *testing.T) {

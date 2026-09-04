@@ -22,23 +22,6 @@ func (r *blockingKafOutboxRunner) Run(ctx context.Context) {
 	<-ctx.Done()
 }
 
-func TestApplication_StartKafOutboxDispatcherRunsOnceAndWaitsForCancellation(t *testing.T) {
-	runner := &blockingKafOutboxRunner{started: make(chan struct{})}
-	app := &Application{KAFOutboxDispatcher: runner}
-	ctx, cancel := context.WithCancel(context.Background())
-	wait := app.startKafOutboxDispatcher(ctx)
-
-	select {
-	case <-runner.started:
-	case <-time.After(time.Second):
-		t.Fatal("KAF outbox dispatcher did not start")
-	}
-	cancel()
-	wait()
-
-	assert.Equal(t, int32(1), runner.runs.Load())
-}
-
 func TestApplication_StartOutboxDeliveryWorkerRunsOnceAndWaitsForCancellation(t *testing.T) {
 	runner := &blockingKafOutboxRunner{started: make(chan struct{})}
 	app := &Application{outboxDeliveryWorker: runner}

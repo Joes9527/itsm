@@ -146,6 +146,22 @@ docker-compose -f docker-compose.prod.yml --env-file .env.prod up -d
 docker-compose -f docker-compose.prod.yml up -d
 ```
 
+KAF 委派投递由独立 `itsm-worker` 负责。生产环境需要提供
+`KAF_WEBHOOK_URL`、`KAF_WEBHOOK_SECRET_FILE`、`ITSM_RUNTIME_DB_PASSWORD_FILE`
+和 `ITSM_MIGRATION_DB_PASSWORD_FILE`。API 与 Worker 只挂载 runtime 数据库
+secret，初始化任务只挂载 migration 数据库 secret；Worker 不发布宿主机端口，
+标准启动至少为两个副本：
+
+```bash
+docker compose --env-file .env.prod -f docker-compose.prod.yml config
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --scale itsm-worker=2 itsm-worker
+```
+
+不要在 API 容器中配置 KAF webhook secret，也不要把 Worker health port 发布到宿主机。
+生产 Compose 不再创建 PostgreSQL 容器；必须配置外部实例的 `ITSM_DB_HOST`、
+`ITSM_DB_NAME`、`ITSM_RUNTIME_DB_USER`、`ITSM_MIGRATION_DB_USER` 与 TLS 设置。
+KAF 与 ITSM 使用同一实例时仍必须使用不同逻辑数据库和用户。
+
 ### 常用排查命令
 
 ```bash

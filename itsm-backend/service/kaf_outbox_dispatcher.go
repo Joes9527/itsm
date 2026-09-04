@@ -25,12 +25,13 @@ const kafWebhookErrorBodyLimit = 1024
 const KafDelegateRequestedEventType = "kaf_delegate_requested"
 
 // KafOutboxConfig contains the runtime settings needed to deliver delegated
-// task events. The application creates a dispatcher only when WebhookURL is set.
+// task events. It is constructed only by the dedicated KAF worker.
 type KafOutboxConfig struct {
 	WebhookURL    string
 	WebhookSecret string
 	BatchSize     int
 	PollInterval  time.Duration
+	MaxAttempts   int
 }
 
 // KafOutboxDispatcher delivers tenant-owned KAF delegation events after their
@@ -40,20 +41,34 @@ type KafOutboxDispatcher struct {
 	config     KafOutboxConfig
 	httpClient *http.Client
 	now        func() time.Time
+	metrics    *KafOutboxMetrics
 }
 
-func NewKafOutboxDispatcher(repository *OutboxEventRepository, config KafOutboxConfig) (*KafOutboxDispatcher, error) {
+func NewKafOutboxDispatcher(repository *OutboxEventRepository, config KafOutboxConfig, metrics ...*KafOutboxMetrics) (*KafOutboxDispatcher, error) {
 	config.WebhookURL = strings.TrimSpace(config.WebhookURL)
 	config.WebhookSecret = strings.TrimSpace(config.WebhookSecret)
-	if config.WebhookURL != "" && config.WebhookSecret == "" {
-		return nil, fmt.Errorf("KAF_WEBHOOK_SECRET is required when KAF_WEBHOOK_URL is configured")
+	if config.WebhookURL == "" {
+		return nil, fmt.Errorf("KAF_WEBHOOK_URL is required for the KAF worker")
 	}
-	return &KafOutboxDispatcher{
+	if config.WebhookSecret == "" {
+		return nil, fmt.Errorf("KAF_WEBHOOK_SECRET is required for the KAF worker")
+	}
+	if config.MaxAttempts == 0 {
+		config.MaxAttempts = 5
+	}
+	if config.BatchSize <= 0 || config.PollInterval <= 0 || config.MaxAttempts <= 0 {
+		return nil, fmt.Errorf("KAF worker outbox settings must be positive")
+	}
+	dispatcher := &KafOutboxDispatcher{
 		repository: repository,
 		config:     config,
 		httpClient: &http.Client{Timeout: kafWebhookRequestTimeout},
 		now:        time.Now,
-	}, nil
+	}
+	if len(metrics) > 0 {
+		dispatcher.metrics = metrics[0]
+	}
+	return dispatcher, nil
 }
 
 // DispatchOnce claims due events and finalizes a delivery only with the lease
@@ -88,9 +103,17 @@ func (d *KafOutboxDispatcher) Run(ctx context.Context) {
 }
 
 func (d *KafOutboxDispatcher) dispatchEvent(ctx context.Context, event *ent.OutboxEvent) error {
+	if err := d.repository.MarkDeliveryAttemptStarted(ctx, event.ID, event.ClaimToken, event.EventID); err != nil {
+		return fmt.Errorf("mark KAF webhook delivery attempt: %w", err)
+	}
+	d.metrics.RecordAttempt()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, d.config.WebhookURL, bytes.NewReader(event.Payload))
 	if err != nil {
-		return fmt.Errorf("create KAF webhook request: %w", err)
+		if markErr := d.repository.MarkBlocked(ctx, event.ID, event.ClaimToken, fmt.Sprintf("create KAF webhook request: %v", err)); markErr != nil {
+			return fmt.Errorf("block invalid KAF webhook request: %w", markErr)
+		}
+		d.metrics.RecordTransition("blocked", "local_contract")
+		return nil
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Event-ID", event.EventID)
@@ -98,13 +121,21 @@ func (d *KafOutboxDispatcher) dispatchEvent(ctx context.Context, event *ent.Outb
 
 	response, err := d.httpClient.Do(req)
 	if err != nil {
-		return d.scheduleRetry(ctx, event, fmt.Sprintf("deliver KAF webhook: %v", err))
+		if markErr := d.repository.MarkDeliveryUnknown(ctx, event, event.ClaimToken, fmt.Sprintf("deliver KAF webhook: %v", err)); markErr != nil {
+			return fmt.Errorf("mark KAF webhook delivery unknown: %w", markErr)
+		}
+		d.metrics.RecordTransition("delivery_unknown", "transport")
+		return nil
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		responseBody, readErr := io.ReadAll(io.LimitReader(response.Body, kafWebhookErrorBodyLimit+1))
 		if readErr != nil {
-			return d.scheduleRetry(ctx, event, fmt.Sprintf("read KAF webhook HTTP %d response: %v", response.StatusCode, readErr))
+			if markErr := d.repository.MarkDeliveryUnknown(ctx, event, event.ClaimToken, fmt.Sprintf("read KAF webhook HTTP %d response: %v", response.StatusCode, readErr)); markErr != nil {
+				return fmt.Errorf("mark unreadable KAF webhook response unknown: %w", markErr)
+			}
+			d.metrics.RecordTransition("delivery_unknown", "response_read")
+			return nil
 		}
 		if len(responseBody) > kafWebhookErrorBodyLimit {
 			responseBody = responseBody[:kafWebhookErrorBodyLimit]
@@ -113,38 +144,35 @@ func (d *KafOutboxDispatcher) dispatchEvent(ctx context.Context, event *ent.Outb
 		if detail := strings.TrimSpace(string(responseBody)); detail != "" {
 			deliveryError += ": " + detail
 		}
-		if response.StatusCode >= http.StatusBadRequest && response.StatusCode < http.StatusInternalServerError {
-			return d.scheduleClientErrorRetry(ctx, event, deliveryError, response.StatusCode)
+		if response.StatusCode >= http.StatusBadRequest && response.StatusCode < http.StatusInternalServerError && response.StatusCode != http.StatusTooManyRequests {
+			if err := d.repository.MarkBlocked(ctx, event.ID, event.ClaimToken, deliveryError); err != nil {
+				return fmt.Errorf("block KAF webhook rejection: %w", err)
+			}
+			d.metrics.RecordTransition("blocked", "permanent_http")
+			return nil
 		}
 		return d.scheduleRetry(ctx, event, deliveryError)
 	}
 	if err := d.repository.MarkPublished(ctx, event.ID, event.ClaimToken, d.now().UTC()); err != nil {
 		return fmt.Errorf("mark KAF webhook event published: %w", err)
 	}
+	d.metrics.RecordTransition("published", "")
 	return nil
 }
 
 func (d *KafOutboxDispatcher) scheduleRetry(ctx context.Context, event *ent.OutboxEvent, deliveryError string) error {
+	if event.AttemptCount+1 >= d.config.MaxAttempts {
+		if err := d.repository.MarkDeadLetter(ctx, event.ID, event.ClaimToken, deliveryError); err != nil {
+			return fmt.Errorf("dead-letter KAF webhook event: %w", err)
+		}
+		d.metrics.RecordTransition("dead_letter", "retry_exhausted")
+		return nil
+	}
 	nextAttemptAt := d.now().UTC().Add(outboxRetryDelay(event.AttemptCount + 1))
 	if err := d.repository.MarkRetry(ctx, event.ID, event.ClaimToken, deliveryError, nextAttemptAt); err != nil {
 		return fmt.Errorf("schedule KAF webhook retry: %w", err)
 	}
-	return nil
-}
-
-func (d *KafOutboxDispatcher) scheduleClientErrorRetry(ctx context.Context, event *ent.OutboxEvent, deliveryError string, statusCode int) error {
-	nextAttemptAt := d.now().UTC().Add(outboxRetryDelay(event.AttemptCount + 1))
-	if err := d.repository.MarkRetryWithAudit(ctx, event.ID, event.ClaimToken, deliveryError, nextAttemptAt, OutboxRetryAudit{
-		TenantID:   event.TenantID,
-		RequestID:  event.EventID,
-		Resource:   "outbox_event",
-		Action:     "kaf_outbox.delivery_rejected",
-		Path:       "kaf/webhook",
-		Method:     http.MethodPost,
-		StatusCode: statusCode,
-	}); err != nil {
-		return fmt.Errorf("schedule KAF webhook client-error retry: %w", err)
-	}
+	d.metrics.RecordTransition("retry", "retryable_http")
 	return nil
 }
 

@@ -49,6 +49,9 @@ COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     go build -trimpath -ldflags="-s -w" -o /out/main ./main.go
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    go build -trimpath -ldflags="-s -w" -o /out/kaf-worker ./cmd/kaf_worker
 
 # ============================================================
 # Stage 2: Runtime
@@ -64,6 +67,7 @@ RUN addgroup -S app && adduser -S -G app app \
 
 # ca-certificates already ship with alpine; copy only what runtime needs.
 COPY --from=builder --chown=app:app /out/main ./main
+COPY --from=builder --chown=app:app /out/kaf-worker ./kaf-worker
 COPY --chown=app:app config.yaml ./
 COPY --chown=app:app migrations ./migrations
 COPY --chown=app:app config/seed ./config/seed

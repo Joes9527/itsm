@@ -1240,6 +1240,12 @@ func (s *Seeder) seedPermissions(ctx context.Context) {
 		{"ticket_template:create", "创建工单模板", "ticket_template", "create", "创建工单模板"},
 		{"ticket_template:update", "更新工单模板", "ticket_template", "update", "更新工单模板"},
 		{"ticket_template:delete", "删除工单模板", "ticket_template", "delete", "删除工单模板"},
+		// KAF delegated execution reconciliation. These permissions are seeded
+		// independently from ticket/workflow access because delivery evidence and
+		// repair operations are operationally sensitive.
+		{"delegated_execution:view", "查看委派执行", "delegated_execution", "view", "查看租户内 KAF 委派投递状态"},
+		{"delegated_execution:reconcile", "对账委派执行", "delegated_execution", "reconcile", "记录 KAF 委派投递对账结论"},
+		{"delegated_execution:requeue", "重发委派执行", "delegated_execution", "requeue", "仅在已确认未接受未开始时重入委派投递"},
 		// 事件权限
 		{"incident:read", "查看事件", "incident", "read", "查看事件列表和详情"},
 		{"incident:write", "管理事件", "incident", "write", "创建、编辑事件"},
@@ -1730,7 +1736,7 @@ func (s *Seeder) seedRolePermissions(ctx context.Context) {
 	// 定义角色权限映射
 	rolePermissionMap := map[string][]string{
 		// 系统管理员：所有权限
-		"sysadmin": allPermissionCodes(),
+		"sysadmin": append(allPermissionCodes(), "delegated_execution:view", "delegated_execution:reconcile", "delegated_execution:requeue"),
 		// IT总监：全局读写（不含系统管理）
 		"it_director": allExcept([]string{"system:write", "msp:write", "msp_allocation:write"}),
 		// 运维总监：运维相关读写

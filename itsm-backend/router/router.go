@@ -21,6 +21,7 @@ import (
 	"itsm-backend/handlers/change"
 	"itsm-backend/handlers/cmdb"
 	domainCommon "itsm-backend/handlers/common"
+	"itsm-backend/handlers/delegated_execution"
 	"itsm-backend/handlers/knowledge"
 	"itsm-backend/handlers/known_error"
 	"itsm-backend/handlers/problem"
@@ -256,9 +257,10 @@ type RouterConfig struct {
 	CloudController        *controller.CloudController
 
 	// Domain Handlers
-	ServiceCatalogHandler *service_catalog.Handler
-	ServiceRequestHandler *service_request.Handler
-	CMDBHandler           *cmdb.Handler
+	ServiceCatalogHandler     *service_catalog.Handler
+	ServiceRequestHandler     *service_request.Handler
+	CMDBHandler               *cmdb.Handler
+	DelegatedExecutionHandler *delegated_execution.Handler
 
 	ProblemHandler        *problem.Handler
 	ChangeHandler         *change.Handler
@@ -404,6 +406,12 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 		// CSRF 不验证登录相关的路径
 		csrfConfig.SkipPaths = append(csrfConfig.SkipPaths, "/api/v1/auth/login")
 		auth.Use(middleware.CSRFProtectionMiddleware(csrfConfig))
+	}
+	if config.DelegatedExecutionHandler != nil {
+		delegatedExecutions := auth.Group("/delegated-executions")
+		delegatedExecutions.GET("", middleware.RequirePermission("delegated_execution", "view"), config.DelegatedExecutionHandler.List)
+		delegatedExecutions.POST("/:eventId/reconcile", middleware.RequirePermission("delegated_execution", "reconcile"), config.DelegatedExecutionHandler.Reconcile)
+		delegatedExecutions.POST("/:eventId/requeue", middleware.RequirePermission("delegated_execution", "requeue"), config.DelegatedExecutionHandler.Requeue)
 	}
 
 	// WebSocket 路由（使用短期票据替代JWT query参数，避免token泄露）
