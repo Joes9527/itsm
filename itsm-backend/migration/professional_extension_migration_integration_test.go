@@ -533,6 +533,40 @@ func TestCurrentRLSRepairRecreatesCanonicalDirectAndWorkItemPolicies(t *testing.
 	}
 }
 
+func TestCurrentRLSRepairReplacesLegacy009SLAPolicyBeforeDroppingHelper(t *testing.T) {
+	db := openProfessionalExtensionMigrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+	defer cancel()
+
+	_, err := db.ExecContext(ctx, `
+		CREATE TABLE sla_policies (
+			id BIGINT PRIMARY KEY,
+			tenant_id BIGINT NOT NULL
+		);
+		CREATE OR REPLACE FUNCTION get_current_tenant_id() RETURNS INTEGER AS $$
+		BEGIN
+			RETURN NULLIF(current_setting('app.current_tenant_id', true)::INTEGER, 0);
+		END;
+		$$ LANGUAGE plpgsql STABLE;
+		ALTER TABLE sla_policies ENABLE ROW LEVEL SECURITY;
+		ALTER TABLE sla_policies FORCE ROW LEVEL SECURITY;
+		CREATE POLICY tenant_isolation_sla_policies ON sla_policies
+			USING (tenant_id = get_current_tenant_id())
+			WITH CHECK (tenant_id = get_current_tenant_id());
+	`)
+	require.NoError(t, err)
+	activationBefore := readRLSActivationState(t, ctx, db, "sla_policies")
+
+	_, err = db.ExecContext(ctx, GetMigrationSQL("027_reconcile_current_rls_policies"))
+	require.NoError(t, err)
+
+	requireCanonicalDirectTenantPolicy(t, ctx, db, "sla_policies")
+	require.Equal(t, activationBefore, readRLSActivationState(t, ctx, db, "sla_policies"))
+	var legacyTenantFunction *string
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT to_regprocedure('get_current_tenant_id()')`).Scan(&legacyTenantFunction))
+	require.Nil(t, legacyTenantFunction)
+}
+
 func TestProfessionalExtensionMigrationRejectsConflictingNamedForeignKey(t *testing.T) {
 	db := openProfessionalExtensionMigrationDB(t)
 	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)

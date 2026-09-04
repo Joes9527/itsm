@@ -138,6 +138,23 @@ func TestApplyMigrationRejectsUnpublishedLineageBeforeOpeningTransaction(t *test
 	require.ErrorContains(t, err, "published lineage")
 }
 
+func TestActiveForwardRepairsMatchPublishedLineage(t *testing.T) {
+	for _, version := range []string{
+		"026_reconcile_change_execution_tenants",
+		"027_reconcile_current_rls_policies",
+	} {
+		t.Run(version, func(t *testing.T) {
+			for _, migration := range RegisteredMigrations {
+				if migration.Version == version {
+					require.NoError(t, validateActiveMigration(migration))
+					return
+				}
+			}
+			require.Fail(t, "active forward repair is not registered", version)
+		})
+	}
+}
+
 func TestValidateLedgerLineageAcceptsCurrentForwardRepairChecksums(t *testing.T) {
 	for _, version := range []string{
 		"026_reconcile_change_execution_tenants",
@@ -311,7 +328,7 @@ func TestCurrentRLSRepairReconcilesAndVerifiesCanonicalPolicies(t *testing.T) {
 	assert.Contains(t, sql, "DROP FUNCTION IF EXISTS get_current_tenant_id()")
 	assert.Contains(t, sql, "pg_get_expr(policy.polqual, policy.polrelid)")
 	assert.Contains(t, sql, "pg_get_expr(policy.polwithcheck, policy.polrelid)")
-	assert.NotContains(t, sql, "sla_policies")
+	assert.Contains(t, sql, "('sla_policies', 'direct')")
 	assert.NotContains(t, sql, "approval_workflows")
 	assert.NotContains(t, sql, "app.current_tenant_id")
 	assert.NotContains(t, sql, "FORCE ROW LEVEL SECURITY")
@@ -322,6 +339,7 @@ func TestCurrentRLSRepairUsesExplicitRegistryAndPreservesActivationState(t *test
 	require.NotEmpty(t, sql)
 	assert.Contains(t, sql, "SELECT * FROM (VALUES")
 	assert.Contains(t, sql, "('teams', 'direct')")
+	assert.Contains(t, sql, "('sla_policies', 'direct')")
 	assert.Contains(t, sql, "('changes', 'work_item')")
 	assert.Contains(t, sql, "('change_approvals', 'change_work_item')")
 	assert.NotContains(t, sql, "pg_attribute")

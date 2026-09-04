@@ -1266,6 +1266,7 @@ BEGIN
             ('teams', 'direct'),
             ('roles', 'direct'),
             ('users', 'direct'),
+            ('sla_policies', 'direct'),
             ('tickets', 'direct'),
             ('service_catalogs', 'direct'),
             ('ci_types', 'direct'),
