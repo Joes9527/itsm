@@ -2,9 +2,12 @@
 
 ## 发布前提
 
-- 使用 PostgreSQL 17，并已完成可恢复备份和恢复抽检。
+- 使用 PostgreSQL 17（major 17），且 `pgvector` 0.8.6 精确可用；一次性 bootstrap 会在 DDL 前执行同一只读 preflight。
 - 发布制品、迁移文件和初始化 manifest 来自同一 release version。
 - 显式提供生产环境变量文件；不得使用仓库默认凭据。
+- `ITSM_MIGRATION_DB_USER` 与 `ITSM_RUNTIME_DB_USER` 必须是不同登录角色；前者仅供
+  init/migrate，后者供 API/Worker，且不得为 superuser 或拥有 `BYPASSRLS`。密码来自
+  Compose secret/受保护环境文件，不写入 Compose。
 - 普通 Web 容器必须设置 `ITSM_AUTO_MIGRATE=false`、`ITSM_AUTO_SEED=false`。
 - 一次性 `itsm-init` 必须显式选择 `ITSM_BOOTSTRAP_MODE=upgrade`（常规发布）或
   `ITSM_BOOTSTRAP_MODE=fresh`（仅全新空库）；该变量不提供 reset/drop 行为。
@@ -19,6 +22,9 @@
 - 当前最低直接支持的 upgrade 来源是精确 cataloged `028_schema_release_state`。缺少匹配
   `schema_state` 或 schema 定义不符时，Job 在任何 migration/privilege/promotion 写入前退出；
   更老版本必须先走经评审的分阶段升级路径，不得手工补 ledger 或临时启用兼容 DDL。
+- 若现有数据卷来自 PostgreSQL 15/16，禁止直接挂载到 PG17 容器。保留原卷并先做可恢复
+  备份，随后选择受控 `pg_dump`/`pg_restore` 到新 PG17 集群，或按官方流程运行
+  `pg_upgrade`；验证 pgvector 0.8.6、schema_state、账本和业务数据后才可切换。
 
 ## 标准发布
 

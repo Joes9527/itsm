@@ -6,7 +6,7 @@
     "releaseId": "itsm-v1.1",
     "schemaVersion": "028_schema_release_state",
     "baselineVersion": "2026-09-04",
-    "releaseManifestSha256": "d7f289b1cee89fb5bacd8e149d0b7afaaef10409b21e62f2422ae4849f0eb943"
+    "releaseManifestSha256": "5decb8eeb0ddfabf00ad46fde9d8e6021dafa7f07dd660bdad22b105e8fadeee"
   },
   "target": {
     "releaseId": "task4-fixture-release-v2",
@@ -15,7 +15,7 @@
   },
   "verifier": {
     "name": "catalog-verifier/postgres-v1.sql",
-    "sha256": "e8bfb1b976bafaff86c988e00e769daa7974b417859b6e0e8696b2b88066324d"
+    "sha256": "81ae14a0b1a6b2c7c1ea41fe6357ff6b7b8db728d6fecaeb67e654550308b4ae"
   },
   "platform": {"postgresMajor": 17, "vectorVersion": "0.8.6"},
   "managedSchemas": ["public"],
@@ -23,7 +23,7 @@
     {
       "version": "task4_fixture_add_transition_marker",
       "sqlSha256": "e058494a69af477b501f0d2f584ee3de9c54ec1ea41b974142a46a0f31d77768",
-      "fingerprint": "8997c41b8bae3b05c27ab4826000f89b46fc44adad250b33303adafc9cbcfcf1",
+      "fingerprint": "557f637d8efdf237dc2b087e93b534d652b4759f66f8365e33c5237b1a881cab",
       "extensions": [
         {"name": "plpgsql", "schema": "pg_catalog", "version": "1.0"},
         {"name": "vector", "schema": "public", "version": "0.8.6"}

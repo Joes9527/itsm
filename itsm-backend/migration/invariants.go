@@ -46,8 +46,24 @@ func VerifyCurrentSchema(ctx context.Context, db DBTX, release ReleaseManifest) 
 	if err != nil {
 		return fmt.Errorf("resolve current release schema fingerprint: %w", err)
 	}
-	if err := VerifyCatalogedUpgradeSourceSchema(ctx, db, entry); err != nil {
-		return fmt.Errorf("verify current release schema fingerprint: %w", err)
+	registry, err := loadEmbeddedSchemaVerifierRegistry()
+	if err != nil {
+		return fmt.Errorf("resolve current release schema fingerprint: %w", err)
+	}
+	asset, err := registry.loadSource(entry.SourceSchemaAsset)
+	if err != nil || !asset.Release.matches(entry) {
+		return fmt.Errorf("resolve current release schema fingerprint: source asset mismatch")
+	}
+	verify := func(expected string) error {
+		return registry.verifyFingerprint(
+			ctx, db, expected, asset.Verifier, asset.Extensions.Installed,
+			asset.Platform, true, asset.ManagedSchemas,
+		)
+	}
+	if err := verify(asset.Phases.CurrentRelease); err != nil {
+		if prePrivilegesErr := verify(asset.Phases.CurrentReleasePrePrivileges); prePrivilegesErr != nil {
+			return fmt.Errorf("verify current release schema fingerprint: schema does not match cataloged release %s", entry.SchemaVersion)
+		}
 	}
 	return nil
 }

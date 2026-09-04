@@ -9,7 +9,7 @@
   },
   "verifier": {
     "name": "catalog-verifier/postgres-v1.sql",
-    "sha256": "e8bfb1b976bafaff86c988e00e769daa7974b417859b6e0e8696b2b88066324d"
+    "sha256": "81ae14a0b1a6b2c7c1ea41fe6357ff6b7b8db728d6fecaeb67e654550308b4ae"
   },
   "platform": {
     "postgresMajor": 17,
@@ -26,9 +26,10 @@
     ]
   },
   "phases": {
-    "empty": "c59eb8c3e45adb281fe6c9a4ddcfd0762b37be4b5b98d59d6de583afec648650",
-    "prepared": "509910e0ed21af2917c4c8b1cba7187145b1bebcabe0162f300f8ebffc937258",
-    "entSchema": "597e598a1ca13fb132d98f90f45d61f06ca7d03d93c03723e77f73c309ff2c56",
-    "currentRelease": "ee7ae0f115b6c30ac593bb4a28f7d378f23d7d1fb4453f48ddcb7d98c957ac56"
+    "empty": "f74b74a3be989200b0222b3b6372442b1cb9c8616da4529cf97821e72c4674b4",
+    "prepared": "a25b4f39ec870bf527cd2e475c039756275ac4c4c3f405a028516b6bbdc6a2e0",
+    "entSchema": "b11945bd8a01c399005ba8016775e51ca1ec0137419c4134492a1cbe468dd6b0",
+    "currentReleasePrePrivileges": "f9d47f5f69643a3657719db3120f5bd26f0e6b88af3f8de7ee328ab882fbd163",
+    "currentRelease": "dda2ad3a486540b0b800b1f7ec07fa9debbb19a7ef047e452c791a25eb4a2e4e"
   }
 }

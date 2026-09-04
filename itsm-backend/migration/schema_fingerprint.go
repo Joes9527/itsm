@@ -20,14 +20,15 @@ const (
 //go:embed sql/catalog/postgres-v1.sql
 var postgresCatalogFingerprintSQL string
 
-//go:embed sql/source sql/transition
+//go:embed sql/catalog sql/source sql/transition
 var embeddedSchemaVerifierAssets embed.FS
 
 type catalogFingerprintPhases struct {
-	Empty          string `json:"empty"`
-	Prepared       string `json:"prepared"`
-	EntSchema      string `json:"entSchema"`
-	CurrentRelease string `json:"currentRelease"`
+	Empty                       string `json:"empty"`
+	Prepared                    string `json:"prepared"`
+	EntSchema                   string `json:"entSchema"`
+	CurrentReleasePrePrivileges string `json:"currentReleasePrePrivileges"`
+	CurrentRelease              string `json:"currentRelease"`
 }
 
 type catalogExtensionIdentity struct {
@@ -80,6 +81,14 @@ func currentSourceSchemaAsset() ReleaseAsset {
 	}
 }
 
+func currentCatalogVerifierAsset() ReleaseAsset {
+	asset, err := loadCurrentCatalogFingerprintAsset()
+	if err != nil {
+		panic(fmt.Sprintf("read current catalog verifier asset: %v", err))
+	}
+	return asset.Verifier
+}
+
 func loadCurrentCatalogFingerprintAsset() (catalogFingerprintAsset, error) {
 	registry, err := loadEmbeddedSchemaVerifierRegistry()
 	if err != nil {
@@ -98,9 +107,29 @@ func loadCurrentCatalogFingerprintAsset() (catalogFingerprintAsset, error) {
 }
 
 func loadEmbeddedSchemaVerifierRegistry() (*SchemaVerifierRegistry, error) {
+	var verifierFiles []VerifierAssetFile
+	err := fs.WalkDir(embeddedSchemaVerifierAssets, "sql/catalog", func(filePath string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() || path.Ext(filePath) != ".sql" {
+			return nil
+		}
+		content, err := embeddedSchemaVerifierAssets.ReadFile(filePath)
+		if err != nil {
+			return err
+		}
+		verifierFiles = append(verifierFiles, VerifierAssetFile{
+			Name: path.Join("catalog-verifier", path.Base(filePath)), Content: content,
+		})
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("load embedded catalog verifier registry: %w", err)
+	}
 	var files []VerifierAssetFile
 	for _, root := range []string{"sql/source", "sql/transition"} {
-		err := fs.WalkDir(embeddedSchemaVerifierAssets, root, func(filePath string, entry fs.DirEntry, walkErr error) error {
+		err = fs.WalkDir(embeddedSchemaVerifierAssets, root, func(filePath string, entry fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
 			}
@@ -122,7 +151,7 @@ func loadEmbeddedSchemaVerifierRegistry() (*SchemaVerifierRegistry, error) {
 			return nil, fmt.Errorf("load embedded schema verifier registry: %w", err)
 		}
 	}
-	return NewSchemaVerifierRegistry(postgresCatalogFingerprintSQL, files)
+	return NewSchemaVerifierRegistry(verifierFiles, files)
 }
 
 // EmbeddedSchemaVerifierRegistry returns an immutable registry containing all
@@ -198,7 +227,19 @@ func catalogFingerprint(ctx context.Context, db DBTX) (string, error) {
 // and external integration fixtures. Production validation compares it only
 // with immutable embedded assets.
 func CatalogFingerprint(ctx context.Context, db DBTX) (string, error) {
-	return catalogFingerprint(ctx, db)
+	registry, err := loadEmbeddedSchemaVerifierRegistry()
+	if err != nil {
+		return "", err
+	}
+	asset, err := registry.loadSource(currentSourceSchemaAsset())
+	if err != nil {
+		return "", err
+	}
+	query, err := registry.loadVerifier(asset.Verifier)
+	if err != nil {
+		return "", err
+	}
+	return catalogFingerprintWithSQL(ctx, db, query)
 }
 
 func verifyManagedSchemas(ctx context.Context, db DBTX, expected []string) error {
@@ -219,6 +260,7 @@ func (registry *SchemaVerifierRegistry) verifyFingerprint(
 	ctx context.Context,
 	db DBTX,
 	expected string,
+	verifier ReleaseAsset,
 	extensions []catalogExtensionIdentity,
 	platform releasePlatformRequirement,
 	requireInstalled bool,
@@ -236,7 +278,11 @@ func (registry *SchemaVerifierRegistry) verifyFingerprint(
 	if err := verifyCatalogExtensions(ctx, db, extensions); err != nil {
 		return err
 	}
-	actual, err := catalogFingerprintWithSQL(ctx, db, registry.verifierSQL)
+	query, err := registry.loadVerifier(verifier)
+	if err != nil {
+		return err
+	}
+	actual, err := catalogFingerprintWithSQL(ctx, db, query)
 	if err != nil {
 		return err
 	}
@@ -274,14 +320,25 @@ func verifyFreshPhaseCatalog(ctx context.Context, db DBTX, phase freshTargetPhas
 	if err != nil {
 		return err
 	}
-	if err := registry.verifyFingerprint(
-		ctx,
-		db,
+	verify := func(fingerprint string) error {
+		return registry.verifyFingerprint(
+			ctx,
+			db,
+			fingerprint,
+			asset.Verifier,
+			expectedFreshPhaseExtensions(asset, phase),
+			asset.Platform,
+			phase != freshTargetEmpty,
+			asset.ManagedSchemas,
+		)
+	}
+	if phase == freshTargetCurrentRelease {
+		if err := verify(asset.Phases.CurrentReleasePrePrivileges); err == nil {
+			return nil
+		}
+	}
+	if err := verify(
 		expected,
-		expectedFreshPhaseExtensions(asset, phase),
-		asset.Platform,
-		phase != freshTargetEmpty,
-		asset.ManagedSchemas,
 	); err != nil {
 		return fmt.Errorf("fresh target catalog does not match verified %s phase", phaseName)
 	}
@@ -317,6 +374,7 @@ func VerifyCatalogedUpgradeSourceSchema(ctx context.Context, db DBTX, entry Rele
 		ctx,
 		db,
 		asset.Phases.CurrentRelease,
+		asset.Verifier,
 		asset.Extensions.Installed,
 		asset.Platform,
 		true,

@@ -1,9 +1,238 @@
 WITH target_schema AS (
-    SELECT current_schema()::text AS name
+    SELECT namespace.oid, namespace.nspname::text AS name,
+           namespace.nspowner, namespace.nspacl
+    FROM pg_namespace namespace
+    WHERE namespace.nspname = current_schema()
+), schema_state_writer_roles AS (
+    SELECT role_record.oid
+    FROM pg_roles role_record
+    WHERE role_record.rolname <> current_user
+      AND NOT role_record.rolsuper
+      AND role_record.rolname !~ '^pg_'
+      AND (
+          has_table_privilege(role_record.oid, to_regclass(format('%I.schema_state', current_schema())), 'INSERT')
+          OR has_table_privilege(role_record.oid, to_regclass(format('%I.schema_state', current_schema())), 'UPDATE')
+          OR has_table_privilege(role_record.oid, to_regclass(format('%I.schema_state', current_schema())), 'DELETE')
+          OR has_table_privilege(role_record.oid, to_regclass(format('%I.schema_state', current_schema())), 'TRUNCATE')
+      )
+), schema_state_writer_inheritance AS (
+    SELECT membership.roleid, membership.member
+    FROM pg_auth_members membership
+    WHERE membership.roleid IN (SELECT oid FROM schema_state_writer_roles)
+       OR membership.member IN (SELECT oid FROM schema_state_writer_roles)
 ), catalog_records AS (
     SELECT jsonb_build_array(
         'schema', (SELECT name FROM target_schema)
     )::text AS record
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'schema-security', namespace.name,
+        CASE
+          WHEN namespace.nspowner = current_user::regrole::oid THEN '$migration_principal'
+          WHEN owner_role.rolname ~ '^pg_' THEN '$system:' || owner_role.rolname
+          ELSE '$external'
+        END,
+        COALESCE((
+            SELECT jsonb_agg(
+                jsonb_build_array(
+                    CASE
+                      WHEN acl.grantee = 0 THEN 'PUBLIC'
+                      WHEN acl.grantee = current_user::regrole::oid THEN '$migration_principal'
+                      WHEN grantee_role.rolname ~ '^pg_' THEN '$system:' || grantee_role.rolname
+                      ELSE '$external'
+                    END,
+                    acl.privilege_type,
+                    acl.is_grantable,
+                    CASE
+                      WHEN acl.grantor = current_user::regrole::oid THEN '$migration_principal'
+                      WHEN grantor_role.rolname ~ '^pg_' THEN '$system:' || grantor_role.rolname
+                      ELSE '$external'
+                    END
+                )
+                ORDER BY
+                    CASE
+                      WHEN acl.grantee = 0 THEN 'PUBLIC'
+                      WHEN acl.grantee = current_user::regrole::oid THEN '$migration_principal'
+                      WHEN grantee_role.rolname ~ '^pg_' THEN '$system:' || grantee_role.rolname
+                      ELSE '$external'
+                    END,
+                    acl.privilege_type, acl.is_grantable
+            )
+            FROM aclexplode(COALESCE(namespace.nspacl, acldefault('n', namespace.nspowner))) acl
+            LEFT JOIN pg_roles grantee_role ON grantee_role.oid = acl.grantee
+            LEFT JOIN pg_roles grantor_role ON grantor_role.oid = acl.grantor
+        ), '[]'::jsonb)
+    )::text
+    FROM target_schema namespace
+    JOIN pg_roles owner_role ON owner_role.oid = namespace.nspowner
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'relation-security', relation.relname, relation.relkind::text,
+        CASE
+          WHEN relation.relowner = current_user::regrole::oid THEN '$migration_principal'
+          WHEN owner_role.rolname ~ '^pg_' THEN '$system:' || owner_role.rolname
+          ELSE '$external'
+        END,
+        COALESCE((
+            SELECT jsonb_agg(
+                jsonb_build_array(
+                    CASE
+                      WHEN acl.grantee = 0 THEN 'PUBLIC'
+                      WHEN acl.grantee = current_user::regrole::oid THEN '$migration_principal'
+                      WHEN grantee_role.rolname ~ '^pg_' THEN '$system:' || grantee_role.rolname
+                      ELSE '$external'
+                    END,
+                    acl.privilege_type,
+                    acl.is_grantable,
+                    CASE
+                      WHEN acl.grantor = current_user::regrole::oid THEN '$migration_principal'
+                      WHEN grantor_role.rolname ~ '^pg_' THEN '$system:' || grantor_role.rolname
+                      ELSE '$external'
+                    END
+                )
+                ORDER BY
+                    CASE
+                      WHEN acl.grantee = 0 THEN 'PUBLIC'
+                      WHEN acl.grantee = current_user::regrole::oid THEN '$migration_principal'
+                      WHEN grantee_role.rolname ~ '^pg_' THEN '$system:' || grantee_role.rolname
+                      ELSE '$external'
+                    END,
+                    acl.privilege_type, acl.is_grantable
+            )
+            FROM aclexplode(COALESCE(relation.relacl, acldefault(
+                CASE WHEN relation.relkind = 'S' THEN 'S'::"char" ELSE 'r'::"char" END,
+                relation.relowner
+            ))) acl
+            LEFT JOIN pg_roles grantee_role ON grantee_role.oid = acl.grantee
+            LEFT JOIN pg_roles grantor_role ON grantor_role.oid = acl.grantor
+        ), '[]'::jsonb)
+    )::text
+    FROM pg_class relation
+    JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+    JOIN pg_roles owner_role ON owner_role.oid = relation.relowner
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
+      AND relation.relkind IN ('r', 'p', 'v', 'm', 'f', 'S')
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'default-acl',
+        CASE
+          WHEN default_acl.defaclrole = current_user::regrole::oid THEN '$migration_principal'
+          WHEN owner_role.rolname ~ '^pg_' THEN '$system:' || owner_role.rolname
+          ELSE '$external'
+        END,
+        COALESCE(namespace.nspname, '<all-schemas>'),
+        default_acl.defaclobjtype::text,
+        COALESCE((
+            SELECT jsonb_agg(
+                jsonb_build_array(
+                    CASE
+                      WHEN acl.grantee = 0 THEN 'PUBLIC'
+                      WHEN acl.grantee = current_user::regrole::oid THEN '$migration_principal'
+                      WHEN grantee_role.rolname ~ '^pg_' THEN '$system:' || grantee_role.rolname
+                      ELSE '$external'
+                    END,
+                    acl.privilege_type,
+                    acl.is_grantable,
+                    CASE
+                      WHEN acl.grantor = current_user::regrole::oid THEN '$migration_principal'
+                      WHEN grantor_role.rolname ~ '^pg_' THEN '$system:' || grantor_role.rolname
+                      ELSE '$external'
+                    END
+                )
+                ORDER BY
+                    CASE
+                      WHEN acl.grantee = 0 THEN 'PUBLIC'
+                      WHEN acl.grantee = current_user::regrole::oid THEN '$migration_principal'
+                      WHEN grantee_role.rolname ~ '^pg_' THEN '$system:' || grantee_role.rolname
+                      ELSE '$external'
+                    END,
+                    acl.privilege_type, acl.is_grantable
+            )
+            FROM aclexplode(default_acl.defaclacl) acl
+            LEFT JOIN pg_roles grantee_role ON grantee_role.oid = acl.grantee
+            LEFT JOIN pg_roles grantor_role ON grantor_role.oid = acl.grantor
+        ), '[]'::jsonb)
+    )::text
+    FROM pg_default_acl default_acl
+    JOIN pg_roles owner_role ON owner_role.oid = default_acl.defaclrole
+    LEFT JOIN pg_namespace namespace ON namespace.oid = default_acl.defaclnamespace
+    WHERE default_acl.defaclnamespace = 0
+       OR default_acl.defaclnamespace = (SELECT oid FROM target_schema)
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'schema-state-effective-writer-boundary',
+        (SELECT count(*) FROM schema_state_writer_roles),
+        (SELECT count(*) FROM schema_state_writer_inheritance)
+    )::text
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'event-trigger', event_trigger.evtname, event_trigger.evtevent,
+        event_trigger.evtenabled::text,
+        COALESCE(event_trigger.evttags::text, ''),
+        routine_namespace.nspname, routine.proname,
+        pg_get_function_identity_arguments(routine.oid),
+        CASE
+          WHEN routine.proowner = current_user::regrole::oid THEN '$migration_principal'
+          WHEN owner_role.rolname ~ '^pg_' THEN '$system:' || owner_role.rolname
+          ELSE '$external'
+        END
+    )::text
+    FROM pg_event_trigger event_trigger
+    JOIN pg_proc routine ON routine.oid = event_trigger.evtfoid
+    JOIN pg_namespace routine_namespace ON routine_namespace.oid = routine.pronamespace
+    JOIN pg_roles owner_role ON owner_role.oid = routine.proowner
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'publication', publication.pubname,
+        CASE
+          WHEN publication.pubowner = current_user::regrole::oid THEN '$migration_principal'
+          WHEN owner_role.rolname ~ '^pg_' THEN '$system:' || owner_role.rolname
+          ELSE '$external'
+        END,
+        publication.puballtables, publication.pubinsert,
+        publication.pubupdate, publication.pubdelete,
+        publication.pubtruncate, publication.pubviaroot
+    )::text
+    FROM pg_publication publication
+    JOIN pg_roles owner_role ON owner_role.oid = publication.pubowner
+    WHERE publication.puballtables
+       OR EXISTS (
+           SELECT 1
+           FROM pg_publication_rel publication_relation
+           JOIN pg_class relation ON relation.oid = publication_relation.prrelid
+           JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+           WHERE publication_relation.prpubid = publication.oid
+             AND namespace.nspname = (SELECT name FROM target_schema)
+       )
+       OR EXISTS (
+           SELECT 1
+           FROM pg_publication_namespace publication_namespace
+           JOIN pg_namespace namespace ON namespace.oid = publication_namespace.pnnspid
+           WHERE publication_namespace.pnpubid = publication.oid
+             AND namespace.nspname = (SELECT name FROM target_schema)
+       )
+
+    UNION ALL
+
+    SELECT jsonb_build_array(
+        'publication-namespace', publication.pubname, namespace.nspname
+    )::text
+    FROM pg_publication_namespace publication_namespace
+    JOIN pg_publication publication ON publication.oid = publication_namespace.pnpubid
+    JOIN pg_namespace namespace ON namespace.oid = publication_namespace.pnnspid
+    WHERE namespace.nspname = (SELECT name FROM target_schema)
 
     UNION ALL
 

@@ -198,7 +198,11 @@ func ValidateCurrentReleaseArtifact(release ReleaseManifest) error {
 	if entry.SourceSchemaAsset != currentSourceSchemaAsset() {
 		return fmt.Errorf("immutable release catalog source schema identity mismatch")
 	}
-	baselineMatches, sourceSchemaMatches := 0, 0
+	baselineMatches, sourceSchemaMatches, catalogVerifierMatches := 0, 0, 0
+	currentSource, err := registry.loadSource(entry.SourceSchemaAsset)
+	if err != nil {
+		return fmt.Errorf("immutable release catalog source schema verifier is unavailable")
+	}
 	transitionMatches := make(map[ReleaseAsset]int, len(entry.TransitionAssets))
 	for _, asset := range release.Assets {
 		if asset.Name == entry.BaselineAsset.Name && asset.SHA256 == entry.BaselineAsset.SHA256 {
@@ -206,6 +210,9 @@ func ValidateCurrentReleaseArtifact(release ReleaseManifest) error {
 		}
 		if asset.Name == entry.SourceSchemaAsset.Name && asset.SHA256 == entry.SourceSchemaAsset.SHA256 {
 			sourceSchemaMatches++
+		}
+		if asset == currentSource.Verifier {
+			catalogVerifierMatches++
 		}
 		for _, transition := range entry.TransitionAssets {
 			if asset == transition {
@@ -218,6 +225,9 @@ func ValidateCurrentReleaseArtifact(release ReleaseManifest) error {
 	}
 	if sourceSchemaMatches != 1 {
 		return fmt.Errorf("immutable release catalog source schema asset manifest mismatch")
+	}
+	if catalogVerifierMatches != 1 {
+		return fmt.Errorf("immutable release catalog verifier asset manifest mismatch")
 	}
 	for _, transition := range entry.TransitionAssets {
 		if transitionMatches[transition] != 1 {

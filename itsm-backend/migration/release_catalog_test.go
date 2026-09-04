@@ -41,14 +41,14 @@ func TestCurrentReleaseCatalogPinsManifestBaselineAndExplicitCoverage(t *testing
 	require.Equal(t, "itsm-v1.1", entry.ReleaseID)
 	require.Equal(t, "028_schema_release_state", entry.SchemaVersion)
 	require.Equal(t, "2026-09-04", entry.BaselineVersion)
-	require.Equal(t, "d7f289b1cee89fb5bacd8e149d0b7afaaef10409b21e62f2422ae4849f0eb943", entry.ReleaseManifestSHA256)
+	require.Equal(t, "5decb8eeb0ddfabf00ad46fde9d8e6021dafa7f07dd660bdad22b105e8fadeee", entry.ReleaseManifestSHA256)
 	require.Equal(t, ReleaseAsset{
 		Name:   CurrentBaselineAssetName,
 		SHA256: "28ebe2d2096542d556eb94fcb42806235ebae1a33d7b6b0db5844890643d6773",
 	}, entry.BaselineAsset)
 	require.Equal(t, ReleaseAsset{
 		Name:   CurrentSourceSchemaAssetName,
-		SHA256: "20c0b4f2b56e3208e1ea62ccf8e9eb90fc211157ad62ed95ed9312877d4417fb",
+		SHA256: "93a8d7dffa303f16394f9e4b67f9b616644ab5777ace8a3c69cf1ba1ce846143",
 	}, entry.SourceSchemaAsset)
 	require.Equal(t, []string{
 		"007_add_change_execution_tables",
@@ -129,9 +129,10 @@ func TestCurrentReleaseArtifactValidationRejectsSelfConsistentSourceVerifierTamp
 	content, err := embeddedSchemaVerifierAssets.ReadFile("sql/source/028_schema_release_state.json")
 	require.NoError(t, err)
 	content = append(content, []byte("\n ")...)
-	registry, err := NewSchemaVerifierRegistry(postgresCatalogFingerprintSQL, []VerifierAssetFile{{
-		Name: CurrentSourceSchemaAssetName, Content: content,
-	}})
+	registry, err := NewSchemaVerifierRegistry(
+		[]VerifierAssetFile{{Name: catalogFingerprintVerifierName, Content: []byte(postgresCatalogFingerprintSQL)}},
+		[]VerifierAssetFile{{Name: CurrentSourceSchemaAssetName, Content: content}},
+	)
 	require.NoError(t, err)
 	entry, err := CurrentReleaseCatalogEntry()
 	require.NoError(t, err)
@@ -139,12 +140,16 @@ func TestCurrentReleaseArtifactValidationRejectsSelfConsistentSourceVerifierTamp
 }
 
 func TestCurrentReleaseArtifactValidationRejectsCatalogQueryTampering(t *testing.T) {
-	original := postgresCatalogFingerprintSQL
-	t.Cleanup(func() { postgresCatalogFingerprintSQL = original })
-	postgresCatalogFingerprintSQL += "\n-- unpinned verifier change"
-
-	err := ValidateCurrentReleaseArtifact(CurrentRelease())
-	require.ErrorContains(t, err, "schema verifier registry mismatch")
+	content, err := embeddedSchemaVerifierAssets.ReadFile("sql/source/028_schema_release_state.json")
+	require.NoError(t, err)
+	_, err = NewSchemaVerifierRegistry(
+		[]VerifierAssetFile{{
+			Name:    catalogFingerprintVerifierName,
+			Content: []byte(postgresCatalogFingerprintSQL + "\n-- unpinned verifier change"),
+		}},
+		[]VerifierAssetFile{{Name: CurrentSourceSchemaAssetName, Content: content}},
+	)
+	require.ErrorContains(t, err, "query identity mismatch")
 }
 
 func TestReleasePublicationGateNamesUnmergedAllocatedVersions(t *testing.T) {

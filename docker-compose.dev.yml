@@ -7,16 +7,20 @@ services:
     hostname: postgres
     environment:
       POSTGRES_DB: itsm
-      POSTGRES_USER: itsm_user
-      POSTGRES_PASSWORD: dev123
+      POSTGRES_USER: ${ITSM_MIGRATION_DB_USER:-itsm_migration}
+      POSTGRES_PASSWORD: ${ITSM_MIGRATION_DB_PASSWORD:?ITSM_MIGRATION_DB_PASSWORD must be set}
+      ITSM_MIGRATION_DB_USER: ${ITSM_MIGRATION_DB_USER:-itsm_migration}
+      ITSM_RUNTIME_DB_USER: ${ITSM_RUNTIME_DB_USER:-itsm_runtime}
+      ITSM_RUNTIME_DB_PASSWORD: ${ITSM_RUNTIME_DB_PASSWORD:?ITSM_RUNTIME_DB_PASSWORD must be set}
     ports:
       - "5432:5432"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
+      - ./scripts/postgres/10-itsm-roles.sh:/docker-entrypoint-initdb.d/10-itsm-roles.sh:ro
     networks:
       - itsm-dev-network
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U itsm_user -d itsm" ]
+      test: [ "CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB" ]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -81,13 +85,14 @@ services:
     hostname: init
     command: ["./main"]
     environment:
-      - DATABASE_URL=postgres://itsm_user:dev123@postgres:5432/itsm?sslmode=disable
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_USER=itsm_user
-      - DB_PASSWORD=dev123
+      - DB_USER=${ITSM_MIGRATION_DB_USER:-itsm_migration}
+      - DB_PASSWORD=${ITSM_MIGRATION_DB_PASSWORD:?ITSM_MIGRATION_DB_PASSWORD must be set}
       - DB_NAME=itsm
       - DB_SSLMODE=disable
+      - ITSM_MIGRATION_DB_USER=${ITSM_MIGRATION_DB_USER:-itsm_migration}
+      - ITSM_RUNTIME_DB_USER=${ITSM_RUNTIME_DB_USER:-itsm_runtime}
       - REDIS_URL=redis://redis:6379
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -100,6 +105,7 @@ services:
       - DEPLOYMENT_MODE=${DEPLOYMENT_MODE:-private}
       - ADMIN_PASSWORD=admin123
       - ITSM_BOOTSTRAP_ONLY=true
+      - ITSM_BOOTSTRAP_MODE=${ITSM_BOOTSTRAP_MODE:-fresh}
       - ITSM_AUTO_MIGRATE=true
       - ITSM_AUTO_SEED=true
       - HTTP_PROXY=
@@ -133,11 +139,10 @@ services:
     hostname: backend
     environment:
       # 数据库配置
-      - DATABASE_URL=postgres://itsm_user:dev123@postgres:5432/itsm?sslmode=disable
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_USER=itsm_user
-      - DB_PASSWORD=dev123
+      - DB_USER=${ITSM_RUNTIME_DB_USER:-itsm_runtime}
+      - DB_PASSWORD=${ITSM_RUNTIME_DB_PASSWORD:?ITSM_RUNTIME_DB_PASSWORD must be set}
       - DB_NAME=itsm
       - DB_SSLMODE=disable
 
@@ -237,8 +242,8 @@ services:
     environment:
       - DB_HOST=postgres
       - DB_PORT=5432
-      - DB_USER=itsm_user
-      - DB_PASSWORD=dev123
+      - DB_USER=${ITSM_RUNTIME_DB_USER:-itsm_runtime}
+      - DB_PASSWORD=${ITSM_RUNTIME_DB_PASSWORD:?ITSM_RUNTIME_DB_PASSWORD must be set}
       - DB_NAME=itsm
       - DB_SSLMODE=disable
       - ENV=development

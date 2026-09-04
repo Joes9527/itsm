@@ -181,6 +181,7 @@ func (m *Migrator) PlanCatalogedUpgrade(
 		ctx,
 		m.db,
 		plan.ExpectedFingerprint,
+		plan.ExpectedVerifier,
 		plan.ExpectedExtensions,
 		plan.ExpectedPlatform,
 		true,

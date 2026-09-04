@@ -2,7 +2,8 @@
 
 ## Schema Overview
 
-The ITSM system uses PostgreSQL 15+ with the following main entities:
+The current release is certified only for **PostgreSQL major 17** with exactly
+**pgvector 0.8.6** available. Bootstrap checks both values before schema writes.
 
 ```
 users ────────┬───── user_roles ─────── roles
@@ -38,13 +39,14 @@ go generate ./ent
 
 ```bash
 # This only applies the registered post-schema stream. The deployment
-# bootstrap owns Ent Schema.Create and must have completed first.
+# bootstrap owns Ent Schema.Create and must have completed first. The current
+# release publication gate must also be open.
 go run -tags migrate ./cmd/migrate -up
 ```
 
 For a disposable development or test database only, `-fresh` performs the
-canonical order: create the Ent schema, apply the post-schema stream, then
-seed. It requires an allowed development mode plus exact confirmation of the
+canonical current-baseline bootstrap without replaying or forging the historical
+`schema_migrations` ledger. It requires an allowed development mode plus exact confirmation of the
 normalized configured host, port, and database name. System databases and the
 shared `192.168.31.66` host are refused:
 
@@ -157,14 +159,30 @@ Do not use `-fresh` for a shared or production database.
 Vector similarity search is used for the AI-powered knowledge base:
 
 ```sql
--- Enable extension
-CREATE EXTENSION IF NOT EXISTS vector;
+-- Bootstrap owns this operation and pins the release-certified version.
+CREATE EXTENSION IF NOT EXISTS vector VERSION '0.8.6';
 
 -- Knowledge articles with embeddings
 ALTER TABLE kb_articles ADD COLUMN embedding vector(1536);
 ```
 
-Note: `pgvector` requires PostgreSQL 15+. If not available, vector features are disabled gracefully.
+This release fails closed unless PostgreSQL reports major version 17 and
+`pg_available_extension_versions` contains pgvector 0.8.6. API and Worker
+processes only perform read-only capability checks; they never install or alter
+the extension.
+
+## PostgreSQL major-version upgrades
+
+Never attach a PostgreSQL 15 (or any other older-major) data directory/Compose
+volume directly to the PostgreSQL 17 image. PostgreSQL data directories are not
+portable across major versions.
+
+Before changing images, preserve the original volume and take a verified logical
+or physical backup. Restore into a new PostgreSQL 17 cluster with a controlled
+`pg_dump`/`pg_restore` procedure, or use PostgreSQL's supported `pg_upgrade`
+workflow with both old and new binaries. Verify row counts, pgvector 0.8.6,
+release schema state, and application readiness before retiring the old volume.
+See [PostgreSQL Upgrade Runbook](pg-upgrade-runbook.md).
 
 ## Indexes
 

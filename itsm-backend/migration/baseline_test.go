@@ -38,6 +38,18 @@ func TestCurrentReleaseIncludesExactEmbeddedSourceSchemaAsset(t *testing.T) {
 	require.Equal(t, []ReleaseAsset{want}, matches)
 }
 
+func TestCurrentReleaseIncludesExactEmbeddedCatalogVerifierAsset(t *testing.T) {
+	release := CurrentRelease()
+	want := currentCatalogVerifierAsset()
+	var matches []ReleaseAsset
+	for _, asset := range release.Assets {
+		if asset.Name == want.Name {
+			matches = append(matches, asset)
+		}
+	}
+	require.Equal(t, []ReleaseAsset{want}, matches)
+}
+
 func TestCatalogFingerprintVerifierIsOneReadOnlyStatement(t *testing.T) {
 	normalized := strings.ToUpper(strings.TrimSpace(postgresCatalogFingerprintSQL))
 	require.True(t, strings.HasPrefix(normalized, "WITH "))
@@ -47,6 +59,22 @@ func TestCatalogFingerprintVerifierIsOneReadOnlyStatement(t *testing.T) {
 		" GRANT ", " REVOKE ", " TRUNCATE ", " CALL ",
 	} {
 		require.NotContains(t, normalized, mutation)
+	}
+}
+
+func TestCatalogFingerprintVerifierCoversManagedSecurityBoundaries(t *testing.T) {
+	for _, boundary := range []string{
+		"'schema-security'",
+		"'relation-security'",
+		"'default-acl'",
+		"'event-trigger'",
+		"'publication'",
+		"'publication-namespace'",
+		"'schema-state-effective-writer-boundary'",
+		"has_table_privilege",
+		"pg_auth_members",
+	} {
+		require.Contains(t, postgresCatalogFingerprintSQL, boundary)
 	}
 }
 

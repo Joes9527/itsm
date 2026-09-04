@@ -194,7 +194,8 @@ make dev-status
 要求：
 
 - Docker Desktop 已启动。
-- macOS 本机开发推荐使用 Homebrew `postgresql@17`，并启用 `pgvector`。不要同时启动 `postgresql@16`，否则 5432 端口可能连接到旧版本，RAG 向量能力会降级或迁移失败。
+- 当前 release 只支持 PostgreSQL 17 + pgvector 0.8.6；bootstrap 会在任何 schema 写入前精确校验。不要同时启动旧版本，否则 5432 端口可能连接到不受支持的实例。
+- 禁止把 PostgreSQL 15/16 的 data directory 或 Docker volume 直接挂到 PG17 镜像。先保留旧卷并完成可验证备份，再走受控 `pg_dump`/`pg_restore` 或 `pg_upgrade`；详见 [升级手册](./docs/pg-upgrade-runbook.md)。
 
 ```bash
 # 确认只有 PostgreSQL 17 在运行
@@ -205,8 +206,8 @@ brew services list | grep postgresql
 # 推荐使用 PostgreSQL 17 客户端，避免 PATH 中旧版 psql/pg_dump 被优先使用
 /usr/local/opt/postgresql@17/bin/psql -h localhost -p 5432 -U heidsoft -d itsm -c "SELECT version();"
 
-# 确认 pgvector 已启用
-/usr/local/opt/postgresql@17/bin/psql -h localhost -p 5432 -U heidsoft -d itsm -c "CREATE EXTENSION IF NOT EXISTS vector; SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';"
+# 只读确认 pgvector 0.8.6 已安装；扩展 DDL 由一次性 bootstrap 独占
+/usr/local/opt/postgresql@17/bin/psql -h localhost -p 5432 -U heidsoft -d itsm -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';"
 ```
 
 本地启动脚本默认连接：
@@ -214,8 +215,10 @@ brew services list | grep postgresql
 ```bash
 DB_HOST=localhost
 DB_PORT=5432
-DB_USER=itsm_user
-DB_PASSWORD=dev123
+ITSM_MIGRATION_DB_USER=itsm_migration
+ITSM_MIGRATION_DB_PASSWORD=<from .env or secret>
+ITSM_RUNTIME_DB_USER=itsm_runtime
+ITSM_RUNTIME_DB_PASSWORD=<from .env or secret>
 DB_NAME=itsm
 ```
 

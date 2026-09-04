@@ -46,13 +46,72 @@ type migrationCommand struct {
 	reset           bool
 }
 
-func (command migrationCommand) mutatesStorage() bool {
-	return command.up || command.down || command.rollbackVersion != "" || command.fresh ||
-		command.seed || command.seedOnly || command.reset
+type migrationAction string
+
+const (
+	migrationActionHelp       migrationAction = "help"
+	migrationActionUp         migrationAction = "up"
+	migrationActionDown       migrationAction = "down"
+	migrationActionStatus     migrationAction = "status"
+	migrationActionList       migrationAction = "list"
+	migrationActionRollbackTo migrationAction = "rollback-to"
+	migrationActionDryRun     migrationAction = "dry-run"
+	migrationActionFresh      migrationAction = "fresh"
+	migrationActionSeed       migrationAction = "seed"
+	migrationActionSeedOnly   migrationAction = "seed-only"
+	migrationActionVersion    migrationAction = "version"
+	migrationActionReset      migrationAction = "reset"
+)
+
+func normalizeMigrationCommand(command migrationCommand) (migrationAction, error) {
+	selected := make([]migrationAction, 0, 2)
+	add := func(active bool, action migrationAction) {
+		if active {
+			selected = append(selected, action)
+		}
+	}
+	add(command.up, migrationActionUp)
+	add(command.down, migrationActionDown)
+	add(command.status, migrationActionStatus)
+	add(command.list, migrationActionList)
+	add(command.dryRun, migrationActionDryRun)
+	add(command.fresh, migrationActionFresh)
+	add(command.seed, migrationActionSeed)
+	add(command.seedOnly, migrationActionSeedOnly)
+	add(command.version, migrationActionVersion)
+	add(command.reset, migrationActionReset)
+	if strings.TrimSpace(command.rollbackVersion) != "" {
+		selected = append(selected, migrationActionRollbackTo)
+	}
+	if len(selected) == 0 {
+		return migrationActionHelp, nil
+	}
+	if len(selected) != 1 {
+		return "", fmt.Errorf("usage error: select exactly one command")
+	}
+	return selected[0], nil
+}
+
+func (action migrationAction) mutatesStorage() bool {
+	switch action {
+	case migrationActionUp, migrationActionDown, migrationActionRollbackTo,
+		migrationActionFresh, migrationActionSeed, migrationActionSeedOnly, migrationActionReset:
+		return true
+	default:
+		return false
+	}
 }
 
 func validateCommandPublication(command migrationCommand) error {
-	if !command.mutatesStorage() {
+	action, err := normalizeMigrationCommand(command)
+	if err != nil {
+		return err
+	}
+	return validateActionPublication(action)
+}
+
+func validateActionPublication(action migrationAction) error {
+	if !action.mutatesStorage() {
 		return nil
 	}
 	return migration.ValidateCurrentReleasePublicationGate()
@@ -92,8 +151,20 @@ func main() {
 		version:         *version,
 		reset:           *reset,
 	}
-	if err := validateCommandPublication(command); err != nil {
+	action, err := normalizeMigrationCommand(command)
+	if err != nil {
+		log.Fatalf("Invalid migration command: %v", err)
+	}
+	if err := validateActionPublication(action); err != nil {
 		log.Fatalf("Refusing mutating migration command: %v", err)
+	}
+	if action == migrationActionHelp {
+		showHelp()
+		return
+	}
+	if action == migrationActionList {
+		listMigrations(getAvailableMigrations())
+		return
 	}
 
 	// Load configuration
@@ -110,7 +181,7 @@ func main() {
 	sugar := logger.Sugar()
 
 	ctx := context.Background()
-	if *fresh || *reset {
+	if action == migrationActionFresh || action == migrationActionReset {
 		freshDatabase(cfg, sugar)
 		return
 	}
@@ -126,12 +197,12 @@ func main() {
 	// Get available migrations
 	available := getAvailableMigrations()
 
-	if *seed {
+	if action == migrationActionSeed {
 		seedData(sugar)
 		return
 	}
 
-	if *seedOnly {
+	if action == migrationActionSeedOnly {
 		count, err := runUpgrade(ctx, db, sugar)
 		if err != nil {
 			log.Fatalf("Upgrade failed: %v", err)
@@ -141,7 +212,7 @@ func main() {
 		return
 	}
 
-	if *dryRun {
+	if action == migrationActionDryRun {
 		migrator := migration.NewMigrator(db, sugar)
 		fmt.Println("=== Dry Run Mode - No changes will be made ===")
 		fmt.Println()
@@ -155,24 +226,19 @@ func main() {
 		return
 	}
 
-	if *status {
+	if action == migrationActionStatus {
 		migrator := migration.NewMigrator(db, sugar)
 		showStatus(migrator, available)
 		return
 	}
 
-	if *version {
+	if action == migrationActionVersion {
 		migrator := migration.NewMigrator(db, sugar)
 		showVersion(migrator, getAvailableMigrations())
 		return
 	}
 
-	if *list {
-		listMigrations(getAvailableMigrations())
-		return
-	}
-
-	if *up {
+	if action == migrationActionUp {
 		count, err := runUpgrade(ctx, db, sugar)
 		if err != nil {
 			log.Fatalf("Upgrade failed: %v", err)
@@ -181,24 +247,27 @@ func main() {
 		return
 	}
 
-	if *down {
+	if action == migrationActionDown {
 		migrator := migration.NewMigrator(db, sugar)
-		if *rollbackVersion != "" {
-			rollbackToVersion(migrator, available, *rollbackVersion)
-		} else {
-			rollbackLast(migrator, available)
-		}
+		rollbackLast(migrator, available)
+		return
+	}
+	if action == migrationActionRollbackTo {
+		rollbackToVersion(migration.NewMigrator(db, sugar), available, strings.TrimSpace(*rollbackVersion))
 		return
 	}
 
-	// No command specified, show help
+	showHelp()
+}
+
+func showHelp() {
 	fmt.Println("Migration CLI for ITSM Backend")
 	fmt.Println("")
 	fmt.Println("Usage:")
 	fmt.Println("  go run -tags migrate cmd/migrate/main.go -up              Apply pending post-schema migrations to an Ent-schema-ready database")
 	fmt.Println("  go run -tags migrate cmd/migrate/main.go -down            Rollback the last migration")
 	fmt.Println("  go run -tags migrate cmd/migrate/main.go -rollback-to v2  Rollback to version v2")
-	fmt.Println("  go run -tags migrate cmd/migrate/main.go -status         Show migration status")
+	fmt.Println("  go run -tags migrate cmd/migrate/main.go -status          Show migration status")
 }
 
 func getAvailableMigrations() []migration.Migration {
@@ -431,6 +500,71 @@ func isSystemDatabase(name string) bool {
 	}
 }
 
+type freshAdminExecutor interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+func recreateFreshDatabase(
+	ctx context.Context,
+	admin freshAdminExecutor,
+	databaseName string,
+	preflight func() error,
+) error {
+	if admin == nil || preflight == nil {
+		return fmt.Errorf("fresh database administrator and preflight are required")
+	}
+	if err := validateDatabaseName(databaseName); err != nil {
+		return err
+	}
+	if err := preflight(); err != nil {
+		return err
+	}
+	target := pq.QuoteIdentifier(databaseName)
+	if _, err := admin.ExecContext(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", target)); err != nil {
+		return fmt.Errorf("drop fresh database: %w", err)
+	}
+	if _, err := admin.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE %s", target)); err != nil {
+		return fmt.Errorf("create fresh database: %w", err)
+	}
+	return nil
+}
+
+func validateDestructiveFreshPreflight(ctx context.Context, db *sql.DB, cfg *config.Config) error {
+	if db == nil || cfg == nil {
+		return fmt.Errorf("destructive fresh preflight database and configuration are required")
+	}
+	if err := migration.ValidateCurrentReleaseArtifact(migration.CurrentRelease()); err != nil {
+		return fmt.Errorf("validate release artifact before destructive fresh: %w", err)
+	}
+	roles, err := migration.LoadSchemaStateRoles(os.Getenv)
+	if err != nil {
+		return fmt.Errorf("validate database roles before destructive fresh: %w", err)
+	}
+	var currentUser string
+	var migrationExists, migrationCanLogin, runtimeExists, runtimeCanLogin, runtimePrivileged bool
+	if err := db.QueryRowContext(ctx, `
+		SELECT current_user,
+		       EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1),
+		       COALESCE((SELECT rolcanlogin FROM pg_roles WHERE rolname = $1), false),
+		       EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $2),
+		       COALESCE((SELECT rolcanlogin FROM pg_roles WHERE rolname = $2), false),
+		       COALESCE((SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = $2), false)
+	`, roles.MigrationRole, roles.RuntimeRole).Scan(
+		&currentUser, &migrationExists, &migrationCanLogin,
+		&runtimeExists, &runtimeCanLogin, &runtimePrivileged,
+	); err != nil {
+		return fmt.Errorf("inspect database roles before destructive fresh: %w", err)
+	}
+	if currentUser != roles.MigrationRole || strings.TrimSpace(cfg.Database.User) != roles.MigrationRole ||
+		!migrationExists || !migrationCanLogin || !runtimeExists || !runtimeCanLogin || runtimePrivileged {
+		return fmt.Errorf("destructive fresh database role identity or existence preflight failed")
+	}
+	if err := migration.VerifyCurrentReleasePlatformAvailability(ctx, db); err != nil {
+		return fmt.Errorf("validate platform before destructive fresh: %w", err)
+	}
+	return nil
+}
+
 func freshDatabase(cfg *config.Config, sugar *zap.SugaredLogger) {
 	if err := validateFreshTarget(cfg); err != nil {
 		log.Fatalf("Refusing fresh bootstrap: %v", err)
@@ -452,17 +586,11 @@ func freshDatabase(cfg *config.Config, sugar *zap.SugaredLogger) {
 	}
 	defer postgresDB.Close()
 
-	fmt.Printf("Dropping database %s...\n", cfg.Database.DBName)
-	target := pq.QuoteIdentifier(cfg.Database.DBName)
-	_, err = postgresDB.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", target))
-	if err != nil {
-		log.Fatalf("Failed to drop database: %v", err)
-	}
-
-	fmt.Printf("Creating database %s...\n", cfg.Database.DBName)
-	_, err = postgresDB.Exec(fmt.Sprintf("CREATE DATABASE %s", target))
-	if err != nil {
-		log.Fatalf("Failed to create database: %v", err)
+	ctx := context.Background()
+	if err := recreateFreshDatabase(ctx, postgresDB, cfg.Database.DBName, func() error {
+		return validateDestructiveFreshPreflight(ctx, postgresDB, cfg)
+	}); err != nil {
+		log.Fatalf("Refusing destructive fresh bootstrap: %v", err)
 	}
 
 	postgresDB.Close()
@@ -482,7 +610,6 @@ func freshDatabase(cfg *config.Config, sugar *zap.SugaredLogger) {
 	if err != nil {
 		log.Fatalf("Failed to configure fresh bootstrap lock: %v", err)
 	}
-	ctx := context.Background()
 	if err := migration.RunFreshBootstrap(ctx, migration.FreshBootstrap{
 		Lock:            lock,
 		Prepare:         migration.PrepareCurrentInfrastructure,

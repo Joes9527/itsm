@@ -67,12 +67,12 @@ func (m *Migrator) EnsureMigrationsTable(ctx context.Context) error {
 	return err
 }
 
-// GetAppliedMigrations returns committed migrations in ledger commit order.
-// Version is only a deterministic tie-breaker; transition-prefix validation
-// never derives execution order from version numbering.
+// GetAppliedMigrations returns the unique committed ledger membership in a
+// deterministic presentation order. Transition-prefix validation derives
+// execution order exclusively from the immutable transition asset.
 func (m *Migrator) GetAppliedMigrations(ctx context.Context) ([]Migration, error) {
 	query := `SELECT version, description, applied_at, rollback_sql, checksum, execution_ms, release_version
-		FROM schema_migrations ORDER BY applied_at, version`
+		FROM schema_migrations ORDER BY version`
 	rows, err := m.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query migrations: %w", err)

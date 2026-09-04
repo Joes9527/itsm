@@ -54,7 +54,7 @@ func CurrentRelease() ReleaseManifest {
 	if err != nil {
 		panic(fmt.Sprintf("load current release catalog entry: %v", err))
 	}
-	assets := make([]ReleaseAsset, 0, len(RegisteredMigrations)+2+len(entry.TransitionAssets))
+	assets := make([]ReleaseAsset, 0, len(RegisteredMigrations)+3+len(entry.TransitionAssets))
 	for _, migration := range RegisteredMigrations {
 		assets = append(assets, ReleaseAsset{
 			Name:   migration.Version,
@@ -66,6 +66,7 @@ func CurrentRelease() ReleaseManifest {
 		SHA256: checksumSQL(CurrentBaselineSQL()),
 	})
 	assets = append(assets, currentSourceSchemaAsset())
+	assets = append(assets, currentCatalogVerifierAsset())
 	assets = append(assets, entry.TransitionAssets...)
 	components := make([]SeedComponent, 0, len(seeder.ProductionComponentNames))
 	for _, name := range seeder.ProductionComponentNames {

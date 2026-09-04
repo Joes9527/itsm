@@ -37,8 +37,9 @@ func TestPostgresLowLevelFreshReentryAndBaselineAwareUpgrade(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), migrationBootstrapIntegrationTimeout)
 	defer cancel()
 
-	runFreshWithoutPrivileges(t, ctx, fixture.target)
-	runFreshWithoutPrivileges(t, ctx, fixture.target)
+	runtimeRole := fixture.createRole(t, "runtime")
+	runFreshWithPrivileges(t, ctx, fixture.target, fixture.currentUser(t, ctx), runtimeRole)
+	runFreshWithPrivileges(t, ctx, fixture.target, fixture.currentUser(t, ctx), runtimeRole)
 
 	var historyRows int64
 	require.NoError(t, fixture.target.QueryRowContext(ctx, `SELECT COUNT(*) FROM schema_migrations`).Scan(&historyRows))
@@ -249,7 +250,7 @@ func TestPostgresFreshResumesEveryVerifiedCommittedSchemaPhase(t *testing.T) {
 				return test.stage(ctx, conn)
 			}))
 
-			runFreshWithoutPrivileges(t, ctx, fixture.target)
+			runFreshWithPrivileges(t, ctx, fixture.target, fixture.currentUser(t, ctx), fixture.createRole(t, "runtime"))
 			state, err := migration.ReadSchemaState(ctx, fixture.target)
 			require.NoError(t, err)
 			require.NoError(t, migration.VerifySchemaState(state, migration.CurrentRelease()))
@@ -308,7 +309,7 @@ func TestPostgresCatalogedUpgradeRejectsLegacyTicketCCAndRolePermissionShapesBef
 	fixture := openDisposableMigrationDatabase(t)
 	ctx, cancel := context.WithTimeout(context.Background(), migrationBootstrapIntegrationTimeout)
 	defer cancel()
-	runFreshWithoutPrivileges(t, ctx, fixture.target)
+	runFreshWithPrivileges(t, ctx, fixture.target, fixture.currentUser(t, ctx), fixture.createRole(t, "runtime"))
 	entry, err := migration.CurrentReleaseCatalogEntry()
 	require.NoError(t, err)
 	require.NoError(t, migration.VerifyCatalogedUpgradeSourceSchema(ctx, fixture.target, entry))
@@ -396,7 +397,7 @@ func TestPostgresCurrentSchemaVerifierRejectsEveryFingerprintObjectClassWithoutR
 			fixture := openDisposableMigrationDatabase(t)
 			ctx, cancel := context.WithTimeout(context.Background(), migrationBootstrapIntegrationTimeout)
 			defer cancel()
-			runFreshWithoutPrivileges(t, ctx, fixture.target)
+			runFreshWithPrivileges(t, ctx, fixture.target, fixture.currentUser(t, ctx), fixture.createRole(t, "runtime"))
 			_, err := fixture.target.ExecContext(ctx, test.corruptSQL)
 			require.NoError(t, err)
 
@@ -493,7 +494,7 @@ func TestPostgresCatalogedSourceFingerprintRejectsUnrelatedDriftBeforePlanning(t
 			fixture := openDisposableMigrationDatabase(t)
 			ctx, cancel := context.WithTimeout(context.Background(), migrationBootstrapIntegrationTimeout)
 			defer cancel()
-			runFreshWithoutPrivileges(t, ctx, fixture.target)
+			runFreshWithPrivileges(t, ctx, fixture.target, fixture.currentUser(t, ctx), fixture.createRole(t, "runtime"))
 			entry, err := migration.CurrentReleaseCatalogEntry()
 			require.NoError(t, err)
 			require.NoError(t, migration.VerifyCatalogedUpgradeSourceSchema(ctx, fixture.target, entry))
@@ -515,7 +516,7 @@ func TestPostgresCatalogedSourceFingerprintRunsInReadOnlyTransaction(t *testing.
 	fixture := openDisposableMigrationDatabase(t)
 	ctx, cancel := context.WithTimeout(context.Background(), migrationBootstrapIntegrationTimeout)
 	defer cancel()
-	runFreshWithoutPrivileges(t, ctx, fixture.target)
+	runFreshWithPrivileges(t, ctx, fixture.target, fixture.currentUser(t, ctx), fixture.createRole(t, "runtime"))
 	entry, err := migration.CurrentReleaseCatalogEntry()
 	require.NoError(t, err)
 	tx, err := fixture.target.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
@@ -523,6 +524,146 @@ func TestPostgresCatalogedSourceFingerprintRunsInReadOnlyTransaction(t *testing.
 	defer tx.Rollback()
 	require.NoError(t, migration.VerifyCatalogedUpgradeSourceSchema(ctx, tx, entry))
 	require.NoError(t, tx.Commit())
+}
+
+func TestPostgresCatalogFingerprintRejectsManagedSecurityDrift(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(*testing.T, context.Context, *disposableMigrationDatabase)
+	}{
+		{
+			name: "third role direct schema state grant",
+			mutate: func(t *testing.T, ctx context.Context, fixture *disposableMigrationDatabase) {
+				attacker := fixture.createRole(t, "direct_writer")
+				_, err := fixture.target.ExecContext(ctx, `GRANT INSERT ON schema_state TO `+pq.QuoteIdentifier(attacker))
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "third role schema state read grant",
+			mutate: func(t *testing.T, ctx context.Context, fixture *disposableMigrationDatabase) {
+				attacker := fixture.createRole(t, "direct_reader")
+				_, err := fixture.target.ExecContext(ctx, `GRANT SELECT ON schema_state TO `+pq.QuoteIdentifier(attacker))
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "third role inherited schema state grant",
+			mutate: func(t *testing.T, ctx context.Context, fixture *disposableMigrationDatabase) {
+				writerGroup := fixture.createRole(t, "writer_group")
+				member := fixture.createRole(t, "writer_member")
+				_, err := fixture.target.ExecContext(ctx, fmt.Sprintf(
+					`GRANT UPDATE ON schema_state TO %s; GRANT %s TO %s`,
+					pq.QuoteIdentifier(writerGroup), pq.QuoteIdentifier(writerGroup), pq.QuoteIdentifier(member),
+				))
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "public schema create",
+			mutate: func(t *testing.T, ctx context.Context, fixture *disposableMigrationDatabase) {
+				_, err := fixture.target.ExecContext(ctx, `GRANT CREATE ON SCHEMA public TO PUBLIC`)
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "managed schema owner",
+			mutate: func(t *testing.T, ctx context.Context, fixture *disposableMigrationDatabase) {
+				attacker := fixture.createRole(t, "schema_owner")
+				_, err := fixture.target.ExecContext(ctx, `ALTER SCHEMA public OWNER TO `+pq.QuoteIdentifier(attacker))
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "managed relation owner",
+			mutate: func(t *testing.T, ctx context.Context, fixture *disposableMigrationDatabase) {
+				attacker := fixture.createRole(t, "relation_owner")
+				_, err := fixture.target.ExecContext(ctx, `ALTER TABLE applications OWNER TO `+pq.QuoteIdentifier(attacker))
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "managed relation acl",
+			mutate: func(t *testing.T, ctx context.Context, fixture *disposableMigrationDatabase) {
+				attacker := fixture.createRole(t, "relation_reader")
+				_, err := fixture.target.ExecContext(ctx, `GRANT SELECT ON users TO `+pq.QuoteIdentifier(attacker))
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "managed default acl",
+			mutate: func(t *testing.T, ctx context.Context, fixture *disposableMigrationDatabase) {
+				attacker := fixture.createRole(t, "default_reader")
+				_, err := fixture.target.ExecContext(ctx, `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO `+pq.QuoteIdentifier(attacker))
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "for all tables publication",
+			mutate: func(t *testing.T, ctx context.Context, fixture *disposableMigrationDatabase) {
+				_, err := fixture.target.ExecContext(ctx, `CREATE PUBLICATION task4_for_all_tables FOR ALL TABLES WITH (publish = 'insert,update')`)
+				require.NoError(t, err)
+			},
+		},
+		{
+			name: "database event trigger",
+			mutate: func(t *testing.T, ctx context.Context, fixture *disposableMigrationDatabase) {
+				_, err := fixture.target.ExecContext(ctx, `
+					CREATE FUNCTION public.task4_event_probe() RETURNS event_trigger
+					LANGUAGE plpgsql AS 'BEGIN NULL; END';
+					CREATE EVENT TRIGGER task4_event_trigger
+					ON ddl_command_start EXECUTE FUNCTION public.task4_event_probe()
+				`)
+				require.NoError(t, err)
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := openDisposableMigrationDatabase(t)
+			ctx, cancel := context.WithTimeout(context.Background(), migrationBootstrapIntegrationTimeout)
+			defer cancel()
+			runFreshWithPrivileges(
+				t, ctx, fixture.target, fixture.currentUser(t, ctx), fixture.createRole(t, "runtime"),
+			)
+			require.NoError(t, migration.VerifyCurrentSchema(ctx, fixture.target, migration.CurrentRelease()))
+			before, err := migration.CatalogFingerprint(ctx, fixture.target)
+			require.NoError(t, err)
+
+			test.mutate(t, ctx, fixture)
+			after, err := migration.CatalogFingerprint(ctx, fixture.target)
+			require.NoError(t, err)
+			require.NotEqual(t, before, after)
+			err = migration.VerifyCurrentSchema(ctx, fixture.target, migration.CurrentRelease())
+			require.Error(t, err, "managed security drift must block promotion")
+		})
+	}
+}
+
+func TestPostgresPrivilegeProvisioningRejectsAnyInheritedSchemaStateWriter(t *testing.T) {
+	fixture := openDisposableMigrationDatabase(t)
+	ctx, cancel := context.WithTimeout(context.Background(), migrationBootstrapIntegrationTimeout)
+	defer cancel()
+	runFreshWithoutPrivileges(t, ctx, fixture.target)
+	runtimeRole := fixture.createRole(t, "runtime")
+	writerGroup := fixture.createRole(t, "writer_group")
+	member := fixture.createRole(t, "writer_member")
+	_, err := fixture.target.ExecContext(ctx, fmt.Sprintf(
+		`GRANT DELETE ON schema_state TO %s; GRANT %s TO %s`,
+		pq.QuoteIdentifier(writerGroup), pq.QuoteIdentifier(writerGroup), pq.QuoteIdentifier(member),
+	))
+	require.NoError(t, err)
+
+	err = migration.ApplySchemaStatePrivileges(ctx, fixture.target, migration.SchemaStateRoles{
+		MigrationRole: fixture.currentUser(t, ctx), RuntimeRole: runtimeRole,
+	})
+	require.ErrorContains(t, err, "effective writer boundary")
+	var runtimeCanSelect bool
+	require.NoError(t, fixture.target.QueryRowContext(ctx,
+		`SELECT has_table_privilege($1, 'schema_state', 'SELECT')`, runtimeRole,
+	).Scan(&runtimeCanSelect))
+	require.False(t, runtimeCanSelect, "failed privilege transaction must roll back all grants")
 }
 
 func TestPostgresFreshReentryRejectsArbitraryExtensionMemberBeforeDDL(t *testing.T) {
@@ -548,7 +689,7 @@ func TestPostgresCatalogedTransitionRecoversCommittedSchemaChangeWithoutReplay(t
 	fixture := openDisposableMigrationDatabase(t)
 	ctx, cancel := context.WithTimeout(context.Background(), migrationBootstrapIntegrationTimeout)
 	defer cancel()
-	runFreshWithoutPrivileges(t, ctx, fixture.target)
+	runFreshWithPrivileges(t, ctx, fixture.target, fixture.currentUser(t, ctx), fixture.createRole(t, "runtime"))
 	stateBefore, err := migration.ReadSchemaState(ctx, fixture.target)
 	require.NoError(t, err)
 	sourceEntry, err := migration.CurrentReleaseCatalogEntry()
@@ -700,15 +841,6 @@ func TestPostgresFreshRLSOffSupportsIndependentRuntimeRoleWithoutTenantGUC(t *te
 	require.Zero(t, forcedRLS, "RLS_MODE=off baseline must keep runtime tables unforced")
 	require.Equal(t, int64(4), policyCount, "RLS_MODE=off must retain the canonical policies for later activation")
 
-	_, err = fixture.target.ExecContext(ctx, fmt.Sprintf(`
-		GRANT USAGE ON SCHEMA public TO %s;
-		GRANT SELECT ON users, roles TO %s;
-		GRANT SELECT, INSERT, UPDATE, DELETE ON kaf_task_action_ledgers, kaf_task_completion_receipts TO %s;
-		GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %s;
-	`, pq.QuoteIdentifier(runtimeRole), pq.QuoteIdentifier(runtimeRole),
-		pq.QuoteIdentifier(runtimeRole), pq.QuoteIdentifier(runtimeRole)))
-	require.NoError(t, err)
-
 	conn, err := fixture.target.Conn(ctx)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -765,6 +897,33 @@ func requirePostgresPermissionDenied(t *testing.T, err error) {
 func runFreshWithoutPrivileges(t *testing.T, ctx context.Context, db *sql.DB) {
 	t.Helper()
 	require.NoError(t, migration.RunFreshBootstrap(ctx, freshBootstrapForTest(t, db)))
+}
+
+func runFreshWithPrivileges(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	migrationRole string,
+	runtimeRole string,
+) {
+	t.Helper()
+	lock, err := migration.NewPostgresAdvisoryLock(db)
+	require.NoError(t, err)
+	require.NoError(t, migration.RunFreshBootstrap(ctx, migration.FreshBootstrap{
+		Lock:            lock,
+		Prepare:         migration.PrepareCurrentInfrastructure,
+		CreateSchema:    migration.CreateCurrentEntSchema,
+		ApplyBaseline:   migration.ApplyCurrentBaseline,
+		VerifySchema:    migration.VerifyCurrentSchema,
+		ApplyPrivileges: migration.ApplySchemaStatePrivilegesOnConnection,
+		PromoteState:    migration.PromoteSchemaState,
+		Seed:            func(context.Context, migration.BootstrapConnection) error { return nil },
+		Release:         migration.CurrentRelease(),
+		Roles: migration.SchemaStateRoles{
+			MigrationRole: migrationRole,
+			RuntimeRole:   runtimeRole,
+		},
+	}))
 }
 
 func freshBootstrapForTest(t *testing.T, db *sql.DB) migration.FreshBootstrap {

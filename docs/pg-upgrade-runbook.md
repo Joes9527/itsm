@@ -2,7 +2,13 @@
 
 ## Overview
 
-This document records the PostgreSQL upgrade procedure from v16 to v17, including pre-upgrade checks, migration steps, and validation.
+This document defines the evidence-preserving upgrade procedure from any older
+supported deployment (including PG15/PG16) to the release contract:
+**PostgreSQL major 17 plus pgvector 0.8.6**.
+
+> Never start the PG17 image against an older-major data directory or Docker
+> volume. Keep the old volume immutable until the new cluster passes restore,
+> schema, row-count, extension-version, and application-readiness checks.
 
 **Current Production Version:** PostgreSQL 17.10 (Debian 17.10-1.pgdg12+1)
 **Previous Version:** PostgreSQL 16.x
@@ -16,7 +22,7 @@ PostgreSQL major version upgrades require careful planning:
 
 1. **Pre-upgrade validation** - Verify current state and create backup
 2. **Schema compatibility check** - Detect incompatibilities
-3. **Binary upgrade** - Replace PostgreSQL binaries (pg_upgrade)
+3. **Controlled migration** - use dump/restore into a new cluster or `pg_upgrade`
 4. **Post-upgrade validation** - Verify data integrity and performance
 
 ---
@@ -67,6 +73,16 @@ sudo apt-get update
 sudo apt-get install -y postgresql-17
 ```
 
+Install pgvector 0.8.6 for PostgreSQL 17 and verify it appears in
+`pg_available_extension_versions` before any ITSM bootstrap.
+
+## Alternative: controlled dump/restore
+
+Create a new empty PG17 cluster rather than reusing the old data directory.
+Run `pg_dump -Fc` with the old-version client, retain its checksum and source
+cluster metadata, restore with `pg_restore --exit-on-error`, and compare database
+objects and recorded row counts. Keep both the dump and old volume until sign-off.
+
 ---
 
 ## Upgrade Procedure (pg_upgrade)
@@ -92,12 +108,15 @@ sudo -u postgres pg_upgrade \
     --new-bindir=/usr/lib/postgresql/17/bin \
     --old-options="-c config_file=/etc/postgresql/16/main/postgresql.conf" \
     --new-options="-c config_file=/etc/postgresql/17/main/postgresql.conf" \
-    --link \
+    --clone \
     --jobs=4
 ```
 
 Options explained:
-- `--link`: Creates hard links instead of copying files (faster, uses less space)
+- `--clone` (where supported) preserves the old cluster independently. If clone
+  mode is unavailable, use the default copy mode. Do not use `--link` for this
+  evidence-preserving procedure because starting the new cluster can make the
+  old cluster unsafe to reuse.
 - `--jobs=4`: Uses 4 parallel jobs for faster upgrade
 
 ### 3. Start PostgreSQL 17
@@ -127,6 +146,11 @@ sudo -u postgres vacuumdb --all --analyze 2>&1 | tail -20
 ```sql
 psql -U postgres -d itsm -c "SELECT version();"
 -- Should show: PostgreSQL 17.10
+
+SELECT version FROM pg_available_extension_versions
+WHERE name = 'vector' AND version = '0.8.6';
+SELECT extversion FROM pg_extension WHERE extname = 'vector';
+-- Both release checks must resolve to 0.8.6.
 ```
 
 ### 2. Check Data Integrity

@@ -17,10 +17,11 @@ type VerifierAssetFile struct {
 // SchemaVerifierRegistry retains all immutable verifier assets required to
 // validate historical release sources and committed transition prefixes.
 type SchemaVerifierRegistry struct {
-	verifierSQL string
-	files       []VerifierAssetFile
-	sources     map[string]catalogFingerprintAsset
-	transitions map[string]catalogTransitionAsset
+	verifierFiles []VerifierAssetFile
+	files         []VerifierAssetFile
+	verifiers     map[string]string
+	sources       map[string]catalogFingerprintAsset
+	transitions   map[string]catalogTransitionAsset
 }
 
 const catalogTransitionFormatVersion = 1
@@ -71,6 +72,7 @@ type catalogTransitionMigration struct {
 
 type catalogTransitionPlan struct {
 	ExpectedFingerprint string
+	ExpectedVerifier    ReleaseAsset
 	ExpectedExtensions  []catalogExtensionIdentity
 	ExpectedPlatform    releasePlatformRequirement
 	ManagedSchemas      []string
@@ -87,15 +89,35 @@ func schemaVerifierRegistryKey(ref ReleaseAsset) string {
 
 // NewSchemaVerifierRegistry validates and indexes an immutable set of files by
 // logical asset ID and exact content checksum.
-func NewSchemaVerifierRegistry(verifierSQL string, files []VerifierAssetFile) (*SchemaVerifierRegistry, error) {
-	if err := validateCatalogVerifierSQL(verifierSQL); err != nil {
-		return nil, err
-	}
+func NewSchemaVerifierRegistry(verifierFiles, files []VerifierAssetFile) (*SchemaVerifierRegistry, error) {
 	registry := &SchemaVerifierRegistry{
-		verifierSQL: verifierSQL,
-		files:       make([]VerifierAssetFile, 0, len(files)),
-		sources:     make(map[string]catalogFingerprintAsset),
-		transitions: make(map[string]catalogTransitionAsset),
+		verifierFiles: make([]VerifierAssetFile, 0, len(verifierFiles)),
+		files:         make([]VerifierAssetFile, 0, len(files)),
+		verifiers:     make(map[string]string),
+		sources:       make(map[string]catalogFingerprintAsset),
+		transitions:   make(map[string]catalogTransitionAsset),
+	}
+	seenVerifierNames := make(map[string]struct{}, len(verifierFiles))
+	for index, file := range verifierFiles {
+		name := strings.TrimSpace(file.Name)
+		query := string(file.Content)
+		if name == "" || query == "" {
+			return nil, fmt.Errorf("catalog verifier asset %d is incomplete", index)
+		}
+		if _, duplicate := seenVerifierNames[name]; duplicate {
+			return nil, fmt.Errorf("duplicate catalog verifier asset ID %q", name)
+		}
+		if err := validateCatalogVerifierSQL(query); err != nil {
+			return nil, fmt.Errorf("catalog verifier asset %q: %w", name, err)
+		}
+		seenVerifierNames[name] = struct{}{}
+		content := append([]byte(nil), file.Content...)
+		registry.verifierFiles = append(registry.verifierFiles, VerifierAssetFile{Name: name, Content: content})
+		ref := ReleaseAsset{Name: name, SHA256: checksumSQL(query)}
+		registry.verifiers[schemaVerifierRegistryKey(ref)] = query
+	}
+	if len(registry.verifiers) == 0 {
+		return nil, fmt.Errorf("schema verifier registry requires a catalog verifier asset")
 	}
 	seenNames := make(map[string]struct{}, len(files))
 	for index, file := range files {
@@ -116,15 +138,21 @@ func NewSchemaVerifierRegistry(verifierSQL string, files []VerifierAssetFile) (*
 		ref := ReleaseAsset{Name: name, SHA256: checksumSQL(string(content))}
 		switch envelope.Kind {
 		case "source":
-			asset, err := decodeSourceSchemaVerifierAsset(content, name, verifierSQL)
+			asset, err := decodeSourceSchemaVerifierAsset(content, name)
 			if err != nil {
 				return nil, err
 			}
+			if _, err := registry.loadVerifier(asset.Verifier); err != nil {
+				return nil, fmt.Errorf("source schema verifier asset %q query identity mismatch", name)
+			}
 			registry.sources[schemaVerifierRegistryKey(ref)] = asset
 		case "transition":
-			asset, err := decodeTransitionSchemaVerifierAsset(content, name, verifierSQL)
+			asset, err := decodeTransitionSchemaVerifierAsset(content, name)
 			if err != nil {
 				return nil, err
+			}
+			if _, err := registry.loadVerifier(asset.Verifier); err != nil {
+				return nil, fmt.Errorf("transition schema verifier asset %q query identity mismatch", name)
 			}
 			registry.transitions[schemaVerifierRegistryKey(ref)] = asset
 		default:
@@ -141,8 +169,24 @@ func NewSchemaVerifierRegistry(verifierSQL string, files []VerifierAssetFile) (*
 // assets plus additional release assets. An existing asset ID cannot be
 // replaced with different bytes.
 func (registry *SchemaVerifierRegistry) WithAssets(files []VerifierAssetFile) (*SchemaVerifierRegistry, error) {
+	return registry.WithVerifierAssets(nil, files)
+}
+
+// WithVerifierAssets returns a new immutable registry that retains every old
+// verifier query and schema asset while adding a release's new assets.
+func (registry *SchemaVerifierRegistry) WithVerifierAssets(
+	verifierFiles []VerifierAssetFile,
+	files []VerifierAssetFile,
+) (*SchemaVerifierRegistry, error) {
 	if registry == nil {
 		return nil, fmt.Errorf("schema verifier registry is required")
+	}
+	combinedVerifiers := make([]VerifierAssetFile, 0, len(registry.verifierFiles)+len(verifierFiles))
+	for _, file := range registry.verifierFiles {
+		combinedVerifiers = append(combinedVerifiers, VerifierAssetFile{Name: file.Name, Content: append([]byte(nil), file.Content...)})
+	}
+	for _, file := range verifierFiles {
+		combinedVerifiers = append(combinedVerifiers, VerifierAssetFile{Name: file.Name, Content: append([]byte(nil), file.Content...)})
 	}
 	combined := make([]VerifierAssetFile, 0, len(registry.files)+len(files))
 	for _, file := range registry.files {
@@ -151,7 +195,7 @@ func (registry *SchemaVerifierRegistry) WithAssets(files []VerifierAssetFile) (*
 	for _, file := range files {
 		combined = append(combined, VerifierAssetFile{Name: file.Name, Content: append([]byte(nil), file.Content...)})
 	}
-	return NewSchemaVerifierRegistry(registry.verifierSQL, combined)
+	return NewSchemaVerifierRegistry(combinedVerifiers, combined)
 }
 
 func validateCatalogVerifierSQL(verifierSQL string) error {
@@ -170,7 +214,7 @@ func validateCatalogVerifierSQL(verifierSQL string) error {
 	return nil
 }
 
-func decodeSourceSchemaVerifierAsset(content []byte, name, verifierSQL string) (catalogFingerprintAsset, error) {
+func decodeSourceSchemaVerifierAsset(content []byte, name string) (catalogFingerprintAsset, error) {
 	decoder := json.NewDecoder(bytes.NewReader(content))
 	decoder.DisallowUnknownFields()
 	var asset catalogFingerprintAsset
@@ -180,19 +224,18 @@ func decodeSourceSchemaVerifierAsset(content []byte, name, verifierSQL string) (
 	if err := ensureJSONEOF(decoder); err != nil {
 		return catalogFingerprintAsset{}, fmt.Errorf("decode source schema verifier asset %q: %w", name, err)
 	}
-	if err := validateSourceSchemaVerifierAsset(asset, name, verifierSQL); err != nil {
+	if err := validateSourceSchemaVerifierAsset(asset, name); err != nil {
 		return catalogFingerprintAsset{}, err
 	}
 	return asset, nil
 }
 
-func validateSourceSchemaVerifierAsset(asset catalogFingerprintAsset, name, verifierSQL string) error {
+func validateSourceSchemaVerifierAsset(asset catalogFingerprintAsset, name string) error {
 	if asset.Kind != "source" || asset.AssetID != name || asset.FormatVersion != catalogFingerprintFormatVersion ||
 		!asset.Release.valid() {
 		return fmt.Errorf("source schema verifier asset %q identity mismatch", name)
 	}
-	if asset.Verifier.Name != catalogFingerprintVerifierName ||
-		asset.Verifier.SHA256 != checksumSQL(verifierSQL) {
+	if strings.TrimSpace(asset.Verifier.Name) == "" || !sha256Pattern.MatchString(asset.Verifier.SHA256) {
 		return fmt.Errorf("source schema verifier asset %q query identity mismatch", name)
 	}
 	if asset.Platform.PostgresMajor <= 0 || strings.TrimSpace(asset.Platform.VectorVersion) == "" {
@@ -205,6 +248,7 @@ func validateSourceSchemaVerifierAsset(asset catalogFingerprintAsset, name, veri
 		asset.Phases.Empty,
 		asset.Phases.Prepared,
 		asset.Phases.EntSchema,
+		asset.Phases.CurrentReleasePrePrivileges,
 		asset.Phases.CurrentRelease,
 	} {
 		if !sha256Pattern.MatchString(digest) {
@@ -219,6 +263,17 @@ func validateSourceSchemaVerifierAsset(asset catalogFingerprintAsset, name, veri
 		}
 	}
 	return nil
+}
+
+func (registry *SchemaVerifierRegistry) loadVerifier(ref ReleaseAsset) (string, error) {
+	if registry == nil || strings.TrimSpace(ref.Name) == "" || !sha256Pattern.MatchString(ref.SHA256) {
+		return "", fmt.Errorf("catalog verifier reference is invalid")
+	}
+	query, ok := registry.verifiers[schemaVerifierRegistryKey(ref)]
+	if !ok {
+		return "", fmt.Errorf("catalog verifier asset is not registered")
+	}
+	return query, nil
 }
 
 func validateExtensionInventory(inventory []catalogExtensionIdentity) error {
@@ -261,15 +316,19 @@ func verifyReleaseCatalogVerifierAssets(entries []ReleaseCatalogEntry, registry 
 			if err != nil || !transition.Target.matches(entry) {
 				return fmt.Errorf("release catalog transition verifier identity mismatch")
 			}
-			sourceFound := false
+			var sourceEntry *ReleaseCatalogEntry
 			for _, candidate := range entries {
 				if transition.Source.matches(candidate) {
-					sourceFound = true
+					candidateCopy := candidate
+					sourceEntry = &candidateCopy
 					break
 				}
 			}
-			if !sourceFound {
+			if sourceEntry == nil {
 				return fmt.Errorf("release catalog transition source is not retained")
+			}
+			if err := verifyExactTransitionCoverageDelta(*sourceEntry, entry, transition); err != nil {
+				return err
 			}
 			targetSource, err := registry.loadSource(entry.SourceSchemaAsset)
 			if err != nil || len(transition.Migrations) == 0 {
@@ -278,7 +337,7 @@ func verifyReleaseCatalogVerifierAssets(entries []ReleaseCatalogEntry, registry 
 			final := transition.Migrations[len(transition.Migrations)-1]
 			if final.Fingerprint != targetSource.Phases.CurrentRelease ||
 				!equalExtensionInventory(final.Extensions, targetSource.Extensions.Installed) ||
-				transition.Platform != targetSource.Platform {
+				transition.Platform != targetSource.Platform || transition.Verifier != targetSource.Verifier {
 				return fmt.Errorf("release catalog transition target verifier identity mismatch")
 			}
 		}
@@ -286,7 +345,36 @@ func verifyReleaseCatalogVerifierAssets(entries []ReleaseCatalogEntry, registry 
 	return nil
 }
 
-func decodeTransitionSchemaVerifierAsset(content []byte, name, verifierSQL string) (catalogTransitionAsset, error) {
+func verifyExactTransitionCoverageDelta(
+	source ReleaseCatalogEntry,
+	target ReleaseCatalogEntry,
+	transition catalogTransitionAsset,
+) error {
+	sourceCovered := relationSet(source.CoveredMigrations...)
+	targetCovered := relationSet(target.CoveredMigrations...)
+	for version := range sourceCovered {
+		if _, retained := targetCovered[version]; !retained {
+			return fmt.Errorf("transition migrations do not match exact ordered target coverage delta")
+		}
+	}
+	delta := make([]string, 0, len(target.CoveredMigrations))
+	for _, version := range target.CoveredMigrations {
+		if _, alreadyCovered := sourceCovered[version]; !alreadyCovered {
+			delta = append(delta, version)
+		}
+	}
+	if len(delta) != len(transition.Migrations) {
+		return fmt.Errorf("transition migrations do not match exact ordered target coverage delta")
+	}
+	for index, version := range delta {
+		if transition.Migrations[index].Version != version {
+			return fmt.Errorf("transition migrations do not match exact ordered target coverage delta")
+		}
+	}
+	return nil
+}
+
+func decodeTransitionSchemaVerifierAsset(content []byte, name string) (catalogTransitionAsset, error) {
 	decoder := json.NewDecoder(bytes.NewReader(content))
 	decoder.DisallowUnknownFields()
 	var asset catalogTransitionAsset
@@ -303,8 +391,7 @@ func decodeTransitionSchemaVerifierAsset(content []byte, name, verifierSQL strin
 			asset.Source.BaselineVersion == asset.Target.BaselineVersion) {
 		return catalogTransitionAsset{}, fmt.Errorf("transition schema verifier asset %q identity mismatch", name)
 	}
-	if asset.Verifier.Name != catalogFingerprintVerifierName ||
-		asset.Verifier.SHA256 != checksumSQL(verifierSQL) {
+	if strings.TrimSpace(asset.Verifier.Name) == "" || !sha256Pattern.MatchString(asset.Verifier.SHA256) {
 		return catalogTransitionAsset{}, fmt.Errorf("transition schema verifier asset %q query identity mismatch", name)
 	}
 	if asset.Platform.PostgresMajor <= 0 || strings.TrimSpace(asset.Platform.VectorVersion) == "" {
@@ -391,6 +478,7 @@ func (registry *SchemaVerifierRegistry) planTransition(
 		}
 		return catalogTransitionPlan{
 			ExpectedFingerprint: sourceAsset.Phases.CurrentRelease,
+			ExpectedVerifier:    sourceAsset.Verifier,
 			ExpectedExtensions:  append([]catalogExtensionIdentity(nil), sourceAsset.Extensions.Installed...),
 			ExpectedPlatform:    sourceAsset.Platform,
 			ManagedSchemas:      append([]string(nil), sourceAsset.ManagedSchemas...),
@@ -417,7 +505,7 @@ func (registry *SchemaVerifierRegistry) planTransition(
 	final := transition.Migrations[len(transition.Migrations)-1]
 	if final.Fingerprint != targetAsset.Phases.CurrentRelease ||
 		!equalExtensionInventory(final.Extensions, targetAsset.Extensions.Installed) ||
-		transition.Platform != targetAsset.Platform {
+		transition.Platform != targetAsset.Platform || transition.Verifier != targetAsset.Verifier {
 		return catalogTransitionPlan{}, fmt.Errorf("transition verifier does not converge on the target release")
 	}
 
@@ -465,21 +553,9 @@ func (registry *SchemaVerifierRegistry) planTransition(
 		}
 		prefixLength = index + 1
 	}
-	observedPrefix := make([]string, 0, prefixLength)
-	for _, item := range applied {
-		if _, baselineCovered := covered[item.Version]; baselineCovered {
-			continue
-		}
-		observedPrefix = append(observedPrefix, item.Version)
-	}
-	for index, version := range observedPrefix {
-		if index >= prefixLength || version != transition.Migrations[index].Version {
-			return catalogTransitionPlan{}, fmt.Errorf("committed transition does not match the exact sequence")
-		}
-	}
-
 	plan := catalogTransitionPlan{
 		ExpectedFingerprint: sourceAsset.Phases.CurrentRelease,
+		ExpectedVerifier:    sourceAsset.Verifier,
 		ExpectedExtensions:  append([]catalogExtensionIdentity(nil), sourceAsset.Extensions.Installed...),
 		ExpectedPlatform:    sourceAsset.Platform,
 		ManagedSchemas:      append([]string(nil), sourceAsset.ManagedSchemas...),
@@ -487,6 +563,7 @@ func (registry *SchemaVerifierRegistry) planTransition(
 	if prefixLength > 0 {
 		prefix := transition.Migrations[prefixLength-1]
 		plan.ExpectedFingerprint = prefix.Fingerprint
+		plan.ExpectedVerifier = transition.Verifier
 		plan.ExpectedExtensions = append([]catalogExtensionIdentity(nil), prefix.Extensions...)
 		plan.ExpectedPlatform = transition.Platform
 		plan.ManagedSchemas = append([]string(nil), transition.ManagedSchemas...)

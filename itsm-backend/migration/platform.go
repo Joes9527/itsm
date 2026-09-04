@@ -71,3 +71,14 @@ func verifyReleasePlatform(
 		InstalledVectorVersion:  installed,
 	}, required, requireInstalled)
 }
+
+// VerifyCurrentReleasePlatformAvailability performs the current release's
+// read-only server-major and exact pgvector package availability preflight.
+// It does not require the extension to be installed yet.
+func VerifyCurrentReleasePlatformAvailability(ctx context.Context, db DBTX) error {
+	asset, err := loadCurrentCatalogFingerprintAsset()
+	if err != nil {
+		return fmt.Errorf("load current release platform requirement: %w", err)
+	}
+	return verifyReleasePlatform(ctx, db, asset.Platform, false)
+}

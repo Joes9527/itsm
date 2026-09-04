@@ -3,6 +3,10 @@
 package main
 
 import (
+	"context"
+	"database/sql"
+	"database/sql/driver"
+	"errors"
 	"net"
 	"testing"
 
@@ -10,6 +14,31 @@ import (
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestNormalizeMigrationCommandRequiresExactlyOneAction(t *testing.T) {
+	for name, command := range map[string]migrationCommand{
+		"up and status":        {up: true, status: true},
+		"down and rollback-to": {down: true, rollbackVersion: "022_prior"},
+		"dry-run and seed":     {dryRun: true, seed: true},
+		"fresh and reset":      {fresh: true, reset: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := normalizeMigrationCommand(command)
+			require.ErrorContains(t, err, "exactly one command")
+			require.NotContains(t, err.Error(), "publication gate")
+		})
+	}
+
+	action, err := normalizeMigrationCommand(migrationCommand{rollbackVersion: " 022_prior "})
+	require.NoError(t, err)
+	require.Equal(t, migrationActionRollbackTo, action)
+}
+
+func TestValidateCommandPublicationNormalizesBeforeGate(t *testing.T) {
+	err := validateCommandPublication(migrationCommand{status: true, up: true})
+	require.ErrorContains(t, err, "exactly one command")
+	require.NotContains(t, err.Error(), "publication gate")
+}
 
 func TestValidateCommandPublicationGatesEveryMutatingFrontDoor(t *testing.T) {
 	mutating := map[string]migrationCommand{
@@ -111,4 +140,29 @@ func TestValidateFreshTargetRejectsHostnameResolvingToSharedHost(t *testing.T) {
 	t.Setenv("ITSM_FRESH_HOST", cfg.Database.Host)
 	t.Setenv("ITSM_FRESH_PORT", "5432")
 	require.ErrorContains(t, validateFreshTarget(cfg), "resolved as")
+}
+
+type recordingFreshAdmin struct {
+	statements []string
+}
+
+func (database *recordingFreshAdmin) ExecContext(_ context.Context, statement string, _ ...any) (sql.Result, error) {
+	database.statements = append(database.statements, statement)
+	return driver.RowsAffected(1), nil
+}
+
+func TestRecreateFreshDatabaseRunsReadOnlyPreflightBeforeDrop(t *testing.T) {
+	admin := &recordingFreshAdmin{}
+	preflightFailure := errors.New("platform preflight failed")
+	err := recreateFreshDatabase(context.Background(), admin, "itsm_fresh_test", func() error {
+		return preflightFailure
+	})
+	require.ErrorIs(t, err, preflightFailure)
+	require.Empty(t, admin.statements, "failed preflight must not issue DROP or CREATE")
+
+	err = recreateFreshDatabase(context.Background(), admin, "itsm_fresh_test", func() error { return nil })
+	require.NoError(t, err)
+	require.Len(t, admin.statements, 2)
+	require.Contains(t, admin.statements[0], "DROP DATABASE")
+	require.Contains(t, admin.statements[1], "CREATE DATABASE")
 }
