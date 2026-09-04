@@ -329,7 +329,7 @@ func TestChangeExecutionTenantReconciliationUsesWorkItemAuthority(t *testing.T) 
 
 	_, err = db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
 	require.NoError(t, err)
-	_, err = db.ExecContext(ctx, GetMigrationSQL("023_reconcile_change_execution_tenants"))
+	_, err = db.ExecContext(ctx, GetMigrationSQL("026_reconcile_change_execution_tenants"))
 	require.NoError(t, err)
 
 	for _, tableName := range changeExecutionTenantTables {
@@ -350,7 +350,22 @@ func TestChangeExecutionTenantReconciliationRejectsUnresolvedWorkItemAuthority(t
 
 	_, err = db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
 	require.NoError(t, err)
-	_, err = db.ExecContext(ctx, GetMigrationSQL("023_reconcile_change_execution_tenants"))
+	_, err = db.ExecContext(ctx, GetMigrationSQL("026_reconcile_change_execution_tenants"))
+	require.ErrorContains(t, err, "change execution tenant reconciliation failed")
+}
+
+func TestChangeExecutionTenantReconciliationRejectsNullChangeID(t *testing.T) {
+	db := openProfessionalExtensionMigrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+	defer cancel()
+
+	createChangeExecutionTenantTestTables(t, ctx, db)
+	_, err := db.ExecContext(ctx, `INSERT INTO change_approvals (change_id, tenant_id) VALUES (NULL, 101)`)
+	require.NoError(t, err)
+
+	_, err = db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, GetMigrationSQL("026_reconcile_change_execution_tenants"))
 	require.ErrorContains(t, err, "change execution tenant reconciliation failed")
 }
 
@@ -359,34 +374,163 @@ func TestCurrentRLSRepairRecreatesCanonicalDirectAndWorkItemPolicies(t *testing.
 	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
 	defer cancel()
 
-	_, err := db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
-	require.NoError(t, err)
-	_, err = db.ExecContext(ctx, `
-		CREATE TABLE tenant_assets (
+	createChangeExecutionTenantTestTables(t, ctx, db)
+	_, err := db.ExecContext(ctx, `
+		CREATE TABLE teams (
 			id BIGINT PRIMARY KEY,
 			tenant_id BIGINT NOT NULL
 		);
-		ALTER TABLE tenant_assets ENABLE ROW LEVEL SECURITY;
-		CREATE POLICY tenant_isolation ON tenant_assets
+		ALTER TABLE teams ENABLE ROW LEVEL SECURITY;
+		ALTER TABLE teams FORCE ROW LEVEL SECURITY;
+		CREATE POLICY tenant_isolation ON teams
 			USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::bigint)
 			WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::bigint);
+		CREATE TABLE roles (
+			id BIGINT PRIMARY KEY,
+			tenant_id BIGINT NOT NULL
+		);
+		CREATE TABLE permission_definitions (
+			id BIGINT PRIMARY KEY,
+			tenant_id BIGINT
+		);
+		CREATE POLICY shared_permission_definitions ON permission_definitions
+			USING (tenant_id IS NULL OR tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::bigint);
+		INSERT INTO tickets (id, tenant_id, record_class) VALUES
+			(41, 101, 'change_request'),
+			(42, 202, 'change_request');
+		INSERT INTO changes (id, work_item_id, tenant_id) VALUES
+			(51, 41, 101),
+			(52, 42, 202);
+	`)
+	require.NoError(t, err)
+	for _, tableName := range changeExecutionTenantTables {
+		_, err = db.ExecContext(ctx, fmt.Sprintf(`
+			INSERT INTO %s (id, change_id, tenant_id) VALUES (101, 51, 999), (202, 52, 999);
+			ALTER TABLE %s ENABLE ROW LEVEL SECURITY;
+		`, tableName, tableName))
+		require.NoError(t, err)
+	}
+
+	_, err = db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `
 		DROP POLICY tenant_isolation_changes ON changes;
 		CREATE POLICY tenant_isolation ON changes USING (true) WITH CHECK (true);
 	`)
 	require.NoError(t, err)
-
-	_, err = db.ExecContext(ctx, GetMigrationSQL("024_reconcile_current_rls_policies"))
+	_, err = db.ExecContext(ctx, GetMigrationSQL("026_reconcile_change_execution_tenants"))
 	require.NoError(t, err)
 
-	for _, tableName := range []string{"tickets", "tenant_assets"} {
+	activationBefore := map[string][2]bool{}
+	for _, tableName := range []string{"teams", "roles", "tickets", "changes", "change_approvals"} {
+		activationBefore[tableName] = readRLSActivationState(t, ctx, db, tableName)
+	}
+
+	_, err = db.ExecContext(ctx, GetMigrationSQL("027_reconcile_current_rls_policies"))
+	require.NoError(t, err)
+
+	for _, tableName := range []string{"teams", "roles", "tickets"} {
 		requireCanonicalDirectTenantPolicy(t, ctx, db, tableName)
 	}
 	for _, tableName := range professionalExtensionTables {
 		requireCanonicalProfessionalExtensionPolicy(t, ctx, db, tableName)
 	}
+	for _, tableName := range changeExecutionTenantTables {
+		requireCanonicalChangeExecutionPolicy(t, ctx, db, tableName)
+	}
+	for tableName, before := range activationBefore {
+		require.Equal(t, before, readRLSActivationState(t, ctx, db, tableName), "%s activation flags must not change", tableName)
+	}
+	var sharedPolicyCount int
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT COUNT(*)
+		FROM pg_policy policy
+		JOIN pg_class relation ON relation.oid = policy.polrelid
+		JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+		WHERE namespace.nspname = current_schema()
+		  AND relation.relname = 'permission_definitions'
+		  AND policy.polname = 'shared_permission_definitions'
+	`).Scan(&sharedPolicyCount))
+	require.Equal(t, 1, sharedPolicyCount, "shared/global permission semantics must remain untouched")
+
 	var legacyTenantFunction *string
 	require.NoError(t, db.QueryRowContext(ctx, `SELECT to_regprocedure('get_current_tenant_id()')`).Scan(&legacyTenantFunction))
 	require.Nil(t, legacyTenantFunction)
+
+	var schemaName string
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT current_schema()`).Scan(&schemaName))
+	roleName := "current_rls_runtime_" + strings.ReplaceAll(uuid.NewString(), "-", "_")
+	_, err = db.ExecContext(ctx, fmt.Sprintf(`
+		CREATE ROLE %q NOLOGIN;
+		GRANT USAGE ON SCHEMA %q TO %q;
+		GRANT SELECT ON %q.tickets, %q.changes TO %q;
+		GRANT SELECT, INSERT, UPDATE ON
+			%q.change_approvals,
+			%q.change_approval_chains,
+			%q.change_risk_assessments,
+			%q.change_rollback_plans,
+			%q.change_rollback_executions,
+			%q.change_implementation_plans
+		TO %q;
+	`, roleName, schemaName, roleName, schemaName, schemaName, roleName,
+		schemaName, schemaName, schemaName, schemaName, schemaName, schemaName, roleName))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, dropErr := db.ExecContext(context.Background(), fmt.Sprintf(`DROP OWNED BY %q; DROP ROLE IF EXISTS %q`, roleName, roleName))
+		require.NoError(t, dropErr)
+	})
+
+	tx, err := db.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	_, err = tx.ExecContext(ctx, fmt.Sprintf(`SET LOCAL ROLE %q`, roleName))
+	require.NoError(t, err)
+	var visible int
+	require.NoError(t, tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM change_approvals`).Scan(&visible))
+	require.Zero(t, visible, "missing tenant GUC must deny all rows for a nonowner role")
+	require.NoError(t, tx.Commit())
+
+	for _, testCase := range []struct {
+		tenantID int
+		wantID   int
+	}{
+		{tenantID: 101, wantID: 101},
+		{tenantID: 202, wantID: 202},
+	} {
+		tx, err = db.BeginTx(ctx, nil)
+		require.NoError(t, err)
+		_, err = tx.ExecContext(ctx, fmt.Sprintf(`SET LOCAL ROLE %q`, roleName))
+		require.NoError(t, err)
+		_, err = tx.ExecContext(ctx, `SELECT set_config('app.current_tenant', $1::text, true)`, testCase.tenantID)
+		require.NoError(t, err)
+		var visibleID int
+		require.NoError(t, tx.QueryRowContext(ctx, `SELECT id FROM change_approvals`).Scan(&visibleID))
+		require.Equal(t, testCase.wantID, visibleID)
+		require.NoError(t, tx.Commit())
+	}
+
+	for index, tableName := range changeExecutionTenantTables {
+		t.Run(tableName, func(t *testing.T) {
+			tx, txErr := db.BeginTx(ctx, nil)
+			require.NoError(t, txErr)
+			_, txErr = tx.ExecContext(ctx, fmt.Sprintf(`SET LOCAL ROLE %q`, roleName))
+			require.NoError(t, txErr)
+			_, txErr = tx.ExecContext(ctx, `SELECT set_config('app.current_tenant', '101', true)`)
+			require.NoError(t, txErr)
+			_, txErr = tx.ExecContext(ctx, fmt.Sprintf(`INSERT INTO %s (id, change_id, tenant_id) VALUES ($1, 52, 101)`, tableName), 1000+index)
+			require.Error(t, txErr, "tenant A must not insert a row referencing tenant B Change")
+			require.NoError(t, tx.Rollback())
+
+			tx, txErr = db.BeginTx(ctx, nil)
+			require.NoError(t, txErr)
+			_, txErr = tx.ExecContext(ctx, fmt.Sprintf(`SET LOCAL ROLE %q`, roleName))
+			require.NoError(t, txErr)
+			_, txErr = tx.ExecContext(ctx, `SELECT set_config('app.current_tenant', '101', true)`)
+			require.NoError(t, txErr)
+			_, txErr = tx.ExecContext(ctx, fmt.Sprintf(`UPDATE %s SET change_id = 52 WHERE id = 101`, tableName))
+			require.Error(t, txErr, "tenant A must not move a row to tenant B Change")
+			require.NoError(t, tx.Rollback())
+		})
+	}
 }
 
 func TestProfessionalExtensionMigrationRejectsConflictingNamedForeignKey(t *testing.T) {
@@ -671,7 +815,7 @@ func createChangeExecutionTenantTestTables(t *testing.T, ctx context.Context, db
 		_, err := db.ExecContext(ctx, fmt.Sprintf(`
 			CREATE TABLE %s (
 				id BIGSERIAL PRIMARY KEY,
-				change_id BIGINT NOT NULL,
+				change_id BIGINT,
 				tenant_id BIGINT NOT NULL
 			)
 		`, tableName))
@@ -760,6 +904,46 @@ func requireCanonicalDirectTenantPolicy(t *testing.T, ctx context.Context, db *s
 		require.Contains(t, expression, "app.current_tenant")
 		require.NotContains(t, expression, "app.current_tenant_id")
 	}
+}
+
+func requireCanonicalChangeExecutionPolicy(t *testing.T, ctx context.Context, db *sql.DB, tableName string) {
+	t.Helper()
+	var usingExpression, checkExpression, policyCommand string
+	var policyRoles pq.Int64Array
+	var policyPermissive bool
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT pg_get_expr(policy.polqual, policy.polrelid), pg_get_expr(policy.polwithcheck, policy.polrelid),
+		       policy.polroles, policy.polcmd, policy.polpermissive
+		FROM pg_policy policy
+		JOIN pg_class relation ON relation.oid = policy.polrelid
+		JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+		WHERE namespace.nspname = current_schema() AND relation.relname = $1 AND policy.polname = $2
+	`, tableName, "tenant_isolation_"+tableName).Scan(&usingExpression, &checkExpression, &policyRoles, &policyCommand, &policyPermissive))
+	require.Equal(t, pq.Int64Array{0}, policyRoles)
+	require.Equal(t, "*", policyCommand)
+	require.True(t, policyPermissive)
+	require.Equal(t, usingExpression, checkExpression)
+	for _, expression := range []string{usingExpression, checkExpression} {
+		require.Contains(t, expression, tableName+".change_id")
+		require.Contains(t, expression, "change_record.work_item_id")
+		require.Contains(t, expression, "work_item.tenant_id")
+		require.Contains(t, expression, "work_item.deleted_at IS NULL")
+		require.Contains(t, expression, "app.current_tenant")
+		require.NotContains(t, expression, "app.current_tenant_id")
+		require.NotContains(t, expression, tableName+".tenant_id")
+	}
+}
+
+func readRLSActivationState(t *testing.T, ctx context.Context, db *sql.DB, tableName string) [2]bool {
+	t.Helper()
+	var enabled, forced bool
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT relation.relrowsecurity, relation.relforcerowsecurity
+		FROM pg_class relation
+		JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+		WHERE namespace.nspname = current_schema() AND relation.relname = $1
+	`, tableName).Scan(&enabled, &forced))
+	return [2]bool{enabled, forced}
 }
 
 func openProfessionalExtensionMigrationDB(t *testing.T) *sql.DB {

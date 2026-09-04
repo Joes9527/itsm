@@ -444,12 +444,12 @@ var RegisteredMigrations = []Migration{
 		RollbackSQL: "",
 	},
 	{
-		Version:     "023_reconcile_change_execution_tenants",
+		Version:     "026_reconcile_change_execution_tenants",
 		Description: "Reconcile Change execution child tenants from the authoritative WorkItem",
 		RollbackSQL: "",
 	},
 	{
-		Version:     "024_reconcile_current_rls_policies",
+		Version:     "027_reconcile_current_rls_policies",
 		Description: "Reconcile current tenant RLS policies with WorkItem authority and the runtime tenant setting",
 		RollbackSQL: "",
 	},
@@ -1166,7 +1166,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
     ADD COLUMN IF NOT EXISTS optional_declared boolean NOT NULL DEFAULT false;`
 	case "022_drop_professional_extension_shared_fields":
 		return professionalExtensionSharedFieldsSQL
-	case "023_reconcile_change_execution_tenants":
+	case "026_reconcile_change_execution_tenants":
 		return `
 UPDATE change_approvals execution
 SET tenant_id = wi.tenant_id
@@ -1213,7 +1213,7 @@ WHERE execution.change_id = c.id
 DO $migration$
 DECLARE
     execution_table TEXT;
-    unresolved_change_id BIGINT;
+    drifted_execution_id BIGINT;
 BEGIN
     FOR execution_table IN SELECT unnest(ARRAY[
         'change_approvals',
@@ -1224,27 +1224,27 @@ BEGIN
         'change_implementation_plans'
     ]) LOOP
         EXECUTE format(
-            'SELECT execution.change_id FROM %I.%I execution '
+            'SELECT execution.id FROM %I.%I execution '
             'LEFT JOIN %I.changes change_record ON change_record.id = execution.change_id '
             'LEFT JOIN %I.tickets work_item ON work_item.id = change_record.work_item_id '
-            'WHERE change_record.id IS NULL OR work_item.id IS NULL '
+            'WHERE execution.change_id IS NULL OR change_record.id IS NULL OR work_item.id IS NULL '
             'OR execution.tenant_id IS DISTINCT FROM work_item.tenant_id LIMIT 1',
             current_schema(), execution_table, current_schema(), current_schema()
-        ) INTO unresolved_change_id;
-        IF unresolved_change_id IS NOT NULL THEN
-            RAISE EXCEPTION 'change execution tenant reconciliation failed for table % at change %',
-                execution_table, unresolved_change_id;
+        ) INTO drifted_execution_id;
+        IF drifted_execution_id IS NOT NULL THEN
+            RAISE EXCEPTION 'change execution tenant reconciliation failed for table % at row %',
+                execution_table, drifted_execution_id;
         END IF;
-        unresolved_change_id := NULL;
+        drifted_execution_id := NULL;
     END LOOP;
 END $migration$;
 `
-	case "024_reconcile_current_rls_policies":
+	case "027_reconcile_current_rls_policies":
 		return `
 DO $migration$
 DECLARE
     target RECORD;
-    extension_table TEXT;
+    relation_id OID;
     canonical_policy TEXT;
     unexpected_policy TEXT;
     expected_policy_expression TEXT;
@@ -1254,64 +1254,122 @@ DECLARE
     policy_command TEXT;
     policy_permissive BOOLEAN;
     policy_count INTEGER;
+    rls_enabled_before BOOLEAN;
+    rls_forced_before BOOLEAN;
+    rls_enabled_after BOOLEAN;
+    rls_forced_after BOOLEAN;
 BEGIN
     PERFORM current_setting('app.current_tenant', true);
 
-    IF EXISTS (
-        SELECT 1
-        FROM pg_class relation
-        JOIN pg_namespace schema ON schema.oid = relation.relnamespace
-        JOIN pg_attribute attribute ON attribute.attrelid = relation.oid
-        WHERE schema.oid = current_schema()::regnamespace
-          AND relation.relkind = 'r'
-          AND attribute.attname = 'tenant_id'
-          AND attribute.attnum > 0
-          AND NOT attribute.attisdropped
-          AND attribute.atttypid NOT IN ('int4'::regtype, 'int8'::regtype)
-    ) THEN
-        RAISE EXCEPTION 'tenant RLS target has a non-integer tenant_id in schema %', current_schema();
-    END IF;
-
     FOR target IN
-        SELECT schema.nspname AS schema_name, relation.relname AS table_name, relation.oid AS relation_id
+        SELECT * FROM (VALUES
+            ('teams', 'direct'),
+            ('roles', 'direct'),
+            ('users', 'direct'),
+            ('tickets', 'direct'),
+            ('service_catalogs', 'direct'),
+            ('ci_types', 'direct'),
+            ('standard_changes', 'direct'),
+            ('known_errors', 'direct'),
+            ('sla_alert_rules', 'direct'),
+            ('tags', 'direct'),
+            ('departments', 'direct'),
+            ('ticket_categories', 'direct'),
+            ('process_bindings', 'direct'),
+            ('process_definitions', 'direct'),
+            ('process_deployments', 'direct'),
+            ('ticket_views', 'direct'),
+            ('kaf_task_action_ledgers', 'direct'),
+            ('kaf_task_completion_receipts', 'direct'),
+            ('incidents', 'work_item'),
+            ('problems', 'work_item'),
+            ('changes', 'work_item'),
+            ('change_approvals', 'change_work_item'),
+            ('change_approval_chains', 'change_work_item'),
+            ('change_risk_assessments', 'change_work_item'),
+            ('change_rollback_plans', 'change_work_item'),
+            ('change_rollback_executions', 'change_work_item'),
+            ('change_implementation_plans', 'change_work_item')
+        ) AS reviewed_policy_registry(table_name, policy_kind)
+    LOOP
+        relation_id := NULL;
+        SELECT relation.oid, relation.relrowsecurity, relation.relforcerowsecurity
+        INTO relation_id, rls_enabled_before, rls_forced_before
         FROM pg_class relation
         JOIN pg_namespace schema ON schema.oid = relation.relnamespace
-        JOIN pg_attribute attribute ON attribute.attrelid = relation.oid
-        WHERE schema.oid = current_schema()::regnamespace
-          AND relation.relkind = 'r'
-          AND attribute.attname = 'tenant_id'
-          AND attribute.attnum > 0
-          AND NOT attribute.attisdropped
-          AND attribute.atttypid IN ('int4'::regtype, 'int8'::regtype)
-        ORDER BY relation.relname
-    LOOP
+        WHERE schema.nspname = current_schema()
+          AND relation.relname = target.table_name
+          AND relation.relkind IN ('r', 'p');
+        IF relation_id IS NULL THEN
+            CONTINUE;
+        END IF;
+
         canonical_policy := format('tenant_isolation_%s', target.table_name);
         IF length(canonical_policy) > 63 THEN
-            RAISE EXCEPTION 'tenant RLS policy name exceeds PostgreSQL identifier limit for %.%', target.schema_name, target.table_name;
+            RAISE EXCEPTION 'tenant RLS policy name exceeds PostgreSQL identifier limit for %.%', current_schema(), target.table_name;
         END IF;
 
-        EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', canonical_policy, target.schema_name, target.table_name);
-        EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', 'tenant_isolation', target.schema_name, target.table_name);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', canonical_policy, current_schema(), target.table_name);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', 'tenant_isolation', current_schema(), target.table_name);
 
         unexpected_policy := NULL;
         SELECT policy.polname
         INTO unexpected_policy
         FROM pg_policy policy
-        WHERE policy.polrelid = target.relation_id
+        WHERE policy.polrelid = relation_id
         LIMIT 1;
         IF unexpected_policy IS NOT NULL THEN
-            RAISE EXCEPTION 'unexpected RLS policy % remains on %.%; refusing dual policy contract', unexpected_policy, target.schema_name, target.table_name;
+            RAISE EXCEPTION 'unexpected RLS policy % remains on %.%; refusing dual policy contract', unexpected_policy, current_schema(), target.table_name;
         END IF;
 
-        EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', target.schema_name, target.table_name);
-        EXECUTE format(
-            'CREATE POLICY %I ON %I.%I AS PERMISSIVE FOR ALL TO PUBLIC '
-            'USING (tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint) '
-            'WITH CHECK (tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint)',
-            canonical_policy, target.schema_name, target.table_name
-        );
+        IF target.policy_kind = 'direct' THEN
+            EXECUTE format(
+                'CREATE POLICY %I ON %I.%I AS PERMISSIVE FOR ALL TO PUBLIC '
+                'USING (tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint) '
+                'WITH CHECK (tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint)',
+                canonical_policy, current_schema(), target.table_name
+            );
+            expected_policy_expression := '(tenant_id = (NULLIF(current_setting(''app.current_tenant''::text, true), ''''::text))::bigint)';
+        ELSIF target.policy_kind = 'work_item' THEN
+            EXECUTE format(
+                'CREATE POLICY %I ON %I.%I AS PERMISSIVE FOR ALL TO PUBLIC '
+                'USING (EXISTS (SELECT 1 FROM %I.tickets work_item '
+                'WHERE work_item.id = %I.work_item_id '
+                'AND work_item.tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint '
+                'AND work_item.deleted_at IS NULL)) '
+                'WITH CHECK (EXISTS (SELECT 1 FROM %I.tickets work_item '
+                'WHERE work_item.id = %I.work_item_id '
+                'AND work_item.tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint '
+                'AND work_item.deleted_at IS NULL))',
+                canonical_policy, current_schema(), target.table_name,
+                current_schema(), target.table_name, current_schema(), target.table_name
+            );
+            expected_policy_expression := format(
+                '(EXISTS ( SELECT 1 FROM tickets work_item WHERE ((work_item.id = %I.work_item_id) AND (work_item.tenant_id = (NULLIF(current_setting(''app.current_tenant''::text, true), ''''::text))::bigint) AND (work_item.deleted_at IS NULL))))',
+                target.table_name
+            );
+        ELSIF target.policy_kind = 'change_work_item' THEN
+            EXECUTE format(
+                'CREATE POLICY %I ON %I.%I AS PERMISSIVE FOR ALL TO PUBLIC '
+                'USING (EXISTS (SELECT 1 FROM %I.changes change_record '
+                'JOIN %I.tickets work_item ON work_item.id = change_record.work_item_id '
+                'WHERE change_record.id = %I.change_id '
+                'AND work_item.tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint '
+                'AND work_item.deleted_at IS NULL)) '
+                'WITH CHECK (EXISTS (SELECT 1 FROM %I.changes change_record '
+                'JOIN %I.tickets work_item ON work_item.id = change_record.work_item_id '
+                'WHERE change_record.id = %I.change_id '
+                'AND work_item.tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint '
+                'AND work_item.deleted_at IS NULL))',
+                canonical_policy, current_schema(), target.table_name,
+                current_schema(), current_schema(), target.table_name,
+                current_schema(), current_schema(), target.table_name
+            );
+            expected_policy_expression := '';
+        ELSE
+            RAISE EXCEPTION 'unsupported reviewed RLS policy kind % for table %', target.policy_kind, target.table_name;
+        END IF;
 
-        expected_policy_expression := '(tenant_id = (NULLIF(current_setting(''app.current_tenant''::text, true), ''''::text))::bigint)';
         policy_using := NULL;
         policy_check := NULL;
         policy_roles := NULL;
@@ -1324,129 +1382,50 @@ BEGIN
                policy.polpermissive
         INTO policy_using, policy_check, policy_roles, policy_command, policy_permissive
         FROM pg_policy policy
-        WHERE policy.polrelid = target.relation_id
+        WHERE policy.polrelid = relation_id
           AND policy.polname = canonical_policy;
 
         IF policy_using IS NULL OR policy_check IS NULL
-           OR regexp_replace(btrim(policy_using), '\s+', ' ', 'g') <> expected_policy_expression
-           OR regexp_replace(btrim(policy_check), '\s+', ' ', 'g') <> expected_policy_expression
+           OR regexp_replace(btrim(policy_using), '\s+', ' ', 'g') <> regexp_replace(btrim(policy_check), '\s+', ' ', 'g')
            OR policy_roles <> ARRAY[0::OID]
            OR policy_command <> '*'
            OR NOT policy_permissive THEN
-            RAISE EXCEPTION '%.% does not have the canonical direct tenant RLS policy',
-                target.schema_name, target.table_name;
+            RAISE EXCEPTION '%.% must have matching canonical PUBLIC/ALL/PERMISSIVE policy predicates',
+                target.table_name, canonical_policy;
+        END IF;
+
+        IF target.policy_kind IN ('direct', 'work_item')
+           AND regexp_replace(btrim(policy_using), '\s+', ' ', 'g') <> expected_policy_expression THEN
+            RAISE EXCEPTION '%.% does not have its canonical tenant authority predicate',
+                target.table_name, canonical_policy;
+        END IF;
+
+        IF target.policy_kind = 'change_work_item'
+           AND (position(format('%I.change_id', target.table_name) IN policy_using) = 0
+                OR position('change_record.work_item_id' IN policy_using) = 0
+                OR position('work_item.tenant_id' IN policy_using) = 0
+                OR position('app.current_tenant' IN policy_using) = 0
+                OR position('work_item.deleted_at IS NULL' IN policy_using) = 0
+                OR position(format('%I.tenant_id', target.table_name) IN policy_using) > 0) THEN
+            RAISE EXCEPTION '%.% must derive tenant scope through Change WorkItem authority',
+                target.table_name, canonical_policy;
         END IF;
 
         SELECT COUNT(*) INTO policy_count
         FROM pg_policy policy
-        WHERE policy.polrelid = target.relation_id;
+        WHERE policy.polrelid = relation_id;
         IF policy_count <> 1 THEN
-            RAISE EXCEPTION '%.% must have exactly one canonical RLS policy',
-                target.schema_name, target.table_name;
+            RAISE EXCEPTION '% must have exactly one canonical RLS policy', target.table_name;
         END IF;
 
-        IF NOT EXISTS (
-            SELECT 1 FROM pg_class relation
-            WHERE relation.oid = target.relation_id AND relation.relrowsecurity
-        ) THEN
-            RAISE EXCEPTION '%.% must have RLS enabled', target.schema_name, target.table_name;
-        END IF;
-    END LOOP;
-
-    IF to_regclass(format('%I.tickets', current_schema())) IS NULL THEN
-        RAISE EXCEPTION 'required WorkItem table tickets is missing from schema %', current_schema();
-    END IF;
-
-    FOR extension_table IN SELECT unnest(ARRAY['incidents', 'problems', 'changes']) LOOP
-        IF to_regclass(format('%I.%I', current_schema(), extension_table)) IS NULL THEN
-            RAISE EXCEPTION 'required professional extension table % is missing from schema %',
-                extension_table, current_schema();
-        END IF;
-
-        canonical_policy := 'tenant_isolation_' || extension_table;
-        EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', canonical_policy, current_schema(), extension_table);
-        EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', 'tenant_isolation', current_schema(), extension_table);
-
-        unexpected_policy := NULL;
-        SELECT policy.polname
-        INTO unexpected_policy
-        FROM pg_policy policy
-        JOIN pg_class relation ON relation.oid = policy.polrelid
-        JOIN pg_namespace schema ON schema.oid = relation.relnamespace
-        WHERE schema.nspname = current_schema()
-          AND relation.relname = extension_table
-        LIMIT 1;
-        IF unexpected_policy IS NOT NULL THEN
-            RAISE EXCEPTION 'unexpected RLS policy % remains on %.%; refusing dual policy contract',
-                unexpected_policy, current_schema(), extension_table;
-        END IF;
-
-        EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', current_schema(), extension_table);
-        EXECUTE format(
-            'CREATE POLICY %I ON %I.%I AS PERMISSIVE FOR ALL TO PUBLIC '
-            'USING (EXISTS (SELECT 1 FROM %I.tickets work_item '
-            'WHERE work_item.id = %I.work_item_id '
-            'AND work_item.tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint '
-            'AND work_item.deleted_at IS NULL)) '
-            'WITH CHECK (EXISTS (SELECT 1 FROM %I.tickets work_item '
-            'WHERE work_item.id = %I.work_item_id '
-            'AND work_item.tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint '
-            'AND work_item.deleted_at IS NULL))',
-            canonical_policy, current_schema(), extension_table,
-            current_schema(), extension_table, current_schema(), extension_table
-        );
-
-        expected_policy_expression := format(
-            '(EXISTS ( SELECT 1 FROM tickets work_item WHERE ((work_item.id = %I.work_item_id) AND (work_item.tenant_id = (NULLIF(current_setting(''app.current_tenant''::text, true), ''''::text))::bigint) AND (work_item.deleted_at IS NULL))))',
-            extension_table
-        );
-        policy_using := NULL;
-        policy_check := NULL;
-        policy_roles := NULL;
-        policy_command := NULL;
-        policy_permissive := NULL;
-        SELECT pg_get_expr(policy.polqual, policy.polrelid),
-               pg_get_expr(policy.polwithcheck, policy.polrelid),
-               policy.polroles,
-               policy.polcmd,
-               policy.polpermissive
-        INTO policy_using, policy_check, policy_roles, policy_command, policy_permissive
-        FROM pg_policy policy
-        JOIN pg_class relation ON relation.oid = policy.polrelid
-        JOIN pg_namespace schema ON schema.oid = relation.relnamespace
-        WHERE schema.nspname = current_schema()
-          AND relation.relname = extension_table
-          AND policy.polname = canonical_policy;
-
-        IF policy_using IS NULL OR policy_check IS NULL
-           OR regexp_replace(btrim(policy_using), '\s+', ' ', 'g') <> expected_policy_expression
-           OR regexp_replace(btrim(policy_check), '\s+', ' ', 'g') <> expected_policy_expression
-           OR policy_roles <> ARRAY[0::OID]
-           OR policy_command <> '*'
-           OR NOT policy_permissive THEN
-            RAISE EXCEPTION '%.% must use authoritative WorkItem tenant and soft-delete scope exactly',
-                extension_table, canonical_policy;
-        END IF;
-
-        SELECT COUNT(*) INTO policy_count
-        FROM pg_policy policy
-        JOIN pg_class relation ON relation.oid = policy.polrelid
-        JOIN pg_namespace schema ON schema.oid = relation.relnamespace
-        WHERE schema.nspname = current_schema()
-          AND relation.relname = extension_table;
-        IF policy_count <> 1 THEN
-            RAISE EXCEPTION '% must have exactly one canonical RLS policy', extension_table;
-        END IF;
-
-        IF NOT EXISTS (
-            SELECT 1
-            FROM pg_class relation
-            JOIN pg_namespace schema ON schema.oid = relation.relnamespace
-            WHERE schema.nspname = current_schema()
-              AND relation.relname = extension_table
-              AND relation.relrowsecurity
-        ) THEN
-            RAISE EXCEPTION '% must have RLS enabled', extension_table;
+        SELECT relation.relrowsecurity, relation.relforcerowsecurity
+        INTO rls_enabled_after, rls_forced_after
+        FROM pg_class relation
+        WHERE relation.oid = relation_id;
+        IF rls_enabled_after IS DISTINCT FROM rls_enabled_before
+           OR rls_forced_after IS DISTINCT FROM rls_forced_before THEN
+            RAISE EXCEPTION '%.% RLS activation state changed during policy reconciliation',
+                current_schema(), target.table_name;
         END IF;
     END LOOP;
 END $migration$;

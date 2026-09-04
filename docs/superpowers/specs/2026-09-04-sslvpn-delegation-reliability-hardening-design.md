@@ -105,8 +105,8 @@ Lineage manifest 是随代码评审的只读验证资产，不是运行时“可
 
 | 历史 ledger version | 历史逻辑文件 | Git commit | Git blob | 原始 SQL SHA-256 | 当前 catalog 归属 | 可执行 | Forward requirement |
 |---|---|---|---|---|---|---|---|
-| `007_add_change_execution_tables` | `itsm-backend/migration/migrations.go` | `a5370db83d89d22ac8b9a2b75e6d7afcb5b40d7b` | `d30270e1425a57d5182366115b6dc74282524c9f` | `1cf4fab4573d373957f8d22012e60652400eeffd09c1caf118ec640761b13d4a` | immutable upgrade lineage | 是 | 新 forward migration 以 WorkItem/tickets 为 tenant 权威修复六张 change execution 表 |
-| `009_enable_rls_tenant_isolation` | `itsm-backend/migration/migrations.go` | `ef7b16a644d94b7fe53e3fce7b519350de070180` | `8951c874999ad205eecf866074704e645ed13f37` | `b88712993b527f72c945e506fecbb41da54e2aeada19317dff9bc489a94ecea0` | immutable upgrade lineage | 是 | 新 forward migration 收敛当前 tenant setting 与 RLS policy |
+| `007_add_change_execution_tables` | `itsm-backend/migration/migrations.go` | `a5370db83d89d22ac8b9a2b75e6d7afcb5b40d7b` | `d30270e1425a57d5182366115b6dc74282524c9f` | `1cf4fab4573d373957f8d22012e60652400eeffd09c1caf118ec640761b13d4a` | immutable upgrade lineage | 是 | `026_reconcile_change_execution_tenants` 以 WorkItem/tickets 为 tenant 权威修复六张 change execution 表 |
+| `009_enable_rls_tenant_isolation` | `itsm-backend/migration/migrations.go` | `ef7b16a644d94b7fe53e3fce7b519350de070180` | `8951c874999ad205eecf866074704e645ed13f37` | `b88712993b527f72c945e506fecbb41da54e2aeada19317dff9bc489a94ecea0` | immutable upgrade lineage | 是 | `027_reconcile_current_rls_policies` 以显式表注册表收敛当前 tenant setting 与 RLS policy，且不改变表的 RLS enable/force 状态 |
 | `015_process_instance_running_unique_guard` | `itsm-backend/migration/migrations.go` | `5898e2244d1534e588b4659dc867bdecc7e1deb8` | `10c6109f3a3855e7ecff83847c97bee9e04d5a30` | `624c72f3fc88b299570f556742959bc1e436574881ee080b3dcd85864d1049f6` | immutable upgrade lineage | 是 | 无；恢复原始字节，当前差异仅为说明文本 |
 | `015_add_service_request_contact_fields` | `itsm-backend/migration/migrations.go` | `6e52278393896d5dc13f6a60ee83c0ae00073c8f` | `b08cce42de3482d9a9c0d90af55ba4ec87b9703b` | `917e74af4aca87b2f40370239ed41c61c847b9c32588ffc8680ecaaad73a0b67` | historical validation-only lineage；当前 canonical version 为 `016_add_service_request_contact_fields` | 否 | 016 作为唯一可执行 canonical migration；不得把旧 015 作为第二条执行路径 |
 
@@ -116,7 +116,9 @@ Manifest 校验使用 version 对应的单一原始 SHA-256；不得为同一个
 
 - 从上表指定的 Git commit/blob 恢复已经部署过的 007、009、015 migration 原始 SQL 字节并逐项验证 SHA-256。
 - 将历史 `015_add_service_request_contact_fields` 纳入 validation-only lineage；它不可被新环境执行，也不是 016 的别名。
-- 007 tenant 来源和 009 RLS 当前需要的语义只能通过新的 forward migration 应用。
+- 007 tenant 来源和 009 RLS 当前需要的语义只能分别通过 `026_reconcile_change_execution_tenants` 与 `027_reconcile_current_rls_policies` 应用；023–025 已由统一 Intake 分支占用。
+- `027` 只处理经过评审的显式表注册表，不得按 `tenant_id` 列名扫描；Change 执行子表的 policy 必须通过 `change_id -> changes.work_item_id -> tickets.tenant_id` 授权，并保留每张表迁移前的 RLS enable/force 状态。
+- 本轮后续 migration 顺序固定为 `028_schema_release_state`、`029_outbox_delivery_version`、`030_delegated_execution_reconciliation`。
 - 新 migration 编号在实施分支从最新 `origin/main` 分配，不复用任何已存在或其他待合并分支已经占用的版本。
 - 禁止直接更新或删除生产/共享数据库的 `schema_migrations` 行。
 - 对无法证明来源的 checksum 或未知 version 继续 fail closed，并输出不含凭据的诊断。

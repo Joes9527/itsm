@@ -34,7 +34,7 @@ func TestLineageManifestRejectsIncompleteDuplicateAndMalformedEntries(t *testing
 		"sqlSha256":"1cf4fab4573d373957f8d22012e60652400eeffd09c1caf118ec640761b13d4a",
 		"catalog":"immutable_upgrade_lineage",
 		"executable":true,
-		"forwardMigration":"023_reconcile_change_execution_tenants"
+		"forwardMigration":"026_reconcile_change_execution_tenants"
 	}`
 
 	tests := map[string]string{

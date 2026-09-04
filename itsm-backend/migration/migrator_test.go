@@ -1,6 +1,7 @@
 package migration
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,10 +95,53 @@ func TestValidateMigrationLedgerAcceptsPublishedChangeExecutionChecksum(t *testi
 	}}))
 }
 
+func TestValidateActiveMigrationRequiresMatchingPublishedLineage(t *testing.T) {
+	originalManifest := lineageManifestJSON
+	t.Cleanup(func() { lineageManifestJSON = originalManifest })
+	migration := RegisteredMigrations[0]
+
+	lineageManifestJSON = []byte(`{"entries":[{
+		"ledgerVersion":"008_add_initialization_ledger",
+		"logicalFile":"itsm-backend/migration/migrations.go",
+		"gitCommit":"e834a20e32414706a1a3a84ac9d6a6bd922208de",
+		"gitBlob":"31eb77395a3a791d550bb5ca591eb703aac72788",
+		"sqlSha256":"772eeef5f6485595f13103f76bb1344aa9526f5f0a7b94f5a062b86ea227d5be",
+		"catalog":"immutable_upgrade_lineage",
+		"executable":true,
+		"forwardMigration":""
+	}]}`)
+	require.ErrorContains(t, validateActiveMigration(migration), "published lineage")
+
+	lineageManifestJSON = []byte(`{"entries":[{
+		"ledgerVersion":"007_add_change_execution_tables",
+		"logicalFile":"itsm-backend/migration/migrations.go",
+		"gitCommit":"a5370db83d89d22ac8b9a2b75e6d7afcb5b40d7b",
+		"gitBlob":"d30270e1425a57d5182366115b6dc74282524c9f",
+		"sqlSha256":"0000000000000000000000000000000000000000000000000000000000000000",
+		"catalog":"immutable_upgrade_lineage",
+		"executable":true,
+		"forwardMigration":"026_reconcile_change_execution_tenants"
+	}]}`)
+	require.ErrorContains(t, validateActiveMigration(migration), "checksum mismatch")
+
+	lineageManifestJSON = originalManifest
+	require.NoError(t, validateActiveMigration(migration))
+}
+
+func TestApplyMigrationRejectsUnpublishedLineageBeforeOpeningTransaction(t *testing.T) {
+	originalManifest := lineageManifestJSON
+	t.Cleanup(func() { lineageManifestJSON = originalManifest })
+	lineageManifestJSON = []byte(`{"entries":[]}`)
+
+	migrator := NewMigrator(nil, nil)
+	err := migrator.ApplyMigration(context.Background(), RegisteredMigrations[0])
+	require.ErrorContains(t, err, "published lineage")
+}
+
 func TestValidateLedgerLineageAcceptsCurrentForwardRepairChecksums(t *testing.T) {
 	for _, version := range []string{
-		"023_reconcile_change_execution_tenants",
-		"024_reconcile_current_rls_policies",
+		"026_reconcile_change_execution_tenants",
+		"027_reconcile_current_rls_policies",
 	} {
 		t.Run(version, func(t *testing.T) {
 			require.NoError(t, ValidateLedgerLineage([]Migration{{
@@ -202,7 +246,7 @@ func TestPublishedMigrationSQLChecksumsMatchLineage(t *testing.T) {
 }
 
 func TestChangeExecutionTenantReconciliationIsAForwardMigration(t *testing.T) {
-	const version = "023_reconcile_change_execution_tenants"
+	const version = "026_reconcile_change_execution_tenants"
 
 	sql := GetMigrationSQL(version)
 	require.NotEmpty(t, sql)
@@ -224,11 +268,19 @@ func TestChangeExecutionTenantReconciliationIsAForwardMigration(t *testing.T) {
 }
 
 func TestChangeExecutionTenantReconciliationFailsClosedOnUnresolvedAuthority(t *testing.T) {
-	sql := GetMigrationSQL("023_reconcile_change_execution_tenants")
+	sql := GetMigrationSQL("026_reconcile_change_execution_tenants")
 	require.NotEmpty(t, sql)
 	assert.Contains(t, sql, "LEFT JOIN %I.tickets work_item ON work_item.id = change_record.work_item_id")
 	assert.Contains(t, sql, "execution.tenant_id IS DISTINCT FROM work_item.tenant_id")
 	assert.Contains(t, sql, "change execution tenant reconciliation failed")
+}
+
+func TestChangeExecutionTenantReconciliationDetectsNullChangeID(t *testing.T) {
+	sql := GetMigrationSQL("026_reconcile_change_execution_tenants")
+	require.NotEmpty(t, sql)
+	assert.Contains(t, sql, "SELECT execution.id")
+	assert.Contains(t, sql, "execution.change_id IS NULL")
+	assert.Contains(t, sql, "IF drifted_execution_id IS NOT NULL")
 }
 
 func TestPostSchemaMigrationsStartsAtUnifiedVersion(t *testing.T) {
@@ -242,7 +294,7 @@ func TestPostSchemaMigrationsStartsAtUnifiedVersion(t *testing.T) {
 }
 
 func TestCurrentRLSRepairUsesWorkItemTenantAuthority(t *testing.T) {
-	sql := GetMigrationSQL("024_reconcile_current_rls_policies")
+	sql := GetMigrationSQL("027_reconcile_current_rls_policies")
 	require.NotEmpty(t, sql)
 	require.Contains(t, sql, "work_item.tenant_id")
 	require.Contains(t, sql, "current_setting('app.current_tenant', true)")
@@ -250,13 +302,10 @@ func TestCurrentRLSRepairUsesWorkItemTenantAuthority(t *testing.T) {
 }
 
 func TestCurrentRLSRepairReconcilesAndVerifiesCanonicalPolicies(t *testing.T) {
-	sql := GetMigrationSQL("024_reconcile_current_rls_policies")
+	sql := GetMigrationSQL("027_reconcile_current_rls_policies")
 	require.NotEmpty(t, sql)
 	assert.Contains(t, sql, "pg_class")
 	assert.Contains(t, sql, "pg_namespace")
-	assert.Contains(t, sql, "pg_attribute")
-	assert.Contains(t, sql, "relkind = 'r'")
-	assert.Contains(t, sql, "schema.oid = current_schema()::regnamespace")
 	assert.Contains(t, sql, "tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint")
 	assert.Contains(t, sql, "DROP POLICY IF EXISTS %I ON %I.%I")
 	assert.Contains(t, sql, "DROP FUNCTION IF EXISTS get_current_tenant_id()")
@@ -268,6 +317,40 @@ func TestCurrentRLSRepairReconcilesAndVerifiesCanonicalPolicies(t *testing.T) {
 	assert.NotContains(t, sql, "FORCE ROW LEVEL SECURITY")
 }
 
+func TestCurrentRLSRepairUsesExplicitRegistryAndPreservesActivationState(t *testing.T) {
+	sql := GetMigrationSQL("027_reconcile_current_rls_policies")
+	require.NotEmpty(t, sql)
+	assert.Contains(t, sql, "SELECT * FROM (VALUES")
+	assert.Contains(t, sql, "('teams', 'direct')")
+	assert.Contains(t, sql, "('changes', 'work_item')")
+	assert.Contains(t, sql, "('change_approvals', 'change_work_item')")
+	assert.NotContains(t, sql, "pg_attribute")
+	assert.NotContains(t, sql, "ENABLE ROW LEVEL SECURITY")
+	assert.NotContains(t, sql, "DISABLE ROW LEVEL SECURITY")
+	assert.NotContains(t, sql, "NO FORCE ROW LEVEL SECURITY")
+	assert.NotContains(t, sql, "FORCE ROW LEVEL SECURITY")
+	assert.NotContains(t, sql, "permission_definitions")
+}
+
+func TestCurrentRLSRepairScopesChangeChildrenThroughWorkItemAuthority(t *testing.T) {
+	sql := GetMigrationSQL("027_reconcile_current_rls_policies")
+	require.NotEmpty(t, sql)
+	for _, table := range []string{
+		"change_approvals",
+		"change_approval_chains",
+		"change_risk_assessments",
+		"change_rollback_plans",
+		"change_rollback_executions",
+		"change_implementation_plans",
+	} {
+		assert.Contains(t, sql, "('"+table+"', 'change_work_item')")
+	}
+	assert.Contains(t, sql, "change_record.id = %I.change_id")
+	assert.Contains(t, sql, "work_item.id = change_record.work_item_id")
+	assert.Contains(t, sql, "work_item.tenant_id = NULLIF(current_setting")
+	assert.NotContains(t, sql, "execution.tenant_id = NULLIF(current_setting")
+}
+
 func TestForwardTenantRepairsAreRegisteredInCanonicalOrder(t *testing.T) {
 	versions := make([]string, 0, len(RegisteredMigrations))
 	for _, migration := range RegisteredMigrations {
@@ -275,11 +358,13 @@ func TestForwardTenantRepairsAreRegisteredInCanonicalOrder(t *testing.T) {
 	}
 	require.Subset(t, versions, []string{
 		"022_drop_professional_extension_shared_fields",
-		"023_reconcile_change_execution_tenants",
-		"024_reconcile_current_rls_policies",
+		"026_reconcile_change_execution_tenants",
+		"027_reconcile_current_rls_policies",
 	})
-	require.Less(t, strings.Index(strings.Join(versions, ","), "022_drop_professional_extension_shared_fields"), strings.Index(strings.Join(versions, ","), "023_reconcile_change_execution_tenants"))
-	require.Less(t, strings.Index(strings.Join(versions, ","), "023_reconcile_change_execution_tenants"), strings.Index(strings.Join(versions, ","), "024_reconcile_current_rls_policies"))
+	require.NotContains(t, versions, "023_reconcile_change_execution_tenants")
+	require.NotContains(t, versions, "024_reconcile_current_rls_policies")
+	require.Less(t, strings.Index(strings.Join(versions, ","), "022_drop_professional_extension_shared_fields"), strings.Index(strings.Join(versions, ","), "026_reconcile_change_execution_tenants"))
+	require.Less(t, strings.Index(strings.Join(versions, ","), "026_reconcile_change_execution_tenants"), strings.Index(strings.Join(versions, ","), "027_reconcile_current_rls_policies"))
 }
 
 func TestTicketTypesMigrationIsRetiredFromTheActivePostSchemaStream(t *testing.T) {

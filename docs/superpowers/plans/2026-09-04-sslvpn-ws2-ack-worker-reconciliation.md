@@ -36,7 +36,7 @@
 - Modify `itsm-backend/service/kaf_outbox_dispatcher.go`: use strict classifier.
 - Modify `itsm-backend/config/config.go`, `service/kaf_outbox_dispatcher.go`, `internal/bootstrap/kaf_worker.go`, and `internal/workerhealth/server.go`: lifecycle/heartbeat readiness.
 - Add `delivery_version` to `itsm-backend/ent/schema/outbox_event.go`.
-- Create `itsm-backend/ent/schema/delegated_execution_reconciliation.go` and migration `027_delegated_execution_reconciliation` after WS1 reserves 023–025 and Task 6 reserves 026.
+- Create `itsm-backend/ent/schema/delegated_execution_reconciliation.go` and migration `030_delegated_execution_reconciliation` after unified Intake reserves 023–025, WS1 reserves 026–028, and Task 6 reserves 029.
 - Create `itsm-backend/handlers/delegated_execution/repository.go`; modify its service and tests.
 
 ### Task 1: WS2a freeze and validate the authoritative contract
@@ -341,9 +341,9 @@ git commit -m "feat(kaf-worker): report scheduler-aware readiness"
 
 For each repository transition, capture the prior version and assert exactly `prior+1`. Assert a stale expected version updates zero rows and returns `ErrOutboxEventClaimLost` or the delegated-execution conflict equivalent.
 
-- [ ] **Step 2: Add Ent field and migration 026**
+- [ ] **Step 2: Add Ent field and migration 029**
 
-Use forward migration `026_outbox_delivery_version` to add `delivery_version BIGINT NOT NULL DEFAULT 1 CHECK (delivery_version > 0)`. Generate Ent code with the repository’s standard Ent generation command and review generated diffs.
+Use forward migration `029_outbox_delivery_version` to add `delivery_version BIGINT NOT NULL DEFAULT 1 CHECK (delivery_version > 0)`. Generate Ent code with the repository’s standard Ent generation command and review generated diffs.
 
 - [ ] **Step 3: Fence every repository update**
 
@@ -354,7 +354,7 @@ Add `AddDeliveryVersion(1)` to every state mutation. Claim/finalization predicat
 ```bash
 cd itsm-backend
 go generate ./ent
-go test ./service ./migration -run 'Outbox.*Version|OutboxEventRepository|Migration026' -count=1
+go test ./service ./migration -run 'Outbox.*Version|OutboxEventRepository|Migration029' -count=1
 git add ent migration/migrations.go service/outbox_event_repository.go service/outbox_event_repository_test.go
 git commit -m "feat(outbox): add monotonic delivery fencing"
 ```
@@ -381,9 +381,9 @@ git commit -m "feat(outbox): add monotonic delivery fencing"
 
 Assert one unconsumed row per `(tenant_id,event_id)`, cross-tenant not-found, duplicate operator conflict, stale version/attempt conflict, two concurrent requeues yield one success, delivery unknown never requeues, and audit/requeue/consumption roll back together on injected failure.
 
-- [ ] **Step 2: Add reconciliation schema and partial unique index in migration 027**
+- [ ] **Step 2: Add reconciliation schema and partial unique index in migration 030**
 
-Fields are tenant/event/task/correlation, observed status/attempt/delivery version/time, conclusion, bounded reason, actor, created time, consumed time, and `consumed_by_audit_id`. Forward migration `027_delegated_execution_reconciliation` creates the table and:
+Fields are tenant/event/task/correlation, observed status/attempt/delivery version/time, conclusion, bounded reason, actor, created time, consumed time, and `consumed_by_audit_id`. Forward migration `030_delegated_execution_reconciliation` creates the table and:
 
 ```sql
 CREATE UNIQUE INDEX delegated_execution_reconciliations_one_open

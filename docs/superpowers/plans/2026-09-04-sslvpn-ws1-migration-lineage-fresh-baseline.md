@@ -140,7 +140,7 @@ Expected: PASS and a commit containing no report or unrelated migration draft fi
 
 **Interfaces:**
 - Consumes: Task 1 lineage checksums.
-- Produces: forward-only `023_reconcile_change_execution_tenants` and `024_reconcile_current_rls_policies`, after confirming those versions are still free.
+- Produces: forward-only `026_reconcile_change_execution_tenants` and `027_reconcile_current_rls_policies`; 023–025 are reserved by the unified Intake stream.
 
 - [ ] **Step 1: Extract exact historical sources read-only**
 
@@ -156,7 +156,7 @@ Expected hashes are `1cf4fab4573d373957f8d22012e60652400eeffd09c1caf118ec640761b
 
 ```go
 func TestCurrentRLSRepairUsesWorkItemTenantAuthority(t *testing.T) {
-    sql := GetMigrationSQL("024_reconcile_current_rls_policies")
+    sql := GetMigrationSQL("027_reconcile_current_rls_policies")
     require.Contains(t, sql, "work_item.tenant_id")
     require.Contains(t, sql, "current_setting('app.current_tenant', true)")
     require.NotContains(t, sql, "changes.tenant_id")
@@ -169,7 +169,7 @@ Apply the displayed 007, 009, and process-instance 015 SQL with `apply_patch`. D
 
 - [ ] **Step 4: Complete forward-only repairs**
 
-Keep 023’s six updates deriving tenant from `changes.work_item_id -> tickets.tenant_id`. Add 024 to recreate current RLS policies and verify their predicates. Do not edit 007/009 to carry new semantics.
+Keep 026’s six updates deriving tenant from `changes.work_item_id -> tickets.tenant_id`. Add 027 with an explicit reviewed table registry to recreate current RLS policies and verify their predicates without changing `relrowsecurity` or `relforcerowsecurity`. Change execution child policies derive authority through `change_id -> changes.work_item_id -> tickets.tenant_id`. Do not edit 007/009 to carry new semantics.
 
 - [ ] **Step 5: Run and commit**
 
@@ -197,7 +197,7 @@ git commit -m "fix(migration): restore history and add forward tenant repairs"
 - Produces: `CurrentRelease() ReleaseManifest`, `ReleaseManifest.Checksum() (string, error)`.
 - Produces: `ReadSchemaState(context.Context, DBTX)`, `PromoteSchemaState(context.Context, DBTX, ReleaseManifest)`, and `VerifySchemaState(SchemaState, ReleaseManifest)`.
 - Produces: `LoadSchemaStateRoles(getenv func(string) string) (SchemaStateRoles, error)` and `ApplySchemaStatePrivileges(context.Context, *sql.DB, SchemaStateRoles) error`.
-- Produces: forward migration `025_schema_release_state`; `CurrentRelease().SchemaVersion` is `025_schema_release_state`.
+- Produces: forward migration `028_schema_release_state`; `CurrentRelease().SchemaVersion` is `028_schema_release_state`.
 
 - [ ] **Step 1: Write failing checksum/state tests**
 
@@ -242,7 +242,7 @@ CREATE TABLE IF NOT EXISTS schema_state (
 );
 ```
 
-Migration `025_schema_release_state` contains only deterministic table/index DDL. It does not interpolate role names and does not grant to a generic or hardcoded runtime role. `PromoteSchemaState` runs only after invariants.
+Migration `028_schema_release_state` contains only deterministic table/index DDL. It does not interpolate role names and does not grant to a generic or hardcoded runtime role. `PromoteSchemaState` runs only after invariants.
 
 - [ ] **Step 4: Implement the controlled privilege-provisioning interface**
 
@@ -258,11 +258,11 @@ func LoadSchemaStateRoles(getenv func(string) string) (SchemaStateRoles, error)
 func ApplySchemaStatePrivileges(ctx context.Context, db *sql.DB, roles SchemaStateRoles) error
 ```
 
-Build the narrowly scoped `REVOKE INSERT, UPDATE, DELETE` and `GRANT SELECT` statements with `pq.QuoteIdentifier`; do not use string replacement or bind parameters for identifiers. The migration role creates and owns `schema_state`. Invoke this provisioning step after migration 025 exists and before schema-state promotion.
+Build the narrowly scoped `REVOKE INSERT, UPDATE, DELETE` and `GRANT SELECT` statements with `pq.QuoteIdentifier`; do not use string replacement or bind parameters for identifiers. The migration role creates and owns `schema_state`. Invoke this provisioning step after migration 028 exists and before schema-state promotion.
 
 - [ ] **Step 5: Prove privileges with two real PostgreSQL roles**
 
-The integration test creates unique migration/runtime roles and a dedicated test database, runs migration 025 and privilege provisioning as the migration role, then reconnects as the runtime role. Assert `SELECT` succeeds and `INSERT`, `UPDATE`, and `DELETE` each fail with insufficient privilege. Also assert an empty role, identical roles, wrong current executor, and wrong table owner fail closed with sanitized errors.
+The integration test creates unique migration/runtime roles and a dedicated test database, runs migration 028 and privilege provisioning as the migration role, then reconnects as the runtime role. Assert `SELECT` succeeds and `INSERT`, `UPDATE`, and `DELETE` each fail with insufficient privilege. Also assert an empty role, identical roles, wrong current executor, and wrong table owner fail closed with sanitized errors.
 
 - [ ] **Step 6: Run and commit**
 

@@ -56,8 +56,8 @@ func TestRunPostSchemaMigrationsAppliesVersion007(t *testing.T) {
 		"020_work_item_number_allocator",
 		"021_add_callback_optional_declared",
 		"022_drop_professional_extension_shared_fields",
-		"023_reconcile_change_execution_tenants",
-		"024_reconcile_current_rls_policies",
+		"026_reconcile_change_execution_tenants",
+		"027_reconcile_current_rls_policies",
 	}
 	for index, version := range requiredOrder {
 		position, ok := positions[version]

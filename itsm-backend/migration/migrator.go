@@ -242,6 +242,14 @@ func validateActiveMigration(migration Migration) error {
 			if registered.Description != migration.Description || registered.RollbackSQL != migration.RollbackSQL {
 				return fmt.Errorf("active migration %q does not match the registered catalog", migration.Version)
 			}
+			lineage, published := PublishedLineage(migration.Version)
+			if !published || !lineage.Executable || lineage.Catalog != immutableUpgradeLineage {
+				return fmt.Errorf("active migration %q has no executable published lineage", migration.Version)
+			}
+			actualChecksum := checksumSQL(GetMigrationSQL(migration.Version))
+			if actualChecksum != lineage.SQLSHA256 {
+				return fmt.Errorf("active migration %q checksum mismatch: current=%s published=%s", migration.Version, actualChecksum, lineage.SQLSHA256)
+			}
 			return nil
 		}
 	}
