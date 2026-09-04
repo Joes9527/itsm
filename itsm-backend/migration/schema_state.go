@@ -34,16 +34,18 @@ func VerifySchemaStateStorage(ctx context.Context, db DBTX) error {
 	}
 
 	var relationCount, columnCount, matchingColumnCount, primaryKeyCount int64
+	var inheritanceParentCount, inheritingChildCount int64
+	var hasSubclass bool
 	var checkExpressions, updatedAtDefault string
 	if err := db.QueryRowContext(ctx, `
 		/* schema_state_storage_catalog */
 		WITH target_relation AS (
-			SELECT relation.oid
+			SELECT relation.oid, relation.relhassubclass
 			FROM pg_class relation
 			JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
 			WHERE namespace.nspname = current_schema()
 			  AND relation.relname = 'schema_state'
-			  AND relation.relkind IN ('r', 'p')
+			  AND relation.relkind = 'r'
 		),
 		expected_columns(name, formatted_type) AS (
 			VALUES
@@ -96,7 +98,14 @@ func VerifySchemaStateStorage(ctx context.Context, db DBTX) error {
 				JOIN actual_columns actual ON actual.number = default_record.adnum
 				WHERE default_record.adrelid = (SELECT oid FROM target_relation)
 				  AND actual.name = 'updated_at'
-			), '')
+			), ''),
+			(SELECT COUNT(*)
+			 FROM pg_inherits inheritance_record
+			 WHERE inheritance_record.inhrelid = (SELECT oid FROM target_relation)),
+			(SELECT COUNT(*)
+			 FROM pg_inherits inheritance_record
+			 WHERE inheritance_record.inhparent = (SELECT oid FROM target_relation)),
+			COALESCE((SELECT relhassubclass FROM target_relation), FALSE)
 	`).Scan(
 		&relationCount,
 		&columnCount,
@@ -104,11 +113,17 @@ func VerifySchemaStateStorage(ctx context.Context, db DBTX) error {
 		&primaryKeyCount,
 		&checkExpressions,
 		&updatedAtDefault,
+		&inheritanceParentCount,
+		&inheritingChildCount,
+		&hasSubclass,
 	); err != nil {
 		return fmt.Errorf("verify schema state storage catalog: %w", err)
 	}
 	if relationCount != 1 {
 		return fmt.Errorf("schema state storage relation invariant failed")
+	}
+	if inheritanceParentCount != 0 || inheritingChildCount != 0 || hasSubclass {
+		return fmt.Errorf("schema state storage standalone relation invariant failed")
 	}
 	if columnCount != 6 || matchingColumnCount != 6 {
 		return fmt.Errorf("schema state storage column invariant failed")

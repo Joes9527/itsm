@@ -42,6 +42,23 @@ func TestVerifySchemaStateStorageRejectsMalformedStorage(t *testing.T) {
 	}
 }
 
+func TestVerifySchemaStateStorageRejectsParentWithInheritingChild(t *testing.T) {
+	fixture := validSchemaStateInvariantFixture()
+	fixture.inheritingChildCount = 1
+	fixture.hasSubclass = true
+	db := openSchemaStateInvariantTestDB(t, fixture)
+
+	require.ErrorContains(t, VerifySchemaStateStorage(context.Background(), db), "standalone relation")
+}
+
+func TestVerifySchemaStateStorageRejectsInheritedChild(t *testing.T) {
+	fixture := validSchemaStateInvariantFixture()
+	fixture.inheritanceParentCount = 1
+	db := openSchemaStateInvariantTestDB(t, fixture)
+
+	require.ErrorContains(t, VerifySchemaStateStorage(context.Background(), db), "standalone relation")
+}
+
 func TestVerifySchemaStateStorageRejectsInvalidOrMultipleRows(t *testing.T) {
 	tests := map[string][]driver.Value{
 		"multiple rows": {int64(2), int64(0)},
@@ -144,8 +161,11 @@ func openSchemaStateTestDB(t *testing.T) *sql.DB {
 }
 
 type schemaStateInvariantFixture struct {
-	catalog []driver.Value
-	rows    []driver.Value
+	catalog                []driver.Value
+	rows                   []driver.Value
+	inheritanceParentCount int64
+	inheritingChildCount   int64
+	hasSubclass            bool
 }
 
 func validSchemaStateInvariantFixture() schemaStateInvariantFixture {
@@ -200,9 +220,15 @@ func (c *schemaStateInvariantConn) QueryContext(
 ) (driver.Rows, error) {
 	switch {
 	case strings.Contains(query, "schema_state_storage_catalog"):
+		columns := []string{"relation_count", "column_count", "matching_column_count", "primary_key_count", "check_expressions", "updated_at_default"}
+		values := append([]driver.Value(nil), c.fixture.catalog...)
+		if strings.Contains(query, "pg_inherits") {
+			columns = append(columns, "inheritance_parent_count", "inheriting_child_count", "has_subclass")
+			values = append(values, c.fixture.inheritanceParentCount, c.fixture.inheritingChildCount, c.fixture.hasSubclass)
+		}
 		return &schemaStateInvariantRows{
-			columns: []string{"relation_count", "column_count", "matching_column_count", "primary_key_count", "check_expressions", "updated_at_default"},
-			values:  c.fixture.catalog,
+			columns: columns,
+			values:  values,
 		}, nil
 	case strings.Contains(query, "schema_state_storage_rows"):
 		return &schemaStateInvariantRows{

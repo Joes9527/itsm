@@ -117,6 +117,32 @@ func TestPostgresSchemaStatePrivileges(t *testing.T) {
 	})
 	adminTargetDB.SetMaxOpenConns(1)
 	require.NoError(t, adminTargetDB.PingContext(ctx))
+
+	_, err = migrationDB.ExecContext(ctx, GetMigrationSQL("028_schema_release_state"))
+	require.NoError(t, err)
+	_, err = migrationDB.ExecContext(ctx, `CREATE TABLE schema_state_child () INHERITS (schema_state)`)
+	require.NoError(t, err)
+	require.ErrorContains(t, VerifySchemaStateStorage(ctx, migrationDB), "standalone relation")
+	_, err = migrationDB.ExecContext(ctx, `DROP TABLE schema_state_child; DROP TABLE schema_state`)
+	require.NoError(t, err)
+
+	_, err = migrationDB.ExecContext(ctx, `
+		CREATE TABLE schema_state_parent (
+			id SMALLINT NOT NULL CHECK (id = 1),
+			release_id VARCHAR(128) NOT NULL,
+			schema_version VARCHAR(255) NOT NULL,
+			baseline_version VARCHAR(64) NOT NULL,
+			release_manifest_checksum CHAR(64) NOT NULL,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE TABLE schema_state () INHERITS (schema_state_parent);
+		ALTER TABLE schema_state ADD PRIMARY KEY (id);
+	`)
+	require.NoError(t, err)
+	require.ErrorContains(t, VerifySchemaStateStorage(ctx, migrationDB), "standalone relation")
+	_, err = migrationDB.ExecContext(ctx, `DROP TABLE schema_state; DROP TABLE schema_state_parent`)
+	require.NoError(t, err)
+
 	_, err = migrationDB.ExecContext(ctx, `
 		CREATE TABLE schema_state (
 			id SMALLINT PRIMARY KEY,
