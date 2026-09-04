@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -21,6 +22,149 @@ type SchemaState struct {
 	BaselineVersion         string
 	ReleaseManifestChecksum string
 	UpdatedAt               time.Time
+}
+
+// VerifySchemaStateStorage verifies the concrete PostgreSQL storage contract
+// before privileges are provisioned or a release marker is promoted. Task 4's
+// full current-schema verifier composes this invariant with the remaining
+// release invariants.
+func VerifySchemaStateStorage(ctx context.Context, db DBTX) error {
+	if db == nil {
+		return fmt.Errorf("schema state store is required")
+	}
+
+	var relationCount, columnCount, matchingColumnCount, primaryKeyCount int64
+	var checkExpressions, updatedAtDefault string
+	if err := db.QueryRowContext(ctx, `
+		/* schema_state_storage_catalog */
+		WITH target_relation AS (
+			SELECT relation.oid
+			FROM pg_class relation
+			JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+			WHERE namespace.nspname = current_schema()
+			  AND relation.relname = 'schema_state'
+			  AND relation.relkind IN ('r', 'p')
+		),
+		expected_columns(name, formatted_type) AS (
+			VALUES
+				('id', 'smallint'),
+				('release_id', 'character varying(128)'),
+				('schema_version', 'character varying(255)'),
+				('baseline_version', 'character varying(64)'),
+				('release_manifest_checksum', 'character(64)'),
+				('updated_at', 'timestamp with time zone')
+		),
+		actual_columns AS (
+			SELECT attribute.attname AS name,
+			       format_type(attribute.atttypid, attribute.atttypmod) AS formatted_type,
+			       attribute.attnotnull AS not_null,
+			       attribute.attnum AS number
+			FROM pg_attribute attribute
+			WHERE attribute.attrelid = (SELECT oid FROM target_relation)
+			  AND attribute.attnum > 0
+			  AND NOT attribute.attisdropped
+		)
+		SELECT
+			(SELECT COUNT(*) FROM target_relation),
+			(SELECT COUNT(*) FROM actual_columns),
+			(SELECT COUNT(*)
+			 FROM actual_columns actual
+			 JOIN expected_columns expected
+			   ON expected.name = actual.name
+			  AND expected.formatted_type = actual.formatted_type
+			 WHERE actual.not_null),
+			(SELECT COUNT(*)
+			 FROM pg_constraint constraint_record
+			 WHERE constraint_record.conrelid = (SELECT oid FROM target_relation)
+			   AND constraint_record.contype = 'p'
+			   AND constraint_record.conkey = ARRAY[(
+				SELECT number FROM actual_columns WHERE name = 'id'
+			   )]::SMALLINT[]),
+			COALESCE((
+				SELECT string_agg(
+					pg_get_expr(constraint_record.conbin, constraint_record.conrelid),
+					E'\n'
+				)
+				FROM pg_constraint constraint_record
+				WHERE constraint_record.conrelid = (SELECT oid FROM target_relation)
+				  AND constraint_record.contype = 'c'
+				  AND constraint_record.convalidated
+			), ''),
+			COALESCE((
+				SELECT pg_get_expr(default_record.adbin, default_record.adrelid)
+				FROM pg_attrdef default_record
+				JOIN actual_columns actual ON actual.number = default_record.adnum
+				WHERE default_record.adrelid = (SELECT oid FROM target_relation)
+				  AND actual.name = 'updated_at'
+			), '')
+	`).Scan(
+		&relationCount,
+		&columnCount,
+		&matchingColumnCount,
+		&primaryKeyCount,
+		&checkExpressions,
+		&updatedAtDefault,
+	); err != nil {
+		return fmt.Errorf("verify schema state storage catalog: %w", err)
+	}
+	if relationCount != 1 {
+		return fmt.Errorf("schema state storage relation invariant failed")
+	}
+	if columnCount != 6 || matchingColumnCount != 6 {
+		return fmt.Errorf("schema state storage column invariant failed")
+	}
+	if primaryKeyCount != 1 {
+		return fmt.Errorf("schema state storage primary key invariant failed")
+	}
+	if !containsSchemaStateIDCheck(checkExpressions) {
+		return fmt.Errorf("schema state storage singleton check invariant failed")
+	}
+	if !isSchemaStateTimestampDefault(updatedAtDefault) {
+		return fmt.Errorf("schema state storage timestamp default invariant failed")
+	}
+
+	var rowCount, invalidIDCount int64
+	if err := db.QueryRowContext(ctx, `
+		/* schema_state_storage_rows */
+		SELECT COUNT(*), COUNT(*) FILTER (WHERE id <> 1)
+		FROM schema_state
+	`).Scan(&rowCount, &invalidIDCount); err != nil {
+		return fmt.Errorf("verify schema state singleton rows: %w", err)
+	}
+	if rowCount > 1 || invalidIDCount != 0 {
+		return fmt.Errorf("schema state storage row invariant failed")
+	}
+	return nil
+}
+
+func containsSchemaStateIDCheck(expressions string) bool {
+	for _, expression := range strings.Split(expressions, "\n") {
+		normalized := strings.NewReplacer(
+			" ", "",
+			"\t", "",
+			"\r", "",
+			"(", "",
+			")", "",
+			`"`, "",
+		).Replace(strings.ToLower(expression))
+		switch normalized {
+		case "id=1", "id=1::smallint", "id=1::int2":
+			return true
+		}
+	}
+	return false
+}
+
+func isSchemaStateTimestampDefault(expression string) bool {
+	normalized := strings.NewReplacer(
+		" ", "",
+		"\t", "",
+		"\r", "",
+		"\n", "",
+		"(", "",
+		")", "",
+	).Replace(strings.ToLower(expression))
+	return normalized == "current_timestamp" || normalized == "now"
 }
 
 // ReadSchemaState reads the only valid schema-state row.

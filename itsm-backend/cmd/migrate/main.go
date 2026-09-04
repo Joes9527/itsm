@@ -107,6 +107,7 @@ func main() {
 			ctx,
 			db,
 			os.Getenv,
+			migration.VerifySchemaStateStorage,
 			migration.ApplySchemaStatePrivileges,
 			migration.PromoteSchemaState,
 		); err != nil {
@@ -221,6 +222,7 @@ func runMigrations(migrator *migration.Migrator, available []migration.Migration
 		ctx,
 		db,
 		os.Getenv,
+		migration.VerifySchemaStateStorage,
 		migration.ApplySchemaStatePrivileges,
 		migration.PromoteSchemaState,
 	); err != nil {
@@ -231,11 +233,13 @@ func runMigrations(migrator *migration.Migrator, available []migration.Migration
 
 type schemaStatePrivilegeApplier func(context.Context, *sql.DB, migration.SchemaStateRoles) error
 type schemaStatePromoter func(context.Context, migration.DBTX, migration.ReleaseManifest) error
+type schemaStateStorageVerifier func(context.Context, migration.DBTX) error
 
 func completeSchemaRelease(
 	ctx context.Context,
 	db *sql.DB,
 	getenv func(string) string,
+	verifyStorage schemaStateStorageVerifier,
 	applyPrivileges schemaStatePrivilegeApplier,
 	promote schemaStatePromoter,
 ) error {
@@ -243,8 +247,11 @@ func completeSchemaRelease(
 	if err != nil {
 		return fmt.Errorf("load schema state roles: %w", err)
 	}
-	if applyPrivileges == nil || promote == nil {
+	if verifyStorage == nil || applyPrivileges == nil || promote == nil {
 		return fmt.Errorf("schema release finalization dependencies are required")
+	}
+	if err := verifyStorage(ctx, db); err != nil {
+		return fmt.Errorf("verify schema state storage: %w", err)
 	}
 	if err := applyPrivileges(ctx, db, roles); err != nil {
 		return fmt.Errorf("provision schema state privileges: %w", err)
@@ -478,6 +485,7 @@ func freshDatabase(cfg *config.Config, sugar *zap.SugaredLogger) {
 		ctx,
 		db,
 		os.Getenv,
+		migration.VerifySchemaStateStorage,
 		migration.ApplySchemaStatePrivileges,
 		migration.PromoteSchemaState,
 	); err != nil {

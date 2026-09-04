@@ -5,6 +5,7 @@ package migration
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -29,8 +30,10 @@ func TestPostgresSchemaStatePrivileges(t *testing.T) {
 	defer cancel()
 	adminDB, err := sql.Open("postgres", adminDSN)
 	require.NoError(t, err)
+	registerSchemaStateCleanup(t, "admin database connection", func(context.Context) error {
+		return adminDB.Close()
+	})
 	require.NoError(t, adminDB.PingContext(ctx))
-	defer adminDB.Close()
 
 	suffix := strings.ReplaceAll(uuid.NewString(), "-", "")
 	migrationRole := "schema_migration_" + suffix
@@ -46,61 +49,106 @@ func TestPostgresSchemaStatePrivileges(t *testing.T) {
 		pq.QuoteLiteral(migrationPassword),
 	))
 	require.NoError(t, err)
+	registerSchemaStateCleanup(t, "migration role", func(cleanupCtx context.Context) error {
+		_, err := adminDB.ExecContext(cleanupCtx, fmt.Sprintf(
+			"DROP ROLE IF EXISTS %s",
+			pq.QuoteIdentifier(migrationRole),
+		))
+		return err
+	})
+	_, err = adminDB.ExecContext(ctx, fmt.Sprintf(
+		"CREATE ROLE %s",
+		pq.QuoteIdentifier(inheritedWriterRole),
+	))
+	require.NoError(t, err)
+	registerSchemaStateCleanup(t, "inherited writer role", func(cleanupCtx context.Context) error {
+		_, err := adminDB.ExecContext(cleanupCtx, fmt.Sprintf(
+			"DROP ROLE IF EXISTS %s",
+			pq.QuoteIdentifier(inheritedWriterRole),
+		))
+		return err
+	})
 	_, err = adminDB.ExecContext(ctx, fmt.Sprintf(
 		"CREATE ROLE %s LOGIN PASSWORD %s",
 		pq.QuoteIdentifier(runtimeRole),
 		pq.QuoteLiteral(runtimePassword),
 	))
 	require.NoError(t, err)
-	_, err = adminDB.ExecContext(ctx, fmt.Sprintf(
-		"CREATE ROLE %s",
-		pq.QuoteIdentifier(inheritedWriterRole),
-	))
-	require.NoError(t, err)
+	registerSchemaStateCleanup(t, "runtime role", func(cleanupCtx context.Context) error {
+		_, err := adminDB.ExecContext(cleanupCtx, fmt.Sprintf(
+			"DROP ROLE IF EXISTS %s",
+			pq.QuoteIdentifier(runtimeRole),
+		))
+		return err
+	})
 	_, err = adminDB.ExecContext(ctx, fmt.Sprintf(
 		"CREATE DATABASE %s OWNER %s",
 		pq.QuoteIdentifier(databaseName),
 		pq.QuoteIdentifier(migrationRole),
 	))
 	require.NoError(t, err)
-
-	var adminTargetDB, migrationDB, runtimeDB *sql.DB
-	t.Cleanup(func() {
-		if runtimeDB != nil {
-			_ = runtimeDB.Close()
-		}
-		if migrationDB != nil {
-			_ = migrationDB.Close()
-		}
-		if adminTargetDB != nil {
-			_ = adminTargetDB.Close()
-		}
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), schemaStatePrivilegesIntegrationTimeout)
-		defer cleanupCancel()
-		_, _ = adminDB.ExecContext(cleanupCtx, `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1`, databaseName)
-		_, _ = adminDB.ExecContext(cleanupCtx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", pq.QuoteIdentifier(databaseName)))
-		_, _ = adminDB.ExecContext(cleanupCtx, fmt.Sprintf("DROP ROLE IF EXISTS %s", pq.QuoteIdentifier(runtimeRole)))
-		_, _ = adminDB.ExecContext(cleanupCtx, fmt.Sprintf("DROP ROLE IF EXISTS %s", pq.QuoteIdentifier(inheritedWriterRole)))
-		_, _ = adminDB.ExecContext(cleanupCtx, fmt.Sprintf("DROP ROLE IF EXISTS %s", pq.QuoteIdentifier(migrationRole)))
+	registerSchemaStateCleanup(t, "test database", func(cleanupCtx context.Context) error {
+		_, err := adminDB.ExecContext(cleanupCtx, fmt.Sprintf(
+			"DROP DATABASE IF EXISTS %s",
+			pq.QuoteIdentifier(databaseName),
+		))
+		return err
+	})
+	registerSchemaStateCleanup(t, "test database connections", func(cleanupCtx context.Context) error {
+		_, err := adminDB.ExecContext(
+			cleanupCtx,
+			`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1`,
+			databaseName,
+		)
+		return err
 	})
 
-	migrationDB, err = sql.Open("postgres", schemaStateRoleDSN(t, adminDSN, databaseName, migrationRole, migrationPassword))
+	migrationDB, err := sql.Open("postgres", schemaStateRoleDSN(t, adminDSN, databaseName, migrationRole, migrationPassword))
 	require.NoError(t, err)
+	registerSchemaStateCleanup(t, "migration database connection", func(context.Context) error {
+		return migrationDB.Close()
+	})
 	migrationDB.SetMaxOpenConns(1)
 	require.NoError(t, migrationDB.PingContext(ctx))
-	adminTargetDB, err = sql.Open("postgres", schemaStateDatabaseDSN(t, adminDSN, databaseName))
+	adminTargetDB, err := sql.Open("postgres", schemaStateDatabaseDSN(t, adminDSN, databaseName))
 	require.NoError(t, err)
+	registerSchemaStateCleanup(t, "target admin database connection", func(context.Context) error {
+		return adminTargetDB.Close()
+	})
 	adminTargetDB.SetMaxOpenConns(1)
 	require.NoError(t, adminTargetDB.PingContext(ctx))
+	_, err = migrationDB.ExecContext(ctx, `
+		CREATE TABLE schema_state (
+			id SMALLINT PRIMARY KEY,
+			release_id VARCHAR(128) NOT NULL,
+			schema_version VARCHAR(255) NOT NULL,
+			baseline_version VARCHAR(64) NOT NULL,
+			release_manifest_checksum CHAR(64) NOT NULL,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+		INSERT INTO schema_state
+			(id, release_id, schema_version, baseline_version, release_manifest_checksum)
+		VALUES (2, 'invalid', 'invalid', 'invalid', '`+strings.Repeat("0", 64)+`');
+	`)
+	require.NoError(t, err)
 	_, err = migrationDB.ExecContext(ctx, GetMigrationSQL("028_schema_release_state"))
 	require.NoError(t, err)
+	require.ErrorContains(t, VerifySchemaStateStorage(ctx, migrationDB), "singleton check")
+	_, err = migrationDB.ExecContext(ctx, `DROP TABLE schema_state`)
+	require.NoError(t, err)
+	_, err = migrationDB.ExecContext(ctx, GetMigrationSQL("028_schema_release_state"))
+	require.NoError(t, err)
+	require.NoError(t, VerifySchemaStateStorage(ctx, migrationDB))
 
 	roles := SchemaStateRoles{MigrationRole: migrationRole, RuntimeRole: runtimeRole}
 	require.NoError(t, ApplySchemaStatePrivileges(ctx, migrationDB, roles))
 	require.NoError(t, PromoteSchemaState(ctx, migrationDB, CurrentRelease()))
 
-	runtimeDB, err = sql.Open("postgres", schemaStateRoleDSN(t, adminDSN, databaseName, runtimeRole, runtimePassword))
+	runtimeDB, err := sql.Open("postgres", schemaStateRoleDSN(t, adminDSN, databaseName, runtimeRole, runtimePassword))
 	require.NoError(t, err)
+	registerSchemaStateCleanup(t, "runtime database connection", func(context.Context) error {
+		return runtimeDB.Close()
+	})
 	runtimeDB.SetMaxOpenConns(1)
 	require.NoError(t, runtimeDB.PingContext(ctx))
 	var releaseID string
@@ -169,6 +217,22 @@ func TestPostgresSchemaStatePrivileges(t *testing.T) {
 		err = ApplySchemaStatePrivileges(ctx, migrationDB, roles)
 		requireSanitizedSchemaStateRoleError(t, err, adminDSN, migrationRole, runtimeRole)
 		require.ErrorContains(t, err, "runtime role")
+	})
+}
+
+func registerSchemaStateCleanup(t *testing.T, category string, cleanup func(context.Context) error) {
+	t.Helper()
+	t.Cleanup(func() {
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), schemaStatePrivilegesIntegrationTimeout)
+		defer cleanupCancel()
+		if err := cleanup(cleanupCtx); err != nil {
+			var pqErr *pq.Error
+			if errors.As(err, &pqErr) {
+				t.Errorf("%s cleanup failed (SQLSTATE %s)", category, pqErr.Code)
+				return
+			}
+			t.Errorf("%s cleanup failed", category)
+		}
 	})
 }
 

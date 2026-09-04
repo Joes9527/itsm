@@ -28,6 +28,10 @@ func TestCompleteSchemaReleaseProvisionsPrivilegesBeforePromotion(t *testing.T) 
 			return ""
 		}
 	}
+	verify := func(_ context.Context, _ migration.DBTX) error {
+		events = append(events, "invariants")
+		return nil
+	}
 	apply := func(_ context.Context, _ *sql.DB, roles migration.SchemaStateRoles) error {
 		require.Equal(t, "migration_role", roles.MigrationRole)
 		require.Equal(t, "runtime_role", roles.RuntimeRole)
@@ -40,13 +44,40 @@ func TestCompleteSchemaReleaseProvisionsPrivilegesBeforePromotion(t *testing.T) 
 		return nil
 	}
 
-	require.NoError(t, completeSchemaRelease(context.Background(), nil, getenv, apply, promote))
+	require.NoError(t, completeSchemaRelease(context.Background(), nil, getenv, verify, apply, promote))
 	require.Equal(t, []string{
 		"load:ITSM_MIGRATION_DB_USER",
 		"load:ITSM_RUNTIME_DB_USER",
+		"invariants",
 		"privileges",
 		"promote",
 	}, events)
+}
+
+func TestCompleteSchemaReleaseStopsBeforePrivilegesAndPromotionOnInvariantFailure(t *testing.T) {
+	privilegesApplied := false
+	promoted := false
+	verify := func(context.Context, migration.DBTX) error {
+		return errors.New("schema state storage invariant failed")
+	}
+	apply := func(context.Context, *sql.DB, migration.SchemaStateRoles) error {
+		privilegesApplied = true
+		return nil
+	}
+	promote := func(context.Context, migration.DBTX, migration.ReleaseManifest) error {
+		promoted = true
+		return nil
+	}
+
+	err := completeSchemaRelease(context.Background(), nil, func(name string) string {
+		if name == "ITSM_MIGRATION_DB_USER" {
+			return "migration_role"
+		}
+		return "runtime_role"
+	}, verify, apply, promote)
+	require.ErrorContains(t, err, "schema state storage")
+	require.False(t, privilegesApplied)
+	require.False(t, promoted)
 }
 
 func TestCompleteSchemaReleaseFailsClosedBeforePromotion(t *testing.T) {
@@ -59,18 +90,40 @@ func TestCompleteSchemaReleaseFailsClosedBeforePromotion(t *testing.T) {
 		return nil
 	}
 
+	verify := func(context.Context, migration.DBTX) error { return nil }
 	err := completeSchemaRelease(context.Background(), nil, func(name string) string {
 		if name == "ITSM_MIGRATION_DB_USER" {
 			return "migration_role"
 		}
 		return "runtime_role"
-	}, apply, promote)
+	}, verify, apply, promote)
 	require.ErrorContains(t, err, "provision schema state privileges")
 	require.False(t, promoted)
 
-	err = completeSchemaRelease(context.Background(), nil, func(string) string { return "same_role" }, apply, promote)
+	err = completeSchemaRelease(context.Background(), nil, func(string) string { return "same_role" }, verify, apply, promote)
 	require.ErrorContains(t, err, "role")
 	require.False(t, promoted)
+}
+
+func TestCompleteSchemaReleaseRequiresConcreteVerifier(t *testing.T) {
+	called := false
+	apply := func(context.Context, *sql.DB, migration.SchemaStateRoles) error {
+		called = true
+		return nil
+	}
+	promote := func(context.Context, migration.DBTX, migration.ReleaseManifest) error {
+		called = true
+		return nil
+	}
+
+	err := completeSchemaRelease(context.Background(), nil, func(name string) string {
+		if name == "ITSM_MIGRATION_DB_USER" {
+			return "migration_role"
+		}
+		return "runtime_role"
+	}, nil, apply, promote)
+	require.ErrorContains(t, err, "dependencies")
+	require.False(t, called)
 }
 
 func TestValidateFreshTargetRequiresDevelopmentModeAndExactConfirmation(t *testing.T) {

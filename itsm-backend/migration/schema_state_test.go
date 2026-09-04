@@ -3,13 +3,63 @@ package migration
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
+	"fmt"
+	"io"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/require"
 )
+
+func TestVerifySchemaStateStorageAcceptsRequiredShapeAndSingleton(t *testing.T) {
+	db := openSchemaStateInvariantTestDB(t, validSchemaStateInvariantFixture())
+	require.NoError(t, VerifySchemaStateStorage(context.Background(), db))
+}
+
+func TestVerifySchemaStateStorageRejectsMalformedStorage(t *testing.T) {
+	tests := map[string]func(*schemaStateInvariantFixture){
+		"missing relation": func(fixture *schemaStateInvariantFixture) { fixture.catalog[0] = int64(0) },
+		"extra relation":   func(fixture *schemaStateInvariantFixture) { fixture.catalog[0] = int64(2) },
+		"extra column":     func(fixture *schemaStateInvariantFixture) { fixture.catalog[1] = int64(7) },
+		"wrong column":     func(fixture *schemaStateInvariantFixture) { fixture.catalog[2] = int64(5) },
+		"missing PK":       func(fixture *schemaStateInvariantFixture) { fixture.catalog[3] = int64(0) },
+		"wrong PK":         func(fixture *schemaStateInvariantFixture) { fixture.catalog[3] = int64(2) },
+		"missing ID check": func(fixture *schemaStateInvariantFixture) { fixture.catalog[4] = "(id > 0)" },
+		"missing default":  func(fixture *schemaStateInvariantFixture) { fixture.catalog[5] = "" },
+	}
+
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			fixture := validSchemaStateInvariantFixture()
+			mutate(&fixture)
+			db := openSchemaStateInvariantTestDB(t, fixture)
+			require.Error(t, VerifySchemaStateStorage(context.Background(), db))
+		})
+	}
+}
+
+func TestVerifySchemaStateStorageRejectsInvalidOrMultipleRows(t *testing.T) {
+	tests := map[string][]driver.Value{
+		"multiple rows": {int64(2), int64(0)},
+		"invalid ID":    {int64(1), int64(1)},
+	}
+	for name, rowFacts := range tests {
+		t.Run(name, func(t *testing.T) {
+			fixture := validSchemaStateInvariantFixture()
+			fixture.rows = rowFacts
+			db := openSchemaStateInvariantTestDB(t, fixture)
+			require.Error(t, VerifySchemaStateStorage(context.Background(), db))
+		})
+	}
+}
+
+func TestVerifySchemaStateStorageRejectsMissingStore(t *testing.T) {
+	require.Error(t, VerifySchemaStateStorage(context.Background(), nil))
+}
 
 func TestSchemaReleaseMigrationCreatesEnforcedSingletonWithoutDCL(t *testing.T) {
 	db := openSchemaStateTestDB(t)
@@ -91,4 +141,92 @@ func openSchemaStateTestDB(t *testing.T) *sql.DB {
 	_, err = db.Exec(GetMigrationSQL("028_schema_release_state"))
 	require.NoError(t, err)
 	return db
+}
+
+type schemaStateInvariantFixture struct {
+	catalog []driver.Value
+	rows    []driver.Value
+}
+
+func validSchemaStateInvariantFixture() schemaStateInvariantFixture {
+	return schemaStateInvariantFixture{
+		catalog: []driver.Value{
+			int64(1),
+			int64(6),
+			int64(6),
+			int64(1),
+			"(id = 1)",
+			"CURRENT_TIMESTAMP",
+		},
+		rows: []driver.Value{int64(1), int64(0)},
+	}
+}
+
+var schemaStateInvariantDriverSequence atomic.Uint64
+
+func openSchemaStateInvariantTestDB(t *testing.T, fixture schemaStateInvariantFixture) *sql.DB {
+	t.Helper()
+	driverName := fmt.Sprintf("schema_state_invariant_%d", schemaStateInvariantDriverSequence.Add(1))
+	sql.Register(driverName, &schemaStateInvariantDriver{fixture: fixture})
+	db, err := sql.Open(driverName, "")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	return db
+}
+
+type schemaStateInvariantDriver struct {
+	fixture schemaStateInvariantFixture
+}
+
+func (d *schemaStateInvariantDriver) Open(string) (driver.Conn, error) {
+	return &schemaStateInvariantConn{fixture: d.fixture}, nil
+}
+
+type schemaStateInvariantConn struct {
+	fixture schemaStateInvariantFixture
+}
+
+func (c *schemaStateInvariantConn) Prepare(string) (driver.Stmt, error) {
+	return nil, fmt.Errorf("prepare is unsupported")
+}
+func (c *schemaStateInvariantConn) Close() error { return nil }
+func (c *schemaStateInvariantConn) Begin() (driver.Tx, error) {
+	return nil, fmt.Errorf("transaction is unsupported")
+}
+func (c *schemaStateInvariantConn) QueryContext(
+	_ context.Context,
+	query string,
+	_ []driver.NamedValue,
+) (driver.Rows, error) {
+	switch {
+	case strings.Contains(query, "schema_state_storage_catalog"):
+		return &schemaStateInvariantRows{
+			columns: []string{"relation_count", "column_count", "matching_column_count", "primary_key_count", "check_expressions", "updated_at_default"},
+			values:  c.fixture.catalog,
+		}, nil
+	case strings.Contains(query, "schema_state_storage_rows"):
+		return &schemaStateInvariantRows{
+			columns: []string{"row_count", "invalid_id_count"},
+			values:  c.fixture.rows,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unexpected schema state invariant query")
+	}
+}
+
+type schemaStateInvariantRows struct {
+	columns []string
+	values  []driver.Value
+	read    bool
+}
+
+func (r *schemaStateInvariantRows) Columns() []string { return r.columns }
+func (r *schemaStateInvariantRows) Close() error      { return nil }
+func (r *schemaStateInvariantRows) Next(destination []driver.Value) error {
+	if r.read {
+		return io.EOF
+	}
+	copy(destination, r.values)
+	r.read = true
+	return nil
 }
