@@ -311,6 +311,84 @@ func TestProfessionalExtensionPoliciesEnforceWorkItemScopeForEveryExtension(t *t
 	}
 }
 
+func TestChangeExecutionTenantReconciliationUsesWorkItemAuthority(t *testing.T) {
+	db := openProfessionalExtensionMigrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+	defer cancel()
+
+	createChangeExecutionTenantTestTables(t, ctx, db)
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO tickets (id, tenant_id, record_class) VALUES (41, 101, 'change_request');
+		INSERT INTO changes (id, work_item_id, tenant_id) VALUES (51, 41, 999);
+	`)
+	require.NoError(t, err)
+	for _, tableName := range changeExecutionTenantTables {
+		_, err = db.ExecContext(ctx, fmt.Sprintf(`INSERT INTO %s (change_id, tenant_id) VALUES (51, 999)`, tableName))
+		require.NoError(t, err)
+	}
+
+	_, err = db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, GetMigrationSQL("023_reconcile_change_execution_tenants"))
+	require.NoError(t, err)
+
+	for _, tableName := range changeExecutionTenantTables {
+		var tenantID int64
+		require.NoError(t, db.QueryRowContext(ctx, fmt.Sprintf(`SELECT tenant_id FROM %s WHERE change_id = 51`, tableName)).Scan(&tenantID))
+		require.Equal(t, int64(101), tenantID, "%s must derive tenant from the authoritative WorkItem", tableName)
+	}
+}
+
+func TestChangeExecutionTenantReconciliationRejectsUnresolvedWorkItemAuthority(t *testing.T) {
+	db := openProfessionalExtensionMigrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+	defer cancel()
+
+	createChangeExecutionTenantTestTables(t, ctx, db)
+	_, err := db.ExecContext(ctx, `INSERT INTO change_approvals (change_id, tenant_id) VALUES (999, 101)`)
+	require.NoError(t, err)
+
+	_, err = db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, GetMigrationSQL("023_reconcile_change_execution_tenants"))
+	require.ErrorContains(t, err, "change execution tenant reconciliation failed")
+}
+
+func TestCurrentRLSRepairRecreatesCanonicalDirectAndWorkItemPolicies(t *testing.T) {
+	db := openProfessionalExtensionMigrationDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
+	defer cancel()
+
+	_, err := db.ExecContext(ctx, GetMigrationSQL("022_drop_professional_extension_shared_fields"))
+	require.NoError(t, err)
+	_, err = db.ExecContext(ctx, `
+		CREATE TABLE tenant_assets (
+			id BIGINT PRIMARY KEY,
+			tenant_id BIGINT NOT NULL
+		);
+		ALTER TABLE tenant_assets ENABLE ROW LEVEL SECURITY;
+		CREATE POLICY tenant_isolation ON tenant_assets
+			USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::bigint)
+			WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::bigint);
+		DROP POLICY tenant_isolation_changes ON changes;
+		CREATE POLICY tenant_isolation ON changes USING (true) WITH CHECK (true);
+	`)
+	require.NoError(t, err)
+
+	_, err = db.ExecContext(ctx, GetMigrationSQL("024_reconcile_current_rls_policies"))
+	require.NoError(t, err)
+
+	for _, tableName := range []string{"tickets", "tenant_assets"} {
+		requireCanonicalDirectTenantPolicy(t, ctx, db, tableName)
+	}
+	for _, tableName := range professionalExtensionTables {
+		requireCanonicalProfessionalExtensionPolicy(t, ctx, db, tableName)
+	}
+	var legacyTenantFunction *string
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT to_regprocedure('get_current_tenant_id()')`).Scan(&legacyTenantFunction))
+	require.Nil(t, legacyTenantFunction)
+}
+
 func TestProfessionalExtensionMigrationRejectsConflictingNamedForeignKey(t *testing.T) {
 	db := openProfessionalExtensionMigrationDB(t)
 	ctx, cancel := context.WithTimeout(context.Background(), professionalExtensionMigrationIntegrationTimeout)
@@ -578,6 +656,29 @@ func TestProfessionalExtensionVerificationRejectsRestrictiveCanonicalPolicy(t *t
 
 var professionalExtensionTables = []string{"incidents", "problems", "changes"}
 
+var changeExecutionTenantTables = []string{
+	"change_approvals",
+	"change_approval_chains",
+	"change_risk_assessments",
+	"change_rollback_plans",
+	"change_rollback_executions",
+	"change_implementation_plans",
+}
+
+func createChangeExecutionTenantTestTables(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+	for _, tableName := range changeExecutionTenantTables {
+		_, err := db.ExecContext(ctx, fmt.Sprintf(`
+			CREATE TABLE %s (
+				id BIGSERIAL PRIMARY KEY,
+				change_id BIGINT NOT NULL,
+				tenant_id BIGINT NOT NULL
+			)
+		`, tableName))
+		require.NoError(t, err)
+	}
+}
+
 func verifyProfessionalExtensionPolicyAttributeRejection(t *testing.T, attributes string) {
 	t.Helper()
 	for _, tableName := range professionalExtensionTables {
@@ -633,6 +734,29 @@ func requireCanonicalProfessionalExtensionPolicy(t *testing.T, ctx context.Conte
 		require.Contains(t, expression, tableName+".work_item_id")
 		require.Contains(t, expression, "work_item.tenant_id")
 		require.Contains(t, expression, "work_item.deleted_at IS NULL")
+		require.Contains(t, expression, "app.current_tenant")
+		require.NotContains(t, expression, "app.current_tenant_id")
+	}
+}
+
+func requireCanonicalDirectTenantPolicy(t *testing.T, ctx context.Context, db *sql.DB, tableName string) {
+	t.Helper()
+	var usingExpression, checkExpression, policyCommand string
+	var policyRoles pq.Int64Array
+	var policyPermissive bool
+	require.NoError(t, db.QueryRowContext(ctx, `
+		SELECT pg_get_expr(policy.polqual, policy.polrelid), pg_get_expr(policy.polwithcheck, policy.polrelid),
+		       policy.polroles, policy.polcmd, policy.polpermissive
+		FROM pg_policy policy
+		JOIN pg_class relation ON relation.oid = policy.polrelid
+		JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+		WHERE namespace.nspname = current_schema() AND relation.relname = $1 AND policy.polname = $2
+	`, tableName, "tenant_isolation_"+tableName).Scan(&usingExpression, &checkExpression, &policyRoles, &policyCommand, &policyPermissive))
+	require.Equal(t, pq.Int64Array{0}, policyRoles)
+	require.Equal(t, "*", policyCommand)
+	require.True(t, policyPermissive)
+	for _, expression := range []string{usingExpression, checkExpression} {
+		require.Contains(t, expression, "tenant_id")
 		require.Contains(t, expression, "app.current_tenant")
 		require.NotContains(t, expression, "app.current_tenant_id")
 	}

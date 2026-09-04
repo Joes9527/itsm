@@ -94,6 +94,20 @@ func TestValidateMigrationLedgerAcceptsPublishedChangeExecutionChecksum(t *testi
 	}}))
 }
 
+func TestValidateLedgerLineageAcceptsCurrentForwardRepairChecksums(t *testing.T) {
+	for _, version := range []string{
+		"023_reconcile_change_execution_tenants",
+		"024_reconcile_current_rls_policies",
+	} {
+		t.Run(version, func(t *testing.T) {
+			require.NoError(t, ValidateLedgerLineage([]Migration{{
+				Version:  version,
+				Checksum: checksumSQL(GetMigrationSQL(version)),
+			}}))
+		})
+	}
+}
+
 func TestMigrationStreamAndLedgerRequireCanonicalOrderAndActivePrefix(t *testing.T) {
 	available := PostSchemaMigrations()
 	available[0], available[1] = available[1], available[0]
@@ -161,16 +175,46 @@ func TestChangeExecutionTablesAreVersioned(t *testing.T) {
 	}
 }
 
-func TestChangeExecutionTenantBackfillUsesWorkItemAuthority(t *testing.T) {
-	sql := GetMigrationSQL("007_add_change_execution_tables")
+func TestPublishedMigrationSQLChecksumsMatchLineage(t *testing.T) {
+	for version, expected := range map[string]string{
+		"007_add_change_execution_tables":           "1cf4fab4573d373957f8d22012e60652400eeffd09c1caf118ec640761b13d4a",
+		"009_enable_rls_tenant_isolation":           "b88712993b527f72c945e506fecbb41da54e2aeada19317dff9bc489a94ecea0",
+		"015_process_instance_running_unique_guard": "624c72f3fc88b299570f556742959bc1e436574881ee080b3dcd85864d1049f6",
+	} {
+		t.Run(version, func(t *testing.T) {
+			require.Equal(t, expected, checksumSQL(GetMigrationSQL(version)))
+		})
+	}
+}
+
+func TestChangeExecutionTenantReconciliationIsAForwardMigration(t *testing.T) {
+	const version = "023_reconcile_change_execution_tenants"
+
+	sql := GetMigrationSQL(version)
 	require.NotEmpty(t, sql)
 
-	// Change is a professional extension and no longer owns tenant_id. Every
-	// execution child keeps its direct tenant_id, sourced through Change's
-	// authoritative WorkItem relation during migration.
-	assert.NotContains(t, sql, "c.tenant_id")
+	for _, table := range []string{
+		"change_approvals",
+		"change_approval_chains",
+		"change_risk_assessments",
+		"change_rollback_plans",
+		"change_rollback_executions",
+		"change_implementation_plans",
+	} {
+		assert.Contains(t, sql, "UPDATE "+table+" execution")
+	}
 	assert.Equal(t, 6, strings.Count(sql, "SET tenant_id = wi.tenant_id"))
 	assert.Equal(t, 6, strings.Count(sql, "JOIN tickets wi ON wi.id = c.work_item_id"))
+	assert.Equal(t, 6, strings.Count(sql, "execution.tenant_id IS DISTINCT FROM wi.tenant_id"))
+	assert.NotContains(t, sql, "c.tenant_id")
+}
+
+func TestChangeExecutionTenantReconciliationFailsClosedOnUnresolvedAuthority(t *testing.T) {
+	sql := GetMigrationSQL("023_reconcile_change_execution_tenants")
+	require.NotEmpty(t, sql)
+	assert.Contains(t, sql, "LEFT JOIN %I.tickets work_item ON work_item.id = change_record.work_item_id")
+	assert.Contains(t, sql, "execution.tenant_id IS DISTINCT FROM work_item.tenant_id")
+	assert.Contains(t, sql, "change execution tenant reconciliation failed")
 }
 
 func TestPostSchemaMigrationsStartsAtUnifiedVersion(t *testing.T) {
@@ -183,8 +227,16 @@ func TestPostSchemaMigrationsStartsAtUnifiedVersion(t *testing.T) {
 	}
 }
 
-func TestTenantRLSReconcilerUsesTheCurrentSchemaAndRuntimeGUC(t *testing.T) {
-	sql := GetMigrationSQL("009_enable_rls_tenant_isolation")
+func TestCurrentRLSRepairUsesWorkItemTenantAuthority(t *testing.T) {
+	sql := GetMigrationSQL("024_reconcile_current_rls_policies")
+	require.NotEmpty(t, sql)
+	require.Contains(t, sql, "work_item.tenant_id")
+	require.Contains(t, sql, "current_setting('app.current_tenant', true)")
+	require.NotContains(t, sql, "changes.tenant_id")
+}
+
+func TestCurrentRLSRepairReconcilesAndVerifiesCanonicalPolicies(t *testing.T) {
+	sql := GetMigrationSQL("024_reconcile_current_rls_policies")
 	require.NotEmpty(t, sql)
 	assert.Contains(t, sql, "pg_class")
 	assert.Contains(t, sql, "pg_namespace")
@@ -194,10 +246,26 @@ func TestTenantRLSReconcilerUsesTheCurrentSchemaAndRuntimeGUC(t *testing.T) {
 	assert.Contains(t, sql, "tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint")
 	assert.Contains(t, sql, "DROP POLICY IF EXISTS %I ON %I.%I")
 	assert.Contains(t, sql, "DROP FUNCTION IF EXISTS get_current_tenant_id()")
+	assert.Contains(t, sql, "pg_get_expr(policy.polqual, policy.polrelid)")
+	assert.Contains(t, sql, "pg_get_expr(policy.polwithcheck, policy.polrelid)")
 	assert.NotContains(t, sql, "sla_policies")
 	assert.NotContains(t, sql, "approval_workflows")
 	assert.NotContains(t, sql, "app.current_tenant_id")
 	assert.NotContains(t, sql, "FORCE ROW LEVEL SECURITY")
+}
+
+func TestForwardTenantRepairsAreRegisteredInCanonicalOrder(t *testing.T) {
+	versions := make([]string, 0, len(RegisteredMigrations))
+	for _, migration := range RegisteredMigrations {
+		versions = append(versions, migration.Version)
+	}
+	require.Subset(t, versions, []string{
+		"022_drop_professional_extension_shared_fields",
+		"023_reconcile_change_execution_tenants",
+		"024_reconcile_current_rls_policies",
+	})
+	require.Less(t, strings.Index(strings.Join(versions, ","), "022_drop_professional_extension_shared_fields"), strings.Index(strings.Join(versions, ","), "023_reconcile_change_execution_tenants"))
+	require.Less(t, strings.Index(strings.Join(versions, ","), "023_reconcile_change_execution_tenants"), strings.Index(strings.Join(versions, ","), "024_reconcile_current_rls_policies"))
 }
 
 func TestTicketTypesMigrationIsRetiredFromTheActivePostSchemaStream(t *testing.T) {
@@ -327,7 +395,14 @@ func TestWorkItemNumberAllocatorVerificationBindsReadyValidIndexes(t *testing.T)
 func TestProfessionalExtensionsDropSharedFieldsIsVersioned(t *testing.T) {
 	const version = "022_drop_professional_extension_shared_fields"
 
-	require.Equal(t, version, RegisteredMigrations[len(RegisteredMigrations)-1].Version)
+	registered := false
+	for _, migration := range RegisteredMigrations {
+		if migration.Version == version {
+			registered = true
+			break
+		}
+	}
+	require.True(t, registered)
 	canonicalSQL := GetMigrationSQL(version)
 	require.NotEmpty(t, canonicalSQL)
 	for _, asset := range []string{

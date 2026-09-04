@@ -34,22 +34,38 @@ func TestRunPostSchemaMigrationsAppliesVersion007(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, runner.ensured)
-	require.Len(t, runner.migrations, 15)
-	require.Equal(t, "007_add_change_execution_tables", runner.migrations[0].Version)
-	require.Equal(t, "008_add_initialization_ledger", runner.migrations[1].Version)
-	require.Equal(t, "009_enable_rls_tenant_isolation", runner.migrations[2].Version)
-	require.Equal(t, "011_add_tool_invocation_tenant_id", runner.migrations[3].Version)
-	require.Equal(t, "012_drop_service_catalog_item", runner.migrations[4].Version)
-	require.Equal(t, "013_service_request_delegates_to_ticket", runner.migrations[5].Version)
-	require.Equal(t, "014_drop_legacy_approval_workflow", runner.migrations[6].Version)
-	require.Equal(t, "015_process_instance_running_unique_guard", runner.migrations[7].Version)
-	require.Equal(t, "016_add_service_request_contact_fields", runner.migrations[8].Version)
-	require.Equal(t, "017_drop_ticket_type_legacy_approval_fields", runner.migrations[9].Version)
-	require.Equal(t, "018_convert_legacy_serial_ids_to_identity", runner.migrations[10].Version)
-	require.Equal(t, "019_kaf_execution_integrity_rls", runner.migrations[11].Version)
-	require.Equal(t, "020_work_item_number_allocator", runner.migrations[12].Version)
-	require.Equal(t, "021_add_callback_optional_declared", runner.migrations[13].Version)
-	require.Equal(t, "022_drop_professional_extension_shared_fields", runner.migrations[14].Version)
+	require.NotEmpty(t, runner.migrations)
+
+	positions := make(map[string]int, len(runner.migrations))
+	for index, registered := range runner.migrations {
+		positions[registered.Version] = index
+	}
+	requiredOrder := []string{
+		"007_add_change_execution_tables",
+		"008_add_initialization_ledger",
+		"009_enable_rls_tenant_isolation",
+		"011_add_tool_invocation_tenant_id",
+		"012_drop_service_catalog_item",
+		"013_service_request_delegates_to_ticket",
+		"014_drop_legacy_approval_workflow",
+		"015_process_instance_running_unique_guard",
+		"016_add_service_request_contact_fields",
+		"017_drop_ticket_type_legacy_approval_fields",
+		"018_convert_legacy_serial_ids_to_identity",
+		"019_kaf_execution_integrity_rls",
+		"020_work_item_number_allocator",
+		"021_add_callback_optional_declared",
+		"022_drop_professional_extension_shared_fields",
+		"023_reconcile_change_execution_tenants",
+		"024_reconcile_current_rls_policies",
+	}
+	for index, version := range requiredOrder {
+		position, ok := positions[version]
+		require.True(t, ok, "required post-schema migration %s is missing", version)
+		if index > 0 {
+			require.Greater(t, position, positions[requiredOrder[index-1]], "%s must follow %s", version, requiredOrder[index-1])
+		}
+	}
 }
 
 func TestRunPostSchemaMigrationsFailsClosed(t *testing.T) {

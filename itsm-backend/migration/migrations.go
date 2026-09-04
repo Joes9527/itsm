@@ -443,6 +443,16 @@ var RegisteredMigrations = []Migration{
 		Description: "Remove WorkItem-owned extension fields and retire legacy TicketApproval and Workflow runtimes",
 		RollbackSQL: "",
 	},
+	{
+		Version:     "023_reconcile_change_execution_tenants",
+		Description: "Reconcile Change execution child tenants from the authoritative WorkItem",
+		RollbackSQL: "",
+	},
+	{
+		Version:     "024_reconcile_current_rls_policies",
+		Description: "Reconcile current tenant RLS policies with WorkItem authority and the runtime tenant setting",
+		RollbackSQL: "",
+	},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -628,31 +638,20 @@ ALTER TABLE change_rollback_executions ADD COLUMN IF NOT EXISTS tenant_id BIGINT
 ALTER TABLE change_implementation_plans ADD COLUMN IF NOT EXISTS tenant_id BIGINT;
 
 UPDATE change_approvals ca
-SET tenant_id = wi.tenant_id
+SET tenant_id = c.tenant_id
 FROM changes c
-JOIN tickets wi ON wi.id = c.work_item_id
 WHERE ca.change_id = c.id AND (ca.tenant_id IS NULL OR ca.tenant_id = 0);
 
-UPDATE change_approval_chains t SET tenant_id = wi.tenant_id
-FROM changes c
-JOIN tickets wi ON wi.id = c.work_item_id
-WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
-UPDATE change_risk_assessments t SET tenant_id = wi.tenant_id
-FROM changes c
-JOIN tickets wi ON wi.id = c.work_item_id
-WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
-UPDATE change_rollback_plans t SET tenant_id = wi.tenant_id
-FROM changes c
-JOIN tickets wi ON wi.id = c.work_item_id
-WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
-UPDATE change_rollback_executions t SET tenant_id = wi.tenant_id
-FROM changes c
-JOIN tickets wi ON wi.id = c.work_item_id
-WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
-UPDATE change_implementation_plans t SET tenant_id = wi.tenant_id
-FROM changes c
-JOIN tickets wi ON wi.id = c.work_item_id
-WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
+UPDATE change_approval_chains t SET tenant_id = c.tenant_id
+FROM changes c WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
+UPDATE change_risk_assessments t SET tenant_id = c.tenant_id
+FROM changes c WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
+UPDATE change_rollback_plans t SET tenant_id = c.tenant_id
+FROM changes c WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
+UPDATE change_rollback_executions t SET tenant_id = c.tenant_id
+FROM changes c WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
+UPDATE change_implementation_plans t SET tenant_id = c.tenant_id
+FROM changes c WHERE t.change_id = c.id AND (t.tenant_id IS NULL OR t.tenant_id = 0);
 
 DO $$
 BEGIN
@@ -783,72 +782,144 @@ CREATE INDEX IF NOT EXISTS idx_init_managed_scope_component
 `
 	case "009_enable_rls_tenant_isolation":
 		return `
--- Current-schema direct-tenant policy reconciler. Ent creates the base schema
--- before this post-schema migration; policies intentionally cover only tables
--- that directly own tenant_id. Professional extensions without tenant_id use
--- their WorkItem relation and receive indirect policies in their own schema wave.
-DO $$
-DECLARE
-    target RECORD;
-    canonical_policy TEXT;
-    unexpected_policy TEXT;
+-- Enable RLS on all tenant-scoped tables
+-- Policy: users can only see rows where tenant_id matches current_setting('app.current_tenant_id')
+
+-- Helper function to get current tenant_id safely
+CREATE OR REPLACE FUNCTION get_current_tenant_id() RETURNS INTEGER AS $$
 BEGIN
-    IF EXISTS (
-        SELECT 1
-        FROM pg_class relation
-        JOIN pg_namespace schema ON schema.oid = relation.relnamespace
-        JOIN pg_attribute attribute ON attribute.attrelid = relation.oid
-        WHERE schema.oid = current_schema()::regnamespace
-          AND relation.relkind = 'r'
-          AND attribute.attname = 'tenant_id'
-          AND attribute.attnum > 0
-          AND NOT attribute.attisdropped
-          AND attribute.atttypid NOT IN ('int4'::regtype, 'int8'::regtype)
-    ) THEN
-        RAISE EXCEPTION 'tenant RLS target has a non-integer tenant_id in schema %', current_schema();
-    END IF;
+    RETURN NULLIF(current_setting('app.current_tenant_id', true)::INTEGER, 0);
+END;
+$$ LANGUAGE plpgsql STABLE;
 
-    FOR target IN
-        SELECT schema.nspname AS schema_name, relation.relname AS table_name, relation.oid AS relation_id
-        FROM pg_class relation
-        JOIN pg_namespace schema ON schema.oid = relation.relnamespace
-        JOIN pg_attribute attribute ON attribute.attrelid = relation.oid
-        WHERE schema.oid = current_schema()::regnamespace
-          AND relation.relkind = 'r'
-          AND attribute.attname = 'tenant_id'
-          AND attribute.attnum > 0
-          AND NOT attribute.attisdropped
-          AND attribute.atttypid IN ('int4'::regtype, 'int8'::regtype)
-        ORDER BY relation.relname
-    LOOP
-        canonical_policy := format('tenant_isolation_%s', target.table_name);
-        IF length(canonical_policy) > 63 THEN
-            RAISE EXCEPTION 'tenant RLS policy name exceeds PostgreSQL identifier limit for %.%', target.schema_name, target.table_name;
-        END IF;
+-- Teams
+ALTER TABLE teams ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_teams ON teams;
+CREATE POLICY tenant_isolation_teams ON teams
+    USING (tenant_id = get_current_tenant_id())
+    WITH CHECK (tenant_id = get_current_tenant_id());
 
-        EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', canonical_policy, target.schema_name, target.table_name);
-        EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', 'tenant_isolation', target.schema_name, target.table_name);
+-- Roles
+ALTER TABLE roles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_roles ON roles;
+CREATE POLICY tenant_isolation_roles ON roles
+    USING (tenant_id = get_current_tenant_id())
+    WITH CHECK (tenant_id = get_current_tenant_id());
 
-        SELECT policy.polname
-        INTO unexpected_policy
-        FROM pg_policy policy
-        WHERE policy.polrelid = target.relation_id
-        LIMIT 1;
-        IF unexpected_policy IS NOT NULL THEN
-            RAISE EXCEPTION 'unexpected RLS policy % remains on %.%; refusing dual policy contract', unexpected_policy, target.schema_name, target.table_name;
-        END IF;
+-- Users
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_users ON users;
+CREATE POLICY tenant_isolation_users ON users
+    USING (tenant_id = get_current_tenant_id())
+    WITH CHECK (tenant_id = get_current_tenant_id());
 
-        EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', target.schema_name, target.table_name);
-        EXECUTE format(
-            'CREATE POLICY %I ON %I.%I USING (tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint) WITH CHECK (tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint)',
-            canonical_policy,
-            target.schema_name,
-            target.table_name
-        );
-    END LOOP;
-END $$;
+-- SLA Policies
+ALTER TABLE sla_policies ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_sla_policies ON sla_policies;
+CREATE POLICY tenant_isolation_sla_policies ON sla_policies
+    USING (tenant_id = get_current_tenant_id())
+    WITH CHECK (tenant_id = get_current_tenant_id());
 
-DROP FUNCTION IF EXISTS get_current_tenant_id();
+-- Service Catalogs
+ALTER TABLE service_catalogs ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_service_catalogs ON service_catalogs;
+CREATE POLICY tenant_isolation_service_catalogs ON service_catalogs
+    USING (tenant_id = get_current_tenant_id())
+    WITH CHECK (tenant_id = get_current_tenant_id());
+
+-- CI Types
+ALTER TABLE ci_types ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_ci_types ON ci_types;
+CREATE POLICY tenant_isolation_ci_types ON ci_types
+    USING (tenant_id = get_current_tenant_id())
+    WITH CHECK (tenant_id = get_current_tenant_id());
+
+-- Standard Changes
+ALTER TABLE standard_changes ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_standard_changes ON standard_changes;
+CREATE POLICY tenant_isolation_standard_changes ON standard_changes
+    USING (tenant_id = get_current_tenant_id())
+    WITH CHECK (tenant_id = get_current_tenant_id());
+
+-- Known Errors
+ALTER TABLE known_errors ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_known_errors ON known_errors;
+CREATE POLICY tenant_isolation_known_errors ON known_errors
+    USING (tenant_id = get_current_tenant_id())
+    WITH CHECK (tenant_id = get_current_tenant_id());
+
+-- SLA Alert Rules
+ALTER TABLE sla_alert_rules ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_sla_alert_rules ON sla_alert_rules;
+CREATE POLICY tenant_isolation_sla_alert_rules ON sla_alert_rules
+    USING (tenant_id = get_current_tenant_id())
+    WITH CHECK (tenant_id = get_current_tenant_id());
+
+-- Tags
+ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_tags ON tags;
+CREATE POLICY tenant_isolation_tags ON tags
+    USING (tenant_id = get_current_tenant_id())
+    WITH CHECK (tenant_id = get_current_tenant_id());
+
+-- Departments
+ALTER TABLE departments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_departments ON departments;
+CREATE POLICY tenant_isolation_departments ON departments
+    USING (tenant_id = get_current_tenant_id())
+    WITH CHECK (tenant_id = get_current_tenant_id());
+
+-- Ticket Categories
+ALTER TABLE ticket_categories ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_ticket_categories ON ticket_categories;
+CREATE POLICY tenant_isolation_ticket_categories ON ticket_categories
+    USING (tenant_id = get_current_tenant_id())
+    WITH CHECK (tenant_id = get_current_tenant_id());
+
+-- Process Bindings
+ALTER TABLE process_bindings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_process_bindings ON process_bindings;
+CREATE POLICY tenant_isolation_process_bindings ON process_bindings
+    USING (tenant_id = get_current_tenant_id())
+    WITH CHECK (tenant_id = get_current_tenant_id());
+
+-- Process Definitions
+ALTER TABLE process_definitions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_process_definitions ON process_definitions;
+CREATE POLICY tenant_isolation_process_definitions ON process_definitions
+    USING (tenant_id = get_current_tenant_id())
+    WITH CHECK (tenant_id = get_current_tenant_id());
+
+-- Process Deployments
+ALTER TABLE process_deployments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_process_deployments ON process_deployments;
+CREATE POLICY tenant_isolation_process_deployments ON process_deployments
+    USING (tenant_id = get_current_tenant_id())
+    WITH CHECK (tenant_id = get_current_tenant_id());
+
+-- Approval Workflows
+ALTER TABLE approval_workflows ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_approval_workflows ON approval_workflows;
+CREATE POLICY tenant_isolation_approval_workflows ON approval_workflows
+    USING (tenant_id = get_current_tenant_id())
+    WITH CHECK (tenant_id = get_current_tenant_id());
+
+-- Ticket Views
+ALTER TABLE ticket_views ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_ticket_views ON ticket_views;
+CREATE POLICY tenant_isolation_ticket_views ON ticket_views
+    USING (tenant_id = get_current_tenant_id())
+    WITH CHECK (tenant_id = get_current_tenant_id());
+
+-- Force role to bypass RLS for system operations (e.g., itsm-backend service account)
+-- The itsm_backend_role is the service account used by the application
+-- Uncomment if you need a superuser role to bypass RLS:
+-- ALTER TABLE teams FORCE ROW LEVEL SECURITY;
+-- ALTER TABLE roles FORCE ROW LEVEL SECURITY;
+-- etc. for other tables
+
+COMMENT ON FUNCTION get_current_tenant_id() IS
+    'Returns the current tenant ID from session settings, used by RLS policies for tenant isolation';
 `
 	case "010_add_ticket_types":
 		return `
@@ -959,7 +1030,7 @@ WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
 
 -- Enforce at most one running process instance per (tenant, business key). No domain
 -- in this codebase treats "same business key, two concurrently running instances" as
--- a legitimate state (canonical BPMN ProcessTask commands assume
+-- a legitimate state (BPMNApprovalBridge/handlers/change's SubmitChange both assume
 -- businessKey -> running instance is 1:1) — this is a data-integrity invariant that
 -- belongs at the DB layer, not just the application-level check-then-act guard.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_process_instances_running_unique
@@ -1095,6 +1166,293 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
     ADD COLUMN IF NOT EXISTS optional_declared boolean NOT NULL DEFAULT false;`
 	case "022_drop_professional_extension_shared_fields":
 		return professionalExtensionSharedFieldsSQL
+	case "023_reconcile_change_execution_tenants":
+		return `
+UPDATE change_approvals execution
+SET tenant_id = wi.tenant_id
+FROM changes c
+JOIN tickets wi ON wi.id = c.work_item_id
+WHERE execution.change_id = c.id
+  AND execution.tenant_id IS DISTINCT FROM wi.tenant_id;
+
+UPDATE change_approval_chains execution
+SET tenant_id = wi.tenant_id
+FROM changes c
+JOIN tickets wi ON wi.id = c.work_item_id
+WHERE execution.change_id = c.id
+  AND execution.tenant_id IS DISTINCT FROM wi.tenant_id;
+
+UPDATE change_risk_assessments execution
+SET tenant_id = wi.tenant_id
+FROM changes c
+JOIN tickets wi ON wi.id = c.work_item_id
+WHERE execution.change_id = c.id
+  AND execution.tenant_id IS DISTINCT FROM wi.tenant_id;
+
+UPDATE change_rollback_plans execution
+SET tenant_id = wi.tenant_id
+FROM changes c
+JOIN tickets wi ON wi.id = c.work_item_id
+WHERE execution.change_id = c.id
+  AND execution.tenant_id IS DISTINCT FROM wi.tenant_id;
+
+UPDATE change_rollback_executions execution
+SET tenant_id = wi.tenant_id
+FROM changes c
+JOIN tickets wi ON wi.id = c.work_item_id
+WHERE execution.change_id = c.id
+  AND execution.tenant_id IS DISTINCT FROM wi.tenant_id;
+
+UPDATE change_implementation_plans execution
+SET tenant_id = wi.tenant_id
+FROM changes c
+JOIN tickets wi ON wi.id = c.work_item_id
+WHERE execution.change_id = c.id
+  AND execution.tenant_id IS DISTINCT FROM wi.tenant_id;
+
+DO $migration$
+DECLARE
+    execution_table TEXT;
+    unresolved_change_id BIGINT;
+BEGIN
+    FOR execution_table IN SELECT unnest(ARRAY[
+        'change_approvals',
+        'change_approval_chains',
+        'change_risk_assessments',
+        'change_rollback_plans',
+        'change_rollback_executions',
+        'change_implementation_plans'
+    ]) LOOP
+        EXECUTE format(
+            'SELECT execution.change_id FROM %I.%I execution '
+            'LEFT JOIN %I.changes change_record ON change_record.id = execution.change_id '
+            'LEFT JOIN %I.tickets work_item ON work_item.id = change_record.work_item_id '
+            'WHERE change_record.id IS NULL OR work_item.id IS NULL '
+            'OR execution.tenant_id IS DISTINCT FROM work_item.tenant_id LIMIT 1',
+            current_schema(), execution_table, current_schema(), current_schema()
+        ) INTO unresolved_change_id;
+        IF unresolved_change_id IS NOT NULL THEN
+            RAISE EXCEPTION 'change execution tenant reconciliation failed for table % at change %',
+                execution_table, unresolved_change_id;
+        END IF;
+        unresolved_change_id := NULL;
+    END LOOP;
+END $migration$;
+`
+	case "024_reconcile_current_rls_policies":
+		return `
+DO $migration$
+DECLARE
+    target RECORD;
+    extension_table TEXT;
+    canonical_policy TEXT;
+    unexpected_policy TEXT;
+    expected_policy_expression TEXT;
+    policy_using TEXT;
+    policy_check TEXT;
+    policy_roles OID[];
+    policy_command TEXT;
+    policy_permissive BOOLEAN;
+    policy_count INTEGER;
+BEGIN
+    PERFORM current_setting('app.current_tenant', true);
+
+    IF EXISTS (
+        SELECT 1
+        FROM pg_class relation
+        JOIN pg_namespace schema ON schema.oid = relation.relnamespace
+        JOIN pg_attribute attribute ON attribute.attrelid = relation.oid
+        WHERE schema.oid = current_schema()::regnamespace
+          AND relation.relkind = 'r'
+          AND attribute.attname = 'tenant_id'
+          AND attribute.attnum > 0
+          AND NOT attribute.attisdropped
+          AND attribute.atttypid NOT IN ('int4'::regtype, 'int8'::regtype)
+    ) THEN
+        RAISE EXCEPTION 'tenant RLS target has a non-integer tenant_id in schema %', current_schema();
+    END IF;
+
+    FOR target IN
+        SELECT schema.nspname AS schema_name, relation.relname AS table_name, relation.oid AS relation_id
+        FROM pg_class relation
+        JOIN pg_namespace schema ON schema.oid = relation.relnamespace
+        JOIN pg_attribute attribute ON attribute.attrelid = relation.oid
+        WHERE schema.oid = current_schema()::regnamespace
+          AND relation.relkind = 'r'
+          AND attribute.attname = 'tenant_id'
+          AND attribute.attnum > 0
+          AND NOT attribute.attisdropped
+          AND attribute.atttypid IN ('int4'::regtype, 'int8'::regtype)
+        ORDER BY relation.relname
+    LOOP
+        canonical_policy := format('tenant_isolation_%s', target.table_name);
+        IF length(canonical_policy) > 63 THEN
+            RAISE EXCEPTION 'tenant RLS policy name exceeds PostgreSQL identifier limit for %.%', target.schema_name, target.table_name;
+        END IF;
+
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', canonical_policy, target.schema_name, target.table_name);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', 'tenant_isolation', target.schema_name, target.table_name);
+
+        unexpected_policy := NULL;
+        SELECT policy.polname
+        INTO unexpected_policy
+        FROM pg_policy policy
+        WHERE policy.polrelid = target.relation_id
+        LIMIT 1;
+        IF unexpected_policy IS NOT NULL THEN
+            RAISE EXCEPTION 'unexpected RLS policy % remains on %.%; refusing dual policy contract', unexpected_policy, target.schema_name, target.table_name;
+        END IF;
+
+        EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', target.schema_name, target.table_name);
+        EXECUTE format(
+            'CREATE POLICY %I ON %I.%I AS PERMISSIVE FOR ALL TO PUBLIC '
+            'USING (tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint) '
+            'WITH CHECK (tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint)',
+            canonical_policy, target.schema_name, target.table_name
+        );
+
+        expected_policy_expression := '(tenant_id = (NULLIF(current_setting(''app.current_tenant''::text, true), ''''::text))::bigint)';
+        policy_using := NULL;
+        policy_check := NULL;
+        policy_roles := NULL;
+        policy_command := NULL;
+        policy_permissive := NULL;
+        SELECT pg_get_expr(policy.polqual, policy.polrelid),
+               pg_get_expr(policy.polwithcheck, policy.polrelid),
+               policy.polroles,
+               policy.polcmd,
+               policy.polpermissive
+        INTO policy_using, policy_check, policy_roles, policy_command, policy_permissive
+        FROM pg_policy policy
+        WHERE policy.polrelid = target.relation_id
+          AND policy.polname = canonical_policy;
+
+        IF policy_using IS NULL OR policy_check IS NULL
+           OR regexp_replace(btrim(policy_using), '\s+', ' ', 'g') <> expected_policy_expression
+           OR regexp_replace(btrim(policy_check), '\s+', ' ', 'g') <> expected_policy_expression
+           OR policy_roles <> ARRAY[0::OID]
+           OR policy_command <> '*'
+           OR NOT policy_permissive THEN
+            RAISE EXCEPTION '%.% does not have the canonical direct tenant RLS policy',
+                target.schema_name, target.table_name;
+        END IF;
+
+        SELECT COUNT(*) INTO policy_count
+        FROM pg_policy policy
+        WHERE policy.polrelid = target.relation_id;
+        IF policy_count <> 1 THEN
+            RAISE EXCEPTION '%.% must have exactly one canonical RLS policy',
+                target.schema_name, target.table_name;
+        END IF;
+
+        IF NOT EXISTS (
+            SELECT 1 FROM pg_class relation
+            WHERE relation.oid = target.relation_id AND relation.relrowsecurity
+        ) THEN
+            RAISE EXCEPTION '%.% must have RLS enabled', target.schema_name, target.table_name;
+        END IF;
+    END LOOP;
+
+    IF to_regclass(format('%I.tickets', current_schema())) IS NULL THEN
+        RAISE EXCEPTION 'required WorkItem table tickets is missing from schema %', current_schema();
+    END IF;
+
+    FOR extension_table IN SELECT unnest(ARRAY['incidents', 'problems', 'changes']) LOOP
+        IF to_regclass(format('%I.%I', current_schema(), extension_table)) IS NULL THEN
+            RAISE EXCEPTION 'required professional extension table % is missing from schema %',
+                extension_table, current_schema();
+        END IF;
+
+        canonical_policy := 'tenant_isolation_' || extension_table;
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', canonical_policy, current_schema(), extension_table);
+        EXECUTE format('DROP POLICY IF EXISTS %I ON %I.%I', 'tenant_isolation', current_schema(), extension_table);
+
+        unexpected_policy := NULL;
+        SELECT policy.polname
+        INTO unexpected_policy
+        FROM pg_policy policy
+        JOIN pg_class relation ON relation.oid = policy.polrelid
+        JOIN pg_namespace schema ON schema.oid = relation.relnamespace
+        WHERE schema.nspname = current_schema()
+          AND relation.relname = extension_table
+        LIMIT 1;
+        IF unexpected_policy IS NOT NULL THEN
+            RAISE EXCEPTION 'unexpected RLS policy % remains on %.%; refusing dual policy contract',
+                unexpected_policy, current_schema(), extension_table;
+        END IF;
+
+        EXECUTE format('ALTER TABLE %I.%I ENABLE ROW LEVEL SECURITY', current_schema(), extension_table);
+        EXECUTE format(
+            'CREATE POLICY %I ON %I.%I AS PERMISSIVE FOR ALL TO PUBLIC '
+            'USING (EXISTS (SELECT 1 FROM %I.tickets work_item '
+            'WHERE work_item.id = %I.work_item_id '
+            'AND work_item.tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint '
+            'AND work_item.deleted_at IS NULL)) '
+            'WITH CHECK (EXISTS (SELECT 1 FROM %I.tickets work_item '
+            'WHERE work_item.id = %I.work_item_id '
+            'AND work_item.tenant_id = NULLIF(current_setting(''app.current_tenant'', true), '''')::bigint '
+            'AND work_item.deleted_at IS NULL))',
+            canonical_policy, current_schema(), extension_table,
+            current_schema(), extension_table, current_schema(), extension_table
+        );
+
+        expected_policy_expression := format(
+            '(EXISTS ( SELECT 1 FROM tickets work_item WHERE ((work_item.id = %I.work_item_id) AND (work_item.tenant_id = (NULLIF(current_setting(''app.current_tenant''::text, true), ''''::text))::bigint) AND (work_item.deleted_at IS NULL))))',
+            extension_table
+        );
+        policy_using := NULL;
+        policy_check := NULL;
+        policy_roles := NULL;
+        policy_command := NULL;
+        policy_permissive := NULL;
+        SELECT pg_get_expr(policy.polqual, policy.polrelid),
+               pg_get_expr(policy.polwithcheck, policy.polrelid),
+               policy.polroles,
+               policy.polcmd,
+               policy.polpermissive
+        INTO policy_using, policy_check, policy_roles, policy_command, policy_permissive
+        FROM pg_policy policy
+        JOIN pg_class relation ON relation.oid = policy.polrelid
+        JOIN pg_namespace schema ON schema.oid = relation.relnamespace
+        WHERE schema.nspname = current_schema()
+          AND relation.relname = extension_table
+          AND policy.polname = canonical_policy;
+
+        IF policy_using IS NULL OR policy_check IS NULL
+           OR regexp_replace(btrim(policy_using), '\s+', ' ', 'g') <> expected_policy_expression
+           OR regexp_replace(btrim(policy_check), '\s+', ' ', 'g') <> expected_policy_expression
+           OR policy_roles <> ARRAY[0::OID]
+           OR policy_command <> '*'
+           OR NOT policy_permissive THEN
+            RAISE EXCEPTION '%.% must use authoritative WorkItem tenant and soft-delete scope exactly',
+                extension_table, canonical_policy;
+        END IF;
+
+        SELECT COUNT(*) INTO policy_count
+        FROM pg_policy policy
+        JOIN pg_class relation ON relation.oid = policy.polrelid
+        JOIN pg_namespace schema ON schema.oid = relation.relnamespace
+        WHERE schema.nspname = current_schema()
+          AND relation.relname = extension_table;
+        IF policy_count <> 1 THEN
+            RAISE EXCEPTION '% must have exactly one canonical RLS policy', extension_table;
+        END IF;
+
+        IF NOT EXISTS (
+            SELECT 1
+            FROM pg_class relation
+            JOIN pg_namespace schema ON schema.oid = relation.relnamespace
+            WHERE schema.nspname = current_schema()
+              AND relation.relname = extension_table
+              AND relation.relrowsecurity
+        ) THEN
+            RAISE EXCEPTION '% must have RLS enabled', extension_table;
+        END IF;
+    END LOOP;
+END $migration$;
+
+DROP FUNCTION IF EXISTS get_current_tenant_id();
+`
 	default:
 		return ""
 	}
