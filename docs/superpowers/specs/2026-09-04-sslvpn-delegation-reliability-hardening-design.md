@@ -1,12 +1,12 @@
 # SSLVPN 委派可靠性收口设计
 
-> 状态：设计已批准，实施计划已编制
+> 状态：设计已批准；实施计划已按评审修订，等待重新批准
 >
 > 日期：2026-09-04
 >
 > 关联：[AGENTS.md](../../../AGENTS.md)、[SSLVPN Worker 生产就绪设计](2026-09-03-sslvpn-worker-production-readiness-design.md)、[生产就绪证据报告](../../reports/2026-09-03-sslvpn-kaf-worker-production-readiness-report.md)
 >
-> KAF 约束：`/home/administrator/actions-runner/_work/kaf/kaf/AGENTS.md` 与 `docs/kaf2/AGENTS-REFERENCE.md`
+> KAF 约束：KAF 仓库根目录的 `AGENTS.md` 与本仓库的 `docs/kaf2/AGENTS-REFERENCE.md`；不得依赖某台机器的 checkout 绝对路径
 
 ## 1. 决策摘要
 

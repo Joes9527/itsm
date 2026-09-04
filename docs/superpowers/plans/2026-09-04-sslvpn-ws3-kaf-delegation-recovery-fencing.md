@@ -2,13 +2,15 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Plan Status:** Review revisions pending approval; do not execute yet.
+
 **Goal:** Give KAF bounded, durable and independently recoverable execution/completion phases, stable step-effect fencing, truthful readiness, and a fail-closed sandbox for every mutating capability.
 
 **Architecture:** Split the oversized delegation pipeline into orchestration plus a PostgreSQL state repository. Execution and ITSM completion use separate statuses, leases and retry budgets; once a Tool effect is durable, recovery can replay only the stable completion payload. All workflow Tool/connector calls pass through one metadata-driven sandbox boundary, and delegated step keys bind tenant/task/correlation/procedure/version/step.
 
 **Tech Stack:** Python 3.12, FastAPI, Pydantic 2, SQLAlchemy async, PostgreSQL, Alembic, pytest/pytest-asyncio, httpx, Docker Compose
 
-**Spec:** `/home/administrator/project/itsm/.worktrees/sslvpn-runtime-validation/docs/superpowers/specs/2026-09-04-sslvpn-delegation-reliability-hardening-design.md`
+**Spec:** `[ITSM] docs/superpowers/specs/2026-09-04-sslvpn-delegation-reliability-hardening-design.md`
 
 ## Global Constraints
 
@@ -357,7 +359,7 @@ git commit -m "refactor(vpn): separate grant and notification effects"
 - Create: `tests/test_kaf_delegation_observability.py`
 - Modify: `src/acp/routers/health.py`
 - Modify: `docs/kaf2/operations/12-prod-cutover-runbook.md`
-- Modify: `/home/administrator/project/itsm/.worktrees/sslvpn-runtime-validation/docs/reports/2026-09-03-sslvpn-kaf-worker-production-readiness-report.md`
+- Modify: `[ITSM] docs/reports/2026-09-03-sslvpn-kaf-worker-production-readiness-report.md`
 
 **Interfaces:**
 - Produces DB-backed aggregate counts/oldest-age by phase/status plus counters for claim/retry/lease-lost/completion-replay.

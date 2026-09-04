@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Plan Status:** Review revisions pending approval; do not execute yet.
+
 **Goal:** Make ITSM upgrade history byte-immutable, give fresh installs a current baseline, and make readiness depend on a verifiable release manifest.
 
 **Architecture:** Keep one executable forward-migration stream and one validation-only historical lineage manifest. Fresh databases use Ent plus current baseline assets; existing databases use immutable forward migrations. Both converge on shared invariants and singleton `schema_state`, writable only by the migration principal.
@@ -26,6 +28,7 @@
 
 - Create `itsm-backend/migration/lineage_manifest.json` and `lineage.go`: immutable provenance plus exact validation.
 - Create `itsm-backend/migration/release_manifest.go` and `schema_state.go`: deterministic release identity and singleton state.
+- Create `itsm-backend/migration/schema_state_privileges.go`: controlled, identifier-safe role provisioning outside generic migration SQL.
 - Create `itsm-backend/migration/baseline.go`, `invariants.go`, and `sql/baseline/current.sql`: fresh path and shared checks.
 - Modify `itsm-backend/migration/migrations.go`, `migrator.go`, and `bootstrap.go`: restore history and split fresh/upgrade paths.
 - Modify `itsm-backend/cmd/migrate/main.go` and `internal/bootstrap/app.go`: call the correct entry point.
@@ -184,11 +187,16 @@ git commit -m "fix(migration): restore history and add forward tenant repairs"
 - Create: `itsm-backend/migration/release_manifest_test.go`
 - Create: `itsm-backend/migration/schema_state.go`
 - Create: `itsm-backend/migration/schema_state_test.go`
+- Create: `itsm-backend/migration/schema_state_privileges.go`
+- Create: `itsm-backend/migration/schema_state_privileges_test.go`
+- Create: `itsm-backend/migration/schema_state_privileges_integration_test.go`
 - Modify: `itsm-backend/migration/migrations.go`
+- Modify: `itsm-backend/cmd/migrate/main.go`
 
 **Interfaces:**
 - Produces: `CurrentRelease() ReleaseManifest`, `ReleaseManifest.Checksum() (string, error)`.
 - Produces: `ReadSchemaState(context.Context, DBTX)`, `PromoteSchemaState(context.Context, DBTX, ReleaseManifest)`, and `VerifySchemaState(SchemaState, ReleaseManifest)`.
+- Produces: `LoadSchemaStateRoles(getenv func(string) string) (SchemaStateRoles, error)` and `ApplySchemaStatePrivileges(context.Context, *sql.DB, SchemaStateRoles) error`.
 - Produces: forward migration `025_schema_release_state`; `CurrentRelease().SchemaVersion` is `025_schema_release_state`.
 
 - [ ] **Step 1: Write failing checksum/state tests**
@@ -221,7 +229,7 @@ type ReleaseManifest struct {
 
 Sort assets/components before canonical JSON hashing. Source seed names/version from `seeder.ProductionComponentNames` and `seeder.CurrentTenantTemplateVersion`.
 
-- [ ] **Step 3: Implement singleton state and grants**
+- [ ] **Step 3: Implement singleton state without dynamic DCL**
 
 ```sql
 CREATE TABLE IF NOT EXISTS schema_state (
@@ -234,14 +242,35 @@ CREATE TABLE IF NOT EXISTS schema_state (
 );
 ```
 
-The migration command validates distinct migration/runtime principals, quotes the runtime role identifier, revokes mutations, and grants SELECT. `PromoteSchemaState` runs only after invariants.
+Migration `025_schema_release_state` contains only deterministic table/index DDL. It does not interpolate role names and does not grant to a generic or hardcoded runtime role. `PromoteSchemaState` runs only after invariants.
 
-- [ ] **Step 4: Run and commit**
+- [ ] **Step 4: Implement the controlled privilege-provisioning interface**
+
+`cmd/migrate` loads `ITSM_MIGRATION_DB_USER` and `ITSM_RUNTIME_DB_USER` from its secret-backed environment. Reject empty values and equal values before opening the provisioning phase. Query `current_user` and the `schema_state` owner; both must equal the configured migration role. Errors identify only `migration role` or `runtime role`, never a username, DSN, generated SQL, or environment value.
+
+```go
+type SchemaStateRoles struct {
+    MigrationRole string
+    RuntimeRole   string
+}
+
+func LoadSchemaStateRoles(getenv func(string) string) (SchemaStateRoles, error)
+func ApplySchemaStatePrivileges(ctx context.Context, db *sql.DB, roles SchemaStateRoles) error
+```
+
+Build the narrowly scoped `REVOKE INSERT, UPDATE, DELETE` and `GRANT SELECT` statements with `pq.QuoteIdentifier`; do not use string replacement or bind parameters for identifiers. The migration role creates and owns `schema_state`. Invoke this provisioning step after migration 025 exists and before schema-state promotion.
+
+- [ ] **Step 5: Prove privileges with two real PostgreSQL roles**
+
+The integration test creates unique migration/runtime roles and a dedicated test database, runs migration 025 and privilege provisioning as the migration role, then reconnects as the runtime role. Assert `SELECT` succeeds and `INSERT`, `UPDATE`, and `DELETE` each fail with insufficient privilege. Also assert an empty role, identical roles, wrong current executor, and wrong table owner fail closed with sanitized errors.
+
+- [ ] **Step 6: Run and commit**
 
 ```bash
 cd itsm-backend
-go test ./migration -run 'ReleaseManifest|SchemaState' -count=1
-git add migration/release_manifest.go migration/release_manifest_test.go migration/schema_state.go migration/schema_state_test.go migration/migrations.go
+go test ./migration -run 'ReleaseManifest|SchemaState|Privileges' -count=1
+go test ./migration -run 'Postgres.*SchemaStatePrivileges' -count=1
+git add migration/release_manifest.go migration/release_manifest_test.go migration/schema_state.go migration/schema_state_test.go migration/schema_state_privileges.go migration/schema_state_privileges_test.go migration/schema_state_privileges_integration_test.go migration/migrations.go cmd/migrate/main.go
 git commit -m "feat(migration): record verified schema release state"
 ```
 
@@ -325,7 +354,7 @@ Use `ReadSchemaState` plus exact manifest verification, then verify all producti
 
 - [ ] **Step 3: Verify production role separation**
 
-Keep migration on `${ITSM_MIGRATION_DB_USER}` and API/Worker on `${ITSM_RUNTIME_DB_USER}`. Against the controlled database, SELECT from `schema_state` as runtime must succeed; UPDATE must return permission denied.
+Keep migration on `${ITSM_MIGRATION_DB_USER}` and API/Worker on `${ITSM_RUNTIME_DB_USER}`. Compose must pass both role identifiers to the migration job, validate they are non-empty and different, and use `${ITSM_MIGRATION_DB_USER}` as the migration connection user. Against the controlled database, `SELECT` from `schema_state` as runtime must succeed; `INSERT`, `UPDATE`, and `DELETE` must each return permission denied. Record only role categories and SQLSTATE, never identifiers or connection details.
 
 - [ ] **Step 4: Run the WS1 gate**
 
