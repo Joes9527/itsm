@@ -3,6 +3,7 @@ package migration
 import (
 	"testing"
 
+	entmigrate "itsm-backend/ent/migrate"
 	"itsm-backend/pkg/seeder"
 
 	"github.com/stretchr/testify/require"
@@ -43,12 +44,13 @@ func TestReleaseManifestChecksumCanonicalizesAssetAndComponentOrder(t *testing.T
 	require.Equal(t, firstChecksum, secondChecksum)
 }
 
-func TestCurrentReleaseUsesRuntimeEntSchemaAndSeederExports(t *testing.T) {
+func TestCurrentReleaseUsesCompiledEntSchemaAndSeederExports(t *testing.T) {
 	release := CurrentRelease()
 	require.Equal(t, "028_schema_release_state", release.SchemaVersion)
 	require.NotEmpty(t, release.ReleaseID)
 	require.NotEmpty(t, release.BaselineVersion)
 	require.Regexp(t, `^[0-9a-f]{64}$`, release.EntSchemaFingerprint)
+	require.Greater(t, len(release.Assets), len(RegisteredMigrations), "fresh baseline is a release asset independent of upgrade lineage")
 
 	require.Len(t, release.SeedComponents, len(seeder.ProductionComponentNames))
 	actual := make(map[string]string, len(release.SeedComponents))
@@ -58,6 +60,16 @@ func TestCurrentReleaseUsesRuntimeEntSchemaAndSeederExports(t *testing.T) {
 	for _, name := range seeder.ProductionComponentNames {
 		require.Equal(t, seeder.CurrentTenantTemplateVersion, actual[name])
 	}
+}
+
+func TestCurrentReleaseFingerprintSurvivesEntPlannerDescriptorMutation(t *testing.T) {
+	before := CurrentRelease().EntSchemaFingerprint
+	column := entmigrate.Tables[0].Columns[0]
+	originalAttr := column.Attr
+	column.Attr = originalAttr + " planner-mutated"
+	t.Cleanup(func() { column.Attr = originalAttr })
+
+	require.Equal(t, before, CurrentRelease().EntSchemaFingerprint)
 }
 
 func TestReleaseManifestChecksumRejectsIncompleteOrDuplicateEntries(t *testing.T) {

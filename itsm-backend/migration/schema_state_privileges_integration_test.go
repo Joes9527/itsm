@@ -168,6 +168,10 @@ func TestPostgresSchemaStatePrivileges(t *testing.T) {
 
 	roles := SchemaStateRoles{MigrationRole: migrationRole, RuntimeRole: runtimeRole}
 	require.NoError(t, ApplySchemaStatePrivileges(ctx, migrationDB, roles))
+	pinnedMigrationConn, err := migrationDB.Conn(ctx)
+	require.NoError(t, err)
+	require.NoError(t, ApplySchemaStatePrivilegesOnConnection(ctx, pinnedMigrationConn, roles))
+	require.NoError(t, pinnedMigrationConn.Close())
 	require.NoError(t, PromoteSchemaState(ctx, migrationDB, CurrentRelease()))
 
 	runtimeDB, err := sql.Open("postgres", schemaStateRoleDSN(t, adminDSN, databaseName, runtimeRole, runtimePassword))

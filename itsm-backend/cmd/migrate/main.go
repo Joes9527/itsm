@@ -16,9 +16,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"itsm-backend/config"
 	"itsm-backend/database"
+	"itsm-backend/internal/initialization"
 	"itsm-backend/migration"
 	"itsm-backend/pkg/seeder"
 
@@ -45,11 +47,11 @@ func main() {
 	list := flag.Bool("list", false, "List all available migrations")
 	rollbackVersion := flag.String("rollback-to", "", "Rollback to a specific version")
 	dryRun := flag.Bool("dry-run", false, "Show SQL without executing")
-	fresh := flag.Bool("fresh", false, "Development-only: recreate the explicitly confirmed database, create Ent schema, apply post-schema migrations, and seed")
+	fresh := flag.Bool("fresh", false, "Development-only: recreate the explicitly confirmed database, create Ent schema, apply the current baseline, and seed")
 	seed := flag.Bool("seed", false, "Seed database with initial data")
 	seedOnly := flag.Bool("seed-only", false, "Only seed data without running migrations")
 	version := flag.Bool("version", false, "Show current database version")
-	reset := flag.Bool("reset", false, "Rollback all migrations")
+	reset := flag.Bool("reset", false, "Development-only: recreate and bootstrap the explicitly confirmed database")
 	flag.Parse()
 
 	// Load configuration
@@ -66,7 +68,7 @@ func main() {
 	sugar := logger.Sugar()
 
 	ctx := context.Background()
-	if *fresh {
+	if *fresh || *reset {
 		freshDatabase(cfg, sugar)
 		return
 	}
@@ -79,12 +81,6 @@ func main() {
 	}
 	defer db.Close()
 
-	migrator := migration.NewMigrator(db, sugar)
-	// Ensure migrations table exists
-	if err := migrator.EnsureMigrationsTable(ctx); err != nil {
-		log.Fatalf("Failed to ensure migrations table: %v", err)
-	}
-
 	// Get available migrations
 	available := getAvailableMigrations()
 
@@ -94,24 +90,9 @@ func main() {
 	}
 
 	if *seedOnly {
-		ctx := context.Background()
-		// First ensure migrations table
-		if err := migrator.EnsureMigrationsTable(ctx); err != nil {
-			log.Fatalf("Failed to ensure migrations table: %v", err)
-		}
-		count, err := migrator.RunMigrations(ctx, available)
+		count, err := runUpgrade(ctx, db, sugar)
 		if err != nil {
-			log.Fatalf("Migration failed: %v", err)
-		}
-		if err := completeSchemaRelease(
-			ctx,
-			db,
-			os.Getenv,
-			migration.VerifySchemaStateStorage,
-			migration.ApplySchemaStatePrivileges,
-			migration.PromoteSchemaState,
-		); err != nil {
-			log.Fatalf("Schema release finalization failed: %v", err)
+			log.Fatalf("Upgrade failed: %v", err)
 		}
 		fmt.Printf("Applied %d migration(s)\n", count)
 		seedData(sugar)
@@ -119,7 +100,7 @@ func main() {
 	}
 
 	if *dryRun {
-		ctx := context.Background()
+		migrator := migration.NewMigrator(db, sugar)
 		fmt.Println("=== Dry Run Mode - No changes will be made ===")
 		fmt.Println()
 		for _, mig := range available {
@@ -133,17 +114,14 @@ func main() {
 	}
 
 	if *status {
+		migrator := migration.NewMigrator(db, sugar)
 		showStatus(migrator, available)
 		return
 	}
 
 	if *version {
+		migrator := migration.NewMigrator(db, sugar)
 		showVersion(migrator, getAvailableMigrations())
-		return
-	}
-
-	if *reset {
-		resetMigrations(migrator, getAvailableMigrations())
 		return
 	}
 
@@ -153,11 +131,16 @@ func main() {
 	}
 
 	if *up {
-		runMigrations(migrator, available, db)
+		count, err := runUpgrade(ctx, db, sugar)
+		if err != nil {
+			log.Fatalf("Upgrade failed: %v", err)
+		}
+		fmt.Printf("Applied %d migration(s)\n", count)
 		return
 	}
 
 	if *down {
+		migrator := migration.NewMigrator(db, sugar)
 		if *rollbackVersion != "" {
 			rollbackToVersion(migrator, available, *rollbackVersion)
 		} else {
@@ -212,54 +195,38 @@ func showStatus(migrator *migration.Migrator, available []migration.Migration) {
 	}
 }
 
-func runMigrations(migrator *migration.Migrator, available []migration.Migration, db *sql.DB) {
-	ctx := context.Background()
-	count, err := migrator.RunMigrations(ctx, available)
+func runUpgrade(ctx context.Context, db *sql.DB, sugar *zap.SugaredLogger) (int, error) {
+	roles, err := migration.LoadSchemaStateRoles(os.Getenv)
 	if err != nil {
-		log.Fatalf("Migration failed: %v", err)
+		return 0, fmt.Errorf("load schema state roles: %w", err)
 	}
-	if err := completeSchemaRelease(
-		ctx,
-		db,
-		os.Getenv,
-		migration.VerifySchemaStateStorage,
-		migration.ApplySchemaStatePrivileges,
-		migration.PromoteSchemaState,
-	); err != nil {
-		log.Fatalf("Schema release finalization failed: %v", err)
-	}
-	fmt.Printf("Applied %d migration(s)\n", count)
-}
-
-type schemaStatePrivilegeApplier func(context.Context, *sql.DB, migration.SchemaStateRoles) error
-type schemaStatePromoter func(context.Context, migration.DBTX, migration.ReleaseManifest) error
-type schemaStateStorageVerifier func(context.Context, migration.DBTX) error
-
-func completeSchemaRelease(
-	ctx context.Context,
-	db *sql.DB,
-	getenv func(string) string,
-	verifyStorage schemaStateStorageVerifier,
-	applyPrivileges schemaStatePrivilegeApplier,
-	promote schemaStatePromoter,
-) error {
-	roles, err := migration.LoadSchemaStateRoles(getenv)
+	lock, err := migration.NewPostgresAdvisoryLock(db)
 	if err != nil {
-		return fmt.Errorf("load schema state roles: %w", err)
+		return 0, err
 	}
-	if verifyStorage == nil || applyPrivileges == nil || promote == nil {
-		return fmt.Errorf("schema release finalization dependencies are required")
-	}
-	if err := verifyStorage(ctx, db); err != nil {
-		return fmt.Errorf("verify schema state storage: %w", err)
-	}
-	if err := applyPrivileges(ctx, db, roles); err != nil {
-		return fmt.Errorf("provision schema state privileges: %w", err)
-	}
-	if err := promote(ctx, db, migration.CurrentRelease()); err != nil {
-		return fmt.Errorf("promote schema state: %w", err)
-	}
-	return nil
+	applied := 0
+	err = migration.RunUpgrade(ctx, migration.UpgradeBootstrap{
+		Lock: lock,
+		PlanForwardMigrations: func(ctx context.Context, conn migration.BootstrapConnection) ([]migration.Migration, error) {
+			return migration.NewMigratorOnConnection(conn, sugar).GetPendingMigrations(ctx, migration.PostSchemaMigrations())
+		},
+		ApplyForwardMigrations: func(ctx context.Context, conn migration.BootstrapConnection, pending []migration.Migration) error {
+			migrator := migration.NewMigratorOnConnection(conn, sugar)
+			for _, item := range pending {
+				if err := migrator.ApplyMigration(ctx, item); err != nil {
+					return err
+				}
+				applied++
+			}
+			return nil
+		},
+		VerifySchema:    migration.VerifyCurrentSchema,
+		ApplyPrivileges: migration.ApplySchemaStatePrivilegesOnConnection,
+		PromoteState:    migration.PromoteSchemaState,
+		Release:         migration.CurrentRelease(),
+		Roles:           roles,
+	})
+	return applied, err
 }
 
 func rollbackLast(migrator *migration.Migrator, available []migration.Migration) {
@@ -465,37 +432,87 @@ func freshDatabase(cfg *config.Config, sugar *zap.SugaredLogger) {
 	}
 	defer db.Close()
 
-	ctx := context.Background()
-	client, err := database.InitDatabase(&cfg.Database)
+	roles, err := migration.LoadSchemaStateRoles(os.Getenv)
 	if err != nil {
-		log.Fatalf("Failed to connect for canonical bootstrap: %v", err)
+		log.Fatalf("Failed to load schema state roles: %v", err)
 	}
-	defer client.Close()
-	migrator := migration.NewMigrator(db, sugar)
-	if err := migration.RunCanonicalBootstrap(ctx, migration.CanonicalBootstrap{
-		Prepare: func(ctx context.Context) error {
-			return database.PrepareBootstrapInfrastructure(ctx, db)
+	lock, err := migration.NewPostgresAdvisoryLock(db)
+	if err != nil {
+		log.Fatalf("Failed to configure fresh bootstrap lock: %v", err)
+	}
+	ctx := context.Background()
+	if err := migration.RunFreshBootstrap(ctx, migration.FreshBootstrap{
+		Lock:    lock,
+		Prepare: migration.PrepareCurrentInfrastructure,
+		CreateSchema: func(ctx context.Context, conn migration.BootstrapConnection) error {
+			client, err := migration.NewEntClientOnConnection(conn)
+			if err != nil {
+				return err
+			}
+			defer client.Close()
+			database.RegisterSoftDeleteInterceptors(client)
+			return client.Schema.Create(ctx)
 		},
-		CreateSchema: func(ctx context.Context) error { return client.Schema.Create(ctx) },
-		Migrator:     migrator,
+		ApplyBaseline:   migration.ApplyCurrentBaseline,
+		VerifySchema:    migration.VerifyCurrentSchema,
+		ApplyPrivileges: migration.ApplySchemaStatePrivilegesOnConnection,
+		PromoteState:    migration.PromoteSchemaState,
+		Seed: func(ctx context.Context, conn migration.BootstrapConnection) error {
+			return seedFreshDatabase(ctx, conn, cfg, sugar)
+		},
+		Release: migration.CurrentRelease(),
+		Roles:   roles,
 	}); err != nil {
-		log.Fatalf("Canonical fresh bootstrap failed: %v", err)
-	}
-	if err := completeSchemaRelease(
-		ctx,
-		db,
-		os.Getenv,
-		migration.VerifySchemaStateStorage,
-		migration.ApplySchemaStatePrivileges,
-		migration.PromoteSchemaState,
-	); err != nil {
-		log.Fatalf("Schema release finalization failed: %v", err)
-	}
-	if err := seeder.NewSeeder(client, sugar, cfg).SeedProduction(ctx); err != nil {
-		log.Fatalf("Production seed failed: %v", err)
+		log.Fatalf("Fresh bootstrap failed: %v", err)
 	}
 
 	fmt.Println("Fresh reset completed successfully")
+}
+
+func seedFreshDatabase(
+	ctx context.Context,
+	conn migration.BootstrapConnection,
+	cfg *config.Config,
+	sugar *zap.SugaredLogger,
+) error {
+	client, err := migration.NewEntClientOnConnection(conn)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	database.RegisterSoftDeleteInterceptors(client)
+	components, err := seeder.ProductionInitializers(seeder.NewSeeder(client, sugar, cfg))
+	if err != nil {
+		return fmt.Errorf("create production initializers: %w", err)
+	}
+	store, err := initialization.NewSQLStoreOnConnection(conn)
+	if err != nil {
+		return fmt.Errorf("create initialization store: %w", err)
+	}
+	engine, err := initialization.NewEngine(store, components, 30*time.Second)
+	if err != nil {
+		return fmt.Errorf("create initialization engine: %w", err)
+	}
+	executorID, err := os.Hostname()
+	if err != nil {
+		executorID = "migration-cli"
+	}
+	executorID, err = initialization.NewExecutorID(executorID)
+	if err != nil {
+		return fmt.Errorf("create initialization executor id: %w", err)
+	}
+	releaseVersion := strings.TrimSpace(os.Getenv("ITSM_RELEASE_VERSION"))
+	if releaseVersion == "" {
+		releaseVersion = "unversioned"
+	}
+	_, err = engine.Apply(ctx, initialization.Request{
+		Scope:          initialization.Scope{Type: "platform", ID: 0},
+		TargetVersion:  seeder.CurrentTenantTemplateVersion,
+		ReleaseVersion: releaseVersion,
+		RequestedBy:    "migration-cli",
+		ExecutorID:     executorID,
+	})
+	return err
 }
 
 func listMigrations(available []migration.Migration) {
@@ -526,31 +543,4 @@ func showVersion(migrator *migration.Migrator, available []migration.Migration) 
 	fmt.Printf("Current version: %s\n", latest.Version)
 	fmt.Printf("Description: %s\n", latest.Description)
 	fmt.Printf("Applied at: %s\n", latest.AppliedAt.Format("2006-01-02 15:04:05"))
-}
-
-func resetMigrations(migrator *migration.Migrator, available []migration.Migration) {
-	ctx := context.Background()
-	applied, _, err := migrator.Status(ctx, available)
-	if err != nil {
-		log.Fatalf("Failed to get status: %v", err)
-	}
-
-	if len(applied) == 0 {
-		fmt.Println("No migrations to rollback")
-		return
-	}
-
-	fmt.Printf("Rolling back %d migration(s)...\n", len(applied))
-	for i := len(applied) - 1; i >= 0; i-- {
-		m := applied[i]
-		if m.RollbackSQL == "" {
-			fmt.Printf("  Skipping %s (no rollback SQL)\n", m.Version)
-			continue
-		}
-		if err := migrator.RollbackMigration(ctx, m); err != nil {
-			log.Fatalf("Rollback failed at %s: %v", m.Version, err)
-		}
-		fmt.Printf("  Rolled back: %s\n", m.Version)
-	}
-	fmt.Println("Reset completed successfully")
 }

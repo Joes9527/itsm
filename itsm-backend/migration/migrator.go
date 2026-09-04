@@ -26,13 +26,20 @@ type Migration struct {
 
 // Migrator handles database migrations
 type Migrator struct {
-	db             *sql.DB
+	db             BootstrapConnection
 	logger         *zap.SugaredLogger
 	releaseVersion string
 }
 
-// NewMigrator creates a new Migrator instance
+// NewMigrator preserves the pool-based migration API for status, rollback, and
+// callers outside the connection-pinned bootstrap orchestration.
 func NewMigrator(db *sql.DB, logger *zap.SugaredLogger) *Migrator {
+	return NewMigratorOnConnection(db, logger)
+}
+
+// NewMigratorOnConnection binds migration history and forward transactions to
+// the dedicated connection that owns the bootstrap advisory lock.
+func NewMigratorOnConnection(db BootstrapConnection, logger *zap.SugaredLogger) *Migrator {
 	releaseVersion := os.Getenv("ITSM_RELEASE_VERSION")
 	if releaseVersion == "" {
 		releaseVersion = "unversioned"

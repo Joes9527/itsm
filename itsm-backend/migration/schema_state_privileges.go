@@ -57,6 +57,22 @@ func ApplySchemaStatePrivileges(ctx context.Context, db *sql.DB, roles SchemaSta
 	if db == nil {
 		return fmt.Errorf("schema state privilege database is required")
 	}
+	return applySchemaStatePrivileges(ctx, db, roles)
+}
+
+// ApplySchemaStatePrivilegesOnConnection applies the same contract on the
+// dedicated connection that owns the bootstrap advisory lock.
+func ApplySchemaStatePrivilegesOnConnection(ctx context.Context, db BootstrapConnection, roles SchemaStateRoles) error {
+	return applySchemaStatePrivileges(ctx, db, roles)
+}
+
+func applySchemaStatePrivileges(ctx context.Context, db BootstrapConnection, roles SchemaStateRoles) error {
+	if err := validateSchemaStateRoles(roles); err != nil {
+		return err
+	}
+	if db == nil {
+		return fmt.Errorf("schema state privilege database is required")
+	}
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {

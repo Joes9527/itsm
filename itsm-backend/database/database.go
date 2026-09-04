@@ -82,29 +82,6 @@ func InitDatabase(cfg *config.DatabaseConfig) (*ent.Client, error) {
 	return client, nil
 }
 
-// PrepareBootstrapInfrastructure installs pre-schema infrastructure through
-// the canonical bootstrap only. Each DDL failure is returned to the caller.
-func PrepareBootstrapInfrastructure(ctx context.Context, db *sql.DB) error {
-	if db == nil {
-		return fmt.Errorf("bootstrap database is required")
-	}
-	statements := []struct{ name, sql string }{
-		{"pgvector extension", `CREATE EXTENSION IF NOT EXISTS vector`},
-		{"vectors table", `CREATE TABLE IF NOT EXISTS vectors (id BIGSERIAL PRIMARY KEY, tenant_id INT NOT NULL, object_type TEXT NOT NULL, object_id INT NOT NULL, embedding VECTOR(1536) NOT NULL, content TEXT, source TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`},
-		{"vectors unique index", `CREATE UNIQUE INDEX IF NOT EXISTS vectors_unique_tenant_obj ON vectors(tenant_id, object_type, object_id)`},
-		{"vectors embedding index", `CREATE INDEX IF NOT EXISTS vectors_embedding_idx ON vectors USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)`},
-		{"ai feedbacks table", `CREATE TABLE IF NOT EXISTS ai_feedbacks (id BIGSERIAL PRIMARY KEY, created_at TIMESTAMPTZ DEFAULT NOW(), tenant_id INT NOT NULL, user_id INT NOT NULL, request_id TEXT NOT NULL, kind TEXT NOT NULL, query TEXT, item_type TEXT, item_id INT, useful BOOLEAN NOT NULL, score INT, notes TEXT)`},
-		{"ai feedback tenant index", `CREATE INDEX IF NOT EXISTS ai_feedbacks_tenant_idx ON ai_feedbacks(tenant_id)`},
-		{"ai feedback created index", `CREATE INDEX IF NOT EXISTS ai_feedbacks_created_idx ON ai_feedbacks(created_at)`},
-	}
-	for _, statement := range statements {
-		if _, err := db.ExecContext(ctx, statement.sql); err != nil {
-			return fmt.Errorf("prepare %s: %w", statement.name, err)
-		}
-	}
-	return nil
-}
-
 // InitDatabaseWithRLS 与 InitDatabase 行为完全一致，但在返回 Ent Client 之前
 // 用 RLS 装饰器包裹 SQL Driver。
 //

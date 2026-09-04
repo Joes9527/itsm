@@ -2,11 +2,15 @@ package migration
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+var _ func(context.Context, *sql.DB, SchemaStateRoles) error = ApplySchemaStatePrivileges
+var _ SchemaStatePrivilegeApplier = ApplySchemaStatePrivilegesOnConnection
 
 func TestLoadSchemaStateRolesRequiresDistinctNonemptyCategories(t *testing.T) {
 	const migrationSecret = "migration_sensitive_identity"

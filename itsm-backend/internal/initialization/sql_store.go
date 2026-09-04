@@ -10,7 +10,14 @@ import (
 )
 
 type SQLStore struct {
-	db *sql.DB
+	db sqlStoreDB
+}
+
+type sqlStoreDB interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+	BeginTx(context.Context, *sql.TxOptions) (*sql.Tx, error)
 }
 
 type InstallationStatus struct {
@@ -30,6 +37,16 @@ type InstallationStatus struct {
 }
 
 func NewSQLStore(db *sql.DB) (*SQLStore, error) {
+	return newSQLStore(db)
+}
+
+// NewSQLStoreOnConnection binds initialization leases and attempts to the
+// connection that owns the surrounding bootstrap advisory lock.
+func NewSQLStoreOnConnection(db sqlStoreDB) (*SQLStore, error) {
+	return newSQLStore(db)
+}
+
+func newSQLStore(db sqlStoreDB) (*SQLStore, error) {
 	if db == nil {
 		return nil, fmt.Errorf("database is required")
 	}

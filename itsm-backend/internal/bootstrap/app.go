@@ -981,53 +981,50 @@ func InitializeStorage(cfg *config.Config, client *ent.Client, sugar *zap.Sugare
 		"schema migration and default seed at process boot")
 
 	if cfg.Deployment.AutoMigrate {
-		migrator := migration.NewMigrator(database.GetRawDB(), sugar)
-		bootstrap := migration.CanonicalBootstrap{
-			Prepare: func(ctx context.Context) error {
-				if err := database.PrepareBootstrapInfrastructure(ctx, database.GetRawDB()); err != nil {
-					return fmt.Errorf("prepare canonical infrastructure: %w", err)
-				}
-				if err := prepareTicketCCIndexMigration(ctx, database.GetRawDB(), sugar); err != nil {
-					return fmt.Errorf("prepare TicketCC index migration: %w", err)
-				}
-				if err := prepareTicketNotificationMigration(ctx, database.GetRawDB(), sugar); err != nil {
-					return fmt.Errorf("prepare ticket notification migration: %w", err)
-				}
-				if err := prepareRolePermissionTenantMigration(ctx, database.GetRawDB(), sugar); err != nil {
-					return fmt.Errorf("prepare role permission tenant migration: %w", err)
-				}
-				if err := prepareCMDBModelMigration(ctx, database.GetRawDB(), sugar); err != nil {
-					return fmt.Errorf("prepare CMDB model migration: %w", err)
-				}
-				if err := prepareIncidentProblemRelationMigration(ctx, database.GetRawDB(), sugar); err != nil {
-					return fmt.Errorf("prepare incident/problem relation migration: %w", err)
-				}
-				if err := prepareServiceRequestTicketMigration(ctx, database.GetRawDB(), sugar); err != nil {
-					return fmt.Errorf("prepare service_request ticket migration: %w", err)
-				}
-				return nil
-			},
-			CreateSchema: func(ctx context.Context) error { return client.Schema.Create(ctx) },
-			Migrator:     migrator,
-		}
-		if cfg.Deployment.AutoSeed {
-			bootstrap.Seed = func(ctx context.Context) error {
-				return runBootstrapSeed(ctx, cfg, client, sugar)
-			}
-		}
-		if err := migration.RunCanonicalBootstrap(ctx, bootstrap); err != nil {
-			return fmt.Errorf("run canonical schema bootstrap: %w", err)
+		if err := runStorageUpgrade(ctx, database.GetRawDB(), sugar); err != nil {
+			return fmt.Errorf("run schema upgrade: %w", err)
 		}
 		sugar.Infow("database schema ensured", "deployment_mode", cfg.Deployment.Mode)
 	}
 
-	if cfg.Deployment.AutoSeed && !cfg.Deployment.AutoMigrate {
+	if cfg.Deployment.AutoSeed {
 		if err := runBootstrapSeed(ctx, cfg, client, sugar); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func runStorageUpgrade(ctx context.Context, db *sql.DB, sugar *zap.SugaredLogger) error {
+	roles, err := migration.LoadSchemaStateRoles(os.Getenv)
+	if err != nil {
+		return fmt.Errorf("load schema state roles: %w", err)
+	}
+	lock, err := migration.NewPostgresAdvisoryLock(db)
+	if err != nil {
+		return err
+	}
+	return migration.RunUpgrade(ctx, migration.UpgradeBootstrap{
+		Lock: lock,
+		PlanForwardMigrations: func(ctx context.Context, conn migration.BootstrapConnection) ([]migration.Migration, error) {
+			return migration.NewMigratorOnConnection(conn, sugar).GetPendingMigrations(ctx, migration.PostSchemaMigrations())
+		},
+		ApplyForwardMigrations: func(ctx context.Context, conn migration.BootstrapConnection, pending []migration.Migration) error {
+			migrator := migration.NewMigratorOnConnection(conn, sugar)
+			for _, item := range pending {
+				if err := migrator.ApplyMigration(ctx, item); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+		VerifySchema:    migration.VerifyCurrentSchema,
+		ApplyPrivileges: migration.ApplySchemaStatePrivilegesOnConnection,
+		PromoteState:    migration.PromoteSchemaState,
+		Release:         migration.CurrentRelease(),
+		Roles:           roles,
+	})
 }
 
 func runBootstrapSeed(ctx context.Context, cfg *config.Config, client *ent.Client, sugar *zap.SugaredLogger) error {
@@ -1087,15 +1084,6 @@ func runBootstrapSeed(ctx context.Context, cfg *config.Config, client *ent.Clien
 	}
 	sugar.Infow("seed completed", "deployment_mode", cfg.Deployment.Mode, "initialization_run_id", runID)
 	return nil
-}
-
-type postSchemaMigrator interface {
-	EnsureMigrationsTable(context.Context) error
-	RunMigrations(context.Context, []migration.Migration) (int, error)
-}
-
-func runPostSchemaMigrations(ctx context.Context, migrator postSchemaMigrator) error {
-	return migration.RunPostSchemaMigrations(ctx, migrator)
 }
 
 func RunInitialization() {

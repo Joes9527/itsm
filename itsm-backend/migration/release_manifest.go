@@ -20,6 +20,11 @@ const (
 	currentBaselineVersion = "2026-09-04"
 )
 
+// Ent's migration planner links and annotates its generated table descriptors
+// while it runs. Capture the compiled artifact identity before any planner can
+// mutate those package globals so release identity remains stable for re-entry.
+var compiledEntSchemaFingerprint = mustEntSchemaFingerprint(entmigrate.Tables)
+
 // ReleaseManifest is the complete deterministic identity of one database release.
 type ReleaseManifest struct {
 	ReleaseID            string          `json:"releaseId"`
@@ -45,13 +50,17 @@ type SeedComponent struct {
 // CurrentRelease builds the release identity exclusively from data available in
 // the compiled artifact. It never reads source files or build-machine metadata.
 func CurrentRelease() ReleaseManifest {
-	assets := make([]ReleaseAsset, 0, len(RegisteredMigrations))
+	assets := make([]ReleaseAsset, 0, len(RegisteredMigrations)+1)
 	for _, migration := range RegisteredMigrations {
 		assets = append(assets, ReleaseAsset{
 			Name:   migration.Version,
 			SHA256: checksumSQL(GetMigrationSQL(migration.Version)),
 		})
 	}
+	assets = append(assets, ReleaseAsset{
+		Name:   CurrentBaselineAssetName,
+		SHA256: checksumSQL(CurrentBaselineSQL()),
+	})
 	components := make([]SeedComponent, 0, len(seeder.ProductionComponentNames))
 	for _, name := range seeder.ProductionComponentNames {
 		components = append(components, SeedComponent{
@@ -63,7 +72,7 @@ func CurrentRelease() ReleaseManifest {
 		ReleaseID:            currentReleaseID,
 		SchemaVersion:        currentSchemaVersion,
 		BaselineVersion:      currentBaselineVersion,
-		EntSchemaFingerprint: mustEntSchemaFingerprint(entmigrate.Tables),
+		EntSchemaFingerprint: compiledEntSchemaFingerprint,
 		Assets:               assets,
 		SeedComponents:       components,
 	}

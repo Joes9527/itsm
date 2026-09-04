@@ -1005,7 +1005,10 @@ func openProfessionalExtensionMigrationDB(t *testing.T) *sql.DB {
 			record_class TEXT NOT NULL,
 			deleted_at TIMESTAMPTZ
 		);
-		CREATE TABLE ticket_categories (id BIGINT PRIMARY KEY);
+		CREATE TABLE ticket_categories (
+			id BIGINT PRIMARY KEY,
+			tenant_id BIGINT NOT NULL DEFAULT 0
+		);
 		CREATE TABLE incidents (
 			id BIGSERIAL PRIMARY KEY,
 			title TEXT, description TEXT, status TEXT, priority TEXT,

@@ -2,8 +2,204 @@ package migration
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
+	"time"
 )
+
+const (
+	// "ITSMMIGR" encoded as a signed-safe int64. Session advisory locks are
+	// scoped by database, so one release operation can run per database.
+	bootstrapAdvisoryLockKey int64 = 0x4954534d4d494752
+	bootstrapUnlockTimeout         = 5 * time.Second
+)
+
+// BootstrapConnection is the connection-pinned SQL boundary used by every
+// operation protected by the migration advisory lock. Both *sql.Conn and
+// *sql.DB implement it, but PostgresAdvisoryLock always supplies *sql.Conn.
+type BootstrapConnection interface {
+	DBTX
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	BeginTx(context.Context, *sql.TxOptions) (*sql.Tx, error)
+}
+
+// BootstrapLock executes one complete bootstrap while a dedicated database
+// connection owns the application advisory lock.
+type BootstrapLock interface {
+	WithLock(context.Context, func(BootstrapConnection) error) error
+}
+
+// PostgresAdvisoryLock owns the database/sql pool used to reserve one pinned
+// connection for the lifetime of a fresh install or upgrade.
+type PostgresAdvisoryLock struct {
+	db *sql.DB
+}
+
+// NewPostgresAdvisoryLock constructs the production lock boundary.
+func NewPostgresAdvisoryLock(db *sql.DB) (*PostgresAdvisoryLock, error) {
+	if db == nil {
+		return nil, fmt.Errorf("bootstrap database is required")
+	}
+	return &PostgresAdvisoryLock{db: db}, nil
+}
+
+// WithLock acquires and releases the fixed session advisory lock on the same
+// dedicated PostgreSQL connection supplied to every protected phase.
+func (lock *PostgresAdvisoryLock) WithLock(ctx context.Context, run func(BootstrapConnection) error) (resultErr error) {
+	if lock == nil || lock.db == nil {
+		return fmt.Errorf("bootstrap database is required")
+	}
+	if run == nil {
+		return fmt.Errorf("bootstrap lock callback is required")
+	}
+	conn, err := lock.db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("reserve bootstrap connection: %w", err)
+	}
+	defer func() {
+		if closeErr := conn.Close(); closeErr != nil {
+			resultErr = errors.Join(resultErr, fmt.Errorf("close bootstrap connection: %w", closeErr))
+		}
+	}()
+	if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_lock($1)`, bootstrapAdvisoryLockKey); err != nil {
+		return fmt.Errorf("acquire bootstrap advisory lock: %w", err)
+	}
+	defer func() {
+		unlockCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), bootstrapUnlockTimeout)
+		defer cancel()
+		var unlocked bool
+		if err := conn.QueryRowContext(unlockCtx, `SELECT pg_advisory_unlock($1)`, bootstrapAdvisoryLockKey).Scan(&unlocked); err != nil {
+			resultErr = errors.Join(resultErr, fmt.Errorf("release bootstrap advisory lock: %w", err))
+			return
+		}
+		if !unlocked {
+			resultErr = errors.Join(resultErr, fmt.Errorf("release bootstrap advisory lock: lock was not owned"))
+		}
+	}()
+	return run(conn)
+}
+
+// BootstrapStep is one connection-pinned fresh-install phase.
+type BootstrapStep func(context.Context, BootstrapConnection) error
+
+// CurrentSchemaVerifier checks the complete release invariant set.
+type CurrentSchemaVerifier func(context.Context, DBTX, ReleaseManifest) error
+
+// SchemaStatePrivilegeApplier provisions the state table on the pinned
+// connection before release promotion.
+type SchemaStatePrivilegeApplier func(context.Context, BootstrapConnection, SchemaStateRoles) error
+
+// SchemaStatePromoter publishes one verified release.
+type SchemaStatePromoter func(context.Context, DBTX, ReleaseManifest) error
+
+// FreshBootstrap defines the only supported fresh-install orchestration.
+type FreshBootstrap struct {
+	Lock            BootstrapLock
+	Prepare         BootstrapStep
+	CreateSchema    BootstrapStep
+	ApplyBaseline   BootstrapStep
+	VerifySchema    CurrentSchemaVerifier
+	ApplyPrivileges SchemaStatePrivilegeApplier
+	PromoteState    SchemaStatePromoter
+	Seed            BootstrapStep
+	Release         ReleaseManifest
+	Roles           SchemaStateRoles
+}
+
+// UpgradeBootstrap defines the immutable-history upgrade orchestration. The
+// planner returns only unapplied migrations after validating all committed
+// history. An empty result is therefore the verified restart path.
+type UpgradeBootstrap struct {
+	Lock                   BootstrapLock
+	PlanForwardMigrations  func(context.Context, BootstrapConnection) ([]Migration, error)
+	ApplyForwardMigrations func(context.Context, BootstrapConnection, []Migration) error
+	VerifySchema           CurrentSchemaVerifier
+	ApplyPrivileges        SchemaStatePrivilegeApplier
+	PromoteState           SchemaStatePromoter
+	Release                ReleaseManifest
+	Roles                  SchemaStateRoles
+}
+
+// RunFreshBootstrap creates the current schema directly. It never invokes the
+// published upgrade stream and never records synthetic schema_migrations rows.
+func RunFreshBootstrap(ctx context.Context, bootstrap FreshBootstrap) error {
+	if bootstrap.Lock == nil || bootstrap.Prepare == nil || bootstrap.CreateSchema == nil ||
+		bootstrap.ApplyBaseline == nil || bootstrap.VerifySchema == nil ||
+		bootstrap.ApplyPrivileges == nil || bootstrap.PromoteState == nil || bootstrap.Seed == nil {
+		return fmt.Errorf("fresh bootstrap dependencies are required")
+	}
+	if _, err := bootstrap.Release.Checksum(); err != nil {
+		return fmt.Errorf("fresh bootstrap release manifest is invalid: %w", err)
+	}
+	if err := validateSchemaStateRoles(bootstrap.Roles); err != nil {
+		return fmt.Errorf("fresh bootstrap schema state roles are invalid: %w", err)
+	}
+
+	return bootstrap.Lock.WithLock(ctx, func(conn BootstrapConnection) error {
+		if err := bootstrap.Prepare(ctx, conn); err != nil {
+			return fmt.Errorf("prepare fresh bootstrap: %w", err)
+		}
+		if err := bootstrap.CreateSchema(ctx, conn); err != nil {
+			return fmt.Errorf("create current Ent schema: %w", err)
+		}
+		if err := bootstrap.ApplyBaseline(ctx, conn); err != nil {
+			return fmt.Errorf("apply current baseline: %w", err)
+		}
+		if err := bootstrap.VerifySchema(ctx, conn, bootstrap.Release); err != nil {
+			return fmt.Errorf("verify current schema: %w", err)
+		}
+		if err := bootstrap.ApplyPrivileges(ctx, conn, bootstrap.Roles); err != nil {
+			return fmt.Errorf("provision schema state privileges: %w", err)
+		}
+		if err := bootstrap.PromoteState(ctx, conn, bootstrap.Release); err != nil {
+			return fmt.Errorf("promote schema state: %w", err)
+		}
+		if err := bootstrap.Seed(ctx, conn); err != nil {
+			return fmt.Errorf("seed fresh bootstrap: %w", err)
+		}
+		return nil
+	})
+}
+
+// RunUpgrade validates committed lineage, applies only verified pending
+// migrations, rechecks the final schema and privileges, and then promotes the
+// release marker. A committed migration is never replayed after interruption.
+func RunUpgrade(ctx context.Context, bootstrap UpgradeBootstrap) error {
+	if bootstrap.Lock == nil || bootstrap.PlanForwardMigrations == nil ||
+		bootstrap.ApplyForwardMigrations == nil || bootstrap.VerifySchema == nil ||
+		bootstrap.ApplyPrivileges == nil || bootstrap.PromoteState == nil {
+		return fmt.Errorf("upgrade bootstrap dependencies are required")
+	}
+	if _, err := bootstrap.Release.Checksum(); err != nil {
+		return fmt.Errorf("upgrade release manifest is invalid: %w", err)
+	}
+	if err := validateSchemaStateRoles(bootstrap.Roles); err != nil {
+		return fmt.Errorf("upgrade schema state roles are invalid: %w", err)
+	}
+
+	return bootstrap.Lock.WithLock(ctx, func(conn BootstrapConnection) error {
+		pending, err := bootstrap.PlanForwardMigrations(ctx, conn)
+		if err != nil {
+			return fmt.Errorf("validate migration lineage and history: %w", err)
+		}
+		if len(pending) > 0 {
+			if err := bootstrap.ApplyForwardMigrations(ctx, conn, append([]Migration(nil), pending...)); err != nil {
+				return fmt.Errorf("apply forward migrations: %w", err)
+			}
+		}
+		if err := bootstrap.VerifySchema(ctx, conn, bootstrap.Release); err != nil {
+			return fmt.Errorf("verify current schema: %w", err)
+		}
+		if err := bootstrap.ApplyPrivileges(ctx, conn, bootstrap.Roles); err != nil {
+			return fmt.Errorf("provision schema state privileges: %w", err)
+		}
+		if err := bootstrap.PromoteState(ctx, conn, bootstrap.Release); err != nil {
+			return fmt.Errorf("promote schema state: %w", err)
+		}
+		return nil
+	})
+}
 
 // PostSchemaMigrator records and applies the canonical post-schema migration stream.
 type PostSchemaMigrator interface {
@@ -11,18 +207,8 @@ type PostSchemaMigrator interface {
 	RunMigrations(context.Context, []Migration) (int, error)
 }
 
-// CanonicalBootstrap contains the only supported ordering for a complete
-// database bootstrap. Pre-schema preparation is optional; schema creation and
-// post-schema migrations are required; seeding is optional.
-type CanonicalBootstrap struct {
-	Prepare      func(context.Context) error
-	CreateSchema func(context.Context) error
-	Migrator     PostSchemaMigrator
-	Seed         func(context.Context) error
-}
-
-// RunPostSchemaMigrations applies the registered stream only after Ent schema
-// creation has completed. It deliberately does not create schema resources.
+// RunPostSchemaMigrations remains the common forward-stream primitive used by
+// tests and non-bootstrap migration tooling. Fresh bootstrap never calls it.
 func RunPostSchemaMigrations(ctx context.Context, migrator PostSchemaMigrator) error {
 	if migrator == nil {
 		return fmt.Errorf("migration runner is required")
@@ -32,34 +218,6 @@ func RunPostSchemaMigrations(ctx context.Context, migrator PostSchemaMigrator) e
 	}
 	if _, err := migrator.RunMigrations(ctx, PostSchemaMigrations()); err != nil {
 		return fmt.Errorf("run post-schema migrations: %w", err)
-	}
-	return nil
-}
-
-// RunCanonicalBootstrap performs preparation, Ent schema creation, registered
-// post-schema migrations, and optional seed in their authoritative order.
-func RunCanonicalBootstrap(ctx context.Context, bootstrap CanonicalBootstrap) error {
-	if bootstrap.CreateSchema == nil {
-		return fmt.Errorf("schema creator is required")
-	}
-	if bootstrap.Migrator == nil {
-		return fmt.Errorf("migration runner is required")
-	}
-	if bootstrap.Prepare != nil {
-		if err := bootstrap.Prepare(ctx); err != nil {
-			return fmt.Errorf("prepare pre-schema bootstrap: %w", err)
-		}
-	}
-	if err := bootstrap.CreateSchema(ctx); err != nil {
-		return fmt.Errorf("create schema resources: %w", err)
-	}
-	if err := RunPostSchemaMigrations(ctx, bootstrap.Migrator); err != nil {
-		return err
-	}
-	if bootstrap.Seed != nil {
-		if err := bootstrap.Seed(ctx); err != nil {
-			return fmt.Errorf("seed bootstrap data: %w", err)
-		}
 	}
 	return nil
 }
