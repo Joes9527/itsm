@@ -239,6 +239,16 @@
       "catalog": "immutable_upgrade_lineage",
       "executable": true,
       "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "028_schema_release_state",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "701ec6a54e8bce5f47e61e744ec35141041213d0",
+      "gitBlob": "641d57fedc00185bcf4de3b73f4f7cf610f50de7",
+      "sqlSha256": "d6a0f77474fbb9f92e6218ed0e346404dde78cab69415b4d74fc137630b63722",
+      "catalog": "immutable_upgrade_lineage",
+      "executable": true,
+      "forwardMigration": ""
     }
   ]
 }
