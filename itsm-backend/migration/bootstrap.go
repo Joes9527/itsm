@@ -129,8 +129,8 @@ func RunFreshBootstrap(ctx context.Context, bootstrap FreshBootstrap) error {
 		bootstrap.ApplyPrivileges == nil || bootstrap.PromoteState == nil || bootstrap.Seed == nil {
 		return fmt.Errorf("fresh bootstrap dependencies are required")
 	}
-	if _, err := bootstrap.Release.Checksum(); err != nil {
-		return fmt.Errorf("fresh bootstrap release manifest is invalid: %w", err)
+	if err := ValidateCurrentReleaseArtifact(bootstrap.Release); err != nil {
+		return fmt.Errorf("fresh bootstrap release artifact is invalid: %w", err)
 	}
 	if err := validateSchemaStateRoles(bootstrap.Roles); err != nil {
 		return fmt.Errorf("fresh bootstrap schema state roles are invalid: %w", err)
@@ -171,8 +171,8 @@ func RunUpgrade(ctx context.Context, bootstrap UpgradeBootstrap) error {
 		bootstrap.ApplyPrivileges == nil || bootstrap.PromoteState == nil {
 		return fmt.Errorf("upgrade bootstrap dependencies are required")
 	}
-	if _, err := bootstrap.Release.Checksum(); err != nil {
-		return fmt.Errorf("upgrade release manifest is invalid: %w", err)
+	if err := ValidateCurrentReleaseArtifact(bootstrap.Release); err != nil {
+		return fmt.Errorf("upgrade release artifact is invalid: %w", err)
 	}
 	if err := validateSchemaStateRoles(bootstrap.Roles); err != nil {
 		return fmt.Errorf("upgrade schema state roles are invalid: %w", err)

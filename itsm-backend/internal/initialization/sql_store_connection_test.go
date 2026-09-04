@@ -21,3 +21,15 @@ func TestSQLStoreRunsOnDedicatedDatabaseConnection(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, store)
 }
+
+func TestSQLStoreRejectsTypedNilDatabaseImmediately(t *testing.T) {
+	var db *sql.DB
+	store, err := NewSQLStore(db)
+	require.Nil(t, store)
+	require.ErrorContains(t, err, "database is required")
+
+	var conn *sql.Conn
+	store, err = NewSQLStoreOnConnection(conn)
+	require.Nil(t, store)
+	require.ErrorContains(t, err, "database is required")
+}

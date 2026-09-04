@@ -6,6 +6,19 @@
 - 发布制品、迁移文件和初始化 manifest 来自同一 release version。
 - 显式提供生产环境变量文件；不得使用仓库默认凭据。
 - 普通 Web 容器必须设置 `ITSM_AUTO_MIGRATE=false`、`ITSM_AUTO_SEED=false`。
+- 一次性 `itsm-init` 必须显式选择 `ITSM_BOOTSTRAP_MODE=upgrade`（常规发布）或
+  `ITSM_BOOTSTRAP_MODE=fresh`（仅全新空库）；该变量不提供 reset/drop 行为。
+
+### 全新安装与升级边界
+
+- 全新且确认没有业务对象的数据库首次运行使用 `ITSM_BOOTSTRAP_MODE=fresh`。该路径在 DDL
+  前验证空库；中断后只接受同一 release 已提交且通过定义校验的阶段，且不会伪造
+  `schema_migrations` 历史。
+- Fresh 成功后立即将环境恢复为 `ITSM_BOOTSTRAP_MODE=upgrade`。后续升级依据 release
+  catalog 的显式 covered set 规划，不以 `version <= head` 猜测覆盖范围。
+- 当前最低直接支持的 upgrade 来源是精确 cataloged `028_schema_release_state`。缺少匹配
+  `schema_state` 或 schema 定义不符时，Job 在任何 migration/privilege/promotion 写入前退出；
+  更老版本必须先走经评审的分阶段升级路径，不得手工补 ledger 或临时启用兼容 DDL。
 
 ## 标准发布
 
@@ -23,6 +36,9 @@ Docker Compose 必须显式传入环境文件：
 
 ```bash
 docker compose -f docker-compose.prod.yml --env-file .env.prod config
+# 仅首次空库：执行成功后把 .env.prod 恢复为 ITSM_BOOTSTRAP_MODE=upgrade
+ITSM_BOOTSTRAP_MODE=fresh docker compose -f docker-compose.prod.yml --env-file .env.prod up itsm-init
+# 常规发布：默认且长期保持 upgrade
 docker compose -f docker-compose.prod.yml --env-file .env.prod up itsm-init
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 ```

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"time"
 )
 
@@ -47,10 +48,15 @@ func NewSQLStoreOnConnection(db sqlStoreDB) (*SQLStore, error) {
 }
 
 func newSQLStore(db sqlStoreDB) (*SQLStore, error) {
-	if db == nil {
+	if db == nil || isNilSQLStoreDB(db) {
 		return nil, fmt.Errorf("database is required")
 	}
 	return &SQLStore{db: db}, nil
+}
+
+func isNilSQLStoreDB(db sqlStoreDB) bool {
+	value := reflect.ValueOf(db)
+	return value.Kind() == reflect.Ptr && value.IsNil()
 }
 
 func (s *SQLStore) Status(ctx context.Context, scope Scope) ([]InstallationStatus, error) {

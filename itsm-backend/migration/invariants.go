@@ -2,24 +2,26 @@ package migration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
+	"ariga.io/atlas/sql/postgres"
+	atlasschema "ariga.io/atlas/sql/schema"
 	entmigrate "itsm-backend/ent/migrate"
 
-	"entgo.io/ent/dialect"
 	entschema "entgo.io/ent/dialect/sql/schema"
-	"entgo.io/ent/schema/field"
-	"github.com/lib/pq"
 )
 
-// VerifyCurrentSchema checks the embedded current-baseline definitions, the
-// compiled Ent table/column contract, and the complete schema_state storage
-// contract. Both fresh and upgrade paths call this exact verifier immediately
-// before privilege provisioning and promotion.
+var errCurrentEntSchemaDrift = errors.New("compiled Ent schema differs from the database catalog")
+
+// VerifyCurrentSchema checks the immutable current-baseline definitions, the
+// full compiled Ent contract, and schema_state storage. Both fresh and upgrade
+// paths call this exact read-only verifier before privilege provisioning and
+// promotion.
 func VerifyCurrentSchema(ctx context.Context, db DBTX, release ReleaseManifest) error {
-	if err := verifyCurrentReleaseBaseline(release); err != nil {
-		return err
+	if err := ValidateCurrentReleaseArtifact(release); err != nil {
+		return fmt.Errorf("validate current release artifact: %w", err)
 	}
 	if db == nil {
 		return fmt.Errorf("current schema database is required")
@@ -43,157 +45,107 @@ func VerifyCurrentSchema(ctx context.Context, db DBTX, release ReleaseManifest) 
 	return nil
 }
 
-func verifyCurrentReleaseBaseline(release ReleaseManifest) error {
-	if _, err := release.Checksum(); err != nil {
-		return fmt.Errorf("validate current release manifest: %w", err)
-	}
-	expected := CurrentRelease()
-	expectedChecksum, err := expected.Checksum()
-	if err != nil {
-		return fmt.Errorf("build current release manifest: %w", err)
-	}
-	actualChecksum, err := release.Checksum()
-	if err != nil {
-		return fmt.Errorf("validate current release manifest: %w", err)
-	}
-	if actualChecksum != expectedChecksum {
-		return fmt.Errorf("current release baseline asset or manifest identity mismatch")
-	}
-	return nil
-}
-
+// verifyCurrentEntSchema asks Atlas for the complete transition from the live
+// PostgreSQL catalog to the compiled Ent descriptor, then rejects any change
+// from the diff hook before Atlas constructs or applies a migration plan. This
+// covers primary keys, unique/index definitions and predicates, foreign-key
+// references/actions, defaults/checks, types, nullability, and identity flags.
+// A clean catalog returns an empty change list and performs no writes.
 func verifyCurrentEntSchema(ctx context.Context, db DBTX) error {
-	tableNames := make([]string, 0, len(entmigrate.Tables))
-	columnTables := make([]string, 0)
-	columnNames := make([]string, 0)
-	columnTypes := make([]string, 0)
-	columnNotNull := make([]bool, 0)
-	columnIdentity := make([]string, 0)
-	for _, table := range entmigrate.Tables {
-		if table == nil {
-			return fmt.Errorf("verify current Ent schema: compiled table is nil")
-		}
-		tableNames = append(tableNames, table.Name)
-		for _, column := range table.Columns {
-			if column == nil {
-				return fmt.Errorf("verify current Ent schema: compiled column is nil")
-			}
-			columnTables = append(columnTables, table.Name)
-			columnNames = append(columnNames, column.Name)
-			columnType, err := currentPostgresColumnType(column)
-			if err != nil {
-				return fmt.Errorf("verify current Ent schema: %w", err)
-			}
-			columnTypes = append(columnTypes, columnType)
-			columnNotNull = append(columnNotNull, !column.Nullable)
-			identity := ""
-			if column.Increment && column.Default == nil && !strings.Contains(columnType, "serial") {
-				identity = "d"
-			}
-			columnIdentity = append(columnIdentity, identity)
-		}
+	conn, ok := db.(BootstrapConnection)
+	if !ok {
+		return fmt.Errorf("verify current Ent schema: connection-capable read boundary is required")
 	}
+	client, err := NewEntClientOnConnection(conn)
+	if err != nil {
+		return fmt.Errorf("verify current Ent schema: %w", err)
+	}
+	defer client.Close()
 
-	var expectedTables, matchingTables, expectedColumns, matchingColumns, actualColumns int64
-	if err := db.QueryRowContext(ctx, `
-		/* current_ent_schema_catalog */
-		WITH expected_tables(table_name) AS (
-			SELECT unnest($1::text[])
-		), expected_columns(table_name, column_name, formatted_type, not_null, identity_kind) AS (
-			SELECT * FROM unnest($2::text[], $3::text[], $4::text[], $5::boolean[], $6::text[])
-		), actual_tables AS (
-			SELECT relation.relname AS table_name, relation.oid
-			FROM pg_class relation
-			JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
-			WHERE namespace.nspname = current_schema()
-			  AND relation.relkind IN ('r', 'p')
-		), actual_columns AS (
-			SELECT relation.relname AS table_name, attribute.attname AS column_name,
-			       format_type(attribute.atttypid, attribute.atttypmod) AS formatted_type,
-			       attribute.attnotnull AS not_null, attribute.attidentity::text AS identity_kind
-			FROM pg_attribute attribute
-			JOIN pg_class relation ON relation.oid = attribute.attrelid
-			JOIN expected_tables expected ON expected.table_name = relation.relname
-			JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
-			WHERE namespace.nspname = current_schema()
-			  AND relation.relkind IN ('r', 'p')
-			  AND attribute.attnum > 0
-			  AND NOT attribute.attisdropped
-		)
-		SELECT
-			(SELECT COUNT(*) FROM expected_tables),
-			(SELECT COUNT(*) FROM expected_tables expected JOIN actual_tables actual USING (table_name)),
-			(SELECT COUNT(*) FROM expected_columns),
-			(SELECT COUNT(*) FROM expected_columns expected JOIN actual_columns actual
-			   ON actual.table_name = expected.table_name
-			  AND actual.column_name = expected.column_name
-			  AND actual.formatted_type = expected.formatted_type
-			  AND actual.not_null = expected.not_null
-			  AND actual.identity_kind = expected.identity_kind),
-			(SELECT COUNT(*) FROM actual_columns)
-	`, pq.Array(tableNames), pq.Array(columnTables), pq.Array(columnNames), pq.Array(columnTypes),
-		pq.Array(columnNotNull), pq.Array(columnIdentity)).Scan(
-		&expectedTables, &matchingTables, &expectedColumns, &matchingColumns, &actualColumns,
-	); err != nil {
+	err = client.Schema.Create(ctx,
+		entmigrate.WithDropColumn(true),
+		entmigrate.WithDropIndex(true),
+		entmigrate.WithForeignKeys(true),
+		entschema.WithDiffHook(func(next entschema.Differ) entschema.Differ {
+			return entschema.DiffFunc(func(current, desired *atlasschema.Schema) ([]atlasschema.Change, error) {
+				changes, err := next.Diff(current, desired)
+				if err != nil {
+					return nil, err
+				}
+				changes = filterBaselineManagedEntDiffs(changes)
+				if len(changes) != 0 {
+					return nil, errCurrentEntSchemaDrift
+				}
+				return nil, nil
+			})
+		}),
+	)
+	if err != nil {
 		return fmt.Errorf("verify current Ent schema catalog: %w", err)
 	}
-	if expectedTables == 0 || matchingTables != expectedTables {
-		return fmt.Errorf("current Ent schema table invariant failed")
-	}
-	if expectedColumns == 0 || matchingColumns != expectedColumns || actualColumns != expectedColumns {
-		return fmt.Errorf("current Ent schema column invariant failed")
-	}
 	return nil
 }
 
-func currentPostgresColumnType(column *entschema.Column) (string, error) {
-	if override := strings.ToLower(strings.TrimSpace(column.SchemaType[dialect.Postgres])); override != "" {
-		switch override {
-		case "timestamptz":
-			return "timestamp with time zone", nil
-		case "timestamp":
-			return "timestamp without time zone", nil
-		case "varchar":
-			return "character varying", nil
-		case "int8", "bigserial":
-			return "bigint", nil
-		case "int4", "serial":
-			return "integer", nil
-		case "float8":
-			return "double precision", nil
-		default:
-			return override, nil
+func filterBaselineManagedEntDiffs(changes []atlasschema.Change) []atlasschema.Change {
+	filtered := make([]atlasschema.Change, 0, len(changes))
+	for _, change := range changes {
+		table, ok := change.(*atlasschema.ModifyTable)
+		if !ok {
+			filtered = append(filtered, change)
+			continue
+		}
+		nested := make([]atlasschema.Change, 0, len(table.Changes))
+		for _, item := range table.Changes {
+			if isVerifiedBaselineEntChange(table.T.Name, item) {
+				continue
+			}
+			nested = append(nested, item)
+		}
+		if len(nested) != 0 {
+			filtered = append(filtered, &atlasschema.ModifyTable{T: table.T, Changes: nested})
 		}
 	}
-	switch column.Type {
-	case field.TypeBool:
-		return "boolean", nil
-	case field.TypeInt8, field.TypeUint8, field.TypeInt16:
-		return "smallint", nil
-	case field.TypeUint16, field.TypeInt32:
-		return "integer", nil
-	case field.TypeUint32, field.TypeInt, field.TypeUint, field.TypeInt64, field.TypeUint64:
-		return "bigint", nil
-	case field.TypeFloat32:
-		return "real", nil
-	case field.TypeFloat64:
-		return "double precision", nil
-	case field.TypeBytes:
-		return "bytea", nil
-	case field.TypeUUID:
-		return "uuid", nil
-	case field.TypeJSON:
-		return "jsonb", nil
-	case field.TypeString:
-		if column.Size > 10<<20 {
-			return "text", nil
+	return filtered
+}
+
+func isVerifiedBaselineEntChange(tableName string, change atlasschema.Change) bool {
+	switch change := change.(type) {
+	case *atlasschema.DropIndex:
+		return (tableName == "process_instances" && change.I.Name == "idx_process_instances_running_unique") ||
+			(tableName == "tool_invocations" && change.I.Name == "idx_tool_invocations_tenant")
+	case *atlasschema.DropCheck:
+		return tableName == "work_item_number_sequences" &&
+			(change.C.Name == "work_item_number_sequences_last_value_check" ||
+				change.C.Name == "work_item_number_sequences_period_check")
+	case *atlasschema.ModifyIndex:
+		if tableName != "work_item_relations" || change.Change != atlasschema.ChangeAttr ||
+			change.From == nil || change.To == nil ||
+			change.From.Name != "workitemrelation_tenant_id_source_work_item_id" ||
+			change.To.Name != "workitemrelation_tenant_id_source_work_item_id" {
+			return false
 		}
-		return "character varying", nil
-	case field.TypeEnum:
-		return "character varying", nil
-	case field.TypeTime:
-		return "timestamp with time zone", nil
+		from, fromOK := postgresIndexPredicate(change.From)
+		to, toOK := postgresIndexPredicate(change.To)
+		return fromOK && toOK &&
+			normalizePredicateWhitespace(from) == "((deleted_at IS NULL) AND ((relation_type)::text = 'investigated_by'::text))" &&
+			normalizePredicateWhitespace(to) == "deleted_at IS NULL AND relation_type = 'investigated_by'"
 	default:
-		return "", fmt.Errorf("unsupported compiled type %q for %s", column.Type, column.Name)
+		return false
 	}
+}
+
+func postgresIndexPredicate(index *atlasschema.Index) (string, bool) {
+	if index == nil {
+		return "", false
+	}
+	for _, attr := range index.Attrs {
+		if predicate, ok := attr.(*postgres.IndexPredicate); ok {
+			return predicate.P, true
+		}
+	}
+	return "", false
+}
+
+func normalizePredicateWhitespace(predicate string) string {
+	return strings.Join(strings.Fields(predicate), " ")
 }

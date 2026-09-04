@@ -536,6 +536,9 @@ DECLARE
     actual_signature TEXT;
     relation_id OID;
     constraint_count INTEGER;
+    expected_default_count INTEGER;
+    matching_default_count INTEGER;
+    actual_default_count INTEGER;
     policy_count INTEGER;
     policy_using TEXT;
     policy_check TEXT;
@@ -583,6 +586,132 @@ BEGIN
             RAISE EXCEPTION 'current baseline table definition mismatch for %', target.table_name;
         END IF;
     END LOOP;
+
+    WITH expected_defaults(table_name, column_name, default_expression) AS (
+        VALUES
+            ('vectors', 'created_at', 'now()'),
+            ('ai_feedbacks', 'created_at', 'now()'),
+            ('change_approvals', 'status', '''pending''::text'),
+            ('change_approvals', 'created_at', 'now()'),
+            ('change_approvals', 'updated_at', 'now()'),
+            ('change_approval_chains', 'role', '''approver''::text'),
+            ('change_approval_chains', 'status', '''pending''::text'),
+            ('change_approval_chains', 'is_required', 'true'),
+            ('change_approval_chains', 'created_at', 'now()'),
+            ('change_risk_assessments', 'risk_level', '''medium''::text'),
+            ('change_risk_assessments', 'created_at', 'now()'),
+            ('change_risk_assessments', 'updated_at', 'now()'),
+            ('change_rollback_plans', 'approval_required', 'false'),
+            ('change_rollback_plans', 'created_at', 'now()'),
+            ('change_rollback_plans', 'updated_at', 'now()'),
+            ('change_rollback_executions', 'status', '''initiated''::text'),
+            ('change_rollback_executions', 'created_at', 'now()'),
+            ('change_rollback_executions', 'updated_at', 'now()'),
+            ('change_implementation_plans', 'status', '''pending''::text'),
+            ('change_implementation_plans', 'created_at', 'now()'),
+            ('change_implementation_plans', 'updated_at', 'now()'),
+            ('initialization_installations', 'installed_version', '''''::character varying'),
+            ('initialization_installations', 'source_checksum', '''''::character varying'),
+            ('initialization_installations', 'fencing_token', '0'),
+            ('initialization_installations', 'lease_owner', '''''::character varying'),
+            ('initialization_installations', 'error_code', '''''::character varying'),
+            ('initialization_installations', 'error_message', '''''::text'),
+            ('initialization_installations', 'result_summary', '''{}''::jsonb'),
+            ('initialization_installations', 'created_at', 'now()'),
+            ('initialization_installations', 'updated_at', 'now()'),
+            ('initialization_runs', 'started_at', 'now()'),
+            ('initialization_runs', 'result_summary', '''{}''::jsonb'),
+            ('initialization_runs', 'error_message', '''''::text'),
+            ('initialization_runs', 'created_at', 'now()'),
+            ('initialization_component_attempts', 'from_version', '''''::character varying'),
+            ('initialization_component_attempts', 'started_at', 'now()'),
+            ('initialization_component_attempts', 'error_code', '''''::character varying'),
+            ('initialization_component_attempts', 'error_message', '''''::text'),
+            ('initialization_component_attempts', 'result_summary', '''{}''::jsonb'),
+            ('initialization_component_attempts', 'rollback_metadata', '''{}''::jsonb'),
+            ('initialization_component_attempts', 'created_at', 'now()'),
+            ('initialization_managed_records', 'ownership_mode', '''managed''::character varying'),
+            ('initialization_managed_records', 'managed_fields', '''[]''::jsonb'),
+            ('initialization_managed_records', 'last_applied_values', '''{}''::jsonb'),
+            ('initialization_managed_records', 'deprecated', 'false'),
+            ('initialization_managed_records', 'stable_key_aliases', '''[]''::jsonb'),
+            ('initialization_managed_records', 'created_at', 'now()'),
+            ('initialization_managed_records', 'updated_at', 'now()'),
+            ('schema_migrations', 'applied_at', 'CURRENT_TIMESTAMP'),
+            ('schema_migrations', 'checksum', '''''::character varying'),
+            ('schema_migrations', 'execution_ms', '0'),
+            ('schema_migrations', 'release_version', '''''::character varying'),
+            ('schema_state', 'updated_at', 'CURRENT_TIMESTAMP')
+    ), actual_defaults AS (
+        SELECT relation.relname AS table_name,
+               attribute.attname AS column_name,
+               pg_get_expr(default_record.adbin, default_record.adrelid) AS default_expression
+        FROM pg_attrdef default_record
+        JOIN pg_attribute attribute
+          ON attribute.attrelid = default_record.adrelid
+         AND attribute.attnum = default_record.adnum
+        JOIN pg_class relation ON relation.oid = default_record.adrelid
+        JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+        WHERE namespace.nspname = current_schema()
+          AND relation.relname = ANY (ARRAY[
+              'vectors', 'ai_feedbacks', 'change_approvals', 'change_approval_chains',
+              'change_risk_assessments', 'change_rollback_plans', 'change_rollback_executions',
+              'change_implementation_plans', 'initialization_installations', 'initialization_runs',
+              'initialization_component_attempts', 'initialization_managed_records',
+              'schema_migrations', 'schema_state'
+          ])
+    )
+    SELECT (SELECT COUNT(*) FROM expected_defaults),
+           (SELECT COUNT(*) FROM expected_defaults expected
+            JOIN actual_defaults actual USING (table_name, column_name, default_expression)),
+           (SELECT COUNT(*) FROM actual_defaults)
+    INTO expected_default_count, matching_default_count, actual_default_count;
+    IF expected_default_count = 0
+       OR matching_default_count <> expected_default_count
+       OR actual_default_count <> expected_default_count THEN
+        RAISE EXCEPTION 'current baseline default invariant mismatch';
+    END IF;
+
+    FOR target IN
+        SELECT * FROM (VALUES
+            ('initialization_component_attempts', 'initialization_component_attempts_status_check', '((status)::text = ANY ((ARRAY[''pending''::character varying, ''running''::character varying, ''succeeded''::character varying, ''failed''::character varying, ''rolling_back''::character varying])::text[]))'),
+            ('initialization_installations', 'initialization_installations_scope_type_check', '((scope_type)::text = ANY ((ARRAY[''platform''::character varying, ''tenant''::character varying])::text[]))'),
+            ('initialization_installations', 'initialization_installations_status_check', '((status)::text = ANY ((ARRAY[''pending''::character varying, ''running''::character varying, ''succeeded''::character varying, ''failed''::character varying, ''rolling_back''::character varying])::text[]))'),
+            ('initialization_runs', 'initialization_runs_scope_type_check', '((scope_type)::text = ANY ((ARRAY[''platform''::character varying, ''tenant''::character varying, ''batch''::character varying])::text[]))'),
+            ('initialization_runs', 'initialization_runs_status_check', '((status)::text = ANY ((ARRAY[''pending''::character varying, ''running''::character varying, ''succeeded''::character varying, ''failed''::character varying, ''partial''::character varying])::text[]))'),
+            ('schema_state', 'schema_state_id_check', '(id = 1)'),
+            ('work_item_number_sequences', 'work_item_number_sequences_last_value_check', '((last_value >= 0) AND (last_value <= 999999))'),
+            ('work_item_number_sequences', 'work_item_number_sequences_period_check', '((period)::text ~ ''^[0-9]{6}$''::text)')
+        ) AS expected_checks(table_name, constraint_name, check_expression)
+    LOOP
+        SELECT COUNT(*) INTO constraint_count
+        FROM pg_constraint constraint_record
+        JOIN pg_class relation ON relation.oid = constraint_record.conrelid
+        JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+        WHERE namespace.nspname = current_schema()
+          AND relation.relname = target.table_name
+          AND constraint_record.conname = target.constraint_name
+          AND constraint_record.contype = 'c'
+          AND constraint_record.convalidated
+          AND pg_get_expr(constraint_record.conbin, constraint_record.conrelid) = target.check_expression;
+        IF constraint_count <> 1 THEN
+            RAISE EXCEPTION 'current baseline check invariant mismatch for %.%', target.table_name, target.constraint_name;
+        END IF;
+    END LOOP;
+
+    SELECT COUNT(*) INTO constraint_count
+    FROM pg_constraint constraint_record
+    JOIN pg_class relation ON relation.oid = constraint_record.conrelid
+    JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+    WHERE namespace.nspname = current_schema()
+      AND relation.relname = ANY (ARRAY[
+          'initialization_component_attempts', 'initialization_installations',
+          'initialization_runs', 'schema_state', 'work_item_number_sequences'
+      ])
+      AND constraint_record.contype = 'c';
+    IF constraint_count <> 8 THEN
+        RAISE EXCEPTION 'current baseline unexpected check invariant mismatch';
+    END IF;
 
     FOREACH retired_table IN ARRAY ARRAY[
         'service_catalog_items', 'service_request_approvals', 'approval_records',
@@ -653,19 +782,19 @@ BEGIN
 
     FOR target IN
         SELECT * FROM (VALUES
-            ('change_approvals', 'changes', 'change_id', 'c'),
-            ('change_approvals', 'users', 'approver_id', 'c'),
-            ('change_approval_chains', 'changes', 'change_id', 'c'),
-            ('change_risk_assessments', 'changes', 'change_id', 'c'),
-            ('change_rollback_plans', 'changes', 'change_id', 'c'),
-            ('change_rollback_executions', 'changes', 'change_id', 'c'),
-            ('change_rollback_executions', 'change_rollback_plans', 'rollback_plan_id', 'c'),
-            ('change_implementation_plans', 'changes', 'change_id', 'c'),
-            ('initialization_component_attempts', 'initialization_runs', 'run_id', 'c'),
-            ('incidents', 'tickets', 'work_item_id', 'a'),
-            ('problems', 'tickets', 'work_item_id', 'a'),
-            ('changes', 'tickets', 'work_item_id', 'a')
-        ) AS foreign_keys(table_name, referenced_table, column_name, delete_action)
+            ('change_approvals', 'changes', 'change_id', 'a', 'c'),
+            ('change_approvals', 'users', 'approver_id', 'a', 'c'),
+            ('change_approval_chains', 'changes', 'change_id', 'a', 'c'),
+            ('change_risk_assessments', 'changes', 'change_id', 'a', 'c'),
+            ('change_rollback_plans', 'changes', 'change_id', 'a', 'c'),
+            ('change_rollback_executions', 'changes', 'change_id', 'a', 'c'),
+            ('change_rollback_executions', 'change_rollback_plans', 'rollback_plan_id', 'a', 'c'),
+            ('change_implementation_plans', 'changes', 'change_id', 'a', 'c'),
+            ('initialization_component_attempts', 'initialization_runs', 'run_id', 'a', 'c'),
+            ('incidents', 'tickets', 'work_item_id', 'a', 'a'),
+            ('problems', 'tickets', 'work_item_id', 'a', 'a'),
+            ('changes', 'tickets', 'work_item_id', 'a', 'a')
+        ) AS foreign_keys(table_name, referenced_table, column_name, update_action, delete_action)
     LOOP
         SELECT COUNT(*) INTO constraint_count
         FROM pg_constraint constraint_record
@@ -686,6 +815,7 @@ BEGIN
           AND referenced_attribute.attname = 'id'
           AND constraint_record.contype = 'f'
           AND constraint_record.convalidated
+          AND constraint_record.confupdtype::text = target.update_action
           AND constraint_record.confdeltype::text = target.delete_action
           AND cardinality(constraint_record.conkey) = 1
           AND cardinality(constraint_record.confkey) = 1;

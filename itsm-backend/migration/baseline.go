@@ -85,6 +85,9 @@ func PrepareCurrentInfrastructure(ctx context.Context, db BootstrapConnection) e
 	if db == nil {
 		return fmt.Errorf("bootstrap database is required")
 	}
+	if err := VerifyFreshBootstrapTarget(ctx, db, CurrentRelease()); err != nil {
+		return fmt.Errorf("verify fresh bootstrap target before DDL: %w", err)
+	}
 	parts, err := loadCurrentBaseline()
 	if err != nil {
 		return err

@@ -208,7 +208,7 @@ func runUpgrade(ctx context.Context, db *sql.DB, sugar *zap.SugaredLogger) (int,
 	err = migration.RunUpgrade(ctx, migration.UpgradeBootstrap{
 		Lock: lock,
 		PlanForwardMigrations: func(ctx context.Context, conn migration.BootstrapConnection) ([]migration.Migration, error) {
-			return migration.NewMigratorOnConnection(conn, sugar).GetPendingMigrations(ctx, migration.PostSchemaMigrations())
+			return migration.NewMigratorOnConnection(conn, sugar).PlanCurrentUpgrade(ctx, migration.CurrentRelease())
 		},
 		ApplyForwardMigrations: func(ctx context.Context, conn migration.BootstrapConnection, pending []migration.Migration) error {
 			migrator := migration.NewMigratorOnConnection(conn, sugar)

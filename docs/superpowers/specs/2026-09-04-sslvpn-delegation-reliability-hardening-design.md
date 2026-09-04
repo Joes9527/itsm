@@ -95,7 +95,7 @@ ITSM migration、ITSM delivery、KAF execution 和最终 E2E 分别实现、测�
 2. **Fresh baseline**：为全新数据库建立当前 schema 所需的版本化资产，包含 Ent schema 之外的 RLS、索引、约束、触发器和初始化基础设施。
 3. **Current schema state**：数据库当前兼容的 schema release/version，是 readiness 的权威来源；它不由“schema_migrations 是否恰好存在最后一行”间接推断。该事实存放在单行 `schema_state` 表中，固定主键为 `1` 并由数据库约束拒绝其他主键值，字段为 `release_id`、`schema_version`、`baseline_version`、`release_manifest_checksum` 和 `updated_at`。
 
-`schema_migrations` 保留实际执行历史。Fresh install 不伪造自己逐条执行过所有历史升级脚本。每个 release 使用一个不可变 manifest，按确定顺序列出 release ID、Ent schema fingerprint、upgrade head、fresh-baseline 资产及 SHA-256、platform seed component/version。升级和 fresh install 最终都必须原子写入同一个 current schema state；readiness 同时校验精确 release ID、schema/baseline version 和 manifest checksum。
+`schema_migrations` 保留实际执行历史。Fresh install 不伪造自己逐条执行过所有历史升级脚本。每个 release 使用一个不可变 manifest，按确定顺序列出 release ID、Ent schema fingerprint、upgrade head、fresh-baseline 资产及 SHA-256、platform seed component/version；另由不可变 release catalog 为该 baseline **逐项枚举**已覆盖 migration version。覆盖集合不是 `version <= head` 区间，后来发布但编号更小的 migration 仍必须执行。升级和 fresh install 最终都必须原子写入同一个 current schema state；readiness 同时校验精确 release ID、schema/baseline version 和 manifest checksum。
 
 ### 5.2 不可歧义的 lineage manifest
 
@@ -127,6 +127,8 @@ Manifest 校验使用 version 对应的单一原始 SHA-256；不得为同一个
 
 Fresh baseline 必须是版本化、可重复验证的安装资产。它与 upgrade lineage 共享最终 schema invariant 测试，但不调用历史升级脚本来修补 Ent 创建出的最新表。
 
+Fresh 路径在第一条 DDL 前必须证明目标 schema 真正为空，或恰好处于同一 release 的已提交且定义验证通过的 prepare/Ent/baseline 阶段；混合、legacy 或多余对象一律只读拒绝。生产一次性 Job 通过 `ITSM_BOOTSTRAP_MODE=fresh` 显式选择该路径，正常发布始终使用 `upgrade`，fresh 不包含 drop/reset 语义。
+
 Fresh install 完成顺序：
 
 1. 获取 migration/bootstrap 专用锁。
@@ -143,6 +145,8 @@ Fresh install 完成顺序：
 ### 5.5 升级现有数据库
 
 升级器先校验 immutable lineage，再按顺序执行尚未应用的 forward migrations。每个 migration 与其 history row 在同一事务提交。若进程在 migration 已提交、`schema_state` 尚未提升时退出，重启后必须从 history 验证已提交步骤、重跑最终 invariant，再提升 state，而不是重新执行或篡改 history。全部完成并通过 invariant 后，才更新 current schema state。
+
+本阶段将最低直接支持的升级来源明确限定为 release catalog 中精确匹配的 `028_schema_release_state`（release/baseline/manifest checksum 全部匹配）。没有 cataloged `schema_state`，或仍保留旧 TicketCC 无条件唯一索引、缺少 `role_permissions.tenant_id` 等非当前定义的数据库，在任何 migration、权限或 promotion 写入前按来源类别/版本 fail closed；不得恢复 ad-hoc convergence。当前工作树尚缺统一 Intake 分支已分配的 023–025，因此 028 catalog entry 明确不覆盖它们，且在三项合入并发布新的不可变 catalog entry 前 release gate 保持关闭。
 
 本地当前数据库只在以下证据齐备后允许升级：
 

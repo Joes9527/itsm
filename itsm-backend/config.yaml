@@ -20,6 +20,7 @@ server:
 
 deployment:
   mode: "${DEPLOYMENT_MODE:private}"  # private | saas | saas_msp
+  bootstrap_mode: "${ITSM_BOOTSTRAP_MODE:upgrade}"  # upgrade | fresh (one-time empty install only)
   auto_migrate: ${ITSM_AUTO_MIGRATE:false}
   auto_seed: ${ITSM_AUTO_SEED:false}
 

@@ -976,23 +976,95 @@ func ValidateWebStartupConfig(cfg *config.Config) error {
 }
 
 func InitializeStorage(cfg *config.Config, client *ent.Client, sugar *zap.SugaredLogger) error {
+	if cfg == nil {
+		return fmt.Errorf("configuration is required")
+	}
+	if err := validateStorageBootstrapMode(cfg.Deployment); err != nil {
+		return err
+	}
 	// RLS：schema 创建 / seed / DDL 属于跨租户操作，必须显式声明 system bypass
 	ctx := tenantctx.SystemContext(context.Background(), "bootstrap:initialize_storage",
 		"schema migration and default seed at process boot")
 
+	bootstrapMode := strings.ToLower(strings.TrimSpace(cfg.Deployment.BootstrapMode))
+	if bootstrapMode == "" {
+		bootstrapMode = "upgrade"
+	}
 	if cfg.Deployment.AutoMigrate {
-		if err := runStorageUpgrade(ctx, database.GetRawDB(), sugar); err != nil {
-			return fmt.Errorf("run schema upgrade: %w", err)
+		switch bootstrapMode {
+		case "fresh":
+			if err := runStorageFresh(ctx, database.GetRawDB(), cfg, sugar); err != nil {
+				return fmt.Errorf("run fresh schema bootstrap: %w", err)
+			}
+		case "upgrade":
+			if err := runStorageUpgrade(ctx, database.GetRawDB(), sugar); err != nil {
+				return fmt.Errorf("run schema upgrade: %w", err)
+			}
 		}
 		sugar.Infow("database schema ensured", "deployment_mode", cfg.Deployment.Mode)
 	}
 
-	if cfg.Deployment.AutoSeed {
+	if cfg.Deployment.AutoSeed && bootstrapMode != "fresh" {
 		if err := runBootstrapSeed(ctx, cfg, client, sugar); err != nil {
 			return err
 		}
 	}
 
+	return nil
+}
+
+func runStorageFresh(
+	ctx context.Context,
+	db *sql.DB,
+	cfg *config.Config,
+	sugar *zap.SugaredLogger,
+) error {
+	roles, err := migration.LoadSchemaStateRoles(os.Getenv)
+	if err != nil {
+		return fmt.Errorf("load schema state roles: %w", err)
+	}
+	lock, err := migration.NewPostgresAdvisoryLock(db)
+	if err != nil {
+		return err
+	}
+	return migration.RunFreshBootstrap(ctx, migration.FreshBootstrap{
+		Lock:    lock,
+		Prepare: migration.PrepareCurrentInfrastructure,
+		CreateSchema: func(ctx context.Context, conn migration.BootstrapConnection) error {
+			pinnedClient, err := migration.NewEntClientOnConnection(conn)
+			if err != nil {
+				return err
+			}
+			defer pinnedClient.Close()
+			database.RegisterSoftDeleteInterceptors(pinnedClient)
+			return pinnedClient.Schema.Create(ctx)
+		},
+		ApplyBaseline:   migration.ApplyCurrentBaseline,
+		VerifySchema:    migration.VerifyCurrentSchema,
+		ApplyPrivileges: migration.ApplySchemaStatePrivilegesOnConnection,
+		PromoteState:    migration.PromoteSchemaState,
+		Seed: func(ctx context.Context, conn migration.BootstrapConnection) error {
+			if !cfg.Deployment.AutoSeed {
+				return nil
+			}
+			return runBootstrapSeedOnConnection(ctx, cfg, conn, sugar)
+		},
+		Release: migration.CurrentRelease(),
+		Roles:   roles,
+	})
+}
+
+func validateStorageBootstrapMode(deployment config.DeploymentConfig) error {
+	mode := strings.ToLower(strings.TrimSpace(deployment.BootstrapMode))
+	if mode == "" {
+		mode = "upgrade"
+	}
+	if mode != "fresh" && mode != "upgrade" {
+		return fmt.Errorf("ITSM_BOOTSTRAP_MODE must be fresh or upgrade")
+	}
+	if mode == "fresh" && !deployment.AutoMigrate {
+		return fmt.Errorf("ITSM_BOOTSTRAP_MODE=fresh requires ITSM_AUTO_MIGRATE=true")
+	}
 	return nil
 }
 
@@ -1008,7 +1080,7 @@ func runStorageUpgrade(ctx context.Context, db *sql.DB, sugar *zap.SugaredLogger
 	return migration.RunUpgrade(ctx, migration.UpgradeBootstrap{
 		Lock: lock,
 		PlanForwardMigrations: func(ctx context.Context, conn migration.BootstrapConnection) ([]migration.Migration, error) {
-			return migration.NewMigratorOnConnection(conn, sugar).GetPendingMigrations(ctx, migration.PostSchemaMigrations())
+			return migration.NewMigratorOnConnection(conn, sugar).PlanCurrentUpgrade(ctx, migration.CurrentRelease())
 		},
 		ApplyForwardMigrations: func(ctx context.Context, conn migration.BootstrapConnection, pending []migration.Migration) error {
 			migrator := migration.NewMigratorOnConnection(conn, sugar)
@@ -1028,6 +1100,39 @@ func runStorageUpgrade(ctx context.Context, db *sql.DB, sugar *zap.SugaredLogger
 }
 
 func runBootstrapSeed(ctx context.Context, cfg *config.Config, client *ent.Client, sugar *zap.SugaredLogger) error {
+	store, err := initialization.NewSQLStore(database.GetRawDB())
+	if err != nil {
+		return fmt.Errorf("create initialization store: %w", err)
+	}
+	return runBootstrapSeedWithStore(ctx, cfg, client, store, sugar)
+}
+
+func runBootstrapSeedOnConnection(
+	ctx context.Context,
+	cfg *config.Config,
+	conn migration.BootstrapConnection,
+	sugar *zap.SugaredLogger,
+) error {
+	client, err := migration.NewEntClientOnConnection(conn)
+	if err != nil {
+		return fmt.Errorf("create pinned seed client: %w", err)
+	}
+	defer client.Close()
+	database.RegisterSoftDeleteInterceptors(client)
+	store, err := initialization.NewSQLStoreOnConnection(conn)
+	if err != nil {
+		return fmt.Errorf("create initialization store: %w", err)
+	}
+	return runBootstrapSeedWithStore(ctx, cfg, client, store, sugar)
+}
+
+func runBootstrapSeedWithStore(
+	ctx context.Context,
+	cfg *config.Config,
+	client *ent.Client,
+	store *initialization.SQLStore,
+	sugar *zap.SugaredLogger,
+) error {
 	needsAdmin, err := needsBootstrapAdmin(ctx, client)
 	if err != nil {
 		return fmt.Errorf("check bootstrap administrator: %w", err)
@@ -1047,10 +1152,6 @@ func runBootstrapSeed(ctx context.Context, cfg *config.Config, client *ent.Clien
 	components, err := seeder.ProductionInitializers(s)
 	if err != nil {
 		return fmt.Errorf("create production initializers: %w", err)
-	}
-	store, err := initialization.NewSQLStore(database.GetRawDB())
-	if err != nil {
-		return fmt.Errorf("create initialization store: %w", err)
 	}
 	engine, err := initialization.NewEngine(
 		store,

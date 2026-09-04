@@ -125,6 +125,82 @@ func (m *Migrator) GetPendingMigrations(ctx context.Context, available []Migrati
 	return pending, nil
 }
 
+// PlanCurrentUpgrade validates the exact minimum-supported source release and
+// its immutable ledger before returning migrations not covered by its fresh
+// baseline entry. All checks in this method are read-only.
+func (m *Migrator) PlanCurrentUpgrade(ctx context.Context, target ReleaseManifest) ([]Migration, error) {
+	if m == nil || m.db == nil {
+		return nil, fmt.Errorf("upgrade migration store is required")
+	}
+	if err := ValidateCurrentReleaseArtifact(target); err != nil {
+		return nil, err
+	}
+	if err := VerifySchemaStateStorage(ctx, m.db); err != nil {
+		return nil, fmt.Errorf("unsupported upgrade source: minimum cataloged release is %s", minimumSupportedUpgradeSchemaVersion)
+	}
+	state, err := ReadSchemaState(ctx, m.db)
+	if err != nil {
+		return nil, fmt.Errorf("unsupported upgrade source: minimum cataloged release is %s", minimumSupportedUpgradeSchemaVersion)
+	}
+	entry, err := CatalogEntryForSchemaState(state)
+	if err != nil {
+		return nil, err
+	}
+	applied, err := m.GetAppliedMigrations(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("read upgrade migration history: %w", err)
+	}
+	if err := ValidateLedgerLineage(applied); err != nil {
+		return nil, err
+	}
+	targetChecksum, err := target.Checksum()
+	if err != nil {
+		return nil, err
+	}
+	if state.ReleaseID == target.ReleaseID && state.SchemaVersion == target.SchemaVersion &&
+		state.BaselineVersion == target.BaselineVersion && state.ReleaseManifestChecksum == targetChecksum {
+		if err := VerifyCurrentSchema(ctx, m.db, target); err != nil {
+			return nil, fmt.Errorf(
+				"unsupported upgrade source: schema does not match cataloged release %s",
+				entry.SchemaVersion,
+			)
+		}
+	} else if err := VerifyCatalogedUpgradeSourceCompatibility(ctx, m.db, entry); err != nil {
+		return nil, err
+	}
+	active := make(map[string]struct{}, len(RegisteredMigrations))
+	for _, migration := range RegisteredMigrations {
+		active[migration.Version] = struct{}{}
+	}
+	appliedActive := make([]string, 0, len(applied))
+	for _, migration := range applied {
+		if _, exists := active[migration.Version]; exists {
+			appliedActive = append(appliedActive, migration.Version)
+		}
+	}
+	pending, err := PlanMigrationsByExplicitCoverage(RegisteredMigrations, appliedActive, entry.CoveredMigrations)
+	if err != nil {
+		return nil, fmt.Errorf("plan baseline-aware upgrade: %w", err)
+	}
+	covered := relationSet(entry.CoveredMigrations...)
+	appliedSet := relationSet(appliedActive...)
+	gap := false
+	for _, migration := range RegisteredMigrations {
+		if _, skip := covered[migration.Version]; skip {
+			continue
+		}
+		_, committed := appliedSet[migration.Version]
+		if !committed {
+			gap = true
+			continue
+		}
+		if gap {
+			return nil, fmt.Errorf("migration ledger uncovered stream is not a continuous prefix")
+		}
+	}
+	return pending, nil
+}
+
 // ApplyMigration applies a single migration
 func (m *Migrator) ApplyMigration(ctx context.Context, mig Migration) error {
 	if err := validateActiveMigration(mig); err != nil {

@@ -73,9 +73,10 @@ type RLSConfig struct {
 }
 
 type DeploymentConfig struct {
-	Mode        string `mapstructure:"mode"`
-	AutoMigrate bool   `mapstructure:"auto_migrate"`
-	AutoSeed    bool   `mapstructure:"auto_seed"`
+	Mode          string `mapstructure:"mode"`
+	BootstrapMode string `mapstructure:"bootstrap_mode"`
+	AutoMigrate   bool   `mapstructure:"auto_migrate"`
+	AutoSeed      bool   `mapstructure:"auto_seed"`
 }
 
 // SecurityConfig 安全配置
@@ -320,6 +321,7 @@ func LoadConfig() (*Config, error) {
 	config.LLM.APIKey = getEnvWithDefault("OPENAI_API_KEY", config.LLM.APIKey)
 	config.LLM.APIKey = getEnvWithDefault("LLM_API_KEY", config.LLM.APIKey)
 	config.Deployment.Mode = getEnvWithDefault("DEPLOYMENT_MODE", config.Deployment.Mode)
+	config.Deployment.BootstrapMode = getEnvWithDefault("ITSM_BOOTSTRAP_MODE", config.Deployment.BootstrapMode)
 	config.Deployment.AutoMigrate = getEnvBoolWithDefault("ITSM_AUTO_MIGRATE", config.Deployment.AutoMigrate)
 	config.Deployment.AutoSeed = getEnvBoolWithDefault("ITSM_AUTO_SEED", config.Deployment.AutoSeed)
 	kafWebhookSecret, err := readEnvironmentOrSecret("KAF_WEBHOOK_SECRET")

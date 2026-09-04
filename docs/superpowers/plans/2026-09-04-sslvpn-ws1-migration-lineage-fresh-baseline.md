@@ -30,6 +30,7 @@
 - Create `itsm-backend/migration/release_manifest.go` and `schema_state.go`: deterministic release identity and singleton state.
 - Create `itsm-backend/migration/schema_state_privileges.go`: controlled, identifier-safe role provisioning outside generic migration SQL.
 - Create `itsm-backend/migration/baseline.go`, `invariants.go`, and `sql/baseline/current.sql`: fresh path and shared checks.
+- Create `itsm-backend/migration/release_catalog.json` and `release_catalog.go`: pin each baseline identity and its explicit covered-migration set; never infer coverage from a numeric head.
 - Modify `itsm-backend/migration/migrations.go`, `migrator.go`, and `bootstrap.go`: restore history and split fresh/upgrade paths.
 - Modify `itsm-backend/cmd/migrate/main.go` and `internal/bootstrap/app.go`: call the correct entry point.
 - Modify `itsm-backend/router/initialization_readiness.go`: consume the manifest until WS2 extracts it from router.
@@ -280,7 +281,7 @@ git commit -m "feat(migration): record verified schema release state"
 - Create: `itsm-backend/migration/sql/baseline/current.sql`
 - Create: `itsm-backend/migration/baseline.go`
 - Create: `itsm-backend/migration/invariants.go`
-- Create: `itsm-backend/migration/baseline_integration_test.go`
+- Create: `itsm-backend/tests/integration/migration_bootstrap_integration_test.go`
 - Modify: `itsm-backend/migration/bootstrap.go`
 - Modify: `itsm-backend/migration/bootstrap_test.go`
 - Modify: `itsm-backend/cmd/migrate/main.go`
@@ -297,16 +298,18 @@ git commit -m "feat(migration): record verified schema release state"
 Assert exact traces:
 
 ```text
-fresh: lock, prepare, ent-schema, baseline, invariants, promote-state, seed
-upgrade: lock, validate-lineage, forward-migrations, invariants, promote-state
-restart-after-forward-commit: validate-history, invariants, promote-state
+fresh: lock, prepare, ent-schema, baseline, invariants, provision-schema-state-privileges, promote-state, seed
+upgrade: lock, validate-lineage, forward-migrations, invariants, provision-schema-state-privileges, promote-state
+restart-after-forward-commit: validate-history, invariants, provision-schema-state-privileges, promote-state
 ```
 
 Assert fresh databases contain no forged historical rows.
 
+The 028 release catalog entry enumerates only migrations actually represented by this baseline. It does not cover the unmerged allocated 023–025 versions; the publication gate remains closed until that branch is integrated and a new immutable entry is reviewed. Upgrade accepts only an exact cataloged `schema_state` as its minimum supported source and performs the source invariant preflight before writes.
+
 - [ ] **Step 2: Implement re-entrant baseline and invariants**
 
-The embedded baseline contains current non-Ent indexes, policies, constraints, triggers, and initialization infrastructure. Each operation is followed by catalog verification; an existing object with the wrong definition fails closed.
+The embedded baseline contains current non-Ent indexes, policies, constraints, triggers, and initialization infrastructure. Each operation is followed by catalog verification; an existing object with the wrong definition fails closed. Before preparation DDL, fresh verifies an empty target or an exact committed phase of the same release. `VerifyCurrentSchema` uses a read-only full Ent catalog diff plus baseline checks covering PKs, index columns/predicates, FKs/actions, defaults/checks, types, nullability, and identity.
 
 - [ ] **Step 3: Implement advisory-lock orchestration**
 

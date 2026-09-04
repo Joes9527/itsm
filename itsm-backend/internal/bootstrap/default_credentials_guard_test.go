@@ -149,6 +149,26 @@ func TestValidateWebStartupConfigRejectsMutationFlags(t *testing.T) {
 	assert.NoError(t, ValidateWebStartupConfig(&config.Config{}))
 }
 
+func TestValidateStorageBootstrapModeIsExplicitAndNonDestructive(t *testing.T) {
+	for _, mode := range []string{"", "upgrade", "fresh"} {
+		t.Run("accepted_"+mode, func(t *testing.T) {
+			require.NoError(t, validateStorageBootstrapMode(config.DeploymentConfig{
+				BootstrapMode: mode,
+				AutoMigrate:   true,
+			}))
+		})
+	}
+
+	require.ErrorContains(t, validateStorageBootstrapMode(config.DeploymentConfig{
+		BootstrapMode: "reset",
+		AutoMigrate:   true,
+	}), "fresh or upgrade")
+	require.ErrorContains(t, validateStorageBootstrapMode(config.DeploymentConfig{
+		BootstrapMode: "fresh",
+		AutoMigrate:   false,
+	}), "requires ITSM_AUTO_MIGRATE")
+}
+
 func TestConfigurePermissionModeFailsClosedByDefault(t *testing.T) {
 	original := authorization.PermissionConfig.Mode
 	t.Cleanup(func() { authorization.PermissionConfig.Mode = original })

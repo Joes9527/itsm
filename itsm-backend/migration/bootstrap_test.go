@@ -250,6 +250,41 @@ func TestRunBootstrapsRequireConcreteDependenciesBeforeTakingLock(t *testing.T) 
 	require.Empty(t, events)
 }
 
+func TestRunBootstrapsRejectArtifactDriftBeforeTakingLock(t *testing.T) {
+	mutated := CurrentRelease()
+	mutated.Assets[0].SHA256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+	var freshEvents []string
+	err := RunFreshBootstrap(context.Background(), FreshBootstrap{
+		Lock:            recordingBootstrapLock{events: &freshEvents, conn: &traceBootstrapConnection{}},
+		Prepare:         func(context.Context, BootstrapConnection) error { return nil },
+		CreateSchema:    func(context.Context, BootstrapConnection) error { return nil },
+		ApplyBaseline:   func(context.Context, BootstrapConnection) error { return nil },
+		VerifySchema:    func(context.Context, DBTX, ReleaseManifest) error { return nil },
+		ApplyPrivileges: func(context.Context, BootstrapConnection, SchemaStateRoles) error { return nil },
+		PromoteState:    func(context.Context, DBTX, ReleaseManifest) error { return nil },
+		Seed:            func(context.Context, BootstrapConnection) error { return nil },
+		Release:         mutated,
+		Roles:           SchemaStateRoles{MigrationRole: "migration", RuntimeRole: "runtime"},
+	})
+	require.ErrorContains(t, err, "immutable release catalog")
+	require.Empty(t, freshEvents)
+
+	var upgradeEvents []string
+	err = RunUpgrade(context.Background(), UpgradeBootstrap{
+		Lock:                   recordingBootstrapLock{events: &upgradeEvents, conn: &traceBootstrapConnection{}},
+		PlanForwardMigrations:  func(context.Context, BootstrapConnection) ([]Migration, error) { return nil, nil },
+		ApplyForwardMigrations: func(context.Context, BootstrapConnection, []Migration) error { return nil },
+		VerifySchema:           func(context.Context, DBTX, ReleaseManifest) error { return nil },
+		ApplyPrivileges:        func(context.Context, BootstrapConnection, SchemaStateRoles) error { return nil },
+		PromoteState:           func(context.Context, DBTX, ReleaseManifest) error { return nil },
+		Release:                mutated,
+		Roles:                  SchemaStateRoles{MigrationRole: "migration", RuntimeRole: "runtime"},
+	})
+	require.ErrorContains(t, err, "immutable release catalog")
+	require.Empty(t, upgradeEvents)
+}
+
 type recordingPostSchemaMigrator struct {
 	ensureErr error
 	runErr    error
