@@ -219,6 +219,26 @@
       "catalog": "immutable_upgrade_lineage",
       "executable": true,
       "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "023_reconcile_change_execution_tenants",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "60c225bc94b7344f4452abe5b67c91865168deb9",
+      "gitBlob": "05b5d346cc47bab0d1e66939ed07dd2d7d5f9b6d",
+      "sqlSha256": "9f338a249d68241f356ab64d08e1ac983eb4bff078a72840e5aeb5db12d19ebe",
+      "catalog": "immutable_upgrade_lineage",
+      "executable": true,
+      "forwardMigration": ""
+    },
+    {
+      "ledgerVersion": "024_reconcile_current_rls_policies",
+      "logicalFile": "itsm-backend/migration/migrations.go",
+      "gitCommit": "60c225bc94b7344f4452abe5b67c91865168deb9",
+      "gitBlob": "05b5d346cc47bab0d1e66939ed07dd2d7d5f9b6d",
+      "sqlSha256": "e3125f45715b2a4164f8fd93b214167f3b53fbe9deb9816cb781c4eb16b7f4cf",
+      "catalog": "immutable_upgrade_lineage",
+      "executable": true,
+      "forwardMigration": ""
     }
   ]
 }

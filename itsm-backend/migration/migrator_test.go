@@ -108,6 +108,20 @@ func TestValidateLedgerLineageAcceptsCurrentForwardRepairChecksums(t *testing.T)
 	}
 }
 
+func TestValidateMigrationLedgerAcceptsCompleteForwardRepairPrefix(t *testing.T) {
+	applied := make([]Migration, 0, len(RegisteredMigrations))
+	for _, registered := range RegisteredMigrations {
+		lineage, ok := PublishedLineage(registered.Version)
+		require.True(t, ok, "registered migration %s must have published lineage", registered.Version)
+		applied = append(applied, Migration{
+			Version:  registered.Version,
+			Checksum: lineage.SQLSHA256,
+		})
+	}
+
+	require.NoError(t, validateMigrationLedger(applied))
+}
+
 func TestMigrationStreamAndLedgerRequireCanonicalOrderAndActivePrefix(t *testing.T) {
 	available := PostSchemaMigrations()
 	available[0], available[1] = available[1], available[0]
