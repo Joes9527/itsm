@@ -58,7 +58,7 @@
       "sqlSha256": "1cf4fab4573d373957f8d22012e60652400eeffd09c1caf118ec640761b13d4a",
       "catalog": "immutable_upgrade_lineage",
       "executable": true,
-      "forwardMigration": "023_reconcile_change_execution_tenants"
+      "forwardMigration": "026_reconcile_change_execution_tenants"
     },
     {
       "ledgerVersion": "008_add_initialization_ledger",
@@ -78,7 +78,7 @@
       "sqlSha256": "b88712993b527f72c945e506fecbb41da54e2aeada19317dff9bc489a94ecea0",
       "catalog": "immutable_upgrade_lineage",
       "executable": true,
-      "forwardMigration": "024_reconcile_current_rls_policies"
+      "forwardMigration": "027_reconcile_current_rls_policies"
     },
     {
       "ledgerVersion": "010_add_ticket_types",
@@ -221,21 +221,21 @@
       "forwardMigration": ""
     },
     {
-      "ledgerVersion": "023_reconcile_change_execution_tenants",
+      "ledgerVersion": "026_reconcile_change_execution_tenants",
       "logicalFile": "itsm-backend/migration/migrations.go",
-      "gitCommit": "60c225bc94b7344f4452abe5b67c91865168deb9",
-      "gitBlob": "05b5d346cc47bab0d1e66939ed07dd2d7d5f9b6d",
-      "sqlSha256": "9f338a249d68241f356ab64d08e1ac983eb4bff078a72840e5aeb5db12d19ebe",
+      "gitCommit": "20d154bd192782db6a64543ed1f040befd49d833",
+      "gitBlob": "548daa29d20dcb8602a0b9f2db0008f65faad5d1",
+      "sqlSha256": "38f2b5f948ee1d1dad0cb4b8d652d392b462395dfe25e657290e515d74d3a719",
       "catalog": "immutable_upgrade_lineage",
       "executable": true,
       "forwardMigration": ""
     },
     {
-      "ledgerVersion": "024_reconcile_current_rls_policies",
+      "ledgerVersion": "027_reconcile_current_rls_policies",
       "logicalFile": "itsm-backend/migration/migrations.go",
-      "gitCommit": "60c225bc94b7344f4452abe5b67c91865168deb9",
-      "gitBlob": "05b5d346cc47bab0d1e66939ed07dd2d7d5f9b6d",
-      "sqlSha256": "e3125f45715b2a4164f8fd93b214167f3b53fbe9deb9816cb781c4eb16b7f4cf",
+      "gitCommit": "20d154bd192782db6a64543ed1f040befd49d833",
+      "gitBlob": "548daa29d20dcb8602a0b9f2db0008f65faad5d1",
+      "sqlSha256": "a932c87caac5e022915b51586f11a01e96f9102c87c72164801b348fbf482864",
       "catalog": "immutable_upgrade_lineage",
       "executable": true,
       "forwardMigration": ""
