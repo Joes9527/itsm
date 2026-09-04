@@ -153,6 +153,9 @@ func (m *Migrator) PlanCurrentUpgrade(ctx context.Context, target ReleaseManifes
 	if err := ValidateLedgerLineage(applied); err != nil {
 		return nil, err
 	}
+	if err := VerifyCatalogedUpgradeSourceSchema(ctx, m.db, entry); err != nil {
+		return nil, err
+	}
 	targetChecksum, err := target.Checksum()
 	if err != nil {
 		return nil, err
@@ -165,8 +168,6 @@ func (m *Migrator) PlanCurrentUpgrade(ctx context.Context, target ReleaseManifes
 				entry.SchemaVersion,
 			)
 		}
-	} else if err := VerifyCatalogedUpgradeSourceCompatibility(ctx, m.db, entry); err != nil {
-		return nil, err
 	}
 	active := make(map[string]struct{}, len(RegisteredMigrations))
 	for _, migration := range RegisteredMigrations {

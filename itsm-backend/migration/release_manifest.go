@@ -50,7 +50,7 @@ type SeedComponent struct {
 // CurrentRelease builds the release identity exclusively from data available in
 // the compiled artifact. It never reads source files or build-machine metadata.
 func CurrentRelease() ReleaseManifest {
-	assets := make([]ReleaseAsset, 0, len(RegisteredMigrations)+1)
+	assets := make([]ReleaseAsset, 0, len(RegisteredMigrations)+2)
 	for _, migration := range RegisteredMigrations {
 		assets = append(assets, ReleaseAsset{
 			Name:   migration.Version,
@@ -61,6 +61,7 @@ func CurrentRelease() ReleaseManifest {
 		Name:   CurrentBaselineAssetName,
 		SHA256: checksumSQL(CurrentBaselineSQL()),
 	})
+	assets = append(assets, currentSourceSchemaAsset())
 	components := make([]SeedComponent, 0, len(seeder.ProductionComponentNames))
 	for _, name := range seeder.ProductionComponentNames {
 		components = append(components, SeedComponent{

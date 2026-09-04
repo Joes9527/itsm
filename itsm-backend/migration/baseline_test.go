@@ -26,6 +26,42 @@ func TestCurrentReleaseIncludesExactEmbeddedFreshBaselineAsset(t *testing.T) {
 	require.Equal(t, []ReleaseAsset{{Name: CurrentBaselineAssetName, SHA256: wantChecksum}}, matches)
 }
 
+func TestCurrentReleaseIncludesExactEmbeddedSourceSchemaAsset(t *testing.T) {
+	release := CurrentRelease()
+	want := currentSourceSchemaAsset()
+	var matches []ReleaseAsset
+	for _, asset := range release.Assets {
+		if asset.Name == CurrentSourceSchemaAssetName {
+			matches = append(matches, asset)
+		}
+	}
+	require.Equal(t, []ReleaseAsset{want}, matches)
+}
+
+func TestCatalogFingerprintVerifierIsOneReadOnlyStatement(t *testing.T) {
+	normalized := strings.ToUpper(strings.TrimSpace(postgresCatalogFingerprintSQL))
+	require.True(t, strings.HasPrefix(normalized, "WITH "))
+	require.NotContains(t, normalized, ";")
+	for _, mutation := range []string{
+		" INSERT ", " UPDATE ", " DELETE ", " CREATE ", " ALTER ", " DROP ",
+		" GRANT ", " REVOKE ", " TRUNCATE ", " CALL ",
+	} {
+		require.NotContains(t, normalized, mutation)
+	}
+}
+
+func TestCurrentSourceSchemaAssetPinsExplicitExtensionInventory(t *testing.T) {
+	asset, err := loadCurrentCatalogFingerprintAsset()
+	require.NoError(t, err)
+	require.Equal(t, []catalogExtensionIdentity{
+		{Name: "plpgsql", Schema: "pg_catalog", Version: "1.0"},
+	}, asset.Extensions.Empty)
+	require.Equal(t, []catalogExtensionIdentity{
+		{Name: "plpgsql", Schema: "pg_catalog", Version: "1.0"},
+		{Name: "vector", Schema: "public", Version: "0.8.6"},
+	}, asset.Extensions.Installed)
+}
+
 func TestParseCurrentBaselineRequiresEveryApplyAndVerifySection(t *testing.T) {
 	_, err := parseCurrentBaseline([]byte("-- +itsm prepare apply\nSELECT 1;"))
 	require.ErrorContains(t, err, "baseline section")

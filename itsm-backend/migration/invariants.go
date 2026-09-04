@@ -42,6 +42,13 @@ func VerifyCurrentSchema(ctx context.Context, db DBTX, release ReleaseManifest) 
 	if err := VerifySchemaStateStorage(ctx, db); err != nil {
 		return fmt.Errorf("verify current schema state storage: %w", err)
 	}
+	entry, err := CurrentReleaseCatalogEntry()
+	if err != nil {
+		return fmt.Errorf("resolve current release schema fingerprint: %w", err)
+	}
+	if err := VerifyCatalogedUpgradeSourceSchema(ctx, db, entry); err != nil {
+		return fmt.Errorf("verify current release schema fingerprint: %w", err)
+	}
 	return nil
 }
 

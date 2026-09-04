@@ -435,28 +435,28 @@ BEGIN
     PERFORM current_setting('app.current_tenant', true);
     FOR target IN
         SELECT * FROM (VALUES
-            ('teams', 'direct', true, false, true),
-            ('roles', 'direct', true, false, true),
-            ('users', 'direct', true, false, true),
-            ('sla_policies', 'direct', true, false, false),
+            ('teams', 'direct', false, false, true),
+            ('roles', 'direct', false, false, true),
+            ('users', 'direct', false, false, true),
+            ('sla_policies', 'direct', false, false, false),
             ('tickets', 'direct', false, false, true),
-            ('service_catalogs', 'direct', true, false, true),
-            ('ci_types', 'direct', true, false, true),
-            ('standard_changes', 'direct', true, false, true),
-            ('known_errors', 'direct', true, false, true),
-            ('sla_alert_rules', 'direct', true, false, true),
-            ('tags', 'direct', true, false, true),
-            ('departments', 'direct', true, false, true),
-            ('ticket_categories', 'direct', true, false, true),
-            ('process_bindings', 'direct', true, false, true),
-            ('process_definitions', 'direct', true, false, true),
-            ('process_deployments', 'direct', true, false, true),
-            ('ticket_views', 'direct', true, false, true),
-            ('kaf_task_action_ledgers', 'direct', true, true, true),
-            ('kaf_task_completion_receipts', 'direct', true, true, true),
-            ('incidents', 'work_item', true, false, true),
-            ('problems', 'work_item', true, false, true),
-            ('changes', 'work_item', true, false, true),
+            ('service_catalogs', 'direct', false, false, true),
+            ('ci_types', 'direct', false, false, true),
+            ('standard_changes', 'direct', false, false, true),
+            ('known_errors', 'direct', false, false, true),
+            ('sla_alert_rules', 'direct', false, false, true),
+            ('tags', 'direct', false, false, true),
+            ('departments', 'direct', false, false, true),
+            ('ticket_categories', 'direct', false, false, true),
+            ('process_bindings', 'direct', false, false, true),
+            ('process_definitions', 'direct', false, false, true),
+            ('process_deployments', 'direct', false, false, true),
+            ('ticket_views', 'direct', false, false, true),
+            ('kaf_task_action_ledgers', 'direct', false, false, true),
+            ('kaf_task_completion_receipts', 'direct', false, false, true),
+            ('incidents', 'work_item', false, false, true),
+            ('problems', 'work_item', false, false, true),
+            ('changes', 'work_item', false, false, true),
             ('change_approvals', 'change_work_item', false, false, true),
             ('change_approval_chains', 'change_work_item', false, false, true),
             ('change_risk_assessments', 'change_work_item', false, false, true),
@@ -542,6 +542,7 @@ DECLARE
     policy_count INTEGER;
     policy_using TEXT;
     policy_check TEXT;
+    expected_policy TEXT;
     policy_roles OID[];
     policy_command TEXT;
     policy_permissive BOOLEAN;
@@ -921,11 +922,10 @@ BEGIN
                 ON attribute.attrelid = table_relation.oid AND attribute.attnum = key_column.attnum
               ORDER BY key_column.ordinal
           ) = ARRAY['tenant_id', 'business_key']::text[]
-          AND position('status' IN pg_get_expr(index_record.indpred, index_record.indrelid)) > 0
-          AND position('running' IN pg_get_expr(index_record.indpred, index_record.indrelid)) > 0
-          AND position('business_key IS NOT NULL' IN pg_get_expr(index_record.indpred, index_record.indrelid)) > 0
-          AND position('<>' IN pg_get_expr(index_record.indpred, index_record.indrelid)) > 0
-          AND position(' OR ' IN upper(pg_get_expr(index_record.indpred, index_record.indrelid))) = 0
+          AND regexp_replace(
+                pg_get_expr(index_record.indpred, index_record.indrelid),
+                '\s+', ' ', 'g'
+              ) = '(((status)::text = ''running''::text) AND (business_key IS NOT NULL) AND ((business_key)::text <> ''''::text))'
     ) INTO index_ok;
     IF NOT index_ok THEN
         RAISE EXCEPTION 'current baseline process instance running index mismatch';
@@ -933,28 +933,28 @@ BEGIN
 
     FOR target IN
         SELECT * FROM (VALUES
-            ('teams', 'direct', true, false, true),
-            ('roles', 'direct', true, false, true),
-            ('users', 'direct', true, false, true),
-            ('sla_policies', 'direct', true, false, false),
+            ('teams', 'direct', false, false, true),
+            ('roles', 'direct', false, false, true),
+            ('users', 'direct', false, false, true),
+            ('sla_policies', 'direct', false, false, false),
             ('tickets', 'direct', false, false, true),
-            ('service_catalogs', 'direct', true, false, true),
-            ('ci_types', 'direct', true, false, true),
-            ('standard_changes', 'direct', true, false, true),
-            ('known_errors', 'direct', true, false, true),
-            ('sla_alert_rules', 'direct', true, false, true),
-            ('tags', 'direct', true, false, true),
-            ('departments', 'direct', true, false, true),
-            ('ticket_categories', 'direct', true, false, true),
-            ('process_bindings', 'direct', true, false, true),
-            ('process_definitions', 'direct', true, false, true),
-            ('process_deployments', 'direct', true, false, true),
-            ('ticket_views', 'direct', true, false, true),
-            ('kaf_task_action_ledgers', 'direct', true, true, true),
-            ('kaf_task_completion_receipts', 'direct', true, true, true),
-            ('incidents', 'work_item', true, false, true),
-            ('problems', 'work_item', true, false, true),
-            ('changes', 'work_item', true, false, true),
+            ('service_catalogs', 'direct', false, false, true),
+            ('ci_types', 'direct', false, false, true),
+            ('standard_changes', 'direct', false, false, true),
+            ('known_errors', 'direct', false, false, true),
+            ('sla_alert_rules', 'direct', false, false, true),
+            ('tags', 'direct', false, false, true),
+            ('departments', 'direct', false, false, true),
+            ('ticket_categories', 'direct', false, false, true),
+            ('process_bindings', 'direct', false, false, true),
+            ('process_definitions', 'direct', false, false, true),
+            ('process_deployments', 'direct', false, false, true),
+            ('ticket_views', 'direct', false, false, true),
+            ('kaf_task_action_ledgers', 'direct', false, false, true),
+            ('kaf_task_completion_receipts', 'direct', false, false, true),
+            ('incidents', 'work_item', false, false, true),
+            ('problems', 'work_item', false, false, true),
+            ('changes', 'work_item', false, false, true),
             ('change_approvals', 'change_work_item', false, false, true),
             ('change_approval_chains', 'change_work_item', false, false, true),
             ('change_risk_assessments', 'change_work_item', false, false, true),
@@ -1002,24 +1002,30 @@ BEGIN
         IF policy_count <> 1 THEN
             RAISE EXCEPTION 'current baseline unexpected RLS policy for %', target.table_name;
         END IF;
-        IF position('app.current_tenant' IN policy_using) = 0
-           OR position('app.current_tenant_id' IN policy_using) > 0 THEN
-            RAISE EXCEPTION 'current baseline tenant setting mismatch for %', target.table_name;
+        IF target.policy_kind = 'direct' THEN
+            expected_policy := '(tenant_id = (NULLIF(current_setting(''app.current_tenant''::text, true), ''''::text))::bigint)';
+        ELSIF target.policy_kind = 'work_item' THEN
+            expected_policy := format(
+                '(EXISTS ( SELECT 1 FROM tickets work_item WHERE ((work_item.id = %I.work_item_id) '
+                'AND (work_item.tenant_id = (NULLIF(current_setting(''app.current_tenant''::text, true), ''''::text))::bigint) '
+                'AND (work_item.deleted_at IS NULL))))',
+                target.table_name
+            );
+        ELSIF target.policy_kind = 'change_work_item' THEN
+            expected_policy := format(
+                '(EXISTS ( SELECT 1 FROM (changes change_record JOIN tickets work_item '
+                'ON ((work_item.id = change_record.work_item_id))) '
+                'WHERE ((change_record.id = %I.change_id) '
+                'AND (work_item.tenant_id = (NULLIF(current_setting(''app.current_tenant''::text, true), ''''::text))::bigint) '
+                'AND (work_item.deleted_at IS NULL))))',
+                target.table_name
+            );
+        ELSE
+            RAISE EXCEPTION 'unsupported current baseline policy kind %', target.policy_kind;
         END IF;
-        IF target.policy_kind = 'direct' AND position('tenant_id' IN policy_using) = 0 THEN
-            RAISE EXCEPTION 'current baseline direct tenant policy mismatch for %', target.table_name;
-        ELSIF target.policy_kind = 'work_item'
-           AND (position(target.table_name || '.work_item_id' IN policy_using) = 0
-                OR position('work_item.tenant_id' IN policy_using) = 0
-                OR position('work_item.deleted_at IS NULL' IN policy_using) = 0) THEN
-            RAISE EXCEPTION 'current baseline WorkItem tenant policy mismatch for %', target.table_name;
-        ELSIF target.policy_kind = 'change_work_item'
-           AND (position(target.table_name || '.change_id' IN policy_using) = 0
-                OR position('change_record.work_item_id' IN policy_using) = 0
-                OR position('work_item.tenant_id' IN policy_using) = 0
-                OR position('work_item.deleted_at IS NULL' IN policy_using) = 0
-                OR position(target.table_name || '.tenant_id' IN policy_using) > 0) THEN
-            RAISE EXCEPTION 'current baseline Change WorkItem tenant policy mismatch for %', target.table_name;
+        IF regexp_replace(policy_using, '\s+', ' ', 'g') IS DISTINCT FROM expected_policy
+           OR regexp_replace(policy_check, '\s+', ' ', 'g') IS DISTINCT FROM expected_policy THEN
+            RAISE EXCEPTION 'current baseline version-pinned RLS policy mismatch for %', target.table_name;
         END IF;
     END LOOP;
 

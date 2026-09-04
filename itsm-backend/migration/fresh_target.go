@@ -88,98 +88,6 @@ func equalRelationSets(left, right map[string]struct{}) bool {
 	return true
 }
 
-func verifyNoUnexpectedFreshSchemaObjects(ctx context.Context, db DBTX) error {
-	var sequenceCount, routineCount, typeCount, triggerCount int64
-	if err := db.QueryRowContext(ctx, `
-		/* fresh_bootstrap_target_standalone_objects */
-		WITH unexpected_sequences AS (
-			SELECT sequence_relation.oid
-			FROM pg_class sequence_relation
-			JOIN pg_namespace namespace ON namespace.oid = sequence_relation.relnamespace
-			WHERE namespace.nspname = current_schema()
-			  AND sequence_relation.relkind = 'S'
-			  AND NOT EXISTS (
-				SELECT 1
-				FROM pg_depend dependency
-				JOIN pg_class owner_relation ON owner_relation.oid = dependency.refobjid
-				JOIN pg_namespace owner_namespace ON owner_namespace.oid = owner_relation.relnamespace
-				WHERE dependency.classid = 'pg_class'::regclass
-				  AND dependency.objid = sequence_relation.oid
-				  AND dependency.refclassid = 'pg_class'::regclass
-				  AND dependency.refobjsubid > 0
-				  AND dependency.deptype IN ('a', 'i')
-				  AND owner_namespace.nspname = current_schema()
-			  )
-			  AND NOT EXISTS (
-				SELECT 1 FROM pg_depend dependency
-				WHERE dependency.classid = 'pg_class'::regclass
-				  AND dependency.objid = sequence_relation.oid
-				  AND dependency.refclassid = 'pg_extension'::regclass
-				  AND dependency.deptype = 'e'
-			  )
-		), unexpected_routines AS (
-			SELECT routine.oid
-			FROM pg_proc routine
-			JOIN pg_namespace namespace ON namespace.oid = routine.pronamespace
-			WHERE namespace.nspname = current_schema()
-			  AND NOT EXISTS (
-				SELECT 1 FROM pg_depend dependency
-				WHERE dependency.classid = 'pg_proc'::regclass
-				  AND dependency.objid = routine.oid
-				  AND dependency.refclassid = 'pg_extension'::regclass
-				  AND dependency.deptype = 'e'
-			  )
-		), unexpected_types AS (
-			SELECT type_record.oid
-			FROM pg_type type_record
-			JOIN pg_namespace namespace ON namespace.oid = type_record.typnamespace
-			WHERE namespace.nspname = current_schema()
-			  AND (
-				type_record.typtype IN ('d', 'e', 'r', 'm')
-				OR (
-					type_record.typtype = 'c'
-					AND EXISTS (
-						SELECT 1 FROM pg_class composite_relation
-						WHERE composite_relation.oid = type_record.typrelid
-						  AND composite_relation.relkind = 'c'
-					)
-				)
-			  )
-			  AND NOT EXISTS (
-				SELECT 1 FROM pg_depend dependency
-				WHERE dependency.classid = 'pg_type'::regclass
-				  AND dependency.objid = type_record.oid
-				  AND dependency.refclassid = 'pg_extension'::regclass
-				  AND dependency.deptype = 'e'
-			  )
-		), unexpected_triggers AS (
-			SELECT trigger_record.oid
-			FROM pg_trigger trigger_record
-			JOIN pg_class relation ON relation.oid = trigger_record.tgrelid
-			JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
-			WHERE namespace.nspname = current_schema()
-			  AND NOT trigger_record.tgisinternal
-			  AND NOT EXISTS (
-				SELECT 1 FROM pg_depend dependency
-				WHERE dependency.classid = 'pg_trigger'::regclass
-				  AND dependency.objid = trigger_record.oid
-				  AND dependency.refclassid = 'pg_extension'::regclass
-				  AND dependency.deptype = 'e'
-			  )
-		)
-		SELECT (SELECT COUNT(*) FROM unexpected_sequences),
-		       (SELECT COUNT(*) FROM unexpected_routines),
-		       (SELECT COUNT(*) FROM unexpected_types),
-		       (SELECT COUNT(*) FROM unexpected_triggers)
-	`).Scan(&sequenceCount, &routineCount, &typeCount, &triggerCount); err != nil {
-		return fmt.Errorf("inspect fresh target standalone objects: %w", err)
-	}
-	if sequenceCount != 0 || routineCount != 0 || typeCount != 0 || triggerCount != 0 {
-		return fmt.Errorf("fresh target contains an unexpected standalone schema object")
-	}
-	return nil
-}
-
 // VerifyFreshBootstrapTarget is the read-only gate run immediately before
 // PrepareCurrentInfrastructure opens its DDL transaction. It permits a truly
 // empty schema or an exact, verified committed phase of this same fresh
@@ -219,7 +127,7 @@ func VerifyFreshBootstrapTarget(ctx context.Context, db BootstrapConnection, rel
 	if err != nil {
 		return err
 	}
-	if err := verifyNoUnexpectedFreshSchemaObjects(ctx, db); err != nil {
+	if err := verifyFreshPhaseCatalog(ctx, db, phase); err != nil {
 		return err
 	}
 	if phase == freshTargetEmpty {

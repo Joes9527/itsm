@@ -169,6 +169,26 @@ func TestValidateStorageBootstrapModeIsExplicitAndNonDestructive(t *testing.T) {
 	}), "requires ITSM_AUTO_MIGRATE")
 }
 
+func TestInitializeStorageRejectsClosedPublicationGateBeforeDatabaseAccess(t *testing.T) {
+	t.Setenv("ITSM_MIGRATION_DB_USER", "migration_role")
+	t.Setenv("ITSM_RUNTIME_DB_USER", "runtime_role")
+
+	for name, deployment := range map[string]config.DeploymentConfig{
+		"schema": {BootstrapMode: "fresh", AutoMigrate: true},
+		"seed":   {BootstrapMode: "upgrade", AutoSeed: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			err := InitializeStorage(&config.Config{Deployment: deployment}, nil, nil)
+			require.ErrorContains(t, err, "release publication gate is closed")
+			require.ErrorContains(t, err, "023")
+			require.ErrorContains(t, err, "024")
+			require.ErrorContains(t, err, "025")
+		})
+	}
+
+	require.NoError(t, InitializeStorage(&config.Config{}, nil, nil), "read-only startup must not require publication")
+}
+
 func TestConfigurePermissionModeFailsClosedByDefault(t *testing.T) {
 	original := authorization.PermissionConfig.Mode
 	t.Cleanup(func() { authorization.PermissionConfig.Mode = original })

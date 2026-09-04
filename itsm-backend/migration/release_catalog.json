@@ -4,10 +4,14 @@
       "releaseId": "itsm-v1.1",
       "schemaVersion": "028_schema_release_state",
       "baselineVersion": "2026-09-04",
-      "releaseManifestSha256": "a592808422f3a58e410e95bddc9ebbf5d119c0827676381095b8386822ec6b61",
+      "releaseManifestSha256": "0746eaecff5b0fa459d3873f54d4b1123b342819f7d6ceeca463f537e4aa3efa",
       "baselineAsset": {
         "name": "fresh-baseline/2026-09-04/current.sql",
-        "sha256": "3fa9d41771a77753fb4c6d5306c692c2e57d8557c034e52d747e3455846768b4"
+        "sha256": "33a8977e08a37e15159b52a1505856c3c7312b0f5b400d44364985d35dadf2c5"
+      },
+      "sourceSchemaAsset": {
+        "name": "source-schema/028_schema_release_state.json",
+        "sha256": "bae1ba2a4759aeb1d0bd75a3ed915efa426071c7b72c735a98e368caa2a8a028"
       },
       "coveredMigrations": [
         "007_add_change_execution_tables",

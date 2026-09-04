@@ -15,11 +15,15 @@ func TestCurrentReleaseCatalogPinsManifestBaselineAndExplicitCoverage(t *testing
 	require.Equal(t, "itsm-v1.1", entry.ReleaseID)
 	require.Equal(t, "028_schema_release_state", entry.SchemaVersion)
 	require.Equal(t, "2026-09-04", entry.BaselineVersion)
-	require.Equal(t, "a592808422f3a58e410e95bddc9ebbf5d119c0827676381095b8386822ec6b61", entry.ReleaseManifestSHA256)
+	require.Equal(t, "0746eaecff5b0fa459d3873f54d4b1123b342819f7d6ceeca463f537e4aa3efa", entry.ReleaseManifestSHA256)
 	require.Equal(t, ReleaseAsset{
 		Name:   CurrentBaselineAssetName,
-		SHA256: "3fa9d41771a77753fb4c6d5306c692c2e57d8557c034e52d747e3455846768b4",
+		SHA256: "33a8977e08a37e15159b52a1505856c3c7312b0f5b400d44364985d35dadf2c5",
 	}, entry.BaselineAsset)
+	require.Equal(t, ReleaseAsset{
+		Name:   CurrentSourceSchemaAssetName,
+		SHA256: "bae1ba2a4759aeb1d0bd75a3ed915efa426071c7b72c735a98e368caa2a8a028",
+	}, entry.SourceSchemaAsset)
 	require.Equal(t, []string{
 		"007_add_change_execution_tables",
 		"008_add_initialization_ledger",
@@ -93,6 +97,25 @@ func TestCurrentReleaseArtifactValidationRejectsSelfConsistentBaselineTampering(
 	regenerated := CurrentRelease()
 	err := ValidateCurrentReleaseArtifact(regenerated)
 	require.ErrorContains(t, err, "baseline identity mismatch")
+}
+
+func TestCurrentReleaseArtifactValidationRejectsSelfConsistentSourceVerifierTampering(t *testing.T) {
+	original := append([]byte(nil), currentSourceSchemaAssetJSON...)
+	t.Cleanup(func() { currentSourceSchemaAssetJSON = original })
+	currentSourceSchemaAssetJSON = append(currentSourceSchemaAssetJSON, []byte("\n ")...)
+
+	regenerated := CurrentRelease()
+	err := ValidateCurrentReleaseArtifact(regenerated)
+	require.ErrorContains(t, err, "source schema identity mismatch")
+}
+
+func TestCurrentReleaseArtifactValidationRejectsCatalogQueryTampering(t *testing.T) {
+	original := postgresCatalogFingerprintSQL
+	t.Cleanup(func() { postgresCatalogFingerprintSQL = original })
+	postgresCatalogFingerprintSQL += "\n-- unpinned verifier change"
+
+	err := ValidateCurrentReleaseArtifact(CurrentRelease())
+	require.ErrorContains(t, err, "source schema identity mismatch")
 }
 
 func TestReleasePublicationGateNamesUnmergedAllocatedVersions(t *testing.T) {

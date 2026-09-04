@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "schemaVersion": "028_schema_release_state",
+  "verifier": {
+    "name": "catalog-verifier/postgres-v1.sql",
+    "sha256": "b6fa2ebf686dd840ec88198c066d95e206fe841223774f2d9a3ddf481034c84c"
+  },
+  "extensions": {
+    "empty": [
+      {"name": "plpgsql", "schema": "pg_catalog", "version": "1.0"}
+    ],
+    "installed": [
+      {"name": "plpgsql", "schema": "pg_catalog", "version": "1.0"},
+      {"name": "vector", "schema": "public", "version": "0.8.6"}
+    ]
+  },
+  "phases": {
+    "empty": "c59eb8c3e45adb281fe6c9a4ddcfd0762b37be4b5b98d59d6de583afec648650",
+    "prepared": "2273a4cc9b9d86c587021a8c3c0352c9774ded0c87cfb1e82a3d2d9eb09fe7e4",
+    "entSchema": "5934b5c5a748558cc9d6a1606c2ab7d4672c0ddfa3b394f7bd6c5c2866bbb50f",
+    "currentRelease": "c27c267adfccaf31ce2709f8e6215a698f8605beb3bf71f028d22f04ab9024e6"
+  }
+}

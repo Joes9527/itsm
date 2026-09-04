@@ -20,6 +20,7 @@ type ReleaseCatalogEntry struct {
 	BaselineVersion       string       `json:"baselineVersion"`
 	ReleaseManifestSHA256 string       `json:"releaseManifestSha256"`
 	BaselineAsset         ReleaseAsset `json:"baselineAsset"`
+	SourceSchemaAsset     ReleaseAsset `json:"sourceSchemaAsset"`
 	CoveredMigrations     []string     `json:"coveredMigrations"`
 }
 
@@ -62,7 +63,9 @@ func loadReleaseCatalog() (releaseCatalog, error) {
 		seenEntries[identity] = struct{}{}
 		if !sha256Pattern.MatchString(entry.ReleaseManifestSHA256) ||
 			strings.TrimSpace(entry.BaselineAsset.Name) == "" ||
-			!sha256Pattern.MatchString(entry.BaselineAsset.SHA256) {
+			!sha256Pattern.MatchString(entry.BaselineAsset.SHA256) ||
+			strings.TrimSpace(entry.SourceSchemaAsset.Name) == "" ||
+			!sha256Pattern.MatchString(entry.SourceSchemaAsset.SHA256) {
 			return releaseCatalog{}, fmt.Errorf("release catalog entry %d artifact identity is invalid", index)
 		}
 		if len(entry.CoveredMigrations) == 0 {
@@ -140,13 +143,14 @@ func sameReleaseCatalogEntry(left, right ReleaseCatalogEntry) bool {
 		left.BaselineVersion == right.BaselineVersion &&
 		left.ReleaseManifestSHA256 == right.ReleaseManifestSHA256 &&
 		left.BaselineAsset == right.BaselineAsset &&
+		left.SourceSchemaAsset == right.SourceSchemaAsset &&
 		slices.Equal(left.CoveredMigrations, right.CoveredMigrations)
 }
 
 // ValidateCurrentReleaseArtifact proves the release manifest, current fresh
-// baseline, and every executable migration against separately pinned digests.
-// It performs no database access and is run before either bootstrap takes a
-// lock or executes SQL.
+// baseline, full source-schema fingerprint/verifier, and every executable
+// migration against separately pinned digests. It performs no database access
+// and is run before either bootstrap takes a lock or executes SQL.
 func ValidateCurrentReleaseArtifact(release ReleaseManifest) error {
 	entry, err := CurrentReleaseCatalogEntry()
 	if err != nil {
@@ -160,14 +164,26 @@ func ValidateCurrentReleaseArtifact(release ReleaseManifest) error {
 		entry.BaselineAsset.SHA256 != checksumSQL(CurrentBaselineSQL()) {
 		return fmt.Errorf("immutable release catalog baseline identity mismatch")
 	}
-	baselineMatches := 0
+	if _, err := loadCurrentCatalogFingerprintAsset(); err != nil {
+		return fmt.Errorf("immutable release catalog source schema identity mismatch: %w", err)
+	}
+	if entry.SourceSchemaAsset != currentSourceSchemaAsset() {
+		return fmt.Errorf("immutable release catalog source schema identity mismatch")
+	}
+	baselineMatches, sourceSchemaMatches := 0, 0
 	for _, asset := range release.Assets {
 		if asset.Name == entry.BaselineAsset.Name && asset.SHA256 == entry.BaselineAsset.SHA256 {
 			baselineMatches++
 		}
+		if asset.Name == entry.SourceSchemaAsset.Name && asset.SHA256 == entry.SourceSchemaAsset.SHA256 {
+			sourceSchemaMatches++
+		}
 	}
 	if baselineMatches != 1 {
 		return fmt.Errorf("immutable release catalog baseline asset manifest mismatch")
+	}
+	if sourceSchemaMatches != 1 {
+		return fmt.Errorf("immutable release catalog source schema asset manifest mismatch")
 	}
 	checksum, err := release.Checksum()
 	if err != nil {

@@ -982,6 +982,11 @@ func InitializeStorage(cfg *config.Config, client *ent.Client, sugar *zap.Sugare
 	if err := validateStorageBootstrapMode(cfg.Deployment); err != nil {
 		return err
 	}
+	if cfg.Deployment.AutoMigrate || cfg.Deployment.AutoSeed {
+		if err := migration.ValidateCurrentReleasePublicationGate(); err != nil {
+			return err
+		}
+	}
 	// RLS：schema 创建 / seed / DDL 属于跨租户操作，必须显式声明 system bypass
 	ctx := tenantctx.SystemContext(context.Background(), "bootstrap:initialize_storage",
 		"schema migration and default seed at process boot")
