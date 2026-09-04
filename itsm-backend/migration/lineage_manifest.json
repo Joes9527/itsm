@@ -233,9 +233,9 @@
     {
       "ledgerVersion": "027_reconcile_current_rls_policies",
       "logicalFile": "itsm-backend/migration/migrations.go",
-      "gitCommit": "20d154bd192782db6a64543ed1f040befd49d833",
-      "gitBlob": "548daa29d20dcb8602a0b9f2db0008f65faad5d1",
-      "sqlSha256": "a932c87caac5e022915b51586f11a01e96f9102c87c72164801b348fbf482864",
+      "gitCommit": "80520dfd4a0a6f73425b875ac68d9794c32abbac",
+      "gitBlob": "6aeb7151791ecfaeeb470d0dfe74a01f62cfce01",
+      "sqlSha256": "c4c3fecae32740e1623caf0bd50945254503ef5de5058cf5c88b069a66d7301b",
       "catalog": "immutable_upgrade_lineage",
       "executable": true,
       "forwardMigration": ""
