@@ -51,7 +51,7 @@ func TestWorkflowStartFrozenNumericFirstGateway(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			f, event := workflowStartFixture(t, numericGatewayXML(tt.expression))
 			event = withFrozenStartVariables(t, event, tt.values)
-			handler := NewWorkflowStartOutboxHandler(f.client, f.engine)
+			handler := NewWorkflowStartOutboxHandler(f.client, f.engine, f.client)
 			require.NoError(t, handler.Deliver(context.Background(), event))
 			first := f.client.ProcessInstance.Query().OnlyX(context.Background())
 			task := f.client.ProcessTask.Query().OnlyX(context.Background())
@@ -71,7 +71,7 @@ func TestWorkflowStartFrozenNumericAssignmentCallback(t *testing.T) {
 	handler := f.engine.CallbackRegistry().GetHandler("ticket_service_handler").(*bpmn.TicketServiceTaskHandler)
 	handler.SetNotificationService(NewTicketNotificationService(f.client, zap.NewNop().Sugar()))
 	event = withFrozenStartVariables(t, event, map[string]any{"assignee_id": json.Number(fmt.Sprint(assigneeID))})
-	deliver := NewWorkflowStartOutboxHandler(f.client, f.engine)
+	deliver := NewWorkflowStartOutboxHandler(f.client, f.engine, f.client)
 	require.NoError(t, deliver.Deliver(ctx, event))
 	callback := f.client.ProcessCallbackOutbox.Query().OnlyX(ctx)
 	require.Equal(t, bpmnCallbackStatusCompleted, callback.Status, "%s", callback.LastErrorClass)
@@ -92,7 +92,7 @@ func TestWorkflowStartRejectsInvalidAssignmentNumbers(t *testing.T) {
 			xml := strings.Replace(string(startProcessServiceTaskXML("ticket_task")), `</bpmn:extensionElements>`, `<bpmn:metaData name="action">assign</bpmn:metaData></bpmn:extensionElements>`, 1)
 			f, event := workflowStartFixture(t, []byte(xml))
 			event = withFrozenStartVariables(t, event, map[string]any{"assignee_id": value})
-			require.NoError(t, NewWorkflowStartOutboxHandler(f.client, f.engine).Deliver(context.Background(), event))
+			require.NoError(t, NewWorkflowStartOutboxHandler(f.client, f.engine, f.client).Deliver(context.Background(), event))
 			row := f.client.ProcessCallbackOutbox.Query().OnlyX(context.Background())
 			require.Equal(t, bpmnCallbackStatusBlocked, row.Status)
 			require.Equal(t, "handler_contract", row.LastErrorClass)
@@ -105,7 +105,7 @@ func TestWorkflowStartRejectsInvalidAssignmentNumbers(t *testing.T) {
 func TestWorkflowStartNumericEvaluationErrorDoesNotSelectFallback(t *testing.T) {
 	f, event := workflowStartFixture(t, numericGatewayXML("amount % 0.1 == 0"))
 	event = withFrozenStartVariables(t, event, map[string]any{"amount": json.Number("1.2")})
-	err := NewWorkflowStartOutboxHandler(f.client, f.engine).Deliver(context.Background(), event)
+	err := NewWorkflowStartOutboxHandler(f.client, f.engine, f.client).Deliver(context.Background(), event)
 	require.ErrorContains(t, err, "unsupported exact decimal operator")
 	require.Zero(t, f.client.ProcessInstance.Query().CountX(context.Background()))
 	require.Zero(t, f.client.ProcessTask.Query().CountX(context.Background()))
@@ -135,7 +135,7 @@ func TestDefinitionStartFrozenIncidentAssignment(t *testing.T) {
 func TestWorkflowStartNumericFalseConditionSelectsFallback(t *testing.T) {
 	f, event := workflowStartFixture(t, numericGatewayXML("amount > 9007199254740993.13"))
 	event = withFrozenStartVariables(t, event, map[string]any{"amount": json.Number("9007199254740993.125")})
-	require.NoError(t, NewWorkflowStartOutboxHandler(f.client, f.engine).Deliver(context.Background(), event))
+	require.NoError(t, NewWorkflowStartOutboxHandler(f.client, f.engine, f.client).Deliver(context.Background(), event))
 	require.Equal(t, "fallback", f.client.ProcessTask.Query().OnlyX(context.Background()).TaskDefinitionKey)
 }
 
@@ -145,7 +145,7 @@ func TestWorkflowNumericContinuationAfterPersistedReload(t *testing.T) {
 	f, event := workflowStartFixture(t, []byte(xml))
 	event = withFrozenStartVariables(t, event, map[string]any{"amount": json.Number("9007199254740993.125")})
 	ctx := context.Background()
-	require.NoError(t, NewWorkflowStartOutboxHandler(f.client, f.engine).Deliver(ctx, event))
+	require.NoError(t, NewWorkflowStartOutboxHandler(f.client, f.engine, f.client).Deliver(ctx, event))
 	instance := f.client.ProcessInstance.Query().OnlyX(ctx)
 	require.Equal(t, json.Number("9007199254740993.125"), instance.Variables["amount"], "actual Ent reload must retain decimal precision")
 	task := f.client.ProcessTask.Query().OnlyX(ctx)

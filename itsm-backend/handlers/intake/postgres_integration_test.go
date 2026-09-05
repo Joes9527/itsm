@@ -46,7 +46,7 @@ func TestPostgresConcurrentApplicationCreation(t *testing.T) {
 	c := workitemcreation.CreateWorkItemCommand{RecordClass: "generic", IntakeKind: "generic", Confirmation: "confirmed", IdempotencyKey: "concurrent", Title: "VPN"}
 	registry := NewCreatorRegistry()
 	require.NoError(t, registry.Register(&preparedCreator{}))
-	service := NewService(client, preparedResolver{}, registry, NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()))
+	service := NewService(client, preparedResolver{}, registry, NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
 	type outcome struct {
 		result *workitemcreation.CreateWorkItemResult
 		err    error

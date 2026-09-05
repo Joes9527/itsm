@@ -56931,29 +56931,31 @@ func (m *IncidentRuleExecutionMutation) ResetEdge(name string) error {
 // IntakeRequestMutation represents an operation that mutates the IntakeRequest nodes in the graph.
 type IntakeRequestMutation struct {
 	config
-	op               Op
-	typ              string
-	id               *int
-	tenant_id        *int
-	addtenant_id     *int
-	actor_id         *int
-	addactor_id      *int
-	requester_id     *int
-	addrequester_id  *int
-	channel          *string
-	operation        *string
-	idempotency_key  *string
-	request_digest   *string
-	digest_version   *string
-	status           *string
-	created_at       *time.Time
-	completed_at     *time.Time
-	clearedFields    map[string]struct{}
-	work_item        *int
-	clearedwork_item bool
-	done             bool
-	oldValue         func(context.Context) (*IntakeRequest, error)
-	predicates       []predicate.IntakeRequest
+	op                 Op
+	typ                string
+	id                 *int
+	tenant_id          *int
+	addtenant_id       *int
+	actor_id           *int
+	addactor_id        *int
+	actor_tenant_id    *int
+	addactor_tenant_id *int
+	requester_id       *int
+	addrequester_id    *int
+	channel            *string
+	operation          *string
+	idempotency_key    *string
+	request_digest     *string
+	digest_version     *string
+	status             *string
+	created_at         *time.Time
+	completed_at       *time.Time
+	clearedFields      map[string]struct{}
+	work_item          *int
+	clearedwork_item   bool
+	done               bool
+	oldValue           func(context.Context) (*IntakeRequest, error)
+	predicates         []predicate.IntakeRequest
 }
 
 var _ ent.Mutation = (*IntakeRequestMutation)(nil)
@@ -57164,6 +57166,62 @@ func (m *IntakeRequestMutation) AddedActorID() (r int, exists bool) {
 func (m *IntakeRequestMutation) ResetActorID() {
 	m.actor_id = nil
 	m.addactor_id = nil
+}
+
+// SetActorTenantID sets the "actor_tenant_id" field.
+func (m *IntakeRequestMutation) SetActorTenantID(i int) {
+	m.actor_tenant_id = &i
+	m.addactor_tenant_id = nil
+}
+
+// ActorTenantID returns the value of the "actor_tenant_id" field in the mutation.
+func (m *IntakeRequestMutation) ActorTenantID() (r int, exists bool) {
+	v := m.actor_tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActorTenantID returns the old "actor_tenant_id" field's value of the IntakeRequest entity.
+// If the IntakeRequest object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IntakeRequestMutation) OldActorTenantID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActorTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActorTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActorTenantID: %w", err)
+	}
+	return oldValue.ActorTenantID, nil
+}
+
+// AddActorTenantID adds i to the "actor_tenant_id" field.
+func (m *IntakeRequestMutation) AddActorTenantID(i int) {
+	if m.addactor_tenant_id != nil {
+		*m.addactor_tenant_id += i
+	} else {
+		m.addactor_tenant_id = &i
+	}
+}
+
+// AddedActorTenantID returns the value that was added to the "actor_tenant_id" field in this mutation.
+func (m *IntakeRequestMutation) AddedActorTenantID() (r int, exists bool) {
+	v := m.addactor_tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetActorTenantID resets all changes to the "actor_tenant_id" field.
+func (m *IntakeRequestMutation) ResetActorTenantID() {
+	m.actor_tenant_id = nil
+	m.addactor_tenant_id = nil
 }
 
 // SetRequesterID sets the "requester_id" field.
@@ -57633,12 +57691,15 @@ func (m *IntakeRequestMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IntakeRequestMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 13)
 	if m.tenant_id != nil {
 		fields = append(fields, intakerequest.FieldTenantID)
 	}
 	if m.actor_id != nil {
 		fields = append(fields, intakerequest.FieldActorID)
+	}
+	if m.actor_tenant_id != nil {
+		fields = append(fields, intakerequest.FieldActorTenantID)
 	}
 	if m.requester_id != nil {
 		fields = append(fields, intakerequest.FieldRequesterID)
@@ -57682,6 +57743,8 @@ func (m *IntakeRequestMutation) Field(name string) (ent.Value, bool) {
 		return m.TenantID()
 	case intakerequest.FieldActorID:
 		return m.ActorID()
+	case intakerequest.FieldActorTenantID:
+		return m.ActorTenantID()
 	case intakerequest.FieldRequesterID:
 		return m.RequesterID()
 	case intakerequest.FieldChannel:
@@ -57715,6 +57778,8 @@ func (m *IntakeRequestMutation) OldField(ctx context.Context, name string) (ent.
 		return m.OldTenantID(ctx)
 	case intakerequest.FieldActorID:
 		return m.OldActorID(ctx)
+	case intakerequest.FieldActorTenantID:
+		return m.OldActorTenantID(ctx)
 	case intakerequest.FieldRequesterID:
 		return m.OldRequesterID(ctx)
 	case intakerequest.FieldChannel:
@@ -57757,6 +57822,13 @@ func (m *IntakeRequestMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetActorID(v)
+		return nil
+	case intakerequest.FieldActorTenantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActorTenantID(v)
 		return nil
 	case intakerequest.FieldRequesterID:
 		v, ok := value.(int)
@@ -57842,6 +57914,9 @@ func (m *IntakeRequestMutation) AddedFields() []string {
 	if m.addactor_id != nil {
 		fields = append(fields, intakerequest.FieldActorID)
 	}
+	if m.addactor_tenant_id != nil {
+		fields = append(fields, intakerequest.FieldActorTenantID)
+	}
 	if m.addrequester_id != nil {
 		fields = append(fields, intakerequest.FieldRequesterID)
 	}
@@ -57857,6 +57932,8 @@ func (m *IntakeRequestMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedTenantID()
 	case intakerequest.FieldActorID:
 		return m.AddedActorID()
+	case intakerequest.FieldActorTenantID:
+		return m.AddedActorTenantID()
 	case intakerequest.FieldRequesterID:
 		return m.AddedRequesterID()
 	}
@@ -57881,6 +57958,13 @@ func (m *IntakeRequestMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddActorID(v)
+		return nil
+	case intakerequest.FieldActorTenantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddActorTenantID(v)
 		return nil
 	case intakerequest.FieldRequesterID:
 		v, ok := value.(int)
@@ -57936,6 +58020,9 @@ func (m *IntakeRequestMutation) ResetField(name string) error {
 		return nil
 	case intakerequest.FieldActorID:
 		m.ResetActorID()
+		return nil
+	case intakerequest.FieldActorTenantID:
+		m.ResetActorTenantID()
 		return nil
 	case intakerequest.FieldRequesterID:
 		m.ResetRequesterID()

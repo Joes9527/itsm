@@ -6,16 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"itsm-backend/authorization"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/ent/processinstance"
-	"itsm-backend/ent/user"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"strconv"
 	"strings"
 )
 
-func executeWorkItemCreation(ctx context.Context, client *ent.Client, app creation.Application, handlerID, action, class string) (*CallbackEffect, error) {
+func executeWorkItemCreation(ctx context.Context, client, directory *ent.Client, app creation.Application, handlerID, action, class string) (*CallbackEffect, error) {
 	key, ok := BPMNCallbackExecutionKey(ctx)
 	if !ok {
 		return BlockedEffect(CallbackBlockHandlerContract, "creation requires durable callback identity"), nil
@@ -24,8 +25,8 @@ func executeWorkItemCreation(ctx context.Context, client *ent.Client, app creati
 	if err != nil {
 		return nil, err
 	}
-	if app == nil {
-		return BlockedEffect(CallbackBlockHandlerContract, "creation application is unavailable"), nil
+	if app == nil || directory == nil {
+		return BlockedEffect(CallbackBlockHandlerContract, "creation application or actor directory is unavailable"), nil
 	}
 	row, err := client.ProcessCallbackOutbox.Query().Where(processcallbackoutbox.ExecutionKeyEQ(key), processcallbackoutbox.TenantIDEQ(tenantID), processcallbackoutbox.HandlerIDEQ(handlerID), processcallbackoutbox.ActionEQ(action), processcallbackoutbox.StatusEQ("processing")).Only(ctx)
 	if ent.IsNotFound(err) {
@@ -48,8 +49,11 @@ func executeWorkItemCreation(ctx context.Context, client *ent.Client, app creati
 	if err != nil || actorID <= 0 {
 		return BlockedEffect(CallbackBlockHandlerContract, "source process has no authenticated initiator"), nil
 	}
-	actor, err := client.User.Query().Where(user.IDEQ(actorID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).Only(ctx)
-	if ent.IsNotFound(err) {
+	// This lookup only supplies the original initiator's current canonical role.
+	// The application reauthorizes every create/replay using its shared RR snapshot.
+	lookup := tenantctx.SystemContext(ctx, "bpmn:creation-initiator", "resolve original creation initiator role")
+	actor, err := directory.User.Get(lookup, actorID)
+	if ent.IsNotFound(err) || (err == nil && !actor.Active) {
 		return BlockedEffect(CallbackBlockTargetMissing, "source initiator is unavailable"), nil
 	}
 	if err != nil {
@@ -59,7 +63,7 @@ func executeWorkItemCreation(ctx context.Context, client *ent.Client, app creati
 	if err != nil {
 		return BlockedEffect(CallbackBlockHandlerContract, "invalid declared creation payload"), nil
 	}
-	result, err := app.Create(ctx, creation.Identity{TenantID: tenantID, ActorID: actor.ID, RequesterID: requesterID, Role: actor.Role, Channel: "bpmn", Provider: "bpmn"}, command)
+	result, err := app.Create(ctx, creation.Identity{TenantID: tenantID, ActorID: actor.ID, RequesterID: requesterID, Role: authorization.EffectiveSessionRole(actor), Channel: "bpmn", Provider: "bpmn"}, command)
 	if err != nil {
 		var typed *creation.IntakeError
 		if errors.As(err, &typed) && !typed.Retryable {

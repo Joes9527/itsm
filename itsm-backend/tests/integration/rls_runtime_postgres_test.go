@@ -39,6 +39,7 @@ func TestPostgresRLSRuntimeConsumer(t *testing.T) {
 	client := clients.Tenant
 	db := database.GetRawDB()
 	owner := service.NewIncidentService(client, zap.NewNop().Sugar())
+	owner.RuleEngine().SetActorDirectory(clients.System)
 	owner.SetAlertCreator(service.NewIncidentAlertingService(client, zap.NewNop().Sugar()))
 	registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{owner.RuleEngine()}, "incident_alert_delivery")
 	require.NoError(t, err)

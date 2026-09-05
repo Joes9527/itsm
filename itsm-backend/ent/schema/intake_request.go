@@ -19,6 +19,7 @@ func (IntakeRequest) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int("tenant_id").Immutable().Positive(),
 		field.Int("actor_id").Immutable().Positive(),
+		field.Int("actor_tenant_id").Immutable().Positive(),
 		field.Int("requester_id").Immutable().Positive(),
 		field.String("channel").Immutable().NotEmpty(),
 		field.String("operation").Immutable().NotEmpty(),

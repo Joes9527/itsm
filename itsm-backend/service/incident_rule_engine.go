@@ -17,9 +17,10 @@ import (
 )
 
 type IncidentRuleEngine struct {
-	client       *ent.Client
-	logger       *zap.SugaredLogger
-	alertCreator IncidentAlertCreator
+	client         *ent.Client
+	actorDirectory *ent.Client
+	logger         *zap.SugaredLogger
+	alertCreator   IncidentAlertCreator
 }
 
 func NewIncidentRuleEngine(client *ent.Client, logger *zap.SugaredLogger) *IncidentRuleEngine {
@@ -28,6 +29,9 @@ func NewIncidentRuleEngine(client *ent.Client, logger *zap.SugaredLogger) *Incid
 		logger: logger,
 	}
 }
+
+// SetActorDirectory wires the restricted directory used by committed Intake effects.
+func (e *IncidentRuleEngine) SetActorDirectory(directory *ent.Client) { e.actorDirectory = directory }
 
 // RuleCondition 规则条件接口
 type RuleCondition interface {
@@ -151,13 +155,14 @@ func (c *CategoryCondition) Evaluate(ctx context.Context, incident *ent.Incident
 
 // EscalationAction 升级动作
 type EscalationAction struct {
-	Level        int
-	Reason       string
-	NotifyUsers  []int
-	AutoAssign   bool
-	client       *ent.Client
-	logger       *zap.SugaredLogger
-	alertCreator IncidentAlertCreator
+	Level          int
+	Reason         string
+	NotifyUsers    []int
+	AutoAssign     bool
+	client         *ent.Client
+	actorDirectory *ent.Client
+	logger         *zap.SugaredLogger
+	alertCreator   IncidentAlertCreator
 }
 
 func (a *EscalationAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
@@ -181,13 +186,14 @@ func (a *EscalationAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *
 
 // NotificationAction 通知动作
 type NotificationAction struct {
-	Channels     []string
-	Recipients   []string
-	Message      string
-	Severity     string
-	client       *ent.Client
-	logger       *zap.SugaredLogger
-	alertCreator IncidentAlertCreator
+	Channels       []string
+	Recipients     []string
+	Message        string
+	Severity       string
+	client         *ent.Client
+	actorDirectory *ent.Client
+	logger         *zap.SugaredLogger
+	alertCreator   IncidentAlertCreator
 }
 
 func (a *NotificationAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {

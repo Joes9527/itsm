@@ -58,7 +58,7 @@ func NewService(repo sr.Repository, client *ent.Client, logger *zap.SugaredLogge
 	for _, tenant := range client.Tenant.Query().AllX(context.Background()) {
 		configureSRIntakeFixture(context.Background(), client, tenant.ID)
 	}
-	return &Service{owner, intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator())), client}
+	return &Service{owner, intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}), client}
 }
 func NewHandler(owner *Service) *Handler {
 	h := sr.NewHandler(owner.Service)

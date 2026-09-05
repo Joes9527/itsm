@@ -53,7 +53,7 @@ func newUnifiedIntakeFixture(t *testing.T, ticketOwners ...func(*ent.Client, *za
 		require.NoError(t, registry.Register(owner))
 	}
 	resolver := intake.NewResolver(catalogdomain.NewService(nil, client, logger), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
-	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(allocator))
+	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(allocator), sameTransactionDirectory{})
 	return &unifiedIntakeFixture{client, app, creation.Identity{TenantID: tenant.ID, ActorID: actor.ID, RequesterID: actor.ID, Role: actor.Role, Channel: "itsm_web"}, creation.CreateWorkItemCommand{RecordClass: "generic", IntakeKind: "generic", Confirmation: "confirmed", Title: "VPN access", IdempotencyKey: "one"}}
 }
 

@@ -67,7 +67,7 @@ func (a *ticketStoreAdapter) CreateTicket(ctx context.Context, tenantID int, req
 	if err != nil {
 		return 0, "", creation.NewAuthenticationRequired("verified email requester is unavailable", err)
 	}
-	identity := creation.Identity{TenantID: tenantID, ActorID: actor.ID, RequesterID: actor.ID, Role: actor.Role, Channel: "email", Provider: "msgraph_email"}
+	identity := creation.Identity{TenantID: tenantID, ActorID: actor.ID, RequesterID: actor.ID, Role: authorization.EffectiveSessionRole(actor), Channel: "email", Provider: "msgraph_email"}
 	result, err := a.creationApp.Create(ctx, identity, creation.CreateWorkItemCommand{
 		RecordClass: creation.RecordClassGeneric, IntakeKind: creation.IntakeKindGeneric, Confirmation: "confirmed",
 		IdempotencyKey: fmt.Sprintf("email:%x", sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(req.Mailbox))+"\x00"+req.ExternalMessageID))),
@@ -108,7 +108,7 @@ func (a *ticketStoreAdapter) PostReplyComment(ctx context.Context, tenantID, tic
 	if err != nil {
 		return err
 	}
-	identity := creation.Identity{TenantID: tenantID, ActorID: actor.ID, RequesterID: actor.ID, Role: actor.Role, Channel: "email", Provider: "msgraph_email"}
+	identity := creation.Identity{TenantID: tenantID, ActorID: actor.ID, RequesterID: actor.ID, Role: authorization.EffectiveSessionRole(actor), Channel: "email", Provider: "msgraph_email"}
 	for _, action := range []string{"read", "write"} {
 		if err := authorization.RequireCurrentPermission(ctx, tx, identity, "ticket", action); err != nil {
 			return err

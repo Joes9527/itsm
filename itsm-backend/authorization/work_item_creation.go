@@ -12,6 +12,8 @@ import (
 	"itsm-backend/ent/user"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"strings"
+	"sync/atomic"
+	"time"
 )
 
 // RequireCurrentPermission reads current RBAC inside the caller transaction.
@@ -51,81 +53,139 @@ func RequireCurrentPermission(ctx context.Context, tx *ent.Tx, identity creation
 
 // AuthorizeWorkItemCreation runs before receipt claim, including matching replays.
 // Command adapters cannot choose the role or bypass requester delegation policy.
-func AuthorizeWorkItemCreation(ctx context.Context, tx *ent.Tx, identity creation.Identity, command creation.CreateWorkItemCommand) error {
-	actor, err := tx.User.Query().Where(user.IDEQ(identity.ActorID), user.TenantIDEQ(identity.TenantID), user.ActiveEQ(true)).Only(ctx)
-	if ent.IsNotFound(err) {
-		return creation.NewAuthenticationRequired("current actor is unavailable", nil)
+func AuthorizeWorkItemCreation(ctx context.Context, tx *ent.Tx, directory *ent.Client, identity creation.Identity, command creation.CreateWorkItemCommand) (*CreationAuthorization, error) {
+	if tx == nil {
+		return nil, creation.NewInternalFailure("creation transaction is required", nil)
 	}
+	actor, err := ResolveCurrentSessionActor(ctx, directory, identity.ActorID, identity.TenantID, identity.Role, time.Now())
 	if err != nil {
-		return creation.NewInfrastructureUnavailable("could not load current actor", err)
+		return nil, err
 	}
+	return authorizeWorkItemCreationForActor(ctx, tx, actor, identity, command)
+}
+
+func authorizeWorkItemCreationForActor(ctx context.Context, tx *ent.Tx, actor *ent.User, identity creation.Identity, command creation.CreateWorkItemCommand) (*CreationAuthorization, error) {
+	identity.ActorTenantID = actor.TenantID
+	if identity.ActorTenantID != identity.TenantID && identity.RequesterID == identity.ActorID {
+		return nil, creation.NewInvalidCommand("an active target-tenant requester must be explicitly selected", creation.FieldError{Field: "requesterId", Message: "select an active target-tenant requester"}, nil)
+	}
+
 	if command.FeishuTask != nil && (identity.ActorID != identity.RequesterID || actor.FeishuOpenID != command.FeishuTask.CreatorOpenID) {
-		return creation.NewPermissionDenied("verified Feishu creator no longer matches the requester", nil)
+		return nil, creation.NewPermissionDenied("verified Feishu creator no longer matches the requester", nil)
 	}
 	if command.Email != nil && (identity.ActorID != identity.RequesterID || !strings.EqualFold(actor.Email, command.Email.SenderEmail)) {
-		return creation.NewPermissionDenied("verified email sender no longer matches the requester", nil)
-	}
-	if actor.Role != identity.Role {
-		return creation.NewAuthenticationRequired("current actor role changed", nil)
+		return nil, creation.NewPermissionDenied("verified email sender no longer matches the requester", nil)
 	}
 	requester, err := tx.User.Query().Where(user.IDEQ(identity.RequesterID), user.TenantIDEQ(identity.TenantID), user.ActiveEQ(true)).Exist(ctx)
 	if err != nil {
-		return creation.NewInfrastructureUnavailable("could not load current requester", err)
+		return nil, creation.NewInfrastructureUnavailable("could not load current requester", err)
 	}
 	if !requester {
-		return creation.NewPermissionDenied("current requester is unavailable", nil)
+		return nil, creation.NewPermissionDenied("current requester is unavailable", nil)
 	}
 	resource := map[string]string{creation.RecordClassGeneric: "ticket", creation.RecordClassIncident: "incident", creation.RecordClassProblem: "problem", creation.RecordClassChangeRequest: "change", creation.RecordClassServiceRequestItem: "service_request"}[command.RecordClass]
 	if resource == "" {
-		return creation.NewUnsupportedRecordClass("unsupported creation class", nil)
+		return nil, creation.NewUnsupportedRecordClass("unsupported creation class", nil)
 	}
 	for _, action := range []string{"write", "read"} {
 		if err := RequireCurrentPermission(ctx, tx, identity, resource, action); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if identity.RequesterID != identity.ActorID {
 		if err := RequireCurrentPermission(ctx, tx, identity, resource, "create_on_behalf"); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	// Runtime input, including BPMN callback values, cannot delegate workflow
 	// management. Server-owned catalog and resolver bindings are not overrides.
 	if command.WorkflowDefinitionKey != "" {
 		if err := RequireCurrentPermission(ctx, tx, identity, "workflow", "write"); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if command.TemplateID != nil || command.ParentTicketID != nil || len(command.TagIDs) > 0 {
 		if err := RequireCurrentPermission(ctx, tx, identity, "ticket", "read"); err != nil {
-			return err
+			return nil, err
 		}
 	}
 	if command.Change != nil && command.Change.StandardTemplateID != nil {
 		if err := RequireCurrentPermission(ctx, tx, identity, "standard_change", "read"); err != nil {
-			return err
+			return nil, err
 		}
 		exists, err := tx.StandardChange.Query().Where(standardchange.IDEQ(*command.Change.StandardTemplateID), standardchange.TenantIDEQ(identity.TenantID), standardchange.IsActiveEQ(true)).Exist(ctx)
 		if err != nil {
-			return creation.NewInfrastructureUnavailable("could not authorize standard change template", err)
+			return nil, creation.NewInfrastructureUnavailable("could not authorize standard change template", err)
 		}
 		if !exists {
-			return creation.NewReferenceNotFound("standard change template is unavailable", nil)
+			return nil, creation.NewReferenceNotFound("standard change template is unavailable", nil)
 		}
 	}
 	if command.Problem != nil && command.Problem.SourceIncidentID != nil {
 		for _, action := range []string{"read", "write"} {
 			if err := RequireCurrentPermission(ctx, tx, identity, "incident", action); err != nil {
-				return err
+				return nil, err
 			}
 		}
 		exists, err := tx.Incident.Query().Where(incident.IDEQ(*command.Problem.SourceIncidentID), incident.HasWorkItemWith(ticket.TenantIDEQ(identity.TenantID), ticket.RecordClassEQ("incident"), ticket.DeletedAtIsNil())).Exist(ctx)
 		if err != nil {
-			return creation.NewInfrastructureUnavailable("could not authorize conversion source", err)
+			return nil, creation.NewInfrastructureUnavailable("could not authorize conversion source", err)
 		}
 		if !exists {
-			return creation.NewReferenceNotFound("source incident is unavailable", nil)
+			return nil, creation.NewReferenceNotFound("source incident is unavailable", nil)
 		}
 	}
+	authorized := &CreationAuthorization{tx: tx, identity: identity}
+	authorized.active.Store(true)
+	tx.OnCommit(func(next ent.Committer) ent.Committer {
+		return ent.CommitFunc(func(ctx context.Context, tx *ent.Tx) error {
+			authorized.active.Store(false)
+			return next.Commit(ctx, tx)
+		})
+	})
+	tx.OnRollback(func(next ent.Rollbacker) ent.Rollbacker {
+		return ent.RollbackFunc(func(ctx context.Context, tx *ent.Tx) error {
+			authorized.active.Store(false)
+			return next.Rollback(ctx, tx)
+		})
+	})
+	return authorized, nil
+}
+
+// CreationAuthorization is materialized after all current checks and contains
+// no directory connection. Only the authorizer can construct a valid value.
+type CreationAuthorization struct {
+	active   atomic.Bool
+	tx       *ent.Tx
+	identity creation.Identity
+}
+
+func (a *CreationAuthorization) Identity() creation.Identity {
+	if a == nil {
+		return creation.Identity{}
+	}
+	return a.identity
+}
+func (a *CreationAuthorization) Validate(tx *ent.Tx, identity creation.Identity) error {
+	if a == nil || !a.active.Load() || tx == nil || a.tx != tx || a.identity != identity || a.identity.ActorTenantID <= 0 {
+		return creation.NewPermissionDenied("creation authorization does not match transaction identity", nil)
+	}
 	return nil
+}
+
+// AuthorizeNativeWorkItemCreation is reserved for verified provider deliveries
+// whose actor/requester are explicitly native to the target tenant.
+func AuthorizeNativeWorkItemCreation(ctx context.Context, tx *ent.Tx, identity creation.Identity, command creation.CreateWorkItemCommand) error {
+	if tx == nil {
+		return creation.NewInternalFailure("creation transaction is required", nil)
+	}
+	actor, err := resolveCurrentSessionActor(ctx, tx.Client(), identity.ActorID, identity.TenantID, identity.Role, time.Now())
+	if err != nil {
+		return err
+	}
+	if actor.TenantID != identity.TenantID {
+		return creation.NewPermissionDenied("provider actor must be native to target", nil)
+	}
+	_, err = authorizeWorkItemCreationForActor(ctx, tx, actor, identity, command)
+	return err
 }

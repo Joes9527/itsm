@@ -43,7 +43,7 @@ func NewService(repo *EntRepository, logger *zap.SugaredLogger) *Service {
 		panic(err)
 	}
 	resolver := intake.NewResolver(service_catalog.NewService(nil, repo.client, logger), service.NewProcessBindingService(repo.client), service.NewConfigurationItemService(repo.client, logger, nil, nil), service.NewTicketCategoryService(repo.client))
-	app := intake.NewService(repo.client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()))
+	app := intake.NewService(repo.client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
 	return &Service{owner, app, repo.client}
 }
 func NewHandler(owner *Service, client *ent.Client) *Handler {

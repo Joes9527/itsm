@@ -7,6 +7,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/incident"
+	"itsm-backend/ent/intakerequest"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/workitemrelation"
 	creation "itsm-backend/handlers/common/workitemcreation"
@@ -121,7 +122,12 @@ func writeIncidentConversion(ctx context.Context, tx *ent.Tx, plan *creation.Cre
 	}
 	command := plan.Resolved.Command
 	request := dto.ConvertIncidentToProblemRequest{Title: command.Title, Description: command.Description, RootCause: command.Problem.RootCause}
-	_, err = tx.AuditLog.Create().SetTenantID(identity.TenantID).SetUserID(identity.ActorID).SetResource("incident").SetAction("convert_to_problem").SetPath(incidentConversionAuditPath).SetMethod("POST").SetRequestBody(redactedConversionAuditJSON(incidentID, sourceWorkItemID, problemID, workItemID, request)).Save(ctx)
+	receipt, err := tx.IntakeRequest.Query().Where(intakerequest.TenantIDEQ(identity.TenantID), intakerequest.ActorIDEQ(identity.ActorID), intakerequest.ActorTenantIDEQ(identity.ActorTenantID), intakerequest.ChannelEQ(identity.Channel), intakerequest.IdempotencyKeyEQ(plan.Resolved.Command.IdempotencyKey)).Only(ctx)
+	if err != nil {
+		return creation.NewInfrastructureUnavailable("conversion receipt provenance unavailable", err)
+	}
+	provenance := creation.ActorProvenance{ActorUserID: identity.ActorID, ActorTenantID: identity.ActorTenantID, TargetTenantID: identity.TenantID, IntakeRequestID: receipt.ID, WorkItemID: workItemID}
+	_, err = tx.AuditLog.Create().SetTenantID(identity.TenantID).SetUserID(identity.ActorID).SetResource("incident").SetAction("convert_to_problem").SetPath(incidentConversionAuditPath).SetMethod("POST").SetRequestBody(redactedConversionAuditJSON(incidentID, sourceWorkItemID, problemID, workItemID, request, provenance)).Save(ctx)
 	if err != nil {
 		return creation.NewInfrastructureUnavailable("could not create incident conversion audit", err)
 	}

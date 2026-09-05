@@ -66,7 +66,7 @@ func setupInstantiationRouter(t *testing.T, client *ent.Client, userID, tenantID
 		service.NewTicketCategoryService(client),
 	)
 	h := NewHandler(client, logger)
-	h.SetCreationApplication(intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator())))
+	h.SetCreationApplication(intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}))
 	return setupRouterForHandler(t, h, userID, tenantID)
 }
 

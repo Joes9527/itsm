@@ -1619,40 +1619,44 @@ func init() {
 	intakerequestDescActorID := intakerequestFields[1].Descriptor()
 	// intakerequest.ActorIDValidator is a validator for the "actor_id" field. It is called by the builders before save.
 	intakerequest.ActorIDValidator = intakerequestDescActorID.Validators[0].(func(int) error)
+	// intakerequestDescActorTenantID is the schema descriptor for actor_tenant_id field.
+	intakerequestDescActorTenantID := intakerequestFields[2].Descriptor()
+	// intakerequest.ActorTenantIDValidator is a validator for the "actor_tenant_id" field. It is called by the builders before save.
+	intakerequest.ActorTenantIDValidator = intakerequestDescActorTenantID.Validators[0].(func(int) error)
 	// intakerequestDescRequesterID is the schema descriptor for requester_id field.
-	intakerequestDescRequesterID := intakerequestFields[2].Descriptor()
+	intakerequestDescRequesterID := intakerequestFields[3].Descriptor()
 	// intakerequest.RequesterIDValidator is a validator for the "requester_id" field. It is called by the builders before save.
 	intakerequest.RequesterIDValidator = intakerequestDescRequesterID.Validators[0].(func(int) error)
 	// intakerequestDescChannel is the schema descriptor for channel field.
-	intakerequestDescChannel := intakerequestFields[3].Descriptor()
+	intakerequestDescChannel := intakerequestFields[4].Descriptor()
 	// intakerequest.ChannelValidator is a validator for the "channel" field. It is called by the builders before save.
 	intakerequest.ChannelValidator = intakerequestDescChannel.Validators[0].(func(string) error)
 	// intakerequestDescOperation is the schema descriptor for operation field.
-	intakerequestDescOperation := intakerequestFields[4].Descriptor()
+	intakerequestDescOperation := intakerequestFields[5].Descriptor()
 	// intakerequest.OperationValidator is a validator for the "operation" field. It is called by the builders before save.
 	intakerequest.OperationValidator = intakerequestDescOperation.Validators[0].(func(string) error)
 	// intakerequestDescIdempotencyKey is the schema descriptor for idempotency_key field.
-	intakerequestDescIdempotencyKey := intakerequestFields[5].Descriptor()
+	intakerequestDescIdempotencyKey := intakerequestFields[6].Descriptor()
 	// intakerequest.IdempotencyKeyValidator is a validator for the "idempotency_key" field. It is called by the builders before save.
 	intakerequest.IdempotencyKeyValidator = intakerequestDescIdempotencyKey.Validators[0].(func(string) error)
 	// intakerequestDescRequestDigest is the schema descriptor for request_digest field.
-	intakerequestDescRequestDigest := intakerequestFields[6].Descriptor()
+	intakerequestDescRequestDigest := intakerequestFields[7].Descriptor()
 	// intakerequest.RequestDigestValidator is a validator for the "request_digest" field. It is called by the builders before save.
 	intakerequest.RequestDigestValidator = intakerequestDescRequestDigest.Validators[0].(func(string) error)
 	// intakerequestDescDigestVersion is the schema descriptor for digest_version field.
-	intakerequestDescDigestVersion := intakerequestFields[7].Descriptor()
+	intakerequestDescDigestVersion := intakerequestFields[8].Descriptor()
 	// intakerequest.DigestVersionValidator is a validator for the "digest_version" field. It is called by the builders before save.
 	intakerequest.DigestVersionValidator = intakerequestDescDigestVersion.Validators[0].(func(string) error)
 	// intakerequestDescStatus is the schema descriptor for status field.
-	intakerequestDescStatus := intakerequestFields[8].Descriptor()
+	intakerequestDescStatus := intakerequestFields[9].Descriptor()
 	// intakerequest.DefaultStatus holds the default value on creation for the status field.
 	intakerequest.DefaultStatus = intakerequestDescStatus.Default.(string)
 	// intakerequestDescWorkItemID is the schema descriptor for work_item_id field.
-	intakerequestDescWorkItemID := intakerequestFields[9].Descriptor()
+	intakerequestDescWorkItemID := intakerequestFields[10].Descriptor()
 	// intakerequest.WorkItemIDValidator is a validator for the "work_item_id" field. It is called by the builders before save.
 	intakerequest.WorkItemIDValidator = intakerequestDescWorkItemID.Validators[0].(func(int) error)
 	// intakerequestDescCreatedAt is the schema descriptor for created_at field.
-	intakerequestDescCreatedAt := intakerequestFields[10].Descriptor()
+	intakerequestDescCreatedAt := intakerequestFields[11].Descriptor()
 	// intakerequest.DefaultCreatedAt holds the default value on creation for the created_at field.
 	intakerequest.DefaultCreatedAt = intakerequestDescCreatedAt.Default.(func() time.Time)
 	intakeresolutionsnapshotFields := schema.IntakeResolutionSnapshot{}.Fields()

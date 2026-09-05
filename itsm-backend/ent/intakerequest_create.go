@@ -35,6 +35,12 @@ func (_c *IntakeRequestCreate) SetActorID(v int) *IntakeRequestCreate {
 	return _c
 }
 
+// SetActorTenantID sets the "actor_tenant_id" field.
+func (_c *IntakeRequestCreate) SetActorTenantID(v int) *IntakeRequestCreate {
+	_c.mutation.SetActorTenantID(v)
+	return _c
+}
+
 // SetRequesterID sets the "requester_id" field.
 func (_c *IntakeRequestCreate) SetRequesterID(v int) *IntakeRequestCreate {
 	_c.mutation.SetRequesterID(v)
@@ -195,6 +201,14 @@ func (_c *IntakeRequestCreate) check() error {
 			return &ValidationError{Name: "actor_id", err: fmt.Errorf(`ent: validator failed for field "IntakeRequest.actor_id": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.ActorTenantID(); !ok {
+		return &ValidationError{Name: "actor_tenant_id", err: errors.New(`ent: missing required field "IntakeRequest.actor_tenant_id"`)}
+	}
+	if v, ok := _c.mutation.ActorTenantID(); ok {
+		if err := intakerequest.ActorTenantIDValidator(v); err != nil {
+			return &ValidationError{Name: "actor_tenant_id", err: fmt.Errorf(`ent: validator failed for field "IntakeRequest.actor_tenant_id": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.RequesterID(); !ok {
 		return &ValidationError{Name: "requester_id", err: errors.New(`ent: missing required field "IntakeRequest.requester_id"`)}
 	}
@@ -288,6 +302,10 @@ func (_c *IntakeRequestCreate) createSpec() (*IntakeRequest, *sqlgraph.CreateSpe
 	if value, ok := _c.mutation.ActorID(); ok {
 		_spec.SetField(intakerequest.FieldActorID, field.TypeInt, value)
 		_node.ActorID = value
+	}
+	if value, ok := _c.mutation.ActorTenantID(); ok {
+		_spec.SetField(intakerequest.FieldActorTenantID, field.TypeInt, value)
+		_node.ActorTenantID = value
 	}
 	if value, ok := _c.mutation.RequesterID(); ok {
 		_spec.SetField(intakerequest.FieldRequesterID, field.TypeInt, value)
@@ -458,6 +476,9 @@ func (u *IntakeRequestUpsertOne) UpdateNewValues() *IntakeRequestUpsertOne {
 		}
 		if _, exists := u.create.mutation.ActorID(); exists {
 			s.SetIgnore(intakerequest.FieldActorID)
+		}
+		if _, exists := u.create.mutation.ActorTenantID(); exists {
+			s.SetIgnore(intakerequest.FieldActorTenantID)
 		}
 		if _, exists := u.create.mutation.RequesterID(); exists {
 			s.SetIgnore(intakerequest.FieldRequesterID)
@@ -748,6 +769,9 @@ func (u *IntakeRequestUpsertBulk) UpdateNewValues() *IntakeRequestUpsertBulk {
 			}
 			if _, exists := b.mutation.ActorID(); exists {
 				s.SetIgnore(intakerequest.FieldActorID)
+			}
+			if _, exists := b.mutation.ActorTenantID(); exists {
+				s.SetIgnore(intakerequest.FieldActorTenantID)
 			}
 			if _, exists := b.mutation.RequesterID(); exists {
 				s.SetIgnore(intakerequest.FieldRequesterID)

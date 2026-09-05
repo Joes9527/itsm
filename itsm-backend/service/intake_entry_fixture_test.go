@@ -113,7 +113,7 @@ func newEntryApplication(client *ent.Client, tickets *domain.TicketService, inci
 	}
 	logger := zap.NewNop().Sugar()
 	resolver := intake.NewResolver(service_catalog.NewService(nil, client, logger), domain.NewProcessBindingService(client), domain.NewConfigurationItemService(client, logger, nil, nil), domain.NewTicketCategoryService(client))
-	return intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()))
+	return intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
 }
 func submitEntryFixture(ctx context.Context, h gin.HandlerFunc, tenantID int, actor *ent.User, body any) (*creation.CreateWorkItemResult, error) {
 	raw, err := json.Marshal(body)
@@ -184,7 +184,9 @@ func testDSN() string { return "file:entry_" + uuid.NewString() + "?mode=memory&
 func setupIncidentTest(t *testing.T) (*ent.Client, *IncidentService, context.Context) {
 	t.Helper()
 	client := enttest.Open(t, "sqlite3", testDSN())
-	return client, NewIncidentService(client, zap.NewNop().Sugar()), context.Background()
+	svc := NewIncidentService(client, zap.NewNop().Sugar())
+	svc.RuleEngine().SetActorDirectory(client)
+	return client, svc, context.Background()
 }
 func createIncidentTestTenant(ctx context.Context, client *ent.Client, suffix string) (*ent.Tenant, error) {
 	return client.Tenant.Create().SetName("Tenant " + suffix).SetCode(suffix).SetStatus("active").Save(ctx)

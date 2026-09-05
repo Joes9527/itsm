@@ -98,7 +98,7 @@ func TestIntakeCreationDurableStartPreservesActorAndCanonicalIdentity(t *testing
 			require.True(t, replay.Replayed)
 			require.Equal(t, result.WorkItemID, replay.WorkItemID)
 			engine := service.NewCustomProcessEngine(f.client, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
-			handler := service.NewWorkflowStartOutboxHandler(f.client, engine)
+			handler := service.NewWorkflowStartOutboxHandler(f.client, engine, f.client)
 			require.NoError(t, handler.Deliver(ctx, event))
 			require.NoError(t, handler.Deliver(ctx, event))
 			instance := f.client.ProcessInstance.Query().OnlyX(ctx)

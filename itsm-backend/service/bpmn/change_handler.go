@@ -20,6 +20,7 @@ type ChangeDomainServiceInterface interface {
 
 type ChangeServiceTaskHandler struct {
 	creationApplication creation.Application
+	creationDirectory   *ent.Client
 	HandlerBase
 	client        *ent.Client
 	changeService ChangeDomainServiceInterface
@@ -126,11 +127,12 @@ func callbackEffectFromWorkflowResult(result workflowcallback.Result) (*Callback
 	}
 }
 
-func (h *ChangeServiceTaskHandler) SetCreationApplication(app creation.Application) {
+func (h *ChangeServiceTaskHandler) SetCreationApplication(app creation.Application, directory *ent.Client) {
 	h.creationApplication = app
+	h.creationDirectory = directory
 }
 func (h *ChangeServiceTaskHandler) createChange(ctx context.Context, _ map[string]interface{}) (*CallbackEffect, error) {
-	return executeWorkItemCreation(ctx, h.client, h.creationApplication, h.GetHandlerID(), "create_change", creation.RecordClassChangeRequest)
+	return executeWorkItemCreation(ctx, h.client, h.creationDirectory, h.creationApplication, h.GetHandlerID(), "create_change", creation.RecordClassChangeRequest)
 }
 
 func (h *ChangeServiceTaskHandler) approveChange(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {

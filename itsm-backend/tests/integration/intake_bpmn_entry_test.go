@@ -24,9 +24,9 @@ func TestIntakeBPMNCreationReplaysAfterFailure(t *testing.T) {
 				require.NoError(t, err)
 				engine := service.NewCustomProcessEngine(f.client, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
 				if kind == "incident" {
-					engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler).SetCreationApplication(f.app)
+					engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler).SetCreationApplication(f.app, f.client)
 				} else {
-					engine.CallbackRegistry().GetHandler("change_service_handler").(*bpmn.ChangeServiceTaskHandler).SetCreationApplication(f.app)
+					engine.CallbackRegistry().GetHandler("change_service_handler").(*bpmn.ChangeServiceTaskHandler).SetCreationApplication(f.app, f.client)
 				}
 				deployment := f.client.ProcessDeployment.Create().SetTenantID(f.identity.TenantID).SetDeploymentID("creation").SetDeploymentName("Creation").SaveX(ctx)
 				xml := []byte(fmt.Sprintf(`<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="test"><bpmn:process id="creation" isExecutable="true"><bpmn:startEvent id="start"/><bpmn:serviceTask id="create"><bpmn:extensionElements><bpmn:metaData name="service_task_type">%s_task</bpmn:metaData><bpmn:metaData name="action">create_%s</bpmn:metaData></bpmn:extensionElements></bpmn:serviceTask><bpmn:endEvent id="end"/><bpmn:sequenceFlow id="a" sourceRef="start" targetRef="create"/><bpmn:sequenceFlow id="b" sourceRef="create" targetRef="end"/></bpmn:process></bpmn:definitions>`, kind, kind))

@@ -131,7 +131,7 @@ func authorizeFeishuManualSync(ctx context.Context, tx *ent.Tx, actor *ent.User,
 	if err != nil {
 		return creation.NewPermissionDenied("unsupported Feishu target class", err)
 	}
-	identity := creation.Identity{TenantID: item.TenantID, ActorID: actor.ID, RequesterID: actor.ID, Role: actor.Role, Channel: "internal"}
+	identity := creation.Identity{TenantID: item.TenantID, ActorID: actor.ID, RequesterID: actor.ID, Role: authorization.EffectiveSessionRole(actor), Channel: "internal"}
 	for _, permission := range [][2]string{{policy.Resource, "read"}, {policy.Resource, policy.ResolveAction("update")}, {"connector", "write"}} {
 		if err := authorization.RequireCurrentPermission(ctx, tx, identity, permission[0], permission[1]); err != nil {
 			return err
@@ -182,9 +182,9 @@ func (s *FeishuSyncService) SyncFeishuTaskToTicket(ctx context.Context, tenantID
 	if err != nil {
 		return nil, "", err
 	}
-	identity := creation.Identity{TenantID: tenantID, ActorID: actor.ID, RequesterID: actor.ID, Role: actor.Role, Channel: "feishu", Provider: "feishu"}
+	identity := creation.Identity{TenantID: tenantID, ActorID: actor.ID, RequesterID: actor.ID, Role: authorization.EffectiveSessionRole(actor), Channel: "feishu", Provider: "feishu"}
 	command := creation.CreateWorkItemCommand{RecordClass: "generic", IntakeKind: "generic", Confirmation: "confirmed", IdempotencyKey: "feishu:" + task.GUID + ":create", Title: stripTicketNumberPrefix(task.Name), Description: task.Description, Priority: mapFeishuPriorityToTicket(task.Priority), SourceReference: &creation.SourceReference{Provider: "feishu", EventID: task.GUID}, FeishuTask: &creation.FeishuTaskInput{TaskGUID: task.GUID, CreatorOpenID: task.CreatorID, Status: task.Status, Completed: task.Completed}}
-	if err := authorization.AuthorizeWorkItemCreation(ctx, tx, identity, command); err != nil {
+	if err := authorization.AuthorizeNativeWorkItemCreation(ctx, tx, identity, command); err != nil {
 		return nil, "", err
 	}
 	record, err := tx.FeishuTicketSync.Query().Where(feishuticketsync.TenantIDEQ(tenantID), feishuticketsync.FeishuTaskIDEQ(task.GUID)).Only(ctx)

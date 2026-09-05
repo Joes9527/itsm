@@ -112,8 +112,8 @@ func (h *FeishuCreationDeliveryHandler) Deliver(ctx context.Context, event *ent.
 		if item.RecordClass != "generic" {
 			return blockOutboxDelivery("invalid Intake Feishu target class")
 		}
-		identity := creation.Identity{TenantID: payload.TenantID, ActorID: actor.ID, RequesterID: item.RequesterID, Role: actor.Role, Channel: "internal"}
-		if err := authorization.AuthorizeWorkItemCreation(ctx, tx, identity, creation.CreateWorkItemCommand{RecordClass: "generic"}); err != nil {
+		identity := creation.Identity{TenantID: payload.TenantID, ActorID: actor.ID, RequesterID: item.RequesterID, Role: authorization.EffectiveSessionRole(actor), Channel: "internal"}
+		if err := authorization.AuthorizeNativeWorkItemCreation(ctx, tx, identity, creation.CreateWorkItemCommand{RecordClass: "generic"}); err != nil {
 			return feishuDeliveryAuthorizationError(err)
 		}
 		complete, err := tx.IntakeRequest.Query().Where(intakerequest.TenantIDEQ(payload.TenantID), intakerequest.ActorIDEQ(payload.ActorID), intakerequest.WorkItemIDEQ(item.ID), intakerequest.StatusEQ("completed")).Exist(ctx)

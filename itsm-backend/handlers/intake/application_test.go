@@ -53,13 +53,13 @@ func intakeFixture(t *testing.T) (*ent.Client, *Service, workitemcreation.Identi
 	tenant := client.Tenant.Create().SetName("Tenant").SetCode("tenant").SaveX(ctx)
 	user := client.User.Create().SetUsername("user").SetName("User").SetEmail("u@example.test").SetPasswordHash("test").SetTenantID(tenant.ID).SetRole("requester").SaveX(ctx)
 	seedCreationPermission(t, client, tenant.ID, "requester")
-	identity := workitemcreation.Identity{TenantID: tenant.ID, ActorID: user.ID, RequesterID: user.ID, Channel: "itsm_web", Role: "requester"}
+	identity := workitemcreation.Identity{TenantID: tenant.ID, ActorTenantID: tenant.ID, ActorID: user.ID, RequesterID: user.ID, Channel: "itsm_web", Role: "requester"}
 	cmd := workitemcreation.CreateWorkItemCommand{RecordClass: "generic", IntakeKind: "generic", Confirmation: "confirmed", IdempotencyKey: "one", Title: "VPN access"}
 	registry := NewCreatorRegistry()
 	creator := &preparedCreator{}
 	require.NoError(t, registry.Register(creator))
 	allocator := &testAllocator{}
-	return client, NewService(client, preparedResolver{}, registry, NewWorkItemCreator(allocator)), identity, cmd, allocator, creator
+	return client, NewService(client, preparedResolver{}, registry, NewWorkItemCreator(allocator), sameTransactionDirectory{}), identity, cmd, allocator, creator
 }
 func TestApplicationGenericAtomicCreationReplayAndConflict(t *testing.T) {
 	client, s, i, c, n, _ := intakeFixture(t)
@@ -138,7 +138,7 @@ func TestApplicationDigestVersionMismatch(t *testing.T) {
 	ctx := context.Background()
 	_, digest, err := workitemcreation.CanonicalizeCommand(c)
 	require.NoError(t, err)
-	client.IntakeRequest.Create().SetTenantID(i.TenantID).SetActorID(i.ActorID).SetRequesterID(i.RequesterID).SetChannel(i.Channel).SetOperation("create_work_item").SetIdempotencyKey(c.IdempotencyKey).SetRequestDigest(digest).SetDigestVersion("intake-v2").SaveX(ctx)
+	client.IntakeRequest.Create().SetTenantID(i.TenantID).SetActorTenantID(i.TenantID).SetActorID(i.ActorID).SetRequesterID(i.RequesterID).SetChannel(i.Channel).SetOperation("create_work_item").SetIdempotencyKey(c.IdempotencyKey).SetRequestDigest(digest).SetDigestVersion("intake-v2").SaveX(ctx)
 	_, err = s.Create(ctx, i, c)
 	require.ErrorIs(t, err, workitemcreation.ErrIdempotencyConflict)
 	require.Zero(t, client.Ticket.Query().CountX(ctx))

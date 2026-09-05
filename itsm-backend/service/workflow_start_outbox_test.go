@@ -17,14 +17,22 @@ import (
 )
 
 func workflowStartFixture(t *testing.T, xml ...[]byte) (*bpmnAuthorizationFixture, *ent.OutboxEvent) {
+	return workflowStartFixtureForActor(t, false, xml...)
+}
+
+func workflowStartFixtureForActor(t *testing.T, nativeMSP bool, xml ...[]byte) (*bpmnAuthorizationFixture, *ent.OutboxEvent) {
 	t.Helper()
 	f := newBPMNAuthorizationFixture(t)
 	ctx := context.Background()
+	if nativeMSP {
+		provider := f.client.Tenant.Create().SetCode("start-provider").SetName("Provider").SetType("msp_provider").SaveX(ctx)
+		f.actor = f.client.User.Create().SetTenantID(provider.ID).SetUsername("native-operator").SetName("Native Operator").SetEmail("native@example.test").SetPasswordHash("unused").SetRole("admin").SetMspRole("provider_agent").SaveX(ctx)
+	}
 	if len(xml) > 0 {
 		f.definition = f.client.ProcessDefinition.UpdateOneID(f.definition.ID).SetBpmnXML(xml[0]).SaveX(ctx)
 	}
 	item := f.client.Ticket.Create().SetTitle("VPN").SetTicketNumber("TKT-202609-000001").SetRecordClass("generic").SetTenantID(f.tenant.ID).SetRequesterID(f.outsider.ID).SetOpenedByID(f.actor.ID).SaveX(ctx)
-	receipt := f.client.IntakeRequest.Create().SetTenantID(f.tenant.ID).SetActorID(f.actor.ID).SetRequesterID(f.outsider.ID).SetChannel("itsm_web").SetOperation("create_work_item").SetIdempotencyKey("one").SetRequestDigest("digest").SetDigestVersion("intake-v3").SetStatus("completed").SetWorkItemID(item.ID).SaveX(ctx)
+	receipt := f.client.IntakeRequest.Create().SetTenantID(f.tenant.ID).SetActorTenantID(f.actor.TenantID).SetActorID(f.actor.ID).SetRequesterID(f.outsider.ID).SetChannel("itsm_web").SetOperation("create_work_item").SetIdempotencyKey("one").SetRequestDigest("digest").SetDigestVersion("intake-v3").SetStatus("completed").SetWorkItemID(item.ID).SaveX(ctx)
 	f.client.IntakeResolutionSnapshot.Create().SetTenantID(f.tenant.ID).SetIntakeRequestID(receipt.ID).SetWorkItemID(item.ID).SetChannel("itsm_web").SetSourceProvider("itsm_web").SetRecordClass("generic").SetWorkflowDefinitionID(f.definition.ID).SetWorkflowDefinitionKey(f.definition.Key).SetWorkflowDefinitionVersion(f.definition.Version).SetResolverVersion("test").SetRequestDigest("digest").SaveX(ctx)
 	key := fmt.Sprintf("workflow-start:%d:%d", item.ID, f.definition.ID)
 	payload, err := json.Marshal(map[string]any{"tenantId": f.tenant.ID, "workItemId": item.ID, "recordClass": "generic", "workflowDefinitionId": f.definition.ID, "workflowDefinitionKey": f.definition.Key, "workflowDefinitionVersion": f.definition.Version, "workflowDefinitionDigest": FreezeProcessDefinition(f.definition).Digest, "actorId": f.actor.ID, "channel": "itsm_web", "intakeRequestId": receipt.ID, "dedupeKey": key, "variables": map[string]any{"work_item_id": item.ID, "tenant_id": item.TenantID, "record_class": item.RecordClass, "requester_id": f.outsider.ID, "triggered_by": fmt.Sprint(f.actor.ID), "channel": "itsm_web"}})
@@ -36,7 +44,7 @@ func workflowStartFixture(t *testing.T, xml ...[]byte) (*bpmnAuthorizationFixtur
 
 func TestWorkflowStartDeliveryReplaysAfterCommitBeforeAcknowledgement(t *testing.T) {
 	f, event := workflowStartFixture(t)
-	handler := NewWorkflowStartOutboxHandler(f.client, f.engine)
+	handler := NewWorkflowStartOutboxHandler(f.client, f.engine, f.client)
 	registry, err := NewOutboxEventTypeRegistry([]OutboxDeliveryHandler{handler})
 	require.NoError(t, err)
 	repo := NewOutboxEventRepository(f.client)
@@ -95,7 +103,7 @@ func TestWorkflowStartDeliveryBlocksMalformedOrConflictingEvidence(t *testing.T)
 			f.client.OutboxEvent.DeleteOneID(event.ID).ExecX(context.Background())
 			_, err = NewOutboxEventRepository(f.client).Enqueue(context.Background(), nil, NewOutboxEvent{EventID: event.EventID, EventType: event.EventType, TenantID: event.TenantID, AggregateType: event.AggregateType, AggregateID: event.AggregateID, Payload: raw, NextAttemptAt: time.Now().UTC().Add(-time.Second)})
 			require.NoError(t, err)
-			handler := NewWorkflowStartOutboxHandler(f.client, f.engine)
+			handler := NewWorkflowStartOutboxHandler(f.client, f.engine, f.client)
 			registry, err := NewOutboxEventTypeRegistry([]OutboxDeliveryHandler{handler})
 			require.NoError(t, err)
 			worker, err := NewOutboxDeliveryWorker(NewOutboxEventRepository(f.client), OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), registry)
@@ -114,7 +122,7 @@ func TestWorkflowStartUsesRequestedForTaskAssignmentAndTenantScope(t *testing.T)
 	require.NotNil(t, handler)
 	handler.(*bpmn.TicketServiceTaskHandler).SetTicketService(NewTicketServiceForTest(f.client, zap.NewNop().Sugar()))
 	ctx := context.Background()
-	require.NoError(t, NewWorkflowStartOutboxHandler(f.client, f.engine).Deliver(ctx, event))
+	require.NoError(t, NewWorkflowStartOutboxHandler(f.client, f.engine, f.client).Deliver(ctx, event))
 	task := f.client.ProcessTask.Query().OnlyX(ctx)
 	require.Equal(t, fmt.Sprint(f.outsider.ID), task.Assignee, "requested-for user, not the event actor, owns the user task")
 	require.Error(t, f.engine.CompleteTask(f.scopedCtx(false, false, false, false), task.TaskID, nil))
@@ -130,10 +138,18 @@ func TestWorkflowStartUsesRequestedForTaskAssignmentAndTenantScope(t *testing.T)
 func TestWorkflowStartDeliveryReplaysAfterDefinitionMetadataChanges(t *testing.T) {
 	f, event := workflowStartFixture(t)
 	ctx := context.Background()
-	handler := NewWorkflowStartOutboxHandler(f.client, f.engine)
+	handler := NewWorkflowStartOutboxHandler(f.client, f.engine, f.client)
 	require.NoError(t, handler.Deliver(ctx, event))
 	first := f.client.ProcessInstance.Query().OnlyX(ctx)
 	f.client.ProcessDefinition.UpdateOneID(f.definition.ID).SetVersion("edited").SetBpmnXML(startProcessUserTaskXML()).SetIsActive(false).ExecX(ctx)
 	require.NoError(t, handler.Deliver(ctx, event))
 	require.Equal(t, first.ID, f.client.ProcessInstance.Query().OnlyX(ctx).ID)
+}
+
+func TestWorkflowStartPreservesNativeMSPActor(t *testing.T) {
+	f, event := workflowStartFixtureForActor(t, true)
+	ctx := context.Background()
+	handler := NewWorkflowStartOutboxHandler(f.client, f.engine, f.client)
+	require.NoError(t, handler.Deliver(ctx, event))
+	require.Equal(t, fmt.Sprint(f.actor.ID), f.client.ProcessInstance.Query().OnlyX(ctx).Initiator)
 }

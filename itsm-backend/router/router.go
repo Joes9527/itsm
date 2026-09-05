@@ -400,7 +400,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 	auth := r.Group("/api/v1")
 	auth.Use(middleware.AuthMiddleware(config.JWTSecret))
 	// RBAC 权限控制中间件：保护所有已认证路由
-	auth.Use(middleware.RBACMiddleware(config.Client))
+	auth.Use(middleware.RBACMiddleware(config.Client, config.TenantDirectoryClient))
 	// CSRF 保护中间件（仅对状态变更请求生效）
 	if config.CSRFEnabled {
 		csrfConfig := middleware.DefaultCSRFConfig()
@@ -463,7 +463,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 	if config.MSPController != nil {
 		msp := r.Group("/api/v1/msp")
 		msp.Use(middleware.AuthMiddleware(config.JWTSecret))
-		msp.Use(middleware.RBACMiddleware(config.Client)) // 设置 client 到 context
+		msp.Use(middleware.RBACMiddleware(config.Client, config.TenantDirectoryClient)) // 设置 client 到 context
 		msp.Use(middleware.MSPMiddleware(config.Client))
 		{
 			// MSP 基础信息 - 允许 MSP 员工和管理员访问

@@ -1843,6 +1843,7 @@ var (
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "tenant_id", Type: field.TypeInt},
 		{Name: "actor_id", Type: field.TypeInt},
+		{Name: "actor_tenant_id", Type: field.TypeInt},
 		{Name: "requester_id", Type: field.TypeInt},
 		{Name: "channel", Type: field.TypeString},
 		{Name: "operation", Type: field.TypeString},
@@ -1862,7 +1863,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "intake_requests_tickets_work_item",
-				Columns:    []*schema.Column{IntakeRequestsColumns[12]},
+				Columns:    []*schema.Column{IntakeRequestsColumns[13]},
 				RefColumns: []*schema.Column{TicketsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -1871,12 +1872,12 @@ var (
 			{
 				Name:    "intakerequest_tenant_id_actor_id_channel_operation_idempotency_key",
 				Unique:  true,
-				Columns: []*schema.Column{IntakeRequestsColumns[1], IntakeRequestsColumns[2], IntakeRequestsColumns[4], IntakeRequestsColumns[5], IntakeRequestsColumns[6]},
+				Columns: []*schema.Column{IntakeRequestsColumns[1], IntakeRequestsColumns[2], IntakeRequestsColumns[5], IntakeRequestsColumns[6], IntakeRequestsColumns[7]},
 			},
 			{
 				Name:    "intakerequest_tenant_id_work_item_id",
 				Unique:  false,
-				Columns: []*schema.Column{IntakeRequestsColumns[1], IntakeRequestsColumns[12]},
+				Columns: []*schema.Column{IntakeRequestsColumns[1], IntakeRequestsColumns[13]},
 			},
 		},
 	}

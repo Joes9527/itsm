@@ -158,12 +158,7 @@ func (s *AuthService) SwitchTenant(ctx context.Context, userID, tenantID int) (*
 			return nil, fmt.Errorf("无权限访问该租户")
 		}
 	}
-	role := string(userEntity.Role)
-	if userEntity.MspRole != "" {
-		if mappedRole := authorization.GetMSPRBACRole(string(userEntity.MspRole)); mappedRole != "" {
-			role = mappedRole
-		}
-	}
+	role := authorization.EffectiveSessionRole(userEntity)
 
 	tokens, err := authentication.IssueSessionTokens(authentication.SessionIdentity{
 		UserID: userEntity.ID, Username: userEntity.Username, Role: role, TenantID: tenantID,

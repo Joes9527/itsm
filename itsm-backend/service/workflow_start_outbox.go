@@ -23,12 +23,13 @@ type WorkflowDefinitionStarter interface {
 	StartProcessByDefinitionID(context.Context, ProcessDefinitionIdentity, string, string, int, map[string]interface{}, string) (*ent.ProcessInstance, error)
 }
 type WorkflowStartOutboxHandler struct {
-	client *ent.Client
-	engine WorkflowDefinitionStarter
+	client    *ent.Client
+	directory *ent.Client
+	engine    WorkflowDefinitionStarter
 }
 
-func NewWorkflowStartOutboxHandler(client *ent.Client, engine WorkflowDefinitionStarter) *WorkflowStartOutboxHandler {
-	return &WorkflowStartOutboxHandler{client: client, engine: engine}
+func NewWorkflowStartOutboxHandler(client *ent.Client, engine WorkflowDefinitionStarter, directory *ent.Client) *WorkflowStartOutboxHandler {
+	return &WorkflowStartOutboxHandler{client: client, engine: engine, directory: directory}
 }
 func (*WorkflowStartOutboxHandler) EventType() string { return "workflow.start.requested" }
 
@@ -98,6 +99,13 @@ func (h *WorkflowStartOutboxHandler) Deliver(ctx context.Context, event *ent.Out
 	if err != nil {
 		return blockOutboxDelivery("unsupported workflow business identity")
 	}
+	actor, err := loadIntakeActor(ctx, h.directory, receipt)
+	if err != nil {
+		return err
+	}
+	ctx = context.WithValue(ctx, intakeStartActorKey{}, intakeStartActor{actor: *actor, targetTenantID: p.TenantID, workItemID: item.ID, receiptID: receipt.ID})
+	p.Variables["actor_tenant_id"] = receipt.ActorTenantID
+	p.Variables["intake_request_id"] = receipt.ID
 	ctx = WithTrustedBPMNTenantContext(ctx, p.TenantID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, p.ActorID)
 	_, err = h.engine.StartProcessByDefinitionID(ctx, ProcessDefinitionIdentity{ID: p.DefinitionID, Key: p.DefinitionKey, Version: p.DefinitionVersion, Digest: p.DefinitionDigest}, fmt.Sprintf("%s:%d", policy.BusinessType, item.ID), string(policy.BusinessType), item.ID, p.Variables, key)

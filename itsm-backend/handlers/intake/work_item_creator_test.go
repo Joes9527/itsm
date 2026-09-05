@@ -3,6 +3,7 @@ package intake
 import (
 	"context"
 	"github.com/stretchr/testify/require"
+	"itsm-backend/authorization"
 	"itsm-backend/handlers/common/workitemcreation"
 	"testing"
 )
@@ -15,11 +16,14 @@ func TestBaseWriterSupportsPreparedClassesWithoutLifecycleDefaults(t *testing.T)
 			tx, err := client.Tx(ctx)
 			require.NoError(t, err)
 			defer tx.Rollback()
+			authorized, err := authorization.AuthorizeWorkItemCreation(ctx, tx, tx.Client(), identity, command)
+			require.NoError(t, err)
+			identity = authorized.Identity()
 			plan, err := creator.Prepare(ctx, tx, workitemcreation.ResolvedIntake{Identity: identity, Command: command, RecordClass: class})
 			require.NoError(t, err)
 			plan.WorkItem.Status = "prepared-domain-state"
 			plan.WorkItem.Priority = "prepared-priority"
-			item, err := NewWorkItemCreator(allocator).CreateBase(ctx, tx, plan)
+			item, err := NewWorkItemCreator(allocator).CreateBase(ctx, tx, plan, authorized)
 			require.NoError(t, err)
 			require.Equal(t, class, item.RecordClass)
 			require.Equal(t, "prepared-domain-state", item.Status)

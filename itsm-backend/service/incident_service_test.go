@@ -29,6 +29,7 @@ func setupIncidentTest(t *testing.T) (*ent.Client, *IncidentService, context.Con
 	client := enttest.Open(t, "sqlite3", testDSN())
 	logger := zaptest.NewLogger(t).Sugar()
 	service := NewIncidentService(client, logger)
+	service.RuleEngine().SetActorDirectory(client)
 	ctx := context.Background()
 	return client, service, ctx
 }

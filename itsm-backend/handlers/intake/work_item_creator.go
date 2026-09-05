@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/ent"
 	"itsm-backend/ent/group"
 	"itsm-backend/ent/sladefinition"
@@ -24,11 +25,18 @@ func NewWorkItemCreator(numbers workitemnumber.Allocator) *WorkItemCreator {
 	return &WorkItemCreator{numbers: numbers, now: time.Now}
 }
 
-func (c *WorkItemCreator) CreateBase(ctx context.Context, tx *ent.Tx, plan *workitemcreation.CreationPlan) (*ent.Ticket, error) {
+func (c *WorkItemCreator) CreateBase(ctx context.Context, tx *ent.Tx, plan *workitemcreation.CreationPlan, authorized *authorization.CreationAuthorization) (*ent.Ticket, error) {
 	if tx == nil || plan == nil {
 		return nil, workitemcreation.NewInternalFailure("work item transaction and creation plan are required", nil)
 	}
+	if err := authorized.Validate(tx, plan.Resolved.Identity); err != nil {
+		return nil, err
+	}
 	draft := &plan.WorkItem
+	identity := authorized.Identity()
+	if draft.ActorID != identity.ActorID || draft.TenantID != identity.TenantID || draft.RequesterID != identity.RequesterID {
+		return nil, workitemcreation.NewPermissionDenied("draft differs from authorized identity", nil)
+	}
 	if draft.TenantID <= 0 || draft.ActorID <= 0 || draft.RequesterID <= 0 || strings.TrimSpace(draft.Title) == "" {
 		return nil, workitemcreation.NewDomainValidationFailed("work item draft is incomplete", nil)
 	}
@@ -100,8 +108,8 @@ func (c *WorkItemCreator) CreateBase(ctx context.Context, tx *ent.Tx, plan *work
 // Validate the base writer's associations independently of preparation. The
 // resolver remains responsible for operation-specific authorization.
 func validateDraftReferences(ctx context.Context, tx *ent.Tx, draft *workitemcreation.WorkItemDraft) error {
-	for _, id := range []int{draft.ActorID, draft.RequesterID} {
-		ok, err := tx.User.Query().Where(user.IDEQ(id), user.TenantIDEQ(draft.TenantID)).Exist(ctx)
+	for _, id := range []int{draft.RequesterID} {
+		ok, err := tx.User.Query().Where(user.IDEQ(id), user.TenantIDEQ(draft.TenantID), user.ActiveEQ(true)).Exist(ctx)
 		if err != nil {
 			return workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)
 		}
@@ -110,7 +118,7 @@ func validateDraftReferences(ctx context.Context, tx *ent.Tx, draft *workitemcre
 		}
 	}
 	if draft.AssigneeID != nil {
-		ok, err := tx.User.Query().Where(user.IDEQ(*draft.AssigneeID), user.TenantIDEQ(draft.TenantID)).Exist(ctx)
+		ok, err := tx.User.Query().Where(user.IDEQ(*draft.AssigneeID), user.TenantIDEQ(draft.TenantID), user.ActiveEQ(true)).Exist(ctx)
 		if err != nil {
 			return workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)
 		}

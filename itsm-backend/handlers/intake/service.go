@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"itsm-backend/authorization"
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/database"
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/incident"
@@ -45,7 +47,7 @@ type receiptRepository interface {
 }
 
 type workItemWriter interface {
-	CreateBase(context.Context, *ent.Tx, *workitemcreation.CreationPlan) (*ent.Ticket, error)
+	CreateBase(context.Context, *ent.Tx, *workitemcreation.CreationPlan, *authorization.CreationAuthorization) (*ent.Ticket, error)
 }
 
 type fieldValueWriter interface {
@@ -69,6 +71,7 @@ type outboxWriter interface {
 // authoritative writes use the transaction opened here.
 type Service struct {
 	client      *ent.Client
+	directory   database.DirectorySnapshot
 	resolver    referenceResolver
 	receipts    receiptRepository
 	registry    *CreatorRegistry
@@ -80,9 +83,9 @@ type Service struct {
 	metrics     *Metrics
 }
 
-func NewService(client *ent.Client, resolver referenceResolver, registry *CreatorRegistry, workItems workItemWriter) *Service {
+func NewService(client *ent.Client, resolver referenceResolver, registry *CreatorRegistry, workItems workItemWriter, directory database.DirectorySnapshot) *Service {
 	return &Service{
-		client: client, resolver: resolver, receipts: NewIdempotencyRepository(), registry: registry, workItems: workItems,
+		client: client, directory: directory, resolver: resolver, receipts: NewIdempotencyRepository(), registry: registry, workItems: workItems,
 		fieldValues: itsmservice.NewFieldValueService(client), snapshots: NewSnapshotRepository(),
 		audits: NewAuditRepository(), outbox: itsmservice.NewOutboxEventRepository(client),
 		metrics: defaultMetrics,
@@ -103,6 +106,12 @@ func (s *Service) Create(ctx context.Context, identity workitemcreation.Identity
 	}()
 	if s == nil || s.client == nil || missingDependency(s.resolver) || missingDependency(s.receipts) || s.registry == nil || missingDependency(s.workItems) || missingDependency(s.fieldValues) || missingDependency(s.snapshots) || missingDependency(s.audits) || missingDependency(s.outbox) {
 		return nil, workitemcreation.NewInternalFailure("intake service is not fully configured", nil)
+	}
+	if scope, ok := tenantctx.TenantID(ctx); tenantctx.IsSystemBypass(ctx) || (ok && scope != identity.TenantID) {
+		return nil, workitemcreation.NewPermissionDenied("intake target differs from authenticated tenant", nil)
+	}
+	if missingDependency(s.directory) {
+		return nil, workitemcreation.NewInfrastructureUnavailable("intake directory snapshot is required", nil)
 	}
 	if err := identity.ValidateCommand(command); err != nil {
 		return nil, err
@@ -132,9 +141,32 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if err := authorization.AuthorizeWorkItemCreation(ctx, tx, identity, command); err != nil {
-		return nil, false, err
+	directory, closeDirectory, err := s.directory.Open(ctx, tx, identity.TenantID)
+	if err != nil {
+		return nil, false, workitemcreation.NewInfrastructureUnavailable("could not open intake directory snapshot", err)
 	}
+	if directory == nil || closeDirectory == nil {
+		if closeDirectory != nil {
+			_ = closeDirectory()
+		}
+		return nil, false, workitemcreation.NewInfrastructureUnavailable("invalid intake directory snapshot", nil)
+	}
+	directoryClosed := false
+	defer func() {
+		if !directoryClosed {
+			_ = closeDirectory()
+		}
+	}()
+	authorized, authErr := authorization.AuthorizeWorkItemCreation(ctx, tx, directory, identity, command)
+	closeErr := closeDirectory()
+	directoryClosed = true
+	if closeErr != nil {
+		return nil, false, workitemcreation.NewInfrastructureUnavailable("could not close intake directory snapshot", errors.Join(authErr, closeErr))
+	}
+	if authErr != nil {
+		return nil, false, authErr
+	}
+	identity = authorized.Identity()
 
 	receipt, outcome, err := s.receipts.Claim(ctx, tx, identity, command.IdempotencyKey, digest, workitemcreation.CanonicalDigestVersion)
 	if err != nil {
@@ -167,7 +199,7 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 		return nil, false, err
 	}
 	resolved = &plan.Resolved
-	workItem, err := s.workItems.CreateBase(ctx, tx, plan)
+	workItem, err := s.workItems.CreateBase(ctx, tx, plan, authorized)
 	if err != nil {
 		return nil, false, err
 	}
@@ -189,6 +221,7 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 	}
 	if err := s.audits.RecordCreated(ctx, tx, CreatedAuditInput{
 		TenantID: identity.TenantID, UserID: identity.ActorID, WorkItemID: workItem.ID,
+		Authorization: authorized, IntakeRequestID: receipt.ID,
 		RequestID: auditRequestID(ctx, identity, digest), Path: intakeCreatePath, Method: "POST", StatusCode: 201,
 	}); err != nil {
 		return nil, false, err

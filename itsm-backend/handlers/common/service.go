@@ -119,11 +119,7 @@ func (s *Service) Login(ctx context.Context, username, password string, tenantID
 	// 对于 MSP 用户，需要将 MSP 角色转换为 RBAC 角色
 	// u.Role 是数据库中存储的 RBAC 角色（MSP 用户的 Role 是 admin）
 	// 如果用户有 MSP 角色，则从 MSP 角色映射到正确的 RBAC 角色
-	if mspRoleStr != "" {
-		if mappedRole := authorization.GetMSPRBACRole(mspRoleStr); mappedRole != "" {
-			u.Role = mappedRole
-		}
-	}
+	u.Role = authorization.EffectiveSessionRole(entUser)
 
 	// Generate tokens
 	tokens, err := authentication.IssueSessionTokens(authentication.SessionIdentity{
@@ -161,12 +157,7 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*AuthR
 	if !userEntity.Active {
 		return nil, fmt.Errorf("user account is inactive")
 	}
-	role := string(userEntity.Role)
-	if userEntity.MspRole != "" {
-		if mappedRole := authorization.GetMSPRBACRole(string(userEntity.MspRole)); mappedRole != "" {
-			role = mappedRole
-		}
-	}
+	role := authorization.EffectiveSessionRole(userEntity)
 	if identity.Username != userEntity.Username || identity.Role != role {
 		return nil, fmt.Errorf("refresh token actor context is stale")
 	}

@@ -229,3 +229,43 @@ func requireTenantRole(ctx context.Context, db dialect.ExecQuerier) error {
 	}
 	return nil
 }
+
+// Generated Ent raw transaction methods retain the exact same scope and
+// session-variable defenses as normal Ent queries. Autocommit raw SQL is not
+// exposed by Driver because *sql.Rows cannot carry its connection cleanup.
+func (tx *scopedTx) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	if err := tx.check(ctx); err != nil {
+		return nil, err
+	}
+	if tx.scope.system {
+		raw, ok := tx.Tx.(interface {
+			ExecContext(context.Context, string, ...any) (sql.Result, error)
+		})
+		if !ok {
+			return nil, fmt.Errorf("rls: raw transaction execution unsupported")
+		}
+		return raw.ExecContext(ctx, query, args...)
+	}
+	if err := prepareVariables(ctx, tx.raw, tx.scope); err != nil {
+		return nil, err
+	}
+	return tx.raw.ExecContext(ctx, query, args...)
+}
+func (tx *scopedTx) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	if err := tx.check(ctx); err != nil {
+		return nil, err
+	}
+	if tx.scope.system {
+		raw, ok := tx.Tx.(interface {
+			QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+		})
+		if !ok {
+			return nil, fmt.Errorf("rls: raw transaction query unsupported")
+		}
+		return raw.QueryContext(ctx, query, args...)
+	}
+	if err := prepareVariables(ctx, tx.raw, tx.scope); err != nil {
+		return nil, err
+	}
+	return tx.raw.QueryContext(ctx, query, args...)
+}

@@ -266,6 +266,7 @@ func NewApplication() *Application {
 
 	// 初始化业务服务层
 	incidentService := service.NewIncidentService(client, sugar)
+	incidentService.RuleEngine().SetActorDirectory(systemClient)
 
 	// 初始化 EventBus 事件总线
 	eventBus, err := eventbus.NewWatermillEventBus(&cfg.Redis, sugar)
@@ -645,7 +646,7 @@ func NewApplication() *Application {
 			log.Fatalf("Invalid Intake creator registry: %v", err)
 		}
 	}
-	intakeApplication := intake.NewService(client, intake.NewResolver(scService, processBindingService, configurationItemService, ticketCategoryService), creationRegistry, intake.NewWorkItemCreator(numberAllocator))
+	intakeApplication := intake.NewService(client, intake.NewResolver(scService, processBindingService, configurationItemService, ticketCategoryService), creationRegistry, intake.NewWorkItemCreator(numberAllocator), clients.IntakeDirectorySnapshot())
 	ticketController.SetCreationApplication(intakeApplication)
 	incidentController.SetCreationApplication(intakeApplication)
 	problemHandler.SetCreationApplication(intakeApplication)
@@ -655,16 +656,16 @@ func NewApplication() *Application {
 
 	if cpe, ok := processEngine.(*service.CustomProcessEngine); ok {
 		if h, ok := cpe.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler); ok {
-			h.SetCreationApplication(intakeApplication)
+			h.SetCreationApplication(intakeApplication, clients.System)
 		}
 		if h, ok := cpe.CallbackRegistry().GetHandler("change_service_handler").(*bpmn.ChangeServiceTaskHandler); ok {
-			h.SetCreationApplication(intakeApplication)
+			h.SetCreationApplication(intakeApplication, clients.System)
 		}
 	}
 	toolQueue := service.NewToolQueue(client, toolRegistry, intakeApplication, ticketService, 100, sugar)
 	feishuSyncService := service.NewFeishuSyncService(client, sugar, intakeApplication)
 	outboxRegistry, err := service.NewOutboxEventTypeRegistry(
-		[]service.OutboxDeliveryHandler{service.NewWorkflowStartOutboxHandler(client, concreteProcessEngine), incidentService.RuleEngine(), service.NewFeishuCreationDeliveryHandler(feishuSyncService, func(tenantID int) (service.FeishuTaskCreator, bool) {
+		[]service.OutboxDeliveryHandler{service.NewWorkflowStartOutboxHandler(client, concreteProcessEngine, systemClient), incidentService.RuleEngine(), service.NewFeishuCreationDeliveryHandler(feishuSyncService, func(tenantID int) (service.FeishuTaskCreator, bool) {
 			conn, ok := connectorManager.Get(tenantID, "feishu")
 			if !ok {
 				return nil, false

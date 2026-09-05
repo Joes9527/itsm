@@ -66,7 +66,7 @@ func setupTestTicketController(t *testing.T) (*gin.Engine, *ent.Client, *TicketC
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(ticketService))
 	resolver := intake.NewResolver(service_catalog.NewService(nil, client, logger), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
-	ticketController.SetCreationApplication(intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator())))
+	ticketController.SetCreationApplication(intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}))
 
 	r := gin.New()
 	r.Use(gin.Recovery())

@@ -6,13 +6,14 @@ import "strings"
 // Validation below checks structure/source consistency; authentication, mapping
 // versions, tenant membership and permissions remain application prerequisites.
 type Identity struct {
-	TenantID    int
-	ActorID     int
-	RequesterID int
-	Role        string
-	Channel     string
-	Provider    string
-	TokenID     string
+	TenantID      int
+	ActorTenantID int // server-derived native provenance; never adapter authority
+	ActorID       int
+	RequesterID   int
+	Role          string
+	Channel       string
+	Provider      string
+	TokenID       string
 }
 
 func (i Identity) ValidateCommand(command CreateWorkItemCommand) error {
@@ -38,4 +39,13 @@ func (i Identity) ValidateCommand(command CreateWorkItemCommand) error {
 		return NewPermissionDenied("source provider does not match the authenticated channel", nil)
 	}
 	return nil
+}
+
+// ActorProvenance is redacted audit evidence, never mutable identity authority.
+type ActorProvenance struct {
+	ActorUserID     int `json:"actorUserId"`
+	ActorTenantID   int `json:"actorTenantId"`
+	TargetTenantID  int `json:"targetTenantId"`
+	IntakeRequestID int `json:"intakeRequestId"`
+	WorkItemID      int `json:"workItemId"`
 }

@@ -34,7 +34,7 @@ func NewChangeIntakeApp(client *ent.Client, svc *Service, logger *zap.SugaredLog
 		service.NewConfigurationItemService(client, logger, nil, nil),
 		service.NewTicketCategoryService(client),
 	)
-	return intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()))
+	return intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
 }
 
 // ConfigureChangeIntakeFixture grants the given actor role current change/ticket
@@ -53,7 +53,7 @@ func ConfigureChangeIntakeFixture(ctx context.Context, client *ent.Client, tenan
 		for _, action := range []string{"read", "write"} {
 			p, err := client.Permission.Query().Where(permission.TenantIDEQ(tenantID), permission.CodeEQ(resource+":"+action)).Only(ctx)
 			if ent.IsNotFound(err) {
-				p = client.Permission.Create().SetTenantID(tenantID).SetCode(resource+":"+action).SetName(resource+action).SetResource(resource).SetAction(action).SaveX(ctx)
+				p = client.Permission.Create().SetTenantID(tenantID).SetCode(resource + ":" + action).SetName(resource + action).SetResource(resource).SetAction(action).SaveX(ctx)
 			}
 			if !client.RolePermission.Query().Where(rolepermission.TenantIDEQ(tenantID), rolepermission.RoleIDEQ(r.ID), rolepermission.PermissionIDEQ(p.ID)).ExistX(ctx) {
 				client.RolePermission.Create().SetTenantID(tenantID).SetRoleID(r.ID).SetPermissionID(p.ID).SaveX(ctx)

@@ -530,7 +530,7 @@ func (s *TicketAttachmentService) UploadEmailAttachment(ctx context.Context, tic
 	if err != nil {
 		return nil, creation.NewInfrastructureUnavailable("could not authorize attachment actor", err)
 	}
-	identity := creation.Identity{TenantID: tenantID, ActorID: actorID, RequesterID: actorID, Role: actor.Role, Channel: "email", Provider: "msgraph_email"}
+	identity := creation.Identity{TenantID: tenantID, ActorID: actorID, RequesterID: actorID, Role: authorization.EffectiveSessionRole(actor), Channel: "email", Provider: "msgraph_email"}
 	for _, action := range []string{"read", "write"} {
 		if err := authorization.RequireCurrentPermission(ctx, tx, identity, "ticket", action); err != nil {
 			return nil, err

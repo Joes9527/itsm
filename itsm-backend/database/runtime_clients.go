@@ -17,9 +17,10 @@ import (
 // RuntimeClients keeps the tenant execution pool separate from the restricted
 // cross-tenant directory/transport capability. It never opens migration credentials.
 type RuntimeClients struct {
-	Tenant   *ent.Client
-	System   *ent.Client
-	SystemDB *sql.DB
+	Tenant          *ent.Client
+	System          *ent.Client
+	SystemDB        *sql.DB
+	intakeDirectory DirectorySnapshot
 }
 
 func (c *RuntimeClients) Close() error { return errors.Join(c.Tenant.Close(), c.System.Close()) }
@@ -64,10 +65,23 @@ func InitRuntimeDatabases(cfg *config.DatabaseConfig, rlsCfg *config.RLSConfig, 
 		}
 
 	}
+	var tenantDatabase, tenantSchema, directoryDatabase, directorySchema string
+	if err = rawDB.QueryRowContext(ctx, "SELECT current_database(),current_schema()").Scan(&tenantDatabase, &tenantSchema); err != nil {
+		_ = tenant.Close()
+		return nil, fmt.Errorf("verify tenant snapshot database: %w", err)
+	}
+	if err = systemDB.QueryRowContext(ctx, "SELECT current_database(),current_schema()").Scan(&directoryDatabase, &directorySchema); err != nil {
+		_ = tenant.Close()
+		return nil, fmt.Errorf("verify directory snapshot database: %w", err)
+	}
+	if tenantDatabase != directoryDatabase || tenantSchema != directorySchema || tenantSchema == "" {
+		_ = tenant.Close()
+		return nil, fmt.Errorf("Intake snapshot pools require the same database and schema")
+	}
 	system := ent.NewClient(ent.Driver(entsql.OpenDB("postgres", systemDB)))
 	RegisterSoftDeleteInterceptors(system)
 	keep = true
-	return &RuntimeClients{Tenant: tenant, System: system, SystemDB: systemDB}, nil
+	return &RuntimeClients{Tenant: tenant, System: system, SystemDB: systemDB, intakeDirectory: &directorySnapshot{system: system}}, nil
 }
 
 // These grants belong to session authentication/directory lookup, connector

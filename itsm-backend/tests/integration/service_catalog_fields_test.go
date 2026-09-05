@@ -71,7 +71,7 @@ func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *e
 		require.NoError(t, registry.Register(owner))
 	}
 	resolver := intake.NewResolver(scService, service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
-	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()))
+	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
 	srHandler.SetCreationApplication(app)
 
 	// handlers/service_catalog default Create leaves RequiresApproval at the
@@ -185,7 +185,7 @@ func TestServiceCatalogFields(t *testing.T) {
 	require.Equal(t, http.StatusCreated, status, "message=%s", env.Message)
 	require.Equal(t, 0, env.Code)
 	var createdRequest struct {
-		WorkItemID int `json:"workItemId"`
+		WorkItemID            int `json:"workItemId"`
 		ProfessionalReference struct {
 			ID int `json:"id"`
 		} `json:"professionalReference"`

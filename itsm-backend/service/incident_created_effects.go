@@ -18,7 +18,7 @@ import (
 	"itsm-backend/ent/intakerequest"
 	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/user"
+	creation "itsm-backend/handlers/common/workitemcreation"
 )
 
 // The existing engine is the creation consumer. Registration remains a bootstrap
@@ -30,14 +30,16 @@ func (e *IncidentRuleEngine) Deliver(ctx context.Context, event *ent.OutboxEvent
 }
 
 type incidentCreatedPayload struct {
-	TenantID   int    `json:"tenantId"`
-	IncidentID int    `json:"incidentId"`
-	WorkItemID int    `json:"workItemId"`
-	ActorID    int    `json:"actorId"`
-	Channel    string `json:"channel"`
+	ActorTenantID   int    `json:"-"`
+	IntakeRequestID int    `json:"-"`
+	TenantID        int    `json:"tenantId"`
+	IncidentID      int    `json:"incidentId"`
+	WorkItemID      int    `json:"workItemId"`
+	ActorID         int    `json:"actorId"`
+	Channel         string `json:"channel"`
 }
 
-func validateIncidentCreatedEvent(ctx context.Context, client *ent.Client, event *ent.OutboxEvent) (incidentCreatedPayload, error) {
+func validateIncidentCreatedEvent(ctx context.Context, client, directory *ent.Client, event *ent.OutboxEvent) (incidentCreatedPayload, error) {
 	var p incidentCreatedPayload
 	if event == nil || event.ID <= 0 || event.EventType != "incident.created" {
 		return p, blockOutboxDelivery("invalid incident creation event")
@@ -73,20 +75,15 @@ func validateIncidentCreatedEvent(ctx context.Context, client *ent.Client, event
 	}
 	// The completed intake receipt is the authorization provenance. Rules execute
 	// as tenant policy, not as an end user's discretionary Incident mutation.
-	exists, err := client.IntakeRequest.Query().Where(intakerequest.TenantID(p.TenantID), intakerequest.WorkItemID(p.WorkItemID), intakerequest.ActorID(p.ActorID), intakerequest.Channel(p.Channel), intakerequest.Status("completed")).Exist(ctx)
+	receipt, err := client.IntakeRequest.Query().Where(intakerequest.TenantID(p.TenantID), intakerequest.WorkItemID(p.WorkItemID), intakerequest.ActorID(p.ActorID), intakerequest.Channel(p.Channel), intakerequest.Status("completed")).Only(ctx)
 	if err != nil {
+		return p, workflowStartReferenceError(err, "authorized intake receipt")
+	}
+	if _, err = loadIntakeActor(ctx, directory, receipt); err != nil {
 		return p, err
 	}
-	if !exists {
-		return p, blockOutboxDelivery("incident creation has no matching authorized intake receipt")
-	}
-	exists, err = client.User.Query().Where(user.ID(p.ActorID), user.TenantID(p.TenantID), user.Active(true)).Exist(ctx)
-	if err != nil {
-		return p, err
-	}
-	if !exists {
-		return p, blockOutboxDelivery("incident creation actor is not active in tenant")
-	}
+	p.ActorTenantID, p.IntakeRequestID = receipt.ActorTenantID, receipt.ID
+
 	return p, nil
 }
 
@@ -94,7 +91,7 @@ func (e *IncidentRuleEngine) ExecuteCreatedEvent(ctx context.Context, event *ent
 	if e.client == nil {
 		return fmt.Errorf("incident rule engine database unavailable")
 	}
-	p, err := validateIncidentCreatedEvent(ctx, e.client, event)
+	p, err := validateIncidentCreatedEvent(ctx, e.client, e.actorDirectory, event)
 	if err != nil {
 		return err
 	}
@@ -147,7 +144,7 @@ func (e *IncidentRuleEngine) freezeCreatedRules(ctx context.Context, event *ent.
 	if err != nil {
 		return nil, err
 	}
-	if _, err = validateIncidentCreatedEvent(ctx, tx.Client(), event); err != nil {
+	if _, err = validateIncidentCreatedEvent(ctx, tx.Client(), e.actorDirectory, event); err != nil {
 		return nil, err
 	}
 	exists, err := tx.IncidentRuleExecution.Query().Where(incidentruleexecution.TenantID(p.TenantID), incidentruleexecution.ExecutionKey(event.EventID)).Exist(ctx)
@@ -210,7 +207,7 @@ func (e *IncidentRuleEngine) applyNextCreatedAction(ctx context.Context, event *
 	if execution.Status == "completed" || execution.Status == "skipped" {
 		return true, tx.Commit()
 	}
-	if _, err := validateIncidentCreatedEvent(ctx, tx.Client(), event); err != nil {
+	if _, err := validateIncidentCreatedEvent(ctx, tx.Client(), e.actorDirectory, event); err != nil {
 		return false, err
 	}
 	ownerExists, err := tx.IncidentRule.Query().Where(incidentrule.ID(execution.RuleID), incidentrule.TenantID(p.TenantID)).Exist(ctx)
@@ -313,7 +310,11 @@ func (e *IncidentRuleEngine) applyNextCreatedAction(ctx context.Context, event *
 	if _, err = tx.IncidentRuleActionReceipt.Create().SetTenantID(p.TenantID).SetExecutionID(id).SetActionIndex(index).Save(ctx); err != nil {
 		return false, err
 	}
-	_, err = tx.AuditLog.Create().SetTenantID(p.TenantID).SetUserID(p.ActorID).SetRequestID(actionKey).SetResource("incident_rule_action").SetAction("incident_rule.action_completed").SetPath("incidents/automation").SetMethod("OUTBOX").SetStatusCode(200).Save(ctx)
+	evidence, err := json.Marshal(creation.ActorProvenance{ActorUserID: p.ActorID, ActorTenantID: p.ActorTenantID, TargetTenantID: p.TenantID, IntakeRequestID: p.IntakeRequestID, WorkItemID: p.WorkItemID})
+	if err != nil {
+		return false, err
+	}
+	_, err = tx.AuditLog.Create().SetRequestBody(string(evidence)).SetTenantID(p.TenantID).SetUserID(p.ActorID).SetRequestID(actionKey).SetResource("incident_rule_action").SetAction("incident_rule.action_completed").SetPath("incidents/automation").SetMethod("OUTBOX").SetStatusCode(200).Save(ctx)
 	if err != nil {
 		return false, err
 	}

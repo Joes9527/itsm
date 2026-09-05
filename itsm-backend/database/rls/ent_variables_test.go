@@ -65,3 +65,34 @@ func TestEnforcedEntVariablesNeverPanicOrLeak(t *testing.T) {
 	require.NotPanics(t, func() { require.NoError(t, d.Exec(ctx, "SELECT 1", []any{}, nil)) })
 	require.Equal(t, 0, db.Stats().InUse)
 }
+
+func TestTransactionRawSQLPreservesScopeAndVariables(t *testing.T) {
+	name := fmt.Sprintf("%s_%d", t.Name(), time.Now().UnixNano())
+	sql.Register(name, variableDriver{})
+	db, err := sql.Open(name, "")
+	require.NoError(t, err)
+	defer db.Close()
+	d := From(entsql.OpenDB("postgres", db), "enforce", zap.NewNop().Sugar())
+	ctx := tenantctx.WithTenantID(context.Background(), 1)
+	tx, err := d.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer tx.Rollback()
+	raw, ok := tx.(interface {
+		ExecContext(context.Context, string, ...any) (sql.Result, error)
+		QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	})
+	require.True(t, ok, "transaction must support guarded Ent raw SQL")
+	_, err = raw.ExecContext(tenantctx.WithTenantID(ctx, 2), "SELECT 1")
+	require.ErrorContains(t, err, "scope cannot change")
+	for _, key := range []string{"role", "app.current_tenant", "row_security", "session_authorization"} {
+		_, err = raw.QueryContext(entsql.WithVar(ctx, key, "unsafe"), "SELECT 1")
+		require.ErrorContains(t, err, "reserved session variable")
+	}
+	rows, err := raw.QueryContext(ctx, "SELECT 1")
+	require.NoError(t, err)
+	require.NoError(t, rows.Close())
+	require.NoError(t, tx.Rollback())
+	_, err = raw.ExecContext(ctx, "SELECT 1")
+	require.ErrorIs(t, err, sql.ErrTxDone)
+	require.Zero(t, db.Stats().InUse)
+}

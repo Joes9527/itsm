@@ -46,7 +46,7 @@ func resolverFixtureWithClient(t *testing.T, client *ent.Client, identity creati
 	registry := NewCreatorRegistry()
 	domain := srhandler.NewService(nil, client, logger, service.NewApprovalChainResolver(client, logger))
 	require.NoError(t, registry.Register(domain))
-	return &resolverFixture{client: client, actor: identity, catalog: catalog, app: NewService(client, resolver, registry, NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()))}
+	return &resolverFixture{client: client, actor: identity, catalog: catalog, app: NewService(client, resolver, registry, NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})}
 }
 func (f *resolverFixture) catalogCommand(t *testing.T) creation.CreateWorkItemCommand {
 	t.Helper()

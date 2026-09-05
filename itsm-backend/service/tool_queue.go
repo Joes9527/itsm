@@ -120,7 +120,7 @@ func (q *ToolQueue) ProcessJob(ctx context.Context, job ToolJob) error {
 		var requester int
 		command, requester, err = toolCreationCommand(inv.Arguments, inv.ID, actor.ID)
 		if err == nil {
-			result, err = q.creation.Create(ctx, creation.Identity{TenantID: inv.TenantID, ActorID: actor.ID, RequesterID: requester, Role: actor.Role, Channel: "ai_tool", Provider: "tool_queue"}, command)
+			result, err = q.creation.Create(ctx, creation.Identity{TenantID: inv.TenantID, ActorID: actor.ID, RequesterID: requester, Role: authorization.EffectiveSessionRole(actor), Channel: "ai_tool", Provider: "tool_queue"}, command)
 		}
 	case "update_ticket":
 		if q.tickets == nil {

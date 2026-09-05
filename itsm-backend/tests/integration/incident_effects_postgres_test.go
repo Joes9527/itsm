@@ -58,6 +58,10 @@ func newIncidentEffectsFixture(t *testing.T) *incidentEffectsFixture {
 	t.Cleanup(func() {
 		_, err := db.ExecContext(context.Background(), "DROP SCHEMA "+schema+" CASCADE")
 		require.NoError(t, err)
+		var remaining int
+		require.NoError(t, db.QueryRowContext(context.Background(), "SELECT count(*) FROM pg_namespace WHERE nspname=$1", schema).Scan(&remaining))
+		require.Zero(t, remaining)
+		t.Logf("isolated schema %s removed; remaining=%d", schema, remaining)
 	})
 	q := parsed.Query()
 	q.Set("search_path", schema)
@@ -76,13 +80,14 @@ func newIncidentEffectsFixture(t *testing.T) *incidentEffectsFixture {
 
 	tenant := client.Tenant.Create().SetCode("effects").SetName("effects").SaveX(ctx)
 	actor := client.User.Create().SetTenantID(tenant.ID).SetUsername("actor").SetName("actor").SetRole("agent").SetActive(true).SetEmail("actor@example.test").SetPasswordHash("test").SaveX(ctx)
-	item := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetTitle("effects").SetTicketNumber("INC-EFFECTS").SetRecordClass("incident").SetType("incident").SetStatus("new").SetPriority("high").SaveX(ctx)
+	item := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetOpenedByID(actor.ID).SetTitle("effects").SetTicketNumber("INC-EFFECTS").SetRecordClass("incident").SetType("incident").SetStatus("new").SetPriority("high").SaveX(ctx)
 	inc := client.Incident.Create().SetWorkItemID(item.ID).SetIncidentNumber(item.TicketNumber).SetSeverity("high").SetDetectedAt(time.Now()).SaveX(ctx)
-	client.IntakeRequest.Create().SetTenantID(tenant.ID).SetActorID(actor.ID).SetRequesterID(actor.ID).SetChannel("api").SetOperation("create").SetIdempotencyKey("effects").SetRequestDigest("digest").SetDigestVersion("v1").SetStatus("completed").SetWorkItemID(item.ID).SaveX(ctx)
+	client.IntakeRequest.Create().SetTenantID(tenant.ID).SetActorTenantID(tenant.ID).SetActorID(actor.ID).SetRequesterID(actor.ID).SetChannel("api").SetOperation("create").SetIdempotencyKey("effects").SetRequestDigest("digest").SetDigestVersion("v1").SetStatus("completed").SetWorkItemID(item.ID).SaveX(ctx)
 	payload, err := json.Marshal(map[string]interface{}{"tenantId": tenant.ID, "incidentId": inc.ID, "workItemId": item.ID, "actorId": actor.ID, "channel": "api"})
 	require.NoError(t, err)
 	event := client.OutboxEvent.Create().SetTenantID(tenant.ID).SetEventID(fmt.Sprintf("incident-created:%d", item.ID)).SetEventType("incident.created").SetAggregateType("work_item").SetAggregateID(fmt.Sprint(item.ID)).SetPayload(payload).SaveX(ctx)
 	svc := service.NewIncidentService(client, zap.NewNop().Sugar())
+	svc.RuleEngine().SetActorDirectory(client)
 	svc.SetAlertCreator(service.NewIncidentAlertingService(client, zap.NewNop().Sugar()))
 	return &incidentEffectsFixture{scopedDB, client, ctx, svc.RuleEngine(), svc, event, inc, actor, tenant}
 }
@@ -152,6 +157,7 @@ func TestPostgresIncidentEffectsResumeFrozenActionsAndCandidateSet(t *testing.T)
 	f.rule(metricAction("new-policy"))
 	fail.Store(false)
 	restarted := service.NewIncidentRuleEngine(f.client, zap.NewNop().Sugar())
+	restarted.SetActorDirectory(f.client)
 	require.NoError(t, restarted.Deliver(f.ctx, f.event))
 	require.NoError(t, restarted.Deliver(f.ctx, f.event))
 	metrics := f.client.IncidentMetric.Query().Order(ent.Asc("id")).AllX(f.ctx)

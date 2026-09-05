@@ -52,6 +52,9 @@ func (e *CustomProcessEngine) StartProcessByDefinitionID(ctx context.Context, de
 	if definition.ID <= 0 || definition.Key == "" || definition.Version == "" || len(definition.Digest) != 64 || businessID <= 0 || strings.TrimSpace(startKey) == "" || strings.TrimSpace(businessKey) == "" || strings.TrimSpace(businessType) == "" {
 		return nil, fmt.Errorf("complete process start identity is required")
 	}
+	if actor, ok := ctx.Value(intakeStartActorKey{}).(intakeStartActor); ok && (actor.targetTenantID != tenantID || actor.workItemID != businessID) {
+		return nil, fmt.Errorf("intake start business identity mismatch")
+	}
 	if _, _, err = resolveBPMNProcessStartActor(ctx, e.client, tenantID, variables); err != nil {
 		return nil, err
 	}

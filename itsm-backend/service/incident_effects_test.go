@@ -64,7 +64,7 @@ func TestIncidentEffectsCreatedEventReplay(t *testing.T) {
 	actor, err := createIncidentTestUser(ctx, client, tenant.ID, "effects-replay")
 	require.NoError(t, err)
 	inc := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "effects-replay")
-	client.IntakeRequest.Create().SetTenantID(tenant.ID).SetActorID(actor.ID).SetRequesterID(actor.ID).SetChannel("api").SetOperation("create").SetIdempotencyKey("one").SetRequestDigest("digest").SetDigestVersion("v1").SetStatus("completed").SetWorkItemID(inc.WorkItemID).SaveX(ctx)
+	client.IntakeRequest.Create().SetTenantID(tenant.ID).SetActorTenantID(tenant.ID).SetActorID(actor.ID).SetRequesterID(actor.ID).SetChannel("api").SetOperation("create").SetIdempotencyKey("one").SetRequestDigest("digest").SetDigestVersion("v1").SetStatus("completed").SetWorkItemID(inc.WorkItemID).SaveX(ctx)
 	payload := []byte(fmt.Sprintf(`{"tenantId":%d,"incidentId":%d,"workItemId":%d,"actorId":%d,"channel":"api"}`, tenant.ID, inc.ID, inc.WorkItemID, actor.ID))
 	event := client.OutboxEvent.Create().SetEventID(fmt.Sprintf("incident-created:%d", inc.WorkItemID)).SetEventType("incident.created").SetTenantID(tenant.ID).SetAggregateType("work_item").SetAggregateID(fmt.Sprint(inc.WorkItemID)).SetPayload(payload).SaveX(ctx)
 	rule := client.IncidentRule.Create().SetName("metric").SetRuleType("metric").SetTenantID(tenant.ID).SetConditions(map[string]interface{}{}).SetActions([]map[string]interface{}{{"type": "collect_metric", "metric_type": "automation", "metric_name": "created", "metric_value": 1.0}}).SaveX(ctx)
@@ -84,4 +84,27 @@ func TestIncidentEffectsRejectLossyRuleIDs(t *testing.T) {
 		_, ok := toInt(value)
 		require.False(t, ok, "unsafe rule integer %v", value)
 	}
+}
+
+func TestIncidentCreatedEffectsUseNativeReceiptProvenance(t *testing.T) {
+	client, svc, ctx := setupIncidentTest(t)
+	defer client.Close()
+	target, err := createIncidentTestTenant(ctx, client, "native-target")
+	require.NoError(t, err)
+	provider, err := createIncidentTestTenant(ctx, client, "native-provider")
+	require.NoError(t, err)
+	requester, err := createIncidentTestUser(ctx, client, target.ID, "native-requester")
+	require.NoError(t, err)
+	actor, err := createIncidentTestUser(ctx, client, provider.ID, "native-actor")
+	require.NoError(t, err)
+	inc := createAutomationIncident(t, ctx, client, target.ID, requester.ID, "native-effect")
+	client.Ticket.UpdateOneID(inc.WorkItemID).SetOpenedByID(actor.ID).ExecX(ctx)
+	client.IntakeRequest.Create().SetTenantID(target.ID).SetActorTenantID(provider.ID).SetActorID(actor.ID).SetRequesterID(requester.ID).SetChannel("itsm_web").SetOperation("create_work_item").SetIdempotencyKey("native").SetRequestDigest("digest").SetDigestVersion("v3").SetStatus("completed").SetWorkItemID(inc.WorkItemID).SaveX(ctx)
+	event := client.OutboxEvent.Create().SetEventID(fmt.Sprintf("incident-created:%d", inc.WorkItemID)).SetEventType("incident.created").SetTenantID(target.ID).SetAggregateType("work_item").SetAggregateID(fmt.Sprint(inc.WorkItemID)).SetPayload([]byte(fmt.Sprintf(`{"tenantId":%d,"incidentId":%d,"workItemId":%d,"actorId":%d,"channel":"itsm_web"}`, target.ID, inc.ID, inc.WorkItemID, actor.ID))).SaveX(ctx)
+	client.IncidentRule.Create().SetName("native-metric").SetRuleType("metric").SetTenantID(target.ID).SetConditions(map[string]interface{}{}).SetActions([]map[string]interface{}{{"type": "collect_metric", "metric_type": "automation", "metric_name": "native", "metric_value": 1.0}}).SaveX(ctx)
+	require.NoError(t, svc.RuleEngine().ExecuteCreatedEvent(ctx, event))
+	require.NoError(t, svc.RuleEngine().ExecuteCreatedEvent(ctx, event))
+	require.Equal(t, 1, client.IncidentMetric.Query().CountX(ctx))
+	client.User.UpdateOneID(actor.ID).SetActive(false).ExecX(ctx)
+	require.Error(t, svc.RuleEngine().ExecuteCreatedEvent(ctx, event))
 }

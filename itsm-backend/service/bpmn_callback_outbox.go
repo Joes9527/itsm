@@ -405,10 +405,11 @@ func (o *bpmnCallbackOutbox) persistCallbackOutcome(ctx context.Context, workerI
 		SetStatus(outcome.OutboxStatus).
 		SetCompletedAt(o.clock()).
 		ClearLeaseOwner().
-		ClearLeaseExpiresAt().
-		ClearLastErrorClass()
+		ClearLeaseExpiresAt()
 	if outcome.OutboxStatus == bpmn.CallbackOutboxBlocked {
 		update.SetLastErrorClass(string(outcome.LastErrorClass))
+	} else {
+		update.ClearLastErrorClass()
 	}
 	affected, err := update.Save(ctx)
 	if err != nil {

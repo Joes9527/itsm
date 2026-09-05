@@ -18,6 +18,8 @@ const (
 	FieldTenantID = "tenant_id"
 	// FieldActorID holds the string denoting the actor_id field in the database.
 	FieldActorID = "actor_id"
+	// FieldActorTenantID holds the string denoting the actor_tenant_id field in the database.
+	FieldActorTenantID = "actor_tenant_id"
 	// FieldRequesterID holds the string denoting the requester_id field in the database.
 	FieldRequesterID = "requester_id"
 	// FieldChannel holds the string denoting the channel field in the database.
@@ -56,6 +58,7 @@ var Columns = []string{
 	FieldID,
 	FieldTenantID,
 	FieldActorID,
+	FieldActorTenantID,
 	FieldRequesterID,
 	FieldChannel,
 	FieldOperation,
@@ -83,6 +86,8 @@ var (
 	TenantIDValidator func(int) error
 	// ActorIDValidator is a validator for the "actor_id" field. It is called by the builders before save.
 	ActorIDValidator func(int) error
+	// ActorTenantIDValidator is a validator for the "actor_tenant_id" field. It is called by the builders before save.
+	ActorTenantIDValidator func(int) error
 	// RequesterIDValidator is a validator for the "requester_id" field. It is called by the builders before save.
 	RequesterIDValidator func(int) error
 	// ChannelValidator is a validator for the "channel" field. It is called by the builders before save.
@@ -119,6 +124,11 @@ func ByTenantID(opts ...sql.OrderTermOption) OrderOption {
 // ByActorID orders the results by the actor_id field.
 func ByActorID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldActorID, opts...).ToFunc()
+}
+
+// ByActorTenantID orders the results by the actor_tenant_id field.
+func ByActorTenantID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldActorTenantID, opts...).ToFunc()
 }
 
 // ByRequesterID orders the results by the requester_id field.

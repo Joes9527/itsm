@@ -279,7 +279,7 @@ func awaitSSLVPNInstance(t *testing.T, fx *sslvpnDelegationFixture, businessType
 	t.Helper()
 	events := fx.client.OutboxEvent.Query().Where(outboxevent.EventTypeEQ("workflow.start.requested"), outboxevent.AggregateIDEQ(strconv.Itoa(workItemID))).AllX(fx.ctx)
 	require.Len(t, events, 1)
-	require.NoError(t, itsmservice.NewWorkflowStartOutboxHandler(fx.client, fx.engine.(*itsmservice.CustomProcessEngine)).Deliver(fx.ctx, events[0]))
+	require.NoError(t, itsmservice.NewWorkflowStartOutboxHandler(fx.client, fx.engine.(*itsmservice.CustomProcessEngine), fx.client).Deliver(fx.ctx, events[0]))
 
 	deadline := time.Now().Add(2 * time.Second)
 	businessKey := businessType + ":" + strconv.Itoa(workItemID)

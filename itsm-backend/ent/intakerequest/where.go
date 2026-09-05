@@ -65,6 +65,11 @@ func ActorID(v int) predicate.IntakeRequest {
 	return predicate.IntakeRequest(sql.FieldEQ(FieldActorID, v))
 }
 
+// ActorTenantID applies equality check predicate on the "actor_tenant_id" field. It's identical to ActorTenantIDEQ.
+func ActorTenantID(v int) predicate.IntakeRequest {
+	return predicate.IntakeRequest(sql.FieldEQ(FieldActorTenantID, v))
+}
+
 // RequesterID applies equality check predicate on the "requester_id" field. It's identical to RequesterIDEQ.
 func RequesterID(v int) predicate.IntakeRequest {
 	return predicate.IntakeRequest(sql.FieldEQ(FieldRequesterID, v))
@@ -193,6 +198,46 @@ func ActorIDLT(v int) predicate.IntakeRequest {
 // ActorIDLTE applies the LTE predicate on the "actor_id" field.
 func ActorIDLTE(v int) predicate.IntakeRequest {
 	return predicate.IntakeRequest(sql.FieldLTE(FieldActorID, v))
+}
+
+// ActorTenantIDEQ applies the EQ predicate on the "actor_tenant_id" field.
+func ActorTenantIDEQ(v int) predicate.IntakeRequest {
+	return predicate.IntakeRequest(sql.FieldEQ(FieldActorTenantID, v))
+}
+
+// ActorTenantIDNEQ applies the NEQ predicate on the "actor_tenant_id" field.
+func ActorTenantIDNEQ(v int) predicate.IntakeRequest {
+	return predicate.IntakeRequest(sql.FieldNEQ(FieldActorTenantID, v))
+}
+
+// ActorTenantIDIn applies the In predicate on the "actor_tenant_id" field.
+func ActorTenantIDIn(vs ...int) predicate.IntakeRequest {
+	return predicate.IntakeRequest(sql.FieldIn(FieldActorTenantID, vs...))
+}
+
+// ActorTenantIDNotIn applies the NotIn predicate on the "actor_tenant_id" field.
+func ActorTenantIDNotIn(vs ...int) predicate.IntakeRequest {
+	return predicate.IntakeRequest(sql.FieldNotIn(FieldActorTenantID, vs...))
+}
+
+// ActorTenantIDGT applies the GT predicate on the "actor_tenant_id" field.
+func ActorTenantIDGT(v int) predicate.IntakeRequest {
+	return predicate.IntakeRequest(sql.FieldGT(FieldActorTenantID, v))
+}
+
+// ActorTenantIDGTE applies the GTE predicate on the "actor_tenant_id" field.
+func ActorTenantIDGTE(v int) predicate.IntakeRequest {
+	return predicate.IntakeRequest(sql.FieldGTE(FieldActorTenantID, v))
+}
+
+// ActorTenantIDLT applies the LT predicate on the "actor_tenant_id" field.
+func ActorTenantIDLT(v int) predicate.IntakeRequest {
+	return predicate.IntakeRequest(sql.FieldLT(FieldActorTenantID, v))
+}
+
+// ActorTenantIDLTE applies the LTE predicate on the "actor_tenant_id" field.
+func ActorTenantIDLTE(v int) predicate.IntakeRequest {
+	return predicate.IntakeRequest(sql.FieldLTE(FieldActorTenantID, v))
 }
 
 // RequesterIDEQ applies the EQ predicate on the "requester_id" field.

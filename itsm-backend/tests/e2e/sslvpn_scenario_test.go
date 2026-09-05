@@ -164,7 +164,7 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 		require.NoError(t, registry.Register(owner))
 	}
 	resolver := intake.NewResolver(scService, service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
-	creationApp := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(numberAllocator))
+	creationApp := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(numberAllocator), sameTransactionDirectory{})
 	ticketController.SetCreationApplication(creationApp)
 	srHandler.SetCreationApplication(creationApp)
 
@@ -394,7 +394,7 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 	// briefly for the resulting process instance/task rows to commit.
 	startEvents := h.client.OutboxEvent.Query().Where(outboxevent.EventTypeEQ("workflow.start.requested"), outboxevent.AggregateIDEQ(fmt.Sprint(ticketID))).AllX(ctx)
 	require.Len(t, startEvents, 1, "exactly one durable workflow start event must be recorded for the created work item")
-	require.NoError(t, service.NewWorkflowStartOutboxHandler(h.client, h.engine.(*service.CustomProcessEngine)).Deliver(ctx, startEvents[0]))
+	require.NoError(t, service.NewWorkflowStartOutboxHandler(h.client, h.engine.(*service.CustomProcessEngine), h.client).Deliver(ctx, startEvents[0]))
 
 	businessKey := fmt.Sprintf("service_request:%d", ticketID)
 	var processInst *ent.ProcessInstance

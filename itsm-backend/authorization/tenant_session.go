@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"time"
 
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
 	"itsm-backend/ent/mspallocation"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/pkg/tenantmode"
 )
 
@@ -65,4 +67,47 @@ func AuthorizeTenantSession(ctx context.Context, client *ent.Client, actor *ent.
 		return nil, ErrTenantExpired
 	}
 	return target, nil
+}
+
+// EffectiveSessionRole is the canonical role issued by login, refresh and switch.
+func EffectiveSessionRole(actor *ent.User) string {
+	if actor == nil {
+		return ""
+	}
+	if actor.MspRole != "" {
+		return GetMSPRBACRole(string(actor.MspRole))
+	}
+	return actor.Role
+}
+
+// ResolveCurrentSessionActor reads only the restricted directory. Callers that
+// need transactional authorization must supply a directory at their snapshot.
+func ResolveCurrentSessionActor(ctx context.Context, directory *ent.Client, actorID, targetTenantID int, authenticatedRole string, now time.Time) (*ent.User, error) {
+	lookup := tenantctx.SystemContext(ctx, "session:current", "resolve current native actor and selected tenant")
+	return resolveCurrentSessionActor(lookup, directory, actorID, targetTenantID, authenticatedRole, now)
+}
+
+// Native provider deliveries use this same policy in their existing target
+// transaction context; SystemContext must never rebind a scoped transaction.
+func resolveCurrentSessionActor(ctx context.Context, directory *ent.Client, actorID, targetTenantID int, authenticatedRole string, now time.Time) (*ent.User, error) {
+	if directory == nil {
+		return nil, creation.NewInfrastructureUnavailable("session directory is required", nil)
+	}
+	actor, err := directory.User.Get(ctx, actorID)
+	if ent.IsNotFound(err) || (err == nil && !actor.Active) {
+		return nil, creation.NewAuthenticationRequired("current actor is unavailable", nil)
+	}
+	if err != nil {
+		return nil, creation.NewInfrastructureUnavailable("could not load current actor", err)
+	}
+	if EffectiveSessionRole(actor) != authenticatedRole {
+		return nil, creation.NewAuthenticationRequired("current actor role changed", nil)
+	}
+	if _, err = AuthorizeTenantSession(ctx, directory, actor, targetTenantID, now); err != nil {
+		if errors.Is(err, ErrTenantAuthorizationUnavailable) {
+			return nil, creation.NewInfrastructureUnavailable("could not authorize current tenant", err)
+		}
+		return nil, creation.NewPermissionDenied("current tenant session is unavailable", err)
+	}
+	return actor, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/stretchr/testify/require"
+	"itsm-backend/authorization"
 	"itsm-backend/ent"
 	"itsm-backend/handlers/common/workitemcreation"
 	"testing"
@@ -117,7 +118,9 @@ func TestInfrastructureReferenceQueryFailuresAreRetryable(t *testing.T) {
 			case "receipt":
 				err = NewIdempotencyRepository().Complete(ctx, tx, i.TenantID, receipt.ID, item.ID)
 			case "audit":
-				err = NewAuditRepository().RecordCreated(ctx, tx, CreatedAuditInput{TenantID: i.TenantID, UserID: i.ActorID, WorkItemID: item.ID, RequestID: "test", Path: "/test", Method: "POST"})
+				authorized, authErr := authorization.AuthorizeWorkItemCreation(ctx, tx, tx.Client(), i, c)
+				require.NoError(t, authErr)
+				err = NewAuditRepository().RecordCreated(ctx, tx, CreatedAuditInput{Authorization: authorized, IntakeRequestID: receipt.ID, TenantID: i.TenantID, UserID: i.ActorID, WorkItemID: item.ID, RequestID: "test", Path: "/test", Method: "POST"})
 			case "professional":
 				err = validateProfessional(ctx, tx, item, &result.ProfessionalReference)
 			default:
@@ -169,9 +172,12 @@ func TestProfessionalReplayQueryFailureAndAbsenceAreDistinct(t *testing.T) {
 				ctx := context.Background()
 				tx, err := client.Tx(ctx)
 				require.NoError(t, err)
+				authorized, err := authorization.AuthorizeWorkItemCreation(ctx, tx, tx.Client(), i, c)
+				require.NoError(t, err)
+				i = authorized.Identity()
 				plan, err := creator.Prepare(ctx, tx, workitemcreation.ResolvedIntake{Identity: i, Command: c, RecordClass: class})
 				require.NoError(t, err)
-				item, err := NewWorkItemCreator(n).CreateBase(ctx, tx, plan)
+				item, err := NewWorkItemCreator(n).CreateBase(ctx, tx, plan, authorized)
 				require.NoError(t, err)
 				require.NoError(t, tx.Commit())
 				reached := false

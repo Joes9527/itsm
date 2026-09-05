@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"itsm-backend/dto"
+	creation "itsm-backend/handlers/common/workitemcreation"
 )
 
 const (
@@ -14,8 +15,10 @@ const (
 func redactedConversionAuditJSON(
 	incidentID, sourceWorkItemID, problemID, targetWorkItemID int,
 	req dto.ConvertIncidentToProblemRequest,
+	provenance creation.ActorProvenance,
 ) string {
 	payload := struct {
+		creation.ActorProvenance
 		IncidentID       int `json:"incidentId"`
 		SourceWorkItemID int `json:"sourceWorkItemId"`
 		ProblemID        int `json:"problemId"`
@@ -26,6 +29,7 @@ func redactedConversionAuditJSON(
 			RootCauseProvided   bool `json:"rootCauseProvided"`
 		} `json:"request"`
 	}{
+		ActorProvenance:  provenance,
 		IncidentID:       incidentID,
 		SourceWorkItemID: sourceWorkItemID,
 		ProblemID:        problemID,

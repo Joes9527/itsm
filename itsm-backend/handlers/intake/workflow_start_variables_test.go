@@ -26,7 +26,7 @@ func TestWorkflowStartFreezesPreparedVariables(t *testing.T) {
 	require.Contains(t, string(event.Payload), `"amount":9007199254740993.125`)
 	f.client.Ticket.UpdateOneID(result.WorkItemID).SetTitle("Edited after creation").SetPriority("low").ExecX(ctx)
 	engine := service.NewCustomProcessEngine(f.client, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
-	require.NoError(t, service.NewWorkflowStartOutboxHandler(f.client, engine).Deliver(ctx, event))
+	require.NoError(t, service.NewWorkflowStartOutboxHandler(f.client, engine, f.client).Deliver(ctx, event))
 	instance := f.client.ProcessInstance.Query().OnlyX(ctx)
 	require.Equal(t, "service_request", instance.BusinessType)
 	require.Equal(t, command.Title, instance.Variables["title"])
@@ -46,6 +46,6 @@ func TestWorkflowStartRejectsMutatedDefinitionContent(t *testing.T) {
 	definition := f.client.ProcessDefinition.Query().OnlyX(ctx)
 	f.client.ProcessDefinition.UpdateOneID(definition.ID).SetBpmnXML([]byte(`<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="changed"><bpmn:process id="changed" isExecutable="true"><bpmn:startEvent id="start"/><bpmn:endEvent id="end"/><bpmn:sequenceFlow id="flow" sourceRef="start" targetRef="end"/></bpmn:process></bpmn:definitions>`)).ExecX(ctx)
 	engine := service.NewCustomProcessEngine(f.client, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
-	require.ErrorContains(t, service.NewWorkflowStartOutboxHandler(f.client, engine).Deliver(ctx, event), "frozen")
+	require.ErrorContains(t, service.NewWorkflowStartOutboxHandler(f.client, engine, f.client).Deliver(ctx, event), "frozen")
 	require.Zero(t, f.client.ProcessInstance.Query().CountX(ctx))
 }

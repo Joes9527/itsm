@@ -161,7 +161,7 @@ func loadEmailCreationDelivery(ctx context.Context, client *ent.Client, event *e
 	if err != nil {
 		return payload, nil, err
 	}
-	identity := creation.Identity{TenantID: payload.TenantID, ActorID: payload.ActorID, RequesterID: payload.ActorID, Role: actor.Role, Channel: "email", Provider: "msgraph_email"}
+	identity := creation.Identity{TenantID: payload.TenantID, ActorID: payload.ActorID, RequesterID: payload.ActorID, Role: authorization.EffectiveSessionRole(actor), Channel: "email", Provider: "msgraph_email"}
 	for _, action := range []string{"read", "write"} {
 		if err := authorization.RequireCurrentPermission(ctx, tx, identity, "ticket", action); err != nil {
 			var failure *creation.IntakeError

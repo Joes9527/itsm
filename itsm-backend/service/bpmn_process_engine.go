@@ -311,6 +311,13 @@ func resolveBPMNProcessStartActor(ctx context.Context, client *ent.Client, tenan
 		}
 	}
 
+	if authorized, ok := ctx.Value(intakeStartActorKey{}).(intakeStartActor); ok {
+		if !hasTrustedActor || authorized.actor.ID != actorID || authorized.targetTenantID != tenantID || authorized.workItemID <= 0 || authorized.receiptID <= 0 || !authorized.actor.Active {
+			return nil, "", fmt.Errorf("intake process actor scope mismatch")
+		}
+		return &authorized.actor, authorized.actor.Name, nil
+	}
+
 	actor, err := client.User.Query().Where(
 		user.ID(actorID), user.TenantID(tenantID), user.Active(true),
 	).Only(ctx)

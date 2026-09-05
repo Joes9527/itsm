@@ -45,13 +45,14 @@ func (r *IdempotencyRepository) Claim(
 	if tx == nil {
 		return nil, "", workitemcreation.NewInternalFailure("intake transaction is required", nil)
 	}
-	if identity.TenantID <= 0 || identity.ActorID <= 0 || identity.Channel == "" || key == "" || digest == "" || digestVersion == "" {
+	if identity.TenantID <= 0 || identity.ActorID <= 0 || identity.ActorTenantID <= 0 || identity.Channel == "" || key == "" || digest == "" || digestVersion == "" {
 		return nil, "", workitemcreation.NewInvalidCommand("invalid idempotency claim", workitemcreation.FieldError{Field: "idempotencyKey", Message: "claim scope and digest are required"}, nil)
 	}
 
 	id, err := tx.IntakeRequest.Create().
 		SetTenantID(identity.TenantID).
 		SetActorID(identity.ActorID).
+		SetActorTenantID(identity.ActorTenantID).
 		SetRequesterID(identity.RequesterID).
 		SetChannel(identity.Channel).
 		SetOperation(intakeCreateOperation).
@@ -91,7 +92,7 @@ func (r *IdempotencyRepository) Claim(
 	if loadErr != nil {
 		return nil, "", workitemcreation.NewInfrastructureUnavailable("could not load idempotency claim", loadErr)
 	}
-	if receipt.RequesterID != identity.RequesterID || receipt.RequestDigest != digest || receipt.DigestVersion != digestVersion {
+	if receipt.ActorTenantID != identity.ActorTenantID || receipt.RequesterID != identity.RequesterID || receipt.RequestDigest != digest || receipt.DigestVersion != digestVersion {
 		return nil, "", workitemcreation.NewIdempotencyConflict("idempotency key was already used for a different command", nil)
 	}
 	if receipt.Status == "completed" {

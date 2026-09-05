@@ -22,6 +22,8 @@ type IntakeRequest struct {
 	TenantID int `json:"tenant_id,omitempty"`
 	// ActorID holds the value of the "actor_id" field.
 	ActorID int `json:"actor_id,omitempty"`
+	// ActorTenantID holds the value of the "actor_tenant_id" field.
+	ActorTenantID int `json:"actor_tenant_id,omitempty"`
 	// RequesterID holds the value of the "requester_id" field.
 	RequesterID int `json:"requester_id,omitempty"`
 	// Channel holds the value of the "channel" field.
@@ -73,7 +75,7 @@ func (*IntakeRequest) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case intakerequest.FieldID, intakerequest.FieldTenantID, intakerequest.FieldActorID, intakerequest.FieldRequesterID, intakerequest.FieldWorkItemID:
+		case intakerequest.FieldID, intakerequest.FieldTenantID, intakerequest.FieldActorID, intakerequest.FieldActorTenantID, intakerequest.FieldRequesterID, intakerequest.FieldWorkItemID:
 			values[i] = new(sql.NullInt64)
 		case intakerequest.FieldChannel, intakerequest.FieldOperation, intakerequest.FieldIdempotencyKey, intakerequest.FieldRequestDigest, intakerequest.FieldDigestVersion, intakerequest.FieldStatus:
 			values[i] = new(sql.NullString)
@@ -111,6 +113,12 @@ func (_m *IntakeRequest) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field actor_id", values[i])
 			} else if value.Valid {
 				_m.ActorID = int(value.Int64)
+			}
+		case intakerequest.FieldActorTenantID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field actor_tenant_id", values[i])
+			} else if value.Valid {
+				_m.ActorTenantID = int(value.Int64)
 			}
 		case intakerequest.FieldRequesterID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -220,6 +228,9 @@ func (_m *IntakeRequest) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("actor_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ActorID))
+	builder.WriteString(", ")
+	builder.WriteString("actor_tenant_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ActorTenantID))
 	builder.WriteString(", ")
 	builder.WriteString("requester_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RequesterID))

@@ -32,6 +32,7 @@ type IncidentDomainServiceInterface interface {
 // IncidentServiceTaskHandler 事件服务任务处理器
 type IncidentServiceTaskHandler struct {
 	creationApplication creation.Application
+	creationDirectory   *ent.Client
 	HandlerBase
 	client          *ent.Client
 	logger          *zap.SugaredLogger
@@ -87,11 +88,12 @@ func (h *IncidentServiceTaskHandler) Execute(ctx context.Context, task *ent.Proc
 }
 
 // createIncident 创建事件
-func (h *IncidentServiceTaskHandler) SetCreationApplication(app creation.Application) {
+func (h *IncidentServiceTaskHandler) SetCreationApplication(app creation.Application, directory *ent.Client) {
 	h.creationApplication = app
+	h.creationDirectory = directory
 }
 func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, _ map[string]interface{}) (*CallbackEffect, error) {
-	return executeWorkItemCreation(ctx, h.client, h.creationApplication, h.GetHandlerID(), "create_incident", creation.RecordClassIncident)
+	return executeWorkItemCreation(ctx, h.client, h.creationDirectory, h.creationApplication, h.GetHandlerID(), "create_incident", creation.RecordClassIncident)
 }
 
 // assignIncident 分配事件。

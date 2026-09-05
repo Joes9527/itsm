@@ -47,7 +47,7 @@ func TestEmailAttachmentDeliveryRetriesAndReplaysActualPersistence(t *testing.T)
 	tenant := client.Tenant.Create().SetCode("email").SetName("email").SaveX(ctx)
 	actor := client.User.Create().SetTenantID(tenant.ID).SetUsername("mail").SetEmail("mail@example.test").SetName("Mail").SetRole("super_admin").SetPasswordHash("unused").SaveX(ctx)
 	item := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetTitle("Email").SetTicketNumber("MAIL-1").SetSource("email").SetExternalMessageID("message").SaveX(ctx)
-	client.IntakeRequest.Create().SetTenantID(tenant.ID).SetActorID(actor.ID).SetRequesterID(actor.ID).SetChannel("email").SetOperation("create").SetIdempotencyKey("message").SetRequestDigest("digest").SetDigestVersion("intake-v3").SetStatus("completed").SetWorkItemID(item.ID).SaveX(ctx)
+	client.IntakeRequest.Create().SetTenantID(tenant.ID).SetActorTenantID(tenant.ID).SetActorID(actor.ID).SetRequesterID(actor.ID).SetChannel("email").SetOperation("create").SetIdempotencyKey("message").SetRequestDigest("digest").SetDigestVersion("intake-v3").SetStatus("completed").SetWorkItemID(item.ID).SaveX(ctx)
 	payload, _ := json.Marshal(emailCreationDelivery{Number: item.TicketNumber, Title: item.Title, TenantID: tenant.ID, WorkItemID: item.ID, ActorID: actor.ID, Mailbox: "support@example.test", GraphMessageID: "graph-message", InternetMessageID: "message"})
 	event := client.OutboxEvent.Create().SetTenantID(tenant.ID).SetEventID("email.attachments.requested:1").SetEventType(EmailAttachmentsRequestedEventType).SetAggregateType("work_item").SetAggregateID("1").SetPayload(payload).SaveX(ctx)
 	storage := &recoveryStorage{objects: map[string][]byte{}}

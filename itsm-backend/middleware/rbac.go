@@ -1,34 +1,23 @@
 package middleware
 
 import (
-	"context"
+	"errors"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"strings"
+	"time"
 
 	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/ent"
-	"itsm-backend/ent/user"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
-// RBACMiddleware is a session/tenant guard, NOT a fine-grained permission
-// check. It validates that the caller is authenticated, that the DB user
-// record exists and is active, resolves and validates the tenant ID, and
-// enriches the gin.Context (user_entity, client, tenant_id) for downstream
-// handlers. It does NOT refresh the authorization role from DB: the
-// userEntity it loads is used only for the Active check and is stashed in
-// "user_entity" — the "role" key used by every downstream RequirePermission /
-// RequireRole / RequireMSPPermission check is set earlier from the JWT claim
-// and is never overwritten with userEntity.Role here. So a role change in
-// the DB does not take effect for a given caller until their JWT is
-// refreshed (re-login or token renewal). Actual resource:action
-// authorization is the sole responsibility of the RequirePermission /
-// RequireRole / RequireMSPPermission call attached to each specific
-// route — a route mounted under a group this middleware guards is NOT
-// automatically permission-protected.
-func RBACMiddleware(client *ent.Client) gin.HandlerFunc {
+// RBACMiddleware validates the current native actor and selected tenant session.
+// Resource authorization still belongs to the route's RequirePermission guard.
+// Intake reauthorizes uncached at its own common transaction snapshot.
+func RBACMiddleware(client, directory *ent.Client) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 调试日志
 		zap.S().Infow(
@@ -120,34 +109,6 @@ func RBACMiddleware(client *ent.Client) gin.HandlerFunc {
 			return
 		}
 
-		// 从数据库获取用户最新角色信息
-		userEntity, err := client.User.Query().
-			Where(user.ID(userID)).
-			Only(context.Background())
-		if err != nil {
-			zap.S().Warnw(
-				"RBACMiddleware: user not found in DB",
-				"path", c.Request.URL.Path,
-				"user_id", userID,
-				"error", err.Error(),
-			)
-			common.Fail(c, common.AuthFailedCode, "用户不存在")
-			c.Abort()
-			return
-		}
-
-		// 检查用户是否被禁用
-		if !userEntity.Active {
-			zap.S().Warnw(
-				"RBACMiddleware: user is disabled",
-				"path", c.Request.URL.Path,
-				"user_id", userID,
-			)
-			common.Fail(c, common.ForbiddenCode, "用户已被禁用")
-			c.Abort()
-			return
-		}
-
 		// 从JWT中获取角色信息
 		roleInterface, exists := c.Get("role")
 		if !exists {
@@ -173,6 +134,18 @@ func RBACMiddleware(client *ent.Client) gin.HandlerFunc {
 			return
 		}
 
+		userEntity, err := authorization.ResolveCurrentSessionActor(c.Request.Context(), directory, userID, tenantID, role, time.Now())
+		if err != nil {
+			code := common.AuthFailedCode
+			if errors.Is(err, creation.ErrInfrastructureUnavailable) {
+				code = common.ServiceUnavailableCode
+			} else if errors.Is(err, creation.ErrPermissionDenied) {
+				code = common.ForbiddenCode
+			}
+			common.Fail(c, code, "当前用户或租户会话不可用")
+			c.Abort()
+			return
+		}
 		// 调试日志：RBAC检查通过
 		zap.S().Infow(
 			"RBACMiddleware: access granted",
