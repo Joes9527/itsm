@@ -1,4 +1,4 @@
-package service_request
+package service_request_test
 
 import (
 	"context"
@@ -54,7 +54,7 @@ func TestEntRepository_GetByTicketID_CrossTenantIsolation(t *testing.T) {
 	ticketA := createTestTicketForSR(t, client, tenantA.ID, requesterA.ID, "TKT-CROSS-A")
 
 	repo := NewEntRepository(client)
-	created, err := repo.Create(ctx, &ServiceRequest{
+	created, err := createSRRepositoryFixture(ctx, client, &ServiceRequest{
 		TenantID:           tenantA.ID,
 		TicketID:           ticketA.ID,
 		CatalogID:          1,
@@ -96,7 +96,7 @@ func TestEntRepository_GetByTicketID_ExcludesSoftDeleted(t *testing.T) {
 	ticket := createTestTicketForSR(t, client, tenant.ID, requester.ID, "TKT-SOFTDEL")
 
 	repo := NewEntRepository(client)
-	created, err := repo.Create(ctx, &ServiceRequest{
+	created, err := createSRRepositoryFixture(ctx, client, &ServiceRequest{
 		TenantID:           tenant.ID,
 		TicketID:           ticket.ID,
 		CatalogID:          1,
@@ -140,7 +140,7 @@ func TestEntRepository_Create_PersistsContactAndQuantityFields(t *testing.T) {
 
 	repo := NewEntRepository(client)
 	expected := time.Now().Add(48 * time.Hour)
-	created, err := repo.Create(ctx, &ServiceRequest{
+	created, err := createSRRepositoryFixture(ctx, client, &ServiceRequest{
 		TenantID:           tenant.ID,
 		TicketID:           ticket.ID,
 		CatalogID:          1,
@@ -182,8 +182,7 @@ func TestEntRepository_Create_QuantityDefaultsToOneWhenOmitted(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	repo := NewEntRepository(client)
-	created, err := repo.Create(ctx, &ServiceRequest{
+	created, err := createSRRepositoryFixture(ctx, client, &ServiceRequest{
 		TenantID:           tenant.ID,
 		TicketID:           ticket.ID,
 		CatalogID:          1,

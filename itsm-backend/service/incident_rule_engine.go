@@ -11,24 +11,21 @@ import (
 	"itsm-backend/ent/incidentrule"
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service/bpmn"
 
 	"go.uber.org/zap"
 )
 
 type IncidentRuleEngine struct {
-	client          *ent.Client
-	logger          *zap.SugaredLogger
-	numberAllocator workitemnumber.Allocator
-	alertCreator    IncidentAlertCreator
+	client       *ent.Client
+	logger       *zap.SugaredLogger
+	alertCreator IncidentAlertCreator
 }
 
-func NewIncidentRuleEngine(client *ent.Client, logger *zap.SugaredLogger, numberAllocator workitemnumber.Allocator) *IncidentRuleEngine {
+func NewIncidentRuleEngine(client *ent.Client, logger *zap.SugaredLogger) *IncidentRuleEngine {
 	return &IncidentRuleEngine{
-		client:          client,
-		logger:          logger,
-		numberAllocator: numberAllocator,
+		client: client,
+		logger: logger,
 	}
 }
 
@@ -154,14 +151,13 @@ func (c *CategoryCondition) Evaluate(ctx context.Context, incident *ent.Incident
 
 // EscalationAction 升级动作
 type EscalationAction struct {
-	Level           int
-	Reason          string
-	NotifyUsers     []int
-	AutoAssign      bool
-	client          *ent.Client
-	logger          *zap.SugaredLogger
-	numberAllocator workitemnumber.Allocator
-	alertCreator    IncidentAlertCreator
+	Level        int
+	Reason       string
+	NotifyUsers  []int
+	AutoAssign   bool
+	client       *ent.Client
+	logger       *zap.SugaredLogger
+	alertCreator IncidentAlertCreator
 }
 
 func (a *EscalationAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
@@ -169,7 +165,7 @@ func (a *EscalationAction) Execute(ctx context.Context, incident *ent.Incident, 
 }
 
 func (a *EscalationAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
-	incidentService := NewIncidentService(a.client, a.logger, a.numberAllocator)
+	incidentService := NewIncidentService(a.client, a.logger)
 	incidentService.SetAlertCreator(a.alertCreator)
 
 	_, err := incidentService.EscalateIncidentTx(ctx, tx, &dto.IncidentEscalationRequest{
@@ -185,14 +181,13 @@ func (a *EscalationAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *
 
 // NotificationAction 通知动作
 type NotificationAction struct {
-	Channels        []string
-	Recipients      []string
-	Message         string
-	Severity        string
-	client          *ent.Client
-	logger          *zap.SugaredLogger
-	numberAllocator workitemnumber.Allocator
-	alertCreator    IncidentAlertCreator
+	Channels     []string
+	Recipients   []string
+	Message      string
+	Severity     string
+	client       *ent.Client
+	logger       *zap.SugaredLogger
+	alertCreator IncidentAlertCreator
 }
 
 func (a *NotificationAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
@@ -222,11 +217,10 @@ func (a *NotificationAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident
 
 // AssignmentAction 分配动作
 type AssignmentAction struct {
-	AssigneeID      int
-	Reason          string
-	client          *ent.Client
-	logger          *zap.SugaredLogger
-	numberAllocator workitemnumber.Allocator
+	AssigneeID int
+	Reason     string
+	client     *ent.Client
+	logger     *zap.SugaredLogger
 }
 
 func (a *AssignmentAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
@@ -234,7 +228,7 @@ func (a *AssignmentAction) Execute(ctx context.Context, incident *ent.Incident, 
 }
 
 func (a *AssignmentAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
-	incidentService := NewIncidentService(a.client, a.logger, a.numberAllocator)
+	incidentService := NewIncidentService(a.client, a.logger)
 
 	_, err := incidentService.UpdateIncidentTx(ctx, tx, incident.ID, &dto.UpdateIncidentRequest{
 		AssigneeID: &a.AssigneeID,
@@ -245,11 +239,10 @@ func (a *AssignmentAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *
 
 // StatusChangeAction 状态变更动作
 type StatusChangeAction struct {
-	Status          string
-	Reason          string
-	client          *ent.Client
-	logger          *zap.SugaredLogger
-	numberAllocator workitemnumber.Allocator
+	Status string
+	Reason string
+	client *ent.Client
+	logger *zap.SugaredLogger
 }
 
 func (a *StatusChangeAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
@@ -257,7 +250,7 @@ func (a *StatusChangeAction) Execute(ctx context.Context, incident *ent.Incident
 }
 
 func (a *StatusChangeAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
-	incidentService := NewIncidentService(a.client, a.logger, a.numberAllocator)
+	incidentService := NewIncidentService(a.client, a.logger)
 
 	_, err := incidentService.UpdateIncidentTx(ctx, tx, incident.ID, &dto.UpdateIncidentRequest{
 		Status: &a.Status,
@@ -268,14 +261,13 @@ func (a *StatusChangeAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident
 
 // MetricCollectionAction 指标收集动作
 type MetricCollectionAction struct {
-	MetricType      string
-	MetricName      string
-	MetricValue     float64
-	Unit            string
-	Tags            map[string]string
-	client          *ent.Client
-	logger          *zap.SugaredLogger
-	numberAllocator workitemnumber.Allocator
+	MetricType  string
+	MetricName  string
+	MetricValue float64
+	Unit        string
+	Tags        map[string]string
+	client      *ent.Client
+	logger      *zap.SugaredLogger
 }
 
 func (a *MetricCollectionAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
@@ -283,7 +275,7 @@ func (a *MetricCollectionAction) Execute(ctx context.Context, incident *ent.Inci
 }
 
 func (a *MetricCollectionAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
-	incidentService := NewIncidentService(tx.Client(), a.logger, a.numberAllocator)
+	incidentService := NewIncidentService(tx.Client(), a.logger)
 
 	_, err := incidentService.CreateIncidentMetric(ctx, &dto.CreateIncidentMetricRequest{
 		IncidentID:  incident.ID,
@@ -678,14 +670,13 @@ func (e *IncidentRuleEngine) parseEscalationAction(actionData map[string]interfa
 	}
 
 	return &EscalationAction{
-		Level:           level,
-		Reason:          reason,
-		NotifyUsers:     notifyUsers,
-		AutoAssign:      autoAssign,
-		client:          e.client,
-		logger:          e.logger,
-		numberAllocator: e.numberAllocator,
-		alertCreator:    e.alertCreator,
+		Level:        level,
+		Reason:       reason,
+		NotifyUsers:  notifyUsers,
+		AutoAssign:   autoAssign,
+		client:       e.client,
+		logger:       e.logger,
+		alertCreator: e.alertCreator,
 	}, nil
 }
 
@@ -719,14 +710,13 @@ func (e *IncidentRuleEngine) parseNotificationAction(actionData map[string]inter
 	}
 
 	return &NotificationAction{
-		Channels:        channels,
-		Recipients:      recipients,
-		Message:         message,
-		Severity:        severity,
-		client:          e.client,
-		logger:          e.logger,
-		numberAllocator: e.numberAllocator,
-		alertCreator:    e.alertCreator,
+		Channels:     channels,
+		Recipients:   recipients,
+		Message:      message,
+		Severity:     severity,
+		client:       e.client,
+		logger:       e.logger,
+		alertCreator: e.alertCreator,
 	}, nil
 }
 
@@ -740,11 +730,10 @@ func (e *IncidentRuleEngine) parseAssignmentAction(actionData map[string]interfa
 	reason, _ := actionData["reason"].(string)
 
 	return &AssignmentAction{
-		AssigneeID:      assigneeID,
-		Reason:          reason,
-		client:          e.client,
-		logger:          e.logger,
-		numberAllocator: e.numberAllocator,
+		AssigneeID: assigneeID,
+		Reason:     reason,
+		client:     e.client,
+		logger:     e.logger,
 	}, nil
 }
 
@@ -758,11 +747,10 @@ func (e *IncidentRuleEngine) parseStatusChangeAction(actionData map[string]inter
 	reason, _ := actionData["reason"].(string)
 
 	return &StatusChangeAction{
-		Status:          status,
-		Reason:          reason,
-		client:          e.client,
-		logger:          e.logger,
-		numberAllocator: e.numberAllocator,
+		Status: status,
+		Reason: reason,
+		client: e.client,
+		logger: e.logger,
 	}, nil
 }
 
@@ -787,14 +775,13 @@ func (e *IncidentRuleEngine) parseMetricCollectionAction(actionData map[string]i
 	tags := toStringMap(actionData["tags"])
 
 	return &MetricCollectionAction{
-		MetricType:      metricType,
-		MetricName:      metricName,
-		MetricValue:     metricValue,
-		Unit:            unit,
-		Tags:            tags,
-		client:          e.client,
-		logger:          e.logger,
-		numberAllocator: e.numberAllocator,
+		MetricType:  metricType,
+		MetricName:  metricName,
+		MetricValue: metricValue,
+		Unit:        unit,
+		Tags:        tags,
+		client:      e.client,
+		logger:      e.logger,
 	}, nil
 }
 

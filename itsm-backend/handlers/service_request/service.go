@@ -2,63 +2,28 @@ package service_request
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"itsm-backend/authorization"
 	"itsm-backend/common"
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	entticket "itsm-backend/ent/ticket"
-	"itsm-backend/handlers/cmdb"
-	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/repository/ticket"
-	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 
 	"go.uber.org/zap"
 )
 
-// TicketServiceInterface 是 Create 需要的最小 Ticket 创建能力，用接口而非具体类型
-// 避免 handlers/service_request 直接依赖 service.TicketService 的完整实现。
-type TicketServiceInterface interface {
-	CreateTicket(ctx context.Context, req *dto.CreateTicketRequest, tenantID int) (*ticket.Ticket, error)
-}
-
-// IncidentCreator 是 Create 在 ITSM 类型为 Incident 时所需的最小事件创建能力。
-type IncidentCreator interface {
-	CreateIncident(ctx context.Context, tenantID, requesterID int, title, description string, catalogID int) (incidentID int, err error)
-}
-
 type Service struct {
-	repo            Repository
-	scRepo          service_catalog.Repository
-	cmdbRepo        cmdb.Repository
-	client          *ent.Client
-	numberAllocator workitemnumber.Allocator
-	logger          *zap.SugaredLogger
-	ticketSvc       TicketServiceInterface
-	chainResolver   *service.ApprovalChainResolver
-	incidentSvc     IncidentCreator
+	repo          Repository
+	client        *ent.Client
+	logger        *zap.SugaredLogger
+	chainResolver *service.ApprovalChainResolver
 }
 
-func NewService(repo Repository, scRepo service_catalog.Repository, cmdbRepo cmdb.Repository, entClient *ent.Client, allocator workitemnumber.Allocator, logger *zap.SugaredLogger, ticketSvc TicketServiceInterface, chainResolver *service.ApprovalChainResolver, incidentSvc IncidentCreator) *Service {
-	if allocator == nil {
-		panic("work item number allocator is required")
-	}
-	return &Service{
-		repo:            repo,
-		scRepo:          scRepo,
-		cmdbRepo:        cmdbRepo,
-		client:          entClient,
-		numberAllocator: allocator,
-		logger:          logger,
-		ticketSvc:       ticketSvc,
-		chainResolver:   chainResolver,
-		incidentSvc:     incidentSvc,
-	}
+func NewService(repo Repository, client *ent.Client, logger *zap.SugaredLogger, chainResolver *service.ApprovalChainResolver) *Service {
+	return &Service{repo: repo, client: client, logger: logger, chainResolver: chainResolver}
 }
 
 // Client exposes the underlying ent client so the handler layer can query
@@ -66,225 +31,8 @@ func NewService(repo Repository, scRepo service_catalog.Repository, cmdbRepo cmd
 // duplicating that dependency on Handler.
 func (s *Service) Client() *ent.Client { return s.client }
 
-// Create submits a new service request. Its WorkItem base record and the
-// ServiceRequest extension are one aggregate and must commit together. BPMN is
-// triggered only after that transaction commits.
-func (s *Service) Create(ctx context.Context, tenantID, requesterID int, catalogID int, reqData *ServiceRequest) (*ServiceRequest, error) {
-	if _, _, err := s.repo.GetUserContext(ctx, requesterID, tenantID); err != nil {
-		return nil, common.NewBadRequestError("Requester not found or inactive", err)
-	}
-	// 1. Validate Service Catalog
-	cat, err := s.scRepo.Get(ctx, tenantID, catalogID)
-	if err != nil {
-		return nil, common.NewNotFoundError("Service Catalog not found")
-	}
-	if cat.CloudServiceID > 0 && cat.CITypeID == 0 {
-		return nil, common.NewBadRequestError("关联云服务时必须配置CI类型", nil)
-	}
-	if cat.Status != "enabled" && cat.Status != "active" {
-		return nil, common.NewBadRequestError("Service Catalog is not enabled", nil)
-	}
-
-	// 1b. Incident 类型：直接创建事件，跳过 SR 和审批流程。判断依据是 target_class
-	// （WorkItem 目标类），不再是 itsm_type——见 entity.go isIncidentCatalog 的注释。
-	// 这要求该 ServiceCatalog 行已经跑过 cmd/backfill_servicecatalog_target_class 回填
-	// 或者是 Wave 2 之后新建/编辑过的（target_class 在写入时同步计算），否则未回填的存量
-	// Incident 类型目录项会被当成 default 落到普通 ServiceRequest 分支——这是部署顺序要求，
-	// 不是代码缺陷，与 Incident/Problem/Change 三次迁移要求先跑各自 backfill 命令再上线新
-	// 路由代码是同一个模式。
-	if isIncidentCatalog(cat.TargetClass) {
-		return s.createIncidentFromCatalog(ctx, tenantID, requesterID, catalogID, reqData)
-	}
-
-	// 2. Validate Request Data
-	title := strings.TrimSpace(reqData.title())
-	if title == "" {
-		return nil, common.NewBadRequestError("Request title is required", nil)
-	}
-	// 基础设施字段组（成本中心/数据分级/公网IP/IP白名单/资源过期时间/合规确认）只对
-	// vm/network/database 三类目录项强制要求——这条判断只在 service_catalog.RequiresInfraFields
-	// 一处实现，见该函数注释。custom/access/security/software/devops 等类型（如 Copilot
-	// 采购申请）不再被要求填写这组跟业务无关的基础设施字段。
-	if service_catalog.RequiresInfraFields(cat.ServiceType) {
-		if !reqData.ComplianceAck {
-			return nil, common.NewBadRequestError("Compliance acknowledgement required", nil)
-		}
-		if reqData.NeedsPublicIP && len(reqData.SourceIPWhitelist) == 0 {
-			return nil, common.NewBadRequestError("Source IP whitelist required for public IP", nil)
-		}
-		if reqData.ExpireAt == nil {
-			return nil, common.NewBadRequestError("Expiration date required", nil)
-		}
-		if !reqData.ExpireAt.After(time.Now()) {
-			return nil, common.NewBadRequestError("Expiration date must be in the future", nil)
-		}
-		switch reqData.DataClassification {
-		case "public", "internal", "confidential", "restricted":
-		default:
-			return nil, common.NewBadRequestError("Invalid data classification", nil)
-		}
-	}
-
-	// 2a-2. 结构化字段值只提取一次，后面三处复用（必填校验 / 从 form_data 里去重 / 写入
-	// field_values），避免同一份提取逻辑跑三遍导致行为漂移（见 stripStructuredFieldKeys 和
-	// 下方第 5 步的注释）。
-	fieldValues := extractServiceRequestFieldValues(reqData.FormData)
-
-	// 2b. Validate required dynamic custom fields (server-side enforcement — the admin-configured
-	// "required" flag on a service catalog's field definitions must not be trust-the-frontend-only).
-	if s.client != nil {
-		defs, err := service.NewFieldDefinitionService(s.client).ListDefinitions(ctx, tenantID, "service_catalog", catalogID)
-		if err != nil {
-			return nil, common.NewInternalError("Failed to load service catalog fields", err)
-		}
-		for _, def := range defs {
-			if !def.Required {
-				continue
-			}
-			val, ok := fieldValues[def.Name]
-			if !ok || val == nil || val == "" {
-				return nil, common.NewBadRequestError(fmt.Sprintf("字段「%s」为必填项", def.Label), nil)
-			}
-		}
-	}
-
-	// 2c. 解析审批链（阶段二）：根据服务目录项属性和请求金额，从 ApprovalChain
-	// (entity_type=service_request) 中解析出实际生效的审批步骤。解析结果存入
-	// ServiceRequest.FormData._approval_chain 供 BPMN 流程 / 前端引用。
-	// 若租户未配置 service_request 类型的审批链，解析结果为 nil——不影响创建流程。
-	var resolvedSteps interface{}
-	if s.chainResolver != nil {
-		chain, resolveErr := s.chainResolver.ResolveForServiceRequest(ctx, tenantID, reqData.amount(), "", 0)
-		if resolveErr != nil {
-			s.logger.Warnw("Failed to resolve approval chain for service request", "error", resolveErr,
-				"tenant_id", tenantID, "catalog_id", catalogID)
-		} else if chain != nil && len(chain.Steps) > 0 {
-			resolvedSteps = chain.Steps
-		}
-	}
-
-	// 3. Build the WorkItem base record. The transaction below owns persistence of
-	// both this Ticket and its ServiceRequest extension.
-	ticketReq := &dto.CreateTicketRequest{
-		Title:       title,
-		Description: reqData.reason(),
-		Priority:    "medium",
-		Type:        mapTargetClassToTicketType(cat.TargetClass),
-		RequesterID: requesterID,
-		Source:      "service_catalog",
-	}
-	if hasApprovalChainSteps(resolvedSteps) {
-		ticketReq.ApprovalChain = resolvedSteps
-	}
-	// 目录条目配置了专属流程时优先生效，跳过 businessType+businessSubType 的通用绑定解析
-	// （见 ticket_service.go triggerWorkflowForTicket 里 workflowDefinitionKey 的优先级）。
-	if strings.TrimSpace(cat.ProcessDefinitionKey) != "" {
-		ticketReq.WorkflowDefinitionKey = strings.TrimSpace(cat.ProcessDefinitionKey)
-	}
-	newReq := &ServiceRequest{
-		TenantID:           tenantID,
-		CatalogID:          catalogID,
-		RequesterID:        requesterID,
-		ComplianceAck:      reqData.ComplianceAck,
-		NeedsPublicIP:      reqData.NeedsPublicIP,
-		DataClassification: reqData.DataClassification,
-		// form_data 不再原样落库整份 FormData——已经通过 field_values 权威持久化的结构化
-		// 字段键先被 stripStructuredFieldKeys 剔除，只留 _approval_chain 这类系统流程上下文
-		// 和没有字段定义覆盖的自由内容，停止 §8.3 描述的 form_data/field_values 双写。
-		FormData:          injectApprovalChain(stripStructuredFieldKeys(reqData.FormData, fieldValues), resolvedSteps),
-		CostCenter:        reqData.CostCenter,
-		SourceIPWhitelist: reqData.SourceIPWhitelist,
-		ExpireAt:          reqData.ExpireAt,
-		ContactName:       reqData.ContactName,
-		ContactEmail:      reqData.ContactEmail,
-		Quantity:          reqData.Quantity,
-		ExpectedAt:        reqData.ExpectedAt,
-	}
-
-	if cat.CITypeID > 0 {
-		ciID, err := s.ensureLinkedCI(ctx, tenantID, cat, reqData)
-		if err != nil {
-			return nil, err
-		}
-		newReq.CiID = ciID
-	}
-
-	// 4. Persist both records atomically. A Service Request may never leave a
-	// classified WorkItem without its one required extension.
-	createdTicket, created, err := s.createWorkItemAndExtension(ctx, tenantID, ticketReq, newReq)
-	if err != nil {
-		return nil, common.NewInternalError("Failed to create service request", err)
-	}
-	s.triggerWorkflowAfterServiceRequestCommit(createdTicket, tenantID, ticketReq.WorkflowDefinitionKey, ticketReq.ApprovalChain)
-
-	// 5. Persist dynamic custom field values against the TICKET now, not the SR
-	// (entity_type/entity_id 归属改成 ticket，这样工单详情页能像其他自定义字段一样直接展示)。
-	// 复用 2a-2 提取的 fieldValues，不重新提取一遍。
-	if s.client != nil && len(fieldValues) > 0 {
-		if err := service.NewFieldValueService(s.client).CreateValues(ctx, tenantID, "service_catalog", catalogID, "ticket", createdTicket.ID, fieldValues); err != nil {
-			s.logger.Warnw("Failed to persist service request custom field values", "error", err, "ticket_id", createdTicket.ID)
-		}
-	}
-
-	return created, nil
-}
-
-func (s *Service) createWorkItemAndExtension(ctx context.Context, tenantID int, ticketReq *dto.CreateTicketRequest, req *ServiceRequest) (*ticket.Ticket, *ServiceRequest, error) {
-	if s.client == nil {
-		return nil, nil, fmt.Errorf("service request Ent client is required")
-	}
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("start service request transaction: %w", err)
-	}
-	rollback := func(cause error) (*ticket.Ticket, *ServiceRequest, error) {
-		if rollbackErr := tx.Rollback(); rollbackErr != nil {
-			return nil, nil, fmt.Errorf("%w (rollback also failed: %v)", cause, rollbackErr)
-		}
-		return nil, nil, cause
-	}
-
-	workItemCreator := ticket.NewTransactionalCreator(s.numberAllocator)
-	workItem, err := workItemCreator.CreateInTransaction(ctx, tx.Client(), &ticket.CreateParams{
-		Title:       ticketReq.Title,
-		Description: ticketReq.Description,
-		Type:        ticket.TypeServiceRequest,
-		Priority:    ticket.Priority(ticketReq.Priority),
-		RequesterID: ticketReq.RequesterID,
-		Source:      ticketReq.Source,
-	}, tenantID)
-	if err != nil {
-		return rollback(fmt.Errorf("create service request work item: %w", err))
-	}
-
-	req.TicketID = workItem.ID
-	created, err := NewEntRepository(tx.Client()).Create(ctx, req)
-	if err != nil {
-		return rollback(fmt.Errorf("create service request extension: %w", err))
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, nil, fmt.Errorf("commit service request transaction: %w", err)
-	}
-	return workItem, created, nil
-}
-
 type ticketWorkflowStarter interface {
 	TriggerWorkflowForExistingTicket(ctx context.Context, tkt *ticket.Ticket, tenantID int, workflowDefinitionKey string, approvalChain interface{}) error
-}
-
-func (s *Service) triggerWorkflowAfterServiceRequestCommit(tkt *ticket.Ticket, tenantID int, workflowDefinitionKey string, approvalChain interface{}) {
-	starter, ok := s.ticketSvc.(ticketWorkflowStarter)
-	if !ok {
-		s.logger.Warnw("Ticket service does not support post-commit workflow triggering", "ticket_id", tkt.ID)
-		return
-	}
-	go func() {
-		workflowCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := starter.TriggerWorkflowForExistingTicket(workflowCtx, tkt, tenantID, workflowDefinitionKey, approvalChain); err != nil {
-			s.logger.Warnw("Workflow trigger failed", "error", err, "ticket_id", tkt.ID)
-		}
-	}()
 }
 
 // title/reason 这两个展示字段现在只是"创建 ticket 时的初始值"，不再持久化在 SR 表上——
@@ -300,23 +48,6 @@ func (r *ServiceRequest) reason() string {
 		return v
 	}
 	return ""
-}
-
-func (s *Service) ensureLinkedCI(ctx context.Context, tenantID int, cat *service_catalog.ServiceCatalog, reqData *ServiceRequest) (int, error) {
-	_ = cat
-	cloudResourceRefID := parseIntField(reqData.FormData, "cloud_resource_ref_id")
-	if cloudResourceRefID > 0 {
-		existing, err := s.cmdbRepo.GetCIByCloudResourceRefID(ctx, tenantID, cloudResourceRefID)
-		if err == nil && existing != nil {
-			return existing.ID, nil
-		}
-		if err != nil && !ent.IsNotFound(err) {
-			return 0, common.NewInternalError("查询关联CI失败", err)
-		}
-	}
-	// 新 CI 必须在审批完成后的 provisioning 阶段由履约器/连接器创建，
-	// 提交申请时不能提前向 CMDB 写入 active 资产。
-	return 0, nil
 }
 
 func parseIntField(formData map[string]interface{}, key string) int {
@@ -527,31 +258,4 @@ func extractServiceRequestFieldValues(formData map[string]interface{}) map[strin
 		result[k] = v
 	}
 	return result
-}
-
-// createIncidentFromCatalog 为 ITSM 类型为 Incident 的服务目录项直接创建事件，
-// 跳过 ServiceRequest 和审批流程。返回的 "stub" ServiceRequest 仅携带 IncidentID 供
-// handler 层返回给前端，不做持久化。
-func (s *Service) createIncidentFromCatalog(ctx context.Context, tenantID, requesterID, catalogID int, reqData *ServiceRequest) (*ServiceRequest, error) {
-	title := strings.TrimSpace(reqData.title())
-	if title == "" {
-		return nil, common.NewBadRequestError("Incident title is required", nil)
-	}
-	description := reqData.reason()
-	if description == "" {
-		description = title
-	}
-
-	incidentID, err := s.incidentSvc.CreateIncident(ctx, tenantID, requesterID, title, description, catalogID)
-	if err != nil {
-		return nil, common.NewInternalError("Failed to create incident from service catalog", err)
-	}
-
-	// 返回一个非持久化的 stub ServiceRequest，仅供 handler 构建响应用。
-	return &ServiceRequest{
-		ID:          incidentID, // 借用 ID 字段传递 incidentID
-		TenantID:    tenantID,
-		CatalogID:   catalogID,
-		RequesterID: requesterID,
-	}, nil
 }

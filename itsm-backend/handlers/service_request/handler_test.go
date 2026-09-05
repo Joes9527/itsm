@@ -1,4 +1,4 @@
-package service_request
+package service_request_test
 
 import (
 	"bytes"
@@ -19,9 +19,8 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	"itsm-backend/handlers/cmdb"
 	"itsm-backend/handlers/service_catalog"
-	"itsm-backend/repository/workitemnumber"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -42,6 +41,7 @@ func srUID() string {
 func srAuth(tid, uid int) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Set("tenant_id", tid)
+		c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: tid})
 		c.Set("user_id", uid)
 		c.Set("role", "manager")
 		c.Set("department", "IT")
@@ -55,6 +55,29 @@ func srDoReq(t *testing.T, r *gin.Engine, method, path string, body interface{})
 	if body != nil {
 		b, err := json.Marshal(body)
 		require.NoError(t, err)
+		if method == "POST" && path == "/api/v1/service-requests" {
+			var request map[string]interface{}
+			require.NoError(t, json.Unmarshal(b, &request))
+			if id, ok := request["catalogId"].(float64); ok && id > 0 {
+				confirmed := srDoReq(t, r, "GET", catalogFixturePath(int(id)), nil)
+				if confirmed.Code == common.SuccessCode {
+					catalog := confirmed.Data.(map[string]interface{})
+					request["recordClass"] = catalog["targetClass"]
+					request["catalogVersion"] = catalog["catalogVersion"]
+					request["formSchemaVersion"] = catalog["formSchemaVersion"]
+				}
+			}
+			if request["recordClass"] == "" || request["recordClass"] == nil {
+				request["recordClass"] = "service_request_item"
+				request["catalogVersion"] = "missing"
+				request["formSchemaVersion"] = "missing"
+			}
+			if request["quantity"] == float64(0) {
+				delete(request, "quantity")
+			}
+			b, err = json.Marshal(request)
+			require.NoError(t, err)
+		}
 		reader = bytes.NewReader(b)
 	}
 	req, err := http.NewRequest(method, path, reader)
@@ -62,6 +85,7 @@ func srDoReq(t *testing.T, r *gin.Engine, method, path string, body interface{})
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	req.Header.Set("Idempotency-Key", srUID())
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -98,9 +122,7 @@ func srSetup(t *testing.T) (*gin.Engine, *ent.Client, int, int, int) {
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(repo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
+	svc := NewService(repo, client, logger, nil)
 	h := NewHandler(svc)
 
 	user, err := client.User.Create().
@@ -118,6 +140,7 @@ func srSetup(t *testing.T) (*gin.Engine, *ent.Client, int, int, int) {
 	r := gin.New()
 	r.Use(srAuth(tenant.ID, uid))
 	r.POST("/api/v1/service-requests", h.Create)
+	r.GET("/api/v1/service-catalogs/:id", service_catalog.NewHandler(scSvc).Get)
 	r.GET("/api/v1/service-requests", h.List)
 	r.GET("/api/v1/service-requests/by-ticket/:ticketId", h.GetByTicket)
 	r.GET("/api/v1/service-requests/:id", h.Get)
@@ -137,7 +160,7 @@ func srCreateOne(t *testing.T, r *gin.Engine, catalogID int) int {
 	resp := srDoReq(t, r, "POST", "/api/v1/service-requests", req)
 	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", srStr(resp))
 	data := resp.Data.(map[string]interface{})
-	return int(data["id"].(float64))
+	return receiptProfessionalID(data)
 }
 
 func TestServiceRequestHandler_Create_Success(t *testing.T) {
@@ -151,8 +174,14 @@ func TestServiceRequestHandler_Create_Success(t *testing.T) {
 	resp := srDoReq(t, r, "POST", "/api/v1/service-requests", req)
 	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", srStr(resp))
 	data := resp.Data.(map[string]interface{})
-	assert.EqualValues(t, catID, data["catalogId"])
-	assert.Greater(t, data["ticketId"], float64(0), "Create 必须委托创建关联 Ticket 并回写 ticketId")
+	assert.Greater(t, data["workItemId"], float64(0))
+	assert.Equal(t, "service_request_item", data["recordClass"])
+	assert.Equal(t, "pending", data["workflowStartStatus"])
+	assert.NotContains(t, data, "id")
+	assert.NotContains(t, data, "ticketId")
+	detail := srDoReq(t, r, "GET", "/api/v1/service-requests/"+strconv.Itoa(receiptProfessionalID(data)), nil)
+	require.Equal(t, common.SuccessCode, detail.Code)
+	assert.EqualValues(t, catID, detail.Data.(map[string]interface{})["catalogId"])
 }
 
 func TestHandler_Get_IncludesCustomFieldValues(t *testing.T) {
@@ -172,7 +201,7 @@ func TestHandler_Get_IncludesCustomFieldValues(t *testing.T) {
 	createResp := srDoReq(t, r, "POST", "/api/v1/service-requests", createReq)
 	require.Equal(t, common.SuccessCode, createResp.Code, "body=%s", srStr(createResp))
 	created := createResp.Data.(map[string]interface{})
-	id := int(created["id"].(float64))
+	id := receiptProfessionalID(created)
 
 	getResp := srDoReq(t, r, "GET", "/api/v1/service-requests/"+strconv.Itoa(id), nil)
 	require.Equal(t, common.SuccessCode, getResp.Code, "body=%s", srStr(getResp))
@@ -235,11 +264,10 @@ func TestServiceRequestCreateDefersNewCIUntilProvisioning(t *testing.T) {
 	catalog, err := service_catalog.NewService(scRepo, client, logger).
 		Create(ctx, "VM Request", "infrastructure", "Provision VM", 24, tenant.ID, "enabled", ciType.ID, 0, nil, "", "")
 	require.NoError(t, err)
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	srSvc := NewService(NewEntRepository(client), scRepo, cmdb.NewEntRepository(client), client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
+	srSvc := NewService(NewEntRepository(client), client, logger, nil)
 	expireAt := time.Now().Add(30 * 24 * time.Hour)
 
-	created, err := srSvc.Create(ctx, tenant.ID, user.ID, catalog.ID, &ServiceRequest{
+	created, err := srSvc.SubmitCreation(ctx, tenant.ID, user.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck: true, DataClassification: "internal", ExpireAt: &expireAt,
 		FormData: map[string]interface{}{"title": "Production VM"},
 	})
@@ -308,7 +336,7 @@ func TestServiceRequestHandler_PartialUpdatePreservesBooleanFields(t *testing.T)
 		NeedsPublicIP: true, SourceIPWhitelist: []string{"10.0.0.1"},
 	})
 	require.Equal(t, common.SuccessCode, create.Code, "body=%s", srStr(create))
-	id := int(create.Data.(map[string]interface{})["id"].(float64))
+	id := receiptProfessionalID(create.Data.(map[string]interface{}))
 
 	// Title is no longer part of UpdateServiceRequestRequest (it's ticket-owned, set only at
 	// creation time) — send an update payload that only touches an unrelated field (FormData)

@@ -43,7 +43,15 @@ func TestIntakeBPMNCreationReplaysAfterSourceAdvanceFailure(t *testing.T) {
 			})
 			ctx = service.WithTrustedBPMNTenantContext(ctx, f.identity.TenantID)
 			ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.identity.ActorID)
-			instance, err := engine.StartProcessByDefinitionID(ctx, service.FreezeProcessDefinition(definition), fmt.Sprintf("ticket:%d", source.WorkItemID), "generic", source.WorkItemID, map[string]any{"title": "Created by process", "description": "Process requested work", "priority": "high"}, "source-start")
+			variables := map[string]any{"title": "Created by process", "description": "Process requested work", "priority": "high"}
+			if kind == "change" {
+				variables["justification"] = "Apply reviewed service configuration"
+				variables["impact_scope"] = "low"
+				variables["risk_level"] = "medium"
+				variables["implementation_plan"] = "Back up configuration, apply and verify"
+				variables["rollback_plan"] = "Restore previous configuration and verify"
+			}
+			instance, err := engine.StartProcessByDefinitionID(ctx, service.FreezeProcessDefinition(definition), fmt.Sprintf("ticket:%d", source.WorkItemID), "generic", source.WorkItemID, variables, "source-start")
 			require.NoError(t, err)
 			require.True(t, failed, "actual child creation must reach source acknowledgement")
 			require.Equal(t, 2, f.client.Ticket.Query().CountX(ctx))

@@ -11,7 +11,6 @@ import (
 // 定义工单数据访问的所有操作
 type Repository interface {
 	// 基础 CRUD
-	Create(ctx context.Context, params *CreateParams, tenantID int) (*Ticket, error)
 	GetByID(ctx context.Context, id int, tenantID int) (*Ticket, error)
 	GetByNumber(ctx context.Context, ticketNumber string, tenantID int) (*Ticket, error)
 	Update(ctx context.Context, id int, params *UpdateParams, tenantID int) (*Ticket, error)

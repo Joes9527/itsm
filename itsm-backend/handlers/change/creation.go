@@ -10,6 +10,7 @@ import (
 	"itsm-backend/service"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -67,11 +68,15 @@ func (s *Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedI
 		if err := authorization.RequireCurrentPermission(ctx, tx, in.Identity, "ticket", "read"); err != nil {
 			return nil, err
 		}
+		distinctNumbers := map[string]bool{}
+		for _, number := range input.RelatedTicketNumbers {
+			distinctNumbers[number] = true
+		}
 		rows, err := tx.Ticket.Query().Where(ticket.TenantIDEQ(in.Identity.TenantID), ticket.DeletedAtIsNil(), ticket.TicketNumberIn(input.RelatedTicketNumbers...)).All(ctx)
 		if err != nil {
 			return nil, creation.NewInfrastructureUnavailable("could not resolve related work item numbers", err)
 		}
-		if len(rows) != len(input.RelatedTicketNumbers) {
+		if len(rows) != len(distinctNumbers) {
 			return nil, creation.NewReferenceNotFound("related work item number is unavailable", nil)
 		}
 		ids := map[int]bool{}
@@ -96,11 +101,16 @@ func (s *Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedI
 	if input.Type == "" {
 		input.Type = "normal"
 	}
-	if input.ImpactScope == "" {
-		input.ImpactScope = "medium"
-	}
-	if input.RiskLevel == "" {
-		input.RiskLevel = "medium"
+	// Required professional fields are checked after authoritative standard-template
+	// expansion. Storage defaults support historical records, not incomplete intake.
+	for _, field := range []struct{ name, value string }{
+		{"justification", input.Justification}, {"impactScope", input.ImpactScope},
+		{"riskLevel", input.RiskLevel}, {"implementationPlan", input.ImplementationPlan},
+		{"rollbackPlan", input.RollbackPlan},
+	} {
+		if strings.TrimSpace(field.value) == "" {
+			return nil, creation.NewDomainValidationFailed("change."+field.name+" is required", nil)
+		}
 	}
 	switch input.Type {
 	case "normal", "standard", "emergency":

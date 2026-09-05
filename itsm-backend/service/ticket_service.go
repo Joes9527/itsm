@@ -10,27 +10,20 @@ import (
 	"strings"
 	"time"
 
-	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/connector"
 	feishuConnector "itsm-backend/connector/builtin/feishu"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
-	"itsm-backend/ent/fielddefinition"
-	"itsm-backend/ent/group"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/slaviolation"
 	entTicket "itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcategory"
 	entTicketComment "itsm-backend/ent/ticketcomment"
-	"itsm-backend/ent/tickettag"
-	"itsm-backend/ent/tickettemplate"
 	"itsm-backend/ent/user"
 	"itsm-backend/repository/base"
 	"itsm-backend/repository/ticket"
-	"itsm-backend/repository/workitemnumber"
-	"itsm-backend/service/bpmn"
 
 	"go.uber.org/zap"
 )
@@ -47,22 +40,20 @@ type TicketService struct {
 	assignmentSmartService *TicketAssignmentSmartService
 	connectorManager       *connector.Manager // 连接器管理器，用于飞书等外部集成
 
-	// 流程触发（V1 兼容语义）
+	// Existing workflow cancellation remains owned by the process service.
 	processTriggerSvc ProcessTriggerServiceInterface
-	processResolver   *ProcessResolver
 }
 
 // TicketServiceConfig 工单服务配置
 // 所有依赖都在配置中明确声明
 type TicketServiceConfig struct {
+	ProcessTriggerService ProcessTriggerServiceInterface
 	Repository            ticket.Repository
 	Client                *ent.Client // 可选；传入后可用作 ProcessInstance 等系统级查询
 	Logger                *zap.SugaredLogger
 	NotificationService   *TicketNotificationService
 	AutomationRuleService *TicketAutomationRuleService
 	SLAService            *TicketSLAService
-	ProcessTriggerService ProcessTriggerServiceInterface
-	ProcessResolver       *ProcessResolver
 	ConnectorManager      *connector.Manager // 连接器管理器
 }
 
@@ -77,14 +68,13 @@ func NewTicketService(cfg *TicketServiceConfig) *TicketService {
 	}
 
 	s := &TicketService{
+		processTriggerSvc: cfg.ProcessTriggerService,
 		repo:              cfg.Repository,
 		client:            cfg.Client,
 		logger:            cfg.Logger,
 		notificationSvc:   cfg.NotificationService,
 		automationRuleSvc: cfg.AutomationRuleService,
 		slaSvc:            cfg.SLAService,
-		processTriggerSvc: cfg.ProcessTriggerService,
-		processResolver:   cfg.ProcessResolver,
 		connectorManager:  cfg.ConnectorManager,
 	}
 	if cfg.Client != nil {
@@ -99,7 +89,7 @@ func NewTicketService(cfg *TicketServiceConfig) *TicketService {
 // 自动构造一个 EntRepository，避免每个测试都要写完整配置
 func NewTicketServiceForTest(client *ent.Client, logger *zap.SugaredLogger) *TicketService {
 	return NewTicketService(&TicketServiceConfig{
-		Repository: ticket.NewEntRepository(client, logger, workitemnumber.NewPostgreSQLAllocator()),
+		Repository: ticket.NewEntRepository(client, logger),
 		Client:     client,
 		Logger:     logger,
 	})
@@ -108,319 +98,6 @@ func NewTicketServiceForTest(client *ent.Client, logger *zap.SugaredLogger) *Tic
 // SetNotificationService 注入通知服务（运行时依赖注入）
 func (s *TicketService) SetNotificationService(n *TicketNotificationService) {
 	s.notificationSvc = n
-}
-
-// SetProcessTriggerService 注入流程触发服务（运行时依赖注入）
-func (s *TicketService) SetProcessTriggerService(p ProcessTriggerServiceInterface) {
-	s.processTriggerSvc = p
-}
-
-// SetProcessResolver 注入流程解析器（运行时依赖注入）
-func (s *TicketService) SetProcessResolver(r *ProcessResolver) {
-	s.processResolver = r
-}
-
-// CreateTicket 创建工单
-func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketRequest, tenantID int) (*ticket.Ticket, error) {
-	s.logger.Infow("Creating ticket", "tenant_id", tenantID, "title", req.Title)
-	if strings.TrimSpace(req.Title) == "" {
-		return nil, fmt.Errorf("title不能为空")
-	}
-	switch ticket.Priority(req.Priority) {
-	case ticket.PriorityLow, ticket.PriorityMedium, ticket.PriorityHigh, ticket.PriorityUrgent, ticket.PriorityCritical:
-	default:
-		return nil, fmt.Errorf("无效的工单优先级: %s", req.Priority)
-	}
-	if err := s.validateCreateTicketReferences(ctx, req, tenantID); err != nil {
-		return nil, err
-	}
-
-	ticketType := normalizeCreateTicketType(req.Type, req.FormFields)
-	assigneeID := req.AssigneeID
-	if assigneeID == 0 {
-		assigneeID = s.defaultTierOneAssignee(ctx, tenantID)
-	}
-	categoryID := req.CategoryID
-	workflowDefinitionKey := req.WorkflowDefinitionKey
-
-	// 转换 DTO 到领域参数
-	params := &ticket.CreateParams{
-		Title:             req.Title,
-		Description:       req.Description,
-		Type:              ticketType,
-		Priority:          ticket.Priority(req.Priority),
-		RequesterID:       req.RequesterID,
-		TemplateID:        req.TemplateID,
-		ParentTicketID:    req.ParentTicketID,
-		TagIDs:            uniqueIDs(req.TagIDs),
-		CustomFieldValues: extractCustomFieldValues(req.FormFields),
-		Source:            req.Source,
-		CreatorEmail:      req.CreatorEmail,
-		ExternalMessageID: req.ExternalMessageID,
-		ConversationID:    req.ConversationID,
-	}
-
-	if assigneeID != 0 {
-		params.AssigneeID = &assigneeID
-	}
-	if categoryID != nil {
-		params.CategoryID = categoryID
-	}
-
-	// 验证必填自定义字段（模板字段定义中标记为 required 的字段必须在提交中存在且非空）。
-	// 必须在 s.repo.Create 之前做——之前的顺序是先落库再校验，校验失败时已经落库的
-	// 工单行（连同工单编号）没有任何回滚，会在数据库里留下一个永远失败创建了的孤儿行，
-	// 污染报表/SLA统计/工单号序列。
-	if req.TemplateID != nil && len(req.FormFields) > 0 {
-		if missing, err := s.validateRequiredFields(ctx, tenantID, *req.TemplateID, req.FormFields); err != nil {
-			s.logger.Errorw("Required field validation error", "error", err, "template_id", *req.TemplateID)
-		} else if len(missing) > 0 {
-			return nil, fmt.Errorf("缺少必填字段: %s", strings.Join(missing, ", "))
-		}
-		// 校验字段值本身的格式/取值范围（number 是否数字、select/multiselect 的值是否在
-		// options 里）。同样必须在 s.repo.Create 之前做：这类校验此前只在落库后的
-		// CreateValues 里跑，写入失败被当成"持久化失败"静默吞掉（只记日志，工单照样创建
-		// 成功），导致越界值既不报错也不落库，提交者对自己的数据丢失毫无感知。
-		if err := s.validateFieldValueFormats(ctx, tenantID, *req.TemplateID, req.FormFields); err != nil {
-			return nil, err
-		}
-	}
-
-	// 通过 Repository 创建工单
-	tkt, err := s.repo.Create(ctx, params, tenantID)
-	if err != nil {
-		s.logger.Errorw("Failed to create ticket", "error", err)
-		return nil, err
-	}
-
-	if tkt.AssigneeID == nil && s.assignmentSmartService != nil {
-		assignment, err := s.assignmentSmartService.AutoAssign(ctx, tkt.ID, tenantID)
-		if err != nil {
-			s.logger.Warnw("Automatic ticket assignment failed", "error", err, "ticket_id", tkt.ID)
-		} else {
-			tkt.AssigneeID = assignment.AssignedTo
-		}
-	}
-
-	// 将自定义字段值写入共享的 field_values 表（取代旧的 Ticket.custom_field_values JSON 列）。
-	// 写入失败不应该阻塞工单创建本身，跟 SLA 计算失败的处理方式一致。
-	if req.TemplateID != nil {
-		if fieldValues := extractCustomFieldValues(req.FormFields); len(fieldValues) > 0 {
-			if err := NewFieldValueService(s.client).CreateValues(ctx, tenantID, "ticket_template", *req.TemplateID, "ticket", tkt.ID, fieldValues); err != nil {
-				s.logger.Errorw("Failed to persist custom field values", "error", err, "ticket_id", tkt.ID, "template_id", *req.TemplateID)
-			}
-		}
-	} else if adHocFields := extractAdHocFieldValues(req.FormFields); len(adHocFields) > 0 {
-		if err := NewFieldValueService(s.client).CreateAdHocValues(ctx, tenantID, "ticket", tkt.ID, adHocFields); err != nil {
-			s.logger.Errorw("Failed to persist ad-hoc custom field values", "error", err, "ticket_id", tkt.ID)
-		}
-	}
-
-	// 计算 SLA（如果配置了 SLA 服务）
-	if s.slaSvc != nil {
-		slaCategoryID := 0
-		if req.CategoryID != nil {
-			slaCategoryID = *req.CategoryID
-		}
-		slaResult, err := s.slaSvc.CalculateSLADeadlineFromRequest(ctx, tenantID, string(tkt.Type), string(tkt.Priority), slaCategoryID)
-		if err != nil {
-			s.logger.Warnw("Failed to calculate SLA", "error", err)
-		} else {
-			err = s.repo.UpdateSLADeadlines(ctx, tkt.ID, slaResult.ResponseDeadline, slaResult.ResolutionDeadline, &slaResult.SLADefinitionID, tenantID)
-			if err != nil {
-				s.logger.Warnw("Failed to update SLA deadlines", "error", err)
-			}
-		}
-	}
-
-	// 异步发送通知（如果分配了处理人）
-	// 注意：必须使用 context.Background()，不能复用请求 ctx。
-	// 否则 HTTP 响应返回后 ctx 立即取消，异步任务会失败（context canceled）。
-	if s.notificationSvc != nil && tkt.AssigneeID != nil {
-		go func() {
-			ctx2, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			// 获取 ent.Ticket 用于通知（临时方案）
-			// 理想情况下应该传递领域模型
-			entTicket := s.toEntTicket(tkt)
-			if err := s.notificationSvc.NotifyTicketCreated(ctx2, entTicket); err != nil {
-				s.logger.Warnw("Notification failed", "error", err)
-			}
-		}()
-	}
-
-	// 异步执行自动化规则
-	// 同样使用独立 ctx，避免请求生命周期结束导致异步任务中断。
-	if s.automationRuleSvc != nil {
-		go func() {
-			ctx2, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			defer cancel()
-			if err := s.automationRuleSvc.ExecuteRulesForTicket(ctx2, tkt.ID, tenantID); err != nil {
-				s.logger.Warnw("Automation rules failed", "error", err)
-			}
-		}()
-	}
-
-	// 异步触发 BPMN 流程（V1 兼容语义）
-	// 这是 V1 缺失的 Phase 1 #1 缺陷修复：V2 必须让工单进入 BPMN 引擎
-	// 使用独立 ctx，否则控制器响应后 workflow 触发立即被取消。
-	if s.processTriggerSvc != nil {
-		workflowActorID, hasWorkflowActor, err := trustedBPMNProcessStartActorID(ctx, tenantID)
-		if err != nil {
-			s.logger.Warnw("Workflow trigger skipped: invalid actor context", "error", err, "ticket_id", tkt.ID)
-		} else {
-			go func(actorID int, hasActor bool) {
-				ctx2, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				defer cancel()
-				if hasActor {
-					ctx2 = context.WithValue(ctx2, bpmn.BPMNUserIDContextKey, actorID)
-				}
-				if err := s.triggerWorkflowForTicket(ctx2, tkt, tenantID, workflowDefinitionKey, req.ApprovalChain); err != nil {
-					s.logger.Warnw("Workflow trigger failed", "error", err, "ticket_id", tkt.ID)
-				}
-			}(workflowActorID, hasWorkflowActor)
-		}
-	}
-
-	s.logger.Infow("Ticket created", "ticket_id", tkt.ID, "ticket_number", tkt.TicketNumber)
-
-	// 异步同步工单到飞书
-	// 必须使用独立 ctx，否则飞书同步在响应返回后立即失败。
-	if s.connectorManager != nil {
-		go func() {
-			ctx2, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			// 获取Feishu连接器
-			conn, ok := s.connectorManager.Get(tenantID, "feishu")
-			if !ok {
-				// 飞书连接器未配置，忽略
-				return
-			}
-			feishuConn, ok := conn.(*feishuConnector.Feishu)
-			if !ok {
-				return
-			}
-			// 开启事务
-			tx, err := s.client.Tx(ctx2)
-			if err != nil {
-				s.logger.Warnw("Failed to start transaction for feishu sync", "error", err, "ticket_id", tkt.ID)
-				return
-			}
-			defer tx.Rollback()
-			// 同步工单到飞书
-			_, err = feishuConn.UpdateExistingTicketTask(ctx2, tx, s.toEntTicket(tkt))
-			if err != nil {
-				s.logger.Warnw("Failed to sync ticket to feishu", "error", err, "ticket_id", tkt.ID)
-				return
-			}
-			// 提交事务
-			if err := tx.Commit(); err != nil {
-				s.logger.Warnw("Failed to commit transaction for feishu sync", "error", err, "ticket_id", tkt.ID)
-				return
-			}
-		}()
-	}
-
-	return tkt, nil
-}
-
-// defaultTierOneAssignee selects a stable, active member of the tenant's
-// tier1-support group. A missing or empty group leaves the ticket unassigned
-// rather than making ticket creation unavailable.
-func (s *TicketService) defaultTierOneAssignee(ctx context.Context, tenantID int) int {
-	if s.client == nil {
-		return 0
-	}
-	member, err := s.client.Group.Query().
-		Where(group.TenantIDEQ(tenantID), group.NameEQ("tier1-support")).
-		QueryMembers().
-		Where(user.TenantIDEQ(tenantID), user.ActiveEQ(true)).
-		Order(ent.Asc(user.FieldID)).
-		First(ctx)
-	if err != nil {
-		if !ent.IsNotFound(err) {
-			s.logger.Warnw("Failed to resolve tier-1 support assignee", "error", err, "tenant_id", tenantID)
-		}
-		return 0
-	}
-	return member.ID
-}
-
-func (s *TicketService) validateCreateTicketReferences(ctx context.Context, req *dto.CreateTicketRequest, tenantID int) error {
-	// Mock-backed unit tests may intentionally construct the service without an
-	// Ent client. Production wiring and integration tests always provide it.
-	if s.client == nil {
-		return nil
-	}
-	if req.RequesterID <= 0 {
-		return fmt.Errorf("requesterId必须为当前租户中的有效用户")
-	}
-	requesterExists, err := s.client.User.Query().
-		Where(user.IDEQ(req.RequesterID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).
-		Exist(ctx)
-	if err != nil {
-		return fmt.Errorf("验证申请人失败: %w", err)
-	}
-	if !requesterExists {
-		return fmt.Errorf("申请人不存在或不可用")
-	}
-	if req.AssigneeID > 0 {
-		assigneeExists, err := s.client.User.Query().
-			Where(user.IDEQ(req.AssigneeID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).
-			Exist(ctx)
-		if err != nil {
-			return fmt.Errorf("验证处理人失败: %w", err)
-		}
-		if !assigneeExists {
-			return fmt.Errorf("处理人不存在或不可用")
-		}
-	}
-	if req.CategoryID != nil {
-		categoryExists, err := s.client.TicketCategory.Query().
-			Where(ticketcategory.IDEQ(*req.CategoryID), ticketcategory.TenantIDEQ(tenantID), ticketcategory.IsActiveEQ(true)).
-			Exist(ctx)
-		if err != nil {
-			return fmt.Errorf("验证工单分类失败: %w", err)
-		}
-		if !categoryExists {
-			return fmt.Errorf("工单分类不存在或不可用")
-		}
-	}
-	if req.TemplateID != nil {
-		templateExists, err := s.client.TicketTemplate.Query().
-			Where(tickettemplate.IDEQ(*req.TemplateID), tickettemplate.TenantIDEQ(tenantID), tickettemplate.IsActiveEQ(true)).
-			Exist(ctx)
-		if err != nil {
-			return fmt.Errorf("验证工单模板失败: %w", err)
-		}
-		if !templateExists {
-			return fmt.Errorf("工单模板不存在或不可用")
-		}
-	}
-	if req.ParentTicketID != nil {
-		parentExists, err := s.client.Ticket.Query().
-			Where(entTicket.IDEQ(*req.ParentTicketID), entTicket.TenantIDEQ(tenantID), entTicket.DeletedAtIsNil()).
-			Exist(ctx)
-		if err != nil {
-			return fmt.Errorf("验证父工单失败: %w", err)
-		}
-		if !parentExists {
-			return fmt.Errorf("父工单不存在")
-		}
-	}
-	tagIDs := uniqueIDs(req.TagIDs)
-	if len(tagIDs) > 0 {
-		count, err := s.client.TicketTag.Query().
-			Where(tickettag.IDIn(tagIDs...), tickettag.TenantIDEQ(tenantID), tickettag.IsActiveEQ(true)).
-			Count(ctx)
-		if err != nil {
-			return fmt.Errorf("验证工单标签失败: %w", err)
-		}
-		if count != len(tagIDs) {
-			return fmt.Errorf("工单标签不存在或不可用")
-		}
-	}
-	return nil
 }
 
 // parseFieldValuesArray 把 formFields["values"] 解析成 [{name,value}] 数组形状，
@@ -452,72 +129,6 @@ func parseFieldValuesArray(formFields map[string]interface{}) map[string]interfa
 		}
 	}
 	return result
-}
-
-// validateRequiredFields 校验模板的必填字段是否在提交数据中存在且非空。
-// 返回缺失的字段 label 列表和 error。
-func (s *TicketService) validateRequiredFields(ctx context.Context, tenantID int, templateID int, formFields map[string]interface{}) ([]string, error) {
-	defs, err := s.client.FieldDefinition.Query().
-		Where(
-			fielddefinition.EntityTypeEQ("ticket_template"),
-			fielddefinition.EntityIDEQ(templateID),
-			fielddefinition.Required(true),
-			fielddefinition.IsActive(true),
-			fielddefinition.TenantIDEQ(tenantID),
-		).
-		All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("查询必填字段定义失败: %w", err)
-	}
-	if len(defs) == 0 {
-		return nil, nil
-	}
-
-	// 提取已提交的字段名和值
-	submittedValues := extractCustomFieldValues(formFields)
-
-	var missing []string
-	for _, d := range defs {
-		val, ok := submittedValues[d.Name]
-		if !ok || isEmptyFieldValue(val) {
-			label := d.Label
-			if label == "" {
-				label = d.Name
-			}
-			missing = append(missing, label)
-		}
-	}
-	return missing, nil
-}
-
-// validateFieldValueFormats 校验提交的自定义字段值是否符合字段定义的格式/取值范围
-// （number 是否数字、select/multiselect 的值是否在 options 里，见 validateFieldValue）。
-func (s *TicketService) validateFieldValueFormats(ctx context.Context, tenantID int, templateID int, formFields map[string]interface{}) error {
-	submittedValues := extractCustomFieldValues(formFields)
-	if len(submittedValues) == 0 {
-		return nil
-	}
-	defs, err := s.client.FieldDefinition.Query().
-		Where(
-			fielddefinition.EntityTypeEQ("ticket_template"),
-			fielddefinition.EntityIDEQ(templateID),
-			fielddefinition.IsActive(true),
-			fielddefinition.TenantIDEQ(tenantID),
-		).
-		All(ctx)
-	if err != nil {
-		return fmt.Errorf("查询字段定义失败: %w", err)
-	}
-	for _, d := range defs {
-		val, ok := submittedValues[d.Name]
-		if !ok {
-			continue
-		}
-		if err := validateFieldValue(d, val); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // isEmptyFieldValue 判断字段值是否为空
@@ -679,92 +290,6 @@ func isTicketDataScopeAllRole(role string) bool {
 	default:
 		return false
 	}
-}
-
-// triggerWorkflowForTicket 异步触发工单关联的 BPMN 流程
-// 逻辑参考 V1 (ticket_service.go:221-279)，适配 V2 的 DDD 领域模型
-func (s *TicketService) triggerWorkflowForTicket(ctx context.Context, tkt *ticket.Ticket, tenantID int, workflowDefinitionKey string, approvalChain interface{}) error {
-	triggeredBy, hasTriggeredBy, err := trustedBPMNProcessStartActorID(ctx, tenantID)
-	if err != nil {
-		return err
-	}
-	triggeredByValue := "system"
-	if hasTriggeredBy {
-		triggeredByValue = strconv.Itoa(triggeredBy)
-	}
-
-	// 构造流程变量
-	variables := map[string]interface{}{
-		"ticket_id":     tkt.ID,
-		"ticket_number": tkt.TicketNumber,
-		"title":         tkt.Title,
-		"description":   tkt.Description,
-		"priority":      string(tkt.Priority),
-		"status":        string(tkt.Status),
-		"requester_id":  tkt.RequesterID,
-	}
-	if tkt.AssigneeID != nil {
-		variables["assignee_id"] = *tkt.AssigneeID
-	}
-
-	// 审批链 → BPMN 变量（由 SR 创建流程传入）
-	if approvalChain != nil {
-		variables["approval_required"] = true
-		variables["approval_chain"] = approvalChain
-	} else {
-		variables["approval_required"] = false
-	}
-
-	// 解析 process key：1.请求指定 2.Resolver 3.兜底
-	processKey := workflowDefinitionKey
-	if processKey == "" && s.processResolver != nil {
-		// ProcessResolver 当前接口需要 *ent.Ticket，临时转换为 ent 适配
-		resolved, err := s.processResolver.ResolveWithPriority(ctx, s.toEntTicket(tkt), workflowDefinitionKey)
-		if err != nil {
-			return fmt.Errorf("failed to resolve process key: %w", err)
-		}
-		processKey = resolved
-	}
-	if processKey == "" {
-		processKey = "ticket_general_flow"
-	}
-	identityPolicy, err := authorization.ResolveWorkItemPolicy(tkt.RecordClass)
-	if err != nil {
-		return fmt.Errorf("解析 WorkItem BPMN 身份失败: %w", err)
-	}
-
-	triggerReq := &dto.ProcessTriggerRequest{
-		BusinessType:         identityPolicy.BusinessType,
-		BusinessID:           tkt.ID,
-		ProcessDefinitionKey: processKey,
-		Variables:            variables,
-		TriggeredBy:          triggeredByValue,
-		TriggeredAt:          time.Now(),
-		TenantID:             tenantID,
-	}
-
-	resp, err := s.processTriggerSvc.TriggerProcess(WithTrustedBPMNTenantContext(ctx, tenantID), triggerReq)
-	if err != nil {
-		return fmt.Errorf("failed to trigger workflow: %w", err)
-	}
-
-	s.logger.Infow(
-		"Workflow triggered for ticket",
-		"ticket_id", tkt.ID,
-		"process_instance_id", resp.ProcessInstanceID,
-		"process_key", processKey,
-		"business_key", resp.BusinessKey,
-	)
-	return nil
-}
-
-// TriggerWorkflowForExistingTicket starts BPMN for a Ticket whose owning domain
-// has already committed its aggregate transaction.
-func (s *TicketService) TriggerWorkflowForExistingTicket(ctx context.Context, tkt *ticket.Ticket, tenantID int, workflowDefinitionKey string, approvalChain interface{}) error {
-	if s.processTriggerSvc == nil {
-		return nil
-	}
-	return s.triggerWorkflowForTicket(ctx, tkt, tenantID, workflowDefinitionKey, approvalChain)
 }
 
 // GetWorkflowStatus 获取工单关联的流程状态
@@ -2145,46 +1670,6 @@ func (s *TicketService) ExportTickets(ctx context.Context, tenantID int, filters
 	}
 }
 
-// ImportTickets 导入工单
-func (s *TicketService) ImportTickets(ctx context.Context, tenantID int, data []byte, format string) error {
-	var tickets []map[string]interface{}
-	switch format {
-	case "csv":
-		parsed, err := s.parseCSV(data)
-		if err != nil {
-			return err
-		}
-		tickets = parsed
-	case "excel":
-		parsed, err := s.parseExcel(data)
-		if err != nil {
-			return err
-		}
-		tickets = parsed
-	case "json":
-		if err := json.Unmarshal(data, &tickets); err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("不支持的导入格式: %s", format)
-	}
-	for _, ticketData := range tickets {
-		title, _ := ticketData["标题"].(string)
-		desc, _ := ticketData["描述"].(string)
-		priority, _ := ticketData["优先级"].(string)
-		_, err := s.CreateTicket(ctx, &dto.CreateTicketRequest{
-			Title:       title,
-			Description: desc,
-			Priority:    priority,
-			RequesterID: 1,
-		}, tenantID)
-		if err != nil {
-			return fmt.Errorf("导入工单失败: %v", err)
-		}
-	}
-	return nil
-}
-
 // AssignTickets 批量分配工单
 func (s *TicketService) AssignTickets(ctx context.Context, tenantID int, ticketIDs []int, assigneeID int) error {
 	if s.client == nil {
@@ -2577,35 +2062,6 @@ func (s *TicketService) generateExcel(data []map[string]interface{}) ([]byte, er
 	return s.generateCSV(data)
 }
 
-// parseCSV 解析 CSV
-func (s *TicketService) parseCSV(data []byte) ([]map[string]interface{}, error) {
-	reader := csv.NewReader(bytes.NewReader(data))
-	records, err := reader.ReadAll()
-	if err != nil {
-		return nil, err
-	}
-	if len(records) < 2 {
-		return nil, fmt.Errorf("CSV文件格式错误")
-	}
-	headers := records[0]
-	result := make([]map[string]interface{}, 0, len(records)-1)
-	for i := 1; i < len(records); i++ {
-		row := make(map[string]interface{})
-		for j, header := range headers {
-			if j < len(records[i]) {
-				row[header] = records[i][j]
-			}
-		}
-		result = append(result, row)
-	}
-	return result, nil
-}
-
-// parseExcel 解析 Excel（与 V1 一致：暂返回空结果）
-func (s *TicketService) parseExcel(data []byte) ([]map[string]interface{}, error) {
-	return []map[string]interface{}{}, nil
-}
-
 // ==================== MSP 相关方法 ====================
 
 // GetCustomerTicketsForMSP 获取 MSP 视角下的客户工单
@@ -2766,4 +2222,8 @@ func (s *TicketService) GetMSPPerformanceReports(ctx context.Context, mspTenantI
 			"date_to":             dateTo,
 		},
 	}, nil
+}
+
+func (s *TicketService) SetProcessTriggerService(owner ProcessTriggerServiceInterface) {
+	s.processTriggerSvc = owner
 }

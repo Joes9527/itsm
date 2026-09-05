@@ -4,9 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/gin-gonic/gin"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"itsm-backend/controller"
 	"itsm-backend/ent"
 	changedomain "itsm-backend/handlers/change"
@@ -20,6 +17,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/gin-gonic/gin"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func intakeHTTP(t *testing.T, f *unifiedIntakeFixture, handle gin.HandlerFunc, body, key string, params gin.Params) (*httptest.ResponseRecorder, creation.CreateWorkItemResult) {
@@ -60,7 +61,7 @@ func TestIntakeHTTPProblemAndIncidentEntry(t *testing.T) {
 	w, _ = intakeHTTP(t, f, problem.Create, strings.TrimSuffix(body, "}")+`,"impactScope":"ignored"}`, "bad", nil)
 	require.Equal(t, 400, w.Code, w.Body.String())
 	require.Contains(t, w.Body.String(), "impactScope")
-	incident := controller.NewIncidentController(nil, nil, nil, nil, nil, nil, zap.NewNop().Sugar())
+	incident := controller.NewIncidentController(nil, nil, nil, nil, nil, zap.NewNop().Sugar())
 	incident.SetCreationApplication(f.app)
 	incidentBody := `{"title":"Service unavailable","description":"Detailed service failure","priority":"critical","severity":"high","impact":"high","urgency":"high","type":"alert","source":"manual","impactAnalysis":{"businessImpact":{"revenueImpact":9007199254740993.125}},"detectedAt":"2026-09-05T08:00:00+08:00"}`
 	w, result = intakeHTTP(t, f, incident.CreateIncident, incidentBody, "incident-http", nil)
@@ -90,7 +91,7 @@ func TestIntakeHTTPChangeReferencesAndStandardTemplate(t *testing.T) {
 	ch := f.client.Change.GetX(ctx, result.ProfessionalReference.ID)
 	require.Equal(t, "restore configuration", ch.RollbackPlan)
 	template := f.client.StandardChange.Create().SetTenantID(f.identity.TenantID).SetCreatedBy(f.identity.ActorID).SetTitle("Standard backup").SetDescription("Backup database").SetImplementationPlan("Run backup").SetRollbackPlan("Restore previous").SetJustification("Recovery point").SetRiskLevel("low").SetImpactScope("low").SaveX(ctx)
-	standard := standarddomain.NewHandler(f.client, zap.NewNop().Sugar(), nil)
+	standard := standarddomain.NewHandler(f.client, zap.NewNop().Sugar())
 	standard.SetCreationApplication(f.app)
 	params := gin.Params{{Key: "id", Value: strconv.Itoa(template.ID)}}
 	w, result = intakeHTTP(t, f, standard.InstantiateStandardChange, `{"title":"Backup production"}`, "standard-http", params)
@@ -177,6 +178,9 @@ func TestIntakeHTTPCatalogTargetsUseConfirmedRevisions(t *testing.T) {
 			handler := requestdomain.NewHandler(nil)
 			handler.SetCreationApplication(f.app)
 			body := map[string]any{"catalogId": catalog.ID, "catalogVersion": resolved.Version, "formSchemaVersion": resolved.FormSchemaVersion, "recordClass": class, "title": "Configured catalog request", "reason": "Business reason", "priority": "high"}
+			if class == "change_request" {
+				body["change"] = map[string]any{"justification": "Apply catalog service configuration", "impactScope": "low", "riskLevel": "medium", "implementationPlan": "Back up configuration, apply catalog settings and verify", "rollbackPlan": "Restore saved configuration"}
+			}
 			if class == "service_request_item" {
 				body["contactName"] = "Requester"
 				body["contactEmail"] = "contact@example.test"
@@ -200,6 +204,67 @@ func TestIntakeHTTPCatalogTargetsUseConfirmedRevisions(t *testing.T) {
 			w, _ = intakeHTTP(t, f, handler.Create, string(raw), "new-stale-key", nil)
 			require.Equal(t, 409, w.Code, w.Body.String())
 			require.Contains(t, w.Body.String(), "CatalogVersionConflict")
+		})
+	}
+}
+
+// Template expansion supplies the professional policy values before validation.
+// A configured low-risk default is authoritative; an incomplete template must
+// still fail at the same Change owner and leave no creation graph.
+func TestIntakeStandardChangeRequiredFieldsAfterTemplateExpansion(t *testing.T) {
+	for _, field := range []string{"justification", "impactScope", "riskLevel", "implementationPlan", "rollbackPlan"} {
+		t.Run(field, func(t *testing.T) {
+			f := newUnifiedIntakeFixture(t)
+			ctx := context.Background()
+			template := f.client.StandardChange.Create().SetTenantID(f.identity.TenantID).SetCreatedBy(f.identity.ActorID).
+				SetTitle("Standard database backup").SetDescription("Create a recoverable daily backup").
+				SetJustification("Meet the recovery point objective").SetImplementationPlan("Run backup and verify checksum").SetRollbackPlan("Retain previous verified backup").SaveX(ctx)
+			update := template.Update()
+			switch field {
+			case "justification":
+				update.SetJustification("   ")
+			case "impactScope":
+				update.SetImpactScope("   ")
+			case "riskLevel":
+				update.SetRiskLevel("   ")
+			case "implementationPlan":
+				update.SetImplementationPlan("   ")
+			case "rollbackPlan":
+				update.SetRollbackPlan("   ")
+			}
+			update.SaveX(ctx)
+			handler := standarddomain.NewHandler(f.client, zap.NewNop().Sugar())
+			handler.SetCreationApplication(f.app)
+			params := gin.Params{{Key: "id", Value: strconv.Itoa(template.ID)}}
+			w, _ := intakeHTTP(t, f, handler.InstantiateStandardChange, `{}`, "incomplete-template", params)
+			require.Equal(t, 400, w.Code, w.Body.String())
+			require.Contains(t, w.Body.String(), "change."+field+" is required")
+			assertNoEntryGraph(t, f.client)
+			require.Zero(t, f.client.Change.Query().CountX(ctx))
+			restore := template.Update()
+			switch field {
+			case "justification":
+				restore.SetJustification("Meet the recovery point objective")
+			case "impactScope":
+				restore.SetImpactScope("low")
+			case "riskLevel":
+				restore.SetRiskLevel("low")
+			case "implementationPlan":
+				restore.SetImplementationPlan("Run backup and verify checksum")
+			case "rollbackPlan":
+				restore.SetRollbackPlan("Retain previous verified backup")
+			}
+			restore.SaveX(ctx)
+			w, result := intakeHTTP(t, f, handler.InstantiateStandardChange, `{}`, "complete-template", params)
+			require.Equal(t, 201, w.Code, w.Body.String())
+			change := f.client.Change.GetX(ctx, result.ProfessionalReference.ID)
+			require.Equal(t, "standard", change.Type)
+			require.Equal(t, "Meet the recovery point objective", change.Justification)
+			require.Equal(t, "Run backup and verify checksum", change.ImplementationPlan)
+			require.Equal(t, "Retain previous verified backup", change.RollbackPlan)
+			require.Equal(t, "low", change.RiskLevel)
+			require.Equal(t, "low", change.ImpactScope)
+			require.Equal(t, "Standard database backup", f.client.Ticket.GetX(ctx, result.WorkItemID).Title)
 		})
 	}
 }

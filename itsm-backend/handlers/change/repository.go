@@ -7,7 +7,6 @@ import (
 // Repository interface for Change domain
 type Repository interface {
 	// Change CRUD
-	Create(ctx context.Context, c *Change) (*Change, error)
 	Get(ctx context.Context, id int, tenantID int) (*Change, error)
 	List(ctx context.Context, tenantID int, page, size int, status, search, riskLevel string) ([]*Change, int, error)
 	Update(ctx context.Context, c *Change) (*Change, error)

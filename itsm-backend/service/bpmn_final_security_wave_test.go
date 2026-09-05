@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 	"testing"
 	"time"
@@ -142,8 +143,8 @@ func TestCompleteTaskMergesParticipantValuesWithoutErasingTaskSummary(t *testing
 
 	updated := f.client.ProcessTask.GetX(f.userCtx, task.ID)
 	assert.Equal(t, "parallel", updated.TaskVariables["approval_type"])
-	assert.EqualValues(t, 2, updated.TaskVariables["threshold"])
-	assert.EqualValues(t, 1, updated.TaskVariables["approved"])
+	assert.Equal(t, json.Number("2"), updated.TaskVariables["threshold"])
+	assert.Equal(t, json.Number("1"), updated.TaskVariables["approved"])
 	assert.Equal(t, "looks good", updated.TaskVariables["approvalComment"])
 }
 

@@ -85,6 +85,7 @@ func EnsureSSLVPNMetadata(ctx context.Context, client *ent.Client, tenantID int)
 			SetCategory("网络与远程访问服务").
 			SetServiceType("security").
 			SetItsmType("Request").
+			SetTargetClass("service_request_item").
 			SetRequiresApproval(true).
 			SetApprovalLevel(2).
 			SetProcessDefinitionKey("sslvpn_approval_flow").
@@ -97,9 +98,10 @@ func EnsureSSLVPNMetadata(ctx context.Context, client *ent.Client, tenantID int)
 		if err != nil {
 			return nil, fmt.Errorf("创建服务目录项失败: %w", err)
 		}
-	} else if catalog.ProcessDefinitionKey != "sslvpn_approval_flow" {
+	} else if catalog.ProcessDefinitionKey != "sslvpn_approval_flow" || catalog.TargetClass != "service_request_item" {
 		catalog, err = catalog.Update().
 			SetProcessDefinitionKey("sslvpn_approval_flow").
+			SetTargetClass("service_request_item").
 			Save(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("更新服务目录项流程绑定失败: %w", err)

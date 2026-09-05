@@ -1,7 +1,6 @@
 package standard_change
 
 import (
-	"context"
 	"strconv"
 	"time"
 
@@ -9,7 +8,6 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	entstandardchange "itsm-backend/ent/standardchange"
-	changedomain "itsm-backend/handlers/change"
 	"itsm-backend/handlers/common/intakehttp"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/middleware"
@@ -22,17 +20,10 @@ type Handler struct {
 	creationApplication creation.Application
 	client              *ent.Client
 	logger              *zap.SugaredLogger
-	changeService       interface {
-		CreateChange(context.Context, *changedomain.Change) (*changedomain.Change, error)
-	}
 }
 
-func NewHandler(client *ent.Client, logger *zap.SugaredLogger, changeService interface {
-	CreateChange(context.Context, *changedomain.Change) (*changedomain.Change, error)
-}) *Handler {
-	return &Handler{
-		client: client, logger: logger, changeService: changeService,
-	}
+func NewHandler(client *ent.Client, logger *zap.SugaredLogger) *Handler {
+	return &Handler{client: client, logger: logger}
 }
 
 // toResponse converts ent StandardChange to DTO response

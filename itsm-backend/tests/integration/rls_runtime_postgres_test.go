@@ -9,13 +9,6 @@ import (
 	"testing"
 	"time"
 
-	entsql "entgo.io/ent/dialect/sql"
-	"github.com/alicebob/miniredis/v2"
-	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
-	"golang.org/x/crypto/bcrypt"
 	"itsm-backend/authentication"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/database"
@@ -27,6 +20,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
+
+	entsql "entgo.io/ent/dialect/sql"
+	"github.com/alicebob/miniredis/v2"
+	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // The consumer must use the real configured Ent decorator under a non-bypass role.
@@ -37,7 +38,7 @@ func TestPostgresRLSRuntimeConsumer(t *testing.T) {
 	clients, _ := runtimeClients(t, f)
 	client := clients.Tenant
 	db := database.GetRawDB()
-	owner := service.NewIncidentService(client, zap.NewNop().Sugar(), nil)
+	owner := service.NewIncidentService(client, zap.NewNop().Sugar())
 	owner.SetAlertCreator(service.NewIncidentAlertingService(client, zap.NewNop().Sugar()))
 	registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{owner.RuleEngine()}, "incident_alert_delivery")
 	require.NoError(t, err)

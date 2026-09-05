@@ -9,7 +9,6 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/handlers/common/intakehttp"
 	creation "itsm-backend/handlers/common/workitemcreation"
-	problemDomain "itsm-backend/handlers/problem"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
 
@@ -24,7 +23,6 @@ type IncidentController struct {
 	monitoringService        *service.IncidentMonitoringService
 	alertingService          *service.IncidentAlertingService
 	rootCauseAnalysisService *service.RootCauseAnalysisService
-	problemConversionService problemDomain.ConversionService
 	logger                   *zap.SugaredLogger
 }
 
@@ -34,7 +32,6 @@ func NewIncidentController(
 	monitoringService *service.IncidentMonitoringService,
 	alertingService *service.IncidentAlertingService,
 	rootCauseAnalysisService *service.RootCauseAnalysisService,
-	problemConversionService problemDomain.ConversionService,
 	logger *zap.SugaredLogger,
 ) *IncidentController {
 	return &IncidentController{
@@ -43,7 +40,6 @@ func NewIncidentController(
 		monitoringService:        monitoringService,
 		alertingService:          alertingService,
 		rootCauseAnalysisService: rootCauseAnalysisService,
-		problemConversionService: problemConversionService,
 		logger:                   logger,
 	}
 }

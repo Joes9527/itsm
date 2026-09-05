@@ -1,4 +1,4 @@
-package service_request
+package service_request_test
 
 import (
 	"context"
@@ -10,9 +10,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/schema"
-	"itsm-backend/handlers/cmdb"
 	"itsm-backend/handlers/service_catalog"
-	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -59,12 +57,10 @@ func TestService_Create_FullChain_TicketStatusReflectedAfterChange(t *testing.T)
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, logger, nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -136,10 +132,8 @@ func TestService_Create_FormDataFieldValuesConsistency_FieldLevel(t *testing.T) 
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, logger, nil)
 
 	submittedCustomFields := map[string]interface{}{
 		"environment":  "production",
@@ -154,7 +148,7 @@ func TestService_Create_FormDataFieldValuesConsistency_FieldLevel(t *testing.T) 
 		formData[k] = v
 	}
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -193,10 +187,12 @@ func TestService_Create_FormDataFieldValuesConsistency_FieldLevel(t *testing.T) 
 		assert.False(t, stillPresent, "字段 %q 已经写入 field_values，不应该在 form_data 里重复出现（停止双写）", name)
 	}
 
-	// 系统上下文键不受影响：title/reason 既不经过 extractServiceRequestFieldValues 提取，
-	// 也不应该被误删。
-	assert.Equal(t, "申请一台云主机-一致性", fetched.FormData["title"])
-	assert.Equal(t, "一致性回归测试", fetched.FormData["reason"])
+	// Shared display fields have one authority in WorkItem, absent from SR JSON.
+	item := client.Ticket.GetX(ctx, created.TicketID)
+	assert.Equal(t, "申请一台云主机-一致性", item.Title)
+	assert.Equal(t, "一致性回归测试", item.Description)
+	assert.NotContains(t, fetched.FormData, "title")
+	assert.NotContains(t, fetched.FormData, "reason")
 }
 
 // TestService_Create_ResolvesApprovalChainIntoFormData 覆盖场景 3：
@@ -236,15 +232,13 @@ func TestService_Create_ResolvesApprovalChainIntoFormData(t *testing.T) {
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
 	chainResolver := service.NewApprovalChainResolver(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, chainResolver, nil)
+	svc := NewService(srRepo, client, logger, chainResolver)
 
 	// 金额低于 IT 审批阈值（50000）：应该只保留 level 1（普通步骤）和 level 3
 	// （group_controlled，始终保留），level 2 被过滤掉。
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -266,7 +260,7 @@ func TestService_Create_ResolvesApprovalChainIntoFormData(t *testing.T) {
 	assertApprovalChainStepsEqual(t, expectedFiltered, fetched.FormData["_approval_chain"])
 
 	// 金额达到 IT 审批阈值：三个步骤全部保留。
-	createdHighAmount, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	createdHighAmount, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -302,13 +296,11 @@ func TestService_Create_NoApprovalChainConfigured_FormDataHasNoApprovalChainKey(
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
 	chainResolver := service.NewApprovalChainResolver(client, logger) // 有效但租户下无配置
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, chainResolver, nil)
+	svc := NewService(srRepo, client, logger, chainResolver)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -333,27 +325,6 @@ func assertApprovalChainStepsEqual(t *testing.T, expected []schema.ApprovalChain
 	actualJSON, err := json.Marshal(actual)
 	require.NoError(t, err)
 	assert.JSONEq(t, string(expectedJSON), string(actualJSON))
-}
-
-// fakeIncidentCreator 是 IncidentCreator 接口的测试替身。IncidentCreator 是
-// handlers/service_request 包自己定义的最小接口（entity.go 顶部注释所述"避免直接依赖具体
-// 实现"），生产环境由 internal/bootstrap/app.go 的 srIncidentBridge 适配真正的
-// IncidentService；测试这里只关心 Service.Create 在 isIncidentCatalog 分流时是否正确
-// 委托、以及委托之后 ServiceRequest 表是否真的没有落地行，不需要拉起完整的 Incident 域。
-type fakeIncidentCreator struct {
-	incidentID int
-	called     bool
-	gotTenant  int
-	gotCatalog int
-	gotTitle   string
-}
-
-func (f *fakeIncidentCreator) CreateIncident(ctx context.Context, tenantID, requesterID int, title, description string, catalogID int) (int, error) {
-	f.called = true
-	f.gotTenant = tenantID
-	f.gotCatalog = catalogID
-	f.gotTitle = title
-	return f.incidentID, nil
 }
 
 // TestService_Create_IncidentCatalog_NoServiceRequestRowCreated 覆盖场景 4：itsm_type=Incident
@@ -382,28 +353,27 @@ func TestService_Create_IncidentCatalog_NoServiceRequestRowCreated(t *testing.T)
 	// isIncidentCatalog）自 target_class 收敛改造后读的是 target_class 不是 itsm_type，
 	// 这里手动补上等价于该行已经跑过 cmd/backfill_servicecatalog_target_class 回填。
 	_, err = client.ServiceCatalog.UpdateOneID(catalog.ID).
-		SetItsmType("Incident").
+		SetItsmType("Incident").SetRequiresApproval(false).
 		SetTargetClass(service_catalog.TargetClassIncident).
 		Save(ctx)
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	fakeIncident := &fakeIncidentCreator{incidentID: 4242}
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, fakeIncident)
+	svc := NewService(srRepo, client, logger, nil)
 
-	result, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	result, err := svc.SubmitCatalog(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		FormData: map[string]interface{}{"title": "生产环境服务器宕机", "reason": "紧急"},
 	})
 	require.NoError(t, err)
 	require.NotNil(t, result)
-	assert.True(t, fakeIncident.called, "Incident 类型目录项必须委托给 IncidentCreator")
-	assert.Equal(t, tenant.ID, fakeIncident.gotTenant)
-	assert.Equal(t, catalog.ID, fakeIncident.gotCatalog)
-	assert.Equal(t, "生产环境服务器宕机", fakeIncident.gotTitle)
-	assert.Equal(t, 4242, result.ID, "返回的 stub ServiceRequest 借用 ID 字段传递 incidentID（createIncidentFromCatalog 的注释）")
+	require.Equal(t, "incident", result.RecordClass)
+	record := client.Incident.GetX(ctx, result.ProfessionalReference.ID)
+	workItem := client.Ticket.GetX(ctx, result.WorkItemID)
+	require.Equal(t, result.WorkItemID, record.WorkItemID)
+	require.Equal(t, "生产环境服务器宕机", workItem.Title)
+	require.Equal(t, tenant.ID, workItem.TenantID)
+	require.Equal(t, catalog.ID, *client.IntakeResolutionSnapshot.Query().OnlyX(ctx).CatalogItemID)
 
 	_, total, err := srRepo.List(ctx, tenant.ID, ListFilters{Page: 1, Size: 10})
 	require.NoError(t, err)
@@ -411,7 +381,7 @@ func TestService_Create_IncidentCatalog_NoServiceRequestRowCreated(t *testing.T)
 
 	ticketCount, err := client.Ticket.Query().Count(ctx)
 	require.NoError(t, err)
-	assert.Equal(t, 0, ticketCount, "Incident 分流跳过 SR→Ticket 委托路径，不应该创建 Ticket")
+	assert.Equal(t, 1, ticketCount, "Incident catalog creates exactly one WorkItem with its Incident extension")
 }
 
 // TestService_Update_ForbiddenForNonOwnerWithoutPermission 和
@@ -440,12 +410,10 @@ func TestService_Update_ForbiddenForNonOwnerWithoutPermission(t *testing.T) {
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, logger, nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -453,15 +421,15 @@ func TestService_Update_ForbiddenForNonOwnerWithoutPermission(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// otherUser 既不是申请人，也没有配置 service_request:write 权限（一个干净的
-	// enttest 库没有种任何 permissions 行）——canManageServiceRequest 必须判 false。
-	_, err = svc.Update(ctx, created.ID, tenant.ID, otherUser.ID, "end_user", &ServiceRequest{CostCenter: "CC-HIJACK"})
+	// A current viewer is neither requester nor granted service_request:write.
+	client.User.UpdateOneID(otherUser.ID).SetRole("viewer").ExecX(ctx)
+	_, err = svc.Update(ctx, created.ID, tenant.ID, otherUser.ID, "viewer", &ServiceRequest{CostCenter: "CC-HIJACK"})
 	require.Error(t, err)
 	appErr, ok := common.AsAppError(err)
 	require.True(t, ok)
 	assert.Equal(t, common.ErrCodeForbidden, appErr.Code)
 
-	err = svc.Delete(ctx, created.ID, tenant.ID, otherUser.ID, "end_user")
+	err = svc.Delete(ctx, created.ID, tenant.ID, otherUser.ID, "viewer")
 	require.Error(t, err)
 	appErr, ok = common.AsAppError(err)
 	require.True(t, ok)
@@ -490,12 +458,10 @@ func TestService_Update_AllowedForNonOwnerWithSuperAdminRole(t *testing.T) {
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, logger, nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -537,12 +503,10 @@ func TestService_CrossTenantIsolation_GetUpdateDelete(t *testing.T) {
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, logger, nil)
 
-	created, err := svc.Create(ctx, tenantA.ID, requesterA.ID, catalogA.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenantA.ID, requesterA.ID, catalogA.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		CostCenter:         "CC-TENANT-A",

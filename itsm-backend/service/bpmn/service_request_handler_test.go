@@ -10,7 +10,6 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	servicerequesthandler "itsm-backend/handlers/service_request"
-	"itsm-backend/repository/workitemnumber"
 	. "itsm-backend/service/bpmn"
 
 	"github.com/stretchr/testify/assert"
@@ -60,7 +59,7 @@ func setupServiceRequestHandlerFixture(t *testing.T) (*ent.Client, *ServiceReque
 
 	logger := zaptest.NewLogger(t).Sugar()
 	handler := NewServiceRequestServiceTaskHandler(client, logger)
-	handler.SetServiceRequestService(servicerequesthandler.NewService(nil, nil, nil, client, workitemnumber.NewPostgreSQLAllocator(), logger, nil, nil, nil))
+	handler.SetServiceRequestService(servicerequesthandler.NewService(nil, client, logger, nil))
 	return client, handler, tenant.ID, tkt, sr
 }
 

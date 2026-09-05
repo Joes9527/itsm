@@ -16,7 +16,6 @@ import (
 
 type ChangeDomainServiceInterface interface {
 	workflowcallback.ChangeService
-	CreateChangeForWorkflow(ctx context.Context, tenantID, createdBy int, title, description, changeType, priority string) (int, error)
 }
 
 type ChangeServiceTaskHandler struct {

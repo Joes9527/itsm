@@ -3,20 +3,46 @@ package ticket
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	"itsm-backend/ent/workitemnumbersequence"
 	"itsm-backend/repository/base"
-	"itsm-backend/repository/workitemnumber"
+
+	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
+
+// CreateParams is a test-only fixture shape mirroring the retired repository-level
+// creation params. Real Ticket creation now goes exclusively through the shared
+// Intake application (handlers/intake, tests/integration/unified_intake_fixture_test.go,
+// service/ticket_service_test.go); this package's own Repository no longer owns a
+// Create method, only Get/Update/Delete/List/etc, so these fixture params only need
+// to carry enough fields to seed a row directly through ent for those tests.
+type CreateParams struct {
+	Title             string
+	Description       string
+	Type              Type
+	Priority          Priority
+	RequesterID       int
+	ParentTicketID    *int
+	CustomFieldValues map[string]interface{}
+	Source            string
+	CreatorEmail      string
+	ExternalMessageID string
+}
+
+var repoTestTicketNumberSeq int64
+
+func nextRepoTestTicketNumber() string {
+	n := atomic.AddInt64(&repoTestTicketNumberSeq, 1)
+	return fmt.Sprintf("TKT-%s-%06d", time.Now().UTC().Format("200601"), n)
+}
 
 // repoFixture sets up an in-memory SQLite repo for testing.
 type repoFixture struct {
@@ -32,7 +58,7 @@ func newRepoFixture(t *testing.T) *repoFixture {
 	ctx := context.Background()
 	client := enttest.Open(t, "sqlite3", "file:repo_test?mode=memory&cache=shared&_fk=1")
 	logger := zaptest.NewLogger(t).Sugar()
-	repo := NewEntRepository(client, logger, workitemnumber.NewPostgreSQLAllocator())
+	repo := NewEntRepository(client, logger)
 
 	tenant, err := client.Tenant.Create().
 		SetName("Test Tenant").
@@ -56,225 +82,40 @@ func newRepoFixture(t *testing.T) *repoFixture {
 	return &repoFixture{ctx: ctx, client: client, repo: repo, tenant: tenant, user: user}
 }
 
-// =====================================================================
-// Create
-// =====================================================================
-
-func TestRepository_Create(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	params := &CreateParams{
-		Title:       "Test Ticket",
-		Description: "Description",
-		Priority:    PriorityMedium,
-		Type:        TypeIncident,
-		RequesterID: fx.user.ID,
-	}
-
-	tkt, err := fx.repo.Create(fx.ctx, params, fx.tenant.ID)
-	require.NoError(t, err)
-	assert.NotZero(t, tkt.ID)
-	assert.Equal(t, "Test Ticket", tkt.Title)
-	assert.Equal(t, StatusNew, tkt.Status)
-}
-
-func TestRepository_Create_FirstNumbersAreTenantScoped(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	params := &CreateParams{
-		Title:       "Number Test",
-		Description: "",
-		Priority:    PriorityLow,
-		Type:        TypeServiceRequest,
-		RequesterID: fx.user.ID,
-	}
-
-	tkt, err := fx.repo.Create(fx.ctx, params, fx.tenant.ID)
-	require.NoError(t, err)
-	assert.Regexp(t, `^TKT-[0-9]{6}-000001$`, tkt.TicketNumber)
-
-	otherTenant, err := fx.client.Tenant.Create().
-		SetName("Other Tenant").
-		SetCode("other").
-		SetDomain("other.test").
-		SetStatus("active").
-		Save(fx.ctx)
-	require.NoError(t, err)
-	otherRequester, err := fx.client.User.Create().
-		SetUsername("other-requester").
-		SetEmail("other-requester@test.com").
-		SetName("Other Requester").
-		SetPasswordHash("hash").
-		SetRole("end_user").
-		SetActive(true).
-		SetTenantID(otherTenant.ID).
-		Save(fx.ctx)
-	require.NoError(t, err)
-
-	otherParams := *params
-	otherParams.RequesterID = otherRequester.ID
-	other, err := fx.repo.Create(fx.ctx, &otherParams, otherTenant.ID)
-	require.NoError(t, err)
-	assert.Equal(t, tkt.TicketNumber, other.TicketNumber)
-}
-
-func TestRepository_Create_PersistsCustomFieldValues(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	params := &CreateParams{
-		Title:       "Custom Field Ticket",
-		Description: "Description",
-		Priority:    PriorityMedium,
-		Type:        TypeIncident,
-		RequesterID: fx.user.ID,
-		CustomFieldValues: map[string]interface{}{
-			"impacted_system":  "ERP",
-			"downtime_minutes": float64(30),
-		},
-	}
-
-	created, err := fx.repo.Create(fx.ctx, params, fx.tenant.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "ERP", created.CustomFieldValues["impacted_system"])
-	assert.Equal(t, float64(30), created.CustomFieldValues["downtime_minutes"])
-
-	fetched, err := fx.repo.GetByID(fx.ctx, created.ID, fx.tenant.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "ERP", fetched.CustomFieldValues["impacted_system"])
-}
-
-func TestRepository_Create_WithoutCustomFieldValues(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	params := &CreateParams{
-		Title:       "No Custom Fields",
-		Description: "Description",
-		Priority:    PriorityMedium,
-		Type:        TypeIncident,
-		RequesterID: fx.user.ID,
-	}
-
-	tkt, err := fx.repo.Create(fx.ctx, params, fx.tenant.ID)
-	require.NoError(t, err)
-	assert.Empty(t, tkt.CustomFieldValues)
-}
-
-func TestRepository_Create_PersistsCreatorEmailAndExternalMessageID(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	params := &CreateParams{
-		Title:             "From email",
-		Description:       "body",
-		Priority:          PriorityMedium,
-		Type:              TypeIncident,
-		RequesterID:       fx.user.ID,
-		Source:            "email",
-		CreatorEmail:      "alice@test.com",
-		ExternalMessageID: "<msg-1@contoso.com>",
-	}
-
-	tkt, err := fx.repo.Create(fx.ctx, params, fx.tenant.ID)
-	require.NoError(t, err)
-
-	stored, err := fx.client.Ticket.Get(fx.ctx, tkt.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "alice@test.com", stored.CreatorEmail)
-	assert.Equal(t, "<msg-1@contoso.com>", stored.ExternalMessageID)
-}
-
-func TestRepository_Create_RollsBackAllocationWhenTicketInsertFails(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	now := time.Now().UTC()
-	existingNumber := fmt.Sprintf("TKT-%s-000001", now.Format("200601"))
-	existing, err := fx.client.Ticket.Create().
-		SetTitle("Existing Ticket").
-		SetDescription("Existing").
-		SetType(string(TypeIncident)).
-		SetPriority(string(PriorityLow)).
-		SetTicketNumber(existingNumber).
-		SetRequesterID(fx.user.ID).
-		SetTenantID(fx.tenant.ID).
+// createTicket seeds a Ticket row directly through ent (bypassing the retired
+// repository-level Create/allocator API) and reads it back through the real
+// Repository.GetByID, so the rest of these tests keep exercising the same
+// domain model shape/mapping as before.
+func (fx *repoFixture) createTicket(ctx context.Context, params *CreateParams, tenantID int) (*Ticket, error) {
+	builder := fx.client.Ticket.Create().
+		SetTitle(params.Title).
+		SetDescription(params.Description).
+		SetType(string(params.Type)).
+		SetPriority(string(params.Priority)).
 		SetStatus(string(StatusNew)).
-		Save(fx.ctx)
-	require.NoError(t, err)
-
-	_, err = fx.repo.Create(fx.ctx, &CreateParams{
-		Title:       "Duplicate Create",
-		Description: "The Ticket insert fails after the allocator advances",
-		Priority:    PriorityMedium,
-		Type:        TypeIncident,
-		RequesterID: fx.user.ID,
-	}, fx.tenant.ID)
-	require.Error(t, err)
-
-	sequenceCount, err := fx.client.WorkItemNumberSequence.Query().
-		Where(workitemnumbersequence.TenantID(fx.tenant.ID), workitemnumbersequence.Period(now.Format("200601"))).
-		Count(fx.ctx)
-	require.NoError(t, err)
-	assert.Zero(t, sequenceCount, "the failed Ticket insert must roll back the allocator increment")
-
-	require.NoError(t, fx.client.Ticket.DeleteOneID(existing.ID).Exec(fx.ctx))
-	created, err := fx.repo.Create(fx.ctx, &CreateParams{
-		Title:       "Successful retry after the conflicting row is removed",
-		Description: "The rolled-back number is reusable because no increment committed",
-		Priority:    PriorityMedium,
-		Type:        TypeIncident,
-		RequesterID: fx.user.ID,
-	}, fx.tenant.ID)
-	require.NoError(t, err)
-	assert.Equal(t, existingNumber, created.TicketNumber)
-}
-
-func TestTransactionalCreator_UsesCallerOwnedTransaction(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	tx, err := fx.client.Tx(fx.ctx)
-	require.NoError(t, err)
-	created, err := NewTransactionalCreator(workitemnumber.NewPostgreSQLAllocator()).CreateInTransaction(fx.ctx, tx.Client(), &CreateParams{
-		Title:       "outer transaction ticket",
-		Description: "the outer owner decides whether the WorkItem commits",
-		Priority:    PriorityMedium,
-		Type:        TypeServiceRequest,
-		RequesterID: fx.user.ID,
-	}, fx.tenant.ID)
-	require.NoError(t, err)
-	require.NotZero(t, created.ID)
-	require.NoError(t, tx.Rollback())
-
-	ticketCount, err := fx.client.Ticket.Query().Count(fx.ctx)
-	require.NoError(t, err)
-	assert.Zero(t, ticketCount)
-	sequenceCount, err := fx.client.WorkItemNumberSequence.Query().Count(fx.ctx)
-	require.NoError(t, err)
-	assert.Zero(t, sequenceCount)
-}
-
-func TestRepository_Create_DifferentTenants(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	params := &CreateParams{
-		Title:       "Cross Tenant",
-		Description: "",
-		Priority:    PriorityMedium,
-		Type:        TypeIncident,
-		RequesterID: fx.user.ID,
+		SetTicketNumber(nextRepoTestTicketNumber()).
+		SetRequesterID(params.RequesterID).
+		SetTenantID(tenantID)
+	if params.ParentTicketID != nil {
+		builder.SetParentTicketID(*params.ParentTicketID)
 	}
-
-	tkt1, err := fx.repo.Create(fx.ctx, params, fx.tenant.ID)
-	require.NoError(t, err)
-
-	// Tenant2 should not see tenant1's ticket
-	_, err = fx.repo.GetByID(fx.ctx, tkt1.ID, 99999)
-	assert.Error(t, err)
+	if len(params.CustomFieldValues) > 0 {
+		builder.SetCustomFieldValues(params.CustomFieldValues)
+	}
+	if params.Source != "" {
+		builder.SetSource(params.Source)
+	}
+	if params.CreatorEmail != "" {
+		builder.SetCreatorEmail(params.CreatorEmail)
+	}
+	if params.ExternalMessageID != "" {
+		builder.SetExternalMessageID(params.ExternalMessageID)
+	}
+	created, err := builder.Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return fx.repo.GetByID(ctx, created.ID, tenantID)
 }
 
 // =====================================================================
@@ -285,7 +126,7 @@ func TestRepository_GetByID(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
-	created, _ := fx.repo.Create(fx.ctx, &CreateParams{
+	created, _ := fx.createTicket(fx.ctx, &CreateParams{
 		Title:       "Get Test",
 		Description: "Desc",
 		Priority:    PriorityHigh,
@@ -311,7 +152,7 @@ func TestRepository_GetByID_WrongTenant(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
-	created, _ := fx.repo.Create(fx.ctx, &CreateParams{
+	created, _ := fx.createTicket(fx.ctx, &CreateParams{
 		Title:       "Tenant Isolation",
 		Description: "",
 		Priority:    PriorityMedium,
@@ -331,7 +172,7 @@ func TestRepository_GetByNumber(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
-	created, _ := fx.repo.Create(fx.ctx, &CreateParams{
+	created, _ := fx.createTicket(fx.ctx, &CreateParams{
 		Title:       "By Number",
 		Description: "",
 		Priority:    PriorityLow,
@@ -357,7 +198,7 @@ func TestRepository_GetByNumber_WrongTenant(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
-	created, _ := fx.repo.Create(fx.ctx, &CreateParams{
+	created, _ := fx.createTicket(fx.ctx, &CreateParams{
 		Title:       "By Number Tenant",
 		Description: "",
 		Priority:    PriorityMedium,
@@ -377,7 +218,7 @@ func TestRepository_Update(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
-	created, _ := fx.repo.Create(fx.ctx, &CreateParams{
+	created, _ := fx.createTicket(fx.ctx, &CreateParams{
 		Title:       "Update Me",
 		Description: "Original",
 		Priority:    PriorityLow,
@@ -414,7 +255,7 @@ func TestRepository_Update_NotFound(t *testing.T) {
 func TestRepository_Update_RejectsStaleVersion(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
-	created, err := fx.repo.Create(fx.ctx, &CreateParams{
+	created, err := fx.createTicket(fx.ctx, &CreateParams{
 		Title: "Original", Priority: PriorityMedium, Type: TypeIncident, RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 	require.NoError(t, err)
@@ -434,7 +275,7 @@ func TestRepository_Delete(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
-	created, _ := fx.repo.Create(fx.ctx, &CreateParams{
+	created, _ := fx.createTicket(fx.ctx, &CreateParams{
 		Title:       "Delete Me",
 		Description: "",
 		Priority:    PriorityLow,
@@ -453,7 +294,7 @@ func TestRepository_Delete_WrongTenant(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
-	created, _ := fx.repo.Create(fx.ctx, &CreateParams{
+	created, _ := fx.createTicket(fx.ctx, &CreateParams{
 		Title:       "Delete Isolated",
 		Description: "",
 		Priority:    PriorityMedium,
@@ -478,7 +319,7 @@ func TestRepository_List(t *testing.T) {
 	defer fx.client.Close()
 
 	for i := 0; i < 5; i++ {
-		fx.repo.Create(fx.ctx, &CreateParams{
+		fx.createTicket(fx.ctx, &CreateParams{
 			Title:       "List Ticket",
 			Description: "",
 			Priority:    PriorityMedium,
@@ -498,7 +339,7 @@ func TestRepository_List_Pagination(t *testing.T) {
 	defer fx.client.Close()
 
 	for i := 0; i < 10; i++ {
-		fx.repo.Create(fx.ctx, &CreateParams{
+		fx.createTicket(fx.ctx, &CreateParams{
 			Title:       "Page Ticket",
 			Description: "",
 			Priority:    PriorityLow,
@@ -517,7 +358,7 @@ func TestRepository_List_TenantIsolation(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
-	fx.repo.Create(fx.ctx, &CreateParams{
+	fx.createTicket(fx.ctx, &CreateParams{
 		Title:       "Tenant1 Ticket",
 		Description: "",
 		Priority:    PriorityMedium,
@@ -534,15 +375,15 @@ func TestRepository_List_TenantIsolation(t *testing.T) {
 func TestRepository_List_ParentTypeAndOverdueFilters(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
-	parent, err := fx.repo.Create(fx.ctx, &CreateParams{
+	parent, err := fx.createTicket(fx.ctx, &CreateParams{
 		Title: "Parent", Priority: PriorityMedium, Type: TypeIncident, RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 	require.NoError(t, err)
-	overdue, err := fx.repo.Create(fx.ctx, &CreateParams{
+	overdue, err := fx.createTicket(fx.ctx, &CreateParams{
 		Title: "Overdue problem", Priority: PriorityHigh, Type: TypeProblem, RequesterID: fx.user.ID, ParentTicketID: &parent.ID,
 	}, fx.tenant.ID)
 	require.NoError(t, err)
-	resolved, err := fx.repo.Create(fx.ctx, &CreateParams{
+	resolved, err := fx.createTicket(fx.ctx, &CreateParams{
 		Title: "Resolved problem", Priority: PriorityHigh, Type: TypeProblem, RequesterID: fx.user.ID, ParentTicketID: &parent.ID,
 	}, fx.tenant.ID)
 	require.NoError(t, err)
@@ -571,7 +412,7 @@ func TestRepository_BatchDelete(t *testing.T) {
 
 	ids := make([]int, 0, 3)
 	for i := 0; i < 3; i++ {
-		tkt, _ := fx.repo.Create(fx.ctx, &CreateParams{
+		tkt, _ := fx.createTicket(fx.ctx, &CreateParams{
 			Title:       "Batch Delete",
 			Description: "",
 			Priority:    PriorityLow,
@@ -602,7 +443,7 @@ func TestRepository_BatchDelete_TenantIsolation(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
-	created, _ := fx.repo.Create(fx.ctx, &CreateParams{
+	created, _ := fx.createTicket(fx.ctx, &CreateParams{
 		Title:       "Batch Tenant",
 		Description: "",
 		Priority:    PriorityMedium,
@@ -624,7 +465,7 @@ func TestRepository_Exists(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
-	created, _ := fx.repo.Create(fx.ctx, &CreateParams{
+	created, _ := fx.createTicket(fx.ctx, &CreateParams{
 		Title:       "Exists Check",
 		Description: "",
 		Priority:    PriorityLow,
@@ -645,7 +486,7 @@ func TestRepository_Exists_WrongTenant(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
-	created, _ := fx.repo.Create(fx.ctx, &CreateParams{
+	created, _ := fx.createTicket(fx.ctx, &CreateParams{
 		Title:       "Exists Tenant",
 		Description: "",
 		Priority:    PriorityMedium,
@@ -666,7 +507,7 @@ func TestRepository_UpdateStatus(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
-	created, _ := fx.repo.Create(fx.ctx, &CreateParams{
+	created, _ := fx.createTicket(fx.ctx, &CreateParams{
 		Title:       "Status Update",
 		Description: "",
 		Priority:    PriorityMedium,
@@ -695,7 +536,7 @@ func TestRepository_AssignTicket(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
-	created, _ := fx.repo.Create(fx.ctx, &CreateParams{
+	created, _ := fx.createTicket(fx.ctx, &CreateParams{
 		Title:       "Assign Test",
 		Description: "",
 		Priority:    PriorityMedium,
@@ -726,7 +567,7 @@ func TestRepository_CountByStatus(t *testing.T) {
 	defer fx.client.Close()
 
 	for i := 0; i < 3; i++ {
-		tkt, _ := fx.repo.Create(fx.ctx, &CreateParams{
+		tkt, _ := fx.createTicket(fx.ctx, &CreateParams{
 			Title:       "Count Status",
 			Description: "",
 			Priority:    PriorityMedium,
@@ -736,7 +577,7 @@ func TestRepository_CountByStatus(t *testing.T) {
 		fx.repo.UpdateStatus(fx.ctx, tkt.ID, StatusOpen, fx.tenant.ID)
 	}
 
-	fx.repo.Create(fx.ctx, &CreateParams{
+	fx.createTicket(fx.ctx, &CreateParams{
 		Title:       "Count Status New",
 		Description: "",
 		Priority:    PriorityLow,
@@ -754,7 +595,7 @@ func TestRepository_CountByPriority(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
-	fx.repo.Create(fx.ctx, &CreateParams{
+	fx.createTicket(fx.ctx, &CreateParams{
 		Title:       "Priority Count",
 		Description: "",
 		Priority:    PriorityCritical,
@@ -775,7 +616,7 @@ func TestRepository_FindByAssignee(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
-	tkt, _ := fx.repo.Create(fx.ctx, &CreateParams{
+	tkt, _ := fx.createTicket(fx.ctx, &CreateParams{
 		Title:       "Assign Find",
 		Description: "",
 		Priority:    PriorityMedium,
@@ -793,7 +634,7 @@ func TestRepository_FindByRequester(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
-	fx.repo.Create(fx.ctx, &CreateParams{
+	fx.createTicket(fx.ctx, &CreateParams{
 		Title:       "Requester Find",
 		Description: "",
 		Priority:    PriorityLow,
@@ -810,7 +651,7 @@ func TestRepository_FindByRequester_WrongTenant(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 
-	fx.repo.Create(fx.ctx, &CreateParams{
+	fx.createTicket(fx.ctx, &CreateParams{
 		Title:       "Requester Tenant",
 		Description: "",
 		Priority:    PriorityMedium,

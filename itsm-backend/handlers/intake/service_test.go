@@ -6,9 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/lib/pq"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"itsm-backend/ent"
 	"itsm-backend/ent/schema"
 	creation "itsm-backend/handlers/common/workitemcreation"
@@ -18,6 +15,10 @@ import (
 	"itsm-backend/service"
 	"strconv"
 	"testing"
+
+	"github.com/lib/pq"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 type resolverFixture struct {
@@ -43,7 +44,7 @@ func resolverFixtureWithClient(t *testing.T, client *ent.Client, identity creati
 	logger := zap.NewNop().Sugar()
 	resolver := NewResolver(cataloghandler.NewService(nil, client, logger), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
 	registry := NewCreatorRegistry()
-	domain := srhandler.NewService(nil, nil, nil, client, workitemnumber.NewPostgreSQLAllocator(), logger, nil, service.NewApprovalChainResolver(client, logger), nil)
+	domain := srhandler.NewService(nil, client, logger, service.NewApprovalChainResolver(client, logger))
 	require.NoError(t, registry.Register(domain))
 	return &resolverFixture{client: client, actor: identity, catalog: catalog, app: NewService(client, resolver, registry, NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()))}
 }

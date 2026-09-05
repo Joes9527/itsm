@@ -1,4 +1,4 @@
-package service_request
+package service_request_test
 
 import (
 	"context"
@@ -10,9 +10,7 @@ import (
 	"itsm-backend/ent/enttest"
 	entticket "itsm-backend/ent/ticket"
 	"itsm-backend/ent/workitemnumbersequence"
-	"itsm-backend/handlers/cmdb"
 	"itsm-backend/handlers/service_catalog"
-	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -36,9 +34,8 @@ func TestService_Create_CommitsWorkItemExtensionAndNumberTogether(t *testing.T) 
 	catalog, err := service_catalog.NewService(scRepo, client, logger).Create(ctx, "allocator catalog", "software", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
 	require.NoError(t, err)
 
-	allocator := workitemnumber.NewPostgreSQLAllocator()
-	svc := NewService(NewEntRepository(client), scRepo, cmdb.NewEntRepository(client), client, allocator, logger, service.NewTicketServiceForTest(client, logger), nil, nil)
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	svc := NewService(NewEntRepository(client), client, logger, nil)
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck: true,
 		FormData:      map[string]interface{}{"title": "allocator request", "reason": "verify one aggregate"},
 	})
@@ -76,11 +73,9 @@ func TestService_Create_PersistsFieldValues(t *testing.T) {
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
-	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -118,11 +113,9 @@ func TestService_Create_SystemFormDataFieldsNotCollectedAsCustomFields(t *testin
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
-	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -156,11 +149,9 @@ func TestService_Create_PersistsFieldValues_ArrayShapeSnakeCaseName(t *testing.T
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
-	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -204,11 +195,9 @@ func TestService_Create_RequiredFieldMissing_Rejected(t *testing.T) {
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
-	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -245,12 +234,10 @@ func TestService_Create_LinksTicketAndDelegatesFields(t *testing.T) {
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, logger, nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -266,7 +253,7 @@ func TestService_Create_LinksTicketAndDelegatesFields(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "申请一台云主机-Link测试", tkt.Title)
 	assert.Equal(t, "delegation test reason", tkt.Description)
-	assert.Equal(t, "service_request", tkt.Type)
+	assert.Equal(t, "service_request_item", tkt.RecordClass)
 	assert.Equal(t, "service_catalog", tkt.Source, "服务目录发起的申请必须标记 ticket.source=service_catalog（Task 2 前端据此判断是否渲染 SR 面板）")
 	assert.Equal(t, tenant.ID, tkt.TenantID)
 	assert.Equal(t, requester.ID, tkt.RequesterID)
@@ -291,12 +278,10 @@ func TestService_GetByTicketID_ReturnsLinkedServiceRequest(t *testing.T) {
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, logger, nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		CostCenter:         "CC-GETBYTICKET",
@@ -338,12 +323,10 @@ func TestService_List_BatchLoadsLinkedTicketSummary(t *testing.T) {
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, logger, nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -403,22 +386,16 @@ func TestService_AttachTicketSummaries_DoesNotLeakCrossTenant(t *testing.T) {
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	scRepo := service_catalog.NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, logger, nil)
 
-	// A tenant-A ServiceRequest whose ticket_id happens to equal tenant B's ticket ID —
-	// simulating the collision scenario without depending on ent's ID allocation order.
-	list := []*ServiceRequest{
-		{ID: 1, TenantID: tenantA.ID, TicketID: ticketB.ID},
-	}
-
-	svc.attachTicketSummaries(ctx, tenantA.ID, list)
-
-	assert.Empty(t, list[0].TicketTitle, "must not leak tenant B's ticket title into a tenant A list entry")
-	assert.Empty(t, list[0].TicketStatus, "must not leak tenant B's ticket status into a tenant A list entry")
+	// Public list must not expose tenant B's WorkItem or title to tenant A.
+	list, total, err := svc.List(ctx, tenantA.ID, ListFilters{Page: 1, Size: 10})
+	require.NoError(t, err)
+	assert.Zero(t, total)
+	assert.Empty(t, list)
+	_, err = svc.GetByTicketID(ctx, ticketB.ID, tenantA.ID)
+	require.Error(t, err)
 }
 
 // TestServiceRequest_ApprovalDegradedToSingleNodeBPMN locks in, as an explicit assertion rather
@@ -458,12 +435,10 @@ func TestServiceRequest_ApprovalDegradedToSingleNodeBPMN(t *testing.T) {
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketSvc := service.NewTicketServiceForTest(client, logger)
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), logger, ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, logger, nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		ComplianceAck:      true,
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
@@ -504,11 +479,9 @@ func TestService_Create_NonInfraCatalog_SkipsInfraValidation(t *testing.T) {
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
-	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		// 故意不设置 ComplianceAck/ExpireAt/DataClassification/NeedsPublicIP——
 		// 非基础设施类型不应该要求这些。
 		FormData: map[string]interface{}{"title": "申请 Copilot 许可证", "reason": "提升研发效率"},
@@ -536,18 +509,16 @@ func TestService_Create_InfraCatalog_StillRequiresComplianceAck(t *testing.T) {
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
-	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	_, err = svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	_, err = svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		DataClassification: "internal",
 		ExpireAt:           ptrTime(time.Now().Add(24 * time.Hour)),
 		// 故意不设置 ComplianceAck（零值 false）
 		FormData: map[string]interface{}{"title": "申请一台云主机", "reason": "测试"},
 	})
 	require.Error(t, err, "vm 类型目录项仍然应该要求合规确认")
-	require.Contains(t, err.Error(), "Compliance acknowledgement required")
+	require.Contains(t, err.Error(), "compliance acknowledgement is required")
 }
 
 // TestService_Create_PersistsContactAndQuantityFieldsThroughFullPath verifies that ContactName,
@@ -571,12 +542,10 @@ func TestService_Create_PersistsContactAndQuantityFieldsThroughFullPath(t *testi
 	require.NoError(t, err)
 
 	srRepo := NewEntRepository(client)
-	cmdbRepo := cmdb.NewEntRepository(client)
-	ticketSvc := service.NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	svc := NewService(srRepo, scRepo, cmdbRepo, client, workitemnumber.NewPostgreSQLAllocator(), zaptest.NewLogger(t).Sugar(), ticketSvc, nil, nil)
+	svc := NewService(srRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 
 	expected := time.Now().Add(72 * time.Hour)
-	created, err := svc.Create(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
+	created, err := svc.SubmitCreation(ctx, tenant.ID, requester.ID, catalog.ID, &ServiceRequest{
 		FormData:     map[string]interface{}{"title": "申请Copilot许可证", "reason": "测试"},
 		ContactName:  "王五",
 		ContactEmail: "wangwu@example.com",

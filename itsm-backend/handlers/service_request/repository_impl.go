@@ -2,7 +2,6 @@ package service_request
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"itsm-backend/ent"
@@ -64,52 +63,6 @@ func optionalInt(value int) *int {
 		return nil
 	}
 	return &value
-}
-
-func (r *EntRepository) Create(ctx context.Context, req *ServiceRequest) (*ServiceRequest, error) {
-	create := r.client.ServiceRequest.Create().
-		SetTenantID(req.TenantID).
-		SetTicketID(req.TicketID).
-		SetCatalogID(req.CatalogID).
-		SetRequesterID(req.RequesterID).
-		SetComplianceAck(req.ComplianceAck).
-		SetNeedsPublicIP(req.NeedsPublicIP).
-		SetDataClassification(req.DataClassification)
-
-	if req.FormData != nil {
-		create.SetFormData(req.FormData)
-	}
-	if req.CostCenter != "" {
-		create.SetCostCenter(req.CostCenter)
-	}
-	if req.SourceIPWhitelist != nil {
-		create.SetSourceIPWhitelist(req.SourceIPWhitelist)
-	}
-	if req.ExpireAt != nil {
-		create.SetExpireAt(*req.ExpireAt)
-	}
-	if req.ContactName != "" {
-		create.SetContactName(req.ContactName)
-	}
-	if req.ContactEmail != "" {
-		create.SetContactEmail(req.ContactEmail)
-	}
-	if req.Quantity > 0 {
-		create.SetQuantity(req.Quantity)
-	}
-	if req.ExpectedAt != nil {
-		create.SetExpectedAt(*req.ExpectedAt)
-	}
-	if req.CiID > 0 {
-		create.SetCiID(req.CiID)
-	}
-
-	savedReq, err := create.Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("creating service request: %w", err)
-	}
-
-	return r.toDomain(savedReq), nil
 }
 
 func (r *EntRepository) Get(ctx context.Context, id, tenantID int) (*ServiceRequest, error) {

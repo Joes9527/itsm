@@ -1,4 +1,4 @@
-package service
+package service_test
 
 import (
 	"context"
@@ -106,7 +106,7 @@ func (f *ticketFixture) makeTicket(t *testing.T, name string, status ticket.Stat
 		Category:    "incident",
 		RequesterID: userID,
 	}
-	tkt, err := f.svc.CreateTicket(f.ctx, req, tenantID)
+	tkt, err := f.svc.SubmitCreation(f.ctx, req, tenantID)
 	require.NoError(t, err)
 	require.NotNil(t, tkt)
 
@@ -507,51 +507,6 @@ func TestTicketService_GetTicketsByAssignee(t *testing.T) {
 // 纯函数 / 内部辅助方法
 // =====================================================================
 
-func TestMapProcessStatusToDTO(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"running", "running"},
-		{"completed", "completed"},
-		{"failed", "failed"},
-		{"cancelled", "cancelled"},
-		{"unknown", "unknown"}, // 默认 fallback
-	}
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			// 注意：mapProcessStatusToDTO 返回 dto.ProcessStatus，
-			// 测试只需验证它不会 panic 并返回非空值。
-			result := mapProcessStatusToDTO(tt.input)
-			assert.NotEmpty(t, string(result))
-		})
-	}
-}
-
-func TestGetEscalatedPriority(t *testing.T) {
-	tests := []struct {
-		currentPriority string
-		expectedNotSame bool
-	}{
-		{"low", true},
-		{"medium", true},
-		{"high", true},
-		{"urgent", false}, // 已是最高之一，升级后仍是 urgent
-		{"critical", false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.currentPriority, func(t *testing.T) {
-			svc := &TicketService{} // 不需要依赖
-			escalated := svc.getEscalatedPriority(tt.currentPriority)
-			if tt.expectedNotSame {
-				assert.NotEqual(t, tt.currentPriority, escalated,
-					"升级后优先级应变化")
-			}
-			assert.NotEmpty(t, escalated)
-		})
-	}
-}
-
 // =====================================================================
 // 跨租户隔离：删除不应该影响其他租户
 // =====================================================================
@@ -616,13 +571,13 @@ func TestTicketService_CreateTicket_DefaultsToNewStatus(t *testing.T) {
 		Category:    "incident",
 		RequesterID: userID,
 	}
-	tkt, err := fx.svc.CreateTicket(fx.ctx, req, tenantID)
+	tkt, err := fx.svc.SubmitCreation(fx.ctx, req, tenantID)
 	require.NoError(t, err)
 	assert.Equal(t, ticket.StatusNew, tkt.Status,
 		"新建工单默认状态应为 new")
 }
 
-func TestTicketService_CreateTicket_PersistsCreatorEmailAndExternalMessageID(t *testing.T) {
+func TestTicketService_PublicCreationRejectsUnverifiedEmailIdentity(t *testing.T) {
 	fx := newTicketFixture(t)
 	defer fx.client.Close()
 
@@ -636,13 +591,11 @@ func TestTicketService_CreateTicket_PersistsCreatorEmailAndExternalMessageID(t *
 		ExternalMessageID: "<msg-1@contoso.com>",
 	}
 
-	tkt, err := fx.svc.CreateTicket(fx.ctx, req, fx.tenant.GetID())
-	require.NoError(t, err)
-
-	stored, err := fx.client.Ticket.Get(fx.ctx, tkt.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "alice@test.com", stored.CreatorEmail)
-	assert.Equal(t, "<msg-1@contoso.com>", stored.ExternalMessageID)
+	tkt, err := fx.svc.SubmitCreation(fx.ctx, req, fx.tenant.GetID())
+	require.Error(t, err)
+	require.Nil(t, tkt)
+	require.Zero(t, fx.client.Ticket.Query().CountX(fx.ctx))
+	require.Zero(t, fx.client.IntakeRequest.Query().CountX(fx.ctx))
 }
 
 // 时间戳 sanity check（用于未来 regression）

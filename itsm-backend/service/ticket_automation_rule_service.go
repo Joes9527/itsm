@@ -238,42 +238,6 @@ func (s *TicketAutomationRuleService) TestAutomationRule(
 	}, nil
 }
 
-// ExecuteRulesForTicket applies the existing owner to an already-created generic
-// item. Creation entry adapters are removed from this method during Intake cutover.
-func (s *TicketAutomationRuleService) ExecuteRulesForTicket(ctx context.Context, ticketID, tenantID int) error {
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	item, err := tx.Ticket.Query().Where(ticket.IDEQ(ticketID), ticket.TenantIDEQ(tenantID)).Only(ctx)
-	if err != nil {
-		return err
-	}
-	if item.RecordClass != "generic" {
-		return fmt.Errorf("professional lifecycle owner is required")
-	}
-	effects, err := s.prepareCreationRules(ctx, tx, item)
-	if err != nil {
-		return err
-	}
-	update := tx.Ticket.UpdateOneID(item.ID).SetPriority(item.Priority).SetStatus(item.Status)
-	if item.AssigneeID > 0 {
-		update.SetAssigneeID(item.AssigneeID)
-	}
-	if item.CategoryID > 0 {
-		update.SetCategoryID(item.CategoryID)
-	}
-	if err := update.Exec(ctx); err != nil {
-		return err
-	}
-	for _, notification := range effects.Notifications {
-		if err := s.notificationService.EnqueueCreationTx(ctx, tx, item, item.RequesterID, "ticket_updated", notification.Content, fmt.Sprintf("rule:%d:ticket:%d:execution:%d:action:%d", notification.RuleID, item.ID, time.Now().UnixNano(), notification.ActionIndex), notification.RecipientIDs); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
-}
 func (s *TicketAutomationRuleService) evaluateConditions(ctx context.Context, conditions []map[string]interface{}, item *ent.Ticket) (bool, string) {
 	matched, err := evaluateTicketRuleConditions(conditions, item)
 	if err != nil {

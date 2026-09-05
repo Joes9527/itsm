@@ -1,4 +1,4 @@
-package problem
+package problem_test
 
 import (
 	"bytes"
@@ -19,6 +19,7 @@ import (
 	"itsm-backend/middleware"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -99,6 +100,10 @@ func performProblemRequest(r http.Handler, method, path string, body interface{}
 	}
 	req := httptest.NewRequest(method, path, bytes.NewBuffer(reqBody))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-User-Role", "agent")
+	if method == http.MethodPost && path == "/api/v1/problems" {
+		req.Header.Set("Idempotency-Key", uuid.NewString())
+	}
 	if tenantID > 0 {
 		req.Header.Set("X-Tenant-ID", strconv.Itoa(tenantID))
 	}
@@ -117,6 +122,9 @@ func performProblemRequestWithRole(r http.Handler, method, path string, body int
 	}
 	req := httptest.NewRequest(method, path, bytes.NewBuffer(reqBody))
 	req.Header.Set("Content-Type", "application/json")
+	if method == http.MethodPost && path == "/api/v1/problems" {
+		req.Header.Set("Idempotency-Key", uuid.NewString())
+	}
 	if tenantID > 0 {
 		req.Header.Set("X-Tenant-ID", strconv.Itoa(tenantID))
 	}
@@ -149,16 +157,17 @@ func TestProblemHTTPHandlerCreateGetList(t *testing.T) {
 		Impact:      "medium",
 	}
 	w := performProblemRequest(r, "POST", "/api/v1/problems", createReq, tenant.ID, user.ID)
-	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, http.StatusCreated, w.Code)
 
 	var res common.Response
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &res))
 	assert.Equal(t, 0, res.Code)
 
 	dataMap := res.Data.(map[string]interface{})
-	probID := int(dataMap["id"].(float64))
-	assert.Equal(t, "Memory Overuse in Service X", dataMap["title"])
-	assert.Equal(t, "open", dataMap["status"])
+	probID := int(dataMap["professionalReference"].(map[string]any)["id"].(float64))
+	require.Positive(t, dataMap["workItemId"])
+	require.NotContains(t, dataMap, "id")
+	require.Equal(t, "problem", dataMap["recordClass"])
 
 	// 2. Create Problem - Invalid Params
 	wBad := performProblemRequest(r, "POST", "/api/v1/problems", "invalid json", tenant.ID, user.ID)
@@ -275,6 +284,9 @@ func TestProblemHTTPHandlerMutationsUseResolvedMSPTenant(t *testing.T) {
 		}
 		req := httptest.NewRequest(method, path, bytes.NewReader(payload))
 		req.Header.Set("Content-Type", "application/json")
+		if method == http.MethodPost && path == "/api/v1/problems" {
+			req.Header.Set("Idempotency-Key", uuid.NewString())
+		}
 		req.Header.Set("X-Tenant-ID", strconv.Itoa(homeTenant.ID))
 		req.Header.Set("X-User-ID", strconv.Itoa(user.ID))
 		req.Header.Set("X-MSP-Customer-ID", strconv.Itoa(customerTenant.ID))

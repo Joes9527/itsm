@@ -9,12 +9,10 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processinstance"
-	"itsm-backend/repository/ticket"
 	"itsm-backend/service/bpmn"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 )
 
 type processStartTriggerCapture struct {
@@ -135,87 +133,4 @@ func TestStartProcessRejectsWrongTenantOrInactiveAuditActor(t *testing.T) {
 			assert.Zero(t, f.client.ProcessCallbackOutbox.Query().CountX(context.Background()))
 		})
 	}
-}
-
-func TestTicketWorkflowStartUsesScopeActorInsteadOfRequestedFor(t *testing.T) {
-	f := newBPMNAuthorizationFixture(t)
-	trigger := &processStartTriggerCapture{}
-	service := &TicketService{processTriggerSvc: trigger, logger: zap.NewNop().Sugar()}
-
-	err := service.TriggerWorkflowForExistingTicket(
-		f.scopedCtx(false, false, false, false),
-		&ticket.Ticket{ID: 701, TicketNumber: "T-701", RequesterID: f.outsider.ID, RecordClass: "generic"},
-		f.tenant.ID,
-		"ticket_general_flow",
-		nil,
-	)
-	require.NoError(t, err)
-	require.NotNil(t, trigger.req)
-	assert.Equal(t, strconv.Itoa(f.actor.ID), trigger.req.TriggeredBy)
-	assert.NotEqual(t, strconv.Itoa(f.outsider.ID), trigger.req.TriggeredBy)
-}
-
-func TestTicketWorkflowStartUsesExplicitSystemWhenNoActorIsAvailable(t *testing.T) {
-	f := newBPMNAuthorizationFixture(t)
-	trigger := &processStartTriggerCapture{}
-	service := &TicketService{processTriggerSvc: trigger, logger: zap.NewNop().Sugar()}
-
-	err := service.TriggerWorkflowForExistingTicket(
-		context.Background(),
-		&ticket.Ticket{ID: 702, TicketNumber: "T-702", RequesterID: f.outsider.ID, RecordClass: "generic"},
-		f.tenant.ID,
-		"ticket_general_flow",
-		nil,
-	)
-	require.NoError(t, err)
-	require.NotNil(t, trigger.req)
-	assert.Equal(t, "system", trigger.req.TriggeredBy)
-}
-
-func TestTicketWorkflowStartUsesRecordClassCanonicalBusinessIdentity(t *testing.T) {
-	f := newBPMNAuthorizationFixture(t)
-	trigger := &processStartTriggerCapture{}
-	service := &TicketService{processTriggerSvc: trigger, logger: zap.NewNop().Sugar()}
-
-	err := service.TriggerWorkflowForExistingTicket(
-		f.scopedCtx(false, false, false, false),
-		&ticket.Ticket{
-			ID:           703,
-			TicketNumber: "RITM-703",
-			RequesterID:  f.outsider.ID,
-			RecordClass:  "service_request_item",
-		},
-		f.tenant.ID,
-		"service_request_flow",
-		nil,
-	)
-	require.NoError(t, err)
-	require.NotNil(t, trigger.req)
-	assert.Equal(t, dto.BusinessTypeServiceRequest, trigger.req.BusinessType)
-	assert.Equal(t, 703, trigger.req.BusinessID)
-}
-
-func TestIncidentWorkflowStartUsesScopeActorInsteadOfReporter(t *testing.T) {
-	f := newBPMNAuthorizationFixture(t)
-	workItem := f.client.Ticket.Create().
-		SetTitle("incident").
-		SetTicketNumber("INC-WI-701").
-		SetType("incident").
-		SetRecordClass("incident").
-		SetStatus("new").
-		SetRequesterID(f.outsider.ID).
-		SetTenantID(f.tenant.ID).
-		SaveX(context.Background())
-	inc := f.client.Incident.Create().
-		SetWorkItemID(workItem.ID).
-		SetIncidentNumber("INC-701").
-		SaveX(context.Background())
-	trigger := &processStartTriggerCapture{}
-	service := &IncidentService{client: f.client, processTriggerService: trigger, logger: zap.NewNop().Sugar()}
-
-	err := service.triggerWorkflowForIncident(f.scopedCtx(false, false, false, false), inc.ID, f.tenant.ID)
-	require.NoError(t, err)
-	require.NotNil(t, trigger.req)
-	assert.Equal(t, strconv.Itoa(f.actor.ID), trigger.req.TriggeredBy)
-	assert.NotEqual(t, strconv.Itoa(f.outsider.ID), trigger.req.TriggeredBy)
 }

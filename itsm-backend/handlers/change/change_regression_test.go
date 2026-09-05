@@ -14,9 +14,9 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/middleware"
-	"itsm-backend/repository/workitemnumber"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -28,14 +28,18 @@ func setupChangeRegressionHandler(t *testing.T, dbName, actorCode string) (*gin.
 
 	entClient := newChangeBPMNEntClient(t, dbName)
 	tenantID, actorID := setupChangeBPMNActor(t, entClient, actorCode)
-	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, dbName), workitemnumber.NewPostgreSQLAllocator())
-	handler := NewHandler(NewService(repo, entClient, zaptest.NewLogger(t).Sugar()))
+	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, dbName))
+	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
+	handler := NewHandler(svc)
+	ConfigureChangeIntakeFixture(context.Background(), entClient, tenantID, "agent")
+	handler.SetCreationApplication(NewChangeIntakeApp(entClient, svc, zaptest.NewLogger(t).Sugar()))
 
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(func(c *gin.Context) {
 		c.Set("user_id", actorID)
 		c.Set("tenant_id", tenantID)
+		c.Set("role", "agent")
 		c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: tenantID})
 		c.Next()
 	})
@@ -50,14 +54,20 @@ func setupChangeRegressionHandler(t *testing.T, dbName, actorCode string) (*gin.
 func TestChangeRepositoryAllocatesSequentialWorkItemNumbers(t *testing.T) {
 	_, repo, client, tenantID, actorID := setupChangeRegressionHandler(t, "change_allocator", "allocator")
 	defer client.Close()
+	ctx := context.Background()
+	ConfigureChangeIntakeFixture(ctx, client, tenantID, "agent")
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+	app := NewChangeIntakeApp(client, svc, zaptest.NewLogger(t).Sugar())
 
-	first, err := repo.Create(context.Background(), &Change{
-		Title: "First allocated change", Type: "normal", Status: "draft", Priority: "medium",
+	first, err := CreateChangeViaIntake(ctx, client, svc, app, tenantID, actorID, &Change{
+		Title: "First allocated change", Type: "normal", Priority: "medium",
+		Justification: "Apply reviewed service configuration", ImplementationPlan: "Back up configuration, apply and verify", RollbackPlan: "Restore previous configuration and verify",
 		RiskLevel: "medium", ImpactScope: "low", TenantID: tenantID, CreatedBy: actorID,
 	})
 	require.NoError(t, err)
-	second, err := repo.Create(context.Background(), &Change{
-		Title: "Second allocated change", Type: "normal", Status: "draft", Priority: "medium",
+	second, err := CreateChangeViaIntake(ctx, client, svc, app, tenantID, actorID, &Change{
+		Title: "Second allocated change", Type: "normal", Priority: "medium",
+		Justification: "Apply reviewed service configuration", ImplementationPlan: "Back up configuration, apply and verify", RollbackPlan: "Restore previous configuration and verify",
 		RiskLevel: "medium", ImpactScope: "low", TenantID: tenantID, CreatedBy: actorID,
 	})
 	require.NoError(t, err)
@@ -324,15 +334,19 @@ func TestChangeController_TransitionStatus_StartGuardByType(t *testing.T) {
 // TestEntRepository_RelatedTickets_WorkItemRelationBehavior 覆盖结构化关系行为：
 // 权威来源为 WorkItemRelation
 // （relation_type="related_to"，source=Change 自己的 WorkItem，target=被关联工单的
-// WorkItem/tickets.id）。这意味着行为跟迁移前有一个刻意的、有意义的差异：只有真实存在于
-// 当前租户下的工单编号才能被解析、写入并在读回时出现；不存在的编号会被跳过（见
-// EntRepository.resolveTicketNumbers 的交付说明——这是业务判断，不是 fail closed 的安全/
-// 租户边界，不应该让整个 Change 创建/更新失败）。
+// WorkItem/tickets.id）。真实 Intake 创建路径（handlers/change/creation.go Prepare）对
+// relatedTicketNumbers 是 fail closed 的：任何一个编号在当前租户下解析不到，整个创建
+// 都会被拒绝，不再是迁移前 EntRepository.Create 那种「解析不到就跳过」的宽松语义——这
+// 符合 AGENTS.md 里「未知目标必须 fail closed」的原则，也堵住了一个静默丢弃关联意图的
+// 缺口。重复编号会先在 Prepare 里去重再计数，不会被误判为部分不可解析。
 func TestEntRepository_RelatedTickets_WorkItemRelationBehavior(t *testing.T) {
 	ctx := context.Background()
 	entClient := newChangeBPMNEntClient(t, "change_related_tickets_regression")
 	repo := newTestChangeRepository(entClient, openChangeBPMNRawDB(t, "change_related_tickets_regression"))
 	tenantID, actorID := setupChangeBPMNActor(t, entClient, "related-tickets")
+	ConfigureChangeIntakeFixture(ctx, entClient, tenantID, "agent")
+	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
+	app := NewChangeIntakeApp(entClient, svc, zaptest.NewLogger(t).Sugar())
 
 	// createRelatedTicket 建一条真实的普通工单，供 RelatedTickets 引用——迁移后只有真实
 	// 存在的编号才能被 resolveTicketNumbers 解析成功。
@@ -352,12 +366,11 @@ func TestEntRepository_RelatedTickets_WorkItemRelationBehavior(t *testing.T) {
 		createRelatedTicket(t, "INC-RT-1001")
 		createRelatedTicket(t, "SR-RT-2002")
 
-		created, err := repo.Create(ctx, &Change{
+		created, err := CreateChangeViaIntake(ctx, entClient, svc, app, tenantID, actorID, &Change{
 			Title:              "related tickets round trip",
 			Description:        "验证 WorkItemRelation 持久化",
 			Justification:      "需要锁定 related_tickets 行为",
 			Type:               "normal",
-			Status:             "draft",
 			Priority:           "medium",
 			ImpactScope:        "low",
 			RiskLevel:          "medium",
@@ -394,12 +407,11 @@ func TestEntRepository_RelatedTickets_WorkItemRelationBehavior(t *testing.T) {
 	})
 
 	t.Run("empty slice remains readable as empty list", func(t *testing.T) {
-		created, err := repo.Create(ctx, &Change{
+		created, err := CreateChangeViaIntake(ctx, entClient, svc, app, tenantID, actorID, &Change{
 			Title:              "related tickets empty boundary",
 			Description:        "验证空数组边界",
 			Justification:      "边界值检查",
 			Type:               "normal",
-			Status:             "draft",
 			Priority:           "medium",
 			ImpactScope:        "low",
 			RiskLevel:          "medium",
@@ -420,12 +432,11 @@ func TestEntRepository_RelatedTickets_WorkItemRelationBehavior(t *testing.T) {
 		createRelatedTicket(t, "INC-RT-DUP-1001")
 		createRelatedTicket(t, "SR-RT-DUP-2002")
 
-		created, err := repo.Create(ctx, &Change{
+		created, err := CreateChangeViaIntake(ctx, entClient, svc, app, tenantID, actorID, &Change{
 			Title:              "related tickets duplicate boundary",
 			Description:        "验证重复工单号边界",
 			Justification:      "重复输入应去重",
 			Type:               "normal",
-			Status:             "draft",
 			Priority:           "medium",
 			ImpactScope:        "low",
 			RiskLevel:          "medium",
@@ -439,21 +450,21 @@ func TestEntRepository_RelatedTickets_WorkItemRelationBehavior(t *testing.T) {
 
 		stored, err := repo.Get(ctx, created.ID, tenantID)
 		require.NoError(t, err)
-		// Wave 2 迁移顺带修复了这个已知缺陷：resolveTicketNumbers 在解析阶段就去重
-		// （唯一索引 (tenant_id, source_work_item_id, target_work_item_id, relation_type)
-		// 也会兜底拒绝重复关系行），不再需要 t.Skip。
+		// creation.go 的 Prepare 在按去重后的集合数量比对解析结果之前，先对
+		// relatedTicketNumbers 去重，因此重复编号不会被误判成部分不可解析而 fail closed；
+		// 唯一索引 (tenant_id, source_work_item_id, target_work_item_id, relation_type)
+		// 也会兜底拒绝重复关系行。
 		assert.ElementsMatch(t, []string{"INC-RT-DUP-1001", "SR-RT-DUP-2002"}, stored.RelatedTickets)
 	})
 
-	t.Run("unresolvable ticket numbers are skipped, not fail closed", func(t *testing.T) {
+	t.Run("unresolvable ticket numbers fail the whole creation closed", func(t *testing.T) {
 		createRelatedTicket(t, "INC-RT-REAL-9001")
 
-		created, err := repo.Create(ctx, &Change{
+		_, err := CreateChangeViaIntake(ctx, entClient, svc, app, tenantID, actorID, &Change{
 			Title:              "related tickets unresolved boundary",
-			Description:        "验证无法解析的工单编号不阻塞创建",
-			Justification:      "业务判断：软性关联，不是 fail closed 的安全边界",
+			Description:        "验证无法解析的工单编号会拒绝整个创建",
+			Justification:      "fail closed：不能让一个不存在/跨租户的编号被静默丢弃",
 			Type:               "normal",
-			Status:             "draft",
 			Priority:           "medium",
 			ImpactScope:        "low",
 			RiskLevel:          "medium",
@@ -463,110 +474,64 @@ func TestEntRepository_RelatedTickets_WorkItemRelationBehavior(t *testing.T) {
 			TenantID:           tenantID,
 			RelatedTickets:     []string{"INC-RT-REAL-9001", "TKT-DOES-NOT-EXIST-0001"},
 		})
-		require.NoError(t, err, "一个工单编号解析不到不应该让整个 Change 创建失败")
-
-		stored, err := repo.Get(ctx, created.ID, tenantID)
-		require.NoError(t, err)
-		assert.Equal(t, []string{"INC-RT-REAL-9001"}, stored.RelatedTickets,
-			"无法解析的工单编号应该被跳过（并记录警告日志），不出现在结果里")
+		require.Error(t, err, "一个工单编号解析不到应该让整个 Change 创建失败（fail closed）")
 	})
 }
 
 func TestChangeController_CreateChange_RequiredFieldValidation(t *testing.T) {
-	router, _, _, _, _ := setupChangeRegressionHandler(t, "change_required_fields_regression", "required-fields")
 	valid := dto.CreateChangeRequest{
-		Title:              "变更校验基线",
-		Description:        "用于验证变更必填字段校验。",
-		Justification:      "满足业务实施需要。",
-		Type:               "normal",
-		Priority:           "medium",
-		ImpactScope:        "low",
-		RiskLevel:          "medium",
-		ImplementationPlan: "1. 备份 2. 实施 3. 验证",
-		RollbackPlan:       "失败后恢复备份并验证业务恢复。",
+		Title: "变更校验基线", Description: "用于验证变更必填字段校验。",
+		Justification: "满足业务实施需要。", Type: "normal", Priority: "medium",
+		ImpactScope: "low", RiskLevel: "medium", ImplementationPlan: "1. 备份 2. 实施 3. 验证",
+		RollbackPlan: "失败后恢复备份并验证业务恢复。",
 	}
-
-	t.Run("valid payload succeeds", func(t *testing.T) {
-		payload, err := json.Marshal(valid)
-		require.NoError(t, err)
-
-		req, err := http.NewRequest("POST", "/api/v1/changes", bytes.NewBuffer(payload))
-		require.NoError(t, err)
-		req.Header.Set("Content-Type", "application/json")
-
-		recorder := httptest.NewRecorder()
-		router.ServeHTTP(recorder, req)
-
-		response := decodeChangeResponse(t, recorder)
-		require.Equal(t, http.StatusOK, recorder.Code)
-		require.Equal(t, common.SuccessCode, response.Code)
-		assert.Equal(t, "draft", changeResponseData(t, response)["status"])
-	})
-
-	tests := []struct {
-		name        string
-		mutate      func(*dto.CreateChangeRequest)
-		defectLabel string
-	}{
-		{
-			name: "requires justification",
-			mutate: func(req *dto.CreateChangeRequest) {
-				req.Justification = ""
-			},
-			defectLabel: "justification",
-		},
-		{
-			name: "requires impact scope",
-			mutate: func(req *dto.CreateChangeRequest) {
-				req.ImpactScope = ""
-			},
-			defectLabel: "impactScope",
-		},
-		{
-			name: "requires risk level",
-			mutate: func(req *dto.CreateChangeRequest) {
-				req.RiskLevel = ""
-			},
-			defectLabel: "riskLevel",
-		},
-		{
-			name: "requires implementation plan",
-			mutate: func(req *dto.CreateChangeRequest) {
-				req.ImplementationPlan = ""
-			},
-			defectLabel: "implementationPlan",
-		},
-		{
-			name: "requires rollback plan",
-			mutate: func(req *dto.CreateChangeRequest) {
-				req.RollbackPlan = ""
-			},
-			defectLabel: "rollbackPlan",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			reqBody := valid
-			tt.mutate(&reqBody)
-
-			payload, err := json.Marshal(reqBody)
-			require.NoError(t, err)
-
-			req, err := http.NewRequest("POST", "/api/v1/changes", bytes.NewBuffer(payload))
-			require.NoError(t, err)
-			req.Header.Set("Content-Type", "application/json")
-
-			recorder := httptest.NewRecorder()
-			router.ServeHTTP(recorder, req)
-			if recorder.Code == http.StatusOK {
-				t.Skip(fmt.Sprintf("已知缺陷，留给后续重构阶段处理：CreateChange 当前允许缺少/清空 %s，未执行变更核心字段校验", tt.defectLabel))
-			}
-
-			response := decodeChangeResponse(t, recorder)
-			assert.Equal(t, http.StatusBadRequest, recorder.Code)
-			assert.Equal(t, common.ParamErrorCode, response.Code)
-		})
+	for _, field := range []string{"justification", "impactScope", "riskLevel", "implementationPlan", "rollbackPlan"} {
+		for _, empty := range []string{"", "   "} {
+			t.Run(field+fmt.Sprintf("/%q", empty), func(t *testing.T) {
+				router, repo, client, tenantID, _ := setupChangeRegressionHandler(t, "change_required_"+uuid.NewString(), "required-fields")
+				t.Cleanup(func() { require.NoError(t, client.Close()) })
+				payload, err := json.Marshal(valid)
+				require.NoError(t, err)
+				var body map[string]any
+				require.NoError(t, json.Unmarshal(payload, &body))
+				body[field] = empty
+				submit := func(body any) *httptest.ResponseRecorder {
+					payload, err := json.Marshal(body)
+					require.NoError(t, err)
+					req := httptest.NewRequest(http.MethodPost, "/api/v1/changes", bytes.NewReader(payload))
+					req.Header.Set("Content-Type", "application/json")
+					req.Header.Set("Idempotency-Key", uuid.NewString())
+					recorder := httptest.NewRecorder()
+					router.ServeHTTP(recorder, req)
+					return recorder
+				}
+				recorder := submit(body)
+				response := decodeChangeResponse(t, recorder)
+				require.Equal(t, http.StatusBadRequest, recorder.Code, recorder.Body.String())
+				require.Equal(t, common.ParamErrorCode, response.Code)
+				ctx := context.Background()
+				require.Zero(t, client.Ticket.Query().CountX(ctx))
+				require.Zero(t, client.Change.Query().CountX(ctx))
+				require.Zero(t, client.WorkItemRelation.Query().CountX(ctx))
+				require.Zero(t, client.WorkItemNumberSequence.Query().CountX(ctx))
+				require.Zero(t, client.IntakeRequest.Query().CountX(ctx))
+				require.Zero(t, client.IntakeResolutionSnapshot.Query().CountX(ctx))
+				require.Zero(t, client.OutboxEvent.Query().CountX(ctx))
+				require.Zero(t, client.AuditLog.Query().CountX(ctx))
+				recorder = submit(valid)
+				require.Equal(t, http.StatusCreated, recorder.Code, recorder.Body.String())
+				data := changeResponseData(t, decodeChangeResponse(t, recorder))
+				ref := data["professionalReference"].(map[string]interface{})
+				stored, err := repo.Get(ctx, int(ref["id"].(float64)), tenantID)
+				require.NoError(t, err)
+				require.Equal(t, "draft", stored.Status)
+				require.Equal(t, valid.Justification, stored.Justification)
+				require.Equal(t, valid.ImpactScope, stored.ImpactScope)
+				require.Equal(t, valid.RiskLevel, stored.RiskLevel)
+				require.Equal(t, valid.ImplementationPlan, stored.ImplementationPlan)
+				require.Equal(t, valid.RollbackPlan, stored.RollbackPlan)
+			})
+		}
 	}
 }
 
@@ -752,6 +717,7 @@ func TestChangeWorkItemAndRelations_TenantIsolation(t *testing.T) {
 
 	tenantA, actorA := setupChangeBPMNActor(t, entClient, "wi-iso-a")
 	tenantB, actorB := setupChangeBPMNActor(t, entClient, "wi-iso-b")
+	ConfigureChangeIntakeFixture(ctx, entClient, tenantA, "agent")
 
 	// 租户 B 有一张真实工单，编号跟租户 A 后面要在 relatedTickets 里引用的字符串相同。
 	ticketNumber := "INC-CROSS-TENANT-0001"
@@ -761,13 +727,16 @@ func TestChangeWorkItemAndRelations_TenantIsolation(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	// 租户 A 创建一条引用同一个编号的 Change——resolveTicketNumbers 必须按 tenant_id 过滤，
-	// 不能跨租户把租户 B 的工单关联到租户 A 的变更上。
+	// 租户 A 创建一条引用同一个编号的 Change——resolveTicketNumbers 必须按 tenant_id 过滤。
+	// 真实 Intake 创建路径对 relatedTicketNumbers 是 fail closed 的：租户 B
+	// 的工单编号在租户 A 下解析不到，整个创建都必须被拒绝，不能静默建立跨租户关联，
+	// 也不能留下一个 related_tickets 为空的孤儿 Change。
 	svcA := NewService(repo, entClient, logger)
-	createdA, err := svcA.CreateChange(ctx, &Change{
+	appA := NewChangeIntakeApp(entClient, svcA, logger)
+	_, err = CreateChangeViaIntake(ctx, entClient, svcA, appA, tenantA, actorA, &Change{
+		Justification: "Repair configuration associated with the referenced incident", ImplementationPlan: "Apply reviewed configuration and verify service", RollbackPlan: "Restore saved configuration",
 		Title:          "租户A引用了租户B工单编号的变更",
 		Type:           "normal",
-		Status:         "draft",
 		Priority:       "medium",
 		ImpactScope:    "low",
 		RiskLevel:      "medium",
@@ -775,20 +744,22 @@ func TestChangeWorkItemAndRelations_TenantIsolation(t *testing.T) {
 		TenantID:       tenantA,
 		RelatedTickets: []string{ticketNumber},
 	})
-	require.NoError(t, err)
-	assert.Empty(t, createdA.RelatedTickets, "跨租户的工单编号必须解析失败并跳过，不能建立跨租户关联")
+	require.Error(t, err, "跨租户的工单编号必须解析失败并拒绝整个创建（fail closed），不能建立跨租户关联")
+	_, total, listErr := repo.List(ctx, tenantA, 1, 10, "", "", "")
+	require.NoError(t, listErr)
+	require.Zero(t, total, "拒绝的创建不应该留下孤儿 Change 行")
 
-	// 租户 A 自己名下的同编号工单则应该能正常关联——证明上面的空结果是因为跨租户过滤，
+	// 租户 A 自己名下的同编号工单则应该能正常关联——证明上面的拒绝是因为跨租户过滤，
 	// 不是因为查询逻辑整体坏掉了。
 	_, err = entClient.Ticket.Create().
 		SetTitle("租户A的工单").SetType("incident").SetTicketNumber(ticketNumber + "-A").
 		SetRequesterID(actorA).SetTenantID(tenantA).
 		Save(ctx)
 	require.NoError(t, err)
-	createdA2, err := svcA.CreateChange(ctx, &Change{
+	createdA2, err := CreateChangeViaIntake(ctx, entClient, svcA, appA, tenantA, actorA, &Change{
+		Justification: "Repair configuration associated with the referenced incident", ImplementationPlan: "Apply reviewed configuration and verify service", RollbackPlan: "Restore saved configuration",
 		Title:          "租户A引用了自己工单编号的变更",
 		Type:           "normal",
-		Status:         "draft",
 		Priority:       "medium",
 		ImpactScope:    "low",
 		RiskLevel:      "medium",
@@ -802,13 +773,13 @@ func TestChangeWorkItemAndRelations_TenantIsolation(t *testing.T) {
 	// businessKey/审批查询的租户隔离：租户 B 不能通过传入自己的 tenantID 读取或推进
 	// 租户 A 的变更审批流程，即使拿到了正确的 changeID。
 	svcB := NewService(repo, entClient, logger)
-	_, err = svcB.GetChange(ctx, createdA.ID, tenantB)
+	_, err = svcB.GetChange(ctx, createdA2.ID, tenantB)
 	require.Error(t, err, "租户 B 不能读取租户 A 的变更")
 
-	_, err = svcB.TransitionStatus(ctx, createdA.ID, tenantB, actorB, "cancelled", "越权取消")
+	_, err = svcB.TransitionStatus(ctx, createdA2.ID, tenantB, actorB, "cancelled", "越权取消")
 	require.Error(t, err, "租户 B 不能推进租户 A 的变更状态")
 
-	stillDraft, err := repo.Get(ctx, createdA.ID, tenantA)
+	stillDraft, err := repo.Get(ctx, createdA2.ID, tenantA)
 	require.NoError(t, err)
 	assert.Equal(t, "draft", stillDraft.Status, "跨租户的越权尝试不应该改变租户 A 变更的真实状态")
 }

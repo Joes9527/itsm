@@ -11,10 +11,11 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/change"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
-	"itsm-backend/repository/workitemnumber"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
 
@@ -37,7 +38,7 @@ func nextTestTicketNumber() string {
 }
 
 func newTestChangeRepository(client *ent.Client, db *sql.DB) *EntRepository {
-	return NewEntRepository(client, db, workitemnumber.NewPostgreSQLAllocator())
+	return NewEntRepository(client, db)
 }
 
 // createChangeWorkItemFixture 在给定的 ent.Client 里先建一条 tickets 行
@@ -874,14 +875,16 @@ func TestSubmitChange_AutoCompletesAssessmentTask(t *testing.T) {
 	svc := NewService(repo, client, logger)
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
+	ConfigureChangeIntakeFixture(ctx, client, tenant.ID, "agent")
+	app := NewChangeIntakeApp(client, svc, logger)
 
-	created, err := repo.Create(ctx, &Change{Title: "自动推进评估的变更", Type: "normal", Status: "draft", RiskLevel: "medium", ImpactScope: "low", TenantID: tenant.ID, CreatedBy: requester.ID})
+	created, err := CreateChangeViaIntake(ctx, client, svc, app, tenant.ID, requester.ID, &Change{Title: "自动推进评估的变更", Type: "normal", Justification: "Apply reviewed service configuration", ImplementationPlan: "Back up configuration, apply and verify", RollbackPlan: "Restore previous configuration and verify", RiskLevel: "medium", ImpactScope: "low", TenantID: tenant.ID, CreatedBy: requester.ID})
 	require.NoError(t, err)
 
 	_, err = svc.SubmitChange(tenantCtx, created.ID, tenant.ID, requester.ID, &dto.SubmitChangeRequest{})
 	require.NoError(t, err)
 
-	require.NotNil(t, created.WorkItemID, "repo.Create 应该已经在同一事务内建好 WorkItem 并回填")
+	require.NotNil(t, created.WorkItemID, "真实 Intake 创建应该已经在同一事务内建好 WorkItem 并回填")
 	instance, err := client.ProcessInstance.Query().
 		Where(processinstance.BusinessKey(fmt.Sprintf("change:%d", *created.WorkItemID)), processinstance.TenantID(tenant.ID)).
 		Only(ctx)
@@ -899,45 +902,62 @@ func TestSubmitChange_AutoCompletesAssessmentTask(t *testing.T) {
 
 // TestChangeServiceTaskHandler_CreateChange_DelegatesToRealServiceAndCreatesWorkItem 是
 // service/bpmn.ChangeServiceTaskHandler 委托单测（那边用假的 ChangeDomainServiceInterface
-// 替身）的真实集成版本：用真实的 handlers/change.Service 实现注入，证明通过 BPMN
-// create_change 这条自动创建路径产生的 Change 也会在同一事务内建好 WorkItem——这正是
+// 替身）的真实集成版本：用真实的 handlers/change.Service 通过共享 Intake 应用注入，证明通过
+// BPMN create_change 这条自动创建路径产生的 Change 也会在同一事务内建好 WorkItem——这正是
 // Wave 2 迁移要修的缺陷（迁移前 ChangeServiceTaskHandler.createChange 直接
 // h.client.Change.Create()，完全绕开 WorkItem 创建）。
+//
+// 真实创建路径要求 executeWorkItemCreation 从一个已认领（status=processing）的
+// ProcessCallbackOutbox 行 + 一个真实 running 的 ProcessInstance 里解析
+// actor/租户/声明的创建载荷，不能像迁移前那样直接摆一份 map[string]interface{} 调
+// taskHandler.Execute。这里复用 tests/integration/intake_bpmn_entry_test.go 里
+// TestIntakeBPMNCreationReplaysAfterSourceAdvanceFailure 已验证过的真实驱动方式：
+// 部署一个只有一个 create_change service task 的最小流程定义，通过真实引擎
+// StartProcessByDefinitionID 走一遍完整的声明->认领->执行->确认链路。
 func TestChangeServiceTaskHandler_CreateChange_DelegatesToRealServiceAndCreatesWorkItem(t *testing.T) {
 	client := newChangeBPMNEntClient(t, "change_bpmn_handler_create_real")
 	logger := zaptest.NewLogger(t).Sugar()
+	ctx := context.Background()
 	tenantID, actorID := setupChangeBPMNActor(t, client, "bpmn-handler-create")
 
 	repo := newTestChangeRepository(client, openChangeBPMNRawDB(t, "change_bpmn_handler_create_real"))
 	svc := NewService(repo, client, logger)
+	ConfigureChangeIntakeFixture(ctx, client, tenantID, "agent")
+	app := NewChangeIntakeApp(client, svc, logger)
 
-	taskHandler := bpmn.NewChangeServiceTaskHandler(client, logger)
-	taskHandler.SetChangeService(svc)
+	engine := service.NewCustomProcessEngine(client, logger).(*service.CustomProcessEngine)
+	engine.CallbackRegistry().GetHandler("change_service_handler").(*bpmn.ChangeServiceTaskHandler).SetCreationApplication(app)
 
-	ctx := context.WithValue(context.Background(), bpmn.BPMNTenantIDContextKey, tenantID)
-	result, err := taskHandler.Execute(ctx, nil, map[string]interface{}{
-		"action":      "create_change",
-		"title":       "BPMN 自动创建的变更",
-		"description": "验证委托到真实领域服务后同步建好 WorkItem",
-		"type":        "normal",
-		"priority":    "medium",
-		"created_by":  float64(actorID),
-	})
+	// 源工单：真实创建路径要求一个已声明/认领的宿主流程实例，源 WorkItem 不需要是任何
+	// 特定专业类型——这里复用现有的 Change WorkItem 夹具，只借用它的 tickets 行身份。
+	source := createChangeWorkItemFixture(t, client, tenantID, actorID, "BPMN 源工单")
+
+	deployment := client.ProcessDeployment.Create().SetTenantID(tenantID).SetDeploymentID("change-creation").SetDeploymentName("Change Creation").SaveX(ctx)
+	xml := []byte(`<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="test"><bpmn:process id="change-creation" isExecutable="true"><bpmn:startEvent id="start"/><bpmn:serviceTask id="create"><bpmn:extensionElements><bpmn:metaData name="service_task_type">change_task</bpmn:metaData><bpmn:metaData name="action">create_change</bpmn:metaData></bpmn:extensionElements></bpmn:serviceTask><bpmn:endEvent id="end"/><bpmn:sequenceFlow id="a" sourceRef="start" targetRef="create"/><bpmn:sequenceFlow id="b" sourceRef="create" targetRef="end"/></bpmn:process></bpmn:definitions>`)
+	definition := client.ProcessDefinition.Create().SetTenantID(tenantID).SetDeploymentID(deployment.ID).SetKey("change-creation").SetName("Change Creation").SetBpmnXML(xml).SetIsActive(true).SaveX(ctx)
+
+	runCtx := service.WithTrustedBPMNTenantContext(ctx, tenantID)
+	runCtx = context.WithValue(runCtx, bpmn.BPMNUserIDContextKey, actorID)
+	_, err := engine.StartProcessByDefinitionID(runCtx, service.FreezeProcessDefinition(definition), fmt.Sprintf("ticket:%d", source.ID), "generic", source.ID, map[string]any{
+		"title":         "BPMN 自动创建的变更",
+		"description":   "验证委托到真实领域服务后同步建好 WorkItem",
+		"type":          "normal",
+		"priority":      "medium",
+		"created_by":    actorID,
+		"justification": "Apply approved service configuration", "impact_scope": "low", "risk_level": "medium", "implementation_plan": "Save configuration, apply update and verify", "rollback_plan": "Restore saved configuration",
+	}, "source-start")
 	require.NoError(t, err)
-	require.Equal(t, bpmn.CallbackEffectApplied, result.Status)
 
-	changeID, ok := result.OutputVars["change_id"].(int)
-	require.True(t, ok, "OutputVars.change_id 应该是真实领域服务创建的 Change ID")
+	// 源工单 + BPMN 自动创建的 Change WorkItem，一共两条 tickets 行。
+	require.Equal(t, 2, client.Ticket.Query().CountX(ctx))
 
-	created, err := repo.Get(context.Background(), changeID, tenantID)
-	require.NoError(t, err)
-	require.NotNil(t, created.WorkItemID,
+	changeEntity := client.Change.Query().Where(change.HasWorkItemWith(ticket.TenantID(tenantID))).OnlyX(ctx)
+	require.NotNil(t, changeEntity.WorkItemID,
 		"通过 BPMN create_change 路径自动创建的 Change 也必须有关联的 WorkItem，不能绕过事务化建表")
 
-	workItem, err := client.Ticket.Get(context.Background(), *created.WorkItemID)
+	workItem, err := client.Ticket.Get(ctx, changeEntity.WorkItemID)
 	require.NoError(t, err)
 	assert.Equal(t, "change_request", workItem.RecordClass, "recordClass 必须是 change_request，不是 change")
 	assert.Equal(t, "BPMN 自动创建的变更", workItem.Title)
 	assert.Equal(t, tenantID, workItem.TenantID)
-	assert.Equal(t, "change", workItem.Type)
 }

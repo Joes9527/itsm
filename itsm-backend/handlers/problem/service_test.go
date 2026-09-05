@@ -1,4 +1,4 @@
-package problem
+package problem_test
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/problem"
-	"itsm-backend/repository/workitemnumber"
+	creation "itsm-backend/handlers/common/workitemcreation"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -26,7 +26,7 @@ func setupProblemHandlerTest(t *testing.T) (*ent.Client, *Service, context.Conte
 }
 
 func newTestProblemRepository(client *ent.Client) *EntRepository {
-	return NewEntRepository(client, workitemnumber.NewPostgreSQLAllocator())
+	return NewEntRepository(client)
 }
 
 func createProblemHandlerTenant(t *testing.T, ctx context.Context, client *ent.Client, suffix string) *ent.Tenant {
@@ -38,6 +38,7 @@ func createProblemHandlerTenant(t *testing.T, ctx context.Context, client *ent.C
 		SetStatus("active").
 		Save(ctx)
 	require.NoError(t, err)
+	configureProblemIntakeFixture(ctx, client, tenant.ID)
 	return tenant
 }
 
@@ -65,7 +66,7 @@ func createProblemHandlerCategory(t *testing.T, ctx context.Context, client *ent
 
 func createProblemHandlerProblem(t *testing.T, ctx context.Context, service *Service, tenantID, userID int) *Problem {
 	t.Helper()
-	p, err := service.Create(ctx, tenantID, &Problem{
+	p, err := service.SubmitCreation(ctx, tenantID, &Problem{
 		Title: "Repeated outage", Description: "Repeated production outage", Priority: "high", CreatedBy: userID,
 	})
 	require.NoError(t, err)
@@ -102,11 +103,11 @@ func TestProblemServiceAllocatesTenantScopedWorkItemNumbers(t *testing.T) {
 	userA := createProblemHandlerUser(t, ctx, client, tenantA.ID, "allocator-a")
 	userB := createProblemHandlerUser(t, ctx, client, tenantB.ID, "allocator-b")
 
-	first, err := service.Create(ctx, tenantA.ID, &Problem{Title: "First tenant A problem", Priority: "high", CreatedBy: userA.ID})
+	first, err := service.SubmitCreation(ctx, tenantA.ID, &Problem{Title: "First tenant A problem", Priority: "high", CreatedBy: userA.ID})
 	require.NoError(t, err)
-	second, err := service.Create(ctx, tenantA.ID, &Problem{Title: "Second tenant A problem", Priority: "high", CreatedBy: userA.ID})
+	second, err := service.SubmitCreation(ctx, tenantA.ID, &Problem{Title: "Second tenant A problem", Priority: "high", CreatedBy: userA.ID})
 	require.NoError(t, err)
-	otherTenant, err := service.Create(ctx, tenantB.ID, &Problem{Title: "First tenant B problem", Priority: "high", CreatedBy: userB.ID})
+	otherTenant, err := service.SubmitCreation(ctx, tenantB.ID, &Problem{Title: "First tenant B problem", Priority: "high", CreatedBy: userB.ID})
 	require.NoError(t, err)
 
 	firstWorkItem, err := client.Ticket.Get(ctx, *first.WorkItemID)
@@ -180,21 +181,22 @@ func TestProblemServiceCreateValidation(t *testing.T) {
 	createProblemHandlerCategory(t, ctx, client, tenant.ID, "database")
 
 	// 1. Title empty or whitespace
-	_, err := service.Create(ctx, tenant.ID, &Problem{Title: "", Priority: "medium", CreatedBy: user.ID})
-	require.ErrorContains(t, err, "problem title is required")
+	_, err := service.SubmitCreation(ctx, tenant.ID, &Problem{Title: "", Priority: "medium", CreatedBy: user.ID})
+	require.ErrorIs(t, err, creation.ErrInvalidCommand)
 
-	_, err = service.Create(ctx, tenant.ID, &Problem{Title: "   ", Priority: "medium", CreatedBy: user.ID})
-	require.ErrorContains(t, err, "problem title is required")
+	_, err = service.SubmitCreation(ctx, tenant.ID, &Problem{Title: "   ", Priority: "medium", CreatedBy: user.ID})
+	require.ErrorIs(t, err, creation.ErrInvalidCommand)
 
 	// 2. Priority invalid
-	_, err = service.Create(ctx, tenant.ID, &Problem{Title: "Valid Title", Priority: "invalid_priority", CreatedBy: user.ID})
-	require.ErrorContains(t, err, "invalid problem priority: invalid_priority")
+	_, err = service.SubmitCreation(ctx, tenant.ID, &Problem{Title: "Valid Title", Priority: "invalid_priority", CreatedBy: user.ID})
+	require.ErrorIs(t, err, creation.ErrDomainValidationFailed)
 
-	_, err = service.Create(ctx, tenant.ID, &Problem{Title: "Valid Title", Priority: "", CreatedBy: user.ID})
-	require.ErrorContains(t, err, "invalid problem priority:")
+	defaulted, err := service.SubmitCreation(ctx, tenant.ID, &Problem{Title: "Valid Title", Priority: "", CreatedBy: user.ID})
+	require.NoError(t, err)
+	require.Equal(t, "medium", defaulted.Priority)
 
 	// 3. Valid creation & trimming
-	p, err := service.Create(ctx, tenant.ID, &Problem{
+	p, err := service.SubmitCreation(ctx, tenant.ID, &Problem{
 		Title:       "   Database Memory Leak   ",
 		Description: "OOM killer triggered on db host",
 		Priority:    "critical",
@@ -234,7 +236,7 @@ func TestProblemServiceStateMachineTransitions(t *testing.T) {
 	}
 
 	for i, tc := range validCases {
-		p, err := service.Create(ctx, tenant.ID, &Problem{
+		p, err := service.SubmitCreation(ctx, tenant.ID, &Problem{
 			Title:     fmt.Sprintf("Problem SM %d", i),
 			Priority:  "medium",
 			CreatedBy: user.ID,
@@ -270,7 +272,7 @@ func TestProblemServiceStateMachineTransitions(t *testing.T) {
 	}
 
 	for i, tc := range invalidCases {
-		p, err := service.Create(ctx, tenant.ID, &Problem{
+		p, err := service.SubmitCreation(ctx, tenant.ID, &Problem{
 			Title:     fmt.Sprintf("Invalid SM %d", i),
 			Priority:  "low",
 			CreatedBy: user.ID,
@@ -354,7 +356,7 @@ func TestProblemServiceInvestigationAndSolutions(t *testing.T) {
 	tenant := createProblemHandlerTenant(t, ctx, client, "investigate")
 	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "investigate")
 
-	p, err := service.Create(ctx, tenant.ID, &Problem{
+	p, err := service.SubmitCreation(ctx, tenant.ID, &Problem{
 		Title:     "Network Packet Drop",
 		Priority:  "high",
 		CreatedBy: user.ID,
@@ -402,12 +404,12 @@ func TestProblemServiceListAndFilters(t *testing.T) {
 	createProblemHandlerCategory(t, ctx, client, tenant.ID, "auth")
 	createProblemHandlerCategory(t, ctx, client, tenant.ID, "storage")
 
-	p1, err := service.Create(ctx, tenant.ID, &Problem{
+	p1, err := service.SubmitCreation(ctx, tenant.ID, &Problem{
 		Title: "CPU Spike in Auth Service", Priority: "critical", Category: "auth", CreatedBy: user.ID,
 	})
 	require.NoError(t, err)
 
-	p2, err := service.Create(ctx, tenant.ID, &Problem{
+	p2, err := service.SubmitCreation(ctx, tenant.ID, &Problem{
 		Title: "Disk Full on Node 2", Priority: "low", Category: "storage", CreatedBy: user.ID,
 	})
 	require.NoError(t, err)
@@ -563,23 +565,23 @@ func TestProblemServiceStats(t *testing.T) {
 	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "stats")
 
 	// Open + critical
-	_, err := service.Create(ctx, tenant.ID, &Problem{Title: "P1", Priority: "critical", CreatedBy: user.ID})
+	_, err := service.SubmitCreation(ctx, tenant.ID, &Problem{Title: "P1", Priority: "critical", CreatedBy: user.ID})
 	require.NoError(t, err)
 
 	// Investigating + high
-	p2, err := service.Create(ctx, tenant.ID, &Problem{Title: "P2", Priority: "high", CreatedBy: user.ID})
+	p2, err := service.SubmitCreation(ctx, tenant.ID, &Problem{Title: "P2", Priority: "high", CreatedBy: user.ID})
 	require.NoError(t, err)
 	_, err = service.InvestigateProblem(ctx, tenant.ID, p2.ID)
 	require.NoError(t, err)
 
 	// Resolved + medium
-	p3, err := service.Create(ctx, tenant.ID, &Problem{Title: "P3", Priority: "medium", CreatedBy: user.ID})
+	p3, err := service.SubmitCreation(ctx, tenant.ID, &Problem{Title: "P3", Priority: "medium", CreatedBy: user.ID})
 	require.NoError(t, err)
 	_, err = service.Update(ctx, tenant.ID, p3.ID, &Problem{Status: "resolved"})
 	require.NoError(t, err)
 
 	// Closed + low
-	p4, err := service.Create(ctx, tenant.ID, &Problem{Title: "P4", Priority: "low", CreatedBy: user.ID})
+	p4, err := service.SubmitCreation(ctx, tenant.ID, &Problem{Title: "P4", Priority: "low", CreatedBy: user.ID})
 	require.NoError(t, err)
 	_, err = service.Update(ctx, tenant.ID, p4.ID, &Problem{Status: "resolved"})
 	require.NoError(t, err)

@@ -58,7 +58,6 @@ type ListFilters struct {
 
 // Repository defines the interface for data persistence
 type Repository interface {
-	Create(ctx context.Context, req *ServiceRequest) (*ServiceRequest, error)
 	Get(ctx context.Context, id, tenantID int) (*ServiceRequest, error)
 	GetByTicketID(ctx context.Context, ticketID, tenantID int) (*ServiceRequest, error)
 	List(ctx context.Context, tenantID int, filters ListFilters) ([]*ServiceRequest, int, error)

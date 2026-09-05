@@ -28,9 +28,7 @@ type Container struct {
 	ticketService         *service.TicketService
 	incidentService       *service.IncidentService
 	notificationService   *service.NotificationService
-	sequenceService       *service.SequenceService
 	processTriggerService service.ProcessTriggerServiceInterface
-	processResolver       *service.ProcessResolver
 	processBindingService service.ProcessBindingServiceInterface
 
 	// Ticket-related Services
@@ -70,31 +68,16 @@ func (c *Container) Initialize() error {
 func (c *Container) initRepositories() {
 	c.numberAllocator = workitemnumber.NewPostgreSQLAllocator()
 	// Ticket Repository
-	c.ticketRepository = ticketRepo.NewEntRepository(c.client, c.logger, c.numberAllocator)
+	c.ticketRepository = ticketRepo.NewEntRepository(c.client, c.logger)
 }
 
 // initCoreServices 初始化核心服务
 func (c *Container) initCoreServices() {
-	// SequenceService is retained solely for Incident's professional incident_number.
-	c.sequenceService = service.NewSequenceService(
-		c.cfg.Redis.Host,
-		c.cfg.Redis.Port,
-		c.cfg.Redis.Password,
-		c.cfg.Redis.DB,
-		c.logger,
-	)
-	if c.sequenceService != nil {
-		c.logger.Info("Redis sequence service initialized for professional incident_number")
-	} else {
-		c.logger.Warn("Redis sequence service not available; professional incident_number will use database fallback")
-	}
-
 	// Notification Service
 	c.notificationService = service.NewNotificationService(c.client)
 
 	// Incident Service
-	c.incidentService = service.NewIncidentService(c.client, c.logger, c.numberAllocator)
-	c.incidentService.SetSequenceService(c.sequenceService)
+	c.incidentService = service.NewIncidentService(c.client, c.logger)
 
 	// Ticket Notification Service
 	c.ticketNotificationService = service.NewTicketNotificationService(c.client, c.logger)
@@ -105,10 +88,8 @@ func (c *Container) initCoreServices() {
 	// Ticket Automation Service
 	c.ticketAutomationService = service.NewTicketAutomationRuleService(c.client, c.logger)
 
-	// BPMN 子服务：Binding / Trigger / Resolver
-	// 注意顺序：Binding -> Resolver（依赖 Binding）-> Trigger（依赖 Engine 与 Binding）
+	// BPMN binding and professional transition orchestration.
 	c.processBindingService = service.NewProcessBindingService(c.client)
-	c.processResolver = service.NewProcessResolver(c.client, c.processBindingService)
 	processEngine := service.NewCustomProcessEngine(c.client, c.logger)
 	c.processTriggerService = service.NewProcessTriggerService(c.client, processEngine)
 }
@@ -123,8 +104,6 @@ func (c *Container) initBusinessServices() {
 		NotificationService:   c.ticketNotificationService,
 		AutomationRuleService: c.ticketAutomationService,
 		SLAService:            c.ticketSLAService,
-		ProcessTriggerService: c.processTriggerService,
-		ProcessResolver:       c.processResolver,
 	})
 }
 
@@ -148,11 +127,6 @@ func (c *Container) GetIncidentService() *service.IncidentService {
 // GetNotificationService 获取通知服务
 func (c *Container) GetNotificationService() *service.NotificationService {
 	return c.notificationService
-}
-
-// GetSequenceService 获取序列服务
-func (c *Container) GetSequenceService() *service.SequenceService {
-	return c.sequenceService
 }
 
 // GetTicketNotificationService 获取工单通知服务

@@ -8,7 +8,6 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/repository/base"
-	"itsm-backend/repository/workitemnumber"
 
 	"go.uber.org/zap"
 )
@@ -16,123 +15,15 @@ import (
 // EntRepository Ent 实现的工单仓储
 type EntRepository struct {
 	*base.EntRepository
-	logger          *zap.SugaredLogger
-	numberAllocator workitemnumber.Allocator
-}
-
-// TransactionalCreator is the narrow creation port for an application layer
-// that already owns an Ent transaction. It has no non-transactional fallback.
-// Ordinary callers must use Repository.Create.
-type TransactionalCreator interface {
-	CreateInTransaction(ctx context.Context, client *ent.Client, params *CreateParams, tenantID int) (*Ticket, error)
-}
-
-type transactionalCreator struct {
-	numberAllocator workitemnumber.Allocator
-}
-
-// NewTransactionalCreator constructs the transaction-bound Ticket creation
-// primitive for an application transaction owner.
-func NewTransactionalCreator(allocator workitemnumber.Allocator) TransactionalCreator {
-	if allocator == nil {
-		panic("work item number allocator is required")
-	}
-	return &transactionalCreator{numberAllocator: allocator}
+	logger *zap.SugaredLogger
 }
 
 // NewEntRepository 创建 Ent 工单仓储
-func NewEntRepository(client *ent.Client, logger *zap.SugaredLogger, allocator workitemnumber.Allocator) *EntRepository {
-	if allocator == nil {
-		panic("work item number allocator is required")
-	}
+func NewEntRepository(client *ent.Client, logger *zap.SugaredLogger) *EntRepository {
 	return &EntRepository{
-		EntRepository:   base.NewEntRepository(client),
-		logger:          logger,
-		numberAllocator: allocator,
+		EntRepository: base.NewEntRepository(client),
+		logger:        logger,
 	}
-}
-
-// Create 创建工单
-func (r *EntRepository) Create(ctx context.Context, params *CreateParams, tenantID int) (*Ticket, error) {
-	tx, err := r.Client().Tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("start ticket creation transaction: %w", err)
-	}
-
-	created, err := NewTransactionalCreator(r.numberAllocator).CreateInTransaction(ctx, tx.Client(), params, tenantID)
-	if err != nil {
-		if rollbackErr := tx.Rollback(); rollbackErr != nil {
-			return nil, fmt.Errorf("%w (rollback ticket creation transaction: %v)", err, rollbackErr)
-		}
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit ticket creation transaction: %w", err)
-	}
-	return created, nil
-}
-
-func (c *transactionalCreator) CreateInTransaction(ctx context.Context, client *ent.Client, params *CreateParams, tenantID int) (*Ticket, error) {
-	issuedAt := time.Now().UTC()
-	ticketNumber, err := c.numberAllocator.Allocate(ctx, client, tenantID, issuedAt)
-	if err != nil {
-		return nil, fmt.Errorf("allocate work item number: %w", err)
-	}
-
-	builder := client.Ticket.Create().
-		SetTitle(params.Title).
-		SetDescription(params.Description).
-		SetType(string(params.Type)).
-		SetPriority(string(params.Priority)).
-		SetTicketNumber(ticketNumber).
-		SetRequesterID(params.RequesterID).
-		SetTenantID(tenantID).
-		SetStatus(string(StatusNew)).
-		SetCreatedAt(issuedAt).
-		SetUpdatedAt(issuedAt)
-
-		// A Service Request's ticket is its WorkItem base record, so its class
-		// must be persisted when the authoritative ticket creation path runs.
-	if params.Type == TypeServiceRequest {
-		builder.SetRecordClass("service_request_item")
-	}
-
-	if params.AssigneeID != nil {
-		builder.SetAssigneeID(*params.AssigneeID)
-	}
-	if params.CategoryID != nil {
-		builder.SetCategoryID(*params.CategoryID)
-	}
-	if params.TemplateID != nil {
-		builder.SetTemplateID(*params.TemplateID)
-	}
-	if params.ParentTicketID != nil {
-		builder.SetParentTicketID(*params.ParentTicketID)
-	}
-	if len(params.TagIDs) > 0 {
-		builder.AddTagIDs(params.TagIDs...)
-	}
-	if len(params.CustomFieldValues) > 0 {
-		builder.SetCustomFieldValues(params.CustomFieldValues)
-	}
-	if params.Source != "" {
-		builder.SetSource(params.Source)
-	}
-	if params.CreatorEmail != "" {
-		builder.SetCreatorEmail(params.CreatorEmail)
-	}
-	if params.ExternalMessageID != "" {
-		builder.SetExternalMessageID(params.ExternalMessageID)
-	}
-	if params.ConversationID != "" {
-		builder.SetConversationID(params.ConversationID)
-	}
-
-	entity, err := builder.Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("create ticket: %w", err)
-	}
-	return toDomainModel(entity), nil
 }
 
 // GetByID 根据 ID 获取工单

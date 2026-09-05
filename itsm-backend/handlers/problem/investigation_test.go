@@ -18,7 +18,6 @@ import (
 	"itsm-backend/ent/enttest"
 	problem "itsm-backend/handlers/problem"
 	"itsm-backend/middleware"
-	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -36,6 +35,7 @@ func createProblemInvestigationTenant(t *testing.T, ctx context.Context, client 
 		SetStatus("active").
 		Save(ctx)
 	require.NoError(t, err)
+	configureProblemIntakeFixture(ctx, client, tenant.ID)
 	return tenant
 }
 
@@ -149,9 +149,9 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	user := createProblemInvestigationUser(t, ctx, client, tenant.ID, "dual-inv")
 
 	// Create problem
-	probRepo := problem.NewEntRepository(client, workitemnumber.NewPostgreSQLAllocator())
-	probHandlerSvc := problem.NewService(probRepo, logger)
-	p, err := probHandlerSvc.Create(ctx, tenant.ID, &problem.Problem{
+	probRepo := NewEntRepository(client)
+	probHandlerSvc := NewService(probRepo, logger)
+	p, err := probHandlerSvc.SubmitCreation(ctx, tenant.ID, &problem.Problem{
 		Title:       "High Latency in API Gateway",
 		Description: "p99 latency > 2s",
 		Priority:    "critical",
@@ -162,7 +162,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	// =========================================================================
 	// Entry Point 1: /api/v1/problems/:id/investigate (handlers/problem/Handler)
 	// =========================================================================
-	probHandler := problem.NewHandler(probHandlerSvc, client)
+	probHandler := NewHandler(probHandlerSvc, client)
 	r1 := gin.New()
 	r1.Use(func(c *gin.Context) {
 		c.Set("tenant_id", tenant.ID)

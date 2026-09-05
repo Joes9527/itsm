@@ -4,13 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -24,6 +22,12 @@ import (
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/ticket"
 	changedomain "itsm-backend/handlers/change"
+	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/intake"
+	"itsm-backend/handlers/service_catalog"
+	"itsm-backend/middleware"
+	"itsm-backend/repository/workitemnumber"
+	"itsm-backend/service"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -41,14 +45,39 @@ func newTestClient(t *testing.T) *ent.Client {
 func setupTestRouter(t *testing.T, client *ent.Client, userID, tenantID int) (*gin.Engine, *Handler) {
 	gin.SetMode(gin.TestMode)
 	logger := zaptest.NewLogger(t).Sugar()
-	changeRepo := changedomain.NewEntRepository(client, nil, &standardChangeTestAllocator{})
-	h := NewHandler(client, logger, changedomain.NewService(changeRepo, client, logger))
+	h := NewHandler(client, logger)
+	return setupRouterForHandler(t, h, userID, tenantID)
+}
 
+// setupInstantiationRouter adds the real shared Intake application only for
+// Standard Change instantiation. Template definition CRUD remains independent
+// from WorkItem creation.
+func setupInstantiationRouter(t *testing.T, client *ent.Client, userID, tenantID int) (*gin.Engine, *Handler) {
+	t.Helper()
+	gin.SetMode(gin.TestMode)
+	logger := zaptest.NewLogger(t).Sugar()
+	changeService := changedomain.NewService(nil, client, logger)
+	registry := intake.NewCreatorRegistry()
+	require.NoError(t, registry.Register(changeService))
+	resolver := intake.NewResolver(
+		service_catalog.NewService(nil, client, logger),
+		service.NewProcessBindingService(client),
+		service.NewConfigurationItemService(client, logger, nil, nil),
+		service.NewTicketCategoryService(client),
+	)
+	h := NewHandler(client, logger)
+	h.SetCreationApplication(intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator())))
+	return setupRouterForHandler(t, h, userID, tenantID)
+}
+
+func setupRouterForHandler(t *testing.T, h *Handler, userID, tenantID int) (*gin.Engine, *Handler) {
+	t.Helper()
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(func(c *gin.Context) {
 		c.Set("user_id", userID)
 		c.Set("tenant_id", tenantID)
+		c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: tenantID})
 		// RegisterRoutes now gates this group behind RequireRole("super_admin");
 		// the handler tests below exercise business logic, not RBAC, so grant the
 		// role here. RBAC gating itself is covered separately by
@@ -60,18 +89,12 @@ func setupTestRouter(t *testing.T, client *ent.Client, userID, tenantID int) (*g
 	return r, h
 }
 
-type standardChangeTestAllocator struct{ next int }
-
-func (a *standardChangeTestAllocator) Allocate(_ context.Context, _ *ent.Client, tenantID int, _ time.Time) (string, error) {
-	a.next++
-	return fmt.Sprintf("TKT-%d-%06d", tenantID, a.next), nil
-}
-
 // createTemplate inserts a StandardChange template directly via ent, so tests can
 // exercise the read/update/delete/instantiate paths without going through the HTTP layer.
 func createTemplate(t *testing.T, client *ent.Client, tenantID, userID int, mutate func(*ent.StandardChangeCreate)) *ent.StandardChange {
 	builder := client.StandardChange.Create().
 		SetTitle("默认模板").
+		SetJustification("实施该标准变更以保持服务稳定").
 		SetImplementationPlan("实施计划步骤").
 		SetRollbackPlan("回滚计划步骤").
 		SetCategory("general").
@@ -96,15 +119,54 @@ func decodeResponse(t *testing.T, w *httptest.ResponseRecorder) (common.Response
 }
 
 func doRequest(r *gin.Engine, method, path string, body interface{}) *httptest.ResponseRecorder {
+	return doRequestWithIdempotencyKey(r, method, path, body, "")
+}
+
+func doRequestWithIdempotencyKey(r *gin.Engine, method, path string, body interface{}, key string) *httptest.ResponseRecorder {
 	var buf bytes.Buffer
 	if body != nil {
 		require.NoError(nil, json.NewEncoder(&buf).Encode(body))
 	}
 	req, _ := http.NewRequest(method, path, &buf)
 	req.Header.Set("Content-Type", "application/json")
+	if key != "" {
+		req.Header.Set("Idempotency-Key", key)
+	}
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	return w
+}
+
+func decodeCreationResponse(t *testing.T, w *httptest.ResponseRecorder) (int, creation.CreateWorkItemResult) {
+	t.Helper()
+	var response struct {
+		Code int                           `json:"code"`
+		Data creation.CreateWorkItemResult `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response), "response body=%s", w.Body.String())
+	return response.Code, response.Data
+}
+
+func createInstantiationIdentity(t *testing.T, client *ent.Client, suffix string) (*ent.Tenant, *ent.User) {
+	t.Helper()
+	ctx := context.Background()
+	tenant := client.Tenant.Create().SetName("Standard Change Tenant").SetCode("standard-change-" + suffix).
+		SetDomain("standard-change-" + suffix + ".example.com").SetStatus("active").SaveX(ctx)
+	actor := client.User.Create().SetUsername("standard-change-" + suffix).SetEmail("standard-change-" + suffix + "@example.com").
+		SetName("Standard Change User").SetPasswordHash("hash").SetRole("super_admin").SetTenantID(tenant.ID).SetActive(true).SaveX(ctx)
+	return tenant, actor
+}
+
+func configureInstantiationWorkflow(client *ent.Client, tenantID int) {
+	client.ProcessBinding.Create().SetTenantID(tenantID).SetBusinessType("change").SetIsDefault(true).
+		SetProcessDefinitionKey("none").SetConditions(map[string]interface{}{"no_process": true}).SaveX(context.Background())
+}
+
+func createInstantiationCI(t *testing.T, client *ent.Client, tenantID int, name string) *ent.ConfigurationItem {
+	t.Helper()
+	ctx := context.Background()
+	ciType := client.CIType.Create().SetTenantID(tenantID).SetName(name + " type").SaveX(ctx)
+	return client.ConfigurationItem.Create().SetTenantID(tenantID).SetName(name).SetCiTypeID(ciType.ID).SaveX(ctx)
 }
 
 // ===================== toResponse conversion =====================
@@ -440,29 +502,36 @@ func TestGetCategories_Distinct(t *testing.T) {
 
 func TestInstantiateStandardChange_Defaults(t *testing.T) {
 	client := newTestClient(t)
-	client.Tenant.Create().SetName("Standard Change Tenant").SetCode("standard-change-defaults").
-		SetDomain("standard-change-defaults.example.com").SetStatus("active").SaveX(context.Background())
-	actor := client.User.Create().SetUsername("standard-change-user").SetEmail("standard-change-user@example.com").
-		SetName("Standard Change User").SetPasswordHash("hash").SetTenantID(1).SetActive(true).SaveX(context.Background())
-	tmpl := createTemplate(t, client, 1, 5, func(b *ent.StandardChangeCreate) {
+	tenant, actor := createInstantiationIdentity(t, client, "defaults")
+	configureInstantiationWorkflow(client, tenant.ID)
+	ci := createInstantiationCI(t, client, tenant.ID, "web server")
+	tmpl := createTemplate(t, client, tenant.ID, actor.ID, func(b *ent.StandardChangeCreate) {
 		b.SetTitle("发布模板").SetRiskLevel("medium").SetImpactScope("high").
-			SetAffectedCis([]string{"web"}).
+			SetAffectedCis([]string{strconv.Itoa(ci.ID)}).
 			SetImplementationPlan("实施计划步骤").SetRollbackPlan("回滚计划步骤")
 	})
-	r, _ := setupTestRouter(t, client, actor.ID, 1)
+	r, _ := setupInstantiationRouter(t, client, actor.ID, tenant.ID)
 
-	w := doRequest(r, "POST", "/api/v1/standard-changes/"+strconv.Itoa(tmpl.ID)+"/instantiate", dto.InstantiateStandardChangeRequest{})
-	resp, data := decodeResponse(t, w)
-	assert.Equal(t, common.SuccessCode, resp.Code)
-	require.Contains(t, data, "change_id")
-	changeID := int(data["change_id"].(float64))
+	body := dto.InstantiateStandardChangeRequest{}
+	path := "/api/v1/standard-changes/" + strconv.Itoa(tmpl.ID) + "/instantiate"
+	w := doRequestWithIdempotencyKey(r, "POST", path, body, "standard-change-defaults")
+	code, result := decodeCreationResponse(t, w)
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	require.Equal(t, common.SuccessCode, code)
+	require.Positive(t, result.WorkItemID)
+	require.NotEmpty(t, result.Number)
+	require.Equal(t, creation.RecordClassChangeRequest, result.RecordClass)
+	require.Equal(t, "change", result.ProfessionalReference.Type)
+	require.Positive(t, result.ProfessionalReference.ID)
 
-	// Verify the Change was created from the template with the expected mapping.
+	// Creation returns the shared receipt. Inspect the authoritative persisted
+	// WorkItem and Change extension separately for template expansion evidence.
 	created, err := client.Change.Query().
-		Where(change.ID(changeID), change.HasWorkItemWith(ticket.TenantID(1))).
+		Where(change.ID(result.ProfessionalReference.ID), change.HasWorkItemWith(ticket.TenantID(tenant.ID))).
 		WithWorkItem().
 		Only(context.Background())
 	require.NoError(t, err)
+	assert.Equal(t, result.WorkItemID, created.Edges.WorkItem.ID)
 	assert.Equal(t, "发布模板", created.Edges.WorkItem.Title)
 	assert.Equal(t, "standard", created.Type)
 	assert.Equal(t, "draft", created.Edges.WorkItem.Status)
@@ -470,59 +539,78 @@ func TestInstantiateStandardChange_Defaults(t *testing.T) {
 	assert.Equal(t, "high", created.ImpactScope)
 	assert.Equal(t, "medium", created.RiskLevel)
 	assert.Equal(t, actor.ID, created.Edges.WorkItem.OpenedByID)
-	assert.Equal(t, []string{"web"}, created.AffectedCis)
+	assert.Equal(t, []string{strconv.Itoa(ci.ID)}, created.AffectedCis)
+	assert.Equal(t, "实施该标准变更以保持服务稳定", created.Justification)
 	assert.Equal(t, "实施计划步骤", created.ImplementationPlan)
 	assert.Equal(t, "回滚计划步骤", created.RollbackPlan)
+
+	replayWriter := doRequestWithIdempotencyKey(r, "POST", path, body, "standard-change-defaults")
+	replayCode, replay := decodeCreationResponse(t, replayWriter)
+	require.Equal(t, http.StatusOK, replayWriter.Code, replayWriter.Body.String())
+	require.Equal(t, common.SuccessCode, replayCode)
+	require.True(t, replay.Replayed)
+	require.Equal(t, result.WorkItemID, replay.WorkItemID)
+	require.Equal(t, result.ProfessionalReference, replay.ProfessionalReference)
+	require.Equal(t, 1, client.Ticket.Query().CountX(context.Background()))
+	require.Equal(t, 1, client.Change.Query().CountX(context.Background()))
 }
 
 func TestInstantiateStandardChange_Overrides(t *testing.T) {
 	client := newTestClient(t)
-	client.Tenant.Create().SetName("Standard Change Tenant").SetCode("standard-change-overrides").
-		SetDomain("standard-change-overrides.example.com").SetStatus("active").SaveX(context.Background())
-	actor := client.User.Create().SetUsername("standard-change-user").SetEmail("standard-change-user@example.com").
-		SetName("Standard Change User").SetPasswordHash("hash").SetTenantID(1).SetActive(true).SaveX(context.Background())
-	tmpl := createTemplate(t, client, 1, 5, func(b *ent.StandardChangeCreate) {
-		b.SetTitle("原模板").SetAffectedCis([]string{"old"})
+	tenant, actor := createInstantiationIdentity(t, client, "overrides")
+	configureInstantiationWorkflow(client, tenant.ID)
+	originalCI := createInstantiationCI(t, client, tenant.ID, "original server")
+	newCI1 := createInstantiationCI(t, client, tenant.ID, "new server 1")
+	newCI2 := createInstantiationCI(t, client, tenant.ID, "new server 2")
+	tmpl := createTemplate(t, client, tenant.ID, actor.ID, func(b *ent.StandardChangeCreate) {
+		b.SetTitle("原模板").SetAffectedCis([]string{strconv.Itoa(originalCI.ID)})
 	})
-	r, _ := setupTestRouter(t, client, actor.ID, 1)
+	r, _ := setupInstantiationRouter(t, client, actor.ID, tenant.ID)
 
 	req := dto.InstantiateStandardChangeRequest{
 		Title:       "覆盖标题",
-		AffectedCis: []string{"new1", "new2"},
+		AffectedCis: []string{strconv.Itoa(newCI1.ID), strconv.Itoa(newCI2.ID)},
 	}
-	w := doRequest(r, "POST", "/api/v1/standard-changes/"+strconv.Itoa(tmpl.ID)+"/instantiate", req)
-	resp, data := decodeResponse(t, w)
-	assert.Equal(t, common.SuccessCode, resp.Code)
-	require.Contains(t, data, "change_id")
-	changeID := int(data["change_id"].(float64))
+	w := doRequestWithIdempotencyKey(r, "POST", "/api/v1/standard-changes/"+strconv.Itoa(tmpl.ID)+"/instantiate", req, "standard-change-overrides")
+	code, result := decodeCreationResponse(t, w)
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	require.Equal(t, common.SuccessCode, code)
+	require.Positive(t, result.WorkItemID)
+	require.NotEmpty(t, result.Number)
+	require.Equal(t, creation.RecordClassChangeRequest, result.RecordClass)
+	require.Positive(t, result.ProfessionalReference.ID)
 
 	created, err := client.Change.Query().
-		Where(change.ID(changeID), change.HasWorkItemWith(ticket.TenantID(1))).
+		Where(change.ID(result.ProfessionalReference.ID), change.HasWorkItemWith(ticket.TenantID(tenant.ID))).
 		WithWorkItem().
 		Only(context.Background())
 	require.NoError(t, err)
+	assert.Equal(t, result.WorkItemID, created.Edges.WorkItem.ID)
 	assert.Equal(t, "覆盖标题", created.Edges.WorkItem.Title)
-	assert.Equal(t, []string{"new1", "new2"}, created.AffectedCis)
+	assert.Equal(t, []string{strconv.Itoa(newCI1.ID), strconv.Itoa(newCI2.ID)}, created.AffectedCis)
 	// Untouched fields fall back to the template's values (implementation plan is unchanged).
 	assert.Equal(t, "实施计划步骤", created.ImplementationPlan)
 }
 
 func TestInstantiateStandardChange_InactiveTemplateNotFound(t *testing.T) {
 	client := newTestClient(t)
-	tmpl := createTemplate(t, client, 1, 5, func(b *ent.StandardChangeCreate) {
+	tenant, actor := createInstantiationIdentity(t, client, "inactive")
+	tmpl := createTemplate(t, client, tenant.ID, actor.ID, func(b *ent.StandardChangeCreate) {
 		b.SetIsActive(false)
 	})
-	r, _ := setupTestRouter(t, client, 9, 1)
+	r, _ := setupInstantiationRouter(t, client, actor.ID, tenant.ID)
 
-	w := doRequest(r, "POST", "/api/v1/standard-changes/"+strconv.Itoa(tmpl.ID)+"/instantiate", dto.InstantiateStandardChangeRequest{})
+	w := doRequestWithIdempotencyKey(r, "POST", "/api/v1/standard-changes/"+strconv.Itoa(tmpl.ID)+"/instantiate", dto.InstantiateStandardChangeRequest{}, "standard-change-inactive")
 	resp, _ := decodeResponse(t, w)
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	assert.Equal(t, common.NotFoundCode, resp.Code)
 }
 
 func TestInstantiateStandardChange_NotFound(t *testing.T) {
-	r, _ := setupTestRouter(t, newTestClient(t), 9, 1)
-	w := doRequest(r, "POST", "/api/v1/standard-changes/99999/instantiate", dto.InstantiateStandardChangeRequest{})
+	client := newTestClient(t)
+	tenant, actor := createInstantiationIdentity(t, client, "missing")
+	r, _ := setupInstantiationRouter(t, client, actor.ID, tenant.ID)
+	w := doRequestWithIdempotencyKey(r, "POST", "/api/v1/standard-changes/99999/instantiate", dto.InstantiateStandardChangeRequest{}, "standard-change-missing")
 	resp, _ := decodeResponse(t, w)
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	assert.Equal(t, common.NotFoundCode, resp.Code)

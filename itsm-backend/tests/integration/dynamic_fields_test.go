@@ -8,18 +8,18 @@ package integration
 // 的测试才能发现——单纯的 service 层单测各自 mock，测不出三份拼接逻辑分叉。
 // Task 4 已经把三份转换收敛成 service.ToTicketResponse /
 // ToTicketResponseWithCustomFields 两个函数（分别对应"列表，不查字段值，避免
-// N+1"和"详情/创建，查一次字段值"），这个测试就是钉住这条设计决策不被后续修改
-// 悄悄破坏。
+// N+1"和"授权详情 GET，查一次字段值"）。创建接口只返回共享 WorkItem 回执，
+// 本测试用回执里的 workItemId 再请求详情，钉住实际消费契约。
 //
 // 脚手架说明：仓库里 itsm-backend/tests/integration/ 目录在本测试新增之前并不
 // 存在（历史上只有顶层 itsm-backend/integration/，且那里的用例只直接操作 ent
 // client，完全不经过 gin router）。真正"起一个真实 gin router + 真实
 // controller/service + httptest 打请求 + 解析 JSON 响应"的既有范式来自
 // controller/ticket_controller_test.go 的 setupTestTicketController：用一个
-// 轻量 middleware 把 tenant_id/user_id/role 直接注入 gin.Context（不跑完整的
-// JWT/RBAC 中间件链），然后挂载真实的 TicketController + 真实
-// service.NewTicketServiceForTest（backed by enttest sqlite）。这个测试沿用同
-// 一种搭法，因为它才是唯一能触发 controller 里实际 DTO 映射代码路径的现有模式；
+// 轻量 middleware 注入完整 actor/tenant context（不跑完整的 JWT/RBAC 中间件链），
+// 然后挂载真实 TicketController、共享 Intake application、generic Creator 和
+// 独立 SQLite。这个测试沿用同一种搭法，因为它才是唯一能触发 controller 里实际
+// DTO 映射代码路径的现有模式；
 // tests/contract 和 tests/rbac 目录下的用例则是手写内联 handler 模拟响应，并不
 // 会经过真实 controller，测不出映射分叉问题。
 import (
@@ -30,16 +30,16 @@ import (
 	"strconv"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
-
 	"itsm-backend/controller"
 	"itsm-backend/ent"
-	"itsm-backend/ent/enttest"
+	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest"
 )
 
@@ -55,44 +55,25 @@ func setupDynamicFieldsRouter(t *testing.T) (*gin.Engine, *ent.Client, *ent.Tena
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	client := enttest.Open(t, "sqlite3", "file:dynamic_fields_e2e?mode=memory&cache=shared&_fk=1")
 	logger := zaptest.NewLogger(t).Sugar()
-
-	ticketService := service.NewTicketServiceForTest(client, logger)
+	var ticketService *service.TicketService
+	fixture := newUnifiedIntakeFixture(t, func(client *ent.Client, logger *zap.SugaredLogger) *service.TicketService {
+		ticketService = service.NewTicketServiceForTest(client, logger)
+		return ticketService
+	})
+	client := fixture.client
+	tenant := client.Tenant.GetX(t.Context(), fixture.identity.TenantID)
+	user := client.User.GetX(t.Context(), fixture.identity.ActorID)
 	ticketController := controller.NewTicketController(ticketService, nil, nil, client, logger)
-
-	ctx := t.Context()
-	tenant, err := client.Tenant.Create().
-		SetName("Dynamic Fields Tenant").
-		SetCode("DYNFIELDS").
-		SetDomain("dynfields.test.com").
-		SetStatus("active").
-		Save(ctx)
-	require.NoError(t, err)
-
-	user, err := client.User.Create().
-		SetUsername("dynfields_user").
-		SetEmail("dynfields@test.com").
-		SetPasswordHash("hashedpassword").
-		SetName("Dynamic Fields User").
-		SetDepartment("IT").
-		SetPhone("1234567890").
-		SetActive(true).
-		SetRole("admin").
-		SetTenantID(tenant.ID).
-		Save(ctx)
-	require.NoError(t, err)
+	ticketController.SetCreationApplication(fixture.app)
 
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.Use(func(c *gin.Context) {
-		// 跟随 controller/ticket_controller_test.go 的既有范式：直接把
-		// tenant_id/user_id/role 塞进 gin.Context，绕开完整的 JWT/RBAC
-		// 中间件链——这个测试要验证的是 controller -> service -> DTO 的
-		// HTTP 层映射，不是认证/鉴权本身（那部分有 tests/rbac 单独覆盖）。
 		c.Set("tenant_id", tenant.ID)
 		c.Set("user_id", user.ID)
-		c.Set("role", "admin") // admin -> DataScopeAll，列表查询不会被行级权限收窄
+		c.Set("role", user.Role)
+		c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: tenant.ID})
 		c.Next()
 	})
 
@@ -104,7 +85,7 @@ func setupDynamicFieldsRouter(t *testing.T) (*gin.Engine, *ent.Client, *ent.Tena
 	return r, client, tenant, user
 }
 
-func doDynamicFieldsRequest(t *testing.T, r http.Handler, method, path string, body interface{}) (apiEnvelope, int) {
+func doDynamicFieldsRequest(t *testing.T, r http.Handler, method, path string, body interface{}, idempotencyKey string) (apiEnvelope, int) {
 	t.Helper()
 	var buf bytes.Buffer
 	if body != nil {
@@ -112,6 +93,9 @@ func doDynamicFieldsRequest(t *testing.T, r http.Handler, method, path string, b
 	}
 	req := httptest.NewRequest(method, path, &buf)
 	req.Header.Set("Content-Type", "application/json")
+	if idempotencyKey != "" {
+		req.Header.Set("Idempotency-Key", idempotencyKey)
+	}
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -125,7 +109,6 @@ func doDynamicFieldsRequest(t *testing.T, r http.Handler, method, path string, b
 // HTTP 路由链路。
 func TestDynamicFields(t *testing.T) {
 	r, client, _, _ := setupDynamicFieldsRouter(t)
-	defer client.Close()
 
 	// ---- Step 1: 创建带 2 个字段定义的工单模板 ----
 	type templateFieldReq struct {
@@ -151,7 +134,7 @@ func TestDynamicFields(t *testing.T) {
 		},
 	}
 
-	env, status := doDynamicFieldsRequest(t, r, http.MethodPost, "/api/v1/tickets/templates", createTemplateReq)
+	env, status := doDynamicFieldsRequest(t, r, http.MethodPost, "/api/v1/tickets/templates", createTemplateReq, "")
 	require.Equal(t, http.StatusOK, status, "创建模板应返回200, message=%s", env.Message)
 	require.Equal(t, 0, env.Code, "创建模板 code 应为成功, message=%s", env.Message)
 
@@ -185,19 +168,31 @@ func TestDynamicFields(t *testing.T) {
 		},
 	}
 
-	env, status = doDynamicFieldsRequest(t, r, http.MethodPost, "/api/v1/tickets", createTicketReq)
-	require.Equal(t, http.StatusOK, status, "创建工单应返回200, message=%s", env.Message)
+	const createKey = "dynamic-fields-ticket"
+	env, status = doDynamicFieldsRequest(t, r, http.MethodPost, "/api/v1/tickets", createTicketReq, createKey)
+	require.Equal(t, http.StatusCreated, status, "首次创建工单应返回201, message=%s", env.Message)
 	require.Equal(t, 0, env.Code, "创建工单 code 应为成功, message=%s", env.Message)
 
-	var createdTicket struct {
-		ID int `json:"id"`
-	}
+	var createdTicket creation.CreateWorkItemResult
 	require.NoError(t, json.Unmarshal(env.Data, &createdTicket))
-	require.NotZero(t, createdTicket.ID)
-	ticketID := createdTicket.ID
+	require.Positive(t, createdTicket.WorkItemID)
+	require.NotEmpty(t, createdTicket.Number)
+	require.Equal(t, creation.RecordClassGeneric, createdTicket.RecordClass)
+	ticketID := createdTicket.WorkItemID
+
+	// A transport retry owns and reuses the same key. Intake returns the same
+	// receipt and does not create a second WorkItem.
+	env, status = doDynamicFieldsRequest(t, r, http.MethodPost, "/api/v1/tickets", createTicketReq, createKey)
+	require.Equal(t, http.StatusOK, status, "重放创建应返回200, message=%s", env.Message)
+	var replay creation.CreateWorkItemResult
+	require.NoError(t, json.Unmarshal(env.Data, &replay))
+	require.True(t, replay.Replayed)
+	require.Equal(t, createdTicket.WorkItemID, replay.WorkItemID)
+	require.Equal(t, createdTicket.Number, replay.Number)
+	require.Equal(t, 1, client.Ticket.Query().CountX(t.Context()))
 
 	// ---- Step 3: 获取工单详情，断言 customFields 长度2，且每项 label 非空 ----
-	env, status = doDynamicFieldsRequest(t, r, http.MethodGet, "/api/v1/tickets/"+strconv.Itoa(ticketID), nil)
+	env, status = doDynamicFieldsRequest(t, r, http.MethodGet, "/api/v1/tickets/"+strconv.Itoa(ticketID), nil, "")
 	require.Equal(t, http.StatusOK, status, "获取工单详情应返回200, message=%s", env.Message)
 	require.Equal(t, 0, env.Code)
 
@@ -211,13 +206,28 @@ func TestDynamicFields(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(env.Data, &ticketDetail))
 	require.Len(t, ticketDetail.CustomFields, 2, "工单详情 customFields 长度应为 2")
+	fieldsByName := make(map[string]struct {
+		Label string
+		Value interface{}
+	}, len(ticketDetail.CustomFields))
 	for _, f := range ticketDetail.CustomFields {
 		assert.NotEmpty(t, f.Label, "customFields[%q] 的 label 不应为空（不能只是原始 name）", f.Name)
 		assert.NotEqual(t, f.Name, f.Label, "customFields[%q] 的 label 不应该退化成原始字段名", f.Name)
+		require.NotContains(t, fieldsByName, f.Name, "详情不应返回重复的动态字段名")
+		fieldsByName[f.Name] = struct {
+			Label string
+			Value interface{}
+		}{Label: f.Label, Value: f.Value}
 	}
+	require.Contains(t, fieldsByName, "department")
+	assert.Equal(t, "部门", fieldsByName["department"].Label)
+	assert.Equal(t, "IT", fieldsByName["department"].Value)
+	require.Contains(t, fieldsByName, "urgencyReason")
+	assert.Equal(t, "紧急原因", fieldsByName["urgencyReason"].Label)
+	assert.Equal(t, "影响全楼层打印", fieldsByName["urgencyReason"].Value)
 
 	// ---- Step 4: 获取工单列表，断言列表项不带 customFields key ----
-	env, status = doDynamicFieldsRequest(t, r, http.MethodGet, "/api/v1/tickets?page=1&pageSize=20&templateId="+strconv.Itoa(templateID), nil)
+	env, status = doDynamicFieldsRequest(t, r, http.MethodGet, "/api/v1/tickets?page=1&pageSize=20&templateId="+strconv.Itoa(templateID), nil, "")
 	require.Equal(t, http.StatusOK, status, "获取工单列表应返回200, message=%s", env.Message)
 	require.Equal(t, 0, env.Code)
 
@@ -247,8 +257,7 @@ func TestDynamicFields(t *testing.T) {
 // 这里用真实的 HTTP body（而不是 service 层直接构造 Go map）走一遍模板 -> 工单创建
 // -> 详情回显，确认数组形状的带下划线字段名真的能落库、能读回。
 func TestDynamicFields_ArrayFormatWithUnderscoreNames(t *testing.T) {
-	r, client, _, _ := setupDynamicFieldsRouter(t)
-	defer client.Close()
+	r, _, _, _ := setupDynamicFieldsRouter(t)
 
 	type templateFieldReq struct {
 		Name     string `json:"name"`
@@ -272,7 +281,7 @@ func TestDynamicFields_ArrayFormatWithUnderscoreNames(t *testing.T) {
 		},
 	}
 
-	env, status := doDynamicFieldsRequest(t, r, http.MethodPost, "/api/v1/tickets/templates", createTemplateReq)
+	env, status := doDynamicFieldsRequest(t, r, http.MethodPost, "/api/v1/tickets/templates", createTemplateReq, "")
 	require.Equal(t, http.StatusOK, status, "创建模板应返回200, message=%s", env.Message)
 	require.Equal(t, 0, env.Code)
 
@@ -303,17 +312,17 @@ func TestDynamicFields_ArrayFormatWithUnderscoreNames(t *testing.T) {
 		},
 	}
 
-	env, status = doDynamicFieldsRequest(t, r, http.MethodPost, "/api/v1/tickets", createTicketReq)
-	require.Equal(t, http.StatusOK, status, "创建工单应返回200, message=%s", env.Message)
+	env, status = doDynamicFieldsRequest(t, r, http.MethodPost, "/api/v1/tickets", createTicketReq, "dynamic-fields-underscore")
+	require.Equal(t, http.StatusCreated, status, "首次创建工单应返回201, message=%s", env.Message)
 	require.Equal(t, 0, env.Code, "创建工单 code 应为成功, message=%s", env.Message)
 
-	var createdTicket struct {
-		ID int `json:"id"`
-	}
+	var createdTicket creation.CreateWorkItemResult
 	require.NoError(t, json.Unmarshal(env.Data, &createdTicket))
-	ticketID := createdTicket.ID
+	require.Positive(t, createdTicket.WorkItemID)
+	require.NotEmpty(t, createdTicket.Number)
+	ticketID := createdTicket.WorkItemID
 
-	env, status = doDynamicFieldsRequest(t, r, http.MethodGet, "/api/v1/tickets/"+strconv.Itoa(ticketID), nil)
+	env, status = doDynamicFieldsRequest(t, r, http.MethodGet, "/api/v1/tickets/"+strconv.Itoa(ticketID), nil, "")
 	require.Equal(t, http.StatusOK, status, "获取工单详情应返回200, message=%s", env.Message)
 	require.Equal(t, 0, env.Code)
 
@@ -336,8 +345,7 @@ func TestDynamicFields_ArrayFormatWithUnderscoreNames(t *testing.T) {
 // extractAdHocFieldValues / CreateAdHocValues。这条路径完全不经过 TemplateID 分支，
 // Task 11 新增，此前没有端到端测试覆盖过真实 HTTP 请求体。
 func TestDynamicFields_AdHocFieldsWithoutTemplate(t *testing.T) {
-	r, client, _, _ := setupDynamicFieldsRouter(t)
-	defer client.Close()
+	r, _, _, _ := setupDynamicFieldsRouter(t)
 
 	createTicketReq := struct {
 		Title       string      `json:"title"`
@@ -359,17 +367,16 @@ func TestDynamicFields_AdHocFieldsWithoutTemplate(t *testing.T) {
 		},
 	}
 
-	env, status := doDynamicFieldsRequest(t, r, http.MethodPost, "/api/v1/tickets", createTicketReq)
-	require.Equal(t, http.StatusOK, status, "创建工单应返回200, message=%s", env.Message)
+	env, status := doDynamicFieldsRequest(t, r, http.MethodPost, "/api/v1/tickets", createTicketReq, "dynamic-fields-adhoc")
+	require.Equal(t, http.StatusCreated, status, "首次创建工单应返回201, message=%s", env.Message)
 	require.Equal(t, 0, env.Code, "创建工单 code 应为成功, message=%s", env.Message)
 
-	var createdTicket struct {
-		ID int `json:"id"`
-	}
+	var createdTicket creation.CreateWorkItemResult
 	require.NoError(t, json.Unmarshal(env.Data, &createdTicket))
-	require.NotZero(t, createdTicket.ID)
+	require.Positive(t, createdTicket.WorkItemID)
+	require.NotEmpty(t, createdTicket.Number)
 
-	env, status = doDynamicFieldsRequest(t, r, http.MethodGet, "/api/v1/tickets/"+strconv.Itoa(createdTicket.ID), nil)
+	env, status = doDynamicFieldsRequest(t, r, http.MethodGet, "/api/v1/tickets/"+strconv.Itoa(createdTicket.WorkItemID), nil, "")
 	require.Equal(t, http.StatusOK, status, "获取工单详情应返回200, message=%s", env.Message)
 	require.Equal(t, 0, env.Code)
 

@@ -1,4 +1,4 @@
-package service
+package service_test
 
 import (
 	"context"
@@ -64,8 +64,8 @@ func TestTicketService_CreateTicket(t *testing.T) {
 				Category:    "incident",
 				RequesterID: testUser.ID,
 				FormFields: map[string]interface{}{
-					"category": "hardware",
-					"urgency":  "normal",
+					"values":    map[string]any{"category": "hardware", "urgency": "normal"},
+					"fieldDefs": []any{map[string]any{"name": "category", "label": "Category"}, map[string]any{"name": "urgency", "label": "Urgency"}},
 				},
 			},
 			tenantID:      testTenant.ID,
@@ -84,7 +84,7 @@ func TestTicketService_CreateTicket(t *testing.T) {
 			expectedError: true,
 		},
 		{
-			name: "描述为空（V2 不做必填校验，会创建成功）",
+			name: "描述为空（真实创建入口要求必填，应被拒绝）",
 			request: &dto.CreateTicketRequest{
 				Title:       "标题",
 				Description: "",
@@ -93,7 +93,7 @@ func TestTicketService_CreateTicket(t *testing.T) {
 				RequesterID: testUser.ID,
 			},
 			tenantID:      testTenant.ID,
-			expectedError: false,
+			expectedError: true,
 		},
 		{
 			name: "无效的优先级",
@@ -131,14 +131,14 @@ func TestTicketService_CreateTicket(t *testing.T) {
 				}
 			}
 
-			response, err := ticketService.CreateTicket(ctx, tt.request, tt.tenantID)
+			response, err := ticketService.SubmitCreation(ctx, tt.request, tt.tenantID)
 
 			if tt.expectedError {
 				assert.Error(t, err)
 				assert.Nil(t, response)
 			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, response)
+				require.NoError(t, err)
+				require.NotNil(t, response)
 				assert.Equal(t, tt.request.Title, response.Title)
 				assert.Equal(t, tt.request.Description, response.Description)
 				assert.Equal(t, tt.request.Priority, string(response.Priority))
@@ -182,18 +182,17 @@ func TestTicketService_CreateTicketTypeMapping(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	serviceRequest, err := ticketService.CreateTicket(ctx, &dto.CreateTicketRequest{
+	serviceRequest, err := ticketService.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title:       "服务请求工单",
 		Description: "申请开通服务请求类型",
 		Priority:    "medium",
 		Type:        "service_request",
 		RequesterID: testUser.ID,
 	}, testTenant.ID)
-	require.NoError(t, err)
-	require.NotNil(t, serviceRequest)
-	assert.Equal(t, "service_request", string(serviceRequest.Type))
+	require.ErrorContains(t, err, "catalog creation contract")
+	require.Nil(t, serviceRequest)
 
-	defaulted, err := ticketService.CreateTicket(ctx, &dto.CreateTicketRequest{
+	defaulted, err := ticketService.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title:       "默认类型工单",
 		Description: "未传类型时不应写入空字符串",
 		Priority:    "medium",
@@ -201,7 +200,7 @@ func TestTicketService_CreateTicketTypeMapping(t *testing.T) {
 	}, testTenant.ID)
 	require.NoError(t, err)
 	require.NotNil(t, defaulted)
-	assert.Equal(t, "incident", string(defaulted.Type))
+	assert.Equal(t, "generic", defaulted.RecordClass)
 }
 
 func TestTicketService_CreateTicketPersistsAssociations(t *testing.T) {
@@ -221,12 +220,12 @@ func TestTicketService_CreateTicketPersistsAssociations(t *testing.T) {
 		SetName("urgent-device").SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	parent, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	parent, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title: "Parent ticket", Description: "parent", Priority: "medium", RequesterID: requester.ID,
 	}, tenant.ID)
 	require.NoError(t, err)
 
-	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	created, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title:          "Child ticket",
 		Description:    "child",
 		Priority:       "high",
@@ -264,7 +263,7 @@ func TestTicketService_CreateTicketPersistsCustomFieldValues(t *testing.T) {
 	require.NoError(t, err)
 
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	created, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title: "网络接入申请", Description: "测试", Priority: "medium",
 		RequesterID: requester.ID, TemplateID: &template.ID,
 		FormFields: map[string]interface{}{
@@ -288,7 +287,7 @@ func TestTicketService_CreateTicketWithoutFormFieldsLeavesCustomFieldValuesEmpty
 	requester := createNamedTestUser(t, ctx, client, tenant.ID, "create-no-custom-fields-requester")
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
 
-	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	created, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title:       "无自定义字段工单",
 		Description: "普通工单",
 		Priority:    "medium",
@@ -307,7 +306,7 @@ func TestTicketService_CreateTicket_AdHocFieldValuesWithoutTemplate(t *testing.T
 	requester := createNamedTestUser(t, ctx, client, tenant.ID, "create-adhoc-fields-requester")
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
 
-	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	created, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title: "K8S扩容", Description: "测试", Priority: "medium", RequesterID: requester.ID,
 		// 没有 TemplateID——模拟静态预设
 		FormFields: map[string]interface{}{
@@ -343,8 +342,8 @@ func TestToTicketResponse_IncludesCustomFieldValuesOrdered(t *testing.T) {
 	require.NoError(t, err)
 
 	svc := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	created, err := svc.CreateTicket(ctx, &dto.CreateTicketRequest{
-		Title: "t", Description: "d", Priority: "medium", RequesterID: requester.ID, TemplateID: &template.ID,
+	created, err := svc.SubmitCreation(ctx, &dto.CreateTicketRequest{
+		Title: "标题", Description: "d", Priority: "medium", RequesterID: requester.ID, TemplateID: &template.ID,
 		FormFields: map[string]interface{}{"values": map[string]interface{}{
 			"office_location": "北京", "device_count": float64(2),
 		}},
@@ -379,33 +378,33 @@ func TestTicketService_CreateTicket_SourceSurvivesToTicketResponse(t *testing.T)
 
 	svc := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
 
-	created, err := svc.CreateTicket(ctx, &dto.CreateTicketRequest{
+	created, err := svc.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title:       "服务目录申请工单",
 		Description: "d",
 		Priority:    "medium",
 		RequesterID: requester.ID,
-		Source:      "service_catalog",
+		Source:      "manual",
 	}, tenant.ID)
 	require.NoError(t, err)
 	require.NotNil(t, created)
 
 	// 1) 创建路径直接返回的领域模型：toDomainModel 必须把 ent.Ticket.Source 带过来。
-	assert.Equal(t, "service_catalog", created.Source)
+	assert.Equal(t, "manual", created.Source)
 
 	// 2) 创建路径的响应 DTO：ToTicketResponse 必须把 t.Source 写进 dto.TicketResponse.Source。
 	createdResp := ToTicketResponse(ctx, created)
 	require.NotNil(t, createdResp)
-	assert.Equal(t, "service_catalog", createdResp.Source)
+	assert.Equal(t, "manual", createdResp.Source)
 
 	// 3) 独立的读路径：GetTicket -> repo.GetByID -> toDomainModel，走真实 DB round-trip
 	// （而不是复用内存里创建时的同一个指针），确认持久化的 source 列本身也读得回来。
 	fetched, err := svc.GetTicket(ctx, created.ID, tenant.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "service_catalog", fetched.Source)
+	assert.Equal(t, "manual", fetched.Source)
 
 	fetchedResp := ToTicketResponse(ctx, fetched)
 	require.NotNil(t, fetchedResp)
-	assert.Equal(t, "service_catalog", fetchedResp.Source)
+	assert.Equal(t, "manual", fetchedResp.Source)
 }
 
 func TestTicketService_CreateTicketRejectsCrossTenantReferences(t *testing.T) {
@@ -417,20 +416,20 @@ func TestTicketService_CreateTicketRejectsCrossTenantReferences(t *testing.T) {
 	userA := createNamedTestUser(t, ctx, client, tenantA.ID, "create-user-a")
 	userB := createNamedTestUser(t, ctx, client, tenantB.ID, "create-user-b")
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	foreignParent, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	foreignParent, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title: "Foreign parent", Description: "foreign", Priority: "medium", RequesterID: userB.ID,
 	}, tenantB.ID)
 	require.NoError(t, err)
 
-	_, err = service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	_, err = service.SubmitCreationAsActor(ctx, &dto.CreateTicketRequest{
 		Title: "Invalid requester", Description: "invalid", Priority: "medium", RequesterID: userB.ID,
-	}, tenantA.ID)
-	require.ErrorContains(t, err, "申请人不存在")
+	}, tenantA.ID, userA.ID)
+	require.ErrorContains(t, err, "current requester is unavailable")
 
-	_, err = service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	_, err = service.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title: "Invalid parent", Description: "invalid", Priority: "medium", RequesterID: userA.ID, ParentTicketID: &foreignParent.ID,
 	}, tenantA.ID)
-	require.ErrorContains(t, err, "父工单不存在")
+	require.ErrorContains(t, err, "parent work item is unavailable")
 }
 
 func TestTicketService_GetTicketStatsCountsNewAsPending(t *testing.T) {
@@ -461,7 +460,7 @@ func TestTicketService_GetTicketStatsCountsNewAsPending(t *testing.T) {
 	require.NoError(t, err)
 
 	for i := 0; i < 3; i++ {
-		_, err := ticketService.CreateTicket(ctx, &dto.CreateTicketRequest{
+		_, err := ticketService.SubmitCreation(ctx, &dto.CreateTicketRequest{
 			Title:       fmt.Sprintf("新工单 %d", i),
 			Description: "新建状态应计入待处理统计",
 			Priority:    "medium",
@@ -585,8 +584,8 @@ func TestTicketService_GetTickets(t *testing.T) {
 				assert.Error(t, err)
 				assert.Nil(t, response)
 			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, response)
+				require.NoError(t, err)
+				require.NotNil(t, response)
 				assert.Len(t, response.Tickets, tt.expectedCount)
 				assert.Equal(t, 3, response.Total) // 总数始终为3
 				assert.Equal(t, tt.request.Page, response.Page)
@@ -956,7 +955,7 @@ func TestTicketService_UpdateTicketPersistsTypeCategoryAndTags(t *testing.T) {
 	foreignCategory, err := client.TicketCategory.Create().SetName("Foreign").SetCode("update-foreign").SetTenantID(otherTenant.ID).Save(ctx)
 	require.NoError(t, err)
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	created, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title: "Update contract", Description: "before", Priority: "medium", RequesterID: user.ID,
 	}, tenant.ID)
 	require.NoError(t, err)
@@ -1360,7 +1359,7 @@ func BenchmarkTicketService_CreateTicket(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := ticketService.CreateTicket(ctx, request, testTenant.ID)
+		_, err := ticketService.SubmitCreation(ctx, request, testTenant.ID)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -1382,7 +1381,7 @@ func TestTicketService_CreateTicket_ValuesArrayFormatSurvivesUnderscoreNames(t *
 	require.NoError(t, err)
 
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
+	created, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title: "扩容申请", Description: "测试", Priority: "medium",
 		RequesterID: requester.ID, TemplateID: &template.ID,
 		FormFields: map[string]interface{}{
@@ -1419,8 +1418,8 @@ func TestTicketService_CreateTicket_ValuesMapFormatStillWorks(t *testing.T) {
 	require.NoError(t, err)
 
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
-	created, err := service.CreateTicket(ctx, &dto.CreateTicketRequest{
-		Title: "t", Description: "d", Priority: "medium",
+	created, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
+		Title: "标题", Description: "d", Priority: "medium",
 		RequesterID: requester.ID, TemplateID: &template.ID,
 		FormFields: map[string]interface{}{
 			"values": map[string]interface{}{"office_location": "北京"},
@@ -1472,15 +1471,16 @@ func TestCreateTicket_RequiredFieldValidationFailure_DoesNotLeaveOrphanTicketRow
 
 	svc := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
 	templateID := template.ID
-	_, err = svc.CreateTicket(ctx, &dto.CreateTicketRequest{
+	_, err = svc.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title:       "缺必填字段的工单",
+		Description: "描述",
 		Priority:    "medium",
 		RequesterID: requester.ID,
 		TemplateID:  &templateID,
 		FormFields:  map[string]interface{}{"values": map[string]interface{}{}},
 	}, tenant.ID)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "缺少必填字段")
+	assert.Contains(t, err.Error(), "required dynamic field is missing")
 
 	afterCount, err := client.Ticket.Query().Count(ctx)
 	require.NoError(t, err)
@@ -1516,8 +1516,9 @@ func TestCreateTicket_RequiredFieldValidationPasses_CreatesTicket(t *testing.T) 
 
 	svc := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
 	templateID := template.ID
-	created, err := svc.CreateTicket(ctx, &dto.CreateTicketRequest{
+	created, err := svc.SubmitCreation(ctx, &dto.CreateTicketRequest{
 		Title:       "字段齐全的工单",
+		Description: "描述",
 		Priority:    "medium",
 		RequesterID: requester.ID,
 		TemplateID:  &templateID,

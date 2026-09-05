@@ -19,7 +19,6 @@ import (
 	"itsm-backend/ent/enttest"
 	problemDomain "itsm-backend/handlers/problem"
 	"itsm-backend/middleware"
-	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -59,10 +58,10 @@ func setupTestIncidentController(t *testing.T) (*gin.Engine, *IncidentController
 	logger := zaptest.NewLogger(t).Sugar()
 
 	// 创建服务
-	incidentService := service.NewIncidentService(client, logger, workitemnumber.NewPostgreSQLAllocator())
+	incidentService := service.NewIncidentService(client, logger)
 
 	// 创建控制器
-	incidentController := NewIncidentController(incidentService, nil, nil, nil, nil, &fakeProblemConversionService{}, logger)
+	incidentController := NewIncidentController(incidentService, nil, nil, nil, nil, logger)
 
 	// 创建路由
 	r := gin.New()
@@ -91,7 +90,7 @@ func TestConvertToProblemControllerUsesConversionServiceAndPublicMapper(t *testi
 		UpdatedAt:   time.Date(2026, 8, 28, 10, 1, 0, 0, time.UTC),
 		WorkItemID:  &workItemID,
 	}}
-	controller := NewIncidentController(nil, nil, nil, nil, nil, fake, zaptest.NewLogger(t).Sugar())
+	controller := NewIncidentController(nil, nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set("tenant_id", 19)
@@ -129,7 +128,7 @@ func TestConvertToProblemControllerUsesAuthorizedMSPCustomerTenant(t *testing.T)
 		ID: 42, Title: "Customer problem", Status: "open", Priority: "high",
 		CreatedBy: 73, TenantID: 200, WorkItemID: &workItemID,
 	}}
-	controller := NewIncidentController(nil, nil, nil, nil, nil, fake, zaptest.NewLogger(t).Sugar())
+	controller := NewIncidentController(nil, nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
 	router := gin.New()
 	customerTenantID := 200
 	router.Use(func(c *gin.Context) {
@@ -163,7 +162,7 @@ func TestConvertToProblemControllerDeniesUnauthorizedMSPCustomerTenant(t *testin
 		ID: 43, Title: "Must not be created", Status: "open", Priority: "high",
 		CreatedBy: 73, TenantID: 999, WorkItemID: &workItemID,
 	}}
-	controller := NewIncidentController(nil, nil, nil, nil, nil, fake, zaptest.NewLogger(t).Sugar())
+	controller := NewIncidentController(nil, nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
 	router := gin.New()
 	deniedTenantID := 999
 	router.Use(func(c *gin.Context) {
@@ -255,7 +254,7 @@ func TestIncidentDetailHasActionsButListDoesNot(t *testing.T) {
 		SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
-	controller := NewIncidentController(service.NewIncidentService(client, zaptest.NewLogger(t).Sugar(), workitemnumber.NewPostgreSQLAllocator()), nil, nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
+	controller := NewIncidentController(service.NewIncidentService(client, zaptest.NewLogger(t).Sugar()), nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set("user_id", user.ID)
@@ -289,7 +288,7 @@ func TestGetIncidentRequiresAuthenticatedActionActor(t *testing.T) {
 	defer client.Close()
 	tenant, err := client.Tenant.Create().SetName("actor").SetCode("actor").SetDomain("actor.test").SetStatus("active").Save(context.Background())
 	require.NoError(t, err)
-	controller := NewIncidentController(service.NewIncidentService(client, zaptest.NewLogger(t).Sugar(), workitemnumber.NewPostgreSQLAllocator()), nil, nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
+	controller := NewIncidentController(service.NewIncidentService(client, zaptest.NewLogger(t).Sugar()), nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
 
 	for _, testCase := range []struct {
 		name   string

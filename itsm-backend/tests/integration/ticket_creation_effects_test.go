@@ -7,13 +7,13 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"itsm-backend/connector"
 	"itsm-backend/ent"
 	repositoryticket "itsm-backend/repository/ticket"
-	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
+
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func configuredCreationTicketOwner(client *ent.Client, logger *zap.SugaredLogger) *service.TicketService {
@@ -26,7 +26,7 @@ func configuredCreationTicketOwnerWithConnector(client *ent.Client, logger *zap.
 	rules := service.NewTicketAutomationRuleService(client, logger)
 	rules.SetAssignmentService(assignment)
 	rules.SetNotificationService(notifications)
-	return service.NewTicketService(&service.TicketServiceConfig{Client: client, Logger: logger, ConnectorManager: manager, Repository: repositoryticket.NewEntRepository(client, logger, workitemnumber.NewPostgreSQLAllocator()), NotificationService: notifications, AutomationRuleService: rules})
+	return service.NewTicketService(&service.TicketServiceConfig{Client: client, Logger: logger, ConnectorManager: manager, Repository: repositoryticket.NewEntRepository(client, logger), NotificationService: notifications, AutomationRuleService: rules})
 }
 func TestIntakeGenericCreationUsesConfiguredEffectsAtomically(t *testing.T) {
 	f := newUnifiedIntakeFixture(t, configuredCreationTicketOwner)

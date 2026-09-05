@@ -6,9 +6,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	changedomain "itsm-backend/handlers/change"
@@ -19,6 +16,10 @@ import (
 	requestdomain "itsm-backend/handlers/service_request"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
+
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 type unifiedIntakeFixture struct {
@@ -48,7 +49,7 @@ func newUnifiedIntakeFixture(t *testing.T, ticketOwners ...func(*ent.Client, *za
 	if len(ticketOwners) > 0 {
 		genericOwner = ticketOwners[0](client, logger)
 	}
-	for _, owner := range []creation.ProfessionalCreator{genericOwner, service.NewIncidentService(client, logger, allocator), problemdomain.NewService(nil, logger), changedomain.NewService(nil, client, logger), requestdomain.NewService(nil, nil, nil, client, allocator, logger, nil, service.NewApprovalChainResolver(client, logger), nil)} {
+	for _, owner := range []creation.ProfessionalCreator{genericOwner, service.NewIncidentService(client, logger), problemdomain.NewService(nil, logger), changedomain.NewService(nil, client, logger), requestdomain.NewService(nil, client, logger, service.NewApprovalChainResolver(client, logger))} {
 		require.NoError(t, registry.Register(owner))
 	}
 	resolver := intake.NewResolver(catalogdomain.NewService(nil, client, logger), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))

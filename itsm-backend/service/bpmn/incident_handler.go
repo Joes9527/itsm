@@ -20,7 +20,6 @@ import (
 // categorize 几个 BPMN 动作原来直接写 Ent 的代码收回到领域服务，理由见
 // service/incident_service.go 对应实现前的注释。
 type IncidentDomainServiceInterface interface {
-	CreateIncident(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, userID int) (*dto.IncidentResponse, error)
 	AssignIncidentForWorkflow(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentMutationOutcome, error)
 	EscalateIncidentLevel(ctx context.Context, id, tenantID, level int) (*dto.IncidentMutationOutcome, error)
 	ResolveIncidentForWorkflow(ctx context.Context, id, tenantID int, resolution string) (*dto.IncidentMutationOutcome, error)

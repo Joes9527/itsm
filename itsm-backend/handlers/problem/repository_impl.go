@@ -14,9 +14,7 @@ import (
 	"itsm-backend/ent/problem"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcategory"
-	"itsm-backend/ent/user"
 	"itsm-backend/ent/workitemrelation"
-	"itsm-backend/repository/workitemnumber"
 
 	entsql "entgo.io/ent/dialect/sql"
 )
@@ -27,12 +25,11 @@ import (
 const problemTicketRelationType = "related_to"
 
 type EntRepository struct {
-	client          *ent.Client
-	numberAllocator workitemnumber.Allocator
+	client *ent.Client
 }
 
-func NewEntRepository(client *ent.Client, numberAllocator workitemnumber.Allocator) *EntRepository {
-	return &EntRepository{client: client, numberAllocator: numberAllocator}
+func NewEntRepository(client *ent.Client) *EntRepository {
+	return &EntRepository{client: client}
 }
 
 func problemTenantScope(tenantID int, extra ...entpredicate.Ticket) entpredicate.Problem {
@@ -304,97 +301,6 @@ func (r *EntRepository) RemoveAssociation(ctx context.Context, tenantID, problem
 		return fmt.Errorf("problem not found")
 	}
 	return err
-}
-
-// Create 在同一数据库事务内先建 tickets 行（record_class="problem"，创建后不可变），
-// 再建 problems 行并把 work_item_id 回填指向那条 tickets 行——统一 WorkItem 领域模型
-// 宪章 §3.2 的事务边界约束，任一边失败整体回滚。模式与 IncidentService.CreateIncident
-// 完全一致（service/incident_service.go）。
-func (r *EntRepository) Create(ctx context.Context, p *Problem) (*Problem, error) {
-	tx, err := r.client.Tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("start problem transaction: %w", err)
-	}
-
-	created, err := r.createInTx(ctx, tx, p)
-	if err != nil {
-		return nil, rollbackProblemTx(tx, err)
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, rollbackProblemTx(tx, fmt.Errorf("commit problem transaction: %w", err))
-	}
-	return created, nil
-}
-
-// createInTx creates the WorkItem base and Problem extension in the caller's
-// transaction. Transaction lifecycle is owned by the caller.
-func (r *EntRepository) createInTx(ctx context.Context, tx *ent.Tx, p *Problem) (*Problem, error) {
-	// Ticket.requester_id 是一条指向 users 表的必填 FK edge（edge.From("requester",
-	// User.Type).Required()），Problem 自己的 created_by 字段历史上没有这层约束。既然
-	// 现在每条 Problem 都会同步建一条 tickets 行并把 requester_id 设成 Problem 的创建人，
-	// 这里必须显式校验创建人存在且属于同一租户——否则 tx.Ticket.Create 会因为 FK 违反
-	// 直接失败，报错信息对调用方不友好（同 IncidentService.CreateIncident 的
-	// reporterExists 校验）。
-	creatorExists, err := tx.User.Query().
-		Where(user.IDEQ(p.CreatedBy), user.TenantIDEQ(p.TenantID), user.ActiveEQ(true)).
-		Exist(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to validate problem creator: %w", err)
-	}
-	if !creatorExists {
-		return nil, fmt.Errorf("problem creator not found or inactive")
-	}
-
-	issuedAt := time.Now().UTC()
-	ticketNumber, err := r.numberAllocator.Allocate(ctx, tx.Client(), p.TenantID, issuedAt)
-	if err != nil {
-		return nil, fmt.Errorf("failed to allocate work item ticket number: %w", err)
-	}
-	categoryID, err := r.resolveCategory(ctx, p.TenantID, p.Category)
-	if err != nil {
-		return nil, err
-	}
-
-	workItem, err := tx.Ticket.Create().
-		SetTitle(p.Title).
-		SetDescription(p.Description).
-		SetType("problem").
-		SetRecordClass("problem").
-		SetPriority(p.Priority).
-		SetTicketNumber(ticketNumber).
-		SetRequesterID(p.CreatedBy).
-		SetOpenedByID(p.CreatedBy).
-		SetTenantID(p.TenantID).
-		SetNillableAssigneeID(p.AssigneeID).
-		SetNillableCategoryID(categoryID).
-		SetCreatedAt(issuedAt).
-		SetUpdatedAt(issuedAt).
-		Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create work item: %w", err)
-	}
-	if categoryID != nil {
-		category, categoryErr := tx.TicketCategory.Query().Where(ticketcategory.IDEQ(*categoryID)).Only(ctx)
-		if categoryErr != nil {
-			return nil, fmt.Errorf("failed to load problem category projection: %w", categoryErr)
-		}
-		workItem.Edges.Category = category
-	}
-
-	create := tx.Problem.Create().
-		SetRootCause(p.RootCause).
-		SetWorkaround(p.Workaround).
-		SetResolution(p.Resolution).
-		SetImpact(p.Impact).
-		SetWorkItemID(workItem.ID)
-
-	saved, err := create.Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create problem: %w", err)
-	}
-
-	saved.Edges.WorkItem = workItem
-	return r.toDomain(saved), nil
 }
 
 func rollbackProblemTx(tx *ent.Tx, cause error) error {

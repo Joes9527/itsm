@@ -1,4 +1,4 @@
-package problem
+package problem_test
 
 import (
 	"context"
@@ -25,7 +25,7 @@ func TestProblemCreate_CreatesWorkItemInSameTransaction(t *testing.T) {
 	tenant := createProblemHandlerTenant(t, ctx, client, "wi-create")
 	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "wi-create")
 
-	p, err := service.Create(ctx, tenant.ID, &Problem{
+	p, err := service.SubmitCreation(ctx, tenant.ID, &Problem{
 		Title: "Disk latency spike", Description: "p99 disk latency", Priority: "high", CreatedBy: user.ID,
 	})
 	require.NoError(t, err)
@@ -55,7 +55,7 @@ func TestProblemCreate_RollsBackWorkItemWhenCreatorInvalid(t *testing.T) {
 	ticketCountBefore, err := client.Ticket.Query().Count(ctx)
 	require.NoError(t, err)
 
-	_, err = service.Create(ctx, tenant.ID, &Problem{
+	_, err = service.SubmitCreation(ctx, tenant.ID, &Problem{
 		Title: "Orphan attempt", Priority: "high", CreatedBy: 999999,
 	})
 	require.Error(t, err)
@@ -207,9 +207,9 @@ func TestProblemWorkItem_CrossTenantSameMonthUsesIndependentSequences(t *testing
 	userA := createProblemHandlerUser(t, ctx, client, tenantA.ID, "seq-a")
 	userB := createProblemHandlerUser(t, ctx, client, tenantB.ID, "seq-b")
 
-	pA, err := service.Create(ctx, tenantA.ID, &Problem{Title: "A first problem", Priority: "medium", CreatedBy: userA.ID})
+	pA, err := service.SubmitCreation(ctx, tenantA.ID, &Problem{Title: "A first problem", Priority: "medium", CreatedBy: userA.ID})
 	require.NoError(t, err)
-	pB, err := service.Create(ctx, tenantB.ID, &Problem{Title: "B first problem", Priority: "medium", CreatedBy: userB.ID})
+	pB, err := service.SubmitCreation(ctx, tenantB.ID, &Problem{Title: "B first problem", Priority: "medium", CreatedBy: userB.ID})
 	require.NoError(t, err)
 
 	require.NotNil(t, pA.WorkItemID)

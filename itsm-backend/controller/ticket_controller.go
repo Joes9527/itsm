@@ -543,34 +543,6 @@ func (tc *TicketController) ExportTickets(c *gin.Context) {
 	c.Data(200, "application/octet-stream", data)
 }
 
-// ImportTickets 导入工单
-func (tc *TicketController) ImportTickets(c *gin.Context) {
-	var req dto.TicketImportRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
-		return
-	}
-
-	tenantID := c.GetInt("tenant_id")
-
-	// 解析文件数据
-	fileData := []byte(req.File) // 这里应该从文件上传中获取
-
-	// 实现导入功能
-	err := tc.ticketService.ImportTickets(c.Request.Context(), tenantID, fileData, req.Format)
-	if err != nil {
-		tc.logger.Errorw("Import tickets failed", "error", err, "tenant_id", tenantID)
-		common.Fail(c, common.InternalErrorCode, "导入失败: "+err.Error())
-		return
-	}
-
-	tc.logger.Infow("Import tickets successful", "format", req.Format, "tenant_id", tenantID)
-	common.Success(c, gin.H{
-		"message": "工单导入成功",
-		"format":  req.Format,
-	})
-}
-
 // AssignTickets 分配工单
 func (tc *TicketController) AssignTickets(c *gin.Context) {
 	var req dto.TicketAssignmentRequest

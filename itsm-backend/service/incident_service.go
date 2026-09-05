@@ -18,7 +18,6 @@ import (
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcategory"
 	"itsm-backend/ent/user"
-	"itsm-backend/repository/workitemnumber"
 
 	entsql "entgo.io/ent/dialect/sql"
 	"go.uber.org/zap"
@@ -28,35 +27,28 @@ type IncidentService struct {
 	priorityMatrixService *PriorityMatrixService
 	client                *ent.Client
 	logger                *zap.SugaredLogger
-	numberAllocator       workitemnumber.Allocator
-	sequenceService       *SequenceService
-	processTriggerService ProcessTriggerServiceInterface
-	ruleEngine            *IncidentRuleEngine
-	alertCreator          IncidentAlertCreator
+
+	ruleEngine   *IncidentRuleEngine
+	alertCreator IncidentAlertCreator
 }
 
 type IncidentAlertCreator interface {
 	CreateIncidentAlert(context.Context, *dto.CreateIncidentAlertRequest, int) (*dto.IncidentAlertResponse, error)
 }
 
-func NewIncidentService(client *ent.Client, logger *zap.SugaredLogger, numberAllocator workitemnumber.Allocator) *IncidentService {
+func NewIncidentService(client *ent.Client, logger *zap.SugaredLogger) *IncidentService {
 	incidentService := &IncidentService{
-		client:          client,
-		logger:          logger,
-		numberAllocator: numberAllocator,
+		client:                client,
+		logger:                logger,
+		priorityMatrixService: NewPriorityMatrixService(logger),
 	}
-	incidentService.ruleEngine = NewIncidentRuleEngine(client, logger, numberAllocator)
+	incidentService.ruleEngine = NewIncidentRuleEngine(client, logger)
 	return incidentService
 }
 
 // RuleEngine returns the single authoritative rule engine owned by this service.
 func (s *IncidentService) RuleEngine() *IncidentRuleEngine {
 	return s.ruleEngine
-}
-
-// SetProcessTriggerService 设置流程触发服务
-func (s *IncidentService) SetProcessTriggerService(triggerService ProcessTriggerServiceInterface) {
-	s.processTriggerService = triggerService
 }
 
 func (s *IncidentService) SetAlertCreator(creator IncidentAlertCreator) {
@@ -67,208 +59,6 @@ func (s *IncidentService) SetAlertCreator(creator IncidentAlertCreator) {
 // SetSequenceService 设置序列服务（用于 incident_number 生成）
 func (s *IncidentService) SetPriorityMatrixService(pms *PriorityMatrixService) {
 	s.priorityMatrixService = pms
-}
-
-func (s *IncidentService) SetSequenceService(seq *SequenceService) {
-	s.sequenceService = seq
-}
-
-// CreateIncident 创建事件
-func (s *IncidentService) CreateIncident(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, userID int) (*dto.IncidentResponse, error) {
-	s.logger.Infow("Creating incident", "title", req.Title, "tenant_id", tenantID, "user_id", userID)
-	if strings.TrimSpace(req.Title) == "" {
-		return nil, fmt.Errorf("incident title is required")
-	}
-	reporterExists, err := s.client.User.Query().
-		Where(user.IDEQ(userID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).
-		Exist(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to validate reporter: %w", err)
-	}
-	if !reporterExists {
-		return nil, fmt.Errorf("reporter not found or inactive")
-	}
-	if req.AssigneeID != nil {
-		if err := s.validateIncidentAssignee(ctx, *req.AssigneeID, tenantID); err != nil {
-			return nil, err
-		}
-	}
-	var configurationItems []*ent.ConfigurationItem
-	if len(req.ConfigurationItemIDs) > 0 {
-		configurationItems, err = s.client.ConfigurationItem.Query().
-			Where(configurationitem.IDIn(req.ConfigurationItemIDs...), configurationitem.TenantIDEQ(tenantID)).
-			All(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to validate configuration items: %w", err)
-		}
-		if len(configurationItems) != len(req.ConfigurationItemIDs) {
-			return nil, fmt.Errorf("one or more configuration items not found")
-		}
-	}
-
-	// 生成事件编号
-	incidentNumber, err := s.generateIncidentNumber(ctx, tenantID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate incident number: %w", err)
-	}
-
-	// 设置检测时间
-	detectedAt := time.Now()
-	if req.DetectedAt != nil {
-		detectedAt = *req.DetectedAt
-	}
-
-	impact := req.Impact
-	if impact == "" {
-		impact = "medium"
-	}
-	urgency := req.Urgency
-	if urgency == "" {
-		urgency = "medium"
-	}
-	severity := req.Severity
-	if severity == "" {
-		severity = "medium"
-	}
-	source := req.Source
-	if source == "" {
-		source = "manual"
-	}
-
-	// 计算优先级
-	priority := req.Priority
-	if priority == "" && s.priorityMatrixService != nil {
-		calculatedPriority, err := s.priorityMatrixService.CalculatePriority(tenantID, impact, urgency)
-		if err != nil {
-			s.logger.Warnw("Failed to calculate priority, using default medium", "error", err)
-			priority = "medium"
-		} else {
-			priority = calculatedPriority
-		}
-	}
-
-	// 如果最终priority还是空，使用默认值
-	if priority == "" {
-		priority = "medium"
-	}
-
-	incidentType := req.Type
-	if incidentType == "" {
-		incidentType = "incident"
-	}
-	categoryID, err := resolveIncidentCategory(ctx, s.client, tenantID, req.Category, req.Subcategory)
-	if err != nil {
-		return nil, err
-	}
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to start incident transaction: %w", err)
-	}
-	rollback := func(cause error) (*dto.IncidentResponse, error) {
-		if rollbackErr := tx.Rollback(); rollbackErr != nil {
-			s.logger.Errorw("Failed to rollback incident transaction", "error", rollbackErr)
-		}
-		return nil, cause
-	}
-	issuedAt := time.Now().UTC()
-	workItemTicketNumber, err := s.numberAllocator.Allocate(ctx, tx.Client(), tenantID, issuedAt)
-	if err != nil {
-		return rollback(fmt.Errorf("failed to allocate work item ticket number: %w", err))
-	}
-
-	// 统一 WorkItem 领域模型宪章 §3.2：WorkItem 创建与专业扩展记录创建必须在同一事务中完成。
-	// 这里先建 tickets 行（record_class="incident"，创建后不可变），公共字段（标题/描述/
-	// 优先级/请求人/租户）以这行为权威来源；Incident 行只保存事件专属数据 + 反向指向这行的
-	// work_item_id。WorkItem 的 status/priority 是共享字段的唯一存储位置，后续 Incident
-	// 状态机通过 transitionIncident 更新 WorkItem；Incident 扩展不再保存第二份状态。
-	workItem, err := tx.Ticket.Create().
-		SetTitle(req.Title).
-		SetDescription(req.Description).
-		SetType("incident").
-		SetRecordClass("incident").
-		SetPriority(priority).
-		SetStatus(common.IncidentStatusNew).
-		SetTicketNumber(workItemTicketNumber).
-		SetRequesterID(userID).
-		SetOpenedByID(userID).
-		SetTenantID(tenantID).
-		SetSource(source).
-		SetCreatedAt(issuedAt).
-		SetUpdatedAt(issuedAt).
-		SetNillableAssigneeID(req.AssigneeID).
-		SetNillableCategoryID(categoryID).
-		Save(ctx)
-	if err != nil {
-		return rollback(fmt.Errorf("failed to create work item for incident: %w", err))
-	}
-
-	create := tx.Incident.Create().
-		SetWorkItemID(workItem.ID).
-		SetType(incidentType).
-		SetSeverity(severity).
-		SetImpact(impact).
-		SetUrgency(urgency).
-		SetIncidentNumber(incidentNumber).
-		SetImpactAnalysis(dto.StructToMap(req.ImpactAnalysis)).
-		SetMetadata(req.Metadata).
-		SetDetectedAt(detectedAt).
-		SetIsAutomated(false).
-		AddConfigurationItemIDs(req.ConfigurationItemIDs...)
-	incidentEntity, err := create.Save(ctx)
-	if err != nil {
-		s.logger.Errorw("Failed to create incident", "error", err)
-		return rollback(fmt.Errorf("failed to create incident: %w", err))
-	}
-	if categoryID != nil {
-		category, categoryErr := tx.TicketCategory.Query().
-			Where(ticketcategory.IDEQ(*categoryID)).
-			WithParent().
-			Only(ctx)
-		if categoryErr != nil {
-			return rollback(fmt.Errorf("failed to load incident category projection: %w", categoryErr))
-		}
-		workItem.Edges.Category = category
-	}
-
-	_, err = tx.IncidentEvent.Create().
-		SetIncidentID(incidentEntity.ID).
-		SetEventType("creation").
-		SetEventName("事件创建").
-		SetDescription(fmt.Sprintf("事件 %s 已创建", incidentNumber)).
-		SetStatus("active").
-		SetSeverity("info").
-		SetSource("system").
-		SetUserID(userID).
-		SetOccurredAt(time.Now()).
-		SetTenantID(tenantID).
-		Save(ctx)
-	if err != nil {
-		return rollback(fmt.Errorf("failed to create incident event: %w", err))
-	}
-	if err := tx.Commit(); err != nil {
-		return rollback(fmt.Errorf("failed to commit incident transaction: %w", err))
-	}
-	incidentEntity.Edges.WorkItem = workItem
-	incidentEntity.Edges.ConfigurationItems = configurationItems
-
-	// Post-commit side effects run within a bounded, deterministic boundary.
-	// CreateIncident never returns while repository work still owns this service/client.
-	ruleCtx, cancelRules := context.WithTimeout(ctx, 30*time.Second)
-	if err := s.ruleEngine.ExecuteRulesForIncident(ruleCtx, incidentEntity.ID, tenantID); err != nil {
-		s.logger.Errorw("Incident rule execution completed with failures", "error", err, "incident_id", incidentEntity.ID)
-	}
-	cancelRules()
-
-	if s.processTriggerService != nil {
-		workflowCtx, cancelWorkflow := context.WithTimeout(ctx, 30*time.Second)
-		if err := s.triggerWorkflowForIncident(workflowCtx, incidentEntity.ID, tenantID); err != nil {
-			s.logger.Warnw("Failed to trigger workflow for incident", "error", err, "incident_id", incidentEntity.ID)
-		}
-		cancelWorkflow()
-	}
-
-	s.logger.Infow("Incident created successfully", "id", incidentEntity.ID, "number", incidentNumber)
-	return s.toIncidentResponse(incidentEntity), nil
 }
 
 // GetIncident 获取事件
@@ -1115,65 +905,6 @@ func (s *IncidentService) escalateIncident(ctx context.Context, tx *ent.Tx, req 
 	return response, nil
 }
 
-// generateIncidentNumber 生成事件编号，优先使用 Redis 序列
-func (s *IncidentService) generateIncidentNumber(ctx context.Context, tenantID int) (string, error) {
-	now := time.Now()
-	year := now.Year()
-	month := int(now.Month())
-	expiredAt := time.Date(year, time.Month(month)+1, 1, 0, 0, 0, 0, time.UTC)
-	key := fmt.Sprintf("sequence:incident:%d%02d", year, month)
-
-	// 优先使用 Redis 序列（原子递增，避免并发重复）
-	if s.sequenceService != nil {
-		seq, err := s.sequenceService.GetNextSequenceWithExpiry(ctx, key, expiredAt)
-		if err != nil {
-			s.logger.Warnw("Redis sequence failed for incident, fallback to DB", "error", err)
-		} else {
-			return fmt.Sprintf("INC-%04d%02d-%06d", year, month, seq), nil
-		}
-	}
-
-	// 备用方案：数据库查询
-	return s.generateIncidentNumberWithDB(ctx, tenantID, year, month)
-}
-
-// generateIncidentNumberWithDB 使用数据库查询生成事件编号（备用方案）
-// 修复：使用 IncidentNumberContains 过滤标准格式（INC-YYYYMM-NNNNNN），
-// 避免旧格式（INC-001 等）干扰序列计算
-func (s *IncidentService) generateIncidentNumberWithDB(ctx context.Context, tenantID int, year, month int) (string, error) {
-	prefix := fmt.Sprintf("INC-%04d%02d-", year, month)
-
-	incidents, err := s.client.Incident.Query().
-		Where(
-			incidentTenantScope(tenantID),
-			incident.IncidentNumberContains(prefix),
-		).
-		All(ctx)
-
-	maxSeq := 0
-	if err != nil {
-		s.logger.Warnw("Query incident numbers failed, starting from 0", "error", err)
-	} else {
-		for _, inc := range incidents {
-			num := inc.IncidentNumber
-			// 解析 INC-YYYYMM-NNNNNN 格式，只取最后的数字序列
-			for i := len(num) - 1; i >= 0; i-- {
-				if num[i] == '-' {
-					var seq int
-					if _, err := fmt.Sscanf(num[i+1:], "%d", &seq); err == nil {
-						if seq > maxSeq {
-							maxSeq = seq
-						}
-					}
-					break
-				}
-			}
-		}
-	}
-
-	return fmt.Sprintf("INC-%04d%02d-%06d", year, month, maxSeq+1), nil
-}
-
 // isValidIncidentStatusTransition 检查事件状态转换是否合法。
 // 阻断6 修复：委托给 common.IsValidIncidentStatusTransition，保持单一事实来源，
 // 避免 service 层与 handlers/incident 层两套白名单漂移。
@@ -1939,85 +1670,6 @@ func (s *IncidentService) GetIncidentMetrics(ctx context.Context, incidentID int
 	}
 
 	return responses, nil
-}
-
-// triggerWorkflowForIncident 为事件触发工作流
-func (s *IncidentService) triggerWorkflowForIncident(ctx context.Context, incidentID int, tenantID int) error {
-	triggeredBy, hasTriggeredBy, err := trustedBPMNProcessStartActorID(ctx, tenantID)
-	if err != nil {
-		return err
-	}
-	triggeredByValue := "system"
-	if hasTriggeredBy {
-		triggeredByValue = fmt.Sprintf("%d", triggeredBy)
-	}
-
-	// 获取事件信息
-	inc, err := s.client.Incident.Query().
-		Where(
-			incident.IDEQ(incidentID),
-			incidentTenantScope(tenantID),
-		).
-		WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get incident: %w", err)
-	}
-
-	// 统一 WorkItem 领域模型宪章 §1.4：BPMN 的 business_id 统一收敛为 WorkItem.ID
-	// （tickets.id），不再是 Incident 自己的主键。CreateIncident 现在总是在同一事务内
-	// 建好 WorkItem 并回填 work_item_id，所以这里为零表示开发数据违反领域不变量。
-	// 宁可拒绝触发流程也不要用错误的业务身份启动，避免产生一个 business_id=0 的
-	// ProcessInstance 污染 BPMN 审批决策回查；不存在运行时修补路径。
-	if inc.WorkItemID <= 0 {
-		return fmt.Errorf("事件 %d 违反 WorkItem 创建不变量：缺少 work_item_id，拒绝触发流程", incidentID)
-	}
-
-	// 构建流程变量
-	incidentResponse := s.toIncidentResponse(inc)
-	variables := map[string]interface{}{
-		"incident_id":     inc.ID,
-		"incident_number": inc.IncidentNumber,
-		"title":           inc.Edges.WorkItem.Title,
-		"description":     inc.Edges.WorkItem.Description,
-		"priority":        inc.Edges.WorkItem.Priority,
-		"severity":        inc.Severity,
-		"status":          inc.Edges.WorkItem.Status,
-		"category":        incidentResponse.Category,
-		"reporter_id":     inc.Edges.WorkItem.RequesterID,
-		"assignee_id":     inc.Edges.WorkItem.AssigneeID,
-	}
-
-	// 根据严重程度选择不同的流程
-	// 注意: incident_general_flow 不存在，使用 incident_emergency_flow 作为默认
-	processKey := "incident_emergency_flow"
-	if inc.Severity == "critical" || inc.Edges.WorkItem.Priority == "urgent" {
-		processKey = "incident_emergency_flow"
-	}
-
-	// 触发流程
-	triggerReq := &dto.ProcessTriggerRequest{
-		BusinessType:         dto.BusinessTypeIncident,
-		BusinessID:           inc.WorkItemID,
-		ProcessDefinitionKey: processKey,
-		Variables:            variables,
-		TriggeredBy:          triggeredByValue,
-		TriggeredAt:          time.Now(),
-		TenantID:             tenantID,
-	}
-
-	resp, err := s.processTriggerService.TriggerProcess(WithTrustedBPMNTenantContext(ctx, tenantID), triggerReq)
-	if err != nil {
-		return fmt.Errorf("failed to trigger workflow: %w", err)
-	}
-
-	s.logger.Infow(
-		"Workflow triggered for incident",
-		"incident_id", incidentID,
-		"process_instance_id", resp.ProcessInstanceID,
-		"process_key", processKey,
-	)
-
-	return nil
 }
 
 // GetWorkflowStatus 获取事件关联的流程状态

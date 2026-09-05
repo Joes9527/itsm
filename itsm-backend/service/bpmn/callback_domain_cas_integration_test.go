@@ -16,7 +16,6 @@ import (
 	"itsm-backend/ent"
 	changehandler "itsm-backend/handlers/change"
 	servicerequesthandler "itsm-backend/handlers/service_request"
-	"itsm-backend/repository/workitemnumber"
 	. "itsm-backend/service/bpmn"
 
 	entgo "entgo.io/ent"
@@ -179,8 +178,8 @@ func TestServiceRequestCallbackConcurrentCompletePostgresHasSingleAppliedAggrega
 		NewServiceRequestServiceTaskHandler(setupClient, logger),
 		NewServiceRequestServiceTaskHandler(workerClient, logger),
 	}
-	handlers[0].SetServiceRequestService(servicerequesthandler.NewService(nil, nil, nil, setupClient, workitemnumber.NewPostgreSQLAllocator(), logger, nil, nil, nil))
-	handlers[1].SetServiceRequestService(servicerequesthandler.NewService(nil, nil, nil, workerClient, workitemnumber.NewPostgreSQLAllocator(), logger, nil, nil, nil))
+	handlers[0].SetServiceRequestService(servicerequesthandler.NewService(nil, setupClient, logger, nil))
+	handlers[1].SetServiceRequestService(servicerequesthandler.NewService(nil, workerClient, logger, nil))
 	results := make(chan callbackCASResult, 2)
 	for _, handler := range handlers {
 		go func(handler *ServiceRequestServiceTaskHandler) {

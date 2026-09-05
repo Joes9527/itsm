@@ -10,8 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	changehandler "itsm-backend/handlers/change"
 	"itsm-backend/handlers/common/workitemcreation"
 	problemhandler "itsm-backend/handlers/problem"
@@ -19,6 +17,9 @@ import (
 	srhandler "itsm-backend/handlers/service_request"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
+
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 // This catches missing domain-owned preparation and extension persistence;
@@ -37,7 +38,7 @@ func TestAuthoritativeProfessionalGraph(t *testing.T) {
 				domain = problemhandler.NewService(nil, zap.NewNop().Sugar())
 				command.Problem = &workitemcreation.ProblemInput{RootCause: "route failure", Impact: "employees"}
 			case "incident":
-				domain = service.NewIncidentService(client, zap.NewNop().Sugar(), workitemnumber.NewPostgreSQLAllocator())
+				domain = service.NewIncidentService(client, zap.NewNop().Sugar())
 				command.Incident = &workitemcreation.IncidentInput{Type: "security", Impact: "critical", Urgency: "high", Severity: "critical", DetectedAt: "2026-09-04T01:00:00Z", ImpactAnalysis: &workitemcreation.ImpactAnalysis{BusinessImpact: &workitemcreation.BusinessImpact{RevenueImpact: json.Number("9007199254740993.125")}, TechnicalImpact: "vpn gateway"}}
 				parent := client.TicketCategory.Create().SetTenantID(identity.TenantID).SetCode("network").SetName("Network").SaveX(context.Background())
 				client.TicketCategory.Create().SetTenantID(identity.TenantID).SetCode("vpn").SetName("VPN").SetParentID(parent.ID).SaveX(context.Background())
@@ -45,7 +46,7 @@ func TestAuthoritativeProfessionalGraph(t *testing.T) {
 				command.Incident.Subcategory = "VPN"
 
 			case "service_request_item":
-				domain = srhandler.NewService(nil, nil, nil, client, workitemnumber.NewPostgreSQLAllocator(), zap.NewNop().Sugar(), nil, service.NewApprovalChainResolver(client, zap.NewNop().Sugar()), nil)
+				domain = srhandler.NewService(nil, client, zap.NewNop().Sugar(), service.NewApprovalChainResolver(client, zap.NewNop().Sugar()))
 				catalog := client.ServiceCatalog.Create().SetTenantID(identity.TenantID).SetName("VPN").SetTargetClass("service_request_item").SetRequiresApproval(false).SaveX(context.Background())
 				command.CatalogItemID = &catalog.ID
 				command.CatalogVersion = "1"
@@ -54,7 +55,7 @@ func TestAuthoritativeProfessionalGraph(t *testing.T) {
 				command.ServiceRequest = &workitemcreation.ServiceRequestInput{CostCenter: "IT", ContactEmail: "user@example.test", Amount: json.Number("9007199254740993.125")}
 			case "change_request":
 				domain = changehandler.NewService(nil, client, zap.NewNop().Sugar())
-				command.Change = &workitemcreation.ChangeInput{Type: "normal", Justification: "security patch", ImplementationPlan: "deploy", RollbackPlan: "restore", PlannedStartDate: "2026-09-07T01:00:00Z", PlannedEndDate: "2026-09-07T02:00:00Z"}
+				command.Change = &workitemcreation.ChangeInput{Type: "normal", ImpactScope: "low", RiskLevel: "medium", Justification: "security patch", ImplementationPlan: "deploy", RollbackPlan: "restore", PlannedStartDate: "2026-09-07T01:00:00Z", PlannedEndDate: "2026-09-07T02:00:00Z"}
 			}
 			business := map[string]string{"generic": "ticket", "problem": "problem", "incident": "incident", "change_request": "change", "service_request_item": "service_request"}[class]
 			client.ProcessBinding.Create().SetTenantID(identity.TenantID).SetBusinessType(business).SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(context.Background())
@@ -129,7 +130,7 @@ func TestIncidentNumbersAreScopedByWorkItemTenant(t *testing.T) {
 	client, app, identity, command, _, _ := intakeFixture(t)
 	ctx := context.Background()
 	app.registry = NewCreatorRegistry()
-	require.NoError(t, app.registry.Register(service.NewIncidentService(client, zap.NewNop().Sugar(), workitemnumber.NewPostgreSQLAllocator())))
+	require.NoError(t, app.registry.Register(service.NewIncidentService(client, zap.NewNop().Sugar())))
 	app.workItems = NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator())
 	command.RecordClass = "incident"
 	command.IntakeKind = "incident"
@@ -196,7 +197,7 @@ func TestRoutingConsumesDomainEffectiveValues(t *testing.T) {
 			typeID := ""
 			switch class {
 			case "incident":
-				owner := service.NewIncidentService(client, logger, workitemnumber.NewPostgreSQLAllocator())
+				owner := service.NewIncidentService(client, logger)
 				owner.SetPriorityMatrixService(service.NewPriorityMatrixService(logger))
 				require.NoError(t, app.registry.Register(owner))
 				business, subtype, priority = "incident", "incident", "critical"
@@ -225,10 +226,9 @@ func TestRoutingConsumesDomainEffectiveValues(t *testing.T) {
 						command.Incident.Severity = "medium"
 					}
 				case "change_request":
-					command.Change = &workitemcreation.ChangeInput{}
+					command.Change = &workitemcreation.ChangeInput{ImpactScope: "low", RiskLevel: "medium", Justification: "Apply security patch", ImplementationPlan: "Back up and deploy patch", RollbackPlan: "Restore previous package"}
 					if explicit {
 						command.Change.Type = subtype
-						command.Change.RiskLevel = "medium"
 					}
 				case "generic":
 					command.Generic = &workitemcreation.GenericInput{TypeID: typeID}
