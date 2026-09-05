@@ -148,6 +148,8 @@ func TestServiceRequestFieldFailureRollsBackCreation(t *testing.T) {
 
 ## A4：切换全部创建入口及客户端
 
+读取契约前置：A4 客户端必须提交用户确认时的目录/表单版本，当前旧目录读取 DTO 尚未提供这两个值。因此 A4 后端同时补齐受权目录读取中的最小版本投影，复用 A3 的唯一版本计算和一致定义快照；不能提交时改取最新版。A5 继续完成发布校验并复用该读取契约。
+
 **Files:** Modify A1 清单中的 `controller/{ticket,incident}_controller.go`、`handlers/{change,problem,standard_change,service_request}/*.go`、`service/{ticket_service,tool_queue,feishu_sync_service}.go`、`service/bpmn/incident_handler.go`、`connector/builtin/email/service.go`、真实邮件/AI 接线；Modify `internal/bootstrap/app.go`、`router/router.go`；Modify 前端 `src/lib/api/{ticket-api,incident-api,service-catalog-api}.ts` 及 A1 确认的实际提交页面；Create `tests/contract/work_item_creation_entrypoints_test.go`。
 
 **Interfaces:** 所有入口只消费 A2 Application。现有 HTTP DTO 映射到统一 command；内部来源键格式为 `provider:stableSourceID:action`，actor/requester 来自原有合法身份解析。参数中不得新增任意可信 tenant/actor 的公网入口。
