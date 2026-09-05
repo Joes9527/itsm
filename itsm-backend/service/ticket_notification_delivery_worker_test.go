@@ -138,9 +138,11 @@ func newDurableNotificationFixture(t *testing.T, suffix string) *durableNotifica
 	require.NoError(t, err)
 	tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
 	require.NoError(t, err)
+	notifications := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar())
+	notifications.SetDeliveryQueueClient(client)
 	return &durableNotificationFixture{
 		workflow:      workflow,
-		notifications: NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar()),
+		notifications: notifications,
 		client:        client,
 		ctx:           ctx,
 		tenant:        tenant,
@@ -214,7 +216,7 @@ func TestTicketNotificationWorkerKeepsUnavailableConnectorRetryable(t *testing.T
 	require.Len(t, fake.sentMessages(), 1)
 }
 
-func TestTicketNotificationWorkerRetriesSendFailureWithStableDeliveryKey(t *testing.T) {
+func TestTicketNotificationWorkerFencesUnknownSendWithStableDeliveryKey(t *testing.T) {
 	fixture := newDurableNotificationFixture(t, "notification-send-failure")
 	row := fixture.enqueueExternalCC(t)
 	fake := &durableNotificationConnector{sendErr: errors.New("external provider unavailable")}
@@ -227,9 +229,9 @@ func TestTicketNotificationWorkerRetriesSendFailureWithStableDeliveryKey(t *test
 	require.Zero(t, completed)
 
 	row = fixture.client.TicketNotification.GetX(fixture.ctx, row.ID)
-	require.Equal(t, "pending", row.Status)
+	require.Equal(t, "failed", row.Status)
 	require.Equal(t, 1, row.AttemptCount)
-	require.Equal(t, "connector_send", row.LastErrorClass)
+	require.Equal(t, "delivery_unknown", row.LastErrorClass)
 	messages := fake.sentMessages()
 	require.Len(t, messages, 1)
 	require.Equal(t, *row.DeliveryKey, messages[0].ID)
@@ -268,7 +270,7 @@ func TestTicketNotificationWorkerRetriesEmailServiceFailure(t *testing.T) {
 	fixture := newDurableNotificationFixture(t, "notification-email-retry")
 	row := fixture.enqueueExternalCCWithChannel(t, "email")
 	fixture.notifications.SetConnectorManager(connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar()))
-	graph := &durableNotificationGraphSender{sendErr: errors.New("graph temporarily unavailable")}
+	graph := &durableNotificationGraphSender{sendErr: newEmailTransportError("graph", "connect", emailNotAccepted, errors.New("graph temporarily unavailable"))}
 	emailService := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
 	emailService.SetGraphProvider(func(_ int) (GraphMailSender, string, bool) {
 		return graph, "sender@example.test", true
@@ -393,7 +395,7 @@ func TestBPMNCCFanoutUsesDistinctStableConnectorDeliveryKeys(t *testing.T) {
 	require.NotNil(t, rows[1].DeliveryKey)
 	require.NotEqual(t, *rows[0].DeliveryKey, *rows[1].DeliveryKey)
 
-	fake := &durableNotificationConnector{sendErr: errors.New("retry fanout")}
+	fake := &durableNotificationConnector{sendErr: newEmailTransportError("connector", "connect", emailNotAccepted, errors.New("retry fanout"))}
 	configureDurableNotificationConnector(t, fixture.notifications, fixture.tenant.ID, fake)
 	now := time.Now().Add(time.Hour)
 	fixture.notifications.now = func() time.Time { return now }
@@ -420,7 +422,7 @@ func TestBPMNCCFanoutUsesDistinctStableConnectorDeliveryKeys(t *testing.T) {
 	}
 }
 
-func TestTicketNotificationWorkerRecoversExpiredLeaseAfterSentStatusWriteFailure(t *testing.T) {
+func TestTicketNotificationWorkerFencesExpiredLeaseAfterSentStatusWriteFailure(t *testing.T) {
 	fixture := newDurableNotificationFixture(t, "notification-status-recovery")
 	row := fixture.enqueueExternalCC(t)
 	fake := &durableNotificationConnector{}
@@ -451,15 +453,13 @@ func TestTicketNotificationWorkerRecoversExpiredLeaseAfterSentStatusWriteFailure
 
 	now = row.LeaseExpiresAt.Add(time.Second)
 	completed, err = fixture.notifications.ProcessPendingDeliveries(fixture.ctx, "notification-worker-status-two", 10)
-	require.NoError(t, err)
-	require.Equal(t, 1, completed)
+	require.Error(t, err)
+	require.Zero(t, completed)
 	row = fixture.client.TicketNotification.GetX(fixture.ctx, row.ID)
-	require.Equal(t, "sent", row.Status)
-	require.Equal(t, 2, row.AttemptCount)
-	require.False(t, row.SentAt.IsZero())
-	require.Empty(t, row.LeaseOwner)
-	require.Len(t, fake.sentMessages(), 2)
-	require.Equal(t, fake.sentMessages()[0].Metadata["delivery_key"], fake.sentMessages()[1].Metadata["delivery_key"])
+	require.Equal(t, "failed", row.Status)
+	require.Equal(t, "delivery_unknown", row.LastErrorClass)
+	require.Equal(t, 1, row.AttemptCount)
+	require.Len(t, fake.sentMessages(), 1)
 }
 
 func TestTicketNotificationWorkerCASPreventsCompetingLiveLeaseDispatch(t *testing.T) {
@@ -469,6 +469,7 @@ func TestTicketNotificationWorkerCASPreventsCompetingLiveLeaseDispatch(t *testin
 	fake := &durableNotificationConnector{entered: make(chan struct{}, 1), release: release}
 	configureDurableNotificationConnector(t, fixture.notifications, fixture.tenant.ID, fake)
 	otherWorker := NewTicketNotificationService(fixture.client, zaptest.NewLogger(t).Sugar())
+	otherWorker.SetDeliveryQueueClient(fixture.client)
 	configureDurableNotificationConnector(t, otherWorker, fixture.tenant.ID, fake)
 	now := time.Now().Add(time.Hour)
 	fixture.notifications.now = func() time.Time { return now }
@@ -492,7 +493,7 @@ func TestTicketNotificationWorkerCASPreventsCompetingLiveLeaseDispatch(t *testin
 	require.Len(t, fake.sentMessages(), 1)
 }
 
-func TestTicketNotificationWorkerRecoversExpiredLease(t *testing.T) {
+func TestTicketNotificationWorkerFencesExpiredLease(t *testing.T) {
 	fixture := newDurableNotificationFixture(t, "notification-expired-lease")
 	row := fixture.enqueueExternalCC(t)
 	fake := &durableNotificationConnector{}
@@ -507,13 +508,14 @@ func TestTicketNotificationWorkerRecoversExpiredLease(t *testing.T) {
 		ExecX(fixture.ctx)
 
 	completed, err := fixture.notifications.ProcessPendingDeliveries(fixture.ctx, "notification-worker-recovery", 10)
-	require.NoError(t, err)
-	require.Equal(t, 1, completed)
+	require.Error(t, err)
+	require.Zero(t, completed)
 	row = fixture.client.TicketNotification.GetX(fixture.ctx, row.ID)
-	require.Equal(t, "sent", row.Status)
-	require.Equal(t, 2, row.AttemptCount)
+	require.Equal(t, "failed", row.Status)
+	require.Equal(t, 1, row.AttemptCount)
 	require.Empty(t, row.LeaseOwner)
-	require.Len(t, fake.sentMessages(), 1)
+	require.Empty(t, fake.sentMessages())
+	require.Equal(t, "delivery_unknown", row.LastErrorClass)
 }
 
 func TestTicketNotificationWorkerRunsImmediateSweepAndStopsOnCancellation(t *testing.T) {

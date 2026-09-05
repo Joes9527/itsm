@@ -50,7 +50,10 @@ func (s *FeishuSyncService) SyncTicketToFeishu(ctx context.Context, tenantID, ti
 		return nil, fmt.Errorf("query ticket: %w", err)
 	}
 
-	taskPayload := s.ticketToFeishuTask(ctx, ticket)
+	taskPayload, err := prepareFeishuTask(ctx, s.client, ticket)
+	if err != nil {
+		return nil, err
+	}
 	syncRecord, err := s.client.FeishuTicketSync.Query().
 		Where(feishuticketsync.TenantID(tenantID), feishuticketsync.TicketID(ticketID)).
 		Only(ctx)
@@ -180,7 +183,7 @@ func (s *FeishuSyncService) SyncFeishuTaskToTicket(ctx context.Context, tenantID
 	return toFeishuSyncResponse(record, item, task), "created", nil
 }
 
-func (s *FeishuSyncService) ticketToFeishuTask(ctx context.Context, ticket *ent.Ticket) *feishuConn.FeishuTask {
+func prepareFeishuTask(ctx context.Context, client *ent.Client, ticket *ent.Ticket) (*feishuConn.FeishuTask, error) {
 	task := &feishuConn.FeishuTask{
 		Name:        fmt.Sprintf("%s %s", ticket.TicketNumber, ticket.Title),
 		Description: ticket.Description,
@@ -194,11 +197,15 @@ func (s *FeishuSyncService) ticketToFeishuTask(ctx context.Context, ticket *ent.
 		},
 	}
 	if ticket.AssigneeID > 0 {
-		if assignee, err := s.client.User.Get(ctx, ticket.AssigneeID); err == nil && assignee.FeishuOpenID != "" {
+		assignee, err := client.User.Query().Where(user.IDEQ(ticket.AssigneeID), user.TenantIDEQ(ticket.TenantID), user.ActiveEQ(true)).Only(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if assignee.FeishuOpenID != "" {
 			task.Assignees = []string{assignee.FeishuOpenID}
 		}
 	}
-	return task
+	return task, nil
 }
 
 func (s *FeishuSyncService) updateTicketFromFeishuTask(ctx context.Context, tx *ent.Tx, tenantID, ticketID int, task *feishuConn.FeishuTask) (*ent.Ticket, error) {

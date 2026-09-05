@@ -28,7 +28,7 @@ type unifiedIntakeFixture struct {
 	command  creation.CreateWorkItemCommand
 }
 
-func newUnifiedIntakeFixture(t *testing.T) *unifiedIntakeFixture {
+func newUnifiedIntakeFixture(t *testing.T, ticketOwners ...func(*ent.Client, *zap.SugaredLogger) *service.TicketService) *unifiedIntakeFixture {
 	t.Helper()
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
@@ -44,7 +44,11 @@ func newUnifiedIntakeFixture(t *testing.T) *unifiedIntakeFixture {
 	}
 	allocator := workitemnumber.NewPostgreSQLAllocator()
 	registry := intake.NewCreatorRegistry()
-	for _, owner := range []creation.ProfessionalCreator{&service.TicketService{}, service.NewIncidentService(client, logger, allocator), problemdomain.NewService(nil, logger), changedomain.NewService(nil, client, logger), requestdomain.NewService(nil, nil, nil, client, allocator, logger, nil, service.NewApprovalChainResolver(client, logger), nil)} {
+	genericOwner := &service.TicketService{}
+	if len(ticketOwners) > 0 {
+		genericOwner = ticketOwners[0](client, logger)
+	}
+	for _, owner := range []creation.ProfessionalCreator{genericOwner, service.NewIncidentService(client, logger, allocator), problemdomain.NewService(nil, logger), changedomain.NewService(nil, client, logger), requestdomain.NewService(nil, nil, nil, client, allocator, logger, nil, service.NewApprovalChainResolver(client, logger), nil)} {
 		require.NoError(t, registry.Register(owner))
 	}
 	resolver := intake.NewResolver(catalogdomain.NewService(nil, client, logger), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))

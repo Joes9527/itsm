@@ -2,6 +2,7 @@ package feishu
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -115,6 +116,14 @@ func (f *Feishu) GetOAuthAuthURL(redirectURI, state string) string {
 		return ""
 	}
 	return f.client.GetOAuthAuthURL(redirectURI, state)
+}
+
+// TaskDestinationIdentity freezes the tenant connector destination without secrets.
+func (f *Feishu) TaskDestinationIdentity() string {
+	if f.client == nil {
+		return ""
+	}
+	return fmt.Sprintf("%x", sha256.Sum256([]byte(f.cfg.Credentials["app_id"]+"\x00"+f.client.baseURL)))
 }
 
 func (f *Feishu) CallbackInstanceID() string {

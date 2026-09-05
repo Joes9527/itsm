@@ -110,6 +110,7 @@ services:
       - DB_PORT=${ITSM_DB_PORT:-5432}
       - DB_USER=${ITSM_RUNTIME_DB_USER:?ITSM_RUNTIME_DB_USER must be set}
       - DB_PASSWORD_FILE=/run/secrets/itsm_runtime_db_password
+      # Restricted system ACL includes SELECT/UPDATE on outbox_events and ticket_notifications; see docs/DEVELOPMENT_GUIDE.md.
       - DB_SYSTEM_ROLE_USER=${ITSM_SYSTEM_DB_USER:?ITSM_SYSTEM_DB_USER must be set}
       - DB_SYSTEM_ROLE_PASSWORD_FILE=/run/secrets/itsm_system_db_password
       - RLS_MODE=${RLS_MODE:-off}
@@ -220,6 +221,7 @@ services:
       - DB_PORT=${ITSM_DB_PORT:-5432}
       - DB_USER=${ITSM_RUNTIME_DB_USER:?ITSM_RUNTIME_DB_USER must be set}
       - DB_PASSWORD_FILE=/run/secrets/itsm_runtime_db_password
+      # Restricted system ACL includes SELECT/UPDATE on outbox_events and ticket_notifications; see docs/DEVELOPMENT_GUIDE.md.
       - DB_SYSTEM_ROLE_USER=${ITSM_SYSTEM_DB_USER:?ITSM_SYSTEM_DB_USER must be set}
       - DB_SYSTEM_ROLE_PASSWORD_FILE=/run/secrets/itsm_system_db_password
       - RLS_MODE=${RLS_MODE:-off}

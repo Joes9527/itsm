@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"itsm-backend/dto"
@@ -239,266 +238,48 @@ func (s *TicketAutomationRuleService) TestAutomationRule(
 	}, nil
 }
 
-// ExecuteRulesForTicket 为工单执行所有适用的规则
-func (s *TicketAutomationRuleService) ExecuteRulesForTicket(
-	ctx context.Context,
-	ticketID, tenantID int,
-) error {
-	s.logger.Infow("Executing automation rules for ticket", "ticket_id", ticketID, "tenant_id", tenantID)
-
-	// 获取工单
-	ticketEntity, err := s.client.Ticket.Get(ctx, ticketID)
+// ExecuteRulesForTicket applies the existing owner to an already-created generic
+// item. Creation entry adapters are removed from this method during Intake cutover.
+func (s *TicketAutomationRuleService) ExecuteRulesForTicket(ctx context.Context, ticketID, tenantID int) error {
+	tx, err := s.client.Tx(ctx)
 	if err != nil {
-		return fmt.Errorf("ticket not found: %w", err)
+		return err
 	}
-
-	if ticketEntity.TenantID != tenantID {
-		return fmt.Errorf("ticket not found")
-	}
-
-	// 获取所有激活的规则，按优先级排序
-	rules, err := s.client.TicketAutomationRule.Query().
-		Where(
-			ticketautomationrule.TenantID(tenantID),
-			ticketautomationrule.IsActive(true),
-		).
-		Order(ent.Desc(ticketautomationrule.FieldPriority)).
-		All(ctx)
+	defer tx.Rollback()
+	item, err := tx.Ticket.Query().Where(ticket.IDEQ(ticketID), ticket.TenantIDEQ(tenantID)).Only(ctx)
 	if err != nil {
-		s.logger.Errorw("Failed to get automation rules", "error", err)
-		return fmt.Errorf("failed to get automation rules: %w", err)
+		return err
 	}
-
-	// 执行每个规则
-	for _, rule := range rules {
-		matched, _ := s.evaluateConditions(ctx, rule.Conditions, ticketEntity)
-		if matched {
-			if err := s.executeActions(ctx, rule, ticketEntity); err != nil {
-				s.logger.Warnw("Failed to execute rule actions", "error", err, "rule_id", rule.ID)
-				// 继续执行其他规则，不中断
-				continue
-			}
-
-			// 更新规则执行统计
-			now := time.Now()
-			_, err = s.client.TicketAutomationRule.UpdateOneID(rule.ID).
-				AddExecutionCount(1).
-				SetLastExecutedAt(now).
-				Save(ctx)
-			if err != nil {
-				s.logger.Warnw("Failed to update rule execution count", "error", err)
-			}
-
-			// 记录执行日志
-			s.logger.Infow("Automation rule executed", "rule_id", rule.ID, "rule_name", rule.Name, "ticket_id", ticketID)
+	if item.RecordClass != "generic" {
+		return fmt.Errorf("professional lifecycle owner is required")
+	}
+	effects, err := s.prepareCreationRules(ctx, tx, item)
+	if err != nil {
+		return err
+	}
+	update := tx.Ticket.UpdateOneID(item.ID).SetPriority(item.Priority).SetStatus(item.Status)
+	if item.AssigneeID > 0 {
+		update.SetAssigneeID(item.AssigneeID)
+	}
+	if item.CategoryID > 0 {
+		update.SetCategoryID(item.CategoryID)
+	}
+	if err := update.Exec(ctx); err != nil {
+		return err
+	}
+	for _, notification := range effects.Notifications {
+		if err := s.notificationService.EnqueueCreationTx(ctx, tx, item, item.RequesterID, "ticket_updated", notification.Content, fmt.Sprintf("rule:%d:ticket:%d:execution:%d:action:%d", notification.RuleID, item.ID, time.Now().UnixNano(), notification.ActionIndex), notification.RecipientIDs); err != nil {
+			return err
 		}
 	}
-
-	return nil
+	return tx.Commit()
 }
-
-// evaluateConditions 评估规则条件
-func (s *TicketAutomationRuleService) evaluateConditions(
-	ctx context.Context,
-	conditions []map[string]interface{},
-	ticketEntity *ent.Ticket,
-) (bool, string) {
-	if len(conditions) == 0 {
-		return true, "无条件（总是匹配）"
+func (s *TicketAutomationRuleService) evaluateConditions(ctx context.Context, conditions []map[string]interface{}, item *ent.Ticket) (bool, string) {
+	matched, err := evaluateTicketRuleConditions(conditions, item)
+	if err != nil {
+		return false, err.Error()
 	}
-
-	for _, condition := range conditions {
-		field, ok := condition["field"].(string)
-		if !ok {
-			continue
-		}
-
-		operator, _ := condition["operator"].(string)
-		value := condition["value"]
-
-		matched := s.evaluateCondition(field, operator, value, ticketEntity)
-		if !matched {
-			return false, fmt.Sprintf("条件不匹配: %s %s %v", field, operator, value)
-		}
-	}
-
-	return true, "所有条件匹配"
-}
-
-// evaluateCondition 评估单个条件
-func (s *TicketAutomationRuleService) evaluateCondition(
-	field, operator string,
-	value interface{},
-	ticketEntity *ent.Ticket,
-) bool {
-	var fieldValue interface{}
-
-	switch field {
-	case "status":
-		fieldValue = ticketEntity.Status
-	case "priority":
-		fieldValue = ticketEntity.Priority
-	case "category_id":
-		fieldValue = ticketEntity.CategoryID
-	case "department_id":
-		fieldValue = ticketEntity.DepartmentID
-	case "requester_id":
-		fieldValue = ticketEntity.RequesterID
-	case "assignee_id":
-		fieldValue = ticketEntity.AssigneeID
-	default:
-		return false
-	}
-
-	return s.compareValues(fieldValue, operator, value)
-}
-
-// compareValues 比较值
-func (s *TicketAutomationRuleService) compareValues(fieldValue interface{}, operator string, conditionValue interface{}) bool {
-	switch operator {
-	case "equals":
-		return fmt.Sprintf("%v", fieldValue) == fmt.Sprintf("%v", conditionValue)
-	case "not_equals":
-		return fmt.Sprintf("%v", fieldValue) != fmt.Sprintf("%v", conditionValue)
-	case "contains":
-		fieldStr := fmt.Sprintf("%v", fieldValue)
-		valueStr := fmt.Sprintf("%v", conditionValue)
-		return strings.Contains(fieldStr, valueStr)
-	case "in":
-		if arr, ok := conditionValue.([]interface{}); ok {
-			for _, v := range arr {
-				if fmt.Sprintf("%v", fieldValue) == fmt.Sprintf("%v", v) {
-					return true
-				}
-			}
-		}
-		return false
-	case "not_in":
-		if arr, ok := conditionValue.([]interface{}); ok {
-			for _, v := range arr {
-				if fmt.Sprintf("%v", fieldValue) == fmt.Sprintf("%v", v) {
-					return false
-				}
-			}
-		}
-		return true
-	case "greater_than":
-		return s.compareNumbersAuto(fieldValue, conditionValue) > 0
-	case "less_than":
-		return s.compareNumbersAuto(fieldValue, conditionValue) < 0
-	default:
-		return false
-	}
-}
-
-// executeActions 执行规则动作
-func (s *TicketAutomationRuleService) executeActions(
-	ctx context.Context,
-	rule *ent.TicketAutomationRule,
-	ticketEntity *ent.Ticket,
-) error {
-	for _, action := range rule.Actions {
-		actionType, ok := action["type"].(string)
-		if !ok {
-			continue
-		}
-
-		switch actionType {
-		case "set_category":
-			if categoryID, ok := action["category_id"].(float64); ok {
-				_, err := s.client.Ticket.UpdateOneID(ticketEntity.ID).
-					SetCategoryID(int(categoryID)).
-					Save(ctx)
-				if err != nil {
-					s.logger.Warnw("Failed to set category", "error", err)
-				}
-			}
-
-		case "set_priority":
-			if priority, ok := action["priority"].(string); ok {
-				_, err := s.client.Ticket.UpdateOneID(ticketEntity.ID).
-					SetPriority(priority).
-					Save(ctx)
-				if err != nil {
-					s.logger.Warnw("Failed to set priority", "error", err)
-				}
-			}
-
-		case "assign":
-			if userID, ok := action["user_id"].(float64); ok {
-				_, err := s.client.Ticket.UpdateOneID(ticketEntity.ID).
-					SetAssigneeID(int(userID)).
-					Save(ctx)
-				if err != nil {
-					s.logger.Warnw("Failed to assign ticket", "error", err)
-				}
-			}
-
-		case "auto_assign":
-			if s.assignmentService != nil {
-				var categoryID *int
-				if ticketEntity.CategoryID > 0 {
-					categoryID = &ticketEntity.CategoryID
-				}
-				_, err := s.assignmentService.AssignTicket(ctx, &AssignmentRequest{
-					TicketID:   ticketEntity.ID,
-					CategoryID: categoryID,
-					Priority:   ticketEntity.Priority,
-					TenantID:   ticketEntity.TenantID,
-					AutoAssign: true,
-				})
-				if err != nil {
-					s.logger.Warnw("Failed to auto assign ticket", "error", err)
-				}
-			}
-
-		case "escalate":
-			// 升级优先级
-			priorityMap := map[string]string{
-				"low":    "medium",
-				"medium": "high",
-				"high":   "urgent",
-				"urgent": "urgent",
-			}
-			if newPriority, ok := priorityMap[ticketEntity.Priority]; ok {
-				_, err := s.client.Ticket.UpdateOneID(ticketEntity.ID).
-					SetPriority(newPriority).
-					Save(ctx)
-				if err != nil {
-					s.logger.Warnw("Failed to escalate ticket", "error", err)
-				}
-			}
-
-		case "send_notification":
-			if s.notificationService != nil {
-				content, _ := action["content"].(string)
-				userIDs := []int{ticketEntity.RequesterID}
-				if ticketEntity.AssigneeID > 0 {
-					userIDs = append(userIDs, ticketEntity.AssigneeID)
-				}
-				result, sendErr := s.notificationService.SendNotification(ctx, ticketEntity.ID, &dto.SendTicketNotificationRequest{
-					UserIDs:   userIDs,
-					EventType: "ticket_updated",
-					Content:   content,
-				}, ticketEntity.TenantID)
-				if err := ticketNotificationDeliveryError(result, sendErr); err != nil {
-					s.logger.Warnw("failed to send automation notification", "error", err, "ticket_id", ticketEntity.ID)
-				}
-			}
-
-		case "set_status":
-			if status, ok := action["status"].(string); ok {
-				_, err := s.client.Ticket.UpdateOneID(ticketEntity.ID).
-					SetStatus(status).
-					Save(ctx)
-				if err != nil {
-					s.logger.Warnw("Failed to set status", "error", err)
-				}
-			}
-		}
-	}
-
-	return nil
+	return matched, "条件已评估"
 }
 
 // getActionDescriptions 获取动作描述
@@ -526,38 +307,4 @@ func (s *TicketAutomationRuleService) getActionDescriptions(actions []map[string
 		}
 	}
 	return descriptions
-}
-
-// compareNumbersAuto 比较数字
-func (s *TicketAutomationRuleService) compareNumbersAuto(a, b interface{}) int {
-	af, ok1 := s.toFloat64Auto(a)
-	bf, ok2 := s.toFloat64Auto(b)
-	if !ok1 || !ok2 {
-		return 0
-	}
-	if af > bf {
-		return 1
-	}
-	if af < bf {
-		return -1
-	}
-	return 0
-}
-
-// toFloat64Auto 转换为float64
-func (s *TicketAutomationRuleService) toFloat64Auto(v interface{}) (float64, bool) {
-	switch val := v.(type) {
-	case float64:
-		return val, true
-	case float32:
-		return float64(val), true
-	case int:
-		return float64(val), true
-	case int32:
-		return float64(val), true
-	case int64:
-		return float64(val), true
-	default:
-		return 0, false
-	}
 }

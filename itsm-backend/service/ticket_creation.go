@@ -13,7 +13,7 @@ import (
 )
 
 func (*TicketService) RecordClass() string { return creation.RecordClassGeneric }
-func (*TicketService) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedIntake) (*creation.CreationPlan, error) {
+func (s *TicketService) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedIntake) (*creation.CreationPlan, error) {
 	priority := in.Command.Priority
 	if priority == "" {
 		priority = "medium"
@@ -109,9 +109,12 @@ func (*TicketService) Prepare(ctx context.Context, tx *ent.Tx, in creation.Resol
 	}
 	plan.BusinessSubtype = plan.WorkItem.GenericSubtype
 	plan.WorkflowVariables["generic_subtype"] = plan.WorkItem.GenericSubtype
+	if err := s.prepareCreationEffects(ctx, tx, plan); err != nil {
+		return nil, err
+	}
 	return plan, nil
 }
-func (*TicketService) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticket, plan *creation.CreationPlan) (*creation.ProfessionalReference, error) {
+func (s *TicketService) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticket, plan *creation.CreationPlan) (*creation.ProfessionalReference, error) {
 	if plan.Resolved.Command.Email != nil {
 		if err := writeEmailCreationSource(ctx, tx, item, plan); err != nil {
 			return nil, err
@@ -121,6 +124,9 @@ func (*TicketService) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent
 		if err := writeFeishuCreationSource(ctx, tx, item, source); err != nil {
 			return nil, err
 		}
+	}
+	if err := s.writeCreationEffects(ctx, tx, item, plan); err != nil {
+		return nil, err
 	}
 	return &creation.ProfessionalReference{}, nil
 }

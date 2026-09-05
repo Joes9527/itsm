@@ -84,10 +84,10 @@ func TestTicketNotificationReadStateDoesNotChangeDurableDeliveryState(t *testing
 	completed, err := fixture.notifications.ProcessPendingDeliveries(
 		context.Background(), "notification-read-state-worker", 10,
 	)
-	require.NoError(t, err)
-	require.Equal(t, 2, completed)
+	require.Error(t, err)
+	require.Equal(t, 1, completed)
 	require.Equal(t, ticketNotificationStatusSent, fixture.client.TicketNotification.GetX(fixture.ctx, pending.ID).Status)
-	require.Equal(t, ticketNotificationStatusSent, fixture.client.TicketNotification.GetX(fixture.ctx, processing.ID).Status)
+	require.Equal(t, ticketNotificationStatusFailed, fixture.client.TicketNotification.GetX(fixture.ctx, processing.ID).Status)
 	require.Equal(t, 3, fixture.client.TicketNotification.Query().Where(
 		ticketnotification.ReadAtNotNil(),
 	).CountX(fixture.ctx))

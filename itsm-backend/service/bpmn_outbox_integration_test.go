@@ -378,7 +378,9 @@ func TestTicketNotificationWorkerPostgresCASAndExpiredLeaseRecovery(t *testing.T
 	_, workerClientOne := openPostgresEntClientInSchema(t, dsn, schemaName, false)
 	_, workerClientTwo := openPostgresEntClientInSchema(t, dsn, schemaName, false)
 	workerOne := NewTicketNotificationService(workerClientOne, zap.NewNop().Sugar())
+	workerOne.SetDeliveryQueueClient(workerClientOne)
 	workerTwo := NewTicketNotificationService(workerClientTwo, zap.NewNop().Sugar())
+	workerTwo.SetDeliveryQueueClient(workerClientTwo)
 	release := make(chan struct{})
 	fake := &durableNotificationConnector{entered: make(chan struct{}, 1), release: release}
 	configureDurableNotificationConnector(t, workerOne, tenant.ID, fake)
@@ -414,13 +416,13 @@ func TestTicketNotificationWorkerPostgresCASAndExpiredLeaseRecovery(t *testing.T
 		ExecX(ctx)
 	now = now.Add(2 * time.Minute)
 	completed, err = workerTwo.ProcessPendingDeliveries(ctx, "postgres-notification-worker-recovery", 10)
-	require.NoError(t, err)
-	require.Equal(t, 1, completed)
+	require.Error(t, err)
+	require.Zero(t, completed)
 	row = setupClient.TicketNotification.GetX(ctx, row.ID)
-	require.Equal(t, "sent", row.Status)
-	require.Equal(t, 2, row.AttemptCount)
-	require.Len(t, fake.sentMessages(), 2)
-	require.Equal(t, fake.sentMessages()[0].Metadata["delivery_key"], fake.sentMessages()[1].Metadata["delivery_key"])
+	require.Equal(t, "failed", row.Status)
+	require.Equal(t, "delivery_unknown", row.LastErrorClass)
+	require.Equal(t, 1, row.AttemptCount)
+	require.Len(t, fake.sentMessages(), 1)
 }
 
 func openPostgresEntClientInSchema(t *testing.T, dsn, schemaName string, createSchema bool) (*sql.DB, *ent.Client) {

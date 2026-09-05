@@ -328,6 +328,7 @@ func NewApplication() *Application {
 	// 通知 / 审批 / SLA / 自动化 / 序列服务（V2 子服务）
 	ticketNotificationService := service.NewTicketNotificationService(client, sugar)
 	ticketNotificationService.SetConnectorManager(connectorManager)
+	ticketNotificationService.SetDeliveryQueueClient(systemClient)
 	// 邮件通知（Graph sendMail 为主，SMTP fallback）
 	emailService := service.NewEmailService(service.EmailConfig{
 		Host:     cfg.SMTP.Host,
@@ -503,6 +504,8 @@ func NewApplication() *Application {
 	ticketViewController := controller.NewTicketViewController(ticketViewService, sugar)
 
 	ticketAssignmentService := service.NewTicketAssignmentService(client, sugar)
+	ticketAutomationRuleService.SetAssignmentService(ticketAssignmentService)
+	ticketAutomationRuleService.SetNotificationService(ticketNotificationService)
 	ticketAssignmentRuleService := service.NewTicketAssignmentRuleService(client, sugar)
 	ticketAssignmentSmartService := service.NewTicketAssignmentSmartService(client, sugar, ticketAssignmentService, ticketAssignmentRuleService)
 	ticketAssignmentSmartController := controller.NewTicketAssignmentSmartController(ticketAssignmentSmartService, ticketAssignmentRuleService, sugar)
@@ -671,8 +674,16 @@ func NewApplication() *Application {
 		}
 	}
 	intakeApplication := intake.NewService(client, intake.NewResolver(scService, processBindingService, configurationItemService, ticketCategoryService), creationRegistry, intake.NewWorkItemCreator(numberAllocator))
+	feishuSyncService := service.NewFeishuSyncService(client, sugar, intakeApplication)
 	outboxRegistry, err := service.NewOutboxEventTypeRegistry(
-		[]service.OutboxDeliveryHandler{service.NewIncidentAlertDeliveryHandler(emailService), service.NewEmailAttachmentsDeliveryHandler(client, ticketAttachmentService, newTenantGraphInboundProvider(connectorManager)), service.NewEmailConfirmationDeliveryHandler(client, newTenantGraphInboundProvider(connectorManager))},
+		[]service.OutboxDeliveryHandler{service.NewFeishuCreationDeliveryHandler(feishuSyncService, func(tenantID int) (service.FeishuTaskCreator, bool) {
+			conn, ok := connectorManager.Get(tenantID, "feishu")
+			if !ok {
+				return nil, false
+			}
+			tasks, ok := conn.(service.FeishuTaskCreator)
+			return tasks, ok
+		}), service.NewIncidentAlertDeliveryHandler(emailService), service.NewEmailAttachmentsDeliveryHandler(client, ticketAttachmentService, newTenantGraphInboundProvider(connectorManager)), service.NewEmailConfirmationDeliveryHandler(client, newTenantGraphInboundProvider(connectorManager))},
 		service.KafDelegateRequestedEventType,
 	)
 	if err != nil {
@@ -693,7 +704,6 @@ func NewApplication() *Application {
 		log.Fatalf("Invalid outbox delivery worker configuration: %v", err)
 	}
 	wireEmailMsgraphConnector(client, intakeApplication, triageService, connectorController, sugar)
-	feishuSyncService := service.NewFeishuSyncService(client, sugar, intakeApplication)
 	feishuController := controller.NewFeishuController(connectorManager, feishuSyncService, marketplaceSvc, sugar)
 
 	// Analytics & Prediction Controllers

@@ -153,6 +153,7 @@ After initialization creates the schema, an authorized database administrator gr
 | `msp_allocations` | SELECT | Active MSP customer authorization |
 | `connector_configs` | SELECT | Restore persisted connector registrations at startup |
 | `outbox_events` | SELECT, UPDATE | Cross-tenant transport claim, attempts, leases, acknowledgment and retry; enqueue stays on the tenant client |
+| `ticket_notifications` | SELECT, UPDATE | Existing delivery queue scan, lease and acknowledgment; creation and recipient/WorkItem checks stay on the tenant client |
 | `audit_logs` | INSERT, SELECT(id) | Append authentication and transport failure/retry audit; SELECT(id) supports Ent RETURNING without reading audit content |
 | audit log ID sequence | USAGE | Allocate audit IDs only |
 
@@ -162,7 +163,7 @@ For a dedicated schema, the grants have this form (the administrator supplies id
 GRANT USAGE ON SCHEMA :"app_schema" TO :"system_role";
 GRANT SELECT ON :"app_schema".users, :"app_schema".tenants,
   :"app_schema".msp_allocations, :"app_schema".connector_configs TO :"system_role";
-GRANT SELECT, UPDATE ON :"app_schema".outbox_events TO :"system_role";
+GRANT SELECT, UPDATE ON :"app_schema".outbox_events, :"app_schema".ticket_notifications TO :"system_role";
 GRANT INSERT, SELECT(id) ON :"app_schema".audit_logs TO :"system_role";
 SELECT format('GRANT USAGE ON SEQUENCE %s TO %I',
   pg_get_serial_sequence(format('%I.audit_logs', :'app_schema'), 'id'), :'system_role') \gexec
@@ -170,7 +171,7 @@ SELECT format('GRANT USAGE ON SEQUENCE %s TO %I',
 
 Do not grant this role business-table access or broad `ALL TABLES`/`ALL SEQUENCES` privileges. Public or inherited privileges count during validation; an administrator must resolve an unsafe existing grant explicitly before startup. No application migration alters shared roles or PUBLIC grants.
 
-Only authentication lookup, tenant middleware, connector restoration and queue repositories receive the system client. AuthService's user management and permission queries keep the tenant client. Connector HTTP persistence keeps the tenant client; restored connector/poller context is derived from its stored tenant. The shared outbox worker derives the business consumer context from the durable event and clears the transport marker; Incident consumers receive only the tenant client. The KAF dispatcher transports already-authorized messages. No request flag grants access to the system pool.
+Only authentication lookup, tenant middleware, connector restoration and queue repositories receive the system client. AuthService's user management and permission queries keep the tenant client. Connector HTTP persistence keeps the tenant client; restored connector/poller context is derived from its stored tenant. The shared outbox worker derives the business consumer context from the durable event and clears the transport marker; Incident consumers receive only the tenant client. The KAF dispatcher transports already-authorized messages. No request flag grants access to the system pool. The ticket notification worker receives this exact queue capability separately from its tenant business client; it clears inherited system context for each recipient delivery. An expired external delivery lease or ambiguous send becomes `failed` with `last_error_class=delivery_unknown`, retaining the existing delivery key and attempt count for reconciliation. Only confirmed pre-acceptance email failures retry, with Graph/SMTP fallback disabled. Existing durable rows use the same lease and status fields; no data migration or new queue is required. Notification content and recipient user ID are frozen; delivery resolves the current address of that same active user.
 
 For local startup, supply the separate role variables above after authorized provisioning; do not change a shared `.env` or apply these grants to a shared instance without the environment owner's approval. Production Compose supplies `ITSM_MIGRATION_DB_USER` and its secret only to initialization; API and Worker receive `ITSM_RUNTIME_DB_USER` and `ITSM_SYSTEM_DB_USER` with their distinct secret files. `ITSM_DB_SCHEMA` selects the same schema for initialization and both runtime processes (default `public`); `RLS_MODE` is forwarded to API/Worker with its existing `off` default. Enabling enforcement remains an explicit rollout decision. These changes prepare the deployment contract; they do not apply grants to a deployed database.
 
