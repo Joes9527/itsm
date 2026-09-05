@@ -1000,14 +1000,18 @@ func (c *IncidentController) GetAlertStatistics(ctx *gin.Context) {
 
 // ConvertToProblem 将事件转换为问题
 // @Summary 将事件转换为问题
-// @Description 将指定的事件转换为问题记录
+// @Description 将指定的事件转换为问题记录；同一 Idempotency-Key 与请求体重放返回原回执
 // @Tags incidents
 // @Accept json
 // @Produce json
 // @Param id path int true "事件ID"
+// @Param Idempotency-Key header string true "创建幂等键"
 // @Param request body dto.ConvertIncidentToProblemRequest true "转换请求"
-// @Success 200 {object} common.Response{data=dto.ProblemResponse}
+// @Success 201 {object} common.Response{data=workitemcreation.CreateWorkItemResult} "新建转换回执"
+// @Success 200 {object} common.Response{data=workitemcreation.CreateWorkItemResult} "幂等重放回执"
 // @Failure 400 {object} common.Response
+// @Failure 403 {object} common.Response
+// @Failure 409 {object} common.Response
 // @Failure 500 {object} common.Response
 // @Router /api/v1/incidents/{id}/convert-to-problem [post]
 func (c *IncidentController) ConvertToProblem(ctx *gin.Context) {
@@ -1024,7 +1028,11 @@ func (c *IncidentController) ConvertToProblem(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	intakehttp.Execute(ctx, c.creationApplication, tenantID, 0, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassProblem, IntakeKind: creation.IntakeKindProblem, Title: req.Title, Description: req.Description, Problem: &creation.ProblemInput{SourceIncidentID: &incidentID, RootCause: req.RootCause}})
+	requesterID := 0
+	if req.RequesterID != nil {
+		requesterID = *req.RequesterID
+	}
+	intakehttp.Execute(ctx, c.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassProblem, IntakeKind: creation.IntakeKindProblem, Title: req.Title, Description: req.Description, Problem: &creation.ProblemInput{SourceIncidentID: &incidentID, RootCause: req.RootCause}})
 }
 
 // GetRootCause 获取根因分析
