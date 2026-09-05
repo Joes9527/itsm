@@ -170,3 +170,20 @@ func TestFieldValueService_CreateValues_AcceptsValidNumberAndSelectValues(t *tes
 	})
 	require.NoError(t, err)
 }
+
+func TestFieldValueService_CreateValuesTxSharesCallerTransaction(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:field_value_caller_tx?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tx, err := client.Tx(ctx)
+	require.NoError(t, err)
+	tx.FieldDefinition.Create().SetTenantID(1).SetEntityType("service_catalog").SetEntityID(10).SetName("location").SetLabel("Location").SetFieldType("text").SaveX(ctx)
+	// The definition exists only inside this transaction, so a root-client read
+	// would fail to persist its value. Both writes must disappear on rollback.
+	err = NewFieldValueService(client).CreateValuesTx(ctx, tx, 1, "service_catalog", 10, "ticket", 20, map[string]any{"location": "Shanghai"})
+	require.NoError(t, err)
+	require.Equal(t, 1, tx.FieldValue.Query().CountX(ctx))
+	require.NoError(t, tx.Rollback())
+	require.Zero(t, client.FieldValue.Query().CountX(ctx))
+	require.Zero(t, client.FieldDefinition.Query().CountX(ctx))
+}

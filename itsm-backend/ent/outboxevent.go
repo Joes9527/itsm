@@ -30,7 +30,7 @@ type OutboxEvent struct {
 	AggregateID string `json:"aggregate_id,omitempty"`
 	// Serialized event payload
 	Payload json.RawMessage `json:"-"`
-	// Delivery status: pending, publishing, published
+	// Delivery status: pending, publishing, published, blocked, dead_letter
 	Status string `json:"status,omitempty"`
 	// Number of failed delivery attempts
 	AttemptCount int `json:"attempt_count,omitempty"`

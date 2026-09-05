@@ -1397,6 +1397,45 @@ var (
 		Columns:    EngineerSkillsColumns,
 		PrimaryKey: []*schema.Column{EngineerSkillsColumns[0]},
 	}
+	// ExternalIdentitiesColumns holds the columns for the "external_identities" table.
+	ExternalIdentitiesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "tenant_id", Type: field.TypeInt},
+		{Name: "provider", Type: field.TypeString},
+		{Name: "workspace", Type: field.TypeString},
+		{Name: "subject", Type: field.TypeString},
+		{Name: "active", Type: field.TypeBool, Default: true},
+		{Name: "version", Type: field.TypeInt, Default: 1},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "updated_at", Type: field.TypeTime},
+		{Name: "user_id", Type: field.TypeInt},
+	}
+	// ExternalIdentitiesTable holds the schema information for the "external_identities" table.
+	ExternalIdentitiesTable = &schema.Table{
+		Name:       "external_identities",
+		Columns:    ExternalIdentitiesColumns,
+		PrimaryKey: []*schema.Column{ExternalIdentitiesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "external_identities_users_user",
+				Columns:    []*schema.Column{ExternalIdentitiesColumns[9]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "externalidentity_provider_workspace_subject",
+				Unique:  true,
+				Columns: []*schema.Column{ExternalIdentitiesColumns[2], ExternalIdentitiesColumns[3], ExternalIdentitiesColumns[4]},
+			},
+			{
+				Name:    "externalidentity_tenant_id_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{ExternalIdentitiesColumns[1], ExternalIdentitiesColumns[9]},
+			},
+		},
+	}
 	// FeishuTicketSyncsColumns holds the columns for the "feishu_ticket_syncs" table.
 	FeishuTicketSyncsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -1737,6 +1776,110 @@ var (
 				Columns:    []*schema.Column{IncidentRuleExecutionsColumns[13]},
 				RefColumns: []*schema.Column{IncidentRulesColumns[0]},
 				OnDelete:   schema.NoAction,
+			},
+		},
+	}
+	// IntakeRequestsColumns holds the columns for the "intake_requests" table.
+	IntakeRequestsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "tenant_id", Type: field.TypeInt},
+		{Name: "actor_id", Type: field.TypeInt},
+		{Name: "requester_id", Type: field.TypeInt},
+		{Name: "channel", Type: field.TypeString},
+		{Name: "operation", Type: field.TypeString},
+		{Name: "idempotency_key", Type: field.TypeString},
+		{Name: "request_digest", Type: field.TypeString},
+		{Name: "digest_version", Type: field.TypeString},
+		{Name: "status", Type: field.TypeString, Default: "pending"},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "work_item_id", Type: field.TypeInt, Nullable: true},
+	}
+	// IntakeRequestsTable holds the schema information for the "intake_requests" table.
+	IntakeRequestsTable = &schema.Table{
+		Name:       "intake_requests",
+		Columns:    IntakeRequestsColumns,
+		PrimaryKey: []*schema.Column{IntakeRequestsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "intake_requests_tickets_work_item",
+				Columns:    []*schema.Column{IntakeRequestsColumns[12]},
+				RefColumns: []*schema.Column{TicketsColumns[0]},
+				OnDelete:   schema.SetNull,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "intakerequest_tenant_id_actor_id_channel_operation_idempotency_key",
+				Unique:  true,
+				Columns: []*schema.Column{IntakeRequestsColumns[1], IntakeRequestsColumns[2], IntakeRequestsColumns[4], IntakeRequestsColumns[5], IntakeRequestsColumns[6]},
+			},
+			{
+				Name:    "intakerequest_tenant_id_work_item_id",
+				Unique:  false,
+				Columns: []*schema.Column{IntakeRequestsColumns[1], IntakeRequestsColumns[12]},
+			},
+		},
+	}
+	// IntakeResolutionSnapshotsColumns holds the columns for the "intake_resolution_snapshots" table.
+	IntakeResolutionSnapshotsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "tenant_id", Type: field.TypeInt},
+		{Name: "channel", Type: field.TypeString},
+		{Name: "source_provider", Type: field.TypeString},
+		{Name: "source_event_id", Type: field.TypeString, Nullable: true},
+		{Name: "source_conversation_id", Type: field.TypeString, Nullable: true},
+		{Name: "catalog_item_id", Type: field.TypeInt, Nullable: true},
+		{Name: "catalog_version", Type: field.TypeString, Nullable: true},
+		{Name: "record_class", Type: field.TypeString},
+		{Name: "cti_snapshot", Type: field.TypeJSON, Nullable: true},
+		{Name: "ci_ids", Type: field.TypeJSON},
+		{Name: "form_schema_version", Type: field.TypeString, Nullable: true},
+		{Name: "workflow_definition_id", Type: field.TypeInt, Nullable: true},
+		{Name: "workflow_definition_key", Type: field.TypeString, Nullable: true},
+		{Name: "workflow_definition_version", Type: field.TypeString, Nullable: true},
+		{Name: "no_process", Type: field.TypeBool, Default: false},
+		{Name: "sla_definition_id", Type: field.TypeInt, Nullable: true},
+		{Name: "resolver_version", Type: field.TypeString},
+		{Name: "request_digest", Type: field.TypeString},
+		{Name: "created_at", Type: field.TypeTime},
+		{Name: "intake_request_id", Type: field.TypeInt},
+		{Name: "work_item_id", Type: field.TypeInt},
+	}
+	// IntakeResolutionSnapshotsTable holds the schema information for the "intake_resolution_snapshots" table.
+	IntakeResolutionSnapshotsTable = &schema.Table{
+		Name:       "intake_resolution_snapshots",
+		Columns:    IntakeResolutionSnapshotsColumns,
+		PrimaryKey: []*schema.Column{IntakeResolutionSnapshotsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "intake_resolution_snapshots_intake_requests_receipt",
+				Columns:    []*schema.Column{IntakeResolutionSnapshotsColumns[20]},
+				RefColumns: []*schema.Column{IntakeRequestsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "intake_resolution_snapshots_tickets_work_item",
+				Columns:    []*schema.Column{IntakeResolutionSnapshotsColumns[21]},
+				RefColumns: []*schema.Column{TicketsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "intakeresolutionsnapshot_intake_request_id",
+				Unique:  true,
+				Columns: []*schema.Column{IntakeResolutionSnapshotsColumns[20]},
+			},
+			{
+				Name:    "intakeresolutionsnapshot_work_item_id",
+				Unique:  true,
+				Columns: []*schema.Column{IntakeResolutionSnapshotsColumns[21]},
+			},
+			{
+				Name:    "intakeresolutionsnapshot_tenant_id_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{IntakeResolutionSnapshotsColumns[1], IntakeResolutionSnapshotsColumns[19]},
 			},
 		},
 	}
@@ -5204,6 +5347,7 @@ var (
 		DomainConfigsTable,
 		EndpointAcLsTable,
 		EngineerSkillsTable,
+		ExternalIdentitiesTable,
 		FeishuTicketSyncsTable,
 		FieldDefinitionsTable,
 		FieldValuesTable,
@@ -5215,6 +5359,8 @@ var (
 		IncidentMetricsTable,
 		IncidentRulesTable,
 		IncidentRuleExecutionsTable,
+		IntakeRequestsTable,
+		IntakeResolutionSnapshotsTable,
 		ItemVersionsTable,
 		KafTaskActionLedgersTable,
 		KafTaskCompletionReceiptsTable,
@@ -5329,6 +5475,7 @@ func init() {
 	DepartmentsTable.ForeignKeys[0].RefTable = DepartmentsTable
 	DiscoveryJobsTable.ForeignKeys[0].RefTable = DiscoverySourcesTable
 	DiscoveryResultsTable.ForeignKeys[0].RefTable = DiscoveryJobsTable
+	ExternalIdentitiesTable.ForeignKeys[0].RefTable = UsersTable
 	FeishuTicketSyncsTable.ForeignKeys[0].RefTable = TicketsTable
 	GroupsTable.ForeignKeys[0].RefTable = UsersTable
 	IncidentsTable.ForeignKeys[0].RefTable = TicketsTable
@@ -5336,6 +5483,9 @@ func init() {
 	IncidentEventsTable.ForeignKeys[0].RefTable = IncidentsTable
 	IncidentMetricsTable.ForeignKeys[0].RefTable = IncidentsTable
 	IncidentRuleExecutionsTable.ForeignKeys[0].RefTable = IncidentRulesTable
+	IntakeRequestsTable.ForeignKeys[0].RefTable = TicketsTable
+	IntakeResolutionSnapshotsTable.ForeignKeys[0].RefTable = IntakeRequestsTable
+	IntakeResolutionSnapshotsTable.ForeignKeys[1].RefTable = TicketsTable
 	ItemVersionsTable.ForeignKeys[0].RefTable = MarketplaceItemsTable
 	KnowledgeArticlesTable.ForeignKeys[0].RefTable = KnownErrorsTable
 	KnowledgeArticleLikesTable.ForeignKeys[0].RefTable = KnowledgeArticlesTable
