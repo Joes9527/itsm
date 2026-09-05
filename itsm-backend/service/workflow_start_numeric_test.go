@@ -40,6 +40,8 @@ func TestWorkflowStartFrozenNumericFirstGateway(t *testing.T) {
 		values           map[string]any
 	}{
 		{"quantity", "quantity > 1", map[string]any{"quantity": json.Number("2")}},
+		{"leading decimal", "quantity > .5", map[string]any{"quantity": json.Number("2")}},
+		{"unary leading decimal", "-quantity < -.5", map[string]any{"quantity": json.Number("2")}},
 		{"nested form", `variables["form_values"]["resource"]["cores"] >= 2`, map[string]any{"form_values": map[string]any{"resource": map[string]any{"cores": json.Number("2")}}}},
 		{"amount precision", "amount > 9007199254740993.12", map[string]any{"amount": json.Number("9007199254740993.125")}},
 		{"amount equality", "amount == 9007199254740993.125", map[string]any{"amount": json.Number("9007199254740993.125")}},

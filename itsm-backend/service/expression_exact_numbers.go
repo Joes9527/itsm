@@ -64,7 +64,7 @@ func (p *exactNumberPatcher) Visit(node *ast.Node) {
 	case *ast.FloatNode:
 		loc := n.Location()
 		text := strings.ReplaceAll(string(p.source[loc.From:loc.To]), "_", "")
-		value, err := common.ParseExactJSONNumber(json.Number(text))
+		value, err := parseExactExpressionLiteral(text)
 		if err != nil {
 			p.err = err
 			return
@@ -81,6 +81,26 @@ func (p *exactNumberPatcher) Visit(node *ast.Node) {
 			ast.Patch(node, &ast.CallNode{Callee: &ast.IdentifierNode{Value: "__itsm_exact_unary"}, Arguments: []ast.Node{&ast.StringNode{Value: n.Operator}, n.Node}})
 		}
 	}
+}
+
+// expr has already validated this FloatNode. Its decimal grammar also accepts
+// .5, 1., leading zeroes and exponent forms; JSON token grammar does not.
+// Parse source digits directly, retaining the existing numeric work bounds.
+func parseExactExpressionLiteral(text string) (*big.Rat, error) {
+	if len(text) == 0 || len(text) > 1024 {
+		return nil, fmt.Errorf("expression number exceeds parser limit")
+	}
+	if index := strings.IndexAny(text, "eE"); index >= 0 {
+		exponent, err := strconv.Atoi(text[index+1:])
+		if err != nil || exponent < -4096 || exponent > 4096 {
+			return nil, fmt.Errorf("expression number exponent exceeds parser limit")
+		}
+	}
+	value, ok := new(big.Rat).SetString(text)
+	if !ok {
+		return nil, fmt.Errorf("invalid expression number")
+	}
+	return value, nil
 }
 
 func expressionRational(value any) (*big.Rat, error) {

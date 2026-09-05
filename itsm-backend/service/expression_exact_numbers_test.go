@@ -19,7 +19,7 @@ func TestExpressionEngineExactJSONNumbers(t *testing.T) {
 }
 
 func TestExpressionEngineRejectsInvalidExactNumbersAndOperations(t *testing.T) {
-	for _, value := range []json.Number{"NaN", "1/2", "", "1e999999999"} {
+	for _, value := range []json.Number{"NaN", "1/2", "", "1e999999999", ".5", "-.5", "1.", "01.25", "1_0.5"} {
 		_, err := NewExpressionEngine().EvaluateCondition("amount > 0", map[string]any{"amount": value})
 		require.Error(t, err)
 	}
@@ -27,4 +27,24 @@ func TestExpressionEngineRejectsInvalidExactNumbersAndOperations(t *testing.T) {
 		_, err := NewExpressionEngine().EvaluateCondition(expression, map[string]any{"amount": json.Number("1.2")})
 		require.Error(t, err)
 	}
+}
+
+func TestExpressionEnginePreservesExprNumericLiteralSyntax(t *testing.T) {
+	for _, expression := range []string{
+		"quantity > .5", "-quantity < -.5", "quantity > +.5", "quantity > 1.",
+		"quantity < .5e+1", "quantity > 01.25", "quantity < 1_0.5_0",
+		"quantity == 0x2", "quantity == 0b10", "quantity == 0o2",
+	} {
+		t.Run(expression, func(t *testing.T) {
+			native, err := NewExpressionEngine().EvaluateCondition(expression, map[string]any{"quantity": 2})
+			require.NoError(t, err, "fixture must use syntax the existing expr engine accepts")
+			require.True(t, native)
+			frozen, err := NewExpressionEngine().EvaluateCondition(expression, map[string]any{"quantity": json.Number("2")})
+			require.NoError(t, err)
+			require.Equal(t, native, frozen)
+		})
+	}
+	precise, err := NewExpressionEngine().EvaluateCondition(".1000000000000000000000000000000001 > .1", map[string]any{"quantity": json.Number("2")})
+	require.NoError(t, err)
+	require.True(t, precise, "literal conversion must retain original digits")
 }
