@@ -36,8 +36,14 @@ I1 是交接时已要求关闭、但此次迁移仍保留的缺口；I2 是此�
 
 更广测试发现的七个 HTTP fixture 401 已修复：四个 Standard Change 实例化和三个 Dynamic Fields 集成用例均接入真实租户/用户/Intake/幂等键与统一回执；Standard Change 与普通 integration 两个完整包通过。独立审查要求补强模板字段的精确名称、标签、值断言，该补充也已测试并复审通过。该轮仅修改两份测试文件，不修改生产逻辑。新增 PG 测试限定本机专属 DSN 的可移植性问题作为 Minor 转入 A7，当前不会扩大数据库执行范围。
 
+## 后续身份与权限检查点
+
+提交 `1802a000` 使用现有权限服务，在回执查询及重放前校验所有显式流程覆盖的 `workflow:write`，包括 BPMN 运行变量；正常目录配置不要求申请人具备流程管理权限。真实 Intake → Outbox → 流程引擎测试恢复了 actor/requester 分离、规范业务身份、缺失身份拒绝及启动重放覆盖；Incident 自定义优先级矩阵变化不会重算已创建请求。相关旧 BPMN 创建 fake 测试也已迁移，实际专业持久化失败验证完整回滚及同来源重试。
+
+八个完整后端包通过；所选真实集成测试 29 个顶层用例、84 条通过事件，无跳过。独立审查无 Critical/Important。完整 controller 包仍有两处旧 Incident→Problem 测试失败：缺少幂等键且仍断言旧 fake/详情响应。MSP 用例还暴露原操作者租户与目标客户租户被强制校验为相同的冲突，将依照既有 MSP 关系、专业权限和双层审计约束修复，不能改用客户本地用户冒充 MSP 验证。另一个已有角色门控测试缺少 tenant 上下文，在 `tenantID.(int)` 处被 Gin 恢复；不计为成功删除流程绑定的证据。
+
 ## 仍然开放的后续门槛
 
-当前复用和迁移有进展，但显式 workflow 覆盖权限、actor 审计测试替换、真实 bootstrap/Worker 装配、A1 其余字段处置、共享字段/schema 026+、前端、身份交换、KAF 和真实 Graph 验收仍未完成。完整后端任务审查范围继续保持 `94cc5787..最终HEAD`。
+后续提交 `1802a000` 已完成显式 workflow 覆盖权限、真实创建到持久化启动的 actor 审计测试、Incident 配置矩阵及重放验证，并通过独立审查。真实 bootstrap/Worker 装配、MSP 创建身份与转换入口、A1 其余字段处置、共享字段/schema 026+、前端、身份交换、KAF 和真实 Graph 验收仍未完成。完整后端任务审查范围继续保持 `94cc5787..最终HEAD`。
 
 详细增量 diff、审查与修复记录保存在现有 worktree 的 `.superpowers/sdd/2026-09-05-sslvpn-end-to-end-implementation/resume-review/`；暂停快照保持原样。总进度见[验证报告](2026-09-05-sslvpn-end-to-end-verification-report.md)。

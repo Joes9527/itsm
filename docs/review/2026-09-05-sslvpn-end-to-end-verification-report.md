@@ -1,10 +1,10 @@
 # SSLVPN 端到端实施与验证报告
 
-**状态：用户已要求原 Agent 重新接手，正在审查接手期间的修改并继续实施；尚未达到端到端验收门槛。** 最新工作区、未提交改动与续做步骤见[开发交接报告](2026-09-05-sslvpn-development-handoff-report.md)。本报告从已执行的验证开始记录；阶段测试通过不等于完整业务交付，也不代表已部署。后续任务应在此追加最终提交、命令、退出码和验收证据。
+**状态：用户已要求原 Agent 重新接手，正在审查接手期间的修改并继续实施；尚未达到端到端验收门槛。** 原暂停时的工作区快照见[开发交接报告](2026-09-05-sslvpn-development-handoff-report.md)；恢复后的最新检查点见本报告及增量审查报告。本报告从已执行的验证开始记录；阶段测试通过不等于完整业务交付，也不代表已部署。后续任务应在此追加最终提交、命令、退出码和验收证据。
 
 ## 1. 验收范围与当前进度
 
-重新接手后的独立增量审查见[接手期间增量审查报告](2026-09-05-sslvpn-successor-review-report.md)：Change/Ticket repository 当前包测试及全部后端包编译通过，其中必填字段测试跳过与真实 PG 回滚覆盖缺失两个阻塞项已修复并通过针对性复审；七个 HTTP fixture 的租户上下文/入口迁移失败也已修复并复审通过。继续处理显式流程覆盖权限、创建 actor 审计与矩阵重放，其他完整链路门槛保持开放。后端退役与测试迁移已保存为中间源码提交 `229d8091`，最新全部包编译检查退出 0；尚非完整 A3b/A4 审查结论。下文较早提交的阶段证据保留原有适用范围。
+重新接手后的独立增量审查见[接手期间增量审查报告](2026-09-05-sslvpn-successor-review-report.md)：Change/Ticket repository 当前包测试及全部后端包编译通过，其中必填字段测试跳过与真实 PG 回滚覆盖缺失两个阻塞项已修复并通过针对性复审；七个 HTTP fixture 的租户上下文/入口迁移失败也已修复并复审通过。后续 `1802a000` 已完成显式流程覆盖权限、创建 actor 审计与矩阵重放，并通过独立审查；正在处理 MSP 创建身份与转换入口，其余完整链路门槛保持开放。后端退役与测试迁移已保存为中间源码提交 `229d8091`，最新全部包编译检查退出 0；尚非完整 A3b/A4 审查结论。下文较早提交的阶段证据保留原有适用范围。
 
 依据[实施计划](../superpowers/plans/2026-09-05-sslvpn-end-to-end-implementation.md)和[已确认设计](../superpowers/specs/2026-09-05-sslvpn-kaf-intake-end-to-end-design.md)，最终链路为：KAF Web 理解意图并复用收集/确认卡片 → 当前用户通过 Unified Intake 创建 ITSM 申请 → BPMN 两级审批 → Worker 委派 KAF 执行 → 查询确认外部用户组成员关系 → ITSM 记录授权结果、状态、审计 → KAF 展示结果。
 
@@ -17,7 +17,7 @@
 | 持久化流程启动 | 精确流程定义、启动摘要、Outbox 重放及故障恢复已有阶段证据 | 生产装配完成后的完整流程验证 |
 | Incident 创建事件 | 复用原规则引擎、事务动作与事件回执，已有阶段审查 | 与全部入口、运行角色的最终联合门禁 |
 | 数据库租户隔离 | 实际受限角色、Tenant/System 独立连接、真实 RLS 策略测试及独立复审通过 | 最终迁移组合与实际服务进程启动门禁 |
-| 全入口、旧路径和共享字段归并 | HTTP、Catalog、BPMN、邮件、AI、Feishu 等适配已产生内部提交及针对性测试 | 旧创建 API 退役、共享 schema/读取方迁移、最终独立审查进行中 |
+| 全入口、旧路径和共享字段归并 | HTTP、Catalog、BPMN、邮件、AI、Feishu 等适配已产生内部提交及针对性测试 | 旧创建 API 已退役；共享 schema/读取方迁移、MSP 入口、最终独立审查仍开放 |
 | ITSM 前端与目录发布 | 已准备最终接口适配及验收清单 | 尚未完成该阶段实现与验证 |
 | 用户身份交换、KAF 确认卡接入 | 已有明确接口与安全契约 | 尚未完成本期实现与集成门禁 |
 | SSLVPN 授权、回执与外部验收 | 已确定策略、有限期限、结果契约和验证方案 | 尚未执行本期完整业务验收 |
@@ -32,6 +32,13 @@
 | `1808f2d9`、`367f9af9` | RLS 驱动、Ent 变量处理、独立受限 System 能力和实际运行构造 | 复审两个 Important 问题均已修复；不等于共享环境已启用 enforce |
 
 后续入口归并中的 `9850c1d6`、`a9986ccb`、`4acfcfcb`、`548d34e3` 为**开发检查点，整体尚未独立审查**。其中新增了迁移 025、目录确认版本读取、统一创建响应、持久化精确数字和单一 Feishu 创建意图。不得将中间提交单独部署或作为最终发布依据。
+
+### 后续身份与入口验证（`1802a000`）
+
+- `go test ./authorization ./handlers/intake ./service ./service/bpmn ./controller ./handlers/change ./handlers/problem ./handlers/service_request ./handlers/standard_change -count=1`：整体退出 1。除 controller 外八个完整包通过；controller 两处旧 Incident→Problem 转换 fixture 失败，保留待修，不计为整体通过。
+- `go test ./tests/integration -run 'TestIntake|TestDynamicFields|TestServiceCatalog' -count=1 -v`：退出 0，29 个顶层用例、84 条通过事件、零跳过，17.183 秒。覆盖真实 HTTP/BPMN 入口、当前流程权限及撤权重放、actor/requester 与规范业务身份、配置矩阵重放、专业持久化故障完整回滚后重试。
+- 独立审查批准这三个检查点，无 Critical/Important。实际完整 controller 日志仍包含既有缺失 tenant 上下文导致的类型断言 panic；相关测试仅证明角色门控未返回 403，不证明业务删除成功。
+- MSP 原租户 actor 与客户数据租户的分离在现有统一创建校验中尚未贯通；两处旧转换测试和此身份边界仍需修复。此次未运行 PG/RLS、真实 bootstrap、前端、KAF 或外部 Graph 验收。
 
 ## 3. 可定位的 RLS 验证记录
 
