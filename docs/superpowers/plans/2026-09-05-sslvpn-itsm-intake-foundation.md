@@ -150,6 +150,8 @@ func TestServiceRequestFieldFailureRollsBackCreation(t *testing.T) {
 
 ## A4：切换全部创建入口及客户端
 
+运行隔离前置：接线审计确认当前 RLS `ModeEnforce` 仅透传，`AcquireConn` 未被生产调用，HTTP 中间件只设置 Go context。因此先独立完成实际 Ent 查询/事务的租户设置与隔离、Worker 事件租户上下文及相关审查小项，再进行全入口和共享字段删除批次。验证必须经过实际 driver 与非绕过角色，涵盖连接池、错误/取消清理和明确的系统访问边界；手工设置 GUC 的策略测试不能替代此门槛。
+
 读取契约前置：A4 客户端必须提交用户确认时的目录/表单版本，当前旧目录读取 DTO 尚未提供这两个值。因此 A4 后端同时补齐受权目录读取中的最小版本投影，复用 A3 的唯一版本计算和一致定义快照；不能提交时改取最新版。A5 继续完成发布校验并复用该读取契约。
 
 **Files:** Modify A1 清单中的 `controller/{ticket,incident}_controller.go`、`handlers/{change,problem,standard_change,service_request}/*.go`、`service/{ticket_service,tool_queue,feishu_sync_service}.go`、`service/bpmn/incident_handler.go`、`connector/builtin/email/service.go`、真实邮件/AI 接线；Modify `internal/bootstrap/app.go`、`router/router.go`；Modify 前端 `src/lib/api/{ticket-api,incident-api,service-catalog-api}.ts` 及 A1 确认的实际提交页面；Create `tests/contract/work_item_creation_entrypoints_test.go`。
