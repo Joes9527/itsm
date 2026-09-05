@@ -49,6 +49,7 @@ import (
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/incidentrule"
+	"itsm-backend/ent/incidentruleactionreceipt"
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/intakerequest"
 	"itsm-backend/ent/intakeresolutionsnapshot"
@@ -234,6 +235,7 @@ func checkColumn(t, c string) error {
 			incidentevent.Table:               incidentevent.ValidColumn,
 			incidentmetric.Table:              incidentmetric.ValidColumn,
 			incidentrule.Table:                incidentrule.ValidColumn,
+			incidentruleactionreceipt.Table:   incidentruleactionreceipt.ValidColumn,
 			incidentruleexecution.Table:       incidentruleexecution.ValidColumn,
 			intakerequest.Table:               intakerequest.ValidColumn,
 			intakeresolutionsnapshot.Table:    intakeresolutionsnapshot.ValidColumn,

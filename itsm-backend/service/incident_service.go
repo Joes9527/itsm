@@ -439,6 +439,29 @@ func (s *IncidentService) GetIncidentCIs(ctx context.Context, incidentID int, te
 
 // UpdateIncident 更新事件
 func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.UpdateIncidentRequest, tenantID int) (*dto.IncidentResponse, error) {
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	result, err := s.UpdateIncidentTx(ctx, tx, id, req, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// UpdateIncidentTx keeps validation, WorkItem/extension changes and timeline in the caller's transaction.
+func (s *IncidentService) UpdateIncidentTx(ctx context.Context, tx *ent.Tx, id int, req *dto.UpdateIncidentRequest, tenantID int) (*dto.IncidentResponse, error) {
+	owner := *s
+	owner.client = tx.Client()
+	return owner.updateIncident(ctx, id, req, tenantID)
+}
+
+func (s *IncidentService) updateIncident(ctx context.Context, id int, req *dto.UpdateIncidentRequest, tenantID int) (*dto.IncidentResponse, error) {
 	s.logger.Infow("Updating incident", "id", id, "tenant_id", tenantID)
 
 	// 获取当前事件实体
@@ -475,6 +498,9 @@ func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.U
 		}
 	}
 	if req.AssigneeID != nil {
+		if !canAssignIncidentStatus(currentIncident.Edges.WorkItem.Status) {
+			return nil, fmt.Errorf("resolved, closed, or cancelled incidents cannot be reassigned")
+		}
 		if err := s.validateIncidentAssignee(ctx, *req.AssigneeID, tenantID); err != nil {
 			return nil, err
 		}
@@ -524,15 +550,7 @@ func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.U
 		}
 	}
 
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("start incident update transaction: %w", err)
-	}
-	rollback := func(cause error) (*dto.IncidentResponse, error) {
-		_ = tx.Rollback()
-		return nil, cause
-	}
-	updateQuery := tx.Incident.UpdateOneID(id).Where(incidentTenantScope(tenantID))
+	updateQuery := s.client.Incident.UpdateOneID(id).Where(incidentTenantScope(tenantID))
 	if req.Severity != nil {
 		updateQuery.SetSeverity(*req.Severity)
 	}
@@ -555,8 +573,8 @@ func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.U
 		updateQuery.SetMetadata(req.Metadata)
 	}
 
-	workItemUpdate := tx.Ticket.UpdateOneID(currentIncident.WorkItemID).
-		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).
+	workItemUpdate := s.client.Ticket.UpdateOneID(currentIncident.WorkItemID).
+		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(currentIncident.Edges.WorkItem.Version)).
 		SetUpdatedAt(time.Now()).
 		AddVersion(1)
 	if !req.Force && req.Version > 0 {
@@ -592,17 +610,14 @@ func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.U
 		if ent.IsNotFound(err) && !req.Force && req.Version > 0 {
 			latest, lookupErr := s.client.Ticket.Query().Where(ticket.IDEQ(currentIncident.WorkItemID), ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).Only(ctx)
 			if lookupErr == nil {
-				return rollback(common.NewVersionConflictError("事件", id, req.Version, latest.Version))
+				return nil, common.NewVersionConflictError("事件", id, req.Version, latest.Version)
 			}
 		}
-		return rollback(fmt.Errorf("failed to update incident work item: %w", err))
+		return nil, fmt.Errorf("failed to update incident work item: %w", err)
 	}
 	incidentEntity, err := updateQuery.Save(ctx)
 	if err != nil {
-		return rollback(fmt.Errorf("failed to update incident: %w", err))
-	}
-	if err := tx.Commit(); err != nil {
-		return rollback(err)
+		return nil, fmt.Errorf("failed to update incident: %w", err)
 	}
 	incidentEntity.Edges.WorkItem = workItem
 
@@ -617,7 +632,7 @@ func (s *IncidentService) UpdateIncident(ctx context.Context, id int, req *dto.U
 		Source:      "system",
 	}, tenantID)
 	if err != nil {
-		s.logger.Errorw("Failed to create incident event", "error", err)
+		return nil, err
 	}
 
 	s.logger.Infow("Incident updated successfully", "id", id)
@@ -808,6 +823,14 @@ func (s *IncidentService) CreateIncidentEvent(ctx context.Context, req *dto.Crea
 	if req.UserID != nil {
 		eventBuilder.SetUserID(*req.UserID)
 	}
+	if actor, ok := ctx.Value(incidentAlertActorContextKey{}).(incidentAlertActor); ok {
+		metadata := make(map[string]interface{}, len(req.Metadata)+1)
+		for key, value := range req.Metadata {
+			metadata[key] = value
+		}
+		metadata["correlationId"] = actor.CorrelationID
+		eventBuilder.SetUserID(actor.ID).SetSource(actor.Source).SetMetadata(metadata)
+	}
 
 	event, err := eventBuilder.Save(ctx)
 	if err != nil {
@@ -970,6 +993,35 @@ func (s *IncidentService) GetIncidentMonitoring(ctx context.Context, req *dto.In
 
 // EscalateIncident 升级事件
 func (s *IncidentService) EscalateIncident(ctx context.Context, req *dto.IncidentEscalationRequest, tenantID int) (*dto.IncidentEscalationResponse, error) {
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	result, err := s.EscalateIncidentTx(ctx, tx, req, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *IncidentService) EscalateIncidentTx(ctx context.Context, tx *ent.Tx, req *dto.IncidentEscalationRequest, tenantID int) (*dto.IncidentEscalationResponse, error) {
+	owner := *s
+	owner.client = tx.Client()
+	return owner.escalateIncident(ctx, tx, req, tenantID)
+}
+
+func (s *IncidentService) escalateIncident(ctx context.Context, tx *ent.Tx, req *dto.IncidentEscalationRequest, tenantID int) (*dto.IncidentEscalationResponse, error) {
+	if req.AutoAssign {
+		return nil, fmt.Errorf("automatic escalation assignment is unsupported; configure an explicit assign action")
+	}
+	recipients, err := incidentRuleUserRecipients(ctx, s.client, req.NotifyUsers, tenantID)
+	if err != nil {
+		return nil, err
+	}
 	s.logger.Infow("Escalating incident", "incident_id", req.IncidentID, "level", req.EscalationLevel)
 	if req.EscalationLevel < 1 || req.EscalationLevel > 5 {
 		return nil, fmt.Errorf("escalation level must be between 1 and 5")
@@ -1000,19 +1052,11 @@ func (s *IncidentService) EscalateIncident(ctx context.Context, req *dto.Inciden
 
 	// 更新事件升级信息
 	now := time.Now()
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("start incident escalation transaction: %w", err)
-	}
-	rollback := func(cause error) (*dto.IncidentEscalationResponse, error) {
-		_ = tx.Rollback()
-		return nil, cause
-	}
 	workItem, err := tx.Ticket.UpdateOneID(current.WorkItemID).
 		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(current.Edges.WorkItem.Version)).
 		SetUpdatedAt(now).AddVersion(1).Save(ctx)
 	if err != nil {
-		return rollback(fmt.Errorf("advance incident WorkItem version: %w", err))
+		return nil, fmt.Errorf("advance incident WorkItem version: %w", err)
 	}
 	incidentEntity, err := tx.Incident.UpdateOneID(req.IncidentID).
 		Where(incidentTenantScope(tenantID)).
@@ -1021,10 +1065,7 @@ func (s *IncidentService) EscalateIncident(ctx context.Context, req *dto.Inciden
 		Save(ctx)
 	if err != nil {
 		s.logger.Errorw("Failed to escalate incident", "error", err)
-		return rollback(fmt.Errorf("failed to escalate incident: %w", err))
-	}
-	if err := tx.Commit(); err != nil {
-		return rollback(fmt.Errorf("commit incident escalation: %w", err))
+		return nil, fmt.Errorf("failed to escalate incident: %w", err)
 	}
 	incidentEntity.Edges.WorkItem = workItem
 
@@ -1043,28 +1084,18 @@ func (s *IncidentService) EscalateIncident(ctx context.Context, req *dto.Inciden
 		Source: "system",
 	}, tenantID)
 	if err != nil {
-		s.logger.Errorw("Failed to create escalation event", "error", err)
+		return nil, err
 	}
 
-	// 创建升级告警
-	if s.alertCreator == nil {
-		return nil, fmt.Errorf("incident alerting service is not configured")
-	}
-	_, err = s.alertCreator.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
-		IncidentID: req.IncidentID,
-		AlertType:  "escalation",
-		AlertName:  "事件升级告警",
-		Message:    fmt.Sprintf("事件 %s 已升级到级别 %d", incidentEntity.IncidentNumber, req.EscalationLevel),
-		Severity:   "high",
-		Channels:   []string{"email"},
-		Recipients: []string{"manager@company.com"},
-		Metadata: map[string]interface{}{
-			"escalation_level": req.EscalationLevel,
-			"reason":           req.Reason,
-		},
-	}, tenantID)
-	if err != nil {
-		return nil, fmt.Errorf("create escalation alert: %w", err)
+	if len(recipients) > 0 {
+		creator, ok := s.alertCreator.(IncidentAlertTransactionCreator)
+		if !ok {
+			return nil, fmt.Errorf("transactional incident alerting service is not configured")
+		}
+		_, err = creator.CreateIncidentAlertTx(ctx, tx, &dto.CreateIncidentAlertRequest{IncidentID: req.IncidentID, AlertType: "escalation", AlertName: "事件升级告警", Message: fmt.Sprintf("事件 %s 已升级到级别 %d", workItem.TicketNumber, req.EscalationLevel), Severity: "high", Channels: []string{"email", "in_app"}, Recipients: recipients}, tenantID)
+		if err != nil {
+			return nil, fmt.Errorf("create escalation alert: %w", err)
+		}
 	}
 
 	// 构建响应

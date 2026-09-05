@@ -16,6 +16,18 @@ const (
 	FieldID = "id"
 	// FieldRuleID holds the string denoting the rule_id field in the database.
 	FieldRuleID = "rule_id"
+	// FieldExecutionKind holds the string denoting the execution_kind field in the database.
+	FieldExecutionKind = "execution_kind"
+	// FieldExecutionKey holds the string denoting the execution_key field in the database.
+	FieldExecutionKey = "execution_key"
+	// FieldSourceEventID holds the string denoting the source_event_id field in the database.
+	FieldSourceEventID = "source_event_id"
+	// FieldActorID holds the string denoting the actor_id field in the database.
+	FieldActorID = "actor_id"
+	// FieldSource holds the string denoting the source field in the database.
+	FieldSource = "source"
+	// FieldFrozenActions holds the string denoting the frozen_actions field in the database.
+	FieldFrozenActions = "frozen_actions"
 	// FieldIncidentID holds the string denoting the incident_id field in the database.
 	FieldIncidentID = "incident_id"
 	// FieldStatus holds the string denoting the status field in the database.
@@ -40,10 +52,37 @@ const (
 	FieldCreatedAt = "created_at"
 	// FieldUpdatedAt holds the string denoting the updated_at field in the database.
 	FieldUpdatedAt = "updated_at"
+	// EdgeIncident holds the string denoting the incident edge name in mutations.
+	EdgeIncident = "incident"
+	// EdgeSourceEvent holds the string denoting the source_event edge name in mutations.
+	EdgeSourceEvent = "source_event"
+	// EdgeActionReceipts holds the string denoting the action_receipts edge name in mutations.
+	EdgeActionReceipts = "action_receipts"
 	// EdgeRule holds the string denoting the rule edge name in mutations.
 	EdgeRule = "rule"
 	// Table holds the table name of the incidentruleexecution in the database.
 	Table = "incident_rule_executions"
+	// IncidentTable is the table that holds the incident relation/edge.
+	IncidentTable = "incident_rule_executions"
+	// IncidentInverseTable is the table name for the Incident entity.
+	// It exists in this package in order to avoid circular dependency with the "incident" package.
+	IncidentInverseTable = "incidents"
+	// IncidentColumn is the table column denoting the incident relation/edge.
+	IncidentColumn = "incident_id"
+	// SourceEventTable is the table that holds the source_event relation/edge.
+	SourceEventTable = "incident_rule_executions"
+	// SourceEventInverseTable is the table name for the OutboxEvent entity.
+	// It exists in this package in order to avoid circular dependency with the "outboxevent" package.
+	SourceEventInverseTable = "outbox_events"
+	// SourceEventColumn is the table column denoting the source_event relation/edge.
+	SourceEventColumn = "source_event_id"
+	// ActionReceiptsTable is the table that holds the action_receipts relation/edge.
+	ActionReceiptsTable = "incident_rule_action_receipts"
+	// ActionReceiptsInverseTable is the table name for the IncidentRuleActionReceipt entity.
+	// It exists in this package in order to avoid circular dependency with the "incidentruleactionreceipt" package.
+	ActionReceiptsInverseTable = "incident_rule_action_receipts"
+	// ActionReceiptsColumn is the table column denoting the action_receipts relation/edge.
+	ActionReceiptsColumn = "execution_id"
 	// RuleTable is the table that holds the rule relation/edge.
 	RuleTable = "incident_rule_executions"
 	// RuleInverseTable is the table name for the IncidentRule entity.
@@ -57,6 +96,12 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldRuleID,
+	FieldExecutionKind,
+	FieldExecutionKey,
+	FieldSourceEventID,
+	FieldActorID,
+	FieldSource,
+	FieldFrozenActions,
 	FieldIncidentID,
 	FieldStatus,
 	FieldResult,
@@ -84,6 +129,12 @@ func ValidColumn(column string) bool {
 var (
 	// RuleIDValidator is a validator for the "rule_id" field. It is called by the builders before save.
 	RuleIDValidator func(int) error
+	// DefaultExecutionKind holds the default value on creation for the "execution_kind" field.
+	DefaultExecutionKind string
+	// SourceEventIDValidator is a validator for the "source_event_id" field. It is called by the builders before save.
+	SourceEventIDValidator func(int) error
+	// ActorIDValidator is a validator for the "actor_id" field. It is called by the builders before save.
+	ActorIDValidator func(int) error
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
 	// DefaultStartedAt holds the default value on creation for the "started_at" field.
@@ -109,6 +160,31 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByRuleID orders the results by the rule_id field.
 func ByRuleID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRuleID, opts...).ToFunc()
+}
+
+// ByExecutionKind orders the results by the execution_kind field.
+func ByExecutionKind(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExecutionKind, opts...).ToFunc()
+}
+
+// ByExecutionKey orders the results by the execution_key field.
+func ByExecutionKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExecutionKey, opts...).ToFunc()
+}
+
+// BySourceEventID orders the results by the source_event_id field.
+func BySourceEventID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSourceEventID, opts...).ToFunc()
+}
+
+// ByActorID orders the results by the actor_id field.
+func ByActorID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldActorID, opts...).ToFunc()
+}
+
+// BySource orders the results by the source field.
+func BySource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSource, opts...).ToFunc()
 }
 
 // ByIncidentID orders the results by the incident_id field.
@@ -161,11 +237,60 @@ func ByUpdatedAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUpdatedAt, opts...).ToFunc()
 }
 
+// ByIncidentField orders the results by incident field.
+func ByIncidentField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newIncidentStep(), sql.OrderByField(field, opts...))
+	}
+}
+
+// BySourceEventField orders the results by source_event field.
+func BySourceEventField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newSourceEventStep(), sql.OrderByField(field, opts...))
+	}
+}
+
+// ByActionReceiptsCount orders the results by action_receipts count.
+func ByActionReceiptsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newActionReceiptsStep(), opts...)
+	}
+}
+
+// ByActionReceipts orders the results by action_receipts terms.
+func ByActionReceipts(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newActionReceiptsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByRuleField orders the results by rule field.
 func ByRuleField(field string, opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newRuleStep(), sql.OrderByField(field, opts...))
 	}
+}
+func newIncidentStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(IncidentInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, IncidentTable, IncidentColumn),
+	)
+}
+func newSourceEventStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(SourceEventInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, false, SourceEventTable, SourceEventColumn),
+	)
+}
+func newActionReceiptsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(ActionReceiptsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, ActionReceiptsTable, ActionReceiptsColumn),
+	)
 }
 func newRuleStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(

@@ -50,6 +50,7 @@ import (
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/incidentrule"
+	"itsm-backend/ent/incidentruleactionreceipt"
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/intakerequest"
 	"itsm-backend/ent/intakeresolutionsnapshot"
@@ -187,6 +188,7 @@ const (
 	TypeIncidentEvent               = "IncidentEvent"
 	TypeIncidentMetric              = "IncidentMetric"
 	TypeIncidentRule                = "IncidentRule"
+	TypeIncidentRuleActionReceipt   = "IncidentRuleActionReceipt"
 	TypeIncidentRuleExecution       = "IncidentRuleExecution"
 	TypeIntakeRequest               = "IntakeRequest"
 	TypeIntakeResolutionSnapshot    = "IntakeResolutionSnapshot"
@@ -54414,33 +54416,656 @@ func (m *IncidentRuleMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown IncidentRule edge %s", name)
 }
 
+// IncidentRuleActionReceiptMutation represents an operation that mutates the IncidentRuleActionReceipt nodes in the graph.
+type IncidentRuleActionReceiptMutation struct {
+	config
+	op               Op
+	typ              string
+	id               *int
+	tenant_id        *int
+	addtenant_id     *int
+	action_index     *int
+	addaction_index  *int
+	completed_at     *time.Time
+	clearedFields    map[string]struct{}
+	execution        *int
+	clearedexecution bool
+	done             bool
+	oldValue         func(context.Context) (*IncidentRuleActionReceipt, error)
+	predicates       []predicate.IncidentRuleActionReceipt
+}
+
+var _ ent.Mutation = (*IncidentRuleActionReceiptMutation)(nil)
+
+// incidentruleactionreceiptOption allows management of the mutation configuration using functional options.
+type incidentruleactionreceiptOption func(*IncidentRuleActionReceiptMutation)
+
+// newIncidentRuleActionReceiptMutation creates new mutation for the IncidentRuleActionReceipt entity.
+func newIncidentRuleActionReceiptMutation(c config, op Op, opts ...incidentruleactionreceiptOption) *IncidentRuleActionReceiptMutation {
+	m := &IncidentRuleActionReceiptMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeIncidentRuleActionReceipt,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withIncidentRuleActionReceiptID sets the ID field of the mutation.
+func withIncidentRuleActionReceiptID(id int) incidentruleactionreceiptOption {
+	return func(m *IncidentRuleActionReceiptMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *IncidentRuleActionReceipt
+		)
+		m.oldValue = func(ctx context.Context) (*IncidentRuleActionReceipt, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().IncidentRuleActionReceipt.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withIncidentRuleActionReceipt sets the old IncidentRuleActionReceipt of the mutation.
+func withIncidentRuleActionReceipt(node *IncidentRuleActionReceipt) incidentruleactionreceiptOption {
+	return func(m *IncidentRuleActionReceiptMutation) {
+		m.oldValue = func(context.Context) (*IncidentRuleActionReceipt, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m IncidentRuleActionReceiptMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m IncidentRuleActionReceiptMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *IncidentRuleActionReceiptMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *IncidentRuleActionReceiptMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().IncidentRuleActionReceipt.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetTenantID sets the "tenant_id" field.
+func (m *IncidentRuleActionReceiptMutation) SetTenantID(i int) {
+	m.tenant_id = &i
+	m.addtenant_id = nil
+}
+
+// TenantID returns the value of the "tenant_id" field in the mutation.
+func (m *IncidentRuleActionReceiptMutation) TenantID() (r int, exists bool) {
+	v := m.tenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTenantID returns the old "tenant_id" field's value of the IncidentRuleActionReceipt entity.
+// If the IncidentRuleActionReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentRuleActionReceiptMutation) OldTenantID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTenantID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
+	}
+	return oldValue.TenantID, nil
+}
+
+// AddTenantID adds i to the "tenant_id" field.
+func (m *IncidentRuleActionReceiptMutation) AddTenantID(i int) {
+	if m.addtenant_id != nil {
+		*m.addtenant_id += i
+	} else {
+		m.addtenant_id = &i
+	}
+}
+
+// AddedTenantID returns the value that was added to the "tenant_id" field in this mutation.
+func (m *IncidentRuleActionReceiptMutation) AddedTenantID() (r int, exists bool) {
+	v := m.addtenant_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetTenantID resets all changes to the "tenant_id" field.
+func (m *IncidentRuleActionReceiptMutation) ResetTenantID() {
+	m.tenant_id = nil
+	m.addtenant_id = nil
+}
+
+// SetExecutionID sets the "execution_id" field.
+func (m *IncidentRuleActionReceiptMutation) SetExecutionID(i int) {
+	m.execution = &i
+}
+
+// ExecutionID returns the value of the "execution_id" field in the mutation.
+func (m *IncidentRuleActionReceiptMutation) ExecutionID() (r int, exists bool) {
+	v := m.execution
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExecutionID returns the old "execution_id" field's value of the IncidentRuleActionReceipt entity.
+// If the IncidentRuleActionReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentRuleActionReceiptMutation) OldExecutionID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExecutionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExecutionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExecutionID: %w", err)
+	}
+	return oldValue.ExecutionID, nil
+}
+
+// ResetExecutionID resets all changes to the "execution_id" field.
+func (m *IncidentRuleActionReceiptMutation) ResetExecutionID() {
+	m.execution = nil
+}
+
+// SetActionIndex sets the "action_index" field.
+func (m *IncidentRuleActionReceiptMutation) SetActionIndex(i int) {
+	m.action_index = &i
+	m.addaction_index = nil
+}
+
+// ActionIndex returns the value of the "action_index" field in the mutation.
+func (m *IncidentRuleActionReceiptMutation) ActionIndex() (r int, exists bool) {
+	v := m.action_index
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActionIndex returns the old "action_index" field's value of the IncidentRuleActionReceipt entity.
+// If the IncidentRuleActionReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentRuleActionReceiptMutation) OldActionIndex(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActionIndex is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActionIndex requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActionIndex: %w", err)
+	}
+	return oldValue.ActionIndex, nil
+}
+
+// AddActionIndex adds i to the "action_index" field.
+func (m *IncidentRuleActionReceiptMutation) AddActionIndex(i int) {
+	if m.addaction_index != nil {
+		*m.addaction_index += i
+	} else {
+		m.addaction_index = &i
+	}
+}
+
+// AddedActionIndex returns the value that was added to the "action_index" field in this mutation.
+func (m *IncidentRuleActionReceiptMutation) AddedActionIndex() (r int, exists bool) {
+	v := m.addaction_index
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetActionIndex resets all changes to the "action_index" field.
+func (m *IncidentRuleActionReceiptMutation) ResetActionIndex() {
+	m.action_index = nil
+	m.addaction_index = nil
+}
+
+// SetCompletedAt sets the "completed_at" field.
+func (m *IncidentRuleActionReceiptMutation) SetCompletedAt(t time.Time) {
+	m.completed_at = &t
+}
+
+// CompletedAt returns the value of the "completed_at" field in the mutation.
+func (m *IncidentRuleActionReceiptMutation) CompletedAt() (r time.Time, exists bool) {
+	v := m.completed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCompletedAt returns the old "completed_at" field's value of the IncidentRuleActionReceipt entity.
+// If the IncidentRuleActionReceipt object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentRuleActionReceiptMutation) OldCompletedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCompletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCompletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCompletedAt: %w", err)
+	}
+	return oldValue.CompletedAt, nil
+}
+
+// ResetCompletedAt resets all changes to the "completed_at" field.
+func (m *IncidentRuleActionReceiptMutation) ResetCompletedAt() {
+	m.completed_at = nil
+}
+
+// ClearExecution clears the "execution" edge to the IncidentRuleExecution entity.
+func (m *IncidentRuleActionReceiptMutation) ClearExecution() {
+	m.clearedexecution = true
+	m.clearedFields[incidentruleactionreceipt.FieldExecutionID] = struct{}{}
+}
+
+// ExecutionCleared reports if the "execution" edge to the IncidentRuleExecution entity was cleared.
+func (m *IncidentRuleActionReceiptMutation) ExecutionCleared() bool {
+	return m.clearedexecution
+}
+
+// ExecutionIDs returns the "execution" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ExecutionID instead. It exists only for internal usage by the builders.
+func (m *IncidentRuleActionReceiptMutation) ExecutionIDs() (ids []int) {
+	if id := m.execution; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetExecution resets all changes to the "execution" edge.
+func (m *IncidentRuleActionReceiptMutation) ResetExecution() {
+	m.execution = nil
+	m.clearedexecution = false
+}
+
+// Where appends a list predicates to the IncidentRuleActionReceiptMutation builder.
+func (m *IncidentRuleActionReceiptMutation) Where(ps ...predicate.IncidentRuleActionReceipt) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the IncidentRuleActionReceiptMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *IncidentRuleActionReceiptMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.IncidentRuleActionReceipt, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *IncidentRuleActionReceiptMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *IncidentRuleActionReceiptMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (IncidentRuleActionReceipt).
+func (m *IncidentRuleActionReceiptMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *IncidentRuleActionReceiptMutation) Fields() []string {
+	fields := make([]string, 0, 4)
+	if m.tenant_id != nil {
+		fields = append(fields, incidentruleactionreceipt.FieldTenantID)
+	}
+	if m.execution != nil {
+		fields = append(fields, incidentruleactionreceipt.FieldExecutionID)
+	}
+	if m.action_index != nil {
+		fields = append(fields, incidentruleactionreceipt.FieldActionIndex)
+	}
+	if m.completed_at != nil {
+		fields = append(fields, incidentruleactionreceipt.FieldCompletedAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *IncidentRuleActionReceiptMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case incidentruleactionreceipt.FieldTenantID:
+		return m.TenantID()
+	case incidentruleactionreceipt.FieldExecutionID:
+		return m.ExecutionID()
+	case incidentruleactionreceipt.FieldActionIndex:
+		return m.ActionIndex()
+	case incidentruleactionreceipt.FieldCompletedAt:
+		return m.CompletedAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *IncidentRuleActionReceiptMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case incidentruleactionreceipt.FieldTenantID:
+		return m.OldTenantID(ctx)
+	case incidentruleactionreceipt.FieldExecutionID:
+		return m.OldExecutionID(ctx)
+	case incidentruleactionreceipt.FieldActionIndex:
+		return m.OldActionIndex(ctx)
+	case incidentruleactionreceipt.FieldCompletedAt:
+		return m.OldCompletedAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown IncidentRuleActionReceipt field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *IncidentRuleActionReceiptMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case incidentruleactionreceipt.FieldTenantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTenantID(v)
+		return nil
+	case incidentruleactionreceipt.FieldExecutionID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExecutionID(v)
+		return nil
+	case incidentruleactionreceipt.FieldActionIndex:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActionIndex(v)
+		return nil
+	case incidentruleactionreceipt.FieldCompletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCompletedAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown IncidentRuleActionReceipt field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *IncidentRuleActionReceiptMutation) AddedFields() []string {
+	var fields []string
+	if m.addtenant_id != nil {
+		fields = append(fields, incidentruleactionreceipt.FieldTenantID)
+	}
+	if m.addaction_index != nil {
+		fields = append(fields, incidentruleactionreceipt.FieldActionIndex)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *IncidentRuleActionReceiptMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case incidentruleactionreceipt.FieldTenantID:
+		return m.AddedTenantID()
+	case incidentruleactionreceipt.FieldActionIndex:
+		return m.AddedActionIndex()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *IncidentRuleActionReceiptMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case incidentruleactionreceipt.FieldTenantID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTenantID(v)
+		return nil
+	case incidentruleactionreceipt.FieldActionIndex:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddActionIndex(v)
+		return nil
+	}
+	return fmt.Errorf("unknown IncidentRuleActionReceipt numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *IncidentRuleActionReceiptMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *IncidentRuleActionReceiptMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *IncidentRuleActionReceiptMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown IncidentRuleActionReceipt nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *IncidentRuleActionReceiptMutation) ResetField(name string) error {
+	switch name {
+	case incidentruleactionreceipt.FieldTenantID:
+		m.ResetTenantID()
+		return nil
+	case incidentruleactionreceipt.FieldExecutionID:
+		m.ResetExecutionID()
+		return nil
+	case incidentruleactionreceipt.FieldActionIndex:
+		m.ResetActionIndex()
+		return nil
+	case incidentruleactionreceipt.FieldCompletedAt:
+		m.ResetCompletedAt()
+		return nil
+	}
+	return fmt.Errorf("unknown IncidentRuleActionReceipt field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *IncidentRuleActionReceiptMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.execution != nil {
+		edges = append(edges, incidentruleactionreceipt.EdgeExecution)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *IncidentRuleActionReceiptMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case incidentruleactionreceipt.EdgeExecution:
+		if id := m.execution; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *IncidentRuleActionReceiptMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *IncidentRuleActionReceiptMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *IncidentRuleActionReceiptMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedexecution {
+		edges = append(edges, incidentruleactionreceipt.EdgeExecution)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *IncidentRuleActionReceiptMutation) EdgeCleared(name string) bool {
+	switch name {
+	case incidentruleactionreceipt.EdgeExecution:
+		return m.clearedexecution
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *IncidentRuleActionReceiptMutation) ClearEdge(name string) error {
+	switch name {
+	case incidentruleactionreceipt.EdgeExecution:
+		m.ClearExecution()
+		return nil
+	}
+	return fmt.Errorf("unknown IncidentRuleActionReceipt unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *IncidentRuleActionReceiptMutation) ResetEdge(name string) error {
+	switch name {
+	case incidentruleactionreceipt.EdgeExecution:
+		m.ResetExecution()
+		return nil
+	}
+	return fmt.Errorf("unknown IncidentRuleActionReceipt edge %s", name)
+}
+
 // IncidentRuleExecutionMutation represents an operation that mutates the IncidentRuleExecution nodes in the graph.
 type IncidentRuleExecutionMutation struct {
 	config
-	op                   Op
-	typ                  string
-	id                   *int
-	incident_id          *int
-	addincident_id       *int
-	status               *string
-	result               *string
-	error_message        *string
-	started_at           *time.Time
-	completed_at         *time.Time
-	execution_time_ms    *int
-	addexecution_time_ms *int
-	input_data           *map[string]interface{}
-	output_data          *map[string]interface{}
-	tenant_id            *int
-	addtenant_id         *int
-	created_at           *time.Time
-	updated_at           *time.Time
-	clearedFields        map[string]struct{}
-	rule                 *int
-	clearedrule          bool
-	done                 bool
-	oldValue             func(context.Context) (*IncidentRuleExecution, error)
-	predicates           []predicate.IncidentRuleExecution
+	op                     Op
+	typ                    string
+	id                     *int
+	execution_kind         *string
+	execution_key          *string
+	actor_id               *int
+	addactor_id            *int
+	source                 *string
+	frozen_actions         *[]map[string]interface{}
+	appendfrozen_actions   []map[string]interface{}
+	status                 *string
+	result                 *string
+	error_message          *string
+	started_at             *time.Time
+	completed_at           *time.Time
+	execution_time_ms      *int
+	addexecution_time_ms   *int
+	input_data             *map[string]interface{}
+	output_data            *map[string]interface{}
+	tenant_id              *int
+	addtenant_id           *int
+	created_at             *time.Time
+	updated_at             *time.Time
+	clearedFields          map[string]struct{}
+	incident               *int
+	clearedincident        bool
+	source_event           *int
+	clearedsource_event    bool
+	action_receipts        map[int]struct{}
+	removedaction_receipts map[int]struct{}
+	clearedaction_receipts bool
+	rule                   *int
+	clearedrule            bool
+	done                   bool
+	oldValue               func(context.Context) (*IncidentRuleExecution, error)
+	predicates             []predicate.IncidentRuleExecution
 }
 
 var _ ent.Mutation = (*IncidentRuleExecutionMutation)(nil)
@@ -54572,20 +55197,350 @@ func (m *IncidentRuleExecutionMutation) OldRuleID(ctx context.Context) (v int, e
 	return oldValue.RuleID, nil
 }
 
+// ClearRuleID clears the value of the "rule_id" field.
+func (m *IncidentRuleExecutionMutation) ClearRuleID() {
+	m.rule = nil
+	m.clearedFields[incidentruleexecution.FieldRuleID] = struct{}{}
+}
+
+// RuleIDCleared returns if the "rule_id" field was cleared in this mutation.
+func (m *IncidentRuleExecutionMutation) RuleIDCleared() bool {
+	_, ok := m.clearedFields[incidentruleexecution.FieldRuleID]
+	return ok
+}
+
 // ResetRuleID resets all changes to the "rule_id" field.
 func (m *IncidentRuleExecutionMutation) ResetRuleID() {
 	m.rule = nil
+	delete(m.clearedFields, incidentruleexecution.FieldRuleID)
+}
+
+// SetExecutionKind sets the "execution_kind" field.
+func (m *IncidentRuleExecutionMutation) SetExecutionKind(s string) {
+	m.execution_kind = &s
+}
+
+// ExecutionKind returns the value of the "execution_kind" field in the mutation.
+func (m *IncidentRuleExecutionMutation) ExecutionKind() (r string, exists bool) {
+	v := m.execution_kind
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExecutionKind returns the old "execution_kind" field's value of the IncidentRuleExecution entity.
+// If the IncidentRuleExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentRuleExecutionMutation) OldExecutionKind(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExecutionKind is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExecutionKind requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExecutionKind: %w", err)
+	}
+	return oldValue.ExecutionKind, nil
+}
+
+// ResetExecutionKind resets all changes to the "execution_kind" field.
+func (m *IncidentRuleExecutionMutation) ResetExecutionKind() {
+	m.execution_kind = nil
+}
+
+// SetExecutionKey sets the "execution_key" field.
+func (m *IncidentRuleExecutionMutation) SetExecutionKey(s string) {
+	m.execution_key = &s
+}
+
+// ExecutionKey returns the value of the "execution_key" field in the mutation.
+func (m *IncidentRuleExecutionMutation) ExecutionKey() (r string, exists bool) {
+	v := m.execution_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExecutionKey returns the old "execution_key" field's value of the IncidentRuleExecution entity.
+// If the IncidentRuleExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentRuleExecutionMutation) OldExecutionKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExecutionKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExecutionKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExecutionKey: %w", err)
+	}
+	return oldValue.ExecutionKey, nil
+}
+
+// ClearExecutionKey clears the value of the "execution_key" field.
+func (m *IncidentRuleExecutionMutation) ClearExecutionKey() {
+	m.execution_key = nil
+	m.clearedFields[incidentruleexecution.FieldExecutionKey] = struct{}{}
+}
+
+// ExecutionKeyCleared returns if the "execution_key" field was cleared in this mutation.
+func (m *IncidentRuleExecutionMutation) ExecutionKeyCleared() bool {
+	_, ok := m.clearedFields[incidentruleexecution.FieldExecutionKey]
+	return ok
+}
+
+// ResetExecutionKey resets all changes to the "execution_key" field.
+func (m *IncidentRuleExecutionMutation) ResetExecutionKey() {
+	m.execution_key = nil
+	delete(m.clearedFields, incidentruleexecution.FieldExecutionKey)
+}
+
+// SetSourceEventID sets the "source_event_id" field.
+func (m *IncidentRuleExecutionMutation) SetSourceEventID(i int) {
+	m.source_event = &i
+}
+
+// SourceEventID returns the value of the "source_event_id" field in the mutation.
+func (m *IncidentRuleExecutionMutation) SourceEventID() (r int, exists bool) {
+	v := m.source_event
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceEventID returns the old "source_event_id" field's value of the IncidentRuleExecution entity.
+// If the IncidentRuleExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentRuleExecutionMutation) OldSourceEventID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceEventID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceEventID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceEventID: %w", err)
+	}
+	return oldValue.SourceEventID, nil
+}
+
+// ClearSourceEventID clears the value of the "source_event_id" field.
+func (m *IncidentRuleExecutionMutation) ClearSourceEventID() {
+	m.source_event = nil
+	m.clearedFields[incidentruleexecution.FieldSourceEventID] = struct{}{}
+}
+
+// SourceEventIDCleared returns if the "source_event_id" field was cleared in this mutation.
+func (m *IncidentRuleExecutionMutation) SourceEventIDCleared() bool {
+	_, ok := m.clearedFields[incidentruleexecution.FieldSourceEventID]
+	return ok
+}
+
+// ResetSourceEventID resets all changes to the "source_event_id" field.
+func (m *IncidentRuleExecutionMutation) ResetSourceEventID() {
+	m.source_event = nil
+	delete(m.clearedFields, incidentruleexecution.FieldSourceEventID)
+}
+
+// SetActorID sets the "actor_id" field.
+func (m *IncidentRuleExecutionMutation) SetActorID(i int) {
+	m.actor_id = &i
+	m.addactor_id = nil
+}
+
+// ActorID returns the value of the "actor_id" field in the mutation.
+func (m *IncidentRuleExecutionMutation) ActorID() (r int, exists bool) {
+	v := m.actor_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActorID returns the old "actor_id" field's value of the IncidentRuleExecution entity.
+// If the IncidentRuleExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentRuleExecutionMutation) OldActorID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActorID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActorID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActorID: %w", err)
+	}
+	return oldValue.ActorID, nil
+}
+
+// AddActorID adds i to the "actor_id" field.
+func (m *IncidentRuleExecutionMutation) AddActorID(i int) {
+	if m.addactor_id != nil {
+		*m.addactor_id += i
+	} else {
+		m.addactor_id = &i
+	}
+}
+
+// AddedActorID returns the value that was added to the "actor_id" field in this mutation.
+func (m *IncidentRuleExecutionMutation) AddedActorID() (r int, exists bool) {
+	v := m.addactor_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearActorID clears the value of the "actor_id" field.
+func (m *IncidentRuleExecutionMutation) ClearActorID() {
+	m.actor_id = nil
+	m.addactor_id = nil
+	m.clearedFields[incidentruleexecution.FieldActorID] = struct{}{}
+}
+
+// ActorIDCleared returns if the "actor_id" field was cleared in this mutation.
+func (m *IncidentRuleExecutionMutation) ActorIDCleared() bool {
+	_, ok := m.clearedFields[incidentruleexecution.FieldActorID]
+	return ok
+}
+
+// ResetActorID resets all changes to the "actor_id" field.
+func (m *IncidentRuleExecutionMutation) ResetActorID() {
+	m.actor_id = nil
+	m.addactor_id = nil
+	delete(m.clearedFields, incidentruleexecution.FieldActorID)
+}
+
+// SetSource sets the "source" field.
+func (m *IncidentRuleExecutionMutation) SetSource(s string) {
+	m.source = &s
+}
+
+// Source returns the value of the "source" field in the mutation.
+func (m *IncidentRuleExecutionMutation) Source() (r string, exists bool) {
+	v := m.source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSource returns the old "source" field's value of the IncidentRuleExecution entity.
+// If the IncidentRuleExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentRuleExecutionMutation) OldSource(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSource: %w", err)
+	}
+	return oldValue.Source, nil
+}
+
+// ClearSource clears the value of the "source" field.
+func (m *IncidentRuleExecutionMutation) ClearSource() {
+	m.source = nil
+	m.clearedFields[incidentruleexecution.FieldSource] = struct{}{}
+}
+
+// SourceCleared returns if the "source" field was cleared in this mutation.
+func (m *IncidentRuleExecutionMutation) SourceCleared() bool {
+	_, ok := m.clearedFields[incidentruleexecution.FieldSource]
+	return ok
+}
+
+// ResetSource resets all changes to the "source" field.
+func (m *IncidentRuleExecutionMutation) ResetSource() {
+	m.source = nil
+	delete(m.clearedFields, incidentruleexecution.FieldSource)
+}
+
+// SetFrozenActions sets the "frozen_actions" field.
+func (m *IncidentRuleExecutionMutation) SetFrozenActions(value []map[string]interface{}) {
+	m.frozen_actions = &value
+	m.appendfrozen_actions = nil
+}
+
+// FrozenActions returns the value of the "frozen_actions" field in the mutation.
+func (m *IncidentRuleExecutionMutation) FrozenActions() (r []map[string]interface{}, exists bool) {
+	v := m.frozen_actions
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldFrozenActions returns the old "frozen_actions" field's value of the IncidentRuleExecution entity.
+// If the IncidentRuleExecution object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IncidentRuleExecutionMutation) OldFrozenActions(ctx context.Context) (v []map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldFrozenActions is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldFrozenActions requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldFrozenActions: %w", err)
+	}
+	return oldValue.FrozenActions, nil
+}
+
+// AppendFrozenActions adds value to the "frozen_actions" field.
+func (m *IncidentRuleExecutionMutation) AppendFrozenActions(value []map[string]interface{}) {
+	m.appendfrozen_actions = append(m.appendfrozen_actions, value...)
+}
+
+// AppendedFrozenActions returns the list of values that were appended to the "frozen_actions" field in this mutation.
+func (m *IncidentRuleExecutionMutation) AppendedFrozenActions() ([]map[string]interface{}, bool) {
+	if len(m.appendfrozen_actions) == 0 {
+		return nil, false
+	}
+	return m.appendfrozen_actions, true
+}
+
+// ClearFrozenActions clears the value of the "frozen_actions" field.
+func (m *IncidentRuleExecutionMutation) ClearFrozenActions() {
+	m.frozen_actions = nil
+	m.appendfrozen_actions = nil
+	m.clearedFields[incidentruleexecution.FieldFrozenActions] = struct{}{}
+}
+
+// FrozenActionsCleared returns if the "frozen_actions" field was cleared in this mutation.
+func (m *IncidentRuleExecutionMutation) FrozenActionsCleared() bool {
+	_, ok := m.clearedFields[incidentruleexecution.FieldFrozenActions]
+	return ok
+}
+
+// ResetFrozenActions resets all changes to the "frozen_actions" field.
+func (m *IncidentRuleExecutionMutation) ResetFrozenActions() {
+	m.frozen_actions = nil
+	m.appendfrozen_actions = nil
+	delete(m.clearedFields, incidentruleexecution.FieldFrozenActions)
 }
 
 // SetIncidentID sets the "incident_id" field.
 func (m *IncidentRuleExecutionMutation) SetIncidentID(i int) {
-	m.incident_id = &i
-	m.addincident_id = nil
+	m.incident = &i
 }
 
 // IncidentID returns the value of the "incident_id" field in the mutation.
 func (m *IncidentRuleExecutionMutation) IncidentID() (r int, exists bool) {
-	v := m.incident_id
+	v := m.incident
 	if v == nil {
 		return
 	}
@@ -54609,28 +55564,9 @@ func (m *IncidentRuleExecutionMutation) OldIncidentID(ctx context.Context) (v in
 	return oldValue.IncidentID, nil
 }
 
-// AddIncidentID adds i to the "incident_id" field.
-func (m *IncidentRuleExecutionMutation) AddIncidentID(i int) {
-	if m.addincident_id != nil {
-		*m.addincident_id += i
-	} else {
-		m.addincident_id = &i
-	}
-}
-
-// AddedIncidentID returns the value that was added to the "incident_id" field in this mutation.
-func (m *IncidentRuleExecutionMutation) AddedIncidentID() (r int, exists bool) {
-	v := m.addincident_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
 // ClearIncidentID clears the value of the "incident_id" field.
 func (m *IncidentRuleExecutionMutation) ClearIncidentID() {
-	m.incident_id = nil
-	m.addincident_id = nil
+	m.incident = nil
 	m.clearedFields[incidentruleexecution.FieldIncidentID] = struct{}{}
 }
 
@@ -54642,8 +55578,7 @@ func (m *IncidentRuleExecutionMutation) IncidentIDCleared() bool {
 
 // ResetIncidentID resets all changes to the "incident_id" field.
 func (m *IncidentRuleExecutionMutation) ResetIncidentID() {
-	m.incident_id = nil
-	m.addincident_id = nil
+	m.incident = nil
 	delete(m.clearedFields, incidentruleexecution.FieldIncidentID)
 }
 
@@ -55162,6 +56097,114 @@ func (m *IncidentRuleExecutionMutation) ResetUpdatedAt() {
 	m.updated_at = nil
 }
 
+// ClearIncident clears the "incident" edge to the Incident entity.
+func (m *IncidentRuleExecutionMutation) ClearIncident() {
+	m.clearedincident = true
+	m.clearedFields[incidentruleexecution.FieldIncidentID] = struct{}{}
+}
+
+// IncidentCleared reports if the "incident" edge to the Incident entity was cleared.
+func (m *IncidentRuleExecutionMutation) IncidentCleared() bool {
+	return m.IncidentIDCleared() || m.clearedincident
+}
+
+// IncidentIDs returns the "incident" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// IncidentID instead. It exists only for internal usage by the builders.
+func (m *IncidentRuleExecutionMutation) IncidentIDs() (ids []int) {
+	if id := m.incident; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetIncident resets all changes to the "incident" edge.
+func (m *IncidentRuleExecutionMutation) ResetIncident() {
+	m.incident = nil
+	m.clearedincident = false
+}
+
+// ClearSourceEvent clears the "source_event" edge to the OutboxEvent entity.
+func (m *IncidentRuleExecutionMutation) ClearSourceEvent() {
+	m.clearedsource_event = true
+	m.clearedFields[incidentruleexecution.FieldSourceEventID] = struct{}{}
+}
+
+// SourceEventCleared reports if the "source_event" edge to the OutboxEvent entity was cleared.
+func (m *IncidentRuleExecutionMutation) SourceEventCleared() bool {
+	return m.SourceEventIDCleared() || m.clearedsource_event
+}
+
+// SourceEventIDs returns the "source_event" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// SourceEventID instead. It exists only for internal usage by the builders.
+func (m *IncidentRuleExecutionMutation) SourceEventIDs() (ids []int) {
+	if id := m.source_event; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetSourceEvent resets all changes to the "source_event" edge.
+func (m *IncidentRuleExecutionMutation) ResetSourceEvent() {
+	m.source_event = nil
+	m.clearedsource_event = false
+}
+
+// AddActionReceiptIDs adds the "action_receipts" edge to the IncidentRuleActionReceipt entity by ids.
+func (m *IncidentRuleExecutionMutation) AddActionReceiptIDs(ids ...int) {
+	if m.action_receipts == nil {
+		m.action_receipts = make(map[int]struct{})
+	}
+	for i := range ids {
+		m.action_receipts[ids[i]] = struct{}{}
+	}
+}
+
+// ClearActionReceipts clears the "action_receipts" edge to the IncidentRuleActionReceipt entity.
+func (m *IncidentRuleExecutionMutation) ClearActionReceipts() {
+	m.clearedaction_receipts = true
+}
+
+// ActionReceiptsCleared reports if the "action_receipts" edge to the IncidentRuleActionReceipt entity was cleared.
+func (m *IncidentRuleExecutionMutation) ActionReceiptsCleared() bool {
+	return m.clearedaction_receipts
+}
+
+// RemoveActionReceiptIDs removes the "action_receipts" edge to the IncidentRuleActionReceipt entity by IDs.
+func (m *IncidentRuleExecutionMutation) RemoveActionReceiptIDs(ids ...int) {
+	if m.removedaction_receipts == nil {
+		m.removedaction_receipts = make(map[int]struct{})
+	}
+	for i := range ids {
+		delete(m.action_receipts, ids[i])
+		m.removedaction_receipts[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedActionReceipts returns the removed IDs of the "action_receipts" edge to the IncidentRuleActionReceipt entity.
+func (m *IncidentRuleExecutionMutation) RemovedActionReceiptsIDs() (ids []int) {
+	for id := range m.removedaction_receipts {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ActionReceiptsIDs returns the "action_receipts" edge IDs in the mutation.
+func (m *IncidentRuleExecutionMutation) ActionReceiptsIDs() (ids []int) {
+	for id := range m.action_receipts {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetActionReceipts resets all changes to the "action_receipts" edge.
+func (m *IncidentRuleExecutionMutation) ResetActionReceipts() {
+	m.action_receipts = nil
+	m.clearedaction_receipts = false
+	m.removedaction_receipts = nil
+}
+
 // ClearRule clears the "rule" edge to the IncidentRule entity.
 func (m *IncidentRuleExecutionMutation) ClearRule() {
 	m.clearedrule = true
@@ -55170,7 +56213,7 @@ func (m *IncidentRuleExecutionMutation) ClearRule() {
 
 // RuleCleared reports if the "rule" edge to the IncidentRule entity was cleared.
 func (m *IncidentRuleExecutionMutation) RuleCleared() bool {
-	return m.clearedrule
+	return m.RuleIDCleared() || m.clearedrule
 }
 
 // RuleIDs returns the "rule" edge IDs in the mutation.
@@ -55223,11 +56266,29 @@ func (m *IncidentRuleExecutionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IncidentRuleExecutionMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 19)
 	if m.rule != nil {
 		fields = append(fields, incidentruleexecution.FieldRuleID)
 	}
-	if m.incident_id != nil {
+	if m.execution_kind != nil {
+		fields = append(fields, incidentruleexecution.FieldExecutionKind)
+	}
+	if m.execution_key != nil {
+		fields = append(fields, incidentruleexecution.FieldExecutionKey)
+	}
+	if m.source_event != nil {
+		fields = append(fields, incidentruleexecution.FieldSourceEventID)
+	}
+	if m.actor_id != nil {
+		fields = append(fields, incidentruleexecution.FieldActorID)
+	}
+	if m.source != nil {
+		fields = append(fields, incidentruleexecution.FieldSource)
+	}
+	if m.frozen_actions != nil {
+		fields = append(fields, incidentruleexecution.FieldFrozenActions)
+	}
+	if m.incident != nil {
 		fields = append(fields, incidentruleexecution.FieldIncidentID)
 	}
 	if m.status != nil {
@@ -55273,6 +56334,18 @@ func (m *IncidentRuleExecutionMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case incidentruleexecution.FieldRuleID:
 		return m.RuleID()
+	case incidentruleexecution.FieldExecutionKind:
+		return m.ExecutionKind()
+	case incidentruleexecution.FieldExecutionKey:
+		return m.ExecutionKey()
+	case incidentruleexecution.FieldSourceEventID:
+		return m.SourceEventID()
+	case incidentruleexecution.FieldActorID:
+		return m.ActorID()
+	case incidentruleexecution.FieldSource:
+		return m.Source()
+	case incidentruleexecution.FieldFrozenActions:
+		return m.FrozenActions()
 	case incidentruleexecution.FieldIncidentID:
 		return m.IncidentID()
 	case incidentruleexecution.FieldStatus:
@@ -55308,6 +56381,18 @@ func (m *IncidentRuleExecutionMutation) OldField(ctx context.Context, name strin
 	switch name {
 	case incidentruleexecution.FieldRuleID:
 		return m.OldRuleID(ctx)
+	case incidentruleexecution.FieldExecutionKind:
+		return m.OldExecutionKind(ctx)
+	case incidentruleexecution.FieldExecutionKey:
+		return m.OldExecutionKey(ctx)
+	case incidentruleexecution.FieldSourceEventID:
+		return m.OldSourceEventID(ctx)
+	case incidentruleexecution.FieldActorID:
+		return m.OldActorID(ctx)
+	case incidentruleexecution.FieldSource:
+		return m.OldSource(ctx)
+	case incidentruleexecution.FieldFrozenActions:
+		return m.OldFrozenActions(ctx)
 	case incidentruleexecution.FieldIncidentID:
 		return m.OldIncidentID(ctx)
 	case incidentruleexecution.FieldStatus:
@@ -55347,6 +56432,48 @@ func (m *IncidentRuleExecutionMutation) SetField(name string, value ent.Value) e
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetRuleID(v)
+		return nil
+	case incidentruleexecution.FieldExecutionKind:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExecutionKind(v)
+		return nil
+	case incidentruleexecution.FieldExecutionKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExecutionKey(v)
+		return nil
+	case incidentruleexecution.FieldSourceEventID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceEventID(v)
+		return nil
+	case incidentruleexecution.FieldActorID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActorID(v)
+		return nil
+	case incidentruleexecution.FieldSource:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSource(v)
+		return nil
+	case incidentruleexecution.FieldFrozenActions:
+		v, ok := value.([]map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetFrozenActions(v)
 		return nil
 	case incidentruleexecution.FieldIncidentID:
 		v, ok := value.(int)
@@ -55440,8 +56567,8 @@ func (m *IncidentRuleExecutionMutation) SetField(name string, value ent.Value) e
 // this mutation.
 func (m *IncidentRuleExecutionMutation) AddedFields() []string {
 	var fields []string
-	if m.addincident_id != nil {
-		fields = append(fields, incidentruleexecution.FieldIncidentID)
+	if m.addactor_id != nil {
+		fields = append(fields, incidentruleexecution.FieldActorID)
 	}
 	if m.addexecution_time_ms != nil {
 		fields = append(fields, incidentruleexecution.FieldExecutionTimeMs)
@@ -55457,8 +56584,8 @@ func (m *IncidentRuleExecutionMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *IncidentRuleExecutionMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
-	case incidentruleexecution.FieldIncidentID:
-		return m.AddedIncidentID()
+	case incidentruleexecution.FieldActorID:
+		return m.AddedActorID()
 	case incidentruleexecution.FieldExecutionTimeMs:
 		return m.AddedExecutionTimeMs()
 	case incidentruleexecution.FieldTenantID:
@@ -55472,12 +56599,12 @@ func (m *IncidentRuleExecutionMutation) AddedField(name string) (ent.Value, bool
 // type.
 func (m *IncidentRuleExecutionMutation) AddField(name string, value ent.Value) error {
 	switch name {
-	case incidentruleexecution.FieldIncidentID:
+	case incidentruleexecution.FieldActorID:
 		v, ok := value.(int)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
-		m.AddIncidentID(v)
+		m.AddActorID(v)
 		return nil
 	case incidentruleexecution.FieldExecutionTimeMs:
 		v, ok := value.(int)
@@ -55501,6 +56628,24 @@ func (m *IncidentRuleExecutionMutation) AddField(name string, value ent.Value) e
 // mutation.
 func (m *IncidentRuleExecutionMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(incidentruleexecution.FieldRuleID) {
+		fields = append(fields, incidentruleexecution.FieldRuleID)
+	}
+	if m.FieldCleared(incidentruleexecution.FieldExecutionKey) {
+		fields = append(fields, incidentruleexecution.FieldExecutionKey)
+	}
+	if m.FieldCleared(incidentruleexecution.FieldSourceEventID) {
+		fields = append(fields, incidentruleexecution.FieldSourceEventID)
+	}
+	if m.FieldCleared(incidentruleexecution.FieldActorID) {
+		fields = append(fields, incidentruleexecution.FieldActorID)
+	}
+	if m.FieldCleared(incidentruleexecution.FieldSource) {
+		fields = append(fields, incidentruleexecution.FieldSource)
+	}
+	if m.FieldCleared(incidentruleexecution.FieldFrozenActions) {
+		fields = append(fields, incidentruleexecution.FieldFrozenActions)
+	}
 	if m.FieldCleared(incidentruleexecution.FieldIncidentID) {
 		fields = append(fields, incidentruleexecution.FieldIncidentID)
 	}
@@ -55536,6 +56681,24 @@ func (m *IncidentRuleExecutionMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *IncidentRuleExecutionMutation) ClearField(name string) error {
 	switch name {
+	case incidentruleexecution.FieldRuleID:
+		m.ClearRuleID()
+		return nil
+	case incidentruleexecution.FieldExecutionKey:
+		m.ClearExecutionKey()
+		return nil
+	case incidentruleexecution.FieldSourceEventID:
+		m.ClearSourceEventID()
+		return nil
+	case incidentruleexecution.FieldActorID:
+		m.ClearActorID()
+		return nil
+	case incidentruleexecution.FieldSource:
+		m.ClearSource()
+		return nil
+	case incidentruleexecution.FieldFrozenActions:
+		m.ClearFrozenActions()
+		return nil
 	case incidentruleexecution.FieldIncidentID:
 		m.ClearIncidentID()
 		return nil
@@ -55567,6 +56730,24 @@ func (m *IncidentRuleExecutionMutation) ResetField(name string) error {
 	switch name {
 	case incidentruleexecution.FieldRuleID:
 		m.ResetRuleID()
+		return nil
+	case incidentruleexecution.FieldExecutionKind:
+		m.ResetExecutionKind()
+		return nil
+	case incidentruleexecution.FieldExecutionKey:
+		m.ResetExecutionKey()
+		return nil
+	case incidentruleexecution.FieldSourceEventID:
+		m.ResetSourceEventID()
+		return nil
+	case incidentruleexecution.FieldActorID:
+		m.ResetActorID()
+		return nil
+	case incidentruleexecution.FieldSource:
+		m.ResetSource()
+		return nil
+	case incidentruleexecution.FieldFrozenActions:
+		m.ResetFrozenActions()
 		return nil
 	case incidentruleexecution.FieldIncidentID:
 		m.ResetIncidentID()
@@ -55610,7 +56791,16 @@ func (m *IncidentRuleExecutionMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *IncidentRuleExecutionMutation) AddedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 4)
+	if m.incident != nil {
+		edges = append(edges, incidentruleexecution.EdgeIncident)
+	}
+	if m.source_event != nil {
+		edges = append(edges, incidentruleexecution.EdgeSourceEvent)
+	}
+	if m.action_receipts != nil {
+		edges = append(edges, incidentruleexecution.EdgeActionReceipts)
+	}
 	if m.rule != nil {
 		edges = append(edges, incidentruleexecution.EdgeRule)
 	}
@@ -55621,6 +56811,20 @@ func (m *IncidentRuleExecutionMutation) AddedEdges() []string {
 // name in this mutation.
 func (m *IncidentRuleExecutionMutation) AddedIDs(name string) []ent.Value {
 	switch name {
+	case incidentruleexecution.EdgeIncident:
+		if id := m.incident; id != nil {
+			return []ent.Value{*id}
+		}
+	case incidentruleexecution.EdgeSourceEvent:
+		if id := m.source_event; id != nil {
+			return []ent.Value{*id}
+		}
+	case incidentruleexecution.EdgeActionReceipts:
+		ids := make([]ent.Value, 0, len(m.action_receipts))
+		for id := range m.action_receipts {
+			ids = append(ids, id)
+		}
+		return ids
 	case incidentruleexecution.EdgeRule:
 		if id := m.rule; id != nil {
 			return []ent.Value{*id}
@@ -55631,19 +56835,39 @@ func (m *IncidentRuleExecutionMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *IncidentRuleExecutionMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 4)
+	if m.removedaction_receipts != nil {
+		edges = append(edges, incidentruleexecution.EdgeActionReceipts)
+	}
 	return edges
 }
 
 // RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
 // the given name in this mutation.
 func (m *IncidentRuleExecutionMutation) RemovedIDs(name string) []ent.Value {
+	switch name {
+	case incidentruleexecution.EdgeActionReceipts:
+		ids := make([]ent.Value, 0, len(m.removedaction_receipts))
+		for id := range m.removedaction_receipts {
+			ids = append(ids, id)
+		}
+		return ids
+	}
 	return nil
 }
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *IncidentRuleExecutionMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 1)
+	edges := make([]string, 0, 4)
+	if m.clearedincident {
+		edges = append(edges, incidentruleexecution.EdgeIncident)
+	}
+	if m.clearedsource_event {
+		edges = append(edges, incidentruleexecution.EdgeSourceEvent)
+	}
+	if m.clearedaction_receipts {
+		edges = append(edges, incidentruleexecution.EdgeActionReceipts)
+	}
 	if m.clearedrule {
 		edges = append(edges, incidentruleexecution.EdgeRule)
 	}
@@ -55654,6 +56878,12 @@ func (m *IncidentRuleExecutionMutation) ClearedEdges() []string {
 // was cleared in this mutation.
 func (m *IncidentRuleExecutionMutation) EdgeCleared(name string) bool {
 	switch name {
+	case incidentruleexecution.EdgeIncident:
+		return m.clearedincident
+	case incidentruleexecution.EdgeSourceEvent:
+		return m.clearedsource_event
+	case incidentruleexecution.EdgeActionReceipts:
+		return m.clearedaction_receipts
 	case incidentruleexecution.EdgeRule:
 		return m.clearedrule
 	}
@@ -55664,6 +56894,12 @@ func (m *IncidentRuleExecutionMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *IncidentRuleExecutionMutation) ClearEdge(name string) error {
 	switch name {
+	case incidentruleexecution.EdgeIncident:
+		m.ClearIncident()
+		return nil
+	case incidentruleexecution.EdgeSourceEvent:
+		m.ClearSourceEvent()
+		return nil
 	case incidentruleexecution.EdgeRule:
 		m.ClearRule()
 		return nil
@@ -55675,6 +56911,15 @@ func (m *IncidentRuleExecutionMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *IncidentRuleExecutionMutation) ResetEdge(name string) error {
 	switch name {
+	case incidentruleexecution.EdgeIncident:
+		m.ResetIncident()
+		return nil
+	case incidentruleexecution.EdgeSourceEvent:
+		m.ResetSourceEvent()
+		return nil
+	case incidentruleexecution.EdgeActionReceipts:
+		m.ResetActionReceipts()
+		return nil
 	case incidentruleexecution.EdgeRule:
 		m.ResetRule()
 		return nil

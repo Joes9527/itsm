@@ -135,6 +135,9 @@ type IncidentMetric func(*sql.Selector)
 // IncidentRule is the predicate function for incidentrule builders.
 type IncidentRule func(*sql.Selector)
 
+// IncidentRuleActionReceipt is the predicate function for incidentruleactionreceipt builders.
+type IncidentRuleActionReceipt func(*sql.Selector)
+
 // IncidentRuleExecution is the predicate function for incidentruleexecution builders.
 type IncidentRuleExecution func(*sql.Selector)
 

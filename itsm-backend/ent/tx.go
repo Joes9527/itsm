@@ -98,6 +98,8 @@ type Tx struct {
 	IncidentMetric *IncidentMetricClient
 	// IncidentRule is the client for interacting with the IncidentRule builders.
 	IncidentRule *IncidentRuleClient
+	// IncidentRuleActionReceipt is the client for interacting with the IncidentRuleActionReceipt builders.
+	IncidentRuleActionReceipt *IncidentRuleActionReceiptClient
 	// IncidentRuleExecution is the client for interacting with the IncidentRuleExecution builders.
 	IncidentRuleExecution *IncidentRuleExecutionClient
 	// IntakeRequest is the client for interacting with the IntakeRequest builders.
@@ -424,6 +426,7 @@ func (tx *Tx) init() {
 	tx.IncidentEvent = NewIncidentEventClient(tx.config)
 	tx.IncidentMetric = NewIncidentMetricClient(tx.config)
 	tx.IncidentRule = NewIncidentRuleClient(tx.config)
+	tx.IncidentRuleActionReceipt = NewIncidentRuleActionReceiptClient(tx.config)
 	tx.IncidentRuleExecution = NewIncidentRuleExecutionClient(tx.config)
 	tx.IntakeRequest = NewIntakeRequestClient(tx.config)
 	tx.IntakeResolutionSnapshot = NewIntakeResolutionSnapshotClient(tx.config)

@@ -60,6 +60,31 @@ func RuleID(v int) predicate.IncidentRuleExecution {
 	return predicate.IncidentRuleExecution(sql.FieldEQ(FieldRuleID, v))
 }
 
+// ExecutionKind applies equality check predicate on the "execution_kind" field. It's identical to ExecutionKindEQ.
+func ExecutionKind(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldEQ(FieldExecutionKind, v))
+}
+
+// ExecutionKey applies equality check predicate on the "execution_key" field. It's identical to ExecutionKeyEQ.
+func ExecutionKey(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldEQ(FieldExecutionKey, v))
+}
+
+// SourceEventID applies equality check predicate on the "source_event_id" field. It's identical to SourceEventIDEQ.
+func SourceEventID(v int) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldEQ(FieldSourceEventID, v))
+}
+
+// ActorID applies equality check predicate on the "actor_id" field. It's identical to ActorIDEQ.
+func ActorID(v int) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldEQ(FieldActorID, v))
+}
+
+// Source applies equality check predicate on the "source" field. It's identical to SourceEQ.
+func Source(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldEQ(FieldSource, v))
+}
+
 // IncidentID applies equality check predicate on the "incident_id" field. It's identical to IncidentIDEQ.
 func IncidentID(v int) predicate.IncidentRuleExecution {
 	return predicate.IncidentRuleExecution(sql.FieldEQ(FieldIncidentID, v))
@@ -130,6 +155,321 @@ func RuleIDNotIn(vs ...int) predicate.IncidentRuleExecution {
 	return predicate.IncidentRuleExecution(sql.FieldNotIn(FieldRuleID, vs...))
 }
 
+// RuleIDIsNil applies the IsNil predicate on the "rule_id" field.
+func RuleIDIsNil() predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldIsNull(FieldRuleID))
+}
+
+// RuleIDNotNil applies the NotNil predicate on the "rule_id" field.
+func RuleIDNotNil() predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldNotNull(FieldRuleID))
+}
+
+// ExecutionKindEQ applies the EQ predicate on the "execution_kind" field.
+func ExecutionKindEQ(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldEQ(FieldExecutionKind, v))
+}
+
+// ExecutionKindNEQ applies the NEQ predicate on the "execution_kind" field.
+func ExecutionKindNEQ(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldNEQ(FieldExecutionKind, v))
+}
+
+// ExecutionKindIn applies the In predicate on the "execution_kind" field.
+func ExecutionKindIn(vs ...string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldIn(FieldExecutionKind, vs...))
+}
+
+// ExecutionKindNotIn applies the NotIn predicate on the "execution_kind" field.
+func ExecutionKindNotIn(vs ...string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldNotIn(FieldExecutionKind, vs...))
+}
+
+// ExecutionKindGT applies the GT predicate on the "execution_kind" field.
+func ExecutionKindGT(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldGT(FieldExecutionKind, v))
+}
+
+// ExecutionKindGTE applies the GTE predicate on the "execution_kind" field.
+func ExecutionKindGTE(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldGTE(FieldExecutionKind, v))
+}
+
+// ExecutionKindLT applies the LT predicate on the "execution_kind" field.
+func ExecutionKindLT(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldLT(FieldExecutionKind, v))
+}
+
+// ExecutionKindLTE applies the LTE predicate on the "execution_kind" field.
+func ExecutionKindLTE(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldLTE(FieldExecutionKind, v))
+}
+
+// ExecutionKindContains applies the Contains predicate on the "execution_kind" field.
+func ExecutionKindContains(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldContains(FieldExecutionKind, v))
+}
+
+// ExecutionKindHasPrefix applies the HasPrefix predicate on the "execution_kind" field.
+func ExecutionKindHasPrefix(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldHasPrefix(FieldExecutionKind, v))
+}
+
+// ExecutionKindHasSuffix applies the HasSuffix predicate on the "execution_kind" field.
+func ExecutionKindHasSuffix(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldHasSuffix(FieldExecutionKind, v))
+}
+
+// ExecutionKindEqualFold applies the EqualFold predicate on the "execution_kind" field.
+func ExecutionKindEqualFold(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldEqualFold(FieldExecutionKind, v))
+}
+
+// ExecutionKindContainsFold applies the ContainsFold predicate on the "execution_kind" field.
+func ExecutionKindContainsFold(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldContainsFold(FieldExecutionKind, v))
+}
+
+// ExecutionKeyEQ applies the EQ predicate on the "execution_key" field.
+func ExecutionKeyEQ(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldEQ(FieldExecutionKey, v))
+}
+
+// ExecutionKeyNEQ applies the NEQ predicate on the "execution_key" field.
+func ExecutionKeyNEQ(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldNEQ(FieldExecutionKey, v))
+}
+
+// ExecutionKeyIn applies the In predicate on the "execution_key" field.
+func ExecutionKeyIn(vs ...string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldIn(FieldExecutionKey, vs...))
+}
+
+// ExecutionKeyNotIn applies the NotIn predicate on the "execution_key" field.
+func ExecutionKeyNotIn(vs ...string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldNotIn(FieldExecutionKey, vs...))
+}
+
+// ExecutionKeyGT applies the GT predicate on the "execution_key" field.
+func ExecutionKeyGT(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldGT(FieldExecutionKey, v))
+}
+
+// ExecutionKeyGTE applies the GTE predicate on the "execution_key" field.
+func ExecutionKeyGTE(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldGTE(FieldExecutionKey, v))
+}
+
+// ExecutionKeyLT applies the LT predicate on the "execution_key" field.
+func ExecutionKeyLT(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldLT(FieldExecutionKey, v))
+}
+
+// ExecutionKeyLTE applies the LTE predicate on the "execution_key" field.
+func ExecutionKeyLTE(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldLTE(FieldExecutionKey, v))
+}
+
+// ExecutionKeyContains applies the Contains predicate on the "execution_key" field.
+func ExecutionKeyContains(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldContains(FieldExecutionKey, v))
+}
+
+// ExecutionKeyHasPrefix applies the HasPrefix predicate on the "execution_key" field.
+func ExecutionKeyHasPrefix(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldHasPrefix(FieldExecutionKey, v))
+}
+
+// ExecutionKeyHasSuffix applies the HasSuffix predicate on the "execution_key" field.
+func ExecutionKeyHasSuffix(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldHasSuffix(FieldExecutionKey, v))
+}
+
+// ExecutionKeyIsNil applies the IsNil predicate on the "execution_key" field.
+func ExecutionKeyIsNil() predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldIsNull(FieldExecutionKey))
+}
+
+// ExecutionKeyNotNil applies the NotNil predicate on the "execution_key" field.
+func ExecutionKeyNotNil() predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldNotNull(FieldExecutionKey))
+}
+
+// ExecutionKeyEqualFold applies the EqualFold predicate on the "execution_key" field.
+func ExecutionKeyEqualFold(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldEqualFold(FieldExecutionKey, v))
+}
+
+// ExecutionKeyContainsFold applies the ContainsFold predicate on the "execution_key" field.
+func ExecutionKeyContainsFold(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldContainsFold(FieldExecutionKey, v))
+}
+
+// SourceEventIDEQ applies the EQ predicate on the "source_event_id" field.
+func SourceEventIDEQ(v int) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldEQ(FieldSourceEventID, v))
+}
+
+// SourceEventIDNEQ applies the NEQ predicate on the "source_event_id" field.
+func SourceEventIDNEQ(v int) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldNEQ(FieldSourceEventID, v))
+}
+
+// SourceEventIDIn applies the In predicate on the "source_event_id" field.
+func SourceEventIDIn(vs ...int) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldIn(FieldSourceEventID, vs...))
+}
+
+// SourceEventIDNotIn applies the NotIn predicate on the "source_event_id" field.
+func SourceEventIDNotIn(vs ...int) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldNotIn(FieldSourceEventID, vs...))
+}
+
+// SourceEventIDIsNil applies the IsNil predicate on the "source_event_id" field.
+func SourceEventIDIsNil() predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldIsNull(FieldSourceEventID))
+}
+
+// SourceEventIDNotNil applies the NotNil predicate on the "source_event_id" field.
+func SourceEventIDNotNil() predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldNotNull(FieldSourceEventID))
+}
+
+// ActorIDEQ applies the EQ predicate on the "actor_id" field.
+func ActorIDEQ(v int) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldEQ(FieldActorID, v))
+}
+
+// ActorIDNEQ applies the NEQ predicate on the "actor_id" field.
+func ActorIDNEQ(v int) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldNEQ(FieldActorID, v))
+}
+
+// ActorIDIn applies the In predicate on the "actor_id" field.
+func ActorIDIn(vs ...int) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldIn(FieldActorID, vs...))
+}
+
+// ActorIDNotIn applies the NotIn predicate on the "actor_id" field.
+func ActorIDNotIn(vs ...int) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldNotIn(FieldActorID, vs...))
+}
+
+// ActorIDGT applies the GT predicate on the "actor_id" field.
+func ActorIDGT(v int) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldGT(FieldActorID, v))
+}
+
+// ActorIDGTE applies the GTE predicate on the "actor_id" field.
+func ActorIDGTE(v int) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldGTE(FieldActorID, v))
+}
+
+// ActorIDLT applies the LT predicate on the "actor_id" field.
+func ActorIDLT(v int) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldLT(FieldActorID, v))
+}
+
+// ActorIDLTE applies the LTE predicate on the "actor_id" field.
+func ActorIDLTE(v int) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldLTE(FieldActorID, v))
+}
+
+// ActorIDIsNil applies the IsNil predicate on the "actor_id" field.
+func ActorIDIsNil() predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldIsNull(FieldActorID))
+}
+
+// ActorIDNotNil applies the NotNil predicate on the "actor_id" field.
+func ActorIDNotNil() predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldNotNull(FieldActorID))
+}
+
+// SourceEQ applies the EQ predicate on the "source" field.
+func SourceEQ(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldEQ(FieldSource, v))
+}
+
+// SourceNEQ applies the NEQ predicate on the "source" field.
+func SourceNEQ(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldNEQ(FieldSource, v))
+}
+
+// SourceIn applies the In predicate on the "source" field.
+func SourceIn(vs ...string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldIn(FieldSource, vs...))
+}
+
+// SourceNotIn applies the NotIn predicate on the "source" field.
+func SourceNotIn(vs ...string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldNotIn(FieldSource, vs...))
+}
+
+// SourceGT applies the GT predicate on the "source" field.
+func SourceGT(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldGT(FieldSource, v))
+}
+
+// SourceGTE applies the GTE predicate on the "source" field.
+func SourceGTE(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldGTE(FieldSource, v))
+}
+
+// SourceLT applies the LT predicate on the "source" field.
+func SourceLT(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldLT(FieldSource, v))
+}
+
+// SourceLTE applies the LTE predicate on the "source" field.
+func SourceLTE(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldLTE(FieldSource, v))
+}
+
+// SourceContains applies the Contains predicate on the "source" field.
+func SourceContains(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldContains(FieldSource, v))
+}
+
+// SourceHasPrefix applies the HasPrefix predicate on the "source" field.
+func SourceHasPrefix(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldHasPrefix(FieldSource, v))
+}
+
+// SourceHasSuffix applies the HasSuffix predicate on the "source" field.
+func SourceHasSuffix(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldHasSuffix(FieldSource, v))
+}
+
+// SourceIsNil applies the IsNil predicate on the "source" field.
+func SourceIsNil() predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldIsNull(FieldSource))
+}
+
+// SourceNotNil applies the NotNil predicate on the "source" field.
+func SourceNotNil() predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldNotNull(FieldSource))
+}
+
+// SourceEqualFold applies the EqualFold predicate on the "source" field.
+func SourceEqualFold(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldEqualFold(FieldSource, v))
+}
+
+// SourceContainsFold applies the ContainsFold predicate on the "source" field.
+func SourceContainsFold(v string) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldContainsFold(FieldSource, v))
+}
+
+// FrozenActionsIsNil applies the IsNil predicate on the "frozen_actions" field.
+func FrozenActionsIsNil() predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldIsNull(FieldFrozenActions))
+}
+
+// FrozenActionsNotNil applies the NotNil predicate on the "frozen_actions" field.
+func FrozenActionsNotNil() predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(sql.FieldNotNull(FieldFrozenActions))
+}
+
 // IncidentIDEQ applies the EQ predicate on the "incident_id" field.
 func IncidentIDEQ(v int) predicate.IncidentRuleExecution {
 	return predicate.IncidentRuleExecution(sql.FieldEQ(FieldIncidentID, v))
@@ -148,26 +488,6 @@ func IncidentIDIn(vs ...int) predicate.IncidentRuleExecution {
 // IncidentIDNotIn applies the NotIn predicate on the "incident_id" field.
 func IncidentIDNotIn(vs ...int) predicate.IncidentRuleExecution {
 	return predicate.IncidentRuleExecution(sql.FieldNotIn(FieldIncidentID, vs...))
-}
-
-// IncidentIDGT applies the GT predicate on the "incident_id" field.
-func IncidentIDGT(v int) predicate.IncidentRuleExecution {
-	return predicate.IncidentRuleExecution(sql.FieldGT(FieldIncidentID, v))
-}
-
-// IncidentIDGTE applies the GTE predicate on the "incident_id" field.
-func IncidentIDGTE(v int) predicate.IncidentRuleExecution {
-	return predicate.IncidentRuleExecution(sql.FieldGTE(FieldIncidentID, v))
-}
-
-// IncidentIDLT applies the LT predicate on the "incident_id" field.
-func IncidentIDLT(v int) predicate.IncidentRuleExecution {
-	return predicate.IncidentRuleExecution(sql.FieldLT(FieldIncidentID, v))
-}
-
-// IncidentIDLTE applies the LTE predicate on the "incident_id" field.
-func IncidentIDLTE(v int) predicate.IncidentRuleExecution {
-	return predicate.IncidentRuleExecution(sql.FieldLTE(FieldIncidentID, v))
 }
 
 // IncidentIDIsNil applies the IsNil predicate on the "incident_id" field.
@@ -673,6 +993,75 @@ func UpdatedAtLT(v time.Time) predicate.IncidentRuleExecution {
 // UpdatedAtLTE applies the LTE predicate on the "updated_at" field.
 func UpdatedAtLTE(v time.Time) predicate.IncidentRuleExecution {
 	return predicate.IncidentRuleExecution(sql.FieldLTE(FieldUpdatedAt, v))
+}
+
+// HasIncident applies the HasEdge predicate on the "incident" edge.
+func HasIncident() predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, IncidentTable, IncidentColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasIncidentWith applies the HasEdge predicate on the "incident" edge with a given conditions (other predicates).
+func HasIncidentWith(preds ...predicate.Incident) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(func(s *sql.Selector) {
+		step := newIncidentStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasSourceEvent applies the HasEdge predicate on the "source_event" edge.
+func HasSourceEvent() predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, SourceEventTable, SourceEventColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasSourceEventWith applies the HasEdge predicate on the "source_event" edge with a given conditions (other predicates).
+func HasSourceEventWith(preds ...predicate.OutboxEvent) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(func(s *sql.Selector) {
+		step := newSourceEventStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
+}
+
+// HasActionReceipts applies the HasEdge predicate on the "action_receipts" edge.
+func HasActionReceipts() predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, ActionReceiptsTable, ActionReceiptsColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasActionReceiptsWith applies the HasEdge predicate on the "action_receipts" edge with a given conditions (other predicates).
+func HasActionReceiptsWith(preds ...predicate.IncidentRuleActionReceipt) predicate.IncidentRuleExecution {
+	return predicate.IncidentRuleExecution(func(s *sql.Selector) {
+		step := newActionReceiptsStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // HasRule applies the HasEdge predicate on the "rule" edge.

@@ -5,8 +5,10 @@ package ent
 import (
 	"encoding/json"
 	"fmt"
+	"itsm-backend/ent/incident"
 	"itsm-backend/ent/incidentrule"
 	"itsm-backend/ent/incidentruleexecution"
+	"itsm-backend/ent/outboxevent"
 	"strings"
 	"time"
 
@@ -19,8 +21,20 @@ type IncidentRuleExecution struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
-	// 规则ID
+	// 规则ID; absent for creation event decision
 	RuleID int `json:"rule_id,omitempty"`
+	// ExecutionKind holds the value of the "execution_kind" field.
+	ExecutionKind string `json:"execution_kind,omitempty"`
+	// ExecutionKey holds the value of the "execution_key" field.
+	ExecutionKey string `json:"execution_key,omitempty"`
+	// SourceEventID holds the value of the "source_event_id" field.
+	SourceEventID int `json:"source_event_id,omitempty"`
+	// ActorID holds the value of the "actor_id" field.
+	ActorID int `json:"actor_id,omitempty"`
+	// Source holds the value of the "source" field.
+	Source string `json:"source,omitempty"`
+	// FrozenActions holds the value of the "frozen_actions" field.
+	FrozenActions []map[string]interface{} `json:"-"`
 	// 事件ID
 	IncidentID int `json:"incident_id,omitempty"`
 	// 执行状态
@@ -53,11 +67,48 @@ type IncidentRuleExecution struct {
 
 // IncidentRuleExecutionEdges holds the relations/edges for other nodes in the graph.
 type IncidentRuleExecutionEdges struct {
+	// Incident holds the value of the incident edge.
+	Incident *Incident `json:"incident,omitempty"`
+	// SourceEvent holds the value of the source_event edge.
+	SourceEvent *OutboxEvent `json:"source_event,omitempty"`
+	// ActionReceipts holds the value of the action_receipts edge.
+	ActionReceipts []*IncidentRuleActionReceipt `json:"action_receipts,omitempty"`
 	// 规则
 	Rule *IncidentRule `json:"rule,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [1]bool
+	loadedTypes [4]bool
+}
+
+// IncidentOrErr returns the Incident value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e IncidentRuleExecutionEdges) IncidentOrErr() (*Incident, error) {
+	if e.Incident != nil {
+		return e.Incident, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: incident.Label}
+	}
+	return nil, &NotLoadedError{edge: "incident"}
+}
+
+// SourceEventOrErr returns the SourceEvent value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e IncidentRuleExecutionEdges) SourceEventOrErr() (*OutboxEvent, error) {
+	if e.SourceEvent != nil {
+		return e.SourceEvent, nil
+	} else if e.loadedTypes[1] {
+		return nil, &NotFoundError{label: outboxevent.Label}
+	}
+	return nil, &NotLoadedError{edge: "source_event"}
+}
+
+// ActionReceiptsOrErr returns the ActionReceipts value or an error if the edge
+// was not loaded in eager-loading.
+func (e IncidentRuleExecutionEdges) ActionReceiptsOrErr() ([]*IncidentRuleActionReceipt, error) {
+	if e.loadedTypes[2] {
+		return e.ActionReceipts, nil
+	}
+	return nil, &NotLoadedError{edge: "action_receipts"}
 }
 
 // RuleOrErr returns the Rule value or an error if the edge
@@ -65,7 +116,7 @@ type IncidentRuleExecutionEdges struct {
 func (e IncidentRuleExecutionEdges) RuleOrErr() (*IncidentRule, error) {
 	if e.Rule != nil {
 		return e.Rule, nil
-	} else if e.loadedTypes[0] {
+	} else if e.loadedTypes[3] {
 		return nil, &NotFoundError{label: incidentrule.Label}
 	}
 	return nil, &NotLoadedError{edge: "rule"}
@@ -76,11 +127,11 @@ func (*IncidentRuleExecution) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case incidentruleexecution.FieldInputData, incidentruleexecution.FieldOutputData:
+		case incidentruleexecution.FieldFrozenActions, incidentruleexecution.FieldInputData, incidentruleexecution.FieldOutputData:
 			values[i] = new([]byte)
-		case incidentruleexecution.FieldID, incidentruleexecution.FieldRuleID, incidentruleexecution.FieldIncidentID, incidentruleexecution.FieldExecutionTimeMs, incidentruleexecution.FieldTenantID:
+		case incidentruleexecution.FieldID, incidentruleexecution.FieldRuleID, incidentruleexecution.FieldSourceEventID, incidentruleexecution.FieldActorID, incidentruleexecution.FieldIncidentID, incidentruleexecution.FieldExecutionTimeMs, incidentruleexecution.FieldTenantID:
 			values[i] = new(sql.NullInt64)
-		case incidentruleexecution.FieldStatus, incidentruleexecution.FieldResult, incidentruleexecution.FieldErrorMessage:
+		case incidentruleexecution.FieldExecutionKind, incidentruleexecution.FieldExecutionKey, incidentruleexecution.FieldSource, incidentruleexecution.FieldStatus, incidentruleexecution.FieldResult, incidentruleexecution.FieldErrorMessage:
 			values[i] = new(sql.NullString)
 		case incidentruleexecution.FieldStartedAt, incidentruleexecution.FieldCompletedAt, incidentruleexecution.FieldCreatedAt, incidentruleexecution.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -110,6 +161,44 @@ func (_m *IncidentRuleExecution) assignValues(columns []string, values []any) er
 				return fmt.Errorf("unexpected type %T for field rule_id", values[i])
 			} else if value.Valid {
 				_m.RuleID = int(value.Int64)
+			}
+		case incidentruleexecution.FieldExecutionKind:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field execution_kind", values[i])
+			} else if value.Valid {
+				_m.ExecutionKind = value.String
+			}
+		case incidentruleexecution.FieldExecutionKey:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field execution_key", values[i])
+			} else if value.Valid {
+				_m.ExecutionKey = value.String
+			}
+		case incidentruleexecution.FieldSourceEventID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field source_event_id", values[i])
+			} else if value.Valid {
+				_m.SourceEventID = int(value.Int64)
+			}
+		case incidentruleexecution.FieldActorID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field actor_id", values[i])
+			} else if value.Valid {
+				_m.ActorID = int(value.Int64)
+			}
+		case incidentruleexecution.FieldSource:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field source", values[i])
+			} else if value.Valid {
+				_m.Source = value.String
+			}
+		case incidentruleexecution.FieldFrozenActions:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field frozen_actions", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.FrozenActions); err != nil {
+					return fmt.Errorf("unmarshal field frozen_actions: %w", err)
+				}
 			}
 		case incidentruleexecution.FieldIncidentID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -200,6 +289,21 @@ func (_m *IncidentRuleExecution) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
 }
 
+// QueryIncident queries the "incident" edge of the IncidentRuleExecution entity.
+func (_m *IncidentRuleExecution) QueryIncident() *IncidentQuery {
+	return NewIncidentRuleExecutionClient(_m.config).QueryIncident(_m)
+}
+
+// QuerySourceEvent queries the "source_event" edge of the IncidentRuleExecution entity.
+func (_m *IncidentRuleExecution) QuerySourceEvent() *OutboxEventQuery {
+	return NewIncidentRuleExecutionClient(_m.config).QuerySourceEvent(_m)
+}
+
+// QueryActionReceipts queries the "action_receipts" edge of the IncidentRuleExecution entity.
+func (_m *IncidentRuleExecution) QueryActionReceipts() *IncidentRuleActionReceiptQuery {
+	return NewIncidentRuleExecutionClient(_m.config).QueryActionReceipts(_m)
+}
+
 // QueryRule queries the "rule" edge of the IncidentRuleExecution entity.
 func (_m *IncidentRuleExecution) QueryRule() *IncidentRuleQuery {
 	return NewIncidentRuleExecutionClient(_m.config).QueryRule(_m)
@@ -230,6 +334,23 @@ func (_m *IncidentRuleExecution) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("rule_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.RuleID))
+	builder.WriteString(", ")
+	builder.WriteString("execution_kind=")
+	builder.WriteString(_m.ExecutionKind)
+	builder.WriteString(", ")
+	builder.WriteString("execution_key=")
+	builder.WriteString(_m.ExecutionKey)
+	builder.WriteString(", ")
+	builder.WriteString("source_event_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SourceEventID))
+	builder.WriteString(", ")
+	builder.WriteString("actor_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.ActorID))
+	builder.WriteString(", ")
+	builder.WriteString("source=")
+	builder.WriteString(_m.Source)
+	builder.WriteString(", ")
+	builder.WriteString("frozen_actions=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("incident_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.IncidentID))

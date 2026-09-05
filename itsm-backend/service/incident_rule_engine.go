@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/repository/workitemnumber"
+	"itsm-backend/service/bpmn"
 
 	"go.uber.org/zap"
 )
@@ -39,6 +40,7 @@ type RuleCondition interface {
 // RuleAction 规则动作接口
 type RuleAction interface {
 	Execute(ctx context.Context, incident *ent.Incident, tenantID int) error
+	ExecuteTx(context.Context, *ent.Tx, *ent.Incident, int) error
 }
 
 // PriorityCondition 优先级条件
@@ -163,10 +165,14 @@ type EscalationAction struct {
 }
 
 func (a *EscalationAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
+	return executeIncidentRuleAction(ctx, a.client, a, incident, tenantID)
+}
+
+func (a *EscalationAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
 	incidentService := NewIncidentService(a.client, a.logger, a.numberAllocator)
 	incidentService.SetAlertCreator(a.alertCreator)
 
-	_, err := incidentService.EscalateIncident(ctx, &dto.IncidentEscalationRequest{
+	_, err := incidentService.EscalateIncidentTx(ctx, tx, &dto.IncidentEscalationRequest{
 		IncidentID:      incident.ID,
 		EscalationLevel: a.Level,
 		Reason:          a.Reason,
@@ -190,10 +196,18 @@ type NotificationAction struct {
 }
 
 func (a *NotificationAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
-	if a.alertCreator == nil {
+	return executeIncidentRuleAction(ctx, a.client, a, incident, tenantID)
+}
+
+func (a *NotificationAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
+	creator, ok := a.alertCreator.(IncidentAlertTransactionCreator)
+	if !ok {
 		return fmt.Errorf("incident alerting service is not configured")
 	}
-	_, err := a.alertCreator.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
+	if err := validateIncidentRuleRecipients(ctx, tx.Client(), a.Recipients, tenantID); err != nil {
+		return err
+	}
+	_, err := creator.CreateIncidentAlertTx(ctx, tx, &dto.CreateIncidentAlertRequest{
 		IncidentID: incident.ID,
 		AlertType:  "notification",
 		AlertName:  "规则触发通知",
@@ -216,9 +230,13 @@ type AssignmentAction struct {
 }
 
 func (a *AssignmentAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
+	return executeIncidentRuleAction(ctx, a.client, a, incident, tenantID)
+}
+
+func (a *AssignmentAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
 	incidentService := NewIncidentService(a.client, a.logger, a.numberAllocator)
 
-	_, err := incidentService.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{
+	_, err := incidentService.UpdateIncidentTx(ctx, tx, incident.ID, &dto.UpdateIncidentRequest{
 		AssigneeID: &a.AssigneeID,
 	}, tenantID)
 
@@ -235,9 +253,13 @@ type StatusChangeAction struct {
 }
 
 func (a *StatusChangeAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
+	return executeIncidentRuleAction(ctx, a.client, a, incident, tenantID)
+}
+
+func (a *StatusChangeAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
 	incidentService := NewIncidentService(a.client, a.logger, a.numberAllocator)
 
-	_, err := incidentService.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{
+	_, err := incidentService.UpdateIncidentTx(ctx, tx, incident.ID, &dto.UpdateIncidentRequest{
 		Status: &a.Status,
 	}, tenantID)
 
@@ -257,7 +279,11 @@ type MetricCollectionAction struct {
 }
 
 func (a *MetricCollectionAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
-	incidentService := NewIncidentService(a.client, a.logger, a.numberAllocator)
+	return executeIncidentRuleAction(ctx, a.client, a, incident, tenantID)
+}
+
+func (a *MetricCollectionAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
+	incidentService := NewIncidentService(tx.Client(), a.logger, a.numberAllocator)
 
 	_, err := incidentService.CreateIncidentMetric(ctx, &dto.CreateIncidentMetricRequest{
 		IncidentID:  incident.ID,
@@ -582,6 +608,9 @@ func (e *IncidentRuleEngine) parseActions(actions []map[string]interface{}) ([]R
 	var parsedActions []RuleAction
 
 	for _, actionData := range actions {
+		if _, present := actionData["optional"]; present {
+			return nil, fmt.Errorf("optional incident rule actions are unsupported")
+		}
 		actionType, ok := actionData["type"].(string)
 		if !ok {
 			return nil, fmt.Errorf("action type is required")
@@ -634,8 +663,19 @@ func (e *IncidentRuleEngine) parseEscalationAction(actionData map[string]interfa
 	}
 
 	reason, _ := actionData["reason"].(string)
-	notifyUsers, _ := toIntSlice(actionData["notify_users"])
+	notifyUsers, err := toIntSlice(actionData["notify_users"])
+	if err != nil {
+		return nil, err
+	}
 	autoAssign, _ := actionData["auto_assign"].(bool)
+	if raw, exists := actionData["auto_assign"]; exists {
+		if _, ok := raw.(bool); !ok {
+			return nil, fmt.Errorf("auto_assign must be boolean")
+		}
+	}
+	if autoAssign {
+		return nil, fmt.Errorf("automatic escalation assignment is unsupported; configure an explicit assign action")
+	}
 
 	return &EscalationAction{
 		Level:           level,
@@ -651,8 +691,14 @@ func (e *IncidentRuleEngine) parseEscalationAction(actionData map[string]interfa
 
 // parseNotificationAction 解析通知动作
 func (e *IncidentRuleEngine) parseNotificationAction(actionData map[string]interface{}) (*NotificationAction, error) {
-	channels, _ := toStringSlice(actionData["channels"])
-	recipients, _ := toStringSlice(actionData["recipients"])
+	channels, err := toStringSlice(actionData["channels"])
+	if err != nil {
+		return nil, err
+	}
+	recipients, err := toStringSlice(actionData["recipients"])
+	if err != nil {
+		return nil, err
+	}
 	message, _ := actionData["message"].(string)
 	severity, _ := actionData["severity"].(string)
 
@@ -663,7 +709,7 @@ func (e *IncidentRuleEngine) parseNotificationAction(actionData map[string]inter
 		return nil, err
 	}
 	if len(recipients) == 0 {
-		recipients = []string{"admin@company.com"}
+		return nil, fmt.Errorf("configured notification recipients are required")
 	}
 	if message == "" {
 		message = "事件需要关注"
@@ -753,17 +799,8 @@ func (e *IncidentRuleEngine) parseMetricCollectionAction(actionData map[string]i
 }
 
 func toInt(value interface{}) (int, bool) {
-	switch typed := value.(type) {
-	case int:
-		return typed, true
-	case int64:
-		return int(typed), true
-	case float64:
-		if typed == float64(int(typed)) {
-			return int(typed), true
-		}
-	}
-	return 0, false
+	n, err := bpmn.CallbackInteger(value)
+	return n, err == nil
 }
 
 func toStringSlice(value interface{}) ([]string, error) {
@@ -793,7 +830,10 @@ func toIntSlice(value interface{}) ([]int, error) {
 		if typed, ok := value.([]int); ok {
 			return typed, nil
 		}
-		return nil, nil
+		if value == nil {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("expected integer array")
 	}
 	result := make([]int, 0, len(items))
 	for _, item := range items {

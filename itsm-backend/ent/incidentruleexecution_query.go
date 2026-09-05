@@ -4,9 +4,13 @@ package ent
 
 import (
 	"context"
+	"database/sql/driver"
 	"fmt"
+	"itsm-backend/ent/incident"
 	"itsm-backend/ent/incidentrule"
+	"itsm-backend/ent/incidentruleactionreceipt"
 	"itsm-backend/ent/incidentruleexecution"
+	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/predicate"
 	"math"
 
@@ -19,11 +23,14 @@ import (
 // IncidentRuleExecutionQuery is the builder for querying IncidentRuleExecution entities.
 type IncidentRuleExecutionQuery struct {
 	config
-	ctx        *QueryContext
-	order      []incidentruleexecution.OrderOption
-	inters     []Interceptor
-	predicates []predicate.IncidentRuleExecution
-	withRule   *IncidentRuleQuery
+	ctx                *QueryContext
+	order              []incidentruleexecution.OrderOption
+	inters             []Interceptor
+	predicates         []predicate.IncidentRuleExecution
+	withIncident       *IncidentQuery
+	withSourceEvent    *OutboxEventQuery
+	withActionReceipts *IncidentRuleActionReceiptQuery
+	withRule           *IncidentRuleQuery
 	// intermediate query (i.e. traversal path).
 	sql  *sql.Selector
 	path func(context.Context) (*sql.Selector, error)
@@ -58,6 +65,72 @@ func (_q *IncidentRuleExecutionQuery) Unique(unique bool) *IncidentRuleExecution
 func (_q *IncidentRuleExecutionQuery) Order(o ...incidentruleexecution.OrderOption) *IncidentRuleExecutionQuery {
 	_q.order = append(_q.order, o...)
 	return _q
+}
+
+// QueryIncident chains the current query on the "incident" edge.
+func (_q *IncidentRuleExecutionQuery) QueryIncident() *IncidentQuery {
+	query := (&IncidentClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(incidentruleexecution.Table, incidentruleexecution.FieldID, selector),
+			sqlgraph.To(incident.Table, incident.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, incidentruleexecution.IncidentTable, incidentruleexecution.IncidentColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QuerySourceEvent chains the current query on the "source_event" edge.
+func (_q *IncidentRuleExecutionQuery) QuerySourceEvent() *OutboxEventQuery {
+	query := (&OutboxEventClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(incidentruleexecution.Table, incidentruleexecution.FieldID, selector),
+			sqlgraph.To(outboxevent.Table, outboxevent.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, incidentruleexecution.SourceEventTable, incidentruleexecution.SourceEventColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryActionReceipts chains the current query on the "action_receipts" edge.
+func (_q *IncidentRuleExecutionQuery) QueryActionReceipts() *IncidentRuleActionReceiptQuery {
+	query := (&IncidentRuleActionReceiptClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(incidentruleexecution.Table, incidentruleexecution.FieldID, selector),
+			sqlgraph.To(incidentruleactionreceipt.Table, incidentruleactionreceipt.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, incidentruleexecution.ActionReceiptsTable, incidentruleexecution.ActionReceiptsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
 }
 
 // QueryRule chains the current query on the "rule" edge.
@@ -269,16 +342,52 @@ func (_q *IncidentRuleExecutionQuery) Clone() *IncidentRuleExecutionQuery {
 		return nil
 	}
 	return &IncidentRuleExecutionQuery{
-		config:     _q.config,
-		ctx:        _q.ctx.Clone(),
-		order:      append([]incidentruleexecution.OrderOption{}, _q.order...),
-		inters:     append([]Interceptor{}, _q.inters...),
-		predicates: append([]predicate.IncidentRuleExecution{}, _q.predicates...),
-		withRule:   _q.withRule.Clone(),
+		config:             _q.config,
+		ctx:                _q.ctx.Clone(),
+		order:              append([]incidentruleexecution.OrderOption{}, _q.order...),
+		inters:             append([]Interceptor{}, _q.inters...),
+		predicates:         append([]predicate.IncidentRuleExecution{}, _q.predicates...),
+		withIncident:       _q.withIncident.Clone(),
+		withSourceEvent:    _q.withSourceEvent.Clone(),
+		withActionReceipts: _q.withActionReceipts.Clone(),
+		withRule:           _q.withRule.Clone(),
 		// clone intermediate query.
 		sql:  _q.sql.Clone(),
 		path: _q.path,
 	}
+}
+
+// WithIncident tells the query-builder to eager-load the nodes that are connected to
+// the "incident" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *IncidentRuleExecutionQuery) WithIncident(opts ...func(*IncidentQuery)) *IncidentRuleExecutionQuery {
+	query := (&IncidentClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withIncident = query
+	return _q
+}
+
+// WithSourceEvent tells the query-builder to eager-load the nodes that are connected to
+// the "source_event" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *IncidentRuleExecutionQuery) WithSourceEvent(opts ...func(*OutboxEventQuery)) *IncidentRuleExecutionQuery {
+	query := (&OutboxEventClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withSourceEvent = query
+	return _q
+}
+
+// WithActionReceipts tells the query-builder to eager-load the nodes that are connected to
+// the "action_receipts" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *IncidentRuleExecutionQuery) WithActionReceipts(opts ...func(*IncidentRuleActionReceiptQuery)) *IncidentRuleExecutionQuery {
+	query := (&IncidentRuleActionReceiptClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withActionReceipts = query
+	return _q
 }
 
 // WithRule tells the query-builder to eager-load the nodes that are connected to
@@ -370,7 +479,10 @@ func (_q *IncidentRuleExecutionQuery) sqlAll(ctx context.Context, hooks ...query
 	var (
 		nodes       = []*IncidentRuleExecution{}
 		_spec       = _q.querySpec()
-		loadedTypes = [1]bool{
+		loadedTypes = [4]bool{
+			_q.withIncident != nil,
+			_q.withSourceEvent != nil,
+			_q.withActionReceipts != nil,
 			_q.withRule != nil,
 		}
 	)
@@ -392,6 +504,27 @@ func (_q *IncidentRuleExecutionQuery) sqlAll(ctx context.Context, hooks ...query
 	if len(nodes) == 0 {
 		return nodes, nil
 	}
+	if query := _q.withIncident; query != nil {
+		if err := _q.loadIncident(ctx, query, nodes, nil,
+			func(n *IncidentRuleExecution, e *Incident) { n.Edges.Incident = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withSourceEvent; query != nil {
+		if err := _q.loadSourceEvent(ctx, query, nodes, nil,
+			func(n *IncidentRuleExecution, e *OutboxEvent) { n.Edges.SourceEvent = e }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withActionReceipts; query != nil {
+		if err := _q.loadActionReceipts(ctx, query, nodes,
+			func(n *IncidentRuleExecution) { n.Edges.ActionReceipts = []*IncidentRuleActionReceipt{} },
+			func(n *IncidentRuleExecution, e *IncidentRuleActionReceipt) {
+				n.Edges.ActionReceipts = append(n.Edges.ActionReceipts, e)
+			}); err != nil {
+			return nil, err
+		}
+	}
 	if query := _q.withRule; query != nil {
 		if err := _q.loadRule(ctx, query, nodes, nil,
 			func(n *IncidentRuleExecution, e *IncidentRule) { n.Edges.Rule = e }); err != nil {
@@ -401,6 +534,94 @@ func (_q *IncidentRuleExecutionQuery) sqlAll(ctx context.Context, hooks ...query
 	return nodes, nil
 }
 
+func (_q *IncidentRuleExecutionQuery) loadIncident(ctx context.Context, query *IncidentQuery, nodes []*IncidentRuleExecution, init func(*IncidentRuleExecution), assign func(*IncidentRuleExecution, *Incident)) error {
+	ids := make([]int, 0, len(nodes))
+	nodeids := make(map[int][]*IncidentRuleExecution)
+	for i := range nodes {
+		fk := nodes[i].IncidentID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(incident.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "incident_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
+func (_q *IncidentRuleExecutionQuery) loadSourceEvent(ctx context.Context, query *OutboxEventQuery, nodes []*IncidentRuleExecution, init func(*IncidentRuleExecution), assign func(*IncidentRuleExecution, *OutboxEvent)) error {
+	ids := make([]int, 0, len(nodes))
+	nodeids := make(map[int][]*IncidentRuleExecution)
+	for i := range nodes {
+		fk := nodes[i].SourceEventID
+		if _, ok := nodeids[fk]; !ok {
+			ids = append(ids, fk)
+		}
+		nodeids[fk] = append(nodeids[fk], nodes[i])
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	query.Where(outboxevent.IDIn(ids...))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		nodes, ok := nodeids[n.ID]
+		if !ok {
+			return fmt.Errorf(`unexpected foreign-key "source_event_id" returned %v`, n.ID)
+		}
+		for i := range nodes {
+			assign(nodes[i], n)
+		}
+	}
+	return nil
+}
+func (_q *IncidentRuleExecutionQuery) loadActionReceipts(ctx context.Context, query *IncidentRuleActionReceiptQuery, nodes []*IncidentRuleExecution, init func(*IncidentRuleExecution), assign func(*IncidentRuleExecution, *IncidentRuleActionReceipt)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int]*IncidentRuleExecution)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(incidentruleactionreceipt.FieldExecutionID)
+	}
+	query.Where(predicate.IncidentRuleActionReceipt(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(incidentruleexecution.ActionReceiptsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.ExecutionID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "execution_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
 func (_q *IncidentRuleExecutionQuery) loadRule(ctx context.Context, query *IncidentRuleQuery, nodes []*IncidentRuleExecution, init func(*IncidentRuleExecution), assign func(*IncidentRuleExecution, *IncidentRule)) error {
 	ids := make([]int, 0, len(nodes))
 	nodeids := make(map[int][]*IncidentRuleExecution)
@@ -455,6 +676,12 @@ func (_q *IncidentRuleExecutionQuery) querySpec() *sqlgraph.QuerySpec {
 			if fields[i] != incidentruleexecution.FieldID {
 				_spec.Node.Columns = append(_spec.Node.Columns, fields[i])
 			}
+		}
+		if _q.withIncident != nil {
+			_spec.Node.AddColumnOnce(incidentruleexecution.FieldIncidentID)
+		}
+		if _q.withSourceEvent != nil {
+			_spec.Node.AddColumnOnce(incidentruleexecution.FieldSourceEventID)
 		}
 		if _q.withRule != nil {
 			_spec.Node.AddColumnOnce(incidentruleexecution.FieldRuleID)

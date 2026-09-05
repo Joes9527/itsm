@@ -46,6 +46,7 @@ import (
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/incidentrule"
+	"itsm-backend/ent/incidentruleactionreceipt"
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/intakerequest"
 	"itsm-backend/ent/intakeresolutionsnapshot"
@@ -1550,30 +1551,60 @@ func init() {
 	incidentrule.DefaultUpdatedAt = incidentruleDescUpdatedAt.Default.(func() time.Time)
 	// incidentrule.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	incidentrule.UpdateDefaultUpdatedAt = incidentruleDescUpdatedAt.UpdateDefault.(func() time.Time)
+	incidentruleactionreceiptFields := schema.IncidentRuleActionReceipt{}.Fields()
+	_ = incidentruleactionreceiptFields
+	// incidentruleactionreceiptDescTenantID is the schema descriptor for tenant_id field.
+	incidentruleactionreceiptDescTenantID := incidentruleactionreceiptFields[0].Descriptor()
+	// incidentruleactionreceipt.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
+	incidentruleactionreceipt.TenantIDValidator = incidentruleactionreceiptDescTenantID.Validators[0].(func(int) error)
+	// incidentruleactionreceiptDescExecutionID is the schema descriptor for execution_id field.
+	incidentruleactionreceiptDescExecutionID := incidentruleactionreceiptFields[1].Descriptor()
+	// incidentruleactionreceipt.ExecutionIDValidator is a validator for the "execution_id" field. It is called by the builders before save.
+	incidentruleactionreceipt.ExecutionIDValidator = incidentruleactionreceiptDescExecutionID.Validators[0].(func(int) error)
+	// incidentruleactionreceiptDescActionIndex is the schema descriptor for action_index field.
+	incidentruleactionreceiptDescActionIndex := incidentruleactionreceiptFields[2].Descriptor()
+	// incidentruleactionreceipt.ActionIndexValidator is a validator for the "action_index" field. It is called by the builders before save.
+	incidentruleactionreceipt.ActionIndexValidator = incidentruleactionreceiptDescActionIndex.Validators[0].(func(int) error)
+	// incidentruleactionreceiptDescCompletedAt is the schema descriptor for completed_at field.
+	incidentruleactionreceiptDescCompletedAt := incidentruleactionreceiptFields[3].Descriptor()
+	// incidentruleactionreceipt.DefaultCompletedAt holds the default value on creation for the completed_at field.
+	incidentruleactionreceipt.DefaultCompletedAt = incidentruleactionreceiptDescCompletedAt.Default.(func() time.Time)
 	incidentruleexecutionFields := schema.IncidentRuleExecution{}.Fields()
 	_ = incidentruleexecutionFields
 	// incidentruleexecutionDescRuleID is the schema descriptor for rule_id field.
 	incidentruleexecutionDescRuleID := incidentruleexecutionFields[0].Descriptor()
 	// incidentruleexecution.RuleIDValidator is a validator for the "rule_id" field. It is called by the builders before save.
 	incidentruleexecution.RuleIDValidator = incidentruleexecutionDescRuleID.Validators[0].(func(int) error)
+	// incidentruleexecutionDescExecutionKind is the schema descriptor for execution_kind field.
+	incidentruleexecutionDescExecutionKind := incidentruleexecutionFields[1].Descriptor()
+	// incidentruleexecution.DefaultExecutionKind holds the default value on creation for the execution_kind field.
+	incidentruleexecution.DefaultExecutionKind = incidentruleexecutionDescExecutionKind.Default.(string)
+	// incidentruleexecutionDescSourceEventID is the schema descriptor for source_event_id field.
+	incidentruleexecutionDescSourceEventID := incidentruleexecutionFields[3].Descriptor()
+	// incidentruleexecution.SourceEventIDValidator is a validator for the "source_event_id" field. It is called by the builders before save.
+	incidentruleexecution.SourceEventIDValidator = incidentruleexecutionDescSourceEventID.Validators[0].(func(int) error)
+	// incidentruleexecutionDescActorID is the schema descriptor for actor_id field.
+	incidentruleexecutionDescActorID := incidentruleexecutionFields[4].Descriptor()
+	// incidentruleexecution.ActorIDValidator is a validator for the "actor_id" field. It is called by the builders before save.
+	incidentruleexecution.ActorIDValidator = incidentruleexecutionDescActorID.Validators[0].(func(int) error)
 	// incidentruleexecutionDescStatus is the schema descriptor for status field.
-	incidentruleexecutionDescStatus := incidentruleexecutionFields[2].Descriptor()
+	incidentruleexecutionDescStatus := incidentruleexecutionFields[8].Descriptor()
 	// incidentruleexecution.DefaultStatus holds the default value on creation for the status field.
 	incidentruleexecution.DefaultStatus = incidentruleexecutionDescStatus.Default.(string)
 	// incidentruleexecutionDescStartedAt is the schema descriptor for started_at field.
-	incidentruleexecutionDescStartedAt := incidentruleexecutionFields[5].Descriptor()
+	incidentruleexecutionDescStartedAt := incidentruleexecutionFields[11].Descriptor()
 	// incidentruleexecution.DefaultStartedAt holds the default value on creation for the started_at field.
 	incidentruleexecution.DefaultStartedAt = incidentruleexecutionDescStartedAt.Default.(func() time.Time)
 	// incidentruleexecutionDescTenantID is the schema descriptor for tenant_id field.
-	incidentruleexecutionDescTenantID := incidentruleexecutionFields[10].Descriptor()
+	incidentruleexecutionDescTenantID := incidentruleexecutionFields[16].Descriptor()
 	// incidentruleexecution.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	incidentruleexecution.TenantIDValidator = incidentruleexecutionDescTenantID.Validators[0].(func(int) error)
 	// incidentruleexecutionDescCreatedAt is the schema descriptor for created_at field.
-	incidentruleexecutionDescCreatedAt := incidentruleexecutionFields[11].Descriptor()
+	incidentruleexecutionDescCreatedAt := incidentruleexecutionFields[17].Descriptor()
 	// incidentruleexecution.DefaultCreatedAt holds the default value on creation for the created_at field.
 	incidentruleexecution.DefaultCreatedAt = incidentruleexecutionDescCreatedAt.Default.(func() time.Time)
 	// incidentruleexecutionDescUpdatedAt is the schema descriptor for updated_at field.
-	incidentruleexecutionDescUpdatedAt := incidentruleexecutionFields[12].Descriptor()
+	incidentruleexecutionDescUpdatedAt := incidentruleexecutionFields[18].Descriptor()
 	// incidentruleexecution.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	incidentruleexecution.DefaultUpdatedAt = incidentruleexecutionDescUpdatedAt.Default.(func() time.Time)
 	// incidentruleexecution.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

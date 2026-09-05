@@ -6,7 +6,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"itsm-backend/ent/incident"
 	"itsm-backend/ent/incidentrule"
+	"itsm-backend/ent/incidentruleactionreceipt"
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/predicate"
 	"time"
@@ -43,9 +45,14 @@ func (_u *IncidentRuleExecutionUpdate) SetNillableRuleID(v *int) *IncidentRuleEx
 	return _u
 }
 
+// ClearRuleID clears the value of the "rule_id" field.
+func (_u *IncidentRuleExecutionUpdate) ClearRuleID() *IncidentRuleExecutionUpdate {
+	_u.mutation.ClearRuleID()
+	return _u
+}
+
 // SetIncidentID sets the "incident_id" field.
 func (_u *IncidentRuleExecutionUpdate) SetIncidentID(v int) *IncidentRuleExecutionUpdate {
-	_u.mutation.ResetIncidentID()
 	_u.mutation.SetIncidentID(v)
 	return _u
 }
@@ -55,12 +62,6 @@ func (_u *IncidentRuleExecutionUpdate) SetNillableIncidentID(v *int) *IncidentRu
 	if v != nil {
 		_u.SetIncidentID(*v)
 	}
-	return _u
-}
-
-// AddIncidentID adds value to the "incident_id" field.
-func (_u *IncidentRuleExecutionUpdate) AddIncidentID(v int) *IncidentRuleExecutionUpdate {
-	_u.mutation.AddIncidentID(v)
 	return _u
 }
 
@@ -250,6 +251,26 @@ func (_u *IncidentRuleExecutionUpdate) SetUpdatedAt(v time.Time) *IncidentRuleEx
 	return _u
 }
 
+// SetIncident sets the "incident" edge to the Incident entity.
+func (_u *IncidentRuleExecutionUpdate) SetIncident(v *Incident) *IncidentRuleExecutionUpdate {
+	return _u.SetIncidentID(v.ID)
+}
+
+// AddActionReceiptIDs adds the "action_receipts" edge to the IncidentRuleActionReceipt entity by IDs.
+func (_u *IncidentRuleExecutionUpdate) AddActionReceiptIDs(ids ...int) *IncidentRuleExecutionUpdate {
+	_u.mutation.AddActionReceiptIDs(ids...)
+	return _u
+}
+
+// AddActionReceipts adds the "action_receipts" edges to the IncidentRuleActionReceipt entity.
+func (_u *IncidentRuleExecutionUpdate) AddActionReceipts(v ...*IncidentRuleActionReceipt) *IncidentRuleExecutionUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddActionReceiptIDs(ids...)
+}
+
 // SetRule sets the "rule" edge to the IncidentRule entity.
 func (_u *IncidentRuleExecutionUpdate) SetRule(v *IncidentRule) *IncidentRuleExecutionUpdate {
 	return _u.SetRuleID(v.ID)
@@ -258,6 +279,33 @@ func (_u *IncidentRuleExecutionUpdate) SetRule(v *IncidentRule) *IncidentRuleExe
 // Mutation returns the IncidentRuleExecutionMutation object of the builder.
 func (_u *IncidentRuleExecutionUpdate) Mutation() *IncidentRuleExecutionMutation {
 	return _u.mutation
+}
+
+// ClearIncident clears the "incident" edge to the Incident entity.
+func (_u *IncidentRuleExecutionUpdate) ClearIncident() *IncidentRuleExecutionUpdate {
+	_u.mutation.ClearIncident()
+	return _u
+}
+
+// ClearActionReceipts clears all "action_receipts" edges to the IncidentRuleActionReceipt entity.
+func (_u *IncidentRuleExecutionUpdate) ClearActionReceipts() *IncidentRuleExecutionUpdate {
+	_u.mutation.ClearActionReceipts()
+	return _u
+}
+
+// RemoveActionReceiptIDs removes the "action_receipts" edge to IncidentRuleActionReceipt entities by IDs.
+func (_u *IncidentRuleExecutionUpdate) RemoveActionReceiptIDs(ids ...int) *IncidentRuleExecutionUpdate {
+	_u.mutation.RemoveActionReceiptIDs(ids...)
+	return _u
+}
+
+// RemoveActionReceipts removes "action_receipts" edges to IncidentRuleActionReceipt entities.
+func (_u *IncidentRuleExecutionUpdate) RemoveActionReceipts(v ...*IncidentRuleActionReceipt) *IncidentRuleExecutionUpdate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveActionReceiptIDs(ids...)
 }
 
 // ClearRule clears the "rule" edge to the IncidentRule entity.
@@ -314,9 +362,6 @@ func (_u *IncidentRuleExecutionUpdate) check() error {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "IncidentRuleExecution.tenant_id": %w`, err)}
 		}
 	}
-	if _u.mutation.RuleCleared() && len(_u.mutation.RuleIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "IncidentRuleExecution.rule"`)
-	}
 	return nil
 }
 
@@ -332,14 +377,17 @@ func (_u *IncidentRuleExecutionUpdate) sqlSave(ctx context.Context) (_node int, 
 			}
 		}
 	}
-	if value, ok := _u.mutation.IncidentID(); ok {
-		_spec.SetField(incidentruleexecution.FieldIncidentID, field.TypeInt, value)
+	if _u.mutation.ExecutionKeyCleared() {
+		_spec.ClearField(incidentruleexecution.FieldExecutionKey, field.TypeString)
 	}
-	if value, ok := _u.mutation.AddedIncidentID(); ok {
-		_spec.AddField(incidentruleexecution.FieldIncidentID, field.TypeInt, value)
+	if _u.mutation.ActorIDCleared() {
+		_spec.ClearField(incidentruleexecution.FieldActorID, field.TypeInt)
 	}
-	if _u.mutation.IncidentIDCleared() {
-		_spec.ClearField(incidentruleexecution.FieldIncidentID, field.TypeInt)
+	if _u.mutation.SourceCleared() {
+		_spec.ClearField(incidentruleexecution.FieldSource, field.TypeString)
+	}
+	if _u.mutation.FrozenActionsCleared() {
+		_spec.ClearField(incidentruleexecution.FieldFrozenActions, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(incidentruleexecution.FieldStatus, field.TypeString, value)
@@ -397,6 +445,80 @@ func (_u *IncidentRuleExecutionUpdate) sqlSave(ctx context.Context) (_node int, 
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(incidentruleexecution.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.IncidentCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   incidentruleexecution.IncidentTable,
+			Columns: []string{incidentruleexecution.IncidentColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(incident.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.IncidentIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   incidentruleexecution.IncidentTable,
+			Columns: []string{incidentruleexecution.IncidentColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(incident.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ActionReceiptsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   incidentruleexecution.ActionReceiptsTable,
+			Columns: []string{incidentruleexecution.ActionReceiptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(incidentruleactionreceipt.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedActionReceiptsIDs(); len(nodes) > 0 && !_u.mutation.ActionReceiptsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   incidentruleexecution.ActionReceiptsTable,
+			Columns: []string{incidentruleexecution.ActionReceiptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(incidentruleactionreceipt.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ActionReceiptsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   incidentruleexecution.ActionReceiptsTable,
+			Columns: []string{incidentruleexecution.ActionReceiptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(incidentruleactionreceipt.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _u.mutation.RuleCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -461,9 +583,14 @@ func (_u *IncidentRuleExecutionUpdateOne) SetNillableRuleID(v *int) *IncidentRul
 	return _u
 }
 
+// ClearRuleID clears the value of the "rule_id" field.
+func (_u *IncidentRuleExecutionUpdateOne) ClearRuleID() *IncidentRuleExecutionUpdateOne {
+	_u.mutation.ClearRuleID()
+	return _u
+}
+
 // SetIncidentID sets the "incident_id" field.
 func (_u *IncidentRuleExecutionUpdateOne) SetIncidentID(v int) *IncidentRuleExecutionUpdateOne {
-	_u.mutation.ResetIncidentID()
 	_u.mutation.SetIncidentID(v)
 	return _u
 }
@@ -473,12 +600,6 @@ func (_u *IncidentRuleExecutionUpdateOne) SetNillableIncidentID(v *int) *Inciden
 	if v != nil {
 		_u.SetIncidentID(*v)
 	}
-	return _u
-}
-
-// AddIncidentID adds value to the "incident_id" field.
-func (_u *IncidentRuleExecutionUpdateOne) AddIncidentID(v int) *IncidentRuleExecutionUpdateOne {
-	_u.mutation.AddIncidentID(v)
 	return _u
 }
 
@@ -668,6 +789,26 @@ func (_u *IncidentRuleExecutionUpdateOne) SetUpdatedAt(v time.Time) *IncidentRul
 	return _u
 }
 
+// SetIncident sets the "incident" edge to the Incident entity.
+func (_u *IncidentRuleExecutionUpdateOne) SetIncident(v *Incident) *IncidentRuleExecutionUpdateOne {
+	return _u.SetIncidentID(v.ID)
+}
+
+// AddActionReceiptIDs adds the "action_receipts" edge to the IncidentRuleActionReceipt entity by IDs.
+func (_u *IncidentRuleExecutionUpdateOne) AddActionReceiptIDs(ids ...int) *IncidentRuleExecutionUpdateOne {
+	_u.mutation.AddActionReceiptIDs(ids...)
+	return _u
+}
+
+// AddActionReceipts adds the "action_receipts" edges to the IncidentRuleActionReceipt entity.
+func (_u *IncidentRuleExecutionUpdateOne) AddActionReceipts(v ...*IncidentRuleActionReceipt) *IncidentRuleExecutionUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.AddActionReceiptIDs(ids...)
+}
+
 // SetRule sets the "rule" edge to the IncidentRule entity.
 func (_u *IncidentRuleExecutionUpdateOne) SetRule(v *IncidentRule) *IncidentRuleExecutionUpdateOne {
 	return _u.SetRuleID(v.ID)
@@ -676,6 +817,33 @@ func (_u *IncidentRuleExecutionUpdateOne) SetRule(v *IncidentRule) *IncidentRule
 // Mutation returns the IncidentRuleExecutionMutation object of the builder.
 func (_u *IncidentRuleExecutionUpdateOne) Mutation() *IncidentRuleExecutionMutation {
 	return _u.mutation
+}
+
+// ClearIncident clears the "incident" edge to the Incident entity.
+func (_u *IncidentRuleExecutionUpdateOne) ClearIncident() *IncidentRuleExecutionUpdateOne {
+	_u.mutation.ClearIncident()
+	return _u
+}
+
+// ClearActionReceipts clears all "action_receipts" edges to the IncidentRuleActionReceipt entity.
+func (_u *IncidentRuleExecutionUpdateOne) ClearActionReceipts() *IncidentRuleExecutionUpdateOne {
+	_u.mutation.ClearActionReceipts()
+	return _u
+}
+
+// RemoveActionReceiptIDs removes the "action_receipts" edge to IncidentRuleActionReceipt entities by IDs.
+func (_u *IncidentRuleExecutionUpdateOne) RemoveActionReceiptIDs(ids ...int) *IncidentRuleExecutionUpdateOne {
+	_u.mutation.RemoveActionReceiptIDs(ids...)
+	return _u
+}
+
+// RemoveActionReceipts removes "action_receipts" edges to IncidentRuleActionReceipt entities.
+func (_u *IncidentRuleExecutionUpdateOne) RemoveActionReceipts(v ...*IncidentRuleActionReceipt) *IncidentRuleExecutionUpdateOne {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _u.RemoveActionReceiptIDs(ids...)
 }
 
 // ClearRule clears the "rule" edge to the IncidentRule entity.
@@ -745,9 +913,6 @@ func (_u *IncidentRuleExecutionUpdateOne) check() error {
 			return &ValidationError{Name: "tenant_id", err: fmt.Errorf(`ent: validator failed for field "IncidentRuleExecution.tenant_id": %w`, err)}
 		}
 	}
-	if _u.mutation.RuleCleared() && len(_u.mutation.RuleIDs()) > 0 {
-		return errors.New(`ent: clearing a required unique edge "IncidentRuleExecution.rule"`)
-	}
 	return nil
 }
 
@@ -780,14 +945,17 @@ func (_u *IncidentRuleExecutionUpdateOne) sqlSave(ctx context.Context) (_node *I
 			}
 		}
 	}
-	if value, ok := _u.mutation.IncidentID(); ok {
-		_spec.SetField(incidentruleexecution.FieldIncidentID, field.TypeInt, value)
+	if _u.mutation.ExecutionKeyCleared() {
+		_spec.ClearField(incidentruleexecution.FieldExecutionKey, field.TypeString)
 	}
-	if value, ok := _u.mutation.AddedIncidentID(); ok {
-		_spec.AddField(incidentruleexecution.FieldIncidentID, field.TypeInt, value)
+	if _u.mutation.ActorIDCleared() {
+		_spec.ClearField(incidentruleexecution.FieldActorID, field.TypeInt)
 	}
-	if _u.mutation.IncidentIDCleared() {
-		_spec.ClearField(incidentruleexecution.FieldIncidentID, field.TypeInt)
+	if _u.mutation.SourceCleared() {
+		_spec.ClearField(incidentruleexecution.FieldSource, field.TypeString)
+	}
+	if _u.mutation.FrozenActionsCleared() {
+		_spec.ClearField(incidentruleexecution.FieldFrozenActions, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(incidentruleexecution.FieldStatus, field.TypeString, value)
@@ -845,6 +1013,80 @@ func (_u *IncidentRuleExecutionUpdateOne) sqlSave(ctx context.Context) (_node *I
 	}
 	if value, ok := _u.mutation.UpdatedAt(); ok {
 		_spec.SetField(incidentruleexecution.FieldUpdatedAt, field.TypeTime, value)
+	}
+	if _u.mutation.IncidentCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   incidentruleexecution.IncidentTable,
+			Columns: []string{incidentruleexecution.IncidentColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(incident.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.IncidentIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   incidentruleexecution.IncidentTable,
+			Columns: []string{incidentruleexecution.IncidentColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(incident.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
+	}
+	if _u.mutation.ActionReceiptsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   incidentruleexecution.ActionReceiptsTable,
+			Columns: []string{incidentruleexecution.ActionReceiptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(incidentruleactionreceipt.FieldID, field.TypeInt),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.RemovedActionReceiptsIDs(); len(nodes) > 0 && !_u.mutation.ActionReceiptsCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   incidentruleexecution.ActionReceiptsTable,
+			Columns: []string{incidentruleexecution.ActionReceiptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(incidentruleactionreceipt.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.ActionReceiptsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   incidentruleexecution.ActionReceiptsTable,
+			Columns: []string{incidentruleexecution.ActionReceiptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(incidentruleactionreceipt.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _u.mutation.RuleCleared() {
 		edge := &sqlgraph.EdgeSpec{

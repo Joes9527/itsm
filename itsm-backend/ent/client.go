@@ -54,6 +54,7 @@ import (
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/incidentrule"
+	"itsm-backend/ent/incidentruleactionreceipt"
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/intakerequest"
 	"itsm-backend/ent/intakeresolutionsnapshot"
@@ -228,6 +229,8 @@ type Client struct {
 	IncidentMetric *IncidentMetricClient
 	// IncidentRule is the client for interacting with the IncidentRule builders.
 	IncidentRule *IncidentRuleClient
+	// IncidentRuleActionReceipt is the client for interacting with the IncidentRuleActionReceipt builders.
+	IncidentRuleActionReceipt *IncidentRuleActionReceiptClient
 	// IncidentRuleExecution is the client for interacting with the IncidentRuleExecution builders.
 	IncidentRuleExecution *IncidentRuleExecutionClient
 	// IntakeRequest is the client for interacting with the IntakeRequest builders.
@@ -434,6 +437,7 @@ func (c *Client) init() {
 	c.IncidentEvent = NewIncidentEventClient(c.config)
 	c.IncidentMetric = NewIncidentMetricClient(c.config)
 	c.IncidentRule = NewIncidentRuleClient(c.config)
+	c.IncidentRuleActionReceipt = NewIncidentRuleActionReceiptClient(c.config)
 	c.IncidentRuleExecution = NewIncidentRuleExecutionClient(c.config)
 	c.IntakeRequest = NewIntakeRequestClient(c.config)
 	c.IntakeResolutionSnapshot = NewIntakeResolutionSnapshotClient(c.config)
@@ -645,6 +649,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		IncidentEvent:               NewIncidentEventClient(cfg),
 		IncidentMetric:              NewIncidentMetricClient(cfg),
 		IncidentRule:                NewIncidentRuleClient(cfg),
+		IncidentRuleActionReceipt:   NewIncidentRuleActionReceiptClient(cfg),
 		IncidentRuleExecution:       NewIncidentRuleExecutionClient(cfg),
 		IntakeRequest:               NewIntakeRequestClient(cfg),
 		IntakeResolutionSnapshot:    NewIntakeResolutionSnapshotClient(cfg),
@@ -783,6 +788,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		IncidentEvent:               NewIncidentEventClient(cfg),
 		IncidentMetric:              NewIncidentMetricClient(cfg),
 		IncidentRule:                NewIncidentRuleClient(cfg),
+		IncidentRuleActionReceipt:   NewIncidentRuleActionReceiptClient(cfg),
 		IncidentRuleExecution:       NewIncidentRuleExecutionClient(cfg),
 		IntakeRequest:               NewIntakeRequestClient(cfg),
 		IntakeResolutionSnapshot:    NewIntakeResolutionSnapshotClient(cfg),
@@ -897,10 +903,10 @@ func (c *Client) Use(hooks ...Hook) {
 		c.DiscoveryResult, c.DiscoverySource, c.DomainConfig, c.EndpointACL,
 		c.EngineerSkill, c.ExternalIdentity, c.FeishuTicketSync, c.FieldDefinition,
 		c.FieldValue, c.Group, c.Incident, c.IncidentAlert, c.IncidentEscalationRule,
-		c.IncidentEvent, c.IncidentMetric, c.IncidentRule, c.IncidentRuleExecution,
-		c.IntakeRequest, c.IntakeResolutionSnapshot, c.ItemVersion,
-		c.KafTaskActionLedger, c.KafTaskCompletionReceipt, c.KnowledgeArticle,
-		c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
+		c.IncidentEvent, c.IncidentMetric, c.IncidentRule, c.IncidentRuleActionReceipt,
+		c.IncidentRuleExecution, c.IntakeRequest, c.IntakeResolutionSnapshot,
+		c.ItemVersion, c.KafTaskActionLedger, c.KafTaskCompletionReceipt,
+		c.KnowledgeArticle, c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
 		c.KnowledgeArticleSession, c.KnowledgeArticleVersion, c.KnownError,
 		c.MSPAllocation, c.MarketplaceItem, c.Menu, c.Message, c.Microservice,
 		c.Notification, c.NotificationPreference, c.OutboxEvent, c.PasswordResetToken,
@@ -936,10 +942,10 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.DiscoveryResult, c.DiscoverySource, c.DomainConfig, c.EndpointACL,
 		c.EngineerSkill, c.ExternalIdentity, c.FeishuTicketSync, c.FieldDefinition,
 		c.FieldValue, c.Group, c.Incident, c.IncidentAlert, c.IncidentEscalationRule,
-		c.IncidentEvent, c.IncidentMetric, c.IncidentRule, c.IncidentRuleExecution,
-		c.IntakeRequest, c.IntakeResolutionSnapshot, c.ItemVersion,
-		c.KafTaskActionLedger, c.KafTaskCompletionReceipt, c.KnowledgeArticle,
-		c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
+		c.IncidentEvent, c.IncidentMetric, c.IncidentRule, c.IncidentRuleActionReceipt,
+		c.IncidentRuleExecution, c.IntakeRequest, c.IntakeResolutionSnapshot,
+		c.ItemVersion, c.KafTaskActionLedger, c.KafTaskCompletionReceipt,
+		c.KnowledgeArticle, c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
 		c.KnowledgeArticleSession, c.KnowledgeArticleVersion, c.KnownError,
 		c.MSPAllocation, c.MarketplaceItem, c.Menu, c.Message, c.Microservice,
 		c.Notification, c.NotificationPreference, c.OutboxEvent, c.PasswordResetToken,
@@ -1051,6 +1057,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.IncidentMetric.mutate(ctx, m)
 	case *IncidentRuleMutation:
 		return c.IncidentRule.mutate(ctx, m)
+	case *IncidentRuleActionReceiptMutation:
+		return c.IncidentRuleActionReceipt.mutate(ctx, m)
 	case *IncidentRuleExecutionMutation:
 		return c.IncidentRuleExecution.mutate(ctx, m)
 	case *IntakeRequestMutation:
@@ -7935,6 +7943,155 @@ func (c *IncidentRuleClient) mutate(ctx context.Context, m *IncidentRuleMutation
 	}
 }
 
+// IncidentRuleActionReceiptClient is a client for the IncidentRuleActionReceipt schema.
+type IncidentRuleActionReceiptClient struct {
+	config
+}
+
+// NewIncidentRuleActionReceiptClient returns a client for the IncidentRuleActionReceipt from the given config.
+func NewIncidentRuleActionReceiptClient(c config) *IncidentRuleActionReceiptClient {
+	return &IncidentRuleActionReceiptClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `incidentruleactionreceipt.Hooks(f(g(h())))`.
+func (c *IncidentRuleActionReceiptClient) Use(hooks ...Hook) {
+	c.hooks.IncidentRuleActionReceipt = append(c.hooks.IncidentRuleActionReceipt, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `incidentruleactionreceipt.Intercept(f(g(h())))`.
+func (c *IncidentRuleActionReceiptClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IncidentRuleActionReceipt = append(c.inters.IncidentRuleActionReceipt, interceptors...)
+}
+
+// Create returns a builder for creating a IncidentRuleActionReceipt entity.
+func (c *IncidentRuleActionReceiptClient) Create() *IncidentRuleActionReceiptCreate {
+	mutation := newIncidentRuleActionReceiptMutation(c.config, OpCreate)
+	return &IncidentRuleActionReceiptCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IncidentRuleActionReceipt entities.
+func (c *IncidentRuleActionReceiptClient) CreateBulk(builders ...*IncidentRuleActionReceiptCreate) *IncidentRuleActionReceiptCreateBulk {
+	return &IncidentRuleActionReceiptCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IncidentRuleActionReceiptClient) MapCreateBulk(slice any, setFunc func(*IncidentRuleActionReceiptCreate, int)) *IncidentRuleActionReceiptCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IncidentRuleActionReceiptCreateBulk{err: fmt.Errorf("calling to IncidentRuleActionReceiptClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IncidentRuleActionReceiptCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IncidentRuleActionReceiptCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IncidentRuleActionReceipt.
+func (c *IncidentRuleActionReceiptClient) Update() *IncidentRuleActionReceiptUpdate {
+	mutation := newIncidentRuleActionReceiptMutation(c.config, OpUpdate)
+	return &IncidentRuleActionReceiptUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IncidentRuleActionReceiptClient) UpdateOne(_m *IncidentRuleActionReceipt) *IncidentRuleActionReceiptUpdateOne {
+	mutation := newIncidentRuleActionReceiptMutation(c.config, OpUpdateOne, withIncidentRuleActionReceipt(_m))
+	return &IncidentRuleActionReceiptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IncidentRuleActionReceiptClient) UpdateOneID(id int) *IncidentRuleActionReceiptUpdateOne {
+	mutation := newIncidentRuleActionReceiptMutation(c.config, OpUpdateOne, withIncidentRuleActionReceiptID(id))
+	return &IncidentRuleActionReceiptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IncidentRuleActionReceipt.
+func (c *IncidentRuleActionReceiptClient) Delete() *IncidentRuleActionReceiptDelete {
+	mutation := newIncidentRuleActionReceiptMutation(c.config, OpDelete)
+	return &IncidentRuleActionReceiptDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IncidentRuleActionReceiptClient) DeleteOne(_m *IncidentRuleActionReceipt) *IncidentRuleActionReceiptDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IncidentRuleActionReceiptClient) DeleteOneID(id int) *IncidentRuleActionReceiptDeleteOne {
+	builder := c.Delete().Where(incidentruleactionreceipt.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IncidentRuleActionReceiptDeleteOne{builder}
+}
+
+// Query returns a query builder for IncidentRuleActionReceipt.
+func (c *IncidentRuleActionReceiptClient) Query() *IncidentRuleActionReceiptQuery {
+	return &IncidentRuleActionReceiptQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIncidentRuleActionReceipt},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IncidentRuleActionReceipt entity by its id.
+func (c *IncidentRuleActionReceiptClient) Get(ctx context.Context, id int) (*IncidentRuleActionReceipt, error) {
+	return c.Query().Where(incidentruleactionreceipt.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IncidentRuleActionReceiptClient) GetX(ctx context.Context, id int) *IncidentRuleActionReceipt {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryExecution queries the execution edge of a IncidentRuleActionReceipt.
+func (c *IncidentRuleActionReceiptClient) QueryExecution(_m *IncidentRuleActionReceipt) *IncidentRuleExecutionQuery {
+	query := (&IncidentRuleExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(incidentruleactionreceipt.Table, incidentruleactionreceipt.FieldID, id),
+			sqlgraph.To(incidentruleexecution.Table, incidentruleexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, incidentruleactionreceipt.ExecutionTable, incidentruleactionreceipt.ExecutionColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *IncidentRuleActionReceiptClient) Hooks() []Hook {
+	return c.hooks.IncidentRuleActionReceipt
+}
+
+// Interceptors returns the client interceptors.
+func (c *IncidentRuleActionReceiptClient) Interceptors() []Interceptor {
+	return c.inters.IncidentRuleActionReceipt
+}
+
+func (c *IncidentRuleActionReceiptClient) mutate(ctx context.Context, m *IncidentRuleActionReceiptMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IncidentRuleActionReceiptCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IncidentRuleActionReceiptUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IncidentRuleActionReceiptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IncidentRuleActionReceiptDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IncidentRuleActionReceipt mutation op: %q", m.Op())
+	}
+}
+
 // IncidentRuleExecutionClient is a client for the IncidentRuleExecution schema.
 type IncidentRuleExecutionClient struct {
 	config
@@ -8041,6 +8198,54 @@ func (c *IncidentRuleExecutionClient) GetX(ctx context.Context, id int) *Inciden
 		panic(err)
 	}
 	return obj
+}
+
+// QueryIncident queries the incident edge of a IncidentRuleExecution.
+func (c *IncidentRuleExecutionClient) QueryIncident(_m *IncidentRuleExecution) *IncidentQuery {
+	query := (&IncidentClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(incidentruleexecution.Table, incidentruleexecution.FieldID, id),
+			sqlgraph.To(incident.Table, incident.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, incidentruleexecution.IncidentTable, incidentruleexecution.IncidentColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySourceEvent queries the source_event edge of a IncidentRuleExecution.
+func (c *IncidentRuleExecutionClient) QuerySourceEvent(_m *IncidentRuleExecution) *OutboxEventQuery {
+	query := (&OutboxEventClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(incidentruleexecution.Table, incidentruleexecution.FieldID, id),
+			sqlgraph.To(outboxevent.Table, outboxevent.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, incidentruleexecution.SourceEventTable, incidentruleexecution.SourceEventColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryActionReceipts queries the action_receipts edge of a IncidentRuleExecution.
+func (c *IncidentRuleExecutionClient) QueryActionReceipts(_m *IncidentRuleExecution) *IncidentRuleActionReceiptQuery {
+	query := (&IncidentRuleActionReceiptClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(incidentruleexecution.Table, incidentruleexecution.FieldID, id),
+			sqlgraph.To(incidentruleactionreceipt.Table, incidentruleactionreceipt.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, incidentruleexecution.ActionReceiptsTable, incidentruleexecution.ActionReceiptsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
 }
 
 // QueryRule queries the rule edge of a IncidentRuleExecution.
@@ -20118,8 +20323,8 @@ type (
 		DiscoveryJob, DiscoveryResult, DiscoverySource, DomainConfig, EndpointACL,
 		EngineerSkill, ExternalIdentity, FeishuTicketSync, FieldDefinition, FieldValue,
 		Group, Incident, IncidentAlert, IncidentEscalationRule, IncidentEvent,
-		IncidentMetric, IncidentRule, IncidentRuleExecution, IntakeRequest,
-		IntakeResolutionSnapshot, ItemVersion, KafTaskActionLedger,
+		IncidentMetric, IncidentRule, IncidentRuleActionReceipt, IncidentRuleExecution,
+		IntakeRequest, IntakeResolutionSnapshot, ItemVersion, KafTaskActionLedger,
 		KafTaskCompletionReceipt, KnowledgeArticle, KnowledgeArticleLike,
 		KnowledgeArticleParticipant, KnowledgeArticleSession, KnowledgeArticleVersion,
 		KnownError, MSPAllocation, MarketplaceItem, Menu, Message, Microservice,
@@ -20146,8 +20351,8 @@ type (
 		DiscoveryJob, DiscoveryResult, DiscoverySource, DomainConfig, EndpointACL,
 		EngineerSkill, ExternalIdentity, FeishuTicketSync, FieldDefinition, FieldValue,
 		Group, Incident, IncidentAlert, IncidentEscalationRule, IncidentEvent,
-		IncidentMetric, IncidentRule, IncidentRuleExecution, IntakeRequest,
-		IntakeResolutionSnapshot, ItemVersion, KafTaskActionLedger,
+		IncidentMetric, IncidentRule, IncidentRuleActionReceipt, IncidentRuleExecution,
+		IntakeRequest, IntakeResolutionSnapshot, ItemVersion, KafTaskActionLedger,
 		KafTaskCompletionReceipt, KnowledgeArticle, KnowledgeArticleLike,
 		KnowledgeArticleParticipant, KnowledgeArticleSession, KnowledgeArticleVersion,
 		KnownError, MSPAllocation, MarketplaceItem, Menu, Message, Microservice,

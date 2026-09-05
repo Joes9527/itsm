@@ -524,6 +524,18 @@ func (f IncidentRuleFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IncidentRuleMutation", m)
 }
 
+// The IncidentRuleActionReceiptFunc type is an adapter to allow the use of ordinary
+// function as IncidentRuleActionReceipt mutator.
+type IncidentRuleActionReceiptFunc func(context.Context, *ent.IncidentRuleActionReceiptMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f IncidentRuleActionReceiptFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.IncidentRuleActionReceiptMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IncidentRuleActionReceiptMutation", m)
+}
+
 // The IncidentRuleExecutionFunc type is an adapter to allow the use of ordinary
 // function as IncidentRuleExecution mutator.
 type IncidentRuleExecutionFunc func(context.Context, *ent.IncidentRuleExecutionMutation) (ent.Value, error)
