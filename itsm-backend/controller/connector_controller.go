@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"itsm-backend/common"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/connector"
 	msgraphpkg "itsm-backend/connector/builtin/msgraph"
 	"itsm-backend/connector/marketplace"
@@ -45,12 +46,13 @@ type ConnectorController struct {
 	market           *marketplace.Market // optional
 	registry         *connector.Registry
 	logger           *zap.SugaredLogger
-	client           *ent.Client // 持久化连接器配置（nil 时跳过，测试场景）
+	restoreClient    *ent.Client             // Read-only cross-tenant startup capability.
+	client           *ent.Client             // 持久化连接器配置（nil 时跳过，测试场景）
 	emailCoordinator emailPollingCoordinator // optional; nil unless SetEmailCoordinator is called
 }
 
-func NewConnectorController(mgr *connector.Manager, reg *connector.Registry, mkt *marketplace.Market, logger *zap.SugaredLogger, client *ent.Client) *ConnectorController {
-	return &ConnectorController{manager: mgr, market: mkt, registry: reg, logger: logger, client: client}
+func NewConnectorController(mgr *connector.Manager, reg *connector.Registry, mkt *marketplace.Market, logger *zap.SugaredLogger, client, restoreClient *ent.Client) *ConnectorController {
+	return &ConnectorController{manager: mgr, market: mkt, registry: reg, logger: logger, client: client, restoreClient: restoreClient}
 }
 
 // SetEmailCoordinator wires in the MS Graph email polling coordinator.
@@ -528,16 +530,17 @@ func (c *ConnectorController) deleteConfig(ctx context.Context, tenantID int, na
 // LoadAll 从数据库加载所有已启用的连接器配置并自动 provision。
 // 供 bootstrap 在启动时调用，恢复因进程重启而丢失的连接器实例。
 func (c *ConnectorController) LoadAll(ctx context.Context) error {
-	if c.client == nil {
-		return nil
+	if c.restoreClient == nil {
+		return fmt.Errorf("connector restore database capability is required")
 	}
-	configs, err := c.client.ConnectorConfig.Query().
+	configs, err := c.restoreClient.ConnectorConfig.Query().
 		Where(connectorconfig.EnabledEQ(true)).
 		All(ctx)
 	if err != nil {
 		return err
 	}
 	for _, cfg := range configs {
+		tenantCtx := tenantctx.WithTenantID(ctx, cfg.TenantID)
 		var credentials map[string]string
 		var settings map[string]interface{}
 		var labels map[string]string
@@ -547,7 +550,7 @@ func (c *ConnectorController) LoadAll(ctx context.Context) error {
 		if settings == nil {
 			settings = make(map[string]interface{})
 		}
-		if err := c.manager.Provision(ctx, connector.Config{
+		if err := c.manager.Provision(tenantCtx, connector.Config{
 			TenantID:    cfg.TenantID,
 			Name:        cfg.Name,
 			Provider:    cfg.Provider,
@@ -565,7 +568,7 @@ func (c *ConnectorController) LoadAll(ctx context.Context) error {
 		if cfg.Name == "msgraph-email" && cfg.Enabled && c.emailCoordinator != nil {
 			if conn, ok := c.manager.Get(cfg.TenantID, "msgraph-email"); ok {
 				if gc, ok := conn.(*msgraphpkg.GraphConnector); ok {
-					c.emailCoordinator.Start(ctx, cfg.TenantID, gc)
+					c.emailCoordinator.Start(tenantCtx, cfg.TenantID, gc)
 				}
 			}
 		}

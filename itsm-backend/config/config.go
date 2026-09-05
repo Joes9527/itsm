@@ -87,12 +87,15 @@ type TicketConfig struct {
 }
 
 type DatabaseConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	User     string `mapstructure:"user"`
-	Password string `mapstructure:"password"`
-	DBName   string `mapstructure:"dbname"`
-	SSLMode  string `mapstructure:"sslmode"`
+	Schema             string `mapstructure:"schema"`
+	SystemRoleUser     string `mapstructure:"system_role_user"`
+	SystemRolePassword string `mapstructure:"system_role_password"`
+	Host               string `mapstructure:"host"`
+	Port               int    `mapstructure:"port"`
+	User               string `mapstructure:"user"`
+	Password           string `mapstructure:"password"`
+	DBName             string `mapstructure:"dbname"`
+	SSLMode            string `mapstructure:"sslmode"`
 
 	// AppRoleUser / AppRolePassword: 应用请求路径使用的低权角色
 	// （不带 BYPASSRLS，走 policy 过滤）。留空时降级为使用 User/Password。
@@ -296,6 +299,15 @@ func LoadConfig() (*Config, error) {
 	}
 	if databasePassword != "" {
 		config.Database.Password = databasePassword
+	}
+	config.Database.Schema = getEnvWithDefault("DB_SCHEMA", config.Database.Schema)
+	config.Database.SystemRoleUser = getEnvWithDefault("DB_SYSTEM_ROLE_USER", config.Database.SystemRoleUser)
+	systemPassword, err := readEnvironmentOrSecret("DB_SYSTEM_ROLE_PASSWORD")
+	if err != nil {
+		return nil, err
+	}
+	if systemPassword != "" {
+		config.Database.SystemRolePassword = systemPassword
 	}
 	// RLS 双角色 DSN（可选）：留空则回落至默认 DB_USER/DB_PASSWORD
 	config.Database.AppRoleUser = getEnvWithDefault("DB_APP_ROLE_USER", config.Database.AppRoleUser)

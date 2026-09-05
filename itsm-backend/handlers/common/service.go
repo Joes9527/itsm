@@ -20,7 +20,7 @@ type Service struct {
 	repo          Repository
 	jwtSecret     string
 	logger        *zap.SugaredLogger
-	client        *ent.Client // Authentication audit and tenant queries.
+	client        *ent.Client // Restricted system pool: credential/session lookup and append-only authentication audit.
 	refreshTokens *authentication.RefreshTokenConsumer
 }
 

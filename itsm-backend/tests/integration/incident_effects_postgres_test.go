@@ -68,6 +68,8 @@ func newIncidentEffectsFixture(t *testing.T) *incidentEffectsFixture {
 	scopedDB, err := sql.Open("postgres", parsed.String())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, scopedDB.Close()) })
+	_, err = scopedDB.ExecContext(ctx, migration.GetMigrationSQL("009_enable_rls_tenant_isolation"))
+	require.NoError(t, err)
 	_, err = scopedDB.ExecContext(ctx, migration.GetMigrationSQL("024_incident_rule_action_receipts"))
 	require.NoError(t, err)
 
@@ -415,14 +417,10 @@ func TestPostgresIncidentEffectsRLSUnderNonBypassRole(t *testing.T) {
 	f.rule(metricAction("once"))
 	require.NoError(t, f.engine.Deliver(f.ctx, f.event))
 	require.NoError(t, f.client.Schema.Create(f.ctx), "RLS proof follows a repeated Ent bootstrap")
-	tx, err := f.db.BeginTx(f.ctx, nil)
+	_, runtimeDB := runtimeRLSDriver(t, f)
+	tx, err := runtimeDB.BeginTx(f.ctx, nil)
 	require.NoError(t, err)
 	defer tx.Rollback()
-	var schema string
-	require.NoError(t, tx.QueryRowContext(f.ctx, "SELECT current_schema()").Scan(&schema))
-	// Only transactional grants on this disposable schema; no roles are created.
-	_, err = tx.ExecContext(f.ctx, "GRANT USAGE ON SCHEMA "+schema+" TO pg_monitor; GRANT SELECT ON ALL TABLES IN SCHEMA "+schema+" TO pg_monitor; GRANT INSERT,UPDATE ON incident_rule_executions,incident_rule_action_receipts TO pg_monitor; GRANT USAGE ON ALL SEQUENCES IN SCHEMA "+schema+" TO pg_monitor; SET LOCAL ROLE pg_monitor")
-	require.NoError(t, err)
 	var super, bypass bool
 	require.NoError(t, tx.QueryRowContext(f.ctx, "SELECT rolsuper,rolbypassrls FROM pg_roles WHERE rolname=current_user").Scan(&super, &bypass))
 	require.False(t, super)
@@ -446,7 +444,9 @@ func TestPostgresIncidentEffectsRLSUnderNonBypassRole(t *testing.T) {
 	_, err = tx.ExecContext(f.ctx, "SAVEPOINT denied_write")
 	require.NoError(t, err)
 	_, err = tx.ExecContext(f.ctx, "INSERT INTO incident_rule_executions(tenant_id,rule_id,status,started_at,created_at,updated_at) VALUES($1,1,'running',now(),now(),now())", f.tenant.ID)
-	require.ErrorContains(t, err, "row-level security")
+	// Under baseline 009 the owning rule is already hidden by RLS; the
+	// ownership trigger rejects before the execution table WITH CHECK runs.
+	require.ErrorContains(t, err, "Incident rule owner tenant mismatch")
 	_, err = tx.ExecContext(f.ctx, "ROLLBACK TO SAVEPOINT denied_write")
 	require.NoError(t, err)
 }

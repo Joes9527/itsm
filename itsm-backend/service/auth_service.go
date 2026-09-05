@@ -22,19 +22,21 @@ import (
 )
 
 type AuthService struct {
-	client       *ent.Client
-	jwtSecret    string
-	logger       *zap.SugaredLogger
-	emailService *EmailService
-	baseURL      string // 前端基础URL，用于生成重置链接
+	client        *ent.Client
+	sessionClient *ent.Client
+	jwtSecret     string
+	logger        *zap.SugaredLogger
+	emailService  *EmailService
+	baseURL       string // 前端基础URL，用于生成重置链接
 }
 
-func NewAuthService(client *ent.Client, jwtSecret string, logger *zap.SugaredLogger) *AuthService {
+func NewAuthService(client, sessionClient *ent.Client, jwtSecret string, logger *zap.SugaredLogger) *AuthService {
 	return &AuthService{
-		client:    client,
-		jwtSecret: jwtSecret,
-		logger:    logger,
-		baseURL:   "http://localhost:3000", // 默认值，可在生产环境通过配置覆盖
+		client:        client,
+		sessionClient: sessionClient,
+		jwtSecret:     jwtSecret,
+		logger:        logger,
+		baseURL:       "http://localhost:3000", // 默认值，可在生产环境通过配置覆盖
 	}
 }
 
@@ -133,7 +135,7 @@ func (s *AuthService) SwitchTenant(ctx context.Context, userID, tenantID int) (*
 	// Session selection needs the authenticated actor and MSP relation before
 	// authorizing a target. This scope never escapes the authentication owner.
 	ctx = tenantctx.SystemContext(ctx, "auth:switch_tenant", "authorize the actor against the requested tenant")
-	userEntity, err := s.client.User.Get(ctx, userID)
+	userEntity, err := s.sessionClient.User.Get(ctx, userID)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, fmt.Errorf("用户不存在")
@@ -144,7 +146,7 @@ func (s *AuthService) SwitchTenant(ctx context.Context, userID, tenantID int) (*
 	if !userEntity.Active {
 		return nil, fmt.Errorf("用户账号已被禁用")
 	}
-	tenantEntity, err := authorization.AuthorizeTenantSession(ctx, s.client, userEntity, tenantID, time.Now())
+	tenantEntity, err := authorization.AuthorizeTenantSession(ctx, s.sessionClient, userEntity, tenantID, time.Now())
 	if err != nil {
 		switch {
 		case errors.Is(err, authorization.ErrTenantInactive):

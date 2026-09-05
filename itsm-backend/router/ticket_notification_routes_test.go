@@ -109,9 +109,9 @@ func setupTicketNotificationRouteEnv(t *testing.T, roleCode string, permissions 
 	genericNotifications := controller.NewNotificationController(service.NewNotificationService(client))
 	router := gin.New()
 	SetupRoutes(router, &RouterConfig{
-		JWTSecret:                    "ticket-notification-routes",
-		Logger:                       logger,
-		Client:                       client,
+		JWTSecret: "ticket-notification-routes",
+		Logger:    logger,
+		Client:    client, TenantDirectoryClient: client,
 		CommonHandler:                &domainCommon.Handler{},
 		TicketNotificationController: ticketNotifications,
 		NotificationController:       genericNotifications,

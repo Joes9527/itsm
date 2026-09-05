@@ -40,7 +40,7 @@ func newAuthFixture(t *testing.T) *authFixture {
 	logger := zaptest.NewLogger(t).Sugar()
 
 	svc := &AuthService{
-		client:    client,
+		client: client, sessionClient: client,
 		jwtSecret: "test-secret-key",
 		logger:    logger,
 		baseURL:   "http://localhost:3000",

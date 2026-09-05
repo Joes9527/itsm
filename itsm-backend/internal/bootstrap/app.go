@@ -82,6 +82,7 @@ type Application struct {
 	Cfg                      *config.Config
 	Logger                   *zap.SugaredLogger
 	DBClient                 *ent.Client
+	systemClient             *ent.Client
 	Router                   *gin.Engine
 	Embedder                 service.Embedder
 	VectorStore              *service.VectorStore
@@ -236,10 +237,11 @@ func NewApplication() *Application {
 	}
 
 	// 3. 初始化数据库连接（带 RLS 装饰器，默认 off 模式=透明）
-	client, err := database.InitDatabaseWithRLS(&cfg.Database, &cfg.RLS, sugar)
+	clients, err := database.InitRuntimeDatabases(&cfg.Database, &cfg.RLS, sugar)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
+	client, systemClient := clients.Tenant, clients.System
 	// 6. 初始化服务层 & 控制器
 	// 这部分代码量较大，为了简化，我们先在这里进行组装，后续可以进一步拆分为 wires / container
 
@@ -297,7 +299,7 @@ func NewApplication() *Application {
 	// Connector Manager / Registry / Market —— 连接器/插件/技能市场基础设施
 	connectorManager := connector.NewManager(connector.Default(), sugar)
 	connectorMarket := marketplace.New()
-	connectorController := controller.NewConnectorController(connectorManager, connector.Default(), connectorMarket, sugar, client)
+	connectorController := controller.NewConnectorController(connectorManager, connector.Default(), connectorMarket, sugar, client, systemClient)
 
 	// Webhook 事件推送订阅方：sla.breached 按租户推送到已配置的 webhook 端点
 	webhookSubscriber := service.NewWebhookEventSubscriber(connectorManager, sugar)
@@ -330,7 +332,7 @@ func NewApplication() *Application {
 		log.Fatalf("Invalid outbox event type registry: %v", err)
 	}
 	outboxDeliveryWorker, err := service.NewOutboxDeliveryWorker(
-		service.NewOutboxEventRepository(client),
+		service.NewOutboxEventRepository(systemClient),
 		service.OutboxDeliveryWorkerConfig{
 			BatchSize:      cfg.OutboxDelivery.BatchSize,
 			PollInterval:   cfg.OutboxDelivery.PollInterval,
@@ -721,11 +723,11 @@ func NewApplication() *Application {
 		sugar.Warn("REDIS_HOST is not configured; token refresh unavailable")
 	}
 	refreshTokenConsumer := authentication.NewRefreshTokenConsumer(cfg.JWT.Secret, refreshTokenStore)
-	commonServiceDomain := domainCommon.NewService(commonRepo, cfg.JWT.Secret, sugar, client, refreshTokenConsumer)
+	commonServiceDomain := domainCommon.NewService(commonRepo, cfg.JWT.Secret, sugar, systemClient, refreshTokenConsumer)
 	commonHandler := domainCommon.NewHandler(commonServiceDomain)
 
 	// Auth Controller（装配缺失的 register / forgot-password / reset-password / validate-reset-token / switch-tenant 路由）
-	authService := service.NewAuthService(client, cfg.JWT.Secret, sugar)
+	authService := service.NewAuthService(client, systemClient, cfg.JWT.Secret, sugar)
 	authService.SetEmailService(emailService)
 	if cfg.Server.FrontendURL != "" {
 		authService.SetBaseURL(cfg.Server.FrontendURL)
@@ -837,6 +839,7 @@ func NewApplication() *Application {
 		JWTSecret:                       cfg.JWT.Secret,
 		Logger:                          sugar,
 		Client:                          client,
+		TenantDirectoryClient:           systemClient,
 		RawDB:                           database.GetRawDB(),
 		CSRFEnabled:                     cfg.Security.CSRFEnabled,
 		RedisRateLimiter:                redisRateLimiter,
@@ -944,6 +947,7 @@ func NewApplication() *Application {
 		Cfg:                  cfg,
 		Logger:               sugar,
 		DBClient:             client,
+		systemClient:         systemClient,
 		Router:               r,
 		Embedder:             embedder,
 		VectorStore:          vectorStore,
@@ -1149,6 +1153,9 @@ func needsBootstrapAdmin(ctx context.Context, client *ent.Client) (bool, error) 
 func (app *Application) Run() {
 	defer app.Logger.Sync()
 	defer app.DBClient.Close()
+	if app.systemClient != nil {
+		defer app.systemClient.Close()
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	stopAPIRuntime := app.startAPIRuntime(ctx)

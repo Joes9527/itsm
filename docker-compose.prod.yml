@@ -66,6 +66,7 @@ services:
       - DB_USER=${ITSM_MIGRATION_DB_USER:?ITSM_MIGRATION_DB_USER must be set}
       - DB_PASSWORD_FILE=/run/secrets/itsm_migration_db_password
       - DB_NAME=${ITSM_DB_NAME:?ITSM_DB_NAME must be set}
+      - DB_SCHEMA=${ITSM_DB_SCHEMA:-public}
       - DB_SSLMODE=${ITSM_DB_SSLMODE:-require}
       - REDIS_URL=redis://:${REDIS_PASSWORD:?REDIS_PASSWORD must be set}@redis:6379/0
       - REDIS_HOST=redis
@@ -109,7 +110,11 @@ services:
       - DB_PORT=${ITSM_DB_PORT:-5432}
       - DB_USER=${ITSM_RUNTIME_DB_USER:?ITSM_RUNTIME_DB_USER must be set}
       - DB_PASSWORD_FILE=/run/secrets/itsm_runtime_db_password
+      - DB_SYSTEM_ROLE_USER=${ITSM_SYSTEM_DB_USER:?ITSM_SYSTEM_DB_USER must be set}
+      - DB_SYSTEM_ROLE_PASSWORD_FILE=/run/secrets/itsm_system_db_password
+      - RLS_MODE=${RLS_MODE:-off}
       - DB_NAME=${ITSM_DB_NAME:?ITSM_DB_NAME must be set}
+      - DB_SCHEMA=${ITSM_DB_SCHEMA:-public}
       - DB_SSLMODE=${ITSM_DB_SSLMODE:-require}
 
       # Redis 配置
@@ -185,6 +190,7 @@ services:
       - ./config:/app/config:ro
     secrets:
       - itsm_runtime_db_password
+      - itsm_system_db_password
     networks:
       - itsm-prod-network
     healthcheck:
@@ -214,7 +220,11 @@ services:
       - DB_PORT=${ITSM_DB_PORT:-5432}
       - DB_USER=${ITSM_RUNTIME_DB_USER:?ITSM_RUNTIME_DB_USER must be set}
       - DB_PASSWORD_FILE=/run/secrets/itsm_runtime_db_password
+      - DB_SYSTEM_ROLE_USER=${ITSM_SYSTEM_DB_USER:?ITSM_SYSTEM_DB_USER must be set}
+      - DB_SYSTEM_ROLE_PASSWORD_FILE=/run/secrets/itsm_system_db_password
+      - RLS_MODE=${RLS_MODE:-off}
       - DB_NAME=${ITSM_DB_NAME:?ITSM_DB_NAME must be set}
+      - DB_SCHEMA=${ITSM_DB_SCHEMA:-public}
       - DB_SSLMODE=${ITSM_DB_SSLMODE:-require}
       - ENV=production
       - DEPLOYMENT_MODE=${DEPLOYMENT_MODE:-private}
@@ -238,6 +248,7 @@ services:
       - ./config:/app/config:ro
     secrets:
       - itsm_runtime_db_password
+      - itsm_system_db_password
       - kaf_webhook_secret
     networks:
       - itsm-prod-network
@@ -316,6 +327,8 @@ volumes:
     driver: local
 
 secrets:
+  itsm_system_db_password:
+    file: ${ITSM_SYSTEM_DB_PASSWORD_FILE:?ITSM_SYSTEM_DB_PASSWORD_FILE must point to the restricted system database secret file}
   itsm_runtime_db_password:
     file: ${ITSM_RUNTIME_DB_PASSWORD_FILE:?ITSM_RUNTIME_DB_PASSWORD_FILE must point to the API and Worker database secret file}
   itsm_migration_db_password:

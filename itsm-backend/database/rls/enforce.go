@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strconv"
 	"sync"
 
 	"entgo.io/ent/dialect"
@@ -35,30 +34,55 @@ func (d *Driver) beginEnforced(ctx context.Context, opts *sql.TxOptions) (dialec
 	if err != nil {
 		return nil, err
 	}
-	tx, err := d.beginInner(ctx, opts)
+	if scoped.system {
+		tx, err := d.beginInner(ctx, opts)
+		if err != nil {
+			return nil, err
+		}
+		return &scopedTx{Tx: tx, scope: scoped}, nil
+	}
+	conn, err := d.acquire(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if !scoped.system {
-		if err = requireTenantRole(ctx, tx); err != nil {
-			_ = tx.Rollback()
-			return nil, err
-		}
-		if err = tx.Exec(ctx, "SELECT set_config('app.current_tenant', $1, true)", []any{strconv.Itoa(scoped.tenant)}, nil); err != nil {
-			_ = tx.Rollback()
-			return nil, fmt.Errorf("rls: set transaction tenant: %w", err)
-		}
+	raw, err := conn.BeginTx(ctx, opts)
+	if err != nil {
+		return nil, errors.Join(err, ReleaseConn(ctx, conn))
 	}
-	if !scoped.system {
-		d.nEnforceApplied.Add(1)
-	}
-	return &scopedTx{Tx: tx, scope: scoped}, nil
+	tx := &entsql.Tx{Conn: entsql.Conn{ExecQuerier: raw}, Tx: raw}
+
+	return &scopedTx{Tx: tx, scope: scoped, raw: raw, release: func() error { return ReleaseConn(ctx, conn) }}, nil
 }
 
 type scopedTx struct {
 	dialect.Tx
-	scope scope
+	scope    scope
+	raw      entsql.ExecQuerier
+	release  func() error
+	once     sync.Once
+	closeErr error
 }
+
+func (tx *scopedTx) finish(commit bool) error {
+	finished := false
+	tx.once.Do(func() {
+		finished = true
+		if commit {
+			tx.closeErr = tx.Tx.Commit()
+		} else {
+			tx.closeErr = tx.Tx.Rollback()
+		}
+		if tx.release != nil {
+			tx.closeErr = errors.Join(tx.closeErr, tx.release())
+		}
+	})
+	if !finished {
+		return sql.ErrTxDone
+	}
+	return tx.closeErr
+}
+func (tx *scopedTx) Commit() error   { return tx.finish(true) }
+func (tx *scopedTx) Rollback() error { return tx.finish(false) }
 
 func (tx *scopedTx) check(ctx context.Context) error {
 	current, err := scopeFrom(ctx)
@@ -74,37 +98,68 @@ func (tx *scopedTx) Exec(ctx context.Context, q string, args, v any) error {
 	if err := tx.check(ctx); err != nil {
 		return err
 	}
-	return tx.Tx.Exec(ctx, q, args, v)
+	if tx.scope.system {
+		return tx.Tx.Exec(ctx, q, args, v)
+	}
+	if err := prepareVariables(ctx, tx.raw, tx.scope); err != nil {
+		return err
+	}
+	return (rawConnection{tx.raw}).Exec(ctx, q, args, v)
 }
 func (tx *scopedTx) Query(ctx context.Context, q string, args, v any) error {
 	if err := tx.check(ctx); err != nil {
 		return err
 	}
-	return tx.Tx.Query(ctx, q, args, v)
+	if tx.scope.system {
+		return tx.Tx.Query(ctx, q, args, v)
+	}
+	if err := prepareVariables(ctx, tx.raw, tx.scope); err != nil {
+		return err
+	}
+	return (rawConnection{tx.raw}).Query(ctx, q, args, v)
 }
 
 // Autocommit uses a checked-out physical connection. It retains PostgreSQL's
 // ordinary statement/RETURNING semantics without introducing a hidden commit
 // after Ent has already reported success. ReleaseConn cleans or evicts it even
 // if the request was cancelled; Query retains ownership until rows close.
-func (d *Driver) acquire(ctx context.Context) (*sql.Conn, error) {
-	if _, err := scopeFrom(ctx); err != nil {
+func (d *Driver) acquire(ctx context.Context) (conn *sql.Conn, err error) {
+	scoped, err := scopeFrom(ctx)
+	if err != nil {
 		return nil, err
 	}
 	pool, ok := d.inner.(interface{ DB() *sql.DB })
 	if !ok {
 		return nil, fmt.Errorf("rls: enforced autocommit requires a SQL connection pool")
 	}
-	conn, err := AcquireConn(ctx, pool.DB())
+	conn, err = AcquireConn(ctx, pool.DB())
 	if err != nil {
 		return nil, err
 	}
-	if err = requireTenantRole(ctx, entsql.Conn{ExecQuerier: conn}); err != nil {
-		return nil, errors.Join(err, ReleaseConn(ctx, conn))
+	checkedOut := conn
+	owned := false
+	defer func() {
+		if !owned {
+			err = errors.Join(err, ReleaseConn(ctx, checkedOut))
+			conn = nil
+		}
+	}()
+	setup, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer setup.Rollback()
+	if err = prepareVariables(ctx, setup, scoped); err != nil {
+		return nil, err
+	}
+	if err = setup.Commit(); err != nil {
+		return nil, err
 	}
 	d.nEnforceApplied.Add(1)
+	owned = true
 	return conn, nil
 }
+
 func (d *Driver) execEnforced(ctx context.Context, q string, args, v any) (err error) {
 	if _, err = scopeFrom(ctx); err != nil {
 		return err
@@ -117,7 +172,7 @@ func (d *Driver) execEnforced(ctx context.Context, q string, args, v any) (err e
 		return err
 	}
 	defer func() { err = errors.Join(err, ReleaseConn(ctx, conn)) }()
-	return (entsql.Conn{ExecQuerier: conn}).Exec(ctx, q, args, v)
+	return (rawConnection{conn}).Exec(ctx, q, args, v)
 }
 func (d *Driver) queryEnforced(ctx context.Context, q string, args, v any) error {
 	if _, err := scopeFrom(ctx); err != nil {
@@ -134,7 +189,7 @@ func (d *Driver) queryEnforced(ctx context.Context, q string, args, v any) error
 	if err != nil {
 		return err
 	}
-	if err = (entsql.Conn{ExecQuerier: conn}).Query(ctx, q, args, rows); err != nil {
+	if err = (rawConnection{conn}).Query(ctx, q, args, rows); err != nil {
 		return errors.Join(err, ReleaseConn(ctx, conn))
 	}
 	rows.ColumnScanner = &scopedRows{ColumnScanner: rows.ColumnScanner, release: func() error { return ReleaseConn(ctx, conn) }}

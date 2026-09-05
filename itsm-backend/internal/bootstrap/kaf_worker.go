@@ -43,13 +43,14 @@ func NewKAFWorkerApplication() (*KAFWorkerApplication, error) {
 	}
 
 	logger := initLogger(&cfg.Log).Sugar()
-	client, err := database.InitDatabaseWithRLS(&cfg.Database, &cfg.RLS, logger)
+	clients, err := database.InitRuntimeDatabases(&cfg.Database, &cfg.RLS, logger)
 	if err != nil {
 		return nil, fmt.Errorf("connect worker database: %w", err)
 	}
+	client := clients.Tenant
 	metrics := service.NewKafOutboxMetrics()
 	dispatcher, err := service.NewKafOutboxDispatcher(
-		service.NewOutboxEventRepository(client),
+		service.NewOutboxEventRepository(clients.System),
 		service.KafOutboxConfig{
 			WebhookURL:    cfg.KAFOutbox.WebhookURL,
 			WebhookSecret: cfg.KAFOutbox.WebhookSecret,
@@ -59,11 +60,11 @@ func NewKAFWorkerApplication() (*KAFWorkerApplication, error) {
 		}, metrics,
 	)
 	if err != nil {
-		client.Close()
+		clients.Close()
 		return nil, fmt.Errorf("create KAF outbox dispatcher: %w", err)
 	}
 	healthRunner := workerhealth.New(fmt.Sprintf(":%d", cfg.KAFOutbox.HealthPort), func(ctx context.Context) error {
-		db := database.GetRawDB()
+		db := clients.SystemDB
 		if db == nil {
 			return fmt.Errorf("database is unavailable")
 		}
@@ -76,7 +77,7 @@ func NewKAFWorkerApplication() (*KAFWorkerApplication, error) {
 		dbClient:     client,
 		dispatcher:   dispatcher,
 		healthRunner: healthRunner,
-		closeDB:      func() { client.Close() },
+		closeDB:      func() { clients.Close() },
 	}, nil
 }
 

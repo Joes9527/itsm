@@ -322,11 +322,11 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --scale its
 ```
 
 生产 `.env.prod` 只保存 secret 文件路径而不是密钥值：
-`ITSM_RUNTIME_DB_PASSWORD_FILE`、`ITSM_MIGRATION_DB_PASSWORD_FILE` 和
+`ITSM_RUNTIME_DB_PASSWORD_FILE`、`ITSM_SYSTEM_DB_PASSWORD_FILE`、`ITSM_MIGRATION_DB_PASSWORD_FILE` 和
 `KAF_WEBHOOK_SECRET_FILE`。Compose 将它们只读挂载给需要该角色的容器。
 生产数据库为外部共享实例，`.env.prod` 还必须提供 `ITSM_DB_HOST`、
-`ITSM_DB_NAME`、`ITSM_RUNTIME_DB_USER` 与 `ITSM_MIGRATION_DB_USER`；不要恢复
-生产 Compose 内嵌 PostgreSQL 容器。
+`ITSM_DB_NAME`、`ITSM_RUNTIME_DB_USER`、`ITSM_SYSTEM_DB_USER` 与 `ITSM_MIGRATION_DB_USER`；不要恢复
+生产 Compose 内嵌 PostgreSQL 容器。受限 system 角色的精确授权和本地启动步骤见 [RLS execution boundary](DEVELOPMENT_GUIDE.md#rls-execution-boundary)。
 
 ---
 

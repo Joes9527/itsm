@@ -38,7 +38,7 @@ func setupTestEngine(t *testing.T) (*gin.Engine, *ent.Client) {
 	cfg := &RouterConfig{
 		JWTSecret: "test-secret",
 		Logger:    logger,
-		Client:    client,
+		Client:    client, TenantDirectoryClient: client,
 		// All controllers nil — only public routes and health should register
 	}
 
@@ -60,7 +60,7 @@ func TestSetupRoutes_NoPanic(t *testing.T) {
 	cfg := &RouterConfig{
 		JWTSecret: "test-secret",
 		Logger:    logger,
-		Client:    client,
+		Client:    client, TenantDirectoryClient: client,
 	}
 
 	gin.SetMode(gin.TestMode)
@@ -79,7 +79,7 @@ func TestSetupRoutes_AllControllersNil(t *testing.T) {
 	cfg := &RouterConfig{
 		JWTSecret: "test-secret",
 		Logger:    logger,
-		Client:    client,
+		Client:    client, TenantDirectoryClient: client,
 		// All controller fields nil by default
 	}
 
@@ -106,9 +106,9 @@ func TestSetupRoutes_DelegatedExecutionRoutesAreRegistered(t *testing.T) {
 	defer client.Close()
 	r := gin.New()
 	SetupRoutes(r, &RouterConfig{
-		JWTSecret:                 "test-secret",
-		Logger:                    zaptest.NewLogger(t).Sugar(),
-		Client:                    client,
+		JWTSecret: "test-secret",
+		Logger:    zaptest.NewLogger(t).Sugar(),
+		Client:    client, TenantDirectoryClient: client,
 		DelegatedExecutionHandler: delegatedexecution.NewHandler(delegatedexecution.NewService(client)),
 	})
 
@@ -199,9 +199,9 @@ func TestSetupRoutes_MSPControllerNil(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 
 	cfg := &RouterConfig{
-		JWTSecret:     "test-secret",
-		Logger:        logger,
-		Client:        client,
+		JWTSecret: "test-secret",
+		Logger:    logger,
+		Client:    client, TenantDirectoryClient: client,
 		MSPController: nil,
 	}
 
@@ -223,9 +223,9 @@ func TestSetupRoutes_DashboardHandlerNil(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 
 	cfg := &RouterConfig{
-		JWTSecret:        "test-secret",
-		Logger:           logger,
-		Client:           client,
+		JWTSecret: "test-secret",
+		Logger:    logger,
+		Client:    client, TenantDirectoryClient: client,
 		DashboardHandler: nil,
 	}
 
@@ -241,9 +241,9 @@ func TestSetupRoutes_CMDBControllerNil(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 
 	cfg := &RouterConfig{
-		JWTSecret:      "test-secret",
-		Logger:         logger,
-		Client:         client,
+		JWTSecret: "test-secret",
+		Logger:    logger,
+		Client:    client, TenantDirectoryClient: client,
 		CMDBController: nil,
 	}
 
@@ -259,9 +259,9 @@ func TestSetupRoutes_IncidentControllerNil(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 
 	cfg := &RouterConfig{
-		JWTSecret:          "test-secret",
-		Logger:             logger,
-		Client:             client,
+		JWTSecret: "test-secret",
+		Logger:    logger,
+		Client:    client, TenantDirectoryClient: client,
 		IncidentController: nil,
 	}
 
@@ -306,7 +306,7 @@ func TestAssignRouteUsesIncidentWritePermission(t *testing.T) {
 	incidentController := controller.NewIncidentController(service.NewIncidentService(client, logger, workitemnumber.NewPostgreSQLAllocator()), nil, nil, nil, nil, nil, logger)
 	router := gin.New()
 	SetupRoutes(router, &RouterConfig{
-		JWTSecret: jwtSecret, Logger: logger, Client: client, IncidentController: incidentController,
+		JWTSecret: jwtSecret, Logger: logger, Client: client, TenantDirectoryClient: client, IncidentController: incidentController,
 	})
 	token, err := authentication.GenerateAccessToken(reporter.ID, reporter.Username, role.Code, tenant.ID, jwtSecret, time.Hour)
 	require.NoError(t, err)
@@ -452,9 +452,9 @@ func TestSetupRoutes_DoesNotExposeRetiredWorkflowAliases(t *testing.T) {
 	logger := zaptest.NewLogger(t).Sugar()
 
 	cfg := &RouterConfig{
-		JWTSecret:        "test-secret",
-		Logger:           logger,
-		Client:           client,
+		JWTSecret: "test-secret",
+		Logger:    logger,
+		Client:    client, TenantDirectoryClient: client,
 		TenantController: nil, // triggers legacy stubs
 	}
 

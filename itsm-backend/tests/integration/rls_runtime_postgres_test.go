@@ -10,12 +10,15 @@ import (
 	"time"
 
 	entsql "entgo.io/ent/dialect/sql"
+	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 	"itsm-backend/authentication"
 	"itsm-backend/common/tenantctx"
+	"itsm-backend/database"
 	"itsm-backend/database/rls"
 	"itsm-backend/ent"
 	authcommon "itsm-backend/handlers/common"
@@ -31,16 +34,17 @@ import (
 func TestPostgresRLSRuntimeConsumer(t *testing.T) {
 	f := newIncidentEffectsFixture(t)
 	f.rule(metricAction("scoped"), map[string]interface{}{"type": "escalate", "level": 1, "reason": "runtime policy", "notify_users": []int{f.actor.ID}})
-	drv, db := runtimeRLSDriver(t, f)
-	client := ent.NewClient(ent.Driver(drv))
+	clients, _ := runtimeClients(t, f)
+	client := clients.Tenant
+	db := database.GetRawDB()
 	owner := service.NewIncidentService(client, zap.NewNop().Sugar(), nil)
 	owner.SetAlertCreator(service.NewIncidentAlertingService(client, zap.NewNop().Sugar()))
 	registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{owner.RuleEngine()}, "incident_alert_delivery")
 	require.NoError(t, err)
-	worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(f.client), service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 10 * time.Second, MaxAttempts: 5}, zap.NewNop().Sugar(), registry)
+	worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(clients.System), service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 10 * time.Second, MaxAttempts: 5}, zap.NewNop().Sugar(), registry)
 	require.NoError(t, err)
 	require.NoError(t, worker.DispatchOnce(f.ctx))
-	require.Equal(t, "published", f.client.OutboxEvent.GetX(f.ctx, f.event.ID).Status)
+	require.Equal(t, "published", f.client.OutboxEvent.GetX(f.ctx, f.event.ID).Status, f.client.OutboxEvent.GetX(f.ctx, f.event.ID).LastError)
 	require.Equal(t, 1, f.client.IncidentMetric.Query().CountX(f.ctx))
 	require.Equal(t, 1, f.client.IncidentAlert.Query().CountX(f.ctx))
 	require.Equal(t, 1, f.client.Notification.Query().CountX(f.ctx))
@@ -77,10 +81,24 @@ func runtimeRLSDriver(t *testing.T, f *incidentEffectsFixture) (*rls.Driver, *sq
 		require.Zero(t, remaining)
 		t.Logf("isolated role %s removed", role)
 	})
-	for _, query := range []string{"GRANT USAGE ON SCHEMA " + schema + " TO " + role, "GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA " + schema + " TO " + role, "GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA " + schema + " TO " + role} {
-		_, err = f.db.ExecContext(f.ctx, query)
+	_, err = f.db.ExecContext(f.ctx, "GRANT USAGE ON SCHEMA "+schema+" TO "+role)
+	require.NoError(t, err)
+	for _, table := range []string{"incident_rule_executions", "incident_rule_action_receipts", "incident_rules", "tickets", "users", "incidents", "outbox_events", "intake_requests", "variable_probe", "rls_probe"} {
+		var exists bool
+		require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT to_regclass($1) IS NOT NULL", schema+"."+table).Scan(&exists))
+		if !exists {
+			continue
+		} // Optional probe tables are created only by their owning test.
+		_, err = f.db.ExecContext(f.ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON "+schema+"."+table+" TO "+role)
 		require.NoError(t, err)
+		var sequence *string
+		require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT pg_get_serial_sequence($1,'id')", schema+"."+table).Scan(&sequence))
+		if sequence != nil {
+			_, err = f.db.ExecContext(f.ctx, "GRANT USAGE ON SEQUENCE "+*sequence+" TO "+role)
+			require.NoError(t, err)
+		}
 	}
+
 	db, err := sql.Open("postgres", "host=127.0.0.1 port=36444 user=postgres dbname=sslvpn_test sslmode=disable search_path="+schema+" role="+role)
 	require.NoError(t, err)
 	db.SetMaxOpenConns(1)
@@ -119,7 +137,7 @@ func TestPostgresRLSRuntimeStatementsAndTransactions(t *testing.T) {
 	for _, tenant := range []int{0, -1} {
 		require.Error(t, drv.Exec(tenantctx.WithTenantID(f.ctx, tenant), "DELETE FROM rls_probe", []any{}, nil))
 	}
-	require.Error(t, drv.Exec(one, "INSERT INTO rls_probe VALUES(3,2)", []any{}, nil))
+	require.ErrorContains(t, drv.Exec(one, "INSERT INTO rls_probe VALUES(3,2)", []any{}, nil), "row-level security")
 	require.NoError(t, drv.Exec(one, "INSERT INTO rls_probe VALUES(3,1)", []any{}, nil))
 	tx, err := drv.BeginTx(one, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	require.NoError(t, err)
@@ -213,19 +231,31 @@ func TestPostgresRLSRuntimeAuthenticationAndTenantLookup(t *testing.T) {
 	hashed, err := bcrypt.GenerateFromPassword([]byte("runtime-auth"), bcrypt.MinCost)
 	require.NoError(t, err)
 	f.actor.Update().SetPasswordHash(string(hashed)).SaveX(f.ctx)
-	drv, _ := runtimeRLSDriver(t, f)
-	client := ent.NewClient(ent.Driver(drv))
-	svc := authcommon.NewService(authcommon.NewEntRepository(client), "runtime-secret", zap.NewNop().Sugar(), client, nil)
+	clients, _ := runtimeClients(t, f)
+	client := clients.Tenant
+	redisServer := miniredis.RunT(t)
+	redisClient := redis.NewClient(&redis.Options{Addr: redisServer.Addr()})
+	t.Cleanup(func() { require.NoError(t, redisClient.Close()) })
+	refresh := authentication.NewRefreshTokenConsumer("runtime-secret", authentication.NewRedisRefreshTokenStore(redisClient))
+	svc := authcommon.NewService(authcommon.NewEntRepository(client), "runtime-secret", zap.NewNop().Sugar(), clients.System, refresh)
 	result, err := svc.Login(f.ctx, f.actor.Username, "runtime-auth", 0, f.tenant.Code)
 	require.NoError(t, err)
 	require.Equal(t, f.actor.ID, result.User.ID)
+	rotated, err := svc.RefreshToken(f.ctx, result.RefreshToken)
+	require.NoError(t, err)
+	require.Equal(t, f.actor.ID, rotated.User.ID)
+	_, err = svc.RefreshToken(f.ctx, result.RefreshToken)
+	require.Error(t, err, "refresh replay is rejected through real Redis consumer")
 	_, err = svc.Login(f.ctx, f.actor.Username, "wrong-password", 0, f.tenant.Code)
 	require.Error(t, err)
+	_, err = svc.Login(f.ctx, "unknown-user", "wrong-password", 0, "")
+	require.Error(t, err)
+	require.Equal(t, 3, f.client.AuditLog.Query().CountX(f.ctx), "success and both resolved/unresolved authentication failures persist under 009")
 	tokens, err := authentication.IssueSessionTokens(authentication.SessionIdentity{UserID: f.actor.ID, Username: f.actor.Username, Role: "agent", TenantID: f.tenant.ID}, "runtime-secret")
 	require.NoError(t, err)
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.GET("/tenant", middleware.AuthMiddleware("runtime-secret"), middleware.TenantMiddleware(client), func(c *gin.Context) {
+	r.GET("/tenant", middleware.AuthMiddleware("runtime-secret"), middleware.TenantMiddleware(clients.System), func(c *gin.Context) {
 		require.False(t, tenantctx.IsSystemBypass(c.Request.Context()))
 		id, ok := tenantctx.TenantID(c.Request.Context())
 		require.True(t, ok)
@@ -237,6 +267,34 @@ func TestPostgresRLSRuntimeAuthenticationAndTenantLookup(t *testing.T) {
 	response := httptest.NewRecorder()
 	r.ServeHTTP(response, request)
 	require.Equal(t, 204, response.Code)
+}
+
+func TestPostgresRLSRuntimeMSPSession(t *testing.T) {
+	f := newIncidentEffectsFixture(t)
+	provider := f.tenant.Update().SetType("msp_provider").SaveX(f.ctx)
+	actor := f.actor.Update().SetMspRole("provider_agent").SaveX(f.ctx)
+	customer := f.client.Tenant.Create().SetCode("customer").SetName("customer").SetType("msp_customer").SaveX(f.ctx)
+	other := f.client.Tenant.Create().SetCode("other").SetName("other").SetType("msp_customer").SaveX(f.ctx)
+	allocation := f.client.MSPAllocation.Create().SetMspUserID(actor.ID).SetCustomerTenantID(customer.ID).SaveX(f.ctx)
+	clients, _ := runtimeClients(t, f)
+	svc := service.NewAuthService(clients.Tenant, clients.System, "msp-runtime", zap.NewNop().Sugar())
+	selected, err := svc.SwitchTenant(tenantctx.WithTenantID(f.ctx, provider.ID), actor.ID, customer.ID)
+	require.NoError(t, err)
+	require.Equal(t, customer.ID, selected.User.TenantID)
+	_, err = svc.SwitchTenant(f.ctx, actor.ID, other.ID)
+	require.Error(t, err)
+	server := miniredis.RunT(t)
+	redisClient := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { _ = redisClient.Close() })
+	common := authcommon.NewService(authcommon.NewEntRepository(clients.Tenant), "msp-runtime", zap.NewNop().Sugar(), clients.System, authentication.NewRefreshTokenConsumer("msp-runtime", authentication.NewRedisRefreshTokenStore(redisClient)))
+	refreshed, err := common.RefreshToken(f.ctx, selected.RefreshToken)
+	require.NoError(t, err)
+	require.Equal(t, customer.ID, refreshed.User.TenantID)
+	allocation.Update().SetDeassignedAt(time.Now()).SaveX(f.ctx)
+	_, err = svc.SwitchTenant(f.ctx, actor.ID, customer.ID)
+	require.Error(t, err)
+	_, err = common.RefreshToken(f.ctx, refreshed.RefreshToken)
+	require.Error(t, err, "revoked MSP allocation invalidates session refresh")
 }
 
 func TestPostgresRLSRuntimeRejectsPrivilegedTenantRole(t *testing.T) {
@@ -256,8 +314,8 @@ func TestPostgresRLSRuntimeRejectsPrivilegedTenantRole(t *testing.T) {
 
 func TestPostgresRLSRuntimeKAFTransport(t *testing.T) {
 	f := newIncidentEffectsFixture(t)
-	driver := rls.From(entsql.OpenDB("postgres", f.db), "enforce", zap.NewNop().Sugar())
-	queue := ent.NewClient(ent.Driver(driver))
+	clients, _ := runtimeClients(t, f)
+	queue := clients.System
 	event := f.client.OutboxEvent.Create().SetTenantID(f.tenant.ID).SetEventID("runtime-kaf").SetEventType(service.KafDelegateRequestedEventType).SetAggregateType("work_item").SetAggregateID(fmt.Sprint(f.inc.WorkItemID)).SetPayload([]byte(`{"task":"scoped"}`)).SaveX(f.ctx)
 	var sent atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { sent.Add(1); w.WriteHeader(200) }))

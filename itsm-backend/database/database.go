@@ -7,7 +7,10 @@ import (
 	"context"      // Go标准库，用于处理上下文（超时、取消等）
 	"database/sql" // Go标准库，提供数据库操作的通用接口
 	"fmt"          // Go标准库，用于格式化字符串
-	"time"         // Go标准库，用于时间处理
+	"net"
+	"net/url"
+	"strconv" // Go标准库，用于时间处理
+	"time"
 
 	"itsm-backend/config"       // 自定义配置包
 	"itsm-backend/database/rls" // RLS driver 装饰器
@@ -43,8 +46,14 @@ func GetRLSDriver() *rls.Driver { return rlsDriver }
 // InitDB initializes a raw database connection without Ent-specific setup
 // Used for migrations and other operations that don't need Ent ORM
 func InitDB(cfg *config.DatabaseConfig) (*sql.DB, error) {
-	dsn := fmt.Sprintf("host=%s port=%d user=%s dbname=%s sslmode=%s password=%s",
-		cfg.Host, cfg.Port, cfg.User, cfg.DBName, cfg.SSLMode, cfg.Password)
+	connection := &url.URL{Scheme: "postgres", Host: net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)), Path: "/" + cfg.DBName, User: url.UserPassword(cfg.User, cfg.Password)}
+	options := connection.Query()
+	options.Set("sslmode", cfg.SSLMode)
+	if cfg.Schema != "" {
+		options.Set("search_path", cfg.Schema)
+	}
+	connection.RawQuery = options.Encode()
+	dsn := connection.String()
 
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
@@ -59,6 +68,7 @@ func InitDB(cfg *config.DatabaseConfig) (*sql.DB, error) {
 	defer cancel()
 
 	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 

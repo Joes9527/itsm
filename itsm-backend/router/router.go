@@ -182,10 +182,11 @@ func dashboardWidgetByID(widgetID string) gin.H {
 
 // RouterConfig 路由配置
 type RouterConfig struct {
-	JWTSecret string
-	Logger    *zap.SugaredLogger
-	Client    *ent.Client
-	RawDB     *sql.DB
+	TenantDirectoryClient *ent.Client
+	JWTSecret             string
+	Logger                *zap.SugaredLogger
+	Client                *ent.Client
+	RawDB                 *sql.DB
 
 	// CSRF configuration
 	CSRFEnabled bool
@@ -496,7 +497,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 
 	{
 		// 租户中间件
-		tenant := auth.Use(middleware.TenantMiddleware(config.Client))
+		tenant := auth.Use(middleware.TenantMiddleware(config.TenantDirectoryClient))
 
 		// ==================== Ticket Categories & Tags ====================
 		if config.TicketCategoryController != nil {
