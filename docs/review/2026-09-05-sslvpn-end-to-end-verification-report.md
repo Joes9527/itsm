@@ -4,7 +4,7 @@
 
 ## 1. 验收范围与当前进度
 
-重新接手后的独立增量审查见[接手期间增量审查报告](2026-09-05-sslvpn-successor-review-report.md)：Change/Ticket repository 当前包测试及全部后端包编译通过，但发现必填字段测试跳过与真实 PG 回滚覆盖缺失两个阻塞项，正在修复。下文较早提交的阶段证据保留原有适用范围。
+重新接手后的独立增量审查见[接手期间增量审查报告](2026-09-05-sslvpn-successor-review-report.md)：Change/Ticket repository 当前包测试及全部后端包编译通过，其中必填字段测试跳过与真实 PG 回滚覆盖缺失两个阻塞项已修复并通过针对性复审；七个 HTTP fixture 的租户上下文/入口迁移失败也已修复并复审通过。继续处理显式流程覆盖权限、创建 actor 审计与矩阵重放，其他完整链路门槛保持开放。后端退役与测试迁移已保存为中间源码提交 `229d8091`，最新全部包编译检查退出 0；尚非完整 A3b/A4 审查结论。下文较早提交的阶段证据保留原有适用范围。
 
 依据[实施计划](../superpowers/plans/2026-09-05-sslvpn-end-to-end-implementation.md)和[已确认设计](../superpowers/specs/2026-09-05-sslvpn-kaf-intake-end-to-end-design.md)，最终链路为：KAF Web 理解意图并复用收集/确认卡片 → 当前用户通过 Unified Intake 创建 ITSM 申请 → BPMN 两级审批 → Worker 委派 KAF 执行 → 查询确认外部用户组成员关系 → ITSM 记录授权结果、状态、审计 → KAF 展示结果。
 
