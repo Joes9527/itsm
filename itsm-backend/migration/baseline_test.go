@@ -63,18 +63,37 @@ func TestCatalogFingerprintVerifierIsOneReadOnlyStatement(t *testing.T) {
 }
 
 func TestCatalogFingerprintVerifierCoversManagedSecurityBoundaries(t *testing.T) {
+	require.Equal(t, "catalog-verifier/postgres-v2.sql", catalogFingerprintVerifierName)
 	for _, boundary := range []string{
 		"'schema-security'",
 		"'relation-security'",
+		"'column-security'",
 		"'default-acl'",
 		"'event-trigger'",
 		"'publication'",
 		"'publication-namespace'",
 		"'schema-state-effective-writer-boundary'",
-		"has_table_privilege",
+		"'$migration'",
+		"'$runtime'",
+		"'$bootstrap'",
+		"'$unknown'",
+		"inherit_option",
+		"set_option",
+		"pg_write_all_data",
 		"pg_auth_members",
 	} {
 		require.Contains(t, postgresCatalogFingerprintSQL, boundary)
+	}
+	for _, physicalIdentity := range []string{
+		"attribute.attnum, attribute.attname",
+		"partitioned_table.partattrs::text",
+		"partitioned_table.partclass::text",
+		"partitioned_table.partcollation::text",
+		"index_record.indkey::text",
+		"statistics_record.stxkeys::text",
+		"relation.relhassubclass",
+	} {
+		require.NotContains(t, postgresCatalogFingerprintSQL, physicalIdentity)
 	}
 }
 

@@ -101,24 +101,28 @@ type FreshBootstrap struct {
 	ApplyBaseline   BootstrapStep
 	VerifySchema    CurrentSchemaVerifier
 	ApplyPrivileges SchemaStatePrivilegeApplier
-	PromoteState    SchemaStatePromoter
-	Seed            BootstrapStep
-	Release         ReleaseManifest
-	Roles           SchemaStateRoles
+	// VerifyProvisionedSchema reruns the complete target verifier after ACL
+	// provisioning and immediately before authoritative state promotion.
+	VerifyProvisionedSchema CurrentSchemaVerifier
+	PromoteState            SchemaStatePromoter
+	Seed                    BootstrapStep
+	Release                 ReleaseManifest
+	Roles                   SchemaStateRoles
 }
 
 // UpgradeBootstrap defines the immutable-history upgrade orchestration. The
 // planner returns only unapplied migrations after validating all committed
 // history. An empty result is therefore the verified restart path.
 type UpgradeBootstrap struct {
-	Lock                   BootstrapLock
-	PlanForwardMigrations  func(context.Context, BootstrapConnection) ([]Migration, error)
-	ApplyForwardMigrations func(context.Context, BootstrapConnection, []Migration) error
-	VerifySchema           CurrentSchemaVerifier
-	ApplyPrivileges        SchemaStatePrivilegeApplier
-	PromoteState           SchemaStatePromoter
-	Release                ReleaseManifest
-	Roles                  SchemaStateRoles
+	Lock                    BootstrapLock
+	PlanForwardMigrations   func(context.Context, BootstrapConnection) ([]Migration, error)
+	ApplyForwardMigrations  func(context.Context, BootstrapConnection, []Migration) error
+	VerifySchema            CurrentSchemaVerifier
+	ApplyPrivileges         SchemaStatePrivilegeApplier
+	VerifyProvisionedSchema CurrentSchemaVerifier
+	PromoteState            SchemaStatePromoter
+	Release                 ReleaseManifest
+	Roles                   SchemaStateRoles
 }
 
 // RunFreshBootstrap creates the current schema directly. It never invokes the
@@ -126,7 +130,8 @@ type UpgradeBootstrap struct {
 func RunFreshBootstrap(ctx context.Context, bootstrap FreshBootstrap) error {
 	if bootstrap.Lock == nil || bootstrap.Prepare == nil || bootstrap.CreateSchema == nil ||
 		bootstrap.ApplyBaseline == nil || bootstrap.VerifySchema == nil ||
-		bootstrap.ApplyPrivileges == nil || bootstrap.PromoteState == nil || bootstrap.Seed == nil {
+		bootstrap.ApplyPrivileges == nil || bootstrap.VerifyProvisionedSchema == nil ||
+		bootstrap.PromoteState == nil || bootstrap.Seed == nil {
 		return fmt.Errorf("fresh bootstrap dependencies are required")
 	}
 	if err := ValidateCurrentReleaseArtifact(bootstrap.Release); err != nil {
@@ -135,27 +140,34 @@ func RunFreshBootstrap(ctx context.Context, bootstrap FreshBootstrap) error {
 	if err := validateSchemaStateRoles(bootstrap.Roles); err != nil {
 		return fmt.Errorf("fresh bootstrap schema state roles are invalid: %w", err)
 	}
+	roleContext, err := WithSchemaStateRoles(ctx, bootstrap.Roles)
+	if err != nil {
+		return fmt.Errorf("fresh bootstrap schema state roles are invalid: %w", err)
+	}
 
-	return bootstrap.Lock.WithLock(ctx, func(conn BootstrapConnection) error {
-		if err := bootstrap.Prepare(ctx, conn); err != nil {
+	return bootstrap.Lock.WithLock(roleContext, func(conn BootstrapConnection) error {
+		if err := bootstrap.Prepare(roleContext, conn); err != nil {
 			return fmt.Errorf("prepare fresh bootstrap: %w", err)
 		}
-		if err := bootstrap.CreateSchema(ctx, conn); err != nil {
+		if err := bootstrap.CreateSchema(roleContext, conn); err != nil {
 			return fmt.Errorf("create current Ent schema: %w", err)
 		}
-		if err := bootstrap.ApplyBaseline(ctx, conn); err != nil {
+		if err := bootstrap.ApplyBaseline(roleContext, conn); err != nil {
 			return fmt.Errorf("apply current baseline: %w", err)
 		}
-		if err := bootstrap.VerifySchema(ctx, conn, bootstrap.Release); err != nil {
+		if err := bootstrap.VerifySchema(roleContext, conn, bootstrap.Release); err != nil {
 			return fmt.Errorf("verify current schema: %w", err)
 		}
-		if err := bootstrap.ApplyPrivileges(ctx, conn, bootstrap.Roles); err != nil {
+		if err := bootstrap.ApplyPrivileges(roleContext, conn, bootstrap.Roles); err != nil {
 			return fmt.Errorf("provision schema state privileges: %w", err)
 		}
-		if err := bootstrap.PromoteState(ctx, conn, bootstrap.Release); err != nil {
+		if err := bootstrap.VerifyProvisionedSchema(roleContext, conn, bootstrap.Release); err != nil {
+			return fmt.Errorf("verify provisioned current schema: %w", err)
+		}
+		if err := bootstrap.PromoteState(roleContext, conn, bootstrap.Release); err != nil {
 			return fmt.Errorf("promote schema state: %w", err)
 		}
-		if err := bootstrap.Seed(ctx, conn); err != nil {
+		if err := bootstrap.Seed(roleContext, conn); err != nil {
 			return fmt.Errorf("seed fresh bootstrap: %w", err)
 		}
 		return nil
@@ -168,7 +180,8 @@ func RunFreshBootstrap(ctx context.Context, bootstrap FreshBootstrap) error {
 func RunUpgrade(ctx context.Context, bootstrap UpgradeBootstrap) error {
 	if bootstrap.Lock == nil || bootstrap.PlanForwardMigrations == nil ||
 		bootstrap.ApplyForwardMigrations == nil || bootstrap.VerifySchema == nil ||
-		bootstrap.ApplyPrivileges == nil || bootstrap.PromoteState == nil {
+		bootstrap.ApplyPrivileges == nil || bootstrap.VerifyProvisionedSchema == nil ||
+		bootstrap.PromoteState == nil {
 		return fmt.Errorf("upgrade bootstrap dependencies are required")
 	}
 	if err := ValidateCurrentReleaseArtifact(bootstrap.Release); err != nil {
@@ -177,24 +190,31 @@ func RunUpgrade(ctx context.Context, bootstrap UpgradeBootstrap) error {
 	if err := validateSchemaStateRoles(bootstrap.Roles); err != nil {
 		return fmt.Errorf("upgrade schema state roles are invalid: %w", err)
 	}
+	roleContext, err := WithSchemaStateRoles(ctx, bootstrap.Roles)
+	if err != nil {
+		return fmt.Errorf("upgrade schema state roles are invalid: %w", err)
+	}
 
-	return bootstrap.Lock.WithLock(ctx, func(conn BootstrapConnection) error {
-		pending, err := bootstrap.PlanForwardMigrations(ctx, conn)
+	return bootstrap.Lock.WithLock(roleContext, func(conn BootstrapConnection) error {
+		pending, err := bootstrap.PlanForwardMigrations(roleContext, conn)
 		if err != nil {
 			return fmt.Errorf("validate migration lineage and history: %w", err)
 		}
 		if len(pending) > 0 {
-			if err := bootstrap.ApplyForwardMigrations(ctx, conn, append([]Migration(nil), pending...)); err != nil {
+			if err := bootstrap.ApplyForwardMigrations(roleContext, conn, append([]Migration(nil), pending...)); err != nil {
 				return fmt.Errorf("apply forward migrations: %w", err)
 			}
 		}
-		if err := bootstrap.VerifySchema(ctx, conn, bootstrap.Release); err != nil {
+		if err := bootstrap.VerifySchema(roleContext, conn, bootstrap.Release); err != nil {
 			return fmt.Errorf("verify current schema: %w", err)
 		}
-		if err := bootstrap.ApplyPrivileges(ctx, conn, bootstrap.Roles); err != nil {
+		if err := bootstrap.ApplyPrivileges(roleContext, conn, bootstrap.Roles); err != nil {
 			return fmt.Errorf("provision schema state privileges: %w", err)
 		}
-		if err := bootstrap.PromoteState(ctx, conn, bootstrap.Release); err != nil {
+		if err := bootstrap.VerifyProvisionedSchema(roleContext, conn, bootstrap.Release); err != nil {
+			return fmt.Errorf("verify provisioned current schema: %w", err)
+		}
+		if err := bootstrap.PromoteState(roleContext, conn, bootstrap.Release); err != nil {
 			return fmt.Errorf("promote schema state: %w", err)
 		}
 		return nil

@@ -66,6 +66,7 @@ services:
       - DB_USER=${ITSM_MIGRATION_DB_USER:?ITSM_MIGRATION_DB_USER must be set}
       - ITSM_MIGRATION_DB_USER=${ITSM_MIGRATION_DB_USER:?ITSM_MIGRATION_DB_USER must be set}
       - ITSM_RUNTIME_DB_USER=${ITSM_RUNTIME_DB_USER:?ITSM_RUNTIME_DB_USER must be set}
+      - ITSM_BOOTSTRAP_DB_USER=${ITSM_BOOTSTRAP_DB_USER:?ITSM_BOOTSTRAP_DB_USER must be set}
       - DB_PASSWORD_FILE=/run/secrets/itsm_migration_db_password
       - DB_NAME=${ITSM_DB_NAME:?ITSM_DB_NAME must be set}
       - DB_SSLMODE=${ITSM_DB_SSLMODE:-require}

@@ -219,6 +219,8 @@ ITSM_MIGRATION_DB_USER=itsm_migration
 ITSM_MIGRATION_DB_PASSWORD=<from .env or secret>
 ITSM_RUNTIME_DB_USER=itsm_runtime
 ITSM_RUNTIME_DB_PASSWORD=<from .env or secret>
+ITSM_BOOTSTRAP_DB_USER=itsm_migration
+ITSM_BOOTSTRAP_DB_PASSWORD=<only when the existing-volume provision command uses a different DBA secret>
 DB_NAME=itsm
 ```
 
@@ -255,8 +257,19 @@ tail -f logs/frontend.log
 ### 初始化与生产部署
 
 ```bash
-# 手动执行一次性初始化（迁移 + seed）
-docker compose --env-file .env -f docker-compose.dev.yml --profile dev run --rm itsm-init
+# 已有 Compose 数据卷：先以受控 bootstrap DBA 幂等创建/校正 split roles
+docker compose --profile bootstrap run --rm itsm-role-provision
+
+# 仅首次、已确认空库：显式执行一次非破坏 fresh；成功后不要把 fresh 写进长期环境
+ITSM_BOOTSTRAP_MODE=fresh docker compose run --rm itsm-init
+
+# 稳态与后续发布：Compose 默认 upgrade，然后启动 API（API/Worker 始终不执行 DDL）
+docker compose up -d
+
+# 开发 Compose 使用相同契约
+docker compose -f docker-compose.dev.yml --profile bootstrap run --rm itsm-role-provision
+ITSM_BOOTSTRAP_MODE=fresh docker compose -f docker-compose.dev.yml --profile dev run --rm itsm-init
+docker compose -f docker-compose.dev.yml --profile dev up -d
 
 # 首次生成生产配置并修改所有 REQUIRED/默认凭据
 make prod-init

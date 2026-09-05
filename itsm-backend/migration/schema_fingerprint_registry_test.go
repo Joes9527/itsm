@@ -71,7 +71,7 @@ func TestPublishingNextVerifierRetainsCurrent028SourceIdentity(t *testing.T) {
 	require.NoError(t, err)
 
 	nextVerifier := VerifierAssetFile{
-		Name:    "catalog-verifier/postgres-v2.sql",
+		Name:    "catalog-verifier/postgres-v3.sql",
 		Content: []byte(postgresCatalogFingerprintSQL + "\n-- immutable next-release verifier"),
 	}
 	nextSource := fixtureSourceVerifierFile(
@@ -94,10 +94,21 @@ func TestPublishingNextVerifierRetainsCurrent028SourceIdentity(t *testing.T) {
 	retainedQuery, err := registry.loadVerifier(currentSource.Verifier)
 	require.NoError(t, err)
 	require.Equal(t, currentQuery, retainedQuery)
+	_, err = registry.loadVerifier(ReleaseAsset{
+		Name: "catalog-verifier/postgres-v1.sql", SHA256: checksumSQL(mustEmbeddedVerifier(t, "sql/catalog/postgres-v1.sql")),
+	})
+	require.NoError(t, err, "publishing verifier v2 for 028 must retain verifier v1")
 	_, err = registry.loadSource(ReleaseAsset{
 		Name: nextSource.Name, SHA256: checksumSQL(string(nextSource.Content)),
 	})
 	require.NoError(t, err)
+}
+
+func mustEmbeddedVerifier(t *testing.T, name string) string {
+	t.Helper()
+	content, err := embeddedSchemaVerifierAssets.ReadFile(name)
+	require.NoError(t, err)
+	return string(content)
 }
 
 func TestTransitionPlanningRequiresExactCommittedChecksumPrefix(t *testing.T) {

@@ -166,7 +166,11 @@ func TestPostgresSchemaStatePrivileges(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, VerifySchemaStateStorage(ctx, migrationDB))
 
-	roles := SchemaStateRoles{MigrationRole: migrationRole, RuntimeRole: runtimeRole}
+	var bootstrapRole string
+	require.NoError(t, adminDB.QueryRowContext(ctx, `SELECT current_user`).Scan(&bootstrapRole))
+	roles := SchemaStateRoles{
+		MigrationRole: migrationRole, RuntimeRole: runtimeRole, BootstrapRole: bootstrapRole,
+	}
 	require.NoError(t, ApplySchemaStatePrivileges(ctx, migrationDB, roles))
 	pinnedMigrationConn, err := migrationDB.Conn(ctx)
 	require.NoError(t, err)
@@ -198,9 +202,10 @@ func TestPostgresSchemaStatePrivileges(t *testing.T) {
 
 	t.Run("invalid role categories fail closed", func(t *testing.T) {
 		for _, invalid := range []SchemaStateRoles{
-			{RuntimeRole: runtimeRole},
-			{MigrationRole: migrationRole},
-			{MigrationRole: migrationRole, RuntimeRole: migrationRole},
+			{RuntimeRole: runtimeRole, BootstrapRole: bootstrapRole},
+			{MigrationRole: migrationRole, BootstrapRole: bootstrapRole},
+			{MigrationRole: migrationRole, RuntimeRole: runtimeRole},
+			{MigrationRole: migrationRole, RuntimeRole: migrationRole, BootstrapRole: bootstrapRole},
 		} {
 			err := ApplySchemaStatePrivileges(ctx, migrationDB, invalid)
 			requireSanitizedSchemaStateRoleError(t, err, adminDSN, migrationRole, runtimeRole)
@@ -246,7 +251,7 @@ func TestPostgresSchemaStatePrivileges(t *testing.T) {
 
 		err = ApplySchemaStatePrivileges(ctx, migrationDB, roles)
 		requireSanitizedSchemaStateRoleError(t, err, adminDSN, migrationRole, runtimeRole)
-		require.ErrorContains(t, err, "runtime role")
+		require.ErrorContains(t, err, "effective writer boundary")
 	})
 }
 

@@ -10,8 +10,10 @@ services:
       POSTGRES_USER: ${ITSM_MIGRATION_DB_USER:-itsm_migration}
       POSTGRES_PASSWORD: ${ITSM_MIGRATION_DB_PASSWORD:?ITSM_MIGRATION_DB_PASSWORD must be set}
       ITSM_MIGRATION_DB_USER: ${ITSM_MIGRATION_DB_USER:-itsm_migration}
+      ITSM_MIGRATION_DB_PASSWORD: ${ITSM_MIGRATION_DB_PASSWORD:?ITSM_MIGRATION_DB_PASSWORD must be set}
       ITSM_RUNTIME_DB_USER: ${ITSM_RUNTIME_DB_USER:-itsm_runtime}
       ITSM_RUNTIME_DB_PASSWORD: ${ITSM_RUNTIME_DB_PASSWORD:?ITSM_RUNTIME_DB_PASSWORD must be set}
+      ITSM_BOOTSTRAP_DB_USER: ${ITSM_BOOTSTRAP_DB_USER:-${ITSM_MIGRATION_DB_USER:-itsm_migration}}
     ports:
       - "5432:5432"
     volumes:
@@ -25,7 +27,32 @@ services:
       timeout: 3s
       retries: 10
     restart: unless-stopped
-    profiles: [ "dev" ]
+    profiles: [ "dev", "bootstrap" ]
+
+  # Explicit, idempotent role convergence for an already initialized dev volume.
+  itsm-role-provision:
+    image: pgvector/pgvector:pg17@sha256:7ae6051efd0e60444282c27c7e141af07f322ce033300e727a49c3dd11075e38
+    entrypoint: ["/bin/sh", "/opt/itsm/10-itsm-roles.sh"]
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGPASSWORD: ${ITSM_BOOTSTRAP_DB_PASSWORD:-${ITSM_MIGRATION_DB_PASSWORD:?ITSM_MIGRATION_DB_PASSWORD must be set}}
+      POSTGRES_DB: itsm
+      POSTGRES_USER: ${ITSM_BOOTSTRAP_DB_USER:-${ITSM_MIGRATION_DB_USER:-itsm_migration}}
+      ITSM_BOOTSTRAP_DB_USER: ${ITSM_BOOTSTRAP_DB_USER:-${ITSM_MIGRATION_DB_USER:-itsm_migration}}
+      ITSM_MIGRATION_DB_USER: ${ITSM_MIGRATION_DB_USER:-itsm_migration}
+      ITSM_MIGRATION_DB_PASSWORD: ${ITSM_MIGRATION_DB_PASSWORD:?ITSM_MIGRATION_DB_PASSWORD must be set}
+      ITSM_RUNTIME_DB_USER: ${ITSM_RUNTIME_DB_USER:-itsm_runtime}
+      ITSM_RUNTIME_DB_PASSWORD: ${ITSM_RUNTIME_DB_PASSWORD:?ITSM_RUNTIME_DB_PASSWORD must be set}
+    volumes:
+      - ./scripts/postgres/10-itsm-roles.sh:/opt/itsm/10-itsm-roles.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - itsm-dev-network
+    restart: "no"
+    profiles: ["bootstrap"]
 
   # Redis 缓存（开发环境）
   redis:
@@ -93,6 +120,7 @@ services:
       - DB_SSLMODE=disable
       - ITSM_MIGRATION_DB_USER=${ITSM_MIGRATION_DB_USER:-itsm_migration}
       - ITSM_RUNTIME_DB_USER=${ITSM_RUNTIME_DB_USER:-itsm_runtime}
+      - ITSM_BOOTSTRAP_DB_USER=${ITSM_BOOTSTRAP_DB_USER:-${ITSM_MIGRATION_DB_USER:-itsm_migration}}
       - REDIS_URL=redis://redis:6379
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -105,7 +133,7 @@ services:
       - DEPLOYMENT_MODE=${DEPLOYMENT_MODE:-private}
       - ADMIN_PASSWORD=admin123
       - ITSM_BOOTSTRAP_ONLY=true
-      - ITSM_BOOTSTRAP_MODE=${ITSM_BOOTSTRAP_MODE:-fresh}
+      - ITSM_BOOTSTRAP_MODE=${ITSM_BOOTSTRAP_MODE:-upgrade}
       - ITSM_AUTO_MIGRATE=true
       - ITSM_AUTO_SEED=true
       - HTTP_PROXY=
@@ -184,7 +212,7 @@ services:
       - LLM_PROVIDER=openai
       - LLM_BASE_URL=https://api.deepseek.com/v1
       - LLM_ENDPOINT=https://api.deepseek.com/v1
-      - LLM_API_KEY=sk-f06badc392ec4d5797288736d5e5c040
+      - LLM_API_KEY=${LLM_API_KEY:-}
       - LLM_MODEL=deepseek-v4-pro
 
       # 监控配置

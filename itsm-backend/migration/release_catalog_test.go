@@ -41,14 +41,14 @@ func TestCurrentReleaseCatalogPinsManifestBaselineAndExplicitCoverage(t *testing
 	require.Equal(t, "itsm-v1.1", entry.ReleaseID)
 	require.Equal(t, "028_schema_release_state", entry.SchemaVersion)
 	require.Equal(t, "2026-09-04", entry.BaselineVersion)
-	require.Equal(t, "5decb8eeb0ddfabf00ad46fde9d8e6021dafa7f07dd660bdad22b105e8fadeee", entry.ReleaseManifestSHA256)
+	require.Equal(t, "ea8f196b686d6e7dec85f2fa7c05ef8a3f22838974f03c3f8523b71d3d9f90dd", entry.ReleaseManifestSHA256)
 	require.Equal(t, ReleaseAsset{
 		Name:   CurrentBaselineAssetName,
 		SHA256: "28ebe2d2096542d556eb94fcb42806235ebae1a33d7b6b0db5844890643d6773",
 	}, entry.BaselineAsset)
 	require.Equal(t, ReleaseAsset{
 		Name:   CurrentSourceSchemaAssetName,
-		SHA256: "93a8d7dffa303f16394f9e4b67f9b616644ab5777ace8a3c69cf1ba1ce846143",
+		SHA256: "f53da89a2c199b85d8009bc3cada020d76419a0a9e7fecd36ddc3d73fbf1b46b",
 	}, entry.SourceSchemaAsset)
 	require.Equal(t, []string{
 		"007_add_change_execution_tables",

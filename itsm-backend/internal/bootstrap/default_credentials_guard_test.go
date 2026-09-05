@@ -172,6 +172,7 @@ func TestValidateStorageBootstrapModeIsExplicitAndNonDestructive(t *testing.T) {
 func TestInitializeStorageRejectsClosedPublicationGateBeforeDatabaseAccess(t *testing.T) {
 	t.Setenv("ITSM_MIGRATION_DB_USER", "migration_role")
 	t.Setenv("ITSM_RUNTIME_DB_USER", "runtime_role")
+	t.Setenv("ITSM_BOOTSTRAP_DB_USER", "migration_role")
 
 	for name, deployment := range map[string]config.DeploymentConfig{
 		"schema": {BootstrapMode: "fresh", AutoMigrate: true},

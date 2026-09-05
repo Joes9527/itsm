@@ -8,8 +8,8 @@
     "baselineVersion": "2026-09-04"
   },
   "verifier": {
-    "name": "catalog-verifier/postgres-v1.sql",
-    "sha256": "81ae14a0b1a6b2c7c1ea41fe6357ff6b7b8db728d6fecaeb67e654550308b4ae"
+    "name": "catalog-verifier/postgres-v2.sql",
+    "sha256": "e2ee243f9217605f898ea9cd28c64cc48c9bb453007e40e96cfa71c54c0bf39a"
   },
   "platform": {
     "postgresMajor": 17,
@@ -27,9 +27,9 @@
   },
   "phases": {
     "empty": "f74b74a3be989200b0222b3b6372442b1cb9c8616da4529cf97821e72c4674b4",
-    "prepared": "a25b4f39ec870bf527cd2e475c039756275ac4c4c3f405a028516b6bbdc6a2e0",
-    "entSchema": "b11945bd8a01c399005ba8016775e51ca1ec0137419c4134492a1cbe468dd6b0",
-    "currentReleasePrePrivileges": "f9d47f5f69643a3657719db3120f5bd26f0e6b88af3f8de7ee328ab882fbd163",
-    "currentRelease": "dda2ad3a486540b0b800b1f7ec07fa9debbb19a7ef047e452c791a25eb4a2e4e"
+    "prepared": "cb5e02735655ea78231d256af93a854678da6dcb89f47df6160456fddef7723a",
+    "entSchema": "04351ddb93a79aa64b3ee13568a2f7538a4aa1cedbc7d86819ec8d6ffb03167a",
+    "currentReleasePrePrivileges": "bcd3c58c9180bc557643ff8115cd3e2713423c5eb293dc72ac4d33eb4d4d5579",
+    "currentRelease": "6c82fc398055e421fca94ef9d7c30addab465abe2871baf980df6b713ed7860b"
   }
 }

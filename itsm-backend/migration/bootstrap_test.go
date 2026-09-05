@@ -56,16 +56,29 @@ func TestRunFreshBootstrapUsesExactReleaseTraceOnOneLockedConnection(t *testing.
 			return nil
 		}
 	}
-	verify := func(_ context.Context, got DBTX, release ReleaseManifest) error {
+	verify := func(ctx context.Context, got DBTX, release ReleaseManifest) error {
 		require.Same(t, conn, got)
 		require.Equal(t, CurrentRelease(), release)
+		roles, err := schemaStateRolesFromContext(ctx)
+		require.NoError(t, err)
+		require.Equal(t, SchemaStateRoles{
+			MigrationRole: "migration", RuntimeRole: "runtime", BootstrapRole: "migration",
+		}, roles)
 		events = append(events, "invariants")
 		return nil
 	}
 	privileges := func(_ context.Context, got BootstrapConnection, roles SchemaStateRoles) error {
 		require.Same(t, conn, got)
-		require.Equal(t, SchemaStateRoles{MigrationRole: "migration", RuntimeRole: "runtime"}, roles)
+		require.Equal(t, SchemaStateRoles{
+			MigrationRole: "migration", RuntimeRole: "runtime", BootstrapRole: "migration",
+		}, roles)
 		events = append(events, "provision-schema-state-privileges")
+		return nil
+	}
+	verifyProvisioned := func(_ context.Context, got DBTX, release ReleaseManifest) error {
+		require.Same(t, conn, got)
+		require.Equal(t, CurrentRelease(), release)
+		events = append(events, "post-privilege-invariants")
 		return nil
 	}
 	promote := func(_ context.Context, got DBTX, release ReleaseManifest) error {
@@ -76,16 +89,19 @@ func TestRunFreshBootstrapUsesExactReleaseTraceOnOneLockedConnection(t *testing.
 	}
 
 	err := RunFreshBootstrap(context.Background(), FreshBootstrap{
-		Lock:            recordingBootstrapLock{events: &events, conn: conn},
-		Prepare:         step("prepare"),
-		CreateSchema:    step("ent-schema"),
-		ApplyBaseline:   step("baseline"),
-		VerifySchema:    verify,
-		ApplyPrivileges: privileges,
-		PromoteState:    promote,
-		Seed:            step("seed"),
-		Release:         CurrentRelease(),
-		Roles:           SchemaStateRoles{MigrationRole: "migration", RuntimeRole: "runtime"},
+		Lock:                    recordingBootstrapLock{events: &events, conn: conn},
+		Prepare:                 step("prepare"),
+		CreateSchema:            step("ent-schema"),
+		ApplyBaseline:           step("baseline"),
+		VerifySchema:            verify,
+		ApplyPrivileges:         privileges,
+		VerifyProvisionedSchema: verifyProvisioned,
+		PromoteState:            promote,
+		Seed:                    step("seed"),
+		Release:                 CurrentRelease(),
+		Roles: SchemaStateRoles{
+			MigrationRole: "migration", RuntimeRole: "runtime", BootstrapRole: "migration",
+		},
 	})
 
 	require.NoError(t, err)
@@ -96,6 +112,7 @@ func TestRunFreshBootstrapUsesExactReleaseTraceOnOneLockedConnection(t *testing.
 		"baseline",
 		"invariants",
 		"provision-schema-state-privileges",
+		"post-privilege-invariants",
 		"promote-state",
 		"seed",
 	}, events)
@@ -112,14 +129,14 @@ func TestRunUpgradeUsesExactTraceAndSkipsOnlyVerifiedCommittedMigrations(t *test
 			pending: []Migration{{Version: "028_schema_release_state"}},
 			want: []string{
 				"lock", "validate-lineage", "forward-migrations", "invariants",
-				"provision-schema-state-privileges", "promote-state",
+				"provision-schema-state-privileges", "post-privilege-invariants", "promote-state",
 			},
 		},
 		{
 			name: "restart after committed forward migration",
 			want: []string{
 				"lock", "validate-history", "invariants",
-				"provision-schema-state-privileges", "promote-state",
+				"provision-schema-state-privileges", "post-privilege-invariants", "promote-state",
 			},
 		},
 	}
@@ -155,13 +172,21 @@ func TestRunUpgradeUsesExactTraceAndSkipsOnlyVerifiedCommittedMigrations(t *test
 					events = append(events, "provision-schema-state-privileges")
 					return nil
 				},
+				VerifyProvisionedSchema: func(_ context.Context, got DBTX, release ReleaseManifest) error {
+					require.Same(t, conn, got)
+					require.Equal(t, CurrentRelease(), release)
+					events = append(events, "post-privilege-invariants")
+					return nil
+				},
 				PromoteState: func(_ context.Context, got DBTX, _ ReleaseManifest) error {
 					require.Same(t, conn, got)
 					events = append(events, "promote-state")
 					return nil
 				},
 				Release: CurrentRelease(),
-				Roles:   SchemaStateRoles{MigrationRole: "migration", RuntimeRole: "runtime"},
+				Roles: SchemaStateRoles{
+					MigrationRole: "migration", RuntimeRole: "runtime", BootstrapRole: "migration",
+				},
 			})
 			require.NoError(t, err)
 			require.Equal(t, test.want, events)
@@ -191,13 +216,16 @@ func TestRunFreshBootstrapStopsBeforePromotionAndSeedOnInvariantFailure(t *testi
 			events = append(events, "privileges")
 			return nil
 		},
+		VerifyProvisionedSchema: func(context.Context, DBTX, ReleaseManifest) error { return nil },
 		PromoteState: func(context.Context, DBTX, ReleaseManifest) error {
 			events = append(events, "promote")
 			return nil
 		},
 		Seed:    step("seed"),
 		Release: CurrentRelease(),
-		Roles:   SchemaStateRoles{MigrationRole: "migration", RuntimeRole: "runtime"},
+		Roles: SchemaStateRoles{
+			MigrationRole: "migration", RuntimeRole: "runtime", BootstrapRole: "migration",
+		},
 	})
 	require.ErrorContains(t, err, "verify current schema")
 	require.Equal(t, []string{"lock", "prepare", "ent-schema", "baseline", "invariants"}, events)
@@ -224,12 +252,15 @@ func TestRunUpgradeStopsBeforePromotionWhenPrivilegeProvisioningFails(t *testing
 			events = append(events, "privileges")
 			return privilegeErr
 		},
+		VerifyProvisionedSchema: func(context.Context, DBTX, ReleaseManifest) error { return nil },
 		PromoteState: func(context.Context, DBTX, ReleaseManifest) error {
 			events = append(events, "promote")
 			return nil
 		},
 		Release: CurrentRelease(),
-		Roles:   SchemaStateRoles{MigrationRole: "migration", RuntimeRole: "runtime"},
+		Roles: SchemaStateRoles{
+			MigrationRole: "migration", RuntimeRole: "runtime", BootstrapRole: "migration",
+		},
 	})
 	require.ErrorIs(t, err, privilegeErr)
 	require.Equal(t, []string{"lock", "validate-history", "invariants", "privileges"}, events)
@@ -256,30 +287,36 @@ func TestRunBootstrapsRejectArtifactDriftBeforeTakingLock(t *testing.T) {
 
 	var freshEvents []string
 	err := RunFreshBootstrap(context.Background(), FreshBootstrap{
-		Lock:            recordingBootstrapLock{events: &freshEvents, conn: &traceBootstrapConnection{}},
-		Prepare:         func(context.Context, BootstrapConnection) error { return nil },
-		CreateSchema:    func(context.Context, BootstrapConnection) error { return nil },
-		ApplyBaseline:   func(context.Context, BootstrapConnection) error { return nil },
-		VerifySchema:    func(context.Context, DBTX, ReleaseManifest) error { return nil },
-		ApplyPrivileges: func(context.Context, BootstrapConnection, SchemaStateRoles) error { return nil },
-		PromoteState:    func(context.Context, DBTX, ReleaseManifest) error { return nil },
-		Seed:            func(context.Context, BootstrapConnection) error { return nil },
-		Release:         mutated,
-		Roles:           SchemaStateRoles{MigrationRole: "migration", RuntimeRole: "runtime"},
+		Lock:                    recordingBootstrapLock{events: &freshEvents, conn: &traceBootstrapConnection{}},
+		Prepare:                 func(context.Context, BootstrapConnection) error { return nil },
+		CreateSchema:            func(context.Context, BootstrapConnection) error { return nil },
+		ApplyBaseline:           func(context.Context, BootstrapConnection) error { return nil },
+		VerifySchema:            func(context.Context, DBTX, ReleaseManifest) error { return nil },
+		ApplyPrivileges:         func(context.Context, BootstrapConnection, SchemaStateRoles) error { return nil },
+		VerifyProvisionedSchema: func(context.Context, DBTX, ReleaseManifest) error { return nil },
+		PromoteState:            func(context.Context, DBTX, ReleaseManifest) error { return nil },
+		Seed:                    func(context.Context, BootstrapConnection) error { return nil },
+		Release:                 mutated,
+		Roles: SchemaStateRoles{
+			MigrationRole: "migration", RuntimeRole: "runtime", BootstrapRole: "migration",
+		},
 	})
 	require.ErrorContains(t, err, "immutable release catalog")
 	require.Empty(t, freshEvents)
 
 	var upgradeEvents []string
 	err = RunUpgrade(context.Background(), UpgradeBootstrap{
-		Lock:                   recordingBootstrapLock{events: &upgradeEvents, conn: &traceBootstrapConnection{}},
-		PlanForwardMigrations:  func(context.Context, BootstrapConnection) ([]Migration, error) { return nil, nil },
-		ApplyForwardMigrations: func(context.Context, BootstrapConnection, []Migration) error { return nil },
-		VerifySchema:           func(context.Context, DBTX, ReleaseManifest) error { return nil },
-		ApplyPrivileges:        func(context.Context, BootstrapConnection, SchemaStateRoles) error { return nil },
-		PromoteState:           func(context.Context, DBTX, ReleaseManifest) error { return nil },
-		Release:                mutated,
-		Roles:                  SchemaStateRoles{MigrationRole: "migration", RuntimeRole: "runtime"},
+		Lock:                    recordingBootstrapLock{events: &upgradeEvents, conn: &traceBootstrapConnection{}},
+		PlanForwardMigrations:   func(context.Context, BootstrapConnection) ([]Migration, error) { return nil, nil },
+		ApplyForwardMigrations:  func(context.Context, BootstrapConnection, []Migration) error { return nil },
+		VerifySchema:            func(context.Context, DBTX, ReleaseManifest) error { return nil },
+		ApplyPrivileges:         func(context.Context, BootstrapConnection, SchemaStateRoles) error { return nil },
+		VerifyProvisionedSchema: func(context.Context, DBTX, ReleaseManifest) error { return nil },
+		PromoteState:            func(context.Context, DBTX, ReleaseManifest) error { return nil },
+		Release:                 mutated,
+		Roles: SchemaStateRoles{
+			MigrationRole: "migration", RuntimeRole: "runtime", BootstrapRole: "migration",
+		},
 	})
 	require.ErrorContains(t, err, "immutable release catalog")
 	require.Empty(t, upgradeEvents)

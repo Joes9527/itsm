@@ -76,6 +76,11 @@ sudo apt-get install -y postgresql-17
 Install pgvector 0.8.6 for PostgreSQL 17 and verify it appears in
 `pg_available_extension_versions` before any ITSM bootstrap.
 
+Before stopping the old cluster, record the installed extension version, vector
+row count, vector index definitions/validity, and a representative similarity
+query result. Store these beside the dump checksum; they are the comparison and
+rollback evidence, not optional diagnostics.
+
 ## Alternative: controlled dump/restore
 
 Create a new empty PG17 cluster rather than reusing the old data directory.
@@ -127,7 +132,33 @@ sudo systemctl start postgresql@17-main
 sudo systemctl start postgresql
 ```
 
-### 4. Run Vacuum/Analyze
+### 4. Upgrade the pgvector extension catalog
+
+Installing the PG17 pgvector package does not update an extension already
+recorded in the restored catalog. Before ITSM bootstrap, first prove that the
+installed source version has a supported update path:
+
+```sql
+SELECT source, target, path
+FROM pg_extension_update_paths('vector')
+WHERE source = (SELECT extversion FROM pg_extension WHERE extname = 'vector')
+  AND target = '0.8.6';
+```
+
+If the installed version is not already 0.8.6 and this query returns no usable
+path, stop and restore; do not drop/recreate the extension around live vector
+data. With a verified backup and update path, execute the controlled catalog
+upgrade as the extension owner:
+
+```sql
+BEGIN;
+ALTER EXTENSION vector UPDATE TO '0.8.6';
+SELECT extversion = '0.8.6' AS exact_version
+FROM pg_extension WHERE extname = 'vector';
+COMMIT;
+```
+
+### 5. Run Vacuum/Analyze
 
 ```bash
 # As postgres user, run vacuumdb to update statistics
@@ -151,6 +182,24 @@ SELECT version FROM pg_available_extension_versions
 WHERE name = 'vector' AND version = '0.8.6';
 SELECT extversion FROM pg_extension WHERE extname = 'vector';
 -- Both release checks must resolve to 0.8.6.
+
+-- Every vector-backed index must remain valid and ready; compare indexdef with
+-- the captured pre-upgrade inventory.
+SELECT n.nspname, t.relname AS table_name, i.relname AS index_name,
+       x.indisvalid, x.indisready, pg_get_indexdef(i.oid)
+FROM pg_index x
+JOIN pg_class i ON i.oid = x.indexrelid
+JOIN pg_class t ON t.oid = x.indrelid
+JOIN pg_namespace n ON n.oid = t.relnamespace
+WHERE pg_get_indexdef(i.oid) ~ '(vector_| hnsw| ivfflat)';
+
+-- Compare this count with the signed pre-upgrade record and prove stored
+-- embeddings remain readable by the operator selected sample.
+SELECT count(*) AS vector_rows,
+       count(*) FILTER (WHERE embedding IS NOT NULL) AS populated_embeddings
+FROM public.vectors;
+SELECT id, embedding <=> embedding AS self_distance
+FROM public.vectors WHERE embedding IS NOT NULL ORDER BY id LIMIT 10;
 ```
 
 ### 2. Check Data Integrity
@@ -190,6 +239,12 @@ sudo tail -100 /var/log/postgresql/postgresql-17-main.log | grep -i warning
 ## Rollback Procedure
 
 If the upgrade fails or critical issues are found:
+
+Do not attempt an in-place pgvector downgrade. Stop the PG17 cluster, preserve
+its logs and failed validation output, and restore the old immutable cluster or
+the verified backup. Re-run the recorded row-count, vector-index, and sample
+similarity checks before returning traffic; the old volume remains the rollback
+authority until sign-off.
 
 ### 1. Stop PostgreSQL 17
 

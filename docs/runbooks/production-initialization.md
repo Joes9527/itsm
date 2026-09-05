@@ -5,7 +5,9 @@
 - 使用 PostgreSQL 17（major 17），且 `pgvector` 0.8.6 精确可用；一次性 bootstrap 会在 DDL 前执行同一只读 preflight。
 - 发布制品、迁移文件和初始化 manifest 来自同一 release version。
 - 显式提供生产环境变量文件；不得使用仓库默认凭据。
-- `ITSM_MIGRATION_DB_USER` 与 `ITSM_RUNTIME_DB_USER` 必须是不同登录角色；前者仅供
+- `ITSM_MIGRATION_DB_USER` 与 `ITSM_RUNTIME_DB_USER` 必须是不同登录角色；另需声明唯一
+  `ITSM_BOOTSTRAP_DB_USER`（受控 DBA，可在自有集群中与 migration 相同）；三者仅允许
+  canonical lowercase PostgreSQL identifier。前者仅供
   init/migrate，后者供 API/Worker，且不得为 superuser 或拥有 `BYPASSRLS`。密码来自
   Compose secret/受保护环境文件，不写入 Compose。
 - 普通 Web 容器必须设置 `ITSM_AUTO_MIGRATE=false`、`ITSM_AUTO_SEED=false`。
@@ -48,6 +50,17 @@ ITSM_BOOTSTRAP_MODE=fresh docker compose -f docker-compose.prod.yml --env-file .
 docker compose -f docker-compose.prod.yml --env-file .env.prod up itsm-init
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 ```
+
+仓库根 Compose 管理的已有卷，在 init 前先以凭据所有者提供的 bootstrap DBA secret
+幂等校正角色（不会 drop database/schema）：
+
+```bash
+docker compose --profile bootstrap --env-file .env run --rm itsm-role-provision
+```
+
+外部托管 PostgreSQL 由 DBA 使用同等受控的角色 provisioning 流程；不得把 bootstrap
+凭据挂载给 API/Worker，也不得让 runtime 继承 migration、bootstrap 或
+`pg_write_all_data`。
 
 ## 失败与重试
 

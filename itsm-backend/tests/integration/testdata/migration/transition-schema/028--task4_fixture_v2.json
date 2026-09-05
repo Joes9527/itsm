@@ -6,7 +6,7 @@
     "releaseId": "itsm-v1.1",
     "schemaVersion": "028_schema_release_state",
     "baselineVersion": "2026-09-04",
-    "releaseManifestSha256": "5decb8eeb0ddfabf00ad46fde9d8e6021dafa7f07dd660bdad22b105e8fadeee"
+    "releaseManifestSha256": "ea8f196b686d6e7dec85f2fa7c05ef8a3f22838974f03c3f8523b71d3d9f90dd"
   },
   "target": {
     "releaseId": "task4-fixture-release-v2",

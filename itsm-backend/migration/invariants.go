@@ -20,6 +20,16 @@ var errCurrentEntSchemaDrift = errors.New("compiled Ent schema differs from the 
 // paths call this exact read-only verifier before privilege provisioning and
 // promotion.
 func VerifyCurrentSchema(ctx context.Context, db DBTX, release ReleaseManifest) error {
+	return verifyCurrentSchema(ctx, db, release, true)
+}
+
+// VerifyProvisionedCurrentSchema is the final promotion gate. Unlike the
+// pre-provision verifier it accepts only the exact target ACL fingerprint.
+func VerifyProvisionedCurrentSchema(ctx context.Context, db DBTX, release ReleaseManifest) error {
+	return verifyCurrentSchema(ctx, db, release, false)
+}
+
+func verifyCurrentSchema(ctx context.Context, db DBTX, release ReleaseManifest, allowPrePrivileges bool) error {
 	if err := ValidateCurrentReleaseArtifact(release); err != nil {
 		return fmt.Errorf("validate current release artifact: %w", err)
 	}
@@ -60,12 +70,15 @@ func VerifyCurrentSchema(ctx context.Context, db DBTX, release ReleaseManifest) 
 			asset.Platform, true, asset.ManagedSchemas,
 		)
 	}
-	if err := verify(asset.Phases.CurrentRelease); err != nil {
-		if prePrivilegesErr := verify(asset.Phases.CurrentReleasePrePrivileges); prePrivilegesErr != nil {
-			return fmt.Errorf("verify current release schema fingerprint: schema does not match cataloged release %s", entry.SchemaVersion)
+	if err := verify(asset.Phases.CurrentRelease); err == nil {
+		return nil
+	}
+	if allowPrePrivileges {
+		if err := verify(asset.Phases.CurrentReleasePrePrivileges); err == nil {
+			return nil
 		}
 	}
-	return nil
+	return fmt.Errorf("verify current release schema fingerprint: schema does not match cataloged release %s", entry.SchemaVersion)
 }
 
 // verifyCurrentEntSchema asks Atlas for the complete transition from the live

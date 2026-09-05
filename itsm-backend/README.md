@@ -26,14 +26,19 @@ API base: `http://localhost:8090/api/v1`
   an exact cataloged forward upgrade. `fresh` does not drop a database.
 - `ITSM_AUTO_MIGRATE=true`: enable schema migration during bootstrap
 - `ITSM_AUTO_SEED=true`: enable idempotent seed during bootstrap
-- `ITSM_MIGRATION_DB_USER` and `ITSM_RUNTIME_DB_USER` are mandatory, distinct
-  principals. Init uses the migration DSN; API and Worker use the runtime DSN.
+- `ITSM_MIGRATION_DB_USER`, `ITSM_RUNTIME_DB_USER`, and
+  `ITSM_BOOTSTRAP_DB_USER` are mandatory canonical lowercase PostgreSQL role
+  identifiers. Runtime is distinct; bootstrap is the sole declared superuser
+  boundary and may equal migration for a locally owned cluster. Init uses the
+  migration DSN; API and Worker use only the runtime DSN.
 
 In Docker Compose, the recommended flow is:
 
-1. `itsm-init` runs once with `ITSM_BOOTSTRAP_ONLY=true`
-2. `itsm-backend` starts after init completes
-3. Frontend proxies browser requests through same-origin `/api`
+1. For an existing volume, run the idempotent `itsm-role-provision` profile.
+2. For an empty database only, run one explicit `ITSM_BOOTSTRAP_MODE=fresh`
+   init job; the steady default remains `upgrade`.
+3. `itsm-backend` starts after init completes; Frontend proxies browser
+   requests through same-origin `/api`.
 
 For a standalone database, run init explicitly with the migration principal,
 then start API/Worker with the runtime principal. The release preflight requires

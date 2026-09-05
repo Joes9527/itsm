@@ -13,11 +13,11 @@ import (
 
 const (
 	CurrentSourceSchemaAssetName    = "source-schema/028_schema_release_state.json"
-	catalogFingerprintVerifierName  = "catalog-verifier/postgres-v1.sql"
+	catalogFingerprintVerifierName  = "catalog-verifier/postgres-v2.sql"
 	catalogFingerprintFormatVersion = 1
 )
 
-//go:embed sql/catalog/postgres-v1.sql
+//go:embed sql/catalog/postgres-v2.sql
 var postgresCatalogFingerprintSQL string
 
 //go:embed sql/catalog sql/source sql/transition
@@ -213,10 +213,69 @@ func catalogFingerprintWithSQL(ctx context.Context, db DBTX, verifierSQL string)
 		return "", fmt.Errorf("catalog fingerprint database is required")
 	}
 	var canonical string
-	if err := db.QueryRowContext(ctx, verifierSQL).Scan(&canonical); err != nil {
-		return "", fmt.Errorf("inspect PostgreSQL catalog fingerprint: %w", err)
+	var queryErr error
+	if strings.Contains(verifierSQL, "$1") {
+		roles, err := schemaStateRolesFromContext(ctx)
+		if err != nil {
+			return "", fmt.Errorf("catalog fingerprint role categories are unavailable: %w", err)
+		}
+		if err := verifyCatalogRoleBoundary(ctx, db, roles); err != nil {
+			return "", err
+		}
+		queryErr = db.QueryRowContext(
+			ctx, verifierSQL, roles.MigrationRole, roles.RuntimeRole, roles.BootstrapRole,
+		).Scan(&canonical)
+	} else {
+		queryErr = db.QueryRowContext(ctx, verifierSQL).Scan(&canonical)
+	}
+	if queryErr != nil {
+		return "", fmt.Errorf("inspect PostgreSQL catalog fingerprint: %w", queryErr)
 	}
 	return checksumSQL(canonical), nil
+}
+
+// verifyCatalogRoleBoundary fixes the three deployment-specific principals
+// into stable verifier categories. The exact names never enter an immutable
+// fingerprint or an error. PostgreSQL 17 supplies the recursive role-option
+// semantics used by the checksum-pinned v2 verifier itself.
+func verifyCatalogRoleBoundary(ctx context.Context, db DBTX, roles SchemaStateRoles) error {
+	if err := validateSchemaStateRoles(roles); err != nil {
+		return err
+	}
+	var executorMatches, migrationExists, runtimeExists, bootstrapExists bool
+	var runtimeSuper, runtimeBypass, bootstrapSuper bool
+	var extraSuperusers int64
+	if err := db.QueryRowContext(ctx, `
+		SELECT current_user = $1,
+		       EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1),
+		       EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $2),
+		       EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $3),
+		       COALESCE((SELECT rolsuper FROM pg_roles WHERE rolname = $2), false),
+		       COALESCE((SELECT rolbypassrls FROM pg_roles WHERE rolname = $2), false),
+		       COALESCE((SELECT rolsuper FROM pg_roles WHERE rolname = $3), false),
+		       (SELECT count(*) FROM pg_roles WHERE rolsuper AND rolname <> $3)
+	`, roles.MigrationRole, roles.RuntimeRole, roles.BootstrapRole).Scan(
+		&executorMatches,
+		&migrationExists,
+		&runtimeExists,
+		&bootstrapExists,
+		&runtimeSuper,
+		&runtimeBypass,
+		&bootstrapSuper,
+		&extraSuperusers,
+	); err != nil {
+		return fmt.Errorf("inspect catalog role categories: database operation failed")
+	}
+	if !executorMatches || !migrationExists {
+		return fmt.Errorf("catalog migration role boundary is invalid")
+	}
+	if !runtimeExists || runtimeSuper || runtimeBypass {
+		return fmt.Errorf("catalog runtime role boundary is invalid")
+	}
+	if !bootstrapExists || !bootstrapSuper || extraSuperusers != 0 {
+		return fmt.Errorf("catalog bootstrap DBA boundary is invalid")
+	}
+	return nil
 }
 
 func catalogFingerprint(ctx context.Context, db DBTX) (string, error) {

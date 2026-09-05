@@ -331,11 +331,12 @@ func runUpgrade(ctx context.Context, db *sql.DB, sugar *zap.SugaredLogger) (int,
 			}
 			return nil
 		},
-		VerifySchema:    migration.VerifyCurrentSchema,
-		ApplyPrivileges: migration.ApplySchemaStatePrivilegesOnConnection,
-		PromoteState:    migration.PromoteSchemaState,
-		Release:         migration.CurrentRelease(),
-		Roles:           roles,
+		VerifySchema:            migration.VerifyCurrentSchema,
+		ApplyPrivileges:         migration.ApplySchemaStatePrivilegesOnConnection,
+		VerifyProvisionedSchema: migration.VerifyProvisionedCurrentSchema,
+		PromoteState:            migration.PromoteSchemaState,
+		Release:                 migration.CurrentRelease(),
+		Roles:                   roles,
 	})
 	return applied, err
 }
@@ -542,21 +543,28 @@ func validateDestructiveFreshPreflight(ctx context.Context, db *sql.DB, cfg *con
 	}
 	var currentUser string
 	var migrationExists, migrationCanLogin, runtimeExists, runtimeCanLogin, runtimePrivileged bool
+	var bootstrapExists, bootstrapSuper bool
+	var extraSuperusers int64
 	if err := db.QueryRowContext(ctx, `
 		SELECT current_user,
 		       EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1),
 		       COALESCE((SELECT rolcanlogin FROM pg_roles WHERE rolname = $1), false),
 		       EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $2),
 		       COALESCE((SELECT rolcanlogin FROM pg_roles WHERE rolname = $2), false),
-		       COALESCE((SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = $2), false)
-	`, roles.MigrationRole, roles.RuntimeRole).Scan(
+		       COALESCE((SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = $2), false),
+		       EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $3),
+		       COALESCE((SELECT rolsuper FROM pg_roles WHERE rolname = $3), false),
+		       (SELECT count(*) FROM pg_roles WHERE rolsuper AND rolname <> $3)
+	`, roles.MigrationRole, roles.RuntimeRole, roles.BootstrapRole).Scan(
 		&currentUser, &migrationExists, &migrationCanLogin,
 		&runtimeExists, &runtimeCanLogin, &runtimePrivileged,
+		&bootstrapExists, &bootstrapSuper, &extraSuperusers,
 	); err != nil {
 		return fmt.Errorf("inspect database roles before destructive fresh: %w", err)
 	}
 	if currentUser != roles.MigrationRole || strings.TrimSpace(cfg.Database.User) != roles.MigrationRole ||
-		!migrationExists || !migrationCanLogin || !runtimeExists || !runtimeCanLogin || runtimePrivileged {
+		!migrationExists || !migrationCanLogin || !runtimeExists || !runtimeCanLogin || runtimePrivileged ||
+		!bootstrapExists || !bootstrapSuper || extraSuperusers != 0 {
 		return fmt.Errorf("destructive fresh database role identity or existence preflight failed")
 	}
 	if err := migration.VerifyCurrentReleasePlatformAvailability(ctx, db); err != nil {
@@ -611,13 +619,14 @@ func freshDatabase(cfg *config.Config, sugar *zap.SugaredLogger) {
 		log.Fatalf("Failed to configure fresh bootstrap lock: %v", err)
 	}
 	if err := migration.RunFreshBootstrap(ctx, migration.FreshBootstrap{
-		Lock:            lock,
-		Prepare:         migration.PrepareCurrentInfrastructure,
-		CreateSchema:    migration.CreateCurrentEntSchema,
-		ApplyBaseline:   migration.ApplyCurrentBaseline,
-		VerifySchema:    migration.VerifyCurrentSchema,
-		ApplyPrivileges: migration.ApplySchemaStatePrivilegesOnConnection,
-		PromoteState:    migration.PromoteSchemaState,
+		Lock:                    lock,
+		Prepare:                 migration.PrepareCurrentInfrastructure,
+		CreateSchema:            migration.CreateCurrentEntSchema,
+		ApplyBaseline:           migration.ApplyCurrentBaseline,
+		VerifySchema:            migration.VerifyCurrentSchema,
+		ApplyPrivileges:         migration.ApplySchemaStatePrivilegesOnConnection,
+		VerifyProvisionedSchema: migration.VerifyProvisionedCurrentSchema,
+		PromoteState:            migration.PromoteSchemaState,
 		Seed: func(ctx context.Context, conn migration.BootstrapConnection) error {
 			return seedFreshDatabase(ctx, conn, cfg, sugar)
 		},

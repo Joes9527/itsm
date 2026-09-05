@@ -1044,13 +1044,14 @@ func runStorageFresh(
 		return err
 	}
 	return migration.RunFreshBootstrap(ctx, migration.FreshBootstrap{
-		Lock:            lock,
-		Prepare:         migration.PrepareCurrentInfrastructure,
-		CreateSchema:    migration.CreateCurrentEntSchema,
-		ApplyBaseline:   migration.ApplyCurrentBaseline,
-		VerifySchema:    migration.VerifyCurrentSchema,
-		ApplyPrivileges: migration.ApplySchemaStatePrivilegesOnConnection,
-		PromoteState:    migration.PromoteSchemaState,
+		Lock:                    lock,
+		Prepare:                 migration.PrepareCurrentInfrastructure,
+		CreateSchema:            migration.CreateCurrentEntSchema,
+		ApplyBaseline:           migration.ApplyCurrentBaseline,
+		VerifySchema:            migration.VerifyCurrentSchema,
+		ApplyPrivileges:         migration.ApplySchemaStatePrivilegesOnConnection,
+		VerifyProvisionedSchema: migration.VerifyProvisionedCurrentSchema,
+		PromoteState:            migration.PromoteSchemaState,
 		Seed: func(ctx context.Context, conn migration.BootstrapConnection) error {
 			if !cfg.Deployment.AutoSeed {
 				return nil
@@ -1099,11 +1100,12 @@ func runStorageUpgrade(ctx context.Context, db *sql.DB, sugar *zap.SugaredLogger
 			}
 			return nil
 		},
-		VerifySchema:    migration.VerifyCurrentSchema,
-		ApplyPrivileges: migration.ApplySchemaStatePrivilegesOnConnection,
-		PromoteState:    migration.PromoteSchemaState,
-		Release:         migration.CurrentRelease(),
-		Roles:           roles,
+		VerifySchema:            migration.VerifyCurrentSchema,
+		ApplyPrivileges:         migration.ApplySchemaStatePrivilegesOnConnection,
+		VerifyProvisionedSchema: migration.VerifyProvisionedCurrentSchema,
+		PromoteState:            migration.PromoteSchemaState,
+		Release:                 migration.CurrentRelease(),
+		Roles:                   roles,
 	})
 }
 

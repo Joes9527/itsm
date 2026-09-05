@@ -108,10 +108,10 @@ func TestResolveAWSCredential(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("keys valid", func(t *testing.T) {
-		cred, err := ResolveAWSCredential(ctx, `{"type":"keys","access_key_id":"AKIAIOSFODNN7EXAMPLE","secret_access_key":"wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"}`)
+		cred, err := ResolveAWSCredential(ctx, `{"type":"keys","access_key_id":"aws_test_access_key","secret_access_key":"aws_test_secret"}`)
 		require.NoError(t, err)
 		assert.Equal(t, "aws", cred.Provider)
-		assert.Equal(t, "AKIAIOSFODNN7EXAMPLE", cred.AccessKeyID)
+		assert.Equal(t, "aws_test_access_key", cred.AccessKeyID)
 	})
 
 	t.Run("keys missing secret", func(t *testing.T) {
