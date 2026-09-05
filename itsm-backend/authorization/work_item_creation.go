@@ -89,6 +89,13 @@ func AuthorizeWorkItemCreation(ctx context.Context, tx *ent.Tx, identity creatio
 			return err
 		}
 	}
+	// Runtime input, including BPMN callback values, cannot delegate workflow
+	// management. Server-owned catalog and resolver bindings are not overrides.
+	if command.WorkflowDefinitionKey != "" {
+		if err := RequireCurrentPermission(ctx, tx, identity, "workflow", "write"); err != nil {
+			return err
+		}
+	}
 	if command.TemplateID != nil || command.ParentTicketID != nil || len(command.TagIDs) > 0 {
 		if err := RequireCurrentPermission(ctx, tx, identity, "ticket", "read"); err != nil {
 			return err

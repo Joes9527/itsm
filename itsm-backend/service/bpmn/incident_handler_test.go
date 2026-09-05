@@ -30,33 +30,6 @@ type dbBackedIncidentService struct {
 	client *ent.Client
 }
 
-func (s *dbBackedIncidentService) CreateIncident(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, userID int) (*dto.IncidentResponse, error) {
-	workItem, err := s.client.Ticket.Create().
-		SetTitle(req.Title).
-		SetDescription(req.Description).
-		SetStatus(common.IncidentStatusNew).
-		SetPriority(req.Priority).
-		SetType("incident").
-		SetRecordClass("incident").
-		SetTicketNumber("TKT-BPMN-INCIDENT-FIXTURE").
-		SetRequesterID(userID).
-		SetOpenedByID(userID).
-		SetTenantID(tenantID).
-		Save(ctx)
-	if err != nil {
-		return nil, err
-	}
-	inc, err := s.client.Incident.Create().
-		SetType(req.Type).
-		SetSeverity(req.Severity).
-		SetWorkItemID(workItem.ID).
-		Save(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return &dto.IncidentResponse{ID: inc.ID, IncidentNumber: inc.IncidentNumber}, nil
-}
-
 func (s *dbBackedIncidentService) AssignIncidentForWorkflow(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentMutationOutcome, error) {
 	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.HasWorkItemWith(ticket.TenantID(tenantID))).WithWorkItem().Only(ctx)
 	if err != nil {
@@ -493,36 +466,34 @@ func TestIncidentServiceTaskHandler_TenantScopedActions(t *testing.T) {
 	}
 }
 
-// 以下测试覆盖 create_incident / assign_incident 从裸 Ent 写入收回到
-// IncidentDomainServiceInterface 之后的委派契约：未注入时 fail closed，
-// 注入后把请求原样转发给领域服务，assign 额外触发一次状态更新。
-
-func TestIncidentServiceTaskHandler_CreateIncident_RequiresInjectedService(t *testing.T) {
-	handler := NewIncidentServiceTaskHandler(nil, zap.NewNop().Sugar())
-	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, 1)
-	_, err := handler.Execute(ctx, nil, map[string]interface{}{
-		"action": "create_incident",
-		"title":  "测试事件",
-	})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "未注入")
-}
-
-func TestIncidentServiceTaskHandler_CreateIncident_DelegatesToInjectedService(t *testing.T) {
-	handler := NewIncidentServiceTaskHandler(nil, zap.NewNop().Sugar())
-	fake := &fakeIncidentService{createResp: &dto.IncidentResponse{ID: 7, IncidentNumber: "INC-1"}}
-	handler.SetIncidentService(fake)
-
-	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, 1)
-	result, err := handler.Execute(ctx, nil, map[string]interface{}{
-		"action":      "create_incident",
-		"title":       "测试事件",
-		"reporter_id": 3,
-	})
-	require.NoError(t, err)
-	require.Equal(t, "测试事件", fake.lastCreateReq.Title)
-	require.Equal(t, 3, fake.lastCreateUserID)
-	require.Equal(t, 7, result.OutputVars["incident_id"])
+// Creation requires durable callback identity and the shared application.
+// Positive delegation and retries use the real engine/Intake integration fixture.
+func TestIncidentServiceTaskHandler_CreateIncidentRequiresDurableApplication(t *testing.T) {
+	for _, missing := range []string{"identity", "application"} {
+		t.Run(missing, func(t *testing.T) {
+			client, handler, tenantID, _, _ := setupIncidentHandlerFixture(t)
+			ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
+			if missing == "application" {
+				ctx = WithBPMNCallbackExecutionKey(ctx, "claimed-creation")
+			}
+			result, err := handler.Execute(ctx, nil, map[string]interface{}{"action": "create_incident", "title": "Incident"})
+			require.NoError(t, err)
+			require.Equal(t, CallbackEffectBlocked, result.Status)
+			require.Equal(t, CallbackBlockHandlerContract, result.BlockCode)
+			require.Nil(t, result.CreationResult)
+			require.Empty(t, result.OutputVars)
+			if missing == "identity" {
+				require.Contains(t, result.Message, "durable callback identity")
+			} else {
+				require.Contains(t, result.Message, "application is unavailable")
+			}
+			require.Equal(t, 1, client.Ticket.Query().CountX(ctx))
+			require.Equal(t, 1, client.Incident.Query().CountX(ctx))
+			require.Zero(t, client.IntakeRequest.Query().CountX(ctx))
+			require.Zero(t, client.OutboxEvent.Query().CountX(ctx))
+			require.Zero(t, client.AuditLog.Query().CountX(ctx))
+		})
+	}
 }
 
 func TestIncidentServiceTaskHandler_AssignIncident_DelegatesToAtomicDomainOperation(t *testing.T) {
@@ -542,20 +513,8 @@ func TestIncidentServiceTaskHandler_AssignIncident_DelegatesToAtomicDomainOperat
 }
 
 type fakeIncidentService struct {
-	createResp       *dto.IncidentResponse
-	lastCreateReq    *dto.CreateIncidentRequest
-	lastCreateUserID int
-	lastAssignID     int
-	lastAssigneeID   int
-}
-
-func (f *fakeIncidentService) CreateIncident(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, userID int) (*dto.IncidentResponse, error) {
-	f.lastCreateReq = req
-	f.lastCreateUserID = userID
-	if f.createResp != nil {
-		return f.createResp, nil
-	}
-	return &dto.IncidentResponse{ID: 1}, nil
+	lastAssignID   int
+	lastAssigneeID int
 }
 
 func (f *fakeIncidentService) AssignIncidentForWorkflow(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentMutationOutcome, error) {
