@@ -1,0 +1,15 @@
+{
+  "idempotencyKey": "fixture-confirmed-submission",
+  "intakeKind": "catalog_item",
+  "recordClass": "service_request_item",
+  "confirmation": "confirmed",
+  "title": "SSLVPN access request",
+  "description": "Fixture request using fake catalog values",
+  "catalogItemId": 101,
+  "catalogVersion": "fixture-catalog-v1",
+  "formSchemaVersion": "fixture-form-v1",
+  "formValues": {
+    "vpn_level": "level_1",
+    "access_duration": "duration_30d"
+  }
+}
