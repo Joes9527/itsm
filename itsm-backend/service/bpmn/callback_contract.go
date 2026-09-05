@@ -3,9 +3,10 @@ package bpmn
 // CallbackActionContract is the handler-owned allowlist for one declared
 // callback action. Only these fields may cross the durable callback boundary.
 type CallbackActionContract struct {
-	PayloadFields     []string
-	RequiredFields    []string
-	ConfigRefRequired bool
+	PayloadFields         []string
+	PositiveIntegerFields []string
+	RequiredFields        []string
+	ConfigRefRequired     bool
 }
 
 // CallbackContractProvider is implemented only by synchronous handlers.
@@ -50,7 +51,11 @@ func (h *IncidentServiceTaskHandler) CallbackContract(action string) (CallbackAc
 		"categorize_incident":  {"category", "subcategory"},
 	}
 	fields, ok := payload[action]
-	return callbackActionContract(fields, nil), ok
+	contract := callbackActionContract(fields, nil)
+	if action == "assign_incident" {
+		contract.PositiveIntegerFields = []string{"assignee_id"}
+	}
+	return contract, ok
 }
 
 func (h *TicketServiceTaskHandler) CallbackContract(action string) (CallbackActionContract, bool) {
@@ -62,7 +67,11 @@ func (h *TicketServiceTaskHandler) CallbackContract(action string) (CallbackActi
 		"assign":           {"assignee_id", "notify_content"},
 	}
 	fields, ok := payload[action]
-	return callbackActionContract(fields, nil), ok
+	contract := callbackActionContract(fields, nil)
+	if action == "assign" {
+		contract.PositiveIntegerFields = []string{"assignee_id"}
+	}
+	return contract, ok
 }
 
 func (h *ServiceRequestServiceTaskHandler) CallbackContract(action string) (CallbackActionContract, bool) {
@@ -77,7 +86,11 @@ func (h *ServiceRequestServiceTaskHandler) CallbackContract(action string) (Call
 		"cancel_request":     {"cancel_reason"},
 	}
 	fields, ok := payload[action]
-	return callbackActionContract(fields, nil), ok
+	contract := callbackActionContract(fields, nil)
+	if action == "assign_request" {
+		contract.PositiveIntegerFields = []string{"assignee_id"}
+	}
+	return contract, ok
 }
 
 func (h *NotificationHandler) CallbackContract(action string) (CallbackActionContract, bool) {

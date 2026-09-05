@@ -1048,7 +1048,11 @@ func (e *CustomProcessEngine) executeStep(ctx context.Context, instance *ent.Pro
 	var selectedFlow *BPMNSequenceFlow
 	unconditionalCount := 0
 	for _, flow := range outgoingFlows {
-		if e.evaluateCondition(flow, variables) {
+		matched, err := e.evaluateCondition(flow, variables)
+		if err != nil {
+			return fmt.Errorf("流程条件评估失败 [%s]: %w", flow.ID, err)
+		}
+		if matched {
 			if selectedFlow == nil {
 				selectedFlow = flow
 			}
@@ -2291,9 +2295,9 @@ func (e *CustomProcessEngine) findOutgoingFlows(process *BPMNProcess, sourceRef 
 
 // evaluateCondition 评估流转条件 (Domain Logic)
 // 使用表达式引擎评估条件
-func (e *CustomProcessEngine) evaluateCondition(flow *BPMNSequenceFlow, variables map[string]interface{}) bool {
+func (e *CustomProcessEngine) evaluateCondition(flow *BPMNSequenceFlow, variables map[string]interface{}) (bool, error) {
 	if flow.ConditionExpression == nil || flow.ConditionExpression.Expression == "" {
-		return true // 无条件则默认通过
+		return true, nil // 无条件则默认通过
 	}
 
 	// 合并变量
@@ -2308,19 +2312,9 @@ func (e *CustomProcessEngine) evaluateCondition(flow *BPMNSequenceFlow, variable
 	// 将 variables 包装在 "variables" 键中，以便 BPMN 表达式可以使用 variables['key'] 语法
 	evalVars["variables"] = variables
 
-	// 使用表达式引擎评估条件
-	result, err := e.exprEngine.EvaluateCondition(flow.ConditionExpression.Expression, evalVars)
-	if err != nil {
-		// SEC-002 修复：评估失败时默认拒绝（return false），而非放行
-		e.logger.Errorw(
-			"条件评估失败，默认拒绝流转",
-			"expression", flow.ConditionExpression.Expression,
-			"error", err,
-		)
-		return false
-	}
-
-	return result
+	// Errors are not false conditions: choosing a fallback would hide a broken
+	// required expression and could execute the wrong branch.
+	return e.exprEngine.EvaluateCondition(flow.ConditionExpression.Expression, evalVars)
 }
 
 func (e *CustomProcessEngine) isEndEvent(process *BPMNProcess, id string) bool {

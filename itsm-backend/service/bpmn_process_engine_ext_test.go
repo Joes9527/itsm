@@ -292,11 +292,12 @@ func TestBPMNProcessEngine_EvaluateCondition_ComplexExpressions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := engine.evaluateCondition(&BPMNSequenceFlow{
+			result, err := engine.evaluateCondition(&BPMNSequenceFlow{
 				ConditionExpression: &BPMNConditionExpression{
 					Expression: tt.expression,
 				},
 			}, tt.variables)
+			assert.NoError(t, err)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -318,11 +319,12 @@ func TestBPMNProcessEngine_EvaluateCondition_InvalidExpressions(t *testing.T) {
 	}
 
 	for _, expr := range invalidExpressions {
-		result := engine.evaluateCondition(&BPMNSequenceFlow{
+		result, err := engine.evaluateCondition(&BPMNSequenceFlow{
 			ConditionExpression: &BPMNConditionExpression{
 				Expression: expr,
 			},
 		}, map[string]interface{}{"status": "test"})
+		assert.Error(t, err)
 		assert.False(t, result, "Invalid expression '%s' should return false", expr)
 	}
 }

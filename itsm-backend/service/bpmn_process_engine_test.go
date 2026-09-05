@@ -29,11 +29,12 @@ func TestEvaluateCondition_FailureReturnsFalse(t *testing.T) {
 	}
 
 	// 使用一个无效的表达式，评估应该失败并返回 false
-	result := engine.evaluateCondition(&BPMNSequenceFlow{
+	result, err := engine.evaluateCondition(&BPMNSequenceFlow{
 		ConditionExpression: &BPMNConditionExpression{
 			Expression: "invalid {{{{ expression",
 		},
 	}, variables)
+	assert.Error(t, err)
 
 	if result {
 		t.Error("无效表达式评估应返回 false，但返回了 true")
@@ -55,9 +56,10 @@ func TestEvaluateCondition_NoConditionReturnsTrue(t *testing.T) {
 	}
 
 	// 无条件表达式，应该默认通过
-	result := engine.evaluateCondition(&BPMNSequenceFlow{
+	result, err := engine.evaluateCondition(&BPMNSequenceFlow{
 		ConditionExpression: nil,
 	}, variables)
+	assert.NoError(t, err)
 
 	if !result {
 		t.Error("无条件表达式应返回 true")
@@ -79,11 +81,12 @@ func TestEvaluateCondition_EmptyExpressionReturnsTrue(t *testing.T) {
 	}
 
 	// 空条件表达式
-	result := engine.evaluateCondition(&BPMNSequenceFlow{
+	result, err := engine.evaluateCondition(&BPMNSequenceFlow{
 		ConditionExpression: &BPMNConditionExpression{
 			Expression: "",
 		},
 	}, variables)
+	assert.NoError(t, err)
 
 	if !result {
 		t.Error("空条件表达式应返回 true")
@@ -105,11 +108,12 @@ func TestEvaluateCondition_ValidExpression(t *testing.T) {
 	}
 
 	// 有效表达式：priority == 1
-	result := engine.evaluateCondition(&BPMNSequenceFlow{
+	result, err := engine.evaluateCondition(&BPMNSequenceFlow{
 		ConditionExpression: &BPMNConditionExpression{
 			Expression: "priority == 1",
 		},
 	}, variables)
+	assert.NoError(t, err)
 
 	if !result {
 		t.Error("priority == 1 评估应返回 true")

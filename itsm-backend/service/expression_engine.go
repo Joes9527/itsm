@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"math/big"
 	"reflect"
 	"regexp"
 	"strings"
@@ -36,8 +37,14 @@ func (e *ExpressionEngine) Evaluate(expression string, variables map[string]inte
 
 	// 构建环境
 	env := make(map[string]interface{})
+	hasExactNumbers := false
 	for k, v := range variables {
-		env[k] = v
+		adapted, exact, err := exactExpressionValue(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid expression number: %w", err)
+		}
+		env[k] = adapted
+		hasExactNumbers = hasExactNumbers || exact
 	}
 
 	// 添加内置函数
@@ -49,7 +56,17 @@ func (e *ExpressionEngine) Evaluate(expression string, variables map[string]inte
 	}
 
 	// 编译并执行表达式
-	program, err := expr.Compile(expression, expr.Env(env))
+	options := []expr.Option{expr.Env(env)}
+	patcher := &exactNumberPatcher{source: []rune(expression)}
+	if hasExactNumbers {
+		env["__itsm_exact_binary"] = exactExpressionBinary
+		env["__itsm_exact_unary"] = exactExpressionUnary
+		options = append(options, expr.Patch(patcher))
+	}
+	program, err := expr.Compile(expression, options...)
+	if patcher.err != nil {
+		return nil, patcher.err
+	}
 	if err != nil {
 		return nil, fmt.Errorf("表达式编译失败: %w", err)
 	}
@@ -73,6 +90,8 @@ func (e *ExpressionEngine) EvaluateCondition(expression string, variables map[st
 	switch v := result.(type) {
 	case bool:
 		return v, nil
+	case *big.Rat:
+		return v.Sign() != 0, nil
 	case string:
 		return strings.ToLower(v) == "true" || v == "1", nil
 	case int, int64, float64:
@@ -90,6 +109,9 @@ func (e *ExpressionEngine) EvaluateNumeric(expression string, variables map[stri
 	}
 
 	switch v := result.(type) {
+	case *big.Rat:
+		result, _ := v.Float64()
+		return result, nil
 	case float64:
 		return v, nil
 	case int:

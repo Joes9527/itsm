@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
 
+	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/incident"
@@ -90,6 +92,11 @@ func cloneBPMNJSONValue(value interface{}, depth int) (interface{}, error) {
 		return nil, fmt.Errorf("嵌套层级超过限制")
 	}
 	switch typed := value.(type) {
+	case json.Number:
+		if _, err := common.ParseExactJSONNumber(typed); err != nil {
+			return nil, err
+		}
+		return typed, nil
 	case nil, bool, string, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
 		return typed, nil
 	case float32:
@@ -232,7 +239,7 @@ func validateBPMNCallbackActionContract(contract bpmn.CallbackActionContract) er
 	if err != nil {
 		return err
 	}
-	for _, field := range contract.RequiredFields {
+	for _, field := range append(append([]string(nil), contract.RequiredFields...), contract.PositiveIntegerFields...) {
 		if _, ok := allowed[field]; !ok {
 			return fmt.Errorf("回调必填字段未在负载契约中声明")
 		}
@@ -290,6 +297,17 @@ func normalizeBPMNCallbackContractPayload(contract bpmn.CallbackActionContract, 
 			return nil, fmt.Errorf("回调字段 %q 类型无效", field)
 		}
 		normalized[field] = cloned
+	}
+	for _, field := range contract.PositiveIntegerFields {
+		value, exists := normalized[field]
+		if !exists {
+			continue
+		}
+		integer, err := bpmn.CallbackInteger(value)
+		if err != nil || integer <= 0 {
+			return nil, fmt.Errorf("回调字段 %q 必须是有效正整数", field)
+		}
+		normalized[field] = strconv.Itoa(integer)
 	}
 	for _, field := range contract.RequiredFields {
 		if _, exists := normalized[field]; !exists {
