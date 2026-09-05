@@ -1482,19 +1482,20 @@ func ToTicketResponse(ctx context.Context, t *ticket.Ticket) *dto.TicketResponse
 		return nil
 	}
 	resp := &dto.TicketResponse{
-		ID:           t.ID,
-		TicketNumber: t.TicketNumber,
-		Title:        t.Title,
-		Description:  t.Description,
-		Status:       string(t.Status),
-		Priority:     string(t.Priority),
-		Type:         string(t.Type),
-		RequesterID:  t.RequesterID,
-		TenantID:     t.TenantID,
-		Version:      t.Version,
-		CreatedAt:    t.CreatedAt,
-		UpdatedAt:    t.UpdatedAt,
-		Source:       t.Source,
+		ID:             t.ID,
+		TicketNumber:   t.TicketNumber,
+		Title:          t.Title,
+		Description:    t.Description,
+		Status:         string(t.Status),
+		Priority:       string(t.Priority),
+		Type:           string(t.Type),
+		GenericSubtype: t.GenericSubtype,
+		RequesterID:    t.RequesterID,
+		TenantID:       t.TenantID,
+		Version:        t.Version,
+		CreatedAt:      t.CreatedAt,
+		UpdatedAt:      t.UpdatedAt,
+		Source:         t.Source,
 	}
 
 	if t.AssigneeID != nil {
@@ -1570,19 +1571,20 @@ func ToTicketResponseWithCustomFields(ctx context.Context, client *ent.Client, t
 // 这是一个临时方案：理想情况下 ProcessResolver 应该接受领域模型。
 func (s *TicketService) toEntTicket(t *ticket.Ticket) *ent.Ticket {
 	entTicket := &ent.Ticket{
-		ID:           t.ID,
-		TicketNumber: t.TicketNumber,
-		Title:        t.Title,
-		Description:  t.Description,
-		Status:       string(t.Status),
-		Type:         string(t.Type),
-		RecordClass:  t.RecordClass,
-		Priority:     string(t.Priority),
-		RequesterID:  t.RequesterID,
-		TenantID:     t.TenantID,
-		Version:      t.Version,
-		CreatedAt:    t.CreatedAt,
-		UpdatedAt:    t.UpdatedAt,
+		ID:             t.ID,
+		TicketNumber:   t.TicketNumber,
+		Title:          t.Title,
+		Description:    t.Description,
+		Status:         string(t.Status),
+		Type:           string(t.Type),
+		GenericSubtype: t.GenericSubtype,
+		RecordClass:    t.RecordClass,
+		Priority:       string(t.Priority),
+		RequesterID:    t.RequesterID,
+		TenantID:       t.TenantID,
+		Version:        t.Version,
+		CreatedAt:      t.CreatedAt,
+		UpdatedAt:      t.UpdatedAt,
 	}
 	if t.AssigneeID != nil {
 		entTicket.AssigneeID = *t.AssigneeID
@@ -2063,19 +2065,20 @@ func (s *TicketService) entToDomain(e *ent.Ticket) *ticket.Ticket {
 		return nil
 	}
 	t := &ticket.Ticket{
-		ID:           e.ID,
-		TicketNumber: e.TicketNumber,
-		Title:        e.Title,
-		Description:  e.Description,
-		Status:       ticket.Status(e.Status),
-		Type:         ticket.Type(e.Type),
-		Priority:     ticket.Priority(e.Priority),
-		RequesterID:  e.RequesterID,
-		TenantID:     e.TenantID,
-		Version:      e.Version,
-		CreatedAt:    e.CreatedAt,
-		UpdatedAt:    e.UpdatedAt,
-		Source:       e.Source,
+		ID:             e.ID,
+		TicketNumber:   e.TicketNumber,
+		Title:          e.Title,
+		Description:    e.Description,
+		Status:         ticket.Status(e.Status),
+		Type:           ticket.Type(e.Type),
+		GenericSubtype: e.GenericSubtype,
+		Priority:       ticket.Priority(e.Priority),
+		RequesterID:    e.RequesterID,
+		TenantID:       e.TenantID,
+		Version:        e.Version,
+		CreatedAt:      e.CreatedAt,
+		UpdatedAt:      e.UpdatedAt,
+		Source:         e.Source,
 	}
 	if e.AssigneeID > 0 {
 		aid := e.AssigneeID

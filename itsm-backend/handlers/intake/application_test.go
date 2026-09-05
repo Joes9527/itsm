@@ -51,7 +51,8 @@ func intakeFixture(t *testing.T) (*ent.Client, *Service, workitemcreation.Identi
 	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:%s?mode=memory&cache=shared&_fk=1", t.Name()))
 	t.Cleanup(func() { client.Close() })
 	tenant := client.Tenant.Create().SetName("Tenant").SetCode("tenant").SaveX(ctx)
-	user := client.User.Create().SetUsername("user").SetName("User").SetEmail("u@example.test").SetPasswordHash("test").SetTenantID(tenant.ID).SaveX(ctx)
+	user := client.User.Create().SetUsername("user").SetName("User").SetEmail("u@example.test").SetPasswordHash("test").SetTenantID(tenant.ID).SetRole("requester").SaveX(ctx)
+	seedCreationPermission(t, client, tenant.ID, "requester")
 	identity := workitemcreation.Identity{TenantID: tenant.ID, ActorID: user.ID, RequesterID: user.ID, Channel: "itsm_web", Role: "requester"}
 	cmd := workitemcreation.CreateWorkItemCommand{RecordClass: "generic", IntakeKind: "generic", Confirmation: "confirmed", IdempotencyKey: "one", Title: "VPN access"}
 	registry := NewCreatorRegistry()
@@ -190,4 +191,34 @@ func TestApplicationTypedNilCollaboratorFailsClosed(t *testing.T) {
 		_, err := s.Create(context.Background(), i, c)
 		require.ErrorIs(t, err, workitemcreation.ErrInternalFailure)
 	})
+}
+
+func TestApplicationReplayRechecksCurrentIdentity(t *testing.T) {
+	client, s, i, c, _, _ := intakeFixture(t)
+	_, err := s.Create(context.Background(), i, c)
+	require.NoError(t, err)
+	client.User.UpdateOneID(i.ActorID).SetActive(false).ExecX(context.Background())
+	_, err = s.Create(context.Background(), i, c)
+	require.ErrorIs(t, err, workitemcreation.ErrAuthenticationRequired)
+	require.Equal(t, 1, client.Ticket.Query().CountX(context.Background()))
+}
+
+func seedCreationPermission(t *testing.T, client *ent.Client, tenantID int, roleName string) {
+	t.Helper()
+	ctx := context.Background()
+	role := client.Role.Create().SetTenantID(tenantID).SetName(roleName).SetCode(roleName).SaveX(ctx)
+	permission := client.Permission.Create().SetTenantID(tenantID).SetName("Create work").SetCode("create-work").SetResource("*").SetAction("*").SaveX(ctx)
+	client.RolePermission.Create().SetTenantID(tenantID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(ctx)
+}
+
+func TestApplicationReplayRechecksCurrentPermissions(t *testing.T) {
+	client, s, i, c, _, _ := intakeFixture(t)
+	first, err := s.Create(context.Background(), i, c)
+	require.NoError(t, err)
+	_, err = client.RolePermission.Delete().Exec(context.Background())
+	require.NoError(t, err)
+	_, err = s.Create(context.Background(), i, c)
+	require.ErrorIs(t, err, workitemcreation.ErrPermissionDenied)
+	require.Equal(t, first.WorkItemID, client.Ticket.Query().OnlyX(context.Background()).ID)
+	require.Equal(t, 1, client.IntakeRequest.Query().CountX(context.Background()))
 }

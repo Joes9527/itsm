@@ -1,0 +1,165 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"go.uber.org/zap"
+	"itsm-backend/ent"
+	"itsm-backend/ent/processbinding"
+	"itsm-backend/ent/processdefinition"
+	"itsm-backend/ent/sladefinition"
+	"itsm-backend/ent/user"
+	creation "itsm-backend/handlers/common/workitemcreation"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+)
+
+// ResolveCreationWorkflow freezes the owning process service's creation binding.
+// A catalog key takes precedence. Only configured conditions.no_process permits
+// skipping orchestration; absent/unsupported configurations fail closed.
+func (s *ProcessBindingService) ResolveCreationWorkflow(ctx context.Context, tx *ent.Tx, in creation.ResolvedIntake, key string) (creation.ResolvedWorkflowBinding, *int, error) {
+	var result creation.ResolvedWorkflowBinding
+	var slaID *int
+	version := 0
+	key = strings.TrimSpace(key)
+	if key == "" {
+		business := map[string]string{"generic": "ticket", "incident": "incident", "problem": "problem", "change_request": "change", "service_request_item": "service_request"}[in.RecordClass]
+		if business == "" {
+			return result, nil, creation.NewUnsupportedRecordClass("unsupported workflow creation class", nil)
+		}
+		subtype := ""
+		if in.Command.Incident != nil {
+			subtype = in.Command.Incident.Type
+		}
+		if in.Command.Change != nil {
+			subtype = in.Command.Change.Type
+		}
+		if in.Command.Generic != nil {
+			subtype = in.Command.Generic.Type
+		}
+		requester, err := tx.User.Query().Where(user.IDEQ(in.Identity.RequesterID), user.TenantIDEQ(in.Identity.TenantID), user.ActiveEQ(true)).Only(ctx)
+		if ent.IsNotFound(err) {
+			return result, nil, creation.NewReferenceNotFound("workflow requester is unavailable", err)
+		}
+		if err != nil {
+			return result, nil, creation.NewInfrastructureUnavailable("could not load workflow requester", err)
+		}
+		variables := map[string]interface{}{}
+		for key, value := range in.Command.FormValues {
+			variables[key] = value
+		}
+		if in.Command.ServiceRequest != nil && in.Command.ServiceRequest.Amount != "" {
+			variables["amount"] = in.Command.ServiceRequest.Amount
+		}
+		variables["priority"] = in.Command.Priority
+		if in.Command.Incident != nil {
+			variables["severity"] = in.Command.Incident.Severity
+			variables["impact"] = in.Command.Incident.Impact
+			variables["urgency"] = in.Command.Incident.Urgency
+		}
+		if in.Command.Change != nil {
+			variables["riskLevel"] = in.Command.Change.RiskLevel
+		}
+		routing := &RoutingContext{TenantID: in.Identity.TenantID, BusinessType: business, BusinessSubType: subtype, DepartmentID: requester.DepartmentID, Category: in.CTI.CategoryName, Variables: variables}
+		if in.CTI.CategoryID != nil {
+			routing.CategoryID = *in.CTI.CategoryID
+		}
+		selected, err := NewProcessRoutingService(tx.Client(), zap.NewNop().Sugar()).FindBestRouteTx(ctx, tx, routing)
+		if err != nil {
+			var configurationError *RoutingConfigurationError
+			if errors.As(err, &configurationError) {
+				return result, nil, creation.NewDomainValidationFailed("invalid workflow routing configuration", err)
+			}
+			return result, nil, creation.NewInfrastructureUnavailable("could not select configured workflow", err)
+		}
+		if selected == nil {
+			return result, nil, creation.NewWorkflowBindingRequired("active workflow binding is required", nil)
+		}
+		if selected.SLAPolicyID != "" {
+			id, err := strconv.Atoi(selected.SLAPolicyID)
+			if err != nil || id <= 0 {
+				return result, nil, creation.NewDomainValidationFailed("invalid workflow SLA policy", err)
+			}
+			slaID = &id
+		}
+		if selected.NoProcess {
+			return creation.ResolvedWorkflowBinding{NoProcess: true}, slaID, nil
+		}
+		key, version = selected.ProcessDefinitionKey, selected.ProcessVersion
+	}
+	query := tx.ProcessDefinition.Query().Where(processdefinition.TenantIDEQ(in.Identity.TenantID), processdefinition.KeyEQ(key), processdefinition.IsActiveEQ(true))
+	if version <= 0 {
+		query = query.Where(processdefinition.IsLatestEQ(true))
+	}
+	definitions, err := query.Order(ent.Desc(processdefinition.FieldIsLatest), ent.Desc(processdefinition.FieldDeployedAt), ent.Desc(processdefinition.FieldID)).All(ctx)
+	if err != nil {
+		return result, nil, creation.NewInfrastructureUnavailable("could not resolve workflow definition", err)
+	}
+	var definition *ent.ProcessDefinition
+	for _, candidate := range definitions {
+		major, err := creationProcessDefinitionMajorVersion(candidate.Version)
+		if err != nil {
+			return result, nil, creation.NewDomainValidationFailed("unsupported workflow definition version", err)
+		}
+		if version <= 0 || major == version {
+			definition = candidate
+			break
+		}
+	}
+	if definition == nil {
+		return result, nil, creation.NewWorkflowBindingRequired("active workflow definition for the configured major version is required", nil)
+	}
+	return creation.ResolvedWorkflowBinding{DefinitionID: &definition.ID, DefinitionKey: definition.Key, DefinitionVersion: definition.Version}, slaID, nil
+}
+
+// CreationConfigurationRevision freezes declared routing configuration rather
+// than a route selected using incomplete (pre-submission) form values.
+func (*ProcessBindingService) CreationConfigurationRevision(ctx context.Context, tx *ent.Tx, tenantID int, class, key string) (string, error) {
+	business := map[string]string{"generic": "ticket", "incident": "incident", "problem": "problem", "change_request": "change", "service_request_item": "service_request"}[class]
+	if business == "" {
+		return "", creation.NewUnsupportedRecordClass("unsupported workflow creation class", nil)
+	}
+	bindings, err := tx.ProcessBinding.Query().Where(processbinding.TenantIDEQ(tenantID), processbinding.BusinessTypeEQ(business), processbinding.IsActiveEQ(true)).Order(ent.Asc(processbinding.FieldID)).All(ctx)
+	if err != nil {
+		return "", creation.NewInfrastructureUnavailable("could not load workflow configuration", err)
+	}
+	keys := []string{}
+	if key != "" {
+		keys = append(keys, key)
+	}
+	for _, binding := range bindings {
+		keys = append(keys, binding.ProcessDefinitionKey)
+	}
+	definitions, err := tx.ProcessDefinition.Query().Where(processdefinition.TenantIDEQ(tenantID), processdefinition.KeyIn(keys...), processdefinition.IsActiveEQ(true)).Order(ent.Asc(processdefinition.FieldID)).All(ctx)
+	if err != nil {
+		return "", creation.NewInfrastructureUnavailable("could not load workflow revisions", err)
+	}
+	slaDefinitions, err := tx.SLADefinition.Query().Where(sladefinition.TenantIDEQ(tenantID), sladefinition.IsActiveEQ(true)).Order(ent.Asc(sladefinition.FieldID)).All(ctx)
+	if err != nil {
+		return "", creation.NewInfrastructureUnavailable("could not load SLA revisions", err)
+	}
+	for _, binding := range bindings {
+		binding.CreatedAt = time.Time{}
+		binding.UpdatedAt = time.Time{}
+	}
+	for _, definition := range slaDefinitions {
+		definition.CreatedAt = time.Time{}
+		definition.UpdatedAt = time.Time{}
+	}
+	return creation.ConfigurationRevision("workflow-config-v1", map[string]any{"bindings": bindings, "definitions": definitions, "sla": slaDefinitions})
+}
+
+// ProcessBinding stores a major-version reference. Definition snapshots retain
+// the exact selected version; supported stored versions are integer, dotted
+// numeric (up to three components), and their conventional v-prefixed forms.
+var creationProcessVersionPattern = regexp.MustCompile(`^v?([1-9][0-9]*)(?:\.(?:0|[1-9][0-9]*)){0,2}$`)
+
+func creationProcessDefinitionMajorVersion(version string) (int, error) {
+	matches := creationProcessVersionPattern.FindStringSubmatch(strings.TrimSpace(version))
+	if matches == nil {
+		return 0, errors.New("workflow version must be a positive numeric major or dotted numeric version")
+	}
+	return strconv.Atoi(matches[1])
+}

@@ -57,12 +57,22 @@ func (c *WorkItemCreator) CreateBase(ctx context.Context, tx *ent.Tx, plan *work
 		SetStatus(draft.Status).
 		SetRecordClass(draft.RecordClass).
 		SetType("").
+		SetGenericSubtype(draft.GenericSubtype).
+		SetNillableTemplateID(draft.TemplateID).
+		SetNillableParentTicketID(draft.ParentTicketID).
+		AddTagIDs(draft.TagIDs...).
 		SetPriority(draft.Priority).
 		SetSource(draft.Source).
 		SetTicketNumber(number).
 		SetRequesterID(draft.RequesterID).
 		SetOpenedByID(draft.ActorID).
 		SetTenantID(draft.TenantID)
+	if draft.RecordClass != workitemcreation.RecordClassGeneric && draft.GenericSubtype != "" {
+		return nil, workitemcreation.NewDomainValidationFailed("professional work items cannot carry a generic subtype", nil)
+	}
+	if source := plan.Resolved.Command.SourceReference; source != nil {
+		create.SetExternalMessageID(source.EventID).SetConversationID(source.ConversationID)
+	}
 	if draft.AssigneeID != nil {
 		create.SetAssigneeID(*draft.AssigneeID)
 	}

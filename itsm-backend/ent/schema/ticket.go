@@ -29,6 +29,8 @@ func (Ticket) Fields() []ent.Field {
 		field.String("type").
 			Comment("工单类型").
 			Default("incident"),
+		field.String("generic_subtype").
+			Comment("Generic-only business subtype; professional subtypes belong to their extensions").Optional(),
 		field.String("source").
 			Comment("工单来源：manual=手动创建，service_catalog=服务目录申请").
 			Default("manual").

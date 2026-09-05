@@ -175,6 +175,9 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 	}
 	if n.ServiceRequest != nil {
 		s := n.ServiceRequest
+		if s.CloudResourceRefID != nil && *s.CloudResourceRefID <= 0 {
+			return n, "", invalid("serviceRequest.cloudResourceRefId", "must be positive")
+		}
 		dates["serviceRequest.expireAt"] = &s.ExpireAt
 		dates["serviceRequest.expectedAt"] = &s.ExpectedAt
 		if s.Quantity != nil && (*s.Quantity < 1 || *s.Quantity > 1000) {

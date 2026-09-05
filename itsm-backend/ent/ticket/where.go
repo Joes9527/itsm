@@ -75,6 +75,11 @@ func Type(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldType, v))
 }
 
+// GenericSubtype applies equality check predicate on the "generic_subtype" field. It's identical to GenericSubtypeEQ.
+func GenericSubtype(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldGenericSubtype, v))
+}
+
 // Source applies equality check predicate on the "source" field. It's identical to SourceEQ.
 func Source(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldSource, v))
@@ -523,6 +528,81 @@ func TypeEqualFold(v string) predicate.Ticket {
 // TypeContainsFold applies the ContainsFold predicate on the "type" field.
 func TypeContainsFold(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldContainsFold(FieldType, v))
+}
+
+// GenericSubtypeEQ applies the EQ predicate on the "generic_subtype" field.
+func GenericSubtypeEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldGenericSubtype, v))
+}
+
+// GenericSubtypeNEQ applies the NEQ predicate on the "generic_subtype" field.
+func GenericSubtypeNEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldGenericSubtype, v))
+}
+
+// GenericSubtypeIn applies the In predicate on the "generic_subtype" field.
+func GenericSubtypeIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldGenericSubtype, vs...))
+}
+
+// GenericSubtypeNotIn applies the NotIn predicate on the "generic_subtype" field.
+func GenericSubtypeNotIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldGenericSubtype, vs...))
+}
+
+// GenericSubtypeGT applies the GT predicate on the "generic_subtype" field.
+func GenericSubtypeGT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldGenericSubtype, v))
+}
+
+// GenericSubtypeGTE applies the GTE predicate on the "generic_subtype" field.
+func GenericSubtypeGTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldGenericSubtype, v))
+}
+
+// GenericSubtypeLT applies the LT predicate on the "generic_subtype" field.
+func GenericSubtypeLT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldGenericSubtype, v))
+}
+
+// GenericSubtypeLTE applies the LTE predicate on the "generic_subtype" field.
+func GenericSubtypeLTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldGenericSubtype, v))
+}
+
+// GenericSubtypeContains applies the Contains predicate on the "generic_subtype" field.
+func GenericSubtypeContains(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContains(FieldGenericSubtype, v))
+}
+
+// GenericSubtypeHasPrefix applies the HasPrefix predicate on the "generic_subtype" field.
+func GenericSubtypeHasPrefix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasPrefix(FieldGenericSubtype, v))
+}
+
+// GenericSubtypeHasSuffix applies the HasSuffix predicate on the "generic_subtype" field.
+func GenericSubtypeHasSuffix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasSuffix(FieldGenericSubtype, v))
+}
+
+// GenericSubtypeIsNil applies the IsNil predicate on the "generic_subtype" field.
+func GenericSubtypeIsNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldIsNull(FieldGenericSubtype))
+}
+
+// GenericSubtypeNotNil applies the NotNil predicate on the "generic_subtype" field.
+func GenericSubtypeNotNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotNull(FieldGenericSubtype))
+}
+
+// GenericSubtypeEqualFold applies the EqualFold predicate on the "generic_subtype" field.
+func GenericSubtypeEqualFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEqualFold(FieldGenericSubtype, v))
+}
+
+// GenericSubtypeContainsFold applies the ContainsFold predicate on the "generic_subtype" field.
+func GenericSubtypeContainsFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContainsFold(FieldGenericSubtype, v))
 }
 
 // SourceEQ applies the EQ predicate on the "source" field.

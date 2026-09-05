@@ -102,6 +102,26 @@ func (_u *TicketUpdate) SetNillableType(v *string) *TicketUpdate {
 	return _u
 }
 
+// SetGenericSubtype sets the "generic_subtype" field.
+func (_u *TicketUpdate) SetGenericSubtype(v string) *TicketUpdate {
+	_u.mutation.SetGenericSubtype(v)
+	return _u
+}
+
+// SetNillableGenericSubtype sets the "generic_subtype" field if the given value is not nil.
+func (_u *TicketUpdate) SetNillableGenericSubtype(v *string) *TicketUpdate {
+	if v != nil {
+		_u.SetGenericSubtype(*v)
+	}
+	return _u
+}
+
+// ClearGenericSubtype clears the value of the "generic_subtype" field.
+func (_u *TicketUpdate) ClearGenericSubtype() *TicketUpdate {
+	_u.mutation.ClearGenericSubtype()
+	return _u
+}
+
 // SetSource sets the "source" field.
 func (_u *TicketUpdate) SetSource(v string) *TicketUpdate {
 	_u.mutation.SetSource(v)
@@ -1358,6 +1378,12 @@ func (_u *TicketUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(ticket.FieldType, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.GenericSubtype(); ok {
+		_spec.SetField(ticket.FieldGenericSubtype, field.TypeString, value)
+	}
+	if _u.mutation.GenericSubtypeCleared() {
+		_spec.ClearField(ticket.FieldGenericSubtype, field.TypeString)
+	}
 	if value, ok := _u.mutation.Source(); ok {
 		_spec.SetField(ticket.FieldSource, field.TypeString, value)
 	}
@@ -2229,6 +2255,26 @@ func (_u *TicketUpdateOne) SetNillableType(v *string) *TicketUpdateOne {
 	if v != nil {
 		_u.SetType(*v)
 	}
+	return _u
+}
+
+// SetGenericSubtype sets the "generic_subtype" field.
+func (_u *TicketUpdateOne) SetGenericSubtype(v string) *TicketUpdateOne {
+	_u.mutation.SetGenericSubtype(v)
+	return _u
+}
+
+// SetNillableGenericSubtype sets the "generic_subtype" field if the given value is not nil.
+func (_u *TicketUpdateOne) SetNillableGenericSubtype(v *string) *TicketUpdateOne {
+	if v != nil {
+		_u.SetGenericSubtype(*v)
+	}
+	return _u
+}
+
+// ClearGenericSubtype clears the value of the "generic_subtype" field.
+func (_u *TicketUpdateOne) ClearGenericSubtype() *TicketUpdateOne {
+	_u.mutation.ClearGenericSubtype()
 	return _u
 }
 
@@ -3517,6 +3563,12 @@ func (_u *TicketUpdateOne) sqlSave(ctx context.Context) (_node *Ticket, err erro
 	}
 	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(ticket.FieldType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.GenericSubtype(); ok {
+		_spec.SetField(ticket.FieldGenericSubtype, field.TypeString, value)
+	}
+	if _u.mutation.GenericSubtypeCleared() {
+		_spec.ClearField(ticket.FieldGenericSubtype, field.TypeString)
 	}
 	if value, ok := _u.mutation.Source(); ok {
 		_spec.SetField(ticket.FieldSource, field.TypeString, value)

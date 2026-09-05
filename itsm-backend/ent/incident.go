@@ -27,7 +27,7 @@ type Incident struct {
 	Impact string `json:"impact,omitempty"`
 	// 紧急程度：low/medium/high/critical
 	Urgency string `json:"urgency,omitempty"`
-	// 事件编号
+	// Legacy projection of the owning WorkItem number; tenant-scoped identity lives on WorkItem
 	IncidentNumber string `json:"incident_number,omitempty"`
 	// 关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入
 	WorkItemID int `json:"work_item_id,omitempty"`

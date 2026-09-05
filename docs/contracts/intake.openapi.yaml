@@ -377,6 +377,14 @@ components:
       type: object
       additionalProperties: false
       properties:
+        amount:
+          type: number
+          minimum: 0
+          description: Exact decimal estimated amount used by the owning approval policy.
+        cloudResourceRefId:
+          type: integer
+          minimum: 1
+          description: Existing tenant-authorized cloud resource reference; creation does not provision a CI.
         costCenter:
           type: string
         dataClassification:

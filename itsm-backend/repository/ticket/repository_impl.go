@@ -599,6 +599,7 @@ func toDomainModel(e *ent.Ticket) *Ticket {
 		Description:    e.Description,
 		Status:         Status(e.Status),
 		Type:           Type(e.Type),
+		GenericSubtype: e.GenericSubtype,
 		RecordClass:    e.RecordClass,
 		Priority:       Priority(e.Priority),
 		RequesterID:    e.RequesterID,

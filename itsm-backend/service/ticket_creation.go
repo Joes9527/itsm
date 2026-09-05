@@ -1,0 +1,100 @@
+package service
+
+import (
+	"context"
+	"itsm-backend/authorization"
+	"itsm-backend/ent"
+	"itsm-backend/ent/ticket"
+	"itsm-backend/ent/tickettag"
+	"itsm-backend/ent/tickettemplate"
+	"itsm-backend/ent/tickettype"
+	creation "itsm-backend/handlers/common/workitemcreation"
+	"strconv"
+)
+
+func (*TicketService) RecordClass() string { return creation.RecordClassGeneric }
+func (*TicketService) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedIntake) (*creation.CreationPlan, error) {
+	priority := in.Command.Priority
+	if priority == "" {
+		priority = "medium"
+	}
+	switch priority {
+	case "low", "medium", "high", "critical", "urgent":
+	default:
+		return nil, creation.NewDomainValidationFailed("invalid ticket priority", nil)
+	}
+	plan := creation.NewPlan(in, "new", priority, in.Identity.Channel)
+	if input := in.Command.Generic; input != nil {
+		plan.WorkItem.GenericSubtype = input.Type
+		if input.Source != "" {
+			plan.WorkItem.Source = input.Source
+		}
+		if input.TypeID != "" {
+			id, _ := strconv.Atoi(input.TypeID)
+			configured, err := tx.TicketType.Query().Where(tickettype.IDEQ(id), tickettype.TenantIDEQ(int64(in.Identity.TenantID)), tickettype.StatusEQ("active")).Only(ctx)
+			if ent.IsNotFound(err) {
+				return nil, creation.NewReferenceNotFound("ticket type is unavailable", err)
+			}
+			if err != nil {
+				return nil, creation.NewInfrastructureUnavailable("could not resolve ticket type", err)
+			}
+			if input.Type != "" && input.Type != configured.Code {
+				return nil, creation.NewDomainValidationFailed("ticket subtype does not match type definition", nil)
+			}
+			plan.WorkItem.GenericSubtype = configured.Code
+		}
+		subtype := plan.WorkItem.GenericSubtype
+		switch subtype {
+		case "incident", "problem", "change", "change_request", "service_request", "service_request_item", "catalog_task":
+			return nil, creation.NewDomainValidationFailed("professional class cannot be a generic subtype", nil)
+		case "", "ticket", "improvement":
+		default:
+			exists, err := tx.TicketType.Query().Where(tickettype.CodeEQ(subtype), tickettype.TenantIDEQ(int64(in.Identity.TenantID)), tickettype.StatusEQ("active")).Exist(ctx)
+			if err != nil {
+				return nil, creation.NewInfrastructureUnavailable("could not resolve generic subtype", err)
+			}
+			if !exists {
+				return nil, creation.NewDomainValidationFailed("generic subtype is not configured", nil)
+			}
+		}
+		if input.TemplateID != nil {
+			exists, err := tx.TicketTemplate.Query().Where(tickettemplate.IDEQ(*input.TemplateID), tickettemplate.TenantIDEQ(in.Identity.TenantID), tickettemplate.IsActiveEQ(true)).Exist(ctx)
+			if err != nil {
+				return nil, creation.NewInfrastructureUnavailable("could not resolve template", err)
+			}
+			if !exists {
+				return nil, creation.NewReferenceNotFound("template is unavailable", nil)
+			}
+			plan.WorkItem.TemplateID = input.TemplateID
+		}
+		if input.ParentTicketID != nil {
+			if err := authorization.RequireCurrentPermission(ctx, tx, in.Identity, "ticket", "read"); err != nil {
+				return nil, err
+			}
+			exists, err := tx.Ticket.Query().Where(ticket.IDEQ(*input.ParentTicketID), ticket.TenantIDEQ(in.Identity.TenantID), ticket.DeletedAtIsNil()).Exist(ctx)
+			if err != nil {
+				return nil, creation.NewInfrastructureUnavailable("could not resolve parent work item", err)
+			}
+			if !exists {
+				return nil, creation.NewReferenceNotFound("parent work item is unavailable", nil)
+			}
+			plan.WorkItem.ParentTicketID = input.ParentTicketID
+		}
+		if len(input.TagIDs) > 0 {
+			count, err := tx.TicketTag.Query().Where(tickettag.IDIn(input.TagIDs...), tickettag.TenantIDEQ(in.Identity.TenantID)).Count(ctx)
+			if err != nil {
+				return nil, creation.NewInfrastructureUnavailable("could not resolve tags", err)
+			}
+			if count != len(input.TagIDs) {
+				return nil, creation.NewReferenceNotFound("tag is outside tenant", nil)
+			}
+			plan.WorkItem.TagIDs = append([]int(nil), input.TagIDs...)
+		}
+	}
+	return plan, nil
+}
+func (*TicketService) CreateExtension(_ context.Context, _ *ent.Tx, _ *ent.Ticket, _ *creation.CreationPlan) (*creation.ProfessionalReference, error) {
+	return &creation.ProfessionalReference{}, nil
+}
+
+var _ creation.ProfessionalCreator = (*TicketService)(nil)

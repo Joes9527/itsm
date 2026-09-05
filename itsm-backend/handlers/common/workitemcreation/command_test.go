@@ -240,3 +240,29 @@ func TestSharedFieldsContributeAndIDsNormalize(t *testing.T) {
 		}
 	}
 }
+
+func TestServiceRequestResourceInputsAffectCanonicalDigest(t *testing.T) {
+	command := catalogCommand()
+	resource := 7
+	command.ServiceRequest = &ServiceRequestInput{Amount: json.Number("9007199254740993.125"), CloudResourceRefID: &resource}
+	_, first, err := CanonicalizeCommand(command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command.ServiceRequest.Amount = json.Number("9007199254740993.126")
+	_, second, err := CanonicalizeCommand(command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second {
+		t.Fatal("exact amount change was omitted")
+	}
+	resource = 8
+	_, third, err := CanonicalizeCommand(command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second == third {
+		t.Fatal("cloud resource change was omitted")
+	}
+}

@@ -22,6 +22,8 @@ const (
 	FieldStatus = "status"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
+	// FieldGenericSubtype holds the string denoting the generic_subtype field in the database.
+	FieldGenericSubtype = "generic_subtype"
 	// FieldSource holds the string denoting the source field in the database.
 	FieldSource = "source"
 	// FieldRecordClass holds the string denoting the record_class field in the database.
@@ -228,6 +230,7 @@ var Columns = []string{
 	FieldDescription,
 	FieldStatus,
 	FieldType,
+	FieldGenericSubtype,
 	FieldSource,
 	FieldRecordClass,
 	FieldOpenedByID,
@@ -360,6 +363,11 @@ func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 // ByType orders the results by the type field.
 func ByType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldType, opts...).ToFunc()
+}
+
+// ByGenericSubtype orders the results by the generic_subtype field.
+func ByGenericSubtype(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldGenericSubtype, opts...).ToFunc()
 }
 
 // BySource orders the results by the source field.

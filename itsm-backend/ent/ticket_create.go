@@ -82,6 +82,20 @@ func (_c *TicketCreate) SetNillableType(v *string) *TicketCreate {
 	return _c
 }
 
+// SetGenericSubtype sets the "generic_subtype" field.
+func (_c *TicketCreate) SetGenericSubtype(v string) *TicketCreate {
+	_c.mutation.SetGenericSubtype(v)
+	return _c
+}
+
+// SetNillableGenericSubtype sets the "generic_subtype" field if the given value is not nil.
+func (_c *TicketCreate) SetNillableGenericSubtype(v *string) *TicketCreate {
+	if v != nil {
+		_c.SetGenericSubtype(*v)
+	}
+	return _c
+}
+
 // SetSource sets the "source" field.
 func (_c *TicketCreate) SetSource(v string) *TicketCreate {
 	_c.mutation.SetSource(v)
@@ -935,6 +949,10 @@ func (_c *TicketCreate) createSpec() (*Ticket, *sqlgraph.CreateSpec) {
 		_spec.SetField(ticket.FieldType, field.TypeString, value)
 		_node.Type = value
 	}
+	if value, ok := _c.mutation.GenericSubtype(); ok {
+		_spec.SetField(ticket.FieldGenericSubtype, field.TypeString, value)
+		_node.GenericSubtype = value
+	}
 	if value, ok := _c.mutation.Source(); ok {
 		_spec.SetField(ticket.FieldSource, field.TypeString, value)
 		_node.Source = value
@@ -1401,6 +1419,24 @@ func (u *TicketUpsert) SetType(v string) *TicketUpsert {
 // UpdateType sets the "type" field to the value that was provided on create.
 func (u *TicketUpsert) UpdateType() *TicketUpsert {
 	u.SetExcluded(ticket.FieldType)
+	return u
+}
+
+// SetGenericSubtype sets the "generic_subtype" field.
+func (u *TicketUpsert) SetGenericSubtype(v string) *TicketUpsert {
+	u.Set(ticket.FieldGenericSubtype, v)
+	return u
+}
+
+// UpdateGenericSubtype sets the "generic_subtype" field to the value that was provided on create.
+func (u *TicketUpsert) UpdateGenericSubtype() *TicketUpsert {
+	u.SetExcluded(ticket.FieldGenericSubtype)
+	return u
+}
+
+// ClearGenericSubtype clears the value of the "generic_subtype" field.
+func (u *TicketUpsert) ClearGenericSubtype() *TicketUpsert {
+	u.SetNull(ticket.FieldGenericSubtype)
 	return u
 }
 
@@ -2172,6 +2208,27 @@ func (u *TicketUpsertOne) SetType(v string) *TicketUpsertOne {
 func (u *TicketUpsertOne) UpdateType() *TicketUpsertOne {
 	return u.Update(func(s *TicketUpsert) {
 		s.UpdateType()
+	})
+}
+
+// SetGenericSubtype sets the "generic_subtype" field.
+func (u *TicketUpsertOne) SetGenericSubtype(v string) *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.SetGenericSubtype(v)
+	})
+}
+
+// UpdateGenericSubtype sets the "generic_subtype" field to the value that was provided on create.
+func (u *TicketUpsertOne) UpdateGenericSubtype() *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.UpdateGenericSubtype()
+	})
+}
+
+// ClearGenericSubtype clears the value of the "generic_subtype" field.
+func (u *TicketUpsertOne) ClearGenericSubtype() *TicketUpsertOne {
+	return u.Update(func(s *TicketUpsert) {
+		s.ClearGenericSubtype()
 	})
 }
 
@@ -3219,6 +3276,27 @@ func (u *TicketUpsertBulk) SetType(v string) *TicketUpsertBulk {
 func (u *TicketUpsertBulk) UpdateType() *TicketUpsertBulk {
 	return u.Update(func(s *TicketUpsert) {
 		s.UpdateType()
+	})
+}
+
+// SetGenericSubtype sets the "generic_subtype" field.
+func (u *TicketUpsertBulk) SetGenericSubtype(v string) *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.SetGenericSubtype(v)
+	})
+}
+
+// UpdateGenericSubtype sets the "generic_subtype" field to the value that was provided on create.
+func (u *TicketUpsertBulk) UpdateGenericSubtype() *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.UpdateGenericSubtype()
+	})
+}
+
+// ClearGenericSubtype clears the value of the "generic_subtype" field.
+func (u *TicketUpsertBulk) ClearGenericSubtype() *TicketUpsertBulk {
+	return u.Update(func(s *TicketUpsert) {
+		s.ClearGenericSubtype()
 	})
 }
 

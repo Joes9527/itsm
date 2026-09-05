@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"math/big"
 	"sort"
 	"strconv"
 	"strings"
@@ -36,12 +38,15 @@ type RoutingContext struct {
 	TeamID          int                    `json:"teamId,omitempty"`
 	ProjectID       int                    `json:"projectId,omitempty"`
 	Scenario        string                 `json:"scenario,omitempty"`
+	CategoryID      int                    `json:"categoryId,omitempty"`
 	Category        string                 `json:"category,omitempty"`
 	Variables       map[string]interface{} `json:"variables,omitempty"`
 }
 
 // RoutingResult contains the result of a routing decision
 type RoutingResult struct {
+	ProcessVersion       int                    `json:"processVersion"`
+	NoProcess            bool                   `json:"noProcess"`
 	ProcessDefinitionKey string                 `json:"processDefinitionKey"`
 	ApprovalChainID      string                 `json:"approvalChainId,omitempty"`
 	SLAPolicyID          string                 `json:"slaPolicyId,omitempty"`
@@ -52,6 +57,15 @@ type RoutingResult struct {
 
 // FindBestRoute finds the best matching process binding using priority-based scoring
 func (s *ProcessRoutingService) FindBestRoute(ctx context.Context, reqCtx *RoutingContext) (*RoutingResult, error) {
+	return s.findBestRoute(ctx, s.client, reqCtx)
+}
+func (s *ProcessRoutingService) FindBestRouteTx(ctx context.Context, tx *ent.Tx, reqCtx *RoutingContext) (*RoutingResult, error) {
+	if tx == nil {
+		return nil, fmt.Errorf("routing transaction is required")
+	}
+	return s.findBestRoute(ctx, tx.Client(), reqCtx)
+}
+func (s *ProcessRoutingService) findBestRoute(ctx context.Context, client *ent.Client, reqCtx *RoutingContext) (*RoutingResult, error) {
 	s.logger.Infow(
 		"Finding best route",
 		"business_type", reqCtx.BusinessType,
@@ -61,7 +75,7 @@ func (s *ProcessRoutingService) FindBestRoute(ctx context.Context, reqCtx *Routi
 	)
 
 	// Query all active bindings for this tenant and business type
-	query := s.client.ProcessBinding.Query().
+	query := client.ProcessBinding.Query().
 		Where(
 			processbinding.TenantID(reqCtx.TenantID),
 			processbinding.IsActive(true),
@@ -72,7 +86,7 @@ func (s *ProcessRoutingService) FindBestRoute(ctx context.Context, reqCtx *Routi
 		query = query.Where(processbinding.BusinessType(reqCtx.BusinessType))
 	}
 
-	bindings, err := query.All(ctx)
+	bindings, err := query.Order(ent.Asc(processbinding.FieldID)).All(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query process bindings: %w", err)
 	}
@@ -90,6 +104,9 @@ func (s *ProcessRoutingService) FindBestRoute(ctx context.Context, reqCtx *Routi
 
 	scored := make([]scoredBinding, 0, len(bindings))
 	for _, b := range bindings {
+		if err := validateRoutingConditions(b.Conditions); err != nil {
+			return nil, &RoutingConfigurationError{cause: err}
+		}
 		score := s.calculateMatchScore(b, reqCtx)
 		if score > 0 {
 			scored = append(scored, scoredBinding{binding: b, score: score})
@@ -102,7 +119,7 @@ func (s *ProcessRoutingService) FindBestRoute(ctx context.Context, reqCtx *Routi
 	}
 
 	// Sort by score (desc), then priority (desc)
-	sort.Slice(scored, func(i, j int) bool {
+	sort.SliceStable(scored, func(i, j int) bool {
 		if scored[i].score != scored[j].score {
 			return scored[i].score > scored[j].score
 		}
@@ -119,6 +136,8 @@ func (s *ProcessRoutingService) FindBestRoute(ctx context.Context, reqCtx *Routi
 
 	return &RoutingResult{
 		ProcessDefinitionKey: best.ProcessDefinitionKey,
+		ProcessVersion:       best.ProcessVersion,
+		NoProcess:            best.Conditions["no_process"] == true,
 		ApprovalChainID:      best.ApprovalChainID,
 		SLAPolicyID:          best.SLAPolicyID,
 		Overrides:            best.Overrides,
@@ -130,6 +149,9 @@ func (s *ProcessRoutingService) FindBestRoute(ctx context.Context, reqCtx *Routi
 // Higher score = more specific match
 func (s *ProcessRoutingService) calculateMatchScore(binding *ent.ProcessBinding, reqCtx *RoutingContext) int {
 	score := 0
+	if binding.CategoryID > 0 && binding.CategoryID != reqCtx.CategoryID {
+		return 0
+	}
 
 	// Business sub-type match (required if specified in binding)
 	if binding.BusinessSubType != "" {
@@ -196,20 +218,26 @@ func (s *ProcessRoutingService) calculateMatchScore(binding *ent.ProcessBinding,
 // evaluateConditions evaluates condition expressions against variables
 func (s *ProcessRoutingService) evaluateConditions(conditions map[string]interface{}, variables map[string]interface{}) bool {
 	if variables == nil {
-		return len(conditions) == 0
+		variables = map[string]interface{}{}
 	}
 
 	for key, expected := range conditions {
+		if key == "no_process" {
+			if _, ok := expected.(bool); !ok {
+				return false
+			}
+			continue
+		}
 		if key == "min_amount" || strings.HasPrefix(key, "min_") {
 			field := strings.TrimPrefix(key, "min_")
-			if !s.compareNumericCondition(variables[field], expected, func(actual, threshold float64) bool { return actual >= threshold }) {
+			if !s.compareNumericCondition(variables[field], expected, func(comparison int) bool { return comparison >= 0 }) {
 				return false
 			}
 			continue
 		}
 		if key == "max_amount" || strings.HasPrefix(key, "max_") {
 			field := strings.TrimPrefix(key, "max_")
-			if !s.compareNumericCondition(variables[field], expected, func(actual, threshold float64) bool { return actual <= threshold }) {
+			if !s.compareNumericCondition(variables[field], expected, func(comparison int) bool { return comparison <= 0 }) {
 				return false
 			}
 			continue
@@ -279,12 +307,13 @@ func routingMatchesOperators(actual interface{}, operators map[string]interface{
 				return false
 			}
 		case "gt", "gte", "lt", "lte":
-			a, aok := routingValueToFloat64(actual)
-			b, bok := routingValueToFloat64(expected)
+			a, aok := routingValueToRational(actual)
+			b, bok := routingValueToRational(expected)
 			if !aok || !bok {
 				return false
 			}
-			if operator == "gt" && !(a > b) || operator == "gte" && !(a >= b) || operator == "lt" && !(a < b) || operator == "lte" && !(a <= b) {
+			comparison := a.Cmp(b)
+			if operator == "gt" && comparison <= 0 || operator == "gte" && comparison < 0 || operator == "lt" && comparison >= 0 || operator == "lte" && comparison > 0 {
 				return false
 			}
 		case "exists":
@@ -299,42 +328,83 @@ func routingMatchesOperators(actual interface{}, operators map[string]interface{
 }
 
 func routingEqual(actual, expected interface{}) bool {
-	if a, ok := routingValueToFloat64(actual); ok {
-		if b, ok := routingValueToFloat64(expected); ok {
-			return a == b
+	if a, ok := routingValueToRational(actual); ok {
+		if b, ok := routingValueToRational(expected); ok {
+			return a.Cmp(b) == 0
 		}
 	}
 	return fmt.Sprint(actual) == fmt.Sprint(expected)
 }
 
-func (s *ProcessRoutingService) compareNumericCondition(actualValue, expectedValue interface{}, compare func(actual, threshold float64) bool) bool {
-	actual, ok := routingValueToFloat64(actualValue)
+func (s *ProcessRoutingService) compareNumericCondition(actualValue, expectedValue interface{}, compare func(comparison int) bool) bool {
+	actual, ok := routingValueToRational(actualValue)
 	if !ok {
 		return false
 	}
-	threshold, ok := routingValueToFloat64(expectedValue)
+	threshold, ok := routingValueToRational(expectedValue)
 	if !ok {
 		return false
 	}
-	return compare(actual, threshold)
+	return compare(actual.Cmp(threshold))
 }
 
-func routingValueToFloat64(value interface{}) (float64, bool) {
+func routingValueToRational(value interface{}) (*big.Rat, bool) {
+	var text string
 	switch v := value.(type) {
+	case json.Number:
+		text = string(v)
 	case int:
-		return float64(v), true
+		text = strconv.Itoa(v)
 	case int64:
-		return float64(v), true
+		text = strconv.FormatInt(v, 10)
 	case float32:
-		return float64(v), true
+		text = strconv.FormatFloat(float64(v), 'g', -1, 32)
 	case float64:
-		return v, true
+		text = strconv.FormatFloat(v, 'g', -1, 64)
 	case string:
-		parsed, err := strconv.ParseFloat(v, 64)
-		return parsed, err == nil
+		text = v
 	default:
-		return 0, false
+		return nil, false
 	}
+	return new(big.Rat).SetString(text)
+}
+func validateRoutingConditions(conditions map[string]interface{}) error {
+	for key, value := range conditions {
+		if key == "no_process" {
+			if _, ok := value.(bool); !ok {
+				return fmt.Errorf("no_process must be a boolean")
+			}
+			continue
+		}
+		if strings.HasPrefix(key, "min_") || strings.HasPrefix(key, "max_") {
+			if _, ok := routingValueToRational(value); !ok {
+				return fmt.Errorf("routing threshold must be numeric")
+			}
+			continue
+		}
+		if operators, ok := value.(map[string]interface{}); ok {
+			for operator, expected := range operators {
+				switch operator {
+				case "eq", "ne":
+				case "in", "notIn":
+					if _, ok := expected.([]interface{}); !ok {
+						return fmt.Errorf("routing membership operator requires array")
+					}
+				case "gt", "gte", "lt", "lte":
+					if _, ok := routingValueToRational(expected); !ok {
+						return fmt.Errorf("routing comparison requires number")
+					}
+				case "exists":
+					if _, ok := expected.(bool); !ok {
+						return fmt.Errorf("routing exists requires boolean")
+					}
+				default:
+					return fmt.Errorf("unsupported routing condition operator: %s", operator)
+				}
+			}
+		}
+	}
+	return nil
 }
 
 // CreateBinding creates a new process binding
@@ -413,3 +483,8 @@ func (s *ProcessRoutingService) ListBindings(ctx context.Context, tenantID int, 
 
 	return query.Order(ent.Desc(processbinding.FieldPriority)).All(ctx)
 }
+
+type RoutingConfigurationError struct{ cause error }
+
+func (e *RoutingConfigurationError) Error() string { return e.cause.Error() }
+func (e *RoutingConfigurationError) Unwrap() error { return e.cause }

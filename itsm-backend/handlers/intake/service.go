@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/incident"
@@ -124,6 +125,10 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	if err := authorization.AuthorizeWorkItemCreation(ctx, tx, identity, command); err != nil {
+		return nil, false, err
+	}
+
 	receipt, outcome, err := s.receipts.Claim(ctx, tx, identity, command.IdempotencyKey, digest, workitemcreation.CanonicalDigestVersion)
 	if err != nil {
 		return nil, errors.Is(err, errIdempotencyOwnerInProgress), err
@@ -162,6 +167,9 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 	if err := validateProfessional(ctx, tx, workItem, professional); err != nil {
 		return nil, false, err
 	}
+	if err := itsmservice.NewTicketSLAService(tx.Client(), nil).ApplyCreationSLA(ctx, tx, workItem, plan.WorkItem.SLADefinitionID); err != nil {
+		return nil, false, err
+	}
 	if err := s.writeFieldValues(ctx, tx, resolved, workItem.ID, professional); err != nil {
 		return nil, false, err
 	}
@@ -198,11 +206,17 @@ func (s *Service) writeFieldValues(ctx context.Context, tx *ent.Tx, resolved *wo
 	if len(resolved.Command.FormValues) == 0 {
 		return nil
 	}
-	if resolved.Catalog == nil {
+	scopeType, scopeID := "", 0
+	if resolved.Catalog != nil {
+		scopeType, scopeID = "service_catalog", resolved.Catalog.ID
+	} else if resolved.FieldScope != nil {
+		scopeType, scopeID = resolved.FieldScope.EntityType, resolved.FieldScope.EntityID
+	}
+	if scopeType == "" || scopeID <= 0 {
 		return workitemcreation.NewDomainValidationFailed("dynamic fields require a resolved definition scope", nil)
 	}
 	err := s.fieldValues.CreateValuesTx(
-		ctx, tx, resolved.Identity.TenantID, "service_catalog", resolved.Catalog.ID,
+		ctx, tx, resolved.Identity.TenantID, scopeType, scopeID,
 		"ticket", workItemID, resolved.Command.FormValues,
 	)
 	if err == nil {
@@ -228,6 +242,9 @@ func buildSnapshot(receiptID, workItemID int, digest string, resolved *workitemc
 		input.SourceProvider = resolved.Command.SourceReference.Provider
 		input.SourceEventID = resolved.Command.SourceReference.EventID
 		input.SourceConversationID = resolved.Command.SourceReference.ConversationID
+	}
+	if resolved.FieldScope != nil {
+		input.FormSchemaVersion = resolved.FieldScope.Version
 	}
 	if resolved.Catalog != nil {
 		catalogID := resolved.Catalog.ID

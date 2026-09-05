@@ -2,6 +2,7 @@ package workitemcreation
 
 import (
 	"encoding/json"
+	"github.com/stretchr/testify/require"
 	"os"
 	"strings"
 	"testing"
@@ -83,4 +84,13 @@ func TestUnicodeCharacterBoundaries(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestServiceRequestExactAmountAndCloudReferenceWire(t *testing.T) {
+	command, err := DecodeCreateWorkItemCommand(strings.NewReader(`{"recordClass":"service_request_item","confirmation":"confirmed","intakeKind":"catalog_item","catalogItemId":1,"catalogVersion":"v1","formSchemaVersion":"v1","title":"VPN","idempotencyKey":"one","serviceRequest":{"amount":9007199254740993.125,"cloudResourceRefId":7}}`))
+	require.NoError(t, err)
+	raw, err := json.Marshal(command)
+	require.NoError(t, err)
+	require.Contains(t, string(raw), `9007199254740993.125`)
+	require.Contains(t, string(raw), `"cloudResourceRefId":7`)
 }

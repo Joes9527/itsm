@@ -71,16 +71,18 @@ type ProblemInput struct {
 	Impact    string `json:"impact,omitempty"`
 }
 type ServiceRequestInput struct {
-	CostCenter         string   `json:"costCenter,omitempty"`
-	DataClassification string   `json:"dataClassification,omitempty"`
-	NeedsPublicIP      bool     `json:"needsPublicIp,omitempty"`
-	SourceIPWhitelist  []string `json:"sourceIpWhitelist,omitempty"`
-	ExpireAt           string   `json:"expireAt,omitempty"`
-	ComplianceAck      bool     `json:"complianceAck,omitempty"`
-	ContactName        string   `json:"contactName,omitempty"`
-	ContactEmail       string   `json:"contactEmail,omitempty"`
-	Quantity           *int     `json:"quantity,omitempty"`
-	ExpectedAt         string   `json:"expectedAt,omitempty"`
+	Amount             json.Number `json:"amount,omitempty"`
+	CloudResourceRefID *int        `json:"cloudResourceRefId,omitempty"`
+	CostCenter         string      `json:"costCenter,omitempty"`
+	DataClassification string      `json:"dataClassification,omitempty"`
+	NeedsPublicIP      bool        `json:"needsPublicIp,omitempty"`
+	SourceIPWhitelist  []string    `json:"sourceIpWhitelist,omitempty"`
+	ExpireAt           string      `json:"expireAt,omitempty"`
+	ComplianceAck      bool        `json:"complianceAck,omitempty"`
+	ContactName        string      `json:"contactName,omitempty"`
+	ContactEmail       string      `json:"contactEmail,omitempty"`
+	Quantity           *int        `json:"quantity,omitempty"`
+	ExpectedAt         string      `json:"expectedAt,omitempty"`
 }
 type IncidentInput struct {
 	Type           string                 `json:"type,omitempty"`
@@ -157,6 +159,9 @@ type ResolvedWorkflowBinding struct {
 }
 
 type ResolvedCatalog struct {
+	RequiresApproval        bool
+	SLAResponseTime         int
+	SLAResolutionTime       int
 	ID                      int
 	Version                 string
 	TargetClass             string
@@ -170,9 +175,10 @@ type ResolvedCatalog struct {
 }
 
 type ResolvedCTI struct {
-	CategoryID *int
-	TypeID     *int
-	ItemID     *int
+	CategoryName string
+	CategoryID   *int
+	TypeID       *int
+	ItemID       *int
 }
 
 type ResolvedFieldDefinition struct {
@@ -183,7 +189,14 @@ type ResolvedFieldDefinition struct {
 	Options  []any
 }
 
+type FieldDefinitionScope struct {
+	EntityType string
+	EntityID   int
+	Version    string
+}
+
 type ResolvedIntake struct {
+	FieldScope         *FieldDefinitionScope
 	Identity           Identity
 	Command            CreateWorkItemCommand
 	RecordClass        string
@@ -198,6 +211,10 @@ type ResolvedIntake struct {
 }
 
 type WorkItemDraft struct {
+	GenericSubtype    string
+	TemplateID        *int
+	ParentTicketID    *int
+	TagIDs            []int
 	TenantID          int
 	ActorID           int
 	RequesterID       int

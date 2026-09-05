@@ -127929,6 +127929,7 @@ type TicketMutation struct {
 	description                *string
 	status                     *string
 	_type                      *string
+	generic_subtype            *string
 	source                     *string
 	record_class               *string
 	opened_by_id               *int
@@ -128273,6 +128274,55 @@ func (m *TicketMutation) OldType(ctx context.Context) (v string, err error) {
 // ResetType resets all changes to the "type" field.
 func (m *TicketMutation) ResetType() {
 	m._type = nil
+}
+
+// SetGenericSubtype sets the "generic_subtype" field.
+func (m *TicketMutation) SetGenericSubtype(s string) {
+	m.generic_subtype = &s
+}
+
+// GenericSubtype returns the value of the "generic_subtype" field in the mutation.
+func (m *TicketMutation) GenericSubtype() (r string, exists bool) {
+	v := m.generic_subtype
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGenericSubtype returns the old "generic_subtype" field's value of the Ticket entity.
+// If the Ticket object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketMutation) OldGenericSubtype(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGenericSubtype is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGenericSubtype requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGenericSubtype: %w", err)
+	}
+	return oldValue.GenericSubtype, nil
+}
+
+// ClearGenericSubtype clears the value of the "generic_subtype" field.
+func (m *TicketMutation) ClearGenericSubtype() {
+	m.generic_subtype = nil
+	m.clearedFields[ticket.FieldGenericSubtype] = struct{}{}
+}
+
+// GenericSubtypeCleared returns if the "generic_subtype" field was cleared in this mutation.
+func (m *TicketMutation) GenericSubtypeCleared() bool {
+	_, ok := m.clearedFields[ticket.FieldGenericSubtype]
+	return ok
+}
+
+// ResetGenericSubtype resets all changes to the "generic_subtype" field.
+func (m *TicketMutation) ResetGenericSubtype() {
+	m.generic_subtype = nil
+	delete(m.clearedFields, ticket.FieldGenericSubtype)
 }
 
 // SetSource sets the "source" field.
@@ -130930,7 +130980,7 @@ func (m *TicketMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TicketMutation) Fields() []string {
-	fields := make([]string, 0, 41)
+	fields := make([]string, 0, 42)
 	if m.title != nil {
 		fields = append(fields, ticket.FieldTitle)
 	}
@@ -130942,6 +130992,9 @@ func (m *TicketMutation) Fields() []string {
 	}
 	if m._type != nil {
 		fields = append(fields, ticket.FieldType)
+	}
+	if m.generic_subtype != nil {
+		fields = append(fields, ticket.FieldGenericSubtype)
 	}
 	if m.source != nil {
 		fields = append(fields, ticket.FieldSource)
@@ -131070,6 +131123,8 @@ func (m *TicketMutation) Field(name string) (ent.Value, bool) {
 		return m.Status()
 	case ticket.FieldType:
 		return m.GetType()
+	case ticket.FieldGenericSubtype:
+		return m.GenericSubtype()
 	case ticket.FieldSource:
 		return m.Source()
 	case ticket.FieldRecordClass:
@@ -131161,6 +131216,8 @@ func (m *TicketMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldStatus(ctx)
 	case ticket.FieldType:
 		return m.OldType(ctx)
+	case ticket.FieldGenericSubtype:
+		return m.OldGenericSubtype(ctx)
 	case ticket.FieldSource:
 		return m.OldSource(ctx)
 	case ticket.FieldRecordClass:
@@ -131271,6 +131328,13 @@ func (m *TicketMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetType(v)
+		return nil
+	case ticket.FieldGenericSubtype:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGenericSubtype(v)
 		return nil
 	case ticket.FieldSource:
 		v, ok := value.(string)
@@ -131711,6 +131775,9 @@ func (m *TicketMutation) ClearedFields() []string {
 	if m.FieldCleared(ticket.FieldDescription) {
 		fields = append(fields, ticket.FieldDescription)
 	}
+	if m.FieldCleared(ticket.FieldGenericSubtype) {
+		fields = append(fields, ticket.FieldGenericSubtype)
+	}
 	if m.FieldCleared(ticket.FieldSource) {
 		fields = append(fields, ticket.FieldSource)
 	}
@@ -131811,6 +131878,9 @@ func (m *TicketMutation) ClearField(name string) error {
 	switch name {
 	case ticket.FieldDescription:
 		m.ClearDescription()
+		return nil
+	case ticket.FieldGenericSubtype:
+		m.ClearGenericSubtype()
 		return nil
 	case ticket.FieldSource:
 		m.ClearSource()
@@ -131915,6 +131985,9 @@ func (m *TicketMutation) ResetField(name string) error {
 		return nil
 	case ticket.FieldType:
 		m.ResetType()
+		return nil
+	case ticket.FieldGenericSubtype:
+		m.ResetGenericSubtype()
 		return nil
 	case ticket.FieldSource:
 		m.ResetSource()
