@@ -11,6 +11,17 @@ import (
 	"itsm-backend/ent/fieldvalue"
 )
 
+// FieldValidationError identifies invalid submitted data independently of
+// persistence failures. Transport layers choose their own response policy.
+type FieldValidationError struct {
+	Field   string
+	Message string
+	cause   error
+}
+
+func (e *FieldValidationError) Error() string { return e.Message }
+func (e *FieldValidationError) Unwrap() error { return e.cause }
+
 // FieldValueService 动态字段值的共享服务，工单先接入，服务请求以后接入。
 type FieldValueService struct {
 	client *ent.Client
@@ -141,11 +152,11 @@ func createFieldValues(
 			continue
 		}
 		if err := validateFieldValue(def, raw); err != nil {
-			return err
+			return &FieldValidationError{Field: def.Name, Message: err.Error(), cause: err}
 		}
 		encoded, err := json.Marshal(raw)
 		if err != nil {
-			return err
+			return &FieldValidationError{Field: def.Name, Message: "field value must be JSON-compatible", cause: err}
 		}
 		defID := def.ID
 		_, err = client.FieldValue.Create().

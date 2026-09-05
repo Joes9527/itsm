@@ -187,3 +187,16 @@ func TestFieldValueService_CreateValuesTxSharesCallerTransaction(t *testing.T) {
 	require.Zero(t, client.FieldValue.Query().CountX(ctx))
 	require.Zero(t, client.FieldDefinition.Query().CountX(ctx))
 }
+
+func TestFieldValueServiceReturnsTypedValidationError(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:field_value_typed_error?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	client.FieldDefinition.Create().SetTenantID(1).SetEntityType("service_catalog").SetEntityID(10).SetName("count").SetLabel("Count").SetFieldType("number").SaveX(ctx)
+	err := NewFieldValueService(client).CreateValues(ctx, 1, "service_catalog", 10, "ticket", 20, map[string]any{"count": "not a number"})
+	var validation *FieldValidationError
+	require.ErrorAs(t, err, &validation)
+	require.Equal(t, "count", validation.Field)
+	require.NotEmpty(t, validation.Message)
+	require.Zero(t, client.FieldValue.Query().CountX(ctx))
+}

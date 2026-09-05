@@ -34,11 +34,17 @@ func (r *AuditRepository) RecordCreated(ctx context.Context, tx *ent.Tx, input C
 		return workitemcreation.NewInvalidCommand("invalid intake audit evidence", workitemcreation.FieldError{Field: "audit", Message: "required audit context is missing"}, nil)
 	}
 	ok, err := tx.Ticket.Query().Where(ticket.IDEQ(input.WorkItemID), ticket.TenantIDEQ(input.TenantID)).Exist(ctx)
-	if err != nil || !ok {
+	if err != nil {
+		return workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)
+	}
+	if !ok {
 		return workitemcreation.NewReferenceNotFound("audit work item outside tenant", err)
 	}
 	ok, err = tx.User.Query().Where(user.IDEQ(input.UserID), user.TenantIDEQ(input.TenantID)).Exist(ctx)
-	if err != nil || !ok {
+	if err != nil {
+		return workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)
+	}
+	if !ok {
 		return workitemcreation.NewReferenceNotFound("audit actor outside tenant", err)
 	}
 	_, err = tx.AuditLog.Create().

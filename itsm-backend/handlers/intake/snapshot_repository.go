@@ -70,34 +70,52 @@ func (r *SnapshotRepository) Create(ctx context.Context, tx *ent.Tx, input Snaps
 	}
 
 	ok, err := tx.IntakeRequest.Query().Where(intakerequest.IDEQ(input.IntakeRequestID), intakerequest.TenantIDEQ(input.TenantID)).Exist(ctx)
-	if err != nil || !ok {
+	if err != nil {
+		return nil, workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)
+	}
+	if !ok {
 		return nil, workitemcreation.NewReferenceNotFound("snapshot receipt is outside tenant", err)
 	}
 	ok, err = tx.Ticket.Query().Where(ticket.IDEQ(input.WorkItemID), ticket.TenantIDEQ(input.TenantID), ticket.RecordClassEQ(input.RecordClass)).Exist(ctx)
-	if err != nil || !ok {
+	if err != nil {
+		return nil, workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)
+	}
+	if !ok {
 		return nil, workitemcreation.NewReferenceNotFound("snapshot work item is outside tenant", err)
 	}
 	if input.CatalogItemID != nil {
 		ok, err = tx.ServiceCatalog.Query().Where(servicecatalog.IDEQ(*input.CatalogItemID), servicecatalog.TenantIDEQ(input.TenantID)).Exist(ctx)
-		if err != nil || !ok {
+		if err != nil {
+			return nil, workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)
+		}
+		if !ok {
 			return nil, workitemcreation.NewReferenceNotFound("snapshot catalog outside tenant", err)
 		}
 	}
 	if input.WorkflowDefinitionID != nil {
 		ok, err = tx.ProcessDefinition.Query().Where(processdefinition.IDEQ(*input.WorkflowDefinitionID), processdefinition.TenantIDEQ(input.TenantID), processdefinition.KeyEQ(input.WorkflowDefinitionKey), processdefinition.VersionEQ(input.WorkflowDefinitionVersion)).Exist(ctx)
-		if err != nil || !ok {
+		if err != nil {
+			return nil, workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)
+		}
+		if !ok {
 			return nil, workitemcreation.NewReferenceNotFound("snapshot workflow binding unavailable", err)
 		}
 	}
 	if input.SLADefinitionID != nil {
 		ok, err = tx.SLADefinition.Query().Where(sladefinition.IDEQ(*input.SLADefinitionID), sladefinition.TenantIDEQ(input.TenantID)).Exist(ctx)
-		if err != nil || !ok {
+		if err != nil {
+			return nil, workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)
+		}
+		if !ok {
 			return nil, workitemcreation.NewReferenceNotFound("snapshot SLA outside tenant", err)
 		}
 	}
 	for _, id := range input.CIIDs {
 		ok, err = tx.ConfigurationItem.Query().Where(configurationitem.IDEQ(id), configurationitem.TenantIDEQ(input.TenantID)).Exist(ctx)
-		if err != nil || !ok {
+		if err != nil {
+			return nil, workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)
+		}
+		if !ok {
 			return nil, workitemcreation.NewReferenceNotFound("snapshot CI outside tenant", err)
 		}
 	}
@@ -107,7 +125,10 @@ func (r *SnapshotRepository) Create(ctx context.Context, tx *ent.Tx, input Snaps
 			return nil, workitemcreation.NewInvalidCommand("invalid CTI evidence", workitemcreation.FieldError{Field: "ctiSnapshot", Message: "only resolved category IDs are allowed"}, nil)
 		}
 		ok, err = tx.TicketCategory.Query().Where(ticketcategory.IDEQ(id), ticketcategory.TenantIDEQ(input.TenantID)).Exist(ctx)
-		if err != nil || !ok {
+		if err != nil {
+			return nil, workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)
+		}
+		if !ok {
 			return nil, workitemcreation.NewReferenceNotFound("snapshot CTI outside tenant", err)
 		}
 	}

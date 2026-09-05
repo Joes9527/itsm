@@ -87,31 +87,46 @@ func (c *WorkItemCreator) CreateBase(ctx context.Context, tx *ent.Tx, plan *work
 func validateDraftReferences(ctx context.Context, tx *ent.Tx, draft *workitemcreation.WorkItemDraft) error {
 	for _, id := range []int{draft.ActorID, draft.RequesterID} {
 		ok, err := tx.User.Query().Where(user.IDEQ(id), user.TenantIDEQ(draft.TenantID)).Exist(ctx)
-		if err != nil || !ok {
+		if err != nil {
+			return workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)
+		}
+		if !ok {
 			return workitemcreation.NewReferenceNotFound("work item user is outside tenant", err)
 		}
 	}
 	if draft.AssigneeID != nil {
 		ok, err := tx.User.Query().Where(user.IDEQ(*draft.AssigneeID), user.TenantIDEQ(draft.TenantID)).Exist(ctx)
-		if err != nil || !ok {
+		if err != nil {
+			return workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)
+		}
+		if !ok {
 			return workitemcreation.NewReferenceNotFound("assignee is outside tenant", err)
 		}
 	}
 	if draft.AssignmentGroupID != nil {
 		ok, err := tx.Group.Query().Where(group.IDEQ(*draft.AssignmentGroupID), group.TenantIDEQ(draft.TenantID)).Exist(ctx)
-		if err != nil || !ok {
+		if err != nil {
+			return workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)
+		}
+		if !ok {
 			return workitemcreation.NewReferenceNotFound("assignment group is outside tenant", err)
 		}
 	}
 	if draft.CategoryID != nil {
 		ok, err := tx.TicketCategory.Query().Where(ticketcategory.IDEQ(*draft.CategoryID), ticketcategory.TenantIDEQ(draft.TenantID)).Exist(ctx)
-		if err != nil || !ok {
+		if err != nil {
+			return workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)
+		}
+		if !ok {
 			return workitemcreation.NewReferenceNotFound("category is outside tenant", err)
 		}
 	}
 	if draft.SLADefinitionID != nil {
 		ok, err := tx.SLADefinition.Query().Where(sladefinition.IDEQ(*draft.SLADefinitionID), sladefinition.TenantIDEQ(draft.TenantID)).Exist(ctx)
-		if err != nil || !ok {
+		if err != nil {
+			return workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)
+		}
+		if !ok {
 			return workitemcreation.NewReferenceNotFound("SLA is outside tenant", err)
 		}
 	}

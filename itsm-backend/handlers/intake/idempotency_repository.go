@@ -85,6 +85,9 @@ func (r *IdempotencyRepository) Claim(
 			intakerequest.IdempotencyKeyEQ(key),
 		).
 		Only(ctx)
+	if ent.IsNotFound(loadErr) || ent.IsNotSingular(loadErr) {
+		return nil, "", workitemcreation.NewInternalFailure("claimed intake receipt is missing or ambiguous", loadErr)
+	}
 	if loadErr != nil {
 		return nil, "", workitemcreation.NewInfrastructureUnavailable("could not load idempotency claim", loadErr)
 	}
@@ -114,7 +117,10 @@ func (r *IdempotencyRepository) Complete(ctx context.Context, tx *ent.Tx, tenant
 		return workitemcreation.NewInternalFailure("completed intake receipt requires a work item", nil)
 	}
 	ok, err := tx.Ticket.Query().Where(ticket.IDEQ(workItemID), ticket.TenantIDEQ(tenantID)).Exist(ctx)
-	if err != nil || !ok {
+	if err != nil {
+		return workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)
+	}
+	if !ok {
 		return workitemcreation.NewReferenceNotFound("receipt work item is outside tenant", err)
 	}
 	updated, err := tx.IntakeRequest.Update().
@@ -152,6 +158,9 @@ func (r *IdempotencyRepository) LoadCompleted(ctx context.Context, tx *ent.Tx, i
 		Only(ctx)
 	if ent.IsNotFound(err) {
 		return nil, workitemcreation.NewReferenceNotFound("completed intake receipt was not found", err)
+	}
+	if ent.IsNotSingular(err) {
+		return nil, workitemcreation.NewInternalFailure("completed intake receipt is ambiguous", err)
 	}
 	if err != nil {
 		return nil, workitemcreation.NewInfrastructureUnavailable("could not load completed intake receipt", err)

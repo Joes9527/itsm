@@ -163,7 +163,7 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 		return nil, false, err
 	}
 	if err := s.writeFieldValues(ctx, tx, resolved, workItem.ID, professional); err != nil {
-		return nil, false, workitemcreation.NewInfrastructureUnavailable("could not persist intake field values", err)
+		return nil, false, err
 	}
 	if _, err := s.snapshots.Create(ctx, tx, buildSnapshot(receipt.ID, workItem.ID, digest, resolved)); err != nil {
 		return nil, false, err
@@ -201,10 +201,18 @@ func (s *Service) writeFieldValues(ctx context.Context, tx *ent.Tx, resolved *wo
 	if resolved.Catalog == nil {
 		return workitemcreation.NewDomainValidationFailed("dynamic fields require a resolved definition scope", nil)
 	}
-	return s.fieldValues.CreateValuesTx(
+	err := s.fieldValues.CreateValuesTx(
 		ctx, tx, resolved.Identity.TenantID, "service_catalog", resolved.Catalog.ID,
 		"ticket", workItemID, resolved.Command.FormValues,
 	)
+	if err == nil {
+		return nil
+	}
+	var validation *itsmservice.FieldValidationError
+	if errors.As(err, &validation) {
+		return workitemcreation.NewDomainValidationFailed("invalid dynamic field value", err, workitemcreation.FieldError{Field: "formValues." + validation.Field, Message: validation.Message})
+	}
+	return workitemcreation.NewInfrastructureUnavailable("could not persist intake field values", err)
 }
 
 func buildSnapshot(receiptID, workItemID int, digest string, resolved *workitemcreation.ResolvedIntake) SnapshotInput {
@@ -278,6 +286,9 @@ func (s *Service) loadResult(ctx context.Context, tx *ent.Tx, tenantID, workItem
 	if ent.IsNotFound(err) {
 		return nil, workitemcreation.NewReferenceNotFound("completed intake work item was not found", err)
 	}
+	if ent.IsNotSingular(err) {
+		return nil, workitemcreation.NewInternalFailure("completed intake work item is ambiguous", err)
+	}
 	if err != nil {
 		return nil, workitemcreation.NewInfrastructureUnavailable("could not load completed intake work item", err)
 	}
@@ -286,24 +297,36 @@ func (s *Service) loadResult(ctx context.Context, tx *ent.Tx, tenantID, workItem
 	case workitemcreation.RecordClassGeneric:
 	case workitemcreation.RecordClassProblem:
 		extension, queryErr := tx.Problem.Query().Where(problem.WorkItemIDEQ(workItem.ID)).Only(ctx)
+		if queryErr != nil && !ent.IsNotFound(queryErr) && !ent.IsNotSingular(queryErr) {
+			return nil, workitemcreation.NewInfrastructureUnavailable("could not load professional extension", queryErr)
+		}
 		if queryErr != nil {
 			return nil, workitemcreation.NewInternalFailure("missing problem extension", queryErr)
 		}
 		result.ProfessionalReference = workitemcreation.ProfessionalReference{Type: "problem", ID: extension.ID}
 	case workitemcreation.RecordClassIncident:
 		extension, queryErr := tx.Incident.Query().Where(incident.WorkItemIDEQ(workItem.ID)).Only(ctx)
+		if queryErr != nil && !ent.IsNotFound(queryErr) && !ent.IsNotSingular(queryErr) {
+			return nil, workitemcreation.NewInfrastructureUnavailable("could not load professional extension", queryErr)
+		}
 		if queryErr != nil {
 			return nil, workitemcreation.NewInternalFailure("completed work item is missing its incident extension", queryErr)
 		}
 		result.ProfessionalReference = workitemcreation.ProfessionalReference{Type: "incident", ID: extension.ID}
 	case workitemcreation.RecordClassServiceRequestItem:
 		extension, queryErr := tx.ServiceRequest.Query().Where(servicerequest.TicketIDEQ(workItem.ID), servicerequest.TenantIDEQ(tenantID)).Only(ctx)
+		if queryErr != nil && !ent.IsNotFound(queryErr) && !ent.IsNotSingular(queryErr) {
+			return nil, workitemcreation.NewInfrastructureUnavailable("could not load professional extension", queryErr)
+		}
 		if queryErr != nil {
 			return nil, workitemcreation.NewInternalFailure("completed work item is missing its service request extension", queryErr)
 		}
 		result.ProfessionalReference = workitemcreation.ProfessionalReference{Type: "service_request", ID: extension.ID}
 	case workitemcreation.RecordClassChangeRequest:
 		extension, queryErr := tx.Change.Query().Where(change.WorkItemIDEQ(workItem.ID)).Only(ctx)
+		if queryErr != nil && !ent.IsNotFound(queryErr) && !ent.IsNotSingular(queryErr) {
+			return nil, workitemcreation.NewInfrastructureUnavailable("could not load professional extension", queryErr)
+		}
 		if queryErr != nil {
 			return nil, workitemcreation.NewInternalFailure("completed work item is missing its change extension", queryErr)
 		}
@@ -314,6 +337,9 @@ func (s *Service) loadResult(ctx context.Context, tx *ent.Tx, tenantID, workItem
 	snapshot, err := tx.IntakeResolutionSnapshot.Query().Where(
 		intakeresolutionsnapshot.WorkItemIDEQ(workItem.ID), intakeresolutionsnapshot.TenantIDEQ(tenantID),
 	).Only(ctx)
+	if err != nil && !ent.IsNotFound(err) && !ent.IsNotSingular(err) {
+		return nil, workitemcreation.NewInfrastructureUnavailable("could not load completed intake graph", err)
+	}
 	if err != nil {
 		return nil, workitemcreation.NewInternalFailure("completed work item is missing its intake snapshot", err)
 	}
@@ -326,6 +352,9 @@ func (s *Service) loadResult(ctx context.Context, tx *ent.Tx, tenantID, workItem
 	}
 	eventID := workflowStartEventID(workItem.ID, *snapshot.WorkflowDefinitionID)
 	event, err := tx.OutboxEvent.Query().Where(outboxevent.EventIDEQ(eventID), outboxevent.TenantIDEQ(tenantID)).Only(ctx)
+	if err != nil && !ent.IsNotFound(err) && !ent.IsNotSingular(err) {
+		return nil, workitemcreation.NewInfrastructureUnavailable("could not load completed intake graph", err)
+	}
 	if err != nil {
 		return nil, workitemcreation.NewInternalFailure("completed work item is missing its workflow start event", err)
 	}
@@ -395,7 +424,10 @@ func validateProfessional(ctx context.Context, tx *ent.Tx, item *ent.Ticket, ref
 		}
 		ok, err = tx.ServiceRequest.Query().Where(servicerequest.IDEQ(reference.ID), servicerequest.TicketIDEQ(item.ID), servicerequest.TenantIDEQ(item.TenantID)).Exist(ctx)
 	}
-	if err != nil || !ok {
+	if err != nil {
+		return workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)
+	}
+	if !ok {
 		return workitemcreation.NewReferenceNotFound("professional extension does not belong to work item", err)
 	}
 	return nil
