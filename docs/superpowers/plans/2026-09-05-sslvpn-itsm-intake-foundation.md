@@ -266,3 +266,13 @@ go test -tags integration_rls ./database/rls -count=1
 - [ ] 逐行关闭 A1 清单，验证所有错误映射和 DTO 字段，检查 `git diff --check`，提交 `test(intake): verify atomic creation across all entrypoints`。
 
 **完成定义：** A2-A6 的功能与 A7 的真实数据库证据均通过；无遗漏入口、无测试豁免伪装通过。此时才能向 B 提供可集成的 ITSM 基线。
+
+
+### A3b/A4 实施补充：MSP 身份贯通
+
+身份与权限检查点 `1802a000` 已独立审查通过。实际入口仍发现 MSP 原生 actor 与客户 tenant 被强制要求相同、旧转换 fixture 未适配统一回执等缺口，按[设计 §7.5](../specs/2026-09-05-sslvpn-kaf-intake-end-to-end-design.md#75-msp-创建身份与事务快照实施细化)分两步完成：
+
+1. 现有会话授权与客户 RBAC、同快照目录读取、原生身份回执/审计、真实持久化启动和 Incident 事件，以及迁移 026 同步实现并独立审查。
+2. 转换接口显式 requester、真实签名客户会话 HTTP 流程、旧 controller fixture 修复与撤权重放验证；前端确认与回执迁移继续由 A4 前端任务完成。
+
+共享字段清理迁移顺延 027+。本补充不取消原 A3/A4/A7 的逐入口、原子图、运行装配及完整 schema 验收；原全入口审查基线仍为 `94cc5787`。
