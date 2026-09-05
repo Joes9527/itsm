@@ -33,7 +33,7 @@
 | [B：KAF 用户受理接入](2026-09-05-sslvpn-kaf-web-intake.md) | W3 | 原确认卡片可靠创建新 ITSM 申请，身份、重复和超时恢复有契约测试 |
 | [C：授权执行与运行验收](2026-09-05-sslvpn-fulfillment-validation.md) | W4、W5 | 真实外部授权、ITSM 回执、KAF 展示和部署验收完整 |
 
-默认执行方式：单会话按 executing-plans 推进；需要多人/多 Agent 时，再按权限与独立文件边界分配。当前只是编写计划，不启动实现子 Agent。
+执行方式：已获准进入实现，按 executing-plans / subagent-driven-development 在同一会话顺序推进；每次仅一个实现 Agent 写代码，并由独立审查者复核。当前任务进度见各子计划，未完成的集成门禁保持开放。
 
 ```text
 A1 复用审查/入口清单
