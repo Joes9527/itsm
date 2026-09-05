@@ -1032,7 +1032,7 @@ func InitializeStorage(cfg *config.Config, client *ent.Client, sugar *zap.Sugare
 				if err := prepareServiceRequestTicketMigration(ctx, database.GetRawDB(), sugar); err != nil {
 					return fmt.Errorf("prepare service_request ticket migration: %w", err)
 				}
-				return nil
+				return migration.PrepareIntakeActorProvenance(ctx, database.GetRawDB())
 			},
 			CreateSchema: func(ctx context.Context) error { return client.Schema.Create(ctx) },
 			Migrator:     migrator,

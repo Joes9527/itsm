@@ -437,7 +437,18 @@ func (e *CustomProcessEngine) startResolvedProcess(ctx context.Context, definiti
 	if actor != nil {
 		userID = actor.ID
 	}
-	if err := e.auditService.RecordProcessStarted(ctx, instance, userID, userName, variables); err != nil {
+	auditVariables := variables
+	if provenance, ok := ctx.Value(intakeStartActorKey{}).(intakeStartActor); ok {
+		// Identity evidence belongs to the audit. The frozen workflow input also
+		// determines the start digest and must remain unchanged across upgrades.
+		auditVariables = make(map[string]interface{}, len(variables)+2)
+		for key, value := range variables {
+			auditVariables[key] = value
+		}
+		auditVariables["actor_tenant_id"] = provenance.actor.TenantID
+		auditVariables["intake_request_id"] = provenance.receiptID
+	}
+	if err := e.auditService.RecordProcessStarted(ctx, instance, userID, userName, auditVariables); err != nil {
 		return nil, err
 	}
 	return instance, nil

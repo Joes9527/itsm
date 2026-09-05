@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -152,4 +153,27 @@ func TestWorkflowStartPreservesNativeMSPActor(t *testing.T) {
 	handler := NewWorkflowStartOutboxHandler(f.client, f.engine, f.client)
 	require.NoError(t, handler.Deliver(ctx, event))
 	require.Equal(t, fmt.Sprint(f.actor.ID), f.client.ProcessInstance.Query().OnlyX(ctx).Initiator)
+}
+
+// An upgrade must not change the digest of a start that committed before its
+// outbox acknowledgement. The old handler passed the frozen variables verbatim.
+func TestWorkflowStartReplaysCommittedStartBeforeProvenanceUpgrade(t *testing.T) {
+	f, event := workflowStartFixture(t)
+	var payload workflowStartPayload
+	decoder := json.NewDecoder(bytes.NewReader(event.Payload))
+	decoder.UseNumber()
+	require.NoError(t, decoder.Decode(&payload))
+	ctx := WithTrustedBPMNTenantContext(context.Background(), f.tenant.ID)
+	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.actor.ID)
+	first, err := f.engine.StartProcessByDefinitionID(ctx, FreezeProcessDefinition(f.definition),
+		fmt.Sprintf("ticket:%d", payload.WorkItemID), "ticket", payload.WorkItemID,
+		payload.Variables, payload.DedupeKey)
+	require.NoError(t, err)
+	audits := f.client.ProcessAuditLog.Query().CountX(ctx)
+
+	require.NoError(t, NewWorkflowStartOutboxHandler(f.client, f.engine, f.client).Deliver(ctx, event))
+	stored := f.client.ProcessInstance.Query().OnlyX(ctx)
+	require.Equal(t, first.ID, stored.ID)
+	require.Equal(t, first.StartRequestDigest, stored.StartRequestDigest)
+	require.Equal(t, audits, f.client.ProcessAuditLog.Query().CountX(ctx))
 }

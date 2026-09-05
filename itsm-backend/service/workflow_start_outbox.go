@@ -104,8 +104,6 @@ func (h *WorkflowStartOutboxHandler) Deliver(ctx context.Context, event *ent.Out
 		return err
 	}
 	ctx = context.WithValue(ctx, intakeStartActorKey{}, intakeStartActor{actor: *actor, targetTenantID: p.TenantID, workItemID: item.ID, receiptID: receipt.ID})
-	p.Variables["actor_tenant_id"] = receipt.ActorTenantID
-	p.Variables["intake_request_id"] = receipt.ID
 	ctx = WithTrustedBPMNTenantContext(ctx, p.TenantID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, p.ActorID)
 	_, err = h.engine.StartProcessByDefinitionID(ctx, ProcessDefinitionIdentity{ID: p.DefinitionID, Key: p.DefinitionKey, Version: p.DefinitionVersion, Digest: p.DefinitionDigest}, fmt.Sprintf("%s:%d", policy.BusinessType, item.ID), string(policy.BusinessType), item.ID, p.Variables, key)

@@ -29,15 +29,17 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN RAISE EXCEPTION 'invalid Intake audit JSON at audit ID %; reconcile audit history before retry',a.id; END;
   IF jsonb_typeof(body)<>'object' THEN RAISE EXCEPTION 'invalid Intake audit object at audit ID %',a.id; END IF;
   item_id:=NULL;
+  -- The original action association remains authoritative even when the body
+  -- already names a receipt. Never overwrite contradictory historical evidence.
+  IF a.action='intake.created' AND a.resource ~ '^work_item:[0-9]+$' THEN item_id:=split_part(a.resource,':',2)::bigint;
+  ELSIF a.action='convert_to_problem' AND body->>'targetWorkItemId' ~ '^[0-9]+$' THEN item_id:=(body->>'targetWorkItemId')::bigint;
+  ELSIF a.action='incident_rule.action_completed' THEN
+   SELECT i.work_item_id INTO item_id FROM incident_rule_executions e JOIN incidents i ON i.id=e.incident_id WHERE e.tenant_id=a.tenant_id AND e.actor_id=a.user_id AND a.request_id ~ ( '^' || e.execution_key || ':action:[0-9]+$');
+  END IF;
   IF body->>'intakeRequestId' IS NOT NULL THEN
-   SELECT count(*) INTO matches FROM intake_requests i WHERE i.id::text=body->>'intakeRequestId' AND i.actor_id=a.user_id AND i.tenant_id=a.tenant_id;
-   SELECT * INTO r FROM intake_requests i WHERE i.id::text=body->>'intakeRequestId' AND i.actor_id=a.user_id AND i.tenant_id=a.tenant_id;
+   SELECT count(*) INTO matches FROM intake_requests i WHERE i.id::text=body->>'intakeRequestId' AND i.actor_id=a.user_id AND i.tenant_id=a.tenant_id AND i.work_item_id=item_id AND i.status='completed';
+   SELECT * INTO r FROM intake_requests i WHERE i.id::text=body->>'intakeRequestId' AND i.actor_id=a.user_id AND i.tenant_id=a.tenant_id AND i.work_item_id=item_id AND i.status='completed';
   ELSE
-   IF a.action='intake.created' AND a.resource ~ '^work_item:[0-9]+$' THEN item_id:=split_part(a.resource,':',2)::bigint;
-   ELSIF a.action='convert_to_problem' AND body->>'targetWorkItemId' ~ '^[0-9]+$' THEN item_id:=(body->>'targetWorkItemId')::bigint;
-   ELSIF a.action='incident_rule.action_completed' THEN
-    SELECT i.work_item_id INTO item_id FROM incident_rule_executions e JOIN incidents i ON i.id=e.incident_id WHERE e.tenant_id=a.tenant_id AND e.actor_id=a.user_id AND a.request_id ~ ( '^' || e.execution_key || ':action:[0-9]+$');
-   END IF;
    SELECT count(*) INTO matches FROM intake_requests i WHERE i.work_item_id=item_id AND i.actor_id=a.user_id AND i.tenant_id=a.tenant_id AND i.status='completed';
    SELECT * INTO r FROM intake_requests i WHERE i.work_item_id=item_id AND i.actor_id=a.user_id AND i.tenant_id=a.tenant_id AND i.status='completed';
   END IF;

@@ -1,13 +1,43 @@
 package migration
 
-const intakeActorProvenanceSQL = `DO $prerequisites$
-DECLARE target text;
-BEGIN
- FOR target IN SELECT unnest(ARRAY['intake_requests','audit_logs','users','tenants','tickets','incident_rule_executions','incident_rule_action_receipts','outbox_events','incidents']) LOOP
-  IF to_regclass(format('%I.%I',current_schema(),target)) IS NULL THEN RAISE EXCEPTION 'required local % table missing; restore Intake provenance prerequisites',target; END IF;
- END LOOP;
-END $prerequisites$;
-ALTER TABLE intake_requests ADD COLUMN IF NOT EXISTS actor_tenant_id bigint;
+import (
+	"context"
+	"database/sql"
+	"fmt"
+)
+
+// PrepareIntakeActorProvenance runs the same validated 026 backfill before Ent
+// can enforce the required column on an existing table. Fresh schemas need no
+// preparation; the registered post-schema migration owns guards and its ledger.
+func PrepareIntakeActorProvenance(ctx context.Context, db *sql.DB) error {
+	if db == nil {
+		return fmt.Errorf("provenance bootstrap database is required")
+	}
+	var exists, required bool
+	if err := db.QueryRowContext(ctx, "SELECT to_regclass(format('%I.intake_requests',current_schema())) IS NOT NULL").Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return nil
+	}
+	if err := db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=format('%I.intake_requests',current_schema())::regclass AND attname='actor_tenant_id' AND attnotnull AND NOT attisdropped)`).Scan(&required); err != nil {
+		return err
+	}
+	if required {
+		return nil
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err = tx.ExecContext(ctx, intakeActorProvenanceBackfillSQL); err != nil {
+		return fmt.Errorf("prepare Intake actor provenance: %w", err)
+	}
+	return tx.Commit()
+}
+
+const intakeActorProvenanceBackfillSQL = `ALTER TABLE intake_requests ADD COLUMN IF NOT EXISTS actor_tenant_id bigint;
 DO $history$
 DECLARE invalid_ids text;
 BEGIN
@@ -23,7 +53,16 @@ END $history$;
 -- Historical absence is provable only for an existing native target actor.
 UPDATE intake_requests r SET actor_tenant_id=u.tenant_id FROM users u WHERE u.id=r.actor_id AND r.actor_tenant_id IS NULL AND u.tenant_id=r.tenant_id;
 ALTER TABLE intake_requests ALTER COLUMN actor_tenant_id SET NOT NULL;
-DO $audit_history$
+`
+
+const intakeActorProvenanceSQL = `DO $prerequisites$
+DECLARE target text;
+BEGIN
+ FOR target IN SELECT unnest(ARRAY['intake_requests','audit_logs','users','tenants','tickets','incident_rule_executions','incident_rule_action_receipts','outbox_events','incidents']) LOOP
+  IF to_regclass(format('%I.%I',current_schema(),target)) IS NULL THEN RAISE EXCEPTION 'required local % table missing; restore Intake provenance prerequisites',target; END IF;
+ END LOOP;
+END $prerequisites$;
+` + intakeActorProvenanceBackfillSQL + `DO $audit_history$
 DECLARE a record;r record;body jsonb;item_id bigint;matches bigint;
 BEGIN
  FOR a IN SELECT * FROM audit_logs WHERE action IN ('intake.created','convert_to_problem','incident_rule.action_completed') LOOP
@@ -31,15 +70,17 @@ BEGIN
   EXCEPTION WHEN OTHERS THEN RAISE EXCEPTION 'invalid Intake audit JSON at audit ID %; reconcile audit history before retry',a.id; END;
   IF jsonb_typeof(body)<>'object' THEN RAISE EXCEPTION 'invalid Intake audit object at audit ID %',a.id; END IF;
   item_id:=NULL;
+  -- The original action association remains authoritative even when the body
+  -- already names a receipt. Never overwrite contradictory historical evidence.
+  IF a.action='intake.created' AND a.resource ~ '^work_item:[0-9]+$' THEN item_id:=split_part(a.resource,':',2)::bigint;
+  ELSIF a.action='convert_to_problem' AND body->>'targetWorkItemId' ~ '^[0-9]+$' THEN item_id:=(body->>'targetWorkItemId')::bigint;
+  ELSIF a.action='incident_rule.action_completed' THEN
+   SELECT i.work_item_id INTO item_id FROM incident_rule_executions e JOIN incidents i ON i.id=e.incident_id WHERE e.tenant_id=a.tenant_id AND e.actor_id=a.user_id AND a.request_id ~ ( '^' || e.execution_key || ':action:[0-9]+$');
+  END IF;
   IF body->>'intakeRequestId' IS NOT NULL THEN
-   SELECT count(*) INTO matches FROM intake_requests i WHERE i.id::text=body->>'intakeRequestId' AND i.actor_id=a.user_id AND i.tenant_id=a.tenant_id;
-   SELECT * INTO r FROM intake_requests i WHERE i.id::text=body->>'intakeRequestId' AND i.actor_id=a.user_id AND i.tenant_id=a.tenant_id;
+   SELECT count(*) INTO matches FROM intake_requests i WHERE i.id::text=body->>'intakeRequestId' AND i.actor_id=a.user_id AND i.tenant_id=a.tenant_id AND i.work_item_id=item_id AND i.status='completed';
+   SELECT * INTO r FROM intake_requests i WHERE i.id::text=body->>'intakeRequestId' AND i.actor_id=a.user_id AND i.tenant_id=a.tenant_id AND i.work_item_id=item_id AND i.status='completed';
   ELSE
-   IF a.action='intake.created' AND a.resource ~ '^work_item:[0-9]+$' THEN item_id:=split_part(a.resource,':',2)::bigint;
-   ELSIF a.action='convert_to_problem' AND body->>'targetWorkItemId' ~ '^[0-9]+$' THEN item_id:=(body->>'targetWorkItemId')::bigint;
-   ELSIF a.action='incident_rule.action_completed' THEN
-    SELECT i.work_item_id INTO item_id FROM incident_rule_executions e JOIN incidents i ON i.id=e.incident_id WHERE e.tenant_id=a.tenant_id AND e.actor_id=a.user_id AND a.request_id ~ ( '^' || e.execution_key || ':action:[0-9]+$');
-   END IF;
    SELECT count(*) INTO matches FROM intake_requests i WHERE i.work_item_id=item_id AND i.actor_id=a.user_id AND i.tenant_id=a.tenant_id AND i.status='completed';
    SELECT * INTO r FROM intake_requests i WHERE i.work_item_id=item_id AND i.actor_id=a.user_id AND i.tenant_id=a.tenant_id AND i.status='completed';
   END IF;
