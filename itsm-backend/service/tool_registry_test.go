@@ -146,10 +146,11 @@ func TestCreateTicketToolPublishesItsExactExecutableContract(t *testing.T) {
 	require.Equal(t, map[string]interface{}{
 		"type":                 "object",
 		"additionalProperties": false,
+		"description":          "Canonical create-ticket arguments. Intake trims title, description and priority before validation; omitted or blank priority defaults to medium.",
 		"properties": map[string]interface{}{
-			"title":        map[string]interface{}{"type": "string", "minLength": 1, "maxLength": 500, "pattern": `\S`},
-			"description":  map[string]interface{}{"type": "string", "maxLength": 20000},
-			"priority":     map[string]interface{}{"type": "string", "enum": []string{"low", "medium", "high", "critical", "urgent"}},
+			"title":        map[string]interface{}{"type": "string", "minLength": 1, "maxLength": 500, "pattern": `\S`, "description": "Canonical title after Intake trimming."},
+			"description":  map[string]interface{}{"type": "string", "maxLength": 20000, "description": "Canonical description after Intake trimming."},
+			"priority":     map[string]interface{}{"type": "string", "enum": []string{"low", "medium", "high", "critical", "urgent"}, "description": "Canonical priority after Intake trimming; omit for medium. Intake also accepts blank priority as the medium default."},
 			"requester_id": map[string]interface{}{"type": "integer", "minimum": 1},
 		},
 		"required": []string{"title"},

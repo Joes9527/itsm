@@ -113,3 +113,39 @@ func TestIntakeToolCreationRejectsAdvertisedContractViolations(t *testing.T) {
 		})
 	}
 }
+
+func TestIntakeToolCreationNormalizesAcceptedAliases(t *testing.T) {
+	for name, test := range map[string]struct {
+		arguments string
+		title     string
+		priority  string
+	}{
+		"padded title":    {arguments: `{"title":"  Padded request  "}`, title: "Padded request", priority: "medium"},
+		"padded priority": {arguments: `{"title":"Priority request","priority":" high "}`, title: "Priority request", priority: "high"},
+		"blank priority":  {arguments: `{"title":"Default request","priority":"  "}`, title: "Default request", priority: "medium"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newUnifiedIntakeFixture(t)
+			ctx := context.Background()
+			q := service.NewToolQueue(f.client, nil, f.app, nil, 1, zap.NewNop().Sugar())
+			defer q.Close()
+			inv := f.client.ToolInvocation.Create().
+				SetTenantID(f.identity.TenantID).
+				SetUserID(f.identity.ActorID).
+				SetToolName("create_ticket").
+				SetArguments(test.arguments).
+				SetNeedsApproval(true).
+				SetApprovalState("approved").
+				SetApprovedBy(f.identity.ActorID).
+				SetApprovedAt(time.Now()).
+				SetStatus("pending").
+				SaveX(ctx)
+
+			require.NoError(t, q.ProcessJob(ctx, service.ToolJob{InvocationID: inv.ID, TenantID: f.identity.TenantID}))
+			require.Equal(t, "done", f.client.ToolInvocation.GetX(ctx, inv.ID).Status)
+			created := f.client.Ticket.Query().OnlyX(ctx)
+			require.Equal(t, test.title, created.Title)
+			require.Equal(t, test.priority, created.Priority)
+		})
+	}
+}

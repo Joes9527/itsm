@@ -123,6 +123,99 @@ func TestToolQueueCloseLeavesBufferedApprovedInvocationPendingAndRequeueable(t *
 	require.Equal(t, buffered.ID, (<-requeued).InvocationID)
 }
 
+func TestToolQueueEnqueueCompetesWithCloseAtSharedStartBarrier(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:tool_queue_close_race?mode=memory&cache=shared&_fk=1")
+	t.Cleanup(func() { require.NoError(t, client.Close()) })
+	ctx := context.Background()
+	activeInvocation := client.ToolInvocation.Create().
+		SetTenantID(11).
+		SetToolName("create_ticket").
+		SetArguments(`{"title":"active"}`).
+		SetNeedsApproval(true).
+		SetApprovalState("approved").
+		SetStatus("pending").
+		SaveX(ctx)
+	contendingInvocation := client.ToolInvocation.Create().
+		SetTenantID(11).
+		SetToolName("create_ticket").
+		SetArguments(`{"title":"contending"}`).
+		SetNeedsApproval(true).
+		SetApprovalState("approved").
+		SetStatus("pending").
+		SaveX(ctx)
+
+	logCore, observed := observer.New(zapcore.WarnLevel)
+	active := make(chan struct{})
+	releaseActive := make(chan struct{})
+	processed := make(chan int, 1)
+	q := newLifecycleTestQueue(t, 2, func(_ context.Context, job ToolJob) error {
+		processed <- job.InvocationID
+		close(active)
+		<-releaseActive
+		return nil
+	}, zap.New(logCore).Sugar())
+	require.NoError(t, q.Enqueue(ToolJob{InvocationID: activeInvocation.ID, TenantID: 11}))
+	<-active
+
+	start := make(chan struct{})
+	var ready sync.WaitGroup
+	ready.Add(3)
+	enqueueResult := make(chan error, 1)
+	closeResults := make(chan struct{}, 2)
+	go func() {
+		ready.Done()
+		<-start
+		enqueueResult <- q.Enqueue(ToolJob{InvocationID: contendingInvocation.ID, TenantID: 11})
+	}()
+	for range 2 {
+		go func() {
+			ready.Done()
+			<-start
+			q.Close()
+			closeResults <- struct{}{}
+		}()
+	}
+	ready.Wait()
+	close(start)
+
+	enqueueErr := <-enqueueResult
+	acceptedBeforeStop := enqueueErr == nil
+	if !acceptedBeforeStop {
+		require.ErrorIs(t, enqueueErr, ErrToolQueueClosed)
+	}
+	<-q.stopping
+	require.ErrorIs(t, q.Enqueue(ToolJob{InvocationID: contendingInvocation.ID, TenantID: 11}), ErrToolQueueClosed)
+	recorded := client.ToolInvocation.GetX(ctx, contendingInvocation.ID)
+	require.Equal(t, "approved", recorded.ApprovalState)
+	require.Equal(t, "pending", recorded.Status)
+
+	close(releaseActive)
+	<-closeResults
+	<-closeResults
+	require.Equal(t, activeInvocation.ID, <-processed)
+	select {
+	case unexpected := <-processed:
+		t.Fatalf("buffered invocation %d executed after stopping", unexpected)
+	default:
+	}
+	require.ErrorIs(t, q.Enqueue(ToolJob{InvocationID: contendingInvocation.ID, TenantID: 11}), ErrToolQueueClosed)
+	warnings := observed.FilterMessage("Approved tool job remains pending after queue shutdown").All()
+	if acceptedBeforeStop {
+		require.Len(t, warnings, 1)
+		require.Equal(t, int64(contendingInvocation.ID), warnings[0].ContextMap()["invocation_id"])
+	} else {
+		require.Empty(t, warnings)
+	}
+
+	requeued := make(chan ToolJob, 1)
+	q2 := newLifecycleTestQueue(t, 1, func(_ context.Context, job ToolJob) error {
+		requeued <- job
+		return nil
+	}, zap.NewNop().Sugar())
+	require.NoError(t, q2.Enqueue(ToolJob{InvocationID: contendingInvocation.ID, TenantID: 11}))
+	require.Equal(t, contendingInvocation.ID, (<-requeued).InvocationID)
+}
+
 func TestToolQueueRejectsInvalidIdentity(t *testing.T) {
 	q := newLifecycleTestQueue(t, 1, func(context.Context, ToolJob) error {
 		return errors.New("must not run")
