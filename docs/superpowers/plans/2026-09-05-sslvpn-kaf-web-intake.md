@@ -74,10 +74,10 @@ def test_identity_signature_matches_itsm_fixture():
 ```
 
 - [ ] 执行 `uv run pytest tests/test_workitem_intake_identity.py -q`，确认签名模块/行为未实现导致失败。
-- [ ] 实现 `sign_assertion_fields(fields: list[str], secret: str) -> str`，严格要求 7 个字段、拒绝 CR/LF，与 A6 trim/顺序一致：
+- [ ] 实现 `sign_assertion_fields(fields: list[str], secret: str) -> str`，严格要求 10 个 v2 字段、拒绝 CR/LF 和首尾空白，与总计划 §3.2/A6 顺序一致：
 
 ```python
-if len(fields) != 7 or any(not isinstance(v, str) or "\n" in v or "\r" in v for v in fields):
+if len(fields) != 10 or any(not isinstance(v, str) or v != v.strip() or "\n" in v or "\r" in v for v in fields):
     raise ValueError("invalid_assertion_fields")
 normalized = [value.strip() for value in fields]
 if any(not value for value in normalized):

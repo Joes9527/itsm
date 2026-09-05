@@ -193,14 +193,14 @@ func TestRevisionChangesWithPolicy(t *testing.T) {
 
 **Files:** 审查复用早期分支 `handlers/intake/{handler,identity_exchange,identity_mapping_handler}.go` 及测试；Create `identity_exchange_service.go`、`identity_repository.go`；Modify `middleware/auth.go`、`router/router.go`、`config/config.go`、`internal/bootstrap/app.go`；Create `tests/contract/intake_identity_contract_test.go`、根目录 `docs/contracts/fixtures/intake-identity-signature.json`。
 
-**Interfaces:** 保留 `IdentityAssertion` 字段与顺序，外部映射依据 provider/workspace/subject；禁止以邮箱模糊匹配补救。写交换签发 `aud=itsm-intake`/`intake:create`；用户目录/状态读取严格使用总计划 §3.2 定义的只读交换路由、scope 和响应投影；同一 nonce store 跨两种交换用途拒绝重放。技术自动化 token 仅用于既有 task API。
+**Interfaces:** 采用总计划 §3.2 的唯一 v2 `IdentityAssertion` 字段与签名顺序，外部映射依据 provider/workspace/subject；禁止以邮箱模糊匹配补救。写交换签发 `aud=itsm-intake`/`intake:create`；用户目录/状态读取严格使用总计划 §3.2 定义的只读交换路由、scope 和响应投影；同一 nonce store 跨两种交换用途拒绝重放。技术自动化 token 仅用于既有 task API。
 
 - [ ] 迁入旧 identity exchange 测试，增加 provider/channel 允许列表、包含换行的字段、nonce 重放、Redis 不可用、停用映射、跨 workspace、错误 audience、伪造 subject 和 role 拒绝用例。
 - [ ] 跨语言 fixture 用固定测试秘密与 nonce（仅测试文件），生成并保存准确 HMAC；A/B 读取同一文件。实现/测试流程：
 
 ```python
 import hashlib, hmac, json
-fields = ["kaf", "workspace-test", "subject-test", "kaf_web", "submission-test", "1788566400", "nonce-test"]
+fields = ["2", "itsm-intake", "create", "kaf", "11111111-1111-4111-8111-111111111111", "subject-test", "kaf_web", "submission-test", "1788566400", "nonce-test"]
 canonical = "\n".join(fields)
 fixture = {"fields": fields, "secret": "test-only-key", "canonical": canonical,
            "signature": hmac.new(b"test-only-key", canonical.encode(), hashlib.sha256).hexdigest()}
@@ -208,8 +208,8 @@ print(json.dumps(fixture, indent=2))
 ```
 
 - [ ] 运行 `go test ./handlers/intake ./tests/contract -run 'Identity|Assertion|Audience|Scope' -count=1`。
-- [ ] 将旧 Handler 中直接 Ent 查询、签名/nonce/审计业务下沉到服务和 repository；保持 Handler 绑定、限长、调用、DTO 返回。字段拒绝 CR/LF，消除 newline canonicalization 歧义；时间窗、TTL、允许 provider/channel 从已有配置机制注入。
-- [ ] nonce store 使用 provider/channel/workspace 范围，验签通过后原子 claim；存储失败即拒绝。身份映射管理使用权限与版本条件，审计不记录 assertion、token、秘密和个人明文。
+- [ ] 将旧 Handler 中直接 Ent 查询、签名/nonce/审计业务下沉到服务和 repository；保持 Handler 绑定、限长、调用、DTO 返回。字段拒绝 CR/LF 和首尾空白，严格校验签名 version/audience/purpose 与路由，消除用途替换和 canonicalization 歧义；时间窗、TTL、允许 provider/channel 从已有配置机制注入。
+- [ ] nonce store 使用 provider/channel/workspace 范围，验签通过后原子 claim，TTL 覆盖完整 assertion 剩余接受期和未来偏差；存储失败即拒绝。身份映射管理使用权限与版本条件，审计不记录 assertion、token、秘密和个人明文。
 - [ ] 注册 create、identity exchange、映射管理及最小用户目录/当前状态读路由，分别验证 scope 和对象权限。创建 201/200、错误 envelope 与 B 共用 OpenAPI；Intake token 不可访问任意通用 API。
 - [ ] 配置使用角色受限 secret 文件；exchange secret 与 JWT 签名密钥、webhook HMAC、automation token 分开；缺失时相关能力明确不可用。
 - [ ] 运行包测试与 route/ACL 契约测试，提交 `feat(intake): bind user identity exchange and scoped APIs`。
@@ -220,7 +220,7 @@ print(json.dumps(fixture, indent=2))
 
 **Files:** Create `tests/integration/intake_creation_test.go`、`tests/contract/work_item_creation_entrypoints_test.go` 的剩余数据库用例；Modify A1 固定的 schema/migration/verify 文件、`internal/bootstrap/post_schema_migrations_test.go`；记录证据到总计划指定报告。
 
-**Interfaces:** 使用现有集成测试隔离数据库策略与 `RLS_TEST_DSN`/测试 DSN 机制；不能在普通 `go test` 下隐式连共享库。真正的 PostgreSQL 测试标签沿现有文件构建标签。
+**Interfaces:** 使用隔离数据库；Intake 为 `integration_postgres`/`INTAKE_POSTGRES_TEST_DSN`，编号器为 `integration`/`ITSM_TEST_DB`，RLS 为 `integration_rls`/`RLS_TEST_DSN`；不能在普通 `go test` 下隐式连共享库。真正的 PostgreSQL 测试标签沿现有文件构建标签。
 
 - [ ] 增加同请求 20 个并发创建：所有成功结果同一 WorkItem、同一扩展、一个启动事件；不同请求独立编号；任一贡献者失败无部分记录。
 - [ ] 增加双 Worker 重放同启动事件：只有一个流程实例；事务提交后模拟返回错误再次重放仍返回原申请。禁止用睡眠等待碰运气，使用 barrier/注入故障和轮询断言。
@@ -230,7 +230,8 @@ print(json.dumps(fixture, indent=2))
 ```bash
 go test ./... -count=1
 go build ./...
-go test -tags integration ./handlers/intake ./tests/integration ./repository/workitemnumber -count=1
+go test -tags integration_postgres ./handlers/intake -count=1
+go test -tags integration ./tests/integration ./repository/workitemnumber -count=1
 go test -tags integration_rls ./database/rls -count=1
 ```
 

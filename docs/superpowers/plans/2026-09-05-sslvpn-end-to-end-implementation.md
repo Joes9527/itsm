@@ -103,21 +103,21 @@ B 的开发可在 A2/A6 契约冻结后使用 mock ITSM 开始，但不能在 A7
 
 ### 3.2 身份交换
 
-复用早期分支 `IdentityAssertion` 与 `/api/v1/intake/identity-exchange`：`provider/subject/channel/workspace/eventId/issuedAt/nonce/signature`；HMAC 字段顺序以已有 canonical 函数为唯一跨语言规范。
+复用早期分支身份映射与交换服务的职责，但替换尚未上线的签名协议为 v2，不接受旧签名 fallback。`IdentityAssertion` 必须包含 `version=2`、`audience=itsm-intake`、`purpose=create|read` 和 `provider/subject/channel/workspace/eventId/issuedAt/nonce/signature`。HMAC-SHA256 的 UTF-8 输入严格为 LF 连接的 `["2", audience, purpose, provider, workspace, subject, channel, eventId, decimal(issuedAt), nonce]`，无尾部换行；拒绝未知字段、CR/LF、首尾空白和未注册 provider。签名使用小写十六进制并恒定时间比较。
 
-KAF 在服务端从已认证会话、验证过的 workspace 成员关系生成 assertion；浏览器不发送待签名的任意 subject/workspace。ITSM 根据受信 provider、workspace、subject 查内部映射，签发短期 `aud=itsm-intake`、`scope=intake:create` 的凭据。
+KAF 在服务端从已认证会话、当前 workspace 成员关系生成 assertion；workspace 使用服务端加载的 UUID，subject 使用当前调用者已认证的外部 sub 并核对其本地身份映射，不使用邮箱或本地 user UUID 代替。管理员能查看他人会话不意味着可以为会话主人签名。浏览器不发送待签名的任意 subject/workspace。ITSM 根据受信 provider、workspace、subject 查内部映射，签发短期 `aud=itsm-intake`、`scope=intake:create` 的凭据。
 
 创建 token 不自动用于目录查询或当前状态查询。A6 实现以下最小读契约，复用同一交换服务和身份映射：
 
 | 路由 | 凭据/结果 |
 | --- | --- |
-| `POST /api/v1/intake/identity-exchange` | 原签名 assertion；固定签发 `aud=itsm-intake`、`intake:create` |
-| `POST /api/v1/intake/identity-exchange/read` | 同形状的新 assertion；固定签发同 audience 的 `intake:catalog:read intake:workitem:read`，不能创建 |
+| `POST /api/v1/intake/identity-exchange` | purpose=create 的 v2 assertion；固定签发 `aud=itsm-intake`、`intake:create` |
+| `POST /api/v1/intake/identity-exchange/read` | purpose=read 的新 v2 assertion；固定签发同 audience 的 `intake:catalog:read intake:workitem:read`，不能创建 |
 | `GET /api/v1/intake/catalog-items?q=&cursor=` | catalog read scope + 目录可见性；返回 `CatalogPage` |
 | `GET /api/v1/intake/catalog-items/{id}` | catalog read scope + 逐目录权限；返回 `CatalogContract` |
 | `GET /api/v1/intake/work-items/{id}` | workitem read scope + 当前用户行权限；返回 `WorkItemView` |
 
-交换用途由上述路由固定，不能提交任意 scope/role；provider 配置分别允许 create/read 用途。两端点共用 nonce store，同一 assertion 不能跨端点再用。读凭据 TTL 与原写凭据一致，映射停用/权限撤销后不得继续读取；秘密只在服务端。读 scope 不可访问通用业务 API，写 scope 不隐式包含读权限。
+交换用途必须与已签名 purpose 及路由一致，audience 必须为 itsm-intake，不能提交任意 scope/role；provider 配置分别允许 create/read 用途。两端点共用 nonce store，同一 assertion 不能跨端点再用。读凭据 TTL 与原写凭据一致，映射停用/权限撤销后不得继续读取；秘密只在服务端。读 scope 不可访问通用业务 API，写 scope 不隐式包含读权限。
 
 A2/A6 的 OpenAPI 固定以下最小投影，B1 使用同名严格模型：
 
@@ -125,6 +125,10 @@ A2/A6 的 OpenAPI 固定以下最小投影，B1 使用同名严格模型：
 - `CatalogPage`：`items: CatalogSummary[]`、`nextCursor: string|null`。`CatalogSummary` 包含 `id: integer`、`name: string`、`description: string`、`targetClass: string`。列表只返回可用且当前用户可见项；游标绑定租户/查询条件，默认最多 50 项。
 - `CatalogContract`：Summary 字段 + `catalogVersion: string`、`formSchemaVersion: string`、`fields: CatalogField[]`。字段项为 `key/label/type/required/readOnly/options`；options 为 `key/label` 数组；type 取现有字段定义类型，未知类型明确拒绝。授权目标和期限由目录选项表达，不能让用户提交任意外部组 ID。
 - `WorkItemView`：`workItemId/number/recordClass/status/version`、`fulfillmentState`、`accessResult`。status 保留专业域原值；fulfillmentState 为 `awaiting_approval/fulfilling/unknown/completed/rejected/cancelled`。accessResult 在 C1 前为 null，C1 后为授权结果的受权投影，包含 outcome、verifiedAt、expiresAt；不向普通申请人暴露 provider 原始回执或其他用户信息。
+
+内部 JWT 保留 `tokenType=intake` 和 scope 数组；外部交换 DTO 明确改为 Bearer/string scope，不直接搬用旧分支的响应类型。JWT 增加 `mappingId/mappingVersion`，每次请求按签名 tenant 查询原映射、核对版本/启用状态/用户/provider，再查当前用户权限及行范围。映射失效为明确拒绝，存储故障为可观测失败，不伪装成未映射。
+
+assertion 接受截止时间为 issuedAt + maxAge，要求 now 严格早于截止；nonce 保留 TTL 向上取整覆盖剩余接受期，包括允许的未来时钟偏差。nonce namespace 使用 provider/channel/workspace/nonce 的无歧义编码，不含 purpose；禁止相同 assertion 跨用途重用。交换响应丢失时生成新 nonce/assertion，业务提交键不变。
 
 目录版本字段冻结已确认定义，当前权限始终实时校验；不会因持有旧快照继续授权。
 
