@@ -108,6 +108,8 @@ func TestDecodeRejectsInjectedTenant(t *testing.T) {
 
 ## A3：专业创建规则与完整事务
 
+实施切片：A3a 先交付专业创建规则、真实解析与事务验证；A3b 与 A4 后端接线一起移除旧创建事务、切换依赖的 SR 共享字段和旧 `Ticket.type` 读写。A3a 通过不等于 A3 完成，整个分支在切换与迁移门禁通过前不启用生产路径。通用工单业务子类型使用 `generic_subtype`，专业类别仍只由 `recordClass` 表示；专业子类型保留在专业扩展。流程条件复用既有 `ProcessRoutingService` 策略，不建立第二套求值器。
+
 实施依赖调整：本任务按实际旧创建链路将金额、云资源引用等已使用的 SR 字段显式纳入公共类型与 OpenAPI，并补齐摘要测试；不将专业含义塞入未声明动态字段。为真实解析提供目录服务拥有的事务一致定义/版本接口，提前完成 A5 对应的版本计算前置部分。A5 复用同一实现并完成发布校验；C1 授权策略也必须参与同一版本输入。
 
 **Files:** Modify `handlers/intake/{service,work_item_creator,incident_creator,change_creator,service_request_creator}.go`；Create `generic_creator.go`、`problem_creator.go`；Modify `service/incident_service.go`、`handlers/{change,problem,service_request}/{service,repository_impl}.go`；Create 各专业 `creation.go`；Modify `service/field_value_service.go`、相关 schema/迁移。
