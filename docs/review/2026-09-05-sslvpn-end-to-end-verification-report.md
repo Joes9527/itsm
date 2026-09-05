@@ -1,10 +1,10 @@
 # SSLVPN 端到端实施与验证报告
 
-**状态：用户已要求原 Agent 重新接手，正在审查接手期间的修改并继续实施；尚未达到端到端验收门槛。** 原暂停时的工作区快照见[开发交接报告](2026-09-05-sslvpn-development-handoff-report.md)；恢复后的最新检查点见本报告及增量审查报告。本报告从已执行的验证开始记录；阶段测试通过不等于完整业务交付，也不代表已部署。后续任务应在此追加最终提交、命令、退出码和验收证据。
+**状态：用户已终止原会话，由接手 Agent 持续实施；MSP core、升级修复与转换 HTTP 已通过限定范围独立审查，正在完成工具队列生命周期与契约。尚未达到端到端验收门槛。** 原暂停时的工作区快照见[开发交接报告](2026-09-05-sslvpn-development-handoff-report.md)；恢复后的最新检查点见本报告及增量审查报告。本报告从已执行的验证开始记录；阶段测试通过不等于完整业务交付，也不代表已部署。后续任务应在此追加最终提交、命令、退出码和验收证据。
 
 ## 1. 验收范围与当前进度
 
-重新接手后的独立增量审查见[接手期间增量审查报告](2026-09-05-sslvpn-successor-review-report.md)：Change/Ticket repository 当前包测试及全部后端包编译通过，其中必填字段测试跳过与真实 PG 回滚覆盖缺失两个阻塞项已修复并通过针对性复审；七个 HTTP fixture 的租户上下文/入口迁移失败也已修复并复审通过。后续 `1802a000` 已完成显式流程覆盖权限、创建 actor 审计与矩阵重放，并通过独立审查；正在处理 MSP 创建身份与转换入口，其余完整链路门槛保持开放。后端退役与测试迁移已保存为中间源码提交 `229d8091`，最新全部包编译检查退出 0；尚非完整 A3b/A4 审查结论。下文较早提交的阶段证据保留原有适用范围。
+重新接手后的独立增量审查见[接手期间增量审查报告](2026-09-05-sslvpn-successor-review-report.md)：Change/Ticket repository 当前包测试及全部后端包编译通过，其中必填字段测试跳过与真实 PG 回滚覆盖缺失两个阻塞项已修复并通过针对性复审；七个 HTTP fixture 的租户上下文/入口迁移失败也已修复并复审通过。后续 `1802a000` 已完成显式流程覆盖权限、创建 actor 审计与矩阵重放，并通过独立审查；MSP 创建身份及转换入口的限定范围验收已补齐，其余完整链路门槛保持开放。后端退役与测试迁移已保存为中间源码提交 `229d8091`，最新全部包编译检查退出 0；尚非完整 A3b/A4 审查结论。下文较早提交的阶段证据保留原有适用范围。
 
 依据[实施计划](../superpowers/plans/2026-09-05-sslvpn-end-to-end-implementation.md)和[已确认设计](../superpowers/specs/2026-09-05-sslvpn-kaf-intake-end-to-end-design.md)，最终链路为：KAF Web 理解意图并复用收集/确认卡片 → 当前用户通过 Unified Intake 创建 ITSM 申请 → BPMN 两级审批 → Worker 委派 KAF 执行 → 查询确认外部用户组成员关系 → ITSM 记录授权结果、状态、审计 → KAF 展示结果。
 
@@ -17,7 +17,7 @@
 | 持久化流程启动 | 精确流程定义、启动摘要、Outbox 重放及故障恢复已有阶段证据 | 生产装配完成后的完整流程验证 |
 | Incident 创建事件 | 复用原规则引擎、事务动作与事件回执，已有阶段审查 | 与全部入口、运行角色的最终联合门禁 |
 | 数据库租户隔离 | 实际受限角色、Tenant/System 独立连接、真实 RLS 策略测试及独立复审通过 | 最终迁移组合与实际服务进程启动门禁 |
-| 全入口、旧路径和共享字段归并 | HTTP、Catalog、BPMN、邮件、AI、Feishu 等适配已产生内部提交及针对性测试 | 旧创建 API 已退役；共享 schema/读取方迁移、MSP 入口、最终独立审查仍开放 |
+| 全入口、旧路径和共享字段归并 | HTTP、Catalog、BPMN、邮件、AI、Feishu 等适配已产生内部提交及针对性测试 | 旧创建 API 已退役；共享 schema/读取方迁移、剩余输入与工具队列、最终整体独立审查仍开放 |
 | ITSM 前端与目录发布 | 已准备最终接口适配及验收清单 | 尚未完成该阶段实现与验证 |
 | 用户身份交换、KAF 确认卡接入 | 已有明确接口与安全契约 | 尚未完成本期实现与集成门禁 |
 | SSLVPN 授权、回执与外部验收 | 已确定策略、有限期限、结果契约和验证方案 | 尚未执行本期完整业务验收 |
@@ -39,6 +39,32 @@
 - `go test ./tests/integration -run 'TestIntake|TestDynamicFields|TestServiceCatalog' -count=1 -v`：退出 0，29 个顶层用例、84 条通过事件、零跳过，17.183 秒。覆盖真实 HTTP/BPMN 入口、当前流程权限及撤权重放、actor/requester 与规范业务身份、配置矩阵重放、专业持久化故障完整回滚后重试。
 - 独立审查批准这三个检查点，无 Critical/Important。实际完整 controller 日志仍包含既有缺失 tenant 上下文导致的类型断言 panic；相关测试仅证明角色门控未返回 403，不证明业务删除成功。
 - MSP 原租户 actor 与客户数据租户的分离在现有统一创建校验中尚未贯通；两处旧转换测试和此身份边界仍需修复。此次未运行 PG/RLS、真实 bootstrap、前端、KAF 或外部 Graph 验收。
+
+### 接手后的 MSP core 审查与修复（`57d519e3`、`2865ba2e`）
+
+接手时源码已提交，但原实现报告因相对路径错误未写入。接手者恢复了历史报告，并重新验证核心授权与实际 PostgreSQL 用例。独立审查发现三个升级缺口：新增必填列先于历史回填、追加流程变量破坏旧启动摘要、审计指定回执与原业务关联冲突未拒绝。三个问题均已复现、修复，并通过限定范围的独立复审。
+
+- `go test ./authorization ./middleware ./handlers/intake ./database ./database/rls -count=1 -timeout=120s`：退出 0。
+- `go test ./service -run '^TestWorkflowStart' -count=1 -timeout=90s`：退出 0，包括旧流程已提交但 Outbox 确认丢失后的升级重放。
+- `go test ./migration ./internal/bootstrap -count=1 -timeout=120s`：退出 0；补齐原迁移清单测试遗漏的 026 项。
+- 设置专属 `INTAKE_POSTGRES_TEST_DSN` 后执行 `go test -tags=integration_postgres ./tests/integration -run 'TestPostgresIntakeMSP(CanonicalBootstrap|MigrationRejectsConflictingAudit|ProvenanceMigration|SharedSnapshotAndDurableEffects|EmptyDevelopmentReset)' -count=1 -timeout=120s -v`：退出 0，19.235 秒。覆盖有数据升级、重复 bootstrap、冲突历史拒绝、真实受限角色的快照与原 actor 审计、回滚/清理。
+- 最初 PostgreSQL 16 测试镜像缺少 pgvector，直接 `InitializeStorage` 检查在该环境前置步骤失败。随后在独占临时 `pgvector/pgvector:pg17` 实例 `127.0.0.1:36446/sslvpn_runtime`，从提交 `2865ba2e` 的独立源码快照调用真实 `InitializeStorage`，连续两次通过（`timeout 180s go run ./cmd/takeover_storage_check`，退出 0，AutoMigrate=true、AutoSeed=false）。数据库复核：vector 0.8.6 已安装、19 项迁移已执行至 026、actor_tenant_id 为 NOT NULL。该检查证明完整存储初始化与重复执行，不代替有数据升级测试、API/Worker 启动或业务验收。
+
+- 同一提交另用独占 `sslvpn_upgrade` 库构造已执行至 025 的有数据夹具，经真实 `InitializeStorage` 升级并重复执行，均通过（`timeout 120s go run ./cmd/takeover_storage_upgrade_check`，退出 0）；断言原 actor、租户、WorkItem、回执 ID 与数量不变。夹具通过生产 `ApplyMigration` 逐项装载 025 及以前迁移，026 由正常初始化入口执行。前两次夹具构造失败（残留 026 触发器、完整迁移流检查拒绝截断列表）仅作搭建记录，不计为产品失败或通过。
+
+MSP core 阶段完成不关闭转换接口、共享字段 027+、全入口、前端、KAF 或外部授权验收。下一项为显式客户申请人及真实签名 HTTP/撤权重放验证。
+
+### MSP 转换 HTTP 验收（`87cb95ea`）
+
+可选 `requesterId` 经严格 DTO 绑定传给统一 Intake，显式零或负值返回 400；跨客户 MSP 会话必须提供有效客户申请人。保持原 provider actor，创建与重放分别返回 201/200 的统一回执。原来的假转换测试及通过恢复 panic 掩盖问题的绑定删除测试，已改为真实服务与数据断言。
+
+- `go test ./controller -count=1 -timeout=120s`：退出 0，18.170 秒。完整包通过，关闭此前两处旧转换 fixture 和无 tenant 的绑定删除缺口。
+- `go test ./handlers/problem ./handlers/common/intakehttp ./tests/contract -count=1 -timeout=120s`：退出 0。
+- 专属 PostgreSQL 上执行 `go test -tags=integration_postgres ./tests/integration -run '^TestPostgresIncidentConversionSignedMSPHTTPAuthorizationAndReplay$' -count=1 -timeout=120s -v`：退出 0，4.802 秒，无跳过。使用真实 SwitchTenant 签名、Auth/RBAC/Tenant/路由权限链、限定客户角色权限、实际受限 Runtime/System 连接及迁移流。
+- 原始申请人/actor 审计、关联与来源 Incident 保持正确；分配、权限、角色、actor、申请人及客户状态撤销后的重放全部拒绝，比较业务图数量、快照/Outbox 数量及编号分配器实际值不变。外国租户、已删除、终态来源均拒绝。角色/schema 清理与连接归还均通过。
+- 独立限定范围审查结论 PASS，无新增执行检查要求。生成的完整 Swagger 和前端响应/提交键适配仍归后续协调切换，不能据此声称全部入口或端到端完成。
+
+下一项是工具队列关闭与准确工具契约；之后再按有边界的输入修复、027/028 共享字段清理推进。
 
 ## 3. 可定位的 RLS 验证记录
 
@@ -68,7 +94,7 @@
 ## 5. 环境、外部影响与后续证据
 
 - ITSM 和 KAF 使用独立 feature worktree；原 KAF 工作区已有 `uv.lock` 修改保持原样。
-- 专属临时 PostgreSQL 容器使用本机端口 36444。专属 Redis 使用 `127.0.0.1:36445`，健康检查 PONG，关闭持久化；ITSM/KAF 分别预留 DB0/DB1。依赖健康不计为 API、Worker 或业务链路通过。
+- 专属临时 PostgreSQL 16 测试容器使用本机端口 36444；新增独占 pgvector PostgreSQL 17 容器使用本机端口 36446，仅用于运行初始化验证，数据位于 tmpfs。专属 Redis 使用 `127.0.0.1:36445`，健康检查 PONG，关闭持久化；ITSM/KAF 分别预留 DB0/DB1。依赖健康不计为 API、Worker 或业务链路通过。
 - 未向共享数据库或现有角色写入本期变更，未推送、合并或部署，未执行本期 Graph 成员关系查询或外部授权变更。
 - 后续必须补充：最终 schema 升级/恢复与 Ent 重启检查、每个真实创建入口、Catalog 发布组合校验、当前用户身份与撤权、确认卡丢响应恢复、两级审批、两个 Worker、外部成员关系核验、首次授权时间重放不变、回执/审计一致性、外部测试清理。
 - 流程实例等待期间修改同一流程版本的行为尚需 A5 具体验证；不能由精确初始启动摘要或固定定义下的数值精度测试推出流程定义不可变。
