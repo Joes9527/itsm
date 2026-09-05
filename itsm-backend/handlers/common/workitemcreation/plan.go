@@ -17,6 +17,7 @@ func NewPlan(in ResolvedIntake, status, priority, source string) *CreationPlan {
 		"form_values": in.Command.FormValues, "approval_required": false,
 	}, WorkItem: WorkItemDraft{
 		TenantID: in.Identity.TenantID, ActorID: in.Identity.ActorID, RequesterID: in.Identity.RequesterID,
+		TemplateID: in.Command.TemplateID, ParentTicketID: in.Command.ParentTicketID, TagIDs: append([]int(nil), in.Command.TagIDs...),
 		RecordClass: in.RecordClass, Title: in.Command.Title, Description: in.Command.Description,
 		Status: status, Priority: priority, Source: source, AssigneeID: in.Command.AssigneeID,
 		AssignmentGroupID: in.Command.AssignmentGroupID, CategoryID: categoryID, SLADefinitionID: in.SLADefinitionID,

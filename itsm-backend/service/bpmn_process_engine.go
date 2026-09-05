@@ -1419,6 +1419,25 @@ func (e *CustomProcessEngine) executeClaimedServiceTaskCallback(
 	if instance.CurrentActivityID != txRow.ElementID {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(errors.New("callback no longer owns current activity"))
 	}
+	outputs, err := creationCallbackOutputs(handler, txRow.Action, effect)
+	if err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(err)
+	}
+	if len(outputs) > 0 {
+		merged := copyBPMNCallbackVariables(instance.Variables)
+		for key, value := range outputs {
+			merged[key] = value
+		}
+		affected, err := tx.ProcessInstance.Update().Where(processinstance.IDEQ(instance.ID), processinstance.TenantIDEQ(instance.TenantID), processinstance.VersionEQ(instance.Version)).SetVariables(merged).SetVersion(instance.Version + 1).Save(ctx)
+		if err != nil {
+			return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+		}
+		if affected != 1 {
+			return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(errors.New("source process changed during creation callback"))
+		}
+		instance.Variables = merged
+		instance.Version++
+	}
 	definition, err := tx.Client().ProcessDefinition.Query().Where(
 		processdefinition.ID(instance.ProcessDefinitionID),
 		processdefinition.TenantID(instance.TenantID),
@@ -2127,20 +2146,9 @@ func (e *CustomProcessEngine) getDefaultAssigntee(ctx context.Context, instance 
 
 	// 第一优先：流程变量中显式指定 assignee
 	if instance.Variables != nil {
-		if assignee, ok := instance.Variables["assignee"]; ok {
-			switch val := assignee.(type) {
-			case float64:
-				if val > 0 {
-					return strconv.FormatFloat(val, 'f', 0, 64)
-				}
-			case int:
-				if val > 0 {
-					return strconv.Itoa(val)
-				}
-			case string:
-				if val != "" && val != "0" {
-					return val
-				}
+		if value, ok := instance.Variables["assignee"]; ok {
+			if id, err := bpmn.CallbackInteger(value); err == nil && id > 0 {
+				return strconv.Itoa(id)
 			}
 		}
 	}
@@ -4275,14 +4283,8 @@ func getCounterSignStatus(ctx context.Context, client *ent.Client, parent *ent.P
 }
 
 func numericInt(value interface{}) (int, bool) {
-	switch v := value.(type) {
-	case int:
-		return v, true
-	case float64:
-		return int(v), true
-	default:
-		return 0, false
-	}
+	integer, err := bpmn.CallbackInteger(value)
+	return integer, err == nil
 }
 
 func bpmnProcessTaskWriteLock() predicate.ProcessTask {

@@ -119,7 +119,7 @@ func TestSetTaskVariablesRejectsReservedCallbackAndIdentityKeysAtomically(t *tes
 	)
 
 	require.Error(t, err)
-	assert.Equal(t, map[string]interface{}{"existing_form_value": "kept"}, f.client.ProcessTask.GetX(f.userCtx, task.ID).TaskVariables)
+	assert.Equal(t, map[string]interface{}{"existing_form_value": "kept"}, map[string]any(f.client.ProcessTask.GetX(f.userCtx, task.ID).TaskVariables))
 }
 
 func TestCompleteTaskMergesParticipantValuesWithoutErasingTaskSummary(t *testing.T) {

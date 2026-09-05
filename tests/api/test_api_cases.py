@@ -6,6 +6,7 @@ API Test Cases - Complete and Robust Implementation
 
 import pytest
 import time
+from uuid import uuid4
 import requests
 from tests.api import ITSMAPIClient
 from tests.database import ITSMDBClient
@@ -142,10 +143,14 @@ class TestTickets:
     def test_create_ticket(self, api_client):
         """测试创建工单"""
         ticket_data = TicketFixture.create()
-        result = api_client.create_ticket(ticket_data)
+        result = api_client.create_ticket(ticket_data, idempotency_key=str(uuid4()))
 
-        # 创建可能成功或因数据问题失败
-        assert result is not None
+        assert result["code"] == 0, result
+        receipt = result["data"]
+        assert receipt["workItemId"] > 0
+        assert receipt["number"]
+        assert "professionalReference" in receipt
+        assert "id" not in receipt and "ticketId" not in receipt
 
     def test_get_ticket_detail(self, api_client):
         """测试获取工单详情"""

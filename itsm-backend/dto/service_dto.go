@@ -1,6 +1,7 @@
 package dto
 
 import (
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"time"
 )
 
@@ -15,6 +16,19 @@ type UserResponse struct {
 
 // CreateServiceRequestRequest 创建服务请求请求
 type CreateServiceRequestRequest struct {
+	RecordClass       string                  `json:"recordClass" binding:"required"`
+	CatalogVersion    string                  `json:"catalogVersion" binding:"required"`
+	FormSchemaVersion string                  `json:"formSchemaVersion" binding:"required"`
+	Priority          string                  `json:"priority,omitempty"`
+	RequesterID       int                     `json:"requesterId,omitempty"`
+	AssigneeID        *int                    `json:"assigneeId,omitempty"`
+	CTI               *creation.CTIInput      `json:"cti,omitempty"`
+	CIIDs             []int                   `json:"ciIds,omitempty"`
+	Generic           *creation.GenericInput  `json:"generic,omitempty"`
+	Incident          *creation.IncidentInput `json:"incident,omitempty"`
+	Problem           *creation.ProblemInput  `json:"problem,omitempty"`
+	Change            *creation.ChangeInput   `json:"change,omitempty"`
+
 	CatalogID int            `json:"catalogId" binding:"omitempty,min=1"`
 	Title     string         `json:"title" binding:"omitempty,max=255"`
 	Reason    string         `json:"reason" binding:"omitempty,max=500"`

@@ -9,13 +9,17 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/handlers/common/intakehttp"
+	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
-	service *Service
+	creationApplication creation.Application
+	service             *Service
 }
 
 func failServiceRequest(c *gin.Context, err error) {
@@ -117,64 +121,22 @@ func (h *Handler) toDTOWithCustomFields(req *ServiceRequest, client *ent.Client,
 	return resp
 }
 
+func (h *Handler) SetCreationApplication(app creation.Application) { h.creationApplication = app }
 func (h *Handler) Create(c *gin.Context) {
 	var req dto.CreateServiceRequestRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, 1001, "Invalid parameters: "+err.Error())
+	if !intakehttp.Bind(c, &req) {
 		return
 	}
-	normalizeCreateServiceRequest(&req)
-	if req.CatalogID == 0 {
-		common.Fail(c, 1001, "catalogId is required")
+	tenantID, err := middleware.ResolveRequestTenantID(c)
+	if middleware.AbortIfTenantError(c, err) {
 		return
 	}
-
-	tenantID := c.GetInt("tenant_id")
-	if tenantID == 0 {
-		common.Fail(c, 2001, "Tenant ID missing")
-		return
-	}
-	userID := c.GetInt("user_id")
-	if userID == 0 {
-		common.Fail(c, 2001, "User ID missing")
-		return
-	}
-
-	expireAt := req.ExpireAt
-
-	domainReq := &ServiceRequest{
-		ComplianceAck:      req.ComplianceAck,
-		NeedsPublicIP:      req.NeedsPublicIP,
-		DataClassification: req.DataClassification,
-		FormData:           req.FormData,
-		CostCenter:         req.CostCenter,
-		SourceIPWhitelist:  req.SourceIPWhitelist,
-		ExpireAt:           expireAt,
-		ContactName:        req.ContactName,
-		ContactEmail:       req.ContactEmail,
-		Quantity:           req.Quantity,
-		ExpectedAt:         req.ExpectedAt,
-	}
-	if domainReq.FormData == nil {
-		domainReq.FormData = map[string]interface{}{}
-	}
-	domainReq.FormData["title"] = req.Title
-	domainReq.FormData["reason"] = req.Reason
-
-	created, err := h.service.Create(c.Request.Context(), tenantID, userID, req.CatalogID, domainReq)
+	command, err := catalogCreationCommand(req, func(name string) bool { return intakehttp.FieldPresent(c, name) })
 	if err != nil {
-		failServiceRequest(c, err)
+		intakehttp.Fail(c, err)
 		return
 	}
-
-	fullReq, err := h.service.Get(c.Request.Context(), created.ID, tenantID)
-	if err != nil {
-		h.service.logger.Errorw("Create: failed to get created service request", "error", err, "id", created.ID)
-		// Return the created object even if Get fails - created.ID is valid
-		common.Success(c, h.toDTO(created))
-		return
-	}
-	common.Success(c, h.toDTOWithCustomFields(fullReq, h.service.Client(), c.GetInt("user_id"), c.GetString("role")))
+	intakehttp.Execute(c, h.creationApplication, tenantID, req.RequesterID, command)
 }
 
 func (h *Handler) Get(c *gin.Context) {

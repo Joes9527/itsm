@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/processvariable"
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -197,7 +198,7 @@ func (_u *ProcessInstanceUpdate) ClearCurrentActivityName() *ProcessInstanceUpda
 }
 
 // SetVariables sets the "variables" field.
-func (_u *ProcessInstanceUpdate) SetVariables(v map[string]interface{}) *ProcessInstanceUpdate {
+func (_u *ProcessInstanceUpdate) SetVariables(v jsonvalue.NumberMap) *ProcessInstanceUpdate {
 	_u.mutation.SetVariables(v)
 	return _u
 }
@@ -1095,7 +1096,7 @@ func (_u *ProcessInstanceUpdateOne) ClearCurrentActivityName() *ProcessInstanceU
 }
 
 // SetVariables sets the "variables" field.
-func (_u *ProcessInstanceUpdateOne) SetVariables(v map[string]interface{}) *ProcessInstanceUpdateOne {
+func (_u *ProcessInstanceUpdateOne) SetVariables(v jsonvalue.NumberMap) *ProcessInstanceUpdateOne {
 	_u.mutation.SetVariables(v)
 	return _u
 }

@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent"
@@ -69,7 +70,7 @@ func (ProcessTask) Fields() []ent.Field {
 		field.String("form_key").
 			Comment("表单Key").
 			Optional(),
-		field.JSON("task_variables", map[string]interface{}{}).
+		field.JSON("task_variables", jsonvalue.NumberMap{}).
 			Comment("参与者可编辑的任务表单变量；回调路由和系统元数据不得存放在此字段").
 			Optional(),
 		field.String("callback_handler_id").

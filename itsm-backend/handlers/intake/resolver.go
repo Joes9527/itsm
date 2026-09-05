@@ -2,7 +2,11 @@ package intake
 
 import (
 	"context"
+	"itsm-backend/authorization"
 	"itsm-backend/ent"
+	"itsm-backend/ent/ticket"
+	"itsm-backend/ent/tickettag"
+	"itsm-backend/ent/tickettemplate"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
 	"strconv"
@@ -21,6 +25,9 @@ func NewResolver(catalog creation.CatalogResolver, workflow creation.WorkflowRes
 func (r *Resolver) Resolve(ctx context.Context, tx *ent.Tx, identity creation.Identity, command creation.CreateWorkItemCommand) (*creation.ResolvedIntake, error) {
 	if r == nil || missingDependency(r.catalog) || missingDependency(r.workflow) || missingDependency(r.cis) || missingDependency(r.classification) {
 		return nil, creation.NewInternalFailure("intake resolver is not fully configured", nil)
+	}
+	if err := resolveSharedCreationReferences(ctx, tx, identity, command); err != nil {
+		return nil, err
 	}
 	result := &creation.ResolvedIntake{Identity: identity, Command: command, RecordClass: command.RecordClass, ResolverVersion: "intake-resolver-v1"}
 	var err error
@@ -46,16 +53,16 @@ func (r *Resolver) Resolve(ctx context.Context, tx *ent.Tx, identity creation.Id
 			return nil, err
 		}
 	} else {
-		if command.Generic != nil && command.Generic.TemplateID != nil {
+		if command.TemplateID != nil {
 			fields := service.NewFieldDefinitionService(tx.Client())
-			if err = fields.ValidateCreationValues(ctx, tx, identity.TenantID, "ticket_template", *command.Generic.TemplateID, command.FormValues); err != nil {
+			if err = fields.ValidateCreationValues(ctx, tx, identity.TenantID, "ticket_template", *command.TemplateID, command.FormValues); err != nil {
 				return nil, err
 			}
-			result.FieldScope, err = fields.CreationFieldScope(ctx, tx, identity.TenantID, "ticket_template", *command.Generic.TemplateID)
+			result.FieldScope, err = fields.CreationFieldScope(ctx, tx, identity.TenantID, "ticket_template", *command.TemplateID)
 			if err != nil {
 				return nil, err
 			}
-		} else if len(command.FormValues) > 0 {
+		} else if len(command.FormValues) > 0 && len(command.AdHocFields) == 0 {
 			return nil, creation.NewDomainValidationFailed("dynamic fields require a catalog or template definition", nil)
 		}
 	}
@@ -86,8 +93,8 @@ func (r *Resolver) ResolveWorkflow(ctx context.Context, tx *ent.Tx, plan *creati
 	key := ""
 	if plan.Resolved.Catalog != nil {
 		key = plan.Resolved.Catalog.ProcessDefinitionKey
-	} else if input := plan.Resolved.Command.Generic; input != nil {
-		key = input.WorkflowDefinitionKey
+	} else {
+		key = plan.Resolved.Command.WorkflowDefinitionKey
 	}
 	workflow, slaID, err := r.workflow.ResolveCreationWorkflow(ctx, tx, plan, key)
 	if err != nil {
@@ -99,5 +106,45 @@ func (r *Resolver) ResolveWorkflow(ctx context.Context, tx *ent.Tx, plan *creati
 	plan.Resolved.Workflow = workflow
 	plan.Resolved.SLADefinitionID = slaID
 	plan.WorkItem.SLADefinitionID = slaID
+	return nil
+}
+
+func resolveSharedCreationReferences(ctx context.Context, tx *ent.Tx, identity creation.Identity, command creation.CreateWorkItemCommand) error {
+	if command.TemplateID != nil {
+		if err := authorization.RequireCurrentPermission(ctx, tx, identity, "ticket", "read"); err != nil {
+			return err
+		}
+		exists, err := tx.TicketTemplate.Query().Where(tickettemplate.IDEQ(*command.TemplateID), tickettemplate.TenantIDEQ(identity.TenantID), tickettemplate.IsActiveEQ(true)).Exist(ctx)
+		if err != nil {
+			return creation.NewInfrastructureUnavailable("could not resolve template", err)
+		}
+		if !exists {
+			return creation.NewReferenceNotFound("template is unavailable", nil)
+		}
+	}
+	if command.ParentTicketID != nil {
+		if err := authorization.RequireCurrentPermission(ctx, tx, identity, "ticket", "read"); err != nil {
+			return err
+		}
+		exists, err := tx.Ticket.Query().Where(ticket.IDEQ(*command.ParentTicketID), ticket.TenantIDEQ(identity.TenantID), ticket.DeletedAtIsNil()).Exist(ctx)
+		if err != nil {
+			return creation.NewInfrastructureUnavailable("could not resolve parent work item", err)
+		}
+		if !exists {
+			return creation.NewReferenceNotFound("parent work item is unavailable", nil)
+		}
+	}
+	if len(command.TagIDs) > 0 {
+		if err := authorization.RequireCurrentPermission(ctx, tx, identity, "ticket", "read"); err != nil {
+			return err
+		}
+		count, err := tx.TicketTag.Query().Where(tickettag.IDIn(command.TagIDs...), tickettag.TenantIDEQ(identity.TenantID)).Count(ctx)
+		if err != nil {
+			return creation.NewInfrastructureUnavailable("could not resolve tags", err)
+		}
+		if count != len(command.TagIDs) {
+			return creation.NewReferenceNotFound("tag is outside tenant", nil)
+		}
+	}
 	return nil
 }

@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/processvariable"
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -143,7 +144,7 @@ func (_c *ProcessInstanceCreate) SetNillableCurrentActivityName(v *string) *Proc
 }
 
 // SetVariables sets the "variables" field.
-func (_c *ProcessInstanceCreate) SetVariables(v map[string]interface{}) *ProcessInstanceCreate {
+func (_c *ProcessInstanceCreate) SetVariables(v jsonvalue.NumberMap) *ProcessInstanceCreate {
 	_c.mutation.SetVariables(v)
 	return _c
 }
@@ -842,7 +843,7 @@ func (u *ProcessInstanceUpsert) ClearCurrentActivityName() *ProcessInstanceUpser
 }
 
 // SetVariables sets the "variables" field.
-func (u *ProcessInstanceUpsert) SetVariables(v map[string]interface{}) *ProcessInstanceUpsert {
+func (u *ProcessInstanceUpsert) SetVariables(v jsonvalue.NumberMap) *ProcessInstanceUpsert {
 	u.Set(processinstance.FieldVariables, v)
 	return u
 }
@@ -1271,7 +1272,7 @@ func (u *ProcessInstanceUpsertOne) ClearCurrentActivityName() *ProcessInstanceUp
 }
 
 // SetVariables sets the "variables" field.
-func (u *ProcessInstanceUpsertOne) SetVariables(v map[string]interface{}) *ProcessInstanceUpsertOne {
+func (u *ProcessInstanceUpsertOne) SetVariables(v jsonvalue.NumberMap) *ProcessInstanceUpsertOne {
 	return u.Update(func(s *ProcessInstanceUpsert) {
 		s.SetVariables(v)
 	})
@@ -1902,7 +1903,7 @@ func (u *ProcessInstanceUpsertBulk) ClearCurrentActivityName() *ProcessInstanceU
 }
 
 // SetVariables sets the "variables" field.
-func (u *ProcessInstanceUpsertBulk) SetVariables(v map[string]interface{}) *ProcessInstanceUpsertBulk {
+func (u *ProcessInstanceUpsertBulk) SetVariables(v jsonvalue.NumberMap) *ProcessInstanceUpsertBulk {
 	return u.Update(func(s *ProcessInstanceUpsert) {
 		s.SetVariables(v)
 	})

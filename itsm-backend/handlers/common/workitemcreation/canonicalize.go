@@ -12,7 +12,7 @@ import (
 	"unicode/utf8"
 )
 
-const CanonicalDigestVersion = "intake-v3"
+const CanonicalDigestVersion = "intake-v4"
 
 func invalid(field, message string) error {
 	return NewInvalidCommand("invalid intake command", FieldError{Field: field, Message: message}, nil)
@@ -41,7 +41,7 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 	if n.IdempotencyKey == "" || utf8.RuneCountInString(n.IdempotencyKey) > 200 {
 		return n, "", invalid("idempotencyKey", "must contain 1 to 200 characters")
 	}
-	if (n.Title == "" && (n.Problem == nil || n.Problem.SourceIncidentID == nil)) || utf8.RuneCountInString(n.Title) > 500 {
+	if (n.Title == "" && (n.Problem == nil || n.Problem.SourceIncidentID == nil) && (n.Change == nil || n.Change.StandardTemplateID == nil)) || utf8.RuneCountInString(n.Title) > 500 {
 		return n, "", invalid("title", "must contain 1 to 500 characters")
 	}
 	if utf8.RuneCountInString(n.Description) > 20000 {
@@ -79,10 +79,8 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 		ids["cti.typeId"] = n.CTI.TypeID
 		ids["cti.itemId"] = n.CTI.ItemID
 	}
-	if n.Generic != nil {
-		ids["generic.templateId"] = n.Generic.TemplateID
-		ids["generic.parentTicketId"] = n.Generic.ParentTicketID
-	}
+	ids["templateId"] = n.TemplateID
+	ids["parentTicketId"] = n.ParentTicketID
 	for field, id := range ids {
 		if id != nil && *id <= 0 {
 			return n, "", invalid(field, "must be positive")
@@ -127,7 +125,6 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 		g.TypeID = strings.TrimSpace(g.TypeID)
 		g.Source = strings.TrimSpace(g.Source)
 		g.Category = strings.TrimSpace(g.Category)
-		g.WorkflowDefinitionKey = strings.TrimSpace(g.WorkflowDefinitionKey)
 		if g.TypeID != "" {
 			id, e := strconv.Atoi(g.TypeID)
 			if e != nil || id <= 0 {
@@ -135,8 +132,35 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 			}
 			g.TypeID = strconv.Itoa(id)
 		}
-		if g.TagIDs, err = normalizeCIIDs(g.TagIDs); err != nil {
-			return n, "", err
+	}
+	n.WorkflowDefinitionKey = strings.TrimSpace(n.WorkflowDefinitionKey)
+	if n.TagIDs, err = normalizeCIIDs(n.TagIDs); err != nil {
+		return n, "", err
+	}
+	if len(n.AdHocFields) > 0 {
+		if n.TemplateID != nil || n.CatalogItemID != nil {
+			return n, "", invalid("adHocFields", "cannot replace catalog or template definitions")
+		}
+		if len(n.AdHocFields) > 100 {
+			return n, "", invalid("adHocFields", "must not exceed 100 fields")
+		}
+		names := map[string]bool{}
+		for index := range n.AdHocFields {
+			field := &n.AdHocFields[index]
+			field.Name = strings.TrimSpace(field.Name)
+			field.Label = strings.TrimSpace(field.Label)
+			if field.Name == "" || len(field.Name) > 100 || len(field.Label) > 255 || names[field.Name] {
+				return n, "", invalid("adHocFields", "field names must be unique and bounded")
+			}
+			if field.Label == "" {
+				field.Label = field.Name
+			}
+			names[field.Name] = true
+		}
+		for name := range n.FormValues {
+			if !names[name] {
+				return n, "", invalid("formValues."+name, "ad-hoc field definition is required")
+			}
 		}
 	}
 	if n.Problem != nil {
@@ -172,6 +196,22 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 	}
 	if n.Change != nil {
 		c := n.Change
+		if c.StandardTemplateID != nil && *c.StandardTemplateID <= 0 {
+			return n, "", invalid("change.standardTemplateId", "must be positive")
+		}
+		refs := map[string]bool{}
+		for _, number := range c.RelatedTicketNumbers {
+			number = strings.TrimSpace(number)
+			if number == "" {
+				return n, "", invalid("change.relatedTicketNumbers", "number is required")
+			}
+			refs[number] = true
+		}
+		c.RelatedTicketNumbers = nil
+		for number := range refs {
+			c.RelatedTicketNumbers = append(c.RelatedTicketNumbers, number)
+		}
+		sort.Strings(c.RelatedTicketNumbers)
 		c.Justification = strings.TrimSpace(c.Justification)
 		c.Type = strings.TrimSpace(c.Type)
 		c.ImpactScope = strings.TrimSpace(c.ImpactScope)

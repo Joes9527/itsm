@@ -138,3 +138,28 @@ func TestWorkflowStartNumericFalseConditionSelectsFallback(t *testing.T) {
 	require.NoError(t, NewWorkflowStartOutboxHandler(f.client, f.engine).Deliver(context.Background(), event))
 	require.Equal(t, "fallback", f.client.ProcessTask.Query().OnlyX(context.Background()).TaskDefinitionKey)
 }
+
+func TestWorkflowNumericContinuationAfterPersistedReload(t *testing.T) {
+	xml := strings.Replace(string(numericGatewayXML("amount + 0.005 == 9007199254740993.13")), `<bpmn:exclusiveGateway id="choose"/>`, `<bpmn:userTask id="checkpoint" name="Confirm"/><bpmn:exclusiveGateway id="choose"/><bpmn:sequenceFlow id="after-checkpoint" sourceRef="checkpoint" targetRef="choose"/>`, 1)
+	xml = strings.Replace(xml, `id="begin" sourceRef="start" targetRef="choose"`, `id="begin" sourceRef="start" targetRef="checkpoint"`, 1)
+	f, event := workflowStartFixture(t, []byte(xml))
+	event = withFrozenStartVariables(t, event, map[string]any{"amount": json.Number("9007199254740993.125")})
+	ctx := context.Background()
+	require.NoError(t, NewWorkflowStartOutboxHandler(f.client, f.engine).Deliver(ctx, event))
+	instance := f.client.ProcessInstance.Query().OnlyX(ctx)
+	require.Equal(t, json.Number("9007199254740993.125"), instance.Variables["amount"], "actual Ent reload must retain decimal precision")
+	task := f.client.ProcessTask.Query().OnlyX(ctx)
+	require.Equal(t, "checkpoint", task.TaskDefinitionKey)
+	task.Update().SetAssignee(fmt.Sprint(f.actor.ID)).SaveX(ctx)
+	restarted := NewCustomProcessEngine(f.client, zap.NewNop().Sugar()).(*CustomProcessEngine)
+	require.NoError(t, restarted.CompleteTask(f.typedTaskScopeOnlyCtx(f.actor, false), task.TaskID, map[string]any{}))
+	tasks := f.client.ProcessTask.Query().AllX(ctx)
+	require.Len(t, tasks, 2)
+	for _, next := range tasks {
+		if next.ID != task.ID {
+			require.Equal(t, "accepted", next.TaskDefinitionKey)
+		}
+	}
+	reloaded := f.client.ProcessInstance.GetX(ctx, instance.ID)
+	require.Equal(t, json.Number("9007199254740993.125"), reloaded.Variables["amount"])
+}

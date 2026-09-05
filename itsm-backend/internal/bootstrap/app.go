@@ -478,7 +478,6 @@ func NewApplication() *Application {
 
 	// AI Tools
 	toolRegistry := service.NewToolRegistry(ragService, incidentService, configurationItemService, client)
-	toolQueue := service.NewToolQueue(client, toolRegistry, numberAllocator, 100, sugar)
 
 	ticketController := controller.NewTicketController(ticketService, ticketDependencyService, database.GetRawDB(), client, sugar)
 	ticketDependencyController := controller.NewTicketDependencyController(ticketDependencyService)
@@ -674,6 +673,22 @@ func NewApplication() *Application {
 		}
 	}
 	intakeApplication := intake.NewService(client, intake.NewResolver(scService, processBindingService, configurationItemService, ticketCategoryService), creationRegistry, intake.NewWorkItemCreator(numberAllocator))
+	ticketController.SetCreationApplication(intakeApplication)
+	incidentController.SetCreationApplication(intakeApplication)
+	problemHandler.SetCreationApplication(intakeApplication)
+	changeHandler.SetCreationApplication(intakeApplication)
+	standardChangeHandler.SetCreationApplication(intakeApplication)
+	srHandler.SetCreationApplication(intakeApplication)
+
+	if cpe, ok := processEngine.(*service.CustomProcessEngine); ok {
+		if h, ok := cpe.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler); ok {
+			h.SetCreationApplication(intakeApplication)
+		}
+		if h, ok := cpe.CallbackRegistry().GetHandler("change_service_handler").(*bpmn.ChangeServiceTaskHandler); ok {
+			h.SetCreationApplication(intakeApplication)
+		}
+	}
+	toolQueue := service.NewToolQueue(client, toolRegistry, intakeApplication, ticketService, 100, sugar)
 	feishuSyncService := service.NewFeishuSyncService(client, sugar, intakeApplication)
 	outboxRegistry, err := service.NewOutboxEventTypeRegistry(
 		[]service.OutboxDeliveryHandler{service.NewFeishuCreationDeliveryHandler(feishuSyncService, func(tenantID int) (service.FeishuTaskCreator, bool) {

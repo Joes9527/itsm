@@ -308,7 +308,7 @@ func (s *TicketService) CreateTicket(ctx context.Context, req *dto.CreateTicketR
 			}
 			defer tx.Rollback()
 			// 同步工单到飞书
-			_, err = feishuConn.SyncTicketToFeishu(ctx2, tx, s.toEntTicket(tkt))
+			_, err = feishuConn.UpdateExistingTicketTask(ctx2, tx, s.toEntTicket(tkt))
 			if err != nil {
 				s.logger.Warnw("Failed to sync ticket to feishu", "error", err, "ticket_id", tkt.ID)
 				return
@@ -917,7 +917,7 @@ func (s *TicketService) GetTicket(ctx context.Context, id int, tenantID int) (*t
 			}
 			defer tx.Rollback()
 			// 同步工单到飞书
-			_, err = feishuConn.SyncTicketToFeishu(ctx2, tx, s.toEntTicket(updated))
+			_, err = feishuConn.UpdateExistingTicketTask(ctx2, tx, s.toEntTicket(updated))
 			if err != nil {
 				s.logger.Warnw("Failed to sync ticket to feishu", "error", err, "ticket_id", updated.ID)
 				return
@@ -1116,7 +1116,7 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 			}
 			defer tx.Rollback()
 			// 同步工单到飞书
-			_, err = feishuConn.SyncTicketToFeishu(ctx2, tx, s.toEntTicket(updated))
+			_, err = feishuConn.UpdateExistingTicketTask(ctx2, tx, s.toEntTicket(updated))
 			if err != nil {
 				s.logger.Warnw("Failed to sync ticket to feishu", "error", err, "ticket_id", updated.ID)
 				return
@@ -1286,7 +1286,7 @@ func (s *TicketService) AssignTicket(ctx context.Context, ticketID int, assignee
 			}
 			defer tx.Rollback()
 			// 同步工单到飞书
-			_, err = feishuConn.SyncTicketToFeishu(ctx2, tx, s.toEntTicket(updated))
+			_, err = feishuConn.UpdateExistingTicketTask(ctx2, tx, s.toEntTicket(updated))
 			if err != nil {
 				s.logger.Warnw("Failed to sync ticket to feishu", "error", err, "ticket_id", updated.ID)
 				return
@@ -1359,7 +1359,7 @@ func (s *TicketService) ResolveTicket(ctx context.Context, ticketID int, resolut
 			}
 			defer tx.Rollback()
 			// 同步工单到飞书
-			_, err = feishuConn.SyncTicketToFeishu(ctx2, tx, s.toEntTicket(updated))
+			_, err = feishuConn.UpdateExistingTicketTask(ctx2, tx, s.toEntTicket(updated))
 			if err != nil {
 				s.logger.Warnw("Failed to sync ticket to feishu", "error", err, "ticket_id", updated.ID)
 				return
@@ -1429,7 +1429,7 @@ func (s *TicketService) CloseTicket(ctx context.Context, ticketID int, tenantID 
 			}
 			defer tx.Rollback()
 			// 同步工单到飞书
-			_, err = feishuConn.SyncTicketToFeishu(ctx2, tx, s.toEntTicket(updated))
+			_, err = feishuConn.UpdateExistingTicketTask(ctx2, tx, s.toEntTicket(updated))
 			if err != nil {
 				s.logger.Warnw("Failed to sync ticket to feishu", "error", err, "ticket_id", updated.ID)
 				return
@@ -1678,7 +1678,7 @@ func (s *TicketService) updateTicketStatus(ctx context.Context, ticketID int, st
 			}
 			defer tx.Rollback()
 			// 同步工单到飞书
-			_, err = feishuConn.SyncTicketToFeishu(ctx2, tx, s.toEntTicket(updated))
+			_, err = feishuConn.UpdateExistingTicketTask(ctx2, tx, s.toEntTicket(updated))
 			if err != nil {
 				s.logger.Warnw("Failed to sync ticket to feishu", "error", err, "ticket_id", updated.ID)
 				return
@@ -1869,7 +1869,7 @@ func (s *TicketService) EscalateTicket(ctx context.Context, ticketID int, reason
 			}
 			defer tx.Rollback()
 			// 同步工单到飞书
-			_, err = feishuConn.SyncTicketToFeishu(ctx2, tx, s.toEntTicket(updated))
+			_, err = feishuConn.UpdateExistingTicketTask(ctx2, tx, s.toEntTicket(updated))
 			if err != nil {
 				s.logger.Warnw("Failed to sync ticket to feishu", "error", err, "ticket_id", updated.ID)
 				return
@@ -2680,7 +2680,7 @@ func (s *TicketService) AssignMSPTechnician(ctx context.Context, ticketID, custo
 			}
 			defer tx.Rollback()
 			// 同步工单到飞书
-			_, err = feishuConn.SyncTicketToFeishu(ctx2, tx, s.toEntTicket(updated))
+			_, err = feishuConn.UpdateExistingTicketTask(ctx2, tx, s.toEntTicket(updated))
 			if err != nil {
 				s.logger.Warnw("Failed to sync ticket to feishu", "error", err, "ticket_id", updated.ID)
 				return

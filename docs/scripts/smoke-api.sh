@@ -93,12 +93,14 @@ api_get() {
 api_post() {
     local path="$1"
     local data="$2"
+    local idempotency_key="${3:-}"
     local csrf
     csrf=$(curl -s -c "$SESSION_COOKIE_JAR" -b "$SESSION_COOKIE_JAR" "${API_BASE}/api/v1/csrf-token" | jq -r '.data.csrf_token // empty')
 
     curl -s -X POST "${API_BASE}${path}" \
         -b "$SESSION_COOKIE_JAR" \
         -H "X-CSRF-Token: ${csrf}" \
+        -H "Idempotency-Key: ${idempotency_key}" \
         -H "Content-Type: application/json" \
         -d "$data"
 }
@@ -157,9 +159,15 @@ main() {
 
     # Step 8: Tickets CRUD
     log_info "Step 8: Ticket Create..."
-    local ticket_resp
-    ticket_resp=$(api_post "/api/v1/tickets" '{"title":"Smoke Test Ticket","priority":"low","category":"general"}')
-    check_contains "ticket_create" "code" "$ticket_resp" || true
+    local ticket_resp ticket_submission_key
+    ticket_submission_key="smoke-ticket-$(cat /proc/sys/kernel/random/uuid)"
+    ticket_resp=$(api_post "/api/v1/tickets" '{"title":"Smoke Test Ticket","description":"API smoke test","priority":"low"}' "$ticket_submission_key")
+    if jq -e '.code == 0 and .data.workItemId > 0 and (.data.number | length > 0)' <<< "$ticket_resp" >/dev/null; then
+        log_info "ticket_create: PASS"
+    else
+        log_fail "ticket_create: missing committed creation receipt"
+        ((fails++))
+    fi
 
     # Step 9: Ticket List
     log_info "Step 9: Ticket List..."

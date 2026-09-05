@@ -3,8 +3,8 @@ package bpmn
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
-	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -279,7 +279,7 @@ func normalizeCCRecipientIDs(value interface{}) ([]int, error) {
 		for _, id := range strings.Split(typed, ",") {
 			values = append(values, id)
 		}
-	case int, int64, float64:
+	case int, int64, float64, json.Number:
 		values = append(values, typed)
 	default:
 		return nil, fmt.Errorf("动态抄送人必须是正整数列表")
@@ -305,35 +305,14 @@ func normalizeCCRecipientIDs(value interface{}) ([]int, error) {
 }
 
 func normalizeCCRecipientID(value interface{}) (int, error) {
-	maxInt := int(^uint(0) >> 1)
-	valid := func(id int) (int, error) {
-		if id <= 0 {
-			return 0, fmt.Errorf("动态抄送人必须是正整数")
-		}
-		return id, nil
+	if text, ok := value.(string); ok {
+		value = strings.TrimSpace(text)
 	}
-	switch typed := value.(type) {
-	case int:
-		return valid(typed)
-	case int64:
-		if typed > int64(maxInt) {
-			return 0, fmt.Errorf("动态抄送人必须是正整数")
-		}
-		return valid(int(typed))
-	case float64:
-		if math.IsNaN(typed) || math.IsInf(typed, 0) || math.Trunc(typed) != typed || typed > float64(maxInt) || typed < 1 {
-			return 0, fmt.Errorf("动态抄送人必须是正整数")
-		}
-		return valid(int(typed))
-	case string:
-		id, err := strconv.Atoi(strings.TrimSpace(typed))
-		if err != nil {
-			return 0, fmt.Errorf("动态抄送人必须是正整数")
-		}
-		return valid(id)
-	default:
+	id, err := CallbackInteger(value)
+	if err != nil || id <= 0 {
 		return 0, fmt.Errorf("动态抄送人必须是正整数")
 	}
+	return id, nil
 }
 
 func (h *CCTaskHandler) validateCCUsers(ctx context.Context, client *ent.Client, ids []int, tenantID int) ([]int, error) {

@@ -12,6 +12,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/feishuticketsync"
+	"itsm-backend/ent/outboxevent"
 	entTicket "itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
 	creation "itsm-backend/handlers/common/workitemcreation"
@@ -36,68 +37,107 @@ func NewFeishuSyncService(
 	return &FeishuSyncService{client: client, logger: logger, creationApp: app}
 }
 
-func (s *FeishuSyncService) SyncTicketToFeishu(ctx context.Context, tenantID, ticketID int, fc *feishuConn.Feishu) (*dto.FeishuTicketSyncResponse, error) {
-	if s.client == nil {
-		return nil, fmt.Errorf("ent client not configured")
+// SyncTicketToFeishu updates an existing mapping or requests the single governed
+// creation intent. Remote creation is performed only by the Outbox consumer.
+func (s *FeishuSyncService) SyncTicketToFeishu(ctx context.Context, caller ActionActor, ticketID int, fc *feishuConn.Feishu) (*dto.FeishuTicketSyncResponse, error) {
+	if s.client == nil || fc == nil || caller.TenantID <= 0 || caller.UserID <= 0 || fc.TaskDestinationIdentity() == "" {
+		return nil, creation.NewAuthenticationRequired("Feishu sync requires an active tenant actor and configured destination", nil)
 	}
-	ticket, err := s.client.Ticket.Query().
-		Where(entTicket.ID(ticketID), entTicket.TenantID(tenantID)).
-		Only(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("ticket not found")
-		}
-		return nil, fmt.Errorf("query ticket: %w", err)
-	}
-
-	taskPayload, err := prepareFeishuTask(ctx, s.client, ticket)
+	ctx = tenantctx.WithTenantID(ctx, caller.TenantID)
+	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return nil, err
 	}
-	syncRecord, err := s.client.FeishuTicketSync.Query().
-		Where(feishuticketsync.TenantID(tenantID), feishuticketsync.TicketID(ticketID)).
-		Only(ctx)
-	if err != nil && !ent.IsNotFound(err) {
-		return nil, fmt.Errorf("query feishu sync record: %w", err)
-	}
-
-	var task *feishuConn.FeishuTask
-	if syncRecord != nil && syncRecord.FeishuTaskGUID != "" {
-		task, err = fc.UpdateTask(ctx, syncRecord.FeishuTaskGUID, taskPayload)
-		if err != nil {
-			_ = s.markSyncFailed(ctx, syncRecord, err)
-			return nil, fmt.Errorf("update feishu task: %w", err)
-		}
-		syncRecord, err = syncRecord.Update().
-			SetFeishuTaskID(firstNonEmptyString(task.GUID, syncRecord.FeishuTaskID)).
-			SetFeishuTaskGUID(firstNonEmptyString(task.GUID, syncRecord.FeishuTaskGUID)).
-			SetSyncStatus("synced").
-			SetLastSyncDirection("itsm_to_feishu").
-			SetLastSyncedAt(time.Now()).
-			ClearErrorMessage().
-			Save(ctx)
-	} else {
-		task, err = fc.CreateTask(ctx, taskPayload)
-		if err != nil {
-			return nil, fmt.Errorf("create feishu task: %w", err)
-		}
-		if task == nil || task.GUID == "" {
-			return nil, fmt.Errorf("create feishu task: empty task guid")
-		}
-		syncRecord, err = s.client.FeishuTicketSync.Create().
-			SetTenantID(tenantID).
-			SetTicketID(ticket.ID).
-			SetFeishuTaskID(task.GUID).
-			SetFeishuTaskGUID(task.GUID).
-			SetSyncStatus("synced").
-			SetLastSyncDirection("itsm_to_feishu").
-			SetLastSyncedAt(time.Now()).
-			Save(ctx)
+	defer tx.Rollback()
+	actor, err := tx.User.Query().Where(user.IDEQ(caller.UserID), user.TenantIDEQ(caller.TenantID), user.ActiveEQ(true)).Only(ctx)
+	if ent.IsNotFound(err) {
+		return nil, creation.NewAuthenticationRequired("active Feishu sync actor is required", err)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("save feishu sync record: %w", err)
+		return nil, err
 	}
-	return toFeishuSyncResponse(syncRecord, ticket, task), nil
+	item, err := tx.Ticket.Query().Where(entTicket.IDEQ(ticketID), entTicket.TenantIDEQ(caller.TenantID), entTicket.DeletedAtIsNil()).Only(ctx)
+	if ent.IsNotFound(err) {
+		return nil, creation.NewReferenceNotFound("Feishu sync target is unavailable", err)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := authorizeFeishuManualSync(ctx, tx, actor, item); err != nil {
+		return nil, err
+	}
+	record, err := tx.FeishuTicketSync.Query().Where(feishuticketsync.TenantIDEQ(caller.TenantID), feishuticketsync.TicketIDEQ(item.ID)).Only(ctx)
+	if err != nil && !ent.IsNotFound(err) {
+		return nil, err
+	}
+	if record == nil {
+		event, err := tx.OutboxEvent.Query().Where(outboxevent.TenantIDEQ(caller.TenantID), outboxevent.EventIDEQ(fmt.Sprintf("feishu-create:%d", item.ID))).Only(ctx)
+		if err != nil && !ent.IsNotFound(err) {
+			return nil, err
+		}
+		status := "pending"
+		if event == nil {
+			if err := enqueueFeishuCreation(ctx, tx, item, actor.ID, fc.TaskDestinationIdentity(), feishuOriginManual); err != nil {
+				return nil, err
+			}
+			if err := tx.AuditLog.Create().SetTenantID(item.TenantID).SetUserID(actor.ID).SetResource("ticket").SetAction("feishu_sync_requested").SetPath("/feishu/tickets/sync").SetMethod("POST").SetRequestBody(fmt.Sprintf(`{"workItemId":%d}`, item.ID)).Exec(ctx); err != nil {
+				return nil, err
+			}
+		} else {
+			if event.EventType != FeishuCreationRequestedEventType || event.AggregateType != "work_item" || event.AggregateID != fmt.Sprint(item.ID) {
+				return nil, creation.NewDomainValidationFailed("conflicting Feishu intent identity", nil)
+			}
+			switch event.Status {
+			case outboxEventStatusPending, outboxEventStatusPublishing:
+			case outboxEventStatusBlocked, outboxEventStatusDeadLetter, outboxEventStatusPublished:
+				status = "blocked"
+			default:
+				return nil, creation.NewDomainValidationFailed("unknown Feishu intent state", nil)
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		return &dto.FeishuTicketSyncResponse{TenantID: item.TenantID, TicketID: item.ID, TicketNumber: item.TicketNumber, SyncStatus: status, LastSyncDirection: "itsm_to_feishu"}, nil
+	}
+	if record.FeishuTaskGUID == "" {
+		return nil, creation.NewDomainValidationFailed("Feishu mapping requires reconciliation", nil)
+	}
+	taskPayload, err := prepareFeishuTask(ctx, tx.Client(), item)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	record.Unwrap()
+	task, err := fc.UpdateTask(ctx, record.FeishuTaskGUID, taskPayload)
+	if err != nil {
+		_ = s.markSyncFailed(ctx, record, err)
+		return nil, fmt.Errorf("update feishu task: %w", err)
+	}
+	if task == nil {
+		return nil, fmt.Errorf("update feishu task returned no receipt")
+	}
+	record, err = record.Update().SetFeishuTaskID(firstNonEmptyString(task.GUID, record.FeishuTaskID)).SetFeishuTaskGUID(firstNonEmptyString(task.GUID, record.FeishuTaskGUID)).SetSyncStatus("synced").SetLastSyncDirection("itsm_to_feishu").SetLastSyncedAt(time.Now()).ClearErrorMessage().Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return toFeishuSyncResponse(record, item, task), nil
+}
+
+func authorizeFeishuManualSync(ctx context.Context, tx *ent.Tx, actor *ent.User, item *ent.Ticket) error {
+	policy, err := authorization.ResolveWorkItemPolicy(item.RecordClass)
+	if err != nil {
+		return creation.NewPermissionDenied("unsupported Feishu target class", err)
+	}
+	identity := creation.Identity{TenantID: item.TenantID, ActorID: actor.ID, RequesterID: actor.ID, Role: actor.Role, Channel: "internal"}
+	for _, permission := range [][2]string{{policy.Resource, "read"}, {policy.Resource, policy.ResolveAction("update")}, {"connector", "write"}} {
+		if err := authorization.RequireCurrentPermission(ctx, tx, identity, permission[0], permission[1]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *FeishuSyncService) HandleTaskEvent(ctx context.Context, tenantID int, fc *feishuConn.Feishu, eventType string, eventData map[string]interface{}) (*dto.FeishuWebhookResponse, error) {

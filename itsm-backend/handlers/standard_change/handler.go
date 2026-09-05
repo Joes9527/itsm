@@ -3,12 +3,15 @@ package standard_change
 import (
 	"context"
 	"strconv"
+	"time"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	entstandardchange "itsm-backend/ent/standardchange"
 	changedomain "itsm-backend/handlers/change"
+	"itsm-backend/handlers/common/intakehttp"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -16,9 +19,10 @@ import (
 )
 
 type Handler struct {
-	client        *ent.Client
-	logger        *zap.SugaredLogger
-	changeService interface {
+	creationApplication creation.Application
+	client              *ent.Client
+	logger              *zap.SugaredLogger
+	changeService       interface {
 		CreateChange(context.Context, *changedomain.Change) (*changedomain.Change, error)
 	}
 }
@@ -392,81 +396,28 @@ func (h *Handler) GetCategories(c *gin.Context) {
 
 // InstantiateStandardChange handles POST /api/v1/standard-changes/:id/instantiate
 // Creates a new Change from a standard change template
+func (h *Handler) SetCreationApplication(app creation.Application) { h.creationApplication = app }
 func (h *Handler) InstantiateStandardChange(c *gin.Context) {
 	id, ok := common.ParsePositiveID(c, "id")
 	if !ok {
 		return
 	}
-
-	tenantIDVal, _ := c.Get("tenant_id")
-	tenantID := tenantIDVal.(int)
-
-	userIDVal, _ := c.Get("user_id")
-	userID := userIDVal.(int)
-
 	var req dto.InstantiateStandardChangeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		// Body is optional
-		req = dto.InstantiateStandardChangeRequest{}
-	}
-
-	ctx := c.Request.Context()
-	if h.changeService == nil {
-		h.logger.Errorw("Authoritative change service is unavailable")
-		common.InternalError(c, "Change service is unavailable")
+	if !intakehttp.Bind(c, &req) {
 		return
 	}
-
-	// Get the template
-	template, err := h.client.StandardChange.Query().
-		Where(
-			entstandardchange.ID(id),
-			entstandardchange.TenantID(tenantID),
-			entstandardchange.IsActive(true),
-		).
-		Only(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			common.NotFound(c, "Standard change template not found")
-			return
-		}
-		h.logger.Warnw("Failed to get standard change template", "error", err, "id", id)
-		common.InternalError(c, "Failed to get standard change template")
+	tenantID, err := middleware.ResolveRequestTenantID(c)
+	if middleware.AbortIfTenantError(c, err) {
 		return
 	}
-
-	// Determine title
-	title := template.Title
-	if req.Title != "" {
-		title = req.Title
+	start, end := "", ""
+	if req.PlannedStartDate != nil {
+		start = req.PlannedStartDate.UTC().Format(time.RFC3339Nano)
 	}
-
-	// Determine affected CIs
-	affectedCIs := template.AffectedCis
-	if len(req.AffectedCis) > 0 {
-		affectedCIs = req.AffectedCis
+	if req.PlannedEndDate != nil {
+		end = req.PlannedEndDate.UTC().Format(time.RFC3339Nano)
 	}
-
-	// Create change from template
-	change, err := h.changeService.CreateChange(ctx, &changedomain.Change{
-		Title: title, Description: template.Description, Justification: template.Justification,
-		Type: "standard", Status: "draft", Priority: "medium", ImpactScope: template.ImpactScope,
-		RiskLevel: template.RiskLevel, ImplementationPlan: template.ImplementationPlan,
-		RollbackPlan: template.RollbackPlan, AffectedCIs: affectedCIs, CreatedBy: userID, TenantID: tenantID,
-	})
-	if err != nil {
-		h.logger.Warnw("Failed to create change from template", "error", err)
-		common.InternalError(c, "Failed to create change from template")
-		return
-	}
-
-	h.logger.Infow("Created change from standard change template",
-		"template_id", id, "change_id", change.ID, "title", change.Title)
-
-	common.Success(c, gin.H{
-		"change_id": change.ID,
-		"change":    change,
-	})
+	intakehttp.Execute(c, h.creationApplication, tenantID, 0, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassChangeRequest, IntakeKind: creation.IntakeKindChangeRequest, Title: req.Title, Change: &creation.ChangeInput{StandardTemplateID: &id, AffectedCIs: req.AffectedCis, PlannedStartDate: start, PlannedEndDate: end}})
 }
 
 // RegisterRoutes registers the standard change routes

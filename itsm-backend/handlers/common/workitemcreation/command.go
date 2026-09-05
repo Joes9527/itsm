@@ -74,14 +74,10 @@ type FeishuTaskInput struct {
 }
 
 type GenericInput struct {
-	Type                  string `json:"type,omitempty"`
-	TypeID                string `json:"typeId,omitempty"`
-	Source                string `json:"source,omitempty"`
-	Category              string `json:"category,omitempty"`
-	TemplateID            *int   `json:"templateId,omitempty"`
-	ParentTicketID        *int   `json:"parentTicketId,omitempty"`
-	TagIDs                []int  `json:"tagIds,omitempty"`
-	WorkflowDefinitionKey string `json:"workflowDefinitionKey,omitempty"`
+	Type     string `json:"type,omitempty"`
+	TypeID   string `json:"typeId,omitempty"`
+	Source   string `json:"source,omitempty"`
+	Category string `json:"category,omitempty"`
 }
 type ProblemInput struct {
 	SourceIncidentID *int   `json:"sourceIncidentId,omitempty"`
@@ -117,21 +113,34 @@ type IncidentInput struct {
 }
 
 type ChangeInput struct {
-	Justification      string   `json:"justification,omitempty"`
-	Type               string   `json:"type,omitempty"`
-	ImpactScope        string   `json:"impactScope,omitempty"`
-	RiskLevel          string   `json:"riskLevel,omitempty"`
-	PlannedStartDate   string   `json:"plannedStartDate,omitempty"`
-	PlannedEndDate     string   `json:"plannedEndDate,omitempty"`
-	ImplementationPlan string   `json:"implementationPlan,omitempty"`
-	RollbackPlan       string   `json:"rollbackPlan,omitempty"`
-	AffectedCIs        []string `json:"affectedCis,omitempty"`
-	RelatedTickets     []int    `json:"relatedTickets,omitempty"`
+	StandardTemplateID   *int     `json:"standardTemplateId,omitempty"`
+	RelatedTicketNumbers []string `json:"relatedTicketNumbers,omitempty"`
+	Justification        string   `json:"justification,omitempty"`
+	Type                 string   `json:"type,omitempty"`
+	ImpactScope          string   `json:"impactScope,omitempty"`
+	RiskLevel            string   `json:"riskLevel,omitempty"`
+	PlannedStartDate     string   `json:"plannedStartDate,omitempty"`
+	PlannedEndDate       string   `json:"plannedEndDate,omitempty"`
+	ImplementationPlan   string   `json:"implementationPlan,omitempty"`
+	RollbackPlan         string   `json:"rollbackPlan,omitempty"`
+	AffectedCIs          []string `json:"affectedCis,omitempty"`
+	RelatedTickets       []int    `json:"relatedTickets,omitempty"`
 }
 
 // Identity is supplied separately by trusted adapters, never by command JSON.
 // FormValues owns dynamic fields; professional fields have typed inputs.
+type AdHocFieldDefinition struct {
+	Name  string `json:"name"`
+	Label string `json:"label"`
+}
 type CreateWorkItemCommand struct {
+	FormPresetID          string                 `json:"formPresetId,omitempty"`
+	TemplateID            *int                   `json:"templateId,omitempty"`
+	ParentTicketID        *int                   `json:"parentTicketId,omitempty"`
+	TagIDs                []int                  `json:"tagIds,omitempty"`
+	WorkflowDefinitionKey string                 `json:"workflowDefinitionKey,omitempty"`
+	AdHocFields           []AdHocFieldDefinition `json:"adHocFields,omitempty"`
+
 	FeishuTask        *FeishuTaskInput     `json:"feishuTask,omitempty"`
 	Email             *EmailInput          `json:"email,omitempty"`
 	RecordClass       string               `json:"recordClass"`

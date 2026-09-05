@@ -129,6 +129,7 @@ import (
 	"itsm-backend/ent/vendor"
 	"itsm-backend/ent/workitemnumbersequence"
 	"itsm-backend/ent/workitemrelation"
+	"itsm-backend/internal/jsonvalue"
 	"sync"
 	"time"
 
@@ -87751,7 +87752,7 @@ type ProcessCallbackOutboxMutation struct {
 	element_id             *string
 	action                 *string
 	config_ref             *string
-	variables              *map[string]interface{}
+	variables              *jsonvalue.NumberMap
 	optional_declared      *bool
 	status                 *string
 	attempt_count          *int
@@ -88377,12 +88378,12 @@ func (m *ProcessCallbackOutboxMutation) ResetConfigRef() {
 }
 
 // SetVariables sets the "variables" field.
-func (m *ProcessCallbackOutboxMutation) SetVariables(value map[string]interface{}) {
-	m.variables = &value
+func (m *ProcessCallbackOutboxMutation) SetVariables(jm jsonvalue.NumberMap) {
+	m.variables = &jm
 }
 
 // Variables returns the value of the "variables" field in the mutation.
-func (m *ProcessCallbackOutboxMutation) Variables() (r map[string]interface{}, exists bool) {
+func (m *ProcessCallbackOutboxMutation) Variables() (r jsonvalue.NumberMap, exists bool) {
 	v := m.variables
 	if v == nil {
 		return
@@ -88393,7 +88394,7 @@ func (m *ProcessCallbackOutboxMutation) Variables() (r map[string]interface{}, e
 // OldVariables returns the old "variables" field's value of the ProcessCallbackOutbox entity.
 // If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ProcessCallbackOutboxMutation) OldVariables(ctx context.Context) (v map[string]interface{}, err error) {
+func (m *ProcessCallbackOutboxMutation) OldVariables(ctx context.Context) (v jsonvalue.NumberMap, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldVariables is only allowed on UpdateOne operations")
 	}
@@ -89150,7 +89151,7 @@ func (m *ProcessCallbackOutboxMutation) SetField(name string, value ent.Value) e
 		m.SetConfigRef(v)
 		return nil
 	case processcallbackoutbox.FieldVariables:
-		v, ok := value.(map[string]interface{})
+		v, ok := value.(jsonvalue.NumberMap)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -93598,7 +93599,7 @@ type ProcessInstanceMutation struct {
 	status                     *string
 	current_activity_id        *string
 	current_activity_name      *string
-	variables                  *map[string]interface{}
+	variables                  *jsonvalue.NumberMap
 	start_time                 *time.Time
 	end_time                   *time.Time
 	suspended_time             *time.Time
@@ -94189,12 +94190,12 @@ func (m *ProcessInstanceMutation) ResetCurrentActivityName() {
 }
 
 // SetVariables sets the "variables" field.
-func (m *ProcessInstanceMutation) SetVariables(value map[string]interface{}) {
-	m.variables = &value
+func (m *ProcessInstanceMutation) SetVariables(jm jsonvalue.NumberMap) {
+	m.variables = &jm
 }
 
 // Variables returns the value of the "variables" field in the mutation.
-func (m *ProcessInstanceMutation) Variables() (r map[string]interface{}, exists bool) {
+func (m *ProcessInstanceMutation) Variables() (r jsonvalue.NumberMap, exists bool) {
 	v := m.variables
 	if v == nil {
 		return
@@ -94205,7 +94206,7 @@ func (m *ProcessInstanceMutation) Variables() (r map[string]interface{}, exists 
 // OldVariables returns the old "variables" field's value of the ProcessInstance entity.
 // If the ProcessInstance object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ProcessInstanceMutation) OldVariables(ctx context.Context) (v map[string]interface{}, err error) {
+func (m *ProcessInstanceMutation) OldVariables(ctx context.Context) (v jsonvalue.NumberMap, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldVariables is only allowed on UpdateOne operations")
 	}
@@ -95311,7 +95312,7 @@ func (m *ProcessInstanceMutation) SetField(name string, value ent.Value) error {
 		m.SetCurrentActivityName(v)
 		return nil
 	case processinstance.FieldVariables:
-		v, ok := value.(map[string]interface{})
+		v, ok := value.(jsonvalue.NumberMap)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -95825,7 +95826,7 @@ type ProcessTaskMutation struct {
 	started_time            *time.Time
 	completed_time          *time.Time
 	form_key                *string
-	task_variables          *map[string]interface{}
+	task_variables          *jsonvalue.NumberMap
 	callback_handler_id     *string
 	callback_task_type      *string
 	callback_action         *string
@@ -96663,12 +96664,12 @@ func (m *ProcessTaskMutation) ResetFormKey() {
 }
 
 // SetTaskVariables sets the "task_variables" field.
-func (m *ProcessTaskMutation) SetTaskVariables(value map[string]interface{}) {
-	m.task_variables = &value
+func (m *ProcessTaskMutation) SetTaskVariables(jm jsonvalue.NumberMap) {
+	m.task_variables = &jm
 }
 
 // TaskVariables returns the value of the "task_variables" field in the mutation.
-func (m *ProcessTaskMutation) TaskVariables() (r map[string]interface{}, exists bool) {
+func (m *ProcessTaskMutation) TaskVariables() (r jsonvalue.NumberMap, exists bool) {
 	v := m.task_variables
 	if v == nil {
 		return
@@ -96679,7 +96680,7 @@ func (m *ProcessTaskMutation) TaskVariables() (r map[string]interface{}, exists 
 // OldTaskVariables returns the old "task_variables" field's value of the ProcessTask entity.
 // If the ProcessTask object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ProcessTaskMutation) OldTaskVariables(ctx context.Context) (v map[string]interface{}, err error) {
+func (m *ProcessTaskMutation) OldTaskVariables(ctx context.Context) (v jsonvalue.NumberMap, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldTaskVariables is only allowed on UpdateOne operations")
 	}
@@ -97705,7 +97706,7 @@ func (m *ProcessTaskMutation) SetField(name string, value ent.Value) error {
 		m.SetFormKey(v)
 		return nil
 	case processtask.FieldTaskVariables:
-		v, ok := value.(map[string]interface{})
+		v, ok := value.(jsonvalue.NumberMap)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}

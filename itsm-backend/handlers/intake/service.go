@@ -217,6 +217,19 @@ func (s *Service) writeFieldValues(ctx context.Context, tx *ent.Tx, resolved *wo
 	if len(resolved.Command.FormValues) == 0 {
 		return nil
 	}
+	if len(resolved.Command.AdHocFields) > 0 {
+		values := []itsmservice.AdHocFieldValue{}
+		for index, definition := range resolved.Command.AdHocFields {
+			value, present := resolved.Command.FormValues[definition.Name]
+			if present {
+				values = append(values, itsmservice.AdHocFieldValue{Name: definition.Name, Label: definition.Label, SortOrder: index, Value: value})
+			}
+		}
+		if err := itsmservice.NewFieldValueService(tx.Client()).CreateAdHocValuesTx(ctx, tx, resolved.Identity.TenantID, "ticket", workItemID, values); err != nil {
+			return workitemcreation.NewInfrastructureUnavailable("could not persist ad-hoc fields", err)
+		}
+		return nil
+	}
 	scopeType, scopeID := "", 0
 	if resolved.Catalog != nil {
 		scopeType, scopeID = "service_catalog", resolved.Catalog.ID

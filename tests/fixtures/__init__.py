@@ -14,8 +14,8 @@ class TicketFixture:
     """工单测试数据生成器"""
 
     STATUSES = ['new', 'open', 'in_progress', 'pending', 'resolved', 'closed']
-    PRIORITIES = ['low', 'medium', 'high', 'urgent']
-    TYPES = ['incident', 'service_request', 'problem', 'change']
+    PRIORITIES = ['low', 'medium', 'high', 'critical']
+    TYPES = ['ticket', 'improvement']
 
     @classmethod
     def create(cls, overrides: Dict = None) -> Dict:
@@ -24,10 +24,7 @@ class TicketFixture:
             'title': f'Test Ticket {uuid.uuid4().hex[:8]}',
             'description': 'This is a test ticket created by automated tests.',
             'priority': random.choice(cls.PRIORITIES),
-            'status': 'new',
-            'type': random.choice(cls.TYPES),
-            'category_id': random.randint(1, 5),
-            'tenant_id': 1
+            'type': random.choice(cls.TYPES)
         }
 
         if overrides:

@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent"
@@ -48,7 +49,7 @@ func (ProcessInstance) Fields() []ent.Field {
 		field.String("current_activity_name").
 			Comment("当前活动名称").
 			Optional(),
-		field.JSON("variables", map[string]interface{}{}).
+		field.JSON("variables", jsonvalue.NumberMap{}).
 			Comment("流程变量").
 			Optional(),
 		field.Time("start_time").

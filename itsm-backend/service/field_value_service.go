@@ -196,10 +196,21 @@ func (s *FieldValueService) CreateAdHocValues(ctx context.Context, tenantID int,
 	if err != nil {
 		return err
 	}
+	if err := s.CreateAdHocValuesTx(ctx, tx, tenantID, valueEntityType, valueEntityID, fields); err != nil {
+		return rollback(tx, err)
+	}
+
+	return tx.Commit()
+}
+
+func (s *FieldValueService) CreateAdHocValuesTx(ctx context.Context, tx *ent.Tx, tenantID int, valueEntityType string, valueEntityID int, fields []AdHocFieldValue) error {
+	if tx == nil || tenantID <= 0 || valueEntityID <= 0 {
+		return fmt.Errorf("field value transaction and identity are required")
+	}
 	for _, f := range fields {
 		encoded, err := json.Marshal(f.Value)
 		if err != nil {
-			return rollback(tx, err)
+			return err
 		}
 		_, err = tx.FieldValue.Create().
 			SetTenantID(tenantID).
@@ -211,10 +222,10 @@ func (s *FieldValueService) CreateAdHocValues(ctx context.Context, tenantID int,
 			SetValue(encoded).
 			Save(ctx)
 		if err != nil {
-			return rollback(tx, err)
+			return err
 		}
 	}
-	return tx.Commit()
+	return nil
 }
 
 // FieldValueDTO 展示用的已解析字段值。

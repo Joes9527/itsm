@@ -1083,7 +1083,7 @@ func TestTaskAuditRejectsForeignProcessInstance(t *testing.T) {
 			after := f.client.ProcessTask.GetX(f.userCtx, task.ID)
 			assert.Equal(t, common.ProcessTaskStatusAssigned, after.Status)
 			assert.Equal(t, task.Assignee, after.Assignee)
-			assert.Equal(t, map[string]interface{}{"before": "unchanged"}, after.TaskVariables)
+			assert.Equal(t, map[string]interface{}{"before": "unchanged"}, map[string]any(after.TaskVariables))
 			assert.Zero(t, f.client.ProcessTask.Query().Where(processtask.ParentTaskID(task.TaskID)).CountX(f.userCtx))
 			assert.Zero(t, f.client.ProcessApprovalDecision.Query().CountX(f.userCtx))
 			assert.Zero(t, f.client.ProcessAuditLog.Query().CountX(f.userCtx))

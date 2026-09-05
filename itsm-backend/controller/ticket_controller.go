@@ -11,16 +11,18 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/handlers/common/intakehttp"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/middleware"
 	"itsm-backend/repository/ticket"
 	"itsm-backend/service"
-	"itsm-backend/service/bpmn"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
 type TicketController struct {
+	creationApplication     creation.Application
 	ticketService           *service.TicketService
 	ticketDependencyService *service.TicketDependencyService
 	db                      *sql.DB
@@ -70,57 +72,10 @@ func (tc *TicketController) ticketListToResponse(ctx context.Context, ts []*tick
 // @Router /api/v1/tickets [post]
 func (tc *TicketController) CreateTicket(c *gin.Context) {
 	var req dto.CreateTicketRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		tc.logger.Errorw("CreateTicket param bind failed", "error", err.Error())
-		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
+	if !intakehttp.Bind(c, &req) {
 		return
 	}
-
-	// source 只允许由受信任的内部调用链设置（例如 service_request.Service.Create 在
-	// provisioning 前置条件判断中依赖 source=service_catalog 配合真实的 ticket_id →
-	// process_approval_decision 链路）。公开 HTTP 创建接口必须忽略客户端自报的 source，
-	// 否则任何已认证调用方都能在没有真实关联 ServiceRequest 的情况下伪造
-	// source=service_catalog，误导 ServiceRequestPanel 等 UI 展示。清空后交给
-	// ent schema 的 Default("manual") 生效。
-	req.Source = ""
-
-	// 获取租户ID（从中间件注入）
-	tenantID := c.GetInt("tenant_id")
-	if tenantID == 0 {
-		// 尝试从TenantContext获取
-		if tenantCtx, ok := middleware.GetTenantContext(c); ok {
-			tenantID = tenantCtx.TenantID
-		}
-	}
-	if tenantID == 0 {
-		common.Fail(c, common.ParamErrorCode, "租户ID无效")
-		return
-	}
-
-	userID := c.GetInt("user_id")
-	if userID == 0 {
-		// 尝试从中间件获取
-		if uid, err := middleware.GetUserID(c); err == nil {
-			userID = uid
-		}
-	}
-	if userID == 0 {
-		common.Fail(c, common.ParamErrorCode, "无法获取当前用户信息，请重新登录")
-		return
-	}
-
-	// 设置请求者ID为当前用户
-	req.RequesterID = userID
-
-	workflowCtx := context.WithValue(c.Request.Context(), bpmn.BPMNUserIDContextKey, userID)
-	ticket, err := tc.ticketService.CreateTicket(workflowCtx, &req, tenantID)
-	if err != nil {
-		tc.logger.Errorw("Failed to create ticket", "error", err, "tenant_id", tenantID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
-		return
-	}
-
-	common.Success(c, tc.ticketToResponse(c, ticket))
+	tc.createFromRequest(c, req)
 }
 
 // UpdateTicket 更新工单
@@ -966,41 +921,15 @@ func (tc *TicketController) GetSubtasks(c *gin.Context) {
 // CreateSubtask 创建子任务
 func (tc *TicketController) CreateSubtask(c *gin.Context) {
 	parentID, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		common.Fail(c, common.ParamErrorCode, "无效的工单ID")
+	if err != nil || parentID <= 0 {
+		intakehttp.Fail(c, intakehttp.Invalid("id", "positive parent work item ID is required"))
 		return
 	}
-
 	var req dto.CreateSubtaskRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
+	if !intakehttp.Bind(c, &req) {
 		return
 	}
-
-	tenantID := c.GetInt("tenant_id")
-	userID := c.GetInt("user_id")
-
-	// 转换为本服务的 CreateTicketRequest（补全父工单字段）
-	fullReq := dto.CreateTicketRequest{
-		Title:          req.Title,
-		Description:    req.Description,
-		Priority:       req.Priority,
-		Type:           req.Type,
-		RequesterID:    userID,
-		ParentTicketID: &parentID,
-		AssigneeID:     req.AssigneeID,
-		FormFields:     req.FormFields,
-	}
-
-	workflowCtx := context.WithValue(c.Request.Context(), bpmn.BPMNUserIDContextKey, userID)
-	ticket, err := tc.ticketService.CreateTicket(workflowCtx, &fullReq, tenantID)
-	if err != nil {
-		tc.logger.Errorw("Failed to create subtask", "error", err, "parent_id", parentID, "tenant_id", tenantID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
-		return
-	}
-
-	common.Success(c, tc.ticketToResponse(c, ticket))
+	tc.createFromRequest(c, dto.CreateTicketRequest{Title: req.Title, Description: req.Description, Priority: req.Priority, Type: req.Type, ParentTicketID: &parentID, AssigneeID: req.AssigneeID, FormFields: req.FormFields})
 }
 
 // UpdateSubtask 更新子任务

@@ -6,14 +6,18 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
+	"itsm-backend/handlers/common/intakehttp"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
-	svc *Service
+	creationApplication creation.Application
+	svc                 *Service
 }
 
 func NewHandler(svc *Service) *Handler {
@@ -68,46 +72,24 @@ func toDTO(c *Change) *dto.ChangeResponse {
 }
 
 // CreateChange handles POST /api/v1/changes
+func (h *Handler) SetCreationApplication(app creation.Application) { h.creationApplication = app }
 func (h *Handler) CreateChange(c *gin.Context) {
 	var req dto.CreateChangeRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.ParamError(c, "Invalid request body: "+err.Error())
+	if !intakehttp.Bind(c, &req) {
 		return
 	}
-
 	tenantID, ok := resolveChangeTenantID(c)
 	if !ok {
 		return
 	}
-	userIDVal, _ := c.Get("user_id")
-	userID := userIDVal.(int)
-
-	changeEntity := &Change{
-		Title:              req.Title,
-		Description:        req.Description,
-		Justification:      req.Justification,
-		Type:               string(req.Type),
-		Status:             "draft",
-		Priority:           string(req.Priority),
-		ImpactScope:        string(req.ImpactScope),
-		RiskLevel:          string(req.RiskLevel),
-		CreatedBy:          userID,
-		TenantID:           tenantID,
-		PlannedStartDate:   req.PlannedStartDate,
-		PlannedEndDate:     req.PlannedEndDate,
-		ImplementationPlan: req.ImplementationPlan,
-		RollbackPlan:       req.RollbackPlan,
-		AffectedCIs:        req.AffectedCIs,
-		RelatedTickets:     req.RelatedTickets,
+	start, end := "", ""
+	if req.PlannedStartDate != nil {
+		start = req.PlannedStartDate.UTC().Format(time.RFC3339Nano)
 	}
-
-	res, err := h.svc.CreateChange(c.Request.Context(), changeEntity)
-	if err != nil {
-		common.InternalError(c, "创建变更失败: "+err.Error())
-		return
+	if req.PlannedEndDate != nil {
+		end = req.PlannedEndDate.UTC().Format(time.RFC3339Nano)
 	}
-
-	common.Success(c, toDTO(res))
+	intakehttp.Execute(c, h.creationApplication, tenantID, 0, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassChangeRequest, IntakeKind: creation.IntakeKindChangeRequest, Title: req.Title, Description: req.Description, Priority: req.Priority, Change: &creation.ChangeInput{Justification: req.Justification, Type: req.Type, ImpactScope: req.ImpactScope, RiskLevel: req.RiskLevel, PlannedStartDate: start, PlannedEndDate: end, ImplementationPlan: req.ImplementationPlan, RollbackPlan: req.RollbackPlan, AffectedCIs: req.AffectedCIs, RelatedTicketNumbers: req.RelatedTickets}})
 }
 
 // GetChange handles GET /api/v1/changes/:id

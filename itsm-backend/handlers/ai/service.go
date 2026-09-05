@@ -208,11 +208,11 @@ func (s *Service) ApproveTool(ctx context.Context, id int, tenantID, userID int,
 		return "", err
 	}
 
-	if s.queue != nil {
-		s.queue.Enqueue(service.ToolJob{
-			InvocationID: inv.ID,
-			TenantID:     tenantID,
-		})
+	if s.queue == nil {
+		return "", fmt.Errorf("approved tool queue is unavailable")
+	}
+	if err := s.queue.Enqueue(service.ToolJob{InvocationID: inv.ID, TenantID: tenantID}); err != nil {
+		return "", err
 	}
 
 	return "approved", nil

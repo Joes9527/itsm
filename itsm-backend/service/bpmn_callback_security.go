@@ -18,6 +18,7 @@ import (
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
+	"itsm-backend/internal/jsonvalue"
 	"itsm-backend/service/bpmn"
 )
 
@@ -109,6 +110,8 @@ func cloneBPMNJSONValue(value interface{}, depth int) (interface{}, error) {
 			return nil, fmt.Errorf("非有限数值")
 		}
 		return typed, nil
+	case jsonvalue.NumberMap:
+		return cloneBPMNJSONValue(map[string]any(typed), depth)
 	case map[string]interface{}:
 		if len(typed) > maxBPMNParticipantVariableEntries {
 			return nil, fmt.Errorf("对象字段数量超过限制")
@@ -466,6 +469,12 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 		variables["addedBy"] = initiatorID
 	}
 
+	if provider, ok := handler.(bpmn.CallbackContractProvider); ok {
+		action, _ := payload["action"].(string)
+		if contract, declared := provider.CallbackContract(action); declared && contract.CreatedRecordClass != "" {
+			return variables, nil
+		}
+	}
 	if !isBuiltInBusinessCallbackHandler(handler.GetTaskType()) {
 		return variables, nil
 	}

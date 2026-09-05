@@ -7,6 +7,7 @@ import (
 	"itsm-backend/ent/permission"
 	"itsm-backend/ent/role"
 	"itsm-backend/ent/rolepermission"
+	"itsm-backend/ent/standardchange"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
 	creation "itsm-backend/handlers/common/workitemcreation"
@@ -86,6 +87,23 @@ func AuthorizeWorkItemCreation(ctx context.Context, tx *ent.Tx, identity creatio
 	if identity.RequesterID != identity.ActorID {
 		if err := RequireCurrentPermission(ctx, tx, identity, resource, "create_on_behalf"); err != nil {
 			return err
+		}
+	}
+	if command.TemplateID != nil || command.ParentTicketID != nil || len(command.TagIDs) > 0 {
+		if err := RequireCurrentPermission(ctx, tx, identity, "ticket", "read"); err != nil {
+			return err
+		}
+	}
+	if command.Change != nil && command.Change.StandardTemplateID != nil {
+		if err := RequireCurrentPermission(ctx, tx, identity, "standard_change", "read"); err != nil {
+			return err
+		}
+		exists, err := tx.StandardChange.Query().Where(standardchange.IDEQ(*command.Change.StandardTemplateID), standardchange.TenantIDEQ(identity.TenantID), standardchange.IsActiveEQ(true)).Exist(ctx)
+		if err != nil {
+			return creation.NewInfrastructureUnavailable("could not authorize standard change template", err)
+		}
+		if !exists {
+			return creation.NewReferenceNotFound("standard change template is unavailable", nil)
 		}
 	}
 	if command.Problem != nil && command.Problem.SourceIncidentID != nil {

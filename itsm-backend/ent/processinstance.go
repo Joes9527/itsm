@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/processdefinition"
 	"itsm-backend/ent/processinstance"
+	"itsm-backend/internal/jsonvalue"
 	"strings"
 	"time"
 
@@ -40,7 +41,7 @@ type ProcessInstance struct {
 	// 当前活动名称
 	CurrentActivityName string `json:"current_activity_name,omitempty"`
 	// 流程变量
-	Variables map[string]interface{} `json:"variables,omitempty"`
+	Variables jsonvalue.NumberMap `json:"variables,omitempty"`
 	// 开始时间
 	StartTime time.Time `json:"start_time,omitempty"`
 	// 结束时间

@@ -7,6 +7,8 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/handlers/common/intakehttp"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
 
@@ -14,8 +16,9 @@ import (
 )
 
 type Handler struct {
-	service *Service
-	client  *ent.Client
+	creationApplication creation.Application
+	service             *Service
+	client              *ent.Client
 }
 
 func NewHandler(service *Service, client *ent.Client) *Handler {
@@ -108,40 +111,21 @@ func ToResponse(p *Problem) *dto.ProblemResponse {
 	return &resp
 }
 
+func (h *Handler) SetCreationApplication(app creation.Application) { h.creationApplication = app }
 func (h *Handler) Create(c *gin.Context) {
 	var req dto.CreateProblemRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, common.ParamErrorCode, err.Error())
+	if !intakehttp.Bind(c, &req) {
 		return
 	}
-
 	tenantID, ok := resolveProblemTenantID(c)
 	if !ok {
 		return
 	}
-	userID, _ := c.Get("user_id") // Override req.CreatedBy with actual user?
-
-	// Legacy DTO has CreatedBy in request, but better to enforce from context
-	createdBy := userID.(int)
-
-	problem := &Problem{
-		Title:       req.Title,
-		Description: req.Description,
-		Priority:    req.Priority,
-		Status:      "open",
-		Category:    req.Category,
-		RootCause:   req.RootCause,
-		Impact:      req.Impact,
-		CreatedBy:   createdBy,
-	}
-
-	created, err := h.service.Create(c.Request.Context(), tenantID, problem)
-	if err != nil {
-		common.Fail(c, common.InternalErrorCode, err.Error())
+	if req.ImpactScope != "" {
+		intakehttp.Fail(c, intakehttp.Invalid("impactScope", "impactScope is unsupported; use impact"))
 		return
 	}
-
-	common.Success(c, h.toDTO(created))
+	intakehttp.Execute(c, h.creationApplication, tenantID, 0, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassProblem, IntakeKind: creation.IntakeKindProblem, Title: req.Title, Description: req.Description, Priority: req.Priority, Problem: &creation.ProblemInput{Category: req.Category, RootCause: req.RootCause, Impact: req.Impact}})
 }
 
 func (h *Handler) Get(c *gin.Context) {

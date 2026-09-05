@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -124,7 +125,7 @@ func TestCCCallbackOutboxVariableRecipientsUseAuthoritativeInitiator(t *testing.
 	require.NotContains(t, row.Variables, "addedBy")
 	require.NotContains(t, row.Variables, "authorization")
 	require.Contains(t, row.Variables, "ccResolvedUserIds")
-	require.ElementsMatch(t, []interface{}{float64(f.outsider.ID), float64(watcher.ID)}, row.Variables["ccResolvedUserIds"])
+	require.ElementsMatch(t, []interface{}{json.Number(strconv.Itoa(f.outsider.ID)), json.Number(strconv.Itoa(watcher.ID))}, row.Variables["ccResolvedUserIds"])
 	require.Equal(t, "in_app,email", row.Variables["notifyChannels"])
 
 	completed, err := f.engine.ProcessPendingCallbacks(context.Background(), "cc-variable-recipients-worker", 1)
@@ -654,7 +655,7 @@ func TestStoredUserTaskCallbackRequiresCurrentHandlerBeforeMutation(t *testing.T
 	assert.Equal(t, map[string]interface{}{
 		"decision": "approve",
 		"note":     "preserve this allowlisted payload",
-	}, row.Variables)
+	}, map[string]any(row.Variables))
 }
 
 func TestAlreadyEnqueuedCallbackRemainsRetryableWhenHandlerDisappears(t *testing.T) {

@@ -215,7 +215,7 @@ func TestBPMNTaskTerminalMutations(t *testing.T) {
 
 				after := f.client.ProcessTask.GetX(f.userCtx, task.ID)
 				assert.Equal(t, status, after.Status)
-				assert.Equal(t, beforeVariables, after.TaskVariables)
+				assert.Equal(t, beforeVariables, map[string]any(after.TaskVariables))
 				logs := f.client.ProcessAuditLog.Query().Where(
 					processauditlog.ProcessInstanceID(instance.ID),
 					processauditlog.Action(AuditActionTaskMutationRejected),

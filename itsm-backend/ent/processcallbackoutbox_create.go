@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"itsm-backend/ent/processcallbackoutbox"
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -121,7 +122,7 @@ func (_c *ProcessCallbackOutboxCreate) SetNillableConfigRef(v *string) *ProcessC
 }
 
 // SetVariables sets the "variables" field.
-func (_c *ProcessCallbackOutboxCreate) SetVariables(v map[string]interface{}) *ProcessCallbackOutboxCreate {
+func (_c *ProcessCallbackOutboxCreate) SetVariables(v jsonvalue.NumberMap) *ProcessCallbackOutboxCreate {
 	_c.mutation.SetVariables(v)
 	return _c
 }
@@ -760,7 +761,7 @@ func (u *ProcessCallbackOutboxUpsert) ClearConfigRef() *ProcessCallbackOutboxUps
 }
 
 // SetVariables sets the "variables" field.
-func (u *ProcessCallbackOutboxUpsert) SetVariables(v map[string]interface{}) *ProcessCallbackOutboxUpsert {
+func (u *ProcessCallbackOutboxUpsert) SetVariables(v jsonvalue.NumberMap) *ProcessCallbackOutboxUpsert {
 	u.Set(processcallbackoutbox.FieldVariables, v)
 	return u
 }
@@ -1164,7 +1165,7 @@ func (u *ProcessCallbackOutboxUpsertOne) ClearConfigRef() *ProcessCallbackOutbox
 }
 
 // SetVariables sets the "variables" field.
-func (u *ProcessCallbackOutboxUpsertOne) SetVariables(v map[string]interface{}) *ProcessCallbackOutboxUpsertOne {
+func (u *ProcessCallbackOutboxUpsertOne) SetVariables(v jsonvalue.NumberMap) *ProcessCallbackOutboxUpsertOne {
 	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
 		s.SetVariables(v)
 	})
@@ -1760,7 +1761,7 @@ func (u *ProcessCallbackOutboxUpsertBulk) ClearConfigRef() *ProcessCallbackOutbo
 }
 
 // SetVariables sets the "variables" field.
-func (u *ProcessCallbackOutboxUpsertBulk) SetVariables(v map[string]interface{}) *ProcessCallbackOutboxUpsertBulk {
+func (u *ProcessCallbackOutboxUpsertBulk) SetVariables(v jsonvalue.NumberMap) *ProcessCallbackOutboxUpsertBulk {
 	return u.Update(func(s *ProcessCallbackOutboxUpsert) {
 		s.SetVariables(v)
 	})

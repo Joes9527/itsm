@@ -1,9 +1,10 @@
 openapi: 3.1.0
 info:
   title: Unified Intake contract
-  version: 3.0.0
-  description: Accepted A2a wire contract. Creation digest intake-v3; assertion v2
-    only. This specification does not activate routes.
+  version: 4.0.0
+  description: Creation digest intake-v4; assertion v2 only. Existing creation URLs
+    return the shared receipt with new 201/replay 200. The new unified routes activate
+    in A6.
 paths:
   /api/v1/intake/work-items:
     post:
@@ -352,17 +353,6 @@ components:
           type: string
         category:
           type: string
-        templateId:
-          type: integer
-          minimum: 1
-        parentTicketId:
-          type: integer
-          minimum: 1
-        tagIds:
-          type: array
-          items: *id009
-        workflowDefinitionKey:
-          type: string
     ProblemInput:
       type: object
       additionalProperties: false
@@ -373,6 +363,11 @@ components:
           type: string
         impact:
           type: string
+        sourceIncidentId:
+          type: integer
+          minimum: 1
+          description: Creates a new Problem and an investigated_by relation atomically;
+            current Incident access is required.
     ServiceRequestInput:
       type: object
       additionalProperties: false
@@ -380,11 +375,13 @@ components:
         amount:
           type: number
           minimum: 0
-          description: Exact decimal estimated amount used by the owning approval policy.
+          description: Exact decimal estimated amount used by the owning approval
+            policy.
         cloudResourceRefId:
           type: integer
           minimum: 1
-          description: Existing tenant-authorized cloud resource reference; creation does not provision a CI.
+          description: Existing tenant-authorized cloud resource reference; creation
+            does not provision a CI.
         costCenter:
           type: string
         dataClassification:
@@ -484,6 +481,14 @@ components:
         relatedTickets:
           type: array
           items: *id009
+        standardTemplateId:
+          type: integer
+          minimum: 1
+        relatedTicketNumbers:
+          type: array
+          items:
+            type: string
+            minLength: 1
     CreateWorkItemCommand:
       type: object
       additionalProperties: false
@@ -535,9 +540,7 @@ components:
           - change_request
         title:
           type: string
-          minLength: 1
           maxLength: 500
-          pattern: \S
         description:
           type: string
           maxLength: 20000
@@ -558,12 +561,41 @@ components:
           $ref: '#/components/schemas/IncidentInput'
         change:
           $ref: '#/components/schemas/ChangeInput'
+        templateId:
+          type: integer
+          minimum: 1
+        parentTicketId:
+          type: integer
+          minimum: 1
+        tagIds:
+          type: array
+          items: *id009
+        workflowDefinitionKey:
+          type: string
+        formPresetId:
+          type: string
+          description: Internal form preset metadata retained in the canonical submission.
+        adHocFields:
+          type: array
+          maxItems: 100
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              name:
+                type: string
+                minLength: 1
+                maxLength: 100
+              label:
+                type: string
+                maxLength: 255
+            required:
+            - name
       required:
       - recordClass
       - confirmation
       - idempotencyKey
       - intakeKind
-      - title
       allOf:
       - if:
           properties:
@@ -650,15 +682,40 @@ components:
           properties:
             recordClass:
               const: change_request
-      description: A2a contract only; routes activate in A6. Identity comes from verified
-        context. Catalog class/versions, permissions and professional rules must be
-        validated against authority by the application. formValues contains dynamic
-        fields only; typed professional inputs own their fields. Source claims require
-        trusted ingress validation. No catalog_task creator is supported. Typed object
-        fields require exact camelCase keys with no duplicates; explicit null is invalid
-        for every typed field, including optional fields. Dynamic formValues/metadata
-        objects retain arbitrary JSON values (including nested null). Limits count
-        Unicode characters after trimming.
+      - if:
+          not:
+            anyOf:
+            - required:
+              - problem
+              properties:
+                problem:
+                  required:
+                  - sourceIncidentId
+            - required:
+              - change
+              properties:
+                change:
+                  required:
+                  - standardTemplateId
+        then:
+          required:
+          - title
+          properties:
+            title:
+              minLength: 1
+              pattern: \S
+      description: The unified endpoint activates in A6. Shared template, parent,
+        tag and workflow inputs exist only at the root; nested Generic aliases are
+        rejected. Ad-hoc definitions cannot be combined with a catalog or template.
+        Legacy HTTP creation uses Idempotency-Key header and its documented DTO mapped
+        to this command. Identity comes from verified context. Catalog class/versions,
+        permissions and professional rules must be validated against authority by
+        the application. formValues contains dynamic fields only; typed professional
+        inputs own their fields. Source claims require trusted ingress validation.
+        No catalog_task creator is supported. Typed object fields require exact camelCase
+        keys with no duplicates; explicit null is invalid for every typed field, including
+        optional fields. Dynamic formValues/metadata objects retain arbitrary JSON
+        values (including nested null). Limits count Unicode characters after trimming.
     ProfessionalReference:
       type: object
       additionalProperties: false
@@ -698,6 +755,11 @@ components:
       - professionalReference
       - workflowStartStatus
       - replayed
+      description: Authoritative committed creation receipt. Use workItemId for shared
+        operations and professionalReference.id for existing professional detail GETs;
+        Generic has no professional extension. workflowStartStatus pending is not
+        workflow completion. No legacy id/ticketId aliases or post-commit detail lookup
+        are returned.
     FieldError:
       type: object
       additionalProperties: false

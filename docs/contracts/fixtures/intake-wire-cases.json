@@ -21,7 +21,7 @@
   },
   {
     "name": "null typed array element",
-    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"generic\": {\"tagIds\": [null]}}",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"tagIds\": [null]}",
     "valid": false
   },
   {
@@ -72,6 +72,16 @@
   {
     "name": "invalid change ci",
     "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"change_request\", \"recordClass\": \"change_request\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"change\": {\"affectedCis\": [\"abc\"]}}",
+    "valid": false
+  },
+  {
+    "name": "shared root inputs",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"templateId\": 1, \"parentTicketId\": 2, \"tagIds\": [3], \"workflowDefinitionKey\": \"flow\"}",
+    "valid": true
+  },
+  {
+    "name": "removed Generic shared alias",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"generic\": {\"templateId\": 1}}",
     "valid": false
   }
 ]

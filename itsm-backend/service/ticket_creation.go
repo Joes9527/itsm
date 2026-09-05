@@ -2,11 +2,7 @@ package service
 
 import (
 	"context"
-	"itsm-backend/authorization"
 	"itsm-backend/ent"
-	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/tickettag"
-	"itsm-backend/ent/tickettemplate"
 	"itsm-backend/ent/tickettype"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"strconv"
@@ -57,39 +53,7 @@ func (s *TicketService) Prepare(ctx context.Context, tx *ent.Tx, in creation.Res
 				return nil, creation.NewDomainValidationFailed("generic subtype is not configured", nil)
 			}
 		}
-		if input.TemplateID != nil {
-			exists, err := tx.TicketTemplate.Query().Where(tickettemplate.IDEQ(*input.TemplateID), tickettemplate.TenantIDEQ(in.Identity.TenantID), tickettemplate.IsActiveEQ(true)).Exist(ctx)
-			if err != nil {
-				return nil, creation.NewInfrastructureUnavailable("could not resolve template", err)
-			}
-			if !exists {
-				return nil, creation.NewReferenceNotFound("template is unavailable", nil)
-			}
-			plan.WorkItem.TemplateID = input.TemplateID
-		}
-		if input.ParentTicketID != nil {
-			if err := authorization.RequireCurrentPermission(ctx, tx, in.Identity, "ticket", "read"); err != nil {
-				return nil, err
-			}
-			exists, err := tx.Ticket.Query().Where(ticket.IDEQ(*input.ParentTicketID), ticket.TenantIDEQ(in.Identity.TenantID), ticket.DeletedAtIsNil()).Exist(ctx)
-			if err != nil {
-				return nil, creation.NewInfrastructureUnavailable("could not resolve parent work item", err)
-			}
-			if !exists {
-				return nil, creation.NewReferenceNotFound("parent work item is unavailable", nil)
-			}
-			plan.WorkItem.ParentTicketID = input.ParentTicketID
-		}
-		if len(input.TagIDs) > 0 {
-			count, err := tx.TicketTag.Query().Where(tickettag.IDIn(input.TagIDs...), tickettag.TenantIDEQ(in.Identity.TenantID)).Count(ctx)
-			if err != nil {
-				return nil, creation.NewInfrastructureUnavailable("could not resolve tags", err)
-			}
-			if count != len(input.TagIDs) {
-				return nil, creation.NewReferenceNotFound("tag is outside tenant", nil)
-			}
-			plan.WorkItem.TagIDs = append([]int(nil), input.TagIDs...)
-		}
+
 	}
 	if source := in.Command.FeishuTask; source != nil {
 		switch source.Status {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"itsm-backend/internal/jsonvalue"
 	"itsm-backend/service/bpmn"
 )
 
@@ -33,4 +34,19 @@ func TestCallbackJSONNumberValidationPreservesNestedPrecision(t *testing.T) {
 	}
 	_, err = normalizeBPMNCallbackContractPayload(bpmn.CallbackActionContract{PayloadFields: []string{"tenant_id"}, PositiveIntegerFields: []string{"tenant_id"}}, map[string]any{"tenant_id": json.Number("2")})
 	require.Error(t, err, "integer metadata must not bypass reserved identity filtering")
+}
+
+func TestPersistedBPMNNumberMapCloneAndCounterThreshold(t *testing.T) {
+	var reloaded jsonvalue.NumberMap
+	require.NoError(t, json.Unmarshal([]byte(`{"threshold":2,"amount":9007199254740993.125,"nested":{"value":0.125}}`), &reloaded))
+	cloned, err := cloneBPMNJSONValue(reloaded, 0)
+	require.NoError(t, err)
+	require.Equal(t, json.Number("9007199254740993.125"), cloned.(map[string]any)["amount"])
+	cloned.(map[string]any)["nested"].(map[string]any)["value"] = "edited"
+	require.Equal(t, json.Number("0.125"), reloaded["nested"].(map[string]any)["value"])
+	threshold, ok := numericInt(reloaded["threshold"])
+	require.True(t, ok)
+	require.Equal(t, 2, threshold)
+	_, ok = numericInt(json.Number("2.5"))
+	require.False(t, ok)
 }

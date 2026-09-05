@@ -106,7 +106,7 @@ func (s *TicketService) writeCreationEffects(ctx context.Context, tx *ent.Tx, it
 		}
 	}
 	if effects.FeishuDestination != "" {
-		if err := enqueueFeishuCreation(ctx, tx, item, plan.Resolved.Identity.ActorID, effects.FeishuDestination); err != nil {
+		if err := enqueueFeishuCreation(ctx, tx, item, plan.Resolved.Identity.ActorID, effects.FeishuDestination, feishuOriginIntake); err != nil {
 			return err
 		}
 	}

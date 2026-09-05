@@ -4,8 +4,11 @@ import (
 	"context"
 	"itsm-backend/authorization"
 	"itsm-backend/ent"
+	"itsm-backend/ent/standardchange"
 	"itsm-backend/ent/ticket"
 	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/service"
+	"sort"
 	"strconv"
 	"time"
 )
@@ -16,10 +19,73 @@ type changeCreation struct {
 }
 
 func (*Service) RecordClass() string { return creation.RecordClassChangeRequest }
-func (*Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedIntake) (*creation.CreationPlan, error) {
+func (s *Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedIntake) (*creation.CreationPlan, error) {
 	input := creation.ChangeInput{}
 	if in.Command.Change != nil {
 		input = *in.Command.Change
+	}
+	if input.StandardTemplateID != nil {
+		template, err := tx.StandardChange.Query().Where(standardchange.IDEQ(*input.StandardTemplateID), standardchange.TenantIDEQ(in.Identity.TenantID), standardchange.IsActiveEQ(true)).Only(ctx)
+		if ent.IsNotFound(err) {
+			return nil, creation.NewReferenceNotFound("standard change template is unavailable", nil)
+		}
+		if err != nil {
+			return nil, creation.NewInfrastructureUnavailable("could not resolve standard change template", err)
+		}
+		if in.Command.Title == "" {
+			in.Command.Title = template.Title
+		}
+		in.Command.Description = template.Description
+		input.Type = "standard"
+		input.Justification = template.Justification
+		input.ImplementationPlan = template.ImplementationPlan
+		input.RollbackPlan = template.RollbackPlan
+		input.RiskLevel = template.RiskLevel
+		input.ImpactScope = template.ImpactScope
+		if len(input.AffectedCIs) == 0 {
+			input.AffectedCIs = append([]string(nil), template.AffectedCis...)
+		}
+		ids := []int{}
+		for _, raw := range input.AffectedCIs {
+			id, err := strconv.Atoi(raw)
+			if err != nil || id <= 0 {
+				return nil, creation.NewDomainValidationFailed("standard change template has invalid affected CI", nil)
+			}
+			ids = append(ids, id)
+		}
+		cis, err := service.NewConfigurationItemService(tx.Client(), s.logger, nil, nil).ResolveCreationCIs(ctx, tx, in.Identity, ids, nil)
+		if err != nil {
+			return nil, err
+		}
+		in.ConfigurationItems = cis
+		in.CIIDs = nil
+		for _, ci := range cis {
+			in.CIIDs = append(in.CIIDs, ci.ID)
+		}
+	}
+	if len(input.RelatedTicketNumbers) > 0 {
+		if err := authorization.RequireCurrentPermission(ctx, tx, in.Identity, "ticket", "read"); err != nil {
+			return nil, err
+		}
+		rows, err := tx.Ticket.Query().Where(ticket.TenantIDEQ(in.Identity.TenantID), ticket.DeletedAtIsNil(), ticket.TicketNumberIn(input.RelatedTicketNumbers...)).All(ctx)
+		if err != nil {
+			return nil, creation.NewInfrastructureUnavailable("could not resolve related work item numbers", err)
+		}
+		if len(rows) != len(input.RelatedTicketNumbers) {
+			return nil, creation.NewReferenceNotFound("related work item number is unavailable", nil)
+		}
+		ids := map[int]bool{}
+		for _, id := range input.RelatedTickets {
+			ids[id] = true
+		}
+		for _, row := range rows {
+			ids[row.ID] = true
+		}
+		input.RelatedTickets = nil
+		for id := range ids {
+			input.RelatedTickets = append(input.RelatedTickets, id)
+		}
+		sort.Ints(input.RelatedTickets)
 	}
 	if len(in.CIIDs) > 0 {
 		input.AffectedCIs = nil

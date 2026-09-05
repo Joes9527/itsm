@@ -6,6 +6,7 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	creation "itsm-backend/handlers/common/workitemcreation"
 
 	"go.uber.org/zap"
 )
@@ -31,6 +32,7 @@ type IncidentDomainServiceInterface interface {
 
 // IncidentServiceTaskHandler 事件服务任务处理器
 type IncidentServiceTaskHandler struct {
+	creationApplication creation.Application
 	HandlerBase
 	client          *ent.Client
 	logger          *zap.SugaredLogger
@@ -86,45 +88,11 @@ func (h *IncidentServiceTaskHandler) Execute(ctx context.Context, task *ent.Proc
 }
 
 // createIncident 创建事件
-func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
-	if _, durable := BPMNCallbackExecutionKey(ctx); durable {
-		return nil, fmt.Errorf("持久化回调必须使用流程实例中的既有事件目标")
-	}
-	title, _ := variables["title"].(string)
-	description, _ := variables["description"].(string)
-	incidentType, _ := variables["type"].(string)
-	priority, _ := variables["priority"].(string)
-	severity, _ := variables["severity"].(string)
-	tenantID, err := RequireTenantID(ctx, variables)
-	if err != nil {
-		return nil, err
-	}
-
-	if title == "" {
-		return nil, fmt.Errorf("事件标题不能为空")
-	}
-
-	if h.incidentService == nil {
-		return nil, fmt.Errorf("incident service 未注入，无法创建事件")
-	}
-	reporterID := GetIntFromVars(variables, "reporter_id")
-	resp, err := h.incidentService.CreateIncident(ctx, &dto.CreateIncidentRequest{
-		Title:       title,
-		Description: description,
-		Type:        incidentType,
-		Priority:    priority,
-		Severity:    severity,
-	}, tenantID, reporterID)
-	if err != nil {
-		return nil, fmt.Errorf("创建事件失败: %w", err)
-	}
-
-	h.logger.Infow("Incident created via BPMN", "incident_id", resp.ID, "title", title)
-
-	return &CallbackEffect{Status: CallbackEffectApplied,
-		Message:    fmt.Sprintf("事件 %d 已创建", resp.ID),
-		OutputVars: map[string]interface{}{"incident_id": resp.ID, "incident_number": resp.IncidentNumber},
-	}, nil
+func (h *IncidentServiceTaskHandler) SetCreationApplication(app creation.Application) {
+	h.creationApplication = app
+}
+func (h *IncidentServiceTaskHandler) createIncident(ctx context.Context, _ map[string]interface{}) (*CallbackEffect, error) {
+	return executeWorkItemCreation(ctx, h.client, h.creationApplication, h.GetHandlerID(), "create_incident", creation.RecordClassIncident)
 }
 
 // assignIncident 分配事件。

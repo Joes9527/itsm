@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -20,12 +21,18 @@ import (
 
 const FeishuCreationRequestedEventType = "feishu.task.creation.requested"
 
+const (
+	feishuOriginIntake = "intake_creation"
+	feishuOriginManual = "manual_sync"
+)
+
 type FeishuTaskCreator interface {
 	CreateTask(context.Context, *feishu.FeishuTask) (*feishu.FeishuTask, error)
 	TaskDestinationIdentity() string
 }
 type FeishuTaskProvider func(int) (FeishuTaskCreator, bool)
 type feishuCreationPayload struct {
+	Origin      string            `json:"origin"`
 	TenantID    int               `json:"tenantId"`
 	WorkItemID  int               `json:"workItemId"`
 	ActorID     int               `json:"actorId"`
@@ -33,12 +40,12 @@ type feishuCreationPayload struct {
 	Task        feishu.FeishuTask `json:"task"`
 }
 
-func enqueueFeishuCreation(ctx context.Context, tx *ent.Tx, item *ent.Ticket, actorID int, destination string) error {
+func enqueueFeishuCreation(ctx context.Context, tx *ent.Tx, item *ent.Ticket, actorID int, destination, origin string) error {
 	task, err := prepareFeishuTask(ctx, tx.Client(), item)
 	if err != nil {
 		return creation.NewInfrastructureUnavailable("could not freeze Feishu task", err)
 	}
-	payload, err := json.Marshal(feishuCreationPayload{item.TenantID, item.ID, actorID, destination, *task})
+	payload, err := json.Marshal(feishuCreationPayload{Origin: origin, TenantID: item.TenantID, WorkItemID: item.ID, ActorID: actorID, Destination: destination, Task: *task})
 	if err != nil {
 		return creation.NewInternalFailure("could not encode Feishu creation", err)
 	}
@@ -93,23 +100,35 @@ func (h *FeishuCreationDeliveryHandler) Deliver(ctx context.Context, event *ent.
 	if err != nil {
 		return err
 	}
-	item, err := tx.Ticket.Query().Where(ticket.IDEQ(payload.WorkItemID), ticket.TenantIDEQ(payload.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("generic")).Only(ctx)
+	item, err := tx.Ticket.Query().Where(ticket.IDEQ(payload.WorkItemID), ticket.TenantIDEQ(payload.TenantID), ticket.DeletedAtIsNil()).Only(ctx)
 	if ent.IsNotFound(err) {
 		return blockOutboxDelivery("Feishu creation target is unavailable")
 	}
 	if err != nil {
 		return err
 	}
-	identity := creation.Identity{TenantID: payload.TenantID, ActorID: actor.ID, RequesterID: item.RequesterID, Role: actor.Role, Channel: "internal"}
-	if err := authorization.AuthorizeWorkItemCreation(ctx, tx, identity, creation.CreateWorkItemCommand{RecordClass: "generic"}); err != nil {
-		return blockOutboxDelivery("Feishu creation permission is no longer valid")
-	}
-	complete, err := tx.IntakeRequest.Query().Where(intakerequest.TenantIDEQ(payload.TenantID), intakerequest.ActorIDEQ(payload.ActorID), intakerequest.WorkItemIDEQ(item.ID), intakerequest.StatusEQ("completed")).Exist(ctx)
-	if err != nil {
-		return err
-	}
-	if !complete {
-		return blockOutboxDelivery("Feishu target has no completed Intake receipt")
+	switch payload.Origin {
+	case feishuOriginIntake:
+		if item.RecordClass != "generic" {
+			return blockOutboxDelivery("invalid Intake Feishu target class")
+		}
+		identity := creation.Identity{TenantID: payload.TenantID, ActorID: actor.ID, RequesterID: item.RequesterID, Role: actor.Role, Channel: "internal"}
+		if err := authorization.AuthorizeWorkItemCreation(ctx, tx, identity, creation.CreateWorkItemCommand{RecordClass: "generic"}); err != nil {
+			return feishuDeliveryAuthorizationError(err)
+		}
+		complete, err := tx.IntakeRequest.Query().Where(intakerequest.TenantIDEQ(payload.TenantID), intakerequest.ActorIDEQ(payload.ActorID), intakerequest.WorkItemIDEQ(item.ID), intakerequest.StatusEQ("completed")).Exist(ctx)
+		if err != nil {
+			return err
+		}
+		if !complete {
+			return blockOutboxDelivery("Feishu target has no completed Intake receipt")
+		}
+	case feishuOriginManual:
+		if err := authorizeFeishuManualSync(ctx, tx, actor, item); err != nil {
+			return feishuDeliveryAuthorizationError(err)
+		}
+	default:
+		return blockOutboxDelivery("unknown Feishu creation origin")
 	}
 	mapped, err := tx.FeishuTicketSync.Query().Where(feishuticketsync.TenantIDEQ(payload.TenantID), feishuticketsync.TicketIDEQ(item.ID)).Only(ctx)
 	if err != nil && !ent.IsNotFound(err) {
@@ -139,4 +158,11 @@ func (h *FeishuCreationDeliveryHandler) Deliver(ctx context.Context, event *ent.
 		return blockOutboxDelivery("delivery_unknown: Feishu task mapping requires reconciliation")
 	}
 	return nil
+}
+
+func feishuDeliveryAuthorizationError(err error) error {
+	if errors.Is(err, creation.ErrPermissionDenied) || errors.Is(err, creation.ErrAuthenticationRequired) || errors.Is(err, creation.ErrReferenceNotFound) {
+		return blockOutboxDelivery("Feishu creation permission is no longer valid")
+	}
+	return err
 }

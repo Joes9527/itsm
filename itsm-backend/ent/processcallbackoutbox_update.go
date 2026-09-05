@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/processcallbackoutbox"
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -228,7 +229,7 @@ func (_u *ProcessCallbackOutboxUpdate) ClearConfigRef() *ProcessCallbackOutboxUp
 }
 
 // SetVariables sets the "variables" field.
-func (_u *ProcessCallbackOutboxUpdate) SetVariables(v map[string]interface{}) *ProcessCallbackOutboxUpdate {
+func (_u *ProcessCallbackOutboxUpdate) SetVariables(v jsonvalue.NumberMap) *ProcessCallbackOutboxUpdate {
 	_u.mutation.SetVariables(v)
 	return _u
 }
@@ -818,7 +819,7 @@ func (_u *ProcessCallbackOutboxUpdateOne) ClearConfigRef() *ProcessCallbackOutbo
 }
 
 // SetVariables sets the "variables" field.
-func (_u *ProcessCallbackOutboxUpdateOne) SetVariables(v map[string]interface{}) *ProcessCallbackOutboxUpdateOne {
+func (_u *ProcessCallbackOutboxUpdateOne) SetVariables(v jsonvalue.NumberMap) *ProcessCallbackOutboxUpdateOne {
 	_u.mutation.SetVariables(v)
 	return _u
 }

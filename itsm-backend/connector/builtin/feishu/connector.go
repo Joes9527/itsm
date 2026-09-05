@@ -272,8 +272,8 @@ func (f *Feishu) ParseInbound(body []byte) (*connector.InboundMessage, error) {
 	return nil, fmt.Errorf("feishu: unknown event type=%s", base.Type)
 }
 
-// SyncTicketToFeishu syncs an ITSM ticket to Feishu as a task (creates or updates)
-func (f *Feishu) SyncTicketToFeishu(ctx context.Context, tx *ent.Tx, ticket *ent.Ticket) (*FeishuTask, error) {
+// UpdateExistingTicketTask updates a mapped task. Creation belongs to the durable Outbox owner.
+func (f *Feishu) UpdateExistingTicketTask(ctx context.Context, tx *ent.Tx, ticket *ent.Ticket) (*FeishuTask, error) {
 	if f.client == nil {
 		return nil, fmt.Errorf("feishu: connector not initialized")
 	}
@@ -284,6 +284,10 @@ func (f *Feishu) SyncTicketToFeishu(ctx context.Context, tx *ent.Tx, ticket *ent
 		Only(ctx)
 	if err != nil && !ent.IsNotFound(err) {
 		return nil, fmt.Errorf("feishu: failed to query sync record: %w", err)
+	}
+
+	if syncRecord == nil || syncRecord.FeishuTaskGUID == "" {
+		return nil, fmt.Errorf("feishu: task mapping is pending or unavailable")
 	}
 
 	// Map ticket fields to Feishu task
@@ -315,22 +319,6 @@ func (f *Feishu) SyncTicketToFeishu(ctx context.Context, tx *ent.Tx, ticket *ent
 			SetLastSyncDirection("itsm_to_feishu").
 			SetLastSyncedAt(time.Now()).
 			ClearErrorMessage().
-			Save(ctx)
-	} else {
-		// Create new task
-		task, err = f.client.CreateTask(ctx, feishuTask)
-		if err != nil {
-			return nil, fmt.Errorf("feishu: failed to create task: %w", err)
-		}
-		// Create sync record
-		_, err = tx.FeishuTicketSync.Create().
-			SetTenantID(ticket.TenantID).
-			SetTicketID(ticket.ID).
-			SetFeishuTaskID(task.GUID). // Wait, is GUID the same as ID? Let's check Feishu API: yes, task GUID is the unique ID
-			SetFeishuTaskGUID(task.GUID).
-			SetSyncStatus("synced").
-			SetLastSyncDirection("itsm_to_feishu").
-			SetLastSyncedAt(time.Now()).
 			Save(ctx)
 	}
 

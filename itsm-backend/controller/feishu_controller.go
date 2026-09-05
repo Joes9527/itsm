@@ -145,7 +145,7 @@ func (c *FeishuController) SyncTicketToFeishu(ctx *gin.Context) {
 		common.Fail(ctx, common.InternalErrorCode, "Feishu connector not configured")
 		return
 	}
-	resp, err := c.syncService.SyncTicketToFeishu(ctx.Request.Context(), tenantID, ticketID, fc)
+	resp, err := c.syncService.SyncTicketToFeishu(ctx.Request.Context(), service.ActionActor{TenantID: tenantID, UserID: ctx.GetInt("user_id"), Role: ctx.GetString("role")}, ticketID, fc)
 	if err != nil {
 		c.logger.Errorw("Failed to sync ticket to Feishu", "ticket_id", ticketID, "tenant_id", tenantID, "err", err)
 		common.Fail(ctx, common.InternalErrorCode, err.Error())
