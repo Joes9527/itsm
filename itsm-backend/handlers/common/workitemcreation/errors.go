@@ -169,7 +169,7 @@ func errorPolicy(code ErrorCode) (status int, retryable bool, known bool) {
 	case IdempotencyConflict, CatalogVersionConflict:
 		return 409, false, true
 	case DomainValidationFailed, UnsupportedRecordClass, WorkflowBindingRequired:
-		return 422, false, true
+		return 400, false, true
 	case InfrastructureUnavailable:
 		return 503, true, true
 	case InternalFailure:

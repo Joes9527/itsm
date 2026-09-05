@@ -1,9 +1,12 @@
 package workitemcreation
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"reflect"
+	"strings"
 
 	"itsm-backend/ent"
 )
@@ -42,9 +45,9 @@ type ImpactAnalysis struct {
 	TimeImpact      *TimeImpact     `json:"timeImpact,omitempty"`
 }
 type BusinessImpact struct {
-	AffectedUsers       int     `json:"affectedUsers,omitempty"`
-	RevenueImpact       float64 `json:"revenueImpact,omitempty"`
-	ServiceAvailability float64 `json:"serviceAvailability,omitempty"`
+	AffectedUsers       int         `json:"affectedUsers,omitempty"`
+	RevenueImpact       json.Number `json:"revenueImpact,omitempty"`
+	ServiceAvailability json.Number `json:"serviceAvailability,omitempty"`
 }
 type TimeImpact struct {
 	IsOverdue          bool   `json:"isOverdue,omitempty"`
@@ -217,28 +220,134 @@ type CreationPlan struct {
 	ProfessionalInput any
 }
 
-// DecodeCreateWorkItemCommand is the single strict JSON decoder used by Intake
-// HTTP adapters. Identity and authorization fields are deliberately absent from
-// CreateWorkItemCommand, so DisallowUnknownFields rejects attempts to smuggle
-// them in the payload.
+// DecodeCreateWorkItemCommand enforces the exact tagged wire shape before
+// binding. encoding/json alone permits case folding, duplicate keys and nulls.
+// Dynamic form/metadata contents retain their JSON values and domain-defined keys.
 func DecodeCreateWorkItemCommand(reader io.Reader) (CreateWorkItemCommand, error) {
 	decoder := json.NewDecoder(reader)
-	decoder.DisallowUnknownFields()
-	decoder.UseNumber()
-
-	var command *CreateWorkItemCommand
-	if err := decoder.Decode(&command); err != nil {
-		return CreateWorkItemCommand{}, NewInvalidCommand("invalid intake command", FieldError{Field: "body", Message: "must be valid JSON with only supported fields"}, err)
-	}
-	if command == nil {
-		return CreateWorkItemCommand{}, NewInvalidCommand("invalid intake command", FieldError{Field: "body", Message: "must be a JSON object"}, nil)
+	var raw json.RawMessage
+	if err := decoder.Decode(&raw); err != nil {
+		return CreateWorkItemCommand{}, wireError(err)
 	}
 	var trailing any
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		if err == nil {
 			err = fmt.Errorf("multiple JSON values")
 		}
-		return CreateWorkItemCommand{}, NewInvalidCommand("invalid intake command", FieldError{Field: "body", Message: "must contain exactly one JSON object"}, err)
+		return CreateWorkItemCommand{}, wireError(err)
 	}
-	return *command, nil
+	shape := json.NewDecoder(bytes.NewReader(raw))
+	shape.UseNumber()
+	if err := validateWireValue(shape, reflect.TypeOf(CreateWorkItemCommand{})); err != nil {
+		return CreateWorkItemCommand{}, wireError(err)
+	}
+	decoder = json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	decoder.DisallowUnknownFields()
+	var command CreateWorkItemCommand
+	if err := decoder.Decode(&command); err != nil {
+		return CreateWorkItemCommand{}, wireError(err)
+	}
+	return command, nil
+}
+func wireError(cause error) error {
+	return NewInvalidCommand("invalid intake command", FieldError{Field: "body", Message: "must be one JSON object with exact supported field names, no duplicate typed keys, and concrete typed values"}, cause)
+}
+
+func validateWireValue(decoder *json.Decoder, typ reflect.Type) error {
+	for typ.Kind() == reflect.Pointer {
+		typ = typ.Elem()
+	}
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	if token == nil {
+		return fmt.Errorf("null is not a concrete %s value", typ)
+	}
+	if typ == reflect.TypeOf(json.Number("")) {
+		if _, ok := token.(json.Number); !ok {
+			return fmt.Errorf("expected a JSON number")
+		}
+		return nil
+	}
+	switch typ.Kind() {
+	case reflect.Struct:
+		if token != json.Delim('{') {
+			return fmt.Errorf("expected an object")
+		}
+		fields := make(map[string]reflect.Type, typ.NumField())
+		for index := 0; index < typ.NumField(); index++ {
+			field := typ.Field(index)
+			tag := strings.Split(field.Tag.Get("json"), ",")[0]
+			if tag != "" && tag != "-" {
+				fields[tag] = field.Type
+			}
+		}
+		seen := make(map[string]bool)
+		for decoder.More() {
+			key, err := decoder.Token()
+			if err != nil {
+				return err
+			}
+			name, ok := key.(string)
+			if !ok {
+				return fmt.Errorf("expected a field name")
+			}
+			field, ok := fields[name]
+			if !ok {
+				return fmt.Errorf("unsupported field name")
+			}
+			if seen[name] {
+				return fmt.Errorf("duplicate typed field")
+			}
+			seen[name] = true
+			if err := validateWireValue(decoder, field); err != nil {
+				return err
+			}
+		}
+		_, err = decoder.Token()
+		return err
+	case reflect.Map:
+		if token != json.Delim('{') {
+			return fmt.Errorf("expected a dynamic object")
+		}
+		for decoder.More() {
+			if _, err = decoder.Token(); err != nil {
+				return err
+			}
+			var value json.RawMessage
+			if err = decoder.Decode(&value); err != nil {
+				return err
+			}
+		}
+		_, err = decoder.Token()
+		return err
+	case reflect.Slice:
+		if token != json.Delim('[') {
+			return fmt.Errorf("expected an array")
+		}
+		for decoder.More() {
+			if err := validateWireValue(decoder, typ.Elem()); err != nil {
+				return err
+			}
+		}
+		_, err = decoder.Token()
+		return err
+	case reflect.String:
+		if _, ok := token.(string); !ok {
+			return fmt.Errorf("expected a string")
+		}
+	case reflect.Bool:
+		if _, ok := token.(bool); !ok {
+			return fmt.Errorf("expected a boolean")
+		}
+	case reflect.Int, reflect.Int64:
+		if _, ok := token.(json.Number); !ok {
+			return fmt.Errorf("expected an integer")
+		}
+	default:
+		return fmt.Errorf("unsupported typed wire value")
+	}
+	return nil
 }

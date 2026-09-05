@@ -92,9 +92,9 @@ func TestIncidentNestedFieldsAndTimestamps(t *testing.T) {
 	if n.Incident.DetectedAt != "2026-09-05T00:00:00Z" {
 		t.Fatal("timestamp not UTC")
 	}
-	c.Incident.ImpactAnalysis.BusinessImpact.RevenueImpact = 8
+	c.Incident.ImpactAnalysis.BusinessImpact.RevenueImpact = json.Number("8")
 	c.Incident.Metadata["nested"].(map[string]any)["value"] = 2
-	if n.Incident.ImpactAnalysis.BusinessImpact.RevenueImpact != 4.5 || n.Incident.Metadata["nested"].(map[string]any)["value"] != json.Number("1") {
+	if n.Incident.ImpactAnalysis.BusinessImpact.RevenueImpact != json.Number("4.5") || n.Incident.Metadata["nested"].(map[string]any)["value"] != json.Number("1") {
 		t.Fatal("incident payload not cloned")
 	}
 	_, d2, err := CanonicalizeCommand(c)

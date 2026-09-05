@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 const CanonicalDigestVersion = "intake-v3"
@@ -37,13 +38,13 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 	n.Priority = strings.TrimSpace(n.Priority)
 	n.CatalogVersion = strings.TrimSpace(n.CatalogVersion)
 	n.FormSchemaVersion = strings.TrimSpace(n.FormSchemaVersion)
-	if n.IdempotencyKey == "" || len(n.IdempotencyKey) > 200 {
+	if n.IdempotencyKey == "" || utf8.RuneCountInString(n.IdempotencyKey) > 200 {
 		return n, "", invalid("idempotencyKey", "must contain 1 to 200 characters")
 	}
-	if n.Title == "" || len(n.Title) > 500 {
+	if n.Title == "" || utf8.RuneCountInString(n.Title) > 500 {
 		return n, "", invalid("title", "must contain 1 to 500 characters")
 	}
-	if len(n.Description) > 20000 {
+	if utf8.RuneCountInString(n.Description) > 20000 {
 		return n, "", invalid("description", "must not exceed 20000 characters")
 	}
 	if n.Confirmation != "confirmed" {

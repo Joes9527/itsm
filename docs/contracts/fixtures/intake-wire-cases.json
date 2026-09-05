@@ -1,0 +1,77 @@
+[
+  {
+    "name": "uppercase root",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"TITLE\": \"override\"}",
+    "valid": false
+  },
+  {
+    "name": "null assignment",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"assigneeId\": null}",
+    "valid": false
+  },
+  {
+    "name": "null nested string",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"generic\": {\"type\": null}}",
+    "valid": false
+  },
+  {
+    "name": "uppercase nested",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"generic\": {\"TYPE\": \"ticket\"}}",
+    "valid": false
+  },
+  {
+    "name": "null typed array element",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"generic\": {\"tagIds\": [null]}}",
+    "valid": false
+  },
+  {
+    "name": "null dynamic container",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"formValues\": null}",
+    "valid": false
+  },
+  {
+    "name": "null nested object",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"incident\": null}",
+    "valid": false
+  },
+  {
+    "name": "invalid generic id",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"generic\": {\"typeId\": \"abc\"}}",
+    "valid": false
+  },
+  {
+    "name": "blank provider",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"sourceReference\": {\"provider\": \"  \", \"eventId\": \"e\"}}",
+    "valid": false
+  },
+  {
+    "name": "blank event",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"sourceReference\": {\"provider\": \"kaf\", \"eventId\": \" \"}}",
+    "valid": false
+  },
+  {
+    "name": "dynamic JSON preserved",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"formValues\": {\"TITLE\": null, \"nested\": [null, {\"Anything\": true}]}, \"generic\": {\"type\": \"ticket\"}}",
+    "valid": true
+  },
+  {
+    "name": "duplicate root",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\",\"title\":\"second\"}",
+    "valid": false
+  },
+  {
+    "name": "duplicate nested",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\",\"generic\":{\"type\":\"ticket\",\"type\":\"improvement\"}}",
+    "valid": false
+  },
+  {
+    "name": "quoted professional number",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"incident\", \"recordClass\": \"incident\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"incident\": {\"impactAnalysis\": {\"businessImpact\": {\"revenueImpact\": \"123.4\"}}}}",
+    "valid": false
+  },
+  {
+    "name": "invalid change ci",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"change_request\", \"recordClass\": \"change_request\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"change\": {\"affectedCis\": [\"abc\"]}}",
+    "valid": false
+  }
+]
