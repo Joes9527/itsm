@@ -2,9 +2,11 @@ package service_request
 
 import (
 	"context"
+	"errors"
 	"itsm-backend/ent"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/service_catalog"
+	"itsm-backend/service"
 	"math/big"
 	"net"
 	"net/mail"
@@ -23,6 +25,9 @@ func (*Service) RecordClass() string { return creation.RecordClassServiceRequest
 func (s *Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedIntake) (*creation.CreationPlan, error) {
 	if in.Catalog == nil || in.Catalog.TargetClass != creation.RecordClassServiceRequestItem {
 		return nil, creation.NewDomainValidationFailed("requested item requires a resolved service catalog", nil)
+	}
+	if in.Catalog.CloudServiceID != nil && *in.Catalog.CloudServiceID > 0 && (in.Catalog.ConfigurationItemTypeID == nil || *in.Catalog.ConfigurationItemTypeID <= 0) {
+		return nil, creation.NewDomainValidationFailed("cloud service catalog requires a configuration item type", nil)
 	}
 	input := creation.ServiceRequestInput{}
 	if in.Command.ServiceRequest != nil {
@@ -92,13 +97,14 @@ func (s *Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedI
 	}
 	chain, err := s.chainResolver.ResolveServiceRequestCreation(ctx, tx, in.Identity.TenantID, input.Amount)
 	if err != nil {
+		var configurationError *service.ApprovalConfigurationError
+		if errors.As(err, &configurationError) {
+			return nil, creation.NewDomainValidationFailed("invalid approval configuration", err)
+		}
 		return nil, creation.NewInfrastructureUnavailable("could not resolve approval chain", err)
 	}
 	workflowContext := map[string]any{}
 	if chain != nil && len(chain.Steps) > 0 {
-		if in.Workflow.NoProcess {
-			return nil, creation.NewWorkflowBindingRequired("resolved approvals require a workflow", nil)
-		}
 		workflowContext["_approval_chain"] = chain.Steps
 	}
 	if input.Amount != "" {
@@ -130,6 +136,11 @@ func (s *Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedI
 		return nil, creation.NewDomainValidationFailed("requested item supports one linked CI", nil)
 	}
 	plan := creation.NewPlan(in, "new", priority, "service_catalog")
+	plan.RequiresWorkflow = chain != nil && len(chain.Steps) > 0
+	plan.RoutingValues = map[string]any{}
+	if input.Amount != "" {
+		plan.RoutingValues["amount"] = input.Amount
+	}
 	plan.ProfessionalInput = requestCreation{Input: input, ExpireAt: expire, ExpectedAt: expected, Quantity: quantity, Context: workflowContext, CIID: ciID}
 	return plan, nil
 }

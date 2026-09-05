@@ -11,7 +11,7 @@ type CatalogResolver interface {
 	ResolveCreationCatalog(context.Context, *ent.Tx, Identity, int) (*ResolvedCatalog, []ResolvedFieldDefinition, error)
 }
 type WorkflowResolver interface {
-	ResolveCreationWorkflow(context.Context, *ent.Tx, ResolvedIntake, string) (ResolvedWorkflowBinding, *int, error)
+	ResolveCreationWorkflow(context.Context, *ent.Tx, *CreationPlan, string) (ResolvedWorkflowBinding, *int, error)
 }
 type ConfigurationItemResolver interface {
 	ResolveCreationCIs(context.Context, *ent.Tx, Identity, []int, *int) ([]*ent.ConfigurationItem, error)

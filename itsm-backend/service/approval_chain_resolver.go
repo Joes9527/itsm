@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"sort"
@@ -14,6 +15,15 @@ import (
 
 	"go.uber.org/zap"
 )
+
+// ApprovalConfigurationError identifies deterministic policy errors separately
+// from database availability failures, including decoding stored chain JSON.
+type ApprovalConfigurationError struct{ Cause error }
+
+func (e *ApprovalConfigurationError) Error() string {
+	return "invalid approval configuration: " + e.Cause.Error()
+}
+func (e *ApprovalConfigurationError) Unwrap() error { return e.Cause }
 
 // ResolvedApprovalChain 解析后的审批链，包含实际生效的步骤列表。
 type ResolvedApprovalChain struct {
@@ -60,7 +70,7 @@ func (r *ApprovalChainResolver) resolveServiceRequestCreation(ctx context.Contex
 	}
 	exact, ok := new(big.Rat).SetString(string(amount))
 	if !ok || exact.Sign() < 0 {
-		return nil, fmt.Errorf("approval amount must be a nonnegative decimal")
+		return nil, &ApprovalConfigurationError{Cause: fmt.Errorf("approval amount must be a nonnegative decimal")}
 	}
 	if client == nil {
 		return nil, fmt.Errorf("ent client is nil")
@@ -81,13 +91,18 @@ func (r *ApprovalChainResolver) resolveServiceRequestCreation(ctx context.Contex
 			r.logger.Infow("No active approval chain for service_request", "tenant_id", tenantID)
 			return nil, nil
 		}
+		var invalidType *json.UnmarshalTypeError
+		var invalidJSON *json.SyntaxError
+		if errors.As(err, &invalidType) || errors.As(err, &invalidJSON) {
+			return nil, &ApprovalConfigurationError{Cause: err}
+		}
 		return nil, fmt.Errorf("query approval chain: %w", err)
 	}
 
 	// Parse and filter steps
 	allSteps, err := parseChainSteps(chain.Chain)
 	if err != nil {
-		return nil, fmt.Errorf("parse chain steps: %w", err)
+		return nil, &ApprovalConfigurationError{Cause: fmt.Errorf("parse chain steps: %w", err)}
 	}
 
 	filtered := make([]schema.ApprovalChainStep, 0, len(allSteps))

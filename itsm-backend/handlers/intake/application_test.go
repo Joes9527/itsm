@@ -222,3 +222,7 @@ func TestApplicationReplayRechecksCurrentPermissions(t *testing.T) {
 	require.Equal(t, first.WorkItemID, client.Ticket.Query().OnlyX(context.Background()).ID)
 	require.Equal(t, 1, client.IntakeRequest.Query().CountX(context.Background()))
 }
+
+func (preparedResolver) ResolveWorkflow(context.Context, *ent.Tx, *workitemcreation.CreationPlan) error {
+	return nil
+}

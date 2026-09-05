@@ -19,8 +19,12 @@ import (
 // ResolveCreationWorkflow freezes the owning process service's creation binding.
 // A catalog key takes precedence. Only configured conditions.no_process permits
 // skipping orchestration; absent/unsupported configurations fail closed.
-func (s *ProcessBindingService) ResolveCreationWorkflow(ctx context.Context, tx *ent.Tx, in creation.ResolvedIntake, key string) (creation.ResolvedWorkflowBinding, *int, error) {
+func (s *ProcessBindingService) ResolveCreationWorkflow(ctx context.Context, tx *ent.Tx, plan *creation.CreationPlan, key string) (creation.ResolvedWorkflowBinding, *int, error) {
 	var result creation.ResolvedWorkflowBinding
+	if plan == nil {
+		return result, nil, creation.NewInternalFailure("prepared creation plan is required for routing", nil)
+	}
+	in := plan.Resolved
 	var slaID *int
 	version := 0
 	key = strings.TrimSpace(key)
@@ -29,16 +33,7 @@ func (s *ProcessBindingService) ResolveCreationWorkflow(ctx context.Context, tx 
 		if business == "" {
 			return result, nil, creation.NewUnsupportedRecordClass("unsupported workflow creation class", nil)
 		}
-		subtype := ""
-		if in.Command.Incident != nil {
-			subtype = in.Command.Incident.Type
-		}
-		if in.Command.Change != nil {
-			subtype = in.Command.Change.Type
-		}
-		if in.Command.Generic != nil {
-			subtype = in.Command.Generic.Type
-		}
+		subtype := plan.BusinessSubtype
 		requester, err := tx.User.Query().Where(user.IDEQ(in.Identity.RequesterID), user.TenantIDEQ(in.Identity.TenantID), user.ActiveEQ(true)).Only(ctx)
 		if ent.IsNotFound(err) {
 			return result, nil, creation.NewReferenceNotFound("workflow requester is unavailable", err)
@@ -50,18 +45,10 @@ func (s *ProcessBindingService) ResolveCreationWorkflow(ctx context.Context, tx 
 		for key, value := range in.Command.FormValues {
 			variables[key] = value
 		}
-		if in.Command.ServiceRequest != nil && in.Command.ServiceRequest.Amount != "" {
-			variables["amount"] = in.Command.ServiceRequest.Amount
+		for key, value := range plan.RoutingValues {
+			variables[key] = value
 		}
-		variables["priority"] = in.Command.Priority
-		if in.Command.Incident != nil {
-			variables["severity"] = in.Command.Incident.Severity
-			variables["impact"] = in.Command.Incident.Impact
-			variables["urgency"] = in.Command.Incident.Urgency
-		}
-		if in.Command.Change != nil {
-			variables["riskLevel"] = in.Command.Change.RiskLevel
-		}
+		variables["priority"] = plan.WorkItem.Priority
 		routing := &RoutingContext{TenantID: in.Identity.TenantID, BusinessType: business, BusinessSubType: subtype, DepartmentID: requester.DepartmentID, Category: in.CTI.CategoryName, Variables: variables}
 		if in.CTI.CategoryID != nil {
 			routing.CategoryID = *in.CTI.CategoryID

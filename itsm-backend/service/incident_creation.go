@@ -69,6 +69,8 @@ func (s *IncidentService) Prepare(_ context.Context, _ *ent.Tx, in creation.Reso
 		source = in.Identity.Channel
 	}
 	plan := creation.NewPlan(in, "new", priority, source)
+	plan.BusinessSubtype = input.Type
+	plan.RoutingValues = map[string]any{"severity": input.Severity, "impact": input.Impact, "urgency": input.Urgency}
 	plan.ProfessionalInput = incidentCreation{Input: input, DetectedAt: *detected}
 	return plan, nil
 }

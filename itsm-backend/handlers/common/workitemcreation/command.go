@@ -232,6 +232,11 @@ type WorkItemDraft struct {
 }
 
 type CreationPlan struct {
+	// Routing facts are supplied by the domain after effective defaults/policy.
+	// Priority is read from WorkItem; submitted Command remains digest evidence.
+	BusinessSubtype   string
+	RoutingValues     map[string]any
+	RequiresWorkflow  bool
 	Resolved          ResolvedIntake
 	WorkItem          WorkItemDraft
 	ProfessionalInput any

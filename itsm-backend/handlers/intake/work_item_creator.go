@@ -70,9 +70,8 @@ func (c *WorkItemCreator) CreateBase(ctx context.Context, tx *ent.Tx, plan *work
 	if draft.RecordClass != workitemcreation.RecordClassGeneric && draft.GenericSubtype != "" {
 		return nil, workitemcreation.NewDomainValidationFailed("professional work items cannot carry a generic subtype", nil)
 	}
-	if source := plan.Resolved.Command.SourceReference; source != nil {
-		create.SetExternalMessageID(source.EventID).SetConversationID(source.ConversationID)
-	}
+	// SourceReference is provider-scoped provenance, persisted by the snapshot.
+	// Email thread identity is assigned only by its trusted email boundary.
 	if draft.AssigneeID != nil {
 		create.SetAssigneeID(*draft.AssigneeID)
 	}

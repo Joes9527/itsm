@@ -26,7 +26,7 @@ func TestCreationCatalogRevisionAndWorkflowResolution(t *testing.T) {
 	require.NotEmpty(t, first.Version)
 	require.NotEmpty(t, first.FormSchemaVersion)
 	require.Len(t, defs, 1)
-	binding, _, err := service.NewProcessBindingService(tx.Client()).ResolveCreationWorkflow(ctx, tx, workitemcreation.ResolvedIntake{Identity: identity, RecordClass: catalog.TargetClass}, "")
+	binding, _, err := service.NewProcessBindingService(tx.Client()).ResolveCreationWorkflow(ctx, tx, workitemcreation.NewPlan(workitemcreation.ResolvedIntake{Identity: identity, RecordClass: catalog.TargetClass}, "new", "medium", "test"), "")
 	require.NoError(t, err)
 	require.True(t, binding.NoProcess)
 	require.NoError(t, tx.Rollback())
@@ -47,7 +47,7 @@ func TestCreationWorkflowMissingBindingFailsClosed(t *testing.T) {
 	tx, err := client.Tx(context.Background())
 	require.NoError(t, err)
 	defer tx.Rollback()
-	_, _, err = port.ResolveCreationWorkflow(context.Background(), tx, workitemcreation.ResolvedIntake{Identity: identity, Command: command, RecordClass: "generic"}, "")
+	_, _, err = port.ResolveCreationWorkflow(context.Background(), tx, workitemcreation.NewPlan(workitemcreation.ResolvedIntake{Identity: identity, Command: command, RecordClass: "generic"}, "new", "medium", "test"), "")
 	require.ErrorIs(t, err, workitemcreation.ErrWorkflowBindingRequired)
 }
 
@@ -95,7 +95,7 @@ func TestCreationWorkflowResolvesMajorVersionToExactDefinition(t *testing.T) {
 			tx, err := client.Tx(ctx)
 			require.NoError(t, err)
 			defer tx.Rollback()
-			resolved, _, err := service.NewProcessBindingService(client).ResolveCreationWorkflow(ctx, tx, workitemcreation.ResolvedIntake{Identity: identity, Command: command, RecordClass: "generic"}, "")
+			resolved, _, err := service.NewProcessBindingService(client).ResolveCreationWorkflow(ctx, tx, workitemcreation.NewPlan(workitemcreation.ResolvedIntake{Identity: identity, Command: command, RecordClass: "generic"}, "new", "medium", "test"), "")
 			if tc.invalid {
 				require.ErrorIs(t, err, workitemcreation.ErrDomainValidationFailed)
 				return

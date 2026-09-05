@@ -3,7 +3,12 @@ package intake
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"itsm-backend/ent/intakeresolutionsnapshot"
+	"itsm-backend/ent/ticket"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -142,4 +147,101 @@ func TestIncidentNumbersAreScopedByWorkItemTenant(t *testing.T) {
 	require.Equal(t, first.Number, second.Number)
 	require.NotEqual(t, first.WorkItemID, second.WorkItemID)
 	require.Equal(t, 2, client.Incident.Query().CountX(ctx))
+}
+
+func TestSourceConversationIsProvenanceNotEmailIdentity(t *testing.T) {
+	for _, tc := range []struct{ name, conversation, secondProvider string }{
+		{name: "absent conversation"},
+		{name: "same non-email conversation", conversation: "chat-session"},
+		{name: "different providers same conversation", conversation: "chat-session", secondProvider: "second-chat"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client, app, identity, command, _, _ := intakeFixture(t)
+			ctx := context.Background()
+			for n := 0; n < 2; n++ {
+				provider := "first-chat"
+				if n == 1 && tc.secondProvider != "" {
+					provider = tc.secondProvider
+				}
+				identity.Provider = provider
+				command.IdempotencyKey = fmt.Sprintf("source-%d", n)
+				command.SourceReference = &workitemcreation.SourceReference{Provider: provider, EventID: fmt.Sprintf("event-%d", n), ConversationID: tc.conversation}
+				result, err := app.Create(ctx, identity, command)
+				require.NoError(t, err)
+				snapshot := client.IntakeResolutionSnapshot.Query().Where(intakeresolutionsnapshot.WorkItemIDEQ(result.WorkItemID)).OnlyX(ctx)
+				require.Equal(t, provider, snapshot.SourceProvider)
+				require.Equal(t, command.SourceReference.EventID, snapshot.SourceEventID)
+				require.Equal(t, tc.conversation, snapshot.SourceConversationID)
+				replay, err := app.Create(ctx, identity, command)
+				require.NoError(t, err)
+				require.True(t, replay.Replayed)
+				require.Equal(t, result.WorkItemID, replay.WorkItemID)
+			}
+			require.Equal(t, 2, client.Ticket.Query().Where(ticket.ConversationIDIsNil()).CountX(ctx))
+		})
+	}
+}
+
+func TestRoutingConsumesDomainEffectiveValues(t *testing.T) {
+	for _, class := range []string{"incident", "change_request", "generic"} {
+		t.Run(class, func(t *testing.T) {
+			client, app, identity, command, _, _ := intakeFixture(t)
+			ctx := context.Background()
+			logger := zap.NewNop().Sugar()
+			command.RecordClass, command.IntakeKind = class, class
+			app.registry = NewCreatorRegistry()
+			app.resolver = NewResolver(cataloghandler.NewService(nil, client, logger), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
+			business, subtype, priority := "ticket", "improvement", "medium"
+			conditions := map[string]any{"no_process": true, "priority": "medium"}
+			typeID := ""
+			switch class {
+			case "incident":
+				owner := service.NewIncidentService(client, logger, workitemnumber.NewPostgreSQLAllocator())
+				owner.SetPriorityMatrixService(service.NewPriorityMatrixService(logger))
+				require.NoError(t, app.registry.Register(owner))
+				business, subtype, priority = "incident", "incident", "critical"
+				conditions = map[string]any{"no_process": true, "priority": "critical", "severity": "medium", "impact": "critical", "urgency": "high"}
+			case "change_request":
+				require.NoError(t, app.registry.Register(changehandler.NewService(nil, client, logger)))
+				business, subtype = "change", "normal"
+				conditions["riskLevel"] = "medium"
+			case "generic":
+				require.NoError(t, app.registry.Register(&service.TicketService{}))
+				configured := client.TicketType.Create().SetTenantID(int64(identity.TenantID)).SetCode(subtype).SetName("Improvement").SetDescription("").SetIcon("").SetColor("").SetAssignmentRules([]interface{}{}).SetNotificationConfig(map[string]interface{}{}).SetPermissionConfig(map[string]interface{}{}).SetCreatedBy(int64(identity.ActorID)).SetCreatedAt(time.Now()).SetUpdatedAt(time.Now()).SaveX(ctx)
+				typeID = strconv.Itoa(configured.ID)
+			}
+			client.ProcessBinding.Create().SetTenantID(identity.TenantID).SetBusinessType(business).SetBusinessSubType(subtype).SetProcessDefinitionKey("none").SetConditions(conditions).SaveX(ctx)
+			for _, explicit := range []bool{true, false} {
+				command.IdempotencyKey = fmt.Sprintf("effective-%v", explicit)
+				command.Priority = ""
+				if explicit {
+					command.Priority = priority
+				}
+				switch class {
+				case "incident":
+					command.Incident = &workitemcreation.IncidentInput{Impact: "critical", Urgency: "high"}
+					if explicit {
+						command.Incident.Type = subtype
+						command.Incident.Severity = "medium"
+					}
+				case "change_request":
+					command.Change = &workitemcreation.ChangeInput{}
+					if explicit {
+						command.Change.Type = subtype
+						command.Change.RiskLevel = "medium"
+					}
+				case "generic":
+					command.Generic = &workitemcreation.GenericInput{TypeID: typeID}
+					if explicit {
+						command.Generic.Type = subtype
+					}
+				}
+				result, err := app.Create(ctx, identity, command)
+				require.NoError(t, err, "explicit=%v", explicit)
+				require.Equal(t, priority, client.Ticket.GetX(ctx, result.WorkItemID).Priority)
+				require.Equal(t, "not_required", result.WorkflowStartStatus)
+			}
+			require.Equal(t, 2, client.IntakeResolutionSnapshot.Query().CountX(ctx))
+		})
+	}
 }

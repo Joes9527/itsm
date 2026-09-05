@@ -118,3 +118,7 @@ func TestApplicationGraphCommitsFieldsSnapshotAndOutbox(t *testing.T) {
 	require.Equal(t, result.Number, replay.Number)
 	require.Equal(t, "1", client.IntakeResolutionSnapshot.Query().OnlyX(ctx).CatalogVersion)
 }
+
+func (graphResolver) ResolveWorkflow(context.Context, *ent.Tx, *workitemcreation.CreationPlan) error {
+	return nil
+}

@@ -81,6 +81,8 @@ func (*Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedInt
 		}
 	}
 	plan := creation.NewPlan(in, "draft", priority, in.Identity.Channel)
+	plan.BusinessSubtype = input.Type
+	plan.RoutingValues = map[string]any{"riskLevel": input.RiskLevel, "impactScope": input.ImpactScope}
 	plan.ProfessionalInput = changeCreation{Input: input, Start: start, End: end}
 	return plan, nil
 }

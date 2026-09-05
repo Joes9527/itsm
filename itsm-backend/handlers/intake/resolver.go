@@ -42,25 +42,10 @@ func (r *Resolver) Resolve(ctx context.Context, tx *ent.Tx, identity creation.Id
 		if result.Catalog.Version != command.CatalogVersion || result.Catalog.FormSchemaVersion != command.FormSchemaVersion {
 			return nil, creation.NewIntakeError(creation.CatalogVersionConflict, "catalog or form changed after confirmation", nil)
 		}
-		result.Workflow, result.SLADefinitionID, err = r.workflow.ResolveCreationWorkflow(ctx, tx, *result, result.Catalog.ProcessDefinitionKey)
-		if err != nil {
-			return nil, err
-		}
-		if result.Catalog.RequiresApproval && result.Workflow.NoProcess {
-			return nil, creation.NewWorkflowBindingRequired("approval catalog requires a workflow", nil)
-		}
 		if err = service.NewFieldDefinitionService(tx.Client()).ValidateCreationValues(ctx, tx, identity.TenantID, "service_catalog", result.Catalog.ID, command.FormValues); err != nil {
 			return nil, err
 		}
 	} else {
-		key := ""
-		if command.Generic != nil {
-			key = command.Generic.WorkflowDefinitionKey
-		}
-		result.Workflow, result.SLADefinitionID, err = r.workflow.ResolveCreationWorkflow(ctx, tx, *result, key)
-		if err != nil {
-			return nil, err
-		}
 		if command.Generic != nil && command.Generic.TemplateID != nil {
 			fields := service.NewFieldDefinitionService(tx.Client())
 			if err = fields.ValidateCreationValues(ctx, tx, identity.TenantID, "ticket_template", *command.Generic.TemplateID, command.FormValues); err != nil {
@@ -93,4 +78,26 @@ func (r *Resolver) Resolve(ctx context.Context, tx *ent.Tx, identity creation.Id
 		result.CIIDs = append(result.CIIDs, ci.ID)
 	}
 	return result, nil
+}
+
+// ResolveWorkflow follows owning-domain preparation, so routing observes exactly
+// the effective classification/priority that will be persisted.
+func (r *Resolver) ResolveWorkflow(ctx context.Context, tx *ent.Tx, plan *creation.CreationPlan) error {
+	key := ""
+	if plan.Resolved.Catalog != nil {
+		key = plan.Resolved.Catalog.ProcessDefinitionKey
+	} else if input := plan.Resolved.Command.Generic; input != nil {
+		key = input.WorkflowDefinitionKey
+	}
+	workflow, slaID, err := r.workflow.ResolveCreationWorkflow(ctx, tx, plan, key)
+	if err != nil {
+		return err
+	}
+	if workflow.NoProcess && (plan.RequiresWorkflow || (plan.Resolved.Catalog != nil && plan.Resolved.Catalog.RequiresApproval)) {
+		return creation.NewWorkflowBindingRequired("resolved approvals require a workflow", nil)
+	}
+	plan.Resolved.Workflow = workflow
+	plan.Resolved.SLADefinitionID = slaID
+	plan.WorkItem.SLADefinitionID = slaID
+	return nil
 }

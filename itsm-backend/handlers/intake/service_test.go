@@ -2,11 +2,15 @@ package intake
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/ent"
+	"itsm-backend/ent/schema"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	cataloghandler "itsm-backend/handlers/service_catalog"
 	srhandler "itsm-backend/handlers/service_request"
@@ -235,4 +239,169 @@ func TestRealResolverOutagesStayRetryable(t *testing.T) {
 			require.True(t, policy.Retryable)
 		})
 	}
+}
+
+func TestServiceRequestCloudCatalogRequiresCITypeBeforeAllocation(t *testing.T) {
+	for _, configured := range []bool{false, true} {
+		t.Run(fmt.Sprint(configured), func(t *testing.T) {
+			f := newResolverFixture(t)
+			ctx := context.Background()
+			update := f.client.ServiceCatalog.UpdateOne(f.catalog).SetCloudServiceID(42)
+			if configured {
+				ciType := f.client.CIType.Create().SetTenantID(f.actor.TenantID).SetName("Provisioned service").SaveX(ctx)
+				update.SetCiTypeID(ciType.ID)
+			}
+			update.ExecX(ctx)
+			command := f.catalogCommand(t)
+			allocator := &testAllocator{}
+			f.app.workItems = NewWorkItemCreator(allocator)
+			_, err := f.app.Create(ctx, f.actor, command)
+			if configured {
+				require.NoError(t, err)
+				require.Equal(t, 1, allocator.calls)
+				return
+			}
+			require.ErrorIs(t, err, creation.ErrDomainValidationFailed)
+			require.Zero(t, allocator.calls)
+			assertNoIntakeGraph(t, f.client)
+		})
+	}
+}
+
+func TestServiceRequestApprovalConfigurationAndStorageErrors(t *testing.T) {
+	for _, malformed := range []bool{true, false} {
+		t.Run(fmt.Sprint(malformed), func(t *testing.T) {
+			f := newResolverFixture(t)
+			ctx := context.Background()
+			chain := f.client.ApprovalChain.Create().SetTenantID(f.actor.TenantID).SetName("Approval").SetEntityType("service_request").SetChain([]schema.ApprovalChainStep{}).SaveX(ctx)
+			command := f.catalogCommand(t)
+			if malformed {
+				db, err := sql.Open("sqlite3", fmt.Sprintf("file:%s?mode=memory&cache=shared&_fk=1", t.Name()))
+				require.NoError(t, err)
+				defer db.Close()
+				_, err = db.ExecContext(ctx, `UPDATE approval_chains SET chain = '{}' WHERE id = ?`, chain.ID)
+				require.NoError(t, err)
+			} else {
+				f.client.ApprovalChain.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
+					return ent.QuerierFunc(func(context.Context, ent.Query) (ent.Value, error) { return nil, errors.New("approval storage outage") })
+				}))
+			}
+			allocator := &testAllocator{}
+			f.app.workItems = NewWorkItemCreator(allocator)
+			_, err := f.app.Create(ctx, f.actor, command)
+			var policy *creation.IntakeError
+			require.ErrorAs(t, err, &policy)
+			if malformed {
+				require.Equal(t, 400, policy.HTTPStatus)
+				require.False(t, policy.Retryable)
+			} else {
+				require.Equal(t, 503, policy.HTTPStatus)
+				require.True(t, policy.Retryable)
+			}
+			require.Zero(t, allocator.calls)
+			assertNoIntakeGraph(t, f.client)
+		})
+	}
+}
+
+func TestPreparedApprovalRequirementIsCheckedAfterRouting(t *testing.T) {
+	for _, noProcess := range []bool{true, false} {
+		t.Run(fmt.Sprint(noProcess), func(t *testing.T) {
+			f := newResolverFixture(t)
+			ctx := context.Background()
+			f.client.ServiceCatalog.UpdateOne(f.catalog).SetRequiresApproval(false).ExecX(ctx)
+			f.client.ProcessBinding.Update().SetConditions(map[string]any{"no_process": noProcess}).ExecX(ctx)
+			f.client.ApprovalChain.Create().SetTenantID(f.actor.TenantID).SetName("Required approval").SetEntityType("service_request").SetChain([]schema.ApprovalChainStep{{Level: 1, Role: "manager", IsRequired: true}}).SaveX(ctx)
+			command := f.catalogCommand(t)
+			allocator := &testAllocator{}
+			f.app.workItems = NewWorkItemCreator(allocator)
+			result, err := f.app.Create(ctx, f.actor, command)
+			if noProcess {
+				require.ErrorIs(t, err, creation.ErrWorkflowBindingRequired)
+				require.Zero(t, allocator.calls)
+				assertNoIntakeGraph(t, f.client)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, "pending", result.WorkflowStartStatus)
+			require.Contains(t, f.client.ServiceRequest.Query().OnlyX(ctx).FormData, "_approval_chain")
+		})
+	}
+}
+
+func TestSerializationRetryRollsBackTheWholeCreationAttempt(t *testing.T) {
+	for _, failCount := range []int{2, 3} {
+		t.Run(fmt.Sprint(failCount), func(t *testing.T) {
+			f := newResolverFixture(t)
+			ctx := context.Background()
+			command := f.catalogCommand(t)
+			attempts := 0
+			f.client.Ticket.Use(func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+					value, err := next.Mutate(ctx, m)
+					if err != nil || !m.Op().Is(ent.OpCreate) {
+						return value, err
+					}
+					attempts++
+					if attempts <= failCount {
+						return value, &pq.Error{Code: "40001", Message: "injected serialization failure after base mutation"}
+					}
+					return value, nil
+				})
+			})
+			_, err := f.app.Create(ctx, f.actor, command)
+			require.Equal(t, 3, attempts)
+			if failCount == 3 {
+				require.ErrorIs(t, err, creation.ErrInfrastructureUnavailable)
+				var policy *creation.IntakeError
+				require.ErrorAs(t, err, &policy)
+				require.Equal(t, 503, policy.HTTPStatus)
+				require.True(t, policy.Retryable)
+				assertNoIntakeGraph(t, f.client)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, 1, f.client.Ticket.Query().CountX(ctx))
+			require.Equal(t, 1, f.client.IntakeRequest.Query().CountX(ctx))
+			require.Equal(t, 1, f.client.ServiceRequest.Query().CountX(ctx))
+			require.Equal(t, int64(1), f.client.WorkItemNumberSequence.Query().OnlyX(ctx).LastValue)
+		})
+	}
+}
+
+func TestSerializationRetryRechecksRevokedPermission(t *testing.T) {
+	f := newResolverFixture(t)
+	ctx := context.Background()
+	command := f.catalogCommand(t)
+	baseWrites := 0
+	revoked := false
+	f.client.Ticket.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			value, err := next.Mutate(ctx, m)
+			if err != nil || !m.Op().Is(ent.OpCreate) {
+				return value, err
+			}
+			baseWrites++
+			tx, err := m.(*ent.TicketMutation).Tx()
+			if err != nil {
+				return nil, err
+			}
+			tx.OnRollback(func(next ent.Rollbacker) ent.Rollbacker {
+				return ent.RollbackFunc(func(ctx context.Context, tx *ent.Tx) error {
+					if err := next.Rollback(ctx, tx); err != nil {
+						return err
+					}
+					_, err := f.client.RolePermission.Delete().Exec(ctx)
+					revoked = err == nil
+					return err
+				})
+			})
+			return value, &pq.Error{Code: "40001", Message: "injected transaction conflict"}
+		})
+	})
+	_, err := f.app.Create(ctx, f.actor, command)
+	require.True(t, revoked, "revoke committed after first attempt rolled back")
+	require.ErrorIs(t, err, creation.ErrPermissionDenied)
+	require.Equal(t, 1, baseWrites, "second attempt must authorize before allocating/writing")
+	assertNoIntakeGraph(t, f.client)
 }

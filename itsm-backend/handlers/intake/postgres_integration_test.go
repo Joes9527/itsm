@@ -13,6 +13,7 @@ import (
 	"itsm-backend/ent/intakerequest"
 	"itsm-backend/ent/intakeresolutionsnapshot"
 	"itsm-backend/ent/outboxevent"
+	"itsm-backend/ent/processbinding"
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/workitemnumbersequence"
@@ -132,4 +133,84 @@ func TestPostgresConcurrentProfessionalCreation(t *testing.T) {
 	require.Equal(t, 1, client.IntakeResolutionSnapshot.Query().Where(intakeresolutionsnapshot.TenantIDEQ(tenant.ID)).CountX(ctx))
 	require.Equal(t, 1, client.OutboxEvent.Query().Where(outboxevent.TenantIDEQ(tenant.ID)).CountX(ctx))
 	require.Equal(t, 1, client.AuditLog.Query().Where(auditlog.TenantIDEQ(tenant.ID)).CountX(ctx))
+}
+
+type interleavingCatalog struct {
+	workitemcreation.CatalogResolver
+	captured chan struct{}
+	resume   chan struct{}
+	once     sync.Once
+}
+
+func (c *interleavingCatalog) ResolveCreationCatalog(ctx context.Context, tx *ent.Tx, identity workitemcreation.Identity, id int) (*workitemcreation.ResolvedCatalog, []workitemcreation.ResolvedFieldDefinition, error) {
+	catalog, fields, err := c.CatalogResolver.ResolveCreationCatalog(ctx, tx, identity, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	c.once.Do(func() { close(c.captured) })
+	select {
+	case <-c.resume:
+		return catalog, fields, nil
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
+}
+
+func TestPostgresCreationConfigurationSnapshotIsCoherent(t *testing.T) {
+	for _, changed := range []string{"binding", "field definition"} {
+		t.Run(changed, func(t *testing.T) {
+			dsn := os.Getenv("INTAKE_POSTGRES_TEST_DSN")
+			if dsn == "" {
+				t.Skip("disposable INTAKE_POSTGRES_TEST_DSN is required")
+			}
+			client, err := ent.Open("postgres", dsn)
+			require.NoError(t, err)
+			defer client.Close()
+			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+			defer cancel()
+			require.NoError(t, client.Schema.Create(ctx))
+			name := fmt.Sprintf("coherence-%d", time.Now().UnixNano())
+			tenant := client.Tenant.Create().SetName(name).SetCode(name).SaveX(ctx)
+			actor := client.User.Create().SetTenantID(tenant.ID).SetUsername(name).SetEmail(name + "@example.test").SetName(name).SetPasswordHash("test").SetRole("requester").SaveX(ctx)
+			seedCreationPermission(t, client, tenant.ID, "requester")
+			identity := workitemcreation.Identity{TenantID: tenant.ID, ActorID: actor.ID, RequesterID: actor.ID, Role: "requester", Channel: "itsm_web"}
+			f := resolverFixtureWithClient(t, client, identity)
+			client.ServiceCatalog.UpdateOne(f.catalog).SetRequiresApproval(false).ExecX(ctx)
+			command := f.catalogCommand(t)
+			resolver := f.app.resolver.(*Resolver)
+			capture := &interleavingCatalog{CatalogResolver: resolver.catalog, captured: make(chan struct{}), resume: make(chan struct{})}
+			resolver.catalog = capture
+			type outcome struct {
+				result *workitemcreation.CreateWorkItemResult
+				err    error
+			}
+			done := make(chan outcome, 1)
+			go func() { result, err := f.app.Create(ctx, identity, command); done <- outcome{result, err} }()
+			select {
+			case <-capture.captured:
+			case <-ctx.Done():
+				t.Fatal(ctx.Err())
+			}
+			// Another real transaction commits after A captured its accepted revision,
+			// but before A selects the route or re-reads field validation definitions.
+			if changed == "binding" {
+				_, err = client.ProcessBinding.Update().Where(processbinding.TenantIDEQ(tenant.ID)).SetConditions(map[string]any{"no_process": true}).Save(ctx)
+			} else {
+				_, err = client.FieldDefinition.Create().SetTenantID(tenant.ID).SetEntityType("service_catalog").SetEntityID(f.catalog.ID).SetName("new_required").SetLabel("New required").SetFieldType("text").SetRequired(true).Save(ctx)
+			}
+			close(capture.resume)
+			require.NoError(t, err)
+			out := <-done
+			require.NoError(t, out.err)
+			snapshot := client.IntakeResolutionSnapshot.Query().Where(intakeresolutionsnapshot.WorkItemIDEQ(out.result.WorkItemID)).OnlyX(ctx)
+			require.Equal(t, command.CatalogVersion, snapshot.CatalogVersion)
+			require.Equal(t, command.FormSchemaVersion, snapshot.FormSchemaVersion)
+			require.Equal(t, "vpn", snapshot.WorkflowDefinitionKey)
+			require.False(t, snapshot.NoProcess, "new route must not be paired with the old revision")
+			require.Equal(t, "pending", out.result.WorkflowStartStatus)
+			command.IdempotencyKey = "new-attempt"
+			_, err = f.app.Create(ctx, identity, command)
+			require.ErrorIs(t, err, workitemcreation.ErrCatalogVersionConflict, "a new snapshot must reject the old confirmed revision")
+		})
+	}
 }

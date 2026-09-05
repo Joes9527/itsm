@@ -2,6 +2,7 @@ package intake
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"itsm-backend/handlers/common/workitemcreation"
@@ -34,6 +35,7 @@ func WithRequestID(ctx context.Context, requestID string) context.Context {
 }
 
 type referenceResolver interface {
+	ResolveWorkflow(context.Context, *ent.Tx, *workitemcreation.CreationPlan) error
 	Resolve(context.Context, *ent.Tx, workitemcreation.Identity, workitemcreation.CreateWorkItemCommand) (*workitemcreation.ResolvedIntake, error)
 }
 
@@ -109,17 +111,22 @@ func (s *Service) Create(ctx context.Context, identity workitemcreation.Identity
 	if err != nil {
 		return nil, err
 	}
+	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
 		result, retry, attemptErr := s.createAttempt(ctx, identity, normalized, digest)
-		if !retry {
+		if !retry && !retryableTransactionConflict(attemptErr) {
 			return result, attemptErr
 		}
+		lastErr = attemptErr
 	}
-	return nil, workitemcreation.NewInfrastructureUnavailable("idempotency owner rolled back before completing", errIdempotencyOwnerInProgress)
+	return nil, workitemcreation.NewInfrastructureUnavailable("could not obtain a stable intake transaction after contention", lastErr)
 }
 
 func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.Identity, command workitemcreation.CreateWorkItemCommand, digest string) (*workitemcreation.CreateWorkItemResult, bool, error) {
-	tx, err := s.client.Tx(ctx)
+	// All authorization/configuration reads, revision checks and graph writes
+	// share one snapshot. Concurrent receipt/allocator writes may serialize;
+	// Create retries the entire rolled-back attempt with a fresh snapshot.
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return nil, false, workitemcreation.NewInfrastructureUnavailable("could not begin intake transaction", err)
 	}
@@ -156,6 +163,10 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 	if plan == nil || plan.WorkItem.TenantID != identity.TenantID || plan.WorkItem.ActorID != identity.ActorID || plan.WorkItem.RequesterID != identity.RequesterID || plan.WorkItem.RecordClass != resolved.RecordClass {
 		return nil, false, workitemcreation.NewDomainValidationFailed("preparation changed immutable creation scope", nil)
 	}
+	if err := s.resolver.ResolveWorkflow(ctx, tx, plan); err != nil {
+		return nil, false, err
+	}
+	resolved = &plan.Resolved
 	workItem, err := s.workItems.CreateBase(ctx, tx, plan)
 	if err != nil {
 		return nil, false, err
@@ -460,4 +471,12 @@ func missingDependency(value any) bool {
 		return v.IsNil()
 	}
 	return false
+}
+
+func retryableTransactionConflict(err error) bool {
+	var state interface{ SQLState() string }
+	if !errors.As(err, &state) {
+		return false
+	}
+	return state.SQLState() == "40001" || state.SQLState() == "40P01"
 }
