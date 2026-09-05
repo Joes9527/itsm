@@ -160,6 +160,8 @@ func TestServiceRequestFieldFailureRollsBackCreation(t *testing.T) {
 
 **Interfaces:** 所有入口只消费 A2 Application。现有 HTTP DTO 映射到统一 command；内部来源键格式为 `provider:stableSourceID:action`，actor/requester 来自原有合法身份解析。参数中不得新增任意可信 tenant/actor 的公网入口。
 
+创建响应裁定：保留现有业务 URL，创建响应统一使用 `CreateWorkItemResult` 与 numeric `code/message/data`（新建 201、重放 200），不保留旧详情字段或 `id/ticketId` 别名。事务提交后的 receipt 已确定成功；详情读取失败不能将成功建单变为失败响应。专业 ID 从 `professionalReference` 读取，共享身份使用 `workItemId`，详情仍走受权 GET。所有活跃消费者（含前端、Python AI 和内部调用）及契约测试同批适配；发布说明必须列出此响应变化。请求字段的保留/映射义务不变，`workflowStartStatus=pending` 不表示履约完成。
+
 - [ ] 逐入口加测试，注入 Application spy，断言仅调用一次、完整字段和来源传入。spy 的最小实现：
 
 ```go
