@@ -41,7 +41,7 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 	if n.IdempotencyKey == "" || utf8.RuneCountInString(n.IdempotencyKey) > 200 {
 		return n, "", invalid("idempotencyKey", "must contain 1 to 200 characters")
 	}
-	if n.Title == "" || utf8.RuneCountInString(n.Title) > 500 {
+	if (n.Title == "" && (n.Problem == nil || n.Problem.SourceIncidentID == nil)) || utf8.RuneCountInString(n.Title) > 500 {
 		return n, "", invalid("title", "must contain 1 to 500 characters")
 	}
 	if utf8.RuneCountInString(n.Description) > 20000 {
@@ -100,6 +100,27 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 			return n, "", invalid("sourceReference", "provider and eventId are required")
 		}
 	}
+	if n.FeishuTask != nil {
+		f := n.FeishuTask
+		f.TaskGUID = strings.TrimSpace(f.TaskGUID)
+		f.CreatorOpenID = strings.TrimSpace(f.CreatorOpenID)
+		f.Status = strings.TrimSpace(f.Status)
+		if n.RecordClass != RecordClassGeneric || n.Email != nil || n.SourceReference == nil || n.SourceReference.Provider != "feishu" || n.SourceReference.EventID != f.TaskGUID || f.TaskGUID == "" || f.CreatorOpenID == "" {
+			return n, "", invalid("feishuTask", "complete verified Feishu task identity is required")
+		}
+	}
+	if n.Email != nil {
+		e := n.Email
+		e.Mailbox = strings.ToLower(strings.TrimSpace(e.Mailbox))
+		e.SenderEmail = strings.ToLower(strings.TrimSpace(e.SenderEmail))
+		e.GraphMessageID = strings.TrimSpace(e.GraphMessageID)
+		if n.RecordClass != RecordClassGeneric || n.SourceReference == nil || n.SourceReference.Provider != "msgraph_email" || e.Mailbox == "" || e.SenderEmail == "" || e.GraphMessageID == "" {
+			return n, "", invalid("email", "complete verified email source is required")
+		}
+		if len(e.TriageComment) > 20000 {
+			return n, "", invalid("email.triageComment", "must not exceed 20000 bytes")
+		}
+	}
 	if n.Generic != nil {
 		g := n.Generic
 		g.Type = strings.TrimSpace(g.Type)
@@ -119,6 +140,9 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 		}
 	}
 	if n.Problem != nil {
+		if n.Problem.SourceIncidentID != nil && *n.Problem.SourceIncidentID <= 0 {
+			return n, "", invalid("problem.sourceIncidentId", "must be positive")
+		}
 		p := n.Problem
 		p.Category = strings.TrimSpace(p.Category)
 		p.RootCause = strings.TrimSpace(p.RootCause)

@@ -15,6 +15,7 @@ import (
 	"itsm-backend/controller"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
 )
 
@@ -57,9 +58,8 @@ func TestTicketStoreAdapter_FindActiveUserByEmail_CaseInsensitive(t *testing.T) 
 	client, tenant, user := newWiringFixture(t)
 	defer client.Close()
 
-	logger := zaptest.NewLogger(t).Sugar()
-	ticketService := service.NewTicketServiceForTest(client, logger)
-	adapter := newTicketStoreAdapter(client, ticketService, nil)
+	app := &emailApplicationRecorder{}
+	adapter := newTicketStoreAdapter(client, app)
 
 	id, found, err := adapter.FindActiveUserByEmail(context.Background(), tenant.ID, "alice@test.com")
 	require.NoError(t, err)
@@ -71,84 +71,49 @@ func TestTicketStoreAdapter_FindActiveUserByEmail_CaseInsensitive(t *testing.T) 
 	assert.False(t, found)
 }
 
-func TestTicketStoreAdapter_CreateTicket_AndDedup(t *testing.T) {
-	client, tenant, user := newWiringFixture(t)
-	defer client.Close()
-
-	logger := zaptest.NewLogger(t).Sugar()
-	ticketService := service.NewTicketServiceForTest(client, logger)
-	adapter := newTicketStoreAdapter(client, ticketService, nil)
-	ctx := context.Background()
-
-	existsBefore, err := adapter.TicketExistsForExternalMessage(ctx, tenant.ID, "<abc@contoso.com>")
-	require.NoError(t, err)
-	assert.False(t, existsBefore)
-
-	ticketID, ticketNumber, err := adapter.CreateTicket(ctx, tenant.ID, msgraphInboundTicketRequestFixture(user.ID))
-	require.NoError(t, err)
-	assert.NotZero(t, ticketID)
-	assert.NotEmpty(t, ticketNumber)
-
-	existsAfter, err := adapter.TicketExistsForExternalMessage(ctx, tenant.ID, "<abc@contoso.com>")
-	require.NoError(t, err)
-	assert.True(t, existsAfter)
+type emailApplicationRecorder struct {
+	identity creation.Identity
+	command  creation.CreateWorkItemCommand
 }
 
-// TestTicketStoreAdapter_CreateTicket_WritesAuditLog is a regression test:
-// tickets created through the normal HTTP API get an audit_log row via
-// middleware.AuditMiddleware, but this adapter's CreateTicket is called
-// from a background polling goroutine that never goes through HTTP — so
-// without an explicit audit write here, connector-created tickets would be
-// LESS auditable than manually-created ones. Per CLAUDE.md: "Any high-risk
-// action triggered by AI, connector, workflow automation, or bulk operation
-// must create an audit record."
-func TestTicketStoreAdapter_CreateTicket_WritesAuditLog(t *testing.T) {
-	client, tenant, user := newWiringFixture(t)
-	defer client.Close()
-
-	logger := zaptest.NewLogger(t).Sugar()
-	ticketService := service.NewTicketServiceForTest(client, logger)
-	adapter := newTicketStoreAdapter(client, ticketService, nil)
-	ctx := context.Background()
-
-	countBefore, err := client.AuditLog.Query().Count(ctx)
-	require.NoError(t, err)
-	require.Zero(t, countBefore)
-
-	ticketID, _, err := adapter.CreateTicket(ctx, tenant.ID, msgraphInboundTicketRequestFixture(user.ID))
-	require.NoError(t, err)
-
-	logs, err := client.AuditLog.Query().All(ctx)
-	require.NoError(t, err)
-	require.Len(t, logs, 1, "exactly one audit_log row must exist after a connector-created ticket")
-
-	entry := logs[0]
-	assert.Equal(t, "ticket", entry.Resource)
-	assert.Equal(t, "create", entry.Action)
-	assert.Equal(t, tenant.ID, entry.TenantID)
-	assert.Equal(t, user.ID, entry.UserID)
-	assert.Contains(t, entry.Path, "msgraph")
-	_ = ticketID
+func (a *emailApplicationRecorder) Create(_ context.Context, identity creation.Identity, command creation.CreateWorkItemCommand) (*creation.CreateWorkItemResult, error) {
+	a.identity = identity
+	a.command = command
+	return &creation.CreateWorkItemResult{WorkItemID: 23, Number: "TKT-202609-000023"}, nil
 }
-
-func TestTicketStoreAdapter_PostSystemComment(t *testing.T) {
-	client, tenant, user := newWiringFixture(t)
+func TestTicketStoreAdapter_ForwardsVerifiedEmailToIntake(t *testing.T) {
+	client, tenant, actor := newWiringFixture(t)
 	defer client.Close()
-
-	logger := zaptest.NewLogger(t).Sugar()
-	ticketService := service.NewTicketServiceForTest(client, logger)
-	adapter := newTicketStoreAdapter(client, ticketService, nil)
-	ctx := context.Background()
-
-	ticketID, _, err := adapter.CreateTicket(ctx, tenant.ID, msgraphInboundTicketRequestFixture(user.ID))
+	app := &emailApplicationRecorder{}
+	adapter := newTicketStoreAdapter(client, app)
+	req := msgraphInboundTicketRequestFixture(actor.ID)
+	req.Mailbox = "support@test.com"
+	req.GraphMessageID = "graph-1"
+	req.HasAttachments = true
+	req.TriageComment = "advisory"
+	req.ConversationID = "conversation"
+	id, number, err := adapter.CreateTicket(context.Background(), tenant.ID, req)
 	require.NoError(t, err)
-
-	err = adapter.PostSystemComment(ctx, tenant.ID, ticketID, user.ID, "AI 分派参考：测试评论")
-	require.NoError(t, err)
-
-	count, err := client.TicketComment.Query().Count(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, 1, count)
+	require.Equal(t, 23, id)
+	require.Equal(t, "TKT-202609-000023", number)
+	require.Equal(t, creation.Identity{TenantID: tenant.ID, ActorID: actor.ID, RequesterID: actor.ID, Role: actor.Role, Channel: "email", Provider: "msgraph_email"}, app.identity)
+	require.Equal(t, "graph-1", app.command.Email.GraphMessageID)
+	require.True(t, app.command.Email.HasAttachments)
+	require.Equal(t, "advisory", app.command.Email.TriageComment)
+	require.Equal(t, req.ExternalMessageID, app.command.SourceReference.EventID)
+	require.Zero(t, client.Ticket.Query().CountX(context.Background()), "adapter cannot add an independent creation transaction")
+	require.Zero(t, client.AuditLog.Query().CountX(context.Background()))
+	req.CreatorEmail = "foreign@test.com"
+	_, _, err = adapter.CreateTicket(context.Background(), tenant.ID, req)
+	require.Error(t, err)
+}
+func TestTicketStoreAdapter_AmbiguousEmailFailsClosed(t *testing.T) {
+	client, tenant, _ := newWiringFixture(t)
+	defer client.Close()
+	client.User.Create().SetTenantID(tenant.ID).SetUsername("other").SetName("Other").SetEmail("alice@test.com").SetPasswordHash("hash").SetRole("end_user").SaveX(context.Background())
+	_, found, err := newTicketStoreAdapter(client, &emailApplicationRecorder{}).FindActiveUserByEmail(context.Background(), tenant.ID, "alice@test.com")
+	require.Error(t, err)
+	require.False(t, found)
 }
 
 // triageServiceSuggestForTenantSignature is a compile-time pin on
@@ -231,8 +196,8 @@ func TestWireEmailMsgraphConnector_RegistersCoordinator(t *testing.T) {
 	client, _, _ := newWiringFixture(t)
 	defer client.Close()
 
+	app := &emailApplicationRecorder{}
 	logger := zaptest.NewLogger(t).Sugar()
-	ticketService := service.NewTicketServiceForTest(client, logger)
 	triageService := service.NewTriageServiceWithSugaredLogger(nil, logger)
 
 	reg := connector.NewRegistry()
@@ -242,5 +207,5 @@ func TestWireEmailMsgraphConnector_RegistersCoordinator(t *testing.T) {
 
 	// Must not panic even though this is a from-scratch registry/controller —
 	// that's the behavior under test.
-	wireEmailMsgraphConnector(client, ticketService, triageService, nil, connCtrl, logger)
+	wireEmailMsgraphConnector(client, app, triageService, connCtrl, logger)
 }

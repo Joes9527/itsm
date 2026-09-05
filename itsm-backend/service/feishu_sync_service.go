@@ -6,32 +6,34 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/authorization"
+	"itsm-backend/common/tenantctx"
 	feishuConn "itsm-backend/connector/builtin/feishu"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/feishuticketsync"
 	entTicket "itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
-	"itsm-backend/repository/workitemnumber"
+	creation "itsm-backend/handlers/common/workitemcreation"
 
 	"go.uber.org/zap"
 )
 
 type FeishuSyncService struct {
-	client          *ent.Client
-	logger          *zap.SugaredLogger
-	numberAllocator workitemnumber.Allocator
+	client      *ent.Client
+	logger      *zap.SugaredLogger
+	creationApp creation.Application
 }
 
 func NewFeishuSyncService(
 	client *ent.Client,
 	logger *zap.SugaredLogger,
-	allocator workitemnumber.Allocator,
+	app creation.Application,
 ) *FeishuSyncService {
-	if allocator == nil {
-		panic("work item number allocator is required")
+	if app == nil {
+		panic("intake application is required")
 	}
-	return &FeishuSyncService{client: client, logger: logger, numberAllocator: allocator}
+	return &FeishuSyncService{client: client, logger: logger, creationApp: app}
 }
 
 func (s *FeishuSyncService) SyncTicketToFeishu(ctx context.Context, tenantID, ticketID int, fc *feishuConn.Feishu) (*dto.FeishuTicketSyncResponse, error) {
@@ -121,60 +123,61 @@ func (s *FeishuSyncService) HandleTaskEvent(ctx context.Context, tenantID int, f
 }
 
 func (s *FeishuSyncService) SyncFeishuTaskToTicket(ctx context.Context, tenantID int, task *feishuConn.FeishuTask) (*dto.FeishuTicketSyncResponse, string, error) {
-	if task == nil || task.GUID == "" {
-		return nil, "", fmt.Errorf("feishu task guid is required")
+	if task == nil || task.GUID == "" || task.CreatorID == "" {
+		return nil, "", creation.NewDomainValidationFailed("Feishu task GUID and mapped creator are required", nil)
 	}
-
+	ctx = tenantctx.WithTenantID(ctx, tenantID)
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
-		return nil, "", fmt.Errorf("start transaction: %w", err)
+		return nil, "", err
 	}
 	defer tx.Rollback()
-
-	syncRecord, err := tx.FeishuTicketSync.Query().
-		Where(feishuticketsync.TenantID(tenantID), feishuticketsync.FeishuTaskID(task.GUID)).
-		Only(ctx)
-	if err != nil && !ent.IsNotFound(err) {
-		return nil, "", fmt.Errorf("query feishu sync record: %w", err)
-	}
-
-	var ticket *ent.Ticket
-	action := "updated"
-	if syncRecord != nil {
-		ticket, err = s.updateTicketFromFeishuTask(ctx, tx, tenantID, syncRecord.TicketID, task)
-		if err != nil {
-			_, _ = syncRecord.Update().SetSyncStatus("failed").SetErrorMessage(err.Error()).Save(ctx)
-			return nil, "", err
-		}
-		syncRecord, err = syncRecord.Update().
-			SetSyncStatus("synced").
-			SetLastSyncDirection("feishu_to_itsm").
-			SetLastSyncedAt(time.Now()).
-			ClearErrorMessage().
-			Save(ctx)
-	} else {
-		action = "created"
-		ticket, err = s.createTicketFromFeishuTask(ctx, tx, tenantID, task)
-		if err != nil {
-			return nil, "", err
-		}
-		syncRecord, err = tx.FeishuTicketSync.Create().
-			SetTenantID(tenantID).
-			SetTicketID(ticket.ID).
-			SetFeishuTaskID(task.GUID).
-			SetFeishuTaskGUID(task.GUID).
-			SetSyncStatus("synced").
-			SetLastSyncDirection("feishu_to_itsm").
-			SetLastSyncedAt(time.Now()).
-			Save(ctx)
+	actor, err := tx.User.Query().Where(user.TenantIDEQ(tenantID), user.FeishuOpenIDEQ(task.CreatorID), user.ActiveEQ(true)).Only(ctx)
+	if ent.IsNotFound(err) {
+		return nil, "", creation.NewAuthenticationRequired("Feishu creator has no active tenant mapping", err)
 	}
 	if err != nil {
-		return nil, "", fmt.Errorf("save feishu sync record: %w", err)
+		return nil, "", err
 	}
-	if err := tx.Commit(); err != nil {
-		return nil, "", fmt.Errorf("commit feishu sync transaction: %w", err)
+	identity := creation.Identity{TenantID: tenantID, ActorID: actor.ID, RequesterID: actor.ID, Role: actor.Role, Channel: "feishu", Provider: "feishu"}
+	command := creation.CreateWorkItemCommand{RecordClass: "generic", IntakeKind: "generic", Confirmation: "confirmed", IdempotencyKey: "feishu:" + task.GUID + ":create", Title: stripTicketNumberPrefix(task.Name), Description: task.Description, Priority: mapFeishuPriorityToTicket(task.Priority), SourceReference: &creation.SourceReference{Provider: "feishu", EventID: task.GUID}, FeishuTask: &creation.FeishuTaskInput{TaskGUID: task.GUID, CreatorOpenID: task.CreatorID, Status: task.Status, Completed: task.Completed}}
+	if err := authorization.AuthorizeWorkItemCreation(ctx, tx, identity, command); err != nil {
+		return nil, "", err
 	}
-	return toFeishuSyncResponse(syncRecord, ticket, task), action, nil
+	record, err := tx.FeishuTicketSync.Query().Where(feishuticketsync.TenantIDEQ(tenantID), feishuticketsync.FeishuTaskIDEQ(task.GUID)).Only(ctx)
+	if err != nil && !ent.IsNotFound(err) {
+		return nil, "", err
+	}
+	if record != nil {
+		item, err := s.updateTicketFromFeishuTask(ctx, tx, tenantID, record.TicketID, task)
+		if err != nil {
+			return nil, "", err
+		}
+		record, err = record.Update().SetSyncStatus("synced").SetLastSyncDirection("feishu_to_itsm").SetLastSyncedAt(time.Now()).ClearErrorMessage().Save(ctx)
+		if err != nil {
+			return nil, "", err
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, "", err
+		}
+		return toFeishuSyncResponse(record, item, task), "updated", nil
+	}
+	if err := tx.Rollback(); err != nil {
+		return nil, "", err
+	}
+	result, err := s.creationApp.Create(ctx, identity, command)
+	if err != nil {
+		return nil, "", err
+	}
+	record, err = s.client.FeishuTicketSync.Query().Where(feishuticketsync.TenantIDEQ(tenantID), feishuticketsync.TicketIDEQ(result.WorkItemID), feishuticketsync.FeishuTaskIDEQ(task.GUID)).Only(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	item, err := s.client.Ticket.Query().Where(entTicket.IDEQ(result.WorkItemID), entTicket.TenantIDEQ(tenantID)).Only(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	return toFeishuSyncResponse(record, item, task), "created", nil
 }
 
 func (s *FeishuSyncService) ticketToFeishuTask(ctx context.Context, ticket *ent.Ticket) *feishuConn.FeishuTask {
@@ -205,6 +208,9 @@ func (s *FeishuSyncService) updateTicketFromFeishuTask(ctx context.Context, tx *
 	if err != nil {
 		return nil, fmt.Errorf("query ticket for feishu sync: %w", err)
 	}
+	if current.RecordClass != "generic" {
+		return nil, creation.NewDomainValidationFailed("professional WorkItem updates require the owning domain", nil)
+	}
 	update := tx.Ticket.UpdateOneID(ticketID).
 		Where(entTicket.TenantID(tenantID)).
 		SetVersion(current.Version + 1)
@@ -221,50 +227,12 @@ func (s *FeishuSyncService) updateTicketFromFeishuTask(ctx context.Context, tx *
 	return update.Save(ctx)
 }
 
-func (s *FeishuSyncService) createTicketFromFeishuTask(ctx context.Context, tx *ent.Tx, tenantID int, task *feishuConn.FeishuTask) (*ent.Ticket, error) {
-	requesterID, err := s.resolveRequesterID(ctx, tx, tenantID, task.CreatorID)
+func writeFeishuCreationSource(ctx context.Context, tx *ent.Tx, item *ent.Ticket, source *creation.FeishuTaskInput) error {
+	_, err := tx.FeishuTicketSync.Create().SetTenantID(item.TenantID).SetTicketID(item.ID).SetFeishuTaskID(source.TaskGUID).SetFeishuTaskGUID(source.TaskGUID).SetSyncStatus("synced").SetLastSyncDirection("feishu_to_itsm").SetLastSyncedAt(item.CreatedAt).Save(ctx)
 	if err != nil {
-		return nil, err
+		return creation.NewInfrastructureUnavailable("could not persist Feishu source mapping", err)
 	}
-	issuedAt := time.Now().UTC()
-	ticketNumber, err := s.numberAllocator.Allocate(ctx, tx.Client(), tenantID, issuedAt)
-	if err != nil {
-		return nil, fmt.Errorf("allocate work item number for feishu task: %w", err)
-	}
-	return tx.Ticket.Create().
-		SetTenantID(tenantID).
-		SetTicketNumber(ticketNumber).
-		SetTitle(stripTicketNumberPrefix(firstNonEmptyString(task.Name, "飞书同步工单"))).
-		SetDescription(task.Description).
-		SetType("ticket").
-		SetPriority(mapFeishuPriorityToTicket(task.Priority)).
-		SetStatus(mapFeishuStatusToTicket(task.Status, task.Completed)).
-		SetRequesterID(requesterID).
-		SetCreatedAt(issuedAt).
-		SetUpdatedAt(issuedAt).
-		Save(ctx)
-}
-
-func (s *FeishuSyncService) resolveRequesterID(ctx context.Context, tx *ent.Tx, tenantID int, feishuOpenID string) (int, error) {
-	if feishuOpenID != "" {
-		u, err := tx.User.Query().
-			Where(user.TenantID(tenantID), user.FeishuOpenID(feishuOpenID)).
-			Only(ctx)
-		if err == nil {
-			return u.ID, nil
-		}
-		if err != nil && !ent.IsNotFound(err) {
-			return 0, fmt.Errorf("query feishu requester: %w", err)
-		}
-	}
-	u, err := tx.User.Query().
-		Where(user.TenantID(tenantID), user.Active(true)).
-		Order(ent.Asc(user.FieldID)).
-		First(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("resolve default requester for feishu task: %w", err)
-	}
-	return u.ID, nil
+	return nil
 }
 
 func (s *FeishuSyncService) markTaskDeleted(ctx context.Context, tenantID int, taskGUID string) (*dto.FeishuTicketSyncResponse, error) {

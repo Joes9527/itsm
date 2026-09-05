@@ -19,6 +19,12 @@ func (i Identity) ValidateCommand(command CreateWorkItemCommand) error {
 	if i.TenantID <= 0 || i.ActorID <= 0 || i.RequesterID <= 0 || strings.TrimSpace(i.Role) == "" || strings.TrimSpace(i.Channel) == "" {
 		return NewAuthenticationRequired("authenticated intake identity is required", nil)
 	}
+	if command.FeishuTask != nil && (i.Channel != "feishu" || i.Provider != "feishu" || command.RecordClass != RecordClassGeneric || command.SourceReference == nil) {
+		return NewPermissionDenied("verified Feishu source is required", nil)
+	}
+	if command.Email != nil && (i.Channel != "email" || i.Provider != "msgraph_email" || command.RecordClass != RecordClassGeneric || command.SourceReference == nil) {
+		return NewPermissionDenied("verified MS Graph email source is required", nil)
+	}
 	if command.SourceReference == nil {
 		return nil
 	}

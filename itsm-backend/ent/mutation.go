@@ -134890,6 +134890,7 @@ type TicketAttachmentMutation struct {
 	op              Op
 	typ             string
 	id              *int
+	source_key      *string
 	file_name       *string
 	file_path       *string
 	file_url        *string
@@ -135006,6 +135007,55 @@ func (m *TicketAttachmentMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetSourceKey sets the "source_key" field.
+func (m *TicketAttachmentMutation) SetSourceKey(s string) {
+	m.source_key = &s
+}
+
+// SourceKey returns the value of the "source_key" field in the mutation.
+func (m *TicketAttachmentMutation) SourceKey() (r string, exists bool) {
+	v := m.source_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceKey returns the old "source_key" field's value of the TicketAttachment entity.
+// If the TicketAttachment object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketAttachmentMutation) OldSourceKey(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceKey: %w", err)
+	}
+	return oldValue.SourceKey, nil
+}
+
+// ClearSourceKey clears the value of the "source_key" field.
+func (m *TicketAttachmentMutation) ClearSourceKey() {
+	m.source_key = nil
+	m.clearedFields[ticketattachment.FieldSourceKey] = struct{}{}
+}
+
+// SourceKeyCleared returns if the "source_key" field was cleared in this mutation.
+func (m *TicketAttachmentMutation) SourceKeyCleared() bool {
+	_, ok := m.clearedFields[ticketattachment.FieldSourceKey]
+	return ok
+}
+
+// ResetSourceKey resets all changes to the "source_key" field.
+func (m *TicketAttachmentMutation) ResetSourceKey() {
+	m.source_key = nil
+	delete(m.clearedFields, ticketattachment.FieldSourceKey)
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -135535,7 +135585,10 @@ func (m *TicketAttachmentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TicketAttachmentMutation) Fields() []string {
-	fields := make([]string, 0, 10)
+	fields := make([]string, 0, 11)
+	if m.source_key != nil {
+		fields = append(fields, ticketattachment.FieldSourceKey)
+	}
 	if m.ticket != nil {
 		fields = append(fields, ticketattachment.FieldTicketID)
 	}
@@ -135574,6 +135627,8 @@ func (m *TicketAttachmentMutation) Fields() []string {
 // schema.
 func (m *TicketAttachmentMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case ticketattachment.FieldSourceKey:
+		return m.SourceKey()
 	case ticketattachment.FieldTicketID:
 		return m.TicketID()
 	case ticketattachment.FieldFileName:
@@ -135603,6 +135658,8 @@ func (m *TicketAttachmentMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *TicketAttachmentMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case ticketattachment.FieldSourceKey:
+		return m.OldSourceKey(ctx)
 	case ticketattachment.FieldTicketID:
 		return m.OldTicketID(ctx)
 	case ticketattachment.FieldFileName:
@@ -135632,6 +135689,13 @@ func (m *TicketAttachmentMutation) OldField(ctx context.Context, name string) (e
 // type.
 func (m *TicketAttachmentMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case ticketattachment.FieldSourceKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceKey(v)
+		return nil
 	case ticketattachment.FieldTicketID:
 		v, ok := value.(int)
 		if !ok {
@@ -135759,6 +135823,9 @@ func (m *TicketAttachmentMutation) AddField(name string, value ent.Value) error 
 // mutation.
 func (m *TicketAttachmentMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(ticketattachment.FieldSourceKey) {
+		fields = append(fields, ticketattachment.FieldSourceKey)
+	}
 	if m.FieldCleared(ticketattachment.FieldFileURL) {
 		fields = append(fields, ticketattachment.FieldFileURL)
 	}
@@ -135779,6 +135846,9 @@ func (m *TicketAttachmentMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *TicketAttachmentMutation) ClearField(name string) error {
 	switch name {
+	case ticketattachment.FieldSourceKey:
+		m.ClearSourceKey()
+		return nil
 	case ticketattachment.FieldFileURL:
 		m.ClearFileURL()
 		return nil
@@ -135793,6 +135863,9 @@ func (m *TicketAttachmentMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *TicketAttachmentMutation) ResetField(name string) error {
 	switch name {
+	case ticketattachment.FieldSourceKey:
+		m.ResetSourceKey()
+		return nil
 	case ticketattachment.FieldTicketID:
 		m.ResetTicketID()
 		return nil

@@ -1,20 +1,21 @@
 package bootstrap
 
 import (
-	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"strings"
-	"time"
 
 	"go.uber.org/zap"
 
+	"itsm-backend/authorization"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/connector/builtin/msgraph"
 	"itsm-backend/controller"
-	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
 )
 
@@ -28,19 +29,22 @@ type msgraphInboundTicketRequest = msgraph.InboundTicketRequest
 // client and TicketService, so connector/builtin/msgraph never needs to
 // import ent/dto/service directly.
 type ticketStoreAdapter struct {
-	client            *ent.Client
-	ticketService     *service.TicketService
-	attachmentService *service.TicketAttachmentService
+	client      *ent.Client
+	creationApp creation.Application
 }
 
-func newTicketStoreAdapter(client *ent.Client, ticketService *service.TicketService, attachmentService *service.TicketAttachmentService) *ticketStoreAdapter {
-	return &ticketStoreAdapter{client: client, ticketService: ticketService, attachmentService: attachmentService}
+func newTicketStoreAdapter(client *ent.Client, app creation.Application) *ticketStoreAdapter {
+	if app == nil {
+		panic("email creation application is required")
+	}
+	return &ticketStoreAdapter{client: client, creationApp: app}
 }
 
 func (a *ticketStoreAdapter) FindActiveUserByEmail(ctx context.Context, tenantID int, email string) (int, bool, error) {
+	ctx = tenantctx.WithTenantID(ctx, tenantID)
 	u, err := a.client.User.Query().
 		Where(user.EmailEqualFold(email), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).
-		First(ctx)
+		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return 0, false, nil
@@ -51,84 +55,38 @@ func (a *ticketStoreAdapter) FindActiveUserByEmail(ctx context.Context, tenantID
 }
 
 func (a *ticketStoreAdapter) TicketExistsForExternalMessage(ctx context.Context, tenantID int, externalMessageID string) (bool, error) {
+	ctx = tenantctx.WithTenantID(ctx, tenantID)
 	return a.client.Ticket.Query().
 		Where(ticket.TenantIDEQ(tenantID), ticket.ExternalMessageIDEQ(externalMessageID)).
 		Exist(ctx)
 }
 
 func (a *ticketStoreAdapter) CreateTicket(ctx context.Context, tenantID int, req msgraph.InboundTicketRequest) (int, string, error) {
-	tkt, err := a.ticketService.CreateTicket(ctx, &dto.CreateTicketRequest{
-		Title:             req.Title,
-		Description:       req.Description,
-		Priority:          req.Priority,
-		RequesterID:       req.RequesterID,
-		CreatorEmail:      req.CreatorEmail,
-		Source:            req.Source,
-		ExternalMessageID: req.ExternalMessageID,
-		ConversationID:    req.ConversationID,
-	}, tenantID)
+	ctx = tenantctx.WithTenantID(ctx, tenantID)
+	actor, err := a.client.User.Query().Where(user.IDEQ(req.RequesterID), user.TenantIDEQ(tenantID), user.ActiveEQ(true), user.EmailEqualFold(req.CreatorEmail)).Only(ctx)
+	if err != nil {
+		return 0, "", creation.NewAuthenticationRequired("verified email requester is unavailable", err)
+	}
+	identity := creation.Identity{TenantID: tenantID, ActorID: actor.ID, RequesterID: actor.ID, Role: actor.Role, Channel: "email", Provider: "msgraph_email"}
+	result, err := a.creationApp.Create(ctx, identity, creation.CreateWorkItemCommand{
+		RecordClass: creation.RecordClassGeneric, IntakeKind: creation.IntakeKindGeneric, Confirmation: "confirmed",
+		IdempotencyKey: fmt.Sprintf("email:%x", sha256.Sum256([]byte(strings.ToLower(strings.TrimSpace(req.Mailbox))+"\x00"+req.ExternalMessageID))),
+		Title:          req.Title, Description: req.Description, Priority: req.Priority,
+		SourceReference: &creation.SourceReference{Provider: "msgraph_email", EventID: req.ExternalMessageID, ConversationID: req.ConversationID},
+		Email:           &creation.EmailInput{Mailbox: req.Mailbox, GraphMessageID: req.GraphMessageID, SenderEmail: req.CreatorEmail, HasAttachments: req.HasAttachments, TriageComment: req.TriageComment},
+	})
 	if err != nil {
 		return 0, "", err
 	}
-
-	// Tickets created via the HTTP API get an audit_log row through
-	// middleware.AuditMiddleware. This path bypasses HTTP entirely (it's a
-	// background polling goroutine), so without this it would be LESS
-	// auditable than manual ticket creation — backwards for a
-	// connector-triggered, high-risk automated action. Mirror the shape
-	// middleware/audit.go writes, using placeholder path/method values that
-	// make the non-HTTP origin of this record clear.
-	a.recordCreateTicketAudit(ctx, tenantID, req.RequesterID, tkt.ID)
-
-	return tkt.ID, tkt.TicketNumber, nil
-}
-
-// recordCreateTicketAudit writes one audit_log row for a ticket created by
-// the msgraph-email polling coordinator. Best-effort: a failure to write
-// the audit record must not fail (or roll back) the ticket creation that
-// already succeeded, but it is logged loudly so it doesn't go unnoticed.
-func (a *ticketStoreAdapter) recordCreateTicketAudit(ctx context.Context, tenantID, userID, ticketID int) {
-	err := a.client.AuditLog.Create().
-		SetCreatedAt(time.Now()).
-		SetTenantID(tenantID).
-		SetUserID(userID).
-		SetResource("ticket").
-		SetAction("create").
-		SetPath("connector:msgraph-email").
-		SetMethod("CONNECTOR").
-		SetStatusCode(201).
-		SetRequestBody(fmt.Sprintf(`{"ticketId":%d,"source":"email"}`, ticketID)).
-		Exec(ctx)
-	if err != nil {
-		zap.S().Errorw("msgraph: failed to write audit log for connector-created ticket", "tenant_id", tenantID, "ticket_id", ticketID, "error", err)
-	}
-}
-
-// PostSystemComment writes an internal ticket comment directly via ent,
-// bypassing TicketCommentService's permission gate (which requires the
-// authoring user to hold an admin/agent/manager/technician/security role).
-// This is a backend-automation write, not a simulated user action — same
-// reasoning the BPMN engine and escalation service already use elsewhere
-// for system-generated ticket state changes. authorUserID must be an
-// existing user in the tenant (the ticket's requester, satisfying the
-// comment's required FK) — the content text itself makes clear it's
-// system-generated.
-func (a *ticketStoreAdapter) PostSystemComment(ctx context.Context, tenantID, ticketID, authorUserID int, content string) error {
-	_, err := a.client.TicketComment.Create().
-		SetTicketID(ticketID).
-		SetUserID(authorUserID).
-		SetContent("[系统 AI 分派] " + content).
-		SetIsInternal(true).
-		SetTenantID(tenantID).
-		Save(ctx)
-	return err
+	return result.WorkItemID, result.Number, nil
 }
 
 // FindTicketByConversationID 按邮件对话线程ID查找已关联的工单。
 func (a *ticketStoreAdapter) FindTicketByConversationID(ctx context.Context, tenantID int, conversationID string) (int, bool, error) {
+	ctx = tenantctx.WithTenantID(ctx, tenantID)
 	t, err := a.client.Ticket.Query().
 		Where(ticket.TenantIDEQ(tenantID), ticket.ConversationIDEQ(conversationID)).
-		First(ctx)
+		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return 0, false, nil
@@ -140,25 +98,30 @@ func (a *ticketStoreAdapter) FindTicketByConversationID(ctx context.Context, ten
 
 // PostReplyComment 追加一条用户可见的邮件回复评论（IsInternal=false）。
 func (a *ticketStoreAdapter) PostReplyComment(ctx context.Context, tenantID, ticketID, authorUserID int, content string) error {
-	_, err := a.client.TicketComment.Create().
-		SetTicketID(ticketID).
-		SetUserID(authorUserID).
-		SetContent(content).
-		SetIsInternal(false).
-		SetTenantID(tenantID).
-		Save(ctx)
-	return err
-}
-
-// SaveAttachment 复用 TicketAttachmentService 保存邮件附件到工单。
-func (a *ticketStoreAdapter) SaveAttachment(ctx context.Context, tenantID, ticketID, uploaderID int, name, contentType string, data []byte) error {
-	_, err := a.attachmentService.UploadAttachment(ctx, ticketID, &service.FileHeader{
-		Filename:    name,
-		Size:        int64(len(data)),
-		ContentType: contentType,
-		Reader:      bytes.NewReader(data),
-	}, uploaderID, tenantID)
-	return err
+	ctx = tenantctx.WithTenantID(ctx, tenantID)
+	tx, err := a.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	actor, err := tx.User.Query().Where(user.IDEQ(authorUserID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).Only(ctx)
+	if err != nil {
+		return err
+	}
+	identity := creation.Identity{TenantID: tenantID, ActorID: actor.ID, RequesterID: actor.ID, Role: actor.Role, Channel: "email", Provider: "msgraph_email"}
+	for _, action := range []string{"read", "write"} {
+		if err := authorization.RequireCurrentPermission(ctx, tx, identity, "ticket", action); err != nil {
+			return err
+		}
+	}
+	item, err := tx.Ticket.Query().Where(ticket.IDEQ(ticketID), ticket.TenantIDEQ(tenantID), ticket.RequesterIDEQ(actor.ID), ticket.SourceEQ("email"), ticket.DeletedAtIsNil()).Only(ctx)
+	if err != nil {
+		return creation.NewPermissionDenied("email reply target is unavailable", err)
+	}
+	if err := tx.TicketComment.Create().SetTicketID(item.ID).SetUserID(actor.ID).SetContent(content).SetIsInternal(false).SetTenantID(tenantID).Exec(ctx); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // triagerAdapter implements msgraph.Triager over the real TriageService.
@@ -187,13 +150,12 @@ func (a *triagerAdapter) Suggest(ctx context.Context, tenantID int, title, descr
 // any tenant — SetEmailCoordinator just makes the capability available.
 func wireEmailMsgraphConnector(
 	client *ent.Client,
-	ticketService *service.TicketService,
+	creationApp creation.Application,
 	triageService *service.TriageService,
-	attachmentService *service.TicketAttachmentService,
 	connectorController *controller.ConnectorController,
 	logger *zap.SugaredLogger,
 ) {
-	store := newTicketStoreAdapter(client, ticketService, attachmentService)
+	store := newTicketStoreAdapter(client, creationApp)
 	triager := newTriagerAdapter(triageService)
 	coordinator := msgraph.NewEmailPollingCoordinator(store, triager, logger.Named("connector.msgraph.coordinator"))
 	connectorController.SetEmailCoordinator(coordinator)

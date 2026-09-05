@@ -55,6 +55,24 @@ type TimeImpact struct {
 	ResponseDeadline   string `json:"responseDeadline,omitempty"`
 	ResolutionDeadline string `json:"resolutionDeadline,omitempty"`
 }
+
+// EmailInput is accepted only from the verified MS Graph channel. SourceReference
+// owns internet message/thread identity; these fields retain recoverable provider references.
+type EmailInput struct {
+	Mailbox        string `json:"mailbox"`
+	GraphMessageID string `json:"graphMessageId"`
+	SenderEmail    string `json:"senderEmail"`
+	HasAttachments bool   `json:"hasAttachments"`
+	TriageComment  string `json:"triageComment,omitempty"`
+}
+
+type FeishuTaskInput struct {
+	TaskGUID      string `json:"taskGuid"`
+	CreatorOpenID string `json:"creatorOpenId"`
+	Status        string `json:"status,omitempty"`
+	Completed     bool   `json:"completed,omitempty"`
+}
+
 type GenericInput struct {
 	Type                  string `json:"type,omitempty"`
 	TypeID                string `json:"typeId,omitempty"`
@@ -66,9 +84,10 @@ type GenericInput struct {
 	WorkflowDefinitionKey string `json:"workflowDefinitionKey,omitempty"`
 }
 type ProblemInput struct {
-	Category  string `json:"category,omitempty"`
-	RootCause string `json:"rootCause,omitempty"`
-	Impact    string `json:"impact,omitempty"`
+	SourceIncidentID *int   `json:"sourceIncidentId,omitempty"`
+	Category         string `json:"category,omitempty"`
+	RootCause        string `json:"rootCause,omitempty"`
+	Impact           string `json:"impact,omitempty"`
 }
 type ServiceRequestInput struct {
 	Amount             json.Number `json:"amount,omitempty"`
@@ -113,6 +132,8 @@ type ChangeInput struct {
 // Identity is supplied separately by trusted adapters, never by command JSON.
 // FormValues owns dynamic fields; professional fields have typed inputs.
 type CreateWorkItemCommand struct {
+	FeishuTask        *FeishuTaskInput     `json:"feishuTask,omitempty"`
+	Email             *EmailInput          `json:"email,omitempty"`
 	RecordClass       string               `json:"recordClass"`
 	Confirmation      string               `json:"confirmation"`
 	CatalogVersion    string               `json:"catalogVersion,omitempty"`
@@ -212,6 +233,9 @@ type ResolvedIntake struct {
 }
 
 type WorkItemDraft struct {
+	CreatorEmail      string
+	ExternalMessageID string
+	ConversationID    string
 	GenericSubtype    string
 	TemplateID        *int
 	ParentTicketID    *int

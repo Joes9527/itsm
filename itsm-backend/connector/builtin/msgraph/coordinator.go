@@ -15,6 +15,10 @@ import (
 // has zero dependency on ent/dto/service — see the design doc's decision
 // to keep the connector package testable without a database.
 type InboundTicketRequest struct {
+	Mailbox           string
+	GraphMessageID    string
+	HasAttachments    bool
+	TriageComment     string
 	Title             string
 	Description       string
 	Priority          string // one of: low, medium, high, critical
@@ -48,13 +52,10 @@ type TicketStore interface {
 	FindActiveUserByEmail(ctx context.Context, tenantID int, email string) (userID int, found bool, err error)
 	TicketExistsForExternalMessage(ctx context.Context, tenantID int, externalMessageID string) (bool, error)
 	CreateTicket(ctx context.Context, tenantID int, req InboundTicketRequest) (ticketID int, ticketNumber string, err error)
-	PostSystemComment(ctx context.Context, tenantID, ticketID, authorUserID int, content string) error
 	// FindTicketByConversationID 按邮件对话线程ID查找已关联的工单，用于识别用户回复。
 	FindTicketByConversationID(ctx context.Context, tenantID int, conversationID string) (ticketID int, found bool, err error)
 	// PostReplyComment 追加一条用户可见的邮件回复评论（IsInternal=false）。
 	PostReplyComment(ctx context.Context, tenantID, ticketID, authorUserID int, content string) error
-	// SaveAttachment 保存一个邮件附件到工单（复用 TicketAttachmentService）。
-	SaveAttachment(ctx context.Context, tenantID, ticketID, uploaderID int, name, contentType string, data []byte) error
 }
 
 // EmailPollingCoordinator polls one MS Graph mailbox per tenant (one
@@ -209,6 +210,10 @@ func (c *EmailPollingCoordinator) handleMessage(ctx context.Context, tenantID in
 	}
 
 	ticketID, ticketNumber, err := c.store.CreateTicket(ctx, tenantID, InboundTicketRequest{
+		Mailbox:           conn.Mailbox(),
+		GraphMessageID:    m.ID,
+		HasAttachments:    m.HasAttachments,
+		TriageComment:     fmt.Sprintf("AI 分派参考：建议分类=%s（未自动应用，请人工确认），优先级=%s（已应用），置信度=%.0f%%，理由=%s", suggestion.Category, priority, suggestion.Confidence*100, suggestion.Explanation),
 		Title:             subject,
 		Description:       body,
 		Priority:          priority,
@@ -224,65 +229,4 @@ func (c *EmailPollingCoordinator) handleMessage(ctx context.Context, tenantID in
 	}
 	c.logger.Infow("msgraph ticket created", "tenant_id", tenantID, "ticket_id", ticketID, "ticket_number", ticketNumber, "from", m.FromAddress)
 
-	comment := fmt.Sprintf(
-		"AI 分派参考：建议分类=%s（未自动应用，请人工确认），优先级=%s（已应用），置信度=%.0f%%，理由=%s",
-		suggestion.Category, priority, suggestion.Confidence*100, suggestion.Explanation,
-	)
-	if err := c.store.PostSystemComment(ctx, tenantID, ticketID, userID, comment); err != nil {
-		c.logger.Warnw("msgraph failed to post triage comment", "tenant_id", tenantID, "ticket_id", ticketID, "error", err)
-	}
-
-	// 附件下载（尽力而为，失败不阻断建单）
-	if m.HasAttachments {
-		c.saveAttachments(ctx, tenantID, userID, ticketID, conn, m)
-	}
-
-	replyBody := renderReplyTemplate(ticketNumber, subject, "新建")
-	replySubject := fmt.Sprintf("Re: [%s] %s", ticketNumber, subject)
-	// 用 reply API 回复原邮件（而非 sendMail），让回复归入同一 conversation 线程，
-	// 这样用户后续回复能通过 conversationId 匹配回本工单。
-	if err := conn.GraphClient().ReplyMessage(ctx, conn.Mailbox(), m.ID, replySubject, replyBody); err != nil {
-		c.logger.Warnw("msgraph failed to send confirmation reply", "tenant_id", tenantID, "ticket_id", ticketID, "error", err)
-	}
-}
-
-// saveAttachments downloads and saves a message's attachments to the ticket,
-// best-effort: failures are logged and summarized into a system comment, but
-// never block ticket creation.
-func (c *EmailPollingCoordinator) saveAttachments(ctx context.Context, tenantID, userID, ticketID int, conn *GraphConnector, m Message) {
-	atts, err := conn.GraphClient().ListAttachments(ctx, conn.Mailbox(), m.ID)
-	if err != nil {
-		c.logger.Warnw("msgraph list attachments failed", "tenant_id", tenantID, "ticket_id", ticketID, "error", err)
-		c.postAttachmentSummary(ctx, tenantID, ticketID, userID, "邮件附件列表获取失败")
-		return
-	}
-	saved, failed := 0, 0
-	for _, att := range atts {
-		data := att.Data
-		if data == nil { // 大附件走 $value 下载
-			data, err = conn.GraphClient().DownloadAttachment(ctx, conn.Mailbox(), m.ID, att.ID)
-			if err != nil {
-				failed++
-				c.logger.Warnw("msgraph download attachment failed", "tenant_id", tenantID, "ticket_id", ticketID, "name", att.Name, "error", err)
-				continue
-			}
-		}
-		if err := c.store.SaveAttachment(ctx, tenantID, ticketID, userID, att.Name, att.ContentType, data); err != nil {
-			failed++
-			c.logger.Warnw("msgraph save attachment failed", "tenant_id", tenantID, "ticket_id", ticketID, "name", att.Name, "error", err)
-			continue
-		}
-		saved++
-	}
-	if failed > 0 {
-		c.postAttachmentSummary(ctx, tenantID, ticketID, userID,
-			fmt.Sprintf("邮件含 %d 个附件，成功保存 %d 个，%d 个未保存", len(atts), saved, failed))
-	}
-}
-
-// postAttachmentSummary writes a system comment summarizing attachment results.
-func (c *EmailPollingCoordinator) postAttachmentSummary(ctx context.Context, tenantID, ticketID, userID int, content string) {
-	if err := c.store.PostSystemComment(ctx, tenantID, ticketID, userID, "[邮件附件] "+content); err != nil {
-		c.logger.Warnw("msgraph failed to post attachment summary comment", "tenant_id", tenantID, "ticket_id", ticketID, "error", err)
-	}
 }

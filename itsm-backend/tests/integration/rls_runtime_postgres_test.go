@@ -83,7 +83,7 @@ func runtimeRLSDriver(t *testing.T, f *incidentEffectsFixture) (*rls.Driver, *sq
 	})
 	_, err = f.db.ExecContext(f.ctx, "GRANT USAGE ON SCHEMA "+schema+" TO "+role)
 	require.NoError(t, err)
-	for _, table := range []string{"incident_rule_executions", "incident_rule_action_receipts", "incident_rules", "tickets", "users", "incidents", "outbox_events", "intake_requests", "variable_probe", "rls_probe"} {
+	for _, table := range []string{"incident_rule_executions", "incident_rule_action_receipts", "incident_rules", "tickets", "users", "incidents", "ticket_attachments", "outbox_events", "intake_requests", "variable_probe", "rls_probe"} {
 		var exists bool
 		require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT to_regclass($1) IS NOT NULL", schema+"."+table).Scan(&exists))
 		if !exists {

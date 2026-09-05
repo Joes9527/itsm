@@ -6,6 +6,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 )
 
 // TicketAttachment holds the schema definition for the TicketAttachment entity.
@@ -16,6 +17,7 @@ type TicketAttachment struct {
 // Fields of the TicketAttachment.
 func (TicketAttachment) Fields() []ent.Field {
 	return []ent.Field{
+		field.String("source_key").Optional().Nillable().MaxLen(64).Comment("Immutable scoped inbound attachment identity; NULL for interactive uploads"),
 		field.Int("ticket_id").
 			Comment("工单ID").
 			Positive(),
@@ -65,4 +67,8 @@ func (TicketAttachment) Edges() []ent.Edge {
 			Unique().
 			Comment("上传人"),
 	}
+}
+
+func (TicketAttachment) Indexes() []ent.Index {
+	return []ent.Index{index.Fields("tenant_id", "source_key").Unique()}
 }

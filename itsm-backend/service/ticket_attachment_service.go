@@ -3,8 +3,12 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"io"
+	"itsm-backend/authorization"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"mime"
 	"net/http"
 	"path/filepath"
@@ -38,9 +42,9 @@ func (noopAttachmentVirusScanner) Scan(context.Context, io.Reader, int64) error 
 
 func NewTicketAttachmentService(client *ent.Client, logger *zap.SugaredLogger) *TicketAttachmentService {
 	return &TicketAttachmentService{
-		client:  client,
-		logger:  logger,
-		storage: NewLocalAttachmentStorage("uploads"),
+		client:      client,
+		logger:      logger,
+		storage:     NewLocalAttachmentStorage("uploads"),
 		maxFileSize: 10 * 1024 * 1024, // 10MB
 		allowedTypes: []string{
 			// 图片
@@ -82,6 +86,10 @@ func (s *TicketAttachmentService) UploadAttachment(
 	fileHeader *FileHeader,
 	userID, tenantID int,
 ) (*dto.TicketAttachmentResponse, error) {
+	return s.uploadAttachment(ctx, ticketID, fileHeader, userID, tenantID, "")
+}
+
+func (s *TicketAttachmentService) uploadAttachment(ctx context.Context, ticketID int, fileHeader *FileHeader, userID, tenantID int, sourceKey string) (*dto.TicketAttachmentResponse, error) {
 	s.logger.Infow("Uploading attachment", "ticket_id", ticketID, "file_name", fileHeader.Filename, "user_id", userID)
 
 	// 验证工单是否存在且属于当前租户
@@ -145,6 +153,18 @@ func (s *TicketAttachmentService) UploadAttachment(
 	fileName := fmt.Sprintf("%d_%d_%s", ticketID, time.Now().UnixNano(), safeName)
 	key := fmt.Sprintf("tickets/%s", fileName)
 
+	if sourceKey != "" {
+		contentHash := sha256.Sum256(data)
+		key = fmt.Sprintf("tickets/%d/email/%s/%x", tenantID, sourceKey, contentHash)
+		existing, err := s.client.TicketAttachment.Query().Where(ticketattachment.TenantIDEQ(tenantID), ticketattachment.SourceKeyEQ(sourceKey)).Only(ctx)
+		if err == nil {
+			return matchingEmailAttachment(existing, ticketID, userID, key)
+		}
+		if !ent.IsNotFound(err) {
+			return nil, fmt.Errorf("load source attachment: %w", err)
+		}
+	}
+
 	// 病毒扫描（对内容字节流，存储后端无关）
 	if err := s.virusScanner.Scan(ctx, bytes.NewReader(data), int64(len(data))); err != nil {
 		return nil, fmt.Errorf("file rejected by malware scan")
@@ -160,7 +180,7 @@ func (s *TicketAttachmentService) UploadAttachment(
 	fileURL := fmt.Sprintf("/api/v1/tickets/%d/attachments/%s/download", ticketID, fileName)
 
 	// 创建附件记录
-	attachment, err := s.client.TicketAttachment.Create().
+	builder := s.client.TicketAttachment.Create().
 		SetTicketID(ticketID).
 		SetFileName(safeName).
 		SetFilePath(key).
@@ -169,9 +189,23 @@ func (s *TicketAttachmentService) UploadAttachment(
 		SetFileType(mimeType).
 		SetMimeType(mimeType).
 		SetUploadedBy(userID).
-		SetTenantID(tenantID).
-		Save(ctx)
+		SetTenantID(tenantID)
+	if sourceKey != "" {
+		builder.SetSourceKey(sourceKey).SetFileSize(len(data))
+	}
+	attachment, err := builder.Save(ctx)
 	if err != nil {
+		if sourceKey != "" {
+			// The deterministic object survives an ambiguous DB outcome. The durable
+			// email delivery retries it; deleting here could remove a concurrent winner.
+			if ent.IsConstraintError(err) {
+				existing, loadErr := s.client.TicketAttachment.Query().Where(ticketattachment.TenantIDEQ(tenantID), ticketattachment.SourceKeyEQ(sourceKey)).Only(ctx)
+				if loadErr == nil {
+					return matchingEmailAttachment(existing, ticketID, userID, key)
+				}
+			}
+			return nil, fmt.Errorf("persist source attachment: %w", err)
+		}
 		// 如果数据库保存失败，删除已上传的文件
 		_ = s.storage.Delete(ctx, key)
 		s.logger.Errorw("Failed to create attachment record", "error", err)
@@ -475,3 +509,51 @@ func sanitizeFilename(name string) string {
 }
 
 // prefixedReader 已移除：上传改为一次性读入内存后统一做类型嗅探与存储。
+
+// UploadEmailAttachment uses one immutable source identity per tenant, mailbox,
+// provider message and attachment. Only the verified inbound delivery owner
+// calls this method; it is not an HTTP upload field.
+func (s *TicketAttachmentService) UploadEmailAttachment(ctx context.Context, ticketID int, header *FileHeader, actorID, tenantID int, mailbox, messageID, attachmentID string) (*dto.TicketAttachmentResponse, error) {
+	mailbox = strings.ToLower(strings.TrimSpace(mailbox))
+	if mailbox == "" || strings.TrimSpace(messageID) == "" || strings.TrimSpace(attachmentID) == "" {
+		return nil, creation.NewDomainValidationFailed("email attachment source identity is required", nil)
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, creation.NewInfrastructureUnavailable("could not authorize email attachment", err)
+	}
+	defer tx.Rollback()
+	actor, err := tx.User.Query().Where(user.IDEQ(actorID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).Only(ctx)
+	if ent.IsNotFound(err) {
+		return nil, creation.NewAuthenticationRequired("email attachment actor is unavailable", err)
+	}
+	if err != nil {
+		return nil, creation.NewInfrastructureUnavailable("could not authorize attachment actor", err)
+	}
+	identity := creation.Identity{TenantID: tenantID, ActorID: actorID, RequesterID: actorID, Role: actor.Role, Channel: "email", Provider: "msgraph_email"}
+	for _, action := range []string{"read", "write"} {
+		if err := authorization.RequireCurrentPermission(ctx, tx, identity, "ticket", action); err != nil {
+			return nil, err
+		}
+	}
+	exists, err := tx.Ticket.Query().Where(ticket.IDEQ(ticketID), ticket.TenantIDEQ(tenantID), ticket.RequesterIDEQ(actorID), ticket.SourceEQ("email"), ticket.ExternalMessageIDEQ(messageID), ticket.DeletedAtIsNil()).Exist(ctx)
+	if err != nil {
+		return nil, creation.NewInfrastructureUnavailable("could not authorize email work item", err)
+	}
+	if !exists {
+		return nil, creation.NewPermissionDenied("email attachment does not belong to this work item and actor", nil)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, creation.NewInfrastructureUnavailable("could not complete attachment authorization", err)
+	}
+	evidence, _ := json.Marshal([]any{"msgraph_email", tenantID, mailbox, messageID, attachmentID})
+	sourceHash := sha256.Sum256(evidence)
+	return s.uploadAttachment(ctx, ticketID, header, actorID, tenantID, fmt.Sprintf("%x", sourceHash))
+}
+
+func matchingEmailAttachment(existing *ent.TicketAttachment, ticketID, actorID int, path string) (*dto.TicketAttachmentResponse, error) {
+	if existing.TicketID != ticketID || existing.UploadedBy != actorID || existing.FilePath != path {
+		return nil, creation.NewIdempotencyConflict("email attachment source already has different content or ownership", nil)
+	}
+	return dto.ToTicketAttachmentResponse(existing, nil), nil
+}

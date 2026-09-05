@@ -91,11 +91,37 @@ func (*TicketService) Prepare(ctx context.Context, tx *ent.Tx, in creation.Resol
 			plan.WorkItem.TagIDs = append([]int(nil), input.TagIDs...)
 		}
 	}
+	if source := in.Command.FeishuTask; source != nil {
+		switch source.Status {
+		case "", "not_started", "in_progress", "completed", "canceled", "cancelled":
+		default:
+			return nil, creation.NewDomainValidationFailed("unsupported initial Feishu task status", nil)
+		}
+		plan.WorkItem.Source = "feishu"
+		plan.WorkItem.Status = mapFeishuStatusToTicket(source.Status, source.Completed)
+		plan.WorkflowVariables["status"] = plan.WorkItem.Status
+	}
+	if in.Command.Email != nil {
+		plan.WorkItem.Source = "email"
+		plan.WorkItem.ExternalMessageID = in.Command.SourceReference.EventID
+		plan.WorkItem.ConversationID = in.Command.SourceReference.ConversationID
+		plan.WorkItem.CreatorEmail = in.Command.Email.SenderEmail
+	}
 	plan.BusinessSubtype = plan.WorkItem.GenericSubtype
 	plan.WorkflowVariables["generic_subtype"] = plan.WorkItem.GenericSubtype
 	return plan, nil
 }
-func (*TicketService) CreateExtension(_ context.Context, _ *ent.Tx, _ *ent.Ticket, _ *creation.CreationPlan) (*creation.ProfessionalReference, error) {
+func (*TicketService) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticket, plan *creation.CreationPlan) (*creation.ProfessionalReference, error) {
+	if plan.Resolved.Command.Email != nil {
+		if err := writeEmailCreationSource(ctx, tx, item, plan); err != nil {
+			return nil, err
+		}
+	}
+	if source := plan.Resolved.Command.FeishuTask; source != nil {
+		if err := writeFeishuCreationSource(ctx, tx, item, source); err != nil {
+			return nil, err
+		}
+	}
 	return &creation.ProfessionalReference{}, nil
 }
 

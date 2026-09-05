@@ -72,6 +72,12 @@ func (c *WorkItemCreator) CreateBase(ctx context.Context, tx *ent.Tx, plan *work
 	}
 	// SourceReference is provider-scoped provenance, persisted by the snapshot.
 	// Email thread identity is assigned only by its trusted email boundary.
+	if draft.ExternalMessageID != "" {
+		if plan.Resolved.Command.Email == nil || plan.Resolved.Identity.Channel != "email" || plan.Resolved.Identity.Provider != "msgraph_email" {
+			return nil, workitemcreation.NewPermissionDenied("email identity requires verified email creation", nil)
+		}
+		create.SetExternalMessageID(draft.ExternalMessageID).SetConversationID(draft.ConversationID).SetCreatorEmail(draft.CreatorEmail)
+	}
 	if draft.AssigneeID != nil {
 		create.SetAssigneeID(*draft.AssigneeID)
 	}

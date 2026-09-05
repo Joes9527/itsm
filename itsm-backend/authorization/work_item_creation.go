@@ -3,11 +3,14 @@ package authorization
 import (
 	"context"
 	"itsm-backend/ent"
+	"itsm-backend/ent/incident"
 	"itsm-backend/ent/permission"
 	"itsm-backend/ent/role"
 	"itsm-backend/ent/rolepermission"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
 	creation "itsm-backend/handlers/common/workitemcreation"
+	"strings"
 )
 
 // RequireCurrentPermission reads current RBAC inside the caller transaction.
@@ -55,6 +58,12 @@ func AuthorizeWorkItemCreation(ctx context.Context, tx *ent.Tx, identity creatio
 	if err != nil {
 		return creation.NewInfrastructureUnavailable("could not load current actor", err)
 	}
+	if command.FeishuTask != nil && (identity.ActorID != identity.RequesterID || actor.FeishuOpenID != command.FeishuTask.CreatorOpenID) {
+		return creation.NewPermissionDenied("verified Feishu creator no longer matches the requester", nil)
+	}
+	if command.Email != nil && (identity.ActorID != identity.RequesterID || !strings.EqualFold(actor.Email, command.Email.SenderEmail)) {
+		return creation.NewPermissionDenied("verified email sender no longer matches the requester", nil)
+	}
 	if actor.Role != identity.Role {
 		return creation.NewAuthenticationRequired("current actor role changed", nil)
 	}
@@ -77,6 +86,20 @@ func AuthorizeWorkItemCreation(ctx context.Context, tx *ent.Tx, identity creatio
 	if identity.RequesterID != identity.ActorID {
 		if err := RequireCurrentPermission(ctx, tx, identity, resource, "create_on_behalf"); err != nil {
 			return err
+		}
+	}
+	if command.Problem != nil && command.Problem.SourceIncidentID != nil {
+		for _, action := range []string{"read", "write"} {
+			if err := RequireCurrentPermission(ctx, tx, identity, "incident", action); err != nil {
+				return err
+			}
+		}
+		exists, err := tx.Incident.Query().Where(incident.IDEQ(*command.Problem.SourceIncidentID), incident.HasWorkItemWith(ticket.TenantIDEQ(identity.TenantID), ticket.RecordClassEQ("incident"), ticket.DeletedAtIsNil())).Exist(ctx)
+		if err != nil {
+			return creation.NewInfrastructureUnavailable("could not authorize conversion source", err)
+		}
+		if !exists {
+			return creation.NewReferenceNotFound("source incident is unavailable", nil)
 		}
 	}
 	return nil

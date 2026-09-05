@@ -30,6 +30,26 @@ func (_u *TicketAttachmentUpdate) Where(ps ...predicate.TicketAttachment) *Ticke
 	return _u
 }
 
+// SetSourceKey sets the "source_key" field.
+func (_u *TicketAttachmentUpdate) SetSourceKey(v string) *TicketAttachmentUpdate {
+	_u.mutation.SetSourceKey(v)
+	return _u
+}
+
+// SetNillableSourceKey sets the "source_key" field if the given value is not nil.
+func (_u *TicketAttachmentUpdate) SetNillableSourceKey(v *string) *TicketAttachmentUpdate {
+	if v != nil {
+		_u.SetSourceKey(*v)
+	}
+	return _u
+}
+
+// ClearSourceKey clears the value of the "source_key" field.
+func (_u *TicketAttachmentUpdate) ClearSourceKey() *TicketAttachmentUpdate {
+	_u.mutation.ClearSourceKey()
+	return _u
+}
+
 // SetTicketID sets the "ticket_id" field.
 func (_u *TicketAttachmentUpdate) SetTicketID(v int) *TicketAttachmentUpdate {
 	_u.mutation.SetTicketID(v)
@@ -258,6 +278,11 @@ func (_u *TicketAttachmentUpdate) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *TicketAttachmentUpdate) check() error {
+	if v, ok := _u.mutation.SourceKey(); ok {
+		if err := ticketattachment.SourceKeyValidator(v); err != nil {
+			return &ValidationError{Name: "source_key", err: fmt.Errorf(`ent: validator failed for field "TicketAttachment.source_key": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.TicketID(); ok {
 		if err := ticketattachment.TicketIDValidator(v); err != nil {
 			return &ValidationError{Name: "ticket_id", err: fmt.Errorf(`ent: validator failed for field "TicketAttachment.ticket_id": %w`, err)}
@@ -313,6 +338,12 @@ func (_u *TicketAttachmentUpdate) sqlSave(ctx context.Context) (_node int, err e
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.SourceKey(); ok {
+		_spec.SetField(ticketattachment.FieldSourceKey, field.TypeString, value)
+	}
+	if _u.mutation.SourceKeyCleared() {
+		_spec.ClearField(ticketattachment.FieldSourceKey, field.TypeString)
 	}
 	if value, ok := _u.mutation.FileName(); ok {
 		_spec.SetField(ticketattachment.FieldFileName, field.TypeString, value)
@@ -426,6 +457,26 @@ type TicketAttachmentUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *TicketAttachmentMutation
+}
+
+// SetSourceKey sets the "source_key" field.
+func (_u *TicketAttachmentUpdateOne) SetSourceKey(v string) *TicketAttachmentUpdateOne {
+	_u.mutation.SetSourceKey(v)
+	return _u
+}
+
+// SetNillableSourceKey sets the "source_key" field if the given value is not nil.
+func (_u *TicketAttachmentUpdateOne) SetNillableSourceKey(v *string) *TicketAttachmentUpdateOne {
+	if v != nil {
+		_u.SetSourceKey(*v)
+	}
+	return _u
+}
+
+// ClearSourceKey clears the value of the "source_key" field.
+func (_u *TicketAttachmentUpdateOne) ClearSourceKey() *TicketAttachmentUpdateOne {
+	_u.mutation.ClearSourceKey()
+	return _u
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -669,6 +720,11 @@ func (_u *TicketAttachmentUpdateOne) ExecX(ctx context.Context) {
 
 // check runs all checks and user-defined validators on the builder.
 func (_u *TicketAttachmentUpdateOne) check() error {
+	if v, ok := _u.mutation.SourceKey(); ok {
+		if err := ticketattachment.SourceKeyValidator(v); err != nil {
+			return &ValidationError{Name: "source_key", err: fmt.Errorf(`ent: validator failed for field "TicketAttachment.source_key": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.TicketID(); ok {
 		if err := ticketattachment.TicketIDValidator(v); err != nil {
 			return &ValidationError{Name: "ticket_id", err: fmt.Errorf(`ent: validator failed for field "TicketAttachment.ticket_id": %w`, err)}
@@ -741,6 +797,12 @@ func (_u *TicketAttachmentUpdateOne) sqlSave(ctx context.Context) (_node *Ticket
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.SourceKey(); ok {
+		_spec.SetField(ticketattachment.FieldSourceKey, field.TypeString, value)
+	}
+	if _u.mutation.SourceKeyCleared() {
+		_spec.ClearField(ticketattachment.FieldSourceKey, field.TypeString)
 	}
 	if value, ok := _u.mutation.FileName(); ok {
 		_spec.SetField(ticketattachment.FieldFileName, field.TypeString, value)

@@ -4422,6 +4422,7 @@ var (
 	// TicketAttachmentsColumns holds the columns for the "ticket_attachments" table.
 	TicketAttachmentsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "source_key", Type: field.TypeString, Nullable: true, Size: 64},
 		{Name: "file_name", Type: field.TypeString},
 		{Name: "file_path", Type: field.TypeString},
 		{Name: "file_url", Type: field.TypeString, Nullable: true},
@@ -4441,15 +4442,22 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "ticket_attachments_tickets_attachments",
-				Columns:    []*schema.Column{TicketAttachmentsColumns[9]},
+				Columns:    []*schema.Column{TicketAttachmentsColumns[10]},
 				RefColumns: []*schema.Column{TicketsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "ticket_attachments_users_ticket_attachments",
-				Columns:    []*schema.Column{TicketAttachmentsColumns[10]},
+				Columns:    []*schema.Column{TicketAttachmentsColumns[11]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "ticketattachment_tenant_id_source_key",
+				Unique:  true,
+				Columns: []*schema.Column{TicketAttachmentsColumns[8], TicketAttachmentsColumns[1]},
 			},
 		},
 	}

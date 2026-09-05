@@ -3683,36 +3683,40 @@ func init() {
 	ticketassignmentrule.UpdateDefaultUpdatedAt = ticketassignmentruleDescUpdatedAt.UpdateDefault.(func() time.Time)
 	ticketattachmentFields := schema.TicketAttachment{}.Fields()
 	_ = ticketattachmentFields
+	// ticketattachmentDescSourceKey is the schema descriptor for source_key field.
+	ticketattachmentDescSourceKey := ticketattachmentFields[0].Descriptor()
+	// ticketattachment.SourceKeyValidator is a validator for the "source_key" field. It is called by the builders before save.
+	ticketattachment.SourceKeyValidator = ticketattachmentDescSourceKey.Validators[0].(func(string) error)
 	// ticketattachmentDescTicketID is the schema descriptor for ticket_id field.
-	ticketattachmentDescTicketID := ticketattachmentFields[0].Descriptor()
+	ticketattachmentDescTicketID := ticketattachmentFields[1].Descriptor()
 	// ticketattachment.TicketIDValidator is a validator for the "ticket_id" field. It is called by the builders before save.
 	ticketattachment.TicketIDValidator = ticketattachmentDescTicketID.Validators[0].(func(int) error)
 	// ticketattachmentDescFileName is the schema descriptor for file_name field.
-	ticketattachmentDescFileName := ticketattachmentFields[1].Descriptor()
+	ticketattachmentDescFileName := ticketattachmentFields[2].Descriptor()
 	// ticketattachment.FileNameValidator is a validator for the "file_name" field. It is called by the builders before save.
 	ticketattachment.FileNameValidator = ticketattachmentDescFileName.Validators[0].(func(string) error)
 	// ticketattachmentDescFilePath is the schema descriptor for file_path field.
-	ticketattachmentDescFilePath := ticketattachmentFields[2].Descriptor()
+	ticketattachmentDescFilePath := ticketattachmentFields[3].Descriptor()
 	// ticketattachment.FilePathValidator is a validator for the "file_path" field. It is called by the builders before save.
 	ticketattachment.FilePathValidator = ticketattachmentDescFilePath.Validators[0].(func(string) error)
 	// ticketattachmentDescFileSize is the schema descriptor for file_size field.
-	ticketattachmentDescFileSize := ticketattachmentFields[4].Descriptor()
+	ticketattachmentDescFileSize := ticketattachmentFields[5].Descriptor()
 	// ticketattachment.FileSizeValidator is a validator for the "file_size" field. It is called by the builders before save.
 	ticketattachment.FileSizeValidator = ticketattachmentDescFileSize.Validators[0].(func(int) error)
 	// ticketattachmentDescFileType is the schema descriptor for file_type field.
-	ticketattachmentDescFileType := ticketattachmentFields[5].Descriptor()
+	ticketattachmentDescFileType := ticketattachmentFields[6].Descriptor()
 	// ticketattachment.FileTypeValidator is a validator for the "file_type" field. It is called by the builders before save.
 	ticketattachment.FileTypeValidator = ticketattachmentDescFileType.Validators[0].(func(string) error)
 	// ticketattachmentDescUploadedBy is the schema descriptor for uploaded_by field.
-	ticketattachmentDescUploadedBy := ticketattachmentFields[7].Descriptor()
+	ticketattachmentDescUploadedBy := ticketattachmentFields[8].Descriptor()
 	// ticketattachment.UploadedByValidator is a validator for the "uploaded_by" field. It is called by the builders before save.
 	ticketattachment.UploadedByValidator = ticketattachmentDescUploadedBy.Validators[0].(func(int) error)
 	// ticketattachmentDescTenantID is the schema descriptor for tenant_id field.
-	ticketattachmentDescTenantID := ticketattachmentFields[8].Descriptor()
+	ticketattachmentDescTenantID := ticketattachmentFields[9].Descriptor()
 	// ticketattachment.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	ticketattachment.TenantIDValidator = ticketattachmentDescTenantID.Validators[0].(func(int) error)
 	// ticketattachmentDescCreatedAt is the schema descriptor for created_at field.
-	ticketattachmentDescCreatedAt := ticketattachmentFields[9].Descriptor()
+	ticketattachmentDescCreatedAt := ticketattachmentFields[10].Descriptor()
 	// ticketattachment.DefaultCreatedAt holds the default value on creation for the created_at field.
 	ticketattachment.DefaultCreatedAt = ticketattachmentDescCreatedAt.Default.(func() time.Time)
 	ticketautomationruleFields := schema.TicketAutomationRule{}.Fields()

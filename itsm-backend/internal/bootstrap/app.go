@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	intakecreation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/intake"
 	"log"
 	"net"
 	"net/http"
@@ -212,6 +214,20 @@ func newTenantGraphProvider(manager *connector.Manager) service.GraphProvider {
 	}
 }
 
+func newTenantGraphInboundProvider(manager *connector.Manager) service.GraphInboundProvider {
+	return func(tenantID int) (service.GraphInboundClient, string, bool) {
+		conn, ok := manager.Get(tenantID, "msgraph-email")
+		if !ok {
+			return nil, "", false
+		}
+		graph, ok := conn.(*msgraph.GraphConnector)
+		if !ok {
+			return nil, "", false
+		}
+		return graph.GraphClient(), graph.Mailbox(), true
+	}
+}
+
 func NewApplication() *Application {
 	// 1. 初始化配置
 	cfg, err := config.LoadConfig()
@@ -324,27 +340,6 @@ func NewApplication() *Application {
 	// 延迟绑定 Graph 发信：发信时只查询当前租户的 msgraph 连接器。
 	emailService.SetGraphProvider(newTenantGraphProvider(connectorManager))
 	ticketNotificationService.SetEmailService(emailService)
-	outboxRegistry, err := service.NewOutboxEventTypeRegistry(
-		[]service.OutboxDeliveryHandler{service.NewIncidentAlertDeliveryHandler(emailService)},
-		service.KafDelegateRequestedEventType,
-	)
-	if err != nil {
-		log.Fatalf("Invalid outbox event type registry: %v", err)
-	}
-	outboxDeliveryWorker, err := service.NewOutboxDeliveryWorker(
-		service.NewOutboxEventRepository(systemClient),
-		service.OutboxDeliveryWorkerConfig{
-			BatchSize:      cfg.OutboxDelivery.BatchSize,
-			PollInterval:   cfg.OutboxDelivery.PollInterval,
-			HandlerTimeout: cfg.OutboxDelivery.HandlerTimeout,
-			MaxAttempts:    cfg.OutboxDelivery.MaxAttempts,
-		},
-		sugar,
-		outboxRegistry,
-	)
-	if err != nil {
-		log.Fatalf("Invalid outbox delivery worker configuration: %v", err)
-	}
 	ticketSLAService := service.NewTicketSLAService(client, sugar)
 	ticketAutomationRuleService := service.NewTicketAutomationRuleService(client, sugar)
 
@@ -471,7 +466,6 @@ func NewApplication() *Application {
 			sugar.Infow("attachment storage backend: minio", "endpoint", cfg.MinIO.Endpoint, "bucket", cfg.MinIO.Bucket)
 		}
 	}
-	wireEmailMsgraphConnector(client, ticketService, triageService, ticketAttachmentService, connectorController, sugar)
 
 	// 从数据库恢复已配置的连接器（如 msgraph-email），避免进程重启后丢失
 	if err := connectorController.LoadAll(tenantctx.SystemContext(context.Background(), "bootstrap:connectors", "load configured tenant connector registrations")); err != nil {
@@ -605,8 +599,6 @@ func NewApplication() *Application {
 
 	// Connector Manager / Registry / Market —— 连接器/插件/技能市场基础设施
 	// Feishu 连接器控制器
-	feishuSyncService := service.NewFeishuSyncService(client, sugar, numberAllocator)
-	feishuController := controller.NewFeishuController(connectorManager, feishuSyncService, marketplaceSvc, sugar)
 
 	// Set process trigger service for workflow integration (after processTriggerService is declared)
 	ticketService.SetProcessTriggerService(processTriggerService)
@@ -671,6 +663,38 @@ func NewApplication() *Application {
 			h.SetChangeService(changeServiceDomain)
 		}
 	}
+
+	creationRegistry := intake.NewCreatorRegistry()
+	for _, owner := range []intakecreation.ProfessionalCreator{ticketService, incidentService, problemServiceDomain, changeServiceDomain, srService} {
+		if err := creationRegistry.Register(owner); err != nil {
+			log.Fatalf("Invalid Intake creator registry: %v", err)
+		}
+	}
+	intakeApplication := intake.NewService(client, intake.NewResolver(scService, processBindingService, configurationItemService, ticketCategoryService), creationRegistry, intake.NewWorkItemCreator(numberAllocator))
+	outboxRegistry, err := service.NewOutboxEventTypeRegistry(
+		[]service.OutboxDeliveryHandler{service.NewIncidentAlertDeliveryHandler(emailService), service.NewEmailAttachmentsDeliveryHandler(client, ticketAttachmentService, newTenantGraphInboundProvider(connectorManager)), service.NewEmailConfirmationDeliveryHandler(client, newTenantGraphInboundProvider(connectorManager))},
+		service.KafDelegateRequestedEventType,
+	)
+	if err != nil {
+		log.Fatalf("Invalid outbox event type registry: %v", err)
+	}
+	outboxDeliveryWorker, err := service.NewOutboxDeliveryWorker(
+		service.NewOutboxEventRepository(systemClient),
+		service.OutboxDeliveryWorkerConfig{
+			BatchSize:      cfg.OutboxDelivery.BatchSize,
+			PollInterval:   cfg.OutboxDelivery.PollInterval,
+			HandlerTimeout: cfg.OutboxDelivery.HandlerTimeout,
+			MaxAttempts:    cfg.OutboxDelivery.MaxAttempts,
+		},
+		sugar,
+		outboxRegistry,
+	)
+	if err != nil {
+		log.Fatalf("Invalid outbox delivery worker configuration: %v", err)
+	}
+	wireEmailMsgraphConnector(client, intakeApplication, triageService, connectorController, sugar)
+	feishuSyncService := service.NewFeishuSyncService(client, sugar, intakeApplication)
+	feishuController := controller.NewFeishuController(connectorManager, feishuSyncService, marketplaceSvc, sugar)
 
 	// Analytics & Prediction Controllers
 	analyticsController := controller.NewAnalyticsController(analyticsService)

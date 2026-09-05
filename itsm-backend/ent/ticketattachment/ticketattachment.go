@@ -14,6 +14,8 @@ const (
 	Label = "ticket_attachment"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldSourceKey holds the string denoting the source_key field in the database.
+	FieldSourceKey = "source_key"
 	// FieldTicketID holds the string denoting the ticket_id field in the database.
 	FieldTicketID = "ticket_id"
 	// FieldFileName holds the string denoting the file_name field in the database.
@@ -59,6 +61,7 @@ const (
 // Columns holds all SQL columns for ticketattachment fields.
 var Columns = []string{
 	FieldID,
+	FieldSourceKey,
 	FieldTicketID,
 	FieldFileName,
 	FieldFilePath,
@@ -82,6 +85,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// SourceKeyValidator is a validator for the "source_key" field. It is called by the builders before save.
+	SourceKeyValidator func(string) error
 	// TicketIDValidator is a validator for the "ticket_id" field. It is called by the builders before save.
 	TicketIDValidator func(int) error
 	// FileNameValidator is a validator for the "file_name" field. It is called by the builders before save.
@@ -106,6 +111,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// BySourceKey orders the results by the source_key field.
+func BySourceKey(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSourceKey, opts...).ToFunc()
 }
 
 // ByTicketID orders the results by the ticket_id field.
