@@ -157,7 +157,7 @@ def test_submission_roundtrip_preserves_key_and_command():
 
 **Files:** Extend B1-B3 测试；Create `tests/test_workitem_intake_live_contract.py`，运行时用明确集成标记和独立测试环境；记录总计划验收报告。
 
-**Interfaces:** 消费 A7 实际部署基线与测试角色，禁止用同一管理员账号代替用户和审批人。
+**Interfaces:** 消费 A7 实际部署基线（已包含 C1 的授权策略和结果契约）与测试角色，禁止用同一管理员账号代替用户和审批人。
 
 - [ ] 测试用户交换、查询目录、创建、同键重放、跨用户访问拒绝；确认真实返回符合 A2 OpenAPI 和 B1 模型。
 - [ ] 网络代理注入“ITSM 已提交但 KAF 没收到响应”，重启 KAF 后恢复：一个 WorkItem、相同编号、一次启动记录，无重复确认或外部执行。
