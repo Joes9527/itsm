@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
 
 	"go.uber.org/zap"
@@ -26,6 +27,11 @@ func RecordLoginAudit(ctx context.Context, client *ent.Client, userID, tenantID 
 	payload, _ := json.Marshal(map[string]string{"username": username, "userAgent": req.UserAgent, "failureReason": failureReason})
 	auditCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
+	if tenantID > 0 {
+		auditCtx = tenantctx.WithTenantID(auditCtx, tenantID)
+	} else {
+		auditCtx = tenantctx.SystemContext(auditCtx, "auth:audit", "record failed authentication without a resolved tenant")
+	}
 	err := client.AuditLog.Create().SetCreatedAt(time.Now()).SetTenantID(tenantID).SetUserID(userID).
 		SetIP(req.IP).SetResource("auth").SetAction(action).SetPath("/api/v1/auth/login").
 		SetMethod("POST").SetStatusCode(map[bool]int{true: 200, false: 401}[action == "LOGIN_SUCCESS"]).

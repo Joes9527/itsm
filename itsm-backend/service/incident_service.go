@@ -490,16 +490,16 @@ func (s *IncidentService) updateIncident(ctx context.Context, id int, req *dto.U
 	if req.Status != nil {
 		// 验证状态转换
 		if !isValidIncidentStatusTransition(currentIncident.Edges.WorkItem.Status, *req.Status) {
-			return nil, fmt.Errorf("invalid status transition from '%s' to '%s'", currentIncident.Edges.WorkItem.Status, *req.Status)
+			return nil, rejectIncidentAction("invalid status transition from '%s' to '%s'", currentIncident.Edges.WorkItem.Status, *req.Status)
 		}
 		// 解决与关闭必须走专用动作，确保解决说明、关闭备注和审计事件不可被通用更新绕过。
 		if *req.Status == common.IncidentStatusResolved || *req.Status == common.IncidentStatusClosed {
-			return nil, fmt.Errorf("use the dedicated resolve or close action for this status transition")
+			return nil, rejectIncidentAction("use the dedicated resolve or close action for this status transition")
 		}
 	}
 	if req.AssigneeID != nil {
 		if !canAssignIncidentStatus(currentIncident.Edges.WorkItem.Status) {
-			return nil, fmt.Errorf("resolved, closed, or cancelled incidents cannot be reassigned")
+			return nil, rejectIncidentAction("resolved, closed, or cancelled incidents cannot be reassigned")
 		}
 		if err := s.validateIncidentAssignee(ctx, *req.AssigneeID, tenantID); err != nil {
 			return nil, err
@@ -679,7 +679,7 @@ func (s *IncidentService) assignIncident(ctx context.Context, id int, assigneeID
 		return nil, fmt.Errorf("failed to get incident: %w", err)
 	}
 	if !canAssignIncidentStatus(current.Edges.WorkItem.Status) {
-		return nil, fmt.Errorf("resolved, closed, or cancelled incidents cannot be reassigned")
+		return nil, rejectIncidentAction("resolved, closed, or cancelled incidents cannot be reassigned")
 	}
 	if current.Edges.WorkItem.AssigneeID == assigneeID && (!workflow || current.Edges.WorkItem.Status == common.IncidentStatusAssigned) {
 		return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(current), Applied: false}, nil
@@ -744,7 +744,7 @@ func (s *IncidentService) assignIncident(ctx context.Context, id int, assigneeID
 
 func (s *IncidentService) validateIncidentAssignee(ctx context.Context, assigneeID, tenantID int) error {
 	if assigneeID <= 0 {
-		return fmt.Errorf("invalid assignee id")
+		return rejectIncidentAction("invalid assignee id")
 	}
 	assigneeExists, err := s.client.User.Query().
 		Where(user.IDEQ(assigneeID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).
@@ -753,7 +753,7 @@ func (s *IncidentService) validateIncidentAssignee(ctx context.Context, assignee
 		return fmt.Errorf("failed to validate assignee: %w", err)
 	}
 	if !assigneeExists {
-		return fmt.Errorf("assignee not found or inactive")
+		return rejectIncidentAction("assignee not found or inactive")
 	}
 	return nil
 }
@@ -1016,7 +1016,7 @@ func (s *IncidentService) EscalateIncidentTx(ctx context.Context, tx *ent.Tx, re
 
 func (s *IncidentService) escalateIncident(ctx context.Context, tx *ent.Tx, req *dto.IncidentEscalationRequest, tenantID int) (*dto.IncidentEscalationResponse, error) {
 	if req.AutoAssign {
-		return nil, fmt.Errorf("automatic escalation assignment is unsupported; configure an explicit assign action")
+		return nil, rejectIncidentAction("automatic escalation assignment is unsupported; configure an explicit assign action")
 	}
 	recipients, err := incidentRuleUserRecipients(ctx, s.client, req.NotifyUsers, tenantID)
 	if err != nil {
@@ -1024,10 +1024,10 @@ func (s *IncidentService) escalateIncident(ctx context.Context, tx *ent.Tx, req 
 	}
 	s.logger.Infow("Escalating incident", "incident_id", req.IncidentID, "level", req.EscalationLevel)
 	if req.EscalationLevel < 1 || req.EscalationLevel > 5 {
-		return nil, fmt.Errorf("escalation level must be between 1 and 5")
+		return nil, rejectIncidentAction("escalation level must be between 1 and 5")
 	}
 	if strings.TrimSpace(req.Reason) == "" {
-		return nil, fmt.Errorf("escalation reason is required")
+		return nil, rejectIncidentAction("escalation reason is required")
 	}
 
 	// 获取事件
@@ -1044,10 +1044,10 @@ func (s *IncidentService) escalateIncident(ctx context.Context, tx *ent.Tx, req 
 		return nil, fmt.Errorf("failed to get incident: %w", err)
 	}
 	if current.Edges.WorkItem.Status == common.IncidentStatusClosed || current.Edges.WorkItem.Status == common.IncidentStatusCancelled {
-		return nil, fmt.Errorf("terminal incident cannot be escalated")
+		return nil, rejectIncidentAction("terminal incident cannot be escalated")
 	}
 	if req.EscalationLevel <= current.EscalationLevel {
-		return nil, fmt.Errorf("escalation level must be greater than current level %d", current.EscalationLevel)
+		return nil, rejectIncidentAction("escalation level must be greater than current level %d", current.EscalationLevel)
 	}
 
 	// 更新事件升级信息

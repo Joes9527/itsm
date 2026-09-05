@@ -32,10 +32,10 @@ var ErrNoTenant = errors.New("tenantctx: no tenant_id in context and system bypa
 // WithTenantID returns a new context carrying tenant_id.
 //
 // The tenant_id must be a positive integer; zero or negative values are
-// silently accepted here (input validation is a middleware concern), but
-// the DB layer will reject them via NULLIF(...)::bigint casting.
+// accepted here, but the enforced DB boundary rejects them before any SQL.
+// Selecting a tenant revokes an inherited system bypass.
 func WithTenantID(ctx context.Context, tenantID int) context.Context {
-	return context.WithValue(ctx, tenantKey, tenantID)
+	return context.WithValue(context.WithValue(ctx, systemBypassKey, false), tenantKey, tenantID)
 }
 
 // TenantID returns the tenant_id stored in ctx. The second value is false

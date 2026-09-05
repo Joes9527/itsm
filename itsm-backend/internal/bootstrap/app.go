@@ -472,7 +472,7 @@ func NewApplication() *Application {
 	wireEmailMsgraphConnector(client, ticketService, triageService, ticketAttachmentService, connectorController, sugar)
 
 	// 从数据库恢复已配置的连接器（如 msgraph-email），避免进程重启后丢失
-	if err := connectorController.LoadAll(context.Background()); err != nil {
+	if err := connectorController.LoadAll(tenantctx.SystemContext(context.Background(), "bootstrap:connectors", "load configured tenant connector registrations")); err != nil {
 		sugar.Warnw("Failed to restore connectors from DB", "error", err)
 	}
 
@@ -612,8 +612,8 @@ func NewApplication() *Application {
 
 	// 初始化模板并部署默认流程
 	go func() {
-		ctx := context.Background()
 		const defaultTenantID = 1
+		ctx := tenantctx.WithTenantID(context.Background(), defaultTenantID)
 		if _, err := bpmnTemplateService.LoadAndDeployTemplates(ctx, defaultTenantID); err != nil {
 			sugar.Warnw("Failed to deploy BPMN templates", "error", err)
 		}
@@ -1114,7 +1114,10 @@ func RunInitialization() {
 		GuardRuntimeCredentials(cfg.Deployment.Mode, cfg.JWT.Secret, cfg.Database.Password),
 		sugar,
 	)
-	client, err := database.InitDatabaseWithRLS(&cfg.Database, &cfg.RLS, sugar)
+	// This dedicated initialization job uses the deployment's migration credentials.
+	// Atlas opens its inspector with a background context, so schema work must use
+	// the migration client, never a tenant-scoped runtime decorator.
+	client, err := database.InitDatabase(&cfg.Database)
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}

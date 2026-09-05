@@ -44,7 +44,7 @@ func (IncidentRuleExecution) Edges() []ent.Edge {
 		edge.From("rule", IncidentRule.Type).
 			Ref("rule_executions").
 			Field("rule_id").
-			Unique().Annotations(entsql.OnDelete(entsql.Restrict)).
+			Unique().
 			Comment("规则"),
 	}
 }

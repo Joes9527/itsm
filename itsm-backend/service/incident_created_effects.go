@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -303,6 +304,10 @@ func (e *IncidentRuleEngine) applyNextCreatedAction(ctx context.Context, event *
 	actionKey := fmt.Sprintf("%s:action:%d", execution.ExecutionKey, index)
 	actionCtx := WithIncidentAlertActor(ctx, p.ActorID, "incident_rule", actionKey)
 	if err = actions[index].ExecuteTx(actionCtx, tx, current, p.TenantID); err != nil {
+		var rejected *incidentActionRejection
+		if errors.As(err, &rejected) {
+			return false, blockOutboxDelivery(rejected.Error())
+		}
 		return false, err
 	}
 	if _, err = tx.IncidentRuleActionReceipt.Create().SetTenantID(p.TenantID).SetExecutionID(id).SetActionIndex(index).Save(ctx); err != nil {

@@ -1810,7 +1810,7 @@ var (
 				Symbol:     "incident_rule_executions_incident_rules_rule_executions",
 				Columns:    []*schema.Column{IncidentRuleExecutionsColumns[17]},
 				RefColumns: []*schema.Column{IncidentRulesColumns[0]},
-				OnDelete:   schema.SetNull,
+				OnDelete:   schema.Restrict,
 			},
 			{
 				Symbol:     "incident_rule_executions_incidents_incident",

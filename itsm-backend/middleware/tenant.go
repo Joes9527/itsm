@@ -34,11 +34,15 @@ func TenantMiddleware(client *ent.Client) gin.HandlerFunc {
 		var err error
 		var source string
 
+		// Tenant directory lookup precedes tenant validation. Keep this capability
+		// local; only the validated tenant is propagated to downstream handlers.
+		lookupCtx := tenantctx.SystemContext(c.Request.Context(), "tenant:resolve", "resolve tenant directory before validating the request scope")
+
 		// 1) JWT claims 中的 tenant_id 是最强来源。
 		// JWT 一旦锁定,后续任何来源都不能与之不一致。
 		claimsTenantID := c.GetInt("tenant_id")
 		if claimsTenantID > 0 {
-			tenantEntity, err = client.Tenant.Get(c.Request.Context(), claimsTenantID)
+			tenantEntity, err = client.Tenant.Get(lookupCtx, claimsTenantID)
 			if err != nil {
 				zap.S().Warnw(
 					"jwt tenant_id not found",
@@ -58,7 +62,7 @@ func TenantMiddleware(client *ent.Client) gin.HandlerFunc {
 				tenantEntity, err = client.Tenant.
 					Query().
 					Where(tenant.CodeEQ(code)).
-					First(c.Request.Context())
+					First(lookupCtx)
 				if err != nil {
 					if ent.IsNotFound(err) {
 						common.NotFound(c, "租户不存在")
@@ -82,7 +86,7 @@ func TenantMiddleware(client *ent.Client) gin.HandlerFunc {
 				tenantEntity, err = client.Tenant.
 					Query().
 					Where(tenant.CodeEQ(code)).
-					First(c.Request.Context())
+					First(lookupCtx)
 				if err != nil {
 					if ent.IsNotFound(err) {
 						common.NotFound(c, "租户不存在")
@@ -106,7 +110,7 @@ func TenantMiddleware(client *ent.Client) gin.HandlerFunc {
 				tenantEntity, err = client.Tenant.
 					Query().
 					Where(tenant.CodeEQ(code)).
-					First(c.Request.Context())
+					First(lookupCtx)
 				if err != nil {
 					if ent.IsNotFound(err) {
 						common.NotFound(c, "租户不存在")

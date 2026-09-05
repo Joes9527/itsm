@@ -28,13 +28,13 @@ func executeIncidentRuleAction(ctx context.Context, client *ent.Client, action R
 // remain an alert API concern and cannot be smuggled into creation automation.
 func validateIncidentRuleRecipients(ctx context.Context, client *ent.Client, recipients []string, tenantID int) error {
 	if len(recipients) == 0 {
-		return fmt.Errorf("configured notification recipients are required")
+		return rejectIncidentAction("configured notification recipients are required")
 	}
 	seen := map[string]bool{}
 	for _, address := range recipients {
 		parsed, err := mail.ParseAddress(address)
 		if err != nil || parsed.Address != address || seen[address] {
-			return fmt.Errorf("invalid or duplicate configured notification recipient")
+			return rejectIncidentAction("invalid or duplicate configured notification recipient")
 		}
 		seen[address] = true
 		count, err := client.User.Query().Where(user.TenantID(tenantID), user.Active(true), user.Email(address)).Count(ctx)
@@ -42,7 +42,7 @@ func validateIncidentRuleRecipients(ctx context.Context, client *ent.Client, rec
 			return err
 		}
 		if count != 1 {
-			return fmt.Errorf("notification recipient is not a unique active tenant user")
+			return rejectIncidentAction("notification recipient is not a unique active tenant user")
 		}
 	}
 	return nil
@@ -52,12 +52,15 @@ func incidentRuleUserRecipients(ctx context.Context, client *ent.Client, ids []i
 	seen := map[int]bool{}
 	for _, id := range ids {
 		if id <= 0 || seen[id] {
-			return nil, fmt.Errorf("invalid or duplicate notification user")
+			return nil, rejectIncidentAction("invalid or duplicate notification user")
 		}
 		seen[id] = true
 		recipient, err := client.User.Query().Where(user.ID(id), user.TenantID(tenantID), user.Active(true)).Only(ctx)
+		if ent.IsNotFound(err) {
+			return nil, rejectIncidentAction("notification user not found or inactive")
+		}
 		if err != nil {
-			return nil, fmt.Errorf("notification user not found or inactive: %w", err)
+			return nil, fmt.Errorf("could not load notification user: %w", err)
 		}
 		recipients = append(recipients, recipient.Email)
 	}
@@ -67,4 +70,13 @@ func incidentRuleUserRecipients(ctx context.Context, client *ent.Client, ids []i
 		}
 	}
 	return recipients, nil
+}
+
+// incidentActionRejection is an owning validation decision, not a storage failure.
+// Frozen automation cannot repair this request by retrying it unchanged.
+type incidentActionRejection struct{ message string }
+
+func (e *incidentActionRejection) Error() string { return e.message }
+func rejectIncidentAction(format string, args ...any) error {
+	return &incidentActionRejection{message: fmt.Sprintf(format, args...)}
 }

@@ -1,36 +1,8 @@
-// Package rls: Ent SQL Driver decorator for Row-Level Security.
-//
-// This decorator wraps entsql.Driver so we can transparently inject the
-// PostgreSQL SET LOCAL app.current_tenant statement per query/transaction,
-// without touching thousands of call sites.
-//
-// Three modes, controlled by config.RLSConfig.Mode:
-//
-//	off (default):
-//	  Pass-through. No side effects. Zero risk. Used until R2B灰度期结束.
-//
-//	shadow:
-//	  Pass-through DB behavior, but audit every query:
-//	    - If ctx has tenant_id -> debug log with (op, entity, tid).
-//	    - If ctx lacks tenant_id AND is not system-bypass -> WARN log with
-//	      call stack summary. Used to detect missing propagation points
-//	      before flipping to enforce.
-//
-//	enforce:
-//	  Every query is wrapped in a short-lived transaction (or reuses the
-//	  caller's Tx if present) with SET LOCAL app.current_tenant = <tid>.
-//	  System-bypass ctx skips the SET; caller is expected to have connected
-//	  via itsm_admin (BYPASSRLS).
-//
-// Design notes:
-//   - We wrap dialect.Driver (Ent's interface), not *sql.DB. This lets us
-//     intercept at the exact call boundary where Ent asks for I/O.
-//   - We do NOT modify Ent codegen; the decorator is a runtime concern.
-//   - shadow/enforce modes read tenant_id from context via
-//     common/tenantctx.TenantID(ctx). System bypass via IsSystemBypass(ctx).
-//
-// Status: R2A skeleton. off + shadow verified; enforce implemented but
-// disabled until R2B灰度收尾.
+// Package rls applies tenant scope at the physical SQL connection boundary.
+// Off passes through; shadow observes context only; enforce requires a positive
+// tenant or an explicit server-owned system scope. Tenant transactions use SET
+// LOCAL; ordinary statements use the established connection checkout/cleanup
+// lifecycle. System scope never grants database privileges or changes roles.
 package rls
 
 import (
@@ -55,15 +27,17 @@ const (
 	ModeEnforce Mode = "enforce"
 )
 
-// ParseMode normalizes user input. Unknown values fall back to off.
+// ParseMode retains unknown values so they fail closed at configuration/execution.
 func ParseMode(s string) Mode {
 	switch Mode(s) {
+	case "", ModeOff:
+		return ModeOff
 	case ModeShadow:
 		return ModeShadow
 	case ModeEnforce:
 		return ModeEnforce
 	default:
-		return ModeOff
+		return Mode(s)
 	}
 }
 
@@ -131,34 +105,47 @@ func (d *Driver) Dialect() string { return d.inner.Dialect() }
 // Close closes the underlying driver.
 func (d *Driver) Close() error { return d.inner.Close() }
 
-// Tx delegates transaction creation to the inner driver. Enforce-mode
-// SET LOCAL is applied via Exec/Query below rather than here, so that
-// shadow mode does not need to intercept transaction boundaries.
-func (d *Driver) Tx(ctx context.Context) (dialect.Tx, error) {
-	d.observe(ctx, "Tx", "")
-	return d.inner.Tx(ctx)
-}
-
-// BeginTx delegates to the inner driver. See Tx() for rationale.
+// Tx and BeginTx retain the caller's real transaction and isolation options.
+func (d *Driver) Tx(ctx context.Context) (dialect.Tx, error) { return d.BeginTx(ctx, nil) }
 func (d *Driver) BeginTx(ctx context.Context, opts *sql.TxOptions) (dialect.Tx, error) {
+	if err := d.validateMode(); err != nil {
+		return nil, err
+	}
 	d.observe(ctx, "BeginTx", "")
-	if t, ok := d.inner.(interface {
+	if d.mode == ModeEnforce {
+		return d.beginEnforced(ctx, opts)
+	}
+	return d.beginInner(ctx, opts)
+}
+func (d *Driver) beginInner(ctx context.Context, opts *sql.TxOptions) (dialect.Tx, error) {
+	if beginner, ok := d.inner.(interface {
 		BeginTx(context.Context, *sql.TxOptions) (dialect.Tx, error)
 	}); ok {
-		return t.BeginTx(ctx, opts)
+		return beginner.BeginTx(ctx, opts)
+	}
+	if opts != nil {
+		return nil, fmt.Errorf("rls: driver does not support transaction options")
 	}
 	return d.inner.Tx(ctx)
 }
-
-// Exec implements dialect.ExecQuerier.
 func (d *Driver) Exec(ctx context.Context, query string, args, v any) error {
+	if err := d.validateMode(); err != nil {
+		return err
+	}
 	d.observe(ctx, "Exec", firstToken(query))
+	if d.mode == ModeEnforce {
+		return d.execEnforced(ctx, query, args, v)
+	}
 	return d.inner.Exec(ctx, query, args, v)
 }
-
-// Query implements dialect.ExecQuerier.
 func (d *Driver) Query(ctx context.Context, query string, args, v any) error {
+	if err := d.validateMode(); err != nil {
+		return err
+	}
 	d.observe(ctx, "Query", firstToken(query))
+	if d.mode == ModeEnforce {
+		return d.queryEnforced(ctx, query, args, v)
+	}
 	return d.inner.Query(ctx, query, args, v)
 }
 
@@ -168,8 +155,8 @@ func (d *Driver) Query(ctx context.Context, query string, args, v any) error {
 
 // observe records a query event according to the current mode. It never
 // blocks and never returns an error: the goal is auditing, not enforcement.
-// Enforce-mode side effects live in the caller (AcquireConn / withRLS),
-// keeping this decorator lightweight and safe to disable at runtime.
+// Enforced counters are incremented only after the tenant setting and role
+// checks succeed, in the actual execution boundary.
 func (d *Driver) observe(ctx context.Context, op, firstTok string) {
 	switch d.mode {
 	case ModeOff:
@@ -182,11 +169,9 @@ func (d *Driver) observe(ctx context.Context, op, firstTok string) {
 			return
 		}
 		tid, ok := tenantctx.TenantID(ctx)
-		if !ok {
+		if !ok || tid <= 0 {
 			d.nMissingTenant.Add(1)
-			// In shadow mode: WARN only (no error). In enforce, upstream
-			// AcquireConn is expected to have failed already; we log to be
-			// defensive against paths that bypass it.
+			// Shadow mode observes; enforce rejects before SQL execution.
 			d.log.Warnw(
 				"rls: query without tenant scope",
 				"op", op,
@@ -201,9 +186,6 @@ func (d *Driver) observe(ctx context.Context, op, firstTok string) {
 				"rls: shadow query",
 				"op", op, "stmt", firstTok, "tenant_id", tid,
 			)
-		} else {
-			// Enforce mode: no-op here; SET LOCAL is applied at conn checkout.
-			d.nEnforceApplied.Add(1)
 		}
 
 	default:
@@ -250,4 +232,13 @@ func From(inner dialect.Driver, modeStr string, log *zap.SugaredLogger) *Driver 
 // Describe returns a short human string used in startup logs.
 func (d *Driver) Describe() string {
 	return fmt.Sprintf("rls-driver(mode=%s)", d.mode)
+}
+
+func (d *Driver) validateMode() error {
+	switch d.mode {
+	case ModeOff, ModeShadow, ModeEnforce:
+		return nil
+	default:
+		return fmt.Errorf("rls: unsupported enforcement mode %q", d.mode)
+	}
 }

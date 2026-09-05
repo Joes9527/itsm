@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zaptest/observer"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 )
@@ -14,6 +16,8 @@ import (
 // Losing the timeline must roll back the actual WorkItem mutation.
 func TestIncidentEffectsUpdateTimelineRollback(t *testing.T) {
 	client, svc, ctx := setupIncidentTest(t)
+	core, logs := observer.New(zap.ErrorLevel)
+	svc.logger = zap.New(core).Sugar()
 	defer client.Close()
 	tenant, err := createIncidentTestTenant(ctx, client, "effects-update")
 	require.NoError(t, err)
@@ -28,6 +32,8 @@ func TestIncidentEffectsUpdateTimelineRollback(t *testing.T) {
 	status := "in_progress"
 	_, err = svc.UpdateIncident(ctx, inc.ID, &dto.UpdateIncidentRequest{Status: &status}, tenant.ID)
 	require.ErrorContains(t, err, "timeline unavailable")
+	require.Len(t, logs.All(), 1)
+	require.Equal(t, "timeline unavailable", logs.All()[0].ContextMap()["error"])
 	require.Equal(t, "new", client.Ticket.GetX(ctx, inc.WorkItemID).Status)
 }
 
@@ -73,8 +79,9 @@ func TestIncidentEffectsCreatedEventReplay(t *testing.T) {
 	require.Equal(t, "created", client.IncidentMetric.Query().OnlyX(ctx).MetricName)
 }
 
-func TestIncidentEffectsRejectLossyRuleIDs(t *testing.T){
- for _,value:=range []interface{}{1.5,9007199254740992.0,"1.5","9223372036854775808"}{
-  _,ok:=toInt(value);require.False(t,ok,"unsafe rule integer %v",value)
- }
+func TestIncidentEffectsRejectLossyRuleIDs(t *testing.T) {
+	for _, value := range []interface{}{1.5, 9007199254740992.0, "1.5", "9223372036854775808"} {
+		_, ok := toInt(value)
+		require.False(t, ok, "unsafe rule integer %v", value)
+	}
 }

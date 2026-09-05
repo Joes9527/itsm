@@ -105,22 +105,21 @@ func PrepareBootstrapInfrastructure(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-// InitDatabaseWithRLS 与 InitDatabase 行为完全一致，但在返回 Ent Client 之前
-// 用 RLS 装饰器包裹 SQL Driver。
-//
-// 三档行为（由 rlsCfg.Mode 决定）：
-//   - off      (默认)：装饰器为 no-op，零开销、零风险，行为等同 InitDatabase
-//   - shadow   ：审计每次查询，warn 缺少 tenant 的调用点；不改变 SQL 语义
-//   - enforce  ：审计计数 + 依赖 middleware / AcquireConn 在 conn 上 SET 变量
-//
-// 说明：本函数**不**主动执行 SET LOCAL/SESSION。变量注入由 middleware 与
-// 显式 rls.AcquireConn 负责，装饰器只是插入观测点。这么设计的原因：
-//  1. 一次 request 可能触发多次 Ent 查询，共享同一 *sql.Conn。若在装饰器
-//     内每查询前后 SET+RESET，连接来回换值成本高且易出错。
-//  2. SET LOCAL 只在事务内生效；Ent 大多数查询是 autocommit，事务边界由
-//     业务逻辑控制，装饰器无法感知。
-//  3. 装饰器保持无副作用，可以在 R2A 阶段以 shadow 模式安全上线。
+// InitDatabaseWithRLS installs the actual Ent connection/transaction boundary.
+// Off is pass-through; shadow observes only; enforce applies app.current_tenant
+// and rejects tenant operations through privileged database roles. Explicit
+// system operations still require the privileges of their configured connection.
 func InitDatabaseWithRLS(cfg *config.DatabaseConfig, rlsCfg *config.RLSConfig, logger *zap.SugaredLogger) (*ent.Client, error) {
+	if rlsCfg != nil {
+		switch rls.ParseMode(rlsCfg.Mode) {
+		case rls.ModeOff, rls.ModeShadow, rls.ModeEnforce:
+		default:
+			return nil, fmt.Errorf("unsupported RLS mode %q", rlsCfg.Mode)
+		}
+		if rlsCfg.TenantVarName != "" && rlsCfg.TenantVarName != "app.current_tenant" {
+			return nil, fmt.Errorf("RLS tenant variable must match app.current_tenant policies")
+		}
+	}
 	// 复用 InitDatabase 连接与 Ent client 初始化。
 	client, err := InitDatabase(cfg)
 	if err != nil {

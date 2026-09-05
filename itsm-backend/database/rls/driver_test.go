@@ -49,10 +49,10 @@ func TestParseMode(t *testing.T) {
 	cases := map[string]Mode{
 		"":          ModeOff,
 		"off":       ModeOff,
-		"OFF":       ModeOff, // unknown values fall back to off
+		"OFF":       Mode("OFF"), // unknown values are retained and rejected
 		"shadow":    ModeShadow,
 		"enforce":   ModeEnforce,
-		"gibberish": ModeOff,
+		"gibberish": Mode("gibberish"),
 	}
 	for in, want := range cases {
 		if got := ParseMode(in); got != want {
@@ -121,8 +121,8 @@ func TestDriverEnforceCountsAppliedAndBypass(t *testing.T) {
 	_ = d.Exec(sysCtx, "SELECT COUNT(*) FROM changes", nil, nil)
 
 	s := d.Stats()
-	if s.EnforceApplied != 1 {
-		t.Errorf("EnforceApplied = %d, want 1", s.EnforceApplied)
+	if s.EnforceApplied != 0 {
+		t.Errorf("failed enforcement must not increment applied count: %d", s.EnforceApplied)
 	}
 	if s.SystemBypass != 1 {
 		t.Errorf("SystemBypass = %d, want 1", s.SystemBypass)
@@ -148,5 +148,12 @@ func TestFirstToken(t *testing.T) {
 		if got := firstToken(in); got != want {
 			t.Errorf("firstToken(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestDriverUnknownModeFailsClosed(t *testing.T) {
+	d := From(&fakeDriver{}, "typo", zap.NewNop().Sugar())
+	if err := d.Exec(tenantctx.WithTenantID(context.Background(), 1), "SELECT 1", nil, nil); err == nil {
+		t.Fatal("unknown mode must fail closed")
 	}
 }

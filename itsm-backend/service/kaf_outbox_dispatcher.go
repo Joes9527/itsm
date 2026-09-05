@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
 
 	"github.com/google/uuid"
@@ -74,6 +75,9 @@ func NewKafOutboxDispatcher(repository *OutboxEventRepository, config KafOutboxC
 // DispatchOnce claims due events and finalizes a delivery only with the lease
 // token returned by the repository claim operation.
 func (d *KafOutboxDispatcher) DispatchOnce(ctx context.Context) error {
+	// This dedicated process transports already-authorized cross-tenant intents;
+	// it performs no tenant business action and retains the queue role capability.
+	ctx = tenantctx.SystemContext(ctx, "kaf:outbox_transport", "claim and acknowledge authorized delegation messages")
 	events, err := d.repository.ClaimDueByEventType(ctx, d.now().UTC(), d.config.BatchSize, KafDelegateRequestedEventType)
 	if err != nil {
 		return err

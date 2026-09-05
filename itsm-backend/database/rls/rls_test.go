@@ -8,6 +8,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"itsm-backend/common/tenantctx"
 )
 
 type recordedRLSExec struct {
@@ -77,32 +79,32 @@ func (c *failingDiscardConn) ExecContext(ctx context.Context, query string, _ []
 }
 
 func TestWithTenantAndRoundTrip(t *testing.T) {
-	ctx := WithTenant(context.Background(), 42)
-	tid, ok := TenantFromContext(ctx)
+	ctx := tenantctx.WithTenantID(context.Background(), 42)
+	tid, ok := tenantctx.TenantID(ctx)
 	if !ok || tid != 42 {
 		t.Fatalf("expected tenant 42, got %d ok=%v", tid, ok)
 	}
 }
 
 func TestTenantMissing(t *testing.T) {
-	_, ok := TenantFromContext(context.Background())
+	_, ok := tenantctx.TenantID(context.Background())
 	if ok {
 		t.Fatal("expected missing tenant")
 	}
 }
 
 func TestSystemBypass(t *testing.T) {
-	if IsSystemBypass(context.Background()) {
+	if tenantctx.IsSystemBypass(context.Background()) {
 		t.Fatal("plain context should not be bypass")
 	}
-	ctx := WithSystemBypass(context.Background())
-	if !IsSystemBypass(ctx) {
+	ctx := tenantctx.WithSystemBypass(context.Background())
+	if !tenantctx.IsSystemBypass(ctx) {
 		t.Fatal("bypass context should be flagged")
 	}
 	// bypass and tenant can coexist; DB layer decides which to honor
-	ctx = WithTenant(ctx, 1)
-	if !IsSystemBypass(ctx) {
-		t.Fatal("bypass should survive WithTenant chaining")
+	ctx = tenantctx.WithTenantID(ctx, 1)
+	if tenantctx.IsSystemBypass(ctx) {
+		t.Fatal("tenant selection must revoke system bypass")
 	}
 }
 
@@ -116,7 +118,7 @@ func TestAcquireConnUsesParameterSafeCanonicalTenantSetting(t *testing.T) {
 	}
 	defer db.Close()
 
-	conn, err := AcquireConn(WithTenant(context.Background(), 42), db)
+	conn, err := AcquireConn(tenantctx.WithTenantID(context.Background(), 42), db)
 	if err != nil {
 		t.Fatalf("acquire conn: %v", err)
 	}
@@ -141,7 +143,7 @@ func TestReleaseConnUsesIndependentCleanupContext(t *testing.T) {
 	}
 	defer db.Close()
 
-	requestCtx, cancel := context.WithCancel(WithTenant(context.Background(), 42))
+	requestCtx, cancel := context.WithCancel(tenantctx.WithTenantID(context.Background(), 42))
 	conn, err := AcquireConn(requestCtx, db)
 	if err != nil {
 		t.Fatalf("acquire conn: %v", err)
@@ -170,7 +172,7 @@ func TestReleaseConnEvictsPhysicalConnectionWhenCleanupFails(t *testing.T) {
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 
-	conn, err := AcquireConn(WithTenant(context.Background(), 42), db)
+	conn, err := AcquireConn(tenantctx.WithTenantID(context.Background(), 42), db)
 	if err != nil {
 		t.Fatalf("acquire conn: %v", err)
 	}

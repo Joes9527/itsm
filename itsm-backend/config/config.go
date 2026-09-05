@@ -54,19 +54,10 @@ type OutboxDeliveryConfig struct {
 	MaxAttempts    int
 }
 
-// RLSConfig 控制 PostgreSQL Row-Level Security 的启用档位。
-//
-// Mode:
-//   - "off"     : 默认。中间件仍会向 request.Context 注入 tenant_id，
-//     但不 SET SESSION 变量，也不启用 policy。零风险。
-//   - "shadow"  : 每次 request 走 rls.AcquireConn 设 SESSION 变量，
-//     但 policy 未启用 → 数据库不拦截，只观察是否有 ctx
-//     缺失情况；不影响任何业务。
-//   - "enforce" : SESSION 变量 + policy 同时生效，数据库层强制隔离。
-//     需先在 shadow 模式下把所有缺失点补齐。
-//
-// TenantVarName: PostgreSQL 用于承载 tenant_id 的 GUC 变量名，默认
-// "app.current_tenant"，与 policy 中的 current_setting() 保持一致。
+// RLSConfig selects off (pass-through), shadow (observe only), or enforce
+// (physical connection/transaction tenant settings with non-bypass roles).
+// Policies are managed separately by migrations; this setting does not enable
+// or disable them. TenantVarName must match the canonical app.current_tenant.
 type RLSConfig struct {
 	Mode          string `mapstructure:"mode"`
 	TenantVarName string `mapstructure:"tenant_var_name"`

@@ -10,6 +10,7 @@ import (
 
 	"itsm-backend/authentication"
 	"itsm-backend/authorization"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/passwordresettoken"
@@ -129,6 +130,9 @@ func (s *AuthService) GetUserTenants(ctx context.Context, userID int) (*dto.User
 
 // SwitchTenant 切换租户
 func (s *AuthService) SwitchTenant(ctx context.Context, userID, tenantID int) (*dto.LoginResponse, error) {
+	// Session selection needs the authenticated actor and MSP relation before
+	// authorizing a target. This scope never escapes the authentication owner.
+	ctx = tenantctx.SystemContext(ctx, "auth:switch_tenant", "authorize the actor against the requested tenant")
 	userEntity, err := s.client.User.Get(ctx, userID)
 	if err != nil {
 		if ent.IsNotFound(err) {

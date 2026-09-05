@@ -7,6 +7,7 @@ import (
 
 	"itsm-backend/authentication"
 	"itsm-backend/authorization"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
 	enttenant "itsm-backend/ent/tenant"
 	entuser "itsm-backend/ent/user"
@@ -63,6 +64,9 @@ func (s *Service) getUserPermissions(role string) []string {
 }
 
 func (s *Service) Login(ctx context.Context, username, password string, tenantID int, tenantCode string) (*AuthResult, error) {
+	// Authentication resolves credentials before a trusted tenant exists. This
+	// scope is local to authentication and is never propagated to a request.
+	ctx = tenantctx.SystemContext(ctx, "auth:login", "resolve credentials before establishing a tenant session")
 	// Resolve tenant
 	if tenantID == 0 && tenantCode != "" {
 		t, err := s.client.Tenant.Query().Where(enttenant.CodeEQ(tenantCode)).First(ctx)
@@ -92,6 +96,8 @@ func (s *Service) Login(ctx context.Context, username, password string, tenantID
 		}
 		u = toUserDomain(entUser)
 	}
+
+	ctx = tenantctx.WithTenantID(ctx, entUser.TenantID)
 
 	// Set msp_role from ent user
 	mspRoleStr := string(entUser.MspRole)
@@ -147,7 +153,8 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*AuthR
 	if s.client == nil {
 		return nil, fmt.Errorf("refresh authentication context unavailable")
 	}
-	userEntity, err := s.client.User.Get(ctx, identity.UserID)
+	lookupCtx := tenantctx.SystemContext(ctx, "auth:refresh", "load the signed session actor before tenant authorization")
+	userEntity, err := s.client.User.Get(lookupCtx, identity.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("user not found")
 	}
@@ -163,7 +170,7 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*AuthR
 	if identity.Username != userEntity.Username || identity.Role != role {
 		return nil, fmt.Errorf("refresh token actor context is stale")
 	}
-	tenantEntity, err := authorization.AuthorizeTenantSession(ctx, s.client, userEntity, identity.TenantID, time.Now())
+	tenantEntity, err := authorization.AuthorizeTenantSession(lookupCtx, s.client, userEntity, identity.TenantID, time.Now())
 	if err != nil {
 		return nil, fmt.Errorf("refresh tenant rejected: %w", err)
 	}

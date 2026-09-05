@@ -134,6 +134,16 @@ state 租户不一致、邮箱为空或租户内邮箱不唯一时均明确失�
 
 ---
 
+### RLS execution boundary
+
+`RLS_MODE=off` passes Ent operations through; `shadow` records missing tenant context without changing SQL. `enforce` applies the canonical `app.current_tenant` on the same physical connection as the query, and rejects missing/nonpositive tenant context, unknown modes, incompatible tenant variable names, and tenant operations using a superuser or `BYPASSRLS` role. RLS policies remain migration-owned; changing the mode does not install policies.
+
+Use `common/tenantctx.WithTenantID` after authenticated tenant resolution. Selecting a tenant revokes any inherited system scope. Explicit Ent transactions retain their isolation options and one fixed tenant; each transaction uses a local setting cleared by commit/rollback. Ordinary statements preserve SQL autocommit semantics, with a checked-out connection held until returned rows close. Always close raw query rows. Connection release uses an independent cleanup context and evicts the physical connection if cleanup fails, including after request cancellation.
+
+System scope is local to an owning server operation: credential/tenant-directory lookup, startup/migrations, or cross-tenant queue claim/acknowledgment. It does not grant database privileges or switch roles. Keep the queue repository's configured capabilities separate from consumer business operations; the shared worker derives the consumer tenant from the durable event and revokes transport system scope. The dedicated KAF dispatcher only transports already-authorized messages. Authentication lookup scope must never be propagated to downstream HTTP handlers. Tenant actions require the configured non-bypass role; schema/bootstrap work requires its separately provisioned migration role. No request flag can select a privileged role. The dedicated `RunInitialization` process uses the ordinary migration client because Atlas performs initial inspection with a background context. Production Compose supplies `ITSM_MIGRATION_DB_USER` and its migration password secret only to that job, and `ITSM_RUNTIME_DB_USER` with the runtime secret to API/Worker. With `enforce`, a default superuser runtime connection fails explicitly with `tenant operations require a non-superuser, non-bypass database role`; a migration connection without DDL privileges fails initialization with the database privilege error.
+
+The runtime regression suite is `go test -tags integration_postgres ./tests/integration -run TestPostgresRLSRuntime -count=1 -v` with an explicit `INTAKE_POSTGRES_TEST_DSN`. Its guarded disposable target is `127.0.0.1:36444/sslvpn_test`; it creates unique schemas and non-login test roles, closes their pools, and verifies role cleanup. Do not point it at a shared environment. It exercises real Ent operations, worker consumption, authentication/tenant lookup, cancellation, failed-connection eviction, and migration-role access; it does not certify complete application RLS readiness or enable an entry/schema cutover.
+
 ## 2. Docker 部署与运维排查
 
 ### 生产环境启动（必须显式传入 env-file）

@@ -338,6 +338,9 @@ func TestPostgresIncidentEffectsMigrationPreservesLegacyAndGuardsOwnership(t *te
 	_, err = f.db.ExecContext(f.ctx, string(verify))
 	require.NoError(t, err)
 	require.NoError(t, f.client.Schema.Create(f.ctx), "a later Ent bootstrap must preserve durable schema")
+	var deleteAction string
+	require.NoError(t, f.db.QueryRowContext(f.ctx, `SELECT c.confdeltype::text FROM pg_constraint c JOIN pg_attribute a ON a.attrelid=c.conrelid AND a.attnum=ANY(c.conkey) WHERE c.contype='f' AND c.conrelid='incident_rule_executions'::regclass AND a.attname='rule_id'`).Scan(&deleteAction))
+	require.Equal(t, "r", deleteAction, "Ent rebootstrap must preserve the owning rule FK's RESTRICT action")
 	_, err = f.db.ExecContext(f.ctx, string(verify))
 	require.NoError(t, err)
 	old := f.client.IncidentRuleExecution.GetX(f.ctx, legacy.ID)
@@ -492,4 +495,44 @@ func TestPostgresIncidentEffectsResetDoesNotTouchSearchPathShadow(t *testing.T) 
 	var exists bool
 	require.NoError(t, tx.QueryRowContext(f.ctx, "SELECT to_regclass($1) IS NOT NULL", shadow+".incident_rule_action_receipts").Scan(&exists))
 	require.True(t, exists, "empty development reset must stay inside its local schema")
+}
+
+// A frozen domain rejection requires intervention, while storage failure must retain retry recovery.
+func TestPostgresIncidentEffectsWorkerClassifiesActionFailures(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		action    map[string]interface{}
+		permanent bool
+	}{
+		{"closed", map[string]interface{}{"type": "change_status", "status": "closed"}, true},
+		{"invalid_level", map[string]interface{}{"type": "escalate", "level": 0, "reason": "frozen"}, true},
+		{"unknown_recipient", map[string]interface{}{"type": "notify", "channels": []string{"email"}, "recipients": []string{"missing@example.test"}}, true},
+		{"storage", metricAction("retry"), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newIncidentEffectsFixture(t)
+			f.rule(tc.action)
+			if !tc.permanent {
+				f.client.IncidentMetric.Use(func(next ent.Mutator) ent.Mutator {
+					return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+						return nil, errors.New("metric storage unavailable")
+					})
+				})
+			}
+			registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{f.engine})
+			require.NoError(t, err)
+			worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(f.client), service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 10 * time.Second, MaxAttempts: 5}, zap.NewNop().Sugar(), registry)
+			require.NoError(t, err)
+			require.NoError(t, worker.DispatchOnce(f.ctx))
+			event := f.client.OutboxEvent.GetX(f.ctx, f.event.ID)
+			if tc.permanent {
+				require.Equal(t, "blocked", event.Status)
+			} else {
+				require.Equal(t, "pending", event.Status)
+				require.Equal(t, 1, event.AttemptCount)
+			}
+			require.Zero(t, f.client.IncidentRuleActionReceipt.Query().CountX(f.ctx))
+			require.Equal(t, "new", f.client.Ticket.GetX(f.ctx, f.inc.WorkItemID).Status)
+		})
+	}
 }
