@@ -143,7 +143,9 @@ assertion 接受截止时间为 issuedAt + maxAge，要求 now 严格早于截�
 | 409 目录版本变化 | 获取新定义并重新展示卡片，不静默重写旧请求 |
 | 5xx/连接中断/响应丢失 | 持久化未知提交结果，使用原键查询或重放 |
 
-错误 code 在 A2 的 OpenAPI 文件和 Go/Python 契约 fixture 中统一，禁止两端各自猜字符串。
+错误响应沿用 main 的数字 `code/message/data` envelope；不导入早期分支独有的字符串顶层 TypedFail。`data` 为 `{errorCode: string, retryable: boolean, fieldErrors?: [{field, message}]}`，其中 errorCode 使用公共创建领域的错误分类。HTTP 400 使用既有 1001/1002，401→2001，403→2003，404→4004，409→4090，500→5001，503→5003；领域错误字符串与顶层数字业务码职责不同。KAF 先读取 HTTP/数字 code，再按 data.errorCode 区分同键冲突与目录版本冲突。
+
+错误契约在 A2 的 OpenAPI 文件和 Go/Python fixture 中统一，禁止两端各自猜字符串。
 
 ## 4. 全局完成门槛
 
