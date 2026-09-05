@@ -45,8 +45,8 @@
 
 **Interfaces:** 输入为总计划三条 ITSM 基线；输出每行含 `sourceCommit/path/entry/targetClass/actorSource/idempotencySource/transactionOwner/disposition/test` 的清单。`disposition` 只能是 `reuse-reviewed`、`reimplement`、`remove`、`already-authoritative`、`not-production`。
 
-- [ ] 记录 `git status --short`、HEAD、远端跟踪基线、来源分支 HEAD 和 worktree 状态；使用独立实现分支，不改动来源 worktree。
-- [ ] 执行差异和入口扫描，保存到系统临时目录后将有业务意义的结果写入清单：
+- [x] 记录 `git status --short`、HEAD、远端跟踪基线、来源分支 HEAD 和 worktree 状态；使用独立实现分支，不改动来源 worktree。
+- [x] 执行差异和入口扫描，保存到系统临时目录后将有业务意义的结果写入清单：
 
 ```bash
 git diff --name-status main...worktree-unified-intake-p1-reconciliation
@@ -56,10 +56,12 @@ rg -n 'createServiceRequest\(|createIncident\(|createTicket\(' itsm-frontend/src
 git ls-tree -r --name-only worktree-unified-intake-p1-reconciliation itsm-backend/ent/schema
 ```
 
-- [ ] 追踪 Problem、标准变更、飞书同步、Ticket 模板/快速入口、邮件 Connector 的调用者；对接口只有定义而无运行接线的情况明确标记，不声称端点已可用。
-- [ ] 比较来源分支的 `023/024/025` 和当前注册表，记录内容冲突与执行顺序；SR 共享字段迁移必须与 A3/A4 读写切换放同一发布批次。
-- [ ] 输出一份迁移文件清单及一份逐字段保留/映射/拒绝表，覆盖 Incident、SR、Change、Problem、Generic 的当前公开 DTO。
-- [ ] 核对所有扫描命中都有 disposition 和测试落点后提交：`docs: inventory intake reconciliation and creation entrypoints`。
+- [x] 追踪 Problem、标准变更、飞书同步、Ticket 模板/快速入口、邮件 Connector 的调用者；对接口只有定义而无运行接线的情况明确标记，不声称端点已可用。
+- [x] 比较来源分支的 `023/024/025` 和当前注册表，记录内容冲突与执行顺序；SR 共享字段迁移必须与 A3/A4 读写切换放同一发布批次。
+- [x] 输出一份迁移文件清单及一份逐字段保留/映射/拒绝表，覆盖 Incident、SR、Change、Problem、Generic 的当前公开 DTO。
+- [x] 核对所有扫描命中都有 disposition 和测试落点后提交：`docs: inventory intake reconciliation and creation entrypoints`。
+
+执行记录：清单提交 `242a0a5e` / `0f4935b5`，独立审查 spec/quality 通过，无阻塞项；详见 [归并清单](../../review/2026-09-05-intake-reconciliation-inventory.md)。
 
 本任务不复制业务代码、不执行迁移，也不把文件数或旧测试报告作为归并完成证明。
 
