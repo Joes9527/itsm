@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** draft — 实施计划待执行；设计已确认，未宣称代码完成。
+**Status:** accepted — 已进入实施；按任务验证与审查推进，尚未完成端到端验收。
 
 **Goal:** 归并已有 Intake 成果，所有生产创建入口复用同一编号、专业规则和完整事务，并提供 KAF 所需的受权目录与创建接口。
 
