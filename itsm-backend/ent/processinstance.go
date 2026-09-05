@@ -21,6 +21,8 @@ type ProcessInstance struct {
 	ID int `json:"id,omitempty"`
 	// 流程实例ID，BPMN标准
 	ProcessInstanceID string `json:"process_instance_id,omitempty"`
+	// Immutable digest of a durable start request; NULL for legacy non-idempotent starts
+	StartRequestDigest string `json:"-"`
 	// 业务键，关联业务实体
 	BusinessKey string `json:"business_key,omitempty"`
 	// 结构化业务类型。Wave 1 写入的是 dto.BusinessType 取值（ticket/change/incident/service_request/problem/release，见 dto/bpmn_process_trigger_dto.go），即迁移前的词表；不是 recordClass 词表——两者有两个值对不上：change vs change_request、ticket vs generic。收敛到 recordClass（generic/service_request_item/incident/problem/change_request/catalog_task）由 Wave 2 各域迁移任务负责，在对应域拥有 WorkItem 之后进行。与 business_key 由同一次 TriggerProcess 调用原子写入，不从 variables JSON 里现取
@@ -131,7 +133,7 @@ func (*ProcessInstance) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case processinstance.FieldID, processinstance.FieldBusinessID, processinstance.FieldProcessDefinitionID, processinstance.FieldTenantID, processinstance.FieldVersion:
 			values[i] = new(sql.NullInt64)
-		case processinstance.FieldProcessInstanceID, processinstance.FieldBusinessKey, processinstance.FieldBusinessType, processinstance.FieldProcessDefinitionKey, processinstance.FieldStatus, processinstance.FieldCurrentActivityID, processinstance.FieldCurrentActivityName, processinstance.FieldSuspendedReason, processinstance.FieldInitiator, processinstance.FieldParentProcessInstanceID, processinstance.FieldRootProcessInstanceID:
+		case processinstance.FieldProcessInstanceID, processinstance.FieldStartRequestDigest, processinstance.FieldBusinessKey, processinstance.FieldBusinessType, processinstance.FieldProcessDefinitionKey, processinstance.FieldStatus, processinstance.FieldCurrentActivityID, processinstance.FieldCurrentActivityName, processinstance.FieldSuspendedReason, processinstance.FieldInitiator, processinstance.FieldParentProcessInstanceID, processinstance.FieldRootProcessInstanceID:
 			values[i] = new(sql.NullString)
 		case processinstance.FieldStartTime, processinstance.FieldEndTime, processinstance.FieldSuspendedTime, processinstance.FieldCreatedAt, processinstance.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -161,6 +163,12 @@ func (_m *ProcessInstance) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field process_instance_id", values[i])
 			} else if value.Valid {
 				_m.ProcessInstanceID = value.String
+			}
+		case processinstance.FieldStartRequestDigest:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field start_request_digest", values[i])
+			} else if value.Valid {
+				_m.StartRequestDigest = value.String
 			}
 		case processinstance.FieldBusinessKey:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -350,6 +358,8 @@ func (_m *ProcessInstance) String() string {
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
 	builder.WriteString("process_instance_id=")
 	builder.WriteString(_m.ProcessInstanceID)
+	builder.WriteString(", ")
+	builder.WriteString("start_request_digest=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("business_key=")
 	builder.WriteString(_m.BusinessKey)

@@ -98,7 +98,7 @@ func (s *ProcessBindingService) ResolveCreationWorkflow(ctx context.Context, tx 
 	if definition == nil {
 		return result, nil, creation.NewWorkflowBindingRequired("active workflow definition for the configured major version is required", nil)
 	}
-	return creation.ResolvedWorkflowBinding{DefinitionID: &definition.ID, DefinitionKey: definition.Key, DefinitionVersion: definition.Version}, slaID, nil
+	return creation.ResolvedWorkflowBinding{DefinitionID: &definition.ID, DefinitionKey: definition.Key, DefinitionVersion: definition.Version, DefinitionDigest: FreezeProcessDefinition(definition).Digest}, slaID, nil
 }
 
 // CreationConfigurationRevision freezes declared routing configuration rather

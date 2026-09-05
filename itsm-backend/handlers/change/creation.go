@@ -82,6 +82,9 @@ func (*Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedInt
 	}
 	plan := creation.NewPlan(in, "draft", priority, in.Identity.Channel)
 	plan.BusinessSubtype = input.Type
+	for key, value := range map[string]any{"change_type": input.Type, "justification": input.Justification, "risk_level": input.RiskLevel, "impact_scope": input.ImpactScope, "implementation_plan": input.ImplementationPlan, "rollback_plan": input.RollbackPlan, "planned_start_date": start, "planned_end_date": end, "affected_cis": input.AffectedCIs, "related_tickets": input.RelatedTickets} {
+		plan.WorkflowVariables[key] = value
+	}
 	plan.RoutingValues = map[string]any{"riskLevel": input.RiskLevel, "impactScope": input.ImpactScope}
 	plan.ProfessionalInput = changeCreation{Input: input, Start: start, End: end}
 	return plan, nil
@@ -106,6 +109,7 @@ func (*Service) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticke
 			return nil, creation.NewInfrastructureUnavailable("could not create change relation", err)
 		}
 	}
+	plan.WorkflowVariables["change_id"] = record.ID
 	return &creation.ProfessionalReference{Type: "change", ID: record.ID}, nil
 }
 

@@ -443,6 +443,7 @@ var RegisteredMigrations = []Migration{
 		Description: "Remove WorkItem-owned extension fields and retire legacy TicketApproval and Workflow runtimes",
 		RollbackSQL: "",
 	},
+	{Version: "023_add_process_start_request_digest", Description: "Persist immutable original BPMN start context for durable replay conflicts", RollbackSQL: processStartRequestDigestDevelopmentResetSQL},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -1093,6 +1094,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
 	case "021_add_callback_optional_declared":
 		return `ALTER TABLE process_callback_outboxes
     ADD COLUMN IF NOT EXISTS optional_declared boolean NOT NULL DEFAULT false;`
+	case "023_add_process_start_request_digest":
+		return processStartRequestDigestSQL
 	case "022_drop_professional_extension_shared_fields":
 		return professionalExtensionSharedFieldsSQL
 	default:

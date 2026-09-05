@@ -21,6 +21,9 @@ func (ProcessInstance) Fields() []ent.Field {
 			Comment("流程实例ID，BPMN标准").
 			Unique().
 			NotEmpty(),
+		field.String("start_request_digest").
+			Comment("Immutable digest of a durable start request; NULL for legacy non-idempotent starts").
+			Optional().Immutable().Sensitive(),
 		field.String("business_key").
 			Comment("业务键，关联业务实体").
 			Optional(),

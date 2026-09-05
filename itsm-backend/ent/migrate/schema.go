@@ -3031,6 +3031,7 @@ var (
 	ProcessInstancesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
 		{Name: "process_instance_id", Type: field.TypeString, Unique: true},
+		{Name: "start_request_digest", Type: field.TypeString, Nullable: true},
 		{Name: "business_key", Type: field.TypeString, Nullable: true},
 		{Name: "business_type", Type: field.TypeString, Nullable: true},
 		{Name: "business_id", Type: field.TypeInt, Nullable: true},
@@ -3061,7 +3062,7 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "process_instances_process_definitions_process_instances",
-				Columns:    []*schema.Column{ProcessInstancesColumns[22]},
+				Columns:    []*schema.Column{ProcessInstancesColumns[23]},
 				RefColumns: []*schema.Column{ProcessDefinitionsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -3075,52 +3076,52 @@ var (
 			{
 				Name:    "processinstance_business_key",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessInstancesColumns[2]},
+				Columns: []*schema.Column{ProcessInstancesColumns[3]},
 			},
 			{
 				Name:    "processinstance_process_definition_key",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessInstancesColumns[5]},
+				Columns: []*schema.Column{ProcessInstancesColumns[6]},
 			},
 			{
 				Name:    "processinstance_process_definition_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessInstancesColumns[22]},
+				Columns: []*schema.Column{ProcessInstancesColumns[23]},
 			},
 			{
 				Name:    "processinstance_status",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessInstancesColumns[6]},
+				Columns: []*schema.Column{ProcessInstancesColumns[7]},
 			},
 			{
 				Name:    "processinstance_tenant_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessInstancesColumns[14]},
+				Columns: []*schema.Column{ProcessInstancesColumns[15]},
 			},
 			{
 				Name:    "processinstance_initiator",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessInstancesColumns[16]},
+				Columns: []*schema.Column{ProcessInstancesColumns[17]},
 			},
 			{
 				Name:    "processinstance_start_time",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessInstancesColumns[10]},
+				Columns: []*schema.Column{ProcessInstancesColumns[11]},
 			},
 			{
 				Name:    "processinstance_parent_process_instance_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessInstancesColumns[17]},
+				Columns: []*schema.Column{ProcessInstancesColumns[18]},
 			},
 			{
 				Name:    "processinstance_root_process_instance_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessInstancesColumns[18]},
+				Columns: []*schema.Column{ProcessInstancesColumns[19]},
 			},
 			{
 				Name:    "processinstance_tenant_id_business_type_business_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessInstancesColumns[14], ProcessInstancesColumns[3], ProcessInstancesColumns[4], ProcessInstancesColumns[6]},
+				Columns: []*schema.Column{ProcessInstancesColumns[15], ProcessInstancesColumns[4], ProcessInstancesColumns[5], ProcessInstancesColumns[7]},
 			},
 		},
 	}

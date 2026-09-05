@@ -60,6 +60,11 @@ func ProcessInstanceID(v string) predicate.ProcessInstance {
 	return predicate.ProcessInstance(sql.FieldEQ(FieldProcessInstanceID, v))
 }
 
+// StartRequestDigest applies equality check predicate on the "start_request_digest" field. It's identical to StartRequestDigestEQ.
+func StartRequestDigest(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldEQ(FieldStartRequestDigest, v))
+}
+
 // BusinessKey applies equality check predicate on the "business_key" field. It's identical to BusinessKeyEQ.
 func BusinessKey(v string) predicate.ProcessInstance {
 	return predicate.ProcessInstance(sql.FieldEQ(FieldBusinessKey, v))
@@ -218,6 +223,81 @@ func ProcessInstanceIDEqualFold(v string) predicate.ProcessInstance {
 // ProcessInstanceIDContainsFold applies the ContainsFold predicate on the "process_instance_id" field.
 func ProcessInstanceIDContainsFold(v string) predicate.ProcessInstance {
 	return predicate.ProcessInstance(sql.FieldContainsFold(FieldProcessInstanceID, v))
+}
+
+// StartRequestDigestEQ applies the EQ predicate on the "start_request_digest" field.
+func StartRequestDigestEQ(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldEQ(FieldStartRequestDigest, v))
+}
+
+// StartRequestDigestNEQ applies the NEQ predicate on the "start_request_digest" field.
+func StartRequestDigestNEQ(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldNEQ(FieldStartRequestDigest, v))
+}
+
+// StartRequestDigestIn applies the In predicate on the "start_request_digest" field.
+func StartRequestDigestIn(vs ...string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldIn(FieldStartRequestDigest, vs...))
+}
+
+// StartRequestDigestNotIn applies the NotIn predicate on the "start_request_digest" field.
+func StartRequestDigestNotIn(vs ...string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldNotIn(FieldStartRequestDigest, vs...))
+}
+
+// StartRequestDigestGT applies the GT predicate on the "start_request_digest" field.
+func StartRequestDigestGT(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldGT(FieldStartRequestDigest, v))
+}
+
+// StartRequestDigestGTE applies the GTE predicate on the "start_request_digest" field.
+func StartRequestDigestGTE(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldGTE(FieldStartRequestDigest, v))
+}
+
+// StartRequestDigestLT applies the LT predicate on the "start_request_digest" field.
+func StartRequestDigestLT(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldLT(FieldStartRequestDigest, v))
+}
+
+// StartRequestDigestLTE applies the LTE predicate on the "start_request_digest" field.
+func StartRequestDigestLTE(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldLTE(FieldStartRequestDigest, v))
+}
+
+// StartRequestDigestContains applies the Contains predicate on the "start_request_digest" field.
+func StartRequestDigestContains(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldContains(FieldStartRequestDigest, v))
+}
+
+// StartRequestDigestHasPrefix applies the HasPrefix predicate on the "start_request_digest" field.
+func StartRequestDigestHasPrefix(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldHasPrefix(FieldStartRequestDigest, v))
+}
+
+// StartRequestDigestHasSuffix applies the HasSuffix predicate on the "start_request_digest" field.
+func StartRequestDigestHasSuffix(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldHasSuffix(FieldStartRequestDigest, v))
+}
+
+// StartRequestDigestIsNil applies the IsNil predicate on the "start_request_digest" field.
+func StartRequestDigestIsNil() predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldIsNull(FieldStartRequestDigest))
+}
+
+// StartRequestDigestNotNil applies the NotNil predicate on the "start_request_digest" field.
+func StartRequestDigestNotNil() predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldNotNull(FieldStartRequestDigest))
+}
+
+// StartRequestDigestEqualFold applies the EqualFold predicate on the "start_request_digest" field.
+func StartRequestDigestEqualFold(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldEqualFold(FieldStartRequestDigest, v))
+}
+
+// StartRequestDigestContainsFold applies the ContainsFold predicate on the "start_request_digest" field.
+func StartRequestDigestContainsFold(v string) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldContainsFold(FieldStartRequestDigest, v))
 }
 
 // BusinessKeyEQ applies the EQ predicate on the "business_key" field.

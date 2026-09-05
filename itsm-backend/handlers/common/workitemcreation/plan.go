@@ -12,7 +12,10 @@ func NewPlan(in ResolvedIntake, status, priority, source string) *CreationPlan {
 	if in.CTI.ItemID != nil {
 		categoryID = in.CTI.ItemID
 	}
-	return &CreationPlan{Resolved: in, WorkItem: WorkItemDraft{
+	return &CreationPlan{Resolved: in, WorkflowVariables: map[string]any{
+		"title": in.Command.Title, "description": in.Command.Description, "priority": priority, "status": status,
+		"form_values": in.Command.FormValues, "approval_required": false,
+	}, WorkItem: WorkItemDraft{
 		TenantID: in.Identity.TenantID, ActorID: in.Identity.ActorID, RequesterID: in.Identity.RequesterID,
 		RecordClass: in.RecordClass, Title: in.Command.Title, Description: in.Command.Description,
 		Status: status, Priority: priority, Source: source, AssigneeID: in.Command.AssigneeID,

@@ -92,6 +92,7 @@ func (*TicketService) Prepare(ctx context.Context, tx *ent.Tx, in creation.Resol
 		}
 	}
 	plan.BusinessSubtype = plan.WorkItem.GenericSubtype
+	plan.WorkflowVariables["generic_subtype"] = plan.WorkItem.GenericSubtype
 	return plan, nil
 }
 func (*TicketService) CreateExtension(_ context.Context, _ *ent.Tx, _ *ent.Ticket, _ *creation.CreationPlan) (*creation.ProfessionalReference, error) {

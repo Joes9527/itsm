@@ -32,6 +32,20 @@ func (_c *ProcessInstanceCreate) SetProcessInstanceID(v string) *ProcessInstance
 	return _c
 }
 
+// SetStartRequestDigest sets the "start_request_digest" field.
+func (_c *ProcessInstanceCreate) SetStartRequestDigest(v string) *ProcessInstanceCreate {
+	_c.mutation.SetStartRequestDigest(v)
+	return _c
+}
+
+// SetNillableStartRequestDigest sets the "start_request_digest" field if the given value is not nil.
+func (_c *ProcessInstanceCreate) SetNillableStartRequestDigest(v *string) *ProcessInstanceCreate {
+	if v != nil {
+		_c.SetStartRequestDigest(*v)
+	}
+	return _c
+}
+
 // SetBusinessKey sets the "business_key" field.
 func (_c *ProcessInstanceCreate) SetBusinessKey(v string) *ProcessInstanceCreate {
 	_c.mutation.SetBusinessKey(v)
@@ -481,6 +495,10 @@ func (_c *ProcessInstanceCreate) createSpec() (*ProcessInstance, *sqlgraph.Creat
 	if value, ok := _c.mutation.ProcessInstanceID(); ok {
 		_spec.SetField(processinstance.FieldProcessInstanceID, field.TypeString, value)
 		_node.ProcessInstanceID = value
+	}
+	if value, ok := _c.mutation.StartRequestDigest(); ok {
+		_spec.SetField(processinstance.FieldStartRequestDigest, field.TypeString, value)
+		_node.StartRequestDigest = value
 	}
 	if value, ok := _c.mutation.BusinessKey(); ok {
 		_spec.SetField(processinstance.FieldBusinessKey, field.TypeString, value)
@@ -1049,6 +1067,11 @@ func (u *ProcessInstanceUpsert) UpdateUpdatedAt() *ProcessInstanceUpsert {
 //		Exec(ctx)
 func (u *ProcessInstanceUpsertOne) UpdateNewValues() *ProcessInstanceUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.StartRequestDigest(); exists {
+			s.SetIgnore(processinstance.FieldStartRequestDigest)
+		}
+	}))
 	return u
 }
 
@@ -1673,6 +1696,13 @@ type ProcessInstanceUpsertBulk struct {
 //		Exec(ctx)
 func (u *ProcessInstanceUpsertBulk) UpdateNewValues() *ProcessInstanceUpsertBulk {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.StartRequestDigest(); exists {
+				s.SetIgnore(processinstance.FieldStartRequestDigest)
+			}
+		}
+	}))
 	return u
 }
 

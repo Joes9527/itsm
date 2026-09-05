@@ -21,6 +21,8 @@ func (s *Service) Prepare(_ context.Context, _ *ent.Tx, in creation.ResolvedInta
 	}
 	plan := creation.NewPlan(in, "open", priority, in.Identity.Channel)
 	plan.ProfessionalInput = input
+	plan.WorkflowVariables["root_cause"] = input.RootCause
+	plan.WorkflowVariables["impact"] = input.Impact
 	return plan, nil
 }
 func (*Service) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticket, plan *creation.CreationPlan) (*creation.ProfessionalReference, error) {
@@ -32,6 +34,7 @@ func (*Service) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticke
 	if err != nil {
 		return nil, creation.NewInfrastructureUnavailable("could not create problem extension", err)
 	}
+	plan.WorkflowVariables["problem_id"] = record.ID
 	return &creation.ProfessionalReference{Type: "problem", ID: record.ID}, nil
 }
 

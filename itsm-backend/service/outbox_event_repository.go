@@ -265,10 +265,18 @@ func (r *OutboxEventRepository) claimDue(ctx context.Context, now time.Time, lim
 // MarkDeliveryAttemptStarted durably records the boundary immediately before
 // an external side effect. Expiry after this marker is delivery-ambiguous.
 func (r *OutboxEventRepository) MarkDeliveryAttemptStarted(ctx context.Context, eventID int, claimToken, deliveryID string) error {
+	return r.markDeliveryAttemptStarted(ctx, eventID, claimToken, deliveryID, false)
+}
+
+func (r *OutboxEventRepository) markDeliveryAttemptStarted(ctx context.Context, eventID int, claimToken, deliveryID string, replaySafe bool) error {
+	prefix := outboxDeliveryAttemptPrefix
+	if replaySafe {
+		prefix = "replayable_attempt_started:"
+	}
 	updated, err := r.client.OutboxEvent.Update().Where(
 		outboxevent.IDEQ(eventID), outboxevent.StatusEQ(outboxEventStatusPublishing),
 		outboxevent.ClaimTokenEQ(claimToken), outboxevent.ClaimExpiresAtGT(r.currentTime()),
-	).SetLastError(outboxDeliveryAttemptPrefix + summarizeOutboxError(deliveryID)).Save(ctx)
+	).SetLastError(prefix + summarizeOutboxError(deliveryID)).Save(ctx)
 	if err != nil {
 		return fmt.Errorf("mark delivery attempt started: %w", err)
 	}

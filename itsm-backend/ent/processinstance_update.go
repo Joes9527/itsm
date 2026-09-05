@@ -631,6 +631,9 @@ func (_u *ProcessInstanceUpdate) sqlSave(ctx context.Context) (_node int, err er
 	if value, ok := _u.mutation.ProcessInstanceID(); ok {
 		_spec.SetField(processinstance.FieldProcessInstanceID, field.TypeString, value)
 	}
+	if _u.mutation.StartRequestDigestCleared() {
+		_spec.ClearField(processinstance.FieldStartRequestDigest, field.TypeString)
+	}
 	if value, ok := _u.mutation.BusinessKey(); ok {
 		_spec.SetField(processinstance.FieldBusinessKey, field.TypeString, value)
 	}
@@ -1555,6 +1558,9 @@ func (_u *ProcessInstanceUpdateOne) sqlSave(ctx context.Context) (_node *Process
 	}
 	if value, ok := _u.mutation.ProcessInstanceID(); ok {
 		_spec.SetField(processinstance.FieldProcessInstanceID, field.TypeString, value)
+	}
+	if _u.mutation.StartRequestDigestCleared() {
+		_spec.ClearField(processinstance.FieldStartRequestDigest, field.TypeString)
 	}
 	if value, ok := _u.mutation.BusinessKey(); ok {
 		_spec.SetField(processinstance.FieldBusinessKey, field.TypeString, value)

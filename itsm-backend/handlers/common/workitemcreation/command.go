@@ -152,6 +152,7 @@ type CreateWorkItemResult struct {
 }
 
 type ResolvedWorkflowBinding struct {
+	DefinitionDigest  string
 	DefinitionID      *int
 	DefinitionKey     string
 	DefinitionVersion string
@@ -232,6 +233,8 @@ type WorkItemDraft struct {
 }
 
 type CreationPlan struct {
+	// WorkflowVariables are prepared by the owning domain and frozen in the outbox.
+	WorkflowVariables map[string]any
 	// Routing facts are supplied by the domain after effective defaults/policy.
 	// Priority is read from WorkItem; submitted Command remains digest evidence.
 	BusinessSubtype   string

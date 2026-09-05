@@ -70,6 +70,9 @@ func (s *IncidentService) Prepare(_ context.Context, _ *ent.Tx, in creation.Reso
 	}
 	plan := creation.NewPlan(in, "new", priority, source)
 	plan.BusinessSubtype = input.Type
+	for key, value := range map[string]any{"type": input.Type, "severity": input.Severity, "impact": input.Impact, "urgency": input.Urgency, "category": in.CTI.CategoryName, "subcategory": input.Subcategory, "detected_at": *detected, "impact_analysis": input.ImpactAnalysis, "metadata": input.Metadata, "reporter_id": in.Identity.RequesterID} {
+		plan.WorkflowVariables[key] = value
+	}
 	plan.RoutingValues = map[string]any{"severity": input.Severity, "impact": input.Impact, "urgency": input.Urgency}
 	plan.ProfessionalInput = incidentCreation{Input: input, DetectedAt: *detected}
 	return plan, nil
@@ -116,6 +119,8 @@ func (*IncidentService) CreateExtension(ctx context.Context, tx *ent.Tx, item *e
 	if err != nil {
 		return nil, creation.NewInfrastructureUnavailable("could not enqueue incident automation", err)
 	}
+	plan.WorkflowVariables["incident_id"] = record.ID
+	plan.WorkflowVariables["incident_number"] = item.TicketNumber
 	return &creation.ProfessionalReference{Type: "incident", ID: record.ID}, nil
 }
 

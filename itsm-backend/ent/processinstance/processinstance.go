@@ -16,6 +16,8 @@ const (
 	FieldID = "id"
 	// FieldProcessInstanceID holds the string denoting the process_instance_id field in the database.
 	FieldProcessInstanceID = "process_instance_id"
+	// FieldStartRequestDigest holds the string denoting the start_request_digest field in the database.
+	FieldStartRequestDigest = "start_request_digest"
 	// FieldBusinessKey holds the string denoting the business_key field in the database.
 	FieldBusinessKey = "business_key"
 	// FieldBusinessType holds the string denoting the business_type field in the database.
@@ -102,6 +104,7 @@ const (
 var Columns = []string{
 	FieldID,
 	FieldProcessInstanceID,
+	FieldStartRequestDigest,
 	FieldBusinessKey,
 	FieldBusinessType,
 	FieldBusinessID,
@@ -169,6 +172,11 @@ func ByID(opts ...sql.OrderTermOption) OrderOption {
 // ByProcessInstanceID orders the results by the process_instance_id field.
 func ByProcessInstanceID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldProcessInstanceID, opts...).ToFunc()
+}
+
+// ByStartRequestDigest orders the results by the start_request_digest field.
+func ByStartRequestDigest(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldStartRequestDigest, opts...).ToFunc()
 }
 
 // ByBusinessKey orders the results by the business_key field.

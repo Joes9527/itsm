@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -361,6 +362,11 @@ func (e *CustomProcessEngine) startProcessWithClient(ctx context.Context, proces
 		return nil, fmt.Errorf("获取流程定义失败: %w", err)
 	}
 
+	return e.startResolvedProcess(ctx, definition, businessKey, businessType, businessID, variables, fmt.Sprintf("PI-%s-%d", processDefinitionKey, time.Now().UnixNano()), "")
+}
+
+// startResolvedProcess shares the atomic engine path for resolved and key-based starts.
+func (e *CustomProcessEngine) startResolvedProcess(ctx context.Context, definition *ent.ProcessDefinition, businessKey, businessType string, businessID int, variables map[string]interface{}, instanceIdentity, startDigest string) (*ent.ProcessInstance, error) {
 	bpmnDefinitions, err := e.parser.ParseXML(definition.BpmnXML)
 	if err != nil {
 		return nil, fmt.Errorf("解析BPMN失败: %w", err)
@@ -377,9 +383,9 @@ func (e *CustomProcessEngine) startProcessWithClient(ctx context.Context, proces
 	startEvent := process.StartEvents[0]
 
 	createInstance := e.client.ProcessInstance.Create().
-		SetProcessInstanceID(fmt.Sprintf("PI-%s-%d", processDefinitionKey, time.Now().UnixNano())).
+		SetProcessInstanceID(instanceIdentity).
 		SetBusinessKey(businessKey).
-		SetProcessDefinitionKey(processDefinitionKey).
+		SetProcessDefinitionKey(definition.Key).
 		SetProcessDefinitionID(definition.ID).
 		SetStatus("running").
 		SetVariables(variables).
@@ -388,6 +394,9 @@ func (e *CustomProcessEngine) startProcessWithClient(ctx context.Context, proces
 		SetTenantID(definition.TenantID).
 		SetCurrentActivityID(startEvent.ID).
 		SetCurrentActivityName(startEvent.Name)
+	if startDigest != "" {
+		createInstance.SetStartRequestDigest(startDigest)
+	}
 	if businessType != "" {
 		createInstance = createInstance.SetBusinessType(businessType)
 	}
@@ -1597,6 +1606,10 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 				// JSON numbers are float64
 				if val > 0 {
 					return strconv.FormatFloat(val, 'f', 0, 64)
+				}
+			case json.Number:
+				if parsed, err := strconv.Atoi(string(val)); err == nil && parsed > 0 {
+					return strconv.Itoa(parsed)
 				}
 			case int:
 				if val > 0 {

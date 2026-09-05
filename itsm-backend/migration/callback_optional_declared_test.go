@@ -88,7 +88,7 @@ func TestMigration021CallbackOptionalDeclaredIsRegisteredBetweenWorkItemMigratio
 		"020_work_item_number_allocator",
 		"021_add_callback_optional_declared",
 		"022_drop_professional_extension_shared_fields",
-	}, versions[len(versions)-3:])
+	}, versions[12:15])
 }
 
 func TestMigration021CallbackOptionalDeclaredIsIdempotent(t *testing.T) {

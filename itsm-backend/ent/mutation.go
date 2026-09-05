@@ -92344,6 +92344,7 @@ type ProcessInstanceMutation struct {
 	typ                        string
 	id                         *int
 	process_instance_id        *string
+	start_request_digest       *string
 	business_key               *string
 	business_type              *string
 	business_id                *int
@@ -92517,6 +92518,55 @@ func (m *ProcessInstanceMutation) OldProcessInstanceID(ctx context.Context) (v s
 // ResetProcessInstanceID resets all changes to the "process_instance_id" field.
 func (m *ProcessInstanceMutation) ResetProcessInstanceID() {
 	m.process_instance_id = nil
+}
+
+// SetStartRequestDigest sets the "start_request_digest" field.
+func (m *ProcessInstanceMutation) SetStartRequestDigest(s string) {
+	m.start_request_digest = &s
+}
+
+// StartRequestDigest returns the value of the "start_request_digest" field in the mutation.
+func (m *ProcessInstanceMutation) StartRequestDigest() (r string, exists bool) {
+	v := m.start_request_digest
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStartRequestDigest returns the old "start_request_digest" field's value of the ProcessInstance entity.
+// If the ProcessInstance object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessInstanceMutation) OldStartRequestDigest(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStartRequestDigest is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStartRequestDigest requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStartRequestDigest: %w", err)
+	}
+	return oldValue.StartRequestDigest, nil
+}
+
+// ClearStartRequestDigest clears the value of the "start_request_digest" field.
+func (m *ProcessInstanceMutation) ClearStartRequestDigest() {
+	m.start_request_digest = nil
+	m.clearedFields[processinstance.FieldStartRequestDigest] = struct{}{}
+}
+
+// StartRequestDigestCleared returns if the "start_request_digest" field was cleared in this mutation.
+func (m *ProcessInstanceMutation) StartRequestDigestCleared() bool {
+	_, ok := m.clearedFields[processinstance.FieldStartRequestDigest]
+	return ok
+}
+
+// ResetStartRequestDigest resets all changes to the "start_request_digest" field.
+func (m *ProcessInstanceMutation) ResetStartRequestDigest() {
+	m.start_request_digest = nil
+	delete(m.clearedFields, processinstance.FieldStartRequestDigest)
 }
 
 // SetBusinessKey sets the "business_key" field.
@@ -93757,9 +93807,12 @@ func (m *ProcessInstanceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProcessInstanceMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 23)
 	if m.process_instance_id != nil {
 		fields = append(fields, processinstance.FieldProcessInstanceID)
+	}
+	if m.start_request_digest != nil {
+		fields = append(fields, processinstance.FieldStartRequestDigest)
 	}
 	if m.business_key != nil {
 		fields = append(fields, processinstance.FieldBusinessKey)
@@ -93834,6 +93887,8 @@ func (m *ProcessInstanceMutation) Field(name string) (ent.Value, bool) {
 	switch name {
 	case processinstance.FieldProcessInstanceID:
 		return m.ProcessInstanceID()
+	case processinstance.FieldStartRequestDigest:
+		return m.StartRequestDigest()
 	case processinstance.FieldBusinessKey:
 		return m.BusinessKey()
 	case processinstance.FieldBusinessType:
@@ -93887,6 +93942,8 @@ func (m *ProcessInstanceMutation) OldField(ctx context.Context, name string) (en
 	switch name {
 	case processinstance.FieldProcessInstanceID:
 		return m.OldProcessInstanceID(ctx)
+	case processinstance.FieldStartRequestDigest:
+		return m.OldStartRequestDigest(ctx)
 	case processinstance.FieldBusinessKey:
 		return m.OldBusinessKey(ctx)
 	case processinstance.FieldBusinessType:
@@ -93944,6 +94001,13 @@ func (m *ProcessInstanceMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetProcessInstanceID(v)
+		return nil
+	case processinstance.FieldStartRequestDigest:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStartRequestDigest(v)
 		return nil
 	case processinstance.FieldBusinessKey:
 		v, ok := value.(string)
@@ -94161,6 +94225,9 @@ func (m *ProcessInstanceMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *ProcessInstanceMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(processinstance.FieldStartRequestDigest) {
+		fields = append(fields, processinstance.FieldStartRequestDigest)
+	}
 	if m.FieldCleared(processinstance.FieldBusinessKey) {
 		fields = append(fields, processinstance.FieldBusinessKey)
 	}
@@ -94214,6 +94281,9 @@ func (m *ProcessInstanceMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ProcessInstanceMutation) ClearField(name string) error {
 	switch name {
+	case processinstance.FieldStartRequestDigest:
+		m.ClearStartRequestDigest()
+		return nil
 	case processinstance.FieldBusinessKey:
 		m.ClearBusinessKey()
 		return nil
@@ -94263,6 +94333,9 @@ func (m *ProcessInstanceMutation) ResetField(name string) error {
 	switch name {
 	case processinstance.FieldProcessInstanceID:
 		m.ResetProcessInstanceID()
+		return nil
+	case processinstance.FieldStartRequestDigest:
+		m.ResetStartRequestDigest()
 		return nil
 	case processinstance.FieldBusinessKey:
 		m.ResetBusinessKey()

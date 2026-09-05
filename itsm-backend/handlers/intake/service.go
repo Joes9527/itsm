@@ -195,7 +195,7 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 	}
 	workflowStatus := "not_required"
 	if !resolved.Workflow.NoProcess {
-		if err := s.enqueueWorkflowStart(ctx, tx, receipt.ID, workItem.ID, identity, resolved); err != nil {
+		if err := s.enqueueWorkflowStart(ctx, tx, receipt.ID, workItem, identity, plan); err != nil {
 			return nil, false, err
 		}
 		workflowStatus = "pending"
@@ -285,16 +285,29 @@ func auditRequestID(ctx context.Context, identity workitemcreation.Identity, dig
 	return "intake-" + digest
 }
 
-func (s *Service) enqueueWorkflowStart(ctx context.Context, tx *ent.Tx, receiptID, workItemID int, identity workitemcreation.Identity, resolved *workitemcreation.ResolvedIntake) error {
+func (s *Service) enqueueWorkflowStart(ctx context.Context, tx *ent.Tx, receiptID int, item *ent.Ticket, identity workitemcreation.Identity, plan *workitemcreation.CreationPlan) error {
+	resolved := &plan.Resolved
+	workItemID := item.ID
 	if resolved.Workflow.DefinitionID == nil {
 		return workitemcreation.NewWorkflowBindingRequired("workflow definition is required for process start", nil)
+	}
+	variables := make(map[string]any, len(plan.WorkflowVariables)+12)
+	for key, value := range plan.WorkflowVariables {
+		variables[key] = value
+	}
+	// Shared identity is set once from the committed creation graph, never from caller form fields.
+	for key, value := range map[string]any{"work_item_id": item.ID, "ticket_id": item.ID, "ticket_number": item.TicketNumber, "record_class": item.RecordClass, "tenant_id": item.TenantID, "requester_id": identity.RequesterID, "triggered_by": strconv.Itoa(identity.ActorID), "channel": identity.Channel} {
+		variables[key] = value
+	}
+	if item.AssigneeID > 0 {
+		variables["assignee_id"] = item.AssigneeID
 	}
 	eventID := workflowStartEventID(workItemID, *resolved.Workflow.DefinitionID)
 	payload, err := json.Marshal(map[string]any{
 		"tenantId": identity.TenantID, "workItemId": workItemID, "recordClass": resolved.RecordClass,
 		"workflowDefinitionId": *resolved.Workflow.DefinitionID, "workflowDefinitionKey": resolved.Workflow.DefinitionKey,
-		"workflowDefinitionVersion": resolved.Workflow.DefinitionVersion, "actorId": identity.ActorID,
-		"channel": identity.Channel, "intakeRequestId": receiptID, "dedupeKey": eventID,
+		"workflowDefinitionVersion": resolved.Workflow.DefinitionVersion, "workflowDefinitionDigest": resolved.Workflow.DefinitionDigest, "actorId": identity.ActorID,
+		"channel": identity.Channel, "intakeRequestId": receiptID, "dedupeKey": eventID, "variables": variables,
 	})
 	if err != nil {
 		return workitemcreation.NewInternalFailure("could not encode workflow start event", err)

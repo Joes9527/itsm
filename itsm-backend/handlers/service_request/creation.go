@@ -137,6 +137,31 @@ func (s *Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedI
 	}
 	plan := creation.NewPlan(in, "new", priority, "service_catalog")
 	plan.RequiresWorkflow = chain != nil && len(chain.Steps) > 0
+	plan.WorkflowVariables["approval_required"] = plan.RequiresWorkflow
+	if plan.RequiresWorkflow {
+		plan.WorkflowVariables["approval_chain"] = chain.Steps
+	}
+	plan.WorkflowVariables["amount"] = input.Amount
+	if input.Amount == "" {
+		delete(plan.WorkflowVariables, "amount")
+	}
+	plan.WorkflowVariables["contact_name"] = input.ContactName
+	plan.WorkflowVariables["contact_email"] = input.ContactEmail
+	plan.WorkflowVariables["quantity"] = quantity
+	plan.WorkflowVariables["catalog_id"] = in.Catalog.ID
+	plan.WorkflowVariables["cost_center"] = input.CostCenter
+	plan.WorkflowVariables["data_classification"] = input.DataClassification
+	plan.WorkflowVariables["needs_public_ip"] = input.NeedsPublicIP
+	plan.WorkflowVariables["source_ip_whitelist"] = input.SourceIPWhitelist
+	plan.WorkflowVariables["expire_at"] = expire
+	plan.WorkflowVariables["expected_at"] = expected
+	plan.WorkflowVariables["compliance_ack"] = input.ComplianceAck
+	if ciID > 0 {
+		plan.WorkflowVariables["ci_id"] = ciID
+	}
+	if input.CloudResourceRefID != nil {
+		plan.WorkflowVariables["cloud_resource_ref_id"] = *input.CloudResourceRefID
+	}
 	plan.RoutingValues = map[string]any{}
 	if input.Amount != "" {
 		plan.RoutingValues["amount"] = input.Amount
@@ -162,6 +187,7 @@ func (*Service) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticke
 	if err != nil {
 		return nil, creation.NewInfrastructureUnavailable("could not create service request extension", err)
 	}
+	plan.WorkflowVariables["service_request_id"] = record.ID
 	return &creation.ProfessionalReference{Type: "service_request", ID: record.ID}, nil
 }
 
