@@ -216,6 +216,8 @@ print(json.dumps(fixture, indent=2))
 
 ## A7：PostgreSQL、迁移与全入口集成门禁
 
+**前置依赖：** A2-A6 和 C1 完成。门禁必须包含实际 SSLVPN 授权策略的发布、版本变化与创建验证，不能以没有履约配置的普通目录代替。
+
 **Files:** Create `tests/integration/intake_creation_test.go`、`tests/contract/work_item_creation_entrypoints_test.go` 的剩余数据库用例；Modify A1 固定的 schema/migration/verify 文件、`internal/bootstrap/post_schema_migrations_test.go`；记录证据到总计划指定报告。
 
 **Interfaces:** 使用现有集成测试隔离数据库策略与 `RLS_TEST_DSN`/测试 DSN 机制；不能在普通 `go test` 下隐式连共享库。真正的 PostgreSQL 测试标签沿现有文件构建标签。

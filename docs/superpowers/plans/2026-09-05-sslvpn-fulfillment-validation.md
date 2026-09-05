@@ -43,6 +43,8 @@
 
 ## C1：有限期限配置与授权结果模型
 
+**前置依赖：** A3/A5/A6 完成后执行，必须先于 A7 和 B4。此任务的 KAF 类型工作仅涉及现有 delegation contract；新 Intake 客户端模型由 B1 根据本任务的结果契约实现，不反向依赖尚未创建的 B1 模块。
+
 **Files:** 新增上表 access_policy/access_result/schema/契约文件与相邻测试；Modify Catalog DTO/preflight、KAF context 投影、ITSM/KAF 展示类型。
 
 **Interfaces:** `ComputeAccessExpiry(verifiedAt time.Time, durationSeconds int64) (time.Time, error)` 属 SR 域。审批快照引用 CatalogAccessPolicy 的版本、外部系统、目标组 ID、期限选项 key 和数值；身份源使用受信请求人映射。授权结果契约包含：
