@@ -84,8 +84,8 @@ type ProfessionalCreator interface {
 
 公共包不 import Intake、`service` 或任何专业实现包。专业准备/写入接口消费上述公共类型；bootstrap 注入实现。`intake.Service.Create` 实现 Application，Registry 实现保留一份。
 
-- [ ] 先搬入 A1 审查通过的源码与测试，手工归并冲突；移除重复编号器、旧字段访问与来源分支的旧 bootstrap。此步骤只是归并工作区，不单独部署。
-- [ ] 给未知/重复 Registry 注册写红测试（沿用原 `creator_test.go` fixture）：
+- [x] 先搬入 A1 审查通过的源码与测试，手工归并冲突；移除重复编号器、旧字段访问与来源分支的旧 bootstrap。此步骤只是归并工作区，不单独部署。
+- [x] 给未知/重复 Registry 注册写红测试（沿用原 `creator_test.go` fixture）：
 
 ```go
 func TestRegistryRejectsMissingClass(t *testing.T) {
@@ -98,13 +98,17 @@ func TestDecodeRejectsInjectedTenant(t *testing.T) {
 }
 ```
 
-- [ ] 运行 `go test ./handlers/intake -run 'Registry|Decode|Canonical' -count=1`；记录当前失败，不把 import/fixture 错误当作预期业务失败。
-- [ ] 单向移动公共类型并更新全部调用方，删除原类型定义和兼容别名；增加 `recordClass/confirmation/catalogVersion/formSchemaVersion`，完整参与 canonical digest。保留现有 Incident/Change typed input；为 generic 和 Problem 加对应 typed input，字段来自 A1 已固定映射表，禁止 `map` 吞掉专业输入。
-- [ ] 扩展 `CanonicalizeCommand` 测试：修改任一指派、分类、专业字段、期限、目标组、目录版本都改变摘要；仅 JSON map 键顺序变化不改变摘要。更新摘要版本并令旧版本重放显式失败。
-- [ ] 用 `go list -deps ./...` 检查依赖图，专业包无 Intake 实现依赖、无循环；运行上面的测试和 `go build ./...`。
-- [ ] 同提交保存 OpenAPI/fixture 和公共 port：`refactor(intake): establish one creation contract and registry`。
+- [x] 运行 `go test ./handlers/intake -run 'Registry|Decode|Canonical' -count=1`；记录当前失败，不把 import/fixture 错误当作预期业务失败。
+- [x] 单向移动公共类型并更新全部调用方，删除原类型定义和兼容别名；增加 `recordClass/confirmation/catalogVersion/formSchemaVersion`，完整参与 canonical digest。保留现有 Incident/Change typed input；为 generic 和 Problem 加对应 typed input，字段来自 A1 已固定映射表，禁止 `map` 吞掉专业输入。
+- [x] 扩展 `CanonicalizeCommand` 测试：修改任一指派、分类、专业字段、期限、目标组、目录版本都改变摘要；仅 JSON map 键顺序变化不改变摘要。更新摘要版本并令旧版本重放显式失败。
+- [x] 用 `go list -deps ./...` 检查依赖图，专业包无 Intake 实现依赖、无循环；运行上面的测试和 `go build ./...`。
+- [x] 同提交保存 OpenAPI/fixture 和公共 port：`refactor(intake): establish one creation contract and registry`。
+
+执行记录：A2a `ab5d9b10` / `f33db98d`，A2b `d8cb0f13` / `b276c426`；独立审查及修复复审通过。共享契约、事务回滚和 PostgreSQL 并发验证通过，生产接线仍由 A3/A4 完成。
 
 ## A3：专业创建规则与完整事务
+
+实施依赖调整：本任务按实际旧创建链路将金额、云资源引用等已使用的 SR 字段显式纳入公共类型与 OpenAPI，并补齐摘要测试；不将专业含义塞入未声明动态字段。为真实解析提供目录服务拥有的事务一致定义/版本接口，提前完成 A5 对应的版本计算前置部分。A5 复用同一实现并完成发布校验；C1 授权策略也必须参与同一版本输入。
 
 **Files:** Modify `handlers/intake/{service,work_item_creator,incident_creator,change_creator,service_request_creator}.go`；Create `generic_creator.go`、`problem_creator.go`；Modify `service/incident_service.go`、`handlers/{change,problem,service_request}/{service,repository_impl}.go`；Create 各专业 `creation.go`；Modify `service/field_value_service.go`、相关 schema/迁移。
 
@@ -166,6 +170,8 @@ spy 只用于调用映射测试；另以真实数据库验证业务写入，不�
 - [ ] 重跑 A1 扫描，除唯一 WorkItem writer、生成代码和标注非生产项外无基表直写；运行受影响 Go、Jest、`npm run type-check`，提交 `refactor(intake): converge all production creation entrypoints`。
 
 ## A5：Catalog 发布校验与快照版本
+
+前置复用：A3 为真实创建解析提前提供的目录定义/版本接口和测试属于本任务的基础，复用并补齐，禁止建立第二套版本计算实现。
 
 **Files:** Create `handlers/service_catalog/{preflight,revision}.go` 及相邻测试；Modify `service.go`、`repository_impl.go`、`entity.go`、`handler.go`、`handlers/intake/resolver.go`；Modify `dto/service_dto.go`、前端 Catalog API 类型。
 
