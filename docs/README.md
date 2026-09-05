@@ -28,6 +28,7 @@
 
 ## 产品与架构
 
+- [SSLVPN：KAF 对话受理、统一创建与授权闭环设计（待评审）](./superpowers/specs/2026-09-05-sslvpn-kaf-intake-end-to-end-design.md)
 - [AI-Native ITSM 架构解析](./articles/07-ai-native-architecture-guidance-harness-skill.md)
 - [开源发布能力说明](./product/open-source-release-capability.md)
 - [商业就绪架构评审（已归档）](./archive/reviews/commercial-ready-architecture.md)
@@ -36,6 +37,7 @@
 
 ## 测试与评审
 
+- [2026-09-05 ITSM 架构、功能差距与迭代建议（待评审）](./review/2026-09-05-architecture-product-assessment-report.md)
 - [角色视角测试方案](./testing/role-based-product-test-plan.md)
 - [测试用例目录](./testing/test-cases/README.md)
 - [系统功能评审清单](./review/system-function-review-checklist-2026-07-01.md)
