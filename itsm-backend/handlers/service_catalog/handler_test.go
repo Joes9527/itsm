@@ -83,8 +83,10 @@ func scSetup(t *testing.T) (*gin.Engine, *ent.Client, int) {
 	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
 	h := NewHandler(svc)
 
+	actor := client.User.Create().SetTenantID(tenant.ID).SetUsername("sc-reader" + scUID()).SetEmail("reader" + scUID() + "@example.test").SetPasswordHash("unused").SetName("Reader").SetRole("super_admin").SaveX(ctx)
 	r := gin.New()
 	r.Use(withTenant(tenant.ID))
+	r.Use(func(c *gin.Context) { c.Set("user_id", actor.ID); c.Set("role", actor.Role); c.Next() })
 	r.GET("/api/v1/service-catalogs", h.List)
 	r.POST("/api/v1/service-catalogs", h.Create)
 	r.GET("/api/v1/service-catalogs/search", h.Search)

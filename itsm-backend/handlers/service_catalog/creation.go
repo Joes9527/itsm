@@ -2,11 +2,13 @@ package service_catalog
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"itsm-backend/authorization"
 	"itsm-backend/ent"
 	"itsm-backend/ent/fielddefinition"
 	"itsm-backend/ent/servicecatalog"
+	"itsm-backend/ent/user"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
 )
@@ -28,9 +30,15 @@ func (s *Service) ResolveCreationCatalog(ctx context.Context, tx *ent.Tx, identi
 	if !creation.IsSupportedRecordClass(catalog.TargetClass) {
 		return nil, nil, creation.NewUnsupportedRecordClass("catalog target class is not configured", nil)
 	}
+	result, _, fields, err := s.projectCreationCatalog(ctx, tx, identity, catalog)
+	return result, fields, err
+}
+
+func (s *Service) projectCreationCatalog(ctx context.Context, tx *ent.Tx, identity creation.Identity, catalog *ent.ServiceCatalog) (*creation.ResolvedCatalog, []*ent.FieldDefinition, []creation.ResolvedFieldDefinition, error) {
+	id := catalog.ID
 	definitions, err := tx.FieldDefinition.Query().Where(fielddefinition.TenantIDEQ(identity.TenantID), fielddefinition.EntityTypeEQ("service_catalog"), fielddefinition.EntityIDEQ(id), fielddefinition.IsActiveEQ(true)).Order(ent.Asc(fielddefinition.FieldSortOrder), ent.Asc(fielddefinition.FieldID)).All(ctx)
 	if err != nil {
-		return nil, nil, creation.NewInfrastructureUnavailable("could not load catalog fields", err)
+		return nil, nil, nil, creation.NewInfrastructureUnavailable("could not load catalog fields", err)
 	}
 	fields := make([]creation.ResolvedFieldDefinition, 0, len(definitions))
 	fieldEvidence := make([]map[string]any, 0, len(definitions))
@@ -40,28 +48,28 @@ func (s *Service) ResolveCreationCatalog(ctx context.Context, tx *ent.Tx, identi
 	}
 	routingRevision, err := service.NewProcessBindingService(tx.Client()).CreationConfigurationRevision(ctx, tx, identity.TenantID, catalog.TargetClass, catalog.ProcessDefinitionKey)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	formVersion, err := creationRevision(fieldEvidence)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	// Include every declared catalog field; clearing timestamps excludes unrelated
 	// update clocks while future configuration fields automatically join revision.
 	raw, err := json.Marshal(catalog)
 	if err != nil {
-		return nil, nil, creation.NewInternalFailure("could not encode catalog revision", err)
+		return nil, nil, nil, creation.NewInternalFailure("could not encode catalog revision", err)
 	}
 	var properties map[string]json.RawMessage
 	if err = json.Unmarshal(raw, &properties); err != nil {
-		return nil, nil, creation.NewInternalFailure("could not encode catalog revision", err)
+		return nil, nil, nil, creation.NewInternalFailure("could not encode catalog revision", err)
 	}
 	delete(properties, "created_at")
 	delete(properties, "updated_at")
 	delete(properties, "edges")
 	version, err := creationRevision(map[string]any{"catalog": properties, "fields": fieldEvidence, "routingRevision": routingRevision})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	result := &creation.ResolvedCatalog{ID: catalog.ID, Version: version, TargetClass: catalog.TargetClass, ServiceType: catalog.ServiceType, DeliveryTime: catalog.DeliveryTime, FormSchemaVersion: formVersion, ProcessDefinitionKey: catalog.ProcessDefinitionKey, RequiresApproval: catalog.RequiresApproval, SLAResponseTime: catalog.SLAResponseTime, SLAResolutionTime: catalog.SLAResolutionTime}
 	if catalog.CiTypeID > 0 {
@@ -70,8 +78,52 @@ func (s *Service) ResolveCreationCatalog(ctx context.Context, tx *ent.Tx, identi
 	if catalog.CloudServiceID > 0 {
 		result.CloudServiceID = &catalog.CloudServiceID
 	}
-	return result, fields, nil
+	return result, definitions, fields, nil
 }
 func creationRevision(value any) (string, error) {
 	return creation.ConfigurationRevision("catalog-v1", value)
+}
+
+// Read returns display fields and confirmation revisions from one database
+// snapshot. The submission later validates these exact revisions in Intake.
+func (s *Service) Read(ctx context.Context, identity creation.Identity, id int) (*ServiceCatalog, error) {
+	if err := identity.ValidateCommand(creation.CreateWorkItemCommand{}); err != nil {
+		return nil, err
+	}
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return nil, creation.NewInfrastructureUnavailable("could not begin catalog read", err)
+	}
+	defer tx.Rollback()
+	actor, err := tx.User.Query().Where(user.IDEQ(identity.ActorID), user.TenantIDEQ(identity.TenantID), user.ActiveEQ(true)).Only(ctx)
+	if ent.IsNotFound(err) {
+		return nil, creation.NewAuthenticationRequired("current actor is unavailable", err)
+	}
+	if err != nil {
+		return nil, creation.NewInfrastructureUnavailable("could not load catalog reader", err)
+	}
+	if actor.Role != identity.Role {
+		return nil, creation.NewAuthenticationRequired("current actor role changed", nil)
+	}
+	if err := authorization.RequireCurrentPermission(ctx, tx, identity, "service_catalog", "read"); err != nil {
+		return nil, err
+	}
+	record, err := tx.ServiceCatalog.Query().Where(servicecatalog.IDEQ(id), servicecatalog.TenantIDEQ(identity.TenantID)).Only(ctx)
+	if ent.IsNotFound(err) {
+		return nil, creation.NewReferenceNotFound("catalog is unavailable", err)
+	}
+	if err != nil {
+		return nil, creation.NewInfrastructureUnavailable("could not read catalog", err)
+	}
+	revision, definitions, _, err := s.projectCreationCatalog(ctx, tx, identity, record)
+	if err != nil {
+		return nil, err
+	}
+	result := NewEntRepository(tx.Client()).toDomain(record)
+	result.Fields = toFieldDefinitionInputsFromEnt(definitions)
+	result.CatalogVersion, result.FormSchemaVersion = revision.Version, revision.FormSchemaVersion
+	if err := tx.Commit(); err != nil {
+		return nil, creation.NewInfrastructureUnavailable("could not complete catalog read", err)
+	}
+	return result, nil
 }

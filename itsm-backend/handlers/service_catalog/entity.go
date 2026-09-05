@@ -9,10 +9,12 @@ import (
 
 // ServiceCatalog represents the core domain entity
 type ServiceCatalog struct {
-	ID          int
-	Name        string
-	Category    string
-	Description string
+	CatalogVersion    string
+	FormSchemaVersion string
+	ID                int
+	Name              string
+	Category          string
+	Description       string
 	// ITSMType 历史字段：Request|Incident|Change。Wave 2（ServiceRequest 层级规范化）之后
 	// 不再是路由权威——TargetClass 才是。保留只是因为 ent schema 列还在、且是 TargetClass
 	// 的计算输入（见 repository_impl.go 调用的 ComputeTargetClass），不代表两个字段并存做路由

@@ -1,6 +1,8 @@
 package service_catalog
 
 import (
+	"errors"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"strconv"
 
 	"itsm-backend/common"
@@ -17,6 +19,13 @@ type Handler struct {
 }
 
 func failServiceCatalog(c *gin.Context, err error) {
+	var intakeErr *creation.IntakeError
+	if errors.As(err, &intakeErr) {
+		codes := map[int]int{400: common.ParamErrorCode, 401: common.AuthFailedCode, 403: common.ForbiddenCode, 404: common.NotFoundCode, 409: common.ConflictCode, 500: common.InternalErrorCode, 503: common.ServiceUnavailableCode}
+		common.FailWithData(c, codes[intakeErr.HTTPStatus], intakeErr.Message, gin.H{"errorCode": intakeErr.Code, "retryable": intakeErr.Retryable, "fieldErrors": intakeErr.FieldErrors})
+		return
+	}
+
 	if appErr, ok := common.AsAppError(err); ok {
 		switch appErr.Code {
 		case common.ErrCodeBadRequest, common.ErrCodeValidation:
@@ -105,7 +114,7 @@ func (h *Handler) Get(c *gin.Context) {
 		return
 	}
 
-	catalog, err := h.service.Get(c.Request.Context(), tenantID, id)
+	catalog, err := h.service.Read(c.Request.Context(), creation.Identity{TenantID: tenantID, ActorID: c.GetInt("user_id"), RequesterID: c.GetInt("user_id"), Role: c.GetString("role"), Channel: "web"}, id)
 	if err != nil {
 		failServiceCatalog(c, err)
 		return
@@ -328,6 +337,7 @@ func (h *Handler) toDTO(c *ServiceCatalog) dto.ServiceCatalogResponse {
 		})
 	}
 	return dto.ServiceCatalogResponse{
+		CatalogVersion: c.CatalogVersion, FormSchemaVersion: c.FormSchemaVersion,
 		ID:                   c.ID,
 		Name:                 c.Name,
 		Category:             c.Category,

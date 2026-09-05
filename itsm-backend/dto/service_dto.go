@@ -68,13 +68,15 @@ type GetServiceRequestsRequest struct {
 
 // ServiceCatalogResponse 服务目录响应
 type ServiceCatalogResponse struct {
-	ID             int    `json:"id"`
-	Name           string `json:"name"`
-	Category       string `json:"category"`
-	Description    string `json:"description"`
-	DeliveryTime   string `json:"deliveryTime"`
-	CITypeID       int    `json:"ciTypeId,omitempty"`
-	CloudServiceID int    `json:"cloudServiceId,omitempty"`
+	CatalogVersion    string `json:"catalogVersion,omitempty"`
+	FormSchemaVersion string `json:"formSchemaVersion,omitempty"`
+	ID                int    `json:"id"`
+	Name              string `json:"name"`
+	Category          string `json:"category"`
+	Description       string `json:"description"`
+	DeliveryTime      string `json:"deliveryTime"`
+	CITypeID          int    `json:"ciTypeId,omitempty"`
+	CloudServiceID    int    `json:"cloudServiceId,omitempty"`
 	// ProcessDefinitionKey 是该目录条目专属的 BPMN 流程定义 Key（可选），非空时优先于
 	// businessType+businessSubType 的通用流程绑定解析。
 	ProcessDefinitionKey string `json:"processDefinitionKey,omitempty"`
