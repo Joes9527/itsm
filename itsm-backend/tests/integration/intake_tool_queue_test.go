@@ -40,12 +40,21 @@ func TestIntakeApprovedToolCreationRecoversAcknowledgement(t *testing.T) {
 	require.Equal(t, "done", recorded.Status)
 	var result map[string]any
 	require.NoError(t, json.Unmarshal([]byte(*recorded.Result), &result))
-	require.Contains(t, result, "workItemId")
-	require.NotContains(t, result, "id")
+	require.ElementsMatch(t, []string{"workItemId", "number", "recordClass", "professionalReference", "workflowStartStatus", "replayed"}, mapKeys(result))
+	require.Equal(t, "generic", result["recordClass"])
+	require.Equal(t, map[string]any{"type": "", "id": float64(0)}, result["professionalReference"])
 	require.True(t, result["replayed"].(bool))
 	f.client.User.UpdateOneID(f.identity.ActorID).SetActive(false).SaveX(ctx)
 	require.Error(t, q.ProcessJob(ctx, job))
 	require.Equal(t, 1, f.client.Ticket.Query().CountX(ctx))
+}
+
+func mapKeys(values map[string]any) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	return keys
 }
 func TestIntakeToolCreationRequiresApprovedTenantInvocation(t *testing.T) {
 	for _, state := range []string{"pending", "rejected", "wrong_tenant", "missing_actor", "malformed"} {
@@ -70,6 +79,36 @@ func TestIntakeToolCreationRequiresApprovedTenantInvocation(t *testing.T) {
 				tenantID += 100
 			}
 			require.Error(t, q.ProcessJob(ctx, service.ToolJob{InvocationID: inv.ID, TenantID: tenantID}))
+			assertNoEntryGraph(t, f.client)
+		})
+	}
+}
+
+func TestIntakeToolCreationRejectsAdvertisedContractViolations(t *testing.T) {
+	for name, arguments := range map[string]string{
+		"missing title":    `{}`,
+		"blank title":      `{"title":"  "}`,
+		"unknown priority": `{"title":"request","priority":"highest"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newUnifiedIntakeFixture(t)
+			ctx := context.Background()
+			q := service.NewToolQueue(f.client, nil, f.app, nil, 1, zap.NewNop().Sugar())
+			defer q.Close()
+			inv := f.client.ToolInvocation.Create().
+				SetTenantID(f.identity.TenantID).
+				SetUserID(f.identity.ActorID).
+				SetToolName("create_ticket").
+				SetArguments(arguments).
+				SetNeedsApproval(true).
+				SetApprovalState("approved").
+				SetApprovedBy(f.identity.ActorID).
+				SetApprovedAt(time.Now()).
+				SetStatus("pending").
+				SaveX(ctx)
+
+			require.Error(t, q.ProcessJob(ctx, service.ToolJob{InvocationID: inv.ID, TenantID: f.identity.TenantID}))
+			require.Equal(t, "failed", f.client.ToolInvocation.GetX(ctx, inv.ID).Status)
 			assertNoEntryGraph(t, f.client)
 		})
 	}

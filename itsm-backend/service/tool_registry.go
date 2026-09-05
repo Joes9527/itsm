@@ -6,6 +6,7 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	creation "itsm-backend/handlers/common/workitemcreation"
 )
 
 type ToolDefinition struct {
@@ -104,24 +105,50 @@ func (t *ToolRegistry) ListTools() []ToolDefinition {
 			Resource:    "ticket",
 			Action:      "write",
 			ArgsSchema: map[string]interface{}{
-				"type": "object",
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"title":        map[string]interface{}{"type": "string", "minLength": 1, "maxLength": 500, "pattern": `\S`},
+					"description":  map[string]interface{}{"type": "string", "maxLength": 20000},
+					"priority":     map[string]interface{}{"type": "string", "enum": []string{"low", "medium", "high", "critical", "urgent"}},
+					"requester_id": map[string]interface{}{"type": "integer", "minimum": 1},
+				},
+				"required": []string{"title"},
 			},
 			ResultSchema: map[string]interface{}{
-				"type": "object",
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"workItemId": map[string]interface{}{"type": "integer", "minimum": 1},
+					"number":     map[string]interface{}{"type": "string"},
+					"recordClass": map[string]interface{}{
+						"type": "string", "enum": []string{creation.RecordClassGeneric},
+					},
+					"professionalReference": map[string]interface{}{
+						"type":                 "object",
+						"additionalProperties": false,
+						"properties": map[string]interface{}{
+							"type": map[string]interface{}{"type": "string", "enum": []string{""}},
+							"id":   map[string]interface{}{"type": "integer", "enum": []int{0}},
+						},
+						"required": []string{"type", "id"},
+					},
+					"workflowStartStatus": map[string]interface{}{
+						"type": "string", "enum": []string{"not_required", "pending", "active", "manual_intervention_required"},
+					},
+					"replayed": map[string]interface{}{"type": "boolean"},
+				},
+				"required": []string{"workItemId", "number", "recordClass", "professionalReference", "workflowStartStatus", "replayed"},
 			},
 		},
 		{
-			Name:        "update_ticket",
-			Description: "更新工单（需审批）",
-			ReadOnly:    false,
-			Resource:    "ticket",
-			Action:      "write",
-			ArgsSchema: map[string]interface{}{
-				"type": "object",
-			},
-			ResultSchema: map[string]interface{}{
-				"type": "object",
-			},
+			Name:         "update_ticket",
+			Description:  "更新工单（需审批）",
+			ReadOnly:     false,
+			Resource:     "ticket",
+			Action:       "write",
+			ArgsSchema:   nil,
+			ResultSchema: nil,
 		},
 	}
 }

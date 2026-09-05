@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"testing"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	creation "itsm-backend/handlers/common/workitemcreation"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -136,6 +138,89 @@ func TestToolRegistry_ListToolsCatalog(t *testing.T) {
 	assert.True(t, names["list_kb"], "list_kb tool must remain registered")
 	assert.True(t, names["create_ticket"], "create_ticket tool must remain registered")
 	assert.True(t, names["update_ticket"], "update_ticket tool must remain registered")
+}
+
+func TestCreateTicketToolPublishesItsExactExecutableContract(t *testing.T) {
+	tool := NewToolRegistry(nil, nil, nil, nil).GetTool("create_ticket")
+	require.NotNil(t, tool)
+	require.Equal(t, map[string]interface{}{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties": map[string]interface{}{
+			"title":        map[string]interface{}{"type": "string", "minLength": 1, "maxLength": 500, "pattern": `\S`},
+			"description":  map[string]interface{}{"type": "string", "maxLength": 20000},
+			"priority":     map[string]interface{}{"type": "string", "enum": []string{"low", "medium", "high", "critical", "urgent"}},
+			"requester_id": map[string]interface{}{"type": "integer", "minimum": 1},
+		},
+		"required": []string{"title"},
+	}, tool.ArgsSchema)
+	require.Equal(t, map[string]interface{}{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties": map[string]interface{}{
+			"workItemId": map[string]interface{}{"type": "integer", "minimum": 1},
+			"number":     map[string]interface{}{"type": "string"},
+			"recordClass": map[string]interface{}{
+				"type": "string", "enum": []string{creation.RecordClassGeneric},
+			},
+			"professionalReference": map[string]interface{}{
+				"type":                 "object",
+				"additionalProperties": false,
+				"properties": map[string]interface{}{
+					"type": map[string]interface{}{"type": "string", "enum": []string{""}},
+					"id":   map[string]interface{}{"type": "integer", "enum": []int{0}},
+				},
+				"required": []string{"type", "id"},
+			},
+			"workflowStartStatus": map[string]interface{}{
+				"type": "string", "enum": []string{"not_required", "pending", "active", "manual_intervention_required"},
+			},
+			"replayed": map[string]interface{}{"type": "boolean"},
+		},
+		"required": []string{"workItemId", "number", "recordClass", "professionalReference", "workflowStartStatus", "replayed"},
+	}, tool.ResultSchema)
+
+	update := NewToolRegistry(nil, nil, nil, nil).GetTool("update_ticket")
+	require.NotNil(t, update)
+	require.Nil(t, update.ArgsSchema)
+	require.Nil(t, update.ResultSchema)
+}
+
+func TestCreateTicketToolArgumentsMatchPublishedContract(t *testing.T) {
+	for _, priority := range []string{"low", "medium", "high", "critical", "urgent"} {
+		t.Run("accepts_"+priority, func(t *testing.T) {
+			command, requester, err := toolCreationCommand(`{"title":"Approved request","description":"details","priority":"`+priority+`","requester_id":23}`, 4, 17)
+			require.NoError(t, err)
+			require.Equal(t, priority, command.Priority)
+			require.Equal(t, 23, requester)
+		})
+	}
+	for name, raw := range map[string]string{
+		"zero requester":     `{"title":"request","requester_id":0}`,
+		"fraction requester": `{"title":"request","requester_id":1.5}`,
+		"extra field":        `{"title":"request","tenant_id":9}`,
+	} {
+		t.Run("rejects_"+name, func(t *testing.T) {
+			_, _, err := toolCreationCommand(raw, 4, 17)
+			require.Error(t, err)
+		})
+	}
+}
+
+func TestCreateTicketToolResultSchemaMatchesSerializedSharedReceipt(t *testing.T) {
+	receipt := creation.CreateWorkItemResult{
+		WorkItemID: 31, Number: "TKT-202609-000031", RecordClass: creation.RecordClassGeneric,
+		ProfessionalReference: creation.ProfessionalReference{}, WorkflowStartStatus: "not_required", Replayed: true,
+	}
+	encoded, err := json.Marshal(receipt)
+	require.NoError(t, err)
+	var serialized map[string]interface{}
+	require.NoError(t, json.Unmarshal(encoded, &serialized))
+	require.Equal(t, map[string]interface{}{
+		"workItemId": float64(31), "number": "TKT-202609-000031", "recordClass": "generic",
+		"professionalReference": map[string]interface{}{"type": "", "id": float64(0)},
+		"workflowStartStatus":   "not_required", "replayed": true,
+	}, serialized)
 }
 
 // TestToolRegistry_UnknownTool confirms unknown tools are rejected with an

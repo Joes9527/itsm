@@ -25,10 +25,27 @@ type ToolJob struct {
 	TenantID     int
 	RequestID    string
 }
+
+var ErrToolQueueClosed = errors.New("tool queue is stopping or stopped")
+
+type toolQueueState uint8
+
+const (
+	toolQueueAccepting toolQueueState = iota
+	toolQueueStopping
+	toolQueueStopped
+)
+
 type ToolQueue struct {
-	jobs      chan ToolJob
-	done      chan struct{}
+	mu        sync.Mutex
+	cond      *sync.Cond
+	jobs      []ToolJob
+	capacity  int
+	state     toolQueueState
+	stopping  chan struct{}
+	stopped   chan struct{}
 	closeOnce sync.Once
+	process   func(context.Context, ToolJob) error
 	client    *ent.Client
 	tools     *ToolRegistry
 	creation  creation.Application
@@ -40,45 +57,87 @@ func NewToolQueue(client *ent.Client, tools *ToolRegistry, app creation.Applicat
 	if client == nil || app == nil {
 		panic("tool queue requires the shared creation application and tenant client")
 	}
+	q := &ToolQueue{client: client, tools: tools, creation: app, tickets: tickets}
+	q.start(capacity, logger, q.ProcessJob)
+	return q
+}
+
+func (q *ToolQueue) start(capacity int, logger *zap.SugaredLogger, process func(context.Context, ToolJob) error) {
 	if capacity <= 0 {
 		capacity = 100
 	}
 	if logger == nil {
 		logger = zap.NewNop().Sugar()
 	}
-	q := &ToolQueue{jobs: make(chan ToolJob, capacity), done: make(chan struct{}), client: client, tools: tools, creation: app, tickets: tickets, logger: logger}
+	if process == nil {
+		panic("tool queue requires a job processor")
+	}
+	q.capacity = capacity
+	q.jobs = make([]ToolJob, 0, capacity)
+	q.state = toolQueueAccepting
+	q.stopping = make(chan struct{})
+	q.stopped = make(chan struct{})
+	q.process = process
+	q.logger = logger
+	q.cond = sync.NewCond(&q.mu)
 	go q.worker()
-	return q
 }
-func (q *ToolQueue) Close() { q.closeOnce.Do(func() { close(q.done) }) }
+
+func (q *ToolQueue) Close() {
+	q.closeOnce.Do(func() {
+		q.mu.Lock()
+		q.state = toolQueueStopping
+		close(q.stopping)
+		q.cond.Broadcast()
+		q.mu.Unlock()
+	})
+	<-q.stopped
+}
+
 func (q *ToolQueue) Enqueue(job ToolJob) error {
 	if job.TenantID <= 0 || job.InvocationID <= 0 {
 		return fmt.Errorf("tool invocation identity is required")
 	}
-	select {
-	case <-q.done:
-		return fmt.Errorf("tool queue is closed")
-	default:
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.state != toolQueueAccepting {
+		return fmt.Errorf("%w; approved invocation remains pending", ErrToolQueueClosed)
 	}
-	select {
-	case q.jobs <- job:
-		return nil
-	default:
+	if len(q.jobs) >= q.capacity {
 		return fmt.Errorf("tool queue is full; approved invocation remains pending")
 	}
+	q.jobs = append(q.jobs, job)
+	q.cond.Signal()
+	return nil
 }
+
 func (q *ToolQueue) worker() {
 	for {
-		select {
-		case <-q.done:
-			return
-		case job := <-q.jobs:
-			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			if err := q.ProcessJob(ctx, job); err != nil {
-				q.logger.Warnw("Approved tool job did not complete", "tenant_id", job.TenantID, "invocation_id", job.InvocationID)
-			}
-			cancel()
+		q.mu.Lock()
+		for q.state == toolQueueAccepting && len(q.jobs) == 0 {
+			q.cond.Wait()
 		}
+		if q.state != toolQueueAccepting {
+			buffered := append([]ToolJob(nil), q.jobs...)
+			q.jobs = nil
+			q.state = toolQueueStopped
+			q.mu.Unlock()
+			for _, job := range buffered {
+				q.logger.Warnw("Approved tool job remains pending after queue shutdown", "tenant_id", job.TenantID, "invocation_id", job.InvocationID)
+			}
+			close(q.stopped)
+			return
+		}
+		job := q.jobs[0]
+		q.jobs[0] = ToolJob{}
+		q.jobs = q.jobs[1:]
+		q.mu.Unlock()
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if err := q.process(ctx, job); err != nil {
+			q.logger.Warnw("Approved tool job did not complete", "tenant_id", job.TenantID, "invocation_id", job.InvocationID)
+		}
+		cancel()
 	}
 }
 

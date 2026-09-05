@@ -90,7 +90,12 @@ type Application struct {
 	callbackWorker           bpmnCallbackWorker
 	notificationWorker       ticketNotificationWorker
 	outboxDeliveryWorker     kafOutboxRunner
+	toolQueue                toolQueueCloser
 	startBackgroundTasksFunc func(context.Context)
+}
+
+type toolQueueCloser interface {
+	Close()
 }
 
 // prepareTicketCCIndexMigration removes the pre-partial-index definition.
@@ -977,6 +982,7 @@ func NewApplication() *Application {
 		callbackWorker:       concreteProcessEngine,
 		notificationWorker:   ticketNotificationService,
 		outboxDeliveryWorker: outboxDeliveryWorker,
+		toolQueue:            toolQueue,
 	}
 }
 
@@ -1175,14 +1181,15 @@ func needsBootstrapAdmin(ctx context.Context, client *ent.Client) (bool, error) 
 
 func (app *Application) Run() {
 	defer app.Logger.Sync()
-	defer app.DBClient.Close()
-	if app.systemClient != nil {
-		defer app.systemClient.Close()
-	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	stopAPIRuntime := app.startAPIRuntime(ctx)
-	defer stopAPIRuntime()
+	defer stopAPIRuntimeBeforeDependencies(stopAPIRuntime, func() {
+		if app.systemClient != nil {
+			app.systemClient.Close()
+		}
+		app.DBClient.Close()
+	})
 
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", app.Cfg.Server.Port))
 	if err != nil {
@@ -1195,6 +1202,11 @@ func (app *Application) Run() {
 	}
 }
 
+func stopAPIRuntimeBeforeDependencies(stopRuntime func(), closeDependencies func()) {
+	stopRuntime()
+	closeDependencies()
+}
+
 // startAPIRuntime starts the background responsibilities that remain owned by
 // the API process in this release. KAF delegation delivery is deliberately
 // excluded: it has a single owner in the dedicated Worker process.
@@ -1205,6 +1217,9 @@ func (app *Application) startAPIRuntime(ctx context.Context) func() {
 	return func() {
 		cancelBackground()
 		waitForOutboxDelivery()
+		if app.toolQueue != nil {
+			app.toolQueue.Close()
+		}
 	}
 }
 
