@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** accepted — 用户要求暂停并交接；当前停在 A3b/A4 后端入口退役与共享 schema 归并。恢复入口见[开发交接报告](../../review/2026-09-05-sslvpn-development-handoff-report.md)。
+**Status:** accepted — 已按用户要求恢复；审查接手期间修改并继续 A3b/A4 后端入口退役与共享 schema 归并。[开发交接报告](../../review/2026-09-05-sslvpn-development-handoff-report.md)保留暂停时基线。
 
 **Goal:** 归并已有 Intake 成果，所有生产创建入口复用同一编号、专业规则和完整事务，并提供 KAF 所需的受权目录与创建接口。
 

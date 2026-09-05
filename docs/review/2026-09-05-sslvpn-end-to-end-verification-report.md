@@ -1,8 +1,10 @@
 # SSLVPN 端到端实施与验证报告
 
-**状态：已按用户要求暂停开发，尚未达到端到端验收门槛。** 最新工作区、未提交改动与续做步骤见[开发交接报告](2026-09-05-sslvpn-development-handoff-report.md)。本报告从已执行的验证开始记录；阶段测试通过不等于完整业务交付，也不代表已部署。后续任务应在此追加最终提交、命令、退出码和验收证据。
+**状态：用户已要求原 Agent 重新接手，正在审查接手期间的修改并继续实施；尚未达到端到端验收门槛。** 最新工作区、未提交改动与续做步骤见[开发交接报告](2026-09-05-sslvpn-development-handoff-report.md)。本报告从已执行的验证开始记录；阶段测试通过不等于完整业务交付，也不代表已部署。后续任务应在此追加最终提交、命令、退出码和验收证据。
 
 ## 1. 验收范围与当前进度
+
+重新接手后的独立增量审查见[接手期间增量审查报告](2026-09-05-sslvpn-successor-review-report.md)：Change/Ticket repository 当前包测试及全部后端包编译通过，但发现必填字段测试跳过与真实 PG 回滚覆盖缺失两个阻塞项，正在修复。下文较早提交的阶段证据保留原有适用范围。
 
 依据[实施计划](../superpowers/plans/2026-09-05-sslvpn-end-to-end-implementation.md)和[已确认设计](../superpowers/specs/2026-09-05-sslvpn-kaf-intake-end-to-end-design.md)，最终链路为：KAF Web 理解意图并复用收集/确认卡片 → 当前用户通过 Unified Intake 创建 ITSM 申请 → BPMN 两级审批 → Worker 委派 KAF 执行 → 查询确认外部用户组成员关系 → ITSM 记录授权结果、状态、审计 → KAF 展示结果。
 
