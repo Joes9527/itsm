@@ -126,9 +126,34 @@ describe('canonical authenticated session hydration', () => {
     expect(useAuthStore.getState().currentTenant?.id).toBe(7);
   });
 
-  it.each([undefined, 0, -1, 1.5])(
-    'fails closed for invalid actorTenantId %s',
-    async actorTenantId => {
+  it.each(
+    [undefined, 0, -1, 1.5, true, false, '7', [7], {}, Number.MAX_SAFE_INTEGER + 1].map(
+      actorTenantId => ({ actorTenantId })
+    )
+  )(
+    'fails closed for invalid actorTenantId $actorTenantId',
+    async ({ actorTenantId }) => {
+      useAuthStore.setState({
+        user: {
+          id: 99,
+          username: 'stale',
+          email: '',
+          name: '',
+          tenantId: 99,
+          actorTenantId: 99,
+          role: 'end_user',
+        },
+        currentTenant: {
+          id: 99,
+          name: 'Stale tenant',
+          code: 'stale',
+          type: 'standard',
+          status: 'active',
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+        isAuthenticated: true,
+      });
       mockGet
         .mockResolvedValueOnce({
           id: 42,
@@ -148,7 +173,7 @@ describe('canonical authenticated session hydration', () => {
         currentTenant: null,
         isAuthenticated: false,
       });
-      expect(mockGet).toHaveBeenCalledTimes(1);
+      expect(mockGet.mock.calls).toEqual([['/api/v1/auth/me']]);
     }
   );
 });

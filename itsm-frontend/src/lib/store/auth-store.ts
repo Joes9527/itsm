@@ -63,8 +63,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         throw new Error('Invalid authenticated tenant identity');
       }
 
-      const actorTenantID = Number(user?.actorTenantId);
-      if (!Number.isInteger(actorTenantID) || actorTenantID <= 0) {
+      const actorTenantID = user?.actorTenantId;
+      if (
+        typeof actorTenantID !== 'number' ||
+        !Number.isSafeInteger(actorTenantID) ||
+        actorTenantID <= 0
+      ) {
         throw new Error('Invalid authenticated native tenant identity');
       }
 
