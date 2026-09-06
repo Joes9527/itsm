@@ -116,6 +116,22 @@ func (s *Service) Create(ctx context.Context, identity workitemcreation.Identity
 	if err := identity.ValidateCommand(command); err != nil {
 		return nil, err
 	}
+	// Validate current professional trust policy even when a completed receipt exists.
+	// Preserve submitted source in the canonical request; applying omitted defaults
+	// here would invalidate existing intake-v4 receipts.
+	if strings.TrimSpace(command.RecordClass) == workitemcreation.RecordClassIncident {
+		creator, err := s.registry.Get(workitemcreation.RecordClassIncident)
+		if err != nil {
+			return nil, err
+		}
+		owner, ok := creator.(workitemcreation.IncidentCreationInputOwner)
+		if !ok {
+			return nil, workitemcreation.NewInternalFailure("incident creation input owner is required", nil)
+		}
+		if _, err := owner.ValidateIncidentCreationInput(identity, command.SourceReference, command.Incident); err != nil {
+			return nil, err
+		}
+	}
 	normalized, digest, err := workitemcreation.CanonicalizeCommand(command)
 	if err != nil {
 		return nil, err

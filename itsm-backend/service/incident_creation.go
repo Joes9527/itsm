@@ -17,6 +17,10 @@ type incidentCreation struct {
 
 func (*IncidentService) RecordClass() string { return creation.RecordClassIncident }
 func (s *IncidentService) Prepare(_ context.Context, _ *ent.Tx, in creation.ResolvedIntake) (*creation.CreationPlan, error) {
+	source, err := s.ValidateIncidentCreationInput(in.Identity, in.Command.SourceReference, in.Command.Incident)
+	if err != nil {
+		return nil, err
+	}
 	input := creation.IncidentInput{}
 	if in.Command.Incident != nil {
 		input = *in.Command.Incident
@@ -63,10 +67,6 @@ func (s *IncidentService) Prepare(_ context.Context, _ *ent.Tx, in creation.Reso
 	if detected == nil {
 		now := time.Now().UTC()
 		detected = &now
-	}
-	source := input.Source
-	if source == "" {
-		source = in.Identity.Channel
 	}
 	plan := creation.NewPlan(in, "new", priority, source)
 	plan.BusinessSubtype = input.Type
@@ -124,4 +124,4 @@ func (*IncidentService) CreateExtension(ctx context.Context, tx *ent.Tx, item *e
 	return &creation.ProfessionalReference{Type: "incident", ID: record.ID}, nil
 }
 
-var _ creation.ProfessionalCreator = (*IncidentService)(nil)
+var _ creation.IncidentCreationInputOwner = (*IncidentService)(nil)

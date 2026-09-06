@@ -191,7 +191,7 @@ func TestPostgresIntakeMSPSharedSnapshotAndDurableEffects(t *testing.T) {
 	snapshots := &mutateDirectorySnapshot{directory: clients.IntakeDirectorySnapshot()}
 
 	app := intake.NewService(clients.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), snapshots)
-	identity := creation.Identity{TenantID: f.tenant.ID, ActorID: actor.ID, RequesterID: f.actor.ID, Role: "msp_tech", Channel: "itsm_web"}
+	identity := creation.Identity{TenantID: f.tenant.ID, ActorID: actor.ID, RequesterID: f.actor.ID, Role: "msp_tech", Channel: "http"}
 	command := creation.CreateWorkItemCommand{RecordClass: "incident", IntakeKind: "incident", Confirmation: "confirmed", Title: "Native MSP incident", IdempotencyKey: "msp"}
 	for _, stage := range []string{"export", "close", "serialize"} {
 		switch stage {

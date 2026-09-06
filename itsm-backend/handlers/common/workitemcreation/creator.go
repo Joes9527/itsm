@@ -14,6 +14,13 @@ type ProfessionalCreator interface {
 	CreateExtension(ctx context.Context, tx *ent.Tx, workItem *ent.Ticket, plan *CreationPlan) (*ProfessionalReference, error)
 }
 
+// IncidentCreationInputOwner validates the professional trust boundary before
+// receipt replay. The returned source is an execution default, not request evidence.
+type IncidentCreationInputOwner interface {
+	ProfessionalCreator
+	ValidateIncidentCreationInput(Identity, *SourceReference, *IncidentInput) (string, error)
+}
+
 // IsSupportedRecordClass describes the bounded creation contract, not lifecycle dispatch.
 func IsSupportedRecordClass(class string) bool {
 	switch class {

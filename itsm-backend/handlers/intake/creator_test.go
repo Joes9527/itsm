@@ -2,6 +2,7 @@ package intake
 
 import (
 	"context"
+	"errors"
 	"itsm-backend/ent"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"testing"
@@ -39,5 +40,23 @@ func TestRegistryFailsClosed(t *testing.T) {
 		if _, err := r.Get(class); err == nil {
 			t.Fatal("missing creator succeeded")
 		}
+	}
+}
+
+func TestIncidentCreationRequiresInputOwnerBeforeReceipt(t *testing.T) {
+	client, app, identity, command, _, _ := intakeFixture(t)
+	app.registry = NewCreatorRegistry()
+	if err := app.registry.Register(&fixtureCreator{"incident"}); err != nil {
+		t.Fatal(err)
+	}
+	command.RecordClass = " incident "
+	command.IntakeKind = "incident"
+	identity.Channel = "http"
+	_, err := app.Create(context.Background(), identity, command)
+	if !errors.Is(err, creation.ErrInternalFailure) {
+		t.Fatalf("expected missing owner failure, got %v", err)
+	}
+	if n := client.IntakeRequest.Query().CountX(context.Background()); n != 0 {
+		t.Fatalf("unexpected receipts: %d", n)
 	}
 }

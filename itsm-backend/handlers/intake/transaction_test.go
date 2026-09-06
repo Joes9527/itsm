@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/repository/workitemnumber"
+	"itsm-backend/service"
 )
 
 type graphResolver struct{ catalogID, workflowID int }
@@ -19,6 +20,9 @@ func (r graphResolver) Resolve(_ context.Context, _ *ent.Tx, i workitemcreation.
 
 type graphCreator struct{ preparedCreator }
 
+func (*graphCreator) ValidateIncidentCreationInput(i workitemcreation.Identity, ref *workitemcreation.SourceReference, input *workitemcreation.IncidentInput) (string, error) {
+	return (&service.IncidentService{}).ValidateIncidentCreationInput(i, ref, input)
+}
 func (*graphCreator) RecordClass() string { return "incident" }
 func (*graphCreator) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticket, _ *workitemcreation.CreationPlan) (*workitemcreation.ProfessionalReference, error) {
 	extension, err := tx.Incident.Create().SetWorkItemID(item.ID).SetIncidentNumber(item.TicketNumber).Save(ctx)
@@ -29,6 +33,7 @@ func (*graphCreator) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.
 }
 func graphFixture(t *testing.T) (*ent.Client, *Service, workitemcreation.Identity, workitemcreation.CreateWorkItemCommand) {
 	client, s, i, c, _, _ := intakeFixture(t)
+	i.Channel = "http"
 	ctx := context.Background()
 	catalog := client.ServiceCatalog.Create().SetName("VPN").SetTenantID(i.TenantID).SaveX(ctx)
 	deployment := client.ProcessDeployment.Create().SetDeploymentID("test").SetDeploymentName("test").SetTenantID(i.TenantID).SaveX(ctx)

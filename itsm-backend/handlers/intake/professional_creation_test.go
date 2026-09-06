@@ -38,6 +38,7 @@ func TestAuthoritativeProfessionalGraph(t *testing.T) {
 				domain = problemhandler.NewService(nil, zap.NewNop().Sugar())
 				command.Problem = &workitemcreation.ProblemInput{RootCause: "route failure", Impact: "employees"}
 			case "incident":
+				identity.Channel = "http"
 				domain = service.NewIncidentService(client, zap.NewNop().Sugar())
 				command.Incident = &workitemcreation.IncidentInput{Type: "security", Impact: "critical", Urgency: "high", Severity: "critical", DetectedAt: "2026-09-04T01:00:00Z", ImpactAnalysis: &workitemcreation.ImpactAnalysis{BusinessImpact: &workitemcreation.BusinessImpact{RevenueImpact: json.Number("9007199254740993.125")}, TechnicalImpact: "vpn gateway"}}
 				parent := client.TicketCategory.Create().SetTenantID(identity.TenantID).SetCode("network").SetName("Network").SaveX(context.Background())
@@ -128,6 +129,7 @@ func TestGenericSubtypeHasOneAuthoritativeField(t *testing.T) {
 
 func TestIncidentNumbersAreScopedByWorkItemTenant(t *testing.T) {
 	client, app, identity, command, _, _ := intakeFixture(t)
+	identity.Channel = "http"
 	ctx := context.Background()
 	app.registry = NewCreatorRegistry()
 	require.NoError(t, app.registry.Register(service.NewIncidentService(client, zap.NewNop().Sugar())))
@@ -197,6 +199,7 @@ func TestRoutingConsumesDomainEffectiveValues(t *testing.T) {
 			typeID := ""
 			switch class {
 			case "incident":
+				identity.Channel = "http"
 				owner := service.NewIncidentService(client, logger)
 				owner.SetPriorityMatrixService(service.NewPriorityMatrixService(logger))
 				require.NoError(t, app.registry.Register(owner))

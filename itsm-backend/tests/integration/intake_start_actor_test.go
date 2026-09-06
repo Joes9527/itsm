@@ -67,7 +67,7 @@ func TestIntakeCreationDurableStartPreservesActorAndCanonicalIdentity(t *testing
 			require.Equal(t, requester.ID, item.RequesterID)
 			require.Equal(t, actor.ID, item.OpenedByID)
 			require.Equal(t, f.identity.TenantID, item.TenantID)
-			require.Equal(t, map[string]string{"generic": "itsm_web", "incident": "itsm_web", "service_request_item": "service_catalog"}[class], item.Source)
+			require.Equal(t, map[string]string{"generic": "http", "incident": "manual", "service_request_item": "service_catalog"}[class], item.Source)
 			if class != "generic" {
 				require.NotEqual(t, result.WorkItemID, result.ProfessionalReference.ID)
 			}

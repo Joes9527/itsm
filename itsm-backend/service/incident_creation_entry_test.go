@@ -93,7 +93,7 @@ func TestIncidentService_CreateIncident_WithOptionalFields(t *testing.T) {
 		Category:    "security",
 		Subcategory: "intrusion",
 		AssigneeID:  &assignee.ID,
-		Source:      "monitoring",
+		Source:      "user",
 		DetectedAt:  &detectedAt,
 		Metadata: map[string]interface{}{
 			"source_ip": "192.168.1.100",

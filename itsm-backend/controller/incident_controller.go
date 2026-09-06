@@ -46,7 +46,7 @@ func NewIncidentController(
 
 // CreateIncident 创建事件
 // @Summary 创建事件
-// @Description 创建新的事件记录
+// @Description 创建新的事件记录。HTTP source 仅允许省略、manual 或 user；system/monitoring 需要受信内部入口。
 // @Tags 事件管理
 // @Accept json
 // @Produce json
