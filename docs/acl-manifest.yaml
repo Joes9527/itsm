@@ -1,7 +1,7 @@
 version: "1.0"
 generated_at: "2026-09-01T19:02:29.996Z"
 router_version: "1.0"
-total_routes: 526
+total_routes: 525
 permission_coverage: "100.00%"
 routes:
   - method: POST
@@ -2320,12 +2320,6 @@ routes:
     menu: v1
     description: 列表
     source: router.go:1442
-  - method: POST
-    path: /api/v1/connectors/feishu/callback
-    permission: null  # PUBLIC
-    menu: v1
-    description: 创建
-    source: router.go:1444
   - method: GET
     path: /api/v1/dashboard/overview
     permission: report.read

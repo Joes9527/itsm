@@ -40,7 +40,6 @@ type emailPollingCoordinator interface {
 //	POST   /api/v1/connectors/:name/send   -> 通过指定连接器发消息
 //	POST   /api/v1/connectors/:name/test   -> 发送一条测试消息
 //	GET    /api/v1/connectors/health       -> 所有实例的健康检查
-//	POST   /api/v1/connectors/feishu/callback -> 飞书事件回调入口（如果安装了 feishu）
 type ConnectorController struct {
 	manager          *connector.Manager
 	market           *marketplace.Market // optional
@@ -311,53 +310,6 @@ func (c *ConnectorController) Lifecycle(ctx *gin.Context) {
 		})
 	}
 	common.Success(ctx, gin.H{"items": out, "total": len(out)})
-}
-
-// FeishuCallback 飞书事件回调入口
-// 注意：本方法假定 manager 中已经配置了 feishu 连接器；
-// 实际签名校验和负载解析由该连接器自身完成。
-func (c *ConnectorController) FeishuCallback(ctx *gin.Context) {
-	body, _ := ctx.GetRawData()
-	tenantID := ctx.GetInt("tenant_id")
-	if tenantID <= 0 {
-		zap.S().Warnw("Connector FeishuCallback: tenant_id missing in context", "remote_ip", ctx.ClientIP())
-		common.Fail(ctx, common.AuthFailedCode, "租户信息缺失")
-		return
-	}
-	conn, ok := c.manager.Get(tenantID, "feishu")
-	if !ok {
-		// 飞书 URL Verification 仍然要回应，否则平台会反复重试
-		ctx.JSON(200, gin.H{"challenge": ctx.Query("challenge")})
-		return
-	}
-	rcv, ok := conn.(connector.Receiver)
-	if !ok {
-		ctx.JSON(200, gin.H{"code": -1, "msg": "feishu connector is not a Receiver"})
-		return
-	}
-	headers := map[string]string{
-		"X-Lark-Request-Timestamp": ctx.GetHeader("X-Lark-Request-Timestamp"),
-		"X-Lark-Request-Nonce":     ctx.GetHeader("X-Lark-Request-Nonce"),
-		"X-Lark-Signature":         ctx.GetHeader("X-Lark-Signature"),
-	}
-	if err := rcv.VerifySignature(headers, body); err != nil {
-		ctx.JSON(401, gin.H{"code": -1, "msg": err.Error()})
-		return
-	}
-	msg, err := rcv.ParseInbound(body)
-	if err != nil {
-		ctx.JSON(400, gin.H{"code": -1, "msg": err.Error()})
-		return
-	}
-	if msg.Type == "url_verification" {
-		ctx.JSON(200, gin.H{"challenge": msg.Content})
-		return
-	}
-	// 入站消息进入 Router 派发
-	if c.logger != nil {
-		c.logger.Infow("feishu inbound", "type", msg.Type, "user", msg.UserID, "chat", msg.ChatID)
-	}
-	ctx.JSON(200, gin.H{"code": 0})
 }
 
 // helpers

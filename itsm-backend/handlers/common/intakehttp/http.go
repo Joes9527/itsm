@@ -80,22 +80,10 @@ func Execute(c *gin.Context, app creation.Application, tenantID, requesterID int
 // Bind rejects ambiguous/unknown members without changing global Gin decoding.
 // Dynamic values remain json.Number all the way into the canonical command.
 func Bind(c *gin.Context, target any) bool {
-	raw, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20))
+	raw, err := io.ReadAll(http.MaxBytesReader(c.Writer, c.Request.Body, common.MaxJSONBodyBytes))
 	if err == nil {
-		d := json.NewDecoder(bytes.NewReader(raw))
-		d.UseNumber()
-		var value any
-		value, err = readValue(d)
-		if err == nil {
-			if _, next := d.Token(); next != io.EOF {
-				err = fmt.Errorf("exactly one JSON object is required")
-			}
-		}
-		if err == nil {
-			if _, ok := value.(map[string]any); !ok {
-				err = fmt.Errorf("JSON object is required")
-			}
-		}
+		var value map[string]any
+		value, err = common.DecodeJSONObject(raw)
 		if err == nil {
 			err = checkNames(value, reflect.TypeOf(target))
 		}
@@ -117,53 +105,6 @@ func Bind(c *gin.Context, target any) bool {
 		return false
 	}
 	return true
-}
-func readValue(d *json.Decoder) (any, error) {
-	token, err := d.Token()
-	if err != nil {
-		return nil, err
-	}
-	delim, ok := token.(json.Delim)
-	if !ok {
-		return token, nil
-	}
-	switch delim {
-	case '{':
-		object := map[string]any{}
-		for d.More() {
-			key, err := d.Token()
-			if err != nil {
-				return nil, err
-			}
-			name, ok := key.(string)
-			if !ok {
-				return nil, fmt.Errorf("invalid member")
-			}
-			if _, exists := object[name]; exists {
-				return nil, fmt.Errorf("duplicate member %q", name)
-			}
-			value, err := readValue(d)
-			if err != nil {
-				return nil, err
-			}
-			object[name] = value
-		}
-		_, err = d.Token()
-		return object, err
-	case '[':
-		values := []any{}
-		for d.More() {
-			value, err := readValue(d)
-			if err != nil {
-				return nil, err
-			}
-			values = append(values, value)
-		}
-		_, err = d.Token()
-		return values, err
-	default:
-		return nil, fmt.Errorf("unexpected delimiter")
-	}
 }
 func checkNames(value any, typ reflect.Type) error {
 	for typ.Kind() == reflect.Pointer {

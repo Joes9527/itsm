@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common"
 	"itsm-backend/connector"
 	"itsm-backend/ent"
 	"itsm-backend/ent/feishuticketsync"
@@ -189,6 +190,10 @@ func (f *Feishu) VerifySignature(headers map[string]string, body []byte) error {
 // ParseInbound 解析飞书事件回调
 // 支持：url_verification / event_callback / card.action.trigger
 func (f *Feishu) ParseInbound(body []byte) (*connector.InboundMessage, error) {
+	if _, err := common.DecodeJSONObject(body); err != nil {
+		return nil, fmt.Errorf("feishu: invalid JSON payload")
+	}
+
 	var base struct {
 		UUID      string `json:"uuid"`
 		Token     string `json:"token"`

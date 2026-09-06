@@ -1449,8 +1449,6 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				conns.POST("/:name/send", middleware.RequirePermission("connector", "write"), config.ConnectorController.Send)
 				conns.POST("/:name/test", middleware.RequirePermission("connector", "write"), config.ConnectorController.Test)
 				conns.GET("/health", middleware.RequirePermission("connector", "read"), config.ConnectorController.Health)
-				// 飞书事件回调（独立签名校验）
-				conns.POST("/feishu/callback", middleware.RequireRole("super_admin"), config.ConnectorController.FeishuCallback)
 			}
 		}
 

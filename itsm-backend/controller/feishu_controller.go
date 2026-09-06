@@ -1,8 +1,11 @@
 package controller
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"strconv"
 	"sync"
 	"time"
@@ -18,9 +21,14 @@ import (
 	"go.uber.org/zap"
 )
 
+type feishuSyncService interface {
+	SyncTicketToFeishu(context.Context, service.ActionActor, int, *feishuConn.Feishu) (*dto.FeishuTicketSyncResponse, error)
+	HandleTaskEvent(context.Context, int, *feishuConn.Feishu, string, map[string]interface{}) (*dto.FeishuWebhookResponse, error)
+}
+
 type FeishuController struct {
 	connectorManager *connector.Manager
-	syncService      *service.FeishuSyncService
+	syncService      feishuSyncService
 	marketplace      *marketplaceService.Service
 	logger           *zap.SugaredLogger
 	replayMu         sync.Mutex
@@ -162,7 +170,15 @@ func (c *FeishuController) Webhook(ctx *gin.Context) {
 		return
 	}
 
-	rawData, _ := ctx.GetRawData()
+	rawData, err := io.ReadAll(http.MaxBytesReader(ctx.Writer, ctx.Request.Body, common.MaxJSONBodyBytes))
+	if err != nil {
+		common.Fail(ctx, common.ParamErrorCode, "Invalid event payload")
+		return
+	}
+	if _, err := common.DecodeJSONObject(rawData); err != nil {
+		common.Fail(ctx, common.ParamErrorCode, "Invalid event payload")
+		return
+	}
 
 	// 将 http.Header 转换为 map[string]string
 	headers := make(map[string]string)
@@ -172,7 +188,7 @@ func (c *FeishuController) Webhook(ctx *gin.Context) {
 		}
 	}
 
-	err := fc.VerifySignature(headers, rawData)
+	err = fc.VerifySignature(headers, rawData)
 	if err != nil {
 		c.logger.Errorw("Invalid Feishu webhook signature", "err", err)
 		common.Fail(ctx, common.ForbiddenCode, "Invalid signature")
@@ -188,7 +204,7 @@ func (c *FeishuController) Webhook(ctx *gin.Context) {
 
 	msg, err := fc.ParseInbound(rawData)
 	if err != nil {
-		c.logger.Errorw("Failed to parse Feishu webhook event", "err", err)
+		c.logger.Errorw("Failed to parse Feishu webhook event")
 		common.Fail(ctx, common.ParamErrorCode, "Invalid event payload")
 		return
 	}
@@ -211,7 +227,7 @@ func (c *FeishuController) Webhook(ctx *gin.Context) {
 		return
 	}
 
-	common.Success(ctx, &dto.FeishuWebhookResponse{EventType: msg.Type, Action: "ignored"})
+	common.Fail(ctx, common.ParamErrorCode, "Unsupported event type")
 }
 
 func (c *FeishuController) consumeWebhookNonce(timestamp, nonce, signature string) bool {
