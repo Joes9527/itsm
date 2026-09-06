@@ -132,7 +132,6 @@ func TestIncidentIntegration(t *testing.T) {
 	logger.Info("Created service", "service_id", service.ID)
 
 	// 创建事件
-	incidentNumber := fmt.Sprintf("INC-%d", time.Now().UnixNano())
 	incidentWorkItem, err := client.Ticket.Create().SetTitle("Critical incident").SetStatus("open").SetPriority("critical").SetRecordClass("incident").SetTicketNumber("TKT-INC-1").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	incident, err := client.Incident.Create().
