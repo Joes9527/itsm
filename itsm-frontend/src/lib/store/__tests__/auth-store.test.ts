@@ -44,6 +44,7 @@ describe('useAuthStore', () => {
         email: 'test@example.com',
         role: 'admin',
         tenantId: 1,
+        actorTenantId: 1,
       };
 
       const mockTenant = {
@@ -78,6 +79,7 @@ describe('useAuthStore', () => {
         email: 'test@example.com',
         role: 'user',
         tenantId: 1,
+        actorTenantId: 1,
       };
 
       act(() => {
@@ -101,6 +103,7 @@ describe('useAuthStore', () => {
         email: 'test@example.com',
         role: 'admin',
         tenantId: 1,
+        actorTenantId: 1,
       };
 
       act(() => {
@@ -133,6 +136,7 @@ describe('useAuthStore', () => {
         email: 'test@example.com',
         role: 'user',
         tenantId: 1,
+        actorTenantId: 1,
       };
 
       act(() => {
@@ -193,6 +197,7 @@ describe('useAuthStore', () => {
         email: 'test@example.com',
         role: 'admin',
         tenantId: 1,
+        actorTenantId: 1,
         permissions: ['ticket:view', 'ticket:create'],
       };
 
@@ -214,6 +219,7 @@ describe('useAuthStore', () => {
         email: 'test@example.com',
         role: 'user',
         tenantId: 1,
+        actorTenantId: 1,
         permissions: ['ticket:view'],
       };
 
@@ -242,6 +248,7 @@ describe('useAuthStore', () => {
         email: 'test@example.com',
         role: 'admin',
         tenantId: 1,
+        actorTenantId: 1,
       };
 
       act(() => {
@@ -261,6 +268,7 @@ describe('useAuthStore', () => {
         email: 'test@example.com',
         role: 'user',
         tenantId: 1,
+        actorTenantId: 1,
       };
 
       act(() => {
@@ -282,6 +290,7 @@ describe('useAuthStore', () => {
         email: 'test@example.com',
         role: 'admin',
         tenantId: 1,
+        actorTenantId: 1,
       };
 
       act(() => {
@@ -301,6 +310,7 @@ describe('useAuthStore', () => {
         email: 'test@example.com',
         role: 'super_admin',
         tenantId: 1,
+        actorTenantId: 1,
       };
 
       act(() => {
@@ -320,6 +330,7 @@ describe('useAuthStore', () => {
         email: 'test@example.com',
         role: 'user',
         tenantId: 1,
+        actorTenantId: 1,
       };
 
       act(() => {

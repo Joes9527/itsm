@@ -19,19 +19,32 @@ import (
 // RequireCurrentPermission reads current RBAC inside the caller transaction.
 // Durable idempotency replay must never rely on the process-wide permission cache.
 func RequireCurrentPermission(ctx context.Context, tx *ent.Tx, identity creation.Identity, resource, action string) error {
+	rules, err := CurrentSessionPermissions(ctx, tx, identity)
+	if err != nil {
+		return err
+	}
+	if !CheckPermissionMatch(rules, resource, action) {
+		return creation.NewPermissionDenied("permission denied for "+resource+":"+action, nil)
+	}
+	return nil
+}
+
+// CurrentSessionPermissions projects live target-tenant RBAC without consulting
+// the process cache or native actor role assignments.
+func CurrentSessionPermissions(ctx context.Context, tx *ent.Tx, identity creation.Identity) ([]Permission, error) {
 	if identity.Role == "super_admin" {
-		return nil
+		return []Permission{{Resource: "*", Action: "*"}}, nil
 	}
 	record, err := tx.Role.Query().Where(role.CodeEQ(identity.Role), role.TenantIDEQ(identity.TenantID), role.IsActiveEQ(true)).Only(ctx)
 	if ent.IsNotFound(err) {
-		return creation.NewPermissionDenied("active role is required", nil)
+		return nil, creation.NewPermissionDenied("active role is required", nil)
 	}
 	if err != nil {
-		return creation.NewInfrastructureUnavailable("could not load current role", err)
+		return nil, creation.NewInfrastructureUnavailable("could not load current role", err)
 	}
 	links, err := tx.RolePermission.Query().Where(rolepermission.RoleIDEQ(record.ID), rolepermission.TenantIDEQ(identity.TenantID)).All(ctx)
 	if err != nil {
-		return creation.NewInfrastructureUnavailable("could not load current role permissions", err)
+		return nil, creation.NewInfrastructureUnavailable("could not load current role permissions", err)
 	}
 	ids := make([]int, 0, len(links))
 	for _, link := range links {
@@ -39,16 +52,13 @@ func RequireCurrentPermission(ctx context.Context, tx *ent.Tx, identity creation
 	}
 	permissions, err := tx.Permission.Query().Where(permission.IDIn(ids...), permission.TenantIDEQ(identity.TenantID)).All(ctx)
 	if err != nil {
-		return creation.NewInfrastructureUnavailable("could not load current permissions", err)
+		return nil, creation.NewInfrastructureUnavailable("could not load current permissions", err)
 	}
 	rules := make([]Permission, 0, len(permissions))
 	for _, p := range permissions {
 		rules = append(rules, Permission{Resource: p.Resource, Action: p.Action})
 	}
-	if !CheckPermissionMatch(rules, resource, action) {
-		return creation.NewPermissionDenied("permission denied for "+resource+":"+action, nil)
-	}
-	return nil
+	return rules, nil
 }
 
 // AuthorizeWorkItemCreation runs before receipt claim, including matching replays.

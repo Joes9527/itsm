@@ -5,6 +5,8 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
+	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/shared/sessionhttp"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -228,9 +230,9 @@ func (c *MenuController) GetUserMenus(ctx *gin.Context) {
 	}
 	tenantID := tenantIDVal.(int)
 
-	menus, err := c.menuService.GetUserMenus(ctx.Request.Context(), userID, tenantID)
+	menus, err := c.menuService.GetUserMenus(ctx.Request.Context(), creation.Identity{ActorID: userID, TenantID: tenantID, Role: ctx.GetString("role")})
 	if err != nil {
-		common.Fail(ctx, common.InternalErrorCode, err.Error())
+		sessionhttp.Fail(ctx, err)
 		return
 	}
 

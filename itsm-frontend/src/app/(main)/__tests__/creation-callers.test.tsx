@@ -49,7 +49,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   useAuthStore.setState({
     isAuthenticated: true,
-    user: { id: 1, tenantId: 2 } as never,
+    user: { id: 1, actorTenantId: 2, tenantId: 2 } as never,
     currentTenant: { id: 2 } as never,
   });
 });

@@ -16,7 +16,7 @@ jest.mock('antd', () => ({
 const session = () =>
   useAuthStore.setState({
     isAuthenticated: true,
-    user: { id: 1, tenantId: 2 } as never,
+    user: { id: 1, actorTenantId: 2, tenantId: 2 } as never,
     currentTenant: { id: 2 } as never,
   });
 beforeEach(session);
@@ -129,7 +129,7 @@ it('keeps an in-flight committed receipt but prevents navigation after the actor
   const { result } = renderHook(() => useWorkItemCreation());
   const onCommitted = jest.fn();
   const send = jest.fn().mockImplementation(async () => {
-    useAuthStore.setState({ user: { id: 9, tenantId: 2 } as never });
+    useAuthStore.setState({ user: { id: 9, actorTenantId: 2, tenantId: 2 } as never });
     return receipt;
   });
   await act(async () => { await result.current.submit({ title: 'saved for original actor' }, send, onCommitted); });

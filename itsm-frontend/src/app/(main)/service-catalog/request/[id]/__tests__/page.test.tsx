@@ -15,7 +15,7 @@ const receipt = { workItemId: 71, number: 'WI-71', recordClass: 'service_request
 const catalog = { id: '24', name: '申请服务', targetClass: 'service_request_item', catalogVersion: 'v1', formSchemaVersion: 'f1', requiresInfraFields: false, fields: [{ name: 'office_location', label: '办公地点', type: 'text', required: true }] };
 let key = 0;
 Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: () => `catalog-${++key}` });
-beforeEach(() => { jest.clearAllMocks(); useAuthStore.setState({ isAuthenticated: true, user: { id: 1, tenantId: 2, name: '申请人', email: 'user@example.com' } as never, currentTenant: { id: 2 } as never }); jest.mocked(ServiceCatalogApi.getService).mockResolvedValue(catalog as never); jest.mocked(ServiceCatalogApi.createServiceRequest).mockResolvedValue(receipt as never); });
+beforeEach(() => { jest.clearAllMocks(); useAuthStore.setState({ isAuthenticated: true, user: { id: 1, actorTenantId: 2, tenantId: 2, name: '申请人', email: 'user@example.com' } as never, currentTenant: { id: 2 } as never }); jest.mocked(ServiceCatalogApi.getService).mockResolvedValue(catalog as never); jest.mocked(ServiceCatalogApi.createServiceRequest).mockResolvedValue(receipt as never); });
 async function fill() {
   await screen.findByLabelText('申请标题');
   fireEvent.change(screen.getByLabelText('申请标题'), { target: { value: '服务申请' } });
@@ -174,7 +174,7 @@ it('requires acknowledgment of service-request answers before confirming a reloa
 });
 
 it('preserves an explicitly selected authorized requester across a compatible Catalog reload', async () => {
-  useAuthStore.setState({ user: { id: 1, tenantId: 2, name: '申请人', email: 'user@example.com', permissions: ['user:read'] } as never });
+  useAuthStore.setState({ user: { id: 1, actorTenantId: 2, tenantId: 2, name: '申请人', email: 'user@example.com', permissions: ['user:read'] } as never });
   jest.mocked(UserApi.getUsers).mockResolvedValue({ users: [{ id: 9, tenantId: 2, name: '代申请人', active: true }] } as never);
   jest.mocked(ServiceCatalogApi.createServiceRequest).mockRejectedValueOnce(new ApiError('version conflict', 409));
   render(<Page />); await fill();

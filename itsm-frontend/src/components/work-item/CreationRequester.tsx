@@ -11,7 +11,7 @@ export function CreationRequester() {
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const form = Form.useFormInstance();
-  const required = !!user && user.tenantId !== tenantId;
+  const required = !!user && user.actorTenantId !== tenantId;
   const canSelect =
     required ||
     !!user?.mspRole ||

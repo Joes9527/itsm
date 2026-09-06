@@ -22,15 +22,17 @@ type Service struct {
 	logger        *zap.SugaredLogger
 	client        *ent.Client // Restricted system pool: credential/session lookup and append-only authentication audit.
 	refreshTokens *authentication.RefreshTokenConsumer
+	sessions      *authorization.SessionReader
 }
 
-func NewService(repo Repository, jwtSecret string, logger *zap.SugaredLogger, client *ent.Client, refreshTokens *authentication.RefreshTokenConsumer) *Service {
+func NewService(repo Repository, jwtSecret string, logger *zap.SugaredLogger, client *ent.Client, refreshTokens *authentication.RefreshTokenConsumer, sessions *authorization.SessionReader) *Service {
 	return &Service{
 		repo:          repo,
 		jwtSecret:     jwtSecret,
 		logger:        logger,
 		client:        client,
 		refreshTokens: refreshTokens,
+		sessions:      sessions,
 	}
 }
 
@@ -190,10 +192,6 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*AuthR
 
 // User Management
 
-func (s *Service) GetUser(ctx context.Context, id int) (*User, error) {
-	return s.repo.GetUserByID(ctx, id)
-}
-
 func (s *Service) ListUsers(ctx context.Context, tenantID int) ([]*User, error) {
 	return s.repo.ListUsers(ctx, tenantID)
 }
@@ -266,33 +264,4 @@ func (s *Service) LogActivity(ctx context.Context, log *AuditLog) error {
 
 func (s *Service) GetAuditLogs(ctx context.Context, tenantID int, userID int) ([]*AuditLog, error) {
 	return s.repo.ListAuditLogs(ctx, tenantID, userID, 100)
-}
-
-// GetUserTenants 获取用户所属的租户列表
-func (s *Service) GetUserTenants(ctx context.Context, userID int) ([]interface{}, error) {
-	// 直接使用 ent client 查询用户关联的租户
-	user, err := s.client.User.Get(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("user not found: %w", err)
-	}
-
-	// 通过 tenant_id 直接查询租户
-	tenant, err := s.client.Tenant.Get(ctx, user.TenantID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get tenant: %w", err)
-	}
-
-	if tenant == nil {
-		return []interface{}{}, nil
-	}
-
-	return []interface{}{
-		map[string]interface{}{
-			"id":     tenant.ID,
-			"name":   tenant.Name,
-			"code":   tenant.Code,
-			"type":   tenant.Type,
-			"status": tenant.Status,
-		},
-	}, nil
 }

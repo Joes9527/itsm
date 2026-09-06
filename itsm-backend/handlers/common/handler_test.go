@@ -22,7 +22,7 @@ func TestRefreshTokenReturnsServiceUnavailableWhenAuthoritativeStoreIsUnavailabl
 	tenant := fx.tenant("unavailable-handler", "standard", "active")
 	user := fx.user(tenant.ID, "unavailable-handler-user", "end_user", "", true)
 	consumer := authentication.NewRefreshTokenConsumer(fx.secret, nil)
-	svc := NewService(NewEntRepository(fx.client), fx.secret, zap.NewNop().Sugar(), fx.client, consumer)
+	svc := NewService(NewEntRepository(fx.client), fx.secret, zap.NewNop().Sugar(), fx.client, consumer, nil)
 	handler := NewHandler(svc)
 	router := gin.New()
 	router.POST("/api/v1/auth/refresh", handler.RefreshToken)

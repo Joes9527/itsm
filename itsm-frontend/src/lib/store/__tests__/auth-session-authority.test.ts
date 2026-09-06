@@ -10,6 +10,7 @@ const mockGet = httpClient.get as jest.Mock;
 describe('canonical authenticated session hydration', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGet.mockReset();
     useAuthStore.setState({
       user: null,
       currentTenant: null,
@@ -27,6 +28,7 @@ describe('canonical authenticated session hydration', () => {
         name: 'Operator',
         role: 'agent',
         tenantId: 7,
+        actorTenantId: 7,
         permissions: ['ticket:read'],
       })
       .mockResolvedValueOnce({
@@ -55,7 +57,15 @@ describe('canonical authenticated session hydration', () => {
 
   it('fails closed when /auth/me has no positive tenant identity', async () => {
     useAuthStore.setState({
-      user: { id: 99, username: 'stale', email: '', name: '', tenantId: 99 },
+      user: {
+        id: 99,
+        username: 'stale',
+        email: '',
+        name: '',
+        tenantId: 99,
+        actorTenantId: 99,
+        role: 'end_user',
+      },
       isAuthenticated: true,
     });
     mockGet.mockResolvedValueOnce({ id: 42, username: 'operator', role: 'agent' });
@@ -83,7 +93,13 @@ describe('canonical authenticated session hydration', () => {
 
   it('fails closed when the session tenant is absent from authorized tenants', async () => {
     mockGet
-      .mockResolvedValueOnce({ id: 42, username: 'operator', role: 'agent', tenantId: 7 })
+      .mockResolvedValueOnce({
+        id: 42,
+        username: 'operator',
+        role: 'agent',
+        tenantId: 7,
+        actorTenantId: 7,
+      })
       .mockResolvedValueOnce({
         tenants: [{ id: 8, name: 'Other', code: 'other', type: 'standard', status: 'active' }],
       });
@@ -93,4 +109,46 @@ describe('canonical authenticated session hydration', () => {
     );
     expect(useAuthStore.getState().isAuthenticated).toBe(false);
   });
+  it('preserves the server native actor tenant when the selected customer differs', async () => {
+    mockGet
+      .mockResolvedValueOnce({
+        id: 42,
+        username: 'operator',
+        role: 'msp_tech',
+        tenantId: 7,
+        actorTenantId: 2,
+      })
+      .mockResolvedValueOnce({
+        tenants: [{ id: 7, name: 'Customer', code: 'customer', status: 'active' }],
+      });
+    const user = await useAuthStore.getState().hydrateSession();
+    expect(user).toMatchObject({ id: 42, tenantId: 7, actorTenantId: 2 });
+    expect(useAuthStore.getState().currentTenant?.id).toBe(7);
+  });
+
+  it.each([undefined, 0, -1, 1.5])(
+    'fails closed for invalid actorTenantId %s',
+    async actorTenantId => {
+      mockGet
+        .mockResolvedValueOnce({
+          id: 42,
+          username: 'operator',
+          role: 'msp_tech',
+          tenantId: 7,
+          actorTenantId,
+        })
+        .mockResolvedValueOnce({
+          tenants: [{ id: 7, name: 'Customer', code: 'customer', status: 'active' }],
+        });
+      await expect(useAuthStore.getState().hydrateSession()).rejects.toThrow(
+        'Invalid authenticated native tenant identity'
+      );
+      expect(useAuthStore.getState()).toMatchObject({
+        user: null,
+        currentTenant: null,
+        isAuthenticated: false,
+      });
+      expect(mockGet).toHaveBeenCalledTimes(1);
+    }
+  );
 });

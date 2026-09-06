@@ -749,7 +749,8 @@ func NewApplication() *Application {
 		sugar.Warn("REDIS_HOST is not configured; token refresh unavailable")
 	}
 	refreshTokenConsumer := authentication.NewRefreshTokenConsumer(cfg.JWT.Secret, refreshTokenStore)
-	commonServiceDomain := domainCommon.NewService(commonRepo, cfg.JWT.Secret, sugar, systemClient, refreshTokenConsumer)
+	sessionReader := authorization.NewSessionReader(client, clients.IntakeDirectorySnapshot())
+	commonServiceDomain := domainCommon.NewService(commonRepo, cfg.JWT.Secret, sugar, systemClient, refreshTokenConsumer, sessionReader)
 	commonHandler := domainCommon.NewHandler(commonServiceDomain)
 
 	// Auth Controller（装配缺失的 register / forgot-password / reset-password / validate-reset-token / switch-tenant 路由）
@@ -778,7 +779,7 @@ func NewApplication() *Application {
 	permissionController := controller.NewPermissionController(permissionService, sugar)
 
 	// Menu Controller (database-backed with tenant isolation)
-	menuService := service.NewMenuService(client, sugar)
+	menuService := service.NewMenuService(client, sugar, sessionReader)
 	menuController := controller.NewMenuController(menuService)
 
 	// Audit Log Controller (支持过滤/分页的审计日志查询)

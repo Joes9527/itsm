@@ -89,6 +89,7 @@ describe('MainLayout authentication bootstrap', () => {
       name: '',
       role: 'manager',
       tenantId: 22,
+      actorTenantId: 22,
     });
 
     render(

@@ -5,7 +5,7 @@
  */
 
 import { create } from 'zustand';
-import type { User, Tenant } from '@/lib/api/api-config';
+import type { SessionUser, Tenant } from '@/lib/api/api-config';
 import { httpClient } from '@/lib/api/http-client';
 
 // ===================================
@@ -16,15 +16,15 @@ import { httpClient } from '@/lib/api/http-client';
 
 interface AuthState {
   // 状态
-  user: User | null;
+  user: SessionUser | null;
   currentTenant: Tenant | null;
   isAuthenticated: boolean;
   isLoading: boolean;
 
   // 认证操作
-  hydrateSession: () => Promise<User>;
+  hydrateSession: () => Promise<SessionUser>;
   logout: () => void;
-  updateUser: (user: Partial<User>) => void;
+  updateUser: (user: Partial<SessionUser>) => void;
   setLoading: (loading: boolean) => void;
 
   // 权限检查
@@ -48,7 +48,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   hydrateSession: async () => {
     set({ isLoading: true });
     try {
-      const user = await httpClient.get<User>('/api/v1/auth/me');
+      const user = await httpClient.get<SessionUser>('/api/v1/auth/me');
       const actorID = Number(user?.id);
       if (!Number.isInteger(actorID) || actorID <= 0 || !String(user?.username || '').trim()) {
         throw new Error('Invalid authenticated actor response');
@@ -63,6 +63,11 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         throw new Error('Invalid authenticated tenant identity');
       }
 
+      const actorTenantID = Number(user?.actorTenantId);
+      if (!Number.isInteger(actorTenantID) || actorTenantID <= 0) {
+        throw new Error('Invalid authenticated native tenant identity');
+      }
+
       const response = await httpClient.get<{ tenants: Tenant[] }>('/api/v1/auth/tenants');
       const tenant = Array.isArray(response?.tenants)
         ? response.tenants.find(candidate => Number(candidate.id) === tenantID)
@@ -71,12 +76,13 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
         throw new Error('Authenticated tenant is not authorized');
       }
 
-      const sessionUser: User = {
+      const sessionUser: SessionUser = {
         ...user,
         id: actorID,
         username: String(user.username).trim(),
         role,
         tenantId: tenantID,
+        actorTenantId: actorTenantID,
       };
       set({
         user: sessionUser,
@@ -107,7 +113,7 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   },
 
   // 更新用户信息
-  updateUser: (userData: Partial<User>) => {
+  updateUser: (userData: Partial<SessionUser>) => {
     const { user } = get();
     if (user) {
       set({

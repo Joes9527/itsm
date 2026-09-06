@@ -195,6 +195,13 @@ export interface User {
   updatedAt?: string;
 }
 
+/** Verified /auth/me projection; ordinary User records keep native tenant semantics. */
+export interface SessionUser extends User {
+  readonly actorTenantId: number;
+  tenantId: number;
+  role: string;
+}
+
 export interface TicketListResponse {
   tickets: Ticket[];
   total: number;
