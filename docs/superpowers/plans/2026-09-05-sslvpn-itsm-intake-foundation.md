@@ -189,13 +189,15 @@ spy 只用于调用映射测试；另以真实数据库验证业务写入，不�
 
 ## A5：Catalog 发布校验与快照版本
 
+进度：通用发布/版本能力已完成（`00cddaf8`、修复 `621b4228`，独立复审通过）。下列含外部授权策略的组合条目按总计划由 C1 注册后关闭；真实浏览器与最终运行验证保留给集成门禁。
+
 前置复用：A3 为真实创建解析提前提供的目录定义/版本接口和测试属于本任务的基础，复用并补齐，禁止建立第二套版本计算实现。
 
 **Files:** Create `handlers/service_catalog/{preflight,revision}.go` 及相邻测试；Modify `service.go`、`repository_impl.go`、`entity.go`、`handler.go`、`handlers/intake/resolver.go`；Modify `dto/service_dto.go`、前端 Catalog API 类型。
 
 **Interfaces:** `ValidateForPublication(ctx context.Context, tenantID int, catalog *ServiceCatalog) error` 属 Catalog 应用服务；`Revision(input []byte) string` 对已经 canonical 的公开定义计算 SHA-256，放 `revision.go`。定义 canonical 字段固定包含目标类、表单字段/选项/必填、期限策略、SLA、流程键/版本、委派能力引用；不含显示更新时间、调用者或秘密。
 
-- [ ] 写纯函数红测试和服务组合测试：
+- [x] 写纯函数红测试和服务组合测试：
 
 ```go
 func TestRevisionChangesWithPolicy(t *testing.T) {
@@ -206,14 +208,16 @@ func TestRevisionChangesWithPolicy(t *testing.T) {
 }
 ```
 
-- [ ] 运行 `go test ./handlers/service_catalog -run 'Revision|Publication' -count=1`。
-- [ ] 实现 Revision（标准库 `crypto/sha256`、`encoding/hex`）；由 Repository 读取一份一致定义、按字段 ID/option key 稳定排序后 `json.Marshal`。所有影响契约的写路径使用事务和目录版本条件，禁止读到部分新表单/旧策略形成混合版本。
-- [ ] 发布测试逐项删除配置：未知 targetClass、缺必填定义、SSLVPN 授权能力无期限或配置无限期、无流程、缺 handler、无候选解析配置、跨租户 SLA、声明授权能力却缺授权目标、声明 KAF 委派却缺必需配置均拒绝；draft 可保存结构未完整草稿但不能启用。
+- [x] 运行 `go test ./handlers/service_catalog -run 'Revision|Publication' -count=1`。
+- [x] 实现 Revision（标准库 `crypto/sha256`、`encoding/hex`）；由 Repository 读取一份一致定义、按字段 ID/option key 稳定排序后 `json.Marshal`。所有影响契约的写路径使用事务和目录版本条件，禁止读到部分新表单/旧策略形成混合版本。
+- [ ] 发布测试逐项删除配置：未知 targetClass、缺失目录声明所需的自定义定义、SSLVPN 授权能力无期限或配置无限期、无流程、缺 handler、无候选解析配置、跨租户 SLA、声明授权能力却缺授权目标、声明 KAF 委派却缺必需配置均拒绝；draft 可保存结构未完整草稿但不能启用。
+实施澄清：专业内建必填字段由 A2 严格 typed input 和专业 `Prepare` 拥有，不复制为 required `Catalog.Fields`/`FormValues`。发布校验实际注册 Creator 与目录拥有的自定义定义、流程、SLA 和能力声明；合法专业目录不得因缺少同名重复动态字段而失败。回归同时验证 typed 正例创建、缺专业必填值的原子拒绝，以及无效自定义定义的发布拒绝。
+
 - [ ] 通用 preflight 按目录声明的履约能力调用校验策略；仅声明外部授权的目录要求有限期限与目标组，不能让普通硬件/咨询目录强制配置 SSLVPN 策略。C1 注册授权策略后补该组合测试。
-- [ ] Create/Update 直接写目标类，删除 `ComputeTargetClass` 和 `itsm_type` 活跃依赖，合并来源分支已经完成的部分，不再实现一遍。
-- [ ] 创建时比较用户确认的目录/表单版本；差异返回 OpenAPI 规定的版本冲突，不自动用新配置代替。流程实例绑定版本，实际审批权限仍实时验证。
-- [ ] 若缺 KAF 可查询能力健康接口，ITSM 只验证既有委派配置与 required capability 引用，部署 gate 补实际健康验证；未知必需能力 fail closed，不拉取完整 Procedure 注册表建立副本。
-- [ ] 运行 `go test ./handlers/service_catalog ./handlers/intake -count=1`、前端类型检查，提交 `feat(catalog): validate executable configuration before publication`。
+- [x] Create/Update 直接写目标类，删除 `ComputeTargetClass` 和 `itsm_type` 活跃依赖，合并来源分支已经完成的部分，不再实现一遍。
+- [x] 创建时比较用户确认的目录/表单版本；差异返回 OpenAPI 规定的版本冲突，不自动用新配置代替。流程实例绑定版本，实际审批权限仍实时验证。 已部署定义的 XML/执行变量不可原地替换，变更复用既有 `BPMNVersionService.CreateVersion`；显示属性仍可修改。普通草稿保存保留现有可执行版本，显式激活才切换，目录确认版本与实际创建共享同一选择规则。验证等待实例在新版本创建后继续旧流程，并协调实际更新 API/编辑调用方的明确版本语义。
+- [x] 若缺 KAF 可查询能力健康接口，ITSM 只验证既有委派配置与 required capability 引用，部署 gate 补实际健康验证；未知必需能力 fail closed，不拉取完整 Procedure 注册表建立副本。
+- [x] 运行 `go test ./handlers/service_catalog ./handlers/intake -count=1`、前端类型检查，提交 `feat(catalog): validate executable configuration before publication`。
 
 ## A6：身份交换、用户读契约与 Intake 路由
 
