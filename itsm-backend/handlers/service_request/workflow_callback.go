@@ -290,15 +290,16 @@ func (s *Service) applyWorkflowAggregate(ctx context.Context, cmd workflowcallba
 		return callbackIdempotent(fmt.Sprintf("service request %d already at target state", request.ID)), nil
 	}
 	now := time.Now()
-	if requestWrite {
-		update := tx.ServiceRequest.Update().Where(
-			servicerequest.ID(request.ID), requestScope(cmd.TenantID),
-		)
-		if cmd.CompletionNote != "" {
-			update.SetCompletionNote(cmd.CompletionNote)
+	// Every aggregate writer acquires the owning WorkItem before its extension.
+	if workItemWrite || requestWrite {
+		update := tx.Ticket.Update().Where(
+			ticket.ID(workItem.ID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item"), ticket.VersionEQ(workItem.Version),
+		).SetUpdatedAt(now).AddVersion(1)
+		if workItem.Status != target {
+			update.SetStatus(target)
 		}
-		if complete && request.CompletedAt.IsZero() {
-			update.SetCompletedAt(now)
+		if (target == "resolved" || target == "closed") && (workItem.Status != target || workItem.ResolvedAt.IsZero()) {
+			update.SetResolvedAt(now)
 		}
 		count, updateErr := update.Save(ctx)
 		if updateErr != nil {
@@ -309,12 +310,15 @@ func (s *Service) applyWorkflowAggregate(ctx context.Context, cmd workflowcallba
 			return s.classifyWorkflowAggregate(ctx, cmd, target, complete)
 		}
 	}
-	if workItemWrite || requestWrite {
-		update := tx.Ticket.Update().Where(
-			ticket.ID(workItem.ID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item"), ticket.VersionEQ(workItem.Version),
-		).SetStatus(target).SetUpdatedAt(now).AddVersion(1)
-		if target == "resolved" || target == "closed" {
-			update.SetResolvedAt(now)
+	if requestWrite {
+		update := tx.ServiceRequest.Update().Where(
+			servicerequest.ID(request.ID), requestScope(cmd.TenantID),
+		)
+		if cmd.CompletionNote != "" {
+			update.SetCompletionNote(cmd.CompletionNote)
+		}
+		if complete && request.CompletedAt.IsZero() {
+			update.SetCompletedAt(now)
 		}
 		count, updateErr := update.Save(ctx)
 		if updateErr != nil {
