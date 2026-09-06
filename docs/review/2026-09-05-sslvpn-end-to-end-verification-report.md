@@ -1,6 +1,6 @@
 # SSLVPN 端到端实施与验证报告
 
-**状态：用户已终止原会话，由接手 Agent 持续实施；MSP core、升级修复与转换 HTTP 已通过限定范围独立审查，工具队列生命周期与契约也已完成并复审通过；2026-09-06重启后已恢复四入口申请人修复并通过独立审查，继续输入与共享字段切换。尚未达到端到端验收门槛。** 原暂停时的工作区快照见[开发交接报告](2026-09-05-sslvpn-development-handoff-report.md)；恢复后的最新检查点见本报告及增量审查报告。本报告从已执行的验证开始记录；阶段测试通过不等于完整业务交付，也不代表已部署。后续任务应在此追加最终提交、命令、退出码和验收证据。
+**状态：用户已终止原会话，由接手 Agent 持续实施；MSP core、升级修复与转换 HTTP 已通过限定范围独立审查，工具队列生命周期与契约也已完成并复审通过；2026-09-06重启后已恢复四入口申请人修复并通过独立审查，输入语义修复亦已复审通过；Incident来源/元数据校验及其内部自定义JSON编码边界修复均已通过独立复审。尚未达到端到端验收门槛。** 原暂停时的工作区快照见[开发交接报告](2026-09-05-sslvpn-development-handoff-report.md)；恢复后的最新检查点见本报告及增量审查报告。本报告从已执行的验证开始记录；阶段测试通过不等于完整业务交付，也不代表已部署。后续任务应在此追加最终提交、命令、退出码和验收证据。
 
 ## 1. 验收范围与当前进度
 
@@ -93,6 +93,14 @@ Change分类名称复用既有租户分类所有者；移除没有执行意义�
 
 专属PG16与Redis已在重启后恢复健康，Redis须显式使用36445端口；健康不等于数据库迁移或业务验收。PG17尚未重启。下一项为Incident来源/元数据信任边界，随后处理Feishu严格解析和027/028共享字段清理。完整前端、Catalog发布、KAF、运行进程与外部验收仍未完成。
 
+### Incident 来源与元数据边界（`357373f4`、`4668f743`）
+
+公开 HTTP 仅允许人工/用户来源，可信 BPMN 默认系统来源；专业服务在回执查找前验证绑定与元数据，创建时复用同一策略。合法历史请求保留 intake-v4 摘要和原回执。真实 HTTP/BPMN 及相关包已通过阶段测试；独立审查发现内部类型的指针接收者 JSON 编码器可绕过前置元数据检查，已用 owner 与匹配历史回执重放两例复现，再增加地址可取且可暴露接口的指针编码器检查。原始输入与intake-v4摘要不变，限定复审PASS，本阶段关闭。
+
+- 重启后补跑实际 PostgreSQL：`timeout 150s go test -tags=integration_postgres ./tests/integration -run '^TestPostgresIntakeMSPSharedSnapshotAndDurableEffects$' -count=1 -timeout=120s -v`，退出0，4.427秒，无跳过；受限 Runtime/System 角色、并发撤权快照、后续重放拒绝、Worker/Incident 原操作人审计通过，角色/schema清理残留0。
+- 修复回归：`timeout 180s go test ./service ./tests/integration -run '^(TestIncidentCreationMetadataRejectsAddressablePointerEncoder|TestIntakeIncidentPointerEncoderCannotReplayHistoricalReceipt)$' -count=1 -timeout=90s`，修复前退出1、修复后退出0；受影响元数据与Incident集合退出0（service0.016秒、integration1.383秒）。复审无新增问题，没有重复未改变的完整MSP检查。
+- 当前容器实际映射为 `127.0.0.1:36430`，重启后 `36444` 没有监听。本次测试用仅在测试进程内存在的本地 `36444 → 36430` 转发满足隔离库硬校验，结束后已关闭。此前容器健康检查不能证明测试端口恢复；后续测试必须显式恢复其连接环境。
+
 ## 3. 可定位的 RLS 验证记录
 
 以下结果对应 `367f9af9` 阶段的稳定代码，工作目录为 `itsm-backend`。数据库类测试使用专属临时 PostgreSQL 16 实例 `127.0.0.1:36444/sslvpn_test`；环境变量 `ITSM_TEST_DB` 和 `INTAKE_POSTGRES_TEST_DSN` 指向该隔离库，不使用共享数据库。
@@ -121,7 +129,7 @@ Change分类名称复用既有租户分类所有者；移除没有执行意义�
 ## 5. 环境、外部影响与后续证据
 
 - ITSM 和 KAF 使用独立 feature worktree；原 KAF 工作区已有 `uv.lock` 修改保持原样。
-- 专属临时 PostgreSQL 16 测试容器使用本机端口 36444；新增独占 pgvector PostgreSQL 17 容器使用本机端口 36446，仅用于运行初始化验证，数据位于 tmpfs。专属 Redis 使用 `127.0.0.1:36445`，健康检查 PONG，关闭持久化；ITSM/KAF 分别预留 DB0/DB1。依赖健康不计为 API、Worker 或业务链路通过。
+- 专属临时 PostgreSQL 16 测试端点为本机端口36444；重启后确认容器实际映射36430，定向测试通过临时本地转发访问，转发不常驻；新增独占 pgvector PostgreSQL 17 容器使用本机端口 36446，仅用于运行初始化验证，数据位于 tmpfs。专属 Redis 使用 `127.0.0.1:36445`，健康检查 PONG，关闭持久化；ITSM/KAF 分别预留 DB0/DB1。依赖健康不计为 API、Worker 或业务链路通过。
 - 未向共享数据库或现有角色写入本期变更，未推送、合并或部署，未执行本期 Graph 成员关系查询或外部授权变更。
 - 后续必须补充：最终 schema 升级/恢复与 Ent 重启检查、每个真实创建入口、Catalog 发布组合校验、当前用户身份与撤权、确认卡丢响应恢复、两级审批、两个 Worker、外部成员关系核验、首次授权时间重放不变、回执/审计一致性、外部测试清理。
 - 流程实例等待期间修改同一流程版本的行为尚需 A5 具体验证；不能由精确初始启动摘要或固定定义下的数值精度测试推出流程定义不可变。
