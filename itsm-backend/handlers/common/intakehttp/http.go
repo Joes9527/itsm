@@ -38,7 +38,11 @@ func Fail(c *gin.Context, err error) {
 	case 503:
 		code = common.ServiceUnavailableCode
 	}
-	common.FailWithData(c, code, typed.Message, gin.H{"errorCode": typed.Code, "retryable": typed.Retryable, "fieldErrors": typed.FieldErrors})
+	details := gin.H{"errorCode": typed.Code, "retryable": typed.Retryable}
+	if len(typed.FieldErrors) > 0 {
+		details["fieldErrors"] = typed.FieldErrors
+	}
+	common.FailWithData(c, code, typed.Message, details)
 }
 func Invalid(field, message string) error {
 	return creation.NewInvalidCommand(message, creation.FieldError{Field: field, Message: message}, nil)

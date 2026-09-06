@@ -84,6 +84,7 @@ func (h *Handler) exchangeHandler(purpose string) gin.HandlerFunc {
 }
 func (h *Handler) CreateWorkItem(c *gin.Context) {
 	identity := c.MustGet("intake_identity").(creation.Identity)
+	identity.CatalogOptionKeys = true
 	claims := c.MustGet("intake_claims").(*authentication.IntakeClaims)
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 256*1024)
 	command, err := creation.DecodeCreateWorkItemCommand(c.Request.Body)

@@ -6,14 +6,16 @@ import "strings"
 // Validation below checks structure/source consistency; authentication, mapping
 // versions, tenant membership and permissions remain application prerequisites.
 type Identity struct {
-	TenantID      int
-	ActorTenantID int // server-derived native provenance; never adapter authority
-	ActorID       int
-	RequesterID   int
-	Role          string
-	Channel       string
-	Provider      string
-	TokenID       string
+	// CatalogOptionKeys is server-only adapter metadata, never a public command field.
+	CatalogOptionKeys bool
+	TenantID          int
+	ActorTenantID     int // server-derived native provenance; never adapter authority
+	ActorID           int
+	RequesterID       int
+	Role              string
+	Channel           string
+	Provider          string
+	TokenID           string
 }
 
 func (i Identity) ValidateCommand(command CreateWorkItemCommand) error {

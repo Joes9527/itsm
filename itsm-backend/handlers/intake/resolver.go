@@ -50,7 +50,13 @@ func (r *Resolver) Resolve(ctx context.Context, tx *ent.Tx, identity creation.Id
 		if result.Catalog.Version != command.CatalogVersion || result.Catalog.FormSchemaVersion != command.FormSchemaVersion {
 			return nil, creation.NewIntakeError(creation.CatalogVersionConflict, "catalog or form changed after confirmation", nil)
 		}
-		if err = service.NewFieldDefinitionService(tx.Client()).ValidateCreationValues(ctx, tx, identity.TenantID, "service_catalog", result.Catalog.ID, command.FormValues); err != nil {
+		if identity.CatalogOptionKeys {
+			result.Command.FormValues, err = service.ResolveCatalogOptionKeys(result.FieldDefinitions, command.FormValues)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if err = service.NewFieldDefinitionService(tx.Client()).ValidateCreationValues(ctx, tx, identity.TenantID, "service_catalog", result.Catalog.ID, result.Command.FormValues); err != nil {
 			return nil, err
 		}
 	} else {

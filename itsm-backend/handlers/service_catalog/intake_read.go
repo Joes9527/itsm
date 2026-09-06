@@ -6,6 +6,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/servicecatalog"
 	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/service"
 )
 
 // ListAvailableForIntake uses the same live directory visibility policy as
@@ -60,7 +61,11 @@ func (s *Service) ReadAvailableForIntake(ctx context.Context, snapshot *authoriz
 	}
 	result := &creation.CatalogReadDefinition{ID: row.ID, Name: row.Name, Description: row.Description, TargetClass: row.TargetClass, CatalogVersion: revision.Version, FormSchemaVersion: revision.FormSchemaVersion}
 	for _, f := range definitions {
-		result.Fields = append(result.Fields, creation.CatalogReadField{Name: f.Name, Label: f.Label, FieldType: f.FieldType, Required: f.Required, Options: f.Options})
+		options, err := service.ProjectCatalogOptions(f.Options)
+		if err != nil {
+			return nil, err
+		}
+		result.Fields = append(result.Fields, creation.CatalogReadField{Name: f.Name, Label: f.Label, FieldType: f.FieldType, Required: f.Required, Options: options})
 	}
 	return result, nil
 }

@@ -10,5 +10,7 @@ type CatalogReadDefinition struct {
 type CatalogReadField struct {
 	Name, Label, FieldType string
 	Required               bool
-	Options                []any
+	Options                []CatalogReadOption
 }
+
+type CatalogReadOption struct{ Key, Label string }

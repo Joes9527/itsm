@@ -151,17 +151,8 @@ func (s *ReadService) Detail(ctx context.Context, i creation.Identity, id int) (
 				return creation.NewDomainValidationFailed("unsupported catalog field type", nil)
 			}
 			field := CatalogField{Key: f.Name, Label: f.Label, Type: f.FieldType, Required: f.Required, ReadOnly: false, Options: []CatalogOption{}}
-			for _, raw := range f.Options {
-				option, ok := raw.(map[string]any)
-				if !ok {
-					return creation.NewDomainValidationFailed("invalid catalog option", nil)
-				}
-				key, ok := option["value"].(string)
-				label, labelOK := option["label"].(string)
-				if !ok || !labelOK || key == "" || label == "" {
-					return creation.NewDomainValidationFailed("invalid catalog option", nil)
-				}
-				field.Options = append(field.Options, CatalogOption{Key: key, Label: label})
+			for _, option := range f.Options {
+				field.Options = append(field.Options, CatalogOption{Key: option.Key, Label: option.Label})
 			}
 			result.Fields = append(result.Fields, field)
 		}

@@ -867,6 +867,11 @@ components:
       - description
       - targetClass
     CatalogOption:
+      description: key is an opaque server-generated identifier. Return it unchanged
+        in formValues (or an array of keys for multiselect); clients must not encode,
+        decode or infer the underlying value. The field definition owner resolves
+        the key to the original configured JSON type after confirmation-version
+        validation and after successful receipt replay lookup.
       type: object
       additionalProperties: false
       properties:
