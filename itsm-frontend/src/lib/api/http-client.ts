@@ -202,6 +202,11 @@ class HttpClient {
       const timeoutId = setTimeout(() => controller.abort(), config.timeout ?? this.timeout);
       try {
         return await fetch(url, { ...init, credentials: 'include', signal: controller.signal });
+      } catch (error) {
+        if (error instanceof TypeError && /fetch|network/i.test(error.message)) {
+          throw new Error('无法连接到服务器，请检查网络连接和后端服务是否运行');
+        }
+        throw error;
       } finally {
         clearTimeout(timeoutId);
       }
@@ -283,10 +288,8 @@ class HttpClient {
         throw error;
       }
       logger.error('Request failed:', error);
+      if (error instanceof ApiError) throw error;
       if (error instanceof Error) {
-        if (error.message.includes('fetch')) {
-          throw new Error('无法连接到服务器，请检查网络连接和后端服务是否运行');
-        }
         throw error;
       }
       throw new Error('未知错误发生');

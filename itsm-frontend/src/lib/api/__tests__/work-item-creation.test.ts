@@ -264,3 +264,21 @@ it('does not retry an unparseable permission 403 when CSRF token retrieval also 
   await expect(TicketApi.createTicket({ title: 'confirmed' } as any, options)).rejects.toMatchObject({ status: 403, requestId: 'rid-41' });
   expect(fetchMock).toHaveBeenCalledTimes(1);
 });
+
+it.each(['initial', 'refresh'])('keeps all ApiError metadata when the %s envelope message contains fetch', async path => {
+  const details = { errorCode: 'catalog_version_conflict', retryable: false, fieldErrors: { fetch_location: 'definition changed' } };
+  if (path === 'refresh') fetchMock.mockResolvedValueOnce(response({}, 401)).mockResolvedValueOnce(response({}));
+  fetchMock.mockResolvedValueOnce({ ...response(details, 409, 4001), json: async () => ({ code: 4001, message: 'failed to fetch catalog definition', data: details }) });
+  await expect(TicketApi.createTicket({ title: 'confirmed' } as any, options)).rejects.toMatchObject({
+    name: 'ApiError', message: 'failed to fetch catalog definition [RID: rid-41]', status: 409, code: 4001, requestId: 'rid-41', ...details,
+  });
+});
+
+it('translates an actual fetch network failure but preserves a context guard error mentioning fetch', async () => {
+  fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+  await expect(TicketApi.createTicket({ title: 'confirmed' } as any, options)).rejects.toThrow('无法连接到服务器');
+  fetchMock.mockClear();
+  const contextError = new TypeError('fetch context is no longer confirmed');
+  await expect(TicketApi.createTicket({ title: 'confirmed' } as any, { ...options, assertSubmissionContext: () => { throw contextError; } })).rejects.toBe(contextError);
+  expect(fetchMock).not.toHaveBeenCalled();
+});

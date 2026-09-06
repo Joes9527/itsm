@@ -6,7 +6,7 @@
  * B10 修复：表单加上 compliance_ack / expire_at / delivery_time
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Card,
@@ -33,6 +33,7 @@ import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
 import { CreationAttempts } from '@/components/work-item/CreationAttempts';
 import { CreationRequester } from '@/components/work-item/CreationRequester';
 import { CatalogProfessionalFields } from './CatalogProfessionalFields';
+import { incompatibleCatalogAnswers, type IncompatibleCatalogAnswer } from './catalog-reload';
 import { useAuthStore } from '@/lib/store/auth-store';
 
 const { Title, Text, Paragraph } = Typography;
@@ -46,6 +47,8 @@ export default function ServiceCatalogRequestPage() {
   const [loading, setLoading] = useState(false);
   const [catalog, setCatalog] = useState<ServiceItem | null>(null);
   const [revision, setRevision] = useState(0);
+  const catalogRef = useRef<ServiceItem | null>(null);
+  const [incompatibleAnswers, setIncompatibleAnswers] = useState<IncompatibleCatalogAnswer[]>([]);
   const creation = useWorkItemCreation();
   const serviceRequestTarget = catalog?.targetClass === 'service_request_item';
   const [fetching, setFetching] = useState(true);
@@ -66,7 +69,12 @@ export default function ServiceCatalogRequestPage() {
       if (!data.catalogVersion || !data.formSchemaVersion || !['generic', 'incident', 'problem', 'change_request', 'service_request_item'].includes(data.targetClass || '')) {
         throw new Error('目录缺少有效目标或确认版本');
       }
+      const incompatible = catalogRef.current
+        ? incompatibleCatalogAnswers(catalogRef.current, data, form.getFieldsValue(true)) : [];
+      setIncompatibleAnswers(incompatible);
+      catalogRef.current = data;
       setCatalog(data);
+      if (incompatible.length === 0) creation.newConfirmation();
     }).catch(() => { if (!cancelled) { setCatalog(null); setFetchError('服务信息加载失败，请重新读取并确认目录'); } })
       .finally(() => { if (!cancelled) setFetching(false); });
     return () => { cancelled = true; };
@@ -81,6 +89,8 @@ export default function ServiceCatalogRequestPage() {
   const onFinish = async (values: any) => {
     setLoading(true);
     try {
+      if (fetching) throw new Error('请等待读取目录完成');
+      if (incompatibleAnswers.length) throw new Error('请先核对并确认舍弃不兼容答案');
       if (!catalog?.targetClass || !catalog.catalogVersion || !catalog.formSchemaVersion) throw new Error('请先读取并确认目录');
       const customFieldValues = (catalog.fields || []).map(field => ({ name: field.name, value: values.customFields?.[field.name] }))
         .filter(field => field.value !== undefined && field.value !== null && field.value !== '');
@@ -120,7 +130,7 @@ export default function ServiceCatalogRequestPage() {
     }
   };
 
-  if (fetching) {
+  if (fetching && !catalogRef.current) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Spin size="large" />
@@ -148,9 +158,23 @@ export default function ServiceCatalogRequestPage() {
           </Title>
         </Space>
 
-        {(fetchError || creation.attempts.some(attempt => attempt.state === 'rejected')) && (
-          <Alert type="warning" className="mb-4" title="请重新读取目录并核对后再确认申请" description="重试不会自动替换原确认版本；已填写字段会保留。"
-            action={<Button onClick={() => { creation.newConfirmation(); setRevision(value => value + 1); }}>重新读取目录</Button>} />
+        {(fetchError || creation.attempts.some(attempt => attempt.state === 'rejected' || attempt.state === 'unknown')) && (
+          <Alert type="warning" className="mb-4" title="请重新读取目录并核对后再确认申请" description="重试不会自动替换原确认版本；重载将保留兼容答案，不兼容内容需您明确核对。"
+            action={<Button loading={fetching} disabled={fetching || incompatibleAnswers.length > 0 || creation.submitting} onClick={() => setRevision(value => value + 1)}>重新读取目录</Button>} />
+        )}
+        {incompatibleAnswers.length > 0 && (
+          <Alert type="warning" className="mb-4" title="目录变更需要重新核对已填内容"
+            description={<>
+              <p>以下答案不再适用于新目录定义。确认后将舍弃这些答案，请在新表单重新填写；其他答案及原申请快照保留。</p>
+              <ul>{incompatibleAnswers.map(answer => <li key={JSON.stringify(answer.path)}>
+                {answer.label}：{typeof answer.value === 'string' ? answer.value : JSON.stringify(answer.value)}
+              </li>)}</ul>
+            </>}
+            action={<Button onClick={() => {
+              incompatibleAnswers.forEach(answer => form.setFieldValue(answer.path, undefined));
+              setIncompatibleAnswers([]);
+              creation.newConfirmation();
+            }}>确认舍弃上述不兼容答案并重新填写</Button>} />
         )}
         {fetchError && (
           <Alert
@@ -184,7 +208,7 @@ export default function ServiceCatalogRequestPage() {
 
         <Divider />
 
-        <Form form={form} layout="vertical" onFinish={onFinish}>
+        <Form form={form} layout="vertical" onFinish={onFinish} disabled={fetching || incompatibleAnswers.length > 0}>
           <CreationRequester />
           <Alert type="info" title={`确认目标：${catalog?.targetClass || '未加载'}`} />
           {serviceRequestTarget && <>
@@ -338,7 +362,7 @@ export default function ServiceCatalogRequestPage() {
                 htmlType="submit"
                 icon={<Send />}
                 loading={loading}
-                disabled={!catalog || !!fetchError}
+                disabled={fetching || !catalog || !!fetchError || incompatibleAnswers.length > 0}
               >
                 提交申请
               </Button>

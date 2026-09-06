@@ -5,6 +5,8 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import Page from '../page';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
 import { useAuthStore } from '@/lib/store/auth-store';
+import { UserApi } from '@/lib/api/user-api';
+jest.mock('@/lib/api/user-api', () => ({ UserApi: { getUsers: jest.fn() } }));
 const push = jest.fn();
 jest.mock('antd', () => ({ ...jest.requireActual('antd'), DatePicker: () => <input aria-label="date" /> }));
 jest.mock('next/navigation', () => ({ useParams: () => ({ id: '24' }), useRouter: () => ({ push }) }));
@@ -52,6 +54,7 @@ it('requires explicit Catalog reload and reconfirmation after version conflict w
   jest.mocked(ServiceCatalogApi.getService).mockResolvedValue({ ...catalog, catalogVersion: 'v2', formSchemaVersion: 'f2' } as never);
   fireEvent.click(screen.getByRole('button', { name: '重新读取目录' }));
   await waitFor(() => expect(ServiceCatalogApi.getService).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.getByRole('button', { name: '提交申请' })).toBeEnabled());
   await screen.findByLabelText('申请标题');
   expect(screen.getByLabelText('办公地点')).toHaveValue('上海');
   expect(ServiceCatalogApi.createServiceRequest).toHaveBeenCalledTimes(1);
@@ -114,4 +117,81 @@ it('Catalog Change requires professional inputs and preserves them in the confir
   const payload = jest.mocked(ServiceCatalogApi.createServiceRequest).mock.calls[0][0];
   expect(payload).toMatchObject({ catalogId: 24, recordClass: 'change_request', catalogVersion: 'v1', formSchemaVersion: 'f1', change: { type: 'normal', justification: '变更理由内容', implementationPlan: '实施计划内容', rollbackPlan: '回退计划内容', impactScope: 'medium', riskLevel: 'low' } });
   expect(payload).not.toHaveProperty('quantity');
+});
+
+it('requires explicit discard of a removed/renamed answer on reload, preserving compatible draft and the old unknown attempt', async () => {
+  jest.mocked(ServiceCatalogApi.createServiceRequest).mockRejectedValueOnce(new Error('response lost'));
+  render(<Page />); await fill(); fireEvent.click(screen.getByRole('button', { name: '提交申请' }));
+  await screen.findByRole('button', { name: '重试原申请' });
+  const original = jest.mocked(ServiceCatalogApi.createServiceRequest).mock.calls[0];
+  jest.mocked(ServiceCatalogApi.getService).mockResolvedValue({ ...catalog, catalogVersion: 'v2', formSchemaVersion: 'f2', fields: [{ name: 'work_location', label: '工作地点', type: 'text', required: true }] } as never);
+  fireEvent.click(screen.getByRole('button', { name: '重新读取目录' }));
+  expect(await screen.findByText('目录变更需要重新核对已填内容')).toBeInTheDocument();
+  expect(screen.getByText(/办公地点.*office_location.*上海/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '提交申请' })).toBeDisabled();
+  expect(screen.getByLabelText('申请标题')).toHaveValue('服务申请');
+  expect(screen.getByRole('button', { name: '重试原申请' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('button', { name: '确认舍弃上述不兼容答案并重新填写' }));
+  fireEvent.change(screen.getByLabelText('工作地点'), { target: { value: '北京' } });
+  fireEvent.click(screen.getByRole('button', { name: '提交申请' }));
+  await waitFor(() => expect(ServiceCatalogApi.createServiceRequest).toHaveBeenCalledTimes(2));
+  const revised = jest.mocked(ServiceCatalogApi.createServiceRequest).mock.calls[1];
+  expect(revised[0]).toMatchObject({ title: '服务申请', catalogVersion: 'v2', formData: { customFieldValues: [{ name: 'work_location', value: '北京' }] } });
+  expect(revised[1].idempotencyKey).not.toBe(original[1].idempotencyKey);
+  fireEvent.click(screen.getByRole('button', { name: '重试原申请' }));
+  await waitFor(() => expect(ServiceCatalogApi.createServiceRequest).toHaveBeenCalledTimes(3));
+  expect(jest.mocked(ServiceCatalogApi.createServiceRequest).mock.calls[2][0]).toEqual(original[0]);
+  expect(jest.mocked(ServiceCatalogApi.createServiceRequest).mock.calls[2][1].idempotencyKey).toBe(original[1].idempotencyKey);
+});
+
+it('requires acknowledgment of service-request answers before confirming a reloaded Incident target', async () => {
+  jest.mocked(ServiceCatalogApi.createServiceRequest).mockRejectedValueOnce(new ApiError('version conflict', 409, 4001, 'catalog_version_conflict', false));
+  render(<Page />); await fill();
+  fireEvent.change(screen.getByLabelText('联系人'), { target: { value: '代申请联系人' } });
+  fireEvent.click(screen.getByRole('button', { name: '提交申请' }));
+  await screen.findByRole('button', { name: '重新读取目录' });
+  const original = jest.mocked(ServiceCatalogApi.createServiceRequest).mock.calls[0];
+  jest.mocked(ServiceCatalogApi.getService).mockResolvedValue({ ...catalog, targetClass: 'incident', catalogVersion: 'v2', formSchemaVersion: 'f2' } as never);
+  fireEvent.click(screen.getByRole('button', { name: '重新读取目录' }));
+  await screen.findByText('目录变更需要重新核对已填内容');
+  expect(screen.getByText(/联系人.*代申请联系人/)).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '提交申请' })).toBeDisabled();
+  expect(screen.getByLabelText('办公地点')).toHaveValue('上海');
+  fireEvent.click(screen.getByRole('button', { name: '确认舍弃上述不兼容答案并重新填写' }));
+  for (const [label, option] of [['事件类型', 'incident'], ['事件来源', '手工']]) {
+    const input = screen.getByLabelText(label); fireEvent.mouseDown(input);
+    const dropdown = document.getElementById(input.getAttribute('aria-controls')!)!.closest('.ant-select-dropdown') as HTMLElement;
+    await waitFor(() => expect(dropdown).toBeVisible());
+    fireEvent.click(within(dropdown).getByText(option, { selector: '.ant-select-item-option-content' }));
+  }
+  fireEvent.click(screen.getByRole('button', { name: '提交申请' }));
+  await waitFor(() => expect(ServiceCatalogApi.createServiceRequest).toHaveBeenCalledTimes(2));
+  const revised = jest.mocked(ServiceCatalogApi.createServiceRequest).mock.calls[1];
+  expect(revised[0]).toMatchObject({ recordClass: 'incident', title: '服务申请', formData: { customFieldValues: [{ name: 'office_location', value: '上海' }] }, incident: { source: 'manual', type: 'incident' } });
+  expect(revised[0]).not.toHaveProperty('contactName'); expect(revised[0]).not.toHaveProperty('quantity');
+  expect(original[0]).toMatchObject({ recordClass: 'service_request_item', contactName: '代申请联系人', catalogVersion: 'v1' });
+  expect(revised[1].idempotencyKey).not.toBe(original[1].idempotencyKey);
+});
+
+it('preserves an explicitly selected authorized requester across a compatible Catalog reload', async () => {
+  useAuthStore.setState({ user: { id: 1, tenantId: 2, name: '申请人', email: 'user@example.com', permissions: ['user:read'] } as never });
+  jest.mocked(UserApi.getUsers).mockResolvedValue({ users: [{ id: 9, tenantId: 2, name: '代申请人', active: true }] } as never);
+  jest.mocked(ServiceCatalogApi.createServiceRequest).mockRejectedValueOnce(new ApiError('version conflict', 409));
+  render(<Page />); await fill();
+  await waitFor(() => expect(UserApi.getUsers).toHaveBeenCalled());
+  const input = screen.getByLabelText('申请人'); fireEvent.mouseDown(input);
+  const dropdown = document.getElementById(input.getAttribute('aria-controls')!)!.closest('.ant-select-dropdown') as HTMLElement;
+  await waitFor(() => expect(dropdown).toBeVisible());
+  fireEvent.click(await within(dropdown).findByText('代申请人', { selector: '.ant-select-item-option-content' }));
+  fireEvent.click(screen.getByRole('button', { name: '提交申请' }));
+  await screen.findByRole('button', { name: '重新读取目录' });
+  expect(jest.mocked(ServiceCatalogApi.createServiceRequest).mock.calls[0][0].requesterId).toBe(9);
+  jest.mocked(ServiceCatalogApi.getService).mockResolvedValue({ ...catalog, catalogVersion: 'v2' } as never);
+  fireEvent.click(screen.getByRole('button', { name: '重新读取目录' }));
+  await waitFor(() => expect(ServiceCatalogApi.getService).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.getByRole('button', { name: '提交申请' })).toBeEnabled());
+  await screen.findByLabelText('申请标题');
+  fireEvent.click(screen.getByRole('button', { name: '提交申请' }));
+  await waitFor(() => expect(ServiceCatalogApi.createServiceRequest).toHaveBeenCalledTimes(2));
+  expect(jest.mocked(ServiceCatalogApi.createServiceRequest).mock.calls[1][0]).toMatchObject({ requesterId: 9, catalogVersion: 'v2' });
 });
