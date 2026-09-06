@@ -24,16 +24,16 @@ SELECT policyname FROM pg_policies WHERE tablename = 'changes' AND policyname = 
 
 -- 共享字段与业务身份由 WorkItem(tickets) 权威持有。先以管理员身份创建两条探针
 -- WorkItem，随后仅用 changes.work_item_id 验证 extension 表的 RLS。
-INSERT INTO tickets (title, description, status, priority, type, record_class, ticket_number, tenant_id, requester_id, created_at, updated_at)
-VALUES ('rls_r1_probe_same_tenant', 'legit', 'draft', 'low', 'change', 'change_request', 'TKT-RLS-R1-SAME', 1, 1, NOW(), NOW())
+INSERT INTO tickets (title, description, status, priority, record_class, ticket_number, tenant_id, requester_id, created_at, updated_at)
+VALUES ('rls_r1_probe_same_tenant', 'legit', 'draft', 'low', 'change_request', 'TKT-RLS-R1-SAME', 1, 1, NOW(), NOW())
 ON CONFLICT (tenant_id, ticket_number) DO UPDATE SET title = EXCLUDED.title
 RETURNING id AS same_work_item_id \gset
-INSERT INTO tickets (title, description, status, priority, type, record_class, ticket_number, tenant_id, requester_id, created_at, updated_at)
-VALUES ('rls_r1_probe_cross_tenant', 'attack', 'draft', 'low', 'change', 'change_request', 'TKT-RLS-R1-CROSS', 2, 1, NOW(), NOW())
+INSERT INTO tickets (title, description, status, priority, record_class, ticket_number, tenant_id, requester_id, created_at, updated_at)
+VALUES ('rls_r1_probe_cross_tenant', 'attack', 'draft', 'low', 'change_request', 'TKT-RLS-R1-CROSS', 2, 1, NOW(), NOW())
 ON CONFLICT (tenant_id, ticket_number) DO UPDATE SET title = EXCLUDED.title
 RETURNING id AS cross_work_item_id \gset
-INSERT INTO tickets (title, description, status, priority, type, record_class, ticket_number, tenant_id, requester_id, created_at, updated_at, deleted_at)
-VALUES ('rls_r1_probe_deleted', 'deleted', 'draft', 'low', 'change', 'change_request', 'TKT-RLS-R1-DELETED', 1, 1, NOW(), NOW(), NOW())
+INSERT INTO tickets (title, description, status, priority, record_class, ticket_number, tenant_id, requester_id, created_at, updated_at, deleted_at)
+VALUES ('rls_r1_probe_deleted', 'deleted', 'draft', 'low', 'change_request', 'TKT-RLS-R1-DELETED', 1, 1, NOW(), NOW(), NOW())
 ON CONFLICT (tenant_id, ticket_number) DO UPDATE SET deleted_at = NOW()
 RETURNING id AS deleted_work_item_id \gset
 INSERT INTO changes (work_item_id, type, risk_level)

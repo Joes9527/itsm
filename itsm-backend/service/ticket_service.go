@@ -1575,6 +1575,7 @@ func (s *TicketService) entToDomain(e *ent.Ticket) *ticket.Ticket {
 		Description:    e.Description,
 		Status:         ticket.Status(e.Status),
 		GenericSubtype: e.GenericSubtype,
+		RecordClass:    e.RecordClass,
 		Priority:       ticket.Priority(e.Priority),
 		RequesterID:    e.RequesterID,
 		TenantID:       e.TenantID,
