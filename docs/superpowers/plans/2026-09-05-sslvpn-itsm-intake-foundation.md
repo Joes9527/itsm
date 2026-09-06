@@ -221,12 +221,16 @@ func TestRevisionChangesWithPolicy(t *testing.T) {
 
 ## A6：身份交换、用户读契约与 Intake 路由
 
+进度：`1dca1558` 与修复 `a36fb02c` 已通过独立审查及复审；身份、权限、nonce、角色矩阵与契约回归证据见持续验证报告。跨语言 fixture 已生成并由 Go 验证，Python 消费由 B1 完成。
+
+阶段边界澄清：A6保留真实专业status/version；缺少权威履约投影时明确unknown/accessResult=null，不把投递或流程启动当作授权成功。下一项C1负责在同一读取所有者接入实际审批/履约/授权结果并覆盖全部fulfillmentState，A7/B1前必须关闭；不是永久未知状态实现。
+
 **Files:** 审查复用早期分支 `handlers/intake/{handler,identity_exchange,identity_mapping_handler}.go` 及测试；Create `identity_exchange_service.go`、`identity_repository.go`；Modify `middleware/auth.go`、`router/router.go`、`config/config.go`、`internal/bootstrap/app.go`；Create `tests/contract/intake_identity_contract_test.go`、根目录 `docs/contracts/fixtures/intake-identity-signature.json`。
 
 **Interfaces:** 采用总计划 §3.2 的唯一 v2 `IdentityAssertion` 字段与签名顺序，外部映射依据 provider/workspace/subject；禁止以邮箱模糊匹配补救。写交换签发 `aud=itsm-intake`/`intake:create`；用户目录/状态读取严格使用总计划 §3.2 定义的只读交换路由、scope 和响应投影；同一 nonce store 跨两种交换用途拒绝重放。技术自动化 token 仅用于既有 task API。
 
-- [ ] 迁入旧 identity exchange 测试，增加 provider/channel 允许列表、包含换行的字段、nonce 重放、Redis 不可用、停用映射、跨 workspace、错误 audience、伪造 subject 和 role 拒绝用例。
-- [ ] 跨语言 fixture 用固定测试秘密与 nonce（仅测试文件），生成并保存准确 HMAC；A/B 读取同一文件。实现/测试流程：
+- [x] 迁入旧 identity exchange 测试，增加 provider/channel 允许列表、包含换行的字段、nonce 重放、Redis 不可用、停用映射、跨 workspace、错误 audience、伪造 subject 和 role 拒绝用例。
+- [x] 跨语言 fixture 用固定测试秘密与 nonce（仅测试文件），生成并保存准确 HMAC；A/B 读取同一文件。实现/测试流程：
 
 ```python
 import hashlib, hmac, json
@@ -237,12 +241,12 @@ fixture = {"fields": fields, "secret": "test-only-key", "canonical": canonical,
 print(json.dumps(fixture, indent=2))
 ```
 
-- [ ] 运行 `go test ./handlers/intake ./tests/contract -run 'Identity|Assertion|Audience|Scope' -count=1`。
-- [ ] 将旧 Handler 中直接 Ent 查询、签名/nonce/审计业务下沉到服务和 repository；保持 Handler 绑定、限长、调用、DTO 返回。字段拒绝 CR/LF 和首尾空白，严格校验签名 version/audience/purpose 与路由，消除用途替换和 canonicalization 歧义；时间窗、TTL、允许 provider/channel 从已有配置机制注入。
-- [ ] nonce store 使用 provider/channel/workspace 范围，验签通过后原子 claim，TTL 覆盖完整 assertion 剩余接受期和未来偏差；存储失败即拒绝。身份映射管理使用权限与版本条件，审计不记录 assertion、token、秘密和个人明文。
-- [ ] 注册 create、identity exchange、映射管理及最小用户目录/当前状态读路由，分别验证 scope 和对象权限。创建 201/200、错误 envelope 与 B 共用 OpenAPI；Intake token 不可访问任意通用 API。
-- [ ] 配置使用角色受限 secret 文件；exchange secret 与 JWT 签名密钥、webhook HMAC、automation token 分开；缺失时相关能力明确不可用。
-- [ ] 运行包测试与 route/ACL 契约测试，提交 `feat(intake): bind user identity exchange and scoped APIs`。
+- [x] 运行 `go test ./handlers/intake ./tests/contract -run 'Identity|Assertion|Audience|Scope' -count=1`。
+- [x] 将旧 Handler 中直接 Ent 查询、签名/nonce/审计业务下沉到服务和 repository；保持 Handler 绑定、限长、调用、DTO 返回。字段拒绝 CR/LF 和首尾空白，严格校验签名 version/audience/purpose 与路由，消除用途替换和 canonicalization 歧义；时间窗、TTL、允许 provider/channel 从已有配置机制注入。
+- [x] nonce store 使用 provider/channel/workspace 范围，验签通过后原子 claim，TTL 覆盖完整 assertion 剩余接受期和未来偏差；存储失败即拒绝。身份映射管理使用权限与版本条件，审计不记录 assertion、token、秘密和个人明文。
+- [x] 注册 create、identity exchange、映射管理及最小用户目录/当前状态读路由，分别验证 scope 和对象权限。创建 201/200、错误 envelope 与 B 共用 OpenAPI；Intake token 不可访问任意通用 API。
+- [x] 配置使用角色受限 secret 文件；exchange secret 与 JWT 签名密钥、webhook HMAC、automation token 分开；缺失时相关能力明确不可用。
+- [x] 运行包测试与 route/ACL 契约测试，提交 `feat(intake): bind user identity exchange and scoped APIs`。
 
 ## A7：PostgreSQL、迁移与全入口集成门禁
 

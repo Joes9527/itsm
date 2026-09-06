@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Status:** accepted — 原会话已由用户终止；接手 Agent 已在2026-09-06重启后恢复执行，继续A3b/A4。阶段证据与剩余门槛见[持续验证报告](../../review/2026-09-05-sslvpn-end-to-end-verification-report.md)，尚未完成端到端验收。原暂停基线见[开发交接报告](../../review/2026-09-05-sslvpn-development-handoff-report.md)。
+**Status:** accepted — 原会话已由用户终止；接手 Agent 已在2026-09-06重启后恢复执行，现已完成A6及其审查修复，继续C1与后续集成门禁。阶段证据与剩余门槛见[持续验证报告](../../review/2026-09-05-sslvpn-end-to-end-verification-report.md)，尚未完成端到端验收。原暂停基线见[开发交接报告](../../review/2026-09-05-sslvpn-development-handoff-report.md)。
 
 **Goal:** 从 KAF Web 已有收集与确认卡片，经统一 ITSM 创建、两级审批和 KAF 执行，验证外部用户组授权成功并完成业务状态与审计同步。
 
