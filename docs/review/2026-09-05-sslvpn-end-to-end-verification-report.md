@@ -82,7 +82,16 @@ Incident、Problem、Change 创建及标准变更实例化增加可选正整数 
 - 电脑重启使子Agent退出、专属测试容器停止，源码与日志均保留；该批变更当时尚未提交或审查。9月6日恢复时未改源码，只核对既有12文件改动并补一次定向验证：`timeout 180s go test ./tests/integration ./handlers/change ./handlers/standard_change -run '^(TestIntakeHTTPRequesterAdapters|TestChangeServiceTaskHandler_CreateChange_DelegatesToRealServiceAndCreatesWorkItem|TestStandardChangeHandler_RoutesRequireSuperAdmin|TestInstantiateStandardChange_SuperAdminOnBehalf)$' -count=1 -timeout=120s -v`，退出0，三个包0.955/0.039/0.036秒。
 - 提交378e2820的独立spec/quality审查PASS，无新增问题。恢复时未启动数据库或访问外部系统。专属PG使用tmpfs，后续数据库验证需重新建立隔离夹具，不能沿用重启前初始化状态的假设。
 
-下一项为输入语义修复，之后继续来源信任边界及027/028共享字段清理。完整前端、Catalog发布、KAF、运行进程与外部验收仍未完成。
+### 输入语义与动态字段夹具切换（`e72eb323`、`eeecbf75`）
+
+Change分类名称复用既有租户分类所有者；移除没有执行意义的FormPresetID/presetTypeId，保留真实字段定义、字段值和数据库templateId；旧模板workflow_steps为非空列表、错误形状或坏JSON时显式拒绝，缺省/null/空列表仍沿用实际流程绑定。未受影响请求保留intake-v4摘要，并有固定历史摘要和持久化回执重放回归。
+
+- 共享契约/真实HTTP/完整Change命令定向RED→GREEN通过；Intake完整包通过2.765秒。Common完整包发现旧Generic测试仍使用已删除的嵌套共享字段别名，修正测试后通过，没有增加生产兼容字段。
+- 前端实际提交参数构造的两例测试通过，`timeout 120s npm run type-check`退出0；仅移除无效preset指令，尚未完成前端全入口切换。
+- 独立审查发现三处既有动态字段正向夹具仍发presetTypeId；父进程补查两例复现201/400失败。修复仅删三处旧字段，保留全部持久化/字段名/详情/重放断言。`timeout 120s go test ./tests/integration -run '^TestDynamicFields($|_)' -count=1 -timeout=90s`退出0，0.566秒，三例均匹配。限定复审通过，无新增问题。
+- 旧`POST /tickets type=change`不能表达五个专业必填字段，仍不能独立完成Change创建；本阶段没有虚构默认值。HTTP测试证明分类解析/拒绝，完整统一命令证明真实Change分类持久化。A4必须通过专业表单/API和权威类型元数据解决活跃客户端输入，不能保留按模板名称正则猜业务类的路径。
+
+专属PG16与Redis已在重启后恢复健康，Redis须显式使用36445端口；健康不等于数据库迁移或业务验收。PG17尚未重启。下一项为Incident来源/元数据信任边界，随后处理Feishu严格解析和027/028共享字段清理。完整前端、Catalog发布、KAF、运行进程与外部验收仍未完成。
 
 ## 3. 可定位的 RLS 验证记录
 
