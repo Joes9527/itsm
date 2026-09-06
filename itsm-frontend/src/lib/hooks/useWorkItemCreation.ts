@@ -32,6 +32,7 @@ export function useWorkItemCreation() {
   const attemptsRef = useRef<Attempt[]>([]);
   const activeRef = useRef<Attempt | undefined>(undefined);
   const busyRef = useRef(false);
+  const resetRequestedRef = useRef(false);
   const [attempts, setAttempts] = useState<Attempt[]>([]);
   const publish = () => setAttempts(attemptsRef.current.map(attempt => ({ ...attempt })));
 
@@ -69,6 +70,11 @@ export function useWorkItemCreation() {
       message.error(attempt.error);
       return undefined;
     } finally {
+      // A reload/acknowledgment may request a new confirmation while this attempt is sending.
+      if (resetRequestedRef.current) {
+        activeRef.current = undefined;
+        resetRequestedRef.current = false;
+      }
       busyRef.current = false;
       publish();
     }
@@ -107,10 +113,12 @@ export function useWorkItemCreation() {
     if (attempt) return run(attempt);
   };
   const newConfirmation = () => {
-    if (!busyRef.current) {
-      activeRef.current = undefined;
-      publish();
+    if (busyRef.current) {
+      resetRequestedRef.current = true;
+      return;
     }
+    activeRef.current = undefined;
+    publish();
   };
   return {
     submit,

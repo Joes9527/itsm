@@ -136,3 +136,38 @@ it('keeps an in-flight committed receipt but prevents navigation after the actor
   expect(result.current.attempts[0]).toMatchObject({ state: 'committed', receipt });
   expect(onCommitted).not.toHaveBeenCalled();
 });
+
+it.each(['committed', 'unknown'])('durably requests a fresh confirmation while sending and preserves the settled %s attempt', async state => {
+  const { result } = renderHook(() => useWorkItemCreation());
+  let reject!: (error: Error) => void;
+  let resolve!: (value: typeof receipt) => void;
+  const pending = new Promise<typeof receipt>((accept, fail) => { resolve = accept; reject = fail; });
+  const send = jest.fn().mockRejectedValueOnce(new Error('lost')).mockReturnValueOnce(pending).mockResolvedValue(receipt);
+  await act(async () => { await result.current.submit({ title: 'original' }, send); });
+  const originalKey = result.current.attempts[0].key;
+  let retry!: Promise<unknown>;
+  act(() => {
+    retry = result.current.retry(originalKey);
+    result.current.newConfirmation();
+    result.current.newConfirmation();
+    void result.current.submit({ title: 'cannot send concurrently' }, send);
+  });
+  expect(send).toHaveBeenCalledTimes(2);
+  await act(async () => {
+    if (state === 'committed') resolve(receipt);
+    else reject(new Error('retry lost'));
+    await retry;
+  });
+  await act(async () => { await result.current.submit({ title: 'new confirmation' }, send); });
+  expect(send.mock.calls[2][0]).toEqual({ title: 'new confirmation' });
+  expect(send.mock.calls[2][1].idempotencyKey).not.toBe(originalKey);
+  expect(result.current.attempts).toHaveLength(2);
+  expect(result.current.attempts[0]).toMatchObject({ key: originalKey, state });
+  expect(send.mock.calls[1][0]).toEqual({ title: 'original' });
+  expect(send.mock.calls[1][1].idempotencyKey).toBe(originalKey);
+  await act(async () => { await result.current.retry(originalKey); });
+  if (state === 'unknown') {
+    expect(send.mock.calls[3][0]).toEqual({ title: 'original' });
+    expect(send.mock.calls[3][1].idempotencyKey).toBe(originalKey);
+  } else expect(send).toHaveBeenCalledTimes(3);
+});

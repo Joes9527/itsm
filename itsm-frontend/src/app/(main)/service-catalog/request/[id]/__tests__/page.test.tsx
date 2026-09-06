@@ -1,7 +1,7 @@
 // These integration cases render complete Ant Design forms under coverage instrumentation.
 jest.setTimeout(30000);
 import React from 'react';
-import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within, act } from '@testing-library/react';
 import Page from '../page';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
 import { useAuthStore } from '@/lib/store/auth-store';
@@ -194,4 +194,57 @@ it('preserves an explicitly selected authorized requester across a compatible Ca
   fireEvent.click(screen.getByRole('button', { name: '提交申请' }));
   await waitFor(() => expect(ServiceCatalogApi.createServiceRequest).toHaveBeenCalledTimes(2));
   expect(jest.mocked(ServiceCatalogApi.createServiceRequest).mock.calls[1][0]).toMatchObject({ requesterId: 9, catalogVersion: 'v2' });
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((accept, fail) => { resolve = accept; reject = fail; });
+  return { promise, resolve, reject };
+}
+
+it.each(['compatible reload', 'target acknowledgment'])('keeps a new confirmation when %s overlaps an old retry', async scenario => {
+  const incompatible = scenario === 'target acknowledgment';
+  const retry = deferred<never>();
+  const detail = deferred<any>();
+  jest.mocked(ServiceCatalogApi.createServiceRequest).mockRejectedValueOnce(new Error('original response lost')).mockImplementationOnce(() => retry.promise);
+  render(<Page />); await fill(); fireEvent.click(screen.getByRole('button', { name: '提交申请' }));
+  await screen.findByRole('button', { name: '重试原申请' });
+  const original = jest.mocked(ServiceCatalogApi.createServiceRequest).mock.calls[0];
+  jest.mocked(ServiceCatalogApi.getService).mockImplementationOnce(() => detail.promise);
+  fireEvent.click(screen.getByRole('button', { name: '重新读取目录' }));
+  await waitFor(() => expect(ServiceCatalogApi.getService).toHaveBeenCalledTimes(2));
+  const revisedDefinition = { ...catalog, targetClass: incompatible ? 'incident' : 'service_request_item', catalogVersion: 'v2', formSchemaVersion: 'f2' };
+  if (incompatible) {
+    await act(async () => { detail.resolve(revisedDefinition); });
+    await screen.findByText('目录变更需要重新核对已填内容');
+  }
+  fireEvent.click(screen.getByRole('button', { name: '重试原申请' }));
+  await waitFor(() => expect(ServiceCatalogApi.createServiceRequest).toHaveBeenCalledTimes(2));
+  if (incompatible) {
+    fireEvent.click(screen.getByRole('button', { name: '确认舍弃上述不兼容答案并重新填写' }));
+    for (const [label, option] of [['事件类型', 'incident'], ['事件来源', '手工']]) {
+      const input = screen.getByLabelText(label); fireEvent.mouseDown(input);
+      const dropdown = document.getElementById(input.getAttribute('aria-controls')!)!.closest('.ant-select-dropdown') as HTMLElement;
+      await waitFor(() => expect(dropdown).toBeVisible());
+      fireEvent.click(within(dropdown).getByText(option, { selector: '.ant-select-item-option-content' }));
+    }
+  } else {
+    await act(async () => { detail.resolve(revisedDefinition); });
+  }
+  fireEvent.change(screen.getByLabelText('申请标题'), { target: { value: '重新确认的申请' } });
+  await act(async () => { retry.reject(new Error('retry response lost')); });
+  await screen.findByRole('button', { name: '重试原申请' });
+  fireEvent.click(screen.getByRole('button', { name: '提交申请' }));
+  await waitFor(() => expect(ServiceCatalogApi.createServiceRequest).toHaveBeenCalledTimes(3));
+  const calls = jest.mocked(ServiceCatalogApi.createServiceRequest).mock.calls;
+  expect(calls[1][0]).toEqual(original[0]);
+  expect(calls[1][1].idempotencyKey).toBe(original[1].idempotencyKey);
+  expect(calls[2][0]).toMatchObject({ title: '重新确认的申请', recordClass: revisedDefinition.targetClass, catalogVersion: 'v2', formSchemaVersion: 'f2' });
+  expect(calls[2][1].idempotencyKey).not.toBe(original[1].idempotencyKey);
+  if (incompatible) {
+    expect(calls[2][0]).toMatchObject({ incident: { source: 'manual', type: 'incident' } });
+    expect(calls[2][0]).not.toHaveProperty('contactName');
+  }
+  expect(screen.getByRole('button', { name: '重试原申请' })).toBeEnabled();
 });
