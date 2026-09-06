@@ -1,6 +1,6 @@
 # SSLVPN 端到端实施与验证报告
 
-**状态：用户已终止原会话，由接手 Agent 持续实施；MSP core、升级修复与转换 HTTP 已通过限定范围独立审查，工具队列生命周期与契约也已完成并复审通过；继续其余创建入口与共享字段切换。尚未达到端到端验收门槛。** 原暂停时的工作区快照见[开发交接报告](2026-09-05-sslvpn-development-handoff-report.md)；恢复后的最新检查点见本报告及增量审查报告。本报告从已执行的验证开始记录；阶段测试通过不等于完整业务交付，也不代表已部署。后续任务应在此追加最终提交、命令、退出码和验收证据。
+**状态：用户已终止原会话，由接手 Agent 持续实施；MSP core、升级修复与转换 HTTP 已通过限定范围独立审查，工具队列生命周期与契约也已完成并复审通过；2026-09-06重启后已恢复四入口申请人修复并通过独立审查，继续输入与共享字段切换。尚未达到端到端验收门槛。** 原暂停时的工作区快照见[开发交接报告](2026-09-05-sslvpn-development-handoff-report.md)；恢复后的最新检查点见本报告及增量审查报告。本报告从已执行的验证开始记录；阶段测试通过不等于完整业务交付，也不代表已部署。后续任务应在此追加最终提交、命令、退出码和验收证据。
 
 ## 1. 验收范围与当前进度
 
@@ -73,7 +73,16 @@ MSP core 阶段完成不关闭转换接口、共享字段 027+、全入口、前
 - `create_ticket` schema 描述规范输入，归一化仍由原 Intake 所有；Generic 结果包含六个必填回执字段，professionalReference 为 `{type:"",id:0}`。实际 Intake 的已批准调用验证了带空白标题/优先级和空优先级默认值，相关集成命令退出0，0.886秒。未新增重复业务校验器。
 - 复审 PASS，原 schema 问题根据规范输入与接受等价别名的边界撤回生产 P2 分类，竞争测试缺口已关闭。该修复轮未修改生产队列行为，因此仅运行受影响测试，没有重复完整包。
 
-下一批补齐 Incident、Problem、Change、标准变更实例化的显式 requesterId 传递；标准变更现有 super_admin 路由限制保持不变。之后继续输入语义/信任边界及027/028共享字段清理。完整前端、KAF、运行进程与外部验收仍未完成。
+### 四入口申请人传递与重启恢复（`378e2820`，2026-09-06）
+
+Incident、Problem、Change 创建及标准变更实例化增加可选正整数 requesterId，映射到原 Intake；缺省/null 保留原 actor 默认，显式零/负数拒绝400。申请人、原操作人、租户授权仍由既有事务快照边界管理。标准变更实际路由保留 super_admin 限制，未向 MSP 放开该入口。
+
+- 9月5日保留日志：四入口真实 Intake 正反例通过，1.195秒；签名 MSP PostgreSQL 矩阵通过，4.667秒，覆盖三个可访问资源及标准变更403，测试角色和schema清理残留均为0。这些是重启前证据，非重启后新跑的数据库检查。
+- 受影响包首次执行：controller/problem/standard_change通过，Change旧BPMN夹具缺少新的client参数导致编译失败；补齐现有隔离client后，Change完整包通过，1.873秒。此修复没有改变生产BPMN授权。
+- 电脑重启使子Agent退出、专属测试容器停止，源码与日志均保留；该批变更当时尚未提交或审查。9月6日恢复时未改源码，只核对既有12文件改动并补一次定向验证：`timeout 180s go test ./tests/integration ./handlers/change ./handlers/standard_change -run '^(TestIntakeHTTPRequesterAdapters|TestChangeServiceTaskHandler_CreateChange_DelegatesToRealServiceAndCreatesWorkItem|TestStandardChangeHandler_RoutesRequireSuperAdmin|TestInstantiateStandardChange_SuperAdminOnBehalf)$' -count=1 -timeout=120s -v`，退出0，三个包0.955/0.039/0.036秒。
+- 提交378e2820的独立spec/quality审查PASS，无新增问题。恢复时未启动数据库或访问外部系统。专属PG使用tmpfs，后续数据库验证需重新建立隔离夹具，不能沿用重启前初始化状态的假设。
+
+下一项为输入语义修复，之后继续来源信任边界及027/028共享字段清理。完整前端、Catalog发布、KAF、运行进程与外部验收仍未完成。
 
 ## 3. 可定位的 RLS 验证记录
 
