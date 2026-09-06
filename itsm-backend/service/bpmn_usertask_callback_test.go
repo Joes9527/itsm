@@ -174,8 +174,8 @@ func TestUserTaskMetadataPersistsOnlyInImmutableDescriptor(t *testing.T) {
 		SetTitle("Service request callback").SetTicketNumber("T-USER-CALLBACK-SR-1").
 		SetRecordClass("service_request_item").
 		SetRequesterID(scope.UserID).SetTenantID(tenantID).SaveX(ctx)
-	client.ServiceRequest.Create().SetTenantID(tenantID).SetTicketID(requestWorkItem.ID).
-		SetCatalogID(1).SetRequesterID(scope.UserID).SaveX(ctx)
+	client.ServiceRequest.Create().SetTicketID(requestWorkItem.ID).
+		SetCatalogID(1).SaveX(ctx)
 	srInstance, err := engine.StartProcess(ctx, "service_request_flow", "service_request:callback-3", "service_request", requestWorkItem.ID, map[string]interface{}{
 		"approval_required": true,
 	})

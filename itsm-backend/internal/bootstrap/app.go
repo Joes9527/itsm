@@ -1036,6 +1036,9 @@ func InitializeStorage(cfg *config.Config, client *ent.Client, sugar *zap.Sugare
 				if err := prepareServiceRequestTicketMigration(ctx, database.GetRawDB(), sugar); err != nil {
 					return fmt.Errorf("prepare service_request ticket migration: %w", err)
 				}
+				if err := migration.PrepareServiceRequestWorkItemAuthority(ctx, database.GetRawDB()); err != nil {
+					return fmt.Errorf("ServiceRequest WorkItem authority preflight: %w", err)
+				}
 				return migration.PrepareIntakeActorProvenance(ctx, database.GetRawDB())
 			},
 			CreateSchema: func(ctx context.Context) error { return client.Schema.Create(ctx) },

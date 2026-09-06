@@ -40,7 +40,7 @@ func RegisterSoftDeleteInterceptors(client *ent.Client) {
 			case *ent.ChangeQuery:
 				q.Where(change.HasWorkItemWith(ticket.DeletedAtIsNil()))
 			case *ent.ServiceRequestQuery:
-				q.Where(servicerequest.DeletedAtIsNil())
+				q.Where(servicerequest.HasWorkItemWith(ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item")))
 			}
 			return next.Query(ctx, query)
 		})

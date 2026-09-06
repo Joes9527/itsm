@@ -21,6 +21,7 @@ func createTestTicketForSR(t *testing.T, client *ent.Client, tenantID, requester
 	t.Helper()
 	tkt, err := client.Ticket.Create().
 		SetTicketNumber(number).
+		SetRecordClass("service_request_item").
 		SetTitle("Test Ticket " + number).
 		SetDescription("desc").
 		SetPriority("medium").
@@ -113,7 +114,7 @@ func TestEntRepository_GetByTicketID_ExcludesSoftDeleted(t *testing.T) {
 	assert.Equal(t, created.ID, found.ID)
 
 	// Soft-delete it directly (mirrors what Repository.Delete does — sets deleted_at).
-	_, err = client.ServiceRequest.UpdateOneID(created.ID).SetDeletedAt(time.Now()).Save(ctx)
+	_, err = client.Ticket.UpdateOneID(created.TicketID).SetDeletedAt(time.Now()).Save(ctx)
 	require.NoError(t, err)
 
 	_, err = repo.GetByTicketID(ctx, ticket.ID, tenant.ID)
@@ -133,7 +134,7 @@ func TestEntRepository_Create_PersistsContactAndQuantityFields(t *testing.T) {
 		SetPasswordHash("hash").SetRole("end_user").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	ticket, err := client.Ticket.Create().
-		SetTitle("测试工单").SetDescription("desc").SetPriority("medium").SetStatus("open").
+		SetRecordClass("service_request_item").SetTitle("测试工单").SetDescription("desc").SetPriority("medium").SetStatus("open").
 		SetTenantID(tenant.ID).SetRequesterID(requester.ID).SetTicketNumber("T-1").
 		Save(ctx)
 	require.NoError(t, err)
@@ -177,7 +178,7 @@ func TestEntRepository_Create_QuantityDefaultsToOneWhenOmitted(t *testing.T) {
 		SetPasswordHash("hash").SetRole("end_user").SetActive(true).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	ticket, err := client.Ticket.Create().
-		SetTitle("测试工单").SetDescription("desc").SetPriority("medium").SetStatus("open").
+		SetRecordClass("service_request_item").SetTitle("测试工单").SetDescription("desc").SetPriority("medium").SetStatus("open").
 		SetTenantID(tenant.ID).SetRequesterID(requester.ID).SetTicketNumber("T-2").
 		Save(ctx)
 	require.NoError(t, err)
@@ -192,4 +193,43 @@ func TestEntRepository_Create_QuantityDefaultsToOneWhenOmitted(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.Equal(t, 1, created.Quantity, "Quantity 未提供时应落到 ent schema 的默认值 1，而不是 0")
+}
+
+func TestEntRepository_WorkItemAuthority(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:sr_authority?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant := client.Tenant.Create().SetName("authority").SetCode("authority").SaveX(ctx)
+	requester := client.User.Create().SetUsername("authority").SetEmail("authority@test.com").SetName("Owner").SetPasswordHash("hash").SetRole("end_user").SetTenantID(tenant.ID).SaveX(ctx)
+	wi := createTestTicketForSR(t, client, tenant.ID, requester.ID, "SR-AUTH")
+	wi = client.Ticket.UpdateOne(wi).SetVersion(9).SetAssigneeID(requester.ID).SaveX(ctx)
+	sr, err := createSRRepositoryFixture(ctx, client, &ServiceRequest{TenantID: tenant.ID, RequesterID: requester.ID, TicketID: wi.ID, CatalogID: 1, DataClassification: "internal"})
+	require.NoError(t, err)
+	require.Equal(t, wi.Version, sr.Version, "shared version must project owning WorkItem")
+	require.Equal(t, wi.CreatedAt, sr.CreatedAt)
+	require.Equal(t, wi.UpdatedAt, sr.UpdatedAt)
+	require.Equal(t, wi.Title, sr.TicketTitle)
+	require.Equal(t, wi.AssigneeID, *sr.ProcessorID)
+	repo := NewEntRepository(client)
+	rows, count, err := repo.List(ctx, tenant.ID, ListFilters{UserID: requester.ID})
+	require.NoError(t, err)
+	require.Equal(t, 1, count)
+	require.Equal(t, wi.Title, rows[0].TicketTitle)
+	_, count, err = repo.List(ctx, tenant.ID, ListFilters{UserID: requester.ID + 999})
+	require.NoError(t, err)
+	require.Zero(t, count)
+	_, err = client.ServiceRequest.Create().SetTicketID(wi.ID + 999).SetCatalogID(1).Save(ctx)
+	require.Error(t, err, "missing required owner must fail closed")
+	stale := *sr
+	sr.CostCenter = "updated"
+	require.NoError(t, repo.Update(ctx, sr))
+	require.Error(t, repo.Update(ctx, &stale), "stale WorkItem CAS must reject extension changes")
+	current, err := repo.Get(ctx, sr.ID, tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, 10, current.Version)
+	require.Error(t, repo.Delete(ctx, &stale))
+	require.NoError(t, repo.Delete(ctx, current))
+	require.NotNil(t, client.Ticket.GetX(ctx, wi.ID).DeletedAt)
+	_, err = repo.Get(ctx, sr.ID, tenant.ID)
+	require.Error(t, err)
 }

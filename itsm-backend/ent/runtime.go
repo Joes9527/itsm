@@ -3311,56 +3311,32 @@ func init() {
 	servicecatalog.UpdateDefaultUpdatedAt = servicecatalogDescUpdatedAt.UpdateDefault.(func() time.Time)
 	servicerequestFields := schema.ServiceRequest{}.Fields()
 	_ = servicerequestFields
-	// servicerequestDescTenantID is the schema descriptor for tenant_id field.
-	servicerequestDescTenantID := servicerequestFields[0].Descriptor()
-	// servicerequest.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
-	servicerequest.TenantIDValidator = servicerequestDescTenantID.Validators[0].(func(int) error)
 	// servicerequestDescTicketID is the schema descriptor for ticket_id field.
-	servicerequestDescTicketID := servicerequestFields[1].Descriptor()
+	servicerequestDescTicketID := servicerequestFields[0].Descriptor()
 	// servicerequest.TicketIDValidator is a validator for the "ticket_id" field. It is called by the builders before save.
 	servicerequest.TicketIDValidator = servicerequestDescTicketID.Validators[0].(func(int) error)
 	// servicerequestDescCatalogID is the schema descriptor for catalog_id field.
-	servicerequestDescCatalogID := servicerequestFields[2].Descriptor()
+	servicerequestDescCatalogID := servicerequestFields[1].Descriptor()
 	// servicerequest.CatalogIDValidator is a validator for the "catalog_id" field. It is called by the builders before save.
 	servicerequest.CatalogIDValidator = servicerequestDescCatalogID.Validators[0].(func(int) error)
-	// servicerequestDescRequesterID is the schema descriptor for requester_id field.
-	servicerequestDescRequesterID := servicerequestFields[4].Descriptor()
-	// servicerequest.RequesterIDValidator is a validator for the "requester_id" field. It is called by the builders before save.
-	servicerequest.RequesterIDValidator = servicerequestDescRequesterID.Validators[0].(func(int) error)
 	// servicerequestDescDataClassification is the schema descriptor for data_classification field.
-	servicerequestDescDataClassification := servicerequestFields[7].Descriptor()
+	servicerequestDescDataClassification := servicerequestFields[5].Descriptor()
 	// servicerequest.DefaultDataClassification holds the default value on creation for the data_classification field.
 	servicerequest.DefaultDataClassification = servicerequestDescDataClassification.Default.(string)
 	// servicerequestDescNeedsPublicIP is the schema descriptor for needs_public_ip field.
-	servicerequestDescNeedsPublicIP := servicerequestFields[8].Descriptor()
+	servicerequestDescNeedsPublicIP := servicerequestFields[6].Descriptor()
 	// servicerequest.DefaultNeedsPublicIP holds the default value on creation for the needs_public_ip field.
 	servicerequest.DefaultNeedsPublicIP = servicerequestDescNeedsPublicIP.Default.(bool)
 	// servicerequestDescComplianceAck is the schema descriptor for compliance_ack field.
-	servicerequestDescComplianceAck := servicerequestFields[11].Descriptor()
+	servicerequestDescComplianceAck := servicerequestFields[9].Descriptor()
 	// servicerequest.DefaultComplianceAck holds the default value on creation for the compliance_ack field.
 	servicerequest.DefaultComplianceAck = servicerequestDescComplianceAck.Default.(bool)
 	// servicerequestDescQuantity is the schema descriptor for quantity field.
-	servicerequestDescQuantity := servicerequestFields[14].Descriptor()
+	servicerequestDescQuantity := servicerequestFields[12].Descriptor()
 	// servicerequest.DefaultQuantity holds the default value on creation for the quantity field.
 	servicerequest.DefaultQuantity = servicerequestDescQuantity.Default.(int)
 	// servicerequest.QuantityValidator is a validator for the "quantity" field. It is called by the builders before save.
 	servicerequest.QuantityValidator = servicerequestDescQuantity.Validators[0].(func(int) error)
-	// servicerequestDescVersion is the schema descriptor for version field.
-	servicerequestDescVersion := servicerequestFields[21].Descriptor()
-	// servicerequest.DefaultVersion holds the default value on creation for the version field.
-	servicerequest.DefaultVersion = servicerequestDescVersion.Default.(int)
-	// servicerequest.VersionValidator is a validator for the "version" field. It is called by the builders before save.
-	servicerequest.VersionValidator = servicerequestDescVersion.Validators[0].(func(int) error)
-	// servicerequestDescCreatedAt is the schema descriptor for created_at field.
-	servicerequestDescCreatedAt := servicerequestFields[22].Descriptor()
-	// servicerequest.DefaultCreatedAt holds the default value on creation for the created_at field.
-	servicerequest.DefaultCreatedAt = servicerequestDescCreatedAt.Default.(func() time.Time)
-	// servicerequestDescUpdatedAt is the schema descriptor for updated_at field.
-	servicerequestDescUpdatedAt := servicerequestFields[23].Descriptor()
-	// servicerequest.DefaultUpdatedAt holds the default value on creation for the updated_at field.
-	servicerequest.DefaultUpdatedAt = servicerequestDescUpdatedAt.Default.(func() time.Time)
-	// servicerequest.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
-	servicerequest.UpdateDefaultUpdatedAt = servicerequestDescUpdatedAt.UpdateDefault.(func() time.Time)
 	standardchangeFields := schema.StandardChange{}.Fields()
 	_ = standardchangeFields
 	// standardchangeDescTitle is the schema descriptor for title field.

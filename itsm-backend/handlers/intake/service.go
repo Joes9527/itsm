@@ -417,7 +417,7 @@ func (s *Service) loadResult(ctx context.Context, tx *ent.Tx, tenantID, workItem
 		}
 		result.ProfessionalReference = workitemcreation.ProfessionalReference{Type: "incident", ID: extension.ID}
 	case workitemcreation.RecordClassServiceRequestItem:
-		extension, queryErr := tx.ServiceRequest.Query().Where(servicerequest.TicketIDEQ(workItem.ID), servicerequest.TenantIDEQ(tenantID)).Only(ctx)
+		extension, queryErr := tx.ServiceRequest.Query().Where(servicerequest.TicketIDEQ(workItem.ID), servicerequest.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item"))).Only(ctx)
 		if queryErr != nil && !ent.IsNotFound(queryErr) && !ent.IsNotSingular(queryErr) {
 			return nil, workitemcreation.NewInfrastructureUnavailable("could not load professional extension", queryErr)
 		}
@@ -525,7 +525,7 @@ func validateProfessional(ctx context.Context, tx *ent.Tx, item *ent.Ticket, ref
 		if reference.Type != "service_request" {
 			break
 		}
-		ok, err = tx.ServiceRequest.Query().Where(servicerequest.IDEQ(reference.ID), servicerequest.TicketIDEQ(item.ID), servicerequest.TenantIDEQ(item.TenantID)).Exist(ctx)
+		ok, err = tx.ServiceRequest.Query().Where(servicerequest.IDEQ(reference.ID), servicerequest.TicketIDEQ(item.ID), servicerequest.HasWorkItemWith(ticket.TenantID(item.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item"))).Exist(ctx)
 	}
 	if err != nil {
 		return workitemcreation.NewInfrastructureUnavailable("could not query intake reference", err)

@@ -50,9 +50,16 @@ func (s *Service) ApplyServiceRequestWorkflowCallback(ctx context.Context, cmd w
 }
 
 func (s *Service) loadWorkflowRequest(ctx context.Context, id, tenantID int) (*ent.ServiceRequest, error) {
-	return s.client.ServiceRequest.Query().Where(
-		servicerequest.ID(id), servicerequest.TenantID(tenantID), servicerequest.DeletedAtIsNil(),
-	).Only(ctx)
+	request, err := s.client.ServiceRequest.Query().Where(
+		servicerequest.ID(id), requestScope(tenantID),
+	).WithWorkItem().Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := request.Edges.WorkItemOrErr(); err != nil {
+		return nil, fmt.Errorf("service request %d requires WorkItem: %w", id, err)
+	}
+	return request, nil
 }
 
 func (s *Service) applyWorkflowUpdate(ctx context.Context, cmd workflowcallback.ServiceRequestCommand) (workflowcallback.Result, error) {
@@ -60,9 +67,12 @@ func (s *Service) applyWorkflowUpdate(ctx context.Context, cmd workflowcallback.
 	if err != nil {
 		return workflowcallback.Result{}, fmt.Errorf("load service request: %w", err)
 	}
-	update := s.client.ServiceRequest.Update().Where(
-		servicerequest.ID(current.ID), servicerequest.TenantID(cmd.TenantID), servicerequest.DeletedAtIsNil(), servicerequest.VersionEQ(current.Version),
-	)
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return workflowcallback.Result{}, err
+	}
+	defer tx.Rollback()
+	update := tx.ServiceRequest.Update().Where(servicerequest.ID(current.ID), requestScope(cmd.TenantID))
 	changed := false
 	if cmd.FormData != nil && !reflect.DeepEqual(current.FormData, cmd.FormData) {
 		update.SetFormData(cmd.FormData)
@@ -95,13 +105,31 @@ func (s *Service) applyWorkflowUpdate(ctx context.Context, cmd workflowcallback.
 	if !changed {
 		return callbackIdempotent(fmt.Sprintf("service request %d already matches", current.ID)), nil
 	}
-	affected, err := update.AddVersion(1).Save(ctx)
+	if err := tx.Ticket.UpdateOneID(current.TicketID).Where(ticket.TenantID(cmd.TenantID), ticket.RecordClassEQ("service_request_item"), ticket.DeletedAtIsNil(), ticket.VersionEQ(current.Edges.WorkItem.Version)).SetUpdatedAt(time.Now()).AddVersion(1).Exec(ctx); err != nil {
+		_ = tx.Rollback()
+		if !ent.IsNotFound(err) {
+			return workflowcallback.Result{}, err
+		}
+		latest, loadErr := s.loadWorkflowRequest(ctx, current.ID, cmd.TenantID)
+		if loadErr != nil {
+			return workflowcallback.Result{}, loadErr
+		}
+		if serviceRequestCommandMatches(latest, cmd) {
+			return callbackIdempotent("service request already matches"), nil
+		}
+		return callbackBlocked("service request has a conflicting concurrent update"), nil
+	}
+	affected, err := update.Save(ctx)
 	if err != nil {
 		return workflowcallback.Result{}, err
 	}
 	if affected == 1 {
+		if err := tx.Commit(); err != nil {
+			return workflowcallback.Result{}, err
+		}
 		return callbackApplied(fmt.Sprintf("service request %d updated", current.ID)), nil
 	}
+	_ = tx.Rollback()
 	latest, err := s.loadWorkflowRequest(ctx, current.ID, cmd.TenantID)
 	if err != nil {
 		return workflowcallback.Result{}, err
@@ -138,7 +166,7 @@ func (s *Service) applyWorkflowAssignment(ctx context.Context, cmd workflowcallb
 		}
 		return workflowcallback.Result{}, err
 	}
-	workItem, err := s.client.Ticket.Query().Where(ticket.ID(current.TicketID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil()).Only(ctx)
+	workItem, err := s.client.Ticket.Query().Where(ticket.ID(current.TicketID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item")).Only(ctx)
 	if err != nil {
 		return workflowcallback.Result{}, err
 	}
@@ -146,7 +174,7 @@ func (s *Service) applyWorkflowAssignment(ctx context.Context, cmd workflowcallb
 		return callbackIdempotent(fmt.Sprintf("service request %d already assigned", current.ID)), nil
 	}
 	affected, err := s.client.Ticket.Update().Where(
-		ticket.ID(workItem.ID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(workItem.Version),
+		ticket.ID(workItem.ID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item"), ticket.VersionEQ(workItem.Version),
 	).SetAssigneeID(cmd.AssigneeID).SetUpdatedAt(time.Now()).AddVersion(1).Save(ctx)
 	if err != nil {
 		return workflowcallback.Result{}, err
@@ -154,7 +182,7 @@ func (s *Service) applyWorkflowAssignment(ctx context.Context, cmd workflowcallb
 	if affected == 1 {
 		return callbackApplied(fmt.Sprintf("service request %d assigned", current.ID)), nil
 	}
-	latest, err := s.client.Ticket.Query().Where(ticket.ID(workItem.ID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil()).Only(ctx)
+	latest, err := s.client.Ticket.Query().Where(ticket.ID(workItem.ID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item")).Only(ctx)
 	if err != nil {
 		return workflowcallback.Result{}, err
 	}
@@ -172,16 +200,36 @@ func (s *Service) applyWorkflowProvision(ctx context.Context, cmd workflowcallba
 	if !current.StartedAt.IsZero() {
 		return callbackIdempotent(fmt.Sprintf("service request %d provisioning already started", current.ID)), nil
 	}
-	affected, err := s.client.ServiceRequest.Update().Where(
-		servicerequest.ID(current.ID), servicerequest.TenantID(cmd.TenantID), servicerequest.DeletedAtIsNil(),
-		servicerequest.VersionEQ(current.Version), servicerequest.StartedAtIsNil(),
-	).SetStartedAt(time.Now()).AddVersion(1).Save(ctx)
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return workflowcallback.Result{}, err
+	}
+	defer tx.Rollback()
+	if err := tx.Ticket.UpdateOneID(current.TicketID).Where(ticket.TenantID(cmd.TenantID), ticket.RecordClassEQ("service_request_item"), ticket.DeletedAtIsNil(), ticket.VersionEQ(current.Edges.WorkItem.Version)).SetUpdatedAt(time.Now()).AddVersion(1).Exec(ctx); err != nil {
+		_ = tx.Rollback()
+		if !ent.IsNotFound(err) {
+			return workflowcallback.Result{}, err
+		}
+		latest, loadErr := s.loadWorkflowRequest(ctx, current.ID, cmd.TenantID)
+		if loadErr != nil {
+			return workflowcallback.Result{}, loadErr
+		}
+		if !latest.StartedAt.IsZero() {
+			return callbackIdempotent("service request provisioning already started"), nil
+		}
+		return callbackBlocked("service request has a conflicting provisioning update"), nil
+	}
+	affected, err := tx.ServiceRequest.Update().Where(servicerequest.ID(current.ID), requestScope(cmd.TenantID), servicerequest.StartedAtIsNil()).SetStartedAt(time.Now()).Save(ctx)
 	if err != nil {
 		return workflowcallback.Result{}, err
 	}
 	if affected == 1 {
+		if err := tx.Commit(); err != nil {
+			return workflowcallback.Result{}, err
+		}
 		return callbackApplied(fmt.Sprintf("service request %d provisioning started", current.ID)), nil
 	}
+	_ = tx.Rollback()
 	latest, err := s.loadWorkflowRequest(ctx, current.ID, cmd.TenantID)
 	if err != nil {
 		return workflowcallback.Result{}, err
@@ -223,11 +271,11 @@ func (s *Service) applyWorkflowAggregate(ctx context.Context, cmd workflowcallba
 		}
 		return workflowcallback.Result{}, cause
 	}
-	request, err := tx.ServiceRequest.Query().Where(servicerequest.ID(cmd.RequestID), servicerequest.TenantID(cmd.TenantID), servicerequest.DeletedAtIsNil()).Only(ctx)
+	request, err := tx.ServiceRequest.Query().Where(servicerequest.ID(cmd.RequestID), requestScope(cmd.TenantID)).Only(ctx)
 	if err != nil {
 		return rollback(err)
 	}
-	workItem, err := tx.Ticket.Query().Where(ticket.ID(request.TicketID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil()).Only(ctx)
+	workItem, err := tx.Ticket.Query().Where(ticket.ID(request.TicketID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item")).Only(ctx)
 	if err != nil {
 		return rollback(err)
 	}
@@ -244,8 +292,8 @@ func (s *Service) applyWorkflowAggregate(ctx context.Context, cmd workflowcallba
 	now := time.Now()
 	if requestWrite {
 		update := tx.ServiceRequest.Update().Where(
-			servicerequest.ID(request.ID), servicerequest.TenantID(cmd.TenantID), servicerequest.DeletedAtIsNil(), servicerequest.VersionEQ(request.Version),
-		).AddVersion(1)
+			servicerequest.ID(request.ID), requestScope(cmd.TenantID),
+		)
 		if cmd.CompletionNote != "" {
 			update.SetCompletionNote(cmd.CompletionNote)
 		}
@@ -261,9 +309,9 @@ func (s *Service) applyWorkflowAggregate(ctx context.Context, cmd workflowcallba
 			return s.classifyWorkflowAggregate(ctx, cmd, target, complete)
 		}
 	}
-	if workItemWrite {
+	if workItemWrite || requestWrite {
 		update := tx.Ticket.Update().Where(
-			ticket.ID(workItem.ID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(workItem.Version),
+			ticket.ID(workItem.ID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item"), ticket.VersionEQ(workItem.Version),
 		).SetStatus(target).SetUpdatedAt(now).AddVersion(1)
 		if target == "resolved" || target == "closed" {
 			update.SetResolvedAt(now)
@@ -288,7 +336,7 @@ func (s *Service) classifyWorkflowAggregate(ctx context.Context, cmd workflowcal
 	if err != nil {
 		return workflowcallback.Result{}, err
 	}
-	workItem, err := s.client.Ticket.Query().Where(ticket.ID(request.TicketID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil()).Only(ctx)
+	workItem, err := s.client.Ticket.Query().Where(ticket.ID(request.TicketID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item")).Only(ctx)
 	if err != nil {
 		return workflowcallback.Result{}, err
 	}

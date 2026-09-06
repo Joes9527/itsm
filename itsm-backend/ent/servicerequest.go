@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"itsm-backend/ent/servicerequest"
+	"itsm-backend/ent/ticket"
 	"strings"
 	"time"
 
@@ -18,16 +19,12 @@ type ServiceRequest struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
-	// 租户ID
-	TenantID int `json:"tenant_id,omitempty"`
 	// 关联的Ticket ID——状态/审批/工作流全部委托给它
 	TicketID int `json:"ticket_id,omitempty"`
 	// 服务目录ID
 	CatalogID int `json:"catalog_id,omitempty"`
 	// 关联CI ID
 	CiID int `json:"ci_id,omitempty"`
-	// 申请人ID
-	RequesterID int `json:"requester_id,omitempty"`
 	// 表单数据
 	FormData map[string]interface{} `json:"form_data,omitempty"`
 	// 成本中心
@@ -50,8 +47,6 @@ type ServiceRequest struct {
 	Quantity int `json:"quantity,omitempty"`
 	// 期望交付时间
 	ExpectedAt time.Time `json:"expected_at,omitempty"`
-	// 处理人ID
-	ProcessorID int `json:"processor_id,omitempty"`
 	// 开始处理时间
 	StartedAt time.Time `json:"started_at,omitempty"`
 	// 完成时间
@@ -60,15 +55,30 @@ type ServiceRequest struct {
 	CompletionNote string `json:"completion_note,omitempty"`
 	// 最近一次错误信息
 	LastError string `json:"last_error,omitempty"`
-	// 乐观锁版本
-	Version int `json:"version,omitempty"`
-	// 创建时间
-	CreatedAt time.Time `json:"created_at,omitempty"`
-	// 更新时间
-	UpdatedAt time.Time `json:"updated_at,omitempty"`
-	// 软删除时间
-	DeletedAt    *time.Time `json:"deleted_at,omitempty"`
+	// Edges holds the relations/edges for other nodes in the graph.
+	// The values are being populated by the ServiceRequestQuery when eager-loading is set.
+	Edges        ServiceRequestEdges `json:"edges"`
 	selectValues sql.SelectValues
+}
+
+// ServiceRequestEdges holds the relations/edges for other nodes in the graph.
+type ServiceRequestEdges struct {
+	// WorkItem holds the value of the work_item edge.
+	WorkItem *Ticket `json:"work_item,omitempty"`
+	// loadedTypes holds the information for reporting if a
+	// type was loaded (or requested) in eager-loading or not.
+	loadedTypes [1]bool
+}
+
+// WorkItemOrErr returns the WorkItem value or an error if the edge
+// was not loaded in eager-loading, or loaded but was not found.
+func (e ServiceRequestEdges) WorkItemOrErr() (*Ticket, error) {
+	if e.WorkItem != nil {
+		return e.WorkItem, nil
+	} else if e.loadedTypes[0] {
+		return nil, &NotFoundError{label: ticket.Label}
+	}
+	return nil, &NotLoadedError{edge: "work_item"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -80,11 +90,11 @@ func (*ServiceRequest) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case servicerequest.FieldNeedsPublicIP, servicerequest.FieldComplianceAck:
 			values[i] = new(sql.NullBool)
-		case servicerequest.FieldID, servicerequest.FieldTenantID, servicerequest.FieldTicketID, servicerequest.FieldCatalogID, servicerequest.FieldCiID, servicerequest.FieldRequesterID, servicerequest.FieldQuantity, servicerequest.FieldProcessorID, servicerequest.FieldVersion:
+		case servicerequest.FieldID, servicerequest.FieldTicketID, servicerequest.FieldCatalogID, servicerequest.FieldCiID, servicerequest.FieldQuantity:
 			values[i] = new(sql.NullInt64)
 		case servicerequest.FieldCostCenter, servicerequest.FieldDataClassification, servicerequest.FieldContactName, servicerequest.FieldContactEmail, servicerequest.FieldCompletionNote, servicerequest.FieldLastError:
 			values[i] = new(sql.NullString)
-		case servicerequest.FieldExpireAt, servicerequest.FieldExpectedAt, servicerequest.FieldStartedAt, servicerequest.FieldCompletedAt, servicerequest.FieldCreatedAt, servicerequest.FieldUpdatedAt, servicerequest.FieldDeletedAt:
+		case servicerequest.FieldExpireAt, servicerequest.FieldExpectedAt, servicerequest.FieldStartedAt, servicerequest.FieldCompletedAt:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -107,12 +117,6 @@ func (_m *ServiceRequest) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
-		case servicerequest.FieldTenantID:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field tenant_id", values[i])
-			} else if value.Valid {
-				_m.TenantID = int(value.Int64)
-			}
 		case servicerequest.FieldTicketID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field ticket_id", values[i])
@@ -130,12 +134,6 @@ func (_m *ServiceRequest) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field ci_id", values[i])
 			} else if value.Valid {
 				_m.CiID = int(value.Int64)
-			}
-		case servicerequest.FieldRequesterID:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field requester_id", values[i])
-			} else if value.Valid {
-				_m.RequesterID = int(value.Int64)
 			}
 		case servicerequest.FieldFormData:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -207,12 +205,6 @@ func (_m *ServiceRequest) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.ExpectedAt = value.Time
 			}
-		case servicerequest.FieldProcessorID:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field processor_id", values[i])
-			} else if value.Valid {
-				_m.ProcessorID = int(value.Int64)
-			}
 		case servicerequest.FieldStartedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field started_at", values[i])
@@ -237,31 +229,6 @@ func (_m *ServiceRequest) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.LastError = value.String
 			}
-		case servicerequest.FieldVersion:
-			if value, ok := values[i].(*sql.NullInt64); !ok {
-				return fmt.Errorf("unexpected type %T for field version", values[i])
-			} else if value.Valid {
-				_m.Version = int(value.Int64)
-			}
-		case servicerequest.FieldCreatedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field created_at", values[i])
-			} else if value.Valid {
-				_m.CreatedAt = value.Time
-			}
-		case servicerequest.FieldUpdatedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field updated_at", values[i])
-			} else if value.Valid {
-				_m.UpdatedAt = value.Time
-			}
-		case servicerequest.FieldDeletedAt:
-			if value, ok := values[i].(*sql.NullTime); !ok {
-				return fmt.Errorf("unexpected type %T for field deleted_at", values[i])
-			} else if value.Valid {
-				_m.DeletedAt = new(time.Time)
-				*_m.DeletedAt = value.Time
-			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
 		}
@@ -273,6 +240,11 @@ func (_m *ServiceRequest) assignValues(columns []string, values []any) error {
 // This includes values selected through modifiers, order, etc.
 func (_m *ServiceRequest) Value(name string) (ent.Value, error) {
 	return _m.selectValues.Get(name)
+}
+
+// QueryWorkItem queries the "work_item" edge of the ServiceRequest entity.
+func (_m *ServiceRequest) QueryWorkItem() *TicketQuery {
+	return NewServiceRequestClient(_m.config).QueryWorkItem(_m)
 }
 
 // Update returns a builder for updating this ServiceRequest.
@@ -298,9 +270,6 @@ func (_m *ServiceRequest) String() string {
 	var builder strings.Builder
 	builder.WriteString("ServiceRequest(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	builder.WriteString("tenant_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.TenantID))
-	builder.WriteString(", ")
 	builder.WriteString("ticket_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TicketID))
 	builder.WriteString(", ")
@@ -309,9 +278,6 @@ func (_m *ServiceRequest) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("ci_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.CiID))
-	builder.WriteString(", ")
-	builder.WriteString("requester_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.RequesterID))
 	builder.WriteString(", ")
 	builder.WriteString("form_data=")
 	builder.WriteString(fmt.Sprintf("%v", _m.FormData))
@@ -346,9 +312,6 @@ func (_m *ServiceRequest) String() string {
 	builder.WriteString("expected_at=")
 	builder.WriteString(_m.ExpectedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
-	builder.WriteString("processor_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.ProcessorID))
-	builder.WriteString(", ")
 	builder.WriteString("started_at=")
 	builder.WriteString(_m.StartedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
@@ -360,20 +323,6 @@ func (_m *ServiceRequest) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("last_error=")
 	builder.WriteString(_m.LastError)
-	builder.WriteString(", ")
-	builder.WriteString("version=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Version))
-	builder.WriteString(", ")
-	builder.WriteString("created_at=")
-	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("updated_at=")
-	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	if v := _m.DeletedAt; v != nil {
-		builder.WriteString("deleted_at=")
-		builder.WriteString(v.Format(time.ANSIC))
-	}
 	builder.WriteByte(')')
 	return builder.String()
 }

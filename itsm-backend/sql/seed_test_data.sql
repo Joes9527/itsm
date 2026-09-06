@@ -97,14 +97,18 @@ WHERE NOT EXISTS (SELECT 1 FROM changes c WHERE c.work_item_id = t.id);
 -- =============================================
 -- 6. 添加更多服务请求测试数据
 -- =============================================
-INSERT INTO service_requests (title, status, requester_id, catalog_id, tenant_id, created_at, updated_at)
-SELECT * FROM (VALUES
+WITH fixture(title,status,requester_id,catalog_id,tenant_id,created_at,updated_at) AS (VALUES
     ('开通云服务器', 'pending_approval', 1, 2, 1, NOW(), NOW()),
     ('申请域名', 'in_progress', 2, 2, 1, NOW(), NOW()),
     ('开通CDN服务', 'approved', 3, 2, 1, NOW(), NOW()),
     ('SSL证书申请', 'completed', 4, 2, 1, NOW(), NOW())
-) AS v(title, status, requester_id, catalog_id, tenant_id, created_at, updated_at)
-WHERE NOT EXISTS (SELECT 1 FROM service_requests WHERE title = '开通云服务器');
+), owners AS (
+ INSERT INTO tickets(ticket_number,title,description,status,priority,record_class,requester_id,tenant_id,created_at,updated_at)
+ SELECT 'SR-SEED-' || requester_id::text,title,'',status,'medium','service_request_item',requester_id,tenant_id,created_at,updated_at FROM fixture
+ ON CONFLICT (tenant_id,ticket_number) DO NOTHING RETURNING id,tenant_id,ticket_number
+)
+INSERT INTO service_requests(ticket_id,catalog_id)
+SELECT owners.id,fixture.catalog_id FROM owners JOIN fixture ON owners.tenant_id=fixture.tenant_id AND owners.ticket_number='SR-SEED-' || requester_id::text;
 
 -- =============================================
 -- 7. 添加更多知识库文章

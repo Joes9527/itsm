@@ -359,5 +359,5 @@ func TestServiceRequestHandler_Delete(t *testing.T) {
 	assert.EqualValues(t, 404, resp2.Code, "body=%s", srStr(resp2))
 	stored, err := client.ServiceRequest.Get(context.Background(), id)
 	require.NoError(t, err)
-	require.NotNil(t, stored.DeletedAt)
+	require.NotNil(t, client.Ticket.GetX(context.Background(), stored.TicketID).DeletedAt)
 }

@@ -525,7 +525,7 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 		variables["ticket_id"] = workItemID
 	case "service_request", "service_request_item":
 		entity, err := e.client.ServiceRequest.Query().Where(
-			servicerequest.TicketID(instance.BusinessID), servicerequest.TenantID(instance.TenantID),
+			servicerequest.TicketID(instance.BusinessID), servicerequest.HasWorkItemWith(ticket.TenantID(instance.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item")),
 		).Only(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("权威服务请求目标不存在")

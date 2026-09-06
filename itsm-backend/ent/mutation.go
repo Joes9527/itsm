@@ -117522,16 +117522,10 @@ type ServiceRequestMutation struct {
 	op                        Op
 	typ                       string
 	id                        *int
-	tenant_id                 *int
-	addtenant_id              *int
-	ticket_id                 *int
-	addticket_id              *int
 	catalog_id                *int
 	addcatalog_id             *int
 	ci_id                     *int
 	addci_id                  *int
-	requester_id              *int
-	addrequester_id           *int
 	form_data                 *map[string]interface{}
 	cost_center               *string
 	data_classification       *string
@@ -117545,18 +117539,13 @@ type ServiceRequestMutation struct {
 	quantity                  *int
 	addquantity               *int
 	expected_at               *time.Time
-	processor_id              *int
-	addprocessor_id           *int
 	started_at                *time.Time
 	completed_at              *time.Time
 	completion_note           *string
 	last_error                *string
-	version                   *int
-	addversion                *int
-	created_at                *time.Time
-	updated_at                *time.Time
-	deleted_at                *time.Time
 	clearedFields             map[string]struct{}
+	work_item                 *int
+	clearedwork_item          bool
 	done                      bool
 	oldValue                  func(context.Context) (*ServiceRequest, error)
 	predicates                []predicate.ServiceRequest
@@ -117660,71 +117649,14 @@ func (m *ServiceRequestMutation) IDs(ctx context.Context) ([]int, error) {
 	}
 }
 
-// SetTenantID sets the "tenant_id" field.
-func (m *ServiceRequestMutation) SetTenantID(i int) {
-	m.tenant_id = &i
-	m.addtenant_id = nil
-}
-
-// TenantID returns the value of the "tenant_id" field in the mutation.
-func (m *ServiceRequestMutation) TenantID() (r int, exists bool) {
-	v := m.tenant_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldTenantID returns the old "tenant_id" field's value of the ServiceRequest entity.
-// If the ServiceRequest object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ServiceRequestMutation) OldTenantID(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldTenantID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldTenantID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldTenantID: %w", err)
-	}
-	return oldValue.TenantID, nil
-}
-
-// AddTenantID adds i to the "tenant_id" field.
-func (m *ServiceRequestMutation) AddTenantID(i int) {
-	if m.addtenant_id != nil {
-		*m.addtenant_id += i
-	} else {
-		m.addtenant_id = &i
-	}
-}
-
-// AddedTenantID returns the value that was added to the "tenant_id" field in this mutation.
-func (m *ServiceRequestMutation) AddedTenantID() (r int, exists bool) {
-	v := m.addtenant_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetTenantID resets all changes to the "tenant_id" field.
-func (m *ServiceRequestMutation) ResetTenantID() {
-	m.tenant_id = nil
-	m.addtenant_id = nil
-}
-
 // SetTicketID sets the "ticket_id" field.
 func (m *ServiceRequestMutation) SetTicketID(i int) {
-	m.ticket_id = &i
-	m.addticket_id = nil
+	m.work_item = &i
 }
 
 // TicketID returns the value of the "ticket_id" field in the mutation.
 func (m *ServiceRequestMutation) TicketID() (r int, exists bool) {
-	v := m.ticket_id
+	v := m.work_item
 	if v == nil {
 		return
 	}
@@ -117748,28 +117680,9 @@ func (m *ServiceRequestMutation) OldTicketID(ctx context.Context) (v int, err er
 	return oldValue.TicketID, nil
 }
 
-// AddTicketID adds i to the "ticket_id" field.
-func (m *ServiceRequestMutation) AddTicketID(i int) {
-	if m.addticket_id != nil {
-		*m.addticket_id += i
-	} else {
-		m.addticket_id = &i
-	}
-}
-
-// AddedTicketID returns the value that was added to the "ticket_id" field in this mutation.
-func (m *ServiceRequestMutation) AddedTicketID() (r int, exists bool) {
-	v := m.addticket_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
 // ResetTicketID resets all changes to the "ticket_id" field.
 func (m *ServiceRequestMutation) ResetTicketID() {
-	m.ticket_id = nil
-	m.addticket_id = nil
+	m.work_item = nil
 }
 
 // SetCatalogID sets the "catalog_id" field.
@@ -117896,62 +117809,6 @@ func (m *ServiceRequestMutation) ResetCiID() {
 	m.ci_id = nil
 	m.addci_id = nil
 	delete(m.clearedFields, servicerequest.FieldCiID)
-}
-
-// SetRequesterID sets the "requester_id" field.
-func (m *ServiceRequestMutation) SetRequesterID(i int) {
-	m.requester_id = &i
-	m.addrequester_id = nil
-}
-
-// RequesterID returns the value of the "requester_id" field in the mutation.
-func (m *ServiceRequestMutation) RequesterID() (r int, exists bool) {
-	v := m.requester_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldRequesterID returns the old "requester_id" field's value of the ServiceRequest entity.
-// If the ServiceRequest object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ServiceRequestMutation) OldRequesterID(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldRequesterID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldRequesterID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldRequesterID: %w", err)
-	}
-	return oldValue.RequesterID, nil
-}
-
-// AddRequesterID adds i to the "requester_id" field.
-func (m *ServiceRequestMutation) AddRequesterID(i int) {
-	if m.addrequester_id != nil {
-		*m.addrequester_id += i
-	} else {
-		m.addrequester_id = &i
-	}
-}
-
-// AddedRequesterID returns the value that was added to the "requester_id" field in this mutation.
-func (m *ServiceRequestMutation) AddedRequesterID() (r int, exists bool) {
-	v := m.addrequester_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetRequesterID resets all changes to the "requester_id" field.
-func (m *ServiceRequestMutation) ResetRequesterID() {
-	m.requester_id = nil
-	m.addrequester_id = nil
 }
 
 // SetFormData sets the "form_data" field.
@@ -118477,76 +118334,6 @@ func (m *ServiceRequestMutation) ResetExpectedAt() {
 	delete(m.clearedFields, servicerequest.FieldExpectedAt)
 }
 
-// SetProcessorID sets the "processor_id" field.
-func (m *ServiceRequestMutation) SetProcessorID(i int) {
-	m.processor_id = &i
-	m.addprocessor_id = nil
-}
-
-// ProcessorID returns the value of the "processor_id" field in the mutation.
-func (m *ServiceRequestMutation) ProcessorID() (r int, exists bool) {
-	v := m.processor_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldProcessorID returns the old "processor_id" field's value of the ServiceRequest entity.
-// If the ServiceRequest object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ServiceRequestMutation) OldProcessorID(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldProcessorID is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldProcessorID requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldProcessorID: %w", err)
-	}
-	return oldValue.ProcessorID, nil
-}
-
-// AddProcessorID adds i to the "processor_id" field.
-func (m *ServiceRequestMutation) AddProcessorID(i int) {
-	if m.addprocessor_id != nil {
-		*m.addprocessor_id += i
-	} else {
-		m.addprocessor_id = &i
-	}
-}
-
-// AddedProcessorID returns the value that was added to the "processor_id" field in this mutation.
-func (m *ServiceRequestMutation) AddedProcessorID() (r int, exists bool) {
-	v := m.addprocessor_id
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ClearProcessorID clears the value of the "processor_id" field.
-func (m *ServiceRequestMutation) ClearProcessorID() {
-	m.processor_id = nil
-	m.addprocessor_id = nil
-	m.clearedFields[servicerequest.FieldProcessorID] = struct{}{}
-}
-
-// ProcessorIDCleared returns if the "processor_id" field was cleared in this mutation.
-func (m *ServiceRequestMutation) ProcessorIDCleared() bool {
-	_, ok := m.clearedFields[servicerequest.FieldProcessorID]
-	return ok
-}
-
-// ResetProcessorID resets all changes to the "processor_id" field.
-func (m *ServiceRequestMutation) ResetProcessorID() {
-	m.processor_id = nil
-	m.addprocessor_id = nil
-	delete(m.clearedFields, servicerequest.FieldProcessorID)
-}
-
 // SetStartedAt sets the "started_at" field.
 func (m *ServiceRequestMutation) SetStartedAt(t time.Time) {
 	m.started_at = &t
@@ -118743,181 +118530,44 @@ func (m *ServiceRequestMutation) ResetLastError() {
 	delete(m.clearedFields, servicerequest.FieldLastError)
 }
 
-// SetVersion sets the "version" field.
-func (m *ServiceRequestMutation) SetVersion(i int) {
-	m.version = &i
-	m.addversion = nil
+// SetWorkItemID sets the "work_item" edge to the Ticket entity by id.
+func (m *ServiceRequestMutation) SetWorkItemID(id int) {
+	m.work_item = &id
 }
 
-// Version returns the value of the "version" field in the mutation.
-func (m *ServiceRequestMutation) Version() (r int, exists bool) {
-	v := m.version
-	if v == nil {
-		return
+// ClearWorkItem clears the "work_item" edge to the Ticket entity.
+func (m *ServiceRequestMutation) ClearWorkItem() {
+	m.clearedwork_item = true
+	m.clearedFields[servicerequest.FieldTicketID] = struct{}{}
+}
+
+// WorkItemCleared reports if the "work_item" edge to the Ticket entity was cleared.
+func (m *ServiceRequestMutation) WorkItemCleared() bool {
+	return m.clearedwork_item
+}
+
+// WorkItemID returns the "work_item" edge ID in the mutation.
+func (m *ServiceRequestMutation) WorkItemID() (id int, exists bool) {
+	if m.work_item != nil {
+		return *m.work_item, true
 	}
-	return *v, true
+	return
 }
 
-// OldVersion returns the old "version" field's value of the ServiceRequest entity.
-// If the ServiceRequest object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ServiceRequestMutation) OldVersion(ctx context.Context) (v int, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldVersion is only allowed on UpdateOne operations")
+// WorkItemIDs returns the "work_item" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// WorkItemID instead. It exists only for internal usage by the builders.
+func (m *ServiceRequestMutation) WorkItemIDs() (ids []int) {
+	if id := m.work_item; id != nil {
+		ids = append(ids, *id)
 	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldVersion requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldVersion: %w", err)
-	}
-	return oldValue.Version, nil
+	return
 }
 
-// AddVersion adds i to the "version" field.
-func (m *ServiceRequestMutation) AddVersion(i int) {
-	if m.addversion != nil {
-		*m.addversion += i
-	} else {
-		m.addversion = &i
-	}
-}
-
-// AddedVersion returns the value that was added to the "version" field in this mutation.
-func (m *ServiceRequestMutation) AddedVersion() (r int, exists bool) {
-	v := m.addversion
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// ResetVersion resets all changes to the "version" field.
-func (m *ServiceRequestMutation) ResetVersion() {
-	m.version = nil
-	m.addversion = nil
-}
-
-// SetCreatedAt sets the "created_at" field.
-func (m *ServiceRequestMutation) SetCreatedAt(t time.Time) {
-	m.created_at = &t
-}
-
-// CreatedAt returns the value of the "created_at" field in the mutation.
-func (m *ServiceRequestMutation) CreatedAt() (r time.Time, exists bool) {
-	v := m.created_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldCreatedAt returns the old "created_at" field's value of the ServiceRequest entity.
-// If the ServiceRequest object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ServiceRequestMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
-	}
-	return oldValue.CreatedAt, nil
-}
-
-// ResetCreatedAt resets all changes to the "created_at" field.
-func (m *ServiceRequestMutation) ResetCreatedAt() {
-	m.created_at = nil
-}
-
-// SetUpdatedAt sets the "updated_at" field.
-func (m *ServiceRequestMutation) SetUpdatedAt(t time.Time) {
-	m.updated_at = &t
-}
-
-// UpdatedAt returns the value of the "updated_at" field in the mutation.
-func (m *ServiceRequestMutation) UpdatedAt() (r time.Time, exists bool) {
-	v := m.updated_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldUpdatedAt returns the old "updated_at" field's value of the ServiceRequest entity.
-// If the ServiceRequest object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ServiceRequestMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
-	}
-	return oldValue.UpdatedAt, nil
-}
-
-// ResetUpdatedAt resets all changes to the "updated_at" field.
-func (m *ServiceRequestMutation) ResetUpdatedAt() {
-	m.updated_at = nil
-}
-
-// SetDeletedAt sets the "deleted_at" field.
-func (m *ServiceRequestMutation) SetDeletedAt(t time.Time) {
-	m.deleted_at = &t
-}
-
-// DeletedAt returns the value of the "deleted_at" field in the mutation.
-func (m *ServiceRequestMutation) DeletedAt() (r time.Time, exists bool) {
-	v := m.deleted_at
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldDeletedAt returns the old "deleted_at" field's value of the ServiceRequest entity.
-// If the ServiceRequest object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ServiceRequestMutation) OldDeletedAt(ctx context.Context) (v *time.Time, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldDeletedAt is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldDeletedAt requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldDeletedAt: %w", err)
-	}
-	return oldValue.DeletedAt, nil
-}
-
-// ClearDeletedAt clears the value of the "deleted_at" field.
-func (m *ServiceRequestMutation) ClearDeletedAt() {
-	m.deleted_at = nil
-	m.clearedFields[servicerequest.FieldDeletedAt] = struct{}{}
-}
-
-// DeletedAtCleared returns if the "deleted_at" field was cleared in this mutation.
-func (m *ServiceRequestMutation) DeletedAtCleared() bool {
-	_, ok := m.clearedFields[servicerequest.FieldDeletedAt]
-	return ok
-}
-
-// ResetDeletedAt resets all changes to the "deleted_at" field.
-func (m *ServiceRequestMutation) ResetDeletedAt() {
-	m.deleted_at = nil
-	delete(m.clearedFields, servicerequest.FieldDeletedAt)
+// ResetWorkItem resets all changes to the "work_item" edge.
+func (m *ServiceRequestMutation) ResetWorkItem() {
+	m.work_item = nil
+	m.clearedwork_item = false
 }
 
 // Where appends a list predicates to the ServiceRequestMutation builder.
@@ -118954,11 +118604,8 @@ func (m *ServiceRequestMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ServiceRequestMutation) Fields() []string {
-	fields := make([]string, 0, 25)
-	if m.tenant_id != nil {
-		fields = append(fields, servicerequest.FieldTenantID)
-	}
-	if m.ticket_id != nil {
+	fields := make([]string, 0, 18)
+	if m.work_item != nil {
 		fields = append(fields, servicerequest.FieldTicketID)
 	}
 	if m.catalog_id != nil {
@@ -118966,9 +118613,6 @@ func (m *ServiceRequestMutation) Fields() []string {
 	}
 	if m.ci_id != nil {
 		fields = append(fields, servicerequest.FieldCiID)
-	}
-	if m.requester_id != nil {
-		fields = append(fields, servicerequest.FieldRequesterID)
 	}
 	if m.form_data != nil {
 		fields = append(fields, servicerequest.FieldFormData)
@@ -119003,9 +118647,6 @@ func (m *ServiceRequestMutation) Fields() []string {
 	if m.expected_at != nil {
 		fields = append(fields, servicerequest.FieldExpectedAt)
 	}
-	if m.processor_id != nil {
-		fields = append(fields, servicerequest.FieldProcessorID)
-	}
 	if m.started_at != nil {
 		fields = append(fields, servicerequest.FieldStartedAt)
 	}
@@ -119018,18 +118659,6 @@ func (m *ServiceRequestMutation) Fields() []string {
 	if m.last_error != nil {
 		fields = append(fields, servicerequest.FieldLastError)
 	}
-	if m.version != nil {
-		fields = append(fields, servicerequest.FieldVersion)
-	}
-	if m.created_at != nil {
-		fields = append(fields, servicerequest.FieldCreatedAt)
-	}
-	if m.updated_at != nil {
-		fields = append(fields, servicerequest.FieldUpdatedAt)
-	}
-	if m.deleted_at != nil {
-		fields = append(fields, servicerequest.FieldDeletedAt)
-	}
 	return fields
 }
 
@@ -119038,16 +118667,12 @@ func (m *ServiceRequestMutation) Fields() []string {
 // schema.
 func (m *ServiceRequestMutation) Field(name string) (ent.Value, bool) {
 	switch name {
-	case servicerequest.FieldTenantID:
-		return m.TenantID()
 	case servicerequest.FieldTicketID:
 		return m.TicketID()
 	case servicerequest.FieldCatalogID:
 		return m.CatalogID()
 	case servicerequest.FieldCiID:
 		return m.CiID()
-	case servicerequest.FieldRequesterID:
-		return m.RequesterID()
 	case servicerequest.FieldFormData:
 		return m.FormData()
 	case servicerequest.FieldCostCenter:
@@ -119070,8 +118695,6 @@ func (m *ServiceRequestMutation) Field(name string) (ent.Value, bool) {
 		return m.Quantity()
 	case servicerequest.FieldExpectedAt:
 		return m.ExpectedAt()
-	case servicerequest.FieldProcessorID:
-		return m.ProcessorID()
 	case servicerequest.FieldStartedAt:
 		return m.StartedAt()
 	case servicerequest.FieldCompletedAt:
@@ -119080,14 +118703,6 @@ func (m *ServiceRequestMutation) Field(name string) (ent.Value, bool) {
 		return m.CompletionNote()
 	case servicerequest.FieldLastError:
 		return m.LastError()
-	case servicerequest.FieldVersion:
-		return m.Version()
-	case servicerequest.FieldCreatedAt:
-		return m.CreatedAt()
-	case servicerequest.FieldUpdatedAt:
-		return m.UpdatedAt()
-	case servicerequest.FieldDeletedAt:
-		return m.DeletedAt()
 	}
 	return nil, false
 }
@@ -119097,16 +118712,12 @@ func (m *ServiceRequestMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *ServiceRequestMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
-	case servicerequest.FieldTenantID:
-		return m.OldTenantID(ctx)
 	case servicerequest.FieldTicketID:
 		return m.OldTicketID(ctx)
 	case servicerequest.FieldCatalogID:
 		return m.OldCatalogID(ctx)
 	case servicerequest.FieldCiID:
 		return m.OldCiID(ctx)
-	case servicerequest.FieldRequesterID:
-		return m.OldRequesterID(ctx)
 	case servicerequest.FieldFormData:
 		return m.OldFormData(ctx)
 	case servicerequest.FieldCostCenter:
@@ -119129,8 +118740,6 @@ func (m *ServiceRequestMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldQuantity(ctx)
 	case servicerequest.FieldExpectedAt:
 		return m.OldExpectedAt(ctx)
-	case servicerequest.FieldProcessorID:
-		return m.OldProcessorID(ctx)
 	case servicerequest.FieldStartedAt:
 		return m.OldStartedAt(ctx)
 	case servicerequest.FieldCompletedAt:
@@ -119139,14 +118748,6 @@ func (m *ServiceRequestMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldCompletionNote(ctx)
 	case servicerequest.FieldLastError:
 		return m.OldLastError(ctx)
-	case servicerequest.FieldVersion:
-		return m.OldVersion(ctx)
-	case servicerequest.FieldCreatedAt:
-		return m.OldCreatedAt(ctx)
-	case servicerequest.FieldUpdatedAt:
-		return m.OldUpdatedAt(ctx)
-	case servicerequest.FieldDeletedAt:
-		return m.OldDeletedAt(ctx)
 	}
 	return nil, fmt.Errorf("unknown ServiceRequest field %s", name)
 }
@@ -119156,13 +118757,6 @@ func (m *ServiceRequestMutation) OldField(ctx context.Context, name string) (ent
 // type.
 func (m *ServiceRequestMutation) SetField(name string, value ent.Value) error {
 	switch name {
-	case servicerequest.FieldTenantID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetTenantID(v)
-		return nil
 	case servicerequest.FieldTicketID:
 		v, ok := value.(int)
 		if !ok {
@@ -119183,13 +118777,6 @@ func (m *ServiceRequestMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCiID(v)
-		return nil
-	case servicerequest.FieldRequesterID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetRequesterID(v)
 		return nil
 	case servicerequest.FieldFormData:
 		v, ok := value.(map[string]interface{})
@@ -119268,13 +118855,6 @@ func (m *ServiceRequestMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetExpectedAt(v)
 		return nil
-	case servicerequest.FieldProcessorID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetProcessorID(v)
-		return nil
 	case servicerequest.FieldStartedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -119303,34 +118883,6 @@ func (m *ServiceRequestMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetLastError(v)
 		return nil
-	case servicerequest.FieldVersion:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetVersion(v)
-		return nil
-	case servicerequest.FieldCreatedAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetCreatedAt(v)
-		return nil
-	case servicerequest.FieldUpdatedAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetUpdatedAt(v)
-		return nil
-	case servicerequest.FieldDeletedAt:
-		v, ok := value.(time.Time)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetDeletedAt(v)
-		return nil
 	}
 	return fmt.Errorf("unknown ServiceRequest field %s", name)
 }
@@ -119339,29 +118891,14 @@ func (m *ServiceRequestMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *ServiceRequestMutation) AddedFields() []string {
 	var fields []string
-	if m.addtenant_id != nil {
-		fields = append(fields, servicerequest.FieldTenantID)
-	}
-	if m.addticket_id != nil {
-		fields = append(fields, servicerequest.FieldTicketID)
-	}
 	if m.addcatalog_id != nil {
 		fields = append(fields, servicerequest.FieldCatalogID)
 	}
 	if m.addci_id != nil {
 		fields = append(fields, servicerequest.FieldCiID)
 	}
-	if m.addrequester_id != nil {
-		fields = append(fields, servicerequest.FieldRequesterID)
-	}
 	if m.addquantity != nil {
 		fields = append(fields, servicerequest.FieldQuantity)
-	}
-	if m.addprocessor_id != nil {
-		fields = append(fields, servicerequest.FieldProcessorID)
-	}
-	if m.addversion != nil {
-		fields = append(fields, servicerequest.FieldVersion)
 	}
 	return fields
 }
@@ -119371,22 +118908,12 @@ func (m *ServiceRequestMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ServiceRequestMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
-	case servicerequest.FieldTenantID:
-		return m.AddedTenantID()
-	case servicerequest.FieldTicketID:
-		return m.AddedTicketID()
 	case servicerequest.FieldCatalogID:
 		return m.AddedCatalogID()
 	case servicerequest.FieldCiID:
 		return m.AddedCiID()
-	case servicerequest.FieldRequesterID:
-		return m.AddedRequesterID()
 	case servicerequest.FieldQuantity:
 		return m.AddedQuantity()
-	case servicerequest.FieldProcessorID:
-		return m.AddedProcessorID()
-	case servicerequest.FieldVersion:
-		return m.AddedVersion()
 	}
 	return nil, false
 }
@@ -119396,20 +118923,6 @@ func (m *ServiceRequestMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ServiceRequestMutation) AddField(name string, value ent.Value) error {
 	switch name {
-	case servicerequest.FieldTenantID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddTenantID(v)
-		return nil
-	case servicerequest.FieldTicketID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddTicketID(v)
-		return nil
 	case servicerequest.FieldCatalogID:
 		v, ok := value.(int)
 		if !ok {
@@ -119424,33 +118937,12 @@ func (m *ServiceRequestMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddCiID(v)
 		return nil
-	case servicerequest.FieldRequesterID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddRequesterID(v)
-		return nil
 	case servicerequest.FieldQuantity:
 		v, ok := value.(int)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddQuantity(v)
-		return nil
-	case servicerequest.FieldProcessorID:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddProcessorID(v)
-		return nil
-	case servicerequest.FieldVersion:
-		v, ok := value.(int)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.AddVersion(v)
 		return nil
 	}
 	return fmt.Errorf("unknown ServiceRequest numeric field %s", name)
@@ -119484,9 +118976,6 @@ func (m *ServiceRequestMutation) ClearedFields() []string {
 	if m.FieldCleared(servicerequest.FieldExpectedAt) {
 		fields = append(fields, servicerequest.FieldExpectedAt)
 	}
-	if m.FieldCleared(servicerequest.FieldProcessorID) {
-		fields = append(fields, servicerequest.FieldProcessorID)
-	}
 	if m.FieldCleared(servicerequest.FieldStartedAt) {
 		fields = append(fields, servicerequest.FieldStartedAt)
 	}
@@ -119498,9 +118987,6 @@ func (m *ServiceRequestMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(servicerequest.FieldLastError) {
 		fields = append(fields, servicerequest.FieldLastError)
-	}
-	if m.FieldCleared(servicerequest.FieldDeletedAt) {
-		fields = append(fields, servicerequest.FieldDeletedAt)
 	}
 	return fields
 }
@@ -119540,9 +119026,6 @@ func (m *ServiceRequestMutation) ClearField(name string) error {
 	case servicerequest.FieldExpectedAt:
 		m.ClearExpectedAt()
 		return nil
-	case servicerequest.FieldProcessorID:
-		m.ClearProcessorID()
-		return nil
 	case servicerequest.FieldStartedAt:
 		m.ClearStartedAt()
 		return nil
@@ -119555,9 +119038,6 @@ func (m *ServiceRequestMutation) ClearField(name string) error {
 	case servicerequest.FieldLastError:
 		m.ClearLastError()
 		return nil
-	case servicerequest.FieldDeletedAt:
-		m.ClearDeletedAt()
-		return nil
 	}
 	return fmt.Errorf("unknown ServiceRequest nullable field %s", name)
 }
@@ -119566,9 +119046,6 @@ func (m *ServiceRequestMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *ServiceRequestMutation) ResetField(name string) error {
 	switch name {
-	case servicerequest.FieldTenantID:
-		m.ResetTenantID()
-		return nil
 	case servicerequest.FieldTicketID:
 		m.ResetTicketID()
 		return nil
@@ -119577,9 +119054,6 @@ func (m *ServiceRequestMutation) ResetField(name string) error {
 		return nil
 	case servicerequest.FieldCiID:
 		m.ResetCiID()
-		return nil
-	case servicerequest.FieldRequesterID:
-		m.ResetRequesterID()
 		return nil
 	case servicerequest.FieldFormData:
 		m.ResetFormData()
@@ -119614,9 +119088,6 @@ func (m *ServiceRequestMutation) ResetField(name string) error {
 	case servicerequest.FieldExpectedAt:
 		m.ResetExpectedAt()
 		return nil
-	case servicerequest.FieldProcessorID:
-		m.ResetProcessorID()
-		return nil
 	case servicerequest.FieldStartedAt:
 		m.ResetStartedAt()
 		return nil
@@ -119629,37 +119100,34 @@ func (m *ServiceRequestMutation) ResetField(name string) error {
 	case servicerequest.FieldLastError:
 		m.ResetLastError()
 		return nil
-	case servicerequest.FieldVersion:
-		m.ResetVersion()
-		return nil
-	case servicerequest.FieldCreatedAt:
-		m.ResetCreatedAt()
-		return nil
-	case servicerequest.FieldUpdatedAt:
-		m.ResetUpdatedAt()
-		return nil
-	case servicerequest.FieldDeletedAt:
-		m.ResetDeletedAt()
-		return nil
 	}
 	return fmt.Errorf("unknown ServiceRequest field %s", name)
 }
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *ServiceRequestMutation) AddedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.work_item != nil {
+		edges = append(edges, servicerequest.EdgeWorkItem)
+	}
 	return edges
 }
 
 // AddedIDs returns all IDs (to other nodes) that were added for the given edge
 // name in this mutation.
 func (m *ServiceRequestMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case servicerequest.EdgeWorkItem:
+		if id := m.work_item; id != nil {
+			return []ent.Value{*id}
+		}
+	}
 	return nil
 }
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *ServiceRequestMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
 	return edges
 }
 
@@ -119671,25 +119139,42 @@ func (m *ServiceRequestMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *ServiceRequestMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 0)
+	edges := make([]string, 0, 1)
+	if m.clearedwork_item {
+		edges = append(edges, servicerequest.EdgeWorkItem)
+	}
 	return edges
 }
 
 // EdgeCleared returns a boolean which indicates if the edge with the given name
 // was cleared in this mutation.
 func (m *ServiceRequestMutation) EdgeCleared(name string) bool {
+	switch name {
+	case servicerequest.EdgeWorkItem:
+		return m.clearedwork_item
+	}
 	return false
 }
 
 // ClearEdge clears the value of the edge with the given name. It returns an error
 // if that edge is not defined in the schema.
 func (m *ServiceRequestMutation) ClearEdge(name string) error {
+	switch name {
+	case servicerequest.EdgeWorkItem:
+		m.ClearWorkItem()
+		return nil
+	}
 	return fmt.Errorf("unknown ServiceRequest unique edge %s", name)
 }
 
 // ResetEdge resets all changes to the edge with the given name in this mutation.
 // It returns an error if the edge is not defined in the schema.
 func (m *ServiceRequestMutation) ResetEdge(name string) error {
+	switch name {
+	case servicerequest.EdgeWorkItem:
+		m.ResetWorkItem()
+		return nil
+	}
 	return fmt.Errorf("unknown ServiceRequest edge %s", name)
 }
 

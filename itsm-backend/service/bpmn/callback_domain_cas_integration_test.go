@@ -167,7 +167,7 @@ func TestServiceRequestCallbackConcurrentCompletePostgresHasSingleAppliedAggrega
 	tenant := setupClient.Tenant.Create().SetName("SR CAS").SetCode("sr-cas-" + schemaName).SetDomain(schemaName + ".test").SetStatus("active").SaveX(ctx)
 	actor := setupClient.User.Create().SetUsername("sr-actor-" + schemaName).SetEmail(schemaName + "@test.local").SetPasswordHash("x").SetName("actor").SetTenantID(tenant.ID).SetActive(true).SaveX(ctx)
 	workItem := setupClient.Ticket.Create().SetTitle("concurrent request").SetTicketNumber("SR-CAS-1").SetStatus("in_progress").SetRecordClass("service_request_item").SetRequesterID(actor.ID).SetTenantID(tenant.ID).SaveX(ctx)
-	request := setupClient.ServiceRequest.Create().SetTenantID(tenant.ID).SetTicketID(workItem.ID).SetCatalogID(1).SetRequesterID(actor.ID).SaveX(ctx)
+	request := setupClient.ServiceRequest.Create().SetTicketID(workItem.ID).SetCatalogID(1).SaveX(ctx)
 
 	arrived := make(chan struct{}, 2)
 	release := make(chan struct{})

@@ -186,7 +186,7 @@ func TestSSLVPNRequest_CreateRollsBackWorkItemAndDoesNotStartBPMNWhenExtensionPe
 	classifiedCount, err := fx.client.Ticket.Query().Where(ticket.TenantIDEQ(fx.tenant.ID), ticket.RecordClassEQ("service_request_item")).Count(fx.ctx)
 	require.NoError(t, err)
 	assert.Zero(t, classifiedCount)
-	extensionCount, err := fx.client.ServiceRequest.Query().Where(servicerequest.TenantIDEQ(fx.tenant.ID)).Count(fx.ctx)
+	extensionCount, err := fx.client.ServiceRequest.Query().Where(servicerequest.HasWorkItemWith(ticket.TenantID(fx.tenant.ID))).Count(fx.ctx)
 	require.NoError(t, err)
 	assert.Zero(t, extensionCount)
 	processCount, err := fx.client.ProcessInstance.Query().Where(processinstance.TenantIDEQ(fx.tenant.ID)).Count(fx.ctx)
@@ -422,7 +422,7 @@ func assertSSLVPNProcessAdvancedOnce(t *testing.T, fx *sslvpnDelegationFixture, 
 
 func assertExclusiveSSLVPNServiceRequestClass(t *testing.T, fx *sslvpnDelegationFixture, workItemID int) {
 	t.Helper()
-	srCount, err := fx.client.ServiceRequest.Query().Where(servicerequest.TicketIDEQ(workItemID), servicerequest.TenantIDEQ(fx.tenant.ID)).Count(fx.ctx)
+	srCount, err := fx.client.ServiceRequest.Query().Where(servicerequest.TicketIDEQ(workItemID), servicerequest.HasWorkItemWith(ticket.TenantID(fx.tenant.ID))).Count(fx.ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 1, srCount)
 	incidentCount, err := fx.client.Incident.Query().Where(incident.WorkItemIDEQ(workItemID), incident.HasWorkItemWith(ticket.TenantIDEQ(fx.tenant.ID))).Count(fx.ctx)
@@ -435,7 +435,7 @@ func assertExclusiveSSLVPNIncidentClass(t *testing.T, fx *sslvpnDelegationFixtur
 	incidentCount, err := fx.client.Incident.Query().Where(incident.WorkItemIDEQ(workItemID), incident.HasWorkItemWith(ticket.TenantIDEQ(fx.tenant.ID))).Count(fx.ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 1, incidentCount)
-	srCount, err := fx.client.ServiceRequest.Query().Where(servicerequest.TicketIDEQ(workItemID), servicerequest.TenantIDEQ(fx.tenant.ID)).Count(fx.ctx)
+	srCount, err := fx.client.ServiceRequest.Query().Where(servicerequest.TicketIDEQ(workItemID), servicerequest.HasWorkItemWith(ticket.TenantID(fx.tenant.ID))).Count(fx.ctx)
 	require.NoError(t, err)
 	assert.Zero(t, srCount)
 }

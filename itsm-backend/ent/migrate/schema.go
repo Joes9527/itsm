@@ -3888,11 +3888,8 @@ var (
 	// ServiceRequestsColumns holds the columns for the "service_requests" table.
 	ServiceRequestsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
-		{Name: "tenant_id", Type: field.TypeInt},
-		{Name: "ticket_id", Type: field.TypeInt},
 		{Name: "catalog_id", Type: field.TypeInt},
 		{Name: "ci_id", Type: field.TypeInt, Nullable: true},
-		{Name: "requester_id", Type: field.TypeInt},
 		{Name: "form_data", Type: field.TypeJSON, Nullable: true},
 		{Name: "cost_center", Type: field.TypeString, Nullable: true},
 		{Name: "data_classification", Type: field.TypeString, Default: "internal"},
@@ -3904,41 +3901,30 @@ var (
 		{Name: "contact_email", Type: field.TypeString, Nullable: true},
 		{Name: "quantity", Type: field.TypeInt, Default: 1},
 		{Name: "expected_at", Type: field.TypeTime, Nullable: true},
-		{Name: "processor_id", Type: field.TypeInt, Nullable: true},
 		{Name: "started_at", Type: field.TypeTime, Nullable: true},
 		{Name: "completed_at", Type: field.TypeTime, Nullable: true},
 		{Name: "completion_note", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "last_error", Type: field.TypeString, Nullable: true, Size: 2147483647},
-		{Name: "version", Type: field.TypeInt, Default: 1},
-		{Name: "created_at", Type: field.TypeTime},
-		{Name: "updated_at", Type: field.TypeTime},
-		{Name: "deleted_at", Type: field.TypeTime, Nullable: true},
+		{Name: "ticket_id", Type: field.TypeInt},
 	}
 	// ServiceRequestsTable holds the schema information for the "service_requests" table.
 	ServiceRequestsTable = &schema.Table{
 		Name:       "service_requests",
 		Columns:    ServiceRequestsColumns,
 		PrimaryKey: []*schema.Column{ServiceRequestsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "service_requests_work_item_fk",
+				Columns:    []*schema.Column{ServiceRequestsColumns[18]},
+				RefColumns: []*schema.Column{TicketsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
 		Indexes: []*schema.Index{
 			{
 				Name:    "servicerequest_ticket_id",
 				Unique:  true,
-				Columns: []*schema.Column{ServiceRequestsColumns[2]},
-			},
-			{
-				Name:    "servicerequest_tenant_id_created_at",
-				Unique:  false,
-				Columns: []*schema.Column{ServiceRequestsColumns[1], ServiceRequestsColumns[23]},
-			},
-			{
-				Name:    "servicerequest_tenant_id_requester_id_created_at",
-				Unique:  false,
-				Columns: []*schema.Column{ServiceRequestsColumns[1], ServiceRequestsColumns[5], ServiceRequestsColumns[23]},
-			},
-			{
-				Name:    "servicerequest_tenant_id_ci_id",
-				Unique:  false,
-				Columns: []*schema.Column{ServiceRequestsColumns[1], ServiceRequestsColumns[4]},
+				Columns: []*schema.Column{ServiceRequestsColumns[18]},
 			},
 		},
 	}
@@ -5585,6 +5571,7 @@ func init() {
 	SLAMetricsTable.ForeignKeys[0].RefTable = SLADefinitionsTable
 	SLAViolationsTable.ForeignKeys[0].RefTable = SLADefinitionsTable
 	SLAViolationsTable.ForeignKeys[1].RefTable = TicketsTable
+	ServiceRequestsTable.ForeignKeys[0].RefTable = TicketsTable
 	SurveyResponsesTable.ForeignKeys[0].RefTable = SurveysTable
 	TenantsTable.ForeignKeys[0].RefTable = BootstrapTokensTable
 	TenantInstallationsTable.ForeignKeys[0].RefTable = MarketplaceItemsTable

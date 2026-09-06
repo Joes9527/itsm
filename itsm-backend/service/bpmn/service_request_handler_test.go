@@ -47,14 +47,13 @@ func setupServiceRequestHandlerFixture(t *testing.T) (*ent.Client, *ServiceReque
 	require.NoError(t, err)
 
 	tkt, err := client.Ticket.Create().
-		SetTitle("服务请求关联工单").SetTicketNumber("T-SRH-1").SetStatus("open").
+		SetTitle("服务请求关联工单").SetRecordClass("service_request_item").SetTicketNumber("T-SRH-1").SetStatus("open").
 		SetRequesterID(requester.ID).SetTenantID(tenant.ID).
 		Save(ctx)
 	require.NoError(t, err)
 
 	sr, err := client.ServiceRequest.Create().
-		SetTenantID(tenant.ID).SetTicketID(tkt.ID).SetCatalogID(1).SetRequesterID(requester.ID).
-		Save(ctx)
+		SetTicketID(tkt.ID).SetCatalogID(1).Save(ctx)
 	require.NoError(t, err)
 
 	logger := zaptest.NewLogger(t).Sugar()
@@ -78,7 +77,7 @@ func TestServiceRequestHandler_AssignRequest_SetsAuthoritativeWorkItemAssignee(t
 
 	updated, err := client.ServiceRequest.Get(ctx, sr.ID)
 	require.NoError(t, err)
-	assert.Zero(t, updated.ProcessorID, "professional extension must not shadow WorkItem assignment")
+	assert.Equal(t, tkt.ID, updated.TicketID, "professional extension retains owning WorkItem")
 	updatedWorkItem := client.Ticket.GetX(ctx, tkt.ID)
 	require.Equal(t, assignee.ID, updatedWorkItem.AssigneeID)
 }
@@ -90,10 +89,11 @@ func TestServiceRequestHandler_ProvisionCASLoserReturnsIdempotent(t *testing.T) 
 	var injected atomic.Bool
 	client.Use(func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(mutationCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
-			if srMutation, ok := mutation.(*ent.ServiceRequestMutation); ok {
-				if _, exists := srMutation.StartedAt(); exists && injected.CompareAndSwap(false, true) {
-					_, injectErr := client.ServiceRequest.UpdateOneID(sr.ID).SetStartedAt(startedAt).AddVersion(1).Save(mutationCtx)
+			if wiMutation, ok := mutation.(*ent.TicketMutation); ok {
+				if _, exists := wiMutation.AddedVersion(); exists && injected.CompareAndSwap(false, true) {
+					_, injectErr := client.ServiceRequest.UpdateOneID(sr.ID).SetStartedAt(startedAt).Save(mutationCtx)
 					require.NoError(t, injectErr)
+					client.Ticket.UpdateOneID(sr.TicketID).AddVersion(1).ExecX(mutationCtx)
 				}
 			}
 			return next.Mutate(mutationCtx, mutation)
@@ -124,10 +124,11 @@ func TestServiceRequestHandler_UpdateRequestCASLoserClassifiesPayload(t *testing
 			var injected atomic.Bool
 			client.Use(func(next ent.Mutator) ent.Mutator {
 				return ent.MutateFunc(func(mutationCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
-					if srMutation, ok := mutation.(*ent.ServiceRequestMutation); ok {
-						if _, exists := srMutation.CostCenter(); exists && injected.CompareAndSwap(false, true) {
-							_, injectErr := client.ServiceRequest.UpdateOneID(sr.ID).SetCostCenter(tc.winnerCost).AddVersion(1).Save(mutationCtx)
+					if wiMutation, ok := mutation.(*ent.TicketMutation); ok {
+						if _, exists := wiMutation.AddedVersion(); exists && injected.CompareAndSwap(false, true) {
+							_, injectErr := client.ServiceRequest.UpdateOneID(sr.ID).SetCostCenter(tc.winnerCost).Save(mutationCtx)
 							require.NoError(t, injectErr)
+							client.Ticket.UpdateOneID(sr.TicketID).AddVersion(1).ExecX(mutationCtx)
 						}
 					}
 					return next.Mutate(mutationCtx, mutation)
@@ -190,8 +191,8 @@ func TestServiceRequestHandler_CompleteRequestCASConflictBlocksWithoutPartialWri
 	var injected atomic.Bool
 	client.Use(func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(mutationCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
-			if srMutation, ok := mutation.(*ent.ServiceRequestMutation); ok {
-				if _, exists := srMutation.CompletedAt(); exists && injected.CompareAndSwap(false, true) {
+			if wiMutation, ok := mutation.(*ent.TicketMutation); ok {
+				if _, exists := wiMutation.AddedVersion(); exists && injected.CompareAndSwap(false, true) {
 					return 0, nil
 				}
 			}

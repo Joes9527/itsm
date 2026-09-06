@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"entgo.io/ent/dialect/sql"
+	"entgo.io/ent/dialect/sql/sqlgraph"
 )
 
 // ID filters vertices based on their ID field.
@@ -54,11 +55,6 @@ func IDLTE(id int) predicate.ServiceRequest {
 	return predicate.ServiceRequest(sql.FieldLTE(FieldID, id))
 }
 
-// TenantID applies equality check predicate on the "tenant_id" field. It's identical to TenantIDEQ.
-func TenantID(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldEQ(FieldTenantID, v))
-}
-
 // TicketID applies equality check predicate on the "ticket_id" field. It's identical to TicketIDEQ.
 func TicketID(v int) predicate.ServiceRequest {
 	return predicate.ServiceRequest(sql.FieldEQ(FieldTicketID, v))
@@ -72,11 +68,6 @@ func CatalogID(v int) predicate.ServiceRequest {
 // CiID applies equality check predicate on the "ci_id" field. It's identical to CiIDEQ.
 func CiID(v int) predicate.ServiceRequest {
 	return predicate.ServiceRequest(sql.FieldEQ(FieldCiID, v))
-}
-
-// RequesterID applies equality check predicate on the "requester_id" field. It's identical to RequesterIDEQ.
-func RequesterID(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldEQ(FieldRequesterID, v))
 }
 
 // CostCenter applies equality check predicate on the "cost_center" field. It's identical to CostCenterEQ.
@@ -124,11 +115,6 @@ func ExpectedAt(v time.Time) predicate.ServiceRequest {
 	return predicate.ServiceRequest(sql.FieldEQ(FieldExpectedAt, v))
 }
 
-// ProcessorID applies equality check predicate on the "processor_id" field. It's identical to ProcessorIDEQ.
-func ProcessorID(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldEQ(FieldProcessorID, v))
-}
-
 // StartedAt applies equality check predicate on the "started_at" field. It's identical to StartedAtEQ.
 func StartedAt(v time.Time) predicate.ServiceRequest {
 	return predicate.ServiceRequest(sql.FieldEQ(FieldStartedAt, v))
@@ -149,66 +135,6 @@ func LastError(v string) predicate.ServiceRequest {
 	return predicate.ServiceRequest(sql.FieldEQ(FieldLastError, v))
 }
 
-// Version applies equality check predicate on the "version" field. It's identical to VersionEQ.
-func Version(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldEQ(FieldVersion, v))
-}
-
-// CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
-func CreatedAt(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldEQ(FieldCreatedAt, v))
-}
-
-// UpdatedAt applies equality check predicate on the "updated_at" field. It's identical to UpdatedAtEQ.
-func UpdatedAt(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldEQ(FieldUpdatedAt, v))
-}
-
-// DeletedAt applies equality check predicate on the "deleted_at" field. It's identical to DeletedAtEQ.
-func DeletedAt(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldEQ(FieldDeletedAt, v))
-}
-
-// TenantIDEQ applies the EQ predicate on the "tenant_id" field.
-func TenantIDEQ(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldEQ(FieldTenantID, v))
-}
-
-// TenantIDNEQ applies the NEQ predicate on the "tenant_id" field.
-func TenantIDNEQ(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldNEQ(FieldTenantID, v))
-}
-
-// TenantIDIn applies the In predicate on the "tenant_id" field.
-func TenantIDIn(vs ...int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldIn(FieldTenantID, vs...))
-}
-
-// TenantIDNotIn applies the NotIn predicate on the "tenant_id" field.
-func TenantIDNotIn(vs ...int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldNotIn(FieldTenantID, vs...))
-}
-
-// TenantIDGT applies the GT predicate on the "tenant_id" field.
-func TenantIDGT(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldGT(FieldTenantID, v))
-}
-
-// TenantIDGTE applies the GTE predicate on the "tenant_id" field.
-func TenantIDGTE(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldGTE(FieldTenantID, v))
-}
-
-// TenantIDLT applies the LT predicate on the "tenant_id" field.
-func TenantIDLT(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldLT(FieldTenantID, v))
-}
-
-// TenantIDLTE applies the LTE predicate on the "tenant_id" field.
-func TenantIDLTE(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldLTE(FieldTenantID, v))
-}
-
 // TicketIDEQ applies the EQ predicate on the "ticket_id" field.
 func TicketIDEQ(v int) predicate.ServiceRequest {
 	return predicate.ServiceRequest(sql.FieldEQ(FieldTicketID, v))
@@ -227,26 +153,6 @@ func TicketIDIn(vs ...int) predicate.ServiceRequest {
 // TicketIDNotIn applies the NotIn predicate on the "ticket_id" field.
 func TicketIDNotIn(vs ...int) predicate.ServiceRequest {
 	return predicate.ServiceRequest(sql.FieldNotIn(FieldTicketID, vs...))
-}
-
-// TicketIDGT applies the GT predicate on the "ticket_id" field.
-func TicketIDGT(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldGT(FieldTicketID, v))
-}
-
-// TicketIDGTE applies the GTE predicate on the "ticket_id" field.
-func TicketIDGTE(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldGTE(FieldTicketID, v))
-}
-
-// TicketIDLT applies the LT predicate on the "ticket_id" field.
-func TicketIDLT(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldLT(FieldTicketID, v))
-}
-
-// TicketIDLTE applies the LTE predicate on the "ticket_id" field.
-func TicketIDLTE(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldLTE(FieldTicketID, v))
 }
 
 // CatalogIDEQ applies the EQ predicate on the "catalog_id" field.
@@ -337,46 +243,6 @@ func CiIDIsNil() predicate.ServiceRequest {
 // CiIDNotNil applies the NotNil predicate on the "ci_id" field.
 func CiIDNotNil() predicate.ServiceRequest {
 	return predicate.ServiceRequest(sql.FieldNotNull(FieldCiID))
-}
-
-// RequesterIDEQ applies the EQ predicate on the "requester_id" field.
-func RequesterIDEQ(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldEQ(FieldRequesterID, v))
-}
-
-// RequesterIDNEQ applies the NEQ predicate on the "requester_id" field.
-func RequesterIDNEQ(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldNEQ(FieldRequesterID, v))
-}
-
-// RequesterIDIn applies the In predicate on the "requester_id" field.
-func RequesterIDIn(vs ...int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldIn(FieldRequesterID, vs...))
-}
-
-// RequesterIDNotIn applies the NotIn predicate on the "requester_id" field.
-func RequesterIDNotIn(vs ...int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldNotIn(FieldRequesterID, vs...))
-}
-
-// RequesterIDGT applies the GT predicate on the "requester_id" field.
-func RequesterIDGT(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldGT(FieldRequesterID, v))
-}
-
-// RequesterIDGTE applies the GTE predicate on the "requester_id" field.
-func RequesterIDGTE(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldGTE(FieldRequesterID, v))
-}
-
-// RequesterIDLT applies the LT predicate on the "requester_id" field.
-func RequesterIDLT(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldLT(FieldRequesterID, v))
-}
-
-// RequesterIDLTE applies the LTE predicate on the "requester_id" field.
-func RequesterIDLTE(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldLTE(FieldRequesterID, v))
 }
 
 // FormDataIsNil applies the IsNil predicate on the "form_data" field.
@@ -849,56 +715,6 @@ func ExpectedAtNotNil() predicate.ServiceRequest {
 	return predicate.ServiceRequest(sql.FieldNotNull(FieldExpectedAt))
 }
 
-// ProcessorIDEQ applies the EQ predicate on the "processor_id" field.
-func ProcessorIDEQ(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldEQ(FieldProcessorID, v))
-}
-
-// ProcessorIDNEQ applies the NEQ predicate on the "processor_id" field.
-func ProcessorIDNEQ(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldNEQ(FieldProcessorID, v))
-}
-
-// ProcessorIDIn applies the In predicate on the "processor_id" field.
-func ProcessorIDIn(vs ...int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldIn(FieldProcessorID, vs...))
-}
-
-// ProcessorIDNotIn applies the NotIn predicate on the "processor_id" field.
-func ProcessorIDNotIn(vs ...int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldNotIn(FieldProcessorID, vs...))
-}
-
-// ProcessorIDGT applies the GT predicate on the "processor_id" field.
-func ProcessorIDGT(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldGT(FieldProcessorID, v))
-}
-
-// ProcessorIDGTE applies the GTE predicate on the "processor_id" field.
-func ProcessorIDGTE(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldGTE(FieldProcessorID, v))
-}
-
-// ProcessorIDLT applies the LT predicate on the "processor_id" field.
-func ProcessorIDLT(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldLT(FieldProcessorID, v))
-}
-
-// ProcessorIDLTE applies the LTE predicate on the "processor_id" field.
-func ProcessorIDLTE(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldLTE(FieldProcessorID, v))
-}
-
-// ProcessorIDIsNil applies the IsNil predicate on the "processor_id" field.
-func ProcessorIDIsNil() predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldIsNull(FieldProcessorID))
-}
-
-// ProcessorIDNotNil applies the NotNil predicate on the "processor_id" field.
-func ProcessorIDNotNil() predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldNotNull(FieldProcessorID))
-}
-
 // StartedAtEQ applies the EQ predicate on the "started_at" field.
 func StartedAtEQ(v time.Time) predicate.ServiceRequest {
 	return predicate.ServiceRequest(sql.FieldEQ(FieldStartedAt, v))
@@ -1149,174 +965,27 @@ func LastErrorContainsFold(v string) predicate.ServiceRequest {
 	return predicate.ServiceRequest(sql.FieldContainsFold(FieldLastError, v))
 }
 
-// VersionEQ applies the EQ predicate on the "version" field.
-func VersionEQ(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldEQ(FieldVersion, v))
+// HasWorkItem applies the HasEdge predicate on the "work_item" edge.
+func HasWorkItem() predicate.ServiceRequest {
+	return predicate.ServiceRequest(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, WorkItemTable, WorkItemColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
 }
 
-// VersionNEQ applies the NEQ predicate on the "version" field.
-func VersionNEQ(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldNEQ(FieldVersion, v))
-}
-
-// VersionIn applies the In predicate on the "version" field.
-func VersionIn(vs ...int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldIn(FieldVersion, vs...))
-}
-
-// VersionNotIn applies the NotIn predicate on the "version" field.
-func VersionNotIn(vs ...int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldNotIn(FieldVersion, vs...))
-}
-
-// VersionGT applies the GT predicate on the "version" field.
-func VersionGT(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldGT(FieldVersion, v))
-}
-
-// VersionGTE applies the GTE predicate on the "version" field.
-func VersionGTE(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldGTE(FieldVersion, v))
-}
-
-// VersionLT applies the LT predicate on the "version" field.
-func VersionLT(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldLT(FieldVersion, v))
-}
-
-// VersionLTE applies the LTE predicate on the "version" field.
-func VersionLTE(v int) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldLTE(FieldVersion, v))
-}
-
-// CreatedAtEQ applies the EQ predicate on the "created_at" field.
-func CreatedAtEQ(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldEQ(FieldCreatedAt, v))
-}
-
-// CreatedAtNEQ applies the NEQ predicate on the "created_at" field.
-func CreatedAtNEQ(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldNEQ(FieldCreatedAt, v))
-}
-
-// CreatedAtIn applies the In predicate on the "created_at" field.
-func CreatedAtIn(vs ...time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldIn(FieldCreatedAt, vs...))
-}
-
-// CreatedAtNotIn applies the NotIn predicate on the "created_at" field.
-func CreatedAtNotIn(vs ...time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldNotIn(FieldCreatedAt, vs...))
-}
-
-// CreatedAtGT applies the GT predicate on the "created_at" field.
-func CreatedAtGT(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldGT(FieldCreatedAt, v))
-}
-
-// CreatedAtGTE applies the GTE predicate on the "created_at" field.
-func CreatedAtGTE(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldGTE(FieldCreatedAt, v))
-}
-
-// CreatedAtLT applies the LT predicate on the "created_at" field.
-func CreatedAtLT(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldLT(FieldCreatedAt, v))
-}
-
-// CreatedAtLTE applies the LTE predicate on the "created_at" field.
-func CreatedAtLTE(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldLTE(FieldCreatedAt, v))
-}
-
-// UpdatedAtEQ applies the EQ predicate on the "updated_at" field.
-func UpdatedAtEQ(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldEQ(FieldUpdatedAt, v))
-}
-
-// UpdatedAtNEQ applies the NEQ predicate on the "updated_at" field.
-func UpdatedAtNEQ(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldNEQ(FieldUpdatedAt, v))
-}
-
-// UpdatedAtIn applies the In predicate on the "updated_at" field.
-func UpdatedAtIn(vs ...time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldIn(FieldUpdatedAt, vs...))
-}
-
-// UpdatedAtNotIn applies the NotIn predicate on the "updated_at" field.
-func UpdatedAtNotIn(vs ...time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldNotIn(FieldUpdatedAt, vs...))
-}
-
-// UpdatedAtGT applies the GT predicate on the "updated_at" field.
-func UpdatedAtGT(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldGT(FieldUpdatedAt, v))
-}
-
-// UpdatedAtGTE applies the GTE predicate on the "updated_at" field.
-func UpdatedAtGTE(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldGTE(FieldUpdatedAt, v))
-}
-
-// UpdatedAtLT applies the LT predicate on the "updated_at" field.
-func UpdatedAtLT(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldLT(FieldUpdatedAt, v))
-}
-
-// UpdatedAtLTE applies the LTE predicate on the "updated_at" field.
-func UpdatedAtLTE(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldLTE(FieldUpdatedAt, v))
-}
-
-// DeletedAtEQ applies the EQ predicate on the "deleted_at" field.
-func DeletedAtEQ(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldEQ(FieldDeletedAt, v))
-}
-
-// DeletedAtNEQ applies the NEQ predicate on the "deleted_at" field.
-func DeletedAtNEQ(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldNEQ(FieldDeletedAt, v))
-}
-
-// DeletedAtIn applies the In predicate on the "deleted_at" field.
-func DeletedAtIn(vs ...time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldIn(FieldDeletedAt, vs...))
-}
-
-// DeletedAtNotIn applies the NotIn predicate on the "deleted_at" field.
-func DeletedAtNotIn(vs ...time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldNotIn(FieldDeletedAt, vs...))
-}
-
-// DeletedAtGT applies the GT predicate on the "deleted_at" field.
-func DeletedAtGT(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldGT(FieldDeletedAt, v))
-}
-
-// DeletedAtGTE applies the GTE predicate on the "deleted_at" field.
-func DeletedAtGTE(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldGTE(FieldDeletedAt, v))
-}
-
-// DeletedAtLT applies the LT predicate on the "deleted_at" field.
-func DeletedAtLT(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldLT(FieldDeletedAt, v))
-}
-
-// DeletedAtLTE applies the LTE predicate on the "deleted_at" field.
-func DeletedAtLTE(v time.Time) predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldLTE(FieldDeletedAt, v))
-}
-
-// DeletedAtIsNil applies the IsNil predicate on the "deleted_at" field.
-func DeletedAtIsNil() predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldIsNull(FieldDeletedAt))
-}
-
-// DeletedAtNotNil applies the NotNil predicate on the "deleted_at" field.
-func DeletedAtNotNil() predicate.ServiceRequest {
-	return predicate.ServiceRequest(sql.FieldNotNull(FieldDeletedAt))
+// HasWorkItemWith applies the HasEdge predicate on the "work_item" edge with a given conditions (other predicates).
+func HasWorkItemWith(preds ...predicate.Ticket) predicate.ServiceRequest {
+	return predicate.ServiceRequest(func(s *sql.Selector) {
+		step := newWorkItemStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // And groups predicates with the AND operator between them.

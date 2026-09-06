@@ -8,7 +8,6 @@ import (
 	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/ent"
-	entticket "itsm-backend/ent/ticket"
 	"itsm-backend/repository/ticket"
 	"itsm-backend/service"
 
@@ -84,54 +83,9 @@ func (s *Service) GetByTicketID(ctx context.Context, ticketID, tenantID int) (*S
 	return s.repo.GetByTicketID(ctx, ticketID, tenantID)
 }
 
-// List 返回服务请求列表，并批量回填每条记录关联 ticket 的 title/status（展示用，
-// 非持久化字段——见 entity.go 上 TicketTitle/TicketStatus 的注释）。批量查一次
-// `WHERE id IN (...)`，不是逐条查，避免 N+1（同 FieldDefinitionService.ListDefinitionsForEntities
-// 的批量加载先例）。批量回填失败只记警告、不让整个列表请求失败——title/status 是展示增强，
-// 不是列表能否返回的必要条件。
+// List loads complete aggregates through the repository's required WorkItem edge.
 func (s *Service) List(ctx context.Context, tenantID int, filters ListFilters) ([]*ServiceRequest, int, error) {
-	list, total, err := s.repo.List(ctx, tenantID, filters)
-	if err != nil {
-		return nil, 0, err
-	}
-	s.attachTicketSummaries(ctx, tenantID, list)
-	return list, total, nil
-}
-
-// attachTicketSummaries 批量查询 list 里每条记录关联的 Ticket，把 title/status 写回
-// 对应记录的 TicketTitle/TicketStatus 字段。
-func (s *Service) attachTicketSummaries(ctx context.Context, tenantID int, list []*ServiceRequest) {
-	if s.client == nil || len(list) == 0 {
-		return
-	}
-	ticketIDs := make([]int, 0, len(list))
-	for _, r := range list {
-		if r.TicketID > 0 {
-			ticketIDs = append(ticketIDs, r.TicketID)
-		}
-	}
-	if len(ticketIDs) == 0 {
-		return
-	}
-
-	tickets, err := s.client.Ticket.Query().
-		Where(entticket.IDIn(ticketIDs...), entticket.TenantID(tenantID)).
-		All(ctx)
-	if err != nil {
-		s.logger.Warnw("Failed to batch-load linked tickets for service request list", "error", err)
-		return
-	}
-
-	byID := make(map[int]*ent.Ticket, len(tickets))
-	for _, t := range tickets {
-		byID[t.ID] = t
-	}
-	for _, r := range list {
-		if t, ok := byID[r.TicketID]; ok {
-			r.TicketTitle = t.Title
-			r.TicketStatus = t.Status
-		}
-	}
+	return s.repo.List(ctx, tenantID, filters)
 }
 
 // Update updates a service request
@@ -174,7 +128,7 @@ func (s *Service) Update(ctx context.Context, id, tenantID, actorID int, actorRo
 		return nil, common.NewInternalError("Failed to update service request", err)
 	}
 
-	return req, nil
+	return s.repo.Get(ctx, id, tenantID)
 }
 
 // Delete deletes a service request

@@ -484,7 +484,7 @@ func TestIncidentServiceTaskHandler_CreateIncidentRequiresDurableApplication(t *
 			if missing == "identity" {
 				require.Contains(t, result.Message, "durable callback identity")
 			} else {
-				require.Contains(t, result.Message, "application is unavailable")
+				require.Contains(t, result.Message, "application or actor directory is unavailable")
 			}
 			require.Equal(t, 1, client.Ticket.Query().CountX(ctx))
 			require.Equal(t, 1, client.Incident.Query().CountX(ctx))

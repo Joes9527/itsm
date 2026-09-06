@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"errors"
+	"itsm-backend/infrastructure/cloud"
 	"strconv"
 	"testing"
 
@@ -46,7 +48,7 @@ func provisioningTestFixture(t *testing.T, client *ent.Client, label string) (sr
 
 	tkt, err := client.Ticket.Create().
 		SetTicketNumber("TKT-PROV-" + label).
-		SetTitle("Provisioning Test Ticket").
+		SetTitle("Provisioning Test Ticket").SetRecordClass("service_request_item").
 		SetDescription("desc").
 		SetPriority("medium").
 		SetStatus("open").
@@ -56,10 +58,8 @@ func provisioningTestFixture(t *testing.T, client *ent.Client, label string) (sr
 	require.NoError(t, err)
 
 	req, err := client.ServiceRequest.Create().
-		SetTenantID(tenant.ID).
 		SetTicketID(tkt.ID).
 		SetCatalogID(1).
-		SetRequesterID(requester.ID).
 		SetComplianceAck(true).
 		SetDataClassification("internal").
 		Save(ctx)
@@ -91,7 +91,7 @@ func TestCreateTaskFromServiceRequest_RejectsWithoutApprovalDecision(t *testing.
 	sr, _ := provisioningTestFixture(t, client, "no-decision")
 
 	svc := NewProvisioningService(client, zaptest.NewLogger(t).Sugar())
-	task, err := svc.CreateTaskFromServiceRequest(ctx, sr.ID, sr.TenantID, provisioningTestActorID, provisioningTestRole)
+	task, err := svc.CreateTaskFromServiceRequest(ctx, sr.ID, client.Ticket.GetX(ctx, sr.TicketID).TenantID, provisioningTestActorID, provisioningTestRole)
 	require.Error(t, err)
 	assert.Nil(t, task)
 
@@ -124,16 +124,16 @@ func TestCreateTaskFromServiceRequest_SucceedsWithApprovalDecision(t *testing.T)
 		SetActorID(1).
 		SetAction("approve").
 		SetDecision("approved").
-		SetTenantID(sr.TenantID).
+		SetTenantID(client.Ticket.GetX(ctx, sr.TicketID).TenantID).
 		Save(ctx)
 	require.NoError(t, err)
 
 	svc := NewProvisioningService(client, zaptest.NewLogger(t).Sugar())
-	task, err := svc.CreateTaskFromServiceRequest(ctx, sr.ID, sr.TenantID, provisioningTestActorID, provisioningTestRole)
+	task, err := svc.CreateTaskFromServiceRequest(ctx, sr.ID, client.Ticket.GetX(ctx, sr.TicketID).TenantID, provisioningTestActorID, provisioningTestRole)
 	require.NoError(t, err)
 	require.NotNil(t, task)
 	assert.Equal(t, sr.ID, task.ServiceRequestID)
-	assert.Equal(t, sr.TenantID, task.TenantID)
+	assert.Equal(t, client.Ticket.GetX(ctx, sr.TicketID).TenantID, task.TenantID)
 
 	count, err := client.ProvisioningTask.Query().Count(ctx)
 	require.NoError(t, err)
@@ -169,16 +169,56 @@ func TestCreateTaskFromServiceRequest_CrossTenantApprovalDoesNotUnlock(t *testin
 		SetActorID(1).
 		SetAction("approve").
 		SetDecision("approved").
-		SetTenantID(srB.TenantID).
+		SetTenantID(client.Ticket.GetX(ctx, srB.TicketID).TenantID).
 		Save(ctx)
 	require.NoError(t, err)
 
 	svc := NewProvisioningService(client, zaptest.NewLogger(t).Sugar())
-	task, err := svc.CreateTaskFromServiceRequest(ctx, srA.ID, srA.TenantID, provisioningTestActorID, provisioningTestRole)
+	task, err := svc.CreateTaskFromServiceRequest(ctx, srA.ID, client.Ticket.GetX(ctx, srA.TicketID).TenantID, provisioningTestActorID, provisioningTestRole)
 	require.Error(t, err, "a same-business_id approval decision filed under a different tenant must not unlock provisioning")
 	assert.Nil(t, task)
 
 	count, err := client.ProvisioningTask.Query().Count(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, 0, count)
+}
+
+type authorityFailureProvider struct{ before func() }
+
+func (p authorityFailureProvider) Name() string { return "failure-test" }
+func (p authorityFailureProvider) Execute(context.Context, map[string]any) (*cloud.ExecuteResult, error) {
+	if p.before != nil {
+		p.before()
+	}
+	return nil, errors.New("provider refused request")
+}
+func TestProvisioningFailureUsesWorkItemVersionTransaction(t *testing.T) {
+	for _, conflict := range []bool{false, true} {
+		t.Run(strconv.FormatBool(conflict), func(t *testing.T) {
+			client := enttest.Open(t, "sqlite3", "file:provision-authority-"+strconv.FormatBool(conflict)+"?mode=memory&cache=shared&_fk=1")
+			defer client.Close()
+			ctx := context.Background()
+			sr, wi := provisioningTestFixture(t, client, "authority")
+			task := client.ProvisioningTask.Create().SetTenantID(wi.TenantID).SetServiceRequestID(sr.ID).SetProvider("alicloud").SetResourceType("ecs").SetStatus("pending").SaveX(ctx)
+			svc := NewProvisioningService(client, zaptest.NewLogger(t).Sugar())
+			provider := authorityFailureProvider{}
+			if conflict {
+				provider.before = func() { client.Ticket.UpdateOneID(wi.ID).AddVersion(1).ExecX(ctx) }
+			}
+			svc.provider = provider
+			_, err := svc.ExecuteTask(ctx, task.ID, wi.TenantID, provisioningTestActorID, provisioningTestRole)
+			require.Error(t, err)
+			current := client.Ticket.GetX(ctx, wi.ID)
+			require.Equal(t, wi.Version+1, current.Version)
+			if conflict {
+				require.ErrorContains(t, err, "WorkItem")
+				require.Empty(t, client.ServiceRequest.GetX(ctx, sr.ID).LastError)
+				require.Equal(t, "running", client.ProvisioningTask.GetX(ctx, task.ID).Status)
+			} else {
+				require.ErrorContains(t, err, "provider refused")
+				require.Equal(t, "provider refused request", client.ServiceRequest.GetX(ctx, sr.ID).LastError)
+				require.Equal(t, "failed", client.ProvisioningTask.GetX(ctx, task.ID).Status)
+			}
+		})
+	}
 }

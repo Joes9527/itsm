@@ -182,7 +182,7 @@ func catalogFixturePath(id int) string { return "/api/v1/service-catalogs/" + st
 // Explicit persistence fixture for repository read/isolation tests. Creation
 // field/default assertions live in the real Intake service and HTTP tests.
 func createSRRepositoryFixture(ctx context.Context, client *ent.Client, input *ServiceRequest) (*ServiceRequest, error) {
-	create := client.ServiceRequest.Create().SetTenantID(input.TenantID).SetRequesterID(input.RequesterID).SetTicketID(input.TicketID).SetCatalogID(input.CatalogID).SetDataClassification(input.DataClassification).SetComplianceAck(input.ComplianceAck).SetContactName(input.ContactName).SetContactEmail(input.ContactEmail).SetNillableExpectedAt(input.ExpectedAt).SetNillableExpireAt(input.ExpireAt)
+	create := client.ServiceRequest.Create().SetTicketID(input.TicketID).SetCatalogID(input.CatalogID).SetDataClassification(input.DataClassification).SetComplianceAck(input.ComplianceAck).SetContactName(input.ContactName).SetContactEmail(input.ContactEmail).SetNillableExpectedAt(input.ExpectedAt).SetNillableExpireAt(input.ExpireAt)
 	if input.Quantity > 0 {
 		create.SetQuantity(input.Quantity)
 	}

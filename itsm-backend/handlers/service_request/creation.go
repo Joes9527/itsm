@@ -176,7 +176,7 @@ func (*Service) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticke
 	}
 	input := prepared.Input
 	create := tx.ServiceRequest.Create().SetTicketID(item.ID).SetCatalogID(plan.Resolved.Catalog.ID).
-		SetTenantID(item.TenantID).SetRequesterID(item.RequesterID).SetCostCenter(input.CostCenter).
+		SetCostCenter(input.CostCenter).
 		SetDataClassification(input.DataClassification).SetNeedsPublicIP(input.NeedsPublicIP).SetSourceIPWhitelist(input.SourceIPWhitelist).
 		SetComplianceAck(input.ComplianceAck).SetContactName(input.ContactName).SetContactEmail(input.ContactEmail).SetQuantity(prepared.Quantity).
 		SetNillableExpireAt(prepared.ExpireAt).SetNillableExpectedAt(prepared.ExpectedAt).SetFormData(prepared.Context)

@@ -15807,6 +15807,22 @@ func (c *ServiceRequestClient) GetX(ctx context.Context, id int) *ServiceRequest
 	return obj
 }
 
+// QueryWorkItem queries the work_item edge of a ServiceRequest.
+func (c *ServiceRequestClient) QueryWorkItem(_m *ServiceRequest) *TicketQuery {
+	query := (&TicketClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(servicerequest.Table, servicerequest.FieldID, id),
+			sqlgraph.To(ticket.Table, ticket.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, servicerequest.WorkItemTable, servicerequest.WorkItemColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *ServiceRequestClient) Hooks() []Hook {
 	return c.hooks.ServiceRequest

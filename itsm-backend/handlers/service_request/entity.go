@@ -41,10 +41,9 @@ type ServiceRequest struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 
-	// TicketTitle/TicketStatus 是列表响应场景下由 Service.List 批量回填的展示字段——
-	// 不是持久化列，只在内存里跟着 List 的返回值走一次，供 handler.toDTO 映射进
-	// ServiceRequestResponse.TicketTitle/TicketStatus（/my-requests 列表页用，
-	// 省掉前端对每条记录再单独查一次 ticket 的往返）。Get/Create/Update 路径不填这两个字段。
+	// Shared identity, tenant, requester, assignment, version and timestamps above,
+	// plus title/status below, are required owning WorkItem projections populated
+	// by aggregate repository reads. They are never extension persistence fields.
 	TicketTitle  string
 	TicketStatus string
 }
