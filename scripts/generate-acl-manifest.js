@@ -229,7 +229,6 @@ const KNOWN_PUBLIC = new Set([
   "/api/v1/auth/azure/login",
   "/api/v1/auth/azure/callback",
   // 外部系统回调：由独立签名/事件校验保护，无法要求登录态 RBAC
-  "/api/v1/connectors/feishu/callback",
   "/api/v1/feishu/oauth/callback/:instance_id",
   "/api/v1/feishu/webhook/:instance_id",
 ]);
