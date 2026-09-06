@@ -35,6 +35,9 @@ func newIncidentSourcePolicy(bindings ...incidentSourceBinding) *incidentSourceP
 var incidentCreationSources = newIncidentSourcePolicy(
 	incidentSourceBinding{channel: "http", defaultSource: "manual", sources: []string{"manual", "user"}},
 	incidentSourceBinding{channel: "bpmn", provider: "bpmn", defaultSource: "system", sources: []string{"system"}},
+	// KAF Intake constructs this identity/reference only after v2 exchange and
+	// current mapping validation; public HTTP cannot self-assert this channel.
+	incidentSourceBinding{channel: "kaf_web", provider: "kaf", defaultSource: "user", sources: []string{"user"}},
 )
 
 func (*IncidentService) ValidateIncidentCreationInput(identity creation.Identity, ref *creation.SourceReference, input *creation.IncidentInput) (string, error) {

@@ -151,6 +151,7 @@ After initialization creates the schema, an authorized database administrator gr
 | `users` | SELECT | Credential lookup, refresh actor validation, MSP session selection |
 | `tenants` | SELECT | Tenant directory and active/expiry checks |
 | `msp_allocations` | SELECT | Active MSP customer authorization |
+| `external_identities` | SELECT | Verified provider/workspace/subject lookup after v2 assertion validation; mapping writes use tenant runtime transactions |
 | `connector_configs` | SELECT | Restore persisted connector registrations at startup |
 | `outbox_events` | SELECT, UPDATE | Cross-tenant transport claim, attempts, leases, acknowledgment and retry; enqueue stays on the tenant client |
 | `ticket_notifications` | SELECT, UPDATE | Existing delivery queue scan, lease and acknowledgment; creation and recipient/WorkItem checks stay on the tenant client |
@@ -162,7 +163,7 @@ For a dedicated schema, the grants have this form (the administrator supplies id
 ```sql
 GRANT USAGE ON SCHEMA :"app_schema" TO :"system_role";
 GRANT SELECT ON :"app_schema".users, :"app_schema".tenants,
-  :"app_schema".msp_allocations, :"app_schema".connector_configs TO :"system_role";
+  :"app_schema".msp_allocations, :"app_schema".external_identities, :"app_schema".connector_configs TO :"system_role";
 GRANT SELECT, UPDATE ON :"app_schema".outbox_events, :"app_schema".ticket_notifications TO :"system_role";
 GRANT INSERT, SELECT(id) ON :"app_schema".audit_logs TO :"system_role";
 SELECT format('GRANT USAGE ON SEQUENCE %s TO %I',
@@ -248,3 +249,12 @@ docker exec <container> wget -qO- http://localhost:8090/api/v1/health
    代码交付、单测/集成测通过，都不能替代一次端到端的真实操作验证；至少要用真实 HTTP 客户端路径走一遍主链路。
 7. **复用旧代码时，要重新审视它当初依赖的假设是否还成立。**
    当一个此前半成品的功能第一次被真正打通、有真实数据流过时，依赖它的旧代码需要重新审视，不能假设其历史设计假设仍然合理。
+
+
+### Intake identity exchange configuration
+
+A6 routes use assertion v2 only. Set `INTAKE_IDENTITY_CONFIG_FILE` (or the existing `ITSM_` environment prefix) to an owner-only regular JSON file (mode 0600/0400). The file contains `providers` keyed by registered provider, each with a distinct `secret`, allowed `channels` and allowed `purposes` (`create`, `read`); optional `maxAge`, `futureSkew`, `tokenTTL` are whole-second durations. Defaults are 60s, 5s and 5m. Max age is 1s–5m, future skew 0–30s, token TTL 1s–15m. Secrets must differ from JWT/webhook/automation credentials and stay server-side. The application rejects reuse of its loaded JWT or KAF webhook secret. Missing configuration disables exchange; unavailable Redis rejects exchange instead of falling back to memory. Use the deployment's explicit Redis host/port/database.
+
+Create/read exchange share one atomic nonce namespace. Lost exchange responses require a fresh nonce and assertion; retain the business submission key. Only the corresponding Intake routes accept the resulting token. Every request checks current mapping version/active state and current session/target-tenant permissions. Mapping management uses native access-token tenant routes with `intake_identity_mapping:read`/`write`, and PATCH requires `version` plus `active`; immutable provider/workspace/subject/user identity is replaced through a new mapping rather than changed in place. Manage mappings with exact external subjects; email matching is unsupported.
+
+The requester WorkItem projection preserves professional status and returns `fulfillmentState: "unknown"` and `accessResult: null` until C1 installs its authoritative fulfillment/result projection. This is a C1 gate before A7/B1 acceptance, not evidence that access was granted. The shared test-only signature vector lives in [intake-identity-signature.json](contracts/fixtures/intake-identity-signature.json).

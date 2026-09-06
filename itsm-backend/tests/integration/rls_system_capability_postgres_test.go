@@ -45,7 +45,7 @@ func runtimeClients(t *testing.T, f *incidentEffectsFixture) (*database.RuntimeC
 	}
 	// Grant only tables exercised by the actual Incident consumer and auth role
 	// permission lookup, with only their sequences; never grant ALL TABLES.
-	for _, table := range []string{"tickets", "incidents", "incident_rules", "incident_rule_executions", "incident_rule_action_receipts", "incident_metrics", "incident_alerts", "notifications", "ticket_notifications", "outbox_events", "audit_logs", "intake_requests", "users", "tenants", "roles", "permissions", "role_permissions", "incident_events", "ticket_categories"} {
+	for _, table := range []string{"external_identities", "tickets", "incidents", "incident_rules", "incident_rule_executions", "incident_rule_action_receipts", "incident_metrics", "incident_alerts", "notifications", "ticket_notifications", "outbox_events", "audit_logs", "intake_requests", "users", "tenants", "roles", "permissions", "role_permissions", "incident_events", "ticket_categories"} {
 		_, err := f.db.ExecContext(f.ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON "+schema+"."+table+" TO "+runtimeRole)
 		require.NoError(t, err)
 		if table == "role_permissions" {
@@ -58,7 +58,7 @@ func runtimeClients(t *testing.T, f *incidentEffectsFixture) (*database.RuntimeC
 			require.NoError(t, err)
 		}
 	}
-	for _, grant := range []string{"SELECT ON users,tenants,msp_allocations,connector_configs", "SELECT,UPDATE ON outbox_events,ticket_notifications", "INSERT,SELECT(id) ON audit_logs", "USAGE ON SEQUENCE audit_logs_id_seq"} {
+	for _, grant := range []string{"SELECT ON users,tenants,msp_allocations,external_identities,connector_configs", "SELECT,UPDATE ON outbox_events,ticket_notifications", "INSERT,SELECT(id) ON audit_logs", "USAGE ON SEQUENCE audit_logs_id_seq"} {
 		_, err := f.db.ExecContext(f.ctx, "GRANT "+grant+" TO "+systemRole)
 		require.NoError(t, err)
 	}

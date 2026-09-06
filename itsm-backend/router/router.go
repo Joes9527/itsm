@@ -22,6 +22,7 @@ import (
 	"itsm-backend/handlers/cmdb"
 	domainCommon "itsm-backend/handlers/common"
 	"itsm-backend/handlers/delegated_execution"
+	"itsm-backend/handlers/intake"
 	"itsm-backend/handlers/knowledge"
 	"itsm-backend/handlers/known_error"
 	"itsm-backend/handlers/problem"
@@ -182,6 +183,7 @@ func dashboardWidgetByID(widgetID string) gin.H {
 
 // RouterConfig 路由配置
 type RouterConfig struct {
+	IntakeHandler         *intake.Handler
 	TenantDirectoryClient *ent.Client
 	JWTSecret             string
 	Logger                *zap.SugaredLogger
@@ -341,6 +343,9 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 
 	// 公共路由（无需认证）
 	public := r.Group("/api/v1")
+	if config.IntakeHandler != nil {
+		config.IntakeHandler.RegisterRoutes(public)
+	}
 	{
 		if config.CommonHandler != nil {
 			public.POST("/auth/login", config.CommonHandler.Login)
@@ -498,6 +503,9 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 	{
 		// 租户中间件
 		tenant := auth.Use(middleware.TenantMiddleware(config.TenantDirectoryClient))
+		if config.IntakeHandler != nil {
+			config.IntakeHandler.RegisterMappingRoutes(tenant)
+		}
 
 		// ==================== Ticket Categories & Tags ====================
 		if config.TicketCategoryController != nil {

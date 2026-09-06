@@ -89,7 +89,7 @@ func InitRuntimeDatabases(cfg *config.DatabaseConfig, rlsCfg *config.RLSConfig, 
 // Audit INSERT plus SELECT(id) permits Ent RETURNING without reading audit content.
 var systemTablePrivileges = map[string]string{
 	"users": "SELECT", "tenants": "SELECT", "msp_allocations": "SELECT",
-	"connector_configs": "SELECT", "outbox_events": "SELECT,UPDATE", "ticket_notifications": "SELECT,UPDATE", "audit_logs": "INSERT",
+	"external_identities": "SELECT", "connector_configs": "SELECT", "outbox_events": "SELECT,UPDATE", "ticket_notifications": "SELECT,UPDATE", "audit_logs": "INSERT",
 }
 
 func validateSystemPrivileges(ctx context.Context, db *sql.DB) error {

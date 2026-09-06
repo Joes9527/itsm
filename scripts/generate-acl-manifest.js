@@ -34,6 +34,12 @@ function extractPermission(arg) {
   // 形式区分开，提示审计者这条路由的资源不是固定的。
   const wm = arg.match(/RequireWorkItemRecordClassPermission\s*\(\s*["']([^"']+)["']\s*\)/);
   if (wm) return `workitem.${wm[1]}`;
+  const scoped = arg.match(/IntakeAuthMiddleware\s*\(\s*\w+\s*,\s*"([^"]+)"/);
+  if (scoped) return scoped[1];
+  // The exchange handler verifies signed v2 purpose, provider and nonce before
+  // identity lookup. This denotes assertion authentication, not an RBAC grant.
+  const assertion = arg.match(/exchangeHandler\s*\(\s*"(create|read)"/);
+  if (assertion) return `assertion.v2.${assertion[1]}`;
   return null;
 }
 
@@ -273,7 +279,7 @@ const outIdx = args.indexOf("--output");
 const outFile = outIdx !== -1 ? args[outIdx + 1] : OUTPUT_FILE;
 
 console.log("Parsing router files...");
-for (const f of discoverRouterFiles(ROUTER_DIR)) {
+for (const f of [...discoverRouterFiles(ROUTER_DIR), ...["handler.go", "identity_mapping_handler.go"].map(name => path.join(ROUTER_DIR, "../handlers/intake", name))]) {
   parseFile(f);
 }
 

@@ -32,6 +32,7 @@ type Config struct {
 	RLS            RLSConfig        `mapstructure:"rls"`
 	KAFOutbox      KAFOutboxConfig
 	OutboxDelivery OutboxDeliveryConfig
+	IntakeIdentity IntakeIdentityConfig
 }
 
 // KAFOutboxConfig controls reliable delivery of BPMN delegation events to KAF.
@@ -334,6 +335,14 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 	config.KAFOutbox = kafOutboxConfig
+	identityConfig, err := loadIntakeIdentityConfig(outboxEnv)
+	if err != nil {
+		return nil, err
+	}
+	if err = validateIdentitySecretSeparation(identityConfig, config.JWT.Secret, kafWebhookSecret); err != nil {
+		return nil, err
+	}
+	config.IntakeIdentity = identityConfig
 	outboxDeliveryConfig, err := loadOutboxDeliveryConfig(outboxEnv)
 	if err != nil {
 		return nil, err

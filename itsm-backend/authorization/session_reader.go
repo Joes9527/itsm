@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/mspallocation"
 	"itsm-backend/ent/tenant"
+	"itsm-backend/ent/user"
 	creation "itsm-backend/handlers/common/workitemcreation"
 )
 
@@ -38,6 +39,14 @@ type SessionSnapshot struct {
 // Read owns both transactions. A projection is usable only after Read succeeds,
 // including directory cleanup and completion of the target transaction.
 func (s *SessionReader) Read(ctx context.Context, identity creation.Identity, project func(*SessionSnapshot) error) error {
+	return s.withSnapshot(ctx, identity, true, project)
+}
+
+// Write shares current session authorization with an atomic tenant mutation.
+func (s *SessionReader) Write(ctx context.Context, identity creation.Identity, apply func(*SessionSnapshot) error) error {
+	return s.withSnapshot(ctx, identity, false, apply)
+}
+func (s *SessionReader) withSnapshot(ctx context.Context, identity creation.Identity, readOnly bool, project func(*SessionSnapshot) error) error {
 	scope, ok := tenantctx.TenantID(ctx)
 	if !ok || scope != identity.TenantID || tenantctx.IsSystemBypass(ctx) || identity.ActorID <= 0 || strings.TrimSpace(identity.Role) == "" {
 		return creation.NewAuthenticationRequired("authenticated session is required", nil)
@@ -45,7 +54,7 @@ func (s *SessionReader) Read(ctx context.Context, identity creation.Identity, pr
 	if s == nil || s.runtime == nil || s.directory == nil {
 		return creation.NewInfrastructureUnavailable("session directory snapshot is required", nil)
 	}
-	tx, err := s.runtime.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	tx, err := s.runtime.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: readOnly})
 	if err != nil {
 		return creation.NewInfrastructureUnavailable("could not begin session read", err)
 	}
@@ -119,4 +128,19 @@ func (s *SessionSnapshot) SelectableTenants(ctx context.Context) ([]*ent.Tenant,
 		}
 	}
 	return result, nil
+}
+
+// AuthorizeMappedActor uses this same directory snapshot to validate a mapping
+// target's native identity and eligibility for the selected tenant.
+func (s *SessionSnapshot) AuthorizeMappedActor(ctx context.Context, id int) error {
+	lookup := tenantctx.SystemContext(ctx, "intake:mapping-target", "validate mapped actor for target tenant")
+	actor, err := s.directory.User.Query().Where(user.IDEQ(id), user.ActiveEQ(true)).Only(lookup)
+	if ent.IsNotFound(err) {
+		return creation.NewPermissionDenied("mapped user unavailable", nil)
+	}
+	if err != nil {
+		return creation.NewInfrastructureUnavailable("mapped user lookup unavailable", err)
+	}
+	_, err = ResolveCurrentSessionActor(ctx, s.directory, id, s.Identity.TenantID, EffectiveSessionRole(actor), s.now)
+	return err
 }

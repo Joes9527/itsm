@@ -844,6 +844,7 @@ func NewApplication() *Application {
 
 	// 初始化 Redis 限流器（分布式环境使用）
 	var redisRateLimiter router.RateLimiterInterface
+	var identityRedis *redis.Client
 	if cfg.Redis.Host != "" {
 		redisClient := redis.NewClient(&redis.Options{
 			Addr:     fmt.Sprintf("%s:%d", cfg.Redis.Host, cfg.Redis.Port),
@@ -860,12 +861,24 @@ func NewApplication() *Application {
 			sugar.Info("Redis connection established, using distributed rate limiter")
 			// 默认每分钟 500 次请求
 			redisRateLimiter = middleware.NewRedisRateLimiter(redisClient, 500, time.Minute)
+			identityRedis = redisClient
 		}
 	} else {
 		sugar.Warn("Redis not configured, rate limiter will use in-memory fallback (not suitable for distributed deployment)")
 	}
 
+	identityProviders := make(map[string]intake.IdentityProvider, len(cfg.IntakeIdentity.Providers))
+	for name, p := range cfg.IntakeIdentity.Providers {
+		identityProviders[name] = intake.IdentityProvider{Secret: p.Secret, Channels: p.Channels, Purposes: p.Purposes}
+	}
+	identityConfig := intake.IdentityExchangeConfig{Providers: identityProviders, MaxAge: cfg.IntakeIdentity.MaxAge, FutureSkew: cfg.IntakeIdentity.FutureSkew, TokenTTL: cfg.IntakeIdentity.TokenTTL}
+	identityRepository := intake.NewIdentityRepository(client, systemClient, sessionReader)
+	identityExchange := intake.NewIdentityExchangeService(identityConfig, intake.NewRedisNonceStore(identityRedis), identityRepository, cfg.JWT.Secret)
+	intakeHandler := intake.NewHandler(identityExchange, intakeApplication)
+	intakeHandler.SetReaders(intake.NewReadService(sessionReader, scService, cfg.JWT.Secret))
+	intakeHandler.SetMappings(intake.NewIdentityMappingService(sessionReader, identityProviders))
 	routerConfig := &router.RouterConfig{
+		IntakeHandler:                   intakeHandler,
 		JWTSecret:                       cfg.JWT.Secret,
 		Logger:                          sugar,
 		Client:                          client,
