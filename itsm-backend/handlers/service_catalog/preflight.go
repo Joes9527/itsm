@@ -51,6 +51,17 @@ func (s *Service) validateForPublicationTx(ctx context.Context, tx *ent.Tx, tena
 			return creation.NewDomainValidationFailed("unsupported field type: "+field.Name, nil)
 		}
 	}
+	if catalog.AccessPolicy != nil {
+		if catalog.TargetClass != creation.RecordClassServiceRequestItem || !catalog.RequiresApproval {
+			return creation.NewDomainValidationFailed("external access requires a requested item and business approval", nil)
+		}
+		if err := ValidateAccessPolicy(catalog.AccessPolicy, catalog.Fields); err != nil {
+			return creation.NewDomainValidationFailed("invalid access policy", err)
+		}
+	}
+	if err := service.NewProcessBindingService(tx.Client()).ValidateAccessPolicyBinding(ctx, tx, tenantID, catalog.TargetClass, catalog.ProcessDefinitionKey, catalog.AccessPolicy); err != nil {
+		return creation.NewDomainValidationFailed("access capability binding is incomplete", err)
+	}
 	// Built-in professional inputs are owned by the registered Creator.Prepare.
 	// Catalog Fields describe custom FormValues and must not duplicate typed input.
 	err := service.NewProcessBindingService(tx.Client()).ValidateCreationPublication(ctx, tx, tenantID, catalog.TargetClass, catalog.ProcessDefinitionKey, catalog.RequiresApproval, s.publicationEngine)

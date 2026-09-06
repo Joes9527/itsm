@@ -66,6 +66,7 @@ export class ServiceCatalogApi {
     // 后端 dto.ServiceCatalogResponse: {id,name,category,description,deliveryTime,status,ciTypeId,cloudServiceId,createdAt,updatedAt}
     return {
       id: String(raw?.id),
+      accessPolicy: raw?.accessPolicy,
       name: String(raw?.name || ''),
       // 这里保留后端 category 的原始字符串（前端页面目前以中文分类做统计/图标）
        
@@ -202,6 +203,7 @@ export class ServiceCatalogApi {
   static async createService(request: CreateServiceItemRequest): Promise<ServiceItem> {
     const payload = {
       name: request.name,
+      accessPolicy: request.accessPolicy,
       category: String(request.category),
       description: request.shortDescription || request.fullDescription || '',
       ciTypeId: request.ciTypeId,
@@ -241,6 +243,7 @@ export class ServiceCatalogApi {
     if (request.ciTypeId !== undefined) payload.ciTypeId = request.ciTypeId;
     if (request.cloudServiceId !== undefined) payload.cloudServiceId = request.cloudServiceId;
     if (request.fields !== undefined) payload.fields = request.fields;
+    if (request.accessPolicy !== undefined) payload.accessPolicy = request.accessPolicy;
     if (request.processDefinitionKey !== undefined) {
       payload.processDefinitionKey = request.processDefinitionKey;
     }

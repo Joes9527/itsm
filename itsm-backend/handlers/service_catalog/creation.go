@@ -33,8 +33,19 @@ func (s *Service) ResolveCreationCatalog(ctx context.Context, tx *ent.Tx, identi
 	if !creation.IsSupportedRecordClass(catalog.TargetClass) {
 		return nil, nil, creation.NewUnsupportedRecordClass("catalog target class is not configured", nil)
 	}
-	result, _, fields, err := s.projectCreationCatalog(ctx, tx, identity, catalog)
-	return result, fields, err
+	result, defs, fields, err := s.projectCreationCatalog(ctx, tx, identity, catalog)
+	if err != nil {
+		return nil, nil, err
+	}
+	if result.AccessPolicy != nil {
+		if err := ValidateAccessPolicy(result.AccessPolicy, toFieldDefinitionInputsFromEnt(defs)); err != nil {
+			return nil, nil, creation.NewDomainValidationFailed("invalid access policy", err)
+		}
+	}
+	if err := service.NewProcessBindingService(tx.Client()).ValidateAccessPolicyBinding(ctx, tx, identity.TenantID, catalog.TargetClass, catalog.ProcessDefinitionKey, result.AccessPolicy); err != nil {
+		return nil, nil, creation.NewDomainValidationFailed("access capability binding is incomplete", err)
+	}
+	return result, fields, nil
 }
 
 func (s *Service) projectCreationCatalog(ctx context.Context, tx *ent.Tx, identity creation.Identity, catalog *ent.ServiceCatalog) (*creation.ResolvedCatalog, []*ent.FieldDefinition, []creation.ResolvedFieldDefinition, error) {
@@ -59,8 +70,13 @@ func (s *Service) projectCreationCatalog(ctx context.Context, tx *ent.Tx, identi
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	policy, err := ReadAccessPolicy(ctx, tx.Client(), identity.TenantID, catalog.ID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	version, err := creationRevision(publicCatalogDefinition{
-		TargetClass: catalog.TargetClass, ServiceType: catalog.ServiceType,
+		AccessPolicy: policy,
+		TargetClass:  catalog.TargetClass, ServiceType: catalog.ServiceType,
 		Name: catalog.Name, Description: catalog.Description, Category: catalog.Category,
 		DeliveryTime: catalog.DeliveryTime, RequiresApproval: catalog.RequiresApproval,
 		SLAResponseTime: catalog.SLAResponseTime, SLAResolutionTime: catalog.SLAResolutionTime,
@@ -71,7 +87,7 @@ func (s *Service) projectCreationCatalog(ctx context.Context, tx *ent.Tx, identi
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	result := &creation.ResolvedCatalog{ID: catalog.ID, Version: version, TargetClass: catalog.TargetClass, ServiceType: catalog.ServiceType, DeliveryTime: catalog.DeliveryTime, FormSchemaVersion: formVersion, ProcessDefinitionKey: catalog.ProcessDefinitionKey, RequiresApproval: catalog.RequiresApproval, SLAResponseTime: catalog.SLAResponseTime, SLAResolutionTime: catalog.SLAResolutionTime}
+	result := &creation.ResolvedCatalog{AccessPolicy: policy, ID: catalog.ID, Version: version, TargetClass: catalog.TargetClass, ServiceType: catalog.ServiceType, DeliveryTime: catalog.DeliveryTime, FormSchemaVersion: formVersion, ProcessDefinitionKey: catalog.ProcessDefinitionKey, RequiresApproval: catalog.RequiresApproval, SLAResponseTime: catalog.SLAResponseTime, SLAResolutionTime: catalog.SLAResolutionTime}
 	if catalog.CiTypeID > 0 {
 		result.ConfigurationItemTypeID = &catalog.CiTypeID
 	}
@@ -143,6 +159,7 @@ func (s *Service) Read(ctx context.Context, identity creation.Identity, id int) 
 	}
 	result := NewEntRepository(tx.Client()).toDomain(record)
 	result.Fields = toFieldDefinitionInputsFromEnt(definitions)
+	result.AccessPolicy = revision.AccessPolicy
 	result.CatalogVersion, result.FormSchemaVersion = revision.Version, revision.FormSchemaVersion
 	if err := tx.Commit(); err != nil {
 		return nil, creation.NewInfrastructureUnavailable("could not complete catalog read", err)

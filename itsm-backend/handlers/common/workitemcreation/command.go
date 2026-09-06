@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"itsm-backend/handlers/common/accessgrant"
 	"reflect"
 	"strings"
 
@@ -190,6 +191,7 @@ type ResolvedWorkflowBinding struct {
 }
 
 type ResolvedCatalog struct {
+	AccessPolicy            *accessgrant.Policy
 	RequiresApproval        bool
 	SLAResponseTime         int
 	SLAResolutionTime       int

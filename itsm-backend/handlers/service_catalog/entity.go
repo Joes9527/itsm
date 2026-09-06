@@ -2,6 +2,7 @@ package service_catalog
 
 import (
 	"context"
+	"itsm-backend/handlers/common/accessgrant"
 	"time"
 
 	"itsm-backend/service"
@@ -9,6 +10,7 @@ import (
 
 // ServiceCatalog represents the core domain entity
 type ServiceCatalog struct {
+	AccessPolicy      *accessgrant.Policy
 	CatalogVersion    string
 	FormSchemaVersion string
 	ID                int

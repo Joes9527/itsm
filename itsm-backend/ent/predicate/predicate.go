@@ -51,6 +51,9 @@ type CMDBImportTask func(*sql.Selector)
 // CMDBSavedView is the predicate function for cmdbsavedview builders.
 type CMDBSavedView func(*sql.Selector)
 
+// CatalogAccessPolicy is the predicate function for catalogaccesspolicy builders.
+type CatalogAccessPolicy func(*sql.Selector)
+
 // Change is the predicate function for change builders.
 type Change func(*sql.Selector)
 
@@ -287,6 +290,12 @@ type ServiceCatalog func(*sql.Selector)
 
 // ServiceRequest is the predicate function for servicerequest builders.
 type ServiceRequest func(*sql.Selector)
+
+// ServiceRequestAccessResult is the predicate function for servicerequestaccessresult builders.
+type ServiceRequestAccessResult func(*sql.Selector)
+
+// ServiceRequestAccessSnapshot is the predicate function for servicerequestaccesssnapshot builders.
+type ServiceRequestAccessSnapshot func(*sql.Selector)
 
 // StandardChange is the predicate function for standardchange builders.
 type StandardChange func(*sql.Selector)

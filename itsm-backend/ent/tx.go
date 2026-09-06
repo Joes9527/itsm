@@ -44,6 +44,8 @@ type Tx struct {
 	CMDBImportTask *CMDBImportTaskClient
 	// CMDBSavedView is the client for interacting with the CMDBSavedView builders.
 	CMDBSavedView *CMDBSavedViewClient
+	// CatalogAccessPolicy is the client for interacting with the CatalogAccessPolicy builders.
+	CatalogAccessPolicy *CatalogAccessPolicyClient
 	// Change is the client for interacting with the Change builders.
 	Change *ChangeClient
 	// ChangePIR is the client for interacting with the ChangePIR builders.
@@ -202,6 +204,10 @@ type Tx struct {
 	ServiceCatalog *ServiceCatalogClient
 	// ServiceRequest is the client for interacting with the ServiceRequest builders.
 	ServiceRequest *ServiceRequestClient
+	// ServiceRequestAccessResult is the client for interacting with the ServiceRequestAccessResult builders.
+	ServiceRequestAccessResult *ServiceRequestAccessResultClient
+	// ServiceRequestAccessSnapshot is the client for interacting with the ServiceRequestAccessSnapshot builders.
+	ServiceRequestAccessSnapshot *ServiceRequestAccessSnapshotClient
 	// StandardChange is the client for interacting with the StandardChange builders.
 	StandardChange *StandardChangeClient
 	// Survey is the client for interacting with the Survey builders.
@@ -400,6 +406,7 @@ func (tx *Tx) init() {
 	tx.CMDBExportTask = NewCMDBExportTaskClient(tx.config)
 	tx.CMDBImportTask = NewCMDBImportTaskClient(tx.config)
 	tx.CMDBSavedView = NewCMDBSavedViewClient(tx.config)
+	tx.CatalogAccessPolicy = NewCatalogAccessPolicyClient(tx.config)
 	tx.Change = NewChangeClient(tx.config)
 	tx.ChangePIR = NewChangePIRClient(tx.config)
 	tx.CloudAccount = NewCloudAccountClient(tx.config)
@@ -479,6 +486,8 @@ func (tx *Tx) init() {
 	tx.SLAViolation = NewSLAViolationClient(tx.config)
 	tx.ServiceCatalog = NewServiceCatalogClient(tx.config)
 	tx.ServiceRequest = NewServiceRequestClient(tx.config)
+	tx.ServiceRequestAccessResult = NewServiceRequestAccessResultClient(tx.config)
+	tx.ServiceRequestAccessSnapshot = NewServiceRequestAccessSnapshotClient(tx.config)
 	tx.StandardChange = NewStandardChangeClient(tx.config)
 	tx.Survey = NewSurveyClient(tx.config)
 	tx.SurveyResponse = NewSurveyResponseClient(tx.config)

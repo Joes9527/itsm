@@ -9,6 +9,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"itsm-backend/authorization"
 	"itsm-backend/common"
+	"itsm-backend/ent"
+	"itsm-backend/handlers/common/accessgrant"
 	"itsm-backend/handlers/common/intakehttp"
 	creation "itsm-backend/handlers/common/workitemcreation"
 
@@ -20,11 +22,17 @@ type CatalogReader interface {
 	ListAvailableForIntake(context.Context, *authorization.SessionSnapshot, int, string, int) ([]*creation.CatalogReadDefinition, error)
 	ReadAvailableForIntake(context.Context, *authorization.SessionSnapshot, int) (*creation.CatalogReadDefinition, error)
 }
+type FulfillmentReader interface {
+	ReadFulfillment(context.Context, *ent.Client, *ent.Ticket) (accessgrant.Fulfillment, error)
+}
 type ReadService struct {
+	fulfillment  FulfillmentReader
 	sessions     *authorization.SessionReader
 	catalog      CatalogReader
 	cursorSecret string
 }
+
+func (s *ReadService) SetFulfillmentReader(owner FulfillmentReader) { s.fulfillment = owner }
 
 func NewReadService(sessions *authorization.SessionReader, c CatalogReader, secret string) *ReadService {
 	return &ReadService{sessions: sessions, catalog: c, cursorSecret: secret}
@@ -59,13 +67,13 @@ type CatalogContract struct {
 	Fields            []CatalogField `json:"fields"`
 }
 type WorkItemView struct {
-	WorkItemID       int    `json:"workItemId"`
-	Number           string `json:"number"`
-	RecordClass      string `json:"recordClass"`
-	Status           string `json:"status"`
-	Version          int    `json:"version"`
-	FulfillmentState string `json:"fulfillmentState"`
-	AccessResult     any    `json:"accessResult"`
+	WorkItemID       int               `json:"workItemId"`
+	Number           string            `json:"number"`
+	RecordClass      string            `json:"recordClass"`
+	Status           string            `json:"status"`
+	Version          int               `json:"version"`
+	FulfillmentState string            `json:"fulfillmentState"`
+	AccessResult     *accessgrant.View `json:"accessResult"`
 }
 type catalogCursor struct {
 	TenantID int    `json:"tenantId"`
@@ -186,6 +194,17 @@ func (s *ReadService) WorkItem(ctx context.Context, i creation.Identity, id int)
 			return creation.NewReferenceNotFound("work item unavailable", nil)
 		}
 		result = &WorkItemView{WorkItemID: item.ID, Number: item.TicketNumber, RecordClass: item.RecordClass, Status: item.Status, Version: item.Version, FulfillmentState: "unknown", AccessResult: nil}
+		if item.RecordClass == creation.RecordClassServiceRequestItem {
+			if s.fulfillment == nil {
+				return creation.NewInfrastructureUnavailable("requested item fulfillment owner unavailable", nil)
+			}
+			projection, err := s.fulfillment.ReadFulfillment(ctx, snapshot.Tx.Client(), item)
+			if err != nil {
+				return creation.NewInfrastructureUnavailable("requested item fulfillment unavailable", err)
+			}
+			result.FulfillmentState = projection.State
+			result.AccessResult = projection.AccessResult
+		}
 		return nil
 	})
 	return result, err

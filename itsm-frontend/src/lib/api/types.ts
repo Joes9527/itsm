@@ -1,3 +1,4 @@
+import type { CatalogAccessPolicy } from '@/types/access-grant';
 /**
  * 统一API类型定义
  * 包含所有API共用的类型定义
@@ -288,6 +289,7 @@ export interface ServiceRequest {
 }
 
 export interface ServiceCatalog {
+  accessPolicy?: CatalogAccessPolicy;
   id: number;
   name: string;
   description?: string;

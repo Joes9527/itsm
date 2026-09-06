@@ -1,3 +1,4 @@
+import type { CatalogAccessPolicy } from '@/types/access-grant';
 import type { WorkItemRecordClass } from '@/lib/api/work-item-creation';
 import type { CreateIncidentRequest } from '@/lib/api/incident-api';
 /**
@@ -42,6 +43,7 @@ export enum ServiceType {
  * 服务项
  */
 export interface ServiceItem {
+  accessPolicy?: CatalogAccessPolicy;
   targetClass?: WorkItemRecordClass;
   catalogVersion?: string;
   formSchemaVersion?: string;
@@ -413,6 +415,7 @@ export interface ServiceAnalytics {
  * 创建服务请求
  */
 export interface CreateServiceItemRequest {
+  accessPolicy?: CatalogAccessPolicy;
   targetClass?: WorkItemRecordClass;
   slaResponseTime?: number;
   slaResolutionTime?: number;

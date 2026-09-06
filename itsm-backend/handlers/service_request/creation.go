@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"itsm-backend/ent"
+	"itsm-backend/handlers/common/accessgrant"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/service"
@@ -14,6 +15,7 @@ import (
 )
 
 type requestCreation struct {
+	AccessSnapshot       *accessgrant.ApprovalSnapshot
 	Input                creation.ServiceRequestInput
 	ExpireAt, ExpectedAt *time.Time
 	Quantity             int
@@ -135,6 +137,10 @@ func (s *Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedI
 	if len(in.CIIDs) > 1 {
 		return nil, creation.NewDomainValidationFailed("requested item supports one linked CI", nil)
 	}
+	accessSnapshot, err := prepareAccessSnapshot(ctx, tx, in)
+	if err != nil {
+		return nil, err
+	}
 	plan := creation.NewPlan(in, "new", priority, "service_catalog")
 	plan.RequiresWorkflow = chain != nil && len(chain.Steps) > 0
 	plan.WorkflowVariables["approval_required"] = plan.RequiresWorkflow
@@ -166,7 +172,7 @@ func (s *Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedI
 	if input.Amount != "" {
 		plan.RoutingValues["amount"] = input.Amount
 	}
-	plan.ProfessionalInput = requestCreation{Input: input, ExpireAt: expire, ExpectedAt: expected, Quantity: quantity, Context: workflowContext, CIID: ciID}
+	plan.ProfessionalInput = requestCreation{AccessSnapshot: accessSnapshot, Input: input, ExpireAt: expire, ExpectedAt: expected, Quantity: quantity, Context: workflowContext, CIID: ciID}
 	return plan, nil
 }
 func (*Service) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticket, plan *creation.CreationPlan) (*creation.ProfessionalReference, error) {
@@ -186,6 +192,9 @@ func (*Service) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticke
 	record, err := create.Save(ctx)
 	if err != nil {
 		return nil, creation.NewInfrastructureUnavailable("could not create service request extension", err)
+	}
+	if err := saveAccessSnapshot(ctx, tx, item.ID, prepared.AccessSnapshot); err != nil {
+		return nil, creation.NewInfrastructureUnavailable("could not freeze requested access", err)
 	}
 	plan.WorkflowVariables["service_request_id"] = record.ID
 	return &creation.ProfessionalReference{Type: "service_request", ID: record.ID}, nil

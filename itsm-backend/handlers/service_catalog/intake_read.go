@@ -56,6 +56,7 @@ func (s *Service) ReadAvailableForIntake(ctx context.Context, snapshot *authoriz
 	}
 	domain := NewEntRepository(snapshot.Tx.Client()).toDomain(row)
 	domain.Fields = toFieldDefinitionInputsFromEnt(definitions)
+	domain.AccessPolicy = revision.AccessPolicy
 	if err = s.validateForPublicationTx(ctx, snapshot.Tx, snapshot.Identity.TenantID, domain); err != nil {
 		return nil, err
 	}

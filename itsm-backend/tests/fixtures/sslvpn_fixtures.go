@@ -3,6 +3,11 @@ package fixtures
 import (
 	"context"
 	"fmt"
+	"itsm-backend/ent/catalogaccesspolicy"
+	"itsm-backend/ent/externalidentity"
+	"itsm-backend/ent/processdefinition"
+	"itsm-backend/handlers/common/accessgrant"
+	"strings"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/fielddefinition"
@@ -34,7 +39,7 @@ type SSLVPNFixtureResult struct {
 }
 
 // EnsureSSLVPNMetadata 幂等确保 SSL-VPN 相关的服务分类、服务目录项（绑定流程 sslvpn_approval_flow）、
-// 8项动态自定义字段、BPMN内置流程模板部署以及 3 个测试用户与审批组存在。
+// 3项业务自定义字段、BPMN内置流程模板部署以及 3 个测试用户与审批组存在。
 func EnsureSSLVPNMetadata(ctx context.Context, client *ent.Client, tenantID int) (*SSLVPNFixtureResult, error) {
 	// 1. 部署 BPMN 模板 (sslvpn_approval_flow)
 	templateSvc := service.NewBPMNTemplateService(client)
@@ -107,7 +112,7 @@ func EnsureSSLVPNMetadata(ctx context.Context, client *ent.Client, tenantID int)
 		}
 	}
 
-	// 4. 确保 8 个动态自定义字段定义 (归属 entity_type="service_catalog", entity_id=catalog.ID)
+	// 4. 确保 3 个业务自定义字段定义 (归属 entity_type="service_catalog", entity_id=catalog.ID)
 	fieldsConfig := []struct {
 		Name      string
 		Label     string
@@ -117,52 +122,6 @@ func EnsureSSLVPNMetadata(ctx context.Context, client *ent.Client, tenantID int)
 		SortOrder int
 	}{
 		{
-			Name:      "applicant_name",
-			Label:     "申请人姓名",
-			FieldType: "text",
-			Required:  true,
-			SortOrder: 1,
-		},
-		{
-			Name:      "applicant_upn",
-			Label:     "申请人域账号/UPN",
-			FieldType: "text",
-			Required:  true,
-			SortOrder: 2,
-		},
-		{
-			Name:      "employee_id",
-			Label:     "员工工号",
-			FieldType: "text",
-			Required:  true,
-			SortOrder: 3,
-		},
-		{
-			Name:      "department",
-			Label:     "所属部门",
-			FieldType: "select",
-			Required:  true,
-			Options: []interface{}{
-				map[string]interface{}{"label": "IT研发中心", "value": "IT研发中心"},
-				map[string]interface{}{"label": "供应链运营", "value": "供应链运营"},
-				map[string]interface{}{"label": "财务部", "value": "财务部"},
-				map[string]interface{}{"label": "人力资源部", "value": "人力资源部"},
-			},
-			SortOrder: 4,
-		},
-		{
-			Name:      "vpn_level",
-			Label:     "申请权限级别与用户组",
-			FieldType: "select",
-			Required:  true,
-			Options: []interface{}{
-				map[string]interface{}{"label": "Level 1 - 基础办公组 (CNDL-OKTA-SSLVPN-Level1-Users)", "value": "Level 1 - 基础办公组 (CNDL-OKTA-SSLVPN-Level1-Users)"},
-				map[string]interface{}{"label": "Level 2 - 业务系统组 (CNDL-OKTA-SSLVPN-Level2-Users)", "value": "Level 2 - 业务系统组 (CNDL-OKTA-SSLVPN-Level2-Users)"},
-				map[string]interface{}{"label": "Level 3 - 高权/运维组 (CNDL-OKTA-SSLVPN-Level3-Users)", "value": "Level 3 - 高权/运维组 (CNDL-OKTA-SSLVPN-Level3-Users)"},
-			},
-			SortOrder: 5,
-		},
-		{
 			Name:      "target_systems",
 			Label:     "访问目标系统与网段",
 			FieldType: "text",
@@ -171,13 +130,12 @@ func EnsureSSLVPNMetadata(ctx context.Context, client *ent.Client, tenantID int)
 		},
 		{
 			Name:      "access_duration",
-			Label:     "权限有效期",
+			Label:     "申请有效期（不自动回收）",
 			FieldType: "select",
 			Required:  true,
 			Options: []interface{}{
-				map[string]interface{}{"label": "30天临时", "value": "30天临时"},
-				map[string]interface{}{"label": "90天临时", "value": "90天临时"},
-				map[string]interface{}{"label": "长期有效", "value": "长期有效"},
+				map[string]interface{}{"label": "30天临时", "value": "days_30"},
+				map[string]interface{}{"label": "90天临时", "value": "days_90"},
 			},
 			SortOrder: 7,
 		},
@@ -244,6 +202,27 @@ func EnsureSSLVPNMetadata(ctx context.Context, client *ent.Client, tenantID int)
 		fieldDefs = append(fieldDefs, fd)
 	}
 
+	// Remove obsolete editable identity/target selectors from this owned fixture.
+	if _, err := client.FieldDefinition.Delete().Where(fielddefinition.TenantIDEQ(tenantID), fielddefinition.EntityTypeEQ("service_catalog"), fielddefinition.EntityIDEQ(catalog.ID), fielddefinition.NameIn("applicant_name", "applicant_upn", "employee_id", "department", "vpn_level")).Exec(ctx); err != nil {
+		return nil, err
+	}
+	policy, err := client.CatalogAccessPolicy.Query().Where(catalogaccesspolicy.CatalogIDEQ(catalog.ID)).Only(ctx)
+	if ent.IsNotFound(err) {
+		policy, err = client.CatalogAccessPolicy.Create().SetCatalogID(catalog.ID).SetProvider("graph").SetExternalSystem("sslvpn-fixture-directory").SetGroupID("sslvpn-fixture-group").SetDurationField("access_duration").SetDurationOptions([]accessgrant.DurationOption{{Key: "days_30", Label: "30天临时", Seconds: 30 * 86400}, {Key: "days_90", Label: "90天临时", Seconds: 90 * 86400}}).Save(ctx)
+	}
+	if err != nil {
+		return nil, err
+	}
+	definitions, err := client.ProcessDefinition.Query().Where(processdefinition.TenantIDEQ(tenantID), processdefinition.KeyEQ("sslvpn_approval_flow")).All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, definition := range definitions {
+		xml := strings.ReplaceAll(string(definition.BpmnXML), "CATALOG_ACCESS_POLICY_REQUIRED", fmt.Sprint(policy.ID))
+		if err := client.ProcessDefinition.UpdateOneID(definition.ID).SetBpmnXML([]byte(xml)).Exec(ctx); err != nil {
+			return nil, err
+		}
+	}
 	// 5. 确保角色和测试用户存在
 	// 角色列表：end_user, dept_manager, network_eng
 	rolesConfig := []struct {
@@ -283,6 +262,15 @@ func EnsureSSLVPNMetadata(ctx context.Context, client *ent.Client, tenantID int)
 		return nil, err
 	}
 
+	mappingExists, err := client.ExternalIdentity.Query().Where(externalidentity.TenantIDEQ(tenantID), externalidentity.UserIDEQ(endUser.ID), externalidentity.ProviderEQ("graph"), externalidentity.WorkspaceEQ("sslvpn-fixture-directory")).Exist(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !mappingExists {
+		if _, err := client.ExternalIdentity.Create().SetTenantID(tenantID).SetUserID(endUser.ID).SetProvider("graph").SetWorkspace("sslvpn-fixture-directory").SetSubject("sslvpn-fixture-requester").Save(ctx); err != nil {
+			return nil, err
+		}
+	}
 	// 用户 2: supervisor_test
 	supervisor, err := ensureUser(ctx, client, tenantID, "supervisor_test", "supervisor_test@example.com", "主管初审测试账号", "dept_manager", string(hash))
 	if err != nil {

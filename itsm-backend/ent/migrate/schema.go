@@ -692,6 +692,38 @@ var (
 			},
 		},
 	}
+	// CatalogAccessPoliciesColumns holds the columns for the "catalog_access_policies" table.
+	CatalogAccessPoliciesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "version", Type: field.TypeInt, Default: 1},
+		{Name: "provider", Type: field.TypeEnum, Enums: []string{"graph"}},
+		{Name: "external_system", Type: field.TypeString},
+		{Name: "group_id", Type: field.TypeString},
+		{Name: "duration_field", Type: field.TypeString},
+		{Name: "duration_options", Type: field.TypeJSON},
+		{Name: "catalog_id", Type: field.TypeInt},
+	}
+	// CatalogAccessPoliciesTable holds the schema information for the "catalog_access_policies" table.
+	CatalogAccessPoliciesTable = &schema.Table{
+		Name:       "catalog_access_policies",
+		Columns:    CatalogAccessPoliciesColumns,
+		PrimaryKey: []*schema.Column{CatalogAccessPoliciesColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "catalog_access_policies_service_catalogs_catalog",
+				Columns:    []*schema.Column{CatalogAccessPoliciesColumns[7]},
+				RefColumns: []*schema.Column{ServiceCatalogsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "catalogaccesspolicy_catalog_id",
+				Unique:  true,
+				Columns: []*schema.Column{CatalogAccessPoliciesColumns[7]},
+			},
+		},
+	}
 	// ChangesColumns holds the columns for the "changes" table.
 	ChangesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -3927,6 +3959,87 @@ var (
 			},
 		},
 	}
+	// ServiceRequestAccessResultsColumns holds the columns for the "service_request_access_results" table.
+	ServiceRequestAccessResultsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "outcome", Type: field.TypeEnum, Enums: []string{"granted", "already_present"}},
+		{Name: "provider", Type: field.TypeEnum, Enums: []string{"graph"}},
+		{Name: "subject_id", Type: field.TypeString},
+		{Name: "group_id", Type: field.TypeString},
+		{Name: "baseline", Type: field.TypeEnum, Enums: []string{"not_member", "member"}},
+		{Name: "verified_at", Type: field.TypeTime},
+		{Name: "expires_at", Type: field.TypeTime, Nullable: true},
+		{Name: "evidence_ref", Type: field.TypeString},
+		{Name: "work_item_id", Type: field.TypeInt},
+		{Name: "process_task_id", Type: field.TypeInt},
+	}
+	// ServiceRequestAccessResultsTable holds the schema information for the "service_request_access_results" table.
+	ServiceRequestAccessResultsTable = &schema.Table{
+		Name:       "service_request_access_results",
+		Columns:    ServiceRequestAccessResultsColumns,
+		PrimaryKey: []*schema.Column{ServiceRequestAccessResultsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "service_request_access_results_tickets_work_item",
+				Columns:    []*schema.Column{ServiceRequestAccessResultsColumns[9]},
+				RefColumns: []*schema.Column{TicketsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "service_request_access_results_process_tasks_process_task",
+				Columns:    []*schema.Column{ServiceRequestAccessResultsColumns[10]},
+				RefColumns: []*schema.Column{ProcessTasksColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "servicerequestaccessresult_work_item_id",
+				Unique:  true,
+				Columns: []*schema.Column{ServiceRequestAccessResultsColumns[9]},
+			},
+		},
+	}
+	// ServiceRequestAccessSnapshotsColumns holds the columns for the "service_request_access_snapshots" table.
+	ServiceRequestAccessSnapshotsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "policy_version", Type: field.TypeInt},
+		{Name: "provider", Type: field.TypeEnum, Enums: []string{"graph"}},
+		{Name: "external_system", Type: field.TypeString},
+		{Name: "subject_id", Type: field.TypeString},
+		{Name: "group_id", Type: field.TypeString},
+		{Name: "duration_key", Type: field.TypeString},
+		{Name: "duration_seconds", Type: field.TypeInt64},
+		{Name: "work_item_id", Type: field.TypeInt},
+		{Name: "policy_id", Type: field.TypeInt},
+	}
+	// ServiceRequestAccessSnapshotsTable holds the schema information for the "service_request_access_snapshots" table.
+	ServiceRequestAccessSnapshotsTable = &schema.Table{
+		Name:       "service_request_access_snapshots",
+		Columns:    ServiceRequestAccessSnapshotsColumns,
+		PrimaryKey: []*schema.Column{ServiceRequestAccessSnapshotsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "service_request_access_snapshots_tickets_work_item",
+				Columns:    []*schema.Column{ServiceRequestAccessSnapshotsColumns[8]},
+				RefColumns: []*schema.Column{TicketsColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+			{
+				Symbol:     "service_request_access_snapshots_catalog_access_policies_policy",
+				Columns:    []*schema.Column{ServiceRequestAccessSnapshotsColumns[9]},
+				RefColumns: []*schema.Column{CatalogAccessPoliciesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "servicerequestaccesssnapshot_work_item_id",
+				Unique:  true,
+				Columns: []*schema.Column{ServiceRequestAccessSnapshotsColumns[8]},
+			},
+		},
+	}
 	// StandardChangesColumns holds the columns for the "standard_changes" table.
 	StandardChangesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
@@ -5378,6 +5491,7 @@ var (
 		CmdbExportTasksTable,
 		CmdbImportTasksTable,
 		CmdbSavedViewsTable,
+		CatalogAccessPoliciesTable,
 		ChangesTable,
 		ChangePiRsTable,
 		CloudAccountsTable,
@@ -5457,6 +5571,8 @@ var (
 		SLAViolationsTable,
 		ServiceCatalogsTable,
 		ServiceRequestsTable,
+		ServiceRequestAccessResultsTable,
+		ServiceRequestAccessSnapshotsTable,
 		StandardChangesTable,
 		SurveysTable,
 		SurveyResponsesTable,
@@ -5509,6 +5625,7 @@ func init() {
 	CiRelationshipsTable.ForeignKeys[0].RefTable = ConfigurationItemsTable
 	CiRelationshipsTable.ForeignKeys[1].RefTable = ConfigurationItemsTable
 	CiTypesTable.ForeignKeys[0].RefTable = CiTypesTable
+	CatalogAccessPoliciesTable.ForeignKeys[0].RefTable = ServiceCatalogsTable
 	ChangesTable.ForeignKeys[0].RefTable = TicketsTable
 	ChangesTable.ForeignKeys[1].RefTable = StandardChangesTable
 	ChangePiRsTable.ForeignKeys[0].RefTable = ChangesTable
@@ -5571,6 +5688,10 @@ func init() {
 	SLAViolationsTable.ForeignKeys[0].RefTable = SLADefinitionsTable
 	SLAViolationsTable.ForeignKeys[1].RefTable = TicketsTable
 	ServiceRequestsTable.ForeignKeys[0].RefTable = TicketsTable
+	ServiceRequestAccessResultsTable.ForeignKeys[0].RefTable = TicketsTable
+	ServiceRequestAccessResultsTable.ForeignKeys[1].RefTable = ProcessTasksTable
+	ServiceRequestAccessSnapshotsTable.ForeignKeys[0].RefTable = TicketsTable
+	ServiceRequestAccessSnapshotsTable.ForeignKeys[1].RefTable = CatalogAccessPoliciesTable
 	SurveyResponsesTable.ForeignKeys[0].RefTable = SurveysTable
 	TenantsTable.ForeignKeys[0].RefTable = BootstrapTokensTable
 	TenantInstallationsTable.ForeignKeys[0].RefTable = MarketplaceItemsTable

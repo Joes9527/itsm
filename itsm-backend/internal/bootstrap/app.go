@@ -620,6 +620,7 @@ func NewApplication() *Application {
 	chainResolver := service.NewApprovalChainResolver(client, sugar)
 	srService := service_request.NewService(srRepo, client, sugar, chainResolver)
 	srHandler := service_request.NewHandler(srService)
+	bpmnWorkflowController.SetApprovedAccessReader(srService)
 
 	// Domain: Change (DDD)
 	changeRepo := change.NewEntRepository(client, database.GetRawDB())
@@ -875,7 +876,9 @@ func NewApplication() *Application {
 	identityRepository := intake.NewIdentityRepository(client, systemClient, sessionReader)
 	identityExchange := intake.NewIdentityExchangeService(identityConfig, intake.NewRedisNonceStore(identityRedis), identityRepository, cfg.JWT.Secret)
 	intakeHandler := intake.NewHandler(identityExchange, intakeApplication)
-	intakeHandler.SetReaders(intake.NewReadService(sessionReader, scService, cfg.JWT.Secret))
+	intakeReaders := intake.NewReadService(sessionReader, scService, cfg.JWT.Secret)
+	intakeReaders.SetFulfillmentReader(srService)
+	intakeHandler.SetReaders(intakeReaders)
 	intakeHandler.SetMappings(intake.NewIdentityMappingService(sessionReader, identityProviders))
 	routerConfig := &router.RouterConfig{
 		IntakeHandler:                   intakeHandler,

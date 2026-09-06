@@ -277,7 +277,7 @@ func (h *Handler) toDTO(c *ServiceCatalog) dto.ServiceCatalogResponse {
 			"required": d.Required, "options": d.Options, "sortOrder": d.SortOrder,
 		})
 	}
-	return dto.ServiceCatalogResponse{
+	return dto.ServiceCatalogResponse{AccessPolicy: c.AccessPolicy,
 		CatalogVersion: c.CatalogVersion, FormSchemaVersion: c.FormSchemaVersion,
 		ID:                   c.ID,
 		Name:                 c.Name,

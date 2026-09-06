@@ -15,6 +15,7 @@ import (
 	"itsm-backend/ent/bootstraptoken"
 	"itsm-backend/ent/bpmnpermission"
 	"itsm-backend/ent/cabmember"
+	"itsm-backend/ent/catalogaccesspolicy"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/changepir"
 	"itsm-backend/ent/ciattributedefinition"
@@ -98,6 +99,8 @@ import (
 	"itsm-backend/ent/schema"
 	"itsm-backend/ent/servicecatalog"
 	"itsm-backend/ent/servicerequest"
+	"itsm-backend/ent/servicerequestaccessresult"
+	"itsm-backend/ent/servicerequestaccesssnapshot"
 	"itsm-backend/ent/slaalerthistory"
 	"itsm-backend/ent/slaalertrule"
 	"itsm-backend/ent/sladefinition"
@@ -129,6 +132,7 @@ import (
 	"itsm-backend/ent/vendor"
 	"itsm-backend/ent/workitemnumbersequence"
 	"itsm-backend/ent/workitemrelation"
+	"itsm-backend/handlers/common/accessgrant"
 	"itsm-backend/internal/jsonvalue"
 	"sync"
 	"time"
@@ -146,126 +150,129 @@ const (
 	OpUpdateOne = ent.OpUpdateOne
 
 	// Node types.
-	TypeApplication                 = "Application"
-	TypeApprovalChain               = "ApprovalChain"
-	TypeAsset                       = "Asset"
-	TypeAssetLicense                = "AssetLicense"
-	TypeAuditLog                    = "AuditLog"
-	TypeBPMNPermission              = "BPMNPermission"
-	TypeBootstrapToken              = "BootstrapToken"
-	TypeCABMember                   = "CABMember"
-	TypeCIAttributeDefinition       = "CIAttributeDefinition"
-	TypeCIRelationship              = "CIRelationship"
-	TypeCITag                       = "CITag"
-	TypeCIType                      = "CIType"
-	TypeCMDBExportTask              = "CMDBExportTask"
-	TypeCMDBImportTask              = "CMDBImportTask"
-	TypeCMDBSavedView               = "CMDBSavedView"
-	TypeChange                      = "Change"
-	TypeChangePIR                   = "ChangePIR"
-	TypeCloudAccount                = "CloudAccount"
-	TypeCloudResource               = "CloudResource"
-	TypeCloudService                = "CloudService"
-	TypeConfigurationItem           = "ConfigurationItem"
-	TypeConfigurationItemHistory    = "ConfigurationItemHistory"
-	TypeConnectorConfig             = "ConnectorConfig"
-	TypeContract                    = "Contract"
-	TypeConversation                = "Conversation"
-	TypeDepartment                  = "Department"
-	TypeDiscoveryJob                = "DiscoveryJob"
-	TypeDiscoveryResult             = "DiscoveryResult"
-	TypeDiscoverySource             = "DiscoverySource"
-	TypeDomainConfig                = "DomainConfig"
-	TypeEndpointACL                 = "EndpointACL"
-	TypeEngineerSkill               = "EngineerSkill"
-	TypeExternalIdentity            = "ExternalIdentity"
-	TypeFeishuTicketSync            = "FeishuTicketSync"
-	TypeFieldDefinition             = "FieldDefinition"
-	TypeFieldValue                  = "FieldValue"
-	TypeGroup                       = "Group"
-	TypeIncident                    = "Incident"
-	TypeIncidentAlert               = "IncidentAlert"
-	TypeIncidentEscalationRule      = "IncidentEscalationRule"
-	TypeIncidentEvent               = "IncidentEvent"
-	TypeIncidentMetric              = "IncidentMetric"
-	TypeIncidentRule                = "IncidentRule"
-	TypeIncidentRuleActionReceipt   = "IncidentRuleActionReceipt"
-	TypeIncidentRuleExecution       = "IncidentRuleExecution"
-	TypeIntakeRequest               = "IntakeRequest"
-	TypeIntakeResolutionSnapshot    = "IntakeResolutionSnapshot"
-	TypeItemVersion                 = "ItemVersion"
-	TypeKafTaskActionLedger         = "KafTaskActionLedger"
-	TypeKafTaskCompletionReceipt    = "KafTaskCompletionReceipt"
-	TypeKnowledgeArticle            = "KnowledgeArticle"
-	TypeKnowledgeArticleLike        = "KnowledgeArticleLike"
-	TypeKnowledgeArticleParticipant = "KnowledgeArticleParticipant"
-	TypeKnowledgeArticleSession     = "KnowledgeArticleSession"
-	TypeKnowledgeArticleVersion     = "KnowledgeArticleVersion"
-	TypeKnownError                  = "KnownError"
-	TypeMSPAllocation               = "MSPAllocation"
-	TypeMarketplaceItem             = "MarketplaceItem"
-	TypeMenu                        = "Menu"
-	TypeMessage                     = "Message"
-	TypeMicroservice                = "Microservice"
-	TypeNotification                = "Notification"
-	TypeNotificationPreference      = "NotificationPreference"
-	TypeOutboxEvent                 = "OutboxEvent"
-	TypePasswordResetToken          = "PasswordResetToken"
-	TypePermission                  = "Permission"
-	TypePermissionDefinition        = "PermissionDefinition"
-	TypeProblem                     = "Problem"
-	TypeProcessApprovalDecision     = "ProcessApprovalDecision"
-	TypeProcessAuditLog             = "ProcessAuditLog"
-	TypeProcessBinding              = "ProcessBinding"
-	TypeProcessCallbackOutbox       = "ProcessCallbackOutbox"
-	TypeProcessDefinition           = "ProcessDefinition"
-	TypeProcessDeployment           = "ProcessDeployment"
-	TypeProcessExecutionHistory     = "ProcessExecutionHistory"
-	TypeProcessInstance             = "ProcessInstance"
-	TypeProcessTask                 = "ProcessTask"
-	TypeProcessVariable             = "ProcessVariable"
-	TypeProcessVersionChangelog     = "ProcessVersionChangelog"
-	TypeProject                     = "Project"
-	TypePromptTemplate              = "PromptTemplate"
-	TypeProvisioningTask            = "ProvisioningTask"
-	TypeRelationshipType            = "RelationshipType"
-	TypeRelease                     = "Release"
-	TypeRole                        = "Role"
-	TypeRolePermission              = "RolePermission"
-	TypeRootCauseAnalysis           = "RootCauseAnalysis"
-	TypeSLAAlertHistory             = "SLAAlertHistory"
-	TypeSLAAlertRule                = "SLAAlertRule"
-	TypeSLADefinition               = "SLADefinition"
-	TypeSLAMetric                   = "SLAMetric"
-	TypeSLAViolation                = "SLAViolation"
-	TypeServiceCatalog              = "ServiceCatalog"
-	TypeServiceRequest              = "ServiceRequest"
-	TypeStandardChange              = "StandardChange"
-	TypeSurvey                      = "Survey"
-	TypeSurveyResponse              = "SurveyResponse"
-	TypeSystemConfig                = "SystemConfig"
-	TypeTag                         = "Tag"
-	TypeTeam                        = "Team"
-	TypeTenant                      = "Tenant"
-	TypeTenantInstallation          = "TenantInstallation"
-	TypeTicket                      = "Ticket"
-	TypeTicketAssignmentRule        = "TicketAssignmentRule"
-	TypeTicketAttachment            = "TicketAttachment"
-	TypeTicketAutomationRule        = "TicketAutomationRule"
-	TypeTicketCC                    = "TicketCC"
-	TypeTicketCategory              = "TicketCategory"
-	TypeTicketComment               = "TicketComment"
-	TypeTicketNotification          = "TicketNotification"
-	TypeTicketTag                   = "TicketTag"
-	TypeTicketTemplate              = "TicketTemplate"
-	TypeTicketType                  = "TicketType"
-	TypeTicketView                  = "TicketView"
-	TypeTicketWorkflowRecord        = "TicketWorkflowRecord"
-	TypeToolInvocation              = "ToolInvocation"
-	TypeUser                        = "User"
-	TypeVendor                      = "Vendor"
-	TypeWorkItemNumberSequence      = "WorkItemNumberSequence"
-	TypeWorkItemRelation            = "WorkItemRelation"
+	TypeApplication                  = "Application"
+	TypeApprovalChain                = "ApprovalChain"
+	TypeAsset                        = "Asset"
+	TypeAssetLicense                 = "AssetLicense"
+	TypeAuditLog                     = "AuditLog"
+	TypeBPMNPermission               = "BPMNPermission"
+	TypeBootstrapToken               = "BootstrapToken"
+	TypeCABMember                    = "CABMember"
+	TypeCIAttributeDefinition        = "CIAttributeDefinition"
+	TypeCIRelationship               = "CIRelationship"
+	TypeCITag                        = "CITag"
+	TypeCIType                       = "CIType"
+	TypeCMDBExportTask               = "CMDBExportTask"
+	TypeCMDBImportTask               = "CMDBImportTask"
+	TypeCMDBSavedView                = "CMDBSavedView"
+	TypeCatalogAccessPolicy          = "CatalogAccessPolicy"
+	TypeChange                       = "Change"
+	TypeChangePIR                    = "ChangePIR"
+	TypeCloudAccount                 = "CloudAccount"
+	TypeCloudResource                = "CloudResource"
+	TypeCloudService                 = "CloudService"
+	TypeConfigurationItem            = "ConfigurationItem"
+	TypeConfigurationItemHistory     = "ConfigurationItemHistory"
+	TypeConnectorConfig              = "ConnectorConfig"
+	TypeContract                     = "Contract"
+	TypeConversation                 = "Conversation"
+	TypeDepartment                   = "Department"
+	TypeDiscoveryJob                 = "DiscoveryJob"
+	TypeDiscoveryResult              = "DiscoveryResult"
+	TypeDiscoverySource              = "DiscoverySource"
+	TypeDomainConfig                 = "DomainConfig"
+	TypeEndpointACL                  = "EndpointACL"
+	TypeEngineerSkill                = "EngineerSkill"
+	TypeExternalIdentity             = "ExternalIdentity"
+	TypeFeishuTicketSync             = "FeishuTicketSync"
+	TypeFieldDefinition              = "FieldDefinition"
+	TypeFieldValue                   = "FieldValue"
+	TypeGroup                        = "Group"
+	TypeIncident                     = "Incident"
+	TypeIncidentAlert                = "IncidentAlert"
+	TypeIncidentEscalationRule       = "IncidentEscalationRule"
+	TypeIncidentEvent                = "IncidentEvent"
+	TypeIncidentMetric               = "IncidentMetric"
+	TypeIncidentRule                 = "IncidentRule"
+	TypeIncidentRuleActionReceipt    = "IncidentRuleActionReceipt"
+	TypeIncidentRuleExecution        = "IncidentRuleExecution"
+	TypeIntakeRequest                = "IntakeRequest"
+	TypeIntakeResolutionSnapshot     = "IntakeResolutionSnapshot"
+	TypeItemVersion                  = "ItemVersion"
+	TypeKafTaskActionLedger          = "KafTaskActionLedger"
+	TypeKafTaskCompletionReceipt     = "KafTaskCompletionReceipt"
+	TypeKnowledgeArticle             = "KnowledgeArticle"
+	TypeKnowledgeArticleLike         = "KnowledgeArticleLike"
+	TypeKnowledgeArticleParticipant  = "KnowledgeArticleParticipant"
+	TypeKnowledgeArticleSession      = "KnowledgeArticleSession"
+	TypeKnowledgeArticleVersion      = "KnowledgeArticleVersion"
+	TypeKnownError                   = "KnownError"
+	TypeMSPAllocation                = "MSPAllocation"
+	TypeMarketplaceItem              = "MarketplaceItem"
+	TypeMenu                         = "Menu"
+	TypeMessage                      = "Message"
+	TypeMicroservice                 = "Microservice"
+	TypeNotification                 = "Notification"
+	TypeNotificationPreference       = "NotificationPreference"
+	TypeOutboxEvent                  = "OutboxEvent"
+	TypePasswordResetToken           = "PasswordResetToken"
+	TypePermission                   = "Permission"
+	TypePermissionDefinition         = "PermissionDefinition"
+	TypeProblem                      = "Problem"
+	TypeProcessApprovalDecision      = "ProcessApprovalDecision"
+	TypeProcessAuditLog              = "ProcessAuditLog"
+	TypeProcessBinding               = "ProcessBinding"
+	TypeProcessCallbackOutbox        = "ProcessCallbackOutbox"
+	TypeProcessDefinition            = "ProcessDefinition"
+	TypeProcessDeployment            = "ProcessDeployment"
+	TypeProcessExecutionHistory      = "ProcessExecutionHistory"
+	TypeProcessInstance              = "ProcessInstance"
+	TypeProcessTask                  = "ProcessTask"
+	TypeProcessVariable              = "ProcessVariable"
+	TypeProcessVersionChangelog      = "ProcessVersionChangelog"
+	TypeProject                      = "Project"
+	TypePromptTemplate               = "PromptTemplate"
+	TypeProvisioningTask             = "ProvisioningTask"
+	TypeRelationshipType             = "RelationshipType"
+	TypeRelease                      = "Release"
+	TypeRole                         = "Role"
+	TypeRolePermission               = "RolePermission"
+	TypeRootCauseAnalysis            = "RootCauseAnalysis"
+	TypeSLAAlertHistory              = "SLAAlertHistory"
+	TypeSLAAlertRule                 = "SLAAlertRule"
+	TypeSLADefinition                = "SLADefinition"
+	TypeSLAMetric                    = "SLAMetric"
+	TypeSLAViolation                 = "SLAViolation"
+	TypeServiceCatalog               = "ServiceCatalog"
+	TypeServiceRequest               = "ServiceRequest"
+	TypeServiceRequestAccessResult   = "ServiceRequestAccessResult"
+	TypeServiceRequestAccessSnapshot = "ServiceRequestAccessSnapshot"
+	TypeStandardChange               = "StandardChange"
+	TypeSurvey                       = "Survey"
+	TypeSurveyResponse               = "SurveyResponse"
+	TypeSystemConfig                 = "SystemConfig"
+	TypeTag                          = "Tag"
+	TypeTeam                         = "Team"
+	TypeTenant                       = "Tenant"
+	TypeTenantInstallation           = "TenantInstallation"
+	TypeTicket                       = "Ticket"
+	TypeTicketAssignmentRule         = "TicketAssignmentRule"
+	TypeTicketAttachment             = "TicketAttachment"
+	TypeTicketAutomationRule         = "TicketAutomationRule"
+	TypeTicketCC                     = "TicketCC"
+	TypeTicketCategory               = "TicketCategory"
+	TypeTicketComment                = "TicketComment"
+	TypeTicketNotification           = "TicketNotification"
+	TypeTicketTag                    = "TicketTag"
+	TypeTicketTemplate               = "TicketTemplate"
+	TypeTicketType                   = "TicketType"
+	TypeTicketView                   = "TicketView"
+	TypeTicketWorkflowRecord         = "TicketWorkflowRecord"
+	TypeToolInvocation               = "ToolInvocation"
+	TypeUser                         = "User"
+	TypeVendor                       = "Vendor"
+	TypeWorkItemNumberSequence       = "WorkItemNumberSequence"
+	TypeWorkItemRelation             = "WorkItemRelation"
 )
 
 // ApplicationMutation represents an operation that mutates the Application nodes in the graph.
@@ -19427,6 +19434,762 @@ func (m *CMDBSavedViewMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *CMDBSavedViewMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown CMDBSavedView edge %s", name)
+}
+
+// CatalogAccessPolicyMutation represents an operation that mutates the CatalogAccessPolicy nodes in the graph.
+type CatalogAccessPolicyMutation struct {
+	config
+	op                     Op
+	typ                    string
+	id                     *int
+	version                *int
+	addversion             *int
+	provider               *catalogaccesspolicy.Provider
+	external_system        *string
+	group_id               *string
+	duration_field         *string
+	duration_options       *[]accessgrant.DurationOption
+	appendduration_options []accessgrant.DurationOption
+	clearedFields          map[string]struct{}
+	catalog                *int
+	clearedcatalog         bool
+	done                   bool
+	oldValue               func(context.Context) (*CatalogAccessPolicy, error)
+	predicates             []predicate.CatalogAccessPolicy
+}
+
+var _ ent.Mutation = (*CatalogAccessPolicyMutation)(nil)
+
+// catalogaccesspolicyOption allows management of the mutation configuration using functional options.
+type catalogaccesspolicyOption func(*CatalogAccessPolicyMutation)
+
+// newCatalogAccessPolicyMutation creates new mutation for the CatalogAccessPolicy entity.
+func newCatalogAccessPolicyMutation(c config, op Op, opts ...catalogaccesspolicyOption) *CatalogAccessPolicyMutation {
+	m := &CatalogAccessPolicyMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCatalogAccessPolicy,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCatalogAccessPolicyID sets the ID field of the mutation.
+func withCatalogAccessPolicyID(id int) catalogaccesspolicyOption {
+	return func(m *CatalogAccessPolicyMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *CatalogAccessPolicy
+		)
+		m.oldValue = func(ctx context.Context) (*CatalogAccessPolicy, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().CatalogAccessPolicy.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCatalogAccessPolicy sets the old CatalogAccessPolicy of the mutation.
+func withCatalogAccessPolicy(node *CatalogAccessPolicy) catalogaccesspolicyOption {
+	return func(m *CatalogAccessPolicyMutation) {
+		m.oldValue = func(context.Context) (*CatalogAccessPolicy, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CatalogAccessPolicyMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CatalogAccessPolicyMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CatalogAccessPolicyMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CatalogAccessPolicyMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().CatalogAccessPolicy.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCatalogID sets the "catalog_id" field.
+func (m *CatalogAccessPolicyMutation) SetCatalogID(i int) {
+	m.catalog = &i
+}
+
+// CatalogID returns the value of the "catalog_id" field in the mutation.
+func (m *CatalogAccessPolicyMutation) CatalogID() (r int, exists bool) {
+	v := m.catalog
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCatalogID returns the old "catalog_id" field's value of the CatalogAccessPolicy entity.
+// If the CatalogAccessPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CatalogAccessPolicyMutation) OldCatalogID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCatalogID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCatalogID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCatalogID: %w", err)
+	}
+	return oldValue.CatalogID, nil
+}
+
+// ResetCatalogID resets all changes to the "catalog_id" field.
+func (m *CatalogAccessPolicyMutation) ResetCatalogID() {
+	m.catalog = nil
+}
+
+// SetVersion sets the "version" field.
+func (m *CatalogAccessPolicyMutation) SetVersion(i int) {
+	m.version = &i
+	m.addversion = nil
+}
+
+// Version returns the value of the "version" field in the mutation.
+func (m *CatalogAccessPolicyMutation) Version() (r int, exists bool) {
+	v := m.version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVersion returns the old "version" field's value of the CatalogAccessPolicy entity.
+// If the CatalogAccessPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CatalogAccessPolicyMutation) OldVersion(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVersion: %w", err)
+	}
+	return oldValue.Version, nil
+}
+
+// AddVersion adds i to the "version" field.
+func (m *CatalogAccessPolicyMutation) AddVersion(i int) {
+	if m.addversion != nil {
+		*m.addversion += i
+	} else {
+		m.addversion = &i
+	}
+}
+
+// AddedVersion returns the value that was added to the "version" field in this mutation.
+func (m *CatalogAccessPolicyMutation) AddedVersion() (r int, exists bool) {
+	v := m.addversion
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetVersion resets all changes to the "version" field.
+func (m *CatalogAccessPolicyMutation) ResetVersion() {
+	m.version = nil
+	m.addversion = nil
+}
+
+// SetProvider sets the "provider" field.
+func (m *CatalogAccessPolicyMutation) SetProvider(c catalogaccesspolicy.Provider) {
+	m.provider = &c
+}
+
+// Provider returns the value of the "provider" field in the mutation.
+func (m *CatalogAccessPolicyMutation) Provider() (r catalogaccesspolicy.Provider, exists bool) {
+	v := m.provider
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProvider returns the old "provider" field's value of the CatalogAccessPolicy entity.
+// If the CatalogAccessPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CatalogAccessPolicyMutation) OldProvider(ctx context.Context) (v catalogaccesspolicy.Provider, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProvider is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProvider requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProvider: %w", err)
+	}
+	return oldValue.Provider, nil
+}
+
+// ResetProvider resets all changes to the "provider" field.
+func (m *CatalogAccessPolicyMutation) ResetProvider() {
+	m.provider = nil
+}
+
+// SetExternalSystem sets the "external_system" field.
+func (m *CatalogAccessPolicyMutation) SetExternalSystem(s string) {
+	m.external_system = &s
+}
+
+// ExternalSystem returns the value of the "external_system" field in the mutation.
+func (m *CatalogAccessPolicyMutation) ExternalSystem() (r string, exists bool) {
+	v := m.external_system
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExternalSystem returns the old "external_system" field's value of the CatalogAccessPolicy entity.
+// If the CatalogAccessPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CatalogAccessPolicyMutation) OldExternalSystem(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExternalSystem is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExternalSystem requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExternalSystem: %w", err)
+	}
+	return oldValue.ExternalSystem, nil
+}
+
+// ResetExternalSystem resets all changes to the "external_system" field.
+func (m *CatalogAccessPolicyMutation) ResetExternalSystem() {
+	m.external_system = nil
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *CatalogAccessPolicyMutation) SetGroupID(s string) {
+	m.group_id = &s
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *CatalogAccessPolicyMutation) GroupID() (r string, exists bool) {
+	v := m.group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the CatalogAccessPolicy entity.
+// If the CatalogAccessPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CatalogAccessPolicyMutation) OldGroupID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *CatalogAccessPolicyMutation) ResetGroupID() {
+	m.group_id = nil
+}
+
+// SetDurationField sets the "duration_field" field.
+func (m *CatalogAccessPolicyMutation) SetDurationField(s string) {
+	m.duration_field = &s
+}
+
+// DurationField returns the value of the "duration_field" field in the mutation.
+func (m *CatalogAccessPolicyMutation) DurationField() (r string, exists bool) {
+	v := m.duration_field
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDurationField returns the old "duration_field" field's value of the CatalogAccessPolicy entity.
+// If the CatalogAccessPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CatalogAccessPolicyMutation) OldDurationField(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDurationField is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDurationField requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDurationField: %w", err)
+	}
+	return oldValue.DurationField, nil
+}
+
+// ResetDurationField resets all changes to the "duration_field" field.
+func (m *CatalogAccessPolicyMutation) ResetDurationField() {
+	m.duration_field = nil
+}
+
+// SetDurationOptions sets the "duration_options" field.
+func (m *CatalogAccessPolicyMutation) SetDurationOptions(ao []accessgrant.DurationOption) {
+	m.duration_options = &ao
+	m.appendduration_options = nil
+}
+
+// DurationOptions returns the value of the "duration_options" field in the mutation.
+func (m *CatalogAccessPolicyMutation) DurationOptions() (r []accessgrant.DurationOption, exists bool) {
+	v := m.duration_options
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDurationOptions returns the old "duration_options" field's value of the CatalogAccessPolicy entity.
+// If the CatalogAccessPolicy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CatalogAccessPolicyMutation) OldDurationOptions(ctx context.Context) (v []accessgrant.DurationOption, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDurationOptions is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDurationOptions requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDurationOptions: %w", err)
+	}
+	return oldValue.DurationOptions, nil
+}
+
+// AppendDurationOptions adds ao to the "duration_options" field.
+func (m *CatalogAccessPolicyMutation) AppendDurationOptions(ao []accessgrant.DurationOption) {
+	m.appendduration_options = append(m.appendduration_options, ao...)
+}
+
+// AppendedDurationOptions returns the list of values that were appended to the "duration_options" field in this mutation.
+func (m *CatalogAccessPolicyMutation) AppendedDurationOptions() ([]accessgrant.DurationOption, bool) {
+	if len(m.appendduration_options) == 0 {
+		return nil, false
+	}
+	return m.appendduration_options, true
+}
+
+// ResetDurationOptions resets all changes to the "duration_options" field.
+func (m *CatalogAccessPolicyMutation) ResetDurationOptions() {
+	m.duration_options = nil
+	m.appendduration_options = nil
+}
+
+// ClearCatalog clears the "catalog" edge to the ServiceCatalog entity.
+func (m *CatalogAccessPolicyMutation) ClearCatalog() {
+	m.clearedcatalog = true
+	m.clearedFields[catalogaccesspolicy.FieldCatalogID] = struct{}{}
+}
+
+// CatalogCleared reports if the "catalog" edge to the ServiceCatalog entity was cleared.
+func (m *CatalogAccessPolicyMutation) CatalogCleared() bool {
+	return m.clearedcatalog
+}
+
+// CatalogIDs returns the "catalog" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// CatalogID instead. It exists only for internal usage by the builders.
+func (m *CatalogAccessPolicyMutation) CatalogIDs() (ids []int) {
+	if id := m.catalog; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetCatalog resets all changes to the "catalog" edge.
+func (m *CatalogAccessPolicyMutation) ResetCatalog() {
+	m.catalog = nil
+	m.clearedcatalog = false
+}
+
+// Where appends a list predicates to the CatalogAccessPolicyMutation builder.
+func (m *CatalogAccessPolicyMutation) Where(ps ...predicate.CatalogAccessPolicy) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CatalogAccessPolicyMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CatalogAccessPolicyMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.CatalogAccessPolicy, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CatalogAccessPolicyMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CatalogAccessPolicyMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (CatalogAccessPolicy).
+func (m *CatalogAccessPolicyMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CatalogAccessPolicyMutation) Fields() []string {
+	fields := make([]string, 0, 7)
+	if m.catalog != nil {
+		fields = append(fields, catalogaccesspolicy.FieldCatalogID)
+	}
+	if m.version != nil {
+		fields = append(fields, catalogaccesspolicy.FieldVersion)
+	}
+	if m.provider != nil {
+		fields = append(fields, catalogaccesspolicy.FieldProvider)
+	}
+	if m.external_system != nil {
+		fields = append(fields, catalogaccesspolicy.FieldExternalSystem)
+	}
+	if m.group_id != nil {
+		fields = append(fields, catalogaccesspolicy.FieldGroupID)
+	}
+	if m.duration_field != nil {
+		fields = append(fields, catalogaccesspolicy.FieldDurationField)
+	}
+	if m.duration_options != nil {
+		fields = append(fields, catalogaccesspolicy.FieldDurationOptions)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CatalogAccessPolicyMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case catalogaccesspolicy.FieldCatalogID:
+		return m.CatalogID()
+	case catalogaccesspolicy.FieldVersion:
+		return m.Version()
+	case catalogaccesspolicy.FieldProvider:
+		return m.Provider()
+	case catalogaccesspolicy.FieldExternalSystem:
+		return m.ExternalSystem()
+	case catalogaccesspolicy.FieldGroupID:
+		return m.GroupID()
+	case catalogaccesspolicy.FieldDurationField:
+		return m.DurationField()
+	case catalogaccesspolicy.FieldDurationOptions:
+		return m.DurationOptions()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CatalogAccessPolicyMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case catalogaccesspolicy.FieldCatalogID:
+		return m.OldCatalogID(ctx)
+	case catalogaccesspolicy.FieldVersion:
+		return m.OldVersion(ctx)
+	case catalogaccesspolicy.FieldProvider:
+		return m.OldProvider(ctx)
+	case catalogaccesspolicy.FieldExternalSystem:
+		return m.OldExternalSystem(ctx)
+	case catalogaccesspolicy.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case catalogaccesspolicy.FieldDurationField:
+		return m.OldDurationField(ctx)
+	case catalogaccesspolicy.FieldDurationOptions:
+		return m.OldDurationOptions(ctx)
+	}
+	return nil, fmt.Errorf("unknown CatalogAccessPolicy field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CatalogAccessPolicyMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case catalogaccesspolicy.FieldCatalogID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCatalogID(v)
+		return nil
+	case catalogaccesspolicy.FieldVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVersion(v)
+		return nil
+	case catalogaccesspolicy.FieldProvider:
+		v, ok := value.(catalogaccesspolicy.Provider)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProvider(v)
+		return nil
+	case catalogaccesspolicy.FieldExternalSystem:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExternalSystem(v)
+		return nil
+	case catalogaccesspolicy.FieldGroupID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case catalogaccesspolicy.FieldDurationField:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDurationField(v)
+		return nil
+	case catalogaccesspolicy.FieldDurationOptions:
+		v, ok := value.([]accessgrant.DurationOption)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDurationOptions(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CatalogAccessPolicy field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CatalogAccessPolicyMutation) AddedFields() []string {
+	var fields []string
+	if m.addversion != nil {
+		fields = append(fields, catalogaccesspolicy.FieldVersion)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CatalogAccessPolicyMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case catalogaccesspolicy.FieldVersion:
+		return m.AddedVersion()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CatalogAccessPolicyMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case catalogaccesspolicy.FieldVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddVersion(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CatalogAccessPolicy numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CatalogAccessPolicyMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CatalogAccessPolicyMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CatalogAccessPolicyMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown CatalogAccessPolicy nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CatalogAccessPolicyMutation) ResetField(name string) error {
+	switch name {
+	case catalogaccesspolicy.FieldCatalogID:
+		m.ResetCatalogID()
+		return nil
+	case catalogaccesspolicy.FieldVersion:
+		m.ResetVersion()
+		return nil
+	case catalogaccesspolicy.FieldProvider:
+		m.ResetProvider()
+		return nil
+	case catalogaccesspolicy.FieldExternalSystem:
+		m.ResetExternalSystem()
+		return nil
+	case catalogaccesspolicy.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case catalogaccesspolicy.FieldDurationField:
+		m.ResetDurationField()
+		return nil
+	case catalogaccesspolicy.FieldDurationOptions:
+		m.ResetDurationOptions()
+		return nil
+	}
+	return fmt.Errorf("unknown CatalogAccessPolicy field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CatalogAccessPolicyMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.catalog != nil {
+		edges = append(edges, catalogaccesspolicy.EdgeCatalog)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CatalogAccessPolicyMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case catalogaccesspolicy.EdgeCatalog:
+		if id := m.catalog; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CatalogAccessPolicyMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CatalogAccessPolicyMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CatalogAccessPolicyMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.clearedcatalog {
+		edges = append(edges, catalogaccesspolicy.EdgeCatalog)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CatalogAccessPolicyMutation) EdgeCleared(name string) bool {
+	switch name {
+	case catalogaccesspolicy.EdgeCatalog:
+		return m.clearedcatalog
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CatalogAccessPolicyMutation) ClearEdge(name string) error {
+	switch name {
+	case catalogaccesspolicy.EdgeCatalog:
+		m.ClearCatalog()
+		return nil
+	}
+	return fmt.Errorf("unknown CatalogAccessPolicy unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CatalogAccessPolicyMutation) ResetEdge(name string) error {
+	switch name {
+	case catalogaccesspolicy.EdgeCatalog:
+		m.ResetCatalog()
+		return nil
+	}
+	return fmt.Errorf("unknown CatalogAccessPolicy edge %s", name)
 }
 
 // ChangeMutation represents an operation that mutates the Change nodes in the graph.
@@ -119122,6 +119885,1870 @@ func (m *ServiceRequestMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown ServiceRequest edge %s", name)
+}
+
+// ServiceRequestAccessResultMutation represents an operation that mutates the ServiceRequestAccessResult nodes in the graph.
+type ServiceRequestAccessResultMutation struct {
+	config
+	op                  Op
+	typ                 string
+	id                  *int
+	outcome             *servicerequestaccessresult.Outcome
+	provider            *servicerequestaccessresult.Provider
+	subject_id          *string
+	group_id            *string
+	baseline            *servicerequestaccessresult.Baseline
+	verified_at         *time.Time
+	expires_at          *time.Time
+	evidence_ref        *string
+	clearedFields       map[string]struct{}
+	work_item           *int
+	clearedwork_item    bool
+	process_task        *int
+	clearedprocess_task bool
+	done                bool
+	oldValue            func(context.Context) (*ServiceRequestAccessResult, error)
+	predicates          []predicate.ServiceRequestAccessResult
+}
+
+var _ ent.Mutation = (*ServiceRequestAccessResultMutation)(nil)
+
+// servicerequestaccessresultOption allows management of the mutation configuration using functional options.
+type servicerequestaccessresultOption func(*ServiceRequestAccessResultMutation)
+
+// newServiceRequestAccessResultMutation creates new mutation for the ServiceRequestAccessResult entity.
+func newServiceRequestAccessResultMutation(c config, op Op, opts ...servicerequestaccessresultOption) *ServiceRequestAccessResultMutation {
+	m := &ServiceRequestAccessResultMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeServiceRequestAccessResult,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withServiceRequestAccessResultID sets the ID field of the mutation.
+func withServiceRequestAccessResultID(id int) servicerequestaccessresultOption {
+	return func(m *ServiceRequestAccessResultMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ServiceRequestAccessResult
+		)
+		m.oldValue = func(ctx context.Context) (*ServiceRequestAccessResult, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ServiceRequestAccessResult.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withServiceRequestAccessResult sets the old ServiceRequestAccessResult of the mutation.
+func withServiceRequestAccessResult(node *ServiceRequestAccessResult) servicerequestaccessresultOption {
+	return func(m *ServiceRequestAccessResultMutation) {
+		m.oldValue = func(context.Context) (*ServiceRequestAccessResult, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ServiceRequestAccessResultMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ServiceRequestAccessResultMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ServiceRequestAccessResultMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ServiceRequestAccessResultMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ServiceRequestAccessResult.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetWorkItemID sets the "work_item_id" field.
+func (m *ServiceRequestAccessResultMutation) SetWorkItemID(i int) {
+	m.work_item = &i
+}
+
+// WorkItemID returns the value of the "work_item_id" field in the mutation.
+func (m *ServiceRequestAccessResultMutation) WorkItemID() (r int, exists bool) {
+	v := m.work_item
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWorkItemID returns the old "work_item_id" field's value of the ServiceRequestAccessResult entity.
+// If the ServiceRequestAccessResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessResultMutation) OldWorkItemID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWorkItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWorkItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWorkItemID: %w", err)
+	}
+	return oldValue.WorkItemID, nil
+}
+
+// ResetWorkItemID resets all changes to the "work_item_id" field.
+func (m *ServiceRequestAccessResultMutation) ResetWorkItemID() {
+	m.work_item = nil
+}
+
+// SetProcessTaskID sets the "process_task_id" field.
+func (m *ServiceRequestAccessResultMutation) SetProcessTaskID(i int) {
+	m.process_task = &i
+}
+
+// ProcessTaskID returns the value of the "process_task_id" field in the mutation.
+func (m *ServiceRequestAccessResultMutation) ProcessTaskID() (r int, exists bool) {
+	v := m.process_task
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProcessTaskID returns the old "process_task_id" field's value of the ServiceRequestAccessResult entity.
+// If the ServiceRequestAccessResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessResultMutation) OldProcessTaskID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProcessTaskID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProcessTaskID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProcessTaskID: %w", err)
+	}
+	return oldValue.ProcessTaskID, nil
+}
+
+// ResetProcessTaskID resets all changes to the "process_task_id" field.
+func (m *ServiceRequestAccessResultMutation) ResetProcessTaskID() {
+	m.process_task = nil
+}
+
+// SetOutcome sets the "outcome" field.
+func (m *ServiceRequestAccessResultMutation) SetOutcome(s servicerequestaccessresult.Outcome) {
+	m.outcome = &s
+}
+
+// Outcome returns the value of the "outcome" field in the mutation.
+func (m *ServiceRequestAccessResultMutation) Outcome() (r servicerequestaccessresult.Outcome, exists bool) {
+	v := m.outcome
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOutcome returns the old "outcome" field's value of the ServiceRequestAccessResult entity.
+// If the ServiceRequestAccessResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessResultMutation) OldOutcome(ctx context.Context) (v servicerequestaccessresult.Outcome, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOutcome is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOutcome requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOutcome: %w", err)
+	}
+	return oldValue.Outcome, nil
+}
+
+// ResetOutcome resets all changes to the "outcome" field.
+func (m *ServiceRequestAccessResultMutation) ResetOutcome() {
+	m.outcome = nil
+}
+
+// SetProvider sets the "provider" field.
+func (m *ServiceRequestAccessResultMutation) SetProvider(s servicerequestaccessresult.Provider) {
+	m.provider = &s
+}
+
+// Provider returns the value of the "provider" field in the mutation.
+func (m *ServiceRequestAccessResultMutation) Provider() (r servicerequestaccessresult.Provider, exists bool) {
+	v := m.provider
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProvider returns the old "provider" field's value of the ServiceRequestAccessResult entity.
+// If the ServiceRequestAccessResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessResultMutation) OldProvider(ctx context.Context) (v servicerequestaccessresult.Provider, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProvider is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProvider requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProvider: %w", err)
+	}
+	return oldValue.Provider, nil
+}
+
+// ResetProvider resets all changes to the "provider" field.
+func (m *ServiceRequestAccessResultMutation) ResetProvider() {
+	m.provider = nil
+}
+
+// SetSubjectID sets the "subject_id" field.
+func (m *ServiceRequestAccessResultMutation) SetSubjectID(s string) {
+	m.subject_id = &s
+}
+
+// SubjectID returns the value of the "subject_id" field in the mutation.
+func (m *ServiceRequestAccessResultMutation) SubjectID() (r string, exists bool) {
+	v := m.subject_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubjectID returns the old "subject_id" field's value of the ServiceRequestAccessResult entity.
+// If the ServiceRequestAccessResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessResultMutation) OldSubjectID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubjectID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubjectID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubjectID: %w", err)
+	}
+	return oldValue.SubjectID, nil
+}
+
+// ResetSubjectID resets all changes to the "subject_id" field.
+func (m *ServiceRequestAccessResultMutation) ResetSubjectID() {
+	m.subject_id = nil
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *ServiceRequestAccessResultMutation) SetGroupID(s string) {
+	m.group_id = &s
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *ServiceRequestAccessResultMutation) GroupID() (r string, exists bool) {
+	v := m.group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the ServiceRequestAccessResult entity.
+// If the ServiceRequestAccessResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessResultMutation) OldGroupID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *ServiceRequestAccessResultMutation) ResetGroupID() {
+	m.group_id = nil
+}
+
+// SetBaseline sets the "baseline" field.
+func (m *ServiceRequestAccessResultMutation) SetBaseline(s servicerequestaccessresult.Baseline) {
+	m.baseline = &s
+}
+
+// Baseline returns the value of the "baseline" field in the mutation.
+func (m *ServiceRequestAccessResultMutation) Baseline() (r servicerequestaccessresult.Baseline, exists bool) {
+	v := m.baseline
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBaseline returns the old "baseline" field's value of the ServiceRequestAccessResult entity.
+// If the ServiceRequestAccessResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessResultMutation) OldBaseline(ctx context.Context) (v servicerequestaccessresult.Baseline, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBaseline is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBaseline requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBaseline: %w", err)
+	}
+	return oldValue.Baseline, nil
+}
+
+// ResetBaseline resets all changes to the "baseline" field.
+func (m *ServiceRequestAccessResultMutation) ResetBaseline() {
+	m.baseline = nil
+}
+
+// SetVerifiedAt sets the "verified_at" field.
+func (m *ServiceRequestAccessResultMutation) SetVerifiedAt(t time.Time) {
+	m.verified_at = &t
+}
+
+// VerifiedAt returns the value of the "verified_at" field in the mutation.
+func (m *ServiceRequestAccessResultMutation) VerifiedAt() (r time.Time, exists bool) {
+	v := m.verified_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVerifiedAt returns the old "verified_at" field's value of the ServiceRequestAccessResult entity.
+// If the ServiceRequestAccessResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessResultMutation) OldVerifiedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVerifiedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVerifiedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVerifiedAt: %w", err)
+	}
+	return oldValue.VerifiedAt, nil
+}
+
+// ResetVerifiedAt resets all changes to the "verified_at" field.
+func (m *ServiceRequestAccessResultMutation) ResetVerifiedAt() {
+	m.verified_at = nil
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *ServiceRequestAccessResultMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *ServiceRequestAccessResultMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the ServiceRequestAccessResult entity.
+// If the ServiceRequestAccessResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessResultMutation) OldExpiresAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ClearExpiresAt clears the value of the "expires_at" field.
+func (m *ServiceRequestAccessResultMutation) ClearExpiresAt() {
+	m.expires_at = nil
+	m.clearedFields[servicerequestaccessresult.FieldExpiresAt] = struct{}{}
+}
+
+// ExpiresAtCleared returns if the "expires_at" field was cleared in this mutation.
+func (m *ServiceRequestAccessResultMutation) ExpiresAtCleared() bool {
+	_, ok := m.clearedFields[servicerequestaccessresult.FieldExpiresAt]
+	return ok
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *ServiceRequestAccessResultMutation) ResetExpiresAt() {
+	m.expires_at = nil
+	delete(m.clearedFields, servicerequestaccessresult.FieldExpiresAt)
+}
+
+// SetEvidenceRef sets the "evidence_ref" field.
+func (m *ServiceRequestAccessResultMutation) SetEvidenceRef(s string) {
+	m.evidence_ref = &s
+}
+
+// EvidenceRef returns the value of the "evidence_ref" field in the mutation.
+func (m *ServiceRequestAccessResultMutation) EvidenceRef() (r string, exists bool) {
+	v := m.evidence_ref
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEvidenceRef returns the old "evidence_ref" field's value of the ServiceRequestAccessResult entity.
+// If the ServiceRequestAccessResult object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessResultMutation) OldEvidenceRef(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEvidenceRef is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEvidenceRef requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEvidenceRef: %w", err)
+	}
+	return oldValue.EvidenceRef, nil
+}
+
+// ResetEvidenceRef resets all changes to the "evidence_ref" field.
+func (m *ServiceRequestAccessResultMutation) ResetEvidenceRef() {
+	m.evidence_ref = nil
+}
+
+// ClearWorkItem clears the "work_item" edge to the Ticket entity.
+func (m *ServiceRequestAccessResultMutation) ClearWorkItem() {
+	m.clearedwork_item = true
+	m.clearedFields[servicerequestaccessresult.FieldWorkItemID] = struct{}{}
+}
+
+// WorkItemCleared reports if the "work_item" edge to the Ticket entity was cleared.
+func (m *ServiceRequestAccessResultMutation) WorkItemCleared() bool {
+	return m.clearedwork_item
+}
+
+// WorkItemIDs returns the "work_item" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// WorkItemID instead. It exists only for internal usage by the builders.
+func (m *ServiceRequestAccessResultMutation) WorkItemIDs() (ids []int) {
+	if id := m.work_item; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetWorkItem resets all changes to the "work_item" edge.
+func (m *ServiceRequestAccessResultMutation) ResetWorkItem() {
+	m.work_item = nil
+	m.clearedwork_item = false
+}
+
+// ClearProcessTask clears the "process_task" edge to the ProcessTask entity.
+func (m *ServiceRequestAccessResultMutation) ClearProcessTask() {
+	m.clearedprocess_task = true
+	m.clearedFields[servicerequestaccessresult.FieldProcessTaskID] = struct{}{}
+}
+
+// ProcessTaskCleared reports if the "process_task" edge to the ProcessTask entity was cleared.
+func (m *ServiceRequestAccessResultMutation) ProcessTaskCleared() bool {
+	return m.clearedprocess_task
+}
+
+// ProcessTaskIDs returns the "process_task" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// ProcessTaskID instead. It exists only for internal usage by the builders.
+func (m *ServiceRequestAccessResultMutation) ProcessTaskIDs() (ids []int) {
+	if id := m.process_task; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetProcessTask resets all changes to the "process_task" edge.
+func (m *ServiceRequestAccessResultMutation) ResetProcessTask() {
+	m.process_task = nil
+	m.clearedprocess_task = false
+}
+
+// Where appends a list predicates to the ServiceRequestAccessResultMutation builder.
+func (m *ServiceRequestAccessResultMutation) Where(ps ...predicate.ServiceRequestAccessResult) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ServiceRequestAccessResultMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ServiceRequestAccessResultMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ServiceRequestAccessResult, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ServiceRequestAccessResultMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ServiceRequestAccessResultMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ServiceRequestAccessResult).
+func (m *ServiceRequestAccessResultMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ServiceRequestAccessResultMutation) Fields() []string {
+	fields := make([]string, 0, 10)
+	if m.work_item != nil {
+		fields = append(fields, servicerequestaccessresult.FieldWorkItemID)
+	}
+	if m.process_task != nil {
+		fields = append(fields, servicerequestaccessresult.FieldProcessTaskID)
+	}
+	if m.outcome != nil {
+		fields = append(fields, servicerequestaccessresult.FieldOutcome)
+	}
+	if m.provider != nil {
+		fields = append(fields, servicerequestaccessresult.FieldProvider)
+	}
+	if m.subject_id != nil {
+		fields = append(fields, servicerequestaccessresult.FieldSubjectID)
+	}
+	if m.group_id != nil {
+		fields = append(fields, servicerequestaccessresult.FieldGroupID)
+	}
+	if m.baseline != nil {
+		fields = append(fields, servicerequestaccessresult.FieldBaseline)
+	}
+	if m.verified_at != nil {
+		fields = append(fields, servicerequestaccessresult.FieldVerifiedAt)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, servicerequestaccessresult.FieldExpiresAt)
+	}
+	if m.evidence_ref != nil {
+		fields = append(fields, servicerequestaccessresult.FieldEvidenceRef)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ServiceRequestAccessResultMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case servicerequestaccessresult.FieldWorkItemID:
+		return m.WorkItemID()
+	case servicerequestaccessresult.FieldProcessTaskID:
+		return m.ProcessTaskID()
+	case servicerequestaccessresult.FieldOutcome:
+		return m.Outcome()
+	case servicerequestaccessresult.FieldProvider:
+		return m.Provider()
+	case servicerequestaccessresult.FieldSubjectID:
+		return m.SubjectID()
+	case servicerequestaccessresult.FieldGroupID:
+		return m.GroupID()
+	case servicerequestaccessresult.FieldBaseline:
+		return m.Baseline()
+	case servicerequestaccessresult.FieldVerifiedAt:
+		return m.VerifiedAt()
+	case servicerequestaccessresult.FieldExpiresAt:
+		return m.ExpiresAt()
+	case servicerequestaccessresult.FieldEvidenceRef:
+		return m.EvidenceRef()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ServiceRequestAccessResultMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case servicerequestaccessresult.FieldWorkItemID:
+		return m.OldWorkItemID(ctx)
+	case servicerequestaccessresult.FieldProcessTaskID:
+		return m.OldProcessTaskID(ctx)
+	case servicerequestaccessresult.FieldOutcome:
+		return m.OldOutcome(ctx)
+	case servicerequestaccessresult.FieldProvider:
+		return m.OldProvider(ctx)
+	case servicerequestaccessresult.FieldSubjectID:
+		return m.OldSubjectID(ctx)
+	case servicerequestaccessresult.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case servicerequestaccessresult.FieldBaseline:
+		return m.OldBaseline(ctx)
+	case servicerequestaccessresult.FieldVerifiedAt:
+		return m.OldVerifiedAt(ctx)
+	case servicerequestaccessresult.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	case servicerequestaccessresult.FieldEvidenceRef:
+		return m.OldEvidenceRef(ctx)
+	}
+	return nil, fmt.Errorf("unknown ServiceRequestAccessResult field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ServiceRequestAccessResultMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case servicerequestaccessresult.FieldWorkItemID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWorkItemID(v)
+		return nil
+	case servicerequestaccessresult.FieldProcessTaskID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProcessTaskID(v)
+		return nil
+	case servicerequestaccessresult.FieldOutcome:
+		v, ok := value.(servicerequestaccessresult.Outcome)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOutcome(v)
+		return nil
+	case servicerequestaccessresult.FieldProvider:
+		v, ok := value.(servicerequestaccessresult.Provider)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProvider(v)
+		return nil
+	case servicerequestaccessresult.FieldSubjectID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubjectID(v)
+		return nil
+	case servicerequestaccessresult.FieldGroupID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case servicerequestaccessresult.FieldBaseline:
+		v, ok := value.(servicerequestaccessresult.Baseline)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBaseline(v)
+		return nil
+	case servicerequestaccessresult.FieldVerifiedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVerifiedAt(v)
+		return nil
+	case servicerequestaccessresult.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	case servicerequestaccessresult.FieldEvidenceRef:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEvidenceRef(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ServiceRequestAccessResult field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ServiceRequestAccessResultMutation) AddedFields() []string {
+	var fields []string
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ServiceRequestAccessResultMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ServiceRequestAccessResultMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown ServiceRequestAccessResult numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ServiceRequestAccessResultMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(servicerequestaccessresult.FieldExpiresAt) {
+		fields = append(fields, servicerequestaccessresult.FieldExpiresAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ServiceRequestAccessResultMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ServiceRequestAccessResultMutation) ClearField(name string) error {
+	switch name {
+	case servicerequestaccessresult.FieldExpiresAt:
+		m.ClearExpiresAt()
+		return nil
+	}
+	return fmt.Errorf("unknown ServiceRequestAccessResult nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ServiceRequestAccessResultMutation) ResetField(name string) error {
+	switch name {
+	case servicerequestaccessresult.FieldWorkItemID:
+		m.ResetWorkItemID()
+		return nil
+	case servicerequestaccessresult.FieldProcessTaskID:
+		m.ResetProcessTaskID()
+		return nil
+	case servicerequestaccessresult.FieldOutcome:
+		m.ResetOutcome()
+		return nil
+	case servicerequestaccessresult.FieldProvider:
+		m.ResetProvider()
+		return nil
+	case servicerequestaccessresult.FieldSubjectID:
+		m.ResetSubjectID()
+		return nil
+	case servicerequestaccessresult.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case servicerequestaccessresult.FieldBaseline:
+		m.ResetBaseline()
+		return nil
+	case servicerequestaccessresult.FieldVerifiedAt:
+		m.ResetVerifiedAt()
+		return nil
+	case servicerequestaccessresult.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	case servicerequestaccessresult.FieldEvidenceRef:
+		m.ResetEvidenceRef()
+		return nil
+	}
+	return fmt.Errorf("unknown ServiceRequestAccessResult field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ServiceRequestAccessResultMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.work_item != nil {
+		edges = append(edges, servicerequestaccessresult.EdgeWorkItem)
+	}
+	if m.process_task != nil {
+		edges = append(edges, servicerequestaccessresult.EdgeProcessTask)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ServiceRequestAccessResultMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case servicerequestaccessresult.EdgeWorkItem:
+		if id := m.work_item; id != nil {
+			return []ent.Value{*id}
+		}
+	case servicerequestaccessresult.EdgeProcessTask:
+		if id := m.process_task; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ServiceRequestAccessResultMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ServiceRequestAccessResultMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ServiceRequestAccessResultMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedwork_item {
+		edges = append(edges, servicerequestaccessresult.EdgeWorkItem)
+	}
+	if m.clearedprocess_task {
+		edges = append(edges, servicerequestaccessresult.EdgeProcessTask)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ServiceRequestAccessResultMutation) EdgeCleared(name string) bool {
+	switch name {
+	case servicerequestaccessresult.EdgeWorkItem:
+		return m.clearedwork_item
+	case servicerequestaccessresult.EdgeProcessTask:
+		return m.clearedprocess_task
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ServiceRequestAccessResultMutation) ClearEdge(name string) error {
+	switch name {
+	case servicerequestaccessresult.EdgeWorkItem:
+		m.ClearWorkItem()
+		return nil
+	case servicerequestaccessresult.EdgeProcessTask:
+		m.ClearProcessTask()
+		return nil
+	}
+	return fmt.Errorf("unknown ServiceRequestAccessResult unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ServiceRequestAccessResultMutation) ResetEdge(name string) error {
+	switch name {
+	case servicerequestaccessresult.EdgeWorkItem:
+		m.ResetWorkItem()
+		return nil
+	case servicerequestaccessresult.EdgeProcessTask:
+		m.ResetProcessTask()
+		return nil
+	}
+	return fmt.Errorf("unknown ServiceRequestAccessResult edge %s", name)
+}
+
+// ServiceRequestAccessSnapshotMutation represents an operation that mutates the ServiceRequestAccessSnapshot nodes in the graph.
+type ServiceRequestAccessSnapshotMutation struct {
+	config
+	op                  Op
+	typ                 string
+	id                  *int
+	policy_version      *int
+	addpolicy_version   *int
+	provider            *servicerequestaccesssnapshot.Provider
+	external_system     *string
+	subject_id          *string
+	group_id            *string
+	duration_key        *string
+	duration_seconds    *int64
+	addduration_seconds *int64
+	clearedFields       map[string]struct{}
+	work_item           *int
+	clearedwork_item    bool
+	policy              *int
+	clearedpolicy       bool
+	done                bool
+	oldValue            func(context.Context) (*ServiceRequestAccessSnapshot, error)
+	predicates          []predicate.ServiceRequestAccessSnapshot
+}
+
+var _ ent.Mutation = (*ServiceRequestAccessSnapshotMutation)(nil)
+
+// servicerequestaccesssnapshotOption allows management of the mutation configuration using functional options.
+type servicerequestaccesssnapshotOption func(*ServiceRequestAccessSnapshotMutation)
+
+// newServiceRequestAccessSnapshotMutation creates new mutation for the ServiceRequestAccessSnapshot entity.
+func newServiceRequestAccessSnapshotMutation(c config, op Op, opts ...servicerequestaccesssnapshotOption) *ServiceRequestAccessSnapshotMutation {
+	m := &ServiceRequestAccessSnapshotMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeServiceRequestAccessSnapshot,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withServiceRequestAccessSnapshotID sets the ID field of the mutation.
+func withServiceRequestAccessSnapshotID(id int) servicerequestaccesssnapshotOption {
+	return func(m *ServiceRequestAccessSnapshotMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ServiceRequestAccessSnapshot
+		)
+		m.oldValue = func(ctx context.Context) (*ServiceRequestAccessSnapshot, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ServiceRequestAccessSnapshot.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withServiceRequestAccessSnapshot sets the old ServiceRequestAccessSnapshot of the mutation.
+func withServiceRequestAccessSnapshot(node *ServiceRequestAccessSnapshot) servicerequestaccesssnapshotOption {
+	return func(m *ServiceRequestAccessSnapshotMutation) {
+		m.oldValue = func(context.Context) (*ServiceRequestAccessSnapshot, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ServiceRequestAccessSnapshotMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ServiceRequestAccessSnapshotMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ServiceRequestAccessSnapshotMutation) ID() (id int, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ServiceRequestAccessSnapshotMutation) IDs(ctx context.Context) ([]int, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ServiceRequestAccessSnapshot.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetWorkItemID sets the "work_item_id" field.
+func (m *ServiceRequestAccessSnapshotMutation) SetWorkItemID(i int) {
+	m.work_item = &i
+}
+
+// WorkItemID returns the value of the "work_item_id" field in the mutation.
+func (m *ServiceRequestAccessSnapshotMutation) WorkItemID() (r int, exists bool) {
+	v := m.work_item
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWorkItemID returns the old "work_item_id" field's value of the ServiceRequestAccessSnapshot entity.
+// If the ServiceRequestAccessSnapshot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessSnapshotMutation) OldWorkItemID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWorkItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWorkItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWorkItemID: %w", err)
+	}
+	return oldValue.WorkItemID, nil
+}
+
+// ResetWorkItemID resets all changes to the "work_item_id" field.
+func (m *ServiceRequestAccessSnapshotMutation) ResetWorkItemID() {
+	m.work_item = nil
+}
+
+// SetPolicyID sets the "policy_id" field.
+func (m *ServiceRequestAccessSnapshotMutation) SetPolicyID(i int) {
+	m.policy = &i
+}
+
+// PolicyID returns the value of the "policy_id" field in the mutation.
+func (m *ServiceRequestAccessSnapshotMutation) PolicyID() (r int, exists bool) {
+	v := m.policy
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPolicyID returns the old "policy_id" field's value of the ServiceRequestAccessSnapshot entity.
+// If the ServiceRequestAccessSnapshot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessSnapshotMutation) OldPolicyID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPolicyID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPolicyID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPolicyID: %w", err)
+	}
+	return oldValue.PolicyID, nil
+}
+
+// ResetPolicyID resets all changes to the "policy_id" field.
+func (m *ServiceRequestAccessSnapshotMutation) ResetPolicyID() {
+	m.policy = nil
+}
+
+// SetPolicyVersion sets the "policy_version" field.
+func (m *ServiceRequestAccessSnapshotMutation) SetPolicyVersion(i int) {
+	m.policy_version = &i
+	m.addpolicy_version = nil
+}
+
+// PolicyVersion returns the value of the "policy_version" field in the mutation.
+func (m *ServiceRequestAccessSnapshotMutation) PolicyVersion() (r int, exists bool) {
+	v := m.policy_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPolicyVersion returns the old "policy_version" field's value of the ServiceRequestAccessSnapshot entity.
+// If the ServiceRequestAccessSnapshot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessSnapshotMutation) OldPolicyVersion(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPolicyVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPolicyVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPolicyVersion: %w", err)
+	}
+	return oldValue.PolicyVersion, nil
+}
+
+// AddPolicyVersion adds i to the "policy_version" field.
+func (m *ServiceRequestAccessSnapshotMutation) AddPolicyVersion(i int) {
+	if m.addpolicy_version != nil {
+		*m.addpolicy_version += i
+	} else {
+		m.addpolicy_version = &i
+	}
+}
+
+// AddedPolicyVersion returns the value that was added to the "policy_version" field in this mutation.
+func (m *ServiceRequestAccessSnapshotMutation) AddedPolicyVersion() (r int, exists bool) {
+	v := m.addpolicy_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetPolicyVersion resets all changes to the "policy_version" field.
+func (m *ServiceRequestAccessSnapshotMutation) ResetPolicyVersion() {
+	m.policy_version = nil
+	m.addpolicy_version = nil
+}
+
+// SetProvider sets the "provider" field.
+func (m *ServiceRequestAccessSnapshotMutation) SetProvider(s servicerequestaccesssnapshot.Provider) {
+	m.provider = &s
+}
+
+// Provider returns the value of the "provider" field in the mutation.
+func (m *ServiceRequestAccessSnapshotMutation) Provider() (r servicerequestaccesssnapshot.Provider, exists bool) {
+	v := m.provider
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProvider returns the old "provider" field's value of the ServiceRequestAccessSnapshot entity.
+// If the ServiceRequestAccessSnapshot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessSnapshotMutation) OldProvider(ctx context.Context) (v servicerequestaccesssnapshot.Provider, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProvider is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProvider requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProvider: %w", err)
+	}
+	return oldValue.Provider, nil
+}
+
+// ResetProvider resets all changes to the "provider" field.
+func (m *ServiceRequestAccessSnapshotMutation) ResetProvider() {
+	m.provider = nil
+}
+
+// SetExternalSystem sets the "external_system" field.
+func (m *ServiceRequestAccessSnapshotMutation) SetExternalSystem(s string) {
+	m.external_system = &s
+}
+
+// ExternalSystem returns the value of the "external_system" field in the mutation.
+func (m *ServiceRequestAccessSnapshotMutation) ExternalSystem() (r string, exists bool) {
+	v := m.external_system
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExternalSystem returns the old "external_system" field's value of the ServiceRequestAccessSnapshot entity.
+// If the ServiceRequestAccessSnapshot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessSnapshotMutation) OldExternalSystem(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExternalSystem is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExternalSystem requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExternalSystem: %w", err)
+	}
+	return oldValue.ExternalSystem, nil
+}
+
+// ResetExternalSystem resets all changes to the "external_system" field.
+func (m *ServiceRequestAccessSnapshotMutation) ResetExternalSystem() {
+	m.external_system = nil
+}
+
+// SetSubjectID sets the "subject_id" field.
+func (m *ServiceRequestAccessSnapshotMutation) SetSubjectID(s string) {
+	m.subject_id = &s
+}
+
+// SubjectID returns the value of the "subject_id" field in the mutation.
+func (m *ServiceRequestAccessSnapshotMutation) SubjectID() (r string, exists bool) {
+	v := m.subject_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubjectID returns the old "subject_id" field's value of the ServiceRequestAccessSnapshot entity.
+// If the ServiceRequestAccessSnapshot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessSnapshotMutation) OldSubjectID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubjectID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubjectID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubjectID: %w", err)
+	}
+	return oldValue.SubjectID, nil
+}
+
+// ResetSubjectID resets all changes to the "subject_id" field.
+func (m *ServiceRequestAccessSnapshotMutation) ResetSubjectID() {
+	m.subject_id = nil
+}
+
+// SetGroupID sets the "group_id" field.
+func (m *ServiceRequestAccessSnapshotMutation) SetGroupID(s string) {
+	m.group_id = &s
+}
+
+// GroupID returns the value of the "group_id" field in the mutation.
+func (m *ServiceRequestAccessSnapshotMutation) GroupID() (r string, exists bool) {
+	v := m.group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldGroupID returns the old "group_id" field's value of the ServiceRequestAccessSnapshot entity.
+// If the ServiceRequestAccessSnapshot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessSnapshotMutation) OldGroupID(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldGroupID: %w", err)
+	}
+	return oldValue.GroupID, nil
+}
+
+// ResetGroupID resets all changes to the "group_id" field.
+func (m *ServiceRequestAccessSnapshotMutation) ResetGroupID() {
+	m.group_id = nil
+}
+
+// SetDurationKey sets the "duration_key" field.
+func (m *ServiceRequestAccessSnapshotMutation) SetDurationKey(s string) {
+	m.duration_key = &s
+}
+
+// DurationKey returns the value of the "duration_key" field in the mutation.
+func (m *ServiceRequestAccessSnapshotMutation) DurationKey() (r string, exists bool) {
+	v := m.duration_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDurationKey returns the old "duration_key" field's value of the ServiceRequestAccessSnapshot entity.
+// If the ServiceRequestAccessSnapshot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessSnapshotMutation) OldDurationKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDurationKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDurationKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDurationKey: %w", err)
+	}
+	return oldValue.DurationKey, nil
+}
+
+// ResetDurationKey resets all changes to the "duration_key" field.
+func (m *ServiceRequestAccessSnapshotMutation) ResetDurationKey() {
+	m.duration_key = nil
+}
+
+// SetDurationSeconds sets the "duration_seconds" field.
+func (m *ServiceRequestAccessSnapshotMutation) SetDurationSeconds(i int64) {
+	m.duration_seconds = &i
+	m.addduration_seconds = nil
+}
+
+// DurationSeconds returns the value of the "duration_seconds" field in the mutation.
+func (m *ServiceRequestAccessSnapshotMutation) DurationSeconds() (r int64, exists bool) {
+	v := m.duration_seconds
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDurationSeconds returns the old "duration_seconds" field's value of the ServiceRequestAccessSnapshot entity.
+// If the ServiceRequestAccessSnapshot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ServiceRequestAccessSnapshotMutation) OldDurationSeconds(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDurationSeconds is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDurationSeconds requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDurationSeconds: %w", err)
+	}
+	return oldValue.DurationSeconds, nil
+}
+
+// AddDurationSeconds adds i to the "duration_seconds" field.
+func (m *ServiceRequestAccessSnapshotMutation) AddDurationSeconds(i int64) {
+	if m.addduration_seconds != nil {
+		*m.addduration_seconds += i
+	} else {
+		m.addduration_seconds = &i
+	}
+}
+
+// AddedDurationSeconds returns the value that was added to the "duration_seconds" field in this mutation.
+func (m *ServiceRequestAccessSnapshotMutation) AddedDurationSeconds() (r int64, exists bool) {
+	v := m.addduration_seconds
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetDurationSeconds resets all changes to the "duration_seconds" field.
+func (m *ServiceRequestAccessSnapshotMutation) ResetDurationSeconds() {
+	m.duration_seconds = nil
+	m.addduration_seconds = nil
+}
+
+// ClearWorkItem clears the "work_item" edge to the Ticket entity.
+func (m *ServiceRequestAccessSnapshotMutation) ClearWorkItem() {
+	m.clearedwork_item = true
+	m.clearedFields[servicerequestaccesssnapshot.FieldWorkItemID] = struct{}{}
+}
+
+// WorkItemCleared reports if the "work_item" edge to the Ticket entity was cleared.
+func (m *ServiceRequestAccessSnapshotMutation) WorkItemCleared() bool {
+	return m.clearedwork_item
+}
+
+// WorkItemIDs returns the "work_item" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// WorkItemID instead. It exists only for internal usage by the builders.
+func (m *ServiceRequestAccessSnapshotMutation) WorkItemIDs() (ids []int) {
+	if id := m.work_item; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetWorkItem resets all changes to the "work_item" edge.
+func (m *ServiceRequestAccessSnapshotMutation) ResetWorkItem() {
+	m.work_item = nil
+	m.clearedwork_item = false
+}
+
+// ClearPolicy clears the "policy" edge to the CatalogAccessPolicy entity.
+func (m *ServiceRequestAccessSnapshotMutation) ClearPolicy() {
+	m.clearedpolicy = true
+	m.clearedFields[servicerequestaccesssnapshot.FieldPolicyID] = struct{}{}
+}
+
+// PolicyCleared reports if the "policy" edge to the CatalogAccessPolicy entity was cleared.
+func (m *ServiceRequestAccessSnapshotMutation) PolicyCleared() bool {
+	return m.clearedpolicy
+}
+
+// PolicyIDs returns the "policy" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// PolicyID instead. It exists only for internal usage by the builders.
+func (m *ServiceRequestAccessSnapshotMutation) PolicyIDs() (ids []int) {
+	if id := m.policy; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetPolicy resets all changes to the "policy" edge.
+func (m *ServiceRequestAccessSnapshotMutation) ResetPolicy() {
+	m.policy = nil
+	m.clearedpolicy = false
+}
+
+// Where appends a list predicates to the ServiceRequestAccessSnapshotMutation builder.
+func (m *ServiceRequestAccessSnapshotMutation) Where(ps ...predicate.ServiceRequestAccessSnapshot) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ServiceRequestAccessSnapshotMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ServiceRequestAccessSnapshotMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ServiceRequestAccessSnapshot, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ServiceRequestAccessSnapshotMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ServiceRequestAccessSnapshotMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ServiceRequestAccessSnapshot).
+func (m *ServiceRequestAccessSnapshotMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ServiceRequestAccessSnapshotMutation) Fields() []string {
+	fields := make([]string, 0, 9)
+	if m.work_item != nil {
+		fields = append(fields, servicerequestaccesssnapshot.FieldWorkItemID)
+	}
+	if m.policy != nil {
+		fields = append(fields, servicerequestaccesssnapshot.FieldPolicyID)
+	}
+	if m.policy_version != nil {
+		fields = append(fields, servicerequestaccesssnapshot.FieldPolicyVersion)
+	}
+	if m.provider != nil {
+		fields = append(fields, servicerequestaccesssnapshot.FieldProvider)
+	}
+	if m.external_system != nil {
+		fields = append(fields, servicerequestaccesssnapshot.FieldExternalSystem)
+	}
+	if m.subject_id != nil {
+		fields = append(fields, servicerequestaccesssnapshot.FieldSubjectID)
+	}
+	if m.group_id != nil {
+		fields = append(fields, servicerequestaccesssnapshot.FieldGroupID)
+	}
+	if m.duration_key != nil {
+		fields = append(fields, servicerequestaccesssnapshot.FieldDurationKey)
+	}
+	if m.duration_seconds != nil {
+		fields = append(fields, servicerequestaccesssnapshot.FieldDurationSeconds)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ServiceRequestAccessSnapshotMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case servicerequestaccesssnapshot.FieldWorkItemID:
+		return m.WorkItemID()
+	case servicerequestaccesssnapshot.FieldPolicyID:
+		return m.PolicyID()
+	case servicerequestaccesssnapshot.FieldPolicyVersion:
+		return m.PolicyVersion()
+	case servicerequestaccesssnapshot.FieldProvider:
+		return m.Provider()
+	case servicerequestaccesssnapshot.FieldExternalSystem:
+		return m.ExternalSystem()
+	case servicerequestaccesssnapshot.FieldSubjectID:
+		return m.SubjectID()
+	case servicerequestaccesssnapshot.FieldGroupID:
+		return m.GroupID()
+	case servicerequestaccesssnapshot.FieldDurationKey:
+		return m.DurationKey()
+	case servicerequestaccesssnapshot.FieldDurationSeconds:
+		return m.DurationSeconds()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ServiceRequestAccessSnapshotMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case servicerequestaccesssnapshot.FieldWorkItemID:
+		return m.OldWorkItemID(ctx)
+	case servicerequestaccesssnapshot.FieldPolicyID:
+		return m.OldPolicyID(ctx)
+	case servicerequestaccesssnapshot.FieldPolicyVersion:
+		return m.OldPolicyVersion(ctx)
+	case servicerequestaccesssnapshot.FieldProvider:
+		return m.OldProvider(ctx)
+	case servicerequestaccesssnapshot.FieldExternalSystem:
+		return m.OldExternalSystem(ctx)
+	case servicerequestaccesssnapshot.FieldSubjectID:
+		return m.OldSubjectID(ctx)
+	case servicerequestaccesssnapshot.FieldGroupID:
+		return m.OldGroupID(ctx)
+	case servicerequestaccesssnapshot.FieldDurationKey:
+		return m.OldDurationKey(ctx)
+	case servicerequestaccesssnapshot.FieldDurationSeconds:
+		return m.OldDurationSeconds(ctx)
+	}
+	return nil, fmt.Errorf("unknown ServiceRequestAccessSnapshot field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ServiceRequestAccessSnapshotMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case servicerequestaccesssnapshot.FieldWorkItemID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWorkItemID(v)
+		return nil
+	case servicerequestaccesssnapshot.FieldPolicyID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPolicyID(v)
+		return nil
+	case servicerequestaccesssnapshot.FieldPolicyVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPolicyVersion(v)
+		return nil
+	case servicerequestaccesssnapshot.FieldProvider:
+		v, ok := value.(servicerequestaccesssnapshot.Provider)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProvider(v)
+		return nil
+	case servicerequestaccesssnapshot.FieldExternalSystem:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExternalSystem(v)
+		return nil
+	case servicerequestaccesssnapshot.FieldSubjectID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubjectID(v)
+		return nil
+	case servicerequestaccesssnapshot.FieldGroupID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetGroupID(v)
+		return nil
+	case servicerequestaccesssnapshot.FieldDurationKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDurationKey(v)
+		return nil
+	case servicerequestaccesssnapshot.FieldDurationSeconds:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDurationSeconds(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ServiceRequestAccessSnapshot field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ServiceRequestAccessSnapshotMutation) AddedFields() []string {
+	var fields []string
+	if m.addpolicy_version != nil {
+		fields = append(fields, servicerequestaccesssnapshot.FieldPolicyVersion)
+	}
+	if m.addduration_seconds != nil {
+		fields = append(fields, servicerequestaccesssnapshot.FieldDurationSeconds)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ServiceRequestAccessSnapshotMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case servicerequestaccesssnapshot.FieldPolicyVersion:
+		return m.AddedPolicyVersion()
+	case servicerequestaccesssnapshot.FieldDurationSeconds:
+		return m.AddedDurationSeconds()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ServiceRequestAccessSnapshotMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case servicerequestaccesssnapshot.FieldPolicyVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddPolicyVersion(v)
+		return nil
+	case servicerequestaccesssnapshot.FieldDurationSeconds:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDurationSeconds(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ServiceRequestAccessSnapshot numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ServiceRequestAccessSnapshotMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ServiceRequestAccessSnapshotMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ServiceRequestAccessSnapshotMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown ServiceRequestAccessSnapshot nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ServiceRequestAccessSnapshotMutation) ResetField(name string) error {
+	switch name {
+	case servicerequestaccesssnapshot.FieldWorkItemID:
+		m.ResetWorkItemID()
+		return nil
+	case servicerequestaccesssnapshot.FieldPolicyID:
+		m.ResetPolicyID()
+		return nil
+	case servicerequestaccesssnapshot.FieldPolicyVersion:
+		m.ResetPolicyVersion()
+		return nil
+	case servicerequestaccesssnapshot.FieldProvider:
+		m.ResetProvider()
+		return nil
+	case servicerequestaccesssnapshot.FieldExternalSystem:
+		m.ResetExternalSystem()
+		return nil
+	case servicerequestaccesssnapshot.FieldSubjectID:
+		m.ResetSubjectID()
+		return nil
+	case servicerequestaccesssnapshot.FieldGroupID:
+		m.ResetGroupID()
+		return nil
+	case servicerequestaccesssnapshot.FieldDurationKey:
+		m.ResetDurationKey()
+		return nil
+	case servicerequestaccesssnapshot.FieldDurationSeconds:
+		m.ResetDurationSeconds()
+		return nil
+	}
+	return fmt.Errorf("unknown ServiceRequestAccessSnapshot field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ServiceRequestAccessSnapshotMutation) AddedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.work_item != nil {
+		edges = append(edges, servicerequestaccesssnapshot.EdgeWorkItem)
+	}
+	if m.policy != nil {
+		edges = append(edges, servicerequestaccesssnapshot.EdgePolicy)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ServiceRequestAccessSnapshotMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case servicerequestaccesssnapshot.EdgeWorkItem:
+		if id := m.work_item; id != nil {
+			return []ent.Value{*id}
+		}
+	case servicerequestaccesssnapshot.EdgePolicy:
+		if id := m.policy; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ServiceRequestAccessSnapshotMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 2)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ServiceRequestAccessSnapshotMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ServiceRequestAccessSnapshotMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 2)
+	if m.clearedwork_item {
+		edges = append(edges, servicerequestaccesssnapshot.EdgeWorkItem)
+	}
+	if m.clearedpolicy {
+		edges = append(edges, servicerequestaccesssnapshot.EdgePolicy)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ServiceRequestAccessSnapshotMutation) EdgeCleared(name string) bool {
+	switch name {
+	case servicerequestaccesssnapshot.EdgeWorkItem:
+		return m.clearedwork_item
+	case servicerequestaccesssnapshot.EdgePolicy:
+		return m.clearedpolicy
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ServiceRequestAccessSnapshotMutation) ClearEdge(name string) error {
+	switch name {
+	case servicerequestaccesssnapshot.EdgeWorkItem:
+		m.ClearWorkItem()
+		return nil
+	case servicerequestaccesssnapshot.EdgePolicy:
+		m.ClearPolicy()
+		return nil
+	}
+	return fmt.Errorf("unknown ServiceRequestAccessSnapshot unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ServiceRequestAccessSnapshotMutation) ResetEdge(name string) error {
+	switch name {
+	case servicerequestaccesssnapshot.EdgeWorkItem:
+		m.ResetWorkItem()
+		return nil
+	case servicerequestaccesssnapshot.EdgePolicy:
+		m.ResetPolicy()
+		return nil
+	}
+	return fmt.Errorf("unknown ServiceRequestAccessSnapshot edge %s", name)
 }
 
 // StandardChangeMutation represents an operation that mutates the StandardChange nodes in the graph.

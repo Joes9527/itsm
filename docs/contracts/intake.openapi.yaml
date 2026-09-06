@@ -951,18 +951,38 @@ components:
     AccessResult:
       type: object
       additionalProperties: false
+      description: First verified external membership. Already-present membership is unmanaged and has no expiry or original grant timestamp owned by this request. No automatic revocation is promised.
       properties:
-        outcome: *id008
+        outcome:
+          enum: [granted, already_present]
         verifiedAt:
           type: string
           format: date-time
         expiresAt:
-          type: string
+          type: [string, 'null']
           format: date-time
+        managed:
+          type: boolean
       required:
       - outcome
       - verifiedAt
       - expiresAt
+      - managed
+      allOf:
+      - if:
+          properties:
+            outcome: {const: already_present}
+        then:
+          properties:
+            expiresAt: {type: 'null'}
+            managed: {const: false}
+      - if:
+          properties:
+            outcome: {const: granted}
+        then:
+          properties:
+            expiresAt: {type: string, format: date-time}
+            managed: {const: true}
     WorkItemView:
       type: object
       additionalProperties: false
@@ -994,7 +1014,7 @@ components:
       - fulfillmentState
       - accessResult
       description: Current user row-authorized projection. status retains professional
-        lifecycle value. accessResult is null until C1; never expose provider raw
+        lifecycle value. Fulfillment comes from SR, BPMN approval/delegation and persisted verified results. Never expose provider raw
         receipts.
     ErrorDetails:
       type: object

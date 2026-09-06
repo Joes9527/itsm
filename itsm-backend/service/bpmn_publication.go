@@ -163,6 +163,9 @@ func (e *CustomProcessEngine) ValidateDefinitionForPublication(ctx context.Conte
 				if err := config.ValidateKAFWorkerStartupConfig(e.publicationKAFConfig); err != nil {
 					return err
 				}
+				if err := validateCapability(t.ServiceTaskType(), t.ServiceTaskAction(), t.CallbackConfigRef(), optional); err != nil {
+					return err
+				}
 				continue
 			}
 			if err := validateCapability(t.ServiceTaskType(), t.ServiceTaskAction(), t.CallbackConfigRef(), optional); err != nil {

@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"itsm-backend/handlers/common/accessgrant"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"time"
 )
@@ -82,15 +83,16 @@ type GetServiceRequestsRequest struct {
 
 // ServiceCatalogResponse 服务目录响应
 type ServiceCatalogResponse struct {
-	CatalogVersion    string `json:"catalogVersion,omitempty"`
-	FormSchemaVersion string `json:"formSchemaVersion,omitempty"`
-	ID                int    `json:"id"`
-	Name              string `json:"name"`
-	Category          string `json:"category"`
-	Description       string `json:"description"`
-	DeliveryTime      string `json:"deliveryTime"`
-	CITypeID          int    `json:"ciTypeId,omitempty"`
-	CloudServiceID    int    `json:"cloudServiceId,omitempty"`
+	AccessPolicy      *accessgrant.Policy `json:"accessPolicy,omitempty"`
+	CatalogVersion    string              `json:"catalogVersion,omitempty"`
+	FormSchemaVersion string              `json:"formSchemaVersion,omitempty"`
+	ID                int                 `json:"id"`
+	Name              string              `json:"name"`
+	Category          string              `json:"category"`
+	Description       string              `json:"description"`
+	DeliveryTime      string              `json:"deliveryTime"`
+	CITypeID          int                 `json:"ciTypeId,omitempty"`
+	CloudServiceID    int                 `json:"cloudServiceId,omitempty"`
 	// ProcessDefinitionKey 是该目录条目专属的 BPMN 流程定义 Key（可选），非空时优先于
 	// businessType+businessSubType 的通用流程绑定解析。
 	ProcessDefinitionKey string `json:"processDefinitionKey,omitempty"`
@@ -174,6 +176,7 @@ type ServiceRequestListResponse struct {
 
 // CreateServiceCatalogRequest 创建服务目录请求
 type CreateServiceCatalogRequest struct {
+	AccessPolicy         *accessgrant.Policy      `json:"accessPolicy,omitempty"`
 	Name                 string                   `json:"name" binding:"required,max=255"`
 	Category             string                   `json:"category" binding:"required,max=100"`
 	Description          string                   `json:"description" binding:"omitempty,max=1000"`
@@ -192,6 +195,7 @@ type CreateServiceCatalogRequest struct {
 
 // Update is a conditional patch; supplied zero/empty values clear configuration.
 type UpdateServiceCatalogRequest struct {
+	AccessPolicy           *accessgrant.Policy      `json:"accessPolicy,omitempty"`
 	ExpectedCatalogVersion string                   `json:"expectedCatalogVersion" binding:"required"`
 	Name                   *string                  `json:"name" binding:"omitempty,max=255"`
 	Category               *string                  `json:"category" binding:"omitempty,max=100"`

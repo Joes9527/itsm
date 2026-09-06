@@ -188,6 +188,18 @@ func (f CMDBSavedViewFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Valu
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CMDBSavedViewMutation", m)
 }
 
+// The CatalogAccessPolicyFunc type is an adapter to allow the use of ordinary
+// function as CatalogAccessPolicy mutator.
+type CatalogAccessPolicyFunc func(context.Context, *ent.CatalogAccessPolicyMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CatalogAccessPolicyFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CatalogAccessPolicyMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CatalogAccessPolicyMutation", m)
+}
+
 // The ChangeFunc type is an adapter to allow the use of ordinary
 // function as Change mutator.
 type ChangeFunc func(context.Context, *ent.ChangeMutation) (ent.Value, error)
@@ -1134,6 +1146,30 @@ func (f ServiceRequestFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Val
 		return f(ctx, mv)
 	}
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ServiceRequestMutation", m)
+}
+
+// The ServiceRequestAccessResultFunc type is an adapter to allow the use of ordinary
+// function as ServiceRequestAccessResult mutator.
+type ServiceRequestAccessResultFunc func(context.Context, *ent.ServiceRequestAccessResultMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ServiceRequestAccessResultFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ServiceRequestAccessResultMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ServiceRequestAccessResultMutation", m)
+}
+
+// The ServiceRequestAccessSnapshotFunc type is an adapter to allow the use of ordinary
+// function as ServiceRequestAccessSnapshot mutator.
+type ServiceRequestAccessSnapshotFunc func(context.Context, *ent.ServiceRequestAccessSnapshotMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ServiceRequestAccessSnapshotFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ServiceRequestAccessSnapshotMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ServiceRequestAccessSnapshotMutation", m)
 }
 
 // The StandardChangeFunc type is an adapter to allow the use of ordinary

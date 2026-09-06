@@ -1150,3 +1150,9 @@ func (c *BPMNWorkflowController) GetVersionChangeLogsByID(ctx *gin.Context) {
 
 	common.Success(ctx, changelogs)
 }
+
+func (c *BPMNWorkflowController) SetApprovedAccessReader(owner service.ApprovedAccessReader) {
+	if c.kafDelegationController != nil {
+		c.kafDelegationController.service.SetApprovedAccessReader(owner)
+	}
+}

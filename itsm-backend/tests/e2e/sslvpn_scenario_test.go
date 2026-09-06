@@ -308,13 +308,8 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 		"reason":            "因出差需要远程访问研发内网与生产堡垒机",
 		"formData": map[string]interface{}{
 			"customFieldValues": []map[string]interface{}{
-				{"name": "applicant_name", "value": "侯艾华"},
-				{"name": "applicant_upn", "value": "shouah@kln.com"},
-				{"name": "employee_id", "value": "EMP001"},
-				{"name": "department", "value": "IT研发中心"},
-				{"name": "vpn_level", "value": "Level 2 - 业务系统组 (CNDL-OKTA-SSLVPN-Level2-Users)"},
 				{"name": "target_systems", "value": "10.128.35.0/24, ERP与WMS生产系统"},
-				{"name": "access_duration", "value": "90天临时"},
+				{"name": "access_duration", "value": "days_90"},
 				{"name": "access_reason", "value": "因研发排障及出差值班，需远程接入内网生产环境"},
 			},
 		},
@@ -351,26 +346,16 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 		Order(ent.Asc(fieldvalue.FieldSortOrder)).
 		All(ctx)
 	require.NoError(t, err)
-	require.Len(t, dbFieldValues, 8, "must persist all 8 custom fields")
+	require.Len(t, dbFieldValues, 3, "must persist all 3 business fields")
 
 	expectedFieldKeys := []string{
-		"applicant_name",
-		"applicant_upn",
-		"employee_id",
-		"department",
-		"vpn_level",
 		"target_systems",
 		"access_duration",
 		"access_reason",
 	}
 	expectedValues := map[string]string{
-		"applicant_name":  "侯艾华",
-		"applicant_upn":   "shouah@kln.com",
-		"employee_id":     "EMP001",
-		"department":      "IT研发中心",
-		"vpn_level":       "Level 2 - 业务系统组 (CNDL-OKTA-SSLVPN-Level2-Users)",
 		"target_systems":  "10.128.35.0/24, ERP与WMS生产系统",
-		"access_duration": "90天临时",
+		"access_duration": "days_90",
 		"access_reason":   "因研发排障及出差值班，需远程接入内网生产环境",
 	}
 
@@ -521,7 +506,8 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 	// 2. Process Instance status -> COMPLETED
 	finalProcessInst, err := h.client.ProcessInstance.Get(ctx, processInst.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "completed", finalProcessInst.Status, "BPMN process instance must be completed")
+	assert.Equal(t, "running", finalProcessInst.Status, "BPMN awaits verified external fulfillment")
+	require.Equal(t, 1, h.client.ProcessTask.Query().Where(processtask.ProcessInstanceIDEQ(finalProcessInst.ID), processtask.TaskTypeEQ("kaf_delegate"), processtask.StatusEQ("delegated")).CountX(ctx))
 	assert.NotNil(t, finalProcessInst.EndTime, "Process end time must be set")
 
 	// 3. Process Approval Decision for L2 review

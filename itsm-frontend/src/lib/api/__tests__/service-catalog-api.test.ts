@@ -232,3 +232,12 @@ describe('catalog publication contract', () => {
     expect(mockPost).toHaveBeenLastCalledWith('/api/v1/service-catalogs',expect.objectContaining({status:'disabled'}));
   });
 });
+
+it('preserves the backend finite access policy in catalog details', async () => {
+  const accessPolicy = {
+    id: 2, version: 3, provider: 'graph', externalSystem: 'directory', groupId: 'group',
+    durationField: 'duration', durationOptions: [{ key: 'month', label: '一个月', seconds: 2592000 }],
+  };
+  mockGet.mockResolvedValue({ id: 1, name: 'Access', status: 'enabled', accessPolicy });
+  expect(await ServiceCatalogApi.getService('1')).toMatchObject({ accessPolicy });
+});

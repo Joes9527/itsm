@@ -3,6 +3,7 @@ package service_catalog
 import (
 	"encoding/json"
 	"itsm-backend/ent"
+	"itsm-backend/handlers/common/accessgrant"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"sort"
 )
@@ -10,6 +11,7 @@ import (
 // Explicit public contract: storage additions, actors, clocks and secrets do not
 // silently join a user's confirmation. Process references are projected by their owner.
 type publicCatalogDefinition struct {
+	AccessPolicy         *accessgrant.Policy     `json:"accessPolicy"`
 	TargetClass          string                  `json:"targetClass"`
 	ServiceType          string                  `json:"serviceType"`
 	Name                 string                  `json:"name"`

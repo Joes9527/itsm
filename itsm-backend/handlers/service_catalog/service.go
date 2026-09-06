@@ -7,6 +7,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent/servicecatalog"
 	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/service/bpmn"
 	"strconv"
 	"strings"
 	"time"
@@ -79,6 +80,9 @@ func (s *Service) Create(ctx context.Context, tenantID int, input dto.CreateServ
 	if _, err := service.NewFieldDefinitionService(tx.Client()).ReplaceDefinitionsTx(ctx, tx, tenantID, "service_catalog", created.ID, catalog.Fields); err != nil {
 		return nil, common.NewBadRequestError("invalid field definitions", err)
 	}
+	if err := saveAccessPolicy(ctx, tx, tenantID, created.ID, input.AccessPolicy); err != nil {
+		return nil, err
+	}
 	result, err := s.finishDefinition(ctx, tx, tenantID, created.ID)
 	if err != nil {
 		return nil, err
@@ -131,6 +135,7 @@ func (s *Service) finishDefinition(ctx context.Context, tx *ent.Tx, tenantID, id
 	}
 	result := NewEntRepository(tx.Client()).toDomain(row)
 	result.Fields = toFieldDefinitionInputsFromEnt(defs)
+	result.AccessPolicy = revision.AccessPolicy
 	if row.IsActive && (row.Status == "enabled" || row.Status == "active") {
 		if err := s.validateForPublicationTx(ctx, tx, tenantID, result); err != nil {
 			return nil, err
@@ -214,6 +219,7 @@ func (s *Service) attachRevision(ctx context.Context, tx *ent.Tx, tenantID int, 
 	catalog.CatalogVersion = revision.Version
 	catalog.FormSchemaVersion = revision.FormSchemaVersion
 	catalog.Fields = toFieldDefinitionInputsFromEnt(defs)
+	catalog.AccessPolicy = revision.AccessPolicy
 	return nil
 }
 
@@ -314,6 +320,9 @@ func (s *Service) Update(ctx context.Context, tenantID, id int, input dto.Update
 			return nil, common.NewBadRequestError("invalid field definitions", err)
 		}
 	}
+	if err := saveAccessPolicy(ctx, tx, tenantID, id, input.AccessPolicy); err != nil {
+		return nil, err
+	}
 	result, err := s.finishDefinition(ctx, tx, tenantID, id)
 	if err != nil {
 		return nil, err
@@ -366,6 +375,13 @@ func (s *Service) GetStats(ctx context.Context, tenantID int) (*ServiceStats, er
 
 func (s *Service) SetPublicationEngine(engine *service.CustomProcessEngine) {
 	s.publicationEngine = engine
+	if engine != nil {
+		for _, h := range engine.CallbackRegistry().ListHandlers() {
+			if kaf, ok := h.(*bpmn.KafDelegateServiceTaskHandler); ok {
+				kaf.SetPublicationConfiguration(s)
+			}
+		}
+	}
 }
 
 func (s *Service) SetCreatorRegistry(registry interface {

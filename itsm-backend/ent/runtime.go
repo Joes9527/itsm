@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/bootstraptoken"
 	"itsm-backend/ent/bpmnpermission"
 	"itsm-backend/ent/cabmember"
+	"itsm-backend/ent/catalogaccesspolicy"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/changepir"
 	"itsm-backend/ent/ciattributedefinition"
@@ -91,6 +92,8 @@ import (
 	"itsm-backend/ent/schema"
 	"itsm-backend/ent/servicecatalog"
 	"itsm-backend/ent/servicerequest"
+	"itsm-backend/ent/servicerequestaccessresult"
+	"itsm-backend/ent/servicerequestaccesssnapshot"
 	"itsm-backend/ent/slaalerthistory"
 	"itsm-backend/ent/slaalertrule"
 	"itsm-backend/ent/sladefinition"
@@ -602,6 +605,30 @@ func init() {
 	cmdbsavedview.DefaultUpdatedAt = cmdbsavedviewDescUpdatedAt.Default.(func() time.Time)
 	// cmdbsavedview.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	cmdbsavedview.UpdateDefaultUpdatedAt = cmdbsavedviewDescUpdatedAt.UpdateDefault.(func() time.Time)
+	catalogaccesspolicyFields := schema.CatalogAccessPolicy{}.Fields()
+	_ = catalogaccesspolicyFields
+	// catalogaccesspolicyDescCatalogID is the schema descriptor for catalog_id field.
+	catalogaccesspolicyDescCatalogID := catalogaccesspolicyFields[0].Descriptor()
+	// catalogaccesspolicy.CatalogIDValidator is a validator for the "catalog_id" field. It is called by the builders before save.
+	catalogaccesspolicy.CatalogIDValidator = catalogaccesspolicyDescCatalogID.Validators[0].(func(int) error)
+	// catalogaccesspolicyDescVersion is the schema descriptor for version field.
+	catalogaccesspolicyDescVersion := catalogaccesspolicyFields[1].Descriptor()
+	// catalogaccesspolicy.DefaultVersion holds the default value on creation for the version field.
+	catalogaccesspolicy.DefaultVersion = catalogaccesspolicyDescVersion.Default.(int)
+	// catalogaccesspolicy.VersionValidator is a validator for the "version" field. It is called by the builders before save.
+	catalogaccesspolicy.VersionValidator = catalogaccesspolicyDescVersion.Validators[0].(func(int) error)
+	// catalogaccesspolicyDescExternalSystem is the schema descriptor for external_system field.
+	catalogaccesspolicyDescExternalSystem := catalogaccesspolicyFields[3].Descriptor()
+	// catalogaccesspolicy.ExternalSystemValidator is a validator for the "external_system" field. It is called by the builders before save.
+	catalogaccesspolicy.ExternalSystemValidator = catalogaccesspolicyDescExternalSystem.Validators[0].(func(string) error)
+	// catalogaccesspolicyDescGroupID is the schema descriptor for group_id field.
+	catalogaccesspolicyDescGroupID := catalogaccesspolicyFields[4].Descriptor()
+	// catalogaccesspolicy.GroupIDValidator is a validator for the "group_id" field. It is called by the builders before save.
+	catalogaccesspolicy.GroupIDValidator = catalogaccesspolicyDescGroupID.Validators[0].(func(string) error)
+	// catalogaccesspolicyDescDurationField is the schema descriptor for duration_field field.
+	catalogaccesspolicyDescDurationField := catalogaccesspolicyFields[5].Descriptor()
+	// catalogaccesspolicy.DurationFieldValidator is a validator for the "duration_field" field. It is called by the builders before save.
+	catalogaccesspolicy.DurationFieldValidator = catalogaccesspolicyDescDurationField.Validators[0].(func(string) error)
 	changeFields := schema.Change{}.Fields()
 	_ = changeFields
 	// changeDescType is the schema descriptor for type field.
@@ -3334,6 +3361,62 @@ func init() {
 	servicerequest.DefaultQuantity = servicerequestDescQuantity.Default.(int)
 	// servicerequest.QuantityValidator is a validator for the "quantity" field. It is called by the builders before save.
 	servicerequest.QuantityValidator = servicerequestDescQuantity.Validators[0].(func(int) error)
+	servicerequestaccessresultFields := schema.ServiceRequestAccessResult{}.Fields()
+	_ = servicerequestaccessresultFields
+	// servicerequestaccessresultDescWorkItemID is the schema descriptor for work_item_id field.
+	servicerequestaccessresultDescWorkItemID := servicerequestaccessresultFields[0].Descriptor()
+	// servicerequestaccessresult.WorkItemIDValidator is a validator for the "work_item_id" field. It is called by the builders before save.
+	servicerequestaccessresult.WorkItemIDValidator = servicerequestaccessresultDescWorkItemID.Validators[0].(func(int) error)
+	// servicerequestaccessresultDescProcessTaskID is the schema descriptor for process_task_id field.
+	servicerequestaccessresultDescProcessTaskID := servicerequestaccessresultFields[1].Descriptor()
+	// servicerequestaccessresult.ProcessTaskIDValidator is a validator for the "process_task_id" field. It is called by the builders before save.
+	servicerequestaccessresult.ProcessTaskIDValidator = servicerequestaccessresultDescProcessTaskID.Validators[0].(func(int) error)
+	// servicerequestaccessresultDescSubjectID is the schema descriptor for subject_id field.
+	servicerequestaccessresultDescSubjectID := servicerequestaccessresultFields[4].Descriptor()
+	// servicerequestaccessresult.SubjectIDValidator is a validator for the "subject_id" field. It is called by the builders before save.
+	servicerequestaccessresult.SubjectIDValidator = servicerequestaccessresultDescSubjectID.Validators[0].(func(string) error)
+	// servicerequestaccessresultDescGroupID is the schema descriptor for group_id field.
+	servicerequestaccessresultDescGroupID := servicerequestaccessresultFields[5].Descriptor()
+	// servicerequestaccessresult.GroupIDValidator is a validator for the "group_id" field. It is called by the builders before save.
+	servicerequestaccessresult.GroupIDValidator = servicerequestaccessresultDescGroupID.Validators[0].(func(string) error)
+	// servicerequestaccessresultDescEvidenceRef is the schema descriptor for evidence_ref field.
+	servicerequestaccessresultDescEvidenceRef := servicerequestaccessresultFields[9].Descriptor()
+	// servicerequestaccessresult.EvidenceRefValidator is a validator for the "evidence_ref" field. It is called by the builders before save.
+	servicerequestaccessresult.EvidenceRefValidator = servicerequestaccessresultDescEvidenceRef.Validators[0].(func(string) error)
+	servicerequestaccesssnapshotFields := schema.ServiceRequestAccessSnapshot{}.Fields()
+	_ = servicerequestaccesssnapshotFields
+	// servicerequestaccesssnapshotDescWorkItemID is the schema descriptor for work_item_id field.
+	servicerequestaccesssnapshotDescWorkItemID := servicerequestaccesssnapshotFields[0].Descriptor()
+	// servicerequestaccesssnapshot.WorkItemIDValidator is a validator for the "work_item_id" field. It is called by the builders before save.
+	servicerequestaccesssnapshot.WorkItemIDValidator = servicerequestaccesssnapshotDescWorkItemID.Validators[0].(func(int) error)
+	// servicerequestaccesssnapshotDescPolicyID is the schema descriptor for policy_id field.
+	servicerequestaccesssnapshotDescPolicyID := servicerequestaccesssnapshotFields[1].Descriptor()
+	// servicerequestaccesssnapshot.PolicyIDValidator is a validator for the "policy_id" field. It is called by the builders before save.
+	servicerequestaccesssnapshot.PolicyIDValidator = servicerequestaccesssnapshotDescPolicyID.Validators[0].(func(int) error)
+	// servicerequestaccesssnapshotDescPolicyVersion is the schema descriptor for policy_version field.
+	servicerequestaccesssnapshotDescPolicyVersion := servicerequestaccesssnapshotFields[2].Descriptor()
+	// servicerequestaccesssnapshot.PolicyVersionValidator is a validator for the "policy_version" field. It is called by the builders before save.
+	servicerequestaccesssnapshot.PolicyVersionValidator = servicerequestaccesssnapshotDescPolicyVersion.Validators[0].(func(int) error)
+	// servicerequestaccesssnapshotDescExternalSystem is the schema descriptor for external_system field.
+	servicerequestaccesssnapshotDescExternalSystem := servicerequestaccesssnapshotFields[4].Descriptor()
+	// servicerequestaccesssnapshot.ExternalSystemValidator is a validator for the "external_system" field. It is called by the builders before save.
+	servicerequestaccesssnapshot.ExternalSystemValidator = servicerequestaccesssnapshotDescExternalSystem.Validators[0].(func(string) error)
+	// servicerequestaccesssnapshotDescSubjectID is the schema descriptor for subject_id field.
+	servicerequestaccesssnapshotDescSubjectID := servicerequestaccesssnapshotFields[5].Descriptor()
+	// servicerequestaccesssnapshot.SubjectIDValidator is a validator for the "subject_id" field. It is called by the builders before save.
+	servicerequestaccesssnapshot.SubjectIDValidator = servicerequestaccesssnapshotDescSubjectID.Validators[0].(func(string) error)
+	// servicerequestaccesssnapshotDescGroupID is the schema descriptor for group_id field.
+	servicerequestaccesssnapshotDescGroupID := servicerequestaccesssnapshotFields[6].Descriptor()
+	// servicerequestaccesssnapshot.GroupIDValidator is a validator for the "group_id" field. It is called by the builders before save.
+	servicerequestaccesssnapshot.GroupIDValidator = servicerequestaccesssnapshotDescGroupID.Validators[0].(func(string) error)
+	// servicerequestaccesssnapshotDescDurationKey is the schema descriptor for duration_key field.
+	servicerequestaccesssnapshotDescDurationKey := servicerequestaccesssnapshotFields[7].Descriptor()
+	// servicerequestaccesssnapshot.DurationKeyValidator is a validator for the "duration_key" field. It is called by the builders before save.
+	servicerequestaccesssnapshot.DurationKeyValidator = servicerequestaccesssnapshotDescDurationKey.Validators[0].(func(string) error)
+	// servicerequestaccesssnapshotDescDurationSeconds is the schema descriptor for duration_seconds field.
+	servicerequestaccesssnapshotDescDurationSeconds := servicerequestaccesssnapshotFields[8].Descriptor()
+	// servicerequestaccesssnapshot.DurationSecondsValidator is a validator for the "duration_seconds" field. It is called by the builders before save.
+	servicerequestaccesssnapshot.DurationSecondsValidator = servicerequestaccesssnapshotDescDurationSeconds.Validators[0].(func(int64) error)
 	standardchangeFields := schema.StandardChange{}.Fields()
 	_ = standardchangeFields
 	// standardchangeDescTitle is the schema descriptor for title field.

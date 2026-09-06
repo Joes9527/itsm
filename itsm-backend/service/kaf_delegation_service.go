@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"itsm-backend/handlers/common/accessgrant"
 	"net/http"
 	"strconv"
 	"strings"
@@ -33,10 +34,14 @@ type kafDelegationOutbox interface {
 // KafDelegationService owns the all-or-nothing persistence boundary for a
 // KAF BPMN delegation. Transport is intentionally deferred to the outbox
 // dispatcher after the database transaction commits.
+type ApprovedAccessReader interface {
+	ReadApprovedAccess(context.Context, *ent.Client, int, int, *ent.ProcessTask) (*accessgrant.ApprovedContext, error)
+}
 type KafDelegationService struct {
-	client *ent.Client
-	outbox kafDelegationOutbox
-	now    func() time.Time
+	accessReader ApprovedAccessReader
+	client       *ent.Client
+	outbox       kafDelegationOutbox
+	now          func() time.Time
 }
 
 type kafDelegatedTaskCompletionEngine interface {
@@ -66,18 +71,19 @@ const (
 // a delegated procedure. Tenant and business identifiers are derived from the
 // authenticated task, never from request input.
 type KafTaskContext struct {
-	TaskID          string                 `json:"taskId"`
-	TaskType        string                 `json:"taskType"`
-	Status          string                 `json:"status"`
-	CorrelationID   string                 `json:"correlationId"`
-	TenantID        string                 `json:"tenantId"`
-	RecordClass     string                 `json:"recordClass"`
-	AllowedActions  []string               `json:"allowedActions"`
-	ExpectedVersion int                    `json:"expectedVersion"`
-	WaitingPoint    KafWaitingPoint        `json:"waitingPoint"`
-	IntakeSnapshot  map[string]interface{} `json:"intakeSnapshot"`
-	WorkItem        KafWorkItem            `json:"workItem"`
-	Attachments     []KafAttachmentRef     `json:"attachments"`
+	ApprovedAccess  *accessgrant.ApprovedContext `json:"approvedAccess,omitempty"`
+	TaskID          string                       `json:"taskId"`
+	TaskType        string                       `json:"taskType"`
+	Status          string                       `json:"status"`
+	CorrelationID   string                       `json:"correlationId"`
+	TenantID        string                       `json:"tenantId"`
+	RecordClass     string                       `json:"recordClass"`
+	AllowedActions  []string                     `json:"allowedActions"`
+	ExpectedVersion int                          `json:"expectedVersion"`
+	WaitingPoint    KafWaitingPoint              `json:"waitingPoint"`
+	IntakeSnapshot  map[string]interface{}       `json:"intakeSnapshot"`
+	WorkItem        KafWorkItem                  `json:"workItem"`
+	Attachments     []KafAttachmentRef           `json:"attachments"`
 }
 
 type KafWaitingPoint struct {
@@ -144,6 +150,9 @@ type kafDelegatedTaskCursor struct {
 	TaskID int `json:"taskId"`
 }
 
+func (s *KafDelegationService) SetApprovedAccessReader(owner ApprovedAccessReader) {
+	s.accessReader = owner
+}
 func NewKafDelegationService(client *ent.Client) *KafDelegationService {
 	return &KafDelegationService{
 		client: client,
@@ -254,7 +263,20 @@ func (s *KafDelegationService) GetTaskContext(ctx context.Context, taskID string
 			}
 		}
 	}
-	return &KafTaskContext{
+	if task.CallbackAction != "" && task.CallbackAction != accessgrant.Capability {
+		return nil, fmt.Errorf("unsupported delegated capability")
+	}
+	var approved *accessgrant.ApprovedContext
+	if task.CallbackAction == accessgrant.Capability {
+		if s.accessReader == nil {
+			return nil, fmt.Errorf("approved access owner unavailable")
+		}
+		approved, err = s.accessReader.ReadApprovedAccess(ctx, s.client, task.TenantID, instance.BusinessID, task)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &KafTaskContext{ApprovedAccess: approved,
 		TaskID: task.TaskID, TaskType: task.TaskType, Status: task.Status,
 		CorrelationID: task.CorrelationID, TenantID: strconv.Itoa(task.TenantID), RecordClass: recordClass,
 		AllowedActions: kafAllowedActions(task), ExpectedVersion: instance.Version,
