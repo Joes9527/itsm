@@ -408,7 +408,11 @@ func (h *Handler) InstantiateStandardChange(c *gin.Context) {
 	if req.PlannedEndDate != nil {
 		end = req.PlannedEndDate.UTC().Format(time.RFC3339Nano)
 	}
-	intakehttp.Execute(c, h.creationApplication, tenantID, 0, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassChangeRequest, IntakeKind: creation.IntakeKindChangeRequest, Title: req.Title, Change: &creation.ChangeInput{StandardTemplateID: &id, AffectedCIs: req.AffectedCis, PlannedStartDate: start, PlannedEndDate: end}})
+	requesterID := 0
+	if req.RequesterID != nil {
+		requesterID = *req.RequesterID
+	}
+	intakehttp.Execute(c, h.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassChangeRequest, IntakeKind: creation.IntakeKindChangeRequest, Title: req.Title, Change: &creation.ChangeInput{StandardTemplateID: &id, AffectedCIs: req.AffectedCis, PlannedStartDate: start, PlannedEndDate: end}})
 }
 
 // RegisterRoutes registers the standard change routes

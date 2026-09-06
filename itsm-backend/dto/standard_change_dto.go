@@ -68,10 +68,11 @@ type StandardChangeListResponse struct {
 
 // InstantiateStandardChangeRequest 从模板实例化变更请求
 type InstantiateStandardChangeRequest struct {
-	Title            string     `json:"title"`            // 可选：自定义标题
-	PlannedStartDate *time.Time `json:"plannedStartDate"` // 计划开始时间
-	PlannedEndDate   *time.Time `json:"plannedEndDate"`   // 计划结束时间
-	AffectedCis      []string   `json:"affectedCis"`      // 受影响配置项（可覆盖）
+	RequesterID      *int       `json:"requesterId,omitempty" binding:"omitempty,gt=0"` // 可选目标租户申请人
+	Title            string     `json:"title"`                                          // 可选：自定义标题
+	PlannedStartDate *time.Time `json:"plannedStartDate"`                               // 计划开始时间
+	PlannedEndDate   *time.Time `json:"plannedEndDate"`                                 // 计划结束时间
+	AffectedCis      []string   `json:"affectedCis"`                                    // 受影响配置项（可覆盖）
 }
 
 // StandardChangeCategory 标准变更分类统计

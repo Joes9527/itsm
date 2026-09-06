@@ -125,7 +125,11 @@ func (h *Handler) Create(c *gin.Context) {
 		intakehttp.Fail(c, intakehttp.Invalid("impactScope", "impactScope is unsupported; use impact"))
 		return
 	}
-	intakehttp.Execute(c, h.creationApplication, tenantID, 0, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassProblem, IntakeKind: creation.IntakeKindProblem, Title: req.Title, Description: req.Description, Priority: req.Priority, Problem: &creation.ProblemInput{Category: req.Category, RootCause: req.RootCause, Impact: req.Impact}})
+	requesterID := 0
+	if req.RequesterID != nil {
+		requesterID = *req.RequesterID
+	}
+	intakehttp.Execute(c, h.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassProblem, IntakeKind: creation.IntakeKindProblem, Title: req.Title, Description: req.Description, Priority: req.Priority, Problem: &creation.ProblemInput{Category: req.Category, RootCause: req.RootCause, Impact: req.Impact}})
 }
 
 func (h *Handler) Get(c *gin.Context) {

@@ -652,9 +652,30 @@ func TestStandardChangeHandler_RoutesRequireSuperAdmin(t *testing.T) {
 	group.Use(func(ctx *gin.Context) { ctx.Set("role", "change_manager") })
 	h.RegisterRoutes(group)
 
-	w := httptest.NewRecorder()
-	req, _ := http.NewRequest("GET", "/api/v1/standard-changes", nil)
-	r.ServeHTTP(w, req)
+	for _, route := range []struct{ method, path string }{{"GET", "/api/v1/standard-changes"}, {"POST", "/api/v1/standard-changes/1/instantiate"}} {
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(route.method, route.path, strings.NewReader(`{"requesterId":2}`))
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	}
+}
 
-	assert.Equal(t, http.StatusForbidden, w.Code)
+func TestInstantiateStandardChange_SuperAdminOnBehalf(t *testing.T) {
+	client := newTestClient(t)
+	tenant, actor := createInstantiationIdentity(t, client, "on-behalf")
+	configureInstantiationWorkflow(client, tenant.ID)
+	requester := client.User.Create().SetTenantID(tenant.ID).SetUsername("customer-requester").SetName("Customer requester").SetEmail("customer@example.test").SetPasswordHash("test").SetRole("requester").SetActive(true).SaveX(context.Background())
+	template := createTemplate(t, client, tenant.ID, actor.ID, nil)
+	router, _ := setupInstantiationRouter(t, client, actor.ID, tenant.ID)
+	path := "/api/v1/standard-changes/" + strconv.Itoa(template.ID) + "/instantiate"
+	body := map[string]any{"requesterId": requester.ID}
+	w := doRequestWithIdempotencyKey(router, "POST", path, body, "on-behalf")
+	require.Equal(t, http.StatusCreated, w.Code, w.Body.String())
+	_, result := decodeCreationResponse(t, w)
+	item := client.Ticket.GetX(context.Background(), result.WorkItemID)
+	require.Equal(t, requester.ID, item.RequesterID)
+	require.Equal(t, actor.ID, item.OpenedByID)
+	w = doRequestWithIdempotencyKey(router, "POST", path, body, "on-behalf")
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	require.Equal(t, 1, client.Change.Query().CountX(context.Background()))
 }

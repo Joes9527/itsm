@@ -926,7 +926,7 @@ func TestChangeServiceTaskHandler_CreateChange_DelegatesToRealServiceAndCreatesW
 	app := NewChangeIntakeApp(client, svc, logger)
 
 	engine := service.NewCustomProcessEngine(client, logger).(*service.CustomProcessEngine)
-	engine.CallbackRegistry().GetHandler("change_service_handler").(*bpmn.ChangeServiceTaskHandler).SetCreationApplication(app)
+	engine.CallbackRegistry().GetHandler("change_service_handler").(*bpmn.ChangeServiceTaskHandler).SetCreationApplication(app, client)
 
 	// 源工单：真实创建路径要求一个已声明/认领的宿主流程实例，源 WorkItem 不需要是任何
 	// 特定专业类型——这里复用现有的 Change WorkItem 夹具，只借用它的 tickets 行身份。

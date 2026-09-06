@@ -51,6 +51,7 @@ type CIInfo struct {
 
 // 事件管理相关DTO
 type CreateIncidentRequest struct {
+	RequesterID          *int                     `json:"requesterId,omitempty" binding:"omitempty,gt=0"` // 可选目标租户申请人
 	Title                string                   `json:"title" binding:"required" example:"服务器CPU使用率过高"`
 	Description          string                   `json:"description" binding:"omitempty,max=5000" example:"生产环境Web服务器CPU使用率持续超过90%"`
 	Type                 string                   `json:"type" binding:"omitempty,oneof=incident service_request security_event alert" example:"incident"` // 事件类型
