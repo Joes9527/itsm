@@ -241,32 +241,6 @@ func extractAdHocFieldValues(formFields map[string]interface{}) []AdHocFieldValu
 	return result
 }
 
-func normalizeCreateTicketType(reqType string, formFields ...map[string]interface{}) ticket.Type {
-	if isSupportedTicketType(reqType) {
-		return ticket.Type(reqType)
-	}
-
-	for _, fields := range formFields {
-		if fields == nil {
-			continue
-		}
-		if value, ok := fields["type"].(string); ok && isSupportedTicketType(value) {
-			return ticket.Type(value)
-		}
-	}
-
-	return ticket.TypeIncident
-}
-
-func isSupportedTicketType(value string) bool {
-	switch ticket.Type(value) {
-	case ticket.TypeIncident, ticket.TypeProblem, ticket.TypeChange, ticket.TypeServiceRequest, "improvement", "ticket":
-		return true
-	default:
-		return false
-	}
-}
-
 func uniqueIDs(ids []int) []int {
 	seen := make(map[int]struct{}, len(ids))
 	result := make([]int, 0, len(ids))
@@ -509,11 +483,14 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 		params.Status = &status
 	}
 	if req.Type != "" {
-		if req.Type != "ticket" && !isSupportedTicketType(req.Type) {
-			return nil, fmt.Errorf("无效的工单类型: %s", req.Type)
+		class, subtype := common.WorkItemIdentityFilter(req.Type)
+		if class != "generic" || current.RecordClass != "generic" {
+			return nil, fmt.Errorf("legacy type cannot change professional class")
 		}
-		ticketType := normalizeCreateTicketType(req.Type)
-		params.Type = &ticketType
+		if err := s.validateGenericSubtype(ctx, tenantID, subtype); err != nil {
+			return nil, err
+		}
+		params.GenericSubtype = &subtype
 	}
 	if req.Priority != "" {
 		priority := ticket.Priority(req.Priority)
@@ -608,7 +585,7 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 
 	// 优先级或分类变更时重新计算 SLA
 	if (req.Priority != "" || req.CategoryID != nil || strings.TrimSpace(req.Category) != "") && s.slaSvc != nil {
-		slaResult, err := s.slaSvc.CalculateSLADeadlineFromRequest(ctx, tenantID, string(updated.Type), string(updated.Priority), getCategoryIDValue(categoryID))
+		slaResult, err := s.slaSvc.CalculateSLADeadlineFromRequest(ctx, tenantID, common.WorkItemLegacyType(updated.RecordClass, updated.GenericSubtype), string(updated.Priority), getCategoryIDValue(categoryID))
 		if err != nil {
 			s.logger.Warnw("Failed to recalculate SLA after update", "error", err, "ticket_id", id)
 		} else {
@@ -685,8 +662,11 @@ func (s *TicketService) ListTickets(ctx context.Context, req *dto.ListTicketsReq
 		filters.AssigneeID = req.AssigneeID
 	}
 	if req.Type != "" {
-		ticketType := ticket.Type(req.Type)
-		filters.Type = &ticketType
+		class, subtype := common.WorkItemIdentityFilter(req.Type)
+		filters.RecordClass = &class
+		if class == "generic" {
+			filters.GenericSubtype = &subtype
+		}
 	}
 	if req.CategoryID != nil {
 		filters.CategoryID = req.CategoryID
@@ -1013,7 +993,7 @@ func ToTicketResponse(ctx context.Context, t *ticket.Ticket) *dto.TicketResponse
 		Description:    t.Description,
 		Status:         string(t.Status),
 		Priority:       string(t.Priority),
-		Type:           string(t.Type),
+		Type:           common.WorkItemLegacyType(t.RecordClass, t.GenericSubtype),
 		GenericSubtype: t.GenericSubtype,
 		RequesterID:    t.RequesterID,
 		TenantID:       t.TenantID,
@@ -1101,7 +1081,6 @@ func (s *TicketService) toEntTicket(t *ticket.Ticket) *ent.Ticket {
 		Title:          t.Title,
 		Description:    t.Description,
 		Status:         string(t.Status),
-		Type:           string(t.Type),
 		GenericSubtype: t.GenericSubtype,
 		RecordClass:    t.RecordClass,
 		Priority:       string(t.Priority),
@@ -1595,7 +1574,6 @@ func (s *TicketService) entToDomain(e *ent.Ticket) *ticket.Ticket {
 		Title:          e.Title,
 		Description:    e.Description,
 		Status:         ticket.Status(e.Status),
-		Type:           ticket.Type(e.Type),
 		GenericSubtype: e.GenericSubtype,
 		Priority:       ticket.Priority(e.Priority),
 		RequesterID:    e.RequesterID,

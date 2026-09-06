@@ -208,13 +208,12 @@ func setupIncidentHandlerFixture(t *testing.T) (*ent.Client, *IncidentServiceTas
 		SetName("处理人").SetTenantID(tenant.ID).SetActive(true).
 		Save(ctx)
 	require.NoError(t, err)
-	workItem, err := client.Ticket.Create().SetTitle("测试事件").SetStatus(common.IncidentStatusNew).SetPriority("medium").SetType("incident").SetRecordClass("incident").SetTicketNumber("TKT-INCIDENT-HANDLER").SetRequesterID(reporter.ID).SetTenantID(tenant.ID).Save(ctx)
+	workItem, err := client.Ticket.Create().SetTitle("测试事件").SetStatus(common.IncidentStatusNew).SetPriority("medium").SetRecordClass("incident").SetTicketNumber("TKT-INCIDENT-HANDLER").SetRequesterID(reporter.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	_, err = client.TicketCategory.Create().SetName("Network").SetCode("network").SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
 	inc, err := client.Incident.Create().
-		SetIncidentNumber("INC-IH-1").
 		SetWorkItemID(workItem.ID).
 		Save(ctx)
 	require.NoError(t, err)

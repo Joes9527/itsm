@@ -110,8 +110,8 @@ func newConversionControllerFixture(t *testing.T, msp bool) *conversionControlle
 		client.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(role.ID).SetPermissionID(p.ID).SaveX(ctx)
 	}
 	client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("problem").SetIsDefault(true).SetIsActive(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
-	sourceItem := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(requester.ID).SetOpenedByID(requester.ID).SetTitle("VPN incident").SetDescription("VPN unavailable").SetTicketNumber("INC-CONVERSION").SetRecordClass("incident").SetType("incident").SetStatus("new").SetPriority("high").SaveX(ctx)
-	incident := client.Incident.Create().SetWorkItemID(sourceItem.ID).SetIncidentNumber("INC-CONVERSION").SetSeverity("high").SetImpact("high").SetDetectedAt(time.Now()).SaveX(ctx)
+	sourceItem := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(requester.ID).SetOpenedByID(requester.ID).SetTitle("VPN incident").SetDescription("VPN unavailable").SetTicketNumber("INC-CONVERSION").SetRecordClass("incident").SetStatus("new").SetPriority("high").SaveX(ctx)
+	incident := client.Incident.Create().SetWorkItemID(sourceItem.ID).SetSeverity("high").SetImpact("high").SetDetectedAt(time.Now()).SaveX(ctx)
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(problemDomain.NewService(problemDomain.NewEntRepository(client), logger)))
 	resolver := intake.NewResolver(service_catalog.NewService(nil, client, logger), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
@@ -265,7 +265,7 @@ func TestIncidentDetailHasActionsButListDoesNot(t *testing.T) {
 		SetTitle("Detail WorkItem").SetTicketNumber("TKT-DETAIL").SetStatus("open").SetPriority("high").
 		SetRequesterID(user.ID).SetTenantID(tenant.ID).SetRecordClass("incident").Save(ctx)
 	require.NoError(t, err)
-	incidentEntity, err := client.Incident.Create().SetIncidentNumber("INC-DETAIL").
+	incidentEntity, err := client.Incident.Create().
 		SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 

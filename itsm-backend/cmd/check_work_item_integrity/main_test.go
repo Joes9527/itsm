@@ -72,7 +72,6 @@ func TestFindMismatches_MissingExtension(t *testing.T) {
 
 	t.Run("after_creating_matching_extension", func(t *testing.T) {
 		_, err := client.Incident.Create().
-			SetIncidentNumber("INC-INTEGRITY-001").
 			SetWorkItemID(tk.ID).
 			Save(ctx)
 		require.NoError(t, err)
@@ -99,7 +98,6 @@ func TestFindMismatches_MissingExtension(t *testing.T) {
 		require.NoError(t, err)
 
 		_, err = client.Incident.Create().
-			SetIncidentNumber("INC-INTEGRITY-002").
 			SetWorkItemID(wrongClassTicket.ID).
 			Save(ctx)
 		require.NoError(t, err)
@@ -198,7 +196,6 @@ func TestProfessionalExtensionRejectsDanglingWorkItemID(t *testing.T) {
 	// work_item_id 指向一个不存在的 ticket id。
 	const danglingWorkItemID = 999999
 	_, err = client.Incident.Create().
-		SetIncidentNumber("INC-DANGLING-001").
 		SetWorkItemID(danglingWorkItemID).
 		Save(ctx)
 	require.Error(t, err, "professional extension FK must reject a dangling WorkItem reference")

@@ -56,7 +56,6 @@ func createChangeWorkItemFixture(t *testing.T, client *ent.Client, tenantID, req
 	workItem, err := client.Ticket.Create().
 		SetTitle(title).
 		SetStatus(status).
-		SetType("change").
 		SetRecordClass("change_request").
 		SetPriority("medium").
 		SetTicketNumber(nextTestTicketNumber()).

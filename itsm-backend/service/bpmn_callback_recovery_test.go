@@ -445,7 +445,6 @@ func TestChangeCallbackBusinessEffectSurvivesAdvanceFailureWithoutReplay(t *test
 	workItem := f.client.Ticket.Create().
 		SetTitle("Durable callback change").
 		SetStatus("pending").
-		SetType("change").
 		SetRecordClass("change_request").
 		SetPriority("medium").
 		SetTicketNumber("BPMN-CALLBACK-CHANGE-1").

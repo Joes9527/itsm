@@ -34,7 +34,6 @@ func createAutomationIncident(
 	workItem := createIncidentTestWorkItem(t, ctx, client, tenantID, reporterID, number, common.IncidentStatusNew, "high")
 	entity, err := client.Incident.Create().
 		SetSeverity("high").
-		SetIncidentNumber(number).
 		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)

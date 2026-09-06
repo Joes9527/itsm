@@ -24,7 +24,7 @@ func TestIntakeProblemConversionOwnsWholeGraph(t *testing.T) {
 			// the same Intake transaction, including all audit/timeline records.
 
 			source := client.Ticket.Create().SetTenantID(identity.TenantID).SetRequesterID(identity.ActorID).SetTitle("VPN outage").SetDescription("Connection loss").SetPriority("high").SetStatus("new").SetTicketNumber("TKT-SOURCE").SetRecordClass("incident").SaveX(ctx)
-			incident := client.Incident.Create().SetWorkItemID(source.ID).SetIncidentNumber(source.TicketNumber).SetType("incident").SetSeverity("high").SetImpact("high").SetUrgency("high").SaveX(ctx)
+			incident := client.Incident.Create().SetWorkItemID(source.ID).SetSeverity("high").SetImpact("high").SetUrgency("high").SaveX(ctx)
 			command.RecordClass, command.IntakeKind, command.Title = "problem", "problem", ""
 			require.NoError(t, json.Unmarshal([]byte(fmt.Sprintf(`{"sourceIncidentId":%d,"rootCause":"sensitive diagnosis"}`, incident.ID)), &command.Problem))
 			reached := false

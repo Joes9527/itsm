@@ -216,8 +216,8 @@ func TestGetCIImpactAnalysis_UpstreamCriticalAndAffectedItems(t *testing.T) {
 	tk := client.Ticket.Create().SetTitle("impact ticket").SetTicketNumber("TCK-IMPACT-1").
 		SetRequesterID(user.ID).SetTenantID(tenant.ID).SaveX(ctx)
 	incidentWorkItem := client.Ticket.Create().SetTitle("impact incident").SetTicketNumber("TCK-IMPACT-INC-1").
-		SetType("incident").SetRecordClass("incident").SetRequesterID(user.ID).SetTenantID(tenant.ID).SaveX(ctx)
-	in := client.Incident.Create().SetIncidentNumber("INC-IMPACT-1").
+		SetRecordClass("incident").SetRequesterID(user.ID).SetTenantID(tenant.ID).SaveX(ctx)
+	in := client.Incident.Create().
 		SetWorkItemID(incidentWorkItem.ID).SaveX(ctx)
 	client.ConfigurationItem.UpdateOneID(root.ID).AddTickets(tk).AddIncidents(in).ExecX(ctx)
 

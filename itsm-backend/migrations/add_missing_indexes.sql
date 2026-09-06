@@ -6,7 +6,7 @@
 -- 1. 工单表 (Tickets) 索引优化 - 高优先级
 -- =====================================================
 -- 按类型查询
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ticket_tenant_type_idx ON tickets (tenant_id, type);
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ticket_tenant_record_class_idx ON tickets (tenant_id, record_class);
 -- 按优先级查询
 CREATE INDEX CONCURRENTLY IF NOT EXISTS ticket_tenant_priority_idx ON tickets (tenant_id, priority);
 -- 按权威生命周期状态查询（Incident/Problem/Change 共用）

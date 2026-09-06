@@ -29,16 +29,6 @@ const (
 	PriorityCritical Priority = "critical"
 )
 
-// Type 工单类型
-type Type string
-
-const (
-	TypeIncident       Type = "incident"
-	TypeProblem        Type = "problem"
-	TypeChange         Type = "change"
-	TypeServiceRequest Type = "service_request"
-)
-
 // Ticket 工单领域模型
 // 表示 ITSM 系统中的工单实体
 type Ticket struct {
@@ -47,7 +37,6 @@ type Ticket struct {
 	Title                 string
 	Description           string
 	Status                Status
-	Type                  Type
 	RecordClass           string
 	GenericSubtype        string
 	Priority              Priority
@@ -193,7 +182,8 @@ const (
 type FilterParams struct {
 	Status         *Status
 	Priority       *Priority
-	Type           *Type
+	RecordClass    *string
+	GenericSubtype *string
 	RequesterID    *int
 	AssigneeID     *int
 	CategoryID     *int
@@ -213,15 +203,15 @@ type FilterParams struct {
 
 // UpdateParams 工单更新参数
 type UpdateParams struct {
-	Title       *string
-	Description *string
-	Status      *Status
-	Type        *Type
-	Priority    *Priority
-	AssigneeID  *int
-	CategoryID  *int
-	ReplaceTags bool
-	TagIDs      []int
-	Resolution  *string
-	Version     int // 乐观锁版本号
+	Title          *string
+	Description    *string
+	Status         *Status
+	GenericSubtype *string
+	Priority       *Priority
+	AssigneeID     *int
+	CategoryID     *int
+	ReplaceTags    bool
+	TagIDs         []int
+	Resolution     *string
+	Version        int // 乐观锁版本号
 }

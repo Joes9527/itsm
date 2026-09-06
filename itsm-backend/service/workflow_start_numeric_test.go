@@ -117,7 +117,7 @@ func TestDefinitionStartFrozenIncidentAssignment(t *testing.T) {
 	xml := strings.Replace(string(startProcessServiceTaskXML("incident_task")), `</bpmn:extensionElements>`, `<bpmn:metaData name="action">assign_incident</bpmn:metaData></bpmn:extensionElements>`, 1)
 	definition := f.client.ProcessDefinition.UpdateOneID(f.definition.ID).SetBpmnXML([]byte(xml)).SaveX(ctx)
 	item := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(f.actor.ID).SetRecordClass("incident").SetTitle("Incident").SetTicketNumber("INC-work-item").SetStatus("new").SaveX(ctx)
-	f.client.Incident.Create().SetWorkItemID(item.ID).SetIncidentNumber(item.TicketNumber).SaveX(ctx)
+	f.client.Incident.Create().SetWorkItemID(item.ID).SaveX(ctx)
 	f.engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler).SetIncidentService(&IncidentService{client: f.client, logger: zap.NewNop().Sugar()})
 	vars := map[string]any{"assignee_id": json.Number(fmt.Sprint(f.outsider.ID))}
 	first, err := f.engine.StartProcessByDefinitionID(ctx, FreezeProcessDefinition(definition), fmt.Sprintf("incident:%d", item.ID), "incident", item.ID, vars, "incident-assignment")

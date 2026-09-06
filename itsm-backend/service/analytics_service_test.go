@@ -87,7 +87,6 @@ func TestAnalyticsService_GetDeepAnalytics_WithTickets(t *testing.T) {
 			SetTitle(fmt.Sprintf("Test Ticket %d", i)).
 			SetDescription("Test description").
 			SetPriority("medium").
-			SetType("incident").
 			SetStatus(status).
 			SetTicketNumber(fmt.Sprintf("TKT-ANAL-%03d", i)).
 			SetTenantID(testTenant.ID).
@@ -128,7 +127,6 @@ func TestAnalyticsService_GetDeepAnalytics_WithFilters(t *testing.T) {
 			SetTitle(fmt.Sprintf("Test Ticket %d", i)).
 			SetDescription("Test description").
 			SetPriority(priority).
-			SetType("incident").
 			SetStatus("open").
 			SetTicketNumber(fmt.Sprintf("TKT-FLT-%03d", i)).
 			SetTenantID(testTenant.ID).
@@ -205,7 +203,6 @@ func TestAnalyticsService_GetDeepAnalytics_GroupBy(t *testing.T) {
 			SetTitle(fmt.Sprintf("Test Ticket %d", i)).
 			SetDescription("Test description").
 			SetPriority("medium").
-			SetType("incident").
 			SetStatus(status).
 			SetTicketNumber(fmt.Sprintf("TKT-GRP-%03d", i)).
 			SetTenantID(testTenant.ID).
@@ -249,7 +246,6 @@ func TestAnalyticsService_ExportAnalytics_CSV(t *testing.T) {
 		SetTitle("Test Ticket").
 		SetDescription("Test description").
 		SetPriority("medium").
-		SetType("incident").
 		SetStatus("open").
 		SetTicketNumber("TKT-CSV-001").
 		SetTenantID(testTenant.ID).
@@ -309,7 +305,6 @@ func TestAnalyticsService_GetDimensionValue(t *testing.T) {
 		SetTitle("Test Ticket").
 		SetDescription("Test description").
 		SetPriority("high").
-		SetType("incident").
 		SetStatus("open").
 		SetTicketNumber("TKT-DIM-001").
 		SetTenantID(testTenant.ID).
@@ -368,7 +363,6 @@ func TestAnalyticsService_CalculateSummary(t *testing.T) {
 			SetTitle(fmt.Sprintf("Test Ticket %d", i)).
 			SetDescription("Test description").
 			SetPriority("medium").
-			SetType("incident").
 			SetStatus(status).
 			SetTicketNumber(fmt.Sprintf("TKT-SUM-%03d", i)).
 			SetTenantID(testTenant.ID).
@@ -404,7 +398,6 @@ func TestAnalyticsService_CalculateMetrics_Count(t *testing.T) {
 			SetTitle(fmt.Sprintf("Test Ticket %d", i)).
 			SetDescription("Test description").
 			SetPriority("medium").
-			SetType("incident").
 			SetStatus("open").
 			SetTicketNumber(fmt.Sprintf("TKT-MET-%03d", i)).
 			SetTenantID(testTenant.ID).

@@ -1075,14 +1075,12 @@ func TestHandleElement_ServiceTask_IncidentAutoAssign_NoAssignee_BlocksNonOption
 	workItem := engine.client.Ticket.Create().
 		SetTitle("自动分配空态回归").
 		SetTicketNumber("T-INC-AUTOASSIGN-1").
-		SetType("incident").
 		SetRecordClass("incident").
 		SetStatus("new").
 		SetRequesterID(actorID).
 		SetTenantID(tenantID).
 		SaveX(ctx)
 	inc, err := engine.client.Incident.Create().
-		SetIncidentNumber("INC-AUTOASSIGN-1").
 		SetWorkItemID(workItem.ID).
 		Save(ctx)
 	require.NoError(t, err)

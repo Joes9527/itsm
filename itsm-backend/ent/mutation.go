@@ -45973,7 +45973,6 @@ type IncidentMutation struct {
 	severity                   *string
 	impact                     *string
 	urgency                    *string
-	incident_number            *string
 	configuration_item_id      *int
 	addconfiguration_item_id   *int
 	impact_analysis            *map[string]interface{}
@@ -46256,42 +46255,6 @@ func (m *IncidentMutation) OldUrgency(ctx context.Context) (v string, err error)
 // ResetUrgency resets all changes to the "urgency" field.
 func (m *IncidentMutation) ResetUrgency() {
 	m.urgency = nil
-}
-
-// SetIncidentNumber sets the "incident_number" field.
-func (m *IncidentMutation) SetIncidentNumber(s string) {
-	m.incident_number = &s
-}
-
-// IncidentNumber returns the value of the "incident_number" field in the mutation.
-func (m *IncidentMutation) IncidentNumber() (r string, exists bool) {
-	v := m.incident_number
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldIncidentNumber returns the old "incident_number" field's value of the Incident entity.
-// If the Incident object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *IncidentMutation) OldIncidentNumber(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldIncidentNumber is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldIncidentNumber requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldIncidentNumber: %w", err)
-	}
-	return oldValue.IncidentNumber, nil
-}
-
-// ResetIncidentNumber resets all changes to the "incident_number" field.
-func (m *IncidentMutation) ResetIncidentNumber() {
-	m.incident_number = nil
 }
 
 // SetWorkItemID sets the "work_item_id" field.
@@ -47264,7 +47227,7 @@ func (m *IncidentMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IncidentMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 15)
 	if m._type != nil {
 		fields = append(fields, incident.FieldType)
 	}
@@ -47276,9 +47239,6 @@ func (m *IncidentMutation) Fields() []string {
 	}
 	if m.urgency != nil {
 		fields = append(fields, incident.FieldUrgency)
-	}
-	if m.incident_number != nil {
-		fields = append(fields, incident.FieldIncidentNumber)
 	}
 	if m.work_item != nil {
 		fields = append(fields, incident.FieldWorkItemID)
@@ -47329,8 +47289,6 @@ func (m *IncidentMutation) Field(name string) (ent.Value, bool) {
 		return m.Impact()
 	case incident.FieldUrgency:
 		return m.Urgency()
-	case incident.FieldIncidentNumber:
-		return m.IncidentNumber()
 	case incident.FieldWorkItemID:
 		return m.WorkItemID()
 	case incident.FieldConfigurationItemID:
@@ -47370,8 +47328,6 @@ func (m *IncidentMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldImpact(ctx)
 	case incident.FieldUrgency:
 		return m.OldUrgency(ctx)
-	case incident.FieldIncidentNumber:
-		return m.OldIncidentNumber(ctx)
 	case incident.FieldWorkItemID:
 		return m.OldWorkItemID(ctx)
 	case incident.FieldConfigurationItemID:
@@ -47430,13 +47386,6 @@ func (m *IncidentMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetUrgency(v)
-		return nil
-	case incident.FieldIncidentNumber:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetIncidentNumber(v)
 		return nil
 	case incident.FieldWorkItemID:
 		v, ok := value.(int)
@@ -47641,9 +47590,6 @@ func (m *IncidentMutation) ResetField(name string) error {
 		return nil
 	case incident.FieldUrgency:
 		m.ResetUrgency()
-		return nil
-	case incident.FieldIncidentNumber:
-		m.ResetIncidentNumber()
 		return nil
 	case incident.FieldWorkItemID:
 		m.ResetWorkItemID()
@@ -129334,7 +129280,6 @@ type TicketMutation struct {
 	title                      *string
 	description                *string
 	status                     *string
-	_type                      *string
 	generic_subtype            *string
 	source                     *string
 	record_class               *string
@@ -129644,42 +129589,6 @@ func (m *TicketMutation) OldStatus(ctx context.Context) (v string, err error) {
 // ResetStatus resets all changes to the "status" field.
 func (m *TicketMutation) ResetStatus() {
 	m.status = nil
-}
-
-// SetType sets the "type" field.
-func (m *TicketMutation) SetType(s string) {
-	m._type = &s
-}
-
-// GetType returns the value of the "type" field in the mutation.
-func (m *TicketMutation) GetType() (r string, exists bool) {
-	v := m._type
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldType returns the old "type" field's value of the Ticket entity.
-// If the Ticket object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *TicketMutation) OldType(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldType is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldType requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldType: %w", err)
-	}
-	return oldValue.Type, nil
-}
-
-// ResetType resets all changes to the "type" field.
-func (m *TicketMutation) ResetType() {
-	m._type = nil
 }
 
 // SetGenericSubtype sets the "generic_subtype" field.
@@ -132386,7 +132295,7 @@ func (m *TicketMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TicketMutation) Fields() []string {
-	fields := make([]string, 0, 42)
+	fields := make([]string, 0, 41)
 	if m.title != nil {
 		fields = append(fields, ticket.FieldTitle)
 	}
@@ -132395,9 +132304,6 @@ func (m *TicketMutation) Fields() []string {
 	}
 	if m.status != nil {
 		fields = append(fields, ticket.FieldStatus)
-	}
-	if m._type != nil {
-		fields = append(fields, ticket.FieldType)
 	}
 	if m.generic_subtype != nil {
 		fields = append(fields, ticket.FieldGenericSubtype)
@@ -132527,8 +132433,6 @@ func (m *TicketMutation) Field(name string) (ent.Value, bool) {
 		return m.Description()
 	case ticket.FieldStatus:
 		return m.Status()
-	case ticket.FieldType:
-		return m.GetType()
 	case ticket.FieldGenericSubtype:
 		return m.GenericSubtype()
 	case ticket.FieldSource:
@@ -132620,8 +132524,6 @@ func (m *TicketMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldDescription(ctx)
 	case ticket.FieldStatus:
 		return m.OldStatus(ctx)
-	case ticket.FieldType:
-		return m.OldType(ctx)
 	case ticket.FieldGenericSubtype:
 		return m.OldGenericSubtype(ctx)
 	case ticket.FieldSource:
@@ -132727,13 +132629,6 @@ func (m *TicketMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
-		return nil
-	case ticket.FieldType:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetType(v)
 		return nil
 	case ticket.FieldGenericSubtype:
 		v, ok := value.(string)
@@ -133388,9 +133283,6 @@ func (m *TicketMutation) ResetField(name string) error {
 		return nil
 	case ticket.FieldStatus:
 		m.ResetStatus()
-		return nil
-	case ticket.FieldType:
-		m.ResetType()
 		return nil
 	case ticket.FieldGenericSubtype:
 		m.ResetGenericSubtype()

@@ -94,7 +94,6 @@ func TestSLAMonitorService_CheckSLAViolations_WithTickets(t *testing.T) {
 		SetTitle("Test Ticket").
 		SetDescription("Test description").
 		SetPriority("medium").
-		SetType("incident").
 		SetStatus("open").
 		SetTicketNumber("TKT-SLA-001").
 		SetTenantID(testTenant.ID).
@@ -129,7 +128,7 @@ func TestSLAMonitorService_CalculateSLAMetrics(t *testing.T) {
 			SetTitle("Test Ticket").
 			SetDescription("Test description").
 			SetPriority("medium").
-			SetType("ticket").
+			SetGenericSubtype("ticket").
 			SetStatus("resolved").
 			SetTicketNumber(fmt.Sprintf("TKT-METRICS-%03d", i)).
 			SetTenantID(testTenant.ID).
@@ -170,7 +169,6 @@ func TestSLAMonitorService_GetSLAComplianceByDefinition(t *testing.T) {
 		SetTitle("Compliance Test Ticket").
 		SetDescription("Test description").
 		SetPriority("medium").
-		SetType("incident").
 		SetStatus("open").
 		SetTicketNumber("TKT-COMP-001").
 		SetTenantID(testTenant.ID).
@@ -207,7 +205,6 @@ func TestSLAMonitorService_GetDashboardMetrics(t *testing.T) {
 		SetTitle("Dashboard Test Ticket").
 		SetDescription("Test description").
 		SetPriority("medium").
-		SetType("incident").
 		SetStatus("open").
 		SetTicketNumber("TKT-DASH-001").
 		SetTenantID(testTenant.ID).
@@ -242,7 +239,6 @@ func TestSLAMonitorService_CreateViolation(t *testing.T) {
 		SetTitle("Violation Test Ticket").
 		SetDescription("Test description").
 		SetPriority("medium").
-		SetType("incident").
 		SetStatus("open").
 		SetTicketNumber("TKT-VIOL-001").
 		SetTenantID(testTenant.ID).

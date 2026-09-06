@@ -464,14 +464,14 @@ func TestProblemServiceAssociationsLifecycle(t *testing.T) {
 		SetTitle("T1").SetTicketNumber("T-001").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	incidentWorkItem, err := client.Ticket.Create().SetTitle("I1").SetType("incident").SetRecordClass("incident").
+	incidentWorkItem, err := client.Ticket.Create().SetTitle("I1").SetRecordClass("incident").
 		SetTicketNumber("T-INC-001").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
-	incident1, err := client.Incident.Create().SetIncidentNumber("INC-001").
+	incident1, err := client.Incident.Create().
 		SetWorkItemID(incidentWorkItem.ID).Save(ctx)
 	require.NoError(t, err)
 
-	changeWorkItem, err := client.Ticket.Create().SetTitle("C1").SetType("change").SetRecordClass("change_request").
+	changeWorkItem, err := client.Ticket.Create().SetTitle("C1").SetRecordClass("change_request").
 		SetTicketNumber("T-CHG-001").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	change1, err := client.Change.Create().SetWorkItemID(changeWorkItem.ID).Save(ctx)

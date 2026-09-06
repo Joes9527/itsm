@@ -62,14 +62,12 @@ func TestStartProcess_TrustedTenant_ServiceTaskUsesInstanceIdentity(t *testing.T
 	workItem := client.Ticket.Create().
 		SetTitle("平台级启动测试事件").
 		SetTicketNumber("T-PLATFORM-INCIDENT-1").
-		SetType("incident").
 		SetRecordClass("incident").
 		SetStatus("new").
 		SetRequesterID(assignee.ID).
 		SetTenantID(tenantID).
 		SaveX(platformCtx)
 	inc, err := client.Incident.Create().
-		SetIncidentNumber("INC-PLATFORM-1").
 		SetWorkItemID(workItem.ID).
 		Save(platformCtx)
 	require.NoError(t, err)
@@ -102,7 +100,6 @@ func TestCompleteTask_TypedScope_CallbackUsesAuthoritativeBusinessIdentity(t *te
 	workItem := client.Ticket.Create().
 		SetTitle("平台回调测试变更").
 		SetTicketNumber("T-PLATFORM-CHANGE-1").
-		SetType("change").
 		SetRecordClass("change_request").
 		SetRequesterID(actor.ID).
 		SetTenantID(tenantID).
@@ -150,7 +147,7 @@ func TestCompleteTask_ParticipantBusinessIDCannotRetargetCallback(t *testing.T) 
 		SaveX(platformCtx)
 	otherWorkItem := client.Ticket.Create().
 		SetTitle("别家租户的变更").SetTicketNumber("T-PLATFORM-OTHER-CHANGE-1").
-		SetType("change").SetRecordClass("change_request").SetRequesterID(otherActor.ID).
+		SetRecordClass("change_request").SetRequesterID(otherActor.ID).
 		SetTenantID(otherTenant.ID).SaveX(platformCtx)
 	otherChange := client.Change.Create().
 		SetWorkItemID(otherWorkItem.ID).
@@ -162,7 +159,7 @@ func TestCompleteTask_ParticipantBusinessIDCannotRetargetCallback(t *testing.T) 
 		SaveX(platformCtx)
 	workItem := client.Ticket.Create().
 		SetTitle("本租户变更").SetTicketNumber("T-PLATFORM-OWN-CHANGE-1").
-		SetType("change").SetRecordClass("change_request").SetRequesterID(actor.ID).
+		SetRecordClass("change_request").SetRequesterID(actor.ID).
 		SetTenantID(tenantID).SaveX(platformCtx)
 	ch := client.Change.Create().
 		SetWorkItemID(workItem.ID).

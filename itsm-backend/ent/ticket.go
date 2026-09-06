@@ -26,8 +26,6 @@ type Ticket struct {
 	Description string `json:"description,omitempty"`
 	// 状态
 	Status string `json:"status,omitempty"`
-	// 工单类型
-	Type string `json:"type,omitempty"`
 	// Generic-only business subtype; professional subtypes belong to their extensions
 	GenericSubtype string `json:"generic_subtype,omitempty"`
 	// 工单来源：manual=手动创建，service_catalog=服务目录申请
@@ -294,7 +292,7 @@ func (*Ticket) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case ticket.FieldID, ticket.FieldOpenedByID, ticket.FieldAssignmentGroupID, ticket.FieldRequesterID, ticket.FieldAssigneeID, ticket.FieldTenantID, ticket.FieldTemplateID, ticket.FieldCategoryID, ticket.FieldDepartmentID, ticket.FieldParentTicketID, ticket.FieldSLADefinitionID, ticket.FieldRating, ticket.FieldRatedBy, ticket.FieldVersion, ticket.FieldMspProviderID, ticket.FieldManagedByUserID:
 			values[i] = new(sql.NullInt64)
-		case ticket.FieldTitle, ticket.FieldDescription, ticket.FieldStatus, ticket.FieldType, ticket.FieldGenericSubtype, ticket.FieldSource, ticket.FieldRecordClass, ticket.FieldPriority, ticket.FieldTicketNumber, ticket.FieldCreatorEmail, ticket.FieldExternalMessageID, ticket.FieldConversationID, ticket.FieldResolution, ticket.FieldResolutionCategory, ticket.FieldRatingComment, ticket.FieldMspTicketID:
+		case ticket.FieldTitle, ticket.FieldDescription, ticket.FieldStatus, ticket.FieldGenericSubtype, ticket.FieldSource, ticket.FieldRecordClass, ticket.FieldPriority, ticket.FieldTicketNumber, ticket.FieldCreatorEmail, ticket.FieldExternalMessageID, ticket.FieldConversationID, ticket.FieldResolution, ticket.FieldResolutionCategory, ticket.FieldRatingComment, ticket.FieldMspTicketID:
 			values[i] = new(sql.NullString)
 		case ticket.FieldSLAResponseDeadline, ticket.FieldSLAResolutionDeadline, ticket.FieldFirstResponseAt, ticket.FieldResolvedAt, ticket.FieldClosedAt, ticket.FieldRatedAt, ticket.FieldCreatedAt, ticket.FieldUpdatedAt, ticket.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
@@ -348,12 +346,6 @@ func (_m *Ticket) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				_m.Status = value.String
-			}
-		case ticket.FieldType:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field type", values[i])
-			} else if value.Valid {
-				_m.Type = value.String
 			}
 		case ticket.FieldGenericSubtype:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -743,9 +735,6 @@ func (_m *Ticket) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
-	builder.WriteString(", ")
-	builder.WriteString("type=")
-	builder.WriteString(_m.Type)
 	builder.WriteString(", ")
 	builder.WriteString("generic_subtype=")
 	builder.WriteString(_m.GenericSubtype)

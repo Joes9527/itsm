@@ -96,7 +96,7 @@ func (*IncidentService) CreateExtension(ctx context.Context, tx *ent.Tx, item *e
 			return nil, creation.NewDomainValidationFailed("invalid incident impact analysis", err)
 		}
 	}
-	record, err := tx.Incident.Create().SetWorkItemID(item.ID).SetIncidentNumber(item.TicketNumber).
+	record, err := tx.Incident.Create().SetWorkItemID(item.ID).
 		SetType(input.Type).SetSeverity(input.Severity).SetImpact(input.Impact).SetUrgency(input.Urgency).
 		SetDetectedAt(prepared.DetectedAt).SetImpactAnalysis(analysis).SetMetadata(input.Metadata).
 		AddConfigurationItemIDs(plan.Resolved.CIIDs...).Save(ctx)

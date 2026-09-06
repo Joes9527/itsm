@@ -25,7 +25,7 @@ func (*graphCreator) ValidateIncidentCreationInput(i workitemcreation.Identity, 
 }
 func (*graphCreator) RecordClass() string { return "incident" }
 func (*graphCreator) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticket, _ *workitemcreation.CreationPlan) (*workitemcreation.ProfessionalReference, error) {
-	extension, err := tx.Incident.Create().SetWorkItemID(item.ID).SetIncidentNumber(item.TicketNumber).Save(ctx)
+	extension, err := tx.Incident.Create().SetWorkItemID(item.ID).Save(ctx)
 	if err != nil {
 		return nil, err
 	}

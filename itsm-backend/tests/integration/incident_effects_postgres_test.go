@@ -80,8 +80,8 @@ func newIncidentEffectsFixture(t *testing.T) *incidentEffectsFixture {
 
 	tenant := client.Tenant.Create().SetCode("effects").SetName("effects").SaveX(ctx)
 	actor := client.User.Create().SetTenantID(tenant.ID).SetUsername("actor").SetName("actor").SetRole("agent").SetActive(true).SetEmail("actor@example.test").SetPasswordHash("test").SaveX(ctx)
-	item := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetOpenedByID(actor.ID).SetTitle("effects").SetTicketNumber("INC-EFFECTS").SetRecordClass("incident").SetType("incident").SetStatus("new").SetPriority("high").SaveX(ctx)
-	inc := client.Incident.Create().SetWorkItemID(item.ID).SetIncidentNumber(item.TicketNumber).SetSeverity("high").SetDetectedAt(time.Now()).SaveX(ctx)
+	item := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetOpenedByID(actor.ID).SetTitle("effects").SetTicketNumber("INC-EFFECTS").SetRecordClass("incident").SetStatus("new").SetPriority("high").SaveX(ctx)
+	inc := client.Incident.Create().SetWorkItemID(item.ID).SetSeverity("high").SetDetectedAt(time.Now()).SaveX(ctx)
 	client.IntakeRequest.Create().SetTenantID(tenant.ID).SetActorTenantID(tenant.ID).SetActorID(actor.ID).SetRequesterID(actor.ID).SetChannel("api").SetOperation("create").SetIdempotencyKey("effects").SetRequestDigest("digest").SetDigestVersion("v1").SetStatus("completed").SetWorkItemID(item.ID).SaveX(ctx)
 	payload, err := json.Marshal(map[string]interface{}{"tenantId": tenant.ID, "incidentId": inc.ID, "workItemId": item.ID, "actorId": actor.ID, "channel": "api"})
 	require.NoError(t, err)

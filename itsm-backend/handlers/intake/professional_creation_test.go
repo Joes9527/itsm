@@ -80,7 +80,7 @@ func TestAuthoritativeProfessionalGraph(t *testing.T) {
 			item := client.Ticket.GetX(context.Background(), result.WorkItemID)
 			require.Equal(t, "high", item.Priority)
 			require.Equal(t, "Professional description", item.Description)
-			require.Equal(t, "", item.Type)
+			require.Equal(t, class, item.RecordClass)
 			status := map[string]string{"generic": "new", "problem": "open", "incident": "new", "change_request": "draft", "service_request_item": "new"}[class]
 			require.Equal(t, status, item.Status)
 			switch class {
@@ -92,7 +92,7 @@ func TestAuthoritativeProfessionalGraph(t *testing.T) {
 				incident := client.Incident.Query().OnlyX(context.Background())
 				require.Equal(t, "security", incident.Type)
 				require.Equal(t, "VPN", client.TicketCategory.GetX(context.Background(), item.CategoryID).Name)
-				require.Equal(t, item.TicketNumber, incident.IncidentNumber)
+				require.Equal(t, item.TicketNumber, incident.QueryWorkItem().OnlyX(context.Background()).TicketNumber)
 				// Read raw JSON so Ent's map decoder cannot conceal precision lost before persistence.
 				var raw []string
 				require.NoError(t, client.Incident.Query().Select("impact_analysis").Scan(context.Background(), &raw))
@@ -124,7 +124,7 @@ func TestGenericSubtypeHasOneAuthoritativeField(t *testing.T) {
 	values, err := client.Ticket.Query().Select("generic_subtype").Strings(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, []string{"improvement"}, values)
-	require.Equal(t, "", client.Ticket.Query().OnlyX(context.Background()).Type)
+	require.Equal(t, "generic", client.Ticket.Query().OnlyX(context.Background()).RecordClass)
 }
 
 func TestIncidentNumbersAreScopedByWorkItemTenant(t *testing.T) {

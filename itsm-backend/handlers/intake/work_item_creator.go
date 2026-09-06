@@ -64,7 +64,6 @@ func (c *WorkItemCreator) CreateBase(ctx context.Context, tx *ent.Tx, plan *work
 		SetDescription(strings.TrimSpace(draft.Description)).
 		SetStatus(draft.Status).
 		SetRecordClass(draft.RecordClass).
-		SetType("").
 		SetGenericSubtype(draft.GenericSubtype).
 		SetNillableTemplateID(draft.TemplateID).
 		SetNillableParentTicketID(draft.ParentTicketID).

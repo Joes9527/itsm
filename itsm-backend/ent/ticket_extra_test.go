@@ -31,7 +31,7 @@ func TestTicket_ExternalMessageID_Dedup(t *testing.T) {
 	_, err = client.Ticket.Create().
 		SetTitle("From email").
 		SetDescription("body").
-		SetType("incident").
+		SetRecordClass("incident").
 		SetPriority("medium").
 		SetTicketNumber("TCK-EXT-0001").
 		SetRequesterID(user.ID).

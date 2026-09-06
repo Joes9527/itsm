@@ -133,10 +133,9 @@ func TestIncidentIntegration(t *testing.T) {
 
 	// 创建事件
 	incidentNumber := fmt.Sprintf("INC-%d", time.Now().UnixNano())
-	incidentWorkItem, err := client.Ticket.Create().SetTitle("Critical incident").SetStatus("open").SetPriority("critical").SetType("incident").SetRecordClass("incident").SetTicketNumber("TKT-INC-1").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
+	incidentWorkItem, err := client.Ticket.Create().SetTitle("Critical incident").SetStatus("open").SetPriority("critical").SetRecordClass("incident").SetTicketNumber("TKT-INC-1").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	incident, err := client.Incident.Create().
-		SetIncidentNumber(incidentNumber).
 		SetWorkItemID(incidentWorkItem.ID).
 		Save(ctx)
 	require.NoError(t, err)
@@ -179,7 +178,7 @@ func TestChangeManagementIntegration(t *testing.T) {
 	require.NoError(t, err)
 
 	// 创建变更请求
-	changeWorkItem, err := client.Ticket.Create().SetTitle("Standard change").SetStatus("draft").SetPriority("medium").SetType("change").SetRecordClass("change_request").SetTicketNumber("TKT-CHG-1").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
+	changeWorkItem, err := client.Ticket.Create().SetTitle("Standard change").SetStatus("draft").SetPriority("medium").SetRecordClass("change_request").SetTicketNumber("TKT-CHG-1").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	change, err := client.Change.Create().
 		SetType("standard").

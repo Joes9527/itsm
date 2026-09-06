@@ -27,8 +27,6 @@ type Incident struct {
 	Impact string `json:"impact,omitempty"`
 	// 紧急程度：low/medium/high/critical
 	Urgency string `json:"urgency,omitempty"`
-	// Legacy projection of the owning WorkItem number; tenant-scoped identity lives on WorkItem
-	IncidentNumber string `json:"incident_number,omitempty"`
 	// 关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入
 	WorkItemID int `json:"work_item_id,omitempty"`
 	// 配置项ID
@@ -165,7 +163,7 @@ func (*Incident) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullBool)
 		case incident.FieldID, incident.FieldWorkItemID, incident.FieldConfigurationItemID, incident.FieldEscalationLevel:
 			values[i] = new(sql.NullInt64)
-		case incident.FieldType, incident.FieldSeverity, incident.FieldImpact, incident.FieldUrgency, incident.FieldIncidentNumber:
+		case incident.FieldType, incident.FieldSeverity, incident.FieldImpact, incident.FieldUrgency:
 			values[i] = new(sql.NullString)
 		case incident.FieldDetectedAt, incident.FieldEscalatedAt:
 			values[i] = new(sql.NullTime)
@@ -213,12 +211,6 @@ func (_m *Incident) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field urgency", values[i])
 			} else if value.Valid {
 				_m.Urgency = value.String
-			}
-		case incident.FieldIncidentNumber:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field incident_number", values[i])
-			} else if value.Valid {
-				_m.IncidentNumber = value.String
 			}
 		case incident.FieldWorkItemID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -381,9 +373,6 @@ func (_m *Incident) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("urgency=")
 	builder.WriteString(_m.Urgency)
-	builder.WriteString(", ")
-	builder.WriteString("incident_number=")
-	builder.WriteString(_m.IncidentNumber)
 	builder.WriteString(", ")
 	builder.WriteString("work_item_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.WorkItemID))

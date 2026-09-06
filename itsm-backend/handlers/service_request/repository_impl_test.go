@@ -134,7 +134,7 @@ func TestEntRepository_Create_PersistsContactAndQuantityFields(t *testing.T) {
 	require.NoError(t, err)
 	ticket, err := client.Ticket.Create().
 		SetTitle("测试工单").SetDescription("desc").SetPriority("medium").SetStatus("open").
-		SetType("service_request").SetTenantID(tenant.ID).SetRequesterID(requester.ID).SetTicketNumber("T-1").
+		SetTenantID(tenant.ID).SetRequesterID(requester.ID).SetTicketNumber("T-1").
 		Save(ctx)
 	require.NoError(t, err)
 
@@ -178,7 +178,7 @@ func TestEntRepository_Create_QuantityDefaultsToOneWhenOmitted(t *testing.T) {
 	require.NoError(t, err)
 	ticket, err := client.Ticket.Create().
 		SetTitle("测试工单").SetDescription("desc").SetPriority("medium").SetStatus("open").
-		SetType("service_request").SetTenantID(tenant.ID).SetRequesterID(requester.ID).SetTicketNumber("T-2").
+		SetTenantID(tenant.ID).SetRequesterID(requester.ID).SetTicketNumber("T-2").
 		Save(ctx)
 	require.NoError(t, err)
 

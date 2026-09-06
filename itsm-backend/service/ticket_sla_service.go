@@ -101,7 +101,7 @@ func (s *TicketSLAService) GetTicketSLAInfo(ctx context.Context, ticketID int, t
 	if !t.ResolvedAt.IsZero() {
 		resolutionTimeUsed = int(t.ResolvedAt.Sub(t.CreatedAt).Minutes())
 	}
-	slaDef, err := s.getSLADefinition(ctx, tenantID, t.Type, t.Priority, 0)
+	slaDef, err := s.getSLADefinition(ctx, tenantID, common.WorkItemLegacyType(t.RecordClass, t.GenericSubtype), t.Priority, 0)
 	if err != nil {
 		s.logger.Warnw("Failed to get SLA definition", "error", err)
 		// 返回没有SLA信息的结果
@@ -109,7 +109,7 @@ func (s *TicketSLAService) GetTicketSLAInfo(ctx context.Context, ticketID int, t
 			TicketID:           t.ID,
 			TicketNumber:       t.TicketNumber,
 			Priority:           t.Priority,
-			TicketType:         t.Type,
+			TicketType:         common.WorkItemLegacyType(t.RecordClass, t.GenericSubtype),
 			ResponseTimeUsed:   responseTimeUsed,
 			ResolutionTimeUsed: resolutionTimeUsed,
 			SLAStatus:          "unknown",
@@ -156,7 +156,7 @@ func (s *TicketSLAService) GetTicketSLAInfo(ctx context.Context, ticketID int, t
 		TicketID:           t.ID,
 		TicketNumber:       t.TicketNumber,
 		Priority:           t.Priority,
-		TicketType:         t.Type,
+		TicketType:         common.WorkItemLegacyType(t.RecordClass, t.GenericSubtype),
 		ResponseDeadline:   responseDeadline,
 		ResolutionDeadline: resolutionDeadline,
 		ResponseTimeUsed:   responseTimeUsed,

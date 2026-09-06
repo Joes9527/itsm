@@ -98,8 +98,11 @@ func (r *EntRepository) Update(ctx context.Context, id int, params *UpdateParams
 			builder.ClearResolvedAt().ClearClosedAt()
 		}
 	}
-	if params.Type != nil {
-		builder.SetType(string(*params.Type))
+	if params.GenericSubtype != nil {
+		if current.RecordClass != "generic" {
+			return nil, fmt.Errorf("generic subtype cannot mutate professional work item")
+		}
+		builder.SetGenericSubtype(*params.GenericSubtype)
 	}
 	if params.Priority != nil {
 		builder.SetPriority(string(*params.Priority))
@@ -167,8 +170,11 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, filters *FilterP
 		if filters.Priority != nil {
 			query = query.Where(ticket.PriorityEQ(string(*filters.Priority)))
 		}
-		if filters.Type != nil {
-			query = query.Where(ticket.TypeEQ(string(*filters.Type)))
+		if filters.RecordClass != nil {
+			query = query.Where(ticket.RecordClassEQ(*filters.RecordClass))
+		}
+		if filters.GenericSubtype != nil {
+			query = query.Where(ticket.RecordClassEQ("generic"), ticket.GenericSubtypeEQ(*filters.GenericSubtype))
 		}
 		if filters.RequesterID != nil {
 			query = query.Where(ticket.RequesterID(*filters.RequesterID))
@@ -489,7 +495,6 @@ func toDomainModel(e *ent.Ticket) *Ticket {
 		Title:          e.Title,
 		Description:    e.Description,
 		Status:         Status(e.Status),
-		Type:           Type(e.Type),
 		GenericSubtype: e.GenericSubtype,
 		RecordClass:    e.RecordClass,
 		Priority:       Priority(e.Priority),

@@ -68,20 +68,6 @@ func (_c *TicketCreate) SetNillableStatus(v *string) *TicketCreate {
 	return _c
 }
 
-// SetType sets the "type" field.
-func (_c *TicketCreate) SetType(v string) *TicketCreate {
-	_c.mutation.SetType(v)
-	return _c
-}
-
-// SetNillableType sets the "type" field if the given value is not nil.
-func (_c *TicketCreate) SetNillableType(v *string) *TicketCreate {
-	if v != nil {
-		_c.SetType(*v)
-	}
-	return _c
-}
-
 // SetGenericSubtype sets the "generic_subtype" field.
 func (_c *TicketCreate) SetGenericSubtype(v string) *TicketCreate {
 	_c.mutation.SetGenericSubtype(v)
@@ -801,10 +787,6 @@ func (_c *TicketCreate) defaults() {
 		v := ticket.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
-	if _, ok := _c.mutation.GetType(); !ok {
-		v := ticket.DefaultType
-		_c.mutation.SetType(v)
-	}
 	if _, ok := _c.mutation.Source(); !ok {
 		v := ticket.DefaultSource
 		_c.mutation.SetSource(v)
@@ -847,9 +829,6 @@ func (_c *TicketCreate) check() error {
 	}
 	if _, ok := _c.mutation.Status(); !ok {
 		return &ValidationError{Name: "status", err: errors.New(`ent: missing required field "Ticket.status"`)}
-	}
-	if _, ok := _c.mutation.GetType(); !ok {
-		return &ValidationError{Name: "type", err: errors.New(`ent: missing required field "Ticket.type"`)}
 	}
 	if _, ok := _c.mutation.RecordClass(); !ok {
 		return &ValidationError{Name: "record_class", err: errors.New(`ent: missing required field "Ticket.record_class"`)}
@@ -944,10 +923,6 @@ func (_c *TicketCreate) createSpec() (*Ticket, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(ticket.FieldStatus, field.TypeString, value)
 		_node.Status = value
-	}
-	if value, ok := _c.mutation.GetType(); ok {
-		_spec.SetField(ticket.FieldType, field.TypeString, value)
-		_node.Type = value
 	}
 	if value, ok := _c.mutation.GenericSubtype(); ok {
 		_spec.SetField(ticket.FieldGenericSubtype, field.TypeString, value)
@@ -1407,18 +1382,6 @@ func (u *TicketUpsert) SetStatus(v string) *TicketUpsert {
 // UpdateStatus sets the "status" field to the value that was provided on create.
 func (u *TicketUpsert) UpdateStatus() *TicketUpsert {
 	u.SetExcluded(ticket.FieldStatus)
-	return u
-}
-
-// SetType sets the "type" field.
-func (u *TicketUpsert) SetType(v string) *TicketUpsert {
-	u.Set(ticket.FieldType, v)
-	return u
-}
-
-// UpdateType sets the "type" field to the value that was provided on create.
-func (u *TicketUpsert) UpdateType() *TicketUpsert {
-	u.SetExcluded(ticket.FieldType)
 	return u
 }
 
@@ -2194,20 +2157,6 @@ func (u *TicketUpsertOne) SetStatus(v string) *TicketUpsertOne {
 func (u *TicketUpsertOne) UpdateStatus() *TicketUpsertOne {
 	return u.Update(func(s *TicketUpsert) {
 		s.UpdateStatus()
-	})
-}
-
-// SetType sets the "type" field.
-func (u *TicketUpsertOne) SetType(v string) *TicketUpsertOne {
-	return u.Update(func(s *TicketUpsert) {
-		s.SetType(v)
-	})
-}
-
-// UpdateType sets the "type" field to the value that was provided on create.
-func (u *TicketUpsertOne) UpdateType() *TicketUpsertOne {
-	return u.Update(func(s *TicketUpsert) {
-		s.UpdateType()
 	})
 }
 
@@ -3262,20 +3211,6 @@ func (u *TicketUpsertBulk) SetStatus(v string) *TicketUpsertBulk {
 func (u *TicketUpsertBulk) UpdateStatus() *TicketUpsertBulk {
 	return u.Update(func(s *TicketUpsert) {
 		s.UpdateStatus()
-	})
-}
-
-// SetType sets the "type" field.
-func (u *TicketUpsertBulk) SetType(v string) *TicketUpsertBulk {
-	return u.Update(func(s *TicketUpsert) {
-		s.SetType(v)
-	})
-}
-
-// UpdateType sets the "type" field to the value that was provided on create.
-func (u *TicketUpsertBulk) UpdateType() *TicketUpsertBulk {
-	return u.Update(func(s *TicketUpsert) {
-		s.UpdateType()
 	})
 }
 

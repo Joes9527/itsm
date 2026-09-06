@@ -109,7 +109,7 @@ func (r *EntRepository) toDomain(e *ent.Problem) *Problem {
 	return p
 }
 
-func (r *EntRepository) toDomainWithAssociations(e *ent.Problem) *Problem {
+func (r *EntRepository) toDomainWithAssociations(e *ent.Problem) (*Problem, error) {
 	p := r.toDomain(e)
 
 	// 注意：Tickets 关联不在这里填充——历史上通过 ent 的 Problem<->Ticket 多对多 edge
@@ -120,13 +120,13 @@ func (r *EntRepository) toDomainWithAssociations(e *ent.Problem) *Problem {
 		p.Incidents = make([]*AssociatedItem, 0, len(e.Edges.Incidents))
 		for _, inc := range e.Edges.Incidents {
 			if inc.Edges.WorkItem == nil {
-				continue
+				return nil, fmt.Errorf("Incident %d required WorkItem missing", inc.ID)
 			}
 			p.Incidents = append(p.Incidents, &AssociatedItem{
 				ID:     inc.ID,
 				Title:  inc.Edges.WorkItem.Title,
 				Status: inc.Edges.WorkItem.Status,
-				Number: inc.IncidentNumber,
+				Number: inc.Edges.WorkItem.TicketNumber,
 				Type:   "incident",
 			})
 		}
@@ -146,7 +146,7 @@ func (r *EntRepository) toDomainWithAssociations(e *ent.Problem) *Problem {
 		}
 	}
 
-	return p
+	return p, nil
 }
 
 func (r *EntRepository) AddAssociations(ctx context.Context, tenantID, problemID, actorUserID int, relatedType string, relatedIDs []int) error {
@@ -336,7 +336,10 @@ func (r *EntRepository) GetWithAssociations(ctx context.Context, id int, tenantI
 	if err != nil {
 		return nil, err
 	}
-	p := r.toDomainWithAssociations(e)
+	p, err := r.toDomainWithAssociations(e)
+	if err != nil {
+		return nil, err
+	}
 	incidents, err := r.loadIncidentAssociations(ctx, tenantID, e.WorkItemID)
 	if err != nil {
 		return nil, err
@@ -390,11 +393,11 @@ func (r *EntRepository) loadIncidentAssociations(ctx context.Context, tenantID, 
 	items := make([]*AssociatedItem, 0, len(incidents))
 	for _, inc := range incidents {
 		if inc.Edges.WorkItem == nil {
-			continue
+			return nil, fmt.Errorf("Incident %d required WorkItem missing", inc.ID)
 		}
 		items = append(items, &AssociatedItem{
 			ID: inc.ID, Title: inc.Edges.WorkItem.Title, Status: inc.Edges.WorkItem.Status,
-			Number: inc.IncidentNumber, Type: "incident",
+			Number: inc.Edges.WorkItem.TicketNumber, Type: "incident",
 		})
 	}
 	return items, nil

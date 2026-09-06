@@ -20,8 +20,6 @@ const (
 	FieldDescription = "description"
 	// FieldStatus holds the string denoting the status field in the database.
 	FieldStatus = "status"
-	// FieldType holds the string denoting the type field in the database.
-	FieldType = "type"
 	// FieldGenericSubtype holds the string denoting the generic_subtype field in the database.
 	FieldGenericSubtype = "generic_subtype"
 	// FieldSource holds the string denoting the source field in the database.
@@ -229,7 +227,6 @@ var Columns = []string{
 	FieldTitle,
 	FieldDescription,
 	FieldStatus,
-	FieldType,
 	FieldGenericSubtype,
 	FieldSource,
 	FieldRecordClass,
@@ -307,8 +304,6 @@ var (
 	TitleValidator func(string) error
 	// DefaultStatus holds the default value on creation for the "status" field.
 	DefaultStatus string
-	// DefaultType holds the default value on creation for the "type" field.
-	DefaultType string
 	// DefaultSource holds the default value on creation for the "source" field.
 	DefaultSource string
 	// DefaultRecordClass holds the default value on creation for the "record_class" field.
@@ -358,11 +353,6 @@ func ByDescription(opts ...sql.OrderTermOption) OrderOption {
 // ByStatus orders the results by the status field.
 func ByStatus(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldStatus, opts...).ToFunc()
-}
-
-// ByType orders the results by the type field.
-func ByType(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldType, opts...).ToFunc()
 }
 
 // ByGenericSubtype orders the results by the generic_subtype field.

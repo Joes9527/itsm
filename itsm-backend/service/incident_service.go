@@ -56,7 +56,7 @@ func (s *IncidentService) SetAlertCreator(creator IncidentAlertCreator) {
 	s.ruleEngine.alertCreator = creator
 }
 
-// SetSequenceService 设置序列服务（用于 incident_number 生成）
+// SetPriorityMatrixService configures professional Incident priority rules.
 func (s *IncidentService) SetPriorityMatrixService(pms *PriorityMatrixService) {
 	s.priorityMatrixService = pms
 }
@@ -136,7 +136,7 @@ func (s *IncidentService) ListIncidents(ctx context.Context, tenantID int, page,
 		query = query.Where(
 			incident.Or(
 				incident.HasWorkItemWith(ticket.Or(ticket.TitleContains(keyword), ticket.DescriptionContains(keyword))),
-				incident.IncidentNumberContains(keyword),
+				incident.HasWorkItemWith(ticket.TicketNumberContains(keyword)),
 			),
 		)
 	}

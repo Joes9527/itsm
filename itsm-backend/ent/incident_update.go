@@ -91,20 +91,6 @@ func (_u *IncidentUpdate) SetNillableUrgency(v *string) *IncidentUpdate {
 	return _u
 }
 
-// SetIncidentNumber sets the "incident_number" field.
-func (_u *IncidentUpdate) SetIncidentNumber(v string) *IncidentUpdate {
-	_u.mutation.SetIncidentNumber(v)
-	return _u
-}
-
-// SetNillableIncidentNumber sets the "incident_number" field if the given value is not nil.
-func (_u *IncidentUpdate) SetNillableIncidentNumber(v *string) *IncidentUpdate {
-	if v != nil {
-		_u.SetIncidentNumber(*v)
-	}
-	return _u
-}
-
 // SetWorkItemID sets the "work_item_id" field.
 func (_u *IncidentUpdate) SetWorkItemID(v int) *IncidentUpdate {
 	_u.mutation.SetWorkItemID(v)
@@ -590,11 +576,6 @@ func (_u *IncidentUpdate) check() error {
 			return &ValidationError{Name: "urgency", err: fmt.Errorf(`ent: validator failed for field "Incident.urgency": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.IncidentNumber(); ok {
-		if err := incident.IncidentNumberValidator(v); err != nil {
-			return &ValidationError{Name: "incident_number", err: fmt.Errorf(`ent: validator failed for field "Incident.incident_number": %w`, err)}
-		}
-	}
 	if _u.mutation.WorkItemCleared() && len(_u.mutation.WorkItemIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Incident.work_item"`)
 	}
@@ -624,9 +605,6 @@ func (_u *IncidentUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Urgency(); ok {
 		_spec.SetField(incident.FieldUrgency, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.IncidentNumber(); ok {
-		_spec.SetField(incident.FieldIncidentNumber, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.ConfigurationItemID(); ok {
 		_spec.SetField(incident.FieldConfigurationItemID, field.TypeInt, value)
@@ -1103,20 +1081,6 @@ func (_u *IncidentUpdateOne) SetUrgency(v string) *IncidentUpdateOne {
 func (_u *IncidentUpdateOne) SetNillableUrgency(v *string) *IncidentUpdateOne {
 	if v != nil {
 		_u.SetUrgency(*v)
-	}
-	return _u
-}
-
-// SetIncidentNumber sets the "incident_number" field.
-func (_u *IncidentUpdateOne) SetIncidentNumber(v string) *IncidentUpdateOne {
-	_u.mutation.SetIncidentNumber(v)
-	return _u
-}
-
-// SetNillableIncidentNumber sets the "incident_number" field if the given value is not nil.
-func (_u *IncidentUpdateOne) SetNillableIncidentNumber(v *string) *IncidentUpdateOne {
-	if v != nil {
-		_u.SetIncidentNumber(*v)
 	}
 	return _u
 }
@@ -1619,11 +1583,6 @@ func (_u *IncidentUpdateOne) check() error {
 			return &ValidationError{Name: "urgency", err: fmt.Errorf(`ent: validator failed for field "Incident.urgency": %w`, err)}
 		}
 	}
-	if v, ok := _u.mutation.IncidentNumber(); ok {
-		if err := incident.IncidentNumberValidator(v); err != nil {
-			return &ValidationError{Name: "incident_number", err: fmt.Errorf(`ent: validator failed for field "Incident.incident_number": %w`, err)}
-		}
-	}
 	if _u.mutation.WorkItemCleared() && len(_u.mutation.WorkItemIDs()) > 0 {
 		return errors.New(`ent: clearing a required unique edge "Incident.work_item"`)
 	}
@@ -1670,9 +1629,6 @@ func (_u *IncidentUpdateOne) sqlSave(ctx context.Context) (_node *Incident, err 
 	}
 	if value, ok := _u.mutation.Urgency(); ok {
 		_spec.SetField(incident.FieldUrgency, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.IncidentNumber(); ok {
-		_spec.SetField(incident.FieldIncidentNumber, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.ConfigurationItemID(); ok {
 		_spec.SetField(incident.FieldConfigurationItemID, field.TypeInt, value)

@@ -44,9 +44,6 @@ func (Incident) Fields() []ent.Field {
 				return nil
 			}).
 			Default("medium"),
-		field.String("incident_number").
-			Comment("Legacy projection of the owning WorkItem number; tenant-scoped identity lives on WorkItem").
-			NotEmpty(),
 		field.Int("work_item_id").
 			Comment("关联的 WorkItem（tickets.id），唯一且必填；共享字段只从该 WorkItem 读取和写入"),
 		field.Int("configuration_item_id").

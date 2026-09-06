@@ -34,7 +34,7 @@ func TestRunPostSchemaMigrationsAppliesVersion007(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, runner.ensured)
-	require.Len(t, runner.migrations, 19)
+	require.Len(t, runner.migrations, 20)
 	require.Equal(t, "007_add_change_execution_tables", runner.migrations[0].Version)
 	require.Equal(t, "008_add_initialization_ledger", runner.migrations[1].Version)
 	require.Equal(t, "009_enable_rls_tenant_isolation", runner.migrations[2].Version)
@@ -54,6 +54,7 @@ func TestRunPostSchemaMigrationsAppliesVersion007(t *testing.T) {
 	require.Equal(t, "024_incident_rule_action_receipts", runner.migrations[16].Version)
 	require.Equal(t, "025_email_attachment_source_identity", runner.migrations[17].Version)
 	require.Equal(t, "026_intake_actor_provenance", runner.migrations[18].Version)
+	require.Equal(t, "027_work_item_identity_field_retirement", runner.migrations[19].Version)
 }
 
 func TestRunPostSchemaMigrationsFailsClosed(t *testing.T) {

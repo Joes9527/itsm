@@ -108,7 +108,6 @@ func createRegressionChange(t *testing.T, client *ent.Client, tenantID, actorID 
 	for _, number := range relatedTickets {
 		target, err := client.Ticket.Create().
 			SetTitle("回归测试关联工单 " + number).
-			SetType("incident").
 			SetTicketNumber(number).
 			SetRequesterID(actorID).
 			SetTenantID(tenantID).
@@ -354,7 +353,6 @@ func TestEntRepository_RelatedTickets_WorkItemRelationBehavior(t *testing.T) {
 		t.Helper()
 		_, err := entClient.Ticket.Create().
 			SetTitle("关联工单 " + number).
-			SetType("incident").
 			SetTicketNumber(number).
 			SetRequesterID(actorID).
 			SetTenantID(tenantID).
@@ -722,7 +720,7 @@ func TestChangeWorkItemAndRelations_TenantIsolation(t *testing.T) {
 	// 租户 B 有一张真实工单，编号跟租户 A 后面要在 relatedTickets 里引用的字符串相同。
 	ticketNumber := "INC-CROSS-TENANT-0001"
 	_, err := entClient.Ticket.Create().
-		SetTitle("租户B的工单").SetType("incident").SetTicketNumber(ticketNumber).
+		SetTitle("租户B的工单").SetTicketNumber(ticketNumber).
 		SetRequesterID(actorB).SetTenantID(tenantB).
 		Save(ctx)
 	require.NoError(t, err)
@@ -752,7 +750,7 @@ func TestChangeWorkItemAndRelations_TenantIsolation(t *testing.T) {
 	// 租户 A 自己名下的同编号工单则应该能正常关联——证明上面的拒绝是因为跨租户过滤，
 	// 不是因为查询逻辑整体坏掉了。
 	_, err = entClient.Ticket.Create().
-		SetTitle("租户A的工单").SetType("incident").SetTicketNumber(ticketNumber + "-A").
+		SetTitle("租户A的工单").SetTicketNumber(ticketNumber + "-A").
 		SetRequesterID(actorA).SetTenantID(tenantA).
 		Save(ctx)
 	require.NoError(t, err)

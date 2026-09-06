@@ -70,11 +70,6 @@ func Status(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldStatus, v))
 }
 
-// Type applies equality check predicate on the "type" field. It's identical to TypeEQ.
-func Type(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldEQ(FieldType, v))
-}
-
 // GenericSubtype applies equality check predicate on the "generic_subtype" field. It's identical to GenericSubtypeEQ.
 func GenericSubtype(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldGenericSubtype, v))
@@ -463,71 +458,6 @@ func StatusEqualFold(v string) predicate.Ticket {
 // StatusContainsFold applies the ContainsFold predicate on the "status" field.
 func StatusContainsFold(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldContainsFold(FieldStatus, v))
-}
-
-// TypeEQ applies the EQ predicate on the "type" field.
-func TypeEQ(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldEQ(FieldType, v))
-}
-
-// TypeNEQ applies the NEQ predicate on the "type" field.
-func TypeNEQ(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldNEQ(FieldType, v))
-}
-
-// TypeIn applies the In predicate on the "type" field.
-func TypeIn(vs ...string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldIn(FieldType, vs...))
-}
-
-// TypeNotIn applies the NotIn predicate on the "type" field.
-func TypeNotIn(vs ...string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldNotIn(FieldType, vs...))
-}
-
-// TypeGT applies the GT predicate on the "type" field.
-func TypeGT(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldGT(FieldType, v))
-}
-
-// TypeGTE applies the GTE predicate on the "type" field.
-func TypeGTE(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldGTE(FieldType, v))
-}
-
-// TypeLT applies the LT predicate on the "type" field.
-func TypeLT(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldLT(FieldType, v))
-}
-
-// TypeLTE applies the LTE predicate on the "type" field.
-func TypeLTE(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldLTE(FieldType, v))
-}
-
-// TypeContains applies the Contains predicate on the "type" field.
-func TypeContains(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldContains(FieldType, v))
-}
-
-// TypeHasPrefix applies the HasPrefix predicate on the "type" field.
-func TypeHasPrefix(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldHasPrefix(FieldType, v))
-}
-
-// TypeHasSuffix applies the HasSuffix predicate on the "type" field.
-func TypeHasSuffix(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldHasSuffix(FieldType, v))
-}
-
-// TypeEqualFold applies the EqualFold predicate on the "type" field.
-func TypeEqualFold(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldEqualFold(FieldType, v))
-}
-
-// TypeContainsFold applies the ContainsFold predicate on the "type" field.
-func TypeContainsFold(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldContainsFold(FieldType, v))
 }
 
 // GenericSubtypeEQ applies the EQ predicate on the "generic_subtype" field.

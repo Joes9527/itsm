@@ -48,7 +48,6 @@ func newConversionFixture(t *testing.T, status string, _ bool) *conversionFixtur
 		SetTitle("Intermittent API outage").
 		SetDescription("Requests intermittently return 503").
 		SetStatus(status).
-		SetType("incident").
 		SetRecordClass("incident").
 		SetPriority("high").
 		SetTicketNumber("CONV-SRC-" + suffix).
@@ -59,11 +58,9 @@ func newConversionFixture(t *testing.T, status string, _ bool) *conversionFixtur
 	require.NoError(t, err)
 
 	create := client.Incident.Create().
-		SetType("incident").
 		SetSeverity("high").
 		SetImpact("high").
 		SetUrgency("high").
-		SetIncidentNumber("CONV-INC-" + suffix).
 		SetWorkItemID(workItem.ID)
 	incident, err := create.Save(ctx)
 	require.NoError(t, err)
@@ -179,7 +176,7 @@ func TestCreateFromIncidentCreatesWorkItemsRelationAndAuditAtomically(t *testing
 	require.NoError(t, err)
 	require.Len(t, withAssociations.Incidents, 1, "converted Problem must expose its source Incident")
 	assert.Equal(t, f.incidentID, withAssociations.Incidents[0].ID)
-	assert.Equal(t, "CONV-INC-"+strings.NewReplacer("/", "-", " ", "-").Replace(t.Name()), withAssociations.Incidents[0].Number)
+	assert.Equal(t, "CONV-SRC-"+strings.NewReplacer("/", "-", " ", "-").Replace(t.Name()), withAssociations.Incidents[0].Number)
 }
 
 func TestGetWithAssociationsOmitsDeletedConvertedIncident(t *testing.T) {
@@ -253,7 +250,6 @@ func TestCreateFromIncidentRejectsIneligibleSourceWithoutWrites(t *testing.T) {
 		foreignUser := createProblemHandlerUser(t, f.ctx, f.client, foreignTenant.ID, suffix)
 		foreignWorkItem, err := f.client.Ticket.Create().
 			SetTitle("Foreign incident work item").
-			SetType("incident").
 			SetRecordClass("incident").
 			SetPriority("high").
 			SetTicketNumber("CONV-FOREIGN-" + suffix).

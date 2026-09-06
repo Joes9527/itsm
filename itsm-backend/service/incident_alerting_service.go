@@ -558,22 +558,22 @@ func (s *IncidentAlertingService) ProcessEscalationAlerts(ctx context.Context, i
 
 	switch escalationLevel {
 	case 1:
-		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 1，需要关注", incidentEntity.IncidentNumber)
+		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 1，需要关注", incidentEntity.Edges.WorkItem.TicketNumber)
 		severity = "high"
 		channels = []string{"email"}
 		recipients = []string{"manager@company.com", "team@company.com"}
 	case 2:
-		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 2，需要立即处理", incidentEntity.IncidentNumber)
+		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 2，需要立即处理", incidentEntity.Edges.WorkItem.TicketNumber)
 		severity = "critical"
 		channels = []string{"email"}
 		recipients = []string{"director@company.com", "manager@company.com", "team@company.com"}
 	case 3:
-		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 3，需要紧急处理", incidentEntity.IncidentNumber)
+		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 3，需要紧急处理", incidentEntity.Edges.WorkItem.TicketNumber)
 		severity = "critical"
 		channels = []string{"email"}
 		recipients = []string{"cto@company.com", "director@company.com", "manager@company.com", "team@company.com"}
 	default:
-		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 %d", incidentEntity.IncidentNumber, escalationLevel)
+		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 %d", incidentEntity.Edges.WorkItem.TicketNumber, escalationLevel)
 		severity = "high"
 		channels = []string{"email"}
 		recipients = []string{"admin@company.com"}
@@ -665,17 +665,17 @@ func (s *IncidentAlertingService) ProcessSLAViolationAlerts(ctx context.Context,
 
 	switch violationType {
 	case "response_time":
-		alertMessage = fmt.Sprintf("事件 %s 响应时间超时，违反SLA", incidentEntity.IncidentNumber)
+		alertMessage = fmt.Sprintf("事件 %s 响应时间超时，违反SLA", incidentEntity.Edges.WorkItem.TicketNumber)
 		severity = "high"
 		channels = []string{"email"}
 		recipients = []string{"manager@company.com", "team@company.com"}
 	case "resolution_time":
-		alertMessage = fmt.Sprintf("事件 %s 解决时间超时，违反SLA", incidentEntity.IncidentNumber)
+		alertMessage = fmt.Sprintf("事件 %s 解决时间超时，违反SLA", incidentEntity.Edges.WorkItem.TicketNumber)
 		severity = "critical"
 		channels = []string{"email"}
 		recipients = []string{"director@company.com", "manager@company.com", "team@company.com"}
 	default:
-		alertMessage = fmt.Sprintf("事件 %s 违反SLA: %s", incidentEntity.IncidentNumber, violationType)
+		alertMessage = fmt.Sprintf("事件 %s 违反SLA: %s", incidentEntity.Edges.WorkItem.TicketNumber, violationType)
 		severity = "medium"
 		channels = []string{"email"}
 		recipients = []string{"admin@company.com"}

@@ -38,7 +38,7 @@ func setupChangeHandlerFixture(t *testing.T) (*ent.Client, *ChangeServiceTaskHan
 		SetName("发起人").SetTenantID(tenant.ID).SetActive(true).
 		Save(ctx)
 	require.NoError(t, err)
-	workItem, err := client.Ticket.Create().SetTitle("测试变更").SetStatus("draft").SetPriority("medium").SetType("change").SetRecordClass("change_request").SetTicketNumber("TKT-CHANGE-HANDLER").SetRequesterID(creator.ID).SetTenantID(tenant.ID).Save(ctx)
+	workItem, err := client.Ticket.Create().SetTitle("测试变更").SetStatus("draft").SetPriority("medium").SetRecordClass("change_request").SetTicketNumber("TKT-CHANGE-HANDLER").SetRequesterID(creator.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
 	changeEntity, err := client.Change.Create().

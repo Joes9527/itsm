@@ -27,7 +27,7 @@ import (
 type CreateParams struct {
 	Title             string
 	Description       string
-	Type              Type
+	RecordClass       string
 	Priority          Priority
 	RequesterID       int
 	ParentTicketID    *int
@@ -90,7 +90,7 @@ func (fx *repoFixture) createTicket(ctx context.Context, params *CreateParams, t
 	builder := fx.client.Ticket.Create().
 		SetTitle(params.Title).
 		SetDescription(params.Description).
-		SetType(string(params.Type)).
+		SetRecordClass(string(params.RecordClass)).
 		SetPriority(string(params.Priority)).
 		SetStatus(string(StatusNew)).
 		SetTicketNumber(nextRepoTestTicketNumber()).
@@ -130,7 +130,7 @@ func TestRepository_GetByID(t *testing.T) {
 		Title:       "Get Test",
 		Description: "Desc",
 		Priority:    PriorityHigh,
-		Type:        TypeIncident,
+		RecordClass: "incident",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -156,7 +156,7 @@ func TestRepository_GetByID_WrongTenant(t *testing.T) {
 		Title:       "Tenant Isolation",
 		Description: "",
 		Priority:    PriorityMedium,
-		Type:        TypeIncident,
+		RecordClass: "incident",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -176,7 +176,7 @@ func TestRepository_GetByNumber(t *testing.T) {
 		Title:       "By Number",
 		Description: "",
 		Priority:    PriorityLow,
-		Type:        TypeServiceRequest,
+		RecordClass: "service_request_item",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -202,7 +202,7 @@ func TestRepository_GetByNumber_WrongTenant(t *testing.T) {
 		Title:       "By Number Tenant",
 		Description: "",
 		Priority:    PriorityMedium,
-		Type:        TypeIncident,
+		RecordClass: "incident",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -222,7 +222,7 @@ func TestRepository_Update(t *testing.T) {
 		Title:       "Update Me",
 		Description: "Original",
 		Priority:    PriorityLow,
-		Type:        TypeIncident,
+		RecordClass: "incident",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -256,7 +256,7 @@ func TestRepository_Update_RejectsStaleVersion(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 	created, err := fx.createTicket(fx.ctx, &CreateParams{
-		Title: "Original", Priority: PriorityMedium, Type: TypeIncident, RequesterID: fx.user.ID,
+		Title: "Original", Priority: PriorityMedium, RecordClass: "incident", RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 	require.NoError(t, err)
 	title := "Must not overwrite"
@@ -279,7 +279,7 @@ func TestRepository_Delete(t *testing.T) {
 		Title:       "Delete Me",
 		Description: "",
 		Priority:    PriorityLow,
-		Type:        TypeIncident,
+		RecordClass: "incident",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -298,7 +298,7 @@ func TestRepository_Delete_WrongTenant(t *testing.T) {
 		Title:       "Delete Isolated",
 		Description: "",
 		Priority:    PriorityMedium,
-		Type:        TypeIncident,
+		RecordClass: "incident",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -323,7 +323,7 @@ func TestRepository_List(t *testing.T) {
 			Title:       "List Ticket",
 			Description: "",
 			Priority:    PriorityMedium,
-			Type:        TypeIncident,
+			RecordClass: "incident",
 			RequesterID: fx.user.ID,
 		}, fx.tenant.ID)
 	}
@@ -343,7 +343,7 @@ func TestRepository_List_Pagination(t *testing.T) {
 			Title:       "Page Ticket",
 			Description: "",
 			Priority:    PriorityLow,
-			Type:        TypeIncident,
+			RecordClass: "incident",
 			RequesterID: fx.user.ID,
 		}, fx.tenant.ID)
 	}
@@ -362,7 +362,7 @@ func TestRepository_List_TenantIsolation(t *testing.T) {
 		Title:       "Tenant1 Ticket",
 		Description: "",
 		Priority:    PriorityMedium,
-		Type:        TypeIncident,
+		RecordClass: "incident",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -376,15 +376,15 @@ func TestRepository_List_ParentTypeAndOverdueFilters(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 	parent, err := fx.createTicket(fx.ctx, &CreateParams{
-		Title: "Parent", Priority: PriorityMedium, Type: TypeIncident, RequesterID: fx.user.ID,
+		Title: "Parent", Priority: PriorityMedium, RecordClass: "incident", RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 	require.NoError(t, err)
 	overdue, err := fx.createTicket(fx.ctx, &CreateParams{
-		Title: "Overdue problem", Priority: PriorityHigh, Type: TypeProblem, RequesterID: fx.user.ID, ParentTicketID: &parent.ID,
+		Title: "Overdue problem", Priority: PriorityHigh, RecordClass: "problem", RequesterID: fx.user.ID, ParentTicketID: &parent.ID,
 	}, fx.tenant.ID)
 	require.NoError(t, err)
 	resolved, err := fx.createTicket(fx.ctx, &CreateParams{
-		Title: "Resolved problem", Priority: PriorityHigh, Type: TypeProblem, RequesterID: fx.user.ID, ParentTicketID: &parent.ID,
+		Title: "Resolved problem", Priority: PriorityHigh, RecordClass: "problem", RequesterID: fx.user.ID, ParentTicketID: &parent.ID,
 	}, fx.tenant.ID)
 	require.NoError(t, err)
 	past := time.Now().Add(-time.Hour)
@@ -393,9 +393,9 @@ func TestRepository_List_ParentTypeAndOverdueFilters(t *testing.T) {
 	_, err = fx.client.Ticket.UpdateOneID(resolved.ID).SetSLAResolutionDeadline(past).SetStatus(string(StatusResolved)).Save(fx.ctx)
 	require.NoError(t, err)
 
-	problemType := TypeProblem
+	problemType := string("problem")
 	result, err := fx.repo.List(fx.ctx, fx.tenant.ID, &FilterParams{
-		Type: &problemType, ParentTicketID: &parent.ID, IsOverdue: true,
+		RecordClass: &problemType, ParentTicketID: &parent.ID, IsOverdue: true,
 	}, &base.QueryParams{})
 	require.NoError(t, err)
 	require.Len(t, result.Data, 1)
@@ -416,7 +416,7 @@ func TestRepository_BatchDelete(t *testing.T) {
 			Title:       "Batch Delete",
 			Description: "",
 			Priority:    PriorityLow,
-			Type:        TypeIncident,
+			RecordClass: "incident",
 			RequesterID: fx.user.ID,
 		}, fx.tenant.ID)
 		ids = append(ids, tkt.ID)
@@ -447,7 +447,7 @@ func TestRepository_BatchDelete_TenantIsolation(t *testing.T) {
 		Title:       "Batch Tenant",
 		Description: "",
 		Priority:    PriorityMedium,
-		Type:        TypeIncident,
+		RecordClass: "incident",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -469,7 +469,7 @@ func TestRepository_Exists(t *testing.T) {
 		Title:       "Exists Check",
 		Description: "",
 		Priority:    PriorityLow,
-		Type:        TypeIncident,
+		RecordClass: "incident",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -490,7 +490,7 @@ func TestRepository_Exists_WrongTenant(t *testing.T) {
 		Title:       "Exists Tenant",
 		Description: "",
 		Priority:    PriorityMedium,
-		Type:        TypeIncident,
+		RecordClass: "incident",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -511,7 +511,7 @@ func TestRepository_UpdateStatus(t *testing.T) {
 		Title:       "Status Update",
 		Description: "",
 		Priority:    PriorityMedium,
-		Type:        TypeIncident,
+		RecordClass: "incident",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -540,7 +540,7 @@ func TestRepository_AssignTicket(t *testing.T) {
 		Title:       "Assign Test",
 		Description: "",
 		Priority:    PriorityMedium,
-		Type:        TypeIncident,
+		RecordClass: "incident",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -571,7 +571,7 @@ func TestRepository_CountByStatus(t *testing.T) {
 			Title:       "Count Status",
 			Description: "",
 			Priority:    PriorityMedium,
-			Type:        TypeIncident,
+			RecordClass: "incident",
 			RequesterID: fx.user.ID,
 		}, fx.tenant.ID)
 		fx.repo.UpdateStatus(fx.ctx, tkt.ID, StatusOpen, fx.tenant.ID)
@@ -581,7 +581,7 @@ func TestRepository_CountByStatus(t *testing.T) {
 		Title:       "Count Status New",
 		Description: "",
 		Priority:    PriorityLow,
-		Type:        TypeIncident,
+		RecordClass: "incident",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -599,7 +599,7 @@ func TestRepository_CountByPriority(t *testing.T) {
 		Title:       "Priority Count",
 		Description: "",
 		Priority:    PriorityCritical,
-		Type:        TypeIncident,
+		RecordClass: "incident",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -620,7 +620,7 @@ func TestRepository_FindByAssignee(t *testing.T) {
 		Title:       "Assign Find",
 		Description: "",
 		Priority:    PriorityMedium,
-		Type:        TypeIncident,
+		RecordClass: "incident",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 	fx.repo.AssignTicket(fx.ctx, tkt.ID, fx.user.ID, fx.tenant.ID)
@@ -638,7 +638,7 @@ func TestRepository_FindByRequester(t *testing.T) {
 		Title:       "Requester Find",
 		Description: "",
 		Priority:    PriorityLow,
-		Type:        TypeIncident,
+		RecordClass: "incident",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -655,7 +655,7 @@ func TestRepository_FindByRequester_WrongTenant(t *testing.T) {
 		Title:       "Requester Tenant",
 		Description: "",
 		Priority:    PriorityMedium,
-		Type:        TypeIncident,
+		RecordClass: "incident",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -709,4 +709,30 @@ func TestTicketModel_IsFinalState(t *testing.T) {
 func TestTicketModel_StateError(t *testing.T) {
 	err := &StateError{CurrentStatus: StatusNew, Message: "cannot resolve ticket from current status"}
 	assert.Contains(t, err.Error(), "cannot resolve ticket")
+}
+
+func TestRepositoryCanonicalIdentityFilters(t *testing.T) {
+	fx := newRepoFixture(t)
+	defer fx.client.Close()
+	incident, err := fx.createTicket(fx.ctx, &CreateParams{Title: "incident", RecordClass: "incident", Priority: PriorityMedium, RequesterID: fx.user.ID}, fx.tenant.ID)
+	require.NoError(t, err)
+	generic, err := fx.createTicket(fx.ctx, &CreateParams{Title: "generic", RecordClass: "generic", Priority: PriorityMedium, RequesterID: fx.user.ID}, fx.tenant.ID)
+	require.NoError(t, err)
+	fx.client.Ticket.UpdateOneID(generic.ID).SetGenericSubtype("improvement").ExecX(fx.ctx)
+	for _, tt := range []struct {
+		class, subtype string
+		want           int
+	}{{"incident", "", incident.ID}, {"generic", "improvement", generic.ID}} {
+		filter := &FilterParams{RecordClass: &tt.class}
+		if tt.subtype != "" {
+			filter.GenericSubtype = &tt.subtype
+		}
+		result, err := fx.repo.List(fx.ctx, fx.tenant.ID, filter, &base.QueryParams{Page: 1, PageSize: 20})
+		require.NoError(t, err)
+		require.Len(t, result.Data, 1)
+		require.Equal(t, tt.want, result.Data[0].ID)
+	}
+	subtype := "improvement"
+	_, err = fx.repo.Update(fx.ctx, incident.ID, &UpdateParams{GenericSubtype: &subtype, Version: incident.Version}, fx.tenant.ID)
+	require.ErrorContains(t, err, "cannot mutate professional")
 }

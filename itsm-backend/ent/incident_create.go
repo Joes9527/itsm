@@ -84,12 +84,6 @@ func (_c *IncidentCreate) SetNillableUrgency(v *string) *IncidentCreate {
 	return _c
 }
 
-// SetIncidentNumber sets the "incident_number" field.
-func (_c *IncidentCreate) SetIncidentNumber(v string) *IncidentCreate {
-	_c.mutation.SetIncidentNumber(v)
-	return _c
-}
-
 // SetWorkItemID sets the "work_item_id" field.
 func (_c *IncidentCreate) SetWorkItemID(v int) *IncidentCreate {
 	_c.mutation.SetWorkItemID(v)
@@ -407,14 +401,6 @@ func (_c *IncidentCreate) check() error {
 			return &ValidationError{Name: "urgency", err: fmt.Errorf(`ent: validator failed for field "Incident.urgency": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.IncidentNumber(); !ok {
-		return &ValidationError{Name: "incident_number", err: errors.New(`ent: missing required field "Incident.incident_number"`)}
-	}
-	if v, ok := _c.mutation.IncidentNumber(); ok {
-		if err := incident.IncidentNumberValidator(v); err != nil {
-			return &ValidationError{Name: "incident_number", err: fmt.Errorf(`ent: validator failed for field "Incident.incident_number": %w`, err)}
-		}
-	}
 	if _, ok := _c.mutation.WorkItemID(); !ok {
 		return &ValidationError{Name: "work_item_id", err: errors.New(`ent: missing required field "Incident.work_item_id"`)}
 	}
@@ -475,10 +461,6 @@ func (_c *IncidentCreate) createSpec() (*Incident, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Urgency(); ok {
 		_spec.SetField(incident.FieldUrgency, field.TypeString, value)
 		_node.Urgency = value
-	}
-	if value, ok := _c.mutation.IncidentNumber(); ok {
-		_spec.SetField(incident.FieldIncidentNumber, field.TypeString, value)
-		_node.IncidentNumber = value
 	}
 	if value, ok := _c.mutation.ConfigurationItemID(); ok {
 		_spec.SetField(incident.FieldConfigurationItemID, field.TypeInt, value)
@@ -746,18 +728,6 @@ func (u *IncidentUpsert) SetUrgency(v string) *IncidentUpsert {
 // UpdateUrgency sets the "urgency" field to the value that was provided on create.
 func (u *IncidentUpsert) UpdateUrgency() *IncidentUpsert {
 	u.SetExcluded(incident.FieldUrgency)
-	return u
-}
-
-// SetIncidentNumber sets the "incident_number" field.
-func (u *IncidentUpsert) SetIncidentNumber(v string) *IncidentUpsert {
-	u.Set(incident.FieldIncidentNumber, v)
-	return u
-}
-
-// UpdateIncidentNumber sets the "incident_number" field to the value that was provided on create.
-func (u *IncidentUpsert) UpdateIncidentNumber() *IncidentUpsert {
-	u.SetExcluded(incident.FieldIncidentNumber)
 	return u
 }
 
@@ -1034,20 +1004,6 @@ func (u *IncidentUpsertOne) SetUrgency(v string) *IncidentUpsertOne {
 func (u *IncidentUpsertOne) UpdateUrgency() *IncidentUpsertOne {
 	return u.Update(func(s *IncidentUpsert) {
 		s.UpdateUrgency()
-	})
-}
-
-// SetIncidentNumber sets the "incident_number" field.
-func (u *IncidentUpsertOne) SetIncidentNumber(v string) *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.SetIncidentNumber(v)
-	})
-}
-
-// UpdateIncidentNumber sets the "incident_number" field to the value that was provided on create.
-func (u *IncidentUpsertOne) UpdateIncidentNumber() *IncidentUpsertOne {
-	return u.Update(func(s *IncidentUpsert) {
-		s.UpdateIncidentNumber()
 	})
 }
 
@@ -1518,20 +1474,6 @@ func (u *IncidentUpsertBulk) SetUrgency(v string) *IncidentUpsertBulk {
 func (u *IncidentUpsertBulk) UpdateUrgency() *IncidentUpsertBulk {
 	return u.Update(func(s *IncidentUpsert) {
 		s.UpdateUrgency()
-	})
-}
-
-// SetIncidentNumber sets the "incident_number" field.
-func (u *IncidentUpsertBulk) SetIncidentNumber(v string) *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.SetIncidentNumber(v)
-	})
-}
-
-// UpdateIncidentNumber sets the "incident_number" field to the value that was provided on create.
-func (u *IncidentUpsertBulk) UpdateIncidentNumber() *IncidentUpsertBulk {
-	return u.Update(func(s *IncidentUpsert) {
-		s.UpdateIncidentNumber()
 	})
 }
 

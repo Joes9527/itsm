@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"itsm-backend/common"
 	"strings"
 	"time"
 
@@ -239,7 +240,7 @@ func (s *RootCauseService) performAIAnalysis(ticketEntity *ent.Ticket) ([]dto.Ti
 - 提供 1-3 个最可能的根本原因
 - confidence 值为 0-1 之间的小数
 - category 必须是指定的值之一`, ticketEntity.TicketNumber, ticketEntity.Title, ticketEntity.Description,
-		ticketEntity.Priority, ticketEntity.Status, ticketEntity.Type, ticketEntity.CreatedAt.Format(time.RFC3339))
+		ticketEntity.Priority, ticketEntity.Status, common.WorkItemLegacyType(ticketEntity.RecordClass, ticketEntity.GenericSubtype), ticketEntity.CreatedAt.Format(time.RFC3339))
 
 	messages := []LLMMessage{
 		{Role: "system", Content: "你是一个专业的 IT 服务管理根因分析助手，擅长分析工单找出根本原因。"},
@@ -410,7 +411,7 @@ func (s *RootCauseService) SummarizeTicket(ctx context.Context, ticketID int, te
 	fallback := fmt.Sprintf(
 		"工单 #%s（%s）当前状态为 %s，优先级 %s。标题：%s。",
 		ticketEntity.TicketNumber,
-		ticketEntity.Type,
+		common.WorkItemLegacyType(ticketEntity.RecordClass, ticketEntity.GenericSubtype),
 		ticketEntity.Status,
 		ticketEntity.Priority,
 		ticketEntity.Title,

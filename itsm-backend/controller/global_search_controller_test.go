@@ -61,7 +61,6 @@ func TestGlobalSearch_SearchCaseInsensitiveAndNumber(t *testing.T) {
 		SetTitle("VPN Access Failure").
 		SetDescription("Cannot connect to gateway").
 		SetPriority("medium").
-		SetType("incident").
 		SetStatus("open").
 		SetTicketNumber("TKT-GLOBAL-001").
 		SetTenantID(tenant.ID).
@@ -71,7 +70,6 @@ func TestGlobalSearch_SearchCaseInsensitiveAndNumber(t *testing.T) {
 
 	incidentWorkItem, err := client.Ticket.Create().
 		SetTitle("Global search incident").
-		SetType("incident").
 		SetRecordClass("incident").
 		SetTicketNumber("TKT-GLOBAL-002").
 		SetTenantID(tenant.ID).
@@ -80,9 +78,7 @@ func TestGlobalSearch_SearchCaseInsensitiveAndNumber(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = client.Incident.Create().
-		SetType("incident").
 		SetSeverity("high").
-		SetIncidentNumber("INC-GLOBAL-002").
 		SetWorkItemID(incidentWorkItem.ID).
 		Save(t.Context())
 	require.NoError(t, err)
@@ -95,7 +91,7 @@ func TestGlobalSearch_SearchCaseInsensitiveAndNumber(t *testing.T) {
 	}{
 		{name: "case insensitive title", keyword: "vpn access", expectedType: "ticket", expectedNo: "TKT-GLOBAL-001"},
 		{name: "case insensitive ticket number", keyword: "tkt-global", expectedType: "ticket", expectedNo: "TKT-GLOBAL-001"},
-		{name: "case insensitive incident number", keyword: "inc-global", expectedType: "incident", expectedNo: "INC-GLOBAL-002"},
+		{name: "case insensitive incident number", keyword: "tkt-global-002", expectedType: "incident", expectedNo: "TKT-GLOBAL-002"},
 	}
 
 	for _, tt := range tests {
@@ -118,8 +114,13 @@ func TestGlobalSearch_SearchCaseInsensitiveAndNumber(t *testing.T) {
 			var searchResp SearchResponse
 			require.NoError(t, json.Unmarshal(dataBytes, &searchResp))
 			require.NotEmpty(t, searchResp.Results)
-			require.Equal(t, tt.expectedType, searchResp.Results[0].Type)
-			require.Equal(t, tt.expectedNo, searchResp.Results[0].Number)
+			matched := false
+			for _, result := range searchResp.Results {
+				if result.Type == tt.expectedType && result.Number == tt.expectedNo {
+					matched = true
+				}
+			}
+			require.True(t, matched, "search must project the owning WorkItem number for %s", tt.expectedType)
 		})
 	}
 }

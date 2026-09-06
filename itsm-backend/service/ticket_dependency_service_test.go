@@ -49,7 +49,6 @@ func createDependencyTestTicket(ctx context.Context, client *ent.Client, tenantI
 		SetTitle("Dependency Test Ticket " + number).
 		SetDescription("desc").
 		SetPriority("medium").
-		SetType("incident").
 		SetStatus("open").
 		SetTicketNumber(number).
 		SetTenantID(tenantID).

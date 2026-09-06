@@ -29,7 +29,7 @@ func TestBaseWriterSupportsPreparedClassesWithoutLifecycleDefaults(t *testing.T)
 			require.Equal(t, "prepared-domain-state", item.Status)
 			require.Equal(t, "prepared-priority", item.Priority)
 			require.Equal(t, "TKT-TEST-000001", item.TicketNumber)
-			require.Empty(t, item.Type, "legacy class alias must not be synthesized")
+			require.Equal(t, class, item.RecordClass)
 		})
 	}
 }

@@ -447,6 +447,7 @@ var RegisteredMigrations = []Migration{
 	{Version: "024_incident_rule_action_receipts", Description: "Freeze creation rule decisions and commit action receipts with domain effects", RollbackSQL: incidentRuleActionReceiptsDevelopmentResetSQL},
 	{Version: "025_email_attachment_source_identity", Description: "Persist scoped inbound attachment identity for recoverable delivery", RollbackSQL: emailAttachmentSourceIdentityDevelopmentResetSQL},
 	{Version: "026_intake_actor_provenance", Description: "Preserve immutable native actor provenance for Intake and committed tenant policy effects", RollbackSQL: intakeActorProvenanceDevelopmentResetSQL},
+	{Version: "027_work_item_identity_field_retirement", Description: "Retire duplicate Ticket type and Incident number identity fields"},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -1097,6 +1098,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
 	case "021_add_callback_optional_declared":
 		return `ALTER TABLE process_callback_outboxes
     ADD COLUMN IF NOT EXISTS optional_declared boolean NOT NULL DEFAULT false;`
+	case "027_work_item_identity_field_retirement":
+		return workItemIdentityRetirementSQL
 	case "026_intake_actor_provenance":
 		return intakeActorProvenanceSQL
 	case "025_email_attachment_source_identity":

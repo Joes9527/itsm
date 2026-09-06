@@ -74,7 +74,6 @@ func TestEscalationService_ProcessEscalations_WithTickets(t *testing.T) {
 		SetTitle("Test Ticket").
 		SetDescription("Test description").
 		SetPriority("medium").
-		SetType("incident").
 		SetStatus("open").
 		SetTicketNumber("TKT-ESC-001").
 		SetTenantID(testTenant.ID).
@@ -105,7 +104,6 @@ func TestEscalationService_ProcessLongPendingTickets(t *testing.T) {
 		SetTitle("Old Pending Ticket").
 		SetDescription("This ticket has been pending for a long time").
 		SetPriority("high").
-		SetType("incident").
 		SetStatus("open").
 		SetTicketNumber("TKT-PEND-001").
 		SetTenantID(testTenant.ID).
@@ -136,7 +134,6 @@ func TestEscalationService_ProcessUnassignedTickets(t *testing.T) {
 		SetTitle("Unassigned Ticket").
 		SetDescription("This ticket has no assignee").
 		SetPriority("medium").
-		SetType("incident").
 		SetStatus("open").
 		SetTicketNumber("TKT-UNASSIGN-001").
 		SetTenantID(testTenant.ID).
@@ -169,7 +166,6 @@ func TestEscalationService_EscalateTicket(t *testing.T) {
 		SetTitle("Ticket to Escalate").
 		SetDescription("This ticket needs to be escalated").
 		SetPriority("high").
-		SetType("incident").
 		SetStatus("open").
 		SetTicketNumber("TKT-ESCALATE-001").
 		SetTenantID(testTenant.ID).

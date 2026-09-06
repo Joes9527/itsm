@@ -657,7 +657,6 @@ func TestTicketService_ListTickets_DataScope(t *testing.T) {
 		SetDescription("desc").
 		SetPriority("medium").
 		SetStatus("open").
-		SetType("incident").
 		SetRequesterID(alice.ID).
 		SetTenantID(testTenant.ID).
 		Save(ctx)
@@ -669,7 +668,6 @@ func TestTicketService_ListTickets_DataScope(t *testing.T) {
 		SetDescription("desc").
 		SetPriority("medium").
 		SetStatus("open").
-		SetType("incident").
 		SetRequesterID(alice.ID).
 		SetTenantID(testTenant.ID).
 		Save(ctx)
@@ -681,7 +679,6 @@ func TestTicketService_ListTickets_DataScope(t *testing.T) {
 		SetDescription("salary info").
 		SetPriority("high").
 		SetStatus("open").
-		SetType("incident").
 		SetRequesterID(bob.ID).
 		SetTenantID(testTenant.ID).
 		Save(ctx)
@@ -694,7 +691,6 @@ func TestTicketService_ListTickets_DataScope(t *testing.T) {
 		SetDescription("assigned to alice").
 		SetPriority("medium").
 		SetStatus("open").
-		SetType("incident").
 		SetRequesterID(bob.ID).
 		SetAssigneeID(alice.ID).
 		SetTenantID(testTenant.ID).
@@ -956,15 +952,18 @@ func TestTicketService_UpdateTicketPersistsTypeCategoryAndTags(t *testing.T) {
 	require.NoError(t, err)
 	service := NewTicketServiceForTest(client, zaptest.NewLogger(t).Sugar())
 	created, err := service.SubmitCreation(ctx, &dto.CreateTicketRequest{
-		Title: "Update contract", Description: "before", Priority: "medium", RequesterID: user.ID,
+		Title: "Update contract", Description: "before", Type: "ticket", Priority: "medium", RequesterID: user.ID,
 	}, tenant.ID)
 	require.NoError(t, err)
 
 	updated, err := service.UpdateTicket(ctx, created.ID, &dto.UpdateTicketRequest{
-		Type: "problem", CategoryID: &category.ID, Tags: []string{"backend", "backend", "customer"}, Version: created.Version,
+		Type: "improvement", CategoryID: &category.ID, Tags: []string{"backend", "backend", "customer"}, Version: created.Version,
 	}, tenant.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "problem", string(updated.Type))
+	assert.Equal(t, "improvement", updated.GenericSubtype)
+	require.Equal(t, "generic", updated.RecordClass)
+	_, mutationErr := service.UpdateTicket(ctx, created.ID, &dto.UpdateTicketRequest{Type: "incident", Version: updated.Version}, tenant.ID)
+	require.ErrorContains(t, mutationErr, "cannot change professional class")
 	entity, err := client.Ticket.Query().Where(entTicket.IDEQ(created.ID)).WithTags().Only(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, category.ID, entity.CategoryID)

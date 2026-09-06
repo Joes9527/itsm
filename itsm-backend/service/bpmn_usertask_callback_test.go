@@ -75,7 +75,6 @@ func createUserTaskCallbackChange(t *testing.T, client *ent.Client, ctx context.
 		SetTitle("User task callback change").
 		SetStatus("draft").
 		SetTicketNumber(number).
-		SetType("change").
 		SetRecordClass("change_request").
 		SetRequesterID(requesterID).
 		SetTenantID(tenantID).
@@ -173,7 +172,7 @@ func TestUserTaskMetadataPersistsOnlyInImmutableDescriptor(t *testing.T) {
 	// 不应该出现这两个 key（否则回调会对无关流程无条件触发）。
 	requestWorkItem := client.Ticket.Create().
 		SetTitle("Service request callback").SetTicketNumber("T-USER-CALLBACK-SR-1").
-		SetType("service_request").SetRecordClass("service_request_item").
+		SetRecordClass("service_request_item").
 		SetRequesterID(scope.UserID).SetTenantID(tenantID).SaveX(ctx)
 	client.ServiceRequest.Create().SetTenantID(tenantID).SetTicketID(requestWorkItem.ID).
 		SetCatalogID(1).SetRequesterID(scope.UserID).SaveX(ctx)

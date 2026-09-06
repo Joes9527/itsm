@@ -342,8 +342,6 @@ func NewApplication() *Application {
 		SLAService:            ticketSLAService,
 		ConnectorManager:      connectorManager,
 	})
-	// SequenceService is retained solely for Incident's professional incident_number;
-	// WorkItem numbering is owned by numberAllocator above.
 
 	// MSP 服务初始化
 	mspAllocationService := service.NewMSPAllocationService(client, sugar)

@@ -142,7 +142,6 @@ func setupWorkItemRBACTestTicket(t *testing.T, client *ent.Client, tenantID int,
 
 	tk, err := client.Ticket.Create().
 		SetTitle("test ticket").
-		SetType("incident").
 		SetRecordClass(recordClass).
 		SetPriority("medium").
 		SetTicketNumber(fmt.Sprintf("TKT-TEST-%s-%d", recordClass, seq)).

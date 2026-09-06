@@ -88,20 +88,6 @@ func (_u *TicketUpdate) SetNillableStatus(v *string) *TicketUpdate {
 	return _u
 }
 
-// SetType sets the "type" field.
-func (_u *TicketUpdate) SetType(v string) *TicketUpdate {
-	_u.mutation.SetType(v)
-	return _u
-}
-
-// SetNillableType sets the "type" field if the given value is not nil.
-func (_u *TicketUpdate) SetNillableType(v *string) *TicketUpdate {
-	if v != nil {
-		_u.SetType(*v)
-	}
-	return _u
-}
-
 // SetGenericSubtype sets the "generic_subtype" field.
 func (_u *TicketUpdate) SetGenericSubtype(v string) *TicketUpdate {
 	_u.mutation.SetGenericSubtype(v)
@@ -1375,9 +1361,6 @@ func (_u *TicketUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(ticket.FieldStatus, field.TypeString, value)
 	}
-	if value, ok := _u.mutation.GetType(); ok {
-		_spec.SetField(ticket.FieldType, field.TypeString, value)
-	}
 	if value, ok := _u.mutation.GenericSubtype(); ok {
 		_spec.SetField(ticket.FieldGenericSubtype, field.TypeString, value)
 	}
@@ -2240,20 +2223,6 @@ func (_u *TicketUpdateOne) SetStatus(v string) *TicketUpdateOne {
 func (_u *TicketUpdateOne) SetNillableStatus(v *string) *TicketUpdateOne {
 	if v != nil {
 		_u.SetStatus(*v)
-	}
-	return _u
-}
-
-// SetType sets the "type" field.
-func (_u *TicketUpdateOne) SetType(v string) *TicketUpdateOne {
-	_u.mutation.SetType(v)
-	return _u
-}
-
-// SetNillableType sets the "type" field if the given value is not nil.
-func (_u *TicketUpdateOne) SetNillableType(v *string) *TicketUpdateOne {
-	if v != nil {
-		_u.SetType(*v)
 	}
 	return _u
 }
@@ -3560,9 +3529,6 @@ func (_u *TicketUpdateOne) sqlSave(ctx context.Context) (_node *Ticket, err erro
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(ticket.FieldStatus, field.TypeString, value)
-	}
-	if value, ok := _u.mutation.GetType(); ok {
-		_spec.SetField(ticket.FieldType, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.GenericSubtype(); ok {
 		_spec.SetField(ticket.FieldGenericSubtype, field.TypeString, value)
