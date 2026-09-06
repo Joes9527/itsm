@@ -124,9 +124,9 @@ func TestCreateFixture(t *testing.T) {
 // Removing any accepted field from canonical serialization must fail this test.
 func TestEveryProfessionalFieldContributesToDigest(t *testing.T) {
 	bodies := map[string]string{
-		"generic":              `{"generic":{"type":"improvement","typeId":"3","source":"manual","category":"ops","templateId":2,"parentTicketId":3,"tagIds":[4],"workflowDefinitionKey":"process"}}`,
+		"generic":              `{"generic":{"type":"improvement","typeId":"3","source":"manual","category":"ops"}}`,
 		"problem":              `{"problem":{"category":"ops","rootCause":"fault","impact":"high"}}`,
-		"change_request":       `{"change":{"justification":"reason","type":"normal","impactScope":"service","riskLevel":"low","plannedStartDate":"2026-09-06T00:00:00Z","plannedEndDate":"2026-09-07T00:00:00Z","implementationPlan":"apply","rollbackPlan":"undo","affectedCis":["2"],"relatedTickets":[3]}}`,
+		"change_request":       `{"change":{"category":"ops","justification":"reason","type":"normal","impactScope":"service","riskLevel":"low","plannedStartDate":"2026-09-06T00:00:00Z","plannedEndDate":"2026-09-07T00:00:00Z","implementationPlan":"apply","rollbackPlan":"undo","affectedCis":["2"],"relatedTickets":[3]}}`,
 		"incident":             `{"incident":{"type":"incident","severity":"high","impact":"medium","urgency":"low","category":"ops","subcategory":"network","detectedAt":"2026-09-05T00:00:00Z","source":"manual","metadata":{"deep":{"items":["a"]}},"impactAnalysis":{"businessImpact":{"affectedUsers":2,"revenueImpact":3.5,"serviceAvailability":0.9},"technicalImpact":"outage","affectedUsers":4,"timeImpact":{"isOverdue":true,"hoursSinceCreation":5,"responseDeadline":"2026-09-06T00:00:00Z","resolutionDeadline":"2026-09-07T00:00:00Z"}}}}`,
 		"service_request_item": `{"serviceRequest":{"costCenter":"it","dataClassification":"internal","needsPublicIp":true,"sourceIpWhitelist":["192.0.2.1"],"expireAt":"2026-10-05T00:00:00Z","complianceAck":true,"contactName":"Fixture","contactEmail":"fixture@example.invalid","quantity":2,"expectedAt":"2026-09-06T00:00:00Z"}}`,
 	}

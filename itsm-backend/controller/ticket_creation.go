@@ -51,7 +51,7 @@ func ticketCreationCommand(req dto.CreateTicketRequest) (creation.CreateWorkItem
 		command.Problem = &creation.ProblemInput{Category: req.Category}
 	case "change":
 		command.RecordClass = creation.RecordClassChangeRequest
-		command.Change = &creation.ChangeInput{}
+		command.Change = &creation.ChangeInput{Category: req.Category}
 	case "service_request":
 		return command, intakehttp.Invalid("type", "service_request creation requires the catalog creation contract and confirmed revisions")
 	default:
@@ -60,34 +60,22 @@ func ticketCreationCommand(req dto.CreateTicketRequest) (creation.CreateWorkItem
 	if command.RecordClass != creation.RecordClassGeneric && req.TypeID != "" {
 		return command, intakehttp.Invalid("typeId", "professional subtype metadata must use its owning creation contract")
 	}
-	if command.RecordClass == creation.RecordClassChangeRequest && req.Category != "" && req.CategoryID == nil {
-		return command, intakehttp.Invalid("category", "change creation requires categoryId for shared classification")
-	}
 	command.IntakeKind = command.RecordClass
-	values, defs, preset, err := ticketCreationFields(req.FormFields)
+	values, defs, err := ticketCreationFields(req.FormFields)
 	if err != nil {
 		return command, err
 	}
 	command.FormValues = values
 	command.AdHocFields = defs
-	command.FormPresetID = preset
 	return command, nil
 }
-func ticketCreationFields(fields map[string]any) (map[string]any, []creation.AdHocFieldDefinition, string, error) {
-	fail := func(field string) (map[string]any, []creation.AdHocFieldDefinition, string, error) {
-		return nil, nil, "", intakehttp.Invalid("formFields."+field, "invalid or unsupported form field envelope")
+func ticketCreationFields(fields map[string]any) (map[string]any, []creation.AdHocFieldDefinition, error) {
+	fail := func(field string) (map[string]any, []creation.AdHocFieldDefinition, error) {
+		return nil, nil, intakehttp.Invalid("formFields."+field, "invalid or unsupported form field envelope")
 	}
 	for name := range fields {
-		if name != "values" && name != "fieldDefs" && name != "presetTypeId" {
+		if name != "values" && name != "fieldDefs" {
 			return fail(name)
-		}
-	}
-	preset := ""
-	if raw, ok := fields["presetTypeId"]; ok {
-		var valid bool
-		preset, valid = raw.(string)
-		if !valid {
-			return fail("presetTypeId")
 		}
 	}
 	values := map[string]any{}
@@ -139,5 +127,5 @@ func ticketCreationFields(fields map[string]any) (map[string]any, []creation.AdH
 			defs = append(defs, creation.AdHocFieldDefinition{Name: name, Label: label})
 		}
 	}
-	return values, defs, preset, nil
+	return values, defs, nil
 }

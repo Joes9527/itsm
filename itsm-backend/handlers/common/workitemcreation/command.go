@@ -113,6 +113,7 @@ type IncidentInput struct {
 }
 
 type ChangeInput struct {
+	Category             string   `json:"category,omitempty"`
 	StandardTemplateID   *int     `json:"standardTemplateId,omitempty"`
 	RelatedTicketNumbers []string `json:"relatedTicketNumbers,omitempty"`
 	Justification        string   `json:"justification,omitempty"`
@@ -134,7 +135,6 @@ type AdHocFieldDefinition struct {
 	Label string `json:"label"`
 }
 type CreateWorkItemCommand struct {
-	FormPresetID          string                 `json:"formPresetId,omitempty"`
 	TemplateID            *int                   `json:"templateId,omitempty"`
 	ParentTicketID        *int                   `json:"parentTicketId,omitempty"`
 	TagIDs                []int                  `json:"tagIds,omitempty"`

@@ -2,6 +2,7 @@ package intake
 
 import (
 	"context"
+	"encoding/json"
 	"itsm-backend/authorization"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
@@ -114,12 +115,20 @@ func resolveSharedCreationReferences(ctx context.Context, tx *ent.Tx, identity c
 		if err := authorization.RequireCurrentPermission(ctx, tx, identity, "ticket", "read"); err != nil {
 			return err
 		}
-		exists, err := tx.TicketTemplate.Query().Where(tickettemplate.IDEQ(*command.TemplateID), tickettemplate.TenantIDEQ(identity.TenantID), tickettemplate.IsActiveEQ(true)).Exist(ctx)
+		template, err := tx.TicketTemplate.Query().Where(tickettemplate.IDEQ(*command.TemplateID), tickettemplate.TenantIDEQ(identity.TenantID), tickettemplate.IsActiveEQ(true)).Only(ctx)
+		if ent.IsNotFound(err) {
+			return creation.NewReferenceNotFound("template is unavailable", nil)
+		}
 		if err != nil {
 			return creation.NewInfrastructureUnavailable("could not resolve template", err)
 		}
-		if !exists {
-			return creation.NewReferenceNotFound("template is unavailable", nil)
+		// Legacy JSON steps have no registered executor. Only an absent/null/empty
+		// list delegates to the authoritative process-binding resolver.
+		if len(template.WorkflowSteps) > 0 {
+			var steps []json.RawMessage
+			if err := json.Unmarshal(template.WorkflowSteps, &steps); err != nil || len(steps) > 0 {
+				return creation.NewWorkflowBindingRequired("ticket template workflow_steps are unsupported; configure a process binding", err)
+			}
 		}
 	}
 	if command.ParentTicketID != nil {

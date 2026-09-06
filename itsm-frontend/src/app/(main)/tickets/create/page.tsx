@@ -11,6 +11,7 @@ import {
   ArrowLeft, FileText, ChevronRight, Sparkles, FolderOpen,
 } from 'lucide-react';
 import { TicketApi } from '@/lib/api/ticket-api';
+import { buildTicketFormFields } from './ticket-form-fields';
 import { TicketCategoryApi, type TicketCategory } from '@/lib/api/ticket-category-api';
 import { useI18n } from '@/lib/i18n';
 import { httpClient } from '@/lib/api/http-client';
@@ -371,7 +372,6 @@ export default function CreateTicketPage() {
         });
       }
 
-      const isDbTemplate = !!selectedTemplate;
       const templateId = selectedTemplate?.id;
 
       const created = await TicketApi.createTicket({
@@ -382,18 +382,7 @@ export default function CreateTicketPage() {
         category: values.category || selectedCategoryCode || (activeSelection ? (selectedTemplate?.category || selectedPreset?.category) : undefined),
         templateId,
         formFields: activeSelection
-          ? {
-              presetTypeId: isDbTemplate ? `db_${selectedTemplate?.id}` : selectedPreset?.id,
-              values: customFieldValues,
-              ...(isDbTemplate
-                ? {}
-                : {
-                    fieldDefs: activeFields.map(f => ({
-                      name: f.name,
-                      label: f.label,
-                    })),
-                  }),
-            }
+          ? buildTicketFormFields(activeFields, customFieldValues, templateId)
           : undefined,
         workflowDefinitionKey: selectedPreset?.workflowTemplateId,
       });

@@ -19,6 +19,9 @@ func (*TicketCategoryService) ResolveCreationClassification(ctx context.Context,
 	if command.Problem != nil {
 		category = command.Problem.Category
 	}
+	if command.Change != nil {
+		category = command.Change.Category
+	}
 	if command.Generic != nil {
 		category = command.Generic.Category
 	}

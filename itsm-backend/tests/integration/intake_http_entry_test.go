@@ -144,7 +144,7 @@ func TestIntakeHTTPManualTicketSubtaskAndProfessionalClass(t *testing.T) {
 	ctx := context.Background()
 	handler := controller.NewTicketController(nil, nil, nil, f.client, zap.NewNop().Sugar())
 	handler.SetCreationApplication(f.app)
-	body := `{"title":"Manual task","description":"Manual request description","priority":"medium","type":"improvement","formFields":{"presetTypeId":"custom-entry","fieldDefs":[{"name":"amount","label":"Amount"}],"values":[{"name":"amount","value":9007199254740993.125}]}}`
+	body := `{"title":"Manual task","description":"Manual request description","priority":"medium","type":"improvement","formFields":{"fieldDefs":[{"name":"amount","label":"Amount"}],"values":[{"name":"amount","value":9007199254740993.125}]}}`
 	w, result := intakeHTTP(t, f, handler.CreateTicket, body, "manual-http", nil)
 	require.Equal(t, 201, w.Code, w.Body.String())
 	require.Equal(t, "generic", result.RecordClass)

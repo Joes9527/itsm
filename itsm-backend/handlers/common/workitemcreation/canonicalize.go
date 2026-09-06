@@ -196,6 +196,7 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 	}
 	if n.Change != nil {
 		c := n.Change
+		c.Category = strings.TrimSpace(c.Category)
 		if c.StandardTemplateID != nil && *c.StandardTemplateID <= 0 {
 			return n, "", invalid("change.standardTemplateId", "must be positive")
 		}

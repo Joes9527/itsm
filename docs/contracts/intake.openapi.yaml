@@ -455,6 +455,9 @@ components:
       type: object
       additionalProperties: false
       properties:
+        category:
+          type: string
+          description: Tenant-scoped category name; explicit cti.categoryId takes precedence.
         justification:
           type: string
         type:
@@ -564,6 +567,11 @@ components:
         templateId:
           type: integer
           minimum: 1
+          description: >-
+            Tenant-scoped database template. Legacy workflow_steps must be absent,
+            null, or an empty list; other definitions fail with WorkflowBindingRequired.
+            Process bindings remain authoritative. Completed replays retain the
+            original resolved workflow snapshot.
         parentTicketId:
           type: integer
           minimum: 1
@@ -572,9 +580,6 @@ components:
           items: *id009
         workflowDefinitionKey:
           type: string
-        formPresetId:
-          type: string
-          description: Internal form preset metadata retained in the canonical submission.
         adHocFields:
           type: array
           maxItems: 100

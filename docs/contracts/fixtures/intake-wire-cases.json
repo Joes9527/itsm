@@ -83,5 +83,15 @@
     "name": "removed Generic shared alias",
     "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"generic\": {\"templateId\": 1}}",
     "valid": false
+  },
+  {
+    "name": "removed form preset instruction",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"generic\", \"recordClass\": \"generic\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"formPresetId\": \"vpn\"}",
+    "valid": false
+  },
+  {
+    "name": "change category name",
+    "body": "{\"idempotencyKey\": \"fixture\", \"intakeKind\": \"change_request\", \"recordClass\": \"change_request\", \"confirmation\": \"confirmed\", \"title\": \"Fixture\", \"change\": {\"category\": \"Network\"}}",
+    "valid": true
   }
 ]
