@@ -20,7 +20,7 @@ func TestService_Create_SavesFieldDefinitions(t *testing.T) {
 	ctx := context.Background()
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
 	fields := []service.FieldDefinitionInput{
 		{Name: "office_location", Label: "办公地点", FieldType: "text", Required: true, SortOrder: 0},
@@ -52,7 +52,7 @@ func TestService_Create_NoClient_SkipsFieldDefinitions(t *testing.T) {
 
 	repo := NewEntRepository(client)
 	// client == nil：不接入字段定义（沿用现有可选 client 的兼容路径）
-	svc := NewService(repo, nil, zaptest.NewLogger(t).Sugar())
+	svc := NewService(repo, nil, zaptest.NewLogger(t).Sugar(), nil)
 
 	fields := []service.FieldDefinitionInput{
 		{Name: "office_location", Label: "办公地点", FieldType: "text"},
@@ -71,7 +71,7 @@ func TestService_Update_NilFields_LeavesExistingDefinitionsUntouched(t *testing.
 	ctx := context.Background()
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
 	created, err := svc.Create(ctx, "VM Service", "it_service", "virtual machine", 1, 1, "enabled", 0, 0, []service.FieldDefinitionInput{
 		{Name: "office_location", Label: "办公地点", FieldType: "text"},
@@ -95,7 +95,7 @@ func TestService_Update_NonNilFields_ReplacesDefinitions(t *testing.T) {
 	ctx := context.Background()
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
 	created, err := svc.Create(ctx, "VM Service", "it_service", "virtual machine", 1, 1, "enabled", 0, 0, []service.FieldDefinitionInput{
 		{Name: "office_location", Label: "办公地点", FieldType: "text"},
@@ -132,7 +132,7 @@ func TestService_Create_FieldDefinitions_CrossTenantIsolation(t *testing.T) {
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
 	createdA, err := svc.Create(ctx, "VM Service A", "it_service", "tenant A catalog", 1, tenantA.ID, "enabled", 0, 0, []service.FieldDefinitionInput{
 		{Name: "office_location", Label: "办公地点", FieldType: "text", Required: true},
@@ -164,7 +164,7 @@ func TestService_CreateAndGet_PersistsFieldDefinitions(t *testing.T) {
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
 	created, err := svc.Create(ctx, "云主机申请", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
 		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text", Required: true}}, "", "")
@@ -186,7 +186,7 @@ func TestService_List_BatchLoadsFieldDefinitionsPerCatalog(t *testing.T) {
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
 	c1, err := svc.Create(ctx, "云主机申请", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
 		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", "")
@@ -217,7 +217,7 @@ func TestService_Delete_DisablesFieldDefinitions(t *testing.T) {
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
 	created, err := svc.Create(ctx, "云主机申请", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
 		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", "")
@@ -254,7 +254,7 @@ func TestService_Search_PopulatesFieldDefinitions(t *testing.T) {
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
 	created, err := svc.Create(ctx, "云主机申请搜索测试", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
 		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", "")
@@ -279,7 +279,7 @@ func TestService_Get_TenantIsolation_NoCrossTenantFieldLeak(t *testing.T) {
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
 	catalogA, err := svc.Create(ctx, "服务A", "分类", "desc", 1, tenantA.ID, "enabled", 0, 0,
 		[]service.FieldDefinitionInput{{Name: "secretField", Label: "租户A专属字段", FieldType: "text"}}, "", "")

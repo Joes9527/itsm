@@ -60,7 +60,7 @@ func TestAuthoritativeProfessionalGraph(t *testing.T) {
 			}
 			business := map[string]string{"generic": "ticket", "problem": "problem", "incident": "incident", "change_request": "change", "service_request_item": "service_request"}[class]
 			client.ProcessBinding.Create().SetTenantID(identity.TenantID).SetBusinessType(business).SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(context.Background())
-			catalogOwner := cataloghandler.NewService(nil, client, zap.NewNop().Sugar())
+			catalogOwner := cataloghandler.NewService(nil, client, zap.NewNop().Sugar(), nil)
 			app.resolver = NewResolver(catalogOwner, service.NewProcessBindingService(client), service.NewConfigurationItemService(client, zap.NewNop().Sugar(), nil, nil), service.NewTicketCategoryService(client))
 			if command.CatalogItemID != nil {
 				tx, err := client.Tx(context.Background())
@@ -193,7 +193,7 @@ func TestRoutingConsumesDomainEffectiveValues(t *testing.T) {
 			logger := zap.NewNop().Sugar()
 			command.RecordClass, command.IntakeKind = class, class
 			app.registry = NewCreatorRegistry()
-			app.resolver = NewResolver(cataloghandler.NewService(nil, client, logger), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
+			app.resolver = NewResolver(cataloghandler.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
 			business, subtype, priority := "ticket", "improvement", "medium"
 			conditions := map[string]any{"no_process": true, "priority": "medium"}
 			typeID := ""

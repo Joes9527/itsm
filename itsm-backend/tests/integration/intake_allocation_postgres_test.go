@@ -65,7 +65,7 @@ func TestPostgresIntakeInsertFailureRollsBackAllocationAndReusesNumber(t *testin
 	logger := zap.NewNop().Sugar()
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(&service.TicketService{}))
-	resolver := intake.NewResolver(catalogdomain.NewService(nil, client, logger), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
+	resolver := intake.NewResolver(catalogdomain.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
 	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
 	identity := creation.Identity{TenantID: tenant.ID, ActorID: actor.ID, RequesterID: actor.ID, Role: actor.Role, Channel: "itsm_web"}
 	command := creation.CreateWorkItemCommand{RecordClass: "generic", IntakeKind: "generic", Confirmation: "confirmed", IdempotencyKey: "collision", Title: "Fails after number allocation", Description: "The existing first number forces a real PostgreSQL unique violation"}

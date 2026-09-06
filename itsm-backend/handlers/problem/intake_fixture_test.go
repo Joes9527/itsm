@@ -42,7 +42,7 @@ func NewService(repo *EntRepository, logger *zap.SugaredLogger) *Service {
 	if err := registry.Register(owner); err != nil {
 		panic(err)
 	}
-	resolver := intake.NewResolver(service_catalog.NewService(nil, repo.client, logger), service.NewProcessBindingService(repo.client), service.NewConfigurationItemService(repo.client, logger, nil, nil), service.NewTicketCategoryService(repo.client))
+	resolver := intake.NewResolver(service_catalog.NewService(nil, repo.client, logger, nil), service.NewProcessBindingService(repo.client), service.NewConfigurationItemService(repo.client, logger, nil, nil), service.NewTicketCategoryService(repo.client))
 	app := intake.NewService(repo.client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
 	return &Service{owner, app, repo.client}
 }

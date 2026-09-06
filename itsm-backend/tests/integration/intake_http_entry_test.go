@@ -169,7 +169,7 @@ func TestIntakeHTTPCatalogTargetsUseConfirmedRevisions(t *testing.T) {
 			f := newUnifiedIntakeFixture(t)
 			ctx := context.Background()
 			catalog := f.client.ServiceCatalog.Create().SetTenantID(f.identity.TenantID).SetName("Catalog service").SetCategory("general").SetDescription("Configured service").SetTargetClass(class).SetRequiresApproval(false).SetStatus("enabled").SaveX(ctx)
-			owner := catalogdomain.NewService(nil, f.client, zap.NewNop().Sugar())
+			owner := catalogdomain.NewService(nil, f.client, zap.NewNop().Sugar(), nil)
 			tx, err := f.client.Tx(ctx)
 			require.NoError(t, err)
 			resolved, _, err := owner.ResolveCreationCatalog(ctx, tx, f.identity, catalog.ID)

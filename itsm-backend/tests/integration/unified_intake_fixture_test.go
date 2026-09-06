@@ -52,7 +52,7 @@ func newUnifiedIntakeFixture(t *testing.T, ticketOwners ...func(*ent.Client, *za
 	for _, owner := range []creation.ProfessionalCreator{genericOwner, service.NewIncidentService(client, logger), problemdomain.NewService(nil, logger), changedomain.NewService(nil, client, logger), requestdomain.NewService(nil, client, logger, service.NewApprovalChainResolver(client, logger))} {
 		require.NoError(t, registry.Register(owner))
 	}
-	resolver := intake.NewResolver(catalogdomain.NewService(nil, client, logger), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
+	resolver := intake.NewResolver(catalogdomain.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
 	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(allocator), sameTransactionDirectory{})
 	return &unifiedIntakeFixture{client, app, creation.Identity{TenantID: tenant.ID, ActorID: actor.ID, RequesterID: actor.ID, Role: actor.Role, Channel: "http"}, creation.CreateWorkItemCommand{RecordClass: "generic", IntakeKind: "generic", Confirmation: "confirmed", Title: "VPN access", IdempotencyKey: "one"}}
 }

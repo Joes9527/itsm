@@ -140,7 +140,7 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 	bpmnController := controller.NewBPMNWorkflowController(engine, versionSvc)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, logger)
+	scService := service_catalog.NewService(scRepo, client, logger, sameTransactionDirectory{})
 	scHandler := service_catalog.NewHandler(scService)
 
 	srRepo := service_request.NewEntRepository(client)

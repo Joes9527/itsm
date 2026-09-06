@@ -114,7 +114,7 @@ func newConversionControllerFixture(t *testing.T, msp bool) *conversionControlle
 	incident := client.Incident.Create().SetWorkItemID(sourceItem.ID).SetSeverity("high").SetImpact("high").SetDetectedAt(time.Now()).SaveX(ctx)
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(problemDomain.NewService(problemDomain.NewEntRepository(client), logger)))
-	resolver := intake.NewResolver(service_catalog.NewService(nil, client, logger), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
+	resolver := intake.NewResolver(service_catalog.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
 	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(&conversionTestAllocator{}), sameTransactionDirectory{})
 	controller := NewIncidentController(nil, nil, nil, nil, nil, logger)
 	controller.SetCreationApplication(app)

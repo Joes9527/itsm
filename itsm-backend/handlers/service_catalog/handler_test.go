@@ -80,7 +80,7 @@ func scSetup(t *testing.T) (*gin.Engine, *ent.Client, int) {
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), sameTransactionDirectory{})
 	h := NewHandler(svc)
 
 	actor := client.User.Create().SetTenantID(tenant.ID).SetUsername("sc-reader" + scUID()).SetEmail("reader" + scUID() + "@example.test").SetPasswordHash("unused").SetName("Reader").SetRole("super_admin").SaveX(ctx)

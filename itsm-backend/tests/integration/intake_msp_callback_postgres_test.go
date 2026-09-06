@@ -66,7 +66,7 @@ func TestPostgresIntakeMSPCreationCallbacks(t *testing.T) {
 			registry := intake.NewCreatorRegistry()
 			require.NoError(t, registry.Register(service.NewIncidentService(clients.Tenant, logger)))
 			require.NoError(t, registry.Register(changedomain.NewService(nil, clients.Tenant, logger)))
-			resolver := intake.NewResolver(catalogdomain.NewService(nil, clients.Tenant, logger), service.NewProcessBindingService(clients.Tenant), service.NewConfigurationItemService(clients.Tenant, logger, nil, nil), service.NewTicketCategoryService(clients.Tenant))
+			resolver := intake.NewResolver(catalogdomain.NewService(nil, clients.Tenant, logger, nil), service.NewProcessBindingService(clients.Tenant), service.NewConfigurationItemService(clients.Tenant, logger, nil, nil), service.NewTicketCategoryService(clients.Tenant))
 			app := intake.NewService(clients.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), clients.IntakeDirectorySnapshot())
 			engine := service.NewCustomProcessEngine(clients.Tenant, logger).(*service.CustomProcessEngine)
 			setDirectory := func(directory *ent.Client) {

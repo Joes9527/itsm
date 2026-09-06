@@ -69,7 +69,7 @@ func TestPostgresRequesterAdaptersSignedMSPHTTP(t *testing.T) {
 	for _, owner := range []creation.ProfessionalCreator{service.NewIncidentService(clients.Tenant, logger), problemdomain.NewService(problemdomain.NewEntRepository(clients.Tenant), logger), changedomain.NewService(nil, clients.Tenant, logger)} {
 		require.NoError(t, registry.Register(owner))
 	}
-	resolver := intake.NewResolver(catalogdomain.NewService(nil, clients.Tenant, logger), service.NewProcessBindingService(clients.Tenant), service.NewConfigurationItemService(clients.Tenant, logger, nil, nil), service.NewTicketCategoryService(clients.Tenant))
+	resolver := intake.NewResolver(catalogdomain.NewService(nil, clients.Tenant, logger, nil), service.NewProcessBindingService(clients.Tenant), service.NewConfigurationItemService(clients.Tenant, logger, nil, nil), service.NewTicketCategoryService(clients.Tenant))
 	app := intake.NewService(clients.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), clients.IntakeDirectorySnapshot())
 	adapters := requesterAdapters(t, f.client, app, f.tenant.ID, f.actor.ID)
 	const secret = "isolated-requester-adapter-signing-key"

@@ -6,23 +6,27 @@ import (
 
 	"go.uber.org/zap"
 	"itsm-backend/common"
+	"itsm-backend/database"
 	"itsm-backend/ent"
 	"itsm-backend/service"
 )
 
 // Service defines the business logic
 type Service struct {
-	repo   Repository
-	client *ent.Client
-	logger *zap.SugaredLogger
+	repo      Repository
+	client    *ent.Client
+	logger    *zap.SugaredLogger
+	directory database.DirectorySnapshot
 }
 
-// NewService creates a new Service
-func NewService(repo Repository, client *ent.Client, logger *zap.SugaredLogger) *Service {
+// NewService creates the Catalog owner. Directory is required for authenticated
+// Read; callers using only the already-authorized Intake projection may pass nil.
+func NewService(repo Repository, client *ent.Client, logger *zap.SugaredLogger, directory database.DirectorySnapshot) *Service {
 	return &Service{
-		repo:   repo,
-		client: client,
-		logger: logger,
+		repo:      repo,
+		client:    client,
+		logger:    logger,
+		directory: directory,
 	}
 }
 

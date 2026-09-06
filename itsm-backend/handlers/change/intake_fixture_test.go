@@ -29,7 +29,7 @@ func NewChangeIntakeApp(client *ent.Client, svc *Service, logger *zap.SugaredLog
 		panic(err)
 	}
 	resolver := intake.NewResolver(
-		service_catalog.NewService(nil, client, logger),
+		service_catalog.NewService(nil, client, logger, nil),
 		service.NewProcessBindingService(client),
 		service.NewConfigurationItemService(client, logger, nil, nil),
 		service.NewTicketCategoryService(client),

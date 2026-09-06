@@ -52,7 +52,7 @@ func TestService_Create_FullChain_TicketStatusReflectedAfterChange(t *testing.T)
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 	catalog, err := scService.Create(ctx, "云主机申请-全链路", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
 	require.NoError(t, err)
 
@@ -121,7 +121,7 @@ func TestService_Create_FormDataFieldValuesConsistency_FieldLevel(t *testing.T) 
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 	// 定义三个自定义字段，全部非必填——测试关心的是一致性，不是必填校验。
 	catalog, err := scService.Create(ctx, "云主机申请-一致性", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
 		[]service.FieldDefinitionInput{
@@ -227,7 +227,7 @@ func TestService_Create_ResolvesApprovalChainIntoFormData(t *testing.T) {
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 	catalog, err := scService.Create(ctx, "云主机申请-审批链", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
 	require.NoError(t, err)
 
@@ -291,7 +291,7 @@ func TestService_Create_NoApprovalChainConfigured_FormDataHasNoApprovalChainKey(
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 	catalog, err := scService.Create(ctx, "云主机申请-无审批链", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
 	require.NoError(t, err)
 
@@ -345,7 +345,7 @@ func TestService_Create_IncidentCatalog_NoServiceRequestRowCreated(t *testing.T)
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 	catalog, err := scService.Create(ctx, "系统故障上报", "运维", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
 	require.NoError(t, err)
 	// Service.Create 没有暴露设置 itsm_type 的参数（默认 Request），直接用 ent 改成 Incident，
@@ -405,7 +405,7 @@ func TestService_Update_ForbiddenForNonOwnerWithoutPermission(t *testing.T) {
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 	catalog, err := scService.Create(ctx, "云主机申请-权限", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
 	require.NoError(t, err)
 
@@ -453,7 +453,7 @@ func TestService_Update_AllowedForNonOwnerWithSuperAdminRole(t *testing.T) {
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 	catalog, err := scService.Create(ctx, "云主机申请-管理员", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
 	require.NoError(t, err)
 
@@ -498,7 +498,7 @@ func TestService_CrossTenantIsolation_GetUpdateDelete(t *testing.T) {
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar())
+	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
 	catalogA, err := scService.Create(ctx, "云主机申请-跨租户", "云服务", "desc", 1, tenantA.ID, "enabled", 0, 0, nil, "", "")
 	require.NoError(t, err)
 

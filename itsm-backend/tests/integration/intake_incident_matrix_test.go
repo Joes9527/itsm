@@ -25,7 +25,7 @@ func TestIntakeIncidentConfiguredMatrixAndReplay(t *testing.T) {
 	owner.SetPriorityMatrixService(matrix)
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(owner))
-	resolver := intake.NewResolver(catalogdomain.NewService(nil, f.client, logger), service.NewProcessBindingService(f.client), service.NewConfigurationItemService(f.client, logger, nil, nil), service.NewTicketCategoryService(f.client))
+	resolver := intake.NewResolver(catalogdomain.NewService(nil, f.client, logger, nil), service.NewProcessBindingService(f.client), service.NewConfigurationItemService(f.client, logger, nil, nil), service.NewTicketCategoryService(f.client))
 	f.app = intake.NewService(f.client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
 	h := controller.NewIncidentController(owner, owner.RuleEngine(), nil, nil, nil, logger)
 	h.SetCreationApplication(f.app)

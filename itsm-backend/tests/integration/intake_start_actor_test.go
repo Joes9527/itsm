@@ -22,7 +22,7 @@ func entryCatalogCommand(t *testing.T, f *unifiedIntakeFixture, class, process s
 	catalog := f.client.ServiceCatalog.Create().SetTenantID(f.identity.TenantID).SetName("Configured service").SetCategory("general").SetDescription("Configured request").SetTargetClass(class).SetRequiresApproval(false).SetStatus("enabled").SetProcessDefinitionKey(process).SaveX(ctx)
 	tx, err := f.client.Tx(ctx)
 	require.NoError(t, err)
-	resolved, _, err := catalogdomain.NewService(nil, f.client, zap.NewNop().Sugar()).ResolveCreationCatalog(ctx, tx, f.identity, catalog.ID)
+	resolved, _, err := catalogdomain.NewService(nil, f.client, zap.NewNop().Sugar(), nil).ResolveCreationCatalog(ctx, tx, f.identity, catalog.ID)
 	require.NoError(t, err)
 	require.NoError(t, tx.Rollback())
 	command := f.command

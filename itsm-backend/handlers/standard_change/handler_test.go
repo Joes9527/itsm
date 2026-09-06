@@ -60,7 +60,7 @@ func setupInstantiationRouter(t *testing.T, client *ent.Client, userID, tenantID
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(changeService))
 	resolver := intake.NewResolver(
-		service_catalog.NewService(nil, client, logger),
+		service_catalog.NewService(nil, client, logger, nil),
 		service.NewProcessBindingService(client),
 		service.NewConfigurationItemService(client, logger, nil, nil),
 		service.NewTicketCategoryService(client),

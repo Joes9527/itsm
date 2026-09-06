@@ -4,11 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"strings"
+	"time"
+
 	"itsm-backend/authorization"
 	"itsm-backend/ent"
 	"itsm-backend/ent/fielddefinition"
 	"itsm-backend/ent/servicecatalog"
-	"itsm-backend/ent/user"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
 )
@@ -87,23 +90,45 @@ func creationRevision(value any) (string, error) {
 // Read returns display fields and confirmation revisions from one database
 // snapshot. The submission later validates these exact revisions in Intake.
 func (s *Service) Read(ctx context.Context, identity creation.Identity, id int) (*ServiceCatalog, error) {
-	if err := identity.ValidateCommand(creation.CreateWorkItemCommand{}); err != nil {
-		return nil, err
+	if identity.TenantID <= 0 || identity.ActorID <= 0 || strings.TrimSpace(identity.Role) == "" {
+		return nil, creation.NewAuthenticationRequired("authenticated catalog reader is required", nil)
+	}
+	if s.client == nil || s.directory == nil {
+		return nil, creation.NewInfrastructureUnavailable("catalog directory snapshot is required", nil)
 	}
 	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
 		return nil, creation.NewInfrastructureUnavailable("could not begin catalog read", err)
 	}
 	defer tx.Rollback()
-	actor, err := tx.User.Query().Where(user.IDEQ(identity.ActorID), user.TenantIDEQ(identity.TenantID), user.ActiveEQ(true)).Only(ctx)
-	if ent.IsNotFound(err) {
-		return nil, creation.NewAuthenticationRequired("current actor is unavailable", err)
-	}
+	directory, closeDirectory, err := s.directory.Open(ctx, tx, identity.TenantID)
 	if err != nil {
-		return nil, creation.NewInfrastructureUnavailable("could not load catalog reader", err)
+		if closeDirectory != nil {
+			err = errors.Join(err, closeDirectory())
+		}
+		return nil, creation.NewInfrastructureUnavailable("could not open catalog directory snapshot", err)
 	}
-	if actor.Role != identity.Role {
-		return nil, creation.NewAuthenticationRequired("current actor role changed", nil)
+	if directory == nil || closeDirectory == nil {
+		var closeErr error
+		if closeDirectory != nil {
+			closeErr = closeDirectory()
+		}
+		return nil, creation.NewInfrastructureUnavailable("invalid catalog directory snapshot", closeErr)
+	}
+	directoryClosed := false
+	defer func() {
+		if !directoryClosed {
+			_ = closeDirectory()
+		}
+	}()
+	_, authErr := authorization.ResolveCurrentSessionActor(ctx, directory, identity.ActorID, identity.TenantID, identity.Role, time.Now())
+	closeErr := closeDirectory()
+	directoryClosed = true
+	if closeErr != nil {
+		return nil, creation.NewInfrastructureUnavailable("could not close catalog directory snapshot", errors.Join(authErr, closeErr))
+	}
+	if authErr != nil {
+		return nil, authErr
 	}
 	if err := authorization.RequireCurrentPermission(ctx, tx, identity, "service_catalog", "read"); err != nil {
 		return nil, err

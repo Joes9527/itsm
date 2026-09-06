@@ -47,7 +47,7 @@ func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *e
 	require.NoError(t, err)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, logger)
+	scService := service_catalog.NewService(scRepo, client, logger, sameTransactionDirectory{})
 	scHandler := service_catalog.NewHandler(scService)
 
 	srRepo := service_request.NewEntRepository(client)

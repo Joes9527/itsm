@@ -187,7 +187,7 @@ func TestPostgresIntakeMSPSharedSnapshotAndDurableEffects(t *testing.T) {
 	owner.RuleEngine().SetActorDirectory(clients.System)
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(owner))
-	resolver := intake.NewResolver(catalogdomain.NewService(nil, clients.Tenant, logger), service.NewProcessBindingService(clients.Tenant), service.NewConfigurationItemService(clients.Tenant, logger, nil, nil), service.NewTicketCategoryService(clients.Tenant))
+	resolver := intake.NewResolver(catalogdomain.NewService(nil, clients.Tenant, logger, nil), service.NewProcessBindingService(clients.Tenant), service.NewConfigurationItemService(clients.Tenant, logger, nil, nil), service.NewTicketCategoryService(clients.Tenant))
 	snapshots := &mutateDirectorySnapshot{directory: clients.IntakeDirectorySnapshot()}
 
 	app := intake.NewService(clients.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), snapshots)
@@ -389,7 +389,7 @@ func TestPostgresIncidentConversionSignedMSPHTTPAuthorizationAndReplay(t *testin
 	logger := zap.NewNop().Sugar()
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(problemdomain.NewService(problemdomain.NewEntRepository(clients.Tenant), logger)))
-	resolver := intake.NewResolver(catalogdomain.NewService(nil, clients.Tenant, logger), service.NewProcessBindingService(clients.Tenant), service.NewConfigurationItemService(clients.Tenant, logger, nil, nil), service.NewTicketCategoryService(clients.Tenant))
+	resolver := intake.NewResolver(catalogdomain.NewService(nil, clients.Tenant, logger, nil), service.NewProcessBindingService(clients.Tenant), service.NewConfigurationItemService(clients.Tenant, logger, nil, nil), service.NewTicketCategoryService(clients.Tenant))
 	app := intake.NewService(clients.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), clients.IntakeDirectorySnapshot())
 	incidentController := controller.NewIncidentController(nil, nil, nil, nil, nil, logger)
 	incidentController.SetCreationApplication(app)

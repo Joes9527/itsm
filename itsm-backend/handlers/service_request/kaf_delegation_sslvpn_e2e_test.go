@@ -173,7 +173,7 @@ func TestSSLVPNRequest_CreateRollsBackWorkItemAndDoesNotStartBPMNWhenExtensionPe
 
 	logger := zaptest.NewLogger(t).Sugar()
 	scRepo := service_catalog.NewEntRepository(fx.client)
-	catalog, err := service_catalog.NewService(scRepo, fx.client, logger).Create(fx.ctx, "SSLVPN access", "SSLVPN access request", "Delegated SSLVPN access", 1, fx.tenant.ID, "enabled", 0, 0, nil, "sslvpn_extension_failure", "access")
+	catalog, err := service_catalog.NewService(scRepo, fx.client, logger, nil).Create(fx.ctx, "SSLVPN access", "SSLVPN access request", "Delegated SSLVPN access", 1, fx.tenant.ID, "enabled", 0, 0, nil, "sslvpn_extension_failure", "access")
 	require.NoError(t, err)
 	svc := NewService(NewEntRepository(fx.client), fx.client, logger, nil)
 
@@ -267,7 +267,7 @@ func createSSLVPNServiceRequestForDefinition(t *testing.T, fx *sslvpnDelegationF
 	t.Helper()
 	logger := zaptest.NewLogger(t).Sugar()
 	scRepo := service_catalog.NewEntRepository(fx.client)
-	catalog, err := service_catalog.NewService(scRepo, fx.client, logger).Create(fx.ctx, "SSLVPN access", "SSLVPN access request", "Delegated SSLVPN access", 1, fx.tenant.ID, "enabled", 0, 0, nil, definitionKey, "access")
+	catalog, err := service_catalog.NewService(scRepo, fx.client, logger, nil).Create(fx.ctx, "SSLVPN access", "SSLVPN access request", "Delegated SSLVPN access", 1, fx.tenant.ID, "enabled", 0, 0, nil, definitionKey, "access")
 	require.NoError(t, err)
 	svc := NewService(NewEntRepository(fx.client), fx.client, logger, nil)
 	created, err := svc.SubmitCreation(fx.ctx, fx.tenant.ID, fx.requester.ID, catalog.ID, &ServiceRequest{ComplianceAck: true, FormData: map[string]interface{}{"title": "SSLVPN access request", "reason": "VPN profile details must stay in ITSM"}})

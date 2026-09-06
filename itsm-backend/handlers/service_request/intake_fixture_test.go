@@ -54,7 +54,7 @@ func NewService(repo sr.Repository, client *ent.Client, logger *zap.SugaredLogge
 	if err := registry.Register(incident); err != nil {
 		panic(err)
 	}
-	resolver := intake.NewResolver(service_catalog.NewService(nil, client, logger), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
+	resolver := intake.NewResolver(service_catalog.NewService(nil, client, logger, sameTransactionDirectory{}), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
 	for _, tenant := range client.Tenant.Query().AllX(context.Background()) {
 		configureSRIntakeFixture(context.Background(), client, tenant.ID)
 	}
@@ -84,7 +84,7 @@ func (s *Service) SubmitCatalog(ctx context.Context, tenantID, actorID, catalogI
 	if err != nil {
 		return nil, err
 	}
-	catalog, err := service_catalog.NewService(service_catalog.NewEntRepository(s.client), s.client, zap.NewNop().Sugar()).Read(ctx, creation.Identity{TenantID: tenantID, ActorID: actorID, RequesterID: actorID, Role: actor.Role, Channel: "http"}, catalogID)
+	catalog, err := service_catalog.NewService(service_catalog.NewEntRepository(s.client), s.client, zap.NewNop().Sugar(), sameTransactionDirectory{}).Read(ctx, creation.Identity{TenantID: tenantID, ActorID: actorID, RequesterID: actorID, Role: actor.Role, Channel: "http"}, catalogID)
 	if err != nil {
 		return nil, err
 	}

@@ -16,7 +16,7 @@ func TestCreationCatalogRevisionAndWorkflowResolution(t *testing.T) {
 	catalog := client.ServiceCatalog.Create().SetTenantID(identity.TenantID).SetName("VPN").SetTargetClass("service_request_item").SaveX(ctx)
 	client.ProcessBinding.Create().SetTenantID(identity.TenantID).SetBusinessType("service_request").SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 	field := client.FieldDefinition.Create().SetTenantID(identity.TenantID).SetEntityType("service_catalog").SetEntityID(catalog.ID).SetName("device_count").SetLabel("Devices").SetFieldType("number").SetRequired(true).SaveX(ctx)
-	owner := cataloghandler.NewService(nil, client, zap.NewNop().Sugar())
+	owner := cataloghandler.NewService(nil, client, zap.NewNop().Sugar(), nil)
 	port, ok := any(owner).(workitemcreation.CatalogResolver)
 	require.True(t, ok, "catalog owner must provide a real transaction-aware revision")
 	tx, err := client.Tx(ctx)
