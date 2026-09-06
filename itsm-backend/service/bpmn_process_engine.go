@@ -362,14 +362,12 @@ func (e *CustomProcessEngine) startProcessWithClient(ctx context.Context, proces
 	if legacyTenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); legacyTenantID > 0 && legacyTenantID != tenantID {
 		return nil, common.NewForbiddenError("BPMN 启动租户上下文不一致")
 	}
-	query := e.client.ProcessDefinition.Query().
-		Where(processdefinition.Key(processDefinitionKey)).
-		Where(processdefinition.IsActive(true)).
-		Where(processdefinition.IsLatest(true))
-	query = query.Where(processdefinition.TenantID(tenantID))
-	definition, err := query.First(ctx)
+	definition, err := selectExecutableProcessDefinition(ctx, e.client, tenantID, processDefinitionKey, 0)
 	if err != nil {
 		return nil, fmt.Errorf("获取流程定义失败: %w", err)
+	}
+	if definition == nil {
+		return nil, common.NewNotFoundError("executable process definition")
 	}
 
 	return e.startResolvedProcess(ctx, definition, businessKey, businessType, businessID, variables, fmt.Sprintf("PI-%s-%d", processDefinitionKey, time.Now().UnixNano()), "")
@@ -2081,6 +2079,30 @@ func (e *CustomProcessEngine) resolveRolesByPermission(ctx context.Context, tena
 	return codes
 }
 
+type fixedScopeApproverSource struct {
+	resolver approver.ApproverResolver
+	context  approver.ApproverContext
+}
+
+// The BPMN declaration-to-resolver mapping is shared by runtime and publication.
+// Resolver owners retain all tenant, hierarchy and active-candidate rules.
+func fixedScopeApproverSources(task *BPMNUserTask, tenantID int) []fixedScopeApproverSource {
+	sources := []fixedScopeApproverSource{}
+	if task.AssigneeDeptId != 0 {
+		sources = append(sources, fixedScopeApproverSource{approver.NewDeptManagerResolver(), approver.ApproverContext{TenantID: tenantID, DepartmentID: task.AssigneeDeptId}})
+	}
+	if task.AssigneeTeamId != 0 {
+		sources = append(sources, fixedScopeApproverSource{approver.NewTeamLeaderResolver(), approver.ApproverContext{TenantID: tenantID, TeamID: task.AssigneeTeamId}})
+	}
+	if task.AssigneeProjectId != 0 {
+		sources = append(sources, fixedScopeApproverSource{approver.NewProjectMgrResolver(), approver.ApproverContext{TenantID: tenantID, ProjectID: task.AssigneeProjectId}})
+	}
+	if task.AssigneeTempTeamId != 0 {
+		sources = append(sources, fixedScopeApproverSource{approver.NewTempTeamResolver(), approver.ApproverContext{TenantID: tenantID, TeamID: task.AssigneeTempTeamId}})
+	}
+	return sources
+}
+
 // resolveFixedScopeAssignee 处理固定范围组织路由（BPMN 声明 assigneeDeptId/assigneeTeamId/
 // assigneeProjectId/assigneeTempTeamId 中的一个，按这个顺序取第一个非零的）。四个 resolver
 // （service/approver/*.go，已有、已测试）都是"至多解析出一个人"的形状，返回值/自我审批
@@ -2089,24 +2111,11 @@ func (e *CustomProcessEngine) resolveRolesByPermission(ctx context.Context, tena
 // 不是 authorizeTaskActor 用来比对的 User.Username（登录名），用 UserName 会导致候选人
 // 字符串永远匹配不上真实登录用户。
 func (e *CustomProcessEngine) resolveFixedScopeAssignee(ctx context.Context, instance *ent.ProcessInstance, requester *ent.User, task *BPMNUserTask) string {
-	var resolver approver.ApproverResolver
-	appCtx := &approver.ApproverContext{TenantID: instance.TenantID}
-	switch {
-	case task.AssigneeDeptId != 0:
-		resolver = approver.NewDeptManagerResolver()
-		appCtx.DepartmentID = task.AssigneeDeptId
-	case task.AssigneeTeamId != 0:
-		resolver = approver.NewTeamLeaderResolver()
-		appCtx.TeamID = task.AssigneeTeamId
-	case task.AssigneeProjectId != 0:
-		resolver = approver.NewProjectMgrResolver()
-		appCtx.ProjectID = task.AssigneeProjectId
-	case task.AssigneeTempTeamId != 0:
-		resolver = approver.NewTempTeamResolver()
-		appCtx.TeamID = task.AssigneeTempTeamId
-	default:
+	sources := fixedScopeApproverSources(task, instance.TenantID)
+	if len(sources) == 0 {
 		return ""
 	}
+	resolver, appCtx := sources[0].resolver, &sources[0].context
 	approvers, err := resolver.Resolve(ctx, e.client, appCtx)
 	if err != nil || len(approvers) == 0 {
 		e.logger.Infow(
@@ -2956,15 +2965,18 @@ func (s *bpmnProcessDefinitionService) UpdateProcessDefinition(ctx context.Conte
 	if req.Category != "" {
 		update.SetCategory(req.Category)
 	}
-	if req.IsActive != nil {
-		update.SetIsActive(*req.IsActive)
-	}
 
 	updated, err := update.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("更新流程定义失败: %w", err)
 	}
 
+	if req.IsActive != nil {
+		if err := s.SetProcessDefinitionActive(ctx, key, version, *req.IsActive); err != nil {
+			return nil, err
+		}
+		return s.GetProcessDefinition(ctx, key, version)
+	}
 	return updated, nil
 }
 
@@ -3026,17 +3038,15 @@ func (s *bpmnProcessDefinitionService) ListProcessDefinitions(ctx context.Contex
 	return definitions, total, nil
 }
 
-func (s *bpmnProcessDefinitionService) SetProcessDefinitionActive(ctx context.Context, key string, version string, active bool) error {
+func (s *bpmnProcessDefinitionService) SetProcessDefinitionActive(ctx context.Context, key, version string, active bool) error {
 	definition, err := s.GetProcessDefinition(ctx, key, version)
 	if err != nil {
 		return err
 	}
-
-	_, err = s.client.ProcessDefinition.UpdateOne(definition).
-		SetIsActive(active).
-		Save(ctx)
-
-	return err
+	if active {
+		return NewBPMNVersionService(s.client, zap.NewNop().Sugar()).ActivateVersion(ctx, key, version, definition.TenantID)
+	}
+	return s.client.ProcessDefinition.UpdateOne(definition).SetIsActive(false).Exec(ctx)
 }
 
 type bpmnProcessInstanceService struct {

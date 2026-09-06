@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processbinding"
-	"itsm-backend/ent/processdefinition"
 	"itsm-backend/ent/sladefinition"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"strconv"
@@ -80,25 +79,15 @@ func loadCreationConfiguration(ctx context.Context, tx *ent.Tx, tenantID int, cl
 	}
 	seen := map[int]bool{}
 	for _, ref := range refs {
-		q := tx.ProcessDefinition.Query().Where(processdefinition.TenantIDEQ(tenantID), processdefinition.KeyEQ(ref.key), processdefinition.IsActiveEQ(true))
-		if ref.version <= 0 {
-			q = q.Where(processdefinition.IsLatestEQ(true))
-		}
-		rows, err := q.Order(ent.Desc(processdefinition.FieldIsLatest), ent.Desc(processdefinition.FieldDeployedAt), ent.Desc(processdefinition.FieldID)).All(ctx)
+		row, err := selectExecutableProcessDefinition(ctx, tx.Client(), tenantID, ref.key, ref.version)
 		if err != nil {
 			return result, err
 		}
-		for _, row := range rows {
-			major, err := creationProcessDefinitionMajorVersion(row.Version)
-			if ref.version > 0 && (err != nil || major != ref.version) {
-				continue
-			}
-			if !seen[row.ID] {
-				result.definitions = append(result.definitions, row)
-				seen[row.ID] = true
-			}
-			break
+		if row != nil && !seen[row.ID] {
+			result.definitions = append(result.definitions, row)
+			seen[row.ID] = true
 		}
+
 	}
 	if len(slaIDs) > 0 {
 		rows, err := tx.SLADefinition.Query().Where(sladefinition.TenantIDEQ(tenantID), sladefinition.IDIn(slaIDs...), sladefinition.IsActiveEQ(true)).Order(ent.Asc(sladefinition.FieldID)).All(ctx)
@@ -141,6 +130,16 @@ func (*ProcessBindingService) ValidateCreationPublication(ctx context.Context, t
 	records, err := loadCreationConfiguration(ctx, tx, tenantID, class, key)
 	if err != nil {
 		return creation.NewInfrastructureUnavailable("could not validate workflow configuration", err)
+	}
+	for _, sla := range records.sla {
+		if len(sla.BusinessHours) > 0 {
+			if _, err := parseBusinessHoursConfig(sla.BusinessHours); err != nil {
+				return creation.NewDomainValidationFailed("invalid declared SLA calendar", err)
+			}
+		}
+		if _, err := parseSLAEscalationMatrix(sla.EscalationRules); err != nil {
+			return creation.NewDomainValidationFailed("invalid declared SLA escalation", err)
+		}
 	}
 	if key == "" && len(records.bindings) == 0 {
 		return creation.NewWorkflowBindingRequired("publication requires a declared process or no_process binding", nil)

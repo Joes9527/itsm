@@ -5,7 +5,6 @@ import (
 	"errors"
 	"go.uber.org/zap"
 	"itsm-backend/ent"
-	"itsm-backend/ent/processdefinition"
 	"itsm-backend/ent/user"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"regexp"
@@ -73,27 +72,15 @@ func (s *ProcessBindingService) ResolveCreationWorkflow(ctx context.Context, tx 
 		}
 		key, version = selected.ProcessDefinitionKey, selected.ProcessVersion
 	}
-	query := tx.ProcessDefinition.Query().Where(processdefinition.TenantIDEQ(in.Identity.TenantID), processdefinition.KeyEQ(key), processdefinition.IsActiveEQ(true))
-	if version <= 0 {
-		query = query.Where(processdefinition.IsLatestEQ(true))
-	}
-	definitions, err := query.Order(ent.Desc(processdefinition.FieldIsLatest), ent.Desc(processdefinition.FieldDeployedAt), ent.Desc(processdefinition.FieldID)).All(ctx)
+	definition, err := selectExecutableProcessDefinition(ctx, tx.Client(), in.Identity.TenantID, key, version)
 	if err != nil {
-		return result, nil, creation.NewInfrastructureUnavailable("could not resolve workflow definition", err)
-	}
-	var definition *ent.ProcessDefinition
-	for _, candidate := range definitions {
-		major, err := creationProcessDefinitionMajorVersion(candidate.Version)
-		if err != nil {
-			return result, nil, creation.NewDomainValidationFailed("unsupported workflow definition version", err)
-		}
-		if version <= 0 || major == version {
-			definition = candidate
-			break
-		}
+		return result, nil, creation.NewInfrastructureUnavailable("could not resolve executable workflow definition", err)
 	}
 	if definition == nil {
 		return result, nil, creation.NewWorkflowBindingRequired("active workflow definition for the configured major version is required", nil)
+	}
+	if _, err := creationProcessDefinitionMajorVersion(definition.Version); err != nil {
+		return result, nil, creation.NewDomainValidationFailed("unsupported workflow definition version", err)
 	}
 	return creation.ResolvedWorkflowBinding{DefinitionID: &definition.ID, DefinitionKey: definition.Key, DefinitionVersion: definition.Version, DefinitionDigest: FreezeProcessDefinition(definition).Digest}, slaID, nil
 }

@@ -683,3 +683,28 @@ func (s *BPMNVersionService) GetChangeLogsByProcessDefinitionID(ctx context.Cont
 
 	return changelogs, nil
 }
+
+// selectExecutableProcessDefinition is the version owner's executable selection.
+// is_latest identifies the newest editable version, including drafts; it must
+// never hide the active version when a new inactive draft is saved.
+func selectExecutableProcessDefinition(ctx context.Context, client *ent.Client, tenantID int, key string, majorVersion int) (*ent.ProcessDefinition, error) {
+	rows, err := client.ProcessDefinition.Query().Where(processdefinition.TenantIDEQ(tenantID), processdefinition.KeyEQ(key), processdefinition.IsActiveEQ(true)).Order(ent.Desc(processdefinition.FieldDeployedAt), ent.Desc(processdefinition.FieldID)).All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		if majorVersion <= 0 {
+			return row, nil
+		}
+		major, err := creationProcessDefinitionMajorVersion(row.Version)
+		if err != nil {
+			// Preserve invalid active declarations for public inspection and the
+			// caller's validation; they must not masquerade as a missing binding.
+			return row, nil
+		}
+		if major == majorVersion {
+			return row, nil
+		}
+	}
+	return nil, nil
+}

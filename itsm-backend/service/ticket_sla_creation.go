@@ -21,8 +21,14 @@ func (s *TicketSLAService) ApplyCreationSLA(ctx context.Context, tx *ent.Tx, ite
 	if err != nil {
 		return creation.NewInfrastructureUnavailable("could not load creation SLA", err)
 	}
-	response := s.calculateDeadlineWithBusinessHours(item.CreatedAt, definition.ResponseTime, definition.BusinessHours)
-	resolution := s.calculateDeadlineWithBusinessHours(item.CreatedAt, definition.ResolutionTime, definition.BusinessHours)
+	response, err := s.calculateDeadlineWithBusinessHours(item.CreatedAt, definition.ResponseTime, definition.BusinessHours)
+	if err != nil {
+		return creation.NewDomainValidationFailed("invalid SLA calendar", err)
+	}
+	resolution, err := s.calculateDeadlineWithBusinessHours(item.CreatedAt, definition.ResolutionTime, definition.BusinessHours)
+	if err != nil {
+		return creation.NewDomainValidationFailed("invalid SLA calendar", err)
+	}
 	_, err = tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantIDEQ(item.TenantID)).SetSLADefinitionID(definition.ID).SetSLAResponseDeadline(response).SetSLAResolutionDeadline(resolution).Save(ctx)
 	if err != nil {
 		return creation.NewInfrastructureUnavailable("could not persist creation SLA", err)

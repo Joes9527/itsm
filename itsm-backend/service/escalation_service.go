@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -23,10 +24,12 @@ type EscalationService struct {
 }
 
 func NewEscalationService(client *ent.Client, logger *zap.SugaredLogger) *EscalationService {
+	matrix := NewEscalationMatrixService(logger)
+	matrix.SetClient(client)
 	return &EscalationService{
 		client:    client,
 		logger:    logger,
-		matrixSvc: NewEscalationMatrixService(logger),
+		matrixSvc: matrix,
 	}
 }
 
@@ -49,25 +52,29 @@ func (e *EscalationService) MatrixService() *EscalationMatrixService {
 
 // ProcessEscalations 处理所有升级任务
 func (e *EscalationService) ProcessEscalations(ctx context.Context, tenantID int) error {
+	var failures []error
 	e.logger.Infow("Processing escalations", "tenant_id", tenantID)
 
 	// 1. 检查SLA预警规则中的升级配置
 	if err := e.processSLAEscalations(ctx, tenantID); err != nil {
+		failures = append(failures, err)
 		e.logger.Errorw("Failed to process SLA escalations", "error", err)
 	}
 
 	// 2. 检查长时间未解决的工单
 	if err := e.processLongPendingTickets(ctx, tenantID); err != nil {
+		failures = append(failures, err)
 		e.logger.Errorw("Failed to process long pending tickets", "error", err)
 	}
 
 	// 3. 检查未分配工单
 	if err := e.processUnassignedTickets(ctx, tenantID); err != nil {
+		failures = append(failures, err)
 		e.logger.Errorw("Failed to process unassigned tickets", "error", err)
 	}
 
 	e.logger.Infow("Escalation processing completed", "tenant_id", tenantID)
-	return nil
+	return errors.Join(failures...)
 }
 
 // processSLAEscalations 处理SLA预警规则中的升级
@@ -116,7 +123,10 @@ func (e *EscalationService) processSLAEscalations(ctx context.Context, tenantID 
 			currentMax := alert.EscalationLevel
 			for {
 				slaDefID := e.resolveSLADefinitionID(ctx, alert.TicketID)
-				nextLevel := e.matrixSvc.FindNextEscalationLevel(tenantID, priority, elapsedMinutes, currentMax, slaDefID)
+				nextLevel, err := e.matrixSvc.FindNextEscalationLevel(ctx, tenantID, priority, elapsedMinutes, currentMax, slaDefID)
+				if err != nil {
+					return fmt.Errorf("SLA escalation configuration: %w", err)
+				}
 				if nextLevel == nil {
 					break
 				}

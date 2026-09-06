@@ -57,6 +57,7 @@ func TestPublicationDeclaredWorkflowValidation(t *testing.T) {
 		approval  bool
 		ok        bool
 	}{
+		{"dynamic_gm", `<userTask id="task" taskPurpose="approval" assigneeGmChain="true"/>`, true, true},
 		{"generic", `<userTask id="task" assignee="${requester_id}"/>`, false, true},
 		{"unknown_role", `<userTask id="task" assigneeRole="missing_role"/>`, false, false},
 		{"missing_candidate", `<userTask id="task"/>`, false, false},
