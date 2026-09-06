@@ -108,6 +108,12 @@ func validateIncidentMetadata(metadata map[string]any) error {
 				return false
 			}
 		}
+		// encoding/json also uses pointer receivers on addressable slice elements.
+		if value.CanAddr() && value.Addr().CanInterface() {
+			if _, custom := value.Addr().Interface().(json.Marshaler); custom {
+				return false
+			}
+		}
 		switch value.Kind() {
 		case reflect.Map:
 			if value.Type().Key().Kind() != reflect.String {

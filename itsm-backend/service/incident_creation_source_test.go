@@ -87,3 +87,19 @@ func TestIncidentCreationMetadataRejectsCyclesAndUnknownSource(t *testing.T) {
 	require.ErrorIs(t, err, creation.ErrInvalidCommand)
 	require.NotContains(t, err.Error(), "unknown-source-sentinel")
 }
+
+type pointerEncodedIncidentMetadata string
+
+func (*pointerEncodedIncidentMetadata) MarshalJSON() ([]byte, error) {
+	return []byte(`{"password":"credential-sentinel"}`), nil
+}
+
+func TestIncidentCreationMetadataRejectsAddressablePointerEncoder(t *testing.T) {
+	values := []pointerEncodedIncidentMetadata{"benign"}
+	input := &creation.IncidentInput{Source: "manual", Metadata: map[string]any{"nested": values}}
+	_, err := (&IncidentService{}).ValidateIncidentCreationInput(creation.Identity{Channel: "http"}, nil, input)
+	require.ErrorIs(t, err, creation.ErrInvalidCommand)
+	require.NotContains(t, err.Error(), "credential-sentinel")
+	require.Equal(t, []pointerEncodedIncidentMetadata{"benign"}, values)
+	require.Equal(t, "manual", input.Source)
+}

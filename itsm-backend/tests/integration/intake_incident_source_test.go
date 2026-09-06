@@ -144,3 +144,38 @@ func TestIntakeIncidentForbiddenHistoricalReceiptCannotReplay(t *testing.T) {
 		require.Equal(t, "manual", f.client.Ticket.GetX(ctx, result.WorkItemID).Source)
 	}
 }
+
+type pointerEncodedHistoricalIncidentMetadata string
+
+func (*pointerEncodedHistoricalIncidentMetadata) MarshalJSON() ([]byte, error) {
+	return []byte(`{"password":"credential-sentinel"}`), nil
+}
+
+func TestIntakeIncidentPointerEncoderCannotReplayHistoricalReceipt(t *testing.T) {
+	f := newUnifiedIntakeFixture(t)
+	ctx := context.Background()
+	command := creation.CreateWorkItemCommand{RecordClass: "incident", IntakeKind: "incident", Confirmation: "confirmed", Title: "Historical metadata receipt", Priority: "high", IdempotencyKey: "original", Incident: &creation.IncidentInput{Source: "manual"}}
+	original, err := f.app.Create(ctx, f.identity, command)
+	require.NoError(t, err)
+
+	// Seed historical digest evidence from the JSON object emitted by the encoder.
+	command.IdempotencyKey = "historical-pointer-encoder"
+	command.Incident.Metadata = map[string]any{"nested": []any{map[string]any{"password": "credential-sentinel"}}}
+	_, historicalDigest, err := creation.CanonicalizeCommand(command)
+	require.NoError(t, err)
+	receipt := f.client.IntakeRequest.Create().SetTenantID(f.identity.TenantID).SetActorTenantID(f.identity.TenantID).SetActorID(f.identity.ActorID).SetRequesterID(f.identity.RequesterID).SetChannel("http").SetOperation("create_work_item").SetIdempotencyKey(command.IdempotencyKey).SetRequestDigest(historicalDigest).SetDigestVersion("intake-v4").SetStatus("completed").SetWorkItemID(original.WorkItemID).SaveX(ctx)
+
+	values := []pointerEncodedHistoricalIncidentMetadata{"benign"}
+	command.Incident.Metadata = map[string]any{"nested": values}
+	result, err := f.app.Create(ctx, f.identity, command)
+	require.ErrorIs(t, err, creation.ErrInvalidCommand)
+	require.Nil(t, result)
+	require.NotContains(t, err.Error(), "credential-sentinel")
+	require.Equal(t, []pointerEncodedHistoricalIncidentMetadata{"benign"}, values)
+	require.Equal(t, "manual", command.Incident.Source)
+	require.Equal(t, historicalDigest, f.client.IntakeRequest.GetX(ctx, receipt.ID).RequestDigest)
+	require.Equal(t, "intake-v4", f.client.IntakeRequest.GetX(ctx, receipt.ID).DigestVersion)
+	require.Equal(t, 2, f.client.IntakeRequest.Query().CountX(ctx))
+	require.Equal(t, 1, f.client.Ticket.Query().CountX(ctx))
+	require.Equal(t, 1, f.client.Incident.Query().CountX(ctx))
+}
