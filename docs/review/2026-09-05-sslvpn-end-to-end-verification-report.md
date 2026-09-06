@@ -101,6 +101,16 @@ Change分类名称复用既有租户分类所有者；移除没有执行意义�
 - 修复回归：`timeout 180s go test ./service ./tests/integration -run '^(TestIncidentCreationMetadataRejectsAddressablePointerEncoder|TestIntakeIncidentPointerEncoderCannotReplayHistoricalReceipt)$' -count=1 -timeout=90s`，修复前退出1、修复后退出0；受影响元数据与Incident集合退出0（service0.016秒、integration1.383秒）。复审无新增问题，没有重复未改变的完整MSP检查。
 - 当前容器实际映射为 `127.0.0.1:36430`，重启后 `36444` 没有监听。本次测试用仅在测试进程内存在的本地 `36444 → 36430` 转发满足隔离库硬校验，结束后已关闭。此前容器健康检查不能证明测试端口恢复；后续测试必须显式恢复其连接环境。
 
+### Feishu 严格输入与旧入口退役（`a8f04a36`、`60ad44ce`）
+
+真实 instance-ID Webhook 和直接 Receiver 入口共用有界 JSON 结构解析，递归重复字段、额外根对象、坏 JSON、过大/过深输入及读取失败被显式拒绝。验签仍使用原始字节，合法任务与 URL 验证保持有效，未知执行事件不再返回虚假成功。删除没有实际投递行为的管理员旧回调和无调用方 HTTPHandler；ACL生成器的旧公开豁免亦移除。
+
+- 定向测试先复现旧问题再通过。最终 `timeout 180s go test ./common ./connector/builtin/feishu ./controller ./handlers/common/intakehttp ./router -count=1 -timeout=120s`退出0，五包全部通过；包含真实签名控制器入口、重放拒绝、无歧义分发、Intake精确字段/数值及真实路由退役检查。
+- `timeout 120s node scripts/generate-acl-manifest.js --check --output /tmp/feishu-boundary-fix1-acl.yaml`退出0，527条实时路由覆盖100%；Go ACL门禁亦通过。已提交清单此前比实时路由少两条，本阶段仅移除旧入口，未借此声称清单完全同步；后续统一路由交付需消除该已知差异。
+- 独立审查与单行公开豁免修复的限定复审均PASS。无外部Feishu调用、共享数据库或部署操作；测试替代仅位于现有应用服务的副作用边界。
+
+下一阶段为027身份字段退役与028服务请求共享字段归并；A4前端、A5目录发布、A6身份交换、C1及KAF完整链路保持未完成。
+
 ## 3. 可定位的 RLS 验证记录
 
 以下结果对应 `367f9af9` 阶段的稳定代码，工作目录为 `itsm-backend`。数据库类测试使用专属临时 PostgreSQL 16 实例 `127.0.0.1:36444/sslvpn_test`；环境变量 `ITSM_TEST_DB` 和 `INTAKE_POSTGRES_TEST_DSN` 指向该隔离库，不使用共享数据库。
