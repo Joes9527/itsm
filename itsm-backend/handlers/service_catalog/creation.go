@@ -3,7 +3,7 @@ package service_catalog
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
+
 	"errors"
 	"strings"
 	"time"
@@ -44,12 +44,14 @@ func (s *Service) projectCreationCatalog(ctx context.Context, tx *ent.Tx, identi
 		return nil, nil, nil, creation.NewInfrastructureUnavailable("could not load catalog fields", err)
 	}
 	fields := make([]creation.ResolvedFieldDefinition, 0, len(definitions))
-	fieldEvidence := make([]map[string]any, 0, len(definitions))
+	fieldEvidence, err := publicFields(definitions)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 	for _, field := range definitions {
 		fields = append(fields, creation.ResolvedFieldDefinition{ID: field.ID, Key: field.Name, DataType: field.FieldType, Required: field.Required, Options: field.Options})
-		fieldEvidence = append(fieldEvidence, map[string]any{"id": field.ID, "name": field.Name, "label": field.Label, "type": field.FieldType, "required": field.Required, "options": field.Options, "sortOrder": field.SortOrder, "config": field.Config})
 	}
-	routingRevision, err := service.NewProcessBindingService(tx.Client()).CreationConfigurationRevision(ctx, tx, identity.TenantID, catalog.TargetClass, catalog.ProcessDefinitionKey)
+	routingRevision, err := service.NewProcessBindingService(tx.Client()).CreationConfigurationRevision(ctx, tx, identity.TenantID, catalog.TargetClass, catalog.ProcessDefinitionKey, s.publicationEngine)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -57,20 +59,15 @@ func (s *Service) projectCreationCatalog(ctx context.Context, tx *ent.Tx, identi
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	// Include every declared catalog field; clearing timestamps excludes unrelated
-	// update clocks while future configuration fields automatically join revision.
-	raw, err := json.Marshal(catalog)
-	if err != nil {
-		return nil, nil, nil, creation.NewInternalFailure("could not encode catalog revision", err)
-	}
-	var properties map[string]json.RawMessage
-	if err = json.Unmarshal(raw, &properties); err != nil {
-		return nil, nil, nil, creation.NewInternalFailure("could not encode catalog revision", err)
-	}
-	delete(properties, "created_at")
-	delete(properties, "updated_at")
-	delete(properties, "edges")
-	version, err := creationRevision(map[string]any{"catalog": properties, "fields": fieldEvidence, "routingRevision": routingRevision})
+	version, err := creationRevision(publicCatalogDefinition{
+		TargetClass: catalog.TargetClass, ServiceType: catalog.ServiceType,
+		Name: catalog.Name, Description: catalog.Description, Category: catalog.Category,
+		DeliveryTime: catalog.DeliveryTime, RequiresApproval: catalog.RequiresApproval,
+		SLAResponseTime: catalog.SLAResponseTime, SLAResolutionTime: catalog.SLAResolutionTime,
+		CITypeID: catalog.CiTypeID, CloudServiceID: catalog.CloudServiceID,
+		ProcessDefinitionKey: catalog.ProcessDefinitionKey, Status: catalog.Status, IsActive: catalog.IsActive,
+		Fields: fieldEvidence, RoutingRevision: routingRevision,
+	})
 	if err != nil {
 		return nil, nil, nil, err
 	}

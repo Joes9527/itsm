@@ -20,14 +20,14 @@ func TestService_Create_SavesFieldDefinitions(t *testing.T) {
 	ctx := context.Background()
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), nil)
+	svc := newCatalogPublisher(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
 	fields := []service.FieldDefinitionInput{
 		{Name: "office_location", Label: "办公地点", FieldType: "text", Required: true, SortOrder: 0},
 		{Name: "device_count", Label: "设备数量", FieldType: "number", Required: false, SortOrder: 1},
 	}
 
-	created, err := svc.Create(ctx, "VM Service", "it_service", "virtual machine", 1, 1, "enabled", 0, 0, fields, "", "")
+	created, err := svc.Create(ctx, 1, catalogCreateInput("VM Service", "it_service", "virtual machine", 1, "disabled", 0, 0, fields, "", ""))
 	require.NoError(t, err)
 	require.NotNil(t, created)
 
@@ -45,24 +45,10 @@ func TestService_Create_SavesFieldDefinitions(t *testing.T) {
 	assert.Equal(t, "device_count", listed[1].Name)
 }
 
-func TestService_Create_NoClient_SkipsFieldDefinitions(t *testing.T) {
-	client := enttest.Open(t, "sqlite3", "file:sc_service_create_noclient?mode=memory&cache=shared&_fk=1")
-	defer client.Close()
-	ctx := context.Background()
-
-	repo := NewEntRepository(client)
-	// client == nil：不接入字段定义（沿用现有可选 client 的兼容路径）
-	svc := NewService(repo, nil, zaptest.NewLogger(t).Sugar(), nil)
-
-	fields := []service.FieldDefinitionInput{
-		{Name: "office_location", Label: "办公地点", FieldType: "text"},
-	}
-
-	created, err := svc.Create(ctx, "VM Service", "it_service", "virtual machine", 1, 1, "enabled", 0, 0, fields, "", "")
-	require.NoError(t, err)
-	require.NotNil(t, created)
-	// Create 仍然把入参 fields 回填到返回对象上
-	require.Len(t, created.Fields, 1)
+func TestService_Create_NoClientFailsClosed(t *testing.T) {
+	svc := newCatalogPublisher(nil, nil, zaptest.NewLogger(t).Sugar(), nil)
+	_, err := svc.Create(context.Background(), 1, catalogCreateInput("Catalog", "IT", "", 1, "disabled", 0, 0, nil, "", ""))
+	require.Error(t, err)
 }
 
 func TestService_Update_NilFields_LeavesExistingDefinitionsUntouched(t *testing.T) {
@@ -71,15 +57,15 @@ func TestService_Update_NilFields_LeavesExistingDefinitionsUntouched(t *testing.
 	ctx := context.Background()
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), nil)
+	svc := newCatalogPublisher(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	created, err := svc.Create(ctx, "VM Service", "it_service", "virtual machine", 1, 1, "enabled", 0, 0, []service.FieldDefinitionInput{
+	created, err := svc.Create(ctx, 1, catalogCreateInput("VM Service", "it_service", "virtual machine", 1, "disabled", 0, 0, []service.FieldDefinitionInput{
 		{Name: "office_location", Label: "办公地点", FieldType: "text"},
-	}, "", "")
+	}, "", ""))
 	require.NoError(t, err)
 
 	// Update 时不传 fields（nil）：既有字段定义应保持不变
-	updated, err := svc.Update(ctx, 1, created.ID, "VM Service Updated", "", "", 0, "", 0, 0, nil, "", "")
+	updated, err := svc.Update(ctx, 1, created.ID, catalogUpdateInput(t, svc, ctx, 1, created.ID, "VM Service Updated", "", "", 0, "", 0, 0, nil, "", ""))
 	require.NoError(t, err)
 	require.NotNil(t, updated)
 
@@ -95,17 +81,17 @@ func TestService_Update_NonNilFields_ReplacesDefinitions(t *testing.T) {
 	ctx := context.Background()
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), nil)
+	svc := newCatalogPublisher(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	created, err := svc.Create(ctx, "VM Service", "it_service", "virtual machine", 1, 1, "enabled", 0, 0, []service.FieldDefinitionInput{
+	created, err := svc.Create(ctx, 1, catalogCreateInput("VM Service", "it_service", "virtual machine", 1, "disabled", 0, 0, []service.FieldDefinitionInput{
 		{Name: "office_location", Label: "办公地点", FieldType: "text"},
-	}, "", "")
+	}, "", ""))
 	require.NoError(t, err)
 
 	newFields := []service.FieldDefinitionInput{
 		{Name: "device_count", Label: "设备数量", FieldType: "number"},
 	}
-	updated, err := svc.Update(ctx, 1, created.ID, "", "", "", 0, "", 0, 0, newFields, "", "")
+	updated, err := svc.Update(ctx, 1, created.ID, catalogUpdateInput(t, svc, ctx, 1, created.ID, "", "", "", 0, "", 0, 0, newFields, "", ""))
 	require.NoError(t, err)
 	require.Len(t, updated.Fields, 1)
 	assert.Equal(t, "device_count", updated.Fields[0].Name)
@@ -132,11 +118,11 @@ func TestService_Create_FieldDefinitions_CrossTenantIsolation(t *testing.T) {
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), nil)
+	svc := newCatalogPublisher(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	createdA, err := svc.Create(ctx, "VM Service A", "it_service", "tenant A catalog", 1, tenantA.ID, "enabled", 0, 0, []service.FieldDefinitionInput{
+	createdA, err := svc.Create(ctx, tenantA.ID, catalogCreateInput("VM Service A", "it_service", "tenant A catalog", 1, "disabled", 0, 0, []service.FieldDefinitionInput{
 		{Name: "office_location", Label: "办公地点", FieldType: "text", Required: true},
-	}, "", "")
+	}, "", ""))
 	require.NoError(t, err)
 	require.Len(t, createdA.Fields, 1)
 
@@ -164,10 +150,9 @@ func TestService_CreateAndGet_PersistsFieldDefinitions(t *testing.T) {
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), nil)
+	svc := newCatalogPublisher(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	created, err := svc.Create(ctx, "云主机申请", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text", Required: true}}, "", "")
+	created, err := svc.Create(ctx, tenant.ID, catalogCreateInput("云主机申请", "云服务", "desc", 1, "disabled", 0, 0, []service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text", Required: true}}, "", ""))
 	require.NoError(t, err)
 	require.Len(t, created.Fields, 1)
 	assert.Equal(t, "environment", created.Fields[0].Name)
@@ -186,12 +171,11 @@ func TestService_List_BatchLoadsFieldDefinitionsPerCatalog(t *testing.T) {
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), nil)
+	svc := newCatalogPublisher(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	c1, err := svc.Create(ctx, "云主机申请", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", "")
+	c1, err := svc.Create(ctx, tenant.ID, catalogCreateInput("云主机申请", "云服务", "desc", 1, "disabled", 0, 0, []service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", ""))
 	require.NoError(t, err)
-	c2, err := svc.Create(ctx, "VPN权限", "网络", "desc", 1, tenant.ID, "enabled", 0, 0, nil, "", "")
+	c2, err := svc.Create(ctx, tenant.ID, catalogCreateInput("VPN权限", "网络", "desc", 1, "disabled", 0, 0, nil, "", ""))
 	require.NoError(t, err)
 
 	list, _, err := svc.List(ctx, tenant.ID, ListFilters{Page: 1, Size: 10})
@@ -217,21 +201,20 @@ func TestService_Delete_DisablesFieldDefinitions(t *testing.T) {
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), nil)
+	svc := newCatalogPublisher(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	created, err := svc.Create(ctx, "云主机申请", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", "")
+	created, err := svc.Create(ctx, tenant.ID, catalogCreateInput("云主机申请", "云服务", "desc", 1, "disabled", 0, 0, []service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", ""))
 	require.NoError(t, err)
 
 	listedBefore, err := service.NewFieldDefinitionService(client).ListDefinitions(ctx, tenant.ID, "service_catalog", created.ID)
 	require.NoError(t, err)
 	require.Len(t, listedBefore, 1)
 
-	require.NoError(t, svc.Delete(ctx, tenant.ID, created.ID))
+	require.NoError(t, svc.Delete(ctx, tenant.ID, created.ID, created.CatalogVersion))
 
 	listedAfter, err := service.NewFieldDefinitionService(client).ListDefinitions(ctx, tenant.ID, "service_catalog", created.ID)
 	require.NoError(t, err)
-	assert.Empty(t, listedAfter, "ListDefinitions should not return definitions for a disabled catalog")
+	assert.Len(t, listedAfter, 1, "draft definitions remain available for administrative repair")
 
 	// 数据本身还在（is_active=false），不是被物理删除——这是跟旧的硬删除实现的关键区别：
 	// 目录被恢复（status 改回 enabled）后，字段配置应该能一起恢复，而不是永久丢失。
@@ -240,7 +223,7 @@ func TestService_Delete_DisablesFieldDefinitions(t *testing.T) {
 		All(ctx)
 	require.NoError(t, err)
 	require.Len(t, raw, 1, "field_definitions row must survive a soft-deleted catalog, not be physically removed")
-	assert.False(t, raw[0].IsActive)
+	assert.True(t, raw[0].IsActive)
 	assert.Equal(t, "environment", raw[0].Name)
 }
 
@@ -254,10 +237,10 @@ func TestService_Search_PopulatesFieldDefinitions(t *testing.T) {
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), nil)
+	svc := newCatalogPublisher(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	created, err := svc.Create(ctx, "云主机申请搜索测试", "云服务", "desc", 1, tenant.ID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", "")
+	client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("ticket").SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
+	created, err := svc.Create(ctx, tenant.ID, catalogCreateInput("云主机申请搜索测试", "云服务", "desc", 1, "enabled", 0, 0, []service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", ""))
 	require.NoError(t, err)
 
 	results, total, err := svc.Search(ctx, tenant.ID, "云主机申请搜索", ListFilters{Page: 1, Size: 10})
@@ -279,10 +262,9 @@ func TestService_Get_TenantIsolation_NoCrossTenantFieldLeak(t *testing.T) {
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), nil)
+	svc := newCatalogPublisher(repo, client, zaptest.NewLogger(t).Sugar(), nil)
 
-	catalogA, err := svc.Create(ctx, "服务A", "分类", "desc", 1, tenantA.ID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "secretField", Label: "租户A专属字段", FieldType: "text"}}, "", "")
+	catalogA, err := svc.Create(ctx, tenantA.ID, catalogCreateInput("服务A", "分类", "desc", 1, "disabled", 0, 0, []service.FieldDefinitionInput{{Name: "secretField", Label: "租户A专属字段", FieldType: "text"}}, "", ""))
 	require.NoError(t, err)
 
 	// 租户 B 用同样的 entity_id（碰巧撞上租户 A 的 catalog.ID）查询，不应该看到租户 A 的字段定义。

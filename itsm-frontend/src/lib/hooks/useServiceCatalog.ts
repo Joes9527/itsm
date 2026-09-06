@@ -149,8 +149,8 @@ export function useUpdateServiceMutation() {
 export function usePublishServiceMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => ServiceCatalogApi.publishService(id),
-    onSuccess: (_, id) => {
+    mutationFn: ({id, expectedCatalogVersion}: {id: string; expectedCatalogVersion: string}) => ServiceCatalogApi.publishService(id, expectedCatalogVersion),
+    onSuccess: (_, {id}) => {
       message.success('服务已发布');
       queryClient.invalidateQueries({
         queryKey: SERVICE_CATALOG_KEYS.serviceDetail(id),

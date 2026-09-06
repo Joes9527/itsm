@@ -338,7 +338,7 @@ func (c *BPMNWorkflowController) UpdateProcessDefinition(ctx *gin.Context) {
 
 	definition, err := c.processEngine.ProcessDefinitionService().UpdateProcessDefinition(workflowCtx, key, version, &req)
 	if err != nil {
-		common.InternalError(ctx, "更新流程定义失败: "+err.Error())
+		respondBPMNError(ctx, err, "更新流程定义失败")
 		return
 	}
 

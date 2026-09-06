@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"itsm-backend/ent/fielddefinition"
+	"itsm-backend/internal/jsonvalue"
 	"strings"
 	"time"
 
@@ -33,7 +34,7 @@ type FieldDefinition struct {
 	// 是否必填
 	Required bool `json:"required,omitempty"`
 	// select/multiselect 的选项列表 [{label,value}]
-	Options []interface{} `json:"options,omitempty"`
+	Options jsonvalue.NumberArray `json:"options,omitempty"`
 	// 显示顺序
 	SortOrder int `json:"sort_order,omitempty"`
 	// 预留：校验规则/默认值/显隐条件，v1 不使用

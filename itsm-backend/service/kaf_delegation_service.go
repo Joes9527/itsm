@@ -540,7 +540,7 @@ func matchesKafExecution(variables map[string]interface{}, execution KafActionEx
 }
 
 func validateKafAction(req KafActionRequest) error {
-	if req.Action != kafActionComplete && req.Action != kafActionProgress && req.Action != kafActionFailure {
+	if !isSupportedKafAction(req.Action) {
 		return fmt.Errorf("%w: unsupported action", ErrKafActionInvalid)
 	}
 	if req.ExpectedVersion <= 0 || strings.TrimSpace(req.Execution.RunID) == "" || strings.TrimSpace(req.Execution.StepID) == "" ||
@@ -1119,4 +1119,21 @@ func kafDelegationRecordClass(ctx context.Context, client *ent.Client, instance 
 		return "", fmt.Errorf("unsupported KAF delegation work item record class %q", workItem.RecordClass)
 	}
 	return "", fmt.Errorf("unsupported KAF delegation record class %q", instance.BusinessType)
+}
+
+func isSupportedKafAction(action string) bool {
+	return action == kafActionComplete || action == kafActionProgress || action == kafActionFailure
+}
+
+func validateKafDeclaredActions(value string) error {
+	actions := splitNonEmptyCSV(value)
+	if len(actions) == 0 {
+		return fmt.Errorf("KAF allowed_actions must be declared")
+	}
+	for _, action := range actions {
+		if !isSupportedKafAction(action) {
+			return fmt.Errorf("KAF action %q is unsupported", action)
+		}
+	}
+	return nil
 }

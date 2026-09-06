@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"itsm-backend/ent/sladefinition"
+	"itsm-backend/internal/jsonvalue"
 	"strings"
 	"time"
 
@@ -33,11 +34,11 @@ type SLADefinition struct {
 	// 解决时间(分钟)
 	ResolutionTime int `json:"resolution_time,omitempty"`
 	// 营业时间配置
-	BusinessHours map[string]interface{} `json:"business_hours,omitempty"`
+	BusinessHours jsonvalue.NumberMap `json:"business_hours,omitempty"`
 	// 升级规则
-	EscalationRules map[string]interface{} `json:"escalation_rules,omitempty"`
+	EscalationRules jsonvalue.NumberMap `json:"escalation_rules,omitempty"`
 	// 适用条件
-	Conditions map[string]interface{} `json:"conditions,omitempty"`
+	Conditions jsonvalue.NumberMap `json:"conditions,omitempty"`
 	// 是否排除周末
 	ExcludeWeekends bool `json:"exclude_weekends,omitempty"`
 	// 是否排除节假日

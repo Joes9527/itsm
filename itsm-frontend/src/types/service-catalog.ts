@@ -413,6 +413,9 @@ export interface ServiceAnalytics {
  * 创建服务请求
  */
 export interface CreateServiceItemRequest {
+  targetClass?: WorkItemRecordClass;
+  slaResponseTime?: number;
+  slaResolutionTime?: number;
   name: string;
   category: ServiceCategory;
   shortDescription: string;
@@ -439,7 +442,7 @@ export interface CreateServiceItemRequest {
 /**
  * 更新服务请求
  */
-export type UpdateServiceItemRequest = Partial<CreateServiceItemRequest>;
+export type UpdateServiceItemRequest = Partial<CreateServiceItemRequest> & { expectedCatalogVersion: string };
 
 /**
  * 创建服务请求

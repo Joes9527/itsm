@@ -57,24 +57,24 @@ describe('ServiceCatalogApi', () => {
   describe('deleteService', () => {
     it('should delete a service', async () => {
       mockDelete.mockResolvedValue(undefined);
-      await ServiceCatalogApi.deleteService('1');
-      expect(mockDelete).toHaveBeenCalledWith('/api/v1/service-catalogs/1');
+      await ServiceCatalogApi.deleteService('1', 'v1');
+      expect(mockDelete).toHaveBeenCalledWith('/api/v1/service-catalogs/1?expectedCatalogVersion=v1');
     });
   });
 
   describe('publishService', () => {
     it('should publish a service', async () => {
       mockPut.mockResolvedValue({ id: 1, status: 'enabled' });
-      await ServiceCatalogApi.publishService('1');
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/service-catalogs/1', { status: 'enabled' });
+      await ServiceCatalogApi.publishService('1', 'v1');
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/service-catalogs/1', { status: 'enabled', expectedCatalogVersion: 'v1' });
     });
   });
 
   describe('retireService', () => {
     it('should retire a service', async () => {
       mockPut.mockResolvedValue({ id: 1, status: 'disabled' });
-      await ServiceCatalogApi.retireService('1');
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/service-catalogs/1', { status: 'disabled' });
+      await ServiceCatalogApi.retireService('1', 'v1');
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/service-catalogs/1', { status: 'disabled', expectedCatalogVersion: 'v1' });
     });
   });
 
@@ -194,8 +194,8 @@ describe('ServiceCatalogApi', () => {
   describe('retireService', () => {
     it('should retire service', async () => {
       mockPut.mockResolvedValue({ id: '1', status: 'disabled' });
-      await ServiceCatalogApi.retireService('1');
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/service-catalogs/1', { status: 'disabled' });
+      await ServiceCatalogApi.retireService('1', 'v1');
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/service-catalogs/1', { status: 'disabled', expectedCatalogVersion: 'v1' });
     });
   });
 
@@ -207,5 +207,28 @@ describe('ServiceCatalogApi', () => {
       expect(mockGet).toHaveBeenCalledWith('/api/v1/service-catalogs/1');
       expect(mockPost).toHaveBeenCalled();
     });
+  });
+});
+
+
+describe('catalog publication contract', () => {
+  it('sends the reviewed version and explicit cleared configuration', async () => {
+    mockPut.mockResolvedValue({ id: 1, status: 'disabled', targetClass: 'generic', requiresApproval: false });
+    const result = await ServiceCatalogApi.updateService('1', {
+      expectedCatalogVersion: 'catalog-v1:reviewed', targetClass: 'generic',
+      processDefinitionKey: '', ciTypeId: 0, cloudServiceId: 0,
+      requiresApproval: false, slaResponseTime: 0, slaResolutionTime: 0,
+    } as any);
+    expect(mockPut).toHaveBeenLastCalledWith('/api/v1/service-catalogs/1', {
+      expectedCatalogVersion: 'catalog-v1:reviewed', targetClass: 'generic',
+      processDefinitionKey: '', ciTypeId: 0, cloudServiceId: 0,
+      requiresApproval: false, slaResponseTime: 0, slaResolutionTime: 0,
+    });
+    expect(result.requiresApproval).toBe(false);
+  });
+  it('creates incomplete definitions as drafts', async () => {
+    mockPost.mockResolvedValue({ id: 2, status: 'disabled' });
+    await ServiceCatalogApi.createService({name:'Draft', category:'it_service'} as any);
+    expect(mockPost).toHaveBeenLastCalledWith('/api/v1/service-catalogs',expect.objectContaining({status:'disabled'}));
   });
 });

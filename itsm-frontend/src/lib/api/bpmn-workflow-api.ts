@@ -160,6 +160,9 @@ export interface ProcessVersion {
   compatibilityNotes: string;
 }
 export interface CreateVersionRequest {
+  baseVersion?: string;
+  category?: string;
+  processVariables?: Record<string, unknown>;
   processDefinitionKey: string;
   name: string;
   description?: string;

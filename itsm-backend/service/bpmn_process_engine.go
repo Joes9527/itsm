@@ -1,10 +1,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"itsm-backend/config"
 	"strconv"
 	"strings"
 	"time"
@@ -105,6 +107,7 @@ type CustomProcessEngine struct {
 	parser                *BPMNParser            // 使用自定义的BPMN解析器
 	exprEngine            *ExpressionEngine      // 表达式引擎
 	expressionVars        map[string]interface{} // 表达式变量
+	publicationKAFConfig  *config.Config
 	callbackRegistry      *bpmn.CallbackRegistry // 服务任务回调注册中心
 	groupResolver         *bpmn.GroupResolver    // 审批组解析器：candidateGroups → 候选用户
 	participationResolver *bpmnParticipationResolver
@@ -2923,6 +2926,25 @@ func (s *bpmnProcessDefinitionService) UpdateProcessDefinition(ctx context.Conte
 		return nil, err
 	}
 
+	// Deployed definitions are immutable execution versions. Waiting instances
+	// and frozen intake resolutions retain this row; edits must create a version.
+	if req.BPMNXML != "" && !bytes.Equal([]byte(req.BPMNXML), definition.BpmnXML) {
+		return nil, common.NewValidationError("execution content is immutable; create a new process version", nil)
+	}
+	if req.ProcessVariables != nil {
+		before, err := json.Marshal(definition.ProcessVariables)
+		if err != nil {
+			return nil, err
+		}
+		after, err := json.Marshal(req.ProcessVariables)
+		if err != nil {
+			return nil, common.NewValidationError("invalid process variables", err)
+		}
+		if !bytes.Equal(before, after) {
+			return nil, common.NewValidationError("execution content is immutable; create a new process version", nil)
+		}
+	}
+
 	update := s.client.ProcessDefinition.UpdateOne(definition)
 
 	if req.Name != "" {
@@ -2933,12 +2955,6 @@ func (s *bpmnProcessDefinitionService) UpdateProcessDefinition(ctx context.Conte
 	}
 	if req.Category != "" {
 		update.SetCategory(req.Category)
-	}
-	if req.BPMNXML != "" {
-		update.SetBpmnXML([]byte(req.BPMNXML))
-	}
-	if req.ProcessVariables != nil {
-		update.SetProcessVariables(req.ProcessVariables)
 	}
 	if req.IsActive != nil {
 		update.SetIsActive(*req.IsActive)

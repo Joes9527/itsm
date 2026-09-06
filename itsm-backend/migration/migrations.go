@@ -449,6 +449,7 @@ var RegisteredMigrations = []Migration{
 	{Version: "026_intake_actor_provenance", Description: "Preserve immutable native actor provenance for Intake and committed tenant policy effects", RollbackSQL: intakeActorProvenanceDevelopmentResetSQL},
 	{Version: "027_work_item_identity_field_retirement", Description: "Retire duplicate Ticket type and Incident number identity fields"},
 	{Version: "028_service_request_work_item_authority", Description: "Use WorkItem authority for ServiceRequest shared fields"},
+	{Version: "029_catalog_target_class_authority", Description: "Retire legacy Catalog class inference"},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -1099,6 +1100,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
 	case "021_add_callback_optional_declared":
 		return `ALTER TABLE process_callback_outboxes
     ADD COLUMN IF NOT EXISTS optional_declared boolean NOT NULL DEFAULT false;`
+	case "029_catalog_target_class_authority":
+		return catalogTargetClassAuthoritySQL
 	case "028_service_request_work_item_authority":
 		return serviceRequestWorkItemAuthoritySQL
 	case "027_work_item_identity_field_retirement":

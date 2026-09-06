@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent"
@@ -82,10 +83,10 @@ func (ProcessBinding) Fields() []ent.Field {
 			Optional(),
 
 		// 匹配条件JSON
-		field.JSON("conditions", map[string]interface{}{}).
+		field.JSON("conditions", jsonvalue.NumberMap{}).
 			Comment("匹配条件JSON").
 			Optional().
-			Default(map[string]interface{}{}),
+			Default(jsonvalue.NumberMap{}),
 
 		// 审批链ID
 		field.String("approval_chain_id").
@@ -100,10 +101,10 @@ func (ProcessBinding) Fields() []ent.Field {
 			Default(""),
 
 		// 覆盖配置
-		field.JSON("overrides", map[string]interface{}{}).
+		field.JSON("overrides", jsonvalue.NumberMap{}).
 			Comment("覆盖配置").
 			Optional().
-			Default(map[string]interface{}{}),
+			Default(jsonvalue.NumberMap{}),
 
 		// 租户ID
 		field.Int("tenant_id").

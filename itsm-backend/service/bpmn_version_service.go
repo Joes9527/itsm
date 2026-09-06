@@ -48,14 +48,17 @@ type ProcessVersion struct {
 
 // CreateVersionRequest 创建版本请求
 type CreateVersionRequest struct {
-	ProcessDefinitionKey string `json:"processDefinitionKey" binding:"required"`
-	Name                 string `json:"name" binding:"required"`
-	Description          string `json:"description"`
-	BPMNXML              string `json:"bpmnXml" binding:"required"`
-	ChangeLog            string `json:"changeLog"`
-	CompatibilityNotes   string `json:"compatibilityNotes"`
-	TenantID             int    `json:"-" form:"-"`
-	CreatedBy            string `json:"-" form:"-"`
+	BaseVersion          string                 `json:"baseVersion"`
+	Category             *string                `json:"category"`
+	ProcessVariables     map[string]interface{} `json:"processVariables"`
+	ProcessDefinitionKey string                 `json:"processDefinitionKey" binding:"required"`
+	Name                 string                 `json:"name" binding:"required"`
+	Description          string                 `json:"description"`
+	BPMNXML              string                 `json:"bpmnXml" binding:"required"`
+	ChangeLog            string                 `json:"changeLog"`
+	CompatibilityNotes   string                 `json:"compatibilityNotes"`
+	TenantID             int                    `json:"-" form:"-"`
+	CreatedBy            string                 `json:"-" form:"-"`
 }
 
 // UpdateVersionRequest 更新版本请求
@@ -135,7 +138,24 @@ func (s *BPMNVersionService) CreateVersion(ctx context.Context, req *CreateVersi
 	if err != nil {
 		return nil, fmt.Errorf("开启事务失败: %w", err)
 	}
+	defer tx.Rollback()
 	txClient := tx.Client()
+	category, variables := req.Category, req.ProcessVariables
+	if req.BaseVersion != "" {
+		base, err := txClient.ProcessDefinition.Query().Where(processdefinition.TenantIDEQ(tenantID), processdefinition.KeyEQ(req.ProcessDefinitionKey), processdefinition.VersionEQ(req.BaseVersion)).Only(ctx)
+		if ent.IsNotFound(err) {
+			return nil, common.NewValidationError("base process version is unavailable", nil)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if category == nil {
+			category = &base.Category
+		}
+		if variables == nil {
+			variables = base.ProcessVariables
+		}
+	}
 
 	// 把当前 is_latest=true 的旧版本全部降级——不这样做的话，每次 CreateVersion 都会
 	// 让同一个 key 同时存在多行 is_latest=true（新行靠 schema 默认值天生是 true，
@@ -165,6 +185,8 @@ func (s *BPMNVersionService) CreateVersion(ctx context.Context, req *CreateVersi
 		SetKey(req.ProcessDefinitionKey).
 		SetName(req.Name).
 		SetDescription(req.Description).
+		SetNillableCategory(category).
+		SetProcessVariables(variables).
 		SetBpmnXML([]byte(req.BPMNXML)).
 		SetVersion(newVersion).
 		SetTenantID(tenantID).

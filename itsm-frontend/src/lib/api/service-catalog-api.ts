@@ -76,7 +76,9 @@ export class ServiceCatalogApi {
       ciTypeId: typeof raw?.ciTypeId === 'number' ? raw.ciTypeId : undefined,
       cloudServiceId: typeof raw?.cloudServiceId === 'number' ? raw.cloudServiceId : undefined,
       tags: [],
-      requiresApproval: true,
+      requiresApproval: Boolean(raw?.requiresApproval),
+      slaResponseTime: raw?.slaResponseTime,
+      slaResolutionTime: raw?.slaResolutionTime,
       createdBy: 0,
       createdByName: '',
       createdAt: raw?.createdAt ? new Date(raw.createdAt) : new Date(),
@@ -207,8 +209,12 @@ export class ServiceCatalogApi {
       deliveryTime: String(
         request.availability?.responseTime ?? request.availability?.resolutionTime ?? 1
       ),
-      status: ServiceCatalogApi.toBackendStatus(request.status) || 'enabled',
+      status: ServiceCatalogApi.toBackendStatus(request.status) || 'disabled',
       fields: request.fields,
+      targetClass: request.targetClass,
+      requiresApproval: request.requiresApproval,
+      slaResponseTime: request.slaResponseTime,
+      slaResolutionTime: request.slaResolutionTime,
       processDefinitionKey: request.processDefinitionKey,
       serviceType: request.serviceType ? String(request.serviceType) : undefined,
     };
@@ -220,7 +226,10 @@ export class ServiceCatalogApi {
    * 更新服务
    */
   static async updateService(id: string, request: UpdateServiceItemRequest): Promise<ServiceItem> {
-    const payload: Record<string, unknown> = {};
+    const payload: Record<string, unknown> = { expectedCatalogVersion: request.expectedCatalogVersion };
+    for (const key of ['targetClass', 'requiresApproval', 'slaResponseTime', 'slaResolutionTime'] as const) {
+      if (request[key] !== undefined) payload[key] = request[key];
+    }
     if (request.name !== undefined) payload.name = request.name;
     if (request.category !== undefined) payload.category = String(request.category);
     if (request.shortDescription !== undefined || request.fullDescription !== undefined) {
@@ -248,16 +257,16 @@ export class ServiceCatalogApi {
   /**
    * 删除服务
    */
-  static async deleteService(id: string): Promise<void> {
-    return httpClient.delete(`/api/v1/service-catalogs/${id}`);
+  static async deleteService(id: string, expectedCatalogVersion: string): Promise<void> {
+    return httpClient.delete(`/api/v1/service-catalogs/${id}?expectedCatalogVersion=${encodeURIComponent(expectedCatalogVersion)}`);
   }
 
   /**
    * 发布服务
    */
-  static async publishService(id: string): Promise<ServiceItem> {
+  static async publishService(id: string, expectedCatalogVersion: string): Promise<ServiceItem> {
     const resp = await httpClient.put<any>(`/api/v1/service-catalogs/${id}`, {
-      status: 'enabled',
+      status: 'enabled', expectedCatalogVersion,
     });
     return ServiceCatalogApi.toServiceItem(resp);
   }
@@ -265,9 +274,9 @@ export class ServiceCatalogApi {
   /**
    * 停用服务
    */
-  static async retireService(id: string): Promise<ServiceItem> {
+  static async retireService(id: string, expectedCatalogVersion: string): Promise<ServiceItem> {
     const resp = await httpClient.put<any>(`/api/v1/service-catalogs/${id}`, {
-      status: 'disabled',
+      status: 'disabled', expectedCatalogVersion,
     });
     return ServiceCatalogApi.toServiceItem(resp);
   }
@@ -280,7 +289,7 @@ export class ServiceCatalogApi {
     const { id: _omit, ...rest } = src;
     return ServiceCatalogApi.createService({
       ...rest,
-      name,
+      name, status: 'draft' as ServiceStatus,
     });
   }
 

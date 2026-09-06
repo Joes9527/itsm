@@ -605,6 +605,8 @@ func NewApplication() *Application {
 	// Domain: Service Catalog (DDD)
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, sugar, clients.IntakeDirectorySnapshot())
+	concreteProcessEngine.SetPublicationKAFConfig(cfg)
+	scService.SetPublicationEngine(concreteProcessEngine)
 	scHandler := service_catalog.NewHandler(scService)
 
 	// Domain: CMDB (DDD)
@@ -649,6 +651,7 @@ func NewApplication() *Application {
 			log.Fatalf("Invalid Intake creator registry: %v", err)
 		}
 	}
+	scService.SetCreatorRegistry(creationRegistry)
 	intakeApplication := intake.NewService(client, intake.NewResolver(scService, processBindingService, configurationItemService, ticketCategoryService), creationRegistry, intake.NewWorkItemCreator(numberAllocator), clients.IntakeDirectorySnapshot())
 	ticketController.SetCreationApplication(intakeApplication)
 	incidentController.SetCreationApplication(intakeApplication)
@@ -1039,6 +1042,9 @@ func InitializeStorage(cfg *config.Config, client *ent.Client, sugar *zap.Sugare
 				}
 				if err := migration.PrepareServiceRequestWorkItemAuthority(ctx, database.GetRawDB()); err != nil {
 					return fmt.Errorf("ServiceRequest WorkItem authority preflight: %w", err)
+				}
+				if err := migration.PrepareCatalogTargetClassAuthority(ctx, database.GetRawDB()); err != nil {
+					return fmt.Errorf("catalog target class preflight: %w", err)
 				}
 				return migration.PrepareIntakeActorProvenance(ctx, database.GetRawDB())
 			},

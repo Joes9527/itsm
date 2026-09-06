@@ -79,8 +79,9 @@ func scSetup(t *testing.T) (*gin.Engine, *ent.Client, int) {
 		Save(ctx)
 	require.NoError(t, err)
 
+	client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("ticket").SetProcessDefinitionKey("none").SetConditions(map[string]interface{}{"no_process": true}).SaveX(ctx)
 	repo := NewEntRepository(client)
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), sameTransactionDirectory{})
+	svc := newCatalogPublisher(repo, client, zaptest.NewLogger(t).Sugar(), sameTransactionDirectory{})
 	h := NewHandler(svc)
 
 	actor := client.User.Create().SetTenantID(tenant.ID).SetUsername("sc-reader" + scUID()).SetEmail("reader" + scUID() + "@example.test").SetPasswordHash("unused").SetName("Reader").SetRole("super_admin").SaveX(ctx)
@@ -109,7 +110,7 @@ func TestHandler_Create_Success(t *testing.T) {
 	require.IsType(t, map[string]interface{}{}, resp.Data)
 	data := resp.Data.(map[string]interface{})
 	assert.Equal(t, req.Name, data["name"])
-	assert.Equal(t, "enabled", data["status"]) // normalizeServiceCatalogRequest 默认 enabled
+	assert.Equal(t, "disabled", data["status"]) // normalizeServiceCatalogRequest 默认 enabled
 }
 
 func TestHandler_Create_MissingName(t *testing.T) {
@@ -190,7 +191,7 @@ func TestHandler_Update_Success(t *testing.T) {
 
 	updated := "Renamed-" + uid
 	resp := scDoReq(t, r, "PUT", "/api/v1/service-catalogs/"+strconv.Itoa(id),
-		dto.UpdateServiceCatalogRequest{Name: updated, Status: "disabled"})
+		dto.UpdateServiceCatalogRequest{ExpectedCatalogVersion: create.Data.(map[string]interface{})["catalogVersion"].(string), Name: &updated, Status: scPtr("disabled")})
 	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", mustSC(resp))
 	assert.Equal(t, updated, resp.Data.(map[string]interface{})["name"])
 	assert.Equal(t, "disabled", resp.Data.(map[string]interface{})["status"])
@@ -205,7 +206,7 @@ func TestHandler_Delete_Success(t *testing.T) {
 	require.Equal(t, common.SuccessCode, create.Code)
 	id := int(create.Data.(map[string]interface{})["id"].(float64))
 
-	del := scDoReq(t, r, "DELETE", "/api/v1/service-catalogs/"+strconv.Itoa(id), nil)
+	del := scDoReq(t, r, "DELETE", "/api/v1/service-catalogs/"+strconv.Itoa(id)+"?expectedCatalogVersion="+create.Data.(map[string]interface{})["catalogVersion"].(string), nil)
 	require.Equal(t, common.SuccessCode, del.Code, "body=%s", mustSC(del))
 
 	// 删除采用归档禁用，保留目录历史
@@ -264,7 +265,7 @@ func TestHandler_Search(t *testing.T) {
 	r, _, _ := scSetup(t)
 	uid := scUID()
 	scDoReq(t, r, "POST", "/api/v1/service-catalogs", dto.CreateServiceCatalogRequest{
-		Name: "SearchCat-" + uid, Category: "hw",
+		Name: "SearchCat-" + uid, Category: "hw", Status: "enabled", TargetClass: "generic",
 	})
 	resp := scDoReq(t, r, "GET", "/api/v1/service-catalogs/search?q=SearchCat", nil)
 	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", mustSC(resp))

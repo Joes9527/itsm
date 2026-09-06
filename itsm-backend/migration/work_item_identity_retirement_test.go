@@ -15,5 +15,5 @@ func TestIdentityRetirementOperationalSQLMatchesRegisteredMigration(t *testing.T
 	verify, err := os.ReadFile("../migrations/" + version + "_verify.sql")
 	require.NoError(t, err)
 	require.Equal(t, strings.TrimSpace(workItemIdentityRetirementVerifySQL), strings.TrimSpace(string(verify)))
-	require.Equal(t, version, RegisteredMigrations[len(RegisteredMigrations)-2].Version)
+	require.Equal(t, version, RegisteredMigrations[len(RegisteredMigrations)-3].Version)
 }

@@ -2,7 +2,14 @@ package service_catalog
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"itsm-backend/dto"
+	"itsm-backend/ent/servicecatalog"
+	creation "itsm-backend/handlers/common/workitemcreation"
+	"strconv"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 	"itsm-backend/common"
@@ -13,10 +20,14 @@ import (
 
 // Service defines the business logic
 type Service struct {
-	repo      Repository
-	client    *ent.Client
-	logger    *zap.SugaredLogger
-	directory database.DirectorySnapshot
+	repo              Repository
+	client            *ent.Client
+	logger            *zap.SugaredLogger
+	directory         database.DirectorySnapshot
+	publicationEngine *service.CustomProcessEngine
+	creators          interface {
+		Get(string) (creation.ProfessionalCreator, error)
+	}
 }
 
 // NewService creates the Catalog owner. Directory is required for authenticated
@@ -30,107 +41,180 @@ func NewService(repo Repository, client *ent.Client, logger *zap.SugaredLogger, 
 	}
 }
 
-func (s *Service) Create(ctx context.Context, name, category, description string, deliveryTime, tenantID int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput, processDefinitionKey string, serviceType string) (*ServiceCatalog, error) {
-	name = strings.TrimSpace(name)
-	category = strings.TrimSpace(category)
-	if name == "" || category == "" {
-		return nil, common.NewBadRequestError("Service name and category are required", nil)
+func (s *Service) Create(ctx context.Context, tenantID int, input dto.CreateServiceCatalogRequest) (*ServiceCatalog, error) {
+	delivery := 1
+	var err error
+	if input.DeliveryTime != "" {
+		delivery, err = strconv.Atoi(input.DeliveryTime)
+		if err != nil {
+			return nil, common.NewBadRequestError("invalid deliveryTime", err)
+		}
 	}
-	if deliveryTime == 0 {
-		deliveryTime = 1
-	}
-	if deliveryTime < 1 || deliveryTime > 3650 {
-		return nil, common.NewBadRequestError("Delivery time must be between 1 and 3650 days", nil)
-	}
+	status := input.Status
 	if status == "" {
-		status = "enabled"
+		status = "disabled"
 	}
-	if !isValidCatalogStatus(status) {
-		return nil, common.NewBadRequestError("Invalid service catalog status", nil)
-	}
-	if cloudServiceID > 0 && ciTypeID == 0 {
-		return nil, common.NewBadRequestError("CI type is required when linking a cloud service", nil)
-	}
-	exists, err := s.repo.NameExists(ctx, tenantID, name, 0)
+	catalog := &ServiceCatalog{Name: strings.TrimSpace(input.Name), Category: strings.TrimSpace(input.Category), Description: input.Description, DeliveryTime: delivery, TenantID: tenantID, Status: status, CITypeID: input.CITypeID, CloudServiceID: input.CloudServiceID, ProcessDefinitionKey: strings.TrimSpace(input.ProcessDefinitionKey), ServiceType: input.ServiceType, TargetClass: input.TargetClass, RequiresApproval: input.RequiresApproval, SLAResponseTime: input.SLAResponseTime, SLAResolutionTime: input.SLAResolutionTime, Fields: nil}
+	fields, err := catalogFieldInputs(input.Fields)
 	if err != nil {
-		return nil, common.NewInternalError("Failed to validate service catalog name", err)
+		return nil, common.NewBadRequestError("invalid fields", err)
 	}
-	if exists {
-		return nil, common.NewConflictError("Service catalog name", name)
+	catalog.Fields = fields
+	if s.client == nil {
+		return nil, creation.NewInfrastructureUnavailable("catalog transaction client is required", nil)
 	}
-	if err := s.repo.ValidateReferences(ctx, tenantID, ciTypeID, cloudServiceID); err != nil {
-		return nil, common.NewBadRequestError(err.Error(), err)
-	}
-	catalog := &ServiceCatalog{
-		Name:                 name,
-		Category:             category,
-		Description:          description,
-		DeliveryTime:         deliveryTime,
-		CITypeID:             ciTypeID,
-		CloudServiceID:       cloudServiceID,
-		ProcessDefinitionKey: strings.TrimSpace(processDefinitionKey),
-		Status:               status,
-		TenantID:             tenantID,
-		ServiceType:          strings.TrimSpace(serviceType),
-	}
-	created, err := s.repo.Create(ctx, catalog)
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return nil, err
 	}
-	if s.client != nil {
-		if _, err := service.NewFieldDefinitionService(s.client).ReplaceDefinitions(ctx, tenantID, "service_catalog", created.ID, fields); err != nil {
-			return nil, common.NewInternalError("Failed to save custom field definitions", err)
-		}
+	defer tx.Rollback()
+	repo := NewEntRepository(tx.Client())
+	if err := s.validateDefinition(ctx, repo, catalog); err != nil {
+		return nil, err
 	}
-	created.Fields = fields
-	return created, nil
+	created, err := repo.Create(ctx, catalog)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := service.NewFieldDefinitionService(tx.Client()).ReplaceDefinitionsTx(ctx, tx, tenantID, "service_catalog", created.ID, catalog.Fields); err != nil {
+		return nil, common.NewBadRequestError("invalid field definitions", err)
+	}
+	result, err := s.finishDefinition(ctx, tx, tenantID, created.ID)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
-func (s *Service) Get(ctx context.Context, tenantID int, id int) (*ServiceCatalog, error) {
-	catalog, err := s.repo.Get(ctx, tenantID, id)
+func (s *Service) validateDefinition(ctx context.Context, repo Repository, catalog *ServiceCatalog) error {
+	if catalog.TenantID <= 0 || catalog.Name == "" || catalog.Category == "" {
+		return common.NewBadRequestError("name, category and tenant are required", nil)
+	}
+	if catalog.DeliveryTime < 1 || catalog.DeliveryTime > 3650 {
+		return common.NewBadRequestError("Delivery time must be between 1 and 3650 days", nil)
+	}
+	if !isValidCatalogStatus(catalog.Status) {
+		return common.NewBadRequestError("invalid catalog status", nil)
+	}
+	if catalog.SLAResponseTime < 0 || catalog.SLAResolutionTime < 0 || catalog.CITypeID < 0 || catalog.CloudServiceID < 0 {
+		return common.NewBadRequestError("configuration values cannot be negative", nil)
+	}
+	if catalog.CloudServiceID > 0 && catalog.CITypeID == 0 {
+		return common.NewBadRequestError("cloud service requires CI type", nil)
+	}
+	exists, err := repo.NameExists(ctx, catalog.TenantID, catalog.Name, catalog.ID)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return common.NewConflictError("Service catalog name", catalog.Name)
+	}
+	if err := repo.ValidateReferences(ctx, catalog.TenantID, catalog.CITypeID, catalog.CloudServiceID); err != nil {
+		return common.NewBadRequestError("invalid catalog references", err)
+	}
+	return nil
+}
+
+// finishDefinition is shared by all mutations: validate the entire persisted
+// candidate and expose exactly its confirmation revision before committing.
+func (s *Service) finishDefinition(ctx context.Context, tx *ent.Tx, tenantID, id int) (*ServiceCatalog, error) {
+	row, err := tx.ServiceCatalog.Query().Where(servicecatalog.IDEQ(id), servicecatalog.TenantIDEQ(tenantID)).Only(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if s.client != nil {
-		defs, err := service.NewFieldDefinitionService(s.client).ListDefinitions(ctx, tenantID, "service_catalog", catalog.ID)
-		if err != nil {
-			s.logger.Warnw("Failed to load field definitions for service catalog", "error", err, "catalog_id", catalog.ID)
-		} else {
-			catalog.Fields = toFieldDefinitionInputsFromEnt(defs)
+	revision, defs, _, err := s.projectCreationCatalog(ctx, tx, creation.Identity{TenantID: tenantID}, row)
+	if err != nil {
+		return nil, err
+	}
+	result := NewEntRepository(tx.Client()).toDomain(row)
+	result.Fields = toFieldDefinitionInputsFromEnt(defs)
+	if row.IsActive && (row.Status == "enabled" || row.Status == "active") {
+		if err := s.validateForPublicationTx(ctx, tx, tenantID, result); err != nil {
+			return nil, err
 		}
 	}
-	return catalog, nil
+	result.CatalogVersion = revision.Version
+	result.FormSchemaVersion = revision.FormSchemaVersion
+	return result, nil
+}
+
+func (s *Service) Get(ctx context.Context, tenantID, id int) (*ServiceCatalog, error) {
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	row, err := tx.ServiceCatalog.Query().Where(servicecatalog.TenantIDEQ(tenantID), servicecatalog.IDEQ(id)).Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+	result := NewEntRepository(tx.Client()).toDomain(row)
+	if err := s.attachRevision(ctx, tx, tenantID, result); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (s *Service) List(ctx context.Context, tenantID int, filters ListFilters) ([]*ServiceCatalog, int, error) {
+	return s.listSnapshot(ctx, tenantID, filters, "", false)
+}
+
+func (s *Service) listSnapshot(ctx context.Context, tenantID int, filters ListFilters, keyword string, search bool) ([]*ServiceCatalog, int, error) {
 	if filters.Page < 1 {
 		filters.Page = 1
 	}
 	if filters.Size < 1 {
-		filters.Size = 10
+		filters.Size = 20
 	}
 	if filters.Size > 100 {
 		filters.Size = 100
 	}
-	catalogs, total, err := s.repo.List(ctx, tenantID, filters)
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
 		return nil, 0, err
 	}
-	if s.client != nil && len(catalogs) > 0 {
-		ids := make([]int, len(catalogs))
-		for i, c := range catalogs {
-			ids[i] = c.ID
-		}
-		defsByCatalog, err := service.NewFieldDefinitionService(s.client).ListDefinitionsForEntities(ctx, tenantID, "service_catalog", ids)
-		if err != nil {
-			s.logger.Warnw("Failed to batch-load field definitions for service catalogs", "error", err)
-		} else {
-			for _, c := range catalogs {
-				c.Fields = toFieldDefinitionInputsFromEnt(defsByCatalog[c.ID])
-			}
+	defer tx.Rollback()
+	repo := NewEntRepository(tx.Client())
+	var catalogs []*ServiceCatalog
+	var total int
+	if search {
+		catalogs, total, err = repo.Search(ctx, tenantID, keyword, filters)
+	} else {
+		catalogs, total, err = repo.List(ctx, tenantID, filters)
+	}
+	if err != nil {
+		return nil, 0, err
+	}
+	for _, catalog := range catalogs {
+		if err := s.attachRevision(ctx, tx, tenantID, catalog); err != nil {
+			return nil, 0, err
 		}
 	}
+	if err := tx.Commit(); err != nil {
+		return nil, 0, err
+	}
 	return catalogs, total, nil
+}
+
+func (s *Service) attachRevision(ctx context.Context, tx *ent.Tx, tenantID int, catalog *ServiceCatalog) error {
+	row, err := tx.ServiceCatalog.Query().Where(servicecatalog.IDEQ(catalog.ID), servicecatalog.TenantIDEQ(tenantID)).Only(ctx)
+	if err != nil {
+		return err
+	}
+	revision, defs, _, err := s.projectCreationCatalog(ctx, tx, creation.Identity{TenantID: tenantID}, row)
+	if err != nil {
+		return err
+	}
+	catalog.CatalogVersion = revision.Version
+	catalog.FormSchemaVersion = revision.FormSchemaVersion
+	catalog.Fields = toFieldDefinitionInputsFromEnt(defs)
+	return nil
 }
 
 // toFieldDefinitionInputsFromEnt 把查出来的 ent.FieldDefinition 转成领域层的 FieldDefinitionInput。
@@ -145,136 +229,109 @@ func toFieldDefinitionInputsFromEnt(defs []*ent.FieldDefinition) []service.Field
 	return result
 }
 
-func (s *Service) Update(ctx context.Context, tenantID int, id int, name, category, description string, deliveryTime int, status string, ciTypeID, cloudServiceID int, fields []service.FieldDefinitionInput, processDefinitionKey string, serviceType string) (*ServiceCatalog, error) {
-	// First check if exists
-	current, err := s.repo.Get(ctx, tenantID, id)
+func (s *Service) Update(ctx context.Context, tenantID, id int, input dto.UpdateServiceCatalogRequest) (*ServiceCatalog, error) {
+	if input.ExpectedCatalogVersion == "" {
+		return nil, creation.NewCatalogVersionConflict("expected catalog version is required", nil)
+	}
+	if s.client == nil {
+		return nil, creation.NewInfrastructureUnavailable("catalog transaction client is required", nil)
+	}
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return nil, err
 	}
-
-	name = strings.TrimSpace(name)
-	category = strings.TrimSpace(category)
-	if deliveryTime < 0 || deliveryTime > 3650 {
-		return nil, common.NewBadRequestError("Delivery time must be between 1 and 3650 days", nil)
-	}
-	if status != "" && !isValidCatalogStatus(status) {
-		return nil, common.NewBadRequestError("Invalid service catalog status", nil)
-	}
-	effectiveName := current.Name
-	if name != "" {
-		effectiveName = name
-	}
-	exists, err := s.repo.NameExists(ctx, tenantID, effectiveName, id)
+	defer tx.Rollback()
+	// Lock the host before projecting the old contract. Concurrent writers wait,
+	// then compare against the committed current definition, including its fields.
+	row, err := tx.ServiceCatalog.UpdateOneID(id).Where(servicecatalog.TenantIDEQ(tenantID)).SetUpdatedAt(time.Now()).Save(ctx)
 	if err != nil {
-		return nil, common.NewInternalError("Failed to validate service catalog name", err)
+		return nil, catalogMutationError(err)
 	}
-	if exists {
-		return nil, common.NewConflictError("Service catalog name", effectiveName)
-	}
-	effectiveCITypeID := current.CITypeID
-	if ciTypeID > 0 {
-		effectiveCITypeID = ciTypeID
-	}
-	effectiveCloudServiceID := current.CloudServiceID
-	if cloudServiceID > 0 {
-		effectiveCloudServiceID = cloudServiceID
-	}
-	if effectiveCloudServiceID > 0 && effectiveCITypeID == 0 {
-		return nil, common.NewBadRequestError("CI type is required when linking a cloud service", nil)
-	}
-	if err := s.repo.ValidateReferences(ctx, tenantID, effectiveCITypeID, effectiveCloudServiceID); err != nil {
-		return nil, common.NewBadRequestError(err.Error(), err)
-	}
-
-	// Apply updates
-	if name != "" {
-		current.Name = name
-	}
-	if category != "" {
-		current.Category = category
-	}
-	if description != "" {
-		current.Description = description
-	}
-	if deliveryTime > 0 {
-		current.DeliveryTime = deliveryTime
-	}
-	if status != "" {
-		current.Status = status
-	}
-	if ciTypeID > 0 {
-		current.CITypeID = ciTypeID
-	}
-	if cloudServiceID > 0 {
-		current.CloudServiceID = cloudServiceID
-	}
-	if key := strings.TrimSpace(processDefinitionKey); key != "" {
-		current.ProcessDefinitionKey = key
-	}
-	if st := strings.TrimSpace(serviceType); st != "" {
-		current.ServiceType = st
-	}
-
-	updated, err := s.repo.Update(ctx, tenantID, current)
+	old, defs, _, err := s.projectCreationCatalog(ctx, tx, creation.Identity{TenantID: tenantID}, row)
 	if err != nil {
 		return nil, err
 	}
-	if fields != nil && s.client != nil {
-		if _, err := service.NewFieldDefinitionService(s.client).ReplaceDefinitions(ctx, tenantID, "service_catalog", id, fields); err != nil {
-			return nil, common.NewInternalError("Failed to save custom field definitions", err)
+	if old.Version != input.ExpectedCatalogVersion {
+		return nil, creation.NewCatalogVersionConflict("catalog changed; reload and reconfirm", nil)
+	}
+	repo := NewEntRepository(tx.Client())
+	current := repo.toDomain(row)
+	current.Fields = toFieldDefinitionInputsFromEnt(defs)
+	if input.Name != nil {
+		current.Name = strings.TrimSpace(*input.Name)
+	}
+	if input.Category != nil {
+		current.Category = strings.TrimSpace(*input.Category)
+	}
+	if input.Description != nil {
+		current.Description = *input.Description
+	}
+	if input.DeliveryTime != nil {
+		current.DeliveryTime, err = strconv.Atoi(*input.DeliveryTime)
+		if err != nil {
+			return nil, common.NewBadRequestError("invalid deliveryTime", err)
 		}
-		updated.Fields = fields
 	}
-	return updated, nil
+	if input.Status != nil {
+		current.Status = *input.Status
+	}
+	if input.CITypeID != nil {
+		current.CITypeID = *input.CITypeID
+	}
+	if input.CloudServiceID != nil {
+		current.CloudServiceID = *input.CloudServiceID
+	}
+	if input.ProcessDefinitionKey != nil {
+		current.ProcessDefinitionKey = strings.TrimSpace(*input.ProcessDefinitionKey)
+	}
+	if input.ServiceType != nil {
+		current.ServiceType = *input.ServiceType
+	}
+	if input.TargetClass != nil {
+		current.TargetClass = *input.TargetClass
+	}
+	if input.RequiresApproval != nil {
+		current.RequiresApproval = *input.RequiresApproval
+	}
+	if input.SLAResponseTime != nil {
+		current.SLAResponseTime = *input.SLAResponseTime
+	}
+	if input.SLAResolutionTime != nil {
+		current.SLAResolutionTime = *input.SLAResolutionTime
+	}
+	if err := s.validateDefinition(ctx, repo, current); err != nil {
+		return nil, err
+	}
+	if _, err := repo.Update(ctx, tenantID, current); err != nil {
+		return nil, err
+	}
+	if input.Fields != nil {
+		fields, err := catalogFieldInputs(input.Fields)
+		if err != nil {
+			return nil, common.NewBadRequestError("invalid fields", err)
+		}
+		if _, err := service.NewFieldDefinitionService(tx.Client()).ReplaceDefinitionsTx(ctx, tx, tenantID, "service_catalog", id, fields); err != nil {
+			return nil, common.NewBadRequestError("invalid field definitions", err)
+		}
+	}
+	result, err := s.finishDefinition(ctx, tx, tenantID, id)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
-func (s *Service) Delete(ctx context.Context, tenantID int, id int) error {
-	if _, err := s.repo.Get(ctx, tenantID, id); err != nil {
-		return err
-	}
-	if err := s.repo.Delete(ctx, tenantID, id); err != nil {
-		return err
-	}
-	if s.client != nil {
-		// repo.Delete 是软删除（status=disabled），目录随时可能被重新启用，所以这里用
-		// DisableDefinitions 而不是 DeleteDefinitions——否则目录恢复后自定义字段配置
-		// 已经永久丢了，恢复不回来。
-		if err := service.NewFieldDefinitionService(s.client).DisableDefinitions(ctx, tenantID, "service_catalog", id); err != nil {
-			s.logger.Warnw("Failed to disable field definitions for deleted service catalog", "error", err, "catalog_id", id)
-		}
-	}
-	return nil
+func (s *Service) Delete(ctx context.Context, tenantID, id int, expectedVersion string) error {
+	disabled := "disabled"
+	_, err := s.Update(ctx, tenantID, id, dto.UpdateServiceCatalogRequest{ExpectedCatalogVersion: expectedVersion, Status: &disabled})
+	return err
 }
 
 func (s *Service) Search(ctx context.Context, tenantID int, keyword string, filters ListFilters) ([]*ServiceCatalog, int, error) {
-	if filters.Page < 1 {
-		filters.Page = 1
-	}
-	if filters.Size < 1 {
-		filters.Size = 20
-	}
-	if filters.Size > 100 {
-		filters.Size = 100
-	}
-	catalogs, total, err := s.repo.Search(ctx, tenantID, strings.TrimSpace(keyword), filters)
-	if err != nil {
-		return nil, 0, err
-	}
-	if s.client != nil && len(catalogs) > 0 {
-		ids := make([]int, len(catalogs))
-		for i, c := range catalogs {
-			ids[i] = c.ID
-		}
-		defsByCatalog, err := service.NewFieldDefinitionService(s.client).ListDefinitionsForEntities(ctx, tenantID, "service_catalog", ids)
-		if err != nil {
-			s.logger.Warnw("Failed to batch-load field definitions for service catalogs (search)", "error", err)
-		} else {
-			for _, c := range catalogs {
-				c.Fields = toFieldDefinitionInputsFromEnt(defsByCatalog[c.ID])
-			}
-		}
-	}
-	return catalogs, total, nil
+	return s.listSnapshot(ctx, tenantID, filters, strings.TrimSpace(keyword), true)
 }
 
 func isValidCatalogStatus(status string) bool {
@@ -305,4 +362,22 @@ func (s *Service) GetStats(ctx context.Context, tenantID int) (*ServiceStats, er
 		PublishedServices: enabled,
 		Categories:        byCategory,
 	}, nil
+}
+
+func (s *Service) SetPublicationEngine(engine *service.CustomProcessEngine) {
+	s.publicationEngine = engine
+}
+
+func (s *Service) SetCreatorRegistry(registry interface {
+	Get(string) (creation.ProfessionalCreator, error)
+}) {
+	s.creators = registry
+}
+
+func catalogMutationError(err error) error {
+	var state interface{ SQLState() string }
+	if errors.As(err, &state) && (state.SQLState() == "40001" || state.SQLState() == "40P01") {
+		return creation.NewCatalogVersionConflict("catalog changed; reload and reconfirm", err)
+	}
+	return err
 }

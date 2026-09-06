@@ -479,22 +479,21 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
 
         message.success('工作流创建成功');
       } else {
-        const response = await BPMNWorkflowApi.updateProcessDefinition(
-          workflow.id,
-          workflow.version,
-          {
-            name: workflow.name,
-            description: workflow.description,
-            category: workflow.category,
-            bpmnXml: xml,
-          }
-        );
-
-        updateWorkflow({
-          version: response.version || workflow.version,
+        const response = await BPMNWorkflowApi.createVersion({
+          processDefinitionKey: workflow.id,
+          baseVersion: workflow.version,
+          name: workflow.name,
+          description: workflow.description,
+          category: workflow.category,
+          bpmnXml: xml,
         });
 
-        message.success('工作流更新成功');
+        updateWorkflow({
+          version: response.version,
+          status: 'draft',
+        });
+
+        message.success('新工作流版本已保存');
       }
 
       setCurrentXML(xml);
@@ -553,8 +552,6 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
     setSaving(true);
     setDeploying(true);
     try {
-      const currentVersion = workflow.version || '1.0.0';
-
       if (workflow.id === 'new') {
         const createData = {
           key: `workflow_${Date.now()}`,
@@ -594,10 +591,14 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
           bpmnXml: xml,
         };
 
-        await BPMNWorkflowApi.updateProcessDefinition(workflow.id, currentVersion, updateData);
-        await BPMNWorkflowApi.setProcessDefinitionActive(workflow.id, currentVersion, true);
+        const version = await BPMNWorkflowApi.createVersion({
+          processDefinitionKey: workflow.id,
+          baseVersion: workflow.version,
+          ...updateData,
+        });
+        await BPMNWorkflowApi.setProcessDefinitionActive(workflow.id, version.version, true);
 
-        updateWorkflow({ status: 'active' });
+        updateWorkflow({ version: version.version, status: 'active' });
         message.success('工作流保存并部署成功');
       }
 
@@ -639,8 +640,10 @@ function WorkflowDesignerInner({ workflowId }: { workflowId?: string }) {
     try {
       await BPMNWorkflowApi.createVersion({
         processDefinitionKey: workflow.id,
+        baseVersion: workflow.version,
         name: workflow.name,
         description: workflow.description,
+        category: workflow.category,
         bpmnXml: currentXML,
         changeLog: '创建新版本',
       });

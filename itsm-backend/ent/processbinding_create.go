@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/processbinding"
 	"itsm-backend/ent/processdefinition"
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -176,7 +177,7 @@ func (_c *ProcessBindingCreate) SetNillableCategoryID(v *int) *ProcessBindingCre
 }
 
 // SetConditions sets the "conditions" field.
-func (_c *ProcessBindingCreate) SetConditions(v map[string]interface{}) *ProcessBindingCreate {
+func (_c *ProcessBindingCreate) SetConditions(v jsonvalue.NumberMap) *ProcessBindingCreate {
 	_c.mutation.SetConditions(v)
 	return _c
 }
@@ -210,7 +211,7 @@ func (_c *ProcessBindingCreate) SetNillableSLAPolicyID(v *string) *ProcessBindin
 }
 
 // SetOverrides sets the "overrides" field.
-func (_c *ProcessBindingCreate) SetOverrides(v map[string]interface{}) *ProcessBindingCreate {
+func (_c *ProcessBindingCreate) SetOverrides(v jsonvalue.NumberMap) *ProcessBindingCreate {
 	_c.mutation.SetOverrides(v)
 	return _c
 }
@@ -788,7 +789,7 @@ func (u *ProcessBindingUpsert) ClearCategoryID() *ProcessBindingUpsert {
 }
 
 // SetConditions sets the "conditions" field.
-func (u *ProcessBindingUpsert) SetConditions(v map[string]interface{}) *ProcessBindingUpsert {
+func (u *ProcessBindingUpsert) SetConditions(v jsonvalue.NumberMap) *ProcessBindingUpsert {
 	u.Set(processbinding.FieldConditions, v)
 	return u
 }
@@ -842,7 +843,7 @@ func (u *ProcessBindingUpsert) ClearSLAPolicyID() *ProcessBindingUpsert {
 }
 
 // SetOverrides sets the "overrides" field.
-func (u *ProcessBindingUpsert) SetOverrides(v map[string]interface{}) *ProcessBindingUpsert {
+func (u *ProcessBindingUpsert) SetOverrides(v jsonvalue.NumberMap) *ProcessBindingUpsert {
 	u.Set(processbinding.FieldOverrides, v)
 	return u
 }
@@ -1187,7 +1188,7 @@ func (u *ProcessBindingUpsertOne) ClearCategoryID() *ProcessBindingUpsertOne {
 }
 
 // SetConditions sets the "conditions" field.
-func (u *ProcessBindingUpsertOne) SetConditions(v map[string]interface{}) *ProcessBindingUpsertOne {
+func (u *ProcessBindingUpsertOne) SetConditions(v jsonvalue.NumberMap) *ProcessBindingUpsertOne {
 	return u.Update(func(s *ProcessBindingUpsert) {
 		s.SetConditions(v)
 	})
@@ -1250,7 +1251,7 @@ func (u *ProcessBindingUpsertOne) ClearSLAPolicyID() *ProcessBindingUpsertOne {
 }
 
 // SetOverrides sets the "overrides" field.
-func (u *ProcessBindingUpsertOne) SetOverrides(v map[string]interface{}) *ProcessBindingUpsertOne {
+func (u *ProcessBindingUpsertOne) SetOverrides(v jsonvalue.NumberMap) *ProcessBindingUpsertOne {
 	return u.Update(func(s *ProcessBindingUpsert) {
 		s.SetOverrides(v)
 	})
@@ -1769,7 +1770,7 @@ func (u *ProcessBindingUpsertBulk) ClearCategoryID() *ProcessBindingUpsertBulk {
 }
 
 // SetConditions sets the "conditions" field.
-func (u *ProcessBindingUpsertBulk) SetConditions(v map[string]interface{}) *ProcessBindingUpsertBulk {
+func (u *ProcessBindingUpsertBulk) SetConditions(v jsonvalue.NumberMap) *ProcessBindingUpsertBulk {
 	return u.Update(func(s *ProcessBindingUpsert) {
 		s.SetConditions(v)
 	})
@@ -1832,7 +1833,7 @@ func (u *ProcessBindingUpsertBulk) ClearSLAPolicyID() *ProcessBindingUpsertBulk 
 }
 
 // SetOverrides sets the "overrides" field.
-func (u *ProcessBindingUpsertBulk) SetOverrides(v map[string]interface{}) *ProcessBindingUpsertBulk {
+func (u *ProcessBindingUpsertBulk) SetOverrides(v jsonvalue.NumberMap) *ProcessBindingUpsertBulk {
 	return u.Update(func(s *ProcessBindingUpsert) {
 		s.SetOverrides(v)
 	})

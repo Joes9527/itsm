@@ -25,3 +25,20 @@ func (m *NumberMap) UnmarshalJSON(raw []byte) error {
 	*m = value
 	return nil
 }
+
+// NumberArray preserves exact option values using the same persistence codec.
+type NumberArray []any
+
+func (a *NumberArray) UnmarshalJSON(raw []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var value []any
+	if err := decoder.Decode(&value); err != nil {
+		return err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return fmt.Errorf("exactly one JSON value is required")
+	}
+	*a = value
+	return nil
+}

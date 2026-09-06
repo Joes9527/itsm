@@ -166,7 +166,7 @@ describe('useServiceCatalog hooks', () => {
     it('publishes service', async () => {
       mockApi.publishService.mockResolvedValue(undefined as any);
       const { result } = renderHook(() => usePublishServiceMutation(), { wrapper: createWrapper() });
-      act(() => { result.current.mutate('s1'); });
+      act(() => { result.current.mutate({id: 's1', expectedCatalogVersion: 'v1'}); });
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(message.success).toHaveBeenCalled();
     });

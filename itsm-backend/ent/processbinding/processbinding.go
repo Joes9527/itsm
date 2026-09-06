@@ -3,6 +3,7 @@
 package processbinding
 
 import (
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -132,13 +133,13 @@ var (
 	// DefaultCategory holds the default value on creation for the "category" field.
 	DefaultCategory string
 	// DefaultConditions holds the default value on creation for the "conditions" field.
-	DefaultConditions map[string]interface{}
+	DefaultConditions jsonvalue.NumberMap
 	// DefaultApprovalChainID holds the default value on creation for the "approval_chain_id" field.
 	DefaultApprovalChainID string
 	// DefaultSLAPolicyID holds the default value on creation for the "sla_policy_id" field.
 	DefaultSLAPolicyID string
 	// DefaultOverrides holds the default value on creation for the "overrides" field.
-	DefaultOverrides map[string]interface{}
+	DefaultOverrides jsonvalue.NumberMap
 	// TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	TenantIDValidator func(int) error
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.

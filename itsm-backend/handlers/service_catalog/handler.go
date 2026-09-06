@@ -1,14 +1,16 @@
 package service_catalog
 
 import (
+	"encoding/json"
 	"errors"
+	"github.com/gin-gonic/gin/binding"
+	"io"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"strconv"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
-	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -126,7 +128,7 @@ func (h *Handler) Get(c *gin.Context) {
 // Create handles CreateServiceCatalog
 func (h *Handler) Create(c *gin.Context) {
 	var req dto.CreateServiceCatalogRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := bindCatalogJSON(c, &req); err != nil {
 		common.Fail(c, 1001, "参数错误: "+err.Error())
 		return
 	}
@@ -142,32 +144,7 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	deliveryTime := 0
-	if req.DeliveryTime != "" {
-		val, parseErr := strconv.Atoi(req.DeliveryTime)
-		if parseErr != nil || val <= 0 {
-			common.Fail(c, common.ParamErrorCode, "deliveryTime 必须为正整数天数")
-			return
-		}
-		deliveryTime = val
-	}
-
-	fields := service.ToFieldDefinitionInputs(req.Fields)
-
-	catalog, err := h.service.Create(
-		c.Request.Context(),
-		req.Name,
-		req.Category,
-		req.Description,
-		deliveryTime,
-		tenantID,
-		req.Status,
-		req.CITypeID,
-		req.CloudServiceID,
-		fields,
-		req.ProcessDefinitionKey,
-		req.ServiceType,
-	)
+	catalog, err := h.service.Create(c.Request.Context(), tenantID, req)
 	if err != nil {
 		failServiceCatalog(c, err)
 		return
@@ -185,7 +162,7 @@ func (h *Handler) Update(c *gin.Context) {
 	}
 
 	var req dto.UpdateServiceCatalogRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := bindCatalogJSON(c, &req); err != nil {
 		common.Fail(c, 1001, "参数错误: "+err.Error())
 		return
 	}
@@ -197,43 +174,7 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 
-	deliveryTime := 0
-	if req.DeliveryTime != "" {
-		val, parseErr := strconv.Atoi(req.DeliveryTime)
-		if parseErr != nil || val <= 0 {
-			common.Fail(c, common.ParamErrorCode, "deliveryTime 必须为正整数天数")
-			return
-		}
-		deliveryTime = val
-	}
-
-	var fields []service.FieldDefinitionInput
-	if req.Fields != nil {
-		fields = service.ToFieldDefinitionInputs(req.Fields)
-	}
-
-	_, err = h.service.Update(
-		c.Request.Context(),
-		tenantID,
-		id,
-		req.Name,
-		req.Category,
-		req.Description,
-		deliveryTime,
-		req.Status,
-		req.CITypeID,
-		req.CloudServiceID,
-		fields,
-		req.ProcessDefinitionKey,
-		req.ServiceType,
-	)
-	if err != nil {
-		failServiceCatalog(c, err)
-		return
-	}
-
-	// Fetch updated to return full object
-	updated, err := h.service.Get(c.Request.Context(), tenantID, id)
+	updated, err := h.service.Update(c.Request.Context(), tenantID, id, req)
 	if err != nil {
 		failServiceCatalog(c, err)
 		return
@@ -247,7 +188,7 @@ func normalizeServiceCatalogRequest(req *dto.CreateServiceCatalogRequest) {
 		req.DeliveryTime = "1"
 	}
 	if req.Status == "" {
-		req.Status = "enabled"
+		req.Status = "disabled"
 	}
 }
 
@@ -268,7 +209,7 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.Delete(c.Request.Context(), tenantID, id); err != nil {
+	if err := h.service.Delete(c.Request.Context(), tenantID, id, c.Query("expectedCatalogVersion")); err != nil {
 		failServiceCatalog(c, err)
 		return
 	}
@@ -333,7 +274,7 @@ func (h *Handler) toDTO(c *ServiceCatalog) dto.ServiceCatalogResponse {
 	for _, d := range c.Fields {
 		fields = append(fields, map[string]interface{}{
 			"name": d.Name, "label": d.Label, "type": d.FieldType,
-			"required": d.Required, "options": d.Options,
+			"required": d.Required, "options": d.Options, "sortOrder": d.SortOrder,
 		})
 	}
 	return dto.ServiceCatalogResponse{
@@ -349,9 +290,23 @@ func (h *Handler) toDTO(c *ServiceCatalog) dto.ServiceCatalogResponse {
 		Status:               c.Status,
 		ServiceType:          c.ServiceType,
 		TargetClass:          c.TargetClass,
-		RequiresInfraFields:  RequiresInfraFields(c.ServiceType),
-		Fields:               fields,
-		CreatedAt:            c.CreatedAt,
-		UpdatedAt:            c.UpdatedAt,
+		RequiresApproval:     c.RequiresApproval, SLAResponseTime: c.SLAResponseTime, SLAResolutionTime: c.SLAResolutionTime,
+		RequiresInfraFields: RequiresInfraFields(c.ServiceType),
+		Fields:              fields,
+		CreatedAt:           c.CreatedAt,
+		UpdatedAt:           c.UpdatedAt,
 	}
+}
+
+func bindCatalogJSON(c *gin.Context, value any) error {
+	decoder := json.NewDecoder(c.Request.Body)
+	decoder.UseNumber()
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(value); err != nil {
+		return err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return errors.New("exactly one JSON object is required")
+	}
+	return binding.Validator.ValidateStruct(value)
 }

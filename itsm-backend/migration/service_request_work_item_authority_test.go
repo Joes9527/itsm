@@ -15,5 +15,5 @@ func TestServiceRequestAuthorityOperationalSQLMatchesStream(t *testing.T) {
 	verify, err := os.ReadFile("../migrations/" + version + "_verify.sql")
 	require.NoError(t, err)
 	require.Equal(t, strings.TrimSpace(serviceRequestWorkItemAuthorityVerifySQL), strings.TrimSpace(string(verify)))
-	require.Equal(t, version, RegisteredMigrations[len(RegisteredMigrations)-1].Version)
+	require.Equal(t, version, RegisteredMigrations[len(RegisteredMigrations)-2].Version)
 }

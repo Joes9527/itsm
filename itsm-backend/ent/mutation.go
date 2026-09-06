@@ -43199,8 +43199,8 @@ type FieldDefinitionMutation struct {
 	label         *string
 	field_type    *string
 	required      *bool
-	options       *[]interface{}
-	appendoptions []interface{}
+	options       *jsonvalue.NumberArray
+	appendoptions jsonvalue.NumberArray
 	sort_order    *int
 	addsort_order *int
 	_config       *map[string]interface{}
@@ -43604,13 +43604,13 @@ func (m *FieldDefinitionMutation) ResetRequired() {
 }
 
 // SetOptions sets the "options" field.
-func (m *FieldDefinitionMutation) SetOptions(i []interface{}) {
-	m.options = &i
+func (m *FieldDefinitionMutation) SetOptions(ja jsonvalue.NumberArray) {
+	m.options = &ja
 	m.appendoptions = nil
 }
 
 // Options returns the value of the "options" field in the mutation.
-func (m *FieldDefinitionMutation) Options() (r []interface{}, exists bool) {
+func (m *FieldDefinitionMutation) Options() (r jsonvalue.NumberArray, exists bool) {
 	v := m.options
 	if v == nil {
 		return
@@ -43621,7 +43621,7 @@ func (m *FieldDefinitionMutation) Options() (r []interface{}, exists bool) {
 // OldOptions returns the old "options" field's value of the FieldDefinition entity.
 // If the FieldDefinition object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *FieldDefinitionMutation) OldOptions(ctx context.Context) (v []interface{}, err error) {
+func (m *FieldDefinitionMutation) OldOptions(ctx context.Context) (v jsonvalue.NumberArray, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldOptions is only allowed on UpdateOne operations")
 	}
@@ -43635,13 +43635,13 @@ func (m *FieldDefinitionMutation) OldOptions(ctx context.Context) (v []interface
 	return oldValue.Options, nil
 }
 
-// AppendOptions adds i to the "options" field.
-func (m *FieldDefinitionMutation) AppendOptions(i []interface{}) {
-	m.appendoptions = append(m.appendoptions, i...)
+// AppendOptions adds ja to the "options" field.
+func (m *FieldDefinitionMutation) AppendOptions(ja jsonvalue.NumberArray) {
+	m.appendoptions = append(m.appendoptions, ja...)
 }
 
 // AppendedOptions returns the list of values that were appended to the "options" field in this mutation.
-func (m *FieldDefinitionMutation) AppendedOptions() ([]interface{}, bool) {
+func (m *FieldDefinitionMutation) AppendedOptions() (jsonvalue.NumberArray, bool) {
 	if len(m.appendoptions) == 0 {
 		return nil, false
 	}
@@ -44083,7 +44083,7 @@ func (m *FieldDefinitionMutation) SetField(name string, value ent.Value) error {
 		m.SetRequired(v)
 		return nil
 	case fielddefinition.FieldOptions:
-		v, ok := value.([]interface{})
+		v, ok := value.(jsonvalue.NumberArray)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -86026,10 +86026,10 @@ type ProcessBindingMutation struct {
 	category                  *string
 	category_id               *int
 	addcategory_id            *int
-	conditions                *map[string]interface{}
+	conditions                *jsonvalue.NumberMap
 	approval_chain_id         *string
 	sla_policy_id             *string
-	overrides                 *map[string]interface{}
+	overrides                 *jsonvalue.NumberMap
 	tenant_id                 *int
 	addtenant_id              *int
 	created_at                *time.Time
@@ -86754,12 +86754,12 @@ func (m *ProcessBindingMutation) ResetCategoryID() {
 }
 
 // SetConditions sets the "conditions" field.
-func (m *ProcessBindingMutation) SetConditions(value map[string]interface{}) {
-	m.conditions = &value
+func (m *ProcessBindingMutation) SetConditions(jm jsonvalue.NumberMap) {
+	m.conditions = &jm
 }
 
 // Conditions returns the value of the "conditions" field in the mutation.
-func (m *ProcessBindingMutation) Conditions() (r map[string]interface{}, exists bool) {
+func (m *ProcessBindingMutation) Conditions() (r jsonvalue.NumberMap, exists bool) {
 	v := m.conditions
 	if v == nil {
 		return
@@ -86770,7 +86770,7 @@ func (m *ProcessBindingMutation) Conditions() (r map[string]interface{}, exists 
 // OldConditions returns the old "conditions" field's value of the ProcessBinding entity.
 // If the ProcessBinding object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ProcessBindingMutation) OldConditions(ctx context.Context) (v map[string]interface{}, err error) {
+func (m *ProcessBindingMutation) OldConditions(ctx context.Context) (v jsonvalue.NumberMap, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldConditions is only allowed on UpdateOne operations")
 	}
@@ -86901,12 +86901,12 @@ func (m *ProcessBindingMutation) ResetSLAPolicyID() {
 }
 
 // SetOverrides sets the "overrides" field.
-func (m *ProcessBindingMutation) SetOverrides(value map[string]interface{}) {
-	m.overrides = &value
+func (m *ProcessBindingMutation) SetOverrides(jm jsonvalue.NumberMap) {
+	m.overrides = &jm
 }
 
 // Overrides returns the value of the "overrides" field in the mutation.
-func (m *ProcessBindingMutation) Overrides() (r map[string]interface{}, exists bool) {
+func (m *ProcessBindingMutation) Overrides() (r jsonvalue.NumberMap, exists bool) {
 	v := m.overrides
 	if v == nil {
 		return
@@ -86917,7 +86917,7 @@ func (m *ProcessBindingMutation) Overrides() (r map[string]interface{}, exists b
 // OldOverrides returns the old "overrides" field's value of the ProcessBinding entity.
 // If the ProcessBinding object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ProcessBindingMutation) OldOverrides(ctx context.Context) (v map[string]interface{}, err error) {
+func (m *ProcessBindingMutation) OldOverrides(ctx context.Context) (v jsonvalue.NumberMap, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldOverrides is only allowed on UpdateOne operations")
 	}
@@ -87395,7 +87395,7 @@ func (m *ProcessBindingMutation) SetField(name string, value ent.Value) error {
 		m.SetCategoryID(v)
 		return nil
 	case processbinding.FieldConditions:
-		v, ok := value.(map[string]interface{})
+		v, ok := value.(jsonvalue.NumberMap)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -87416,7 +87416,7 @@ func (m *ProcessBindingMutation) SetField(name string, value ent.Value) error {
 		m.SetSLAPolicyID(v)
 		return nil
 	case processbinding.FieldOverrides:
-		v, ok := value.(map[string]interface{})
+		v, ok := value.(jsonvalue.NumberMap)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -110782,9 +110782,9 @@ type SLADefinitionMutation struct {
 	addresponse_time   *int
 	resolution_time    *int
 	addresolution_time *int
-	business_hours     *map[string]interface{}
-	escalation_rules   *map[string]interface{}
-	conditions         *map[string]interface{}
+	business_hours     *jsonvalue.NumberMap
+	escalation_rules   *jsonvalue.NumberMap
+	conditions         *jsonvalue.NumberMap
 	exclude_weekends   *bool
 	exclude_holidays   *bool
 	is_active          *bool
@@ -111269,12 +111269,12 @@ func (m *SLADefinitionMutation) ResetResolutionTime() {
 }
 
 // SetBusinessHours sets the "business_hours" field.
-func (m *SLADefinitionMutation) SetBusinessHours(value map[string]interface{}) {
-	m.business_hours = &value
+func (m *SLADefinitionMutation) SetBusinessHours(jm jsonvalue.NumberMap) {
+	m.business_hours = &jm
 }
 
 // BusinessHours returns the value of the "business_hours" field in the mutation.
-func (m *SLADefinitionMutation) BusinessHours() (r map[string]interface{}, exists bool) {
+func (m *SLADefinitionMutation) BusinessHours() (r jsonvalue.NumberMap, exists bool) {
 	v := m.business_hours
 	if v == nil {
 		return
@@ -111285,7 +111285,7 @@ func (m *SLADefinitionMutation) BusinessHours() (r map[string]interface{}, exist
 // OldBusinessHours returns the old "business_hours" field's value of the SLADefinition entity.
 // If the SLADefinition object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLADefinitionMutation) OldBusinessHours(ctx context.Context) (v map[string]interface{}, err error) {
+func (m *SLADefinitionMutation) OldBusinessHours(ctx context.Context) (v jsonvalue.NumberMap, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldBusinessHours is only allowed on UpdateOne operations")
 	}
@@ -111318,12 +111318,12 @@ func (m *SLADefinitionMutation) ResetBusinessHours() {
 }
 
 // SetEscalationRules sets the "escalation_rules" field.
-func (m *SLADefinitionMutation) SetEscalationRules(value map[string]interface{}) {
-	m.escalation_rules = &value
+func (m *SLADefinitionMutation) SetEscalationRules(jm jsonvalue.NumberMap) {
+	m.escalation_rules = &jm
 }
 
 // EscalationRules returns the value of the "escalation_rules" field in the mutation.
-func (m *SLADefinitionMutation) EscalationRules() (r map[string]interface{}, exists bool) {
+func (m *SLADefinitionMutation) EscalationRules() (r jsonvalue.NumberMap, exists bool) {
 	v := m.escalation_rules
 	if v == nil {
 		return
@@ -111334,7 +111334,7 @@ func (m *SLADefinitionMutation) EscalationRules() (r map[string]interface{}, exi
 // OldEscalationRules returns the old "escalation_rules" field's value of the SLADefinition entity.
 // If the SLADefinition object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLADefinitionMutation) OldEscalationRules(ctx context.Context) (v map[string]interface{}, err error) {
+func (m *SLADefinitionMutation) OldEscalationRules(ctx context.Context) (v jsonvalue.NumberMap, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldEscalationRules is only allowed on UpdateOne operations")
 	}
@@ -111367,12 +111367,12 @@ func (m *SLADefinitionMutation) ResetEscalationRules() {
 }
 
 // SetConditions sets the "conditions" field.
-func (m *SLADefinitionMutation) SetConditions(value map[string]interface{}) {
-	m.conditions = &value
+func (m *SLADefinitionMutation) SetConditions(jm jsonvalue.NumberMap) {
+	m.conditions = &jm
 }
 
 // Conditions returns the value of the "conditions" field in the mutation.
-func (m *SLADefinitionMutation) Conditions() (r map[string]interface{}, exists bool) {
+func (m *SLADefinitionMutation) Conditions() (r jsonvalue.NumberMap, exists bool) {
 	v := m.conditions
 	if v == nil {
 		return
@@ -111383,7 +111383,7 @@ func (m *SLADefinitionMutation) Conditions() (r map[string]interface{}, exists b
 // OldConditions returns the old "conditions" field's value of the SLADefinition entity.
 // If the SLADefinition object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *SLADefinitionMutation) OldConditions(ctx context.Context) (v map[string]interface{}, err error) {
+func (m *SLADefinitionMutation) OldConditions(ctx context.Context) (v jsonvalue.NumberMap, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldConditions is only allowed on UpdateOne operations")
 	}
@@ -112090,21 +112090,21 @@ func (m *SLADefinitionMutation) SetField(name string, value ent.Value) error {
 		m.SetResolutionTime(v)
 		return nil
 	case sladefinition.FieldBusinessHours:
-		v, ok := value.(map[string]interface{})
+		v, ok := value.(jsonvalue.NumberMap)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetBusinessHours(v)
 		return nil
 	case sladefinition.FieldEscalationRules:
-		v, ok := value.(map[string]interface{})
+		v, ok := value.(jsonvalue.NumberMap)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetEscalationRules(v)
 		return nil
 	case sladefinition.FieldConditions:
-		v, ok := value.(map[string]interface{})
+		v, ok := value.(jsonvalue.NumberMap)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
@@ -115206,7 +115206,6 @@ type ServiceCatalogMutation struct {
 	category                *string
 	icon                    *string
 	service_type            *string
-	itsm_type               *string
 	target_class            *string
 	price                   *float64
 	addprice                *float64
@@ -115560,42 +115559,6 @@ func (m *ServiceCatalogMutation) OldServiceType(ctx context.Context) (v string, 
 // ResetServiceType resets all changes to the "service_type" field.
 func (m *ServiceCatalogMutation) ResetServiceType() {
 	m.service_type = nil
-}
-
-// SetItsmType sets the "itsm_type" field.
-func (m *ServiceCatalogMutation) SetItsmType(s string) {
-	m.itsm_type = &s
-}
-
-// ItsmType returns the value of the "itsm_type" field in the mutation.
-func (m *ServiceCatalogMutation) ItsmType() (r string, exists bool) {
-	v := m.itsm_type
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldItsmType returns the old "itsm_type" field's value of the ServiceCatalog entity.
-// If the ServiceCatalog object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *ServiceCatalogMutation) OldItsmType(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldItsmType is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldItsmType requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldItsmType: %w", err)
-	}
-	return oldValue.ItsmType, nil
-}
-
-// ResetItsmType resets all changes to the "itsm_type" field.
-func (m *ServiceCatalogMutation) ResetItsmType() {
-	m.itsm_type = nil
 }
 
 // SetTargetClass sets the "target_class" field.
@@ -116742,7 +116705,7 @@ func (m *ServiceCatalogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ServiceCatalogMutation) Fields() []string {
-	fields := make([]string, 0, 26)
+	fields := make([]string, 0, 25)
 	if m.name != nil {
 		fields = append(fields, servicecatalog.FieldName)
 	}
@@ -116757,9 +116720,6 @@ func (m *ServiceCatalogMutation) Fields() []string {
 	}
 	if m.service_type != nil {
 		fields = append(fields, servicecatalog.FieldServiceType)
-	}
-	if m.itsm_type != nil {
-		fields = append(fields, servicecatalog.FieldItsmType)
 	}
 	if m.target_class != nil {
 		fields = append(fields, servicecatalog.FieldTargetClass)
@@ -116839,8 +116799,6 @@ func (m *ServiceCatalogMutation) Field(name string) (ent.Value, bool) {
 		return m.Icon()
 	case servicecatalog.FieldServiceType:
 		return m.ServiceType()
-	case servicecatalog.FieldItsmType:
-		return m.ItsmType()
 	case servicecatalog.FieldTargetClass:
 		return m.TargetClass()
 	case servicecatalog.FieldPrice:
@@ -116900,8 +116858,6 @@ func (m *ServiceCatalogMutation) OldField(ctx context.Context, name string) (ent
 		return m.OldIcon(ctx)
 	case servicecatalog.FieldServiceType:
 		return m.OldServiceType(ctx)
-	case servicecatalog.FieldItsmType:
-		return m.OldItsmType(ctx)
 	case servicecatalog.FieldTargetClass:
 		return m.OldTargetClass(ctx)
 	case servicecatalog.FieldPrice:
@@ -116985,13 +116941,6 @@ func (m *ServiceCatalogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetServiceType(v)
-		return nil
-	case servicecatalog.FieldItsmType:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetItsmType(v)
 		return nil
 	case servicecatalog.FieldTargetClass:
 		v, ok := value.(string)
@@ -117400,9 +117349,6 @@ func (m *ServiceCatalogMutation) ResetField(name string) error {
 		return nil
 	case servicecatalog.FieldServiceType:
 		m.ResetServiceType()
-		return nil
-	case servicecatalog.FieldItsmType:
-		m.ResetItsmType()
 		return nil
 	case servicecatalog.FieldTargetClass:
 		m.ResetTargetClass()

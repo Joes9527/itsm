@@ -5,15 +5,12 @@ import (
 	"errors"
 	"go.uber.org/zap"
 	"itsm-backend/ent"
-	"itsm-backend/ent/processbinding"
 	"itsm-backend/ent/processdefinition"
-	"itsm-backend/ent/sladefinition"
 	"itsm-backend/ent/user"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // ResolveCreationWorkflow freezes the owning process service's creation binding.
@@ -99,43 +96,6 @@ func (s *ProcessBindingService) ResolveCreationWorkflow(ctx context.Context, tx 
 		return result, nil, creation.NewWorkflowBindingRequired("active workflow definition for the configured major version is required", nil)
 	}
 	return creation.ResolvedWorkflowBinding{DefinitionID: &definition.ID, DefinitionKey: definition.Key, DefinitionVersion: definition.Version, DefinitionDigest: FreezeProcessDefinition(definition).Digest}, slaID, nil
-}
-
-// CreationConfigurationRevision freezes declared routing configuration rather
-// than a route selected using incomplete (pre-submission) form values.
-func (*ProcessBindingService) CreationConfigurationRevision(ctx context.Context, tx *ent.Tx, tenantID int, class, key string) (string, error) {
-	business := map[string]string{"generic": "ticket", "incident": "incident", "problem": "problem", "change_request": "change", "service_request_item": "service_request"}[class]
-	if business == "" {
-		return "", creation.NewUnsupportedRecordClass("unsupported workflow creation class", nil)
-	}
-	bindings, err := tx.ProcessBinding.Query().Where(processbinding.TenantIDEQ(tenantID), processbinding.BusinessTypeEQ(business), processbinding.IsActiveEQ(true)).Order(ent.Asc(processbinding.FieldID)).All(ctx)
-	if err != nil {
-		return "", creation.NewInfrastructureUnavailable("could not load workflow configuration", err)
-	}
-	keys := []string{}
-	if key != "" {
-		keys = append(keys, key)
-	}
-	for _, binding := range bindings {
-		keys = append(keys, binding.ProcessDefinitionKey)
-	}
-	definitions, err := tx.ProcessDefinition.Query().Where(processdefinition.TenantIDEQ(tenantID), processdefinition.KeyIn(keys...), processdefinition.IsActiveEQ(true)).Order(ent.Asc(processdefinition.FieldID)).All(ctx)
-	if err != nil {
-		return "", creation.NewInfrastructureUnavailable("could not load workflow revisions", err)
-	}
-	slaDefinitions, err := tx.SLADefinition.Query().Where(sladefinition.TenantIDEQ(tenantID), sladefinition.IsActiveEQ(true)).Order(ent.Asc(sladefinition.FieldID)).All(ctx)
-	if err != nil {
-		return "", creation.NewInfrastructureUnavailable("could not load SLA revisions", err)
-	}
-	for _, binding := range bindings {
-		binding.CreatedAt = time.Time{}
-		binding.UpdatedAt = time.Time{}
-	}
-	for _, definition := range slaDefinitions {
-		definition.CreatedAt = time.Time{}
-		definition.UpdatedAt = time.Time{}
-	}
-	return creation.ConfigurationRevision("workflow-config-v1", map[string]any{"bindings": bindings, "definitions": definitions, "sla": slaDefinitions})
 }
 
 // ProcessBinding stores a major-version reference. Definition snapshots retain

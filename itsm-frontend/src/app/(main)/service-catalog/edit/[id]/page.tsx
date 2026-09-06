@@ -15,6 +15,7 @@ export default function EditServicePage() {
   const { message: appMessage } = App.useApp();
   const { t } = useI18n();
   const [form] = Form.useForm();
+  const [catalogVersion, setCatalogVersion] = useState('');
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
 
@@ -24,12 +25,13 @@ export default function EditServicePage() {
     const loadService = async () => {
       try {
         const data = await ServiceCatalogApi.getService(serviceId);
+        setCatalogVersion(data.catalogVersion || '');
         form.setFieldsValue({
           name: data.name,
           category: data.category,
           description: data.shortDescription || data.fullDescription,
           deliveryTime: data.availability?.responseTime,
-          status: data.status === 'published' ? 'enabled' : 'disabled',
+          status: data.status === 'published',
         });
       } catch (error) {
         appMessage.error(t('common.getFailed'));
@@ -45,6 +47,7 @@ export default function EditServicePage() {
     try {
       setLoading(true);
       await ServiceCatalogApi.updateService(serviceId, {
+        expectedCatalogVersion: catalogVersion,
         name: values.name,
         category: values.category,
         shortDescription: values.description,
@@ -54,7 +57,7 @@ export default function EditServicePage() {
       appMessage.success(t('common.saveSuccess'));
       router.push('/service-catalog');
     } catch (error) {
-      appMessage.error(t('common.saveFailed'));
+      appMessage.error(error instanceof Error ? error.message : t('common.saveFailed'));
     } finally {
       setLoading(false);
     }

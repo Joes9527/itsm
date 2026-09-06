@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/slametric"
 	"itsm-backend/ent/slaviolation"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -109,19 +110,19 @@ func (_c *SLADefinitionCreate) SetNillableResolutionTime(v *int) *SLADefinitionC
 }
 
 // SetBusinessHours sets the "business_hours" field.
-func (_c *SLADefinitionCreate) SetBusinessHours(v map[string]interface{}) *SLADefinitionCreate {
+func (_c *SLADefinitionCreate) SetBusinessHours(v jsonvalue.NumberMap) *SLADefinitionCreate {
 	_c.mutation.SetBusinessHours(v)
 	return _c
 }
 
 // SetEscalationRules sets the "escalation_rules" field.
-func (_c *SLADefinitionCreate) SetEscalationRules(v map[string]interface{}) *SLADefinitionCreate {
+func (_c *SLADefinitionCreate) SetEscalationRules(v jsonvalue.NumberMap) *SLADefinitionCreate {
 	_c.mutation.SetEscalationRules(v)
 	return _c
 }
 
 // SetConditions sets the "conditions" field.
-func (_c *SLADefinitionCreate) SetConditions(v map[string]interface{}) *SLADefinitionCreate {
+func (_c *SLADefinitionCreate) SetConditions(v jsonvalue.NumberMap) *SLADefinitionCreate {
 	_c.mutation.SetConditions(v)
 	return _c
 }
@@ -704,7 +705,7 @@ func (u *SLADefinitionUpsert) AddResolutionTime(v int) *SLADefinitionUpsert {
 }
 
 // SetBusinessHours sets the "business_hours" field.
-func (u *SLADefinitionUpsert) SetBusinessHours(v map[string]interface{}) *SLADefinitionUpsert {
+func (u *SLADefinitionUpsert) SetBusinessHours(v jsonvalue.NumberMap) *SLADefinitionUpsert {
 	u.Set(sladefinition.FieldBusinessHours, v)
 	return u
 }
@@ -722,7 +723,7 @@ func (u *SLADefinitionUpsert) ClearBusinessHours() *SLADefinitionUpsert {
 }
 
 // SetEscalationRules sets the "escalation_rules" field.
-func (u *SLADefinitionUpsert) SetEscalationRules(v map[string]interface{}) *SLADefinitionUpsert {
+func (u *SLADefinitionUpsert) SetEscalationRules(v jsonvalue.NumberMap) *SLADefinitionUpsert {
 	u.Set(sladefinition.FieldEscalationRules, v)
 	return u
 }
@@ -740,7 +741,7 @@ func (u *SLADefinitionUpsert) ClearEscalationRules() *SLADefinitionUpsert {
 }
 
 // SetConditions sets the "conditions" field.
-func (u *SLADefinitionUpsert) SetConditions(v map[string]interface{}) *SLADefinitionUpsert {
+func (u *SLADefinitionUpsert) SetConditions(v jsonvalue.NumberMap) *SLADefinitionUpsert {
 	u.Set(sladefinition.FieldConditions, v)
 	return u
 }
@@ -1016,7 +1017,7 @@ func (u *SLADefinitionUpsertOne) UpdateResolutionTime() *SLADefinitionUpsertOne 
 }
 
 // SetBusinessHours sets the "business_hours" field.
-func (u *SLADefinitionUpsertOne) SetBusinessHours(v map[string]interface{}) *SLADefinitionUpsertOne {
+func (u *SLADefinitionUpsertOne) SetBusinessHours(v jsonvalue.NumberMap) *SLADefinitionUpsertOne {
 	return u.Update(func(s *SLADefinitionUpsert) {
 		s.SetBusinessHours(v)
 	})
@@ -1037,7 +1038,7 @@ func (u *SLADefinitionUpsertOne) ClearBusinessHours() *SLADefinitionUpsertOne {
 }
 
 // SetEscalationRules sets the "escalation_rules" field.
-func (u *SLADefinitionUpsertOne) SetEscalationRules(v map[string]interface{}) *SLADefinitionUpsertOne {
+func (u *SLADefinitionUpsertOne) SetEscalationRules(v jsonvalue.NumberMap) *SLADefinitionUpsertOne {
 	return u.Update(func(s *SLADefinitionUpsert) {
 		s.SetEscalationRules(v)
 	})
@@ -1058,7 +1059,7 @@ func (u *SLADefinitionUpsertOne) ClearEscalationRules() *SLADefinitionUpsertOne 
 }
 
 // SetConditions sets the "conditions" field.
-func (u *SLADefinitionUpsertOne) SetConditions(v map[string]interface{}) *SLADefinitionUpsertOne {
+func (u *SLADefinitionUpsertOne) SetConditions(v jsonvalue.NumberMap) *SLADefinitionUpsertOne {
 	return u.Update(func(s *SLADefinitionUpsert) {
 		s.SetConditions(v)
 	})
@@ -1514,7 +1515,7 @@ func (u *SLADefinitionUpsertBulk) UpdateResolutionTime() *SLADefinitionUpsertBul
 }
 
 // SetBusinessHours sets the "business_hours" field.
-func (u *SLADefinitionUpsertBulk) SetBusinessHours(v map[string]interface{}) *SLADefinitionUpsertBulk {
+func (u *SLADefinitionUpsertBulk) SetBusinessHours(v jsonvalue.NumberMap) *SLADefinitionUpsertBulk {
 	return u.Update(func(s *SLADefinitionUpsert) {
 		s.SetBusinessHours(v)
 	})
@@ -1535,7 +1536,7 @@ func (u *SLADefinitionUpsertBulk) ClearBusinessHours() *SLADefinitionUpsertBulk 
 }
 
 // SetEscalationRules sets the "escalation_rules" field.
-func (u *SLADefinitionUpsertBulk) SetEscalationRules(v map[string]interface{}) *SLADefinitionUpsertBulk {
+func (u *SLADefinitionUpsertBulk) SetEscalationRules(v jsonvalue.NumberMap) *SLADefinitionUpsertBulk {
 	return u.Update(func(s *SLADefinitionUpsert) {
 		s.SetEscalationRules(v)
 	})
@@ -1556,7 +1557,7 @@ func (u *SLADefinitionUpsertBulk) ClearEscalationRules() *SLADefinitionUpsertBul
 }
 
 // SetConditions sets the "conditions" field.
-func (u *SLADefinitionUpsertBulk) SetConditions(v map[string]interface{}) *SLADefinitionUpsertBulk {
+func (u *SLADefinitionUpsertBulk) SetConditions(v jsonvalue.NumberMap) *SLADefinitionUpsertBulk {
 	return u.Update(func(s *SLADefinitionUpsert) {
 		s.SetConditions(v)
 	})

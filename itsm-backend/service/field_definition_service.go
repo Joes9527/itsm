@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/fielddefinition"
@@ -27,57 +28,71 @@ type FieldDefinitionInput struct {
 	SortOrder int
 }
 
-// ReplaceDefinitions 删除 (tenantID, entityType, entityID) 下所有既有字段定义，
-// 按 defs 的顺序重新插入。字段值（field_values）已经快照了 name/label/顺序，
-// 不依赖这里的行 ID 存续，所以用"删除重建"而不是逐字段 diff。
-// 删除+插入包在一个事务里：field_definitions 上有 (tenant_id, entity_type, entity_id, name)
-// 唯一约束，如果 defs 里有重名字段导致某次 insert 撞约束失败，没有事务的话旧定义已经被删掉、
-// 新定义插了一半——比"什么都没做"更糟。事务保证要么全部生效，要么整体回滚。
+// ReplaceDefinitions preserves field identities by name and commits the complete form atomically.
 func (s *FieldDefinitionService) ReplaceDefinitions(ctx context.Context, tenantID int, entityType string, entityID int, defs []FieldDefinitionInput) ([]*ent.FieldDefinition, error) {
+	if entityType == "service_catalog" {
+		return nil, fmt.Errorf("catalog definitions require the versioned catalog mutation")
+	}
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = tx.FieldDefinition.Delete().
-		Where(
-			fielddefinition.TenantID(tenantID),
-			fielddefinition.EntityType(entityType),
-			fielddefinition.EntityID(entityID),
-		).
-		Exec(ctx)
+	result, err := s.ReplaceDefinitionsTx(ctx, tx, tenantID, entityType, entityID, defs)
 	if err != nil {
 		return nil, rollback(tx, err)
 	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
 
+// ReplaceDefinitionsTx joins the owning entity's atomic definition mutation.
+func (s *FieldDefinitionService) ReplaceDefinitionsTx(ctx context.Context, tx *ent.Tx, tenantID int, entityType string, entityID int, defs []FieldDefinitionInput) ([]*ent.FieldDefinition, error) {
+	existing, err := tx.FieldDefinition.Query().Where(fielddefinition.TenantIDEQ(tenantID), fielddefinition.EntityTypeEQ(entityType), fielddefinition.EntityIDEQ(entityID)).All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	byName := map[string]*ent.FieldDefinition{}
+	for _, row := range existing {
+		byName[row.Name] = row
+	}
+	names := []string{}
+	seen := map[string]bool{}
 	result := make([]*ent.FieldDefinition, 0, len(defs))
-	for i, d := range defs {
-		sortOrder := d.SortOrder
-		if sortOrder == 0 {
-			sortOrder = i
+	for _, d := range defs {
+		if strings.TrimSpace(d.Name) == "" || strings.TrimSpace(d.Label) == "" || seen[d.Name] {
+			return nil, fmt.Errorf("field name and label must be nonempty and names unique")
 		}
+		seen[d.Name] = true
+		names = append(names, d.Name)
+		switch d.FieldType {
+		case "text", "textarea", "number", "date", "select", "multiselect", "boolean", "file":
+		default:
+			return nil, fmt.Errorf("unsupported field type %q", d.FieldType)
+		}
+		order := d.SortOrder
 		options := d.Options
 		if options == nil {
 			options = []interface{}{}
 		}
-		created, err := tx.FieldDefinition.Create().
-			SetTenantID(tenantID).
-			SetEntityType(entityType).
-			SetEntityID(entityID).
-			SetName(d.Name).
-			SetLabel(d.Label).
-			SetFieldType(d.FieldType).
-			SetRequired(d.Required).
-			SetOptions(options).
-			SetSortOrder(sortOrder).
-			Save(ctx)
-		if err != nil {
-			return nil, rollback(tx, err)
+		var row *ent.FieldDefinition
+		if old := byName[d.Name]; old != nil {
+			row, err = tx.FieldDefinition.UpdateOneID(old.ID).SetLabel(d.Label).SetFieldType(d.FieldType).SetRequired(d.Required).SetOptions(options).SetSortOrder(order).SetIsActive(true).Save(ctx)
+		} else {
+			row, err = tx.FieldDefinition.Create().SetTenantID(tenantID).SetEntityType(entityType).SetEntityID(entityID).SetName(d.Name).SetLabel(d.Label).SetFieldType(d.FieldType).SetRequired(d.Required).SetOptions(options).SetSortOrder(order).Save(ctx)
 		}
-		result = append(result, created)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, row)
 	}
-
-	if err := tx.Commit(); err != nil {
+	deletion := tx.FieldDefinition.Delete().Where(fielddefinition.TenantIDEQ(tenantID), fielddefinition.EntityTypeEQ(entityType), fielddefinition.EntityIDEQ(entityID))
+	if len(names) > 0 {
+		deletion = deletion.Where(fielddefinition.NameNotIn(names...))
+	}
+	if _, err := deletion.Exec(ctx); err != nil {
 		return nil, err
 	}
 	return result, nil
@@ -128,6 +143,9 @@ func (s *FieldDefinitionService) ListDefinitionsForEntities(ctx context.Context,
 // disabled 但记录还在），应该用 DisableDefinitions，否则宿主"恢复"之后字段定义
 // 已经永久丢了，恢复不回来。
 func (s *FieldDefinitionService) DeleteDefinitions(ctx context.Context, tenantID int, entityType string, entityID int) error {
+	if entityType == "service_catalog" {
+		return fmt.Errorf("catalog definitions require the versioned catalog mutation")
+	}
 	_, err := s.client.FieldDefinition.Delete().
 		Where(
 			fielddefinition.TenantID(tenantID),
@@ -143,6 +161,9 @@ func (s *FieldDefinitionService) DeleteDefinitions(ctx context.Context, tenantID
 // ListDefinitionsForEntities 都过滤 is_active=true，效果上等同于"字段定义也消失了"，
 // 但宿主实体恢复后，数据仍在，不会永久丢失管理员配置过的自定义字段。
 func (s *FieldDefinitionService) DisableDefinitions(ctx context.Context, tenantID int, entityType string, entityID int) error {
+	if entityType == "service_catalog" {
+		return fmt.Errorf("catalog definitions require the versioned catalog mutation")
+	}
 	_, err := s.client.FieldDefinition.Update().
 		Where(
 			fielddefinition.TenantID(tenantID),

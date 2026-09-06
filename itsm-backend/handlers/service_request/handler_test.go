@@ -118,7 +118,8 @@ func srSetup(t *testing.T) (*gin.Engine, *ent.Client, int, int, int) {
 	// 播种一个服务目录（无 CI 类型，走简单路径）
 	scRepo := service_catalog.NewEntRepository(client)
 	scSvc := service_catalog.NewService(scRepo, client, logger, sameTransactionDirectory{})
-	cat, err := scSvc.Create(ctx, "SRCatalog-"+srUID(), "software", "for test", 0, tenant.ID, "enabled", 0, 0, nil, "", "")
+	configureCatalogPublicationForTest(ctx, client, tenant.ID, scSvc)
+	cat, err := scSvc.Create(ctx, tenant.ID, catalogCreateInput("SRCatalog-"+srUID(), "software", "for test", 0, "enabled", 0, 0, nil, "", ""))
 	require.NoError(t, err)
 
 	repo := NewEntRepository(client)
@@ -190,8 +191,8 @@ func TestHandler_Get_IncludesCustomFieldValues(t *testing.T) {
 	r, client, tenantID, _, _ := srSetup(t)
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
-	catalog, err := scService.Create(context.Background(), "云主机申请-"+srUID(), "software", "desc", 1, tenantID, "enabled", 0, 0,
-		[]service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", "")
+	configureCatalogPublicationForTest(context.Background(), client, tenantID, scService)
+	catalog, err := scService.Create(context.Background(), tenantID, catalogCreateInput("云主机申请-"+srUID(), "software", "desc", 1, "enabled", 0, 0, []service.FieldDefinitionInput{{Name: "environment", Label: "环境", FieldType: "text"}}, "", ""))
 	require.NoError(t, err)
 
 	createReq := dto.CreateServiceRequestRequest{
@@ -236,7 +237,8 @@ func TestServiceRequestHandler_Create_MissingComplianceAck(t *testing.T) {
 	// 创建一个 infra 类型的目录项（ComplianceAck 仅对 vm/network/database 类型强制）
 	scRepo := service_catalog.NewEntRepository(client)
 	scService := service_catalog.NewService(scRepo, client, zaptest.NewLogger(t).Sugar(), nil)
-	infraCat, err := scService.Create(ctx, "VM-"+srUID(), "infrastructure", "for test", 0, tenantID, "enabled", 0, 0, nil, "", "vm")
+	configureCatalogPublicationForTest(ctx, client, tenantID, scService)
+	infraCat, err := scService.Create(ctx, tenantID, catalogCreateInput("VM-"+srUID(), "infrastructure", "for test", 0, "enabled", 0, 0, nil, "", "vm"))
 	require.NoError(t, err)
 
 	// ComplianceAck=false → service 返回 BadRequest → handler 映射 5001
@@ -261,8 +263,9 @@ func TestServiceRequestCreateDefersNewCIUntilProvisioning(t *testing.T) {
 	ciType, err := client.CIType.Create().SetName("Virtual Machine").SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 	scRepo := service_catalog.NewEntRepository(client)
-	catalog, err := service_catalog.NewService(scRepo, client, logger, sameTransactionDirectory{}).
-		Create(ctx, "VM Request", "infrastructure", "Provision VM", 24, tenant.ID, "enabled", ciType.ID, 0, nil, "", "")
+	scSvc := service_catalog.NewService(scRepo, client, logger, sameTransactionDirectory{})
+	configureCatalogPublicationForTest(ctx, client, tenant.ID, scSvc)
+	catalog, err := scSvc.Create(ctx, tenant.ID, catalogCreateInput("VM Request", "infrastructure", "Provision VM", 24, "enabled", ciType.ID, 0, nil, "", ""))
 	require.NoError(t, err)
 	srSvc := NewService(NewEntRepository(client), client, logger, nil)
 	expireAt := time.Now().Add(30 * 24 * time.Hour)
