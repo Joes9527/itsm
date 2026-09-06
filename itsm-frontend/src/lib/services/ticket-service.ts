@@ -185,11 +185,6 @@ class TicketService {
     return httpClient.get<Ticket>(`${this.baseUrl}/${id}`);
   }
 
-  // 创建工单
-  async createTicket(data: CreateTicketRequest): Promise<Ticket> {
-    return httpClient.post<Ticket>(this.baseUrl, data);
-  }
-
   // 更新工单
   async updateTicket(
     id: number,

@@ -107,13 +107,6 @@ class ProblemService {
     return httpClient.get<Problem>(`${this.baseUrl}/${id}`);
   }
 
-  // 创建问题
-  async createProblem(
-    data: CreateProblemRequest
-  ): Promise<{ message: string; problemId: number }> {
-    return httpClient.post<{ message: string; problemId: number }>(this.baseUrl, data);
-  }
-
   // 更新问题
   async updateProblem(
     id: number,

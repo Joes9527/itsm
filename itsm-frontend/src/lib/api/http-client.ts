@@ -35,6 +35,7 @@ export interface RequestConfig {
   // 改名成后端 handler 读不到的 key（GetIntFromVars(variables, "request_id") 拿到
   // "requestId" 的值就是 0，报"无效的请求ID"）。设为 true 跳过这次请求的 body 转换。
   skipCamelCaseBody?: boolean;
+  assertSubmissionContext?: () => void;
 }
 
 // Axios-like request config used by some legacy API modules
@@ -52,6 +53,18 @@ interface ApiResponse<T> {
   code: number;
   message: string;
   data: T;
+}
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+    public readonly code?: number,
+    public readonly errorCode?: string,
+    public readonly retryable?: boolean,
+    public readonly fieldErrors?: unknown,
+    public readonly requestId?: string,
+  ) { super(message); this.name = 'ApiError'; }
 }
 
 class HttpClient {
@@ -175,7 +188,7 @@ class HttpClient {
       url,
       method: config.method,
       headers: sanitizedHeaders,
-      body: config.body,
+      body: config.assertSubmissionContext ? '[confirmed creation]' : config.body,
     });
 
     // 在开发模式下，如果后端服务不可用，使用模拟数据
@@ -183,25 +196,25 @@ class HttpClient {
       logger.warn('开发模式：正在连接到后端服务，如果后端服务未运行，将显示错误');
     }
 
-    try {
+    const fetchWithContext = async (init: RequestInit): Promise<Response> => {
+      config.assertSubmissionContext?.();
       const controller = new AbortController();
-      const timeoutMs = config.timeout ?? this.timeout;
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-
-      let response = await fetch(url, {
-        ...requestConfig,
-        credentials: 'include', // Include httpOnly cookies for authenticated requests
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
+      const timeoutId = setTimeout(() => controller.abort(), config.timeout ?? this.timeout);
+      try {
+        return await fetch(url, { ...init, credentials: 'include', signal: controller.signal });
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    };
+    try {
+      let response = await fetchWithContext(requestConfig);
 
       // The backend rotates the token after every successful mutation. A cached token
       // can therefore race with the CSRF cookie; refresh it once and retry the request.
       if (this.isMutatingMethod(config.method) && (await this.isCSRFRejection(response))) {
         security.csrf.clearToken();
         const retryHeaders = await this.addCSRFHeader(this.getHeaders(), config.method || 'GET');
-        response = await fetch(url, {
+        response = await fetchWithContext({
           ...requestConfig,
           credentials: 'include',
           headers: {
@@ -235,23 +248,8 @@ class HttpClient {
               ...config.headers,
             },
           };
-          const retryResponse = await fetch(url, retryConfig);
-          if (!retryResponse.ok) {
-            const rid = retryResponse.headers.get('X-Request-Id') || '';
-            const suffix = rid ? ` [RID: ${rid}]` : '';
-            throw new Error(`HTTP error! status: ${retryResponse?.status}${suffix}`);
-          }
-          const retryData = (await retryResponse.json()) as ApiResponse<T>;
-          logger.debug('HTTP Client Retry Response Data:', retryData);
-
-          // Check response code - 容忍后端没有返回 code 字段的情况
-          if (retryData.code !== undefined && retryData.code !== null && retryData.code !== 0) {
-            const rid = retryResponse.headers.get('X-Request-Id') || '';
-            const suffix = rid ? ` [RID: ${rid}]` : '';
-            throw new Error((retryData.message || 'Request failed') + suffix);
-          }
-
-          return retryData.data;
+          response = await fetchWithContext(retryConfig);
+          if (response.ok && this.isMutatingMethod(config.method)) security.csrf.clearToken();
         } else {
           // Refresh failed; the backend session is authoritative.
           if (typeof window !== 'undefined') {
@@ -260,51 +258,29 @@ class HttpClient {
               window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname)}`;
             }
           }
-          throw new Error('Authentication failed');
+          // Preserve the original 401 envelope through the common error decoder below.
         }
       }
 
-      if (!response?.ok) {
-        const rid = response?.headers?.get('X-Request-Id') || '';
-        const suffix = rid ? ` [RID: ${rid}]` : '';
-        // 尝试从响应中获取更详细的错误信息——注意 throw 不能写在这个 try 块里：
-        // 写在里面会被下面紧跟着的 catch 立刻吞掉（catch 只是为了忽略 JSON 解析失败，
-        // 不是用来吞掉我们自己抛出的、带后端消息的错误），实际效果是不管后端返回什么
-        // message，最终永远走到下面的兜底 "HTTP error! status: N"。
-        let backendMessage: string | undefined;
-        try {
-          const errorData = await response.json();
-          if (errorData && errorData.message) {
-            backendMessage = errorData.message;
-          }
-        } catch {
-          // Ignore JSON parse errors, use default message
-        }
-        throw new Error((backendMessage ?? `HTTP error! status: ${response?.status}`) + suffix);
+      let responseData: ApiResponse<T> | undefined;
+      try { responseData = await response.json() as ApiResponse<T>; } catch (error) {
+        if (response.ok) throw config.assertSubmissionContext ? new Error('服务器响应无法解析，提交结果未知') : error;
       }
-
-      const responseData = (await response.json()) as ApiResponse<T>;
-      logger.debug('HTTP Client Raw Response Data:', responseData);
-
-      // Check response code - 容忍后端没有返回 code 字段的情况（如 BPMN workflow controller）
-      // 允许 code 为 0、undefined、null 或不存在
-      if (
-        responseData.code !== undefined &&
-        responseData.code !== null &&
-        responseData.code !== 0
-      ) {
-        const rid = (response.headers && response.headers.get('X-Request-Id')) || '';
-        const suffix = rid ? ` [RID: ${rid}]` : '';
-        throw new Error((responseData.message || 'Request failed') + suffix);
+      if (!response.ok || (responseData?.code != null && responseData.code !== 0)) {
+        const rid = response.headers?.get('X-Request-Id') || '';
+        const details = responseData?.data as { errorCode?: string; retryable?: boolean; fieldErrors?: unknown } | undefined;
+        throw new ApiError(
+          (responseData?.message || `HTTP error! status: ${response.status}`) + (rid ? ` [RID: ${rid}]` : ''),
+          response.status, responseData?.code, details?.errorCode, details?.retryable, details?.fieldErrors, rid,
+        );
       }
-
       // 自动转换响应数据 key 为 camelCase
-      return toCamelCase(responseData.data) as T;
+      return toCamelCase(responseData?.data) as T;
     } catch (error: unknown) {
       // AbortError 是正常的中止请求，不记录错误日志
       if (error instanceof Error && error.name === 'AbortError') {
         logger.debug('Request aborted (page navigation)');
-        return null as T;
+        throw error;
       }
       logger.error('Request failed:', error);
       if (error instanceof Error) {
@@ -381,6 +357,8 @@ class HttpClient {
       headers: cfg.headers,
       body: cfg.body,
       timeout: cfg.timeout,
+      skipCamelCaseBody: cfg.skipCamelCaseBody,
+      assertSubmissionContext: cfg.assertSubmissionContext,
     });
   }
 
@@ -409,6 +387,7 @@ class HttpClient {
       headers?: Record<string, string>;
       responseType?: 'json' | 'blob';
       skipCamelCaseBody?: boolean;
+      assertSubmissionContext?: () => void;
     }
   ): Promise<T> {
     // 如果是 FormData，直接传递，不进行 JSON.stringify
@@ -497,6 +476,7 @@ class HttpClient {
       body: data ? JSON.stringify(data) : undefined,
       headers: config?.headers,
       skipCamelCaseBody: config?.skipCamelCaseBody,
+      assertSubmissionContext: config?.assertSubmissionContext,
     });
   }
 

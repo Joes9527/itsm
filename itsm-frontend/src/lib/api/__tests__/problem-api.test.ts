@@ -1,3 +1,4 @@
+import { creationReceipt, creationOptions, creationHttpOptions } from '../creation.test-utils';
 import { ProblemApi } from '@/lib/api/problem-api';
 import { httpClient } from '@/lib/api/http-client';
 
@@ -38,14 +39,13 @@ describe('ProblemApi', () => {
       expect(result.title).toBe('Memory leak');
     });
   });
-
   describe('createProblem', () => {
-    it('should create a problem', async () => {
-      const data = { title: 'New Problem', description: 'desc', priority: 'high' };
-      mockPost.mockResolvedValue({ id: 2, ...data });
-      const result = await ProblemApi.createProblem(data);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/problems', data);
-      expect(result.id).toBe(2);
+    it('preserves confirmed payload and returns only the creation receipt', async () => {
+      const data = { title: 'Title', description: 'Description', priority: 'high', rootCause: 'cause', impact: 'impact' };
+      mockPost.mockResolvedValue(creationReceipt);
+      const result = await ProblemApi.createProblem(data, creationOptions);
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/problems', data, creationHttpOptions);
+      expect(result).toEqual(creationReceipt);
     });
   });
 

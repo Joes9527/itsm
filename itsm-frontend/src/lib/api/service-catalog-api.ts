@@ -1,3 +1,4 @@
+import { createWorkItem, type CreationRequestOptions, type CreateWorkItemResult } from './work-item-creation';
 /**
  * 服务目录 API 服务
  */
@@ -88,6 +89,9 @@ export class ServiceCatalogApi {
       processDefinitionKey: raw?.processDefinitionKey || undefined,
       serviceType: raw?.serviceType || undefined,
       requiresInfraFields: Boolean(raw?.requiresInfraFields),
+      targetClass: raw?.targetClass,
+      catalogVersion: raw?.catalogVersion,
+      formSchemaVersion: raw?.formSchemaVersion,
     };
   }
 
@@ -325,53 +329,10 @@ export class ServiceCatalogApi {
   /**
    * 创建服务请求
    *
-   * 返回值透传后端 dto.ServiceRequestResponse（不经过 toServiceRequest 适配），其中
-   * ticketId 是提交成功后创建的关联 Ticket ID——调用方（提交表单页）据此跳转到
-   * /tickets/:ticketId，服务请求已经不再有独立详情页。
+   * 返回已确认创建收据；共享工单详情使用 workItemId，专业引用保留在 professionalReference。
    */
-  static async createServiceRequest(
-    request: CreateServiceRequestRequest
-  ): Promise<{ ticketId: number } & Record<string, any>> {
-    // 前端 CreateServiceRequestRequest: { serviceId, formData, ... }
-    // 后端 CreateServiceRequestRequest: { catalog_id, title, reason, form_data, ... , compliance_ack }
-    const reason =
-      (request.formData && (request.formData.reason || request.formData.notes)) ||
-      request.additionalNotes ||
-      '';
-
-    const title = (request.formData && (request.formData.title || request.formData.name)) || '';
-
-    // V0：最小字段集合。复杂字段（成本中心/分级/到期/公网白名单）可先从 formData 透传，后续再做强校验与表单化。
-    const payload: unknown = {
-      catalogId: Number(request.serviceId),
-      title: title ? String(title) : undefined,
-      reason,
-      formData: request.formData || {},
-      // 合规确认绝不能静默默认为已勾选——没有 ?? true 兜底，调用方忘传就是 false。
-      complianceAck: Boolean(request.formData?.complianceAck),
-      dataClassification: String(request.formData?.dataClassification || 'internal'),
-      needsPublicIp: Boolean(request.formData?.needsPublicIp || false),
-      sourceIpWhitelist: Array.isArray(request.formData?.sourceIpWhitelist)
-        ? request.formData?.sourceIpWhitelist
-        : undefined,
-      costCenter: request.formData?.costCenter
-        ? String(request.formData?.costCenter)
-        : undefined,
-      expireAt: request.formData?.expireAt ? request.formData?.expireAt : undefined,
-      // 通用层字段：所有 service_type 都适用，真正落到后端 ContactName/ContactEmail/
-      // Quantity/ExpectedAt 列。直接映射到新增列，不再经过 formData JSON 兜底路径
-      // （见 docs/superpowers/specs/2026-08-21-service-catalog-request-form-redesign-design.md
-      // §3.5），所以从 request 顶层读取而不是 request.formData。
-      contactName: request.contactName ? String(request.contactName) : undefined,
-      contactEmail: request.contactEmail ? String(request.contactEmail) : undefined,
-      quantity: request.quantity ? Number(request.quantity) : undefined,
-      expectedAt: request.expectedAt ? request.expectedAt : undefined,
-    };
-
-    return httpClient.post<{ ticketId: number } & Record<string, any>>(
-      '/api/v1/service-requests',
-      payload
-    );
+  static async createServiceRequest(request: CreateServiceRequestRequest, options: CreationRequestOptions): Promise<CreateWorkItemResult> {
+    return createWorkItem('/api/v1/service-requests', request, options);
   }
 
   /**

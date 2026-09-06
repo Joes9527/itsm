@@ -1,3 +1,4 @@
+import { creationReceipt, creationOptions } from '../api/creation.test-utils';
 import { TicketApi } from '@/lib/api/ticket-api';
 import { DashboardAPI } from '@/lib/api/dashboard-api';
 
@@ -151,12 +152,7 @@ describe('API Integration Tests', () => {
         const mockResponse = {
           code: 0,
           message: 'success',
-          data: {
-            id: 1,
-            ...mockTicketData,
-            status: 'open',
-            createdAt: '2024-01-01T10:00:00Z',
-          },
+          data: creationReceipt,
         };
 
         (fetch as jest.Mock).mockResolvedValueOnce({
@@ -165,7 +161,7 @@ describe('API Integration Tests', () => {
           json: async () => mockResponse,
         });
 
-        const result = await TicketApi.createTicket(mockTicketData);
+        const result = await TicketApi.createTicket(mockTicketData, creationOptions);
 
         expect(fetch).toHaveBeenCalledWith(
           expect.stringContaining('/api/v1/tickets'),
@@ -179,9 +175,7 @@ describe('API Integration Tests', () => {
         );
 
         // Verify response has expected fields
-        expect(result).toHaveProperty('id');
-        expect(result).toHaveProperty('title', '新工单');
-        expect(result).toHaveProperty('status', 'open');
+        expect(result).toEqual(creationReceipt);
       });
 
       it('should handle validation errors', async () => {
@@ -204,7 +198,7 @@ describe('API Integration Tests', () => {
         };
 
          
-        await expect(TicketApi.createTicket(invalidData as any)).rejects.toThrow(
+        await expect(TicketApi.createTicket(invalidData as any, creationOptions)).rejects.toThrow(
           '请求参数错误: title is required'
         );
       });

@@ -1,3 +1,4 @@
+import { creationReceipt, creationOptions } from '../creation.test-utils';
 import { ChangeApi, type ChangeRequest } from '@/lib/api/change-api';
 
 // Mock security module to avoid CSRF fetch calls
@@ -220,26 +221,7 @@ describe('ChangeApi', () => {
       const mockResponse = {
         code: 0,
         message: 'success',
-        data: {
-          id: 10,
-          title: 'New Change Request',
-          description: 'Description for new change',
-          justification: 'Business justification',
-          type: 'normal',
-          status: 'draft',
-          priority: 'high',
-          impactScope: 'medium',
-          riskLevel: 'low',
-          createdBy: 1,
-          createdByName: 'Test User',
-          tenantId: 1,
-          implementationPlan: 'Implementation steps',
-          rollbackPlan: 'Rollback steps',
-          affectedCis: ['server-01'],
-          relatedTickets: [],
-          createdAt: '2024-01-01T10:00:00Z',
-          updatedAt: '2024-01-01T10:00:00Z',
-        },
+        data: { ...creationReceipt, recordClass: 'change_request', professionalReference: { type: 'change', id: 10 } },
       };
 
       (fetch as jest.Mock).mockResolvedValueOnce({
@@ -263,7 +245,7 @@ describe('ChangeApi', () => {
         relatedTickets: [],
       };
 
-      const result = await ChangeApi.createChange(newChange);
+      const result = await ChangeApi.createChange(newChange, creationOptions);
 
       expect(fetch).toHaveBeenCalledWith(
         expect.stringContaining('/api/v1/changes'),
@@ -272,7 +254,8 @@ describe('ChangeApi', () => {
         })
       );
 
-      expect(result.title).toBe('New Change Request');
+      expect(result.number).toBe('WI-41');
+      expect(result.professionalReference).toEqual({ type: 'change', id: 10 });
     });
   });
 

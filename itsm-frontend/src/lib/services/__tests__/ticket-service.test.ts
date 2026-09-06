@@ -82,24 +82,6 @@ describe('ticketService', () => {
       expect(init.method).toBe('GET');
     });
 
-    it('createTicket calls POST /api/v1/tickets with the body', async () => {
-      mockSuccess({ id: 1, ticketNumber: 'TKT-001' });
-      await ticketService.createTicket({
-        title: 'New',
-        priority: 'medium' as never,
-        requesterId: 1,
-      });
-
-      const [url, init] = fetchMock.mock.calls[0];
-      expect(url).toContain('/api/v1/tickets');
-      // basePath should not have a trailing slash, so URL must end with /tickets (no // )
-      expect(url.endsWith('/api/v1/tickets')).toBe(true);
-      expect(init.method).toBe('POST');
-      const body = JSON.parse(init.body as string);
-      expect(body.title).toBe('New');
-      expect(body.priority).toBe('medium');
-    });
-
     it('updateTicket calls PUT /api/v1/tickets/:id with the body', async () => {
       mockSuccess({ id: 1 });
       await ticketService.updateTicket(1, { title: 'Updated' });
@@ -293,11 +275,7 @@ describe('ticketService', () => {
       );
 
       await expect(
-        ticketService.createTicket({
-          title: '',
-          priority: 'medium' as never,
-          requesterId: 1,
-        })
+        ticketService.updateTicket(1, { title: '' })
       ).rejects.toThrow('标题不能为空');
     });
 

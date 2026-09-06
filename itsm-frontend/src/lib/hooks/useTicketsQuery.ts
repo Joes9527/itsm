@@ -132,38 +132,6 @@ export const useTicketDetailQuery = (id: number) => {
   });
 };
 
-// 创建工单
-export const useCreateTicketMutation = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (ticketData: CreateTicketRequest) => {
-      const response = await ticketService.createTicket(ticketData);
-      return response;
-    },
-    onSuccess: data => {
-      message.success('Ticket created successfully');
-
-      // 使相关查询失效，触发重新获取
-      queryClient.invalidateQueries({ queryKey: ticketKeys.lists() });
-      queryClient.invalidateQueries({ queryKey: ticketKeys.stats() });
-
-      // 乐观更新统计
-      queryClient.setQueryData(ticketKeys.stats(), (old: TicketStats | undefined) => {
-        if (!old) return old;
-        return {
-          ...old,
-          total: old.total + 1,
-        };
-      });
-    },
-    onError: (error: unknown) => {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create ticket';
-      message.error(errorMessage);
-    },
-  });
-};
-
 // 更新工单
 export const useUpdateTicketMutation = () => {
   const queryClient = useQueryClient();

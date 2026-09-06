@@ -1,3 +1,4 @@
+import { createWorkItem, type CreationRequestOptions, type CreateWorkItemResult } from './work-item-creation';
 /**
  * 标准变更模板 API
  */
@@ -64,6 +65,7 @@ export interface UpdateStandardChangeRequest {
 
 // 实例化请求
 export interface InstantiateStandardChangeRequest {
+  requesterId?: number;
   title?: string;
   plannedStartDate?: string;
   plannedEndDate?: string;
@@ -117,7 +119,7 @@ export class StandardChangeApi {
   }
 
   // 从模板实例化变更
-  static async instantiate(id: number, data?: InstantiateStandardChangeRequest): Promise<{ changeId: number }> {
-    return httpClient.post<{ changeId: number }>(`/api/v1/standard-changes/${id}/instantiate`, data || {});
+  static async instantiate(id: number, data: InstantiateStandardChangeRequest, options: CreationRequestOptions): Promise<CreateWorkItemResult> {
+    return createWorkItem(`/api/v1/standard-changes/${id}/instantiate`, data, options);
   }
 }

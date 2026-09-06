@@ -1,3 +1,5 @@
+import type { WorkItemRecordClass } from '@/lib/api/work-item-creation';
+import type { CreateIncidentRequest } from '@/lib/api/incident-api';
 /**
  * 服务目录和自助门户类型定义
  */
@@ -40,6 +42,9 @@ export enum ServiceType {
  * 服务项
  */
 export interface ServiceItem {
+  targetClass?: WorkItemRecordClass;
+  catalogVersion?: string;
+  formSchemaVersion?: string;
   id: string;
   name: string;
   category: ServiceCategory;
@@ -440,19 +445,35 @@ export type UpdateServiceItemRequest = Partial<CreateServiceItemRequest>;
  * 创建服务请求
  */
 export interface CreateServiceRequestRequest {
-  serviceId: string;
-  formData: Record<string, any>;
-  priority?: 'low' | 'medium' | 'high' | 'urgent';
-  additionalNotes?: string;
-  requestedFor?: number;
-
-  // 通用层字段：直接映射到后端新增列（contactName/contactEmail/quantity/expectedAt），
-  // 不再经过 formData JSON 兜底路径（见 docs/superpowers/specs/
-  // 2026-08-21-service-catalog-request-form-redesign-design.md §3.5）。
+  catalogId: number;
+  recordClass: WorkItemRecordClass;
+  catalogVersion: string;
+  formSchemaVersion: string;
+  title?: string;
+  reason?: string;
+  formData: Record<string, unknown>;
+  priority?: 'low' | 'medium' | 'high' | 'critical';
+  requesterId?: number;
+  assigneeId?: number;
+  ciIds?: number[];
+  generic?: { type?: string; typeId?: string; source?: string; category?: string };
+  incident?: Omit<CreateIncidentRequest, 'title' | 'description' | 'priority' | 'requesterId' | 'assigneeId' | 'configurationItemIds'>;
+  problem?: { category?: string; rootCause?: string; impact?: string; sourceIncidentId?: number };
+  change?: {
+    category?: string; justification?: string; type?: string; impactScope?: string; riskLevel?: string;
+    plannedStartDate?: string; plannedEndDate?: string; implementationPlan?: string; rollbackPlan?: string;
+    affectedCis?: string[]; relatedTickets?: number[]; relatedTicketNumbers?: string[];
+  };
   contactName?: string;
   contactEmail?: string;
   quantity?: number;
   expectedAt?: string;
+  costCenter?: string;
+  dataClassification?: 'public' | 'internal' | 'confidential' | 'restricted';
+  needsPublicIp?: boolean;
+  sourceIpWhitelist?: string[];
+  expireAt?: string;
+  complianceAck?: boolean;
 }
 
 /**

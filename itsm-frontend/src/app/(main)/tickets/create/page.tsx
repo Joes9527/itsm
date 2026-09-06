@@ -1,5 +1,9 @@
 'use client';
 
+import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
+import { CreationAttempts } from '@/components/work-item/CreationAttempts';
+import { CreationRequester } from '@/components/work-item/CreationRequester';
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -26,7 +30,6 @@ const { Title, Text } = Typography;
 const { TextArea } = Input;
 
 type Priority = 'low' | 'medium' | 'high' | 'urgent';
-type TicketCreateType = 'incident' | 'service_request' | 'change' | 'problem';
 
 // 图标映射
 const iconMap: Record<string, React.ReactNode> = {
@@ -119,18 +122,6 @@ function getCategoryCodeChain(node: CategoryTreeNode): string[] {
   return [node.code];
 }
 
-const inferTicketType = (template: DbTemplate | null, preset: TicketTypePreset | null): TicketCreateType => {
-  if (preset) {
-    const value = `${preset.id} ${preset.code} ${preset.name}`;
-    if (/change|变更|ddl|firewall|domain/i.test(value)) return 'change';
-    if (/problem|问题/i.test(value)) return 'problem';
-  }
-  if (template) {
-    if (/故障|报修|异常|incident/i.test(template.name)) return 'incident';
-  }
-  return 'service_request';
-};
-
 // 归一化优先级：历史模板数据可能存了 SLA 优先级代码（P0-P4），
 // 统一映射为标准优先级（low/medium/high/critical/urgent），避免后端 oneof 校验失败。
 const normalizePriority = (p: string): string => {
@@ -151,6 +142,8 @@ const normalizePriority = (p: string): string => {
 
 export default function CreateTicketPage() {
   const router = useRouter();
+  const creation = useWorkItemCreation();
+  const [genericChosen, setGenericChosen] = useState(false);
   const searchParams = useSearchParams();
   const { message } = App.useApp();
   const { t } = useI18n();
@@ -229,7 +222,7 @@ export default function CreateTicketPage() {
       form.setFieldValue('category', cat.code);
       if (urlItem) form.setFieldValue('title', urlItem);
     }
-  }, [urlCategory, categories]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [urlCategory, categories]);
 
   // --- 分类树 ---
   const categoryTree = useMemo(() => buildCategoryTree(categories), [categories]);
@@ -374,21 +367,19 @@ export default function CreateTicketPage() {
 
       const templateId = selectedTemplate?.id;
 
-      const created = await TicketApi.createTicket({
+      await creation.submit({
         title,
         description,
         priority,
-        type: inferTicketType(selectedTemplate, selectedPreset),
+        type: 'ticket',
+        requesterId: values.requesterId,
         category: values.category || selectedCategoryCode || (activeSelection ? (selectedTemplate?.category || selectedPreset?.category) : undefined),
         templateId,
         formFields: activeSelection
           ? buildTicketFormFields(activeFields, customFieldValues, templateId)
           : undefined,
         workflowDefinitionKey: selectedPreset?.workflowTemplateId,
-      });
-
-      message.success('工单创建成功');
-      router.push(`/tickets/${created.id}`);
+      }, TicketApi.createTicket, receipt => router.push(`/tickets/${receipt.workItemId}`));
     } catch (e: unknown) {
       console.error('Create ticket error:', e);
       const errorObj = e as { message?: string; error?: { message?: string } };
@@ -428,8 +419,21 @@ export default function CreateTicketPage() {
   // --- 渲染 ---
   const isLoading = categoriesLoading || templatesLoading;
 
+  if (!genericChosen) return <Card className="m-6" title="选择创建目标">
+    <p className="mb-4">先选择工作类型，再填写对应表单。模板名称和分类不会决定专业类型。</p>
+    <Space wrap>
+      <Button onClick={() => setGenericChosen(true)}>普通工单</Button>
+      <Button onClick={() => router.push('/incidents/create')}>事件</Button>
+      <Button onClick={() => router.push('/problems/new')}>问题</Button>
+      <Button onClick={() => router.push('/changes/new')}>变更请求</Button>
+      <Button onClick={() => router.push('/service-catalog')}>服务目录申请</Button>
+    </Space>
+  </Card>;
+
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-6" role="main" aria-label="创建工单页面">
+      <Alert type="info" title="当前目标：普通工单" description="模板提供普通工单字段；专业工作请返回创建入口重新选择。" />
+      <CreationAttempts creation={creation} />
       <Space orientation="vertical" size={16} style={{ width: '100%' }}>
         {/* 页面头部 */}
         <Card>
@@ -564,6 +568,7 @@ export default function CreateTicketPage() {
 
               {/* 表单 */}
               <Form form={form} layout="vertical" requiredMark="optional">
+                <CreationRequester />
                 <Card title="工单信息" style={{ marginBottom: 16 }}>
                   <Alert
                     type="info" showIcon className="mb-4"

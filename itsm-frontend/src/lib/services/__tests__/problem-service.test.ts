@@ -51,16 +51,6 @@ describe('ProblemService', () => {
     });
   });
 
-  describe('createProblem', () => {
-    it('should call POST /api/v1/problems with data', async () => {
-      const data = { title: 'New', description: 'Desc', priority: ProblemPriority.HIGH, category: 'infra', rootCause: 'TBD', impact: 'High' };
-      mockPost.mockResolvedValueOnce({ message: 'created', problemId: 10 });
-      const result = await problemService.createProblem(data);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/problems', data);
-      expect(result.problemId).toBe(10);
-    });
-  });
-
   describe('updateProblem', () => {
     it('should call PUT /api/v1/problems/:id', async () => {
       mockPut.mockResolvedValueOnce({ message: 'updated', problemId: 3 });

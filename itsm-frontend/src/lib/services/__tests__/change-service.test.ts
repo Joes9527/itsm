@@ -57,29 +57,6 @@ describe('ChangeService', () => {
     });
   });
 
-  describe('createChange', () => {
-    it('should call POST /api/v1/changes with data', async () => {
-      const createData = {
-        title: 'New Change',
-        description: 'Desc',
-        justification: 'Just',
-        type: 'normal' as const,
-        priority: 'high' as const,
-        impactScope: 'medium' as const,
-        riskLevel: 'low' as const,
-        implementationPlan: 'plan',
-        rollbackPlan: 'rollback',
-      };
-      const mockResult = { id: 2, ...createData };
-      mockPost.mockResolvedValueOnce(mockResult);
-
-      const result = await changeService.createChange(createData);
-
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/changes', createData);
-      expect(result).toEqual(mockResult);
-    });
-  });
-
   describe('updateChange', () => {
     it('should call PUT /api/v1/changes/:id with data', async () => {
       const updateData = { title: 'Updated' };

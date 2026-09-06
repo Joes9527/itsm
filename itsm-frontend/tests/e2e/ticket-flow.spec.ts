@@ -1,3 +1,4 @@
+import { verifyCreationAndReplay } from './creation.test-utils';
 /**
  * Ticket Flow E2E Tests
  * Tests complete ticket lifecycle from creation to closure
@@ -22,6 +23,7 @@ test.describe('Ticket Lifecycle - End User Creates Ticket', () => {
     // Step 2: Navigate to create ticket page
     await test.step('Navigate to create ticket page', async () => {
       await page.goto('/tickets/create');
+      await page.getByRole('button', { name: '普通工单', exact: true }).click();
       await page.waitForLoadState('networkidle');
 
       await expect(page.getByRole('main', { name: '创建工单页面' })).toBeVisible({ timeout: 10000 });
@@ -60,12 +62,8 @@ test.describe('Ticket Lifecycle - End User Creates Ticket', () => {
       );
       await submitButton.click();
       const response = await createResponse;
-      expect(response.status()).toBe(200);
-      const envelope = await response.json();
-      expect(envelope).toHaveProperty('code', 0);
-      expect(envelope.data).toMatchObject({ title: ticketTitle });
-      expect(envelope.data.id).toBeGreaterThan(0);
-      createdTicketId = envelope.data.id;
+      const receipt = await verifyCreationAndReplay(page, response);
+      createdTicketId = receipt.workItemId;
     });
 
     // Step 5: Verify ticket created (check URL or success message)

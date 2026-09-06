@@ -130,14 +130,14 @@ function extractFrontendPaths(filePath: string): ExtractedFrontendPath[] {
 
   // Match httpClient.METHOD("path", ...) | 'path' | `path` (with optional <T> generic).
   const callRe =
-    /httpClient\.(get|post|put|patch|delete)\s*(?:<[^>]+>)?\s*\(\s*['"`]([^'"`]+)['"`]/g;
+    /(?:httpClient\.(get|post|put|patch|delete)|createWorkItem)\s*(?:<[^>]+>)?\s*\(\s*['"`]([^'"`]+)['"`]/g;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const re = new RegExp(callRe.source, 'g');
     let m: RegExpExecArray | null;
     while ((m = re.exec(line)) !== null) {
-      const method = m[1].toUpperCase();
+      const method = (m[1] || 'post').toUpperCase();
       const rawPath = m[2];
       const resolvedPath = rawPath.replace(/^\$\{(?:this\.)?([^}]+)\}/, (token, name: string) => {
         return staticBases.get(name) ?? token;

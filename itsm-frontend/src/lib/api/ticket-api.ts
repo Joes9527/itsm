@@ -1,3 +1,4 @@
+import { createWorkItem, type CreationRequestOptions, type CreateWorkItemResult } from './work-item-creation';
 import { httpClient } from './http-client';
 import { handleApiRequest } from './base-api-handler';
 import type { Ticket, TicketListResponse, CreateTicketRequest, GetTicketsParams } from './api-config';
@@ -19,11 +20,8 @@ export class TicketApi {
   }
 
   // Create ticket
-  static async createTicket(data: CreateTicketRequest): Promise<Ticket> {
-    return handleApiRequest(httpClient.post<Ticket>('/api/v1/tickets', data), {
-      errorMessage: 'Failed to create ticket',
-      showSuccess: true,
-    });
+  static async createTicket(data: CreateTicketRequest, options: CreationRequestOptions): Promise<CreateWorkItemResult> {
+    return createWorkItem('/api/v1/tickets', data, options);
   }
 
   // Get ticket details
@@ -144,14 +142,6 @@ export class TicketApi {
     );
      
     return (response as any).tickets || (response as any).data || response || [];
-  }
-
-  // Create subtask
-  static async createSubtask(parentTicketId: number, data: Partial<Ticket>): Promise<Ticket> {
-    return httpClient.post<Ticket>(`/api/v1/tickets/${parentTicketId}/subtasks`, {
-      ...data,
-      parentTicketId: parentTicketId,
-    });
   }
 
   // Update subtask

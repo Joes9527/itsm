@@ -1,3 +1,4 @@
+import { creationReceipt, creationOptions, creationHttpOptions } from '../creation.test-utils';
 import { StandardChangeApi } from '../standard-change-api';
 import { httpClient } from '../http-client';
 
@@ -75,19 +76,13 @@ describe('StandardChangeApi', () => {
       expect(result.categories).toContain('network');
     });
   });
-
   describe('instantiate', () => {
-    it('should instantiate from template', async () => {
-      mockPost.mockResolvedValue({ changeId: 42 });
-      const result = await StandardChangeApi.instantiate(1, { title: 'My Change', plannedStartDate: '2024-02-01' });
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/standard-changes/1/instantiate', { title: 'My Change', plannedStartDate: '2024-02-01' });
-      expect(result.changeId).toBe(42);
-    });
-
-    it('should instantiate without optional data', async () => {
-      mockPost.mockResolvedValue({ changeId: 43 });
-      await StandardChangeApi.instantiate(1);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/standard-changes/1/instantiate', {});
+    it('preserves confirmed payload and returns only the creation receipt', async () => {
+      const data = { title: 'Title', plannedStartDate: '2026-09-10T00:00:00Z', affectedCis: ['ci'] };
+      mockPost.mockResolvedValue(creationReceipt);
+      const result = await StandardChangeApi.instantiate(1, data, creationOptions);
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/standard-changes/1/instantiate', data, creationHttpOptions);
+      expect(result).toEqual(creationReceipt);
     });
   });
 

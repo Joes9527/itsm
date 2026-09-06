@@ -341,41 +341,6 @@ export function useDuplicateTemplateMutation(
 }
 
 /**
- * 从模板创建工单
- */
-export function useCreateTicketFromTemplateMutation(
-  options?: UseMutationOptions<Ticket, Error, CreateTicketFromTemplateRequest>
-) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: CreateTicketFromTemplateRequest) =>
-      TemplateApi.createTicketFromTemplate(data),
-    onSuccess: (data, variables, onMutateResult, context) => {
-      // 记录模板使用
-      TemplateApi.recordTemplateUsage(variables.templateId);
-
-      // 刷新模板统计
-      queryClient.invalidateQueries({
-        queryKey: templateKeys.stats(variables.templateId),
-      });
-
-      // 刷新最近使用
-      queryClient.invalidateQueries({ queryKey: templateKeys.recent() });
-
-      message.success('工单创建成功！');
-
-      options?.onSuccess?.(data, variables, onMutateResult, context);
-    },
-    onError: (error, variables, onMutateResult, context) => {
-      message.error(`创建工单失败：${error.message}`);
-      options?.onError?.(error, variables, onMutateResult, context);
-    },
-    ...options,
-  });
-}
-
-/**
  * 为模板评分
  */
 export function useRateTemplateMutation(

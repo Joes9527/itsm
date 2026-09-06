@@ -122,22 +122,6 @@ describe('useTickets', () => {
     expect(result.current.pagination.pageSize).toBe(10);
   });
 
-  it('should create ticket and refresh data', async () => {
-    mockTicketService.createTicket.mockResolvedValue({ id: 1 } as any);
-
-    const { result } = renderHook(() => useTickets());
-
-    await waitFor(() => {
-      expect(result.current.loading).toBe(false);
-    });
-
-    await act(async () => {
-      await result.current.createTicket({ title: 'New ticket' });
-    });
-
-    expect(mockTicketService.createTicket).toHaveBeenCalledWith({ title: 'New ticket' });
-  });
-
   it('should delete ticket and refresh data', async () => {
     mockTicketService.deleteTicket.mockResolvedValue(undefined as any);
 

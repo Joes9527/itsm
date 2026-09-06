@@ -1,3 +1,4 @@
+import { verifyCreationAndReplay } from './creation.test-utils';
 import { expect, test } from '@playwright/test';
 import { DEFAULT_LOGIN, loginAndReturn } from './auth-utils';
 
@@ -48,7 +49,7 @@ test.describe('事件管理页面功能', () => {
         response.url().endsWith('/api/v1/incidents') && response.request().method() === 'POST'
     );
     await page.getByTestId('incident-submit-button').click();
-    expect((await createResponse).status()).toBe(200);
+    await verifyCreationAndReplay(page, await createResponse);
     await expect(page).toHaveURL(/\/incidents$/);
     await expect(page.getByText(title)).toBeVisible();
   });

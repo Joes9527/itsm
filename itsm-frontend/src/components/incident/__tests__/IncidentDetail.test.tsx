@@ -11,11 +11,13 @@ const mockGetImpactAssessment = jest.fn();
 const mockGetIncidentClassification = jest.fn();
 const mockResolveIncident = jest.fn();
 const mockCloseIncident = jest.fn();
+const mockConvertToProblem = jest.fn();
+const mockPush = jest.fn();
 const hasPermission = () => false;
 
 jest.mock('next/navigation', () => ({
   useParams: () => ({ id: '301' }),
-  useRouter: () => ({ push: jest.fn(), back: jest.fn() }),
+  useRouter: () => ({ push: mockPush, back: jest.fn() }),
 }));
 
 jest.mock('@/lib/api/', () => ({
@@ -26,6 +28,7 @@ jest.mock('@/lib/api/', () => ({
     getIncidentClassification: (...args: unknown[]) => mockGetIncidentClassification(...args),
     resolveIncident: (...args: unknown[]) => mockResolveIncident(...args),
     closeIncident: (...args: unknown[]) => mockCloseIncident(...args),
+    convertToProblem: (...args: unknown[]) => mockConvertToProblem(...args),
   },
 }));
 
@@ -35,10 +38,11 @@ jest.mock('@/lib/api/user-api', () => ({
   },
 }));
 
-jest.mock('@/lib/store/auth-store', () => ({
-  useAuthStore: (selector: (state: { hasPermission: typeof hasPermission }) => unknown) =>
-    selector({ hasPermission }),
-}));
+jest.mock('@/lib/store/auth-store', () => {
+  const state = { hasPermission: () => false, isAuthenticated: true, user: { id: 1, tenantId: 2 }, currentTenant: { id: 2 } };
+  return { useAuthStore: Object.assign((selector: (state: unknown) => unknown) => selector(state), { getState: () => state }) };
+});
+Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: () => 'conversion-key' });
 
 const workItem: WorkItemCommon = {
   id: 301,
@@ -236,4 +240,16 @@ describe('IncidentDetail action eligibility', () => {
 
     expect(screen.getByRole('button', { name: '重新打开' })).toBeDisabled();
   });
+});
+
+it('conversion uses a confirmed payload and professional Problem reference without inheriting reporter', async () => {
+  mockGetIncident.mockResolvedValue({ ...incident, reporterId: 999, actions: { convertToProblem: { allowed: true } } });
+  mockConvertToProblem.mockResolvedValue({ workItemId: 41, number: 'PRB-41', recordClass: 'problem', professionalReference: { type: 'problem', id: 88 }, workflowStartStatus: 'manual_intervention_required', replayed: true });
+  renderWithoutProvider({ convertToProblem: { allowed: true } });
+  await userEvent.click(await screen.findByRole('button', { name: '转为问题' }));
+  const dialog = await screen.findByRole('dialog', { name: '创建关联问题' });
+  fireEvent.click(within(dialog).getByRole('button', { name: /确|OK/ }));
+  await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/problems/88'));
+  expect(mockConvertToProblem).toHaveBeenCalledWith(301, { title: incident.title, description: incident.description }, expect.objectContaining({ idempotencyKey: 'conversion-key' }));
+  expect(screen.getAllByText(/PRB-41.*已创建.*需要人工处理/).length).toBeGreaterThan(0);
 });

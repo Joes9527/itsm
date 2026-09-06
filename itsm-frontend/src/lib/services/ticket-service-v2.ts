@@ -154,13 +154,6 @@ export class TicketService extends BaseService<Ticket, CreateTicketParams, Updat
   }
 
   /**
-   * 创建工单
-   */
-  async createTicket(data: CreateTicketParams): Promise<Ticket> {
-    return this.create(data);
-  }
-
-  /**
    * 更新工单
    */
   async updateTicket(id: number, data: UpdateTicketParams): Promise<Ticket> {
@@ -426,16 +419,6 @@ export class TicketService extends BaseService<Ticket, CreateTicketParams, Updat
       `/${parentTicketId}/subtasks`
     );
     return (response as any).tickets || (response as any).data || [];
-  }
-
-  /**
-   * 创建子任务
-   */
-  async createSubtask(parentTicketId: number, data: Partial<Ticket>): Promise<Ticket> {
-    return this.post(`/${parentTicketId}/subtasks`, {
-      ...data,
-      parentTicketId: parentTicketId,
-    });
   }
 
   /**

@@ -1,3 +1,4 @@
+import { verifyCreationAndReplay } from './creation.test-utils';
 import { expect, test } from '@playwright/test';
 import { DEFAULT_LOGIN, loginAndReturn } from './auth-utils';
 
@@ -40,7 +41,7 @@ test.describe('变更管理页面功能', () => {
         response.url().endsWith('/api/v1/changes') && response.request().method() === 'POST'
     );
     await page.getByTestId('change-submit-button').click();
-    expect((await createResponse).status()).toBe(200);
+    await verifyCreationAndReplay(page, await createResponse);
     await expect(page).toHaveURL(/\/changes$/);
     await expect(page.getByText(title)).toBeVisible();
   });

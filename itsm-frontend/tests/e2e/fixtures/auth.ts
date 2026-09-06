@@ -21,7 +21,7 @@ export type TestRole = keyof typeof TEST_ACCOUNTS;
 interface TestFixtures {
   loginAs: (role: TestRole) => Promise<string>;
   apiGet: (role: string, path: string) => Promise<any>;
-  apiPost: (role: string, path: string, body?: any) => Promise<any>;
+  apiPost: (role: string, path: string, body?: any, headers?: Record<string, string>) => Promise<any>;
   apiPostExpectStatus: (role: string, path: string, expectedStatus: number, body?: any) => Promise<any>;
 }
 
@@ -54,10 +54,10 @@ export const test = base.extend<TestFixtures>({
   },
 
   apiPost: async ({ request }, use) => {
-    await use(async (role: string, path: string, body?: any) => {
+    await use(async (role: string, path: string, body?: any, headers?: Record<string, string>) => {
       await establishRoleSession(request, role as TestRole);
       const apiURL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8090';
-      const response = await mutateWithCSRF(request, 'POST', `${apiURL}${path}`, { data: body });
+      const response = await mutateWithCSRF(request, 'POST', `${apiURL}${path}`, { data: body, headers });
       if (!response.ok()) {
         throw new Error(`POST ${path} failed: ${response.status()} ${await response.text()}`);
       }

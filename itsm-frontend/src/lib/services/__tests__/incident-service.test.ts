@@ -74,18 +74,6 @@ describe('IncidentService', () => {
     });
   });
 
-  describe('createIncident', () => {
-    it('should call POST /api/v1/incidents with data', async () => {
-      const data = { title: 'New incident', description: 'Desc', priority: IncidentPriority.CRITICAL };
-      mockPost.mockResolvedValueOnce({ message: 'created', incidentId: 5 });
-
-      const result = await incidentService.createIncident(data);
-
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents', data);
-      expect(result.incidentId).toBe(5);
-    });
-  });
-
   describe('updateIncident', () => {
     it('should call PUT /api/v1/incidents/:id with data', async () => {
       mockPut.mockResolvedValueOnce({ message: 'updated', incidentId: 3 });

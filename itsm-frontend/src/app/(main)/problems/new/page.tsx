@@ -1,5 +1,9 @@
 'use client';
 
+import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
+import { CreationAttempts } from '@/components/work-item/CreationAttempts';
+import { CreationRequester } from '@/components/work-item/CreationRequester';
+
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
@@ -12,6 +16,7 @@ const { TextArea } = Input;
 
 const CreateProblemPageContent = () => {
   const router = useRouter();
+  const creation = useWorkItemCreation();
   const { t } = useI18n();
   const searchParams = useSearchParams();
   const [form] = Form.useForm();
@@ -35,18 +40,15 @@ const CreateProblemPageContent = () => {
   const handleSubmit = async (values: any) => {
     setLoading(true);
     try {
-      await ProblemApi.createProblem({
+      await creation.submit({
         title: values.title,
         description: values.description,
         priority: values.priority,
         category: values.category,
         rootCause: values.rootCause,
         impact: values.impact,
-        assigneeId: values.assigneeId,
-      });
-
-      message.success(t('problems.createSuccess'));
-      router.push('/problems');
+        requesterId: values.requesterId,
+      }, ProblemApi.createProblem, () => router.push('/problems'));
     } catch (error) {
       console.error('创建问题失败:', error);
       message.error(t('problems.createFailed'));
@@ -87,6 +89,7 @@ const CreateProblemPageContent = () => {
         <p className="text-gray-500 mt-1">识别、分析和解决IT服务的根本原因</p>
       </header>
 
+      <CreationAttempts creation={creation} />
       <Card className="shadow-md">
         <Form
           form={form}
@@ -97,6 +100,7 @@ const CreateProblemPageContent = () => {
             category: '系统问题',
           }}
         >
+          <CreationRequester />
           {searchParams.get('fromIncidentId') && (
             <Alert
               message={`此问题由事件 ${searchParams.get('fromIncidentId')} 触发`}

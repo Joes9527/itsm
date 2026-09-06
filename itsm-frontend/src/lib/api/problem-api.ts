@@ -1,3 +1,14 @@
+export interface CreateProblemRequest {
+  requesterId?: number;
+  title: string;
+  description: string;
+  priority: string;
+  category?: string;
+  rootCause?: string;
+  impact?: string;
+  impactScope?: string;
+}
+import { createWorkItem, type CreationRequestOptions, type CreateWorkItemResult } from './work-item-creation';
 /**
  * 问题管理 API 包装器
  * 兼容旧代码使用
@@ -136,8 +147,8 @@ export class ProblemApi {
   /**
    * 创建问题
    */
-  static async createProblem(data: Partial<Problem>): Promise<Problem> {
-    return httpClient.post('/api/v1/problems', data);
+  static async createProblem(data: CreateProblemRequest, options: CreationRequestOptions): Promise<CreateWorkItemResult> {
+    return createWorkItem('/api/v1/problems', data, options);
   }
 
   /**

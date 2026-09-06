@@ -1,3 +1,4 @@
+import { verifyCreationAndReplay } from './creation.test-utils';
 /**
  * Problem Management E2E Tests
  * 问题管理端到端测试
@@ -65,10 +66,12 @@ test.describe('Problem Create - 创建问题', () => {
 
     await titleInput.fill(`E2E 问题 - ${Date.now()}`);
     await descInput.fill('这是一个用于 E2E 的创建问题测试描述。');
+    await page.getByLabel('根本原因分析 (RCA)').fill('用于验证创建问题的根本原因分析');
+    await page.getByLabel('影响范围').fill('用于验证影响范围字段完整提交');
     await submitBtn.click();
 
     const createResp = await createResponsePromise;
-    expect(createResp.status()).toBe(200);
+    await verifyCreationAndReplay(page, createResp);
   });
 });
 

@@ -152,13 +152,6 @@ class IncidentService {
     return httpClient.get<Incident>(`${this.baseUrl}/${id}`);
   }
 
-  // 创建事件
-  async createIncident(
-    data: CreateIncidentRequest
-  ): Promise<{ message: string; incidentId: number }> {
-    return httpClient.post<{ message: string; incidentId: number }>(this.baseUrl, data);
-  }
-
   // 更新事件
   async updateIncident(
     id: number,

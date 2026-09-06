@@ -182,6 +182,7 @@ export interface SLAInfo {
 }
 
 export interface User {
+  mspRole?: string;
   id: number;
   username: string;
   email: string;
@@ -204,6 +205,7 @@ export interface TicketListResponse {
 }
 
 export interface CreateTicketRequest {
+  requesterId?: number;
   title: string;
   description: string;
   priority: string;

@@ -162,20 +162,6 @@ export function usePublishServiceMutation() {
   });
 }
 
-export function useCreateServiceRequestMutation() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ServiceCatalogApi.createServiceRequest,
-    onSuccess: () => {
-      message.success('服务请求已提交');
-      queryClient.invalidateQueries({
-        queryKey: SERVICE_CATALOG_KEYS.requests(),
-      });
-      queryClient.invalidateQueries({ queryKey: SERVICE_CATALOG_KEYS.stats() });
-    },
-  });
-}
-
 export function useAddFavoriteMutation() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -239,7 +225,6 @@ export default {
   useCreateServiceMutation,
   useUpdateServiceMutation,
   usePublishServiceMutation,
-  useCreateServiceRequestMutation,
   useAddFavoriteMutation,
   useRemoveFavoriteMutation,
   useRateServiceMutation,

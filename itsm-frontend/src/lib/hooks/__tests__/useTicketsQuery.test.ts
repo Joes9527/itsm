@@ -5,7 +5,6 @@ import {
   useTicketsQuery,
   useTicketStatsQuery,
   useTicketDetailQuery,
-  useCreateTicketMutation,
   useUpdateTicketMutation,
   useDeleteTicketMutation,
   useBatchDeleteTicketsMutation,
@@ -234,33 +233,6 @@ describe('useTicketsQuery hooks', () => {
     it('should not fetch when id is 0', () => {
       renderHook(() => useTicketDetailQuery(0), { wrapper: createWrapper() });
       expect(mockService.getTicket).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('useCreateTicketMutation', () => {
-    it('should create a ticket', async () => {
-      mockService.createTicket.mockResolvedValue({ id: 1 } as any);
-
-      const { result } = renderHook(() => useCreateTicketMutation(), {
-        wrapper: createWrapper(),
-      });
-
-      result.current.mutate({ title: 'New Ticket' } as any);
-
-      await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(mockService.createTicket).toHaveBeenCalledWith({ title: 'New Ticket' });
-    });
-
-    it('should handle create error', async () => {
-      mockService.createTicket.mockRejectedValue(new Error('Create failed'));
-
-      const { result } = renderHook(() => useCreateTicketMutation(), {
-        wrapper: createWrapper(),
-      });
-
-      result.current.mutate({ title: 'Bad' } as any);
-
-      await waitFor(() => expect(result.current.isError).toBe(true));
     });
   });
 

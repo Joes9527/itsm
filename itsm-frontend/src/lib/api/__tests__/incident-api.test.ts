@@ -1,3 +1,4 @@
+import { creationReceipt, creationOptions, creationHttpOptions } from '../creation.test-utils';
 import { IncidentAPI } from '@/lib/api/incident-api';
 import { httpClient } from '@/lib/api/http-client';
 
@@ -47,14 +48,13 @@ describe('IncidentAPI', () => {
       expect(result.id).toBe(1);
     });
   });
-
   describe('createIncident', () => {
-    it('should create an incident', async () => {
-      const data = { title: 'New Incident', priority: 'high', source: 'monitoring', type: 'alert' };
-      mockPost.mockResolvedValue({ id: 2, ...data });
-      const result = await IncidentAPI.createIncident(data);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents', data);
-      expect(result.title).toBe('New Incident');
+    it('preserves confirmed payload and returns only the creation receipt', async () => {
+      const data = { title: 'Title', description: 'Description', type: 'incident', priority: 'medium', source: 'manual' as const, metadata: { raw_key: 'value' } };
+      mockPost.mockResolvedValue(creationReceipt);
+      const result = await IncidentAPI.createIncident(data, creationOptions);
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents', data, creationHttpOptions);
+      expect(result).toEqual(creationReceipt);
     });
   });
 
