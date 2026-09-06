@@ -160,7 +160,6 @@ func TestDynamicFields(t *testing.T) {
 		Priority:    "medium",
 		TemplateID:  templateID,
 		FormFields: map[string]interface{}{
-			"presetTypeId": "incident",
 			"values": map[string]interface{}{
 				"department":    "IT",
 				"urgencyReason": "影响全楼层打印",
@@ -305,7 +304,6 @@ func TestDynamicFields_ArrayFormatWithUnderscoreNames(t *testing.T) {
 		Priority:    "medium",
 		TemplateID:  templateID,
 		FormFields: map[string]interface{}{
-			"presetTypeId": "incident",
 			"values": []map[string]interface{}{
 				{"name": "current_replicas", "value": 5},
 			},
@@ -357,7 +355,6 @@ func TestDynamicFields_AdHocFieldsWithoutTemplate(t *testing.T) {
 		Description: "没有数据库模板，字段定义随请求内联提交",
 		Priority:    "medium",
 		FormFields: map[string]interface{}{
-			"presetTypeId": "incident",
 			"fieldDefs": []map[string]interface{}{
 				{"name": "affected_region", "label": "受影响地域"},
 			},
