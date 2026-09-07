@@ -106,6 +106,8 @@ services:
     container_name: itsm-backend-prod
     hostname: backend
     environment:
+      # Public endpoint only; the signing secret remains worker-owned.
+      - KAF_WEBHOOK_URL=${KAF_WEBHOOK_URL:-}
       - DB_HOST=${ITSM_DB_HOST:?ITSM_DB_HOST must point to the external PostgreSQL instance}
       - DB_PORT=${ITSM_DB_PORT:-5432}
       - DB_USER=${ITSM_RUNTIME_DB_USER:?ITSM_RUNTIME_DB_USER must be set}

@@ -2,13 +2,16 @@ package service_request_test
 
 import (
 	"fmt"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"itsm-backend/config"
 	"itsm-backend/dto"
 	"itsm-backend/ent/processdefinition"
 	"itsm-backend/handlers/common/accessgrant"
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/service"
+	"os"
 	"strings"
 	"testing"
 )
@@ -20,6 +23,22 @@ func TestAccessPolicyPublicationRequiresExactDeclaredCapability(t *testing.T) {
 			deploySSLVPNDefinition(t, fx, "access", fmt.Sprintf(sslvpnApprovalNodes, fx.approver.ID, fx.approver.ID), sslvpnApprovalFlows)
 			owner := service_catalog.NewService(service_catalog.NewEntRepository(fx.client), fx.client, zap.NewNop().Sugar(), nil)
 			configureCatalogPublicationForTest(fx.ctx, fx.client, fx.tenant.ID, owner)
+			if kind == "valid" {
+				t.Chdir(t.TempDir())
+				require.NoError(t, os.WriteFile("config.yaml", []byte("{}\n"), 0600))
+				viper.Reset()
+				t.Cleanup(viper.Reset)
+				t.Setenv("KAF_WEBHOOK_URL", "http://127.0.0.1:1")
+				t.Setenv("KAF_WEBHOOK_SECRET", "")
+				t.Setenv("KAF_WEBHOOK_SECRET_FILE", "")
+				cfg, err := config.LoadConfig()
+				require.NoError(t, err)
+				require.Empty(t, cfg.KAFOutbox.WebhookSecret)
+				require.ErrorContains(t, config.ValidateKAFWorkerStartupConfig(cfg), "KAF_WEBHOOK_SECRET")
+				engine := service.NewCustomProcessEngine(fx.client, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
+				engine.SetPublicationKAFConfig(cfg)
+				owner.SetPublicationEngine(engine)
+			}
 			policy := &accessgrant.Policy{Provider: accessgrant.Graph, ExternalSystem: "directory", GroupID: "group", DurationField: "duration", DurationOptions: []accessgrant.DurationOption{{Key: "month", Label: "一个月", Seconds: 2592000}}}
 			input := dto.CreateServiceCatalogRequest{Name: "Access", Category: "IT", TargetClass: "service_request_item", ProcessDefinitionKey: "access", RequiresApproval: true, AccessPolicy: policy, Fields: []map[string]any{{"name": "duration", "label": "申请有效期", "type": "select", "required": true, "options": []any{map[string]any{"label": "一个月", "value": "month"}}}}}
 			if kind == "missing_policy" {

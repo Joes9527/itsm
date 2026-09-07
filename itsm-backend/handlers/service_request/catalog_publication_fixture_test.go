@@ -11,7 +11,6 @@ import (
 	sr "itsm-backend/handlers/service_request"
 	"itsm-backend/service"
 	"strconv"
-	"time"
 )
 
 func catalogCreateInput(name, category, description string, days int, status string, ci, cloud int, fields []service.FieldDefinitionInput, key, serviceType string) dto.CreateServiceCatalogRequest {
@@ -36,6 +35,6 @@ func configureCatalogPublicationForTest(ctx context.Context, client *ent.Client,
 	}
 	catalog.SetCreatorRegistry(registry)
 	engine := service.NewCustomProcessEngine(client, logger).(*service.CustomProcessEngine)
-	engine.SetPublicationKAFConfig(&config.Config{KAFOutbox: config.KAFOutboxConfig{WebhookURL: "http://127.0.0.1:1", WebhookSecret: "fixture-only-unused", BatchSize: 1, PollInterval: time.Second, MaxAttempts: 1, HealthPort: 12345}})
+	engine.SetPublicationKAFConfig(&config.Config{KAFOutbox: config.KAFOutboxConfig{WebhookURL: "http://127.0.0.1:1"}})
 	catalog.SetPublicationEngine(engine)
 }

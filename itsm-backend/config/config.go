@@ -524,26 +524,33 @@ func loadKAFOutboxConfigWithSecret(getenv func(string) string, webhookSecret str
 		config.HealthPort = healthPort
 	}
 
-	if config.WebhookURL != "" && config.WebhookSecret == "" {
-		return KAFOutboxConfig{}, fmt.Errorf("KAF_WEBHOOK_SECRET is required when KAF_WEBHOOK_URL is configured")
-	}
 	if config.WebhookURL != "" {
-		parsedURL, err := url.ParseRequestURI(config.WebhookURL)
-		if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" || parsedURL.User != nil {
-			return KAFOutboxConfig{}, fmt.Errorf("KAF_WEBHOOK_URL must be an absolute HTTP(S) URL without userinfo")
+		if err := ValidateKAFPublicationConfig(&Config{KAFOutbox: config}); err != nil {
+			return KAFOutboxConfig{}, err
 		}
 	}
 	return config, nil
 }
 
+// ValidateKAFPublicationConfig validates the public deployment endpoint used by
+// API publication. It does not assert worker health or possession of credentials;
+// the dedicated worker validates its secret and execution settings on startup.
+func ValidateKAFPublicationConfig(cfg *Config) error {
+	if cfg == nil || strings.TrimSpace(cfg.KAFOutbox.WebhookURL) == "" {
+		return fmt.Errorf("KAF_WEBHOOK_URL is required for KAF delegation")
+	}
+	endpoint, err := url.ParseRequestURI(cfg.KAFOutbox.WebhookURL)
+	if err != nil || (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.Host == "" || endpoint.User != nil {
+		return fmt.Errorf("KAF_WEBHOOK_URL must be an absolute HTTP(S) URL without userinfo")
+	}
+	return nil
+}
+
 // ValidateKAFWorkerStartupConfig makes KAF delivery configuration required for
 // the dedicated Worker while keeping it optional for the API process.
 func ValidateKAFWorkerStartupConfig(cfg *Config) error {
-	if cfg == nil {
-		return fmt.Errorf("worker configuration is required")
-	}
-	if strings.TrimSpace(cfg.KAFOutbox.WebhookURL) == "" {
-		return fmt.Errorf("KAF_WEBHOOK_URL is required for the KAF worker")
+	if err := ValidateKAFPublicationConfig(cfg); err != nil {
+		return err
 	}
 	if strings.TrimSpace(cfg.KAFOutbox.WebhookSecret) == "" {
 		return fmt.Errorf("KAF_WEBHOOK_SECRET is required for the KAF worker")

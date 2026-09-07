@@ -201,7 +201,7 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml config
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --scale itsm-worker=2 itsm-worker
 ```
 
-不要在 API 容器中配置 KAF webhook secret，也不要把 Worker health port 发布到宿主机。
+API 仅接收非秘密的 `KAF_WEBHOOK_URL`，目录发布使用它校验投递地址是否已配置且格式有效；此检查不代表 Worker 健康或其凭据已部署。Worker 启动仍单独强制签名 secret 和执行参数。不要在 API 容器中配置 KAF webhook secret，也不要把 Worker health port 发布到宿主机。
 生产 Compose 不再创建 PostgreSQL 容器；必须配置外部实例的 `ITSM_DB_HOST`、
 `ITSM_DB_NAME`、`ITSM_RUNTIME_DB_USER`、`ITSM_SYSTEM_DB_USER`、`ITSM_MIGRATION_DB_USER` 与 TLS 设置。
 KAF 与 ITSM 使用同一实例时仍必须使用不同逻辑数据库和用户。
