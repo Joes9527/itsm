@@ -1,6 +1,6 @@
 # SSLVPN 端到端实施与验证报告
 
-**状态：持续实施，尚未完成端到端验收。** 原会话已由用户终止；接手后完成MSP身份、入口语义、队列生命周期及027/028共享字段归一的限定修复与独立审查。Catalog当前会话读取、前端创建切换及浏览器会话投影已通过限定范围独立审查；A5通用目录发布及修复621b4228已通过独立复核。A6身份交换及两项契约修复已通过独立复审；C1授权策略与结果模型已实现，审查中断且阻塞未关闭；最终浏览器与全入口门禁、KAF接入及外部授权验收仍未完成。阶段测试通过不等于完整业务交付，也不代表已部署。
+**状态：持续实施，尚未完成端到端验收。** 原会话已由用户终止；接手后完成MSP身份、入口语义、队列生命周期及027/028共享字段归一的限定修复与独立审查。Catalog当前会话读取、前端创建切换及浏览器会话投影已通过限定范围独立审查；A5通用目录发布及修复621b4228已通过独立复核。A6身份交换及两项契约修复已通过独立复审；C1授权策略与结果模型及F1/F2修复已通过独立复审；最终浏览器与全入口门禁、KAF接入及外部授权验收仍未完成。阶段测试通过不等于完整业务交付，也不代表已部署。
 
 原暂停快照见[开发交接报告](2026-09-05-sslvpn-development-handoff-report.md)。本报告按提交保留各阶段实际验证范围、失败修复和剩余门槛；较早段落中的“下一项”仅表示当时状态。
 
@@ -256,3 +256,13 @@ Incident创建页三个未保存的输入（固定字符串受影响系统、仅
 KAF 另有启动前提待 B4 修复：在独立 PG17 数据库加载仓库 `docker/infra/postgres/schema.sql` 成功后，真实 Alembic 升级在 005 失败，因为 SQL 已定义 `azure_oid` 而迁移仍重命名不存在的 `keycloak_sub`。失败来自未修改的 `d07a178`，没有跳过迁移或强制 stamp；旧迁移链的实际启动验证仍保持开放。
 
 交接状态（2026-09-07）：按用户要求暂停实施，由另一 coding agent 接手。完整起点、两个待修问题、worktree 和运行门禁见[交接指令](2026-09-07-sslvpn-agent-handoff.md)。C1 正式独立审查报告尚未保存，没有最终批准；本次交接仅提交现有代码状态与文档，不继续修复或运行测试。
+
+
+### C1 修复与独立复审关闭（2026-09-07）
+
+- 固定源码：ITSM `f38fe3de10277c75afcac43963cb8abf2a04d59b`，KAF `e9e8fc673b99785bad967fab7c96ac5ee949fb14`。统一post-schema阶段事务性恢复三表CHECK和依赖函数，历史030内容与23条登记不变。单条域失效任务显式domain_blocked且不可执行，健康任务继续恢复；认证/租户/基础设施错误仍失败。
+- PG16：`python3 ART/run-owned-postgres-test.py c1-fix1-schema-final.log TestPostgresAccess`退出0，3个实际测试，临时schema清理remaining=0；六个受影响Go包与最后bootstrap检查通过。
+- PG17：`python3 ART/mac-run-c1-fix-check.py f38fe3de10277c75afcac43963cb8abf2a04d59b`退出0，构建/空库/029升级/两个原损坏030库恢复均退出0，每类连续InitializeStorage两次。前态严格验证；有数据用例原manifest字节一致；CHECK定义匹配独立预期，唯一关系/FK/RLS/FORCE/policy/guard元数据保留。原损坏库就地恢复，未重建，执行后无任务库会话。CHECK正负写入在回滚事务内暂禁关系触发器，仅证明CHECK；受限角色RLS另由PG16用例覆盖。
+- KAF pipeline111通过；完整KAF2590通过/1既有迁移head断言失败/12跳过/1预期失败/41警告，退出1，B4继续处理。全Go编译检查外层180秒超时退出124；没有全量编译或测试通过结论，A7仍需完整门禁。
+- 独立复审 `ART/entry-c1-fix1-rereview.md` 为Spec Approved / Quality Approved，两项阻塞关闭。原失败与本轮红绿证据均保留；详情 `entry-c1-fix1-report.md`、`mac-c1-fix1-runtime-f38fe3de.json`。ART为原工作区 `.superpowers/sdd/2026-09-05-sslvpn-end-to-end-implementation`。
+- 继续A7 → B1–B4 → C2–C4 → 最终整体审查；尚无浏览器/Graph授权验收，未推送、合并或部署。
