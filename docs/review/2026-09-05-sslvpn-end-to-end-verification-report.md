@@ -382,3 +382,12 @@ ITSM 最终受影响4包1187顶层通过/1跳过（含子测试2280通过/3跳�
 RED/修复日志完整保留，包括真实PG竞争暴露的rollback后ORM过期ID导致MissingGreenlet（保存ID再rollback修复）、Go测试比较私有driver函数身份/错误字段名、提取runner后mock位置，以及前端测试缺少必需props。首次完整候选45告警中的新增AsyncMock状态未配置已修复；最终42告警相对C2的41仅多1条既有连接回收告警，单独运行未修改邮件测试也可复现（44通过/22告警），排除了C3 PG测试作为必要触发因素，不宣称其深层生命周期根因已修复。完整告警/skip清单保存在ART/c3-kaf-warning-inventory-final.txt；已有前端环境与包体积警告未压制。
 
 证据目录沿用 `.superpowers/sdd/2026-09-05-sslvpn-end-to-end-implementation`，入口为 entry-C3-recovery-report.md、review-C3-binding-constraints.md、c3-final-source-freeze.json。合同及KAF运行手册已同步动作payload语义和精确内容fingerprint。仅本地源码验证，无部署/推送/合并/真实Graph授权。A7/B4进程仍旧030/037/source；A7 legacy ITSM detail 基类new/start-delivery页面本阶段未修改或浏览器验收，C2专业领域guard仍有效，具体页面与真实同编号两级审批交由C4核验。端到端验收仍未完成。
+
+
+### C3 独立审查修复第1轮（2026-09-07，待定向复审）
+
+关闭范围为 I1/I2。I1 原先允许 unknown 使用新 run/step/key 与当前版本建立额外 failure；RED 复现后，改为既有 action claim 事务锁定 ProcessInstance 行，再读取专业投影：fulfilling 才能首次建立，unknown 只能加载并验证原完整动作身份及相同 digest。锁序 instance→ledger 与既有非完成贡献版本CAS/ledger最终化一致；没有新ledger、状态owner或全局锁。测试在授权读取后插入已应用原failure，验证 claim 重新读取状态；换run/step/key、内容或版本均不增加ledger/comment/audit/version，同payload重放及撤销拒绝保留，实际owned PG覆盖。
+
+I2 原先吞掉恢复查询/回报异常且ACK清除诊断；改为阶段/类别/异常类型的安全分类与结构化日志，不保存远端原文。context/callback认证故障复用既有告警owner，测试只用mock；unknown ACK保留诊断，成功仍优先。新增8阶段×内存/SQLite/PG共24例全部通过；受影响KAF pipeline及真实PG竞争合计160通过、无skip/warning、exit0，lint通过，pipeline1419行。Go最终受影响计数及实际PG/构建结果以ART/entry-C3-fix1-report.md为准。
+
+保留RED、fixture修正及全部原C3失败记录。M1既有warning按原inventory跟踪；本轮无前端变更，不重复前端/完整KAF套件来增加信心。C4最终完整门禁与真实环境验收仍开放；未发出真实通知、未部署、未推送/合并。

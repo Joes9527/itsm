@@ -61,3 +61,10 @@ KAF 将固定安全摘要 access_result_unknown_manual_review_required 通过现
 ITSM 的 non-completing action 成功应用时 ledger 状态仍为 applied，流程 version 只增长一次。BPMN 投影根据 applied 的 record_execution_failure 动作显示 unknown；没有授权结果、任务完成或成功回执。SR 的 ValidateAccessFailure 仅复用当前冻结快照、身份和真实审批校验，返回错误或允许失败回报，不返回执行 scope。ReadApprovedAccess 在 unknown 仍拒绝新执行；原失败动作重放可单独通过当前授权校验，身份撤销后拒绝。晚到失败不能降级已完成任务或覆盖专业成功结果。
 
 KAF 卡片创建回执仅证明申请存在。会话恢复和“查看申请详情/刷新”实时读取当前用户的 WorkItemView；拒绝时清空本次 view，历史创建编号不冒充当前完成。用户看到专业状态、权限已存在/已开通、验证时间和申请有效期；不显示 provider payload/原始错误，不承诺自动回收。卡片动作不生成虚构用户消息；历史关联按稳定 turn/message 身份，真实重复文本保留。已存在的无身份历史重复不按文本清理。
+
+
+### C3 review fix 1: original action and recovery diagnostics
+
+After an applied uncertain report projects `unknown`, failure authorization permits only the existing full run/step/key/procedure/correlation identity and identical payload/expectedVersion digest. It cannot create another failure ledger/comment/audit or increment the instance version. The existing action claim transaction locks the ProcessInstance row before reading the current projection and creating a first ledger; this serializes against the existing instance-version CAS followed by ledger finalization. First reports require current `fulfilling`; unknown loads and validates an existing action. Current SR identity/approval validation remains before replay. Non-access action claim behavior is unchanged.
+
+Recovery exceptions retain safe stage/category diagnostics (context, workspace, provider, callback, payload/ACK storage) in existing delivery last_error and structured logs. Only exception class/category is retained, never raw provider payload or credential text. Authentication failures call the existing recovery alert owner; tests mock that notification. A failure ACK retains its uncertainty diagnostic instead of clearing it; successful completion still clears errors and cannot be downgraded. No new state/schema owner is introduced.

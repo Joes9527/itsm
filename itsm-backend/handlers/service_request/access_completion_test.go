@@ -244,6 +244,27 @@ func TestC3UnknownFailureReceiptProjectsAuthorityAndReplays(t *testing.T) {
 	assertC3UnknownFailure(t, fx, task, itemID, req)
 }
 
+// Inject an applied original report after authority validation, before the outer claim.
+// The same test runs on SQLite and owned PostgreSQL.
+type c3FailureAuthorityBarrier struct {
+	owner           *sr.Service
+	afterValidation func()
+}
+
+func (b *c3FailureAuthorityBarrier) ReadApprovedAccess(ctx context.Context, client *ent.Client, tenantID, itemID int, task *ent.ProcessTask) (*accessgrant.ApprovedContext, error) {
+	return b.owner.ReadApprovedAccess(ctx, client, tenantID, itemID, task)
+}
+func (b *c3FailureAuthorityBarrier) ValidateAccessFailure(ctx context.Context, client *ent.Client, tenantID, itemID int, task *ent.ProcessTask) error {
+	if err := b.owner.ValidateAccessFailure(ctx, client, tenantID, itemID, task); err != nil {
+		return err
+	}
+	if hook := b.afterValidation; hook != nil {
+		b.afterValidation = nil
+		hook()
+	}
+	return nil
+}
+
 func assertC3UnknownFailure(t *testing.T, fx *sslvpnDelegationFixture, task *ent.ProcessTask, itemID int, req svc.KafActionRequest) {
 	task = fx.client.ProcessTask.UpdateOne(task).SetTaskVariables(map[string]interface{}{"allowed_actions": "complete_bpmn_task,record_execution_failure"}).SaveX(fx.ctx)
 	failure := req
@@ -252,10 +273,22 @@ func assertC3UnknownFailure(t *testing.T, fx *sslvpnDelegationFixture, task *ent
 	failure.Execution.IdempotencyKey = fmt.Sprintf("%d:%s:%s:%s", fx.tenant.ID, task.TaskID, failure.Execution.RunID, failure.Execution.StepID)
 	failure.Payload.AccessResult = nil
 	failure.Payload.FailureSummary = "access_result_unknown_manual_review_required"
-	applied, err := fx.delegation.ExecuteAction(fx.ctx, task.TaskID, failure, fx.engine)
-	require.NoError(t, err)
-	require.Equal(t, svc.KafActionApplied, applied.ResultStatus)
 	owner := sr.NewService(sr.NewEntRepository(fx.client), fx.client, zap.NewNop().Sugar(), nil)
+	barrier := &c3FailureAuthorityBarrier{owner: owner}
+	barrier.afterValidation = func() {
+		applied, err := fx.delegation.ExecuteAction(fx.ctx, task.TaskID, failure, fx.engine)
+		require.NoError(t, err)
+		require.Equal(t, svc.KafActionApplied, applied.ResultStatus)
+	}
+	fx.delegation.SetApprovedAccessReader(barrier)
+	racing := failure
+	racing.Execution.RunID += "-racing"
+	racing.Execution.IdempotencyKey = fmt.Sprintf("%d:%s:%s:%s", fx.tenant.ID, task.TaskID, racing.Execution.RunID, racing.Execution.StepID)
+	racing.ExpectedVersion++ // The attack anticipates the original report's applied version.
+	_, err := fx.delegation.ExecuteAction(fx.ctx, task.TaskID, racing, fx.engine)
+	require.Error(t, err, "state changed after authority read must be rechecked in claim")
+	require.Equal(t, 1, fx.client.KafTaskActionLedger.Query().CountX(fx.ctx))
+	fx.delegation.SetApprovedAccessReader(owner)
 	view, err := owner.ReadFulfillment(fx.ctx, fx.client, fx.client.Ticket.GetX(fx.ctx, itemID))
 	require.NoError(t, err)
 	require.Equal(t, "unknown", view.State)
@@ -265,6 +298,31 @@ func assertC3UnknownFailure(t *testing.T, fx *sslvpnDelegationFixture, task *ent
 		replay, err := fx.delegation.ExecuteAction(fx.ctx, task.TaskID, failure, fx.engine)
 		require.NoError(t, err)
 		require.Equal(t, svc.KafActionAlreadyApplied, replay.ResultStatus)
+	}
+	version := fx.client.ProcessInstance.GetX(fx.ctx, task.ProcessInstanceID).Version
+	comments := fx.client.TicketComment.Query().CountX(fx.ctx)
+	audits := fx.client.AuditLog.Query().CountX(fx.ctx)
+	for _, changed := range []string{"run", "step", "both", "payload", "version"} {
+		candidate := failure
+		if changed == "run" || changed == "both" {
+			candidate.Execution.RunID += "-new"
+		}
+		if changed == "step" || changed == "both" {
+			candidate.Execution.StepID += "-new"
+		}
+		if changed == "payload" {
+			candidate.Payload.FailureSummary = "different safe summary"
+		}
+		if changed != "payload" {
+			candidate.ExpectedVersion = version
+		}
+		candidate.Execution.IdempotencyKey = fmt.Sprintf("%d:%s:%s:%s", fx.tenant.ID, task.TaskID, candidate.Execution.RunID, candidate.Execution.StepID)
+		_, err = fx.delegation.ExecuteAction(fx.ctx, task.TaskID, candidate, fx.engine)
+		require.Error(t, err, changed)
+		require.Equal(t, 1, fx.client.KafTaskActionLedger.Query().CountX(fx.ctx), changed)
+		require.Equal(t, comments, fx.client.TicketComment.Query().CountX(fx.ctx), changed)
+		require.Equal(t, audits, fx.client.AuditLog.Query().CountX(fx.ctx), changed)
+		require.Equal(t, version, fx.client.ProcessInstance.GetX(fx.ctx, task.ProcessInstanceID).Version, changed)
 	}
 	require.Equal(t, 1, fx.client.KafTaskActionLedger.Query().CountX(fx.ctx))
 	require.Zero(t, fx.client.ServiceRequestAccessResult.Query().CountX(fx.ctx))

@@ -26,6 +26,8 @@ import (
 	"itsm-backend/ent/user"
 	"itsm-backend/service/bpmn"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 )
 
@@ -415,6 +417,7 @@ func (s *KafDelegationService) ExecuteAction(ctx context.Context, taskID string,
 		if err := s.accessReader.ValidateAccessFailure(ctx, s.client, task.TenantID, instance.BusinessID, task); err != nil {
 			return nil, err
 		}
+
 	}
 	if !kafActionAllowed(task, req.Action) {
 		return nil, fmt.Errorf("%w: action %q is not allowed for this delegated task", ErrKafActionInvalid, req.Action)
@@ -654,26 +657,61 @@ func (s *KafDelegationService) claimKafActionOnce(ctx context.Context, task *ent
 	if err != nil {
 		return nil, false, fmt.Errorf("start KAF action claim transaction: %w", err)
 	}
-	ledger, err := tx.KafTaskActionLedger.Create().
-		SetTenantID(task.TenantID).SetTaskID(task.TaskID).
-		SetRunID(req.Execution.RunID).SetStepID(req.Execution.StepID).
-		SetAction(req.Action).SetIdempotencyKey(req.Execution.IdempotencyKey).
-		SetCorrelationID(req.Execution.CorrelationID).
-		SetProcedureRef(req.Execution.ProcedureRef).SetProcedureVersion(req.Execution.ProcedureVersion).
-		SetRequestDigest(digest).
-		Save(ctx)
-	if err == nil {
-		if err := tx.Commit(); err != nil {
-			return nil, false, fmt.Errorf("commit KAF action claim transaction: %w", err)
-		}
-	} else {
-		_ = tx.Rollback()
-		if !ent.IsConstraintError(err) {
-			return nil, false, fmt.Errorf("create KAF action ledger: %w", err)
-		}
-		ledger, err = s.loadKafActionLedger(ctx, task, req)
+	var ledger *ent.KafTaskActionLedger
+	if req.Action == kafActionFailure && task.CallbackAction == accessgrant.Capability {
+		// Serialize against the same instance row updated by the failure contribution CAS.
+		// SQLite's transaction/write-lock retry retains its existing serialization path.
+		instance, err := tx.ProcessInstance.Query().Where(processinstance.IDEQ(task.ProcessInstanceID), processinstance.TenantIDEQ(task.TenantID), func(selector *entsql.Selector) {
+			if selector.Dialect() != dialect.SQLite {
+				selector.ForUpdate()
+			}
+		}).Only(ctx)
 		if err != nil {
+			_ = tx.Rollback()
 			return nil, false, err
+		}
+		progress, err := ReadWorkflowFulfillment(ctx, tx.Client(), task.TenantID, instance.BusinessID)
+		if err != nil {
+			_ = tx.Rollback()
+			return nil, false, err
+		}
+		if progress.State != "fulfilling" && progress.State != "unknown" {
+			_ = tx.Rollback()
+			return nil, false, fmt.Errorf("%w: access failure is no longer reportable", ErrKafActionConflict)
+		}
+		if progress.State == "unknown" {
+			ledger, err = loadKafActionLedger(ctx, tx.Client(), task, req)
+			if err == nil {
+				err = validateKafActionLedger(ledger, task, req)
+			}
+			_ = tx.Rollback()
+			if err != nil {
+				return nil, false, fmt.Errorf("%w: unknown access requires identical original failure action", ErrKafActionConflict)
+			}
+		}
+	}
+	if ledger == nil {
+		ledger, err = tx.KafTaskActionLedger.Create().
+			SetTenantID(task.TenantID).SetTaskID(task.TaskID).
+			SetRunID(req.Execution.RunID).SetStepID(req.Execution.StepID).
+			SetAction(req.Action).SetIdempotencyKey(req.Execution.IdempotencyKey).
+			SetCorrelationID(req.Execution.CorrelationID).
+			SetProcedureRef(req.Execution.ProcedureRef).SetProcedureVersion(req.Execution.ProcedureVersion).
+			SetRequestDigest(digest).
+			Save(ctx)
+		if err == nil {
+			if err := tx.Commit(); err != nil {
+				return nil, false, fmt.Errorf("commit KAF action claim transaction: %w", err)
+			}
+		} else {
+			_ = tx.Rollback()
+			if !ent.IsConstraintError(err) {
+				return nil, false, fmt.Errorf("create KAF action ledger: %w", err)
+			}
+			ledger, err = loadKafActionLedger(ctx, s.client, task, req)
+			if err != nil {
+				return nil, false, err
+			}
 		}
 	}
 	if err := validateKafActionLedger(ledger, task, req); err != nil {
@@ -725,8 +763,8 @@ func waitForKafActionLedgerRetry(ctx context.Context, delay time.Duration) error
 	}
 }
 
-func (s *KafDelegationService) loadKafActionLedger(ctx context.Context, task *ent.ProcessTask, req KafActionRequest) (*ent.KafTaskActionLedger, error) {
-	ledger, err := s.client.KafTaskActionLedger.Query().Where(
+func loadKafActionLedger(ctx context.Context, client *ent.Client, task *ent.ProcessTask, req KafActionRequest) (*ent.KafTaskActionLedger, error) {
+	ledger, err := client.KafTaskActionLedger.Query().Where(
 		kaftaskactionledger.TenantIDEQ(task.TenantID), kaftaskactionledger.TaskIDEQ(task.TaskID),
 		kaftaskactionledger.RunIDEQ(req.Execution.RunID), kaftaskactionledger.StepIDEQ(req.Execution.StepID),
 	).Only(ctx)
@@ -736,7 +774,7 @@ func (s *KafDelegationService) loadKafActionLedger(ctx context.Context, task *en
 	if !ent.IsNotFound(err) {
 		return nil, fmt.Errorf("load KAF action ledger: %w", err)
 	}
-	ledger, err = s.client.KafTaskActionLedger.Query().Where(
+	ledger, err = client.KafTaskActionLedger.Query().Where(
 		kaftaskactionledger.TenantIDEQ(task.TenantID), kaftaskactionledger.IdempotencyKeyEQ(req.Execution.IdempotencyKey),
 	).Only(ctx)
 	if err != nil {
