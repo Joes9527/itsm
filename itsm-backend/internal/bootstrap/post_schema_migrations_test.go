@@ -74,3 +74,5 @@ func TestRunPostSchemaMigrationsFailsClosed(t *testing.T) {
 		require.ErrorContains(t, err, "run post-schema migrations")
 	})
 }
+
+func (m *recordingPostSchemaMigrator) ReconcileSchemaInvariants(context.Context) error { return nil }

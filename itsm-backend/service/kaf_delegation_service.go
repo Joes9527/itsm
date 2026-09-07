@@ -71,6 +71,7 @@ const (
 // a delegated procedure. Tenant and business identifiers are derived from the
 // authenticated task, never from request input.
 type KafTaskContext struct {
+	BlockReason     string                       `json:"blockReason,omitempty"`
 	ApprovedAccess  *accessgrant.ApprovedContext `json:"approvedAccess,omitempty"`
 	TaskID          string                       `json:"taskId"`
 	TaskType        string                       `json:"taskType"`
@@ -336,7 +337,18 @@ func (s *KafDelegationService) ListDelegatedTaskPage(ctx context.Context, limit 
 		}
 		item, err := s.GetTaskContext(ctx, task.TaskID)
 		if err != nil {
-			return nil, err
+			var blocked *accessgrant.BlockedError
+			if !errors.As(err, &blocked) {
+				return nil, err
+			}
+			// Keep required blocked work visible without exposing executable
+			// context. GetTaskContext continues to deny this task individually.
+			item = &KafTaskContext{
+				TaskID: task.TaskID, TaskType: task.TaskType,
+				Status: "domain_blocked", BlockReason: blocked.Code,
+				TenantID: strconv.Itoa(task.TenantID), CorrelationID: task.CorrelationID,
+				AllowedActions: []string{},
+			}
 		}
 		items = append(items, *item)
 	}

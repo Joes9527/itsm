@@ -3,8 +3,10 @@
 package integration
 
 import (
+	"context"
 	"fmt"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/handlers/common/accessgrant"
 	"itsm-backend/migration"
@@ -97,4 +99,44 @@ func TestPostgresAccessPolicyResultContract(t *testing.T) {
 	require.NoError(t, tx.Rollback())
 	require.False(t, c.Ticket.Query().Where(ticket.IDEQ(failedItem.ID)).ExistX(ctx))
 
+}
+
+// This exercises Ent reconciliation followed by the real migration ledger, not
+// repeated direct execution of historical migration 030.
+func TestPostgresAccessCanonicalRestart(t *testing.T) {
+	f := newIncidentEffectsFixture(t)
+	setup := migration.CanonicalBootstrap{
+		CreateSchema: func(ctx context.Context) error { return f.client.Schema.Create(ctx) },
+		Migrator:     migration.NewMigrator(f.db, zap.NewNop().Sugar()),
+	}
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt == 2 {
+			_, err := f.db.ExecContext(f.ctx, "ALTER TABLE catalog_access_policies DROP CONSTRAINT catalog_access_policy_finite; ALTER TABLE service_request_access_snapshots DROP CONSTRAINT access_snapshot_finite; ALTER TABLE service_request_access_results DROP CONSTRAINT access_result_verified; DROP FUNCTION itsm_finite_access_options(jsonb)")
+			require.NoError(t, err, "simulate recorded 030 with absent CHECKs and function")
+		}
+		require.NoError(t, migration.RunCanonicalBootstrap(f.ctx, setup))
+		for _, table := range []string{"catalog_access_policies", "service_request_access_snapshots", "service_request_access_results"} {
+			var count int
+			require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT count(*) FROM pg_constraint WHERE conrelid=$1::regclass AND contype='c'", table).Scan(&count))
+			require.Equal(t, 1, count, "attempt %d table %s", attempt, table)
+		}
+	}
+}
+
+func TestPostgresAccessCanonicalRejectsInvalidExistingData(t *testing.T) {
+	f := newIncidentEffectsFixture(t)
+	setup := migration.CanonicalBootstrap{
+		CreateSchema: func(ctx context.Context) error { return f.client.Schema.Create(ctx) },
+		Migrator:     migration.NewMigrator(f.db, zap.NewNop().Sugar()),
+	}
+	require.NoError(t, migration.RunCanonicalBootstrap(f.ctx, setup))
+	catalog := f.client.ServiceCatalog.Create().SetTenantID(f.tenant.ID).SetName("Invalid legacy policy").SetTargetClass("service_request_item").SaveX(f.ctx)
+	_, err := f.db.ExecContext(f.ctx, "ALTER TABLE catalog_access_policies DROP CONSTRAINT catalog_access_policy_finite")
+	require.NoError(t, err)
+	_, err = f.db.ExecContext(f.ctx, "INSERT INTO catalog_access_policies(catalog_id,version,provider,external_system,group_id,duration_field,duration_options) VALUES($1,1,'graph','directory','group','duration','[]')", catalog.ID)
+	require.NoError(t, err)
+	seeded := false
+	setup.Seed = func(context.Context) error { seeded = true; return nil }
+	require.ErrorContains(t, migration.RunCanonicalBootstrap(f.ctx, setup), "reconcile schema invariants")
+	require.False(t, seeded, "invalid existing data must block startup before seeding")
 }

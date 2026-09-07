@@ -10,6 +10,9 @@ import (
 // Verified professional result. The KAF action ledger remains execution owner.
 type ServiceRequestAccessResult struct{ ent.Schema }
 
+// PostgreSQL CHECKs and their SQL function dependency are owned by the
+// mandatory canonical migration.ReconcileSchemaInvariants phase after Ent.
+// Do not rely on historical migration 030 being replayed at startup.
 func (ServiceRequestAccessResult) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int("work_item_id").Positive().Unique().Immutable(),

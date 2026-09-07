@@ -2,6 +2,7 @@ package service_request
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -70,9 +71,64 @@ func TestAccessSnapshotTrustedRequesterAndFrozenTerms(t *testing.T) {
 	_, err = delegate.GetTaskContext(kafctx, task.TaskID)
 	require.Error(t, err, "execution rechecks trusted mapping")
 
+	// The actual domain reader blocks one task without starving same-tenant work.
+	healthy := c.ProcessTask.Create().SetTenantID(tenant.ID).SetProcessInstanceID(inst.ID).SetProcessDefinitionKey("access").SetTaskDefinitionKey("ordinary").SetTaskName("Ordinary").SetTaskID("healthy-task").SetTaskType("kaf_delegate").SetStatus("delegated").SaveX(ctx)
+	later := c.ProcessTask.Create().SetTenantID(tenant.ID).SetProcessInstanceID(inst.ID).SetProcessDefinitionKey("access").SetTaskDefinitionKey("later").SetTaskName("Later").SetTaskID("later-blocked-task").SetTaskType("kaf_delegate").SetStatus("delegated").SetCallbackAction(accessgrant.Capability).SetCallbackConfigRef(fmt.Sprint(policy.ID)).SaveX(ctx)
+	cursor := ""
+	for index, expected := range []string{task.TaskID, healthy.TaskID, later.TaskID} {
+		page, err := delegate.ListDelegatedTaskPage(kafctx, 1, cursor)
+		require.NoError(t, err)
+		require.Len(t, page.Items, 1)
+		require.Equal(t, expected, page.Items[0].TaskID)
+		if index != 1 {
+			require.Equal(t, "domain_blocked", page.Items[0].Status)
+			require.Equal(t, "requester_identity_inactive", page.Items[0].BlockReason)
+			require.Empty(t, page.Items[0].AllowedActions)
+			require.Nil(t, page.Items[0].ApprovedAccess)
+		} else {
+			require.Equal(t, "delegated", page.Items[0].Status)
+		}
+		cursor = page.NextCursor
+	}
+	require.Empty(t, cursor)
+	_, err = delegate.ListDelegatedTaskPage(ctx, 1, "")
+	require.Error(t, err, "missing tenant remains fatal")
+	unauthorized := context.WithValue(kafctx, bpmn.BPMNUserIDContextKey, user.ID)
+	_, err = delegate.ListDelegatedTaskPage(unauthorized, 1, "")
+	require.Error(t, err, "nontechnical actor remains forbidden")
+
+	// Other domain-owner decisions are equally visible and remain non-executable.
+	c.ExternalIdentity.UpdateOne(mapping).SetActive(true).SaveX(ctx)
+	c.ProcessTask.UpdateOne(later).SetStatus("completed").SaveX(ctx)
+	c.ProcessInstance.UpdateOne(inst).SetStatus("suspended").SaveX(ctx)
+	page, err := delegate.ListDelegatedTaskPage(kafctx, 10, "")
+	require.NoError(t, err)
+	require.Equal(t, "domain_blocked", page.Items[0].Status)
+	require.Equal(t, "approval_not_executable", page.Items[0].BlockReason)
+	require.Equal(t, "delegated", page.Items[1].Status)
+	_, err = delegate.GetTaskContext(kafctx, task.TaskID)
+	require.Error(t, err)
+	c.ProcessInstance.UpdateOne(inst).SetStatus("running").SaveX(ctx)
+	c.KafTaskActionLedger.Create().SetTenantID(tenant.ID).SetTaskID(task.TaskID).SetRunID("run").SetStepID("step").SetAction("complete_bpmn_task").SetIdempotencyKey("key").SetCorrelationID("corr").SetProcedureRef("proc").SetProcedureVersion("1").SetResultStatus("failed_terminal").SaveX(ctx)
+	page, err = delegate.ListDelegatedTaskPage(kafctx, 10, "")
+	require.NoError(t, err)
+	require.Equal(t, "domain_blocked", page.Items[0].Status)
+	require.Equal(t, "delegated", page.Items[1].Status)
+	c.ExternalIdentity.UpdateOne(mapping).SetActive(false).SaveX(ctx)
 	tx, err = c.Tx(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback()
 	_, err = prepareAccessSnapshot(ctx, tx, in)
 	require.Error(t, err, "inactive mapping fails closed")
+	require.NoError(t, tx.Rollback())
+	raw, err := sql.Open("sqlite3", "file:"+t.Name()+"?mode=memory&cache=shared&_fk=1")
+	require.NoError(t, err)
+	defer raw.Close()
+	_, err = raw.Exec("DROP TABLE external_identities")
+	require.NoError(t, err)
+	_, err = delegate.ListDelegatedTaskPage(kafctx, 10, "")
+	require.Error(t, err, "domain-reader database failure must abort the page")
+	var blocked *accessgrant.BlockedError
+	require.NotErrorAs(t, err, &blocked)
+
 }

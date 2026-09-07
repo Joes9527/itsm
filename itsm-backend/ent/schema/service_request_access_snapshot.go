@@ -10,6 +10,9 @@ import (
 // Immutable requested access terms approved through the existing BPMN process.
 type ServiceRequestAccessSnapshot struct{ ent.Schema }
 
+// PostgreSQL CHECKs and their SQL function dependency are owned by the
+// mandatory canonical migration.ReconcileSchemaInvariants phase after Ent.
+// Do not rely on historical migration 030 being replayed at startup.
 func (ServiceRequestAccessSnapshot) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int("work_item_id").Positive().Unique().Immutable(),

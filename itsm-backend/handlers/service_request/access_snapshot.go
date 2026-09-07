@@ -71,31 +71,31 @@ func (s *Service) ReadApprovedAccess(ctx context.Context, client *ent.Client, te
 		return nil, err
 	}
 	if snapshot == nil {
-		return nil, fmt.Errorf("approved access snapshot is unavailable")
+		return nil, &accessgrant.BlockedError{Code: "snapshot_unavailable"}
 	}
 	item, err := client.Ticket.Query().Where(ticket.IDEQ(itemID), ticket.TenantIDEQ(tenantID), ticket.RecordClassEQ(creation.RecordClassServiceRequestItem), ticket.DeletedAtIsNil()).Only(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if item.Status == "cancelled" || item.Status == "rejected" {
-		return nil, fmt.Errorf("requested access is no longer executable")
+		return nil, &accessgrant.BlockedError{Code: "request_not_executable"}
 	}
 	validIdentity, err := client.ExternalIdentity.Query().Where(externalidentity.TenantIDEQ(tenantID), externalidentity.UserIDEQ(item.RequesterID), externalidentity.ProviderEQ(string(snapshot.Provider)), externalidentity.WorkspaceEQ(snapshot.ExternalSystem), externalidentity.SubjectEQ(snapshot.SubjectID), externalidentity.ActiveEQ(true), externalidentity.HasUserWith(user.TenantIDEQ(tenantID), user.ActiveEQ(true))).Exist(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if !validIdentity {
-		return nil, fmt.Errorf("approved requester identity is no longer active")
+		return nil, &accessgrant.BlockedError{Code: "requester_identity_inactive"}
 	}
 	if task.CallbackAction != accessgrant.Capability || task.CallbackConfigRef != fmt.Sprint(snapshot.PolicyID) {
-		return nil, fmt.Errorf("delegation does not match approved access policy")
+		return nil, &accessgrant.BlockedError{Code: "policy_mismatch"}
 	}
 	progress, err := service.ReadWorkflowFulfillment(ctx, client, tenantID, itemID)
 	if err != nil {
 		return nil, err
 	}
 	if progress.State != "fulfilling" || progress.DelegatedTaskID != task.ID || len(progress.Approvals) == 0 {
-		return nil, fmt.Errorf("access delegation lacks completed business approval")
+		return nil, &accessgrant.BlockedError{Code: "approval_not_executable"}
 	}
 	return &accessgrant.ApprovedContext{ApprovalSnapshot: *snapshot, Approvals: progress.Approvals}, nil
 }

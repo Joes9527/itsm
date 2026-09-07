@@ -1146,12 +1146,7 @@ func runBootstrapSeed(ctx context.Context, cfg *config.Config, client *ent.Clien
 	return nil
 }
 
-type postSchemaMigrator interface {
-	EnsureMigrationsTable(context.Context) error
-	RunMigrations(context.Context, []migration.Migration) (int, error)
-}
-
-func runPostSchemaMigrations(ctx context.Context, migrator postSchemaMigrator) error {
+func runPostSchemaMigrations(ctx context.Context, migrator migration.PostSchemaMigrator) error {
 	return migration.RunPostSchemaMigrations(ctx, migrator)
 }
 

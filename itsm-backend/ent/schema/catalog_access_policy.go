@@ -11,6 +11,9 @@ import (
 // CatalogAccessPolicy is declared access configuration, not a tool registry.
 type CatalogAccessPolicy struct{ ent.Schema }
 
+// PostgreSQL CHECKs and their SQL function dependency are owned by the
+// mandatory canonical migration.ReconcileSchemaInvariants phase after Ent.
+// Do not rely on historical migration 030 being replayed at startup.
 func (CatalogAccessPolicy) Fields() []ent.Field {
 	return []ent.Field{
 		field.Int("catalog_id").Positive().Unique().Immutable(),
