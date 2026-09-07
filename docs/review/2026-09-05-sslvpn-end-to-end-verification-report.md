@@ -266,3 +266,13 @@ KAF 另有启动前提待 B4 修复：在独立 PG17 数据库加载仓库 `dock
 - KAF pipeline111通过；完整KAF2590通过/1既有迁移head断言失败/12跳过/1预期失败/41警告，退出1，B4继续处理。全Go编译检查外层180秒超时退出124；没有全量编译或测试通过结论，A7仍需完整门禁。
 - 独立复审 `ART/entry-c1-fix1-rereview.md` 为Spec Approved / Quality Approved，两项阻塞关闭。原失败与本轮红绿证据均保留；详情 `entry-c1-fix1-report.md`、`mac-c1-fix1-runtime-f38fe3de.json`。ART为原工作区 `.superpowers/sdd/2026-09-05-sslvpn-end-to-end-implementation`。
 - 继续A7 → B1–B4 → C2–C4 → 最终整体审查；尚无浏览器/Graph授权验收，未推送、合并或部署。
+
+### A7 最终集成门禁提交（2026-09-07，独立复审待进行）
+
+- A7 API/Worker配置修复7bfdbff7；回调恢复System仅SELECT候选+逐行Tenant执行6bc4746；真实MSP评论和SR字段详情读取修复964f9840。API不持有Worker签名secret，未知能力/无效配置仍拒绝；无新增System表权限放宽。
+- 最终完整Go：4963测试/子测试通过、11既有跳过、60包通过、159无测试包，exit0；go build全包exit0。完整integration_postgres两包186顶层/529通过事件/0跳过，另新增PG目录并发激活1项、详情2项通过；allocator integration最终59顶层/176通过事件/0跳过，RLS20项/0跳过。命令、退出码、原失败、跳过清单和隔离清理见ART/entry-A7-integration-gate-report.md；没有降低阈值或把skip-only计通过。
+- 前端最终type-check、lint:check、test:ci、build均exit0；215套/3121通过/13既有跳过。受控2worker完整执行，无forceExit；保留初始资源超时和错误native session夹具证据。既有lint警告保留。
+- 028只增加精确policy断言，并同步canonical VerifySQL及apply/dev_reset/standalone资产；实际PG apply/reapply与四负例通过，历史DDL/backfill/ledger顺序和030未改。C1独立PG17完整启动矩阵沿用已关闭证据；最终standalone verify与扩展既有integrity CLI实际runtime检查由父级独立执行，尚未收到结果。
+- 真实浏览器native/MSP身份/切租户/申请人、提交丢响应后的原确认重放通过；两个API内实际workflow worker确定性重放同event仅一个流程。两位实际指定审批人UI批准，本地HMAC委派只发一次；第二KAFworker仅在线，不声称执行。964f9840实际浏览器补验同WorkItem2详情与comments200、duration=month。没有Graph/外部授权完成。
+- A1原历史清单保留，追加25后端入口、每项DTO字段、35前端扫描行的当前owner/证据；AST仅五个执行writer，ACL534唯一路由权限相同。Low O1组合显示编辑/激活部分显示写入保留Minor给whole-branch triage；C4编号定位/claim和外部授权验收不由A7替代。
+- 所有源改动仅ITSM原worktree，KAF e9e8fc67未改；无push/merge/deploy/共享环境访问。此为A7可审查提交，阶段关闭仍须最终runtime verifier与独立review；不是整体SSLVPN完成。

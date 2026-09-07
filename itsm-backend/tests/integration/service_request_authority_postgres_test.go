@@ -227,3 +227,30 @@ func TestPostgresServiceRequestCompletionAndExtensionUpdateUseWorkItemLockOrder(
 	require.Empty(t, currentRequest.CompletionNote, "losing completion must not leave a partial extension write")
 	require.True(t, currentRequest.CompletedAt.IsZero())
 }
+
+func TestPostgresServiceRequestAuthorityVerifierRejectsPermissivePolicy(t *testing.T) {
+	f := newIncidentEffectsFixture(t)
+	_, err := f.db.ExecContext(f.ctx, migration.GetMigrationSQL(srAuthorityVersion))
+	require.NoError(t, err)
+	verify, err := os.ReadFile("../../migrations/028_service_request_work_item_authority_verify.sql")
+	require.NoError(t, err)
+	_, err = f.db.ExecContext(f.ctx, string(verify))
+	require.NoError(t, err)
+
+	for _, clause := range []string{"USING (true)", "WITH CHECK (true)", "USING (false)", "RENAME TO wrong_policy"} {
+		t.Run(clause, func(t *testing.T) {
+			_, err := f.db.ExecContext(f.ctx, "ALTER POLICY tenant_isolation_service_requests ON service_requests "+clause)
+			require.NoError(t, err)
+			_, err = f.db.ExecContext(f.ctx, string(verify))
+			require.ErrorContains(t, err, "ServiceRequest RLS policy")
+			if clause == "RENAME TO wrong_policy" {
+				_, err = f.db.ExecContext(f.ctx, "ALTER POLICY wrong_policy ON service_requests RENAME TO tenant_isolation_service_requests")
+				require.NoError(t, err)
+			}
+			_, err = f.db.ExecContext(f.ctx, migration.GetMigrationSQL(srAuthorityVersion))
+			require.NoError(t, err)
+			_, err = f.db.ExecContext(f.ctx, string(verify))
+			require.NoError(t, err)
+		})
+	}
+}

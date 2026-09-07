@@ -248,3 +248,158 @@ A1 validation is static: source object inspection, required scans with explicit 
 The imported PostgreSQL tests use build tag `integration_postgres` and `INTAKE_POSTGRES_TEST_DSN`; the master plan's generic `integration` command must not be treated as executing those tests. Verify exact tags after import, explicitly supply an isolated database, and report skipped tagged suites. Relevant existing source test names are `idempotency_postgres_test.go` and `postgres_integration_test.go`; new tests must cover all five classes, every field's digest contribution, rollback of all required facts, replay, cross-actor/tenant denial and process start recovery.
 
 A2 review must confirm compile-safe common-package dependencies and the source-hunk selection; A3/A4 must close every live entrypoint and preserve all mapped fields; A5+ must finish identity/HTTP/version binding; A6 must supply the real workflow-start consumer. Complete creation acceptance requires fresh tests and running API/worker evidence, not this inventory or either source branch's reports.
+
+## A7 reconciliation at final integration gate (2026-09-07)
+
+The original tables above remain the historical A1 audit, not current source claims. This appendix reconciles every row to the current owner and concrete gate. Test names below omit the common Test prefix; source paths omit itsm-backend/. Full Go, both integration_postgres packages, allocator/RLS and frontend gates are recorded with exact results in the A7 report. Static adapter/digest review is not a claim that every field was exercised in a browser. Provider transports here use task-local fixtures; Graph and external grant completion remain C4.
+
+### Backend entry rows
+| A1 row | Original entry | Current closure / evidence |
+| --- | --- | --- |
+| E01 | POST /tickets (manual, template, quick UI) | IntakeHTTPManualTicketSubtaskAndProfessionalClass; controller/ticket_creation.go |
+| E02 | POST /tickets/:id/subtasks | IntakeHTTPManualTicketSubtaskAndProfessionalClass; shared parent permission and graph |
+| E03 | ImportTickets; controller method has no router registration found | Not registered; retired service creation APIs rejected by AST contract; no import activation |
+| E04 | POST /incidents | IntakeHTTPProblemAndIncidentEntry; Incident source/metadata/matrix regressions |
+| E05 | POST /service-requests, Requested Item branch | IntakeHTTPCatalogTargetsUseConfirmedRevisions; SR authority PostgreSQL |
+| E06 | catalog Incident bridge | IntakeHTTPCatalogTargetsUseConfirmedRevisions; Incident contributor |
+| E07 | catalog Change falls into default SR path | IntakeHTTPCatalogTargetsUseConfirmedRevisions; Change contributor |
+| E08 | POST /changes | IntakeHTTPChangeReferencesAndStandardTemplate; shared fields and reference validation |
+| E09 | POST /standard-changes/:id/instantiate | IntakeHTTPChangeReferencesAndStandardTemplate; StandardChangeRequiredFieldsAfterTemplateExpansion |
+| E10 | POST /problems | IntakeHTTPProblemAndIncidentEntry; shared fields and rejected impactScope |
+| E11 | POST /incidents/:id/convert-to-problem | IntakeProblemConversionOwnsWholeGraph; signed MSP conversion PostgreSQL |
+| E12 | incident service task create | IntakeBPMNCreationReplaysAfterFailure; IntakeBPMNIncidentSourcePolicy |
+| E13 | CreateChangeForWorkflow | IntakeBPMNCreationReplaysAfterFailure; stable execution intent and trusted context |
+| E14 | create_request | Explicitly blocked service-task create_request; no alternative SR writer |
+| E15 | wired tenant email poll coordinator → TicketService | IntakeEmailSourceGraphIsAtomicAndTrusted; actual bootstrap wiring tests (no Graph call) |
+| E16 | old IMAP TicketCreator interface/consumer | No production creator injection; no IMAP activation |
+| E17 | approved create_ticket invocation | IntakeApprovedToolCreationRecoversAcknowledgement; approved tenant invocation/contract tests |
+| E18 | direct create_ticket dispatch | Direct unapproved tool creation remains rejected |
+| E19 | POST /ai/ticket/create | Suggestion-only handler; not an execution writer |
+| E20 | inbound task sync/webhook creates Ticket | IntakeGenericFeishuIntentFreezesAndDeliversOwningMapping; manual/automatic/concurrent intent tests |
+| E21 | TransactionalCreator interface/implementation | Retired standalone repository APIs AST contract; only Intake WorkItem writer remains |
+| E22 | StandardChange definition creation | Definition-only writer; not an execution record |
+| E23 | generated documentation examples | Generated examples excluded from execution writer scan; compiled by full Go build |
+| E24 | Python scan: analyze/triage, no creation write found | Analysis-only surface; no Python direct execution writer in original inventory; no new Python source |
+| E25 | /intake/work-items, not present in M/R | IdentityHTTPErrorDetailsStrictContract; actual signed identity/MSP PostgreSQL and handler concurrency |
+
+### Public DTO field rows
+| A1 field | Current owner / verification |
+| --- | --- |
+| Generic.`title` | controller/ticket_creation.go; command/wire/shared-field tests; HTTP manual/subtask graph |
+| Generic.`description` | controller/ticket_creation.go; command/wire/shared-field tests; HTTP manual/subtask graph |
+| Generic.`priority` | controller/ticket_creation.go; command/wire/shared-field tests; HTTP manual/subtask graph |
+| Generic.`type` | controller/ticket_creation.go; command/wire/shared-field tests; HTTP manual/subtask graph |
+| Generic.`typeId` | controller/ticket_creation.go; command/wire/shared-field tests; HTTP manual/subtask graph |
+| Generic.`source` | Public HTTP only manual; trusted email/BPMN/Feishu input owned by ingress; strict wire/adapter regressions |
+| Generic.`creatorEmail` | ticketCreationCommand rejects public input explicitly; trusted email evidence belongs only to email adapter, not browser impersonation |
+| Generic.`externalMessageId` | ticketCreationCommand rejects public input explicitly; trusted email evidence belongs only to email adapter, not browser impersonation |
+| Generic.`conversationId` | ticketCreationCommand rejects public input explicitly; trusted email evidence belongs only to email adapter, not browser impersonation |
+| Generic.`category` | controller/ticket_creation.go; command/wire/shared-field tests; HTTP manual/subtask graph |
+| Generic.`categoryId` | controller/ticket_creation.go; command/wire/shared-field tests; HTTP manual/subtask graph |
+| Generic.`templateId` | controller/ticket_creation.go; command/wire/shared-field tests; HTTP manual/subtask graph |
+| Generic.`requesterId` | controller/ticket_creation.go; command/wire/shared-field tests; HTTP manual/subtask graph |
+| Generic.`assigneeId` | controller/ticket_creation.go; command/wire/shared-field tests; HTTP manual/subtask graph |
+| Generic.`parentTicketId` | controller/ticket_creation.go; command/wire/shared-field tests; HTTP manual/subtask graph |
+| Generic.`tagIds` | controller/ticket_creation.go; command/wire/shared-field tests; HTTP manual/subtask graph |
+| Generic.`tags` | ticketCreationCommand rejects public input explicitly; trusted email evidence belongs only to email adapter, not browser impersonation |
+| Generic.`formFields` | controller/ticket_creation.go; command/wire/shared-field tests; HTTP manual/subtask graph |
+| Generic.`attachments` | ticketCreationCommand rejects public input explicitly; trusted email evidence belongs only to email adapter, not browser impersonation |
+| Generic.`workflowDefinitionKey` | controller/ticket_creation.go; command/wire/shared-field tests; HTTP manual/subtask graph |
+| Generic.`approvalChain` | ticketCreationCommand rejects public input explicitly; trusted email evidence belongs only to email adapter, not browser impersonation |
+| Incident.`title` | controller/incident_controller.go; IncidentInput digest/nested-value tests; HTTP Incident graph |
+| Incident.`description` | controller/incident_controller.go; IncidentInput digest/nested-value tests; HTTP Incident graph |
+| Incident.`type` | controller/incident_controller.go; IncidentInput digest/nested-value tests; HTTP Incident graph |
+| Incident.`priority` | controller/incident_controller.go; IncidentInput digest/nested-value tests; HTTP Incident graph |
+| Incident.`severity` | controller/incident_controller.go; IncidentInput digest/nested-value tests; HTTP Incident graph |
+| Incident.`impact` | controller/incident_controller.go; IncidentInput digest/nested-value tests; HTTP Incident graph |
+| Incident.`urgency` | controller/incident_controller.go; IncidentInput digest/nested-value tests; HTTP Incident graph |
+| Incident.`category` | controller/incident_controller.go; IncidentInput digest/nested-value tests; HTTP Incident graph |
+| Incident.`subcategory` | controller/incident_controller.go; IncidentInput digest/nested-value tests; HTTP Incident graph |
+| Incident.`configurationItemIds` | controller/incident_controller.go; IncidentInput digest/nested-value tests; HTTP Incident graph |
+| Incident.`assigneeId` | controller/incident_controller.go; IncidentInput digest/nested-value tests; HTTP Incident graph |
+| Incident.`impactAnalysis` | controller/incident_controller.go; IncidentInput digest/nested-value tests; HTTP Incident graph |
+| Incident.`source` | controller/incident_controller.go; IncidentInput digest/nested-value tests; HTTP Incident graph |
+| Incident.`metadata` | controller/incident_controller.go; IncidentInput digest/nested-value tests; HTTP Incident graph |
+| Incident.`detectedAt` | controller/incident_controller.go; IncidentInput digest/nested-value tests; HTTP Incident graph |
+| SR.`catalogId` | handlers/service_request/creation_http.go; resource-input/wire tests; confirmed catalog HTTP and authority graph |
+| SR.`title` | handlers/service_request/creation_http.go; resource-input/wire tests; confirmed catalog HTTP and authority graph |
+| SR.`reason` | handlers/service_request/creation_http.go; resource-input/wire tests; confirmed catalog HTTP and authority graph |
+| SR.`formData` | handlers/service_request/creation_http.go; resource-input/wire tests; confirmed catalog HTTP and authority graph |
+| SR.`costCenter` | handlers/service_request/creation_http.go; resource-input/wire tests; confirmed catalog HTTP and authority graph |
+| SR.`dataClassification` | handlers/service_request/creation_http.go; resource-input/wire tests; confirmed catalog HTTP and authority graph |
+| SR.`needsPublicIp` | handlers/service_request/creation_http.go; resource-input/wire tests; confirmed catalog HTTP and authority graph |
+| SR.`sourceIpWhitelist` | handlers/service_request/creation_http.go; resource-input/wire tests; confirmed catalog HTTP and authority graph |
+| SR.`expireAt` | handlers/service_request/creation_http.go; resource-input/wire tests; confirmed catalog HTTP and authority graph |
+| SR.`complianceAck` | handlers/service_request/creation_http.go; resource-input/wire tests; confirmed catalog HTTP and authority graph |
+| SR.`contactName` | handlers/service_request/creation_http.go; resource-input/wire tests; confirmed catalog HTTP and authority graph |
+| SR.`contactEmail` | handlers/service_request/creation_http.go; resource-input/wire tests; confirmed catalog HTTP and authority graph |
+| SR.`quantity` | handlers/service_request/creation_http.go; resource-input/wire tests; confirmed catalog HTTP and authority graph |
+| SR.`expectedAt` | handlers/service_request/creation_http.go; resource-input/wire tests; confirmed catalog HTTP and authority graph |
+| Change.`title` | handlers/change/handler.go; ChangeInput digest tests; HTTP Change/template references |
+| Change.`description` | handlers/change/handler.go; ChangeInput digest tests; HTTP Change/template references |
+| Change.`justification` | handlers/change/handler.go; ChangeInput digest tests; HTTP Change/template references |
+| Change.`type` | handlers/change/handler.go; ChangeInput digest tests; HTTP Change/template references |
+| Change.`priority` | handlers/change/handler.go; ChangeInput digest tests; HTTP Change/template references |
+| Change.`impactScope` | handlers/change/handler.go; ChangeInput digest tests; HTTP Change/template references |
+| Change.`riskLevel` | handlers/change/handler.go; ChangeInput digest tests; HTTP Change/template references |
+| Change.`plannedStartDate` | handlers/change/handler.go; ChangeInput digest tests; HTTP Change/template references |
+| Change.`plannedEndDate` | handlers/change/handler.go; ChangeInput digest tests; HTTP Change/template references |
+| Change.`implementationPlan` | handlers/change/handler.go; ChangeInput digest tests; HTTP Change/template references |
+| Change.`rollbackPlan` | handlers/change/handler.go; ChangeInput digest tests; HTTP Change/template references |
+| Change.`affectedCis` | handlers/change/handler.go; ChangeInput digest tests; HTTP Change/template references |
+| Change.`relatedTickets` | handlers/change/handler.go; ChangeInput digest tests; HTTP Change/template references |
+| Problem.`title` | handlers/problem/handler.go; ProblemInput digest tests; HTTP Problem/conversion graph |
+| Problem.`description` | handlers/problem/handler.go; ProblemInput digest tests; HTTP Problem/conversion graph |
+| Problem.`priority` | handlers/problem/handler.go; ProblemInput digest tests; HTTP Problem/conversion graph |
+| Problem.`category` | handlers/problem/handler.go; ProblemInput digest tests; HTTP Problem/conversion graph |
+| Problem.`rootCause` | handlers/problem/handler.go; ProblemInput digest tests; HTTP Problem/conversion graph |
+| Problem.`impact` | handlers/problem/handler.go; ProblemInput digest tests; HTTP Problem/conversion graph |
+| Problem.`impactScope` | Explicit structured unsupported-field rejection; frontend sends impact and omits unsupported assigneeId |
+
+### Frontend call-site rows
+| A1 row | Original path | Current closure / evidence |
+| --- | --- | --- |
+| F01 | `itsm-frontend/src/lib/hooks/useTicketsQuery.ts:141` | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F02 | `itsm-frontend/src/lib/hooks/__tests__/useTickets.test.ts:135` | Retained test fixture / definition-only or unregistered surface; no new execution owner. Full frontend regression/compile. |
+| F03 | `itsm-frontend/src/lib/hooks/useTickets.ts:181` | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F04 | `itsm-frontend/src/lib/__tests__/api-integration.test.ts:168` | Retained test fixture / definition-only or unregistered surface; no new execution owner. Full frontend regression/compile. |
+| F05 | `itsm-frontend/src/lib/__tests__/api-integration.test.ts:207` | Retained test fixture / definition-only or unregistered surface; no new execution owner. Full frontend regression/compile. |
+| F06 | `itsm-frontend/src/lib/services/__tests__/incident-service.test.ts:82` | Retained test fixture / definition-only or unregistered surface; no new execution owner. Full frontend regression/compile. |
+| F07 | `itsm-frontend/src/lib/services/__tests__/ticket-service.test.ts:87` | Retained test fixture / definition-only or unregistered surface; no new execution owner. Full frontend regression/compile. |
+| F08 | `itsm-frontend/src/lib/services/__tests__/ticket-service.test.ts:296` | Retained test fixture / definition-only or unregistered surface; no new execution owner. Full frontend regression/compile. |
+| F09 | `itsm-frontend/src/lib/services/ticket-service.ts:189` | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F10 | `itsm-frontend/src/lib/services/incident-service.ts:156` | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F11 | `itsm-frontend/src/lib/services/ticket-service-v2.ts:159` | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F12 | `itsm-frontend/src/lib/api/ticket-api.ts:22` | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F13 | `itsm-frontend/src/lib/api/service-request-api.ts:120` | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F14 | `itsm-frontend/src/lib/api/incident-api.ts:395` | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F15 | `itsm-frontend/src/lib/api/service-catalog-api.ts:332` | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F16 | `itsm-frontend/src/components/business/IncidentManagement.tsx:1072` | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F17 | `itsm-frontend/src/components/business/ticket-modal/TicketModalContainer.tsx:28` | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F18 | `itsm-frontend/src/lib/api/__tests__/ticket-api.test.ts:52` | Retained test fixture / definition-only or unregistered surface; no new execution owner. Full frontend regression/compile. |
+| F19 | `itsm-frontend/src/lib/api/__tests__/service-request-api.test.ts:45` | Retained test fixture / definition-only or unregistered surface; no new execution owner. Full frontend regression/compile. |
+| F20 | `itsm-frontend/src/lib/api/__tests__/incident-api.test.ts:55` | Retained test fixture / definition-only or unregistered surface; no new execution owner. Full frontend regression/compile. |
+| F21 | `itsm-frontend/src/lib/api/__tests__/service-catalog-api.test.ts:142` | Retained test fixture / definition-only or unregistered surface; no new execution owner. Full frontend regression/compile. |
+| F22 | `itsm-frontend/src/lib/api/__tests__/service-catalog-api.test.ts:152` | Retained test fixture / definition-only or unregistered surface; no new execution owner. Full frontend regression/compile. |
+| F23 | `itsm-frontend/src/lib/api/__tests__/service-catalog-api.test.ts:175` | Retained test fixture / definition-only or unregistered surface; no new execution owner. Full frontend regression/compile. |
+| F24 | `itsm-frontend/src/components/business/ticket-modal/services/ticket-modal-service.ts:21` | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F25 | `itsm-frontend/src/app/(main)/incidents/create/page.tsx:113` | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F26 | `itsm-frontend/src/app/(main)/tickets/create/page.tsx:377` | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F27 | `itsm-frontend/src/app/(main)/improvements/new/page.tsx:20` | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F28 | `itsm-frontend/src/app/(main)/service-catalog/request/[id]/page.tsx:123` | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F29 | frontend/app/(main)/problems/new/page.tsx; lib/api/problem-api.ts:139; lib/services/problem-service.ts:111 | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F30 | frontend/app/(main)/changes/new/page.tsx; lib/api/change-api.ts:260; lib/services/change-service.ts:134 | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F31 | frontend/app/(main)/standard-changes/page.tsx:164; lib/api/standard-change-api.ts:120 | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F32 | frontend/components/incident/IncidentDetail.tsx:335; lib/api/incident-api.ts:497 | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F33 | frontend/lib/api/ticket-api.ts:150; lib/services/ticket-service-v2.ts:434 | Existing API/service/hook forwards stable creation context to server; API suites, useWorkItemCreation and creation-callers regressions. Browser combined recovery is specifically the catalog path. |
+| F34 | frontend/lib/api/change-api.ts:332 | Retained test fixture / definition-only or unregistered surface; no new execution owner. Full frontend regression/compile. |
+| F35 | frontend/lib/services/ticket-template-service.ts; lib/api/ticket-api.ts template APIs; standard-change-api.ts create definition | Retained test fixture / definition-only or unregistered surface; no new execution owner. Full frontend regression/compile. |
+
+### Error, writer and migration reconciliation
+The single intakehttp.Fail mapper preserves 400/401/403/404/409/503 with business codes 1001/2001/2003/4004/4090/5003; unknown failures remain 500, retryable is explicit, empty fieldErrors is omitted and nonempty values are arrays. IdentityHTTPErrorDetailsStrictContract executes all six public error cases through the real handler. Creation adapters call the same mapper; Bind rejects unknown/duplicate members and uses exact JSON numbers. Shared response identity is a receipt; professionalReference supplies professional navigation, workflow pending/manual intervention is not creation failure.
+
+The final Go AST scan found exactly five execution Create writers: the Intake Ticket writer plus Incident/Problem/Change/ServiceRequest contributors. Retired APIs are checked in ten named owner files by IntakeHasNoStandaloneCreationAPIs. Raw execution INSERT and qualified retired-column string literal counts are zero in the scanner's production Go scope; dynamic SQL and generated/historical migration strings are not inferred safe solely from that scan. ACL semantic comparison found 536 registrations / 534 unique method+path entries, matching all 534 committed manifest permissions.
+
+023–030 remain the canonical registry, with the existing allocator/021/022 order preserved. C1 exact f38fe3de PG17 fresh/029-upgrade/two damaged-030 recovery matrices remain the full initialization evidence. A7 changes only 028 read-only policy verification in canonical VerifySQL and three operational assets, preserving stream/asset equivalence; actual apply/reapply and four damaged-policy cases execute in isolated PG16 schemas. No historical DDL/backfill/ledger identity/count/order or 030 change is included.
+
+Catalog concurrent activation now has a PostgreSQL barrier regression (four rounds, two successful contenders, one active version each round, foreign tenant unchanged, publication owner still resolves an executable contract). Existing SQLite draft-save/activation-failure rollback/old-version create regression remains a different assertion. Low O1 combined display-edit/activation partial display write remains the previously deferred Minor for whole-branch triage; it is not silently closed. catalog_task creation remains explicitly unsupported. Current frontend has no tenant-picker control; live tenant switching uses the authenticated endpoint followed by reload/hydration.

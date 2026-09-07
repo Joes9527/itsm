@@ -70,6 +70,8 @@ func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *e
 	} {
 		require.NoError(t, registry.Register(owner))
 	}
+	scService.SetCreatorRegistry(registry)
+	scService.SetPublicationEngine(service.NewCustomProcessEngine(client, logger).(*service.CustomProcessEngine))
 	resolver := intake.NewResolver(scService, service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
 	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
 	srHandler.SetCreationApplication(app)
@@ -81,7 +83,7 @@ func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *e
 	// tests/integration/intake_bpmn_entry_test.go.
 	const processKey = "service-catalog-fields-approval"
 	deployment := client.ProcessDeployment.Create().SetTenantID(tenant.ID).SetDeploymentID(processKey).SetDeploymentName(processKey).SaveX(ctx)
-	client.ProcessDefinition.Create().SetTenantID(tenant.ID).SetDeploymentID(deployment.ID).SetKey(processKey).SetName(processKey).SetVersion("1").SetIsActive(true).SetIsLatest(true).SetBpmnXML([]byte(fmt.Sprintf(`<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" targetNamespace="test"><bpmn:process id="%s" isExecutable="true"><bpmn:startEvent id="start"/><bpmn:userTask id="approval" camunda:candidateGroups="admin"/><bpmn:endEvent id="end"/><bpmn:sequenceFlow id="a" sourceRef="start" targetRef="approval"/><bpmn:sequenceFlow id="b" sourceRef="approval" targetRef="end"/></bpmn:process></bpmn:definitions>`, processKey))).SaveX(ctx)
+	client.ProcessDefinition.Create().SetTenantID(tenant.ID).SetDeploymentID(deployment.ID).SetKey(processKey).SetName(processKey).SetVersion("1").SetIsActive(true).SetIsLatest(true).SetBpmnXML([]byte(fmt.Sprintf(`<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" targetNamespace="test"><bpmn:process id="%s" isExecutable="true"><bpmn:startEvent id="start"/><bpmn:userTask id="approval" assignee="%d" taskPurpose="approval"/><bpmn:endEvent id="end"/><bpmn:sequenceFlow id="a" sourceRef="start" targetRef="approval"/><bpmn:sequenceFlow id="b" sourceRef="approval" targetRef="end"/></bpmn:process></bpmn:definitions>`, processKey, user.ID))).SaveX(ctx)
 	client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("service_request").SetIsDefault(true).SetProcessDefinitionKey(processKey).SaveX(ctx)
 	adminRole := client.Role.Create().SetTenantID(tenant.ID).SetCode("admin").SetName("admin").SetIsActive(true).SaveX(ctx)
 	for _, grant := range []struct{ resource, action string }{
@@ -142,6 +144,7 @@ func TestServiceCatalogFields(t *testing.T) {
 
 	createCatalogReq := map[string]interface{}{
 		"name": "云主机申请", "category": "云服务", "description": "测试",
+		"status": "enabled", "targetClass": "service_request_item", "processDefinitionKey": "service-catalog-fields-approval", "requiresApproval": true,
 		"fields": []map[string]interface{}{
 			{"name": "office_location", "label": "办公地点", "type": "text", "required": true},
 		},

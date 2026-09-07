@@ -5,12 +5,15 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 
 	"itsm-backend/common/tenantctx"
 )
+
+var recordingDriverSequence atomic.Uint64
 
 type recordedRLSExec struct {
 	query string
@@ -110,7 +113,7 @@ func TestSystemBypass(t *testing.T) {
 
 func TestAcquireConnUsesParameterSafeCanonicalTenantSetting(t *testing.T) {
 	executed := make(chan recordedRLSExec, 1)
-	driverName := "recording-rls-" + t.Name()
+	driverName := "recording-rls-" + t.Name() + "-" + strconv.FormatUint(recordingDriverSequence.Add(1), 10)
 	sql.Register(driverName, &recordingRLSDriver{executed: executed})
 	db, err := sql.Open(driverName, "")
 	if err != nil {
@@ -135,7 +138,7 @@ func TestAcquireConnUsesParameterSafeCanonicalTenantSetting(t *testing.T) {
 
 func TestReleaseConnUsesIndependentCleanupContext(t *testing.T) {
 	executed := make(chan recordedRLSExec, 2)
-	driverName := "recording-rls-release-" + t.Name()
+	driverName := "recording-rls-release-" + t.Name() + "-" + strconv.FormatUint(recordingDriverSequence.Add(1), 10)
 	sql.Register(driverName, &recordingRLSDriver{executed: executed})
 	db, err := sql.Open(driverName, "")
 	if err != nil {
@@ -162,7 +165,7 @@ func TestReleaseConnUsesIndependentCleanupContext(t *testing.T) {
 
 func TestReleaseConnEvictsPhysicalConnectionWhenCleanupFails(t *testing.T) {
 	testDriver := &failingDiscardDriver{}
-	driverName := "failing-discard-" + t.Name()
+	driverName := "failing-discard-" + t.Name() + "-" + strconv.FormatUint(recordingDriverSequence.Add(1), 10)
 	sql.Register(driverName, testDriver)
 	db, err := sql.Open(driverName, "")
 	if err != nil {

@@ -27,9 +27,11 @@ import (
 // Intake transaction and leave its first number available to a fresh request.
 func TestPostgresIntakeInsertFailureRollsBackAllocationAndReusesNumber(t *testing.T) {
 	dsn := os.Getenv("INTAKE_POSTGRES_TEST_DSN")
-	require.Equal(t, "postgres://postgres@127.0.0.1:36444/sslvpn_test?sslmode=disable", dsn, "only the dedicated disposable database is permitted")
+	require.NotEmpty(t, dsn, "explicit disposable INTAKE_POSTGRES_TEST_DSN is required")
 	parsed, err := url.Parse(dsn)
 	require.NoError(t, err)
+	require.NotEmpty(t, parsed.Host, "explicit PostgreSQL test endpoint is required")
+	require.Equal(t, "/sslvpn_test", parsed.Path, "use the dedicated disposable SSLVPN test database")
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	t.Cleanup(cancel)
 	db, err := sql.Open("postgres", dsn)

@@ -83,7 +83,7 @@ describe('TenantAPI', () => {
     it('should switch tenant', async () => {
       mockPost.mockResolvedValue(undefined);
       await TenantAPI.switchTenant(2);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/tenants/switch', { tenantId: 2 });
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/auth/switch-tenant', { tenantId: 2 });
     });
   });
 });

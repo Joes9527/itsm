@@ -103,15 +103,23 @@ func TestPostgresConcurrentProfessionalCreation(t *testing.T) {
 		result *workitemcreation.CreateWorkItemResult
 		err    error
 	}
-	outcomes := make(chan outcome, 12)
+	outcomes := make(chan outcome, 20)
 	start := make(chan struct{})
-	for range 12 {
-		go func() { <-start; result, err := f.app.Create(ctx, identity, command); outcomes <- outcome{result, err} }()
+	var ready sync.WaitGroup
+	ready.Add(20)
+	for range 20 {
+		go func() {
+			ready.Done()
+			<-start
+			result, err := f.app.Create(ctx, identity, command)
+			outcomes <- outcome{result, err}
+		}()
 	}
+	ready.Wait()
 	close(start)
 	var first *workitemcreation.CreateWorkItemResult
 	created := 0
-	for range 12 {
+	for range 20 {
 		out := <-outcomes
 		require.NoError(t, out.err)
 		if first == nil {
@@ -133,6 +141,15 @@ func TestPostgresConcurrentProfessionalCreation(t *testing.T) {
 	require.Equal(t, 1, client.IntakeResolutionSnapshot.Query().Where(intakeresolutionsnapshot.TenantIDEQ(tenant.ID)).CountX(ctx))
 	require.Equal(t, 1, client.OutboxEvent.Query().Where(outboxevent.TenantIDEQ(tenant.ID)).CountX(ctx))
 	require.Equal(t, 1, client.AuditLog.Query().Where(auditlog.TenantIDEQ(tenant.ID)).CountX(ctx))
+
+	command.IdempotencyKey = "independent-request"
+	independent, err := f.app.Create(ctx, identity, command)
+	require.NoError(t, err)
+	require.NotEqual(t, first.WorkItemID, independent.WorkItemID)
+	require.NotEqual(t, first.Number, independent.Number)
+	require.NotEqual(t, first.ProfessionalReference, independent.ProfessionalReference)
+	require.Equal(t, 2, client.ServiceRequest.Query().Where(servicerequest.TicketIDIn(first.WorkItemID, independent.WorkItemID)).CountX(ctx))
+	require.Equal(t, 2, client.OutboxEvent.Query().Where(outboxevent.TenantIDEQ(tenant.ID)).CountX(ctx))
 }
 
 type interleavingCatalog struct {

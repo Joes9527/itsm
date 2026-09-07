@@ -39,7 +39,7 @@ jest.mock('@/lib/api/user-api', () => ({
 }));
 
 jest.mock('@/lib/store/auth-store', () => {
-  const state = { hasPermission: () => false, isAuthenticated: true, user: { id: 1, tenantId: 2 }, currentTenant: { id: 2 } };
+  const state = { hasPermission: () => false, isAuthenticated: true, user: { id: 1, tenantId: 2, actorTenantId: 2 }, currentTenant: { id: 2 } };
   return { useAuthStore: Object.assign((selector: (state: unknown) => unknown) => selector(state), { getState: () => state }) };
 });
 Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: () => 'conversion-key' });

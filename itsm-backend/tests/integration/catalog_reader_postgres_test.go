@@ -7,8 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"itsm-backend/ent/processdefinition"
+	"itsm-backend/handlers/intake"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 	"time"
 
@@ -45,7 +48,7 @@ func TestPostgresCatalogReaderSignedCurrentSession(t *testing.T) {
 	nativeRole := f.client.Role.Create().SetTenantID(f.tenant.ID).SetCode(f.actor.Role).SetName("Native reader").SaveX(f.ctx)
 	f.client.RolePermission.Create().SetTenantID(f.tenant.ID).SetRoleID(nativeRole.ID).SetPermissionID(permission.ID).SaveX(f.ctx)
 	clients, cfg := runtimeClients(t, f)
-	for _, table := range []string{"service_catalogs", "field_definitions", "process_bindings", "process_definitions", "sla_definitions"} {
+	for _, table := range []string{"service_catalogs", "field_definitions", "process_bindings", "process_definitions", "sla_definitions", "catalog_access_policies"} {
 		_, err := f.db.ExecContext(f.ctx, "GRANT SELECT ON "+table+" TO "+cfg.User)
 		require.NoError(t, err)
 	}
@@ -215,4 +218,55 @@ func (d *catalogReaderDirectory) Open(ctx context.Context, tx *ent.Tx, tenantID 
 		return client, func() error { return errors.Join(closeDirectory(), errors.New("injected directory close failure")) }, nil
 	}
 	return client, closeDirectory, nil
+}
+
+// Activation uses the production version owner against the existing isolated
+// PostgreSQL fixture. Both contenders are released together; no timing sleeps.
+func TestPostgresCatalogConcurrentActivationKeepsOneExecutableVersion(t *testing.T) {
+	f := newIncidentEffectsFixture(t)
+	ctx := service.WithBPMNAccessScope(f.ctx, service.BPMNAccessScope{TenantID: f.tenant.ID, UserID: f.actor.ID})
+	logger := zap.NewNop().Sugar()
+	engine := service.NewCustomProcessEngine(f.client, logger).(*service.CustomProcessEngine)
+	xml := `<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><process id="flow" isExecutable="true"><startEvent id="start"/><userTask id="work" assignee="${requester_id}"/><endEvent id="end"/><sequenceFlow id="a" sourceRef="start" targetRef="work"/><sequenceFlow id="b" sourceRef="work" targetRef="end"/></process></definitions>`
+	definition, err := engine.ProcessDefinitionService().CreateProcessDefinition(ctx, &service.CreateProcessDefinitionRequest{Key: "concurrent-catalog", Name: "Flow", BPMNXML: xml, TenantID: f.tenant.ID})
+	require.NoError(t, err)
+	registry := intake.NewCreatorRegistry()
+	require.NoError(t, registry.Register(&service.TicketService{}))
+	owner := catalogdomain.NewService(catalogdomain.NewEntRepository(f.client), f.client, logger, sameTransactionDirectory{})
+	owner.SetCreatorRegistry(registry)
+	owner.SetPublicationEngine(engine)
+	published, err := owner.Create(ctx, f.tenant.ID, dto.CreateServiceCatalogRequest{Name: "Concurrent", Category: "IT", TargetClass: "generic", Status: "enabled", ProcessDefinitionKey: definition.Key})
+	require.NoError(t, err)
+	versions := service.NewBPMNVersionService(f.client, logger)
+	draft, err := versions.CreateVersion(ctx, &service.CreateVersionRequest{ProcessDefinitionKey: definition.Key, BaseVersion: definition.Version, Name: "Draft", BPMNXML: xml, TenantID: f.tenant.ID})
+	require.NoError(t, err)
+	foreignTenant := f.client.Tenant.Create().SetCode("activation-foreign").SetName("Foreign").SaveX(f.ctx)
+	foreignCtx := service.WithBPMNAccessScope(f.ctx, service.BPMNAccessScope{TenantID: foreignTenant.ID, UserID: f.actor.ID})
+	foreign, err := engine.ProcessDefinitionService().CreateProcessDefinition(foreignCtx, &service.CreateProcessDefinitionRequest{Key: definition.Key, Name: "Foreign", BPMNXML: xml, TenantID: foreignTenant.ID})
+	require.NoError(t, err)
+	for round := 0; round < 4; round++ {
+		barrier := make(chan struct{})
+		results := make(chan error, 2)
+		var ready sync.WaitGroup
+		ready.Add(2)
+		for _, version := range []string{definition.Version, draft.Version} {
+			go func(version string) {
+				ready.Done()
+				<-barrier
+				results <- versions.ActivateVersion(ctx, definition.Key, version, f.tenant.ID)
+			}(version)
+		}
+		ready.Wait()
+		close(barrier)
+		require.NoError(t, <-results)
+		require.NoError(t, <-results)
+		active := f.client.ProcessDefinition.Query().Where(processdefinition.TenantID(f.tenant.ID), processdefinition.KeyEQ(definition.Key), processdefinition.IsActive(true)).AllX(ctx)
+		require.Len(t, active, 1, "both successful competing activations must leave one executable version")
+		require.Contains(t, []string{definition.Version, draft.Version}, active[0].Version)
+		require.True(t, f.client.ProcessDefinition.GetX(f.ctx, foreign.ID).IsActive, "activation cannot deactivate another tenant")
+		current, err := owner.Get(ctx, f.tenant.ID, published.ID)
+		require.NoError(t, err)
+		require.NoError(t, owner.ValidateForPublication(ctx, f.tenant.ID, current))
+		require.NotEmpty(t, current.CatalogVersion, "the publication owner must resolve a current executable contract after every race")
+	}
 }

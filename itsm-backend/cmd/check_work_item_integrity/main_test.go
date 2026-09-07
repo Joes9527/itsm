@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"sync/atomic"
 	"testing"
@@ -242,8 +243,8 @@ func TestFindMismatches_UnknownRecordClass(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	// Wave 1 已知的两个"暂不检查"取值仍必须静默跳过，不能被这次改动误报。
-	for i, deferredClass := range []string{"service_request_item", "catalog_task"} {
+	// CatalogTask 尚无扩展表；ServiceRequest 已由独立正反向用例覆盖。
+	for i, deferredClass := range []string{"catalog_task"} {
 		_, err = client.Ticket.Create().
 			SetTitle("Wave 2 才检查的类别").
 			SetDescription("暂不检查").
@@ -264,4 +265,43 @@ func TestFindMismatches_UnknownRecordClass(t *testing.T) {
 	require.Equal(t, bad.ID, mismatches[0].ticketID)
 	require.Equal(t, tenant.ID, mismatches[0].tenantID)
 	require.Equal(t, "change", mismatches[0].recordClass)
+}
+
+func TestFindMismatchesServiceRequestAuthority(t *testing.T) {
+	dsn := testDSN()
+	client := enttest.Open(t, "sqlite3", dsn)
+	defer client.Close()
+	ctx := t.Context()
+	tenant := client.Tenant.Create().SetName("SR").SetCode("sr").SaveX(ctx)
+	actor := client.User.Create().SetTenantID(tenant.ID).SetUsername("sr").SetName("SR").SetEmail("sr@example.test").SetPasswordHash("unused").SaveX(ctx)
+	item := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetTitle("SR").SetTicketNumber("SR1").SetRecordClass("service_request_item").SaveX(ctx)
+	mismatches, err := findMismatches(ctx, client, tenant.ID)
+	require.NoError(t, err)
+	require.Len(t, mismatches, 1)
+	require.Equal(t, "missing_extension", mismatches[0].kind)
+	client.ServiceRequest.Create().SetTicketID(item.ID).SetCatalogID(1).SaveX(ctx)
+	mismatches, err = findMismatches(ctx, client, tenant.ID)
+	require.NoError(t, err)
+	require.Empty(t, mismatches)
+	// The diagnostic must also detect damaged uniqueness, not assume the index.
+	db, err := sql.Open("sqlite3", dsn)
+	require.NoError(t, err)
+	defer db.Close()
+	_, err = db.Exec("DROP INDEX servicerequest_ticket_id")
+	require.NoError(t, err)
+	duplicate := client.ServiceRequest.Create().SetTicketID(item.ID).SetCatalogID(1).SaveX(ctx)
+	mismatches, err = findMismatches(ctx, client, tenant.ID)
+	require.NoError(t, err)
+	require.Len(t, mismatches, 1)
+	require.Equal(t, "duplicate_extension", mismatches[0].kind)
+	client.ServiceRequest.DeleteOne(duplicate).ExecX(ctx)
+	wrong := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetTitle("Wrong").SetTicketNumber("SR2").SetRecordClass("generic").SaveX(ctx)
+	client.ServiceRequest.Create().SetTicketID(wrong.ID).SetCatalogID(1).SaveX(ctx)
+	mismatches, err = findMismatches(ctx, client, tenant.ID)
+	require.NoError(t, err)
+	require.Len(t, mismatches, 1)
+	require.Equal(t, "record_class_mismatch", mismatches[0].kind)
+	mismatches, err = findMismatches(ctx, client, tenant.ID+1)
+	require.NoError(t, err)
+	require.Empty(t, mismatches)
 }
