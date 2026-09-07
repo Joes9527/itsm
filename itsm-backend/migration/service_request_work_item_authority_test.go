@@ -21,3 +21,19 @@ func TestServiceRequestAuthorityOperationalSQLMatchesStream(t *testing.T) {
 	}
 	require.Contains(t, versions, version)
 }
+
+func TestServiceRequestAuthorityAcceptsPreviouslyApplied028(t *testing.T) {
+	ledger := []Migration{}
+	for _, migration := range RegisteredMigrations {
+		migration.Checksum = checksumSQL(GetMigrationSQL(migration.Version))
+		if migration.Version == "028_service_request_work_item_authority" {
+			// Actual retained pre-C4 deployment ledger, written before verifier hardening.
+			migration.Checksum = "c145c16991841983599da34362f003d2db0a785ff5ed89918c6b7fb0b58571c5"
+		}
+		ledger = append(ledger, migration)
+		if migration.Version == "028_service_request_work_item_authority" {
+			break
+		}
+	}
+	require.NoError(t, validateMigrationLedger(ledger))
+}

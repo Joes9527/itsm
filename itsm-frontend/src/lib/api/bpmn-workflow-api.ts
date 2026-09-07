@@ -97,6 +97,7 @@ export interface UserTask {
   businessKey: string;
   businessType: string;
   businessId: number;
+  workItemNumber?: string;
   taskPurpose: string;
   formKey?: string;
   taskVariables?: Record<string, unknown>;

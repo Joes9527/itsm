@@ -216,4 +216,10 @@ describe('TicketDetail', () => {
 
     expect(await screen.findByText('发送通知')).toBeInTheDocument();
   });
+  it('does not present the base new status as KAF Requested Item progress', async () => {
+    mockGetTicket.mockResolvedValueOnce({ ...baseTicket, source: 'kaf_web', recordClass: 'service_request_item', status: 'new' });
+    render(<TicketDetail />);
+    await screen.findByText('#101 VPN 无法连接');
+    expect(screen.queryByText('新建')).not.toBeInTheDocument();
+  });
 });

@@ -117,12 +117,14 @@ type ServiceCatalogResponse struct {
 
 // ServiceRequestResponse 服务请求响应
 type ServiceRequestResponse struct {
-	ID          int            `json:"id"`
-	TicketID    int            `json:"ticketId"`
-	CatalogID   int            `json:"catalogId"`
-	RequesterID int            `json:"requesterId"`
-	CIID        int            `json:"ciId,omitempty"`
-	FormData    map[string]any `json:"formData,omitempty"`
+	FulfillmentState string            `json:"fulfillmentState,omitempty"`
+	AccessResult     *accessgrant.View `json:"accessResult,omitempty"`
+	ID               int               `json:"id"`
+	TicketID         int               `json:"ticketId"`
+	CatalogID        int               `json:"catalogId"`
+	RequesterID      int               `json:"requesterId"`
+	CIID             int               `json:"ciId,omitempty"`
+	FormData         map[string]any    `json:"formData,omitempty"`
 
 	CostCenter         string     `json:"costCenter,omitempty"`
 	DataClassification string     `json:"dataClassification,omitempty"`

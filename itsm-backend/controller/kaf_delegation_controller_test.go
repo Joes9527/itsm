@@ -269,6 +269,11 @@ func TestKafDelegatedList_PaginatesBeyondOneHundredTasks(t *testing.T) {
 	assert.Equal(t, common.SuccessCode, secondPage.Code)
 	assert.Len(t, secondPage.Data.Items, 2)
 	assert.Empty(t, secondPage.Data.NextCursor)
+	var terminalWire struct {
+		Data map[string]json.RawMessage `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(second.Body.Bytes(), &terminalWire))
+	assert.NotContains(t, terminalWire.Data, "nextCursor", "terminal page omits cursor as required by the strict KAF HTTP client")
 }
 
 func TestKafAction_RejectsResolveUntilIncidentTypedActionExists(t *testing.T) {
@@ -451,4 +456,16 @@ func attachKafWorkItem(t *testing.T, client *ent.Client, taskID string) int {
 	_, err = client.ProcessInstance.UpdateOneID(task.ProcessInstanceID).SetBusinessID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 	return workItem.ID
+}
+
+func TestKafDelegatedList_EmptyPageOmitsCursor(t *testing.T) {
+	router, _, _ := newKafDelegationHTTPFixture(t, kafHTTPFixture{actorTenantID: 1, taskTenantID: 1, taskType: "kaf_delegate", status: "completed"})
+	response := doKafRequest(t, router, http.MethodGet, "/api/v1/bpmn/process-tasks/kaf-delegated?status=delegated", "")
+	require.Equal(t, http.StatusOK, response.Code)
+	var wire struct {
+		Data map[string]json.RawMessage `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &wire))
+	assert.NotContains(t, wire.Data, "nextCursor")
+	assert.JSONEq(t, "[]", string(wire.Data["items"]))
 }

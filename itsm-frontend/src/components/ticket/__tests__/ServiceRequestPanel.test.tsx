@@ -158,4 +158,16 @@ describe('ServiceRequestPanel', () => {
     expect(buttonElement).toHaveAttribute('title', '申请人不能交付自己提交的服务请求');
     expect(mockStartProvisioning).not.toHaveBeenCalled();
   });
+  it.each([
+    ['awaiting_approval', '待审批'], ['fulfilling', '履约中'], ['unknown', '结果未知'],
+    ['completed', '已完成'], ['rejected', '已拒绝'], ['cancelled', '已取消'],
+  ])('renders authoritative access state %s without manual delivery', async (state, label) => {
+    mockGetByTicket.mockResolvedValueOnce({ id: 80, fulfillmentState: state,
+      actions: { provision: { allowed: false, reason: 'managed_access_requires_verified_delegation' } } });
+    mockListTasks.mockResolvedValueOnce([]);
+    render(<ServiceRequestPanel ticketId={80} />);
+    expect(await screen.findByText(label)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '开始交付' })).not.toBeInTheDocument();
+    expect(screen.queryByText('尚未开始交付')).not.toBeInTheDocument();
+  });
 });

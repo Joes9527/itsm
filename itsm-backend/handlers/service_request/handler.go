@@ -9,6 +9,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/handlers/common/intakehttp"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/middleware"
@@ -106,6 +107,21 @@ func (h *Handler) toDTOWithCustomFields(ctx context.Context, req *ServiceRequest
 	}
 	resp.Actions = map[string]dto.ActionPermission{
 		"provision": service.CanProvision(client, req.TenantID, actorUserID, actorRole, req.RequesterID),
+	}
+	if err := h.service.ValidateManualProvisioning(ctx, client, req.TenantID, req.TicketID); err != nil {
+		resp.Actions["provision"] = dto.ActionPermission{Allowed: false, Reason: "此申请需通过审批流程履约"}
+		resp.FulfillmentState = "unknown"
+		item, readErr := client.Ticket.Query().Where(ticket.IDEQ(req.TicketID), ticket.TenantIDEQ(req.TenantID), ticket.RecordClassEQ("service_request_item"), ticket.DeletedAtIsNil()).Only(ctx)
+		if readErr == nil {
+			fulfillment, projectionErr := h.service.ReadFulfillment(ctx, client, item)
+			if projectionErr == nil {
+				resp.FulfillmentState, resp.AccessResult = fulfillment.State, fulfillment.AccessResult
+			} else {
+				h.service.logger.Warnw("Service request fulfillment unavailable", "ticket_id", req.TicketID)
+			}
+		} else {
+			h.service.logger.Warnw("Service request WorkItem unavailable", "ticket_id", req.TicketID)
+		}
 	}
 	values, err := service.NewFieldValueService(client).ListValues(ctx, req.TenantID, "ticket", req.TicketID)
 	if err != nil {

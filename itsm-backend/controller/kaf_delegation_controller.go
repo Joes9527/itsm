@@ -72,7 +72,7 @@ func (c *KafDelegationController) ListDelegated(ctx *gin.Context) {
 		writeKafDelegationError(ctx, err)
 		return
 	}
-	common.Success(ctx, gin.H{"items": page.Items, "limit": page.Limit, "nextCursor": page.NextCursor})
+	common.Success(ctx, page)
 }
 
 func (c *KafDelegationController) ExecuteAction(ctx *gin.Context) {

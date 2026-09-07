@@ -70,7 +70,7 @@ function getBusinessLink(task: UserTask): { label: string; url: string } | null 
   if (task.businessType && task.businessId) {
     const meta = businessTypeMap[task.businessType];
     if (meta) {
-      return { label: `${meta.label} #${task.businessId}`, url: meta.url(task.businessId) };
+      return { label: task.workItemNumber || `${meta.label} #${task.businessId}`, url: meta.url(task.businessId) };
     }
   }
   if (task.processInstanceId) {

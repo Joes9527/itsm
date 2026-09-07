@@ -243,6 +243,8 @@ func TestPostgresServiceRequestAuthorityVerifierRejectsPermissivePolicy(t *testi
 			require.NoError(t, err)
 			_, err = f.db.ExecContext(f.ctx, string(verify))
 			require.ErrorContains(t, err, "ServiceRequest RLS policy")
+			err = migration.NewMigrator(f.db, zaptest.NewLogger(t).Sugar()).ReconcileSchemaInvariants(f.ctx)
+			require.ErrorContains(t, err, "ServiceRequest RLS policy", "canonical owner must retain current precise policy validation")
 			if clause == "RENAME TO wrong_policy" {
 				_, err = f.db.ExecContext(f.ctx, "ALTER POLICY wrong_policy ON service_requests RENAME TO tenant_isolation_service_requests")
 				require.NoError(t, err)

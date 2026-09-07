@@ -1,8 +1,6 @@
 # SSLVPN 端到端实施与验证报告
 
-**状态：持续实施，尚未完成端到端验收。** 原会话已由用户终止；接手后完成MSP身份、入口语义、队列生命周期及027/028共享字段归一的限定修复与独立审查。Catalog当前会话读取、前端创建切换及浏览器会话投影已通过限定范围独立审查；A5通用目录发布及修复621b4228已通过独立复核。A6身份交换及两项契约修复已通过独立复审；C1授权策略与结果模型及F1/F2修复已通过独立复审；最终浏览器与全入口门禁、KAF接入及外部授权验收仍未完成。阶段测试通过不等于完整业务交付，也不代表已部署。
-
-最新 C3 增量：崩溃/回执重放、unknown 权威投影与 KAF 结果显示已实现并通过本地验证，待独立审查；C4 真实环境升级、同编号审批/浏览器与 Graph 验收仍未开始。详见文末 C3 记录。
+**状态：C4受控跨进程、浏览器与Graph验收已完成，待C4独立审查及父任务整体审查；未生产部署。** 各阶段历史记录和失败尝试保留，最新结果、真实外部清理及证据边界见文末C4记录。
 
 原暂停快照见[开发交接报告](2026-09-05-sslvpn-development-handoff-report.md)。本报告按提交保留各阶段实际验证范围、失败修复和剩余门槛；较早段落中的“下一项”仅表示当时状态。
 
@@ -402,3 +400,83 @@ Fix1 的 I2 已关闭，KAF 保持 e7f7f6fbedd42ada745bcb7c55c4233dae79e85d，�
 未重开I2/M1、未改前端/BPMN/schema；C4仍未启动，未真实通知/provider调用、部署、推送或合并。历史Fix1通过证据只适用于其覆盖范围，不据此宣布I1已关闭。
 
 Fix2最终验证：两个受影响Go包1184顶层通过/1跳过（含子测试2278通过/3跳过），all-package build退出0；actualPG retry/resume/success/original四个独立用例各1通过/0跳过，临时库全部remaining0。KAF/I2/前端源码不变，本轮未重复其完整套件。
+
+
+## C4 实际验收记录（2026-09-07，待独立审查）
+
+C4 实施与受控验收已完成，**尚未独立审查，也不代表整个实施计划完成或生产部署通过**。本阶段使用两个隔离 feature worktree，基础提交 ITSM `965c98037d25b38c9587f8a80b1a0d5cd5cef1e6`、KAF `e7f7f6fbedd42ada745bcb7c55c4233dae79e85d`；最终提交号和完整 diff 由 C4 交接清单记录。源码冻结散列：ITSM `de1a8b7a1e57589c030489167b24186205ff0f0b2153409d48527dbbc97c1b6b`；KAF `4e55d70950733bb12dfcdb9737bec8e32ce766ade65195b9eb3b5bad1624ee30`。冻结清单按修改的源码/测试文件及其 SHA-256 计算，文档、构建产物不混入。没有 push、main merge 或共享环境部署。
+
+证据保存在仓库 `.superpowers/sdd/2026-09-05-sslvpn-end-to-end-implementation/`（下称 ART），本阶段运行清单为 `c4-live-runtime/`（下称 R）。保留所有旧阶段和失败尝试，不将原 NoGo 改成通过。
+
+### 环境、身份及内容
+
+- owned PG17 loopback 36446：ITSM `sslvpn_a7_runtime_20260907` 经正式 owner 升级到031；KAF `sslvpn_b4_gateway_20260907` 经正式 CLI 升级到038。未重置迁移 ledger，未使用 ORM create_all/stamp 冒充升级。ITSM owner 连续初始化、三项 CHECK、精确 RLS predicate 及负向篡改验证保留。
+- ITSM app `a7_runtime_app_20260907` 是 nonowner/NOBYPASS；独立 system role 仅获准枚举跨租户租户范围，业务仍 app role。KAF `b4_gateway_app_20260907` 无 DDL/owner 权限，checkpoint/alembic 仅读；最终真实只读 schema gate 通过。测试另用 owned PG16 loopback36430 和正式038 unit DB，未触及共享数据库端口。
+- Redis loopback36445：DB0 ITSM、DB1 unit、DB2 gateway；Qdrant36483保留存储，未 flush/重建。API36470/36475、两 worker36471/36472、KAF36480 在本次动作前均 ready200。精确 PID/exe/cwd/startTicks/argv 在 R/processes.json，源码变化没有被当作进程升级证据。
+- 申请人为 tenant3/user3；主管 user16 与网络 user17 使用独立真实浏览器 context、原生登录、逐行领取和审批。KAF 使用既有 issue_token/auth callback 和真实 session 校验的专用 fixture JWT，**不是 Azure 交互式 SSO**。cleanup users14/15从未作为申请/审批权限证明。
+- 原合成 WorkItems1–10均通过 owning termination API 隔离，旧目录10在真实 Graph 验收期间停用。固定 Dev 对象从[权威受控夹具](../testing/kaf-delegation-release-closeout-fixture.md)读取，tenant/user/group精确只读匹配；正文不复制个人身份、provider原文或凭据。没有邮件、LDAP、其他组、VPN登录或共享部署副作用。
+- 正式BPMN源 SHA-256 `4a3280795b7d4cc84a97c0e40ab9b94a280306eae78bcb6fd308a329159cf5ca`；既有模板/版本 owner 发布后，目录实际绑定 definition25（部署版本1.1.0）。占位符配置后持久化 XML SHA-256 为 `9595f8d1641ef530104aa375b7d2080e201f9c32e42e7a5487320e7dbf0c74f3`，含两级拒绝分支及完成/失败动作。来源版本和配置后 digest 不混同；旧实例保留旧 definition。
+- `graph_vpn_access_grant.md` 通过原 Procedure ingestion owner 和现存 Dev embedding 服务装载；384维非零真实embedding，exact intent内容hash `9ceb648f0c10e1cde4df80cdccfd7390b0623eda5f1abdd554e06963ebacba57`。未插假vector、假Procedure、mock RAG或提高recursion limit。
+
+### 实际链路、重复执行与恢复
+
+| 申请 | 实测过程与结果 | 外部写入 |
+|---|---|---|
+| 000007 / WorkItem11 | 原KAF卡恢复后确认创建；主管16领取task13并拒绝；ITSM专业详情与KAF当前卡均显示拒绝。原卡TTL/会话和一次用户消息保留。 | transport观测区间及无delegated任务共同证明0 add |
+| 000008 / WorkItem12 | 主管16/task14与网络17/task15真实领取批准；worker1停止期间worker2实际claim outbox并发布，记录租约及claim token digest，随后worker1恢复ready。原正式context空legacy snapshot暴露Procedure intent顺序缺陷，修复后仅在not_started自然重试。 | driver3单次POST204；立即GET404、后续恢复GET200。原结果保持execution_unknown，无accessResult，不重新执行 |
+| 000009 / WorkItem13 | 新会话/新卡正常创建，主管16/task17、网络17/task18真实双审批；原Procedure执行、GET确认、ITSM原子完成。KAF“权限已开通”与ITSM“已完成/授权已验证”通过真实Playwright分段续接核对。 | driver4单次POST204、GET200；没有第二次本轮add |
+
+000009 原会话为 `016700bf-3dad-43ae-ad1f-67f7217f61f1`，action为 `65db34a4-9af8-4a14-9918-ca0270e98a91`，delivery event为 `8a7dc9bf-b2ad-4fe5-8570-d7dc617099ef`，task为 `TASK-b0104db5-1aed-446b-9b0c-c15540033ed4`。driver4记录的初始sessionId误取并发初始化响应，服务端真实action/session关系及最终浏览器按ID恢复证据纠正该字段；错误值保留。首次followup误选20:36旧会话读到000008，断言立即失败，没有再次提交。
+
+000009 的首次 verifiedAt 为 **2026-09-07T14:06:23.182049Z**，expiresAt 为 **2026-10-07T14:06:23.182049Z**。通过原认证 client 重放原持久化完整payload，2次串行加4次并发均返回 already_applied：同一receipt仍1条、accessResult整行及两时间完全不变；Graph本轮add仍1次。有效期仅为申请期限，**不代表已实现自动回收**。
+
+最终浏览器 `R/playwright-grant-4-followup3.log` 1 passed，绑定实际session ID与原审批记录；拒绝 `R/playwright-reject-10.log` 1 passed。这是一条有失败修复和分段续接的真实链路，**不是一次无中断整轮PASS**。driver4最初browserExit1是测试把包含验证时间/有效期的整个status区域误要求完全等于“已完成”；DOM核对后改为区域内准确标签。原exit1保留，业务状态未被改写迁就测试。
+
+### 失败窗口与真实清理
+
+Microsoft说明Entra组成员写入通过异步复制，app-only紧随读取不保证一致；必须读取时可用指数退避。[官方说明（2026-03-24）](https://devblogs.microsoft.com/identity/designing-for-eventual-consistency-for-microsoft-entra/)。本任务仍要求查询验证，未改成“收到写成功即完成”。
+
+driver3同一成员路径 POST204后约0.01秒GET，得到404；随后仅恢复查询得到200，原执行仍unknown。原生remove得到DELETE204，立即GET200导致cleanupExit1；13:57:00Z/13:57:04Z两次后续GET404确认恢复，未重复删除。新增有界GET逻辑仅限原成功写执行上下文，默认10秒预算、0.5秒初始/2秒封顶指数退避，只重试404；超时、迟到成功、取消、401/403及其他异常均不制造verifiedAt，不重发POST。
+
+driver4最初cleanupExit0只来自两次GET404，**当时0次DELETE，不能作为已知add的清理完成依据**。审计核对发现后，依据本轮已知成功add调用原 remove_vpn_access：14:08:30Z唯一DELETE204，后续GET200→404；14:09:07Z/14:09:11Z再查均404。修复harness为按本轮effect attribution清理，已知add即使初始404也调用原native remove；无本轮add不删既有权限，已知成功remove不重复删除。三个归属测试和四个可见性测试均通过，原假阴性记录不抹除。
+
+累计真实变更为 **2次add POST204 + 2次remove DELETE204**，每个有写轮次各1次；blocked write为0。最后固定对象明确非成员，未知000008历史保持未知，成功000009结果和时间保留。
+
+### 最终门禁
+
+| 实际命令/环境 | 结果 |
+|---|---|
+| Go `test ./... -count=1 -json` | exit0，4994 test/subtest pass，2448顶层pass，13已有skip，0fail；source最终Go未再改 |
+| Go `build ./...`；`TestSSLVPNScenarioE2E` | 均exit0；scenario1pass/0skip |
+| owned PG `integration_postgres ./handlers/intake ./tests/integration` | exit0，189顶层/532pass事件，0skip |
+| owned `integration ./tests/integration ./repository/workitemnumber` | exit0，59顶层/176pass事件，0skip，实际Redis门禁 |
+| owned `integration_rls ./database/rls` | exit0，20pass/0skip，专用DB/role finally删除 |
+| ITSM frontend type-check、lint:check、build | 均exit0 |
+| ITSM frontend `npm run test:ci -- --maxWorkers=2` | exit0，215suite，3129pass/13skip；正常退出，无forceExit |
+| KAF全量，正式038 unit DB+Redis1 | exit0，2868pass/18skip/1xfail/42warnings |
+| KAF正式038受限app只读schema gate；独立unit负向索引gate | 3pass+2pass，0skip；不改runtime索引 |
+| B4真实身份/客户端gate | 1pass/0skip，三身份、两租户，真实read/create exchange、幂等/冲突/跨租户/冒签拒绝 |
+| KAF frontend build；此前最终应用源码frontend tests | build exit0；17files/113pass |
+
+默认Go的13skip详细清单在R/final-counts.json，包含既有硬编码共享5432的安装fence测试，不用共享库强行运行；真实owned租户/动作隔离门禁另跑0skip，不将默认skip算证明。KAF18skip为performance11、migration5、security1、live1；其中migration5/live1已以上述显式环境实际执行。security opt-in和性能不计为本阶段真实业务证明。1xfail为既有企业内容索引退役项；42warnings包含既有依赖/Redis/email lifespan GC库存及先前未改email路径独立复现，未忽略也未扩展无关重构。
+
+首次并发frontend CI有2suite/3测试超10秒（3126pass/13skip），原失败日志保留；隔离两文件13测试全通过，但该限定运行因全局覆盖率门槛exit1，未被称为完整gate成功。最终两个worker的完整CI覆盖率达标并exit0，未修改超时、跳过或forceExit。RLS首轮引用已由A7清掉的临时DB失败，随后复用原fixture owner创建专库、实际执行并finally删除。B4准备中的字段名、HTTP client重复open及proxy URL配置失败均留存；最终三条新pending WorkItems14–16已由owning termination清理并保留审计。没有直接改审批表或删除队列。
+
+### 最终恢复与交接边界
+
+R/final-configuration-restoration.json、workspace-restoration.json和driver4-cleanup-final-readonly.json记录最终状态。真实gateway及两worker已精确PID guard停止；Graph marker撤销、各轮写锁保留。临时actor16/17及cleanup14/15 inactive，专用role permissions清空/inactive，审批组成员移除，固定Dev身份mapping inactive。目录9/10内容回到原prestate（owner产生的新version如实保留），workspace设置恢复；已装载Procedure版本和BPMN25保留审计历史且无临时执行binding。API/前端及owned数据库/Redis/Qdrant保留供只读审查，不擅自删除其他阶段runtime或历史。
+
+原C3已独立关闭；C4源码、真实验收报告和diff包交下一轮独立审查。仍需父任务的整体审查；本记录不授予生产部署、自动到期回收、VPN连通性、真实Azure SSO或其他渠道的通过结论。
+
+
+### C4 实测发现及最小修复索引
+
+1. **历史028 checksum漂移**：A7把可变当前VerifySQL拼入历史迁移，使旧正式库升级拒绝。冻结028原发布字节，SQL artifact与Go历史checksum一致；当前bootstrap仍在ReconcileSchemaInvariants先执行精确RLS verifier，再检查C1三项约束。未改数据库checksum、未接纳第二checksum别名。owned ledger清点、失败升级、修复后031/重复初始化及负向policy证据均在R。
+2. **同编号专业页面和审批引用**：BPMNTask DTO从冻结流程变量投影WorkItem编号，待办按唯一编号领取；Ticket DTO携带recordClass，ServiceRequestService权威fulfillmentState/accessResult和manual provision guard映射到原专业详情。界面不再用base new或“开始交付”掩盖受管审批/履约状态。
+3. **分页终止契约**：真实KAF严格client拒绝ITSM末页nextCursor为空串。controller返回原分页DTO，末页省略cursor，有下一页保留；HTTP RED/GREEN覆盖两种情况，KAF校验未放宽。
+4. **选中会话丢确认卡**：原history只回消息，切换会话丢失仍pending的卡。复用原授权history/projection owner返回history+active_interactions，共享hydration；generation/revision/socket guard防迟到会话覆盖、当前实时卡丢失，403清除视图。3个后端、13个针对前端和完整113个前端测试通过，原卡在实际浏览器恢复后创建000007。
+5. **approvedAccess独立intent选择**：正式已审批context的legacy intakeSnapshot为空。有效binding先选择现有登记intent；普通任务仍要求operationKind，无效binding不降级。真实失败未开始时才自然重试，不改snapshot/审批/执行状态，RED/GREEN及完整pipeline回归保留。
+6. **Graph成功写后短暂不可见**：按上节有限GET验证修复，受控时钟证明预算、迟到结果、取消及错误分类；原unknown不恢复为成功。已知写归属的清理修复仅在验收harness，测试覆盖暂时404不能免除remove以及已remove不重复操作。
+7. **浏览器测试观察契约**：明确侧栏展开状态、图标按钮可访问名、真实新建force_new响应与业务session连接、原创建receipt授权详情、领取HTTP完成后断言、专业status子标签。所有真实失败和原会话/卡/编号关系保留；未使用force点击、任意sleep、后台审批或新卡绕过失败。
+
+构建及测试命令与源冻结之间没有未验证的应用源码更改。最后源检查 `git diff --check` 两仓库通过；R/secret-scan.json对784份本轮及修改文本按13个活跃秘密值扫描，0命中（不输出秘密本身）。JUnit和tsbuildinfo已复制到ART后恢复tracked HEAD版本，不进入提交。截图无trace网络归档，保存在受限目录；没有把认证头、登录body或provider raw作为公开验收材料。

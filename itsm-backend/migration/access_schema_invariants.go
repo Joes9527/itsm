@@ -16,6 +16,9 @@ func (m *Migrator) ReconcileSchemaInvariants(ctx context.Context) error {
 		return err
 	}
 	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, serviceRequestWorkItemAuthorityVerifySQL); err != nil {
+		return fmt.Errorf("ServiceRequest WorkItem invariants: %w", err)
+	}
 	if _, err := tx.ExecContext(ctx, accessSchemaInvariantsSQL); err != nil {
 		return fmt.Errorf("finite access invariants: %w", err)
 	}

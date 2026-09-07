@@ -995,6 +995,7 @@ func ToTicketResponse(ctx context.Context, t *ticket.Ticket) *dto.TicketResponse
 		Priority:       string(t.Priority),
 		Type:           common.WorkItemLegacyType(t.RecordClass, t.GenericSubtype),
 		GenericSubtype: t.GenericSubtype,
+		RecordClass:    t.RecordClass,
 		RequesterID:    t.RequesterID,
 		TenantID:       t.TenantID,
 		Version:        t.Version,

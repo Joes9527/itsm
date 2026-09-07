@@ -26,6 +26,7 @@ type BPMNTaskResponse struct {
 	BusinessKey          string                 `json:"businessKey"`
 	BusinessType         string                 `json:"businessType"`
 	BusinessID           int                    `json:"businessId"`
+	WorkItemNumber       string                 `json:"workItemNumber,omitempty"`
 	TaskPurpose          string                 `json:"taskPurpose"`
 	FormKey              string                 `json:"formKey,omitempty"`
 	TaskVariables        map[string]interface{} `json:"taskVariables,omitempty"`
@@ -75,6 +76,7 @@ func ToBPMNTaskResponse(task *ent.ProcessTask, instance *ent.ProcessInstance) *B
 	if instance != nil {
 		resp.ProcessInstanceKey = instance.ProcessInstanceID
 		resp.BusinessKey = instance.BusinessKey
+		resp.WorkItemNumber, _ = instance.Variables["ticket_number"].(string)
 		resp.BusinessType, resp.BusinessID = parseBusinessKey(instance.BusinessKey)
 	}
 	return resp

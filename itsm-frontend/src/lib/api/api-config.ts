@@ -100,6 +100,7 @@ export interface GetTenantsParams {
 import type { Ticket as BaseTicket } from './types';
 
 export interface Ticket extends BaseTicket {
+  recordClass?: string;
   tenantId?: number;
   templateId?: number;
   tenant?: Tenant;
