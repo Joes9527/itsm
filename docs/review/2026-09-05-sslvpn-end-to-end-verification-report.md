@@ -276,3 +276,66 @@ KAF 另有启动前提待 B4 修复：在独立 PG17 数据库加载仓库 `dock
 - 真实浏览器native/MSP身份/切租户/申请人、提交丢响应后的原确认重放通过；两个API内实际workflow worker确定性重放同event仅一个流程。两位实际指定审批人UI批准，本地HMAC委派只发一次；第二KAFworker仅在线，不声称执行。964f9840实际浏览器补验同WorkItem2详情与comments200、duration=month。没有Graph/外部授权完成。
 - A1原历史清单保留，追加25后端入口、每项DTO字段、35前端扫描行的当前owner/证据；AST仅五个执行writer，ACL534唯一路由权限相同。Low O1组合显示编辑/激活部分显示写入保留Minor给whole-branch triage；C4编号定位/claim和外部授权验收不由A7替代。
 - 所有源改动仅ITSM原worktree，KAF e9e8fc67未改；无push/merge/deploy/共享环境访问。此为A7可审查提交，阶段关闭仍须最终runtime verifier与独立review；不是整体SSLVPN完成。
+
+### B4 跨系统真实合同、恢复与迁移门禁（2026-09-07，待独立复审）
+
+B4 实现和实际运行门禁已通过，尚待独立审查；整体 SSLVPN 外部授权验收仍未完成。
+KAF 提交为迁移 `3c269730abc5533cf3418966c9537c8aa7b990d9` 和运行修复/测试
+`ebad0ad4acbd92e854d073a3c925775fdbe45f75`。ITSM 产品源码保持
+`89cd479f608c24ae521a7bf671afb33a2ab2c1bf`；本段仅更新验证报告。
+完整证据位于本 worktree 的
+`.superpowers/sdd/2026-09-05-sslvpn-end-to-end-implementation/entry-KAF-B4-live-report.md`。
+
+- **真实安装与升级**：显式 `python -m acp.infrastructure.schema_management`
+  为唯一受支持入口。冻结可追溯历史基线后执行实际迁移链，窄修018/019重复列，
+  037统一补齐确认的运行表/列与历史唯一索引；无强制stamp、旧revision改序或
+  当前ORM建表冒充迁移。实际有数据032→037、036→037、空库及重复入口通过；
+  非空未版本化、缺历史表、重复旧数据等负例拒绝且原版本/数据不变。
+  原失败 `sslvpn_kaf_migration_baseline` 和新失败数据库/日志全部保留。
+- **真实启动边界**：KAF gateway36480、前端36481、故障代理36482及新隔离
+  Qdrant36483使用PG17专库 `sslvpn_b4_gateway_20260907`、Redis36445 DB2。
+  应用角色无超级用户/建库/建角色/绕过RLS/建schema权限，迁移账本仅SELECT。
+  严格启动验证实际037及固定LangGraph checkpoint版本，不执行DDL。
+  最终提交重启后KAF和A7两API/两Worker共六项健康检查均200。
+- **用户合同**：已有JWT issuer签发短期夹具令牌，经真实前端/auth/callback
+  和/auth/me；不同非管理员用户、workspace成员关系及ITSM管理API映射。
+  实际交换/目录/创建/读取、同键重放、不同命令冲突、只读令牌创建拒绝、
+  签名篡改、跨用户/跨租户拒绝、同用户不同workspace及不同用户同key隔离通过。
+  这是实际JWT/session边界验证，不是Azure交互登录验收。
+- **实际模型与卡片**：真实DeepSeek调用经过注册能力元数据选择ITSM目录，
+  复用现有确认卡。首轮真实模型因“所有操作必须先找Procedure”的矛盾提示
+  重复NOT_FOUND至既有上限；改为配置的intake能力直接发现权威目录，
+  未添加关键词路由、假Procedure、嵌入数据或提高递归阈值。
+  该问题属于当前集成，不涉及用户排除的旧coding-agent循环调查。
+- **提交后丢响应与进程恢复**：代理取得ITSM真实201后扣留响应，再精确校验
+  所有权并SIGKILL KAF。原卡片/命令/key恢复为WorkItem10、
+  `TKT-202609-000006`，始终一个WorkItem、一个流程启动。首次恢复被正常90秒
+  Redis运行租约拒绝；自然到期后普通页面刷新并点击恢复成功，无flush/手动解锁。
+  随后修复终端错误后卡片本地一直“提交中”的状态，并用两个真实浏览器上下文
+  验证同卡片被拒后无需重载即可重试；无新增申请。
+- **完整回归**：KAF后端2741通过/18跳过/1预期失败/41警告，exit0；
+  前端99测试/17文件通过、构建exit0；实际HTTP合同1通过，迁移实际门禁另行通过，
+  UI定向7通过。18跳过包含原12项及显式隔离的5迁移/1HTTP测试；后者另有真实
+  运行证据，不以跳过计通过。既有构建体积和测试警告保留给原所有者。
+- **受测源码说明**：全量结果中的source为当时HEAD3c269730，实际测试含随后提交的
+  工作区产品代码。运行后只有opt-in测试import排序、文档和四处末尾空行变化；
+  没有产品行为修改。保存提交前后字节/哈希验证，但不把运行后取得的哈希伪称
+  为测试开始时采集；没有仅为Git元数据重复整套测试。
+- **凭据**：最终86个运行日志/JSON/文本/Markdown文件扫描零泄露，14条握手参数
+  已脱敏。早期日志曾出现3个一次性WS ticket，原日志保留为0600脱敏副本并记录
+  原始/脱敏hash及次数，明确排除“从未记录”断言。产品过滤器在正常INFO层
+  覆盖Uvicorn error/access日志；pending/异常/报告未持久化token或assertion secret。
+  原99文件扫描和最终86文件扫描范围不同，证据未删除。
+- **收尾**：B4产生的WorkItems3–10保留票据/回执；八个流程经正式BPMN API终止，
+  八条终止审计和审批任务cancelled已核对。租户3/4未配置流程修改权限，原生租户
+  actor校验又拒绝跨租户bootstrap管理员，因此经父级授权创建两个cleanup-only
+  super_admin夹具14/15，清理后API停用且实际active=false；不是申请人/审批人
+  权限证明。原A7 WorkItems1/2与任务状态完全不变，没有SQL伪完成或审批放行。
+- **外部影响**：三条external_actions均为低风险internal目录发现审计；
+  KAF delegation deliveries为0。HTTP仅访问DeepSeek和专属代理/Qdrant。
+  无Graph/LDAP/Azure授权、共享部署、推送或合并；运行服务保留隔离以供复审。
+  实际两级审批、执行Procedure内容、外部成员关系及C4恢复验收仍开放。
+
+C3显示交接：`awaiting_approval`原始枚举、recover/refresh内部命令气泡、
+确认前“执行操作流程”绿勾文案和重新打开会话时重复原提问需复核；
+现有回执明确是申请创建，未声称授权成功，也未发现重复命令。
