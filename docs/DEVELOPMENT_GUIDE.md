@@ -153,6 +153,7 @@ After initialization creates the schema, an authorized database administrator gr
 | `msp_allocations` | SELECT | Active MSP customer authorization |
 | `external_identities` | SELECT | Verified provider/workspace/subject lookup after v2 assertion validation; mapping writes use tenant runtime transactions |
 | `connector_configs` | SELECT | Restore persisted connector registrations at startup |
+| `process_callback_outboxes` | SELECT | Discover callback recovery candidates across tenants; claims, execution, retries and acknowledgments use the candidate tenant on the tenant client |
 | `outbox_events` | SELECT, UPDATE | Cross-tenant transport claim, attempts, leases, acknowledgment and retry; enqueue stays on the tenant client |
 | `ticket_notifications` | SELECT, UPDATE | Existing delivery queue scan, lease and acknowledgment; creation and recipient/WorkItem checks stay on the tenant client |
 | `audit_logs` | INSERT, SELECT(id) | Append authentication and transport failure/retry audit; SELECT(id) supports Ent RETURNING without reading audit content |

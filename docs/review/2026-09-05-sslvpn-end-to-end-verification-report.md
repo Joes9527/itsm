@@ -269,7 +269,7 @@ KAF 另有启动前提待 B4 修复：在独立 PG17 数据库加载仓库 `dock
 
 ### A7 最终集成门禁提交（2026-09-07，独立复审待进行）
 
-- A7 API/Worker配置修复7bfdbff7；回调恢复System仅SELECT候选+逐行Tenant执行6bc4746；真实MSP评论和SR字段详情读取修复964f9840。API不持有Worker签名secret，未知能力/无效配置仍拒绝；无新增System表权限放宽。
+- A7 API/Worker配置修复7bfdbff7；回调恢复System仅SELECT候选+逐行Tenant执行6bc4746；真实MSP评论和SR字段详情读取修复964f9840。API不持有Worker签名secret，未知能力/无效配置仍拒绝。回调恢复新增System对process_callback_outboxes的只读SELECT能力，仅用于跨租户候选发现；claim、执行、重试和确认仍由候选所属Tenant client负责。MSP评论复用既有System身份目录能力，未新增表授权。
 - 最终完整Go：4963测试/子测试通过、11既有跳过、60包通过、159无测试包，exit0；go build全包exit0。完整integration_postgres两包186顶层/529通过事件/0跳过，另新增PG目录并发激活1项、详情2项通过；allocator integration最终59顶层/176通过事件/0跳过，RLS20项/0跳过。命令、退出码、原失败、跳过清单和隔离清理见ART/entry-A7-integration-gate-report.md；没有降低阈值或把skip-only计通过。
 - 前端最终type-check、lint:check、test:ci、build均exit0；215套/3121通过/13既有跳过。受控2worker完整执行，无forceExit；保留初始资源超时和错误native session夹具证据。既有lint警告保留。
 - 028只增加精确policy断言，并同步canonical VerifySQL及apply/dev_reset/standalone资产；实际PG apply/reapply与四负例通过，历史DDL/backfill/ledger顺序和030未改。C1独立PG17完整启动矩阵沿用已关闭证据；最终standalone verify与扩展既有integrity CLI实际runtime检查由父级独立执行，尚未收到结果。
