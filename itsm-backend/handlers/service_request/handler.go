@@ -99,7 +99,7 @@ func (h *Handler) toDTO(req *ServiceRequest) *dto.ServiceRequestResponse {
 // Used by detail-style responses (Get, Create's success branch) — List intentionally
 // does not call this to avoid N+1 queries, mirroring ToTicketResponse vs
 // ToTicketResponseWithCustomFields.
-func (h *Handler) toDTOWithCustomFields(req *ServiceRequest, client *ent.Client, actorUserID int, actorRole string) *dto.ServiceRequestResponse {
+func (h *Handler) toDTOWithCustomFields(ctx context.Context, req *ServiceRequest, client *ent.Client, actorUserID int, actorRole string) *dto.ServiceRequestResponse {
 	resp := h.toDTO(req)
 	if client == nil {
 		return resp
@@ -107,8 +107,9 @@ func (h *Handler) toDTOWithCustomFields(req *ServiceRequest, client *ent.Client,
 	resp.Actions = map[string]dto.ActionPermission{
 		"provision": service.CanProvision(client, req.TenantID, actorUserID, actorRole, req.RequesterID),
 	}
-	values, err := service.NewFieldValueService(client).ListValues(context.Background(), req.TenantID, "ticket", req.TicketID)
+	values, err := service.NewFieldValueService(client).ListValues(ctx, req.TenantID, "ticket", req.TicketID)
 	if err != nil {
+		h.service.logger.Warnw("Failed to load service request custom fields", "tenant_id", req.TenantID, "ticket_id", req.TicketID, "error", err)
 		return resp
 	}
 	if len(values) == 0 {
@@ -159,7 +160,7 @@ func (h *Handler) Get(c *gin.Context) {
 		}
 		return
 	}
-	common.Success(c, h.toDTOWithCustomFields(req, h.service.Client(), c.GetInt("user_id"), c.GetString("role")))
+	common.Success(c, h.toDTOWithCustomFields(c.Request.Context(), req, h.service.Client(), c.GetInt("user_id"), c.GetString("role")))
 }
 
 // GetByTicket 供 ticket 详情页渲染关联的服务请求扩展面板。
@@ -181,7 +182,7 @@ func (h *Handler) GetByTicket(c *gin.Context) {
 		}
 		return
 	}
-	common.Success(c, h.toDTOWithCustomFields(req, h.service.Client(), c.GetInt("user_id"), c.GetString("role")))
+	common.Success(c, h.toDTOWithCustomFields(c.Request.Context(), req, h.service.Client(), c.GetInt("user_id"), c.GetString("role")))
 }
 
 func (h *Handler) List(c *gin.Context) {

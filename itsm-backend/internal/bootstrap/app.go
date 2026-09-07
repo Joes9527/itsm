@@ -467,6 +467,7 @@ func NewApplication() *Application {
 	ticketDependencyController := controller.NewTicketDependencyController(ticketDependencyService)
 
 	ticketCommentService := service.NewTicketCommentService(client, sugar)
+	ticketCommentService.SetActorDirectory(systemClient)
 	ticketCommentController := controller.NewTicketCommentController(ticketCommentService, sugar)
 	ticketAttachmentController := controller.NewTicketAttachmentController(ticketAttachmentService, sugar)
 	ticketNotificationController := controller.NewTicketNotificationController(ticketNotificationService, sugar)
