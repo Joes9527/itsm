@@ -480,3 +480,5 @@ R/final-configuration-restoration.json、workspace-restoration.json和driver4-cl
 7. **浏览器测试观察契约**：明确侧栏展开状态、图标按钮可访问名、真实新建force_new响应与业务session连接、原创建receipt授权详情、领取HTTP完成后断言、专业status子标签。所有真实失败和原会话/卡/编号关系保留；未使用force点击、任意sleep、后台审批或新卡绕过失败。
 
 构建及测试命令与源冻结之间没有未验证的应用源码更改。最后源检查 `git diff --check` 两仓库通过；R/secret-scan.json对784份本轮及修改文本按13个活跃秘密值扫描，0命中（不输出秘密本身）。JUnit和tsbuildinfo已复制到ART后恢复tracked HEAD版本，不进入提交。截图无trace网络归档，保存在受限目录；没有把认证头、登录body或provider raw作为公开验收材料。
+
+已验证实现提交：ITSM `30cfbce107c4dde171d3da1d6ecbbbb19e27acf0`；KAF `adc526267b2a7c2e25e90de3ac758c1828ec71aa`。随后仅补记报告引用，不改变已测试的源码；完整交接HEAD、base、diff与冻结清单见 ART/c4-live-runtime/c4-source-handoff.json。
