@@ -1,6 +1,8 @@
 # SSLVPN 端到端实施与验证报告
 
-**当前状态（2026-09-07，最终协调修复时点）：C4受控验收及其独立审查已通过；全分支最终独立审查已完成，发现 I1 来源归属、M1 报告状态和 M2 postcheck 身份绑定三项 Required。本轮已实施修复，等待一次限定复审，尚不能宣布最终无条件通过。未 push、合并 main 或生产部署。**
+**当前最终状态（2026-09-07，限定复审完成）：C4受控验收及其独立审查已通过；全分支最终审查提出的 I1、M1、M2 Required 经一次协调修复和一次独立限定复审全部关闭，M3 文字清理完成，未发现新的 Critical/Important。本地交付评估为 YES，限定于下文列出的两个本地 feature 源码 HEAD；保留一个非阻断、尚未修复的 E2E 日期解析 Minor 作为维护待办。未 push、合并 main、共享部署或生产部署。**
+
+**历史状态（2026-09-07，最终协调修复完成、限定复审尚未进行时）：C4受控验收及其独立审查已通过；全分支最终独立审查已完成，发现 I1 来源归属、M1 报告状态和 M2 postcheck 身份绑定三项 Required。本轮已实施修复，等待一次限定复审，尚不能宣布最终无条件通过。未 push、合并 main 或生产部署。**
 
 C4 真实效果和清理沿用已接受证据：第一申请 000008 保持 unknown；第二申请 000009（WorkItem 13）完成，原始授权时间、申请有效期和单一回执不变。累计 2 add / 2 remove；driver4 初次清理计数错误及后续 DELETE 204、更晚 GET 404 均保留。浏览器验收是分段补充通过，不改写成一次不间断完整浏览器通过；真实 provider 验证不证明 VPN 登录、网络可达或到期自动回收。最新运行结果及证据边界见文末 C4 记录。
 
@@ -488,3 +490,31 @@ R/final-configuration-restoration.json、workspace-restoration.json和driver4-cl
 构建及测试命令与源冻结之间没有未验证的应用源码更改。最后源检查 `git diff --check` 两仓库通过；R/secret-scan.json对784份本轮及修改文本按13个活跃秘密值扫描，0命中（不输出秘密本身）。JUnit和tsbuildinfo已复制到ART后恢复tracked HEAD版本，不进入提交。截图无trace网络归档，保存在受限目录；没有把认证头、登录body或provider raw作为公开验收材料。
 
 已验证实现提交：ITSM `30cfbce107c4dde171d3da1d6ecbbbb19e27acf0`；KAF `adc526267b2a7c2e25e90de3ac758c1828ec71aa`。随后仅补记报告引用，不改变已测试的源码；完整交接HEAD、base、diff与冻结清单见 ART/c4-live-runtime/c4-source-handoff.json。
+
+
+## 最终整体审查与限定复审结论（2026-09-07，行政收尾）
+
+全分支最终独立审查发现 1 项 Important（I1 可信 KAF 来源归属及三个 UI 消费者），并要求同轮处理 M1 历史/当前报告状态和 M2 postcheck 当前申请绑定；M3 为可选文字清理。一次协调修复后，独立限定复审确认 **I1、M1、M2 核心要求、M3 全部 ADDRESSED，未发现新的 Critical/Important；Ready for local delivery: YES**。原全分支审查和限定复审均有正式留存报告；本节只登记最终结论，不代表新增修复或重新执行验收。
+
+| 已审查源码 | 冻结 HEAD | 状态 |
+| --- | --- | --- |
+| ITSM feature 分支 | `afa87021588b4a656de1d56e43112fa78b2e4af9` | Required 修复及针对性验证通过限定复审 |
+| KAF feature 分支 | `ef39fbcf4c087c370bf1c41b5b78a56120087936` | M3 两处测试文字调整通过限定复审，生产源码未改 |
+
+两库分支均为 `codex/feat/sslvpn-unified-intake`。本节之后的 ITSM 提交只登记本文档状态，不改变上述已审查源码；KAF HEAD 不变。限定复审原报告保留于本地验收证据目录 `.superpowers/sdd/2026-09-05-sslvpn-end-to-end-implementation/entry-final-scoped-rereview-report.md`，SHA256 为 `83708d9e9e8544fba6d27046cb06d43a4629ec9476c5a04f3a4ff14f7e5ac0e8`。
+
+### 保留维护待办：E2E 无效日历日期归一（非阻断 Minor，未修复）
+
+`itsm-frontend/tests/e2e/sslvpn-postcheck.test-utils.ts` 的时间正则只验证字段形状，随后使用 `Date.parse`，部分不存在的日期会被归一成合法瞬时。例如 `2026-09-31T14:06:23Z` 与 `2026-10-01T14:06:23Z`、`2026-02-29T00:00:00Z` 与 `2026-03-01T00:00:00Z` 可得到相同值。当 WorkItem ID 已严格匹配、其他字段也匹配时，证据文件中的这种无效日期可能通过时间比较。现有“invalid timestamp”用例只覆盖非日期字符串，尚未覆盖日历合法性；此问题明确保留为维护待办，本次行政收尾不修改代码或测试。
+
+范围仅限 Playwright E2E 证据文件判定辅助工具，不影响生产 API、数据库、Worker 或 provider 状态，不能绕过当前 WorkItem ID 强绑定。当前 C4 WorkItem 13 的原 `2026-09-07T14:06:23.182049Z` 和 `2026-10-07T14:06:23.182049Z` 均为有效日历时间，保留证据已通过本地交叉比对；该 Minor 不推翻已接受 C4 事实或 M2 当前申请绑定的关闭结论。
+
+### 验证边界与剩余范围
+
+限定复审复核了原始 RED/GREEN、针对性验证日志、两库 clean HEAD、精确差异包及源文件摘要，没有无因重跑全套或真实 Graph。本次行政记录只做文档校对和文件摘要/差异核验，不重跑测试，也不操作 runtime。
+
+既有噪声保留：KAF 全量日志的 42 warnings、18 skipped、1 xfailed；ITSM frontend 全量日志的 13 skipped；Next ESLint plugin 提示及 BPMNDesigner unused-disable warning。未通过增加 skip、forceExit、timeout 或抑制 warning 改写结果。
+
+原 unknown 000008、completed 000009/WorkItem 13、累计 2 add/2 remove、driver4 初次清理错误及后续 DELETE 204/GET 404、分段浏览器和 live worker/provider 证据范围原样保留。验收只证明所列固定 Dev fixture 的授权、查询及清理，不证明 VPN 登录、网段访问、到期自动回收或 Teams/WeCom；当前运行时点状态也不能由只读源码复审推定。到期自动回收仍为 Backlog。
+
+本地交付通过不是 push、main 集成、共享部署、生产发布或新 Graph 授权。上述动作均未执行；没有第二修复波次。
