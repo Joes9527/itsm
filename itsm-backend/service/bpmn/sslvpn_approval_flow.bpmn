@@ -47,7 +47,7 @@
         <bpmn:metaData name="service_task_type">kaf_delegate</bpmn:metaData>
         <bpmn:metaData name="action">external_group_grant</bpmn:metaData>
         <bpmn:metaData name="callback_config_ref">CATALOG_ACCESS_POLICY_REQUIRED</bpmn:metaData>
-        <bpmn:metaData name="allowed_actions">complete_bpmn_task</bpmn:metaData>
+        <bpmn:metaData name="allowed_actions">complete_bpmn_task,record_execution_failure</bpmn:metaData>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_To_End</bpmn:incoming>
       <bpmn:outgoing>Flow_Grant_End</bpmn:outgoing>

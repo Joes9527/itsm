@@ -67,6 +67,16 @@ func (s *Service) ReadAccessSnapshot(ctx context.Context, client *ent.Client, te
 	return &accessgrant.ApprovalSnapshot{PolicyID: row.PolicyID, PolicyVersion: row.PolicyVersion, Provider: accessgrant.Provider(row.Provider), ExternalSystem: row.ExternalSystem, SubjectID: row.SubjectID, GroupID: row.GroupID, DurationKey: row.DurationKey, DurationSeconds: row.DurationSeconds}, nil
 }
 func (s *Service) ReadApprovedAccess(ctx context.Context, client *ent.Client, tenantID, itemID int, task *ent.ProcessTask) (*accessgrant.ApprovedContext, error) {
+	return s.readApprovedAccess(ctx, client, tenantID, itemID, task, false)
+}
+
+// ValidateAccessFailure authorizes reporting/replaying uncertainty, never provider execution.
+func (s *Service) ValidateAccessFailure(ctx context.Context, client *ent.Client, tenantID, itemID int, task *ent.ProcessTask) error {
+	_, err := s.readApprovedAccess(ctx, client, tenantID, itemID, task, true)
+	return err
+}
+
+func (s *Service) readApprovedAccess(ctx context.Context, client *ent.Client, tenantID, itemID int, task *ent.ProcessTask, allowUnknown bool) (*accessgrant.ApprovedContext, error) {
 	snapshot, err := s.ReadAccessSnapshot(ctx, client, tenantID, itemID)
 	if err != nil {
 		return nil, err
@@ -95,7 +105,7 @@ func (s *Service) ReadApprovedAccess(ctx context.Context, client *ent.Client, te
 	if err != nil {
 		return nil, err
 	}
-	if progress.State != "fulfilling" || progress.DelegatedTaskID != task.ID || len(progress.Approvals) == 0 {
+	if (progress.State != "fulfilling" && !(allowUnknown && progress.State == "unknown")) || progress.DelegatedTaskID != task.ID || len(progress.Approvals) == 0 {
 		return nil, &accessgrant.BlockedError{Code: "approval_not_executable"}
 	}
 	return &accessgrant.ApprovedContext{ApprovalSnapshot: *snapshot, Approvals: progress.Approvals}, nil

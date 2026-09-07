@@ -69,9 +69,11 @@ func ReadWorkflowFulfillment(ctx context.Context, client *ent.Client, tenantID, 
 			if err != nil {
 				return result, err
 			}
+			uncertain := false
 			for _, ledger := range ledgers {
-				if ledger.ResultStatus == "failed_terminal" || ledger.ResultStatus == "failed_retryable" {
-					return WorkflowFulfillment{State: "unknown"}, nil
+				if ledger.ResultStatus == "failed_terminal" || ledger.ResultStatus == "failed_retryable" ||
+					(ledger.Action == kafActionFailure && ledger.ResultStatus == "applied") {
+					uncertain = true
 				}
 			}
 			if result.DelegatedTaskID != 0 {
@@ -79,6 +81,9 @@ func ReadWorkflowFulfillment(ctx context.Context, client *ent.Client, tenantID, 
 			}
 			result.DelegatedTaskID = task.ID
 			result.State = "fulfilling"
+			if uncertain {
+				result.State = "unknown"
+			}
 		}
 	}
 	return result, nil

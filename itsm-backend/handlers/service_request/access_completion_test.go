@@ -19,9 +19,9 @@ import (
 	svc "itsm-backend/service"
 )
 
-func verifiedAccessFixture(t *testing.T) (*sslvpnDelegationFixture, *ent.ProcessTask, int, svc.KafActionRequest) {
+func verifiedAccessFixture(t *testing.T, supplied ...*ent.Client) (*sslvpnDelegationFixture, *ent.ProcessTask, int, svc.KafActionRequest) {
 	t.Helper()
-	fx := newSSLVPNDelegationFixture(t)
+	fx := newSSLVPNDelegationFixture(t, supplied...)
 	security := fx.client.User.Create().SetTenantID(fx.tenant.ID).SetUsername("security").SetEmail("security@example.test").SetName("Security").SetPasswordHash("unused").SetRole("security_approver").SaveX(fx.ctx)
 	deploySSLVPNDefinition(t, fx, "verified_access", fmt.Sprintf(sslvpnApprovalNodes, fx.approver.ID, security.ID), sslvpnApprovalFlows)
 	request := createSSLVPNServiceRequestForDefinition(t, fx, "verified_access")
@@ -180,4 +180,96 @@ func TestKafAccessManualProvisioningUsesDomainOwner(t *testing.T) {
 	// A legacy missing snapshot cannot evade its current catalog policy either.
 	fx.client.ServiceRequestAccessSnapshot.Delete().ExecX(fx.ctx)
 	require.ErrorContains(t, owner.ValidateManualProvisioning(fx.ctx, fx.client, fx.tenant.ID, itemID), "access_snapshot_unavailable")
+}
+
+func TestC3AccessSequentialReplayAndLateFailure(t *testing.T) {
+	fx, task, itemID, req := verifiedAccessFixture(t)
+	assertC3AccessReplay(t, fx, task, itemID, req, false)
+}
+
+func assertC3AccessReplay(t *testing.T, fx *sslvpnDelegationFixture, task *ent.ProcessTask, itemID int, req svc.KafActionRequest, concurrent bool) {
+	t.Helper()
+	task = fx.client.ProcessTask.UpdateOne(task).SetTaskVariables(map[string]interface{}{"allowed_actions": "complete_bpmn_task,record_execution_failure"}).SaveX(fx.ctx)
+	result, err := fx.delegation.ExecuteAction(fx.ctx, task.TaskID, req, fx.engine)
+	require.NoError(t, err)
+	require.Equal(t, svc.KafActionApplied, result.ResultStatus)
+	original := fx.client.ServiceRequestAccessResult.Query().OnlyX(fx.ctx)
+	originalTask := fx.client.ProcessTask.GetX(fx.ctx, task.ID)
+	for i := 0; i < 5; i++ {
+		replay, err := fx.delegation.ExecuteAction(fx.ctx, task.TaskID, req, fx.engine)
+		require.NoError(t, err)
+		require.Equal(t, svc.KafActionAlreadyApplied, replay.ResultStatus)
+	}
+	if concurrent {
+		ready := make(chan struct{})
+		errs := make(chan error, 8)
+		for i := 0; i < 8; i++ {
+			go func() {
+				<-ready
+				replay, err := fx.delegation.ExecuteAction(fx.ctx, task.TaskID, req, fx.engine)
+				if err == nil && replay.ResultStatus != svc.KafActionAlreadyApplied {
+					err = fmt.Errorf("unexpected replay %s", replay.ResultStatus)
+				}
+				errs <- err
+			}()
+		}
+		close(ready)
+		for i := 0; i < 8; i++ {
+			require.NoError(t, <-errs)
+		}
+	}
+	late := req
+	late.Action = "record_execution_failure"
+	late.Execution.StepID = "late-failure"
+	late.Execution.IdempotencyKey = fmt.Sprintf("%d:%s:%s:%s", fx.tenant.ID, task.TaskID, late.Execution.RunID, late.Execution.StepID)
+	late.Payload.AccessResult = nil
+	late.Payload.FailureSummary = "late failure"
+	_, err = fx.delegation.ExecuteAction(fx.ctx, task.TaskID, late, fx.engine)
+	require.Error(t, err)
+	saved := fx.client.ServiceRequestAccessResult.Query().OnlyX(fx.ctx)
+	require.Equal(t, original.ID, saved.ID)
+	require.Equal(t, original.Outcome, saved.Outcome)
+	require.Equal(t, original.EvidenceRef, saved.EvidenceRef)
+	require.Equal(t, original.VerifiedAt, saved.VerifiedAt)
+	require.Equal(t, original.ExpiresAt, saved.ExpiresAt)
+	require.Equal(t, originalTask.CompletedTime, fx.client.ProcessTask.GetX(fx.ctx, task.ID).CompletedTime)
+	require.Equal(t, "resolved", fx.client.Ticket.GetX(fx.ctx, itemID).Status)
+	require.Equal(t, 1, fx.client.KafTaskCompletionReceipt.Query().Where(kaftaskcompletionreceipt.StatusEQ("callback_succeeded")).CountX(fx.ctx))
+	require.Equal(t, 1, fx.client.AuditLog.Query().Where(auditlog.ActionEQ("service_request.access_verified")).CountX(fx.ctx))
+	require.Equal(t, 1, fx.client.KafTaskActionLedger.Query().CountX(fx.ctx))
+}
+
+func TestC3UnknownFailureReceiptProjectsAuthorityAndReplays(t *testing.T) {
+	fx, task, itemID, req := verifiedAccessFixture(t)
+	assertC3UnknownFailure(t, fx, task, itemID, req)
+}
+
+func assertC3UnknownFailure(t *testing.T, fx *sslvpnDelegationFixture, task *ent.ProcessTask, itemID int, req svc.KafActionRequest) {
+	task = fx.client.ProcessTask.UpdateOne(task).SetTaskVariables(map[string]interface{}{"allowed_actions": "complete_bpmn_task,record_execution_failure"}).SaveX(fx.ctx)
+	failure := req
+	failure.Action = "record_execution_failure"
+	failure.Execution.StepID = "result-unknown"
+	failure.Execution.IdempotencyKey = fmt.Sprintf("%d:%s:%s:%s", fx.tenant.ID, task.TaskID, failure.Execution.RunID, failure.Execution.StepID)
+	failure.Payload.AccessResult = nil
+	failure.Payload.FailureSummary = "access_result_unknown_manual_review_required"
+	applied, err := fx.delegation.ExecuteAction(fx.ctx, task.TaskID, failure, fx.engine)
+	require.NoError(t, err)
+	require.Equal(t, svc.KafActionApplied, applied.ResultStatus)
+	owner := sr.NewService(sr.NewEntRepository(fx.client), fx.client, zap.NewNop().Sugar(), nil)
+	view, err := owner.ReadFulfillment(fx.ctx, fx.client, fx.client.Ticket.GetX(fx.ctx, itemID))
+	require.NoError(t, err)
+	require.Equal(t, "unknown", view.State)
+	_, err = fx.delegation.GetTaskContext(fx.ctx, task.TaskID)
+	require.ErrorContains(t, err, "approval_not_executable", "unknown must not authorize a new Procedure")
+	for i := 0; i < 3; i++ {
+		replay, err := fx.delegation.ExecuteAction(fx.ctx, task.TaskID, failure, fx.engine)
+		require.NoError(t, err)
+		require.Equal(t, svc.KafActionAlreadyApplied, replay.ResultStatus)
+	}
+	require.Equal(t, 1, fx.client.KafTaskActionLedger.Query().CountX(fx.ctx))
+	require.Zero(t, fx.client.ServiceRequestAccessResult.Query().CountX(fx.ctx))
+	require.Equal(t, "delegated", fx.client.ProcessTask.GetX(fx.ctx, task.ID).Status)
+	fx.client.ExternalIdentity.Update().SetActive(false).SaveX(fx.ctx)
+	_, err = fx.delegation.ExecuteAction(fx.ctx, task.TaskID, failure, fx.engine)
+	require.ErrorContains(t, err, "requester_identity_inactive", "replay still enforces current authority")
 }

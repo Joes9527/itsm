@@ -236,10 +236,15 @@ func TestSSLVPNIncident_UsesSameDelegationTransportWithoutServiceRequestConversi
 	assertNoSensitiveSSLVPNPayload(t, event)
 }
 
-func newSSLVPNDelegationFixture(t *testing.T) *sslvpnDelegationFixture {
+func newSSLVPNDelegationFixture(t *testing.T, supplied ...*ent.Client) *sslvpnDelegationFixture {
 	t.Helper()
-	client := enttest.Open(t, "sqlite3", "file:kaf_delegation_sslvpn_e2e?mode=memory&cache=shared&_fk=1")
-	t.Cleanup(func() { client.Close() })
+	var client *ent.Client
+	if len(supplied) > 0 {
+		client = supplied[0]
+	} else {
+		client = enttest.Open(t, "sqlite3", "file:kaf_delegation_sslvpn_e2e?mode=memory&cache=shared&_fk=1")
+		t.Cleanup(func() { client.Close() })
+	}
 	ctx := context.Background()
 	tenant, err := client.Tenant.Create().SetName("SSLVPN Tenant").SetCode("sslvpn-kaf").SetDomain("sslvpn.example.test").SetStatus("active").Save(ctx)
 	require.NoError(t, err)

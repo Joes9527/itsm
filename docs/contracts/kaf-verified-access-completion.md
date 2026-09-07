@@ -1,6 +1,6 @@
 # 委派权限开通的验证完成契约
 
-本契约对应 C2。实现验证使用模拟 Graph 和独占数据库；不表示 C3 崩溃矩阵、完整用户展示或 C4 真实 Graph 演练已完成。
+本契约对应 C2/C3。实现验证使用模拟 Graph 和独占数据库；C3 变更须独立审查，C4 真实 Graph 演练及运行升级尚未执行。
 
 ## 权威边界
 
@@ -22,7 +22,7 @@ tests/e2e/sslvpn_approval_rejection_test.go 使用正式嵌入模板、真实创
 
 XML 的 metaData/version 是模板作者注释，与 ProcessDefinition.Version 的租户部署序列不同。BPMNVersionService 是后者的唯一升级权威：新租户从 1.0.0 起步，内容漂移时按该租户已有历史递增，内容相同则跳过。因此 1.0.0 的部署可能已经包含修复，1.1.0 的部署也不能单凭数字证明安全。不得依据任一版本数字决定是否允许委派。
 
-模板 owner 在 TemplateInfo.ContentSHA256 暴露嵌入 BPMN 原始字节的 SHA-256；不新增持久化摘要或版本字段，ProcessDefinition.BpmnXML 仍是部署内容权威。本轮发布嵌入 SSLVPN 文件的精确指纹为 `d55c0715dacce46d65baffdf89418e1e4157aa3c6d1b532b61ae03cb4746df9c`。消费者/发布核验须读取当前租户实际绑定的 ProcessDefinition.BpmnXML，计算相同 SHA-256 并与获批发布内容比较，不能仅检查 GetTemplateList 的新模板或 is_latest 标签。运行中实例必须按其自身 ProcessDefinitionID 读取历史定义，不能拿当前模板指纹替代旧实例证据。
+模板 owner 在 TemplateInfo.ContentSHA256 暴露嵌入 BPMN 原始字节的 SHA-256；不新增持久化摘要或版本字段，ProcessDefinition.BpmnXML 仍是部署内容权威。本轮发布嵌入 SSLVPN 文件的精确指纹为 `4a3280795b7d4cc84a97c0e40ab9b94a280306eae78bcb6fd308a329159cf5ca`。消费者/发布核验须读取当前租户实际绑定的 ProcessDefinition.BpmnXML，计算相同 SHA-256 并与获批发布内容比较，不能仅检查 GetTemplateList 的新模板或 is_latest 标签。运行中实例必须按其自身 ProcessDefinitionID 读取历史定义，不能拿当前模板指纹替代旧实例证据。
 
 若受控配置会替换 CATALOG_ACCESS_POLICY_REQUIRED 等占位符，替换后字节必然不同；必须保存经审批的最终配置 BPMN，核验仍保留两级拒绝分支，并比较该最终内容与实际持久化 BpmnXML 的精确指纹。嵌入内容指纹只识别发布源，不能伪装成配置后定义的匹配证明。
 
@@ -44,8 +44,20 @@ XML 的 metaData/version 是模板作者注释，与 ProcessDefinition.Version �
 
 ## 重放与恢复
 
-completion_payload 始终优先，保存与 completion_persisted 同次提交。领取、重试、认证失败及诊断文本更新不得回退 execution_phase。已进入 write_pending、verification_pending、legacy_unknown 或未知阶段却无 payload 的记录不能再次调用 Procedure；即使重领后再次崩溃也一样。完成请求丢失响应时重放同一 payload，不重新查询 Graph、不改首次验证时间。
+completion_payload 保留原列名，承载一个不可变终态动作：complete_bpmn_task 或 record_execution_failure。成功动作保存与 completion_persisted 同次提交；失败动作没有 accessResult，保留原执行阶段，不作为完成凭据。已持久化动作始终优先；失败不能覆盖成功 payload。领取、重试、认证失败及诊断文本更新不得回退 execution_phase。已进入 write_pending、verification_pending、legacy_unknown 或未知阶段却无 payload 的记录不能再次调用 Procedure；即使重领后再次崩溃也一样。完成请求丢失响应时重放同一 payload，不重新查询 Graph、不改首次验证时间。
 
-不得在不核对这些记录的情况下回退到不理解 execution_phase 的旧消费者；038 的自动 downgrade 被拒绝。维护期间应保留现有回执、action ledger、租约与诊断证据。完整恢复演练、用户界面和真实受控开通/移除由 C3/C4 继续验证。
+不得在不核对这些记录的情况下回退到不理解 execution_phase 的旧消费者；038 的自动 downgrade 被拒绝。维护期间应保留现有回执、action ledger、租约与诊断证据。C3 覆盖模拟故障和用户界面；当前运行环境升级、浏览器跨进程与真实受控开通/移除仍由 C4 验证。
 
 固定真实演练对象、ad_grant_vpn_access 和 remove_vpn_access 的范围见 [发布收口夹具](../testing/kaf-delegation-release-closeout-fixture.md)。本契约没有执行该夹具。
+
+## C3 不确定结果与用户展示
+
+正式 SSLVPN 模板同时声明 complete_bpmn_task 和 record_execution_failure；两级审批与拒绝分支保持。新指纹包含允许失败回报这一变化。旧实例仍按其原定义和动作范围授权；不得直接篡改旧实例允许动作来绕过发布核验。
+
+写入后缺少成功证据的恢复先重新获取当前授权上下文并校验 task、tenant、审批和冻结目标，再仅查询成员关系。成员存在只说明当前状态；不能恢复原 baseline/首次验证归属时保持结果未知，不构造 verifiedAt。恢复查询不能成为再执行 Procedure 的授权。
+
+KAF 将固定安全摘要 access_result_unknown_manual_review_required 通过现有 record_execution_failure 回报。稳定动作身份为 tenant:task:kaf-recovery:correlation:result-unknown；procedureRef=kaf.delivery_recovery、procedureVersion=v1 明确标识本次恢复动作，不声称原执行 Procedure 版本。原 expectedVersion 和完整 payload 在原 delivery CAS 中保存；丢 ACK 后只重放原动作，不因 ITSM version 已递增而重建 payload。
+
+ITSM 的 non-completing action 成功应用时 ledger 状态仍为 applied，流程 version 只增长一次。BPMN 投影根据 applied 的 record_execution_failure 动作显示 unknown；没有授权结果、任务完成或成功回执。SR 的 ValidateAccessFailure 仅复用当前冻结快照、身份和真实审批校验，返回错误或允许失败回报，不返回执行 scope。ReadApprovedAccess 在 unknown 仍拒绝新执行；原失败动作重放可单独通过当前授权校验，身份撤销后拒绝。晚到失败不能降级已完成任务或覆盖专业成功结果。
+
+KAF 卡片创建回执仅证明申请存在。会话恢复和“查看申请详情/刷新”实时读取当前用户的 WorkItemView；拒绝时清空本次 view，历史创建编号不冒充当前完成。用户看到专业状态、权限已存在/已开通、验证时间和申请有效期；不显示 provider payload/原始错误，不承诺自动回收。卡片动作不生成虚构用户消息；历史关联按稳定 turn/message 身份，真实重复文本保留。已存在的无身份历史重复不按文本清理。

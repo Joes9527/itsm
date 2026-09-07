@@ -37,6 +37,7 @@ type kafDelegationOutbox interface {
 // KAF BPMN delegation. Transport is intentionally deferred to the outbox
 // dispatcher after the database transaction commits.
 type ApprovedAccessReader interface {
+	ValidateAccessFailure(context.Context, *ent.Client, int, int, *ent.ProcessTask) error
 	ReadApprovedAccess(context.Context, *ent.Client, int, int, *ent.ProcessTask) (*accessgrant.ApprovedContext, error)
 }
 type KafDelegationService struct {
@@ -402,6 +403,18 @@ func (s *KafDelegationService) ExecuteAction(ctx context.Context, taskID string,
 	}
 	if err := s.authorizeKafActionTask(ctx, task, req.Action); err != nil {
 		return nil, err
+	}
+	if req.Action == kafActionFailure && task.CallbackAction == accessgrant.Capability {
+		if s.accessReader == nil {
+			return nil, fmt.Errorf("approved access owner unavailable")
+		}
+		instance, err := s.client.ProcessInstance.Get(ctx, task.ProcessInstanceID)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.accessReader.ValidateAccessFailure(ctx, s.client, task.TenantID, instance.BusinessID, task); err != nil {
+			return nil, err
+		}
 	}
 	if !kafActionAllowed(task, req.Action) {
 		return nil, fmt.Errorf("%w: action %q is not allowed for this delegated task", ErrKafActionInvalid, req.Action)

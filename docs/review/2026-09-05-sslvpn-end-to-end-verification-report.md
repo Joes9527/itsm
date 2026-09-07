@@ -2,6 +2,8 @@
 
 **状态：持续实施，尚未完成端到端验收。** 原会话已由用户终止；接手后完成MSP身份、入口语义、队列生命周期及027/028共享字段归一的限定修复与独立审查。Catalog当前会话读取、前端创建切换及浏览器会话投影已通过限定范围独立审查；A5通用目录发布及修复621b4228已通过独立复核。A6身份交换及两项契约修复已通过独立复审；C1授权策略与结果模型及F1/F2修复已通过独立复审；最终浏览器与全入口门禁、KAF接入及外部授权验收仍未完成。阶段测试通过不等于完整业务交付，也不代表已部署。
 
+最新 C3 增量：崩溃/回执重放、unknown 权威投影与 KAF 结果显示已实现并通过本地验证，待独立审查；C4 真实环境升级、同编号审批/浏览器与 Graph 验收仍未开始。详见文末 C3 记录。
+
 原暂停快照见[开发交接报告](2026-09-05-sslvpn-development-handoff-report.md)。本报告按提交保留各阶段实际验证范围、失败修复和剩余门槛；较早段落中的“下一项”仅表示当时状态。
 
 ## 1. 验收范围与当前进度
@@ -363,3 +365,20 @@ b4-fix1-warning-inventory.md：依赖弃用2、Redis关闭25、邮件模板时�
 此次测试补齐编码参数名和token形式。初期3次ticket泄露及脱敏记录仍保留披露。
 C3显示问题不扩围；父任务另核对既有角色字符串授权证据。本轮未重复真实申请、
 模型/浏览器丢响应或外部授权，也未改变A7和已清理的B4记录。
+
+
+## C3 崩溃恢复、重放与权威结果（2026-09-07，待独立审查）
+
+基于 C2 两仓库已审提交，继续使用 delivery038 的执行阶段/单一动作 payload 和 ITSM031 的动作 digest。已持久化成功只重放原始动作及首次 verifiedAt；外部写后无耐久结果只能先重新读取当前授权，再进行只读成员观察。当前存在成员不构成首次验证证据，保持 unknown，不能重新授权。
+
+unknown 通过既有 record_execution_failure owner 持久化，正式 BPMN allowed_actions 纳入该动作，内容 SHA256 为 4a3280795b7d4cc84a97c0e40ab9b94a280306eae78bcb6fd308a329159cf5ca。已应用 failure ledger 正确投影 unknown；原动作 ACK 丢失后可按原版本/身份/内容重放。专用失败授权复用同一个 SR 冻结快照与身份/审批验证，只返回错误或授权通过，不提供新执行 scope；撤销身份仍拒绝，晚到失败不降级成功。
+
+KAF 卡片恢复和详情刷新重新受权读取 WorkItemView，403 清掉旧视图；显示中文专业状态、权限已存在/已开通、验证时间和申请期限。创建回执不升级为完成证明。刷新动作按事件来源不生成用户气泡；稳定 turn/message ID 去重历史，同时保留真实同文本重复请求。共享 history reader 和唯一 Procedure runner 保持单一实现，pipeline1397行。
+
+最终 KAF 完整回归 2824通过/18跳过/1预期失败/42警告，47.71秒、exit0。受影响 pipeline148通过；四故障/成功场景×内存/SQLite/实际PG共12通过；unknown动作耐久重放三存储均通过。旧lease真实PG测试验证8个并发claim仅1获胜、旧owner不得持久化、8并发+3连续ACK不变。完整测试的18跳过为性能11、显式迁移库5、安全live1和跨系统live1，均不是C3 PG证据替代。
+
+ITSM 最终受影响4包1187顶层通过/1跳过（含子测试2280通过/3跳过），all-package build退出0；较早全量2442顶层通过/10跳过（含子测试4985通过/13跳过）发生在后续failure/template改动前，仅按该快照记账。真实PG最终3顶层/5含子测试全部通过无skip，覆盖5次连续+8并发成功回执、首次结果/审计/时间不变、晚到失败拒绝、旧lease提交fence回滚及unknown后原动作重放/撤销拒绝。专属临时数据库均清理为remaining0。前端17文件106测试及TypeScript/Vite构建退出0。
+
+RED/修复日志完整保留，包括真实PG竞争暴露的rollback后ORM过期ID导致MissingGreenlet（保存ID再rollback修复）、Go测试比较私有driver函数身份/错误字段名、提取runner后mock位置，以及前端测试缺少必需props。首次完整候选45告警中的新增AsyncMock状态未配置已修复；最终42告警相对C2的41仅多1条既有连接回收告警，单独运行未修改邮件测试也可复现（44通过/22告警），排除了C3 PG测试作为必要触发因素，不宣称其深层生命周期根因已修复。完整告警/skip清单保存在ART/c3-kaf-warning-inventory-final.txt；已有前端环境与包体积警告未压制。
+
+证据目录沿用 `.superpowers/sdd/2026-09-05-sslvpn-end-to-end-implementation`，入口为 entry-C3-recovery-report.md、review-C3-binding-constraints.md、c3-final-source-freeze.json。合同及KAF运行手册已同步动作payload语义和精确内容fingerprint。仅本地源码验证，无部署/推送/合并/真实Graph授权。A7/B4进程仍旧030/037/source；A7 legacy ITSM detail 基类new/start-delivery页面本阶段未修改或浏览器验收，C2专业领域guard仍有效，具体页面与真实同编号两级审批交由C4核验。端到端验收仍未完成。
