@@ -39,3 +39,19 @@ func initializeC3Postgres(t *testing.T) *ent.Client {
 	require.NoError(t, bootstrap.InitializeStorage(cfg, client, zap.NewNop().Sugar()))
 	return client
 }
+
+func TestC3PostgresPreclaimedFailureRetry(t *testing.T) {
+	client := initializeC3Postgres(t)
+	fx, task, _, req := verifiedAccessFixture(t, client)
+	assertC3PreclaimedFailure(t, fx, task, req, "retry")
+}
+func TestC3PostgresPreclaimedFailureResume(t *testing.T) {
+	client := initializeC3Postgres(t)
+	fx, task, _, req := verifiedAccessFixture(t, client)
+	assertC3PreclaimedFailure(t, fx, task, req, "resume")
+}
+func TestC3PostgresPreclaimedFailureAfterSuccess(t *testing.T) {
+	client := initializeC3Postgres(t)
+	fx, task, _, req := verifiedAccessFixture(t, client)
+	assertC3PreclaimedFailure(t, fx, task, req, "success")
+}

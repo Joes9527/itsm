@@ -684,6 +684,9 @@ func (s *KafDelegationService) claimKafActionOnce(ctx context.Context, task *ent
 			if err == nil {
 				err = validateKafActionLedger(ledger, task, req)
 			}
+			if err == nil && ledger.ResultStatus != "applied" {
+				err = fmt.Errorf("%w: unknown access permits only an applied original report", ErrKafActionConflict)
+			}
 			_ = tx.Rollback()
 			if err != nil {
 				return nil, false, fmt.Errorf("%w: unknown access requires identical original failure action", ErrKafActionConflict)
@@ -904,6 +907,27 @@ func (s *KafDelegationService) persistNonCompletingAction(ctx context.Context, t
 	}
 	if updated != 1 {
 		return fmt.Errorf("%w: task was changed by another actor", ErrKafActionConflict)
+	}
+	if req.Action == kafActionFailure && task.CallbackAction == accessgrant.Capability {
+		// The version CAS above holds the instance lock through all contributions.
+		// A prior claim is not permission to contribute after another report/success.
+		progress, err := ReadWorkflowFulfillment(ctx, tx.Client(), task.TenantID, instance.BusinessID)
+		if err != nil {
+			return err
+		}
+		if progress.DelegatedTaskID != task.ID || (progress.State != "fulfilling" && progress.State != "unknown") {
+			return fmt.Errorf("%w: access failure is no longer reportable", ErrKafActionConflict)
+		}
+		applied, err := tx.KafTaskActionLedger.Query().Where(
+			kaftaskactionledger.TenantIDEQ(task.TenantID), kaftaskactionledger.TaskIDEQ(task.TaskID),
+			kaftaskactionledger.ActionEQ(kafActionFailure), kaftaskactionledger.ResultStatusEQ("applied"),
+		).Exist(ctx)
+		if err != nil {
+			return err
+		}
+		if applied {
+			return fmt.Errorf("%w: original access failure was already applied", ErrKafActionConflict)
+		}
 	}
 	workItem, err := tx.Ticket.Query().Where(
 		ticket.IDEQ(instance.BusinessID), ticket.TenantIDEQ(task.TenantID), ticket.DeletedAtIsNil(),

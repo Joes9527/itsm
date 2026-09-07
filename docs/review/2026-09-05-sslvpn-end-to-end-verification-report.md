@@ -391,3 +391,14 @@ RED/修复日志完整保留，包括真实PG竞争暴露的rollback后ORM过期
 I2 原先吞掉恢复查询/回报异常且ACK清除诊断；改为阶段/类别/异常类型的安全分类与结构化日志，不保存远端原文。context/callback认证故障复用既有告警owner，测试只用mock；unknown ACK保留诊断，成功仍优先。新增8阶段×内存/SQLite/PG共24例全部通过；受影响KAF pipeline及真实PG竞争合计160通过、无skip/warning、exit0，lint通过，pipeline1419行。Go最终受影响计数及实际PG/构建结果以ART/entry-C3-fix1-report.md为准。
 
 保留RED、fixture修正及全部原C3失败记录。M1既有warning按原inventory跟踪；本轮无前端变更，不重复前端/完整KAF套件来增加信心。C4最终完整门禁与真实环境验收仍开放；未发出真实通知、未部署、未推送/合并。
+
+
+### C3 独立审查修复第2轮（2026-09-07，待定向复审）
+
+Fix1 的 I2 已关闭，KAF 保持 e7f7f6fbedd42ada745bcb7c55c4233dae79e85d，不改源码或重复测试。I1 仍有 Claim 提交后到实际贡献前的间隙：预建 failed_retryable/executing ledger 不等于已应用原报告。本轮通过正常 ExecuteAction 和只读 Ent query barrier 确定性复现三种交错，SQLite 三例与三个独立 owned PG 数据库全部 RED：未来版本先失败后原报告应用再重试；预claim调用暂停、原报告先应用后恢复首次调用；预claim调用暂停、成功完成先提交后恢复失败调用。
+
+修复将 unknown Claim 收紧到同身份/digest 且 applied 的原动作；更关键的是，在既有非完成贡献事务的 instance 版本 CAS 取得行锁后，用同一 tx client 重新检查 delegated 专业投影及同任务是否已有 applied failure。拒绝时整笔 version/comment/audit/ledger contribution 回滚。另一请求仅版本失败并不代表原报告已应用，先前合法claim的原请求仍可成为第一份已应用报告。无新增状态/ledger、全局锁或普通非access语义变化。详细 RED/GREEN、实际PG清理与最终计数见 ART/entry-C3-fix2-report.md。
+
+未重开I2/M1、未改前端/BPMN/schema；C4仍未启动，未真实通知/provider调用、部署、推送或合并。历史Fix1通过证据只适用于其覆盖范围，不据此宣布I1已关闭。
+
+Fix2最终验证：两个受影响Go包1184顶层通过/1跳过（含子测试2278通过/3跳过），all-package build退出0；actualPG retry/resume/success/original四个独立用例各1通过/0跳过，临时库全部remaining0。KAF/I2/前端源码不变，本轮未重复其完整套件。
