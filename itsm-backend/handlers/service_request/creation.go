@@ -141,7 +141,13 @@ func (s *Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedI
 	if err != nil {
 		return nil, err
 	}
-	plan := creation.NewPlan(in, "new", priority, "service_catalog")
+	// Origin comes from the authenticated identity, never submitted fields.
+	// Native catalog adapters retain their established service_catalog source.
+	source := "service_catalog"
+	if in.Identity.Channel == "kaf_web" {
+		source = in.Identity.Channel
+	}
+	plan := creation.NewPlan(in, "new", priority, source)
 	plan.RequiresWorkflow = chain != nil && len(chain.Steps) > 0
 	plan.WorkflowVariables["approval_required"] = plan.RequiresWorkflow
 	if plan.RequiresWorkflow {

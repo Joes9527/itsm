@@ -92,8 +92,15 @@ jest.mock('@/components/ticket-relations/RelationPanel', () => ({
 }));
 
 jest.mock('../ServiceRequestPanel', () => () => null);
-jest.mock('../ServiceCatalogApprovalChain', () => () => null);
-jest.mock('../CIContextCard', () => ({ CIContextCard: () => null }));
+jest.mock('@/lib/api/service-catalog-api', () => ({
+  ServiceCatalogApi: { getServiceRequestByTicketId: jest.fn(async () => ({id: 55, ciId: 88, formData: {_approval_chain: [{level: 1, name: 'Source regression approval', role: 'dept_manager', approval_type: 'serial'}]}})) },
+}));
+jest.mock('@/lib/api/cmdb-api', () => ({
+  CMDBApi: {
+    getCI: jest.fn(async () => ({id: 88, name: 'Request linked server'})),
+    getCITopology: jest.fn(async () => ({totalNodes: 1, totalEdges: 0})),
+  },
+}));
 jest.mock('../KBRecommendCard', () => ({ KBRecommendCard: () => null }));
 jest.mock('@/components/common/UserSelect', () => ({ UserSelect: () => null }));
 
@@ -132,6 +139,29 @@ const baseTicket = {
 };
 
 describe('TicketDetail', () => {
+  it.each([
+    ['kaf_web', 'service_request_item', 'KAF Web 申请', true],
+    ['service_catalog', 'service_request_item', '服务目录申请', true],
+    ['service_catalog', 'generic', '服务目录申请', false],
+    ['kaf_web', 'incident', 'KAF Web 申请', false],
+    ['service_catalog', 'change_request', '服务目录申请', false],
+    ['service_catalog', 'problem', '服务目录申请', false],
+    ['service_catalog', 'catalog_task', '服务目录申请', false],
+  ])('uses source %s as a label and %s as approval ownership', async (source, recordClass, label, hasChain) => {
+    mockGetTicket.mockResolvedValueOnce({...baseTicket, source, recordClass, status: 'new'});
+    const user = userEvent.setup({pointerEventsCheck: PointerEventsCheckLevel.Never});
+    render(<TicketDetail />);
+    expect(await screen.findByText(label as string)).toBeInTheDocument();
+    await user.click(await screen.findByText(/^审批链/));
+    if (hasChain) {
+      expect(await screen.findByText(/L1: Source regression approval/)).toBeInTheDocument();
+      expect(await screen.findByText('Request linked server')).toBeInTheDocument();
+    } else {
+      expect(screen.queryByText(/L1: Source regression approval/)).not.toBeInTheDocument();
+      expect(screen.queryByText('Request linked server')).not.toBeInTheDocument();
+    }
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockHasPermission.mockImplementation(() => false);

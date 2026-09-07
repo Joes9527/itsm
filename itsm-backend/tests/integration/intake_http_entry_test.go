@@ -156,7 +156,7 @@ func TestIntakeHTTPManualTicketSubtaskAndProfessionalClass(t *testing.T) {
 	require.Equal(t, 201, w.Code, w.Body.String())
 	require.Equal(t, "incident", child.RecordClass)
 	require.Equal(t, result.WorkItemID, f.client.Ticket.GetX(ctx, child.WorkItemID).ParentTicketID)
-	for _, extra := range []string{`,"creatorEmail":"forged@example.test"`, `,"attachments":["raw"]`, `,"approvalChain":[]`, `,"tags":["ignored"]`, `,"source":"service_catalog"`} {
+	for _, extra := range []string{`,"creatorEmail":"forged@example.test"`, `,"attachments":["raw"]`, `,"approvalChain":[]`, `,"tags":["ignored"]`, `,"source":"service_catalog"`, `,"source":"kaf_web"`} {
 		raw := strings.TrimSuffix(body, "}") + extra + "}"
 		w, _ = intakeHTTP(t, f, handler.CreateTicket, raw, "invalid", nil)
 		require.Equal(t, 400, w.Code, w.Body.String())

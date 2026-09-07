@@ -1,6 +1,7 @@
 import { test, expect, type BrowserContext, type Page } from '@playwright/test';
 import { accessSync, constants, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
+import {matchesSSLVPNPostcheck} from '../sslvpn-postcheck.test-utils';
 
 const fixturePath = process.env.SSLVPN_C4_FIXTURE;
 if (!fixturePath) throw new Error('SSLVPN_C4_FIXTURE must name the approved owned runtime fixture.');
@@ -240,8 +241,7 @@ for (const scenario of ['rejection', 'grant'] as const) test('SSLVPN original KA
       const postcheck = process.env.SSLVPN_C4_POSTCHECK_FILE;
       if (!postcheck) throw new Error('Controlled Graph run requires provider and replay evidence.');
       await expect.poll(() => {
-        try { return JSON.parse(readFileSync(postcheck, 'utf8')).passed === true; }
-        catch { return false; }
+        return matchesSSLVPNPostcheck(postcheck, workItem.id, completed.accessResult);
       }, {timeout: 300_000}).toBe(true);
     } else {
     await expect.poll(async () => (await data(requestPage, '/api/v1/service-requests/by-ticket/' + workItem.id)).fulfillmentState).toBe('rejected');

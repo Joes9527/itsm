@@ -488,7 +488,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                 <>
                   <span>/</span>
                   <span className="text-slate-600">
-                    {ticket.source === 'service_catalog' ? '服务目录申请' : ticket.source}
+                    {ticket.source === 'service_catalog' ? '服务目录申请' : ticket.source === 'kaf_web' ? 'KAF Web 申请' : ticket.source}
                   </span>
                 </>
               )}
@@ -617,7 +617,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
           {/* 3. 底部协作 Tabs（评论/附件/审批链/历史/关联/通知） */}
           <TicketDetailTabs
             ticketId={ticketId}
-            ticketSource={ticket.source}
+            recordClass={ticket.recordClass}
             currentUserId={currentUser?.id}
             ticketAssigneeId={ticket.assigneeId}
             tabCounts={tabCounts}
@@ -820,7 +820,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
           )}
 
           {/* 4. 关联 CMDB 配置项（CI）卡片 */}
-          <CIContextCard ticketId={ticketId} source={ticket.source} />
+          <CIContextCard ticketId={ticketId} recordClass={ticket.recordClass} />
 
           {/* 5. 推荐操作指引 (KB) */}
           <KBRecommendCard query={ticket.title} />
@@ -1124,7 +1124,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
 interface TicketDetailTabsProps {
   ticketId: number;
-  ticketSource?: string;
+  recordClass?: string;
   currentUserId?: number;
   ticketAssigneeId?: number;
   canReadNotifications: boolean;
@@ -1140,7 +1140,7 @@ interface TicketDetailTabsProps {
 
 const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
   ticketId,
-  ticketSource,
+  recordClass,
   currentUserId,
   tabCounts,
   ticketAssigneeId,
@@ -1187,7 +1187,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
       ),
       children: (
         <div>
-          {ticketSource === 'service_catalog' && (
+          {recordClass === 'service_request_item' && (
             <ServiceCatalogApprovalChain ticketId={ticketId} />
           )}
           <ProcessApprovalDecisionCards ticketId={ticketId} />
