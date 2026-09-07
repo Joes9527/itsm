@@ -9,7 +9,7 @@
   <bpmn:process id="sslvpn_approval_flow" name="SSL-VPN 申请与双级审批流" isExecutable="true">
     <bpmn:extensionElements>
       <bpmn:metaData name="category">service_request</bpmn:metaData>
-      <bpmn:metaData name="version">1.0.0</bpmn:metaData>
+      <bpmn:metaData name="version">1.1.0</bpmn:metaData>
       <bpmn:metaData name="description">SSL-VPN 远程办公访问权限申请与双级审批流</bpmn:metaData>
     </bpmn:extensionElements>
 
@@ -21,14 +21,26 @@
     <!-- 一级审批：上级领导初审 -->
     <bpmn:userTask id="UserTask_DeptManagerApproval" name="上级领导初审" taskPurpose="approval" candidateGroups="dept_manager">
       <bpmn:incoming>Flow_To_DeptApproval</bpmn:incoming>
-      <bpmn:outgoing>Flow_To_L2OpsApproval</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ManagerDecision</bpmn:outgoing>
     </bpmn:userTask>
+
+    <bpmn:exclusiveGateway id="Gateway_ManagerDecision" name="初审结果">
+      <bpmn:incoming>Flow_ManagerDecision</bpmn:incoming>
+      <bpmn:outgoing>Flow_To_L2OpsApproval</bpmn:outgoing>
+      <bpmn:outgoing>Flow_ManagerRejected</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
 
     <!-- 二级审批：网络运维技术复审 -->
     <bpmn:userTask id="UserTask_L2NetworkOpsApproval" name="网络运维技术复审" taskPurpose="approval" candidateGroups="network_eng">
       <bpmn:incoming>Flow_To_L2OpsApproval</bpmn:incoming>
-      <bpmn:outgoing>Flow_To_End</bpmn:outgoing>
+      <bpmn:outgoing>Flow_SecurityDecision</bpmn:outgoing>
     </bpmn:userTask>
+
+    <bpmn:exclusiveGateway id="Gateway_SecurityDecision" name="复审结果">
+      <bpmn:incoming>Flow_SecurityDecision</bpmn:incoming>
+      <bpmn:outgoing>Flow_To_End</bpmn:outgoing>
+      <bpmn:outgoing>Flow_SecurityRejected</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
 
     <bpmn:serviceTask id="Activity_KafDelegate" name="验证并履行获批访问权限">
       <bpmn:extensionElements>
@@ -45,10 +57,28 @@
       <bpmn:incoming>Flow_Grant_End</bpmn:incoming>
     </bpmn:endEvent>
 
+    <!-- 任一级拒绝均结束审批；专业拒绝状态由原审批决定投影。 -->
+    <bpmn:endEvent id="EndEvent_Reject" name="申请被拒绝">
+      <bpmn:incoming>Flow_ManagerRejected</bpmn:incoming>
+      <bpmn:incoming>Flow_SecurityRejected</bpmn:incoming>
+    </bpmn:endEvent>
+
     <!-- 顺序流连接 -->
     <bpmn:sequenceFlow id="Flow_To_DeptApproval" sourceRef="StartEvent_1" targetRef="UserTask_DeptManagerApproval"/>
-    <bpmn:sequenceFlow id="Flow_To_L2OpsApproval" sourceRef="UserTask_DeptManagerApproval" targetRef="UserTask_L2NetworkOpsApproval"/>
-    <bpmn:sequenceFlow id="Flow_To_End" sourceRef="UserTask_L2NetworkOpsApproval" targetRef="Activity_KafDelegate"/>
+    <bpmn:sequenceFlow id="Flow_ManagerDecision" sourceRef="UserTask_DeptManagerApproval" targetRef="Gateway_ManagerDecision"/>
+    <bpmn:sequenceFlow id="Flow_To_L2OpsApproval" sourceRef="Gateway_ManagerDecision" targetRef="UserTask_L2NetworkOpsApproval">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression"><![CDATA[variables['approvalResult'] == 'approved']]></bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ManagerRejected" sourceRef="Gateway_ManagerDecision" targetRef="EndEvent_Reject">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression"><![CDATA[variables['approvalResult'] == 'rejected']]></bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_SecurityDecision" sourceRef="UserTask_L2NetworkOpsApproval" targetRef="Gateway_SecurityDecision"/>
+    <bpmn:sequenceFlow id="Flow_To_End" sourceRef="Gateway_SecurityDecision" targetRef="Activity_KafDelegate">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression"><![CDATA[variables['approvalResult'] == 'approved']]></bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_SecurityRejected" sourceRef="Gateway_SecurityDecision" targetRef="EndEvent_Reject">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression"><![CDATA[variables['approvalResult'] == 'rejected']]></bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_Grant_End" sourceRef="Activity_KafDelegate" targetRef="EndEvent_1"/>
   </bpmn:process>
 
@@ -60,30 +90,56 @@
       <bpmndi:BPMNShape id="UserTask_DeptManagerApproval_di" bpmnElement="UserTask_DeptManagerApproval">
         <dc:Bounds x="240" y="80" width="120" height="80"/>
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_ManagerDecision_di" bpmnElement="Gateway_ManagerDecision">
+        <dc:Bounds x="410" y="95" width="50" height="50"/>
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="UserTask_L2NetworkOpsApproval_di" bpmnElement="UserTask_L2NetworkOpsApproval">
-        <dc:Bounds x="410" y="80" width="160" height="80"/>
+        <dc:Bounds x="510" y="80" width="160" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_SecurityDecision_di" bpmnElement="Gateway_SecurityDecision">
+        <dc:Bounds x="720" y="95" width="50" height="50"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Activity_KafDelegate_di" bpmnElement="Activity_KafDelegate">
-        <dc:Bounds x="620" y="80" width="150" height="80"/>
+        <dc:Bounds x="820" y="80" width="150" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">
-        <dc:Bounds x="820" y="102" width="36" height="36"/>
+        <dc:Bounds x="1020" y="102" width="36" height="36"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_Reject_di" bpmnElement="EndEvent_Reject">
+        <dc:Bounds x="727" y="282" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="Flow_To_DeptApproval_di" bpmnElement="Flow_To_DeptApproval">
         <di:waypoint x="188" y="120"/>
         <di:waypoint x="240" y="120"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_To_L2OpsApproval_di" bpmnElement="Flow_To_L2OpsApproval">
+      <bpmndi:BPMNEdge id="Flow_ManagerDecision_di" bpmnElement="Flow_ManagerDecision">
         <di:waypoint x="360" y="120"/>
         <di:waypoint x="410" y="120"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_To_End_di" bpmnElement="Flow_To_End">
-        <di:waypoint x="570" y="120"/>
-        <di:waypoint x="622" y="120"/>
+      <bpmndi:BPMNEdge id="Flow_To_L2OpsApproval_di" bpmnElement="Flow_To_L2OpsApproval">
+        <di:waypoint x="460" y="120"/>
+        <di:waypoint x="510" y="120"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_Grant_End_di" bpmnElement="Flow_Grant_End">
+      <bpmndi:BPMNEdge id="Flow_SecurityDecision_di" bpmnElement="Flow_SecurityDecision">
+        <di:waypoint x="670" y="120"/>
+        <di:waypoint x="720" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_To_End_di" bpmnElement="Flow_To_End">
         <di:waypoint x="770" y="120"/>
         <di:waypoint x="820" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Grant_End_di" bpmnElement="Flow_Grant_End">
+        <di:waypoint x="970" y="120"/>
+        <di:waypoint x="1020" y="120"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ManagerRejected_di" bpmnElement="Flow_ManagerRejected">
+        <di:waypoint x="435" y="145"/>
+        <di:waypoint x="435" y="300"/>
+        <di:waypoint x="727" y="300"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_SecurityRejected_di" bpmnElement="Flow_SecurityRejected">
+        <di:waypoint x="745" y="145"/>
+        <di:waypoint x="745" y="282"/>
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>

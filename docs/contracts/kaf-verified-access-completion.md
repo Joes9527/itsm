@@ -12,6 +12,16 @@ ITSM 在原 BPMN 完成事务内校验任务、租户、认证 actor、现有 ac
 
 手工 provisioning 的任务创建和旧任务执行均调用 Service Request owner。具有冻结权限快照、或具有权限策略却缺少快照的请求不能从该入口交付；启动时缺少 owner 也拒绝执行。普通请求继续使用其既有 provisioning 行为。
 
+## 双级审批与拒绝分支
+
+正式定义由 BPMNTemplateService 部署 service/bpmn/sslvpn_approval_flow.bpmn。模板 1.1.0 在主管初审和网络运维复审之后分别使用原引擎的条件网关：仅 approvalResult=approved 进入下一级或 KAF 委派，rejected 进入 EndEvent_Reject。两级分别使用 dept_manager 和 network_eng 候选组；任务 API 校验实际任务身份、当前状态和审批人，重复决定不能额外推进。
+
+拒绝的专业状态由 Service Request 的既有审批决定投影为 rejected；不会产生 KAF 任务、委派事件或开通结果，也不会填写 Requested Item 的交付完成时间。流程到达拒绝终点的 completed 表示审批流程结束，不代表请求已交付。共享 WorkItem 状态不承担第二份审批状态。
+
+tests/e2e/sslvpn_approval_rejection_test.go 使用正式嵌入模板、真实创建请求及审批 REST 操作、不同角色的认证会话和现有 outbox dispatcher，覆盖任一级拒绝、错误审批人、提前第二级及重复审批。接收端仅为测试内 HTTP mock；双通过恰好一次委派作为零发送断言的正向对照。
+
+旧模板 1.0.0 缺少拒绝分支，不能作为安全审批基线。发布 owner 必须通过原 BPMNTemplateService 的定义同步机制发布更新并核对新请求绑定的定义内容；内容变化由现有 owner 发布新定义版本。源码修复不会更改已部署定义或运行中的旧实例。启用消费者前，应单独核对旧实例的定义、审批决定及现有委派记录，按既有受控运维流程处置；不得因流程 completed 或缺少新分支而推断已获授权，也不得重放授权来补证。本次测试没有更新任何 live 定义或实例。
+
 ## 同批次升级要求
 
 两端应用和数据库必须作为同一发布批次升级，在恢复委派消费者前完成：
