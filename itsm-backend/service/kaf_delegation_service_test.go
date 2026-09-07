@@ -939,3 +939,27 @@ func TestExecuteAction_RealEngineCallbackFailureRecoversWithoutSecondBPMNComplet
 	assert.Equal(t, 2, handler.calls)
 	assert.Equal(t, 1, completionWrites)
 }
+
+func TestKafAccessResultParticipatesInActionDigest(t *testing.T) {
+	_, svc, task, ctx := newKafActionFixture(t)
+	first := validCompleteRequest(task, "verified-run", "finish")
+	raw, err := json.Marshal(first)
+	require.NoError(t, err)
+	var wire map[string]interface{}
+	require.NoError(t, json.Unmarshal(raw, &wire))
+	wire["payload"].(map[string]interface{})["accessResult"] = map[string]interface{}{"outcome": "granted", "provider": "graph", "subjectId": "subject", "groupId": "group", "baseline": "not_member", "verifiedAt": "2026-09-05T08:00:00Z", "evidenceRef": "e"}
+	raw, err = json.Marshal(wire)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(raw, &first))
+	ledger, claimed, err := svc.ClaimKafAction(ctx, task, first)
+	require.NoError(t, err)
+	require.True(t, claimed)
+	require.NoError(t, svc.finalizeKafAction(ctx, ledger, "applied", ""))
+	wire["payload"].(map[string]interface{})["accessResult"].(map[string]interface{})["groupId"] = "other"
+	raw, err = json.Marshal(wire)
+	require.NoError(t, err)
+	var second KafActionRequest
+	require.NoError(t, json.Unmarshal(raw, &second))
+	_, _, err = svc.ClaimKafAction(ctx, task, second)
+	require.ErrorIs(t, err, ErrKafActionConflict)
+}

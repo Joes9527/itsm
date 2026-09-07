@@ -37,10 +37,15 @@ func CanProvision(client *ent.Client, tenantID, actorUserID int, actorRole strin
 
 // ProvisioningService（应用层）：服务请求 -> 交付任务 -> 执行 -> 状态回写
 // M2：先实现可运行骨架（Stub），后续接入阿里云真实交付。
+type ManualProvisioningGuard interface {
+	ValidateManualProvisioning(context.Context, *ent.Client, int, int) error
+}
+
 type ProvisioningService struct {
-	client   *ent.Client
-	logger   *zap.SugaredLogger
-	provider cloud.Provider
+	accessGuard ManualProvisioningGuard
+	client      *ent.Client
+	logger      *zap.SugaredLogger
+	provider    cloud.Provider
 }
 
 func NewProvisioningService(client *ent.Client, logger *zap.SugaredLogger) *ProvisioningService {
@@ -49,6 +54,17 @@ func NewProvisioningService(client *ent.Client, logger *zap.SugaredLogger) *Prov
 		logger:   logger,
 		provider: cloudAlicloud.NewStubProvider(),
 	}
+}
+
+// SetManualProvisioningGuard supplies the Service Request domain authority.
+func (s *ProvisioningService) SetManualProvisioningGuard(guard ManualProvisioningGuard) {
+	s.accessGuard = guard
+}
+func (s *ProvisioningService) validateManualProvisioning(ctx context.Context, client *ent.Client, tenantID, itemID int) error {
+	if s.accessGuard == nil {
+		return fmt.Errorf("manual_provisioning_owner_unavailable")
+	}
+	return s.accessGuard.ValidateManualProvisioning(ctx, client, tenantID, itemID)
 }
 
 // CreateTaskFromServiceRequest 仅创建交付任务并把 ServiceRequest 置为 provisioning
@@ -68,6 +84,9 @@ func (s *ProvisioningService) CreateTaskFromServiceRequest(ctx context.Context, 
 
 	if _, err := sr.Edges.WorkItemOrErr(); err != nil {
 		return nil, fmt.Errorf("service request requires WorkItem: %w", err)
+	}
+	if err := s.validateManualProvisioning(ctx, tx.Client(), tenantID, sr.TicketID); err != nil {
+		return nil, err
 	}
 	if perm := CanProvision(s.client, tenantID, actorUserID, actorRole, sr.Edges.WorkItem.RequesterID); !perm.Allowed {
 		return nil, fmt.Errorf("%s", perm.Reason)
@@ -136,6 +155,9 @@ func (s *ProvisioningService) ExecuteTask(ctx context.Context, taskID, tenantID,
 	}
 	if _, err := sr.Edges.WorkItemOrErr(); err != nil {
 		return nil, fmt.Errorf("service request requires WorkItem: %w", err)
+	}
+	if err := s.validateManualProvisioning(ctx, s.client, tenantID, sr.TicketID); err != nil {
+		return nil, err
 	}
 	if perm := CanProvision(s.client, tenantID, actorUserID, actorRole, sr.Edges.WorkItem.RequesterID); !perm.Allowed {
 		return nil, fmt.Errorf("%s", perm.Reason)

@@ -77,6 +77,20 @@ func (_c *KafTaskActionLedgerCreate) SetProcedureVersion(v string) *KafTaskActio
 	return _c
 }
 
+// SetRequestDigest sets the "request_digest" field.
+func (_c *KafTaskActionLedgerCreate) SetRequestDigest(v string) *KafTaskActionLedgerCreate {
+	_c.mutation.SetRequestDigest(v)
+	return _c
+}
+
+// SetNillableRequestDigest sets the "request_digest" field if the given value is not nil.
+func (_c *KafTaskActionLedgerCreate) SetNillableRequestDigest(v *string) *KafTaskActionLedgerCreate {
+	if v != nil {
+		_c.SetRequestDigest(*v)
+	}
+	return _c
+}
+
 // SetResultStatus sets the "result_status" field.
 func (_c *KafTaskActionLedgerCreate) SetResultStatus(v string) *KafTaskActionLedgerCreate {
 	_c.mutation.SetResultStatus(v)
@@ -202,6 +216,10 @@ func (_c *KafTaskActionLedgerCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *KafTaskActionLedgerCreate) defaults() {
+	if _, ok := _c.mutation.RequestDigest(); !ok {
+		v := kaftaskactionledger.DefaultRequestDigest
+		_c.mutation.SetRequestDigest(v)
+	}
 	if _, ok := _c.mutation.ResultStatus(); !ok {
 		v := kaftaskactionledger.DefaultResultStatus
 		_c.mutation.SetResultStatus(v)
@@ -290,6 +308,9 @@ func (_c *KafTaskActionLedgerCreate) check() error {
 			return &ValidationError{Name: "procedure_version", err: fmt.Errorf(`ent: validator failed for field "KafTaskActionLedger.procedure_version": %w`, err)}
 		}
 	}
+	if _, ok := _c.mutation.RequestDigest(); !ok {
+		return &ValidationError{Name: "request_digest", err: errors.New(`ent: missing required field "KafTaskActionLedger.request_digest"`)}
+	}
 	if _, ok := _c.mutation.ResultStatus(); !ok {
 		return &ValidationError{Name: "result_status", err: errors.New(`ent: missing required field "KafTaskActionLedger.result_status"`)}
 	}
@@ -361,6 +382,10 @@ func (_c *KafTaskActionLedgerCreate) createSpec() (*KafTaskActionLedger, *sqlgra
 	if value, ok := _c.mutation.ProcedureVersion(); ok {
 		_spec.SetField(kaftaskactionledger.FieldProcedureVersion, field.TypeString, value)
 		_node.ProcedureVersion = value
+	}
+	if value, ok := _c.mutation.RequestDigest(); ok {
+		_spec.SetField(kaftaskactionledger.FieldRequestDigest, field.TypeString, value)
+		_node.RequestDigest = value
 	}
 	if value, ok := _c.mutation.ResultStatus(); ok {
 		_spec.SetField(kaftaskactionledger.FieldResultStatus, field.TypeString, value)
@@ -587,6 +612,9 @@ func (u *KafTaskActionLedgerUpsertOne) UpdateNewValues() *KafTaskActionLedgerUps
 		}
 		if _, exists := u.create.mutation.ProcedureVersion(); exists {
 			s.SetIgnore(kaftaskactionledger.FieldProcedureVersion)
+		}
+		if _, exists := u.create.mutation.RequestDigest(); exists {
+			s.SetIgnore(kaftaskactionledger.FieldRequestDigest)
 		}
 	}))
 	return u
@@ -947,6 +975,9 @@ func (u *KafTaskActionLedgerUpsertBulk) UpdateNewValues() *KafTaskActionLedgerUp
 			}
 			if _, exists := b.mutation.ProcedureVersion(); exists {
 				s.SetIgnore(kaftaskactionledger.FieldProcedureVersion)
+			}
+			if _, exists := b.mutation.RequestDigest(); exists {
+				s.SetIgnore(kaftaskactionledger.FieldRequestDigest)
 			}
 		}
 	}))

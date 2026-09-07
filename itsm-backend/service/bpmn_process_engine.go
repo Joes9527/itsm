@@ -102,19 +102,20 @@ type TaskService interface {
 // CustomProcessEngine 是ProcessEngine接口的实现
 // 充当领域服务(Domain Service)，协调流程定义、实例和任务实体的生命周期
 type CustomProcessEngine struct {
-	client                *ent.Client
-	logger                *zap.SugaredLogger
-	parser                *BPMNParser            // 使用自定义的BPMN解析器
-	exprEngine            *ExpressionEngine      // 表达式引擎
-	expressionVars        map[string]interface{} // 表达式变量
-	publicationKAFConfig  *config.Config
-	callbackRegistry      *bpmn.CallbackRegistry // 服务任务回调注册中心
-	groupResolver         *bpmn.GroupResolver    // 审批组解析器：candidateGroups → 候选用户
-	participationResolver *bpmnParticipationResolver
-	instanceAccessPolicy  *bpmnInstanceAccessPolicy
-	callbackOutbox        *bpmnCallbackOutbox
-	callbackExecutionKeys *[]string
-	transactionBound      bool
+	accessCompletionContributor AccessCompletionContributor
+	client                      *ent.Client
+	logger                      *zap.SugaredLogger
+	parser                      *BPMNParser            // 使用自定义的BPMN解析器
+	exprEngine                  *ExpressionEngine      // 表达式引擎
+	expressionVars              map[string]interface{} // 表达式变量
+	publicationKAFConfig        *config.Config
+	callbackRegistry            *bpmn.CallbackRegistry // 服务任务回调注册中心
+	groupResolver               *bpmn.GroupResolver    // 审批组解析器：candidateGroups → 候选用户
+	participationResolver       *bpmnParticipationResolver
+	instanceAccessPolicy        *bpmnInstanceAccessPolicy
+	callbackOutbox              *bpmnCallbackOutbox
+	callbackExecutionKeys       *[]string
+	transactionBound            bool
 	// 内部服务
 	processDefinitionService *bpmnProcessDefinitionService
 	processInstanceService   *bpmnProcessInstanceService

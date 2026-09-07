@@ -451,6 +451,7 @@ var RegisteredMigrations = []Migration{
 	{Version: "028_service_request_work_item_authority", Description: "Use WorkItem authority for ServiceRequest shared fields"},
 	{Version: "029_catalog_target_class_authority", Description: "Retire legacy Catalog class inference"},
 	{Version: "030_catalog_access_policy_result", Description: "Finite catalog access policy and immutable verified results"},
+	{Version: "031_kaf_action_request_digest", Description: "Bind verified access completion to immutable canonical request digest"},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -1101,6 +1102,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
 	case "021_add_callback_optional_declared":
 		return `ALTER TABLE process_callback_outboxes
     ADD COLUMN IF NOT EXISTS optional_declared boolean NOT NULL DEFAULT false;`
+	case "031_kaf_action_request_digest":
+		return kafActionRequestDigestSQL
 	case "030_catalog_access_policy_result":
 		return catalogAccessPolicyResultSQL
 	case "029_catalog_target_class_authority":

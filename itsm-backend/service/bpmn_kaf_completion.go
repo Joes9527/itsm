@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"itsm-backend/handlers/common/accessgrant"
 	"strings"
 	"time"
 
@@ -21,6 +23,17 @@ import (
 
 	entsql "entgo.io/ent/dialect/sql"
 )
+
+// AccessCompletionContributor is implemented by the Requested Item domain.
+// The supplied client belongs to the existing BPMN completion transaction.
+type AccessCompletionContributor interface {
+	ContributeAccessCompletion(context.Context, *ent.Client, *ent.ProcessTask, *ent.KafTaskActionLedger, json.RawMessage) error
+	ValidateAccessCompletionReplay(context.Context, *ent.Client, *ent.ProcessTask, *ent.KafTaskActionLedger) error
+}
+
+func (e *CustomProcessEngine) SetAccessCompletionContributor(owner AccessCompletionContributor) {
+	e.accessCompletionContributor = owner
+}
 
 // CompleteKafDelegatedTask joins BPMN completion, callback scheduling and the
 // KAF lease fence in one transaction, then reconciles the durable callback.
@@ -76,11 +89,19 @@ func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledg
 		return err
 	}
 	ctx = WithBPMNAccessScope(ctx, scope)
-	receipt, err := e.ensureKafCompletionReceipt(ctx, ledger.ID, ledger.TenantID, taskID)
-	if err != nil {
-		return err
-	}
 	if task.Status == common.ProcessTaskStatusCompleted {
+		if task.CallbackAction == accessgrant.Capability {
+			if e.accessCompletionContributor == nil {
+				return fmt.Errorf("verified access completion owner unavailable")
+			}
+			if err := e.accessCompletionContributor.ValidateAccessCompletionReplay(ctx, e.client, task, ledger); err != nil {
+				return err
+			}
+		}
+		receipt, err := e.ensureKafCompletionReceipt(ctx, ledger.ID, ledger.TenantID, taskID)
+		if err != nil {
+			return err
+		}
 		return e.recoverKafCompletionCallback(ctx, ledger.ID, leaseOwner, receipt, task)
 	}
 
@@ -97,6 +118,25 @@ func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledg
 		return fmt.Errorf("start KAF BPMN completion transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	if task.CallbackAction == accessgrant.Capability {
+		if e.accessCompletionContributor == nil {
+			return fmt.Errorf("verified access completion owner unavailable")
+		}
+		raw, err := json.Marshal(variables["kaf_access_result"])
+		if err != nil {
+			return err
+		}
+		if err := e.accessCompletionContributor.ContributeAccessCompletion(ctx, tx.Client(), task, ledger, raw); err != nil {
+			return err
+		}
+	} else if variables["kaf_access_result"] != nil {
+		return fmt.Errorf("access result supplied for a different delegated capability")
+	}
+	txEngine := e.forClient(tx.Client(), nil)
+	receipt, err := txEngine.ensureKafCompletionReceipt(ctx, ledger.ID, ledger.TenantID, taskID)
+	if err != nil {
+		return err
+	}
 	executionKeys := make([]string, 0)
 	effect, err := e.completeTaskWithClient(ctx, tx.Client(), taskID, completionVariables, &executionKeys)
 	if err != nil {
@@ -391,7 +431,7 @@ func kafReceiptOwnedByExecutingLease(ledgerID int, leaseOwner string, now time.T
 
 func (e *CustomProcessEngine) runKafFencedWrite(ctx context.Context, write func(*ent.Client) error) error {
 	fence, fenced := ctx.Value(kafCompletionFenceContextKey{}).(kafCompletionFence)
-	if !fenced {
+	if !fenced || e.transactionBound {
 		return write(e.client)
 	}
 	tx, err := e.client.Tx(ctx)

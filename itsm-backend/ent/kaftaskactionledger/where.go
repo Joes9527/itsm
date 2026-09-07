@@ -99,6 +99,11 @@ func ProcedureVersion(v string) predicate.KafTaskActionLedger {
 	return predicate.KafTaskActionLedger(sql.FieldEQ(FieldProcedureVersion, v))
 }
 
+// RequestDigest applies equality check predicate on the "request_digest" field. It's identical to RequestDigestEQ.
+func RequestDigest(v string) predicate.KafTaskActionLedger {
+	return predicate.KafTaskActionLedger(sql.FieldEQ(FieldRequestDigest, v))
+}
+
 // ResultStatus applies equality check predicate on the "result_status" field. It's identical to ResultStatusEQ.
 func ResultStatus(v string) predicate.KafTaskActionLedger {
 	return predicate.KafTaskActionLedger(sql.FieldEQ(FieldResultStatus, v))
@@ -687,6 +692,71 @@ func ProcedureVersionEqualFold(v string) predicate.KafTaskActionLedger {
 // ProcedureVersionContainsFold applies the ContainsFold predicate on the "procedure_version" field.
 func ProcedureVersionContainsFold(v string) predicate.KafTaskActionLedger {
 	return predicate.KafTaskActionLedger(sql.FieldContainsFold(FieldProcedureVersion, v))
+}
+
+// RequestDigestEQ applies the EQ predicate on the "request_digest" field.
+func RequestDigestEQ(v string) predicate.KafTaskActionLedger {
+	return predicate.KafTaskActionLedger(sql.FieldEQ(FieldRequestDigest, v))
+}
+
+// RequestDigestNEQ applies the NEQ predicate on the "request_digest" field.
+func RequestDigestNEQ(v string) predicate.KafTaskActionLedger {
+	return predicate.KafTaskActionLedger(sql.FieldNEQ(FieldRequestDigest, v))
+}
+
+// RequestDigestIn applies the In predicate on the "request_digest" field.
+func RequestDigestIn(vs ...string) predicate.KafTaskActionLedger {
+	return predicate.KafTaskActionLedger(sql.FieldIn(FieldRequestDigest, vs...))
+}
+
+// RequestDigestNotIn applies the NotIn predicate on the "request_digest" field.
+func RequestDigestNotIn(vs ...string) predicate.KafTaskActionLedger {
+	return predicate.KafTaskActionLedger(sql.FieldNotIn(FieldRequestDigest, vs...))
+}
+
+// RequestDigestGT applies the GT predicate on the "request_digest" field.
+func RequestDigestGT(v string) predicate.KafTaskActionLedger {
+	return predicate.KafTaskActionLedger(sql.FieldGT(FieldRequestDigest, v))
+}
+
+// RequestDigestGTE applies the GTE predicate on the "request_digest" field.
+func RequestDigestGTE(v string) predicate.KafTaskActionLedger {
+	return predicate.KafTaskActionLedger(sql.FieldGTE(FieldRequestDigest, v))
+}
+
+// RequestDigestLT applies the LT predicate on the "request_digest" field.
+func RequestDigestLT(v string) predicate.KafTaskActionLedger {
+	return predicate.KafTaskActionLedger(sql.FieldLT(FieldRequestDigest, v))
+}
+
+// RequestDigestLTE applies the LTE predicate on the "request_digest" field.
+func RequestDigestLTE(v string) predicate.KafTaskActionLedger {
+	return predicate.KafTaskActionLedger(sql.FieldLTE(FieldRequestDigest, v))
+}
+
+// RequestDigestContains applies the Contains predicate on the "request_digest" field.
+func RequestDigestContains(v string) predicate.KafTaskActionLedger {
+	return predicate.KafTaskActionLedger(sql.FieldContains(FieldRequestDigest, v))
+}
+
+// RequestDigestHasPrefix applies the HasPrefix predicate on the "request_digest" field.
+func RequestDigestHasPrefix(v string) predicate.KafTaskActionLedger {
+	return predicate.KafTaskActionLedger(sql.FieldHasPrefix(FieldRequestDigest, v))
+}
+
+// RequestDigestHasSuffix applies the HasSuffix predicate on the "request_digest" field.
+func RequestDigestHasSuffix(v string) predicate.KafTaskActionLedger {
+	return predicate.KafTaskActionLedger(sql.FieldHasSuffix(FieldRequestDigest, v))
+}
+
+// RequestDigestEqualFold applies the EqualFold predicate on the "request_digest" field.
+func RequestDigestEqualFold(v string) predicate.KafTaskActionLedger {
+	return predicate.KafTaskActionLedger(sql.FieldEqualFold(FieldRequestDigest, v))
+}
+
+// RequestDigestContainsFold applies the ContainsFold predicate on the "request_digest" field.
+func RequestDigestContainsFold(v string) predicate.KafTaskActionLedger {
+	return predicate.KafTaskActionLedger(sql.FieldContainsFold(FieldRequestDigest, v))
 }
 
 // ResultStatusEQ applies the EQ predicate on the "result_status" field.

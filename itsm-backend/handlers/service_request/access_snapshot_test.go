@@ -48,6 +48,7 @@ func TestAccessSnapshotTrustedRequesterAndFrozenTerms(t *testing.T) {
 	frozen, err := owner.ReadAccessSnapshot(ctx, c, tenant.ID, item.ID)
 	require.NoError(t, err)
 	require.Equal(t, snapshot, frozen)
+	require.ErrorContains(t, owner.ValidateManualProvisioning(ctx, c, tenant.ID, item.ID), "managed_access_requires_verified_delegation")
 	foreign, err := owner.ReadAccessSnapshot(ctx, c, tenant.ID+1, item.ID)
 	require.NoError(t, err)
 	require.Nil(t, foreign)

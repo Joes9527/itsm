@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"itsm-backend/ent"
 	"itsm-backend/ent/externalidentity"
+	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/servicerequestaccesssnapshot"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
@@ -77,7 +78,7 @@ func (s *Service) ReadApprovedAccess(ctx context.Context, client *ent.Client, te
 	if err != nil {
 		return nil, err
 	}
-	if item.Status == "cancelled" || item.Status == "rejected" {
+	if item.Status == "cancelled" || item.Status == "rejected" || item.Status == "closed" || item.Status == "resolved" {
 		return nil, &accessgrant.BlockedError{Code: "request_not_executable"}
 	}
 	validIdentity, err := client.ExternalIdentity.Query().Where(externalidentity.TenantIDEQ(tenantID), externalidentity.UserIDEQ(item.RequesterID), externalidentity.ProviderEQ(string(snapshot.Provider)), externalidentity.WorkspaceEQ(snapshot.ExternalSystem), externalidentity.SubjectEQ(snapshot.SubjectID), externalidentity.ActiveEQ(true), externalidentity.HasUserWith(user.TenantIDEQ(tenantID), user.ActiveEQ(true))).Exist(ctx)
@@ -98,4 +99,30 @@ func (s *Service) ReadApprovedAccess(ctx context.Context, client *ent.Client, te
 		return nil, &accessgrant.BlockedError{Code: "approval_not_executable"}
 	}
 	return &accessgrant.ApprovedContext{ApprovalSnapshot: *snapshot, Approvals: progress.Approvals}, nil
+}
+
+// ValidateManualProvisioning keeps policy-governed access on its verified workflow.
+// The frozen snapshot remains authoritative even when catalog configuration changes.
+func (s *Service) ValidateManualProvisioning(ctx context.Context, client *ent.Client, tenantID, itemID int) error {
+	snapshot, err := s.ReadAccessSnapshot(ctx, client, tenantID, itemID)
+	if err != nil {
+		return err
+	}
+	if snapshot != nil {
+		return &accessgrant.BlockedError{Code: "managed_access_requires_verified_delegation"}
+	}
+	// Legacy requests missing the required frozen terms also cannot bypass a
+	// configured access policy via the generic provisioning surface.
+	request, err := client.ServiceRequest.Query().Where(servicerequest.TicketIDEQ(itemID), servicerequest.HasWorkItemWith(ticket.TenantIDEQ(tenantID), ticket.RecordClassEQ("service_request_item"), ticket.DeletedAtIsNil())).Only(ctx)
+	if err != nil {
+		return err
+	}
+	policy, err := service_catalog.ReadAccessPolicy(ctx, client, tenantID, request.CatalogID)
+	if err != nil {
+		return err
+	}
+	if policy != nil {
+		return &accessgrant.BlockedError{Code: "access_snapshot_unavailable"}
+	}
+	return nil
 }

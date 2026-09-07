@@ -61921,6 +61921,7 @@ type KafTaskActionLedgerMutation struct {
 	correlation_id       *string
 	procedure_ref        *string
 	procedure_version    *string
+	request_digest       *string
 	result_status        *string
 	result_payload       *json.RawMessage
 	appendresult_payload json.RawMessage
@@ -62377,6 +62378,42 @@ func (m *KafTaskActionLedgerMutation) ResetProcedureVersion() {
 	m.procedure_version = nil
 }
 
+// SetRequestDigest sets the "request_digest" field.
+func (m *KafTaskActionLedgerMutation) SetRequestDigest(s string) {
+	m.request_digest = &s
+}
+
+// RequestDigest returns the value of the "request_digest" field in the mutation.
+func (m *KafTaskActionLedgerMutation) RequestDigest() (r string, exists bool) {
+	v := m.request_digest
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestDigest returns the old "request_digest" field's value of the KafTaskActionLedger entity.
+// If the KafTaskActionLedger object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *KafTaskActionLedgerMutation) OldRequestDigest(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestDigest is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestDigest requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestDigest: %w", err)
+	}
+	return oldValue.RequestDigest, nil
+}
+
+// ResetRequestDigest resets all changes to the "request_digest" field.
+func (m *KafTaskActionLedgerMutation) ResetRequestDigest() {
+	m.request_digest = nil
+}
+
 // SetResultStatus sets the "result_status" field.
 func (m *KafTaskActionLedgerMutation) SetResultStatus(s string) {
 	m.result_status = &s
@@ -62731,7 +62768,7 @@ func (m *KafTaskActionLedgerMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *KafTaskActionLedgerMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 17)
 	if m.tenant_id != nil {
 		fields = append(fields, kaftaskactionledger.FieldTenantID)
 	}
@@ -62758,6 +62795,9 @@ func (m *KafTaskActionLedgerMutation) Fields() []string {
 	}
 	if m.procedure_version != nil {
 		fields = append(fields, kaftaskactionledger.FieldProcedureVersion)
+	}
+	if m.request_digest != nil {
+		fields = append(fields, kaftaskactionledger.FieldRequestDigest)
 	}
 	if m.result_status != nil {
 		fields = append(fields, kaftaskactionledger.FieldResultStatus)
@@ -62806,6 +62846,8 @@ func (m *KafTaskActionLedgerMutation) Field(name string) (ent.Value, bool) {
 		return m.ProcedureRef()
 	case kaftaskactionledger.FieldProcedureVersion:
 		return m.ProcedureVersion()
+	case kaftaskactionledger.FieldRequestDigest:
+		return m.RequestDigest()
 	case kaftaskactionledger.FieldResultStatus:
 		return m.ResultStatus()
 	case kaftaskactionledger.FieldResultPayload:
@@ -62847,6 +62889,8 @@ func (m *KafTaskActionLedgerMutation) OldField(ctx context.Context, name string)
 		return m.OldProcedureRef(ctx)
 	case kaftaskactionledger.FieldProcedureVersion:
 		return m.OldProcedureVersion(ctx)
+	case kaftaskactionledger.FieldRequestDigest:
+		return m.OldRequestDigest(ctx)
 	case kaftaskactionledger.FieldResultStatus:
 		return m.OldResultStatus(ctx)
 	case kaftaskactionledger.FieldResultPayload:
@@ -62932,6 +62976,13 @@ func (m *KafTaskActionLedgerMutation) SetField(name string, value ent.Value) err
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetProcedureVersion(v)
+		return nil
+	case kaftaskactionledger.FieldRequestDigest:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestDigest(v)
 		return nil
 	case kaftaskactionledger.FieldResultStatus:
 		v, ok := value.(string)
@@ -63099,6 +63150,9 @@ func (m *KafTaskActionLedgerMutation) ResetField(name string) error {
 		return nil
 	case kaftaskactionledger.FieldProcedureVersion:
 		m.ResetProcedureVersion()
+		return nil
+	case kaftaskactionledger.FieldRequestDigest:
+		m.ResetRequestDigest()
 		return nil
 	case kaftaskactionledger.FieldResultStatus:
 		m.ResetResultStatus()

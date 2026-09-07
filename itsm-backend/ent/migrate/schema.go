@@ -2029,6 +2029,7 @@ var (
 		{Name: "correlation_id", Type: field.TypeString},
 		{Name: "procedure_ref", Type: field.TypeString},
 		{Name: "procedure_version", Type: field.TypeString},
+		{Name: "request_digest", Type: field.TypeString, Default: ""},
 		{Name: "result_status", Type: field.TypeString, Default: "pending"},
 		{Name: "result_payload", Type: field.TypeJSON, Nullable: true},
 		{Name: "lease_owner", Type: field.TypeString, Nullable: true},

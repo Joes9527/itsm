@@ -623,6 +623,8 @@ func NewApplication() *Application {
 	srService := service_request.NewService(srRepo, client, sugar, chainResolver)
 	srHandler := service_request.NewHandler(srService)
 	bpmnWorkflowController.SetApprovedAccessReader(srService)
+	concreteProcessEngine.SetAccessCompletionContributor(srService)
+	provisioningService.SetManualProvisioningGuard(srService)
 
 	// Domain: Change (DDD)
 	changeRepo := change.NewEntRepository(client, database.GetRawDB())

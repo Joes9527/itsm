@@ -46,6 +46,8 @@
 历史测试报告与阶段性评审（模块功能复盘、浏览器 E2E/功能测试报告、深度业务测试报告、前端 UX
 Review、商用就绪验收报告等）已移入 [archive](./archive/README.md)，仅作历史记录，不代表当前状态。
 
+- [委派权限开通的验证完成契约](./contracts/kaf-verified-access-completion.md)
+
 ## CI/CD 与发布
 
 当前保留的 GitHub Actions:

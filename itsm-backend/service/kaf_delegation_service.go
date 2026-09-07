@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -127,9 +129,10 @@ type KafActionExecution struct {
 }
 
 type KafActionPayload struct {
-	ResultSummary  string   `json:"resultSummary"`
-	EvidenceRefs   []string `json:"evidenceRefs"`
-	FailureSummary string   `json:"failureSummary"`
+	AccessResult   json.RawMessage `json:"accessResult,omitempty"`
+	ResultSummary  string          `json:"resultSummary"`
+	EvidenceRefs   []string        `json:"evidenceRefs"`
+	FailureSummary string          `json:"failureSummary"`
 }
 
 type KafActionResult struct {
@@ -452,6 +455,13 @@ func (s *KafDelegationService) ExecuteAction(ctx context.Context, taskID string,
 			"procedure_ref": req.Execution.ProcedureRef, "procedure_version": req.Execution.ProcedureVersion,
 		}
 		variables["kaf_result_summary"] = strings.TrimSpace(req.Payload.ResultSummary)
+		if len(req.Payload.AccessResult) > 0 {
+			var accessResult map[string]interface{}
+			if err := json.Unmarshal(req.Payload.AccessResult, &accessResult); err != nil {
+				return nil, fmt.Errorf("%w: invalid accessResult", ErrKafActionInvalid)
+			}
+			variables["kaf_access_result"] = accessResult
+		}
 		completionEngine, ok := engine.(kafDelegatedTaskCompletionEngine)
 		if !ok {
 			_ = s.finalizeKafAction(ctx, ledger, "failed_terminal", "kaf_completion_engine_required")
@@ -623,6 +633,10 @@ func (s *KafDelegationService) claimKafActionOnce(ctx context.Context, task *ent
 	if err := validateKafActionKey(task, req); err != nil {
 		return nil, false, err
 	}
+	digest, err := kafActionRequestDigest(task, req)
+	if err != nil {
+		return nil, false, err
+	}
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return nil, false, fmt.Errorf("start KAF action claim transaction: %w", err)
@@ -633,6 +647,7 @@ func (s *KafDelegationService) claimKafActionOnce(ctx context.Context, task *ent
 		SetAction(req.Action).SetIdempotencyKey(req.Execution.IdempotencyKey).
 		SetCorrelationID(req.Execution.CorrelationID).
 		SetProcedureRef(req.Execution.ProcedureRef).SetProcedureVersion(req.Execution.ProcedureVersion).
+		SetRequestDigest(digest).
 		Save(ctx)
 	if err == nil {
 		if err := tx.Commit(); err != nil {
@@ -717,7 +732,34 @@ func (s *KafDelegationService) loadKafActionLedger(ctx context.Context, task *en
 	return ledger, nil
 }
 
+func kafActionRequestDigest(task *ent.ProcessTask, req KafActionRequest) (string, error) {
+	if task.CallbackAction != accessgrant.Capability && len(req.Payload.AccessResult) == 0 {
+		return "", nil // Preserve the existing non-access action replay contract.
+	}
+	raw, err := json.Marshal(map[string]interface{}{"payload": req.Payload, "expectedVersion": req.ExpectedVersion})
+	if err != nil {
+		return "", fmt.Errorf("%w: invalid action payload", ErrKafActionInvalid)
+	}
+	var canonical interface{}
+	if err := json.Unmarshal(raw, &canonical); err != nil {
+		return "", err
+	}
+	raw, err = json.Marshal(canonical)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), nil
+}
+
 func validateKafActionLedger(ledger *ent.KafTaskActionLedger, task *ent.ProcessTask, req KafActionRequest) error {
+	digest, err := kafActionRequestDigest(task, req)
+	if err != nil {
+		return err
+	}
+	if ledger.RequestDigest != digest {
+		return fmt.Errorf("%w: action payload or expected version differs from original request", ErrKafActionConflict)
+	}
 	if ledger.TenantID != task.TenantID || ledger.TaskID != task.TaskID || ledger.RunID != req.Execution.RunID || ledger.StepID != req.Execution.StepID ||
 		ledger.Action != req.Action || ledger.IdempotencyKey != req.Execution.IdempotencyKey || ledger.CorrelationID != req.Execution.CorrelationID ||
 		ledger.ProcedureRef != req.Execution.ProcedureRef || ledger.ProcedureVersion != req.Execution.ProcedureVersion {

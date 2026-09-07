@@ -1795,16 +1795,20 @@ func init() {
 	kaftaskactionledgerDescProcedureVersion := kaftaskactionledgerFields[8].Descriptor()
 	// kaftaskactionledger.ProcedureVersionValidator is a validator for the "procedure_version" field. It is called by the builders before save.
 	kaftaskactionledger.ProcedureVersionValidator = kaftaskactionledgerDescProcedureVersion.Validators[0].(func(string) error)
+	// kaftaskactionledgerDescRequestDigest is the schema descriptor for request_digest field.
+	kaftaskactionledgerDescRequestDigest := kaftaskactionledgerFields[9].Descriptor()
+	// kaftaskactionledger.DefaultRequestDigest holds the default value on creation for the request_digest field.
+	kaftaskactionledger.DefaultRequestDigest = kaftaskactionledgerDescRequestDigest.Default.(string)
 	// kaftaskactionledgerDescResultStatus is the schema descriptor for result_status field.
-	kaftaskactionledgerDescResultStatus := kaftaskactionledgerFields[9].Descriptor()
+	kaftaskactionledgerDescResultStatus := kaftaskactionledgerFields[10].Descriptor()
 	// kaftaskactionledger.DefaultResultStatus holds the default value on creation for the result_status field.
 	kaftaskactionledger.DefaultResultStatus = kaftaskactionledgerDescResultStatus.Default.(string)
 	// kaftaskactionledgerDescCreatedAt is the schema descriptor for created_at field.
-	kaftaskactionledgerDescCreatedAt := kaftaskactionledgerFields[14].Descriptor()
+	kaftaskactionledgerDescCreatedAt := kaftaskactionledgerFields[15].Descriptor()
 	// kaftaskactionledger.DefaultCreatedAt holds the default value on creation for the created_at field.
 	kaftaskactionledger.DefaultCreatedAt = kaftaskactionledgerDescCreatedAt.Default.(func() time.Time)
 	// kaftaskactionledgerDescUpdatedAt is the schema descriptor for updated_at field.
-	kaftaskactionledgerDescUpdatedAt := kaftaskactionledgerFields[15].Descriptor()
+	kaftaskactionledgerDescUpdatedAt := kaftaskactionledgerFields[16].Descriptor()
 	// kaftaskactionledger.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	kaftaskactionledger.DefaultUpdatedAt = kaftaskactionledgerDescUpdatedAt.Default.(func() time.Time)
 	// kaftaskactionledger.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
