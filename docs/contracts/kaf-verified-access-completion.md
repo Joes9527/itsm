@@ -14,13 +14,19 @@ ITSM 在原 BPMN 完成事务内校验任务、租户、认证 actor、现有 ac
 
 ## 双级审批与拒绝分支
 
-正式定义由 BPMNTemplateService 部署 service/bpmn/sslvpn_approval_flow.bpmn。模板 1.1.0 在主管初审和网络运维复审之后分别使用原引擎的条件网关：仅 approvalResult=approved 进入下一级或 KAF 委派，rejected 进入 EndEvent_Reject。两级分别使用 dept_manager 和 network_eng 候选组；任务 API 校验实际任务身份、当前状态和审批人，重复决定不能额外推进。
+正式定义由 BPMNTemplateService 部署 service/bpmn/sslvpn_approval_flow.bpmn。当前模板（XML 注释版本 1.1.0）在主管初审和网络运维复审之后分别使用原引擎的条件网关：仅 approvalResult=approved 进入下一级或 KAF 委派，rejected 进入 EndEvent_Reject。两级分别使用 dept_manager 和 network_eng 候选组；任务 API 校验实际任务身份、当前状态和审批人，重复决定不能额外推进。
 
 拒绝的专业状态由 Service Request 的既有审批决定投影为 rejected；不会产生 KAF 任务、委派事件或开通结果，也不会填写 Requested Item 的交付完成时间。流程到达拒绝终点的 completed 表示审批流程结束，不代表请求已交付。共享 WorkItem 状态不承担第二份审批状态。
 
 tests/e2e/sslvpn_approval_rejection_test.go 使用正式嵌入模板、真实创建请求及审批 REST 操作、不同角色的认证会话和现有 outbox dispatcher，覆盖任一级拒绝、错误审批人、提前第二级及重复审批。接收端仅为测试内 HTTP mock；双通过恰好一次委派作为零发送断言的正向对照。
 
-旧模板 1.0.0 缺少拒绝分支，不能作为安全审批基线。发布 owner 必须通过原 BPMNTemplateService 的定义同步机制发布更新并核对新请求绑定的定义内容；内容变化由现有 owner 发布新定义版本。源码修复不会更改已部署定义或运行中的旧实例。启用消费者前，应单独核对旧实例的定义、审批决定及现有委派记录，按既有受控运维流程处置；不得因流程 completed 或缺少新分支而推断已获授权，也不得重放授权来补证。本次测试没有更新任何 live 定义或实例。
+XML 的 metaData/version 是模板作者注释，与 ProcessDefinition.Version 的租户部署序列不同。BPMNVersionService 是后者的唯一升级权威：新租户从 1.0.0 起步，内容漂移时按该租户已有历史递增，内容相同则跳过。因此 1.0.0 的部署可能已经包含修复，1.1.0 的部署也不能单凭数字证明安全。不得依据任一版本数字决定是否允许委派。
+
+模板 owner 在 TemplateInfo.ContentSHA256 暴露嵌入 BPMN 原始字节的 SHA-256；不新增持久化摘要或版本字段，ProcessDefinition.BpmnXML 仍是部署内容权威。本轮发布嵌入 SSLVPN 文件的精确指纹为 `d55c0715dacce46d65baffdf89418e1e4157aa3c6d1b532b61ae03cb4746df9c`。消费者/发布核验须读取当前租户实际绑定的 ProcessDefinition.BpmnXML，计算相同 SHA-256 并与获批发布内容比较，不能仅检查 GetTemplateList 的新模板或 is_latest 标签。运行中实例必须按其自身 ProcessDefinitionID 读取历史定义，不能拿当前模板指纹替代旧实例证据。
+
+若受控配置会替换 CATALOG_ACCESS_POLICY_REQUIRED 等占位符，替换后字节必然不同；必须保存经审批的最终配置 BPMN，核验仍保留两级拒绝分支，并比较该最终内容与实际持久化 BpmnXML 的精确指纹。嵌入内容指纹只识别发布源，不能伪装成配置后定义的匹配证明。
+
+修复前历史内容缺少拒绝分支，不能作为安全审批基线。发布 owner 须通过原 BPMNTemplateService 的定义同步机制发布更新并核对新请求绑定的最终定义；内容变化由现有 owner 发布新部署版本，重复同步相同字节不新增定义或部署。源码修复不会更改已部署定义或运行中的旧实例。启用消费者前，应单独核对旧实例的定义、审批决定及现有委派记录，按既有受控运维流程处置；不得因流程 completed 或缺少新分支而推断已获授权，也不得重放授权来补证。本次测试没有更新任何 live 定义或实例。
 
 ## 同批次升级要求
 

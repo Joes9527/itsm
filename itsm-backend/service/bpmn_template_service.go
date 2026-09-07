@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"embed"
 	"fmt"
 	"io/fs"
@@ -34,13 +35,14 @@ func NewBPMNTemplateService(client *ent.Client) *BPMNTemplateService {
 
 // TemplateInfo 模板信息
 type TemplateInfo struct {
-	ID          string
-	Name        string
-	Category    string
-	SubCategory string
-	Version     string
-	Description string
-	Filename    string
+	ID            string
+	Name          string
+	Category      string
+	SubCategory   string
+	Version       string // Initial deployment version; later versions belong to BPMNVersionService.
+	Description   string
+	Filename      string
+	ContentSHA256 string // Derived from exact embedded bytes; compare with persisted BpmnXML, never a running instance's latest template.
 }
 
 // LoadAndDeployTemplates 加载并同步所有内置模板：
@@ -220,6 +222,11 @@ func (s *BPMNTemplateService) listTemplates() ([]*TemplateInfo, error) {
 			info.Category = "default"
 		}
 
+		data, err := bpmnTemplates.ReadFile(path)
+		if err != nil {
+			return errors.Wrap(err, "读取模板内容标识失败")
+		}
+		info.ContentSHA256 = fmt.Sprintf("%x", sha256.Sum256(data))
 		info.Version = "1.0.0"
 		templates = append(templates, info)
 		return nil
