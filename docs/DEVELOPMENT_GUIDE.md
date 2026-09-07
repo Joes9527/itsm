@@ -164,6 +164,7 @@ For a dedicated schema, the grants have this form (the administrator supplies id
 GRANT USAGE ON SCHEMA :"app_schema" TO :"system_role";
 GRANT SELECT ON :"app_schema".users, :"app_schema".tenants,
   :"app_schema".msp_allocations, :"app_schema".external_identities, :"app_schema".connector_configs TO :"system_role";
+GRANT SELECT ON :"app_schema".process_callback_outboxes TO :"system_role";
 GRANT SELECT, UPDATE ON :"app_schema".outbox_events, :"app_schema".ticket_notifications TO :"system_role";
 GRANT INSERT, SELECT(id) ON :"app_schema".audit_logs TO :"system_role";
 SELECT format('GRANT USAGE ON SEQUENCE %s TO %I',

@@ -58,7 +58,7 @@ func runtimeClients(t *testing.T, f *incidentEffectsFixture) (*database.RuntimeC
 			require.NoError(t, err)
 		}
 	}
-	for _, grant := range []string{"SELECT ON users,tenants,msp_allocations,external_identities,connector_configs", "SELECT,UPDATE ON outbox_events,ticket_notifications", "INSERT,SELECT(id) ON audit_logs", "USAGE ON SEQUENCE audit_logs_id_seq"} {
+	for _, grant := range []string{"SELECT ON users,tenants,msp_allocations,external_identities,connector_configs,process_callback_outboxes", "SELECT,UPDATE ON outbox_events,ticket_notifications", "INSERT,SELECT(id) ON audit_logs", "USAGE ON SEQUENCE audit_logs_id_seq"} {
 		_, err := f.db.ExecContext(f.ctx, "GRANT "+grant+" TO "+systemRole)
 		require.NoError(t, err)
 	}
@@ -133,12 +133,15 @@ func TestPostgresRLSSystemCapabilityConstruction(t *testing.T) {
 		_, err = f.db.ExecContext(f.ctx, "REVOKE "+privilege.revoke+" FROM "+cfg.SystemRoleUser)
 		require.NoError(t, err)
 	}
-	_, err = f.db.ExecContext(f.ctx, "REVOKE SELECT ON users FROM "+cfg.SystemRoleUser)
-	require.NoError(t, err)
-	_, err = database.InitRuntimeDatabases(&cfg, &config.RLSConfig{Mode: "enforce"}, nil)
-	require.ErrorContains(t, err, "users SELECT")
-	_, err = f.db.ExecContext(f.ctx, "GRANT SELECT ON users TO "+cfg.SystemRoleUser)
-	require.NoError(t, err)
+
+	for _, table := range []string{"users", "process_callback_outboxes"} {
+		_, err = f.db.ExecContext(f.ctx, "REVOKE SELECT ON "+table+" FROM "+cfg.SystemRoleUser)
+		require.NoError(t, err)
+		_, err = database.InitRuntimeDatabases(&cfg, &config.RLSConfig{Mode: "enforce"}, nil)
+		require.ErrorContains(t, err, table+" SELECT")
+		_, err = f.db.ExecContext(f.ctx, "GRANT SELECT ON "+table+" TO "+cfg.SystemRoleUser)
+		require.NoError(t, err)
+	}
 	// A non-bypass table owner still bypasses non-FORCE policies. Reject it.
 	_, err = f.db.ExecContext(f.ctx, "ALTER TABLE tickets OWNER TO "+cfg.User)
 	require.NoError(t, err)

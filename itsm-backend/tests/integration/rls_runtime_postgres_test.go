@@ -14,6 +14,7 @@ import (
 	"itsm-backend/database"
 	"itsm-backend/database/rls"
 	"itsm-backend/ent"
+	"itsm-backend/ent/processcallbackoutbox"
 	authcommon "itsm-backend/handlers/common"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
@@ -353,4 +354,48 @@ func TestPostgresRLSRuntimeEvictsFailedConnection(t *testing.T) {
 	require.Equal(t, fmt.Sprint(f.tenant.ID), tenant)
 	require.NoError(t, next.Close())
 	require.Equal(t, 0, db.Stats().InUse)
+}
+
+func TestPostgresRLSRuntimeCallbackSweep(t *testing.T) {
+	f := newIncidentEffectsFixture(t)
+	clients, cfg := runtimeClients(t, f)
+	_, err := f.db.ExecContext(f.ctx, "GRANT SELECT,UPDATE ON process_callback_outboxes TO "+cfg.User)
+	require.NoError(t, err)
+	engine := service.NewCustomProcessEngine(clients.Tenant, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
+	engine.SetCallbackCandidateClient(clients.System)
+	count, err := engine.ProcessPendingCallbacks(context.Background(), "a7-callback-worker", 10)
+	require.NoError(t, err)
+	require.Zero(t, count)
+	second := f.client.Tenant.Create().SetName("Callback second").SetCode("callback-second").SaveX(f.ctx)
+	rows := []*ent.ProcessCallbackOutbox{}
+	for _, tenantID := range []int{f.tenant.ID, second.ID} {
+		row := f.client.ProcessCallbackOutbox.Create().SetTenantID(tenantID).SetExecutionKey(fmt.Sprintf("a7-callback-%d", tenantID)).SetProcessInstanceID(1).SetTaskID(fmt.Sprintf("callback-%d", tenantID)).SetCallbackKind("service_task").SetHandlerID("unknown").SetTaskType("unknown").SetElementID("unknown").SetAction("unknown").SetStatus("pending").SetNextAttemptAt(time.Now().Add(-time.Second)).SaveX(f.ctx)
+		rows = append(rows, row)
+	}
+	count, err = engine.ProcessPendingCallbacks(context.Background(), "a7-callback-worker", 10)
+	require.ErrorContains(t, err, "one or more bpmn callbacks")
+	require.Zero(t, count)
+	for _, row := range rows {
+		current := f.client.ProcessCallbackOutbox.GetX(f.ctx, row.ID)
+		require.Equal(t, 1, current.AttemptCount, "each tenant candidate must be claimed exactly once")
+		require.Equal(t, "pending", current.Status, "unsupported callback must never report completion")
+		require.Empty(t, current.LeaseOwner)
+		require.Greater(t, current.NextAttemptAt, row.NextAttemptAt)
+	}
+
+	// Each row still uses the non-bypass runtime role and canonical 009 policy.
+	for _, row := range rows {
+		foreignCtx := tenantctx.WithTenantID(context.Background(), row.TenantID+1000)
+		_, err := clients.Tenant.ProcessCallbackOutbox.Get(foreignCtx, row.ID)
+		require.True(t, ent.IsNotFound(err))
+		changed, err := clients.Tenant.ProcessCallbackOutbox.Update().Where(processcallbackoutbox.IDEQ(row.ID)).SetStatus("completed").Save(foreignCtx)
+		require.NoError(t, err)
+		require.Zero(t, changed)
+	}
+	_, err = clients.SystemDB.ExecContext(f.ctx, "UPDATE process_callback_outboxes SET status='completed'")
+	require.ErrorContains(t, err, "permission denied")
+	_, err = f.db.ExecContext(f.ctx, "REVOKE SELECT ON process_callback_outboxes FROM "+cfg.SystemRoleUser)
+	require.NoError(t, err)
+	_, err = engine.ProcessPendingCallbacks(context.Background(), "a7-callback-worker", 10)
+	require.ErrorContains(t, err, "candidate scan failed")
 }

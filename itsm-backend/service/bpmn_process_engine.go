@@ -1292,6 +1292,12 @@ func (e *CustomProcessEngine) processCommittedCallbackKeys(ctx context.Context, 
 	}
 }
 
+// SetCallbackCandidateClient supplies the existing restricted System read pool.
+// Only cross-tenant candidate selection uses it; claims and execution keep Tenant.
+func (e *CustomProcessEngine) SetCallbackCandidateClient(client *ent.Client) {
+	e.callbackOutbox.candidateClient = client
+}
+
 // ProcessPendingCallbacks performs one deterministic durable callback sweep.
 func (e *CustomProcessEngine) ProcessPendingCallbacks(ctx context.Context, workerID string, limit int) (int, error) {
 	if e.callbackOutbox == nil {
