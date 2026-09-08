@@ -33,12 +33,15 @@ func TestIntakeCatalogDiscoverySkipsInvalidAcrossPages(t *testing.T) {
 		xml := `<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><process id="` + key + `" isExecutable="true"><startEvent id="start"/>` + task + `<endEvent id="end"/></process></definitions>`
 		c.ProcessDefinition.Create().SetKey(key).SetName(key).SetVersion("1.0.0").SetTenantID(1).SetDeploymentID(dep.ID).SetBpmnXML([]byte(xml)).SetIsActive(true).SetIsLatest(true).SaveX(ctx)
 	}
+	grantXML := `<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"><process id="legacy-grant" isExecutable="true"><startEvent id="start"/><serviceTask id="grant"><extensionElements><metaData name="service_task_type">kaf_delegate</metaData><metaData name="action">external_group_grant</metaData><metaData name="callback_config_ref">999</metaData></extensionElements></serviceTask><endEvent id="end"/></process></definitions>`
+	c.ProcessDefinition.Create().SetKey("legacy-grant").SetName("legacy-grant").SetVersion("1.0.0").SetTenantID(1).SetDeploymentID(dep.ID).SetBpmnXML([]byte(grantXML)).SetIsActive(true).SetIsLatest(true).SaveX(ctx)
 	add := func(key string) *ent.ServiceCatalog {
 		return c.ServiceCatalog.Create().SetName(key).SetTenantID(1).SetTargetClass("generic").SetProcessDefinitionKey(key).SetStatus("enabled").SetIsActive(true).SetRequiresApproval(false).SaveX(ctx)
 	}
 	for i := 0; i < 60; i++ {
 		add("invalid")
 	}
+	legacy := add("legacy-grant")
 	valid := []int{}
 	for i := 0; i < 52; i++ {
 		valid = append(valid, add("valid").ID)
@@ -65,6 +68,8 @@ func TestIntakeCatalogDiscoverySkipsInvalidAcrossPages(t *testing.T) {
 	require.Len(t, second, 2)
 	require.Equal(t, first[50].ID, second[0].ID)
 	require.Equal(t, valid[51], second[1].ID)
+	_, err = svc.ReadAvailableForIntake(ctx, snapshot, legacy.ID)
+	require.ErrorContains(t, err, "access capability binding is incomplete")
 	_, err = svc.ReadAvailableForIntake(ctx, snapshot, 1)
 	require.Error(t, err)
 	require.Greater(t, logs.Len(), 0)
@@ -83,7 +88,16 @@ func TestIntakeCatalogDiscoverySkipsInvalidAcrossPages(t *testing.T) {
 	_, err = svc.ListAvailableForIntake(ctx, snapshot, 0, "", 51)
 	require.ErrorIs(t, err, creation.ErrPermissionDenied)
 	snapshot.Identity.Role = "super_admin"
+	binder := service.NewProcessBindingService(tx.Client())
+	for _, policy := range []*accessgrant.Policy{nil, {ID: 123}} {
+		err = binder.ValidateAccessPolicyBinding(ctx, tx, 1, "generic", "legacy-grant", policy)
+		require.True(t, isUnavailableIntakeCatalog(err))
+	}
 	require.NoError(t, tx.Rollback())
+	err = binder.ValidateAccessPolicyBinding(ctx, tx, 1, "generic", "legacy-grant", nil)
+	require.Error(t, err)
+	require.False(t, isUnavailableIntakeCatalog(err))
+
 	_, err = svc.ListAvailableForIntake(ctx, snapshot, 0, "", 51)
 	require.ErrorIs(t, err, creation.ErrInfrastructureUnavailable)
 }
