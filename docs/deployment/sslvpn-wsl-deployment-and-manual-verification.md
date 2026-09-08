@@ -1,5 +1,7 @@
 # SSLVPN：WSL 部署与手工端到端验收
 
+> 2026-09-08 维护补充：目录整理已完成，运行版本未升级。当前 ITSM API 使用 `intake-catalog-discovery-v2`，交付对应尚未进入本地 main 的 `7c114b3e` 修复；仅从 main 重建可能丢失修复。先读[当前开发环境与交付约束](../development-environment.md)，本手册正式升级流程需单独规划。
+
 状态：运行手册；命令与契约按 2026-09-08 两仓 SSLVPN 最终 feature 代码核对。本文提供操作步骤，**不表示新一轮部署、正常 Azure SSO 或真实授权已执行**。最终发布版本以两仓合并后的 `origin/main` SHA 为准。
 
 配套交付 PR：[ITSM #10](https://github.com/Joes9527/itsm/pull/10)、[KAF #214](https://github.com/DawnproIN/kaf/pull/214)。部署前确认两者均已合并，再按第 3 节读取真实 main SHA；PR 已创建不等于已经合并。
@@ -24,7 +26,7 @@
 ## 2. 环境事实与恢复前提
 
 原 ITSM feature：`/home/administrator/project/itsm/.worktrees/sslvpn-unified-intake`。
-KAF 源码路径：`/home/administrator/.worktrees/kaf-sslvpn-unified-intake`。该路径在本次交付中恢复为持有自身 `.git` 目录的独立仓库，不再依赖 CI runner checkout 的 linked-worktree 元数据；已有源码与 ART 证据保留。部署前确认这项恢复完成，再从该独立仓库执行第 3 节的 `fetch` / `worktree add` 命令。
+KAF 当前源码主入口为 `/home/administrator/project/kaf`，运行 worktree 为 `/home/administrator/apps/itsm-kaf/kaf`，两者已建立并验证 Git 关联。旧 WSL/Windows 源码入口已归档保留。当前目录和专用 ITSM 修复交付见[本机开发环境](../development-environment.md)；下列正式升级步骤不能作为日常重启命令直接套用。
 
 原 KAF 主 checkout 位于 CI runner 的 `/home/administrator/actions-runner/_work/kaf/kaf`。CI checkout 会清理工作目录，本次曾导致关联 worktree 的父级 Git 元数据丢失；因此 runner checkout **不得承载部署 worktree 的 Git 元数据**，也不能作为个人部署目录。本节只说明恢复后的目录关系，不要求用户重建、删除或搬动原仓库/证据。
 
@@ -58,7 +60,7 @@ C4 已恢复：临时 users 14–17 inactive，审批角色权限和组成员清
 
 ```bash
 export ITSM_SOURCE=/home/administrator/project/itsm/.worktrees/sslvpn-unified-intake
-export KAF_SOURCE=/home/administrator/.worktrees/kaf-sslvpn-unified-intake
+export KAF_SOURCE=/home/administrator/project/kaf
 export ITSM_DEPLOY=/home/administrator/.worktrees/itsm-sslvpn-deployment
 export KAF_DEPLOY=/home/administrator/.worktrees/kaf-sslvpn-deployment
 export SSLVPN_RUN=/home/administrator/.local/state/sslvpn-wsl
