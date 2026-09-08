@@ -36,7 +36,7 @@ WSL 还有多个其他任务的 PostgreSQL / Redis / Qdrant 容器。当前不�
 
 ## 进入下一阶段前的门禁
 
-- 统一 PostgreSQL 实例涉及 KAF PG16 与 ITSM PG17 的版本差异；原设计“不顺带升级数据库大版本”需要针对这项必要迁移作显式决策。
+- 维护者已指定统一 PostgreSQL 目标为 PROD 基线 16.14 x86_64 Alpine/musl。ITSM PG17→PG16 必须采用经过验证的逻辑迁移；不复制源卷、不原地降级，不将低版本 pg_dump 用于 PG17 源。
 - Redis 7.2 / 7.4、MinIO 2024 / 2025 需要确定统一版本并验证恢复、持久化和 API 行为；不采用浮动 latest 或未经验证的降级。
 - 核对每个库、bucket、Qdrant 集合与 Mac/WSL/CI 的实际调用关系。
 - 核对 Redis 键类型、TTL、队列/消费组、持久化和淘汰策略；核对 MinIO 历史版本、本地附件与跨系统引用。
