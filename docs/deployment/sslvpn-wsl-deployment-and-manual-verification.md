@@ -24,8 +24,9 @@
 ## 2. 环境事实与恢复前提
 
 原 ITSM feature：`/home/administrator/project/itsm/.worktrees/sslvpn-unified-intake`。
-原 KAF feature：`/home/administrator/.worktrees/kaf-sslvpn-unified-intake`。
-原 KAF 主 checkout 位于 CI runner 的 `/home/administrator/actions-runner/_work/kaf/kaf`，不要把它当个人部署目录。
+KAF 源码路径：`/home/administrator/.worktrees/kaf-sslvpn-unified-intake`。该路径在本次交付中恢复为持有自身 `.git` 目录的独立仓库，不再依赖 CI runner checkout 的 linked-worktree 元数据；已有源码与 ART 证据保留。部署前确认这项恢复完成，再从该独立仓库执行第 3 节的 `fetch` / `worktree add` 命令。
+
+原 KAF 主 checkout 位于 CI runner 的 `/home/administrator/actions-runner/_work/kaf/kaf`。CI checkout 会清理工作目录，本次曾导致关联 worktree 的父级 Git 元数据丢失；因此 runner checkout **不得承载部署 worktree 的 Git 元数据**，也不能作为个人部署目录。本节只说明恢复后的目录关系，不要求用户重建、删除或搬动原仓库/证据。
 
 原证据目录（以下称 ART）为 ITSM feature 下 `.superpowers/sdd/2026-09-05-sslvpn-end-to-end-implementation`；C4 运行证据位于 `ART/c4-live-runtime`。
 
