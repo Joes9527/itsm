@@ -1506,9 +1506,6 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 		{Name: "变更管理", Path: "/changes", Icon: "BarChart3", PermissionCode: "change:read", SortOrder: 50},
 		{Name: "CMDB", Path: "/cmdb", Icon: "Database", PermissionCode: "cmdb:read", SortOrder: 60},
 		{Name: "服务目录", Path: "/service-catalog", Icon: "Book", PermissionCode: "service:read", SortOrder: 70},
-		// BPMN ProcessTask 审批收件箱的唯一页面。PermissionCode 用 task:read，
-		// 因为任务候选人不必拥有流程定义管理权限。
-		{Name: "我的待办", Path: "/approvals", Icon: "CheckSquare", PermissionCode: "task:read", SortOrder: 75},
 		{Name: "知识库", Path: "/knowledge", Icon: "HelpCircle", PermissionCode: "knowledge:read", SortOrder: 80},
 		{Name: "SLA监控", Path: "/sla-dashboard", Icon: "Calendar", PermissionCode: "sla:read", SortOrder: 90},
 		{Name: "报表", Path: "/reports", Icon: "TrendingUp", PermissionCode: "report:read", SortOrder: 100},
@@ -1532,6 +1529,9 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 	for _, item := range menus {
 		s.expectedMenus = append(s.expectedMenus, item.Path)
 	}
+	// The approvals reconciler owns creation and legacy migration so operator
+	// visibility settings survive initialization. Keep its route in verification.
+	s.expectedMenus = append(s.expectedMenus, "/approvals")
 
 	for _, m := range menus {
 		existing, err := s.client.Menu.Query().
@@ -1711,6 +1711,9 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 	}
 	if err := reconcileCatalogMenus(ctx, s.client, t.ID); err != nil {
 		s.sugar.Errorw("reconcile catalog menus failed", "tenant_id", t.ID, "error", err)
+	}
+	if err := reconcileApprovalMenus(ctx, s.client, t.ID); err != nil {
+		s.sugar.Errorw("reconcile approval menus failed", "tenant_id", t.ID, "error", err)
 	}
 }
 

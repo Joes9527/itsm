@@ -19,7 +19,7 @@ import (
 func main() {
 	tenantID := flag.Int("tenant-id", 0, "existing tenant whose menus will be reconciled")
 	requestedBy := flag.String("requested-by", "", "operator identity recorded in the audit log")
-	scope := flag.String("scope", "", "required menu scope: workflow|catalog")
+	scope := flag.String("scope", "", "required menu scope: workflow|catalog|approvals")
 	flag.Parse()
 	if *tenantID <= 0 || strings.TrimSpace(*requestedBy) == "" {
 		fmt.Fprintln(os.Stderr, "-tenant-id must be positive and -requested-by is required")

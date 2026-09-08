@@ -16,8 +16,9 @@ func (s *Seeder) ReconcileMenus(ctx context.Context, tenantID int, requestedBy, 
 		return fmt.Errorf("positive tenant ID and requester are required")
 	}
 	reconcile, ok := map[string]func(context.Context, *ent.Client, int) error{
-		"workflow": reconcileWorkflowMenus,
-		"catalog":  reconcileCatalogMenus,
+		"workflow":  reconcileWorkflowMenus,
+		"catalog":   reconcileCatalogMenus,
+		"approvals": reconcileApprovalMenus,
 	}[scope]
 	if !ok {
 		return fmt.Errorf("unsupported menu reconciliation scope %q", scope)
