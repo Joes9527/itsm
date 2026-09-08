@@ -8,7 +8,7 @@
 
 **Tech Stack:** WSL、Docker Compose、PostgreSQL、Redis、MinIO、KAF Qdrant、现有 Go/Ent 与 Python/Alembic 应用。
 
-状态：accepted；任务 1 只读盘点进行中。SSH 身份已经维护者核验并恢复连接；源版本差异需要决策，尚未创建目标栈或迁移。设计依据：[已批准设计](../specs/2026-09-08-wsl-infrastructure-consolidation-design.md)。
+状态：in progress；任务 1 盘点未闭合。已提前执行独立的在线备份和 Qdrant 隔离恢复验证；PG16 镜像已构建，12 个数据库恢复及数据比对通过。Redis/MinIO PROD 版本由维护者确认暂时未知，最终共享栈和应用切换未执行。设计依据：[已批准设计](../specs/2026-09-08-wsl-infrastructure-consolidation-design.md)。
 
 ## Global Constraints
 
@@ -173,3 +173,9 @@ ssh -o BatchMode=yes -o ConnectTimeout=10 -p 22222 administrator@192.168.31.66 '
 后续记录：维护者提供的 WSL 本机指纹与远端一致，本机备份并定向更新信任条目后，严格校验连接通过。源实例版本、运行配置和资源容量已部分核对，见 [实际盘点记录](../../deployment/wsl-infrastructure-consolidation-runbook.md)。发现 PostgreSQL 16/17、Redis 7.2/7.4、MinIO 2024/2025 差异，需要在创建目标栈前确定版本统一范围。任务 1 未完成，未改动远端数据或配置。
 
 版本决定已收敛：维护者要求 PostgreSQL 对齐 PROD 16.14 Alpine。ITSM 17→16 的完整逻辑恢复与业务兼容性是任务 3 的硬门禁；Redis、MinIO 版本尚未确定。
+
+执行补充：已保全两个源实例的 12 个 PostgreSQL 数据库、Redis 状态、MinIO 对象和四个 Qdrant 集合快照。Qdrant 隔离恢复通过数量/向量配置核验，其他恢复门禁尚未闭合。Mac 与 WSL 使用不同业务库及 Redis DB，最终映射需明确保留。当前执行顺序调整为先完成可独立验证的备份与隔离演练，不因目标 Redis/MinIO 版本待定而停止 PostgreSQL 准备；不绕过最终切换门禁。详见 runbook。
+
+维护者确认 Redis 和 MinIO 的 PROD 版本暂时未知；不据此猜测目标版本。PG16 镜像已构建并启动隔离恢复，两套 WSL 当前 config_baseline 库已通过表数据哈希和序列值比对，其余数据库继续验证。
+
+本轮结束记录：PostgreSQL 12/12 库（2,892 张表、277,948 条记录、2,706 个序列）恢复比对通过。WSL 启动配置/现用二进制和 Mac 两仓环境文件已私有备份。完整范围、方法、验证限制和未完成门禁见 runbook。任务 1～3 仍有未闭合项；任务 4～7 尚未执行，不更新正式环境文档或架构图为已切换拓扑。
