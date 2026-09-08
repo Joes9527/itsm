@@ -1,5 +1,7 @@
 # Development Guide
 
+> 已存在的 KAF/ITSM WSL 联调实例请先读[本机开发环境](development-environment.md)。以下 Quick Start 用于新环境，不能对现有共享数据库直接执行 init/quickstart。
+
 ## Prerequisites
 
 - **Go** 1.25+（`go.mod` 当前固定 1.25.12，与 `itsm-backend/Dockerfile.prod` 一致）
