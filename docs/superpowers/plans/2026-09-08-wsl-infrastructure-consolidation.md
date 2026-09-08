@@ -8,7 +8,7 @@
 
 **Tech Stack:** WSL、Docker Compose、PostgreSQL、Redis、MinIO、KAF Qdrant、现有 Go/Ent 与 Python/Alembic 应用。
 
-状态：accepted；任务 1 的 SSH 只读连接预检因主机指纹与本机记录不一致而停止，尚未进入远端执行盘点和迁移。设计依据：[已批准设计](../specs/2026-09-08-wsl-infrastructure-consolidation-design.md)。
+状态：accepted；任务 1 只读盘点进行中。SSH 身份已经维护者核验并恢复连接；源版本差异需要决策，尚未创建目标栈或迁移。设计依据：[已批准设计](../specs/2026-09-08-wsl-infrastructure-consolidation-design.md)。
 
 ## Global Constraints
 
@@ -47,7 +47,7 @@ WSL 本机私有交付：`/home/administrator/.local/state/kaf-itsm-dev-consolid
 
 **Interfaces:** 输入为当前 WSL 运行环境；输出清单必须包括 `sources`、`consumers`、`ciDependencies`、`capacity`、`targetMappings` 和 `backupMethods`。每个资源记录 engine/version、host/port、database/Redis DB/bucket、owner、凭据文件来源，不记录凭据值。
 
-- [ ] 验证已有 SSH 公钥连接。候选连接来自当前环境文档，失败时停在连接核对，不猜密码或改网络配置：
+- [x] 验证已有 SSH 公钥连接。候选连接来自当前环境文档，失败时停在连接核对，不猜密码或改网络配置：
 
 ```bash
 ssh -o BatchMode=yes -o ConnectTimeout=10 -p 22222 administrator@192.168.31.66 'hostname; id -un; uname -s'
@@ -168,3 +168,5 @@ ssh -o BatchMode=yes -o ConnectTimeout=10 -p 22222 administrator@192.168.31.66 '
 ## 执行记录：2026-09-08
 
 已完成计划自检和本地提交。首次 SSH 预检使用严格主机身份校验，返回 `Host key verification failed`；未执行任何远端命令，未修改 known_hosts 或目标环境。下一步由维护者通过 WSL 本机控制台核对主机公钥指纹，匹配后再受控更新本机信任记录并继续任务 1。该连接阻塞不影响设计结论，也不能视为迁移失败或数据异常。
+
+后续记录：维护者提供的 WSL 本机指纹与远端一致，本机备份并定向更新信任条目后，严格校验连接通过。源实例版本、运行配置和资源容量已部分核对，见 [实际盘点记录](../../deployment/wsl-infrastructure-consolidation-runbook.md)。发现 PostgreSQL 16/17、Redis 7.2/7.4、MinIO 2024/2025 差异，需要在创建目标栈前确定版本统一范围。任务 1 未完成，未改动远端数据或配置。
