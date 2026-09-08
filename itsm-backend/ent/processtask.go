@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
+	"itsm-backend/internal/jsonvalue"
 	"strings"
 	"time"
 
@@ -54,7 +55,7 @@ type ProcessTask struct {
 	// 表单Key
 	FormKey string `json:"form_key,omitempty"`
 	// 参与者可编辑的任务表单变量；回调路由和系统元数据不得存放在此字段
-	TaskVariables map[string]interface{} `json:"task_variables,omitempty"`
+	TaskVariables jsonvalue.NumberMap `json:"task_variables,omitempty"`
 	// 创建任务时从流程定义解析的不可变回调处理器 ID；显式哨兵表示无回调或无法解析
 	CallbackHandlerID string `json:"callback_handler_id,omitempty"`
 	// 创建任务时从流程定义解析的不可变回调任务类型

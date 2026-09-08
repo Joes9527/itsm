@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/fielddefinition"
 	"itsm-backend/ent/predicate"
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -142,13 +143,13 @@ func (_u *FieldDefinitionUpdate) SetNillableRequired(v *bool) *FieldDefinitionUp
 }
 
 // SetOptions sets the "options" field.
-func (_u *FieldDefinitionUpdate) SetOptions(v []interface{}) *FieldDefinitionUpdate {
+func (_u *FieldDefinitionUpdate) SetOptions(v jsonvalue.NumberArray) *FieldDefinitionUpdate {
 	_u.mutation.SetOptions(v)
 	return _u
 }
 
 // AppendOptions appends value to the "options" field.
-func (_u *FieldDefinitionUpdate) AppendOptions(v []interface{}) *FieldDefinitionUpdate {
+func (_u *FieldDefinitionUpdate) AppendOptions(v jsonvalue.NumberArray) *FieldDefinitionUpdate {
 	_u.mutation.AppendOptions(v)
 	return _u
 }
@@ -506,13 +507,13 @@ func (_u *FieldDefinitionUpdateOne) SetNillableRequired(v *bool) *FieldDefinitio
 }
 
 // SetOptions sets the "options" field.
-func (_u *FieldDefinitionUpdateOne) SetOptions(v []interface{}) *FieldDefinitionUpdateOne {
+func (_u *FieldDefinitionUpdateOne) SetOptions(v jsonvalue.NumberArray) *FieldDefinitionUpdateOne {
 	_u.mutation.SetOptions(v)
 	return _u
 }
 
 // AppendOptions appends value to the "options" field.
-func (_u *FieldDefinitionUpdateOne) AppendOptions(v []interface{}) *FieldDefinitionUpdateOne {
+func (_u *FieldDefinitionUpdateOne) AppendOptions(v jsonvalue.NumberArray) *FieldDefinitionUpdateOne {
 	_u.mutation.AppendOptions(v)
 	return _u
 }

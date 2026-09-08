@@ -130,11 +130,6 @@ class ChangeService {
     return httpClient.get<Change>(`${this.baseUrl}/${id}`);
   }
 
-  // 创建变更
-  async createChange(data: CreateChangeRequest): Promise<Change> {
-    return httpClient.post<Change>(this.baseUrl, data);
-  }
-
   // 更新变更
   async updateChange(id: number, data: UpdateChangeRequest): Promise<Change> {
     return httpClient.put<Change>(`${this.baseUrl}/${id}`, data);

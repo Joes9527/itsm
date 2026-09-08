@@ -1,5 +1,10 @@
 'use client';
 
+import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
+import { CreationAttempts } from '@/components/work-item/CreationAttempts';
+import { CreationRequester } from '@/components/work-item/CreationRequester';
+
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { IncidentAPI, type Incident, type ListIncidentsRequest } from '@/lib/api/incident-api';
 import {
@@ -1045,6 +1050,7 @@ const IncidentFormModal: React.FC<{
   onSuccess: () => void;
 }> = ({ visible, incident, onClose, onSuccess }) => {
   const [form] = Form.useForm();
+  const creation = useWorkItemCreation();
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -1065,11 +1071,11 @@ const IncidentFormModal: React.FC<{
   const handleSubmit = async (values: any) => {
     setLoading(true);
     try {
-      const url = incident ? `/api/v1/incidents/${incident.id}` : '/api/v1/incidents';
       if (incident) {
         await IncidentAPI.updateIncident(incident.id, values);
       } else {
-        await IncidentAPI.createIncident(values);
+        await creation.submit({ ...values, source: 'manual', type: 'incident' }, IncidentAPI.createIncident, onSuccess);
+        return;
       }
 
       message.success(incident ? '更新事件成功' : '创建事件成功');
@@ -1090,7 +1096,9 @@ const IncidentFormModal: React.FC<{
       confirmLoading={loading}
       width={600}
     >
+      <CreationAttempts creation={creation} />
       <Form form={form} layout="vertical" onFinish={handleSubmit}>
+        {!incident && <CreationRequester />}
         <Form.Item
           name="title"
           label="事件标题"
@@ -1110,7 +1118,7 @@ const IncidentFormModal: React.FC<{
               label="优先级"
               rules={[{ required: true, message: '请选择优先级' }]}
             >
-              <Select placeholder="请选择优先级" options={[{ value: "low", label: "低" }, { value: "medium", label: "中" }, { value: "high", label: "高" }, { value: "urgent", label: "紧急" }]} />
+              <Select placeholder="请选择优先级" options={[{ value: "low", label: "低" }, { value: "medium", label: "中" }, { value: "high", label: "高" }, { value: "critical", label: "紧急" }]} />
             </Form.Item>
           </Col>
           <Col span={12}>

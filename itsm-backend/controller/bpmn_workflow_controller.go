@@ -338,7 +338,7 @@ func (c *BPMNWorkflowController) UpdateProcessDefinition(ctx *gin.Context) {
 
 	definition, err := c.processEngine.ProcessDefinitionService().UpdateProcessDefinition(workflowCtx, key, version, &req)
 	if err != nil {
-		common.InternalError(ctx, "更新流程定义失败: "+err.Error())
+		respondBPMNError(ctx, err, "更新流程定义失败")
 		return
 	}
 
@@ -1149,4 +1149,10 @@ func (c *BPMNWorkflowController) GetVersionChangeLogsByID(ctx *gin.Context) {
 	}
 
 	common.Success(ctx, changelogs)
+}
+
+func (c *BPMNWorkflowController) SetApprovedAccessReader(owner service.ApprovedAccessReader) {
+	if c.kafDelegationController != nil {
+		c.kafDelegationController.service.SetApprovedAccessReader(owner)
+	}
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/metrics"
@@ -78,9 +79,10 @@ func newBPMNCallbackAdvanceError(_ error) error {
 // bpmnCallbackOutbox owns the durable callback lease lifecycle. Task 3 supplies
 // the executor that performs the BPMN-specific callback and token advancement.
 type bpmnCallbackOutbox struct {
-	client   *ent.Client
-	executor bpmnCallbackExecutor
-	now      func() time.Time
+	client          *ent.Client
+	candidateClient *ent.Client
+	executor        bpmnCallbackExecutor
+	now             func() time.Time
 }
 
 func (o *bpmnCallbackOutbox) enqueue(ctx context.Context, client *ent.Client, request bpmnCallbackEnqueueRequest) (*ent.ProcessCallbackOutbox, error) {
@@ -157,7 +159,11 @@ func (o *bpmnCallbackOutbox) processPending(ctx context.Context, workerID string
 	now := o.clock()
 	// This is a system worker scan. Every row-specific claim and transition below
 	// includes the authoritative tenant predicate carried by the candidate row.
-	candidates, err := o.client.ProcessCallbackOutbox.Query().
+	candidateClient := o.client
+	if _, scoped := tenantctx.TenantID(ctx); !scoped && o.candidateClient != nil {
+		candidateClient = o.candidateClient
+	}
+	candidates, err := candidateClient.ProcessCallbackOutbox.Query().
 		Where(processcallbackoutbox.Or(
 			processcallbackoutbox.And(
 				processcallbackoutbox.StatusEQ(bpmnCallbackStatusPending),
@@ -178,6 +184,7 @@ func (o *bpmnCallbackOutbox) processPending(ctx context.Context, workerID string
 	completed := 0
 	failed := false
 	for _, row := range candidates {
+		ctx := tenantctx.WithTenantID(ctx, row.TenantID)
 		claimed, claimErr := o.claim(ctx, workerID, row)
 		if claimErr != nil {
 			failed = true
@@ -405,10 +412,11 @@ func (o *bpmnCallbackOutbox) persistCallbackOutcome(ctx context.Context, workerI
 		SetStatus(outcome.OutboxStatus).
 		SetCompletedAt(o.clock()).
 		ClearLeaseOwner().
-		ClearLeaseExpiresAt().
-		ClearLastErrorClass()
+		ClearLeaseExpiresAt()
 	if outcome.OutboxStatus == bpmn.CallbackOutboxBlocked {
 		update.SetLastErrorClass(string(outcome.LastErrorClass))
+	} else {
+		update.ClearLastErrorClass()
 	}
 	affected, err := update.Save(ctx)
 	if err != nil {

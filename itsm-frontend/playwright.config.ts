@@ -22,7 +22,7 @@ export default defineConfig({
     },
   },
   reporter: [['list'], ['html', { open: 'never' }]],
-  webServer: {
+  webServer: process.env.PLAYWRIGHT_EXTERNAL_SERVER === '1' ? undefined : {
     command: 'npm run dev',
     port: 3000,
     reuseExistingServer: true,

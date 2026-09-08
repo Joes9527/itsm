@@ -548,3 +548,19 @@ func mustCount(t *testing.T, query func() (int, error)) int {
 	require.NoError(t, err)
 	return count
 }
+
+func TestCatalogSeedsRemainRepairableDrafts(t *testing.T) {
+	s, ctx := newTestSeeder(t, tenantmode.DeploymentModePrivate)
+	require.NotNil(t, s.seedDefaultTenant(ctx))
+	s.seedServiceCatalog(ctx)
+	rows := s.client.ServiceCatalog.Query().AllX(ctx)
+	require.NotEmpty(t, rows)
+	for _, row := range rows {
+		require.False(t, row.IsActive)
+		require.Equal(t, "disabled", row.Status)
+		require.NotEmpty(t, row.TargetClass)
+	}
+	original := rows[0].Update().SetStatus("enabled").SetIsActive(true).SaveX(ctx)
+	s.seedServiceCatalog(ctx)
+	require.True(t, s.client.ServiceCatalog.GetX(ctx, original.ID).IsActive)
+}

@@ -1,29 +1,28 @@
 package controller
 
 import (
-	"context"
 	"strconv"
 	"strings"
 	"time"
 
 	"itsm-backend/common"
 	"itsm-backend/dto"
-	problemDomain "itsm-backend/handlers/problem"
+	"itsm-backend/handlers/common/intakehttp"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
-	"itsm-backend/service/bpmn"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )
 
 type IncidentController struct {
+	creationApplication      creation.Application
 	incidentService          *service.IncidentService
 	ruleEngine               *service.IncidentRuleEngine
 	monitoringService        *service.IncidentMonitoringService
 	alertingService          *service.IncidentAlertingService
 	rootCauseAnalysisService *service.RootCauseAnalysisService
-	problemConversionService problemDomain.ConversionService
 	logger                   *zap.SugaredLogger
 }
 
@@ -33,7 +32,6 @@ func NewIncidentController(
 	monitoringService *service.IncidentMonitoringService,
 	alertingService *service.IncidentAlertingService,
 	rootCauseAnalysisService *service.RootCauseAnalysisService,
-	problemConversionService problemDomain.ConversionService,
 	logger *zap.SugaredLogger,
 ) *IncidentController {
 	return &IncidentController{
@@ -42,14 +40,13 @@ func NewIncidentController(
 		monitoringService:        monitoringService,
 		alertingService:          alertingService,
 		rootCauseAnalysisService: rootCauseAnalysisService,
-		problemConversionService: problemConversionService,
 		logger:                   logger,
 	}
 }
 
 // CreateIncident 创建事件
 // @Summary 创建事件
-// @Description 创建新的事件记录
+// @Description 创建新的事件记录。HTTP source 仅允许省略、manual 或 user；system/monitoring 需要受信内部入口。
 // @Tags 事件管理
 // @Accept json
 // @Produce json
@@ -72,35 +69,27 @@ func (c *IncidentController) resolveTenantID(ctx *gin.Context) (int, bool) {
 	return 0, false
 }
 
+func (c *IncidentController) SetCreationApplication(app creation.Application) {
+	c.creationApplication = app
+}
 func (c *IncidentController) CreateIncident(ctx *gin.Context) {
 	var req dto.CreateIncidentRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		c.logger.Errorw("Invalid request body", "error", err)
-		common.Fail(ctx, common.ParamErrorCode, "请求参数无效")
+	if !intakehttp.Bind(ctx, &req) {
 		return
 	}
-
 	tenantID, ok := c.resolveTenantID(ctx)
 	if !ok {
 		return
 	}
-
-	userID, err := middleware.GetUserID(ctx)
-	if err != nil {
-		c.logger.Errorw("Failed to get user ID", "error", err)
-		common.Fail(ctx, common.AuthFailedCode, "获取用户ID失败")
-		return
+	detected := ""
+	if req.DetectedAt != nil {
+		detected = req.DetectedAt.UTC().Format(time.RFC3339Nano)
 	}
-
-	workflowCtx := context.WithValue(ctx.Request.Context(), bpmn.BPMNUserIDContextKey, userID)
-	response, err := c.incidentService.CreateIncident(workflowCtx, &req, tenantID, userID)
-	if err != nil {
-		c.logger.Errorw("Failed to create incident", "error", err)
-		common.Fail(ctx, common.InternalErrorCode, "创建事件失败")
-		return
+	requesterID := 0
+	if req.RequesterID != nil {
+		requesterID = *req.RequesterID
 	}
-
-	common.Success(ctx, response)
+	intakehttp.Execute(ctx, c.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassIncident, IntakeKind: creation.IntakeKindIncident, Title: req.Title, Description: req.Description, Priority: req.Priority, AssigneeID: req.AssigneeID, CIIDs: req.ConfigurationItemIDs, Incident: &creation.IncidentInput{Type: req.Type, Severity: req.Severity, Impact: req.Impact, Urgency: req.Urgency, Category: req.Category, Subcategory: req.Subcategory, DetectedAt: detected, ImpactAnalysis: req.ImpactAnalysis, Metadata: req.Metadata, Source: req.Source}})
 }
 
 // GetIncident 获取事件详情
@@ -1015,49 +1004,39 @@ func (c *IncidentController) GetAlertStatistics(ctx *gin.Context) {
 
 // ConvertToProblem 将事件转换为问题
 // @Summary 将事件转换为问题
-// @Description 将指定的事件转换为问题记录
+// @Description 将指定的事件转换为问题记录；同一 Idempotency-Key 与请求体重放返回原回执
 // @Tags incidents
 // @Accept json
 // @Produce json
 // @Param id path int true "事件ID"
+// @Param Idempotency-Key header string true "创建幂等键"
 // @Param request body dto.ConvertIncidentToProblemRequest true "转换请求"
-// @Success 200 {object} common.Response{data=dto.ProblemResponse}
+// @Success 201 {object} common.Response{data=workitemcreation.CreateWorkItemResult} "新建转换回执"
+// @Success 200 {object} common.Response{data=workitemcreation.CreateWorkItemResult} "幂等重放回执"
 // @Failure 400 {object} common.Response
+// @Failure 403 {object} common.Response
+// @Failure 409 {object} common.Response
 // @Failure 500 {object} common.Response
 // @Router /api/v1/incidents/{id}/convert-to-problem [post]
 func (c *IncidentController) ConvertToProblem(ctx *gin.Context) {
 	incidentID, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
-		common.Fail(ctx, common.ParamErrorCode, "无效的事件ID")
+	if err != nil || incidentID <= 0 {
+		intakehttp.Fail(ctx, intakehttp.Invalid("id", "positive incident ID is required"))
 		return
 	}
-
 	var req dto.ConvertIncidentToProblemRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		common.Fail(ctx, common.ParamErrorCode, "请求参数错误: "+err.Error())
+	if !intakehttp.Bind(ctx, &req) {
 		return
 	}
-
-	userID, err := middleware.GetUserID(ctx)
-	if err != nil {
-		common.Fail(ctx, common.InternalErrorCode, "获取用户ID失败")
-		return
-	}
-
 	tenantID, ok := c.resolveTenantID(ctx)
 	if !ok {
 		return
 	}
-	created, err := c.problemConversionService.CreateFromIncident(
-		ctx.Request.Context(), tenantID, incidentID, userID, req,
-	)
-	if err != nil {
-		c.logger.Errorw("Failed to convert incident to problem", "error", err, "incident_id", incidentID)
-		common.Fail(ctx, common.InternalErrorCode, "转换失败: "+err.Error())
-		return
+	requesterID := 0
+	if req.RequesterID != nil {
+		requesterID = *req.RequesterID
 	}
-
-	common.Success(ctx, problemDomain.ToResponse(created))
+	intakehttp.Execute(ctx, c.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassProblem, IntakeKind: creation.IntakeKindProblem, Title: req.Title, Description: req.Description, Problem: &creation.ProblemInput{SourceIncidentID: &incidentID, RootCause: req.RootCause}})
 }
 
 // GetRootCause 获取根因分析

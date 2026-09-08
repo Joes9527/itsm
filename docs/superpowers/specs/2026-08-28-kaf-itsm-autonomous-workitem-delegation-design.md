@@ -177,6 +177,9 @@ type KafDelegateRequested = {
 
 事件推送是主路径；KAF 重启或事件遗漏时，通过 `GET /bpmn/process-tasks/kaf-delegated?status=delegated` 补拉其有权处理的未完成任务。MVP 不提供 claim 或 lease API，KAF 自身负责执行协调。
 
+C1 当前访问授权恢复契约：分页仍按原 delegated ProcessTask 的稳定 ID 游标推进。当前 SR 域判定不可执行的记录以列表投影 `status=domain_blocked`、`blockReason` 原因码和空 `allowedActions` 返回，不包含 `approvedAccess`；底层任务状态不改写。单任务 context 读取继续拒绝执行。KAF 恢复保留该记录的可观测 warning，不创建执行收据或调用 Procedure，并继续恢复同租户其他可执行记录。只有明确的域阻塞类型适用；身份认证、租户授权、数据库及其他基础设施错误仍使请求失败。原因码包括 snapshot_unavailable、request_not_executable、requester_identity_inactive、policy_mismatch、approval_not_executable；客户端不得按错误文本推断阻塞。
+
+
 任务范围 API 为：
 
 - `GET /bpmn/process-tasks/{taskId}/kaf-context`：返回该任务关联的 WorkItem、冻结受理快照、当前 BPMN 等待点、允许动作和当前版本；

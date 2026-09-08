@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"itsm-backend/ent/processcallbackoutbox"
+	"itsm-backend/internal/jsonvalue"
 	"strings"
 	"time"
 
@@ -41,7 +42,7 @@ type ProcessCallbackOutbox struct {
 	// 可信连接器配置引用；端点和凭据在执行时解析，绝不持久化到回调载荷
 	ConfigRef string `json:"config_ref,omitempty"`
 	// 按处理器声明字段过滤后的非敏感业务载荷
-	Variables map[string]interface{} `json:"variables,omitempty"`
+	Variables jsonvalue.NumberMap `json:"variables,omitempty"`
 	// OptionalDeclared holds the value of the "optional_declared" field.
 	OptionalDeclared bool `json:"optional_declared,omitempty"`
 	// Status holds the value of the "status" field.

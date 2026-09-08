@@ -68,7 +68,34 @@ func WithIncidentAlertActor(ctx context.Context, actorID int, source, correlatio
 }
 
 // CreateIncidentAlert 创建事件告警
+// IncidentAlertTransactionCreator is required by replayable rule actions. An independently committing creator is not safe.
+type IncidentAlertTransactionCreator interface {
+	CreateIncidentAlertTx(context.Context, *ent.Tx, *dto.CreateIncidentAlertRequest, int) (*dto.IncidentAlertResponse, error)
+}
+
 func (s *IncidentAlertingService) CreateIncidentAlert(ctx context.Context, req *dto.CreateIncidentAlertRequest, tenantID int) (*dto.IncidentAlertResponse, error) {
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	result, err := s.CreateIncidentAlertTx(ctx, tx, req, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (s *IncidentAlertingService) CreateIncidentAlertTx(ctx context.Context, tx *ent.Tx, req *dto.CreateIncidentAlertRequest, tenantID int) (*dto.IncidentAlertResponse, error) {
+	owner := *s
+	owner.client = tx.Client()
+	return owner.createIncidentAlertTx(ctx, tx, req, tenantID)
+}
+
+func (s *IncidentAlertingService) createIncidentAlertTx(ctx context.Context, tx *ent.Tx, req *dto.CreateIncidentAlertRequest, tenantID int) (*dto.IncidentAlertResponse, error) {
 	s.logger.Infow("Creating incident alert", "incident_id", req.IncidentID, "type", req.AlertType)
 	if err := s.validateAlertRequest(ctx, req, tenantID); err != nil {
 		return nil, err
@@ -78,11 +105,6 @@ func (s *IncidentAlertingService) CreateIncidentAlert(ctx context.Context, req *
 		triggeredAt = *req.TriggeredAt
 	}
 
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("start incident alert transaction: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
 	actor := resolveIncidentAlertActor(ctx)
 	if actor.CorrelationID == "" {
 		actor.CorrelationID = uuid.NewString()
@@ -128,10 +150,6 @@ func (s *IncidentAlertingService) CreateIncidentAlert(ctx context.Context, req *
 			return nil, fmt.Errorf("audit incident alert delivery acceptance: %w", err)
 		}
 	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit incident alert transaction: %w", err)
-	}
-
 	s.logger.Infow("Incident alert created successfully", "id", alert.ID)
 	return s.toIncidentAlertResponse(alert), nil
 }
@@ -237,13 +255,13 @@ func (s *IncidentAlertingService) validateAlertRequest(ctx context.Context, req 
 
 // createSystemNotification 创建系统通知记录
 func (s *IncidentAlertingService) createSystemNotification(ctx context.Context, tx *ent.Tx, alert *ent.IncidentAlert, tenantID int) error {
-	recipients, err := tx.User.Query().
-		Where(
-			user.TenantIDEQ(tenantID),
-			user.ActiveEQ(true),
-			user.RoleIn("super_admin"),
-		).
-		All(ctx)
+	query := tx.User.Query().Where(user.TenantIDEQ(tenantID), user.ActiveEQ(true))
+	if len(alert.Recipients) > 0 {
+		query.Where(user.EmailIn(alert.Recipients...))
+	} else {
+		query.Where(user.RoleIn("super_admin"))
+	}
+	recipients, err := query.All(ctx)
 	if err != nil {
 		return fmt.Errorf("resolve in-app alert recipients: %w", err)
 	}
@@ -540,22 +558,22 @@ func (s *IncidentAlertingService) ProcessEscalationAlerts(ctx context.Context, i
 
 	switch escalationLevel {
 	case 1:
-		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 1，需要关注", incidentEntity.IncidentNumber)
+		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 1，需要关注", incidentEntity.Edges.WorkItem.TicketNumber)
 		severity = "high"
 		channels = []string{"email"}
 		recipients = []string{"manager@company.com", "team@company.com"}
 	case 2:
-		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 2，需要立即处理", incidentEntity.IncidentNumber)
+		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 2，需要立即处理", incidentEntity.Edges.WorkItem.TicketNumber)
 		severity = "critical"
 		channels = []string{"email"}
 		recipients = []string{"director@company.com", "manager@company.com", "team@company.com"}
 	case 3:
-		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 3，需要紧急处理", incidentEntity.IncidentNumber)
+		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 3，需要紧急处理", incidentEntity.Edges.WorkItem.TicketNumber)
 		severity = "critical"
 		channels = []string{"email"}
 		recipients = []string{"cto@company.com", "director@company.com", "manager@company.com", "team@company.com"}
 	default:
-		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 %d", incidentEntity.IncidentNumber, escalationLevel)
+		alertMessage = fmt.Sprintf("事件 %s 已升级到级别 %d", incidentEntity.Edges.WorkItem.TicketNumber, escalationLevel)
 		severity = "high"
 		channels = []string{"email"}
 		recipients = []string{"admin@company.com"}
@@ -647,17 +665,17 @@ func (s *IncidentAlertingService) ProcessSLAViolationAlerts(ctx context.Context,
 
 	switch violationType {
 	case "response_time":
-		alertMessage = fmt.Sprintf("事件 %s 响应时间超时，违反SLA", incidentEntity.IncidentNumber)
+		alertMessage = fmt.Sprintf("事件 %s 响应时间超时，违反SLA", incidentEntity.Edges.WorkItem.TicketNumber)
 		severity = "high"
 		channels = []string{"email"}
 		recipients = []string{"manager@company.com", "team@company.com"}
 	case "resolution_time":
-		alertMessage = fmt.Sprintf("事件 %s 解决时间超时，违反SLA", incidentEntity.IncidentNumber)
+		alertMessage = fmt.Sprintf("事件 %s 解决时间超时，违反SLA", incidentEntity.Edges.WorkItem.TicketNumber)
 		severity = "critical"
 		channels = []string{"email"}
 		recipients = []string{"director@company.com", "manager@company.com", "team@company.com"}
 	default:
-		alertMessage = fmt.Sprintf("事件 %s 违反SLA: %s", incidentEntity.IncidentNumber, violationType)
+		alertMessage = fmt.Sprintf("事件 %s 违反SLA: %s", incidentEntity.Edges.WorkItem.TicketNumber, violationType)
 		severity = "medium"
 		channels = []string{"email"}
 		recipients = []string{"admin@company.com"}

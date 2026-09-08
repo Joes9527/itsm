@@ -72,7 +72,7 @@ func (p *EmbeddingPipeline) RunOnce(ctx context.Context, tenantID int, limit int
 				continue
 			}
 			if p.vectors != nil {
-				_ = p.vectors.Upsert(ctx, tenantID, "incident", it.ID, vec, it.Edges.WorkItem.Description, "incident:"+it.IncidentNumber)
+				_ = p.vectors.Upsert(ctx, tenantID, "incident", it.ID, vec, it.Edges.WorkItem.Description, "incident:"+it.Edges.WorkItem.TicketNumber)
 			}
 			if p.logger != nil {
 				p.logger.Infow("Embedded Incident", "id", it.ID, "tenant_id", tenantID, "ts", time.Now().Unix())

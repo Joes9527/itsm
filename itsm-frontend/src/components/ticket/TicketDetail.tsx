@@ -339,7 +339,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       if (values.status && ticket?.status && values.status !== ticket.status) {
         if (!isValidTransition(ticket.status as TicketStatus, values.status as TicketStatus)) {
           antMessage.error(
-            `不允许从 "${getTicketStatusLabel(ticket.status)}" 转换到 "${getTicketStatusLabel(values.status)}"`
+            `不允许从 "${ticket.recordClass === 'service_request_item' ? '服务请求' : getTicketStatusLabel(ticket.status)}" 转换到 "${getTicketStatusLabel(values.status)}"`
           );
           return;
         }
@@ -488,7 +488,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                 <>
                   <span>/</span>
                   <span className="text-slate-600">
-                    {ticket.source === 'service_catalog' ? '服务目录申请' : ticket.source}
+                    {ticket.source === 'service_catalog' ? '服务目录申请' : ticket.source === 'kaf_web' ? 'KAF Web 申请' : ticket.source}
                   </span>
                 </>
               )}
@@ -500,7 +500,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               </h1>
               <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-orange-700 border border-orange-200">
                 <span className="w-1.5 h-1.5 rounded-full bg-orange-500 mr-1.5" />
-                {getTicketStatusLabel(ticket.status)}
+                {ticket.recordClass === 'service_request_item' ? '服务请求' : getTicketStatusLabel(ticket.status)}
               </span>
               <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
                 {getPriorityConfig(ticket.priority).label}
@@ -608,7 +608,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
           </div>
 
           {/* 2. 服务目录专属交付面板 */}
-          {ticket?.source === 'service_catalog' && (
+          {ticket?.recordClass === 'service_request_item' && (
             <div className="bg-white rounded-2xl border border-slate-200/90 p-5 shadow-xs">
               <ServiceRequestPanel ticketId={ticket.id} />
             </div>
@@ -617,7 +617,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
           {/* 3. 底部协作 Tabs（评论/附件/审批链/历史/关联/通知） */}
           <TicketDetailTabs
             ticketId={ticketId}
-            ticketSource={ticket.source}
+            recordClass={ticket.recordClass}
             currentUserId={currentUser?.id}
             ticketAssigneeId={ticket.assigneeId}
             tabCounts={tabCounts}
@@ -820,7 +820,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
           )}
 
           {/* 4. 关联 CMDB 配置项（CI）卡片 */}
-          <CIContextCard ticketId={ticketId} source={ticket.source} />
+          <CIContextCard ticketId={ticketId} recordClass={ticket.recordClass} />
 
           {/* 5. 推荐操作指引 (KB) */}
           <KBRecommendCard query={ticket.title} />
@@ -958,7 +958,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               label="状态"
               name="status"
               rules={[{ required: true, message: '请选择状态' }]}
-              extra={ticket ? `当前状态: ${getTicketStatusLabel(ticket.status)}` : ''}
+              extra={ticket ? `当前状态: ${ticket.recordClass === 'service_request_item' ? '服务请求' : getTicketStatusLabel(ticket.status)}` : ''}
             >
               <Select
                 placeholder="请选择状态"
@@ -1124,7 +1124,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
 interface TicketDetailTabsProps {
   ticketId: number;
-  ticketSource?: string;
+  recordClass?: string;
   currentUserId?: number;
   ticketAssigneeId?: number;
   canReadNotifications: boolean;
@@ -1140,7 +1140,7 @@ interface TicketDetailTabsProps {
 
 const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
   ticketId,
-  ticketSource,
+  recordClass,
   currentUserId,
   tabCounts,
   ticketAssigneeId,
@@ -1187,7 +1187,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
       ),
       children: (
         <div>
-          {ticketSource === 'service_catalog' && (
+          {recordClass === 'service_request_item' && (
             <ServiceCatalogApprovalChain ticketId={ticketId} />
           )}
           <ProcessApprovalDecisionCards ticketId={ticketId} />

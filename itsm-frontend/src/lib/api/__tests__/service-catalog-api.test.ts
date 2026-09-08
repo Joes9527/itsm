@@ -1,3 +1,4 @@
+import { creationReceipt, creationOptions, creationHttpOptions } from '../creation.test-utils';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
 import { httpClient } from '@/lib/api/http-client';
 
@@ -56,24 +57,24 @@ describe('ServiceCatalogApi', () => {
   describe('deleteService', () => {
     it('should delete a service', async () => {
       mockDelete.mockResolvedValue(undefined);
-      await ServiceCatalogApi.deleteService('1');
-      expect(mockDelete).toHaveBeenCalledWith('/api/v1/service-catalogs/1');
+      await ServiceCatalogApi.deleteService('1', 'v1');
+      expect(mockDelete).toHaveBeenCalledWith('/api/v1/service-catalogs/1?expectedCatalogVersion=v1');
     });
   });
 
   describe('publishService', () => {
     it('should publish a service', async () => {
       mockPut.mockResolvedValue({ id: 1, status: 'enabled' });
-      await ServiceCatalogApi.publishService('1');
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/service-catalogs/1', { status: 'enabled' });
+      await ServiceCatalogApi.publishService('1', 'v1');
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/service-catalogs/1', { status: 'enabled', expectedCatalogVersion: 'v1' });
     });
   });
 
   describe('retireService', () => {
     it('should retire a service', async () => {
       mockPut.mockResolvedValue({ id: 1, status: 'disabled' });
-      await ServiceCatalogApi.retireService('1');
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/service-catalogs/1', { status: 'disabled' });
+      await ServiceCatalogApi.retireService('1', 'v1');
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/service-catalogs/1', { status: 'disabled', expectedCatalogVersion: 'v1' });
     });
   });
 
@@ -135,51 +136,13 @@ describe('ServiceCatalogApi', () => {
       expect(mockGet).toHaveBeenCalledWith('/api/v1/service-requests/1');
     });
   });
-
   describe('createServiceRequest', () => {
-    it('should create service request', async () => {
-      mockPost.mockResolvedValue({ id: 1 });
-      await ServiceCatalogApi.createServiceRequest({ serviceId: '5', formData: { reason: 'Need access' } } as any);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/service-requests', expect.objectContaining({ catalogId: 5 }));
-    });
-
-    // 回归测试：contactName/contactEmail/quantity/expectedAt 必须原样透传到后端 payload
-    // 的顶层 key（真实落到 ent 新增列），不能被大小写误改或悄悄丢失——这个 bug class
-    // 在这个代码库反复出现过。这 4 个字段直接映射到新增列，不再经过 formData JSON
-    // 兜底路径，所以从 request 顶层读取，而不是 request.formData。
-    it('passes contactName/contactEmail/quantity/expectedAt through as top-level payload keys', async () => {
-      mockPost.mockResolvedValue({ ticketId: 1 });
-      await ServiceCatalogApi.createServiceRequest({
-        serviceId: '5',
-        formData: { reason: 'Need a VM' },
-        contactName: 'Alice',
-        contactEmail: 'alice@example.com',
-        quantity: 3,
-        expectedAt: '2026-09-01T00:00:00.000Z',
-      } as any);
-      expect(mockPost).toHaveBeenCalledWith(
-        '/api/v1/service-requests',
-        expect.objectContaining({
-          contactName: 'Alice',
-          contactEmail: 'alice@example.com',
-          quantity: 3,
-          expectedAt: '2026-09-01T00:00:00.000Z',
-        })
-      );
-    });
-
-    // 合规确认绝不能静默默认为已勾选：调用方不传 complianceAck 时，必须落到 false，
-    // 而不是曾经的 `?? true` 兜底（那会让忘记传参的调用方悄悄"代签"合规确认）。
-    it('defaults complianceAck to false when the caller does not pass it, never true', async () => {
-      mockPost.mockResolvedValue({ ticketId: 1 });
-      await ServiceCatalogApi.createServiceRequest({
-        serviceId: '5',
-        formData: { reason: 'Need access' },
-      } as any);
-      expect(mockPost).toHaveBeenCalledWith(
-        '/api/v1/service-requests',
-        expect.objectContaining({ complianceAck: false })
-      );
+    it('preserves confirmed payload and returns only the creation receipt', async () => {
+      const data = { catalogId: 5, recordClass: 'service_request_item' as const, catalogVersion: 'v1', formSchemaVersion: 'f1', formData: { office_location: 'A' }, contactName: 'Alice', contactEmail: 'alice@example.com', quantity: 3, expectedAt: '2026-09-01T00:00:00.000Z', complianceAck: false };
+      mockPost.mockResolvedValue(creationReceipt);
+      const result = await ServiceCatalogApi.createServiceRequest(data, creationOptions);
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/service-requests', data, creationHttpOptions);
+      expect(result).toEqual(creationReceipt);
     });
   });
 
@@ -231,8 +194,8 @@ describe('ServiceCatalogApi', () => {
   describe('retireService', () => {
     it('should retire service', async () => {
       mockPut.mockResolvedValue({ id: '1', status: 'disabled' });
-      await ServiceCatalogApi.retireService('1');
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/service-catalogs/1', { status: 'disabled' });
+      await ServiceCatalogApi.retireService('1', 'v1');
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/service-catalogs/1', { status: 'disabled', expectedCatalogVersion: 'v1' });
     });
   });
 
@@ -245,4 +208,36 @@ describe('ServiceCatalogApi', () => {
       expect(mockPost).toHaveBeenCalled();
     });
   });
+});
+
+
+describe('catalog publication contract', () => {
+  it('sends the reviewed version and explicit cleared configuration', async () => {
+    mockPut.mockResolvedValue({ id: 1, status: 'disabled', targetClass: 'generic', requiresApproval: false });
+    const result = await ServiceCatalogApi.updateService('1', {
+      expectedCatalogVersion: 'catalog-v1:reviewed', targetClass: 'generic',
+      processDefinitionKey: '', ciTypeId: 0, cloudServiceId: 0,
+      requiresApproval: false, slaResponseTime: 0, slaResolutionTime: 0,
+    } as any);
+    expect(mockPut).toHaveBeenLastCalledWith('/api/v1/service-catalogs/1', {
+      expectedCatalogVersion: 'catalog-v1:reviewed', targetClass: 'generic',
+      processDefinitionKey: '', ciTypeId: 0, cloudServiceId: 0,
+      requiresApproval: false, slaResponseTime: 0, slaResolutionTime: 0,
+    });
+    expect(result.requiresApproval).toBe(false);
+  });
+  it('creates incomplete definitions as drafts', async () => {
+    mockPost.mockResolvedValue({ id: 2, status: 'disabled' });
+    await ServiceCatalogApi.createService({name:'Draft', category:'it_service'} as any);
+    expect(mockPost).toHaveBeenLastCalledWith('/api/v1/service-catalogs',expect.objectContaining({status:'disabled'}));
+  });
+});
+
+it('preserves the backend finite access policy in catalog details', async () => {
+  const accessPolicy = {
+    id: 2, version: 3, provider: 'graph', externalSystem: 'directory', groupId: 'group',
+    durationField: 'duration', durationOptions: [{ key: 'month', label: '一个月', seconds: 2592000 }],
+  };
+  mockGet.mockResolvedValue({ id: 1, name: 'Access', status: 'enabled', accessPolicy });
+  expect(await ServiceCatalogApi.getService('1')).toMatchObject({ accessPolicy });
 });

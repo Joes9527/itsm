@@ -132,6 +132,8 @@ services:
     container_name: itsm-backend-dev
     hostname: backend
     environment:
+      # Public endpoint only; the signing secret remains worker-owned.
+      - KAF_WEBHOOK_URL=${KAF_WEBHOOK_URL:-}
       # 数据库配置
       - DATABASE_URL=postgres://itsm_user:dev123@postgres:5432/itsm?sslmode=disable
       - DB_HOST=postgres

@@ -34,7 +34,7 @@ func TestRunPostSchemaMigrationsAppliesVersion007(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, runner.ensured)
-	require.Len(t, runner.migrations, 15)
+	require.Len(t, runner.migrations, 24)
 	require.Equal(t, "007_add_change_execution_tables", runner.migrations[0].Version)
 	require.Equal(t, "008_add_initialization_ledger", runner.migrations[1].Version)
 	require.Equal(t, "009_enable_rls_tenant_isolation", runner.migrations[2].Version)
@@ -50,6 +50,15 @@ func TestRunPostSchemaMigrationsAppliesVersion007(t *testing.T) {
 	require.Equal(t, "020_work_item_number_allocator", runner.migrations[12].Version)
 	require.Equal(t, "021_add_callback_optional_declared", runner.migrations[13].Version)
 	require.Equal(t, "022_drop_professional_extension_shared_fields", runner.migrations[14].Version)
+	require.Equal(t, "023_add_process_start_request_digest", runner.migrations[15].Version)
+	require.Equal(t, "024_incident_rule_action_receipts", runner.migrations[16].Version)
+	require.Equal(t, "025_email_attachment_source_identity", runner.migrations[17].Version)
+	require.Equal(t, "026_intake_actor_provenance", runner.migrations[18].Version)
+	require.Equal(t, "027_work_item_identity_field_retirement", runner.migrations[19].Version)
+	require.Equal(t, "028_service_request_work_item_authority", runner.migrations[20].Version)
+	require.Equal(t, "029_catalog_target_class_authority", runner.migrations[21].Version)
+	require.Equal(t, "030_catalog_access_policy_result", runner.migrations[22].Version)
+	require.Equal(t, "031_kaf_action_request_digest", runner.migrations[23].Version)
 }
 
 func TestRunPostSchemaMigrationsFailsClosed(t *testing.T) {
@@ -66,3 +75,5 @@ func TestRunPostSchemaMigrationsFailsClosed(t *testing.T) {
 		require.ErrorContains(t, err, "run post-schema migrations")
 	})
 }
+
+func (m *recordingPostSchemaMigrator) ReconcileSchemaInvariants(context.Context) error { return nil }

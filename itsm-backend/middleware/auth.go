@@ -8,6 +8,7 @@ import (
 
 	"itsm-backend/authentication"
 	"itsm-backend/common"
+	"itsm-backend/common/tenantctx"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -125,7 +126,7 @@ func AuthMiddleware(jwtSecret string) gin.HandlerFunc {
 		c.Set("role", claims.Role)
 		c.Set("tenant_id", claims.TenantID)
 		c.Set("token", tokenString)
-		c.Request = c.Request.WithContext(WithAuthenticatedTenantID(c.Request.Context(), claims.TenantID))
+		c.Request = c.Request.WithContext(tenantctx.WithTenantID(WithAuthenticatedTenantID(c.Request.Context(), claims.TenantID), claims.TenantID))
 
 		zap.S().Infow(
 			"AuthMiddleware: authentication successful",

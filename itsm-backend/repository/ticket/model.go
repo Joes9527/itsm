@@ -29,16 +29,6 @@ const (
 	PriorityCritical Priority = "critical"
 )
 
-// Type 工单类型
-type Type string
-
-const (
-	TypeIncident       Type = "incident"
-	TypeProblem        Type = "problem"
-	TypeChange         Type = "change"
-	TypeServiceRequest Type = "service_request"
-)
-
 // Ticket 工单领域模型
 // 表示 ITSM 系统中的工单实体
 type Ticket struct {
@@ -47,8 +37,8 @@ type Ticket struct {
 	Title                 string
 	Description           string
 	Status                Status
-	Type                  Type
 	RecordClass           string
+	GenericSubtype        string
 	Priority              Priority
 	RequesterID           int
 	AssigneeID            *int
@@ -192,7 +182,8 @@ const (
 type FilterParams struct {
 	Status         *Status
 	Priority       *Priority
-	Type           *Type
+	RecordClass    *string
+	GenericSubtype *string
 	RequesterID    *int
 	AssigneeID     *int
 	CategoryID     *int
@@ -210,42 +201,17 @@ type FilterParams struct {
 	CurrentUserID int
 }
 
-// CreateParams 工单创建参数
-type CreateParams struct {
-	Title             string
-	Description       string
-	Type              Type
-	Priority          Priority
-	RequesterID       int
-	AssigneeID        *int
-	CategoryID        *int
-	TemplateID        *int
-	ParentTicketID    *int
-	TagIDs            []int
-	Tags              []string
-	CustomFieldValues map[string]interface{}
-	// Source 工单来源：manual=手动创建，service_catalog=服务目录申请。
-	// 留空时由 ent schema 的 Default("manual") 生效，不强制赋值。
-	Source string
-	// CreatorEmail 创建人邮箱：邮件建单时记录原始发件邮箱，便于人工核对
-	CreatorEmail string
-	// ExternalMessageID 外部消息ID（如邮件 internetMessageId），用于建单去重判断
-	ExternalMessageID string
-	// ConversationID 邮件对话线程ID（Graph conversationId），用于识别用户回复
-	ConversationID string
-}
-
 // UpdateParams 工单更新参数
 type UpdateParams struct {
-	Title       *string
-	Description *string
-	Status      *Status
-	Type        *Type
-	Priority    *Priority
-	AssigneeID  *int
-	CategoryID  *int
-	ReplaceTags bool
-	TagIDs      []int
-	Resolution  *string
-	Version     int // 乐观锁版本号
+	Title          *string
+	Description    *string
+	Status         *Status
+	GenericSubtype *string
+	Priority       *Priority
+	AssigneeID     *int
+	CategoryID     *int
+	ReplaceTags    bool
+	TagIDs         []int
+	Resolution     *string
+	Version        int // 乐观锁版本号
 }

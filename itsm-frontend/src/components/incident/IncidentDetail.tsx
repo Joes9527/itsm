@@ -1,5 +1,13 @@
 'use client';
 
+import { professionalCreationPath } from '@/lib/api/work-item-creation';
+
+
+import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
+import { CreationAttempts } from '@/components/work-item/CreationAttempts';
+import { CreationRequester } from '@/components/work-item/CreationRequester';
+
+
 /**
  * 事件详情组件
  * 包含：基本信息、根因分析、影响评估、事件分类的编辑入口
@@ -115,6 +123,9 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
 }) => {
   const params = useParams();
   const router = useRouter();
+  const creation = useWorkItemCreation();
+  const [conversionForm] = Form.useForm();
+  const [conversionOpen, setConversionOpen] = useState(false);
   // 支持通过props传入id，或通过useParams获取
   const id = propId || (params?.id as string);
   const workItemContext = useOptionalWorkItemContext();
@@ -327,17 +338,17 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
     }
   };
 
-  const handleConvertToProblem = async () => {
+  const handleConvertToProblem = () => setConversionOpen(true);
+
+  const submitConversion = async () => {
     if (!data) return;
 
     setConverting(true);
     try {
-      const result = await IncidentAPI.convertToProblem(data.id, {
-        title: data.title,
-        description: data.description,
-      });
-      message.success(`已转为问题单 #${result.id}`);
-      router.push(`/problems/${result.id}`);
+      const values = await conversionForm.validateFields();
+      await creation.submit({ incidentId: data.id, title: data.title, description: data.description, requesterId: values.requesterId },
+        ({ incidentId, ...body }, options) => IncidentAPI.convertToProblem(incidentId, body, options),
+        receipt => { router.push(professionalCreationPath(receipt, 'problem')); setConversionOpen(false); });
     } catch (error) {
       handleError(error, 'convertToProblem', '转为问题失败');
     } finally {
@@ -591,6 +602,11 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
 
   return (
     <>
+      <CreationAttempts creation={creation} />
+      <Modal open={conversionOpen} title='创建关联问题' onCancel={() => setConversionOpen(false)} onOk={submitConversion} confirmLoading={converting}>
+        <p>保留当前事件并创建关联问题，请确认申请人。</p>
+        <Form form={conversionForm}><CreationRequester /></Form>
+      </Modal>
       <Space orientation='vertical' style={{ width: '100%' }} size='middle'>
         {/* 头部操作栏 */}
         <Card styles={{ body: { padding: '16px 24px' } }}>

@@ -121,6 +121,26 @@ func main() {
 		}
 	}
 
+	// Intake capability routes live beside their thin adapter. Inspect each
+	// exact declaration: the signature handler or scoped JWT middleware is the
+	// authority; they are never added to knownPublic.
+	for _, name := range []string{"handler.go", "identity_mapping_handler.go"} {
+		p := filepath.Join(routerDir, "../handlers/intake", name)
+		data, err := os.ReadFile(p)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		for index, line := range strings.Split(string(data), "\n") {
+			match := routeRE.FindStringSubmatch(line)
+			if match == nil {
+				continue
+			}
+			if !regexp.MustCompile(`RequirePermission\s*\(|IntakeAuthMiddleware\s*\([^,]+,\s*"intake:(create|catalog:read|workitem:read)"|exchangeHandler\s*\(\s*"(create|read)"`).MatchString(line) {
+				unprotected = append(unprotected, RouteInfo{Method: match[1], Path: "/api/v1" + match[2], File: name, Line: index + 1})
+			}
+		}
+	}
 	if len(unprotected) > 0 {
 		fmt.Fprintf(os.Stderr, "verify-acl-coverage: %d non-public routes missing RequirePermission:\n", len(unprotected))
 		for _, r := range unprotected {

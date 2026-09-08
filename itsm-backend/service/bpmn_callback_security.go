@@ -2,11 +2,13 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
 
+	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/incident"
@@ -16,6 +18,7 @@ import (
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
+	"itsm-backend/internal/jsonvalue"
 	"itsm-backend/service/bpmn"
 )
 
@@ -90,6 +93,11 @@ func cloneBPMNJSONValue(value interface{}, depth int) (interface{}, error) {
 		return nil, fmt.Errorf("嵌套层级超过限制")
 	}
 	switch typed := value.(type) {
+	case json.Number:
+		if _, err := common.ParseExactJSONNumber(typed); err != nil {
+			return nil, err
+		}
+		return typed, nil
 	case nil, bool, string, int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
 		return typed, nil
 	case float32:
@@ -102,6 +110,8 @@ func cloneBPMNJSONValue(value interface{}, depth int) (interface{}, error) {
 			return nil, fmt.Errorf("非有限数值")
 		}
 		return typed, nil
+	case jsonvalue.NumberMap:
+		return cloneBPMNJSONValue(map[string]any(typed), depth)
 	case map[string]interface{}:
 		if len(typed) > maxBPMNParticipantVariableEntries {
 			return nil, fmt.Errorf("对象字段数量超过限制")
@@ -232,7 +242,7 @@ func validateBPMNCallbackActionContract(contract bpmn.CallbackActionContract) er
 	if err != nil {
 		return err
 	}
-	for _, field := range contract.RequiredFields {
+	for _, field := range append(append([]string(nil), contract.RequiredFields...), contract.PositiveIntegerFields...) {
 		if _, ok := allowed[field]; !ok {
 			return fmt.Errorf("回调必填字段未在负载契约中声明")
 		}
@@ -290,6 +300,17 @@ func normalizeBPMNCallbackContractPayload(contract bpmn.CallbackActionContract, 
 			return nil, fmt.Errorf("回调字段 %q 类型无效", field)
 		}
 		normalized[field] = cloned
+	}
+	for _, field := range contract.PositiveIntegerFields {
+		value, exists := normalized[field]
+		if !exists {
+			continue
+		}
+		integer, err := bpmn.CallbackInteger(value)
+		if err != nil || integer <= 0 {
+			return nil, fmt.Errorf("回调字段 %q 必须是有效正整数", field)
+		}
+		normalized[field] = strconv.Itoa(integer)
 	}
 	for _, field := range contract.RequiredFields {
 		if _, exists := normalized[field]; !exists {
@@ -448,6 +469,12 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 		variables["addedBy"] = initiatorID
 	}
 
+	if provider, ok := handler.(bpmn.CallbackContractProvider); ok {
+		action, _ := payload["action"].(string)
+		if contract, declared := provider.CallbackContract(action); declared && contract.CreatedRecordClass != "" {
+			return variables, nil
+		}
+	}
 	if !isBuiltInBusinessCallbackHandler(handler.GetTaskType()) {
 		return variables, nil
 	}
@@ -498,7 +525,7 @@ func (e *CustomProcessEngine) authoritativeCallbackVariables(
 		variables["ticket_id"] = workItemID
 	case "service_request", "service_request_item":
 		entity, err := e.client.ServiceRequest.Query().Where(
-			servicerequest.TicketID(instance.BusinessID), servicerequest.TenantID(instance.TenantID),
+			servicerequest.TicketID(instance.BusinessID), servicerequest.HasWorkItemWith(ticket.TenantID(instance.TenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item")),
 		).Only(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("权威服务请求目标不存在")

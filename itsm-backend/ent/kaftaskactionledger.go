@@ -36,6 +36,8 @@ type KafTaskActionLedger struct {
 	ProcedureRef string `json:"procedure_ref,omitempty"`
 	// ProcedureVersion holds the value of the "procedure_version" field.
 	ProcedureVersion string `json:"procedure_version,omitempty"`
+	// RequestDigest holds the value of the "request_digest" field.
+	RequestDigest string `json:"request_digest,omitempty"`
 	// ResultStatus holds the value of the "result_status" field.
 	ResultStatus string `json:"result_status,omitempty"`
 	// ResultPayload holds the value of the "result_payload" field.
@@ -62,7 +64,7 @@ func (*KafTaskActionLedger) scanValues(columns []string) ([]any, error) {
 			values[i] = new([]byte)
 		case kaftaskactionledger.FieldID, kaftaskactionledger.FieldTenantID:
 			values[i] = new(sql.NullInt64)
-		case kaftaskactionledger.FieldTaskID, kaftaskactionledger.FieldRunID, kaftaskactionledger.FieldStepID, kaftaskactionledger.FieldAction, kaftaskactionledger.FieldIdempotencyKey, kaftaskactionledger.FieldCorrelationID, kaftaskactionledger.FieldProcedureRef, kaftaskactionledger.FieldProcedureVersion, kaftaskactionledger.FieldResultStatus, kaftaskactionledger.FieldLeaseOwner, kaftaskactionledger.FieldLastErrorCode:
+		case kaftaskactionledger.FieldTaskID, kaftaskactionledger.FieldRunID, kaftaskactionledger.FieldStepID, kaftaskactionledger.FieldAction, kaftaskactionledger.FieldIdempotencyKey, kaftaskactionledger.FieldCorrelationID, kaftaskactionledger.FieldProcedureRef, kaftaskactionledger.FieldProcedureVersion, kaftaskactionledger.FieldRequestDigest, kaftaskactionledger.FieldResultStatus, kaftaskactionledger.FieldLeaseOwner, kaftaskactionledger.FieldLastErrorCode:
 			values[i] = new(sql.NullString)
 		case kaftaskactionledger.FieldLeaseExpiresAt, kaftaskactionledger.FieldCreatedAt, kaftaskactionledger.FieldUpdatedAt:
 			values[i] = new(sql.NullTime)
@@ -140,6 +142,12 @@ func (_m *KafTaskActionLedger) assignValues(columns []string, values []any) erro
 				return fmt.Errorf("unexpected type %T for field procedure_version", values[i])
 			} else if value.Valid {
 				_m.ProcedureVersion = value.String
+			}
+		case kaftaskactionledger.FieldRequestDigest:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field request_digest", values[i])
+			} else if value.Valid {
+				_m.RequestDigest = value.String
 			}
 		case kaftaskactionledger.FieldResultStatus:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -247,6 +255,9 @@ func (_m *KafTaskActionLedger) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("procedure_version=")
 	builder.WriteString(_m.ProcedureVersion)
+	builder.WriteString(", ")
+	builder.WriteString("request_digest=")
+	builder.WriteString(_m.RequestDigest)
 	builder.WriteString(", ")
 	builder.WriteString("result_status=")
 	builder.WriteString(_m.ResultStatus)

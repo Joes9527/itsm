@@ -1,5 +1,9 @@
 'use client';
 
+import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
+import { CreationAttempts } from '@/components/work-item/CreationAttempts';
+import { CreationRequester } from '@/components/work-item/CreationRequester';
+
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -25,6 +29,7 @@ const { TextArea } = Input;
 
 // 表单值类型：DatePicker 用 Dayjs，affectedCis 用字符串
 interface ChangeFormValues {
+  requesterId?: number;
   title: string;
   description: string;
   justification: string;
@@ -65,6 +70,7 @@ const RISK_OPTIONS: Array<{ value: ChangeRequest['riskLevel']; label: string }> 
 
 const CreateChangePage: React.FC = () => {
   const router = useRouter();
+  const creation = useWorkItemCreation();
   const { t } = useI18n();
   const { message } = App.useApp();
   const [form] = Form.useForm<ChangeFormValues>();
@@ -81,6 +87,7 @@ const CreateChangePage: React.FC = () => {
           .filter(Boolean) ?? [];
 
       const payload: ChangeRequest = {
+        requesterId: values.requesterId,
         title: values.title.trim(),
         description: values.description.trim(),
         justification: values.justification.trim(),
@@ -96,9 +103,7 @@ const CreateChangePage: React.FC = () => {
         relatedTickets: [],
       };
 
-      await ChangeApi.createChange(payload);
-      message.success(t('changes.createSuccess'));
-      router.push('/changes');
+      await creation.submit(payload, ChangeApi.createChange, () => router.push('/changes'));
     } catch (err) {
       console.error('提交变更失败:', err);
       message.error(t('changes.createFailed'));
@@ -132,6 +137,7 @@ const CreateChangePage: React.FC = () => {
         <Text type="secondary">提交新的 IT 基础设施或服务变更请求</Text>
       </div>
 
+      <CreationAttempts creation={creation} />
       <Card className="shadow-sm rounded-lg">
         <Form<ChangeFormValues>
           form={form}
@@ -147,6 +153,7 @@ const CreateChangePage: React.FC = () => {
           disabled={loading}
           scrollToFirstError
         >
+          <CreationRequester />
           <Form.Item
             label="变更标题"
             name="title"

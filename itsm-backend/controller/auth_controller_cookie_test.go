@@ -30,7 +30,7 @@ func TestSwitchTenantDeliversJWTsOnlyThroughHttpOnlyCookies(t *testing.T) {
 		SetUsername("switch-cookie-user").SetEmail("switch-cookie@example.test").SetName("Switch Cookie User").
 		SetPasswordHash("not-used").SetTenantID(tenant.ID).SetRole("end_user").SetActive(true).SaveX(ctx)
 
-	controller := NewAuthController(service.NewAuthService(client, "switch-cookie-secret", zap.NewNop().Sugar()))
+	controller := NewAuthController(service.NewAuthService(client, client, "switch-cookie-secret", zap.NewNop().Sugar()))
 	router := gin.New()
 	router.POST("/api/v1/auth/switch-tenant", func(c *gin.Context) {
 		c.Set("user_id", user.ID)

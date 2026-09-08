@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/processvariable"
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -29,6 +30,20 @@ type ProcessInstanceCreate struct {
 // SetProcessInstanceID sets the "process_instance_id" field.
 func (_c *ProcessInstanceCreate) SetProcessInstanceID(v string) *ProcessInstanceCreate {
 	_c.mutation.SetProcessInstanceID(v)
+	return _c
+}
+
+// SetStartRequestDigest sets the "start_request_digest" field.
+func (_c *ProcessInstanceCreate) SetStartRequestDigest(v string) *ProcessInstanceCreate {
+	_c.mutation.SetStartRequestDigest(v)
+	return _c
+}
+
+// SetNillableStartRequestDigest sets the "start_request_digest" field if the given value is not nil.
+func (_c *ProcessInstanceCreate) SetNillableStartRequestDigest(v *string) *ProcessInstanceCreate {
+	if v != nil {
+		_c.SetStartRequestDigest(*v)
+	}
 	return _c
 }
 
@@ -129,7 +144,7 @@ func (_c *ProcessInstanceCreate) SetNillableCurrentActivityName(v *string) *Proc
 }
 
 // SetVariables sets the "variables" field.
-func (_c *ProcessInstanceCreate) SetVariables(v map[string]interface{}) *ProcessInstanceCreate {
+func (_c *ProcessInstanceCreate) SetVariables(v jsonvalue.NumberMap) *ProcessInstanceCreate {
 	_c.mutation.SetVariables(v)
 	return _c
 }
@@ -482,6 +497,10 @@ func (_c *ProcessInstanceCreate) createSpec() (*ProcessInstance, *sqlgraph.Creat
 		_spec.SetField(processinstance.FieldProcessInstanceID, field.TypeString, value)
 		_node.ProcessInstanceID = value
 	}
+	if value, ok := _c.mutation.StartRequestDigest(); ok {
+		_spec.SetField(processinstance.FieldStartRequestDigest, field.TypeString, value)
+		_node.StartRequestDigest = value
+	}
 	if value, ok := _c.mutation.BusinessKey(); ok {
 		_spec.SetField(processinstance.FieldBusinessKey, field.TypeString, value)
 		_node.BusinessKey = value
@@ -824,7 +843,7 @@ func (u *ProcessInstanceUpsert) ClearCurrentActivityName() *ProcessInstanceUpser
 }
 
 // SetVariables sets the "variables" field.
-func (u *ProcessInstanceUpsert) SetVariables(v map[string]interface{}) *ProcessInstanceUpsert {
+func (u *ProcessInstanceUpsert) SetVariables(v jsonvalue.NumberMap) *ProcessInstanceUpsert {
 	u.Set(processinstance.FieldVariables, v)
 	return u
 }
@@ -1049,6 +1068,11 @@ func (u *ProcessInstanceUpsert) UpdateUpdatedAt() *ProcessInstanceUpsert {
 //		Exec(ctx)
 func (u *ProcessInstanceUpsertOne) UpdateNewValues() *ProcessInstanceUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.StartRequestDigest(); exists {
+			s.SetIgnore(processinstance.FieldStartRequestDigest)
+		}
+	}))
 	return u
 }
 
@@ -1248,7 +1272,7 @@ func (u *ProcessInstanceUpsertOne) ClearCurrentActivityName() *ProcessInstanceUp
 }
 
 // SetVariables sets the "variables" field.
-func (u *ProcessInstanceUpsertOne) SetVariables(v map[string]interface{}) *ProcessInstanceUpsertOne {
+func (u *ProcessInstanceUpsertOne) SetVariables(v jsonvalue.NumberMap) *ProcessInstanceUpsertOne {
 	return u.Update(func(s *ProcessInstanceUpsert) {
 		s.SetVariables(v)
 	})
@@ -1673,6 +1697,13 @@ type ProcessInstanceUpsertBulk struct {
 //		Exec(ctx)
 func (u *ProcessInstanceUpsertBulk) UpdateNewValues() *ProcessInstanceUpsertBulk {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.StartRequestDigest(); exists {
+				s.SetIgnore(processinstance.FieldStartRequestDigest)
+			}
+		}
+	}))
 	return u
 }
 
@@ -1872,7 +1903,7 @@ func (u *ProcessInstanceUpsertBulk) ClearCurrentActivityName() *ProcessInstanceU
 }
 
 // SetVariables sets the "variables" field.
-func (u *ProcessInstanceUpsertBulk) SetVariables(v map[string]interface{}) *ProcessInstanceUpsertBulk {
+func (u *ProcessInstanceUpsertBulk) SetVariables(v jsonvalue.NumberMap) *ProcessInstanceUpsertBulk {
 	return u.Update(func(s *ProcessInstanceUpsert) {
 		s.SetVariables(v)
 	})

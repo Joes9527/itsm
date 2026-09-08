@@ -134,6 +134,52 @@ state 租户不一致、邮箱为空或租户内邮箱不唯一时均明确失�
 
 ---
 
+### RLS execution boundary
+
+`RLS_MODE=off` passes Ent operations through; `shadow` records missing tenant context without changing SQL. `enforce` applies the canonical `app.current_tenant` on the same physical connection as the query, and rejects missing/nonpositive tenant context, unknown modes, incompatible tenant variable names, and tenant operations using a superuser or `BYPASSRLS` role. RLS policies remain migration-owned; changing the mode does not install policies.
+
+Use `common/tenantctx.WithTenantID` after authenticated tenant resolution. Selecting a tenant revokes any inherited system scope. Explicit Ent transactions retain their isolation options and one fixed tenant; each transaction retains a checked-out connection and clears all session settings on commit/rollback. Ent `WithVar`/`WithIntVar` are processed through the pinned public Ent API on a real SQL transaction before executing the statement. Direct reserved tenant/role settings are rejected; canonical tenant scope is reapplied after variable processing. Ordinary statements preserve SQL autocommit semantics, with a checked-out connection held until returned rows close. Always close raw query rows. Connection release uses an independent cleanup context and evicts the physical connection if cleanup fails, including after request cancellation.
+
+System context labels do not grant database privileges or select a connection pool. API and KAF startup use `database.InitRuntimeDatabases`: `DB_USER`/`DB_PASSWORD_FILE` open the tenant pool, while **required** `DB_SYSTEM_ROLE_USER`/`DB_SYSTEM_ROLE_PASSWORD_FILE` open an independent restricted system pool. `DB_SCHEMA` optionally selects the application schema (default PostgreSQL search path). There is no fallback to migration credentials, the legacy optional admin-role settings, or the runtime role. The standalone `RunInitialization` process still opens only its migration credentials with ordinary Ent SQL, allowing Atlas background inspection.
+
+The system role must be `LOGIN NOSUPERUSER BYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT`, with no role memberships or schema/table ownership. Provision it separately from the runtime role and migration owner, with its own password secret. The application never creates roles or grants at startup. The authoritative startup validation is in `database/runtime_clients.go`; it rejects missing configuration, unsafe role attributes/memberships, extra table/column/sequence privileges, schema/database CREATE, and callable application SECURITY DEFINER functions. The enforced runtime role must be non-superuser/non-bypass, non-owner, and have no role memberships. A default developer superuser is therefore diagnosed instead of silently disabling enforcement.
+
+After initialization creates the schema, an authorized database administrator grants the system role USAGE on that schema and only these capabilities:
+
+| Object | Privilege | Owning operation |
+| --- | --- | --- |
+| `users` | SELECT | Credential lookup, refresh actor validation, MSP session selection |
+| `tenants` | SELECT | Tenant directory and active/expiry checks |
+| `msp_allocations` | SELECT | Active MSP customer authorization |
+| `external_identities` | SELECT | Verified provider/workspace/subject lookup after v2 assertion validation; mapping writes use tenant runtime transactions |
+| `connector_configs` | SELECT | Restore persisted connector registrations at startup |
+| `process_callback_outboxes` | SELECT | Discover callback recovery candidates across tenants; claims, execution, retries and acknowledgments use the candidate tenant on the tenant client |
+| `outbox_events` | SELECT, UPDATE | Cross-tenant transport claim, attempts, leases, acknowledgment and retry; enqueue stays on the tenant client |
+| `ticket_notifications` | SELECT, UPDATE | Existing delivery queue scan, lease and acknowledgment; creation and recipient/WorkItem checks stay on the tenant client |
+| `audit_logs` | INSERT, SELECT(id) | Append authentication and transport failure/retry audit; SELECT(id) supports Ent RETURNING without reading audit content |
+| audit log ID sequence | USAGE | Allocate audit IDs only |
+
+For a dedicated schema, the grants have this form (the administrator supplies identifier variables `app_schema` and `system_role` to psql and configures the role password using their secret-management process):
+
+```sql
+GRANT USAGE ON SCHEMA :"app_schema" TO :"system_role";
+GRANT SELECT ON :"app_schema".users, :"app_schema".tenants,
+  :"app_schema".msp_allocations, :"app_schema".external_identities, :"app_schema".connector_configs TO :"system_role";
+GRANT SELECT ON :"app_schema".process_callback_outboxes TO :"system_role";
+GRANT SELECT, UPDATE ON :"app_schema".outbox_events, :"app_schema".ticket_notifications TO :"system_role";
+GRANT INSERT, SELECT(id) ON :"app_schema".audit_logs TO :"system_role";
+SELECT format('GRANT USAGE ON SEQUENCE %s TO %I',
+  pg_get_serial_sequence(format('%I.audit_logs', :'app_schema'), 'id'), :'system_role') \gexec
+```
+
+Do not grant this role business-table access or broad `ALL TABLES`/`ALL SEQUENCES` privileges. Public or inherited privileges count during validation; an administrator must resolve an unsafe existing grant explicitly before startup. No application migration alters shared roles or PUBLIC grants.
+
+Only authentication lookup, tenant middleware, connector restoration and queue repositories receive the system client. AuthService's user management and permission queries keep the tenant client. Connector HTTP persistence keeps the tenant client; restored connector/poller context is derived from its stored tenant. The shared outbox worker derives the business consumer context from the durable event and clears the transport marker; Incident consumers receive only the tenant client. The KAF dispatcher transports already-authorized messages. No request flag grants access to the system pool. The ticket notification worker receives this exact queue capability separately from its tenant business client; it clears inherited system context for each recipient delivery. An expired external delivery lease or ambiguous send becomes `failed` with `last_error_class=delivery_unknown`, retaining the existing delivery key and attempt count for reconciliation. Only confirmed pre-acceptance email failures retry, with Graph/SMTP fallback disabled. Existing durable rows use the same lease and status fields; no data migration or new queue is required. Notification content and recipient user ID are frozen; delivery resolves the current address of that same active user.
+
+For local startup, supply the separate role variables above after authorized provisioning; do not change a shared `.env` or apply these grants to a shared instance without the environment owner's approval. Production Compose supplies `ITSM_MIGRATION_DB_USER` and its secret only to initialization; API and Worker receive `ITSM_RUNTIME_DB_USER` and `ITSM_SYSTEM_DB_USER` with their distinct secret files. `ITSM_DB_SCHEMA` selects the same schema for initialization and both runtime processes (default `public`); `RLS_MODE` is forwarded to API/Worker with its existing `off` default. Enabling enforcement remains an explicit rollout decision. These changes prepare the deployment contract; they do not apply grants to a deployed database.
+
+The runtime regression command is `go test -tags integration_postgres ./tests/integration -run TestPostgresRLS -count=1 -v` with explicit `INTAKE_POSTGRES_TEST_DSN`. Its guarded disposable target is `127.0.0.1:36444/sslvpn_test`; it installs registered policies 009 then 024, uses unique schemas and temporary login/non-login roles, closes all pools and verifies role cleanup. It covers the actual runtime factory, login/refresh/MSP, connector restoration, queue/business separation, variable processing, cancellation and migration-role access. It does not certify every legacy application RLS path or activate the deferred entry/schema cutover.
+
 ## 2. Docker 部署与运维排查
 
 ### 生产环境启动（必须显式传入 env-file）
@@ -147,8 +193,8 @@ docker-compose -f docker-compose.prod.yml up -d
 ```
 
 KAF 委派投递由独立 `itsm-worker` 负责。生产环境需要提供
-`KAF_WEBHOOK_URL`、`KAF_WEBHOOK_SECRET_FILE`、`ITSM_RUNTIME_DB_PASSWORD_FILE`
-和 `ITSM_MIGRATION_DB_PASSWORD_FILE`。API 与 Worker 只挂载 runtime 数据库
+`KAF_WEBHOOK_URL`、`KAF_WEBHOOK_SECRET_FILE`、`ITSM_RUNTIME_DB_PASSWORD_FILE`、
+`ITSM_SYSTEM_DB_PASSWORD_FILE` 和 `ITSM_MIGRATION_DB_PASSWORD_FILE`。API 与 Worker 挂载 runtime 与受限 system 数据库
 secret，初始化任务只挂载 migration 数据库 secret；Worker 不发布宿主机端口，
 标准启动至少为两个副本：
 
@@ -157,9 +203,9 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml config
 docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --scale itsm-worker=2 itsm-worker
 ```
 
-不要在 API 容器中配置 KAF webhook secret，也不要把 Worker health port 发布到宿主机。
+API 仅接收非秘密的 `KAF_WEBHOOK_URL`，目录发布使用它校验投递地址是否已配置且格式有效；此检查不代表 Worker 健康或其凭据已部署。Worker 启动仍单独强制签名 secret 和执行参数。不要在 API 容器中配置 KAF webhook secret，也不要把 Worker health port 发布到宿主机。
 生产 Compose 不再创建 PostgreSQL 容器；必须配置外部实例的 `ITSM_DB_HOST`、
-`ITSM_DB_NAME`、`ITSM_RUNTIME_DB_USER`、`ITSM_MIGRATION_DB_USER` 与 TLS 设置。
+`ITSM_DB_NAME`、`ITSM_RUNTIME_DB_USER`、`ITSM_SYSTEM_DB_USER`、`ITSM_MIGRATION_DB_USER` 与 TLS 设置。
 KAF 与 ITSM 使用同一实例时仍必须使用不同逻辑数据库和用户。
 
 ### 常用排查命令
@@ -205,3 +251,12 @@ docker exec <container> wget -qO- http://localhost:8090/api/v1/health
    代码交付、单测/集成测通过，都不能替代一次端到端的真实操作验证；至少要用真实 HTTP 客户端路径走一遍主链路。
 7. **复用旧代码时，要重新审视它当初依赖的假设是否还成立。**
    当一个此前半成品的功能第一次被真正打通、有真实数据流过时，依赖它的旧代码需要重新审视，不能假设其历史设计假设仍然合理。
+
+
+### Intake identity exchange configuration
+
+A6 routes use assertion v2 only. Set `INTAKE_IDENTITY_CONFIG_FILE` (or the existing `ITSM_` environment prefix) to an owner-only regular JSON file (mode 0600/0400). The file contains `providers` keyed by registered provider, each with a distinct `secret`, allowed `channels` and allowed `purposes` (`create`, `read`); optional `maxAge`, `futureSkew`, `tokenTTL` are whole-second durations. Defaults are 60s, 5s and 5m. Max age is 1s–5m, future skew 0–30s, token TTL 1s–15m. Secrets must differ from JWT/webhook/automation credentials and stay server-side. The application rejects reuse of its loaded JWT or KAF webhook secret. Missing configuration disables exchange; unavailable Redis rejects exchange instead of falling back to memory. Use the deployment's explicit Redis host/port/database.
+
+Create/read exchange share one atomic nonce namespace. Lost exchange responses require a fresh nonce and assertion; retain the business submission key. Only the corresponding Intake routes accept the resulting token. Every request checks current mapping version/active state and current session/target-tenant permissions. Mapping management uses native access-token tenant routes with `intake_identity_mapping:read`/`write`, and PATCH requires `version` plus `active`; immutable provider/workspace/subject/user identity is replaced through a new mapping rather than changed in place. Manage mappings with exact external subjects; email matching is unsupported.
+
+The requester WorkItem projection preserves professional status and returns `fulfillmentState: "unknown"` and `accessResult: null` until C1 installs its authoritative fulfillment/result projection. This is a C1 gate before A7/B1 acceptance, not evidence that access was granted. The shared test-only signature vector lives in [intake-identity-signature.json](contracts/fixtures/intake-identity-signature.json).

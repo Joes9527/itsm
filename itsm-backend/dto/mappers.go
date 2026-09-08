@@ -105,7 +105,7 @@ func ToIncidentResponse(incident *ent.Incident, workItem *ent.Ticket) *IncidentR
 		Severity:        incident.Severity,
 		Impact:          incident.Impact,
 		Urgency:         incident.Urgency,
-		IncidentNumber:  incident.IncidentNumber,
+		IncidentNumber:  workItem.TicketNumber,
 		ReporterID:      workItem.RequesterID,
 		ImpactAnalysis:  impactAnalysis,
 		RootCause:       rootCause,

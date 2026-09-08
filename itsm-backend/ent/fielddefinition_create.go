@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"itsm-backend/ent/fielddefinition"
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -73,7 +74,7 @@ func (_c *FieldDefinitionCreate) SetNillableRequired(v *bool) *FieldDefinitionCr
 }
 
 // SetOptions sets the "options" field.
-func (_c *FieldDefinitionCreate) SetOptions(v []interface{}) *FieldDefinitionCreate {
+func (_c *FieldDefinitionCreate) SetOptions(v jsonvalue.NumberArray) *FieldDefinitionCreate {
 	_c.mutation.SetOptions(v)
 	return _c
 }
@@ -490,7 +491,7 @@ func (u *FieldDefinitionUpsert) UpdateRequired() *FieldDefinitionUpsert {
 }
 
 // SetOptions sets the "options" field.
-func (u *FieldDefinitionUpsert) SetOptions(v []interface{}) *FieldDefinitionUpsert {
+func (u *FieldDefinitionUpsert) SetOptions(v jsonvalue.NumberArray) *FieldDefinitionUpsert {
 	u.Set(fielddefinition.FieldOptions, v)
 	return u
 }
@@ -732,7 +733,7 @@ func (u *FieldDefinitionUpsertOne) UpdateRequired() *FieldDefinitionUpsertOne {
 }
 
 // SetOptions sets the "options" field.
-func (u *FieldDefinitionUpsertOne) SetOptions(v []interface{}) *FieldDefinitionUpsertOne {
+func (u *FieldDefinitionUpsertOne) SetOptions(v jsonvalue.NumberArray) *FieldDefinitionUpsertOne {
 	return u.Update(func(s *FieldDefinitionUpsert) {
 		s.SetOptions(v)
 	})
@@ -1153,7 +1154,7 @@ func (u *FieldDefinitionUpsertBulk) UpdateRequired() *FieldDefinitionUpsertBulk 
 }
 
 // SetOptions sets the "options" field.
-func (u *FieldDefinitionUpsertBulk) SetOptions(v []interface{}) *FieldDefinitionUpsertBulk {
+func (u *FieldDefinitionUpsertBulk) SetOptions(v jsonvalue.NumberArray) *FieldDefinitionUpsertBulk {
 	return u.Update(func(s *FieldDefinitionUpsert) {
 		s.SetOptions(v)
 	})

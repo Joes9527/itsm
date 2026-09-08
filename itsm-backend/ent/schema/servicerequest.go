@@ -1,9 +1,8 @@
 package schema
 
 import (
-	"time"
-
 	"entgo.io/ent"
+	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
 	"entgo.io/ent/schema/index"
 )
@@ -13,11 +12,9 @@ type ServiceRequest struct{ ent.Schema }
 func (ServiceRequest) Fields() []ent.Field {
 	return []ent.Field{
 		// 基础信息
-		field.Int("tenant_id").Comment("租户ID").Positive(),
 		field.Int("ticket_id").Comment("关联的Ticket ID——状态/审批/工作流全部委托给它").Positive(),
 		field.Int("catalog_id").Comment("服务目录ID").Positive(),
 		field.Int("ci_id").Comment("关联CI ID").Optional(),
-		field.Int("requester_id").Comment("申请人ID").Positive(),
 
 		// 表单数据
 		field.JSON("form_data", map[string]any{}).Comment("表单数据").Optional(),
@@ -35,26 +32,20 @@ func (ServiceRequest) Fields() []ent.Field {
 		field.Time("expected_at").Comment("期望交付时间").Optional(),
 
 		// 实施信息（资源交付，不属于本次重构范围，原样保留）
-		field.Int("processor_id").Comment("处理人ID").Optional(),
 		field.Time("started_at").Comment("开始处理时间").Optional(),
 		field.Time("completed_at").Comment("完成时间").Optional(),
 		field.Text("completion_note").Comment("完成备注").Optional(),
 		field.Text("last_error").Comment("最近一次错误信息").Optional(),
-		field.Int("version").Comment("乐观锁版本").Default(1).Positive(),
 
 		// 时间戳
-		field.Time("created_at").Comment("创建时间").Default(time.Now),
-		field.Time("updated_at").Comment("更新时间").Default(time.Now).UpdateDefault(time.Now),
-		field.Time("deleted_at").Comment("软删除时间").Optional().Nillable(),
 	}
 }
-func (ServiceRequest) Edges() []ent.Edge { return nil }
+func (ServiceRequest) Edges() []ent.Edge {
+	return []ent.Edge{edge.To("work_item", Ticket.Type).Field("ticket_id").Unique().Required().StorageKey(edge.Symbol("service_requests_work_item_fk"))}
+}
 
 func (ServiceRequest) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("ticket_id").Unique(),
-		index.Fields("tenant_id", "created_at"),
-		index.Fields("tenant_id", "requester_id", "created_at"),
-		index.Fields("tenant_id", "ci_id"),
 	}
 }

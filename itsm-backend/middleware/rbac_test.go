@@ -23,7 +23,7 @@ func TestRBACMiddleware(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		c.Request, _ = http.NewRequest("GET", "/api/v1/tickets", nil)
 
-		RBACMiddleware(nil)(c)
+		RBACMiddleware(nil, nil)(c)
 
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 		assert.Contains(t, w.Body.String(), "用户未认证")
@@ -35,7 +35,7 @@ func TestRBACMiddleware(t *testing.T) {
 		c.Request, _ = http.NewRequest("GET", "/api/v1/tickets", nil)
 		c.Set("user_id", 1)
 
-		RBACMiddleware(nil)(c)
+		RBACMiddleware(nil, nil)(c)
 
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
 		assert.Contains(t, w.Body.String(), "租户信息缺失")
@@ -69,7 +69,7 @@ func TestRBACMiddleware_NoLongerPerformsPermissionCheck(t *testing.T) {
 		SetUsername("test_no_perm_check").
 		SetEmail("test_no_perm_check@example.com").
 		SetName("Test No Perm Check").
-		SetPasswordHash("x").
+		SetPasswordHash("x").SetRole("end_user").
 		SetActive(true).
 		SetTenantID(tenant.ID).
 		Save(ctx)
@@ -82,7 +82,7 @@ func TestRBACMiddleware_NoLongerPerformsPermissionCheck(t *testing.T) {
 	c.Set("tenant_id", tenant.ID)
 	c.Set("role", "end_user")
 
-	RBACMiddleware(client)(c)
+	RBACMiddleware(client, client)(c)
 
 	assert.False(t, c.IsAborted())
 }
@@ -265,4 +265,30 @@ func TestDBOnlyPermissionModeDoesNotUseHardcodedFallback(t *testing.T) {
 	permissions := authorization.LoadPermissionsByMode(nil, "admin", 1)
 	assert.Empty(t, permissions)
 	assert.False(t, authorization.CheckPermissionMatch(permissions, "ticket", "read"))
+}
+
+func TestRBACMiddlewareRejectsStaleSignedRole(t *testing.T) {
+	client := enttest.Open(t, "sqlite3", "file:rbac_stale?mode=memory&cache=shared&_fk=1")
+	defer client.Close()
+	ctx := context.Background()
+	tenant := client.Tenant.Create().SetCode("stale").SetName("Stale").SaveX(ctx)
+	actor := client.User.Create().SetTenantID(tenant.ID).SetUsername("stale").SetEmail("stale@example.test").SetName("Stale").SetPasswordHash("unused").SetRole("end_user").SaveX(ctx)
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest("GET", "/api/v1/tickets", nil)
+	c.Set("user_id", actor.ID)
+	c.Set("tenant_id", tenant.ID)
+	c.Set("role", "admin")
+	RBACMiddleware(client, client)(c)
+	require.True(t, c.IsAborted(), "a stale token role must be rejected")
+}
+
+func TestRBACMiddlewareMissingDirectoryIsUnavailable(t *testing.T) {
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest("GET", "/api/v1/tickets", nil)
+	c.Set("user_id", 1)
+	c.Set("tenant_id", 1)
+	c.Set("role", "end_user")
+	RBACMiddleware(nil, nil)(c)
+	require.Equal(t, http.StatusServiceUnavailable, w.Code)
 }

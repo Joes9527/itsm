@@ -7,7 +7,6 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service/bpmn"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -257,7 +256,7 @@ func TestTaskService_ReusesEngineInstanceAndRegistry(t *testing.T) {
 	// 注入发生在拿到 TaskService 之后也必须可见（bootstrap 就是这个顺序）。
 	incidentHandler, ok := engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler)
 	require.True(t, ok, "incident_service_handler 必须已注册")
-	incidentHandler.SetIncidentService(NewIncidentService(client, zap.NewNop().Sugar(), workitemnumber.NewPostgreSQLAllocator()))
+	incidentHandler.SetIncidentService(NewIncidentService(client, zap.NewNop().Sugar()))
 
 	reachable, ok := internal.engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler)
 	require.True(t, ok)

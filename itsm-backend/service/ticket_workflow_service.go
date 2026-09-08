@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"itsm-backend/common"
 	"strconv"
 	"strings"
 	"time"
@@ -630,7 +631,7 @@ func (s *TicketWorkflowService) GetWorkflowRulesByTicket(ctx context.Context, ti
 	if err != nil {
 		return nil, err
 	}
-	ticketType := string(tk.Type)
+	ticketType := string(common.WorkItemLegacyType(tk.RecordClass, tk.GenericSubtype))
 	if ticketType == "" {
 		ticketType = "ticket"
 	}

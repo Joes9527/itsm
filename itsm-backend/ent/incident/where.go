@@ -75,11 +75,6 @@ func Urgency(v string) predicate.Incident {
 	return predicate.Incident(sql.FieldEQ(FieldUrgency, v))
 }
 
-// IncidentNumber applies equality check predicate on the "incident_number" field. It's identical to IncidentNumberEQ.
-func IncidentNumber(v string) predicate.Incident {
-	return predicate.Incident(sql.FieldEQ(FieldIncidentNumber, v))
-}
-
 // WorkItemID applies equality check predicate on the "work_item_id" field. It's identical to WorkItemIDEQ.
 func WorkItemID(v int) predicate.Incident {
 	return predicate.Incident(sql.FieldEQ(FieldWorkItemID, v))
@@ -373,71 +368,6 @@ func UrgencyEqualFold(v string) predicate.Incident {
 // UrgencyContainsFold applies the ContainsFold predicate on the "urgency" field.
 func UrgencyContainsFold(v string) predicate.Incident {
 	return predicate.Incident(sql.FieldContainsFold(FieldUrgency, v))
-}
-
-// IncidentNumberEQ applies the EQ predicate on the "incident_number" field.
-func IncidentNumberEQ(v string) predicate.Incident {
-	return predicate.Incident(sql.FieldEQ(FieldIncidentNumber, v))
-}
-
-// IncidentNumberNEQ applies the NEQ predicate on the "incident_number" field.
-func IncidentNumberNEQ(v string) predicate.Incident {
-	return predicate.Incident(sql.FieldNEQ(FieldIncidentNumber, v))
-}
-
-// IncidentNumberIn applies the In predicate on the "incident_number" field.
-func IncidentNumberIn(vs ...string) predicate.Incident {
-	return predicate.Incident(sql.FieldIn(FieldIncidentNumber, vs...))
-}
-
-// IncidentNumberNotIn applies the NotIn predicate on the "incident_number" field.
-func IncidentNumberNotIn(vs ...string) predicate.Incident {
-	return predicate.Incident(sql.FieldNotIn(FieldIncidentNumber, vs...))
-}
-
-// IncidentNumberGT applies the GT predicate on the "incident_number" field.
-func IncidentNumberGT(v string) predicate.Incident {
-	return predicate.Incident(sql.FieldGT(FieldIncidentNumber, v))
-}
-
-// IncidentNumberGTE applies the GTE predicate on the "incident_number" field.
-func IncidentNumberGTE(v string) predicate.Incident {
-	return predicate.Incident(sql.FieldGTE(FieldIncidentNumber, v))
-}
-
-// IncidentNumberLT applies the LT predicate on the "incident_number" field.
-func IncidentNumberLT(v string) predicate.Incident {
-	return predicate.Incident(sql.FieldLT(FieldIncidentNumber, v))
-}
-
-// IncidentNumberLTE applies the LTE predicate on the "incident_number" field.
-func IncidentNumberLTE(v string) predicate.Incident {
-	return predicate.Incident(sql.FieldLTE(FieldIncidentNumber, v))
-}
-
-// IncidentNumberContains applies the Contains predicate on the "incident_number" field.
-func IncidentNumberContains(v string) predicate.Incident {
-	return predicate.Incident(sql.FieldContains(FieldIncidentNumber, v))
-}
-
-// IncidentNumberHasPrefix applies the HasPrefix predicate on the "incident_number" field.
-func IncidentNumberHasPrefix(v string) predicate.Incident {
-	return predicate.Incident(sql.FieldHasPrefix(FieldIncidentNumber, v))
-}
-
-// IncidentNumberHasSuffix applies the HasSuffix predicate on the "incident_number" field.
-func IncidentNumberHasSuffix(v string) predicate.Incident {
-	return predicate.Incident(sql.FieldHasSuffix(FieldIncidentNumber, v))
-}
-
-// IncidentNumberEqualFold applies the EqualFold predicate on the "incident_number" field.
-func IncidentNumberEqualFold(v string) predicate.Incident {
-	return predicate.Incident(sql.FieldEqualFold(FieldIncidentNumber, v))
-}
-
-// IncidentNumberContainsFold applies the ContainsFold predicate on the "incident_number" field.
-func IncidentNumberContainsFold(v string) predicate.Incident {
-	return predicate.Incident(sql.FieldContainsFold(FieldIncidentNumber, v))
 }
 
 // WorkItemIDEQ applies the EQ predicate on the "work_item_id" field.

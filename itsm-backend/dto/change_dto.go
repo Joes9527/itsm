@@ -57,19 +57,20 @@ const (
 
 // CreateChangeRequest 创建变更请求
 type CreateChangeRequest struct {
-	Title              string     `json:"title" binding:"required"` // 变更标题
-	Description        string     `json:"description"`              // 变更描述
-	Justification      string     `json:"justification"`            // 变更理由
-	Type               string     `json:"type"`                     // 变更类型: normal, standard, emergency
-	Priority           string     `json:"priority"`                 // 优先级: low, medium, high, critical
-	ImpactScope        string     `json:"impactScope"`              // 影响范围: low, medium, high
-	RiskLevel          string     `json:"riskLevel"`                // 风险等级: low, medium, high
-	PlannedStartDate   *time.Time `json:"plannedStartDate"`         // 计划开始时间
-	PlannedEndDate     *time.Time `json:"plannedEndDate"`           // 计划结束时间
-	ImplementationPlan string     `json:"implementationPlan"`       // 实施计划
-	RollbackPlan       string     `json:"rollbackPlan"`             // 回滚计划
-	AffectedCIs        []string   `json:"affectedCis"`              // 受影响的配置项
-	RelatedTickets     []string   `json:"relatedTickets"`           // 相关工单编号
+	RequesterID        *int       `json:"requesterId,omitempty" binding:"omitempty,gt=0"` // 可选目标租户申请人
+	Title              string     `json:"title" binding:"required"`                       // 变更标题
+	Description        string     `json:"description"`                                    // 变更描述
+	Justification      string     `json:"justification"`                                  // 变更理由
+	Type               string     `json:"type"`                                           // 变更类型: normal, standard, emergency
+	Priority           string     `json:"priority"`                                       // 优先级: low, medium, high, critical
+	ImpactScope        string     `json:"impactScope"`                                    // 影响范围: low, medium, high
+	RiskLevel          string     `json:"riskLevel"`                                      // 风险等级: low, medium, high
+	PlannedStartDate   *time.Time `json:"plannedStartDate"`                               // 计划开始时间
+	PlannedEndDate     *time.Time `json:"plannedEndDate"`                                 // 计划结束时间
+	ImplementationPlan string     `json:"implementationPlan"`                             // 实施计划
+	RollbackPlan       string     `json:"rollbackPlan"`                                   // 回滚计划
+	AffectedCIs        []string   `json:"affectedCis"`                                    // 受影响的配置项
+	RelatedTickets     []string   `json:"relatedTickets"`                                 // 相关工单编号
 }
 
 // UpdateChangeRequest 更新变更请求

@@ -100,6 +100,7 @@ export interface GetTenantsParams {
 import type { Ticket as BaseTicket } from './types';
 
 export interface Ticket extends BaseTicket {
+  recordClass?: string;
   tenantId?: number;
   templateId?: number;
   tenant?: Tenant;
@@ -182,6 +183,7 @@ export interface SLAInfo {
 }
 
 export interface User {
+  mspRole?: string;
   id: number;
   username: string;
   email: string;
@@ -194,6 +196,13 @@ export interface User {
   updatedAt?: string;
 }
 
+/** Verified /auth/me projection; ordinary User records keep native tenant semantics. */
+export interface SessionUser extends User {
+  readonly actorTenantId: number;
+  tenantId: number;
+  role: string;
+}
+
 export interface TicketListResponse {
   tickets: Ticket[];
   total: number;
@@ -204,6 +213,7 @@ export interface TicketListResponse {
 }
 
 export interface CreateTicketRequest {
+  requesterId?: number;
   title: string;
   description: string;
   priority: string;

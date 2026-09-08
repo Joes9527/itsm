@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
 
 	"go.uber.org/zap"
@@ -18,6 +19,13 @@ import (
 type OutboxDeliveryHandler interface {
 	EventType() string
 	Deliver(context.Context, *ent.OutboxEvent) error
+}
+
+// ReplaySafeOutboxDeliveryHandler declares durable domain deduplication for every
+// effect, including a crash after commit. External transports default to ambiguous.
+type ReplaySafeOutboxDeliveryHandler interface {
+	OutboxDeliveryHandler
+	ReplaySafe() bool
 }
 
 type OutboxDeliveryWorkerConfig struct {
@@ -78,6 +86,9 @@ func NewOutboxDeliveryWorker(
 }
 
 func (w *OutboxDeliveryWorker) DispatchOnce(ctx context.Context) error {
+	// The transport polls across tenants; only its separately configured repository
+	// may hold database privileges for that server-owned operation.
+	ctx = tenantctx.SystemContext(ctx, "outbox:poll", "claim and acknowledge tenant delivery events")
 	blocked, err := w.repository.BlockUnknownPendingEventTypes(ctx, w.now().UTC(), w.config.BatchSize, w.registry.KnownTypes())
 	if err != nil {
 		return fmt.Errorf("block unknown outbox event types: %w", err)
@@ -100,10 +111,14 @@ func (w *OutboxDeliveryWorker) DispatchOnce(ctx context.Context) error {
 }
 
 func (w *OutboxDeliveryWorker) dispatch(ctx context.Context, handler OutboxDeliveryHandler, event *ent.OutboxEvent) error {
-	if err := w.repository.MarkDeliveryAttemptStarted(ctx, event.ID, event.ClaimToken, event.EventID); err != nil {
+	replaySafe := false
+	if capability, ok := handler.(ReplaySafeOutboxDeliveryHandler); ok {
+		replaySafe = capability.ReplaySafe()
+	}
+	if err := w.repository.markDeliveryAttemptStarted(ctx, event.ID, event.ClaimToken, event.EventID, replaySafe); err != nil {
 		return fmt.Errorf("mark outbox delivery attempt %s: %w", event.EventID, err)
 	}
-	handlerCtx, cancel := context.WithTimeout(ctx, w.config.HandlerTimeout)
+	handlerCtx, cancel := context.WithTimeout(tenantctx.WithTenantID(ctx, event.TenantID), w.config.HandlerTimeout)
 	err := handler.Deliver(handlerCtx, event)
 	cancel()
 	if err == nil {

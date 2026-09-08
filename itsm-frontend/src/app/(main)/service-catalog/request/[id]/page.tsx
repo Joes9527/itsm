@@ -6,7 +6,7 @@
  * B10 修复：表单加上 compliance_ack / expire_at / delivery_time
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Card,
@@ -26,10 +26,14 @@ import {
   Divider,
 } from 'antd';
 import { ArrowLeft, Clock, Send } from 'lucide-react';
-import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { ServiceCatalogApi } from '@/lib/api/service-catalog-api';
-import { httpClient } from '@/lib/api/http-client';
+import type { ServiceItem, CreateServiceRequestRequest } from '@/types/service-catalog';
+import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
+import { CreationAttempts } from '@/components/work-item/CreationAttempts';
+import { CreationRequester } from '@/components/work-item/CreationRequester';
+import { CatalogProfessionalFields } from './CatalogProfessionalFields';
+import { incompatibleCatalogAnswers, type IncompatibleCatalogAnswer } from './catalog-reload';
 import { useAuthStore } from '@/lib/store/auth-store';
 
 const { Title, Text, Paragraph } = Typography;
@@ -41,7 +45,12 @@ export default function ServiceCatalogRequestPage() {
   const id = Number(params?.id);
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
-  const [catalog, setCatalog] = useState<any>(null);
+  const [catalog, setCatalog] = useState<ServiceItem | null>(null);
+  const [revision, setRevision] = useState(0);
+  const catalogRef = useRef<ServiceItem | null>(null);
+  const [incompatibleAnswers, setIncompatibleAnswers] = useState<IncompatibleCatalogAnswer[]>([]);
+  const creation = useWorkItemCreation();
+  const serviceRequestTarget = catalog?.targetClass === 'service_request_item';
   const [fetching, setFetching] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const user = useAuthStore(state => state.user);
@@ -54,75 +63,66 @@ export default function ServiceCatalogRequestPage() {
     }
     setFetching(true);
     setFetchError(null);
-    // 拉取服务目录详情
-    httpClient
-      .get<any>(`/api/v1/service-catalogs/${id}`)
-      .then((data: any) => {
-        setCatalog(data?.data || data);
-      })
-      .catch(() => {
-        // 兜底：列表接口
-        return httpClient.get<any>('/api/v1/service-catalogs', { page: 1, size: 100 }).then((list: any) => {
-          const items = list?.data?.items || list?.items || [];
-          const found = items.find((it: any) => it.id === id);
-          if (found) {
-            setCatalog(found);
-          } else {
-            setFetchError('未找到所选服务，该服务可能已下架');
-          }
-        });
-      })
-      .catch(() => setFetchError('服务信息加载失败，请稍后重试'))
-      .finally(() => setFetching(false));
-  }, [id]);
+    let cancelled = false;
+    ServiceCatalogApi.getService(String(id)).then(data => {
+      if (cancelled) return;
+      if (!data.catalogVersion || !data.formSchemaVersion || !['generic', 'incident', 'problem', 'change_request', 'service_request_item'].includes(data.targetClass || '')) {
+        throw new Error('目录缺少有效目标或确认版本');
+      }
+      const incompatible = catalogRef.current
+        ? incompatibleCatalogAnswers(catalogRef.current, data, form.getFieldsValue(true)) : [];
+      setIncompatibleAnswers(incompatible);
+      catalogRef.current = data;
+      setCatalog(data);
+      if (incompatible.length === 0) creation.newConfirmation();
+    }).catch(() => { if (!cancelled) { setCatalog(null); setFetchError('服务信息加载失败，请重新读取并确认目录'); } })
+      .finally(() => { if (!cancelled) setFetching(false); });
+    return () => { cancelled = true; };
+  }, [id, revision]);
 
   useEffect(() => {
-    if (user) {
+    if (user && serviceRequestTarget) {
       form.setFieldsValue({ contactName: user.name, contactEmail: user.email });
     }
-  }, [form, user]);
+  }, [form, user, serviceRequestTarget]);
 
   const onFinish = async (values: any) => {
     setLoading(true);
     try {
-      const expireAt: Dayjs | undefined = values.expireAt;
-      // 自定义字段值必须以 [{name, value}] 数组形状提交，而不是 name 为 key 的 map：
-      // http-client.ts 会对请求体做全局递归 camelCase 转换，map 形状里带下划线的字段名
-      // （如 office_location）会被悄悄改写成 officeLocation，导致后端按名称匹配字段定义
-      // 时找不到、值被静默丢弃。数组元素里的 name 是字符串值而非 object key，不受影响。
-      const customFieldValues = (catalog?.fields || [])
-        .map((field: { name: string }) => ({
-          name: field.name,
-          value: values.customFields?.[field.name],
-        }))
-        .filter((f: { value: unknown }) => f.value !== undefined && f.value !== null && f.value !== '');
-      const payload: any = {
-        serviceId: id,
-        // 通用层字段：直接映射到后端新增列，不再经过 formData JSON 兜底路径
-        // （见 docs/superpowers/specs/2026-08-21-service-catalog-request-form-redesign-design.md §3.5）。
-        contactName: values.contactName,
-        contactEmail: values.contactEmail,
-        quantity: values.quantity || 1,
-        expectedAt: values.expectedAt ? values.expectedAt.toISOString() : undefined,
-        formData: {
-          title: values.title,
-          reason: values.reason,
-          costCenter: values.costCenter,
-          dataClassification: values.dataClassification || 'internal',
-          needsPublicIp: values.needsPublicIp || false,
-          sourceIpWhitelist: values.sourceIpWhitelist
-            ? values.sourceIpWhitelist.split(',').map((s: string) => s.trim()).filter(Boolean)
-            : undefined,
-          // B10: 合规确认 + 过期时间（仅基础设施类目录项渲染，见下方 requiresInfraFields 分支）
-          complianceAck: !!values.complianceAck,
-          expireAt: expireAt ? expireAt.toISOString() : undefined,
-          customFieldValues,
-        },
+      if (fetching) throw new Error('请等待读取目录完成');
+      if (incompatibleAnswers.length) throw new Error('请先核对并确认舍弃不兼容答案');
+      if (!catalog?.targetClass || !catalog.catalogVersion || !catalog.formSchemaVersion) throw new Error('请先读取并确认目录');
+      const customFieldValues = (catalog.fields || []).map(field => ({ name: field.name, value: values.customFields?.[field.name] }))
+        .filter(field => field.value !== undefined && field.value !== null && field.value !== '');
+      const payload: CreateServiceRequestRequest = {
+        catalogId: id, recordClass: catalog.targetClass, catalogVersion: catalog.catalogVersion, formSchemaVersion: catalog.formSchemaVersion,
+        title: values.title, reason: values.reason, priority: values.priority, requesterId: values.requesterId,
+        formData: { customFieldValues },
       };
-
-      const created = await ServiceCatalogApi.createServiceRequest(payload);
-      message.success('申请已提交，等待审批');
-      router.push(`/tickets/${created.ticketId}`);
+      if (serviceRequestTarget) {
+        Object.assign(payload, { contactName: values.contactName, contactEmail: values.contactEmail, quantity: Number(values.quantity || 1), expectedAt: values.expectedAt?.toISOString() });
+        if (catalog.requiresInfraFields) Object.assign(payload, {
+          costCenter: values.costCenter, dataClassification: values.dataClassification, needsPublicIp: !!values.needsPublicIp,
+          sourceIpWhitelist: values.sourceIpWhitelist?.split(',').map((value: string) => value.trim()).filter(Boolean),
+          complianceAck: !!values.complianceAck, expireAt: values.expireAt?.toISOString(),
+        });
+      } else {
+        payload.ciIds = values.ciIds?.map(Number);
+        if (payload.ciIds?.some(value => !Number.isInteger(value) || value <= 0)) throw new Error('配置项 ID 必须为正整数');
+        if (catalog.targetClass === 'generic') payload.generic = values.generic || {};
+        if (catalog.targetClass === 'problem') payload.problem = values.problem || {};
+        if (catalog.targetClass === 'incident') payload.incident = { ...values.incident,
+          detectedAt: values.incident?.detectedAt?.toISOString(),
+          metadata: values.incident?.metadata ? JSON.parse(values.incident.metadata) : undefined,
+          impactAnalysis: values.incident?.impactAnalysis ? JSON.parse(values.incident.impactAnalysis) : undefined,
+        };
+        if (catalog.targetClass === 'change_request') {
+          const change = values.change;
+          if (change?.plannedStartDate && change?.plannedEndDate?.isBefore(change.plannedStartDate)) throw new Error('结束时间必须晚于开始时间');
+          payload.change = { ...change, plannedStartDate: change?.plannedStartDate?.toISOString(), plannedEndDate: change?.plannedEndDate?.toISOString() };
+        }
+      }
+      await creation.submit(payload, ServiceCatalogApi.createServiceRequest, receipt => router.push(`/tickets/${receipt.workItemId}`));
     } catch (e: any) {
       message.error('提交失败：' + (e?.message || '未知错误'));
     } finally {
@@ -130,7 +130,7 @@ export default function ServiceCatalogRequestPage() {
     }
   };
 
-  if (fetching) {
+  if (fetching && !catalogRef.current) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Spin size="large" />
@@ -147,6 +147,7 @@ export default function ServiceCatalogRequestPage() {
         ]}
         className="mb-4"
       />
+      <CreationAttempts creation={creation} />
       <Card>
         <Space className="mb-4">
           <Button icon={<ArrowLeft />} onClick={() => router.push('/service-catalog')}>
@@ -157,6 +158,24 @@ export default function ServiceCatalogRequestPage() {
           </Title>
         </Space>
 
+        {(fetchError || creation.attempts.some(attempt => attempt.state === 'rejected' || attempt.state === 'unknown')) && (
+          <Alert type="warning" className="mb-4" title="请重新读取目录并核对后再确认申请" description="重试不会自动替换原确认版本；重载将保留兼容答案，不兼容内容需您明确核对。"
+            action={<Button loading={fetching} disabled={fetching || incompatibleAnswers.length > 0 || creation.submitting} onClick={() => setRevision(value => value + 1)}>重新读取目录</Button>} />
+        )}
+        {incompatibleAnswers.length > 0 && (
+          <Alert type="warning" className="mb-4" title="目录变更需要重新核对已填内容"
+            description={<>
+              <p>以下答案不再适用于新目录定义。确认后将舍弃这些答案，请在新表单重新填写；其他答案及原申请快照保留。</p>
+              <ul>{incompatibleAnswers.map(answer => <li key={JSON.stringify(answer.path)}>
+                {answer.label}：{typeof answer.value === 'string' ? answer.value : JSON.stringify(answer.value)}
+              </li>)}</ul>
+            </>}
+            action={<Button onClick={() => {
+              incompatibleAnswers.forEach(answer => form.setFieldValue(answer.path, undefined));
+              setIncompatibleAnswers([]);
+              creation.newConfirmation();
+            }}>确认舍弃上述不兼容答案并重新填写</Button>} />
+        )}
         {fetchError && (
           <Alert
             type="error"
@@ -175,21 +194,24 @@ export default function ServiceCatalogRequestPage() {
             message={
               <Space>
                 <Text strong>{catalog.name}</Text>
-                {catalog.deliveryTime != null && (
+                {catalog.availability?.responseTime != null && (
                   <Tag icon={<Clock />} color="blue">
-                    交付时长 {catalog.deliveryTime} 天
+                    交付时长 {catalog.availability?.responseTime} 天
                   </Tag>
                 )}
                 {catalog.category && <Tag>{catalog.category}</Tag>}
               </Space>
             }
-            description={catalog.description}
+            description={catalog.fullDescription}
           />
         )}
 
         <Divider />
 
-        <Form form={form} layout="vertical" onFinish={onFinish}>
+        <Form form={form} layout="vertical" onFinish={onFinish} disabled={fetching || incompatibleAnswers.length > 0}>
+          <CreationRequester />
+          <Alert type="info" title={`确认目标：${catalog?.targetClass || '未加载'}`} />
+          {serviceRequestTarget && <>
           <div className="grid grid-cols-2 gap-4">
             <Form.Item
               name="contactName"
@@ -210,6 +232,7 @@ export default function ServiceCatalogRequestPage() {
               <Input placeholder="联系邮箱" />
             </Form.Item>
           </div>
+          </>}
           <Form.Item
             name="title"
             label="申请标题"
@@ -223,9 +246,10 @@ export default function ServiceCatalogRequestPage() {
             label="申请理由"
             rules={[{ required: true, message: '请输入申请理由' }]}
           >
-            <TextArea rows={4} placeholder="请详细说明申请原因、业务场景、紧急程度" maxLength={2000} />
+            <TextArea rows={4} placeholder="请详细说明申请原因、业务场景、紧急程度" maxLength={500} />
           </Form.Item>
 
+          {serviceRequestTarget && <>
           <div className="grid grid-cols-2 gap-4">
             <Form.Item name="quantity" label="数量" initialValue={1}>
               <Input type="number" min={1} max={100} />
@@ -235,7 +259,8 @@ export default function ServiceCatalogRequestPage() {
             </Form.Item>
           </div>
 
-          {catalog?.requiresInfraFields && (
+          </>}
+          {serviceRequestTarget && catalog?.requiresInfraFields && (
             <>
               <div className="grid grid-cols-2 gap-4">
                 <Form.Item name="costCenter" label="成本中心">
@@ -273,8 +298,8 @@ export default function ServiceCatalogRequestPage() {
 
               <Form.Item
                 name="expireAt"
-                label="资源过期时间（到期自动回收）"
-                extra="若不填写，则按服务目录默认策略"
+                label="申请有效期"
+                extra="填写期望的有效期限，实际执行以服务流程为准"
               >
                 <DatePicker
                   showTime
@@ -302,6 +327,8 @@ export default function ServiceCatalogRequestPage() {
             </>
           )}
 
+          <Form.Item name="priority" label="优先级"><Select options={['low', 'medium', 'high', 'critical'].map(value => ({ value, label: value }))} /></Form.Item>
+          <CatalogProfessionalFields targetClass={catalog?.targetClass} />
           {Array.isArray(catalog?.fields) && catalog.fields.length > 0 && (
             <>
               <Divider>该服务的补充信息</Divider>
@@ -335,7 +362,7 @@ export default function ServiceCatalogRequestPage() {
                 htmlType="submit"
                 icon={<Send />}
                 loading={loading}
-                disabled={!catalog || !!fetchError}
+                disabled={fetching || !catalog || !!fetchError || incompatibleAnswers.length > 0}
               >
                 提交申请
               </Button>

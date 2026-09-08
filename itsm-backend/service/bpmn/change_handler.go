@@ -8,6 +8,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/ticket"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/shared/workflowcallback"
 
 	"go.uber.org/zap"
@@ -15,10 +16,11 @@ import (
 
 type ChangeDomainServiceInterface interface {
 	workflowcallback.ChangeService
-	CreateChangeForWorkflow(ctx context.Context, tenantID, createdBy int, title, description, changeType, priority string) (int, error)
 }
 
 type ChangeServiceTaskHandler struct {
+	creationApplication creation.Application
+	creationDirectory   *ent.Client
 	HandlerBase
 	client        *ent.Client
 	changeService ChangeDomainServiceInterface
@@ -125,29 +127,12 @@ func callbackEffectFromWorkflowResult(result workflowcallback.Result) (*Callback
 	}
 }
 
-func (h *ChangeServiceTaskHandler) createChange(ctx context.Context, variables map[string]interface{}) (*CallbackEffect, error) {
-	if _, durable := BPMNCallbackExecutionKey(ctx); durable {
-		return nil, fmt.Errorf("durable callback must use an existing change target")
-	}
-	if h.changeService == nil {
-		return nil, fmt.Errorf("change service is not injected")
-	}
-	title, _ := variables["title"].(string)
-	if title == "" {
-		return BlockedEffect(CallbackBlockHandlerContract, "change title is required"), nil
-	}
-	tenantID, err := RequireTenantID(ctx, variables)
-	if err != nil {
-		return nil, err
-	}
-	description, _ := variables["description"].(string)
-	changeType, _ := variables["type"].(string)
-	priority, _ := variables["priority"].(string)
-	changeID, err := h.changeService.CreateChangeForWorkflow(ctx, tenantID, GetIntFromVars(variables, "created_by"), title, description, changeType, priority)
-	if err != nil {
-		return nil, fmt.Errorf("create change: %w", err)
-	}
-	return AppliedEffect(fmt.Sprintf("change %d created", changeID), map[string]interface{}{"change_id": changeID}), nil
+func (h *ChangeServiceTaskHandler) SetCreationApplication(app creation.Application, directory *ent.Client) {
+	h.creationApplication = app
+	h.creationDirectory = directory
+}
+func (h *ChangeServiceTaskHandler) createChange(ctx context.Context, _ map[string]interface{}) (*CallbackEffect, error) {
+	return executeWorkItemCreation(ctx, h.client, h.creationDirectory, h.creationApplication, h.GetHandlerID(), "create_change", creation.RecordClassChangeRequest)
 }
 
 func (h *ChangeServiceTaskHandler) approveChange(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*CallbackEffect, error) {

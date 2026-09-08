@@ -723,3 +723,12 @@ func TestBPMNAuthorizationMatrix(t *testing.T) {
 		}
 	}
 }
+
+func TestBPMNDefinitionExecutionEditReturnsValidationError(t *testing.T) {
+	f := newBPMNHTTPAuthorizationFixture(t)
+	d := f.client.ProcessDefinition.GetX(context.Background(), f.instance.ProcessDefinitionID)
+	w := f.doAsActor(t, "elevated", http.MethodPut, "/api/v1/bpmn/process-definitions/"+d.Key+"?version="+d.Version, `{"bpmnXml":"<definitions/>"}`)
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	require.Contains(t, w.Body.String(), "new process version")
+	require.Equal(t, d.BpmnXML, f.client.ProcessDefinition.GetX(context.Background(), d.ID).BpmnXML)
+}

@@ -45,7 +45,7 @@ func setupIncidentWithWorkItem(t *testing.T, client *ent.Client, ctx context.Con
 		SetRecordClass("incident").SetRequesterID(userID).SetTenantID(tenantID).
 		Save(ctx)
 	require.NoError(t, err)
-	inc, err := client.Incident.Create().SetIncidentNumber("INC-" + code).
+	inc, err := client.Incident.Create().
 		SetWorkItemID(wi.ID).
 		Save(ctx)
 	require.NoError(t, err)

@@ -2,9 +2,9 @@
  * CIContextCard Component Tests
  *
  * 覆盖：
- * - 非 service_catalog 来源不渲染
- * - service_catalog 且有关联 CI 时展示 CI 名称/类型/拓扑信息
- * - service_catalog 且无关联 CI 时展示空态
+ * - 非 Requested Item 不渲染
+ * - Requested Item 且有关联 CI 时展示 CI 名称/类型/拓扑信息
+ * - Requested Item 且无关联 CI 时展示空态
  */
 
 import React from 'react';
@@ -29,10 +29,13 @@ const mockGetTopology = CMDBApi.getCITopology as jest.Mock;
 describe('CIContextCard', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetByTicket.mockReset();
+    mockGetCI.mockReset();
+    mockGetTopology.mockReset();
   });
 
-  it('renders nothing for non-service_catalog tickets', async () => {
-    const { container } = render(<CIContextCard ticketId={101} source="web" />);
+  it.each(['generic', 'incident', 'problem', 'change_request', 'catalog_task'])('renders nothing for %s even if source claims service_catalog', async recordClass => {
+    const { container } = render(<CIContextCard ticketId={101} {...{recordClass, source: "service_catalog"}} />);
 
     await waitFor(() => {
       expect(mockGetByTicket).not.toHaveBeenCalled();
@@ -40,7 +43,7 @@ describe('CIContextCard', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('shows CI name, type chip and topology counts when the service request has a linked CI', async () => {
+  it.each(['service_catalog', 'kaf_web'])('shows linked CI for a Requested Item from %s', async source => {
     mockGetByTicket.mockResolvedValueOnce({ id: 55, ciId: 88 });
     mockGetCI.mockResolvedValueOnce({
       id: '88',
@@ -50,7 +53,7 @@ describe('CIContextCard', () => {
     });
     mockGetTopology.mockResolvedValueOnce({ totalNodes: 14, totalEdges: 5 });
 
-    render(<CIContextCard ticketId={202} source="service_catalog" />);
+    render(<CIContextCard ticketId={202} {...{recordClass: "service_request_item", source}} />);
 
     await waitFor(() => {
       expect(screen.getByText('app-promotion-calc-cluster')).toBeInTheDocument();
@@ -64,7 +67,7 @@ describe('CIContextCard', () => {
   it('shows empty state when the service request has no linked CI', async () => {
     mockGetByTicket.mockResolvedValueOnce({ id: 66 });
 
-    render(<CIContextCard ticketId={303} source="service_catalog" />);
+    render(<CIContextCard ticketId={303} {...{recordClass: "service_request_item", source: "service_catalog"}} />);
 
     await waitFor(() => {
       expect(screen.getByText('无关联 CI')).toBeInTheDocument();

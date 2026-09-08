@@ -7,7 +7,9 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketassignmentrule"
+	"itsm-backend/ent/user"
 
 	"go.uber.org/zap"
 )
@@ -199,37 +201,11 @@ func (s *TicketAssignmentRuleService) matchRule(
 	rule *ent.TicketAssignmentRule,
 	ticketEntity *ent.Ticket,
 ) (bool, string) {
-	if len(rule.Conditions) == 0 {
-		return true, "无匹配条件，默认匹配"
+	matched, err := evaluateTicketRuleConditions(rule.Conditions, ticketEntity)
+	if err != nil {
+		return false, err.Error()
 	}
-
-	for _, condition := range rule.Conditions {
-		field, _ := condition["field"].(string)
-		operator, _ := condition["operator"].(string)
-		value := condition["value"]
-
-		matched := false
-		switch field {
-		case "category_id":
-			if ticketEntity.CategoryID > 0 {
-				matched = s.compareValue(ticketEntity.CategoryID, operator, value)
-			}
-		case "priority":
-			matched = s.compareValue(ticketEntity.Priority, operator, value)
-		case "status":
-			matched = s.compareValue(ticketEntity.Status, operator, value)
-		case "department_id":
-			if ticketEntity.DepartmentID > 0 {
-				matched = s.compareValue(ticketEntity.DepartmentID, operator, value)
-			}
-		}
-
-		if !matched {
-			return false, fmt.Sprintf("条件不匹配: %s %s %v", field, operator, value)
-		}
-	}
-
-	return true, "所有条件匹配"
+	return matched, "条件已评估"
 }
 
 // compareValue 比较值
@@ -268,41 +244,56 @@ func (s *TicketAssignmentRuleService) executeRuleAction(
 	ticketEntity *ent.Ticket,
 ) (*int, float64, error) {
 	actionType, _ := rule.Actions["type"].(string)
-	actionValue := rule.Actions["value"]
-
+	var ids []int
 	switch actionType {
 	case "user":
-		// 直接分配给指定用户
-		userID, ok := actionValue.(float64)
-		if !ok {
-			return nil, 0, fmt.Errorf("invalid user ID")
+		id, err := ticketRulePositiveID(rule.Actions["value"])
+		if err != nil {
+			return nil, 0, err
 		}
-		uid := int(userID)
-		return &uid, 1.0, nil
-	case "round_robin":
-		// 轮询分配
-		if len(actionValue.([]interface{})) == 0 {
-			return nil, 0, fmt.Errorf("no users for round_robin")
+		ids = []int{id}
+	case "round_robin", "load_balance":
+		values, ok := rule.Actions["value"].([]interface{})
+		if !ok || len(values) == 0 {
+			return nil, 0, fmt.Errorf("assignment rule requires users")
 		}
-		users := actionValue.([]interface{})
-		// 简单实现：使用 ExecutionCount 取模
-		idx := rule.ExecutionCount % len(users)
-		uid := int(users[idx].(float64))
-		return &uid, 1.0, nil
-	case "load_balance":
-		// 负载均衡分配
-		// 简单实现：随机选择一个（实际应查询用户当前负载）
-		if len(actionValue.([]interface{})) == 0 {
-			return nil, 0, fmt.Errorf("no users for load_balance")
+		for _, value := range values {
+			id, err := ticketRulePositiveID(value)
+			if err != nil {
+				return nil, 0, err
+			}
+			ids = append(ids, id)
 		}
-		users := actionValue.([]interface{})
-		// 模拟负载均衡，实际应查询 Ticket 表统计 assigned_to
-		idx := time.Now().Unix() % int64(len(users))
-		uid := int(users[idx].(float64))
-		return &uid, 1.0, nil
 	default:
-		return nil, 0, fmt.Errorf("unknown action type: %s", actionType)
+		return nil, 0, fmt.Errorf("unknown assignment action: %s", actionType)
 	}
+	for _, id := range ids {
+		exists, err := s.client.User.Query().Where(user.IDEQ(id), user.TenantIDEQ(ticketEntity.TenantID), user.ActiveEQ(true)).Exist(ctx)
+		if err != nil {
+			return nil, 0, err
+		}
+		if !exists {
+			return nil, 0, fmt.Errorf("assignment user is unavailable")
+		}
+	}
+	selected := ids[0]
+	if actionType == "round_robin" {
+		selected = ids[rule.ExecutionCount%len(ids)]
+	}
+	if actionType == "load_balance" {
+		least := -1
+		for _, id := range ids {
+			count, err := s.client.Ticket.Query().Where(ticket.AssigneeIDEQ(id), ticket.TenantIDEQ(ticketEntity.TenantID), ticket.StatusNotIn("closed", "resolved", "cancelled")).Count(ctx)
+			if err != nil {
+				return nil, 0, err
+			}
+			if least < 0 || count < least || (count == least && id < selected) {
+				selected = id
+				least = count
+			}
+		}
+	}
+	return &selected, 1, nil
 }
 
 // toAssignmentRuleResponse 转换为响应DTO

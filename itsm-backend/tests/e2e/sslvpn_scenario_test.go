@@ -12,25 +12,34 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/authentication"
+
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
-	"itsm-backend/authentication"
 
 	"itsm-backend/controller"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/fieldvalue"
+	"itsm-backend/ent/outboxevent"
+	"itsm-backend/ent/permission"
 	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/processauditlog"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
+	"itsm-backend/ent/role"
+	"itsm-backend/ent/rolepermission"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/handlers/cmdb"
+	changedomain "itsm-backend/handlers/change"
+	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/intake"
+	problemdomain "itsm-backend/handlers/problem"
 	"itsm-backend/handlers/service_catalog"
 	"itsm-backend/handlers/service_request"
 	"itsm-backend/middleware"
@@ -115,7 +124,7 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 	slaSvc := service.NewTicketSLAService(client, logger)
 
 	numberAllocator := workitemnumber.NewPostgreSQLAllocator()
-	ticketRepo := repoTicket.NewEntRepository(client, logger, numberAllocator)
+	ticketRepo := repoTicket.NewEntRepository(client, logger)
 	ticketSvc := service.NewTicketService(&service.TicketServiceConfig{
 		Repository:            ticketRepo,
 		Client:                client,
@@ -131,13 +140,62 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 	bpmnController := controller.NewBPMNWorkflowController(engine, versionSvc)
 
 	scRepo := service_catalog.NewEntRepository(client)
-	scService := service_catalog.NewService(scRepo, client, logger)
+	scService := service_catalog.NewService(scRepo, client, logger, sameTransactionDirectory{})
 	scHandler := service_catalog.NewHandler(scService)
 
-	cmdbRepo := cmdb.NewEntRepository(client)
 	srRepo := service_request.NewEntRepository(client)
-	srService := service_request.NewService(srRepo, scRepo, cmdbRepo, client, numberAllocator, logger, ticketSvc, nil, nil)
+	srService := service_request.NewService(srRepo, client, logger, service.NewApprovalChainResolver(client, logger))
 	srHandler := service_request.NewHandler(srService)
+
+	// Wire the real shared Intake application, mirroring production bootstrap:
+	// creation now always goes through Resolve->Prepare->CreateExtension, not a
+	// direct repository/service Create method. The SSL-VPN scenario's own
+	// service_catalog item already carries ProcessDefinitionKey=sslvpn_approval_flow,
+	// so catalog-driven creation resolves its workflow directly from the catalog
+	// row and does not need a ProcessBinding fixture for "service_request".
+	registry := intake.NewCreatorRegistry()
+	for _, owner := range []creation.ProfessionalCreator{
+		ticketSvc,
+		service.NewIncidentService(client, logger),
+		problemdomain.NewService(nil, logger),
+		changedomain.NewService(nil, client, logger),
+		srService,
+	} {
+		require.NoError(t, registry.Register(owner))
+	}
+	resolver := intake.NewResolver(scService, service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
+	creationApp := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(numberAllocator), sameTransactionDirectory{})
+	ticketController.SetCreationApplication(creationApp)
+	srHandler.SetCreationApplication(creationApp)
+
+	// Grant the end_user requester's role current read permission on the service
+	// catalog: handlers/service_catalog.ResolveCreationCatalog requires it before
+	// a non-super_admin actor's submission can resolve the confirmed catalog/form
+	// revision. The BPMN template deployment above already provisions an active
+	// "end_user" role row for this tenant, so look it up rather than creating a
+	// second (non-singular) one.
+	endUserRole, err := client.Role.Query().Where(role.TenantIDEQ(tenant.ID), role.CodeEQ(fixResult.Users.EndUser.Role), role.IsActiveEQ(true)).First(ctx)
+	if ent.IsNotFound(err) {
+		endUserRole, err = client.Role.Create().SetTenantID(tenant.ID).SetCode(fixResult.Users.EndUser.Role).SetName(fixResult.Users.EndUser.Role).SetIsActive(true).Save(ctx)
+	}
+	require.NoError(t, err)
+	for _, grant := range []struct{ resource, action string }{
+		{"service_catalog", "read"},
+		{"service_request", "read"},
+		{"service_request", "write"},
+		{"ticket", "read"},
+		{"ticket", "write"},
+	} {
+		code := grant.resource + ":" + grant.action
+		perm, err := client.Permission.Query().Where(permission.TenantIDEQ(tenant.ID), permission.CodeEQ(code)).First(ctx)
+		if ent.IsNotFound(err) {
+			perm, err = client.Permission.Create().SetTenantID(tenant.ID).SetCode(code).SetName(code).SetResource(grant.resource).SetAction(grant.action).Save(ctx)
+		}
+		require.NoError(t, err)
+		if !client.RolePermission.Query().Where(rolepermission.TenantIDEQ(tenant.ID), rolepermission.RoleIDEQ(endUserRole.ID), rolepermission.PermissionIDEQ(perm.ID)).ExistX(ctx) {
+			client.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(endUserRole.ID).SetPermissionID(perm.ID).SaveX(ctx)
+		}
+	}
 
 	// Build signed session values for the same HttpOnly-cookie path used in production.
 	userSession, err := authentication.GenerateAccessToken(fixResult.Users.EndUser.ID, fixResult.Users.EndUser.Username, fixResult.Users.EndUser.Role, tenant.ID, testJWTSecret, 24*time.Hour)
@@ -153,6 +211,13 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 
 	apiV1 := r.Group("/api/v1")
 	apiV1.Use(middleware.AuthMiddleware(testJWTSecret), middleware.CSRFProtectionMiddleware(middleware.DefaultCSRFConfig()))
+	// The shared Intake HTTP boundary resolves tenant scope through
+	// middleware.TenantContextKey (middleware.ResolveRequestTenantID), not the
+	// legacy plain "tenant_id" gin key AuthMiddleware sets for older routes.
+	apiV1.Use(func(c *gin.Context) {
+		c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: c.GetInt("tenant_id")})
+		c.Next()
+	})
 	{
 		// Tickets
 		apiV1.POST("/tickets", ticketController.CreateTicket)
@@ -199,6 +264,9 @@ func doRequest(t *testing.T, r http.Handler, session, method, path string, body 
 		const csrf = "sslvpn-e2e-csrf"
 		req.AddCookie(&http.Cookie{Name: middleware.CSRFTokenCookieName, Value: csrf, Path: "/", HttpOnly: true})
 		req.Header.Set(middleware.CSRFTokenHeaderName, csrf)
+		// Required by the shared Intake HTTP boundary for creation routes;
+		// harmless no-op for other mutating routes that ignore it.
+		req.Header.Set("Idempotency-Key", uuid.NewString())
 	}
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -221,33 +289,41 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 	// =========================================================================
 	t.Log("== Step 1: Submitting SSL-VPN Service Request with 8 Custom Fields ==")
 
+	// Authenticated catalog detail is the authoritative confirmation revision
+	// source: the shared Intake resolver rejects a submission whose
+	// catalogVersion/formSchemaVersion do not match the current row.
+	catalogEnv, catalogStatus := doRequest(t, h.router, h.userSession, http.MethodGet, fmt.Sprintf("/api/v1/service-catalogs/%d", h.fixture.CatalogItem.ID), nil)
+	require.Equal(t, http.StatusOK, catalogStatus, "catalog detail read should succeed: %s", catalogEnv.Message)
+	var catalogResp dto.ServiceCatalogResponse
+	require.NoError(t, json.Unmarshal(catalogEnv.Data, &catalogResp))
+	require.NotEmpty(t, catalogResp.CatalogVersion)
+	require.NotEmpty(t, catalogResp.FormSchemaVersion)
+
 	srCreationBody := map[string]interface{}{
-		"catalogId": h.fixture.CatalogItem.ID,
-		"title":     "申请研发出差 SSL-VPN 访问权限",
-		"reason":    "因出差需要远程访问研发内网与生产堡垒机",
+		"catalogId":         h.fixture.CatalogItem.ID,
+		"recordClass":       "service_request_item",
+		"catalogVersion":    catalogResp.CatalogVersion,
+		"formSchemaVersion": catalogResp.FormSchemaVersion,
+		"title":             "申请研发出差 SSL-VPN 访问权限",
+		"reason":            "因出差需要远程访问研发内网与生产堡垒机",
 		"formData": map[string]interface{}{
 			"customFieldValues": []map[string]interface{}{
-				{"name": "applicant_name", "value": "侯艾华"},
-				{"name": "applicant_upn", "value": "shouah@kln.com"},
-				{"name": "employee_id", "value": "EMP001"},
-				{"name": "department", "value": "IT研发中心"},
-				{"name": "vpn_level", "value": "Level 2 - 业务系统组 (CNDL-OKTA-SSLVPN-Level2-Users)"},
 				{"name": "target_systems", "value": "10.128.35.0/24, ERP与WMS生产系统"},
-				{"name": "access_duration", "value": "90天临时"},
+				{"name": "access_duration", "value": "days_90"},
 				{"name": "access_reason", "value": "因研发排障及出差值班，需远程接入内网生产环境"},
 			},
 		},
 	}
 
 	env, status := doRequest(t, h.router, h.userSession, http.MethodPost, "/api/v1/service-requests", srCreationBody)
-	require.Equal(t, http.StatusOK, status, "service request creation should return 200 OK: %s", env.Message)
+	require.Equal(t, http.StatusCreated, status, "service request creation should return 201 Created: %s", env.Message)
 	require.Equal(t, 0, env.Code, "service request creation code must be 0: %s", env.Message)
 
-	var srResp dto.ServiceRequestResponse
-	require.NoError(t, json.Unmarshal(env.Data, &srResp))
-	ticketID := srResp.TicketID
+	var createResult creation.CreateWorkItemResult
+	require.NoError(t, json.Unmarshal(env.Data, &createResult))
+	ticketID := createResult.WorkItemID
 	require.Positive(t, ticketID, "linked ticket ID must be positive")
-	t.Logf("Created Service Request ID: %d, Linked Ticket ID: %d", srResp.ID, ticketID)
+	t.Logf("Created Service Request ID: %d, Linked Ticket ID: %d", createResult.ProfessionalReference.ID, ticketID)
 
 	// Direct DB Assertions for Step 1
 	// 1. Ticket Table
@@ -270,26 +346,16 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 		Order(ent.Asc(fieldvalue.FieldSortOrder)).
 		All(ctx)
 	require.NoError(t, err)
-	require.Len(t, dbFieldValues, 8, "must persist all 8 custom fields")
+	require.Len(t, dbFieldValues, 3, "must persist all 3 business fields")
 
 	expectedFieldKeys := []string{
-		"applicant_name",
-		"applicant_upn",
-		"employee_id",
-		"department",
-		"vpn_level",
 		"target_systems",
 		"access_duration",
 		"access_reason",
 	}
 	expectedValues := map[string]string{
-		"applicant_name":  "侯艾华",
-		"applicant_upn":   "shouah@kln.com",
-		"employee_id":     "EMP001",
-		"department":      "IT研发中心",
-		"vpn_level":       "Level 2 - 业务系统组 (CNDL-OKTA-SSLVPN-Level2-Users)",
 		"target_systems":  "10.128.35.0/24, ERP与WMS生产系统",
-		"access_duration": "90天临时",
+		"access_duration": "days_90",
 		"access_reason":   "因研发排障及出差值班，需远程接入内网生产环境",
 	}
 
@@ -306,7 +372,15 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 		assert.Equal(t, expectedValues[k], val, "custom field %s value mismatch", k)
 	}
 
-	// 3. BPMN Process Instance (ACTIVE) - wait briefly for async trigger goroutine if needed
+	// 3. BPMN Process Instance (ACTIVE). Creation now durably persists a
+	// "workflow.start.requested" Outbox event rather than synchronously starting
+	// the process; deliver it through the real handler once, mirroring
+	// handlers/service_request/kaf_delegation_sslvpn_e2e_test.go, then wait
+	// briefly for the resulting process instance/task rows to commit.
+	startEvents := h.client.OutboxEvent.Query().Where(outboxevent.EventTypeEQ("workflow.start.requested"), outboxevent.AggregateIDEQ(fmt.Sprint(ticketID))).AllX(ctx)
+	require.Len(t, startEvents, 1, "exactly one durable workflow start event must be recorded for the created work item")
+	require.NoError(t, service.NewWorkflowStartOutboxHandler(h.client, h.engine.(*service.CustomProcessEngine), h.client).Deliver(ctx, startEvents[0]))
+
 	businessKey := fmt.Sprintf("service_request:%d", ticketID)
 	var processInst *ent.ProcessInstance
 	require.Eventually(t, func() bool {
@@ -432,7 +506,8 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 	// 2. Process Instance status -> COMPLETED
 	finalProcessInst, err := h.client.ProcessInstance.Get(ctx, processInst.ID)
 	require.NoError(t, err)
-	assert.Equal(t, "completed", finalProcessInst.Status, "BPMN process instance must be completed")
+	assert.Equal(t, "running", finalProcessInst.Status, "BPMN awaits verified external fulfillment")
+	require.Equal(t, 1, h.client.ProcessTask.Query().Where(processtask.ProcessInstanceIDEQ(finalProcessInst.ID), processtask.TaskTypeEQ("kaf_delegate"), processtask.StatusEQ("delegated")).CountX(ctx))
 	assert.NotNil(t, finalProcessInst.EndTime, "Process end time must be set")
 
 	// 3. Process Approval Decision for L2 review

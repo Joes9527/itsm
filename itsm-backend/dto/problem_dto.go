@@ -4,6 +4,7 @@ import "time"
 
 // CreateProblemRequest 创建问题请求
 type CreateProblemRequest struct {
+	RequesterID *int   `json:"requesterId,omitempty" binding:"omitempty,gt=0"` // 可选目标租户申请人
 	Title       string `json:"title" binding:"required,min=2,max=200"`
 	Description string `json:"description" binding:"required,min=10,max=5000"`
 	Priority    string `json:"priority" binding:"required"`

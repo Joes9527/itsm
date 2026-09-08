@@ -59,11 +59,11 @@ func TestKafOutboxConfigFromEnvironment(t *testing.T) {
 			wantErr: "KAF_OUTBOX_MAX_ATTEMPTS",
 		},
 		{
-			name: "URL without secret is rejected",
+			name: "API accepts public URL without worker secret",
 			values: map[string]string{
 				"KAF_WEBHOOK_URL": "https://kaf.example.test/webhooks/itsm",
 			},
-			wantErr: "KAF_WEBHOOK_SECRET",
+			want: KAFOutboxConfig{WebhookURL: "https://kaf.example.test/webhooks/itsm", BatchSize: 20, PollInterval: 5 * time.Second, MaxAttempts: 5, HealthPort: 8081},
 		},
 		{
 			name: "non HTTP URL is rejected",

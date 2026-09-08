@@ -1,5 +1,13 @@
 'use client';
 
+import { professionalCreationPath } from '@/lib/api/work-item-creation';
+
+
+import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
+import { CreationAttempts } from '@/components/work-item/CreationAttempts';
+import { CreationRequester } from '@/components/work-item/CreationRequester';
+
+
 import React, { useState, useEffect } from 'react';
 import {
   Table,
@@ -58,6 +66,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 export default function StandardChangesPage() {
   const router = useRouter();
+  const creation = useWorkItemCreation();
   const { t } = useI18n();
   const [loading, setLoading] = useState(false);
   const [templates, setTemplates] = useState<StandardChange[]>([]);
@@ -160,11 +169,10 @@ export default function StandardChangesPage() {
   const handleInstantiateSubmit = async () => {
     if (!selectedTemplate) return;
     try {
-      const values = instantiateForm.getFieldsValue();
-      const result = await StandardChangeApi.instantiate(selectedTemplate.id, values);
-      message.success(t('standardChanges.instantiateSuccess') || '已成功从模板创建变更');
-      setInstantiateModalVisible(false);
-      router.push(`/changes/${result.changeId}`);
+      const values = await instantiateForm.validateFields();
+      await creation.submit({ templateId: selectedTemplate.id, values },
+        (snapshot, options) => StandardChangeApi.instantiate(snapshot.templateId, snapshot.values, options),
+        receipt => { router.push(professionalCreationPath(receipt, 'change')); setInstantiateModalVisible(false); });
     } catch (error) {
       console.error('Failed to instantiate:', error);
       message.error(t('standardChanges.instantiateFailed') || '从模板创建变更失败');
@@ -272,6 +280,7 @@ export default function StandardChangesPage() {
             <Button
               type='link'
               icon={<PlayCircle size={14} />}
+              aria-label='从模板创建变更'
               onClick={() => handleInstantiate(record)}
             />
           </Tooltip>
@@ -295,6 +304,7 @@ export default function StandardChangesPage() {
 
   return (
     <div className='p-6 bg-gray-50 min-h-full'>
+      <CreationAttempts creation={creation} />
       <div className='mb-6'>
         <div className='flex items-center justify-between mb-4'>
           <div>
@@ -511,12 +521,14 @@ export default function StandardChangesPage() {
             </Descriptions>
 
             <Form form={instantiateForm} layout='vertical'>
+              <CreationRequester />
               <Form.Item name='title' label='变更标题' initialValue={selectedTemplate.title}>
                 <Input />
               </Form.Item>
               <Form.Item name='plannedStartDate' label='计划开始时间'>
                 <DatePicker showTime style={{ width: '100%' }} placeholder='选择计划开始时间' />
               </Form.Item>
+              <Form.Item name='affectedCis' label='受影响配置项（覆盖模板）'><Select mode='tags' /></Form.Item>
               <Form.Item name='plannedEndDate' label='计划结束时间'>
                 <DatePicker showTime style={{ width: '100%' }} placeholder='选择计划结束时间' />
               </Form.Item>

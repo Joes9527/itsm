@@ -5,7 +5,7 @@
  * 1. Persona 1 (end_user_test / Password123!):
  *    - 登录系统，访问服务目录 (/service-catalog)；
  *    - 定位 "SSL-VPN 远程办公访问权限申请"，进入申请页 (/service-catalog/request/:id)；
- *    - 验证 8 个动态自定义字段的 UI 渲染并填充提交；
+ *    - 验证 3 个动态自定义字段的 UI 渲染并填充提交；
  *    - 提交后跳转工单详情页 (/tickets/:ticketId)，验证状态与审批链。
  * 2. Persona 2 (supervisor_test / Password123!):
  *    - 登录系统，访问唯一 BPMN 审批中心 (/approvals)；
@@ -49,15 +49,10 @@ const USERS = {
   },
 };
 
-// 8 项动态自定义字段测试数据
+// 3 项动态自定义字段测试数据
 const SSLVPN_CUSTOM_FIELDS = {
-  applicant_name: '侯艾华',
-  applicant_upn: 'shouah@kln.com',
-  employee_id: 'EMP001',
-  department: 'IT研发中心',
-  vpn_level: 'Level 2 - 业务系统组 (CNDL-OKTA-SSLVPN-Level2-Users)',
   target_systems: '10.128.35.0/24, ERP与WMS生产系统',
-  access_duration: '90天临时',
+  access_duration: 'days_90',
   access_reason: '因研发排障及出差值班，需远程接入内网生产环境',
 };
 
@@ -86,7 +81,7 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
   // =========================================================================
   // 1. Persona 1: 申请人 (end_user_test) 提交 SSL-VPN 服务申请
   // =========================================================================
-  test('Step 1: 申请人 (end_user_test) 浏览服务目录并填写 8 个自定义字段提交申请', async ({
+  test('Step 1: 申请人 (end_user_test) 浏览服务目录并填写 3 个自定义字段提交申请', async ({
     page,
   }) => {
     // 1.1 登录申请人账号
@@ -115,7 +110,7 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
     expect(urlMatch).not.toBeNull();
     catalogId = parseInt(urlMatch![1], 10);
 
-    // 1.3 验证申请页与 8 个自定义输入控件正确渲染
+    // 1.3 验证申请页与 3 个自定义输入控件正确渲染
     // 基础表单项
     const titleInput = page.locator('#title');
     await titleInput.fill('申请研发出差 SSL-VPN 访问权限');
@@ -123,53 +118,8 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
     const reasonInput = page.locator('#reason');
     await reasonInput.fill('因出差需要远程访问研发内网与生产堡垒机');
 
-    // 验证与填写 8 个动态自定义字段
-    // 字段 1: 申请人姓名 (applicant_name)
-    const nameInput = page.locator('#customFields_applicant_name');
-    await expect(nameInput).toBeVisible();
-    {
-      await nameInput.fill(SSLVPN_CUSTOM_FIELDS.applicant_name);
-    }
-
-    // 字段 2: 申请人域账号/UPN (applicant_upn)
-    const upnInput = page.locator('#customFields_applicant_upn');
-    await expect(upnInput).toBeVisible();
-    {
-      await upnInput.fill(SSLVPN_CUSTOM_FIELDS.applicant_upn);
-    }
-
-    // 字段 3: 员工工号 (employee_id)
-    const empIdInput = page.locator('#customFields_employee_id');
-    await expect(empIdInput).toBeVisible();
-    {
-      await empIdInput.fill(SSLVPN_CUSTOM_FIELDS.employee_id);
-    }
-
-    // 字段 4: 所属部门 (department - select)
-    const deptSelect = page.locator('[id*="customFields_department"]').first();
-    await expect(deptSelect).toBeVisible();
-    {
-      await deptSelect.click();
-      await page
-        .locator('.ant-select-item-option-content')
-        .filter({ hasText: SSLVPN_CUSTOM_FIELDS.department })
-        .first()
-        .click();
-    }
-
-    // 字段 5: 申请权限级别与用户组 (vpn_level - select)
-    const vpnLevelSelect = page.locator('[id*="customFields_vpn_level"]').first();
-    await expect(vpnLevelSelect).toBeVisible();
-    {
-      await vpnLevelSelect.click();
-      await page
-        .locator('.ant-select-item-option-content')
-        .filter({ hasText: 'Level 2' })
-        .first()
-        .click();
-    }
-
-    // 字段 6: 访问目标系统与网段 (target_systems)
+    // 身份和授权目标由认证映射与目录策略提供。
+    // 业务字段: 访问目标系统与网段 (target_systems)
     const targetInput = page.locator('#customFields_target_systems');
     await expect(targetInput).toBeVisible();
     {
@@ -188,7 +138,7 @@ test.describe('SSL-VPN 服务申请与多级审批端到端场景验证 (3-Perso
         .click();
     }
 
-    // 字段 8: 业务申请理由 (access_reason - textarea)
+    // 业务字段: 业务申请理由 (access_reason - textarea)
     const accessReasonInput = page.locator('#customFields_access_reason');
     await expect(accessReasonInput).toBeVisible();
     {

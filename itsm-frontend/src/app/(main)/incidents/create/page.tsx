@@ -1,7 +1,11 @@
 'use client';
 
+import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
+import { CreationAttempts } from '@/components/work-item/CreationAttempts';
+import { CreationRequester } from '@/components/work-item/CreationRequester';
+
 import React, { useState, useEffect } from 'react';
-import { Button, Card, Form, Input, Select, Upload, Space, Row, Col, message, Tabs, Typography, Divider, Tag, Spin } from 'antd';
+import { Button, Card, Form, Input, Select, Space, Row, Col, message, Tabs, Typography, Divider, Tag, Spin } from 'antd';
 import { ArrowLeft, Search, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { IncidentAPI } from '@/lib/api/incident-api';
@@ -27,18 +31,18 @@ interface IncidentFormValues {
   title: string;
   description: string;
   priority: 'critical' | 'high' | 'medium' | 'low';
-  source: 'manual' | 'monitoring' | 'system' | 'user';
+  source: 'manual' | 'user';
+  requesterId?: number;
   type: 'incident' | 'service_request' | 'security_event' | 'alert';
   category?: string;
   impact?: 'critical' | 'high' | 'medium' | 'low';
   urgency?: 'critical' | 'high' | 'medium' | 'low';
   assignedTo?: number;
-  affectedSystems?: string[];
-  rootCause?: string;
 }
 
 export default function CreateIncidentPage() {
   const router = useRouter();
+  const creation = useWorkItemCreation();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('basic');
@@ -110,7 +114,8 @@ export default function CreateIncidentPage() {
   const handleSubmit = async (values: IncidentFormValues) => {
     setLoading(true);
     try {
-      await IncidentAPI.createIncident({
+      await creation.submit({
+        requesterId: values.requesterId,
         title: values.title,
         description: values.description,
         priority: values.priority,
@@ -121,9 +126,7 @@ export default function CreateIncidentPage() {
         urgency: values.urgency,
         assigneeId: values.assignedTo,
         configurationItemIds: selectedCIs.map(ci => ci.id),
-      });
-      message.success('事件创建成功');
-      router.push('/incidents');
+      }, IncidentAPI.createIncident, () => router.push('/incidents'));
     } catch (error) {
       handleError(error, 'createIncident', '创建失败，请重试');
     } finally {
@@ -151,6 +154,7 @@ export default function CreateIncidentPage() {
         <Text type="secondary">填写事件信息以创建新的事件记录</Text>
       </div>
 
+      <CreationAttempts creation={creation} />
       <Row gutter={24}>
         {/* 左侧表单 */}
         <Col xs={24} lg={16}>
@@ -168,6 +172,7 @@ export default function CreateIncidentPage() {
                 type: 'incident',
               }}
             >
+              <CreationRequester />
               <Tabs
                 activeKey={activeTab}
                 onChange={setActiveTab}
@@ -220,8 +225,6 @@ export default function CreateIncidentPage() {
                             >
                               <Select options={[
                                 { value: 'manual', label: '手动创建' },
-                                { value: 'monitoring', label: '监控告警' },
-                                { value: 'system', label: '系统' },
                                 { value: 'user', label: '用户' },
                               ]} />
                             </Form.Item>
@@ -367,59 +370,13 @@ export default function CreateIncidentPage() {
                           </Col>
                         </Row>
 
-                        <Form.Item
-                          name="affectedSystems"
-                          label="受影响系统"
-                        >
-                          <Select
-                            mode="multiple"
-                            placeholder="选择受影响的系统"
-                            allowClear
-                            options={[
-                              { value: 'web', label: 'Web网站' },
-                              { value: 'api', label: 'API服务' },
-                              { value: 'database', label: '数据库' },
-                              { value: 'network', label: '网络' },
-                              { value: 'storage', label: '存储' },
-                            ]}
-                          />
-                        </Form.Item>
-
-                        <Form.Item
-                          name="rootCause"
-                          label="初步原因分析"
-                        >
-                          <TextArea
-                            rows={4}
-                            placeholder="初步分析可能的原因"
-                          />
-                        </Form.Item>
                       </>
                     ),
                   },
                   {
                     key: 'attachment',
                     label: '附件',
-                    children: (
-                      <>
-                        <Form.Item
-                          name="attachments"
-                          label="上传附件"
-                          valuePropName="fileList"
-                          getValueFromEvent={(e) => {
-                            if (Array.isArray(e)) return e;
-                            return e?.fileList;
-                          }}
-                        >
-                          <Upload name="logo" action="/upload.do" listType="text">
-                            <Button icon={<Upload />}>上传附件</Button>
-                          </Upload>
-                        </Form.Item>
-                        <Text type="secondary">
-                          支持上传图片、文档等附件，单个文件不超过10MB
-                        </Text>
-                      </>
-                    ),
+                    children: <Text type="secondary">创建后，可在关联工单详情的附件区上传文件。</Text>,
                   },
                 ]}
               />

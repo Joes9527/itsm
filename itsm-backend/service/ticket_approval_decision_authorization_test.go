@@ -37,7 +37,6 @@ func createApprovalDecisionWorkItem(t *testing.T, client *ent.Client, tenant *en
 	workItem, err := client.Ticket.Create().
 		SetTitle("Approval history " + suffix).
 		SetTicketNumber(fmt.Sprintf("APPROVAL-HISTORY-%s-%d", suffix, time.Now().UnixNano())).
-		SetType(recordClass).
 		SetRecordClass(recordClass).
 		SetRequesterID(requester.ID).
 		SetTenantID(tenant.ID).

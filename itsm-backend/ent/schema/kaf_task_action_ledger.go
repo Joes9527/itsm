@@ -27,6 +27,7 @@ func (KafTaskActionLedger) Fields() []ent.Field {
 		field.String("correlation_id").Immutable().NotEmpty(),
 		field.String("procedure_ref").Immutable().NotEmpty(),
 		field.String("procedure_version").Immutable().NotEmpty(),
+		field.String("request_digest").Immutable().Default(""),
 		field.String("result_status").Default("pending"),
 		field.JSON("result_payload", json.RawMessage{}).Optional(),
 		field.String("lease_owner").Optional().Sensitive(),

@@ -38,16 +38,6 @@ describe('ServiceRequestAPI', () => {
     });
   });
 
-  describe('createServiceRequest', () => {
-    it('should create a service request', async () => {
-      const data = { catalogId: 1, complianceAck: true };
-      mockPost.mockResolvedValue({ id: 10, ...data, status: 'submitted', version: 1, createdAt: '' });
-      const result = await serviceRequestAPI.createServiceRequest(data);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/service-requests', data);
-      expect(result.id).toBe(10);
-    });
-  });
-
   describe('startProvisioning', () => {
     it('should start provisioning', async () => {
       mockPost.mockResolvedValue({ task: { id: 1, status: 'pending' } });

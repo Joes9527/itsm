@@ -89,7 +89,7 @@ func (c *GlobalSearchController) Search(ctx *gin.Context) {
 			incident.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil()),
 			incident.Or(
 				incident.HasWorkItemWith(ticket.Or(ticket.TitleContainsFold(keyword), ticket.DescriptionContainsFold(keyword))),
-				incident.IncidentNumberContainsFold(keyword),
+				incident.HasWorkItemWith(ticket.TicketNumberContainsFold(keyword)),
 			),
 		).
 		WithWorkItem().
@@ -103,7 +103,7 @@ func (c *GlobalSearchController) Search(ctx *gin.Context) {
 				Title:       i.Edges.WorkItem.Title,
 				Description: i.Edges.WorkItem.Description,
 				Status:      i.Edges.WorkItem.Status,
-				Number:      i.IncidentNumber,
+				Number:      i.Edges.WorkItem.TicketNumber,
 			})
 		}
 	}

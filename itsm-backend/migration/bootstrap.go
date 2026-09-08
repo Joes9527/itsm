@@ -9,6 +9,7 @@ import (
 type PostSchemaMigrator interface {
 	EnsureMigrationsTable(context.Context) error
 	RunMigrations(context.Context, []Migration) (int, error)
+	ReconcileSchemaInvariants(context.Context) error
 }
 
 // CanonicalBootstrap contains the only supported ordering for a complete
@@ -32,6 +33,9 @@ func RunPostSchemaMigrations(ctx context.Context, migrator PostSchemaMigrator) e
 	}
 	if _, err := migrator.RunMigrations(ctx, PostSchemaMigrations()); err != nil {
 		return fmt.Errorf("run post-schema migrations: %w", err)
+	}
+	if err := migrator.ReconcileSchemaInvariants(ctx); err != nil {
+		return fmt.Errorf("reconcile schema invariants: %w", err)
 	}
 	return nil
 }

@@ -81,6 +81,8 @@ type ListTicketsRequest struct {
 
 // TicketResponse 工单响应
 type TicketResponse struct {
+	RecordClass           string                      `json:"recordClass"`
+	GenericSubtype        string                      `json:"genericSubtype,omitempty"`
 	ID                    int                         `json:"id"`
 	Title                 string                      `json:"title"`
 	Description           string                      `json:"description"`

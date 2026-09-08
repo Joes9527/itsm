@@ -344,15 +344,9 @@ func (h *TicketServiceTaskHandler) escalateTicket(ctx context.Context, ticketID 
 // assignTicket 分配工单
 func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID int, variables map[string]interface{}) (*CallbackEffect, error) {
 	// 获取分配的处理人ID
-	assigneeIDFloat, ok := variables["assignee_id"].(float64)
-	assigneeID := int(assigneeIDFloat)
-	if !ok || assigneeID == 0 {
-		// 尝试从变量中获取
-		assigneeID, _ = variables["assignee_id"].(int)
-	}
-
-	if assigneeID == 0 {
-		return nil, fmt.Errorf("分配失败: 未指定处理人ID")
+	assigneeID, err := CallbackInteger(variables["assignee_id"])
+	if err != nil || assigneeID <= 0 {
+		return nil, fmt.Errorf("分配失败: 处理人ID必须是有效正整数")
 	}
 
 	// 获取工单信息

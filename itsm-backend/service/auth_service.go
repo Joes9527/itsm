@@ -10,6 +10,7 @@ import (
 
 	"itsm-backend/authentication"
 	"itsm-backend/authorization"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/passwordresettoken"
@@ -21,19 +22,21 @@ import (
 )
 
 type AuthService struct {
-	client       *ent.Client
-	jwtSecret    string
-	logger       *zap.SugaredLogger
-	emailService *EmailService
-	baseURL      string // 前端基础URL，用于生成重置链接
+	client        *ent.Client
+	sessionClient *ent.Client
+	jwtSecret     string
+	logger        *zap.SugaredLogger
+	emailService  *EmailService
+	baseURL       string // 前端基础URL，用于生成重置链接
 }
 
-func NewAuthService(client *ent.Client, jwtSecret string, logger *zap.SugaredLogger) *AuthService {
+func NewAuthService(client, sessionClient *ent.Client, jwtSecret string, logger *zap.SugaredLogger) *AuthService {
 	return &AuthService{
-		client:    client,
-		jwtSecret: jwtSecret,
-		logger:    logger,
-		baseURL:   "http://localhost:3000", // 默认值，可在生产环境通过配置覆盖
+		client:        client,
+		sessionClient: sessionClient,
+		jwtSecret:     jwtSecret,
+		logger:        logger,
+		baseURL:       "http://localhost:3000", // 默认值，可在生产环境通过配置覆盖
 	}
 }
 
@@ -129,7 +132,10 @@ func (s *AuthService) GetUserTenants(ctx context.Context, userID int) (*dto.User
 
 // SwitchTenant 切换租户
 func (s *AuthService) SwitchTenant(ctx context.Context, userID, tenantID int) (*dto.LoginResponse, error) {
-	userEntity, err := s.client.User.Get(ctx, userID)
+	// Session selection needs the authenticated actor and MSP relation before
+	// authorizing a target. This scope never escapes the authentication owner.
+	ctx = tenantctx.SystemContext(ctx, "auth:switch_tenant", "authorize the actor against the requested tenant")
+	userEntity, err := s.sessionClient.User.Get(ctx, userID)
 	if err != nil {
 		if ent.IsNotFound(err) {
 			return nil, fmt.Errorf("用户不存在")
@@ -140,7 +146,7 @@ func (s *AuthService) SwitchTenant(ctx context.Context, userID, tenantID int) (*
 	if !userEntity.Active {
 		return nil, fmt.Errorf("用户账号已被禁用")
 	}
-	tenantEntity, err := authorization.AuthorizeTenantSession(ctx, s.client, userEntity, tenantID, time.Now())
+	tenantEntity, err := authorization.AuthorizeTenantSession(ctx, s.sessionClient, userEntity, tenantID, time.Now())
 	if err != nil {
 		switch {
 		case errors.Is(err, authorization.ErrTenantInactive):
@@ -152,12 +158,7 @@ func (s *AuthService) SwitchTenant(ctx context.Context, userID, tenantID int) (*
 			return nil, fmt.Errorf("无权限访问该租户")
 		}
 	}
-	role := string(userEntity.Role)
-	if userEntity.MspRole != "" {
-		if mappedRole := authorization.GetMSPRBACRole(string(userEntity.MspRole)); mappedRole != "" {
-			role = mappedRole
-		}
-	}
+	role := authorization.EffectiveSessionRole(userEntity)
 
 	tokens, err := authentication.IssueSessionTokens(authentication.SessionIdentity{
 		UserID: userEntity.ID, Username: userEntity.Username, Role: role, TenantID: tenantID,

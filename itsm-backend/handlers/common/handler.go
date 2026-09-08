@@ -7,6 +7,8 @@ import (
 	"itsm-backend/authentication"
 	"itsm-backend/authorization"
 	"itsm-backend/common"
+	creation "itsm-backend/handlers/common/workitemcreation"
+	sessionhttp "itsm-backend/handlers/shared/sessionhttp"
 
 	"github.com/gin-gonic/gin"
 )
@@ -133,10 +135,10 @@ func (h *Handler) Logout(c *gin.Context) {
 }
 
 func (h *Handler) GetMe(c *gin.Context) {
-	userID := c.GetInt("user_id")
-	u, err := h.svc.GetUser(c.Request.Context(), userID)
+	identity := creation.Identity{ActorID: c.GetInt("user_id"), TenantID: c.GetInt("tenant_id"), Role: c.GetString("role")}
+	u, err := h.svc.GetSession(c.Request.Context(), identity)
 	if err != nil {
-		common.NotFound(c, "User not found")
+		sessionhttp.Fail(c, err)
 		return
 	}
 	common.Success(c, u)
@@ -144,10 +146,10 @@ func (h *Handler) GetMe(c *gin.Context) {
 
 // GetUserTenants 获取用户所属的租户列表（前端登录后需要）
 func (h *Handler) GetUserTenants(c *gin.Context) {
-	userID := c.GetInt("user_id")
-	tenants, err := h.svc.GetUserTenants(c.Request.Context(), userID)
+	identity := creation.Identity{ActorID: c.GetInt("user_id"), TenantID: c.GetInt("tenant_id"), Role: c.GetString("role")}
+	tenants, err := h.svc.GetUserTenants(c.Request.Context(), identity)
 	if err != nil {
-		common.InternalError(c, "获取用户租户列表失败: "+err.Error())
+		sessionhttp.Fail(c, err)
 		return
 	}
 	common.Success(c, gin.H{"tenants": tenants})

@@ -19,6 +19,7 @@ import (
 	"itsm-backend/ent/bootstraptoken"
 	"itsm-backend/ent/bpmnpermission"
 	"itsm-backend/ent/cabmember"
+	"itsm-backend/ent/catalogaccesspolicy"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/changepir"
 	"itsm-backend/ent/ciattributedefinition"
@@ -43,6 +44,7 @@ import (
 	"itsm-backend/ent/domainconfig"
 	"itsm-backend/ent/endpointacl"
 	"itsm-backend/ent/engineerskill"
+	"itsm-backend/ent/externalidentity"
 	"itsm-backend/ent/feishuticketsync"
 	"itsm-backend/ent/fielddefinition"
 	"itsm-backend/ent/fieldvalue"
@@ -53,7 +55,10 @@ import (
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/incidentrule"
+	"itsm-backend/ent/incidentruleactionreceipt"
 	"itsm-backend/ent/incidentruleexecution"
+	"itsm-backend/ent/intakerequest"
+	"itsm-backend/ent/intakeresolutionsnapshot"
 	"itsm-backend/ent/itemversion"
 	"itsm-backend/ent/kaftaskactionledger"
 	"itsm-backend/ent/kaftaskcompletionreceipt"
@@ -96,6 +101,8 @@ import (
 	"itsm-backend/ent/rootcauseanalysis"
 	"itsm-backend/ent/servicecatalog"
 	"itsm-backend/ent/servicerequest"
+	"itsm-backend/ent/servicerequestaccessresult"
+	"itsm-backend/ent/servicerequestaccesssnapshot"
 	"itsm-backend/ent/slaalerthistory"
 	"itsm-backend/ent/slaalertrule"
 	"itsm-backend/ent/sladefinition"
@@ -132,6 +139,8 @@ import (
 	"entgo.io/ent/dialect"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+
+	stdsql "database/sql"
 )
 
 // Client is the client that holds all ent builders.
@@ -169,6 +178,8 @@ type Client struct {
 	CMDBImportTask *CMDBImportTaskClient
 	// CMDBSavedView is the client for interacting with the CMDBSavedView builders.
 	CMDBSavedView *CMDBSavedViewClient
+	// CatalogAccessPolicy is the client for interacting with the CatalogAccessPolicy builders.
+	CatalogAccessPolicy *CatalogAccessPolicyClient
 	// Change is the client for interacting with the Change builders.
 	Change *ChangeClient
 	// ChangePIR is the client for interacting with the ChangePIR builders.
@@ -203,6 +214,8 @@ type Client struct {
 	EndpointACL *EndpointACLClient
 	// EngineerSkill is the client for interacting with the EngineerSkill builders.
 	EngineerSkill *EngineerSkillClient
+	// ExternalIdentity is the client for interacting with the ExternalIdentity builders.
+	ExternalIdentity *ExternalIdentityClient
 	// FeishuTicketSync is the client for interacting with the FeishuTicketSync builders.
 	FeishuTicketSync *FeishuTicketSyncClient
 	// FieldDefinition is the client for interacting with the FieldDefinition builders.
@@ -223,8 +236,14 @@ type Client struct {
 	IncidentMetric *IncidentMetricClient
 	// IncidentRule is the client for interacting with the IncidentRule builders.
 	IncidentRule *IncidentRuleClient
+	// IncidentRuleActionReceipt is the client for interacting with the IncidentRuleActionReceipt builders.
+	IncidentRuleActionReceipt *IncidentRuleActionReceiptClient
 	// IncidentRuleExecution is the client for interacting with the IncidentRuleExecution builders.
 	IncidentRuleExecution *IncidentRuleExecutionClient
+	// IntakeRequest is the client for interacting with the IntakeRequest builders.
+	IntakeRequest *IntakeRequestClient
+	// IntakeResolutionSnapshot is the client for interacting with the IntakeResolutionSnapshot builders.
+	IntakeResolutionSnapshot *IntakeResolutionSnapshotClient
 	// ItemVersion is the client for interacting with the ItemVersion builders.
 	ItemVersion *ItemVersionClient
 	// KafTaskActionLedger is the client for interacting with the KafTaskActionLedger builders.
@@ -319,6 +338,10 @@ type Client struct {
 	ServiceCatalog *ServiceCatalogClient
 	// ServiceRequest is the client for interacting with the ServiceRequest builders.
 	ServiceRequest *ServiceRequestClient
+	// ServiceRequestAccessResult is the client for interacting with the ServiceRequestAccessResult builders.
+	ServiceRequestAccessResult *ServiceRequestAccessResultClient
+	// ServiceRequestAccessSnapshot is the client for interacting with the ServiceRequestAccessSnapshot builders.
+	ServiceRequestAccessSnapshot *ServiceRequestAccessSnapshotClient
 	// StandardChange is the client for interacting with the StandardChange builders.
 	StandardChange *StandardChangeClient
 	// Survey is the client for interacting with the Survey builders.
@@ -397,6 +420,7 @@ func (c *Client) init() {
 	c.CMDBExportTask = NewCMDBExportTaskClient(c.config)
 	c.CMDBImportTask = NewCMDBImportTaskClient(c.config)
 	c.CMDBSavedView = NewCMDBSavedViewClient(c.config)
+	c.CatalogAccessPolicy = NewCatalogAccessPolicyClient(c.config)
 	c.Change = NewChangeClient(c.config)
 	c.ChangePIR = NewChangePIRClient(c.config)
 	c.CloudAccount = NewCloudAccountClient(c.config)
@@ -414,6 +438,7 @@ func (c *Client) init() {
 	c.DomainConfig = NewDomainConfigClient(c.config)
 	c.EndpointACL = NewEndpointACLClient(c.config)
 	c.EngineerSkill = NewEngineerSkillClient(c.config)
+	c.ExternalIdentity = NewExternalIdentityClient(c.config)
 	c.FeishuTicketSync = NewFeishuTicketSyncClient(c.config)
 	c.FieldDefinition = NewFieldDefinitionClient(c.config)
 	c.FieldValue = NewFieldValueClient(c.config)
@@ -424,7 +449,10 @@ func (c *Client) init() {
 	c.IncidentEvent = NewIncidentEventClient(c.config)
 	c.IncidentMetric = NewIncidentMetricClient(c.config)
 	c.IncidentRule = NewIncidentRuleClient(c.config)
+	c.IncidentRuleActionReceipt = NewIncidentRuleActionReceiptClient(c.config)
 	c.IncidentRuleExecution = NewIncidentRuleExecutionClient(c.config)
+	c.IntakeRequest = NewIntakeRequestClient(c.config)
+	c.IntakeResolutionSnapshot = NewIntakeResolutionSnapshotClient(c.config)
 	c.ItemVersion = NewItemVersionClient(c.config)
 	c.KafTaskActionLedger = NewKafTaskActionLedgerClient(c.config)
 	c.KafTaskCompletionReceipt = NewKafTaskCompletionReceiptClient(c.config)
@@ -472,6 +500,8 @@ func (c *Client) init() {
 	c.SLAViolation = NewSLAViolationClient(c.config)
 	c.ServiceCatalog = NewServiceCatalogClient(c.config)
 	c.ServiceRequest = NewServiceRequestClient(c.config)
+	c.ServiceRequestAccessResult = NewServiceRequestAccessResultClient(c.config)
+	c.ServiceRequestAccessSnapshot = NewServiceRequestAccessSnapshotClient(c.config)
 	c.StandardChange = NewStandardChangeClient(c.config)
 	c.Survey = NewSurveyClient(c.config)
 	c.SurveyResponse = NewSurveyResponseClient(c.config)
@@ -588,124 +618,131 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:                         ctx,
-		config:                      cfg,
-		Application:                 NewApplicationClient(cfg),
-		ApprovalChain:               NewApprovalChainClient(cfg),
-		Asset:                       NewAssetClient(cfg),
-		AssetLicense:                NewAssetLicenseClient(cfg),
-		AuditLog:                    NewAuditLogClient(cfg),
-		BPMNPermission:              NewBPMNPermissionClient(cfg),
-		BootstrapToken:              NewBootstrapTokenClient(cfg),
-		CABMember:                   NewCABMemberClient(cfg),
-		CIAttributeDefinition:       NewCIAttributeDefinitionClient(cfg),
-		CIRelationship:              NewCIRelationshipClient(cfg),
-		CITag:                       NewCITagClient(cfg),
-		CIType:                      NewCITypeClient(cfg),
-		CMDBExportTask:              NewCMDBExportTaskClient(cfg),
-		CMDBImportTask:              NewCMDBImportTaskClient(cfg),
-		CMDBSavedView:               NewCMDBSavedViewClient(cfg),
-		Change:                      NewChangeClient(cfg),
-		ChangePIR:                   NewChangePIRClient(cfg),
-		CloudAccount:                NewCloudAccountClient(cfg),
-		CloudResource:               NewCloudResourceClient(cfg),
-		CloudService:                NewCloudServiceClient(cfg),
-		ConfigurationItem:           NewConfigurationItemClient(cfg),
-		ConfigurationItemHistory:    NewConfigurationItemHistoryClient(cfg),
-		ConnectorConfig:             NewConnectorConfigClient(cfg),
-		Contract:                    NewContractClient(cfg),
-		Conversation:                NewConversationClient(cfg),
-		Department:                  NewDepartmentClient(cfg),
-		DiscoveryJob:                NewDiscoveryJobClient(cfg),
-		DiscoveryResult:             NewDiscoveryResultClient(cfg),
-		DiscoverySource:             NewDiscoverySourceClient(cfg),
-		DomainConfig:                NewDomainConfigClient(cfg),
-		EndpointACL:                 NewEndpointACLClient(cfg),
-		EngineerSkill:               NewEngineerSkillClient(cfg),
-		FeishuTicketSync:            NewFeishuTicketSyncClient(cfg),
-		FieldDefinition:             NewFieldDefinitionClient(cfg),
-		FieldValue:                  NewFieldValueClient(cfg),
-		Group:                       NewGroupClient(cfg),
-		Incident:                    NewIncidentClient(cfg),
-		IncidentAlert:               NewIncidentAlertClient(cfg),
-		IncidentEscalationRule:      NewIncidentEscalationRuleClient(cfg),
-		IncidentEvent:               NewIncidentEventClient(cfg),
-		IncidentMetric:              NewIncidentMetricClient(cfg),
-		IncidentRule:                NewIncidentRuleClient(cfg),
-		IncidentRuleExecution:       NewIncidentRuleExecutionClient(cfg),
-		ItemVersion:                 NewItemVersionClient(cfg),
-		KafTaskActionLedger:         NewKafTaskActionLedgerClient(cfg),
-		KafTaskCompletionReceipt:    NewKafTaskCompletionReceiptClient(cfg),
-		KnowledgeArticle:            NewKnowledgeArticleClient(cfg),
-		KnowledgeArticleLike:        NewKnowledgeArticleLikeClient(cfg),
-		KnowledgeArticleParticipant: NewKnowledgeArticleParticipantClient(cfg),
-		KnowledgeArticleSession:     NewKnowledgeArticleSessionClient(cfg),
-		KnowledgeArticleVersion:     NewKnowledgeArticleVersionClient(cfg),
-		KnownError:                  NewKnownErrorClient(cfg),
-		MSPAllocation:               NewMSPAllocationClient(cfg),
-		MarketplaceItem:             NewMarketplaceItemClient(cfg),
-		Menu:                        NewMenuClient(cfg),
-		Message:                     NewMessageClient(cfg),
-		Microservice:                NewMicroserviceClient(cfg),
-		Notification:                NewNotificationClient(cfg),
-		NotificationPreference:      NewNotificationPreferenceClient(cfg),
-		OutboxEvent:                 NewOutboxEventClient(cfg),
-		PasswordResetToken:          NewPasswordResetTokenClient(cfg),
-		Permission:                  NewPermissionClient(cfg),
-		PermissionDefinition:        NewPermissionDefinitionClient(cfg),
-		Problem:                     NewProblemClient(cfg),
-		ProcessApprovalDecision:     NewProcessApprovalDecisionClient(cfg),
-		ProcessAuditLog:             NewProcessAuditLogClient(cfg),
-		ProcessBinding:              NewProcessBindingClient(cfg),
-		ProcessCallbackOutbox:       NewProcessCallbackOutboxClient(cfg),
-		ProcessDefinition:           NewProcessDefinitionClient(cfg),
-		ProcessDeployment:           NewProcessDeploymentClient(cfg),
-		ProcessExecutionHistory:     NewProcessExecutionHistoryClient(cfg),
-		ProcessInstance:             NewProcessInstanceClient(cfg),
-		ProcessTask:                 NewProcessTaskClient(cfg),
-		ProcessVariable:             NewProcessVariableClient(cfg),
-		ProcessVersionChangelog:     NewProcessVersionChangelogClient(cfg),
-		Project:                     NewProjectClient(cfg),
-		PromptTemplate:              NewPromptTemplateClient(cfg),
-		ProvisioningTask:            NewProvisioningTaskClient(cfg),
-		RelationshipType:            NewRelationshipTypeClient(cfg),
-		Release:                     NewReleaseClient(cfg),
-		Role:                        NewRoleClient(cfg),
-		RolePermission:              NewRolePermissionClient(cfg),
-		RootCauseAnalysis:           NewRootCauseAnalysisClient(cfg),
-		SLAAlertHistory:             NewSLAAlertHistoryClient(cfg),
-		SLAAlertRule:                NewSLAAlertRuleClient(cfg),
-		SLADefinition:               NewSLADefinitionClient(cfg),
-		SLAMetric:                   NewSLAMetricClient(cfg),
-		SLAViolation:                NewSLAViolationClient(cfg),
-		ServiceCatalog:              NewServiceCatalogClient(cfg),
-		ServiceRequest:              NewServiceRequestClient(cfg),
-		StandardChange:              NewStandardChangeClient(cfg),
-		Survey:                      NewSurveyClient(cfg),
-		SurveyResponse:              NewSurveyResponseClient(cfg),
-		SystemConfig:                NewSystemConfigClient(cfg),
-		Tag:                         NewTagClient(cfg),
-		Team:                        NewTeamClient(cfg),
-		Tenant:                      NewTenantClient(cfg),
-		TenantInstallation:          NewTenantInstallationClient(cfg),
-		Ticket:                      NewTicketClient(cfg),
-		TicketAssignmentRule:        NewTicketAssignmentRuleClient(cfg),
-		TicketAttachment:            NewTicketAttachmentClient(cfg),
-		TicketAutomationRule:        NewTicketAutomationRuleClient(cfg),
-		TicketCC:                    NewTicketCCClient(cfg),
-		TicketCategory:              NewTicketCategoryClient(cfg),
-		TicketComment:               NewTicketCommentClient(cfg),
-		TicketNotification:          NewTicketNotificationClient(cfg),
-		TicketTag:                   NewTicketTagClient(cfg),
-		TicketTemplate:              NewTicketTemplateClient(cfg),
-		TicketType:                  NewTicketTypeClient(cfg),
-		TicketView:                  NewTicketViewClient(cfg),
-		TicketWorkflowRecord:        NewTicketWorkflowRecordClient(cfg),
-		ToolInvocation:              NewToolInvocationClient(cfg),
-		User:                        NewUserClient(cfg),
-		Vendor:                      NewVendorClient(cfg),
-		WorkItemNumberSequence:      NewWorkItemNumberSequenceClient(cfg),
-		WorkItemRelation:            NewWorkItemRelationClient(cfg),
+		ctx:                          ctx,
+		config:                       cfg,
+		Application:                  NewApplicationClient(cfg),
+		ApprovalChain:                NewApprovalChainClient(cfg),
+		Asset:                        NewAssetClient(cfg),
+		AssetLicense:                 NewAssetLicenseClient(cfg),
+		AuditLog:                     NewAuditLogClient(cfg),
+		BPMNPermission:               NewBPMNPermissionClient(cfg),
+		BootstrapToken:               NewBootstrapTokenClient(cfg),
+		CABMember:                    NewCABMemberClient(cfg),
+		CIAttributeDefinition:        NewCIAttributeDefinitionClient(cfg),
+		CIRelationship:               NewCIRelationshipClient(cfg),
+		CITag:                        NewCITagClient(cfg),
+		CIType:                       NewCITypeClient(cfg),
+		CMDBExportTask:               NewCMDBExportTaskClient(cfg),
+		CMDBImportTask:               NewCMDBImportTaskClient(cfg),
+		CMDBSavedView:                NewCMDBSavedViewClient(cfg),
+		CatalogAccessPolicy:          NewCatalogAccessPolicyClient(cfg),
+		Change:                       NewChangeClient(cfg),
+		ChangePIR:                    NewChangePIRClient(cfg),
+		CloudAccount:                 NewCloudAccountClient(cfg),
+		CloudResource:                NewCloudResourceClient(cfg),
+		CloudService:                 NewCloudServiceClient(cfg),
+		ConfigurationItem:            NewConfigurationItemClient(cfg),
+		ConfigurationItemHistory:     NewConfigurationItemHistoryClient(cfg),
+		ConnectorConfig:              NewConnectorConfigClient(cfg),
+		Contract:                     NewContractClient(cfg),
+		Conversation:                 NewConversationClient(cfg),
+		Department:                   NewDepartmentClient(cfg),
+		DiscoveryJob:                 NewDiscoveryJobClient(cfg),
+		DiscoveryResult:              NewDiscoveryResultClient(cfg),
+		DiscoverySource:              NewDiscoverySourceClient(cfg),
+		DomainConfig:                 NewDomainConfigClient(cfg),
+		EndpointACL:                  NewEndpointACLClient(cfg),
+		EngineerSkill:                NewEngineerSkillClient(cfg),
+		ExternalIdentity:             NewExternalIdentityClient(cfg),
+		FeishuTicketSync:             NewFeishuTicketSyncClient(cfg),
+		FieldDefinition:              NewFieldDefinitionClient(cfg),
+		FieldValue:                   NewFieldValueClient(cfg),
+		Group:                        NewGroupClient(cfg),
+		Incident:                     NewIncidentClient(cfg),
+		IncidentAlert:                NewIncidentAlertClient(cfg),
+		IncidentEscalationRule:       NewIncidentEscalationRuleClient(cfg),
+		IncidentEvent:                NewIncidentEventClient(cfg),
+		IncidentMetric:               NewIncidentMetricClient(cfg),
+		IncidentRule:                 NewIncidentRuleClient(cfg),
+		IncidentRuleActionReceipt:    NewIncidentRuleActionReceiptClient(cfg),
+		IncidentRuleExecution:        NewIncidentRuleExecutionClient(cfg),
+		IntakeRequest:                NewIntakeRequestClient(cfg),
+		IntakeResolutionSnapshot:     NewIntakeResolutionSnapshotClient(cfg),
+		ItemVersion:                  NewItemVersionClient(cfg),
+		KafTaskActionLedger:          NewKafTaskActionLedgerClient(cfg),
+		KafTaskCompletionReceipt:     NewKafTaskCompletionReceiptClient(cfg),
+		KnowledgeArticle:             NewKnowledgeArticleClient(cfg),
+		KnowledgeArticleLike:         NewKnowledgeArticleLikeClient(cfg),
+		KnowledgeArticleParticipant:  NewKnowledgeArticleParticipantClient(cfg),
+		KnowledgeArticleSession:      NewKnowledgeArticleSessionClient(cfg),
+		KnowledgeArticleVersion:      NewKnowledgeArticleVersionClient(cfg),
+		KnownError:                   NewKnownErrorClient(cfg),
+		MSPAllocation:                NewMSPAllocationClient(cfg),
+		MarketplaceItem:              NewMarketplaceItemClient(cfg),
+		Menu:                         NewMenuClient(cfg),
+		Message:                      NewMessageClient(cfg),
+		Microservice:                 NewMicroserviceClient(cfg),
+		Notification:                 NewNotificationClient(cfg),
+		NotificationPreference:       NewNotificationPreferenceClient(cfg),
+		OutboxEvent:                  NewOutboxEventClient(cfg),
+		PasswordResetToken:           NewPasswordResetTokenClient(cfg),
+		Permission:                   NewPermissionClient(cfg),
+		PermissionDefinition:         NewPermissionDefinitionClient(cfg),
+		Problem:                      NewProblemClient(cfg),
+		ProcessApprovalDecision:      NewProcessApprovalDecisionClient(cfg),
+		ProcessAuditLog:              NewProcessAuditLogClient(cfg),
+		ProcessBinding:               NewProcessBindingClient(cfg),
+		ProcessCallbackOutbox:        NewProcessCallbackOutboxClient(cfg),
+		ProcessDefinition:            NewProcessDefinitionClient(cfg),
+		ProcessDeployment:            NewProcessDeploymentClient(cfg),
+		ProcessExecutionHistory:      NewProcessExecutionHistoryClient(cfg),
+		ProcessInstance:              NewProcessInstanceClient(cfg),
+		ProcessTask:                  NewProcessTaskClient(cfg),
+		ProcessVariable:              NewProcessVariableClient(cfg),
+		ProcessVersionChangelog:      NewProcessVersionChangelogClient(cfg),
+		Project:                      NewProjectClient(cfg),
+		PromptTemplate:               NewPromptTemplateClient(cfg),
+		ProvisioningTask:             NewProvisioningTaskClient(cfg),
+		RelationshipType:             NewRelationshipTypeClient(cfg),
+		Release:                      NewReleaseClient(cfg),
+		Role:                         NewRoleClient(cfg),
+		RolePermission:               NewRolePermissionClient(cfg),
+		RootCauseAnalysis:            NewRootCauseAnalysisClient(cfg),
+		SLAAlertHistory:              NewSLAAlertHistoryClient(cfg),
+		SLAAlertRule:                 NewSLAAlertRuleClient(cfg),
+		SLADefinition:                NewSLADefinitionClient(cfg),
+		SLAMetric:                    NewSLAMetricClient(cfg),
+		SLAViolation:                 NewSLAViolationClient(cfg),
+		ServiceCatalog:               NewServiceCatalogClient(cfg),
+		ServiceRequest:               NewServiceRequestClient(cfg),
+		ServiceRequestAccessResult:   NewServiceRequestAccessResultClient(cfg),
+		ServiceRequestAccessSnapshot: NewServiceRequestAccessSnapshotClient(cfg),
+		StandardChange:               NewStandardChangeClient(cfg),
+		Survey:                       NewSurveyClient(cfg),
+		SurveyResponse:               NewSurveyResponseClient(cfg),
+		SystemConfig:                 NewSystemConfigClient(cfg),
+		Tag:                          NewTagClient(cfg),
+		Team:                         NewTeamClient(cfg),
+		Tenant:                       NewTenantClient(cfg),
+		TenantInstallation:           NewTenantInstallationClient(cfg),
+		Ticket:                       NewTicketClient(cfg),
+		TicketAssignmentRule:         NewTicketAssignmentRuleClient(cfg),
+		TicketAttachment:             NewTicketAttachmentClient(cfg),
+		TicketAutomationRule:         NewTicketAutomationRuleClient(cfg),
+		TicketCC:                     NewTicketCCClient(cfg),
+		TicketCategory:               NewTicketCategoryClient(cfg),
+		TicketComment:                NewTicketCommentClient(cfg),
+		TicketNotification:           NewTicketNotificationClient(cfg),
+		TicketTag:                    NewTicketTagClient(cfg),
+		TicketTemplate:               NewTicketTemplateClient(cfg),
+		TicketType:                   NewTicketTypeClient(cfg),
+		TicketView:                   NewTicketViewClient(cfg),
+		TicketWorkflowRecord:         NewTicketWorkflowRecordClient(cfg),
+		ToolInvocation:               NewToolInvocationClient(cfg),
+		User:                         NewUserClient(cfg),
+		Vendor:                       NewVendorClient(cfg),
+		WorkItemNumberSequence:       NewWorkItemNumberSequenceClient(cfg),
+		WorkItemRelation:             NewWorkItemRelationClient(cfg),
 	}, nil
 }
 
@@ -723,124 +760,131 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:                         ctx,
-		config:                      cfg,
-		Application:                 NewApplicationClient(cfg),
-		ApprovalChain:               NewApprovalChainClient(cfg),
-		Asset:                       NewAssetClient(cfg),
-		AssetLicense:                NewAssetLicenseClient(cfg),
-		AuditLog:                    NewAuditLogClient(cfg),
-		BPMNPermission:              NewBPMNPermissionClient(cfg),
-		BootstrapToken:              NewBootstrapTokenClient(cfg),
-		CABMember:                   NewCABMemberClient(cfg),
-		CIAttributeDefinition:       NewCIAttributeDefinitionClient(cfg),
-		CIRelationship:              NewCIRelationshipClient(cfg),
-		CITag:                       NewCITagClient(cfg),
-		CIType:                      NewCITypeClient(cfg),
-		CMDBExportTask:              NewCMDBExportTaskClient(cfg),
-		CMDBImportTask:              NewCMDBImportTaskClient(cfg),
-		CMDBSavedView:               NewCMDBSavedViewClient(cfg),
-		Change:                      NewChangeClient(cfg),
-		ChangePIR:                   NewChangePIRClient(cfg),
-		CloudAccount:                NewCloudAccountClient(cfg),
-		CloudResource:               NewCloudResourceClient(cfg),
-		CloudService:                NewCloudServiceClient(cfg),
-		ConfigurationItem:           NewConfigurationItemClient(cfg),
-		ConfigurationItemHistory:    NewConfigurationItemHistoryClient(cfg),
-		ConnectorConfig:             NewConnectorConfigClient(cfg),
-		Contract:                    NewContractClient(cfg),
-		Conversation:                NewConversationClient(cfg),
-		Department:                  NewDepartmentClient(cfg),
-		DiscoveryJob:                NewDiscoveryJobClient(cfg),
-		DiscoveryResult:             NewDiscoveryResultClient(cfg),
-		DiscoverySource:             NewDiscoverySourceClient(cfg),
-		DomainConfig:                NewDomainConfigClient(cfg),
-		EndpointACL:                 NewEndpointACLClient(cfg),
-		EngineerSkill:               NewEngineerSkillClient(cfg),
-		FeishuTicketSync:            NewFeishuTicketSyncClient(cfg),
-		FieldDefinition:             NewFieldDefinitionClient(cfg),
-		FieldValue:                  NewFieldValueClient(cfg),
-		Group:                       NewGroupClient(cfg),
-		Incident:                    NewIncidentClient(cfg),
-		IncidentAlert:               NewIncidentAlertClient(cfg),
-		IncidentEscalationRule:      NewIncidentEscalationRuleClient(cfg),
-		IncidentEvent:               NewIncidentEventClient(cfg),
-		IncidentMetric:              NewIncidentMetricClient(cfg),
-		IncidentRule:                NewIncidentRuleClient(cfg),
-		IncidentRuleExecution:       NewIncidentRuleExecutionClient(cfg),
-		ItemVersion:                 NewItemVersionClient(cfg),
-		KafTaskActionLedger:         NewKafTaskActionLedgerClient(cfg),
-		KafTaskCompletionReceipt:    NewKafTaskCompletionReceiptClient(cfg),
-		KnowledgeArticle:            NewKnowledgeArticleClient(cfg),
-		KnowledgeArticleLike:        NewKnowledgeArticleLikeClient(cfg),
-		KnowledgeArticleParticipant: NewKnowledgeArticleParticipantClient(cfg),
-		KnowledgeArticleSession:     NewKnowledgeArticleSessionClient(cfg),
-		KnowledgeArticleVersion:     NewKnowledgeArticleVersionClient(cfg),
-		KnownError:                  NewKnownErrorClient(cfg),
-		MSPAllocation:               NewMSPAllocationClient(cfg),
-		MarketplaceItem:             NewMarketplaceItemClient(cfg),
-		Menu:                        NewMenuClient(cfg),
-		Message:                     NewMessageClient(cfg),
-		Microservice:                NewMicroserviceClient(cfg),
-		Notification:                NewNotificationClient(cfg),
-		NotificationPreference:      NewNotificationPreferenceClient(cfg),
-		OutboxEvent:                 NewOutboxEventClient(cfg),
-		PasswordResetToken:          NewPasswordResetTokenClient(cfg),
-		Permission:                  NewPermissionClient(cfg),
-		PermissionDefinition:        NewPermissionDefinitionClient(cfg),
-		Problem:                     NewProblemClient(cfg),
-		ProcessApprovalDecision:     NewProcessApprovalDecisionClient(cfg),
-		ProcessAuditLog:             NewProcessAuditLogClient(cfg),
-		ProcessBinding:              NewProcessBindingClient(cfg),
-		ProcessCallbackOutbox:       NewProcessCallbackOutboxClient(cfg),
-		ProcessDefinition:           NewProcessDefinitionClient(cfg),
-		ProcessDeployment:           NewProcessDeploymentClient(cfg),
-		ProcessExecutionHistory:     NewProcessExecutionHistoryClient(cfg),
-		ProcessInstance:             NewProcessInstanceClient(cfg),
-		ProcessTask:                 NewProcessTaskClient(cfg),
-		ProcessVariable:             NewProcessVariableClient(cfg),
-		ProcessVersionChangelog:     NewProcessVersionChangelogClient(cfg),
-		Project:                     NewProjectClient(cfg),
-		PromptTemplate:              NewPromptTemplateClient(cfg),
-		ProvisioningTask:            NewProvisioningTaskClient(cfg),
-		RelationshipType:            NewRelationshipTypeClient(cfg),
-		Release:                     NewReleaseClient(cfg),
-		Role:                        NewRoleClient(cfg),
-		RolePermission:              NewRolePermissionClient(cfg),
-		RootCauseAnalysis:           NewRootCauseAnalysisClient(cfg),
-		SLAAlertHistory:             NewSLAAlertHistoryClient(cfg),
-		SLAAlertRule:                NewSLAAlertRuleClient(cfg),
-		SLADefinition:               NewSLADefinitionClient(cfg),
-		SLAMetric:                   NewSLAMetricClient(cfg),
-		SLAViolation:                NewSLAViolationClient(cfg),
-		ServiceCatalog:              NewServiceCatalogClient(cfg),
-		ServiceRequest:              NewServiceRequestClient(cfg),
-		StandardChange:              NewStandardChangeClient(cfg),
-		Survey:                      NewSurveyClient(cfg),
-		SurveyResponse:              NewSurveyResponseClient(cfg),
-		SystemConfig:                NewSystemConfigClient(cfg),
-		Tag:                         NewTagClient(cfg),
-		Team:                        NewTeamClient(cfg),
-		Tenant:                      NewTenantClient(cfg),
-		TenantInstallation:          NewTenantInstallationClient(cfg),
-		Ticket:                      NewTicketClient(cfg),
-		TicketAssignmentRule:        NewTicketAssignmentRuleClient(cfg),
-		TicketAttachment:            NewTicketAttachmentClient(cfg),
-		TicketAutomationRule:        NewTicketAutomationRuleClient(cfg),
-		TicketCC:                    NewTicketCCClient(cfg),
-		TicketCategory:              NewTicketCategoryClient(cfg),
-		TicketComment:               NewTicketCommentClient(cfg),
-		TicketNotification:          NewTicketNotificationClient(cfg),
-		TicketTag:                   NewTicketTagClient(cfg),
-		TicketTemplate:              NewTicketTemplateClient(cfg),
-		TicketType:                  NewTicketTypeClient(cfg),
-		TicketView:                  NewTicketViewClient(cfg),
-		TicketWorkflowRecord:        NewTicketWorkflowRecordClient(cfg),
-		ToolInvocation:              NewToolInvocationClient(cfg),
-		User:                        NewUserClient(cfg),
-		Vendor:                      NewVendorClient(cfg),
-		WorkItemNumberSequence:      NewWorkItemNumberSequenceClient(cfg),
-		WorkItemRelation:            NewWorkItemRelationClient(cfg),
+		ctx:                          ctx,
+		config:                       cfg,
+		Application:                  NewApplicationClient(cfg),
+		ApprovalChain:                NewApprovalChainClient(cfg),
+		Asset:                        NewAssetClient(cfg),
+		AssetLicense:                 NewAssetLicenseClient(cfg),
+		AuditLog:                     NewAuditLogClient(cfg),
+		BPMNPermission:               NewBPMNPermissionClient(cfg),
+		BootstrapToken:               NewBootstrapTokenClient(cfg),
+		CABMember:                    NewCABMemberClient(cfg),
+		CIAttributeDefinition:        NewCIAttributeDefinitionClient(cfg),
+		CIRelationship:               NewCIRelationshipClient(cfg),
+		CITag:                        NewCITagClient(cfg),
+		CIType:                       NewCITypeClient(cfg),
+		CMDBExportTask:               NewCMDBExportTaskClient(cfg),
+		CMDBImportTask:               NewCMDBImportTaskClient(cfg),
+		CMDBSavedView:                NewCMDBSavedViewClient(cfg),
+		CatalogAccessPolicy:          NewCatalogAccessPolicyClient(cfg),
+		Change:                       NewChangeClient(cfg),
+		ChangePIR:                    NewChangePIRClient(cfg),
+		CloudAccount:                 NewCloudAccountClient(cfg),
+		CloudResource:                NewCloudResourceClient(cfg),
+		CloudService:                 NewCloudServiceClient(cfg),
+		ConfigurationItem:            NewConfigurationItemClient(cfg),
+		ConfigurationItemHistory:     NewConfigurationItemHistoryClient(cfg),
+		ConnectorConfig:              NewConnectorConfigClient(cfg),
+		Contract:                     NewContractClient(cfg),
+		Conversation:                 NewConversationClient(cfg),
+		Department:                   NewDepartmentClient(cfg),
+		DiscoveryJob:                 NewDiscoveryJobClient(cfg),
+		DiscoveryResult:              NewDiscoveryResultClient(cfg),
+		DiscoverySource:              NewDiscoverySourceClient(cfg),
+		DomainConfig:                 NewDomainConfigClient(cfg),
+		EndpointACL:                  NewEndpointACLClient(cfg),
+		EngineerSkill:                NewEngineerSkillClient(cfg),
+		ExternalIdentity:             NewExternalIdentityClient(cfg),
+		FeishuTicketSync:             NewFeishuTicketSyncClient(cfg),
+		FieldDefinition:              NewFieldDefinitionClient(cfg),
+		FieldValue:                   NewFieldValueClient(cfg),
+		Group:                        NewGroupClient(cfg),
+		Incident:                     NewIncidentClient(cfg),
+		IncidentAlert:                NewIncidentAlertClient(cfg),
+		IncidentEscalationRule:       NewIncidentEscalationRuleClient(cfg),
+		IncidentEvent:                NewIncidentEventClient(cfg),
+		IncidentMetric:               NewIncidentMetricClient(cfg),
+		IncidentRule:                 NewIncidentRuleClient(cfg),
+		IncidentRuleActionReceipt:    NewIncidentRuleActionReceiptClient(cfg),
+		IncidentRuleExecution:        NewIncidentRuleExecutionClient(cfg),
+		IntakeRequest:                NewIntakeRequestClient(cfg),
+		IntakeResolutionSnapshot:     NewIntakeResolutionSnapshotClient(cfg),
+		ItemVersion:                  NewItemVersionClient(cfg),
+		KafTaskActionLedger:          NewKafTaskActionLedgerClient(cfg),
+		KafTaskCompletionReceipt:     NewKafTaskCompletionReceiptClient(cfg),
+		KnowledgeArticle:             NewKnowledgeArticleClient(cfg),
+		KnowledgeArticleLike:         NewKnowledgeArticleLikeClient(cfg),
+		KnowledgeArticleParticipant:  NewKnowledgeArticleParticipantClient(cfg),
+		KnowledgeArticleSession:      NewKnowledgeArticleSessionClient(cfg),
+		KnowledgeArticleVersion:      NewKnowledgeArticleVersionClient(cfg),
+		KnownError:                   NewKnownErrorClient(cfg),
+		MSPAllocation:                NewMSPAllocationClient(cfg),
+		MarketplaceItem:              NewMarketplaceItemClient(cfg),
+		Menu:                         NewMenuClient(cfg),
+		Message:                      NewMessageClient(cfg),
+		Microservice:                 NewMicroserviceClient(cfg),
+		Notification:                 NewNotificationClient(cfg),
+		NotificationPreference:       NewNotificationPreferenceClient(cfg),
+		OutboxEvent:                  NewOutboxEventClient(cfg),
+		PasswordResetToken:           NewPasswordResetTokenClient(cfg),
+		Permission:                   NewPermissionClient(cfg),
+		PermissionDefinition:         NewPermissionDefinitionClient(cfg),
+		Problem:                      NewProblemClient(cfg),
+		ProcessApprovalDecision:      NewProcessApprovalDecisionClient(cfg),
+		ProcessAuditLog:              NewProcessAuditLogClient(cfg),
+		ProcessBinding:               NewProcessBindingClient(cfg),
+		ProcessCallbackOutbox:        NewProcessCallbackOutboxClient(cfg),
+		ProcessDefinition:            NewProcessDefinitionClient(cfg),
+		ProcessDeployment:            NewProcessDeploymentClient(cfg),
+		ProcessExecutionHistory:      NewProcessExecutionHistoryClient(cfg),
+		ProcessInstance:              NewProcessInstanceClient(cfg),
+		ProcessTask:                  NewProcessTaskClient(cfg),
+		ProcessVariable:              NewProcessVariableClient(cfg),
+		ProcessVersionChangelog:      NewProcessVersionChangelogClient(cfg),
+		Project:                      NewProjectClient(cfg),
+		PromptTemplate:               NewPromptTemplateClient(cfg),
+		ProvisioningTask:             NewProvisioningTaskClient(cfg),
+		RelationshipType:             NewRelationshipTypeClient(cfg),
+		Release:                      NewReleaseClient(cfg),
+		Role:                         NewRoleClient(cfg),
+		RolePermission:               NewRolePermissionClient(cfg),
+		RootCauseAnalysis:            NewRootCauseAnalysisClient(cfg),
+		SLAAlertHistory:              NewSLAAlertHistoryClient(cfg),
+		SLAAlertRule:                 NewSLAAlertRuleClient(cfg),
+		SLADefinition:                NewSLADefinitionClient(cfg),
+		SLAMetric:                    NewSLAMetricClient(cfg),
+		SLAViolation:                 NewSLAViolationClient(cfg),
+		ServiceCatalog:               NewServiceCatalogClient(cfg),
+		ServiceRequest:               NewServiceRequestClient(cfg),
+		ServiceRequestAccessResult:   NewServiceRequestAccessResultClient(cfg),
+		ServiceRequestAccessSnapshot: NewServiceRequestAccessSnapshotClient(cfg),
+		StandardChange:               NewStandardChangeClient(cfg),
+		Survey:                       NewSurveyClient(cfg),
+		SurveyResponse:               NewSurveyResponseClient(cfg),
+		SystemConfig:                 NewSystemConfigClient(cfg),
+		Tag:                          NewTagClient(cfg),
+		Team:                         NewTeamClient(cfg),
+		Tenant:                       NewTenantClient(cfg),
+		TenantInstallation:           NewTenantInstallationClient(cfg),
+		Ticket:                       NewTicketClient(cfg),
+		TicketAssignmentRule:         NewTicketAssignmentRuleClient(cfg),
+		TicketAttachment:             NewTicketAttachmentClient(cfg),
+		TicketAutomationRule:         NewTicketAutomationRuleClient(cfg),
+		TicketCC:                     NewTicketCCClient(cfg),
+		TicketCategory:               NewTicketCategoryClient(cfg),
+		TicketComment:                NewTicketCommentClient(cfg),
+		TicketNotification:           NewTicketNotificationClient(cfg),
+		TicketTag:                    NewTicketTagClient(cfg),
+		TicketTemplate:               NewTicketTemplateClient(cfg),
+		TicketType:                   NewTicketTypeClient(cfg),
+		TicketView:                   NewTicketViewClient(cfg),
+		TicketWorkflowRecord:         NewTicketWorkflowRecordClient(cfg),
+		ToolInvocation:               NewToolInvocationClient(cfg),
+		User:                         NewUserClient(cfg),
+		Vendor:                       NewVendorClient(cfg),
+		WorkItemNumberSequence:       NewWorkItemNumberSequenceClient(cfg),
+		WorkItemRelation:             NewWorkItemRelationClient(cfg),
 	}, nil
 }
 
@@ -873,13 +917,15 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Application, c.ApprovalChain, c.Asset, c.AssetLicense, c.AuditLog,
 		c.BPMNPermission, c.BootstrapToken, c.CABMember, c.CIAttributeDefinition,
 		c.CIRelationship, c.CITag, c.CIType, c.CMDBExportTask, c.CMDBImportTask,
-		c.CMDBSavedView, c.Change, c.ChangePIR, c.CloudAccount, c.CloudResource,
-		c.CloudService, c.ConfigurationItem, c.ConfigurationItemHistory,
-		c.ConnectorConfig, c.Contract, c.Conversation, c.Department, c.DiscoveryJob,
-		c.DiscoveryResult, c.DiscoverySource, c.DomainConfig, c.EndpointACL,
-		c.EngineerSkill, c.FeishuTicketSync, c.FieldDefinition, c.FieldValue, c.Group,
-		c.Incident, c.IncidentAlert, c.IncidentEscalationRule, c.IncidentEvent,
-		c.IncidentMetric, c.IncidentRule, c.IncidentRuleExecution, c.ItemVersion,
+		c.CMDBSavedView, c.CatalogAccessPolicy, c.Change, c.ChangePIR, c.CloudAccount,
+		c.CloudResource, c.CloudService, c.ConfigurationItem,
+		c.ConfigurationItemHistory, c.ConnectorConfig, c.Contract, c.Conversation,
+		c.Department, c.DiscoveryJob, c.DiscoveryResult, c.DiscoverySource,
+		c.DomainConfig, c.EndpointACL, c.EngineerSkill, c.ExternalIdentity,
+		c.FeishuTicketSync, c.FieldDefinition, c.FieldValue, c.Group, c.Incident,
+		c.IncidentAlert, c.IncidentEscalationRule, c.IncidentEvent, c.IncidentMetric,
+		c.IncidentRule, c.IncidentRuleActionReceipt, c.IncidentRuleExecution,
+		c.IntakeRequest, c.IntakeResolutionSnapshot, c.ItemVersion,
 		c.KafTaskActionLedger, c.KafTaskCompletionReceipt, c.KnowledgeArticle,
 		c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
 		c.KnowledgeArticleSession, c.KnowledgeArticleVersion, c.KnownError,
@@ -892,13 +938,13 @@ func (c *Client) Use(hooks ...Hook) {
 		c.Project, c.PromptTemplate, c.ProvisioningTask, c.RelationshipType, c.Release,
 		c.Role, c.RolePermission, c.RootCauseAnalysis, c.SLAAlertHistory,
 		c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAViolation, c.ServiceCatalog,
-		c.ServiceRequest, c.StandardChange, c.Survey, c.SurveyResponse, c.SystemConfig,
-		c.Tag, c.Team, c.Tenant, c.TenantInstallation, c.Ticket,
-		c.TicketAssignmentRule, c.TicketAttachment, c.TicketAutomationRule, c.TicketCC,
-		c.TicketCategory, c.TicketComment, c.TicketNotification, c.TicketTag,
-		c.TicketTemplate, c.TicketType, c.TicketView, c.TicketWorkflowRecord,
-		c.ToolInvocation, c.User, c.Vendor, c.WorkItemNumberSequence,
-		c.WorkItemRelation,
+		c.ServiceRequest, c.ServiceRequestAccessResult, c.ServiceRequestAccessSnapshot,
+		c.StandardChange, c.Survey, c.SurveyResponse, c.SystemConfig, c.Tag, c.Team,
+		c.Tenant, c.TenantInstallation, c.Ticket, c.TicketAssignmentRule,
+		c.TicketAttachment, c.TicketAutomationRule, c.TicketCC, c.TicketCategory,
+		c.TicketComment, c.TicketNotification, c.TicketTag, c.TicketTemplate,
+		c.TicketType, c.TicketView, c.TicketWorkflowRecord, c.ToolInvocation, c.User,
+		c.Vendor, c.WorkItemNumberSequence, c.WorkItemRelation,
 	} {
 		n.Use(hooks...)
 	}
@@ -911,13 +957,15 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Application, c.ApprovalChain, c.Asset, c.AssetLicense, c.AuditLog,
 		c.BPMNPermission, c.BootstrapToken, c.CABMember, c.CIAttributeDefinition,
 		c.CIRelationship, c.CITag, c.CIType, c.CMDBExportTask, c.CMDBImportTask,
-		c.CMDBSavedView, c.Change, c.ChangePIR, c.CloudAccount, c.CloudResource,
-		c.CloudService, c.ConfigurationItem, c.ConfigurationItemHistory,
-		c.ConnectorConfig, c.Contract, c.Conversation, c.Department, c.DiscoveryJob,
-		c.DiscoveryResult, c.DiscoverySource, c.DomainConfig, c.EndpointACL,
-		c.EngineerSkill, c.FeishuTicketSync, c.FieldDefinition, c.FieldValue, c.Group,
-		c.Incident, c.IncidentAlert, c.IncidentEscalationRule, c.IncidentEvent,
-		c.IncidentMetric, c.IncidentRule, c.IncidentRuleExecution, c.ItemVersion,
+		c.CMDBSavedView, c.CatalogAccessPolicy, c.Change, c.ChangePIR, c.CloudAccount,
+		c.CloudResource, c.CloudService, c.ConfigurationItem,
+		c.ConfigurationItemHistory, c.ConnectorConfig, c.Contract, c.Conversation,
+		c.Department, c.DiscoveryJob, c.DiscoveryResult, c.DiscoverySource,
+		c.DomainConfig, c.EndpointACL, c.EngineerSkill, c.ExternalIdentity,
+		c.FeishuTicketSync, c.FieldDefinition, c.FieldValue, c.Group, c.Incident,
+		c.IncidentAlert, c.IncidentEscalationRule, c.IncidentEvent, c.IncidentMetric,
+		c.IncidentRule, c.IncidentRuleActionReceipt, c.IncidentRuleExecution,
+		c.IntakeRequest, c.IntakeResolutionSnapshot, c.ItemVersion,
 		c.KafTaskActionLedger, c.KafTaskCompletionReceipt, c.KnowledgeArticle,
 		c.KnowledgeArticleLike, c.KnowledgeArticleParticipant,
 		c.KnowledgeArticleSession, c.KnowledgeArticleVersion, c.KnownError,
@@ -930,13 +978,13 @@ func (c *Client) Intercept(interceptors ...Interceptor) {
 		c.Project, c.PromptTemplate, c.ProvisioningTask, c.RelationshipType, c.Release,
 		c.Role, c.RolePermission, c.RootCauseAnalysis, c.SLAAlertHistory,
 		c.SLAAlertRule, c.SLADefinition, c.SLAMetric, c.SLAViolation, c.ServiceCatalog,
-		c.ServiceRequest, c.StandardChange, c.Survey, c.SurveyResponse, c.SystemConfig,
-		c.Tag, c.Team, c.Tenant, c.TenantInstallation, c.Ticket,
-		c.TicketAssignmentRule, c.TicketAttachment, c.TicketAutomationRule, c.TicketCC,
-		c.TicketCategory, c.TicketComment, c.TicketNotification, c.TicketTag,
-		c.TicketTemplate, c.TicketType, c.TicketView, c.TicketWorkflowRecord,
-		c.ToolInvocation, c.User, c.Vendor, c.WorkItemNumberSequence,
-		c.WorkItemRelation,
+		c.ServiceRequest, c.ServiceRequestAccessResult, c.ServiceRequestAccessSnapshot,
+		c.StandardChange, c.Survey, c.SurveyResponse, c.SystemConfig, c.Tag, c.Team,
+		c.Tenant, c.TenantInstallation, c.Ticket, c.TicketAssignmentRule,
+		c.TicketAttachment, c.TicketAutomationRule, c.TicketCC, c.TicketCategory,
+		c.TicketComment, c.TicketNotification, c.TicketTag, c.TicketTemplate,
+		c.TicketType, c.TicketView, c.TicketWorkflowRecord, c.ToolInvocation, c.User,
+		c.Vendor, c.WorkItemNumberSequence, c.WorkItemRelation,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -975,6 +1023,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.CMDBImportTask.mutate(ctx, m)
 	case *CMDBSavedViewMutation:
 		return c.CMDBSavedView.mutate(ctx, m)
+	case *CatalogAccessPolicyMutation:
+		return c.CatalogAccessPolicy.mutate(ctx, m)
 	case *ChangeMutation:
 		return c.Change.mutate(ctx, m)
 	case *ChangePIRMutation:
@@ -1009,6 +1059,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.EndpointACL.mutate(ctx, m)
 	case *EngineerSkillMutation:
 		return c.EngineerSkill.mutate(ctx, m)
+	case *ExternalIdentityMutation:
+		return c.ExternalIdentity.mutate(ctx, m)
 	case *FeishuTicketSyncMutation:
 		return c.FeishuTicketSync.mutate(ctx, m)
 	case *FieldDefinitionMutation:
@@ -1029,8 +1081,14 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.IncidentMetric.mutate(ctx, m)
 	case *IncidentRuleMutation:
 		return c.IncidentRule.mutate(ctx, m)
+	case *IncidentRuleActionReceiptMutation:
+		return c.IncidentRuleActionReceipt.mutate(ctx, m)
 	case *IncidentRuleExecutionMutation:
 		return c.IncidentRuleExecution.mutate(ctx, m)
+	case *IntakeRequestMutation:
+		return c.IntakeRequest.mutate(ctx, m)
+	case *IntakeResolutionSnapshotMutation:
+		return c.IntakeResolutionSnapshot.mutate(ctx, m)
 	case *ItemVersionMutation:
 		return c.ItemVersion.mutate(ctx, m)
 	case *KafTaskActionLedgerMutation:
@@ -1125,6 +1183,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.ServiceCatalog.mutate(ctx, m)
 	case *ServiceRequestMutation:
 		return c.ServiceRequest.mutate(ctx, m)
+	case *ServiceRequestAccessResultMutation:
+		return c.ServiceRequestAccessResult.mutate(ctx, m)
+	case *ServiceRequestAccessSnapshotMutation:
+		return c.ServiceRequestAccessSnapshot.mutate(ctx, m)
 	case *StandardChangeMutation:
 		return c.StandardChange.mutate(ctx, m)
 	case *SurveyMutation:
@@ -3398,6 +3460,155 @@ func (c *CMDBSavedViewClient) mutate(ctx context.Context, m *CMDBSavedViewMutati
 		return (&CMDBSavedViewDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown CMDBSavedView mutation op: %q", m.Op())
+	}
+}
+
+// CatalogAccessPolicyClient is a client for the CatalogAccessPolicy schema.
+type CatalogAccessPolicyClient struct {
+	config
+}
+
+// NewCatalogAccessPolicyClient returns a client for the CatalogAccessPolicy from the given config.
+func NewCatalogAccessPolicyClient(c config) *CatalogAccessPolicyClient {
+	return &CatalogAccessPolicyClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `catalogaccesspolicy.Hooks(f(g(h())))`.
+func (c *CatalogAccessPolicyClient) Use(hooks ...Hook) {
+	c.hooks.CatalogAccessPolicy = append(c.hooks.CatalogAccessPolicy, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `catalogaccesspolicy.Intercept(f(g(h())))`.
+func (c *CatalogAccessPolicyClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CatalogAccessPolicy = append(c.inters.CatalogAccessPolicy, interceptors...)
+}
+
+// Create returns a builder for creating a CatalogAccessPolicy entity.
+func (c *CatalogAccessPolicyClient) Create() *CatalogAccessPolicyCreate {
+	mutation := newCatalogAccessPolicyMutation(c.config, OpCreate)
+	return &CatalogAccessPolicyCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CatalogAccessPolicy entities.
+func (c *CatalogAccessPolicyClient) CreateBulk(builders ...*CatalogAccessPolicyCreate) *CatalogAccessPolicyCreateBulk {
+	return &CatalogAccessPolicyCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CatalogAccessPolicyClient) MapCreateBulk(slice any, setFunc func(*CatalogAccessPolicyCreate, int)) *CatalogAccessPolicyCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CatalogAccessPolicyCreateBulk{err: fmt.Errorf("calling to CatalogAccessPolicyClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CatalogAccessPolicyCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CatalogAccessPolicyCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CatalogAccessPolicy.
+func (c *CatalogAccessPolicyClient) Update() *CatalogAccessPolicyUpdate {
+	mutation := newCatalogAccessPolicyMutation(c.config, OpUpdate)
+	return &CatalogAccessPolicyUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CatalogAccessPolicyClient) UpdateOne(_m *CatalogAccessPolicy) *CatalogAccessPolicyUpdateOne {
+	mutation := newCatalogAccessPolicyMutation(c.config, OpUpdateOne, withCatalogAccessPolicy(_m))
+	return &CatalogAccessPolicyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CatalogAccessPolicyClient) UpdateOneID(id int) *CatalogAccessPolicyUpdateOne {
+	mutation := newCatalogAccessPolicyMutation(c.config, OpUpdateOne, withCatalogAccessPolicyID(id))
+	return &CatalogAccessPolicyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CatalogAccessPolicy.
+func (c *CatalogAccessPolicyClient) Delete() *CatalogAccessPolicyDelete {
+	mutation := newCatalogAccessPolicyMutation(c.config, OpDelete)
+	return &CatalogAccessPolicyDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CatalogAccessPolicyClient) DeleteOne(_m *CatalogAccessPolicy) *CatalogAccessPolicyDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CatalogAccessPolicyClient) DeleteOneID(id int) *CatalogAccessPolicyDeleteOne {
+	builder := c.Delete().Where(catalogaccesspolicy.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CatalogAccessPolicyDeleteOne{builder}
+}
+
+// Query returns a query builder for CatalogAccessPolicy.
+func (c *CatalogAccessPolicyClient) Query() *CatalogAccessPolicyQuery {
+	return &CatalogAccessPolicyQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCatalogAccessPolicy},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CatalogAccessPolicy entity by its id.
+func (c *CatalogAccessPolicyClient) Get(ctx context.Context, id int) (*CatalogAccessPolicy, error) {
+	return c.Query().Where(catalogaccesspolicy.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CatalogAccessPolicyClient) GetX(ctx context.Context, id int) *CatalogAccessPolicy {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryCatalog queries the catalog edge of a CatalogAccessPolicy.
+func (c *CatalogAccessPolicyClient) QueryCatalog(_m *CatalogAccessPolicy) *ServiceCatalogQuery {
+	query := (&ServiceCatalogClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(catalogaccesspolicy.Table, catalogaccesspolicy.FieldID, id),
+			sqlgraph.To(servicecatalog.Table, servicecatalog.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, catalogaccesspolicy.CatalogTable, catalogaccesspolicy.CatalogColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *CatalogAccessPolicyClient) Hooks() []Hook {
+	return c.hooks.CatalogAccessPolicy
+}
+
+// Interceptors returns the client interceptors.
+func (c *CatalogAccessPolicyClient) Interceptors() []Interceptor {
+	return c.inters.CatalogAccessPolicy
+}
+
+func (c *CatalogAccessPolicyClient) mutate(ctx context.Context, m *CatalogAccessPolicyMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CatalogAccessPolicyCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CatalogAccessPolicyUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CatalogAccessPolicyUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CatalogAccessPolicyDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CatalogAccessPolicy mutation op: %q", m.Op())
 	}
 }
 
@@ -6206,6 +6417,155 @@ func (c *EngineerSkillClient) mutate(ctx context.Context, m *EngineerSkillMutati
 	}
 }
 
+// ExternalIdentityClient is a client for the ExternalIdentity schema.
+type ExternalIdentityClient struct {
+	config
+}
+
+// NewExternalIdentityClient returns a client for the ExternalIdentity from the given config.
+func NewExternalIdentityClient(c config) *ExternalIdentityClient {
+	return &ExternalIdentityClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `externalidentity.Hooks(f(g(h())))`.
+func (c *ExternalIdentityClient) Use(hooks ...Hook) {
+	c.hooks.ExternalIdentity = append(c.hooks.ExternalIdentity, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `externalidentity.Intercept(f(g(h())))`.
+func (c *ExternalIdentityClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ExternalIdentity = append(c.inters.ExternalIdentity, interceptors...)
+}
+
+// Create returns a builder for creating a ExternalIdentity entity.
+func (c *ExternalIdentityClient) Create() *ExternalIdentityCreate {
+	mutation := newExternalIdentityMutation(c.config, OpCreate)
+	return &ExternalIdentityCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ExternalIdentity entities.
+func (c *ExternalIdentityClient) CreateBulk(builders ...*ExternalIdentityCreate) *ExternalIdentityCreateBulk {
+	return &ExternalIdentityCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ExternalIdentityClient) MapCreateBulk(slice any, setFunc func(*ExternalIdentityCreate, int)) *ExternalIdentityCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ExternalIdentityCreateBulk{err: fmt.Errorf("calling to ExternalIdentityClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ExternalIdentityCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ExternalIdentityCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ExternalIdentity.
+func (c *ExternalIdentityClient) Update() *ExternalIdentityUpdate {
+	mutation := newExternalIdentityMutation(c.config, OpUpdate)
+	return &ExternalIdentityUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ExternalIdentityClient) UpdateOne(_m *ExternalIdentity) *ExternalIdentityUpdateOne {
+	mutation := newExternalIdentityMutation(c.config, OpUpdateOne, withExternalIdentity(_m))
+	return &ExternalIdentityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ExternalIdentityClient) UpdateOneID(id int) *ExternalIdentityUpdateOne {
+	mutation := newExternalIdentityMutation(c.config, OpUpdateOne, withExternalIdentityID(id))
+	return &ExternalIdentityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ExternalIdentity.
+func (c *ExternalIdentityClient) Delete() *ExternalIdentityDelete {
+	mutation := newExternalIdentityMutation(c.config, OpDelete)
+	return &ExternalIdentityDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ExternalIdentityClient) DeleteOne(_m *ExternalIdentity) *ExternalIdentityDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ExternalIdentityClient) DeleteOneID(id int) *ExternalIdentityDeleteOne {
+	builder := c.Delete().Where(externalidentity.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ExternalIdentityDeleteOne{builder}
+}
+
+// Query returns a query builder for ExternalIdentity.
+func (c *ExternalIdentityClient) Query() *ExternalIdentityQuery {
+	return &ExternalIdentityQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeExternalIdentity},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ExternalIdentity entity by its id.
+func (c *ExternalIdentityClient) Get(ctx context.Context, id int) (*ExternalIdentity, error) {
+	return c.Query().Where(externalidentity.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ExternalIdentityClient) GetX(ctx context.Context, id int) *ExternalIdentity {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a ExternalIdentity.
+func (c *ExternalIdentityClient) QueryUser(_m *ExternalIdentity) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(externalidentity.Table, externalidentity.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, externalidentity.UserTable, externalidentity.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ExternalIdentityClient) Hooks() []Hook {
+	return c.hooks.ExternalIdentity
+}
+
+// Interceptors returns the client interceptors.
+func (c *ExternalIdentityClient) Interceptors() []Interceptor {
+	return c.inters.ExternalIdentity
+}
+
+func (c *ExternalIdentityClient) mutate(ctx context.Context, m *ExternalIdentityMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ExternalIdentityCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ExternalIdentityUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ExternalIdentityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ExternalIdentityDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ExternalIdentity mutation op: %q", m.Op())
+	}
+}
+
 // FeishuTicketSyncClient is a client for the FeishuTicketSync schema.
 type FeishuTicketSyncClient struct {
 	config
@@ -7760,6 +8120,155 @@ func (c *IncidentRuleClient) mutate(ctx context.Context, m *IncidentRuleMutation
 	}
 }
 
+// IncidentRuleActionReceiptClient is a client for the IncidentRuleActionReceipt schema.
+type IncidentRuleActionReceiptClient struct {
+	config
+}
+
+// NewIncidentRuleActionReceiptClient returns a client for the IncidentRuleActionReceipt from the given config.
+func NewIncidentRuleActionReceiptClient(c config) *IncidentRuleActionReceiptClient {
+	return &IncidentRuleActionReceiptClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `incidentruleactionreceipt.Hooks(f(g(h())))`.
+func (c *IncidentRuleActionReceiptClient) Use(hooks ...Hook) {
+	c.hooks.IncidentRuleActionReceipt = append(c.hooks.IncidentRuleActionReceipt, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `incidentruleactionreceipt.Intercept(f(g(h())))`.
+func (c *IncidentRuleActionReceiptClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IncidentRuleActionReceipt = append(c.inters.IncidentRuleActionReceipt, interceptors...)
+}
+
+// Create returns a builder for creating a IncidentRuleActionReceipt entity.
+func (c *IncidentRuleActionReceiptClient) Create() *IncidentRuleActionReceiptCreate {
+	mutation := newIncidentRuleActionReceiptMutation(c.config, OpCreate)
+	return &IncidentRuleActionReceiptCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IncidentRuleActionReceipt entities.
+func (c *IncidentRuleActionReceiptClient) CreateBulk(builders ...*IncidentRuleActionReceiptCreate) *IncidentRuleActionReceiptCreateBulk {
+	return &IncidentRuleActionReceiptCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IncidentRuleActionReceiptClient) MapCreateBulk(slice any, setFunc func(*IncidentRuleActionReceiptCreate, int)) *IncidentRuleActionReceiptCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IncidentRuleActionReceiptCreateBulk{err: fmt.Errorf("calling to IncidentRuleActionReceiptClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IncidentRuleActionReceiptCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IncidentRuleActionReceiptCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IncidentRuleActionReceipt.
+func (c *IncidentRuleActionReceiptClient) Update() *IncidentRuleActionReceiptUpdate {
+	mutation := newIncidentRuleActionReceiptMutation(c.config, OpUpdate)
+	return &IncidentRuleActionReceiptUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IncidentRuleActionReceiptClient) UpdateOne(_m *IncidentRuleActionReceipt) *IncidentRuleActionReceiptUpdateOne {
+	mutation := newIncidentRuleActionReceiptMutation(c.config, OpUpdateOne, withIncidentRuleActionReceipt(_m))
+	return &IncidentRuleActionReceiptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IncidentRuleActionReceiptClient) UpdateOneID(id int) *IncidentRuleActionReceiptUpdateOne {
+	mutation := newIncidentRuleActionReceiptMutation(c.config, OpUpdateOne, withIncidentRuleActionReceiptID(id))
+	return &IncidentRuleActionReceiptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IncidentRuleActionReceipt.
+func (c *IncidentRuleActionReceiptClient) Delete() *IncidentRuleActionReceiptDelete {
+	mutation := newIncidentRuleActionReceiptMutation(c.config, OpDelete)
+	return &IncidentRuleActionReceiptDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IncidentRuleActionReceiptClient) DeleteOne(_m *IncidentRuleActionReceipt) *IncidentRuleActionReceiptDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IncidentRuleActionReceiptClient) DeleteOneID(id int) *IncidentRuleActionReceiptDeleteOne {
+	builder := c.Delete().Where(incidentruleactionreceipt.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IncidentRuleActionReceiptDeleteOne{builder}
+}
+
+// Query returns a query builder for IncidentRuleActionReceipt.
+func (c *IncidentRuleActionReceiptClient) Query() *IncidentRuleActionReceiptQuery {
+	return &IncidentRuleActionReceiptQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIncidentRuleActionReceipt},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IncidentRuleActionReceipt entity by its id.
+func (c *IncidentRuleActionReceiptClient) Get(ctx context.Context, id int) (*IncidentRuleActionReceipt, error) {
+	return c.Query().Where(incidentruleactionreceipt.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IncidentRuleActionReceiptClient) GetX(ctx context.Context, id int) *IncidentRuleActionReceipt {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryExecution queries the execution edge of a IncidentRuleActionReceipt.
+func (c *IncidentRuleActionReceiptClient) QueryExecution(_m *IncidentRuleActionReceipt) *IncidentRuleExecutionQuery {
+	query := (&IncidentRuleExecutionClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(incidentruleactionreceipt.Table, incidentruleactionreceipt.FieldID, id),
+			sqlgraph.To(incidentruleexecution.Table, incidentruleexecution.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, incidentruleactionreceipt.ExecutionTable, incidentruleactionreceipt.ExecutionColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *IncidentRuleActionReceiptClient) Hooks() []Hook {
+	return c.hooks.IncidentRuleActionReceipt
+}
+
+// Interceptors returns the client interceptors.
+func (c *IncidentRuleActionReceiptClient) Interceptors() []Interceptor {
+	return c.inters.IncidentRuleActionReceipt
+}
+
+func (c *IncidentRuleActionReceiptClient) mutate(ctx context.Context, m *IncidentRuleActionReceiptMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IncidentRuleActionReceiptCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IncidentRuleActionReceiptUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IncidentRuleActionReceiptUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IncidentRuleActionReceiptDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IncidentRuleActionReceipt mutation op: %q", m.Op())
+	}
+}
+
 // IncidentRuleExecutionClient is a client for the IncidentRuleExecution schema.
 type IncidentRuleExecutionClient struct {
 	config
@@ -7868,6 +8377,54 @@ func (c *IncidentRuleExecutionClient) GetX(ctx context.Context, id int) *Inciden
 	return obj
 }
 
+// QueryIncident queries the incident edge of a IncidentRuleExecution.
+func (c *IncidentRuleExecutionClient) QueryIncident(_m *IncidentRuleExecution) *IncidentQuery {
+	query := (&IncidentClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(incidentruleexecution.Table, incidentruleexecution.FieldID, id),
+			sqlgraph.To(incident.Table, incident.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, incidentruleexecution.IncidentTable, incidentruleexecution.IncidentColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QuerySourceEvent queries the source_event edge of a IncidentRuleExecution.
+func (c *IncidentRuleExecutionClient) QuerySourceEvent(_m *IncidentRuleExecution) *OutboxEventQuery {
+	query := (&OutboxEventClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(incidentruleexecution.Table, incidentruleexecution.FieldID, id),
+			sqlgraph.To(outboxevent.Table, outboxevent.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, incidentruleexecution.SourceEventTable, incidentruleexecution.SourceEventColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryActionReceipts queries the action_receipts edge of a IncidentRuleExecution.
+func (c *IncidentRuleExecutionClient) QueryActionReceipts(_m *IncidentRuleExecution) *IncidentRuleActionReceiptQuery {
+	query := (&IncidentRuleActionReceiptClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(incidentruleexecution.Table, incidentruleexecution.FieldID, id),
+			sqlgraph.To(incidentruleactionreceipt.Table, incidentruleactionreceipt.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, incidentruleexecution.ActionReceiptsTable, incidentruleexecution.ActionReceiptsColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryRule queries the rule edge of a IncidentRuleExecution.
 func (c *IncidentRuleExecutionClient) QueryRule(_m *IncidentRuleExecution) *IncidentRuleQuery {
 	query := (&IncidentRuleClient{config: c.config}).Query()
@@ -7906,6 +8463,320 @@ func (c *IncidentRuleExecutionClient) mutate(ctx context.Context, m *IncidentRul
 		return (&IncidentRuleExecutionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown IncidentRuleExecution mutation op: %q", m.Op())
+	}
+}
+
+// IntakeRequestClient is a client for the IntakeRequest schema.
+type IntakeRequestClient struct {
+	config
+}
+
+// NewIntakeRequestClient returns a client for the IntakeRequest from the given config.
+func NewIntakeRequestClient(c config) *IntakeRequestClient {
+	return &IntakeRequestClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `intakerequest.Hooks(f(g(h())))`.
+func (c *IntakeRequestClient) Use(hooks ...Hook) {
+	c.hooks.IntakeRequest = append(c.hooks.IntakeRequest, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `intakerequest.Intercept(f(g(h())))`.
+func (c *IntakeRequestClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IntakeRequest = append(c.inters.IntakeRequest, interceptors...)
+}
+
+// Create returns a builder for creating a IntakeRequest entity.
+func (c *IntakeRequestClient) Create() *IntakeRequestCreate {
+	mutation := newIntakeRequestMutation(c.config, OpCreate)
+	return &IntakeRequestCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IntakeRequest entities.
+func (c *IntakeRequestClient) CreateBulk(builders ...*IntakeRequestCreate) *IntakeRequestCreateBulk {
+	return &IntakeRequestCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IntakeRequestClient) MapCreateBulk(slice any, setFunc func(*IntakeRequestCreate, int)) *IntakeRequestCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IntakeRequestCreateBulk{err: fmt.Errorf("calling to IntakeRequestClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IntakeRequestCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IntakeRequestCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IntakeRequest.
+func (c *IntakeRequestClient) Update() *IntakeRequestUpdate {
+	mutation := newIntakeRequestMutation(c.config, OpUpdate)
+	return &IntakeRequestUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IntakeRequestClient) UpdateOne(_m *IntakeRequest) *IntakeRequestUpdateOne {
+	mutation := newIntakeRequestMutation(c.config, OpUpdateOne, withIntakeRequest(_m))
+	return &IntakeRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IntakeRequestClient) UpdateOneID(id int) *IntakeRequestUpdateOne {
+	mutation := newIntakeRequestMutation(c.config, OpUpdateOne, withIntakeRequestID(id))
+	return &IntakeRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IntakeRequest.
+func (c *IntakeRequestClient) Delete() *IntakeRequestDelete {
+	mutation := newIntakeRequestMutation(c.config, OpDelete)
+	return &IntakeRequestDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IntakeRequestClient) DeleteOne(_m *IntakeRequest) *IntakeRequestDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IntakeRequestClient) DeleteOneID(id int) *IntakeRequestDeleteOne {
+	builder := c.Delete().Where(intakerequest.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IntakeRequestDeleteOne{builder}
+}
+
+// Query returns a query builder for IntakeRequest.
+func (c *IntakeRequestClient) Query() *IntakeRequestQuery {
+	return &IntakeRequestQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIntakeRequest},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IntakeRequest entity by its id.
+func (c *IntakeRequestClient) Get(ctx context.Context, id int) (*IntakeRequest, error) {
+	return c.Query().Where(intakerequest.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IntakeRequestClient) GetX(ctx context.Context, id int) *IntakeRequest {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryWorkItem queries the work_item edge of a IntakeRequest.
+func (c *IntakeRequestClient) QueryWorkItem(_m *IntakeRequest) *TicketQuery {
+	query := (&TicketClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(intakerequest.Table, intakerequest.FieldID, id),
+			sqlgraph.To(ticket.Table, ticket.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, intakerequest.WorkItemTable, intakerequest.WorkItemColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *IntakeRequestClient) Hooks() []Hook {
+	return c.hooks.IntakeRequest
+}
+
+// Interceptors returns the client interceptors.
+func (c *IntakeRequestClient) Interceptors() []Interceptor {
+	return c.inters.IntakeRequest
+}
+
+func (c *IntakeRequestClient) mutate(ctx context.Context, m *IntakeRequestMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IntakeRequestCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IntakeRequestUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IntakeRequestUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IntakeRequestDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IntakeRequest mutation op: %q", m.Op())
+	}
+}
+
+// IntakeResolutionSnapshotClient is a client for the IntakeResolutionSnapshot schema.
+type IntakeResolutionSnapshotClient struct {
+	config
+}
+
+// NewIntakeResolutionSnapshotClient returns a client for the IntakeResolutionSnapshot from the given config.
+func NewIntakeResolutionSnapshotClient(c config) *IntakeResolutionSnapshotClient {
+	return &IntakeResolutionSnapshotClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `intakeresolutionsnapshot.Hooks(f(g(h())))`.
+func (c *IntakeResolutionSnapshotClient) Use(hooks ...Hook) {
+	c.hooks.IntakeResolutionSnapshot = append(c.hooks.IntakeResolutionSnapshot, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `intakeresolutionsnapshot.Intercept(f(g(h())))`.
+func (c *IntakeResolutionSnapshotClient) Intercept(interceptors ...Interceptor) {
+	c.inters.IntakeResolutionSnapshot = append(c.inters.IntakeResolutionSnapshot, interceptors...)
+}
+
+// Create returns a builder for creating a IntakeResolutionSnapshot entity.
+func (c *IntakeResolutionSnapshotClient) Create() *IntakeResolutionSnapshotCreate {
+	mutation := newIntakeResolutionSnapshotMutation(c.config, OpCreate)
+	return &IntakeResolutionSnapshotCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of IntakeResolutionSnapshot entities.
+func (c *IntakeResolutionSnapshotClient) CreateBulk(builders ...*IntakeResolutionSnapshotCreate) *IntakeResolutionSnapshotCreateBulk {
+	return &IntakeResolutionSnapshotCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *IntakeResolutionSnapshotClient) MapCreateBulk(slice any, setFunc func(*IntakeResolutionSnapshotCreate, int)) *IntakeResolutionSnapshotCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &IntakeResolutionSnapshotCreateBulk{err: fmt.Errorf("calling to IntakeResolutionSnapshotClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*IntakeResolutionSnapshotCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &IntakeResolutionSnapshotCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for IntakeResolutionSnapshot.
+func (c *IntakeResolutionSnapshotClient) Update() *IntakeResolutionSnapshotUpdate {
+	mutation := newIntakeResolutionSnapshotMutation(c.config, OpUpdate)
+	return &IntakeResolutionSnapshotUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *IntakeResolutionSnapshotClient) UpdateOne(_m *IntakeResolutionSnapshot) *IntakeResolutionSnapshotUpdateOne {
+	mutation := newIntakeResolutionSnapshotMutation(c.config, OpUpdateOne, withIntakeResolutionSnapshot(_m))
+	return &IntakeResolutionSnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *IntakeResolutionSnapshotClient) UpdateOneID(id int) *IntakeResolutionSnapshotUpdateOne {
+	mutation := newIntakeResolutionSnapshotMutation(c.config, OpUpdateOne, withIntakeResolutionSnapshotID(id))
+	return &IntakeResolutionSnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for IntakeResolutionSnapshot.
+func (c *IntakeResolutionSnapshotClient) Delete() *IntakeResolutionSnapshotDelete {
+	mutation := newIntakeResolutionSnapshotMutation(c.config, OpDelete)
+	return &IntakeResolutionSnapshotDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *IntakeResolutionSnapshotClient) DeleteOne(_m *IntakeResolutionSnapshot) *IntakeResolutionSnapshotDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *IntakeResolutionSnapshotClient) DeleteOneID(id int) *IntakeResolutionSnapshotDeleteOne {
+	builder := c.Delete().Where(intakeresolutionsnapshot.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &IntakeResolutionSnapshotDeleteOne{builder}
+}
+
+// Query returns a query builder for IntakeResolutionSnapshot.
+func (c *IntakeResolutionSnapshotClient) Query() *IntakeResolutionSnapshotQuery {
+	return &IntakeResolutionSnapshotQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeIntakeResolutionSnapshot},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a IntakeResolutionSnapshot entity by its id.
+func (c *IntakeResolutionSnapshotClient) Get(ctx context.Context, id int) (*IntakeResolutionSnapshot, error) {
+	return c.Query().Where(intakeresolutionsnapshot.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *IntakeResolutionSnapshotClient) GetX(ctx context.Context, id int) *IntakeResolutionSnapshot {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryReceipt queries the receipt edge of a IntakeResolutionSnapshot.
+func (c *IntakeResolutionSnapshotClient) QueryReceipt(_m *IntakeResolutionSnapshot) *IntakeRequestQuery {
+	query := (&IntakeRequestClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(intakeresolutionsnapshot.Table, intakeresolutionsnapshot.FieldID, id),
+			sqlgraph.To(intakerequest.Table, intakerequest.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, intakeresolutionsnapshot.ReceiptTable, intakeresolutionsnapshot.ReceiptColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryWorkItem queries the work_item edge of a IntakeResolutionSnapshot.
+func (c *IntakeResolutionSnapshotClient) QueryWorkItem(_m *IntakeResolutionSnapshot) *TicketQuery {
+	query := (&TicketClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(intakeresolutionsnapshot.Table, intakeresolutionsnapshot.FieldID, id),
+			sqlgraph.To(ticket.Table, ticket.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, intakeresolutionsnapshot.WorkItemTable, intakeresolutionsnapshot.WorkItemColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *IntakeResolutionSnapshotClient) Hooks() []Hook {
+	return c.hooks.IntakeResolutionSnapshot
+}
+
+// Interceptors returns the client interceptors.
+func (c *IntakeResolutionSnapshotClient) Interceptors() []Interceptor {
+	return c.inters.IntakeResolutionSnapshot
+}
+
+func (c *IntakeResolutionSnapshotClient) mutate(ctx context.Context, m *IntakeResolutionSnapshotMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&IntakeResolutionSnapshotCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&IntakeResolutionSnapshotUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&IntakeResolutionSnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&IntakeResolutionSnapshotDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown IntakeResolutionSnapshot mutation op: %q", m.Op())
 	}
 }
 
@@ -15111,6 +15982,22 @@ func (c *ServiceRequestClient) GetX(ctx context.Context, id int) *ServiceRequest
 	return obj
 }
 
+// QueryWorkItem queries the work_item edge of a ServiceRequest.
+func (c *ServiceRequestClient) QueryWorkItem(_m *ServiceRequest) *TicketQuery {
+	query := (&TicketClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(servicerequest.Table, servicerequest.FieldID, id),
+			sqlgraph.To(ticket.Table, ticket.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, servicerequest.WorkItemTable, servicerequest.WorkItemColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // Hooks returns the client hooks.
 func (c *ServiceRequestClient) Hooks() []Hook {
 	return c.hooks.ServiceRequest
@@ -15133,6 +16020,336 @@ func (c *ServiceRequestClient) mutate(ctx context.Context, m *ServiceRequestMuta
 		return (&ServiceRequestDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown ServiceRequest mutation op: %q", m.Op())
+	}
+}
+
+// ServiceRequestAccessResultClient is a client for the ServiceRequestAccessResult schema.
+type ServiceRequestAccessResultClient struct {
+	config
+}
+
+// NewServiceRequestAccessResultClient returns a client for the ServiceRequestAccessResult from the given config.
+func NewServiceRequestAccessResultClient(c config) *ServiceRequestAccessResultClient {
+	return &ServiceRequestAccessResultClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `servicerequestaccessresult.Hooks(f(g(h())))`.
+func (c *ServiceRequestAccessResultClient) Use(hooks ...Hook) {
+	c.hooks.ServiceRequestAccessResult = append(c.hooks.ServiceRequestAccessResult, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `servicerequestaccessresult.Intercept(f(g(h())))`.
+func (c *ServiceRequestAccessResultClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ServiceRequestAccessResult = append(c.inters.ServiceRequestAccessResult, interceptors...)
+}
+
+// Create returns a builder for creating a ServiceRequestAccessResult entity.
+func (c *ServiceRequestAccessResultClient) Create() *ServiceRequestAccessResultCreate {
+	mutation := newServiceRequestAccessResultMutation(c.config, OpCreate)
+	return &ServiceRequestAccessResultCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ServiceRequestAccessResult entities.
+func (c *ServiceRequestAccessResultClient) CreateBulk(builders ...*ServiceRequestAccessResultCreate) *ServiceRequestAccessResultCreateBulk {
+	return &ServiceRequestAccessResultCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ServiceRequestAccessResultClient) MapCreateBulk(slice any, setFunc func(*ServiceRequestAccessResultCreate, int)) *ServiceRequestAccessResultCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ServiceRequestAccessResultCreateBulk{err: fmt.Errorf("calling to ServiceRequestAccessResultClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ServiceRequestAccessResultCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ServiceRequestAccessResultCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ServiceRequestAccessResult.
+func (c *ServiceRequestAccessResultClient) Update() *ServiceRequestAccessResultUpdate {
+	mutation := newServiceRequestAccessResultMutation(c.config, OpUpdate)
+	return &ServiceRequestAccessResultUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ServiceRequestAccessResultClient) UpdateOne(_m *ServiceRequestAccessResult) *ServiceRequestAccessResultUpdateOne {
+	mutation := newServiceRequestAccessResultMutation(c.config, OpUpdateOne, withServiceRequestAccessResult(_m))
+	return &ServiceRequestAccessResultUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ServiceRequestAccessResultClient) UpdateOneID(id int) *ServiceRequestAccessResultUpdateOne {
+	mutation := newServiceRequestAccessResultMutation(c.config, OpUpdateOne, withServiceRequestAccessResultID(id))
+	return &ServiceRequestAccessResultUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ServiceRequestAccessResult.
+func (c *ServiceRequestAccessResultClient) Delete() *ServiceRequestAccessResultDelete {
+	mutation := newServiceRequestAccessResultMutation(c.config, OpDelete)
+	return &ServiceRequestAccessResultDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ServiceRequestAccessResultClient) DeleteOne(_m *ServiceRequestAccessResult) *ServiceRequestAccessResultDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ServiceRequestAccessResultClient) DeleteOneID(id int) *ServiceRequestAccessResultDeleteOne {
+	builder := c.Delete().Where(servicerequestaccessresult.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ServiceRequestAccessResultDeleteOne{builder}
+}
+
+// Query returns a query builder for ServiceRequestAccessResult.
+func (c *ServiceRequestAccessResultClient) Query() *ServiceRequestAccessResultQuery {
+	return &ServiceRequestAccessResultQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeServiceRequestAccessResult},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ServiceRequestAccessResult entity by its id.
+func (c *ServiceRequestAccessResultClient) Get(ctx context.Context, id int) (*ServiceRequestAccessResult, error) {
+	return c.Query().Where(servicerequestaccessresult.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ServiceRequestAccessResultClient) GetX(ctx context.Context, id int) *ServiceRequestAccessResult {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryWorkItem queries the work_item edge of a ServiceRequestAccessResult.
+func (c *ServiceRequestAccessResultClient) QueryWorkItem(_m *ServiceRequestAccessResult) *TicketQuery {
+	query := (&TicketClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(servicerequestaccessresult.Table, servicerequestaccessresult.FieldID, id),
+			sqlgraph.To(ticket.Table, ticket.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, servicerequestaccessresult.WorkItemTable, servicerequestaccessresult.WorkItemColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryProcessTask queries the process_task edge of a ServiceRequestAccessResult.
+func (c *ServiceRequestAccessResultClient) QueryProcessTask(_m *ServiceRequestAccessResult) *ProcessTaskQuery {
+	query := (&ProcessTaskClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(servicerequestaccessresult.Table, servicerequestaccessresult.FieldID, id),
+			sqlgraph.To(processtask.Table, processtask.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, servicerequestaccessresult.ProcessTaskTable, servicerequestaccessresult.ProcessTaskColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ServiceRequestAccessResultClient) Hooks() []Hook {
+	return c.hooks.ServiceRequestAccessResult
+}
+
+// Interceptors returns the client interceptors.
+func (c *ServiceRequestAccessResultClient) Interceptors() []Interceptor {
+	return c.inters.ServiceRequestAccessResult
+}
+
+func (c *ServiceRequestAccessResultClient) mutate(ctx context.Context, m *ServiceRequestAccessResultMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ServiceRequestAccessResultCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ServiceRequestAccessResultUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ServiceRequestAccessResultUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ServiceRequestAccessResultDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ServiceRequestAccessResult mutation op: %q", m.Op())
+	}
+}
+
+// ServiceRequestAccessSnapshotClient is a client for the ServiceRequestAccessSnapshot schema.
+type ServiceRequestAccessSnapshotClient struct {
+	config
+}
+
+// NewServiceRequestAccessSnapshotClient returns a client for the ServiceRequestAccessSnapshot from the given config.
+func NewServiceRequestAccessSnapshotClient(c config) *ServiceRequestAccessSnapshotClient {
+	return &ServiceRequestAccessSnapshotClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `servicerequestaccesssnapshot.Hooks(f(g(h())))`.
+func (c *ServiceRequestAccessSnapshotClient) Use(hooks ...Hook) {
+	c.hooks.ServiceRequestAccessSnapshot = append(c.hooks.ServiceRequestAccessSnapshot, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `servicerequestaccesssnapshot.Intercept(f(g(h())))`.
+func (c *ServiceRequestAccessSnapshotClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ServiceRequestAccessSnapshot = append(c.inters.ServiceRequestAccessSnapshot, interceptors...)
+}
+
+// Create returns a builder for creating a ServiceRequestAccessSnapshot entity.
+func (c *ServiceRequestAccessSnapshotClient) Create() *ServiceRequestAccessSnapshotCreate {
+	mutation := newServiceRequestAccessSnapshotMutation(c.config, OpCreate)
+	return &ServiceRequestAccessSnapshotCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ServiceRequestAccessSnapshot entities.
+func (c *ServiceRequestAccessSnapshotClient) CreateBulk(builders ...*ServiceRequestAccessSnapshotCreate) *ServiceRequestAccessSnapshotCreateBulk {
+	return &ServiceRequestAccessSnapshotCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ServiceRequestAccessSnapshotClient) MapCreateBulk(slice any, setFunc func(*ServiceRequestAccessSnapshotCreate, int)) *ServiceRequestAccessSnapshotCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ServiceRequestAccessSnapshotCreateBulk{err: fmt.Errorf("calling to ServiceRequestAccessSnapshotClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ServiceRequestAccessSnapshotCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ServiceRequestAccessSnapshotCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ServiceRequestAccessSnapshot.
+func (c *ServiceRequestAccessSnapshotClient) Update() *ServiceRequestAccessSnapshotUpdate {
+	mutation := newServiceRequestAccessSnapshotMutation(c.config, OpUpdate)
+	return &ServiceRequestAccessSnapshotUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ServiceRequestAccessSnapshotClient) UpdateOne(_m *ServiceRequestAccessSnapshot) *ServiceRequestAccessSnapshotUpdateOne {
+	mutation := newServiceRequestAccessSnapshotMutation(c.config, OpUpdateOne, withServiceRequestAccessSnapshot(_m))
+	return &ServiceRequestAccessSnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ServiceRequestAccessSnapshotClient) UpdateOneID(id int) *ServiceRequestAccessSnapshotUpdateOne {
+	mutation := newServiceRequestAccessSnapshotMutation(c.config, OpUpdateOne, withServiceRequestAccessSnapshotID(id))
+	return &ServiceRequestAccessSnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ServiceRequestAccessSnapshot.
+func (c *ServiceRequestAccessSnapshotClient) Delete() *ServiceRequestAccessSnapshotDelete {
+	mutation := newServiceRequestAccessSnapshotMutation(c.config, OpDelete)
+	return &ServiceRequestAccessSnapshotDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ServiceRequestAccessSnapshotClient) DeleteOne(_m *ServiceRequestAccessSnapshot) *ServiceRequestAccessSnapshotDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ServiceRequestAccessSnapshotClient) DeleteOneID(id int) *ServiceRequestAccessSnapshotDeleteOne {
+	builder := c.Delete().Where(servicerequestaccesssnapshot.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ServiceRequestAccessSnapshotDeleteOne{builder}
+}
+
+// Query returns a query builder for ServiceRequestAccessSnapshot.
+func (c *ServiceRequestAccessSnapshotClient) Query() *ServiceRequestAccessSnapshotQuery {
+	return &ServiceRequestAccessSnapshotQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeServiceRequestAccessSnapshot},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ServiceRequestAccessSnapshot entity by its id.
+func (c *ServiceRequestAccessSnapshotClient) Get(ctx context.Context, id int) (*ServiceRequestAccessSnapshot, error) {
+	return c.Query().Where(servicerequestaccesssnapshot.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ServiceRequestAccessSnapshotClient) GetX(ctx context.Context, id int) *ServiceRequestAccessSnapshot {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryWorkItem queries the work_item edge of a ServiceRequestAccessSnapshot.
+func (c *ServiceRequestAccessSnapshotClient) QueryWorkItem(_m *ServiceRequestAccessSnapshot) *TicketQuery {
+	query := (&TicketClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(servicerequestaccesssnapshot.Table, servicerequestaccesssnapshot.FieldID, id),
+			sqlgraph.To(ticket.Table, ticket.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, servicerequestaccesssnapshot.WorkItemTable, servicerequestaccesssnapshot.WorkItemColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// QueryPolicy queries the policy edge of a ServiceRequestAccessSnapshot.
+func (c *ServiceRequestAccessSnapshotClient) QueryPolicy(_m *ServiceRequestAccessSnapshot) *CatalogAccessPolicyQuery {
+	query := (&CatalogAccessPolicyClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(servicerequestaccesssnapshot.Table, servicerequestaccesssnapshot.FieldID, id),
+			sqlgraph.To(catalogaccesspolicy.Table, catalogaccesspolicy.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, servicerequestaccesssnapshot.PolicyTable, servicerequestaccesssnapshot.PolicyColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *ServiceRequestAccessSnapshotClient) Hooks() []Hook {
+	return c.hooks.ServiceRequestAccessSnapshot
+}
+
+// Interceptors returns the client interceptors.
+func (c *ServiceRequestAccessSnapshotClient) Interceptors() []Interceptor {
+	return c.inters.ServiceRequestAccessSnapshot
+}
+
+func (c *ServiceRequestAccessSnapshotClient) mutate(ctx context.Context, m *ServiceRequestAccessSnapshotMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ServiceRequestAccessSnapshotCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ServiceRequestAccessSnapshotUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ServiceRequestAccessSnapshotUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ServiceRequestAccessSnapshotDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ServiceRequestAccessSnapshot mutation op: %q", m.Op())
 	}
 }
 
@@ -19623,13 +20840,15 @@ type (
 	hooks struct {
 		Application, ApprovalChain, Asset, AssetLicense, AuditLog, BPMNPermission,
 		BootstrapToken, CABMember, CIAttributeDefinition, CIRelationship, CITag,
-		CIType, CMDBExportTask, CMDBImportTask, CMDBSavedView, Change, ChangePIR,
-		CloudAccount, CloudResource, CloudService, ConfigurationItem,
-		ConfigurationItemHistory, ConnectorConfig, Contract, Conversation, Department,
-		DiscoveryJob, DiscoveryResult, DiscoverySource, DomainConfig, EndpointACL,
-		EngineerSkill, FeishuTicketSync, FieldDefinition, FieldValue, Group, Incident,
-		IncidentAlert, IncidentEscalationRule, IncidentEvent, IncidentMetric,
-		IncidentRule, IncidentRuleExecution, ItemVersion, KafTaskActionLedger,
+		CIType, CMDBExportTask, CMDBImportTask, CMDBSavedView, CatalogAccessPolicy,
+		Change, ChangePIR, CloudAccount, CloudResource, CloudService,
+		ConfigurationItem, ConfigurationItemHistory, ConnectorConfig, Contract,
+		Conversation, Department, DiscoveryJob, DiscoveryResult, DiscoverySource,
+		DomainConfig, EndpointACL, EngineerSkill, ExternalIdentity, FeishuTicketSync,
+		FieldDefinition, FieldValue, Group, Incident, IncidentAlert,
+		IncidentEscalationRule, IncidentEvent, IncidentMetric, IncidentRule,
+		IncidentRuleActionReceipt, IncidentRuleExecution, IntakeRequest,
+		IntakeResolutionSnapshot, ItemVersion, KafTaskActionLedger,
 		KafTaskCompletionReceipt, KnowledgeArticle, KnowledgeArticleLike,
 		KnowledgeArticleParticipant, KnowledgeArticleSession, KnowledgeArticleVersion,
 		KnownError, MSPAllocation, MarketplaceItem, Menu, Message, Microservice,
@@ -19640,8 +20859,9 @@ type (
 		ProcessVariable, ProcessVersionChangelog, Project, PromptTemplate,
 		ProvisioningTask, RelationshipType, Release, Role, RolePermission,
 		RootCauseAnalysis, SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric,
-		SLAViolation, ServiceCatalog, ServiceRequest, StandardChange, Survey,
-		SurveyResponse, SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket,
+		SLAViolation, ServiceCatalog, ServiceRequest, ServiceRequestAccessResult,
+		ServiceRequestAccessSnapshot, StandardChange, Survey, SurveyResponse,
+		SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket,
 		TicketAssignmentRule, TicketAttachment, TicketAutomationRule, TicketCC,
 		TicketCategory, TicketComment, TicketNotification, TicketTag, TicketTemplate,
 		TicketType, TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor,
@@ -19650,13 +20870,15 @@ type (
 	inters struct {
 		Application, ApprovalChain, Asset, AssetLicense, AuditLog, BPMNPermission,
 		BootstrapToken, CABMember, CIAttributeDefinition, CIRelationship, CITag,
-		CIType, CMDBExportTask, CMDBImportTask, CMDBSavedView, Change, ChangePIR,
-		CloudAccount, CloudResource, CloudService, ConfigurationItem,
-		ConfigurationItemHistory, ConnectorConfig, Contract, Conversation, Department,
-		DiscoveryJob, DiscoveryResult, DiscoverySource, DomainConfig, EndpointACL,
-		EngineerSkill, FeishuTicketSync, FieldDefinition, FieldValue, Group, Incident,
-		IncidentAlert, IncidentEscalationRule, IncidentEvent, IncidentMetric,
-		IncidentRule, IncidentRuleExecution, ItemVersion, KafTaskActionLedger,
+		CIType, CMDBExportTask, CMDBImportTask, CMDBSavedView, CatalogAccessPolicy,
+		Change, ChangePIR, CloudAccount, CloudResource, CloudService,
+		ConfigurationItem, ConfigurationItemHistory, ConnectorConfig, Contract,
+		Conversation, Department, DiscoveryJob, DiscoveryResult, DiscoverySource,
+		DomainConfig, EndpointACL, EngineerSkill, ExternalIdentity, FeishuTicketSync,
+		FieldDefinition, FieldValue, Group, Incident, IncidentAlert,
+		IncidentEscalationRule, IncidentEvent, IncidentMetric, IncidentRule,
+		IncidentRuleActionReceipt, IncidentRuleExecution, IntakeRequest,
+		IntakeResolutionSnapshot, ItemVersion, KafTaskActionLedger,
 		KafTaskCompletionReceipt, KnowledgeArticle, KnowledgeArticleLike,
 		KnowledgeArticleParticipant, KnowledgeArticleSession, KnowledgeArticleVersion,
 		KnownError, MSPAllocation, MarketplaceItem, Menu, Message, Microservice,
@@ -19667,11 +20889,36 @@ type (
 		ProcessVariable, ProcessVersionChangelog, Project, PromptTemplate,
 		ProvisioningTask, RelationshipType, Release, Role, RolePermission,
 		RootCauseAnalysis, SLAAlertHistory, SLAAlertRule, SLADefinition, SLAMetric,
-		SLAViolation, ServiceCatalog, ServiceRequest, StandardChange, Survey,
-		SurveyResponse, SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket,
+		SLAViolation, ServiceCatalog, ServiceRequest, ServiceRequestAccessResult,
+		ServiceRequestAccessSnapshot, StandardChange, Survey, SurveyResponse,
+		SystemConfig, Tag, Team, Tenant, TenantInstallation, Ticket,
 		TicketAssignmentRule, TicketAttachment, TicketAutomationRule, TicketCC,
 		TicketCategory, TicketComment, TicketNotification, TicketTag, TicketTemplate,
 		TicketType, TicketView, TicketWorkflowRecord, ToolInvocation, User, Vendor,
 		WorkItemNumberSequence, WorkItemRelation []ent.Interceptor
 	}
 )
+
+// ExecContext allows calling the underlying ExecContext method of the driver if it is supported by it.
+// See, database/sql#DB.ExecContext for more information.
+func (c *config) ExecContext(ctx context.Context, query string, args ...any) (stdsql.Result, error) {
+	ex, ok := c.driver.(interface {
+		ExecContext(context.Context, string, ...any) (stdsql.Result, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("Driver.ExecContext is not supported")
+	}
+	return ex.ExecContext(ctx, query, args...)
+}
+
+// QueryContext allows calling the underlying QueryContext method of the driver if it is supported by it.
+// See, database/sql#DB.QueryContext for more information.
+func (c *config) QueryContext(ctx context.Context, query string, args ...any) (*stdsql.Rows, error) {
+	q, ok := c.driver.(interface {
+		QueryContext(context.Context, string, ...any) (*stdsql.Rows, error)
+	})
+	if !ok {
+		return nil, fmt.Errorf("Driver.QueryContext is not supported")
+	}
+	return q.QueryContext(ctx, query, args...)
+}

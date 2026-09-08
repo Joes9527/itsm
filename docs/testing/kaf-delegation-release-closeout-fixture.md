@@ -53,3 +53,10 @@ JWT 和 webhook secret 不得写入本文、日志、截图或验收报告。
 
 恢复失败视为发布收口失败：立即停止后续真实变更测试，保留证据并人工修复，不能以
 “业务链路已通过”覆盖未恢复的外部权限状态。
+
+
+## C2 后的执行前置契约
+
+正式委派使用 [验证完成契约](../contracts/kaf-verified-access-completion.md)：subject 必须由可信目录映射形成审批快照中的 Graph 对象 ID，group 必须来自同一获批快照。VPN_USERS_GROUP_ID 仍用于本夹具的受控移除；它不替代委派授权快照。单独调用 grant 工具或传入审批字符串不构成授权。
+
+C4 开始前需将 ITSM 正式迁移至 031、KAF 正式迁移至 038，配置并发布 graph_vpn_access_grant Procedure，再逐项验证本夹具的执行和清理闭环。C2 模拟测试与独占数据库升级验证不替代这一真实演练。

@@ -59,6 +59,14 @@ export default function ServiceRequestPanel({ ticketId }: ServiceRequestPanelPro
   if (loading) return null;
   if (!request) return null;
 
+  const fulfillmentLabels: Record<string, string> = {
+    awaiting_approval: '待审批', fulfilling: '履约中', unknown: '结果未知',
+    completed: '已完成', rejected: '已拒绝', cancelled: '已取消',
+  };
+  const fulfillmentLabel = request.fulfillmentState
+    ? fulfillmentLabels[request.fulfillmentState] || '结果未知'
+    : null;
+
   const fields: Array<{ label: string; value: string; ciId?: number }> = [
     { label: '成本中心 / 费用归属', value: request.costCenter || '-' },
     { label: '数据安全等级', value: request.dataClassification || '-' },
@@ -111,7 +119,7 @@ export default function ServiceRequestPanel({ ticketId }: ServiceRequestPanelPro
           </span>
         </div>
 
-        <Button
+        {!fulfillmentLabel && <Button
           type="primary"
           icon={<PlayCircle size={14} />}
           loading={starting}
@@ -121,8 +129,22 @@ export default function ServiceRequestPanel({ ticketId }: ServiceRequestPanelPro
           className="!bg-orange-500 hover:!bg-orange-600 active:!bg-orange-700 !border-orange-500 hover:!border-orange-600 shrink-0"
         >
           开始交付
-        </Button>
+        </Button>}
       </div>
+
+      {fulfillmentLabel && (
+        <div role="status" className="rounded-lg border border-slate-200 p-3 text-sm">
+          <strong>{fulfillmentLabel}</strong>
+          {request.fulfillmentState === 'unknown' && <p>执行结果待核查，请联系服务团队。</p>}
+          {request.accessResult && (
+            <div>
+              <p>{request.accessResult.outcome === 'already_present' ? '权限已存在' : '授权已验证'}</p>
+              <p>验证时间：{new Date(request.accessResult.verifiedAt).toLocaleString()}</p>
+              {request.accessResult.expiresAt && <p>申请有效期至：{new Date(request.accessResult.expiresAt).toLocaleString()}</p>}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 规格字段网格 */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -146,7 +168,7 @@ export default function ServiceRequestPanel({ ticketId }: ServiceRequestPanelPro
       </div>
 
       {/* 交付任务列表 */}
-      <div className="pt-2">
+      {!fulfillmentLabel && <div className="pt-2">
         <span className="text-xs font-bold text-slate-700 mb-2 block">资源交付任务 ({tasks.length})</span>
         {tasks.length === 0 ? (
           <Empty description="尚未开始交付" />
@@ -172,7 +194,7 @@ export default function ServiceRequestPanel({ ticketId }: ServiceRequestPanelPro
             ))}
           </div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }

@@ -24,6 +24,20 @@ type TicketAttachmentCreate struct {
 	conflict []sql.ConflictOption
 }
 
+// SetSourceKey sets the "source_key" field.
+func (_c *TicketAttachmentCreate) SetSourceKey(v string) *TicketAttachmentCreate {
+	_c.mutation.SetSourceKey(v)
+	return _c
+}
+
+// SetNillableSourceKey sets the "source_key" field if the given value is not nil.
+func (_c *TicketAttachmentCreate) SetNillableSourceKey(v *string) *TicketAttachmentCreate {
+	if v != nil {
+		_c.SetSourceKey(*v)
+	}
+	return _c
+}
+
 // SetTicketID sets the "ticket_id" field.
 func (_c *TicketAttachmentCreate) SetTicketID(v int) *TicketAttachmentCreate {
 	_c.mutation.SetTicketID(v)
@@ -167,6 +181,11 @@ func (_c *TicketAttachmentCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *TicketAttachmentCreate) check() error {
+	if v, ok := _c.mutation.SourceKey(); ok {
+		if err := ticketattachment.SourceKeyValidator(v); err != nil {
+			return &ValidationError{Name: "source_key", err: fmt.Errorf(`ent: validator failed for field "TicketAttachment.source_key": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.TicketID(); !ok {
 		return &ValidationError{Name: "ticket_id", err: errors.New(`ent: missing required field "TicketAttachment.ticket_id"`)}
 	}
@@ -259,6 +278,10 @@ func (_c *TicketAttachmentCreate) createSpec() (*TicketAttachment, *sqlgraph.Cre
 		_spec = sqlgraph.NewCreateSpec(ticketattachment.Table, sqlgraph.NewFieldSpec(ticketattachment.FieldID, field.TypeInt))
 	)
 	_spec.OnConflict = _c.conflict
+	if value, ok := _c.mutation.SourceKey(); ok {
+		_spec.SetField(ticketattachment.FieldSourceKey, field.TypeString, value)
+		_node.SourceKey = &value
+	}
 	if value, ok := _c.mutation.FileName(); ok {
 		_spec.SetField(ticketattachment.FieldFileName, field.TypeString, value)
 		_node.FileName = value
@@ -332,7 +355,7 @@ func (_c *TicketAttachmentCreate) createSpec() (*TicketAttachment, *sqlgraph.Cre
 // of the `INSERT` statement. For example:
 //
 //	client.TicketAttachment.Create().
-//		SetTicketID(v).
+//		SetSourceKey(v).
 //		OnConflict(
 //			// Update the row with the new values
 //			// the was proposed for insertion.
@@ -341,7 +364,7 @@ func (_c *TicketAttachmentCreate) createSpec() (*TicketAttachment, *sqlgraph.Cre
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.TicketAttachmentUpsert) {
-//			SetTicketID(v+v).
+//			SetSourceKey(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *TicketAttachmentCreate) OnConflict(opts ...sql.ConflictOption) *TicketAttachmentUpsertOne {
@@ -376,6 +399,24 @@ type (
 		*sql.UpdateSet
 	}
 )
+
+// SetSourceKey sets the "source_key" field.
+func (u *TicketAttachmentUpsert) SetSourceKey(v string) *TicketAttachmentUpsert {
+	u.Set(ticketattachment.FieldSourceKey, v)
+	return u
+}
+
+// UpdateSourceKey sets the "source_key" field to the value that was provided on create.
+func (u *TicketAttachmentUpsert) UpdateSourceKey() *TicketAttachmentUpsert {
+	u.SetExcluded(ticketattachment.FieldSourceKey)
+	return u
+}
+
+// ClearSourceKey clears the value of the "source_key" field.
+func (u *TicketAttachmentUpsert) ClearSourceKey() *TicketAttachmentUpsert {
+	u.SetNull(ticketattachment.FieldSourceKey)
+	return u
+}
 
 // SetTicketID sets the "ticket_id" field.
 func (u *TicketAttachmentUpsert) SetTicketID(v int) *TicketAttachmentUpsert {
@@ -559,6 +600,27 @@ func (u *TicketAttachmentUpsertOne) Update(set func(*TicketAttachmentUpsert)) *T
 		set(&TicketAttachmentUpsert{UpdateSet: update})
 	}))
 	return u
+}
+
+// SetSourceKey sets the "source_key" field.
+func (u *TicketAttachmentUpsertOne) SetSourceKey(v string) *TicketAttachmentUpsertOne {
+	return u.Update(func(s *TicketAttachmentUpsert) {
+		s.SetSourceKey(v)
+	})
+}
+
+// UpdateSourceKey sets the "source_key" field to the value that was provided on create.
+func (u *TicketAttachmentUpsertOne) UpdateSourceKey() *TicketAttachmentUpsertOne {
+	return u.Update(func(s *TicketAttachmentUpsert) {
+		s.UpdateSourceKey()
+	})
+}
+
+// ClearSourceKey clears the value of the "source_key" field.
+func (u *TicketAttachmentUpsertOne) ClearSourceKey() *TicketAttachmentUpsertOne {
+	return u.Update(func(s *TicketAttachmentUpsert) {
+		s.ClearSourceKey()
+	})
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -864,7 +926,7 @@ func (_c *TicketAttachmentCreateBulk) ExecX(ctx context.Context) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.TicketAttachmentUpsert) {
-//			SetTicketID(v+v).
+//			SetSourceKey(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *TicketAttachmentCreateBulk) OnConflict(opts ...sql.ConflictOption) *TicketAttachmentUpsertBulk {
@@ -931,6 +993,27 @@ func (u *TicketAttachmentUpsertBulk) Update(set func(*TicketAttachmentUpsert)) *
 		set(&TicketAttachmentUpsert{UpdateSet: update})
 	}))
 	return u
+}
+
+// SetSourceKey sets the "source_key" field.
+func (u *TicketAttachmentUpsertBulk) SetSourceKey(v string) *TicketAttachmentUpsertBulk {
+	return u.Update(func(s *TicketAttachmentUpsert) {
+		s.SetSourceKey(v)
+	})
+}
+
+// UpdateSourceKey sets the "source_key" field to the value that was provided on create.
+func (u *TicketAttachmentUpsertBulk) UpdateSourceKey() *TicketAttachmentUpsertBulk {
+	return u.Update(func(s *TicketAttachmentUpsert) {
+		s.UpdateSourceKey()
+	})
+}
+
+// ClearSourceKey clears the value of the "source_key" field.
+func (u *TicketAttachmentUpsertBulk) ClearSourceKey() *TicketAttachmentUpsertBulk {
+	return u.Update(func(s *TicketAttachmentUpsert) {
+		s.ClearSourceKey()
+	})
 }
 
 // SetTicketID sets the "ticket_id" field.

@@ -2,10 +2,13 @@ package service
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"itsm-backend/handlers/common/accessgrant"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,6 +26,8 @@ import (
 	"itsm-backend/ent/user"
 	"itsm-backend/service/bpmn"
 
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 )
 
@@ -33,10 +38,15 @@ type kafDelegationOutbox interface {
 // KafDelegationService owns the all-or-nothing persistence boundary for a
 // KAF BPMN delegation. Transport is intentionally deferred to the outbox
 // dispatcher after the database transaction commits.
+type ApprovedAccessReader interface {
+	ValidateAccessFailure(context.Context, *ent.Client, int, int, *ent.ProcessTask) error
+	ReadApprovedAccess(context.Context, *ent.Client, int, int, *ent.ProcessTask) (*accessgrant.ApprovedContext, error)
+}
 type KafDelegationService struct {
-	client *ent.Client
-	outbox kafDelegationOutbox
-	now    func() time.Time
+	accessReader ApprovedAccessReader
+	client       *ent.Client
+	outbox       kafDelegationOutbox
+	now          func() time.Time
 }
 
 type kafDelegatedTaskCompletionEngine interface {
@@ -66,18 +76,20 @@ const (
 // a delegated procedure. Tenant and business identifiers are derived from the
 // authenticated task, never from request input.
 type KafTaskContext struct {
-	TaskID          string                 `json:"taskId"`
-	TaskType        string                 `json:"taskType"`
-	Status          string                 `json:"status"`
-	CorrelationID   string                 `json:"correlationId"`
-	TenantID        string                 `json:"tenantId"`
-	RecordClass     string                 `json:"recordClass"`
-	AllowedActions  []string               `json:"allowedActions"`
-	ExpectedVersion int                    `json:"expectedVersion"`
-	WaitingPoint    KafWaitingPoint        `json:"waitingPoint"`
-	IntakeSnapshot  map[string]interface{} `json:"intakeSnapshot"`
-	WorkItem        KafWorkItem            `json:"workItem"`
-	Attachments     []KafAttachmentRef     `json:"attachments"`
+	BlockReason     string                       `json:"blockReason,omitempty"`
+	ApprovedAccess  *accessgrant.ApprovedContext `json:"approvedAccess,omitempty"`
+	TaskID          string                       `json:"taskId"`
+	TaskType        string                       `json:"taskType"`
+	Status          string                       `json:"status"`
+	CorrelationID   string                       `json:"correlationId"`
+	TenantID        string                       `json:"tenantId"`
+	RecordClass     string                       `json:"recordClass"`
+	AllowedActions  []string                     `json:"allowedActions"`
+	ExpectedVersion int                          `json:"expectedVersion"`
+	WaitingPoint    KafWaitingPoint              `json:"waitingPoint"`
+	IntakeSnapshot  map[string]interface{}       `json:"intakeSnapshot"`
+	WorkItem        KafWorkItem                  `json:"workItem"`
+	Attachments     []KafAttachmentRef           `json:"attachments"`
 }
 
 type KafWaitingPoint struct {
@@ -120,9 +132,10 @@ type KafActionExecution struct {
 }
 
 type KafActionPayload struct {
-	ResultSummary  string   `json:"resultSummary"`
-	EvidenceRefs   []string `json:"evidenceRefs"`
-	FailureSummary string   `json:"failureSummary"`
+	AccessResult   json.RawMessage `json:"accessResult,omitempty"`
+	ResultSummary  string          `json:"resultSummary"`
+	EvidenceRefs   []string        `json:"evidenceRefs"`
+	FailureSummary string          `json:"failureSummary"`
 }
 
 type KafActionResult struct {
@@ -144,6 +157,9 @@ type kafDelegatedTaskCursor struct {
 	TaskID int `json:"taskId"`
 }
 
+func (s *KafDelegationService) SetApprovedAccessReader(owner ApprovedAccessReader) {
+	s.accessReader = owner
+}
 func NewKafDelegationService(client *ent.Client) *KafDelegationService {
 	return &KafDelegationService{
 		client: client,
@@ -254,7 +270,20 @@ func (s *KafDelegationService) GetTaskContext(ctx context.Context, taskID string
 			}
 		}
 	}
-	return &KafTaskContext{
+	if task.CallbackAction != "" && task.CallbackAction != accessgrant.Capability {
+		return nil, fmt.Errorf("unsupported delegated capability")
+	}
+	var approved *accessgrant.ApprovedContext
+	if task.CallbackAction == accessgrant.Capability {
+		if s.accessReader == nil {
+			return nil, fmt.Errorf("approved access owner unavailable")
+		}
+		approved, err = s.accessReader.ReadApprovedAccess(ctx, s.client, task.TenantID, instance.BusinessID, task)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &KafTaskContext{ApprovedAccess: approved,
 		TaskID: task.TaskID, TaskType: task.TaskType, Status: task.Status,
 		CorrelationID: task.CorrelationID, TenantID: strconv.Itoa(task.TenantID), RecordClass: recordClass,
 		AllowedActions: kafAllowedActions(task), ExpectedVersion: instance.Version,
@@ -314,7 +343,18 @@ func (s *KafDelegationService) ListDelegatedTaskPage(ctx context.Context, limit 
 		}
 		item, err := s.GetTaskContext(ctx, task.TaskID)
 		if err != nil {
-			return nil, err
+			var blocked *accessgrant.BlockedError
+			if !errors.As(err, &blocked) {
+				return nil, err
+			}
+			// Keep required blocked work visible without exposing executable
+			// context. GetTaskContext continues to deny this task individually.
+			item = &KafTaskContext{
+				TaskID: task.TaskID, TaskType: task.TaskType,
+				Status: "domain_blocked", BlockReason: blocked.Code,
+				TenantID: strconv.Itoa(task.TenantID), CorrelationID: task.CorrelationID,
+				AllowedActions: []string{},
+			}
 		}
 		items = append(items, *item)
 	}
@@ -365,6 +405,19 @@ func (s *KafDelegationService) ExecuteAction(ctx context.Context, taskID string,
 	}
 	if err := s.authorizeKafActionTask(ctx, task, req.Action); err != nil {
 		return nil, err
+	}
+	if req.Action == kafActionFailure && task.CallbackAction == accessgrant.Capability {
+		if s.accessReader == nil {
+			return nil, fmt.Errorf("approved access owner unavailable")
+		}
+		instance, err := s.client.ProcessInstance.Get(ctx, task.ProcessInstanceID)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.accessReader.ValidateAccessFailure(ctx, s.client, task.TenantID, instance.BusinessID, task); err != nil {
+			return nil, err
+		}
+
 	}
 	if !kafActionAllowed(task, req.Action) {
 		return nil, fmt.Errorf("%w: action %q is not allowed for this delegated task", ErrKafActionInvalid, req.Action)
@@ -418,6 +471,13 @@ func (s *KafDelegationService) ExecuteAction(ctx context.Context, taskID string,
 			"procedure_ref": req.Execution.ProcedureRef, "procedure_version": req.Execution.ProcedureVersion,
 		}
 		variables["kaf_result_summary"] = strings.TrimSpace(req.Payload.ResultSummary)
+		if len(req.Payload.AccessResult) > 0 {
+			var accessResult map[string]interface{}
+			if err := json.Unmarshal(req.Payload.AccessResult, &accessResult); err != nil {
+				return nil, fmt.Errorf("%w: invalid accessResult", ErrKafActionInvalid)
+			}
+			variables["kaf_access_result"] = accessResult
+		}
 		completionEngine, ok := engine.(kafDelegatedTaskCompletionEngine)
 		if !ok {
 			_ = s.finalizeKafAction(ctx, ledger, "failed_terminal", "kaf_completion_engine_required")
@@ -540,7 +600,7 @@ func matchesKafExecution(variables map[string]interface{}, execution KafActionEx
 }
 
 func validateKafAction(req KafActionRequest) error {
-	if req.Action != kafActionComplete && req.Action != kafActionProgress && req.Action != kafActionFailure {
+	if !isSupportedKafAction(req.Action) {
 		return fmt.Errorf("%w: unsupported action", ErrKafActionInvalid)
 	}
 	if req.ExpectedVersion <= 0 || strings.TrimSpace(req.Execution.RunID) == "" || strings.TrimSpace(req.Execution.StepID) == "" ||
@@ -589,29 +649,72 @@ func (s *KafDelegationService) claimKafActionOnce(ctx context.Context, task *ent
 	if err := validateKafActionKey(task, req); err != nil {
 		return nil, false, err
 	}
+	digest, err := kafActionRequestDigest(task, req)
+	if err != nil {
+		return nil, false, err
+	}
 	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return nil, false, fmt.Errorf("start KAF action claim transaction: %w", err)
 	}
-	ledger, err := tx.KafTaskActionLedger.Create().
-		SetTenantID(task.TenantID).SetTaskID(task.TaskID).
-		SetRunID(req.Execution.RunID).SetStepID(req.Execution.StepID).
-		SetAction(req.Action).SetIdempotencyKey(req.Execution.IdempotencyKey).
-		SetCorrelationID(req.Execution.CorrelationID).
-		SetProcedureRef(req.Execution.ProcedureRef).SetProcedureVersion(req.Execution.ProcedureVersion).
-		Save(ctx)
-	if err == nil {
-		if err := tx.Commit(); err != nil {
-			return nil, false, fmt.Errorf("commit KAF action claim transaction: %w", err)
-		}
-	} else {
-		_ = tx.Rollback()
-		if !ent.IsConstraintError(err) {
-			return nil, false, fmt.Errorf("create KAF action ledger: %w", err)
-		}
-		ledger, err = s.loadKafActionLedger(ctx, task, req)
+	var ledger *ent.KafTaskActionLedger
+	if req.Action == kafActionFailure && task.CallbackAction == accessgrant.Capability {
+		// Serialize against the same instance row updated by the failure contribution CAS.
+		// SQLite's transaction/write-lock retry retains its existing serialization path.
+		instance, err := tx.ProcessInstance.Query().Where(processinstance.IDEQ(task.ProcessInstanceID), processinstance.TenantIDEQ(task.TenantID), func(selector *entsql.Selector) {
+			if selector.Dialect() != dialect.SQLite {
+				selector.ForUpdate()
+			}
+		}).Only(ctx)
 		if err != nil {
+			_ = tx.Rollback()
 			return nil, false, err
+		}
+		progress, err := ReadWorkflowFulfillment(ctx, tx.Client(), task.TenantID, instance.BusinessID)
+		if err != nil {
+			_ = tx.Rollback()
+			return nil, false, err
+		}
+		if progress.State != "fulfilling" && progress.State != "unknown" {
+			_ = tx.Rollback()
+			return nil, false, fmt.Errorf("%w: access failure is no longer reportable", ErrKafActionConflict)
+		}
+		if progress.State == "unknown" {
+			ledger, err = loadKafActionLedger(ctx, tx.Client(), task, req)
+			if err == nil {
+				err = validateKafActionLedger(ledger, task, req)
+			}
+			if err == nil && ledger.ResultStatus != "applied" {
+				err = fmt.Errorf("%w: unknown access permits only an applied original report", ErrKafActionConflict)
+			}
+			_ = tx.Rollback()
+			if err != nil {
+				return nil, false, fmt.Errorf("%w: unknown access requires identical original failure action", ErrKafActionConflict)
+			}
+		}
+	}
+	if ledger == nil {
+		ledger, err = tx.KafTaskActionLedger.Create().
+			SetTenantID(task.TenantID).SetTaskID(task.TaskID).
+			SetRunID(req.Execution.RunID).SetStepID(req.Execution.StepID).
+			SetAction(req.Action).SetIdempotencyKey(req.Execution.IdempotencyKey).
+			SetCorrelationID(req.Execution.CorrelationID).
+			SetProcedureRef(req.Execution.ProcedureRef).SetProcedureVersion(req.Execution.ProcedureVersion).
+			SetRequestDigest(digest).
+			Save(ctx)
+		if err == nil {
+			if err := tx.Commit(); err != nil {
+				return nil, false, fmt.Errorf("commit KAF action claim transaction: %w", err)
+			}
+		} else {
+			_ = tx.Rollback()
+			if !ent.IsConstraintError(err) {
+				return nil, false, fmt.Errorf("create KAF action ledger: %w", err)
+			}
+			ledger, err = loadKafActionLedger(ctx, s.client, task, req)
+			if err != nil {
+				return nil, false, err
+			}
 		}
 	}
 	if err := validateKafActionLedger(ledger, task, req); err != nil {
@@ -663,8 +766,8 @@ func waitForKafActionLedgerRetry(ctx context.Context, delay time.Duration) error
 	}
 }
 
-func (s *KafDelegationService) loadKafActionLedger(ctx context.Context, task *ent.ProcessTask, req KafActionRequest) (*ent.KafTaskActionLedger, error) {
-	ledger, err := s.client.KafTaskActionLedger.Query().Where(
+func loadKafActionLedger(ctx context.Context, client *ent.Client, task *ent.ProcessTask, req KafActionRequest) (*ent.KafTaskActionLedger, error) {
+	ledger, err := client.KafTaskActionLedger.Query().Where(
 		kaftaskactionledger.TenantIDEQ(task.TenantID), kaftaskactionledger.TaskIDEQ(task.TaskID),
 		kaftaskactionledger.RunIDEQ(req.Execution.RunID), kaftaskactionledger.StepIDEQ(req.Execution.StepID),
 	).Only(ctx)
@@ -674,7 +777,7 @@ func (s *KafDelegationService) loadKafActionLedger(ctx context.Context, task *en
 	if !ent.IsNotFound(err) {
 		return nil, fmt.Errorf("load KAF action ledger: %w", err)
 	}
-	ledger, err = s.client.KafTaskActionLedger.Query().Where(
+	ledger, err = client.KafTaskActionLedger.Query().Where(
 		kaftaskactionledger.TenantIDEQ(task.TenantID), kaftaskactionledger.IdempotencyKeyEQ(req.Execution.IdempotencyKey),
 	).Only(ctx)
 	if err != nil {
@@ -683,7 +786,34 @@ func (s *KafDelegationService) loadKafActionLedger(ctx context.Context, task *en
 	return ledger, nil
 }
 
+func kafActionRequestDigest(task *ent.ProcessTask, req KafActionRequest) (string, error) {
+	if task.CallbackAction != accessgrant.Capability && len(req.Payload.AccessResult) == 0 {
+		return "", nil // Preserve the existing non-access action replay contract.
+	}
+	raw, err := json.Marshal(map[string]interface{}{"payload": req.Payload, "expectedVersion": req.ExpectedVersion})
+	if err != nil {
+		return "", fmt.Errorf("%w: invalid action payload", ErrKafActionInvalid)
+	}
+	var canonical interface{}
+	if err := json.Unmarshal(raw, &canonical); err != nil {
+		return "", err
+	}
+	raw, err = json.Marshal(canonical)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), nil
+}
+
 func validateKafActionLedger(ledger *ent.KafTaskActionLedger, task *ent.ProcessTask, req KafActionRequest) error {
+	digest, err := kafActionRequestDigest(task, req)
+	if err != nil {
+		return err
+	}
+	if ledger.RequestDigest != digest {
+		return fmt.Errorf("%w: action payload or expected version differs from original request", ErrKafActionConflict)
+	}
 	if ledger.TenantID != task.TenantID || ledger.TaskID != task.TaskID || ledger.RunID != req.Execution.RunID || ledger.StepID != req.Execution.StepID ||
 		ledger.Action != req.Action || ledger.IdempotencyKey != req.Execution.IdempotencyKey || ledger.CorrelationID != req.Execution.CorrelationID ||
 		ledger.ProcedureRef != req.Execution.ProcedureRef || ledger.ProcedureVersion != req.Execution.ProcedureVersion {
@@ -777,6 +907,27 @@ func (s *KafDelegationService) persistNonCompletingAction(ctx context.Context, t
 	}
 	if updated != 1 {
 		return fmt.Errorf("%w: task was changed by another actor", ErrKafActionConflict)
+	}
+	if req.Action == kafActionFailure && task.CallbackAction == accessgrant.Capability {
+		// The version CAS above holds the instance lock through all contributions.
+		// A prior claim is not permission to contribute after another report/success.
+		progress, err := ReadWorkflowFulfillment(ctx, tx.Client(), task.TenantID, instance.BusinessID)
+		if err != nil {
+			return err
+		}
+		if progress.DelegatedTaskID != task.ID || (progress.State != "fulfilling" && progress.State != "unknown") {
+			return fmt.Errorf("%w: access failure is no longer reportable", ErrKafActionConflict)
+		}
+		applied, err := tx.KafTaskActionLedger.Query().Where(
+			kaftaskactionledger.TenantIDEQ(task.TenantID), kaftaskactionledger.TaskIDEQ(task.TaskID),
+			kaftaskactionledger.ActionEQ(kafActionFailure), kaftaskactionledger.ResultStatusEQ("applied"),
+		).Exist(ctx)
+		if err != nil {
+			return err
+		}
+		if applied {
+			return fmt.Errorf("%w: original access failure was already applied", ErrKafActionConflict)
+		}
 	}
 	workItem, err := tx.Ticket.Query().Where(
 		ticket.IDEQ(instance.BusinessID), ticket.TenantIDEQ(task.TenantID), ticket.DeletedAtIsNil(),
@@ -1119,4 +1270,21 @@ func kafDelegationRecordClass(ctx context.Context, client *ent.Client, instance 
 		return "", fmt.Errorf("unsupported KAF delegation work item record class %q", workItem.RecordClass)
 	}
 	return "", fmt.Errorf("unsupported KAF delegation record class %q", instance.BusinessType)
+}
+
+func isSupportedKafAction(action string) bool {
+	return action == kafActionComplete || action == kafActionProgress || action == kafActionFailure
+}
+
+func validateKafDeclaredActions(value string) error {
+	actions := splitNonEmptyCSV(value)
+	if len(actions) == 0 {
+		return fmt.Errorf("KAF allowed_actions must be declared")
+	}
+	for _, action := range actions {
+		if !isSupportedKafAction(action) {
+			return fmt.Errorf("KAF action %q is unsupported", action)
+		}
+	}
+	return nil
 }

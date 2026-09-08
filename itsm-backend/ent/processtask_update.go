@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -316,7 +317,7 @@ func (_u *ProcessTaskUpdate) ClearFormKey() *ProcessTaskUpdate {
 }
 
 // SetTaskVariables sets the "task_variables" field.
-func (_u *ProcessTaskUpdate) SetTaskVariables(v map[string]interface{}) *ProcessTaskUpdate {
+func (_u *ProcessTaskUpdate) SetTaskVariables(v jsonvalue.NumberMap) *ProcessTaskUpdate {
 	_u.mutation.SetTaskVariables(v)
 	return _u
 }
@@ -1136,7 +1137,7 @@ func (_u *ProcessTaskUpdateOne) ClearFormKey() *ProcessTaskUpdateOne {
 }
 
 // SetTaskVariables sets the "task_variables" field.
-func (_u *ProcessTaskUpdateOne) SetTaskVariables(v map[string]interface{}) *ProcessTaskUpdateOne {
+func (_u *ProcessTaskUpdateOne) SetTaskVariables(v jsonvalue.NumberMap) *ProcessTaskUpdateOne {
 	_u.mutation.SetTaskVariables(v)
 	return _u
 }

@@ -22,8 +22,6 @@ const (
 	FieldImpact = "impact"
 	// FieldUrgency holds the string denoting the urgency field in the database.
 	FieldUrgency = "urgency"
-	// FieldIncidentNumber holds the string denoting the incident_number field in the database.
-	FieldIncidentNumber = "incident_number"
 	// FieldWorkItemID holds the string denoting the work_item_id field in the database.
 	FieldWorkItemID = "work_item_id"
 	// FieldConfigurationItemID holds the string denoting the configuration_item_id field in the database.
@@ -115,7 +113,6 @@ var Columns = []string{
 	FieldSeverity,
 	FieldImpact,
 	FieldUrgency,
-	FieldIncidentNumber,
 	FieldWorkItemID,
 	FieldConfigurationItemID,
 	FieldImpactAnalysis,
@@ -167,8 +164,6 @@ var (
 	DefaultUrgency string
 	// UrgencyValidator is a validator for the "urgency" field. It is called by the builders before save.
 	UrgencyValidator func(string) error
-	// IncidentNumberValidator is a validator for the "incident_number" field. It is called by the builders before save.
-	IncidentNumberValidator func(string) error
 	// DefaultDetectedAt holds the default value on creation for the "detected_at" field.
 	DefaultDetectedAt func() time.Time
 	// DefaultEscalationLevel holds the default value on creation for the "escalation_level" field.
@@ -205,11 +200,6 @@ func ByImpact(opts ...sql.OrderTermOption) OrderOption {
 // ByUrgency orders the results by the urgency field.
 func ByUrgency(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldUrgency, opts...).ToFunc()
-}
-
-// ByIncidentNumber orders the results by the incident_number field.
-func ByIncidentNumber(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldIncidentNumber, opts...).ToFunc()
 }
 
 // ByWorkItemID orders the results by the work_item_id field.

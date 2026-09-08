@@ -44,3 +44,10 @@ func TestMustTenantIDPanicsWithoutTenant(t *testing.T) {
 	}()
 	MustTenantID(context.Background())
 }
+
+func TestTenantScopeRevokesInheritedSystemBypass(t *testing.T) {
+	ctx := WithTenantID(WithSystemBypass(context.Background()), 42)
+	if IsSystemBypass(ctx) {
+		t.Fatal("selected tenant must revoke inherited system bypass")
+	}
+}

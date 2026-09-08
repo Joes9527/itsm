@@ -51,6 +51,9 @@ type CMDBImportTask func(*sql.Selector)
 // CMDBSavedView is the predicate function for cmdbsavedview builders.
 type CMDBSavedView func(*sql.Selector)
 
+// CatalogAccessPolicy is the predicate function for catalogaccesspolicy builders.
+type CatalogAccessPolicy func(*sql.Selector)
+
 // Change is the predicate function for change builders.
 type Change func(*sql.Selector)
 
@@ -102,6 +105,9 @@ type EndpointACL func(*sql.Selector)
 // EngineerSkill is the predicate function for engineerskill builders.
 type EngineerSkill func(*sql.Selector)
 
+// ExternalIdentity is the predicate function for externalidentity builders.
+type ExternalIdentity func(*sql.Selector)
+
 // FeishuTicketSync is the predicate function for feishuticketsync builders.
 type FeishuTicketSync func(*sql.Selector)
 
@@ -132,8 +138,17 @@ type IncidentMetric func(*sql.Selector)
 // IncidentRule is the predicate function for incidentrule builders.
 type IncidentRule func(*sql.Selector)
 
+// IncidentRuleActionReceipt is the predicate function for incidentruleactionreceipt builders.
+type IncidentRuleActionReceipt func(*sql.Selector)
+
 // IncidentRuleExecution is the predicate function for incidentruleexecution builders.
 type IncidentRuleExecution func(*sql.Selector)
+
+// IntakeRequest is the predicate function for intakerequest builders.
+type IntakeRequest func(*sql.Selector)
+
+// IntakeResolutionSnapshot is the predicate function for intakeresolutionsnapshot builders.
+type IntakeResolutionSnapshot func(*sql.Selector)
 
 // ItemVersion is the predicate function for itemversion builders.
 type ItemVersion func(*sql.Selector)
@@ -275,6 +290,12 @@ type ServiceCatalog func(*sql.Selector)
 
 // ServiceRequest is the predicate function for servicerequest builders.
 type ServiceRequest func(*sql.Selector)
+
+// ServiceRequestAccessResult is the predicate function for servicerequestaccessresult builders.
+type ServiceRequestAccessResult func(*sql.Selector)
+
+// ServiceRequestAccessSnapshot is the predicate function for servicerequestaccesssnapshot builders.
+type ServiceRequestAccessSnapshot func(*sql.Selector)
 
 // StandardChange is the predicate function for standardchange builders.
 type StandardChange func(*sql.Selector)

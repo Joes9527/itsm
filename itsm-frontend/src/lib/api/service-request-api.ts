@@ -116,12 +116,6 @@ class ServiceRequestAPI {
     return this.normalizeRequest(resp);
   }
 
-  // Create service request
-  async createServiceRequest(data: CreateServiceRequestRequest): Promise<ServiceRequest> {
-    const resp = await httpClient.post<ServiceRequest>('/api/v1/service-requests', data);
-    return this.normalizeRequest(resp);
-  }
-
   // Health check
   async healthCheck(): Promise<{ status: string }> {
     // backend exposes public health endpoint under /api/v1/health

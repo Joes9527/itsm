@@ -7,6 +7,7 @@ import (
 
 	"itsm-backend/authentication"
 	"itsm-backend/authorization"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
 	enttenant "itsm-backend/ent/tenant"
 	entuser "itsm-backend/ent/user"
@@ -19,17 +20,19 @@ type Service struct {
 	repo          Repository
 	jwtSecret     string
 	logger        *zap.SugaredLogger
-	client        *ent.Client // Authentication audit and tenant queries.
+	client        *ent.Client // Restricted system pool: credential/session lookup and append-only authentication audit.
 	refreshTokens *authentication.RefreshTokenConsumer
+	sessions      *authorization.SessionReader
 }
 
-func NewService(repo Repository, jwtSecret string, logger *zap.SugaredLogger, client *ent.Client, refreshTokens *authentication.RefreshTokenConsumer) *Service {
+func NewService(repo Repository, jwtSecret string, logger *zap.SugaredLogger, client *ent.Client, refreshTokens *authentication.RefreshTokenConsumer, sessions *authorization.SessionReader) *Service {
 	return &Service{
 		repo:          repo,
 		jwtSecret:     jwtSecret,
 		logger:        logger,
 		client:        client,
 		refreshTokens: refreshTokens,
+		sessions:      sessions,
 	}
 }
 
@@ -63,6 +66,9 @@ func (s *Service) getUserPermissions(role string) []string {
 }
 
 func (s *Service) Login(ctx context.Context, username, password string, tenantID int, tenantCode string) (*AuthResult, error) {
+	// Authentication resolves credentials before a trusted tenant exists. This
+	// scope is local to authentication and is never propagated to a request.
+	ctx = tenantctx.SystemContext(ctx, "auth:login", "resolve credentials before establishing a tenant session")
 	// Resolve tenant
 	if tenantID == 0 && tenantCode != "" {
 		t, err := s.client.Tenant.Query().Where(enttenant.CodeEQ(tenantCode)).First(ctx)
@@ -93,6 +99,8 @@ func (s *Service) Login(ctx context.Context, username, password string, tenantID
 		u = toUserDomain(entUser)
 	}
 
+	ctx = tenantctx.WithTenantID(ctx, entUser.TenantID)
+
 	// Set msp_role from ent user
 	mspRoleStr := string(entUser.MspRole)
 	if mspRoleStr != "" {
@@ -113,11 +121,7 @@ func (s *Service) Login(ctx context.Context, username, password string, tenantID
 	// 对于 MSP 用户，需要将 MSP 角色转换为 RBAC 角色
 	// u.Role 是数据库中存储的 RBAC 角色（MSP 用户的 Role 是 admin）
 	// 如果用户有 MSP 角色，则从 MSP 角色映射到正确的 RBAC 角色
-	if mspRoleStr != "" {
-		if mappedRole := authorization.GetMSPRBACRole(mspRoleStr); mappedRole != "" {
-			u.Role = mappedRole
-		}
-	}
+	u.Role = authorization.EffectiveSessionRole(entUser)
 
 	// Generate tokens
 	tokens, err := authentication.IssueSessionTokens(authentication.SessionIdentity{
@@ -147,23 +151,19 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*AuthR
 	if s.client == nil {
 		return nil, fmt.Errorf("refresh authentication context unavailable")
 	}
-	userEntity, err := s.client.User.Get(ctx, identity.UserID)
+	lookupCtx := tenantctx.SystemContext(ctx, "auth:refresh", "load the signed session actor before tenant authorization")
+	userEntity, err := s.client.User.Get(lookupCtx, identity.UserID)
 	if err != nil {
 		return nil, fmt.Errorf("user not found")
 	}
 	if !userEntity.Active {
 		return nil, fmt.Errorf("user account is inactive")
 	}
-	role := string(userEntity.Role)
-	if userEntity.MspRole != "" {
-		if mappedRole := authorization.GetMSPRBACRole(string(userEntity.MspRole)); mappedRole != "" {
-			role = mappedRole
-		}
-	}
+	role := authorization.EffectiveSessionRole(userEntity)
 	if identity.Username != userEntity.Username || identity.Role != role {
 		return nil, fmt.Errorf("refresh token actor context is stale")
 	}
-	tenantEntity, err := authorization.AuthorizeTenantSession(ctx, s.client, userEntity, identity.TenantID, time.Now())
+	tenantEntity, err := authorization.AuthorizeTenantSession(lookupCtx, s.client, userEntity, identity.TenantID, time.Now())
 	if err != nil {
 		return nil, fmt.Errorf("refresh tenant rejected: %w", err)
 	}
@@ -191,10 +191,6 @@ func (s *Service) RefreshToken(ctx context.Context, refreshToken string) (*AuthR
 }
 
 // User Management
-
-func (s *Service) GetUser(ctx context.Context, id int) (*User, error) {
-	return s.repo.GetUserByID(ctx, id)
-}
 
 func (s *Service) ListUsers(ctx context.Context, tenantID int) ([]*User, error) {
 	return s.repo.ListUsers(ctx, tenantID)
@@ -268,33 +264,4 @@ func (s *Service) LogActivity(ctx context.Context, log *AuditLog) error {
 
 func (s *Service) GetAuditLogs(ctx context.Context, tenantID int, userID int) ([]*AuditLog, error) {
 	return s.repo.ListAuditLogs(ctx, tenantID, userID, 100)
-}
-
-// GetUserTenants 获取用户所属的租户列表
-func (s *Service) GetUserTenants(ctx context.Context, userID int) ([]interface{}, error) {
-	// 直接使用 ent client 查询用户关联的租户
-	user, err := s.client.User.Get(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("user not found: %w", err)
-	}
-
-	// 通过 tenant_id 直接查询租户
-	tenant, err := s.client.Tenant.Get(ctx, user.TenantID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get tenant: %w", err)
-	}
-
-	if tenant == nil {
-		return []interface{}{}, nil
-	}
-
-	return []interface{}{
-		map[string]interface{}{
-			"id":     tenant.ID,
-			"name":   tenant.Name,
-			"code":   tenant.Code,
-			"type":   tenant.Type,
-			"status": tenant.Status,
-		},
-	}, nil
 }

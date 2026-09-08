@@ -1,6 +1,8 @@
 package dto
 
 import (
+	"itsm-backend/handlers/common/accessgrant"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"time"
 )
 
@@ -15,6 +17,19 @@ type UserResponse struct {
 
 // CreateServiceRequestRequest 创建服务请求请求
 type CreateServiceRequestRequest struct {
+	RecordClass       string                  `json:"recordClass" binding:"required"`
+	CatalogVersion    string                  `json:"catalogVersion" binding:"required"`
+	FormSchemaVersion string                  `json:"formSchemaVersion" binding:"required"`
+	Priority          string                  `json:"priority,omitempty"`
+	RequesterID       int                     `json:"requesterId,omitempty"`
+	AssigneeID        *int                    `json:"assigneeId,omitempty"`
+	CTI               *creation.CTIInput      `json:"cti,omitempty"`
+	CIIDs             []int                   `json:"ciIds,omitempty"`
+	Generic           *creation.GenericInput  `json:"generic,omitempty"`
+	Incident          *creation.IncidentInput `json:"incident,omitempty"`
+	Problem           *creation.ProblemInput  `json:"problem,omitempty"`
+	Change            *creation.ChangeInput   `json:"change,omitempty"`
+
 	CatalogID int            `json:"catalogId" binding:"omitempty,min=1"`
 	Title     string         `json:"title" binding:"omitempty,max=255"`
 	Reason    string         `json:"reason" binding:"omitempty,max=500"`
@@ -68,13 +83,16 @@ type GetServiceRequestsRequest struct {
 
 // ServiceCatalogResponse 服务目录响应
 type ServiceCatalogResponse struct {
-	ID             int    `json:"id"`
-	Name           string `json:"name"`
-	Category       string `json:"category"`
-	Description    string `json:"description"`
-	DeliveryTime   string `json:"deliveryTime"`
-	CITypeID       int    `json:"ciTypeId,omitempty"`
-	CloudServiceID int    `json:"cloudServiceId,omitempty"`
+	AccessPolicy      *accessgrant.Policy `json:"accessPolicy,omitempty"`
+	CatalogVersion    string              `json:"catalogVersion,omitempty"`
+	FormSchemaVersion string              `json:"formSchemaVersion,omitempty"`
+	ID                int                 `json:"id"`
+	Name              string              `json:"name"`
+	Category          string              `json:"category"`
+	Description       string              `json:"description"`
+	DeliveryTime      string              `json:"deliveryTime"`
+	CITypeID          int                 `json:"ciTypeId,omitempty"`
+	CloudServiceID    int                 `json:"cloudServiceId,omitempty"`
 	// ProcessDefinitionKey 是该目录条目专属的 BPMN 流程定义 Key（可选），非空时优先于
 	// businessType+businessSubType 的通用流程绑定解析。
 	ProcessDefinitionKey string `json:"processDefinitionKey,omitempty"`
@@ -87,24 +105,26 @@ type ServiceCatalogResponse struct {
 	// 公网IP/IP白名单/资源过期时间/合规确认"这组基础设施字段，不自行判断 service_type
 	// （见 handlers/service_catalog/entity.go 的 RequiresInfraFields 函数注释）。
 	RequiresInfraFields bool `json:"requiresInfraFields"`
-	// TargetClass 是该目录项对应的 WorkItem 目标类：service_request_item|incident|change_request，
-	// 由后端根据 itsm_type 计算并在创建/更新时同步落库（见 handlers/service_catalog 的
-	// computeTargetClass），是 service_request 域路由判断（是否走 Incident 创建路径）的唯一
-	// 权威依据，itsm_type 不再承担这个职责（design doc §7.2）。
-	TargetClass string                   `json:"targetClass,omitempty"`
-	Fields      []map[string]interface{} `json:"fields,omitempty"`
-	CreatedAt   time.Time                `json:"createdAt"`
-	UpdatedAt   time.Time                `json:"updatedAt"`
+	// TargetClass is the explicitly declared professional class.
+	RequiresApproval  bool                     `json:"requiresApproval"`
+	SLAResponseTime   int                      `json:"slaResponseTime"`
+	SLAResolutionTime int                      `json:"slaResolutionTime"`
+	TargetClass       string                   `json:"targetClass,omitempty"`
+	Fields            []map[string]interface{} `json:"fields,omitempty"`
+	CreatedAt         time.Time                `json:"createdAt"`
+	UpdatedAt         time.Time                `json:"updatedAt"`
 }
 
 // ServiceRequestResponse 服务请求响应
 type ServiceRequestResponse struct {
-	ID          int            `json:"id"`
-	TicketID    int            `json:"ticketId"`
-	CatalogID   int            `json:"catalogId"`
-	RequesterID int            `json:"requesterId"`
-	CIID        int            `json:"ciId,omitempty"`
-	FormData    map[string]any `json:"formData,omitempty"`
+	FulfillmentState string            `json:"fulfillmentState,omitempty"`
+	AccessResult     *accessgrant.View `json:"accessResult,omitempty"`
+	ID               int               `json:"id"`
+	TicketID         int               `json:"ticketId"`
+	CatalogID        int               `json:"catalogId"`
+	RequesterID      int               `json:"requesterId"`
+	CIID             int               `json:"ciId,omitempty"`
+	FormData         map[string]any    `json:"formData,omitempty"`
 
 	CostCenter         string     `json:"costCenter,omitempty"`
 	DataClassification string     `json:"dataClassification,omitempty"`
@@ -158,32 +178,39 @@ type ServiceRequestListResponse struct {
 
 // CreateServiceCatalogRequest 创建服务目录请求
 type CreateServiceCatalogRequest struct {
-	Name           string `json:"name" binding:"required,max=255"`
-	Category       string `json:"category" binding:"required,max=100"`
-	Description    string `json:"description" binding:"omitempty,max=1000"`
-	DeliveryTime   string `json:"deliveryTime" binding:"omitempty,max=50"`
-	CITypeID       int    `json:"ciTypeId,omitempty"`
-	CloudServiceID int    `json:"cloudServiceId,omitempty"`
-	// ProcessDefinitionKey 可选，指定该目录条目提交后走哪个 BPMN 流程定义，
-	// 不填则沿用 businessType+businessSubType 的通用流程绑定解析。
-	ProcessDefinitionKey string                   `json:"processDefinitionKey" binding:"omitempty,max=255"`
-	Status               string                   `json:"status" binding:"omitempty,oneof=enabled disabled"`
-	Fields               []map[string]interface{} `json:"fields,omitempty"`
-	// ServiceType 决定是否需要基础设施字段，见 handlers/service_catalog.RequiresInfraFields。
-	// 取值：vm|rds|oss|network|storage|security|custom（ent schema servicecatalog.go 字段注释）。
-	ServiceType string `json:"serviceType" binding:"omitempty,max=50"`
-}
-
-// UpdateServiceCatalogRequest 更新服务目录请求
-type UpdateServiceCatalogRequest struct {
-	Name                 string                   `json:"name" binding:"omitempty,max=255"`
-	Category             string                   `json:"category" binding:"omitempty,max=100"`
+	AccessPolicy         *accessgrant.Policy      `json:"accessPolicy,omitempty"`
+	Name                 string                   `json:"name" binding:"required,max=255"`
+	Category             string                   `json:"category" binding:"required,max=100"`
 	Description          string                   `json:"description" binding:"omitempty,max=1000"`
 	DeliveryTime         string                   `json:"deliveryTime" binding:"omitempty,max=50"`
-	CITypeID             int                      `json:"ciTypeId,omitempty"`
-	CloudServiceID       int                      `json:"cloudServiceId,omitempty"`
+	CITypeID             int                      `json:"ciTypeId" binding:"min=0"`
+	CloudServiceID       int                      `json:"cloudServiceId" binding:"min=0"`
 	ProcessDefinitionKey string                   `json:"processDefinitionKey" binding:"omitempty,max=255"`
 	Status               string                   `json:"status" binding:"omitempty,oneof=enabled disabled"`
 	Fields               []map[string]interface{} `json:"fields,omitempty"`
 	ServiceType          string                   `json:"serviceType" binding:"omitempty,max=50"`
+	TargetClass          string                   `json:"targetClass" binding:"omitempty,max=50"`
+	RequiresApproval     bool                     `json:"requiresApproval"`
+	SLAResponseTime      int                      `json:"slaResponseTime" binding:"min=0"`
+	SLAResolutionTime    int                      `json:"slaResolutionTime" binding:"min=0"`
+}
+
+// Update is a conditional patch; supplied zero/empty values clear configuration.
+type UpdateServiceCatalogRequest struct {
+	AccessPolicy           *accessgrant.Policy      `json:"accessPolicy,omitempty"`
+	ExpectedCatalogVersion string                   `json:"expectedCatalogVersion" binding:"required"`
+	Name                   *string                  `json:"name" binding:"omitempty,max=255"`
+	Category               *string                  `json:"category" binding:"omitempty,max=100"`
+	Description            *string                  `json:"description" binding:"omitempty,max=1000"`
+	DeliveryTime           *string                  `json:"deliveryTime" binding:"omitempty,max=50"`
+	CITypeID               *int                     `json:"ciTypeId" binding:"omitempty,min=0"`
+	CloudServiceID         *int                     `json:"cloudServiceId" binding:"omitempty,min=0"`
+	ProcessDefinitionKey   *string                  `json:"processDefinitionKey" binding:"omitempty,max=255"`
+	Status                 *string                  `json:"status" binding:"omitempty,oneof=enabled disabled"`
+	Fields                 []map[string]interface{} `json:"fields,omitempty"`
+	ServiceType            *string                  `json:"serviceType" binding:"omitempty,max=50"`
+	TargetClass            *string                  `json:"targetClass" binding:"omitempty,max=50"`
+	RequiresApproval       *bool                    `json:"requiresApproval"`
+	SLAResponseTime        *int                     `json:"slaResponseTime" binding:"omitempty,min=0"`
+	SLAResolutionTime      *int                     `json:"slaResolutionTime" binding:"omitempty,min=0"`
 }

@@ -82,19 +82,13 @@ func (s *ProcessTriggerService) TriggerProcess(ctx context.Context, req *dto.Pro
 		processDefKey = binding.ProcessDefinitionKey
 	}
 
-	// 3. 获取流程定义（仅要求 IsActive，不过滤 IsLatest 以支持触发特定版本）
-	definition, err := s.client.ProcessDefinition.Query().
-		Where(
-			processdefinition.Key(processDefKey),
-			processdefinition.TenantID(req.TenantID),
-			processdefinition.IsActive(true),
-		).
-		First(ctx)
+	// Resolve the same executable version as Catalog and normal engine starts.
+	definition, err := selectExecutableProcessDefinition(ctx, s.client, req.TenantID, processDefKey, 0)
 	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("流程定义 %s 不存在", processDefKey)
-		}
 		return nil, errors.Wrap(err, "查询流程定义失败")
+	}
+	if definition == nil {
+		return nil, fmt.Errorf("流程定义 %s 不存在", processDefKey)
 	}
 
 	// 4. 构建 businessKey

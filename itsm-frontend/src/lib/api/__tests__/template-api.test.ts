@@ -118,14 +118,6 @@ describe('TemplateApi', () => {
     });
   });
 
-  describe('createTicketFromTemplate', () => {
-    it('should create ticket from template', async () => {
-      mockPost.mockResolvedValue({ id: 1 });
-      await TemplateApi.createTicketFromTemplate({ templateId: '1' } as any);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/tickets/templates/create-ticket', { templateId: '1' });
-    });
-  });
-
   describe('getCategories', () => {
     it('should get categories', async () => {
       mockGet.mockResolvedValue([]);

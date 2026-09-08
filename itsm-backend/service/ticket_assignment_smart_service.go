@@ -8,7 +8,7 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
-	"itsm-backend/ent/ticketassignmentrule"
+	"itsm-backend/ent/ticket"
 
 	"go.uber.org/zap"
 )
@@ -39,49 +39,28 @@ func (s *TicketAssignmentSmartService) AutoAssign(
 	ctx context.Context,
 	ticketID, tenantID int,
 ) (*dto.AutoAssignResponse, error) {
-	s.logger.Infow("Auto assigning ticket", "ticket_id", ticketID, "tenant_id", tenantID)
-
-	// 获取工单信息
-	ticketEntity, err := s.client.Ticket.Get(ctx, ticketID)
+	tx, err := s.client.Tx(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("ticket not found: %w", err)
+		return nil, err
 	}
-
-	if ticketEntity.TenantID != tenantID {
-		return nil, fmt.Errorf("ticket not found")
-	}
-
-	// 1. 先尝试基于规则分配
-	ruleAssigned, err := s.tryRuleBasedAssignment(ctx, ticketEntity, tenantID)
-	if err == nil && ruleAssigned != nil {
-		return ruleAssigned, nil
-	}
-
-	// 2. 如果没有匹配的规则，使用智能分配
-	var categoryID *int
-	if ticketEntity.CategoryID > 0 {
-		categoryID = &ticketEntity.CategoryID
-	}
-	req := &AssignmentRequest{
-		TicketID:   ticketID,
-		CategoryID: categoryID,
-		Priority:   ticketEntity.Priority,
-		TenantID:   tenantID,
-		AutoAssign: true,
-	}
-
-	assignment, err := s.assignmentService.AssignTicket(ctx, req)
+	defer tx.Rollback()
+	item, err := tx.Ticket.Query().Where(ticket.IDEQ(ticketID), ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).Only(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to auto assign: %w", err)
+		return nil, err
 	}
-
-	return &dto.AutoAssignResponse{
-		TicketID:       assignment.TicketID,
-		AssignedTo:     assignment.AssignedTo,
-		AssignmentType: assignment.AssignmentType,
-		Reason:         assignment.Reason,
-		Score:          assignment.Score,
-	}, nil
+	target, err := s.prepareCreation(ctx, tx, item)
+	if err != nil {
+		return nil, err
+	}
+	if target != nil {
+		if err := tx.Ticket.UpdateOneID(item.ID).SetAssigneeID(*target).Exec(ctx); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return &dto.AutoAssignResponse{TicketID: ticketID, AssignedTo: target, AssignmentType: "auto", Reason: "configured assignment policy"}, nil
 }
 
 // GetAssignRecommendations 获取分配推荐
@@ -156,66 +135,6 @@ func (s *TicketAssignmentSmartService) GetAssignRecommendations(
 	}
 
 	return recommendations, nil
-}
-
-// tryRuleBasedAssignment 尝试基于规则分配
-func (s *TicketAssignmentSmartService) tryRuleBasedAssignment(
-	ctx context.Context,
-	ticketEntity *ent.Ticket,
-	tenantID int,
-) (*dto.AutoAssignResponse, error) {
-	// 获取所有激活的规则，按优先级排序
-	rules, err := s.client.TicketAssignmentRule.Query().
-		Where(
-			ticketassignmentrule.TenantID(tenantID),
-			ticketassignmentrule.IsActive(true),
-		).
-		Order(ent.Desc(ticketassignmentrule.FieldPriority)).
-		All(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// 遍历规则，找到第一个匹配的
-	for _, rule := range rules {
-		matched, _ := s.ruleService.matchRule(ctx, rule, ticketEntity)
-		if matched {
-			// 执行规则动作
-			assignedTo, score, err := s.ruleService.executeRuleAction(ctx, rule, ticketEntity)
-			if err != nil {
-				s.logger.Warnw("Failed to execute rule action", "error", err, "rule_id", rule.ID)
-				continue
-			}
-
-			// 更新工单
-			_, err = s.client.Ticket.UpdateOneID(ticketEntity.ID).
-				SetAssigneeID(*assignedTo).
-				Save(ctx)
-			if err != nil {
-				return nil, fmt.Errorf("failed to assign ticket: %w", err)
-			}
-
-			// 更新规则执行统计
-			now := time.Now()
-			_, err = s.client.TicketAssignmentRule.UpdateOneID(rule.ID).
-				AddExecutionCount(1).
-				SetLastExecutedAt(now).
-				Save(ctx)
-			if err != nil {
-				s.logger.Warnw("Failed to update rule execution count", "error", err)
-			}
-
-			return &dto.AutoAssignResponse{
-				TicketID:       ticketEntity.ID,
-				AssignedTo:     assignedTo,
-				AssignmentType: "rule",
-				Reason:         fmt.Sprintf("基于规则 '%s' 自动分配", rule.Name),
-				Score:          score,
-			}, nil
-		}
-	}
-
-	return nil, fmt.Errorf("no matching rule found")
 }
 
 // generateRecommendationReason 生成推荐理由

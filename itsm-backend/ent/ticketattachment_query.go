@@ -334,12 +334,12 @@ func (_q *TicketAttachmentQuery) WithUploader(opts ...func(*UserQuery)) *TicketA
 // Example:
 //
 //	var v []struct {
-//		TicketID int `json:"ticket_id,omitempty"`
+//		SourceKey string `json:"source_key,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.TicketAttachment.Query().
-//		GroupBy(ticketattachment.FieldTicketID).
+//		GroupBy(ticketattachment.FieldSourceKey).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *TicketAttachmentQuery) GroupBy(field string, fields ...string) *TicketAttachmentGroupBy {
@@ -357,11 +357,11 @@ func (_q *TicketAttachmentQuery) GroupBy(field string, fields ...string) *Ticket
 // Example:
 //
 //	var v []struct {
-//		TicketID int `json:"ticket_id,omitempty"`
+//		SourceKey string `json:"source_key,omitempty"`
 //	}
 //
 //	client.TicketAttachment.Query().
-//		Select(ticketattachment.FieldTicketID).
+//		Select(ticketattachment.FieldSourceKey).
 //		Scan(ctx, &v)
 func (_q *TicketAttachmentQuery) Select(fields ...string) *TicketAttachmentSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

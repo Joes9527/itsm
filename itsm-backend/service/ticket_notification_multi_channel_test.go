@@ -47,7 +47,7 @@ func createNotifTestData(t *testing.T, client *ent.Client, ctx context.Context) 
 	require.NoError(t, err)
 
 	ticket, err := client.Ticket.Create().
-		SetTitle("Test").SetDescription("d").SetPriority("medium").SetType("incident").
+		SetTitle("Test").SetDescription("d").SetPriority("medium").
 		SetStatus("open").SetTicketNumber("TKT-TEST-001").SetTenantID(tenant.ID).SetRequesterID(user.ID).
 		Save(ctx)
 	require.NoError(t, err)

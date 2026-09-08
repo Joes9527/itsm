@@ -443,6 +443,15 @@ var RegisteredMigrations = []Migration{
 		Description: "Remove WorkItem-owned extension fields and retire legacy TicketApproval and Workflow runtimes",
 		RollbackSQL: "",
 	},
+	{Version: "023_add_process_start_request_digest", Description: "Persist immutable original BPMN start context for durable replay conflicts", RollbackSQL: processStartRequestDigestDevelopmentResetSQL},
+	{Version: "024_incident_rule_action_receipts", Description: "Freeze creation rule decisions and commit action receipts with domain effects", RollbackSQL: incidentRuleActionReceiptsDevelopmentResetSQL},
+	{Version: "025_email_attachment_source_identity", Description: "Persist scoped inbound attachment identity for recoverable delivery", RollbackSQL: emailAttachmentSourceIdentityDevelopmentResetSQL},
+	{Version: "026_intake_actor_provenance", Description: "Preserve immutable native actor provenance for Intake and committed tenant policy effects", RollbackSQL: intakeActorProvenanceDevelopmentResetSQL},
+	{Version: "027_work_item_identity_field_retirement", Description: "Retire duplicate Ticket type and Incident number identity fields"},
+	{Version: "028_service_request_work_item_authority", Description: "Use WorkItem authority for ServiceRequest shared fields"},
+	{Version: "029_catalog_target_class_authority", Description: "Retire legacy Catalog class inference"},
+	{Version: "030_catalog_access_policy_result", Description: "Finite catalog access policy and immutable verified results"},
+	{Version: "031_kaf_action_request_digest", Description: "Bind verified access completion to immutable canonical request digest"},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -1093,6 +1102,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
 	case "021_add_callback_optional_declared":
 		return `ALTER TABLE process_callback_outboxes
     ADD COLUMN IF NOT EXISTS optional_declared boolean NOT NULL DEFAULT false;`
+	case "031_kaf_action_request_digest":
+		return kafActionRequestDigestSQL
+	case "030_catalog_access_policy_result":
+		return catalogAccessPolicyResultSQL
+	case "029_catalog_target_class_authority":
+		return catalogTargetClassAuthoritySQL
+	case "028_service_request_work_item_authority":
+		return serviceRequestWorkItemAuthoritySQL
+	case "027_work_item_identity_field_retirement":
+		return workItemIdentityRetirementSQL
+	case "026_intake_actor_provenance":
+		return intakeActorProvenanceSQL
+	case "025_email_attachment_source_identity":
+		return emailAttachmentSourceIdentitySQL
+	case "024_incident_rule_action_receipts":
+		return incidentRuleActionReceiptsSQL
+	case "023_add_process_start_request_digest":
+		return processStartRequestDigestSQL
 	case "022_drop_professional_extension_shared_fields":
 		return professionalExtensionSharedFieldsSQL
 	default:

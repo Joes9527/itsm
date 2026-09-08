@@ -2,6 +2,7 @@ package bpmn
 
 import (
 	"fmt"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"reflect"
 )
 
@@ -35,11 +36,12 @@ const (
 // handler. Skipped-optional is reserved for the orchestration layer and is not
 // a valid handler result.
 type CallbackEffect struct {
-	Status      CallbackEffectStatus
-	BlockCode   CallbackBlockCode
-	Message     string
-	OutputVars  map[string]interface{}
-	UpdatedData map[string]interface{}
+	CreationResult *creation.CreateWorkItemResult
+	Status         CallbackEffectStatus
+	BlockCode      CallbackBlockCode
+	Message        string
+	OutputVars     map[string]interface{}
+	UpdatedData    map[string]interface{}
 }
 
 func AppliedEffect(message string, output map[string]interface{}) *CallbackEffect {

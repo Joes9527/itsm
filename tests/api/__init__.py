@@ -255,9 +255,12 @@ class ITSMAPIClient(APIClient):
         response = self.get(f'/api/v1/tickets/{ticket_id}')
         return response.json()
 
-    def create_ticket(self, data: Dict) -> Dict:
-        """创建工单"""
-        response = self.post('/api/v1/tickets', json=data)
+    def create_ticket(self, data: Dict, *, idempotency_key: str) -> Dict:
+        """创建工单；重试同一提交时复用调用方保存的 key。返回共享创建收据。"""
+        if not idempotency_key.strip():
+            raise ValueError("idempotency_key is required")
+        response = self.post('/api/v1/tickets', json=data,
+                             headers={"Idempotency-Key": idempotency_key})
         return response.json()
 
     def update_ticket(self, ticket_id: int, data: Dict) -> Dict:

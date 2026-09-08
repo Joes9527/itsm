@@ -6,8 +6,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"itsm-backend/ent/incident"
 	"itsm-backend/ent/incidentrule"
+	"itsm-backend/ent/incidentruleactionreceipt"
 	"itsm-backend/ent/incidentruleexecution"
+	"itsm-backend/ent/outboxevent"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -26,6 +29,90 @@ type IncidentRuleExecutionCreate struct {
 // SetRuleID sets the "rule_id" field.
 func (_c *IncidentRuleExecutionCreate) SetRuleID(v int) *IncidentRuleExecutionCreate {
 	_c.mutation.SetRuleID(v)
+	return _c
+}
+
+// SetNillableRuleID sets the "rule_id" field if the given value is not nil.
+func (_c *IncidentRuleExecutionCreate) SetNillableRuleID(v *int) *IncidentRuleExecutionCreate {
+	if v != nil {
+		_c.SetRuleID(*v)
+	}
+	return _c
+}
+
+// SetExecutionKind sets the "execution_kind" field.
+func (_c *IncidentRuleExecutionCreate) SetExecutionKind(v string) *IncidentRuleExecutionCreate {
+	_c.mutation.SetExecutionKind(v)
+	return _c
+}
+
+// SetNillableExecutionKind sets the "execution_kind" field if the given value is not nil.
+func (_c *IncidentRuleExecutionCreate) SetNillableExecutionKind(v *string) *IncidentRuleExecutionCreate {
+	if v != nil {
+		_c.SetExecutionKind(*v)
+	}
+	return _c
+}
+
+// SetExecutionKey sets the "execution_key" field.
+func (_c *IncidentRuleExecutionCreate) SetExecutionKey(v string) *IncidentRuleExecutionCreate {
+	_c.mutation.SetExecutionKey(v)
+	return _c
+}
+
+// SetNillableExecutionKey sets the "execution_key" field if the given value is not nil.
+func (_c *IncidentRuleExecutionCreate) SetNillableExecutionKey(v *string) *IncidentRuleExecutionCreate {
+	if v != nil {
+		_c.SetExecutionKey(*v)
+	}
+	return _c
+}
+
+// SetSourceEventID sets the "source_event_id" field.
+func (_c *IncidentRuleExecutionCreate) SetSourceEventID(v int) *IncidentRuleExecutionCreate {
+	_c.mutation.SetSourceEventID(v)
+	return _c
+}
+
+// SetNillableSourceEventID sets the "source_event_id" field if the given value is not nil.
+func (_c *IncidentRuleExecutionCreate) SetNillableSourceEventID(v *int) *IncidentRuleExecutionCreate {
+	if v != nil {
+		_c.SetSourceEventID(*v)
+	}
+	return _c
+}
+
+// SetActorID sets the "actor_id" field.
+func (_c *IncidentRuleExecutionCreate) SetActorID(v int) *IncidentRuleExecutionCreate {
+	_c.mutation.SetActorID(v)
+	return _c
+}
+
+// SetNillableActorID sets the "actor_id" field if the given value is not nil.
+func (_c *IncidentRuleExecutionCreate) SetNillableActorID(v *int) *IncidentRuleExecutionCreate {
+	if v != nil {
+		_c.SetActorID(*v)
+	}
+	return _c
+}
+
+// SetSource sets the "source" field.
+func (_c *IncidentRuleExecutionCreate) SetSource(v string) *IncidentRuleExecutionCreate {
+	_c.mutation.SetSource(v)
+	return _c
+}
+
+// SetNillableSource sets the "source" field if the given value is not nil.
+func (_c *IncidentRuleExecutionCreate) SetNillableSource(v *string) *IncidentRuleExecutionCreate {
+	if v != nil {
+		_c.SetSource(*v)
+	}
+	return _c
+}
+
+// SetFrozenActions sets the "frozen_actions" field.
+func (_c *IncidentRuleExecutionCreate) SetFrozenActions(v []map[string]interface{}) *IncidentRuleExecutionCreate {
+	_c.mutation.SetFrozenActions(v)
 	return _c
 }
 
@@ -173,6 +260,31 @@ func (_c *IncidentRuleExecutionCreate) SetNillableUpdatedAt(v *time.Time) *Incid
 	return _c
 }
 
+// SetIncident sets the "incident" edge to the Incident entity.
+func (_c *IncidentRuleExecutionCreate) SetIncident(v *Incident) *IncidentRuleExecutionCreate {
+	return _c.SetIncidentID(v.ID)
+}
+
+// SetSourceEvent sets the "source_event" edge to the OutboxEvent entity.
+func (_c *IncidentRuleExecutionCreate) SetSourceEvent(v *OutboxEvent) *IncidentRuleExecutionCreate {
+	return _c.SetSourceEventID(v.ID)
+}
+
+// AddActionReceiptIDs adds the "action_receipts" edge to the IncidentRuleActionReceipt entity by IDs.
+func (_c *IncidentRuleExecutionCreate) AddActionReceiptIDs(ids ...int) *IncidentRuleExecutionCreate {
+	_c.mutation.AddActionReceiptIDs(ids...)
+	return _c
+}
+
+// AddActionReceipts adds the "action_receipts" edges to the IncidentRuleActionReceipt entity.
+func (_c *IncidentRuleExecutionCreate) AddActionReceipts(v ...*IncidentRuleActionReceipt) *IncidentRuleExecutionCreate {
+	ids := make([]int, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddActionReceiptIDs(ids...)
+}
+
 // SetRule sets the "rule" edge to the IncidentRule entity.
 func (_c *IncidentRuleExecutionCreate) SetRule(v *IncidentRule) *IncidentRuleExecutionCreate {
 	return _c.SetRuleID(v.ID)
@@ -213,6 +325,10 @@ func (_c *IncidentRuleExecutionCreate) ExecX(ctx context.Context) {
 
 // defaults sets the default values of the builder before save.
 func (_c *IncidentRuleExecutionCreate) defaults() {
+	if _, ok := _c.mutation.ExecutionKind(); !ok {
+		v := incidentruleexecution.DefaultExecutionKind
+		_c.mutation.SetExecutionKind(v)
+	}
 	if _, ok := _c.mutation.Status(); !ok {
 		v := incidentruleexecution.DefaultStatus
 		_c.mutation.SetStatus(v)
@@ -233,12 +349,22 @@ func (_c *IncidentRuleExecutionCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *IncidentRuleExecutionCreate) check() error {
-	if _, ok := _c.mutation.RuleID(); !ok {
-		return &ValidationError{Name: "rule_id", err: errors.New(`ent: missing required field "IncidentRuleExecution.rule_id"`)}
-	}
 	if v, ok := _c.mutation.RuleID(); ok {
 		if err := incidentruleexecution.RuleIDValidator(v); err != nil {
 			return &ValidationError{Name: "rule_id", err: fmt.Errorf(`ent: validator failed for field "IncidentRuleExecution.rule_id": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.ExecutionKind(); !ok {
+		return &ValidationError{Name: "execution_kind", err: errors.New(`ent: missing required field "IncidentRuleExecution.execution_kind"`)}
+	}
+	if v, ok := _c.mutation.SourceEventID(); ok {
+		if err := incidentruleexecution.SourceEventIDValidator(v); err != nil {
+			return &ValidationError{Name: "source_event_id", err: fmt.Errorf(`ent: validator failed for field "IncidentRuleExecution.source_event_id": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.ActorID(); ok {
+		if err := incidentruleexecution.ActorIDValidator(v); err != nil {
+			return &ValidationError{Name: "actor_id", err: fmt.Errorf(`ent: validator failed for field "IncidentRuleExecution.actor_id": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.Status(); !ok {
@@ -260,9 +386,6 @@ func (_c *IncidentRuleExecutionCreate) check() error {
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
 		return &ValidationError{Name: "updated_at", err: errors.New(`ent: missing required field "IncidentRuleExecution.updated_at"`)}
-	}
-	if len(_c.mutation.RuleIDs()) == 0 {
-		return &ValidationError{Name: "rule", err: errors.New(`ent: missing required edge "IncidentRuleExecution.rule"`)}
 	}
 	return nil
 }
@@ -291,9 +414,25 @@ func (_c *IncidentRuleExecutionCreate) createSpec() (*IncidentRuleExecution, *sq
 		_spec = sqlgraph.NewCreateSpec(incidentruleexecution.Table, sqlgraph.NewFieldSpec(incidentruleexecution.FieldID, field.TypeInt))
 	)
 	_spec.OnConflict = _c.conflict
-	if value, ok := _c.mutation.IncidentID(); ok {
-		_spec.SetField(incidentruleexecution.FieldIncidentID, field.TypeInt, value)
-		_node.IncidentID = value
+	if value, ok := _c.mutation.ExecutionKind(); ok {
+		_spec.SetField(incidentruleexecution.FieldExecutionKind, field.TypeString, value)
+		_node.ExecutionKind = value
+	}
+	if value, ok := _c.mutation.ExecutionKey(); ok {
+		_spec.SetField(incidentruleexecution.FieldExecutionKey, field.TypeString, value)
+		_node.ExecutionKey = value
+	}
+	if value, ok := _c.mutation.ActorID(); ok {
+		_spec.SetField(incidentruleexecution.FieldActorID, field.TypeInt, value)
+		_node.ActorID = value
+	}
+	if value, ok := _c.mutation.Source(); ok {
+		_spec.SetField(incidentruleexecution.FieldSource, field.TypeString, value)
+		_node.Source = value
+	}
+	if value, ok := _c.mutation.FrozenActions(); ok {
+		_spec.SetField(incidentruleexecution.FieldFrozenActions, field.TypeJSON, value)
+		_node.FrozenActions = value
 	}
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(incidentruleexecution.FieldStatus, field.TypeString, value)
@@ -338,6 +477,56 @@ func (_c *IncidentRuleExecutionCreate) createSpec() (*IncidentRuleExecution, *sq
 	if value, ok := _c.mutation.UpdatedAt(); ok {
 		_spec.SetField(incidentruleexecution.FieldUpdatedAt, field.TypeTime, value)
 		_node.UpdatedAt = value
+	}
+	if nodes := _c.mutation.IncidentIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   incidentruleexecution.IncidentTable,
+			Columns: []string{incidentruleexecution.IncidentColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(incident.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.IncidentID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.SourceEventIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: false,
+			Table:   incidentruleexecution.SourceEventTable,
+			Columns: []string{incidentruleexecution.SourceEventColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(outboxevent.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.SourceEventID = nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.ActionReceiptsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   incidentruleexecution.ActionReceiptsTable,
+			Columns: []string{incidentruleexecution.ActionReceiptsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(incidentruleactionreceipt.FieldID, field.TypeInt),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.RuleIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -420,6 +609,12 @@ func (u *IncidentRuleExecutionUpsert) UpdateRuleID() *IncidentRuleExecutionUpser
 	return u
 }
 
+// ClearRuleID clears the value of the "rule_id" field.
+func (u *IncidentRuleExecutionUpsert) ClearRuleID() *IncidentRuleExecutionUpsert {
+	u.SetNull(incidentruleexecution.FieldRuleID)
+	return u
+}
+
 // SetIncidentID sets the "incident_id" field.
 func (u *IncidentRuleExecutionUpsert) SetIncidentID(v int) *IncidentRuleExecutionUpsert {
 	u.Set(incidentruleexecution.FieldIncidentID, v)
@@ -429,12 +624,6 @@ func (u *IncidentRuleExecutionUpsert) SetIncidentID(v int) *IncidentRuleExecutio
 // UpdateIncidentID sets the "incident_id" field to the value that was provided on create.
 func (u *IncidentRuleExecutionUpsert) UpdateIncidentID() *IncidentRuleExecutionUpsert {
 	u.SetExcluded(incidentruleexecution.FieldIncidentID)
-	return u
-}
-
-// AddIncidentID adds v to the "incident_id" field.
-func (u *IncidentRuleExecutionUpsert) AddIncidentID(v int) *IncidentRuleExecutionUpsert {
-	u.Add(incidentruleexecution.FieldIncidentID, v)
 	return u
 }
 
@@ -634,6 +823,26 @@ func (u *IncidentRuleExecutionUpsert) UpdateUpdatedAt() *IncidentRuleExecutionUp
 //		Exec(ctx)
 func (u *IncidentRuleExecutionUpsertOne) UpdateNewValues() *IncidentRuleExecutionUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.ExecutionKind(); exists {
+			s.SetIgnore(incidentruleexecution.FieldExecutionKind)
+		}
+		if _, exists := u.create.mutation.ExecutionKey(); exists {
+			s.SetIgnore(incidentruleexecution.FieldExecutionKey)
+		}
+		if _, exists := u.create.mutation.SourceEventID(); exists {
+			s.SetIgnore(incidentruleexecution.FieldSourceEventID)
+		}
+		if _, exists := u.create.mutation.ActorID(); exists {
+			s.SetIgnore(incidentruleexecution.FieldActorID)
+		}
+		if _, exists := u.create.mutation.Source(); exists {
+			s.SetIgnore(incidentruleexecution.FieldSource)
+		}
+		if _, exists := u.create.mutation.FrozenActions(); exists {
+			s.SetIgnore(incidentruleexecution.FieldFrozenActions)
+		}
+	}))
 	return u
 }
 
@@ -678,17 +887,17 @@ func (u *IncidentRuleExecutionUpsertOne) UpdateRuleID() *IncidentRuleExecutionUp
 	})
 }
 
+// ClearRuleID clears the value of the "rule_id" field.
+func (u *IncidentRuleExecutionUpsertOne) ClearRuleID() *IncidentRuleExecutionUpsertOne {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.ClearRuleID()
+	})
+}
+
 // SetIncidentID sets the "incident_id" field.
 func (u *IncidentRuleExecutionUpsertOne) SetIncidentID(v int) *IncidentRuleExecutionUpsertOne {
 	return u.Update(func(s *IncidentRuleExecutionUpsert) {
 		s.SetIncidentID(v)
-	})
-}
-
-// AddIncidentID adds v to the "incident_id" field.
-func (u *IncidentRuleExecutionUpsertOne) AddIncidentID(v int) *IncidentRuleExecutionUpsertOne {
-	return u.Update(func(s *IncidentRuleExecutionUpsert) {
-		s.AddIncidentID(v)
 	})
 }
 
@@ -1090,6 +1299,28 @@ type IncidentRuleExecutionUpsertBulk struct {
 //		Exec(ctx)
 func (u *IncidentRuleExecutionUpsertBulk) UpdateNewValues() *IncidentRuleExecutionUpsertBulk {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
+	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		for _, b := range u.create.builders {
+			if _, exists := b.mutation.ExecutionKind(); exists {
+				s.SetIgnore(incidentruleexecution.FieldExecutionKind)
+			}
+			if _, exists := b.mutation.ExecutionKey(); exists {
+				s.SetIgnore(incidentruleexecution.FieldExecutionKey)
+			}
+			if _, exists := b.mutation.SourceEventID(); exists {
+				s.SetIgnore(incidentruleexecution.FieldSourceEventID)
+			}
+			if _, exists := b.mutation.ActorID(); exists {
+				s.SetIgnore(incidentruleexecution.FieldActorID)
+			}
+			if _, exists := b.mutation.Source(); exists {
+				s.SetIgnore(incidentruleexecution.FieldSource)
+			}
+			if _, exists := b.mutation.FrozenActions(); exists {
+				s.SetIgnore(incidentruleexecution.FieldFrozenActions)
+			}
+		}
+	}))
 	return u
 }
 
@@ -1134,17 +1365,17 @@ func (u *IncidentRuleExecutionUpsertBulk) UpdateRuleID() *IncidentRuleExecutionU
 	})
 }
 
+// ClearRuleID clears the value of the "rule_id" field.
+func (u *IncidentRuleExecutionUpsertBulk) ClearRuleID() *IncidentRuleExecutionUpsertBulk {
+	return u.Update(func(s *IncidentRuleExecutionUpsert) {
+		s.ClearRuleID()
+	})
+}
+
 // SetIncidentID sets the "incident_id" field.
 func (u *IncidentRuleExecutionUpsertBulk) SetIncidentID(v int) *IncidentRuleExecutionUpsertBulk {
 	return u.Update(func(s *IncidentRuleExecutionUpsert) {
 		s.SetIncidentID(v)
-	})
-}
-
-// AddIncidentID adds v to the "incident_id" field.
-func (u *IncidentRuleExecutionUpsertBulk) AddIncidentID(v int) *IncidentRuleExecutionUpsertBulk {
-	return u.Update(func(s *IncidentRuleExecutionUpsert) {
-		s.AddIncidentID(v)
 	})
 }
 

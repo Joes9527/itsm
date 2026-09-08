@@ -122,15 +122,6 @@ export class TemplateApi {
     });
   }
 
-  // ==================== 从模板创建工单 ====================
-
-  /**
-   * 使用模板创建工单
-   */
-  static async createTicketFromTemplate(data: CreateTicketFromTemplateRequest): Promise<Ticket> {
-    return httpClient.post<Ticket>('/api/v1/tickets/templates/create-ticket', data);
-  }
-
   /**
    * 预览从模板创建的工单
    */

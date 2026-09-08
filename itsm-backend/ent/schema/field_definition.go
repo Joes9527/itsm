@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent"
@@ -23,7 +24,7 @@ func (FieldDefinition) Fields() []ent.Field {
 		field.String("label").Comment("显示名，如 办公地点").NotEmpty(),
 		field.String("field_type").Comment("字段类型: text|textarea|number|date|select|multiselect|boolean|file").NotEmpty(),
 		field.Bool("required").Comment("是否必填").Default(false),
-		field.JSON("options", []interface{}{}).Comment("select/multiselect 的选项列表 [{label,value}]").Optional(),
+		field.JSON("options", jsonvalue.NumberArray{}).Comment("select/multiselect 的选项列表 [{label,value}]").Optional(),
 		field.Int("sort_order").Comment("显示顺序").Default(0),
 		field.JSON("config", map[string]interface{}{}).Comment("预留：校验规则/默认值/显隐条件，v1 不使用").Optional(),
 		field.Bool("is_active").Comment("是否启用").Default(true),

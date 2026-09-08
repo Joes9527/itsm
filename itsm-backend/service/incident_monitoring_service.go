@@ -153,7 +153,7 @@ func (s *IncidentMonitoringService) createIncidentMetricFromPrometheus(ctx conte
 		}
 		query = query.Where(incident.IDEQ(incidentID))
 	} else if incidentNumber := metric["incident_number"]; incidentNumber != "" {
-		query = query.Where(incident.IncidentNumberEQ(incidentNumber))
+		query = query.Where(incident.HasWorkItemWith(ticket.TicketNumberEQ(incidentNumber)))
 	} else {
 		return fmt.Errorf("metric must include incident_id or incident_number label")
 	}
@@ -278,7 +278,7 @@ func (s *IncidentMonitoringService) AnalyzeIncidentImpact(ctx context.Context, i
 	// 分析影响
 	impactAnalysis := map[string]interface{}{
 		"incident_id":     incidentID,
-		"incident_number": incidentEntity.IncidentNumber,
+		"incident_number": incidentEntity.Edges.WorkItem.TicketNumber,
 		"title":           incidentEntity.Edges.WorkItem.Title,
 		"severity":        incidentEntity.Severity,
 		"priority":        incidentEntity.Edges.WorkItem.Priority,

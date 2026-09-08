@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent"
@@ -29,7 +30,7 @@ func (ProcessCallbackOutbox) Fields() []ent.Field {
 		field.String("config_ref").
 			Comment("可信连接器配置引用；端点和凭据在执行时解析，绝不持久化到回调载荷").
 			Optional(),
-		field.JSON("variables", map[string]interface{}{}).
+		field.JSON("variables", jsonvalue.NumberMap{}).
 			Comment("按处理器声明字段过滤后的非敏感业务载荷").
 			Optional(),
 		field.Bool("optional_declared").Default(false),

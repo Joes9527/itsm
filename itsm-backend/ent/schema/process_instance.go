@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent"
@@ -21,6 +22,9 @@ func (ProcessInstance) Fields() []ent.Field {
 			Comment("流程实例ID，BPMN标准").
 			Unique().
 			NotEmpty(),
+		field.String("start_request_digest").
+			Comment("Immutable digest of a durable start request; NULL for legacy non-idempotent starts").
+			Optional().Immutable().Sensitive(),
 		field.String("business_key").
 			Comment("业务键，关联业务实体").
 			Optional(),
@@ -45,7 +49,7 @@ func (ProcessInstance) Fields() []ent.Field {
 		field.String("current_activity_name").
 			Comment("当前活动名称").
 			Optional(),
-		field.JSON("variables", map[string]interface{}{}).
+		field.JSON("variables", jsonvalue.NumberMap{}).
 			Comment("流程变量").
 			Optional(),
 		field.Time("start_time").

@@ -44,7 +44,6 @@ func TestTriggerProcess_PopulatesStructuredBusinessIdentity(t *testing.T) {
 	workItem := client.Ticket.Create().
 		SetTitle("Canonical change WorkItem").
 		SetTicketNumber("CHG-TRIGGER-IDENTITY").
-		SetType("change").
 		SetRecordClass("change_request").
 		SetRequesterID(requester.ID).
 		SetTenantID(tenant.ID).
@@ -86,7 +85,6 @@ func TestTransactionalTriggerDefersInitialCallbackUntilCallerCommit(t *testing.T
 	workItem := f.client.Ticket.Create().
 		SetTitle("Atomic callback WorkItem").
 		SetTicketNumber("TKT-ATOMIC-CALLBACK").
-		SetType("generic").
 		SetRecordClass("generic").
 		SetRequesterID(f.actor.ID).
 		SetTenantID(f.tenant.ID).
@@ -128,7 +126,7 @@ func TestTriggerProcessRejectsBusinessTypeThatDisagreesWithWorkItemRecordClass(t
 	ctx := context.Background()
 	tenant := client.Tenant.Create().SetName("Identity mismatch").SetCode("identity-mismatch").SetStatus("active").SaveX(ctx)
 	requester := client.User.Create().SetUsername("identity.mismatch").SetEmail("identity.mismatch@example.test").SetName("Requester").SetPasswordHash("test").SetRole("change_manager").SetActive(true).SetTenantID(tenant.ID).SaveX(ctx)
-	workItem := client.Ticket.Create().SetTitle("Change").SetTicketNumber("CHG-IDENTITY-MISMATCH").SetType("change").SetRecordClass("change_request").SetRequesterID(requester.ID).SetTenantID(tenant.ID).SaveX(ctx)
+	workItem := client.Ticket.Create().SetTitle("Change").SetTicketNumber("CHG-IDENTITY-MISMATCH").SetRecordClass("change_request").SetRequesterID(requester.ID).SetTenantID(tenant.ID).SaveX(ctx)
 	tenantCtx := WithTrustedBPMNTenantContext(ctx, tenant.ID)
 	require.NoError(t, func() error {
 		_, deployErr := NewBPMNTemplateService(client).LoadAndDeployTemplates(tenantCtx, tenant.ID)
@@ -171,7 +169,6 @@ func TestTriggerProcessScopeOverridesRequestTriggeredBy(t *testing.T) {
 	workItem := client.Ticket.Create().
 		SetTitle("Authenticated trigger change").
 		SetTicketNumber("CHG-AUTHENTICATED-TRIGGER").
-		SetType("change").
 		SetRecordClass("change_request").
 		SetRequesterID(actor.ID).
 		SetTenantID(tenant.ID).

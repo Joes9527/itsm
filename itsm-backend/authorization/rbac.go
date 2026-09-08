@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
 	"itsm-backend/ent/permission"
 	"itsm-backend/ent/role"
@@ -130,13 +131,14 @@ func loadPermissionsFromDB(client *ent.Client, roleName string, tenantID int) []
 	}
 
 	permissions := make([]Permission, 0)
+	ctx := tenantctx.WithTenantID(context.Background(), tenantID)
 	roleEntity, err := client.Role.Query().
 		Where(role.Code(roleName), role.TenantID(tenantID)).
-		Only(context.Background())
+		Only(ctx)
 	if err == nil {
 		rolePermissions, queryErr := client.RolePermission.Query().
 			Where(rolepermission.RoleIDEQ(roleEntity.ID), rolepermission.TenantID(tenantID)).
-			All(context.Background())
+			All(ctx)
 		if queryErr == nil && len(rolePermissions) > 0 {
 			permissionIDs := make([]int, len(rolePermissions))
 			for index, rolePermission := range rolePermissions {
@@ -144,7 +146,7 @@ func loadPermissionsFromDB(client *ent.Client, roleName string, tenantID int) []
 			}
 			permissionEntities, permissionErr := client.Permission.Query().
 				Where(permission.IDIn(permissionIDs...), permission.TenantID(tenantID)).
-				All(context.Background())
+				All(ctx)
 			if permissionErr == nil {
 				for _, permissionEntity := range permissionEntities {
 					permissions = append(permissions, Permission{Resource: permissionEntity.Resource, Action: permissionEntity.Action})

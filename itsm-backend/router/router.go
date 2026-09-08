@@ -22,6 +22,7 @@ import (
 	"itsm-backend/handlers/cmdb"
 	domainCommon "itsm-backend/handlers/common"
 	"itsm-backend/handlers/delegated_execution"
+	"itsm-backend/handlers/intake"
 	"itsm-backend/handlers/knowledge"
 	"itsm-backend/handlers/known_error"
 	"itsm-backend/handlers/problem"
@@ -182,10 +183,12 @@ func dashboardWidgetByID(widgetID string) gin.H {
 
 // RouterConfig 路由配置
 type RouterConfig struct {
-	JWTSecret string
-	Logger    *zap.SugaredLogger
-	Client    *ent.Client
-	RawDB     *sql.DB
+	IntakeHandler         *intake.Handler
+	TenantDirectoryClient *ent.Client
+	JWTSecret             string
+	Logger                *zap.SugaredLogger
+	Client                *ent.Client
+	RawDB                 *sql.DB
 
 	// CSRF configuration
 	CSRFEnabled bool
@@ -340,6 +343,9 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 
 	// 公共路由（无需认证）
 	public := r.Group("/api/v1")
+	if config.IntakeHandler != nil {
+		config.IntakeHandler.RegisterRoutes(public)
+	}
 	{
 		if config.CommonHandler != nil {
 			public.POST("/auth/login", config.CommonHandler.Login)
@@ -399,7 +405,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 	auth := r.Group("/api/v1")
 	auth.Use(middleware.AuthMiddleware(config.JWTSecret))
 	// RBAC 权限控制中间件：保护所有已认证路由
-	auth.Use(middleware.RBACMiddleware(config.Client))
+	auth.Use(middleware.RBACMiddleware(config.Client, config.TenantDirectoryClient))
 	// CSRF 保护中间件（仅对状态变更请求生效）
 	if config.CSRFEnabled {
 		csrfConfig := middleware.DefaultCSRFConfig()
@@ -462,7 +468,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 	if config.MSPController != nil {
 		msp := r.Group("/api/v1/msp")
 		msp.Use(middleware.AuthMiddleware(config.JWTSecret))
-		msp.Use(middleware.RBACMiddleware(config.Client)) // 设置 client 到 context
+		msp.Use(middleware.RBACMiddleware(config.Client, config.TenantDirectoryClient)) // 设置 client 到 context
 		msp.Use(middleware.MSPMiddleware(config.Client))
 		{
 			// MSP 基础信息 - 允许 MSP 员工和管理员访问
@@ -496,7 +502,10 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 
 	{
 		// 租户中间件
-		tenant := auth.Use(middleware.TenantMiddleware(config.Client))
+		tenant := auth.Use(middleware.TenantMiddleware(config.TenantDirectoryClient))
+		if config.IntakeHandler != nil {
+			config.IntakeHandler.RegisterMappingRoutes(tenant)
+		}
 
 		// ==================== Ticket Categories & Tags ====================
 		if config.TicketCategoryController != nil {
@@ -1448,8 +1457,6 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				conns.POST("/:name/send", middleware.RequirePermission("connector", "write"), config.ConnectorController.Send)
 				conns.POST("/:name/test", middleware.RequirePermission("connector", "write"), config.ConnectorController.Test)
 				conns.GET("/health", middleware.RequirePermission("connector", "read"), config.ConnectorController.Health)
-				// 飞书事件回调（独立签名校验）
-				conns.POST("/feishu/callback", middleware.RequireRole("super_admin"), config.ConnectorController.FeishuCallback)
 			}
 		}
 

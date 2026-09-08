@@ -18,6 +18,7 @@
 
 ## 核心文档
 
+- [SSLVPN WSL 部署与手工端到端验收](./deployment/sslvpn-wsl-deployment-and-manual-verification.md): 两仓配套部署、正常身份、双审批、授权验证与测试恢复。
 - [部署指南](./deployment.md): Docker Compose、生产部署、反向代理和发布部署建议。
 - [配置参考](./configuration.md): 环境变量、端口、数据库、Redis、AI 服务配置。
 - [开发指南](./development.md): 本地开发、前后端命令、调试和常见问题。
@@ -28,6 +29,8 @@
 
 ## 产品与架构
 
+- [SSLVPN：KAF 对话受理、统一创建与授权闭环设计](./superpowers/specs/2026-09-05-sslvpn-kaf-intake-end-to-end-design.md)
+- [SSLVPN 端到端实施总计划](./superpowers/plans/2026-09-05-sslvpn-end-to-end-implementation.md)
 - [AI-Native ITSM 架构解析](./articles/07-ai-native-architecture-guidance-harness-skill.md)
 - [开源发布能力说明](./product/open-source-release-capability.md)
 - [商业就绪架构评审（已归档）](./archive/reviews/commercial-ready-architecture.md)
@@ -36,12 +39,15 @@
 
 ## 测试与评审
 
+- [2026-09-05 ITSM 架构、功能差距与迭代建议（待评审）](./review/2026-09-05-architecture-product-assessment-report.md)
 - [角色视角测试方案](./testing/role-based-product-test-plan.md)
 - [测试用例目录](./testing/test-cases/README.md)
 - [系统功能评审清单](./review/system-function-review-checklist-2026-07-01.md)
 
 历史测试报告与阶段性评审（模块功能复盘、浏览器 E2E/功能测试报告、深度业务测试报告、前端 UX
 Review、商用就绪验收报告等）已移入 [archive](./archive/README.md)，仅作历史记录，不代表当前状态。
+
+- [委派权限开通的验证完成契约](./contracts/kaf-verified-access-completion.md)
 
 ## CI/CD 与发布
 

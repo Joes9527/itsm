@@ -1,5 +1,9 @@
 'use client';
 
+import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
+import { CreationAttempts } from '@/components/work-item/CreationAttempts';
+import { CreationRequester } from '@/components/work-item/CreationRequester';
+
 import React, { useState } from 'react';
 import { Card, Form, Input, Select, Button, App, Space } from 'antd';
 import { ArrowLeft, Save } from 'lucide-react';
@@ -9,22 +13,22 @@ import { useI18n } from '@/lib/i18n';
 
 const NewImprovementPage = () => {
   const router = useRouter();
+  const creation = useWorkItemCreation();
   const { message } = App.useApp();
   const { t } = useI18n();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
 
-  const onFinish = async (values: { title: string; description?: string; priority?: string }) => {
+  const onFinish = async (values: { title: string; description?: string; priority?: string; requesterId?: number }) => {
     try {
       setLoading(true);
-      await TicketApi.createTicket({
+      await creation.submit({
         type: 'improvement',
+        requesterId: values.requesterId,
         title: values.title,
         description: values.description || '',
         priority: values.priority || 'medium',
-      } as unknown as Parameters<typeof TicketApi.createTicket>[0]);
-      message.success('改进计划创建成功');
-      router.push('/improvements');
+      }, TicketApi.createTicket, () => router.push('/improvements'));
     } catch (error) {
       console.error('Create improvement failed:', error);
       message.error('创建失败，请稍后重试');
@@ -35,6 +39,7 @@ const NewImprovementPage = () => {
 
   return (
     <div className="p-6 bg-gray-50 min-h-full">
+      <CreationAttempts creation={creation} />
       <Card>
         <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <Button icon={<ArrowLeft />} onClick={() => router.push('/improvements')} type="text">
@@ -43,6 +48,7 @@ const NewImprovementPage = () => {
           <h2 className="text-2xl font-bold text-gray-800">新建改进计划</h2>
 
           <Form form={form} layout="vertical" onFinish={onFinish}>
+            <CreationRequester />
             <Form.Item
               label="标题"
               name="title"

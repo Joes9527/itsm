@@ -26,9 +26,8 @@ func (Ticket) Fields() []ent.Field {
 		field.String("status").
 			Comment("状态").
 			Default("open"),
-		field.String("type").
-			Comment("工单类型").
-			Default("incident"),
+		field.String("generic_subtype").
+			Comment("Generic-only business subtype; professional subtypes belong to their extensions").Optional(),
 		field.String("source").
 			Comment("工单来源：manual=手动创建，service_catalog=服务目录申请").
 			Default("manual").
@@ -188,7 +187,6 @@ func (Ticket) Indexes() []ent.Index {
 		index.Fields("tenant_id", "ticket_number").Unique(),
 		index.Fields("status"),
 		index.Fields("priority"),
-		index.Fields("type"), // Added index for type
 		index.Fields("requester_id"),
 		index.Fields("assignee_id"),
 		index.Fields("created_at"),

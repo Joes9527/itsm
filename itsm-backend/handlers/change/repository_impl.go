@@ -16,7 +16,6 @@ import (
 	entticket "itsm-backend/ent/ticket"
 	entuser "itsm-backend/ent/user"
 	"itsm-backend/ent/workitemrelation"
-	"itsm-backend/repository/workitemnumber"
 
 	entsql "entgo.io/ent/dialect/sql"
 	"go.uber.org/zap"
@@ -29,9 +28,8 @@ import (
 const changeTicketRelationType = "related_to"
 
 type EntRepository struct {
-	client          *ent.Client
-	db              *sql.DB
-	numberAllocator workitemnumber.Allocator
+	client *ent.Client
+	db     *sql.DB
 }
 
 func changeTenantScope(tenantID int, extra ...entpredicate.Ticket) entpredicate.Change {
@@ -40,11 +38,10 @@ func changeTenantScope(tenantID int, extra ...entpredicate.Ticket) entpredicate.
 	return change.HasWorkItemWith(predicates...)
 }
 
-func NewEntRepository(client *ent.Client, db *sql.DB, numberAllocator workitemnumber.Allocator) *EntRepository {
+func NewEntRepository(client *ent.Client, db *sql.DB) *EntRepository {
 	return &EntRepository{
-		client:          client,
-		db:              db,
-		numberAllocator: numberAllocator,
+		client: client,
+		db:     db,
 	}
 }
 
@@ -317,103 +314,6 @@ func (r *EntRepository) reconcileRelatedTicketRelations(ctx context.Context, cli
 		}
 	}
 	return nil
-}
-
-// Create 在同一数据库事务内先建 tickets 行（record_class="change_request"，创建后不可变——
-// 注意这个取值跟 Incident/Problem 不同，两者的 recordClass 恰好等于领域名本身，Change 的
-// recordClass 是 "change_request"，见 ent/schema/ticket.go 的字段注释和
-// cmd/check_work_item_integrity 的已知取值枚举），再建 changes 行并回填 work_item_id——
-// 统一 WorkItem 领域模型宪章 §3.2 的事务边界约束，任一边失败整体回滚。模式与
-// handlers/problem.EntRepository.Create / IncidentService.CreateIncident 一致。
-//
-// relatedTickets（自由文本工单编号数组）在同一事务内解析并写入 WorkItemRelation
-// （relation_type="related_to"）；changes 表不保存关系 JSON 副本。
-func (r *EntRepository) Create(ctx context.Context, c *Change) (*Change, error) {
-	tx, err := r.client.Tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to start change transaction: %w", err)
-	}
-	rollback := func(cause error) (*Change, error) {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			return nil, fmt.Errorf("%w (rollback also failed: %v)", cause, rbErr)
-		}
-		return nil, cause
-	}
-
-	// Ticket.requester_id 是一条指向 users 表的必填 FK edge，Change 自己的 created_by
-	// 历史上没有这层约束。既然现在每条 Change 都会同步建一条 tickets 行并把 requester_id
-	// 设成 Change 的创建人，这里必须显式校验创建人存在且属于同一租户——否则
-	// tx.Ticket.Create 会因为 FK 违反直接失败，报错信息对调用方不友好（同
-	// handlers/problem.EntRepository.Create 的 creatorExists 校验）。
-	creatorExists, err := tx.User.Query().
-		Where(entuser.IDEQ(c.CreatedBy), entuser.TenantIDEQ(c.TenantID), entuser.ActiveEQ(true)).
-		Exist(ctx)
-	if err != nil {
-		return rollback(fmt.Errorf("failed to validate change creator: %w", err))
-	}
-	if !creatorExists {
-		return rollback(fmt.Errorf("change creator not found or inactive"))
-	}
-
-	issuedAt := time.Now().UTC()
-	ticketNumber, err := r.numberAllocator.Allocate(ctx, tx.Client(), c.TenantID, issuedAt)
-	if err != nil {
-		return rollback(fmt.Errorf("failed to allocate work item ticket number: %w", err))
-	}
-
-	workItem, err := tx.Ticket.Create().
-		SetTitle(c.Title).
-		SetDescription(c.Description).
-		SetType("change").
-		SetRecordClass("change_request").
-		SetPriority(c.Priority).
-		SetStatus(c.Status).
-		SetTicketNumber(ticketNumber).
-		SetRequesterID(c.CreatedBy).
-		SetOpenedByID(c.CreatedBy).
-		SetTenantID(c.TenantID).
-		SetNillableAssigneeID(c.AssigneeID).
-		SetCreatedAt(issuedAt).
-		SetUpdatedAt(issuedAt).
-		Save(ctx)
-	if err != nil {
-		return rollback(fmt.Errorf("failed to create work item: %w", err))
-	}
-
-	create := tx.Change.Create().
-		SetJustification(c.Justification).
-		SetType(c.Type).
-		SetImpactScope(c.ImpactScope).
-		SetRiskLevel(c.RiskLevel).
-		SetWorkItemID(workItem.ID).
-		SetImplementationPlan(c.ImplementationPlan).
-		SetRollbackPlan(c.RollbackPlan).
-		SetNillablePlannedStartDate(c.PlannedStartDate).
-		SetNillablePlannedEndDate(c.PlannedEndDate).
-		SetAffectedCis(c.AffectedCIs)
-
-	saved, err := create.Save(ctx)
-	if err != nil {
-		return rollback(fmt.Errorf("failed to create change: %w", err))
-	}
-
-	if err := r.reconcileRelatedTicketRelations(ctx, tx.Client(), c.TenantID, workItem.ID, c.CreatedBy, c.RelatedTickets); err != nil {
-		return rollback(fmt.Errorf("failed to link related tickets: %w", err))
-	}
-
-	if err := tx.Commit(); err != nil {
-		return rollback(fmt.Errorf("failed to commit change transaction: %w", err))
-	}
-
-	saved.Edges.WorkItem = workItem
-	result := toDomain(saved)
-	if err := r.hydrateUsers(ctx, []*Change{result}, c.TenantID); err != nil {
-		return nil, err
-	}
-	if err := r.hydrateRelatedTickets(ctx, []*Change{result}, c.TenantID); err != nil {
-		return nil, err
-	}
-	return result, nil
 }
 
 func (r *EntRepository) Get(ctx context.Context, id int, tenantID int) (*Change, error) {

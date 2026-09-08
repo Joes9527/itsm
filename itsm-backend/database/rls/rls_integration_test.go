@@ -34,6 +34,8 @@ import (
 	"testing"
 
 	_ "github.com/lib/pq"
+
+	"itsm-backend/common/tenantctx"
 )
 
 func openTestDB(t *testing.T) *sql.DB {
@@ -127,14 +129,14 @@ func TestAcquireConn_TenantScopeIsolation(t *testing.T) {
 	defer teardown()
 
 	// tenant=1 must see > 0 rows (assumes dev DB has changes for tenant 1)
-	ctx1 := WithTenant(context.Background(), 1)
+	ctx1 := tenantctx.WithTenantID(context.Background(), 1)
 	n1 := countChangesAs(t, db, ctx1)
 	if n1 == 0 {
 		t.Fatalf("tenant 1 saw 0 rows; dev DB may be missing seed data")
 	}
 
 	// tenant=999 must see 0 rows (unless someone seeded it, which is a bug)
-	ctx999 := WithTenant(context.Background(), 999)
+	ctx999 := tenantctx.WithTenantID(context.Background(), 999)
 	n999 := countChangesAs(t, db, ctx999)
 	if n999 != 0 {
 		t.Fatalf("tenant 999 saw %d rows; expected 0 (RLS bypassed?)", n999)
@@ -147,7 +149,7 @@ func TestKafExecutionIntegrityTablesRejectCrossTenantRows(t *testing.T) {
 	db := openTestDB(t)
 	defer db.Close()
 	for _, table := range []string{"kaf_task_action_ledgers", "kaf_task_completion_receipts"} {
-		ctx := WithTenant(context.Background(), 999999)
+		ctx := tenantctx.WithTenantID(context.Background(), 999999)
 		conn, err := AcquireConn(ctx, db)
 		if err != nil {
 			t.Fatalf("acquire %s connection: %v", table, err)
@@ -192,7 +194,7 @@ func TestAcquireConn_SystemBypassSkipsSet(t *testing.T) {
 	db := openTestDB(t)
 	defer db.Close()
 
-	ctx := WithSystemBypass(context.Background())
+	ctx := tenantctx.WithSystemBypass(context.Background())
 	conn, err := AcquireConn(ctx, db)
 	if err != nil {
 		t.Fatalf("bypass acquire should not error: %v", err)
@@ -217,7 +219,7 @@ func TestReleaseConn_DiscardsSessionState(t *testing.T) {
 	db.SetMaxIdleConns(1)
 
 	// First borrow: tenant=1
-	ctx1, cancelRequest := context.WithCancel(WithTenant(context.Background(), 1))
+	ctx1, cancelRequest := context.WithCancel(tenantctx.WithTenantID(context.Background(), 1))
 	conn1, err := AcquireConn(ctx1, db)
 	if err != nil {
 		t.Fatalf("acquire 1: %v", err)

@@ -9,13 +9,18 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/ticket"
+	"itsm-backend/handlers/common/intakehttp"
+	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/middleware"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 )
 
 type Handler struct {
-	service *Service
+	creationApplication creation.Application
+	service             *Service
 }
 
 func failServiceRequest(c *gin.Context, err error) {
@@ -95,7 +100,7 @@ func (h *Handler) toDTO(req *ServiceRequest) *dto.ServiceRequestResponse {
 // Used by detail-style responses (Get, Create's success branch) — List intentionally
 // does not call this to avoid N+1 queries, mirroring ToTicketResponse vs
 // ToTicketResponseWithCustomFields.
-func (h *Handler) toDTOWithCustomFields(req *ServiceRequest, client *ent.Client, actorUserID int, actorRole string) *dto.ServiceRequestResponse {
+func (h *Handler) toDTOWithCustomFields(ctx context.Context, req *ServiceRequest, client *ent.Client, actorUserID int, actorRole string) *dto.ServiceRequestResponse {
 	resp := h.toDTO(req)
 	if client == nil {
 		return resp
@@ -103,8 +108,24 @@ func (h *Handler) toDTOWithCustomFields(req *ServiceRequest, client *ent.Client,
 	resp.Actions = map[string]dto.ActionPermission{
 		"provision": service.CanProvision(client, req.TenantID, actorUserID, actorRole, req.RequesterID),
 	}
-	values, err := service.NewFieldValueService(client).ListValues(context.Background(), req.TenantID, "ticket", req.TicketID)
+	if err := h.service.ValidateManualProvisioning(ctx, client, req.TenantID, req.TicketID); err != nil {
+		resp.Actions["provision"] = dto.ActionPermission{Allowed: false, Reason: "此申请需通过审批流程履约"}
+		resp.FulfillmentState = "unknown"
+		item, readErr := client.Ticket.Query().Where(ticket.IDEQ(req.TicketID), ticket.TenantIDEQ(req.TenantID), ticket.RecordClassEQ("service_request_item"), ticket.DeletedAtIsNil()).Only(ctx)
+		if readErr == nil {
+			fulfillment, projectionErr := h.service.ReadFulfillment(ctx, client, item)
+			if projectionErr == nil {
+				resp.FulfillmentState, resp.AccessResult = fulfillment.State, fulfillment.AccessResult
+			} else {
+				h.service.logger.Warnw("Service request fulfillment unavailable", "ticket_id", req.TicketID)
+			}
+		} else {
+			h.service.logger.Warnw("Service request WorkItem unavailable", "ticket_id", req.TicketID)
+		}
+	}
+	values, err := service.NewFieldValueService(client).ListValues(ctx, req.TenantID, "ticket", req.TicketID)
 	if err != nil {
+		h.service.logger.Warnw("Failed to load service request custom fields", "tenant_id", req.TenantID, "ticket_id", req.TicketID, "error", err)
 		return resp
 	}
 	if len(values) == 0 {
@@ -117,64 +138,22 @@ func (h *Handler) toDTOWithCustomFields(req *ServiceRequest, client *ent.Client,
 	return resp
 }
 
+func (h *Handler) SetCreationApplication(app creation.Application) { h.creationApplication = app }
 func (h *Handler) Create(c *gin.Context) {
 	var req dto.CreateServiceRequestRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, 1001, "Invalid parameters: "+err.Error())
+	if !intakehttp.Bind(c, &req) {
 		return
 	}
-	normalizeCreateServiceRequest(&req)
-	if req.CatalogID == 0 {
-		common.Fail(c, 1001, "catalogId is required")
+	tenantID, err := middleware.ResolveRequestTenantID(c)
+	if middleware.AbortIfTenantError(c, err) {
 		return
 	}
-
-	tenantID := c.GetInt("tenant_id")
-	if tenantID == 0 {
-		common.Fail(c, 2001, "Tenant ID missing")
-		return
-	}
-	userID := c.GetInt("user_id")
-	if userID == 0 {
-		common.Fail(c, 2001, "User ID missing")
-		return
-	}
-
-	expireAt := req.ExpireAt
-
-	domainReq := &ServiceRequest{
-		ComplianceAck:      req.ComplianceAck,
-		NeedsPublicIP:      req.NeedsPublicIP,
-		DataClassification: req.DataClassification,
-		FormData:           req.FormData,
-		CostCenter:         req.CostCenter,
-		SourceIPWhitelist:  req.SourceIPWhitelist,
-		ExpireAt:           expireAt,
-		ContactName:        req.ContactName,
-		ContactEmail:       req.ContactEmail,
-		Quantity:           req.Quantity,
-		ExpectedAt:         req.ExpectedAt,
-	}
-	if domainReq.FormData == nil {
-		domainReq.FormData = map[string]interface{}{}
-	}
-	domainReq.FormData["title"] = req.Title
-	domainReq.FormData["reason"] = req.Reason
-
-	created, err := h.service.Create(c.Request.Context(), tenantID, userID, req.CatalogID, domainReq)
+	command, err := catalogCreationCommand(req, func(name string) bool { return intakehttp.FieldPresent(c, name) })
 	if err != nil {
-		failServiceRequest(c, err)
+		intakehttp.Fail(c, err)
 		return
 	}
-
-	fullReq, err := h.service.Get(c.Request.Context(), created.ID, tenantID)
-	if err != nil {
-		h.service.logger.Errorw("Create: failed to get created service request", "error", err, "id", created.ID)
-		// Return the created object even if Get fails - created.ID is valid
-		common.Success(c, h.toDTO(created))
-		return
-	}
-	common.Success(c, h.toDTOWithCustomFields(fullReq, h.service.Client(), c.GetInt("user_id"), c.GetString("role")))
+	intakehttp.Execute(c, h.creationApplication, tenantID, req.RequesterID, command)
 }
 
 func (h *Handler) Get(c *gin.Context) {
@@ -197,7 +176,7 @@ func (h *Handler) Get(c *gin.Context) {
 		}
 		return
 	}
-	common.Success(c, h.toDTOWithCustomFields(req, h.service.Client(), c.GetInt("user_id"), c.GetString("role")))
+	common.Success(c, h.toDTOWithCustomFields(c.Request.Context(), req, h.service.Client(), c.GetInt("user_id"), c.GetString("role")))
 }
 
 // GetByTicket 供 ticket 详情页渲染关联的服务请求扩展面板。
@@ -219,7 +198,7 @@ func (h *Handler) GetByTicket(c *gin.Context) {
 		}
 		return
 	}
-	common.Success(c, h.toDTOWithCustomFields(req, h.service.Client(), c.GetInt("user_id"), c.GetString("role")))
+	common.Success(c, h.toDTOWithCustomFields(c.Request.Context(), req, h.service.Client(), c.GetInt("user_id"), c.GetString("role")))
 }
 
 func (h *Handler) List(c *gin.Context) {

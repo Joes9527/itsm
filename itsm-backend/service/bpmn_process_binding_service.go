@@ -26,19 +26,12 @@ func NewProcessBindingService(client *ent.Client) *ProcessBindingService {
 // CreateBinding 创建流程绑定
 func (s *ProcessBindingService) CreateBinding(ctx context.Context, binding *dto.ProcessBinding) (*dto.ProcessBinding, error) {
 	// 验证流程定义存在
-	def, err := s.client.ProcessDefinition.Query().
-		Where(
-			processdefinition.Key(binding.ProcessDefinitionKey),
-			processdefinition.TenantID(binding.TenantID),
-			processdefinition.IsActive(true),
-			processdefinition.IsLatest(true),
-		).
-		First(ctx)
+	def, err := selectExecutableProcessDefinition(ctx, s.client, binding.TenantID, binding.ProcessDefinitionKey, binding.ProcessVersion)
 	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("流程定义 %s 不存在", binding.ProcessDefinitionKey)
-		}
 		return nil, errors.Wrap(err, "验证流程定义失败")
+	}
+	if def == nil {
+		return nil, fmt.Errorf("流程定义 %s 不存在", binding.ProcessDefinitionKey)
 	}
 
 	// 如果没有指定版本，使用最新版本

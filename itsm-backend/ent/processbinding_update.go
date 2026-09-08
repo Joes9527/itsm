@@ -9,6 +9,7 @@ import (
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/processbinding"
 	"itsm-backend/ent/processdefinition"
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -269,7 +270,7 @@ func (_u *ProcessBindingUpdate) ClearCategoryID() *ProcessBindingUpdate {
 }
 
 // SetConditions sets the "conditions" field.
-func (_u *ProcessBindingUpdate) SetConditions(v map[string]interface{}) *ProcessBindingUpdate {
+func (_u *ProcessBindingUpdate) SetConditions(v jsonvalue.NumberMap) *ProcessBindingUpdate {
 	_u.mutation.SetConditions(v)
 	return _u
 }
@@ -321,7 +322,7 @@ func (_u *ProcessBindingUpdate) ClearSLAPolicyID() *ProcessBindingUpdate {
 }
 
 // SetOverrides sets the "overrides" field.
-func (_u *ProcessBindingUpdate) SetOverrides(v map[string]interface{}) *ProcessBindingUpdate {
+func (_u *ProcessBindingUpdate) SetOverrides(v jsonvalue.NumberMap) *ProcessBindingUpdate {
 	_u.mutation.SetOverrides(v)
 	return _u
 }
@@ -865,7 +866,7 @@ func (_u *ProcessBindingUpdateOne) ClearCategoryID() *ProcessBindingUpdateOne {
 }
 
 // SetConditions sets the "conditions" field.
-func (_u *ProcessBindingUpdateOne) SetConditions(v map[string]interface{}) *ProcessBindingUpdateOne {
+func (_u *ProcessBindingUpdateOne) SetConditions(v jsonvalue.NumberMap) *ProcessBindingUpdateOne {
 	_u.mutation.SetConditions(v)
 	return _u
 }
@@ -917,7 +918,7 @@ func (_u *ProcessBindingUpdateOne) ClearSLAPolicyID() *ProcessBindingUpdateOne {
 }
 
 // SetOverrides sets the "overrides" field.
-func (_u *ProcessBindingUpdateOne) SetOverrides(v map[string]interface{}) *ProcessBindingUpdateOne {
+func (_u *ProcessBindingUpdateOne) SetOverrides(v jsonvalue.NumberMap) *ProcessBindingUpdateOne {
 	_u.mutation.SetOverrides(v)
 	return _u
 }

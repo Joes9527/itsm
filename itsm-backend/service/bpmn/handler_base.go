@@ -72,17 +72,11 @@ type HandlerBase struct {
 
 // GetIntFromVars 从变量中提取整数
 func GetIntFromVars(variables map[string]interface{}, key string) int {
-	if v, ok := variables[key]; ok {
-		switch val := v.(type) {
-		case float64:
-			return int(val)
-		case int:
-			return val
-		case int64:
-			return int(val)
-		}
+	value, err := CallbackInteger(variables[key])
+	if err != nil {
+		return 0
 	}
-	return 0
+	return value
 }
 
 // GetIntSliceFromVars 从变量中提取整数切片

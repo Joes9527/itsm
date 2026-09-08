@@ -130,7 +130,7 @@ func TestSetProcessInstanceVariables_RejectsTerminalLifecycle(t *testing.T) {
 			after := client.ProcessInstance.GetX(ctx, instance.ID)
 			assert.Equal(t, status, after.Status)
 			assert.Equal(t, instance.Version, after.Version)
-			assert.Equal(t, beforeVariables, after.Variables)
+			assert.Equal(t, beforeVariables, map[string]any(after.Variables))
 			assert.Zero(t, client.ProcessAuditLog.Query().Where(
 				processauditlog.ProcessInstanceID(instance.ID),
 				processauditlog.Action(AuditActionVariableChanged),

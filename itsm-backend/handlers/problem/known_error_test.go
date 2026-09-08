@@ -1,4 +1,4 @@
-package problem
+package problem_test
 
 import (
 	"bytes"
@@ -37,7 +37,7 @@ func TestProblemKnownErrorPublishingDirectService(t *testing.T) {
 	// Create Problem
 	probRepo := newTestProblemRepository(client)
 	probHandlerSvc := NewService(probRepo, logger)
-	problem, err := probHandlerSvc.Create(ctx, tenant.ID, &Problem{
+	problem, err := probHandlerSvc.SubmitCreation(ctx, tenant.ID, &Problem{
 		Title:       "KEDB Source Problem",
 		Description: "Problem description for KEDB",
 		Priority:    "high",
@@ -91,7 +91,7 @@ func TestProblemKnownErrorPublishingHTTPEndpoint(t *testing.T) {
 
 	probRepo := newTestProblemRepository(client)
 	probHandlerSvc := NewService(probRepo, logger)
-	problemA, err := probHandlerSvc.Create(ctx, tenantA.ID, &Problem{
+	problemA, err := probHandlerSvc.SubmitCreation(ctx, tenantA.ID, &Problem{
 		Title:       "HTTP Source Problem Tenant A",
 		Description: "Description A",
 		Priority:    "critical",

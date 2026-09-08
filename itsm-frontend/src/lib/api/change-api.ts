@@ -1,3 +1,4 @@
+import { createWorkItem, type CreationRequestOptions, type CreateWorkItemResult } from './work-item-creation';
 /**
  * 变更管理 API 服务
  */
@@ -32,6 +33,7 @@ export type ChangeRisk = 'low' | 'medium' | 'high';
 
 // 变更请求接口
 export interface ChangeRequest {
+  requesterId?: number;
   title: string;
   description: string;
   justification: string;
@@ -257,8 +259,8 @@ export class ChangeApi {
   }
 
   // 创建变更
-  static async createChange(data: ChangeRequest): Promise<Change> {
-    return httpClient.post<Change>('/api/v1/changes', data);
+  static async createChange(data: ChangeRequest, options: CreationRequestOptions): Promise<CreateWorkItemResult> {
+    return createWorkItem('/api/v1/changes', data, options);
   }
 
   // 更新变更
@@ -326,14 +328,6 @@ export class ChangeApi {
   // 获取变更模板
   static async getChangeTemplates(): Promise<any[]> {
     return httpClient.get('/api/v1/changes/templates');
-  }
-
-  // 从模板创建变更
-  static async createFromTemplate(
-    templateId: number,
-    data: Partial<ChangeRequest>
-  ): Promise<Change> {
-    return httpClient.post(`/api/v1/changes/templates/${templateId}/create`, data);
   }
 
   // 批量操作变更

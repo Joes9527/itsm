@@ -1,3 +1,4 @@
+import { createWorkItem, type CreationRequestOptions, type CreateWorkItemResult } from './work-item-creation';
 /**
  * 服务目录 API 服务
  */
@@ -65,6 +66,7 @@ export class ServiceCatalogApi {
     // 后端 dto.ServiceCatalogResponse: {id,name,category,description,deliveryTime,status,ciTypeId,cloudServiceId,createdAt,updatedAt}
     return {
       id: String(raw?.id),
+      accessPolicy: raw?.accessPolicy,
       name: String(raw?.name || ''),
       // 这里保留后端 category 的原始字符串（前端页面目前以中文分类做统计/图标）
        
@@ -75,7 +77,9 @@ export class ServiceCatalogApi {
       ciTypeId: typeof raw?.ciTypeId === 'number' ? raw.ciTypeId : undefined,
       cloudServiceId: typeof raw?.cloudServiceId === 'number' ? raw.cloudServiceId : undefined,
       tags: [],
-      requiresApproval: true,
+      requiresApproval: Boolean(raw?.requiresApproval),
+      slaResponseTime: raw?.slaResponseTime,
+      slaResolutionTime: raw?.slaResolutionTime,
       createdBy: 0,
       createdByName: '',
       createdAt: raw?.createdAt ? new Date(raw.createdAt) : new Date(),
@@ -88,6 +92,9 @@ export class ServiceCatalogApi {
       processDefinitionKey: raw?.processDefinitionKey || undefined,
       serviceType: raw?.serviceType || undefined,
       requiresInfraFields: Boolean(raw?.requiresInfraFields),
+      targetClass: raw?.targetClass,
+      catalogVersion: raw?.catalogVersion,
+      formSchemaVersion: raw?.formSchemaVersion,
     };
   }
 
@@ -196,6 +203,7 @@ export class ServiceCatalogApi {
   static async createService(request: CreateServiceItemRequest): Promise<ServiceItem> {
     const payload = {
       name: request.name,
+      accessPolicy: request.accessPolicy,
       category: String(request.category),
       description: request.shortDescription || request.fullDescription || '',
       ciTypeId: request.ciTypeId,
@@ -203,8 +211,12 @@ export class ServiceCatalogApi {
       deliveryTime: String(
         request.availability?.responseTime ?? request.availability?.resolutionTime ?? 1
       ),
-      status: ServiceCatalogApi.toBackendStatus(request.status) || 'enabled',
+      status: ServiceCatalogApi.toBackendStatus(request.status) || 'disabled',
       fields: request.fields,
+      targetClass: request.targetClass,
+      requiresApproval: request.requiresApproval,
+      slaResponseTime: request.slaResponseTime,
+      slaResolutionTime: request.slaResolutionTime,
       processDefinitionKey: request.processDefinitionKey,
       serviceType: request.serviceType ? String(request.serviceType) : undefined,
     };
@@ -216,7 +228,10 @@ export class ServiceCatalogApi {
    * 更新服务
    */
   static async updateService(id: string, request: UpdateServiceItemRequest): Promise<ServiceItem> {
-    const payload: Record<string, unknown> = {};
+    const payload: Record<string, unknown> = { expectedCatalogVersion: request.expectedCatalogVersion };
+    for (const key of ['targetClass', 'requiresApproval', 'slaResponseTime', 'slaResolutionTime'] as const) {
+      if (request[key] !== undefined) payload[key] = request[key];
+    }
     if (request.name !== undefined) payload.name = request.name;
     if (request.category !== undefined) payload.category = String(request.category);
     if (request.shortDescription !== undefined || request.fullDescription !== undefined) {
@@ -228,6 +243,7 @@ export class ServiceCatalogApi {
     if (request.ciTypeId !== undefined) payload.ciTypeId = request.ciTypeId;
     if (request.cloudServiceId !== undefined) payload.cloudServiceId = request.cloudServiceId;
     if (request.fields !== undefined) payload.fields = request.fields;
+    if (request.accessPolicy !== undefined) payload.accessPolicy = request.accessPolicy;
     if (request.processDefinitionKey !== undefined) {
       payload.processDefinitionKey = request.processDefinitionKey;
     }
@@ -244,16 +260,16 @@ export class ServiceCatalogApi {
   /**
    * 删除服务
    */
-  static async deleteService(id: string): Promise<void> {
-    return httpClient.delete(`/api/v1/service-catalogs/${id}`);
+  static async deleteService(id: string, expectedCatalogVersion: string): Promise<void> {
+    return httpClient.delete(`/api/v1/service-catalogs/${id}?expectedCatalogVersion=${encodeURIComponent(expectedCatalogVersion)}`);
   }
 
   /**
    * 发布服务
    */
-  static async publishService(id: string): Promise<ServiceItem> {
+  static async publishService(id: string, expectedCatalogVersion: string): Promise<ServiceItem> {
     const resp = await httpClient.put<any>(`/api/v1/service-catalogs/${id}`, {
-      status: 'enabled',
+      status: 'enabled', expectedCatalogVersion,
     });
     return ServiceCatalogApi.toServiceItem(resp);
   }
@@ -261,9 +277,9 @@ export class ServiceCatalogApi {
   /**
    * 停用服务
    */
-  static async retireService(id: string): Promise<ServiceItem> {
+  static async retireService(id: string, expectedCatalogVersion: string): Promise<ServiceItem> {
     const resp = await httpClient.put<any>(`/api/v1/service-catalogs/${id}`, {
-      status: 'disabled',
+      status: 'disabled', expectedCatalogVersion,
     });
     return ServiceCatalogApi.toServiceItem(resp);
   }
@@ -276,7 +292,7 @@ export class ServiceCatalogApi {
     const { id: _omit, ...rest } = src;
     return ServiceCatalogApi.createService({
       ...rest,
-      name,
+      name, status: 'draft' as ServiceStatus,
     });
   }
 
@@ -325,53 +341,10 @@ export class ServiceCatalogApi {
   /**
    * 创建服务请求
    *
-   * 返回值透传后端 dto.ServiceRequestResponse（不经过 toServiceRequest 适配），其中
-   * ticketId 是提交成功后创建的关联 Ticket ID——调用方（提交表单页）据此跳转到
-   * /tickets/:ticketId，服务请求已经不再有独立详情页。
+   * 返回已确认创建收据；共享工单详情使用 workItemId，专业引用保留在 professionalReference。
    */
-  static async createServiceRequest(
-    request: CreateServiceRequestRequest
-  ): Promise<{ ticketId: number } & Record<string, any>> {
-    // 前端 CreateServiceRequestRequest: { serviceId, formData, ... }
-    // 后端 CreateServiceRequestRequest: { catalog_id, title, reason, form_data, ... , compliance_ack }
-    const reason =
-      (request.formData && (request.formData.reason || request.formData.notes)) ||
-      request.additionalNotes ||
-      '';
-
-    const title = (request.formData && (request.formData.title || request.formData.name)) || '';
-
-    // V0：最小字段集合。复杂字段（成本中心/分级/到期/公网白名单）可先从 formData 透传，后续再做强校验与表单化。
-    const payload: unknown = {
-      catalogId: Number(request.serviceId),
-      title: title ? String(title) : undefined,
-      reason,
-      formData: request.formData || {},
-      // 合规确认绝不能静默默认为已勾选——没有 ?? true 兜底，调用方忘传就是 false。
-      complianceAck: Boolean(request.formData?.complianceAck),
-      dataClassification: String(request.formData?.dataClassification || 'internal'),
-      needsPublicIp: Boolean(request.formData?.needsPublicIp || false),
-      sourceIpWhitelist: Array.isArray(request.formData?.sourceIpWhitelist)
-        ? request.formData?.sourceIpWhitelist
-        : undefined,
-      costCenter: request.formData?.costCenter
-        ? String(request.formData?.costCenter)
-        : undefined,
-      expireAt: request.formData?.expireAt ? request.formData?.expireAt : undefined,
-      // 通用层字段：所有 service_type 都适用，真正落到后端 ContactName/ContactEmail/
-      // Quantity/ExpectedAt 列。直接映射到新增列，不再经过 formData JSON 兜底路径
-      // （见 docs/superpowers/specs/2026-08-21-service-catalog-request-form-redesign-design.md
-      // §3.5），所以从 request 顶层读取而不是 request.formData。
-      contactName: request.contactName ? String(request.contactName) : undefined,
-      contactEmail: request.contactEmail ? String(request.contactEmail) : undefined,
-      quantity: request.quantity ? Number(request.quantity) : undefined,
-      expectedAt: request.expectedAt ? request.expectedAt : undefined,
-    };
-
-    return httpClient.post<{ ticketId: number } & Record<string, any>>(
-      '/api/v1/service-requests',
-      payload
-    );
+  static async createServiceRequest(request: CreateServiceRequestRequest, options: CreationRequestOptions): Promise<CreateWorkItemResult> {
+    return createWorkItem('/api/v1/service-requests', request, options);
   }
 
   /**

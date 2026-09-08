@@ -131,7 +131,8 @@ export const ServiceItemCard: React.FC<ServiceItemCardProps> = ({
   const handleDelete = async () => {
     setDeleting(true);
     try {
-      await ServiceCatalogApi.deleteService(String(catalog.id));
+      if (!catalog.catalogVersion) throw new Error('请刷新服务目录后重试');
+      await ServiceCatalogApi.deleteService(String(catalog.id), catalog.catalogVersion);
       message.success(t('service.deleteSuccess') || '服务已删除');
       window.location.reload();
     } catch (error) {

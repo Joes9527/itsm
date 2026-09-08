@@ -32,6 +32,7 @@ type Config struct {
 	RLS            RLSConfig        `mapstructure:"rls"`
 	KAFOutbox      KAFOutboxConfig
 	OutboxDelivery OutboxDeliveryConfig
+	IntakeIdentity IntakeIdentityConfig
 }
 
 // KAFOutboxConfig controls reliable delivery of BPMN delegation events to KAF.
@@ -54,19 +55,10 @@ type OutboxDeliveryConfig struct {
 	MaxAttempts    int
 }
 
-// RLSConfig 控制 PostgreSQL Row-Level Security 的启用档位。
-//
-// Mode:
-//   - "off"     : 默认。中间件仍会向 request.Context 注入 tenant_id，
-//     但不 SET SESSION 变量，也不启用 policy。零风险。
-//   - "shadow"  : 每次 request 走 rls.AcquireConn 设 SESSION 变量，
-//     但 policy 未启用 → 数据库不拦截，只观察是否有 ctx
-//     缺失情况；不影响任何业务。
-//   - "enforce" : SESSION 变量 + policy 同时生效，数据库层强制隔离。
-//     需先在 shadow 模式下把所有缺失点补齐。
-//
-// TenantVarName: PostgreSQL 用于承载 tenant_id 的 GUC 变量名，默认
-// "app.current_tenant"，与 policy 中的 current_setting() 保持一致。
+// RLSConfig selects off (pass-through), shadow (observe only), or enforce
+// (physical connection/transaction tenant settings with non-bypass roles).
+// Policies are managed separately by migrations; this setting does not enable
+// or disable them. TenantVarName must match the canonical app.current_tenant.
 type RLSConfig struct {
 	Mode          string `mapstructure:"mode"`
 	TenantVarName string `mapstructure:"tenant_var_name"`
@@ -96,12 +88,15 @@ type TicketConfig struct {
 }
 
 type DatabaseConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	User     string `mapstructure:"user"`
-	Password string `mapstructure:"password"`
-	DBName   string `mapstructure:"dbname"`
-	SSLMode  string `mapstructure:"sslmode"`
+	Schema             string `mapstructure:"schema"`
+	SystemRoleUser     string `mapstructure:"system_role_user"`
+	SystemRolePassword string `mapstructure:"system_role_password"`
+	Host               string `mapstructure:"host"`
+	Port               int    `mapstructure:"port"`
+	User               string `mapstructure:"user"`
+	Password           string `mapstructure:"password"`
+	DBName             string `mapstructure:"dbname"`
+	SSLMode            string `mapstructure:"sslmode"`
 
 	// AppRoleUser / AppRolePassword: 应用请求路径使用的低权角色
 	// （不带 BYPASSRLS，走 policy 过滤）。留空时降级为使用 User/Password。
@@ -306,6 +301,15 @@ func LoadConfig() (*Config, error) {
 	if databasePassword != "" {
 		config.Database.Password = databasePassword
 	}
+	config.Database.Schema = getEnvWithDefault("DB_SCHEMA", config.Database.Schema)
+	config.Database.SystemRoleUser = getEnvWithDefault("DB_SYSTEM_ROLE_USER", config.Database.SystemRoleUser)
+	systemPassword, err := readEnvironmentOrSecret("DB_SYSTEM_ROLE_PASSWORD")
+	if err != nil {
+		return nil, err
+	}
+	if systemPassword != "" {
+		config.Database.SystemRolePassword = systemPassword
+	}
 	// RLS 双角色 DSN（可选）：留空则回落至默认 DB_USER/DB_PASSWORD
 	config.Database.AppRoleUser = getEnvWithDefault("DB_APP_ROLE_USER", config.Database.AppRoleUser)
 	config.Database.AppRolePassword = getEnvWithDefault("DB_APP_ROLE_PASSWORD", config.Database.AppRolePassword)
@@ -331,6 +335,14 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 	config.KAFOutbox = kafOutboxConfig
+	identityConfig, err := loadIntakeIdentityConfig(outboxEnv)
+	if err != nil {
+		return nil, err
+	}
+	if err = validateIdentitySecretSeparation(identityConfig, config.JWT.Secret, kafWebhookSecret); err != nil {
+		return nil, err
+	}
+	config.IntakeIdentity = identityConfig
 	outboxDeliveryConfig, err := loadOutboxDeliveryConfig(outboxEnv)
 	if err != nil {
 		return nil, err
@@ -512,26 +524,33 @@ func loadKAFOutboxConfigWithSecret(getenv func(string) string, webhookSecret str
 		config.HealthPort = healthPort
 	}
 
-	if config.WebhookURL != "" && config.WebhookSecret == "" {
-		return KAFOutboxConfig{}, fmt.Errorf("KAF_WEBHOOK_SECRET is required when KAF_WEBHOOK_URL is configured")
-	}
 	if config.WebhookURL != "" {
-		parsedURL, err := url.ParseRequestURI(config.WebhookURL)
-		if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" || parsedURL.User != nil {
-			return KAFOutboxConfig{}, fmt.Errorf("KAF_WEBHOOK_URL must be an absolute HTTP(S) URL without userinfo")
+		if err := ValidateKAFPublicationConfig(&Config{KAFOutbox: config}); err != nil {
+			return KAFOutboxConfig{}, err
 		}
 	}
 	return config, nil
 }
 
+// ValidateKAFPublicationConfig validates the public deployment endpoint used by
+// API publication. It does not assert worker health or possession of credentials;
+// the dedicated worker validates its secret and execution settings on startup.
+func ValidateKAFPublicationConfig(cfg *Config) error {
+	if cfg == nil || strings.TrimSpace(cfg.KAFOutbox.WebhookURL) == "" {
+		return fmt.Errorf("KAF_WEBHOOK_URL is required for KAF delegation")
+	}
+	endpoint, err := url.ParseRequestURI(cfg.KAFOutbox.WebhookURL)
+	if err != nil || (endpoint.Scheme != "http" && endpoint.Scheme != "https") || endpoint.Host == "" || endpoint.User != nil {
+		return fmt.Errorf("KAF_WEBHOOK_URL must be an absolute HTTP(S) URL without userinfo")
+	}
+	return nil
+}
+
 // ValidateKAFWorkerStartupConfig makes KAF delivery configuration required for
 // the dedicated Worker while keeping it optional for the API process.
 func ValidateKAFWorkerStartupConfig(cfg *Config) error {
-	if cfg == nil {
-		return fmt.Errorf("worker configuration is required")
-	}
-	if strings.TrimSpace(cfg.KAFOutbox.WebhookURL) == "" {
-		return fmt.Errorf("KAF_WEBHOOK_URL is required for the KAF worker")
+	if err := ValidateKAFPublicationConfig(cfg); err != nil {
+		return err
 	}
 	if strings.TrimSpace(cfg.KAFOutbox.WebhookSecret) == "" {
 		return fmt.Errorf("KAF_WEBHOOK_SECRET is required for the KAF worker")

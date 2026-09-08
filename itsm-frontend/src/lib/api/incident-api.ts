@@ -1,3 +1,4 @@
+import { createWorkItem, type CreationRequestOptions, type CreateWorkItemResult } from './work-item-creation';
 import { httpClient } from './http-client';
 import type { ListQueryParams, PaginationResponse } from './types';
 import { API_URLS } from './types';
@@ -94,32 +95,27 @@ export interface Incident {
 }
 
 export interface CreateIncidentRequest {
+  requesterId?: number;
   title: string;
   description?: string;
   priority: string;
-  source: string;
+  source: 'manual' | 'user';
   type: string;
-  isMajorIncident?: boolean;
   assigneeId?: number;
   configurationItemIds?: number[];
   category?: string;
   subcategory?: string;
-  impact?: string; // Added for UI
-  urgency?: string; // Added for UI
-  // 阿里云相关字段
-  alibabaCloudInstanceId?: string;
-  alibabaCloudRegion?: string;
-  alibabaCloudService?: string;
-  alibabaCloudAlertData?: unknown;
-  alibabaCloudMetrics?: unknown;
-  // 安全事件相关字段
-  securityEventType?: string;
-  securityEventSourceIp?: string;
-  securityEventTarget?: string;
-  securityEventDetails?: unknown;
-  // 关联的配置项
-  affectedConfigurationItemIds?: number[];
-  formFields?: Record<string, string | number | boolean>;
+  severity?: string;
+  impact?: string;
+  urgency?: string;
+  impactAnalysis?: {
+    businessImpact?: { affectedUsers?: number; revenueImpact?: number; serviceAvailability?: number };
+    technicalImpact?: string;
+    affectedUsers?: number;
+    timeImpact?: { isOverdue?: boolean; hoursSinceCreation?: number; responseDeadline?: string; resolutionDeadline?: string };
+  };
+  metadata?: Record<string, unknown>;
+  detectedAt?: string;
 }
 
 // 根因分析接口
@@ -392,9 +388,8 @@ export class IncidentAPI {
   }
 
   // 创建事件
-  static async createIncident(data: CreateIncidentRequest): Promise<Incident> {
-    const response = await httpClient.post<Incident>(API_URLS.INCIDENTS(), data);
-    return response;
+  static async createIncident(data: CreateIncidentRequest, options: CreationRequestOptions): Promise<CreateWorkItemResult> {
+    return createWorkItem(API_URLS.INCIDENTS(), data, options);
   }
 
   // 更新事件
@@ -492,17 +487,10 @@ export class IncidentAPI {
   /**
    * 事件转为问题单
    * 后端: POST /api/v1/incidents/:id/convert-to-problem
-   * 返回: dto.ToProblemResponse (含 id 字段)
+   * 返回: CreateWorkItemResult
    */
-  static async convertToProblem(
-    id: number,
-    data: { title?: string; description?: string } = {}
-  ): Promise<{ id: number }> {
-    const response = await httpClient.post<{ id: number }>(
-      `/api/v1/incidents/${id}/convert-to-problem`,
-      data
-    );
-    return response;
+  static async convertToProblem(id: number, data: { title?: string; description?: string; requesterId?: number }, options: CreationRequestOptions): Promise<CreateWorkItemResult> {
+    return createWorkItem(`/api/v1/incidents/${id}/convert-to-problem`, data, options);
   }
 
   /**

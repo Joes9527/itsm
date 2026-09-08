@@ -2,8 +2,8 @@
 // 数据完整性检查工具，不是一次性迁移脚本——设计文档 §18.3-9。
 //
 // 检查内容：一条 tickets 行的 record_class 若不是 "generic"，就应该有且仅有一条对应专业
-// 扩展表（incidents/problems/changes）的行通过 work_item_id 指回它；反之，一条专业扩展表
-// 行的 work_item_id 若指向某个 tickets.id，那条 ticket 的 record_class 应该跟这张扩展表
+// 扩展表（incidents/problems/changes/service_requests）的行通过其权威外键指回它；反之，一条专业扩展表
+// 行的 work_item_id（ServiceRequest 使用 ticket_id）若指向某个 tickets.id，那条 ticket 的 record_class 应该跟这张扩展表
 // 匹配。任何一边对不上都报告为异常，不自动修复——自动修复需要业务判断（比如该建一条缺失的
 // 专业记录，还是该纠正 record_class），这个工具只负责发现，不负责决定怎么修。
 //
@@ -25,6 +25,7 @@ import (
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/problem"
+	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/ticket"
 
 	"go.uber.org/zap"
@@ -98,19 +99,19 @@ func findMismatches(ctx context.Context, client *ent.Client, tenantID int) ([]mi
 		return nil, fmt.Errorf("查询非 generic 工单失败: %w", err)
 	}
 	for _, t := range tickets {
-		var exists bool
+		var count int
 		var checkErr error
 		switch t.RecordClass {
 		case "incident":
-			exists, checkErr = client.Incident.Query().Where(incident.WorkItemID(t.ID)).Exist(ctx)
+			count, checkErr = client.Incident.Query().Where(incident.WorkItemID(t.ID)).Count(ctx)
 		case "problem":
-			exists, checkErr = client.Problem.Query().Where(problem.WorkItemID(t.ID)).Exist(ctx)
+			count, checkErr = client.Problem.Query().Where(problem.WorkItemID(t.ID)).Count(ctx)
 		case "change_request":
-			exists, checkErr = client.Change.Query().Where(change.WorkItemID(t.ID)).Exist(ctx)
-		case "service_request_item", "catalog_task":
-			// 这两类在 Wave 1 阶段还没有对应的 work_item_id 外键（ServiceRequest 沿用
-			// 既有 ticket_id 列，CatalogTask 是 Wave 2 才新建的表），暂不检查，
-			// 留给各自的 Wave 2 任务包。
+			count, checkErr = client.Change.Query().Where(change.WorkItemID(t.ID)).Count(ctx)
+		case "service_request_item":
+			count, checkErr = client.ServiceRequest.Query().Where(servicerequest.TicketID(t.ID)).Count(ctx)
+		case "catalog_task":
+			// CatalogTask has no owning extension table yet.
 			continue
 		default:
 			// 落到这里说明 record_class 是一个本工具不认识的值。以前这里跟上面两类
@@ -129,12 +130,16 @@ func findMismatches(ctx context.Context, client *ent.Client, tenantID int) ([]mi
 		if checkErr != nil {
 			return nil, fmt.Errorf("查询 ticket %d 的专业扩展记录失败: %w", t.ID, checkErr)
 		}
-		if !exists {
+		if count == 0 {
 			out = append(out, mismatch{
 				kind: "missing_extension", ticketID: t.ID, tenantID: t.TenantID,
 				recordClass: t.RecordClass,
 				detail:      fmt.Sprintf("record_class=%s 但找不到 work_item_id=%d 的专业扩展记录", t.RecordClass, t.ID),
 			})
+		}
+		if count > 1 {
+			out = append(out, mismatch{kind: "duplicate_extension", ticketID: t.ID, tenantID: t.TenantID, recordClass: t.RecordClass,
+				detail: fmt.Sprintf("record_class=%s has %d professional extensions for WorkItem %d", t.RecordClass, count, t.ID)})
 		}
 	}
 
@@ -167,6 +172,23 @@ func findMismatches(ctx context.Context, client *ent.Client, tenantID int) ([]mi
 		}
 	}
 
+	requests := client.ServiceRequest.Query()
+	if tenantID > 0 {
+		requests = requests.Where(servicerequest.HasWorkItemWith(ticket.TenantID(tenantID)))
+	}
+	rows, err := requests.WithWorkItem().All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, request := range rows {
+		ownerTenantID := 0
+		if request.Edges.WorkItem != nil {
+			ownerTenantID = request.Edges.WorkItem.TenantID
+		}
+		if err := checkBackref(ctx, client, request.TicketID, ownerTenantID, "service_request_item", &out); err != nil {
+			return nil, err
+		}
+	}
 	return out, nil
 }
 

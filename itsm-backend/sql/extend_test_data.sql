@@ -27,8 +27,8 @@ WHERE NOT EXISTS (SELECT 1 FROM tickets WHERE tenant_id = 1 AND ticket_number = 
 -- =============================================
 -- 2. 添加更多事件（6条）
 -- =============================================
-INSERT INTO tickets (title, description, status, priority, type, record_class, ticket_number, tenant_id, requester_id, source, created_at, updated_at)
-SELECT title, description, status, priority, 'incident', 'incident', work_item_number, tenant_id, reporter_id, 'monitoring', created_at, created_at
+INSERT INTO tickets (title, description, status, priority, record_class, ticket_number, tenant_id, requester_id, source, created_at, updated_at)
+SELECT title, description, status, priority, 'incident', work_item_number, tenant_id, reporter_id, 'monitoring', created_at, created_at
 FROM (VALUES
     ('数据库CPU持续高负载', '数据库服务器CPU使用率超过90%持续超过30分钟', 'investigating', 'critical', 'TKT-EXT-INC-000007', 1, 1, NOW() - INTERVAL '1 hour'),
     ('第三方API调用失败率上升', '调用外部支付API失败率从1%上升到15%', 'confirmed', 'high', 'TKT-EXT-INC-000008', 1, 1, NOW() - INTERVAL '2 hours'),
@@ -38,24 +38,24 @@ FROM (VALUES
     ('日志采集延迟', '日志采集延迟超过10分钟', 'new', 'low', 'TKT-EXT-INC-000012', 1, 1, NOW() - INTERVAL '30 minutes')
 ) AS v(title, description, status, priority, work_item_number, tenant_id, reporter_id, created_at)
 ON CONFLICT DO NOTHING;
-INSERT INTO incidents (work_item_id, incident_number, type, is_major_incident, detected_at)
-SELECT t.id, v.incident_number, 'incident', v.is_major, v.created_at
+INSERT INTO incidents (work_item_id, type, is_major_incident, detected_at)
+SELECT t.id, 'incident', v.is_major, v.created_at
 FROM (VALUES
-    ('TKT-EXT-INC-000007', 'INC-202602-000007', true, 1, 1, NOW() - INTERVAL '1 hour'),
-    ('TKT-EXT-INC-000008', 'INC-202602-000008', false, 1, 1, NOW() - INTERVAL '2 hours'),
-    ('TKT-EXT-INC-000009', 'INC-202602-000009', false, 1, 1, NOW() - INTERVAL '3 hours'),
-    ('TKT-EXT-INC-000010', 'INC-202602-000010', false, 1, 1, NOW() - INTERVAL '5 hours'),
-    ('TKT-EXT-INC-000011', 'INC-202602-000011', false, 1, 1, NOW() - INTERVAL '1 day'),
-    ('TKT-EXT-INC-000012', 'INC-202602-000012', false, 1, 1, NOW() - INTERVAL '30 minutes')
-) AS v(work_item_number, incident_number, is_major, reporter_id, tenant_id, created_at)
+    ('TKT-EXT-INC-000007', true, 1, 1, NOW() - INTERVAL '1 hour'),
+    ('TKT-EXT-INC-000008', false, 1, 1, NOW() - INTERVAL '2 hours'),
+    ('TKT-EXT-INC-000009', false, 1, 1, NOW() - INTERVAL '3 hours'),
+    ('TKT-EXT-INC-000010', false, 1, 1, NOW() - INTERVAL '5 hours'),
+    ('TKT-EXT-INC-000011', false, 1, 1, NOW() - INTERVAL '1 day'),
+    ('TKT-EXT-INC-000012', false, 1, 1, NOW() - INTERVAL '30 minutes')
+) AS v(work_item_number, is_major, reporter_id, tenant_id, created_at)
 JOIN tickets t ON t.ticket_number = v.work_item_number AND t.tenant_id = v.tenant_id
 WHERE NOT EXISTS (SELECT 1 FROM incidents i WHERE i.work_item_id = t.id);
 
 -- =============================================
 -- 3. 添加更多问题（4条）
 -- =============================================
-INSERT INTO tickets (title, description, status, priority, type, record_class, ticket_number, tenant_id, requester_id, created_at, updated_at)
-SELECT title, description, status, priority, 'problem', 'problem', work_item_number, tenant_id, 1, created_at, created_at
+INSERT INTO tickets (title, description, status, priority, record_class, ticket_number, tenant_id, requester_id, created_at, updated_at)
+SELECT title, description, status, priority, 'problem', work_item_number, tenant_id, 1, created_at, created_at
 FROM (VALUES
     ('API接口超时问题', '多个API接口存在超时问题，影响核心业务流程', 'investigating', 'critical', 'TKT-EXT-PRB-000001', 1, NOW() - INTERVAL '3 days'),
     ('缓存一致性问题', '缓存与数据库数据不一致导致显示异常', 'identified', 'high', 'TKT-EXT-PRB-000002', 1, NOW() - INTERVAL '5 days'),
@@ -77,8 +77,8 @@ WHERE NOT EXISTS (SELECT 1 FROM problems p WHERE p.work_item_id = t.id);
 -- =============================================
 -- 4. 添加更多变更（5条）
 -- =============================================
-INSERT INTO tickets (title, description, status, priority, type, record_class, ticket_number, tenant_id, requester_id, created_at, updated_at)
-SELECT title, description, status, priority, 'change', 'change_request', work_item_number, tenant_id, 1, created_at, created_at
+INSERT INTO tickets (title, description, status, priority, record_class, ticket_number, tenant_id, requester_id, created_at, updated_at)
+SELECT title, description, status, priority, 'change_request', work_item_number, tenant_id, 1, created_at, created_at
 FROM (VALUES
     ('应用服务版本升级', '将Spring Boot应用从2.5升级到3.0', 'draft', 'medium', 'TKT-EXT-CHG-000001', 1, NOW() - INTERVAL '1 day'),
     ('负载均衡策略调整', '修改负载均衡算法从轮询改为加权最小连接', 'approved', 'medium', 'TKT-EXT-CHG-000002', 1, NOW() - INTERVAL '3 days'),
@@ -102,16 +102,20 @@ WHERE NOT EXISTS (SELECT 1 FROM changes c WHERE c.work_item_id = t.id);
 -- =============================================
 -- 5. 添加更多服务请求（6条）
 -- =============================================
-INSERT INTO service_requests (title, description, status, priority, request_number, requester_id, catalog_id, tenant_id, created_at, updated_at)
-SELECT * FROM (VALUES
+WITH fixture(title,description,status,priority,request_number,requester_id,catalog_id,tenant_id,created_at,updated_at) AS (VALUES
     ('开通对象存储OSS', '申请开通阿里云OSS存储服务用于文件存储', 'pending_approval', 'medium', 'SR-202602-000006', 2, 2, 1, NOW() - INTERVAL '2 hours', NOW() - INTERVAL '2 hours'),
     ('申请负载均衡SLB', '申请开通负载均衡服务用于流量分发', 'approved', 'high', 'SR-202602-000007', 4, 2, 1, NOW() - INTERVAL '1 day', NOW() - INTERVAL '1 day'),
     ('开通消息队列MQ', '申请开通RabbitMQ消息队列服务', 'in_progress', 'medium', 'SR-202602-000008', 6, 2, 1, NOW() - INTERVAL '3 days', NOW() - INTERVAL '3 days'),
     ('申请NAT网关', '申请开通NAT网关用于内网访问外网', 'completed', 'medium', 'SR-202602-000009', 2, 2, 1, NOW() - INTERVAL '5 days', NOW() - INTERVAL '2 days'),
     ('开通日志服务SLS', '申请开通日志服务用于日志收集分析', 'pending_approval', 'low', 'SR-202602-000010', 4, 2, 1, NOW() - INTERVAL '4 hours', NOW() - INTERVAL '4 hours'),
     ('申请数据库读写分离', '申请开通数据库读写分离实例', 'draft', 'high', 'SR-202602-000011', 6, 2, 1, NOW() - INTERVAL '6 hours', NOW() - INTERVAL '6 hours')
-) AS v(title, description, status, priority, request_number, requester_id, catalog_id, tenant_id, created_at, updated_at)
-WHERE NOT EXISTS (SELECT 1 FROM service_requests WHERE request_number = 'SR-202602-000006');
+), owners AS (
+ INSERT INTO tickets(ticket_number,title,description,status,priority,record_class,requester_id,tenant_id,created_at,updated_at)
+ SELECT request_number,title,description,status,priority,'service_request_item',requester_id,tenant_id,created_at,updated_at FROM fixture
+ ON CONFLICT (tenant_id,ticket_number) DO NOTHING RETURNING id,tenant_id,ticket_number
+)
+INSERT INTO service_requests(ticket_id,catalog_id)
+SELECT owners.id,fixture.catalog_id FROM owners JOIN fixture ON owners.tenant_id=fixture.tenant_id AND owners.ticket_number=request_number;
 
 -- =============================================
 -- 6. 添加更多知识库文章（6条）

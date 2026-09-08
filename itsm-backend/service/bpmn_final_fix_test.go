@@ -17,6 +17,7 @@ import (
 	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
+	"itsm-backend/internal/jsonvalue"
 	"itsm-backend/service/bpmn"
 
 	"entgo.io/ent/dialect"
@@ -287,7 +288,7 @@ func TestCompleteTaskRollsBackDatabaseStateWhenAuditFails(t *testing.T) {
 	afterTask := f.client.ProcessTask.GetX(f.userCtx, task.ID)
 	afterInstance := f.client.ProcessInstance.GetX(f.userCtx, instance.ID)
 	assert.Equal(t, common.ProcessTaskStatusCreated, afterTask.Status)
-	assert.Equal(t, map[string]interface{}{"before": "kept"}, afterTask.TaskVariables)
+	assert.Equal(t, jsonvalue.NumberMap{"before": "kept"}, afterTask.TaskVariables)
 	assert.Equal(t, instance.CurrentActivityID, afterInstance.CurrentActivityID)
 	assert.Equal(t, instance.Status, afterInstance.Status)
 	assert.Equal(t, instance.Variables, afterInstance.Variables)

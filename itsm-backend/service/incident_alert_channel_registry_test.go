@@ -56,9 +56,23 @@ func TestSLAAlertRuleRejectsUnsupportedChannelBeforePersistence(t *testing.T) {
 }
 
 func TestNotificationRuleActionUsesAuthoritativeAlertCreator(t *testing.T) {
-	creator := &recordingIncidentAlertCreator{}
-	action := &NotificationAction{Channels: []string{"email"}, Recipients: []string{"operator@example.com"}, Message: "act", Severity: "high", alertCreator: creator}
-	require.NoError(t, action.Execute(context.Background(), &ent.Incident{ID: 42}, 7))
-	require.Len(t, creator.requests, 1)
-	assert.Equal(t, 42, creator.requests[0].IncidentID)
+	client, _, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "notification-action")
+	require.NoError(t, err)
+	actor, err := createIncidentTestUser(ctx, client, tenant.ID, "notification-action")
+	require.NoError(t, err)
+	incident := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "notification-action")
+	creator := NewIncidentAlertingService(client, zap.NewNop().Sugar())
+	action := &NotificationAction{Channels: []string{"email"}, Recipients: []string{actor.Email}, Message: "act", Severity: "high", alertCreator: creator, client: client}
+	require.NoError(t, action.Execute(ctx, incident, tenant.ID))
+	require.Equal(t, incident.ID, client.IncidentAlert.Query().OnlyX(ctx).IncidentID)
+	require.Equal(t, "pending", client.OutboxEvent.Query().OnlyX(ctx).Status)
+}
+func TestNotificationRuleActionRejectsIndependentAlertCreator(t *testing.T) {
+	client, _, ctx := setupIncidentTest(t)
+	defer client.Close()
+	action := &NotificationAction{client: client, alertCreator: &recordingIncidentAlertCreator{}}
+	require.ErrorContains(t, action.Execute(ctx, &ent.Incident{ID: 42}, 7), "not configured")
+	require.Zero(t, client.IncidentAlert.Query().CountX(ctx))
 }

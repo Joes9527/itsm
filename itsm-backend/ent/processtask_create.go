@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent/dialect/sql"
@@ -222,7 +223,7 @@ func (_c *ProcessTaskCreate) SetNillableFormKey(v *string) *ProcessTaskCreate {
 }
 
 // SetTaskVariables sets the "task_variables" field.
-func (_c *ProcessTaskCreate) SetTaskVariables(v map[string]interface{}) *ProcessTaskCreate {
+func (_c *ProcessTaskCreate) SetTaskVariables(v jsonvalue.NumberMap) *ProcessTaskCreate {
 	_c.mutation.SetTaskVariables(v)
 	return _c
 }
@@ -1001,7 +1002,7 @@ func (u *ProcessTaskUpsert) ClearFormKey() *ProcessTaskUpsert {
 }
 
 // SetTaskVariables sets the "task_variables" field.
-func (u *ProcessTaskUpsert) SetTaskVariables(v map[string]interface{}) *ProcessTaskUpsert {
+func (u *ProcessTaskUpsert) SetTaskVariables(v jsonvalue.NumberMap) *ProcessTaskUpsert {
 	u.Set(processtask.FieldTaskVariables, v)
 	return u
 }
@@ -1557,7 +1558,7 @@ func (u *ProcessTaskUpsertOne) ClearFormKey() *ProcessTaskUpsertOne {
 }
 
 // SetTaskVariables sets the "task_variables" field.
-func (u *ProcessTaskUpsertOne) SetTaskVariables(v map[string]interface{}) *ProcessTaskUpsertOne {
+func (u *ProcessTaskUpsertOne) SetTaskVariables(v jsonvalue.NumberMap) *ProcessTaskUpsertOne {
 	return u.Update(func(s *ProcessTaskUpsert) {
 		s.SetTaskVariables(v)
 	})
@@ -2314,7 +2315,7 @@ func (u *ProcessTaskUpsertBulk) ClearFormKey() *ProcessTaskUpsertBulk {
 }
 
 // SetTaskVariables sets the "task_variables" field.
-func (u *ProcessTaskUpsertBulk) SetTaskVariables(v map[string]interface{}) *ProcessTaskUpsertBulk {
+func (u *ProcessTaskUpsertBulk) SetTaskVariables(v jsonvalue.NumberMap) *ProcessTaskUpsertBulk {
 	return u.Update(func(s *ProcessTaskUpsert) {
 		s.SetTaskVariables(v)
 	})

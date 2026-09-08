@@ -11,7 +11,6 @@ import (
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/handlers/change"
-	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 
 	"github.com/stretchr/testify/assert"
@@ -66,12 +65,14 @@ func TestChangeApprovalE2E_FullApproveFlow(t *testing.T) {
 	engine := newTestBPMNEngine(t, client, logger)
 	trigger := service.NewProcessTriggerService(client, engine)
 
-	repo := change.NewEntRepository(client, db, workitemnumber.NewPostgreSQLAllocator())
+	repo := change.NewEntRepository(client, db)
 	svc := change.NewService(repo, client, logger)
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
+	change.ConfigureChangeIntakeFixture(ctx, client, tenant.ID, "agent")
+	app := change.NewChangeIntakeApp(client, svc, logger)
 
-	created, err := repo.Create(ctx, &change.Change{Title: "端到端测试变更", Type: "normal", Status: "draft", RiskLevel: "medium", ImpactScope: "low", TenantID: tenant.ID, CreatedBy: requester.ID})
+	created, err := change.CreateChangeViaIntake(ctx, client, svc, app, tenant.ID, requester.ID, &change.Change{Title: "端到端测试变更", Type: "normal", Justification: "Apply reviewed service configuration", ImplementationPlan: "Back up configuration, apply and verify", RollbackPlan: "Restore previous configuration and verify", RiskLevel: "medium", ImpactScope: "low", TenantID: tenant.ID, CreatedBy: requester.ID})
 	require.NoError(t, err)
 
 	_, err = svc.SubmitChange(tenantCtx, created.ID, tenant.ID, requester.ID, &dto.SubmitChangeRequest{})
@@ -142,12 +143,14 @@ func TestChangeApprovalE2E_FullRejectFlow(t *testing.T) {
 	engine := newTestBPMNEngine(t, client, logger)
 	trigger := service.NewProcessTriggerService(client, engine)
 
-	repo := change.NewEntRepository(client, db, workitemnumber.NewPostgreSQLAllocator())
+	repo := change.NewEntRepository(client, db)
 	svc := change.NewService(repo, client, logger)
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
+	change.ConfigureChangeIntakeFixture(ctx, client, tenant.ID, "agent")
+	app := change.NewChangeIntakeApp(client, svc, logger)
 
-	created, err := repo.Create(ctx, &change.Change{Title: "端到端测试变更-驳回", Type: "normal", Status: "draft", RiskLevel: "medium", ImpactScope: "low", TenantID: tenant.ID, CreatedBy: requester.ID})
+	created, err := change.CreateChangeViaIntake(ctx, client, svc, app, tenant.ID, requester.ID, &change.Change{Title: "端到端测试变更-驳回", Type: "normal", Justification: "Apply reviewed service configuration", ImplementationPlan: "Back up configuration, apply and verify", RollbackPlan: "Restore previous configuration and verify", RiskLevel: "medium", ImpactScope: "low", TenantID: tenant.ID, CreatedBy: requester.ID})
 	require.NoError(t, err)
 
 	_, err = svc.SubmitChange(tenantCtx, created.ID, tenant.ID, requester.ID, &dto.SubmitChangeRequest{})
@@ -208,12 +211,14 @@ func TestChangeApprovalE2E_NonCMUserCannotApprove(t *testing.T) {
 	engine := newTestBPMNEngine(t, client, logger)
 	trigger := service.NewProcessTriggerService(client, engine)
 
-	repo := change.NewEntRepository(client, db, workitemnumber.NewPostgreSQLAllocator())
+	repo := change.NewEntRepository(client, db)
 	svc := change.NewService(repo, client, logger)
 	svc.SetProcessTriggerService(trigger)
 	svc.SetProcessEngine(engine)
+	change.ConfigureChangeIntakeFixture(ctx, client, tenant.ID, "agent")
+	app := change.NewChangeIntakeApp(client, svc, logger)
 
-	created, err := repo.Create(ctx, &change.Change{Title: "端到端测试变更-越权", Type: "normal", Status: "draft", RiskLevel: "medium", ImpactScope: "low", TenantID: tenant.ID, CreatedBy: requester.ID})
+	created, err := change.CreateChangeViaIntake(ctx, client, svc, app, tenant.ID, requester.ID, &change.Change{Title: "端到端测试变更-越权", Type: "normal", Justification: "Apply reviewed service configuration", ImplementationPlan: "Back up configuration, apply and verify", RollbackPlan: "Restore previous configuration and verify", RiskLevel: "medium", ImpactScope: "low", TenantID: tenant.ID, CreatedBy: requester.ID})
 	require.NoError(t, err)
 
 	_, err = svc.SubmitChange(tenantCtx, created.ID, tenant.ID, requester.ID, &dto.SubmitChangeRequest{})

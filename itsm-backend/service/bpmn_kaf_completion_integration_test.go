@@ -4,6 +4,8 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"itsm-backend/handlers/common/accessgrant"
 	"sync"
 	"testing"
 	"time"
@@ -64,7 +66,21 @@ func (b *postgresKafFenceBarrier) hook() ent.Hook {
 	}
 }
 
+type postgresAccessContribution struct{ called bool }
+
+func (p *postgresAccessContribution) ValidateAccessCompletionReplay(context.Context, *ent.Client, *ent.ProcessTask, *ent.KafTaskActionLedger) error {
+	return nil
+}
+func (p *postgresAccessContribution) ContributeAccessCompletion(ctx context.Context, client *ent.Client, task *ent.ProcessTask, ledger *ent.KafTaskActionLedger, raw json.RawMessage) error {
+	p.called = true
+	return client.AuditLog.Create().SetTenantID(task.TenantID).SetResource("work_item").SetAction("c2.access_contribution_probe").SetPath("test").SetMethod("POST").SetStatusCode(200).Exec(ctx)
+}
 func TestKafCompletionFinalFenceRollsBackAllEffectsAfterPostgresLeaseReclaim(t *testing.T) {
+	for _, access := range []bool{false, true} {
+		t.Run(map[bool]string{false: "ordinary", true: "access_contribution"}[access], func(t *testing.T) { testPostgresKafFinalFence(t, access) })
+	}
+}
+func testPostgresKafFinalFence(t *testing.T, access bool) {
 	setupClient, setupDB := openBPMNPostgresIntegrationClient(t)
 	migrateBPMNPostgresIntegrationTables(t, setupClient,
 		migrate.AuditLogsTable,
@@ -153,6 +169,9 @@ func TestKafCompletionFinalFenceRollsBackAllEffectsAfterPostgresLeaseReclaim(t *
 		SetCorrelationID("correlation-" + namespace).
 		SetTenantID(tenant.ID).
 		SaveX(ctx)
+	if access {
+		task = setupClient.ProcessTask.UpdateOne(task).SetCallbackAction(accessgrant.Capability).SaveX(ctx)
+	}
 	ledger := setupClient.KafTaskActionLedger.Create().
 		SetTenantID(tenant.ID).SetTaskID(task.TaskID).
 		SetRunID("run-fence").SetStepID("finish").SetAction(kafActionComplete).
@@ -171,6 +190,10 @@ func TestKafCompletionFinalFenceRollsBackAllEffectsAfterPostgresLeaseReclaim(t *
 	barrier := &postgresKafFenceBarrier{arrived: make(chan struct{}), release: make(chan struct{})}
 	clientA.KafTaskActionLedger.Use(barrier.hook())
 	engine := NewCustomProcessEngine(clientA, zap.NewNop().Sugar()).(*CustomProcessEngine)
+	contributor := &postgresAccessContribution{}
+	if access {
+		engine.SetAccessCompletionContributor(contributor)
+	}
 	engine.CallbackRegistry().RegisterHandler(&failingUserTaskCallbackHandler{
 		taskType: "postgres_kaf_callback", handlerID: "postgres_kaf_callback_handler",
 	})
@@ -209,6 +232,10 @@ func TestKafCompletionFinalFenceRollsBackAllEffectsAfterPostgresLeaseReclaim(t *
 		t.Fatal("completion did not return after lease reclaim")
 	}
 
+	if access {
+		require.True(t, contributor.called)
+	}
+	require.Zero(t, setupClient.AuditLog.Query().Where(auditlog.TenantIDEQ(tenant.ID), auditlog.ActionEQ("c2.access_contribution_probe")).CountX(ctx))
 	persistedTask := setupClient.ProcessTask.GetX(ctx, task.ID)
 	require.Equal(t, common.ProcessTaskStatusDelegated, persistedTask.Status)
 	persistedInstance := setupClient.ProcessInstance.GetX(ctx, instance.ID)

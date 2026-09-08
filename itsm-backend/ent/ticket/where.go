@@ -70,9 +70,9 @@ func Status(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldStatus, v))
 }
 
-// Type applies equality check predicate on the "type" field. It's identical to TypeEQ.
-func Type(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldEQ(FieldType, v))
+// GenericSubtype applies equality check predicate on the "generic_subtype" field. It's identical to GenericSubtypeEQ.
+func GenericSubtype(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldGenericSubtype, v))
 }
 
 // Source applies equality check predicate on the "source" field. It's identical to SourceEQ.
@@ -460,69 +460,79 @@ func StatusContainsFold(v string) predicate.Ticket {
 	return predicate.Ticket(sql.FieldContainsFold(FieldStatus, v))
 }
 
-// TypeEQ applies the EQ predicate on the "type" field.
-func TypeEQ(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldEQ(FieldType, v))
+// GenericSubtypeEQ applies the EQ predicate on the "generic_subtype" field.
+func GenericSubtypeEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldGenericSubtype, v))
 }
 
-// TypeNEQ applies the NEQ predicate on the "type" field.
-func TypeNEQ(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldNEQ(FieldType, v))
+// GenericSubtypeNEQ applies the NEQ predicate on the "generic_subtype" field.
+func GenericSubtypeNEQ(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldGenericSubtype, v))
 }
 
-// TypeIn applies the In predicate on the "type" field.
-func TypeIn(vs ...string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldIn(FieldType, vs...))
+// GenericSubtypeIn applies the In predicate on the "generic_subtype" field.
+func GenericSubtypeIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldGenericSubtype, vs...))
 }
 
-// TypeNotIn applies the NotIn predicate on the "type" field.
-func TypeNotIn(vs ...string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldNotIn(FieldType, vs...))
+// GenericSubtypeNotIn applies the NotIn predicate on the "generic_subtype" field.
+func GenericSubtypeNotIn(vs ...string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldGenericSubtype, vs...))
 }
 
-// TypeGT applies the GT predicate on the "type" field.
-func TypeGT(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldGT(FieldType, v))
+// GenericSubtypeGT applies the GT predicate on the "generic_subtype" field.
+func GenericSubtypeGT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldGenericSubtype, v))
 }
 
-// TypeGTE applies the GTE predicate on the "type" field.
-func TypeGTE(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldGTE(FieldType, v))
+// GenericSubtypeGTE applies the GTE predicate on the "generic_subtype" field.
+func GenericSubtypeGTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldGenericSubtype, v))
 }
 
-// TypeLT applies the LT predicate on the "type" field.
-func TypeLT(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldLT(FieldType, v))
+// GenericSubtypeLT applies the LT predicate on the "generic_subtype" field.
+func GenericSubtypeLT(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldGenericSubtype, v))
 }
 
-// TypeLTE applies the LTE predicate on the "type" field.
-func TypeLTE(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldLTE(FieldType, v))
+// GenericSubtypeLTE applies the LTE predicate on the "generic_subtype" field.
+func GenericSubtypeLTE(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldGenericSubtype, v))
 }
 
-// TypeContains applies the Contains predicate on the "type" field.
-func TypeContains(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldContains(FieldType, v))
+// GenericSubtypeContains applies the Contains predicate on the "generic_subtype" field.
+func GenericSubtypeContains(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContains(FieldGenericSubtype, v))
 }
 
-// TypeHasPrefix applies the HasPrefix predicate on the "type" field.
-func TypeHasPrefix(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldHasPrefix(FieldType, v))
+// GenericSubtypeHasPrefix applies the HasPrefix predicate on the "generic_subtype" field.
+func GenericSubtypeHasPrefix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasPrefix(FieldGenericSubtype, v))
 }
 
-// TypeHasSuffix applies the HasSuffix predicate on the "type" field.
-func TypeHasSuffix(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldHasSuffix(FieldType, v))
+// GenericSubtypeHasSuffix applies the HasSuffix predicate on the "generic_subtype" field.
+func GenericSubtypeHasSuffix(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldHasSuffix(FieldGenericSubtype, v))
 }
 
-// TypeEqualFold applies the EqualFold predicate on the "type" field.
-func TypeEqualFold(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldEqualFold(FieldType, v))
+// GenericSubtypeIsNil applies the IsNil predicate on the "generic_subtype" field.
+func GenericSubtypeIsNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldIsNull(FieldGenericSubtype))
 }
 
-// TypeContainsFold applies the ContainsFold predicate on the "type" field.
-func TypeContainsFold(v string) predicate.Ticket {
-	return predicate.Ticket(sql.FieldContainsFold(FieldType, v))
+// GenericSubtypeNotNil applies the NotNil predicate on the "generic_subtype" field.
+func GenericSubtypeNotNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotNull(FieldGenericSubtype))
+}
+
+// GenericSubtypeEqualFold applies the EqualFold predicate on the "generic_subtype" field.
+func GenericSubtypeEqualFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEqualFold(FieldGenericSubtype, v))
+}
+
+// GenericSubtypeContainsFold applies the ContainsFold predicate on the "generic_subtype" field.
+func GenericSubtypeContainsFold(v string) predicate.Ticket {
+	return predicate.Ticket(sql.FieldContainsFold(FieldGenericSubtype, v))
 }
 
 // SourceEQ applies the EQ predicate on the "source" field.

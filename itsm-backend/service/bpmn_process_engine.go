@@ -1,9 +1,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"itsm-backend/config"
 	"strconv"
 	"strings"
 	"time"
@@ -99,18 +102,20 @@ type TaskService interface {
 // CustomProcessEngine 是ProcessEngine接口的实现
 // 充当领域服务(Domain Service)，协调流程定义、实例和任务实体的生命周期
 type CustomProcessEngine struct {
-	client                *ent.Client
-	logger                *zap.SugaredLogger
-	parser                *BPMNParser            // 使用自定义的BPMN解析器
-	exprEngine            *ExpressionEngine      // 表达式引擎
-	expressionVars        map[string]interface{} // 表达式变量
-	callbackRegistry      *bpmn.CallbackRegistry // 服务任务回调注册中心
-	groupResolver         *bpmn.GroupResolver    // 审批组解析器：candidateGroups → 候选用户
-	participationResolver *bpmnParticipationResolver
-	instanceAccessPolicy  *bpmnInstanceAccessPolicy
-	callbackOutbox        *bpmnCallbackOutbox
-	callbackExecutionKeys *[]string
-	transactionBound      bool
+	accessCompletionContributor AccessCompletionContributor
+	client                      *ent.Client
+	logger                      *zap.SugaredLogger
+	parser                      *BPMNParser            // 使用自定义的BPMN解析器
+	exprEngine                  *ExpressionEngine      // 表达式引擎
+	expressionVars              map[string]interface{} // 表达式变量
+	publicationKAFConfig        *config.Config
+	callbackRegistry            *bpmn.CallbackRegistry // 服务任务回调注册中心
+	groupResolver               *bpmn.GroupResolver    // 审批组解析器：candidateGroups → 候选用户
+	participationResolver       *bpmnParticipationResolver
+	instanceAccessPolicy        *bpmnInstanceAccessPolicy
+	callbackOutbox              *bpmnCallbackOutbox
+	callbackExecutionKeys       *[]string
+	transactionBound            bool
 	// 内部服务
 	processDefinitionService *bpmnProcessDefinitionService
 	processInstanceService   *bpmnProcessInstanceService
@@ -310,6 +315,13 @@ func resolveBPMNProcessStartActor(ctx context.Context, client *ent.Client, tenan
 		}
 	}
 
+	if authorized, ok := ctx.Value(intakeStartActorKey{}).(intakeStartActor); ok {
+		if !hasTrustedActor || authorized.actor.ID != actorID || authorized.targetTenantID != tenantID || authorized.workItemID <= 0 || authorized.receiptID <= 0 || !authorized.actor.Active {
+			return nil, "", fmt.Errorf("intake process actor scope mismatch")
+		}
+		return &authorized.actor, authorized.actor.Name, nil
+	}
+
 	actor, err := client.User.Query().Where(
 		user.ID(actorID), user.TenantID(tenantID), user.Active(true),
 	).Only(ctx)
@@ -351,16 +363,19 @@ func (e *CustomProcessEngine) startProcessWithClient(ctx context.Context, proces
 	if legacyTenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); legacyTenantID > 0 && legacyTenantID != tenantID {
 		return nil, common.NewForbiddenError("BPMN 启动租户上下文不一致")
 	}
-	query := e.client.ProcessDefinition.Query().
-		Where(processdefinition.Key(processDefinitionKey)).
-		Where(processdefinition.IsActive(true)).
-		Where(processdefinition.IsLatest(true))
-	query = query.Where(processdefinition.TenantID(tenantID))
-	definition, err := query.First(ctx)
+	definition, err := selectExecutableProcessDefinition(ctx, e.client, tenantID, processDefinitionKey, 0)
 	if err != nil {
 		return nil, fmt.Errorf("获取流程定义失败: %w", err)
 	}
+	if definition == nil {
+		return nil, common.NewNotFoundError("executable process definition")
+	}
 
+	return e.startResolvedProcess(ctx, definition, businessKey, businessType, businessID, variables, fmt.Sprintf("PI-%s-%d", processDefinitionKey, time.Now().UnixNano()), "")
+}
+
+// startResolvedProcess shares the atomic engine path for resolved and key-based starts.
+func (e *CustomProcessEngine) startResolvedProcess(ctx context.Context, definition *ent.ProcessDefinition, businessKey, businessType string, businessID int, variables map[string]interface{}, instanceIdentity, startDigest string) (*ent.ProcessInstance, error) {
 	bpmnDefinitions, err := e.parser.ParseXML(definition.BpmnXML)
 	if err != nil {
 		return nil, fmt.Errorf("解析BPMN失败: %w", err)
@@ -377,9 +392,9 @@ func (e *CustomProcessEngine) startProcessWithClient(ctx context.Context, proces
 	startEvent := process.StartEvents[0]
 
 	createInstance := e.client.ProcessInstance.Create().
-		SetProcessInstanceID(fmt.Sprintf("PI-%s-%d", processDefinitionKey, time.Now().UnixNano())).
+		SetProcessInstanceID(instanceIdentity).
 		SetBusinessKey(businessKey).
-		SetProcessDefinitionKey(processDefinitionKey).
+		SetProcessDefinitionKey(definition.Key).
 		SetProcessDefinitionID(definition.ID).
 		SetStatus("running").
 		SetVariables(variables).
@@ -388,6 +403,9 @@ func (e *CustomProcessEngine) startProcessWithClient(ctx context.Context, proces
 		SetTenantID(definition.TenantID).
 		SetCurrentActivityID(startEvent.ID).
 		SetCurrentActivityName(startEvent.Name)
+	if startDigest != "" {
+		createInstance.SetStartRequestDigest(startDigest)
+	}
 	if businessType != "" {
 		createInstance = createInstance.SetBusinessType(businessType)
 	}
@@ -421,7 +439,18 @@ func (e *CustomProcessEngine) startProcessWithClient(ctx context.Context, proces
 	if actor != nil {
 		userID = actor.ID
 	}
-	if err := e.auditService.RecordProcessStarted(ctx, instance, userID, userName, variables); err != nil {
+	auditVariables := variables
+	if provenance, ok := ctx.Value(intakeStartActorKey{}).(intakeStartActor); ok {
+		// Identity evidence belongs to the audit. The frozen workflow input also
+		// determines the start digest and must remain unchanged across upgrades.
+		auditVariables = make(map[string]interface{}, len(variables)+2)
+		for key, value := range variables {
+			auditVariables[key] = value
+		}
+		auditVariables["actor_tenant_id"] = provenance.actor.TenantID
+		auditVariables["intake_request_id"] = provenance.receiptID
+	}
+	if err := e.auditService.RecordProcessStarted(ctx, instance, userID, userName, auditVariables); err != nil {
 		return nil, err
 	}
 	return instance, nil
@@ -1039,7 +1068,11 @@ func (e *CustomProcessEngine) executeStep(ctx context.Context, instance *ent.Pro
 	var selectedFlow *BPMNSequenceFlow
 	unconditionalCount := 0
 	for _, flow := range outgoingFlows {
-		if e.evaluateCondition(flow, variables) {
+		matched, err := e.evaluateCondition(flow, variables)
+		if err != nil {
+			return fmt.Errorf("流程条件评估失败 [%s]: %w", flow.ID, err)
+		}
+		if matched {
 			if selectedFlow == nil {
 				selectedFlow = flow
 			}
@@ -1260,6 +1293,12 @@ func (e *CustomProcessEngine) processCommittedCallbackKeys(ctx context.Context, 
 	}
 }
 
+// SetCallbackCandidateClient supplies the existing restricted System read pool.
+// Only cross-tenant candidate selection uses it; claims and execution keep Tenant.
+func (e *CustomProcessEngine) SetCallbackCandidateClient(client *ent.Client) {
+	e.callbackOutbox.candidateClient = client
+}
+
 // ProcessPendingCallbacks performs one deterministic durable callback sweep.
 func (e *CustomProcessEngine) ProcessPendingCallbacks(ctx context.Context, workerID string, limit int) (int, error) {
 	if e.callbackOutbox == nil {
@@ -1405,6 +1444,25 @@ func (e *CustomProcessEngine) executeClaimedServiceTaskCallback(
 	}
 	if instance.CurrentActivityID != txRow.ElementID {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(errors.New("callback no longer owns current activity"))
+	}
+	outputs, err := creationCallbackOutputs(handler, txRow.Action, effect)
+	if err != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(err)
+	}
+	if len(outputs) > 0 {
+		merged := copyBPMNCallbackVariables(instance.Variables)
+		for key, value := range outputs {
+			merged[key] = value
+		}
+		affected, err := tx.ProcessInstance.Update().Where(processinstance.IDEQ(instance.ID), processinstance.TenantIDEQ(instance.TenantID), processinstance.VersionEQ(instance.Version)).SetVariables(merged).SetVersion(instance.Version + 1).Save(ctx)
+		if err != nil {
+			return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
+		}
+		if affected != 1 {
+			return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(errors.New("source process changed during creation callback"))
+		}
+		instance.Variables = merged
+		instance.Version++
 	}
 	definition, err := tx.Client().ProcessDefinition.Query().Where(
 		processdefinition.ID(instance.ProcessDefinitionID),
@@ -1597,6 +1655,10 @@ func (e *CustomProcessEngine) createUserTask(ctx context.Context, instance *ent.
 				// JSON numbers are float64
 				if val > 0 {
 					return strconv.FormatFloat(val, 'f', 0, 64)
+				}
+			case json.Number:
+				if parsed, err := strconv.Atoi(string(val)); err == nil && parsed > 0 {
+					return strconv.Itoa(parsed)
 				}
 			case int:
 				if val > 0 {
@@ -2024,6 +2086,30 @@ func (e *CustomProcessEngine) resolveRolesByPermission(ctx context.Context, tena
 	return codes
 }
 
+type fixedScopeApproverSource struct {
+	resolver approver.ApproverResolver
+	context  approver.ApproverContext
+}
+
+// The BPMN declaration-to-resolver mapping is shared by runtime and publication.
+// Resolver owners retain all tenant, hierarchy and active-candidate rules.
+func fixedScopeApproverSources(task *BPMNUserTask, tenantID int) []fixedScopeApproverSource {
+	sources := []fixedScopeApproverSource{}
+	if task.AssigneeDeptId != 0 {
+		sources = append(sources, fixedScopeApproverSource{approver.NewDeptManagerResolver(), approver.ApproverContext{TenantID: tenantID, DepartmentID: task.AssigneeDeptId}})
+	}
+	if task.AssigneeTeamId != 0 {
+		sources = append(sources, fixedScopeApproverSource{approver.NewTeamLeaderResolver(), approver.ApproverContext{TenantID: tenantID, TeamID: task.AssigneeTeamId}})
+	}
+	if task.AssigneeProjectId != 0 {
+		sources = append(sources, fixedScopeApproverSource{approver.NewProjectMgrResolver(), approver.ApproverContext{TenantID: tenantID, ProjectID: task.AssigneeProjectId}})
+	}
+	if task.AssigneeTempTeamId != 0 {
+		sources = append(sources, fixedScopeApproverSource{approver.NewTempTeamResolver(), approver.ApproverContext{TenantID: tenantID, TeamID: task.AssigneeTempTeamId}})
+	}
+	return sources
+}
+
 // resolveFixedScopeAssignee 处理固定范围组织路由（BPMN 声明 assigneeDeptId/assigneeTeamId/
 // assigneeProjectId/assigneeTempTeamId 中的一个，按这个顺序取第一个非零的）。四个 resolver
 // （service/approver/*.go，已有、已测试）都是"至多解析出一个人"的形状，返回值/自我审批
@@ -2032,24 +2118,11 @@ func (e *CustomProcessEngine) resolveRolesByPermission(ctx context.Context, tena
 // 不是 authorizeTaskActor 用来比对的 User.Username（登录名），用 UserName 会导致候选人
 // 字符串永远匹配不上真实登录用户。
 func (e *CustomProcessEngine) resolveFixedScopeAssignee(ctx context.Context, instance *ent.ProcessInstance, requester *ent.User, task *BPMNUserTask) string {
-	var resolver approver.ApproverResolver
-	appCtx := &approver.ApproverContext{TenantID: instance.TenantID}
-	switch {
-	case task.AssigneeDeptId != 0:
-		resolver = approver.NewDeptManagerResolver()
-		appCtx.DepartmentID = task.AssigneeDeptId
-	case task.AssigneeTeamId != 0:
-		resolver = approver.NewTeamLeaderResolver()
-		appCtx.TeamID = task.AssigneeTeamId
-	case task.AssigneeProjectId != 0:
-		resolver = approver.NewProjectMgrResolver()
-		appCtx.ProjectID = task.AssigneeProjectId
-	case task.AssigneeTempTeamId != 0:
-		resolver = approver.NewTempTeamResolver()
-		appCtx.TeamID = task.AssigneeTempTeamId
-	default:
+	sources := fixedScopeApproverSources(task, instance.TenantID)
+	if len(sources) == 0 {
 		return ""
 	}
+	resolver, appCtx := sources[0].resolver, &sources[0].context
 	approvers, err := resolver.Resolve(ctx, e.client, appCtx)
 	if err != nil || len(approvers) == 0 {
 		e.logger.Infow(
@@ -2110,20 +2183,9 @@ func (e *CustomProcessEngine) getDefaultAssigntee(ctx context.Context, instance 
 
 	// 第一优先：流程变量中显式指定 assignee
 	if instance.Variables != nil {
-		if assignee, ok := instance.Variables["assignee"]; ok {
-			switch val := assignee.(type) {
-			case float64:
-				if val > 0 {
-					return strconv.FormatFloat(val, 'f', 0, 64)
-				}
-			case int:
-				if val > 0 {
-					return strconv.Itoa(val)
-				}
-			case string:
-				if val != "" && val != "0" {
-					return val
-				}
+		if value, ok := instance.Variables["assignee"]; ok {
+			if id, err := bpmn.CallbackInteger(value); err == nil && id > 0 {
+				return strconv.Itoa(id)
 			}
 		}
 	}
@@ -2278,9 +2340,9 @@ func (e *CustomProcessEngine) findOutgoingFlows(process *BPMNProcess, sourceRef 
 
 // evaluateCondition 评估流转条件 (Domain Logic)
 // 使用表达式引擎评估条件
-func (e *CustomProcessEngine) evaluateCondition(flow *BPMNSequenceFlow, variables map[string]interface{}) bool {
+func (e *CustomProcessEngine) evaluateCondition(flow *BPMNSequenceFlow, variables map[string]interface{}) (bool, error) {
 	if flow.ConditionExpression == nil || flow.ConditionExpression.Expression == "" {
-		return true // 无条件则默认通过
+		return true, nil // 无条件则默认通过
 	}
 
 	// 合并变量
@@ -2295,19 +2357,9 @@ func (e *CustomProcessEngine) evaluateCondition(flow *BPMNSequenceFlow, variable
 	// 将 variables 包装在 "variables" 键中，以便 BPMN 表达式可以使用 variables['key'] 语法
 	evalVars["variables"] = variables
 
-	// 使用表达式引擎评估条件
-	result, err := e.exprEngine.EvaluateCondition(flow.ConditionExpression.Expression, evalVars)
-	if err != nil {
-		// SEC-002 修复：评估失败时默认拒绝（return false），而非放行
-		e.logger.Errorw(
-			"条件评估失败，默认拒绝流转",
-			"expression", flow.ConditionExpression.Expression,
-			"error", err,
-		)
-		return false
-	}
-
-	return result
+	// Errors are not false conditions: choosing a fallback would hide a broken
+	// required expression and could execute the wrong branch.
+	return e.exprEngine.EvaluateCondition(flow.ConditionExpression.Expression, evalVars)
 }
 
 func (e *CustomProcessEngine) isEndEvent(process *BPMNProcess, id string) bool {
@@ -2890,6 +2942,25 @@ func (s *bpmnProcessDefinitionService) UpdateProcessDefinition(ctx context.Conte
 		return nil, err
 	}
 
+	// Deployed definitions are immutable execution versions. Waiting instances
+	// and frozen intake resolutions retain this row; edits must create a version.
+	if req.BPMNXML != "" && !bytes.Equal([]byte(req.BPMNXML), definition.BpmnXML) {
+		return nil, common.NewValidationError("execution content is immutable; create a new process version", nil)
+	}
+	if req.ProcessVariables != nil {
+		before, err := json.Marshal(definition.ProcessVariables)
+		if err != nil {
+			return nil, err
+		}
+		after, err := json.Marshal(req.ProcessVariables)
+		if err != nil {
+			return nil, common.NewValidationError("invalid process variables", err)
+		}
+		if !bytes.Equal(before, after) {
+			return nil, common.NewValidationError("execution content is immutable; create a new process version", nil)
+		}
+	}
+
 	update := s.client.ProcessDefinition.UpdateOne(definition)
 
 	if req.Name != "" {
@@ -2901,21 +2972,18 @@ func (s *bpmnProcessDefinitionService) UpdateProcessDefinition(ctx context.Conte
 	if req.Category != "" {
 		update.SetCategory(req.Category)
 	}
-	if req.BPMNXML != "" {
-		update.SetBpmnXML([]byte(req.BPMNXML))
-	}
-	if req.ProcessVariables != nil {
-		update.SetProcessVariables(req.ProcessVariables)
-	}
-	if req.IsActive != nil {
-		update.SetIsActive(*req.IsActive)
-	}
 
 	updated, err := update.Save(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("更新流程定义失败: %w", err)
 	}
 
+	if req.IsActive != nil {
+		if err := s.SetProcessDefinitionActive(ctx, key, version, *req.IsActive); err != nil {
+			return nil, err
+		}
+		return s.GetProcessDefinition(ctx, key, version)
+	}
 	return updated, nil
 }
 
@@ -2977,17 +3045,15 @@ func (s *bpmnProcessDefinitionService) ListProcessDefinitions(ctx context.Contex
 	return definitions, total, nil
 }
 
-func (s *bpmnProcessDefinitionService) SetProcessDefinitionActive(ctx context.Context, key string, version string, active bool) error {
+func (s *bpmnProcessDefinitionService) SetProcessDefinitionActive(ctx context.Context, key, version string, active bool) error {
 	definition, err := s.GetProcessDefinition(ctx, key, version)
 	if err != nil {
 		return err
 	}
-
-	_, err = s.client.ProcessDefinition.UpdateOne(definition).
-		SetIsActive(active).
-		Save(ctx)
-
-	return err
+	if active {
+		return NewBPMNVersionService(s.client, zap.NewNop().Sugar()).ActivateVersion(ctx, key, version, definition.TenantID)
+	}
+	return s.client.ProcessDefinition.UpdateOne(definition).SetIsActive(false).Exec(ctx)
 }
 
 type bpmnProcessInstanceService struct {
@@ -4268,14 +4334,8 @@ func getCounterSignStatus(ctx context.Context, client *ent.Client, parent *ent.P
 }
 
 func numericInt(value interface{}) (int, bool) {
-	switch v := value.(type) {
-	case int:
-		return v, true
-	case float64:
-		return int(v), true
-	default:
-		return 0, false
-	}
+	integer, err := bpmn.CallbackInteger(value)
+	return integer, err == nil
 }
 
 func bpmnProcessTaskWriteLock() predicate.ProcessTask {

@@ -16,7 +16,7 @@ func TestAuthService_GetUserTenants(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
 
-	authService := &AuthService{client: client, jwtSecret: "test-secret-key", logger: zaptest.NewLogger(t).Sugar()}
+	authService := &AuthService{client: client, sessionClient: client, jwtSecret: "test-secret-key", logger: zaptest.NewLogger(t).Sugar()}
 	ctx := context.Background()
 	tenant1, err := client.Tenant.Create().
 		SetName("Tenant 1").SetCode("tenant1").SetDomain("tenant1.com").SetStatus("active").Save(ctx)
@@ -50,7 +50,7 @@ func TestAuthService_GetUserInfo(t *testing.T) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	defer client.Close()
 
-	authService := &AuthService{client: client, jwtSecret: "test-secret-key", logger: zaptest.NewLogger(t).Sugar()}
+	authService := &AuthService{client: client, sessionClient: client, jwtSecret: "test-secret-key", logger: zaptest.NewLogger(t).Sugar()}
 	ctx := context.Background()
 	testTenant, err := client.Tenant.Create().
 		SetName("Test Tenant").SetCode("test").SetDomain("test.com").SetStatus("active").Save(ctx)

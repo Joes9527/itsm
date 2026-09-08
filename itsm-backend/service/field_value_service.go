@@ -11,6 +11,17 @@ import (
 	"itsm-backend/ent/fieldvalue"
 )
 
+// FieldValidationError identifies invalid submitted data independently of
+// persistence failures. Transport layers choose their own response policy.
+type FieldValidationError struct {
+	Field   string
+	Message string
+	cause   error
+}
+
+func (e *FieldValidationError) Error() string { return e.Message }
+func (e *FieldValidationError) Unwrap() error { return e.cause }
+
 // FieldValueService 动态字段值的共享服务，工单先接入，服务请求以后接入。
 type FieldValueService struct {
 	client *ent.Client
@@ -79,10 +90,50 @@ func validateFieldValue(def *ent.FieldDefinition, raw interface{}) error {
 // 多条 insert 包在一个事务里：中途某一条失败（比如瞬时 DB 错误）不应该留下"插了一半"的
 // 半成品提交记录——field_values 代表的是一次完整的表单提交，要么整体成功要么整体不落库。
 func (s *FieldValueService) CreateValues(ctx context.Context, tenantID int, defEntityType string, defEntityID int, valueEntityType string, valueEntityID int, values map[string]interface{}) error {
+	return s.CreateValuesTx(ctx, nil, tenantID, defEntityType, defEntityID, valueEntityType, valueEntityID, values)
+}
+
+// CreateValuesTx writes dynamic field values through the caller's transaction
+// when supplied. A nil transaction preserves the standalone CreateValues
+// contract by opening and owning one transaction for the complete submission.
+func (s *FieldValueService) CreateValuesTx(
+	ctx context.Context,
+	tx *ent.Tx,
+	tenantID int,
+	defEntityType string,
+	defEntityID int,
+	valueEntityType string,
+	valueEntityID int,
+	values map[string]any,
+) error {
 	if len(values) == 0 {
 		return nil
 	}
-	defs, err := s.client.FieldDefinition.Query().
+	if tx != nil {
+		return createFieldValues(ctx, tx.Client(), tenantID, defEntityType, defEntityID, valueEntityType, valueEntityID, values)
+	}
+
+	ownedTx, err := s.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	if err := createFieldValues(ctx, ownedTx.Client(), tenantID, defEntityType, defEntityID, valueEntityType, valueEntityID, values); err != nil {
+		return rollback(ownedTx, err)
+	}
+	return ownedTx.Commit()
+}
+
+func createFieldValues(
+	ctx context.Context,
+	client *ent.Client,
+	tenantID int,
+	defEntityType string,
+	defEntityID int,
+	valueEntityType string,
+	valueEntityID int,
+	values map[string]any,
+) error {
+	defs, err := client.FieldDefinition.Query().
 		Where(
 			fielddefinition.TenantID(tenantID),
 			fielddefinition.EntityType(defEntityType),
@@ -95,25 +146,20 @@ func (s *FieldValueService) CreateValues(ctx context.Context, tenantID int, defE
 		return err
 	}
 
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return err
-	}
-
 	for _, def := range defs {
 		raw, ok := values[def.Name]
 		if !ok {
 			continue
 		}
 		if err := validateFieldValue(def, raw); err != nil {
-			return rollback(tx, err)
+			return &FieldValidationError{Field: def.Name, Message: err.Error(), cause: err}
 		}
 		encoded, err := json.Marshal(raw)
 		if err != nil {
-			return rollback(tx, err)
+			return &FieldValidationError{Field: def.Name, Message: "field value must be JSON-compatible", cause: err}
 		}
 		defID := def.ID
-		_, err = tx.FieldValue.Create().
+		_, err = client.FieldValue.Create().
 			SetTenantID(tenantID).
 			SetEntityType(valueEntityType).
 			SetEntityID(valueEntityID).
@@ -124,10 +170,10 @@ func (s *FieldValueService) CreateValues(ctx context.Context, tenantID int, defE
 			SetValue(encoded).
 			Save(ctx)
 		if err != nil {
-			return rollback(tx, err)
+			return err
 		}
 	}
-	return tx.Commit()
+	return nil
 }
 
 // AdHocFieldValue 是没有对应 field_definitions 行的自描述字段值——
@@ -150,10 +196,21 @@ func (s *FieldValueService) CreateAdHocValues(ctx context.Context, tenantID int,
 	if err != nil {
 		return err
 	}
+	if err := s.CreateAdHocValuesTx(ctx, tx, tenantID, valueEntityType, valueEntityID, fields); err != nil {
+		return rollback(tx, err)
+	}
+
+	return tx.Commit()
+}
+
+func (s *FieldValueService) CreateAdHocValuesTx(ctx context.Context, tx *ent.Tx, tenantID int, valueEntityType string, valueEntityID int, fields []AdHocFieldValue) error {
+	if tx == nil || tenantID <= 0 || valueEntityID <= 0 {
+		return fmt.Errorf("field value transaction and identity are required")
+	}
 	for _, f := range fields {
 		encoded, err := json.Marshal(f.Value)
 		if err != nil {
-			return rollback(tx, err)
+			return err
 		}
 		_, err = tx.FieldValue.Create().
 			SetTenantID(tenantID).
@@ -165,10 +222,10 @@ func (s *FieldValueService) CreateAdHocValues(ctx context.Context, tenantID int,
 			SetValue(encoded).
 			Save(ctx)
 		if err != nil {
-			return rollback(tx, err)
+			return err
 		}
 	}
-	return tx.Commit()
+	return nil
 }
 
 // FieldValueDTO 展示用的已解析字段值。

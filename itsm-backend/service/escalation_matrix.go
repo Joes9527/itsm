@@ -2,8 +2,9 @@ package service
 
 import (
 	"context"
-	"itsm-backend/ent"
 	"fmt"
+	"itsm-backend/ent"
+	"itsm-backend/ent/sladefinition"
 	"sync"
 	"time"
 
@@ -119,55 +120,77 @@ func (s *EscalationMatrixService) InvalidateCache(tenantID int) {
 
 // GetMatrixBySLA 从 SLADefinition.escalation_rules 读取升级矩阵。
 // 若 SLA 未配置升级规则，返回 DefaultEscalationMatrix。
-func (s *EscalationMatrixService) GetMatrixBySLA(ctx context.Context, slaDefinitionID int) EscalationMatrix {
-	if s.client != nil && slaDefinitionID > 0 {
-		sla, err := s.client.SLADefinition.Get(ctx, slaDefinitionID)
-		if err == nil && sla != nil && len(sla.EscalationRules) > 0 {
-			rules := sla.EscalationRules
-			if rules != nil {
-				matrix := make(EscalationMatrix, len(rules))
-				for priority, rawLevels := range rules {
-					if levels, ok := rawLevels.([]interface{}); ok {
-						for _, l := range levels {
-							if lm, ok := l.(map[string]interface{}); ok {
-								level := EscalationLevel{}
-								if v, ok := lm["level"].(float64); ok {
-									level.Level = int(v)
-								}
-								if v, ok := lm["afterMinutes"].(float64); ok {
-									level.AfterMinutes = int(v)
-								}
-								if v, ok := lm["description"].(string); ok {
-									level.Description = v
-								}
-								if roles, ok := lm["notifyRoles"].([]interface{}); ok {
-									for _, r := range roles {
-										if rs, ok := r.(string); ok {
-											level.NotifyRoles = append(level.NotifyRoles, rs)
-										}
-									}
-								}
-								matrix[priority] = append(matrix[priority], level)
-							}
-						}
-					}
+func (s *EscalationMatrixService) GetMatrixBySLA(ctx context.Context, tenantID, slaDefinitionID int) (EscalationMatrix, error) {
+	if s.client == nil || slaDefinitionID <= 0 {
+		return nil, fmt.Errorf("SLA matrix database and definition are required")
+	}
+	sla, err := s.client.SLADefinition.Query().Where(sladefinition.IDEQ(slaDefinitionID), sladefinition.TenantIDEQ(tenantID)).Only(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("SLA escalation definition unavailable: %w", err)
+	}
+	return parseSLAEscalationMatrix(sla.EscalationRules)
+}
+
+func parseSLAEscalationMatrix(rules map[string]interface{}) (EscalationMatrix, error) {
+	if len(rules) == 0 {
+		return DefaultEscalationMatrix, nil
+	}
+	matrix := make(EscalationMatrix, len(rules))
+	for priority, raw := range rules {
+		levels, ok := raw.([]interface{})
+		if !ok || len(levels) == 0 {
+			return nil, fmt.Errorf("invalid SLA escalation levels")
+		}
+		previous := 0
+		for _, rawLevel := range levels {
+			values, ok := rawLevel.(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("invalid SLA escalation level")
+			}
+			level, err := slaConfigurationInteger(values["level"], 1, int(^uint(0)>>1))
+			if err != nil {
+				return nil, err
+			}
+			after, err := slaConfigurationInteger(values["afterMinutes"], 0, int(int64(^uint64(0)>>1)/int64(time.Minute)))
+			if err != nil {
+				return nil, err
+			}
+			if level <= previous {
+				return nil, fmt.Errorf("SLA escalation levels must increase")
+			}
+			previous = level
+			item := EscalationLevel{Level: level, AfterMinutes: after}
+			item.Description, _ = values["description"].(string)
+			if rawRoles, exists := values["notifyRoles"]; exists {
+				roles, ok := rawRoles.([]interface{})
+				if !ok {
+					return nil, fmt.Errorf("invalid SLA escalation roles")
 				}
-				if len(matrix) > 0 {
-					return matrix
+				for _, rawRole := range roles {
+					role, ok := rawRole.(string)
+					if !ok || role == "" {
+						return nil, fmt.Errorf("invalid SLA escalation role")
+					}
+					item.NotifyRoles = append(item.NotifyRoles, role)
 				}
 			}
+
+			matrix[priority] = append(matrix[priority], item)
 		}
 	}
-	// Fallback to default
-	return DefaultEscalationMatrix
+	return matrix, nil
 }
 
 // FindNextEscalationLevel 查找下一个应触发的升级级别。
 // slaDefID 可选：>0 时从 SLADefinition.escalation_rules 读取，否则使用默认矩阵。
-func (s *EscalationMatrixService) FindNextEscalationLevel(tenantID int, priority string, elapsedMinutes int, currentMaxLevel int, slaDefID int) *EscalationLevel {
+func (s *EscalationMatrixService) FindNextEscalationLevel(ctx context.Context, tenantID int, priority string, elapsedMinutes int, currentMaxLevel int, slaDefID int) (*EscalationLevel, error) {
 	var matrix EscalationMatrix
-	if slaDefID > 0 && s.client != nil {
-		matrix = s.GetMatrixBySLA(context.TODO(), slaDefID)
+	if slaDefID > 0 {
+		var err error
+		matrix, err = s.GetMatrixBySLA(ctx, tenantID, slaDefID)
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		matrix = s.GetMatrix(tenantID)
 	}
@@ -176,7 +199,7 @@ func (s *EscalationMatrixService) FindNextEscalationLevel(tenantID int, priority
 		// 未知 priority 降级到 medium
 		levels, ok = matrix["medium"]
 		if !ok {
-			return nil
+			return nil, nil
 		}
 	}
 	for i := range levels {
@@ -186,10 +209,10 @@ func (s *EscalationMatrixService) FindNextEscalationLevel(tenantID int, priority
 		}
 		if elapsedMinutes >= lvl.AfterMinutes {
 			out := lvl
-			return &out
+			return &out, nil
 		}
 	}
-	return nil
+	return nil, nil
 }
 
 // CachedMatrixSnapshot 返回当前缓存中所有租户的矩阵快照（用于调试）

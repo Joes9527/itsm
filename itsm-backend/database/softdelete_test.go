@@ -37,7 +37,6 @@ func TestSoftDeleteInterceptorScopesChangeThroughWorkItem(t *testing.T) {
 	workItem, err := client.Ticket.Create().
 		SetTitle("Soft-deleted change").
 		SetTicketNumber("CHG-SOFT-DELETE").
-		SetType("change").
 		SetRecordClass("change_request").
 		SetRequesterID(user.ID).
 		SetTenantID(tenant.ID).

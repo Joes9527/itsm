@@ -64,41 +64,6 @@ func (s *Service) SetProcessEngine(engine service.ProcessEngine) {
 	}
 }
 
-// Change methods
-func (s *Service) CreateChange(ctx context.Context, c *Change) (*Change, error) {
-	s.logger.Infow("Creating change", "title", c.Title, "tenant_id", c.TenantID)
-	return s.repo.Create(ctx, c)
-}
-
-// CreateChangeForWorkflow 实现 service/bpmn.ChangeDomainServiceInterface，供
-// ChangeServiceTaskHandler.createChange 委托调用——BPMN 自动创建的 Change 必须走跟用户在
-// UI 手动创建同一条事务化建表路径（CreateChange -> repo.Create），同步建好 WorkItem，
-// 不能绕过（Wave 2 迁移前，service/bpmn/change_handler.go 直接 h.client.Change.Create()，
-// 完全跳过 WorkItem 创建，是一个真实缺陷，见交付说明）。
-//
-// ImpactScope/RiskLevel 固定给 "medium"：BPMN service task 的输入变量（title/description/
-// type/priority）里从来没有携带这两个字段，迁移前的直接 Ent 写法也没有显式设置它们，靠
-// ent/schema/change.go 的 field.Default("medium") 隐式生效。EntRepository.Create 现在会
-// 无条件 SetImpactScope/SetRiskLevel（不管值是不是空字符串），如果这里传空字符串会用空值
-// 覆盖掉 schema 默认值——所以必须显式传 "medium" 才能保持跟迁移前一致的行为。
-func (s *Service) CreateChangeForWorkflow(ctx context.Context, tenantID, createdBy int, title, description, changeType, priority string) (int, error) {
-	created, err := s.repo.Create(ctx, &Change{
-		Title:       title,
-		Description: description,
-		Type:        changeType,
-		Status:      "draft",
-		Priority:    priority,
-		ImpactScope: "medium",
-		RiskLevel:   "medium",
-		CreatedBy:   createdBy,
-		TenantID:    tenantID,
-	})
-	if err != nil {
-		return 0, err
-	}
-	return created.ID, nil
-}
-
 func (s *Service) GetChange(ctx context.Context, id int, tenantID int) (*Change, error) {
 	return s.repo.Get(ctx, id, tenantID)
 }

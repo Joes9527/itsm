@@ -10,7 +10,7 @@ import { CIType } from '@/types/cmdb';
 
 interface CIContextCardProps {
   ticketId: number;
-  source?: string;
+  recordClass?: string;
 }
 
 const CI_TYPE_LABELS: Record<string, string> = {
@@ -27,17 +27,17 @@ const CI_TYPE_LABELS: Record<string, string> = {
 
 /**
  * 工单详情右侧工具箱：关联 CMDB 配置项（CI）卡片。
- * 仅服务目录来源的工单有 ciId（通过 ServiceRequest 关联），其余来源不渲染。
+ * Requested Item 通过 ServiceRequest 关联 ciId；来源不决定专业归属。
  * 样式对齐 prototype：CI 名称 + 类型 chip + 描述 + 拓扑图入口。
  */
-export const CIContextCard: React.FC<CIContextCardProps> = ({ ticketId, source }) => {
+export const CIContextCard: React.FC<CIContextCardProps> = ({ ticketId, recordClass }) => {
   const [ciId, setCiId] = useState<number | null>(null);
   const [ci, setCi] = useState<{ name?: string; type?: string; description?: string } | null>(null);
   const [topology, setTopology] = useState<{ totalNodes: number; totalEdges: number } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (source !== 'service_catalog') {
+    if (recordClass !== 'service_request_item') {
       setLoading(false);
       return;
     }
@@ -81,9 +81,9 @@ export const CIContextCard: React.FC<CIContextCardProps> = ({ ticketId, source }
     return () => {
       cancelled = true;
     };
-  }, [ticketId, source]);
+  }, [ticketId, recordClass]);
 
-  if (source !== 'service_catalog') return null;
+  if (recordClass !== 'service_request_item') return null;
   if (loading) return null;
 
   return (

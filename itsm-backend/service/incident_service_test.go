@@ -16,8 +16,6 @@ import (
 	"itsm-backend/ent/incidentalert"
 	"itsm-backend/ent/incidentevent"
 	"itsm-backend/ent/incidentmetric"
-	entticket "itsm-backend/ent/ticket"
-	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service/bpmn"
 
 	"github.com/stretchr/testify/assert"
@@ -30,7 +28,8 @@ import (
 func setupIncidentTest(t *testing.T) (*ent.Client, *IncidentService, context.Context) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	logger := zaptest.NewLogger(t).Sugar()
-	service := NewIncidentService(client, logger, workitemnumber.NewPostgreSQLAllocator())
+	service := NewIncidentService(client, logger)
+	service.RuleEngine().SetActorDirectory(client)
 	ctx := context.Background()
 	return client, service, ctx
 }
@@ -60,7 +59,7 @@ func createIncidentTestWorkItem(t *testing.T, ctx context.Context, client *ent.C
 	t.Helper()
 	workItem, err := client.Ticket.Create().
 		SetTitle(title).SetStatus(status).SetPriority(priority).
-		SetType("incident").SetRecordClass("incident").
+		SetRecordClass("incident").
 		SetTicketNumber(fmt.Sprintf("TKT-TEST-%d-%d", tenantID, time.Now().UnixNano())).
 		SetRequesterID(requesterID).SetTenantID(tenantID).Save(ctx)
 	require.NoError(t, err)
@@ -88,289 +87,7 @@ func (f *blockingIncidentProcessTrigger) TriggerProcess(context.Context, *dto.Pr
 
 // ==================== 创建事件测试 ====================
 
-func TestIncidentService_CreateIncident_Success(t *testing.T) {
-	client, service, ctx := setupIncidentTest(t)
-	defer client.Close()
-
-	// 创建测试租户和用户
-	testTenant, err := createIncidentTestTenant(ctx, client, "create")
-	require.NoError(t, err)
-
-	testUser, err := createIncidentTestUser(ctx, client, testTenant.ID, "create")
-	require.NoError(t, err)
-	_, err = client.TicketCategory.Create().SetName("performance").SetCode("performance").SetTenantID(testTenant.ID).Save(ctx)
-	require.NoError(t, err)
-
-	// 测试创建事件
-	req := &dto.CreateIncidentRequest{
-		Title:       "测试事件",
-		Description: "这是一个测试事件的描述",
-		Priority:    "high",
-		Severity:    "medium",
-		Category:    "performance",
-		Source:      "manual",
-	}
-
-	response, err := service.CreateIncident(ctx, req, testTenant.ID, testUser.ID)
-	require.NoError(t, err)
-	assert.NotNil(t, response)
-	assert.Equal(t, req.Title, response.Title)
-	assert.Equal(t, req.Priority, response.Priority)
-	assert.Equal(t, req.Severity, response.Severity)
-	assert.Equal(t, "new", response.Status)
-	assert.Nil(t, response.AssigneeID)
-	assert.Nil(t, response.ConfigurationItemID)
-	assert.NotEmpty(t, response.IncidentNumber)
-	assert.Contains(t, response.IncidentNumber, "INC-")
-	assert.Equal(t, testTenant.ID, response.TenantID)
-}
-
-func TestIncidentService_CreateIncidentWaitsForPostCommitWorkflow(t *testing.T) {
-	client, incidentService, ctx := setupIncidentTest(t)
-	defer client.Close()
-	tenant, err := createIncidentTestTenant(ctx, client, "inline-workflow")
-	require.NoError(t, err)
-	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "inline-workflow")
-	require.NoError(t, err)
-
-	trigger := &blockingIncidentProcessTrigger{entered: make(chan struct{}), release: make(chan struct{})}
-	incidentService.SetProcessTriggerService(trigger)
-	result := make(chan error, 1)
-	go func() {
-		_, createErr := incidentService.CreateIncident(ctx, &dto.CreateIncidentRequest{Title: "Inline workflow boundary"}, tenant.ID, reporter.ID)
-		result <- createErr
-	}()
-
-	select {
-	case <-trigger.entered:
-	case <-time.After(2 * time.Second):
-		t.Fatal("workflow trigger was not entered")
-	}
-	select {
-	case createErr := <-result:
-		t.Fatalf("CreateIncident returned before its post-commit workflow finished: %v", createErr)
-	default:
-	}
-
-	close(trigger.release)
-	select {
-	case createErr := <-result:
-		require.NoError(t, createErr)
-	case <-time.After(2 * time.Second):
-		t.Fatal("CreateIncident did not return after workflow completion")
-	}
-}
-
-func TestIncidentService_CreateIncident_WithOptionalFields(t *testing.T) {
-	client, service, ctx := setupIncidentTest(t)
-	defer client.Close()
-
-	testTenant, err := createIncidentTestTenant(ctx, client, "optional")
-	require.NoError(t, err)
-
-	testUser, err := createIncidentTestUser(ctx, client, testTenant.ID, "optional")
-	require.NoError(t, err)
-
-	assignee, err := createIncidentTestUser(ctx, client, testTenant.ID, "assignee")
-	require.NoError(t, err)
-	parent, err := client.TicketCategory.Create().SetName("security").SetCode("security").SetTenantID(testTenant.ID).Save(ctx)
-	require.NoError(t, err)
-	_, err = client.TicketCategory.Create().SetName("intrusion").SetCode("intrusion").SetTenantID(testTenant.ID).SetParentID(parent.ID).Save(ctx)
-	require.NoError(t, err)
-
-	detectedAt := time.Now().Add(-1 * time.Hour)
-
-	req := &dto.CreateIncidentRequest{
-		Title:       "带可选字段的事件",
-		Description: "描述",
-		Priority:    "critical",
-		Severity:    "high",
-		Category:    "security",
-		Subcategory: "intrusion",
-		AssigneeID:  &assignee.ID,
-		Source:      "monitoring",
-		DetectedAt:  &detectedAt,
-		Metadata: map[string]interface{}{
-			"source_ip": "192.168.1.100",
-			"alert_id":  "ALT-001",
-			"automated": true,
-		},
-	}
-
-	response, err := service.CreateIncident(ctx, req, testTenant.ID, testUser.ID)
-	require.NoError(t, err)
-	assert.NotNil(t, response)
-	assert.Equal(t, "security", response.Category)
-	assert.NotNil(t, response.AssigneeID)
-	assert.Equal(t, assignee.ID, *response.AssigneeID)
-}
-
-func TestIncidentService_CreateIncidentRejectsCrossTenantAssigneeAtomically(t *testing.T) {
-	client, service, ctx := setupIncidentTest(t)
-	defer client.Close()
-	tenantA, err := createIncidentTestTenant(ctx, client, "create-boundary-a")
-	require.NoError(t, err)
-	tenantB, err := createIncidentTestTenant(ctx, client, "create-boundary-b")
-	require.NoError(t, err)
-	reporter, err := createIncidentTestUser(ctx, client, tenantA.ID, "create-boundary-a")
-	require.NoError(t, err)
-	foreignAssignee, err := createIncidentTestUser(ctx, client, tenantB.ID, "create-boundary-b")
-	require.NoError(t, err)
-
-	_, err = service.CreateIncident(ctx, &dto.CreateIncidentRequest{
-		Title: "Cross tenant assignment", AssigneeID: &foreignAssignee.ID,
-	}, tenantA.ID, reporter.ID)
-	require.ErrorContains(t, err, "assignee not found or inactive")
-	count, err := client.Incident.Query().Count(ctx)
-	require.NoError(t, err)
-	assert.Zero(t, count)
-	eventCount, err := client.IncidentEvent.Query().Count(ctx)
-	require.NoError(t, err)
-	assert.Zero(t, eventCount)
-	// 这个校验发生在 CreateIncident 打开事务之前（validateIncidentAssignee 是
-	// tx.Begin 之前的前置校验），所以连 WorkItem 都不应该被创建——但明确断言总比
-	// 依赖"没打开事务所以自然不会有"这条隐含推理更可靠，尤其是以后如果校验顺序被调整。
-	ticketCount, err := client.Ticket.Query().Count(ctx)
-	require.NoError(t, err)
-	assert.Zero(t, ticketCount, "校验失败必须连 WorkItem 都不留下")
-}
-
 // ==================== WorkItem 迁移测试（Wave 2） ====================
-
-// TestIncidentService_CreateIncident_CreatesWorkItemInSameTransaction 覆盖统一 WorkItem
-// 领域模型宪章 §3.2 的事务边界要求：CreateIncident 必须在同一个事务内同时建好 tickets
-// 行（record_class="incident"，创建后不可变）和 incidents 行，且 incidents.work_item_id
-// 指回那条 tickets 行；公共字段（标题/描述/优先级/请求人/租户）以 WorkItem 为权威来源。
-func TestIncidentService_CreateIncident_CreatesWorkItemInSameTransaction(t *testing.T) {
-	client, service, ctx := setupIncidentTest(t)
-	defer client.Close()
-
-	testTenant, err := createIncidentTestTenant(ctx, client, "workitem")
-	require.NoError(t, err)
-	testUser, err := createIncidentTestUser(ctx, client, testTenant.ID, "workitem")
-	require.NoError(t, err)
-
-	req := &dto.CreateIncidentRequest{
-		Title:       "数据库连接池耗尽",
-		Description: "生产库连接池被打满",
-		Priority:    "critical",
-	}
-
-	response, err := service.CreateIncident(ctx, req, testTenant.ID, testUser.ID)
-	require.NoError(t, err)
-	require.NotNil(t, response.WorkItemID, "CreateIncident 响应必须携带新建的 WorkItem ID")
-
-	workItem, err := client.Ticket.Get(ctx, *response.WorkItemID)
-	require.NoError(t, err, "incidents.work_item_id 指向的 tickets 行必须真实存在")
-	assert.Equal(t, "incident", workItem.RecordClass)
-	assert.Equal(t, req.Title, workItem.Title)
-	assert.Equal(t, req.Description, workItem.Description)
-	assert.Equal(t, req.Priority, workItem.Priority)
-	assert.Equal(t, testUser.ID, workItem.RequesterID)
-	assert.Equal(t, testTenant.ID, workItem.TenantID)
-	assert.NotEmpty(t, workItem.TicketNumber)
-
-	persistedIncident, err := client.Incident.Get(ctx, response.ID)
-	require.NoError(t, err)
-	assert.Equal(t, workItem.ID, persistedIncident.WorkItemID, "incidents.work_item_id 必须指回新建的 WorkItem")
-}
-
-func TestIncidentService_CreateIncidentAllocatesSequentialWorkItemNumbers(t *testing.T) {
-	client, service, ctx := setupIncidentTest(t)
-	defer client.Close()
-
-	tenant, err := createIncidentTestTenant(ctx, client, "allocator")
-	require.NoError(t, err)
-	user, err := createIncidentTestUser(ctx, client, tenant.ID, "allocator")
-	require.NoError(t, err)
-
-	first, err := service.CreateIncident(ctx, &dto.CreateIncidentRequest{Title: "First allocated incident"}, tenant.ID, user.ID)
-	require.NoError(t, err)
-	second, err := service.CreateIncident(ctx, &dto.CreateIncidentRequest{Title: "Second allocated incident"}, tenant.ID, user.ID)
-	require.NoError(t, err)
-
-	firstWorkItem, err := client.Ticket.Get(ctx, *first.WorkItemID)
-	require.NoError(t, err)
-	secondWorkItem, err := client.Ticket.Get(ctx, *second.WorkItemID)
-	require.NoError(t, err)
-	require.Regexp(t, `^TKT-\d{6}-000001$`, firstWorkItem.TicketNumber)
-	require.Regexp(t, `^TKT-\d{6}-000002$`, secondWorkItem.TicketNumber)
-}
-
-// TestIncidentService_CreateIncident_ServiceCatalogDivertedPath_AlsoCreatesWorkItem
-// 覆盖服务目录 itsm_type=Incident 的报障分流路径（handlers/service_request/service.go 的
-// isIncidentCatalog + createIncidentFromCatalog）。该路径通过 IncidentCreator 接口
-// （生产环境由 internal/bootstrap/app.go 的 srIncidentBridge 适配）最终调用的正是
-// IncidentService.CreateIncident——这里用与 srIncidentBridge.CreateIncident 完全相同的
-// 请求形状直接调用同一个函数，验证服务目录分流路径同样会产生 WorkItem，不再像 Wave 2
-// 之前那样绕开 Ticket。跨包集成的另一半（Service.Create 确实会在 isIncidentCatalog
-// 命中时委托给 IncidentCreator、且不产生 ServiceRequest 行）由
-// handlers/service_request/regression_test.go 的
-// TestService_Create_IncidentCatalog_NoServiceRequestRowCreated 覆盖，该测试的注释
-// 明确把"Incident 侧完整行为"这一半留给了本任务包。
-func TestIncidentService_CreateIncident_ServiceCatalogDivertedPath_AlsoCreatesWorkItem(t *testing.T) {
-	client, service, ctx := setupIncidentTest(t)
-	defer client.Close()
-
-	testTenant, err := createIncidentTestTenant(ctx, client, "catalog")
-	require.NoError(t, err)
-	testUser, err := createIncidentTestUser(ctx, client, testTenant.ID, "catalog")
-	require.NoError(t, err)
-
-	// 镜像 srIncidentBridge.CreateIncident 传给 IncidentService.CreateIncident 的请求形状。
-	response, err := service.CreateIncident(ctx, &dto.CreateIncidentRequest{
-		Title:       "服务目录报障：VPN无法连接",
-		Description: "员工反馈无法连接VPN",
-		Type:        "incident",
-		Priority:    "medium",
-	}, testTenant.ID, testUser.ID)
-	require.NoError(t, err)
-	require.NotNil(t, response.WorkItemID)
-
-	workItem, err := client.Ticket.Get(ctx, *response.WorkItemID)
-	require.NoError(t, err)
-	assert.Equal(t, "incident", workItem.RecordClass)
-	assert.Equal(t, testTenant.ID, workItem.TenantID)
-}
-
-// TestIncidentService_CreateIncident_TenantIsolation_FailClosed 覆盖 AGENTS.md 的租户强
-// 闭合约束：跨租户既不能读到别的租户的 Incident，也不能读到它关联的 WorkItem。
-func TestIncidentService_CreateIncident_TenantIsolation_FailClosed(t *testing.T) {
-	client, service, ctx := setupIncidentTest(t)
-	defer client.Close()
-
-	tenantA, err := createIncidentTestTenant(ctx, client, "iso-a")
-	require.NoError(t, err)
-	tenantB, err := createIncidentTestTenant(ctx, client, "iso-b")
-	require.NoError(t, err)
-	userA, err := createIncidentTestUser(ctx, client, tenantA.ID, "iso-a")
-	require.NoError(t, err)
-
-	response, err := service.CreateIncident(ctx, &dto.CreateIncidentRequest{
-		Title: "租户A的机密事件",
-	}, tenantA.ID, userA.ID)
-	require.NoError(t, err)
-	require.NotNil(t, response.WorkItemID)
-
-	// 用租户 B 的身份读取租户 A 的 Incident：必须 Fail Closed（"not found"），不能静默
-	// 放行或返回空集合伪装成功。
-	_, err = service.GetIncident(ctx, response.ID, tenantB.ID)
-	require.Error(t, err, "跨租户读取 Incident 必须失败")
-
-	// WorkItem 本身也要遵守同样的租户边界——直接用 ent 查询验证底层数据没有跨租户可见。
-	_, err = client.Ticket.Query().
-		Where(entticket.IDEQ(*response.WorkItemID), entticket.TenantIDEQ(tenantB.ID)).
-		Only(ctx)
-	require.Error(t, err, "WorkItem 不能被其它租户查到")
-	require.True(t, ent.IsNotFound(err))
-
-	// 用正确的租户仍然能读到，证明上面的失败确实是租户过滤生效，不是数据本身就有问题。
-	workItem, err := client.Ticket.Query().
-		Where(entticket.IDEQ(*response.WorkItemID), entticket.TenantIDEQ(tenantA.ID)).
-		Only(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, "incident", workItem.RecordClass)
-}
 
 // ==================== 获取事件测试 ====================
 
@@ -388,7 +105,6 @@ func TestIncidentService_GetIncident_Success(t *testing.T) {
 	workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "测试事件", "new", "medium")
 	testIncident, err := client.Incident.Create().
 		SetSeverity("medium").
-		SetIncidentNumber("INC-202401-000001").
 		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
@@ -432,7 +148,6 @@ func TestIncidentService_GetIncident_TenantMismatch(t *testing.T) {
 	// 在 tenant1 下创建事件
 	testIncident, err := client.Incident.Create().
 		SetSeverity("medium").
-		SetIncidentNumber("INC-TENANT-001").
 		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
@@ -458,7 +173,6 @@ func TestIncidentService_AssignIncident_ValidatesAssigneeAndReturnsUpdatedIncide
 
 	incidentEntity, err := client.Incident.Create().
 		SetSeverity("medium").
-		SetIncidentNumber("INC-ASSIGN-001").
 		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
@@ -500,7 +214,6 @@ func TestAssignIncidentRejectsTerminalStatuses(t *testing.T) {
 			require.NoError(t, err)
 			workItem := createIncidentTestWorkItem(t, ctx, client, tenant.ID, reporter.ID, "Lifecycle guarded assignment", status, "medium")
 			incidentEntity, err := client.Incident.Create().
-				SetIncidentNumber("INC-ASSIGN-" + status).
 				SetWorkItemID(workItem.ID).
 				Save(ctx)
 			require.NoError(t, err)
@@ -565,7 +278,6 @@ func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
 			require.NoError(t, err)
 			workItem := createIncidentTestWorkItem(t, ctx, client, tenant.ID, reporter.ID, "Concurrent assignment", common.IncidentStatusNew, "medium")
 			incidentEntity, err := client.Incident.Create().
-				SetIncidentNumber("INC-ASSIGN-RACE-" + testCase.name).
 				SetWorkItemID(workItem.ID).
 				Save(ctx)
 			require.NoError(t, err)
@@ -581,7 +293,7 @@ func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
 				})
 			})
 
-			incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar(), workitemnumber.NewPostgreSQLAllocator())
+			incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar())
 			_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, assignee.ID, tenant.ID)
 			require.Error(t, err)
 			testCase.assertErr(t, err)
@@ -625,13 +337,12 @@ func TestGetIncidentWithActionsUsesOneEntitySnapshot(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 	incidentEntity, err := client.Incident.Create().
-		SetIncidentNumber("INC-SNAPSHOT").
 		SetWorkItemID(workItem.ID).
 		Save(ctx)
 	require.NoError(t, err)
 
 	incidentSelects = 0
-	incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar(), workitemnumber.NewPostgreSQLAllocator())
+	incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar())
 	response, err := incidentService.GetIncidentWithActions(ctx, incidentEntity.ID, ActionActor{
 		Client: client, TenantID: tenant.ID, UserID: reporter.ID, Role: "super_admin",
 	})
@@ -660,7 +371,6 @@ func TestIncidentService_ListIncidents_Pagination(t *testing.T) {
 		require.NoError(t, err)
 		_, err = client.Incident.Create().
 			SetSeverity("low").
-			SetIncidentNumber(fmt.Sprintf("INC-LIST-%03d", i+1)).
 			SetWorkItemID(workItem.ID).
 			SetDetectedAt(time.Now()).
 			Save(ctx)
@@ -699,7 +409,6 @@ func TestIncidentService_ListIncidents_Filters(t *testing.T) {
 			workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, fmt.Sprintf("filter-%d-%d", i, j), status, priority)
 			_, err := client.Incident.Create().
 				SetSeverity("medium").
-				SetIncidentNumber(fmt.Sprintf("INC-FLT-%d%d", i, j)).
 				SetWorkItemID(workItem.ID).
 				SetDetectedAt(time.Now()).
 				Save(ctx)
@@ -747,7 +456,6 @@ func TestIncidentService_ListIncidents_KeywordSearch(t *testing.T) {
 	require.NoError(t, err)
 	_, err = client.Incident.Create().
 		SetSeverity("high").
-		SetIncidentNumber("INC-DB-001").
 		SetWorkItemID(databaseWorkItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
@@ -758,7 +466,6 @@ func TestIncidentService_ListIncidents_KeywordSearch(t *testing.T) {
 	require.NoError(t, err)
 	_, err = client.Incident.Create().
 		SetSeverity("medium").
-		SetIncidentNumber("INC-NET-001").
 		SetWorkItemID(networkWorkItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
@@ -798,7 +505,6 @@ func TestIncidentService_UpdateIncident_Success(t *testing.T) {
 	require.NoError(t, err)
 	testIncident, err := client.Incident.Create().
 		SetSeverity("low").
-		SetIncidentNumber("INC-UPD-001").
 		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
@@ -837,7 +543,6 @@ func TestIncidentService_UpdateIncident_VersionControl(t *testing.T) {
 	require.NoError(t, err)
 	testIncident, err := client.Incident.Create().
 		SetSeverity("medium").
-		SetIncidentNumber("INC-VER-001").
 		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
@@ -917,7 +622,6 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 		workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "Status Test 1", common.IncidentStatusNew, "medium")
 		testIncident, err := client.Incident.Create().
 			SetSeverity("medium").
-			SetIncidentNumber("INC-ST-001").
 			SetWorkItemID(workItem.ID).
 			SetDetectedAt(time.Now()).
 			Save(ctx)
@@ -941,7 +645,6 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 		workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "Status Test 2", common.IncidentStatusInProgress, "medium")
 		testIncident, err := client.Incident.Create().
 			SetSeverity("medium").
-			SetIncidentNumber("INC-ST-002").
 			SetWorkItemID(workItem.ID).
 			SetDetectedAt(time.Now()).
 			Save(ctx)
@@ -964,7 +667,6 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 		require.NoError(t, err)
 		testIncident, err := client.Incident.Create().
 			SetSeverity("medium").
-			SetIncidentNumber("INC-ST-003").
 			SetWorkItemID(workItem.ID).
 			SetDetectedAt(time.Now()).
 			Save(ctx)
@@ -984,7 +686,6 @@ func TestIncidentService_UpdateIncident_StatusTransition(t *testing.T) {
 		workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "Status Test 4", common.IncidentStatusNew, "medium")
 		testIncident, err := client.Incident.Create().
 			SetSeverity("medium").
-			SetIncidentNumber("INC-ST-004").
 			SetWorkItemID(workItem.ID).
 			SetDetectedAt(time.Now()).
 			Save(ctx)
@@ -1011,7 +712,6 @@ func TestIncidentService_DedicatedLifecyclePersistsAuditAndTimestamps(t *testing
 	workItem := createIncidentTestWorkItem(t, ctx, client, tenant.ID, user.ID, "lifecycle", common.IncidentStatusInProgress, "high")
 	entity, err := client.Incident.Create().
 		SetSeverity("high").
-		SetIncidentNumber("INC-LIFECYCLE-001").
 		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now().Add(-time.Hour)).
 		Save(ctx)
@@ -1049,7 +749,6 @@ func TestIncidentService_ResolveRequiresResolutionAndStatusMachineFailsClosed(t 
 	workItem := createIncidentTestWorkItem(t, ctx, client, tenant.ID, user.ID, "resolution required", "new", "medium")
 	entity, err := client.Incident.Create().
 		SetSeverity("medium").
-		SetIncidentNumber("INC-RESOLUTION-REQUIRED").
 		SetWorkItemID(workItem.ID).
 		Save(ctx)
 	require.NoError(t, err)
@@ -1073,7 +772,6 @@ func newLifecycleIncidentFixture(t *testing.T, client *ent.Client, ctx context.C
 	workItem := createIncidentTestWorkItem(t, ctx, client, tenantID, userID, "BPMN workflow lifecycle incident", "new", "medium")
 	entity, err := client.Incident.Create().
 		SetSeverity("medium").
-		SetIncidentNumber(number).
 		SetWorkItemID(workItem.ID).
 		Save(ctx)
 	require.NoError(t, err)
@@ -1371,7 +1069,6 @@ func TestIncidentService_DeleteIncident_Success(t *testing.T) {
 
 	testIncident, err := client.Incident.Create().
 		SetSeverity("medium").
-		SetIncidentNumber("INC-DEL-001").
 		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
@@ -1440,7 +1137,6 @@ func TestIncidentService_DeleteIncident_CascadeTenantIsolation(t *testing.T) {
 
 	testIncident, err := client.Incident.Create().
 		SetSeverity("medium").
-		SetIncidentNumber("INC-CASCADE-001").
 		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
@@ -1518,7 +1214,6 @@ func TestIncidentService_CreateIncidentEvent_Success(t *testing.T) {
 
 	testIncident, err := client.Incident.Create().
 		SetSeverity("medium").
-		SetIncidentNumber("INC-EVT-001").
 		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
@@ -1584,7 +1279,6 @@ func TestIncidentService_GetIncidentStats(t *testing.T) {
 			require.NoError(t, err)
 			incidentBuilder := client.Incident.Create().
 				SetSeverity(s.severity).
-				SetIncidentNumber(fmt.Sprintf("INC-STATS-%s-%d", s.status, i)).
 				SetWorkItemID(workItem.ID).
 				SetDetectedAt(time.Now())
 			_, err = incidentBuilder.Save(ctx)
@@ -1623,7 +1317,6 @@ func TestIncidentService_EscalateToMajorIncident_Success(t *testing.T) {
 
 	inc, err := client.Incident.Create().
 		SetSeverity("high").
-		SetIncidentNumber("INC-MAJOR-001").
 		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)
@@ -1682,12 +1375,11 @@ func TestIncidentService_EscalateToMajorIncident_Rejections(t *testing.T) {
 		{"已解决事件", "resolved", false, "cannot be escalated"},
 		{"已关闭事件", "closed", false, "cannot be escalated"},
 	}
-	for i, tt := range tests {
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "拒绝场景 "+tt.name, tt.status, "high")
 			inc, err := client.Incident.Create().
 				SetSeverity("high").
-				SetIncidentNumber(fmt.Sprintf("INC-MAJOR-REJ-%d", i)).
 				SetWorkItemID(workItem.ID).
 				SetIsMajorIncident(tt.isMajor).
 				SetDetectedAt(time.Now()).
@@ -1706,7 +1398,6 @@ func TestIncidentService_EscalateToMajorIncident_Rejections(t *testing.T) {
 	workItem := createIncidentTestWorkItem(t, ctx, client, testTenant.ID, testUser.ID, "跨租户事件", common.IncidentStatusInProgress, "high")
 	inc, err := client.Incident.Create().
 		SetSeverity("high").
-		SetIncidentNumber("INC-MAJOR-CROSS").
 		SetWorkItemID(workItem.ID).
 		SetDetectedAt(time.Now()).
 		Save(ctx)

@@ -11,25 +11,27 @@ import (
 	"itsm-backend/ent/incidentrule"
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/repository/workitemnumber"
+	"itsm-backend/service/bpmn"
 
 	"go.uber.org/zap"
 )
 
 type IncidentRuleEngine struct {
-	client          *ent.Client
-	logger          *zap.SugaredLogger
-	numberAllocator workitemnumber.Allocator
-	alertCreator    IncidentAlertCreator
+	client         *ent.Client
+	actorDirectory *ent.Client
+	logger         *zap.SugaredLogger
+	alertCreator   IncidentAlertCreator
 }
 
-func NewIncidentRuleEngine(client *ent.Client, logger *zap.SugaredLogger, numberAllocator workitemnumber.Allocator) *IncidentRuleEngine {
+func NewIncidentRuleEngine(client *ent.Client, logger *zap.SugaredLogger) *IncidentRuleEngine {
 	return &IncidentRuleEngine{
-		client:          client,
-		logger:          logger,
-		numberAllocator: numberAllocator,
+		client: client,
+		logger: logger,
 	}
 }
+
+// SetActorDirectory wires the restricted directory used by committed Intake effects.
+func (e *IncidentRuleEngine) SetActorDirectory(directory *ent.Client) { e.actorDirectory = directory }
 
 // RuleCondition 规则条件接口
 type RuleCondition interface {
@@ -39,6 +41,7 @@ type RuleCondition interface {
 // RuleAction 规则动作接口
 type RuleAction interface {
 	Execute(ctx context.Context, incident *ent.Incident, tenantID int) error
+	ExecuteTx(context.Context, *ent.Tx, *ent.Incident, int) error
 }
 
 // PriorityCondition 优先级条件
@@ -152,21 +155,25 @@ func (c *CategoryCondition) Evaluate(ctx context.Context, incident *ent.Incident
 
 // EscalationAction 升级动作
 type EscalationAction struct {
-	Level           int
-	Reason          string
-	NotifyUsers     []int
-	AutoAssign      bool
-	client          *ent.Client
-	logger          *zap.SugaredLogger
-	numberAllocator workitemnumber.Allocator
-	alertCreator    IncidentAlertCreator
+	Level          int
+	Reason         string
+	NotifyUsers    []int
+	AutoAssign     bool
+	client         *ent.Client
+	actorDirectory *ent.Client
+	logger         *zap.SugaredLogger
+	alertCreator   IncidentAlertCreator
 }
 
 func (a *EscalationAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
-	incidentService := NewIncidentService(a.client, a.logger, a.numberAllocator)
+	return executeIncidentRuleAction(ctx, a.client, a, incident, tenantID)
+}
+
+func (a *EscalationAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
+	incidentService := NewIncidentService(a.client, a.logger)
 	incidentService.SetAlertCreator(a.alertCreator)
 
-	_, err := incidentService.EscalateIncident(ctx, &dto.IncidentEscalationRequest{
+	_, err := incidentService.EscalateIncidentTx(ctx, tx, &dto.IncidentEscalationRequest{
 		IncidentID:      incident.ID,
 		EscalationLevel: a.Level,
 		Reason:          a.Reason,
@@ -179,21 +186,29 @@ func (a *EscalationAction) Execute(ctx context.Context, incident *ent.Incident, 
 
 // NotificationAction 通知动作
 type NotificationAction struct {
-	Channels        []string
-	Recipients      []string
-	Message         string
-	Severity        string
-	client          *ent.Client
-	logger          *zap.SugaredLogger
-	numberAllocator workitemnumber.Allocator
-	alertCreator    IncidentAlertCreator
+	Channels       []string
+	Recipients     []string
+	Message        string
+	Severity       string
+	client         *ent.Client
+	actorDirectory *ent.Client
+	logger         *zap.SugaredLogger
+	alertCreator   IncidentAlertCreator
 }
 
 func (a *NotificationAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
-	if a.alertCreator == nil {
+	return executeIncidentRuleAction(ctx, a.client, a, incident, tenantID)
+}
+
+func (a *NotificationAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
+	creator, ok := a.alertCreator.(IncidentAlertTransactionCreator)
+	if !ok {
 		return fmt.Errorf("incident alerting service is not configured")
 	}
-	_, err := a.alertCreator.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
+	if err := validateIncidentRuleRecipients(ctx, tx.Client(), a.Recipients, tenantID); err != nil {
+		return err
+	}
+	_, err := creator.CreateIncidentAlertTx(ctx, tx, &dto.CreateIncidentAlertRequest{
 		IncidentID: incident.ID,
 		AlertType:  "notification",
 		AlertName:  "规则触发通知",
@@ -208,17 +223,20 @@ func (a *NotificationAction) Execute(ctx context.Context, incident *ent.Incident
 
 // AssignmentAction 分配动作
 type AssignmentAction struct {
-	AssigneeID      int
-	Reason          string
-	client          *ent.Client
-	logger          *zap.SugaredLogger
-	numberAllocator workitemnumber.Allocator
+	AssigneeID int
+	Reason     string
+	client     *ent.Client
+	logger     *zap.SugaredLogger
 }
 
 func (a *AssignmentAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
-	incidentService := NewIncidentService(a.client, a.logger, a.numberAllocator)
+	return executeIncidentRuleAction(ctx, a.client, a, incident, tenantID)
+}
 
-	_, err := incidentService.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{
+func (a *AssignmentAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
+	incidentService := NewIncidentService(a.client, a.logger)
+
+	_, err := incidentService.UpdateIncidentTx(ctx, tx, incident.ID, &dto.UpdateIncidentRequest{
 		AssigneeID: &a.AssigneeID,
 	}, tenantID)
 
@@ -227,17 +245,20 @@ func (a *AssignmentAction) Execute(ctx context.Context, incident *ent.Incident, 
 
 // StatusChangeAction 状态变更动作
 type StatusChangeAction struct {
-	Status          string
-	Reason          string
-	client          *ent.Client
-	logger          *zap.SugaredLogger
-	numberAllocator workitemnumber.Allocator
+	Status string
+	Reason string
+	client *ent.Client
+	logger *zap.SugaredLogger
 }
 
 func (a *StatusChangeAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
-	incidentService := NewIncidentService(a.client, a.logger, a.numberAllocator)
+	return executeIncidentRuleAction(ctx, a.client, a, incident, tenantID)
+}
 
-	_, err := incidentService.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{
+func (a *StatusChangeAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
+	incidentService := NewIncidentService(a.client, a.logger)
+
+	_, err := incidentService.UpdateIncidentTx(ctx, tx, incident.ID, &dto.UpdateIncidentRequest{
 		Status: &a.Status,
 	}, tenantID)
 
@@ -246,18 +267,21 @@ func (a *StatusChangeAction) Execute(ctx context.Context, incident *ent.Incident
 
 // MetricCollectionAction 指标收集动作
 type MetricCollectionAction struct {
-	MetricType      string
-	MetricName      string
-	MetricValue     float64
-	Unit            string
-	Tags            map[string]string
-	client          *ent.Client
-	logger          *zap.SugaredLogger
-	numberAllocator workitemnumber.Allocator
+	MetricType  string
+	MetricName  string
+	MetricValue float64
+	Unit        string
+	Tags        map[string]string
+	client      *ent.Client
+	logger      *zap.SugaredLogger
 }
 
 func (a *MetricCollectionAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
-	incidentService := NewIncidentService(a.client, a.logger, a.numberAllocator)
+	return executeIncidentRuleAction(ctx, a.client, a, incident, tenantID)
+}
+
+func (a *MetricCollectionAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
+	incidentService := NewIncidentService(tx.Client(), a.logger)
 
 	_, err := incidentService.CreateIncidentMetric(ctx, &dto.CreateIncidentMetricRequest{
 		IncidentID:  incident.ID,
@@ -582,6 +606,9 @@ func (e *IncidentRuleEngine) parseActions(actions []map[string]interface{}) ([]R
 	var parsedActions []RuleAction
 
 	for _, actionData := range actions {
+		if _, present := actionData["optional"]; present {
+			return nil, fmt.Errorf("optional incident rule actions are unsupported")
+		}
 		actionType, ok := actionData["type"].(string)
 		if !ok {
 			return nil, fmt.Errorf("action type is required")
@@ -634,25 +661,41 @@ func (e *IncidentRuleEngine) parseEscalationAction(actionData map[string]interfa
 	}
 
 	reason, _ := actionData["reason"].(string)
-	notifyUsers, _ := toIntSlice(actionData["notify_users"])
+	notifyUsers, err := toIntSlice(actionData["notify_users"])
+	if err != nil {
+		return nil, err
+	}
 	autoAssign, _ := actionData["auto_assign"].(bool)
+	if raw, exists := actionData["auto_assign"]; exists {
+		if _, ok := raw.(bool); !ok {
+			return nil, fmt.Errorf("auto_assign must be boolean")
+		}
+	}
+	if autoAssign {
+		return nil, fmt.Errorf("automatic escalation assignment is unsupported; configure an explicit assign action")
+	}
 
 	return &EscalationAction{
-		Level:           level,
-		Reason:          reason,
-		NotifyUsers:     notifyUsers,
-		AutoAssign:      autoAssign,
-		client:          e.client,
-		logger:          e.logger,
-		numberAllocator: e.numberAllocator,
-		alertCreator:    e.alertCreator,
+		Level:        level,
+		Reason:       reason,
+		NotifyUsers:  notifyUsers,
+		AutoAssign:   autoAssign,
+		client:       e.client,
+		logger:       e.logger,
+		alertCreator: e.alertCreator,
 	}, nil
 }
 
 // parseNotificationAction 解析通知动作
 func (e *IncidentRuleEngine) parseNotificationAction(actionData map[string]interface{}) (*NotificationAction, error) {
-	channels, _ := toStringSlice(actionData["channels"])
-	recipients, _ := toStringSlice(actionData["recipients"])
+	channels, err := toStringSlice(actionData["channels"])
+	if err != nil {
+		return nil, err
+	}
+	recipients, err := toStringSlice(actionData["recipients"])
+	if err != nil {
+		return nil, err
+	}
 	message, _ := actionData["message"].(string)
 	severity, _ := actionData["severity"].(string)
 
@@ -663,7 +706,7 @@ func (e *IncidentRuleEngine) parseNotificationAction(actionData map[string]inter
 		return nil, err
 	}
 	if len(recipients) == 0 {
-		recipients = []string{"admin@company.com"}
+		return nil, fmt.Errorf("configured notification recipients are required")
 	}
 	if message == "" {
 		message = "事件需要关注"
@@ -673,14 +716,13 @@ func (e *IncidentRuleEngine) parseNotificationAction(actionData map[string]inter
 	}
 
 	return &NotificationAction{
-		Channels:        channels,
-		Recipients:      recipients,
-		Message:         message,
-		Severity:        severity,
-		client:          e.client,
-		logger:          e.logger,
-		numberAllocator: e.numberAllocator,
-		alertCreator:    e.alertCreator,
+		Channels:     channels,
+		Recipients:   recipients,
+		Message:      message,
+		Severity:     severity,
+		client:       e.client,
+		logger:       e.logger,
+		alertCreator: e.alertCreator,
 	}, nil
 }
 
@@ -694,11 +736,10 @@ func (e *IncidentRuleEngine) parseAssignmentAction(actionData map[string]interfa
 	reason, _ := actionData["reason"].(string)
 
 	return &AssignmentAction{
-		AssigneeID:      assigneeID,
-		Reason:          reason,
-		client:          e.client,
-		logger:          e.logger,
-		numberAllocator: e.numberAllocator,
+		AssigneeID: assigneeID,
+		Reason:     reason,
+		client:     e.client,
+		logger:     e.logger,
 	}, nil
 }
 
@@ -712,11 +753,10 @@ func (e *IncidentRuleEngine) parseStatusChangeAction(actionData map[string]inter
 	reason, _ := actionData["reason"].(string)
 
 	return &StatusChangeAction{
-		Status:          status,
-		Reason:          reason,
-		client:          e.client,
-		logger:          e.logger,
-		numberAllocator: e.numberAllocator,
+		Status: status,
+		Reason: reason,
+		client: e.client,
+		logger: e.logger,
 	}, nil
 }
 
@@ -741,29 +781,19 @@ func (e *IncidentRuleEngine) parseMetricCollectionAction(actionData map[string]i
 	tags := toStringMap(actionData["tags"])
 
 	return &MetricCollectionAction{
-		MetricType:      metricType,
-		MetricName:      metricName,
-		MetricValue:     metricValue,
-		Unit:            unit,
-		Tags:            tags,
-		client:          e.client,
-		logger:          e.logger,
-		numberAllocator: e.numberAllocator,
+		MetricType:  metricType,
+		MetricName:  metricName,
+		MetricValue: metricValue,
+		Unit:        unit,
+		Tags:        tags,
+		client:      e.client,
+		logger:      e.logger,
 	}, nil
 }
 
 func toInt(value interface{}) (int, bool) {
-	switch typed := value.(type) {
-	case int:
-		return typed, true
-	case int64:
-		return int(typed), true
-	case float64:
-		if typed == float64(int(typed)) {
-			return int(typed), true
-		}
-	}
-	return 0, false
+	n, err := bpmn.CallbackInteger(value)
+	return n, err == nil
 }
 
 func toStringSlice(value interface{}) ([]string, error) {
@@ -793,7 +823,10 @@ func toIntSlice(value interface{}) ([]int, error) {
 		if typed, ok := value.([]int); ok {
 			return typed, nil
 		}
-		return nil, nil
+		if value == nil {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("expected integer array")
 	}
 	result := make([]int, 0, len(items))
 	for _, item := range items {

@@ -57,7 +57,7 @@ func newRefreshServiceFixture(t *testing.T) *refreshServiceFixture {
 	consumer := authentication.NewRefreshTokenConsumer(secret, &atomicRefreshTokenStore{consumed: make(map[string]struct{})})
 	return &refreshServiceFixture{
 		ctx: ctx, client: client, consumer: consumer, secret: secret,
-		service: NewService(NewEntRepository(client), secret, zap.NewNop().Sugar(), client, consumer),
+		service: NewService(NewEntRepository(client), secret, zap.NewNop().Sugar(), client, consumer, nil),
 	}
 }
 
@@ -197,7 +197,7 @@ func TestServiceRefreshTokenFailsClosedWhenConsumerStoreUnavailable(t *testing.T
 	tenant := fx.tenant("store-unavailable", "standard", "active")
 	actor := fx.user(tenant.ID, "store-unavailable-refresh", "end_user", "", true)
 	consumer := authentication.NewRefreshTokenConsumer(fx.secret, nil)
-	svc := NewService(NewEntRepository(fx.client), fx.secret, zap.NewNop().Sugar(), fx.client, consumer)
+	svc := NewService(NewEntRepository(fx.client), fx.secret, zap.NewNop().Sugar(), fx.client, consumer, nil)
 
 	result, err := svc.RefreshToken(fx.ctx, fx.token(actor, "end_user", tenant.ID))
 	require.Nil(t, result)

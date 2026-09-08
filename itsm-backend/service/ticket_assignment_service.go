@@ -98,6 +98,16 @@ func (s *TicketAssignmentService) AssignTicket(ctx context.Context, req *Assignm
 
 // autoAssignTicket 自动分配工单
 func (s *TicketAssignmentService) autoAssignTicket(ctx context.Context, req *AssignmentRequest) (*AssignmentResponse, error) {
+	result, err := s.selectAutoAssignment(ctx, req)
+	if err != nil || result.AssignedTo == nil {
+		return result, err
+	}
+	if err := s.client.Ticket.UpdateOneID(req.TicketID).SetAssigneeID(*result.AssignedTo).Exec(ctx); err != nil {
+		return nil, fmt.Errorf("分配工单失败: %w", err)
+	}
+	return result, nil
+}
+func (s *TicketAssignmentService) selectAutoAssignment(ctx context.Context, req *AssignmentRequest) (*AssignmentResponse, error) {
 	// 1. 获取可用的处理人
 	availableUsers, err := s.getAvailableUsers(ctx, req)
 	if err != nil {
@@ -134,18 +144,13 @@ func (s *TicketAssignmentService) autoAssignTicket(ctx context.Context, req *Ass
 
 	// 3. 按评分排序，选择最高分的用户
 	sort.Slice(availableUsers, func(i, j int) bool {
+		if availableUsers[i].Score == availableUsers[j].Score {
+			return availableUsers[i].UserID < availableUsers[j].UserID
+		}
 		return availableUsers[i].Score > availableUsers[j].Score
 	})
 
 	bestUser := availableUsers[0]
-
-	// 4. 执行分配
-	err = s.client.Ticket.UpdateOneID(req.TicketID).
-		SetAssigneeID(bestUser.UserID).
-		Exec(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("分配工单失败: %w", err)
-	}
 
 	return &AssignmentResponse{
 		TicketID:       req.TicketID,

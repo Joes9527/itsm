@@ -65,7 +65,7 @@ func TestProblemService_CreateKnownErrorFromProblemTenantIsolation(t *testing.T)
 	userB, err := createProblemTestUser(ctx, client, tenantB.ID, "kedb-b")
 	require.NoError(t, err)
 	workItem, err := client.Ticket.Create().SetTitle("Connection pool problem").SetStatus("open").SetPriority("high").
-		SetType("problem").SetRecordClass("problem").SetTicketNumber("TKT-KEDB-PROBLEM").
+		SetRecordClass("problem").SetTicketNumber("TKT-KEDB-PROBLEM").
 		SetRequesterID(userA.ID).SetTenantID(tenantA.ID).Save(ctx)
 	require.NoError(t, err)
 	p, err := client.Problem.Create().

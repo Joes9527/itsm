@@ -3,9 +3,11 @@ package bpmn
 // CallbackActionContract is the handler-owned allowlist for one declared
 // callback action. Only these fields may cross the durable callback boundary.
 type CallbackActionContract struct {
-	PayloadFields     []string
-	RequiredFields    []string
-	ConfigRefRequired bool
+	CreatedRecordClass    string
+	PayloadFields         []string
+	PositiveIntegerFields []string
+	RequiredFields        []string
+	ConfigRefRequired     bool
 }
 
 // CallbackContractProvider is implemented only by synchronous handlers.
@@ -23,7 +25,7 @@ func callbackActionContract(payload, required []string) CallbackActionContract {
 
 func (h *ChangeServiceTaskHandler) CallbackContract(action string) (CallbackActionContract, bool) {
 	payload := map[string][]string{
-		"create_change":       {"title", "description", "type", "priority", "created_by"},
+		"create_change":       {"title", "description", "type", "priority", "created_by", "justification", "impact_scope", "risk_level", "planned_start_date", "planned_end_date", "implementation_plan", "rollback_plan", "affected_cis", "related_tickets", "related_ticket_numbers", "assignee_id", "ci_ids", "template_id", "parent_ticket_id", "tag_ids", "workflow_definition_key", "form_values"},
 		"update_change":       {"title", "description", "status"},
 		"approve_change":      nil,
 		"reject_change":       nil,
@@ -35,12 +37,16 @@ func (h *ChangeServiceTaskHandler) CallbackContract(action string) (CallbackActi
 		"notify_stakeholders": {"notification_type"},
 	}
 	fields, ok := payload[action]
-	return callbackActionContract(fields, nil), ok
+	contract := callbackActionContract(fields, nil)
+	if action == "create_change" {
+		contract.CreatedRecordClass = "change_request"
+	}
+	return contract, ok
 }
 
 func (h *IncidentServiceTaskHandler) CallbackContract(action string) (CallbackActionContract, bool) {
 	payload := map[string][]string{
-		"create_incident":      {"title", "description", "type", "priority", "severity", "reporter_id"},
+		"create_incident":      {"title", "description", "type", "priority", "severity", "reporter_id", "impact", "urgency", "category", "subcategory", "detected_at", "impact_analysis", "metadata", "source", "assignee_id", "ci_ids", "template_id", "parent_ticket_id", "tag_ids", "workflow_definition_key", "form_values"},
 		"assign_incident":      {"assignee_id"},
 		"escalate_incident":    {"escalation_level", "escalation_reason"},
 		"resolve_incident":     {"resolution"},
@@ -50,7 +56,14 @@ func (h *IncidentServiceTaskHandler) CallbackContract(action string) (CallbackAc
 		"categorize_incident":  {"category", "subcategory"},
 	}
 	fields, ok := payload[action]
-	return callbackActionContract(fields, nil), ok
+	contract := callbackActionContract(fields, nil)
+	if action == "create_incident" {
+		contract.CreatedRecordClass = "incident"
+	}
+	if action == "assign_incident" {
+		contract.PositiveIntegerFields = []string{"assignee_id"}
+	}
+	return contract, ok
 }
 
 func (h *TicketServiceTaskHandler) CallbackContract(action string) (CallbackActionContract, bool) {
@@ -62,7 +75,11 @@ func (h *TicketServiceTaskHandler) CallbackContract(action string) (CallbackActi
 		"assign":           {"assignee_id", "notify_content"},
 	}
 	fields, ok := payload[action]
-	return callbackActionContract(fields, nil), ok
+	contract := callbackActionContract(fields, nil)
+	if action == "assign" {
+		contract.PositiveIntegerFields = []string{"assignee_id"}
+	}
+	return contract, ok
 }
 
 func (h *ServiceRequestServiceTaskHandler) CallbackContract(action string) (CallbackActionContract, bool) {
@@ -77,7 +94,11 @@ func (h *ServiceRequestServiceTaskHandler) CallbackContract(action string) (Call
 		"cancel_request":     {"cancel_reason"},
 	}
 	fields, ok := payload[action]
-	return callbackActionContract(fields, nil), ok
+	contract := callbackActionContract(fields, nil)
+	if action == "assign_request" {
+		contract.PositiveIntegerFields = []string{"assignee_id"}
+	}
+	return contract, ok
 }
 
 func (h *NotificationHandler) CallbackContract(action string) (CallbackActionContract, bool) {

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -836,7 +837,7 @@ func TestTaskParticipantCanMutateOwnTask(t *testing.T) {
 			assert.Equal(t, f.tenant.ID, audit.TenantID)
 			if name == "counter-sign" {
 				assert.Equal(t, 1, f.client.ProcessTask.Query().Where(processtask.ParentTaskID(task.TaskID), processtask.TenantID(f.tenant.ID)).CountX(f.userCtx))
-				assert.Equal(t, float64(1), f.client.ProcessTask.GetX(f.userCtx, task.ID).TaskVariables["total"])
+				assert.Equal(t, json.Number("1"), f.client.ProcessTask.GetX(f.userCtx, task.ID).TaskVariables["total"])
 			}
 		})
 	}
@@ -1083,7 +1084,7 @@ func TestTaskAuditRejectsForeignProcessInstance(t *testing.T) {
 			after := f.client.ProcessTask.GetX(f.userCtx, task.ID)
 			assert.Equal(t, common.ProcessTaskStatusAssigned, after.Status)
 			assert.Equal(t, task.Assignee, after.Assignee)
-			assert.Equal(t, map[string]interface{}{"before": "unchanged"}, after.TaskVariables)
+			assert.Equal(t, map[string]interface{}{"before": "unchanged"}, map[string]any(after.TaskVariables))
 			assert.Zero(t, f.client.ProcessTask.Query().Where(processtask.ParentTaskID(task.TaskID)).CountX(f.userCtx))
 			assert.Zero(t, f.client.ProcessApprovalDecision.Query().CountX(f.userCtx))
 			assert.Zero(t, f.client.ProcessAuditLog.Query().CountX(f.userCtx))

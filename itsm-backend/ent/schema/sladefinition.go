@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"itsm-backend/internal/jsonvalue"
 	"time"
 
 	"entgo.io/ent"
@@ -19,9 +20,9 @@ func (SLADefinition) Fields() []ent.Field {
 		field.JSON("category_ids", []int{}).Comment("绑定的工单分类ID列表").Optional(),
 		field.Int("response_time").Comment("响应时间(分钟)").Positive().Default(30),
 		field.Int("resolution_time").Comment("解决时间(分钟)").Positive().Default(240),
-		field.JSON("business_hours", map[string]interface{}{}).Comment("营业时间配置").Optional(),
-		field.JSON("escalation_rules", map[string]interface{}{}).Comment("升级规则").Optional(),
-		field.JSON("conditions", map[string]interface{}{}).Comment("适用条件").Optional(),
+		field.JSON("business_hours", jsonvalue.NumberMap{}).Comment("营业时间配置").Optional(),
+		field.JSON("escalation_rules", jsonvalue.NumberMap{}).Comment("升级规则").Optional(),
+		field.JSON("conditions", jsonvalue.NumberMap{}).Comment("适用条件").Optional(),
 		field.Bool("exclude_weekends").Comment("是否排除周末").Default(false),
 		field.Bool("exclude_holidays").Comment("是否排除节假日").Default(false),
 		field.Bool("is_active").Comment("是否激活").Default(true),

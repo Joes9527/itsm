@@ -336,6 +336,7 @@ func assertMigratedTicketNotificationsArePickedUp(
 	}
 	notifications := service.NewTicketNotificationService(client, zap.NewNop().Sugar())
 	notifications.SetConnectorManager(manager)
+	notifications.SetDeliveryQueueClient(client)
 	completed, err := notifications.ProcessPendingDeliveries(ctx, "migration-test-worker", 10)
 	require.NoError(t, err)
 	require.Equal(t, 2, completed)

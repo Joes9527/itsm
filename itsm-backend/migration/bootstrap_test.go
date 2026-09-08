@@ -9,10 +9,11 @@ import (
 )
 
 type recordingBootstrapMigrator struct {
-	t         *testing.T
-	events    *[]string
-	ensureErr error
-	runErr    error
+	t             *testing.T
+	events        *[]string
+	ensureErr     error
+	runErr        error
+	invariantsErr error
 }
 
 func (m *recordingBootstrapMigrator) EnsureMigrationsTable(context.Context) error {
@@ -50,7 +51,7 @@ func TestRunCanonicalBootstrapOrdersEveryPhase(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, []string{"prepare", "schema", "ledger", "post-schema", "seed"}, events)
+	require.Equal(t, []string{"prepare", "schema", "ledger", "post-schema", "invariants", "seed"}, events)
 }
 
 func TestRunCanonicalBootstrapFailsClosedBeforePostSchemaWithoutSchema(t *testing.T) {
@@ -74,5 +75,23 @@ func TestRunCanonicalBootstrapDoesNotSeedAfterPostSchemaFailure(t *testing.T) {
 		},
 	})
 	require.ErrorContains(t, err, "run post-schema migrations")
+	require.False(t, seeded)
+}
+
+func (m *recordingBootstrapMigrator) ReconcileSchemaInvariants(context.Context) error {
+	*m.events = append(*m.events, "invariants")
+	return m.invariantsErr
+}
+
+func TestRunCanonicalBootstrapDoesNotSeedAfterInvariantFailure(t *testing.T) {
+	var events []string
+	runner := &recordingBootstrapMigrator{t: t, events: &events, invariantsErr: errors.New("invalid existing access policy")}
+	seeded := false
+	err := RunCanonicalBootstrap(context.Background(), CanonicalBootstrap{
+		CreateSchema: func(context.Context) error { return nil },
+		Migrator:     runner,
+		Seed:         func(context.Context) error { seeded = true; return nil },
+	})
+	require.ErrorContains(t, err, "reconcile schema invariants")
 	require.False(t, seeded)
 }

@@ -41,10 +41,9 @@ type ServiceRequest struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 
-	// TicketTitle/TicketStatus 是列表响应场景下由 Service.List 批量回填的展示字段——
-	// 不是持久化列，只在内存里跟着 List 的返回值走一次，供 handler.toDTO 映射进
-	// ServiceRequestResponse.TicketTitle/TicketStatus（/my-requests 列表页用，
-	// 省掉前端对每条记录再单独查一次 ticket 的往返）。Get/Create/Update 路径不填这两个字段。
+	// Shared identity, tenant, requester, assignment, version and timestamps above,
+	// plus title/status below, are required owning WorkItem projections populated
+	// by aggregate repository reads. They are never extension persistence fields.
 	TicketTitle  string
 	TicketStatus string
 }
@@ -58,7 +57,6 @@ type ListFilters struct {
 
 // Repository defines the interface for data persistence
 type Repository interface {
-	Create(ctx context.Context, req *ServiceRequest) (*ServiceRequest, error)
 	Get(ctx context.Context, id, tenantID int) (*ServiceRequest, error)
 	GetByTicketID(ctx context.Context, ticketID, tenantID int) (*ServiceRequest, error)
 	List(ctx context.Context, tenantID int, filters ListFilters) ([]*ServiceRequest, int, error)
@@ -144,30 +142,9 @@ func stripStructuredFieldKeys(formData map[string]interface{}, fieldValues map[s
 	return result
 }
 
-// mapTargetClassToTicketType 将 catalog.target_class（WorkItem 目标类）映射为 Ticket.type。
-// Wave 2 之前这里读的是 catalog.itsm_type；现在 target_class 是路由的唯一权威来源
-// （design doc §7.2、AGENTS.md 禁止 itsm_type/target_class 两个字段并存做路由依据）——
-// handlers/service_catalog 在 ServiceCatalog 创建/更新时已经把 itsm_type 同步计算进
-// target_class（见 handlers/service_catalog/entity.go 的 ComputeTargetClass），这里不再
-// 重新读取或解释 itsm_type。
-// incident 类型不通过 Ticket 审批路径，调用方应在入此函数前用 isIncidentCatalog 分流；
-// 这里的 "incident" 分支只是防御性兜底，正常不会走到。
-// 映射规则：service_request_item → service_request, change_request → change,
-// incident 不应到达此处。
-func mapTargetClassToTicketType(targetClass string) string {
-	switch targetClass {
-	case service_catalog.TargetClassChangeRequest:
-		return "change"
-	case service_catalog.TargetClassIncident:
-		return "incident"
-	default:
-		return "service_request" // service_request_item、空值（未跑回填）及兜底
-	}
-}
-
 // isIncidentCatalog 判断服务目录项的 WorkItem 目标类是否为事件——事件无需审批，
 // 直接分派给 Resolver，不走 SR→Ticket 审批流程。参数是 target_class（不是 itsm_type，
-// 见 mapTargetClassToTicketType 的注释）。
+// 按目录目标类判断）。
 func isIncidentCatalog(targetClass string) bool {
 	return targetClass == service_catalog.TargetClassIncident
 }

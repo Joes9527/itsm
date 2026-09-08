@@ -44,4 +44,14 @@ describe('ApprovalsCenterPage', () => {
     expect(httpClient.get).not.toHaveBeenCalled();
     expect(screen.queryByText('业务待审（参考）')).not.toBeInTheDocument();
   });
+  it('identifies approval rows by the owning WorkItem number', async () => {
+    (BPMNWorkflowApi.listUserTasks as jest.Mock).mockResolvedValueOnce({
+      items: [{ id: 102, taskName: '审批', status: 'created', assignee: '',
+        processInstanceId: 13, businessType: 'service_request', businessId: 41,
+        workItemNumber: 'TKT-202609-000021', createdTime: '2026-09-01T00:00:00Z' }],
+    });
+    render(<ApprovalsCenterPage />);
+    expect(await screen.findByRole('link', { name: 'TKT-202609-000021' }))
+      .toHaveAttribute('href', '/service-requests/41');
+  });
 });

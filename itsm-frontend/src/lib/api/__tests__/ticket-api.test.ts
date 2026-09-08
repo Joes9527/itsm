@@ -1,3 +1,4 @@
+import { creationReceipt, creationOptions, creationHttpOptions } from '../creation.test-utils';
 import { TicketApi } from '../ticket-api';
 import { httpClient } from '../http-client';
 import { handleApiRequest } from '../base-api-handler';
@@ -43,14 +44,13 @@ describe('TicketApi', () => {
       expect(result.size).toBe(20);
     });
   });
-
   describe('createTicket', () => {
-    it('should create ticket', async () => {
-      const data = { title: 'Test', description: 'Desc' };
-      const expected = { id: 1, title: 'Test' };
-      mockPost.mockResolvedValue(expected);
-      const result = await TicketApi.createTicket(data as any);
-      expect(result).toEqual(expected);
+    it('preserves confirmed payload and returns only the creation receipt', async () => {
+      const data = { title: 'Title', description: 'Description', type: 'ticket', priority: 'medium' };
+      mockPost.mockResolvedValue(creationReceipt);
+      const result = await TicketApi.createTicket(data, creationOptions);
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/tickets', data, creationHttpOptions);
+      expect(result).toEqual(creationReceipt);
     });
   });
 
@@ -186,14 +186,6 @@ describe('TicketApi', () => {
       const result = await TicketApi.getSubtasks(1);
       expect(mockGet).toHaveBeenCalledWith('/api/v1/tickets/1/subtasks');
       expect(result).toEqual([{ id: 2 }]);
-    });
-  });
-
-  describe('createSubtask', () => {
-    it('should create subtask', async () => {
-      mockPost.mockResolvedValue({ id: 2 });
-      await TicketApi.createSubtask(1, { title: 'sub' } as any);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/tickets/1/subtasks', { title: 'sub', parentTicketId: 1 });
     });
   });
 

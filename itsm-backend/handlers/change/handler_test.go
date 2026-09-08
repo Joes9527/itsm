@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
@@ -344,10 +345,14 @@ func TestChangeService_GetCMDBImpactSummary_WithoutEntClient(t *testing.T) {
 	assert.Contains(t, err.Error(), "CMDB impact summary unavailable")
 }
 
-// TestChangeController_CreateChange tests POST /api/v1/changes
+// TestChangeController_CreateChange tests POST /api/v1/changes. Creation now
+// goes through the real shared Intake application: the HTTP route returns the
+// canonical CreateWorkItemResult envelope (workItemId/number/recordClass/...),
+// not the legacy Change DTO fields, so this needs a real ent-backed handler
+// (mockRepository/nil client cannot satisfy the real Prepare/CreateExtension
+// transaction) and repository inspection to assert persisted fields. This does not exercise
+// detail HTTP authorization, which requires a separate endpoint check.
 func TestChangeController_CreateChange(t *testing.T) {
-	r, _, _ := setupTestHandler(t)
-
 	tests := []struct {
 		name           string
 		request        dto.CreateChangeRequest
@@ -357,15 +362,16 @@ func TestChangeController_CreateChange(t *testing.T) {
 		{
 			name: "成功创建变更",
 			request: dto.CreateChangeRequest{
-				Title:         "新变更请求",
-				Description:   "变更描述",
-				Justification: "变更理由",
-				Type:          "normal",
-				Priority:      "medium",
-				ImpactScope:   "low",
-				RiskLevel:     "low",
+				Title:              "新变更请求",
+				Description:        "变更描述",
+				Justification:      "变更理由",
+				ImplementationPlan: "备份配置，应用变更并验证服务", RollbackPlan: "恢复变更前配置并验证服务",
+				Type:        "normal",
+				Priority:    "medium",
+				ImpactScope: "low",
+				RiskLevel:   "low",
 			},
-			expectedStatus: http.StatusOK,
+			expectedStatus: http.StatusCreated,
 			expectedCode:   common.SuccessCode,
 		},
 		{
@@ -381,18 +387,21 @@ func TestChangeController_CreateChange(t *testing.T) {
 				ImplementationPlan: "实施计划",
 				RollbackPlan:       "回滚计划",
 			},
-			expectedStatus: http.StatusOK,
+			expectedStatus: http.StatusCreated,
 			expectedCode:   common.SuccessCode,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			r, repo, _, tenantID, _ := setupChangeRegressionHandler(t, "change_controller_create_"+tt.name, "change_controller_create_"+tt.name)
+
 			requestBody, err := json.Marshal(tt.request)
 			require.NoError(t, err)
 
 			req, _ := http.NewRequest("POST", "/api/v1/changes", bytes.NewBuffer(requestBody))
 			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Idempotency-Key", uuid.NewString())
 
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
@@ -404,11 +413,14 @@ func TestChangeController_CreateChange(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.expectedCode, response.Code)
 
-			// Verify the change was created
-			if response.Code == common.SuccessCode && tt.request.Title != "" {
+			if response.Code == common.SuccessCode {
 				data := response.Data.(map[string]interface{})
-				assert.Equal(t, tt.request.Title, data["title"])
-				assert.Equal(t, "draft", data["status"]) // Default status
+				professionalReference := data["professionalReference"].(map[string]interface{})
+				changeID := int(professionalReference["id"].(float64))
+				stored, err := repo.Get(context.Background(), changeID, tenantID)
+				require.NoError(t, err)
+				assert.Equal(t, tt.request.Title, stored.Title)
+				assert.Equal(t, "draft", stored.Status)
 			}
 		})
 	}

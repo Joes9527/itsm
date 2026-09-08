@@ -14,6 +14,7 @@ import (
 	"itsm-backend/ent/processapprovaldecision"
 	"itsm-backend/ent/provisioningtask"
 	"itsm-backend/ent/servicerequest"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/infrastructure/cloud"
 	cloudAlicloud "itsm-backend/infrastructure/cloud/alicloud"
 
@@ -36,10 +37,15 @@ func CanProvision(client *ent.Client, tenantID, actorUserID int, actorRole strin
 
 // ProvisioningService（应用层）：服务请求 -> 交付任务 -> 执行 -> 状态回写
 // M2：先实现可运行骨架（Stub），后续接入阿里云真实交付。
+type ManualProvisioningGuard interface {
+	ValidateManualProvisioning(context.Context, *ent.Client, int, int) error
+}
+
 type ProvisioningService struct {
-	client   *ent.Client
-	logger   *zap.SugaredLogger
-	provider cloud.Provider
+	accessGuard ManualProvisioningGuard
+	client      *ent.Client
+	logger      *zap.SugaredLogger
+	provider    cloud.Provider
 }
 
 func NewProvisioningService(client *ent.Client, logger *zap.SugaredLogger) *ProvisioningService {
@@ -48,6 +54,17 @@ func NewProvisioningService(client *ent.Client, logger *zap.SugaredLogger) *Prov
 		logger:   logger,
 		provider: cloudAlicloud.NewStubProvider(),
 	}
+}
+
+// SetManualProvisioningGuard supplies the Service Request domain authority.
+func (s *ProvisioningService) SetManualProvisioningGuard(guard ManualProvisioningGuard) {
+	s.accessGuard = guard
+}
+func (s *ProvisioningService) validateManualProvisioning(ctx context.Context, client *ent.Client, tenantID, itemID int) error {
+	if s.accessGuard == nil {
+		return fmt.Errorf("manual_provisioning_owner_unavailable")
+	}
+	return s.accessGuard.ValidateManualProvisioning(ctx, client, tenantID, itemID)
 }
 
 // CreateTaskFromServiceRequest 仅创建交付任务并把 ServiceRequest 置为 provisioning
@@ -59,13 +76,19 @@ func (s *ProvisioningService) CreateTaskFromServiceRequest(ctx context.Context, 
 	defer tx.Rollback()
 
 	sr, err := tx.ServiceRequest.Query().
-		Where(servicerequest.ID(serviceRequestID), servicerequest.TenantID(tenantID)).
+		WithWorkItem().Where(servicerequest.ID(serviceRequestID), servicerequest.HasWorkItemWith(ticket.TenantID(tenantID), ticket.RecordClassEQ("service_request_item"), ticket.DeletedAtIsNil())).
 		First(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("服务请求不存在")
 	}
 
-	if perm := CanProvision(s.client, tenantID, actorUserID, actorRole, sr.RequesterID); !perm.Allowed {
+	if _, err := sr.Edges.WorkItemOrErr(); err != nil {
+		return nil, fmt.Errorf("service request requires WorkItem: %w", err)
+	}
+	if err := s.validateManualProvisioning(ctx, tx.Client(), tenantID, sr.TicketID); err != nil {
+		return nil, err
+	}
+	if perm := CanProvision(s.client, tenantID, actorUserID, actorRole, sr.Edges.WorkItem.RequesterID); !perm.Allowed {
 		return nil, fmt.Errorf("%s", perm.Reason)
 	}
 
@@ -125,12 +148,18 @@ func (s *ProvisioningService) ExecuteTask(ctx context.Context, taskID, tenantID,
 	}
 
 	sr, err := s.client.ServiceRequest.Query().
-		Where(servicerequest.ID(task.ServiceRequestID), servicerequest.TenantID(tenantID)).
+		WithWorkItem().Where(servicerequest.ID(task.ServiceRequestID), servicerequest.HasWorkItemWith(ticket.TenantID(tenantID), ticket.RecordClassEQ("service_request_item"), ticket.DeletedAtIsNil())).
 		First(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("关联服务请求不存在")
 	}
-	if perm := CanProvision(s.client, tenantID, actorUserID, actorRole, sr.RequesterID); !perm.Allowed {
+	if _, err := sr.Edges.WorkItemOrErr(); err != nil {
+		return nil, fmt.Errorf("service request requires WorkItem: %w", err)
+	}
+	if err := s.validateManualProvisioning(ctx, s.client, tenantID, sr.TicketID); err != nil {
+		return nil, err
+	}
+	if perm := CanProvision(s.client, tenantID, actorUserID, actorRole, sr.Edges.WorkItem.RequesterID); !perm.Allowed {
 		return nil, fmt.Errorf("%s", perm.Reason)
 	}
 
@@ -153,20 +182,24 @@ func (s *ProvisioningService) ExecuteTask(ctx context.Context, taskID, tenantID,
 
 	// 回写任务状态 + ServiceRequest
 	if execErr != nil {
-		if err := s.client.ProvisioningTask.UpdateOneID(task.ID).
-			Where(provisioningtask.TenantID(tenantID)).
-			SetStatus(string(provisioning.TaskFailed)).
-			SetErrorMessage(execErr.Error()).
-			Exec(ctx); err != nil {
-			s.logger.Warnw("failed to update task status to failed", "taskID", task.ID, "error", err)
+		tx, err := s.client.Tx(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("persist provisioning failure: %w", err)
 		}
-		// SR 没有 status 字段了（交付状态从 ProvisioningTask.Status 派生），仅保留错误信息留痕。
-		if err := s.client.ServiceRequest.Update().
-			Where(servicerequest.ID(task.ServiceRequestID), servicerequest.TenantID(tenantID)).
-			SetLastError(execErr.Error()).
-			Exec(ctx); err != nil {
-			s.logger.Warnw("failed to update service request last_error", "serviceRequestID", task.ServiceRequestID, "error", err)
+		defer tx.Rollback()
+		if err := tx.Ticket.UpdateOneID(sr.TicketID).Where(ticket.TenantID(tenantID), ticket.RecordClassEQ("service_request_item"), ticket.DeletedAtIsNil(), ticket.VersionEQ(sr.Edges.WorkItem.Version)).AddVersion(1).SetUpdatedAt(time.Now()).Exec(ctx); err != nil {
+			return nil, fmt.Errorf("persist provisioning failure WorkItem: %w", err)
 		}
+		if err := tx.ServiceRequest.UpdateOneID(sr.ID).Where(servicerequest.TicketID(sr.TicketID), servicerequest.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil(), ticket.RecordClassEQ("service_request_item"))).SetLastError(execErr.Error()).Exec(ctx); err != nil {
+			return nil, fmt.Errorf("persist provisioning failure extension: %w", err)
+		}
+		if err := tx.ProvisioningTask.UpdateOneID(task.ID).Where(provisioningtask.TenantID(tenantID)).SetStatus(string(provisioning.TaskFailed)).SetErrorMessage(execErr.Error()).Exec(ctx); err != nil {
+			return nil, fmt.Errorf("persist provisioning failure task: %w", err)
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("persist provisioning failure commit: %w", err)
+		}
+
 		return nil, execErr
 	}
 
