@@ -2,49 +2,10 @@ package seeder
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
-	"strings"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/menu"
 )
-
-// ReconcileWorkflowMenus repairs only the requested tenant's navigation. It does
-// not seed identities, change grants, migrate schemas, or restart the API.
-func (s *Seeder) ReconcileWorkflowMenus(ctx context.Context, tenantID int, requestedBy string) error {
-	if tenantID <= 0 || strings.TrimSpace(requestedBy) == "" {
-		return fmt.Errorf("positive tenant ID and requester are required")
-	}
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	c := tx.Client()
-	if _, err := c.Tenant.Get(ctx, tenantID); err != nil {
-		return err
-	}
-	before, err := c.Menu.Query().Where(menu.TenantIDEQ(tenantID)).Order(ent.Asc(menu.FieldID)).All(ctx)
-	if err != nil {
-		return err
-	}
-	if err := reconcileWorkflowMenus(ctx, c, tenantID); err != nil {
-		return err
-	}
-	after, err := c.Menu.Query().Where(menu.TenantIDEQ(tenantID)).Order(ent.Asc(menu.FieldID)).All(ctx)
-	if err != nil {
-		return err
-	}
-	body, err := json.Marshal(map[string]any{"requestedBy": requestedBy, "source": "cli:reconcile_workflow_menus", "before": before, "after": after})
-	if err != nil {
-		return err
-	}
-	if _, err := c.AuditLog.Create().SetTenantID(tenantID).SetResource("menu").SetAction("reconcile_workflow_menus").SetPath("/workflow").SetMethod("CLI").SetStatusCode(200).SetRequestBody(string(body)).Save(ctx); err != nil {
-		return err
-	}
-	return tx.Commit()
-}
 
 func reconcileWorkflowMenus(ctx context.Context, c *ent.Client, tenantID int) error {
 	// Prefer the existing group so custom children retain their parent ID.

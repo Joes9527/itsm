@@ -17,8 +17,9 @@ import (
 )
 
 func main() {
-	tenantID := flag.Int("tenant-id", 0, "existing tenant whose workflow menu will be reconciled")
+	tenantID := flag.Int("tenant-id", 0, "existing tenant whose menus will be reconciled")
 	requestedBy := flag.String("requested-by", "", "operator identity recorded in the audit log")
+	scope := flag.String("scope", "", "required menu scope: workflow|catalog")
 	flag.Parse()
 	if *tenantID <= 0 || strings.TrimSpace(*requestedBy) == "" {
 		fmt.Fprintln(os.Stderr, "-tenant-id must be positive and -requested-by is required")
@@ -43,8 +44,8 @@ func main() {
 	defer client.Close()
 	ctx, cancel := context.WithTimeout(tenantctx.WithTenantID(context.Background(), *tenantID), 30*time.Second)
 	defer cancel()
-	if err = seeder.NewSeeder(client, logger.Sugar(), cfg).ReconcileWorkflowMenus(ctx, *tenantID, *requestedBy); err != nil {
-		logger.Sugar().Fatalw("workflow menu reconciliation failed", "tenant_id", *tenantID, "error", err)
+	if err = seeder.NewSeeder(client, logger.Sugar(), cfg).ReconcileMenus(ctx, *tenantID, *requestedBy, *scope); err != nil {
+		logger.Sugar().Fatalw("menu reconciliation failed", "tenant_id", *tenantID, "error", err)
 	}
-	logger.Sugar().Infow("workflow menu reconciliation completed", "tenant_id", *tenantID)
+	logger.Sugar().Infow("menu reconciliation completed", "tenant_id", *tenantID)
 }

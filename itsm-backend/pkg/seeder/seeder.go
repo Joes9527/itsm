@@ -1671,7 +1671,6 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 		PermissionCode string
 		SortOrder      int
 	}{
-		{"工单分类", "/admin/ticket-categories", "Tag", "ticket_category:read", 275},
 		{"CI类型管理", "/admin/cmdb-types", "Database", "cmdb:write", 290},
 		{"许可证管理", "/licenses", "Key", "license:read", 125},
 		{"SLA模板", "/admin/sla-templates", "Layers", "sla:write", 272},
@@ -1709,6 +1708,9 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 	}
 	if err := reconcileWorkflowMenus(ctx, s.client, t.ID); err != nil {
 		s.sugar.Errorw("reconcile workflow menus failed", "tenant_id", t.ID, "error", err)
+	}
+	if err := reconcileCatalogMenus(ctx, s.client, t.ID); err != nil {
+		s.sugar.Errorw("reconcile catalog menus failed", "tenant_id", t.ID, "error", err)
 	}
 }
 

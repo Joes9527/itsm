@@ -41,11 +41,17 @@ NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3301 npm start
 
 ```bash
 # 在 itsm-backend 中构建，再使用目标环境既有配置运行该二进制。
-go build -o /tmp/itsm-reconcile-workflow-menus ./cmd/reconcile_workflow_menus
-/tmp/itsm-reconcile-workflow-menus -tenant-id 1 -requested-by '<operator identity>'
+go build -o /tmp/itsm-reconcile-menus ./cmd/reconcile_menus
+/tmp/itsm-reconcile-menus -scope workflow -tenant-id 1 -requested-by '<operator identity>'
+# 服务目录管理入口与工单分类菜单权限修复：
+/tmp/itsm-reconcile-menus -scope catalog -tenant-id 1 -requested-by '<operator identity>'
 ```
 
 执行前核对目标数据库、schema、租户并协调共享环境写入。命令在单一事务中修复该租户的菜单，合并旧 `/workflow`、`/workflow/list` 重复入口，保留自定义子项与既有可见/启用状态；不改角色授权、不执行 schema 迁移。审计动作 `reconcile_workflow_menus` 保存操作者和菜单前后快照，可用于核对及受控恢复。首次初始化使用同一菜单修复逻辑。
+
+`-scope` 必须显式选择 `workflow` 或 `catalog`，未知值返回错误，不执行写入。`catalog` 仅维护“服务目录管理”和“工单分类”两个入口，权限分别为 `service_catalog:read`、`ticket_category:read`；保留已有菜单可见性、启用状态、父子关系和顺序，审计动作是 `reconcile_catalog_menus`。
+
+产品用词：主导航“服务目录”用于浏览与申请；管理导航“服务目录管理”用于维护目录项、申请字段、流程和服务级别；“目录分类”是目录项的展示分组；“工单分类”是已产生工作的业务分类树。当前 `ServiceCatalog.category` 是字符串，`Ticket.category_id` 关联独立分类树，二者没有自动映射。自定义字段归属于目录项或工单模板，不从分类继承。
 
 ### 后端 (itsm-backend)
 

@@ -511,7 +511,7 @@ export function getMenuConfig(): MenuConfig {
             icon: getIconByName('Tag')!,
             label: '工单分类',
             path: '/admin/ticket-categories',
-            permission: 'ticket:category:manage',
+            permission: 'ticket_category:read',
           },
           {
             key: '/tickets/templates',
@@ -593,9 +593,9 @@ export function getMenuConfig(): MenuConfig {
           {
             key: '/admin/service-catalogs',
             icon: getIconByName('Boxes')!,
-            label: '服务目录',
+            label: '服务目录管理',
             path: '/admin/service-catalogs',
-            permission: 'catalog:manage',
+            permission: 'service_catalog:read',
           },
           {
             key: '/admin/sla-definitions',

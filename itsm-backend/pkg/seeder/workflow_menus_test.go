@@ -11,12 +11,12 @@ import (
 func TestWorkflowMenuRepairCreatesAuditedTenantBaseline(t *testing.T) {
 	s, ctx := newTestSeeder(t, tenantmode.DeploymentModePrivate)
 	root := s.seedDefaultTenant(ctx)
-	require.Error(t, s.ReconcileWorkflowMenus(ctx, 0, "operator"))
-	require.Error(t, s.ReconcileWorkflowMenus(ctx, root.ID, ""))
-	require.Error(t, s.ReconcileWorkflowMenus(ctx, root.ID+999, "operator"))
+	require.Error(t, s.ReconcileMenus(ctx, 0, "operator", "workflow"))
+	require.Error(t, s.ReconcileMenus(ctx, root.ID, "", "workflow"))
+	require.Error(t, s.ReconcileMenus(ctx, root.ID+999, "operator", "workflow"))
 	require.Zero(t, s.client.Menu.Query().CountX(ctx))
 	for i := 0; i < 2; i++ {
-		require.NoError(t, s.ReconcileWorkflowMenus(ctx, root.ID, "test-operator"))
+		require.NoError(t, s.ReconcileMenus(ctx, root.ID, "test-operator", "workflow"))
 		require.Equal(t, 4, s.client.Menu.Query().CountX(ctx))
 	}
 	logs := s.client.AuditLog.Query().AllX(ctx)
