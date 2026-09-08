@@ -37,7 +37,7 @@ NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3301 npm start
 
 `npm run build` 会准备 `.next/standalone`，包含 `server.js`、依赖、静态资源和 `public`。发布可复制该完整目录并执行 `NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3001 node server.js`；不要只复制 `server.js`。保留启动描述和上一发布目录，切换后验证登录、同源 `/api/v1/health`、静态资源及已登录业务页面。本机固定路径与启动描述见[本机开发环境](development-environment.md)。
 
-工作流分组使用 `/workflow`，该页面跳转 `/admin/workflows`。三个子入口为工作流管理、流程设计器和流程实例；动态菜单仍由后端按租户、角色和权限过滤。升级已有租户的旧菜单时，使用定向命令，而非全量初始化：
+工作流分组使用 `/workflow`，该页面跳转 `/admin/workflows`。三个默认子入口为工作流管理、流程设计器和流程实例。审批链规则使用已有页面 `/admin/approval-chains`，旧 `/workflow/approval-chains` 跳转到该页面；`workflow` 菜单修复会同步迁移旧菜单地址，保留已有分组、权限和可见性配置。动态菜单仍由后端按租户、角色和权限过滤。升级已有租户的旧菜单时，使用定向命令，而非全量初始化：
 
 ```bash
 # 在 itsm-backend 中构建，再使用目标环境既有配置运行该二进制。

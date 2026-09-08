@@ -2,6 +2,7 @@ package seeder
 
 import (
 	"context"
+	"fmt"
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/menu"
@@ -37,26 +38,47 @@ func reconcileWorkflowMenus(ctx context.Context, c *ent.Client, tenantID int) er
 		}
 	}
 	definitions := []struct {
-		name, path, icon, permission string
-		order                        int
+		name, path, icon, permission, legacyPath string
+		order                                    int
 	}{
-		{"工作流管理", "/admin/workflows", "Workflow", "workflow:read", 121},
-		{"流程设计器", "/workflow/designer", "Edit", "workflow:write", 122},
-		{"流程实例", "/workflow/instances", "Play", "workflow:read", 123},
+		{"工作流管理", "/admin/workflows", "Workflow", "workflow:read", "", 121},
+		{"流程设计器", "/workflow/designer", "Edit", "workflow:write", "", 122},
+		{"流程实例", "/workflow/instances", "Play", "workflow:read", "", 123},
+		{"审批链规则", "/admin/approval-chains", "CheckSquare", "approval:read", "/workflow/approval-chains", 124},
 	}
 	for _, d := range definitions {
-		rows, err := c.Menu.Query().Where(menu.TenantIDEQ(tenantID), menu.PathEQ(d.path)).Order(ent.Asc(menu.FieldID)).All(ctx)
+		paths := []string{d.path}
+		if d.legacyPath != "" {
+			paths = append(paths, d.legacyPath)
+		}
+		rows, err := c.Menu.Query().Where(menu.TenantIDEQ(tenantID), menu.PathIn(paths...)).Order(ent.Asc(menu.FieldID)).All(ctx)
 		if err != nil {
 			return err
 		}
 		if len(rows) == 0 {
-			if _, err = c.Menu.Create().SetTenantID(tenantID).SetName(d.name).SetPath(d.path).SetIcon(d.icon).SetPermissionCode(d.permission).SetSortOrder(d.order).SetParentID(group.ID).Save(ctx); err != nil {
+			create := c.Menu.Create().SetTenantID(tenantID).SetName(d.name).SetPath(d.path).SetIcon(d.icon).SetPermissionCode(d.permission).SetSortOrder(d.order)
+			if d.legacyPath == "" {
+				create.SetParentID(group.ID)
+			}
+			if _, err = create.Save(ctx); err != nil {
 				return err
 			}
 			continue
 		}
 		canonical := rows[0]
-		if _, err = canonical.Update().SetName(d.name).SetIcon(d.icon).SetPermissionCode(d.permission).SetSortOrder(d.order).SetParentID(group.ID).Save(ctx); err != nil {
+		if d.legacyPath != "" && canonical.ParentID != nil {
+			for _, row := range rows {
+				if *canonical.ParentID == row.ID {
+					return fmt.Errorf("approval menu %d has a conflicting parent %d; repair hierarchy before reconciliation", canonical.ID, row.ID)
+				}
+			}
+		}
+		update := canonical.Update().SetName(d.name).SetPath(d.path).SetIcon(d.icon).SetSortOrder(d.order)
+		// Route repair preserves existing approval navigation and permission policy.
+		if d.legacyPath == "" {
+			update.SetPermissionCode(d.permission).SetParentID(group.ID)
+		}
+		if _, err = update.Save(ctx); err != nil {
 			return err
 		}
 		for _, duplicate := range rows[1:] {
