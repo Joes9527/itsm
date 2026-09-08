@@ -103,8 +103,7 @@ export interface CreateIncidentRequest {
   type: string;
   assigneeId?: number;
   configurationItemIds?: number[];
-  category?: string;
-  subcategory?: string;
+  cti?: { categoryId: number; typeId?: number; itemId?: number };
   severity?: string;
   impact?: string;
   urgency?: string;

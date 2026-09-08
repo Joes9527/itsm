@@ -70,7 +70,7 @@ func (s *IncidentService) Prepare(_ context.Context, _ *ent.Tx, in creation.Reso
 	}
 	plan := creation.NewPlan(in, "new", priority, source)
 	plan.BusinessSubtype = input.Type
-	for key, value := range map[string]any{"type": input.Type, "severity": input.Severity, "impact": input.Impact, "urgency": input.Urgency, "category": in.CTI.CategoryName, "subcategory": input.Subcategory, "detected_at": *detected, "impact_analysis": input.ImpactAnalysis, "metadata": input.Metadata, "reporter_id": in.Identity.RequesterID} {
+	for key, value := range map[string]any{"type": input.Type, "severity": input.Severity, "impact": input.Impact, "urgency": input.Urgency, "category": in.CTI.CategoryName, "subcategory": in.CTI.TypeName, "detected_at": *detected, "impact_analysis": input.ImpactAnalysis, "metadata": input.Metadata, "reporter_id": in.Identity.RequesterID} {
 		plan.WorkflowVariables[key] = value
 	}
 	plan.RoutingValues = map[string]any{"severity": input.Severity, "impact": input.Impact, "urgency": input.Urgency}

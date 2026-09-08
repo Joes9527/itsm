@@ -72,6 +72,9 @@ func (*TicketCategoryService) ResolveCreationClassification(ctx context.Context,
 		if level == 0 {
 			result.CategoryName = record.Name
 		}
+		if level == 1 {
+			result.TypeName = record.Name
+		}
 		parent = record.ID
 	}
 	return result, nil
