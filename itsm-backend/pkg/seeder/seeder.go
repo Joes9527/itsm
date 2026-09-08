@@ -1518,7 +1518,7 @@ func (s *Seeder) seedMenus(ctx context.Context) {
 
 		// 管理菜单
 		{Name: "系统概览", Path: "/admin/overview", Icon: "LayoutDashboard", PermissionCode: "system:read", SortOrder: 190},
-		{Name: "工作流", Path: "/admin/workflows", Icon: "Workflow", PermissionCode: "workflow:read", SortOrder: 200},
+		{Name: "工作流", Path: "/workflow", Icon: "GitMerge", PermissionCode: "workflow:read", SortOrder: 120},
 		{Name: "用户管理", Path: "/admin/users", Icon: "Users", PermissionCode: "user:read", SortOrder: 210},
 		{Name: "角色管理", Path: "/admin/roles", Icon: "Shield", PermissionCode: "role:read", SortOrder: 220},
 		{Name: "组管理", Path: "/admin/groups", Icon: "Users", PermissionCode: "groups:read", SortOrder: 230},
@@ -1590,7 +1590,6 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 	menuPathFixes := map[string]string{
 		"/admin/sla":                "/admin/sla-definitions",
 		"/admin/system":             "/admin/system-config",
-		"/workflow":                 "/admin/workflows",
 		"/admin/tickets/assignment": "/admin/tickets/assignment-rules",
 		"/admin/tickets/automation": "/admin/tickets/automation-rules",
 	}
@@ -1707,6 +1706,9 @@ func (s *Seeder) seedMenuAndPermissionFixes(ctx context.Context) {
 		} else {
 			s.sugar.Infow("missing menu created", "path", m.Path)
 		}
+	}
+	if err := reconcileWorkflowMenus(ctx, s.client, t.ID); err != nil {
+		s.sugar.Errorw("reconcile workflow menus failed", "tenant_id", t.ID, "error", err)
 	}
 }
 

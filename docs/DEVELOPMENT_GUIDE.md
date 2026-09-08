@@ -24,6 +24,29 @@ npm run test:integration # 仅集成测试
 npm run test:e2e         # 运行 Playwright E2E 测试
 ```
 
+### 前端生产模式与工作流入口维护
+
+日常验收使用生产构建，避免 `next dev` 首次访问页面时按需编译。先在独立目录构建并验证，再停止已核对身份的前端进程并切换发布文件；不要在正在提供服务的 `.next` 目录执行构建。
+
+```bash
+# 在 itsm-frontend 中执行；API 代理目标必须在构建时提供。
+npm ci
+ITSM_BACKEND_URL=http://127.0.0.1:8080 NEXT_PUBLIC_API_URL='' npm run build
+NODE_ENV=production HOSTNAME=127.0.0.1 PORT=3301 npm start
+```
+
+`npm run build` 会准备 `.next/standalone`，包含 `server.js`、依赖、静态资源和 `public`。发布可复制该完整目录并执行 `NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3001 node server.js`；不要只复制 `server.js`。保留启动描述和上一发布目录，切换后验证登录、同源 `/api/v1/health`、静态资源及已登录业务页面。本机固定路径与启动描述见[本机开发环境](development-environment.md)。
+
+工作流分组使用 `/workflow`，该页面跳转 `/admin/workflows`。三个子入口为工作流管理、流程设计器和流程实例；动态菜单仍由后端按租户、角色和权限过滤。升级已有租户的旧菜单时，使用定向命令，而非全量初始化：
+
+```bash
+# 在 itsm-backend 中构建，再使用目标环境既有配置运行该二进制。
+go build -o /tmp/itsm-reconcile-workflow-menus ./cmd/reconcile_workflow_menus
+/tmp/itsm-reconcile-workflow-menus -tenant-id 1 -requested-by '<operator identity>'
+```
+
+执行前核对目标数据库、schema、租户并协调共享环境写入。命令在单一事务中修复该租户的菜单，合并旧 `/workflow`、`/workflow/list` 重复入口，保留自定义子项与既有可见/启用状态；不改角色授权、不执行 schema 迁移。审计动作 `reconcile_workflow_menus` 保存操作者和菜单前后快照，可用于核对及受控恢复。首次初始化使用同一菜单修复逻辑。
+
 ### 后端 (itsm-backend)
 
 ```bash

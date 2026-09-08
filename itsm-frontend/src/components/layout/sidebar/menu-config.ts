@@ -322,10 +322,17 @@ export function getMenuConfig(): MenuConfig {
         key: '/workflow',
         icon: getIconByName('GitMerge')!,
         label: '工作流',
-        path: '/workflow/designer',
+        path: '/workflow',
         permission: 'workflow:read',
         description: '工作流自动化',
         children: [
+          {
+            key: '/admin/workflows',
+            icon: getIconByName('Workflow')!,
+            label: '工作流管理',
+            path: '/admin/workflows',
+            permission: 'workflow:read',
+          },
           {
             key: '/workflow/designer',
             icon: getIconByName('Edit')!,
@@ -596,13 +603,6 @@ export function getMenuConfig(): MenuConfig {
             label: 'SLA 定义',
             path: '/admin/sla-definitions',
             permission: 'sla:manage',
-          },
-          {
-            key: '/admin/workflows',
-            icon: getIconByName('GitBranch')!,
-            label: '工作流',
-            path: '/admin/workflows',
-            permission: 'workflow:manage',
           },
         ],
       },
