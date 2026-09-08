@@ -8,7 +8,7 @@
 
 **Tech Stack:** WSL、Docker Compose、PostgreSQL、Redis、MinIO、KAF Qdrant、现有 Go/Ent 与 Python/Alembic 应用。
 
-状态：accepted；目标环境尚未执行盘点和迁移。设计依据：[已批准设计](../specs/2026-09-08-wsl-infrastructure-consolidation-design.md)。
+状态：accepted；任务 1 的 SSH 只读连接预检因主机指纹与本机记录不一致而停止，尚未进入远端执行盘点和迁移。设计依据：[已批准设计](../specs/2026-09-08-wsl-infrastructure-consolidation-design.md)。
 
 ## Global Constraints
 
@@ -164,3 +164,7 @@ ssh -o BatchMode=yes -o ConnectTimeout=10 -p 22222 administrator@192.168.31.66 '
 - [ ] 私有清单之间资源 ID 与路径一致；任何版本/端口/权限不再依赖未核验历史默认值。
 - [ ] 最终交付同时提供两仓提交、实际基础设施状态、验证摘要、遗留项、恢复路径及图形产物。
 - [ ] 只有全部必要验收和文档任务通过，才声明开发整合完成；部分任务失败时按实际阶段报告。
+
+## 执行记录：2026-09-08
+
+已完成计划自检和本地提交。首次 SSH 预检使用严格主机身份校验，返回 `Host key verification failed`；未执行任何远端命令，未修改 known_hosts 或目标环境。下一步由维护者通过 WSL 本机控制台核对主机公钥指纹，匹配后再受控更新本机信任记录并继续任务 1。该连接阻塞不影响设计结论，也不能视为迁移失败或数据异常。
