@@ -40,11 +40,13 @@ func reconcileWorkflowMenus(ctx context.Context, c *ent.Client, tenantID int) er
 	definitions := []struct {
 		name, path, icon, permission, legacyPath string
 		order                                    int
+		preservePermission                       bool
 	}{
-		{"工作流管理", "/admin/workflows", "Workflow", "workflow:read", "", 121},
-		{"流程设计器", "/workflow/designer", "Edit", "workflow:write", "", 122},
-		{"流程实例", "/workflow/instances", "Play", "workflow:read", "", 123},
-		{"审批链规则", "/admin/approval-chains", "CheckSquare", "approval:read", "/workflow/approval-chains", 124},
+		{"工作流管理", "/admin/workflows", "Workflow", "workflow:read", "", 121, false},
+		{"流程设计器", "/workflow/designer", "Edit", "workflow:write", "", 122, false},
+		{"流程实例", "/workflow/instances", "Play", "workflow:read", "", 123, false},
+		{"审批链规则", "/admin/approval-chains", "CheckSquare", "approval:read", "/workflow/approval-chains", 124, true},
+		{"工单自动化规则", "/admin/tickets/automation-rules", "Zap", "automation_rule:read", "/workflow/automation", 125, false},
 	}
 	for _, d := range definitions {
 		paths := []string{d.path}
@@ -69,14 +71,17 @@ func reconcileWorkflowMenus(ctx context.Context, c *ent.Client, tenantID int) er
 		if d.legacyPath != "" && canonical.ParentID != nil {
 			for _, row := range rows {
 				if *canonical.ParentID == row.ID {
-					return fmt.Errorf("approval menu %d has a conflicting parent %d; repair hierarchy before reconciliation", canonical.ID, row.ID)
+					return fmt.Errorf("menu %d has a conflicting parent %d; repair hierarchy before reconciliation", canonical.ID, row.ID)
 				}
 			}
 		}
 		update := canonical.Update().SetName(d.name).SetPath(d.path).SetIcon(d.icon).SetSortOrder(d.order)
-		// Route repair preserves existing approval navigation and permission policy.
+		// Preserve existing hierarchy; align endpoint permissions only where configured.
 		if d.legacyPath == "" {
-			update.SetPermissionCode(d.permission).SetParentID(group.ID)
+			update.SetParentID(group.ID)
+		}
+		if !d.preservePermission {
+			update.SetPermissionCode(d.permission)
 		}
 		if _, err = update.Save(ctx); err != nil {
 			return err

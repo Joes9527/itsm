@@ -159,17 +159,10 @@ export function getMenuConfig(): MenuConfig {
             permission: 'knowledge:read',
           },
           {
-            key: '/knowledge/articles',
-            icon: getIconByName('FileText')!,
-            label: '文章管理',
-            path: '/knowledge/articles',
-            permission: 'knowledge:write',
-          },
-          {
-            key: '/knowledge/articles/create',
+            key: '/knowledge/articles/new',
             icon: getIconByName('Plus')!,
             label: '新建文章',
-            path: '/knowledge/articles/create',
+            path: '/knowledge/articles/new',
             permission: 'knowledge:write',
           },
         ],
@@ -532,7 +525,7 @@ export function getMenuConfig(): MenuConfig {
             icon: getIconByName('Zap')!,
             label: '自动化规则',
             path: '/admin/tickets/automation-rules',
-            permission: 'ticket:manage',
+            permission: 'automation_rule:read',
           },
           {
             key: '/admin/approval-chains',

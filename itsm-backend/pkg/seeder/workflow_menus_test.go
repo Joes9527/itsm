@@ -17,7 +17,7 @@ func TestWorkflowMenuRepairCreatesAuditedTenantBaseline(t *testing.T) {
 	require.Zero(t, s.client.Menu.Query().CountX(ctx))
 	for i := 0; i < 2; i++ {
 		require.NoError(t, s.ReconcileMenus(ctx, root.ID, "test-operator", "workflow"))
-		require.Equal(t, 5, s.client.Menu.Query().CountX(ctx))
+		require.Equal(t, 6, s.client.Menu.Query().CountX(ctx))
 	}
 	logs := s.client.AuditLog.Query().AllX(ctx)
 	require.Len(t, logs, 2)
@@ -26,7 +26,7 @@ func TestWorkflowMenuRepairCreatesAuditedTenantBaseline(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(*logs[0].RequestBody), &body))
 	require.Equal(t, "test-operator", body["requestedBy"])
 	require.Len(t, body["before"], 0)
-	require.Len(t, body["after"], 5)
+	require.Len(t, body["after"], 6)
 }
 
 func TestWorkflowApprovalChainMenuUsesExistingAdminPage(t *testing.T) {
@@ -85,4 +85,21 @@ func TestWorkflowApprovalMenuConflictingParentFailsClosed(t *testing.T) {
 	require.Equal(t, 2, s.client.Menu.Query().CountX(ctx))
 	require.Equal(t, &duplicate.ID, s.client.Menu.GetX(ctx, legacy.ID).ParentID)
 	require.Equal(t, "/workflow/approval-chains", s.client.Menu.GetX(ctx, legacy.ID).Path)
+}
+
+func TestWorkflowAutomationMenuMigratesWithEndpointPermission(t *testing.T) {
+	s, ctx := newTestSeeder(t, tenantmode.DeploymentModePrivate)
+	root := s.seedDefaultTenant(ctx)
+	legacy := s.client.Menu.Create().SetTenantID(root.ID).SetName("自动化规则").SetPath("/workflow/automation").SetPermissionCode("workflow:write").SetIsVisible(false).SetIsEnabled(false).SaveX(ctx)
+	other := s.client.Menu.Create().SetTenantID(root.ID + 1).SetName("other").SetPath("/workflow/automation").SetPermissionCode("workflow:write").SaveX(ctx)
+	for i := 0; i < 2; i++ {
+		require.NoError(t, s.ReconcileMenus(ctx, root.ID, "operator", "workflow"))
+		row := s.client.Menu.GetX(ctx, legacy.ID)
+		require.Equal(t, "/admin/tickets/automation-rules", row.Path)
+		require.Equal(t, "automation_rule:read", row.PermissionCode)
+		require.Equal(t, legacy.ParentID, row.ParentID)
+		require.False(t, row.IsVisible)
+		require.False(t, row.IsEnabled)
+		require.Equal(t, "/workflow/automation", s.client.Menu.GetX(ctx, other.ID).Path)
+	}
 }
