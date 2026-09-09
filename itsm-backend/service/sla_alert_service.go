@@ -313,7 +313,7 @@ func (s *SLAAlertService) CheckAndTriggerAlerts(ctx context.Context, ticketID in
 		return false, fmt.Errorf("failed to get ticket: %w", err)
 	}
 
-	if ticketEntity.SLADefinitionID == 0 {
+	if ticketEntity.ClosedAt != nil || ticketEntity.SLADefinitionID == 0 {
 		return false, nil // 没有SLA定义，无需检查
 	}
 
@@ -389,7 +389,7 @@ func (s *SLAAlertService) TriggerSLAWarning(ctx context.Context, ticketID int, w
 		return false, fmt.Errorf("failed to get ticket: %w", err)
 	}
 
-	if ticketEntity.SLADefinitionID == 0 {
+	if ticketEntity.ClosedAt != nil || ticketEntity.SLADefinitionID == 0 {
 		return false, nil
 	}
 

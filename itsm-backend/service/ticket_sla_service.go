@@ -110,7 +110,9 @@ func (s *TicketSLAService) GetTicketSLAInfo(ctx context.Context, ticketID int, t
 
 // GetOverdueTickets 获取逾期工单
 func (s *TicketSLAService) GetOverdueTickets(ctx context.Context, tenantID int) ([]*ent.Ticket, error) {
-	items, err := s.client.Ticket.Query().Where(ticket.TenantID(tenantID), ticket.DeletedAtIsNil(), ticket.ResolvedAtIsNil()).All(ctx)
+	// Persisted deadlines already include pauses; keep the active deadline filter
+	// in SQL rather than scanning every unresolved WorkItem in the tenant.
+	items, err := s.client.Ticket.Query().Where(ticket.TenantID(tenantID), ticket.DeletedAtIsNil(), ticket.ResolvedAtIsNil(), ticket.ClosedAtIsNil(), ticket.SLAResolutionDeadlineLT(time.Now())).All(ctx)
 	if err != nil {
 		return nil, err
 	}

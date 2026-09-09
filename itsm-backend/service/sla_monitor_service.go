@@ -110,6 +110,8 @@ func (s *SLAMonitorService) CheckSLAViolations(ctx context.Context, tenantID int
 			Where(
 				ticket.TenantIDEQ(tenantID),
 				ticket.ResolvedAtIsNil(),
+				ticket.ClosedAtIsNil(),
+				ticket.DeletedAtIsNil(),
 			).
 			Limit(pageSize).
 			Offset(offset).
@@ -293,6 +295,9 @@ func mapViolationTypeToBreachType(violationType string) string {
 // checkAndTriggerWarning 检查是否需要发送SLA预警（在截止时间前触发）
 // 返回是否发送了预警
 func (s *SLAMonitorService) checkAndTriggerWarning(ctx context.Context, t *ent.Ticket, now time.Time) bool {
+	if t.ClosedAt != nil {
+		return false
+	}
 	// SLA预警阈值：默认在截止时间前20%时预警
 	warningThreshold := 0.8
 
@@ -605,6 +610,8 @@ func (s *SLAMonitorService) GetDashboardMetrics(ctx context.Context, tenantID in
 		Where(
 			ticket.TenantIDEQ(tenantID),
 			ticket.ResolvedAtIsNil(),
+			ticket.ClosedAtIsNil(),
+			ticket.DeletedAtIsNil(),
 			ticket.SLAResolutionDeadlineGT(now),
 			ticket.SLAResolutionDeadlineLT(upcomingDeadline),
 		).

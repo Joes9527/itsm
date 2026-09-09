@@ -52,6 +52,11 @@ func slaMeasuredAt(completed, now time.Time) time.Time {
 // Deadlines already include any applied pause extension. Paused minutes adjust elapsed
 // time only; subtracting them again from the breach clock would extend the contract twice.
 func projectSLACycle(item *ent.Ticket, now time.Time) TicketSLAInfoResult {
+	// Closure stops unfinished clocks without inventing a response or resolution.
+	// Already observed completion and breach facts remain authoritative.
+	if item.ClosedAt != nil && item.ClosedAt.Before(now) {
+		now = *item.ClosedAt
+	}
 	responseAt := slaMeasuredAt(item.FirstResponseAt, now)
 	resolvedAt := slaMeasuredAt(item.ResolvedAt, now)
 	used := func(at time.Time) int {

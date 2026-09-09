@@ -293,9 +293,24 @@ func TestWorkItemChangeLifecycleAssessmentFreshness(t *testing.T) {
 	f := newChangeLifecycleFixture(t, "normal")
 	f.apply(t, f.command("submit", "submit"))
 	assessment := f.command("assess", "assessment")
+	failAssessment := true
+	f.runtime.AuditLog.Use(func(next ent.Mutator) ent.Mutator {
+		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+			if failAssessment {
+				return nil, errors.New("assessment receipt failure")
+			}
+			return next.Mutate(ctx, m)
+		})
+	})
+	_, err := f.owner.ApplyCommand(f.ctx, assessment)
+	require.ErrorContains(t, err, "assessment receipt failure")
+	require.True(t, f.client.Ticket.GetX(f.ctx, f.c.WorkItemID).FirstResponseAt.IsZero())
+	failAssessment = false
 	first := f.apply(t, assessment)
+	firstResponse := f.client.Ticket.GetX(f.ctx, f.c.WorkItemID).FirstResponseAt
+	require.False(t, firstResponse.IsZero())
 	f.client.Change.UpdateOneID(f.c.ID).SetImplementationPlan("changed deployment plan").ExecX(f.ctx)
-	_, err := f.owner.ApplyCommand(f.ctx, f.command("authorize", "stale-assessment"))
+	_, err = f.owner.ApplyCommand(f.ctx, f.command("authorize", "stale-assessment"))
 	require.ErrorContains(t, err, "current assessment required")
 	replay := f.apply(t, assessment)
 	require.True(t, replay.Replayed)
@@ -303,6 +318,7 @@ func TestWorkItemChangeLifecycleAssessmentFreshness(t *testing.T) {
 	reassess := f.command("assess", "reassessment")
 	reassess.Evidence = assessment.Evidence
 	f.apply(t, reassess)
+	require.Equal(t, firstResponse, f.client.Ticket.GetX(f.ctx, f.c.WorkItemID).FirstResponseAt, "reassessment must not move first response")
 	approver := f.client.User.Create().SetTenantID(f.tenant.ID).SetUsername("fresh-approver").SetName("Approver").SetEmail("fresh@example.test").SetPasswordHash("test").SetRole("super_admin").SetActive(true).SaveX(f.ctx)
 	f.actor = approver
 	instance := f.client.ProcessInstance.Query().OnlyX(f.ctx)
@@ -430,4 +446,92 @@ func TestWorkItemChangeLifecycleAllocatedMSP(t *testing.T) {
 	cmd.Meta.ActorID = 999999
 	_, err = f.owner.ApplyCommand(f.ctx, cmd)
 	require.Error(t, err, "forged actor")
+}
+
+func TestWorkItemChangeLifecycleTerminalClocks(t *testing.T) {
+	for _, action := range []string{"close", "cancel"} {
+		for _, bound := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/bound=%v", action, bound), func(t *testing.T) {
+				f := newChangeLifecycleFixture(t, "normal")
+				if action == "close" {
+					f.authorize(t)
+				}
+				if bound {
+					policy := f.client.SLADefinition.Create().SetTenantID(f.tenant.ID).SetName("Change clock").SetResponseTime(30).SetResolutionTime(60).SaveX(f.ctx)
+					f.client.SLAAlertRule.Create().SetTenantID(f.tenant.ID).SetSLADefinitionID(policy.ID).SetName("Clock warning").SetThresholdPercentage(100).SetNotificationChannels([]string{}).SaveX(f.ctx)
+					tx, err := f.client.Tx(f.ctx)
+					require.NoError(t, err)
+					require.NoError(t, service.NewTicketSLAService(f.client, zap.NewNop().Sugar()).ApplyCreationSLA(f.ctx, tx, f.client.Ticket.GetX(f.ctx, f.c.WorkItemID), &policy.ID))
+					require.NoError(t, tx.Commit())
+					f.client.Ticket.UpdateOneID(f.c.WorkItemID).SetSLACycleStartedAt(time.Now().Add(-2 * time.Hour)).SetSLAResponseDeadline(time.Now().Add(-90 * time.Minute)).SetSLAResolutionDeadline(time.Now().Add(-time.Hour)).ExecX(f.ctx)
+				}
+				cmd := f.command(action, "terminal")
+				if action == "close" {
+					outcome := f.command("record_outcome", "result")
+					outcome.Outcome = "failed"
+					end := time.Now()
+					outcome.ActualEnd = &end
+					f.apply(t, outcome)
+					pir := f.client.ChangePIR.Create().SetChangeID(f.c.ID).SetTenantID(f.tenant.ID).SetReviewerID(f.actor.ID).SetOverallResult("failed").SetReviewDate(time.Now()).SetIssuesEncountered("implementation failed").SaveX(f.ctx)
+					review := f.command("review", "review")
+					review.PIRID = pir.ID
+					f.apply(t, review)
+					cmd = f.command(action, "terminal")
+					cmd.PIRID = pir.ID
+				}
+				before := f.client.Ticket.GetX(f.ctx, f.c.WorkItemID)
+				failTerminal := true
+				f.runtime.AuditLog.Use(func(next ent.Mutator) ent.Mutator {
+					return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+						if failTerminal {
+							return nil, errors.New("terminal receipt failure")
+						}
+						return next.Mutate(ctx, m)
+					})
+				})
+				_, err := f.owner.ApplyCommand(f.ctx, cmd)
+				require.ErrorContains(t, err, "terminal receipt failure")
+				rolledBack := f.client.Ticket.GetX(f.ctx, f.c.WorkItemID)
+				require.Equal(t, before.Version, rolledBack.Version)
+				require.Equal(t, before.ClosedAt, rolledBack.ClosedAt)
+				require.Equal(t, before.ResolvedAt, rolledBack.ResolvedAt)
+				require.Equal(t, before.FirstResponseAt, rolledBack.FirstResponseAt)
+				failTerminal = false
+				f.apply(t, cmd)
+				item := f.client.Ticket.GetX(f.ctx, f.c.WorkItemID)
+				require.NotNil(t, item.ClosedAt)
+				if action == "cancel" {
+					require.True(t, item.ResolvedAt.IsZero())
+					require.True(t, item.FirstResponseAt.IsZero())
+				} else {
+					require.False(t, item.ResolvedAt.IsZero())
+					require.False(t, item.FirstResponseAt.IsZero())
+					require.Equal(t, *item.ClosedAt, item.ResolvedAt)
+				}
+				sla := service.NewTicketSLAService(f.runtime, zap.NewNop().Sugar())
+				overdue, err := sla.GetOverdueTickets(f.ctx, f.tenant.ID)
+				require.NoError(t, err)
+				for _, candidate := range overdue {
+					require.NotEqual(t, item.ID, candidate.ID, "closed item is not active overdue")
+				}
+				// Actual active monitor/alert entry points must not manufacture a new
+				// violation after closure, even though old breach facts remain true.
+				monitor := service.NewSLAMonitorService(f.client, zap.NewNop().Sugar())
+				stats, err := monitor.CheckSLAViolations(f.ctx, f.tenant.ID)
+				require.NoError(t, err)
+				require.Zero(t, stats.NewViolations)
+				// Exercise future-deadline warning rules as well as overdue scans.
+				if bound {
+					f.client.Ticket.UpdateOneID(item.ID).SetSLAResponseDeadline(time.Now().Add(time.Minute)).SetSLAResolutionDeadline(time.Now().Add(time.Minute)).ExecX(f.ctx)
+				}
+				alerts := service.NewSLAAlertService(f.client, zap.NewNop().Sugar())
+				alerted, err := alerts.CheckAndTriggerAlerts(f.ctx, item.ID, f.tenant.ID)
+				require.NoError(t, err)
+				require.False(t, alerted)
+				warned, err := alerts.TriggerSLAWarning(f.ctx, item.ID, "resolution_time", f.tenant.ID)
+				require.NoError(t, err)
+				require.False(t, warned)
+			})
+		}
+	}
 }

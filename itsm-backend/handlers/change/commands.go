@@ -244,7 +244,13 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, c
 		update.SetStatus(target)
 	}
 	if cmd.Action == "close" {
+		update.SetResolvedAt(now).SetClosedAt(now)
+	}
+	if cmd.Action == "cancel" {
 		update.SetClosedAt(now)
+	}
+	if cmd.Action == "assess" && item.FirstResponseAt.IsZero() {
+		update.SetFirstResponseAt(now)
 	}
 	updated, err := update.Save(ctx)
 	if ent.IsNotFound(err) {
