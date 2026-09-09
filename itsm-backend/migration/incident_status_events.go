@@ -41,7 +41,7 @@ BEGIN
  JOIN audit_logs a ON a.tenant_id=NEW.tenant_id AND a.user_id=NEW.actor_id
   AND a.operation_id=o.payload->>'operationId' AND a.resource='work_item' AND a.path=t.id::text
   AND a.result_version::text=o.payload->>'version' AND a.result_status=o.payload->>'status'
-  AND a.method=NEW.source AND a.action IN ('incident.acknowledge','incident.start','incident.resolve','incident.close','incident.reopen')
+  AND a.method=NEW.source AND a.action IN ('incident.assign','incident.escalate','incident.acknowledge','incident.start','incident.resolve','incident.close','incident.reopen')
  WHERE o.id=NEW.source_event_id AND o.tenant_id=NEW.tenant_id AND o.event_type='incident.status_changed'
   AND o.aggregate_type='work_item' AND o.aggregate_id=t.id::text AND t.tenant_id=NEW.tenant_id
   AND o.event_id='incident-status:'||t.id::text||':'||a.result_version::text

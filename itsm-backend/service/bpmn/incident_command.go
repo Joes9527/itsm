@@ -80,13 +80,17 @@ func (h *IncidentServiceTaskHandler) applyLifecycle(ctx context.Context, action 
 	if reason == "" {
 		reason, _ = row.Variables["feedback"].(string)
 	}
-	result, err := h.incidentService.ApplyIncidentCommand(ctx, dto.IncidentCommand{Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: actorID, ExpectedVersion: version, Source: source, OperationID: key, CorrelationID: instance.ProcessInstanceID}, IncidentID: current.ID, Action: strings.TrimSuffix(action, "_incident"), Reason: reason, Resolution: resolution})
+	if action == "escalate_incident" {
+		reason, _ = row.Variables["escalation_reason"].(string)
+	}
+	result, err := h.incidentService.ApplyIncidentCommand(ctx, dto.IncidentCommand{Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: actorID, ExpectedVersion: version, Source: source, OperationID: key, CorrelationID: instance.ProcessInstanceID}, IncidentID: current.ID, Action: strings.TrimSuffix(action, "_incident"), Reason: reason, Resolution: resolution, AssigneeID: GetIntFromVars(row.Variables, "assignee_id"), EscalationLevel: GetIntFromVars(row.Variables, "escalation_level")})
 	if err != nil {
 		return nil, err
 	}
-	output := map[string]interface{}{"work_item_id": result.WorkItemID, "version": result.Version, "status": result.Status}
+	effect := &CallbackEffect{Status: CallbackEffectApplied, Message: "Incident command applied", LifecycleResult: &result}
 	if result.Replayed {
-		return IdempotentEffect("Incident command replayed", output), nil
+		effect.Status = CallbackEffectIdempotent
+		effect.Message = "Incident command replayed"
 	}
-	return AppliedEffect("Incident command applied", output), nil
+	return effect, nil
 }

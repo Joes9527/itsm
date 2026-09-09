@@ -414,22 +414,14 @@ func canAssignIncidentStatus(status string) bool {
 }
 
 func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentResponse, error) {
-	outcome, err := s.assignIncident(ctx, id, assigneeID, tenantID, false)
+	outcome, err := s.assignIncident(ctx, id, assigneeID, tenantID)
 	if err != nil {
 		return nil, err
 	}
 	return outcome.Incident, nil
 }
 
-// AssignIncidentForWorkflow atomically applies the workflow assignment target:
-// assignee and the Incident-owned assigned state. Returning the persisted
-// mutation outcome lets the callback engine distinguish a retry from a first
-// application without a race-prone read in the handler.
-func (s *IncidentService) AssignIncidentForWorkflow(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentMutationOutcome, error) {
-	return s.assignIncident(ctx, id, assigneeID, tenantID, true)
-}
-
-func (s *IncidentService) assignIncident(ctx context.Context, id int, assigneeID int, tenantID int, workflow bool) (*dto.IncidentMutationOutcome, error) {
+func (s *IncidentService) assignIncident(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentMutationOutcome, error) {
 	s.logger.Infow("Assigning incident", "id", id, "assignee_id", assigneeID, "tenant_id", tenantID)
 
 	// 获取当前事件
@@ -446,7 +438,7 @@ func (s *IncidentService) assignIncident(ctx context.Context, id int, assigneeID
 	if !canAssignIncidentStatus(current.Edges.WorkItem.Status) {
 		return nil, rejectIncidentAction("resolved, closed, or cancelled incidents cannot be reassigned")
 	}
-	if current.Edges.WorkItem.AssigneeID == assigneeID && (!workflow || current.Edges.WorkItem.Status == common.IncidentStatusAssigned) {
+	if current.Edges.WorkItem.AssigneeID == assigneeID {
 		return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(current), Applied: false}, nil
 	}
 
@@ -464,9 +456,6 @@ func (s *IncidentService) assignIncident(ctx context.Context, id int, assigneeID
 		SetAssigneeID(assigneeID).
 		SetUpdatedAt(time.Now()).
 		AddVersion(1)
-	if workflow {
-		update.SetStatus(common.IncidentStatusAssigned)
-	}
 	_, err = update.Save(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {
@@ -954,81 +943,6 @@ func (s *IncidentService) toIncidentMetricResponse(metric *ent.IncidentMetric) *
 	}
 }
 
-// EscalateIncidentLevel 供 BPMN 自动升级节点使用。level<=0 的稳定目标是一级，
-// 而不是依赖当前值递增；这样同一 durable callback 的重试不会重复升级。
-func (s *IncidentService) EscalateIncidentLevel(ctx context.Context, id, tenantID, level int) (*dto.IncidentMutationOutcome, error) {
-	current, err := s.client.Incident.Query().
-		Where(incident.IDEQ(id), incidentTenantScope(tenantID)).
-		WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("incident not found")
-		}
-		return nil, fmt.Errorf("failed to get incident: %w", err)
-	}
-	if level <= 0 {
-		level = 1
-	}
-	if current.Edges.WorkItem.Status == common.IncidentStatusEscalated && current.EscalationLevel >= level {
-		return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(current), Applied: false}, nil
-	}
-
-	now := time.Now()
-	updated, err := s.transitionIncident(ctx, current, tenantID, common.IncidentStatusEscalated, func(update *ent.IncidentUpdateOne) {
-		update.SetEscalationLevel(level).
-			SetEscalatedAt(now)
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to escalate incident: %w", err)
-	}
-	s.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
-		IncidentID: id, EventType: "escalation", EventName: "事件升级",
-		Description: fmt.Sprintf("事件升级到级别 %d（工作流自动触发）", level),
-		Status:      "active", Severity: "high", Source: "system",
-	}, tenantID)
-	return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(updated), Applied: true}, nil
-}
-
-func (s *IncidentService) transitionIncident(ctx context.Context, current *ent.Incident, tenantID int, status string, mutate func(*ent.IncidentUpdateOne)) (*ent.Incident, error) {
-	return s.transitionIncidentWithCategoryAndMutation(ctx, current, tenantID, status, nil, mutate)
-}
-
-func (s *IncidentService) transitionIncidentWithCategoryAndMutation(ctx context.Context, current *ent.Incident, tenantID int, status string, categoryID *int, mutate func(*ent.IncidentUpdateOne)) (*ent.Incident, error) {
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	fail := func(cause error) (*ent.Incident, error) { _ = tx.Rollback(); return nil, cause }
-	now := time.Now()
-	workItemUpdate := tx.Ticket.UpdateOneID(current.WorkItemID).
-		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(current.Edges.WorkItem.Version)).
-		SetStatus(status).SetUpdatedAt(now).AddVersion(1)
-
-	if categoryID != nil {
-		workItemUpdate.SetCategoryID(*categoryID)
-	}
-	workItem, err := workItemUpdate.Save(ctx)
-	if err != nil {
-		return fail(err)
-	}
-	update := tx.Incident.UpdateOneID(current.ID).Where(incidentTenantScope(tenantID))
-	if mutate != nil {
-		mutate(update)
-	}
-	updated, err := update.Save(ctx)
-	if err != nil {
-		return fail(err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fail(err)
-	}
-	updated.Edges.WorkItem = workItem
-	updated.Edges.WorkItem.Edges.Category = current.Edges.WorkItem.Edges.Category
-	return updated, nil
-}
-
-// ReopenIncident 将已解决或已关闭的事件重新流转到 in_progress
-
 // EscalateToMajorIncident 将事件升级为重大事件（Major Incident）
 // 写入影响评估信息，提升严重程度，并记录审计事件
 func (s *IncidentService) EscalateToMajorIncident(ctx context.Context, id, userID, tenantID int, req *dto.EscalateMajorIncidentRequest) error {
@@ -1059,18 +973,25 @@ func (s *IncidentService) EscalateToMajorIncident(ctx context.Context, id, userI
 		"escalatedAt":       now,
 	}
 
-	_, err = s.transitionIncident(ctx, incidentEntity, tenantID, incidentEntity.Edges.WorkItem.Status, func(update *ent.IncidentUpdateOne) {
-		update.
-			SetIsMajorIncident(true).
-			SetSeverity("critical").
-			SetImpactAnalysis(impactAnalysis).
-			SetEscalatedAt(now).
-			AddEscalationLevel(1)
-	})
+	tx, err := s.client.Tx(ctx)
 	if err != nil {
 		return err
 	}
-	_, eventErr := s.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
+	defer tx.Rollback()
+	_, err = tx.Ticket.UpdateOneID(incidentEntity.WorkItemID).Where(ticket.TenantID(tenantID), ticket.Version(incidentEntity.Edges.WorkItem.Version), ticket.DeletedAtIsNil()).AddVersion(1).SetUpdatedAt(now).Save(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Incident.UpdateOneID(incidentEntity.ID).
+		SetIsMajorIncident(true).
+		SetSeverity("critical").
+		SetImpactAnalysis(impactAnalysis).
+		SetEscalatedAt(now).
+		AddEscalationLevel(1).Save(ctx)
+	if err != nil {
+		return err
+	}
+	_, eventErr := NewIncidentService(tx.Client(), s.logger).CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
 		IncidentID: id, EventType: "major_incident_escalation", EventName: "升级为重大事件",
 		Description: strings.TrimSpace(req.BusinessImpact), Status: "active", Severity: "critical",
 		Data: map[string]interface{}{
@@ -1079,7 +1000,10 @@ func (s *IncidentService) EscalateToMajorIncident(ctx context.Context, id, userI
 		},
 		UserID: &userID, Source: "user",
 	}, tenantID)
-	return eventErr
+	if eventErr != nil {
+		return eventErr
+	}
+	return tx.Commit()
 }
 
 func (s *IncidentService) GetIncidentStats(ctx context.Context, tenantID int) (*dto.IncidentStatsResponse, error) {

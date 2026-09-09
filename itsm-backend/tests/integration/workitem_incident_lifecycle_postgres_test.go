@@ -246,6 +246,9 @@ func TestWorkItemIncidentLifecycleHTTPStartConflictsAndTrustedIdentity(t *testin
 		rec := request(action, body)
 		require.Equal(t, 200, rec.Code, rec.Body.String())
 		version++
+		same := request(action, fmt.Sprintf(`{"version":%d,"operationId":%q,"resolution":"verified restored"}`, version, action+"-same"))
+		require.Equal(t, 400, same.Code, same.Body.String())
+		require.Equal(t, version, f.client.Ticket.GetX(f.ctx, item.ID).Version)
 	}
 	require.Equal(t, "resolved", f.client.Ticket.GetX(f.ctx, item.ID).Status)
 	receipts := f.client.AuditLog.Query().Where(auditlog.OperationIDNotNil()).AllX(f.ctx)
@@ -257,4 +260,90 @@ func TestWorkItemIncidentLifecycleHTTPStartConflictsAndTrustedIdentity(t *testin
 	require.Equal(t, 409, request("resolve", fmt.Sprintf(`{"version":%d,"operationId":"stale","resolution":"verified restored"}`, item.Version)).Code)
 	require.Equal(t, 409, request("resolve", fmt.Sprintf(`{"version":%d,"operationId":"resolve","resolution":"changed evidence"}`, version-1)).Code)
 	require.Equal(t, 400, request("start", `{"operationId":"missing-version"}`).Code)
+}
+
+func runIncidentLifecycleCallback(f *incidentEffectsFixture, action, key string, vars map[string]interface{}) (*bpmn.CallbackEffect, error) {
+	dep := f.client.ProcessDeployment.Create().SetDeploymentID(key).SetDeploymentName(key).SetTenantID(f.tenant.ID).SaveX(f.ctx)
+	def := f.client.ProcessDefinition.Create().SetKey(key).SetName(key).SetBpmnXML([]byte("<definitions/>")).SetDeploymentID(dep.ID).SetTenantID(f.tenant.ID).SaveX(f.ctx)
+	instance := f.client.ProcessInstance.Create().SetProcessInstanceID(key).SetProcessDefinitionKey(def.Key).SetProcessDefinitionID(def.ID).SetTenantID(f.tenant.ID).SetBusinessType("incident").SetBusinessID(f.inc.WorkItemID).SetInitiator(fmt.Sprint(f.actor.ID)).SetCurrentActivityID("effect").SaveX(f.ctx)
+	row := f.client.ProcessCallbackOutbox.Create().SetExecutionKey(key).SetTenantID(f.tenant.ID).SetProcessInstanceID(instance.ID).SetCallbackKind("service_task").SetHandlerID("incident_service_handler").SetTaskType("incident_task").SetElementID("effect").SetAction(action + "_incident").SetStatus("processing").SetVariables(vars).SaveX(f.ctx)
+	ctx := bpmn.WithBPMNCallbackExecutionKey(context.WithValue(f.ctx, bpmn.BPMNTenantIDContextKey, f.tenant.ID), row.ExecutionKey)
+	h := bpmn.NewIncidentServiceTaskHandler(f.client, zap.NewNop().Sugar())
+	h.SetIncidentService(f.svc)
+	return h.Execute(ctx, nil, map[string]interface{}{"action": action + "_incident"})
+}
+
+func TestWorkItemIncidentLifecycleAssignmentEscalationCallbacks(t *testing.T) {
+	for _, action := range []string{"assign", "escalate"} {
+		for _, failure := range []string{"success", "closed", "resolved", "audit"} {
+			t.Run(action+"/"+failure, func(t *testing.T) {
+				f := incidentLifecycleFixture(t)
+				status := "in_progress"
+				if action == "assign" {
+					status = "new"
+				}
+				if failure == "closed" || failure == "resolved" {
+					status = failure
+				}
+				item := f.client.Ticket.UpdateOneID(f.inc.WorkItemID).SetStatus(status).SaveX(f.ctx)
+				if failure == "audit" {
+					f.client.AuditLog.Use(func(next ent.Mutator) ent.Mutator {
+						return ent.MutateFunc(func(context.Context, ent.Mutation) (ent.Value, error) { return nil, errors.New("audit fault") })
+					})
+				}
+				effect, err := runIncidentLifecycleCallback(f, action, "effect", map[string]interface{}{"version": item.Version, "assignee_id": f.actor.ID, "escalation_level": 1})
+				after := f.client.Ticket.GetX(f.ctx, item.ID)
+				if failure != "success" {
+					require.Error(t, err)
+					require.Equal(t, item.Version, after.Version)
+					require.Equal(t, item.Status, after.Status)
+					require.Zero(t, f.client.IncidentEvent.Query().CountX(f.ctx))
+					require.Equal(t, 1, f.client.OutboxEvent.Query().CountX(f.ctx))
+					return
+				}
+				require.NoError(t, err)
+				require.Equal(t, bpmn.CallbackEffectApplied, effect.Status)
+				require.Equal(t, item.Version+1, after.Version)
+				require.Equal(t, 1, f.client.AuditLog.Query().CountX(f.ctx))
+				require.Equal(t, 1, f.client.IncidentEvent.Query().CountX(f.ctx))
+				require.Equal(t, 2, f.client.OutboxEvent.Query().CountX(f.ctx))
+				if action == "assign" {
+					require.Equal(t, "assigned", after.Status)
+					require.Equal(t, f.actor.ID, after.AssigneeID)
+				} else {
+					require.Equal(t, "escalated", after.Status)
+					require.Equal(t, 1, f.client.Incident.GetX(f.ctx, f.inc.ID).EscalationLevel)
+				}
+			})
+		}
+	}
+}
+
+func TestWorkItemIncidentLifecycleEscalationLevelDoesNotEmitStatusEvent(t *testing.T) {
+	f := incidentLifecycleFixture(t)
+	item := f.client.Ticket.UpdateOneID(f.inc.WorkItemID).SetStatus("escalated").SaveX(f.ctx)
+	f.client.Incident.UpdateOneID(f.inc.ID).SetEscalationLevel(1).ExecX(f.ctx)
+	effect, err := runIncidentLifecycleCallback(f, "escalate", "raise", map[string]interface{}{"version": item.Version, "escalation_level": 3})
+	require.NoError(t, err)
+	require.Equal(t, item.Version+1, effect.LifecycleResult.Version)
+	require.Equal(t, 3, f.client.Incident.GetX(f.ctx, f.inc.ID).EscalationLevel)
+	require.Equal(t, 1, f.client.OutboxEvent.Query().CountX(f.ctx))
+	require.Equal(t, 1, f.client.IncidentEvent.Query().CountX(f.ctx))
+	_, err = runIncidentLifecycleCallback(f, "escalate", "same", map[string]interface{}{"version": item.Version + 1, "escalation_level": 3})
+	require.Error(t, err)
+	_, err = runIncidentLifecycleCallback(f, "escalate", "lower", map[string]interface{}{"version": item.Version + 1, "escalation_level": 2})
+	require.Error(t, err)
+	require.Equal(t, item.Version+1, f.client.Ticket.GetX(f.ctx, item.ID).Version)
+}
+
+func TestWorkItemIncidentLifecycleSameStateRuleStopsEventChain(t *testing.T) {
+	f := incidentLifecycleFixture(t)
+	f.rule(map[string]interface{}{"type": "change_status", "status": "resolved", "resolution": "already restored"}).Update().SetConditions(map[string]interface{}{"event_type": []string{"incident.status_changed"}, "status": []string{"resolved"}}).ExecX(f.ctx)
+	result, err := f.svc.ApplyIncidentCommand(f.ctx, incidentPGCommand(f, "restore"))
+	require.NoError(t, err)
+	event := f.client.OutboxEvent.Query().Where(outboxevent.EventType("incident.status_changed")).OnlyX(f.ctx)
+	require.Error(t, service.NewIncidentStatusDeliveryHandler(f.engine).Deliver(f.ctx, event))
+	require.Equal(t, result.Version, f.client.Ticket.GetX(f.ctx, result.WorkItemID).Version)
+	require.Equal(t, 1, f.client.OutboxEvent.Query().Where(outboxevent.EventType("incident.status_changed")).CountX(f.ctx))
+	require.Equal(t, 1, f.client.AuditLog.Query().CountX(f.ctx))
 }

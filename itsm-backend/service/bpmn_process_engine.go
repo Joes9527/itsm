@@ -1461,24 +1461,8 @@ func (e *CustomProcessEngine) executeClaimedServiceTaskCallback(
 	if instance.CurrentActivityID != txRow.ElementID {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(errors.New("callback no longer owns current activity"))
 	}
-	outputs, err := creationCallbackOutputs(handler, txRow.Action, effect)
-	if err != nil {
-		return bpmnCallbackExecutionResult{}, newBPMNCallbackHandlerError(err)
-	}
-	if len(outputs) > 0 {
-		merged := copyBPMNCallbackVariables(instance.Variables)
-		for key, value := range outputs {
-			merged[key] = value
-		}
-		affected, err := tx.ProcessInstance.Update().Where(processinstance.IDEQ(instance.ID), processinstance.TenantIDEQ(instance.TenantID), processinstance.VersionEQ(instance.Version)).SetVariables(merged).SetVersion(instance.Version + 1).Save(ctx)
-		if err != nil {
-			return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
-		}
-		if affected != 1 {
-			return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(errors.New("source process changed during creation callback"))
-		}
-		instance.Variables = merged
-		instance.Version++
+	if err := persistCallbackOutputs(ctx, tx, handler, txRow, instance, effect); err != nil {
+		return bpmnCallbackExecutionResult{}, err
 	}
 	definition, err := tx.Client().ProcessDefinition.Query().Where(
 		processdefinition.ID(instance.ProcessDefinitionID),
@@ -1576,6 +1560,9 @@ func (e *CustomProcessEngine) executeClaimedUserTaskCallback(
 	}
 	if instance.CurrentActivityID != txRow.ElementID {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(errors.New("callback no longer owns current activity"))
+	}
+	if err := persistCallbackOutputs(ctx, tx, handler, txRow, instance, effect); err != nil {
+		return bpmnCallbackExecutionResult{}, err
 	}
 	definition, err := tx.Client().ProcessDefinition.Query().Where(
 		processdefinition.ID(instance.ProcessDefinitionID), processdefinition.TenantID(instance.TenantID),

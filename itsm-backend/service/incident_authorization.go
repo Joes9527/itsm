@@ -135,7 +135,7 @@ func BuildIncidentActions(ctx context.Context, actor ActionActor, incident *ent.
 
 func CanStartIncident(actor ActionActor, incident *ent.Incident) dto.ActionPermission {
 	status := incidentWorkItemStatus(incident)
-	if status == common.IncidentStatusResolved || common.IsIncidentFinalStatus(status) || !isValidIncidentStatusTransition(status, common.IncidentStatusInProgress) {
+	if status == common.IncidentStatusInProgress || status == common.IncidentStatusResolved || common.IsIncidentFinalStatus(status) || !isValidIncidentStatusTransition(status, common.IncidentStatusInProgress) {
 		return dto.ActionPermission{Allowed: false, Reason: "当前事件不能开始处理"}
 	}
 	return CanEditIncident(actor)

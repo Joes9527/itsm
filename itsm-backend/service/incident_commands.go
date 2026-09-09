@@ -33,6 +33,9 @@ func (s *IncidentService) ApplyIncidentCommand(ctx context.Context, cmd dto.Inci
 	cmd.Action = strings.TrimSpace(cmd.Action)
 	cmd.Reason = strings.TrimSpace(cmd.Reason)
 	cmd.Resolution = strings.TrimSpace(cmd.Resolution)
+	if cmd.Action == "escalate" && cmd.EscalationLevel <= 0 {
+		cmd.EscalationLevel = 1
+	}
 	m := cmd.Meta
 	if m.TenantID <= 0 || m.ActorID <= 0 || m.ExpectedVersion <= 0 || strings.TrimSpace(m.OperationID) == "" || strings.TrimSpace(m.Source) == "" {
 		return empty, common.NewValidationError("trusted actor, tenant, version, source and operationId required", nil)
@@ -79,9 +82,9 @@ func (s *IncidentService) ApplyIncidentCommand(ctx context.Context, cmd dto.Inci
 
 func incidentCommandDigest(cmd dto.IncidentCommand) (string, error) {
 	return workitemmutation.Digest(struct {
-		IncidentID, Version        int
-		Action, Reason, Resolution string
-	}{cmd.IncidentID, cmd.Meta.ExpectedVersion, cmd.Action, cmd.Reason, cmd.Resolution})
+		IncidentID, Version, AssigneeID, EscalationLevel int
+		Action, Reason, Resolution                       string
+	}{cmd.IncidentID, cmd.Meta.ExpectedVersion, cmd.AssigneeID, cmd.EscalationLevel, cmd.Action, cmd.Reason, cmd.Resolution})
 }
 
 // The owning HTTP/BPMN entry and configured rule action share this transaction
@@ -115,6 +118,16 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 	}
 	target := ""
 	switch cmd.Action {
+	case "assign":
+		target = common.IncidentStatusAssigned
+		if err := NewIncidentService(tx.Client(), s.logger).validateIncidentAssignee(ctx, cmd.AssigneeID, m.TenantID); err != nil {
+			return empty, err
+		}
+	case "escalate":
+		target = common.IncidentStatusEscalated
+		if cmd.EscalationLevel <= current.EscalationLevel {
+			return empty, common.NewValidationError("escalation level must increase", nil)
+		}
 	case "acknowledge":
 		target = common.IncidentStatusAcknowledged
 	case "start":
@@ -135,6 +148,10 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 		return empty, common.NewValidationError("unsupported incident action", nil)
 	}
 	valid := isValidIncidentStatusTransition(item.Status, target)
+	statusChanged := item.Status != target
+	if !statusChanged && cmd.Action != "escalate" {
+		return empty, common.NewValidationError("Incident command requires a state change", nil)
+	}
 	if cmd.Action == "start" && (item.Status == common.IncidentStatusResolved || common.IsIncidentFinalStatus(item.Status)) {
 		valid = false
 	}
@@ -145,7 +162,13 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 		return empty, common.NewValidationError(fmt.Sprintf("invalid incident action %s from %s", cmd.Action, item.Status), nil)
 	}
 	now := time.Now().UTC()
-	update := tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantID(m.TenantID), ticket.DeletedAtIsNil(), ticket.Version(m.ExpectedVersion)).SetStatus(target).SetVersion(m.ExpectedVersion + 1).SetUpdatedAt(now)
+	update := tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantID(m.TenantID), ticket.DeletedAtIsNil(), ticket.Version(m.ExpectedVersion)).SetVersion(m.ExpectedVersion + 1).SetUpdatedAt(now)
+	if statusChanged {
+		update.SetStatus(target)
+	}
+	if cmd.Action == "assign" {
+		update.SetAssigneeID(cmd.AssigneeID)
+	}
 	switch cmd.Action {
 	case "acknowledge":
 		if item.FirstResponseAt.IsZero() {
@@ -180,10 +203,18 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 			return empty, err
 		}
 	}
+	if cmd.Action == "escalate" {
+		current, err = tx.Incident.UpdateOneID(current.ID).SetEscalationLevel(cmd.EscalationLevel).SetEscalatedAt(now).Save(ctx)
+		if err != nil {
+			return empty, err
+		}
+	}
 	result := workitemmutation.Result{WorkItemID: item.ID, Version: updated.Version, Status: updated.Status}
 	facts := map[string]any{"tenantId": m.TenantID, "incidentId": current.ID, "workItemId": item.ID, "actorId": m.ActorID, "source": m.Source, "operationId": m.OperationID, "correlationId": m.CorrelationID, "oldStatus": item.Status, "status": updated.Status, "version": updated.Version, "cycleNumber": updated.SLACycleNumber, "previousCycleNumber": item.SLACycleNumber}
 	facts["reason"] = cmd.Reason
 	facts["resolution"] = cmd.Resolution
+	facts["assigneeId"] = cmd.AssigneeID
+	facts["escalationLevel"] = cmd.EscalationLevel
 	category := ""
 	if item.Edges.Category != nil {
 		category = item.Edges.Category.Name
@@ -195,9 +226,16 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 	if err = workitemmutation.RecordTx(ctx, tx, m, result, "incident."+cmd.Action, digest, facts); err != nil {
 		return empty, err
 	}
-	_, err = tx.IncidentEvent.Create().SetIncidentID(current.ID).SetTenantID(m.TenantID).SetUserID(m.ActorID).SetSource(m.Source).SetEventType("status_changed").SetEventName(cmd.Action).SetDescription(cmd.Reason).SetStatus("active").SetSeverity("info").SetOccurredAt(now).SetMetadata(facts).Save(ctx)
+	eventType := "status_changed"
+	if !statusChanged {
+		eventType = "escalation"
+	}
+	_, err = tx.IncidentEvent.Create().SetIncidentID(current.ID).SetTenantID(m.TenantID).SetUserID(m.ActorID).SetSource(m.Source).SetEventType(eventType).SetEventName(cmd.Action).SetDescription(cmd.Reason).SetStatus("active").SetSeverity("info").SetOccurredAt(now).SetMetadata(facts).Save(ctx)
 	if err != nil {
 		return empty, err
+	}
+	if !statusChanged {
+		return result, nil
 	}
 	payload, err := json.Marshal(facts)
 	if err != nil {

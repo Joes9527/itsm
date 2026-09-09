@@ -19,6 +19,31 @@ func TestIncidentRecoveryEvidence(t *testing.T) {
 	}
 }
 
+func TestIncidentCommandRejectsSameState(t *testing.T) {
+	for action, status := range map[string]string{"acknowledge": "acknowledged", "start": "in_progress", "resolve": "resolved", "close": "closed"} {
+		t.Run(action, func(t *testing.T) {
+			client, svc, ctx := setupIncidentTest(t)
+			defer client.Close()
+			tenant, err := createIncidentTestTenant(ctx, client, "same")
+			require.NoError(t, err)
+			actor, err := createIncidentTestUser(ctx, client, tenant.ID, "same")
+			require.NoError(t, err)
+			actor.Update().SetRole("super_admin").ExecX(ctx)
+			inc := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "same")
+			before := client.Ticket.UpdateOneID(inc.WorkItemID).SetStatus(status).SaveX(ctx)
+			if action == "start" {
+				inc.Edges.WorkItem = before
+				require.False(t, CanStartIncident(ActionActor{}, inc).Allowed)
+			}
+			_, err = svc.ApplyIncidentCommand(ctx, dto.IncidentCommand{Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: before.Version, Source: "http", OperationID: "fresh"}, IncidentID: inc.ID, Action: action, Reason: "confirmed", Resolution: "restored"})
+			require.Error(t, err)
+			require.Equal(t, before.Version, client.Ticket.GetX(ctx, before.ID).Version)
+			require.Zero(t, client.OutboxEvent.Query().CountX(ctx))
+			require.Zero(t, client.AuditLog.Query().CountX(ctx))
+		})
+	}
+}
+
 func TestIncidentRuleStatusActionUsesCommand(t *testing.T) {
 	client, svc, ctx := setupIncidentTest(t)
 	defer client.Close()

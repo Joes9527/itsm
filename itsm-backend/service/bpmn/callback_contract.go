@@ -3,6 +3,7 @@ package bpmn
 // CallbackActionContract is the handler-owned allowlist for one declared
 // callback action. Only these fields may cross the durable callback boundary.
 type CallbackActionContract struct {
+	LifecycleRecordClass  string
 	CreatedRecordClass    string
 	PayloadFields         []string
 	PositiveIntegerFields []string
@@ -47,8 +48,8 @@ func (h *ChangeServiceTaskHandler) CallbackContract(action string) (CallbackActi
 func (h *IncidentServiceTaskHandler) CallbackContract(action string) (CallbackActionContract, bool) {
 	payload := map[string][]string{
 		"create_incident":      {"title", "description", "type", "priority", "severity", "reporter_id", "impact", "urgency", "category", "subcategory", "detected_at", "impact_analysis", "metadata", "source", "assignee_id", "ci_ids", "template_id", "parent_ticket_id", "tag_ids", "workflow_definition_key", "form_values"},
-		"assign_incident":      {"assignee_id"},
-		"escalate_incident":    {"escalation_level", "escalation_reason"},
+		"assign_incident":      {"assignee_id", "version"},
+		"escalate_incident":    {"escalation_level", "escalation_reason", "version"},
 		"resolve_incident":     {"resolution", "version"},
 		"start_incident":       {"version"},
 		"close_incident":       {"feedback", "reason", "version"},
@@ -61,6 +62,10 @@ func (h *IncidentServiceTaskHandler) CallbackContract(action string) (CallbackAc
 	contract := callbackActionContract(fields, nil)
 	if action == "create_incident" {
 		contract.CreatedRecordClass = "incident"
+	}
+	switch action {
+	case "acknowledge_incident", "start_incident", "resolve_incident", "close_incident", "reopen_incident", "assign_incident", "escalate_incident":
+		contract.LifecycleRecordClass = "incident"
 	}
 	if action == "assign_incident" {
 		contract.PositiveIntegerFields = []string{"assignee_id"}

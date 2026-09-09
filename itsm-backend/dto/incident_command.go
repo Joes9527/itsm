@@ -5,11 +5,13 @@ import "itsm-backend/handlers/shared/workitemmutation"
 // IncidentCommand is domain input shared with orchestration without importing
 // the legacy service package upward into BPMN.
 type IncidentCommand struct {
-	Meta       workitemmutation.Meta
-	IncidentID int
-	Action     string
-	Reason     string
-	Resolution string
+	AssigneeID      int
+	EscalationLevel int
+	Meta            workitemmutation.Meta
+	IncidentID      int
+	Action          string
+	Reason          string
+	Resolution      string
 }
 
 type IncidentCommandRequest struct {
