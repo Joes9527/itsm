@@ -5,8 +5,36 @@ import (
 	"errors"
 
 	"itsm-backend/ent"
+	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
 )
+
+// CheckTaskCompletionTx projects the existing completion authorization and state
+// guards without writes. The actual completion repeats these checks.
+func (e *CustomProcessEngine) CheckTaskCompletionTx(ctx context.Context, tx *ent.Tx, taskID string) error {
+	if tx == nil || e.transactionBound {
+		return errors.New("CheckTaskCompletionTx requires the root engine and owning transaction")
+	}
+	if err := e.requireActorSnapshot(ctx, tx); err != nil {
+		return err
+	}
+	tenantID, err := bpmnTaskMutationTenant(ctx)
+	if err != nil {
+		return err
+	}
+	scoped := e.forClient(tx.Client(), nil, tx)
+	task, err := tx.ProcessTask.Query().Where(processtask.TaskID(taskID), processtask.TenantID(tenantID)).Only(ctx)
+	if err != nil {
+		return err
+	}
+	if err = scoped.authorizeTaskActorWithClient(ctx, tx.Client(), task); err != nil {
+		return err
+	}
+	if _, err = scoped.captureTaskMutationActor(ctx, tx.Client(), task); err != nil {
+		return err
+	}
+	return ValidateBPMNTaskLifecycle(BPMNTaskCommandComplete, task.Status)
+}
 
 // StartProcessTx schedules the existing process execution in the caller's
 // transaction. The caller must roll back on error and owns the final commit.

@@ -382,84 +382,6 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, page, size int, 
 
 // Update 在同一事务内更新专业字段、WorkItem 共享字段，并把 c.RelatedTickets 描述的期望
 // 集合收敛到 WorkItemRelation（见 reconcileRelatedTicketRelations）。
-func (r *EntRepository) Update(ctx context.Context, c *Change) (*Change, error) {
-	tx, err := r.client.Tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to start change update transaction: %w", err)
-	}
-	rollback := func(cause error) (*Change, error) {
-		if rbErr := tx.Rollback(); rbErr != nil {
-			return nil, fmt.Errorf("%w (rollback also failed: %v)", cause, rbErr)
-		}
-		return nil, cause
-	}
-
-	current, err := tx.Change.Query().Where(change.IDEQ(c.ID), changeTenantScope(c.TenantID)).WithWorkItem().Only(ctx)
-	if err != nil {
-		return rollback(err)
-	}
-	update := tx.Change.UpdateOneID(c.ID).
-		Where(changeTenantScope(c.TenantID)).
-		SetJustification(c.Justification).
-		SetType(c.Type).
-		SetImpactScope(c.ImpactScope).
-		SetRiskLevel(c.RiskLevel).
-		SetImplementationPlan(c.ImplementationPlan).
-		SetRollbackPlan(c.RollbackPlan).
-		SetAffectedCis(c.AffectedCIs)
-
-	if c.PlannedStartDate != nil {
-		update.SetPlannedStartDate(*c.PlannedStartDate)
-	}
-	if c.PlannedEndDate != nil {
-		update.SetPlannedEndDate(*c.PlannedEndDate)
-	}
-	if c.ActualStartDate != nil {
-		update.SetActualStartDate(*c.ActualStartDate)
-	}
-	if c.ActualEndDate != nil {
-		update.SetActualEndDate(*c.ActualEndDate)
-	}
-
-	ec, err := update.Save(ctx)
-	if err != nil {
-		return rollback(err)
-	}
-	workItemUpdate := tx.Ticket.UpdateOneID(ec.WorkItemID).
-		Where(entticket.TenantIDEQ(c.TenantID), entticket.DeletedAtIsNil(), entticket.VersionEQ(current.Edges.WorkItem.Version)).
-		SetTitle(c.Title).SetDescription(c.Description).SetStatus(c.Status).SetPriority(c.Priority).
-		SetUpdatedAt(time.Now()).AddVersion(1)
-	if c.AssigneeID == nil {
-		workItemUpdate.ClearAssigneeID()
-	} else {
-		workItemUpdate.SetAssigneeID(*c.AssigneeID)
-	}
-	workItem, err := workItemUpdate.Save(ctx)
-	if err != nil {
-		return rollback(fmt.Errorf("failed to update change work item: %w", err))
-	}
-
-	// 用 Change 自己的创建人作为关系写入的 actor 近似值——UpdateChange 目前没有
-	// 独立的"当前操作人"概念可用，见 reconcileRelatedTicketRelations 顶部注释。
-	if err := r.reconcileRelatedTicketRelations(ctx, tx.Client(), c.TenantID, ec.WorkItemID, c.CreatedBy, c.RelatedTickets); err != nil {
-		return rollback(fmt.Errorf("failed to reconcile related tickets: %w", err))
-	}
-
-	if err := tx.Commit(); err != nil {
-		return rollback(fmt.Errorf("failed to commit change update transaction: %w", err))
-	}
-
-	ec.Edges.WorkItem = workItem
-	result := toDomain(ec)
-	if err := r.hydrateUsers(ctx, []*Change{result}, c.TenantID); err != nil {
-		return nil, err
-	}
-	if err := r.hydrateRelatedTickets(ctx, []*Change{result}, c.TenantID); err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
 func (r *EntRepository) Delete(ctx context.Context, id int, tenantID int) error {
 	entity, err := r.client.Change.Query().Where(change.ID(id), changeTenantScope(tenantID)).Only(ctx)
 	if err != nil {
@@ -537,33 +459,6 @@ func (r *EntRepository) GetStats(ctx context.Context, tenantID int) (*Stats, err
 	// canonical change status definitions.)
 
 	return stats, nil
-}
-
-// MarkSubmittedForApproval 只做 draft -> pending 的状态转换，不写
-// change_approvals/change_approval_chains（这两张表的写入路径正在被
-// Track4 迁移到 BPMN，见 handlers/change/service.go 的 SubmitChange）。
-// 用跟 SubmitForApproval 相同的乐观守卫：要求恰好 1 行受影响，否则说明
-// change 已经不是 draft 状态了。
-func (r *EntRepository) MarkSubmittedForApproval(ctx context.Context, changeID, tenantID int) error {
-	workItemID, err := r.resolveWorkItemID(ctx, changeID, tenantID)
-	if err != nil {
-		return err
-	}
-	result, err := r.db.ExecContext(ctx,
-		`UPDATE tickets SET status = 'pending', updated_at = $1
-		 WHERE id = $2 AND tenant_id = $3 AND status = 'draft'`,
-		time.Now(), workItemID, tenantID)
-	if err != nil {
-		return err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected != 1 {
-		return fmt.Errorf("change is not an editable draft")
-	}
-	return nil
 }
 
 // resolveWorkItemID 返回一个变更关联的 WorkItem ID（tickets.id）——Wave 2 起这是 BPMN
@@ -697,78 +592,6 @@ func (r *EntRepository) pendingApprovalRecord(ctx context.Context, changeID, ten
 }
 
 // Risk Assessment (Raw SQL)
-func (r *EntRepository) CreateRiskAssessment(ctx context.Context, ra *RiskAssessment) (*RiskAssessment, error) {
-	query := `
-		INSERT INTO change_risk_assessments (
-			change_id, tenant_id, risk_level, risk_description, impact_analysis,
-			mitigation_measures, contingency_plan, risk_owner, risk_review_date,
-			created_at, updated_at
-		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-		RETURNING id, created_at
-	`
-	now := time.Now()
-	err := r.db.QueryRowContext(ctx, query,
-		ra.ChangeID, ra.TenantID, ra.RiskLevel, ra.RiskDescription, ra.ImpactAnalysis,
-		ra.MitigationMeasures, ra.ContingencyPlan, ra.RiskOwner, ra.RiskReviewDate,
-		now, now).
-		Scan(&ra.ID, &ra.CreatedAt)
-	if err != nil {
-		return nil, err
-	}
-	ra.UpdatedAt = now
-	return ra, nil
-}
-
-func (r *EntRepository) GetRiskAssessment(ctx context.Context, changeID int, tenantID int) (*RiskAssessment, error) {
-	query := `
-		SELECT id, tenant_id, risk_level, risk_description, impact_analysis,
-		       mitigation_measures, contingency_plan, risk_owner, risk_review_date,
-		       created_at, updated_at
-		FROM change_risk_assessments
-		WHERE change_id = $1 AND tenant_id = $2
-	`
-	var ra RiskAssessment
-	var riskReviewDate sql.NullTime
-	err := r.db.QueryRowContext(ctx, query, changeID, tenantID).Scan(
-		&ra.ID, &ra.TenantID, &ra.RiskLevel, &ra.RiskDescription, &ra.ImpactAnalysis,
-		&ra.MitigationMeasures, &ra.ContingencyPlan, &ra.RiskOwner, &riskReviewDate,
-		&ra.CreatedAt, &ra.UpdatedAt,
-	)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, nil // Not found is not an error here
-		}
-		return nil, err
-	}
-	ra.ChangeID = changeID
-	if riskReviewDate.Valid {
-		ra.RiskReviewDate = &riskReviewDate.Time
-	}
-	return &ra, nil
-}
-
-func (r *EntRepository) UpdateRiskAssessment(ctx context.Context, ra *RiskAssessment) (*RiskAssessment, error) {
-	query := `
-		UPDATE change_risk_assessments
-		SET risk_level = $1, risk_description = $2, impact_analysis = $3,
-		    mitigation_measures = $4, contingency_plan = $5, risk_owner = $6,
-		    risk_review_date = $7, updated_at = $8
-		WHERE change_id = $9 AND tenant_id = $10
-		RETURNING id, created_at, updated_at
-	`
-	err := r.db.QueryRowContext(
-		ctx, query,
-		ra.RiskLevel, ra.RiskDescription, ra.ImpactAnalysis,
-		ra.MitigationMeasures, ra.ContingencyPlan, ra.RiskOwner,
-		ra.RiskReviewDate, time.Now(), ra.ChangeID, ra.TenantID,
-	).Scan(&ra.ID, &ra.CreatedAt, &ra.UpdatedAt)
-	if err != nil {
-		return nil, err
-	}
-	return ra, nil
-}
-
 // ListByDateRange retrieves changes within a date range
 func (r *EntRepository) ListByDateRange(ctx context.Context, tenantID int, startDate, endDate, status string) ([]*Change, error) {
 	// Parse date range

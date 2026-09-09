@@ -46,48 +46,10 @@ func (h *ChangeServiceTaskHandler) Execute(ctx context.Context, task *ent.Proces
 	case "reject_change", "authorize_change", "schedule_change", "implement_change", "verify_change", "review_change", "close_change", "assess_risk", "cancel_change":
 		return h.applyChangeLifecycle(ctx, action)
 	case "update_change":
-		if h.changeService == nil {
-			return nil, fmt.Errorf("change service is not injected")
-		}
-		if _, err := RequireTenantID(ctx, variables); err != nil {
-			return nil, err
-		}
-		command, effect := bindChangeWorkflowCommand(ctx, action, variables)
-		if effect != nil {
-			return effect, nil
-		}
-		result, err := h.changeService.ApplyChangeWorkflowCallback(ctx, command)
-		if err != nil {
-			return nil, err
-		}
-		return callbackEffectFromWorkflowResult(result)
+		return h.applyChangeLifecycle(ctx, action)
 	default:
 		return BlockedEffect(CallbackBlockHandlerContract, "unsupported change callback action"), nil
 	}
-}
-
-func bindChangeWorkflowCommand(ctx context.Context, action string, variables map[string]interface{}) (workflowcallback.ChangeCommand, *CallbackEffect) {
-	tenantID, err := RequireTenantID(ctx, variables)
-	if err != nil {
-		return workflowcallback.ChangeCommand{}, BlockedEffect(CallbackBlockHandlerContract, err.Error())
-	}
-	command := workflowcallback.ChangeCommand{Action: action, ChangeID: GetIntFromVars(variables, "change_id"), TenantID: tenantID}
-	if command.ChangeID <= 0 {
-		return command, BlockedEffect(CallbackBlockTargetMissing, "change_id is required")
-	}
-	if action == "update_change" {
-		if status, ok := variables["status"].(string); ok && status != "" {
-			return command, BlockedEffect(CallbackBlockHandlerContract, "update_change cannot mutate lifecycle status")
-		}
-		if value, ok := variables["title"].(string); ok && value != "" {
-			command.Title = &value
-		}
-		if value, ok := variables["description"].(string); ok && value != "" {
-			command.Description = &value
-		}
-	}
-
-	return command, nil
 }
 
 func callbackEffectFromWorkflowResult(result workflowcallback.Result) (*CallbackEffect, error) {

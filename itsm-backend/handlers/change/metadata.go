@@ -13,14 +13,16 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/ent/user"
 	"itsm-backend/handlers/shared/workitemmutation"
 )
 
 // MetadataCommand accepts editable professional facts and an explicitly observed version.
 type MetadataCommand struct {
-	Meta     workitemmutation.Meta
-	ChangeID int
-	Patch    dto.UpdateChangeRequest
+	Meta               workitemmutation.Meta
+	ChangeID           int
+	Patch              dto.UpdateChangeRequest
+	processingCallback bool
 }
 
 func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out workitemmutation.Result, resultErr error) {
@@ -94,14 +96,18 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 	if item.Status == "completed" || item.Status == "cancelled" || item.Status == "rejected" {
 		return empty, common.NewValidationError("terminal change metadata is locked", nil)
 	}
-	if err = workitemmutation.RequireSettledChangeCallbacks(ctx, tx, m.TenantID, current.WorkItemID); err != nil {
+	var ownCallback []workitemmutation.Meta
+	if cmd.processingCallback {
+		ownCallback = append(ownCallback, m)
+	}
+	if err = workitemmutation.RequireSettledChangeCallbacks(ctx, tx, m.TenantID, current.WorkItemID, ownCallback...); err != nil {
 		if _, unresolved := err.(*workitemmutation.UnresolvedChangeCallbackError); unresolved {
 			err = common.NewConflictError("Change workflow", err.Error())
 		}
 		return empty, err
 	}
 	p := cmd.Patch
-	governedFacts := p.Type != nil || p.Justification != nil || p.ImpactScope != nil || p.RiskLevel != nil || p.ImplementationPlan != nil || p.RollbackPlan != nil || p.AffectedCIs != nil
+	governedFacts := hasRiskDetails(p.ChangeRiskPatch) || p.Type != nil || p.Justification != nil || p.ImpactScope != nil || p.RiskLevel != nil || p.ImplementationPlan != nil || p.RollbackPlan != nil || p.AffectedCIs != nil
 	if governedFacts && item.Status != "draft" && !isChangeSubmitted(item.Status) {
 		return empty, common.NewValidationError("authorized change scope and assessment facts are locked", nil)
 	}
@@ -112,14 +118,31 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 		return empty, common.NewValidationError("use governed schedule action for implementation window", nil)
 	}
 	domain := toDomain(current)
+	if hasRiskDetails(p.ChangeRiskPatch) {
+		domain.RiskAssessment, err = readRiskDetails(ctx, tx, current.ID, m.TenantID, current.RiskLevel)
+		if err != nil {
+			return empty, err
+		}
+	}
+	if p.AssigneeID != nil {
+		// The existing Change assign route requires change:write, already
+		// checked by authorizeCommand. Recipients remain active target-tenant users.
+		eligible, err := tx.User.Query().Where(user.ID(*p.AssigneeID), user.TenantID(m.TenantID), user.Active(true)).Exist(ctx)
+		if err != nil {
+			return empty, err
+		}
+		if *p.AssigneeID <= 0 || !eligible {
+			return empty, common.NewValidationError("assignee must be an active target-tenant user", nil)
+		}
+	}
 	// Assessment advances to CAB without changing submitted status. Its
 	// persisted evidence freezes the covered facts; there is no reassessment task.
 	assessed := current.AssessmentDigest != "" || current.AssessmentEvidence != "" || current.AssessedBy > 0 || !current.AssessedAt.IsZero()
-	if assessed && metadataChanges(domain, dto.UpdateChangeRequest{
+	if assessed && (riskDetailsChanged(domain.RiskAssessment, p.ChangeRiskPatch) || metadataChanges(domain, dto.UpdateChangeRequest{
 		Type: p.Type, Justification: p.Justification, RiskLevel: p.RiskLevel,
 		ImpactScope: p.ImpactScope, ImplementationPlan: p.ImplementationPlan,
 		RollbackPlan: p.RollbackPlan, AffectedCIs: p.AffectedCIs,
-	}) {
+	})) {
 		return empty, common.NewValidationError("assessed change facts are locked", nil)
 	}
 	if assessed && p.AffectedCIs != nil {
@@ -145,6 +168,9 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 	}
 	update := tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantID(m.TenantID), ticket.DeletedAtIsNil(), ticket.Version(m.ExpectedVersion)).SetVersion(m.ExpectedVersion + 1).SetUpdatedAt(time.Now())
 	professional := tx.Change.UpdateOneID(current.ID)
+	if p.AssigneeID != nil {
+		update.SetAssigneeID(*p.AssigneeID)
+	}
 	if p.Title != nil {
 		if strings.TrimSpace(*p.Title) == "" {
 			return empty, common.NewValidationError("title required", nil)
@@ -195,6 +221,11 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 	if _, err = professional.Save(ctx); err != nil {
 		return empty, err
 	}
+	if hasRiskDetails(p.ChangeRiskPatch) {
+		if err = writeRiskDetails(ctx, tx, current.ID, m.TenantID, domain.RiskAssessment, p.ChangeRiskPatch); err != nil {
+			return empty, err
+		}
+	}
 	if p.RelatedTickets != nil {
 		repo := NewEntRepository(tx.Client(), nil)
 		if err = repo.reconcileRelatedTicketRelations(ctx, tx.Client(), m.TenantID, item.ID, m.ActorID, p.RelatedTickets); err != nil {
@@ -212,7 +243,7 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 }
 
 func normalizeMetadataPatch(p dto.UpdateChangeRequest) dto.UpdateChangeRequest {
-	for _, field := range []**string{&p.Title, &p.Description, &p.Justification, &p.ImplementationPlan, &p.RollbackPlan} {
+	for _, field := range []**string{&p.Title, &p.Description, &p.Justification, &p.ImplementationPlan, &p.RollbackPlan, &p.RiskDescription, &p.ImpactAnalysis, &p.MitigationMeasures, &p.ContingencyPlan, &p.RiskOwner} {
 		if *field != nil {
 			value := strings.TrimSpace(**field)
 			*field = &value
@@ -240,6 +271,12 @@ func normalizeMetadataPatch(p dto.UpdateChangeRequest) dto.UpdateChangeRequest {
 }
 
 func metadataChanges(c *Change, p dto.UpdateChangeRequest) bool {
+	if p.AssigneeID != nil && (c.AssigneeID == nil || *p.AssigneeID != *c.AssigneeID) {
+		return true
+	}
+	if riskDetailsChanged(c.RiskAssessment, p.ChangeRiskPatch) {
+		return true
+	}
 	for _, field := range []struct {
 		patch   *string
 		current string

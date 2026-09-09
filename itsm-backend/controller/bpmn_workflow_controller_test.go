@@ -180,6 +180,10 @@ func (e *fakeProcessEngine) StartProcessTx(context.Context, *ent.Tx, string, str
 	return nil, errors.New("transactional start is not implemented by this controller fixture")
 }
 
+func (e *fakeProcessEngine) TerminateProcessTx(context.Context, *ent.Tx, string, string) error {
+	return errors.New("transactional termination is not implemented by this controller fixture")
+}
+
 func (e *fakeProcessEngine) CompleteTaskTx(context.Context, *ent.Tx, string, map[string]interface{}) error {
 	return errors.New("transactional completion is not implemented by this controller fixture")
 }

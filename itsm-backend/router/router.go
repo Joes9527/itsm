@@ -938,16 +938,21 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				changes.GET("/:id", middleware.RequirePermission("change", "read"), config.ChangeHandler.GetChange)
 				changes.PUT("/:id", middleware.RequirePermission("change", "write"), config.ChangeHandler.UpdateChange)
 				changes.DELETE("/:id", middleware.RequirePermission("change", "delete"), config.ChangeHandler.DeleteChange)
-				changes.POST("/:id/submit", middleware.RequirePermission("change", "write"), config.ChangeHandler.SubmitChange)
+				changes.POST("/:id/submit", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
 				changes.POST("/:id/assign", middleware.RequirePermission("change", "write"), config.ChangeHandler.AssignChange)
-				// 状态转换：approve/reject 需要独立审批权限，rollback 需要独立回滚权限（H-15 修复：禁止 write 权限泛化为审批/回滚）
-				changes.POST("/:id/approve", middleware.RequirePermission("change", "approve"), config.ChangeHandler.TransitionStatus)
-				changes.POST("/:id/reject", middleware.RequirePermission("change", "approve"), config.ChangeHandler.TransitionStatus)
-				changes.POST("/:id/start", middleware.RequirePermission("change", "write"), config.ChangeHandler.TransitionStatus)
-				changes.POST("/:id/complete", middleware.RequirePermission("change", "write"), config.ChangeHandler.TransitionStatus)
-				changes.POST("/:id/rollback", middleware.RequirePermission("change", "rollback"), config.ChangeHandler.TransitionStatus)
-				changes.POST("/:id/cancel", middleware.RequirePermission("change", "write"), config.ChangeHandler.TransitionStatus)
+				// CAB decisions retain independent approval permission; stages use the Change write owner.
+				changes.POST("/:id/approve", middleware.RequirePermission("change", "approve"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/reject", middleware.RequirePermission("change", "approve"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/assess", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/schedule", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/implement", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/record-outcome", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/review", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
+				changes.POST("/:id/close", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
+
+				changes.POST("/:id/cancel", middleware.RequirePermission("change", "write"), config.ChangeHandler.ExecuteAction)
 				// 审批
+				changes.GET("/:id/task-progress", middleware.RequirePermission("change", "read"), config.ChangeHandler.GetTaskProgress)
 				changes.GET("/:id/approvals", middleware.RequirePermission("change", "read"), config.ChangeHandler.GetApprovals)
 				// 风险评估（同时支持 /risk 和 /risk-assessment 两个路径）
 				changes.GET("/:id/risk-assessment", middleware.RequirePermission("change", "read"), config.ChangeHandler.GetRiskAssessment)

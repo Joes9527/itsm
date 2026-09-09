@@ -252,6 +252,10 @@ func TestWorkItemChangePIRHTTPBinding(t *testing.T) {
 	missing := invoke(`{"overallResult":"successful","operationId":"missing"}`)
 	require.Equal(t, 400, missing.Code)
 	body := fmt.Sprintf(`{"overallResult":"successful","expectedVersion":1,"operationId":"http-create","actorId":99999,"tenantId":99999}`)
+	forged := invoke(body)
+	require.Equal(t, 400, forged.Code)
+	require.Zero(t, f.client.ChangePIR.Query().CountX(f.ctx))
+	body = `{"overallResult":"successful","expectedVersion":1,"operationId":"http-create"}`
 	success := invoke(body)
 	require.Equal(t, 200, success.Code, success.Body.String())
 	var decoded struct {

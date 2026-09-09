@@ -3,21 +3,11 @@ package change
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"itsm-backend/ent"
-	entchange "itsm-backend/ent/change"
-	"itsm-backend/ent/ticket"
+	"itsm-backend/dto"
 	"itsm-backend/handlers/shared/workflowcallback"
+	"itsm-backend/service/bpmn"
 )
-
-func workflowApplied(message string, output map[string]interface{}) workflowcallback.Result {
-	return workflowcallback.Result{Status: workflowcallback.StatusApplied, Message: message, Output: output}
-}
-
-func workflowIdempotent(message string, output map[string]interface{}) workflowcallback.Result {
-	return workflowcallback.Result{Status: workflowcallback.StatusIdempotent, Message: message, Output: output}
-}
 
 func workflowBlocked(message string) workflowcallback.Result {
 	return workflowcallback.Result{Status: workflowcallback.StatusBlocked, BlockCode: "handler_contract", Message: message}
@@ -62,45 +52,18 @@ func (s *Service) ApplyChangeWorkflowCallback(ctx context.Context, cmd workflowc
 	return workflowcallback.Result{Status: status, Message: "Change command committed", LifecycleResult: &result}, nil
 }
 
-func (s *Service) loadWorkflowChange(ctx context.Context, id, tenantID int) (*ent.Change, error) {
-	return s.entClient.Change.Query().Where(
-		entchange.ID(id), entchange.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil()),
-	).WithWorkItem().Only(ctx)
-}
-
 func (s *Service) applyWorkflowUpdate(ctx context.Context, cmd workflowcallback.ChangeCommand) (workflowcallback.Result, error) {
-	current, err := s.loadWorkflowChange(ctx, cmd.ChangeID, cmd.TenantID)
+	key, ok := bpmn.BPMNCallbackExecutionKey(ctx)
+	if !ok || key != cmd.Meta.OperationID || cmd.Meta.TenantID != cmd.TenantID {
+		return workflowBlocked("metadata requires matching durable callback identity"), nil
+	}
+	result, err := s.ApplyMetadata(ctx, MetadataCommand{Meta: cmd.Meta, ChangeID: cmd.ChangeID, Patch: dto.UpdateChangeRequest{Title: cmd.Title, Description: cmd.Description}, processingCallback: true})
 	if err != nil {
 		return workflowcallback.Result{}, err
 	}
-	update := s.entClient.Ticket.Update().Where(
-		ticket.ID(current.WorkItemID), ticket.TenantID(cmd.TenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(current.Edges.WorkItem.Version),
-	)
-	changed := false
-	if cmd.Title != nil && current.Edges.WorkItem.Title != *cmd.Title {
-		update.SetTitle(*cmd.Title)
-		changed = true
+	status := workflowcallback.StatusApplied
+	if result.Replayed {
+		status = workflowcallback.StatusIdempotent
 	}
-	if cmd.Description != nil && current.Edges.WorkItem.Description != *cmd.Description {
-		update.SetDescription(*cmd.Description)
-		changed = true
-	}
-	if !changed {
-		return workflowIdempotent(fmt.Sprintf("change %d already matches", current.ID), nil), nil
-	}
-	count, err := update.SetUpdatedAt(time.Now()).AddVersion(1).Save(ctx)
-	if err != nil {
-		return workflowcallback.Result{}, err
-	}
-	if count == 1 {
-		return workflowApplied(fmt.Sprintf("change %d updated", current.ID), nil), nil
-	}
-	latest, err := s.loadWorkflowChange(ctx, current.ID, cmd.TenantID)
-	if err != nil {
-		return workflowcallback.Result{}, err
-	}
-	if (cmd.Title == nil || latest.Edges.WorkItem.Title == *cmd.Title) && (cmd.Description == nil || latest.Edges.WorkItem.Description == *cmd.Description) {
-		return workflowIdempotent(fmt.Sprintf("change %d already matches", current.ID), nil), nil
-	}
-	return workflowBlocked(fmt.Sprintf("change %d has a conflicting concurrent update", current.ID)), nil
+	return workflowcallback.Result{Status: status, Message: "Change metadata committed", LifecycleResult: &result}, nil
 }

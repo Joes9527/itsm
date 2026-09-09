@@ -2,7 +2,7 @@ package bpmn_test
 
 import (
 	"context"
-	"sync/atomic"
+
 	"testing"
 
 	"itsm-backend/ent"
@@ -82,18 +82,7 @@ func TestChangeServiceTaskHandler_CreateChangeRequiresDurableApplication(t *test
 	}
 }
 
-func TestChangeServiceTaskHandler_UnchangedUpdateIsIdempotent(t *testing.T) {
-	_, handler, tenantID, changeEntity := setupChangeHandlerFixture(t)
-	ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
-
-	effect, err := handler.Execute(ctx, nil, map[string]interface{}{
-		"action":    "update_change",
-		"change_id": changeEntity.ID,
-		"title":     "测试变更",
-	})
-	require.NoError(t, err)
-	require.Equal(t, CallbackEffectIdempotent, effect.Status)
-}
+// TestChangeServiceTaskHandler_UnchangedUpdateIsIdempotent moved to tests/integration/workitem_change_consumers_postgres_test.go.
 
 func TestChangeServiceTaskHandler_UpdateChangeBlocksStatusBypass(t *testing.T) {
 	client, handler, tenantID, changeEntity := setupChangeHandlerFixture(t)
@@ -112,40 +101,7 @@ func TestChangeServiceTaskHandler_UpdateChangeBlocksStatusBypass(t *testing.T) {
 	require.Equal(t, "draft", after.Status)
 }
 
-func TestChangeServiceTaskHandler_UpdateChangeCASLoserClassifiesExactEffect(t *testing.T) {
-	tests := []struct {
-		name        string
-		winnerTitle string
-		wantStatus  CallbackEffectStatus
-	}{
-		{name: "same payload is idempotent", winnerTitle: "CAS title", wantStatus: CallbackEffectIdempotent},
-		{name: "different payload is blocked", winnerTitle: "conflicting title", wantStatus: CallbackEffectBlocked},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			client, handler, tenantID, changeEntity := setupChangeHandlerFixture(t)
-			ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
-			var injected atomic.Bool
-			client.Use(func(next ent.Mutator) ent.Mutator {
-				return ent.MutateFunc(func(mutationCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
-					if ticketMutation, ok := mutation.(*ent.TicketMutation); ok {
-						if _, exists := ticketMutation.Title(); exists && injected.CompareAndSwap(false, true) {
-							_, injectErr := client.Ticket.UpdateOneID(changeEntity.WorkItemID).SetTitle(tc.winnerTitle).AddVersion(1).Save(mutationCtx)
-							require.NoError(t, injectErr)
-						}
-					}
-					return next.Mutate(mutationCtx, mutation)
-				})
-			})
-
-			effect, err := handler.Execute(ctx, nil, map[string]interface{}{
-				"action": "update_change", "change_id": changeEntity.ID, "title": "CAS title",
-			})
-			require.NoError(t, err)
-			require.Equal(t, tc.wantStatus, effect.Status)
-		})
-	}
-}
+// TestChangeServiceTaskHandler_UpdateChangeCASLoserClassifiesExactEffect moved to tests/integration/workitem_change_consumers_postgres_test.go.
 
 func TestChangeServiceTaskHandler_UnknownActionBlocks(t *testing.T) {
 	_, handler, tenantID, _ := setupChangeHandlerFixture(t)
@@ -172,7 +128,7 @@ func TestChangeServiceTaskHandler_NotifyStakeholdersWithoutDurableDeliveryBlocks
 // Lifecycle success is exercised through the actual restricted PostgreSQL
 // worker and default definitions in tests/integration/workitem_change_callback_postgres_test.go.
 func TestChangeLifecycleRequiresDurableIdentity(t *testing.T) {
-	for _, action := range []string{"assess_risk", "approve_change", "authorize_change", "reject_change", "schedule_change", "implement_change", "verify_change", "review_change", "close_change", "cancel_change"} {
+	for _, action := range []string{"update_change", "assess_risk", "approve_change", "authorize_change", "reject_change", "schedule_change", "implement_change", "verify_change", "review_change", "close_change", "cancel_change"} {
 		t.Run(action, func(t *testing.T) {
 			client, handler, tenantID, c := setupChangeHandlerFixture(t)
 			ctx := context.WithValue(context.Background(), BPMNTenantIDContextKey, tenantID)
@@ -189,25 +145,4 @@ func TestChangeLifecycleRequiresDurableIdentity(t *testing.T) {
 	}
 }
 
-func TestChangeMetadataCallbackPreservesTenantBoundary(t *testing.T) {
-	for _, scope := range []string{"own", "foreign", "missing"} {
-		t.Run(scope, func(t *testing.T) {
-			client, handler, tenantID, c := setupChangeHandlerFixture(t)
-			ctx := context.Background()
-			if scope == "own" {
-				ctx = context.WithValue(ctx, BPMNTenantIDContextKey, tenantID)
-			}
-			if scope == "foreign" {
-				ctx = context.WithValue(ctx, BPMNTenantIDContextKey, tenantID+999)
-			}
-			_, err := handler.Execute(ctx, nil, map[string]interface{}{"action": "update_change", "change_id": c.ID, "title": "Scoped metadata"})
-			if scope == "own" {
-				require.NoError(t, err)
-				require.Equal(t, "Scoped metadata", requireHandlerChangeWorkItem(t, client, c).Title)
-			} else {
-				require.Error(t, err)
-				require.NotEqual(t, "Scoped metadata", requireHandlerChangeWorkItem(t, client, c).Title)
-			}
-		})
-	}
-}
+// TestChangeMetadataCallbackPreservesTenantBoundary moved to tests/integration/workitem_change_consumers_postgres_test.go.

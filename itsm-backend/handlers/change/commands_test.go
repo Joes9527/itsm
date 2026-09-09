@@ -24,10 +24,10 @@ func TestStandardPolicyRequiresTimestampAndUnchangedScope(t *testing.T) {
 
 func TestAssessmentBindsCurrentProfessionalFacts(t *testing.T) {
 	c := &ent.Change{Type: "normal", ImplementationPlan: "v1", RollbackPlan: "restore", AffectedCis: []string{"7"}}
-	first, err := assessmentDigest(c)
+	first, err := assessmentDigest(c, nil)
 	require.NoError(t, err)
 	c.ImplementationPlan = "v2"
-	second, err := assessmentDigest(c)
+	second, err := assessmentDigest(c, nil)
 	require.NoError(t, err)
 	require.NotEqual(t, first, second)
 }

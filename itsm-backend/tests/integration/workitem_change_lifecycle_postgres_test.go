@@ -43,7 +43,7 @@ func newChangeLifecycleFixture(t *testing.T, kind string) *changeLifecycleFixtur
 	clients, cfg := runtimeClients(t, f)
 	_, err = f.db.ExecContext(f.ctx, "GRANT SELECT ON user_roles,work_item_relations TO "+cfg.User)
 	require.NoError(t, err)
-	for _, table := range []string{"changes", "change_pi_rs", "standard_changes", "process_definitions", "process_deployments", "process_instances", "process_tasks", "process_audit_logs", "process_callback_outboxes", "process_execution_histories", "process_approval_decisions", "groups", "departments"} {
+	for _, table := range []string{"changes", "change_pi_rs", "change_risk_assessments", "standard_changes", "process_definitions", "process_deployments", "process_instances", "process_tasks", "process_audit_logs", "process_callback_outboxes", "process_execution_histories", "process_approval_decisions", "groups", "departments"} {
 		_, err = f.db.ExecContext(f.ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON "+table+" TO "+cfg.User)
 		require.NoError(t, err)
 		var sequence *string

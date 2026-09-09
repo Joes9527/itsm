@@ -75,6 +75,8 @@ type CreateChangeRequest struct {
 
 // UpdateChangeRequest 更新变更请求
 type UpdateChangeRequest struct {
+	AssigneeID *int `json:"assigneeId"`
+	ChangeRiskPatch
 	Title              *string         `json:"title"`              // 变更标题
 	Description        *string         `json:"description"`        // 变更描述
 	Justification      *string         `json:"justification"`      // 变更理由
@@ -90,8 +92,24 @@ type UpdateChangeRequest struct {
 	RelatedTickets     []string        `json:"relatedTickets"`     // 相关工单
 }
 
+type ChangeRiskPatch struct {
+	RiskDescription    *string    `json:"riskDescription"`
+	ImpactAnalysis     *string    `json:"impactAnalysis"`
+	MitigationMeasures *string    `json:"mitigationMeasures"`
+	ContingencyPlan    *string    `json:"contingencyPlan"`
+	RiskOwner          *string    `json:"riskOwner"`
+	RiskReviewDate     *time.Time `json:"riskReviewDate"`
+}
+
 // ChangeResponse 变更响应
 type ChangeResponse struct {
+	Version            int            `json:"version"`
+	Outcome            string         `json:"outcome"`
+	OutcomeEvidence    string         `json:"outcomeEvidence"`
+	ReviewEvidence     string         `json:"reviewEvidence"`
+	ReviewedBy         int            `json:"reviewedBy"`
+	ReviewedAt         *time.Time     `json:"reviewedAt"`
+	StandardTemplateID int            `json:"standardTemplateId"`
 	ID                 int            `json:"id"`                 // 变更ID
 	Title              string         `json:"title"`              // 变更标题
 	Description        string         `json:"description"`        // 变更描述
@@ -119,8 +137,9 @@ type ChangeResponse struct {
 	// WorkItemID 关联的 WorkItem（tickets.id）。Change 创建事务保证该值存在；nil 表示
 	// 开发数据违反 WorkItem 创建不变量。与 dto.IncidentResponse.WorkItemID /
 	// dto.ProblemResponse.WorkItemID 同一模式，供前端 WorkItemShell 使用。
-	WorkItemID *int                        `json:"workItemId,omitempty"`
-	Actions    map[string]ActionPermission `json:"actions,omitempty"`
+	WorkItemID   *int                        `json:"workItemId,omitempty"`
+	Actions      map[string]ActionPermission `json:"actions,omitempty"`
+	CurrentTasks map[string]string           `json:"currentTasks"`
 }
 
 // ChangeListResponse 变更列表响应
@@ -143,18 +162,6 @@ type ChangeStatsResponse struct {
 	RolledBack int `json:"rolledBack"` // 已回滚
 	Rejected   int `json:"rejected"`   // 已拒绝
 	Cancelled  int `json:"cancelled"`  // 已取消
-}
-
-// ChangeApprovalRequest 变更审批请求
-type ChangeApprovalRequest struct {
-	Status  ChangeApprovalStatus `json:"status" binding:"required"` // 审批状态
-	Comment *string              `json:"comment"`                   // 审批意见
-}
-
-// ChangeStatusUpdateRequest 变更状态更新请求
-type ChangeStatusUpdateRequest struct {
-	Status  ChangeStatus `json:"status" binding:"required"` // 新状态
-	Comment *string      `json:"comment"`                   // 状态变更说明
 }
 
 // ChangeApproval 变更审批记录
@@ -377,15 +384,6 @@ type ChangeRollbackExecutionResponse struct {
 	Comments        string     `json:"comments"`        // 备注
 	CreatedAt       time.Time  `json:"createdAt"`       // 创建时间
 	UpdatedAt       time.Time  `json:"updatedAt"`       // 更新时间
-}
-
-// SubmitChangeRequest 提交变更审批请求
-//
-// 审批人不再由提交方指定——BPMN 流程的 CAB 审批节点按 assigneeRole="change_manager"
-// 解析候选人（租户内所有 change_manager 角色的用户），旧版本这里的 ApproverIDs
-// 字段已经不生效，删除避免误导调用方以为传了就有用。
-type SubmitChangeRequest struct {
-	Comment string `json:"comment"` // 提交说明（可选）
 }
 
 // ChangeCalendarRequest 日历视图请求

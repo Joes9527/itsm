@@ -226,7 +226,12 @@ func TestWorkItemChangeLifecycleCallbackDeniesStaleAndRevokedActor(t *testing.T)
 			}
 			require.NoError(t, f.engine.CompleteTask(changeCallbackContext(f, f.actor), task.TaskID, vars))
 			row := f.client.ProcessCallbackOutbox.Query().OnlyX(f.ctx)
-			require.Equal(t, "pending", row.Status)
+			if invalid == "missing_evidence" {
+				require.Equal(t, "blocked", row.Status)
+				require.Equal(t, "handler_contract", row.LastErrorClass)
+			} else {
+				require.Equal(t, "pending", row.Status)
+			}
 			require.Equal(t, f.actor.ID, row.ActorID)
 			require.Equal(t, "workflow", row.ActorSource)
 			require.Equal(t, vars["version"], bpmn.GetIntFromVars(row.Variables, "version"))
@@ -235,8 +240,13 @@ func TestWorkItemChangeLifecycleCallbackDeniesStaleAndRevokedActor(t *testing.T)
 				f.actor.Update().SetActive(false).ExecX(f.ctx)
 			}
 			f.client.ProcessCallbackOutbox.UpdateOneID(row.ID).SetNextAttemptAt(time.Now().Add(-time.Minute)).ExecX(f.ctx)
-			_, err = f.engine.ProcessPendingCallbacks(f.ctx, "deny-worker", 10)
-			require.Error(t, err)
+			count, workerErr := f.engine.ProcessPendingCallbacks(f.ctx, "deny-worker", 10)
+			if invalid == "missing_evidence" {
+				require.NoError(t, workerErr)
+				require.Zero(t, count)
+			} else {
+				require.Error(t, workerErr)
+			}
 			require.Equal(t, 2, f.client.Ticket.GetX(f.ctx, f.c.WorkItemID).Version)
 			require.Equal(t, "submitted", f.client.Ticket.GetX(f.ctx, f.c.WorkItemID).Status)
 			require.Equal(t, 0, f.client.AuditLog.Query().Where(auditlog.OperationID(row.ExecutionKey)).CountX(f.ctx))
@@ -245,8 +255,7 @@ func TestWorkItemChangeLifecycleCallbackDeniesStaleAndRevokedActor(t *testing.T)
 	}
 }
 
-// The task-start/completion producers still have native-tenant equality (A4c2).
-// Seed the durable workflow identity here, then exercise the actual restricted
+// This service-task test seeds durable workflow identity and exercises the restricted
 // worker and owning command authorization; never claim this is an MSP HTTP E2E.
 func TestWorkItemChangeLifecycleDurableServiceCallbackMSP(t *testing.T) {
 	for _, access := range []string{"allocated", "revoked", "foreign", "competing", "revoked_replay"} {

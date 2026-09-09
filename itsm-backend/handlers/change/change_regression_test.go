@@ -5,11 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -44,9 +46,9 @@ func setupChangeRegressionHandler(t *testing.T, dbName, actorCode string) (*gin.
 		c.Next()
 	})
 	r.POST("/api/v1/changes", handler.CreateChange)
-	r.POST("/api/v1/changes/:id/start", handler.TransitionStatus)
-	r.POST("/api/v1/changes/:id/complete", handler.TransitionStatus)
-	r.POST("/api/v1/changes/:id/rollback", handler.TransitionStatus)
+	r.POST("/api/v1/changes/:id/start", handler.ExecuteAction)
+	r.POST("/api/v1/changes/:id/complete", handler.ExecuteAction)
+	r.POST("/api/v1/changes/:id/rollback", handler.ExecuteAction)
 	r.GET("/api/v1/changes/calendar", handler.GetCalendar)
 	return r, repo, entClient, tenantID, actorID
 }
@@ -140,194 +142,77 @@ func changeResponseData(t *testing.T, response common.Response) map[string]inter
 }
 
 func TestChangeController_TransitionStatus_NonApprovalLifecycleByType(t *testing.T) {
-	tests := []struct {
-		name             string
-		dbName           string
-		changeType       string
-		startStatus      string
-		finalAction      string
-		finalBody        string
-		expectedTerminal string
-	}{
-		{
-			name:             "standard close path keeps pre-authorized fast start",
-			dbName:           "change_regression_standard_complete",
-			changeType:       "standard",
-			startStatus:      "approved",
-			finalAction:      "complete",
-			finalBody:        `{}`,
-			expectedTerminal: "completed",
-		},
-		{
-			name:             "standard rollback path closes from in_progress",
-			dbName:           "change_regression_standard_rollback",
-			changeType:       "standard",
-			startStatus:      "approved",
-			finalAction:      "rollback",
-			finalBody:        `{"reason":"实施失败后执行回滚"}`,
-			expectedTerminal: "rolled_back",
-		},
-		{
-			name:             "normal close path requires scheduled start point",
-			dbName:           "change_regression_normal_complete",
-			changeType:       "normal",
-			startStatus:      "scheduled",
-			finalAction:      "complete",
-			finalBody:        `{}`,
-			expectedTerminal: "completed",
-		},
-		{
-			name:             "normal rollback path closes from in_progress",
-			dbName:           "change_regression_normal_rollback",
-			changeType:       "normal",
-			startStatus:      "scheduled",
-			finalAction:      "rollback",
-			finalBody:        `{"reason":"实施窗口失败后回滚"}`,
-			expectedTerminal: "rolled_back",
-		},
-		{
-			name:             "emergency close path skips scheduled fast track",
-			dbName:           "change_regression_emergency_complete",
-			changeType:       "emergency",
-			startStatus:      "approved",
-			finalAction:      "complete",
-			finalBody:        `{}`,
-			expectedTerminal: "completed",
-		},
-		{
-			name:             "emergency rollback path skips scheduled fast track",
-			dbName:           "change_regression_emergency_rollback",
-			changeType:       "emergency",
-			startStatus:      "approved",
-			finalAction:      "rollback",
-			finalBody:        `{"reason":"紧急变更实施失败，立即回滚"}`,
-			expectedTerminal: "rolled_back",
-		},
+	gin.SetMode(gin.TestMode)
+	for _, kind := range []string{"normal", "standard", "emergency"} {
+		for _, outcome := range []string{"successful", "rolled_back"} {
+			t.Run(kind+"/"+outcome, func(t *testing.T) {
+				f := newGovernedChangeFixture(t, kind)
+				f.submit(t)
+				f.assess(t)
+				approved, err := f.svc.CompleteChangeTask(f.ctx, f.taskCommand(t, "approve", f.approver))
+				require.NoError(t, err)
+				require.Equal(t, "approved", approved.Result.Status)
+				if kind != "emergency" {
+					cmd := f.taskCommand(t, "schedule", f.requester)
+					start, end := time.Now().Add(-time.Hour), time.Now().Add(time.Hour)
+					cmd.PlannedStart = &start
+					cmd.PlannedEnd = &end
+					_, err = f.svc.CompleteChangeTask(f.ctx, cmd)
+					require.NoError(t, err)
+				}
+				r := gin.New()
+				h := NewHandler(f.svc)
+				r.Use(func(c *gin.Context) {
+					c.Set("tenant_id", f.tenant)
+					c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: f.tenant})
+					c.Set("user_id", f.requester)
+					c.Next()
+				})
+				r.POST("/changes/:id/implement", h.ExecuteAction)
+				r.POST("/changes/:id/record-outcome", h.ExecuteAction)
+				cmd := f.taskCommand(t, "implement", f.requester)
+				body, _ := json.Marshal(ActionRequest{MutationRequest: MutationRequest{ExpectedVersion: cmd.Meta.ExpectedVersion, OperationID: cmd.Meta.OperationID}, TaskID: cmd.TaskID})
+				w := governedHTTP(r, "POST", fmt.Sprintf("/changes/%d/implement", f.record.ID), string(body), nil)
+				require.Equal(t, 200, w.Code, w.Body.String())
+				cmd = f.taskCommand(t, "record_outcome", f.requester)
+				now := time.Now()
+				body, _ = json.Marshal(ActionRequest{MutationRequest: MutationRequest{ExpectedVersion: cmd.Meta.ExpectedVersion, OperationID: cmd.Meta.OperationID}, TaskID: cmd.TaskID, Evidence: "observed result", Outcome: outcome, ActualEnd: &now})
+				w = governedHTTP(r, "POST", fmt.Sprintf("/changes/%d/record-outcome", f.record.ID), string(body), nil)
+				require.Equal(t, 200, w.Code, w.Body.String())
+				require.Equal(t, "in_progress", f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).Status)
+				require.Equal(t, outcome, f.client.Change.GetX(f.ctx, f.record.ID).Outcome)
+			})
+		}
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			router, repo, entClient, tenantID, actorID := setupChangeRegressionHandler(t, tt.dbName, tt.dbName)
-			changeEntity := createRegressionChange(t, entClient, tenantID, actorID, tt.changeType, tt.startStatus, []string{"INC-1001"})
-
-			startReq, err := http.NewRequest("POST", fmt.Sprintf("/api/v1/changes/%d/start", changeEntity.ID), bytes.NewBufferString(`{}`))
-			require.NoError(t, err)
-			startReq.Header.Set("Content-Type", "application/json")
-
-			startResp := httptest.NewRecorder()
-			router.ServeHTTP(startResp, startReq)
-			require.Equal(t, http.StatusOK, startResp.Code)
-
-			startBody := decodeChangeResponse(t, startResp)
-			require.Equal(t, common.SuccessCode, startBody.Code)
-			assert.Equal(t, "in_progress", changeResponseData(t, startBody)["status"])
-
-			afterStart, err := repo.Get(context.Background(), changeEntity.ID, tenantID)
-			require.NoError(t, err)
-			assert.Equal(t, "in_progress", afterStart.Status)
-
-			finalReq, err := http.NewRequest("POST", fmt.Sprintf("/api/v1/changes/%d/%s", changeEntity.ID, tt.finalAction), bytes.NewBufferString(tt.finalBody))
-			require.NoError(t, err)
-			finalReq.Header.Set("Content-Type", "application/json")
-
-			finalResp := httptest.NewRecorder()
-			router.ServeHTTP(finalResp, finalReq)
-			require.Equal(t, http.StatusOK, finalResp.Code)
-
-			finalBody := decodeChangeResponse(t, finalResp)
-			require.Equal(t, common.SuccessCode, finalBody.Code)
-			assert.Equal(t, tt.expectedTerminal, changeResponseData(t, finalBody)["status"])
-
-			stored, err := repo.Get(context.Background(), changeEntity.ID, tenantID)
-			require.NoError(t, err)
-			assert.Equal(t, tt.expectedTerminal, stored.Status)
-		})
-	}
 }
 
 // 这组生命周期测试故意不注入 processEngine：这里只锁定非审批状态机守卫和持久化行为；
 // BPMN 阶段任务推进仍由现有的 service_stage_completion_test.go 单独覆盖。
 func TestChangeController_TransitionStatus_StartGuardByType(t *testing.T) {
-	tests := []struct {
-		name        string
-		dbName      string
-		changeType  string
-		startStatus string
-		wantHTTP    int
-		wantCode    int
-		wantFinal   string
-	}{
-		{
-			name:        "standard approved can start directly",
-			dbName:      "change_start_guard_standard_ok",
-			changeType:  "standard",
-			startStatus: "approved",
-			wantHTTP:    http.StatusOK,
-			wantCode:    common.SuccessCode,
-			wantFinal:   "in_progress",
-		},
-		{
-			name:        "normal scheduled can start",
-			dbName:      "change_start_guard_normal_scheduled_ok",
-			changeType:  "normal",
-			startStatus: "scheduled",
-			wantHTTP:    http.StatusOK,
-			wantCode:    common.SuccessCode,
-			wantFinal:   "in_progress",
-		},
-		{
-			name:        "normal approved cannot skip scheduled",
-			dbName:      "change_start_guard_normal_approved_fail",
-			changeType:  "normal",
-			startStatus: "approved",
-			wantHTTP:    http.StatusInternalServerError,
-			wantCode:    common.InternalErrorCode,
-			wantFinal:   "approved",
-		},
-		{
-			name:        "emergency approved uses fast path to start",
-			dbName:      "change_start_guard_emergency_approved_ok",
-			changeType:  "emergency",
-			startStatus: "approved",
-			wantHTTP:    http.StatusOK,
-			wantCode:    common.SuccessCode,
-			wantFinal:   "in_progress",
-		},
-		{
-			name:        "emergency scheduled is rejected by type specific guard",
-			dbName:      "change_start_guard_emergency_scheduled_fail",
-			changeType:  "emergency",
-			startStatus: "scheduled",
-			wantHTTP:    http.StatusInternalServerError,
-			wantCode:    common.InternalErrorCode,
-			wantFinal:   "scheduled",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			router, repo, entClient, tenantID, actorID := setupChangeRegressionHandler(t, tt.dbName, tt.dbName)
-			changeEntity := createRegressionChange(t, entClient, tenantID, actorID, tt.changeType, tt.startStatus, []string{"INC-2001"})
-
-			req, err := http.NewRequest("POST", fmt.Sprintf("/api/v1/changes/%d/start", changeEntity.ID), bytes.NewBufferString(`{}`))
-			require.NoError(t, err)
-			req.Header.Set("Content-Type", "application/json")
-
-			recorder := httptest.NewRecorder()
-			router.ServeHTTP(recorder, req)
-
-			response := decodeChangeResponse(t, recorder)
-			assert.Equal(t, tt.wantHTTP, recorder.Code)
-			assert.Equal(t, tt.wantCode, response.Code)
-
-			stored, err := repo.Get(context.Background(), changeEntity.ID, tenantID)
-			require.NoError(t, err)
-			assert.Equal(t, tt.wantFinal, stored.Status)
-			if tt.wantHTTP == http.StatusOK {
-				assert.Equal(t, tt.wantFinal, changeResponseData(t, response)["status"])
-			}
+	gin.SetMode(gin.TestMode)
+	for _, kind := range []string{"normal", "standard", "emergency"} {
+		t.Run(kind, func(t *testing.T) {
+			f := newGovernedChangeFixture(t, kind)
+			f.submit(t)
+			r := gin.New()
+			h := NewHandler(f.svc)
+			r.Use(func(c *gin.Context) {
+				c.Set("tenant_id", f.tenant)
+				c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: f.tenant})
+				c.Set("user_id", f.requester)
+				c.Next()
+			})
+			r.POST("/changes/:id/implement", h.ExecuteAction)
+			cmd := f.taskCommand(t, "assess", f.requester)
+			body, _ := json.Marshal(ActionRequest{MutationRequest: MutationRequest{ExpectedVersion: cmd.Meta.ExpectedVersion, OperationID: "bad-start"}, TaskID: cmd.TaskID})
+			w := governedHTTP(r, "POST", fmt.Sprintf("/changes/%d/implement", f.record.ID), string(body), nil)
+			require.Equal(t, 400, w.Code, w.Body.String())
+			require.Equal(t, "submitted", f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).Status)
+			require.Zero(t, f.client.ProcessCallbackOutbox.Query().CountX(f.ctx))
 		})
 	}
+
 }
 
 // TestEntRepository_RelatedTickets_WorkItemRelationBehavior 覆盖结构化关系行为：
@@ -344,6 +229,8 @@ func TestEntRepository_RelatedTickets_WorkItemRelationBehavior(t *testing.T) {
 	repo := newTestChangeRepository(entClient, openChangeBPMNRawDB(t, "change_related_tickets_regression"))
 	tenantID, actorID := setupChangeBPMNActor(t, entClient, "related-tickets")
 	ConfigureChangeIntakeFixture(ctx, entClient, tenantID, "agent")
+	authorization.InvalidateAllPermissionCaches()
+	t.Cleanup(authorization.InvalidateAllPermissionCaches)
 	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
 	app := NewChangeIntakeApp(entClient, svc, zaptest.NewLogger(t).Sugar())
 
@@ -388,7 +275,9 @@ func TestEntRepository_RelatedTickets_WorkItemRelationBehavior(t *testing.T) {
 		createRelatedTicket(t, "CHG-RT-3300")
 		createRelatedTicket(t, "REQ-RT-4400")
 		stored.RelatedTickets = []string{"INC-RT-1001", "CHG-RT-3300", "REQ-RT-4400"}
-		updated, err := repo.Update(ctx, stored)
+		_, err = svc.ApplyMetadata(ctx, MetadataCommand{Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: actorID, ExpectedVersion: stored.Version, OperationID: "related-edit", Source: "http"}, ChangeID: stored.ID, Patch: dto.UpdateChangeRequest{RelatedTickets: stored.RelatedTickets}})
+		require.NoError(t, err)
+		updated, err := repo.Get(ctx, stored.ID, tenantID)
 		require.NoError(t, err)
 		assert.ElementsMatch(t, []string{"INC-RT-1001", "CHG-RT-3300", "REQ-RT-4400"}, updated.RelatedTickets,
 			"PUT 语义是完整期望列表的全量替换：SR-RT-2002 不在新列表里，应该被移除")
@@ -678,7 +567,7 @@ func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 		_, err := svc.GetChange(ctx, changeB.ID, tenantA)
 		require.Error(t, err)
 
-		_, err = svc.TransitionStatus(ctx, changeB.ID, tenantA, actorA, "cancelled", "越权取消")
+		_, err = svc.ApplyCommand(ctx, Command{Meta: workitemmutation.Meta{TenantID: tenantA, ActorID: actorA, ExpectedVersion: 1, OperationID: "foreign-cancel", Source: "http"}, ChangeID: changeB.ID, Action: "cancel", Evidence: "越权取消"})
 		require.Error(t, err)
 
 		stored, err := repo.Get(ctx, changeB.ID, tenantB)
@@ -774,7 +663,7 @@ func TestChangeWorkItemAndRelations_TenantIsolation(t *testing.T) {
 	_, err = svcB.GetChange(ctx, createdA2.ID, tenantB)
 	require.Error(t, err, "租户 B 不能读取租户 A 的变更")
 
-	_, err = svcB.TransitionStatus(ctx, createdA2.ID, tenantB, actorB, "cancelled", "越权取消")
+	_, err = svcB.ApplyCommand(ctx, Command{Meta: workitemmutation.Meta{TenantID: tenantB, ActorID: actorB, ExpectedVersion: 1, OperationID: "foreign-cancel", Source: "http"}, ChangeID: createdA2.ID, Action: "cancel", Evidence: "越权取消"})
 	require.Error(t, err, "租户 B 不能推进租户 A 的变更状态")
 
 	stillDraft, err := repo.Get(ctx, createdA2.ID, tenantA)

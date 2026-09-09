@@ -27,7 +27,7 @@ func callbackActionContract(payload, required []string) CallbackActionContract {
 func (h *ChangeServiceTaskHandler) CallbackContract(action string) (CallbackActionContract, bool) {
 	payload := map[string][]string{
 		"create_change":       {"title", "description", "type", "priority", "created_by", "justification", "impact_scope", "risk_level", "planned_start_date", "planned_end_date", "implementation_plan", "rollback_plan", "affected_cis", "related_tickets", "related_ticket_numbers", "assignee_id", "ci_ids", "template_id", "parent_ticket_id", "tag_ids", "workflow_definition_key", "form_values"},
-		"update_change":       {"title", "description", "status"},
+		"update_change":       {"title", "description", "status", "version"},
 		"approve_change":      {"version", "evidence"},
 		"authorize_change":    {"version", "evidence"},
 		"review_change":       {"version", "evidence", "pir_id"},
@@ -46,7 +46,7 @@ func (h *ChangeServiceTaskHandler) CallbackContract(action string) (CallbackActi
 		contract.CreatedRecordClass = "change_request"
 	}
 	switch action {
-	case "assess_risk", "approve_change", "authorize_change", "reject_change", "schedule_change", "implement_change", "verify_change", "review_change", "close_change", "cancel_change":
+	case "update_change", "assess_risk", "approve_change", "authorize_change", "reject_change", "schedule_change", "implement_change", "verify_change", "review_change", "close_change", "cancel_change":
 		contract.LifecycleRecordClass = "change_request"
 	}
 	return contract, ok

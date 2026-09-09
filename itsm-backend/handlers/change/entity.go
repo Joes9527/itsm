@@ -6,6 +6,7 @@ import (
 
 // Change domain entity
 type Change struct {
+	RiskAssessment     *RiskAssessment
 	ID                 int
 	Title              string
 	Description        string

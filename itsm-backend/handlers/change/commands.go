@@ -11,6 +11,7 @@ import (
 	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/common/tenantctx"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	ec "itsm-backend/ent/change"
@@ -130,9 +131,14 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, c
 		return empty, common.NewVersionConflictError("change", c.ID, m.ExpectedVersion, item.Version)
 	}
 	now := time.Now().UTC()
-	assessment, err := assessmentDigest(c)
-	if err != nil {
-		return empty, err
+	var assessment string
+	var err error
+	switch cmd.Action {
+	case "assess", "authorize", "schedule", "implement":
+		assessment, err = assessmentDigestTx(ctx, tx, c, m.TenantID)
+		if err != nil {
+			return empty, err
+		}
 	}
 	target := item.Status
 	professional := tx.Change.UpdateOneID(c.ID)
@@ -160,7 +166,7 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, c
 		if !isChangeSubmitted(item.Status) {
 			return invalid("submitted change required for authorization")
 		}
-		if c.AssessmentEvidence == "" || c.AssessedBy <= 0 || c.AssessedAt.IsZero() || c.AssessmentDigest != assessment {
+		if !currentChangeAssessment(c, assessment) {
 			return invalid("current assessment required")
 		}
 		if cmd.ApprovalDecisionID != 0 || !qualifyingStandardPolicy(c, m.TenantID) {
@@ -181,7 +187,7 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, c
 		}
 	case "schedule":
 		target = common.ChangeStatusScheduled
-		if (item.Status != common.ChangeStatusApproved && item.Status != common.ChangeStatusFailed) || c.AssessmentEvidence == "" || c.AssessedBy <= 0 || c.AssessedAt.IsZero() || c.AssessmentDigest != assessment {
+		if (item.Status != common.ChangeStatusApproved && item.Status != common.ChangeStatusFailed) || !currentChangeAssessment(c, assessment) {
 			return invalid("current assessed and authorized change required for scheduling")
 		}
 		// The permissive legacy type helper is not authorization evidence. A
@@ -199,14 +205,8 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, c
 		professional.SetPlannedStartDate(*cmd.PlannedStart).SetPlannedEndDate(*cmd.PlannedEnd)
 	case "implement":
 		target = common.ChangeStatusInProgress
-		if c.AssessmentEvidence == "" || c.AssessmentDigest != assessment {
-			return invalid("current assessment required for implementation")
-		}
-		if item.Status != "approved" && item.Status != "scheduled" {
-			return invalid("authorized change required for implementation")
-		}
-		if c.Type != "emergency" && (c.PlannedStartDate.IsZero() || c.PlannedEndDate.IsZero() || now.Before(c.PlannedStartDate) || now.After(c.PlannedEndDate)) {
-			return invalid("implementation must be within planned window")
+		if err := validateChangeImplementation(c, assessment, now); err != nil {
+			return empty, err
 		}
 		professional.SetActualStartDate(now).ClearActualEndDate().ClearOutcome().ClearOutcomeEvidence().ClearReviewedBy().ClearReviewedAt().ClearReviewEvidence().ClearReviewDigest()
 	case "record_outcome":
@@ -312,11 +312,27 @@ func validOutcome(outcome string) bool {
 	return outcome == "successful" || outcome == "failed" || outcome == "rolled_back"
 }
 
-func assessmentDigest(c *ent.Change) (string, error) {
+func assessmentDigestTx(ctx context.Context, tx *ent.Tx, c *ent.Change, tenantID int) (string, error) {
+	details, err := readRiskDetails(ctx, tx, c.ID, tenantID, c.RiskLevel)
+	if err != nil {
+		return "", err
+	}
+	return assessmentDigest(c, details)
+}
+func assessmentDigest(c *ent.Change, details *RiskAssessment) (string, error) {
+	type riskFacts struct {
+		Description, Impact, Mitigation, Contingency, Owner string
+		ReviewDate                                          *time.Time
+	}
+	var risk *riskFacts
+	if details != nil {
+		risk = &riskFacts{details.RiskDescription, details.ImpactAnalysis, details.MitigationMeasures, details.ContingencyPlan, details.RiskOwner, details.RiskReviewDate}
+	}
 	return workitemmutation.Digest(struct {
 		Type, Justification, Risk, Impact, Implementation, Rollback string
 		CIs                                                         []string
-	}{c.Type, c.Justification, c.RiskLevel, c.ImpactScope, c.ImplementationPlan, c.RollbackPlan, c.AffectedCis})
+		RiskDetails                                                 *riskFacts
+	}{c.Type, c.Justification, c.RiskLevel, c.ImpactScope, c.ImplementationPlan, c.RollbackPlan, c.AffectedCis, risk})
 }
 
 func qualifyingStandardPolicy(c *ent.Change, tenantID int) bool {
@@ -379,3 +395,31 @@ func reviewDigest(ctx context.Context, tx *ent.Tx, c *ent.Change, pirID, tenantI
 // IsSuccessfulOutcome evaluates the professional implementation result.
 // A terminal lifecycle status does not establish a successful implementation.
 func IsSuccessfulOutcome(outcome string) bool { return outcome == "successful" }
+
+func isChangeSubmitted(status string) bool {
+	return status == string(dto.ChangeStatusPending) || status == "submitted"
+}
+
+// Shared by the mutation and read projection; preview never supplies fake input
+// facts or executes a mutation to determine implementation readiness.
+func validateChangeImplementation(c *ent.Change, assessment string, now time.Time) error {
+	invalid := func(message string) error { return common.NewValidationError(message, nil) }
+	if c.AssessmentEvidence == "" || c.AssessmentDigest != assessment {
+		return invalid("current assessment required for implementation")
+	}
+	status := c.Edges.WorkItem.Status
+	if status != "approved" && status != "scheduled" {
+		return invalid("authorized change required for implementation")
+	}
+	if c.Type != "emergency" && (c.PlannedStartDate.IsZero() || c.PlannedEndDate.IsZero() || now.Before(c.PlannedStartDate) || now.After(c.PlannedEndDate)) {
+		return invalid("implementation must be within planned window")
+	}
+	if !common.IsValidChangeStatusTransition(status, "in_progress", c.Type) {
+		return invalid("current state does not allow implementation")
+	}
+	return nil
+}
+
+func currentChangeAssessment(c *ent.Change, digest string) bool {
+	return c.AssessmentEvidence != "" && c.AssessedBy > 0 && !c.AssessedAt.IsZero() && c.AssessmentDigest == digest
+}

@@ -6,7 +6,7 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
-	"itsm-backend/ent/processcallbackoutbox"
+
 	"itsm-backend/ent/processtask"
 	"itsm-backend/service/bpmn"
 
@@ -42,7 +42,6 @@ func setupUserTaskCallbackEnv(t *testing.T) (*ent.Client, ProcessEngine, context
 
 	logger := zap.NewNop().Sugar()
 	engine := NewCustomProcessEngine(client, logger)
-	injectEngineChangeCallbackTestService(t, engine, client)
 
 	_, err = NewBPMNTemplateService(client).LoadAndDeployTemplates(ctx, tenant.ID)
 	require.NoError(t, err)
@@ -92,60 +91,7 @@ func createUserTaskCallbackChange(t *testing.T, client *ent.Client, ctx context.
 // handler，把 Change.Status 更新成 pending_approval——这在此前从未发生过，因为：
 //  1. BPMNUserTask 结构体根本没有解析 extensionElements，metaData 在 xml.Unmarshal 时被丢弃；
 //  2. CompleteTask 只在 ServiceTask 分支查 callback registry。
-func TestUserTaskWithServiceTaskTypeMetadataTriggersCallback(t *testing.T) {
-	client, engine, ctx, tenantID := setupUserTaskCallbackEnv(t)
-
-	scope, err := BPMNAccessScopeFromContext(ctx)
-	require.NoError(t, err)
-	workItem, ch := createUserTaskCallbackChange(t, client, ctx, tenantID, scope.UserID, "T-USER-CALLBACK-1")
-
-	instance, err := engine.StartProcess(ctx, "change_normal_flow", "change:callback-1", "change", workItem.ID, map[string]interface{}{
-		"approval_required": true,
-	})
-	require.NoError(t, err)
-
-	// StartProcess 返回的是创建时的实例快照，推进结果要重新读库确认。
-	started, err := client.ProcessInstance.Get(ctx, instance.ID)
-	require.NoError(t, err)
-	require.Equal(t, "Activity_Assessment", started.CurrentActivityID,
-		"流程启动后应停在第一个用户任务 Activity_Assessment")
-
-	// 完成变更评估节点，让审批网关把流程路由到 CAB 审批节点。
-	assessment := findTaskByDefinitionKey(t, client, ctx, instance.ID, "Activity_Assessment")
-	require.NoError(t, engine.CompleteTask(ctx, assessment.TaskID, map[string]interface{}{}))
-
-	advanced, err := client.ProcessInstance.Get(ctx, instance.ID)
-	require.NoError(t, err)
-	require.Equal(t, "Activity_CABApproval", advanced.CurrentActivityID,
-		"approval_required=true 时网关应路由到 CAB 审批节点")
-
-	// Empty completion variables contain no approval action/fact. The callback
-	// row must keep the diagram-derived non-optional snapshot and block instead
-	// of advancing. Only the outbox may turn an already persisted optional
-	// snapshot into a skip.
-	cabTask := findTaskByDefinitionKey(t, client, ctx, instance.ID, "Activity_CABApproval")
-	require.NoError(t, engine.CompleteTask(ctx, cabTask.TaskID, map[string]interface{}{}))
-	row := client.ProcessCallbackOutbox.Query().Where(
-		processcallbackoutbox.ProcessInstanceID(instance.ID),
-		processcallbackoutbox.ProcessTaskID(cabTask.ID),
-	).OnlyX(ctx)
-	require.False(t, row.OptionalDeclared)
-	processed, err := engine.(*CustomProcessEngine).ProcessPendingCallbacks(ctx, "cab-empty-approval-worker", 10)
-	require.NoError(t, err)
-	require.Zero(t, processed)
-	row = client.ProcessCallbackOutbox.GetX(ctx, row.ID)
-	require.Equal(t, "blocked", row.Status)
-
-	afterCallback, err := client.ProcessInstance.Get(ctx, instance.ID)
-	require.NoError(t, err)
-	require.Equal(t, "Activity_CABApproval", afterCallback.CurrentActivityID)
-	require.Equal(t, "running", afterCallback.Status)
-
-	updated, err := client.Change.Get(ctx, ch.ID)
-	require.NoError(t, err)
-	require.Equal(t, "draft", requireChangeWorkItem(t, client, updated).Status,
-		"完成 Activity_CABApproval 触发 ChangeServiceTaskHandler.approveChange，但该回调不改变状态（approve_change 是节点本身的固定 action，不代表审批结果），真正的状态转换发生在后续的 schedule_change/reject_change")
-}
+// TestUserTaskWithServiceTaskTypeMetadataTriggersCallback moved to tests/integration/workitem_change_consumers_postgres_test.go.
 
 // TestUserTaskMetadataPersistsOnlyInImmutableDescriptor verifies that routing
 // metadata never enters participant-editable form variables.
@@ -154,19 +100,7 @@ func TestUserTaskMetadataPersistsOnlyInImmutableDescriptor(t *testing.T) {
 
 	scope, err := BPMNAccessScopeFromContext(ctx)
 	require.NoError(t, err)
-	workItem, _ := createUserTaskCallbackChange(t, client, ctx, tenantID, scope.UserID, "T-USER-CALLBACK-2")
-
-	instance, err := engine.StartProcess(ctx, "change_normal_flow", "change:callback-2", "change", workItem.ID, map[string]interface{}{
-		"approval_required": true,
-	})
-	require.NoError(t, err)
-
-	assessment := findTaskByDefinitionKey(t, client, ctx, instance.ID, "Activity_Assessment")
-	require.NotContains(t, assessment.TaskVariables, "service_task_type")
-	require.NotContains(t, assessment.TaskVariables, "action")
-	require.Equal(t, "change_service_handler", assessment.CallbackHandlerID)
-	require.Equal(t, "change_task", assessment.CallbackTaskType)
-	require.Equal(t, "update_change", assessment.CallbackAction)
+	// Change descriptor coverage moved to the actual PostgreSQL owner fixture.
 
 	// 反面用例：service_request_flow 的用户任务没有声明 service_task_type metadata，
 	// 不应该出现这两个 key（否则回调会对无关流程无条件触发）。

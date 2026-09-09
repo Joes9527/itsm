@@ -2,7 +2,9 @@ package bpmn
 
 import (
 	"context"
+
 	"fmt"
+	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/processapprovaldecision"
@@ -10,6 +12,7 @@ import (
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/ticket"
+
 	"itsm-backend/handlers/shared/workflowcallback"
 	"itsm-backend/handlers/shared/workitemmutation"
 	"strconv"
@@ -67,10 +70,10 @@ func (h *ChangeServiceTaskHandler) applyChangeLifecycle(ctx context.Context, act
 	if workItemID <= 0 {
 		return BlockedEffect(CallbackBlockHandlerContract, "Change callback WorkItem missing"), nil
 	}
-	if instance.BusinessType != "change" {
+	if instance.BusinessType != "change" || instance.BusinessKey != fmt.Sprintf("change:%d", workItemID) {
 		return BlockedEffect(CallbackBlockHandlerContract, "Change callback business type mismatch"), nil
 	}
-	current, err := h.client.Change.Query().Where(change.WorkItemID(workItemID), change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())).Only(ctx)
+	current, err := h.client.Change.Query().Where(change.WorkItemID(workItemID), change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())).WithWorkItem().Only(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +81,28 @@ func (h *ChangeServiceTaskHandler) applyChangeLifecycle(ctx context.Context, act
 		return BlockedEffect(CallbackBlockHandlerContract, "Change callback target mismatch"), nil
 	}
 	cmd := workflowcallback.ChangeCommand{Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: actorID, ExpectedVersion: version, Source: source, OperationID: key, CorrelationID: instance.ProcessInstanceID}, ChangeID: current.ID, TenantID: tenantID, Action: action}
+	if action == "update_change" {
+		if raw, exists := row.Variables["status"]; exists && raw != current.Edges.WorkItem.Status {
+			return BlockedEffect(CallbackBlockHandlerContract, "update_change cannot mutate lifecycle status"), nil
+		}
+		for _, field := range []string{"outcome", "review_status", "approval_decision_id", "actual_start_date", "actual_end_date", "planned_start_date", "planned_end_date", "pir_id"} {
+			if _, exists := row.Variables[field]; exists {
+				return BlockedEffect(CallbackBlockHandlerContract, "update_change cannot mutate lifecycle facts"), nil
+			}
+		}
+		for _, field := range []struct {
+			key   string
+			value **string
+		}{{"title", &cmd.Title}, {"description", &cmd.Description}} {
+			if raw, exists := row.Variables[field.key]; exists {
+				value, ok := raw.(string)
+				if !ok {
+					return BlockedEffect(CallbackBlockHandlerContract, "metadata must be text"), nil
+				}
+				*field.value = &value
+			}
+		}
+	}
 	cmd.Evidence, _ = row.Variables["evidence"].(string)
 	cmd.Outcome, _ = row.Variables["outcome"].(string)
 	cmd.PIRID = GetIntFromVars(row.Variables, "pir_id")
@@ -111,6 +136,15 @@ func (h *ChangeServiceTaskHandler) applyChangeLifecycle(ctx context.Context, act
 	}
 	result, err := h.changeService.ApplyChangeWorkflowCallback(ctx, cmd)
 	if err != nil {
+		// Frozen invalid domain input cannot improve on a worker retry. Keep actual
+		// storage/audit/transport failures retryable through the existing outbox.
+		if app, ok := common.AsAppError(err); ok {
+			switch app.Code {
+			case common.ErrCodeValidation, common.ErrCodeBadRequest:
+				return BlockedEffect(CallbackBlockHandlerContract, "Change callback domain preconditions rejected"), nil
+			}
+		}
+
 		return nil, err
 	}
 	if result.LifecycleResult == nil {
