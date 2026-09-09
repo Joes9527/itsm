@@ -39,3 +39,18 @@ Status: DONE_WITH_CONCERNS. Implementation is complete and scoped checks pass. B
 - The mobile shell test exercises the real MainLayout behavior but substitutes minimal Header/Sidebar renderers so API and Ant Design behavior do not obscure the shell state transitions. The separate Header test exercises the real Header and mocks router/store/service boundaries.
 - Controller browser evidence at 390px confirmed open/Escape/focus-return. The same review found the collapsed Ant Design sidebar remained visible to accessibility APIs and the 768px header overflowed; this task then made collapsed navigation inert/hidden and moved desktop tools into More throughout 768–991px. Those fixes have automated coverage, while browser re-verification and the remaining 767/768, 991/992, 1024/1200/1440 geometry and long-label checks remain at the controller integration gate.
 - Task 1's primary-button hover color issue reported by the controller was not touched in this task.
+
+## Review fix round 1 — mobile close ownership and compact header
+
+Review base: `f0ce1428c`.
+
+- Unified Escape, overlay, content, and Sidebar/menu close requests through the layout-owned `closeMobileNavigation`. It waits for the 250ms navigation transition before focusing the real Header toggle ref. Header remains backward compatible through an optional `sidebarToggleRef` prop.
+- Replaced mocked-shell-only coverage with a MainLayout integration case using the real Header and Sidebar. Only router, stores, menu/notification APIs, WebSocket, i18n, and theme boundaries are mocked. It covers open, Escape, overlay close, real menu selection, focus containment, focus return for every close path, and confirms no desktop focus trap.
+- At 768–991px, Persona and user triggers now use their icon/avatar accessible triggers while full labels remain available through `title` and `aria-label`; notification/theme/language remain available through More. This removes the measured 49px header overflow without dropping actions.
+
+Validation after the review fixes:
+
+- `npm test -- --runInBand --coverage=false --runTestsByPath 'src/app/(main)/__tests__/layout-auth.test.tsx' src/components/layout/__tests__/navigation-theme.test.tsx` → 2 suites / 10 tests passed, no warnings.
+- `npm run type-check` → theme tokens up to date; TypeScript passed.
+- Scoped ESLint over the changed layout, Header, Sidebar and tests → passed with no output.
+- Browser confirmation of 390px and 768px fixes remains with the controller after this fix commit.

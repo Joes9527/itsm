@@ -34,9 +34,19 @@ jest.mock('@/lib/store/persona-store', () => ({
   }),
 }));
 jest.mock('@/components/layout/Header', () => ({
-  Header: ({ collapsed: isCollapsed, onCollapse, showSidebarToggle = true }: any) =>
+  Header: ({
+    collapsed: isCollapsed,
+    onCollapse,
+    showSidebarToggle = true,
+    sidebarToggleRef,
+  }: any) =>
     showSidebarToggle ? (
-      <button data-sidebar-toggle onClick={() => onCollapse(!isCollapsed)} aria-label='展开侧边栏'>
+      <button
+        ref={sidebarToggleRef}
+        data-sidebar-toggle
+        onClick={() => onCollapse(!isCollapsed)}
+        aria-label='展开侧边栏'
+      >
         toggle
       </button>
     ) : null,

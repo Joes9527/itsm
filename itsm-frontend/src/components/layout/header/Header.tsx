@@ -68,6 +68,7 @@ interface HeaderProps {
   extra?: React.ReactNode;
   showBreadcrumb?: boolean;
   showSidebarToggle?: boolean;
+  sidebarToggleRef?: React.Ref<HTMLButtonElement>;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -76,6 +77,7 @@ export const Header: React.FC<HeaderProps> = ({
   breadcrumb,
   showBreadcrumb = false,
   showSidebarToggle = true,
+  sidebarToggleRef,
 }) => {
   const router = useRouter();
   const pathname = usePathname();
@@ -255,6 +257,7 @@ export const Header: React.FC<HeaderProps> = ({
               aria-label={collapsed ? '展开侧边栏' : '收起侧边栏'}
               title={collapsed ? '展开侧边栏' : '收起侧边栏'}
               data-sidebar-toggle
+              ref={sidebarToggleRef}
               className={styles.collapseButton}
             />
           )}

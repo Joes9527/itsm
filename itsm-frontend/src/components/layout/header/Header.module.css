@@ -460,7 +460,25 @@
     overflow: hidden;
   }
   .personaName {
-    max-width: 72px;
+    display: none;
+  }
+  .personaButton,
+  .personaStatic {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+  }
+  .personaButton :global(.lucide-chevron-down) {
+    display: none;
+  }
+  .userMenuDetails,
+  .userMenuChevron {
+    display: none;
+  }
+  .userMenuTrigger {
+    width: 32px;
+    padding: 2px !important;
+    justify-content: center;
   }
 }
 

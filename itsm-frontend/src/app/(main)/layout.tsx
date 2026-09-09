@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Layout, ConfigProvider, App } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import { usePathname, useRouter } from 'next/navigation';
@@ -32,6 +32,7 @@ export default function MainLayout({
   const [isMobile, setIsMobile] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const sidebarToggleRef = useRef<HTMLButtonElement>(null);
   const pathname = usePathname();
   const router = useRouter();
   const { activePersona, setActivePersona, initPersonaByRole } = usePersonaStore();
@@ -99,10 +100,23 @@ export default function MainLayout({
     return () => window.removeEventListener('resize', handleResize);
   }, [setCollapsed]);
 
+  const closeMobileNavigation = useCallback(() => {
+    setCollapsed(true);
+    window.setTimeout(() => sidebarToggleRef.current?.focus(), 250);
+  }, [setCollapsed]);
+
+  const handleSidebarChange = useCallback(
+    (nextCollapsed: boolean) => {
+      if (isMobile && nextCollapsed) closeMobileNavigation();
+      else setCollapsed(nextCollapsed);
+    },
+    [closeMobileNavigation, isMobile, setCollapsed]
+  );
+
   // 在移动端，点击内容区域时折叠侧边栏
   const handleContentClick = () => {
     if (isMobile && !collapsed) {
-      setCollapsed(true);
+      closeMobileNavigation();
     }
   };
 
@@ -118,11 +132,7 @@ export default function MainLayout({
     focusable()[0]?.focus();
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setCollapsed(true);
-        window.setTimeout(
-          () => document.querySelector<HTMLButtonElement>('[data-sidebar-toggle]')?.focus(),
-          0
-        );
+        closeMobileNavigation();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -140,7 +150,7 @@ export default function MainLayout({
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [collapsed, isMobile, setCollapsed]);
+  }, [closeMobileNavigation, collapsed, isMobile]);
 
   // 未挂载时显示 loading（避免服务端渲染问题）
   if (!mounted) {
@@ -206,14 +216,19 @@ export default function MainLayout({
               transition: 'padding-left 0.2s ease',
             }}
           >
-            <Sidebar collapsed={collapsed} onCollapse={setCollapsed} mobile={isMobile} />
+            <Sidebar collapsed={collapsed} onCollapse={handleSidebarChange} mobile={isMobile} />
 
             <Layout
               className='bg-[var(--color-bg-secondary)] min-h-screen'
               aria-hidden={isMobile && !collapsed ? true : undefined}
               inert={isMobile && !collapsed ? true : undefined}
             >
-              <Header collapsed={collapsed} onCollapse={setCollapsed} showBreadcrumb={true} />
+              <Header
+                collapsed={collapsed}
+                onCollapse={handleSidebarChange}
+                showBreadcrumb={true}
+                sidebarToggleRef={sidebarToggleRef}
+              />
 
               <Content
                 id='main-content'
@@ -243,7 +258,7 @@ export default function MainLayout({
               <button
                 type='button'
                 aria-label='关闭导航'
-                onClick={() => setCollapsed(true)}
+                onClick={closeMobileNavigation}
                 className='fixed inset-0 bg-black/45 border-0 p-0'
                 style={{
                   zIndex: LAYOUT_CONFIG.zIndex.sider - 1,
