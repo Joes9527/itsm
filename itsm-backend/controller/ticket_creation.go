@@ -35,8 +35,22 @@ func ticketCreationCommand(req dto.CreateTicketRequest) (creation.CreateWorkItem
 	if req.AssigneeID != 0 {
 		command.AssigneeID = &req.AssigneeID
 	}
+	command.CTI = req.CTI
 	if req.CategoryID != nil {
-		command.CTI = &creation.CTIInput{CategoryID: req.CategoryID}
+		if command.CTI != nil {
+			leaf := command.CTI.CategoryID
+			if command.CTI.TypeID != nil {
+				leaf = command.CTI.TypeID
+			}
+			if command.CTI.ItemID != nil {
+				leaf = command.CTI.ItemID
+			}
+			if leaf == nil || *leaf != *req.CategoryID {
+				return command, intakehttp.Invalid("categoryId", "categoryId conflicts with CTI selection")
+			}
+		} else {
+			command.CTI = &creation.CTIInput{CategoryID: req.CategoryID}
+		}
 	}
 	kind := strings.TrimSpace(req.Type)
 	switch kind {

@@ -94,6 +94,7 @@ func ToResponse(p *Problem) *dto.ProblemResponse {
 		Status:      p.Status,
 		Priority:    p.Priority,
 		Category:    p.Category,
+		CategoryID:  categoryValue(p.CategoryID),
 		RootCause:   p.RootCause,
 		Workaround:  p.Workaround,
 		Resolution:  p.Resolution,
@@ -129,7 +130,7 @@ func (h *Handler) Create(c *gin.Context) {
 	if req.RequesterID != nil {
 		requesterID = *req.RequesterID
 	}
-	intakehttp.Execute(c, h.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassProblem, IntakeKind: creation.IntakeKindProblem, Title: req.Title, Description: req.Description, Priority: req.Priority, Problem: &creation.ProblemInput{Category: req.Category, RootCause: req.RootCause, Impact: req.Impact}})
+	intakehttp.Execute(c, h.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassProblem, IntakeKind: creation.IntakeKindProblem, Title: req.Title, Description: req.Description, Priority: req.Priority, CTI: req.CTI, Problem: &creation.ProblemInput{RootCause: req.RootCause, Impact: req.Impact}})
 }
 
 func (h *Handler) Get(c *gin.Context) {
@@ -362,6 +363,7 @@ func (h *Handler) List(c *gin.Context) {
 			Status:      p.Status,
 			Priority:    p.Priority,
 			Category:    p.Category,
+			CategoryID:  categoryValue(p.CategoryID),
 			RootCause:   p.RootCause,
 			Impact:      p.Impact,
 			CreatedBy:   p.CreatedBy,
@@ -424,9 +426,7 @@ func (h *Handler) Update(c *gin.Context) {
 	if req.Priority != nil {
 		updates.Priority = *req.Priority
 	}
-	if req.Category != nil {
-		updates.Category = *req.Category
-	}
+	updates.CategoryID = req.CategoryID
 	if req.RootCause != nil {
 		updates.RootCause = *req.RootCause
 	}
@@ -566,4 +566,11 @@ func (h *Handler) GetStats(c *gin.Context) {
 		HighPriority: stats.HighPriority,
 	}
 	common.Success(c, resp)
+}
+
+func categoryValue(id *int) int {
+	if id == nil {
+		return 0
+	}
+	return *id
 }

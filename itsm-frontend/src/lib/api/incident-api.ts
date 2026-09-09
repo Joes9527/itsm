@@ -6,6 +6,7 @@ import type { WorkItemActionState } from '@/components/work-item/WorkItemTypes';
 
 // 事件管理API接口
 export interface Incident {
+  categoryId?: number;
   id: number;
   title: string;
   description: string;
@@ -204,6 +205,8 @@ export interface CreateIncidentClassificationRequest {
 }
 
 export interface UpdateIncidentRequest {
+  urgency?: string;
+  impact?: string;
   title?: string;
   description?: string;
   priority?: string;
@@ -211,8 +214,7 @@ export interface UpdateIncidentRequest {
   status?: string;
   assigneeId?: number;
   isMajorIncident?: boolean;
-  category?: string;
-  subcategory?: string;
+  categoryId?: number;
   resolution?: string;
   resolutionNotes?: string;
   suspendReason?: string;

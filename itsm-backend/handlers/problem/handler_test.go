@@ -16,6 +16,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/middleware"
 
 	"github.com/gin-gonic/gin"
@@ -146,14 +147,14 @@ func TestProblemHTTPHandlerCreateGetList(t *testing.T) {
 
 	tenant := createProblemHandlerTenant(t, ctx, client, "http-cgl")
 	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "http-cgl")
-	createProblemHandlerCategory(t, ctx, client, tenant.ID, "backend")
+	category := createProblemHandlerCategory(t, ctx, client, tenant.ID, "backend")
 
 	// 1. Create Problem - Valid
 	createReq := dto.CreateProblemRequest{
 		Title:       "Memory Overuse in Service X",
 		Description: "Pod restarted due to OOM",
 		Priority:    "high",
-		Category:    "backend",
+		CTI:         &creation.CTIInput{CategoryID: &category.ID},
 		Impact:      "medium",
 	}
 	w := performProblemRequest(r, "POST", "/api/v1/problems", createReq, tenant.ID, user.ID)

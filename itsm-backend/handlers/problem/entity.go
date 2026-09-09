@@ -12,6 +12,7 @@ type Problem struct {
 	Status      string
 	Priority    string
 	Category    string
+	CategoryID  *int
 	RootCause   string
 	Workaround  string
 	Resolution  string

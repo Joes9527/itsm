@@ -3,7 +3,7 @@ export interface CreateProblemRequest {
   title: string;
   description: string;
   priority: string;
-  category?: string;
+  cti?: { categoryId: number; typeId?: number; itemId?: number };
   rootCause?: string;
   impact?: string;
   impactScope?: string;
@@ -61,6 +61,7 @@ export interface ProblemHotspotsData {
 }
 
 export interface Problem {
+  categoryId?: number;
   id: number;
   title: string;
   description: string;

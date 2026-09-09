@@ -1,17 +1,20 @@
 package dto
 
-import "time"
+import (
+	creation "itsm-backend/handlers/common/workitemcreation"
+	"time"
+)
 
 // CreateProblemRequest 创建问题请求
 type CreateProblemRequest struct {
-	RequesterID *int   `json:"requesterId,omitempty" binding:"omitempty,gt=0"` // 可选目标租户申请人
-	Title       string `json:"title" binding:"required,min=2,max=200"`
-	Description string `json:"description" binding:"required,min=10,max=5000"`
-	Priority    string `json:"priority" binding:"required"`
-	Category    string `json:"category"`
-	RootCause   string `json:"rootCause"`
-	Impact      string `json:"impact"`
-	ImpactScope string `json:"impactScope"` // 影响范围
+	RequesterID *int               `json:"requesterId,omitempty" binding:"omitempty,gt=0"` // 可选目标租户申请人
+	Title       string             `json:"title" binding:"required,min=2,max=200"`
+	Description string             `json:"description" binding:"required,min=10,max=5000"`
+	Priority    string             `json:"priority" binding:"required"`
+	CTI         *creation.CTIInput `json:"cti,omitempty"`
+	RootCause   string             `json:"rootCause"`
+	Impact      string             `json:"impact"`
+	ImpactScope string             `json:"impactScope"` // 影响范围
 }
 
 // UpdateProblemRequest 更新问题请求
@@ -20,7 +23,7 @@ type UpdateProblemRequest struct {
 	Description *string `json:"description" binding:"omitempty,min=10,max=5000"`
 	Priority    *string `json:"priority" binding:"omitempty"`
 	Status      *string `json:"status" binding:"omitempty"`
-	Category    *string `json:"category" binding:"omitempty"`
+	CategoryID  *int    `json:"categoryId,omitempty" binding:"omitempty,gte=0"`
 	RootCause   *string `json:"rootCause" binding:"omitempty"`
 	Impact      *string `json:"impact" binding:"omitempty"`
 }
@@ -58,6 +61,7 @@ type ListProblemsRequest struct {
 
 // ProblemResponse 问题响应
 type ProblemResponse struct {
+	CategoryID  int                         `json:"categoryId"`
 	ID          int                         `json:"id"`
 	Title       string                      `json:"title"`
 	Description string                      `json:"description"`

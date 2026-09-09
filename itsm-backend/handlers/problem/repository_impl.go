@@ -3,7 +3,6 @@ package problem
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
 	"itsm-backend/common"
@@ -42,23 +41,6 @@ func withProblemWorkItemProjection(query *ent.TicketQuery) {
 	query.WithCategory()
 }
 
-func (r *EntRepository) resolveCategory(ctx context.Context, tenantID int, name string) (*int, error) {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return nil, nil
-	}
-	category, err := r.client.TicketCategory.Query().Where(
-		ticketcategory.TenantIDEQ(tenantID), ticketcategory.IsActiveEQ(true), ticketcategory.NameEQ(name),
-	).Only(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("ticket category not found in tenant")
-		}
-		return nil, fmt.Errorf("resolve ticket category: %w", err)
-	}
-	return &category.ID, nil
-}
-
 func (r *EntRepository) toDomain(e *ent.Problem) *Problem {
 	if e == nil {
 		return nil
@@ -69,6 +51,7 @@ func (r *EntRepository) toDomain(e *ent.Problem) *Problem {
 	}
 	p := &Problem{
 		ID:          e.ID,
+		CategoryID:  &workItem.CategoryID,
 		Title:       workItem.Title,
 		Description: workItem.Description,
 		Status:      workItem.Status,
@@ -523,9 +506,12 @@ func (r *EntRepository) Update(ctx context.Context, p *Problem) (*Problem, error
 		return nil, rollbackProblemTx(tx, err)
 	}
 	now := time.Now()
-	categoryID, err := r.resolveCategory(ctx, p.TenantID, p.Category)
-	if err != nil {
-		return nil, rollbackProblemTx(tx, err)
+	var selected *ent.TicketCategory
+	if p.CategoryID != nil && *p.CategoryID != 0 {
+		selected, err = tx.TicketCategory.Query().Where(ticketcategory.IDEQ(*p.CategoryID), ticketcategory.TenantIDEQ(p.TenantID), ticketcategory.IsActiveEQ(true)).Only(ctx)
+		if err != nil {
+			return nil, rollbackProblemTx(tx, fmt.Errorf("active ticket category not found in tenant: %w", err))
+		}
 	}
 	workItemUpdate := tx.Ticket.UpdateOneID(current.WorkItemID).
 		Where(ticket.TenantIDEQ(p.TenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(current.Edges.WorkItem.Version)).
@@ -536,10 +522,12 @@ func (r *EntRepository) Update(ctx context.Context, p *Problem) (*Problem, error
 	} else {
 		workItemUpdate.SetAssigneeID(*p.AssigneeID)
 	}
-	if categoryID == nil {
-		workItemUpdate.ClearCategoryID()
-	} else {
-		workItemUpdate.SetCategoryID(*categoryID)
+	if p.CategoryID != nil {
+		if *p.CategoryID == 0 {
+			workItemUpdate.ClearCategoryID()
+		} else {
+			workItemUpdate.SetCategoryID(*p.CategoryID)
+		}
 	}
 	if p.ResolvedAt == nil {
 		workItemUpdate.ClearResolvedAt()
@@ -570,11 +558,10 @@ func (r *EntRepository) Update(ctx context.Context, p *Problem) (*Problem, error
 		return nil, rollbackProblemTx(tx, err)
 	}
 	saved.Edges.WorkItem = workItem
-	if categoryID != nil {
-		saved.Edges.WorkItem.Edges.Category, err = r.client.TicketCategory.Get(ctx, *categoryID)
-		if err != nil {
-			return nil, err
-		}
+	if p.CategoryID == nil {
+		saved.Edges.WorkItem.Edges.Category = current.Edges.WorkItem.Edges.Category
+	} else {
+		saved.Edges.WorkItem.Edges.Category = selected
 	}
 	return r.toDomain(saved), nil
 }
