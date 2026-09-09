@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"net/mail"
 
@@ -13,7 +14,7 @@ func executeIncidentRuleAction(ctx context.Context, client *ent.Client, action R
 	if client == nil {
 		return fmt.Errorf("incident rule action database unavailable")
 	}
-	tx, err := client.Tx(ctx)
+	tx, err := client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return err
 	}
@@ -79,4 +80,32 @@ type incidentActionRejection struct{ message string }
 func (e *incidentActionRejection) Error() string { return e.message }
 func rejectIncidentAction(format string, args ...any) error {
 	return &incidentActionRejection{message: fmt.Sprintf(format, args...)}
+}
+
+// Snapshot-backed status actions require an unchanged business snapshot for the
+// directory and current resource permission reads. Never upgrade a caller's
+// already-running transaction or begin a second transaction here.
+func requireIncidentRuleSnapshot(ctx context.Context, tx *ent.Tx) error {
+	if tx == nil {
+		return fmt.Errorf("status rule requires an owning transaction")
+	}
+	rows, err := tx.QueryContext(ctx, "SHOW transaction_isolation")
+	if err != nil {
+		return fmt.Errorf("status rule transaction isolation unavailable: %w", err)
+	}
+	defer rows.Close()
+	var isolation string
+	if !rows.Next() {
+		return fmt.Errorf("status rule transaction isolation unavailable")
+	}
+	if err = rows.Scan(&isolation); err != nil {
+		return err
+	}
+	if err = rows.Err(); err != nil {
+		return err
+	}
+	if isolation != "repeatable read" && isolation != "serializable" {
+		return fmt.Errorf("status rule requires repeatable read or serializable owning transaction; got %s", isolation)
+	}
+	return rows.Close()
 }

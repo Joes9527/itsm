@@ -266,11 +266,21 @@ type StatusChangeAction struct {
 	logger     *zap.SugaredLogger
 }
 
+// SetDirectorySnapshot supplies the same trusted directory capability as the owning rule engine.
+func (a *StatusChangeAction) SetDirectorySnapshot(directory database.DirectorySnapshot) {
+	a.directory = directory
+}
+
 func (a *StatusChangeAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
 	return executeIncidentRuleAction(ctx, a.client, a, incident, tenantID)
 }
 
 func (a *StatusChangeAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
+	if a.directory != nil {
+		if err := requireIncidentRuleSnapshot(ctx, tx); err != nil {
+			return err
+		}
+	}
 	incidentService := NewIncidentService(a.client, a.logger)
 	incidentService.SetDirectorySnapshot(a.directory)
 	actor, ok := ctx.Value(incidentAlertActorContextKey{}).(incidentAlertActor)

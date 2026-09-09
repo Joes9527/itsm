@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -191,9 +192,33 @@ func (e *IncidentRuleEngine) freezeCreatedRules(ctx context.Context, event *ent.
 }
 
 func (e *IncidentRuleEngine) resumeCreatedRule(ctx context.Context, event *ent.OutboxEvent, p incidentCreatedPayload, id int) error {
+	conflicts := 0
 	for {
 		done, err := e.applyNextCreatedAction(ctx, event, p, id)
 		if err != nil {
+			// Repeatable-read contenders must restart the complete action transaction.
+			// applyNextCreatedAction has already rolled it back, including its receipt;
+			// the next snapshot observes the winner and resumes from committed receipts.
+			var state interface{ SQLState() string }
+			if errors.As(err, &state) && (state.SQLState() == "40001" || state.SQLState() == "40P01") && conflicts < outboxEventClaimRetryAttempts-1 {
+				conflicts++
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+
+				delay := time.Duration(conflicts) * outboxEventClaimRetryDelay
+				if delay > outboxEventClaimRetryMaxDelay {
+					delay = outboxEventClaimRetryMaxDelay
+				}
+				timer := time.NewTimer(delay)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return ctx.Err()
+				case <-timer.C:
+				}
+				continue
+			}
 			// Errors stay visible without overwriting a concurrent completed execution.
 			_, recordErr := e.client.IncidentRuleExecution.Update().Where(incidentruleexecution.ID(id), incidentruleexecution.TenantID(p.TenantID), incidentruleexecution.SourceEventID(event.ID), incidentruleexecution.StatusIn("running", "failed")).SetStatus("failed").SetErrorMessage(err.Error()).Save(ctx)
 			if recordErr != nil {
@@ -207,12 +232,17 @@ func (e *IncidentRuleEngine) resumeCreatedRule(ctx context.Context, event *ent.O
 	}
 }
 
-func (e *IncidentRuleEngine) applyNextCreatedAction(ctx context.Context, event *ent.OutboxEvent, p incidentCreatedPayload, id int) (bool, error) {
-	tx, err := e.client.Tx(ctx)
+func (e *IncidentRuleEngine) applyNextCreatedAction(ctx context.Context, event *ent.OutboxEvent, p incidentCreatedPayload, id int) (_ bool, resultErr error) {
+	tx, err := e.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return false, err
 	}
-	defer tx.Rollback()
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
+			// Do not classify an unconfirmed rollback as a safe transaction retry.
+			resultErr = fmt.Errorf("rollback rule action failed: %v (action: %v)", rollbackErr, resultErr)
+		}
+	}()
 	execution, err := tx.IncidentRuleExecution.UpdateOneID(id).Where(incidentruleexecution.TenantID(p.TenantID), incidentruleexecution.SourceEventID(event.ID), incidentruleexecution.IncidentID(p.IncidentID), incidentruleexecution.ActorID(p.ActorID), incidentruleexecution.Source(p.Channel)).SetUpdatedAt(time.Now()).Save(ctx)
 	if err != nil {
 		return false, err
