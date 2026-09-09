@@ -93,7 +93,7 @@ const CreateProblemPageContent = () => {
             priority: ProblemPriority.MEDIUM,
           }}
         >
-          <CreationRequester />
+          <CreationRequester resource="problem" />
           {searchParams.get('fromIncidentId') && (
             <Alert
               message={`此问题由事件 ${searchParams.get('fromIncidentId')} 触发`}

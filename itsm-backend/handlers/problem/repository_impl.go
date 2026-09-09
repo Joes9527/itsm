@@ -545,10 +545,12 @@ func (r *EntRepository) Update(ctx context.Context, p *Problem) (*Problem, error
 	}
 	update := tx.Problem.UpdateOneID(p.ID).
 		Where(problemTenantScope(p.TenantID)).
-		SetRootCause(p.RootCause).
 		SetWorkaround(p.Workaround).
 		SetResolution(p.Resolution).
 		SetImpact(p.Impact)
+	if p.RootCause != "" {
+		update.SetRootCause(p.RootCause)
+	}
 
 	saved, err := update.Save(ctx)
 	if err != nil {

@@ -582,7 +582,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
       <CreationAttempts creation={creation} />
       <Modal open={conversionOpen} title='创建关联问题' onCancel={() => setConversionOpen(false)} onOk={submitConversion} confirmLoading={converting}>
         <p>保留当前事件并创建关联问题，请确认申请人。</p>
-        <Form form={conversionForm}><CreationRequester /></Form>
+        <Form form={conversionForm}><CreationRequester resource="problem" /></Form>
       </Modal>
       <Space orientation='vertical' style={{ width: '100%' }} size='middle'>
         {/* 头部操作栏 */}

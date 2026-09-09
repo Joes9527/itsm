@@ -153,7 +153,7 @@ const CreateChangePage: React.FC = () => {
           disabled={loading}
           scrollToFirstError
         >
-          <CreationRequester />
+          <CreationRequester resource="change" />
           <Form.Item
             label="变更标题"
             name="title"

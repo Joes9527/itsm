@@ -48,7 +48,7 @@ const NewImprovementPage = () => {
           <h2 className="text-2xl font-bold text-gray-800">新建改进计划</h2>
 
           <Form form={form} layout="vertical" onFinish={onFinish}>
-            <CreationRequester />
+            <CreationRequester resource="ticket" />
             <Form.Item
               label="标题"
               name="title"

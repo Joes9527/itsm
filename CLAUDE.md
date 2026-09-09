@@ -188,6 +188,7 @@ Full contract: [AGENTS.md § Unified Work Item Domain Contract](AGENTS.md). Core
 - SLA timers and escalations must be computed from authoritative timestamps and policy bindings, not from UI-derived state.
 - Change management must preserve risk, CAB/approval, release window, implementation result, and PIR concepts.
 - Problem management must preserve root cause, workaround, known error, and linked incident relationships.
+- Problem root-cause text has one authoritative write location: `problems.root_cause`. RCA records own analysis metadata (method, evidence, confidence, reviewer), and expose the Problem root cause as a projection. RCA mutations update the Problem text and analysis metadata atomically; Known Error creation reads that same Problem text. Do not restore a second RCA root-cause text column or dual writes.
 
 ## Fail-Closed Dispatch For Unknown Behavior
 
