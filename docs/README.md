@@ -31,7 +31,9 @@
 
 ## 产品与架构
 
-- [WorkItem 现有实现收敛设计（draft）](./superpowers/specs/2026-09-09-workitem-convergence-design.md)：Incident、Problem、Change 生命周期、关系、SLA 与 BPMN 的分批收敛。
+- [WorkItem 收敛实施总计划（draft）](./superpowers/plans/2026-09-09-workitem-convergence.md)：专业动作、关系联动、流程身份及切换门禁三个子计划。
+
+- [WorkItem 现有实现收敛设计（accepted）](./superpowers/specs/2026-09-09-workitem-convergence-design.md)：Incident、Problem、Change 生命周期、关系、SLA 与 BPMN 的分批收敛。
 
 - [SSLVPN：KAF 对话受理、统一创建与授权闭环设计](./superpowers/specs/2026-09-05-sslvpn-kaf-intake-end-to-end-design.md)
 - [SSLVPN 端到端实施总计划](./superpowers/plans/2026-09-05-sslvpn-end-to-end-implementation.md)

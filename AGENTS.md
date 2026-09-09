@@ -103,7 +103,7 @@ For new work, align with the roadmap rather than creating parallel mechanisms. I
 
 ## Unified Work Item Domain Contract
 
-> Design under review (draft): [WorkItem convergence](docs/superpowers/specs/2026-09-09-workitem-convergence-design.md). Supplements the existing contract; does not authorize parallel implementations.
+> Accepted convergence design: [WorkItem convergence](docs/superpowers/specs/2026-09-09-workitem-convergence-design.md); [implementation plan](docs/superpowers/plans/2026-09-09-workitem-convergence.md). Incident recovery is independent of Problem completion. Problem resolution requires a verified permanent fix. Authorized reopen starts a zeroed SLA cycle while preserving prior results and original creation time. For this convergence only, historical business data is not migrated; schema changes remain required. Retire old structures after sole-path cutover, validation and observation. No parallel lifecycle, relationship, SLA or approval implementation is permitted.
 
 The unified Work Item model is the shared business language for Ticket, Service Catalog, Service Request, Incident, Problem, Known Error, Change, and fulfillment work. The detailed design is maintained in `docs/superpowers/specs/2026-08-26-unified-work-item-model-design.md`; this section is the implementation contract for all coding agents.
 
