@@ -62,57 +62,57 @@ Task 4 static evidence: four auth routes inherit the root ConfigProvider; exact 
 
 | Route | Source | Actual layout | Common components observed | Local risk | Status |
 | --- | --- | --- | --- | --- | --- |
-| `/notifications` | `src/app/(main)/notifications/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; inline styles | NEEDS VERIFICATION |
-| `/applications` | `src/app/(main)/applications/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | table states | NEEDS VERIFICATION |
-| `/approvals` | `src/app/(main)/approvals/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; table states; special visual | NEEDS VERIFICATION |
-| `/assets/[id]/edit` | `src/app/(main)/assets/[id]/edit/page.tsx` | Root > Main (Console) | asset/AssetForm | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/assets/[id]` | `src/app/(main)/assets/[id]/page.tsx` | Root > Main (Console) | asset/AssetDetail | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/assets/new` | `src/app/(main)/assets/new/page.tsx` | Root > Main (Console) | asset/AssetForm | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/assets` | `src/app/(main)/assets/page.tsx` | Root > Main (Console) | asset/AssetList | literal colors; fixed palette classes; inline styles | NEEDS VERIFICATION |
-| `/changes/[id]/edit` | `src/app/(main)/changes/[id]/edit/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes | NEEDS VERIFICATION |
-| `/changes/[id]` | `src/app/(main)/changes/[id]/page.tsx` | Root > Main (Console) | change/ChangeDetail, business/detail-tabs, work-item/WorkItemShell, work-item/WorkItemTypes | fixed palette classes; inline styles | NEEDS VERIFICATION |
-| `/changes/[id]/pir` | `src/app/(main)/changes/[id]/pir/page.tsx` | Root > Main (Console) | layout/PageContainer | literal colors; inline styles | NEEDS VERIFICATION |
-| `/changes/new` | `src/app/(main)/changes/new/page.tsx` | Root > Main (Console) | work-item/CreationAttempts, work-item/CreationRequester | fixed palette classes | NEEDS VERIFICATION |
-| `/changes` | `src/app/(main)/changes/page.tsx` | Root > Main (Console) | layout/BusinessPageTemplate, change/ChangeList, business/UnifiedKanbanBoard | literal colors; fixed palette classes; inline styles | NEEDS VERIFICATION |
-| `/changes/pirs` | `src/app/(main)/changes/pirs/page.tsx` | Root > Main (Console) | layout/PageContainer | literal colors; inline styles; table states | NEEDS VERIFICATION |
-| `/enterprise/departments` | `src/app/(main)/enterprise/departments/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | table states | NEEDS VERIFICATION |
-| `/enterprise/teams` | `src/app/(main)/enterprise/teams/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states | NEEDS VERIFICATION |
-| `/improvements/[id]` | `src/app/(main)/improvements/[id]/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; inline styles | NEEDS VERIFICATION |
-| `/improvements/new` | `src/app/(main)/improvements/new/page.tsx` | Root > Main (Console) | work-item/CreationAttempts, work-item/CreationRequester | fixed palette classes; inline styles | NEEDS VERIFICATION |
-| `/improvements` | `src/app/(main)/improvements/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; table states | NEEDS VERIFICATION |
-| `/incidents/[id]/edit` | `src/app/(main)/incidents/[id]/edit/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles | NEEDS VERIFICATION |
-| `/incidents/[id]` | `src/app/(main)/incidents/[id]/page.tsx` | Root > Main (Console) | incident/IncidentDetail, work-item/WorkItemShell, work-item/WorkItemTypes | literal colors; inline styles | NEEDS VERIFICATION |
-| `/incidents/create` | `src/app/(main)/incidents/create/page.tsx` | Root > Main (Console) | work-item/CreationAttempts, work-item/CreationRequester | fixed palette classes; inline styles | NEEDS VERIFICATION |
-| `/incidents` | `src/app/(main)/incidents/page.tsx` | Root > Main (Console) | layout/BusinessPageTemplate, business/BatchActionBar, business/UnifiedKanbanBoard | literal colors; fixed palette classes | NEEDS VERIFICATION |
-| `/installations` | `src/app/(main)/installations/page.tsx` | Root > Main (Console) | ui/Badge, ui/Button, ui/Card, ui/Input, ui/Select | fixed palette classes | NEEDS VERIFICATION |
-| `/licenses/[id]/edit` | `src/app/(main)/licenses/[id]/edit/page.tsx` | Root > Main (Console) | license/LicenseForm | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/licenses/[id]` | `src/app/(main)/licenses/[id]/page.tsx` | Root > Main (Console) | license/LicenseDetail | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/licenses/new` | `src/app/(main)/licenses/new/page.tsx` | Root > Main (Console) | license/LicenseForm | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/licenses` | `src/app/(main)/licenses/page.tsx` | Root > Main (Console) | license/LicenseList | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/marketplace/[id]` | `src/app/(main)/marketplace/[id]/page.tsx` | Root > Main (Console) | ui/Badge, ui/Button, ui/Card, ui/Tabs | fixed palette classes | NEEDS VERIFICATION |
-| `/marketplace` | `src/app/(main)/marketplace/page.tsx` | Root > Main (Console) | ui/Card, ui/Button, ui/Input, ui/Select, ui/Tabs, ui/Badge | fixed palette classes | NEEDS VERIFICATION |
-| `/msp/management` | `src/app/(main)/msp/management/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | inline styles; table states | NEEDS VERIFICATION |
-| `/msp` | `src/app/(main)/msp/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states | NEEDS VERIFICATION |
-| `/problems/[id]/edit` | `src/app/(main)/problems/[id]/edit/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles | NEEDS VERIFICATION |
-| `/problems/[id]` | `src/app/(main)/problems/[id]/page.tsx` | Root > Main (Console) | problem/ProblemDetail, problem/ProblemAssociationsTab, work-item/WorkItemShell, work-item/WorkItemTypes | literal colors; fixed palette classes; inline styles | NEEDS VERIFICATION |
-| `/problems/known-errors` | `src/app/(main)/problems/known-errors/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states | NEEDS VERIFICATION |
-| `/problems/new` | `src/app/(main)/problems/new/page.tsx` | Root > Main (Console) | work-item/CreationAttempts, work-item/CreationRequester | fixed palette classes | NEEDS VERIFICATION |
-| `/problems` | `src/app/(main)/problems/page.tsx` | Root > Main (Console) | layout/BusinessPageTemplate, problem/ProblemList, business/UnifiedKanbanBoard | literal colors; inline styles | NEEDS VERIFICATION |
-| `/problems/trends` | `src/app/(main)/problems/trends/page.tsx` | Root > Main (Console) | layout/PageContainer | literal colors; fixed palette classes; inline styles; table states; special visual | NEEDS VERIFICATION |
-| `/projects` | `src/app/(main)/projects/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | table states | NEEDS VERIFICATION |
-| `/releases/[id]/edit` | `src/app/(main)/releases/[id]/edit/page.tsx` | Root > Main (Console) | release/ReleaseForm | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/releases/[id]` | `src/app/(main)/releases/[id]/page.tsx` | Root > Main (Console) | release/ReleaseDetail, business/detail-tabs | fixed palette classes; inline styles | NEEDS VERIFICATION |
-| `/releases/new` | `src/app/(main)/releases/new/page.tsx` | Root > Main (Console) | release/ReleaseForm | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/releases` | `src/app/(main)/releases/page.tsx` | Root > Main (Console) | release/ReleaseList | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/sla-dashboard` | `src/app/(main)/sla-dashboard/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/sla-monitor` | `src/app/(main)/sla-monitor/page.tsx` | Root > Main (Console) | business/SLAMonitorDashboard | literal colors; fixed palette classes; inline styles; table states; special visual | NEEDS VERIFICATION |
-| `/sla/definitions/[id]` | `src/app/(main)/sla/definitions/[id]/page.tsx` | Root > Main (Console) | sla/SLADetail | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/sla` | `src/app/(main)/sla/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes | NEEDS VERIFICATION |
-| `/standard-changes` | `src/app/(main)/standard-changes/page.tsx` | Root > Main (Console) | work-item/CreationAttempts, work-item/CreationRequester | fixed palette classes; inline styles; table states | NEEDS VERIFICATION |
-| `/system/organization` | `src/app/(main)/system/organization/page.tsx` | Root > Main (Console) | common/DepartmentTree | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/system/users` | `src/app/(main)/system/users/page.tsx` | Root > Main (Console) | common/UserList | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/tags` | `src/app/(main)/tags/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states | NEEDS VERIFICATION |
-| `/teams` | `src/app/(main)/teams/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
+| `/notifications` | `src/app/(main)/notifications/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; inline styles | STATIC-MIGRATED / PENDING-BROWSER |
+| `/applications` | `src/app/(main)/applications/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | table states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/approvals` | `src/app/(main)/approvals/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; table states; special visual | STATIC-MIGRATED / PENDING-BROWSER |
+| `/assets/[id]/edit` | `src/app/(main)/assets/[id]/edit/page.tsx` | Root > Main (Console) | asset/AssetForm | shared component/theme dependency; inspect rendered states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/assets/[id]` | `src/app/(main)/assets/[id]/page.tsx` | Root > Main (Console) | asset/AssetDetail | shared component/theme dependency; inspect rendered states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/assets/new` | `src/app/(main)/assets/new/page.tsx` | Root > Main (Console) | asset/AssetForm | shared component/theme dependency; inspect rendered states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/assets` | `src/app/(main)/assets/page.tsx` | Root > Main (Console) | asset/AssetList | literal colors; fixed palette classes; inline styles | STATIC-MIGRATED / PENDING-BROWSER |
+| `/changes/[id]/edit` | `src/app/(main)/changes/[id]/edit/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes | STATIC-MIGRATED / PENDING-BROWSER |
+| `/changes/[id]` | `src/app/(main)/changes/[id]/page.tsx` | Root > Main (Console) | change/ChangeDetail, business/detail-tabs, work-item/WorkItemShell, work-item/WorkItemTypes | fixed palette classes; inline styles | STATIC-MIGRATED / PENDING-BROWSER |
+| `/changes/[id]/pir` | `src/app/(main)/changes/[id]/pir/page.tsx` | Root > Main (Console) | layout/PageContainer | literal colors; inline styles | STATIC-MIGRATED / PENDING-BROWSER |
+| `/changes/new` | `src/app/(main)/changes/new/page.tsx` | Root > Main (Console) | work-item/CreationAttempts, work-item/CreationRequester | fixed palette classes | STATIC-MIGRATED / PENDING-BROWSER |
+| `/changes` | `src/app/(main)/changes/page.tsx` | Root > Main (Console) | layout/BusinessPageTemplate, change/ChangeList, business/UnifiedKanbanBoard | literal colors; fixed palette classes; inline styles | STATIC-MIGRATED / PENDING-BROWSER |
+| `/changes/pirs` | `src/app/(main)/changes/pirs/page.tsx` | Root > Main (Console) | layout/PageContainer | literal colors; inline styles; table states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/enterprise/departments` | `src/app/(main)/enterprise/departments/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | table states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/enterprise/teams` | `src/app/(main)/enterprise/teams/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/improvements/[id]` | `src/app/(main)/improvements/[id]/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; inline styles | STATIC-MIGRATED / PENDING-BROWSER |
+| `/improvements/new` | `src/app/(main)/improvements/new/page.tsx` | Root > Main (Console) | work-item/CreationAttempts, work-item/CreationRequester | fixed palette classes; inline styles | STATIC-MIGRATED / PENDING-BROWSER |
+| `/improvements` | `src/app/(main)/improvements/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; table states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/incidents/[id]/edit` | `src/app/(main)/incidents/[id]/edit/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles | STATIC-MIGRATED / PENDING-BROWSER |
+| `/incidents/[id]` | `src/app/(main)/incidents/[id]/page.tsx` | Root > Main (Console) | incident/IncidentDetail, work-item/WorkItemShell, work-item/WorkItemTypes | literal colors; inline styles | STATIC-MIGRATED / PENDING-BROWSER |
+| `/incidents/create` | `src/app/(main)/incidents/create/page.tsx` | Root > Main (Console) | work-item/CreationAttempts, work-item/CreationRequester | fixed palette classes; inline styles | STATIC-MIGRATED / PENDING-BROWSER |
+| `/incidents` | `src/app/(main)/incidents/page.tsx` | Root > Main (Console) | layout/BusinessPageTemplate, business/BatchActionBar, business/UnifiedKanbanBoard | literal colors; fixed palette classes | STATIC-MIGRATED / PENDING-BROWSER |
+| `/installations` | `src/app/(main)/installations/page.tsx` | Root > Main (Console) | ui/Badge, ui/Button, ui/Card, ui/Input, ui/Select | fixed palette classes | STATIC-MIGRATED / PENDING-BROWSER |
+| `/licenses/[id]/edit` | `src/app/(main)/licenses/[id]/edit/page.tsx` | Root > Main (Console) | license/LicenseForm | shared component/theme dependency; inspect rendered states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/licenses/[id]` | `src/app/(main)/licenses/[id]/page.tsx` | Root > Main (Console) | license/LicenseDetail | shared component/theme dependency; inspect rendered states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/licenses/new` | `src/app/(main)/licenses/new/page.tsx` | Root > Main (Console) | license/LicenseForm | shared component/theme dependency; inspect rendered states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/licenses` | `src/app/(main)/licenses/page.tsx` | Root > Main (Console) | license/LicenseList | shared component/theme dependency; inspect rendered states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/marketplace/[id]` | `src/app/(main)/marketplace/[id]/page.tsx` | Root > Main (Console) | ui/Badge, ui/Button, ui/Card, ui/Tabs | fixed palette classes | STATIC-MIGRATED / PENDING-BROWSER |
+| `/marketplace` | `src/app/(main)/marketplace/page.tsx` | Root > Main (Console) | ui/Card, ui/Button, ui/Input, ui/Select, ui/Tabs, ui/Badge | fixed palette classes | STATIC-MIGRATED / PENDING-BROWSER |
+| `/msp/management` | `src/app/(main)/msp/management/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | inline styles; table states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/msp` | `src/app/(main)/msp/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/problems/[id]/edit` | `src/app/(main)/problems/[id]/edit/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles | STATIC-MIGRATED / PENDING-BROWSER |
+| `/problems/[id]` | `src/app/(main)/problems/[id]/page.tsx` | Root > Main (Console) | problem/ProblemDetail, problem/ProblemAssociationsTab, work-item/WorkItemShell, work-item/WorkItemTypes | literal colors; fixed palette classes; inline styles | STATIC-MIGRATED / PENDING-BROWSER |
+| `/problems/known-errors` | `src/app/(main)/problems/known-errors/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/problems/new` | `src/app/(main)/problems/new/page.tsx` | Root > Main (Console) | work-item/CreationAttempts, work-item/CreationRequester | fixed palette classes | STATIC-MIGRATED / PENDING-BROWSER |
+| `/problems` | `src/app/(main)/problems/page.tsx` | Root > Main (Console) | layout/BusinessPageTemplate, problem/ProblemList, business/UnifiedKanbanBoard | literal colors; inline styles | STATIC-MIGRATED / PENDING-BROWSER |
+| `/problems/trends` | `src/app/(main)/problems/trends/page.tsx` | Root > Main (Console) | layout/PageContainer | literal colors; fixed palette classes; inline styles; table states; special visual | STATIC-MIGRATED / PENDING-BROWSER |
+| `/projects` | `src/app/(main)/projects/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | table states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/releases/[id]/edit` | `src/app/(main)/releases/[id]/edit/page.tsx` | Root > Main (Console) | release/ReleaseForm | shared component/theme dependency; inspect rendered states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/releases/[id]` | `src/app/(main)/releases/[id]/page.tsx` | Root > Main (Console) | release/ReleaseDetail, business/detail-tabs | fixed palette classes; inline styles | STATIC-MIGRATED / PENDING-BROWSER |
+| `/releases/new` | `src/app/(main)/releases/new/page.tsx` | Root > Main (Console) | release/ReleaseForm | shared component/theme dependency; inspect rendered states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/releases` | `src/app/(main)/releases/page.tsx` | Root > Main (Console) | release/ReleaseList | shared component/theme dependency; inspect rendered states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/sla-dashboard` | `src/app/(main)/sla-dashboard/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/sla-monitor` | `src/app/(main)/sla-monitor/page.tsx` | Root > Main (Console) | business/SLAMonitorDashboard | literal colors; fixed palette classes; inline styles; table states; special visual | STATIC-MIGRATED / PENDING-BROWSER |
+| `/sla/definitions/[id]` | `src/app/(main)/sla/definitions/[id]/page.tsx` | Root > Main (Console) | sla/SLADetail | shared component/theme dependency; inspect rendered states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/sla` | `src/app/(main)/sla/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes | STATIC-MIGRATED / PENDING-BROWSER |
+| `/standard-changes` | `src/app/(main)/standard-changes/page.tsx` | Root > Main (Console) | work-item/CreationAttempts, work-item/CreationRequester | fixed palette classes; inline styles; table states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/system/organization` | `src/app/(main)/system/organization/page.tsx` | Root > Main (Console) | common/DepartmentTree | shared component/theme dependency; inspect rendered states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/system/users` | `src/app/(main)/system/users/page.tsx` | Root > Main (Console) | common/UserList | shared component/theme dependency; inspect rendered states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/tags` | `src/app/(main)/tags/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/teams` | `src/app/(main)/teams/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | STATIC-MIGRATED / PENDING-BROWSER |
 
 ## knowledge/cmdb/workflows (25)
 

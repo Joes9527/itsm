@@ -135,7 +135,7 @@ export default function CreateIncidentPage() {
   };
 
   return (
-    <div className="p-6 min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-page p-[16px] text-[13px] text-foreground md:p-[24px]">
       {/* 返回按钮 */}
       <div className="mb-6">
         <Button
@@ -310,16 +310,16 @@ export default function CreateIncidentPage() {
 
                               {/* 搜索结果下拉 */}
                               {ciSearchResults.length > 0 && (
-                                <div className="absolute z-10 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-auto">
+                                <div className="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-[6px] border border-border bg-surface shadow-lg">
                                   {ciSearchResults.map(ci => (
                                     <div
                                       key={ci.id}
-                                      className="px-3 py-2 hover:bg-gray-50 cursor-pointer flex justify-between items-center"
+                                      className="px-3 py-2 hover:bg-raised cursor-pointer flex justify-between items-center"
                                       onClick={() => handleAddCI(ci)}
                                     >
                                       <div>
                                         <div className="font-medium">{ci.name}</div>
-										<div className="text-xs text-gray-500">{ci.type || 'CI'} - {ciStatusNameMap[ci.status] || ci.status}</div>
+										<div className="text-xs text-muted">{ci.type || 'CI'} - {ciStatusNameMap[ci.status] || ci.status}</div>
                                       </div>
                                       {selectedCIs.find(item => item.id === ci.id) && (
                                         <Tag color="green">已选择</Tag>
@@ -406,7 +406,7 @@ export default function CreateIncidentPage() {
             <Space orientation="vertical" className="w-full">
               <div>
                 <Text strong>优先级说明</Text>
-                <ul className="mt-2 text-sm text-gray-600">
+                <ul className="mt-2 text-sm text-muted">
                   <li>🔴 紧急：系统完全不可用</li>
                   <li>🟠 高：核心功能受影响</li>
                   <li>🔵 中：非核心功能受影响</li>
@@ -416,7 +416,7 @@ export default function CreateIncidentPage() {
               <Divider className="!my-2" />
               <div>
                 <Text strong>紧急联系方式</Text>
-                <ul className="mt-2 text-sm text-gray-600">
+                <ul className="mt-2 text-sm text-muted">
                   <li>电话：400-XXX-XXXX</li>
                   <li>邮箱：support@example.com</li>
                 </ul>

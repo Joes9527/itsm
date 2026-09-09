@@ -49,8 +49,8 @@ const statusConfig = {
   },
   disabled: {
     label: '已禁用',
-    color: 'bg-gray-100 text-gray-800',
-    icon: <XCircle className="h-4 w-4 text-gray-500" />,
+    color: 'bg-gray-100 text-foreground',
+    icon: <XCircle className="h-4 w-4 text-muted" />,
   },
   failed: {
     label: '运行失败',
@@ -64,8 +64,8 @@ const statusConfig = {
   },
   uninstalled: {
     label: '已卸载',
-    color: 'bg-gray-100 text-gray-800',
-    icon: <XCircle className="h-4 w-4 text-gray-500" />,
+    color: 'bg-gray-100 text-foreground',
+    icon: <XCircle className="h-4 w-4 text-muted" />,
   },
 };
 
@@ -234,7 +234,7 @@ const InstallationsPage = () => {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">我的应用</h1>
-          <p className="text-gray-500 mt-1">管理已安装的连接器、AI技能和扩展插件</p>
+          <p className="mt-1 text-[12px] text-muted">管理已安装的连接器、AI技能和扩展插件</p>
         </div>
         <Link href="/marketplace">
           <Button>
@@ -244,11 +244,11 @@ const InstallationsPage = () => {
         </Link>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+      <div className="mb-6 rounded-[8px] border border-border bg-surface p-[16px] shadow-none">
         <div className="flex flex-col md:flex-row gap-4">
           <div className="flex-1">
             <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted" />
               <Input
                 placeholder="搜索应用名称或描述..."
                 value={search}
@@ -308,7 +308,7 @@ const InstallationsPage = () => {
               <CardHeader className="pb-2">
                 <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-md overflow-hidden bg-gray-100 flex items-center justify-center">
+                    <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-[6px] bg-raised">
                       {item?.iconUrl ? (
                         <img src={item.iconUrl} alt={item.title} className="w-full h-full object-cover" />
                       ) : (
@@ -362,7 +362,7 @@ const InstallationsPage = () => {
                 </div>
 
                 {item?.type === 'connector' && (
-                  <div className="rounded-md border bg-gray-50 p-3">
+                  <div className="rounded-[6px] border border-border bg-raised p-3">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                       <Info label="运行时名称" value={runtimeName || '未识别'} />
                       <Info label="启用状态" value={runtimeConfig?.enabled ? '已启用' : '未启用'} />
@@ -421,11 +421,11 @@ const InstallationsPage = () => {
       </div>
 
       {filteredInstallations.length === 0 && (
-        <div className="bg-white rounded-lg shadow-sm p-10 text-center">
+        <div className="rounded-[8px] border border-border bg-surface p-[24px] text-center shadow-none">
           <div className="flex flex-col items-center justify-center">
-            <Search className="h-12 w-12 text-gray-300 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">没有找到匹配的应用</h3>
-            <p className="text-gray-500 mb-4">尝试调整搜索条件或过滤选项</p>
+            <Search className="mb-4 h-12 w-12 text-muted" />
+            <h3 className="mb-2 text-[15px] font-semibold text-foreground">没有找到匹配的应用</h3>
+            <p className="mb-4 text-[12px] text-muted">尝试调整搜索条件或过滤选项</p>
             <Link href="/marketplace">
               <Button>浏览应用市场</Button>
             </Link>
@@ -438,7 +438,7 @@ const InstallationsPage = () => {
 
 const Info = ({ label, value }: { label: string; value: string }) => (
   <div>
-    <div className="text-gray-500 mb-1">{label}</div>
+    <div className="mb-1 text-muted">{label}</div>
     <div className="break-all">{value}</div>
   </div>
 );

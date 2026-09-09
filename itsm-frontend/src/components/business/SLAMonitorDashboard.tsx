@@ -274,7 +274,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
       style={{
         minHeight: isFullscreen ? '100vh' : 'auto',
         padding: isFullscreen ? '24px' : '16px',
-        backgroundColor: isFullscreen ? '#0a0e27' : '#f0f2f5',
+        backgroundColor: isFullscreen ? '#0a0e27' : 'var(--color-bg-page)',
       }}
     >
       {/* 顶部工具栏 */}
@@ -290,7 +290,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
           <Title
             level={2}
             style={{
-              color: isFullscreen ? '#fff' : '#000',
+              color: isFullscreen ? '#fff' : 'var(--color-text-primary)',
               margin: 0,
               fontSize: isFullscreen ? '32px' : '24px',
             }}
@@ -302,7 +302,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
             type="secondary"
             style={{
               color: isFullscreen ? 'rgba(255,255,255,0.7)' : undefined,
-              fontSize: isFullscreen ? '16px' : '14px',
+              fontSize: isFullscreen ? '16px' : '12px',
             }}
           >
             最后更新: {format(lastUpdateTimeRef.current, 'yyyy-MM-dd HH:mm:ss', { locale: zhCN })}
@@ -342,7 +342,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
           <Card
             className="sla-stat-card"
             style={{
-              backgroundColor: isFullscreen ? 'rgba(255,255,255,0.05)' : '#fff',
+              backgroundColor: isFullscreen ? 'rgba(255,255,255,0.05)' : 'var(--color-bg-primary)',
               border: isFullscreen ? '1px solid rgba(255,255,255,0.1)' : undefined,
             }}
           >
@@ -351,7 +351,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
                 <Text
                   style={{
                     color: isFullscreen ? 'rgba(255,255,255,0.8)' : undefined,
-                    fontSize: isFullscreen ? '18px' : '14px',
+                    fontSize: isFullscreen ? '18px' : '13px',
                   }}
                 >
                   SLA达成率
@@ -363,7 +363,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
               styles={{
                 content: {
                   color: isFullscreen ? '#fff' : getComplianceColor(metrics?.complianceRate || 0),
-                  fontSize: isFullscreen ? '48px' : '32px',
+                  fontSize: isFullscreen ? '48px' : '26px',
                   fontWeight: 'bold',
                 },
               }}
@@ -382,7 +382,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
           <Card
             className="sla-stat-card"
             style={{
-              backgroundColor: isFullscreen ? 'rgba(255,255,255,0.05)' : '#fff',
+              backgroundColor: isFullscreen ? 'rgba(255,255,255,0.05)' : 'var(--color-bg-primary)',
               border: isFullscreen ? '1px solid rgba(255,255,255,0.1)' : undefined,
             }}
           >
@@ -391,7 +391,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
                 <Text
                   style={{
                     color: isFullscreen ? 'rgba(255,255,255,0.8)' : undefined,
-                    fontSize: isFullscreen ? '18px' : '14px',
+                    fontSize: isFullscreen ? '18px' : '13px',
                   }}
                 >
                   SLA违规率
@@ -403,7 +403,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
               styles={{
                 content: {
                   color: isFullscreen ? '#ff4d4f' : '#ff4d4f',
-                  fontSize: isFullscreen ? '48px' : '32px',
+                  fontSize: isFullscreen ? '48px' : '26px',
                   fontWeight: 'bold',
                 },
               }}
@@ -413,7 +413,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
               <Text
                 style={{
                   color: isFullscreen ? 'rgba(255,255,255,0.7)' : undefined,
-                  fontSize: isFullscreen ? '16px' : '14px',
+                  fontSize: isFullscreen ? '16px' : '13px',
                 }}
               >
                 违规工单: {metrics?.violatedTickets || 0}
@@ -425,7 +425,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
           <Card
             className="sla-stat-card"
             style={{
-              backgroundColor: isFullscreen ? 'rgba(255,255,255,0.05)' : '#fff',
+              backgroundColor: isFullscreen ? 'rgba(255,255,255,0.05)' : 'var(--color-bg-primary)',
               border: isFullscreen ? '1px solid rgba(255,255,255,0.1)' : undefined,
             }}
           >
@@ -434,7 +434,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
                 <Text
                   style={{
                     color: isFullscreen ? 'rgba(255,255,255,0.8)' : undefined,
-                    fontSize: isFullscreen ? '18px' : '14px',
+                    fontSize: isFullscreen ? '18px' : '13px',
                   }}
                 >
                   风险工单
@@ -444,7 +444,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
               styles={{
                 content: {
                   color: isFullscreen ? '#faad14' : '#faad14',
-                  fontSize: isFullscreen ? '48px' : '32px',
+                  fontSize: isFullscreen ? '48px' : '26px',
                   fontWeight: 'bold',
                 },
               }}
@@ -454,7 +454,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
               <Text
                 style={{
                   color: isFullscreen ? 'rgba(255,255,255,0.7)' : undefined,
-                  fontSize: isFullscreen ? '16px' : '14px',
+                  fontSize: isFullscreen ? '16px' : '13px',
                 }}
               >
                 总工单: {metrics?.totalTickets || 0}
@@ -466,7 +466,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
           <Card
             className="sla-stat-card"
             style={{
-              backgroundColor: isFullscreen ? 'rgba(255,255,255,0.05)' : '#fff',
+              backgroundColor: isFullscreen ? 'rgba(255,255,255,0.05)' : 'var(--color-bg-primary)',
               border: isFullscreen ? '1px solid rgba(255,255,255,0.1)' : undefined,
             }}
           >
@@ -475,7 +475,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
                 <Text
                   style={{
                     color: isFullscreen ? 'rgba(255,255,255,0.8)' : undefined,
-                    fontSize: isFullscreen ? '18px' : '14px',
+                    fontSize: isFullscreen ? '18px' : '13px',
                   }}
                 >
                   平均响应时间
@@ -487,7 +487,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
               styles={{
                 content: {
                   color: isFullscreen ? '#1890ff' : '#1890ff',
-                  fontSize: isFullscreen ? '48px' : '32px',
+                  fontSize: isFullscreen ? '48px' : '26px',
                   fontWeight: 'bold',
                 },
               }}
@@ -497,7 +497,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
               <Text
                 style={{
                   color: isFullscreen ? 'rgba(255,255,255,0.7)' : undefined,
-                  fontSize: isFullscreen ? '16px' : '14px',
+                  fontSize: isFullscreen ? '16px' : '13px',
                 }}
               >
                 合规率: {metrics?.responseTimeCompliance || 0}%
@@ -518,7 +518,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
         }
         className="mb-6"
         style={{
-          backgroundColor: isFullscreen ? 'rgba(255,255,255,0.05)' : '#fff',
+          backgroundColor: isFullscreen ? 'rgba(255,255,255,0.05)' : 'var(--color-bg-primary)',
           border: isFullscreen ? '1px solid rgba(255,255,255,0.1)' : undefined,
         }}
         styles={{
@@ -575,7 +575,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
               </div>
             }
             style={{
-              backgroundColor: isFullscreen ? 'rgba(255,255,255,0.05)' : '#fff',
+              backgroundColor: isFullscreen ? 'rgba(255,255,255,0.05)' : 'var(--color-bg-primary)',
               border: isFullscreen ? '1px solid rgba(255,255,255,0.1)' : undefined,
             }}
           >
@@ -607,7 +607,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
               </div>
             }
             style={{
-              backgroundColor: isFullscreen ? 'rgba(255,255,255,0.05)' : '#fff',
+              backgroundColor: isFullscreen ? 'rgba(255,255,255,0.05)' : 'var(--color-bg-primary)',
               border: isFullscreen ? '1px solid rgba(255,255,255,0.1)' : undefined,
             }}
           >

@@ -139,10 +139,10 @@ const MarketplaceDetailPage = () => {
   if (loadError || !item) {
     return (
       <div className="container mx-auto px-4 py-6">
-        <div className="bg-white rounded-lg shadow-sm p-10 text-center">
+        <div className="rounded-[8px] border border-border bg-surface p-[24px] text-center shadow-none">
           <AlertCircle className="h-12 w-12 text-red-400 mb-4 mx-auto" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">应用不存在</h3>
-          <p className="text-gray-500 mb-4">{loadError || '您访问的应用可能已被下架或删除'}</p>
+          <h3 className="mb-2 text-[15px] font-semibold text-foreground">应用不存在</h3>
+          <p className="mb-4 text-[12px] text-muted">{loadError || '您访问的应用可能已被下架或删除'}</p>
           <Link href="/marketplace">
             <Button>返回应用市场</Button>
           </Link>
@@ -154,7 +154,7 @@ const MarketplaceDetailPage = () => {
   return (
     <div className="container mx-auto px-4 py-6">
       <div className="flex items-center gap-2 mb-6 text-sm">
-        <Link href="/marketplace" className="text-gray-500 hover:text-gray-700 flex items-center gap-1">
+        <Link href="/marketplace" className="flex items-center gap-1 text-muted hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />
           返回市场
         </Link>
@@ -165,7 +165,7 @@ const MarketplaceDetailPage = () => {
           <Card>
             <CardHeader>
               <div className="flex flex-col md:flex-row md:items-start gap-4">
-                <div className="w-16 h-16 rounded-md overflow-hidden bg-gray-100 flex items-center justify-center">
+                <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[6px] bg-raised">
                   {item.iconUrl ? (
                     <img src={item.iconUrl} alt={item.title} className="w-full h-full object-cover" />
                   ) : (
@@ -183,8 +183,8 @@ const MarketplaceDetailPage = () => {
                       <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-200">¥{item.price || 0}</Badge>
                     )}
                   </div>
-                  <p className="text-gray-600">{item.description || '暂无描述'}</p>
-                  <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-gray-500">
+                  <p className="text-muted">{item.description || '暂无描述'}</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-4 text-[13px] text-muted">
                     <span className="flex items-center gap-1">
                       <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                       {(item.rating || 0).toFixed(1)}
@@ -220,7 +220,7 @@ const MarketplaceDetailPage = () => {
                       {installing ? '安装中...' : '立即安装'}
                     </Button>
                   )}
-                  <p className="text-xs text-gray-500 mt-2">版本 {item.latestVersion || '1.0.0'}</p>
+                  <p className="mt-2 text-[12px] text-muted">版本 {item.latestVersion || '1.0.0'}</p>
                 </div>
               </div>
             </CardHeader>
@@ -257,10 +257,10 @@ const MarketplaceDetailPage = () => {
                     </div>
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <InfoLink icon={<Globe className="h-5 w-5 text-gray-400 mt-0.5" />} label="官方网站" value={item.homepage} />
-                    <InfoLink icon={<Code className="h-5 w-5 text-gray-400 mt-0.5" />} label="代码仓库" value={item.repository} />
-                    <InfoText icon={<Shield className="h-5 w-5 text-gray-400 mt-0.5" />} label="开源协议" value={item.license || '未声明'} />
-                    <InfoText icon={<Terminal className="h-5 w-5 text-gray-400 mt-0.5" />} label="最低系统版本" value={item.minSystemVersion || '未声明'} />
+                    <InfoLink icon={<Globe className="h-5 w-5 text-muted mt-0.5" />} label="官方网站" value={item.homepage} />
+                    <InfoLink icon={<Code className="h-5 w-5 text-muted mt-0.5" />} label="代码仓库" value={item.repository} />
+                    <InfoText icon={<Shield className="h-5 w-5 text-muted mt-0.5" />} label="开源协议" value={item.license || '未声明'} />
+                    <InfoText icon={<Terminal className="h-5 w-5 text-muted mt-0.5" />} label="最低系统版本" value={item.minSystemVersion || '未声明'} />
                   </div>
                 </TabsContent>
 
@@ -268,7 +268,7 @@ const MarketplaceDetailPage = () => {
                   <h3 className="text-lg font-medium mb-3">支持的功能特性</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {(item.capabilities || []).map(capability => (
-                      <div key={capability} className="flex items-center gap-2 p-2 bg-gray-50 rounded-md">
+                      <div key={capability} className="flex items-center gap-2 rounded-[6px] bg-raised p-2">
                         <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
                         <span>{capability}</span>
                       </div>
@@ -280,12 +280,12 @@ const MarketplaceDetailPage = () => {
                   <h3 className="text-lg font-medium mb-3">需要的系统权限</h3>
                   <div className="space-y-3">
                     {(item.requiredPermissions || []).map(permission => (
-                      <div key={permission} className="flex items-start gap-2 p-2 bg-gray-50 rounded-md">
+                      <div key={permission} className="flex items-start gap-2 rounded-[6px] bg-raised p-2">
                         <Shield className="h-5 w-5 text-blue-500 flex-shrink-0 mt-0.5" />
                         <span>{permission}</span>
                       </div>
                     ))}
-                    {(item.requiredPermissions || []).length === 0 && <p className="text-sm text-gray-500">暂无额外权限说明</p>}
+                    {(item.requiredPermissions || []).length === 0 && <p className="text-[13px] text-muted">暂无额外权限说明</p>}
                   </div>
                 </TabsContent>
 
@@ -293,14 +293,14 @@ const MarketplaceDetailPage = () => {
                   <h3 className="text-lg font-medium mb-3">版本历史</h3>
                   <div className="space-y-4">
                     {versions.length > 0 ? versions.map(version => (
-                      <div key={version.version} className="border-l-2 border-gray-200 pl-4 pb-4">
+                      <div key={version.version} className="border-l-2 border-border pb-4 pl-4">
                         <div className="flex items-center justify-between mb-1">
                           <div className="font-medium">v{version.version}</div>
-                          <div className="text-sm text-gray-500">{formatDate(version.releasedAt)}</div>
+                          <div className="text-[13px] text-muted">{formatDate(version.releasedAt)}</div>
                         </div>
-                        <p className="text-sm text-gray-600 whitespace-pre-line">{version.changelog || '暂无更新说明'}</p>
+                        <p className="whitespace-pre-line text-[13px] text-muted">{version.changelog || '暂无更新说明'}</p>
                       </div>
-                    )) : <p className="text-sm text-gray-500">暂无版本历史</p>}
+                    )) : <p className="text-[13px] text-muted">暂无版本历史</p>}
                   </div>
                 </TabsContent>
               </CardContent>
@@ -348,7 +348,7 @@ const MarketplaceDetailPage = () => {
                   {item.isOfficial && <Badge className="mt-1 bg-blue-100 text-blue-800 hover:bg-blue-200">官方认证</Badge>}
                 </div>
               </div>
-              <p className="text-sm text-gray-600">
+              <p className="text-[13px] text-muted">
                 {item.isOfficial ? '由ITSM官方团队开发和维护，确保兼容性和安全性。' : '由社区开发者贡献，经过官方审核验证。'}
               </p>
             </CardContent>
@@ -362,7 +362,7 @@ const MarketplaceDetailPage = () => {
 const InfoRow = ({ label, value }: { label: string; value: string }) => (
   <div>
     <div className="text-sm font-medium mb-1">{label}</div>
-    <div className="text-gray-600">{value}</div>
+    <div className="text-muted">{value}</div>
   </div>
 );
 
@@ -371,7 +371,7 @@ const InfoText = ({ icon, label, value }: { icon: React.ReactNode; label: string
     {icon}
     <div>
       <div className="text-sm font-medium">{label}</div>
-      <div className="text-sm text-gray-600 break-all">{value}</div>
+      <div className="break-all text-[13px] text-muted">{value}</div>
     </div>
   </div>
 );
@@ -386,7 +386,7 @@ const InfoLink = ({ icon, label, value }: { icon: React.ReactNode; label: string
           {value}
         </a>
       ) : (
-        <div className="text-sm text-gray-600">未提供</div>
+        <div className="text-[13px] text-muted">未提供</div>
       )}
     </div>
   </div>

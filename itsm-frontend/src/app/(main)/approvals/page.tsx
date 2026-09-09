@@ -167,7 +167,7 @@ export default function ApprovalsCenterPage() {
       key: 'taskName',
       render: (text: string, record: UserTask) => (
         <div>
-          <div className="font-medium text-gray-900">{text || record.taskDefinitionKey}</div>
+          <div className="font-medium text-foreground">{text || record.taskDefinitionKey}</div>
           {record.taskPurpose && (
             <Text type="secondary" className="text-xs">{record.taskPurpose}</Text>
           )}
@@ -223,7 +223,7 @@ export default function ApprovalsCenterPage() {
       responsive: ['xl'] as any,
       render: (t: string) => t ? (
         <Tooltip title={dayjs(t).format('YYYY-MM-DD HH:mm:ss')}>
-          <span className="text-gray-500">{dayjs(t).fromNow()}</span>
+          <span className="text-muted">{dayjs(t).fromNow()}</span>
         </Tooltip>
       ) : '-',
     },
@@ -303,7 +303,7 @@ export default function ApprovalsCenterPage() {
           <Card className="border-l-4 border-l-blue-500">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs md:text-sm text-gray-500">流程待办</div>
+                <div className="text-[12px] text-muted md:text-[13px]">流程待办</div>
                 <div className="text-2xl md:text-3xl font-bold text-blue-600">{tasks.length}</div>
               </div>
               <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-blue-50 flex items-center justify-center">
@@ -316,7 +316,7 @@ export default function ApprovalsCenterPage() {
           <Card className="border-l-4 border-l-gold-500">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs md:text-sm text-gray-500">待领取</div>
+                <div className="text-[12px] text-muted md:text-[13px]">待领取</div>
                 <div className="text-2xl md:text-3xl font-bold text-amber-500">
                   {tasks.filter((t) => !t.assignee).length}
                 </div>
@@ -343,8 +343,8 @@ export default function ApprovalsCenterPage() {
             locale={{
               emptyText: (
                 <div className="py-12 text-center">
-                  <Clock className="mx-auto mb-3 text-gray-300 w-10 h-10" />
-                  <div className="text-gray-500 mb-1">暂无流程待办</div>
+                  <Clock className="mx-auto mb-3 h-10 w-10 text-muted" />
+                  <div className="mb-1 text-muted">暂无流程待办</div>
                   <Text type="secondary" className="text-sm">当前没有分配给您或待您领取的审批任务</Text>
                 </div>
               ),
