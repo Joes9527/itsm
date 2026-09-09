@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,7 +13,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/user"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/shared/workitemmutation"
 	"strconv"
 	"strings"
@@ -43,29 +44,26 @@ func (s *IncidentService) ApplyIncidentCommand(ctx context.Context, cmd dto.Inci
 	if scoped, ok := tenantctx.TenantID(ctx); ok && scoped != m.TenantID {
 		return empty, common.NewForbiddenError("tenant context mismatch")
 	}
-	actor, err := s.client.User.Query().Where(user.ID(m.ActorID), user.TenantID(m.TenantID), user.Active(true)).Only(ctx)
+	ctx = tenantctx.WithTenantID(ctx, m.TenantID)
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
-		return empty, common.NewForbiddenError("command actor unavailable")
+		return empty, err
 	}
-	current, err := s.getIncidentEntity(ctx, cmd.IncidentID, m.TenantID)
+	defer tx.Rollback()
+	current, err := tx.Incident.Query().Where(incident.ID(cmd.IncidentID), incidentTenantScope(m.TenantID, ticket.RecordClass("incident"))).WithWorkItem().Only(ctx)
 	if err != nil {
 		return empty, common.NewNotFoundError("incident")
 	}
-	if _, _, err = authorization.AuthorizeWorkItem(ctx, s.client, current.WorkItemID, m.TenantID, authorization.EffectiveSessionRole(actor), "update"); err != nil {
+	if err = s.authorizeIncidentCommandActor(ctx, tx, cmd, current.WorkItemID); err != nil {
 		return empty, err
 	}
 	digest, err := incidentCommandDigest(cmd)
 	if err != nil {
 		return empty, err
 	}
-	if result, ok, err := workitemmutation.Replay(ctx, s.client, m, current.WorkItemID, digest); ok || err != nil {
+	if result, ok, err := workitemmutation.Replay(ctx, tx.Client(), m, current.WorkItemID, digest); ok || err != nil {
 		return result, err
 	}
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return empty, err
-	}
-	defer tx.Rollback()
 	result, err := s.applyIncidentCommandTx(ctx, tx, cmd, digest)
 	if err == nil {
 		err = tx.Commit()
@@ -73,7 +71,15 @@ func (s *IncidentService) ApplyIncidentCommand(ctx context.Context, cmd dto.Inci
 	if err != nil {
 		_ = tx.Rollback()
 		// A concurrent same-key winner can commit while this transaction waits on CAS.
-		if replay, ok, replayErr := workitemmutation.Replay(ctx, s.client, m, current.WorkItemID, digest); ok || replayErr != nil {
+		replayTx, openErr := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+		if openErr != nil {
+			return result, err
+		}
+		defer replayTx.Rollback()
+		if authErr := s.authorizeIncidentCommandActor(ctx, replayTx, cmd, current.WorkItemID); authErr != nil {
+			return empty, authErr
+		}
+		if replay, ok, replayErr := workitemmutation.Replay(ctx, replayTx.Client(), m, current.WorkItemID, digest); ok || replayErr != nil {
 			return replay, replayErr
 		}
 	}
@@ -103,11 +109,7 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 		return empty, common.NewNotFoundError("incident")
 	}
 	item := current.Edges.WorkItem
-	actor, err := tx.User.Query().Where(user.ID(m.ActorID), user.TenantID(m.TenantID), user.Active(true)).Only(ctx)
-	if err != nil {
-		return empty, common.NewForbiddenError("command actor unavailable")
-	}
-	if _, _, err = authorization.AuthorizeWorkItem(ctx, tx.Client(), item.ID, m.TenantID, authorization.EffectiveSessionRole(actor), "update"); err != nil {
+	if err = s.authorizeIncidentCommandActor(ctx, tx, cmd, item.ID); err != nil {
 		return empty, err
 	}
 	if replay, ok, err := workitemmutation.Replay(ctx, tx.Client(), m, item.ID, digest); ok || err != nil {
@@ -187,7 +189,9 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 		return empty, err
 	}
 	if cmd.Action == "reopen" {
-		if err = NewTicketSLAService(s.client, s.logger).ResetCycleTx(ctx, tx, item, now, m); err != nil {
+		sla := NewTicketSLAService(s.client, s.logger)
+		sla.SetDirectorySnapshot(s.directory)
+		if err = sla.ResetCycleTx(ctx, tx, item, now, m); err != nil {
 			return empty, err
 		}
 		// The helper archives the completed cycle before any completion is cleared.
@@ -246,4 +250,18 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 		return empty, err
 	}
 	return result, nil
+}
+
+func (s *IncidentService) authorizeIncidentCommandActor(ctx context.Context, tx *ent.Tx, cmd dto.IncidentCommand, itemID int) error {
+	actor, err := authorization.ResolveLifecycleActor(ctx, tx, s.directory, cmd.Meta.ActorID, cmd.Meta.TenantID)
+	if err != nil {
+		return err
+	}
+	if _, _, err = authorization.AuthorizeWorkItem(ctx, tx.Client(), itemID, cmd.Meta.TenantID, authorization.EffectiveSessionRole(actor), "update"); err != nil {
+		return err
+	}
+	if err = authorization.RequireCurrentPermission(ctx, tx, creation.Identity{TenantID: cmd.Meta.TenantID, ActorID: actor.ID, Role: authorization.EffectiveSessionRole(actor)}, "incident", "write"); err != nil {
+		return common.NewForbiddenError("insufficient current Incident permission")
+	}
+	return nil
 }

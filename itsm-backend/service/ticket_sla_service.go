@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"itsm-backend/database"
 	"itsm-backend/dto"
 	"itsm-backend/handlers/shared/slacontract"
 	"strings"
@@ -74,8 +75,9 @@ type TicketStats struct {
 
 // TicketSLAService 工单SLA服务
 type TicketSLAService struct {
-	client *ent.Client
-	logger *zap.SugaredLogger
+	directory database.DirectorySnapshot
+	client    *ent.Client
+	logger    *zap.SugaredLogger
 }
 
 // NewTicketSLAService 创建工单SLA服务
@@ -520,4 +522,8 @@ func mapTicketTypeToServiceType(ticketType string) string {
 // toPointer 返回指针（辅助函数）
 func toPointer[T any](v T) *T {
 	return &v
+}
+
+func (s *TicketSLAService) SetDirectorySnapshot(directory database.DirectorySnapshot) {
+	s.directory = directory
 }

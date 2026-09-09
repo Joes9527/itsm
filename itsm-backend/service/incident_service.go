@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"itsm-backend/database"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 )
 
 type IncidentService struct {
+	directory             database.DirectorySnapshot
 	priorityMatrixService *PriorityMatrixService
 	client                *ent.Client
 	logger                *zap.SugaredLogger
@@ -1288,4 +1290,9 @@ func (s *IncidentService) mapProcessStatus(status string) dto.ProcessStatus {
 	default:
 		return dto.ProcessStatusPending
 	}
+}
+
+func (s *IncidentService) SetDirectorySnapshot(directory database.DirectorySnapshot) {
+	s.directory = directory
+	s.ruleEngine.SetDirectorySnapshot(directory)
 }

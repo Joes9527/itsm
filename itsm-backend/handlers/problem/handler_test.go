@@ -277,6 +277,13 @@ func TestProblemHTTPHandlerMutationsUseResolvedMSPTenant(t *testing.T) {
 	user := createProblemHandlerUser(t, ctx, client, homeTenant.ID, "msp-write-agent")
 	creator := createProblemHandlerUser(t, ctx, client, customerTenant.ID, "msp-write-creator")
 	p := createProblemHandlerProblem(t, ctx, service, customerTenant.ID, creator.ID)
+	homeTenant.Update().SetType("msp_provider").ExecX(ctx)
+	customerTenant.Update().SetType("msp_customer").ExecX(ctx)
+	user.Update().SetMspRole("provider_agent").ExecX(ctx)
+	client.MSPAllocation.Create().SetMspUserID(user.ID).SetCustomerTenantID(customerTenant.ID).SetRole("primary").SaveX(ctx)
+	role := client.Role.Create().SetTenantID(customerTenant.ID).SetCode("msp_tech").SetName("MSP technician").SetIsActive(true).SaveX(ctx)
+	permission := client.Permission.Create().SetTenantID(customerTenant.ID).SetCode("msp-problem-write").SetName("Problem write").SetResource("problem").SetAction("write").SaveX(ctx)
+	client.RolePermission.Create().SetTenantID(customerTenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(ctx)
 
 	request := func(method, path string, body interface{}) *httptest.ResponseRecorder {
 		var payload []byte
@@ -303,12 +310,12 @@ func TestProblemHTTPHandlerMutationsUseResolvedMSPTenant(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
 	w = request(http.MethodPost, fmt.Sprintf("/api/v1/problems/%d/investigate", p.ID), map[string]any{"version": p.Version + 1, "operationId": "msp-investigate"})
-	require.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
 	updated, err := service.Get(ctx, p.ID, customerTenant.ID)
 	require.NoError(t, err)
 	require.Equal(t, "MSP updated problem", updated.Title)
-	require.Equal(t, "open", updated.Status)
+	require.Equal(t, "investigating", updated.Status)
 }
 
 func TestProblemHTTPHandlerUpdateAndLifecycle(t *testing.T) {

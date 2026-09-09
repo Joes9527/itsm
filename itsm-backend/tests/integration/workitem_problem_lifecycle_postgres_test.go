@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
@@ -23,7 +24,137 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
+
+func TestWorkItemProblemLifecycleAllocatedMSP(t *testing.T) {
+	for _, bound := range []bool{false, true} {
+		t.Run(fmt.Sprint("bound=", bound), func(t *testing.T) {
+			f := newProblemLifecycleFixture(t)
+			f.client.Tenant.UpdateOneID(f.tenant.ID).SetType("msp_customer").ExecX(f.ctx)
+			provider := f.client.Tenant.Create().SetCode("lifecycle-provider").SetName("Provider").SetType("msp_provider").SaveX(f.ctx)
+			actor := f.client.User.Create().SetTenantID(provider.ID).SetUsername("provider-operator").SetName("MSP operator").SetEmail("provider-operator@example.test").SetPasswordHash("test").SetRole("admin").SetMspRole("provider_agent").SetActive(true).SaveX(f.ctx)
+			allocation := f.client.MSPAllocation.Create().SetMspUserID(actor.ID).SetCustomerTenantID(f.tenant.ID).SetRole("primary").SaveX(f.ctx)
+			role := f.client.Role.Create().SetTenantID(f.tenant.ID).SetCode("msp_tech").SetName("MSP technician").SetIsActive(true).SaveX(f.ctx)
+			for _, resource := range []string{"problem", "incident"} {
+				permission := f.client.Permission.Create().SetTenantID(f.tenant.ID).SetCode(resource + ":write").SetName(resource + " write").SetResource(resource).SetAction("write").SaveX(f.ctx)
+				f.client.RolePermission.Create().SetTenantID(f.tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(f.ctx)
+			}
+			authorization.InvalidateAllPermissionCaches()
+			t.Cleanup(authorization.InvalidateAllPermissionCaches)
+			nativeInvestigator := f.actor
+			clients, cfg := runtimeClients(t, f.incidentEffectsFixture)
+			for _, table := range []string{"problems", "problem_investigations"} {
+				_, err := f.db.ExecContext(f.ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON "+table+" TO "+cfg.User)
+				require.NoError(t, err)
+				_, err = f.db.ExecContext(f.ctx, "GRANT USAGE ON SEQUENCE "+table+"_id_seq TO "+cfg.User)
+				require.NoError(t, err)
+			}
+			f.ctx = tenantctx.WithTenantID(f.ctx, f.tenant.ID)
+			f.owner = problem.NewService(problem.NewEntRepository(clients.Tenant), zap.NewNop().Sugar())
+			f.owner.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
+			_, err := clients.Tenant.User.Get(f.ctx, actor.ID)
+			require.True(t, ent.IsNotFound(err), "provider must be hidden in customer RLS")
+			f.actor = actor
+			if bound {
+				policy := f.client.SLADefinition.Create().SetTenantID(f.tenant.ID).SetName("MSP SLA").SetResponseTime(30).SetResolutionTime(120).SaveX(f.ctx)
+				tx, err := f.client.Tx(f.ctx)
+				require.NoError(t, err)
+				require.NoError(t, service.NewTicketSLAService(f.client, zap.NewNop().Sugar()).ApplyCreationSLA(f.ctx, tx, f.client.Ticket.GetX(f.ctx, f.p.WorkItemID), &policy.ID))
+				require.NoError(t, tx.Commit())
+			}
+			for _, investigator := range []int{0, actor.ID} {
+				cmd := f.command("investigate", fmt.Sprint("invalid-investigator-", investigator))
+				cmd.Investigation = &dto.CreateProblemInvestigationRequest{ProblemID: f.p.ID, InvestigatorID: investigator}
+				_, err := f.owner.ApplyCommand(f.ctx, cmd)
+				require.ErrorContains(t, err, "select an active investigator in the customer tenant")
+			}
+			start := f.command("investigate", "allocated-start")
+			start.Investigation = &dto.CreateProblemInvestigationRequest{ProblemID: f.p.ID, InvestigatorID: nativeInvestigator.ID}
+			_, err = f.owner.ApplyCommand(f.ctx, start)
+			require.NoError(t, err)
+			var assigned int
+			require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT investigator_id FROM problem_investigations WHERE problem_id=$1", f.p.ID).Scan(&assigned))
+			require.Equal(t, nativeInvestigator.ID, assigned)
+			f.evidence(t)
+			f.apply(t, "verify_resolution", "allocated-verify")
+			require.Equal(t, actor.ID, f.client.Problem.GetX(f.ctx, f.p.ID).VerifiedBy)
+			f.apply(t, "resolve", "allocated-resolve")
+			f.apply(t, "close", "allocated-close")
+			f.apply(t, "reopen", "allocated-reopen")
+			if bound {
+				require.Equal(t, 2, f.client.Ticket.GetX(f.ctx, f.p.WorkItemID).SLACycleNumber)
+			}
+			allocation.Update().SetDeassignedAt(time.Now()).ExecX(f.ctx)
+			_, err = f.owner.ApplyCommand(f.ctx, f.command("verify_resolution", "revoked"))
+			require.Error(t, err)
+			allocation.Update().ClearDeassignedAt().ExecX(f.ctx)
+			incOwner := service.NewIncidentService(clients.Tenant, zap.NewNop().Sugar())
+			incOwner.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
+			incidentCommand := func(action, key string) dto.IncidentCommand {
+				return dto.IncidentCommand{Meta: workitemmutation.Meta{TenantID: f.tenant.ID, ActorID: f.actor.ID, ExpectedVersion: f.client.Ticket.GetX(f.ctx, f.inc.WorkItemID).Version, OperationID: key, Source: "http"}, IncidentID: f.inc.ID, Action: action, Resolution: "service restored", Reason: "confirmed"}
+			}
+			for _, action := range []string{"acknowledge", "start", "resolve", "close", "reopen"} {
+				_, err := incOwner.ApplyIncidentCommand(f.ctx, incidentCommand(action, "msp-"+action))
+				require.NoError(t, err)
+			}
+			assertDenied := func(label string) {
+				t.Helper()
+				_, err := f.owner.ApplyCommand(f.ctx, f.command("verify_resolution", label))
+				require.Error(t, err, label)
+				appErr, ok := common.AsAppError(err)
+				require.True(t, ok, label)
+				require.Equal(t, common.ErrCodeForbidden, appErr.Code, label)
+				_, err = incOwner.ApplyIncidentCommand(f.ctx, incidentCommand("resolve", label))
+				require.Error(t, err, label)
+				appErr, ok = common.AsAppError(err)
+				require.True(t, ok, label)
+				require.Equal(t, common.ErrCodeForbidden, appErr.Code, label)
+			}
+			allocation.Update().SetDeassignedAt(time.Now()).ExecX(f.ctx)
+			assertDenied("revoked-allocation")
+			outsider := f.client.User.Create().SetTenantID(provider.ID).SetUsername("unallocated").SetName("unallocated").SetEmail("unallocated@example.test").SetPasswordHash("test").SetRole("super_admin").SetMspRole("provider_agent").SetActive(true).SaveX(f.ctx)
+			outsider.Update().SetRole("admin").ExecX(f.ctx)
+			f.actor = outsider
+			assertDenied("unallocated-provider")
+			outsider.Update().ClearMspRole().ExecX(f.ctx)
+			assertDenied("native-cross-tenant")
+			f.actor = &ent.User{ID: 999999}
+			assertDenied("forged-actor")
+			allocation.Update().ClearDeassignedAt().ExecX(f.ctx)
+			f.actor = actor
+			rule := f.client.IncidentRule.Create().SetTenantID(f.tenant.ID).SetName("Provider close").SetRuleType("automation").SetIsActive(true).SetConditions(map[string]interface{}{}).SetActions([]map[string]interface{}{{"type": "change_status", "status": "resolved", "resolution": "restored by provider"}}).SaveX(f.ctx)
+			ruleIncident := f.client.Incident.GetX(f.ctx, f.inc.ID)
+			ruleIncident.Edges.WorkItem = f.client.Ticket.GetX(f.ctx, f.inc.WorkItemID)
+			ruleCtx := service.WithIncidentAlertActor(f.ctx, actor.ID, "incident_rule", "allocated-rule")
+			require.NoError(t, incOwner.RuleEngine().ExecuteRule(ruleCtx, rule, ruleIncident, f.tenant.ID))
+			rule.Actions = []map[string]interface{}{{"type": "change_status", "status": "closed", "reason": "confirmed"}}
+			allocation.Update().SetDeassignedAt(time.Now()).ExecX(f.ctx)
+			deniedRuleCtx := service.WithIncidentAlertActor(f.ctx, actor.ID, "incident_rule", "revoked-rule")
+			require.Error(t, incOwner.RuleEngine().ExecuteRule(deniedRuleCtx, rule, ruleIncident, f.tenant.ID))
+			allocation.Update().ClearDeassignedAt().ExecX(f.ctx)
+
+			actor.Update().SetActive(false).ExecX(f.ctx)
+			assertDenied("inactive-actor")
+			actor.Update().SetActive(true).ExecX(f.ctx)
+			role.Update().SetIsActive(false).ExecX(f.ctx)
+			assertDenied("revoked-permission")
+			role.Update().SetIsActive(true).ExecX(f.ctx)
+			outsider.Update().SetRole("super_admin").ExecX(f.ctx)
+			f.actor = outsider
+			f.apply(t, "verify_resolution", "native-super-admin")
+			_, err = incOwner.ApplyIncidentCommand(f.ctx, incidentCommand("reopen", "incident-native-super-admin"))
+			require.NoError(t, err)
+			require.Equal(t, outsider.ID, f.client.Problem.GetX(f.ctx, f.p.ID).VerifiedBy)
+			var wrongActors int
+			require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT count(*) FROM audit_logs WHERE path=$1 AND resource='work_item' AND user_id NOT IN ($2,$3)", fmt.Sprint(f.p.WorkItemID), actor.ID, outsider.ID).Scan(&wrongActors))
+			require.Zero(t, wrongActors)
+			var providerReceipts int
+			require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT count(*) FROM audit_logs WHERE path=$1 AND resource='work_item' AND user_id=$2", fmt.Sprint(f.p.WorkItemID), actor.ID).Scan(&providerReceipts))
+			require.Equal(t, 5, providerReceipts)
+		})
+	}
+}
 
 type problemLifecycleFixture struct {
 	*incidentEffectsFixture

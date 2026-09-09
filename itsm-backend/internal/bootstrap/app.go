@@ -272,6 +272,7 @@ func NewApplication() *Application {
 	// 初始化业务服务层
 	incidentService := service.NewIncidentService(client, sugar)
 	incidentService.RuleEngine().SetActorDirectory(systemClient)
+	incidentService.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 
 	// 初始化 EventBus 事件总线
 	eventBus, err := eventbus.NewWatermillEventBus(&cfg.Redis, sugar)
@@ -529,6 +530,7 @@ func NewApplication() *Application {
 	rootCauseAnalysisService := service.NewRootCauseAnalysisService(client)
 	problemRepo := problem.NewEntRepository(client)
 	problemServiceDomain := problem.NewService(problemRepo, sugar)
+	problemServiceDomain.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 	problemHandler := problem.NewHandler(problemServiceDomain, client)
 	problemInvestigationService := service.NewTenantScopedProblemInvestigationService(database.GetRawDB(), sugar)
 	problemInvestigationController := controller.NewProblemInvestigationController(sugar, problemInvestigationService)

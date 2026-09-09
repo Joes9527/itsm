@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"itsm-backend/authorization"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/sladefinition"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/user"
 	"itsm-backend/handlers/shared/slacontract"
 	"time"
 
@@ -117,12 +117,8 @@ func (s *TicketSLAService) cycleCommandItem(ctx context.Context, tx *ent.Tx, ite
 	if scoped, ok := tenantctx.TenantID(ctx); ok && scoped != meta.TenantID {
 		return nil, fmt.Errorf("SLA cycle tenant context mismatch")
 	}
-	exists, err := tx.User.Query().Where(user.ID(meta.ActorID), user.TenantID(meta.TenantID), user.Active(true)).Exist(ctx)
-	if err != nil {
+	if _, err := authorization.ResolveLifecycleActor(ctx, tx, s.directory, meta.ActorID, meta.TenantID); err != nil {
 		return nil, err
-	}
-	if !exists {
-		return nil, fmt.Errorf("SLA cycle actor unavailable in tenant")
 	}
 	current, err := tx.Ticket.Query().Where(ticket.ID(item.ID), ticket.TenantID(meta.TenantID), ticket.DeletedAtIsNil()).Only(ctx)
 	if err != nil {

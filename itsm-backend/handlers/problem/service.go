@@ -3,6 +3,7 @@ package problem
 import (
 	"context"
 	"fmt"
+	"itsm-backend/database"
 	"strings"
 
 	"go.uber.org/zap"
@@ -11,6 +12,7 @@ import (
 )
 
 type Service struct {
+	directory      database.DirectorySnapshot
 	client         *ent.Client
 	investigations investigationTransactions
 	repo           Repository
@@ -186,3 +188,5 @@ func (s *Service) Delete(ctx context.Context, id int, tenantID int) error {
 func (s *Service) GetStats(ctx context.Context, tenantID int) (*ProblemStats, error) {
 	return s.repo.GetStats(ctx, tenantID)
 }
+
+func (s *Service) SetDirectorySnapshot(directory database.DirectorySnapshot) { s.directory = directory }

@@ -2,7 +2,9 @@ package problem
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"strings"
 	"time"
 
@@ -45,18 +47,21 @@ func resolutionDigest(p *ent.Problem) (string, error) {
 	return workitemmutation.Digest(struct{ RootCause, Resolution string }{p.RootCause, p.Resolution})
 }
 
-func (s *Service) authorizeCommand(ctx context.Context, client *ent.Client, cmd Command) (*ent.Problem, error) {
+func (s *Service) authorizeCommand(ctx context.Context, tx *ent.Tx, cmd Command) (*ent.Problem, error) {
 	m := cmd.Meta
-	actor, err := client.User.Query().Where(user.ID(m.ActorID), user.TenantID(m.TenantID), user.Active(true)).Only(ctx)
+	actor, err := authorization.ResolveLifecycleActor(ctx, tx, s.directory, m.ActorID, m.TenantID)
 	if err != nil {
-		return nil, common.NewForbiddenError("command actor unavailable")
+		return nil, err
 	}
-	p, err := client.Problem.Query().Where(ep.ID(cmd.ProblemID), problemTenantScope(m.TenantID, ticket.RecordClass("problem"))).WithWorkItem().Only(ctx)
+	p, err := tx.Problem.Query().Where(ep.ID(cmd.ProblemID), problemTenantScope(m.TenantID, ticket.RecordClass("problem"))).WithWorkItem().Only(ctx)
 	if err != nil {
 		return nil, common.NewNotFoundError("problem")
 	}
-	if _, _, err = authorization.AuthorizeWorkItem(ctx, client, p.WorkItemID, m.TenantID, authorization.EffectiveSessionRole(actor), "update"); err != nil {
+	if _, _, err = authorization.AuthorizeWorkItem(ctx, tx.Client(), p.WorkItemID, m.TenantID, authorization.EffectiveSessionRole(actor), "update"); err != nil {
 		return nil, err
+	}
+	if err = authorization.RequireCurrentPermission(ctx, tx, creation.Identity{TenantID: m.TenantID, ActorID: actor.ID, Role: authorization.EffectiveSessionRole(actor)}, "problem", "write"); err != nil {
+		return nil, common.NewForbiddenError("insufficient current Problem permission")
 	}
 	return p, nil
 }
@@ -76,7 +81,13 @@ func (s *Service) ApplyCommand(ctx context.Context, cmd Command) (workitemmutati
 	if tenant, ok := tenantctx.TenantID(ctx); ok && tenant != m.TenantID {
 		return empty, common.NewForbiddenError("tenant context mismatch")
 	}
-	p, err := s.authorizeCommand(ctx, s.client, cmd)
+	ctx = tenantctx.WithTenantID(ctx, m.TenantID)
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		return empty, err
+	}
+	defer tx.Rollback()
+	p, err := s.authorizeCommand(ctx, tx, cmd)
 	if err != nil {
 		return empty, err
 	}
@@ -88,21 +99,24 @@ func (s *Service) ApplyCommand(ctx context.Context, cmd Command) (workitemmutati
 	if err != nil {
 		return empty, err
 	}
-	if result, ok, err := workitemmutation.Replay(ctx, s.client, m, p.WorkItemID, digest); ok || err != nil {
+	if result, ok, err := workitemmutation.Replay(ctx, tx.Client(), m, p.WorkItemID, digest); ok || err != nil {
 		return result, err
 	}
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
-		return empty, err
-	}
-	defer tx.Rollback()
 	result, err := s.applyCommandTx(ctx, tx, cmd, digest)
 	if err == nil {
 		err = tx.Commit()
 	}
 	if err != nil {
 		_ = tx.Rollback()
-		if replay, ok, replayErr := workitemmutation.Replay(ctx, s.client, m, p.WorkItemID, digest); ok || replayErr != nil {
+		replayTx, openErr := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+		if openErr != nil {
+			return result, err
+		}
+		defer replayTx.Rollback()
+		if _, authErr := s.authorizeCommand(ctx, replayTx, cmd); authErr != nil {
+			return empty, authErr
+		}
+		if replay, ok, replayErr := workitemmutation.Replay(ctx, replayTx.Client(), m, p.WorkItemID, digest); ok || replayErr != nil {
 			return replay, replayErr
 		}
 	}
@@ -112,7 +126,7 @@ func (s *Service) ApplyCommand(ctx context.Context, cmd Command) (workitemmutati
 func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, digest string) (workitemmutation.Result, error) {
 	var empty workitemmutation.Result
 	m := cmd.Meta
-	p, err := s.authorizeCommand(ctx, tx.Client(), cmd)
+	p, err := s.authorizeCommand(ctx, tx, cmd)
 	if err != nil {
 		return empty, err
 	}
@@ -213,7 +227,9 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, d
 		}
 	}
 	if cmd.Action == "reopen" {
-		if err = service.NewTicketSLAService(s.client, s.logger).ResetCycleTx(ctx, tx, item, now, m); err != nil {
+		sla := service.NewTicketSLAService(s.client, s.logger)
+		sla.SetDirectorySnapshot(s.directory)
+		if err = sla.ResetCycleTx(ctx, tx, item, now, m); err != nil {
 			return empty, err
 		}
 		updated, err = tx.Ticket.UpdateOneID(item.ID).ClearFirstResponseAt().ClearResolvedAt().ClearClosedAt().Save(ctx)
@@ -233,7 +249,7 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, d
 		if err != nil {
 			return empty, err
 		}
-		if _, err = s.authorizeCommand(ctx, tx.Client(), cmd); err != nil {
+		if _, err = s.authorizeCommand(ctx, tx, cmd); err != nil {
 			return empty, err
 		}
 	}
@@ -248,7 +264,7 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, d
 func (r *EntRepository) createInvestigationTx(ctx context.Context, tx *ent.Tx, req *dto.CreateProblemInvestigationRequest, tenantID int, now time.Time) (int, error) {
 	_, err := tx.User.Query().Where(user.ID(req.InvestigatorID), user.TenantID(tenantID), user.Active(true)).Only(ctx)
 	if err != nil {
-		return 0, common.NewForbiddenError("investigator unavailable in tenant")
+		return 0, common.NewForbiddenError("select an active investigator in the customer tenant")
 	}
 	rows, err := tx.QueryContext(ctx, `INSERT INTO problem_investigations (problem_id,investigator_id,estimated_completion_date,investigation_summary,created_at,updated_at) VALUES ($1,$2,$3,$4,$5,$5) RETURNING id`, req.ProblemID, req.InvestigatorID, req.EstimatedCompletionDate, req.InvestigationSummary, now)
 	if err != nil {

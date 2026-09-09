@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/database"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	incidentpkg "itsm-backend/ent/incident"
@@ -20,6 +21,7 @@ import (
 )
 
 type IncidentRuleEngine struct {
+	directory      database.DirectorySnapshot
 	client         *ent.Client
 	actorDirectory *ent.Client
 	logger         *zap.SugaredLogger
@@ -31,6 +33,10 @@ func NewIncidentRuleEngine(client *ent.Client, logger *zap.SugaredLogger) *Incid
 		client: client,
 		logger: logger,
 	}
+}
+
+func (e *IncidentRuleEngine) SetDirectorySnapshot(directory database.DirectorySnapshot) {
+	e.directory = directory
 }
 
 // SetActorDirectory wires the restricted directory used by committed Intake effects.
@@ -252,6 +258,7 @@ func (a *AssignmentAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *
 
 // StatusChangeAction 状态变更动作
 type StatusChangeAction struct {
+	directory  database.DirectorySnapshot
 	Status     string
 	Reason     string
 	Resolution string
@@ -265,6 +272,7 @@ func (a *StatusChangeAction) Execute(ctx context.Context, incident *ent.Incident
 
 func (a *StatusChangeAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
 	incidentService := NewIncidentService(a.client, a.logger)
+	incidentService.SetDirectorySnapshot(a.directory)
 	actor, ok := ctx.Value(incidentAlertActorContextKey{}).(incidentAlertActor)
 	if !ok || actor.ID <= 0 || actor.Source == "" || actor.CorrelationID == "" || incident.Edges.WorkItem == nil {
 		return rejectIncidentAction("status rule requires trusted actor, stable action identity and WorkItem")
@@ -788,6 +796,7 @@ func (e *IncidentRuleEngine) parseStatusChangeAction(actionData map[string]inter
 	reason, _ := actionData["reason"].(string)
 	resolution, _ := actionData["resolution"].(string)
 	return &StatusChangeAction{
+		directory:  e.directory,
 		Status:     status,
 		Reason:     reason,
 		Resolution: resolution,
