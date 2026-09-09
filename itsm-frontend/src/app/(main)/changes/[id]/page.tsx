@@ -35,19 +35,16 @@ function mapApprovalStatus(status: string): ApprovalStepStatus {
   }
 }
 
-// 把 Change 响应映射成 WorkItemShell 的公共字段契约。同 Incident/Problem 迁移那次的模式
-// （itsm-frontend/src/app/(main)/incidents/[id]/page.tsx、problems/[id]/page.tsx）：id 用
-// workItemId（tickets.id，评论/附件/未来的 SLA 都挂在这个 ID 下），number 用变更自己的展示
-// 编号（后端目前用 "C-{id}" 格式，见 dto.ChangeCalendarItem.ChangeNumber，这里保持一致）。
+// Shared identity and number are projected from the authorized WorkItem relation.
 function toWorkItemCommon(change: Change): WorkItemCommon | null {
-  if (!change.workItemId) {
+  if (!change.workItemId || !change.number) {
     // 缺少 workItemId 表示开发数据违反 WorkItem 创建不变量。拒绝用专业记录 ID 猜测
     // WorkItem 身份，避免把评论或附件挂到错误记录。
     return null;
   }
   return {
     id: change.workItemId,
-    number: `C-${change.id}`,
+    number: change.number,
     recordClass: 'change_request',
     title: change.title,
     status: change.status,
@@ -148,30 +145,26 @@ export default function ChangeDetailPage() {
     if (workItem?.id) {
       void loadSLA(workItem.id);
     }
-  }, [workItem?.id, loadSLA]);
+  }, [workItem?.id, change?.version, loadSLA]);
 
-  const renderDetailAndTabs = (fallbackActions?: Change['actions']) => (
+  const renderDetailAndTabs = () => (
     <>
       {/* 主详情组件保持不变——风险等级/CAB/发布窗口（计划开始结束时间）/实施结果/PIR 等
           Change 专业字段、以及所有编辑动作都在这个组件内部完成，WorkItemShell 只包一层
           公共身份信息，不重新实现这些逻辑。 */}
-      <ChangeDetail
-        id={id}
-        fallbackActions={fallbackActions}
-        onChangeLoaded={syncChangeSummary}
-      />
+      <ChangeDetail id={id} onChangeLoaded={syncChangeSummary} />
 
       {/* 追加：审批时间线。历史现在由 WorkItemShell 自己的区块渲染，不再在这里重复一份——
           见 docs/superpowers/specs/2026-08-28-work-item-detail-page-parity-design.md §5.2。 */}
       {Number.isFinite(numericId) && numericId > 0 && (
         <div style={{ padding: '0 24px 24px' }}>
-          <Card className="mt-4 rounded-lg shadow-sm border border-gray-200">
-            <div className="flex items-center gap-1.5 mb-3 text-sm font-medium text-gray-700">
+          <Card className='mt-4 rounded-lg shadow-sm border border-gray-200'>
+            <div className='flex items-center gap-1.5 mb-3 text-sm font-medium text-gray-700'>
               <GitBranch size={14} />
               审批时间线
             </div>
             {approvalLoading ? (
-              <div className="p-6 text-center">加载中...</div>
+              <div className='p-6 text-center'>加载中...</div>
             ) : (
               <ApprovalTimeline
                 approvals={approvals}
@@ -203,12 +196,12 @@ export default function ChangeDetailPage() {
       ) : (
         <>
           <Alert
-            type="info"
+            type='info'
             showIcon
-            message="该变更尚未关联 WorkItem，评论/附件/历史/关联等协作能力暂不可用"
+            message='该变更尚未关联 WorkItem，评论/附件/历史/关联等协作能力暂不可用'
             style={{ marginBottom: 16 }}
           />
-          {renderDetailAndTabs(change?.actions)}
+          {renderDetailAndTabs()}
         </>
       )}
     </App>

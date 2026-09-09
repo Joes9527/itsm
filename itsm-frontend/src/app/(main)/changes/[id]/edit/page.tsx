@@ -18,8 +18,10 @@ import {
 } from 'antd';
 import { ArrowLeft, Lock, Save } from 'lucide-react';
 import dayjs, { type Dayjs } from 'dayjs';
-import { ChangeApi, type ChangeRequest } from '@/lib/api/change-api';
+import { ChangeApi, type ChangeRequest, type Change } from '@/lib/api/change-api';
 import { useI18n } from '@/lib/i18n';
+
+import { useChangeOperation } from '@/components/change/useChangeOperation';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -63,9 +65,6 @@ const RISK_OPTIONS: Array<{ value: ChangeRequest['riskLevel']; label: string }> 
   { value: 'low', label: '低' },
 ];
 
-// 不允许编辑的状态列表（已审批通过/实施中/已完成）
-const READONLY_STATUSES = ['approved', 'implementing', 'completed', 'closed'];
-
 const EditChangePage: React.FC = () => {
   const router = useRouter();
   const params = useParams();
@@ -75,8 +74,10 @@ const EditChangePage: React.FC = () => {
   const [form] = Form.useForm<ChangeFormValues>();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
-  const [changeData, setChangeData] = useState<any>(null);
-  const [isReadonly, setIsReadonly] = useState(false);
+  const [changeData, setChangeData] = useState<Change | null>(null);
+  const [isReadonly, setIsReadonly] = useState(true);
+  const operation = useChangeOperation();
+  const [error, setError] = useState('');
 
   // Fetch change data
   useEffect(() => {
@@ -89,12 +90,7 @@ const EditChangePage: React.FC = () => {
         const data = resp as any;
         setChangeData(data);
 
-        // 状态守卫：已审批/实施中/已完成的变更不允许编辑
-        if (READONLY_STATUSES.includes(data.status)) {
-          setIsReadonly(true);
-          message.warning('该变更已进入不可编辑状态，仅可查看');
-          return;
-        }
+        setIsReadonly(!data.actions?.metadata?.allowed);
 
         // 解析 affectedCis
         const cisText = Array.isArray(data.affectedCis)
@@ -132,7 +128,7 @@ const EditChangePage: React.FC = () => {
   }, [id, form, router, message, t]);
 
   const handleSubmit = async (values: ChangeFormValues) => {
-    if (!id) return;
+    if (!id || !changeData) return;
 
     setLoading(true);
     try {
@@ -159,12 +155,24 @@ const EditChangePage: React.FC = () => {
         relatedTickets: changeData?.relatedTickets || [],
       };
 
-      await ChangeApi.updateChange(Number(id), payload);
+      const patch = Object.fromEntries(
+        Object.entries(payload).filter(
+          ([key, value]) =>
+            value !== undefined &&
+            JSON.stringify(value) !== JSON.stringify(changeData[key as keyof Change])
+        )
+      );
+      await ChangeApi.updateChange(Number(id), {
+        ...patch,
+        ...operation.identity(`${id}/metadata`, patch, changeData.version),
+      });
+      operation.clear();
+      setChangeData(await ChangeApi.getChange(Number(id)));
       message.success(t('changes.updateSuccess') || '变更更新成功');
       router.push(`/changes/${id}`);
     } catch (err) {
       console.error('更新变更失败:', err);
-      message.error(t('changes.updateFailed') || '变更更新失败');
+      setError(err instanceof Error ? err.message : '变更更新失败');
     } finally {
       setLoading(false);
     }
@@ -179,80 +187,103 @@ const EditChangePage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 md:p-10 bg-gray-50 min-h-full">
-      <div className="mb-6">
+    <div className='p-6 md:p-10 bg-gray-50 min-h-full'>
+      <div className='mb-6'>
         <Button
-          type="link"
+          type='link'
           icon={<ArrowLeft size={16} />}
           onClick={() => router.back()}
-          className="!px-0"
+          className='!px-0'
         >
           返回变更详情
         </Button>
-        <Title level={2} className="!mb-1 !mt-2">
+        <Title level={2} className='!mb-1 !mt-2'>
           编辑变更请求 #{id}
         </Title>
-        <Text type="secondary">修改 IT 基础设施或服务变更请求</Text>
+        <Text type='secondary'>修改 IT 基础设施或服务变更请求</Text>
       </div>
 
+      {error && (
+        <Alert
+          type='error'
+          title={error}
+          action={
+            <Button
+              onClick={async () => {
+                try {
+                  const next = await ChangeApi.getChange(Number(id));
+                  setChangeData(next);
+                  setIsReadonly(!next.actions?.metadata?.allowed);
+                  operation.clear();
+                  setError('');
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : '刷新失败');
+                }
+              }}
+            >
+              刷新版本，保留表单
+            </Button>
+          }
+        />
+      )}
       {/* 状态守卫提示 */}
       {isReadonly && (
         <Alert
-          type="warning"
+          type='warning'
           showIcon
           icon={<Lock />}
-          message="该变更已进入不可编辑状态"
-          description="已审批通过、实施中或已完成的变更不允许修改。如需修改，请发起变更申请。"
-          className="mb-4"
+          message='该变更已进入不可编辑状态'
+          description={changeData?.actions?.metadata?.reason || '当前操作不可用，请刷新详情核查'}
+          className='mb-4'
           action={
-            <Button size="small" onClick={() => router.push(`/changes/${id}`)}>
+            <Button size='small' onClick={() => router.push(`/changes/${id}`)}>
               返回详情
             </Button>
           }
         />
       )}
 
-      <Card className="shadow-sm rounded-lg" loading={fetching}>
+      <Card className='shadow-sm rounded-lg' loading={fetching}>
         <Form<ChangeFormValues>
           form={form}
-          layout="vertical"
+          layout='vertical'
           onFinish={handleSubmit}
           disabled={loading || isReadonly}
           scrollToFirstError
         >
           <Form.Item
-            label="变更标题"
-            name="title"
+            label='变更标题'
+            name='title'
             rules={[
               { required: true, message: '请输入变更标题' },
               { max: 200, message: '标题不超过 200 字' },
             ]}
           >
-            <Input placeholder="简要描述变更内容" allowClear />
+            <Input placeholder='简要描述变更内容' allowClear />
           </Form.Item>
 
           <Form.Item
-            label="详细描述"
-            name="description"
+            label='详细描述'
+            name='description'
             rules={[{ required: true, message: '请填写详细描述' }]}
           >
             <TextArea
               rows={4}
-              placeholder="请详细说明变更的目的、范围和内容..."
+              placeholder='请详细说明变更的目的、范围和内容...'
               showCount
               maxLength={2000}
             />
           </Form.Item>
 
           <Form.Item
-            label="变更理由"
-            name="justification"
-            tooltip="解释为什么需要此变更，例如关联的问题或业务需求"
+            label='变更理由'
+            name='justification'
+            tooltip='解释为什么需要此变更，例如关联的问题或业务需求'
             rules={[{ required: true, message: '请填写变更理由' }]}
           >
             <TextArea
               rows={3}
-              placeholder="例如：解决问题 PRB-XXXXX，满足新业务需求等"
+              placeholder='例如：解决问题 PRB-XXXXX，满足新业务需求等'
               showCount
               maxLength={1000}
             />
@@ -261,8 +292,8 @@ const EditChangePage: React.FC = () => {
           <Row gutter={16}>
             <Col xs={24} md={12}>
               <Form.Item
-                label="变更类型"
-                name="type"
+                label='变更类型'
+                name='type'
                 rules={[{ required: true, message: '请选择变更类型' }]}
               >
                 <Select
@@ -272,7 +303,7 @@ const EditChangePage: React.FC = () => {
                       <span>
                         {o.label}
                         {o.hint && (
-                          <Text type="secondary" className="ml-2 text-xs">
+                          <Text type='secondary' className='ml-2 text-xs'>
                             {o.hint}
                           </Text>
                         )}
@@ -284,8 +315,8 @@ const EditChangePage: React.FC = () => {
             </Col>
             <Col xs={24} md={12}>
               <Form.Item
-                label="优先级"
-                name="priority"
+                label='优先级'
+                name='priority'
                 rules={[{ required: true, message: '请选择优先级' }]}
               >
                 <Select options={PRIORITY_OPTIONS} />
@@ -296,8 +327,8 @@ const EditChangePage: React.FC = () => {
           <Row gutter={16}>
             <Col xs={24} md={12}>
               <Form.Item
-                label="影响范围"
-                name="impactScope"
+                label='影响范围'
+                name='impactScope'
                 rules={[{ required: true, message: '请选择影响范围' }]}
               >
                 <Select options={IMPACT_OPTIONS} />
@@ -305,8 +336,8 @@ const EditChangePage: React.FC = () => {
             </Col>
             <Col xs={24} md={12}>
               <Form.Item
-                label="风险等级"
-                name="riskLevel"
+                label='风险等级'
+                name='riskLevel'
                 rules={[{ required: true, message: '请选择风险等级' }]}
               >
                 <Select options={RISK_OPTIONS} />
@@ -315,62 +346,62 @@ const EditChangePage: React.FC = () => {
           </Row>
 
           <Form.Item
-            label="计划实施时间"
-            name="plannedRange"
-            tooltip="计划开始与结束时间"
+            label='计划实施时间'
+            name='plannedRange'
+            tooltip='计划开始与结束时间'
             rules={[{ validator: validateRange }]}
           >
             <DatePicker.RangePicker
               showTime={{ format: 'HH:mm' }}
-              format="YYYY-MM-DD HH:mm"
+              format='YYYY-MM-DD HH:mm'
               disabledDate={current => !!current && current.isBefore(dayjs().startOf('day'))}
               placeholder={['开始时间', '结束时间']}
-              className="w-full"
+              className='w-full'
             />
           </Form.Item>
 
           <Form.Item
-            label="受影响的配置项"
-            name="affectedCisText"
-            tooltip="多个 CI 用逗号或空格分隔"
+            label='受影响的配置项'
+            name='affectedCisText'
+            tooltip='多个 CI 用逗号或空格分隔'
           >
-            <Input placeholder="例如：CI-ECS-001, CI-APP-CRM" allowClear />
+            <Input placeholder='例如：CI-ECS-001, CI-APP-CRM' allowClear />
           </Form.Item>
 
           <Form.Item
-            label="实施计划"
-            name="implementationPlan"
+            label='实施计划'
+            name='implementationPlan'
             rules={[{ required: true, message: '请填写实施计划' }]}
           >
-            <TextArea
-              rows={5}
-              placeholder="详细描述变更的实施步骤..."
-              showCount
-              maxLength={3000}
-            />
+            <TextArea rows={5} placeholder='详细描述变更的实施步骤...' showCount maxLength={3000} />
           </Form.Item>
 
           <Form.Item
-            label="回滚计划"
-            name="rollbackPlan"
-            tooltip="变更失败时如何回退"
+            label='回滚计划'
+            name='rollbackPlan'
+            tooltip='变更失败时如何回退'
             rules={[{ required: true, message: '请填写回滚计划' }]}
           >
             <TextArea
               rows={5}
-              placeholder="详细描述如果变更失败如何回滚..."
+              placeholder='详细描述如果变更失败如何回滚...'
               showCount
               maxLength={3000}
             />
           </Form.Item>
 
-          <Form.Item className="!mb-0 mt-4">
-            <Space className="w-full justify-end">
+          <Form.Item className='!mb-0 mt-4'>
+            <Space className='w-full justify-end'>
               <Button onClick={() => router.back()} disabled={loading}>
                 取消
               </Button>
               {!isReadonly && (
-                <Button type="primary" htmlType="submit" loading={loading} icon={<Save size={16} />}>
+                <Button
+                  type='primary'
+                  htmlType='submit'
+                  loading={loading}
+                  icon={<Save size={16} />}
+                >
                   保存修改
                 </Button>
               )}

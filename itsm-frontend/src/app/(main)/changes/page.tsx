@@ -32,6 +32,7 @@ import {
 // 看板列配置（颜色与全站主色 #F06820 对齐，避免遗留 antd 旧蓝 #1890ff）
 const KANBAN_COLUMNS: KanbanColumnConfig<Change>[] = [
   { key: 'draft', title: '草稿', color: '#d9d9d9' },
+  { key: 'submitted', title: '待审批', color: '#fa8c16' },
   { key: 'pending', title: '待审批', color: '#fa8c16' },
   { key: 'approved', title: '已批准', color: '#F06820' },
   { key: 'scheduled', title: '已排期', color: '#722ed1' },
@@ -43,6 +44,7 @@ const KANBAN_COLUMNS: KanbanColumnConfig<Change>[] = [
 // 筛选选项
 const statusOptions = [
   { value: 'draft', label: '草稿' },
+  { value: 'submitted', label: '待审批' },
   { value: 'pending', label: '待审批' },
   { value: 'approved', label: '已批准' },
   { value: 'in_progress', label: '实施中' },
@@ -59,6 +61,7 @@ const riskOptions = [
 
 const CHANGE_STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   draft: { label: '草稿', color: 'default' },
+  submitted: { label: '待审批', color: 'orange' },
   pending: { label: '待审批', color: 'orange' },
   approved: { label: '已批准', color: 'blue' },
   scheduled: { label: '已排期', color: 'purple' },

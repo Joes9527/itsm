@@ -251,6 +251,7 @@ export const ChangeTypeConfig: Record<ChangeType, {
 
 // ==================== 变更状态 (Change Status) ====================
 export enum ChangeStatus {
+  SUBMITTED = 'submitted',
   DRAFT = 'draft',
   PENDING = 'pending',
   APPROVED = 'approved',
@@ -268,6 +269,7 @@ export const ChangeStatusConfig: Record<ChangeStatus, {
   color: string;
   badgeStatus: 'success' | 'processing' | 'warning' | 'error' | 'default';
 }> = {
+  [ChangeStatus.SUBMITTED]: { label: '待审批', color: 'gold', badgeStatus: 'warning' },
   [ChangeStatus.DRAFT]: {
     label: '草稿',
     color: 'default',

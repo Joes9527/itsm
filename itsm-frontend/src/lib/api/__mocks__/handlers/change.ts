@@ -31,7 +31,6 @@ import type {
   ChangeImpact,
   ChangeRisk,
   RiskAssessmentData,
-  ImpactAnalysisData,
 } from '../../change-api';
 
 // Mock change database
@@ -52,6 +51,15 @@ export function createMockChange(overrides: Partial<Change> = {}): Change {
   const now = new Date().toISOString();
 
   return {
+    number: `CHG-${id}`,
+    version: 1,
+    outcome: '',
+    outcomeEvidence: '',
+    reviewEvidence: '',
+    reviewedBy: 0,
+    reviewedAt: null,
+    standardTemplateId: 0,
+    currentTasks: {},
     id,
     title: `Test Change ${id}`,
     description: 'Test change description',
@@ -78,6 +86,15 @@ export function createMockChange(overrides: Partial<Change> = {}): Change {
 function initializeSampleChanges(): void {
   const changes: Change[] = [
     createMockChange({
+      number: 'CHG-1',
+      version: 1,
+      outcome: '',
+      outcomeEvidence: '',
+      reviewEvidence: '',
+      reviewedBy: 0,
+      reviewedAt: null,
+      standardTemplateId: 0,
+      currentTasks: {},
       id: 1,
       title: 'Database Server Upgrade',
       description: 'Upgrade PostgreSQL from 14 to 15',
@@ -283,6 +300,12 @@ export const changeHandlers = {
     const changes = Array.from(mockChanges.values());
     return {
       total: changes.length,
+      draft: changes.filter(c => c.status === 'draft').length,
+      scheduled: changes.filter(c => c.status === 'scheduled').length,
+      failed: changes.filter(c => c.status === 'failed').length,
+      successfulOutcomes: changes.filter(c => c.outcome === 'successful').length,
+      failedOutcomes: changes.filter(c => c.outcome === 'failed').length,
+      rolledBackOutcomes: changes.filter(c => c.outcome === 'rolled_back').length,
       pending: changes.filter(c => c.status === 'pending').length,
       approved: changes.filter(c => c.status === 'approved').length,
       inProgress: changes.filter(c => c.status === 'in_progress').length,

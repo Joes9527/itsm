@@ -1,27 +1,19 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Card,
-  Table,
-  Tag,
-  Button,
-  Space,
-  Select,
-  message,
-  Modal,
-  Descriptions,
-  Divider,
-} from 'antd';
+import { Card, Table, Tag, Button, Space, Select, App, Modal, Descriptions, Divider } from 'antd';
 import { Trash2, Eye, AlertTriangle, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { PageContainer } from '@/components/layout/PageContainer';
 import { ChangeApi, type PIRResponse, type PIROverallResult } from '@/lib/api/change-api';
 import { useI18n } from '@/lib/i18n/useI18n';
 import dayjs from 'dayjs';
+import { useChangeOperation } from '@/components/change/useChangeOperation';
 import type { ColumnsType } from 'antd/es/table';
 
 export default function PIRListPage() {
+  const { message } = App.useApp();
+  const operation = useChangeOperation();
   const router = useRouter();
   const { t } = useI18n();
 
@@ -35,6 +27,7 @@ export default function PIRListPage() {
   const [selectedPIR, setSelectedPIR] = useState<PIRResponse | null>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deleteVersion, setDeleteVersion] = useState<number | null>(null);
 
   const fetchPIRs = useCallback(async () => {
     setLoading(true);
@@ -59,10 +52,18 @@ export default function PIRListPage() {
   }, [fetchPIRs]);
 
   const handleDelete = async () => {
-    if (!selectedPIR) return;
+    if (!selectedPIR || !deleteVersion) return;
     setDeleting(true);
     try {
-      await ChangeApi.deletePIR(selectedPIR.id);
+      await ChangeApi.deletePIR(selectedPIR.id, {
+        changeId: selectedPIR.changeId,
+        ...operation.identity(
+          `${selectedPIR.changeId}/pir/${selectedPIR.id}/delete`,
+          { changeId: selectedPIR.changeId },
+          deleteVersion
+        ),
+      });
+      operation.clear();
       message.success('PIR已删除');
       setDeleteModalVisible(false);
       setSelectedPIR(null);
@@ -78,19 +79,19 @@ export default function PIRListPage() {
     switch (result) {
       case 'successful':
         return (
-          <Tag icon={<CheckCircle />} color="success">
+          <Tag icon={<CheckCircle />} color='success'>
             成功
           </Tag>
         );
       case 'partially_successful':
         return (
-          <Tag icon={<AlertTriangle />} color="warning">
+          <Tag icon={<AlertTriangle />} color='warning'>
             部分成功
           </Tag>
         );
       case 'failed':
         return (
-          <Tag icon={<XCircle />} color="error">
+          <Tag icon={<XCircle />} color='error'>
             失败
           </Tag>
         );
@@ -106,7 +107,7 @@ export default function PIRListPage() {
       key: 'changeId',
       width: 100,
       render: (id: number) => (
-        <Button type="link" onClick={() => router.push(`/changes/${id}`)}>
+        <Button type='link' onClick={() => router.push(`/changes/${id}`)}>
           C-{id}
         </Button>
       ),
@@ -143,14 +144,14 @@ export default function PIRListPage() {
       key: 'objectivesAchieved',
       width: 100,
       render: (achieved: boolean) =>
-        achieved ? <Tag color="success">是</Tag> : <Tag color="error">否</Tag>,
+        achieved ? <Tag color='success'>是</Tag> : <Tag color='error'>否</Tag>,
     },
     {
       title: '回滚',
       dataIndex: 'rollbackPerformed',
       key: 'rollbackPerformed',
       width: 80,
-      render: (performed: boolean) => (performed ? <Tag color="warning">是</Tag> : <Tag>否</Tag>),
+      render: (performed: boolean) => (performed ? <Tag color='warning'>是</Tag> : <Tag>否</Tag>),
     },
     {
       title: '操作',
@@ -159,7 +160,7 @@ export default function PIRListPage() {
       render: (_, record) => (
         <Space>
           <Button
-            type="link"
+            type='link'
             icon={<Eye />}
             onClick={() => {
               setSelectedPIR(record);
@@ -169,12 +170,19 @@ export default function PIRListPage() {
             查看
           </Button>
           <Button
-            type="link"
+            type='link'
             danger
             icon={<Trash2 />}
-            onClick={() => {
-              setSelectedPIR(record);
-              setDeleteModalVisible(true);
+            onClick={async () => {
+              try {
+                const [detail, currentPIR] = await Promise.all([
+                  ChangeApi.getChange(record.changeId), ChangeApi.getPIR(record.changeId),
+                ]);
+                if (!currentPIR || currentPIR.id !== record.id) throw new Error('PIR 已变化，请刷新列表');
+                setSelectedPIR(currentPIR);
+                setDeleteVersion(detail.version);
+                setDeleteModalVisible(true);
+              } catch (error) { message.error(error instanceof Error ? error.message : '无法加载当前 PIR'); }
             }}
           >
             删除
@@ -192,12 +200,12 @@ export default function PIRListPage() {
   ];
 
   return (
-    <PageContainer title="实施后审查列表 (PIR)" description="查看所有变更的实施后审查记录">
-      <Card className="shadow-sm rounded-lg">
-        <div className="mb-4">
+    <PageContainer title='实施后审查列表 (PIR)' description='查看所有变更的实施后审查记录'>
+      <Card className='shadow-sm rounded-lg'>
+        <div className='mb-4'>
           <Space wrap>
             <Select
-              placeholder="结果筛选"
+              placeholder='结果筛选'
               value={resultFilter}
               onChange={setResultFilter}
               allowClear
@@ -210,7 +218,7 @@ export default function PIRListPage() {
         <Table
           columns={columns}
           dataSource={pirs}
-          rowKey="id"
+          rowKey='id'
           loading={loading}
           pagination={{
             current: page,
@@ -229,19 +237,19 @@ export default function PIRListPage() {
 
       {/* PIR详情弹窗 */}
       <Modal
-        title="PIR详情"
+        title='PIR详情'
         open={detailModalVisible}
         onCancel={() => {
           setDetailModalVisible(false);
           setSelectedPIR(null);
         }}
         footer={[
-          <Button key="close" onClick={() => setDetailModalVisible(false)}>
+          <Button key='close' onClick={() => setDetailModalVisible(false)}>
             关闭
           </Button>,
           <Button
-            key="edit"
-            type="primary"
+            key='edit'
+            type='primary'
             onClick={() => {
               setDetailModalVisible(false);
               if (selectedPIR) {
@@ -257,31 +265,31 @@ export default function PIRListPage() {
         {selectedPIR && (
           <div>
             <Descriptions column={2} bordered>
-              <Descriptions.Item label="变更ID">
-                <Button type="link" onClick={() => router.push(`/changes/${selectedPIR.changeId}`)}>
+              <Descriptions.Item label='变更ID'>
+                <Button type='link' onClick={() => router.push(`/changes/${selectedPIR.changeId}`)}>
                   C-{selectedPIR.changeId}
                 </Button>
               </Descriptions.Item>
-              <Descriptions.Item label="变更标题">{selectedPIR.changeTitle}</Descriptions.Item>
-              <Descriptions.Item label="审查人">{selectedPIR.reviewerName}</Descriptions.Item>
-              <Descriptions.Item label="审查日期">
+              <Descriptions.Item label='变更标题'>{selectedPIR.changeTitle}</Descriptions.Item>
+              <Descriptions.Item label='审查人'>{selectedPIR.reviewerName}</Descriptions.Item>
+              <Descriptions.Item label='审查日期'>
                 {dayjs(selectedPIR.reviewDate).format('YYYY-MM-DD HH:mm')}
               </Descriptions.Item>
-              <Descriptions.Item label="总体结果">
+              <Descriptions.Item label='总体结果'>
                 {getResultTag(selectedPIR.overallResult as PIROverallResult)}
               </Descriptions.Item>
-              <Descriptions.Item label="目标达成">
+              <Descriptions.Item label='目标达成'>
                 {selectedPIR.objectivesAchieved ? (
-                  <Tag color="success">是</Tag>
+                  <Tag color='success'>是</Tag>
                 ) : (
-                  <Tag color="error">否</Tag>
+                  <Tag color='error'>否</Tag>
                 )}
               </Descriptions.Item>
-              <Descriptions.Item label="实际持续时间">
+              <Descriptions.Item label='实际持续时间'>
                 {selectedPIR.actualDurationMinutes} 分钟
               </Descriptions.Item>
-              <Descriptions.Item label="回滚">
-                {selectedPIR.rollbackPerformed ? <Tag color="warning">是</Tag> : <Tag>否</Tag>}
+              <Descriptions.Item label='回滚'>
+                {selectedPIR.rollbackPerformed ? <Tag color='warning'>是</Tag> : <Tag>否</Tag>}
               </Descriptions.Item>
             </Descriptions>
 
@@ -337,11 +345,12 @@ export default function PIRListPage() {
           setDeleteModalVisible(false);
           setSelectedPIR(null);
         }}
-        okText="删除"
+        okText='删除'
         okButtonProps={{ danger: true, loading: deleting }}
-        cancelText="取消"
+        cancelText='取消'
       >
         <p>确定要删除这个实施后审查记录吗？此操作不可撤销。</p>
+        <p>PIR {selectedPIR?.id} · 变更版本 {deleteVersion} · 结果 {selectedPIR?.overallResult}</p>
       </Modal>
     </PageContainer>
   );

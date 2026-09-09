@@ -221,7 +221,11 @@ describe('ChangeApi', () => {
       const mockResponse = {
         code: 0,
         message: 'success',
-        data: { ...creationReceipt, recordClass: 'change_request', professionalReference: { type: 'change', id: 10 } },
+        data: {
+          ...creationReceipt,
+          recordClass: 'change_request',
+          professionalReference: { type: 'change', id: 10 },
+        },
       };
 
       (fetch as jest.Mock).mockResolvedValueOnce({
@@ -259,53 +263,6 @@ describe('ChangeApi', () => {
     });
   });
 
-  describe('updateChange', () => {
-    it('should update change successfully', async () => {
-      const mockResponse = {
-        code: 0,
-        message: 'success',
-        data: {
-          id: 1,
-          title: 'Updated Change',
-          description: 'Test description',
-          justification: 'Test justification',
-          type: 'normal',
-          status: 'draft',
-          priority: 'critical',
-          impactScope: 'medium',
-          riskLevel: 'low',
-          createdBy: 1,
-          createdByName: 'Test User',
-          tenantId: 1,
-          implementationPlan: 'Plan',
-          rollbackPlan: 'Rollback',
-          affectedCis: [],
-          relatedTickets: [],
-          createdAt: '2024-01-01T10:00:00Z',
-          updatedAt: '2024-01-02T10:00:00Z',
-        },
-      };
-
-      (fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        headers: new Headers(),
-        status: 200,
-        json: async () => mockResponse,
-      });
-
-      const result = await ChangeApi.updateChange(1, { title: 'Updated Change' });
-
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/changes/1'),
-        expect.objectContaining({
-          method: 'PUT',
-        })
-      );
-
-      expect(result.title).toBe('Updated Change');
-    });
-  });
-
   describe('deleteChange', () => {
     it('should delete change successfully', async () => {
       const mockResponse = {
@@ -327,84 +284,6 @@ describe('ChangeApi', () => {
         expect.stringContaining('/api/v1/changes/1'),
         expect.objectContaining({
           method: 'DELETE',
-        })
-      );
-    });
-  });
-
-  describe('submitForApproval', () => {
-    it('should submit change for approval', async () => {
-      const mockResponse = {
-        code: 0,
-        message: 'success',
-        data: null,
-      };
-
-      (fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        headers: new Headers(),
-        status: 200,
-        json: async () => mockResponse,
-      });
-
-      await ChangeApi.submitForApproval(1);
-
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/changes/1/submit'),
-        expect.objectContaining({
-          method: 'POST',
-        })
-      );
-    });
-  });
-
-  describe('approveChange', () => {
-    it('should approve change', async () => {
-      const mockResponse = {
-        code: 0,
-        message: 'success',
-        data: null,
-      };
-
-      (fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        headers: new Headers(),
-        status: 200,
-        json: async () => mockResponse,
-      });
-
-      await ChangeApi.approveChange(1, { status: 'approved', comment: 'LGTM' });
-
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/changes/1/approve'),
-        expect.objectContaining({
-          method: 'POST',
-        })
-      );
-    });
-  });
-
-  describe('rejectChange', () => {
-    it('should reject change', async () => {
-      const mockResponse = {
-        code: 0,
-        message: 'success',
-        data: null,
-      };
-
-      (fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        headers: new Headers(),
-        status: 200,
-        json: async () => mockResponse,
-      });
-
-      await ChangeApi.rejectChange(1, { status: 'rejected', comment: 'Not approved' });
-
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/changes/1/reject'),
-        expect.objectContaining({
-          method: 'POST',
         })
       );
     });
@@ -448,136 +327,6 @@ describe('ChangeApi', () => {
     });
   });
 
-  describe('startImplementation', () => {
-    it('should start implementation', async () => {
-      const mockResponse = {
-        code: 0,
-        message: 'success',
-        data: null,
-      };
-
-      (fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        headers: new Headers(),
-        status: 200,
-        json: async () => mockResponse,
-      });
-
-      await ChangeApi.startImplementation(1);
-
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/changes/1/start'),
-        expect.objectContaining({
-          method: 'POST',
-        })
-      );
-    });
-  });
-
-  describe('completeImplementation', () => {
-    it('should complete implementation', async () => {
-      const mockResponse = {
-        code: 0,
-        message: 'success',
-        data: null,
-      };
-
-      (fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        headers: new Headers(),
-        status: 200,
-        json: async () => mockResponse,
-      });
-
-      await ChangeApi.completeImplementation(1);
-
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/changes/1/complete'),
-        expect.objectContaining({
-          method: 'POST',
-        })
-      );
-    });
-  });
-
-  describe('rollbackChange', () => {
-    it('should rollback change with reason', async () => {
-      const mockResponse = {
-        code: 0,
-        message: 'success',
-        data: null,
-      };
-
-      (fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        headers: new Headers(),
-        status: 200,
-        json: async () => mockResponse,
-      });
-
-      await ChangeApi.rollbackChange(1, 'Unexpected issues occurred');
-
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/changes/1/rollback'),
-        expect.objectContaining({
-          method: 'POST',
-        })
-      );
-    });
-  });
-
-  describe('cancelChange', () => {
-    it('should cancel change', async () => {
-      const mockResponse = {
-        code: 0,
-        message: 'success',
-        data: null,
-      };
-
-      (fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        headers: new Headers(),
-        status: 200,
-        json: async () => mockResponse,
-      });
-
-      await ChangeApi.cancelChange(1, 'No longer needed');
-
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/changes/1/cancel'),
-        expect.objectContaining({
-          method: 'POST',
-        })
-      );
-    });
-  });
-
-  describe('assignChange', () => {
-    it('should assign change to user', async () => {
-      const mockResponse = {
-        code: 0,
-        message: 'success',
-        data: null,
-      };
-
-      (fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        headers: new Headers(),
-        status: 200,
-        json: async () => mockResponse,
-      });
-
-      await ChangeApi.assignChange(1, 42);
-
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/changes/1/assign'),
-        expect.objectContaining({
-          method: 'POST',
-        })
-      );
-    });
-  });
-
   describe('getChangeApprovals', () => {
     it('should fetch approval history', async () => {
       const mockResponse = {
@@ -618,45 +367,6 @@ describe('ChangeApi', () => {
     });
   });
 
-  describe('getImpactAnalysis', () => {
-    it('should fetch impact analysis', async () => {
-      const mockResponse = {
-        code: 0,
-        message: 'success',
-        data: {
-          businessImpact: 'High impact on customer-facing services',
-          technicalImpact: 'Database downtime required',
-          userImpact: 'Service unavailable during maintenance',
-          affectedSystems: ['web-app', 'api-gateway'],
-          affectedUsers: 5000,
-          estimatedDowntime: 120,
-          dataRiskLevel: 'medium',
-          serviceDependencies: ['auth-service', 'cache-service'],
-          backupStrategy: 'Full backup before change',
-          recoveryPlan: 'Restore from backup if needed',
-        },
-      };
-
-      (fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        headers: new Headers(),
-        status: 200,
-        json: async () => mockResponse,
-      });
-
-      const result = await ChangeApi.getImpactAnalysis(1);
-
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/changes/1/impact'),
-        expect.objectContaining({
-          method: 'GET',
-        })
-      );
-
-      expect(result.businessImpact).toBe('High impact on customer-facing services');
-    });
-  });
-
   describe('getRiskAssessment', () => {
     it('should fetch risk assessment', async () => {
       const mockResponse = {
@@ -690,59 +400,7 @@ describe('ChangeApi', () => {
         })
       );
 
-      expect(result.riskLevel).toBe('high');
-    });
-  });
-
-  describe('batchUpdateChanges', () => {
-    it('should batch update changes', async () => {
-      const mockResponse = {
-        code: 0,
-        message: 'success',
-        data: null,
-      };
-
-      (fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        headers: new Headers(),
-        status: 200,
-        json: async () => mockResponse,
-      });
-
-      await ChangeApi.batchUpdateChanges([1, 2, 3], 'cancel', { reason: 'Bulk cancel' });
-
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/changes/batch'),
-        expect.objectContaining({
-          method: 'POST',
-        })
-      );
-    });
-  });
-
-  describe('getApprovalSummary (deprecated alias)', () => {
-    it('should call getChangeApprovals internally', async () => {
-      const mockResponse = {
-        code: 0,
-        message: 'success',
-        data: [],
-      };
-
-      (fetch as jest.Mock).mockResolvedValueOnce({
-        ok: true,
-        headers: new Headers(),
-        status: 200,
-        json: async () => mockResponse,
-      });
-
-      const result = await ChangeApi.getApprovalSummary(1);
-
-      expect(fetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/v1/changes/1/approvals'),
-        expect.any(Object)
-      );
-
-      expect(result).toEqual([]);
+      expect(result?.riskLevel).toBe('high');
     });
   });
 });

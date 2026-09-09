@@ -6,6 +6,7 @@ import (
 
 // Change domain entity
 type Change struct {
+	Number             string
 	RiskAssessment     *RiskAssessment
 	ID                 int
 	Title              string
@@ -90,15 +91,18 @@ type RiskAssessment struct {
 // follow the canonical set defined in dto.ChangeStatus (draft, pending, approved,
 // scheduled, in_progress, completed, failed, rolled_back, rejected, cancelled).
 type Stats struct {
-	Total      int `json:"total"`
-	Draft      int `json:"draft"`
-	Pending    int `json:"pending"`
-	Approved   int `json:"approved"`
-	Scheduled  int `json:"scheduled"`
-	InProgress int `json:"inProgress"`
-	Completed  int `json:"completed"`
-	Failed     int `json:"failed"`
-	RolledBack int `json:"rolledBack"`
-	Rejected   int `json:"rejected"`
-	Cancelled  int `json:"cancelled"`
+	SuccessfulOutcomes int
+	FailedOutcomes     int
+	RolledBackOutcomes int
+	Total              int `json:"total"`
+	Draft              int `json:"draft"`
+	Pending            int `json:"pending"`
+	Approved           int `json:"approved"`
+	Scheduled          int `json:"scheduled"`
+	InProgress         int `json:"inProgress"`
+	Completed          int `json:"completed"`
+	Failed             int `json:"failed"`
+	RolledBack         int `json:"rolledBack"`
+	Rejected           int `json:"rejected"`
+	Cancelled          int `json:"cancelled"`
 }

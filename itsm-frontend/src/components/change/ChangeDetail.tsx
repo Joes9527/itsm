@@ -15,19 +15,20 @@ import {
   Divider,
   List,
   Typography,
-  Steps,
   Spin,
   Empty,
   Tabs,
   Space,
-  message,
+  App,
+  Alert,
 } from 'antd';
 import { ArrowLeft, CheckCircle, XCircle } from 'lucide-react';
 import { useParams, useRouter } from 'next/navigation';
 import dayjs from 'dayjs';
-import { Modal, Input } from 'antd';
 
-import { ChangeApi } from '@/lib/api/';
+import { ChangeApi } from '@/lib/api/change-api';
+import { ChangeActions } from './ChangeActions';
+import { useChangeOperation } from './useChangeOperation';
 import {
   ChangeStatus,
   ChangeStatusLabels,
@@ -41,18 +42,16 @@ import type { Change } from '@/lib/api/change-api';
 import { getErrorMessage } from '@/lib/utils/error-message-handler';
 import ChangeRiskAssessment from './ChangeRiskAssessment';
 import ChangeCMDBImpactPanel from './ChangeCMDBImpactPanel';
-import ChangeImpactAnalysis from './ChangeImpactAnalysis';
+
 import ChangeRollbackPlan from './ChangeRollbackPlan';
 import { SafeTextBlock } from '@/components/common/SafeContent';
-import { useOptionalWorkItemContext } from '@/components/work-item/WorkItemContext';
-import type { WorkItemActionState } from '@/components/work-item/WorkItemTypes';
-import { WorkItemActionButton } from '@/components/work-item/WorkItemActionButton';
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 
 const statusColors: Record<string, string> = {
   [ChangeStatus.DRAFT]: 'default',
   [ChangeStatus.PENDING]: 'orange',
+  [ChangeStatus.SUBMITTED]: 'orange',
   [ChangeStatus.APPROVED]: 'cyan',
   [ChangeStatus.IN_PROGRESS]: 'blue',
   [ChangeStatus.COMPLETED]: 'green',
@@ -62,144 +61,48 @@ const statusColors: Record<string, string> = {
 
 interface ChangeDetailProps {
   id?: string;
-  fallbackActions?: Record<string, WorkItemActionState>;
   onChangeLoaded?: (change: Change) => void;
 }
 
-const EMPTY_ACTIONS: Record<string, WorkItemActionState> = {};
-
-const ChangeDetail: React.FC<ChangeDetailProps> = ({
-  id: propId,
-  fallbackActions,
-  onChangeLoaded,
-}) => {
+const ChangeDetail: React.FC<ChangeDetailProps> = ({ id: propId, onChangeLoaded }) => {
   const params = useParams() as { id?: string };
   const id = propId || params?.id;
   const router = useRouter();
-  const workItemContext = useOptionalWorkItemContext();
+  const { message } = App.useApp();
+  const operation = useChangeOperation();
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [change, setChange] = useState<Change | null>(null);
   const [approvals, setApprovals] = useState<ApprovalRecord[]>([]);
   const [riskAssessment, setRiskAssessment] = useState<any>(null);
-  const [impactAnalysis, setImpactAnalysis] = useState<any>(null);
-  const [rollbackPlan, setRollbackPlan] = useState<any>(null);
+  const [riskReadFailed, setRiskReadFailed] = useState(false);
+  const [rollbackPlan] = useState<any>(null);
   const [assessmentLoading, setAssessmentLoading] = useState(false);
-  const [approvalModalVisible, setApprovalModalVisible] = useState(false);
-  const [rejectModalVisible, setRejectModalVisible] = useState(false);
-  const [approvalComment, setApprovalComment] = useState('');
-  const [processing, setProcessing] = useState(false);
-  const actions = workItemContext?.actions ?? fallbackActions ?? EMPTY_ACTIONS;
-
   useEffect(() => {
     if (id) {
-      loadDetail();
+      void loadDetail().catch(() => {});
     }
   }, [id]);
 
-  // 批准变更
-  const handleApprove = async () => {
-    if (!change) return;
-    setProcessing(true);
-    try {
-      await ChangeApi.approveChange(change.id, { comment: approvalComment });
-      message.success('变更已批准');
-      setApprovalModalVisible(false);
-      setApprovalComment('');
-      void loadDetail();
-    } catch (error) {
-      message.error(getErrorMessage(error) || '批准失败');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  // 拒绝变更
-  const handleReject = async () => {
-    if (!change) return;
-    // 后端要求驳回时必须填写意见（TransitionStatus 会拒绝空 comment）——提前在前端拦住，
-    // 不要让用户点了拒绝之后才发现要填内容。
-    if (!approvalComment.trim()) {
-      message.warning('请填写拒绝原因');
-      return;
-    }
-    setProcessing(true);
-    try {
-      await ChangeApi.rejectChange(change.id, { comment: approvalComment });
-      message.success('变更已拒绝');
-      setRejectModalVisible(false);
-      setApprovalComment('');
-      void loadDetail();
-    } catch (error) {
-      message.error(getErrorMessage(error) || '拒绝失败');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  // 提交审批：draft -> pending，触发 change_normal_flow（后端 SubmitChange 已桥接 BPMN）。
-  // API 客户端方法早就实现且有单测覆盖，但此前从未接到任何按钮上——没有这个按钮，
-  // 一个走 CAB 审批的普通变更在真实浏览器里永远走不出草稿状态。
-  const handleSubmitForApproval = async () => {
-    if (!change) return;
-    setProcessing(true);
-    try {
-      await ChangeApi.submitForApproval(change.id);
-      message.success('已提交审批');
-      void loadDetail();
-    } catch (error) {
-      message.error('提交审批失败');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  // 开始实施：approved -> in_progress
-  const handleStartImplementation = async () => {
-    if (!change) return;
-    setProcessing(true);
-    try {
-      await ChangeApi.startImplementation(change.id);
-      message.success('已开始实施');
-      void loadDetail();
-    } catch (error) {
-      message.error('开始实施失败');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  // 完成实施：in_progress -> completed
-  const handleCompleteImplementation = async () => {
-    if (!change) return;
-    setProcessing(true);
-    try {
-      await ChangeApi.completeImplementation(change.id);
-      message.success('变更已完成');
-      void loadDetail();
-    } catch (error) {
-      message.error('完成变更失败');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
   const loadDetail = async () => {
-    setLoading(true);
+    if (!change) setLoading(true);
     try {
       const data = await ChangeApi.getChange(Number(id!));
+      setError('');
       setChange(data as Change);
       onChangeLoaded?.(data as Change);
 
       // Try to load approval summary
       try {
-        const summary = await ChangeApi.getApprovalSummary(Number(id));
+        const summary = await ChangeApi.getChangeApprovals(Number(id));
         setApprovals(summary as unknown as ApprovalRecord[]);
       } catch (e) {
-        // console.warn('Failed to load approval summary', e);
+        setError(getErrorMessage(e) || '审批记录加载失败');
       }
     } catch (error) {
       // console.error(error);
-      message.error('加载变更详情失败');
+      setError(getErrorMessage(error) || '加载变更详情失败');
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -212,22 +115,10 @@ const ChangeDetail: React.FC<ChangeDetailProps> = ({
     try {
       const data = await ChangeApi.getRiskAssessment(Number(id));
       setRiskAssessment(data);
+      setRiskReadFailed(false);
     } catch (error) {
-      console.error('Failed to load risk assessment:', error);
-    } finally {
-      setAssessmentLoading(false);
-    }
-  };
-
-  // 加载影响分析数据
-  const loadImpactAnalysis = async () => {
-    if (!id) return;
-    setAssessmentLoading(true);
-    try {
-      const data = await ChangeApi.getImpactAnalysis(Number(id));
-      setImpactAnalysis(data);
-    } catch (error) {
-      console.error('Failed to load impact analysis:', error);
+      setRiskReadFailed(true);
+      setError(getErrorMessage(error) || '风险评估加载失败');
     } finally {
       setAssessmentLoading(false);
     }
@@ -235,41 +126,57 @@ const ChangeDetail: React.FC<ChangeDetailProps> = ({
 
   // 保存风险评估
   const handleSaveRiskAssessment = async (data: any) => {
-    if (!id) return;
+    if (!id || !change) return;
     try {
-      await ChangeApi.updateRisk(Number(id), data);
+      const {
+        riskLevel,
+        riskDescription,
+        impactAnalysis,
+        mitigationMeasures,
+        contingencyPlan,
+        riskOwner,
+      } = data;
+      const facts = {
+        riskLevel,
+        riskDescription,
+        impactAnalysis,
+        mitigationMeasures,
+        contingencyPlan,
+        riskOwner,
+      };
+      await ChangeApi.updateRisk(Number(id), {
+        ...facts,
+        ...operation.identity(`${id}/risk`, facts, change.version),
+      });
+      operation.clear();
+      await loadDetail();
       message.success('风险评估保存成功');
       loadRiskAssessment();
     } catch (error) {
-      message.error('保存失败');
-    }
-  };
-
-  // 保存影响分析
-  const handleSaveImpactAnalysis = async (data: any) => {
-    if (!id) return;
-    try {
-      await ChangeApi.updateImpactAnalysis(Number(id), data);
-      message.success('影响分析保存成功');
-      loadImpactAnalysis();
-    } catch (error) {
-      message.error('保存失败');
+      message.error(getErrorMessage(error) || '保存失败');
+      throw error;
     }
   };
 
   // 保存回滚计划
   const handleSaveRollbackPlan = async (data: any) => {
-    if (!id) return;
+    if (!id || !change) return;
     try {
-      // 回滚计划暂时通过更新变更的rollback_plan字段实现
-      await ChangeApi.updateChange(Number(id), { rollbackPlan: JSON.stringify(data) });
+      const facts = { rollbackPlan: JSON.stringify(data) };
+      await ChangeApi.updateChange(Number(id), {
+        ...facts,
+        ...operation.identity(`${id}/metadata`, facts, change.version),
+      });
+      operation.clear();
+      await loadDetail();
       message.success('回滚计划保存成功');
     } catch (error) {
-      message.error('保存失败');
+      message.error(getErrorMessage(error) || '保存失败');
+      throw error;
     }
   };
 
-  if (loading)
+  if (loading && !change)
     return (
       <Card>
         <Skeleton active />
@@ -311,73 +218,23 @@ const ChangeDetail: React.FC<ChangeDetailProps> = ({
             <Tag color={statusColors[change.status]} style={{ padding: '4px 12px', fontSize: 14 }}>
               {ChangeStatusLabels[change.status as ChangeStatus]}
             </Tag>
-            <Space wrap>
-              <WorkItemActionButton
-                action={actions.submitForApproval}
-                actionName='submit-for-approval'
-                button={{
-                  type: 'primary',
-                  loading: processing,
-                  disabled: processing,
-                  onClick: handleSubmitForApproval,
-                }}
-              >
-                提交审批
-              </WorkItemActionButton>
-              <WorkItemActionButton
-                action={actions.approve}
-                actionName='approve'
-                button={{
-                  type: 'primary',
-                  icon: <CheckCircle />,
-                  disabled: processing,
-                  onClick: () => setApprovalModalVisible(true),
-                }}
-              >
-                批准
-              </WorkItemActionButton>
-              <WorkItemActionButton
-                action={actions.reject}
-                actionName='reject'
-                button={{
-                  danger: true,
-                  icon: <XCircle />,
-                  disabled: processing,
-                  onClick: () => setRejectModalVisible(true),
-                }}
-              >
-                拒绝
-              </WorkItemActionButton>
-              <WorkItemActionButton
-                action={actions.startImplementation}
-                actionName='start-implementation'
-                button={{
-                  type: 'primary',
-                  loading: processing,
-                  disabled: processing,
-                  onClick: handleStartImplementation,
-                }}
-              >
-                开始实施
-              </WorkItemActionButton>
-              <WorkItemActionButton
-                action={actions.completeImplementation}
-                actionName='complete-implementation'
-                button={{
-                  type: 'primary',
-                  loading: processing,
-                  disabled: processing,
-                  onClick: handleCompleteImplementation,
-                }}
-              >
-                完成
-              </WorkItemActionButton>
-            </Space>
           </div>
         </div>
 
+        <ChangeActions key={change.id} change={change} onRefresh={loadDetail} />
+        {error && <Alert type='error' title={error} />}
+        <Button
+          disabled={!change.actions?.metadata?.allowed}
+          onClick={() => router.push(`/changes/${id}/edit`)}
+        >
+          编辑变更
+        </Button>
         <Descriptions bordered column={2}>
-          <Descriptions.Item label='变更编号'>{change.id}</Descriptions.Item>
+          <Descriptions.Item label='变更编号'>{change.number || '编号不可用'}</Descriptions.Item>
+          <Descriptions.Item label='版本'>{change.version}</Descriptions.Item>
+          <Descriptions.Item label='实施结果'>{change.outcome || '尚未记录'}</Descriptions.Item>
+          <Descriptions.Item label='实施依据'>{change.outcomeEvidence || '-'}</Descriptions.Item>
+          <Descriptions.Item label='审查依据'>{change.reviewEvidence || '-'}</Descriptions.Item>
           <Descriptions.Item label='变更类型'>
             {ChangeTypeLabels[change.type as keyof typeof ChangeTypeLabels]}
           </Descriptions.Item>
@@ -406,7 +263,6 @@ const ChangeDetail: React.FC<ChangeDetailProps> = ({
           style={{ marginTop: 24 }}
           onChange={activeKey => {
             if (activeKey === '3' && !riskAssessment) loadRiskAssessment();
-            if (activeKey === '4' && !impactAnalysis) loadImpactAnalysis();
           }}
           items={[
             {
@@ -475,7 +331,13 @@ const ChangeDetail: React.FC<ChangeDetailProps> = ({
                     )}
                   />
                 ) : (
-                  <Empty description='暂无审批记录' />
+                  <Empty
+                    description={
+                      change.standardTemplateId
+                        ? '无人工审批记录；标准模板预授权由服务端策略校验'
+                        : '暂无审批记录'
+                    }
+                  />
                 ),
             },
             {
@@ -483,23 +345,12 @@ const ChangeDetail: React.FC<ChangeDetailProps> = ({
               label: '风险评估',
               children: (
                 <Spin spinning={assessmentLoading}>
+                  <Button onClick={() => void loadRiskAssessment()}>刷新风险评估</Button>
                   <ChangeRiskAssessment
                     changeId={Number(id)}
-                    initialData={riskAssessment}
+                    readOnly={!change.actions?.risk?.allowed || assessmentLoading || riskReadFailed}
+                    initialData={riskAssessment ?? { riskLevel: change.riskLevel }}
                     onSave={handleSaveRiskAssessment}
-                  />
-                </Spin>
-              ),
-            },
-            {
-              key: '4',
-              label: '影响分析',
-              children: (
-                <Spin spinning={assessmentLoading}>
-                  <ChangeImpactAnalysis
-                    changeId={Number(id)}
-                    initialData={impactAnalysis}
-                    onSave={handleSaveImpactAnalysis}
                   />
                 </Spin>
               ),
@@ -511,6 +362,7 @@ const ChangeDetail: React.FC<ChangeDetailProps> = ({
                 <Spin spinning={assessmentLoading}>
                   <ChangeRollbackPlan
                     changeId={Number(id)}
+                    readOnly={!change.actions?.metadata?.allowed}
                     initialData={rollbackPlan}
                     onSave={handleSaveRollbackPlan}
                   />
@@ -529,7 +381,7 @@ const ChangeDetail: React.FC<ChangeDetailProps> = ({
                 <div className='py-4'>
                   <p className='text-gray-500 mb-4'>评估变更实施结果，总结经验教训</p>
                   <Button type='primary' onClick={() => router.push(`/changes/${id}/pir`)}>
-                    {change.status === 'completed' ? '填写PIR' : '查看PIR'}
+                    查看 / 编辑 PIR
                   </Button>
                 </div>
               ),
@@ -537,58 +389,6 @@ const ChangeDetail: React.FC<ChangeDetailProps> = ({
           ]}
         />
       </Card>
-
-      {/* 批准弹窗 */}
-      <Modal
-        title='批准变更'
-        open={approvalModalVisible}
-        onCancel={() => setApprovalModalVisible(false)}
-        footer={[
-          <Button key='cancel' onClick={() => setApprovalModalVisible(false)}>
-            取消
-          </Button>,
-          <Button key='approve' type='primary' loading={processing} onClick={handleApprove}>
-            批准
-          </Button>,
-        ]}
-      >
-        <div className='py-4'>
-          <p className='mb-2'>审批意见（可选）：</p>
-          <Input.TextArea
-            value={approvalComment}
-            onChange={e => setApprovalComment(e.target.value)}
-            placeholder='请输入审批意见...'
-            rows={3}
-          />
-        </div>
-      </Modal>
-
-      {/* 拒绝弹窗 */}
-      <Modal
-        title='拒绝变更'
-        open={rejectModalVisible}
-        onCancel={() => setRejectModalVisible(false)}
-        footer={[
-          <Button key='cancel' onClick={() => setRejectModalVisible(false)}>
-            取消
-          </Button>,
-          <Button key='reject' danger loading={processing} onClick={handleReject}>
-            拒绝
-          </Button>,
-        ]}
-      >
-        <div className='py-4'>
-          <p className='mb-2'>
-            拒绝原因<span className='text-red-500 ml-1'>*</span>：
-          </p>
-          <Input.TextArea
-            value={approvalComment}
-            onChange={e => setApprovalComment(e.target.value)}
-            placeholder='请输入拒绝原因...'
-            rows={3}
-          />
-        </div>
-      </Modal>
     </Space>
   );
 };

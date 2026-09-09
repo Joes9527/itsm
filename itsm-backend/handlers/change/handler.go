@@ -34,12 +34,20 @@ func resolveChangeTenantID(c *gin.Context) (int, bool) {
 	return tenantID, true
 }
 
+func optionalChangeDate(value *time.Time) *time.Time {
+	if value == nil || value.IsZero() {
+		return nil
+	}
+	return value
+}
+
 // Map domain to DTO
 func toDTO(c *Change) *dto.ChangeResponse {
 	if c == nil {
 		return nil
 	}
 	res := &dto.ChangeResponse{
+		Number:  c.Number,
 		ID:      c.ID,
 		Version: c.Version, Outcome: c.Outcome, OutcomeEvidence: c.OutcomeEvidence, ReviewEvidence: c.ReviewEvidence, ReviewedBy: c.ReviewedBy, StandardTemplateID: c.StandardTemplateID,
 		Title:              c.Title,
@@ -53,10 +61,10 @@ func toDTO(c *Change) *dto.ChangeResponse {
 		AssigneeID:         c.AssigneeID,
 		CreatedBy:          c.CreatedBy,
 		TenantID:           c.TenantID,
-		PlannedStartDate:   c.PlannedStartDate,
-		PlannedEndDate:     c.PlannedEndDate,
-		ActualStartDate:    c.ActualStartDate,
-		ActualEndDate:      c.ActualEndDate,
+		PlannedStartDate:   optionalChangeDate(c.PlannedStartDate),
+		PlannedEndDate:     optionalChangeDate(c.PlannedEndDate),
+		ActualStartDate:    optionalChangeDate(c.ActualStartDate),
+		ActualEndDate:      optionalChangeDate(c.ActualEndDate),
 		ImplementationPlan: c.ImplementationPlan,
 		RollbackPlan:       c.RollbackPlan,
 		AffectedCIs:        c.AffectedCIs,
@@ -234,6 +242,7 @@ func toStatsDTO(s *Stats) *dto.ChangeStatsResponse {
 		return &dto.ChangeStatsResponse{}
 	}
 	return &dto.ChangeStatsResponse{
+		Draft: s.Draft, SuccessfulOutcomes: s.SuccessfulOutcomes, FailedOutcomes: s.FailedOutcomes, RolledBackOutcomes: s.RolledBackOutcomes,
 		Total:      s.Total,
 		Pending:    s.Pending,
 		Approved:   s.Approved,

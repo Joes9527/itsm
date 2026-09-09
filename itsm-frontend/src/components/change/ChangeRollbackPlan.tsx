@@ -17,7 +17,7 @@ import {
   Select,
   TimePicker,
   Checkbox,
-  message,
+  App,
 } from 'antd';
 import {
   RotateCcw,
@@ -81,6 +81,7 @@ const ChangeRollbackPlan: React.FC<ChangeRollbackPlanProps> = ({
   onSave,
   readOnly = false,
 }) => {
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const [rollbackSteps, setRollbackSteps] = useState<RollbackStep[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
@@ -184,7 +185,7 @@ const ChangeRollbackPlan: React.FC<ChangeRollbackPlanProps> = ({
         rollbackSteps: rollbackSteps,
       };
 
-      onSave?.(rollbackData);
+      await onSave?.(rollbackData);
     } catch (error) {
       message.error('表单验证失败');
     } finally {

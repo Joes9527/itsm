@@ -255,7 +255,7 @@ export default function StandardChangesPage() {
       render: (mins: number) => (mins ? `${mins}分钟` : '-'),
     },
     {
-      title: '免审批',
+      title: '授权策略',
       dataIndex: 'approvalRequired',
       key: 'approvalRequired',
       width: 100,
@@ -266,7 +266,7 @@ export default function StandardChangesPage() {
           </Tag>
         ) : (
           <Tag icon={<CheckCircle size={12} />} color='green'>
-            免审批
+            模板预授权策略
           </Tag>
         ),
     },
@@ -515,8 +515,8 @@ export default function StandardChangesPage() {
               <Descriptions.Item label='预计工期'>
                 {selectedTemplate.expectedDuration}分钟
               </Descriptions.Item>
-              <Descriptions.Item label='免审批'>
-                {selectedTemplate.approvalRequired ? '否' : '是'}
+              <Descriptions.Item label='授权策略'>
+                {selectedTemplate.approvalRequired ? '需要审批' : '模板预授权策略（执行时校验适用范围）'}
               </Descriptions.Item>
             </Descriptions>
 

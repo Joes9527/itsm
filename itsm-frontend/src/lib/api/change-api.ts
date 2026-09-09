@@ -1,13 +1,18 @@
-import { createWorkItem, type CreationRequestOptions, type CreateWorkItemResult } from './work-item-creation';
+import {
+  createWorkItem,
+  type CreationRequestOptions,
+  type CreateWorkItemResult,
+} from './work-item-creation';
 /**
  * 变更管理 API 服务
  */
 
-import { httpClient } from './http-client';
+import { ApiError, httpClient } from './http-client';
 import type { WorkItemActionState } from '@/components/work-item/WorkItemTypes';
 
 // 变更状态类型
 export type ChangeStatus =
+  | 'submitted'
   | 'draft'
   | 'pending'
   | 'approved'
@@ -51,6 +56,15 @@ export interface ChangeRequest {
 
 // 变更响应接口
 export interface Change {
+  number: string;
+  version: number;
+  outcome: '' | 'successful' | 'failed' | 'rolled_back';
+  outcomeEvidence: string;
+  reviewEvidence: string;
+  reviewedBy: number;
+  reviewedAt: string | null;
+  standardTemplateId: number;
+  currentTasks: Partial<Record<ChangeAction, string>> | null;
   id: number;
   title: string;
   description: string;
@@ -65,10 +79,10 @@ export interface Change {
   createdBy: number;
   createdByName: string;
   tenantId: number;
-  plannedStartDate?: string;
-  plannedEndDate?: string;
-  actualStartDate?: string;
-  actualEndDate?: string;
+  plannedStartDate?: string | null;
+  plannedEndDate?: string | null;
+  actualStartDate?: string | null;
+  actualEndDate?: string | null;
   implementationPlan: string;
   rollbackPlan: string;
   affectedCis: string[];
@@ -91,6 +105,12 @@ export interface ChangeListResponse {
 
 // 变更统计响应
 export interface ChangeStatsResponse {
+  draft: number;
+  scheduled: number;
+  failed: number;
+  successfulOutcomes: number;
+  failedOutcomes: number;
+  rolledBackOutcomes: number;
   total: number;
   pending: number;
   approved: number;
@@ -99,12 +119,6 @@ export interface ChangeStatsResponse {
   rolledBack: number;
   rejected: number;
   cancelled: number;
-}
-
-// 变更审批请求
-export interface ChangeApprovalRequest {
-  status?: ChangeStatus;
-  comment?: string;
 }
 
 // 变更审批记录
@@ -127,23 +141,6 @@ export interface RiskAssessmentData {
   mitigationMeasures: string;
   contingencyPlan: string;
   riskOwner: string;
-  riskScore?: number;
-  riskFactors?: string[];
-}
-
-// 影响分析数据
-export interface ImpactAnalysisData {
-  businessImpact: string;
-  technicalImpact: string;
-  userImpact: string;
-  affectedSystems: string[];
-  affectedUsers: number;
-  estimatedDowntime: number;
-  dataRiskLevel: string;
-  serviceDependencies: string[];
-  backupStrategy: string;
-  recoveryPlan: string;
-  impactScore?: number;
 }
 
 export interface ChangeCMDBImpactSummary {
@@ -163,11 +160,10 @@ export interface ChangeCMDBImpactSummary {
 
 // ==================== PIR (Post-Implementation Review) 类型定义 ====================
 // PIR总体结果
-export type PIROverallResult = 'successful' | 'partially_successful' | 'failed';
-
+export type PIROverallResult = 'successful' | 'partially_successful' | 'failed' | 'rolled_back';
 
 // PIR请求
-export interface CreatePIRRequest {
+export interface CreatePIRRequest extends ChangeMutationIdentity {
   overallResult: PIROverallResult;
   objectivesAchieved: boolean;
   successSummary?: string;
@@ -181,7 +177,8 @@ export interface CreatePIRRequest {
 }
 
 // PIR更新请求
-export interface UpdatePIRRequest {
+export interface UpdatePIRRequest extends ChangeMutationIdentity {
+  changeId: number;
   overallResult?: PIROverallResult;
   objectivesAchieved?: boolean;
   successSummary?: string;
@@ -214,7 +211,6 @@ export interface PIRResponse {
   updatedAt: string;
 }
 
-
 // PIR列表响应
 export interface PIRListResponse {
   total: number;
@@ -246,26 +242,32 @@ export class ChangeApi {
     risk?: string;
     search?: string;
   }): Promise<ChangeListResponse> {
-    return httpClient.get<ChangeListResponse>('/api/v1/changes', params && {
-      ...params,
-      riskLevel: params.risk,
-      risk: undefined,
-    });
+    return httpClient.get<ChangeListResponse>(
+      '/api/v1/changes',
+      params && {
+        ...params,
+        riskLevel: params.risk,
+        risk: undefined,
+      }
+    );
   }
 
   // 获取单个变更
   static async getChange(id: number): Promise<Change> {
-    return httpClient.get<Change>(`/api/v1/changes/${id}`);
+    return httpClient.request<Change>(`/api/v1/changes/${id}`, { preserveResponseKeys: true });
   }
 
   // 创建变更
-  static async createChange(data: ChangeRequest, options: CreationRequestOptions): Promise<CreateWorkItemResult> {
+  static async createChange(
+    data: ChangeRequest,
+    options: CreationRequestOptions
+  ): Promise<CreateWorkItemResult> {
     return createWorkItem('/api/v1/changes', data, options);
   }
 
   // 更新变更
-  static async updateChange(id: number, data: Partial<ChangeRequest>): Promise<Change> {
-    return httpClient.put<Change>(`/api/v1/changes/${id}`, data);
+  static async updateChange(id: number, data: ChangeMetadataRequest): Promise<ChangeResult> {
+    return changeMutation(`/api/v1/changes/${id}`, 'PUT', data);
   }
 
   // 删除变更
@@ -278,46 +280,38 @@ export class ChangeApi {
     return httpClient.get<ChangeStatsResponse>('/api/v1/changes/stats');
   }
 
-  // 提交变更审批
-  static async submitForApproval(id: number): Promise<void> {
-    // 后端用 ShouldBindJSON 绑定 SubmitChangeRequest：字段都是可选的，但请求体
-    // 完全为空时 json.Decoder 仍会报 EOF——必须显式传 {}，不能省略 body。
-    return httpClient.post(`/api/v1/changes/${id}/submit`, {});
+  static async executeAction<A extends ChangeAction>(
+    id: number,
+    action: A,
+    data: ChangeActionRequests[A]
+  ): Promise<ChangeResult | ChangeTaskProgress> {
+    const route = action === 'record_outcome' ? 'record-outcome' : action;
+    return changeMutation(
+      `/api/v1/changes/${id}/${route}`,
+      'POST',
+      data,
+      action !== 'submit' && action !== 'cancel'
+    );
   }
 
-  // 审批变更
-  static async approveChange(id: number, data: ChangeApprovalRequest): Promise<void> {
-    return httpClient.post(`/api/v1/changes/${id}/approve`, data);
+  static async getTaskProgress(
+    id: number,
+    operationId: string,
+    action: ChangeAction
+  ): Promise<ChangeTaskProgress> {
+    return changeMutation(
+      `/api/v1/changes/${id}/task-progress?${new URLSearchParams({ operationId, action })}`,
+      'GET',
+      undefined,
+      true
+    ) as Promise<ChangeTaskProgress>;
   }
 
-  // 拒绝变更
-  static async rejectChange(id: number, data: ChangeApprovalRequest): Promise<void> {
-    return httpClient.post(`/api/v1/changes/${id}/reject`, data);
-  }
-
-  // 开始实施变更
-  static async startImplementation(id: number): Promise<void> {
-    return httpClient.post(`/api/v1/changes/${id}/start`);
-  }
-
-  // 完成变更实施
-  static async completeImplementation(id: number): Promise<void> {
-    return httpClient.post(`/api/v1/changes/${id}/complete`);
-  }
-
-  // 回滚变更
-  static async rollbackChange(id: number, reason?: string): Promise<void> {
-    return httpClient.post(`/api/v1/changes/${id}/rollback`, { reason });
-  }
-
-  // 取消变更
-  static async cancelChange(id: number, reason?: string): Promise<void> {
-    return httpClient.post(`/api/v1/changes/${id}/cancel`, { reason });
-  }
-
-  // 分配变更
-  static async assignChange(id: number, assigneeId: number): Promise<void> {
-    return httpClient.post(`/api/v1/changes/${id}/assign`, { assigneeId });
+  static async assignChange(
+    id: number,
+    data: ChangeMutationIdentity & { assigneeId: number }
+  ): Promise<ChangeResult> {
+    return changeMutation(`/api/v1/changes/${id}/assign`, 'POST', data);
   }
 
   // 获取变更审批历史
@@ -328,11 +322,6 @@ export class ChangeApi {
   // 获取变更模板
   static async getChangeTemplates(): Promise<any[]> {
     return httpClient.get('/api/v1/changes/templates');
-  }
-
-  // 批量操作变更
-  static async batchUpdateChanges(ids: number[], action: string, data?: unknown): Promise<void> {
-    return httpClient.post('/api/v1/changes/batch', { ids, action, data });
   }
 
   // 导出变更数据
@@ -364,18 +353,8 @@ export class ChangeApi {
     return httpClient.get('/api/v1/changes/calendar', params);
   }
 
-  // 获取变更影响分析
-  static async getImpactAnalysis(id: number): Promise<ImpactAnalysisData> {
-    return httpClient.get(`/api/v1/changes/${id}/impact`);
-  }
-
-  // 更新影响分析
-  static async updateImpactAnalysis(id: number, data: ImpactAnalysisData): Promise<void> {
-    return httpClient.put(`/api/v1/changes/${id}/impact`, data);
-  }
-
   // 获取变更风险评估
-  static async getRiskAssessment(id: number): Promise<RiskAssessmentData> {
+  static async getRiskAssessment(id: number): Promise<RiskAssessmentData | null> {
     return httpClient.get(`/api/v1/changes/${id}/risk`);
   }
 
@@ -384,13 +363,11 @@ export class ChangeApi {
     return httpClient.get(`/api/v1/changes/${id}/cmdb-impact`);
   }
 
-  // 更新风险评估
-  static async updateRiskAssessment(id: number, data: RiskAssessmentData): Promise<void> {
-    return this.updateRisk(id, data);
-  }
-
-  static async updateRisk(id: number, data: RiskAssessmentData): Promise<void> {
-    return httpClient.put(`/api/v1/changes/${id}/risk`, data);
+  static async updateRisk(
+    id: number,
+    data: ChangeMutationIdentity & Partial<RiskAssessmentData>
+  ): Promise<ChangeResult> {
+    return changeMutation(`/api/v1/changes/${id}/risk`, 'PUT', data);
   }
 
   // 获取变更实施日志
@@ -400,14 +377,16 @@ export class ChangeApi {
 
   // ==================== PIR (Post-Implementation Review) ====================
 
-
   // PIR总体结果类型
   static async getPIRs(params?: {
     page?: number;
     pageSize?: number;
     result?: 'successful' | 'partially_successful' | 'failed' | '全部';
   }): Promise<PIRListResponse> {
-    return httpClient.get<PIRListResponse>('/api/v1/changes/pirs', params as Record<string, unknown>);
+    return httpClient.get<PIRListResponse>(
+      '/api/v1/changes/pirs',
+      params as Record<string, unknown>
+    );
   }
 
   // 获取变更关联的PIR
@@ -415,32 +394,138 @@ export class ChangeApi {
     try {
       return await httpClient.get<PIRResponse>(`/api/v1/changes/${changeId}/pir`);
     } catch (error: any) {
-      if (error?.response?.status === 404) {
+      if (error instanceof ApiError && error.status === 404) {
         return null;
       }
       throw error;
     }
   }
 
-  // 创建PIR
-  static async createPIR(changeId: number, data: CreatePIRRequest): Promise<PIRResponse> {
-    return httpClient.post<PIRResponse>(`/api/v1/changes/${changeId}/pir`, data);
+  static async createPIR(changeId: number, data: CreatePIRRequest): Promise<PIRMutationResult> {
+    return changeMutation(`/api/v1/changes/${changeId}/pir`, 'POST', data, false, true);
   }
 
-  // 更新PIR
-  static async updatePIR(pirId: number, data: UpdatePIRRequest): Promise<PIRResponse> {
-    return httpClient.put<PIRResponse>(`/api/v1/changes/pir/${pirId}`, data);
+  static async updatePIR(pirId: number, data: UpdatePIRRequest): Promise<PIRMutationResult> {
+    return changeMutation(`/api/v1/changes/pir/${pirId}`, 'PUT', data, false, true);
   }
 
-  // 删除PIR
-  static async deletePIR(pirId: number): Promise<void> {
-    return httpClient.delete(`/api/v1/changes/pir/${pirId}`);
+  static async deletePIR(
+    pirId: number,
+    data: ChangeMutationIdentity & { changeId: number }
+  ): Promise<PIRMutationResult> {
+    return changeMutation(`/api/v1/changes/pir/${pirId}`, 'DELETE', data, false, true);
   }
+}
 
-  // ==================== 兼容别名（旧代码使用） ====================
+export interface ChangeMutationIdentity {
+  expectedVersion: number;
+  operationId: string;
+}
+export interface ChangeResult {
+  workItemId: number;
+  version: number;
+  status: string;
+  replayed: boolean;
+}
+export interface PIRMutationResult extends ChangeResult {
+  pirId: number;
+}
+export interface ChangeTaskProgress {
+  progress: 'pending' | 'processing' | 'blocked' | 'completed' | 'effect_applied';
+  taskId: string;
+  executionKey: string;
+  reason?: string;
+  result?: ChangeResult;
+}
+export interface ChangeActionRequests {
+  submit: ChangeMutationIdentity;
+  cancel: ChangeMutationIdentity & { evidence: string };
+  assess: ChangeMutationIdentity & { taskId: string; evidence: string };
+  approve: ChangeMutationIdentity & { taskId: string; evidence?: string };
+  reject: ChangeMutationIdentity & { taskId: string; evidence: string };
+  schedule: ChangeMutationIdentity & {
+    taskId: string;
+    plannedStartDate: string;
+    plannedEndDate: string;
+  };
+  implement: ChangeMutationIdentity & { taskId: string };
+  record_outcome: ChangeMutationIdentity & {
+    taskId: string;
+    outcome: 'successful' | 'failed' | 'rolled_back';
+    evidence: string;
+    actualEndDate: string;
+  };
+  review: ChangeMutationIdentity & { taskId: string; evidence: string; pirId: number };
+  close: ChangeMutationIdentity & { taskId: string; evidence: string; pirId: number };
+}
+export type ChangeAction = keyof ChangeActionRequests;
+export type ChangeMetadataRequest = ChangeMutationIdentity &
+  Partial<Omit<ChangeRequest, 'requesterId'>>;
 
-  /** @deprecated 使用 getChangeApprovals */
-  static async getApprovalSummary(id: number) {
-    return this.getChangeApprovals(id);
+function isResult(value: unknown): value is ChangeResult {
+  const v = value as ChangeResult | undefined;
+  return (
+    !!v &&
+    Number.isInteger(v.workItemId) &&
+    v.workItemId > 0 &&
+    Number.isInteger(v.version) &&
+    v.version > 0 &&
+    typeof v.status === 'string' &&
+    typeof v.replayed === 'boolean'
+  );
+}
+export function isChangeTaskProgress(value: unknown): value is ChangeTaskProgress {
+  const v = value as ChangeTaskProgress | undefined;
+  return (
+    !!v &&
+    ['pending', 'processing', 'blocked', 'completed', 'effect_applied'].includes(v.progress) &&
+    typeof v.taskId === 'string' &&
+    !!v.taskId &&
+    typeof v.executionKey === 'string' &&
+    !!v.executionKey &&
+    (v.result === undefined || isResult(v.result))
+  );
+}
+async function changeMutation<T extends ChangeResult | ChangeTaskProgress>(
+  path: string,
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE',
+  data?: unknown,
+  task = false,
+  pir = false
+): Promise<T> {
+  try {
+    return await httpClient.request<T>(path, {
+      method,
+      body: data === undefined ? undefined : JSON.stringify(data),
+      skipCamelCaseBody: true,
+      preserveResponseKeys: true,
+      validateResponse: (value, status) => {
+        if (task) {
+          if (
+            !isChangeTaskProgress(value) ||
+            (status === 200 && !value.result) ||
+            (status === 202 &&
+              (!['pending', 'processing'].includes(value.progress) || value.result))
+          )
+            throw new Error('操作回执无效，结果未知，请查询进度');
+        } else if (
+          !isResult(value) ||
+          (pir &&
+            (!Number.isInteger((value as PIRMutationResult).pirId) ||
+              (value as PIRMutationResult).pirId <= 0))
+        )
+          throw new Error('操作回执缺失，结果未知，请刷新核查');
+      },
+    });
+  } catch (error) {
+    if (
+      task &&
+      error instanceof ApiError &&
+      error.status === 409 &&
+      isChangeTaskProgress(error.data) &&
+      error.data.progress === 'blocked'
+    )
+      return error.data as T;
+    throw error;
   }
 }

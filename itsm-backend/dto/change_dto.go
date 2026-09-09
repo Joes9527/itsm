@@ -7,6 +7,7 @@ type ChangeStatus string
 
 const (
 	ChangeStatusDraft      ChangeStatus = "draft"       // 草稿
+	ChangeStatusSubmitted  ChangeStatus = "submitted"   // 已提交待审批
 	ChangeStatusPending    ChangeStatus = "pending"     // 待审批
 	ChangeStatusApproved   ChangeStatus = "approved"    // 已批准
 	ChangeStatusRejected   ChangeStatus = "rejected"    // 已拒绝
@@ -103,6 +104,7 @@ type ChangeRiskPatch struct {
 
 // ChangeResponse 变更响应
 type ChangeResponse struct {
+	Number             string         `json:"number"`
 	Version            int            `json:"version"`
 	Outcome            string         `json:"outcome"`
 	OutcomeEvidence    string         `json:"outcomeEvidence"`
@@ -152,16 +154,20 @@ type ChangeListResponse struct {
 
 // ChangeStatsResponse 变更统计响应
 type ChangeStatsResponse struct {
-	Total      int `json:"total"`      // 总变更数
-	Pending    int `json:"pending"`    // 待审批
-	Approved   int `json:"approved"`   // 已批准
-	Scheduled  int `json:"scheduled"`  // 已排期
-	InProgress int `json:"inProgress"` // 实施中
-	Completed  int `json:"completed"`  // 已完成
-	Failed     int `json:"failed"`     // 实施失败
-	RolledBack int `json:"rolledBack"` // 已回滚
-	Rejected   int `json:"rejected"`   // 已拒绝
-	Cancelled  int `json:"cancelled"`  // 已取消
+	Draft              int `json:"draft"`
+	SuccessfulOutcomes int `json:"successfulOutcomes"`
+	FailedOutcomes     int `json:"failedOutcomes"`
+	RolledBackOutcomes int `json:"rolledBackOutcomes"`
+	Total              int `json:"total"`      // 总变更数
+	Pending            int `json:"pending"`    // 待审批
+	Approved           int `json:"approved"`   // 已批准
+	Scheduled          int `json:"scheduled"`  // 已排期
+	InProgress         int `json:"inProgress"` // 实施中
+	Completed          int `json:"completed"`  // 已完成
+	Failed             int `json:"failed"`     // 实施失败
+	RolledBack         int `json:"rolledBack"` // 已回滚
+	Rejected           int `json:"rejected"`   // 已拒绝
+	Cancelled          int `json:"cancelled"`  // 已取消
 }
 
 // ChangeApproval 变更审批记录

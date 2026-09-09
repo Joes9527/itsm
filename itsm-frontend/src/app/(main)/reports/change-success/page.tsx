@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Card, Row, Col, Typography, Spin, message, Statistic, Button, Tag, Space } from 'antd';
+import { Card, Row, Col, Typography, Spin, App, Alert, Statistic, Button, Tag, Space } from 'antd';
 import {
   PieChart,
   Pie,
@@ -16,8 +16,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { RotateCcw } from 'lucide-react';
-import type { ChangeStats } from '@/lib/services/change-service';
-import { changeService } from '@/lib/services/change-service';
+import { ChangeApi } from '@/lib/api/change-api';
 
 const { Title, Text } = Typography;
 
@@ -35,67 +34,42 @@ const TYPE_COLORS = ['#1890ff', '#52c41a', '#faad14'];
 
 interface ChangeData {
   byStatus: { name: string; value: number; color: string }[];
-  byType: { type: string; count: number }[];
-  successRate: number;
+
+  successRate: number | null;
   totalChanges: number;
 }
 
 const ChangeSuccessReport = () => {
+  const { message } = App.useApp();
+  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<ChangeData | null>(null);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      // 尝试获取真实统计数据
-      let stats: ChangeStats | null = null;
-      try {
-        stats = await changeService.getChangeStats();
-      } catch (e) {
-        console.warn('获取变更统计失败，使用演示数据');
-      }
-
-      if (stats) {
-        // 使用真实数据
-        const byStatus = [
-          { name: '草稿', value: stats.draft || 0, color: STATUS_COLORS.draft },
-          { name: '待审批', value: stats.pending || 0, color: STATUS_COLORS.pending },
-          { name: '已批准', value: stats.approved || 0, color: STATUS_COLORS.approved },
-          { name: '实施中', value: stats.implementing || 0, color: STATUS_COLORS.implementing },
-          { name: '已完成', value: stats.completed || 0, color: STATUS_COLORS.completed },
-          { name: '已取消', value: stats.cancelled || 0, color: STATUS_COLORS.cancelled },
-        ];
-
-        setData({
-          byStatus,
-          byType: [
-            { type: '标准变更', count: Math.floor(stats.total * 0.3) },
-            { type: '普通变更', count: Math.floor(stats.total * 0.5) },
-            { type: '紧急变更', count: Math.floor(stats.total * 0.2) },
-          ],
-          successRate: stats.completed > 0 ? (stats.completed / stats.total) * 100 : 0,
-          totalChanges: stats.total,
-        });
-      } else {
-        // 无真实数据时，使用空状态
-        setData({
-          byStatus: [],
-          byType: [],
-          successRate: 0,
-          totalChanges: 0,
-        });
-      }
-    } catch (error) {
-      console.error('加载变更报表数据失败:', error);
-      message.error('加载数据失败');
-
-      // 不再使用演示数据，保持空数据状态
+      const stats = await ChangeApi.getChangeStats();
+      const recorded = stats.successfulOutcomes + stats.failedOutcomes + stats.rolledBackOutcomes;
+      setError('');
       setData({
-        byStatus: [],
-        byType: [],
-        successRate: 0,
-        totalChanges: 0,
+        totalChanges: stats.total,
+        successRate: recorded > 0 ? (stats.successfulOutcomes / recorded) * 100 : null,
+        byStatus: [
+          { name: '草稿', value: stats.draft, color: STATUS_COLORS.draft },
+          { name: '待审批', value: stats.pending, color: STATUS_COLORS.pending },
+          { name: '已批准', value: stats.approved, color: STATUS_COLORS.approved },
+          { name: '已排期', value: stats.scheduled, color: '#13c2c2' },
+          { name: '实施中', value: stats.inProgress, color: STATUS_COLORS.implementing },
+          { name: '已完成', value: stats.completed, color: STATUS_COLORS.completed },
+          { name: '失败状态', value: stats.failed, color: STATUS_COLORS.rejected },
+          { name: '已回滚状态', value: stats.rolledBack, color: '#eb2f96' },
+          { name: '已拒绝', value: stats.rejected, color: STATUS_COLORS.rejected },
+          { name: '已取消', value: stats.cancelled, color: STATUS_COLORS.cancelled },
+        ],
       });
+    } catch (error) {
+      setError(error instanceof Error ? error.message : '加载报表失败');
+      message.error('加载数据失败');
     } finally {
       setLoading(false);
     }
@@ -108,10 +82,10 @@ const ChangeSuccessReport = () => {
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
-          <p className="font-semibold text-gray-800">{`${payload[0].name}`}</p>
+        <div className='bg-white p-3 rounded-lg shadow-lg border border-gray-200'>
+          <p className='font-semibold text-gray-800'>{`${payload[0].name}`}</p>
           <p
-            className="text-sm"
+            className='text-sm'
             style={{ color: payload[0].color }}
           >{`数量: ${payload[0].value}`}</p>
         </div>
@@ -122,24 +96,31 @@ const ChangeSuccessReport = () => {
 
   if (!data) {
     return (
-      <div className="p-6 flex items-center justify-center h-64">
-        <Spin size="large" />
+      <div className='p-6 flex items-center justify-center h-64'>
+        {error ? (
+          <Alert type='error' title={error} action={<Button onClick={loadData}>重试</Button>} />
+        ) : (
+          <Spin size='large' />
+        )}
       </div>
     );
   }
 
   return (
-    <div className="p-6 bg-gray-50 min-h-full">
-      <header className="mb-6">
+    <div className='p-6 bg-gray-50 min-h-full'>
+      {error && <Alert type='error' title={error} />}
+      <header className='mb-6'>
         <Title level={2}>变更成功率报表</Title>
-        <p className="text-gray-500 mt-1">展示变更管理的状态分布和成功率统计</p>
+        <p className='text-gray-500 mt-1'>
+          成功率 = 成功结果数 / 已记录结果数（成功、失败、已回滚）；关闭状态单独统计
+        </p>
       </header>
 
       {/* 控制栏 */}
-      <Card className="mb-6">
-        <Row justify="space-between" align="middle">
+      <Card className='mb-6'>
+        <Row justify='space-between' align='middle'>
           <Col>
-            <Text className="text-gray-600">变更执行情况监控</Text>
+            <Text className='text-gray-600'>变更执行情况监控</Text>
           </Col>
           <Col>
             <Button icon={<RotateCcw />} onClick={loadData}>
@@ -150,17 +131,17 @@ const ChangeSuccessReport = () => {
       </Card>
 
       {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <Spin size="large" description="加载报表数据..." />
+        <div className='flex items-center justify-center h-64'>
+          <Spin size='large' description='加载报表数据...' />
         </div>
       ) : (
         <>
           {/* 统计卡片 */}
-          <Row gutter={[16, 16]} className="mb-6">
+          <Row gutter={[16, 16]} className='mb-6'>
             <Col xs={24} sm={12} lg={6}>
               <Card>
                 <Statistic
-                  title="变更总数"
+                  title='变更总数'
                   value={data.totalChanges}
                   styles={{ content: { color: '#1890ff' } }}
                 />
@@ -169,7 +150,7 @@ const ChangeSuccessReport = () => {
             <Col xs={24} sm={12} lg={6}>
               <Card>
                 <Statistic
-                  title="已完成"
+                  title='已完成'
                   value={data.byStatus.find(s => s.name === '已完成')?.value || 0}
                   styles={{ content: { color: '#52c41a' } }}
                 />
@@ -178,7 +159,7 @@ const ChangeSuccessReport = () => {
             <Col xs={24} sm={12} lg={6}>
               <Card>
                 <Statistic
-                  title="实施中"
+                  title='实施中'
                   value={data.byStatus.find(s => s.name === '实施中')?.value || 0}
                   styles={{ content: { color: '#1890ff' } }}
                 />
@@ -187,10 +168,12 @@ const ChangeSuccessReport = () => {
             <Col xs={24} sm={12} lg={6}>
               <Card>
                 <Statistic
-                  title="成功率"
-                  value={data.successRate}
-                  suffix="%"
-                  styles={{ content: { color: data.successRate >= 80 ? '#52c41a' : '#ff4d4f' } }}
+                  title='成功率'
+                  value={data.successRate ?? '暂无已记录结果'}
+                  suffix={data.successRate === null ? undefined : '%'}
+                  styles={{
+                    content: { color: (data.successRate ?? 0) >= 80 ? '#52c41a' : '#ff4d4f' },
+                  }}
                 />
               </Card>
             </Col>
@@ -199,16 +182,16 @@ const ChangeSuccessReport = () => {
           {/* 图表区域 */}
           <Row gutter={[16, 16]}>
             <Col xs={24} lg={12}>
-              <Card title="变更状态分布">
-                <ResponsiveContainer width="100%" height={300}>
+              <Card title='变更状态分布'>
+                <ResponsiveContainer width='100%' height={300}>
                   <PieChart>
                     <Pie
                       data={data.byStatus}
-                      cx="50%"
-                      cy="50%"
+                      cx='50%'
+                      cy='50%'
                       outerRadius={100}
-                      dataKey="value"
-                      nameKey="name"
+                      dataKey='value'
+                      nameKey='name'
                       label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
                     >
                       {data.byStatus.map((entry, index) => (
@@ -221,40 +204,18 @@ const ChangeSuccessReport = () => {
                 </ResponsiveContainer>
               </Card>
             </Col>
-
-            <Col xs={24} lg={12}>
-              <Card title="变更类型分布">
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={data.byType}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="type" />
-                    <YAxis />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend />
-                    <Bar dataKey="count" name="变更数量" fill="#1890ff">
-                      {data.byType.map((entry, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={TYPE_COLORS[index % TYPE_COLORS.length]}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </Card>
-            </Col>
           </Row>
 
           {/* 状态说明 */}
-          <Card title="状态说明" className="mt-6">
+          <Card title='状态说明' className='mt-6'>
             <Row gutter={[16, 16]}>
               {data.byStatus.map((status, index) => (
                 <Col xs={12} sm={8} md={4} key={index}>
-                  <div className="flex items-center gap-2">
-                    <Tag color={status.color} className="m-0">
+                  <div className='flex items-center gap-2'>
+                    <Tag color={status.color} className='m-0'>
                       {status.name}
                     </Tag>
-                    <span className="text-lg font-semibold">{status.value}</span>
+                    <span className='text-lg font-semibold'>{status.value}</span>
                   </div>
                 </Col>
               ))}

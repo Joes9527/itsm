@@ -56,6 +56,7 @@ func toDomain(ec *ent.Change) *Change {
 		return nil
 	}
 	c := &Change{
+		Number:             workItem.TicketNumber,
 		ID:                 ec.ID,
 		Title:              workItem.Title,
 		Description:        workItem.Description,
@@ -405,11 +406,11 @@ func (r *EntRepository) GetStats(ctx context.Context, tenantID int) (*Stats, err
 
 	// Single GROUP BY query instead of 11 sequential COUNT queries
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT t.status, COUNT(*)
+		SELECT t.status, COALESCE(c.outcome, ''), COUNT(*)
 		FROM changes c
 		JOIN tickets t ON t.id = c.work_item_id
 		WHERE t.tenant_id = $1 AND t.deleted_at IS NULL
-		GROUP BY t.status
+		GROUP BY t.status, c.outcome
 	`, tenantID)
 	if err != nil {
 		return nil, err
@@ -417,35 +418,43 @@ func (r *EntRepository) GetStats(ctx context.Context, tenantID int) (*Stats, err
 	defer rows.Close()
 
 	for rows.Next() {
-		var status string
+		var status, outcome string
 		var count int
-		if err := rows.Scan(&status, &count); err != nil {
+		if err := rows.Scan(&status, &outcome, &count); err != nil {
 			return nil, err
+		}
+		switch outcome {
+		case "successful":
+			stats.SuccessfulOutcomes += count
+		case "failed":
+			stats.FailedOutcomes += count
+		case "rolled_back":
+			stats.RolledBackOutcomes += count
 		}
 		switch status {
 		case "draft":
-			stats.Draft = count
-		case "pending":
+			stats.Draft += count
+		case "pending", "submitted":
 			stats.Pending += count
 		case "pending_review":
 			// pending_review is a seed-data alias for pending (changes awaiting approval)
 			stats.Pending += count
 		case "approved":
-			stats.Approved = count
+			stats.Approved += count
 		case "scheduled":
-			stats.Scheduled = count
+			stats.Scheduled += count
 		case "in_progress":
-			stats.InProgress = count
+			stats.InProgress += count
 		case "completed":
-			stats.Completed = count
+			stats.Completed += count
 		case "failed":
-			stats.Failed = count
+			stats.Failed += count
 		case "rolled_back":
-			stats.RolledBack = count
+			stats.RolledBack += count
 		case "rejected":
-			stats.Rejected = count
+			stats.Rejected += count
 		case "cancelled":
-			stats.Cancelled = count
+			stats.Cancelled += count
 		}
 	}
 	if err := rows.Err(); err != nil {
