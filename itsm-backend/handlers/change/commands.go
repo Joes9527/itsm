@@ -12,6 +12,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
+	"itsm-backend/ent/auditlog"
 	ec "itsm-backend/ent/change"
 	"itsm-backend/ent/changepir"
 	"itsm-backend/ent/processapprovaldecision"
@@ -180,6 +181,18 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, c
 		}
 	case "schedule":
 		target = common.ChangeStatusScheduled
+		if (item.Status != common.ChangeStatusApproved && item.Status != common.ChangeStatusFailed) || c.AssessmentEvidence == "" || c.AssessedBy <= 0 || c.AssessedAt.IsZero() || c.AssessmentDigest != assessment {
+			return invalid("current assessed and authorized change required for scheduling")
+		}
+		// The permissive legacy type helper is not authorization evidence. A
+		// retry retains only an actual governed approval after this assessment.
+		authorized, err := tx.AuditLog.Query().Where(auditlog.TenantID(m.TenantID), auditlog.Resource("work_item"), auditlog.Path(strconv.Itoa(item.ID)), auditlog.Action("change.authorize"), auditlog.OperationIDNotNil(), auditlog.ResultStatus(common.ChangeStatusApproved), auditlog.ResultVersionGT(0), auditlog.ResultVersionLTE(item.Version), auditlog.CreatedAtGTE(c.AssessedAt)).Exist(ctx)
+		if err != nil {
+			return empty, err
+		}
+		if !authorized || !common.IsValidChangeStatusTransition(common.ChangeStatusScheduled, common.ChangeStatusInProgress, c.Type) {
+			return invalid("governed authorization and a legal scheduled implementation path required")
+		}
 		if cmd.PlannedStart == nil || cmd.PlannedEnd == nil || !cmd.PlannedEnd.After(*cmd.PlannedStart) {
 			return invalid("valid implementation window required")
 		}

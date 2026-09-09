@@ -379,6 +379,7 @@ func TestWorkItemChangeLifecycleStandardPolicyCreation(t *testing.T) {
 	f.c = f.client.Change.GetX(f.ctx, ref.ID)
 	require.Equal(t, template.ID, f.c.StandardTemplateID)
 	require.Equal(t, false, f.c.StandardPolicy["approvalRequired"])
+	assertDraftScheduleRejected(t, f)
 	template.Update().SetApprovalRequired(true).ExecX(f.ctx)
 	f.actor.Update().SetRole("agent").ExecX(f.ctx)
 	role := f.client.Role.Create().SetTenantID(f.tenant.ID).SetCode("agent").SetName("Change operator").SetIsActive(true).SaveX(f.ctx)
@@ -392,6 +393,11 @@ func TestWorkItemChangeLifecycleStandardPolicyCreation(t *testing.T) {
 	f.apply(t, f.command("assess", "policy-assess"))
 	command := f.command("authorize", "policy-authorize")
 	f.apply(t, command)
+	start, end := time.Now().Add(-time.Minute), time.Now().Add(time.Hour)
+	schedule := f.command("schedule", "policy-schedule")
+	schedule.PlannedStart = &start
+	schedule.PlannedEnd = &end
+	require.Equal(t, "scheduled", f.apply(t, schedule).Status)
 	require.Zero(t, f.client.ProcessApprovalDecision.Query().CountX(f.ctx), "configured policy is not a fabricated approval")
 	role.Update().SetIsActive(false).ExecX(f.ctx)
 	_, err = f.owner.ApplyCommand(f.ctx, command)
@@ -412,6 +418,63 @@ func TestWorkItemChangeLifecycleStandardPolicyCreation(t *testing.T) {
 		_, err = f.owner.ApplyCommand(f.ctx, f.command("authorize", "write-only-"+kind))
 		require.Error(t, err)
 	}
+}
+
+func assertDraftScheduleRejected(t *testing.T, f *changeLifecycleFixture) {
+	t.Helper()
+	before := f.client.Ticket.GetX(f.ctx, f.c.WorkItemID)
+	receipts := f.client.AuditLog.Query().CountX(f.ctx)
+	start, end := time.Now().Add(-time.Minute), time.Now().Add(time.Hour)
+	cmd := f.command("schedule", "draft-schedule")
+	cmd.PlannedStart = &start
+	cmd.PlannedEnd = &end
+	_, err := f.owner.ApplyCommand(f.ctx, cmd)
+	require.Error(t, err)
+	after := f.client.Ticket.GetX(f.ctx, f.c.WorkItemID)
+	require.Equal(t, before.Status, after.Status)
+	require.Equal(t, before.Version, after.Version)
+	require.Equal(t, receipts, f.client.AuditLog.Query().CountX(f.ctx))
+	require.True(t, f.client.Change.GetX(f.ctx, f.c.ID).PlannedStartDate.IsZero())
+}
+
+func TestWorkItemChangeLifecycleScheduleGovernance(t *testing.T) {
+	f := newChangeLifecycleFixture(t, "standard")
+	assertDraftScheduleRejected(t, f)
+	f.authorize(t) // Includes governed standard schedule and implementation.
+	f.client.Ticket.UpdateOneID(f.c.WorkItemID).SetStatus("failed").ExecX(f.ctx)
+	start, end := time.Now().Add(-time.Minute), time.Now().Add(time.Hour)
+	cmd := f.command("schedule", "governed-retry")
+	cmd.PlannedStart = &start
+	cmd.PlannedEnd = &end
+	require.Equal(t, "scheduled", f.apply(t, cmd).Status)
+	f.client.Ticket.UpdateOneID(f.c.WorkItemID).SetStatus("failed").ExecX(f.ctx)
+	f.client.Change.UpdateOneID(f.c.ID).SetImplementationPlan("changed after assessment").ExecX(f.ctx)
+	cmd = f.command("schedule", "stale-retry")
+	cmd.PlannedStart = &start
+	cmd.PlannedEnd = &end
+	_, err := f.owner.ApplyCommand(f.ctx, cmd)
+	require.Error(t, err)
+	t.Run("assessment-without-authorization", func(t *testing.T) {
+		f := newChangeLifecycleFixture(t, "standard")
+		f.apply(t, f.command("submit", "submit"))
+		f.apply(t, f.command("assess", "assess"))
+		f.client.Ticket.UpdateOneID(f.c.WorkItemID).SetStatus("failed").ExecX(f.ctx)
+		cmd := f.command("schedule", "missing-authority")
+		cmd.PlannedStart = &start
+		cmd.PlannedEnd = &end
+		_, err := f.owner.ApplyCommand(f.ctx, cmd)
+		require.ErrorContains(t, err, "governed authorization")
+	})
+	t.Run("emergency-has-no-scheduled-implementation-edge", func(t *testing.T) {
+		f := newChangeLifecycleFixture(t, "emergency")
+		f.authorize(t)
+		f.client.Ticket.UpdateOneID(f.c.WorkItemID).SetStatus("failed").ExecX(f.ctx)
+		cmd := f.command("schedule", "emergency-retry")
+		cmd.PlannedStart = &start
+		cmd.PlannedEnd = &end
+		_, err := f.owner.ApplyCommand(f.ctx, cmd)
+		require.ErrorContains(t, err, "legal scheduled implementation")
+	})
 }
 
 func TestWorkItemChangeLifecycleAllocatedMSP(t *testing.T) {
