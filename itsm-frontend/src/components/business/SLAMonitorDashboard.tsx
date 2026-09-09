@@ -274,7 +274,7 @@ export const SLAMonitorDashboard: React.FC<SLAMonitorDashboardProps> = ({
       style={{
         minHeight: isFullscreen ? '100vh' : 'auto',
         padding: isFullscreen ? '24px' : '16px',
-        backgroundColor: isFullscreen ? '#0a0e27' : 'var(--color-bg-page)',
+        backgroundColor: isFullscreen ? '#0a0e27' : 'var(--color-bg-secondary)',
       }}
     >
       {/* 顶部工具栏 */}

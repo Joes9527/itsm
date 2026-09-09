@@ -159,7 +159,7 @@ const MarketplacePage = () => {
     <div className="container mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">应用市场</h1>
+          <h1 className="text-[24px] font-semibold tracking-tight">应用市场</h1>
           <p className="mt-1 text-[12px] text-muted">发现和安装连接器、AI技能和扩展插件，提升IT服务管理效率</p>
         </div>
         <Link href="/installations">
@@ -225,8 +225,8 @@ const MarketplacePage = () => {
       {/* 应用列表 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {filteredItems.map(item => (
-          <Card key={item.id} className="hover:shadow-md transition-shadow">
-            <CardHeader className="pb-2">
+          <Card key={item.id} className="rounded-[8px] border border-border bg-surface text-[13px] text-foreground shadow-none transition-colors hover:border-[var(--color-primary)]">
+            <CardHeader className="p-[16px] pb-[8px]">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-[6px] bg-raised">
@@ -237,13 +237,13 @@ const MarketplacePage = () => {
                     )}
                   </div>
                   <div>
-                    <CardTitle className="text-lg">{item.title}</CardTitle>
+                    <CardTitle className="text-[15px] font-semibold">{item.title}</CardTitle>
                     <CardDescription className="flex items-center gap-2 mt-1">
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge variant="secondary" className="text-[11px]">
                         {typeNames[item.type]}
                       </Badge>
                       {item.isOfficial && (
-                        <Badge variant="default" className="bg-blue-100 text-blue-800 hover:bg-blue-200 text-xs">
+                        <Badge variant="default" className="bg-blue-100 text-[11px] text-blue-800 hover:bg-blue-200">
                           官方
                         </Badge>
                       )}
@@ -252,13 +252,13 @@ const MarketplacePage = () => {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="pb-2">
+            <CardContent className="px-[16px] pb-[8px]">
               <p className="h-10 line-clamp-2 text-[13px] text-muted">
                 {item.description}
               </p>
               <div className="flex flex-wrap gap-1 mt-2">
                 {item.tags.slice(0, 3).map(tag => (
-                  <Badge key={tag} variant="outline" className="text-xs">
+                  <Badge key={tag} variant="outline" className="text-[11px]">
                     {tag}
                   </Badge>
                 ))}
@@ -267,7 +267,7 @@ const MarketplacePage = () => {
                 )}
               </div>
             </CardContent>
-            <CardFooter className="flex items-center justify-between pt-2 border-t">
+            <CardFooter className="flex items-center justify-between border-t border-border p-[16px] pt-[8px]">
               <div className="flex items-center gap-3 text-[13px] text-muted">
                 <div className="flex items-center gap-1">
                   <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />

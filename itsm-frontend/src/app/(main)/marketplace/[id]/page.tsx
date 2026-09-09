@@ -153,7 +153,7 @@ const MarketplaceDetailPage = () => {
 
   return (
     <div className="container mx-auto px-4 py-6">
-      <div className="flex items-center gap-2 mb-6 text-sm">
+      <div className="mb-6 flex items-center gap-2 text-[13px]">
         <Link href="/marketplace" className="flex items-center gap-1 text-muted hover:text-foreground">
           <ArrowLeft className="h-4 w-4" />
           返回市场
@@ -162,19 +162,19 @@ const MarketplaceDetailPage = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          <Card>
-            <CardHeader>
+          <Card className="rounded-[8px] border border-border bg-surface text-[13px] text-foreground shadow-none">
+            <CardHeader className="p-[16px]">
               <div className="flex flex-col md:flex-row md:items-start gap-4">
                 <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[6px] bg-raised">
                   {item.iconUrl ? (
                     <img src={item.iconUrl} alt={item.title} className="w-full h-full object-cover" />
                   ) : (
-                    <span className="text-sm">{typeNames[item.type]}</span>
+                    <span className="text-[13px]">{typeNames[item.type]}</span>
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-3 mb-1">
-                    <h1 className="text-2xl font-bold">{item.title}</h1>
+                    <h1 className="text-[24px] font-semibold">{item.title}</h1>
                     <Badge variant="secondary">{typeNames[item.type]}</Badge>
                     {item.isOfficial && <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-200">官方</Badge>}
                     {item.isFree ? (
@@ -226,9 +226,9 @@ const MarketplaceDetailPage = () => {
             </CardHeader>
           </Card>
 
-          <Card>
+          <Card className="rounded-[8px] border border-border bg-surface text-[13px] text-foreground shadow-none">
             <Tabs defaultValue="description">
-              <CardHeader>
+              <CardHeader className="p-[16px] pb-[8px]">
                 <TabsList>
                   <TabsTrigger value="description">详情介绍</TabsTrigger>
                   <TabsTrigger value="capabilities">功能特性</TabsTrigger>
@@ -236,7 +236,7 @@ const MarketplaceDetailPage = () => {
                   <TabsTrigger value="versions">版本历史</TabsTrigger>
                 </TabsList>
               </CardHeader>
-              <CardContent>
+              <CardContent className="px-[16px] pb-[16px]">
                 <TabsContent value="description" className="mt-0 space-y-4">
                   <div className="prose prose-sm max-w-none">
                     {normalizeMarkdown(item.longDescription || item.description).map((line, index) => (
@@ -245,7 +245,7 @@ const MarketplaceDetailPage = () => {
                   </div>
                   {(item.tags || []).length > 0 && (
                     <div>
-                      <h3 className="text-lg font-medium mb-3">相关标签</h3>
+                      <h3 className="mb-3 text-[15px] font-semibold">相关标签</h3>
                       <div className="flex flex-wrap gap-2">
                         {(item.tags || []).map(tag => (
                           <Badge key={tag} variant="outline">
@@ -265,7 +265,7 @@ const MarketplaceDetailPage = () => {
                 </TabsContent>
 
                 <TabsContent value="capabilities" className="mt-0">
-                  <h3 className="text-lg font-medium mb-3">支持的功能特性</h3>
+                  <h3 className="mb-3 text-[15px] font-semibold">支持的功能特性</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {(item.capabilities || []).map(capability => (
                       <div key={capability} className="flex items-center gap-2 rounded-[6px] bg-raised p-2">
@@ -277,7 +277,7 @@ const MarketplaceDetailPage = () => {
                 </TabsContent>
 
                 <TabsContent value="permissions" className="mt-0">
-                  <h3 className="text-lg font-medium mb-3">需要的系统权限</h3>
+                  <h3 className="mb-3 text-[15px] font-semibold">需要的系统权限</h3>
                   <div className="space-y-3">
                     {(item.requiredPermissions || []).map(permission => (
                       <div key={permission} className="flex items-start gap-2 rounded-[6px] bg-raised p-2">
@@ -290,7 +290,7 @@ const MarketplaceDetailPage = () => {
                 </TabsContent>
 
                 <TabsContent value="versions" className="mt-0">
-                  <h3 className="text-lg font-medium mb-3">版本历史</h3>
+                  <h3 className="mb-3 text-[15px] font-semibold">版本历史</h3>
                   <div className="space-y-4">
                     {versions.length > 0 ? versions.map(version => (
                       <div key={version.version} className="border-l-2 border-border pb-4 pl-4">
@@ -309,21 +309,21 @@ const MarketplaceDetailPage = () => {
         </div>
 
         <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>安装信息</CardTitle>
+          <Card className="rounded-[8px] border border-border bg-surface text-[13px] text-foreground shadow-none">
+            <CardHeader className="p-[16px] pb-[8px]">
+              <CardTitle className="text-[15px] font-semibold">安装信息</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 px-[16px] pb-[16px]">
               <InfoRow label="最新版本" value={item.latestVersion || '1.0.0'} />
               <InfoRow label="发布日期" value={formatDate(versions[0]?.releasedAt || item.updatedAt)} />
               <InfoRow label="最低系统要求" value={item.minSystemVersion || '未声明'} />
               <InfoRow label="安装量" value={String(item.installCount || 0)} />
               <div>
-                <div className="text-sm font-medium mb-1">分类</div>
+                <div className="mb-1 text-[13px] font-medium">分类</div>
                 <Badge variant="secondary">{item.category || '未分类'}</Badge>
               </div>
             </CardContent>
-            <CardFooter className="border-t pt-4">
+            <CardFooter className="border-t border-border p-[16px]">
               {isInstalled ? (
                 <Button className="w-full" onClick={() => router.push('/installations')}>管理已安装应用</Button>
               ) : (
@@ -334,11 +334,11 @@ const MarketplaceDetailPage = () => {
             </CardFooter>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>提供商信息</CardTitle>
+          <Card className="rounded-[8px] border border-border bg-surface text-[13px] text-foreground shadow-none">
+            <CardHeader className="p-[16px] pb-[8px]">
+              <CardTitle className="text-[15px] font-semibold">提供商信息</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-[16px] pb-[16px]">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-medium">
                   {(item.provider || item.authorName || item.title).charAt(0)}
@@ -361,7 +361,7 @@ const MarketplaceDetailPage = () => {
 
 const InfoRow = ({ label, value }: { label: string; value: string }) => (
   <div>
-    <div className="text-sm font-medium mb-1">{label}</div>
+    <div className="mb-1 text-[13px] font-medium">{label}</div>
     <div className="text-muted">{value}</div>
   </div>
 );
@@ -370,7 +370,7 @@ const InfoText = ({ icon, label, value }: { icon: React.ReactNode; label: string
   <div className="flex items-start gap-2">
     {icon}
     <div>
-      <div className="text-sm font-medium">{label}</div>
+      <div className="text-[13px] font-medium">{label}</div>
       <div className="break-all text-[13px] text-muted">{value}</div>
     </div>
   </div>
@@ -380,9 +380,9 @@ const InfoLink = ({ icon, label, value }: { icon: React.ReactNode; label: string
   <div className="flex items-start gap-2">
     {icon}
     <div>
-      <div className="text-sm font-medium">{label}</div>
+      <div className="text-[13px] font-medium">{label}</div>
       {value ? (
-        <a href={value} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline break-all">
+        <a href={value} target="_blank" rel="noopener noreferrer" className="break-all text-[13px] text-blue-600 hover:underline">
           {value}
         </a>
       ) : (

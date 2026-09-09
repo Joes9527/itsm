@@ -165,11 +165,12 @@ export default function ApprovalsCenterPage() {
       title: '任务',
       dataIndex: 'taskName',
       key: 'taskName',
+      width: 280,
       render: (text: string, record: UserTask) => (
-        <div>
+        <div className="min-w-[220px]">
           <div className="font-medium text-foreground">{text || record.taskDefinitionKey}</div>
           {record.taskPurpose && (
-            <Text type="secondary" className="text-xs">{record.taskPurpose}</Text>
+            <Text type="secondary" className="text-[12px]">{record.taskPurpose}</Text>
           )}
         </div>
       ),
@@ -274,7 +275,7 @@ export default function ApprovalsCenterPage() {
   );
 
   return (
-    <div className="p-4 md:p-6">
+    <div style={{ padding: 24, fontSize: 13 }}>
       {/* 头部区域 */}
       <div className="mb-4 md:mb-6 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
         <div className="flex items-center gap-3">
@@ -282,8 +283,8 @@ export default function ApprovalsCenterPage() {
             <CheckCircle className="text-xl md:text-2xl text-blue-500" />
           </div>
           <div>
-            <Title level={3} className="!mb-0 !text-xl md:!text-2xl">审批中心</Title>
-            <Text type="secondary" className="text-sm">
+            <Title level={3} className="!mb-0 !text-[24px] !font-semibold">审批中心</Title>
+            <Text type="secondary" className="text-[12px]">
               {user?.username ? `${user.username}，` : ''}您有 {tasks.length} 项流程待办
             </Text>
           </div>
@@ -339,13 +340,13 @@ export default function ApprovalsCenterPage() {
             dataSource={tasks}
             columns={taskColumns}
             pagination={{ pageSize: 10, showSizeChanger: true, showTotal: (total) => `共 ${total} 项` }}
-            scroll={{ x: 900 }}
+            scroll={{ x: 1200 }}
             locale={{
               emptyText: (
                 <div className="py-12 text-center">
                   <Clock className="mx-auto mb-3 h-10 w-10 text-muted" />
                   <div className="mb-1 text-muted">暂无流程待办</div>
-                  <Text type="secondary" className="text-sm">当前没有分配给您或待您领取的审批任务</Text>
+                  <Text type="secondary" className="text-[12px]">当前没有分配给您或待您领取的审批任务</Text>
                 </div>
               ),
             }}
