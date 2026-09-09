@@ -30,6 +30,16 @@ npm run dev
 - Integration: `npm run test:integration`
 - E2E/Playwright: `npm run test:e2e`
 
+## Theme token workflow
+
+[`src/design-system/theme-tokens.json`](src/design-system/theme-tokens.json) is the authoritative source for theme colors, sizes, and CSS variables. After changing it or [`src/design-system/expand-theme-tokens.mjs`](src/design-system/expand-theme-tokens.mjs), regenerate the committed CSS artifact:
+
+```bash
+npm run theme:generate
+```
+
+Commit the source and regenerated `src/styles/generated-theme-tokens.css` together. Do not edit the generated CSS directly. `npm run theme:check` fails when the artifact is stale; it also runs automatically before type-checking. Development and production builds regenerate the artifact through their existing npm pre-hooks.
+
 ## Lint/Format
 
 ```

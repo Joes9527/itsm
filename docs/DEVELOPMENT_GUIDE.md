@@ -22,7 +22,11 @@ npm test                 # 运行全部测试
 npm run test:unit        # 仅单元测试
 npm run test:integration # 仅集成测试
 npm run test:e2e         # 运行 Playwright E2E 测试
+npm run theme:generate   # 从主题 token 源重新生成 CSS（修改 token 后执行）
+npm run theme:check      # 检查已提交的生成 CSS 是否与 token 源一致
 ```
+
+主题的权威源是 `itsm-frontend/src/design-system/theme-tokens.json`，展开逻辑位于 `itsm-frontend/src/design-system/expand-theme-tokens.mjs`，生成产物是 `itsm-frontend/src/styles/generated-theme-tokens.css`。不要直接编辑生成 CSS；修改权威源或展开逻辑后运行 `npm run theme:generate`，并把源文件与生成产物一同提交。`theme:check` 会检测漂移，并已接入前端类型检查前置步骤；开发与生产构建使用现有 npm pre-hook 自动重新生成。
 
 ### 后端 (itsm-backend)
 

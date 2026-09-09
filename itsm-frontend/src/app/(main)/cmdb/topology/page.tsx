@@ -203,7 +203,11 @@ export default function TopologyPage() {
           {highlightNodeId && <Tag color="blue" closable onClose={() => setHighlightNodeId(null)}>已高亮直接上下游（点击空白处取消）</Tag>}
         </Space>
       </Card>
-      <Card className="shadow-none rounded-[8px]" style={{ height: 'calc(100vh - 250px)' }}>
+      <Card
+        className="shadow-none rounded-[8px] overflow-hidden"
+        style={{ height: 'calc(100vh - 250px)' }}
+        styles={{ body: { height: '100%', padding: 0 } }}
+      >
         {loading ? <div style={{ textAlign: 'center', padding: 100 }}><Spin size="large" /><div style={{ marginTop: 16 }}>加载拓扑图中...</div></div>
         : selectedCI ? <div style={{ height: '100%' }}><ReactFlow className={graphStyles.host} nodes={displayNodes} edges={displayEdges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onNodeClick={onNodeClick} onPaneClick={onPaneClick}
             nodeTypes={nodeTypes} fitView fitViewOptions={{ padding: 0.2 }} attributionPosition="bottom-left"><Controls /><Background color="var(--color-border)" variant={BackgroundVariant.Dots} gap={20} size={1} /></ReactFlow></div>
