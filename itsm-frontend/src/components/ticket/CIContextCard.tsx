@@ -89,7 +89,7 @@ export const CIContextCard: React.FC<CIContextCardProps> = ({ ticketId, recordCl
   return (
     <div className="bg-surface rounded-[8px] border border-border p-4 shadow-none space-y-3 text-[12px]">
       <div className="flex items-center justify-between border-b border-border pb-2">
-        <span className="font-bold text-foreground flex items-center gap-1.5 text-[12px]">
+        <span className="font-semibold text-foreground flex items-center gap-1.5 text-[15px]">
           <Server size={14} className="text-muted" />
           关联配置项 (CI)
         </span>

@@ -519,7 +519,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               onClick={handleAssign}
               disabled={!ticket.actions?.assign?.allowed}
               title={ticket.actions?.assign?.reason || ''}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-medium bg-surface hover:bg-raised text-foreground border border-border hover:border-border transition-colors duration-150 cursor-pointer shadow-none disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`inline-flex items-center gap-1.5 px-3 h-[29px] rounded-[6px] text-[12px] font-medium bg-surface hover:bg-raised text-foreground border border-border hover:border-border transition-colors duration-150 cursor-pointer shadow-none disabled:opacity-50 disabled:cursor-not-allowed ${
                 !ticket.actions?.assign?.allowed ? DISABLED_ACTION_CLASS : ''
               }`}
             >
@@ -532,7 +532,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               onClick={handleUpdate}
               disabled={!ticket.actions?.edit?.allowed}
               title={ticket.actions?.edit?.reason || ''}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-medium bg-surface hover:bg-raised text-foreground border border-border hover:border-border transition-colors duration-150 cursor-pointer shadow-none disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`inline-flex items-center gap-1.5 px-3 h-[29px] rounded-[6px] text-[12px] font-medium bg-surface hover:bg-raised text-foreground border border-border hover:border-border transition-colors duration-150 cursor-pointer shadow-none disabled:opacity-50 disabled:cursor-not-allowed ${
                 !ticket.actions?.edit?.allowed ? DISABLED_ACTION_CLASS : ''
               }`}
             >
@@ -545,7 +545,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               onClick={() => setCCModalVisible(true)}
               disabled={!ticket.actions?.cc?.allowed}
               title={ticket.actions?.cc?.reason || ''}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-medium bg-surface hover:bg-raised text-foreground border border-border hover:border-border transition-colors duration-150 cursor-pointer shadow-none disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`inline-flex items-center gap-1.5 px-3 h-[29px] rounded-[6px] text-[12px] font-medium bg-surface hover:bg-raised text-foreground border border-border hover:border-border transition-colors duration-150 cursor-pointer shadow-none disabled:opacity-50 disabled:cursor-not-allowed ${
                 !ticket.actions?.cc?.allowed ? DISABLED_ACTION_CLASS : ''
               }`}
             >
@@ -558,7 +558,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               onClick={handleDeleteClick}
               disabled={!ticket.actions?.delete?.allowed}
               title={ticket.actions?.delete?.reason || ''}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-medium bg-surface hover:bg-red-50 text-red-600 border border-red-200 hover:border-red-300 transition-colors duration-150 cursor-pointer shadow-none disabled:opacity-50 disabled:cursor-not-allowed ${
+              className={`inline-flex items-center gap-1.5 px-3 h-[29px] rounded-[6px] text-[12px] font-medium bg-surface hover:bg-red-50 text-red-600 border border-red-200 hover:border-red-300 transition-colors duration-150 cursor-pointer shadow-none disabled:opacity-50 disabled:cursor-not-allowed ${
                 !ticket.actions?.delete?.allowed ? DISABLED_ACTION_CLASS : ''
               }`}
             >
@@ -583,7 +583,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
           <div className="bg-surface rounded-[8px] border border-border p-5 shadow-none space-y-4">
             <div className="flex items-center justify-between border-b border-border pb-3">
               <div className="flex items-center gap-2">
-                <span className="font-bold text-[13px] text-foreground">
+                <span className="font-semibold text-[15px] text-foreground">
                   工单诉求与业务描述
                 </span>
                 <span className="text-[11px] text-muted">申请人填写</span>
@@ -593,17 +593,17 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
               </span>
             </div>
 
-            <div className="text-[12px] text-foreground leading-relaxed whitespace-pre-line bg-raised p-4 rounded-[8px] border border-border">
+            <div className="text-[13px] text-foreground leading-relaxed whitespace-pre-line bg-raised p-4 rounded-[8px] border border-border">
               <SafeTextBlock content={ticket.description} fallback="暂无详细描述" />
             </div>
 
             {/* 动态自定义字段网格展示 */}
             {ticket.customFields && ticket.customFields.length > 0 && (
               <div className="pt-2 border-t border-border space-y-2">
-                <span className="text-[12px] font-bold text-foreground block">
+                <span className="text-[15px] font-semibold text-foreground block">
                   业务扩展参数
                 </span>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[12px]">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[13px]">
                   {ticket.customFields.map(field => (
                     <div
                       key={field.name}
@@ -645,14 +645,14 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
         <div className="lg:col-span-4 flex flex-col gap-4 sticky top-4 min-w-0">
           {/* 1. 工单上下文属性 (置顶) */}
           <div className="bg-surface rounded-[8px] border border-border p-4 shadow-none space-y-3 text-[12px]">
-            <span className="font-bold text-foreground block border-b border-border pb-2 text-[12px]">
+            <span className="font-semibold text-foreground block border-b border-border pb-2 text-[15px]">
               工单上下文属性
             </span>
 
             <div className="space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-muted text-[12px]">申请人:</span>
-                <span className="font-medium text-foreground text-[12px]">
+                <span className="font-medium text-foreground text-[13px]">
                   {ticket.requester?.name || '-'}
                   {ticket.requester?.username ? ` (${ticket.requester.username})` : ''}
                 </span>
@@ -660,7 +660,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
               <div className="flex items-center justify-between">
                 <span className="text-muted text-[12px]">所属部门:</span>
-                <span className="text-foreground text-[12px]">
+                <span className="text-foreground text-[13px]">
                   {ticket.requester?.department || '-'}
                 </span>
               </div>
@@ -674,7 +674,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
               <div className="flex items-center justify-between">
                 <span className="text-muted text-[12px]">工单分类:</span>
-                <span className="text-foreground text-[12px]">
+                <span className="text-foreground text-[13px]">
                   {ticket.category || '未分类'}
                 </span>
               </div>
@@ -719,7 +719,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
           {slaInfo && (
             <div className="bg-surface rounded-[8px] border border-border p-4 shadow-none space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-[12px] font-bold text-foreground flex items-center gap-1.5">
+                <span className="text-[15px] font-semibold text-foreground flex items-center gap-1.5">
                   <Clock size={14} className="text-muted" />
                   SLA 时效与承诺
                 </span>
@@ -1266,7 +1266,7 @@ const TicketDetailTabs: React.FC<TicketDetailTabsProps> = ({
 
   return (
     <div className="bg-surface rounded-[8px] border border-border p-5 shadow-none space-y-3">
-      <div className="flex items-center gap-2 text-muted text-[12px] font-semibold border-b border-border pb-2">
+      <div className="flex items-center gap-2 text-foreground text-[15px] font-semibold border-b border-border pb-2">
         <Info size={13} />
         协作流、审批链与审计历史
       </div>

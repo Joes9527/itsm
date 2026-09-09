@@ -105,7 +105,7 @@ export default function ServiceCatalogPage() {
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div className="min-w-0">
               <div className="flex items-start gap-3">
-                <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-blue-50 text-muted">
+                <div className="mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-raised text-muted">
                   <BookOpen size={20} />
                 </div>
                 <div className="min-w-0">

@@ -120,7 +120,7 @@ export default function ServiceRequestPanel({ ticketId }: ServiceRequestPanelPro
           <div className="w-6 h-6 rounded-md bg-orange-50 text-orange-600 flex items-center justify-center font-bold text-[12px] shrink-0">
             ☁️
           </div>
-          <span className="font-bold text-[13px] text-foreground shrink-0">
+          <span className="font-semibold text-[15px] text-foreground shrink-0">
             服务申请与规格参数
           </span>
           <span className="text-[12px] text-orange-700 bg-orange-50 px-2 py-0.5 rounded font-medium border border-orange-200 truncate">
@@ -136,7 +136,7 @@ export default function ServiceRequestPanel({ ticketId }: ServiceRequestPanelPro
             onClick={handleStartProvisioning}
             disabled={!request.actions?.provision?.allowed}
             title={request.actions?.provision?.reason || ''}
-            className="!bg-orange-500 hover:!bg-orange-600 active:!bg-orange-700 !border-orange-500 hover:!border-orange-600 shrink-0"
+            className="shrink-0"
           >
             开始交付
           </Button>
@@ -181,7 +181,7 @@ export default function ServiceRequestPanel({ ticketId }: ServiceRequestPanelPro
                 <ExternalLink size={11} />
               </button>
             ) : (
-              <span className="font-semibold text-foreground block text-[12px] break-words">
+              <span className="font-semibold text-foreground block text-[13px] break-words">
                 {field.value}
               </span>
             )}
@@ -192,7 +192,7 @@ export default function ServiceRequestPanel({ ticketId }: ServiceRequestPanelPro
       {/* 交付任务列表 */}
       {!fulfillmentLabel && (
         <div className="pt-2">
-          <span className="text-[12px] font-bold text-foreground mb-2 block">
+          <span className="text-[15px] font-semibold text-foreground mb-2 block">
             资源交付任务 ({tasks.length})
           </span>
           {tasks.length === 0 ? (

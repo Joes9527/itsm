@@ -153,7 +153,7 @@ export const TicketCommentStream: React.FC<TicketCommentStreamProps> = ({
                     comment.isInternal
                       ? 'bg-amber-50/50 border-amber-200/70'
                       : ticketAssigneeId && comment.userId === ticketAssigneeId
-                        ? 'bg-orange-50/30 border-orange-100'
+                        ? 'bg-selected border-border'
                         : 'bg-raised border-border'
                   }`}
                 >
@@ -184,7 +184,7 @@ export const TicketCommentStream: React.FC<TicketCommentStreamProps> = ({
                             setEditingId(null);
                             setEditingContent('');
                           }}
-                          className="px-2.5 py-1 rounded-md text-[12px] font-medium bg-surface hover:bg-raised text-foreground border border-border"
+                          className="px-2.5 h-[29px] rounded-[6px] text-[12px] font-medium bg-surface hover:bg-raised text-foreground border border-border"
                         >
                           取消
                         </button>
@@ -192,14 +192,14 @@ export const TicketCommentStream: React.FC<TicketCommentStreamProps> = ({
                           type="button"
                           onClick={() => handleEdit(comment.id)}
                           disabled={!editingContent.trim() || submitting}
-                          className="px-2.5 py-1 rounded-md text-[12px] font-medium bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-50"
+                          className="px-2.5 h-[29px] rounded-[6px] text-[12px] font-medium bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white disabled:opacity-50"
                         >
                           保存
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <p className="text-foreground m-0 leading-relaxed text-[12px] whitespace-pre-wrap">
+                    <p className="text-foreground m-0 leading-relaxed text-[13px] whitespace-pre-wrap">
                       {comment.content}
                     </p>
                   )}
@@ -278,7 +278,7 @@ export const TicketCommentStream: React.FC<TicketCommentStreamProps> = ({
           placeholder="输入您的评论或内部评估记录..."
           value={replyText}
           onChange={e => setReplyText(e.target.value)}
-          className="!rounded-[8px] !border-border !text-[12px] !p-3 shadow-none focus:!border-orange-500"
+          className="!rounded-[8px] !border-border !text-[13px] !p-3 shadow-none focus:!border-[var(--color-primary)]"
         />
 
         <div className="flex justify-end pt-1">
@@ -286,7 +286,7 @@ export const TicketCommentStream: React.FC<TicketCommentStreamProps> = ({
             type="button"
             onClick={handleSend}
             disabled={!replyText.trim() || submitting}
-            className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-[8px] text-[12px] font-medium bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white transition-colors duration-150 cursor-pointer shadow-none disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-4 h-[34px] rounded-[6px] text-[13px] font-medium bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] active:bg-[var(--color-primary-hover)] text-white transition-colors duration-150 cursor-pointer shadow-none disabled:opacity-50"
           >
             <Send size={13} />
             <span>{submitting ? '发送中...' : '发送评论'}</span>

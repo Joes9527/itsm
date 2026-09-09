@@ -446,7 +446,7 @@ export function A2UIFormRenderer() {
   return (
     <Card className="max-w-2xl mx-auto">
       {/* AI 输入区 */}
-      <div className="mb-4 p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-[8px]">
+      <div className="mb-4 p-3 bg-raised border border-border rounded-[8px]">
         <div className="flex items-center gap-2 mb-2">
           <Bot className="w-4 h-4 text-purple-500" />
           <span className="text-[13px] font-medium">描述需求，AI 自动生成表单</span>

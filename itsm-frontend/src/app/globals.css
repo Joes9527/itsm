@@ -212,19 +212,6 @@ h6,
 @media (min-resolution: 120dpi) {
 }
 
-/* 触摸设备优化 */
-@media (hover: none) and (pointer: coarse) {
-
-  button:not(.ant-btn-icon-only),
-  input[type="button"],
-  input[type="submit"],
-  [role="button"]:not(.ant-btn-icon-only) {
-    min-height: var(--touch-target-min);
-    min-width: var(--touch-target-min);
-    padding: 8px 16px;
-  }
-}
-
 /* 增强的焦点指示器 - 移除蓝色边框 */
 *:focus-within {
   outline: none;
@@ -317,9 +304,6 @@ h6,
     font-size: var(--font-size-sm);
   }
 
-  .ant-btn:not(.ant-btn-icon-only):not(.ant-btn-sm) {
-    min-height: var(--touch-target-comfortable);
-  }
 }
 
 /* 基础样式重置 */
@@ -394,9 +378,6 @@ h6,
     line-height: 1.625;
   }
 
-  .text-muted {
-    color: var(--color-text-secondary);
-  }
 
   .text-subtle {
     color: var(--color-text-disabled);

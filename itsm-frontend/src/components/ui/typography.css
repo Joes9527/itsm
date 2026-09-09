@@ -216,9 +216,6 @@
   @apply text-gray-600;
 }
 
-.text-muted {
-  @apply text-gray-500;
-}
 
 .text-disabled {
   @apply text-gray-400;
@@ -422,9 +419,6 @@
     @apply text-gray-400;
   }
   
-  .text-muted {
-    @apply text-gray-500;
-  }
   
   .code-inline {
     @apply bg-gray-800 text-gray-200;

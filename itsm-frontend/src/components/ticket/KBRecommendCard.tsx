@@ -47,7 +47,7 @@ export const KBRecommendCard: React.FC<KBRecommendCardProps> = ({ query }) => {
   return (
     <div className="bg-surface rounded-[8px] border border-border p-4 shadow-none space-y-2.5 text-[12px]">
       <div className="flex items-center justify-between border-b border-border pb-2">
-        <span className="font-bold text-foreground flex items-center gap-1.5 text-[12px]">
+        <span className="font-semibold text-foreground flex items-center gap-1.5 text-[15px]">
           <BookOpen size={13} className="text-muted" />
           推荐操作指引 (KB)
         </span>
@@ -58,7 +58,7 @@ export const KBRecommendCard: React.FC<KBRecommendCardProps> = ({ query }) => {
         {articles.map(article => (
           <div
             key={article.id}
-            className="p-2.5 bg-raised hover:bg-orange-50/50 rounded-[8px] border border-border transition-colors cursor-pointer group"
+            className="p-2.5 bg-raised hover:bg-selected rounded-[8px] border border-border transition-colors cursor-pointer group"
           >
             <p className="text-[11px] font-medium text-foreground group-hover:text-orange-600 truncate m-0">
               {article.title}
