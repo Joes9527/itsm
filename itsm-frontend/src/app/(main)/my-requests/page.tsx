@@ -193,7 +193,7 @@ const MyRequestsPage = () => {
   ];
 
   return (
-    <div className="min-h-screen p-6 bg-raised">
+    <div className="min-h-screen p-6 bg-page">
       <div className="max-w-7xl mx-auto">
         {/* 页面头部 */}
         <div className="mb-8">

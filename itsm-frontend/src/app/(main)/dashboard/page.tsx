@@ -227,10 +227,10 @@ export default function DashboardPage() {
         <p className='text-muted mb-6'>{error}</p>
         <Button
           type='primary'
-          size='large'
+          size='middle'
           onClick={() => refresh()}
           icon={<RefreshCw />}
-          className='h-11 rounded-[8px]'
+          className='h-[34px] rounded-[6px]'
         >
           重新加载
         </Button>

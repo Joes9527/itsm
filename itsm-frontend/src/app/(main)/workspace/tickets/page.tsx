@@ -95,7 +95,7 @@ export default function WorkspaceTicketsPage() {
   };
 
   return (
-    <div className="h-[calc(100vh-[34px]0px)] flex flex-col md:flex-row gap-4 overflow-hidden animate-in fade-in duration-200">
+    <div className="h-[calc(100vh-100px)] flex flex-col md:flex-row gap-4 overflow-hidden animate-in fade-in duration-200">
       {/* ================= 1. 左栏：工单队列与列表 (300px) ================= */}
       <div className="w-full md:w-80 flex flex-col bg-surface rounded-[8px] border border-border shadow-none overflow-hidden flex-shrink-0">
         {/* 队列选择 */}
