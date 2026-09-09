@@ -1,10 +1,12 @@
 'use client';
+import type { ColumnsType } from 'antd/es/table';
+import { ProblemApi } from '@/lib/api/problem-api';
 
 /**
  * 问题调查 Tab 组件
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Tabs,
   Card,
@@ -91,15 +93,19 @@ const methodLabels: Record<string, string> = {
 
 interface ProblemInvestigationTabProps {
   problemId: number;
+  problemVersion: number;
+  onProblemChanged?: () => void;
+  canEdit?: boolean;
   problemTitle?: string;
   problemDescription?: string;
 }
 
 const ProblemInvestigationTab: React.FC<ProblemInvestigationTabProps> = ({
-  problemId,
+  problemId, problemVersion, onProblemChanged, canEdit,
   problemTitle = '',
   problemDescription = '',
 }) => {
+  const operations = useRef<Record<string,string>>({});
   const params = useParams();
   const id = (params?.id as string) || problemId.toString();
 
@@ -139,10 +145,13 @@ const ProblemInvestigationTab: React.FC<ProblemInvestigationTabProps> = ({
   // 创建调查记录
   const handleCreateInvestigation = async () => {
     try {
+      const key = `investigate:${problemId}:${problemVersion}`;
       await ProblemInvestigationAPI.createInvestigation({
+        version: problemVersion, operationId: operations.current[key] ??= crypto.randomUUID(),
         problemId: Number(id) || problemId,
       });
       message.success('创建调查成功');
+      onProblemChanged?.();
       loadSummary();
     } catch (error) {
       message.error('创建调查失败');
@@ -206,6 +215,7 @@ const ProblemInvestigationTab: React.FC<ProblemInvestigationTabProps> = ({
         confidenceLevel: values.confidenceLevel,
       };
       await ProblemInvestigationAPI.createRootCause(data);
+      onProblemChanged?.();
       message.success('创建成功');
       setRootCauseModalOpen(false);
       rootCauseForm.resetFields();
@@ -325,7 +335,7 @@ const ProblemInvestigationTab: React.FC<ProblemInvestigationTabProps> = ({
   ];
 
   // 解决方案表格列
-  const solutionColumns = [
+  const solutionColumns: ColumnsType<ProblemSolution> = [
     {
       title: '类型',
       dataIndex:'solutionType',
@@ -381,6 +391,16 @@ const ProblemInvestigationTab: React.FC<ProblemInvestigationTabProps> = ({
       key:'proposedByName',
     },
   ];
+
+  const selectResolution = async (solution: ProblemSolution) => {
+    const key = `select:${problemId}:${problemVersion}:${solution.id}`;
+    try {
+      await ProblemApi.command(problemId, 'select-resolution', { version: problemVersion, solutionId: solution.id, operationId: operations.current[key] ??= crypto.randomUUID() });
+      message.success('永久方案已选定，请验证后解决问题');
+      onProblemChanged?.();
+    } catch { message.error('选择永久方案失败'); }
+  };
+  solutionColumns.push({ title: '永久方案', key: 'select', render: (_: unknown, row: ProblemSolution) => <Button disabled={!canEdit || row.solutionType === 'workaround'} onClick={() => selectResolution(row)}>选为永久方案</Button> });
 
   // Tab 内容
   const tabItems = [

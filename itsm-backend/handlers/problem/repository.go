@@ -2,6 +2,9 @@ package problem
 
 import (
 	"context"
+	"itsm-backend/dto"
+	"itsm-backend/ent"
+	"time"
 )
 
 // Repository interface for Problem domain
@@ -19,3 +22,11 @@ type Repository interface {
 	AddAssociations(ctx context.Context, tenantID, problemID, actorUserID int, relatedType string, relatedIDs []int) error
 	RemoveAssociation(ctx context.Context, tenantID, problemID int, relatedType string, relatedID int) error
 }
+
+// The owning service controls one transaction; persistence never commits it.
+type investigationTransactions interface {
+	transactionClient() *ent.Client
+	createInvestigationTx(context.Context, *ent.Tx, *dto.CreateProblemInvestigationRequest, int, time.Time) (int, error)
+}
+
+func (r *EntRepository) transactionClient() *ent.Client { return r.client }

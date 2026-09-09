@@ -19,6 +19,7 @@ type CreateProblemRequest struct {
 
 // UpdateProblemRequest 更新问题请求
 type UpdateProblemRequest struct {
+	Version     int     `json:"version" binding:"required,gt=0"`
 	Title       *string `json:"title" binding:"omitempty,min=2,max=200"`
 	Description *string `json:"description" binding:"omitempty,min=10,max=5000"`
 	Priority    *string `json:"priority" binding:"omitempty"`
@@ -30,11 +31,13 @@ type UpdateProblemRequest struct {
 
 // UpdateProblemRootCauseRequest 记录问题根因。
 type UpdateProblemRootCauseRequest struct {
+	Version   int    `json:"version" binding:"required,gt=0"`
 	RootCause string `json:"rootCause" binding:"required"`
 }
 
 // UpdateProblemResolutionRequest 记录问题的临时或最终解决方案。
 type UpdateProblemResolutionRequest struct {
+	Version    int    `json:"version" binding:"required,gt=0"`
 	Solution   string `json:"solution"`
 	Workaround string `json:"workaround"`
 	Resolution string `json:"resolution"`
@@ -61,23 +64,26 @@ type ListProblemsRequest struct {
 
 // ProblemResponse 问题响应
 type ProblemResponse struct {
-	CategoryID  int                         `json:"categoryId"`
-	ID          int                         `json:"id"`
-	Title       string                      `json:"title"`
-	Description string                      `json:"description"`
-	Status      string                      `json:"status"`
-	Priority    string                      `json:"priority"`
-	Category    string                      `json:"category"`
-	RootCause   string                      `json:"rootCause"`
-	Workaround  string                      `json:"workaround"`
-	Resolution  string                      `json:"resolution"`
-	Impact      string                      `json:"impact"`
-	AssigneeID  *int                        `json:"assigneeId,omitempty"`
-	CreatedBy   int                         `json:"createdBy"`
-	TenantID    int                         `json:"tenantId"`
-	CreatedAt   time.Time                   `json:"createdAt"`
-	UpdatedAt   time.Time                   `json:"updatedAt"`
-	Actions     map[string]ActionPermission `json:"actions,omitempty"`
+	Version          int                         `json:"version"`
+	VerifiedVersion  int                         `json:"verifiedVersion"`
+	VerificationNote string                      `json:"verificationNote"`
+	CategoryID       int                         `json:"categoryId"`
+	ID               int                         `json:"id"`
+	Title            string                      `json:"title"`
+	Description      string                      `json:"description"`
+	Status           string                      `json:"status"`
+	Priority         string                      `json:"priority"`
+	Category         string                      `json:"category"`
+	RootCause        string                      `json:"rootCause"`
+	Workaround       string                      `json:"workaround"`
+	Resolution       string                      `json:"resolution"`
+	Impact           string                      `json:"impact"`
+	AssigneeID       *int                        `json:"assigneeId,omitempty"`
+	CreatedBy        int                         `json:"createdBy"`
+	TenantID         int                         `json:"tenantId"`
+	CreatedAt        time.Time                   `json:"createdAt"`
+	UpdatedAt        time.Time                   `json:"updatedAt"`
+	Actions          map[string]ActionPermission `json:"actions,omitempty"`
 	// WorkItemID 关联的 WorkItem（tickets.id）。Problem 创建事务保证该值存在；nil 表示
 	// 开发数据违反 WorkItem 创建不变量。与 dto.IncidentResponse.WorkItemID 同一模式。
 	WorkItemID *int `json:"workItemId,omitempty"`

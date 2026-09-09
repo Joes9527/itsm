@@ -39,7 +39,7 @@ export default function ProblemEditPage() {
           title: data.title,
           description: data.description,
           priority: data.priority,
-          status: data.status,
+
           rootCause: data.rootCause,
           impact: data.impact,
         });
@@ -61,8 +61,8 @@ export default function ProblemEditPage() {
 
     setLoading(true);
     try {
-      const { classification, ...payload } = values;
-      await ProblemApi.updateProblem(Number(id), { ...payload, ...classificationUpdate(classification, form.isFieldTouched('classification')) });
+      const { classification, status: _status, ...payload } = values;
+      await ProblemApi.updateProblem(Number(id), { ...payload, version: problemData.version, ...classificationUpdate(classification, form.isFieldTouched('classification')) });
       message.success(t('problems.updateSuccess'));
       router.push(`/problems/${id}`);
     } catch (error) {
@@ -101,7 +101,7 @@ export default function ProblemEditPage() {
           onFinish={handleSubmit}
           initialValues={{
             priority: 'medium',
-            status: 'open',
+
           }}
         >
           <Row gutter={24}>
@@ -117,15 +117,7 @@ export default function ProblemEditPage() {
           </Row>
 
           <Row gutter={24}>
-            <Col span={12}>
-              <Form.Item
-                name="status"
-                label="状态"
-                rules={[{ required: true, message: '请选择状态' }]}
-              >
-                <Select placeholder="请选择状态" options={[{ value: "open", label: "待处理" }, { value: "investigating", label: "调查中" }, { value: "resolved", label: "已解决" }, { value: "closed", label: "已关闭" }]} />
-              </Form.Item>
-            </Col>
+
             <Col span={12}>
               <Form.Item
                 name="priority"

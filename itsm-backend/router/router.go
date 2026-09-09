@@ -910,8 +910,12 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				problems.PUT("/:id", middleware.RequirePermission("problem", "write"), config.ProblemHandler.Update)
 				problems.DELETE("/:id", middleware.RequirePermission("problem", "delete"), config.ProblemHandler.Delete)
 				problems.POST("/:id/investigate", middleware.RequirePermission("problem", "write"), config.ProblemHandler.InvestigateProblem)
+				problems.POST("/:id/select-resolution", middleware.RequirePermission("problem", "write"), config.ProblemHandler.SelectResolution)
 				problems.PUT("/:id/root-cause", middleware.RequirePermission("problem", "write"), config.ProblemHandler.UpdateRootCause)
 				problems.PUT("/:id/solution", middleware.RequirePermission("problem", "write"), config.ProblemHandler.UpdateSolution)
+				problems.POST("/:id/resolve", middleware.RequirePermission("problem", "write"), config.ProblemHandler.ResolveProblem)
+				problems.POST("/:id/verify-resolution", middleware.RequirePermission("problem", "write"), config.ProblemHandler.VerifyResolution)
+				problems.POST("/:id/reopen", middleware.RequirePermission("problem", "write"), config.ProblemHandler.ReopenProblem)
 				problems.POST("/:id/close", middleware.RequirePermission("problem", "write"), config.ProblemHandler.CloseProblem)
 				// 问题 → 已知错误 (KEDB) 联动
 				if config.KnownErrorHandler != nil {

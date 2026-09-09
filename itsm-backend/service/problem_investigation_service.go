@@ -123,84 +123,6 @@ func (s *ProblemInvestigationService) GetProblemSolution(ctx context.Context, id
 	return &solution, nil
 }
 
-// CreateProblemInvestigation 创建问题调查
-func (s *ProblemInvestigationService) CreateProblemInvestigation(ctx context.Context, req *dto.CreateProblemInvestigationRequest, tenantID int) (*dto.ProblemInvestigationResponse, error) {
-	scoped, release, scopeErr := s.tenantScope(ctx, tenantID)
-	if scopeErr != nil {
-		return nil, scopeErr
-	}
-	defer release()
-	s = scoped
-
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, fmt.Errorf("开始问题调查事务失败: %v", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	now := time.Now()
-	var investigationID int
-	err = tx.QueryRowContext(ctx, `
-		WITH input(problem_id, investigator_id, estimated_completion_date, investigation_summary, occurred_at, tenant_id) AS (
-			VALUES ($1, $2, $3, $4, $5, $6)
-		)
-		INSERT INTO problem_investigations (problem_id, investigator_id, estimated_completion_date, investigation_summary, created_at, updated_at)
-		SELECT p.id, input.investigator_id, input.estimated_completion_date, input.investigation_summary, input.occurred_at, input.occurred_at
-		FROM input
-		JOIN problems p ON p.id = input.problem_id
-		JOIN tickets wi ON wi.id = p.work_item_id
-		JOIN users investigator ON investigator.id = input.investigator_id AND investigator.tenant_id = wi.tenant_id
-		WHERE wi.tenant_id = input.tenant_id AND wi.deleted_at IS NULL
-		  AND NOT EXISTS (
-			SELECT 1 FROM problem_investigations existing
-			WHERE existing.problem_id = p.id
-		  )
-		RETURNING id
-	`, req.ProblemID, req.InvestigatorID, req.EstimatedCompletionDate, req.InvestigationSummary, now, tenantID).Scan(&investigationID)
-	if err != nil {
-		return nil, fmt.Errorf("创建问题调查失败: %v", err)
-	}
-
-	var investigatorName string
-	err = tx.QueryRowContext(ctx, "SELECT name FROM users WHERE id = $1 AND tenant_id = $2", req.InvestigatorID, tenantID).Scan(&investigatorName)
-	if err != nil {
-		return nil, fmt.Errorf("读取调查者失败: %v", err)
-	}
-
-	result, err := tx.ExecContext(ctx, `
-		UPDATE tickets AS work_item SET status = 'in_progress', updated_at = CURRENT_TIMESTAMP
-		FROM problems AS extension
-		WHERE extension.id = $1
-		  AND work_item.id = extension.work_item_id AND work_item.tenant_id = $2 AND work_item.deleted_at IS NULL
-	`, req.ProblemID, tenantID)
-	if err != nil {
-		return nil, fmt.Errorf("更新问题状态失败: %v", err)
-	}
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return nil, fmt.Errorf("确认问题状态更新失败: %v", err)
-	}
-	if rowsAffected != 1 {
-		return nil, fmt.Errorf("问题不存在或已删除")
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("提交问题调查事务失败: %v", err)
-	}
-
-	return &dto.ProblemInvestigationResponse{
-		ID:                      investigationID,
-		ProblemID:               req.ProblemID,
-		InvestigatorID:          req.InvestigatorID,
-		InvestigatorName:        investigatorName,
-		Status:                  dto.InvestigationStatusInProgress,
-		StartDate:               now,
-		EstimatedCompletionDate: req.EstimatedCompletionDate,
-		InvestigationSummary:    &req.InvestigationSummary,
-		CreatedAt:               now,
-		UpdatedAt:               now,
-	}, nil
-}
-
 // GetProblemInvestigation 获取问题调查详情
 func (s *ProblemInvestigationService) GetProblemInvestigation(ctx context.Context, investigationID, tenantID int) (*dto.ProblemInvestigationResponse, error) {
 	scoped, release, scopeErr := s.tenantScope(ctx, tenantID)
@@ -245,7 +167,7 @@ func (s *ProblemInvestigationService) UpdateProblemInvestigation(ctx context.Con
 	s = scoped
 
 	// 检查调查记录是否存在
-	investigation, err := s.GetProblemInvestigation(ctx, investigationID, tenantID)
+	_, err := s.GetProblemInvestigation(ctx, investigationID, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -284,19 +206,6 @@ func (s *ProblemInvestigationService) UpdateProblemInvestigation(ctx context.Con
 		return nil, fmt.Errorf("更新问题调查失败: %v", err)
 	}
 
-	// 如果状态更新为完成，同时更新问题状态
-	if req.Status != nil && *req.Status == dto.InvestigationStatusCompleted {
-		_, err = s.db.ExecContext(ctx, `
-			UPDATE tickets AS work_item SET status = 'resolved', updated_at = NOW()
-			FROM problems AS extension
-			WHERE extension.id = $1
-			  AND work_item.id = extension.work_item_id AND work_item.tenant_id = $2 AND work_item.deleted_at IS NULL
-		`, investigation.ProblemID, tenantID)
-		if err != nil {
-			s.logger.Warnw("Failed to update problem status", "problem_id", investigation.ProblemID, "error", err)
-		}
-	}
-
 	// 返回更新后的调查记录
 	return s.GetProblemInvestigation(ctx, investigationID, tenantID)
 }
@@ -327,17 +236,13 @@ func (s *ProblemInvestigationService) CreateInvestigationStep(ctx context.Contex
 	// 创建调查步骤
 	var stepID int
 	err = s.db.QueryRowContext(ctx, `
-		WITH input(investigation_id, step_number, step_title, step_description, assigned_to, notes, occurred_at, tenant_id) AS (
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		)
 		INSERT INTO problem_investigation_steps (investigation_id, step_number, step_title, step_description, assigned_to, notes, created_at, updated_at)
-		SELECT pi.id, input.step_number, input.step_title, input.step_description, input.assigned_to, input.notes, input.occurred_at, input.occurred_at
-		FROM input
-		JOIN problem_investigations pi ON pi.id = input.investigation_id
+		SELECT $1, $2, $3, $4, $5, $6, $7, $7
+		FROM problem_investigations pi
 		JOIN problems p ON p.id = pi.problem_id
 		JOIN tickets wi ON wi.id = p.work_item_id
-		WHERE wi.tenant_id = input.tenant_id AND wi.deleted_at IS NULL
-		  AND (input.assigned_to IS NULL OR EXISTS (SELECT 1 FROM users assignee WHERE assignee.id = input.assigned_to AND assignee.tenant_id = wi.tenant_id))
+		WHERE pi.id = $1 AND wi.tenant_id = $8 AND wi.deleted_at IS NULL
+		  AND (CAST($5 AS BIGINT) IS NULL OR EXISTS (SELECT 1 FROM users assignee WHERE assignee.id = $5 AND assignee.tenant_id = wi.tenant_id))
 		RETURNING id
 	`, req.InvestigationID, req.StepNumber, req.StepTitle, req.StepDescription, req.AssignedTo, req.Notes, time.Now(), tenantID).Scan(&stepID)
 	if err != nil {
@@ -574,22 +479,14 @@ func (s *ProblemInvestigationService) CreateProblemSolution(ctx context.Context,
 	// 创建解决方案
 	var solutionID int
 	err = s.db.QueryRowContext(ctx, `
-		WITH input(problem_id, solution_type, solution_description, proposed_by, proposed_date,
-		           status, priority, estimated_effort_hours, estimated_cost, risk_assessment,
-		           approval_status, occurred_at, tenant_id) AS (
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-		)
 		INSERT INTO problem_solutions (problem_id, solution_type, solution_description, proposed_by, proposed_date,
 		                             status, priority, estimated_effort_hours, estimated_cost, risk_assessment,
 		                             approval_status, created_at, updated_at)
-		SELECT p.id, input.solution_type, input.solution_description, input.proposed_by, input.proposed_date,
-		       input.status, input.priority, input.estimated_effort_hours, input.estimated_cost, input.risk_assessment,
-		       input.approval_status, input.occurred_at, input.occurred_at
-		FROM input
-		JOIN problems p ON p.id = input.problem_id
+		SELECT $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $12
+		FROM problems p
 		JOIN tickets wi ON wi.id = p.work_item_id
-		JOIN users proposer ON proposer.id = input.proposed_by AND proposer.tenant_id = wi.tenant_id
-		WHERE wi.tenant_id = input.tenant_id AND wi.deleted_at IS NULL
+		JOIN users proposer ON proposer.id = $4 AND proposer.tenant_id = wi.tenant_id
+		WHERE p.id = $1 AND wi.tenant_id = $13 AND wi.deleted_at IS NULL
 		RETURNING id
 	`, req.ProblemID, req.SolutionType, req.SolutionDescription, req.ProposedBy, time.Now(),
 		dto.SolutionStatusProposed, req.Priority, req.EstimatedEffortHours, req.EstimatedCost, req.RiskAssessment,

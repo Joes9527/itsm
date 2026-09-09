@@ -532,6 +532,7 @@ func NewApplication() *Application {
 	problemHandler := problem.NewHandler(problemServiceDomain, client)
 	problemInvestigationService := service.NewTenantScopedProblemInvestigationService(database.GetRawDB(), sugar)
 	problemInvestigationController := controller.NewProblemInvestigationController(sugar, problemInvestigationService)
+	problemInvestigationController.SetProblemDomain(problemServiceDomain)
 	incidentController := controller.NewIncidentController(incidentService, incidentService.RuleEngine(), incidentMonitoringService, incidentAlertingService, rootCauseAnalysisService, sugar)
 
 	provisioningService := service.NewProvisioningService(client, sugar)

@@ -89,6 +89,8 @@ func setupProblemHTTPHandlerTest(t *testing.T) (*gin.Engine, *Handler, *Service,
 		api.POST("/:id/root-cause", handler.UpdateRootCause)
 		api.POST("/:id/solution", handler.UpdateSolution)
 		api.POST("/:id/close", handler.CloseProblem)
+		api.POST("/:id/verify-resolution", handler.VerifyResolution)
+		api.POST("/:id/resolve", handler.ResolveProblem)
 	}
 
 	return r, handler, service, client
@@ -297,16 +299,16 @@ func TestProblemHTTPHandlerMutationsUseResolvedMSPTenant(t *testing.T) {
 		return w
 	}
 
-	w := request(http.MethodPut, fmt.Sprintf("/api/v1/problems/%d", p.ID), dto.UpdateProblemRequest{Title: strPtr("MSP updated problem")})
+	w := request(http.MethodPut, fmt.Sprintf("/api/v1/problems/%d", p.ID), dto.UpdateProblemRequest{Version: p.Version, Title: strPtr("MSP updated problem")})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
-	w = request(http.MethodPost, fmt.Sprintf("/api/v1/problems/%d/investigate", p.ID), nil)
-	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+	w = request(http.MethodPost, fmt.Sprintf("/api/v1/problems/%d/investigate", p.ID), map[string]any{"version": p.Version + 1, "operationId": "msp-investigate"})
+	require.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
 
 	updated, err := service.Get(ctx, p.ID, customerTenant.ID)
 	require.NoError(t, err)
 	require.Equal(t, "MSP updated problem", updated.Title)
-	require.Equal(t, "investigating", updated.Status)
+	require.Equal(t, "open", updated.Status)
 }
 
 func TestProblemHTTPHandlerUpdateAndLifecycle(t *testing.T) {
@@ -320,13 +322,14 @@ func TestProblemHTTPHandlerUpdateAndLifecycle(t *testing.T) {
 
 	// Update Problem
 	updateReq := dto.UpdateProblemRequest{
-		Title: strPtr("Updated Title HTTP"),
+		Version: p.Version,
+		Title:   strPtr("Updated Title HTTP"),
 	}
 	w := performProblemRequest(r, "PUT", fmt.Sprintf("/api/v1/problems/%d", p.ID), updateReq, tenant.ID, user.ID)
 	require.Equal(t, http.StatusOK, w.Code)
 
 	// Investigate Problem
-	wInv := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/investigate", p.ID), nil, tenant.ID, user.ID)
+	wInv := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/investigate", p.ID), map[string]any{"version": p.Version + 1, "operationId": "http-investigate"}, tenant.ID, user.ID)
 	require.Equal(t, http.StatusOK, wInv.Code)
 	var resInv common.Response
 	require.NoError(t, json.Unmarshal(wInv.Body.Bytes(), &resInv))
@@ -334,6 +337,7 @@ func TestProblemHTTPHandlerUpdateAndLifecycle(t *testing.T) {
 
 	// Update Root Cause
 	rcReq := dto.UpdateProblemRootCauseRequest{
+		Version:   p.Version + 2,
 		RootCause: "Network driver deadlock",
 	}
 	wRC := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/root-cause", p.ID), rcReq, tenant.ID, user.ID)
@@ -341,24 +345,21 @@ func TestProblemHTTPHandlerUpdateAndLifecycle(t *testing.T) {
 
 	// Update Solution
 	solReq := dto.UpdateProblemResolutionRequest{
+		Version:    p.Version + 3,
 		Workaround: "Restart driver service",
 		Resolution: "Patched kernel driver",
 	}
 	wSol := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/solution", p.ID), solReq, tenant.ID, user.ID)
 	require.Equal(t, http.StatusOK, wSol.Code)
 
+	// Generic status mutation is rejected even with a current version.
 	statusResolved := "resolved"
-	wResolved := performProblemRequest(r, "PUT", fmt.Sprintf("/api/v1/problems/%d", p.ID), dto.UpdateProblemRequest{
-		Status: &statusResolved,
-	}, tenant.ID, user.ID)
-	require.Equal(t, http.StatusOK, wResolved.Code)
-
-	// Close Problem
-	closeReq := dto.CloseProblemRequest{
-		Resolution: "Verified resolution in staging",
+	wRejected := performProblemRequest(r, "PUT", fmt.Sprintf("/api/v1/problems/%d", p.ID), dto.UpdateProblemRequest{Version: p.Version + 4, Status: &statusResolved}, tenant.ID, user.ID)
+	require.NotEqual(t, http.StatusOK, wRejected.Code)
+	for i, action := range []string{"verify-resolution", "resolve", "close"} {
+		w := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/%s", p.ID, action), map[string]any{"version": p.Version + 4 + i, "operationId": "http-" + action, "verificationNote": "Regression passed"}, tenant.ID, user.ID)
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 	}
-	wClose := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/close", p.ID), closeReq, tenant.ID, user.ID)
-	require.Equal(t, http.StatusOK, wClose.Code)
 
 	// Get Stats
 	wStats := performProblemRequest(r, "GET", "/api/v1/problems/stats", nil, tenant.ID, user.ID)
@@ -423,7 +424,7 @@ func TestProblemHTTPHandlerCrossTenantIsolation(t *testing.T) {
 	assert.Equal(t, common.NotFoundErrorCode, resGet.Code)
 
 	// Tenant B attempts PUT Tenant A problem
-	updateReq := dto.UpdateProblemRequest{Title: strPtr("Hacked")}
+	updateReq := dto.UpdateProblemRequest{Version: 1, Title: strPtr("Hacked")}
 	wPut := performProblemRequest(r, "PUT", fmt.Sprintf("/api/v1/problems/%d", problemA.ID), updateReq, tenantB.ID, userB.ID)
 	require.Equal(t, http.StatusInternalServerError, wPut.Code)
 	var resPut common.Response
@@ -431,7 +432,7 @@ func TestProblemHTTPHandlerCrossTenantIsolation(t *testing.T) {
 	assert.Equal(t, common.InternalErrorCode, resPut.Code)
 
 	// Tenant B attempts POST Investigate Tenant A problem
-	wInv := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/investigate", problemA.ID), nil, tenantB.ID, userB.ID)
+	wInv := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/investigate", problemA.ID), map[string]any{"version": 1, "operationId": "cross-tenant"}, tenantB.ID, userB.ID)
 	require.Equal(t, http.StatusNotFound, wInv.Code)
 	var resInv common.Response
 	require.NoError(t, json.Unmarshal(wInv.Body.Bytes(), &resInv))
@@ -473,7 +474,7 @@ func TestProblemHTTPHandlerGetProjectsActionsAndFailsClosedWithoutActorIdentity(
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &res))
 		require.True(t, res.Data.Actions["edit"].Allowed)
 		require.True(t, res.Data.Actions["startInvestigation"].Allowed)
-		require.True(t, res.Data.Actions["resolve"].Allowed)
+		require.False(t, res.Data.Actions["resolve"].Allowed)
 		require.False(t, res.Data.Actions["close"].Allowed)
 		require.NotEmpty(t, res.Data.Actions["close"].Reason)
 	})

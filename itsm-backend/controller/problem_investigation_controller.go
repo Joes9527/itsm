@@ -8,6 +8,8 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/knowledgearticle"
+	"itsm-backend/handlers/problem"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -16,6 +18,7 @@ import (
 
 // ProblemInvestigationController 问题调查控制器
 type ProblemInvestigationController struct {
+	problemDomain               *problem.Service
 	logger                      *zap.SugaredLogger
 	problemInvestigationService *service.ProblemInvestigationService
 }
@@ -44,18 +47,16 @@ func (pc *ProblemInvestigationController) CreateProblemInvestigation(c *gin.Cont
 		req.InvestigatorID = userID
 	}
 
-	investigation, err := pc.problemInvestigationService.CreateProblemInvestigation(c.Request.Context(), &req, tenantID)
-	if err != nil {
-		pc.logger.Errorw("Create problem investigation failed", "error", err, "tenant_id", tenantID)
-		common.Fail(c, common.InternalErrorCode, "创建问题调查失败: "+err.Error())
+	if pc.problemDomain == nil {
+		common.Fail(c, common.InternalErrorCode, "problem lifecycle unavailable")
 		return
 	}
-
-	common.Success(c, gin.H{
-		"message":         "问题调查创建成功",
-		"investigationId": investigation.ID,
-		"investigation":   investigation,
-	})
+	result, err := pc.problemDomain.ApplyCommand(c.Request.Context(), problem.Command{Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: userID, ExpectedVersion: req.Version, OperationID: req.OperationID, Source: "http", CorrelationID: c.GetString("request_id")}, ProblemID: req.ProblemID, Action: "investigate", Investigation: &req})
+	if err != nil {
+		problem.RespondCommandError(c, err)
+		return
+	}
+	common.Success(c, result)
 }
 
 // GetProblemInvestigation 获取问题调查详情
@@ -497,3 +498,5 @@ func (pc *ProblemInvestigationController) GetProblemKnowledgeArticles(c *gin.Con
 		"knowledgeArticles": result,
 	})
 }
+
+func (pc *ProblemInvestigationController) SetProblemDomain(s *problem.Service) { pc.problemDomain = s }

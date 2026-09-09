@@ -50,20 +50,23 @@ func (r *EntRepository) toDomain(e *ent.Problem) *Problem {
 		return nil
 	}
 	p := &Problem{
-		ID:          e.ID,
-		CategoryID:  &workItem.CategoryID,
-		Title:       workItem.Title,
-		Description: workItem.Description,
-		Status:      workItem.Status,
-		Priority:    workItem.Priority,
-		RootCause:   e.RootCause,
-		Workaround:  e.Workaround,
-		Resolution:  e.Resolution,
-		Impact:      e.Impact,
-		CreatedBy:   workItem.OpenedByID,
-		TenantID:    workItem.TenantID,
-		CreatedAt:   workItem.CreatedAt,
-		UpdatedAt:   workItem.UpdatedAt,
+		Version:          workItem.Version,
+		VerifiedVersion:  e.VerifiedVersion,
+		VerificationNote: e.VerificationNote,
+		ID:               e.ID,
+		CategoryID:       &workItem.CategoryID,
+		Title:            workItem.Title,
+		Description:      workItem.Description,
+		Status:           workItem.Status,
+		Priority:         workItem.Priority,
+		RootCause:        e.RootCause,
+		Workaround:       e.Workaround,
+		Resolution:       e.Resolution,
+		Impact:           e.Impact,
+		CreatedBy:        workItem.OpenedByID,
+		TenantID:         workItem.TenantID,
+		CreatedAt:        workItem.CreatedAt,
+		UpdatedAt:        workItem.UpdatedAt,
 	}
 	if p.CreatedBy == 0 {
 		p.CreatedBy = workItem.RequesterID
@@ -505,6 +508,9 @@ func (r *EntRepository) Update(ctx context.Context, p *Problem) (*Problem, error
 	if err != nil {
 		return nil, rollbackProblemTx(tx, err)
 	}
+	if p.Version != current.Edges.WorkItem.Version {
+		return nil, rollbackProblemTx(tx, common.NewVersionConflictError("problem", p.ID, p.Version, current.Edges.WorkItem.Version))
+	}
 	now := time.Now()
 	var selected *ent.TicketCategory
 	if p.CategoryID != nil && *p.CategoryID != 0 {
@@ -514,8 +520,8 @@ func (r *EntRepository) Update(ctx context.Context, p *Problem) (*Problem, error
 		}
 	}
 	workItemUpdate := tx.Ticket.UpdateOneID(current.WorkItemID).
-		Where(ticket.TenantIDEQ(p.TenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(current.Edges.WorkItem.Version)).
-		SetTitle(p.Title).SetDescription(p.Description).SetStatus(p.Status).SetPriority(p.Priority).
+		Where(ticket.TenantIDEQ(p.TenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(p.Version)).
+		SetTitle(p.Title).SetDescription(p.Description).SetPriority(p.Priority).
 		SetUpdatedAt(now).AddVersion(1)
 	if p.AssigneeID == nil {
 		workItemUpdate.ClearAssigneeID()
@@ -528,16 +534,6 @@ func (r *EntRepository) Update(ctx context.Context, p *Problem) (*Problem, error
 		} else {
 			workItemUpdate.SetCategoryID(*p.CategoryID)
 		}
-	}
-	if p.ResolvedAt == nil {
-		workItemUpdate.ClearResolvedAt()
-	} else {
-		workItemUpdate.SetResolvedAt(*p.ResolvedAt)
-	}
-	if p.ClosedAt == nil {
-		workItemUpdate.ClearClosedAt()
-	} else {
-		workItemUpdate.SetClosedAt(*p.ClosedAt)
 	}
 	workItem, err := workItemUpdate.Save(ctx)
 	if err != nil {

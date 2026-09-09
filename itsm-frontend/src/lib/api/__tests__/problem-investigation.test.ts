@@ -27,10 +27,10 @@ describe('ProblemInvestigationAPI', () => {
 
   describe('createInvestigation', () => {
     it('should create investigation', async () => {
-      mockPost.mockResolvedValue({ investigation: { id: 1, problemId: 1, status: 'not_started' } });
-      const result = await ProblemInvestigationAPI.createInvestigation({ problemId: 1 });
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/problem-investigation/investigations', { problemId: 1 });
-      expect(result.id).toBe(1);
+      mockPost.mockResolvedValue({ workItemId: 1, version: 2, status: 'investigating', replayed: false });
+      const result = await ProblemInvestigationAPI.createInvestigation({ problemId: 1, version: 1, operationId: 'start-1' });
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/problem-investigation/investigations', { problemId: 1, version: 1, operationId: 'start-1' });
+      expect(result.workItemId).toBe(1);
     });
   });
 

@@ -52,8 +52,8 @@ describe('ProblemApi', () => {
   describe('updateProblem', () => {
     it('should update a problem', async () => {
       mockPut.mockResolvedValue({ id: 1, title: 'Updated' });
-      const result = await ProblemApi.updateProblem(1, { title: 'Updated' });
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/problems/1', { title: 'Updated' });
+      const result = await ProblemApi.updateProblem(1, { title: 'Updated', version: 1 });
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/problems/1', { title: 'Updated', version: 1 });
       expect(result.title).toBe('Updated');
     });
   });
@@ -127,18 +127,11 @@ describe('ProblemApi', () => {
     });
   });
 
-  describe('stub methods', () => {
-    it('investigateProblem should throw', async () => {
-      await expect(ProblemApi.investigateProblem(1, {})).rejects.toThrow();
-    });
-    it('recordRootCause should throw', async () => {
-      await expect(ProblemApi.recordRootCause(1, 'cause')).rejects.toThrow();
-    });
-    it('provideSolution should throw', async () => {
-      await expect(ProblemApi.provideSolution(1, 'sol')).rejects.toThrow();
-    });
-    it('closeProblem should throw', async () => {
-      await expect(ProblemApi.closeProblem(1, 'done')).rejects.toThrow();
+  describe('domain commands', () => {
+    it('sends explicit version and operation identity', async () => {
+      const request = { version: 7, operationId: 'resolve-7' };
+      await ProblemApi.command(1, 'resolve', request);
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/problems/1/resolve', request);
     });
   });
 });

@@ -71,8 +71,10 @@ const (
 
 // CreateProblemInvestigationRequest 创建问题调查请求
 type CreateProblemInvestigationRequest struct {
+	Version                 int        `json:"version" binding:"required,gt=0"`
+	OperationID             string     `json:"operationId" binding:"required,max=200"`
 	ProblemID               int        `json:"problemId" binding:"required"`
-	InvestigatorID          int        `json:"investigatorId" binding:"required"`
+	InvestigatorID          int        `json:"investigatorId" binding:"omitempty,gt=0"`
 	EstimatedCompletionDate *time.Time `json:"estimatedCompletionDate"`
 	InvestigationSummary    string     `json:"investigationSummary"`
 }

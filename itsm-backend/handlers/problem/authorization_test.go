@@ -19,23 +19,24 @@ func TestBuildProblemActionsUsesCanonicalStatuses(t *testing.T) {
 	resolvedProblem := &Problem{Status: "resolved"}
 
 	openActions := BuildProblemActions(actor, openProblem)
-	require.Len(t, openActions, 4)
+	require.Len(t, openActions, 6)
 	require.True(t, openActions["edit"].Allowed)
 	require.True(t, openActions["startInvestigation"].Allowed)
-	require.True(t, openActions["resolve"].Allowed)
+	require.False(t, openActions["resolve"].Allowed)
 	require.False(t, openActions["close"].Allowed)
 	require.NotEmpty(t, openActions["close"].Reason)
 
-	require.False(t, CanStartInvestigation(actor, legacyInProgressProblem).Allowed)
-	require.NotEmpty(t, CanStartInvestigation(actor, legacyInProgressProblem).Reason)
+	require.True(t, CanStartInvestigation(actor, legacyInProgressProblem).Allowed)
+	require.Empty(t, CanStartInvestigation(actor, legacyInProgressProblem).Reason)
 
-	require.True(t, CanResolveProblem(actor, investigatingProblem).Allowed)
-	require.True(t, CanResolveProblem(actor, identifiedProblem).Allowed)
-	require.True(t, CanResolveProblem(actor, legacyInProgressProblem).Allowed)
+	require.False(t, CanResolveProblem(actor, investigatingProblem).Allowed)
+	require.False(t, CanResolveProblem(actor, identifiedProblem).Allowed)
+	require.False(t, CanResolveProblem(actor, legacyInProgressProblem).Allowed)
 	require.False(t, CanResolveProblem(actor, resolvedProblem).Allowed)
 	require.True(t, CanStartInvestigation(actor, identifiedProblem).Allowed)
-	require.True(t, CanStartInvestigation(actor, resolvedProblem).Allowed)
+	require.False(t, CanStartInvestigation(actor, resolvedProblem).Allowed)
+	require.True(t, CanReopenProblem(actor, resolvedProblem).Allowed)
 
-	require.True(t, CanCloseProblem(actor, resolvedProblem).Allowed)
+	require.False(t, CanCloseProblem(actor, resolvedProblem).Allowed)
 	require.False(t, CanCloseProblem(actor, investigatingProblem).Allowed)
 }

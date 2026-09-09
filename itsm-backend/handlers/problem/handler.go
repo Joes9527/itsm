@@ -1,6 +1,7 @@
 package problem
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/handlers/common/intakehttp"
 	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
 
@@ -88,22 +90,25 @@ func ToResponse(p *Problem) *dto.ProblemResponse {
 	}
 
 	resp := dto.ProblemResponse{
-		ID:          p.ID,
-		Title:       p.Title,
-		Description: p.Description,
-		Status:      p.Status,
-		Priority:    p.Priority,
-		Category:    p.Category,
-		CategoryID:  categoryValue(p.CategoryID),
-		RootCause:   p.RootCause,
-		Workaround:  p.Workaround,
-		Resolution:  p.Resolution,
-		Impact:      p.Impact,
-		CreatedBy:   p.CreatedBy,
-		TenantID:    p.TenantID,
-		CreatedAt:   p.CreatedAt,
-		UpdatedAt:   p.UpdatedAt,
-		WorkItemID:  p.WorkItemID,
+		Version:          p.Version,
+		VerifiedVersion:  p.VerifiedVersion,
+		VerificationNote: p.VerificationNote,
+		ID:               p.ID,
+		Title:            p.Title,
+		Description:      p.Description,
+		Status:           p.Status,
+		Priority:         p.Priority,
+		Category:         p.Category,
+		CategoryID:       categoryValue(p.CategoryID),
+		RootCause:        p.RootCause,
+		Workaround:       p.Workaround,
+		Resolution:       p.Resolution,
+		Impact:           p.Impact,
+		CreatedBy:        p.CreatedBy,
+		TenantID:         p.TenantID,
+		CreatedAt:        p.CreatedAt,
+		UpdatedAt:        p.UpdatedAt,
+		WorkItemID:       p.WorkItemID,
 	}
 	if p.AssigneeID != nil {
 		resp.AssigneeID = p.AssigneeID
@@ -357,20 +362,23 @@ func (h *Handler) List(c *gin.Context) {
 	dtoProblems := make([]*dto.ProblemResponse, 0, len(list))
 	for _, p := range list {
 		item := &dto.ProblemResponse{
-			ID:          p.ID,
-			Title:       p.Title,
-			Description: p.Description,
-			Status:      p.Status,
-			Priority:    p.Priority,
-			Category:    p.Category,
-			CategoryID:  categoryValue(p.CategoryID),
-			RootCause:   p.RootCause,
-			Impact:      p.Impact,
-			CreatedBy:   p.CreatedBy,
-			TenantID:    p.TenantID,
-			CreatedAt:   p.CreatedAt,
-			UpdatedAt:   p.UpdatedAt,
-			WorkItemID:  p.WorkItemID,
+			Version:          p.Version,
+			VerifiedVersion:  p.VerifiedVersion,
+			VerificationNote: p.VerificationNote,
+			ID:               p.ID,
+			Title:            p.Title,
+			Description:      p.Description,
+			Status:           p.Status,
+			Priority:         p.Priority,
+			Category:         p.Category,
+			CategoryID:       categoryValue(p.CategoryID),
+			RootCause:        p.RootCause,
+			Impact:           p.Impact,
+			CreatedBy:        p.CreatedBy,
+			TenantID:         p.TenantID,
+			CreatedAt:        p.CreatedAt,
+			UpdatedAt:        p.UpdatedAt,
+			WorkItemID:       p.WorkItemID,
 		}
 		if p.AssigneeID != nil {
 			item.AssigneeID = p.AssigneeID
@@ -413,7 +421,7 @@ func (h *Handler) Update(c *gin.Context) {
 	}
 
 	// 将 DTO 指针字段转换为 domain entity
-	updates := &Problem{}
+	updates := &Problem{Version: req.Version}
 	if req.Title != nil {
 		updates.Title = *req.Title
 	}
@@ -436,6 +444,10 @@ func (h *Handler) Update(c *gin.Context) {
 
 	updated, err := h.service.Update(c.Request.Context(), tenantID, id, updates)
 	if err != nil {
+		if _, ok := common.AsAppError(err); ok || common.IsVersionConflictError(err) {
+			RespondCommandError(c, err)
+			return
+		}
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return
 	}
@@ -443,13 +455,59 @@ func (h *Handler) Update(c *gin.Context) {
 	common.Success(c, h.toDTO(updated))
 }
 
-func (h *Handler) InvestigateProblem(c *gin.Context) {
+func (h *Handler) InvestigateProblem(c *gin.Context) { h.command(c, "investigate") }
+func (h *Handler) ResolveProblem(c *gin.Context)     { h.command(c, "resolve") }
+func (h *Handler) VerifyResolution(c *gin.Context)   { h.command(c, "verify_resolution") }
+func (h *Handler) ReopenProblem(c *gin.Context)      { h.command(c, "reopen") }
+func (h *Handler) SelectResolution(c *gin.Context)   { h.command(c, "select_resolution") }
+func (h *Handler) command(c *gin.Context, action string) {
 	id, tenantID, ok := problemRequestContext(c)
 	if !ok {
 		return
 	}
-	updated, err := h.service.InvestigateProblem(c.Request.Context(), tenantID, id)
-	h.respondProblemMutation(c, updated, err)
+	var req struct {
+		Version          int    `json:"version" binding:"required,gt=0"`
+		OperationID      string `json:"operationId" binding:"required,max=200"`
+		Reason           string `json:"reason"`
+		VerificationNote string `json:"verificationNote"`
+		SolutionID       int    `json:"solutionId"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.Fail(c, common.ParamErrorCode, err.Error())
+		return
+	}
+	actorID, ok := problemActorUserID(c)
+	if !ok {
+		return
+	}
+	result, err := h.service.ApplyCommand(c.Request.Context(), Command{Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: actorID, ExpectedVersion: req.Version, OperationID: req.OperationID, Source: "http", CorrelationID: c.GetString("request_id")}, ProblemID: id, Action: action, Reason: req.Reason, VerificationNote: req.VerificationNote, SolutionID: req.SolutionID})
+	if err != nil {
+		RespondCommandError(c, err)
+		return
+	}
+	common.Success(c, result)
+}
+
+func RespondCommandError(c *gin.Context, err error) {
+	var conflict *workitemmutation.OperationConflictError
+	if common.IsVersionConflictError(err) || errors.As(err, &conflict) {
+		common.Conflict(c, err.Error(), nil)
+		return
+	}
+	if app, ok := common.AsAppError(err); ok {
+		switch app.Code {
+		case common.ErrCodeValidation, common.ErrCodeBadRequest:
+			common.Fail(c, common.ParamErrorCode, app.Message)
+		case common.ErrCodeForbidden:
+			common.Forbidden(c, app.Message)
+		case common.ErrCodeNotFound:
+			common.NotFound(c, app.Message)
+		default:
+			common.Fail(c, common.InternalErrorCode, "problem mutation failed")
+		}
+		return
+	}
+	common.Fail(c, common.InternalErrorCode, "problem mutation failed")
 }
 
 func (h *Handler) UpdateRootCause(c *gin.Context) {
@@ -462,7 +520,7 @@ func (h *Handler) UpdateRootCause(c *gin.Context) {
 		common.Fail(c, common.ParamErrorCode, err.Error())
 		return
 	}
-	updated, err := h.service.UpdateRootCause(c.Request.Context(), tenantID, id, req.RootCause)
+	updated, err := h.service.UpdateRootCause(c.Request.Context(), tenantID, id, req.Version, req.RootCause)
 	h.respondProblemMutation(c, updated, err)
 }
 
@@ -480,23 +538,11 @@ func (h *Handler) UpdateSolution(c *gin.Context) {
 	if resolution == "" {
 		resolution = req.Solution
 	}
-	updated, err := h.service.UpdateSolution(c.Request.Context(), tenantID, id, req.Workaround, resolution)
+	updated, err := h.service.UpdateSolution(c.Request.Context(), tenantID, id, req.Version, req.Workaround, resolution)
 	h.respondProblemMutation(c, updated, err)
 }
 
-func (h *Handler) CloseProblem(c *gin.Context) {
-	id, tenantID, ok := problemRequestContext(c)
-	if !ok {
-		return
-	}
-	var req dto.CloseProblemRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, common.ParamErrorCode, err.Error())
-		return
-	}
-	updated, err := h.service.CloseProblem(c.Request.Context(), tenantID, id, req.Resolution)
-	h.respondProblemMutation(c, updated, err)
-}
+func (h *Handler) CloseProblem(c *gin.Context) { h.command(c, "close") }
 
 func problemRequestContext(c *gin.Context) (int, int, bool) {
 	id, err := strconv.Atoi(c.Param("id"))
@@ -513,6 +559,10 @@ func problemRequestContext(c *gin.Context) (int, int, bool) {
 
 func (h *Handler) respondProblemMutation(c *gin.Context, updated *Problem, err error) {
 	if err != nil {
+		if _, ok := common.AsAppError(err); ok || common.IsVersionConflictError(err) {
+			RespondCommandError(c, err)
+			return
+		}
 		if ent.IsNotFound(err) {
 			common.Fail(c, common.NotFoundErrorCode, "Problem not found")
 		} else if strings.Contains(err.Error(), "required") {

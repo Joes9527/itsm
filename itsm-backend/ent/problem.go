@@ -7,6 +7,7 @@ import (
 	"itsm-backend/ent/problem"
 	"itsm-backend/ent/ticket"
 	"strings"
+	"time"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
@@ -17,6 +18,16 @@ type Problem struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
+	// VerifiedVersion holds the value of the "verified_version" field.
+	VerifiedVersion int `json:"verified_version,omitempty"`
+	// VerificationDigest holds the value of the "verification_digest" field.
+	VerificationDigest string `json:"verification_digest,omitempty"`
+	// VerifiedBy holds the value of the "verified_by" field.
+	VerifiedBy int `json:"verified_by,omitempty"`
+	// VerifiedAt holds the value of the "verified_at" field.
+	VerifiedAt time.Time `json:"verified_at,omitempty"`
+	// VerificationNote holds the value of the "verification_note" field.
+	VerificationNote string `json:"verification_note,omitempty"`
 	// 根本原因
 	RootCause string `json:"root_cause,omitempty"`
 	// 临时解决方案
@@ -92,10 +103,12 @@ func (*Problem) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case problem.FieldID, problem.FieldWorkItemID:
+		case problem.FieldID, problem.FieldVerifiedVersion, problem.FieldVerifiedBy, problem.FieldWorkItemID:
 			values[i] = new(sql.NullInt64)
-		case problem.FieldRootCause, problem.FieldWorkaround, problem.FieldResolution, problem.FieldImpact:
+		case problem.FieldVerificationDigest, problem.FieldVerificationNote, problem.FieldRootCause, problem.FieldWorkaround, problem.FieldResolution, problem.FieldImpact:
 			values[i] = new(sql.NullString)
+		case problem.FieldVerifiedAt:
+			values[i] = new(sql.NullTime)
 		case problem.ForeignKeys[0]: // known_error_problem
 			values[i] = new(sql.NullInt64)
 		default:
@@ -119,6 +132,36 @@ func (_m *Problem) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
+		case problem.FieldVerifiedVersion:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field verified_version", values[i])
+			} else if value.Valid {
+				_m.VerifiedVersion = int(value.Int64)
+			}
+		case problem.FieldVerificationDigest:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field verification_digest", values[i])
+			} else if value.Valid {
+				_m.VerificationDigest = value.String
+			}
+		case problem.FieldVerifiedBy:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field verified_by", values[i])
+			} else if value.Valid {
+				_m.VerifiedBy = int(value.Int64)
+			}
+		case problem.FieldVerifiedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field verified_at", values[i])
+			} else if value.Valid {
+				_m.VerifiedAt = value.Time
+			}
+		case problem.FieldVerificationNote:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field verification_note", values[i])
+			} else if value.Valid {
+				_m.VerificationNote = value.String
+			}
 		case problem.FieldRootCause:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field root_cause", values[i])
@@ -212,6 +255,21 @@ func (_m *Problem) String() string {
 	var builder strings.Builder
 	builder.WriteString("Problem(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString("verified_version=")
+	builder.WriteString(fmt.Sprintf("%v", _m.VerifiedVersion))
+	builder.WriteString(", ")
+	builder.WriteString("verification_digest=")
+	builder.WriteString(_m.VerificationDigest)
+	builder.WriteString(", ")
+	builder.WriteString("verified_by=")
+	builder.WriteString(fmt.Sprintf("%v", _m.VerifiedBy))
+	builder.WriteString(", ")
+	builder.WriteString("verified_at=")
+	builder.WriteString(_m.VerifiedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("verification_note=")
+	builder.WriteString(_m.VerificationNote)
+	builder.WriteString(", ")
 	builder.WriteString("root_cause=")
 	builder.WriteString(_m.RootCause)
 	builder.WriteString(", ")

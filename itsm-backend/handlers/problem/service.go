@@ -4,21 +4,29 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"go.uber.org/zap"
+	"itsm-backend/common"
+	"itsm-backend/ent"
 )
 
 type Service struct {
-	repo   Repository
-	logger *zap.SugaredLogger
+	client         *ent.Client
+	investigations investigationTransactions
+	repo           Repository
+	logger         *zap.SugaredLogger
 }
 
 func NewService(repo Repository, logger *zap.SugaredLogger) *Service {
-	return &Service{
+	s := &Service{
 		repo:   repo,
 		logger: logger,
 	}
+	if transactions, ok := repo.(investigationTransactions); ok {
+		s.investigations = transactions
+		s.client = transactions.transactionClient()
+	}
+	return s
 }
 
 func (s *Service) Get(ctx context.Context, id int, tenantID int) (*Problem, error) {
@@ -67,22 +75,12 @@ func (s *Service) Update(ctx context.Context, tenantID int, id int, p *Problem) 
 		existing.Description = p.Description
 	}
 	if p.Status != "" {
-		if !isValidProblemStatusTransition(existing.Status, p.Status) {
-			return nil, fmt.Errorf("invalid problem status transition: %s -> %s", existing.Status, p.Status)
-		}
-		existing.Status = p.Status
-		now := time.Now()
-		switch p.Status {
-		case "resolved":
-			existing.ResolvedAt = &now
-			existing.ClosedAt = nil
-		case "closed":
-			existing.ClosedAt = &now
-		case "investigating":
-			existing.ResolvedAt = nil
-			existing.ClosedAt = nil
-		}
+		return nil, common.NewValidationError("status changes require a problem lifecycle command", nil)
 	}
+	if p.Version <= 0 {
+		return nil, common.NewValidationError("version required", nil)
+	}
+	existing.Version = p.Version
 	if p.Priority != "" {
 		if !isValidProblemPriority(p.Priority) {
 			return nil, fmt.Errorf("invalid problem priority: %s", p.Priority)
@@ -109,36 +107,23 @@ func (s *Service) Update(ctx context.Context, tenantID int, id int, p *Problem) 
 	return s.repo.Update(ctx, existing)
 }
 
-// InvestigateProblem starts the investigation lifecycle for a problem.
-func (s *Service) InvestigateProblem(ctx context.Context, tenantID, id int) (*Problem, error) {
-	return s.Update(ctx, tenantID, id, &Problem{Status: "investigating"})
-}
-
 // UpdateRootCause records the confirmed root cause.
-func (s *Service) UpdateRootCause(ctx context.Context, tenantID, id int, rootCause string) (*Problem, error) {
+func (s *Service) UpdateRootCause(ctx context.Context, tenantID, id, version int, rootCause string) (*Problem, error) {
 	rootCause = strings.TrimSpace(rootCause)
 	if rootCause == "" {
 		return nil, fmt.Errorf("rootCause is required")
 	}
-	return s.Update(ctx, tenantID, id, &Problem{RootCause: rootCause})
+	return s.Update(ctx, tenantID, id, &Problem{Version: version, RootCause: rootCause})
 }
 
 // UpdateSolution records a workaround and/or final resolution.
-func (s *Service) UpdateSolution(ctx context.Context, tenantID, id int, workaround, resolution string) (*Problem, error) {
+func (s *Service) UpdateSolution(ctx context.Context, tenantID, id, version int, workaround, resolution string) (*Problem, error) {
 	workaround = strings.TrimSpace(workaround)
 	resolution = strings.TrimSpace(resolution)
 	if workaround == "" && resolution == "" {
 		return nil, fmt.Errorf("solution, workaround or resolution is required")
 	}
-	return s.Update(ctx, tenantID, id, &Problem{Workaround: workaround, Resolution: resolution})
-}
-
-// CloseProblem closes a problem and optionally records its final resolution.
-func (s *Service) CloseProblem(ctx context.Context, tenantID, id int, resolution string) (*Problem, error) {
-	return s.Update(ctx, tenantID, id, &Problem{
-		Status:     "closed",
-		Resolution: strings.TrimSpace(resolution),
-	})
+	return s.Update(ctx, tenantID, id, &Problem{Version: version, Workaround: workaround, Resolution: resolution})
 }
 
 func isValidProblemPriority(priority string) bool {

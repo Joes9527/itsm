@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -172,7 +173,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	r1.POST("/api/v1/problems/:id/investigate", probHandler.InvestigateProblem)
 
 	w1 := httptest.NewRecorder()
-	req1 := httptest.NewRequest("POST", fmt.Sprintf("/api/v1/problems/%d/investigate", p.ID), nil)
+	req1 := httptest.NewRequest("POST", fmt.Sprintf("/api/v1/problems/%d/investigate", p.ID), strings.NewReader(fmt.Sprintf(`{"version":%d,"operationId":"investigate-1"}`, p.Version)))
 	r1.ServeHTTP(w1, req1)
 	require.Equal(t, http.StatusOK, w1.Code)
 
@@ -186,6 +187,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	// =========================================================================
 	invSvc := service.NewProblemInvestigationService(db, logger)
 	invCtrl := controller.NewProblemInvestigationController(logger, invSvc)
+	invCtrl.SetProblemDomain(probHandlerSvc.Service)
 
 	r2 := gin.New()
 	r2.Use(func(c *gin.Context) {
@@ -218,6 +220,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 
 	// 2.1 Create Problem Investigation
 	createInvReq := dto.CreateProblemInvestigationRequest{
+		Version: updatedP.Version, OperationID: "investigate-details",
 		ProblemID:            p.ID,
 		InvestigatorID:       user.ID,
 		InvestigationSummary: "Investigating memory pools and thread starvation",
@@ -237,7 +240,8 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(w2_1.Body.Bytes(), &invRes))
 	assert.Equal(t, 0, invRes.Code, w2_1.Body.String())
-	invID := invRes.Data.InvestigationID
+	var invID int
+	require.NoError(t, db.QueryRow("SELECT id FROM problem_investigations WHERE problem_id = ?", p.ID).Scan(&invID))
 	require.Greater(t, invID, 0, "invID should be positive")
 
 	// 2.2 Get Problem Investigation
@@ -347,7 +351,7 @@ func TestRCAWritesProblemAuthorityAndKnownError(t *testing.T) {
 	require.Equal(t, root, published.RootCause)
 	// Changes through the professional Problem API must immediately project into RCA.
 	root = "Corrected after investigation"
-	_, err = problemSvc.UpdateRootCause(ctx, tenant.ID, p.ID, root)
+	_, err = problemSvc.UpdateRootCause(ctx, tenant.ID, p.ID, stored.Version, root)
 	require.NoError(t, err)
 	read, err := svc.GetRootCauseAnalysis(ctx, created.ID, tenant.ID)
 	require.NoError(t, err)
@@ -362,7 +366,11 @@ func TestRCAWritesProblemAuthorityAndKnownError(t *testing.T) {
 		_, err := svc.UpdateRootCauseAnalysis(ctx, created.ID, &dto.UpdateRootCauseAnalysisRequest{RootCauseDescription: &revised}, tenant.ID)
 		require.NoError(t, err)
 	}}
-	edited, err := problem.NewService(staleRepo, logger).Update(ctx, tenant.ID, p.ID, &problem.Problem{Title: "Unrelated title edit"})
+	beforeEdit, err := problemSvc.Get(ctx, p.ID, tenant.ID)
+	require.NoError(t, err)
+	_, err = problem.NewService(staleRepo, logger).Update(ctx, tenant.ID, p.ID, &problem.Problem{Version: beforeEdit.Version, Title: "Unrelated title edit"})
+	require.Error(t, err, "concurrent RCA must invalidate an edit based on the previous version")
+	edited, err := problemSvc.Get(ctx, p.ID, tenant.ID)
 	require.NoError(t, err)
 	require.Equal(t, "RCA changed concurrently", edited.RootCause)
 }

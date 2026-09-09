@@ -2,6 +2,7 @@
  * 问题调查 API 客户端
  */
 
+import type { ProblemCommandResult } from './problem-api';
 import { httpClient } from '@/lib/api/http-client';
 
 // 问题调查状态
@@ -220,6 +221,8 @@ export interface ProblemInvestigationSummary {
 
 // 创建问题调查请求
 export interface CreateInvestigationRequest {
+  version: number;
+  operationId: string;
   problemId: number;
   investigatorId?: number;
   estimatedCompletionDate?: string;
@@ -317,12 +320,8 @@ export const ProblemInvestigationAPI = {
   },
 
   // 创建问题调查
-  async createInvestigation(data: CreateInvestigationRequest): Promise<ProblemInvestigation> {
-    const response = await httpClient.post<InvestigationMutationResponse>(
-      '/api/v1/problem-investigation/investigations',
-      data
-    );
-    return response.investigation;
+  async createInvestigation(data: CreateInvestigationRequest): Promise<ProblemCommandResult> {
+    return httpClient.post('/api/v1/problem-investigation/investigations', data);
   },
 
   // 更新问题调查

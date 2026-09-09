@@ -15,6 +15,11 @@ type Problem struct {
 // Fields of the Problem.
 func (Problem) Fields() []ent.Field {
 	return []ent.Field{
+		field.Int("verified_version").Optional(),
+		field.String("verification_digest").Optional(),
+		field.Int("verified_by").Optional(),
+		field.Time("verified_at").Optional(),
+		field.Text("verification_note").Optional(),
 		field.Text("root_cause").
 			Comment("根本原因").
 			Optional(),

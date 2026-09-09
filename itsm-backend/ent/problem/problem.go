@@ -12,6 +12,16 @@ const (
 	Label = "problem"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldVerifiedVersion holds the string denoting the verified_version field in the database.
+	FieldVerifiedVersion = "verified_version"
+	// FieldVerificationDigest holds the string denoting the verification_digest field in the database.
+	FieldVerificationDigest = "verification_digest"
+	// FieldVerifiedBy holds the string denoting the verified_by field in the database.
+	FieldVerifiedBy = "verified_by"
+	// FieldVerifiedAt holds the string denoting the verified_at field in the database.
+	FieldVerifiedAt = "verified_at"
+	// FieldVerificationNote holds the string denoting the verification_note field in the database.
+	FieldVerificationNote = "verification_note"
 	// FieldRootCause holds the string denoting the root_cause field in the database.
 	FieldRootCause = "root_cause"
 	// FieldWorkaround holds the string denoting the workaround field in the database.
@@ -61,6 +71,11 @@ const (
 // Columns holds all SQL columns for problem fields.
 var Columns = []string{
 	FieldID,
+	FieldVerifiedVersion,
+	FieldVerificationDigest,
+	FieldVerifiedBy,
+	FieldVerifiedAt,
+	FieldVerificationNote,
 	FieldRootCause,
 	FieldWorkaround,
 	FieldResolution,
@@ -104,6 +119,31 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByVerifiedVersion orders the results by the verified_version field.
+func ByVerifiedVersion(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVerifiedVersion, opts...).ToFunc()
+}
+
+// ByVerificationDigest orders the results by the verification_digest field.
+func ByVerificationDigest(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVerificationDigest, opts...).ToFunc()
+}
+
+// ByVerifiedBy orders the results by the verified_by field.
+func ByVerifiedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVerifiedBy, opts...).ToFunc()
+}
+
+// ByVerifiedAt orders the results by the verified_at field.
+func ByVerifiedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVerifiedAt, opts...).ToFunc()
+}
+
+// ByVerificationNote orders the results by the verification_note field.
+func ByVerificationNote(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldVerificationNote, opts...).ToFunc()
 }
 
 // ByRootCause orders the results by the root_cause field.

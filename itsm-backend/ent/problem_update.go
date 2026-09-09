@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/problem"
 	"itsm-backend/ent/ticket"
+	"time"
 
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
@@ -27,6 +28,120 @@ type ProblemUpdate struct {
 // Where appends a list predicates to the ProblemUpdate builder.
 func (_u *ProblemUpdate) Where(ps ...predicate.Problem) *ProblemUpdate {
 	_u.mutation.Where(ps...)
+	return _u
+}
+
+// SetVerifiedVersion sets the "verified_version" field.
+func (_u *ProblemUpdate) SetVerifiedVersion(v int) *ProblemUpdate {
+	_u.mutation.ResetVerifiedVersion()
+	_u.mutation.SetVerifiedVersion(v)
+	return _u
+}
+
+// SetNillableVerifiedVersion sets the "verified_version" field if the given value is not nil.
+func (_u *ProblemUpdate) SetNillableVerifiedVersion(v *int) *ProblemUpdate {
+	if v != nil {
+		_u.SetVerifiedVersion(*v)
+	}
+	return _u
+}
+
+// AddVerifiedVersion adds value to the "verified_version" field.
+func (_u *ProblemUpdate) AddVerifiedVersion(v int) *ProblemUpdate {
+	_u.mutation.AddVerifiedVersion(v)
+	return _u
+}
+
+// ClearVerifiedVersion clears the value of the "verified_version" field.
+func (_u *ProblemUpdate) ClearVerifiedVersion() *ProblemUpdate {
+	_u.mutation.ClearVerifiedVersion()
+	return _u
+}
+
+// SetVerificationDigest sets the "verification_digest" field.
+func (_u *ProblemUpdate) SetVerificationDigest(v string) *ProblemUpdate {
+	_u.mutation.SetVerificationDigest(v)
+	return _u
+}
+
+// SetNillableVerificationDigest sets the "verification_digest" field if the given value is not nil.
+func (_u *ProblemUpdate) SetNillableVerificationDigest(v *string) *ProblemUpdate {
+	if v != nil {
+		_u.SetVerificationDigest(*v)
+	}
+	return _u
+}
+
+// ClearVerificationDigest clears the value of the "verification_digest" field.
+func (_u *ProblemUpdate) ClearVerificationDigest() *ProblemUpdate {
+	_u.mutation.ClearVerificationDigest()
+	return _u
+}
+
+// SetVerifiedBy sets the "verified_by" field.
+func (_u *ProblemUpdate) SetVerifiedBy(v int) *ProblemUpdate {
+	_u.mutation.ResetVerifiedBy()
+	_u.mutation.SetVerifiedBy(v)
+	return _u
+}
+
+// SetNillableVerifiedBy sets the "verified_by" field if the given value is not nil.
+func (_u *ProblemUpdate) SetNillableVerifiedBy(v *int) *ProblemUpdate {
+	if v != nil {
+		_u.SetVerifiedBy(*v)
+	}
+	return _u
+}
+
+// AddVerifiedBy adds value to the "verified_by" field.
+func (_u *ProblemUpdate) AddVerifiedBy(v int) *ProblemUpdate {
+	_u.mutation.AddVerifiedBy(v)
+	return _u
+}
+
+// ClearVerifiedBy clears the value of the "verified_by" field.
+func (_u *ProblemUpdate) ClearVerifiedBy() *ProblemUpdate {
+	_u.mutation.ClearVerifiedBy()
+	return _u
+}
+
+// SetVerifiedAt sets the "verified_at" field.
+func (_u *ProblemUpdate) SetVerifiedAt(v time.Time) *ProblemUpdate {
+	_u.mutation.SetVerifiedAt(v)
+	return _u
+}
+
+// SetNillableVerifiedAt sets the "verified_at" field if the given value is not nil.
+func (_u *ProblemUpdate) SetNillableVerifiedAt(v *time.Time) *ProblemUpdate {
+	if v != nil {
+		_u.SetVerifiedAt(*v)
+	}
+	return _u
+}
+
+// ClearVerifiedAt clears the value of the "verified_at" field.
+func (_u *ProblemUpdate) ClearVerifiedAt() *ProblemUpdate {
+	_u.mutation.ClearVerifiedAt()
+	return _u
+}
+
+// SetVerificationNote sets the "verification_note" field.
+func (_u *ProblemUpdate) SetVerificationNote(v string) *ProblemUpdate {
+	_u.mutation.SetVerificationNote(v)
+	return _u
+}
+
+// SetNillableVerificationNote sets the "verification_note" field if the given value is not nil.
+func (_u *ProblemUpdate) SetNillableVerificationNote(v *string) *ProblemUpdate {
+	if v != nil {
+		_u.SetVerificationNote(*v)
+	}
+	return _u
+}
+
+// ClearVerificationNote clears the value of the "verification_note" field.
+func (_u *ProblemUpdate) ClearVerificationNote() *ProblemUpdate {
+	_u.mutation.ClearVerificationNote()
 	return _u
 }
 
@@ -295,6 +410,42 @@ func (_u *ProblemUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			}
 		}
 	}
+	if value, ok := _u.mutation.VerifiedVersion(); ok {
+		_spec.SetField(problem.FieldVerifiedVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedVerifiedVersion(); ok {
+		_spec.AddField(problem.FieldVerifiedVersion, field.TypeInt, value)
+	}
+	if _u.mutation.VerifiedVersionCleared() {
+		_spec.ClearField(problem.FieldVerifiedVersion, field.TypeInt)
+	}
+	if value, ok := _u.mutation.VerificationDigest(); ok {
+		_spec.SetField(problem.FieldVerificationDigest, field.TypeString, value)
+	}
+	if _u.mutation.VerificationDigestCleared() {
+		_spec.ClearField(problem.FieldVerificationDigest, field.TypeString)
+	}
+	if value, ok := _u.mutation.VerifiedBy(); ok {
+		_spec.SetField(problem.FieldVerifiedBy, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedVerifiedBy(); ok {
+		_spec.AddField(problem.FieldVerifiedBy, field.TypeInt, value)
+	}
+	if _u.mutation.VerifiedByCleared() {
+		_spec.ClearField(problem.FieldVerifiedBy, field.TypeInt)
+	}
+	if value, ok := _u.mutation.VerifiedAt(); ok {
+		_spec.SetField(problem.FieldVerifiedAt, field.TypeTime, value)
+	}
+	if _u.mutation.VerifiedAtCleared() {
+		_spec.ClearField(problem.FieldVerifiedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.VerificationNote(); ok {
+		_spec.SetField(problem.FieldVerificationNote, field.TypeString, value)
+	}
+	if _u.mutation.VerificationNoteCleared() {
+		_spec.ClearField(problem.FieldVerificationNote, field.TypeString)
+	}
 	if value, ok := _u.mutation.RootCause(); ok {
 		_spec.SetField(problem.FieldRootCause, field.TypeString, value)
 	}
@@ -501,6 +652,120 @@ type ProblemUpdateOne struct {
 	fields   []string
 	hooks    []Hook
 	mutation *ProblemMutation
+}
+
+// SetVerifiedVersion sets the "verified_version" field.
+func (_u *ProblemUpdateOne) SetVerifiedVersion(v int) *ProblemUpdateOne {
+	_u.mutation.ResetVerifiedVersion()
+	_u.mutation.SetVerifiedVersion(v)
+	return _u
+}
+
+// SetNillableVerifiedVersion sets the "verified_version" field if the given value is not nil.
+func (_u *ProblemUpdateOne) SetNillableVerifiedVersion(v *int) *ProblemUpdateOne {
+	if v != nil {
+		_u.SetVerifiedVersion(*v)
+	}
+	return _u
+}
+
+// AddVerifiedVersion adds value to the "verified_version" field.
+func (_u *ProblemUpdateOne) AddVerifiedVersion(v int) *ProblemUpdateOne {
+	_u.mutation.AddVerifiedVersion(v)
+	return _u
+}
+
+// ClearVerifiedVersion clears the value of the "verified_version" field.
+func (_u *ProblemUpdateOne) ClearVerifiedVersion() *ProblemUpdateOne {
+	_u.mutation.ClearVerifiedVersion()
+	return _u
+}
+
+// SetVerificationDigest sets the "verification_digest" field.
+func (_u *ProblemUpdateOne) SetVerificationDigest(v string) *ProblemUpdateOne {
+	_u.mutation.SetVerificationDigest(v)
+	return _u
+}
+
+// SetNillableVerificationDigest sets the "verification_digest" field if the given value is not nil.
+func (_u *ProblemUpdateOne) SetNillableVerificationDigest(v *string) *ProblemUpdateOne {
+	if v != nil {
+		_u.SetVerificationDigest(*v)
+	}
+	return _u
+}
+
+// ClearVerificationDigest clears the value of the "verification_digest" field.
+func (_u *ProblemUpdateOne) ClearVerificationDigest() *ProblemUpdateOne {
+	_u.mutation.ClearVerificationDigest()
+	return _u
+}
+
+// SetVerifiedBy sets the "verified_by" field.
+func (_u *ProblemUpdateOne) SetVerifiedBy(v int) *ProblemUpdateOne {
+	_u.mutation.ResetVerifiedBy()
+	_u.mutation.SetVerifiedBy(v)
+	return _u
+}
+
+// SetNillableVerifiedBy sets the "verified_by" field if the given value is not nil.
+func (_u *ProblemUpdateOne) SetNillableVerifiedBy(v *int) *ProblemUpdateOne {
+	if v != nil {
+		_u.SetVerifiedBy(*v)
+	}
+	return _u
+}
+
+// AddVerifiedBy adds value to the "verified_by" field.
+func (_u *ProblemUpdateOne) AddVerifiedBy(v int) *ProblemUpdateOne {
+	_u.mutation.AddVerifiedBy(v)
+	return _u
+}
+
+// ClearVerifiedBy clears the value of the "verified_by" field.
+func (_u *ProblemUpdateOne) ClearVerifiedBy() *ProblemUpdateOne {
+	_u.mutation.ClearVerifiedBy()
+	return _u
+}
+
+// SetVerifiedAt sets the "verified_at" field.
+func (_u *ProblemUpdateOne) SetVerifiedAt(v time.Time) *ProblemUpdateOne {
+	_u.mutation.SetVerifiedAt(v)
+	return _u
+}
+
+// SetNillableVerifiedAt sets the "verified_at" field if the given value is not nil.
+func (_u *ProblemUpdateOne) SetNillableVerifiedAt(v *time.Time) *ProblemUpdateOne {
+	if v != nil {
+		_u.SetVerifiedAt(*v)
+	}
+	return _u
+}
+
+// ClearVerifiedAt clears the value of the "verified_at" field.
+func (_u *ProblemUpdateOne) ClearVerifiedAt() *ProblemUpdateOne {
+	_u.mutation.ClearVerifiedAt()
+	return _u
+}
+
+// SetVerificationNote sets the "verification_note" field.
+func (_u *ProblemUpdateOne) SetVerificationNote(v string) *ProblemUpdateOne {
+	_u.mutation.SetVerificationNote(v)
+	return _u
+}
+
+// SetNillableVerificationNote sets the "verification_note" field if the given value is not nil.
+func (_u *ProblemUpdateOne) SetNillableVerificationNote(v *string) *ProblemUpdateOne {
+	if v != nil {
+		_u.SetVerificationNote(*v)
+	}
+	return _u
+}
+
+// ClearVerificationNote clears the value of the "verification_note" field.
+func (_u *ProblemUpdateOne) ClearVerificationNote() *ProblemUpdateOne {
+	_u.mutation.ClearVerificationNote()
+	return _u
 }
 
 // SetRootCause sets the "root_cause" field.
@@ -797,6 +1062,42 @@ func (_u *ProblemUpdateOne) sqlSave(ctx context.Context) (_node *Problem, err er
 				ps[i](selector)
 			}
 		}
+	}
+	if value, ok := _u.mutation.VerifiedVersion(); ok {
+		_spec.SetField(problem.FieldVerifiedVersion, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedVerifiedVersion(); ok {
+		_spec.AddField(problem.FieldVerifiedVersion, field.TypeInt, value)
+	}
+	if _u.mutation.VerifiedVersionCleared() {
+		_spec.ClearField(problem.FieldVerifiedVersion, field.TypeInt)
+	}
+	if value, ok := _u.mutation.VerificationDigest(); ok {
+		_spec.SetField(problem.FieldVerificationDigest, field.TypeString, value)
+	}
+	if _u.mutation.VerificationDigestCleared() {
+		_spec.ClearField(problem.FieldVerificationDigest, field.TypeString)
+	}
+	if value, ok := _u.mutation.VerifiedBy(); ok {
+		_spec.SetField(problem.FieldVerifiedBy, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedVerifiedBy(); ok {
+		_spec.AddField(problem.FieldVerifiedBy, field.TypeInt, value)
+	}
+	if _u.mutation.VerifiedByCleared() {
+		_spec.ClearField(problem.FieldVerifiedBy, field.TypeInt)
+	}
+	if value, ok := _u.mutation.VerifiedAt(); ok {
+		_spec.SetField(problem.FieldVerifiedAt, field.TypeTime, value)
+	}
+	if _u.mutation.VerifiedAtCleared() {
+		_spec.ClearField(problem.FieldVerifiedAt, field.TypeTime)
+	}
+	if value, ok := _u.mutation.VerificationNote(); ok {
+		_spec.SetField(problem.FieldVerificationNote, field.TypeString, value)
+	}
+	if _u.mutation.VerificationNoteCleared() {
+		_spec.ClearField(problem.FieldVerificationNote, field.TypeString)
 	}
 	if value, ok := _u.mutation.RootCause(); ok {
 		_spec.SetField(problem.FieldRootCause, field.TypeString, value)

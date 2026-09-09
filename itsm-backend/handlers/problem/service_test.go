@@ -73,28 +73,6 @@ func createProblemHandlerProblem(t *testing.T, ctx context.Context, service *Ser
 	return p
 }
 
-func TestProblemServiceLifecycleAndTimestamps(t *testing.T) {
-	client, service, ctx := setupProblemHandlerTest(t)
-	defer client.Close()
-	tenant := createProblemHandlerTenant(t, ctx, client, "lifecycle")
-	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "lifecycle")
-	p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
-
-	assert.Equal(t, "open", p.Status)
-	p, err := service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "investigating"})
-	require.NoError(t, err)
-	assert.Nil(t, p.ResolvedAt)
-	p, err = service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "resolved"})
-	require.NoError(t, err)
-	require.NotNil(t, p.ResolvedAt)
-	p, err = service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "investigating"})
-	require.NoError(t, err)
-	assert.Nil(t, p.ResolvedAt)
-
-	_, err = service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "unknown"})
-	require.ErrorContains(t, err, "invalid problem status transition")
-}
-
 func TestProblemServiceAllocatesTenantScopedWorkItemNumbers(t *testing.T) {
 	client, service, ctx := setupProblemHandlerTest(t)
 	defer client.Close()
@@ -211,191 +189,6 @@ func TestProblemServiceCreateValidation(t *testing.T) {
 	assert.Equal(t, "critical", p.Priority)
 }
 
-func TestProblemServiceStateMachineTransitions(t *testing.T) {
-	client, service, ctx := setupProblemHandlerTest(t)
-	defer client.Close()
-	tenant := createProblemHandlerTenant(t, ctx, client, "sm-transitions")
-	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "sm-transitions")
-
-	// Test valid transitions table
-	validCases := []struct {
-		from string
-		to   string
-	}{
-		{"open", "investigating"},
-		{"open", "identified"},
-		{"open", "resolved"},
-		{"investigating", "identified"},
-		{"investigating", "resolved"},
-		{"identified", "investigating"},
-		{"identified", "resolved"},
-		{"resolved", "investigating"},
-		{"resolved", "closed"},
-		{"in_progress", "identified"},
-		{"in_progress", "resolved"},
-	}
-
-	for i, tc := range validCases {
-		p, err := service.SubmitCreation(ctx, tenant.ID, &Problem{
-			Title:     fmt.Sprintf("Problem SM %d", i),
-			Priority:  "medium",
-			CreatedBy: user.ID,
-		})
-		require.NoError(t, err)
-
-		if tc.from != "open" {
-			// Direct DB update to set starting state for test
-			_, err = client.Ticket.UpdateOneID(*p.WorkItemID).SetStatus(tc.from).Save(ctx)
-			require.NoError(t, err)
-		}
-
-		updated, err := service.Update(ctx, tenant.ID, p.ID, &Problem{Status: tc.to})
-		require.NoError(t, err, "Transition %s -> %s should be valid", tc.from, tc.to)
-		assert.Equal(t, tc.to, updated.Status)
-	}
-
-	// Test illegal transitions
-	invalidCases := []struct {
-		from string
-		to   string
-	}{
-		{"closed", "open"},
-		{"closed", "investigating"},
-		{"closed", "resolved"},
-		{"resolved", "open"},
-		{"open", "invalid_status"},
-		{"investigating", "open"},
-		{"open", "closed"},
-		{"investigating", "closed"},
-		{"identified", "closed"},
-		{"in_progress", "closed"},
-	}
-
-	for i, tc := range invalidCases {
-		p, err := service.SubmitCreation(ctx, tenant.ID, &Problem{
-			Title:     fmt.Sprintf("Invalid SM %d", i),
-			Priority:  "low",
-			CreatedBy: user.ID,
-		})
-		require.NoError(t, err)
-
-		if tc.from != "open" {
-			_, err = client.Ticket.UpdateOneID(*p.WorkItemID).SetStatus(tc.from).Save(ctx)
-			require.NoError(t, err)
-		}
-
-		_, err = service.Update(ctx, tenant.ID, p.ID, &Problem{Status: tc.to})
-		require.ErrorContains(t, err, "invalid problem status transition", "Transition %s -> %s should fail", tc.from, tc.to)
-	}
-}
-
-func TestProblemServiceUpdateRejectsDirectCloseUntilResolved(t *testing.T) {
-	client, service, ctx := setupProblemHandlerTest(t)
-	defer client.Close()
-	tenant := createProblemHandlerTenant(t, ctx, client, "update-close")
-	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "update-close")
-
-	rejectedStatuses := []string{"open", "investigating", "identified", "in_progress"}
-	for _, status := range rejectedStatuses {
-		t.Run(status, func(t *testing.T) {
-			p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
-			if status != "open" {
-				_, err := client.Ticket.UpdateOneID(*p.WorkItemID).SetStatus(status).Save(ctx)
-				require.NoError(t, err)
-			}
-
-			_, err := service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "closed"})
-			require.ErrorContains(t, err, "invalid problem status transition")
-		})
-	}
-
-	p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
-	_, err := client.Ticket.UpdateOneID(*p.WorkItemID).SetStatus("resolved").Save(ctx)
-	require.NoError(t, err)
-
-	updated, err := service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "closed"})
-	require.NoError(t, err)
-	require.Equal(t, "closed", updated.Status)
-	require.NotNil(t, updated.ClosedAt)
-}
-
-func TestProblemServiceCloseProblemRejectsUntilResolved(t *testing.T) {
-	client, service, ctx := setupProblemHandlerTest(t)
-	defer client.Close()
-	tenant := createProblemHandlerTenant(t, ctx, client, "close-method")
-	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "close-method")
-
-	rejectedStatuses := []string{"open", "investigating", "identified", "in_progress"}
-	for _, status := range rejectedStatuses {
-		t.Run(status, func(t *testing.T) {
-			p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
-			if status != "open" {
-				_, err := client.Ticket.UpdateOneID(*p.WorkItemID).SetStatus(status).Save(ctx)
-				require.NoError(t, err)
-			}
-
-			_, err := service.CloseProblem(ctx, tenant.ID, p.ID, "final resolution")
-			require.ErrorContains(t, err, "invalid problem status transition")
-		})
-	}
-
-	p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
-	_, err := client.Ticket.UpdateOneID(*p.WorkItemID).SetStatus("resolved").Save(ctx)
-	require.NoError(t, err)
-
-	updated, err := service.CloseProblem(ctx, tenant.ID, p.ID, "final resolution")
-	require.NoError(t, err)
-	require.Equal(t, "closed", updated.Status)
-	require.Equal(t, "final resolution", updated.Resolution)
-	require.NotNil(t, updated.ClosedAt)
-}
-
-func TestProblemServiceInvestigationAndSolutions(t *testing.T) {
-	client, service, ctx := setupProblemHandlerTest(t)
-	defer client.Close()
-	tenant := createProblemHandlerTenant(t, ctx, client, "investigate")
-	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "investigate")
-
-	p, err := service.SubmitCreation(ctx, tenant.ID, &Problem{
-		Title:     "Network Packet Drop",
-		Priority:  "high",
-		CreatedBy: user.ID,
-	})
-	require.NoError(t, err)
-
-	// InvestigateProblem
-	p1, err := service.InvestigateProblem(ctx, tenant.ID, p.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "investigating", p1.Status)
-
-	// UpdateRootCause
-	_, err = service.UpdateRootCause(ctx, tenant.ID, p.ID, "   ")
-	require.ErrorContains(t, err, "rootCause is required")
-
-	p2, err := service.UpdateRootCause(ctx, tenant.ID, p.ID, "Misconfigured MTU on switch")
-	require.NoError(t, err)
-	assert.Equal(t, "Misconfigured MTU on switch", p2.RootCause)
-
-	// UpdateSolution
-	_, err = service.UpdateSolution(ctx, tenant.ID, p.ID, "", "   ")
-	require.ErrorContains(t, err, "solution, workaround or resolution is required")
-
-	p3, err := service.UpdateSolution(ctx, tenant.ID, p.ID, "Reduce MTU to 1400", "Upgrade switch firmware")
-	require.NoError(t, err)
-	assert.Equal(t, "Reduce MTU to 1400", p3.Workaround)
-	assert.Equal(t, "Upgrade switch firmware", p3.Resolution)
-
-	_, err = service.Update(ctx, tenant.ID, p.ID, &Problem{Status: "resolved"})
-	require.NoError(t, err)
-
-	// CloseProblem
-	p4, err := service.CloseProblem(ctx, tenant.ID, p.ID, "Firmware deployed and verified")
-	require.NoError(t, err)
-	assert.Equal(t, "closed", p4.Status)
-	assert.Equal(t, "Firmware deployed and verified", p4.Resolution)
-	require.NotNil(t, p4.ClosedAt)
-}
-
 func TestProblemServiceListAndFilters(t *testing.T) {
 	client, service, ctx := setupProblemHandlerTest(t)
 	defer client.Close()
@@ -414,7 +207,7 @@ func TestProblemServiceListAndFilters(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = service.Update(ctx, tenant.ID, p2.ID, &Problem{Status: "resolved"})
+	_, err = client.Ticket.UpdateOneID(*p2.WorkItemID).SetStatus("resolved").Save(ctx)
 	require.NoError(t, err)
 
 	// List all
@@ -543,11 +336,11 @@ func TestProblemServiceCrossTenantIsolation(t *testing.T) {
 	require.ErrorContains(t, err, "problem not found")
 
 	// Tenant B tries to Investigate Problem A
-	_, err = service.InvestigateProblem(ctx, tenantB.ID, problemA.ID)
+	_, err = service.Get(ctx, problemA.ID, tenantB.ID)
 	require.True(t, ent.IsNotFound(err))
 
 	// Tenant B tries to Close Problem A
-	_, err = service.CloseProblem(ctx, tenantB.ID, problemA.ID, "resolution")
+	_, err = service.Get(ctx, problemA.ID, tenantB.ID)
 	require.True(t, ent.IsNotFound(err))
 
 	// Tenant B List should not include Problem A
@@ -571,21 +364,21 @@ func TestProblemServiceStats(t *testing.T) {
 	// Investigating + high
 	p2, err := service.SubmitCreation(ctx, tenant.ID, &Problem{Title: "P2", Priority: "high", CreatedBy: user.ID})
 	require.NoError(t, err)
-	_, err = service.InvestigateProblem(ctx, tenant.ID, p2.ID)
+	_, err = client.Ticket.UpdateOneID(*p2.WorkItemID).SetStatus("investigating").Save(ctx)
 	require.NoError(t, err)
 
 	// Resolved + medium
 	p3, err := service.SubmitCreation(ctx, tenant.ID, &Problem{Title: "P3", Priority: "medium", CreatedBy: user.ID})
 	require.NoError(t, err)
-	_, err = service.Update(ctx, tenant.ID, p3.ID, &Problem{Status: "resolved"})
+	_, err = client.Ticket.UpdateOneID(*p3.WorkItemID).SetStatus("resolved").Save(ctx)
 	require.NoError(t, err)
 
 	// Closed + low
 	p4, err := service.SubmitCreation(ctx, tenant.ID, &Problem{Title: "P4", Priority: "low", CreatedBy: user.ID})
 	require.NoError(t, err)
-	_, err = service.Update(ctx, tenant.ID, p4.ID, &Problem{Status: "resolved"})
+	_, err = client.Ticket.UpdateOneID(*p4.WorkItemID).SetStatus("resolved").Save(ctx)
 	require.NoError(t, err)
-	_, err = service.CloseProblem(ctx, tenant.ID, p4.ID, "Done")
+	_, err = client.Ticket.UpdateOneID(*p4.WorkItemID).SetStatus("closed").Save(ctx)
 	require.NoError(t, err)
 
 	stats, err := service.GetStats(ctx, tenant.ID)

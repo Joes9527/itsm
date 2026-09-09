@@ -34,6 +34,7 @@ func TestProblemHTTPClassificationIDContract(t *testing.T) {
 	require.NoError(t, err)
 	path := fmt.Sprintf("/api/v1/problems/%d", p.ID)
 	update := func(req dto.UpdateProblemRequest, want int) {
+		req.Version = client.Ticket.GetX(ctx, *p.WorkItemID).Version
 		w := performProblemRequest(router, http.MethodPut, path, req, tenant.ID, user.ID)
 		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 		var response common.Response
@@ -46,7 +47,7 @@ func TestProblemHTTPClassificationIDContract(t *testing.T) {
 	for _, id := range []int{inactive.ID, other.ID, -1, 999999} {
 		before, err := client.Ticket.Get(ctx, *p.WorkItemID)
 		require.NoError(t, err)
-		w := performProblemRequest(router, http.MethodPut, path, dto.UpdateProblemRequest{CategoryID: &id, Title: strPtr("Must not persist")}, tenant.ID, user.ID)
+		w := performProblemRequest(router, http.MethodPut, path, dto.UpdateProblemRequest{Version: before.Version, CategoryID: &id, Title: strPtr("Must not persist")}, tenant.ID, user.ID)
 		var response common.Response
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
 		require.NotZero(t, response.Code)
@@ -71,7 +72,7 @@ func TestProblemHTTPClassificationIDContract(t *testing.T) {
 	})
 	before, err := client.Ticket.Get(ctx, *p.WorkItemID)
 	require.NoError(t, err)
-	w := performProblemRequest(router, http.MethodPut, path, dto.UpdateProblemRequest{CategoryID: &original.ID}, tenant.ID, user.ID)
+	w := performProblemRequest(router, http.MethodPut, path, dto.UpdateProblemRequest{Version: before.Version, CategoryID: &original.ID}, tenant.ID, user.ID)
 	var response common.Response
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
 	require.NotZero(t, response.Code)

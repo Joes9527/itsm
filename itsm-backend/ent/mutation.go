@@ -82758,28 +82758,35 @@ func (m *PermissionDefinitionMutation) ResetEdge(name string) error {
 // ProblemMutation represents an operation that mutates the Problem nodes in the graph.
 type ProblemMutation struct {
 	config
-	op               Op
-	typ              string
-	id               *int
-	root_cause       *string
-	workaround       *string
-	resolution       *string
-	impact           *string
-	clearedFields    map[string]struct{}
-	work_item        *int
-	clearedwork_item bool
-	tickets          map[int]struct{}
-	removedtickets   map[int]struct{}
-	clearedtickets   bool
-	incidents        map[int]struct{}
-	removedincidents map[int]struct{}
-	clearedincidents bool
-	changes          map[int]struct{}
-	removedchanges   map[int]struct{}
-	clearedchanges   bool
-	done             bool
-	oldValue         func(context.Context) (*Problem, error)
-	predicates       []predicate.Problem
+	op                  Op
+	typ                 string
+	id                  *int
+	verified_version    *int
+	addverified_version *int
+	verification_digest *string
+	verified_by         *int
+	addverified_by      *int
+	verified_at         *time.Time
+	verification_note   *string
+	root_cause          *string
+	workaround          *string
+	resolution          *string
+	impact              *string
+	clearedFields       map[string]struct{}
+	work_item           *int
+	clearedwork_item    bool
+	tickets             map[int]struct{}
+	removedtickets      map[int]struct{}
+	clearedtickets      bool
+	incidents           map[int]struct{}
+	removedincidents    map[int]struct{}
+	clearedincidents    bool
+	changes             map[int]struct{}
+	removedchanges      map[int]struct{}
+	clearedchanges      bool
+	done                bool
+	oldValue            func(context.Context) (*Problem, error)
+	predicates          []predicate.Problem
 }
 
 var _ ent.Mutation = (*ProblemMutation)(nil)
@@ -82878,6 +82885,293 @@ func (m *ProblemMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetVerifiedVersion sets the "verified_version" field.
+func (m *ProblemMutation) SetVerifiedVersion(i int) {
+	m.verified_version = &i
+	m.addverified_version = nil
+}
+
+// VerifiedVersion returns the value of the "verified_version" field in the mutation.
+func (m *ProblemMutation) VerifiedVersion() (r int, exists bool) {
+	v := m.verified_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVerifiedVersion returns the old "verified_version" field's value of the Problem entity.
+// If the Problem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProblemMutation) OldVerifiedVersion(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVerifiedVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVerifiedVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVerifiedVersion: %w", err)
+	}
+	return oldValue.VerifiedVersion, nil
+}
+
+// AddVerifiedVersion adds i to the "verified_version" field.
+func (m *ProblemMutation) AddVerifiedVersion(i int) {
+	if m.addverified_version != nil {
+		*m.addverified_version += i
+	} else {
+		m.addverified_version = &i
+	}
+}
+
+// AddedVerifiedVersion returns the value that was added to the "verified_version" field in this mutation.
+func (m *ProblemMutation) AddedVerifiedVersion() (r int, exists bool) {
+	v := m.addverified_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearVerifiedVersion clears the value of the "verified_version" field.
+func (m *ProblemMutation) ClearVerifiedVersion() {
+	m.verified_version = nil
+	m.addverified_version = nil
+	m.clearedFields[problem.FieldVerifiedVersion] = struct{}{}
+}
+
+// VerifiedVersionCleared returns if the "verified_version" field was cleared in this mutation.
+func (m *ProblemMutation) VerifiedVersionCleared() bool {
+	_, ok := m.clearedFields[problem.FieldVerifiedVersion]
+	return ok
+}
+
+// ResetVerifiedVersion resets all changes to the "verified_version" field.
+func (m *ProblemMutation) ResetVerifiedVersion() {
+	m.verified_version = nil
+	m.addverified_version = nil
+	delete(m.clearedFields, problem.FieldVerifiedVersion)
+}
+
+// SetVerificationDigest sets the "verification_digest" field.
+func (m *ProblemMutation) SetVerificationDigest(s string) {
+	m.verification_digest = &s
+}
+
+// VerificationDigest returns the value of the "verification_digest" field in the mutation.
+func (m *ProblemMutation) VerificationDigest() (r string, exists bool) {
+	v := m.verification_digest
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVerificationDigest returns the old "verification_digest" field's value of the Problem entity.
+// If the Problem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProblemMutation) OldVerificationDigest(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVerificationDigest is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVerificationDigest requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVerificationDigest: %w", err)
+	}
+	return oldValue.VerificationDigest, nil
+}
+
+// ClearVerificationDigest clears the value of the "verification_digest" field.
+func (m *ProblemMutation) ClearVerificationDigest() {
+	m.verification_digest = nil
+	m.clearedFields[problem.FieldVerificationDigest] = struct{}{}
+}
+
+// VerificationDigestCleared returns if the "verification_digest" field was cleared in this mutation.
+func (m *ProblemMutation) VerificationDigestCleared() bool {
+	_, ok := m.clearedFields[problem.FieldVerificationDigest]
+	return ok
+}
+
+// ResetVerificationDigest resets all changes to the "verification_digest" field.
+func (m *ProblemMutation) ResetVerificationDigest() {
+	m.verification_digest = nil
+	delete(m.clearedFields, problem.FieldVerificationDigest)
+}
+
+// SetVerifiedBy sets the "verified_by" field.
+func (m *ProblemMutation) SetVerifiedBy(i int) {
+	m.verified_by = &i
+	m.addverified_by = nil
+}
+
+// VerifiedBy returns the value of the "verified_by" field in the mutation.
+func (m *ProblemMutation) VerifiedBy() (r int, exists bool) {
+	v := m.verified_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVerifiedBy returns the old "verified_by" field's value of the Problem entity.
+// If the Problem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProblemMutation) OldVerifiedBy(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVerifiedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVerifiedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVerifiedBy: %w", err)
+	}
+	return oldValue.VerifiedBy, nil
+}
+
+// AddVerifiedBy adds i to the "verified_by" field.
+func (m *ProblemMutation) AddVerifiedBy(i int) {
+	if m.addverified_by != nil {
+		*m.addverified_by += i
+	} else {
+		m.addverified_by = &i
+	}
+}
+
+// AddedVerifiedBy returns the value that was added to the "verified_by" field in this mutation.
+func (m *ProblemMutation) AddedVerifiedBy() (r int, exists bool) {
+	v := m.addverified_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearVerifiedBy clears the value of the "verified_by" field.
+func (m *ProblemMutation) ClearVerifiedBy() {
+	m.verified_by = nil
+	m.addverified_by = nil
+	m.clearedFields[problem.FieldVerifiedBy] = struct{}{}
+}
+
+// VerifiedByCleared returns if the "verified_by" field was cleared in this mutation.
+func (m *ProblemMutation) VerifiedByCleared() bool {
+	_, ok := m.clearedFields[problem.FieldVerifiedBy]
+	return ok
+}
+
+// ResetVerifiedBy resets all changes to the "verified_by" field.
+func (m *ProblemMutation) ResetVerifiedBy() {
+	m.verified_by = nil
+	m.addverified_by = nil
+	delete(m.clearedFields, problem.FieldVerifiedBy)
+}
+
+// SetVerifiedAt sets the "verified_at" field.
+func (m *ProblemMutation) SetVerifiedAt(t time.Time) {
+	m.verified_at = &t
+}
+
+// VerifiedAt returns the value of the "verified_at" field in the mutation.
+func (m *ProblemMutation) VerifiedAt() (r time.Time, exists bool) {
+	v := m.verified_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVerifiedAt returns the old "verified_at" field's value of the Problem entity.
+// If the Problem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProblemMutation) OldVerifiedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVerifiedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVerifiedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVerifiedAt: %w", err)
+	}
+	return oldValue.VerifiedAt, nil
+}
+
+// ClearVerifiedAt clears the value of the "verified_at" field.
+func (m *ProblemMutation) ClearVerifiedAt() {
+	m.verified_at = nil
+	m.clearedFields[problem.FieldVerifiedAt] = struct{}{}
+}
+
+// VerifiedAtCleared returns if the "verified_at" field was cleared in this mutation.
+func (m *ProblemMutation) VerifiedAtCleared() bool {
+	_, ok := m.clearedFields[problem.FieldVerifiedAt]
+	return ok
+}
+
+// ResetVerifiedAt resets all changes to the "verified_at" field.
+func (m *ProblemMutation) ResetVerifiedAt() {
+	m.verified_at = nil
+	delete(m.clearedFields, problem.FieldVerifiedAt)
+}
+
+// SetVerificationNote sets the "verification_note" field.
+func (m *ProblemMutation) SetVerificationNote(s string) {
+	m.verification_note = &s
+}
+
+// VerificationNote returns the value of the "verification_note" field in the mutation.
+func (m *ProblemMutation) VerificationNote() (r string, exists bool) {
+	v := m.verification_note
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldVerificationNote returns the old "verification_note" field's value of the Problem entity.
+// If the Problem object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProblemMutation) OldVerificationNote(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldVerificationNote is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldVerificationNote requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldVerificationNote: %w", err)
+	}
+	return oldValue.VerificationNote, nil
+}
+
+// ClearVerificationNote clears the value of the "verification_note" field.
+func (m *ProblemMutation) ClearVerificationNote() {
+	m.verification_note = nil
+	m.clearedFields[problem.FieldVerificationNote] = struct{}{}
+}
+
+// VerificationNoteCleared returns if the "verification_note" field was cleared in this mutation.
+func (m *ProblemMutation) VerificationNoteCleared() bool {
+	_, ok := m.clearedFields[problem.FieldVerificationNote]
+	return ok
+}
+
+// ResetVerificationNote resets all changes to the "verification_note" field.
+func (m *ProblemMutation) ResetVerificationNote() {
+	m.verification_note = nil
+	delete(m.clearedFields, problem.FieldVerificationNote)
 }
 
 // SetRootCause sets the "root_cause" field.
@@ -83335,7 +83629,22 @@ func (m *ProblemMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProblemMutation) Fields() []string {
-	fields := make([]string, 0, 5)
+	fields := make([]string, 0, 10)
+	if m.verified_version != nil {
+		fields = append(fields, problem.FieldVerifiedVersion)
+	}
+	if m.verification_digest != nil {
+		fields = append(fields, problem.FieldVerificationDigest)
+	}
+	if m.verified_by != nil {
+		fields = append(fields, problem.FieldVerifiedBy)
+	}
+	if m.verified_at != nil {
+		fields = append(fields, problem.FieldVerifiedAt)
+	}
+	if m.verification_note != nil {
+		fields = append(fields, problem.FieldVerificationNote)
+	}
 	if m.root_cause != nil {
 		fields = append(fields, problem.FieldRootCause)
 	}
@@ -83359,6 +83668,16 @@ func (m *ProblemMutation) Fields() []string {
 // schema.
 func (m *ProblemMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case problem.FieldVerifiedVersion:
+		return m.VerifiedVersion()
+	case problem.FieldVerificationDigest:
+		return m.VerificationDigest()
+	case problem.FieldVerifiedBy:
+		return m.VerifiedBy()
+	case problem.FieldVerifiedAt:
+		return m.VerifiedAt()
+	case problem.FieldVerificationNote:
+		return m.VerificationNote()
 	case problem.FieldRootCause:
 		return m.RootCause()
 	case problem.FieldWorkaround:
@@ -83378,6 +83697,16 @@ func (m *ProblemMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *ProblemMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case problem.FieldVerifiedVersion:
+		return m.OldVerifiedVersion(ctx)
+	case problem.FieldVerificationDigest:
+		return m.OldVerificationDigest(ctx)
+	case problem.FieldVerifiedBy:
+		return m.OldVerifiedBy(ctx)
+	case problem.FieldVerifiedAt:
+		return m.OldVerifiedAt(ctx)
+	case problem.FieldVerificationNote:
+		return m.OldVerificationNote(ctx)
 	case problem.FieldRootCause:
 		return m.OldRootCause(ctx)
 	case problem.FieldWorkaround:
@@ -83397,6 +83726,41 @@ func (m *ProblemMutation) OldField(ctx context.Context, name string) (ent.Value,
 // type.
 func (m *ProblemMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case problem.FieldVerifiedVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVerifiedVersion(v)
+		return nil
+	case problem.FieldVerificationDigest:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVerificationDigest(v)
+		return nil
+	case problem.FieldVerifiedBy:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVerifiedBy(v)
+		return nil
+	case problem.FieldVerifiedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVerifiedAt(v)
+		return nil
+	case problem.FieldVerificationNote:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetVerificationNote(v)
+		return nil
 	case problem.FieldRootCause:
 		v, ok := value.(string)
 		if !ok {
@@ -83440,6 +83804,12 @@ func (m *ProblemMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *ProblemMutation) AddedFields() []string {
 	var fields []string
+	if m.addverified_version != nil {
+		fields = append(fields, problem.FieldVerifiedVersion)
+	}
+	if m.addverified_by != nil {
+		fields = append(fields, problem.FieldVerifiedBy)
+	}
 	return fields
 }
 
@@ -83448,6 +83818,10 @@ func (m *ProblemMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ProblemMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case problem.FieldVerifiedVersion:
+		return m.AddedVerifiedVersion()
+	case problem.FieldVerifiedBy:
+		return m.AddedVerifiedBy()
 	}
 	return nil, false
 }
@@ -83457,6 +83831,20 @@ func (m *ProblemMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ProblemMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case problem.FieldVerifiedVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddVerifiedVersion(v)
+		return nil
+	case problem.FieldVerifiedBy:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddVerifiedBy(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Problem numeric field %s", name)
 }
@@ -83465,6 +83853,21 @@ func (m *ProblemMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *ProblemMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(problem.FieldVerifiedVersion) {
+		fields = append(fields, problem.FieldVerifiedVersion)
+	}
+	if m.FieldCleared(problem.FieldVerificationDigest) {
+		fields = append(fields, problem.FieldVerificationDigest)
+	}
+	if m.FieldCleared(problem.FieldVerifiedBy) {
+		fields = append(fields, problem.FieldVerifiedBy)
+	}
+	if m.FieldCleared(problem.FieldVerifiedAt) {
+		fields = append(fields, problem.FieldVerifiedAt)
+	}
+	if m.FieldCleared(problem.FieldVerificationNote) {
+		fields = append(fields, problem.FieldVerificationNote)
+	}
 	if m.FieldCleared(problem.FieldRootCause) {
 		fields = append(fields, problem.FieldRootCause)
 	}
@@ -83491,6 +83894,21 @@ func (m *ProblemMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ProblemMutation) ClearField(name string) error {
 	switch name {
+	case problem.FieldVerifiedVersion:
+		m.ClearVerifiedVersion()
+		return nil
+	case problem.FieldVerificationDigest:
+		m.ClearVerificationDigest()
+		return nil
+	case problem.FieldVerifiedBy:
+		m.ClearVerifiedBy()
+		return nil
+	case problem.FieldVerifiedAt:
+		m.ClearVerifiedAt()
+		return nil
+	case problem.FieldVerificationNote:
+		m.ClearVerificationNote()
+		return nil
 	case problem.FieldRootCause:
 		m.ClearRootCause()
 		return nil
@@ -83511,6 +83929,21 @@ func (m *ProblemMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *ProblemMutation) ResetField(name string) error {
 	switch name {
+	case problem.FieldVerifiedVersion:
+		m.ResetVerifiedVersion()
+		return nil
+	case problem.FieldVerificationDigest:
+		m.ResetVerificationDigest()
+		return nil
+	case problem.FieldVerifiedBy:
+		m.ResetVerifiedBy()
+		return nil
+	case problem.FieldVerifiedAt:
+		m.ResetVerifiedAt()
+		return nil
+	case problem.FieldVerificationNote:
+		m.ResetVerificationNote()
+		return nil
 	case problem.FieldRootCause:
 		m.ResetRootCause()
 		return nil

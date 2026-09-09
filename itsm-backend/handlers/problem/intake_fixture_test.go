@@ -81,3 +81,14 @@ func configureProblemIntakeFixture(ctx context.Context, client *ent.Client, tena
 	}
 
 }
+
+func (s *Service) Update(ctx context.Context, tenantID, id int, p *Problem) (*Problem, error) {
+	if p.Version == 0 {
+		current, err := s.Get(ctx, id, tenantID)
+		if err != nil {
+			return nil, err
+		}
+		p.Version = current.Version
+	}
+	return s.Service.Update(ctx, tenantID, id, p)
+}

@@ -7,3 +7,6 @@ import _ "embed"
 //
 //go:embed 20260910_workitem_sla_cycle.sql
 var WorkItemSLACycleSQL string
+
+//go:embed 20260910_problem_investigation_completion.sql
+var ProblemInvestigationCompletionSQL string

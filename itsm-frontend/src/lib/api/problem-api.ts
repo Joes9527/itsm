@@ -61,6 +61,9 @@ export interface ProblemHotspotsData {
 }
 
 export interface Problem {
+  version: number;
+  verifiedVersion?: number;
+  verificationNote?: string;
   categoryId?: number;
   id: number;
   title: string;
@@ -155,7 +158,7 @@ export class ProblemApi {
   /**
    * 更新问题
    */
-  static async updateProblem(id: number, data: Partial<Problem>): Promise<Problem> {
+  static async updateProblem(id: number, data: Omit<Partial<Problem>, "status"> & { version: number }): Promise<Problem> {
     return httpClient.put(`/api/v1/problems/${id}`, data);
   }
 
@@ -173,32 +176,8 @@ export class ProblemApi {
     return httpClient.get('/api/v1/problems/stats', params);
   }
 
-  /**
-   * 调查问题
-   */
-  static async investigateProblem(_id: number, _data: unknown): Promise<Problem> {
-    throw new Error('功能开发中');
-  }
-
-  /**
-   * 记录根本原因
-   */
-  static async recordRootCause(_id: number, _rootCause: string): Promise<Problem> {
-    throw new Error('功能开发中');
-  }
-
-  /**
-   * 提供解决方案
-   */
-  static async provideSolution(_id: number, _solution: string): Promise<Problem> {
-    throw new Error('功能开发中');
-  }
-
-  /**
-   * 关闭问题
-   */
-  static async closeProblem(_id: number, _resolution: string): Promise<Problem> {
-    throw new Error('功能开发中');
+  static async command(id: number, action: ProblemAction, data: ProblemCommandRequest): Promise<ProblemCommandResult> {
+    return httpClient.post(`/api/v1/problems/${id}/${action}`, data);
   }
 
   // ==================== 趋势分析 ====================
@@ -264,3 +243,7 @@ export class ProblemApi {
 }
 
 export default ProblemApi;
+
+export type ProblemAction = 'investigate' | 'verify-resolution' | 'resolve' | 'close' | 'reopen' | 'select-resolution';
+export interface ProblemCommandRequest { version: number; operationId: string; reason?: string; verificationNote?: string; solutionId?: number; }
+export interface ProblemCommandResult { workItemId: number; version: number; status: string; replayed: boolean; }
