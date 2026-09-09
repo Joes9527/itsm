@@ -221,7 +221,8 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 	if _, err = professional.Save(ctx); err != nil {
 		return empty, err
 	}
-	if hasRiskDetails(p.ChangeRiskPatch) {
+	// Preserve absent details and their assessed digest when the patch changes no risk facts.
+	if riskDetailsChanged(domain.RiskAssessment, p.ChangeRiskPatch) {
 		if err = writeRiskDetails(ctx, tx, current.ID, m.TenantID, domain.RiskAssessment, p.ChangeRiskPatch); err != nil {
 			return empty, err
 		}

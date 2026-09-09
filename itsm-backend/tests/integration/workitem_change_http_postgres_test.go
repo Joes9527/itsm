@@ -397,3 +397,67 @@ func TestWorkItemChangeHTTPAssessmentBindsRiskDetails(t *testing.T) {
 		})
 	}
 }
+
+func TestWorkItemChangeHTTPAssessedEmptyRiskPreservesAbsence(t *testing.T) {
+	for _, value := range []string{"", " \t\n "} {
+		t.Run(fmt.Sprintf("value_%q", value), func(t *testing.T) {
+			f := newChangeLifecycleFixture(t, "normal")
+			cab := seedChangeCABActor(t, f)
+			prepareChangeDefaultTask(t, f)
+			completeDefaultChangeAction(t, f, "assess", "Activity_Assessment")
+			assessed := f.client.Change.GetX(f.ctx, f.c.ID)
+			require.NotEmpty(t, assessed.AssessmentDigest)
+			r, h := changeHTTPFixture(f)
+			r.PUT("/changes/:id", h.UpdateChange)
+			r.POST("/changes/:id/approve", h.ExecuteAction)
+			before := f.client.Ticket.GetX(f.ctx, f.c.WorkItemID)
+			body, err := json.Marshal(map[string]any{"expectedVersion": before.Version, "operationId": "title-empty-risk", "title": "Reviewed change title", "riskDescription": value, "impactAnalysis": value, "mitigationMeasures": value, "contingencyPlan": value, "riskOwner": value})
+			require.NoError(t, err)
+			w := changeHTTPCall(r, "PUT", fmt.Sprintf("/changes/%d", f.c.ID), string(body))
+			require.Equal(t, 200, w.Code, w.Body.String())
+			var count int
+			require.NoError(t, f.db.QueryRowContext(f.ctx, `SELECT count(*) FROM change_risk_assessments WHERE change_id=$1 AND tenant_id=$2`, f.c.ID, f.tenant.ID).Scan(&count))
+			require.Zero(t, count, "unchanged empty risk patch must not create a detail record")
+			require.Equal(t, assessed.AssessmentDigest, f.client.Change.GetX(f.ctx, f.c.ID).AssessmentDigest)
+			after := f.client.Ticket.GetX(f.ctx, before.ID)
+			require.Equal(t, "Reviewed change title", after.Title)
+			require.Equal(t, before.Version+1, after.Version)
+			f.actor = cab
+			task := f.client.ProcessTask.Query().Where(processtask.TaskDefinitionKey("Activity_CABApproval")).OnlyX(f.ctx)
+			w = changeHTTPCall(r, "POST", fmt.Sprintf("/changes/%d/approve", f.c.ID), fmt.Sprintf(`{"expectedVersion":%d,"operationId":"cab-after-title","taskId":%q,"evidence":"reviewed"}`, after.Version, task.TaskID))
+			require.Equal(t, 200, w.Code, w.Body.String())
+			require.Equal(t, "approved", f.client.Ticket.GetX(f.ctx, before.ID).Status)
+		})
+	}
+}
+
+func TestWorkItemChangeHTTPReceiptWithoutCallbackProgress(t *testing.T) {
+	f := newChangeLifecycleFixture(t, "normal")
+	seedChangeCABActor(t, f)
+	prepareChangeDefaultTask(t, f)
+	applied := completeDefaultChangeAction(t, f, "assess", "Activity_Assessment")
+	require.NotNil(t, applied.Result)
+	row := f.client.ProcessCallbackOutbox.Query().Where(processcallbackoutbox.ExecutionKey(applied.ExecutionKey)).OnlyX(f.ctx)
+	// Simulate lost continuation tracking only after the actual owner committed its receipt.
+	f.client.ProcessCallbackOutbox.DeleteOneID(row.ID).ExecX(f.ctx)
+	before := f.client.Ticket.GetX(f.ctx, f.c.WorkItemID)
+	auditCount := f.client.AuditLog.Query().CountX(f.ctx)
+	taskCount := f.client.ProcessTask.Query().CountX(f.ctx)
+	r, h := changeHTTPFixture(f)
+	r.GET("/changes/:id/task-progress", h.GetTaskProgress)
+	w := changeHTTPCall(r, "GET", fmt.Sprintf("/changes/%d/task-progress?operationId=consumer-assess&action=assess", f.c.ID), "")
+	require.Equal(t, 200, w.Code, w.Body.String())
+	var response struct {
+		Data changedomain.TaskProgress `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	require.Equal(t, "effect_applied", response.Data.Progress)
+	require.Equal(t, "continuation_progress_unavailable", response.Data.Reason)
+	require.Equal(t, applied.Result, response.Data.Result)
+	require.Equal(t, applied.TaskID, response.Data.TaskID)
+	require.Equal(t, applied.ExecutionKey, response.Data.ExecutionKey)
+	require.Equal(t, before.Version, f.client.Ticket.GetX(f.ctx, before.ID).Version)
+	require.Equal(t, auditCount, f.client.AuditLog.Query().CountX(f.ctx))
+	require.Equal(t, taskCount, f.client.ProcessTask.Query().CountX(f.ctx))
+	require.Zero(t, f.client.ProcessCallbackOutbox.Query().Where(processcallbackoutbox.ExecutionKey(applied.ExecutionKey)).CountX(f.ctx))
+}
