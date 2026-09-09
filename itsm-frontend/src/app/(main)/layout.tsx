@@ -106,6 +106,42 @@ export default function MainLayout({
     }
   };
 
+  useEffect(() => {
+    if (!isMobile || collapsed) return;
+    const navigation = document.getElementById('primary-navigation');
+    const focusable = () =>
+      Array.from(
+        navigation?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ) || []
+      );
+    focusable()[0]?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setCollapsed(true);
+        window.setTimeout(
+          () => document.querySelector<HTMLButtonElement>('[data-sidebar-toggle]')?.focus(),
+          0
+        );
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const items = focusable();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [collapsed, isMobile, setCollapsed]);
+
   // 未挂载时显示 loading（避免服务端渲染问题）
   if (!mounted) {
     return null;
@@ -141,8 +177,13 @@ export default function MainLayout({
 
         {isPortalLayout ? (
           /* =================== 1. 自服务门户布局 (PortalLayout) =================== */
-          <Layout className='min-h-screen bg-[#f8fafc] dark:bg-slate-950 flex flex-col'>
-            <Header collapsed={true} onCollapse={() => {}} showBreadcrumb={false} />
+          <Layout className='min-h-screen bg-[var(--color-bg-secondary)] flex flex-col'>
+            <Header
+              collapsed={true}
+              onCollapse={() => {}}
+              showBreadcrumb={false}
+              showSidebarToggle={false}
+            />
             <Content id='main-content' tabIndex={-1} className='w-full flex-1 outline-none'>
               <div className='max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-6'>
                 <PageTransition>{children}</PageTransition>
@@ -155,7 +196,7 @@ export default function MainLayout({
         ) : (
           /* =================== 2. 专业控制台布局 (ConsoleLayout) =================== */
           <Layout
-            className='min-h-screen bg-[#f5f7fb] dark:bg-slate-950'
+            className='min-h-screen bg-[var(--color-bg-secondary)]'
             style={{
               paddingLeft: isMobile
                 ? 0
@@ -167,14 +208,18 @@ export default function MainLayout({
           >
             <Sidebar collapsed={collapsed} onCollapse={setCollapsed} mobile={isMobile} />
 
-            <Layout className='bg-[#f5f7fb] dark:bg-slate-950 min-h-screen'>
+            <Layout
+              className='bg-[var(--color-bg-secondary)] min-h-screen'
+              aria-hidden={isMobile && !collapsed ? true : undefined}
+              inert={isMobile && !collapsed ? true : undefined}
+            >
               <Header collapsed={collapsed} onCollapse={setCollapsed} showBreadcrumb={true} />
 
               <Content
                 id='main-content'
                 tabIndex={-1}
                 onClick={handleContentClick}
-                className='bg-[#f5f7fb] dark:bg-slate-950 w-auto min-w-0 max-w-full overflow-x-hidden shadow-none outline-none'
+                className='bg-[var(--color-bg-secondary)] w-auto min-w-0 max-w-full overflow-x-hidden shadow-none outline-none'
                 style={{
                   minHeight: LAYOUT_CONFIG.content.minHeight,
                 }}
@@ -195,9 +240,11 @@ export default function MainLayout({
             </Layout>
 
             {!collapsed && isMobile && (
-              <div
+              <button
+                type='button'
+                aria-label='关闭导航'
                 onClick={() => setCollapsed(true)}
-                className='fixed inset-0 bg-black/45'
+                className='fixed inset-0 bg-black/45 border-0 p-0'
                 style={{
                   zIndex: LAYOUT_CONFIG.zIndex.sider - 1,
                 }}
