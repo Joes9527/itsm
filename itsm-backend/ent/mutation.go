@@ -133,6 +133,7 @@ import (
 	"itsm-backend/ent/workitemnumbersequence"
 	"itsm-backend/ent/workitemrelation"
 	"itsm-backend/handlers/common/accessgrant"
+	"itsm-backend/handlers/shared/slacontract"
 	"itsm-backend/internal/jsonvalue"
 	"sync"
 	"time"
@@ -6792,27 +6793,32 @@ func (m *AssetLicenseMutation) ResetEdge(name string) error {
 // AuditLogMutation represents an operation that mutates the AuditLog nodes in the graph.
 type AuditLogMutation struct {
 	config
-	op             Op
-	typ            string
-	id             *int
-	created_at     *time.Time
-	tenant_id      *int
-	addtenant_id   *int
-	user_id        *int
-	adduser_id     *int
-	request_id     *string
-	ip             *string
-	resource       *string
-	action         *string
-	_path          *string
-	method         *string
-	status_code    *int
-	addstatus_code *int
-	request_body   *string
-	clearedFields  map[string]struct{}
-	done           bool
-	oldValue       func(context.Context) (*AuditLog, error)
-	predicates     []predicate.AuditLog
+	op                Op
+	typ               string
+	id                *int
+	operation_id      *string
+	request_digest    *string
+	result_version    *int
+	addresult_version *int
+	result_status     *string
+	created_at        *time.Time
+	tenant_id         *int
+	addtenant_id      *int
+	user_id           *int
+	adduser_id        *int
+	request_id        *string
+	ip                *string
+	resource          *string
+	action            *string
+	_path             *string
+	method            *string
+	status_code       *int
+	addstatus_code    *int
+	request_body      *string
+	clearedFields     map[string]struct{}
+	done              bool
+	oldValue          func(context.Context) (*AuditLog, error)
+	predicates        []predicate.AuditLog
 }
 
 var _ ent.Mutation = (*AuditLogMutation)(nil)
@@ -6911,6 +6917,223 @@ func (m *AuditLogMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetOperationID sets the "operation_id" field.
+func (m *AuditLogMutation) SetOperationID(s string) {
+	m.operation_id = &s
+}
+
+// OperationID returns the value of the "operation_id" field in the mutation.
+func (m *AuditLogMutation) OperationID() (r string, exists bool) {
+	v := m.operation_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOperationID returns the old "operation_id" field's value of the AuditLog entity.
+// If the AuditLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditLogMutation) OldOperationID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOperationID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOperationID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOperationID: %w", err)
+	}
+	return oldValue.OperationID, nil
+}
+
+// ClearOperationID clears the value of the "operation_id" field.
+func (m *AuditLogMutation) ClearOperationID() {
+	m.operation_id = nil
+	m.clearedFields[auditlog.FieldOperationID] = struct{}{}
+}
+
+// OperationIDCleared returns if the "operation_id" field was cleared in this mutation.
+func (m *AuditLogMutation) OperationIDCleared() bool {
+	_, ok := m.clearedFields[auditlog.FieldOperationID]
+	return ok
+}
+
+// ResetOperationID resets all changes to the "operation_id" field.
+func (m *AuditLogMutation) ResetOperationID() {
+	m.operation_id = nil
+	delete(m.clearedFields, auditlog.FieldOperationID)
+}
+
+// SetRequestDigest sets the "request_digest" field.
+func (m *AuditLogMutation) SetRequestDigest(s string) {
+	m.request_digest = &s
+}
+
+// RequestDigest returns the value of the "request_digest" field in the mutation.
+func (m *AuditLogMutation) RequestDigest() (r string, exists bool) {
+	v := m.request_digest
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestDigest returns the old "request_digest" field's value of the AuditLog entity.
+// If the AuditLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditLogMutation) OldRequestDigest(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestDigest is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestDigest requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestDigest: %w", err)
+	}
+	return oldValue.RequestDigest, nil
+}
+
+// ClearRequestDigest clears the value of the "request_digest" field.
+func (m *AuditLogMutation) ClearRequestDigest() {
+	m.request_digest = nil
+	m.clearedFields[auditlog.FieldRequestDigest] = struct{}{}
+}
+
+// RequestDigestCleared returns if the "request_digest" field was cleared in this mutation.
+func (m *AuditLogMutation) RequestDigestCleared() bool {
+	_, ok := m.clearedFields[auditlog.FieldRequestDigest]
+	return ok
+}
+
+// ResetRequestDigest resets all changes to the "request_digest" field.
+func (m *AuditLogMutation) ResetRequestDigest() {
+	m.request_digest = nil
+	delete(m.clearedFields, auditlog.FieldRequestDigest)
+}
+
+// SetResultVersion sets the "result_version" field.
+func (m *AuditLogMutation) SetResultVersion(i int) {
+	m.result_version = &i
+	m.addresult_version = nil
+}
+
+// ResultVersion returns the value of the "result_version" field in the mutation.
+func (m *AuditLogMutation) ResultVersion() (r int, exists bool) {
+	v := m.result_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResultVersion returns the old "result_version" field's value of the AuditLog entity.
+// If the AuditLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditLogMutation) OldResultVersion(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResultVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResultVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResultVersion: %w", err)
+	}
+	return oldValue.ResultVersion, nil
+}
+
+// AddResultVersion adds i to the "result_version" field.
+func (m *AuditLogMutation) AddResultVersion(i int) {
+	if m.addresult_version != nil {
+		*m.addresult_version += i
+	} else {
+		m.addresult_version = &i
+	}
+}
+
+// AddedResultVersion returns the value that was added to the "result_version" field in this mutation.
+func (m *AuditLogMutation) AddedResultVersion() (r int, exists bool) {
+	v := m.addresult_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearResultVersion clears the value of the "result_version" field.
+func (m *AuditLogMutation) ClearResultVersion() {
+	m.result_version = nil
+	m.addresult_version = nil
+	m.clearedFields[auditlog.FieldResultVersion] = struct{}{}
+}
+
+// ResultVersionCleared returns if the "result_version" field was cleared in this mutation.
+func (m *AuditLogMutation) ResultVersionCleared() bool {
+	_, ok := m.clearedFields[auditlog.FieldResultVersion]
+	return ok
+}
+
+// ResetResultVersion resets all changes to the "result_version" field.
+func (m *AuditLogMutation) ResetResultVersion() {
+	m.result_version = nil
+	m.addresult_version = nil
+	delete(m.clearedFields, auditlog.FieldResultVersion)
+}
+
+// SetResultStatus sets the "result_status" field.
+func (m *AuditLogMutation) SetResultStatus(s string) {
+	m.result_status = &s
+}
+
+// ResultStatus returns the value of the "result_status" field in the mutation.
+func (m *AuditLogMutation) ResultStatus() (r string, exists bool) {
+	v := m.result_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResultStatus returns the old "result_status" field's value of the AuditLog entity.
+// If the AuditLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AuditLogMutation) OldResultStatus(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResultStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResultStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResultStatus: %w", err)
+	}
+	return oldValue.ResultStatus, nil
+}
+
+// ClearResultStatus clears the value of the "result_status" field.
+func (m *AuditLogMutation) ClearResultStatus() {
+	m.result_status = nil
+	m.clearedFields[auditlog.FieldResultStatus] = struct{}{}
+}
+
+// ResultStatusCleared returns if the "result_status" field was cleared in this mutation.
+func (m *AuditLogMutation) ResultStatusCleared() bool {
+	_, ok := m.clearedFields[auditlog.FieldResultStatus]
+	return ok
+}
+
+// ResetResultStatus resets all changes to the "result_status" field.
+func (m *AuditLogMutation) ResetResultStatus() {
+	m.result_status = nil
+	delete(m.clearedFields, auditlog.FieldResultStatus)
 }
 
 // SetCreatedAt sets the "created_at" field.
@@ -7457,7 +7680,19 @@ func (m *AuditLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AuditLogMutation) Fields() []string {
-	fields := make([]string, 0, 11)
+	fields := make([]string, 0, 15)
+	if m.operation_id != nil {
+		fields = append(fields, auditlog.FieldOperationID)
+	}
+	if m.request_digest != nil {
+		fields = append(fields, auditlog.FieldRequestDigest)
+	}
+	if m.result_version != nil {
+		fields = append(fields, auditlog.FieldResultVersion)
+	}
+	if m.result_status != nil {
+		fields = append(fields, auditlog.FieldResultStatus)
+	}
 	if m.created_at != nil {
 		fields = append(fields, auditlog.FieldCreatedAt)
 	}
@@ -7499,6 +7734,14 @@ func (m *AuditLogMutation) Fields() []string {
 // schema.
 func (m *AuditLogMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case auditlog.FieldOperationID:
+		return m.OperationID()
+	case auditlog.FieldRequestDigest:
+		return m.RequestDigest()
+	case auditlog.FieldResultVersion:
+		return m.ResultVersion()
+	case auditlog.FieldResultStatus:
+		return m.ResultStatus()
 	case auditlog.FieldCreatedAt:
 		return m.CreatedAt()
 	case auditlog.FieldTenantID:
@@ -7530,6 +7773,14 @@ func (m *AuditLogMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *AuditLogMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case auditlog.FieldOperationID:
+		return m.OldOperationID(ctx)
+	case auditlog.FieldRequestDigest:
+		return m.OldRequestDigest(ctx)
+	case auditlog.FieldResultVersion:
+		return m.OldResultVersion(ctx)
+	case auditlog.FieldResultStatus:
+		return m.OldResultStatus(ctx)
 	case auditlog.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	case auditlog.FieldTenantID:
@@ -7561,6 +7812,34 @@ func (m *AuditLogMutation) OldField(ctx context.Context, name string) (ent.Value
 // type.
 func (m *AuditLogMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case auditlog.FieldOperationID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOperationID(v)
+		return nil
+	case auditlog.FieldRequestDigest:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestDigest(v)
+		return nil
+	case auditlog.FieldResultVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResultVersion(v)
+		return nil
+	case auditlog.FieldResultStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResultStatus(v)
+		return nil
 	case auditlog.FieldCreatedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -7646,6 +7925,9 @@ func (m *AuditLogMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *AuditLogMutation) AddedFields() []string {
 	var fields []string
+	if m.addresult_version != nil {
+		fields = append(fields, auditlog.FieldResultVersion)
+	}
 	if m.addtenant_id != nil {
 		fields = append(fields, auditlog.FieldTenantID)
 	}
@@ -7663,6 +7945,8 @@ func (m *AuditLogMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *AuditLogMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case auditlog.FieldResultVersion:
+		return m.AddedResultVersion()
 	case auditlog.FieldTenantID:
 		return m.AddedTenantID()
 	case auditlog.FieldUserID:
@@ -7678,6 +7962,13 @@ func (m *AuditLogMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *AuditLogMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case auditlog.FieldResultVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddResultVersion(v)
+		return nil
 	case auditlog.FieldTenantID:
 		v, ok := value.(int)
 		if !ok {
@@ -7707,6 +7998,18 @@ func (m *AuditLogMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *AuditLogMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(auditlog.FieldOperationID) {
+		fields = append(fields, auditlog.FieldOperationID)
+	}
+	if m.FieldCleared(auditlog.FieldRequestDigest) {
+		fields = append(fields, auditlog.FieldRequestDigest)
+	}
+	if m.FieldCleared(auditlog.FieldResultVersion) {
+		fields = append(fields, auditlog.FieldResultVersion)
+	}
+	if m.FieldCleared(auditlog.FieldResultStatus) {
+		fields = append(fields, auditlog.FieldResultStatus)
+	}
 	if m.FieldCleared(auditlog.FieldTenantID) {
 		fields = append(fields, auditlog.FieldTenantID)
 	}
@@ -7733,6 +8036,18 @@ func (m *AuditLogMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *AuditLogMutation) ClearField(name string) error {
 	switch name {
+	case auditlog.FieldOperationID:
+		m.ClearOperationID()
+		return nil
+	case auditlog.FieldRequestDigest:
+		m.ClearRequestDigest()
+		return nil
+	case auditlog.FieldResultVersion:
+		m.ClearResultVersion()
+		return nil
+	case auditlog.FieldResultStatus:
+		m.ClearResultStatus()
+		return nil
 	case auditlog.FieldTenantID:
 		m.ClearTenantID()
 		return nil
@@ -7753,6 +8068,18 @@ func (m *AuditLogMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *AuditLogMutation) ResetField(name string) error {
 	switch name {
+	case auditlog.FieldOperationID:
+		m.ResetOperationID()
+		return nil
+	case auditlog.FieldRequestDigest:
+		m.ResetRequestDigest()
+		return nil
+	case auditlog.FieldResultVersion:
+		m.ResetResultVersion()
+		return nil
+	case auditlog.FieldResultStatus:
+		m.ResetResultStatus()
+		return nil
 	case auditlog.FieldCreatedAt:
 		m.ResetCreatedAt()
 		return nil
@@ -131412,6 +131739,12 @@ type TicketMutation struct {
 	adddepartment_id           *int
 	parent_ticket_id           *int
 	addparent_ticket_id        *int
+	sla_cycle_number           *int
+	addsla_cycle_number        *int
+	sla_cycle_started_at       *time.Time
+	sla_paused_minutes         *int
+	addsla_paused_minutes      *int
+	applied_sla_policy         **slacontract.Policy
 	sla_definition_id          *int
 	addsla_definition_id       *int
 	sla_response_deadline      *time.Time
@@ -132594,6 +132927,216 @@ func (m *TicketMutation) ResetParentTicketID() {
 	m.parent_ticket_id = nil
 	m.addparent_ticket_id = nil
 	delete(m.clearedFields, ticket.FieldParentTicketID)
+}
+
+// SetSLACycleNumber sets the "sla_cycle_number" field.
+func (m *TicketMutation) SetSLACycleNumber(i int) {
+	m.sla_cycle_number = &i
+	m.addsla_cycle_number = nil
+}
+
+// SLACycleNumber returns the value of the "sla_cycle_number" field in the mutation.
+func (m *TicketMutation) SLACycleNumber() (r int, exists bool) {
+	v := m.sla_cycle_number
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSLACycleNumber returns the old "sla_cycle_number" field's value of the Ticket entity.
+// If the Ticket object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketMutation) OldSLACycleNumber(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSLACycleNumber is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSLACycleNumber requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSLACycleNumber: %w", err)
+	}
+	return oldValue.SLACycleNumber, nil
+}
+
+// AddSLACycleNumber adds i to the "sla_cycle_number" field.
+func (m *TicketMutation) AddSLACycleNumber(i int) {
+	if m.addsla_cycle_number != nil {
+		*m.addsla_cycle_number += i
+	} else {
+		m.addsla_cycle_number = &i
+	}
+}
+
+// AddedSLACycleNumber returns the value that was added to the "sla_cycle_number" field in this mutation.
+func (m *TicketMutation) AddedSLACycleNumber() (r int, exists bool) {
+	v := m.addsla_cycle_number
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSLACycleNumber resets all changes to the "sla_cycle_number" field.
+func (m *TicketMutation) ResetSLACycleNumber() {
+	m.sla_cycle_number = nil
+	m.addsla_cycle_number = nil
+}
+
+// SetSLACycleStartedAt sets the "sla_cycle_started_at" field.
+func (m *TicketMutation) SetSLACycleStartedAt(t time.Time) {
+	m.sla_cycle_started_at = &t
+}
+
+// SLACycleStartedAt returns the value of the "sla_cycle_started_at" field in the mutation.
+func (m *TicketMutation) SLACycleStartedAt() (r time.Time, exists bool) {
+	v := m.sla_cycle_started_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSLACycleStartedAt returns the old "sla_cycle_started_at" field's value of the Ticket entity.
+// If the Ticket object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketMutation) OldSLACycleStartedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSLACycleStartedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSLACycleStartedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSLACycleStartedAt: %w", err)
+	}
+	return oldValue.SLACycleStartedAt, nil
+}
+
+// ClearSLACycleStartedAt clears the value of the "sla_cycle_started_at" field.
+func (m *TicketMutation) ClearSLACycleStartedAt() {
+	m.sla_cycle_started_at = nil
+	m.clearedFields[ticket.FieldSLACycleStartedAt] = struct{}{}
+}
+
+// SLACycleStartedAtCleared returns if the "sla_cycle_started_at" field was cleared in this mutation.
+func (m *TicketMutation) SLACycleStartedAtCleared() bool {
+	_, ok := m.clearedFields[ticket.FieldSLACycleStartedAt]
+	return ok
+}
+
+// ResetSLACycleStartedAt resets all changes to the "sla_cycle_started_at" field.
+func (m *TicketMutation) ResetSLACycleStartedAt() {
+	m.sla_cycle_started_at = nil
+	delete(m.clearedFields, ticket.FieldSLACycleStartedAt)
+}
+
+// SetSLAPausedMinutes sets the "sla_paused_minutes" field.
+func (m *TicketMutation) SetSLAPausedMinutes(i int) {
+	m.sla_paused_minutes = &i
+	m.addsla_paused_minutes = nil
+}
+
+// SLAPausedMinutes returns the value of the "sla_paused_minutes" field in the mutation.
+func (m *TicketMutation) SLAPausedMinutes() (r int, exists bool) {
+	v := m.sla_paused_minutes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSLAPausedMinutes returns the old "sla_paused_minutes" field's value of the Ticket entity.
+// If the Ticket object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketMutation) OldSLAPausedMinutes(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSLAPausedMinutes is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSLAPausedMinutes requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSLAPausedMinutes: %w", err)
+	}
+	return oldValue.SLAPausedMinutes, nil
+}
+
+// AddSLAPausedMinutes adds i to the "sla_paused_minutes" field.
+func (m *TicketMutation) AddSLAPausedMinutes(i int) {
+	if m.addsla_paused_minutes != nil {
+		*m.addsla_paused_minutes += i
+	} else {
+		m.addsla_paused_minutes = &i
+	}
+}
+
+// AddedSLAPausedMinutes returns the value that was added to the "sla_paused_minutes" field in this mutation.
+func (m *TicketMutation) AddedSLAPausedMinutes() (r int, exists bool) {
+	v := m.addsla_paused_minutes
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetSLAPausedMinutes resets all changes to the "sla_paused_minutes" field.
+func (m *TicketMutation) ResetSLAPausedMinutes() {
+	m.sla_paused_minutes = nil
+	m.addsla_paused_minutes = nil
+}
+
+// SetAppliedSLAPolicy sets the "applied_sla_policy" field.
+func (m *TicketMutation) SetAppliedSLAPolicy(s *slacontract.Policy) {
+	m.applied_sla_policy = &s
+}
+
+// AppliedSLAPolicy returns the value of the "applied_sla_policy" field in the mutation.
+func (m *TicketMutation) AppliedSLAPolicy() (r *slacontract.Policy, exists bool) {
+	v := m.applied_sla_policy
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAppliedSLAPolicy returns the old "applied_sla_policy" field's value of the Ticket entity.
+// If the Ticket object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketMutation) OldAppliedSLAPolicy(ctx context.Context) (v *slacontract.Policy, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAppliedSLAPolicy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAppliedSLAPolicy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAppliedSLAPolicy: %w", err)
+	}
+	return oldValue.AppliedSLAPolicy, nil
+}
+
+// ClearAppliedSLAPolicy clears the value of the "applied_sla_policy" field.
+func (m *TicketMutation) ClearAppliedSLAPolicy() {
+	m.applied_sla_policy = nil
+	m.clearedFields[ticket.FieldAppliedSLAPolicy] = struct{}{}
+}
+
+// AppliedSLAPolicyCleared returns if the "applied_sla_policy" field was cleared in this mutation.
+func (m *TicketMutation) AppliedSLAPolicyCleared() bool {
+	_, ok := m.clearedFields[ticket.FieldAppliedSLAPolicy]
+	return ok
+}
+
+// ResetAppliedSLAPolicy resets all changes to the "applied_sla_policy" field.
+func (m *TicketMutation) ResetAppliedSLAPolicy() {
+	m.applied_sla_policy = nil
+	delete(m.clearedFields, ticket.FieldAppliedSLAPolicy)
 }
 
 // SetSLADefinitionID sets the "sla_definition_id" field.
@@ -134407,7 +134950,7 @@ func (m *TicketMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TicketMutation) Fields() []string {
-	fields := make([]string, 0, 41)
+	fields := make([]string, 0, 45)
 	if m.title != nil {
 		fields = append(fields, ticket.FieldTitle)
 	}
@@ -134467,6 +135010,18 @@ func (m *TicketMutation) Fields() []string {
 	}
 	if m.parent_ticket_id != nil {
 		fields = append(fields, ticket.FieldParentTicketID)
+	}
+	if m.sla_cycle_number != nil {
+		fields = append(fields, ticket.FieldSLACycleNumber)
+	}
+	if m.sla_cycle_started_at != nil {
+		fields = append(fields, ticket.FieldSLACycleStartedAt)
+	}
+	if m.sla_paused_minutes != nil {
+		fields = append(fields, ticket.FieldSLAPausedMinutes)
+	}
+	if m.applied_sla_policy != nil {
+		fields = append(fields, ticket.FieldAppliedSLAPolicy)
 	}
 	if m.sla_definition_id != nil {
 		fields = append(fields, ticket.FieldSLADefinitionID)
@@ -134579,6 +135134,14 @@ func (m *TicketMutation) Field(name string) (ent.Value, bool) {
 		return m.DepartmentID()
 	case ticket.FieldParentTicketID:
 		return m.ParentTicketID()
+	case ticket.FieldSLACycleNumber:
+		return m.SLACycleNumber()
+	case ticket.FieldSLACycleStartedAt:
+		return m.SLACycleStartedAt()
+	case ticket.FieldSLAPausedMinutes:
+		return m.SLAPausedMinutes()
+	case ticket.FieldAppliedSLAPolicy:
+		return m.AppliedSLAPolicy()
 	case ticket.FieldSLADefinitionID:
 		return m.SLADefinitionID()
 	case ticket.FieldSLAResponseDeadline:
@@ -134670,6 +135233,14 @@ func (m *TicketMutation) OldField(ctx context.Context, name string) (ent.Value, 
 		return m.OldDepartmentID(ctx)
 	case ticket.FieldParentTicketID:
 		return m.OldParentTicketID(ctx)
+	case ticket.FieldSLACycleNumber:
+		return m.OldSLACycleNumber(ctx)
+	case ticket.FieldSLACycleStartedAt:
+		return m.OldSLACycleStartedAt(ctx)
+	case ticket.FieldSLAPausedMinutes:
+		return m.OldSLAPausedMinutes(ctx)
+	case ticket.FieldAppliedSLAPolicy:
+		return m.OldAppliedSLAPolicy(ctx)
 	case ticket.FieldSLADefinitionID:
 		return m.OldSLADefinitionID(ctx)
 	case ticket.FieldSLAResponseDeadline:
@@ -134861,6 +135432,34 @@ func (m *TicketMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetParentTicketID(v)
 		return nil
+	case ticket.FieldSLACycleNumber:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSLACycleNumber(v)
+		return nil
+	case ticket.FieldSLACycleStartedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSLACycleStartedAt(v)
+		return nil
+	case ticket.FieldSLAPausedMinutes:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSLAPausedMinutes(v)
+		return nil
+	case ticket.FieldAppliedSLAPolicy:
+		v, ok := value.(*slacontract.Policy)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAppliedSLAPolicy(v)
+		return nil
 	case ticket.FieldSLADefinitionID:
 		v, ok := value.(int)
 		if !ok {
@@ -135034,6 +135633,12 @@ func (m *TicketMutation) AddedFields() []string {
 	if m.addparent_ticket_id != nil {
 		fields = append(fields, ticket.FieldParentTicketID)
 	}
+	if m.addsla_cycle_number != nil {
+		fields = append(fields, ticket.FieldSLACycleNumber)
+	}
+	if m.addsla_paused_minutes != nil {
+		fields = append(fields, ticket.FieldSLAPausedMinutes)
+	}
 	if m.addsla_definition_id != nil {
 		fields = append(fields, ticket.FieldSLADefinitionID)
 	}
@@ -135072,6 +135677,10 @@ func (m *TicketMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedDepartmentID()
 	case ticket.FieldParentTicketID:
 		return m.AddedParentTicketID()
+	case ticket.FieldSLACycleNumber:
+		return m.AddedSLACycleNumber()
+	case ticket.FieldSLAPausedMinutes:
+		return m.AddedSLAPausedMinutes()
 	case ticket.FieldSLADefinitionID:
 		return m.AddedSLADefinitionID()
 	case ticket.FieldRating:
@@ -135134,6 +135743,20 @@ func (m *TicketMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddParentTicketID(v)
+		return nil
+	case ticket.FieldSLACycleNumber:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSLACycleNumber(v)
+		return nil
+	case ticket.FieldSLAPausedMinutes:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSLAPausedMinutes(v)
 		return nil
 	case ticket.FieldSLADefinitionID:
 		v, ok := value.(int)
@@ -135223,6 +135846,12 @@ func (m *TicketMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(ticket.FieldParentTicketID) {
 		fields = append(fields, ticket.FieldParentTicketID)
+	}
+	if m.FieldCleared(ticket.FieldSLACycleStartedAt) {
+		fields = append(fields, ticket.FieldSLACycleStartedAt)
+	}
+	if m.FieldCleared(ticket.FieldAppliedSLAPolicy) {
+		fields = append(fields, ticket.FieldAppliedSLAPolicy)
 	}
 	if m.FieldCleared(ticket.FieldSLADefinitionID) {
 		fields = append(fields, ticket.FieldSLADefinitionID)
@@ -135327,6 +135956,12 @@ func (m *TicketMutation) ClearField(name string) error {
 		return nil
 	case ticket.FieldParentTicketID:
 		m.ClearParentTicketID()
+		return nil
+	case ticket.FieldSLACycleStartedAt:
+		m.ClearSLACycleStartedAt()
+		return nil
+	case ticket.FieldAppliedSLAPolicy:
+		m.ClearAppliedSLAPolicy()
 		return nil
 	case ticket.FieldSLADefinitionID:
 		m.ClearSLADefinitionID()
@@ -135446,6 +136081,18 @@ func (m *TicketMutation) ResetField(name string) error {
 		return nil
 	case ticket.FieldParentTicketID:
 		m.ResetParentTicketID()
+		return nil
+	case ticket.FieldSLACycleNumber:
+		m.ResetSLACycleNumber()
+		return nil
+	case ticket.FieldSLACycleStartedAt:
+		m.ResetSLACycleStartedAt()
+		return nil
+	case ticket.FieldSLAPausedMinutes:
+		m.ResetSLAPausedMinutes()
+		return nil
+	case ticket.FieldAppliedSLAPolicy:
+		m.ResetAppliedSLAPolicy()
 		return nil
 	case ticket.FieldSLADefinitionID:
 		m.ResetSLADefinitionID()

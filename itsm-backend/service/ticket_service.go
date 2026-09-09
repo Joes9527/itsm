@@ -6,6 +6,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	entticket "itsm-backend/ent/ticket"
 	"strconv"
 	"strings"
 	"time"
@@ -583,17 +584,7 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 		}
 	}
 
-	// 优先级或分类变更时重新计算 SLA
-	if (req.Priority != "" || req.CategoryID != nil || strings.TrimSpace(req.Category) != "") && s.slaSvc != nil {
-		slaResult, err := s.slaSvc.CalculateSLADeadlineFromRequest(ctx, tenantID, common.WorkItemLegacyType(updated.RecordClass, updated.GenericSubtype), string(updated.Priority), getCategoryIDValue(categoryID))
-		if err != nil {
-			s.logger.Warnw("Failed to recalculate SLA after update", "error", err, "ticket_id", id)
-		} else {
-			if err := s.repo.UpdateSLADeadlines(ctx, id, slaResult.ResponseDeadline, slaResult.ResolutionDeadline, &slaResult.SLADefinitionID, tenantID); err != nil {
-				s.logger.Warnw("Failed to persist SLA recalculation", "error", err, "ticket_id", id)
-			}
-		}
-	}
+	// Applied SLA is a frozen contract. Priority/category edits do not reapply policy.
 
 	// 异步同步工单到飞书
 	if s.connectorManager != nil {
@@ -1208,96 +1199,43 @@ func (s *TicketService) UpdateTicketStatusForWorkflow(ctx context.Context, ticke
 	return err
 }
 
-// TicketSLAInfo 工单 SLA 信息
-type TicketSLAInfo struct {
-	TicketID                int        `json:"ticketId"`
-	TicketNumber            string     `json:"ticketNumber"`
-	Priority                string     `json:"priority"`
-	SLADefinitionID         int        `json:"slaDefinitionId"`
-	SlaName                 string     `json:"slaName"`
-	ServiceType             string     `json:"serviceType"`
-	ResponseTime            int        `json:"responseTime"`
-	ResolutionTime          int        `json:"resolutionTime"`
-	ResponseDeadline        *time.Time `json:"responseDeadline"`
-	ResolutionDeadline      *time.Time `json:"resolutionDeadline"`
-	IsBreached              bool       `json:"isBreached"`
-	SlaStatus               string     `json:"slaStatus"` // on_track | at_risk | breached
-	ResponseTimeRemaining   *int       `json:"responseTimeRemaining"`
-	ResolutionTimeRemaining *int       `json:"resolutionTimeRemaining"`
-	FirstResponseAt         *time.Time `json:"firstResponseAt,omitempty"`
-	ResolvedAt              *time.Time `json:"resolvedAt,omitempty"`
-}
-
-// GetTicketSLAInfo 获取工单 SLA 信息
-func (s *TicketService) GetTicketSLAInfo(ctx context.Context, ticketID int, tenantID int) (*TicketSLAInfo, error) {
-	tkt, err := s.repo.GetByID(ctx, ticketID, tenantID)
+// GetTicketSLAInfo projects persisted current deadlines and immutable past-cycle facts.
+func (s *TicketService) GetTicketSLAInfo(ctx context.Context, ticketID int, tenantID int) (*dto.TicketSLAInfo, error) {
+	if s.client == nil {
+		return nil, fmt.Errorf("SLA persistence unavailable")
+	}
+	svc := NewTicketSLAService(s.client, s.logger)
+	item, err := s.client.Ticket.Query().Where(entticket.ID(ticketID), entticket.TenantID(tenantID), entticket.DeletedAtIsNil()).Only(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("ticket not found: %w", err)
+		return nil, err
 	}
-
-	info := &TicketSLAInfo{
-		TicketID:        tkt.ID,
-		TicketNumber:    tkt.TicketNumber,
-		Priority:        string(tkt.Priority),
-		SLADefinitionID: 0,
-		SlaName:         "默认SLA",
+	projection := projectSLACycle(item, time.Now())
+	history, err := svc.cycleHistory(ctx, item)
+	if err != nil {
+		return nil, err
 	}
-	if tkt.SLADefinitionID != nil {
-		info.SLADefinitionID = *tkt.SLADefinitionID
+	info := &dto.TicketSLAInfo{TicketID: item.ID, TicketNumber: item.TicketNumber, Priority: item.Priority, SLADefinitionID: item.SLADefinitionID, ResponseDeadline: projection.ResponseDeadline, ResolutionDeadline: projection.ResolutionDeadline, FirstResponseAt: slaTime(item.FirstResponseAt), ResolvedAt: slaTime(item.ResolvedAt), CycleNumber: projection.CycleNumber, CycleStartedAt: projection.CycleStartedAt, PausedMinutes: projection.PausedMinutes, AppliedPolicy: item.AppliedSLAPolicy, History: history, IsBreached: projection.ResponseBreached || projection.ResolutionBreached, SlaStatus: projection.SLAStatus}
+	if policy := item.AppliedSLAPolicy; policy != nil {
+		info.SlaName = policy.Name
+		info.ServiceType = policy.ServiceType
+		info.ResponseTime = policy.ResponseMinutes
+		info.ResolutionTime = policy.ResolutionMinutes
 	}
-	if tkt.SLAResponseDeadline != nil {
-		info.ResponseDeadline = tkt.SLAResponseDeadline
-	}
-	if tkt.SLAResolutionDeadline != nil {
-		info.ResolutionDeadline = tkt.SLAResolutionDeadline
-	}
-	if tkt.FirstResponseAt != nil {
-		info.FirstResponseAt = tkt.FirstResponseAt
-	}
-	if tkt.ResolvedAt != nil {
-		info.ResolvedAt = tkt.ResolvedAt
-	}
-
-	// 获取 SLA 定义详情
-	if info.SLADefinitionID > 0 && s.client != nil {
-		sla, err := s.client.SLADefinition.Get(ctx, info.SLADefinitionID)
-		if err == nil && sla != nil {
-			info.SlaName = sla.Name
-			info.ServiceType = sla.ServiceType
-			info.ResponseTime = sla.ResponseTime
-			info.ResolutionTime = sla.ResolutionTime
-		}
-	}
-
-	// 计算剩余时间和违规状态
 	now := time.Now()
-	info.IsBreached = false
-	info.SlaStatus = "on_track"
-
-	if info.ResponseDeadline != nil && !info.ResponseDeadline.IsZero() {
-		remaining := int(info.ResponseDeadline.Sub(now).Minutes())
+	if info.ResponseDeadline != nil {
+		remaining := int(info.ResponseDeadline.Sub(slaMeasuredAt(item.FirstResponseAt, now)).Minutes())
 		info.ResponseTimeRemaining = &remaining
-		if remaining < 0 {
-			info.IsBreached = true
-		} else if total := info.ResponseTime; total > 0 && remaining < total/5 {
-			info.SlaStatus = "at_risk"
-		}
 	}
-
-	if info.ResolutionDeadline != nil && !info.ResolutionDeadline.IsZero() {
-		remaining := int(info.ResolutionDeadline.Sub(now).Minutes())
+	if info.ResolutionDeadline != nil {
+		remaining := int(info.ResolutionDeadline.Sub(slaMeasuredAt(item.ResolvedAt, now)).Minutes())
 		info.ResolutionTimeRemaining = &remaining
-		if remaining < 0 {
-			info.IsBreached = true
-		} else if total := info.ResolutionTime; total > 0 && remaining < total/5 {
-			info.SlaStatus = "at_risk"
-		}
 	}
-
-	if info.IsBreached {
-		info.SlaStatus = "breached"
+	if info.SlaStatus == "ok" {
+		info.SlaStatus = "on_track"
 	}
-
+	if info.SlaStatus == "warning" {
+		info.SlaStatus = "at_risk"
+	}
 	return info, nil
 }
 

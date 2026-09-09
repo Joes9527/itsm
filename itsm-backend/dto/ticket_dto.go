@@ -2,6 +2,7 @@ package dto
 
 import (
 	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/shared/slacontract"
 	"time"
 )
 
@@ -336,4 +337,46 @@ type ActivityUser struct {
 	ID       int    `json:"id"`
 	Username string `json:"username,omitempty"`
 	Name     string `json:"name,omitempty"`
+}
+
+// SLACycleResult is the immutable historical result projected from audit facts.
+type SLACycleResult struct {
+	Number             int                 `json:"number"`
+	StartedAt          *time.Time          `json:"startedAt"`
+	EndedAt            time.Time           `json:"endedAt"`
+	ResponseAt         *time.Time          `json:"responseAt"`
+	ResolvedAt         *time.Time          `json:"resolvedAt"`
+	ResponseDeadline   *time.Time          `json:"responseDeadline"`
+	ResolutionDeadline *time.Time          `json:"resolutionDeadline"`
+	PausedMinutes      int                 `json:"pausedMinutes"`
+	ResponseBreached   bool                `json:"responseBreached"`
+	ResolutionBreached bool                `json:"resolutionBreached"`
+	Policy             *slacontract.Policy `json:"policy"`
+	ActorID            int                 `json:"actorId"`
+	Source             string              `json:"source"`
+	CorrelationID      string              `json:"correlationId"`
+}
+
+type TicketSLAInfo struct {
+	CycleNumber             int                 `json:"cycleNumber"`
+	CycleStartedAt          *time.Time          `json:"cycleStartedAt"`
+	PausedMinutes           int                 `json:"pausedMinutes"`
+	AppliedPolicy           *slacontract.Policy `json:"appliedPolicy"`
+	History                 []SLACycleResult    `json:"history"`
+	TicketID                int                 `json:"ticketId"`
+	TicketNumber            string              `json:"ticketNumber"`
+	Priority                string              `json:"priority"`
+	SLADefinitionID         int                 `json:"slaDefinitionId"`
+	SlaName                 string              `json:"slaName"`
+	ServiceType             string              `json:"serviceType"`
+	ResponseTime            int                 `json:"responseTime"`
+	ResolutionTime          int                 `json:"resolutionTime"`
+	ResponseDeadline        *time.Time          `json:"responseDeadline"`
+	ResolutionDeadline      *time.Time          `json:"resolutionDeadline"`
+	IsBreached              bool                `json:"isBreached"`
+	SlaStatus               string              `json:"slaStatus"` // on_track | at_risk | breached
+	ResponseTimeRemaining   *int                `json:"responseTimeRemaining"`
+	ResolutionTimeRemaining *int                `json:"resolutionTimeRemaining"`
+	FirstResponseAt         *time.Time          `json:"firstResponseAt,omitempty"`
+	ResolvedAt              *time.Time          `json:"resolvedAt,omitempty"`
 }

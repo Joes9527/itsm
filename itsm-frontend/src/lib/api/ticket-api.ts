@@ -653,7 +653,40 @@ export class TicketApi {
   }
 
   // Get ticket SLA info
-  static async getTicketSLA(id: number): Promise<{
+  static async getTicketSLA(id: number): Promise<TicketSLAInfo> {
+    return httpClient.get(`/api/v1/tickets/${id}/sla`);
+  }
+}
+
+// 统一导出别名
+export const TicketAPI = TicketApi;
+export default TicketAPI;
+
+export interface SLACycleResult {
+  number: number;
+  startedAt: string | null;
+  endedAt: string;
+  responseAt: string | null;
+  resolvedAt: string | null;
+  responseDeadline: string | null;
+  resolutionDeadline: string | null;
+  pausedMinutes: number;
+  responseBreached: boolean;
+  resolutionBreached: boolean;
+  policy: AppliedSLAPolicy | null;
+}
+export interface AppliedSLAPolicy {
+  schemaVersion: number;
+  definitionId: number;
+  definitionVersion: string;
+  name: string;
+  serviceType: string;
+  responseMinutes: number;
+  resolutionMinutes: number;
+  businessHours: Record<string, unknown> | null;
+}
+export interface TicketSLAInfo {
+
     ticketId: number;
     slaDefinitionId: number;
     slaName: string;
@@ -668,11 +701,9 @@ export class TicketApi {
     isBreached: boolean;
     responseTimeRemaining: number | null;
     resolutionTimeRemaining: number | null;
-  }> {
-    return httpClient.get(`/api/v1/tickets/${id}/sla`);
-  }
+  cycleNumber: number;
+  cycleStartedAt: string | null;
+  pausedMinutes: number;
+  appliedPolicy: AppliedSLAPolicy | null;
+  history: SLACycleResult[];
 }
-
-// 统一导出别名
-export const TicketAPI = TicketApi;
-export default TicketAPI;

@@ -66,15 +66,8 @@ export interface TicketStats {
 }
 
 /** SLA 信息 */
-export interface TicketSLAInfo {
-  ticketId: number;
-  slaName: string;
-  responseDeadline: string | null;
-  resolutionDeadline: string | null;
-  isBreached: boolean;
-  responseTimeRemaining: number | null;
-  resolutionTimeRemaining: number | null;
-}
+export type { TicketSLAInfo } from '@/lib/api/ticket-api';
+import type { TicketSLAInfo } from '@/lib/api/ticket-api';
 
 /** 工单评论 */
 export interface TicketComment {

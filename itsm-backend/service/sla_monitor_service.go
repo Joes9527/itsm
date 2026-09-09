@@ -83,12 +83,14 @@ func (s *SLAMonitorService) CheckSLAViolations(ctx context.Context, tenantID int
 	}
 
 	// 构建违规map快速查找: map[ticketID]map[violationType]bool
-	existingViolationMap := make(map[int]map[string]bool)
+	existingViolationMap := make(map[int]map[string]time.Time)
 	for _, v := range existingViolations {
 		if existingViolationMap[v.TicketID] == nil {
-			existingViolationMap[v.TicketID] = make(map[string]bool)
+			existingViolationMap[v.TicketID] = make(map[string]time.Time)
 		}
-		existingViolationMap[v.TicketID][v.ViolationType] = true
+		if v.ViolationTime.After(existingViolationMap[v.TicketID][v.ViolationType]) {
+			existingViolationMap[v.TicketID][v.ViolationType] = v.ViolationTime
+		}
 	}
 
 	// 批量获取SLA定义
@@ -131,9 +133,9 @@ func (s *SLAMonitorService) CheckSLAViolations(ctx context.Context, tenantID int
 			}
 
 			// 检查响应时间SLA
-			if t.FirstResponseAt.IsZero() && !t.SLAResponseDeadline.IsZero() && now.After(t.SLAResponseDeadline) {
+			if projectSLACycle(t, now).ResponseBreached {
 				existingMap := existingViolationMap[t.ID]
-				if existingMap == nil || !existingMap["response_time"] {
+				if existingMap == nil || existingMap["response_time"].Before(slaCycleStart(t)) {
 					// 新违规
 					if err := s.createViolation(ctx, t, "response_time", t.SLAResponseDeadline, slaDefMap); err != nil {
 						s.logger.Errorw("Failed to create response violation", "ticket_id", t.ID, "error", err)
@@ -148,9 +150,9 @@ func (s *SLAMonitorService) CheckSLAViolations(ctx context.Context, tenantID int
 			}
 
 			// 检查解决时间SLA
-			if !t.SLAResolutionDeadline.IsZero() && now.After(t.SLAResolutionDeadline) {
+			if projectSLACycle(t, now).ResolutionBreached {
 				existingMap := existingViolationMap[t.ID]
-				if existingMap == nil || !existingMap["resolution_time"] {
+				if existingMap == nil || existingMap["resolution_time"].Before(slaCycleStart(t)) {
 					// 新违规
 					if err := s.createViolation(ctx, t, "resolution_time", t.SLAResolutionDeadline, slaDefMap); err != nil {
 						s.logger.Errorw("Failed to create resolution violation", "ticket_id", t.ID, "error", err)
@@ -298,8 +300,8 @@ func (s *SLAMonitorService) checkAndTriggerWarning(ctx context.Context, t *ent.T
 
 	// 检查响应时间SLA预警
 	if t.FirstResponseAt.IsZero() && !t.SLAResponseDeadline.IsZero() {
-		totalDuration := t.SLAResponseDeadline.Sub(t.CreatedAt)
-		elapsed := now.Sub(t.CreatedAt)
+		totalDuration := t.SLAResponseDeadline.Sub(slaCycleStart(t))
+		elapsed := now.Sub(slaCycleStart(t)) - time.Duration(t.SLAPausedMinutes)*time.Minute
 		progress := elapsed.Seconds() / totalDuration.Seconds()
 
 		if progress >= warningThreshold && now.Before(t.SLAResponseDeadline) {
@@ -315,8 +317,8 @@ func (s *SLAMonitorService) checkAndTriggerWarning(ctx context.Context, t *ent.T
 
 	// 检查解决时间SLA预警
 	if !t.SLAResolutionDeadline.IsZero() {
-		totalDuration := t.SLAResolutionDeadline.Sub(t.CreatedAt)
-		elapsed := now.Sub(t.CreatedAt)
+		totalDuration := t.SLAResolutionDeadline.Sub(slaCycleStart(t))
+		elapsed := now.Sub(slaCycleStart(t)) - time.Duration(t.SLAPausedMinutes)*time.Minute
 		progress := elapsed.Seconds() / totalDuration.Seconds()
 
 		if progress >= warningThreshold && now.Before(t.SLAResolutionDeadline) {
@@ -362,27 +364,21 @@ func (s *SLAMonitorService) CalculateSLAMetrics(ctx context.Context, tenantID in
 	for _, t := range tickets {
 		// 计算首次响应时间
 		if !t.FirstResponseAt.IsZero() {
-			responseMinutes := t.FirstResponseAt.Sub(t.CreatedAt).Minutes()
+			responseMinutes := float64(projectSLACycle(t, time.Now()).ResponseTimeUsed)
 			totalResponseMinutes += responseMinutes
 			responseCount++
 		}
 
 		// 计算解决时间
 		if !t.ResolvedAt.IsZero() {
-			resolutionHours := t.ResolvedAt.Sub(t.CreatedAt).Hours()
+			resolutionHours := float64(projectSLACycle(t, time.Now()).ResolutionTimeUsed) / 60
 			totalResolutionHours += resolutionHours
 			resolutionCount++
 
-			// 检查是否违反SLA
-			hasViolation, _ := s.client.SLAViolation.Query().
-				Where(
-					slaviolation.TicketID(t.ID),
-					slaviolation.ResolvedAtIsNil(),
-				).
-				Exist(ctx)
-			if hasViolation {
-				violatedCount++
-			}
+		}
+		projection := projectSLACycle(t, time.Now())
+		if projection.ResponseBreached || projection.ResolutionBreached {
+			violatedCount++
 		}
 	}
 
@@ -437,12 +433,13 @@ func (s *SLAMonitorService) GetSLAComplianceByDefinition(ctx context.Context, te
 			continue
 		}
 
-		violated, _ := s.client.SLAViolation.Query().
-			Where(
-				slaviolation.SLADefinitionID(sla.ID),
-				slaviolation.ResolvedAtIsNil(),
-			).
-			Count(ctx)
+		violated := 0
+		for _, item := range tickets {
+			p := projectSLACycle(item, time.Now())
+			if p.ResponseBreached || p.ResolutionBreached {
+				violated++
+			}
+		}
 
 		stats = append(stats, &SLAComplianceStat{
 			SLADefinitionID:   sla.ID,
@@ -556,22 +553,6 @@ func (s *SLAMonitorService) GetDashboardMetrics(ctx context.Context, tenantID in
 
 	dashboard.TotalTickets = len(tickets)
 
-	// 获取未解决的违规
-	violations, err := s.client.SLAViolation.Query().
-		Where(
-			slaviolation.TenantIDEQ(tenantID),
-			slaviolation.ResolvedAtIsNil(),
-		).
-		All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query violations: %w", err)
-	}
-
-	violationMap := make(map[int][]*ent.SLAViolation)
-	for _, v := range violations {
-		violationMap[v.TicketID] = append(violationMap[v.TicketID], v)
-	}
-
 	// 遍历工单进行分类统计
 	atRiskCount := 0
 	breachedCount := 0
@@ -579,8 +560,8 @@ func (s *SLAMonitorService) GetDashboardMetrics(ctx context.Context, tenantID in
 	priorityViolationMap := make(map[string]int)
 
 	for _, t := range tickets {
-		ticketViolations := violationMap[t.ID]
-		hasViolation := len(ticketViolations) > 0
+		projection := projectSLACycle(t, now)
+		hasViolation := projection.ResponseBreached || projection.ResolutionBreached
 
 		// 按优先级统计
 		priority := t.Priority
@@ -592,20 +573,8 @@ func (s *SLAMonitorService) GetDashboardMetrics(ctx context.Context, tenantID in
 		if hasViolation {
 			breachedCount++
 			priorityViolationMap[priority]++
-		} else if !t.FirstResponseAt.IsZero() || (!t.SLAResponseDeadline.IsZero() && now.After(t.SLAResponseDeadline)) {
-			// 检查是否处于风险中（接近SLA截止时间）
-			if !t.SLAResponseDeadline.IsZero() && now.Before(t.SLAResponseDeadline) {
-				timeLeft := t.SLAResponseDeadline.Sub(now)
-				if timeLeft <= 30*time.Minute {
-					atRiskCount++
-				}
-			}
-			if !t.SLAResolutionDeadline.IsZero() && now.Before(t.SLAResolutionDeadline) {
-				timeLeft := t.SLAResolutionDeadline.Sub(now)
-				if timeLeft <= 30*time.Minute {
-					atRiskCount++
-				}
-			}
+		} else if projection.SLAStatus == "warning" {
+			atRiskCount++
 		}
 	}
 
@@ -654,7 +623,7 @@ func (s *SLAMonitorService) GetDashboardMetrics(ctx context.Context, tenantID in
 				TicketID:    t.ID,
 				TicketTitle: t.Title,
 				Deadline:    t.SLAResolutionDeadline,
-				SLAName:   slaName,
+				SLAName:     slaName,
 				TimeLeft:    timeLeftStr,
 			})
 		}
@@ -686,7 +655,7 @@ func (s *SLAMonitorService) GetDashboardMetrics(ctx context.Context, tenantID in
 			dashboard.TopViolations = append(dashboard.TopViolations, dto.SLAViolationItem{
 				TicketID:    v.TicketID,
 				TicketTitle: ticketTitle,
-				SLAName:   v.SLAName,
+				SLAName:     v.SLAName,
 				ViolatedAt:  v.ViolationTime.Format(time.RFC3339),
 				Delay:       delayMinutes,
 			})

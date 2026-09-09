@@ -155,6 +155,21 @@ func ParentTicketID(v int) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldParentTicketID, v))
 }
 
+// SLACycleNumber applies equality check predicate on the "sla_cycle_number" field. It's identical to SLACycleNumberEQ.
+func SLACycleNumber(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldSLACycleNumber, v))
+}
+
+// SLACycleStartedAt applies equality check predicate on the "sla_cycle_started_at" field. It's identical to SLACycleStartedAtEQ.
+func SLACycleStartedAt(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldSLACycleStartedAt, v))
+}
+
+// SLAPausedMinutes applies equality check predicate on the "sla_paused_minutes" field. It's identical to SLAPausedMinutesEQ.
+func SLAPausedMinutes(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldSLAPausedMinutes, v))
+}
+
 // SLADefinitionID applies equality check predicate on the "sla_definition_id" field. It's identical to SLADefinitionIDEQ.
 func SLADefinitionID(v int) predicate.Ticket {
 	return predicate.Ticket(sql.FieldEQ(FieldSLADefinitionID, v))
@@ -1398,6 +1413,146 @@ func ParentTicketIDIsNil() predicate.Ticket {
 // ParentTicketIDNotNil applies the NotNil predicate on the "parent_ticket_id" field.
 func ParentTicketIDNotNil() predicate.Ticket {
 	return predicate.Ticket(sql.FieldNotNull(FieldParentTicketID))
+}
+
+// SLACycleNumberEQ applies the EQ predicate on the "sla_cycle_number" field.
+func SLACycleNumberEQ(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldSLACycleNumber, v))
+}
+
+// SLACycleNumberNEQ applies the NEQ predicate on the "sla_cycle_number" field.
+func SLACycleNumberNEQ(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldSLACycleNumber, v))
+}
+
+// SLACycleNumberIn applies the In predicate on the "sla_cycle_number" field.
+func SLACycleNumberIn(vs ...int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldSLACycleNumber, vs...))
+}
+
+// SLACycleNumberNotIn applies the NotIn predicate on the "sla_cycle_number" field.
+func SLACycleNumberNotIn(vs ...int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldSLACycleNumber, vs...))
+}
+
+// SLACycleNumberGT applies the GT predicate on the "sla_cycle_number" field.
+func SLACycleNumberGT(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldSLACycleNumber, v))
+}
+
+// SLACycleNumberGTE applies the GTE predicate on the "sla_cycle_number" field.
+func SLACycleNumberGTE(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldSLACycleNumber, v))
+}
+
+// SLACycleNumberLT applies the LT predicate on the "sla_cycle_number" field.
+func SLACycleNumberLT(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldSLACycleNumber, v))
+}
+
+// SLACycleNumberLTE applies the LTE predicate on the "sla_cycle_number" field.
+func SLACycleNumberLTE(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldSLACycleNumber, v))
+}
+
+// SLACycleStartedAtEQ applies the EQ predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtEQ(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldSLACycleStartedAt, v))
+}
+
+// SLACycleStartedAtNEQ applies the NEQ predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtNEQ(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldSLACycleStartedAt, v))
+}
+
+// SLACycleStartedAtIn applies the In predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtIn(vs ...time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldSLACycleStartedAt, vs...))
+}
+
+// SLACycleStartedAtNotIn applies the NotIn predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtNotIn(vs ...time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldSLACycleStartedAt, vs...))
+}
+
+// SLACycleStartedAtGT applies the GT predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtGT(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldSLACycleStartedAt, v))
+}
+
+// SLACycleStartedAtGTE applies the GTE predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtGTE(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldSLACycleStartedAt, v))
+}
+
+// SLACycleStartedAtLT applies the LT predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtLT(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldSLACycleStartedAt, v))
+}
+
+// SLACycleStartedAtLTE applies the LTE predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtLTE(v time.Time) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldSLACycleStartedAt, v))
+}
+
+// SLACycleStartedAtIsNil applies the IsNil predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtIsNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldIsNull(FieldSLACycleStartedAt))
+}
+
+// SLACycleStartedAtNotNil applies the NotNil predicate on the "sla_cycle_started_at" field.
+func SLACycleStartedAtNotNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotNull(FieldSLACycleStartedAt))
+}
+
+// SLAPausedMinutesEQ applies the EQ predicate on the "sla_paused_minutes" field.
+func SLAPausedMinutesEQ(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldEQ(FieldSLAPausedMinutes, v))
+}
+
+// SLAPausedMinutesNEQ applies the NEQ predicate on the "sla_paused_minutes" field.
+func SLAPausedMinutesNEQ(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNEQ(FieldSLAPausedMinutes, v))
+}
+
+// SLAPausedMinutesIn applies the In predicate on the "sla_paused_minutes" field.
+func SLAPausedMinutesIn(vs ...int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldIn(FieldSLAPausedMinutes, vs...))
+}
+
+// SLAPausedMinutesNotIn applies the NotIn predicate on the "sla_paused_minutes" field.
+func SLAPausedMinutesNotIn(vs ...int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotIn(FieldSLAPausedMinutes, vs...))
+}
+
+// SLAPausedMinutesGT applies the GT predicate on the "sla_paused_minutes" field.
+func SLAPausedMinutesGT(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGT(FieldSLAPausedMinutes, v))
+}
+
+// SLAPausedMinutesGTE applies the GTE predicate on the "sla_paused_minutes" field.
+func SLAPausedMinutesGTE(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldGTE(FieldSLAPausedMinutes, v))
+}
+
+// SLAPausedMinutesLT applies the LT predicate on the "sla_paused_minutes" field.
+func SLAPausedMinutesLT(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLT(FieldSLAPausedMinutes, v))
+}
+
+// SLAPausedMinutesLTE applies the LTE predicate on the "sla_paused_minutes" field.
+func SLAPausedMinutesLTE(v int) predicate.Ticket {
+	return predicate.Ticket(sql.FieldLTE(FieldSLAPausedMinutes, v))
+}
+
+// AppliedSLAPolicyIsNil applies the IsNil predicate on the "applied_sla_policy" field.
+func AppliedSLAPolicyIsNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldIsNull(FieldAppliedSLAPolicy))
+}
+
+// AppliedSLAPolicyNotNil applies the NotNil predicate on the "applied_sla_policy" field.
+func AppliedSLAPolicyNotNil() predicate.Ticket {
+	return predicate.Ticket(sql.FieldNotNull(FieldAppliedSLAPolicy))
 }
 
 // SLADefinitionIDEQ applies the EQ predicate on the "sla_definition_id" field.

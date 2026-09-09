@@ -17,6 +17,14 @@ type AuditLog struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
+	// OperationID holds the value of the "operation_id" field.
+	OperationID *string `json:"operation_id,omitempty"`
+	// RequestDigest holds the value of the "request_digest" field.
+	RequestDigest *string `json:"request_digest,omitempty"`
+	// ResultVersion holds the value of the "result_version" field.
+	ResultVersion *int `json:"result_version,omitempty"`
+	// ResultStatus holds the value of the "result_status" field.
+	ResultStatus *string `json:"result_status,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// TenantID holds the value of the "tenant_id" field.
@@ -47,9 +55,9 @@ func (*AuditLog) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case auditlog.FieldID, auditlog.FieldTenantID, auditlog.FieldUserID, auditlog.FieldStatusCode:
+		case auditlog.FieldID, auditlog.FieldResultVersion, auditlog.FieldTenantID, auditlog.FieldUserID, auditlog.FieldStatusCode:
 			values[i] = new(sql.NullInt64)
-		case auditlog.FieldRequestID, auditlog.FieldIP, auditlog.FieldResource, auditlog.FieldAction, auditlog.FieldPath, auditlog.FieldMethod, auditlog.FieldRequestBody:
+		case auditlog.FieldOperationID, auditlog.FieldRequestDigest, auditlog.FieldResultStatus, auditlog.FieldRequestID, auditlog.FieldIP, auditlog.FieldResource, auditlog.FieldAction, auditlog.FieldPath, auditlog.FieldMethod, auditlog.FieldRequestBody:
 			values[i] = new(sql.NullString)
 		case auditlog.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -74,6 +82,34 @@ func (_m *AuditLog) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
+		case auditlog.FieldOperationID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field operation_id", values[i])
+			} else if value.Valid {
+				_m.OperationID = new(string)
+				*_m.OperationID = value.String
+			}
+		case auditlog.FieldRequestDigest:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field request_digest", values[i])
+			} else if value.Valid {
+				_m.RequestDigest = new(string)
+				*_m.RequestDigest = value.String
+			}
+		case auditlog.FieldResultVersion:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field result_version", values[i])
+			} else if value.Valid {
+				_m.ResultVersion = new(int)
+				*_m.ResultVersion = int(value.Int64)
+			}
+		case auditlog.FieldResultStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field result_status", values[i])
+			} else if value.Valid {
+				_m.ResultStatus = new(string)
+				*_m.ResultStatus = value.String
+			}
 		case auditlog.FieldCreatedAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
 				return fmt.Errorf("unexpected type %T for field created_at", values[i])
@@ -177,6 +213,26 @@ func (_m *AuditLog) String() string {
 	var builder strings.Builder
 	builder.WriteString("AuditLog(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	if v := _m.OperationID; v != nil {
+		builder.WriteString("operation_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.RequestDigest; v != nil {
+		builder.WriteString("request_digest=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ResultVersion; v != nil {
+		builder.WriteString("result_version=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.ResultStatus; v != nil {
+		builder.WriteString("result_status=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
 	builder.WriteString("created_at=")
 	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")

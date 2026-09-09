@@ -260,23 +260,23 @@ func init() {
 	auditlogFields := schema.AuditLog{}.Fields()
 	_ = auditlogFields
 	// auditlogDescCreatedAt is the schema descriptor for created_at field.
-	auditlogDescCreatedAt := auditlogFields[0].Descriptor()
+	auditlogDescCreatedAt := auditlogFields[4].Descriptor()
 	// auditlog.DefaultCreatedAt holds the default value on creation for the created_at field.
 	auditlog.DefaultCreatedAt = auditlogDescCreatedAt.Default.(func() time.Time)
 	// auditlogDescIP is the schema descriptor for ip field.
-	auditlogDescIP := auditlogFields[4].Descriptor()
+	auditlogDescIP := auditlogFields[8].Descriptor()
 	// auditlog.DefaultIP holds the default value on creation for the ip field.
 	auditlog.DefaultIP = auditlogDescIP.Default.(string)
 	// auditlogDescResource is the schema descriptor for resource field.
-	auditlogDescResource := auditlogFields[5].Descriptor()
+	auditlogDescResource := auditlogFields[9].Descriptor()
 	// auditlog.DefaultResource holds the default value on creation for the resource field.
 	auditlog.DefaultResource = auditlogDescResource.Default.(string)
 	// auditlogDescAction is the schema descriptor for action field.
-	auditlogDescAction := auditlogFields[6].Descriptor()
+	auditlogDescAction := auditlogFields[10].Descriptor()
 	// auditlog.DefaultAction holds the default value on creation for the action field.
 	auditlog.DefaultAction = auditlogDescAction.Default.(string)
 	// auditlogDescStatusCode is the schema descriptor for status_code field.
-	auditlogDescStatusCode := auditlogFields[9].Descriptor()
+	auditlogDescStatusCode := auditlogFields[13].Descriptor()
 	// auditlog.DefaultStatusCode holds the default value on creation for the status_code field.
 	auditlog.DefaultStatusCode = auditlogDescStatusCode.Default.(int)
 	bpmnpermissionFields := schema.BPMNPermission{}.Fields()
@@ -3681,28 +3681,40 @@ func init() {
 	ticketDescTenantID := ticketFields[15].Descriptor()
 	// ticket.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	ticket.TenantIDValidator = ticketDescTenantID.Validators[0].(func(int) error)
+	// ticketDescSLACycleNumber is the schema descriptor for sla_cycle_number field.
+	ticketDescSLACycleNumber := ticketFields[20].Descriptor()
+	// ticket.DefaultSLACycleNumber holds the default value on creation for the sla_cycle_number field.
+	ticket.DefaultSLACycleNumber = ticketDescSLACycleNumber.Default.(int)
+	// ticket.SLACycleNumberValidator is a validator for the "sla_cycle_number" field. It is called by the builders before save.
+	ticket.SLACycleNumberValidator = ticketDescSLACycleNumber.Validators[0].(func(int) error)
+	// ticketDescSLAPausedMinutes is the schema descriptor for sla_paused_minutes field.
+	ticketDescSLAPausedMinutes := ticketFields[22].Descriptor()
+	// ticket.DefaultSLAPausedMinutes holds the default value on creation for the sla_paused_minutes field.
+	ticket.DefaultSLAPausedMinutes = ticketDescSLAPausedMinutes.Default.(int)
+	// ticket.SLAPausedMinutesValidator is a validator for the "sla_paused_minutes" field. It is called by the builders before save.
+	ticket.SLAPausedMinutesValidator = ticketDescSLAPausedMinutes.Validators[0].(func(int) error)
 	// ticketDescRating is the schema descriptor for rating field.
-	ticketDescRating := ticketFields[28].Descriptor()
+	ticketDescRating := ticketFields[32].Descriptor()
 	// ticket.RatingValidator is a validator for the "rating" field. It is called by the builders before save.
 	ticket.RatingValidator = ticketDescRating.Validators[0].(func(int) error)
 	// ticketDescVersion is the schema descriptor for version field.
-	ticketDescVersion := ticketFields[32].Descriptor()
+	ticketDescVersion := ticketFields[36].Descriptor()
 	// ticket.DefaultVersion holds the default value on creation for the version field.
 	ticket.DefaultVersion = ticketDescVersion.Default.(int)
 	// ticket.VersionValidator is a validator for the "version" field. It is called by the builders before save.
 	ticket.VersionValidator = ticketDescVersion.Validators[0].(func(int) error)
 	// ticketDescCreatedAt is the schema descriptor for created_at field.
-	ticketDescCreatedAt := ticketFields[33].Descriptor()
+	ticketDescCreatedAt := ticketFields[37].Descriptor()
 	// ticket.DefaultCreatedAt holds the default value on creation for the created_at field.
 	ticket.DefaultCreatedAt = ticketDescCreatedAt.Default.(func() time.Time)
 	// ticketDescUpdatedAt is the schema descriptor for updated_at field.
-	ticketDescUpdatedAt := ticketFields[34].Descriptor()
+	ticketDescUpdatedAt := ticketFields[38].Descriptor()
 	// ticket.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	ticket.DefaultUpdatedAt = ticketDescUpdatedAt.Default.(func() time.Time)
 	// ticket.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
 	ticket.UpdateDefaultUpdatedAt = ticketDescUpdatedAt.UpdateDefault.(func() time.Time)
 	// ticketDescIsManagedByMsp is the schema descriptor for is_managed_by_msp field.
-	ticketDescIsManagedByMsp := ticketFields[35].Descriptor()
+	ticketDescIsManagedByMsp := ticketFields[39].Descriptor()
 	// ticket.DefaultIsManagedByMsp holds the default value on creation for the is_managed_by_msp field.
 	ticket.DefaultIsManagedByMsp = ticketDescIsManagedByMsp.Default.(bool)
 	ticketassignmentruleFields := schema.TicketAssignmentRule{}.Fields()

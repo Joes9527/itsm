@@ -54,6 +54,14 @@ const (
 	FieldDepartmentID = "department_id"
 	// FieldParentTicketID holds the string denoting the parent_ticket_id field in the database.
 	FieldParentTicketID = "parent_ticket_id"
+	// FieldSLACycleNumber holds the string denoting the sla_cycle_number field in the database.
+	FieldSLACycleNumber = "sla_cycle_number"
+	// FieldSLACycleStartedAt holds the string denoting the sla_cycle_started_at field in the database.
+	FieldSLACycleStartedAt = "sla_cycle_started_at"
+	// FieldSLAPausedMinutes holds the string denoting the sla_paused_minutes field in the database.
+	FieldSLAPausedMinutes = "sla_paused_minutes"
+	// FieldAppliedSLAPolicy holds the string denoting the applied_sla_policy field in the database.
+	FieldAppliedSLAPolicy = "applied_sla_policy"
 	// FieldSLADefinitionID holds the string denoting the sla_definition_id field in the database.
 	FieldSLADefinitionID = "sla_definition_id"
 	// FieldSLAResponseDeadline holds the string denoting the sla_response_deadline field in the database.
@@ -244,6 +252,10 @@ var Columns = []string{
 	FieldCategoryID,
 	FieldDepartmentID,
 	FieldParentTicketID,
+	FieldSLACycleNumber,
+	FieldSLACycleStartedAt,
+	FieldSLAPausedMinutes,
+	FieldAppliedSLAPolicy,
 	FieldSLADefinitionID,
 	FieldSLAResponseDeadline,
 	FieldSLAResolutionDeadline,
@@ -316,6 +328,14 @@ var (
 	RequesterIDValidator func(int) error
 	// TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	TenantIDValidator func(int) error
+	// DefaultSLACycleNumber holds the default value on creation for the "sla_cycle_number" field.
+	DefaultSLACycleNumber int
+	// SLACycleNumberValidator is a validator for the "sla_cycle_number" field. It is called by the builders before save.
+	SLACycleNumberValidator func(int) error
+	// DefaultSLAPausedMinutes holds the default value on creation for the "sla_paused_minutes" field.
+	DefaultSLAPausedMinutes int
+	// SLAPausedMinutesValidator is a validator for the "sla_paused_minutes" field. It is called by the builders before save.
+	SLAPausedMinutesValidator func(int) error
 	// RatingValidator is a validator for the "rating" field. It is called by the builders before save.
 	RatingValidator func(int) error
 	// DefaultVersion holds the default value on creation for the "version" field.
@@ -438,6 +458,21 @@ func ByDepartmentID(opts ...sql.OrderTermOption) OrderOption {
 // ByParentTicketID orders the results by the parent_ticket_id field.
 func ByParentTicketID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldParentTicketID, opts...).ToFunc()
+}
+
+// BySLACycleNumber orders the results by the sla_cycle_number field.
+func BySLACycleNumber(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSLACycleNumber, opts...).ToFunc()
+}
+
+// BySLACycleStartedAt orders the results by the sla_cycle_started_at field.
+func BySLACycleStartedAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSLACycleStartedAt, opts...).ToFunc()
+}
+
+// BySLAPausedMinutes orders the results by the sla_paused_minutes field.
+func BySLAPausedMinutes(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSLAPausedMinutes, opts...).ToFunc()
 }
 
 // BySLADefinitionID orders the results by the sla_definition_id field.

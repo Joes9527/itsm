@@ -252,4 +252,18 @@ describe('TicketDetail', () => {
     await screen.findByText('#101 VPN 无法连接');
     expect(screen.queryByText('新建')).not.toBeInTheDocument();
   });
+  it('keeps a historical SLA breach visible during a fresh current cycle', async () => {
+    mockGetTicket.mockResolvedValueOnce({ ...baseTicket, status: 'open' });
+    mockGetSLA.mockResolvedValueOnce({
+      slaName: '冻结 SLA', cycleNumber: 2, isBreached: false,
+      responseTime: 60, resolutionTime: 60,
+      responseDeadline: null, resolutionDeadline: null,
+      responseTimeRemaining: 60, resolutionTimeRemaining: 60,
+      history: [{ number: 1, responseBreached: false, resolutionBreached: true }],
+    });
+    render(<TicketDetail />);
+    expect(await screen.findByText('当前周期 2')).toBeInTheDocument();
+    expect(screen.getByText('历史周期 1：已违约')).toBeInTheDocument();
+  });
+
 });

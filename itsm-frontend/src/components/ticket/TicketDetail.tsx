@@ -8,7 +8,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { TicketApi } from '@/lib/api/ticket-api';
+import { TicketApi, type TicketSLAInfo } from '@/lib/api/ticket-api';
 import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
 import { TicketRelationsApi } from '@/lib/api/ticket-relations-api';
 import { UserApi } from '@/lib/api/user-api';
@@ -137,16 +137,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   const [updating, setUpdating] = useState(false);
   const [ccing, setCCing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [slaInfo, setSlaInfo] = useState<{
-    slaName: string;
-    responseTime: number;
-    resolutionTime: number;
-    responseDeadline: string | null;
-    resolutionDeadline: string | null;
-    responseTimeRemaining: number | null;
-    resolutionTimeRemaining: number | null;
-    isBreached: boolean;
-  } | null>(null);
+  const [slaInfo, setSlaInfo] = useState<TicketSLAInfo | null>(null);
   const [tabCounts, setTabCounts] = useState<{
     comments?: number;
     attachments?: number;
@@ -705,6 +696,14 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                   SLA 时效与承诺
                 </span>
                 <Tag color={slaInfo.isBreached ? 'red' : 'blue'}>{slaInfo.slaName}</Tag>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <Tag>当前周期 {slaInfo.cycleNumber || '未建档'}</Tag>
+                {slaInfo.history.map(cycle => (
+                  <Tag key={cycle.number} color={cycle.responseBreached || cycle.resolutionBreached ? 'red' : 'green'}>
+                    历史周期 {cycle.number}：{cycle.responseBreached || cycle.resolutionBreached ? '已违约' : '未违约'}
+                  </Tag>
+                ))}
               </div>
 
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2 text-xs">

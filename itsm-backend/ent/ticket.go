@@ -8,6 +8,7 @@ import (
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcategory"
 	"itsm-backend/ent/user"
+	"itsm-backend/handlers/shared/slacontract"
 	"strings"
 	"time"
 
@@ -60,6 +61,14 @@ type Ticket struct {
 	DepartmentID int `json:"department_id,omitempty"`
 	// 父工单ID
 	ParentTicketID int `json:"parent_ticket_id,omitempty"`
+	// SLACycleNumber holds the value of the "sla_cycle_number" field.
+	SLACycleNumber int `json:"sla_cycle_number,omitempty"`
+	// SLACycleStartedAt holds the value of the "sla_cycle_started_at" field.
+	SLACycleStartedAt time.Time `json:"sla_cycle_started_at,omitempty"`
+	// SLAPausedMinutes holds the value of the "sla_paused_minutes" field.
+	SLAPausedMinutes int `json:"sla_paused_minutes,omitempty"`
+	// AppliedSLAPolicy holds the value of the "applied_sla_policy" field.
+	AppliedSLAPolicy *slacontract.Policy `json:"applied_sla_policy,omitempty"`
 	// SLA定义ID
 	SLADefinitionID int `json:"sla_definition_id,omitempty"`
 	// SLA响应截止时间
@@ -286,15 +295,15 @@ func (*Ticket) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case ticket.FieldCustomFieldValues:
+		case ticket.FieldAppliedSLAPolicy, ticket.FieldCustomFieldValues:
 			values[i] = new([]byte)
 		case ticket.FieldIsManagedByMsp:
 			values[i] = new(sql.NullBool)
-		case ticket.FieldID, ticket.FieldOpenedByID, ticket.FieldAssignmentGroupID, ticket.FieldRequesterID, ticket.FieldAssigneeID, ticket.FieldTenantID, ticket.FieldTemplateID, ticket.FieldCategoryID, ticket.FieldDepartmentID, ticket.FieldParentTicketID, ticket.FieldSLADefinitionID, ticket.FieldRating, ticket.FieldRatedBy, ticket.FieldVersion, ticket.FieldMspProviderID, ticket.FieldManagedByUserID:
+		case ticket.FieldID, ticket.FieldOpenedByID, ticket.FieldAssignmentGroupID, ticket.FieldRequesterID, ticket.FieldAssigneeID, ticket.FieldTenantID, ticket.FieldTemplateID, ticket.FieldCategoryID, ticket.FieldDepartmentID, ticket.FieldParentTicketID, ticket.FieldSLACycleNumber, ticket.FieldSLAPausedMinutes, ticket.FieldSLADefinitionID, ticket.FieldRating, ticket.FieldRatedBy, ticket.FieldVersion, ticket.FieldMspProviderID, ticket.FieldManagedByUserID:
 			values[i] = new(sql.NullInt64)
 		case ticket.FieldTitle, ticket.FieldDescription, ticket.FieldStatus, ticket.FieldGenericSubtype, ticket.FieldSource, ticket.FieldRecordClass, ticket.FieldPriority, ticket.FieldTicketNumber, ticket.FieldCreatorEmail, ticket.FieldExternalMessageID, ticket.FieldConversationID, ticket.FieldResolution, ticket.FieldResolutionCategory, ticket.FieldRatingComment, ticket.FieldMspTicketID:
 			values[i] = new(sql.NullString)
-		case ticket.FieldSLAResponseDeadline, ticket.FieldSLAResolutionDeadline, ticket.FieldFirstResponseAt, ticket.FieldResolvedAt, ticket.FieldClosedAt, ticket.FieldRatedAt, ticket.FieldCreatedAt, ticket.FieldUpdatedAt, ticket.FieldDeletedAt:
+		case ticket.FieldSLACycleStartedAt, ticket.FieldSLAResponseDeadline, ticket.FieldSLAResolutionDeadline, ticket.FieldFirstResponseAt, ticket.FieldResolvedAt, ticket.FieldClosedAt, ticket.FieldRatedAt, ticket.FieldCreatedAt, ticket.FieldUpdatedAt, ticket.FieldDeletedAt:
 			values[i] = new(sql.NullTime)
 		case ticket.ForeignKeys[0]: // configuration_item_tickets
 			values[i] = new(sql.NullInt64)
@@ -448,6 +457,32 @@ func (_m *Ticket) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field parent_ticket_id", values[i])
 			} else if value.Valid {
 				_m.ParentTicketID = int(value.Int64)
+			}
+		case ticket.FieldSLACycleNumber:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field sla_cycle_number", values[i])
+			} else if value.Valid {
+				_m.SLACycleNumber = int(value.Int64)
+			}
+		case ticket.FieldSLACycleStartedAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field sla_cycle_started_at", values[i])
+			} else if value.Valid {
+				_m.SLACycleStartedAt = value.Time
+			}
+		case ticket.FieldSLAPausedMinutes:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field sla_paused_minutes", values[i])
+			} else if value.Valid {
+				_m.SLAPausedMinutes = int(value.Int64)
+			}
+		case ticket.FieldAppliedSLAPolicy:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field applied_sla_policy", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.AppliedSLAPolicy); err != nil {
+					return fmt.Errorf("unmarshal field applied_sla_policy: %w", err)
+				}
 			}
 		case ticket.FieldSLADefinitionID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -786,6 +821,18 @@ func (_m *Ticket) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("parent_ticket_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ParentTicketID))
+	builder.WriteString(", ")
+	builder.WriteString("sla_cycle_number=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SLACycleNumber))
+	builder.WriteString(", ")
+	builder.WriteString("sla_cycle_started_at=")
+	builder.WriteString(_m.SLACycleStartedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("sla_paused_minutes=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SLAPausedMinutes))
+	builder.WriteString(", ")
+	builder.WriteString("applied_sla_policy=")
+	builder.WriteString(fmt.Sprintf("%v", _m.AppliedSLAPolicy))
 	builder.WriteString(", ")
 	builder.WriteString("sla_definition_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.SLADefinitionID))
