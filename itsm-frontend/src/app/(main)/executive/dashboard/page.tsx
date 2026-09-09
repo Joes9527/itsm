@@ -100,14 +100,14 @@ export default function ExecutiveDashboardPage() {
 
         <div className="p-5 rounded-[8px] bg-surface border border-border shadow-none">
           <div className="text-[12px] font-semibold text-muted">企业员工总体满意度 (CSAT)</div>
-          <div className="text-[26px] font-semibold text-purple-600 mt-1">4.88 / 5.0</div>
+          <div className="text-[26px] font-semibold text-foreground mt-1">4.88 / 5.0</div>
           <div className="text-[12px] text-muted mt-2">基于 1,240 份服务评价样本</div>
         </div>
 
         <div className="p-5 rounded-[8px] bg-surface border border-border shadow-none">
           <div className="text-[12px] font-semibold text-muted">AI 自愈与知识拦截率</div>
-          <div className="text-[26px] font-semibold text-indigo-600 mt-1">34.2%</div>
-          <div className="text-[12px] text-indigo-600 font-medium mt-2">预估每月节省 480 人时</div>
+          <div className="text-[26px] font-semibold text-foreground mt-1">34.2%</div>
+          <div className="text-[12px] text-muted font-medium mt-2">预估每月节省 480 人时</div>
         </div>
       </div>
 

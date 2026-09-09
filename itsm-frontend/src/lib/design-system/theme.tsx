@@ -167,6 +167,11 @@ export const getAntdTheme = (isDark: boolean) => {
     components: {
       Button: {
         ...control,
+        controlHeightLG: tokens.sizes.button,
+        contentFontSizeLG: control.fontSize,
+        contentFontSizeSM: parseInt(tokens.typography.fontSize.xs, 10),
+        borderRadiusLG: tokens.sizes.buttonRadius,
+        borderRadiusSM: tokens.sizes.buttonRadius,
         primaryColor: foreground,
         primaryShadow: 'none',
         defaultShadow: 'none',
@@ -206,6 +211,7 @@ export const getAntdTheme = (isDark: boolean) => {
       Modal: { contentBg: surface, headerBg: surface, titleColor: text },
       Drawer: { colorBgElevated: surface, colorText: text },
       Typography: { titleMarginTop: 0, titleMarginBottom: 12 },
+      Statistic: { contentFontSize: parseInt(tokens.typography.statistic, 10) },
       Menu: {
         itemBg: surface,
         subMenuItemBg: surface,

@@ -33,6 +33,7 @@
     },
     "pageTitle": "24px",
     "cardTitle": "15px",
+    "statistic": "26px",
     "helper": "11px",
     "strong": 600
   },

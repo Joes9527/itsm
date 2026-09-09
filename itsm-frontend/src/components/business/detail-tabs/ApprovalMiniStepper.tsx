@@ -88,7 +88,7 @@ export const ApprovalMiniStepper: React.FC<{ ticketId: number }> = ({ ticketId }
   if (loading) return null;
 
   return (
-    <div className="bg-surface rounded-[8px] border border-border p-4 shadow-none space-y-3 text-[12px]">
+    <div className="bg-surface rounded-[8px] border border-border p-[16px] shadow-none space-y-3 text-[12px]">
       <span className="font-semibold text-foreground flex items-center gap-1.5 border-b border-border pb-2 text-[15px]">
         <GitBranch size={14} className="text-muted" />
         流转节点进度 (BPMN)

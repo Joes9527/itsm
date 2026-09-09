@@ -466,7 +466,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   return (
     <div className="w-full space-y-4 pt-4 text-foreground font-sans antialiased">
       {/* ================= 工单主 Header & 规范动作控制台 ================= */}
-      <div className="w-full bg-surface rounded-[8px] border border-border p-4 sm:p-5 shadow-none">
+      <div className="w-full bg-surface rounded-[8px] border border-border p-[16px] shadow-none">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           {/* 左侧：返回、单号、标题、Tag */}
           <div className="space-y-2 min-w-0">
@@ -644,7 +644,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
         {/* 右侧 4 列: 【高密度运维工具箱 + 悬浮跟随】 */}
         <div className="lg:col-span-4 flex flex-col gap-4 sticky top-4 min-w-0">
           {/* 1. 工单上下文属性 (置顶) */}
-          <div className="bg-surface rounded-[8px] border border-border p-4 shadow-none space-y-3 text-[12px]">
+          <div className="bg-surface rounded-[8px] border border-border p-[16px] shadow-none space-y-3 text-[12px]">
             <span className="font-semibold text-foreground block border-b border-border pb-2 text-[15px]">
               工单上下文属性
             </span>
@@ -717,7 +717,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
 
           {/* 3. SLA 履约时限监控卡片 */}
           {slaInfo && (
-            <div className="bg-surface rounded-[8px] border border-border p-4 shadow-none space-y-3">
+            <div className="bg-surface rounded-[8px] border border-border p-[16px] shadow-none space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-[15px] font-semibold text-foreground flex items-center gap-1.5">
                   <Clock size={14} className="text-muted" />

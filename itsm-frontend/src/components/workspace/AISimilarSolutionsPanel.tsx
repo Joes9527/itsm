@@ -66,7 +66,7 @@ export const AISimilarSolutionsPanel: React.FC<AISimilarSolutionsPanelProps> = (
   };
 
   return (
-    <div className="bg-surface rounded-[8px] p-4 border border-border shadow-none space-y-3">
+    <div className="bg-surface rounded-[8px] p-[16px] border border-border shadow-none space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 text-[15px] font-semibold text-foreground">
           <Lightbulb size={16} className="text-amber-500" />

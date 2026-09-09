@@ -76,6 +76,11 @@ h6,
   line-height: var(--line-height-snug, 1.35);
 }
 
+/* Statistic exposes a size token but no content weight token. */
+.ant-statistic-content {
+  font-weight: var(--font-weight-semibold);
+}
+
 @layer utilities {
   .animate-pulse-strong {
     animation: pulse-strong 1.5s infinite;

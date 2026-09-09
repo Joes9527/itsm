@@ -58,7 +58,7 @@ export default function ServiceRequestsPage() {
   }, []);
 
   return (
-    <div className="p-[16px] md:p-[24px] min-h-screen bg-raised">
+    <div className="p-[16px] md:p-[24px] min-h-screen bg-page">
       {/* 页面头部 */}
       <div className="mb-6 flex justify-between items-center">
         <div>

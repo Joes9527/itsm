@@ -298,7 +298,7 @@ export default function WorkspaceTicketsPage() {
       {/* ================= 3. 右栏：申请人画像与 AI 排障辅助 Panel (340px) ================= */}
       <div className="w-full md:w-80 flex flex-col gap-4 overflow-y-auto flex-shrink-0">
         {/* 申请人 360 画像 */}
-        <div className="bg-surface rounded-[8px] p-4 border border-border shadow-none space-y-3">
+        <div className="bg-surface rounded-[8px] p-[16px] border border-border shadow-none space-y-3">
           <div className="text-[15px] font-semibold text-foreground">
             申请人 360° 画像
           </div>

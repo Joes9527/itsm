@@ -15,6 +15,7 @@ export function expandThemeTokens(tokens, isDark) {
     '--font-family-base': tokens.typography.fontFamily,
     '--font-size-page-title': tokens.typography.pageTitle,
     '--font-size-card-title': tokens.typography.cardTitle,
+    '--font-size-statistic': tokens.typography.statistic,
     '--font-size-helper': tokens.typography.helper,
     '--header-height': `${tokens.sizes.header}px`,
     '--sidebar-width': `${tokens.sizes.sidebar}px`,
