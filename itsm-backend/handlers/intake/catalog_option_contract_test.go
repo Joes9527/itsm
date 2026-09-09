@@ -38,7 +38,7 @@ func TestIdentityCatalogOptionPublishedRoundTripAndStableReplay(t *testing.T) {
 	m := client.ExternalIdentity.Create().SetTenantID(i.TenantID).SetUserID(i.ActorID).SetProvider(a.Provider).SetWorkspace(a.Workspace).SetSubject(a.Subject).SaveX(ctx)
 	sessions := authorization.NewSessionReader(client, sameTransactionDirectory{})
 	h := NewHandler(NewIdentityExchangeService(cfg.config, n, NewIdentityRepository(client, client, sessions), "test-jwt"), app)
-	h.SetReaders(NewReadService(sessions, owner, "test-cursor"))
+	h.SetReaders(NewReadService(sessions, owner, "test-cursor", ReferenceReadOptions{FrontendURL: "https://support.example.test", PageSize: 50, Lifecycle: NewRequesterLifecycleReader(referenceLifecycleOwners())}))
 	r := gin.New()
 	h.RegisterRoutes(r.Group("/api/v1"))
 	token := func(scopes []string) string {

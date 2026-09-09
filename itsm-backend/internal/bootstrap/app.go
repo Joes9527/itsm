@@ -880,7 +880,13 @@ func NewApplication() *Application {
 	identityRepository := intake.NewIdentityRepository(client, systemClient, sessionReader)
 	identityExchange := intake.NewIdentityExchangeService(identityConfig, intake.NewRedisNonceStore(identityRedis), identityRepository, cfg.JWT.Secret)
 	intakeHandler := intake.NewHandler(identityExchange, intakeApplication)
-	intakeReaders := intake.NewReadService(sessionReader, scService, cfg.JWT.Secret)
+	intakeReaders := intake.NewReadService(sessionReader, scService, cfg.JWT.Secret, intake.ReferenceReadOptions{
+		FrontendURL: cfg.Server.FrontendURL, PageSize: cfg.IntakeRead.ReferencePageSize,
+		Lifecycle: intake.NewRequesterLifecycleReader(map[string]authorization.WorkItemLifecycleReader{
+			"ticket": ticketService, "incident": incidentService, "problem": problemServiceDomain,
+			"change": changeServiceDomain, "service_request": srService,
+		}),
+	})
 	intakeReaders.SetFulfillmentReader(srService)
 	intakeHandler.SetReaders(intakeReaders)
 	intakeHandler.SetMappings(intake.NewIdentityMappingService(sessionReader, identityProviders))

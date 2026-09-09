@@ -37,6 +37,7 @@ func (h *Handler) RegisterRoutes(group *gin.RouterGroup) {
 	group.POST("/intake/work-items", middleware.IntakeAuthMiddleware(secret, "intake:create", h.exchange.ValidateCredential), h.CreateWorkItem)
 	group.GET("/intake/catalog-items", middleware.IntakeAuthMiddleware(secret, "intake:catalog:read", h.exchange.ValidateCredential), h.CatalogPage)
 	group.GET("/intake/catalog-items/:id", middleware.IntakeAuthMiddleware(secret, "intake:catalog:read", h.exchange.ValidateCredential), h.CatalogDetail)
+	group.GET("/intake/work-item-references", middleware.IntakeAuthMiddleware(secret, "intake:workitem:read", h.exchange.ValidateCredential), h.WorkItemReferences)
 	group.GET("/intake/work-items/:id", middleware.IntakeAuthMiddleware(secret, "intake:workitem:read", h.exchange.ValidateCredential), h.WorkItem)
 }
 func decodeIdentityBody(c *gin.Context, target any) error {
