@@ -111,14 +111,14 @@ export default function SLAPage() {
         <Alert className="mb-4" type="error" showIcon icon={<AlertTriangle />} message={`${stats.openViolations} 个 SLA 违规尚未处理`} description="请立即检查紧急与高优先级工单，避免升级影响扩大。" action={<Button danger onClick={() => router.push('/sla-monitor')}>查看违规</Button>} />
       )}
 
-      <Row gutter={[16, 16]} className="mb-6">
+      <Row gutter={[14, 14]} className="mb-6">
         <Col xs={24} sm={12} xl={6}><Card><Statistic title="SLA 合规率" value={report?.complianceRate ?? stats.overallComplianceRate} precision={1} suffix="%" valueStyle={{ color: (report?.complianceRate ?? stats.overallComplianceRate) >= 95 ? '#389e0d' : '#d46b08' }} /></Card></Col>
         <Col xs={24} sm={12} xl={6}><Card><Statistic title="平均响应时间" value={report?.avgResponseTime ?? 0} suffix="分钟" /></Card></Col>
         <Col xs={24} sm={12} xl={6}><Card><Statistic title="MTTR / 平均解决时间" value={report?.avgResolutionTime ?? 0} suffix="分钟" /></Card></Col>
         <Col xs={24} sm={12} xl={6}><Card><Tooltip title="当前 SLA API 尚未提供故障间隔数据"><Statistic title="MTBF / 平均故障间隔" value="—" /></Tooltip></Card></Col>
       </Row>
 
-      <Row gutter={[16, 16]}>
+      <Row gutter={[14, 14]}>
         <Col xs={24} lg={15}>
           <Card title="实时风险告警" extra={<Button type="link" onClick={() => router.push('/sla-monitor')}>全部监控</Button>}>
             {alerts.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前没有 SLA 风险告警" /> : (
