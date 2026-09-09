@@ -252,6 +252,11 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, c
 	if !evidenceOnly && (target == item.Status || !common.IsValidChangeStatusTransition(item.Status, target, c.Type)) {
 		return invalid(fmt.Sprintf("invalid change action %s from %s", cmd.Action, item.Status))
 	}
+	if cmd.Action == "cancel" {
+		if err := s.terminateChangeTx(ctx, tx, c, m, cmd.Evidence); err != nil {
+			return empty, err
+		}
+	}
 	update := tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantID(m.TenantID), ticket.DeletedAtIsNil(), ticket.Version(m.ExpectedVersion)).SetVersion(m.ExpectedVersion + 1).SetUpdatedAt(now)
 	if !evidenceOnly {
 		update.SetStatus(target)

@@ -1,6 +1,7 @@
 package change
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 
@@ -8,6 +9,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/handlers/common/intakehttp"
 	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
 	"time"
@@ -575,7 +577,7 @@ func (h *Handler) CreatePIR(c *gin.Context) {
 		return
 	}
 	userIDVal, _ := c.Get("user_id")
-	userID := userIDVal.(int)
+	userID, _ := userIDVal.(int)
 
 	var req dto.CreateChangePIRRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -584,13 +586,9 @@ func (h *Handler) CreatePIR(c *gin.Context) {
 	}
 	req.ChangeID = changeID
 
-	pir, err := h.svc.CreatePIR(c.Request.Context(), &req, userID, tenantID)
+	pir, err := h.svc.CreatePIR(c.Request.Context(), &req, workitemmutation.Meta{ActorID: userID, TenantID: tenantID, ExpectedVersion: req.ExpectedVersion, OperationID: req.OperationID, Source: "http"})
 	if err != nil {
-		if strings.Contains(err.Error(), "已存在") {
-			common.Conflict(c, err.Error(), nil)
-			return
-		}
-		common.InternalError(c, err.Error())
+		respondPIRMutationError(c, err)
 		return
 	}
 
@@ -660,13 +658,9 @@ func (h *Handler) UpdatePIR(c *gin.Context) {
 		return
 	}
 
-	pir, err := h.svc.UpdatePIR(c.Request.Context(), pirID, &req, tenantID)
+	pir, err := h.svc.UpdatePIR(c.Request.Context(), pirID, &req, workitemmutation.Meta{ActorID: c.GetInt("user_id"), TenantID: tenantID, ExpectedVersion: req.ExpectedVersion, OperationID: req.OperationID, Source: "http"})
 	if err != nil {
-		if strings.Contains(err.Error(), "不存在") {
-			common.NotFound(c, err.Error())
-			return
-		}
-		common.InternalError(c, err.Error())
+		respondPIRMutationError(c, err)
 		return
 	}
 
@@ -685,14 +679,41 @@ func (h *Handler) DeletePIR(c *gin.Context) {
 		return
 	}
 
-	if err := h.svc.DeletePIR(c.Request.Context(), pirID, tenantID); err != nil {
-		if strings.Contains(err.Error(), "不存在") {
-			common.NotFound(c, err.Error())
-			return
-		}
-		common.InternalError(c, err.Error())
+	var req dto.DeleteChangePIRRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		common.ParamError(c, "Invalid request body: "+err.Error())
+		return
+	}
+	result, err := h.svc.DeletePIR(c.Request.Context(), pirID, &req, workitemmutation.Meta{ActorID: c.GetInt("user_id"), TenantID: tenantID, ExpectedVersion: req.ExpectedVersion, OperationID: req.OperationID, Source: "http"})
+	if err != nil {
+		respondPIRMutationError(c, err)
 		return
 	}
 
-	common.Success(c, gin.H{"message": "PIR deleted"})
+	common.Success(c, result)
+}
+
+func respondPIRMutationError(c *gin.Context, err error) {
+	var conflict *workitemmutation.OperationConflictError
+	var state interface{ SQLState() string }
+	if common.IsVersionConflictError(err) || errors.As(err, &conflict) || (errors.As(err, &state) && (state.SQLState() == "40001" || state.SQLState() == "40P01")) {
+		common.Conflict(c, "PIR mutation conflicts with current state", nil)
+		return
+	}
+	if app, ok := common.AsAppError(err); ok {
+		switch app.Code {
+		case common.ErrCodeValidation, common.ErrCodeBadRequest:
+			common.ParamError(c, app.Message)
+		case common.ErrCodeForbidden:
+			common.Forbidden(c, app.Message)
+		case common.ErrCodeNotFound:
+			common.NotFound(c, app.Message)
+		case common.ErrCodeConflict:
+			common.Conflict(c, app.Message, nil)
+		default:
+			common.InternalError(c, "PIR mutation failed")
+		}
+		return
+	}
+	common.InternalError(c, "PIR mutation failed")
 }

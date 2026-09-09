@@ -3,7 +3,6 @@ package change
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"slices"
 	"sort"
 	"strings"
@@ -13,8 +12,6 @@ import (
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
-	"itsm-backend/ent/processcallbackoutbox"
-	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/handlers/shared/workitemmutation"
 )
@@ -97,7 +94,10 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 	if item.Status == "completed" || item.Status == "cancelled" || item.Status == "rejected" {
 		return empty, common.NewValidationError("terminal change metadata is locked", nil)
 	}
-	if err = requireSettledChangeCallbacks(ctx, tx, m.TenantID, current.WorkItemID); err != nil {
+	if err = workitemmutation.RequireSettledChangeCallbacks(ctx, tx, m.TenantID, current.WorkItemID); err != nil {
+		if _, unresolved := err.(*workitemmutation.UnresolvedChangeCallbackError); unresolved {
+			err = common.NewConflictError("Change workflow", err.Error())
+		}
 		return empty, err
 	}
 	p := cmd.Patch
@@ -283,26 +283,6 @@ func validateMetadataPatch(p dto.UpdateChangeRequest) error {
 	}
 	if p.RiskLevel != nil && !valid(string(*p.RiskLevel), string(dto.ChangeRiskLow), string(dto.ChangeRiskMedium), string(dto.ChangeRiskHigh)) {
 		return common.NewValidationError("invalid change risk", nil)
-	}
-	return nil
-}
-
-// Mutation owners pair this RR read with their Ticket write fence. A mere
-// snapshot read or row lock would miss a concurrently accepted callback.
-func requireSettledChangeCallbacks(ctx context.Context, tx *ent.Tx, tenantID, itemID int) error {
-	ids, err := tx.ProcessInstance.Query().Where(processinstance.TenantID(tenantID), processinstance.BusinessType("change"), processinstance.BusinessID(itemID), processinstance.BusinessKey(fmt.Sprintf("change:%d", itemID))).IDs(ctx)
-	if err != nil {
-		return err
-	}
-	if len(ids) == 0 {
-		return nil
-	}
-	unresolved, err := tx.ProcessCallbackOutbox.Query().Where(processcallbackoutbox.TenantID(tenantID), processcallbackoutbox.ProcessInstanceIDIn(ids...), processcallbackoutbox.StatusNEQ("completed")).Exist(ctx)
-	if err != nil {
-		return err
-	}
-	if unresolved {
-		return common.NewConflictError("Change workflow", "prior callback is unresolved")
 	}
 	return nil
 }

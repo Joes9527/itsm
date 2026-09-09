@@ -19,6 +19,7 @@ import (
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
 
@@ -35,7 +36,12 @@ type Service struct {
 	directory             database.DirectorySnapshot
 }
 
-func (s *Service) SetDirectorySnapshot(directory database.DirectorySnapshot) { s.directory = directory }
+func (s *Service) SetDirectorySnapshot(directory database.DirectorySnapshot) {
+	s.directory = directory
+	if s.pirService != nil {
+		s.pirService.SetDirectorySnapshot(directory)
+	}
+}
 
 func NewService(repo Repository, entClient *ent.Client, logger *zap.SugaredLogger) *Service {
 	svc := &Service{
@@ -941,12 +947,8 @@ func (s *Service) GetApprovalHistory(ctx context.Context, changeID int, tenantID
 
 // ==================== PIR (Post-Implementation Review) Methods ====================
 
-func (s *Service) CreatePIR(ctx context.Context, req *dto.CreateChangePIRRequest, reviewerID, tenantID int) (*dto.ChangePIRResponse, error) {
-	s.logger.Infow("Creating PIR", "change_id", req.ChangeID, "reviewer_id", reviewerID)
-	if s.pirService != nil {
-		return s.pirService.CreatePIR(ctx, req, reviewerID, tenantID)
-	}
-	return nil, fmt.Errorf("PIR service not initialized")
+func (s *Service) CreatePIR(ctx context.Context, req *dto.CreateChangePIRRequest, meta workitemmutation.Meta) (service.PIRMutationResult, error) {
+	return s.pirService.CreatePIR(ctx, req, meta)
 }
 
 func (s *Service) GetPIRByChange(ctx context.Context, changeID, tenantID int) (*dto.ChangePIRResponse, error) {
@@ -963,16 +965,9 @@ func (s *Service) ListPIRs(ctx context.Context, tenantID int, page, pageSize int
 	return nil, fmt.Errorf("PIR service not initialized")
 }
 
-func (s *Service) UpdatePIR(ctx context.Context, pirID int, req *dto.UpdateChangePIRRequest, tenantID int) (*dto.ChangePIRResponse, error) {
-	if s.pirService != nil {
-		return s.pirService.UpdatePIR(ctx, pirID, req, tenantID)
-	}
-	return nil, fmt.Errorf("PIR service not initialized")
+func (s *Service) UpdatePIR(ctx context.Context, id int, req *dto.UpdateChangePIRRequest, meta workitemmutation.Meta) (service.PIRMutationResult, error) {
+	return s.pirService.UpdatePIR(ctx, id, req, meta)
 }
-
-func (s *Service) DeletePIR(ctx context.Context, pirID, tenantID int) error {
-	if s.pirService != nil {
-		return s.pirService.DeletePIR(ctx, pirID, tenantID)
-	}
-	return fmt.Errorf("PIR service not initialized")
+func (s *Service) DeletePIR(ctx context.Context, id int, req *dto.DeleteChangePIRRequest, meta workitemmutation.Meta) (service.PIRMutationResult, error) {
+	return s.pirService.DeletePIR(ctx, id, req, meta)
 }

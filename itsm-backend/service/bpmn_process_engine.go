@@ -58,6 +58,7 @@ type ProcessEngine interface {
 	SuspendProcess(ctx context.Context, processInstanceID string, reason string) error
 	ResumeProcess(ctx context.Context, processInstanceID string) error
 	TerminateProcess(ctx context.Context, processInstanceID string, reason string) error
+	TerminateProcessTx(ctx context.Context, tx *ent.Tx, processInstanceID string, reason string) error
 }
 
 // ProcessDefinitionService 流程定义服务接口
@@ -2550,100 +2551,6 @@ func (e *CustomProcessEngine) ResumeProcess(ctx context.Context, processInstance
 	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("提交恢复流程事务失败: %w", err)
-	}
-	return nil
-}
-
-func (e *CustomProcessEngine) TerminateProcess(ctx context.Context, processInstanceID string, reason string) error {
-	scope, err := BPMNAccessScopeFromContext(ctx)
-	if err != nil {
-		return err
-	}
-	tx, err := e.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
-	if err != nil {
-		return fmt.Errorf("开启终止流程事务失败: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	txEngine := e.forClient(tx.Client(), nil, tx)
-	instance, err := txEngine.instanceAccessPolicy.loadForUpdate(ctx, processInstanceID)
-	if err != nil {
-		return err
-	}
-	if err := ValidateBPMNProcessLifecycle(BPMNProcessCommandTerminate, instance.Status); err != nil {
-		return err
-	}
-	actor, err := loadProcessInstanceMutationActor(ctx, tx.Client(), scope)
-	if err != nil {
-		return err
-	}
-	terminatedAt := time.Now()
-
-	predicate, err := bpmnProcessLifecyclePredicate(BPMNProcessCommandTerminate, instance.Version)
-	if err != nil {
-		return err
-	}
-	affected, err := tx.Client().ProcessInstance.Update().Where(
-		processinstance.ID(instance.ID), processinstance.TenantID(scope.TenantID), predicate,
-	).
-		SetStatus("terminated").
-		SetEndTime(terminatedAt).
-		AddVersion(1).
-		Save(ctx)
-	if err != nil {
-		return fmt.Errorf("终止流程实例失败: %w", err)
-	}
-	if affected != 1 {
-		return bpmnProcessLifecycleConflict(BPMNProcessCommandTerminate)
-	}
-	activeStatuses, err := bpmnTaskSourceStatuses(BPMNTaskCommandCancel)
-	if err != nil {
-		return err
-	}
-	activeTasks, err := tx.Client().ProcessTask.Query().Where(
-		processtask.ProcessInstanceID(instance.ID), processtask.TenantID(scope.TenantID),
-		processtask.StatusIn(activeStatuses...),
-	).All(ctx)
-	if err != nil {
-		return fmt.Errorf("加载待取消流程任务失败: %w", err)
-	}
-	for _, task := range activeTasks {
-		taskPredicate, predicateErr := bpmnTaskLifecyclePredicate(BPMNTaskCommandCancel, task.AggregationVersion)
-		if predicateErr != nil {
-			return predicateErr
-		}
-		cancelled, updateErr := tx.Client().ProcessTask.Update().Where(
-			processtask.ID(task.ID), processtask.TenantID(scope.TenantID), taskPredicate,
-		).SetStatus(common.ProcessTaskStatusCancelled).
-			SetCompletedTime(terminatedAt).
-			AddAggregationVersion(1).
-			Save(ctx)
-		if updateErr != nil {
-			return fmt.Errorf("取消流程任务失败: %w", updateErr)
-		}
-		if cancelled != 1 {
-			return bpmnTaskLifecycleConflict(BPMNTaskCommandCancel)
-		}
-	}
-	if err := e.auditService.ForClient(tx.Client()).RecordAudit(ctx, &AuditContext{
-		ProcessInstanceID:    instance.ID,
-		ProcessInstanceKey:   instance.ProcessInstanceID,
-		ProcessDefinitionKey: instance.ProcessDefinitionKey,
-		ProcessDefinitionID:  instance.ProcessDefinitionID,
-		ActivityID:           instance.CurrentActivityID,
-		ActivityName:         instance.CurrentActivityName,
-		ActivityType:         ActivityTypeEndEvent,
-		Action:               AuditActionProcessTerminated,
-		UserID:               actor.ID,
-		UserName:             actor.Name,
-		VariablesBefore:      map[string]interface{}{"status": instance.Status},
-		VariablesAfter:       map[string]interface{}{"status": "terminated"},
-		Comment:              reason,
-		TenantID:             instance.TenantID,
-	}); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("提交终止流程事务失败: %w", err)
 	}
 	return nil
 }
