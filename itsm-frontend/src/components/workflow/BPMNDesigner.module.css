@@ -1,0 +1,38 @@
+.host {
+  --canvas-fill-color: #fff;
+  --context-pad-entry-background-color: var(--color-bg-secondary);
+  --context-pad-entry-hover-background-color: var(--color-bg-tertiary);
+  --palette-entry-color: var(--color-text-primary);
+  --palette-entry-hover-color: var(--color-primary);
+  --palette-entry-selected-color: var(--color-primary);
+  --palette-background-color: var(--color-bg-secondary);
+  --palette-border-color: var(--color-border);
+  --palette-separator-color: var(--color-border);
+  --popup-font-family: var(--font-family-base);
+  --popup-font-size: 13px;
+  --popup-background-color: var(--color-bg-secondary);
+  --popup-border-color: var(--color-border);
+  --popup-description-color: var(--color-text-secondary);
+  --popup-no-results-color: var(--color-text-secondary);
+  --popup-entry-title-color: var(--color-text-primary);
+  --popup-entry-hover-color: var(--color-bg-tertiary);
+  --popup-search-border-color: var(--color-border);
+  --popup-search-focus-border-color: var(--color-primary);
+  --popup-search-focus-background-color: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+}
+/* Preserve the BPMN drawing sheet and persisted SVG appearance across themes. */
+.sheet {
+  background: #fff;
+  color: #1f2328;
+  min-width: 0;
+}
+.host :global(.djs-context-pad),
+.host :global(.djs-popup) {
+  color: var(--color-text-primary);
+}
+.host :global(.djs-popup input) {
+  color: var(--color-text-primary);
+  background: var(--color-bg-secondary);
+}

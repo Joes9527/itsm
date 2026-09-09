@@ -159,7 +159,7 @@ export default function WorkflowNodeInspector({
             <span>节点属性</span>
           </Space>
         }
-        className="h-full rounded-lg shadow-sm border border-gray-200"
+        className="h-full rounded-[8px] shadow-none border border-border"
         extra={
           onRefresh && (
             <Tooltip title="刷新选中节点属性">
@@ -178,22 +178,22 @@ export default function WorkflowNodeInspector({
           image={Empty.PRESENTED_IMAGE_SIMPLE}
           description={
             <Space orientation="vertical" size={0} align="center">
-              <span className="text-xs text-gray-500">
+              <span className="text-[12px] text-muted">
                 点击画布上的节点查看/编辑属性
               </span>
-              <Text type="secondary" className="text-xs">
+              <Text type="secondary" className="text-[12px]">
                 支持拖拽节点、连接线、条件配置
               </Text>
             </Space>
           }
         />
         {/* 快捷操作提示 */}
-        <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-          <Text strong className="text-xs block mb-2">💡 快捷操作</Text>
+        <div className="mt-4 p-3 bg-raised rounded-[8px]">
+          <Text strong className="text-[12px] block mb-2">💡 快捷操作</Text>
           <Space orientation="vertical" size={2} className="w-full">
-            <Text type="secondary" className="text-xs">• 双击节点可快速编辑名称</Text>
-            <Text type="secondary" className="text-xs">• 点击连接线设置流转条件</Text>
-            <Text type="secondary" className="text-xs">• 拖拽节点左侧/右侧创建新流程</Text>
+            <Text type="secondary" className="text-[12px]">• 双击节点可快速编辑名称</Text>
+            <Text type="secondary" className="text-[12px]">• 点击连接线设置流转条件</Text>
+            <Text type="secondary" className="text-[12px]">• 拖拽节点左侧/右侧创建新流程</Text>
           </Space>
         </div>
       </Card>
@@ -456,7 +456,7 @@ export default function WorkflowNodeInspector({
           </Tag>
         </Space>
       }
-      className="h-full rounded-lg shadow-sm border border-gray-200 overflow-y-auto"
+      className="h-full rounded-[8px] shadow-none border border-border overflow-y-auto"
       extra={
         onRefresh && (
           <Button
@@ -474,15 +474,15 @@ export default function WorkflowNodeInspector({
       <div className="space-y-4 pb-4">
         {/* 基础信息 - 所有节点通用 */}
         <div>
-          <Text type="secondary" className="text-xs">
+          <Text type="secondary" className="text-[12px]">
             节点 ID
           </Text>
-          <div className="font-mono text-xs mt-1 px-2 py-1 bg-gray-50 rounded">
+          <div className="font-mono text-[12px] mt-1 px-2 py-1 bg-raised rounded">
             {selection.id}
           </div>
           
           <div className="mt-2">
-            <Text type="secondary" className="text-xs">
+            <Text type="secondary" className="text-[12px]">
               节点名称
             </Text>
             <Input
@@ -495,7 +495,7 @@ export default function WorkflowNodeInspector({
           </div>
 
           <div className="mt-2">
-            <Text type="secondary" className="text-xs">
+            <Text type="secondary" className="text-[12px]">
               描述信息
             </Text>
             <TextArea
@@ -514,8 +514,8 @@ export default function WorkflowNodeInspector({
           <>
             <Divider className="my-2" />
 
-            <div className="mb-3 p-3 border border-blue-100 rounded-lg bg-blue-50/50">
-              <Text strong className="text-sm flex items-center mb-2">
+            <div className="mb-3 p-3 border border-border rounded-[8px] bg-raised">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Shield className="w-3.5 h-3.5 mr-1" />审批语义
               </Text>
               <Select
@@ -557,9 +557,9 @@ export default function WorkflowNodeInspector({
             </div>
 
             {/* 快捷操作栏 */}
-            <div className="mb-3 p-2 bg-blue-50 rounded-lg">
+            <div className="mb-3 p-2 bg-raised rounded-[8px]">
               <Space wrap>
-                <Text strong className="text-xs text-blue-700">⚡ 常用配置：</Text>
+                <Text strong className="text-[12px] text-foreground">⚡ 常用配置：</Text>
                 <Button
                   size="small"
                   type="text"
@@ -586,10 +586,10 @@ export default function WorkflowNodeInspector({
 
             {/* Assignee */}
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <UserCheck className="w-3.5 h-3.5 mr-1" />
                 受理人 (assignee)
-                <Tag color="blue" className="ml-2 text-xs">单人</Tag>
+                <Tag color="blue" className="ml-2 text-[12px]">单人</Tag>
               </Text>
               <Select
                 allowClear
@@ -605,7 +605,7 @@ export default function WorkflowNodeInspector({
                 options={userOptions}
                 size="small"
               />
-              <Text type="secondary" className="text-xs mt-1 block">
+              <Text type="secondary" className="text-[12px] mt-1 block">
                 指定单一用户为该任务的处理人；与下方"按角色指派"互斥，设置其一会清空另一个
               </Text>
             </div>
@@ -614,10 +614,10 @@ export default function WorkflowNodeInspector({
                 在职用户作为候选人（谁先领谁审批），不是挑固定某一个人，适合"总经理""IT总监"这类
                 跟具体人解耦、只认岗位角色的审批环节。 */}
             <div className="mt-3">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Shield className="w-3.5 h-3.5 mr-1" />
                 按角色指派 (assigneeRole)
-                <Tag color="purple" className="ml-2 text-xs">候选</Tag>
+                <Tag color="purple" className="ml-2 text-[12px]">候选</Tag>
               </Text>
               <Select
                 allowClear
@@ -633,7 +633,7 @@ export default function WorkflowNodeInspector({
                 options={assigneeRoleOptions}
                 size="small"
               />
-              <Text type="secondary" className="text-xs mt-1 block">
+              <Text type="secondary" className="text-[12px] mt-1 block">
                 指定该任务由某个角色下的用户处理（不依赖具体人，适合 IT总监等纯权限角色；跨部门/公司的组织架构负责人请用下方"固定部门审批人"）
               </Text>
             </div>
@@ -643,10 +643,10 @@ export default function WorkflowNodeInspector({
                 总经理，选成某个分公司节点就是那个分公司的负责人。引擎复用"部门经理审批"同一条
                 DeptManagerResolver，只是范围钉死在这里选的部门，不取申请人自己的。 */}
             <div className="mt-3">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Shield className="w-3.5 h-3.5 mr-1" />
                 固定部门审批人 (assigneeDeptId)
-                <Tag color="orange" className="ml-2 text-xs">组织架构</Tag>
+                <Tag color="orange" className="ml-2 text-[12px]">组织架构</Tag>
               </Text>
               <Select
                 allowClear
@@ -664,7 +664,7 @@ export default function WorkflowNodeInspector({
                 options={departmentOptions}
                 size="small"
               />
-              <Text type="secondary" className="text-xs mt-1 block">
+              <Text type="secondary" className="text-[12px] mt-1 block">
                 指定该任务由某个固定部门的负责人处理（例如选公司根部门=总经理审批）；与"受理人""按角色指派"互斥
               </Text>
             </div>
@@ -674,10 +674,10 @@ export default function WorkflowNodeInspector({
                 部门节点常年并存多条业务线的平级总经理，固定部门审批人对所有提交人给出同一个
                 answer，无法区分业务线；这里天然按人区分）。跟前三者互斥。 */}
             <div className="mt-3">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Shield className="w-3.5 h-3.5 mr-1" />
                 总经理审批（个人汇报链） (assigneeGmChain)
-                <Tag color="green" className="ml-2 text-xs">矩阵组织</Tag>
+                <Tag color="green" className="ml-2 text-[12px]">矩阵组织</Tag>
               </Text>
               <Switch
                 checked={currentAssigneeGmChain}
@@ -685,14 +685,14 @@ export default function WorkflowNodeInspector({
                   apply({ assigneeGmChain: checked || undefined, assignee: '', assigneeRole: '', assigneeDeptId: undefined })
                 }
               />
-              <Text type="secondary" className="text-xs mt-1 block">
+              <Text type="secondary" className="text-[12px] mt-1 block">
                 沿提交人自己的汇报链向上找职位头衔带"总经理"的人；适合矩阵组织（同一分公司/部门下有多条业务线各自的总经理），跟"固定部门审批人"互斥
               </Text>
             </div>
 
             {/* Candidate Users */}
             <div className="mt-3">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <User className="w-3.5 h-3.5 mr-1" />
                 候选人 (candidateUsers)
               </Text>
@@ -710,7 +710,7 @@ export default function WorkflowNodeInspector({
                 options={userOptions}
                 size="small"
               />
-              <Text type="secondary" className="text-xs mt-1 block">
+              <Text type="secondary" className="text-[12px] mt-1 block">
                 任一候选人可处理该任务
               </Text>
             </div>
@@ -718,7 +718,7 @@ export default function WorkflowNodeInspector({
             {/* Candidate Groups — 核心审批组入口 */}
             <div className="mt-3">
               <Space>
-                <Text strong className="text-sm flex items-center">
+                <Text strong className="text-[13px] flex items-center">
                   <Users className="w-3.5 h-3.5 mr-1" />
                   候选组 (candidateGroups)
                 </Text>
@@ -738,12 +738,12 @@ export default function WorkflowNodeInspector({
                 maxTagCount="responsive"
                 notFoundContent={
                   loadingGroups ? (
-                    <span className="text-gray-400">加载中...</span>
+                    <span className="text-muted">加载中...</span>
                   ) : (
                     <Empty
                       image={Empty.PRESENTED_IMAGE_SIMPLE}
                       description={
-                        <span className="text-xs">
+                        <span className="text-[12px]">
                           暂无审批组，请先到{' '}
                           <a href="/admin/groups" target="_blank" rel="noreferrer">
                             组管理
@@ -763,7 +763,7 @@ export default function WorkflowNodeInspector({
               <Alert
                 type="info"
                 showIcon
-                className="mt-2 text-xs"
+                className="mt-2 text-[12px]"
                 message="审批组中任一成员审批即视为该节点通过"
               />
             </div>
@@ -772,7 +772,7 @@ export default function WorkflowNodeInspector({
 
             {/* 表单键与优先级 */}
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <FileText className="w-3.5 h-3.5 mr-1" />
                 表单键 (formKey)
               </Text>
@@ -786,7 +786,7 @@ export default function WorkflowNodeInspector({
             </div>
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Hash className="w-3.5 h-3.5 mr-1" />
                 优先级 (priority)
               </Text>
@@ -803,7 +803,7 @@ export default function WorkflowNodeInspector({
             </div>
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Clock className="w-3.5 h-3.5 mr-1" />
                 截止时间 (dueDate)
               </Text>
@@ -817,7 +817,7 @@ export default function WorkflowNodeInspector({
             </div>
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Timer className="w-3.5 h-3.5 mr-1" />
                 提醒时间 (followUpDate)
               </Text>
@@ -838,7 +838,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Server className="w-3.5 h-3.5 mr-1" />
                 服务实现类型
               </Text>
@@ -853,7 +853,7 @@ export default function WorkflowNodeInspector({
             </div>
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Webhook className="w-3.5 h-3.5 mr-1" />
                 操作引用 (operationRef)
               </Text>
@@ -866,7 +866,7 @@ export default function WorkflowNodeInspector({
             </div>
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Hash className="w-3.5 h-3.5 mr-1" />
                 结果存储变量名
               </Text>
@@ -879,7 +879,7 @@ export default function WorkflowNodeInspector({
             </div>
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Settings className="w-3.5 h-3.5 mr-1" />
                 异步执行
               </Text>
@@ -888,7 +888,7 @@ export default function WorkflowNodeInspector({
                 onChange={checked => apply({ async: checked })}
                 size="small"
               />
-              <Text type="secondary" className="text-xs mt-1 block">
+              <Text type="secondary" className="text-[12px] mt-1 block">
                 开启后任务将异步执行，不阻塞主流程
               </Text>
             </div>
@@ -896,7 +896,7 @@ export default function WorkflowNodeInspector({
             <Alert
               type="info"
               showIcon
-              className="mt-2 text-xs"
+              className="mt-2 text-[12px]"
               message="服务任务会在流程执行到该节点时自动调用配置的外部接口或服务，无需人工干预。"
             />
           </>
@@ -909,7 +909,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Users className="w-3.5 h-3.5 mr-1" />
                 抄送类型
               </Text>
@@ -930,7 +930,7 @@ export default function WorkflowNodeInspector({
 
             {currentCCType === 'user' && (
               <div className="mt-2">
-                <Text strong className="text-sm flex items-center mb-2">
+                <Text strong className="text-[13px] flex items-center mb-2">
                   <User className="w-3.5 h-3.5 mr-1" />
                   抄送人
                 </Text>
@@ -951,7 +951,7 @@ export default function WorkflowNodeInspector({
 
             {currentCCType === 'group' && (
               <div className="mt-2">
-                <Text strong className="text-sm flex items-center mb-2">
+                <Text strong className="text-[13px] flex items-center mb-2">
                   <Users className="w-3.5 h-3.5 mr-1" />
                   用户组
                 </Text>
@@ -972,7 +972,7 @@ export default function WorkflowNodeInspector({
 
             {currentCCType === 'role' && (
               <div className="mt-2">
-                <Text strong className="text-sm flex items-center mb-2">
+                <Text strong className="text-[13px] flex items-center mb-2">
                   <Shield className="w-3.5 h-3.5 mr-1" />
                   角色
                 </Text>
@@ -993,7 +993,7 @@ export default function WorkflowNodeInspector({
 
             {currentCCType === 'variable' && (
               <div className="mt-2">
-                <Text strong className="text-sm flex items-center mb-2">
+                <Text strong className="text-[13px] flex items-center mb-2">
                   <Hash className="w-3.5 h-3.5 mr-1" />
                   动态变量名
                 </Text>
@@ -1007,7 +1007,7 @@ export default function WorkflowNodeInspector({
             )}
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Bell className="w-3.5 h-3.5 mr-1" />
                 发送通知
               </Text>
@@ -1021,7 +1021,7 @@ export default function WorkflowNodeInspector({
 
             {currentCCNotify && (
               <div className="mt-2">
-                <Text strong className="text-sm flex items-center mb-2">
+                <Text strong className="text-[13px] flex items-center mb-2">
                   <MessageCircle className="w-3.5 h-3.5 mr-1" />
                   通知渠道
                 </Text>
@@ -1044,7 +1044,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Mail className="w-3.5 h-3.5 mr-1" />
                 收件人 (To)
               </Text>
@@ -1057,7 +1057,7 @@ export default function WorkflowNodeInspector({
             </div>
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Mail className="w-3.5 h-3.5 mr-1" />
                 抄送人 (Cc)
               </Text>
@@ -1070,7 +1070,7 @@ export default function WorkflowNodeInspector({
             </div>
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <MessageSquare className="w-3.5 h-3.5 mr-1" />
                 邮件主题
               </Text>
@@ -1083,7 +1083,7 @@ export default function WorkflowNodeInspector({
             </div>
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <FileText className="w-3.5 h-3.5 mr-1" />
                 邮件模板
               </Text>
@@ -1097,7 +1097,7 @@ export default function WorkflowNodeInspector({
             </div>
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Settings className="w-3.5 h-3.5 mr-1" />
                 异步执行
               </Text>
@@ -1116,7 +1116,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Code className="w-3.5 h-3.5 mr-1" />
                 脚本语言
               </Text>
@@ -1130,7 +1130,7 @@ export default function WorkflowNodeInspector({
             </div>
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Code className="w-3.5 h-3.5 mr-1" />
                 脚本内容
               </Text>
@@ -1139,9 +1139,9 @@ export default function WorkflowNodeInspector({
                 onChange={e => apply({ script: e.target.value })}
                 placeholder="输入要执行的脚本代码"
                 rows={6}
-                className="font-mono text-xs"
+                className="font-mono text-[12px]"
               />
-              <Text type="secondary" className="text-xs mt-1 block">
+              <Text type="secondary" className="text-[12px] mt-1 block">
                 可以通过 execution.getVariable('变量名') 获取流程变量，通过 execution.setVariable('变量名', 值) 设置变量
               </Text>
             </div>
@@ -1154,7 +1154,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Database className="w-3.5 h-3.5 mr-1" />
                 规则引用 (ruleRef)
               </Text>
@@ -1167,7 +1167,7 @@ export default function WorkflowNodeInspector({
             </div>
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <FileText className="w-3.5 h-3.5 mr-1" />
                 输入参数
               </Text>
@@ -1176,12 +1176,12 @@ export default function WorkflowNodeInspector({
                 onChange={e => apply({ ruleInput: e.target.value })}
                 placeholder="输入参数映射，JSON格式"
                 rows={3}
-                className="font-mono text-xs"
+                className="font-mono text-[12px]"
               />
             </div>
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <FileText className="w-3.5 h-3.5 mr-1" />
                 输出参数
               </Text>
@@ -1190,12 +1190,12 @@ export default function WorkflowNodeInspector({
                 onChange={e => apply({ ruleOutput: e.target.value })}
                 placeholder="输出结果映射，JSON格式"
                 rows={3}
-                className="font-mono text-xs"
+                className="font-mono text-[12px]"
               />
             </div>
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Settings className="w-3.5 h-3.5 mr-1" />
                 异步执行
               </Text>
@@ -1214,7 +1214,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <MessageCircle className="w-3.5 h-3.5 mr-1" />
                 消息引用 (messageRef)
               </Text>
@@ -1227,7 +1227,7 @@ export default function WorkflowNodeInspector({
             </div>
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Settings className="w-3.5 h-3.5 mr-1" />
                 操作 (operation)
               </Text>
@@ -1247,7 +1247,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <MessageCircle className="w-3.5 h-3.5 mr-1" />
                 消息引用 (messageRef)
               </Text>
@@ -1267,7 +1267,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <GitBranch className="w-3.5 h-3.5 mr-1" />
                 默认分支
               </Text>
@@ -1277,7 +1277,7 @@ export default function WorkflowNodeInspector({
                 placeholder="输入默认流转的节点ID"
                 size="small"
               />
-              <Text type="secondary" className="text-xs mt-1 block">
+              <Text type="secondary" className="text-[12px] mt-1 block">
                 当所有条件都不满足时，流程将走默认分支
               </Text>
             </div>
@@ -1285,7 +1285,7 @@ export default function WorkflowNodeInspector({
             <Alert
               type="info"
               showIcon
-              className="mt-2 text-xs"
+              className="mt-2 text-[12px]"
               message="网关的具体条件需要在输出的序列流上分别配置，点击对应的连接线即可设置条件表达式。"
             />
           </>
@@ -1297,7 +1297,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <GitBranch className="w-3.5 h-3.5 mr-1" />
                 默认分支
               </Text>
@@ -1312,7 +1312,7 @@ export default function WorkflowNodeInspector({
             <Alert
               type="info"
               showIcon
-              className="mt-2 text-xs"
+              className="mt-2 text-[12px]"
               message="包容网关会执行所有条件为true的分支，全部完成后才会继续向下执行。"
             />
           </>
@@ -1324,7 +1324,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Settings className="w-3.5 h-3.5 mr-1" />
                 激活条件
               </Text>
@@ -1333,14 +1333,14 @@ export default function WorkflowNodeInspector({
                 onChange={e => apply({ activationCondition: e.target.value })}
                 placeholder="输入激活条件表达式"
                 rows={3}
-                className="font-mono text-xs"
+                className="font-mono text-[12px]"
               />
             </div>
 
             <Alert
               type="info"
               showIcon
-              className="mt-2 text-xs"
+              className="mt-2 text-[12px]"
               message="复杂网关支持自定义的分支合并条件，适用于复杂的流程控制场景。"
             />
           </>
@@ -1352,7 +1352,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <GitBranch className="w-3.5 h-3.5 mr-1" />
                 流转条件表达式
               </Text>
@@ -1361,9 +1361,9 @@ export default function WorkflowNodeInspector({
                 onChange={e => applyCondition(e.target.value)}
                 placeholder="例如：${order.amount > 10000} 或 JavaScript 表达式"
                 rows={3}
-                className="font-mono text-xs"
+                className="font-mono text-[12px]"
               />
-              <Text type="secondary" className="text-xs mt-1 block">
+              <Text type="secondary" className="text-[12px] mt-1 block">
                 条件表达式返回 true 时，流程将沿此连线流转
               </Text>
             </div>
@@ -1376,7 +1376,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Clock className="w-3.5 h-3.5 mr-1" />
                 定时类型
               </Text>
@@ -1391,7 +1391,7 @@ export default function WorkflowNodeInspector({
 
             {currentTimerType === 'duration' && (
               <div className="mt-2">
-                <Text strong className="text-sm flex items-center mb-2">
+                <Text strong className="text-[13px] flex items-center mb-2">
                   <Timer className="w-3.5 h-3.5 mr-1" />
                   持续时间
                 </Text>
@@ -1401,7 +1401,7 @@ export default function WorkflowNodeInspector({
                   placeholder="例如：PT1H（1小时后执行）"
                   size="small"
                 />
-                <Text type="secondary" className="text-xs mt-1 block">
+                <Text type="secondary" className="text-[12px] mt-1 block">
                   支持 ISO 8601 时长格式：PnYnMnDTnHnMnS
                 </Text>
               </div>
@@ -1409,7 +1409,7 @@ export default function WorkflowNodeInspector({
 
             {currentTimerType === 'cycle' && (
               <div className="mt-2">
-                <Text strong className="text-sm flex items-center mb-2">
+                <Text strong className="text-[13px] flex items-center mb-2">
                   <Timer className="w-3.5 h-3.5 mr-1" />
                   周期表达式
                 </Text>
@@ -1419,7 +1419,7 @@ export default function WorkflowNodeInspector({
                   placeholder="例如：R/PT1H（每小时执行一次）或 cron 表达式"
                   size="small"
                 />
-                <Text type="secondary" className="text-xs mt-1 block">
+                <Text type="secondary" className="text-[12px] mt-1 block">
                   支持重复执行格式 R[次数]/[间隔时间] 或标准 cron 表达式
                 </Text>
               </div>
@@ -1427,7 +1427,7 @@ export default function WorkflowNodeInspector({
 
             {currentTimerType === 'date' && (
               <div className="mt-2">
-                <Text strong className="text-sm flex items-center mb-2">
+                <Text strong className="text-[13px] flex items-center mb-2">
                   <Timer className="w-3.5 h-3.5 mr-1" />
                   指定时间
                 </Text>
@@ -1437,7 +1437,7 @@ export default function WorkflowNodeInspector({
                   placeholder="例如：2025-12-31T23:59:59Z"
                   size="small"
                 />
-                <Text type="secondary" className="text-xs mt-1 block">
+                <Text type="secondary" className="text-[12px] mt-1 block">
                   支持 ISO 8601 日期时间格式
                 </Text>
               </div>
@@ -1451,7 +1451,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <MessageCircle className="w-3.5 h-3.5 mr-1" />
                 消息引用 (messageRef)
               </Text>
@@ -1471,7 +1471,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Radio className="w-3.5 h-3.5 mr-1" />
                 信号引用 (signalRef)
               </Text>
@@ -1491,7 +1491,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <AlertTriangle className="w-3.5 h-3.5 mr-1" />
                 错误代码 (errorCode)
               </Text>
@@ -1511,7 +1511,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <AlertTriangle className="w-3.5 h-3.5 mr-1" />
                 升级代码 (escalationCode)
               </Text>
@@ -1531,7 +1531,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Settings className="w-3.5 h-3.5 mr-1" />
                 条件表达式
               </Text>
@@ -1540,7 +1540,7 @@ export default function WorkflowNodeInspector({
                 onChange={e => apply({ condition: e.target.value })}
                 placeholder="输入条件表达式，返回true时触发事件"
                 rows={3}
-                className="font-mono text-xs"
+                className="font-mono text-[12px]"
               />
             </div>
           </>
@@ -1552,7 +1552,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Settings className="w-3.5 h-3.5 mr-1" />
                 中断原任务
               </Text>
@@ -1561,7 +1561,7 @@ export default function WorkflowNodeInspector({
                 onChange={checked => apply({ cancelActivity: checked })}
                 size="small"
               />
-              <Text type="secondary" className="text-xs mt-1 block">
+              <Text type="secondary" className="text-[12px] mt-1 block">
                 开启时事件触发会中断原任务执行，关闭时事件触发后原任务继续执行
               </Text>
             </div>
@@ -1574,7 +1574,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Settings className="w-3.5 h-3.5 mr-1" />
                 事件触发
               </Text>
@@ -1583,13 +1583,13 @@ export default function WorkflowNodeInspector({
                 onChange={checked => apply({ triggeredByEvent: checked })}
                 size="small"
               />
-              <Text type="secondary" className="text-xs mt-1 block">
+              <Text type="secondary" className="text-[12px] mt-1 block">
                 开启时该子流程为事件子流程，由事件触发执行
               </Text>
             </div>
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Settings className="w-3.5 h-3.5 mr-1" />
                 补偿流程
               </Text>
@@ -1598,14 +1598,14 @@ export default function WorkflowNodeInspector({
                 onChange={checked => apply({ isForCompensation: checked })}
                 size="small"
               />
-              <Text type="secondary" className="text-xs mt-1 block">
+              <Text type="secondary" className="text-[12px] mt-1 block">
                 开启时该子流程为补偿流程，用于事务回滚时执行
               </Text>
             </div>
 
             {nodeType === 'Transaction' && (
               <div className="mt-2">
-                <Text strong className="text-sm flex items-center mb-2">
+                <Text strong className="text-[13px] flex items-center mb-2">
                   <Settings className="w-3.5 h-3.5 mr-1" />
                   事务方法
                 </Text>
@@ -1631,7 +1631,7 @@ export default function WorkflowNodeInspector({
             <Divider className="my-2" />
 
             <div>
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Link className="w-3.5 h-3.5 mr-1" />
                 调用流程ID
               </Text>
@@ -1644,7 +1644,7 @@ export default function WorkflowNodeInspector({
             </div>
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Settings className="w-3.5 h-3.5 mr-1" />
                 继承变量
               </Text>
@@ -1653,13 +1653,13 @@ export default function WorkflowNodeInspector({
                 onChange={checked => apply({ inheritVariables: checked })}
                 size="small"
               />
-              <Text type="secondary" className="text-xs mt-1 block">
+              <Text type="secondary" className="text-[12px] mt-1 block">
                 开启时子流程继承父流程的所有变量
               </Text>
             </div>
 
             <div className="mt-2">
-              <Text strong className="text-sm flex items-center mb-2">
+              <Text strong className="text-[13px] flex items-center mb-2">
                 <Settings className="w-3.5 h-3.5 mr-1" />
                 继承业务主键
               </Text>
@@ -1668,7 +1668,7 @@ export default function WorkflowNodeInspector({
                 onChange={checked => apply({ inheritBusinessKey: checked })}
                 size="small"
               />
-              <Text type="secondary" className="text-xs mt-1 block">
+              <Text type="secondary" className="text-[12px] mt-1 block">
                 开启时子流程继承父流程的业务主键
               </Text>
             </div>

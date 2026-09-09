@@ -118,31 +118,33 @@ Task 4 static evidence: four auth routes inherit the root ConfigProvider; exact 
 
 | Route | Source | Actual layout | Common components observed | Local risk | Status |
 | --- | --- | --- | --- | --- | --- |
-| `/cmdb/ci-types` | `src/app/(main)/cmdb/ci-types/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/cmdb/ci` | `src/app/(main)/cmdb/ci/page.tsx` | Root > Main (Console) | cmdb/CIList, ui/ManagementPageHeader | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/cmdb/cis/[id]/edit` | `src/app/(main)/cmdb/cis/[id]/edit/page.tsx` | Root > Main (Console) | cmdb/CIEditorForm, cmdb/useUnsavedChangesGuard, cmdb/ci-editor-shared, ui/ManagementPageHeader | special visual | NEEDS VERIFICATION |
-| `/cmdb/cis/[id]` | `src/app/(main)/cmdb/cis/[id]/page.tsx` | Root > Main (Console) | cmdb/ci-detail/CIDetail | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/cmdb/cis/create` | `src/app/(main)/cmdb/cis/create/page.tsx` | Root > Main (Console) | cmdb/CIEditorForm, cmdb/useUnsavedChangesGuard, cmdb/ci-editor-shared, ui/ManagementPageHeader | special visual | NEEDS VERIFICATION |
-| `/cmdb/cloud-accounts` | `src/app/(main)/cmdb/cloud-accounts/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; inline styles; table states | NEEDS VERIFICATION |
-| `/cmdb/cloud-resources` | `src/app/(main)/cmdb/cloud-resources/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; inline styles; table states | NEEDS VERIFICATION |
-| `/cmdb/cloud-services` | `src/app/(main)/cmdb/cloud-services/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | inline styles; table states | NEEDS VERIFICATION |
-| `/cmdb` | `src/app/(main)/cmdb/page.tsx` | Root > Main (Console) | cmdb/CSDMHub | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/cmdb/reconciliation` | `src/app/(main)/cmdb/reconciliation/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; inline styles; table states | NEEDS VERIFICATION |
-| `/cmdb/registry` | `src/app/(main)/cmdb/registry/page.tsx` | Root > Main (Console) | ui/ManagementPageHeader, ui/StatsOverview | literal colors; fixed palette classes; table states | NEEDS VERIFICATION |
-| `/cmdb/relationships` | `src/app/(main)/cmdb/relationships/page.tsx` | Root > Main (Console) | cmdb/CIRelationshipManager, ui/ManagementPageHeader | inline styles | NEEDS VERIFICATION |
-| `/cmdb/topology` | `src/app/(main)/cmdb/topology/page.tsx` | Root > Main (Console) | layout/PageContainer | literal colors; inline styles; special visual | NEEDS VERIFICATION |
-| `/knowledge/articles/[id]` | `src/app/(main)/knowledge/articles/[id]/page.tsx` | Root > Main (Console) | knowledge/ArticleDetail | inline styles | NEEDS VERIFICATION |
-| `/knowledge/articles/new` | `src/app/(main)/knowledge/articles/new/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; inline styles | NEEDS VERIFICATION |
-| `/knowledge` | `src/app/(main)/knowledge/page.tsx` | Root > Main (Console) | knowledge/ArticleList | literal colors; fixed palette classes; inline styles; table states | NEEDS VERIFICATION |
-| `/knowledge/reviews` | `src/app/(main)/knowledge/reviews/page.tsx` | Root > Main (Console) | layout/PageContainer, common/SafeContent | literal colors; inline styles; table states | NEEDS VERIFICATION |
-| `/workflow/audit` | `src/app/(main)/workflow/audit/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; inline styles; table states; special visual | NEEDS VERIFICATION |
-| `/workflow/bottlenecks` | `src/app/(main)/workflow/bottlenecks/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states; special visual | NEEDS VERIFICATION |
-| `/workflow/dashboard` | `src/app/(main)/workflow/dashboard/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; table states; special visual | NEEDS VERIFICATION |
-| `/workflow/designer` | `src/app/(main)/workflow/designer/page.tsx` | Root > Main (Console) | workflow/designer | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/workflow/instances` | `src/app/(main)/workflow/instances/page.tsx` | Root > Main (Console) | ui/FilterToolbarCard, ui/LoadingEmptyError, ui/ManagementPageHeader, ui/StatsOverview | literal colors; fixed palette classes; inline styles; table states; special visual | NEEDS VERIFICATION |
-| `/workflow/sla` | `src/app/(main)/workflow/sla/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; table states; special visual | NEEDS VERIFICATION |
-| `/workflow/ticket-approval` | `src/app/(main)/workflow/ticket-approval/page.tsx` | Root > Main (Console) | workflow/BPMNDesigner | fixed palette classes; table states; special visual | NEEDS VERIFICATION |
-| `/workflow/versions` | `src/app/(main)/workflow/versions/page.tsx` | Root > Main (Console) | ui/FilterToolbarCard, ui/LoadingEmptyError, ui/ManagementPageHeader, ui/StatsOverview | literal colors; fixed palette classes; inline styles; table states; special visual | NEEDS VERIFICATION |
+| `/cmdb/ci-types` | `src/app/(main)/cmdb/ci-types/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | redirect retained; target /admin/cmdb-types owned by Task7 | STATIC MIGRATED / PENDING BROWSER |
+| `/cmdb/ci` | `src/app/(main)/cmdb/ci/page.tsx` | Root > Main (Console) | cmdb/CIList, ui/ManagementPageHeader | shared component/theme dependency; inspect rendered states | STATIC MIGRATED / PENDING BROWSER |
+| `/cmdb/cis/[id]/edit` | `src/app/(main)/cmdb/cis/[id]/edit/page.tsx` | Root > Main (Console) | cmdb/CIEditorForm, cmdb/useUnsavedChangesGuard, cmdb/ci-editor-shared, ui/ManagementPageHeader | special visual | STATIC MIGRATED / PENDING BROWSER |
+| `/cmdb/cis/[id]` | `src/app/(main)/cmdb/cis/[id]/page.tsx` | Root > Main (Console) | cmdb/ci-detail/CIDetail | shared component/theme dependency; inspect rendered states | STATIC MIGRATED / PENDING BROWSER |
+| `/cmdb/cis/create` | `src/app/(main)/cmdb/cis/create/page.tsx` | Root > Main (Console) | cmdb/CIEditorForm, cmdb/useUnsavedChangesGuard, cmdb/ci-editor-shared, ui/ManagementPageHeader | special visual | STATIC MIGRATED / PENDING BROWSER |
+| `/cmdb/cloud-accounts` | `src/app/(main)/cmdb/cloud-accounts/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; inline styles; table states | STATIC MIGRATED / PENDING BROWSER |
+| `/cmdb/cloud-resources` | `src/app/(main)/cmdb/cloud-resources/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; inline styles; table states | STATIC MIGRATED / PENDING BROWSER |
+| `/cmdb/cloud-services` | `src/app/(main)/cmdb/cloud-services/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | inline styles; table states | STATIC MIGRATED / PENDING BROWSER |
+| `/cmdb` | `src/app/(main)/cmdb/page.tsx` | Root > Main (Console) | cmdb/CSDMHub | shared component/theme dependency; inspect rendered states | STATIC MIGRATED / PENDING BROWSER |
+| `/cmdb/reconciliation` | `src/app/(main)/cmdb/reconciliation/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; inline styles; table states | STATIC MIGRATED / PENDING BROWSER |
+| `/cmdb/registry` | `src/app/(main)/cmdb/registry/page.tsx` | Root > Main (Console) | ui/ManagementPageHeader, ui/StatsOverview | literal colors; fixed palette classes; table states | STATIC MIGRATED / PENDING BROWSER |
+| `/cmdb/relationships` | `src/app/(main)/cmdb/relationships/page.tsx` | Root > Main (Console) | cmdb/CIRelationshipManager, ui/ManagementPageHeader | inline styles | STATIC MIGRATED / PENDING BROWSER |
+| `/cmdb/topology` | `src/app/(main)/cmdb/topology/page.tsx` | Root > Main (Console) | layout/PageContainer | literal colors; inline styles; special visual | STATIC MIGRATED / PENDING BROWSER |
+| `/knowledge/articles/[id]` | `src/app/(main)/knowledge/articles/[id]/page.tsx` | Root > Main (Console) | knowledge/ArticleDetail | inline styles | STATIC MIGRATED / PENDING BROWSER |
+| `/knowledge/articles/new` | `src/app/(main)/knowledge/articles/new/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; inline styles | STATIC MIGRATED / PENDING BROWSER |
+| `/knowledge` | `src/app/(main)/knowledge/page.tsx` | Root > Main (Console) | knowledge/ArticleList | literal colors; fixed palette classes; inline styles; table states | STATIC MIGRATED / PENDING BROWSER |
+| `/knowledge/reviews` | `src/app/(main)/knowledge/reviews/page.tsx` | Root > Main (Console) | layout/PageContainer, common/SafeContent | literal colors; inline styles; table states | STATIC MIGRATED / PENDING BROWSER |
+| `/workflow/audit` | `src/app/(main)/workflow/audit/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; inline styles; table states; special visual | STATIC MIGRATED / PENDING BROWSER |
+| `/workflow/bottlenecks` | `src/app/(main)/workflow/bottlenecks/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states; special visual | STATIC MIGRATED / PENDING BROWSER |
+| `/workflow/dashboard` | `src/app/(main)/workflow/dashboard/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; table states; special visual | STATIC MIGRATED / PENDING BROWSER |
+| `/workflow/designer` | `src/app/(main)/workflow/designer/page.tsx` | Root > Main (Console) | workflow/designer | shared component/theme dependency; inspect rendered states | STATIC MIGRATED / PENDING BROWSER |
+| `/workflow/instances` | `src/app/(main)/workflow/instances/page.tsx` | Root > Main (Console) | ui/FilterToolbarCard, ui/LoadingEmptyError, ui/ManagementPageHeader, ui/StatsOverview | literal colors; fixed palette classes; inline styles; table states; special visual | STATIC MIGRATED / PENDING BROWSER |
+| `/workflow/sla` | `src/app/(main)/workflow/sla/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; table states; special visual | STATIC MIGRATED / PENDING BROWSER |
+| `/workflow/ticket-approval` | `src/app/(main)/workflow/ticket-approval/page.tsx` | Root > Main (Console) | workflow/BPMNDesigner | fixed palette classes; table states; special visual | STATIC MIGRATED / PENDING BROWSER |
+| `/workflow/versions` | `src/app/(main)/workflow/versions/page.tsx` | Root > Main (Console) | ui/FilterToolbarCard, ui/LoadingEmptyError, ui/ManagementPageHeader, ui/StatsOverview | literal colors; fixed palette classes; inline styles; table states; special visual | STATIC MIGRATED / PENDING BROWSER |
+
+Task6 static treatment: both ReactFlow hosts/nodes/labels/controls/minimap use semantic theme colors; topology and modeler data/layout are preserved. BPMN retains its white drawing sheet and dark inherited canvas text; custom and library chrome is theme-aware. This is bounded visualization treatment, not a route exclusion. Appearance and interactions remain pending controller browser evidence. The six route files without local styling changes inherit their migrated active components or shared Antd foundation (including cloud-services).
 
 ## admin/reports (37)
 

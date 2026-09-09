@@ -258,7 +258,7 @@ const EditCIPage: React.FC = () => {
         }
       />
 
-      <Card className='rounded-xl shadow-sm' loading={loading}>
+      <Card className='rounded-[8px] shadow-none' loading={loading}>
         <CIEditorForm
           form={form}
           types={types}

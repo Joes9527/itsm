@@ -72,20 +72,20 @@ const normalizeList = <T,>(response: unknown): T[] => {
 function HubCard({ title, description, accent, icon, metrics, actions, onAction }: HubCardProps & { onAction?: (href: string) => void }) {
   return (
     <Card
-      className="h-full border-slate-200 shadow-sm"
+      className="h-full border-border shadow-none"
       styles={{ body: { height: '100%' } }}
       style={{ borderTop: `3px solid ${accent}` }}
     >
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-start justify-between gap-[14px]">
         <div className="min-w-0">
           <div className="mb-2 flex items-center gap-2">
             <div
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-white"
+              className="flex h-10 w-10 items-center justify-center rounded-[8px] text-white"
               style={{ background: accent }}
             >
               {icon}
             </div>
-            <Title level={4} className="!mb-0">
+            <Title level={4} className="!mb-0 !text-[15px] !font-semibold">
               {title}
             </Title>
           </div>
@@ -96,9 +96,9 @@ function HubCard({ title, description, accent, icon, metrics, actions, onAction 
 
       <div className="mt-5 grid gap-3 sm:grid-cols-3">
         {metrics.map(metric => (
-          <div key={metric.label} className="rounded-lg bg-slate-50 px-3 py-2">
-            <div className="text-xs text-slate-500">{metric.label}</div>
-            <div className="mt-1 font-semibold text-slate-900">{metric.value}</div>
+          <div key={metric.label} className="rounded-[8px] bg-raised px-3 py-2">
+            <div className="text-[12px] text-muted">{metric.label}</div>
+            <div className="mt-1 font-semibold text-foreground">{metric.value}</div>
           </div>
         ))}
       </div>
@@ -364,7 +364,7 @@ export function CSDMHub() {
   ];
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-[16px] md:p-[24px]">
       <ManagementPageHeader
         title="配置管理数据库 (CMDB)"
         description="围绕配置项、云资源、关系拓扑和数据质量的日常工作台。"
@@ -382,11 +382,11 @@ export function CSDMHub() {
 
       <StatsOverview items={statsItems} />
 
-      <Card loading={state.loading} className="border-slate-200 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <Card loading={state.loading} className="border-border shadow-none">
+        <div className="flex flex-col gap-[14px] lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <Title level={4} className="!mb-0">
+              <Title level={4} className="!mb-0 !text-[15px] !font-semibold">
                 当前最需要处理的事
               </Title>
               {governanceTotal > 0 ? <Tag color="orange">{governanceTotal} 个待治理项</Tag> : <Tag color="green">数据状态良好</Tag>}
@@ -414,7 +414,7 @@ export function CSDMHub() {
         }
         loading={state.loading}
       >
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-[14px] md:grid-cols-2 xl:grid-cols-3">
           {workbenchActions.map(action => (
             <button
               type="button"
@@ -427,22 +427,22 @@ export function CSDMHub() {
                   if (typeof window !== 'undefined') window.location.href = action.href;
                 }
               }}
-              className="block w-full rounded-lg border border-slate-200 p-4 text-left text-inherit transition hover:border-blue-300 hover:bg-blue-50/40"
+              className="block w-full rounded-[8px] border border-border p-[16px] text-left text-inherit transition hover:border-primary hover:bg-raised"
             >
               <div className="flex items-start gap-3">
                 <div
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-                    action.primary ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700'
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] ${
+                    action.primary ? 'bg-primary text-white' : 'bg-raised text-foreground'
                   }`}
                 >
                   {action.icon}
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 font-medium text-slate-900">
+                  <div className="flex items-center gap-2 font-medium text-foreground">
                     {action.title}
                     {action.primary && <Tag color="blue">推荐</Tag>}
                   </div>
-                  <div className="mt-1 text-sm text-slate-500">{action.description}</div>
+                  <div className="mt-1 text-[13px] text-muted">{action.description}</div>
                 </div>
               </div>
             </button>
@@ -459,7 +459,7 @@ export function CSDMHub() {
         }
         loading={state.loading}
       >
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-[14px] lg:grid-cols-3">
           {hubCards.map(card => (
             <HubCard
               key={card.title}
@@ -494,7 +494,7 @@ export function CSDMHub() {
           </span>
         }
       >
-        <Row gutter={[16, 16]}>
+        <Row gutter={[14, 14]}>
           {pipeline.map((step, index) => (
             <Col key={step.title} xs={24} md={12} xl={6}>
               <Card
@@ -503,12 +503,12 @@ export function CSDMHub() {
                 style={{ borderTop: index === 0 ? '3px solid #13c2c2' : '3px solid #1890ff' }}
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-white">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[8px] bg-slate-900 text-white">
                     {step.icon}
                   </div>
                   <div>
-                    <div className="text-xs text-slate-400">0{index + 1}</div>
-                    <Title level={5} className="!mb-0">
+                    <div className="text-[12px] text-muted">0{index + 1}</div>
+                    <Title level={5} className="!mb-0 !text-[15px] !font-semibold">
                       {step.title}
                     </Title>
                   </div>
@@ -526,10 +526,10 @@ export function CSDMHub() {
       </Card>
 
       <Card title="质量与现状">
-        <Row gutter={[16, 16]}>
+        <Row gutter={[14, 14]}>
           <Col xs={24} md={12}>
-            <Card size="small" className="h-full bg-slate-50">
-              <div className="mb-2 text-sm text-slate-500">当前治理项</div>
+            <Card size="small" className="h-full bg-raised">
+              <div className="mb-2 text-[13px] text-muted">当前治理项</div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Text>待绑定资源</Text>
@@ -547,8 +547,8 @@ export function CSDMHub() {
             </Card>
           </Col>
           <Col xs={24} md={12}>
-            <Card size="small" className="h-full bg-slate-50">
-              <div className="mb-2 text-sm text-slate-500">最近同步</div>
+            <Card size="small" className="h-full bg-raised">
+              <div className="mb-2 text-[13px] text-muted">最近同步</div>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Text>最后刷新</Text>
@@ -569,36 +569,36 @@ export function CSDMHub() {
 
       <Card title="日常巡检清单" loading={state.loading}>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-lg border border-dashed border-slate-200 p-4">
+          <div className="rounded-[8px] border border-dashed border-border p-[16px]">
             <div className="font-medium">1. 新资源是否已入库</div>
-            <div className="mt-1 text-sm text-slate-500">
+            <div className="mt-1 text-[13px] text-muted">
               还有 {state.counts.unboundResources} 个云资源待绑定到配置项。
             </div>
             <Button className="mt-3" size="small" href="/cmdb/reconciliation">
               去处理
             </Button>
           </div>
-          <div className="rounded-lg border border-dashed border-slate-200 p-4">
+          <div className="rounded-[8px] border border-dashed border-border p-[16px]">
             <div className="font-medium">2. 类型模板是否够用</div>
-            <div className="mt-1 text-sm text-slate-500">
+            <div className="mt-1 text-[13px] text-muted">
               当前有 {state.counts.ciTypes} 个 CI 类型，检查核心字段是否已标准化。
             </div>
             <Button className="mt-3" size="small" href="/admin/cmdb-types">
               维护模板
             </Button>
           </div>
-          <div className="rounded-lg border border-dashed border-slate-200 p-4">
+          <div className="rounded-[8px] border border-dashed border-border p-[16px]">
             <div className="font-medium">3. 关键 CI 是否有关联</div>
-            <div className="mt-1 text-sm text-slate-500">
+            <div className="mt-1 text-[13px] text-muted">
               还有 {state.counts.unlinkedCIs} 个 CI 缺少关系，影响故障和变更分析。
             </div>
             <Button className="mt-3" size="small" href="/cmdb/relationships">
               补关系
             </Button>
           </div>
-          <div className="rounded-lg border border-dashed border-slate-200 p-4">
+          <div className="rounded-[8px] border border-dashed border-border p-[16px]">
             <div className="font-medium">4. 数据质量是否可用</div>
-            <div className="mt-1 text-sm text-slate-500">
+            <div className="mt-1 text-[13px] text-muted">
               孤儿 CI 当前 {state.counts.orphanCIs} 个，建议纳入每周巡检。
             </div>
             <Button className="mt-3" size="small" href="/reports/cmdb-quality">

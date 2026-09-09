@@ -145,7 +145,7 @@ export function CIEditorForm({
   // 基础信息
   const basicSection = (
     <>
-      <div className='grid gap-4 lg:grid-cols-2'>
+      <div className='grid gap-[14px] lg:grid-cols-2'>
         <Form.Item
           label='资产名称'
           name='name'
@@ -206,7 +206,7 @@ export function CIEditorForm({
 
   // 归属与环境
   const ownershipSection = (
-    <div className='grid gap-4 lg:grid-cols-2 xl:grid-cols-3'>
+    <div className='grid gap-[14px] lg:grid-cols-2 xl:grid-cols-3'>
       <Form.Item label='环境' name='environment'>
         <Select placeholder='请选择环境' allowClear size='middle' options={environmentOptions} />
       </Form.Item>
@@ -231,12 +231,12 @@ export function CIEditorForm({
   // 云资源
   const cloudSection = (
     <>
-      <div className='mb-3 text-sm text-slate-500'>
+      <div className='mb-3 text-[13px] text-muted'>
         如果配置项来自云平台，请先选择「云资源引用」，系统会自动填充
         Region、Zone、资源类型等字段。如不涉及云资源，此部分可留空。
       </div>
 
-      <div className='grid gap-4 lg:grid-cols-2 xl:grid-cols-3'>
+      <div className='grid gap-[14px] lg:grid-cols-2 xl:grid-cols-3'>
         <Form.Item label='云厂商' name='cloudProvider'>
           <Select placeholder='请选择云厂商' allowClear options={cloudProviderOptions} />
         </Form.Item>
@@ -275,10 +275,10 @@ export function CIEditorForm({
 
       {schemaFields.length > 0 && (
         <>
-          <div className='mb-3 mt-2 text-sm text-slate-500'>
+          <div className='mb-3 mt-2 text-[13px] text-muted'>
             动态属性会跟随所选云资源类型变化，并保存到云资源元数据中，优先使用枚举选择，减少手填错误。
           </div>
-          <div className='grid gap-4 lg:grid-cols-2'>
+          <div className='grid gap-[14px] lg:grid-cols-2'>
             {schemaFields.map(field => (
               <Form.Item
                 key={field.key}
@@ -309,11 +309,11 @@ export function CIEditorForm({
     <>
       {typeSchemaFields.length > 0 && (
         <>
-          <div className='mb-3 text-sm text-slate-500'>
+          <div className='mb-3 text-[13px] text-muted'>
             这些字段来自所选 CI
             类型模板，会保存到配置项扩展属性中，用于统一检索、报表和后续流程引用。
           </div>
-          <div className='grid gap-4 lg:grid-cols-2'>
+          <div className='grid gap-[14px] lg:grid-cols-2'>
             {typeSchemaFields.map(field => (
               <Form.Item
                 key={field.key}

@@ -355,7 +355,7 @@ export default function WorkflowAIModal({
                 />
               </Form.Item>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-[14px]">
                 <Form.Item
                   name="processType"
                   label="流程类型"
@@ -489,7 +489,7 @@ export default function WorkflowAIModal({
               <div className="mt-6">
                 <div className="mb-3 flex justify-between items-center">
                   <div className="space-y-1">
-                    <Title level={5}>生成结果预览</Title>
+                    <Title className="!text-[15px] !font-semibold" level={5}>生成结果预览</Title>
                     {generationResult && (
                       <Space wrap>
                         <Tag color="blue">{generationResult.processName}</Tag>
@@ -517,7 +517,7 @@ export default function WorkflowAIModal({
                     description={generationResult.explanation}
                   />
                 )}
-                <Card className="bg-gray-50 font-mono text-xs overflow-auto max-h-[400px] whitespace-pre-wrap">
+                <Card className="bg-raised font-mono text-[12px] overflow-auto max-h-[400px] whitespace-pre-wrap">
                   {generatedProcess}
                 </Card>
               </div>
@@ -546,11 +546,11 @@ export default function WorkflowAIModal({
             </div>
 
             {suggestions.length > 0 && (
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-border">
                 {suggestions.map(item => (
                   <div
                     key={item.id}
-                    className="cursor-pointer hover:bg-gray-50"
+                    className="cursor-pointer hover:bg-raised"
                     onClick={() => item.elementId && jumpToElement(item.elementId)}
                   >
                     <div className="flex gap-3 px-4 py-3">
@@ -581,7 +581,7 @@ export default function WorkflowAIModal({
                             </Tag>
                           )}
                         </Space>
-                        <div className="mt-1 text-sm text-gray-500">{item.description}</div>
+                        <div className="mt-1 text-[13px] text-muted">{item.description}</div>
                       </div>
                     </div>
                   </div>
@@ -612,11 +612,11 @@ export default function WorkflowAIModal({
             </div>
 
             {complianceIssues.length > 0 && (
-              <div className="divide-y divide-gray-100">
+              <div className="divide-y divide-border">
                 {complianceIssues.map(item => (
                   <div
                     key={item.id}
-                    className="cursor-pointer hover:bg-gray-50"
+                    className="cursor-pointer hover:bg-raised"
                     onClick={() => item.elementId && jumpToElement(item.elementId)}
                   >
                     <div className="flex gap-3 px-4 py-3">
@@ -647,7 +647,7 @@ export default function WorkflowAIModal({
                             </Tag>
                           )}
                         </Space>
-                        <div className="mt-1 text-sm text-gray-500">{item.description}</div>
+                        <div className="mt-1 text-[13px] text-muted">{item.description}</div>
                       </div>
                     </div>
                   </div>
