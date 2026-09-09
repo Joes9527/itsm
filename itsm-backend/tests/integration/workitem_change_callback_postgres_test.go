@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/stretchr/testify/require"
@@ -30,15 +31,18 @@ func changeCallbackContext(f *changeLifecycleFixture, actor *ent.User) context.C
 }
 
 func TestWorkItemChangeLifecycleDefaultWorkflow(t *testing.T) {
-	for _, kind := range []string{"normal", "standard", "emergency", "standard_cab_rejected", "standard_cab_write_only"} {
+	for _, kind := range []string{"normal", "standard", "emergency", "standard_cab_rejected", "standard_cab_write_only", "standard_cab_approved"} {
 		outcomes := []string{"successful", "failed", "rolled_back"}
-		if kind == "standard_cab_rejected" || kind == "standard_cab_write_only" {
+		if kind == "standard_cab_rejected" || kind == "standard_cab_write_only" || kind == "standard_cab_approved" {
 			outcomes = []string{"rejected"}
+			if kind == "standard_cab_approved" {
+				outcomes = []string{"successful"}
+			}
 		}
 		for _, outcome := range outcomes {
 			t.Run(kind+"/"+outcome, func(t *testing.T) {
 				recordType := kind
-				if kind == "standard_cab_rejected" || kind == "standard_cab_write_only" {
+				if kind == "standard_cab_rejected" || kind == "standard_cab_write_only" || kind == "standard_cab_approved" {
 					recordType = "standard"
 				}
 				f := newChangeLifecycleFixture(t, recordType)
@@ -93,7 +97,7 @@ func TestWorkItemChangeLifecycleDefaultWorkflow(t *testing.T) {
 				}
 				f.apply(t, f.command("submit", "submit"))
 				instance := f.client.ProcessInstance.Query().OnlyX(f.ctx)
-				if kind == "standard_cab_rejected" || kind == "standard_cab_write_only" {
+				if kind == "standard_cab_rejected" || kind == "standard_cab_write_only" || kind == "standard_cab_approved" {
 					variables := instance.Variables
 					variables["approval_required"] = true
 					instance.Update().SetVariables(variables).ExecX(f.ctx)
@@ -148,6 +152,7 @@ func TestWorkItemChangeLifecycleDefaultWorkflow(t *testing.T) {
 				if kind == "standard_cab_rejected" {
 					complete("Activity_CABApproval", approver, map[string]interface{}{"approvalAction": "reject", "approvalResult": "rejected", "evidence": "CAB rejected", "approvalComment": "unacceptable risk"})
 					require.Equal(t, "rejected", f.client.Ticket.GetX(f.ctx, f.c.WorkItemID).Status, "real CAB rejection overrides configured policy")
+					assertChangeAuthorizationAudit(t, f, "cab_decision", f.client.ProcessApprovalDecision.Query().OnlyX(f.ctx).ID)
 					require.Equal(t, "completed", f.client.ProcessInstance.GetX(f.ctx, instance.ID).Status)
 					return
 				}
@@ -163,8 +168,10 @@ func TestWorkItemChangeLifecycleDefaultWorkflow(t *testing.T) {
 				if kind != "standard" {
 					complete("Activity_CABApproval", approver, map[string]interface{}{"approvalAction": "approve", "approvalResult": "approved", "evidence": "CAB approves"})
 					require.Equal(t, 1, f.client.ProcessApprovalDecision.Query().CountX(f.ctx))
+					assertChangeAuthorizationAudit(t, f, "cab_decision", f.client.ProcessApprovalDecision.Query().OnlyX(f.ctx).ID)
 				} else {
 					require.Zero(t, f.client.ProcessApprovalDecision.Query().CountX(f.ctx), "configured policy is not human approval")
+					assertChangeAuthorizationAudit(t, f, "standard_policy", 0)
 				}
 				require.Equal(t, "approved", f.client.Ticket.GetX(f.ctx, f.c.WorkItemID).Status)
 				if kind != "emergency" {
@@ -321,5 +328,20 @@ func TestWorkItemChangeLifecycleDurableServiceCallbackMSP(t *testing.T) {
 			require.Equal(t, actor.ID, f.client.AuditLog.Query().Where(auditlog.OperationID(row.ExecutionKey)).OnlyX(f.ctx).UserID)
 			require.Equal(t, "completed", f.client.ProcessCallbackOutbox.GetX(f.ctx, row.ID).Status)
 		})
+	}
+}
+
+func assertChangeAuthorizationAudit(t *testing.T, f *changeLifecycleFixture, kind string, decisionID int) {
+	t.Helper()
+	receipt := f.client.AuditLog.Query().Where(auditlog.TenantID(f.tenant.ID), auditlog.Action("change.authorize"), auditlog.Path(fmt.Sprint(f.c.WorkItemID))).OnlyX(f.ctx)
+	var facts map[string]any
+	require.NotNil(t, receipt.RequestBody)
+	require.NoError(t, json.Unmarshal([]byte(*receipt.RequestBody), &facts))
+	require.Equal(t, kind, facts["authorizationKind"])
+	require.EqualValues(t, decisionID, facts["approvalDecisionId"])
+	if kind == "cab_decision" {
+		require.NotContains(t, facts, "standardPolicy")
+	} else {
+		require.Contains(t, facts, "standardPolicy")
 	}
 }

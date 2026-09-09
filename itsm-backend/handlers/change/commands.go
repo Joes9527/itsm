@@ -280,7 +280,7 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, c
 	facts := map[string]any{"changeId": c.ID, "oldStatus": item.Status, "status": updated.Status, "outcome": saved.Outcome, "outcomeEvidence": saved.OutcomeEvidence, "actualStart": saved.ActualStartDate, "actualEnd": saved.ActualEndDate, "evidence": cmd.Evidence, "approvalDecisionId": cmd.ApprovalDecisionID, "pirId": cmd.PIRID, "statusChanged": target != item.Status}
 	if cmd.Action == "authorize" {
 		facts["authorizationKind"] = "cab_decision"
-		if qualifyingStandardPolicy(c, m.TenantID) {
+		if cmd.ApprovalDecisionID == 0 && qualifyingStandardPolicy(c, m.TenantID) {
 			facts["authorizationKind"] = "standard_policy"
 			facts["standardPolicy"] = c.StandardPolicy
 		}

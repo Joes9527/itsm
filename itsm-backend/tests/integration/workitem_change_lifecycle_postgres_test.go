@@ -394,6 +394,7 @@ func TestWorkItemChangeLifecycleStandardPolicyCreation(t *testing.T) {
 	f.apply(t, f.command("assess", "policy-assess"))
 	command := f.command("authorize", "policy-authorize")
 	f.apply(t, command)
+	assertChangeAuthorizationAudit(t, f, "standard_policy", 0)
 	start, end := time.Now().Add(-time.Minute), time.Now().Add(time.Hour)
 	schedule := f.command("schedule", "policy-schedule")
 	schedule.PlannedStart = &start
