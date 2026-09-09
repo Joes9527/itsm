@@ -139,7 +139,7 @@ func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledg
 		return err
 	}
 	executionKeys := make([]string, 0)
-	effect, err := e.completeTaskWithClient(ctx, tx.Client(), taskID, completionVariables, &executionKeys)
+	effect, err := txEngine.completeTaskWithClient(ctx, tx.Client(), taskID, completionVariables, &executionKeys)
 	if err != nil {
 		return err
 	}
