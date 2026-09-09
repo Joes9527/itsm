@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/ent"
+
 	"go.uber.org/zap"
 )
 
@@ -178,6 +180,22 @@ func isValidProblemStatusTransition(current, next string) bool {
 
 func canCloseProblemStatus(status string) bool {
 	return strings.TrimSpace(status) == "resolved"
+}
+
+// IsUnfinished projects this owner's canonical lifecycle, including its supported
+// legacy in_progress state. A Problem has no cancelled state.
+func (s *Service) IsUnfinished(_ context.Context, _ *ent.Client, item *ent.Ticket) (bool, error) {
+	if item == nil || item.RecordClass != "problem" {
+		return false, fmt.Errorf("Problem WorkItem is required")
+	}
+	switch item.Status {
+	case "open", "investigating", "identified", "in_progress":
+		return true, nil
+	case "resolved", "closed":
+		return false, nil
+	default:
+		return false, fmt.Errorf("unsupported Problem status %q", item.Status)
+	}
 }
 
 func uniquePositiveIDs(ids []int) []int {

@@ -2,6 +2,7 @@ package service_request
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -23,6 +24,22 @@ type Service struct {
 
 func NewService(repo Repository, client *ent.Client, logger *zap.SugaredLogger, chainResolver *service.ApprovalChainResolver) *Service {
 	return &Service{repo: repo, client: client, logger: logger, chainResolver: chainResolver}
+}
+
+// IsUnfinished follows Requested Item workflow completion and access cancellation
+// rules. Catalog Tasks have no implemented lifecycle owner yet and fail closed.
+func (s *Service) IsUnfinished(_ context.Context, _ *ent.Client, item *ent.Ticket) (bool, error) {
+	if item == nil || item.RecordClass != "service_request_item" {
+		return false, fmt.Errorf("Requested Item lifecycle requires service_request_item")
+	}
+	switch item.Status {
+	case "new", "open", "assigned", "pending", "in_progress":
+		return true, nil
+	case "resolved", "closed", "cancelled", "rejected":
+		return false, nil
+	default:
+		return false, fmt.Errorf("unsupported Requested Item status %q", item.Status)
+	}
 }
 
 // Client exposes the underlying ent client so the handler layer can query
