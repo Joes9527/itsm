@@ -54,3 +54,14 @@ Validation after the review fixes:
 - `npm run type-check` → theme tokens up to date; TypeScript passed.
 - Scoped ESLint over the changed layout, Header, Sidebar and tests → passed with no output.
 - Browser confirmation of 390px and 768px fixes remains with the controller after this fix commit.
+
+## Review fix round 2 — compact persona cascade
+
+Review base: `25699c6ea`.
+
+Moved the shared Persona and user-trigger base declarations before the `max-width: 991px` overrides. The compact rules now win the equal-specificity cascade: the Persona name and chevron are hidden, and the trigger remains a centered 32px icon control at 768–991px. No focus logic or theme foundation code changed.
+
+- `npm test -- --runInBand --coverage=false --runTestsByPath 'src/app/(main)/__tests__/layout-auth.test.tsx' src/components/layout/__tests__/navigation-theme.test.tsx` → 2 suites / 10 tests passed, output clean.
+- `npm run type-check` → theme tokens up to date; TypeScript passed.
+- `npx prettier --check src/components/layout/header/Header.module.css` → all matched files use Prettier code style.
+- Browser computed-style and rectangle confirmation remains with the controller after this commit.

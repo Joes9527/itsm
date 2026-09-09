@@ -442,6 +442,39 @@
   }
 }
 
+.userMenuDetails {
+  min-width: 0;
+}
+
+.userMenuDetails > div,
+.personaName {
+  display: block;
+  max-width: 112px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.personaButton,
+.personaStatic {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  max-width: 160px;
+  padding: 0 8px;
+  color: var(--color-text-header);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  box-shadow: none;
+  font-size: 13px;
+}
+
+.userMenuChevron {
+  flex-shrink: 0;
+}
+
 @media (max-width: 991px) {
   .headerSearchInput {
     display: none !important;
@@ -480,39 +513,6 @@
     padding: 2px !important;
     justify-content: center;
   }
-}
-
-.userMenuDetails {
-  min-width: 0;
-}
-
-.userMenuDetails > div,
-.personaName {
-  display: block;
-  max-width: 112px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.personaButton,
-.personaStatic {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 32px;
-  max-width: 160px;
-  padding: 0 8px;
-  color: var(--color-text-header);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  box-shadow: none;
-  font-size: 13px;
-}
-
-.userMenuChevron {
-  flex-shrink: 0;
 }
 
 @media (max-width: 767px) {
