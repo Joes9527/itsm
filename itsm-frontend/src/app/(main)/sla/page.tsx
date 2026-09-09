@@ -96,11 +96,11 @@ export default function SLAPage() {
     <div className="p-6">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="mb-1 text-2xl font-bold">SLA 服务级别管理</h1>
-          <p className="m-0 text-sm text-muted">近 30 天服务质量与实时违约风险</p>
+          <h1 className="mb-1 text-[24px] font-semibold">SLA 服务级别管理</h1>
+          <p className="m-0 text-[13px] text-muted">近 30 天服务质量与实时违约风险</p>
         </div>
         <Space wrap>
-          {refreshedAt && <span className="text-xs text-muted">更新于 {dayjs(refreshedAt).format('HH:mm:ss')}</span>}
+          {refreshedAt && <span className="text-[11px] text-muted">更新于 {dayjs(refreshedAt).format('HH:mm:ss')}</span>}
           <Button icon={<RefreshCw size={16} />} loading={loading} onClick={() => void loadData()}>刷新</Button>
           <Button type="primary" danger icon={<Download size={16} />} onClick={exportReport}>导出 SLA 违约报告</Button>
         </Space>
@@ -126,7 +126,7 @@ export default function SLAPage() {
                 {alerts.slice(0, 6).map(alert => {
                   const priority = priorityConfig[alert.priority] ?? priorityConfig.normal;
                   return <div key={`${alert.ticketId}-${alert.createdAt}`} className="flex flex-wrap items-center justify-between gap-3 rounded border border-border p-3">
-                    <div><div className="font-medium">{alert.ticketTitle}</div><div className="text-xs text-muted">{alert.slaDefinition} · 工单 #{alert.ticketId}</div></div>
+                    <div><div className="font-medium">{alert.ticketTitle}</div><div className="text-[11px] text-muted">{alert.slaDefinition} · 工单 #{alert.ticketId}</div></div>
                     <Space><Tag color={priority.color}>{priority.label}优先级</Tag><Tag color={alert.timeRemaining <= 0 ? 'red' : 'orange'}>{alert.timeRemaining <= 0 ? `已超时 ${Math.abs(alert.timeRemaining)} 分钟` : `剩余 ${alert.timeRemaining} 分钟`}</Tag></Space>
                   </div>;
                 })}
@@ -141,7 +141,7 @@ export default function SLAPage() {
               <div><Tag color="red">高</Tag><span>进入当班队列，优先处理</span></div>
               <div><Tag color="blue">普通</Tag><span>按 SLA 目标有序处理</span></div>
             </Space>
-            <div className="mt-6 grid grid-cols-2 gap-3">
+            <div className="mt-6 grid grid-cols-2 gap-[14px]">
               <Card size="small"><Statistic title="生效 SLA" value={stats.activeDefinitions} /></Card>
               <Card size="small"><Statistic title="累计违规" value={stats.totalViolations} /></Card>
             </div>

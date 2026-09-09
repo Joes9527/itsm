@@ -22,7 +22,7 @@ import { ArrowLeft, Save } from 'lucide-react';
 
 import type { License, LicenseRequest} from '@/lib/api/asset-api';
 import { AssetApi, type LicenseType } from '@/lib/api/asset-api';
-import type { Dayjs } from 'dayjs';
+import dayjs, { type Dayjs } from 'dayjs';
 
 const { TextArea } = Input;
 
@@ -45,7 +45,11 @@ const LicenseForm: React.FC = () => {
     try {
       const data = await AssetApi.getLicense(Number(id));
       setDetail(data);
-      form.setFieldsValue(data);
+      form.setFieldsValue({
+        ...data,
+        purchaseDate: data.purchaseDate ? dayjs(data.purchaseDate) : undefined,
+        expiryDate: data.expiryDate ? dayjs(data.expiryDate) : undefined,
+      });
     } catch (error) {
       message.error('加载许可证详情失败');
     } finally {

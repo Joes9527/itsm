@@ -91,7 +91,8 @@ export async function installVisualThemeFixture(page: Page) {
 
   await page.route('**/api/v1/auth/me', async route => {
     if (!isExact(route, 'GET', '/api/v1/auth/me')) return route.abort('blockedbyclient');
-    if (!route.request().headers().cookie?.includes('access_token=visual-session')) {
+    const headers = await route.request().allHeaders();
+    if (!headers.cookie?.includes('access_token=visual-session')) {
       return route.fulfill({
         status: 401,
         contentType: 'application/json',
