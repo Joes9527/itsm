@@ -74,7 +74,7 @@ func (s *engineChangeCallbackTestService) ApplyChangeWorkflowCallback(ctx contex
 		_, err = workItem.Update().SetStatus("in_progress").Save(ctx)
 	case "verify_change", "close_change":
 		target := "completed"
-		if cmd.VerificationResult == "failed" {
+		if cmd.Outcome == "failed" {
 			target = "failed"
 		}
 		if workItem.Status == target {

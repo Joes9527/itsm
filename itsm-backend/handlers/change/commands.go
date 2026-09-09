@@ -111,7 +111,7 @@ func (s *Service) authorizeCommand(ctx context.Context, tx *ent.Tx, cmd Command)
 		return nil, err
 	}
 	permission := "write"
-	if cmd.Action == "authorize" && !qualifyingStandardPolicy(current, m.TenantID) {
+	if cmd.Action == "authorize" && (cmd.ApprovalDecisionID != 0 || !qualifyingStandardPolicy(current, m.TenantID)) {
 		permission = "approve"
 	}
 	if err = authorization.RequireCurrentPermission(ctx, tx, creation.Identity{TenantID: m.TenantID, ActorID: actor.ID, Role: role}, "change", permission); err != nil {
@@ -163,7 +163,7 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, c
 		if c.AssessmentEvidence == "" || c.AssessedBy <= 0 || c.AssessedAt.IsZero() || c.AssessmentDigest != assessment {
 			return invalid("current assessment required")
 		}
-		if !qualifyingStandardPolicy(c, m.TenantID) {
+		if cmd.ApprovalDecisionID != 0 || !qualifyingStandardPolicy(c, m.TenantID) {
 			if m.ActorID == item.OpenedByID {
 				return invalid("cannot approve own change")
 			}

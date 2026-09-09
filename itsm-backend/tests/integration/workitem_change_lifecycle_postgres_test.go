@@ -25,6 +25,7 @@ import (
 
 type changeLifecycleFixture struct {
 	*incidentEffectsFixture
+	engine  *service.CustomProcessEngine
 	runtime *ent.Client
 	owner   *changedomain.Service
 	c       *ent.Change
@@ -67,7 +68,7 @@ func newChangeLifecycleFixture(t *testing.T, kind string) *changeLifecycleFixtur
 	item := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(f.actor.ID).SetOpenedByID(f.actor.ID).SetTitle("Change core").SetTicketNumber("CHG-CORE").SetRecordClass("change_request").SetStatus("draft").SetPriority("high").SaveX(f.ctx)
 	record := f.client.Change.Create().SetWorkItemID(item.ID).SetType(kind).SetImplementationPlan("deploy package").SetRollbackPlan("restore previous package").SaveX(f.ctx)
 	f.ctx = ctx
-	return &changeLifecycleFixture{f, clients.Tenant, owner, record}
+	return &changeLifecycleFixture{f, engine, clients.Tenant, owner, record}
 }
 
 func (f *changeLifecycleFixture) command(action, key string) changedomain.Command {

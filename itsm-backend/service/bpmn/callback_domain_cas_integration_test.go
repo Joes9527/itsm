@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"itsm-backend/ent"
-	changehandler "itsm-backend/handlers/change"
 	servicerequesthandler "itsm-backend/handlers/service_request"
 	. "itsm-backend/service/bpmn"
 
@@ -87,62 +86,8 @@ func collectCallbackCASResults(t *testing.T, results <-chan callbackCASResult) [
 	return statuses
 }
 
-func TestChangeCallbackConcurrentImplementPostgresHasSingleAppliedEffect(t *testing.T) {
-	dsn := os.Getenv("ITSM_TEST_DB")
-	require.NotEmpty(t, dsn, "ITSM_TEST_DB is required for PostgreSQL integration tests")
-	schemaName := "callback_cas_" + strings.ReplaceAll(uuid.NewString(), "-", "_")
-	setupDB, setupClient := openCallbackCASPostgresClient(t, dsn, schemaName, true)
-	require.NoError(t, setupClient.Schema.Create(context.Background()))
-	_, workerClient := openCallbackCASPostgresClient(t, dsn, schemaName, false)
-	t.Cleanup(func() {
-		_ = workerClient.Close()
-		_ = setupClient.Close()
-		_ = setupDB.Close()
-		cleanupDB, err := sql.Open("postgres", dsn)
-		if err == nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			_, _ = cleanupDB.ExecContext(ctx, fmt.Sprintf(`DROP SCHEMA IF EXISTS "%s" CASCADE`, schemaName))
-			_ = cleanupDB.Close()
-		}
-	})
-	ctx := context.Background()
-	tenant := setupClient.Tenant.Create().SetName("CAS").SetCode("cas-" + schemaName).SetDomain(schemaName + ".test").SetStatus("active").SaveX(ctx)
-	actor := setupClient.User.Create().SetUsername("actor-" + schemaName).SetEmail(schemaName + "@test.local").SetPasswordHash("x").SetName("actor").SetTenantID(tenant.ID).SetActive(true).SaveX(ctx)
-	workItem := setupClient.Ticket.Create().SetTitle("concurrent change").SetTicketNumber("CHG-CAS-1").SetStatus("scheduled").SetRecordClass("change_request").SetRequesterID(actor.ID).SetTenantID(tenant.ID).SaveX(ctx)
-	changeEntity := setupClient.Change.Create().SetWorkItemID(workItem.ID).SaveX(ctx)
-
-	arrived := make(chan struct{}, 2)
-	release := make(chan struct{})
-	installCallbackQueryBarrier(setupClient, ent.TypeChange, arrived, release)
-	installCallbackQueryBarrier(workerClient, ent.TypeChange, arrived, release)
-	handlers := []*ChangeServiceTaskHandler{
-		NewChangeServiceTaskHandler(setupClient, zaptest.NewLogger(t).Sugar()),
-		NewChangeServiceTaskHandler(workerClient, zaptest.NewLogger(t).Sugar()),
-	}
-	handlers[0].SetChangeService(changehandler.NewService(nil, setupClient, zaptest.NewLogger(t).Sugar()))
-	handlers[1].SetChangeService(changehandler.NewService(nil, workerClient, zaptest.NewLogger(t).Sugar()))
-	results := make(chan callbackCASResult, 2)
-	for _, handler := range handlers {
-		go func(handler *ChangeServiceTaskHandler) {
-			effect, err := handler.Execute(context.WithValue(context.Background(), BPMNTenantIDContextKey, tenant.ID), nil, map[string]interface{}{
-				"action": "implement_change", "change_id": changeEntity.ID,
-			})
-			if err != nil {
-				results <- callbackCASResult{err: err}
-				return
-			}
-			results <- callbackCASResult{status: effect.Status}
-		}(handler)
-	}
-	<-arrived
-	<-arrived
-	close(release)
-
-	got := collectCallbackCASResults(t, results)
-	require.Equal(t, []string{string(CallbackEffectApplied), string(CallbackEffectIdempotent)}, got)
-}
-
+// Change callback concurrency uses the restricted, durable worker fixture in
+// tests/integration/workitem_change_callback_postgres_test.go.
 func TestServiceRequestCallbackConcurrentCompletePostgresHasSingleAppliedAggregate(t *testing.T) {
 	dsn := os.Getenv("ITSM_TEST_DB")
 	require.NotEmpty(t, dsn, "ITSM_TEST_DB is required for PostgreSQL integration tests")

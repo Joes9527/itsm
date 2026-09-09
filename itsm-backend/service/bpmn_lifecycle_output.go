@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"fmt"
+	"itsm-backend/common"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/processinstance"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/service/bpmn"
 	"strconv"
 )
@@ -32,8 +34,9 @@ func callbackContinuationOutputs(handler bpmn.ServiceTaskHandlerInterface, row *
 	if effect.Status == bpmn.CallbackEffectBlocked {
 		return nil, nil
 	}
+	class, subtype := common.WorkItemIdentityFilter(instance.BusinessType)
 	result := effect.LifecycleResult
-	if result == nil || effect.CreationResult != nil || len(effect.OutputVars) > 0 || len(effect.UpdatedData) > 0 || instance.BusinessType != contract.LifecycleRecordClass || result.WorkItemID != instance.BusinessID || result.WorkItemID <= 0 || result.Version != bpmn.GetIntFromVars(row.Variables, "version")+1 || result.Status == "" {
+	if result == nil || effect.CreationResult != nil || len(effect.OutputVars) > 0 || len(effect.UpdatedData) > 0 || subtype != "" || class != contract.LifecycleRecordClass || result.WorkItemID != instance.BusinessID || result.WorkItemID <= 0 || result.Version != bpmn.GetIntFromVars(row.Variables, "version")+1 || result.Status == "" {
 		return nil, fmt.Errorf("invalid typed lifecycle result")
 	}
 	return map[string]any{"version": result.Version, "status": result.Status}, nil
@@ -48,6 +51,15 @@ func persistCallbackOutputs(ctx context.Context, tx *ent.Tx, handler bpmn.Servic
 		return nil
 	}
 	if result := effect.LifecycleResult; result != nil {
+		contract, _ := handler.(bpmn.CallbackContractProvider).CallbackContract(row.Action)
+		valid, err := tx.Ticket.Query().Where(ticket.ID(result.WorkItemID), ticket.TenantID(row.TenantID), ticket.RecordClass(contract.LifecycleRecordClass), ticket.DeletedAtIsNil()).Exist(ctx)
+		if err != nil {
+			return newBPMNCallbackAdvanceError(err)
+		}
+		if !valid {
+			return newBPMNCallbackHandlerError(fmt.Errorf("lifecycle source record class mismatch"))
+		}
+
 		actorID := row.ActorID
 		if row.CallbackKind == "service_task" {
 			actorID, _ = strconv.Atoi(instance.Initiator)

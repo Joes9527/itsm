@@ -28,19 +28,26 @@ func (h *ChangeServiceTaskHandler) CallbackContract(action string) (CallbackActi
 	payload := map[string][]string{
 		"create_change":       {"title", "description", "type", "priority", "created_by", "justification", "impact_scope", "risk_level", "planned_start_date", "planned_end_date", "implementation_plan", "rollback_plan", "affected_cis", "related_tickets", "related_ticket_numbers", "assignee_id", "ci_ids", "template_id", "parent_ticket_id", "tag_ids", "workflow_definition_key", "form_values"},
 		"update_change":       {"title", "description", "status"},
-		"approve_change":      nil,
-		"reject_change":       nil,
-		"schedule_change":     {"planned_start_date", "planned_end_date"},
-		"implement_change":    nil,
-		"verify_change":       {"verification_result"},
-		"close_change":        {"feedback"},
-		"assess_risk":         nil,
+		"approve_change":      {"version", "evidence"},
+		"authorize_change":    {"version", "evidence"},
+		"review_change":       {"version", "evidence", "pir_id"},
+		"cancel_change":       {"version", "evidence"},
+		"reject_change":       {"version", "evidence"},
+		"schedule_change":     {"version", "planned_start_date", "planned_end_date"},
+		"implement_change":    {"version"},
+		"verify_change":       {"version", "outcome", "evidence", "actual_end_date"},
+		"close_change":        {"version", "evidence", "pir_id"},
+		"assess_risk":         {"version", "evidence"},
 		"notify_stakeholders": {"notification_type"},
 	}
 	fields, ok := payload[action]
 	contract := callbackActionContract(fields, nil)
 	if action == "create_change" {
 		contract.CreatedRecordClass = "change_request"
+	}
+	switch action {
+	case "assess_risk", "approve_change", "authorize_change", "reject_change", "schedule_change", "implement_change", "verify_change", "review_change", "close_change", "cancel_change":
+		contract.LifecycleRecordClass = "change_request"
 	}
 	return contract, ok
 }
