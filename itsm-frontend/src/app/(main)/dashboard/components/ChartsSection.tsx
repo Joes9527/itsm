@@ -18,12 +18,12 @@ export const ChartsSection: React.FC<ChartsSectionProps> = React.memo(
             {Array.from({ length: 4 }).map((_, index) => (
               <Col key={index} xs={24} lg={12}>
                 <Card
-                  className="rounded-lg shadow-sm border border-gray-200 min-h-[420px]"
+                  className="rounded-[8px] shadow-none border border-border min-h-[420px]"
                  
                 >
                   <div className="flex flex-col items-center justify-center h-full min-h-[400px]">
                     <Spin size="large" />
-                    <p className="text-sm text-gray-400 mt-4">加载图表数据...</p>
+                    <p className="text-[13px] text-muted mt-4">加载图表数据...</p>
                   </div>
                 </Card>
               </Col>
@@ -37,15 +37,15 @@ export const ChartsSection: React.FC<ChartsSectionProps> = React.memo(
       return (
         <div className="mb-6">
           <Card
-            className="rounded-lg shadow-sm border border-gray-200 text-center py-16"
+            className="rounded-[8px] shadow-none border border-border text-center py-16"
            
           >
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={
                 <div>
-                  <p className="text-base font-semibold text-gray-700 mb-1">暂无图表数据</p>
-                  <p className="text-sm text-gray-500">系统正在收集和分析数据，请稍后查看</p>
+                  <p className="text-[13px] font-semibold text-foreground mb-1">暂无图表数据</p>
+                  <p className="text-[13px] text-muted">系统正在收集和分析数据，请稍后查看</p>
                 </div>
               }
             />

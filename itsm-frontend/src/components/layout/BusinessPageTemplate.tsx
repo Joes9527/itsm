@@ -154,23 +154,23 @@ const StatsCard: React.FC<PageStats & { loading?: boolean }> = ({
 }) => (
   <Card
     size="small"
-    className="h-full rounded-lg shadow-sm transition-shadow hover:shadow-md"
+    className="h-full rounded-[8px] shadow-none"
     loading={loading}
     aria-label={`${label}统计`}
   >
     <div className="flex min-h-20 items-center justify-between gap-4">
       <div className="min-w-0">
-        <Text type="secondary" className="block truncate text-sm">
+        <Text type="secondary" className="block truncate text-[12px]">
           {label}
         </Text>
-        <div className="mt-1 flex items-baseline gap-1 text-2xl font-semibold leading-none" style={{ color }}>
+        <div className="mt-1 flex items-baseline gap-1 text-[26px] font-semibold leading-none" style={{ color }}>
           {typeof value === 'number' ? value.toLocaleString() : value}
-          {suffix && <span className="text-xs font-normal text-slate-500">{suffix}</span>}
+          {suffix && <span className="text-[12px] font-normal text-muted">{suffix}</span>}
         </div>
       </div>
       {icon && (
         <div
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px]"
           style={{ color, backgroundColor: `${color}14` }}
           aria-hidden="true"
         >
@@ -301,22 +301,22 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
   }));
 
   return (
-    <div className={`min-h-screen bg-[#f5f7fb] ${className}`}>
+    <div className={`min-h-screen bg-page ${className}`}>
       {/* ====== 页面头部区域 ====== */}
-      <div className="bg-white border-b border-gray-200">
+      <div className="bg-surface border-b border-border">
         <div className="w-full px-3 py-4 sm:px-6">
           {/* 标题行 */}
-          <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="mb-4 flex items-start justify-between flex-wrap gap-3">
             <div className="min-w-0">
               <Title
                 level={2}
                 style={{
                   marginBottom: 0,
                   marginTop: 0,
-                  fontSize: 'var(--font-size-3xl)',
+                  fontSize: 'var(--font-size-page-title)',
                   lineHeight: 'var(--line-height-tight)',
                   color: 'var(--color-text-primary)',
-                  fontWeight: 'var(--font-weight-bold)',
+                  fontWeight: 'var(--font-weight-semibold)',
                 }}
               >
                 {title}
@@ -327,7 +327,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
                   style={{
                     display: 'block',
                     marginTop: '4px',
-                    fontSize: 'var(--font-size-md)',
+                    fontSize: '12px',
                     color: 'var(--color-text-secondary)',
                   }}
                 >
@@ -337,7 +337,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
             </div>
 
             {/* 右侧操作按钮 */}
-            <Space>
+            <Space wrap>
               {/* 预警按钮 */}
               {alertBadge !== undefined && onAlertClick && (
                 <Button
@@ -347,7 +347,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
                 >
                   SLA 预警
                   {alertBadge > 0 && (
-                    <span className="ml-1 px-1.5 py-0.5 text-xs bg-red-500 text-white rounded-full">
+                    <span className="ml-1 px-1.5 py-0.5 text-[12px] bg-red-500 text-white rounded-full">
                       {alertBadge}
                     </span>
                   )}
@@ -391,7 +391,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
       </div>
 
       {/* ====== 搜索和筛选区域 ====== */}
-      <div className="bg-white border-b border-gray-200">
+      <div className="bg-surface border-b border-border">
         <div className="w-full px-3 py-3 sm:px-6">
           <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
             {/* 搜索框 */}
@@ -404,7 +404,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
               loading={searchLoading}
               className="w-full sm:w-72"
               enterButton
-              style={{ fontSize: 'var(--font-size-sm)' }}
+              style={{ fontSize: '12px' }}
             />
 
             <Space wrap className="w-full sm:w-auto">
@@ -431,7 +431,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
 
           {/* 筛选面板 */}
           {filters?.visible && filters.content && (
-            <div className="mt-3 p-3 bg-gray-50 rounded-lg">{filters.content}</div>
+            <div className="mt-3 p-3 bg-raised rounded-[8px]">{filters.content}</div>
           )}
         </div>
       </div>
@@ -460,7 +460,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
 
         {/* 内容区域 */}
         <Card
-          className="rounded-lg shadow-sm"
+          className="rounded-[8px] shadow-none"
           styles={{
             body: {
               padding: screens.md ? (activeView === 'kanban' ? 16 : 24) : 12,
@@ -469,14 +469,14 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
         >
           {loading ? (
             <div className="flex items-center justify-center py-20">
-              <div className="text-gray-400">加载中...</div>
+              <div className="text-muted">加载中...</div>
             </div>
           ) : error ? (
             <div className="py-12 text-center" role="alert">
               <div
                 className="mb-2"
                 style={{
-                  fontSize: 'var(--font-size-lg)',
+                  fontSize: 'var(--font-size-card-title)',
                   fontWeight: 'var(--font-weight-medium)',
                   color: 'var(--color-error)',
                 }}
@@ -488,7 +488,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
                 style={{
                   display: 'block',
                   marginBottom: '16px',
-                  fontSize: 'var(--font-size-sm)',
+                  fontSize: '12px',
                   color: 'var(--color-text-secondary)',
                 }}
               >
@@ -542,7 +542,7 @@ export const BusinessPageTemplate: React.FC<BusinessPageTemplateProps> = ({
             size="large"
             icon={primaryAction.icon || <Plus />}
             onClick={primaryAction.onClick}
-            className="shadow-lg hover:scale-110 transition-transform"
+            className="shadow-none hover:scale-110 transition-transform"
           />
         </div>
       )}

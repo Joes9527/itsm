@@ -19,20 +19,22 @@ Planning inventory only. Worktree: `/Users/julian/.worktrees/itsm-navigation-the
 
 | Route | Source | Actual layout | Common components observed | Local risk | Status |
 | --- | --- | --- | --- | --- | --- |
-| `/forgot-password` | `src/app/(auth)/forgot-password/page.tsx` | Root > Auth | page-local Ant Design/local sections | fixed palette classes | NEEDS VERIFICATION |
-| `/login` | `src/app/(auth)/login/page.tsx` | Root > Auth | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles | NEEDS VERIFICATION |
-| `/register` | `src/app/(auth)/register/page.tsx` | Root > Auth | page-local Ant Design/local sections | literal colors; fixed palette classes | NEEDS VERIFICATION |
-| `/reset-password` | `src/app/(auth)/reset-password/page.tsx` | Root > Auth | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles | NEEDS VERIFICATION |
-| `/ai/chat` | `src/app/(main)/ai/chat/page.tsx` | Root > Main (Console) | ai/AIChat | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/dashboard` | `src/app/(main)/dashboard/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; special visual | NEEDS VERIFICATION |
-| `/executive/dashboard` | `src/app/(main)/executive/dashboard/page.tsx` | Root > Main (Console) | ai/AIConfidenceBadge | fixed palette classes | NEEDS VERIFICATION |
-| `/manager/live-board` | `src/app/(main)/manager/live-board/page.tsx` | Root > Main (Console) | ai/AIConfidenceBadge | literal colors; fixed palette classes | NEEDS VERIFICATION |
-| `/my-requests/[requestId]` | `src/app/(main)/my-requests/[requestId]/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | inline styles | NEEDS VERIFICATION |
-| `/my-requests` | `src/app/(main)/my-requests/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes | NEEDS VERIFICATION |
-| `/portal` | `src/app/(main)/portal/page.tsx` | Root > Main (Portal branch) | portal/HeroSearchBar, portal/ManagerPendingApprovals | fixed palette classes | NEEDS VERIFICATION |
-| `/profile` | `src/app/(main)/profile/page.tsx` | Root > Main (Console) | layout/PageHeader | literal colors; inline styles; table states | NEEDS VERIFICATION |
-| `/workspace/tickets` | `src/app/(main)/workspace/tickets/page.tsx` | Root > Main (Console) | workspace/SLACountdownTimer, workspace/AISimilarSolutionsPanel, ai/AIConfidenceBadge | fixed palette classes | NEEDS VERIFICATION |
-| `/onboarding/wizard` | `src/app/onboarding/wizard/page.tsx` | Root only | page-local Ant Design/local sections | literal colors; inline styles | NEEDS VERIFICATION |
+| `/forgot-password` | `src/app/(auth)/forgot-password/page.tsx` | Root > Auth | page-local Ant Design/local sections | fixed palette classes | STATIC-MIGRATED / PENDING-BROWSER |
+| `/login` | `src/app/(auth)/login/page.tsx` | Root > Auth | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles | STATIC-MIGRATED / PENDING-BROWSER |
+| `/register` | `src/app/(auth)/register/page.tsx` | Root > Auth | page-local Ant Design/local sections | literal colors; fixed palette classes | STATIC-MIGRATED / PENDING-BROWSER |
+| `/reset-password` | `src/app/(auth)/reset-password/page.tsx` | Root > Auth | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles | STATIC-MIGRATED / PENDING-BROWSER |
+| `/ai/chat` | `src/app/(main)/ai/chat/page.tsx` | Root > Main (Console) | ai/AIChat | shared component/theme dependency; inspect rendered states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/dashboard` | `src/app/(main)/dashboard/page.tsx` | Root > Main (Console) | dashboard/KPICards, ChartsSection, QuickActions, DashboardChartCard and seven chart components | semantic surfaces; native classic/classicDark canvas theme; series colors retained | STATIC-MIGRATED / PENDING-BROWSER |
+| `/executive/dashboard` | `src/app/(main)/executive/dashboard/page.tsx` | Root > Main (Console) | ai/AIConfidenceBadge | fixed palette classes | STATIC-MIGRATED / PENDING-BROWSER |
+| `/manager/live-board` | `src/app/(main)/manager/live-board/page.tsx` | Root > Main (Console) | ai/AIConfidenceBadge | literal colors; fixed palette classes | STATIC-MIGRATED / PENDING-BROWSER |
+| `/my-requests/[requestId]` | `src/app/(main)/my-requests/[requestId]/page.tsx` | Root > Main (Console) | redirect-only Spin; target TicketDetail/ServiceRequestPanel (Task 3) | no local surface; redirect behavior unchanged | STATIC-MIGRATED / PENDING-BROWSER |
+| `/my-requests` | `src/app/(main)/my-requests/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes | STATIC-MIGRATED / PENDING-BROWSER |
+| `/portal` | `src/app/(main)/portal/page.tsx` | Root > Main (Portal branch) | portal/HeroSearchBar, portal/ManagerPendingApprovals | fixed palette classes | STATIC-MIGRATED / PENDING-BROWSER |
+| `/profile` | `src/app/(main)/profile/page.tsx` | Root > Main (Console) | layout/PageHeader | literal colors; inline styles; table states | STATIC-MIGRATED / PENDING-BROWSER |
+| `/workspace/tickets` | `src/app/(main)/workspace/tickets/page.tsx` | Root > Main (Console) | workspace/SLACountdownTimer, workspace/AISimilarSolutionsPanel, ai/AIConfidenceBadge | fixed palette classes | STATIC-MIGRATED / PENDING-BROWSER |
+| `/onboarding/wizard` | `src/app/onboarding/wizard/page.tsx` | Root only | page-local Ant Design/local sections | literal colors; inline styles | STATIC-MIGRATED / PENDING-BROWSER |
+
+Task 4 static evidence: four auth routes inherit the root ConfigProvider; exact tracked password sources were inspected (ignore-filtered file search misses them). Portal imports HeroSearchBar/ManagerPendingApprovals; workspace imports AISimilarSolutionsPanel/SLACountdownTimer/AIConfidenceBadge (semantic confidence/SLA palettes retained). AI chat imports AIChat and inherits Ant Design state surfaces. Onboarding keeps existing step/skip/persona actions. Profile uses shared PageHeader and semantic local surface colors. Shared PageContainer, PageHeader, PageLayout, BusinessPageTemplate, WorkItemShell/SLA/action helper, Button and typography migrated. `/my-requests/[requestId]` is an existing redirect-only route; its Spin already inherits theme. `/ai/chat` delegates all presentation to migrated AIChat. No route marked browser-verified. Focused existing 11-suite regression passed (37 passed, 6 pre-existing skipped); final evidence and pending browser matrix in `.superpowers/sdd/2026-09-09-visual-theme-unification/task-4-report.md`.
 
 ## tickets/catalog (17)
 

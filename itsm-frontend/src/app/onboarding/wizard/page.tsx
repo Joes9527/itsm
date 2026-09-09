@@ -79,10 +79,10 @@ export default function FirstRunWizard({ initialStep, onFinish }: WizardProps) {
     <Card style={{ maxWidth: 880, margin: '40px auto' }}>
       <Space orientation="vertical" size="large" style={{ width: '100%' }}>
         <div>
-          <Title level={2} style={{ marginBottom: 8 }}>
+          <Title level={2} style={{ marginBottom: 8, fontSize: 24, fontWeight: 600 }}>
             欢迎使用 AI-Native ITSM
           </Title>
-          <Paragraph type="secondary">
+          <Paragraph type="secondary" style={{ fontSize: 12 }}>
             智能服务管理 · 让 IT 服务更高效
           </Paragraph>
         </div>
@@ -108,7 +108,7 @@ export default function FirstRunWizard({ initialStep, onFinish }: WizardProps) {
         </div>
 
         {current !== 'done' && (
-          <Space style={{ justifyContent: 'space-between', width: '100%' }}>
+          <Space wrap style={{ justifyContent: 'space-between', width: '100%' }}>
             <Button onClick={skip} type="text">
               跳过引导
             </Button>
@@ -128,7 +128,7 @@ export default function FirstRunWizard({ initialStep, onFinish }: WizardProps) {
 function WelcomeStep() {
   return (
     <Result
-      icon={<Rocket style={{ color: '#F06820' }} />}
+      icon={<Rocket style={{ color: 'var(--color-primary)' }} />}
       title="5 分钟快速了解 AI-Native ITSM"
       subTitle="我们将引导你完成：创建第一个工单、浏览服务目录、配置 CMDB、体验 AI 分诊。"
       extra={
@@ -145,7 +145,7 @@ function WelcomeStep() {
 function FirstTicketStep() {
   return (
     <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-      <Title level={4}>第 1 步：创建你的第一个工单</Title>
+      <Title level={4} style={{ fontSize: 15, fontWeight: 600 }}>第 1 步：创建你的第一个工单</Title>
       <Paragraph>
         工单（Ticket）是 ITSM 的核心实体，记录一次服务请求或故障处理的全过程。
       </Paragraph>
@@ -162,7 +162,7 @@ function FirstTicketStep() {
 function CatalogStep() {
   return (
     <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-      <Title level={4}>第 2 步：浏览服务目录</Title>
+      <Title level={4} style={{ fontSize: 15, fontWeight: 600 }}>第 2 步：浏览服务目录</Title>
       <Paragraph>
         服务目录（Service Catalog）将 IT 服务标准化，员工可自助申请，审批自动流转。
       </Paragraph>
@@ -179,7 +179,7 @@ function CatalogStep() {
 function CMDBStep() {
   return (
     <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-      <Title level={4}>第 3 步：配置 CMDB 第一个 CI</Title>
+      <Title level={4} style={{ fontSize: 15, fontWeight: 600 }}>第 3 步：配置 CMDB 第一个 CI</Title>
       <Paragraph>
         CMDB（Configuration Management Database）记录所有受管的配置项（CI）及其关系。
       </Paragraph>
@@ -195,7 +195,7 @@ function CMDBStep() {
 function AITriageStep() {
   return (
     <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-      <Title level={4}>
+      <Title level={4} style={{ fontSize: 15, fontWeight: 600 }}>
         第 4 步：体验 AI 分诊
         <Tag color="orange" style={{ marginLeft: 12 }}>Coming Soon</Tag>
       </Title>

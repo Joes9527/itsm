@@ -137,10 +137,10 @@ export default function PortalPage() {
     <div className="space-y-8 animate-in fade-in duration-300">
       {/* 1. 欢迎横幅 & 智能自愈搜索框 */}
       <div className="text-center pt-4">
-        <h1 className="text-3xl font-extrabold text-slate-900 dark:text-slate-50 tracking-tight">
+        <h1 className="text-[24px] font-semibold text-foreground tracking-tight">
           您好，{userName}！有什么我们可以帮您？
         </h1>
-        <p className="text-sm text-slate-500 mt-1 max-w-xl mx-auto">
+        <p className="text-[13px] text-muted mt-1 max-w-xl mx-auto">
           快速搜索企业知识库自愈排障、提报 IT 服务申请或实时跟踪您的工单进展
         </p>
         <HeroSearchBar />
@@ -153,12 +153,12 @@ export default function PortalPage() {
       <div>
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 m-0">常用服务目录申请</h3>
-            <p className="text-xs text-slate-500 mt-0.5">选择您所需的服务模板，快速提交审批与流转</p>
+            <h3 className="text-[15px] font-semibold text-foreground m-0">常用服务目录申请</h3>
+            <p className="text-[12px] text-muted mt-0.5">选择您所需的服务模板，快速提交审批与流转</p>
           </div>
           <Button
             type="link"
-            className="text-xs font-semibold flex items-center gap-1"
+            className="text-[12px] font-semibold flex items-center gap-1"
             onClick={() => router.push('/service-catalog')}
           >
             全部服务目录 <ArrowRight size={14} />
@@ -181,7 +181,7 @@ export default function PortalPage() {
             }
           />
         ) : catalogs.length === 0 ? (
-          <div className="text-center py-8 text-sm text-slate-400">暂无可申请的服务目录</div>
+          <div className="text-center py-8 text-[13px] text-muted">暂无可申请的服务目录</div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {catalogs.map((item) => (
@@ -189,26 +189,26 @@ export default function PortalPage() {
                 type="button"
                 key={item.id}
                 onClick={() => router.push(`/service-catalog/request/${item.id}`)}
-                className="group relative p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-primary-500/80 shadow-sm hover:shadow-lg transition-all cursor-pointer flex flex-col justify-between text-left"
+                className="group relative p-5 rounded-[8px] bg-surface border border-border hover:border-primary-500/80 shadow-none transition-all cursor-pointer flex flex-col justify-between text-left"
               >
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <div className="p-2.5 rounded-xl border text-primary-600 bg-primary-50 dark:bg-primary-950/40 border-primary-200 dark:border-primary-800">
+                    <div className="p-2.5 rounded-[8px] border text-foreground bg-selected border-primary-200">
                       <Sparkles size={20} />
                     </div>
-                    <span className="text-[11px] font-medium text-slate-400 bg-slate-50 dark:bg-slate-800 px-2 py-0.5 rounded-md">
+                    <span className="text-[11px] font-medium text-muted bg-raised px-2 py-0.5 rounded-md">
                       {item.category}
                     </span>
                   </div>
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-slate-100 group-hover:text-primary-600 transition-colors">
+                  <h4 className="text-[15px] font-semibold text-foreground group-hover:text-foreground transition-colors">
                     {item.name}
                   </h4>
-                  <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                  <p className="text-[12px] text-muted mt-1 line-clamp-2">
                     {item.shortDescription}
                   </p>
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-semibold text-primary-600">
+                <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-[12px] font-semibold text-foreground">
                   <span>立即申请</span>
                   <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
                 </div>
@@ -219,16 +219,16 @@ export default function PortalPage() {
       </div>
 
       {/* 4. 我的近期请求时间轴 */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-800 shadow-sm">
+      <div className="bg-surface rounded-[8px] p-6 border border-border shadow-none">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
-            <Clock size={18} className="text-primary-600" />
-            <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 m-0">我的近期请求追踪</h3>
+            <Clock size={18} className="text-foreground" />
+            <h3 className="text-[15px] font-semibold text-foreground m-0">我的近期请求追踪</h3>
           </div>
           <Button
             size="small"
             onClick={() => router.push('/my-requests')}
-            className="text-xs"
+            className="text-[12px]"
           >
             查看全部我的工单
           </Button>
@@ -250,8 +250,8 @@ export default function PortalPage() {
             }
           />
         ) : recentRequests.length === 0 ? (
-          <div className="text-center py-6 text-sm text-slate-400 flex flex-col items-center gap-2">
-            <Inbox size={24} className="text-slate-300" />
+          <div className="text-center py-6 text-[13px] text-muted flex flex-col items-center gap-2">
+            <Inbox size={24} className="text-muted" />
             暂无近期请求
           </div>
         ) : (
@@ -261,19 +261,19 @@ export default function PortalPage() {
                 type="button"
                 key={req.id}
                 onClick={() => router.push(`/tickets/${req.ticketId}`)}
-                className="w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 hover:bg-slate-100/80 border border-slate-100 dark:border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3 cursor-pointer transition-all text-left"
+                className="w-full p-4 rounded-[8px] bg-raised hover:bg-raised border border-border flex flex-col md:flex-row md:items-center justify-between gap-3 cursor-pointer transition-all text-left"
               >
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-slate-900 dark:text-slate-100">{req.title}</span>
+                    <span className="text-[13px] font-semibold text-foreground">{req.title}</span>
                     <Tag color={req.statusColor} className="text-[11px] m-0">{req.statusLabel}</Tag>
                   </div>
-                  <div className="text-xs text-slate-500 mt-1.5">
+                  <div className="text-[12px] text-muted mt-1.5">
                     更新于 {req.updatedAt}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1 text-xs text-primary-600 font-semibold self-end md:self-center">
+                <div className="flex items-center gap-1 text-[12px] text-foreground font-semibold self-end md:self-center">
                   <span>详情</span>
                   <ArrowRight size={14} />
                 </div>

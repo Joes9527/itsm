@@ -1,13 +1,18 @@
 'use client';
 
 import React from 'react';
+import { useTheme } from '@/lib/design-system/theme';
+import { theme } from 'antd';
 import { Column } from '@ant-design/charts';
 import { Users } from 'lucide-react';
 import type { TeamWorkload } from '../types/dashboard.types';
 import { DashboardChartCard } from './DashboardChartCard';
 
 const TeamWorkloadChart: React.FC<{ data: TeamWorkload[] }> = React.memo(({ data }) => {
+  const { isDark } = useTheme();
+  const { token } = theme.useToken();
   const config = {
+    theme: isDark ? 'classicDark' : 'classic',
     data: data.map(item => ({
       assignee: item.assignee,
       ticketCount: item.ticketCount,
@@ -23,7 +28,7 @@ const TeamWorkloadChart: React.FC<{ data: TeamWorkload[] }> = React.memo(({ data
     label: {
       position: 'right' as const,
       style: {
-        fill: '#666',
+        fill: token.colorTextSecondary,
         fontSize: 12,
       },
       formatter: (datum: { ticketCount: number }) => `${datum.ticketCount}个`,
@@ -49,7 +54,7 @@ const TeamWorkloadChart: React.FC<{ data: TeamWorkload[] }> = React.memo(({ data
       iconColor="#F06820"
       extra={
         <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 12, color: '#8c8c8c' }}>平均完成率</div>
+          <div style={{ fontSize: 12, color: token.colorTextSecondary }}>平均完成率</div>
           <div style={{ fontSize: 16, fontWeight: 600, color: '#1890ff' }}>
             {avgCompletion.toFixed(1)}%
           </div>
