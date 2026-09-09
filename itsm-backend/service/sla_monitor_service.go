@@ -297,14 +297,17 @@ func (s *SLAMonitorService) checkAndTriggerWarning(ctx context.Context, t *ent.T
 	warningThreshold := 0.8
 
 	sentWarning := false
+	// Persisted deadlines include the applied pause extension. Remove it
+	// from both elapsed and target durations to compare the same active clock.
+	paused := time.Duration(t.SLAPausedMinutes) * time.Minute
 
 	// 检查响应时间SLA预警
 	if t.FirstResponseAt.IsZero() && !t.SLAResponseDeadline.IsZero() {
-		totalDuration := t.SLAResponseDeadline.Sub(slaCycleStart(t))
-		elapsed := now.Sub(slaCycleStart(t)) - time.Duration(t.SLAPausedMinutes)*time.Minute
+		totalDuration := t.SLAResponseDeadline.Sub(slaCycleStart(t)) - paused
+		elapsed := now.Sub(slaCycleStart(t)) - paused
 		progress := elapsed.Seconds() / totalDuration.Seconds()
 
-		if progress >= warningThreshold && now.Before(t.SLAResponseDeadline) {
+		if totalDuration > 0 && progress >= warningThreshold && now.Before(t.SLAResponseDeadline) {
 			if s.alertService != nil {
 				if warned, _ := s.alertService.TriggerSLAWarning(ctx, t.ID, "response_time", t.TenantID); warned {
 					sentWarning = true
@@ -316,12 +319,12 @@ func (s *SLAMonitorService) checkAndTriggerWarning(ctx context.Context, t *ent.T
 	}
 
 	// 检查解决时间SLA预警
-	if !t.SLAResolutionDeadline.IsZero() {
-		totalDuration := t.SLAResolutionDeadline.Sub(slaCycleStart(t))
-		elapsed := now.Sub(slaCycleStart(t)) - time.Duration(t.SLAPausedMinutes)*time.Minute
+	if t.ResolvedAt.IsZero() && !t.SLAResolutionDeadline.IsZero() {
+		totalDuration := t.SLAResolutionDeadline.Sub(slaCycleStart(t)) - paused
+		elapsed := now.Sub(slaCycleStart(t)) - paused
 		progress := elapsed.Seconds() / totalDuration.Seconds()
 
-		if progress >= warningThreshold && now.Before(t.SLAResolutionDeadline) {
+		if totalDuration > 0 && progress >= warningThreshold && now.Before(t.SLAResolutionDeadline) {
 			if s.alertService != nil {
 				if warned, _ := s.alertService.TriggerSLAWarning(ctx, t.ID, "resolution_time", t.TenantID); warned {
 					sentWarning = true

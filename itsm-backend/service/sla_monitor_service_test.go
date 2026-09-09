@@ -277,3 +277,59 @@ func TestMapViolationTypeToBreachType(t *testing.T) {
 		}
 	}
 }
+
+// A persisted deadline already includes pause extension. Warning progress must
+// compare elapsed and target durations on the same active-time clock.
+func TestSLAMonitorService_WarningWithPausedCycle(t *testing.T) {
+	for _, kind := range []string{"response", "resolution"} {
+		for _, tc := range []struct {
+			name      string
+			elapsed   time.Duration
+			completed bool
+			want      bool
+		}{
+			{"before_threshold", 100 * time.Minute, false, false},
+			{"within_warning_window", 110 * time.Minute, false, true},
+			{"already_completed", 110 * time.Minute, true, false},
+			{"after_deadline", 121 * time.Minute, false, false},
+		} {
+			t.Run(kind+"/"+tc.name, func(t *testing.T) {
+				client, monitor, ctx := setupSLAMonitorTest(t)
+				defer client.Close()
+				tenant, err := createSLATestTenant(ctx, client, "paused")
+				require.NoError(t, err)
+				actor, err := createSLATestUser(ctx, client, tenant.ID, "paused")
+				require.NoError(t, err)
+				policy, err := createSLATestDefinition(ctx, client, tenant.ID, "paused")
+				require.NoError(t, err)
+				client.SLAAlertRule.Create().SetName("warning").SetTenantID(tenant.ID).SetSLADefinitionID(policy.ID).SetThresholdPercentage(20).SaveX(ctx)
+				start := time.Now().Add(-110 * time.Minute)
+				deadline := start.Add(120 * time.Minute) // 60-minute target + 60-minute applied pause.
+				create := client.Ticket.Create().SetTitle("paused cycle").SetTicketNumber("PAUSED-1").SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetSLADefinitionID(policy.ID).SetCreatedAt(start.Add(-24 * time.Hour)).SetSLACycleNumber(2).SetSLACycleStartedAt(start).SetSLAPausedMinutes(60)
+				if kind == "response" {
+					create.SetSLAResponseDeadline(deadline)
+					if tc.completed {
+						create.SetFirstResponseAt(start.Add(90 * time.Minute))
+					}
+				} else {
+					create.SetSLAResolutionDeadline(deadline)
+					if tc.completed {
+						create.SetResolvedAt(start.Add(90 * time.Minute))
+					}
+				}
+				item := create.SaveX(ctx)
+				monitor.SetAlertService(NewSLAAlertService(client, zaptest.NewLogger(t).Sugar()))
+				warned := monitor.checkAndTriggerWarning(ctx, item, start.Add(tc.elapsed))
+				require.Equal(t, tc.want, warned, "60-minute active target must warn once 50 active minutes have elapsed")
+				histories := client.SLAAlertHistory.Query().AllX(ctx)
+				if tc.want {
+					require.Len(t, histories, 1)
+					require.Equal(t, item.ID, histories[0].TicketID)
+					require.Equal(t, tenant.ID, histories[0].TenantID)
+				} else {
+					require.Empty(t, histories)
+				}
+			})
+		}
+	}
+}
