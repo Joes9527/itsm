@@ -264,3 +264,23 @@ A6 routes use assertion v2 only. Set `INTAKE_IDENTITY_CONFIG_FILE` (or the exist
 Create/read exchange share one atomic nonce namespace. Lost exchange responses require a fresh nonce and assertion; retain the business submission key. Only the corresponding Intake routes accept the resulting token. Every request checks current mapping version/active state and current session/target-tenant permissions. Mapping management uses native access-token tenant routes with `intake_identity_mapping:read`/`write`, and PATCH requires `version` plus `active`; immutable provider/workspace/subject/user identity is replaced through a new mapping rather than changed in place. Manage mappings with exact external subjects; email matching is unsupported.
 
 The requester WorkItem projection preserves professional status and returns `fulfillmentState: "unknown"` and `accessResult: null` until C1 installs its authoritative fulfillment/result projection. This is a C1 gate before A7/B1 acceptance, not evidence that access was granted. The shared test-only signature vector lives in [intake-identity-signature.json](contracts/fixtures/intake-identity-signature.json).
+
+
+### Unified support handoff acceptance
+
+KAF reference inspection uses authenticated requester read identity for exact-number
+lookup and paginated unfinished lists. Display number, current status, and frontend link;
+selection does not grant task execution or authorize ticket mutation. ITSM lifecycle owners
+remain authoritative when a reference closes or access changes.
+
+The intake idempotency index is tenant + actor + channel + operation + key. The same
+mapped actor across KAF workspaces replays the same immutable command/key; different
+actors and tenants remain isolated, and a changed command conflicts. Workspace identity
+mapping remains mandatory and cannot be replaced with client-supplied requester identity.
+
+Use isolated runtime/database manifests for live acceptance. Verify read-purpose tokens
+cannot create, current role permissions apply to every receipt/replay, exact/list isolation,
+professional extension ownership, and configured process/manual task persistence. A manual
+Catalog fixture may have unknown provider fulfillment projection; do not report it as
+access granted or completed. Ordinary association is read-only; a delegated failure uses
+only the original task's allowed action and original run/idempotency identity.
