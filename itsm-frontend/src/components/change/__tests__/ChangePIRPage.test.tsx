@@ -47,6 +47,41 @@ test('list delete confirms the observed PIR/version and never replaces it at sub
   expect(ChangeApi.getChange).toHaveBeenCalledTimes(1);
 });
 
+test.each(['fresh confirmation', 'same confirmation retry'] as const)(
+  'failed PIR delete preserves the correct operation boundary: %s',
+  async mode => {
+    const user = userEvent.setup();
+    let key = 0;
+    Object.defineProperty(global.crypto, 'randomUUID', {
+      configurable: true, value: () => `delete-operation-${++key}`,
+    });
+    const pir = { id: 4, changeId: 1, changeTitle: 'Observed change', overallResult: 'failed', reviewDate: '2026-09-10T01:00:00Z' } as any;
+    jest.mocked(ChangeApi.getPIRs).mockResolvedValue({ total: 1, items: [pir] });
+    jest.mocked(ChangeApi.getPIR).mockResolvedValue(pir);
+    jest.mocked(ChangeApi.getChange).mockResolvedValueOnce({ id: 1, version: 7 } as any).mockResolvedValue({ id: 1, version: 8 } as any);
+    const errorText = mode === 'fresh confirmation' ? 'version conflict' : 'network response lost';
+    jest.mocked(ChangeApi.deletePIR).mockRejectedValueOnce(new Error(errorText)).mockResolvedValue({ workItemId: 31, version: 9, status: 'in_progress', replayed: false, pirId: 4 });
+    render(<PIRListPage />);
+    await user.click(await screen.findByRole('button', { name: /^删\s*除$/ }));
+    await screen.findByText('PIR 4 · 变更版本 7 · 结果 failed');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^删\s*除$/ }));
+    await screen.findByText(errorText);
+    if (mode === 'fresh confirmation') {
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^取\s*消$/ }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await user.click(screen.getByRole('button', { name: /^删\s*除$/ }));
+      await screen.findByText('PIR 4 · 变更版本 8 · 结果 failed');
+    }
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^删\s*除$/ }));
+    await waitFor(() => expect(ChangeApi.deletePIR).toHaveBeenCalledTimes(2));
+    expect(jest.mocked(ChangeApi.deletePIR).mock.calls.map(([, body]) => body)).toEqual([
+      { changeId: 1, expectedVersion: 7, operationId: 'delete-operation-1' },
+      { changeId: 1, expectedVersion: mode === 'fresh confirmation' ? 8 : 7, operationId: mode === 'fresh confirmation' ? 'delete-operation-2' : 'delete-operation-1' },
+    ]);
+    expect(ChangeApi.getChange).toHaveBeenCalledTimes(mode === 'fresh confirmation' ? 2 : 1);
+  }
+);
+
 test('PIR creation refetches actual detail after immutable receipt; later edit uses refreshed version', async () => {
   const user = userEvent.setup();
   jest

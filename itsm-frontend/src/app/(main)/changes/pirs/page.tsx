@@ -179,6 +179,9 @@ export default function PIRListPage() {
                   ChangeApi.getChange(record.changeId), ChangeApi.getPIR(record.changeId),
                 ]);
                 if (!currentPIR || currentPIR.id !== record.id) throw new Error('PIR 已变化，请刷新列表');
+                // A freshly loaded confirmation is a new operation. Failures within
+                // that confirmation keep the same identity for an identical retry.
+                operation.clear();
                 setSelectedPIR(currentPIR);
                 setDeleteVersion(detail.version);
                 setDeleteModalVisible(true);
