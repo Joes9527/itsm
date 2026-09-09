@@ -111,7 +111,7 @@ func (s *Service) authorizeCommand(ctx context.Context, tx *ent.Tx, cmd Command)
 		return nil, err
 	}
 	permission := "write"
-	if cmd.Action == "authorize" && (cmd.ApprovalDecisionID != 0 || !qualifyingStandardPolicy(current, m.TenantID)) {
+	if cmd.Action == "approve" || cmd.Action == "reject" || (cmd.Action == "authorize" && (cmd.ApprovalDecisionID != 0 || !qualifyingStandardPolicy(current, m.TenantID))) {
 		permission = "approve"
 	}
 	if err = authorization.RequireCurrentPermission(ctx, tx, creation.Identity{TenantID: m.TenantID, ActorID: actor.ID, Role: role}, "change", permission); err != nil {
