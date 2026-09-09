@@ -7,6 +7,7 @@ import { parseThemeMode, resolveIsDark, THEME_STORAGE_KEY } from './theme-prefer
 import type { ThemeMode } from './theme-preference';
 export type { ThemeMode } from './theme-preference';
 import tokens from '@/design-system/theme-tokens.json';
+import { expandThemeTokens } from '@/design-system/expand-theme-tokens.mjs';
 
 // 主题类型
 
@@ -224,27 +225,7 @@ export const ThemeConfig: React.FC<ThemeConfigProps> = ({ children }) => {
 
 // CSS 变量生成器
 export const generateCSSVariables = (isDark: boolean): Record<string, string> => {
-  const prefix = (name: string, values: Record<string, string>) =>
-    Object.fromEntries(Object.entries(values).map(([key, value]) => [`--${name}-${key}`, value]));
-  return {
-    ...tokens.common,
-    ...prefix('color-primary', tokens.brand.palette),
-    ...prefix('font-size', tokens.typography.fontSize),
-    '--font-family-base': tokens.typography.fontFamily,
-    '--font-size-page-title': tokens.typography.pageTitle,
-    '--font-size-card-title': tokens.typography.cardTitle,
-    '--font-size-helper': tokens.typography.helper,
-    '--header-height': `${tokens.sizes.header}px`,
-    '--sidebar-width': `${tokens.sizes.sidebar}px`,
-    '--sidebar-collapsed-width': `${tokens.sizes.sidebarCollapsed}px`,
-    '--control-height': `${tokens.sizes.button}px`,
-    '--control-height-sm': `${tokens.sizes.buttonSmall}px`,
-    '--card-padding': `${tokens.sizes.cardPadding}px`,
-    ...Object.fromEntries(
-      Object.entries(tokens.aliases).map(([key, value]) => [key, `var(${value})`])
-    ),
-    ...tokens.themes[isDark ? 'dark' : 'light'],
-  };
+  return expandThemeTokens(tokens, isDark);
 };
 
 // 应用 CSS 变量到文档

@@ -1,28 +1,15 @@
 import { readFile, writeFile } from 'node:fs/promises';
+import { expandThemeTokens } from '../src/design-system/expand-theme-tokens.mjs';
 
 const source = new URL('../src/design-system/theme-tokens.json', import.meta.url);
 const destination = new URL('../src/styles/generated-theme-tokens.css', import.meta.url);
 const tokens = JSON.parse(await readFile(source, 'utf8'));
-const prefix = (name, values) =>
-  Object.fromEntries(Object.entries(values).map(([key, value]) => [`--${name}-${key}`, value]));
-const common = {
-  ...tokens.common,
-  ...prefix('color-primary', tokens.brand.palette),
-  ...prefix('font-size', tokens.typography.fontSize),
-  '--font-family-base': tokens.typography.fontFamily,
-  '--font-size-page-title': tokens.typography.pageTitle,
-  '--font-size-card-title': tokens.typography.cardTitle,
-  '--font-size-helper': tokens.typography.helper,
-  '--header-height': `${tokens.sizes.header}px`,
-  '--sidebar-width': `${tokens.sizes.sidebar}px`,
-  '--sidebar-collapsed-width': `${tokens.sizes.sidebarCollapsed}px`,
-  '--control-height': `${tokens.sizes.button}px`,
-  '--control-height-sm': `${tokens.sizes.buttonSmall}px`,
-  '--card-padding': `${tokens.sizes.cardPadding}px`,
-  ...Object.fromEntries(
-    Object.entries(tokens.aliases).map(([key, value]) => [key, `var(${value})`])
-  ),
-};
+const light = expandThemeTokens(tokens, false);
+const dark = expandThemeTokens(tokens, true);
+// Only emit changed declarations in .dark; inherited common values remain in :root.
+const darkOverrides = Object.fromEntries(
+  Object.entries(dark).filter(([key, value]) => light[key] !== value)
+);
 const block = (selector, variables) =>
   `${selector} {\n${Object.entries(variables)
     .sort(([a], [b]) => a.localeCompare(b, 'en'))
@@ -30,9 +17,9 @@ const block = (selector, variables) =>
     .join('\n')}\n}\n`;
 const output =
   '/* Generated from theme-tokens.json. Run npm run theme:generate; do not edit. */\n' +
-  block(':root', { ...common, ...tokens.themes.light }) +
+  block(':root', light) +
   '\n' +
-  block('.dark', tokens.themes.dark);
+  block('.dark', darkOverrides);
 if (process.argv.includes('--check')) {
   const existing = await readFile(destination, 'utf8').catch(() => '');
   if (existing !== output) {

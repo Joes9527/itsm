@@ -314,3 +314,17 @@ describe('Design System - Theme', () => {
     addSpy.mockRestore();
   });
 });
+
+describe('Theme token consumer consistency', () => {
+  it.each([false, true])('keeps runtime variables consistent with emitted CSS for dark=%s', async isDark => {
+    const { readFileSync } = await import('node:fs');
+    const { generateCSSVariables } = await import('../theme');
+    const css = readFileSync(`${process.cwd()}/src/styles/generated-theme-tokens.css`, 'utf8');
+    const parseBlock = (selector: string) => {
+      const block = css.split(`${selector} {`)[1].split('}')[0];
+      return Object.fromEntries([...block.matchAll(/(--[\w-]+):\s*([^;]+);/g)].map(match => [match[1], match[2]]));
+    };
+    const emitted = { ...parseBlock(':root'), ...(isDark ? parseBlock('.dark') : {}) };
+    expect(generateCSSVariables(isDark)).toEqual(emitted);
+  });
+});
