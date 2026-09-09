@@ -4,12 +4,11 @@ import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
 import { CreationAttempts } from '@/components/work-item/CreationAttempts';
 import { CreationRequester } from '@/components/work-item/CreationRequester';
 
-import { TicketCategoryApi, type TicketCategory } from '@/lib/api/ticket-category-api';
-import { useAuthStore } from '@/lib/store/auth-store';
-import { classificationInput, classificationOptions } from './incident-classification';
+import { WorkItemClassificationSelect } from '@/components/work-item/WorkItemClassificationSelect';
+import { classificationInput } from '@/components/work-item/classification';
 
 import React, { useState, useEffect } from 'react';
-import { Alert, Cascader, Button, Card, Form, Input, Select, Space, Row, Col, message, Tabs, Typography, Divider, Tag, Spin } from 'antd';
+import { Button, Card, Form, Input, Select, Space, Row, Col, message, Tabs, Typography, Divider, Tag, Spin } from 'antd';
 import { ArrowLeft, Search, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { IncidentAPI } from '@/lib/api/incident-api';
@@ -48,24 +47,6 @@ export default function CreateIncidentPage() {
   const router = useRouter();
   const creation = useWorkItemCreation();
   const [form] = Form.useForm();
-  const tenantId = useAuthStore(state => state.currentTenant?.id);
-  const [categories, setCategories] = useState<TicketCategory[]>([]);
-  const [categoryError, setCategoryError] = useState('');
-  const [categoriesLoading, setCategoriesLoading] = useState(false);
-  const [categoryReload, setCategoryReload] = useState(0);
-  useEffect(() => {
-    let cancelled = false;
-    form.setFieldValue('classification', undefined);
-    setCategories([]);
-    setCategoryError('');
-    if (!tenantId) return;
-    setCategoriesLoading(true);
-    TicketCategoryApi.getCategoryTree()
-      .then(rows => { if (!cancelled) setCategories(rows); })
-      .catch(() => { if (!cancelled) setCategoryError('事件分类加载失败，请重试或联系管理员检查分类读取权限'); })
-      .finally(() => { if (!cancelled) setCategoriesLoading(false); });
-    return () => { cancelled = true; };
-  }, [tenantId, categoryReload, form]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('basic');
   const [selectedCIs, setSelectedCIs] = useState<ConfigurationItem[]>([]);
@@ -272,18 +253,8 @@ export default function CreateIncidentPage() {
                               name="classification"
                               label="事件分类"
                             >
-                              <Cascader
-                                placeholder="选择事件分类"
-                                options={classificationOptions(categories)}
-                                changeOnSelect
-                                allowClear
-                                showSearch
-                                loading={categoriesLoading}
-                                disabled={categoriesLoading || !!categoryError}
-                                notFoundContent="暂无可用分类"
-                              />
+                              <WorkItemClassificationSelect />
                             </Form.Item>
-                            {categoryError && <Alert type="error" title={categoryError} action={<Button onClick={() => setCategoryReload(value => value + 1)}>重试</Button>} />}
                           </Col>
                           <Col span={12}>
                             <Form.Item

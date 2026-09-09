@@ -295,25 +295,10 @@ func (s *IncidentService) updateIncident(ctx context.Context, id int, req *dto.U
 			return nil, err
 		}
 	}
-	var categoryID *int
-	categoryChanged := req.Category != nil || req.Subcategory != nil
-	if categoryChanged {
-		currentCategory, currentSubcategory := "", ""
-		if category := currentIncident.Edges.WorkItem.Edges.Category; category != nil {
-			currentCategory = category.Name
-			if parent := category.Edges.Parent; parent != nil {
-				currentCategory, currentSubcategory = parent.Name, category.Name
-			}
-		}
-		if req.Category != nil {
-			currentCategory = *req.Category
-		}
-		if req.Subcategory != nil {
-			currentSubcategory = *req.Subcategory
-		}
-		categoryID, err = resolveIncidentCategory(ctx, s.client, tenantID, currentCategory, currentSubcategory)
+	if req.CategoryID != nil && *req.CategoryID != 0 {
+		_, err = s.client.TicketCategory.Query().Where(ticketcategory.IDEQ(*req.CategoryID), ticketcategory.TenantIDEQ(tenantID), ticketcategory.IsActiveEQ(true)).Only(ctx)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("active ticket category not found in tenant: %w", err)
 		}
 	}
 
@@ -388,11 +373,11 @@ func (s *IncidentService) updateIncident(ctx context.Context, id int, req *dto.U
 	if req.AssigneeID != nil {
 		workItemUpdate.SetAssigneeID(*req.AssigneeID)
 	}
-	if categoryChanged {
-		if categoryID == nil {
+	if req.CategoryID != nil {
+		if *req.CategoryID == 0 {
 			workItemUpdate.ClearCategoryID()
 		} else {
-			workItemUpdate.SetCategoryID(*categoryID)
+			workItemUpdate.SetCategoryID(*req.CategoryID)
 		}
 	}
 	workItem, err := workItemUpdate.Save(ctx)

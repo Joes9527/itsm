@@ -1297,12 +1297,7 @@ func (c *IncidentController) UpdateClassification(ctx *gin.Context) {
 		return
 	}
 
-	cat := req.Category
-	sub := req.Subcategory
-	_, err = c.incidentService.UpdateIncident(ctx.Request.Context(), id, &dto.UpdateIncidentRequest{
-		Category:    &cat,
-		Subcategory: &sub,
-	}, tenantID)
+	_, err = c.incidentService.UpdateClassification(ctx.Request.Context(), id, tenantID, req.Category, req.Subcategory)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			common.Fail(ctx, common.NotFoundErrorCode, "事件不存在")

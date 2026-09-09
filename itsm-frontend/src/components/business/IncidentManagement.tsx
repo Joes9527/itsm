@@ -1,4 +1,7 @@
 'use client';
+import { WorkItemClassificationSelect } from '@/components/work-item/WorkItemClassificationSelect';
+import { classificationInput, classificationUpdate } from '@/components/work-item/classification';
+
 
 import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
 import { CreationAttempts } from '@/components/work-item/CreationAttempts';
@@ -1055,13 +1058,12 @@ const IncidentFormModal: React.FC<{
 
   useEffect(() => {
     if (visible && incident) {
+      form.resetFields();
       form.setFieldsValue({
         title: incident.title,
         description: incident.description,
         priority: incident.priority,
         severity: incident.severity,
-        category: incident.category,
-        subcategory: incident.subcategory,
       });
     } else if (visible) {
       form.resetFields();
@@ -1072,9 +1074,11 @@ const IncidentFormModal: React.FC<{
     setLoading(true);
     try {
       if (incident) {
-        await IncidentAPI.updateIncident(incident.id, values);
+        const { classification, ...payload } = values;
+        await IncidentAPI.updateIncident(incident.id, { ...payload, ...classificationUpdate(classification, form.isFieldTouched('classification')) });
       } else {
-        await creation.submit({ ...values, source: 'manual', type: 'incident' }, IncidentAPI.createIncident, onSuccess);
+        const { classification, ...payload } = values;
+        await creation.submit({ ...payload, cti: classificationInput(classification), source: 'manual', type: 'incident' }, IncidentAPI.createIncident, onSuccess);
         return;
       }
 
@@ -1134,14 +1138,12 @@ const IncidentFormModal: React.FC<{
 
         <Row gutter={16}>
           <Col span={12}>
-            <Form.Item name="category" label="分类">
-              <Select placeholder="请选择分类" options={[{ value: "performance", label: "性能" }, { value: "connectivity", label: "连接" }, { value: "security", label: "安全" }, { value: "storage", label: "存储" }, { value: "network", label: "网络" }]} />
+            <Form.Item name="classification" label="分类">
+              <WorkItemClassificationSelect initialCategoryId={incident?.categoryId} />
             </Form.Item>
           </Col>
           <Col span={12}>
-            <Form.Item name="subcategory" label="子分类">
-              <Input placeholder="请输入子分类" />
-            </Form.Item>
+
           </Col>
         </Row>
       </Form>

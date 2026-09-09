@@ -1,4 +1,4 @@
-import { classificationInput, classificationOptions } from '../incident-classification';
+import { classificationInput, classificationOptions, classificationPath, classificationUpdate } from '@/components/work-item/classification';
 import type { TicketCategory } from '@/lib/api/ticket-category-api';
 
 it('uses IDs for duplicate category names and preserves the selected hierarchy', () => {
@@ -14,4 +14,13 @@ it('uses tenant API names and excludes inactive branches', () => {
     { id: 3, name: '已停用', isActive: false },
   ] }, { id: 4, name: '已停用根', isActive: false, children: [{id:5,isActive:true}] }] as TicketCategory[];
   expect(classificationOptions(nodes)).toEqual([{value:1,label:'企业应用',children:[{value:2,label:'无法访问'}]}]);
+});
+
+it('reconstructs edit selection by ID and distinguishes omission from clearing', () => {
+  const nodes = [{id:1,name:'same',isActive:true,parentId:null,children:[{id:2,name:'same',isActive:true,parentId:1}]}] as TicketCategory[];
+  expect(classificationPath(2,nodes)).toEqual([1,2]);
+  expect(classificationPath(99,nodes)).toBeUndefined();
+  expect(classificationUpdate(undefined,false)).toEqual({});
+  expect(classificationUpdate([],true)).toEqual({categoryId:0});
+  expect(classificationUpdate([1,2],true)).toEqual({categoryId:2});
 });

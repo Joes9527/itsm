@@ -89,9 +89,8 @@ func (s *Service) Update(ctx context.Context, tenantID int, id int, p *Problem) 
 		}
 		existing.Priority = p.Priority
 	}
-	if p.Category != "" {
-		existing.Category = p.Category
-	}
+	// Preserve omission so unrelated edits do not revalidate or rewrite classification.
+	existing.CategoryID = p.CategoryID
 	if p.RootCause != "" {
 		existing.RootCause = p.RootCause
 	}

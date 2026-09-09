@@ -76,8 +76,7 @@ type UpdateIncidentRequest struct {
 	Severity        *string                `json:"severity,omitempty" binding:"omitempty,oneof=low medium high critical"`
 	Impact          *string                `json:"impact,omitempty" binding:"omitempty,oneof=low medium high critical"`
 	Urgency         *string                `json:"urgency,omitempty" binding:"omitempty,oneof=low medium high critical"`
-	Category        *string                `json:"category,omitempty"`
-	Subcategory     *string                `json:"subcategory,omitempty"`
+	CategoryID      *int                   `json:"categoryId,omitempty" binding:"omitempty,gte=0"`
 	AssigneeID      *int                   `json:"assigneeId,omitempty"`
 	RelatedCIIDs    []int                  `json:"relatedCIIds,omitempty"`
 	ImpactAnalysis  *ImpactAnalysis        `json:"impactAnalysis,omitempty"`
@@ -101,6 +100,7 @@ type EscalateMajorIncidentRequest struct {
 }
 
 type IncidentResponse struct {
+	CategoryID          int                         `json:"categoryId"`
 	ID                  int                         `json:"id" example:"1"`
 	Title               string                      `json:"title" example:"服务器CPU使用率过高"`
 	Description         string                      `json:"description" binding:"omitempty,max=5000" example:"生产环境Web服务器CPU使用率持续超过90%"`

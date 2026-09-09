@@ -1,4 +1,6 @@
 'use client';
+import { WorkItemClassificationSelect } from '@/components/work-item/WorkItemClassificationSelect';
+import { classificationInput, classificationPath } from '@/components/work-item/classification';
 
 import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
 import { CreationAttempts } from '@/components/work-item/CreationAttempts';
@@ -178,10 +180,10 @@ export default function CreateTicketPage() {
   // --- 数据加载 ---
   useEffect(() => {
     // 加载分类树
-    TicketCategoryApi.getCategories({ pageSize: 200 })
-      .then(res => {
-        const cats = res.categories || res.items || [];
-        setCategories(cats);
+    TicketCategoryApi.getCategoryTree()
+      .then(roots => {
+        const flatten = (nodes: TicketCategory[], depth = 0): TicketCategory[] => nodes.filter(node => node.isActive).flatMap(node => [node, ...(depth < 2 ? flatten(node.children || [], depth + 1) : [])]);
+        setCategories(flatten(roots));
       })
       .catch(err => console.warn('Failed to load categories:', err))
       .finally(() => setCategoriesLoading(false));
@@ -219,7 +221,7 @@ export default function CreateTicketPage() {
     if (cat) {
       setSelectedCategoryKeys([`cat-${cat.id}`]);
       setSelectedCategoryCode(cat.code);
-      form.setFieldValue('category', cat.code);
+      form.setFieldValue('classification', classificationPath(cat.id, categories));
       if (urlItem) form.setFieldValue('title', urlItem);
     }
   }, [urlCategory, categories]);
@@ -227,17 +229,7 @@ export default function CreateTicketPage() {
   // --- 分类树 ---
   const categoryTree = useMemo(() => buildCategoryTree(categories), [categories]);
 
-  // L1 domains for category dropdown
-  const domainOptions = useMemo(() => {
-    const domainNames: Record<string, string> = {
-      ACC: '账号与访问服务', EUC: '终端与办公支持', COL: '邮箱与M365协作',
-      NET: '网络与远程访问', INF: '平台与基础设施', APP: '业务系统支持',
-      SEC: '安全与合规支持', ADV: '咨询与服务引导',
-    };
-    return categories
-      .filter(c => c.level === 1)
-      .map(c => ({ label: `${c.name} (${c.code})`, value: c.code }));
-  }, [categories]);
+
 
   // 根据选中的分类节点（ID）精确匹配模板的 categoryIds
   const filteredTemplates = useMemo(() => {
@@ -265,6 +257,7 @@ export default function CreateTicketPage() {
     if (keys.length === 0) {
       setSelectedCategoryKeys([]);
       setSelectedCategoryCode(null);
+      form.setFieldValue('classification', undefined);
       return;
     }
     const key = keys[0];
@@ -284,7 +277,8 @@ export default function CreateTicketPage() {
     const node = findNode(categoryTree);
     if (node) {
       setSelectedCategoryCode(node.code);
-      form.setFieldValue('category', node.code);
+      const selected = categories.find(category => category.code === node.code);
+      form.setFieldValue('classification', classificationPath(selected?.id, categories));
     }
   };
 
@@ -373,7 +367,7 @@ export default function CreateTicketPage() {
         priority,
         type: 'ticket',
         requesterId: values.requesterId,
-        category: values.category || selectedCategoryCode || (activeSelection ? (selectedTemplate?.category || selectedPreset?.category) : undefined),
+        cti: classificationInput(values.classification),
         templateId,
         formFields: activeSelection
           ? buildTicketFormFields(activeFields, customFieldValues, templateId)
@@ -606,31 +600,8 @@ export default function CreateTicketPage() {
                       </Form.Item>
                     </Col>
                     <Col xs={24} sm={12}>
-                      {selectedCategoryCode ? (
-                        <div style={{ paddingTop: 4 }}>
-                          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>服务分类</Text>
-                          <Space>
-                            <Tag color="blue">{selectedCategoryCode}</Tag>
-                            <Button type="link" size="small" onClick={() => {
-                              setSelectedCategoryKeys([]);
-                              setSelectedCategoryCode(null);
-                              form.setFieldValue('category', undefined);
-                            }}>清除</Button>
-                          </Space>
-                        </div>
-                      ) : (
-                        <Form.Item name="category" label="服务分类（可选）">
-                          <Select
-                            allowClear showSearch
-                            options={domainOptions}
-                            placeholder="未选分类树？在此快速选择"
-                            optionFilterProp="label"
-                          />
-                        </Form.Item>
-                      )}
-                      {/* 隐藏字段，确保分类值提交 */}
-                      <Form.Item name="category" hidden>
-                        <Input />
+                      <Form.Item name="classification" label="工单分类（可选）">
+                        <WorkItemClassificationSelect />
                       </Form.Item>
                     </Col>
                   </Row>
