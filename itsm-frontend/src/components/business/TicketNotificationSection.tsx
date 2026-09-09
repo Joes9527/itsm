@@ -29,10 +29,11 @@ import {
   Clock,
   AlertCircle,
 } from 'lucide-react';
-import type { TicketNotification, SendTicketNotificationRequest } from '@/lib/api/ticket-notification-api';
-import {
-  TicketNotificationApi
+import type {
+  TicketNotification,
+  SendTicketNotificationRequest,
 } from '@/lib/api/ticket-notification-api';
+import { TicketNotificationApi } from '@/lib/api/ticket-notification-api';
 import { UserSelect } from '@/components/common/UserSelect';
 import { App } from 'antd';
 import { useI18n } from '@/lib/i18n';
@@ -211,81 +212,81 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
             renderItem={notification => {
               const isRead = Boolean(notification.readAt);
               return (
-              <List.Item
-                className={isRead ? 'opacity-70' : ''}
-                actions={[
-                  !isRead && (
-                    <Tooltip title="标记为已读" key="read">
-                      <Button
-                        type="text"
-                        size="small"
-                        icon={<Eye />}
-                        onClick={() => handleMarkRead(notification.id)}
-                      >
-                        标记已读
-                      </Button>
-                    </Tooltip>
-                  ),
-                ].filter(Boolean)}
-              >
-                <List.Item.Meta
-                  avatar={
-                    <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-50">
-                      {isRead ? (
-                        <CheckCircle style={{ fontSize: 20, color: '#52c41a' }} />
-                      ) : (
-                        <Bell style={{ fontSize: 20, color: '#1890ff' }} />
-                      )}
-                    </div>
-                  }
-                  title={
-                    <Space>
-                      <Tag color={getNotificationTypeColor(notification.type)}>
-                        {getNotificationTypeLabel(notification.type)}
-                      </Tag>
-                      <Tag
-                        color={getChannelColor(notification.channel)}
-                        icon={getChannelIcon(notification.channel)}
-                      >
-                        {notification.channel === 'email'
-                          ? '邮件'
-                          : notification.channel === 'sms'
-                            ? '短信'
-                            : '站内消息'}
-                      </Tag>
-                      {!isRead && <Badge status="processing" text="未读" />}
-                    </Space>
-                  }
-                  description={
-                    <div className="space-y-1">
-                      <Text>{notification.content}</Text>
-                      <div className="flex items-center space-x-4 text-xs text-gray-500">
-                        <span>
-                          <Clock style={{ fontSize: 12, marginRight: 4 }} />
-                          创建时间: {formatDateTime(notification.createdAt)}
-                        </span>
-                        {notification.sentAt && (
-                          <span>
-                            <Send style={{ fontSize: 12, marginRight: 4 }} />
-                            发送时间: {formatDateTime(notification.sentAt)}
-                          </span>
-                        )}
-                        {notification.readAt && (
-                          <span>
-                            <Eye style={{ fontSize: 12, marginRight: 4 }} />
-                            阅读时间: {formatDateTime(notification.readAt)}
-                          </span>
-                        )}
-                        {notification.user && (
-                          <span>
-                            接收人: {notification.user.name || notification.user.username}
-                          </span>
+                <List.Item
+                  className={isRead ? 'opacity-70' : ''}
+                  actions={[
+                    !isRead && (
+                      <Tooltip title="标记为已读" key="read">
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={<Eye />}
+                          onClick={() => handleMarkRead(notification.id)}
+                        >
+                          标记已读
+                        </Button>
+                      </Tooltip>
+                    ),
+                  ].filter(Boolean)}
+                >
+                  <List.Item.Meta
+                    avatar={
+                      <div className="flex items-center justify-center w-10 h-10 rounded-full bg-blue-50">
+                        {isRead ? (
+                          <CheckCircle style={{ fontSize: 20, color: '#52c41a' }} />
+                        ) : (
+                          <Bell style={{ fontSize: 20, color: '#1890ff' }} />
                         )}
                       </div>
-                    </div>
-                  }
-                />
-              </List.Item>
+                    }
+                    title={
+                      <Space>
+                        <Tag color={getNotificationTypeColor(notification.type)}>
+                          {getNotificationTypeLabel(notification.type)}
+                        </Tag>
+                        <Tag
+                          color={getChannelColor(notification.channel)}
+                          icon={getChannelIcon(notification.channel)}
+                        >
+                          {notification.channel === 'email'
+                            ? '邮件'
+                            : notification.channel === 'sms'
+                              ? '短信'
+                              : '站内消息'}
+                        </Tag>
+                        {!isRead && <Badge status="processing" text="未读" />}
+                      </Space>
+                    }
+                    description={
+                      <div className="space-y-1">
+                        <Text>{notification.content}</Text>
+                        <div className="flex items-center space-x-4 text-[12px] text-muted">
+                          <span>
+                            <Clock style={{ fontSize: 12, marginRight: 4 }} />
+                            创建时间: {formatDateTime(notification.createdAt)}
+                          </span>
+                          {notification.sentAt && (
+                            <span>
+                              <Send style={{ fontSize: 12, marginRight: 4 }} />
+                              发送时间: {formatDateTime(notification.sentAt)}
+                            </span>
+                          )}
+                          {notification.readAt && (
+                            <span>
+                              <Eye style={{ fontSize: 12, marginRight: 4 }} />
+                              阅读时间: {formatDateTime(notification.readAt)}
+                            </span>
+                          )}
+                          {notification.user && (
+                            <span>
+                              接收人: {notification.user.name || notification.user.username}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    }
+                  />
+                </List.Item>
               );
             }}
           />
@@ -305,11 +306,7 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
         cancelText={t('common.cancel')}
         width={600}
       >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleSendNotification}
-        >
+        <Form form={form} layout="vertical" onFinish={handleSendNotification}>
           <Form.Item
             label="接收人"
             name="userIds"
@@ -323,7 +320,13 @@ export const TicketNotificationSection: React.FC<TicketNotificationSectionProps>
             name="eventType"
             rules={[{ required: true, message: '请选择通知类型' }]}
           >
-            <Select placeholder="请选择通知类型" options={eventTypes.map(eventType => ({ value: eventType.code, label: eventType.name }))} />
+            <Select
+              placeholder="请选择通知类型"
+              options={eventTypes.map(eventType => ({
+                value: eventType.code,
+                label: eventType.name,
+              }))}
+            />
           </Form.Item>
 
           <Form.Item

@@ -87,16 +87,16 @@ export const CIContextCard: React.FC<CIContextCardProps> = ({ ticketId, recordCl
   if (loading) return null;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-3 text-xs">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-        <span className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
-          <Server size={14} className="text-slate-500" />
+    <div className="bg-surface rounded-[8px] border border-border p-4 shadow-none space-y-3 text-[12px]">
+      <div className="flex items-center justify-between border-b border-border pb-2">
+        <span className="font-bold text-foreground flex items-center gap-1.5 text-[12px]">
+          <Server size={14} className="text-muted" />
           关联配置项 (CI)
         </span>
         {ciId && (
           <Link
             href={`/cmdb/cis/${ciId}`}
-            className="text-[11px] text-slate-600 hover:text-orange-600 hover:underline flex items-center gap-0.5"
+            className="text-[11px] text-muted hover:text-orange-600 hover:underline flex items-center gap-0.5"
           >
             拓扑图 <ExternalLink size={11} />
           </Link>
@@ -104,18 +104,20 @@ export const CIContextCard: React.FC<CIContextCardProps> = ({ ticketId, recordCl
       </div>
 
       {ciId ? (
-        <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1.5">
-          <div className="flex items-center justify-between font-mono text-slate-800 font-bold text-xs">
+        <div className="p-3 bg-raised rounded-[8px] border border-border space-y-1.5">
+          <div className="flex items-center justify-between font-mono text-foreground font-bold text-[12px]">
             <span className="truncate">{ci?.name || `CI #${ciId}`}</span>
             {ci?.type && (
-              <span className="text-[10px] text-slate-600 bg-slate-200 px-1.5 py-0.2 rounded font-normal shrink-0 ml-2">
+              <span className="text-[10px] text-muted bg-border px-1.5 py-0.2 rounded font-normal shrink-0 ml-2">
                 {CI_TYPE_LABELS[ci.type] || ci.type}
               </span>
             )}
           </div>
-          <p className="text-[11px] text-slate-500 m-0">
+          <p className="text-[11px] text-muted m-0">
             {ci?.description || `关联配置项 CI #${ciId}`}
-            {topology ? `，拓扑共 ${topology.totalNodes} 个节点 / ${topology.totalEdges} 条关系` : ''}
+            {topology
+              ? `，拓扑共 ${topology.totalNodes} 个节点 / ${topology.totalEdges} 条关系`
+              : ''}
           </p>
         </div>
       ) : (

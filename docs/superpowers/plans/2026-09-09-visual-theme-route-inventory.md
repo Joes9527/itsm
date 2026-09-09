@@ -38,23 +38,23 @@ Planning inventory only. Worktree: `/Users/julian/.worktrees/itsm-navigation-the
 
 | Route | Source | Actual layout | Common components observed | Local risk | Status |
 | --- | --- | --- | --- | --- | --- |
-| `/service-catalog/detail/[id]` | `src/app/(main)/service-catalog/detail/[id]/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/service-catalog/edit/[id]` | `src/app/(main)/service-catalog/edit/[id]/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/service-catalog` | `src/app/(main)/service-catalog/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; inline styles; table states | NEEDS VERIFICATION |
-| `/service-catalog/request/[id]` | `src/app/(main)/service-catalog/request/[id]/page.tsx` | Root > Main (Console) | work-item/CreationAttempts, work-item/CreationRequester | inline styles | NEEDS VERIFICATION |
-| `/service-requests/[id]` | `src/app/(main)/service-requests/[id]/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | inline styles | NEEDS VERIFICATION |
-| `/service-requests` | `src/app/(main)/service-requests/page.tsx` | Root > Main (Console) | service-request/ServiceRequestList | literal colors; fixed palette classes; inline styles; special visual | NEEDS VERIFICATION |
-| `/templates` | `src/app/(main)/templates/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/tickets/[ticketId]` | `src/app/(main)/tickets/[ticketId]/page.tsx` | Root > Main (Console) > Tickets | ticket/TicketDetail | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/tickets/ai-create` | `src/app/(main)/tickets/ai-create/page.tsx` | Root > Main (Console) > Tickets | a2ui/A2UIFormRenderer | fixed palette classes | NEEDS VERIFICATION |
-| `/tickets/analytics` | `src/app/(main)/tickets/analytics/page.tsx` | Root > Main (Console) > Tickets | page-local Ant Design/local sections | table states; special visual | NEEDS VERIFICATION |
-| `/tickets/cc` | `src/app/(main)/tickets/cc/page.tsx` | Root > Main (Console) > Tickets | page-local Ant Design/local sections | fixed palette classes; table states | NEEDS VERIFICATION |
-| `/tickets/create` | `src/app/(main)/tickets/create/page.tsx` | Root > Main (Console) > Tickets | work-item/CreationAttempts, work-item/CreationRequester | literal colors; fixed palette classes; inline styles | NEEDS VERIFICATION |
-| `/tickets/dashboard` | `src/app/(main)/tickets/dashboard/page.tsx` | Root > Main (Console) > Tickets | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; table states | NEEDS VERIFICATION |
-| `/tickets` | `src/app/(main)/tickets/page.tsx` | Root > Main (Console) > Tickets | ticket/TicketList, ticket/TicketKanban, ticket/TicketAdvancedSearch | fixed palette classes; inline styles; table states | NEEDS VERIFICATION |
-| `/tickets/templates/[id]` | `src/app/(main)/tickets/templates/[id]/page.tsx` | Root > Main (Console) > Tickets | page-local Ant Design/local sections | inline styles; table states | NEEDS VERIFICATION |
-| `/tickets/templates` | `src/app/(main)/tickets/templates/page.tsx` | Root > Main (Console) > Tickets | common/CustomFieldsEditor | literal colors; fixed palette classes; inline styles; table states; special visual | NEEDS VERIFICATION |
-| `/tickets/types` | `src/app/(main)/tickets/types/page.tsx` | Root > Main (Console) > Tickets | page-local Ant Design/local sections | inline styles; table states | NEEDS VERIFICATION |
+| `/service-catalog/detail/[id]` | `src/app/(main)/service-catalog/detail/[id]/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | STATIC MIGRATED / PENDING BROWSER (Task 3) |
+| `/service-catalog/edit/[id]` | `src/app/(main)/service-catalog/edit/[id]/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | STATIC MIGRATED / PENDING BROWSER (Task 3) |
+| `/service-catalog` | `src/app/(main)/service-catalog/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 3) |
+| `/service-catalog/request/[id]` | `src/app/(main)/service-catalog/request/[id]/page.tsx` | Root > Main (Console) | work-item/CreationAttempts, work-item/CreationRequester | inline styles | STATIC MIGRATED / PENDING BROWSER (Task 3) |
+| `/service-requests/[id]` | `src/app/(main)/service-requests/[id]/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | inline styles | STATIC MIGRATED / PENDING BROWSER (Task 3) |
+| `/service-requests` | `src/app/(main)/service-requests/page.tsx` | Root > Main (Console) | service-request/ServiceRequestList | literal colors; fixed palette classes; inline styles; special visual | STATIC MIGRATED / PENDING BROWSER (Task 3) |
+| `/templates` | `src/app/(main)/templates/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | STATIC MIGRATED / PENDING BROWSER (Task 3) |
+| `/tickets/[ticketId]` | `src/app/(main)/tickets/[ticketId]/page.tsx` | Root > Main (Console) > Tickets | ticket/TicketDetail | shared component/theme dependency; inspect rendered states | STATIC MIGRATED / PENDING BROWSER (Task 3) |
+| `/tickets/ai-create` | `src/app/(main)/tickets/ai-create/page.tsx` | Root > Main (Console) > Tickets | a2ui/A2UIFormRenderer | fixed palette classes | STATIC MIGRATED / PENDING BROWSER (Task 3) |
+| `/tickets/analytics` | `src/app/(main)/tickets/analytics/page.tsx` | Root > Main (Console) > Tickets | page-local Ant Design/local sections | table states; special visual | STATIC MIGRATED / PENDING BROWSER (Task 3) |
+| `/tickets/cc` | `src/app/(main)/tickets/cc/page.tsx` | Root > Main (Console) > Tickets | page-local Ant Design/local sections | fixed palette classes; table states | STATIC MIGRATED / PENDING BROWSER (Task 3) |
+| `/tickets/create` | `src/app/(main)/tickets/create/page.tsx` | Root > Main (Console) > Tickets | work-item/CreationAttempts, work-item/CreationRequester | literal colors; fixed palette classes; inline styles | STATIC MIGRATED / PENDING BROWSER (Task 3) |
+| `/tickets/dashboard` | `src/app/(main)/tickets/dashboard/page.tsx` | Root > Main (Console) > Tickets | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 3) |
+| `/tickets` | `src/app/(main)/tickets/page.tsx` | Root > Main (Console) > Tickets | ticket/TicketList, ticket/TicketKanban, ticket/TicketAdvancedSearch | fixed palette classes; inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 3) |
+| `/tickets/templates/[id]` | `src/app/(main)/tickets/templates/[id]/page.tsx` | Root > Main (Console) > Tickets | page-local Ant Design/local sections | inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 3) |
+| `/tickets/templates` | `src/app/(main)/tickets/templates/page.tsx` | Root > Main (Console) > Tickets | common/CustomFieldsEditor | literal colors; fixed palette classes; inline styles; table states; special visual | STATIC MIGRATED / PENDING BROWSER (Task 3) |
+| `/tickets/types` | `src/app/(main)/tickets/types/page.tsx` | Root > Main (Console) > Tickets | page-local Ant Design/local sections | inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 3) |
 
 ## operations/assets/licenses/teams/notifications (51)
 

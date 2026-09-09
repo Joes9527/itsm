@@ -45,25 +45,27 @@ export const KBRecommendCard: React.FC<KBRecommendCardProps> = ({ query }) => {
   if (articles.length === 0) return null;
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-xs space-y-2.5 text-xs">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-        <span className="font-bold text-slate-800 flex items-center gap-1.5 text-xs">
-          <BookOpen size={13} className="text-slate-500" />
+    <div className="bg-surface rounded-[8px] border border-border p-4 shadow-none space-y-2.5 text-[12px]">
+      <div className="flex items-center justify-between border-b border-border pb-2">
+        <span className="font-bold text-foreground flex items-center gap-1.5 text-[12px]">
+          <BookOpen size={13} className="text-muted" />
           推荐操作指引 (KB)
         </span>
-        <span className="text-[11px] text-slate-400">{articles.length} 篇</span>
+        <span className="text-[11px] text-muted">{articles.length} 篇</span>
       </div>
 
       <div className="space-y-2">
         {articles.map(article => (
           <div
             key={article.id}
-            className="p-2.5 bg-slate-50 hover:bg-orange-50/50 rounded-lg border border-slate-100 transition-colors cursor-pointer group"
+            className="p-2.5 bg-raised hover:bg-orange-50/50 rounded-[8px] border border-border transition-colors cursor-pointer group"
           >
-            <p className="text-[11px] font-medium text-slate-700 group-hover:text-orange-600 truncate m-0">
+            <p className="text-[11px] font-medium text-foreground group-hover:text-orange-600 truncate m-0">
               {article.title}
             </p>
-            <span className="text-[10px] text-slate-400 block mt-0.5">阅读量: {article.viewCount ?? 0} 次</span>
+            <span className="text-[10px] text-muted block mt-0.5">
+              阅读量: {article.viewCount ?? 0} 次
+            </span>
           </div>
         ))}
       </div>

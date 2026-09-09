@@ -19,7 +19,17 @@ import {
   Form,
   App,
 } from 'antd';
-import { Filter, Plus, Pencil, Trash2, User, Calendar, Clock, ArrowUpDown, MoreHorizontal } from 'lucide-react';
+import {
+  Filter,
+  Plus,
+  Pencil,
+  Trash2,
+  User,
+  Calendar,
+  Clock,
+  ArrowUpDown,
+  MoreHorizontal,
+} from 'lucide-react';
 import type { MenuProps } from 'antd';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -222,7 +232,7 @@ const TicketKanban: React.FC<TicketKanbanProps> = ({ onTicketSelect }) => {
         <div className="space-y-2">
           {/* 工单标题 */}
           <div className="flex items-start justify-between">
-            <Text strong className="text-sm flex-1 mr-2">
+            <Text strong className="text-[13px] flex-1 mr-2">
               {ticket.title}
             </Text>
             <Badge
@@ -237,7 +247,7 @@ const TicketKanban: React.FC<TicketKanbanProps> = ({ onTicketSelect }) => {
 
           {/* 工单号和类型 */}
           <div className="flex items-center justify-between">
-            <Text code className="text-xs">
+            <Text code className="text-[12px]">
               {ticket.ticketNumber || '-'}
             </Text>
             <Tag color="blue">{ticket.type}</Tag>
@@ -246,13 +256,13 @@ const TicketKanban: React.FC<TicketKanbanProps> = ({ onTicketSelect }) => {
           {/* 工单描述 */}
           <Paragraph
             ellipsis={{ rows: 2, expandable: false }}
-            className="text-xs text-gray-500 mb-2"
+            className="text-[12px] text-muted mb-2"
           >
             {ticket.description}
           </Paragraph>
 
           {/* 时间信息 */}
-          <div className="flex items-center text-xs text-gray-400">
+          <div className="flex items-center text-[12px] text-muted">
             <Clock className="mr-1" />
             {dayjs(ticket.createdAt).fromNow()}
           </div>
@@ -261,15 +271,15 @@ const TicketKanban: React.FC<TicketKanbanProps> = ({ onTicketSelect }) => {
           {ticket.assignee && (
             <div className="flex items-center mt-2">
               <Avatar size="small" icon={<User />} className="mr-2" />
-              <Text className="text-xs">{ticket.assignee.name || ticket.assignee.username}</Text>
+              <Text className="text-[12px]">{ticket.assignee.name || ticket.assignee.username}</Text>
             </div>
           )}
 
           {/* 截止时间 */}
           {ticket.dueTime && (
             <div className="flex items-center mt-1">
-              <Calendar className="mr-1 text-xs text-red-500" />
-              <Text className="text-xs text-red-500">
+              <Calendar className="mr-1 text-[12px] text-red-500" />
+              <Text className="text-[12px] text-red-500">
                 截止: {dayjs(ticket.dueTime).format('MM-DD HH:mm')}
               </Text>
             </div>
@@ -333,11 +343,7 @@ const TicketKanban: React.FC<TicketKanbanProps> = ({ onTicketSelect }) => {
           </Col>
           <Col>
             <Space>
-              <Button
-                type="primary"
-                icon={<Plus />}
-                onClick={() => router.push('/tickets/create')}
-              >
+              <Button type="primary" icon={<Plus />} onClick={() => router.push('/tickets/create')}>
                 新建工单
               </Button>
             </Space>
@@ -346,9 +352,9 @@ const TicketKanban: React.FC<TicketKanbanProps> = ({ onTicketSelect }) => {
       </Card>
 
       {/* 看板列 */}
-      <Row gutter={[16, 0]}>
+      <Row gutter={[14, 14]}>
         {KANBAN_STATUS_CONFIG.map(status => (
-          <Col span={4} key={status.key}>
+          <Col xs={24} sm={12} lg={8} xl={4} key={status.key}>
             <Card
               title={
                 <div className="flex items-center justify-between">
@@ -374,7 +380,7 @@ const TicketKanban: React.FC<TicketKanbanProps> = ({ onTicketSelect }) => {
                   <TicketCard key={ticket.id} ticket={ticket} />
                 ))}
                 {(!ticketsByStatus[status.key] || ticketsByStatus[status.key].length === 0) && (
-                  <div className="text-center text-gray-400 py-8">
+                  <div className="text-center text-muted py-8">
                     <Text type="secondary">暂无工单</Text>
                   </div>
                 )}

@@ -219,22 +219,54 @@ const TicketAdvancedSearch: React.FC<TicketAdvancedSearchProps> = ({
     <Row gutter={[16, 0]}>
       <Col span={6}>
         <Form.Item label="状态" name="status">
-          <Select mode="multiple" placeholder="选择状态" allowClear options={TICKET_STATUS_OPTIONS.map(option => ({ value: option.value, label: <Tag color={option.color}>{option.label}</Tag> }))} />
+          <Select
+            mode="multiple"
+            placeholder="选择状态"
+            allowClear
+            options={TICKET_STATUS_OPTIONS.map(option => ({
+              value: option.value,
+              label: <Tag color={option.color}>{option.label}</Tag>,
+            }))}
+          />
         </Form.Item>
       </Col>
       <Col span={6}>
         <Form.Item label="优先级" name="priority">
-          <Select mode="multiple" placeholder="选择优先级" allowClear options={TICKET_PRIORITY_OPTIONS.map(option => ({ value: option.value, label: <Tag color={option.color}>{option.label}</Tag> }))} />
+          <Select
+            mode="multiple"
+            placeholder="选择优先级"
+            allowClear
+            options={TICKET_PRIORITY_OPTIONS.map(option => ({
+              value: option.value,
+              label: <Tag color={option.color}>{option.label}</Tag>,
+            }))}
+          />
         </Form.Item>
       </Col>
       <Col span={6}>
         <Form.Item label="工单类型" name="type">
-          <Select mode="multiple" placeholder="选择类型" allowClear options={TICKET_TYPE_OPTIONS.map(option => ({ value: option.value, label: option.label }))} />
+          <Select
+            mode="multiple"
+            placeholder="选择类型"
+            allowClear
+            options={TICKET_TYPE_OPTIONS.map(option => ({
+              value: option.value,
+              label: option.label,
+            }))}
+          />
         </Form.Item>
       </Col>
       <Col span={6}>
         <Form.Item label="来源" name="source">
-          <Select mode="multiple" placeholder="选择来源" allowClear options={TICKET_SOURCE_OPTIONS.map(option => ({ value: option.value, label: option.label }))} />
+          <Select
+            mode="multiple"
+            placeholder="选择来源"
+            allowClear
+            options={TICKET_SOURCE_OPTIONS.map(option => ({
+              value: option.value,
+              label: option.label,
+            }))}
+          />
         </Form.Item>
       </Col>
     </Row>
@@ -325,7 +357,15 @@ const TicketAdvancedSearch: React.FC<TicketAdvancedSearchProps> = ({
     <Row gutter={[16, 0]}>
       <Col span={6}>
         <Form.Item label="SLA状态" name="sla_status">
-          <Select placeholder="选择SLA状态" allowClear options={[{ value: "breach", label: "已超时" }, { value: "warning", label: "即将超时" }, { value: "normal", label: "正常" }]} />
+          <Select
+            placeholder="选择SLA状态"
+            allowClear
+            options={[
+              { value: 'breach', label: '已超时' },
+              { value: 'warning', label: '即将超时' },
+              { value: 'normal', label: '正常' },
+            ]}
+          />
         </Form.Item>
       </Col>
     </Row>
@@ -389,7 +429,7 @@ const TicketAdvancedSearch: React.FC<TicketAdvancedSearchProps> = ({
   return (
     <Card
       title={
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap gap-3 items-center justify-between">
           <div className="flex items-center">
             <Filter className="mr-2" />
             <span>高级搜索</span>
@@ -438,7 +478,7 @@ const TicketAdvancedSearch: React.FC<TicketAdvancedSearchProps> = ({
         />
 
         {/* 操作按钮 */}
-        <div className="flex justify-between items-center mt-6">
+        <div className="flex flex-wrap gap-3 justify-between items-center mt-6">
           <Space>
             <Button type="primary" icon={<Search />} htmlType="submit" loading={loading}>
               搜索
@@ -459,9 +499,15 @@ const TicketAdvancedSearch: React.FC<TicketAdvancedSearchProps> = ({
                 }
               }}
               allowClear
-             options={savedSearches.map(search => ({ value: search.id, label: <>
-                  {search.name} ({dayjs(search.createdAt).fromNow()})
-                </> }))} />
+              options={savedSearches.map(search => ({
+                value: search.id,
+                label: (
+                  <>
+                    {search.name} ({dayjs(search.createdAt).fromNow()})
+                  </>
+                ),
+              }))}
+            />
           )}
         </div>
       </Form>

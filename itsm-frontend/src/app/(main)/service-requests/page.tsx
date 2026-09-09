@@ -58,23 +58,21 @@ export default function ServiceRequestsPage() {
   }, []);
 
   return (
-    <div className="p-6 min-h-screen bg-gray-50">
+    <div className="p-[16px] md:p-[24px] min-h-screen bg-raised">
       {/* 页面头部 */}
       <div className="mb-6 flex justify-between items-center">
         <div>
-          <Title level={2} style={{ marginBottom: 4 }}>
+          <Title level={2} style={{ fontSize: 24, fontWeight: 600, marginBottom: 4 }}>
             服务请求
           </Title>
-          <Text type="secondary">
-            查看和管理服务请求及审批流程
-          </Text>
+          <Text type="secondary">查看和管理服务请求及审批流程</Text>
         </div>
       </div>
 
       {/* 统计卡片 */}
       <Row gutter={[16, 16]} className="mb-6">
         <Col xs={24} sm={12} lg={6}>
-          <Card className="rounded-lg shadow-sm">
+          <Card className="rounded-[8px] shadow-none">
             <Statistic
               title="请求总数"
               value={stats.totalRequests}
@@ -84,7 +82,7 @@ export default function ServiceRequestsPage() {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card className="rounded-lg shadow-sm">
+          <Card className="rounded-[8px] shadow-none">
             {/* SR 自己的审批阶段概念已经在 Task 1 退休，这里按关联 ticket 的状态统计
                 "尚未开始处理"的请求数，标题相应改成"待处理"而不是"待审批"。 */}
             <Statistic
@@ -96,7 +94,7 @@ export default function ServiceRequestsPage() {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card className="rounded-lg shadow-sm">
+          <Card className="rounded-[8px] shadow-none">
             <Statistic
               title="处理中"
               value={stats.processing}
@@ -106,7 +104,7 @@ export default function ServiceRequestsPage() {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card className="rounded-lg shadow-sm">
+          <Card className="rounded-[8px] shadow-none">
             <Statistic
               title="已完成"
               value={stats.completed}

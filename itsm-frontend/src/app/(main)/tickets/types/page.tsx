@@ -8,16 +8,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import {
-  Card,
-  Table,
-  Tag,
-  Typography,
-  Spin,
-  Alert,
-  Space,
-  Empty,
-} from 'antd';
+import { Card, Table, Tag, Typography, Spin, Alert, Space, Empty } from 'antd';
 import { httpClient } from '@/lib/api/http-client';
 
 const { Title, Text } = Typography;
@@ -60,31 +51,24 @@ export default function TicketTypesPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
+    <div className="max-w-6xl mx-auto p-[16px] md:p-[24px]">
       <Card>
         <Space orientation="vertical" size={8} className="mb-4">
-          <Title level={2} style={{ marginBottom: 0 }}>
+          <Title level={2} style={{ fontSize: 24, fontWeight: 600, marginBottom: 0 }}>
             工单类型
           </Title>
-          <Text type="secondary">
-            系统内置的工单分类及其 SLA / 必填字段 / 审批模板
-          </Text>
+          <Text type="secondary">系统内置的工单分类及其 SLA / 必填字段 / 审批模板</Text>
         </Space>
 
         {error && (
-          <Alert
-            type="error"
-            showIcon
-            className="mb-4"
-            message="加载失败"
-            description={error}
-          />
+          <Alert type="error" showIcon className="mb-4" message="加载失败" description={error} />
         )}
 
         {data.length === 0 && !error ? (
           <Empty description="暂无工单类型数据" />
         ) : (
           <Table<TicketCategory>
+            scroll={{ x: 'max-content' }}
             rowKey="id"
             dataSource={data}
             pagination={{ pageSize: 20 }}
@@ -104,8 +88,7 @@ export default function TicketTypesPage() {
                 title: '编码',
                 dataIndex: 'code',
                 width: 140,
-                render: (text?: string) =>
-                  text ? <Tag color="blue">{text}</Tag> : '-',
+                render: (text?: string) => (text ? <Tag color="blue">{text}</Tag> : '-'),
               },
               {
                 title: '默认优先级',
@@ -124,7 +107,7 @@ export default function TicketTypesPage() {
               },
               {
                 title: 'SLA（小时）',
-                dataIndex:'slaHours',
+                dataIndex: 'slaHours',
                 width: 100,
                 render: (v?: number) => (v != null ? `${v} h` : '-'),
               },
@@ -135,7 +118,7 @@ export default function TicketTypesPage() {
               },
               {
                 title: '必填字段',
-                dataIndex:'requiredFields',
+                dataIndex: 'requiredFields',
                 width: 200,
                 render: (fields?: string[]) =>
                   fields && fields.length > 0 ? (
