@@ -26,6 +26,8 @@ const (
 )
 
 type bpmnCallbackEnqueueRequest struct {
+	ActorID           int
+	ActorSource       string
 	ExecutionKey      string
 	TenantID          int
 	ProcessInstanceID int
@@ -110,6 +112,9 @@ func (o *bpmnCallbackOutbox) enqueue(ctx context.Context, client *ent.Client, re
 		SetNextAttemptAt(o.clock())
 	if request.ProcessTaskID > 0 {
 		create.SetProcessTaskID(request.ProcessTaskID)
+	}
+	if request.ActorID > 0 {
+		create.SetActorID(request.ActorID).SetActorSource(request.ActorSource)
 	}
 	if request.Variables != nil {
 		create.SetVariables(copyBPMNCallbackVariables(request.Variables))

@@ -49,11 +49,13 @@ func (h *IncidentServiceTaskHandler) CallbackContract(action string) (CallbackAc
 		"create_incident":      {"title", "description", "type", "priority", "severity", "reporter_id", "impact", "urgency", "category", "subcategory", "detected_at", "impact_analysis", "metadata", "source", "assignee_id", "ci_ids", "template_id", "parent_ticket_id", "tag_ids", "workflow_definition_key", "form_values"},
 		"assign_incident":      {"assignee_id"},
 		"escalate_incident":    {"escalation_level", "escalation_reason"},
-		"resolve_incident":     {"resolution"},
-		"close_incident":       {"feedback"},
-		"update_incident":      {"title", "description", "priority", "severity", "status"},
-		"acknowledge_incident": nil,
-		"categorize_incident":  {"category", "subcategory"},
+		"resolve_incident":     {"resolution", "version"},
+		"start_incident":       {"version"},
+		"close_incident":       {"feedback", "reason", "version"},
+		"reopen_incident":      {"reason", "version"},
+		"update_incident":      {"title", "description", "priority", "severity", "status", "version"},
+		"acknowledge_incident": {"version"},
+		"categorize_incident":  {"category", "subcategory", "version"},
 	}
 	fields, ok := payload[action]
 	contract := callbackActionContract(fields, nil)

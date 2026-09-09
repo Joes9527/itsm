@@ -733,7 +733,23 @@ func (e *CustomProcessEngine) completionAuditActor(ctx context.Context, client *
 }
 
 func (e *CustomProcessEngine) enqueueUserTaskCallback(ctx context.Context, task *ent.ProcessTask, descriptor bpmnCallbackDescriptor, plan CallbackEnqueuePlan) error {
+	actorID, _, _, actorErr := e.completionAuditActor(ctx, e.client, task)
+	if actorErr != nil {
+		return actorErr
+	}
+	if descriptor.HandlerID == "incident_service_handler" {
+		decisions, err := e.client.ProcessApprovalDecision.Query().Where(processapprovaldecision.TenantID(task.TenantID), processapprovaldecision.ProcessTaskID(task.ID), processapprovaldecision.ActionIn("approve", "reject")).All(ctx)
+		if err != nil {
+			return err
+		}
+		for _, decision := range decisions {
+			if decision.ActorID != actorID {
+				return common.NewForbiddenError("callback actor disagrees with task completion decision")
+			}
+		}
+	}
 	request := bpmnCallbackEnqueueRequest{
+		ActorID: actorID, ActorSource: "workflow",
 		TenantID: task.TenantID, ProcessInstanceID: task.ProcessInstanceID,
 		ProcessTaskID: task.ID, TaskID: task.TaskID,
 		CallbackKind: "user_task_callback", HandlerID: descriptor.HandlerID,

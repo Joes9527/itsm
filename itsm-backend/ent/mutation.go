@@ -88915,6 +88915,9 @@ type ProcessCallbackOutboxMutation struct {
 	op                     Op
 	typ                    string
 	id                     *int
+	actor_id               *int
+	addactor_id            *int
+	actor_source           *string
 	execution_key          *string
 	tenant_id              *int
 	addtenant_id           *int
@@ -89043,6 +89046,125 @@ func (m *ProcessCallbackOutboxMutation) IDs(ctx context.Context) ([]int, error) 
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetActorID sets the "actor_id" field.
+func (m *ProcessCallbackOutboxMutation) SetActorID(i int) {
+	m.actor_id = &i
+	m.addactor_id = nil
+}
+
+// ActorID returns the value of the "actor_id" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) ActorID() (r int, exists bool) {
+	v := m.actor_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActorID returns the old "actor_id" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldActorID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActorID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActorID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActorID: %w", err)
+	}
+	return oldValue.ActorID, nil
+}
+
+// AddActorID adds i to the "actor_id" field.
+func (m *ProcessCallbackOutboxMutation) AddActorID(i int) {
+	if m.addactor_id != nil {
+		*m.addactor_id += i
+	} else {
+		m.addactor_id = &i
+	}
+}
+
+// AddedActorID returns the value that was added to the "actor_id" field in this mutation.
+func (m *ProcessCallbackOutboxMutation) AddedActorID() (r int, exists bool) {
+	v := m.addactor_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearActorID clears the value of the "actor_id" field.
+func (m *ProcessCallbackOutboxMutation) ClearActorID() {
+	m.actor_id = nil
+	m.addactor_id = nil
+	m.clearedFields[processcallbackoutbox.FieldActorID] = struct{}{}
+}
+
+// ActorIDCleared returns if the "actor_id" field was cleared in this mutation.
+func (m *ProcessCallbackOutboxMutation) ActorIDCleared() bool {
+	_, ok := m.clearedFields[processcallbackoutbox.FieldActorID]
+	return ok
+}
+
+// ResetActorID resets all changes to the "actor_id" field.
+func (m *ProcessCallbackOutboxMutation) ResetActorID() {
+	m.actor_id = nil
+	m.addactor_id = nil
+	delete(m.clearedFields, processcallbackoutbox.FieldActorID)
+}
+
+// SetActorSource sets the "actor_source" field.
+func (m *ProcessCallbackOutboxMutation) SetActorSource(s string) {
+	m.actor_source = &s
+}
+
+// ActorSource returns the value of the "actor_source" field in the mutation.
+func (m *ProcessCallbackOutboxMutation) ActorSource() (r string, exists bool) {
+	v := m.actor_source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldActorSource returns the old "actor_source" field's value of the ProcessCallbackOutbox entity.
+// If the ProcessCallbackOutbox object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessCallbackOutboxMutation) OldActorSource(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldActorSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldActorSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldActorSource: %w", err)
+	}
+	return oldValue.ActorSource, nil
+}
+
+// ClearActorSource clears the value of the "actor_source" field.
+func (m *ProcessCallbackOutboxMutation) ClearActorSource() {
+	m.actor_source = nil
+	m.clearedFields[processcallbackoutbox.FieldActorSource] = struct{}{}
+}
+
+// ActorSourceCleared returns if the "actor_source" field was cleared in this mutation.
+func (m *ProcessCallbackOutboxMutation) ActorSourceCleared() bool {
+	_, ok := m.clearedFields[processcallbackoutbox.FieldActorSource]
+	return ok
+}
+
+// ResetActorSource resets all changes to the "actor_source" field.
+func (m *ProcessCallbackOutboxMutation) ResetActorSource() {
+	m.actor_source = nil
+	delete(m.clearedFields, processcallbackoutbox.FieldActorSource)
 }
 
 // SetExecutionKey sets the "execution_key" field.
@@ -90069,7 +90191,13 @@ func (m *ProcessCallbackOutboxMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProcessCallbackOutboxMutation) Fields() []string {
-	fields := make([]string, 0, 22)
+	fields := make([]string, 0, 24)
+	if m.actor_id != nil {
+		fields = append(fields, processcallbackoutbox.FieldActorID)
+	}
+	if m.actor_source != nil {
+		fields = append(fields, processcallbackoutbox.FieldActorSource)
+	}
 	if m.execution_key != nil {
 		fields = append(fields, processcallbackoutbox.FieldExecutionKey)
 	}
@@ -90144,6 +90272,10 @@ func (m *ProcessCallbackOutboxMutation) Fields() []string {
 // schema.
 func (m *ProcessCallbackOutboxMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case processcallbackoutbox.FieldActorID:
+		return m.ActorID()
+	case processcallbackoutbox.FieldActorSource:
+		return m.ActorSource()
 	case processcallbackoutbox.FieldExecutionKey:
 		return m.ExecutionKey()
 	case processcallbackoutbox.FieldTenantID:
@@ -90197,6 +90329,10 @@ func (m *ProcessCallbackOutboxMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *ProcessCallbackOutboxMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case processcallbackoutbox.FieldActorID:
+		return m.OldActorID(ctx)
+	case processcallbackoutbox.FieldActorSource:
+		return m.OldActorSource(ctx)
 	case processcallbackoutbox.FieldExecutionKey:
 		return m.OldExecutionKey(ctx)
 	case processcallbackoutbox.FieldTenantID:
@@ -90250,6 +90386,20 @@ func (m *ProcessCallbackOutboxMutation) OldField(ctx context.Context, name strin
 // type.
 func (m *ProcessCallbackOutboxMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case processcallbackoutbox.FieldActorID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActorID(v)
+		return nil
+	case processcallbackoutbox.FieldActorSource:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetActorSource(v)
+		return nil
 	case processcallbackoutbox.FieldExecutionKey:
 		v, ok := value.(string)
 		if !ok {
@@ -90412,6 +90562,9 @@ func (m *ProcessCallbackOutboxMutation) SetField(name string, value ent.Value) e
 // this mutation.
 func (m *ProcessCallbackOutboxMutation) AddedFields() []string {
 	var fields []string
+	if m.addactor_id != nil {
+		fields = append(fields, processcallbackoutbox.FieldActorID)
+	}
 	if m.addtenant_id != nil {
 		fields = append(fields, processcallbackoutbox.FieldTenantID)
 	}
@@ -90432,6 +90585,8 @@ func (m *ProcessCallbackOutboxMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ProcessCallbackOutboxMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case processcallbackoutbox.FieldActorID:
+		return m.AddedActorID()
 	case processcallbackoutbox.FieldTenantID:
 		return m.AddedTenantID()
 	case processcallbackoutbox.FieldProcessInstanceID:
@@ -90449,6 +90604,13 @@ func (m *ProcessCallbackOutboxMutation) AddedField(name string) (ent.Value, bool
 // type.
 func (m *ProcessCallbackOutboxMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case processcallbackoutbox.FieldActorID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddActorID(v)
+		return nil
 	case processcallbackoutbox.FieldTenantID:
 		v, ok := value.(int)
 		if !ok {
@@ -90485,6 +90647,12 @@ func (m *ProcessCallbackOutboxMutation) AddField(name string, value ent.Value) e
 // mutation.
 func (m *ProcessCallbackOutboxMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(processcallbackoutbox.FieldActorID) {
+		fields = append(fields, processcallbackoutbox.FieldActorID)
+	}
+	if m.FieldCleared(processcallbackoutbox.FieldActorSource) {
+		fields = append(fields, processcallbackoutbox.FieldActorSource)
+	}
 	if m.FieldCleared(processcallbackoutbox.FieldProcessTaskID) {
 		fields = append(fields, processcallbackoutbox.FieldProcessTaskID)
 	}
@@ -90526,6 +90694,12 @@ func (m *ProcessCallbackOutboxMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ProcessCallbackOutboxMutation) ClearField(name string) error {
 	switch name {
+	case processcallbackoutbox.FieldActorID:
+		m.ClearActorID()
+		return nil
+	case processcallbackoutbox.FieldActorSource:
+		m.ClearActorSource()
+		return nil
 	case processcallbackoutbox.FieldProcessTaskID:
 		m.ClearProcessTaskID()
 		return nil
@@ -90561,6 +90735,12 @@ func (m *ProcessCallbackOutboxMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *ProcessCallbackOutboxMutation) ResetField(name string) error {
 	switch name {
+	case processcallbackoutbox.FieldActorID:
+		m.ResetActorID()
+		return nil
+	case processcallbackoutbox.FieldActorSource:
+		m.ResetActorSource()
+		return nil
 	case processcallbackoutbox.FieldExecutionKey:
 		m.ResetExecutionKey()
 		return nil

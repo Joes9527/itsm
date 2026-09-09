@@ -12,8 +12,8 @@ type Meta struct {
 	OperationID     string
 }
 type Result struct {
-	WorkItemID int
-	Version    int
-	Status     string
-	Replayed   bool
+	WorkItemID int    `json:"workItemId"`
+	Version    int    `json:"version"`
+	Status     string `json:"status"`
+	Replayed   bool   `json:"replayed"`
 }

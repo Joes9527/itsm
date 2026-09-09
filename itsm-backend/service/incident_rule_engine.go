@@ -3,6 +3,9 @@ package service
 import (
 	"context"
 	"fmt"
+	"itsm-backend/common"
+	"itsm-backend/handlers/shared/workitemmutation"
+	"strings"
 	"time"
 
 	"itsm-backend/dto"
@@ -96,6 +99,9 @@ type TimeCondition struct {
 func (c *TimeCondition) Evaluate(ctx context.Context, incident *ent.Incident) (bool, error) {
 	var targetTime time.Time
 	now := time.Now()
+	if at, ok := ctx.Value(incidentRuleClockKey{}).(time.Time); ok {
+		now = at
+	}
 
 	switch c.Field {
 	case "created_at":
@@ -238,6 +244,7 @@ func (a *AssignmentAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *
 
 	_, err := incidentService.UpdateIncidentTx(ctx, tx, incident.ID, &dto.UpdateIncidentRequest{
 		AssigneeID: &a.AssigneeID,
+		Version:    incident.Edges.WorkItem.Version,
 	}, tenantID)
 
 	return err
@@ -245,10 +252,11 @@ func (a *AssignmentAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *
 
 // StatusChangeAction 状态变更动作
 type StatusChangeAction struct {
-	Status string
-	Reason string
-	client *ent.Client
-	logger *zap.SugaredLogger
+	Status     string
+	Reason     string
+	Resolution string
+	client     *ent.Client
+	logger     *zap.SugaredLogger
 }
 
 func (a *StatusChangeAction) Execute(ctx context.Context, incident *ent.Incident, tenantID int) error {
@@ -257,11 +265,27 @@ func (a *StatusChangeAction) Execute(ctx context.Context, incident *ent.Incident
 
 func (a *StatusChangeAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
 	incidentService := NewIncidentService(a.client, a.logger)
-
-	_, err := incidentService.UpdateIncidentTx(ctx, tx, incident.ID, &dto.UpdateIncidentRequest{
-		Status: &a.Status,
-	}, tenantID)
-
+	actor, ok := ctx.Value(incidentAlertActorContextKey{}).(incidentAlertActor)
+	if !ok || actor.ID <= 0 || actor.Source == "" || actor.CorrelationID == "" || incident.Edges.WorkItem == nil {
+		return rejectIncidentAction("status rule requires trusted actor, stable action identity and WorkItem")
+	}
+	actions := map[string]string{"acknowledged": "acknowledge", "in_progress": "start", "resolved": "resolve", "closed": "close"}
+	action, ok := actions[a.Status]
+	if !ok {
+		return rejectIncidentAction("unsupported Incident lifecycle target")
+	}
+	if a.Status == "in_progress" && (incident.Edges.WorkItem.Status == "resolved" || incident.Edges.WorkItem.Status == "closed") {
+		action = "reopen"
+	}
+	cmd := dto.IncidentCommand{Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: actor.ID, ExpectedVersion: incident.Edges.WorkItem.Version, Source: actor.Source, OperationID: actor.CorrelationID, CorrelationID: actor.CorrelationID}, IncidentID: incident.ID, Action: action, Reason: strings.TrimSpace(a.Reason), Resolution: strings.TrimSpace(a.Resolution)}
+	digest, err := incidentCommandDigest(cmd)
+	if err != nil {
+		return err
+	}
+	_, err = incidentService.applyIncidentCommandTx(ctx, tx, cmd, digest)
+	if appErr, ok := common.AsAppError(err); ok && (appErr.Code == common.ErrCodeValidation || appErr.Code == common.ErrCodeForbidden || appErr.Code == common.ErrCodeNotFound) {
+		return rejectIncidentAction("%s", appErr.Message)
+	}
 	return err
 }
 
@@ -530,6 +554,17 @@ func (e *IncidentRuleEngine) parseConditions(conditions map[string]interface{}) 
 
 	for conditionType, conditionData := range conditions {
 		switch conditionType {
+		case "event_type":
+			types, err := toStringSlice(conditionData)
+			if err != nil || len(types) == 0 {
+				return nil, fmt.Errorf("invalid Incident event subscription")
+			}
+			for _, name := range types {
+				if name != "incident.created" && name != "incident.status_changed" {
+					return nil, fmt.Errorf("unknown Incident event subscription")
+				}
+			}
+			parsedConditions = append(parsedConditions, &EventTypeCondition{Types: types})
 		case "priority":
 			priorities, err := toStringSlice(conditionData)
 			if err != nil {
@@ -751,12 +786,13 @@ func (e *IncidentRuleEngine) parseStatusChangeAction(actionData map[string]inter
 	}
 
 	reason, _ := actionData["reason"].(string)
-
+	resolution, _ := actionData["resolution"].(string)
 	return &StatusChangeAction{
-		Status: status,
-		Reason: reason,
-		client: e.client,
-		logger: e.logger,
+		Status:     status,
+		Reason:     reason,
+		Resolution: resolution,
+		client:     e.client,
+		logger:     e.logger,
 	}, nil
 }
 

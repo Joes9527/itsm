@@ -83,8 +83,8 @@ type UpdateIncidentRequest struct {
 	RootCause       *RootCause             `json:"rootCause,omitempty"`
 	ResolutionSteps []ResolutionStep       `json:"resolutionSteps,omitempty"`
 	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-	Version         int                    `json:"version"` // 版本号（乐观锁）
-	Force           bool                   `json:"force"`   // 是否强制更新（忽略版本检查）
+	Version         int                    `json:"version" binding:"required,gt=0"` // 必填预期版本
+	Force           bool                   `json:"force"`                           // 是否强制更新（忽略版本检查）
 }
 
 // AssignIncidentRequest 分配事件请求

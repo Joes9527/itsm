@@ -15,7 +15,7 @@ import { CreationRequester } from '@/components/work-item/CreationRequester';
  * 包含：基本信息、根因分析、影响评估、事件分类的编辑入口
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Card,
   Descriptions,
@@ -128,6 +128,16 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
   const creation = useWorkItemCreation();
   const [conversionForm] = Form.useForm();
   const [conversionOpen, setConversionOpen] = useState(false);
+  const commandAttempts = useRef(new Map<string, string>());
+  const commandMeta = (action: string, payload = '') => {
+    if (!data || typeof data.version !== 'number' || !Number.isInteger(data.version) || data.version <= 0) throw new Error('请刷新事件以获取当前版本');
+    const key = JSON.stringify([data.id, data.version, action, payload]);
+    let operationId = commandAttempts.current.get(key);
+    if (!operationId) { operationId = crypto.randomUUID(); commandAttempts.current.set(key, operationId); }
+    return { version: data.version, operationId };
+  };
+  const [closeModalVisible, setCloseModalVisible] = useState(false);
+  const [closeReason, setCloseReason] = useState('');
   // 支持通过props传入id，或通过useParams获取
   const id = propId || (params?.id as string);
   const workItemContext = useOptionalWorkItemContext();
@@ -143,6 +153,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
   const [escalating, setEscalating] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [reopening, setReopening] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [form] = Form.useForm();
   const [resolveForm] = Form.useForm();
 
@@ -182,7 +193,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
   const [categoryForm] = Form.useForm();
   const actions = workItemContext?.actions ?? fallbackActions ?? EMPTY_ACTIONS;
   const actionMutationInFlight =
-    escalating || assigning || escalatingMajor || resolving || closing || converting || reopening;
+    escalating || assigning || escalatingMajor || resolving || closing || converting || reopening || starting;
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -312,8 +323,8 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
     try {
       // 使用专门的 resolve 端点，而非直接更新状态
       await IncidentAPI.resolveIncident(data.id, {
+        ...commandMeta('resolve', values.resolution.trim()),
         resolution: values.resolution,
-        resolutionCode: values.resolutionCode,
       });
       message.success('事件已解决');
       setResolveModalVisible(false);
@@ -330,7 +341,9 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
 
     setClosing(true);
     try {
-      await IncidentAPI.closeIncident(data.id);
+      if (!closeReason.trim()) { message.error('请填写关闭说明'); return; }
+      await IncidentAPI.closeIncident(data.id, { ...commandMeta('close', closeReason.trim()), reason: closeReason.trim() });
+      setCloseModalVisible(false);
       message.success('事件已关闭');
       loadData();
     } catch (error) {
@@ -363,7 +376,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
 
     setReopening(true);
     try {
-      await IncidentAPI.reopenIncident(data.id);
+      await IncidentAPI.reopenIncident(data.id, commandMeta('reopen'));
       message.success('事件已重新打开');
       loadData();
     } catch (error) {
@@ -371,6 +384,14 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
     } finally {
       setReopening(false);
     }
+  };
+
+  const handleStart = async () => {
+    if (!data) return;
+    setStarting(true);
+    try { await IncidentAPI.startIncident(data.id, commandMeta('start')); await loadData(); }
+    catch (error) { handleError(error, 'startIncident', '开始处理失败'); }
+    finally { setStarting(false); }
   };
 
   // 打开指派弹窗
@@ -448,13 +469,14 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
       };
 
       if (rootCauseData?.id) {
-        await IncidentAPI.updateRootCauseAnalysis(rootCauseData.id, request);
+        await IncidentAPI.updateRootCauseAnalysis(rootCauseData.id, { ...request, version: data.version });
         message.success('根因分析已更新');
       } else {
         await IncidentAPI.createRootCauseAnalysis(request);
         message.success('根因分析已创建');
       }
       setRootCauseModalVisible(false);
+      await loadData();
       loadAnalysisData();
     } catch (error) {
       handleError(error, 'saveRootCause', '保存根因分析失败');
@@ -500,13 +522,14 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
       };
 
       if (impactData?.id) {
-        await IncidentAPI.updateImpactAssessment(impactData.id, request);
+        await IncidentAPI.updateImpactAssessment(impactData.id, { ...request, version: data.version });
         message.success('影响评估已更新');
       } else {
         await IncidentAPI.createImpactAssessment(request);
         message.success('影响评估已创建');
       }
       setImpactModalVisible(false);
+      await loadData();
       loadAnalysisData();
     } catch (error) {
       handleError(error, 'saveImpact', '保存影响评估失败');
@@ -528,6 +551,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
     setSavingAnalysis(true);
     try {
       await IncidentAPI.updateIncident(data.id, {
+        version: data.version,
         ...classificationUpdate(values.classification, categoryForm.isFieldTouched('classification')),
         urgency: values.urgency,
         impact: values.impact,
@@ -535,6 +559,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
       message.success('事件分类已更新');
 
       setCategoryModalVisible(false);
+      await loadData();
       loadAnalysisData();
       loadData(); // 刷新事件基本信息
     } catch (error) {
@@ -580,6 +605,10 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
   return (
     <>
       <CreationAttempts creation={creation} />
+      <Modal open={closeModalVisible} title='关闭事件' okText='确认关闭' onCancel={() => setCloseModalVisible(false)} onOk={handleClose} confirmLoading={closing}>
+        <label htmlFor='incident-close-reason'>关闭说明</label>
+        <Input.TextArea id='incident-close-reason' value={closeReason} onChange={event => setCloseReason(event.target.value)} />
+      </Modal>
       <Modal open={conversionOpen} title='创建关联问题' onCancel={() => setConversionOpen(false)} onOk={submitConversion} confirmLoading={converting}>
         <p>保留当前事件并创建关联问题，请确认申请人。</p>
         <Form form={conversionForm}><CreationRequester resource="problem" /></Form>
@@ -652,6 +681,9 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
               >
                 升级为重大事件
               </WorkItemActionButton>
+              <WorkItemActionButton action={actions.start} actionName='start' button={{ onClick: handleStart, loading: starting, disabled: actionMutationInFlight }}>
+                {data.status === 'on_hold' || data.status === 'escalated' ? '恢复处理' : '开始处理'}
+              </WorkItemActionButton>
               <WorkItemActionButton
                 action={actions.resolve}
                 actionName='resolve'
@@ -670,7 +702,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
                 actionName='close'
                 button={{
                   danger: true,
-                  onClick: handleClose,
+                  onClick: () => { setCloseReason(''); setCloseModalVisible(true); },
                   loading: closing,
                   disabled: actionMutationInFlight,
                 }}

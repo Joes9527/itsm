@@ -2866,6 +2866,8 @@ var (
 	// ProcessCallbackOutboxesColumns holds the columns for the "process_callback_outboxes" table.
 	ProcessCallbackOutboxesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "actor_id", Type: field.TypeInt, Nullable: true},
+		{Name: "actor_source", Type: field.TypeString, Nullable: true},
 		{Name: "execution_key", Type: field.TypeString, Unique: true},
 		{Name: "tenant_id", Type: field.TypeInt},
 		{Name: "process_instance_id", Type: field.TypeInt},
@@ -2898,27 +2900,27 @@ var (
 			{
 				Name:    "processcallbackoutbox_tenant_id_status_next_attempt_at",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[14], ProcessCallbackOutboxesColumns[16]},
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[4], ProcessCallbackOutboxesColumns[16], ProcessCallbackOutboxesColumns[18]},
 			},
 			{
 				Name:    "processcallbackoutbox_tenant_id_status_lease_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[14], ProcessCallbackOutboxesColumns[18]},
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[4], ProcessCallbackOutboxesColumns[16], ProcessCallbackOutboxesColumns[20]},
 			},
 			{
 				Name:    "processcallbackoutbox_tenant_id_process_instance_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[3], ProcessCallbackOutboxesColumns[14]},
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[4], ProcessCallbackOutboxesColumns[5], ProcessCallbackOutboxesColumns[16]},
 			},
 			{
 				Name:    "processcallbackoutbox_tenant_id_process_task_id",
 				Unique:  false,
-				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[2], ProcessCallbackOutboxesColumns[4]},
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[4], ProcessCallbackOutboxesColumns[6]},
 			},
 			{
 				Name:    "processcallbackoutbox_execution_key",
 				Unique:  true,
-				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[1]},
+				Columns: []*schema.Column{ProcessCallbackOutboxesColumns[3]},
 			},
 		},
 	}

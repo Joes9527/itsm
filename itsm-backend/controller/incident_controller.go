@@ -276,23 +276,7 @@ func (c *IncidentController) UpdateIncident(ctx *gin.Context) {
 	}
 	response, err := c.incidentService.UpdateIncident(ctx.Request.Context(), id, &req, tenantID)
 	if err != nil {
-		// 处理版本冲突错误
-		if common.IsVersionConflictError(err) {
-			conflictErr := err.(*common.VersionConflictError)
-			c.logger.Warnw("Version conflict", "error", err, "incident_id", id)
-			common.Conflict(ctx, conflictErr.Error(), gin.H{
-				"incidentId":     conflictErr.ResourceID,
-				"currentVersion": conflictErr.CurrentVersion,
-				"serverVersion":  conflictErr.ServerVersion,
-			})
-			return
-		}
-		if err.Error() == "incident not found" {
-			common.Fail(ctx, common.ParamErrorCode, "事件不存在")
-			return
-		}
-		c.logger.Errorw("Failed to update incident", "error", err, "id", id)
-		common.Fail(ctx, common.InternalErrorCode, "更新事件失败")
+		respondIncidentMutationError(ctx, err)
 		return
 	}
 
@@ -652,18 +636,7 @@ func (c *IncidentController) CreateIncidentAlert(ctx *gin.Context) {
 // @Success 200 {object} common.Response
 // @Router /api/v1/incidents/:id/acknowledge [post]
 func (c *IncidentController) AcknowledgeIncident(ctx *gin.Context) {
-	id, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
-		common.Fail(ctx, common.ParamErrorCode, "无效的事件ID")
-		return
-	}
-	userID := ctx.GetInt("user_id")
-	tenantID := ctx.GetInt("tenant_id")
-	if err := c.incidentService.AcknowledgeIncident(ctx.Request.Context(), id, userID, tenantID); err != nil {
-		common.Fail(ctx, common.InternalErrorCode, err.Error())
-		return
-	}
-	common.Success(ctx, gin.H{"message": "事件已确认"})
+	c.applyIncidentCommand(ctx, "acknowledge")
 }
 
 // ResolveIncident 解决事件
@@ -677,23 +650,7 @@ func (c *IncidentController) AcknowledgeIncident(ctx *gin.Context) {
 // @Success 200 {object} common.Response
 // @Router /api/v1/incidents/:id/resolve [post]
 func (c *IncidentController) ResolveIncident(ctx *gin.Context) {
-	id, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
-		common.Fail(ctx, common.ParamErrorCode, "无效的事件ID")
-		return
-	}
-	var body struct {
-		Resolution string `json:"resolution"`
-		RootCause  string `json:"rootCause"`
-	}
-	_ = ctx.ShouldBindJSON(&body)
-	userID := ctx.GetInt("user_id")
-	tenantID := ctx.GetInt("tenant_id")
-	if err := c.incidentService.ResolveIncident(ctx.Request.Context(), id, userID, tenantID, body.Resolution, body.RootCause); err != nil {
-		common.Fail(ctx, common.InternalErrorCode, err.Error())
-		return
-	}
-	common.Success(ctx, gin.H{"message": "事件已解决"})
+	c.applyIncidentCommand(ctx, "resolve")
 }
 
 // CloseIncident 关闭事件
@@ -706,24 +663,7 @@ func (c *IncidentController) ResolveIncident(ctx *gin.Context) {
 // @Param body body object true "关闭信息"
 // @Success 200 {object} common.Response
 // @Router /api/v1/incidents/:id/close [post]
-func (c *IncidentController) CloseIncident(ctx *gin.Context) {
-	id, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
-		common.Fail(ctx, common.ParamErrorCode, "无效的事件ID")
-		return
-	}
-	var body struct {
-		CloseNotes string `json:"closeNotes"`
-	}
-	_ = ctx.ShouldBindJSON(&body)
-	userID := ctx.GetInt("user_id")
-	tenantID := ctx.GetInt("tenant_id")
-	if err := c.incidentService.CloseIncident(ctx.Request.Context(), id, userID, tenantID, body.CloseNotes); err != nil {
-		common.Fail(ctx, common.InternalErrorCode, err.Error())
-		return
-	}
-	common.Success(ctx, gin.H{"message": "事件已关闭"})
-}
+func (c *IncidentController) CloseIncident(ctx *gin.Context) { c.applyIncidentCommand(ctx, "close") }
 
 // ReopenIncident 重新打开事件
 // @Summary 重新打开事件
@@ -733,20 +673,7 @@ func (c *IncidentController) CloseIncident(ctx *gin.Context) {
 // @Param id path int true "事件ID"
 // @Success 200 {object} common.Response
 // @Router /api/v1/incidents/:id/reopen [post]
-func (c *IncidentController) ReopenIncident(ctx *gin.Context) {
-	id, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
-		common.Fail(ctx, common.ParamErrorCode, "无效的事件ID")
-		return
-	}
-	userID := ctx.GetInt("user_id")
-	tenantID := ctx.GetInt("tenant_id")
-	if err := c.incidentService.ReopenIncident(ctx.Request.Context(), id, userID, tenantID); err != nil {
-		common.Fail(ctx, common.InternalErrorCode, err.Error())
-		return
-	}
-	common.Success(ctx, gin.H{"message": "事件已重新打开"})
-}
+func (c *IncidentController) ReopenIncident(ctx *gin.Context) { c.applyIncidentCommand(ctx, "reopen") }
 
 // EscalateMajorIncident 升级为重大事件
 // @Summary 升级为重大事件
@@ -1101,7 +1028,10 @@ func (c *IncidentController) UpdateRootCause(ctx *gin.Context) {
 		return
 	}
 
-	var req dto.RootCause
+	var req struct {
+		dto.RootCause
+		Version int `json:"version" binding:"required,gt=0"`
+	}
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		c.logger.Errorw("Invalid request body", "error", err)
 		common.Fail(ctx, common.ParamErrorCode, "请求参数无效")
@@ -1114,15 +1044,10 @@ func (c *IncidentController) UpdateRootCause(ctx *gin.Context) {
 	}
 
 	_, err = c.incidentService.UpdateIncident(ctx.Request.Context(), id, &dto.UpdateIncidentRequest{
-		RootCause: &req,
+		RootCause: &req.RootCause, Version: req.Version,
 	}, tenantID)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			common.Fail(ctx, common.NotFoundErrorCode, "事件不存在")
-			return
-		}
-		c.logger.Errorw("Failed to update root cause", "error", err, "id", id)
-		common.Fail(ctx, common.InternalErrorCode, "更新根因分析失败")
+		respondIncidentMutationError(ctx, err)
 		return
 	}
 
@@ -1191,7 +1116,10 @@ func (c *IncidentController) UpdateImpactAssessment(ctx *gin.Context) {
 		return
 	}
 
-	var req dto.ImpactAnalysis
+	var req struct {
+		dto.ImpactAnalysis
+		Version int `json:"version" binding:"required,gt=0"`
+	}
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		c.logger.Errorw("Invalid request body", "error", err)
 		common.Fail(ctx, common.ParamErrorCode, "请求参数无效")
@@ -1204,15 +1132,10 @@ func (c *IncidentController) UpdateImpactAssessment(ctx *gin.Context) {
 	}
 
 	_, err = c.incidentService.UpdateIncident(ctx.Request.Context(), id, &dto.UpdateIncidentRequest{
-		ImpactAnalysis: &req,
+		ImpactAnalysis: &req.ImpactAnalysis, Version: req.Version,
 	}, tenantID)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			common.Fail(ctx, common.NotFoundErrorCode, "事件不存在")
-			return
-		}
-		c.logger.Errorw("Failed to update impact assessment", "error", err, "id", id)
-		common.Fail(ctx, common.InternalErrorCode, "更新影响评估失败")
+		respondIncidentMutationError(ctx, err)
 		return
 	}
 
@@ -1285,6 +1208,7 @@ func (c *IncidentController) UpdateClassification(ctx *gin.Context) {
 	var req struct {
 		Category    string `json:"category"`
 		Subcategory string `json:"subcategory"`
+		Version     int    `json:"version" binding:"required,gt=0"`
 	}
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		c.logger.Errorw("Invalid request body", "error", err)
@@ -1297,14 +1221,9 @@ func (c *IncidentController) UpdateClassification(ctx *gin.Context) {
 		return
 	}
 
-	_, err = c.incidentService.UpdateClassification(ctx.Request.Context(), id, tenantID, req.Category, req.Subcategory)
+	_, err = c.incidentService.UpdateClassification(ctx.Request.Context(), id, tenantID, req.Version, req.Category, req.Subcategory)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			common.Fail(ctx, common.NotFoundErrorCode, "事件不存在")
-			return
-		}
-		c.logger.Errorw("Failed to update classification", "error", err, "id", id)
-		common.Fail(ctx, common.InternalErrorCode, "更新分类失败")
+		respondIncidentMutationError(ctx, err)
 		return
 	}
 

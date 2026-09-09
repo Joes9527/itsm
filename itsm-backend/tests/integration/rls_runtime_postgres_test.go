@@ -6,6 +6,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
+	"os"
 	"testing"
 	"time"
 
@@ -102,7 +104,15 @@ func runtimeRLSDriver(t *testing.T, f *incidentEffectsFixture) (*rls.Driver, *sq
 		}
 	}
 
-	db, err := sql.Open("postgres", "host=127.0.0.1 port=36444 user=postgres dbname=sslvpn_test sslmode=disable search_path="+schema+" role="+role)
+	parsed, err := url.Parse(os.Getenv("INTAKE_POSTGRES_TEST_DSN"))
+	require.NoError(t, err)
+	require.Equal(t, "127.0.0.1:36444", parsed.Host)
+	require.Equal(t, "/sslvpn_test", parsed.Path)
+	params := parsed.Query()
+	params.Set("search_path", schema)
+	params.Set("role", role)
+	parsed.RawQuery = params.Encode()
+	db, err := sql.Open("postgres", parsed.String())
 	require.NoError(t, err)
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })

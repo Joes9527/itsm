@@ -26,7 +26,7 @@ export interface Incident {
   resolutionSteps?: Record<string, any>[];
   problemId?: number; // 关联的问题记录ID
   /** 版本号（乐观锁） */
-  version?: number;
+  version: number;
   detectedAt?: string;
   resolvedAt?: string;
   closedAt?: string;

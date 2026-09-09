@@ -11,6 +11,7 @@ const mockGetImpactAssessment = jest.fn();
 const mockGetIncidentClassification = jest.fn();
 const mockResolveIncident = jest.fn();
 const mockCloseIncident = jest.fn();
+const mockStartIncident = jest.fn();
 const mockConvertToProblem = jest.fn();
 const mockPush = jest.fn();
 const hasPermission = () => false;
@@ -28,6 +29,7 @@ jest.mock('@/lib/api/', () => ({
     getIncidentClassification: (...args: unknown[]) => mockGetIncidentClassification(...args),
     resolveIncident: (...args: unknown[]) => mockResolveIncident(...args),
     closeIncident: (...args: unknown[]) => mockCloseIncident(...args),
+    startIncident: (...args: unknown[]) => mockStartIncident(...args),
     convertToProblem: (...args: unknown[]) => mockConvertToProblem(...args),
   },
 }));
@@ -57,6 +59,7 @@ const workItem: WorkItemCommon = {
 };
 
 const incident = {
+	version: 7,
   id: 301,
   incidentNumber: 'INC-202608-000301',
   title: '数据库连接失败',
@@ -146,6 +149,16 @@ describe('IncidentDetail action eligibility', () => {
     mockGetIncidentClassification.mockResolvedValue(null);
     mockResolveIncident.mockResolvedValue(incident);
     mockCloseIncident.mockResolvedValue(incident);
+    mockStartIncident.mockResolvedValue({ workItemId: 301, version: 8, status: 'in_progress' });
+  });
+
+  it('starts acknowledged work using its version and a stable operation key', async () => {
+    mockGetIncident.mockResolvedValue({ ...incident, status: 'acknowledged' });
+    renderWithProvider({ start: { allowed: true } });
+    await userEvent.click(await screen.findByRole('button', { name: /开始处理/ }));
+    await waitFor(() => expect(mockStartIncident).toHaveBeenCalledWith(301, {
+      version: 7, operationId: 'conversion-key',
+    }));
   });
 
   it('disables every denied incident action and shows the backend reason', async () => {
@@ -182,8 +195,9 @@ describe('IncidentDetail action eligibility', () => {
 
     await waitFor(() =>
       expect(mockResolveIncident).toHaveBeenCalledWith(301, {
+		version: 7,
+		operationId: 'conversion-key',
         resolution: '已恢复数据库连接并验证服务正常',
-        resolutionCode: undefined,
       })
     );
   });
@@ -236,7 +250,10 @@ describe('IncidentDetail action eligibility', () => {
 
     const user = userEvent.setup();
     await user.click(await screen.findByRole('button', { name: /关\s*闭/ }));
-    await waitFor(() => expect(mockCloseIncident).toHaveBeenCalledWith(301));
+    const closeDialog = await screen.findByRole('dialog', { name: '关闭事件' });
+    await user.type(within(closeDialog).getByLabelText('关闭说明'), '服务稳定，用户已确认');
+    await user.click(within(closeDialog).getByRole('button', { name: '确认关闭' }));
+    await waitFor(() => expect(mockCloseIncident).toHaveBeenCalledWith(301, { version: 7, operationId: 'conversion-key', reason: '服务稳定，用户已确认' }));
 
     expect(screen.getByRole('button', { name: '重新打开' })).toBeDisabled();
   });

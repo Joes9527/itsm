@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button, Space, message, Pagination, Badge, Modal, Select, Input, Form } from 'antd';
 import {
   Plus,
@@ -46,6 +46,7 @@ const KANBAN_COLUMNS: KanbanColumnConfig<Incident>[] = [
 export default function IncidentsPage() {
   const router = useRouter();
   const { t } = useI18n();
+  const batchAttempts = useRef(new Map<string, string>());
 
   // ====== 状态管理 ======
   const [loading, setLoading] = useState(false);
@@ -252,20 +253,34 @@ export default function IncidentsPage() {
   }, [assignForm, selectedRowKeys, runIncidentBatch]);
 
   const handleBatchResolve = useCallback(async () => {
-    await runIncidentBatch(
-      selectedRowKeys,
-      (id) => IncidentAPI.resolveIncident(id, { resolution: '批量解决' }),
-      '批量解决成功',
-    );
-  }, [selectedRowKeys, runIncidentBatch]);
+    let resolution = '';
+    Modal.confirm({ title: '批量解决事件', content: <Input.TextArea aria-label='恢复验证说明' onChange={event => { resolution = event.target.value; }} />, onOk: async () => {
+      if (!resolution.trim()) throw new Error('请填写恢复验证说明');
+      await runIncidentBatch(selectedRowKeys, id => {
+        const version = incidents.find(item => item.id === id)?.version;
+        if (!version) throw new Error('请刷新列表以获取事件版本');
+        const key = JSON.stringify([id, version, 'resolve', resolution.trim()]);
+        let operationId = batchAttempts.current.get(key);
+        if (!operationId) { operationId = crypto.randomUUID(); batchAttempts.current.set(key, operationId); }
+        return IncidentAPI.resolveIncident(id, { version, operationId, resolution: resolution.trim() });
+      }, '批量解决成功');
+    } });
+  }, [selectedRowKeys, runIncidentBatch, incidents]);
 
   const handleBatchClose = useCallback(async () => {
-    await runIncidentBatch(
-      selectedRowKeys,
-      (id) => IncidentAPI.closeIncident(id, { closeNotes: '批量关闭' }),
-      '批量关闭成功',
-    );
-  }, [selectedRowKeys, runIncidentBatch]);
+    let reason = '';
+    Modal.confirm({ title: '批量关闭事件', content: <Input.TextArea aria-label='关闭说明' onChange={event => { reason = event.target.value; }} />, onOk: async () => {
+      if (!reason.trim()) throw new Error('请填写关闭说明');
+      await runIncidentBatch(selectedRowKeys, id => {
+        const version = incidents.find(item => item.id === id)?.version;
+        if (!version) throw new Error('请刷新列表以获取事件版本');
+        const key = JSON.stringify([id, version, 'close', reason.trim()]);
+        let operationId = batchAttempts.current.get(key);
+        if (!operationId) { operationId = crypto.randomUUID(); batchAttempts.current.set(key, operationId); }
+        return IncidentAPI.closeIncident(id, { version, operationId, reason: reason.trim() });
+      }, '批量关闭成功');
+    } });
+  }, [selectedRowKeys, runIncidentBatch, incidents]);
 
   const handleBatchDelete = useCallback(async () => {
     await runIncidentBatch(

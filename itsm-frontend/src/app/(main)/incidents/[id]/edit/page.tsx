@@ -41,7 +41,6 @@ export default function IncidentEditPage() {
           description: data.description,
           priority: data.priority,
           severity: data.severity,
-          status: data.status,
         });
       } catch (error) {
         if (isMounted) {
@@ -62,12 +61,12 @@ export default function IncidentEditPage() {
   }, [id, form, router]);
 
   const handleSubmit = async (values: any) => {
-    if (!id) return;
+    if (!id || !incidentData) return;
 
     setLoading(true);
     try {
-      const { classification, ...payload } = values;
-      await IncidentAPI.updateIncident(Number(id), { ...payload, ...classificationUpdate(classification, form.isFieldTouched('classification')) });
+      const { classification, status: _status, ...payload } = values;
+      await IncidentAPI.updateIncident(Number(id), { ...payload, version: incidentData.version, ...classificationUpdate(classification, form.isFieldTouched('classification')) });
       message.success(t('incidents.updateSuccess'));
       router.push(`/incidents/${id}`);
     } catch (error) {
@@ -123,20 +122,6 @@ export default function IncidentEditPage() {
           </Row>
 
           <Row gutter={24}>
-            <Col span={12}>
-              <Form.Item
-                name="status"
-                label="状态"
-                rules={[{ required: true, message: '请选择状态' }]}
-              >
-                <Select placeholder="请选择状态" options={[
-                  { value: 'new', label: '新建' },
-                  { value: 'in_progress', label: '进行中' },
-                  { value: 'resolved', label: '已解决' },
-                  { value: 'closed', label: '已关闭' },
-                ]} />
-              </Form.Item>
-            </Col>
             <Col span={12}>
               <Form.Item
                 name="priority"

@@ -30,13 +30,15 @@ func (e *IncidentRuleEngine) Deliver(ctx context.Context, event *ent.OutboxEvent
 }
 
 type incidentCreatedPayload struct {
-	ActorTenantID   int    `json:"-"`
-	IntakeRequestID int    `json:"-"`
-	TenantID        int    `json:"tenantId"`
-	IncidentID      int    `json:"incidentId"`
-	WorkItemID      int    `json:"workItemId"`
-	ActorID         int    `json:"actorId"`
-	Channel         string `json:"channel"`
+	StatusSnapshot  *incidentRuleSnapshot `json:"-"`
+	OperationID     string                `json:"-"`
+	ActorTenantID   int                   `json:"-"`
+	IntakeRequestID int                   `json:"-"`
+	TenantID        int                   `json:"tenantId"`
+	IncidentID      int                   `json:"incidentId"`
+	WorkItemID      int                   `json:"workItemId"`
+	ActorID         int                   `json:"actorId"`
+	Channel         string                `json:"channel"`
 }
 
 func validateIncidentCreatedEvent(ctx context.Context, client, directory *ent.Client, event *ent.OutboxEvent) (incidentCreatedPayload, error) {
@@ -91,7 +93,7 @@ func (e *IncidentRuleEngine) ExecuteCreatedEvent(ctx context.Context, event *ent
 	if e.client == nil {
 		return fmt.Errorf("incident rule engine database unavailable")
 	}
-	p, err := validateIncidentCreatedEvent(ctx, e.client, e.actorDirectory, event)
+	p, err := validateIncidentRuleEvent(ctx, e.client, e.actorDirectory, event)
 	if err != nil {
 		return err
 	}
@@ -100,7 +102,7 @@ func (e *IncidentRuleEngine) ExecuteCreatedEvent(ctx context.Context, event *ent
 		return err
 	}
 	for _, execution := range executions {
-		if execution.ExecutionKind == "creation_event" {
+		if execution.ExecutionKind == "creation_event" || execution.ExecutionKind == "status_event" {
 			continue
 		}
 		if err := e.resumeCreatedRule(ctx, event, p, execution.ID); err != nil {
@@ -144,7 +146,7 @@ func (e *IncidentRuleEngine) freezeCreatedRules(ctx context.Context, event *ent.
 	if err != nil {
 		return nil, err
 	}
-	if _, err = validateIncidentCreatedEvent(ctx, tx.Client(), e.actorDirectory, event); err != nil {
+	if _, err = validateIncidentRuleEvent(ctx, tx.Client(), e.actorDirectory, event); err != nil {
 		return nil, err
 	}
 	exists, err := tx.IncidentRuleExecution.Query().Where(incidentruleexecution.TenantID(p.TenantID), incidentruleexecution.ExecutionKey(event.EventID)).Exist(ctx)
@@ -152,7 +154,11 @@ func (e *IncidentRuleEngine) freezeCreatedRules(ctx context.Context, event *ent.
 		return nil, err
 	}
 	if !exists {
-		_, err = tx.IncidentRuleExecution.Create().SetTenantID(p.TenantID).SetIncidentID(p.IncidentID).SetSourceEventID(event.ID).SetActorID(p.ActorID).SetSource(p.Channel).SetExecutionKey(event.EventID).SetExecutionKind("creation_event").SetStatus("running").SetResult("creation rule selection frozen").Save(ctx)
+		kind := "creation_event"
+		if p.StatusSnapshot != nil {
+			kind = "status_event"
+		}
+		_, err = tx.IncidentRuleExecution.Create().SetTenantID(p.TenantID).SetIncidentID(p.IncidentID).SetSourceEventID(event.ID).SetActorID(p.ActorID).SetSource(p.Channel).SetExecutionKey(event.EventID).SetExecutionKind(kind).SetStatus("running").SetResult("configured rule selection frozen; empty set means no configured actions").Save(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -161,6 +167,13 @@ func (e *IncidentRuleEngine) freezeCreatedRules(ctx context.Context, event *ent.
 			return nil, err
 		}
 		for _, rule := range rules {
+			// Existing rules predate event selection and belong to creation. A
+			// status subscription must be explicit to avoid rerunning old policies.
+			if p.StatusSnapshot != nil {
+				if _, declared := rule.Conditions["event_type"]; !declared {
+					continue
+				}
+			}
 			_, err = tx.IncidentRuleExecution.Create().SetTenantID(p.TenantID).SetRuleID(rule.ID).SetIncidentID(p.IncidentID).SetSourceEventID(event.ID).SetActorID(p.ActorID).SetSource(p.Channel).SetExecutionKey(fmt.Sprintf("%s:rule:%d", event.EventID, rule.ID)).SetFrozenActions(rule.Actions).SetInputData(map[string]interface{}{"conditions": rule.Conditions}).SetStatus("pending").Save(ctx)
 			if err != nil {
 				return nil, err
@@ -207,7 +220,7 @@ func (e *IncidentRuleEngine) applyNextCreatedAction(ctx context.Context, event *
 	if execution.Status == "completed" || execution.Status == "skipped" {
 		return true, tx.Commit()
 	}
-	if _, err := validateIncidentCreatedEvent(ctx, tx.Client(), e.actorDirectory, event); err != nil {
+	if _, err := validateIncidentRuleEvent(ctx, tx.Client(), e.actorDirectory, event); err != nil {
 		return false, err
 	}
 	ownerExists, err := tx.IncidentRule.Query().Where(incidentrule.ID(execution.RuleID), incidentrule.TenantID(p.TenantID)).Exist(ctx)
@@ -223,6 +236,12 @@ func (e *IncidentRuleEngine) applyNextCreatedAction(ctx context.Context, event *
 		return false, err
 	}
 	if execution.Status == "pending" {
+		ctx = context.WithValue(ctx, incidentRuleEventTypeKey{}, event.EventType)
+		conditionItem := current
+		if p.StatusSnapshot != nil {
+			conditionItem = p.StatusSnapshot.incident(p.IncidentID, p.WorkItemID)
+			ctx = context.WithValue(ctx, incidentRuleClockKey{}, p.StatusSnapshot.At)
+		}
 		conditions, ok := execution.InputData["conditions"].(map[string]interface{})
 		if !ok && execution.InputData["conditions"] != nil {
 			return false, blockOutboxDelivery("invalid frozen rule conditions")
@@ -232,7 +251,7 @@ func (e *IncidentRuleEngine) applyNextCreatedAction(ctx context.Context, event *
 		if parseErr == nil {
 			for _, condition := range parsed {
 				var matches bool
-				matches, parseErr = condition.Evaluate(ctx, current)
+				matches, parseErr = condition.Evaluate(ctx, conditionItem)
 				if parseErr != nil {
 					break
 				}
@@ -314,7 +333,15 @@ func (e *IncidentRuleEngine) applyNextCreatedAction(ctx context.Context, event *
 	if err != nil {
 		return false, err
 	}
-	_, err = tx.AuditLog.Create().SetRequestBody(string(evidence)).SetTenantID(p.TenantID).SetUserID(p.ActorID).SetRequestID(actionKey).SetResource("incident_rule_action").SetAction("incident_rule.action_completed").SetPath("incidents/automation").SetMethod("OUTBOX").SetStatusCode(200).Save(ctx)
+	auditAction := "incident_rule.action_completed"
+	if p.StatusSnapshot != nil {
+		auditAction = "incident_rule.status_action_completed"
+		evidence, err = json.Marshal(map[string]any{"sourceEventId": event.ID, "operationId": p.OperationID, "workItemId": p.WorkItemID})
+		if err != nil {
+			return false, err
+		}
+	}
+	_, err = tx.AuditLog.Create().SetRequestBody(string(evidence)).SetTenantID(p.TenantID).SetUserID(p.ActorID).SetRequestID(actionKey).SetResource("incident_rule_action").SetAction(auditAction).SetPath("incidents/automation").SetMethod("OUTBOX").SetStatusCode(200).Save(ctx)
 	if err != nil {
 		return false, err
 	}

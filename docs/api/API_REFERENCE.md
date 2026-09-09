@@ -13,6 +13,24 @@
 
 ## 通用响应格式
 
+### Incident 生命周期命令
+
+`POST /api/v1/incidents/:id/{acknowledge|start|resolve|close|reopen}` 使用领域 Incident ID。
+请求必须提供当前 WorkItem `version`（正整数）和客户端生成的 `operationId`（最多 200 字符）。
+`resolve` 还必须提供非空 `resolution`（服务恢复证据），`close` 必须提供非空 `reason`。
+实际操作者、租户和来源由认证上下文确定。响应 `data` 为
+`{workItemId, version, status, replayed}`。同键同内容重试返回原回执；同键不同内容或陈旧版本返回 409。
+普通 Incident 编辑同样必须提供 `version`，不能写 `status` 或强制跳过版本检查。
+已确认事件通过 `start` 进入处理中；已解决/关闭事件通过 `reopen` 开启新的 SLA 周期。
+Incident 服务恢复不依赖关联 Problem 完成。
+
+状态命令在同一事务保存 WorkItem、审计回执、时间线及 `incident.status_changed` Outbox 事件。
+既有 Incident 规则可用 `conditions.event_type` 显式订阅 `incident.created` 或 `incident.status_changed`；
+没有该条件的历史规则仅处理创建事件。状态条件使用冻结的事件快照。
+状态动作必须由有 `incident:write` 权限的可信操作者执行，解决/关闭动作须配置恢复证据/说明。
+未知事件或动作明确阻断；已知事件没有配置规则时保存可观测的无动作执行记录。
+BPMN 用户任务回调使用入队事务冻结的操作者；缺少身份事实的历史回调会阻断，需要运营排空处理。
+
 所有 API 响应遵循以下格式：
 
 ```json

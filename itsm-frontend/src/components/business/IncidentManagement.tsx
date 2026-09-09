@@ -1075,7 +1075,7 @@ const IncidentFormModal: React.FC<{
     try {
       if (incident) {
         const { classification, ...payload } = values;
-        await IncidentAPI.updateIncident(incident.id, { ...payload, ...classificationUpdate(classification, form.isFieldTouched('classification')) });
+        await IncidentAPI.updateIncident(incident.id, { ...payload, version: incident.version, ...classificationUpdate(classification, form.isFieldTouched('classification')) });
       } else {
         const { classification, ...payload } = values;
         await creation.submit({ ...payload, cti: classificationInput(classification), source: 'manual', type: 'incident' }, IncidentAPI.createIncident, onSuccess);

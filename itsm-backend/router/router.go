@@ -805,6 +805,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				// 事件操作
 				inc.POST("/:id/escalate", middleware.RequirePermission("incident", "write"), config.IncidentController.EscalateIncident)
 				inc.POST("/:id/acknowledge", middleware.RequirePermission("incident", "write"), config.IncidentController.AcknowledgeIncident)
+				inc.POST("/:id/start", middleware.RequirePermission("incident", "write"), config.IncidentController.StartIncident)
 				inc.POST("/:id/resolve", middleware.RequirePermission("incident", "write"), config.IncidentController.ResolveIncident)
 				inc.POST("/:id/close", middleware.RequirePermission("incident", "write"), config.IncidentController.CloseIncident)
 				inc.POST("/:id/reopen", middleware.RequirePermission("incident", "write"), config.IncidentController.ReopenIncident)

@@ -68,7 +68,7 @@ func resolveIncidentCategory(ctx context.Context, client *ent.Client, tenantID i
 
 // UpdateClassification owns the existing name-based classification endpoint.
 // General incident edits use CategoryID directly and never resolve display labels.
-func (s *IncidentService) UpdateClassification(ctx context.Context, id, tenantID int, category, subcategory string) (*dto.IncidentResponse, error) {
+func (s *IncidentService) UpdateClassification(ctx context.Context, id, tenantID, version int, category, subcategory string) (*dto.IncidentResponse, error) {
 	categoryID, err := resolveIncidentCategory(ctx, s.client, tenantID, category, subcategory)
 	if err != nil {
 		return nil, err
@@ -77,5 +77,5 @@ func (s *IncidentService) UpdateClassification(ctx context.Context, id, tenantID
 		zero := 0
 		categoryID = &zero
 	}
-	return s.UpdateIncident(ctx, id, &dto.UpdateIncidentRequest{CategoryID: categoryID}, tenantID)
+	return s.UpdateIncident(ctx, id, &dto.UpdateIncidentRequest{CategoryID: categoryID, Version: version}, tenantID)
 }

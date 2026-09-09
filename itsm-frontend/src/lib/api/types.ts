@@ -155,13 +155,18 @@ export interface SLAInfo {
 export type IncidentSeverity = 'critical' | 'high' | 'medium' | 'low';
 export type IncidentStatus =
   | 'new'
-  | 'investigating'
-  | 'identified'
-  | 'monitoring'
+  | 'acknowledged'
+  | 'assigned'
+  | 'triaged'
+  | 'in_progress'
+  | 'on_hold'
+  | 'escalated'
+  | 'cancelled'
   | 'resolved'
   | 'closed';
 
 export interface Incident {
+  version: number;
   id: number;
   incidentNumber: string;
   title: string;

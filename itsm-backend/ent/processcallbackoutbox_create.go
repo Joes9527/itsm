@@ -23,6 +23,34 @@ type ProcessCallbackOutboxCreate struct {
 	conflict []sql.ConflictOption
 }
 
+// SetActorID sets the "actor_id" field.
+func (_c *ProcessCallbackOutboxCreate) SetActorID(v int) *ProcessCallbackOutboxCreate {
+	_c.mutation.SetActorID(v)
+	return _c
+}
+
+// SetNillableActorID sets the "actor_id" field if the given value is not nil.
+func (_c *ProcessCallbackOutboxCreate) SetNillableActorID(v *int) *ProcessCallbackOutboxCreate {
+	if v != nil {
+		_c.SetActorID(*v)
+	}
+	return _c
+}
+
+// SetActorSource sets the "actor_source" field.
+func (_c *ProcessCallbackOutboxCreate) SetActorSource(v string) *ProcessCallbackOutboxCreate {
+	_c.mutation.SetActorSource(v)
+	return _c
+}
+
+// SetNillableActorSource sets the "actor_source" field if the given value is not nil.
+func (_c *ProcessCallbackOutboxCreate) SetNillableActorSource(v *string) *ProcessCallbackOutboxCreate {
+	if v != nil {
+		_c.SetActorSource(*v)
+	}
+	return _c
+}
+
 // SetExecutionKey sets the "execution_key" field.
 func (_c *ProcessCallbackOutboxCreate) SetExecutionKey(v string) *ProcessCallbackOutboxCreate {
 	_c.mutation.SetExecutionKey(v)
@@ -330,6 +358,11 @@ func (_c *ProcessCallbackOutboxCreate) defaults() {
 
 // check runs all checks and user-defined validators on the builder.
 func (_c *ProcessCallbackOutboxCreate) check() error {
+	if v, ok := _c.mutation.ActorID(); ok {
+		if err := processcallbackoutbox.ActorIDValidator(v); err != nil {
+			return &ValidationError{Name: "actor_id", err: fmt.Errorf(`ent: validator failed for field "ProcessCallbackOutbox.actor_id": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.ExecutionKey(); !ok {
 		return &ValidationError{Name: "execution_key", err: errors.New(`ent: missing required field "ProcessCallbackOutbox.execution_key"`)}
 	}
@@ -446,6 +479,14 @@ func (_c *ProcessCallbackOutboxCreate) createSpec() (*ProcessCallbackOutbox, *sq
 		_spec = sqlgraph.NewCreateSpec(processcallbackoutbox.Table, sqlgraph.NewFieldSpec(processcallbackoutbox.FieldID, field.TypeInt))
 	)
 	_spec.OnConflict = _c.conflict
+	if value, ok := _c.mutation.ActorID(); ok {
+		_spec.SetField(processcallbackoutbox.FieldActorID, field.TypeInt, value)
+		_node.ActorID = value
+	}
+	if value, ok := _c.mutation.ActorSource(); ok {
+		_spec.SetField(processcallbackoutbox.FieldActorSource, field.TypeString, value)
+		_node.ActorSource = value
+	}
 	if value, ok := _c.mutation.ExecutionKey(); ok {
 		_spec.SetField(processcallbackoutbox.FieldExecutionKey, field.TypeString, value)
 		_node.ExecutionKey = value
@@ -541,7 +582,7 @@ func (_c *ProcessCallbackOutboxCreate) createSpec() (*ProcessCallbackOutbox, *sq
 // of the `INSERT` statement. For example:
 //
 //	client.ProcessCallbackOutbox.Create().
-//		SetExecutionKey(v).
+//		SetActorID(v).
 //		OnConflict(
 //			// Update the row with the new values
 //			// the was proposed for insertion.
@@ -550,7 +591,7 @@ func (_c *ProcessCallbackOutboxCreate) createSpec() (*ProcessCallbackOutbox, *sq
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.ProcessCallbackOutboxUpsert) {
-//			SetExecutionKey(v+v).
+//			SetActorID(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *ProcessCallbackOutboxCreate) OnConflict(opts ...sql.ConflictOption) *ProcessCallbackOutboxUpsertOne {
@@ -927,6 +968,12 @@ func (u *ProcessCallbackOutboxUpsert) UpdateUpdatedAt() *ProcessCallbackOutboxUp
 func (u *ProcessCallbackOutboxUpsertOne) UpdateNewValues() *ProcessCallbackOutboxUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.ActorID(); exists {
+			s.SetIgnore(processcallbackoutbox.FieldActorID)
+		}
+		if _, exists := u.create.mutation.ActorSource(); exists {
+			s.SetIgnore(processcallbackoutbox.FieldActorSource)
+		}
 		if _, exists := u.create.mutation.CreatedAt(); exists {
 			s.SetIgnore(processcallbackoutbox.FieldCreatedAt)
 		}
@@ -1481,7 +1528,7 @@ func (_c *ProcessCallbackOutboxCreateBulk) ExecX(ctx context.Context) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.ProcessCallbackOutboxUpsert) {
-//			SetExecutionKey(v+v).
+//			SetActorID(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *ProcessCallbackOutboxCreateBulk) OnConflict(opts ...sql.ConflictOption) *ProcessCallbackOutboxUpsertBulk {
@@ -1522,6 +1569,12 @@ func (u *ProcessCallbackOutboxUpsertBulk) UpdateNewValues() *ProcessCallbackOutb
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
 		for _, b := range u.create.builders {
+			if _, exists := b.mutation.ActorID(); exists {
+				s.SetIgnore(processcallbackoutbox.FieldActorID)
+			}
+			if _, exists := b.mutation.ActorSource(); exists {
+				s.SetIgnore(processcallbackoutbox.FieldActorSource)
+			}
 			if _, exists := b.mutation.CreatedAt(); exists {
 				s.SetIgnore(processcallbackoutbox.FieldCreatedAt)
 			}

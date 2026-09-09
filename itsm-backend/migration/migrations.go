@@ -455,6 +455,7 @@ var RegisteredMigrations = []Migration{
 	{Version: "030_catalog_access_policy_result", Description: "Finite catalog access policy and immutable verified results"},
 	{Version: "031_kaf_action_request_digest", Description: "Bind verified access completion to immutable canonical request digest"},
 	{Version: "032_workitem_sla_cycle", Description: "Freeze applied SLA cycles and immutable action audit receipts"},
+	{Version: "033_incident_status_events", Description: "Authorize Incident status events from immutable command receipts"},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -1105,6 +1106,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
 	case "021_add_callback_optional_declared":
 		return `ALTER TABLE process_callback_outboxes
     ADD COLUMN IF NOT EXISTS optional_declared boolean NOT NULL DEFAULT false;`
+	case "033_incident_status_events":
+		return incidentStatusEventsSQL
 	case "032_workitem_sla_cycle":
 		return migrations.WorkItemSLACycleSQL
 	case "031_kaf_action_request_digest":

@@ -313,6 +313,11 @@ func TestPostgresIncidentEffectsUpdateAndNotificationGraphRollback(t *testing.T)
 }
 func TestPostgresIncidentEffectsLifecycleOwnership(t *testing.T) {
 	f := newIncidentEffectsFixture(t)
+	for _, name := range []string{"032_workitem_sla_cycle", "033_incident_status_events"} {
+		_, err := f.db.ExecContext(f.ctx, migration.GetMigrationSQL(name))
+		require.NoError(t, err)
+	}
+	f.actor.Update().SetRole("super_admin").ExecX(f.ctx)
 	f.rule(map[string]interface{}{"type": "assign", "assignee_id": f.actor.ID}, map[string]interface{}{"type": "change_status", "status": "in_progress"})
 	require.NoError(t, f.engine.Deliver(f.ctx, f.event))
 	item := f.client.Ticket.GetX(f.ctx, f.inc.WorkItemID)

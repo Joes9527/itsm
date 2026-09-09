@@ -12,7 +12,6 @@ import (
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/ticketcategory"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -27,6 +26,7 @@ import (
 // itsm-backend/service/bpmn（用于注册 handler），这里再 import itsm-backend/service
 // 会形成循环依赖。
 type dbBackedIncidentService struct {
+	IncidentDomainServiceInterface
 	client *ent.Client
 }
 
@@ -43,11 +43,6 @@ func (s *dbBackedIncidentService) AssignIncidentForWorkflow(ctx context.Context,
 	}
 	return &dto.IncidentMutationOutcome{Incident: &dto.IncidentResponse{ID: id}, Applied: true}, nil
 }
-
-// EscalateIncidentLevel/ResolveIncidentForWorkflow/CloseIncidentForWorkflow/
-// AcknowledgeIncidentForWorkflow/UpdateIncidentForWorkflow/CategorizeIncidentForWorkflow
-// 镜像 service.IncidentService 里同名方法的写入语义（见该文件"BPMN 工作流专用写入方法"
-// 一节的注释），保持这个 fixture 与真实实现行为一致。
 
 func (s *dbBackedIncidentService) EscalateIncidentLevel(ctx context.Context, id, tenantID, level int) (*dto.IncidentMutationOutcome, error) {
 	current, err := s.client.Incident.Query().Where(incident.ID(id), incident.HasWorkItemWith(ticket.TenantID(tenantID))).WithWorkItem().Only(ctx)
@@ -75,112 +70,6 @@ func (s *dbBackedIncidentService) EscalateIncidentLevel(ctx context.Context, id,
 		return nil, err
 	}
 	return &dto.IncidentMutationOutcome{Incident: &dto.IncidentResponse{ID: id, EscalationLevel: updated.EscalationLevel}, Applied: true}, nil
-}
-
-func (s *dbBackedIncidentService) ResolveIncidentForWorkflow(ctx context.Context, id, tenantID int, resolution string) (*dto.IncidentMutationOutcome, error) {
-	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.HasWorkItemWith(ticket.TenantID(tenantID))).WithWorkItem().Only(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if entity.Edges.WorkItem.Status == common.IncidentStatusResolved && !entity.Edges.WorkItem.ResolvedAt.IsZero() {
-		return &dto.IncidentMutationOutcome{Incident: &dto.IncidentResponse{ID: id}, Applied: false}, nil
-	}
-	if _, err := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID)).SetStatus(common.IncidentStatusResolved).SetResolvedAt(time.Now()).Save(ctx); err != nil {
-		return nil, err
-	}
-	return &dto.IncidentMutationOutcome{Incident: &dto.IncidentResponse{ID: id}, Applied: true}, nil
-}
-
-func (s *dbBackedIncidentService) CloseIncidentForWorkflow(ctx context.Context, id, tenantID int, feedback string) (*dto.IncidentMutationOutcome, error) {
-	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.HasWorkItemWith(ticket.TenantID(tenantID))).WithWorkItem().Only(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if entity.Edges.WorkItem.Status == common.IncidentStatusClosed && entity.Edges.WorkItem.ClosedAt != nil {
-		return &dto.IncidentMutationOutcome{Incident: &dto.IncidentResponse{ID: id}, Applied: false}, nil
-	}
-	if _, err := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID)).SetStatus(common.IncidentStatusClosed).SetClosedAt(time.Now()).Save(ctx); err != nil {
-		return nil, err
-	}
-	return &dto.IncidentMutationOutcome{Incident: &dto.IncidentResponse{ID: id}, Applied: true}, nil
-}
-
-func (s *dbBackedIncidentService) AcknowledgeIncidentForWorkflow(ctx context.Context, id, tenantID int) (*dto.IncidentMutationOutcome, error) {
-	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.HasWorkItemWith(ticket.TenantID(tenantID))).WithWorkItem().Only(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if entity.Edges.WorkItem.Status == common.IncidentStatusAcknowledged {
-		return &dto.IncidentMutationOutcome{Incident: &dto.IncidentResponse{ID: id}, Applied: false}, nil
-	}
-	if _, err := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID)).SetStatus(common.IncidentStatusAcknowledged).Save(ctx); err != nil {
-		return nil, err
-	}
-	return &dto.IncidentMutationOutcome{Incident: &dto.IncidentResponse{ID: id}, Applied: true}, nil
-}
-
-func (s *dbBackedIncidentService) UpdateIncidentForWorkflow(ctx context.Context, id, tenantID int, title, description, priority, severity, status string) (*dto.IncidentMutationOutcome, error) {
-	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.HasWorkItemWith(ticket.TenantID(tenantID))).WithWorkItem().Only(ctx)
-	if err != nil {
-		return nil, err
-	}
-	workItem := entity.Edges.WorkItem
-	if (title == "" || title == workItem.Title) && (description == "" || description == workItem.Description) &&
-		(priority == "" || priority == workItem.Priority) && (severity == "" || severity == entity.Severity) &&
-		(status == "" || status == workItem.Status) {
-		return &dto.IncidentMutationOutcome{Incident: &dto.IncidentResponse{ID: id}, Applied: false}, nil
-	}
-	if severity != "" {
-		if _, err := s.client.Incident.UpdateOneID(id).
-			Where(incident.HasWorkItemWith(ticket.TenantID(tenantID))).
-			SetSeverity(severity).
-			Save(ctx); err != nil {
-			return nil, err
-		}
-	}
-	workItemUpdate := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID))
-	if title != "" {
-		workItemUpdate.SetTitle(title)
-	}
-	if description != "" {
-		workItemUpdate.SetDescription(description)
-	}
-	if priority != "" {
-		workItemUpdate.SetPriority(priority)
-	}
-	if status != "" {
-		workItemUpdate.SetStatus(status)
-	}
-	if _, err := workItemUpdate.Save(ctx); err != nil {
-		return nil, err
-	}
-	return &dto.IncidentMutationOutcome{Incident: &dto.IncidentResponse{ID: id}, Applied: true}, nil
-}
-
-func (s *dbBackedIncidentService) CategorizeIncidentForWorkflow(ctx context.Context, id, tenantID int, category, subcategory string) (*dto.IncidentMutationOutcome, error) {
-	entity, err := s.client.Incident.Query().Where(incident.ID(id), incident.HasWorkItemWith(ticket.TenantID(tenantID))).WithWorkItem(func(q *ent.TicketQuery) { q.WithCategory() }).Only(ctx)
-	if err != nil {
-		return nil, err
-	}
-	currentCategory := ""
-	if entity.Edges.WorkItem.Edges.Category != nil {
-		currentCategory = entity.Edges.WorkItem.Edges.Category.Code
-	}
-	if entity.Edges.WorkItem.Status == common.IncidentStatusTriaged && (category == "" || category == currentCategory) {
-		return &dto.IncidentMutationOutcome{Incident: &dto.IncidentResponse{ID: id, Category: currentCategory}, Applied: false}, nil
-	}
-	workItemUpdate := s.client.Ticket.UpdateOneID(entity.WorkItemID).Where(ticket.TenantID(tenantID))
-	if category != "" {
-		categoryEntity, categoryErr := s.client.TicketCategory.Query().Where(ticketcategory.TenantID(tenantID), ticketcategory.Code(category)).Only(ctx)
-		if categoryErr != nil {
-			return nil, categoryErr
-		}
-		workItemUpdate.SetCategoryID(categoryEntity.ID)
-	}
-	if _, err := workItemUpdate.SetStatus(common.IncidentStatusTriaged).Save(ctx); err != nil {
-		return nil, err
-	}
-	return &dto.IncidentMutationOutcome{Incident: &dto.IncidentResponse{ID: id, Category: category, Subcategory: subcategory}, Applied: true}, nil
 }
 
 // setupIncidentHandlerFixture 建一个"刚创建、还没有处理人"的事件——这正是
@@ -350,65 +239,6 @@ func TestIncidentServiceTaskHandler_TenantScopedActions(t *testing.T) {
 				assert.False(t, after.EscalatedAt.IsZero())
 			},
 		},
-		{
-			name:   "resolve",
-			action: "resolve_incident",
-			assertValid: func(t *testing.T, client *ent.Client, incID int) {
-				after, err := client.Incident.Get(context.Background(), incID)
-				require.NoError(t, err)
-				assert.Equal(t, common.IncidentStatusResolved, requireHandlerIncidentWorkItem(t, client, after).Status)
-				assert.NotNil(t, requireHandlerIncidentWorkItem(t, client, after).ResolvedAt)
-			},
-		},
-		{
-			name:   "close",
-			action: "close_incident",
-			assertValid: func(t *testing.T, client *ent.Client, incID int) {
-				after, err := client.Incident.Get(context.Background(), incID)
-				require.NoError(t, err)
-				assert.Equal(t, common.IncidentStatusClosed, requireHandlerIncidentWorkItem(t, client, after).Status)
-				assert.NotNil(t, requireHandlerIncidentWorkItem(t, client, after).ClosedAt)
-			},
-		},
-		{
-			name:   "acknowledge",
-			action: "acknowledge_incident",
-			assertValid: func(t *testing.T, client *ent.Client, incID int) {
-				after, err := client.Incident.Get(context.Background(), incID)
-				require.NoError(t, err)
-				assert.Equal(t, common.IncidentStatusAcknowledged, requireHandlerIncidentWorkItem(t, client, after).Status)
-			},
-		},
-		{
-			name:   "categorize",
-			action: "categorize_incident",
-			extraVars: map[string]interface{}{
-				"category": "network",
-			},
-			assertValid: func(t *testing.T, client *ent.Client, incID int) {
-				after, err := client.Incident.Get(context.Background(), incID)
-				require.NoError(t, err)
-				assert.Equal(t, common.IncidentStatusTriaged, requireHandlerIncidentWorkItem(t, client, after).Status)
-				workItem := requireHandlerIncidentWorkItem(t, client, after)
-				categoryEntity, err := workItem.QueryCategory().Only(context.Background())
-				require.NoError(t, err)
-				assert.Equal(t, "network", categoryEntity.Code)
-			},
-		},
-		{
-			name:   "update",
-			action: "update_incident",
-			extraVars: map[string]interface{}{
-				"title": "改过的标题",
-			},
-			assertValid: func(t *testing.T, client *ent.Client, incID int) {
-				after, err := client.Incident.Get(context.Background(), incID)
-				require.NoError(t, err)
-				workItem := requireHandlerIncidentWorkItem(t, client, after)
-				assert.Equal(t, "改过的标题", workItem.Title)
-				assert.Equal(t, common.IncidentStatusNew, workItem.Status, "update 只提交 title 时不得改状态")
-			},
-		},
 	}
 
 	for _, tc := range tests {
@@ -512,6 +342,7 @@ func TestIncidentServiceTaskHandler_AssignIncident_DelegatesToAtomicDomainOperat
 }
 
 type fakeIncidentService struct {
+	IncidentDomainServiceInterface
 	lastAssignID   int
 	lastAssigneeID int
 }
@@ -527,24 +358,4 @@ func (f *fakeIncidentService) EscalateIncidentLevel(ctx context.Context, id, ten
 		level = 1
 	}
 	return &dto.IncidentMutationOutcome{Incident: &dto.IncidentResponse{ID: id, EscalationLevel: level}, Applied: true}, nil
-}
-
-func (f *fakeIncidentService) ResolveIncidentForWorkflow(ctx context.Context, id, tenantID int, resolution string) (*dto.IncidentMutationOutcome, error) {
-	return &dto.IncidentMutationOutcome{Incident: &dto.IncidentResponse{ID: id, Status: common.IncidentStatusResolved}, Applied: true}, nil
-}
-
-func (f *fakeIncidentService) CloseIncidentForWorkflow(ctx context.Context, id, tenantID int, feedback string) (*dto.IncidentMutationOutcome, error) {
-	return &dto.IncidentMutationOutcome{Incident: &dto.IncidentResponse{ID: id, Status: common.IncidentStatusClosed}, Applied: true}, nil
-}
-
-func (f *fakeIncidentService) AcknowledgeIncidentForWorkflow(ctx context.Context, id, tenantID int) (*dto.IncidentMutationOutcome, error) {
-	return &dto.IncidentMutationOutcome{Incident: &dto.IncidentResponse{ID: id, Status: common.IncidentStatusAcknowledged}, Applied: true}, nil
-}
-
-func (f *fakeIncidentService) UpdateIncidentForWorkflow(ctx context.Context, id, tenantID int, title, description, priority, severity, status string) (*dto.IncidentMutationOutcome, error) {
-	return &dto.IncidentMutationOutcome{Incident: &dto.IncidentResponse{ID: id, Title: title}, Applied: true}, nil
-}
-
-func (f *fakeIncidentService) CategorizeIncidentForWorkflow(ctx context.Context, id, tenantID int, category, subcategory string) (*dto.IncidentMutationOutcome, error) {
-	return &dto.IncidentMutationOutcome{Incident: &dto.IncidentResponse{ID: id, Category: category, Subcategory: subcategory}, Applied: true}, nil
 }

@@ -32,17 +32,17 @@ func TestIncidentUpdateClassificationIDContract(t *testing.T) {
 	incident, err := client.Incident.Create().SetWorkItemID(wi.ID).SetSeverity("medium").SetDetectedAt(time.Now()).Save(ctx)
 	require.NoError(t, err)
 	title := "Updated title"
-	resp, err := svc.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{Title: &title}, tenant.ID)
+	resp, err := svc.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{Version: client.Ticket.GetX(ctx, wi.ID).Version, Title: &title}, tenant.ID)
 	require.NoError(t, err)
 	require.Equal(t, original.ID, resp.CategoryID)
-	resp, err = svc.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{CategoryID: &selected.ID}, tenant.ID)
+	resp, err = svc.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{Version: client.Ticket.GetX(ctx, wi.ID).Version, CategoryID: &selected.ID}, tenant.ID)
 	require.NoError(t, err)
 	require.Equal(t, selected.ID, resp.CategoryID)
 	for _, id := range []int{inactive.ID, other.ID, -1, 999999} {
 		before, err := client.Ticket.Get(ctx, wi.ID)
 		require.NoError(t, err)
 		rejected := "Must not persist"
-		_, err = svc.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{CategoryID: &id, Title: &rejected}, tenant.ID)
+		_, err = svc.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{Version: client.Ticket.GetX(ctx, wi.ID).Version, CategoryID: &id, Title: &rejected}, tenant.ID)
 		require.Error(t, err)
 		after, err := client.Ticket.Get(ctx, wi.ID)
 		require.NoError(t, err)
@@ -53,10 +53,10 @@ func TestIncidentUpdateClassificationIDContract(t *testing.T) {
 	// Omission preserves a classification that was deactivated after selection.
 	_, err = client.TicketCategory.UpdateOneID(selected.ID).SetIsActive(false).Save(ctx)
 	require.NoError(t, err)
-	_, err = svc.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{Title: &title}, tenant.ID)
+	_, err = svc.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{Version: client.Ticket.GetX(ctx, wi.ID).Version, Title: &title}, tenant.ID)
 	require.NoError(t, err)
 	zero := 0
-	resp, err = svc.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{CategoryID: &zero}, tenant.ID)
+	resp, err = svc.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{Version: client.Ticket.GetX(ctx, wi.ID).Version, CategoryID: &zero}, tenant.ID)
 	require.NoError(t, err)
 	require.Zero(t, resp.CategoryID)
 	require.Empty(t, resp.Category)
@@ -71,7 +71,7 @@ func TestIncidentUpdateClassificationIDContract(t *testing.T) {
 	})
 	before, err := client.Ticket.Get(ctx, wi.ID)
 	require.NoError(t, err)
-	_, err = svc.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{CategoryID: &original.ID}, tenant.ID)
+	_, err = svc.UpdateIncident(ctx, incident.ID, &dto.UpdateIncidentRequest{Version: client.Ticket.GetX(ctx, wi.ID).Version, CategoryID: &original.ID}, tenant.ID)
 	require.Error(t, err)
 	after, err := client.Ticket.Get(ctx, wi.ID)
 	require.NoError(t, err)

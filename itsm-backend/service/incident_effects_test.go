@@ -29,8 +29,8 @@ func TestIncidentEffectsUpdateTimelineRollback(t *testing.T) {
 			return nil, errors.New("timeline unavailable")
 		})
 	})
-	status := "in_progress"
-	_, err = svc.UpdateIncident(ctx, inc.ID, &dto.UpdateIncidentRequest{Status: &status}, tenant.ID)
+	title := "updated"
+	_, err = svc.UpdateIncident(ctx, inc.ID, &dto.UpdateIncidentRequest{Title: &title, Version: client.Ticket.GetX(ctx, inc.WorkItemID).Version}, tenant.ID)
 	require.ErrorContains(t, err, "timeline unavailable")
 	require.Len(t, logs.All(), 1)
 	require.Equal(t, "timeline unavailable", logs.All()[0].ContextMap()["error"])

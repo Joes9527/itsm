@@ -121,6 +121,7 @@ func incidentWorkItemStatus(incident *ent.Incident) string {
 
 func BuildIncidentActions(ctx context.Context, actor ActionActor, incident *ent.Incident) map[string]dto.ActionPermission {
 	return map[string]dto.ActionPermission{
+		"start":             CanStartIncident(actor, incident),
 		"edit":              CanEditIncident(actor),
 		"resolve":           CanResolveIncident(actor, incident),
 		"close":             CanCloseIncident(actor, incident),
@@ -130,4 +131,12 @@ func BuildIncidentActions(ctx context.Context, actor ActionActor, incident *ent.
 		"markMajorIncident": CanMarkMajorIncident(actor, incident),
 		"convertToProblem":  CanConvertToProblem(ctx, actor, incident),
 	}
+}
+
+func CanStartIncident(actor ActionActor, incident *ent.Incident) dto.ActionPermission {
+	status := incidentWorkItemStatus(incident)
+	if status == common.IncidentStatusResolved || common.IsIncidentFinalStatus(status) || !isValidIncidentStatusTransition(status, common.IncidentStatusInProgress) {
+		return dto.ActionPermission{Allowed: false, Reason: "当前事件不能开始处理"}
+	}
+	return CanEditIncident(actor)
 }
