@@ -57,6 +57,7 @@ func newChangeLifecycleFixture(t *testing.T, kind string) *changeLifecycleFixtur
 	owner.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 	engine := service.NewCustomProcessEngine(clients.Tenant, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
 	engine.SetCallbackCandidateClient(clients.System)
+	engine.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 	owner.SetProcessEngine(engine)
 	// A4b deliberately stops at an actual pending assessment task. A4c owns the
 	// complete default definition and callback cutover, not a fake consumer here.

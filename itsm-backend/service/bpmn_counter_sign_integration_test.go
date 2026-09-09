@@ -224,7 +224,7 @@ func TestCounterSignDistinctChildVotesConvergePostgres(t *testing.T) {
 
 	persistedParent := setupClient.ProcessTask.GetX(ctx, parent.ID)
 	require.Equal(t, common.ProcessTaskStatusCompleted, persistedParent.Status)
-	require.Equal(t, 1, persistedParent.AggregationVersion, "the final parent transition increments its version exactly once")
+	require.Equal(t, 3, persistedParent.AggregationVersion, "two accepted votes and the sole final parent transition advance the fence")
 	require.Equal(t, "parent-summary", persistedParent.TaskVariables["preserved"])
 	for key, expected := range map[string]int{
 		"threshold": 2,

@@ -18,8 +18,11 @@ func (e *CustomProcessEngine) StartProcessTx(ctx context.Context, tx *ent.Tx, de
 	if tx == nil || e.transactionBound {
 		return nil, errors.New("StartProcessTx requires a caller transaction and the root process engine")
 	}
+	if err := e.requireActorSnapshot(ctx, tx); err != nil {
+		return nil, err
+	}
 	keys := make([]string, 0)
-	instance, err := e.forClient(tx.Client(), &keys).startProcessWithClient(ctx, definitionKey, businessKey, businessType, businessID, variables)
+	instance, err := e.forClient(tx.Client(), &keys, tx).startProcessWithClient(ctx, definitionKey, businessKey, businessType, businessID, variables)
 	if err != nil {
 		return nil, err
 	}
@@ -45,12 +48,15 @@ func (e *CustomProcessEngine) CompleteTaskTx(ctx context.Context, tx *ent.Tx, ta
 	if tx == nil || e.transactionBound {
 		return errors.New("CompleteTaskTx requires a caller transaction and the root process engine")
 	}
+	if err := e.requireActorSnapshot(ctx, tx); err != nil {
+		return err
+	}
 	participantVariables, err := validateAndCloneBPMNParticipantVariables(variables, false)
 	if err != nil {
 		return err
 	}
 	keys := make([]string, 0)
-	effect, err := e.completeTaskWithClient(ctx, tx.Client(), taskID, participantVariables, &keys)
+	effect, err := e.forClient(tx.Client(), &keys, tx).completeTaskWithClient(ctx, tx.Client(), taskID, participantVariables, &keys)
 	if err != nil {
 		return err
 	}

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -113,7 +114,7 @@ func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledg
 	if err != nil {
 		return err
 	}
-	tx, err := e.client.Tx(ctx)
+	tx, err := e.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return fmt.Errorf("start KAF BPMN completion transaction: %w", err)
 	}
@@ -132,7 +133,7 @@ func (e *CustomProcessEngine) CompleteKafDelegatedTask(ctx context.Context, ledg
 	} else if variables["kaf_access_result"] != nil {
 		return fmt.Errorf("access result supplied for a different delegated capability")
 	}
-	txEngine := e.forClient(tx.Client(), nil)
+	txEngine := e.forClient(tx.Client(), nil, tx)
 	receipt, err := txEngine.ensureKafCompletionReceipt(ctx, ledger.ID, ledger.TenantID, taskID)
 	if err != nil {
 		return err
@@ -232,7 +233,7 @@ func (e *CustomProcessEngine) makeKafCallbacksDue(ctx context.Context, ledgerID 
 }
 
 func (e *CustomProcessEngine) enqueueRecoveredKafCallback(ctx context.Context, ledgerID int, leaseOwner string, receipt *ent.KafTaskCompletionReceipt, task *ent.ProcessTask) error {
-	tx, err := e.client.Tx(ctx)
+	tx, err := e.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return fmt.Errorf("start KAF callback recovery transaction: %w", err)
 	}
@@ -300,7 +301,7 @@ func (e *CustomProcessEngine) enqueueRecoveredKafCallback(ctx context.Context, l
 		return err
 	}
 	keys := make([]string, 0, 1)
-	txEngine := e.forClient(tx.Client(), &keys)
+	txEngine := e.forClient(tx.Client(), &keys, tx)
 	if err := txEngine.enqueueUserTaskCallback(ctx, task, descriptor, plan); err != nil {
 		return err
 	}
