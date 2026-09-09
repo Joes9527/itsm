@@ -58,11 +58,6 @@ const DESIGN = {
     text: 'var(--color-text-primary)',
     textMuted: 'var(--color-text-secondary)',
   },
-  shadows: {
-    card: '0 1px 3px rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05)',
-    cardHover: '0 10px 40px -10px rgb(0 0 0 / 0.15)',
-    glow: (color: string) => `0 0 30px ${color}20`,
-  },
   radius: {
     sm: '8px',
     md: '8px',
@@ -217,6 +212,7 @@ export const QuickActions: React.FC = () => {
           hoverable
           style={{
             height: '100%',
+            boxShadow: 'none',
             borderRadius: DESIGN.radius.lg,
             border: `1px solid ${DESIGN.colors.border}`,
             background: 'var(--color-bg-primary)',
@@ -315,10 +311,6 @@ export const QuickActions: React.FC = () => {
           </div>
 
           <style>{`
-            .action-card:hover {
-              box-shadow: ${DESIGN.shadows.cardHover}, ${DESIGN.shadows.glow(item.color)};
-              transform: translateY(-2px);
-            }
             .action-card:hover .card-bg {
               opacity: 1;
             }
@@ -386,7 +378,7 @@ export const QuickActions: React.FC = () => {
         </div>
 
         {/* 卡片网格 */}
-        <Row gutter={[16, 16]}>
+        <Row gutter={[14, 14]}>
           {group.items.map((item, itemIndex) => (
             <Col xs={24} sm={12} lg={6} key={itemIndex}>
               <ActionCard item={item} index={itemIndex} groupIndex={index} />

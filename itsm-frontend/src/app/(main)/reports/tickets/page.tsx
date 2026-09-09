@@ -87,7 +87,7 @@ const TicketsReportPage = () => {
         工单报表
       </Title>
 
-      <Row gutter={[16, 16]}>
+      <Row gutter={[14, 14]}>
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
@@ -129,7 +129,7 @@ const TicketsReportPage = () => {
         </Col>
       </Row>
 
-      <Row gutter={[16, 16]}>
+      <Row gutter={[14, 14]}>
         <Col xs={24} lg={12}>
           <Card title="工单状态分布">
             {statusData.length > 0 ? (

@@ -315,7 +315,7 @@ export const SystemOverview: React.FC<SystemOverviewProps> = ({ stats, loading }
       </div>
 
       {/* 统计卡片网格 */}
-      <Row gutter={[20, 20]}>
+      <Row gutter={[14, 14]}>
         {systemStats.map((stat, index) => (
           <Col xs={24} sm={12} lg={6} key={index}>
             <EnhancedStatCard stat={stat} index={index} />

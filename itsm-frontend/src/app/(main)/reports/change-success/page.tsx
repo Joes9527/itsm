@@ -160,7 +160,7 @@ const ChangeSuccessReport = () => {
       ) : (
         <>
           {/* 统计卡片 */}
-          <Row gutter={[16, 16]} className="mb-6">
+          <Row gutter={[14, 14]} className="mb-6">
             <Col xs={24} sm={12} lg={6}>
               <Card>
                 <Statistic
@@ -201,7 +201,7 @@ const ChangeSuccessReport = () => {
           </Row>
 
           {/* 图表区域 */}
-          <Row gutter={[16, 16]}>
+          <Row gutter={[14, 14]}>
             <Col xs={24} lg={12}>
               <Card title="变更状态分布">
                 <ResponsiveContainer width="100%" height={300}>

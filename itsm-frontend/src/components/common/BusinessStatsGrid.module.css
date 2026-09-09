@@ -3,6 +3,10 @@
   border-color: var(--business-stat-border) !important;
 }
 
+.card:hover {
+  background: var(--color-bg-tertiary) !important;
+}
+
 .icon {
   background: var(--business-stat-icon-bg) !important;
   color: var(--business-stat-icon-color) !important;

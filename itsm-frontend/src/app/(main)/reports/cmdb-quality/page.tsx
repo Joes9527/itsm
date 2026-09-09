@@ -130,7 +130,7 @@ const CMDBQualityReport = () => {
     if (loading) {
       return (
         <div className="space-y-4">
-          <Row gutter={[16, 16]}>
+          <Row gutter={[14, 14]}>
             {[0, 1, 2].map(i => (
               <Col xs={24} sm={8} key={`skeleton-${i}`}>
                 <Card>
@@ -155,7 +155,7 @@ const CMDBQualityReport = () => {
     return (
       <>
         {/* 统计卡片 */}
-        <Row gutter={[16, 16]} className="mb-6">
+        <Row gutter={[14, 14]} className="mb-6">
           <Col xs={24} sm={8}>
             <Card>
               <Statistic

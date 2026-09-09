@@ -53,10 +53,10 @@ export const BusinessStatsGrid: React.FC<BusinessStatsGridProps> = ({
   if (loading) {
     return (
       <div className={`mb-6 ${className}`}>
-        <Row gutter={[16, 16]} align="stretch">
+        <Row gutter={[14, 14]} align="stretch">
           {Array.from({ length: 4 }).map((_, index) => (
             <Col key={index} xs={24} sm={12} md={6} lg={6} className="flex">
-              <Card loading className="w-full rounded-[8px] shadow-sm" />
+              <Card loading className="w-full rounded-[8px] shadow-none" />
             </Col>
           ))}
         </Row>
@@ -66,7 +66,7 @@ export const BusinessStatsGrid: React.FC<BusinessStatsGridProps> = ({
 
   return (
     <div className={`mb-6 ${className}`}>
-      <Row gutter={[16, 16]} align="stretch">
+      <Row gutter={[14, 14]} align="stretch">
         {items.map((item, index) => {
           const tone = toneClasses[item.tone];
           const toneStyle = {
@@ -80,7 +80,7 @@ export const BusinessStatsGrid: React.FC<BusinessStatsGridProps> = ({
           return (
             <Col key={`${item.label}-${index}`} xs={24} sm={12} md={6} lg={6} className="flex">
               <Card
-                className={`w-full text-center shadow-sm hover:shadow-lg transition-all duration-300 ${styles.card}`}
+                className={`w-full text-center shadow-none transition-colors duration-200 ${styles.card}`}
                 style={toneStyle}
                 styles={{ body: { padding: '16px' } }}
               >

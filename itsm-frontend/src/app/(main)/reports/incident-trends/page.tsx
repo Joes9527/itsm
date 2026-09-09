@@ -192,7 +192,7 @@ const IncidentTrendsPage = () => {
       </Card>
 
       {/* 统计卡片 */}
-      <Row gutter={16} className="mb-6">
+      <Row gutter={[14, 14]} className="mb-6">
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
@@ -241,7 +241,7 @@ const IncidentTrendsPage = () => {
       ) : (
         <>
           {/* 趋势图表 */}
-          <Row gutter={[16, 16]} className="mb-6">
+          <Row gutter={[14, 14]} className="mb-6">
             <Col span={24}>
               <Card title="每日事件数量趋势">
                 <ResponsiveContainer width="100%" height={350}>
@@ -292,7 +292,7 @@ const IncidentTrendsPage = () => {
           </Row>
 
           {/* 优先级分布和解决趋势 */}
-          <Row gutter={[16, 16]}>
+          <Row gutter={[14, 14]}>
             <Col xs={24} lg={12}>
               <Card title="按优先级分布">
                 <ResponsiveContainer width="100%" height={300}>
