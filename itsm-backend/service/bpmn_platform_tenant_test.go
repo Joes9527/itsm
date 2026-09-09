@@ -55,7 +55,7 @@ func TestStartProcess_TrustedTenant_ServiceTaskUsesInstanceIdentity(t *testing.T
 
 	assignee, err := client.User.Create().
 		SetUsername("platform-assignee").SetEmail("platform-assignee@test.com").SetPasswordHash("x").
-		SetName("处理人").SetTenantID(tenantID).SetActive(true).
+		SetName("处理人").SetTenantID(tenantID).SetActive(true).SetRole("super_admin").
 		Save(platformCtx)
 	require.NoError(t, err)
 
@@ -74,6 +74,7 @@ func TestStartProcess_TrustedTenant_ServiceTaskUsesInstanceIdentity(t *testing.T
 
 	trustedCtx := WithTrustedBPMNTenantContext(platformCtx, tenantID)
 	instance, err := engine.StartProcess(trustedCtx, "incident_emergency_flow", "incident:platform-1", "incident", workItem.ID, map[string]interface{}{
+		"version":      workItem.Version,
 		"assignee_id":  assignee.ID,
 		"requester_id": assignee.ID,
 		"triggered_by": strconv.Itoa(assignee.ID),

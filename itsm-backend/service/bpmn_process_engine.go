@@ -48,7 +48,9 @@ type ProcessEngine interface {
 	TaskService() TaskService
 	// 流程执行
 	StartProcess(ctx context.Context, processDefinitionKey string, businessKey string, businessType string, businessID int, variables map[string]interface{}) (*ent.ProcessInstance, error)
+	StartProcessTx(ctx context.Context, tx *ent.Tx, processDefinitionKey string, businessKey string, businessType string, businessID int, variables map[string]interface{}) (*ent.ProcessInstance, error)
 	CompleteTask(ctx context.Context, taskID string, variables map[string]interface{}) error
+	CompleteTaskTx(ctx context.Context, tx *ent.Tx, taskID string, variables map[string]interface{}) error
 	SuspendProcess(ctx context.Context, processInstanceID string, reason string) error
 	ResumeProcess(ctx context.Context, processInstanceID string) error
 	TerminateProcess(ctx context.Context, processInstanceID string, reason string) error
@@ -341,17 +343,13 @@ func (e *CustomProcessEngine) StartProcess(ctx context.Context, processDefinitio
 		return nil, fmt.Errorf("开启流程启动事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	executionKeys := make([]string, 0)
-	txEngine := e.forClient(tx.Client(), &executionKeys)
-	instance, err := txEngine.startProcessWithClient(ctx, processDefinitionKey, businessKey, businessType, businessID, variables)
+	instance, err := e.StartProcessTx(ctx, tx, processDefinitionKey, businessKey, businessType, businessID, variables)
 	if err != nil {
 		return nil, err
 	}
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("提交流程启动事务失败: %w", err)
 	}
-	instance.Unwrap()
-	e.processCommittedCallbackKeys(ctx, instance.TenantID, executionKeys)
 	return instance, nil
 }
 
@@ -466,17 +464,12 @@ type completedTaskEffect struct {
 // post-commit attempt is only a latency optimization; durable recovery owns any
 // callback failure after the task transaction commits.
 func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, variables map[string]interface{}) error {
-	participantVariables, err := validateAndCloneBPMNParticipantVariables(variables, false)
-	if err != nil {
-		return err
-	}
 	tx, err := e.client.Tx(ctx)
 	if err != nil {
 		return fmt.Errorf("开启任务完成事务失败: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	executionKeys := make([]string, 0)
-	effect, err := e.completeTaskWithClient(ctx, tx.Client(), taskID, participantVariables, &executionKeys)
+	err = e.CompleteTaskTx(ctx, tx, taskID, variables)
 	if err != nil {
 		var conflict *bpmnTaskMutationConflict
 		if errors.As(err, &conflict) {
@@ -491,12 +484,6 @@ func (e *CustomProcessEngine) CompleteTask(ctx context.Context, taskID string, v
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("提交任务完成事务失败: %w", err)
 	}
-	effect.task.Unwrap()
-	if tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int); tenantID <= 0 {
-		ctx = context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, effect.task.TenantID)
-	}
-	e.processCommittedCallbackKeys(ctx, effect.task.TenantID, executionKeys)
-	e.executeAsyncUserTaskCompletion(ctx, effect)
 	return nil
 }
 

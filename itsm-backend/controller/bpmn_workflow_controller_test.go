@@ -176,6 +176,14 @@ func (e *fakeProcessEngine) StartProcess(ctx context.Context, key, biz string, b
 	return nil, nil
 }
 
+func (e *fakeProcessEngine) StartProcessTx(context.Context, *ent.Tx, string, string, string, int, map[string]interface{}) (*ent.ProcessInstance, error) {
+	return nil, errors.New("transactional start is not implemented by this controller fixture")
+}
+
+func (e *fakeProcessEngine) CompleteTaskTx(context.Context, *ent.Tx, string, map[string]interface{}) error {
+	return errors.New("transactional completion is not implemented by this controller fixture")
+}
+
 func (e *fakeProcessEngine) CompleteTask(ctx context.Context, taskID string, vars map[string]interface{}) error {
 	return e.taskSvc.CompleteTask(ctx, taskID, vars)
 }
