@@ -10,7 +10,11 @@ export function resolveIsDark(mode: ThemeMode, systemDark: boolean): boolean {
   return mode === 'dark' || (mode === 'system' && systemDark);
 }
 
-function bootstrap(parse: typeof parseThemeMode, resolve: typeof resolveIsDark, key: string) {
+export function applyThemePreference(
+  parse: typeof parseThemeMode = parseThemeMode,
+  resolve: typeof resolveIsDark = resolveIsDark,
+  key: string = THEME_STORAGE_KEY
+) {
   let stored: unknown;
   try {
     stored = window.localStorage.getItem(key);
@@ -29,5 +33,5 @@ function bootstrap(parse: typeof parseThemeMode, resolve: typeof resolveIsDark, 
 
 /** Only static functions and a fixed key are serialized; no stored value becomes executable code. */
 export function getThemeBootstrapScript(): string {
-  return `(${bootstrap.toString()})(${parseThemeMode.toString()},${resolveIsDark.toString()},${JSON.stringify(THEME_STORAGE_KEY)});`;
+  return `(${applyThemePreference.toString()})(${parseThemeMode.toString()},${resolveIsDark.toString()},${JSON.stringify(THEME_STORAGE_KEY)});`;
 }

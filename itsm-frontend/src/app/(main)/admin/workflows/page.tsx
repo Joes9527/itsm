@@ -77,7 +77,6 @@ interface Workflow {
   completedInstances: number;
 }
 
-
 // 工作流类型配置
 const WORKFLOW_TYPE_CONFIG = {
   [WORKFLOW_TYPES.INCIDENT]: {
@@ -210,9 +209,10 @@ const WorkflowManagement = () => {
     const workflow = workflows.find(w => w.id === workflowId);
     if (!workflow) return;
 
-    const newStatus = workflow.status === WORKFLOW_STATUS.ACTIVE
-      ? WORKFLOW_STATUS.INACTIVE
-      : WORKFLOW_STATUS.ACTIVE;
+    const newStatus =
+      workflow.status === WORKFLOW_STATUS.ACTIVE
+        ? WORKFLOW_STATUS.INACTIVE
+        : WORKFLOW_STATUS.ACTIVE;
 
     try {
       // 调用 API 更新状态
@@ -362,12 +362,12 @@ const WorkflowManagement = () => {
             <Text strong>{record.name}</Text>
             <Badge count={record.version} color="blue" />
           </div>
-          <Text type="secondary" className="text-sm">
+          <Text type="secondary" className="text-[13px]">
             {record.description}
           </Text>
           <div className="flex items-center gap-4 mt-1">
-            <span className="text-xs text-gray-500">创建者: {record.createdBy}</span>
-            <span className="text-xs text-gray-500">步骤: {record.stepsCount}</span>
+            <span className="text-[12px] text-muted">创建者: {record.createdBy}</span>
+            <span className="text-[12px] text-muted">步骤: {record.stepsCount}</span>
           </div>
         </div>
       ),
@@ -406,9 +406,9 @@ const WorkflowManagement = () => {
       align: 'center' as const,
       render: (_: unknown, record: Workflow) => (
         <div className="text-center">
-          <div className="text-lg font-bold text-blue-600">{record.activeInstances}</div>
-          <div className="text-xs text-gray-500">活跃实例</div>
-          <div className="text-xs text-gray-500">已完成: {record.completedInstances}</div>
+          <div className="text-[15px] font-bold text-blue-600">{record.activeInstances}</div>
+          <div className="text-[12px] text-muted">活跃实例</div>
+          <div className="text-[12px] text-muted">已完成: {record.completedInstances}</div>
         </div>
       ),
     },
@@ -432,7 +432,7 @@ const WorkflowManagement = () => {
               percent={completionRate}
               format={percent => `${percent}%`}
             />
-            <div className="text-xs text-gray-500 mt-1">完成率</div>
+            <div className="text-[12px] text-muted mt-1">完成率</div>
           </div>
         );
       },
@@ -443,7 +443,7 @@ const WorkflowManagement = () => {
       key: 'lastModified',
       align: 'center' as const,
       render: (date: unknown) => {
-        if (!date) return <span className="text-gray-400">-</span>;
+        if (!date) return <span className="text-muted">-</span>;
         const dateStr = String(date);
         const datePart = dateStr.includes('T')
           ? dateStr.split('T')[0]
@@ -453,8 +453,8 @@ const WorkflowManagement = () => {
           : dateStr.split(' ')[1] || '';
         return (
           <div className="text-center">
-            <div className="text-sm">{datePart}</div>
-            <div className="text-xs text-gray-500">{timePart}</div>
+            <div className="text-[13px]">{datePart}</div>
+            <div className="text-[12px] text-muted">{timePart}</div>
           </div>
         );
       },
@@ -521,7 +521,12 @@ const WorkflowManagement = () => {
             cancelText="取消"
             okType="danger"
           >
-            <Button type="text" danger icon={<Trash2 className="w-4 h-4" />} aria-label="删除工作流" />
+            <Button
+              type="text"
+              danger
+              icon={<Trash2 className="w-4 h-4" />}
+              aria-label="删除工作流"
+            />
           </Popconfirm>
         </Space>
       ),
@@ -577,7 +582,7 @@ const WorkflowManagement = () => {
               title="平均步骤数"
               value={stats.avgSteps}
               prefix={<BarChart3 className="w-5 h-5" />}
-              styles={{ content: { color: '#722ed1' } }}
+              styles={{ content: { color: 'var(--color-text-primary)' } }}
             />
           </Card>
         </Col>
@@ -589,7 +594,7 @@ const WorkflowManagement = () => {
           <Col xs={24} md={8}>
             <Input
               placeholder="搜索工作流名称或描述..."
-              prefix={<Search className="w-4 h-4 text-gray-400" />}
+              prefix={<Search className="w-4 h-4 text-muted" />}
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               allowClear
@@ -601,7 +606,13 @@ const WorkflowManagement = () => {
               value={typeFilter}
               onChange={setTypeFilter}
               style={{ width: '100%' }}
-              options={[{ value: 'all', label: '全部类型' }, ...Object.entries(WORKFLOW_TYPE_CONFIG).map(([key, config]) => ({ value: key, label: config.label }))]}
+              options={[
+                { value: 'all', label: '全部类型' },
+                ...Object.entries(WORKFLOW_TYPE_CONFIG).map(([key, config]) => ({
+                  value: key,
+                  label: config.label,
+                })),
+              ]}
             />
           </Col>
           <Col xs={24} md={4}>
@@ -610,7 +621,13 @@ const WorkflowManagement = () => {
               value={statusFilter}
               onChange={setStatusFilter}
               style={{ width: '100%' }}
-              options={[{ value: 'all', label: '全部状态' }, ...Object.entries(STATUS_CONFIG).map(([key, config]) => ({ value: key, label: config.label }))]}
+              options={[
+                { value: 'all', label: '全部状态' },
+                ...Object.entries(STATUS_CONFIG).map(([key, config]) => ({
+                  value: key,
+                  label: config.label,
+                })),
+              ]}
             />
           </Col>
           <Col xs={24} md={8} className="text-right">
@@ -715,7 +732,13 @@ const WorkflowManagement = () => {
                 name="type"
                 rules={[{ required: true, message: '请选择工作流类型' }]}
               >
-                <Select placeholder="选择工作流类型" options={Object.entries(WORKFLOW_TYPE_CONFIG).map(([key, config]) => ({ value: key, label: config.label }))} />
+                <Select
+                  placeholder="选择工作流类型"
+                  options={Object.entries(WORKFLOW_TYPE_CONFIG).map(([key, config]) => ({
+                    value: key,
+                    label: config.label,
+                  }))}
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -734,7 +757,12 @@ const WorkflowManagement = () => {
             </Col>
             <Col span={12}>
               <Form.Item label="状态" name="status" initialValue={WORKFLOW_STATUS.DRAFT}>
-                <Select options={Object.entries(STATUS_CONFIG).map(([key, config]) => ({ value: key, label: config.label }))} />
+                <Select
+                  options={Object.entries(STATUS_CONFIG).map(([key, config]) => ({
+                    value: key,
+                    label: config.label,
+                  }))}
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -761,7 +789,9 @@ const WorkflowManagement = () => {
         {selectedWorkflow && (
           <div className="space-y-6">
             <div>
-              <Title level={4}>{selectedWorkflow.name}</Title>
+              <Title style={{ fontSize: 15, fontWeight: 600 }} level={4}>
+                {selectedWorkflow.name}
+              </Title>
               <Text type="secondary">{selectedWorkflow.description}</Text>
             </div>
 
@@ -796,7 +826,9 @@ const WorkflowManagement = () => {
             </Row>
 
             <div>
-              <Title level={5}>基本信息</Title>
+              <Title style={{ fontSize: 15, fontWeight: 600 }} level={5}>
+                基本信息
+              </Title>
               <Row gutter={[16, 8]}>
                 <Col span={12}>
                   <Text strong>工作流类型：</Text>

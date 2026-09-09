@@ -34,10 +34,9 @@ import type {
   ProblemStatsResponse,
   Problem,
   ProblemStatus,
-  ProblemPriority} from '@/lib/services/problem-service';
-import {
-  problemService
+  ProblemPriority,
 } from '@/lib/services/problem-service';
+import { problemService } from '@/lib/services/problem-service';
 
 const { Title, Text } = Typography;
 
@@ -177,11 +176,15 @@ const ProblemEfficiencyPage = () => {
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
-          <p className="font-semibold text-gray-800">{`${payload[0].name}`}</p>
+        <div className="bg-surface p-3 rounded-[8px] shadow-lg border border-border">
+          <p className="font-semibold text-foreground">{`${payload[0].name}`}</p>
           <p
-            className="text-sm"
-            style={{ color: payload[0].color }}
+            className="text-[13px]"
+            style={{
+              color: 'var(--color-text-primary)',
+              borderLeft: `3px solid ${payload[0].color}`,
+              paddingLeft: 8,
+            }}
           >{`数量: ${payload[0].value}`}</p>
         </div>
       );
@@ -190,17 +193,17 @@ const ProblemEfficiencyPage = () => {
   };
 
   return (
-    <div className="p-6 bg-gray-50 min-h-full">
+    <div className="p-[24px] max-[1200px]:p-[16px] bg-page min-h-full">
       <header className="mb-6">
         <Title level={2}>问题管理效率报表</Title>
-        <p className="text-gray-500 mt-1">展示问题管理的处理效率和处理趋势</p>
+        <p className="text-muted mt-1">展示问题管理的处理效率和处理趋势</p>
       </header>
 
       {/* 控制栏 */}
       <Card className="mb-6">
         <Row justify="space-between" align="middle">
           <Col>
-            <Text className="text-gray-600">问题处理效率监控</Text>
+            <Text className="text-muted">问题处理效率监控</Text>
           </Col>
           <Col>
             <Button icon={<RotateCcw />} onClick={loadData}>
@@ -265,7 +268,7 @@ const ProblemEfficiencyPage = () => {
               <Card title="解决率">
                 <div className="text-center py-4">
                   <div
-                    className="text-4xl font-bold mb-2"
+                    className="text-[26px] font-semibold mb-2"
                     style={{ color: resolutionRate >= 70 ? '#52c41a' : '#faad14' }}
                   >
                     {resolutionRate.toFixed(1)}%
@@ -284,7 +287,7 @@ const ProblemEfficiencyPage = () => {
             <Col xs={24} lg={8}>
               <Card title="处理中比例">
                 <div className="text-center py-4">
-                  <div className="text-4xl font-bold mb-2" style={{ color: '#1890ff' }}>
+                  <div className="text-[26px] font-semibold mb-2" style={{ color: '#1890ff' }}>
                     {inProgressRate.toFixed(1)}%
                   </div>
                   <Progress percent={inProgressRate} strokeColor="#1890ff" showInfo={false} />
@@ -297,7 +300,7 @@ const ProblemEfficiencyPage = () => {
             <Col xs={24} lg={8}>
               <Card title="高优先级占比">
                 <div className="text-center py-4">
-                  <div className="text-4xl font-bold mb-2" style={{ color: '#ff4d4f' }}>
+                  <div className="text-[26px] font-semibold mb-2" style={{ color: '#ff4d4f' }}>
                     {stats ? ((stats.highPriority / stats.total) * 100).toFixed(1) : 0}%
                   </div>
                   <Progress
@@ -333,7 +336,7 @@ const ProblemEfficiencyPage = () => {
                       ))}
                     </Pie>
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend />
+                    <Legend formatter={value => <span className="text-foreground">{value}</span>} />
                   </PieChart>
                 </ResponsiveContainer>
               </Card>
@@ -342,11 +345,18 @@ const ProblemEfficiencyPage = () => {
               <Card title="问题优先级分布">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={problemsByPriority}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
+                    <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
+                    <XAxis
+                      stroke="var(--color-text-secondary)"
+                      tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                      dataKey="name"
+                    />
+                    <YAxis
+                      stroke="var(--color-text-secondary)"
+                      tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                    />
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend />
+                    <Legend formatter={value => <span className="text-foreground">{value}</span>} />
                     <Bar dataKey="value" name="问题数量" fill="#1890ff">
                       {problemsByPriority.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
@@ -368,7 +378,7 @@ const ProblemEfficiencyPage = () => {
                     <div className="w-full">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-3">
-                          <span className="font-medium text-blue-600">#{problem.id}</span>
+                          <span className="font-medium text-foreground">#{problem.id}</span>
                           <span className="font-medium">{problem.title}</span>
                         </div>
                         <div className="flex items-center gap-2">
@@ -380,7 +390,7 @@ const ProblemEfficiencyPage = () => {
                           </Tag>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between text-sm text-gray-500">
+                      <div className="flex items-center justify-between text-[13px] text-muted">
                         <span>处理人: {problem.assignee?.name || '未分配'}</span>
                         <span>创建时间: {new Date(problem.createdAt).toLocaleDateString()}</span>
                       </div>

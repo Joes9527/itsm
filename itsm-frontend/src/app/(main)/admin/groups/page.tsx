@@ -19,7 +19,17 @@ import {
   Badge,
 } from 'antd';
 import type { TablePaginationConfig } from 'antd';
-import { Edit, Plus, Search, Trash2, UserPlus, Users, User as UserIcon, X, Check } from 'lucide-react';
+import {
+  Edit,
+  Plus,
+  Search,
+  Trash2,
+  UserPlus,
+  Users,
+  User as UserIcon,
+  X,
+  Check,
+} from 'lucide-react';
 import BusinessStatsGrid from '@/components/common/BusinessStatsGrid';
 import { GroupAPI, type Group } from '@/lib/api/group-api';
 import { UserApi, type User } from '@/lib/api/user-api';
@@ -200,9 +210,7 @@ const GroupManagement: React.FC = () => {
   };
 
   // Transfer 的目标key（已选中的成员）
-  const targetKeys = selectedUserIds.filter(id =>
-    groupMembers.some(m => String(m.id) === id)
-  );
+  const targetKeys = selectedUserIds.filter(id => groupMembers.some(m => String(m.id) === id));
 
   const handleTableChange = (nextPagination: TablePaginationConfig) => {
     setPagination(prev => ({
@@ -257,11 +265,7 @@ const GroupManagement: React.FC = () => {
       width: 120,
       render: (_: unknown, record: Group) => (
         <Badge count={record.members?.length || 0} showZero color="blue">
-          <Button
-            type="link"
-            icon={<Users size={16} />}
-            onClick={() => openMemberModal(record)}
-          >
+          <Button type="link" icon={<Users size={16} />} onClick={() => openMemberModal(record)}>
             管理
           </Button>
         </Badge>
@@ -293,10 +297,20 @@ const GroupManagement: React.FC = () => {
       width: 180,
       render: (_: unknown, record: Group) => (
         <Space size="small">
-          <Button type="link" size="small" icon={<Users size={14} />} onClick={() => openMemberModal(record)}>
+          <Button
+            type="link"
+            size="small"
+            icon={<Users size={14} />}
+            onClick={() => openMemberModal(record)}
+          >
             成员
           </Button>
-          <Button type="link" size="small" icon={<Edit size={14} />} onClick={() => openEditModal(record)}>
+          <Button
+            type="link"
+            size="small"
+            icon={<Edit size={14} />}
+            onClick={() => openEditModal(record)}
+          >
             编辑
           </Button>
           <Button
@@ -449,12 +463,7 @@ const GroupManagement: React.FC = () => {
           >
             取消
           </Button>,
-          <Button
-            key="save"
-            type="primary"
-            loading={savingMembers}
-            onClick={handleSaveMembers}
-          >
+          <Button key="save" type="primary" loading={savingMembers} onClick={handleSaveMembers}>
             保存更改
           </Button>,
         ]}
@@ -472,12 +481,12 @@ const GroupManagement: React.FC = () => {
             }))}
             titles={['可添加的用户', '当前成员']}
             targetKeys={targetKeys}
-            onChange={(keys) => setSelectedUserIds(keys.map(k => String(k)))}
+            onChange={keys => setSelectedUserIds(keys.map(k => String(k)))}
             render={item => (
               <Space>
                 <Avatar size="small" icon={<UserIcon size={14} />} />
                 <span>{item.title}</span>
-                <Text type="secondary" className="text-xs">
+                <Text type="secondary" className="text-[12px]">
                   {item.description}
                 </Text>
               </Space>
@@ -505,12 +514,15 @@ const GroupManagement: React.FC = () => {
                 renderItem={item => (
                   <List.Item>
                     <Space>
-                      <Avatar size="small" src={('avatar' in item ? item.avatar : undefined) as string | undefined}>
+                      <Avatar
+                        size="small"
+                        src={('avatar' in item ? item.avatar : undefined) as string | undefined}
+                      >
                         <UserIcon size={14} />
                       </Avatar>
                       <Text>{item.name || item.username || `用户#${item.id}`}</Text>
                       {item.email && (
-                        <Text type="secondary" className="text-xs">
+                        <Text type="secondary" className="text-[12px]">
                           {item.email}
                         </Text>
                       )}

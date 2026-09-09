@@ -1,7 +1,19 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { App, Button, Card, Col, Empty, Progress, Row, Skeleton, Spin, Statistic, Typography } from 'antd';
+import {
+  App,
+  Button,
+  Card,
+  Col,
+  Empty,
+  Progress,
+  Row,
+  Skeleton,
+  Spin,
+  Statistic,
+  Typography,
+} from 'antd';
 import { Clock, RotateCcw, CheckCircle, XCircle } from 'lucide-react';
 import {
   Bar,
@@ -60,8 +72,7 @@ const SLAPerformanceReport = () => {
         SLAApi.getSLADefinitions({ page: 1, size: 50 }),
       ]);
 
-      const report =
-        complianceReport.status === 'fulfilled' ? complianceReport.value : null;
+      const report = complianceReport.status === 'fulfilled' ? complianceReport.value : null;
       const statsValue = stats.status === 'fulfilled' ? stats.value : null;
 
       const totalMetCount = report?.metSla ?? statsValue?.totalDefinitions ?? 0;
@@ -79,9 +90,7 @@ const SLAPerformanceReport = () => {
         definitions.value.items.length > 0
       ) {
         const items = definitions.value.items;
-        const perDefinitionRate = totalMetCount + totalBreachedCount > 0
-          ? compliance
-          : 0;
+        const perDefinitionRate = totalMetCount + totalBreachedCount > 0 ? compliance : 0;
         const list: SLAData[] = items.slice(0, 6).map(def => {
           const rate = def.complianceRate ?? perDefinitionRate;
           const breached = 100 - rate;
@@ -145,13 +154,17 @@ const SLAPerformanceReport = () => {
   }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
-          <p className="font-semibold text-gray-800 mb-2">{`SLA类型: ${label ?? ''}`}</p>
+        <div className="bg-surface p-3 rounded-[8px] shadow-lg border border-border">
+          <p className="font-semibold text-foreground mb-2">{`SLA类型: ${label ?? ''}`}</p>
           {payload.map((entry, index) => (
             <p
               key={`${entry.name ?? 'item'}-${index}`}
-              className="text-sm"
-              style={{ color: entry.color }}
+              className="text-[13px]"
+              style={{
+                color: 'var(--color-text-primary)',
+                borderLeft: `3px solid ${entry.color}`,
+                paddingLeft: 8,
+              }}
             >
               {`${entry.name ?? ''}: ${entry.value ?? 0}%`}
             </p>
@@ -248,11 +261,18 @@ const SLAPerformanceReport = () => {
             <Card title="各类型SLA达成情况">
               <ResponsiveContainer width="100%" height={350}>
                 <BarChart data={slaData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
+                  <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
+                  <XAxis
+                    stroke="var(--color-text-secondary)"
+                    tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                    dataKey="name"
+                  />
+                  <YAxis
+                    stroke="var(--color-text-secondary)"
+                    tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                  />
                   <Tooltip content={<CustomTooltip />} />
-                  <Legend />
+                  <Legend formatter={value => <span className="text-foreground">{value}</span>} />
                   <Bar dataKey="met" name="达标" stackId="a" fill={COLORS.met} />
                   <Bar dataKey="breached" name="违规" stackId="a" fill={COLORS.breached} />
                 </BarChart>
@@ -262,7 +282,7 @@ const SLAPerformanceReport = () => {
           <Col xs={24} lg={8}>
             <Card title="总体达标率">
               <div className="text-center py-8">
-                <div className="text-5xl font-bold mb-4" style={{ color: COLORS.met }}>
+                <div className="text-[26px] font-semibold mb-4" style={{ color: COLORS.met }}>
                   {totalForPie > 0 ? ((totalMet / totalForPie) * 100).toFixed(1) : '0.0'}%
                 </div>
                 <Text type="secondary">SLA总体达标率</Text>
@@ -300,19 +320,13 @@ const SLAPerformanceReport = () => {
                     }
                     showInfo={false}
                   />
-                  <div className="flex justify-between mt-2 text-sm text-gray-500">
+                  <div className="flex justify-between mt-2 text-[13px] text-muted">
                     <span>
-                      <CheckCircle
-                        className="inline mr-1"
-                        style={{ color: COLORS.met }}
-                      />
+                      <CheckCircle className="inline mr-1" style={{ color: COLORS.met }} />
                       {sla.met}%
                     </span>
                     <span>
-                      <XCircle
-                        className="inline mr-1"
-                        style={{ color: COLORS.breached }}
-                      />
+                      <XCircle className="inline mr-1" style={{ color: COLORS.breached }} />
                       {sla.breached}%
                     </span>
                   </div>
@@ -326,17 +340,17 @@ const SLAPerformanceReport = () => {
   };
 
   return (
-    <div className="p-6 bg-gray-50 min-h-full">
+    <div className="p-[24px] max-[1200px]:p-[16px] bg-page min-h-full">
       <header className="mb-6">
         <Title level={2}>SLA性能报表</Title>
-        <p className="text-gray-500 mt-1">展示服务级别协议的达成情况和性能指标</p>
+        <p className="text-muted mt-1">展示服务级别协议的达成情况和性能指标</p>
       </header>
 
       {/* 控制栏 */}
       <Card className="mb-6">
         <Row justify="space-between" align="middle">
           <Col>
-            <Text className="text-gray-600">SLA合规率监控</Text>
+            <Text className="text-muted">SLA合规率监控</Text>
           </Col>
           <Col>
             <Button icon={<RotateCcw />} onClick={loadData} loading={loading}>

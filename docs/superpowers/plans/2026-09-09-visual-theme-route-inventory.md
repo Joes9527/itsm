@@ -150,43 +150,43 @@ Task6 static treatment: both ReactFlow hosts/nodes/labels/controls/minimap use s
 
 | Route | Source | Actual layout | Common components observed | Local risk | Status |
 | --- | --- | --- | --- | --- | --- |
-| `/admin/approval-chains` | `src/app/(main)/admin/approval-chains/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | table states | NEEDS VERIFICATION |
-| `/admin/cmdb-types` | `src/app/(main)/admin/cmdb-types/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; table states | NEEDS VERIFICATION |
-| `/admin/config-inheritance` | `src/app/(main)/admin/config-inheritance/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | inline styles; table states | NEEDS VERIFICATION |
-| `/admin/connectors` | `src/app/(main)/admin/connectors/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | inline styles; table states | NEEDS VERIFICATION |
-| `/admin/department-processes` | `src/app/(main)/admin/department-processes/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states | NEEDS VERIFICATION |
-| `/admin/departments` | `src/app/(main)/admin/departments/page.tsx` | Root > Main (Console) | common/OrgDepartmentTree | fixed palette classes; inline styles; table states | NEEDS VERIFICATION |
-| `/admin/escalation-matrices` | `src/app/(main)/admin/escalation-matrices/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states | NEEDS VERIFICATION |
-| `/admin/escalation-rules` | `src/app/(main)/admin/escalation-rules/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; table states | NEEDS VERIFICATION |
-| `/admin/groups` | `src/app/(main)/admin/groups/page.tsx` | Root > Main (Console) | common/BusinessStatsGrid | inline styles; table states | NEEDS VERIFICATION |
-| `/admin/menus` | `src/app/(main)/admin/menus/page.tsx` | Root > Main (Console) | layout/sidebar/icons | literal colors; fixed palette classes; inline styles; table states; special visual | NEEDS VERIFICATION |
-| `/admin/overview` | `src/app/(main)/admin/overview/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/admin/permissions` | `src/app/(main)/admin/permissions/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; table states; special visual | NEEDS VERIFICATION |
-| `/admin/process-routing` | `src/app/(main)/admin/process-routing/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states; special visual | NEEDS VERIFICATION |
-| `/admin/roles` | `src/app/(main)/admin/roles/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; table states | NEEDS VERIFICATION |
-| `/admin/service-catalogs` | `src/app/(main)/admin/service-catalogs/page.tsx` | Root > Main (Console) | business/BatchActionBar, common/CustomFieldsEditor | literal colors; fixed palette classes; inline styles; table states; special visual | NEEDS VERIFICATION |
-| `/admin/sla-definitions` | `src/app/(main)/admin/sla-definitions/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; table states | NEEDS VERIFICATION |
-| `/admin/sla-templates` | `src/app/(main)/admin/sla-templates/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states | NEEDS VERIFICATION |
-| `/admin/system-config` | `src/app/(main)/admin/system-config/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles | NEEDS VERIFICATION |
-| `/admin/teams` | `src/app/(main)/admin/teams/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states | NEEDS VERIFICATION |
-| `/admin/tenants` | `src/app/(main)/admin/tenants/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; table states | NEEDS VERIFICATION |
-| `/admin/ticket-categories` | `src/app/(main)/admin/ticket-categories/page.tsx` | Root > Main (Console) | ui/LoadingSkeleton | fixed palette classes; inline styles; table states | NEEDS VERIFICATION |
-| `/admin/tickets/assignment-rules` | `src/app/(main)/admin/tickets/assignment-rules/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; inline styles; table states | NEEDS VERIFICATION |
-| `/admin/tickets/automation-rules` | `src/app/(main)/admin/tickets/automation-rules/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | inline styles; table states | NEEDS VERIFICATION |
-| `/admin/users` | `src/app/(main)/admin/users/page.tsx` | Root > Main (Console) | common/OrgDepartmentTree | literal colors; fixed palette classes; inline styles; table states | NEEDS VERIFICATION |
-| `/admin/workflows` | `src/app/(main)/admin/workflows/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; table states; special visual | NEEDS VERIFICATION |
-| `/reports/change-success` | `src/app/(main)/reports/change-success/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; special visual | NEEDS VERIFICATION |
-| `/reports/changes` | `src/app/(main)/reports/changes/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/reports/cmdb-quality` | `src/app/(main)/reports/cmdb-quality/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; special visual | NEEDS VERIFICATION |
-| `/reports/incident-trends` | `src/app/(main)/reports/incident-trends/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; special visual | NEEDS VERIFICATION |
-| `/reports/incidents` | `src/app/(main)/reports/incidents/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/reports` | `src/app/(main)/reports/page.tsx` | Root > Main (Console) | business/AdvancedReporting, ui/ManagementPageHeader | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/reports/problem-efficiency` | `src/app/(main)/reports/problem-efficiency/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; special visual | NEEDS VERIFICATION |
-| `/reports/problems` | `src/app/(main)/reports/problems/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/reports/service-catalog-usage` | `src/app/(main)/reports/service-catalog-usage/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; special visual | NEEDS VERIFICATION |
-| `/reports/sla-performance` | `src/app/(main)/reports/sla-performance/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; special visual | NEEDS VERIFICATION |
-| `/reports/sla` | `src/app/(main)/reports/sla/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | NEEDS VERIFICATION |
-| `/reports/tickets` | `src/app/(main)/reports/tickets/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; special visual | NEEDS VERIFICATION |
+| `/admin/approval-chains` | `src/app/(main)/admin/approval-chains/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | table states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/cmdb-types` | `src/app/(main)/admin/cmdb-types/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/config-inheritance` | `src/app/(main)/admin/config-inheritance/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/connectors` | `src/app/(main)/admin/connectors/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/department-processes` | `src/app/(main)/admin/department-processes/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/departments` | `src/app/(main)/admin/departments/page.tsx` | Root > Main (Console) | common/OrgDepartmentTree | fixed palette classes; inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/escalation-matrices` | `src/app/(main)/admin/escalation-matrices/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/escalation-rules` | `src/app/(main)/admin/escalation-rules/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/groups` | `src/app/(main)/admin/groups/page.tsx` | Root > Main (Console) | common/BusinessStatsGrid | inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/menus` | `src/app/(main)/admin/menus/page.tsx` | Root > Main (Console) | layout/sidebar/icons | literal colors; fixed palette classes; inline styles; table states; special visual | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/overview` | `src/app/(main)/admin/overview/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/permissions` | `src/app/(main)/admin/permissions/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; table states; special visual | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/process-routing` | `src/app/(main)/admin/process-routing/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states; special visual | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/roles` | `src/app/(main)/admin/roles/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/service-catalogs` | `src/app/(main)/admin/service-catalogs/page.tsx` | Root > Main (Console) | business/BatchActionBar, common/CustomFieldsEditor | literal colors; fixed palette classes; inline styles; table states; special visual | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/sla-definitions` | `src/app/(main)/admin/sla-definitions/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/sla-templates` | `src/app/(main)/admin/sla-templates/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/system-config` | `src/app/(main)/admin/system-config/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/teams` | `src/app/(main)/admin/teams/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/tenants` | `src/app/(main)/admin/tenants/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/ticket-categories` | `src/app/(main)/admin/ticket-categories/page.tsx` | Root > Main (Console) | ui/LoadingSkeleton | fixed palette classes; inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/tickets/assignment-rules` | `src/app/(main)/admin/tickets/assignment-rules/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | fixed palette classes; inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/tickets/automation-rules` | `src/app/(main)/admin/tickets/automation-rules/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/users` | `src/app/(main)/admin/users/page.tsx` | Root > Main (Console) | common/OrgDepartmentTree | literal colors; fixed palette classes; inline styles; table states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/admin/workflows` | `src/app/(main)/admin/workflows/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; table states; special visual | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/reports/change-success` | `src/app/(main)/reports/change-success/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; special visual | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/reports/changes` | `src/app/(main)/reports/changes/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/reports/cmdb-quality` | `src/app/(main)/reports/cmdb-quality/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; special visual | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/reports/incident-trends` | `src/app/(main)/reports/incident-trends/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; special visual | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/reports/incidents` | `src/app/(main)/reports/incidents/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/reports` | `src/app/(main)/reports/page.tsx` | Root > Main (Console) | business/AdvancedReporting, ui/ManagementPageHeader | shared component/theme dependency; inspect rendered states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/reports/problem-efficiency` | `src/app/(main)/reports/problem-efficiency/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; special visual | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/reports/problems` | `src/app/(main)/reports/problems/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/reports/service-catalog-usage` | `src/app/(main)/reports/service-catalog-usage/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; special visual | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/reports/sla-performance` | `src/app/(main)/reports/sla-performance/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; fixed palette classes; inline styles; special visual | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/reports/sla` | `src/app/(main)/reports/sla/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | shared component/theme dependency; inspect rendered states | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| `/reports/tickets` | `src/app/(main)/reports/tickets/page.tsx` | Root > Main (Console) | page-local Ant Design/local sections | literal colors; special visual | STATIC MIGRATED / PENDING BROWSER (Task 7) |
 
 ## Development-only exclusions
 
@@ -221,3 +221,18 @@ Run from `itsm-frontend`. These are planned commands; this inventory does not cl
 - `PLAYWRIGHT_SKIP_CHANNELS=1 npx playwright test tests/e2e/responsive-layout.spec.ts --project=chromium`
 
 Add exact-path tests for theme persistence, historical system mode, invalid/unavailable storage, first paint, theme toggle, mobile Escape/overlay/focus return/trap, and navigation actions. Visually exercise every shipped route in A and C; cover representative layout/component families at 390, 767, 768, 991, 992, 1024, 1200, and 1440px. Cover representative loading, failure, empty, long text, disabled/loading controls, popups, table scrolling, charts/topology/BPMN/editor states. Static source scanning is triage evidence only.
+
+## Task 7 static migration and residual conventions
+
+All 37 admin/reports page sources and their active local presentation imports were reconciled. Four report aliases (`changes`, `incidents`, `problems`, `sla`) retain their existing redirects; destinations own presentation. Routes already consisting solely of themed Ant Design controls or migrated shared headers required no artificial local edit. Actual TSX import closure: 57 files; no inactive `EnhancedSystemConfig.tsx` or unused `reports/components/*` implementations were included. Shared data, permission/menu trees, APIs, chart data/series colors and professional status mappings remain unchanged.
+
+| Supplemental active state | Source | Status |
+| --- | --- | --- |
+| Route error | `src/app/error.tsx` | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| Root failure without layout/providers | `src/app/global-error.tsx` | STATIC MIGRATED / PENDING BROWSER (Task 7); SSR bootstrap and client-mount preference regressions pass |
+| Not found | `src/app/not-found.tsx` | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| Main loading convention | `src/app/(main)/loading.tsx` | STATIC MIGRATED / PENDING BROWSER (Task 7); shared collapsed state, mobile zero sidebar reservation |
+| Root common error boundary with diagnostics | `src/components/common/ErrorBoundary.tsx` | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+| Auth-check/loading helpers and main footer | `src/components/ui/LoadingSpinner.tsx`, `src/app/(main)/layout.tsx` | STATIC MIGRATED / PENDING BROWSER (Task 7) |
+
+Task 7 validation: existing baseline 6 suites / 52 tests passed; final scoped regression 9 suites / 81 tests passed, including 8 new standalone-root-error tests and navigation-theme coverage. Type-check, generated theme consistency, scoped ESLint and whitespace checks pass. Details in `.superpowers/sdd/2026-09-09-visual-theme-unification/task-7-report.md`. Browser acceptance and live backend validation remain separate and pending.

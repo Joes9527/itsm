@@ -266,9 +266,7 @@ export default function RoleManagement() {
         try {
           // 优先使用已加载的 catalog，避免重复请求
           const catalog =
-            permissionCatalog.length > 0
-              ? permissionCatalog
-              : await RoleAPI.getPermissionCatalog();
+            permissionCatalog.length > 0 ? permissionCatalog : await RoleAPI.getPermissionCatalog();
           const codeToId = new Map(catalog.map(p => [p.code, p.id]));
           const permissionIds = permissionCodes
             .map(code => codeToId.get(code))
@@ -335,8 +333,8 @@ export default function RoleManagement() {
       key: 'info',
       render: (_: unknown, record: RoleItem) => (
         <div>
-          <div className="font-medium text-gray-900">{record.name}</div>
-          <div className="text-sm text-gray-500">
+          <div className="font-medium text-foreground">{record.name}</div>
+          <div className="text-[13px] text-muted">
             {record.code ? `${record.code} · ` : ''}
             {record.description}
           </div>
@@ -441,9 +439,9 @@ export default function RoleManagement() {
       )}
 
       {permissionsLoading ? (
-        <div className="text-center py-8 text-gray-500">正在加载权限目录…</div>
+        <div className="text-center py-8 text-muted">正在加载权限目录…</div>
       ) : permissionModules.length === 0 && !permissionsError ? (
-        <div className="text-center py-8 text-gray-500">暂无权限定义</div>
+        <div className="text-center py-8 text-muted">暂无权限定义</div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {permissionModules.map(({ resource, label, actions }) => (
@@ -454,7 +452,7 @@ export default function RoleManagement() {
                 <div className="flex items-center">
                   <Shield className="w-4 h-4 mr-2" />
                   {label}
-                  <Text type="secondary" className="ml-2 text-xs">
+                  <Text type="secondary" className="ml-2 text-[12px]">
                     {resource}
                   </Text>
                 </div>
@@ -462,7 +460,7 @@ export default function RoleManagement() {
             >
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">全选</span>
+                  <span className="text-[13px] font-medium">全选</span>
                   <Checkbox onChange={e => handleSelectAllModule(resource, e.target.checked)} />
                 </div>
                 <Divider className="my-2" />
@@ -477,7 +475,7 @@ export default function RoleManagement() {
                           className="mb-0"
                         >
                           <Checkbox>
-                            <span className="text-sm">{actionLabel}</span>
+                            <span className="text-[13px]">{actionLabel}</span>
                           </Checkbox>
                         </Form.Item>
                       </div>
@@ -511,7 +509,10 @@ export default function RoleManagement() {
             name="code"
             tooltip="编码用于权限缓存和系统集成，建议使用英文、数字、下划线"
           >
-            <Input placeholder="例如：it_manager、change_approver" disabled={selectedRole?.isSystem} />
+            <Input
+              placeholder="例如：it_manager、change_approver"
+              disabled={selectedRole?.isSystem}
+            />
           </Form.Item>
           <Form.Item
             label="角色描述"
@@ -592,7 +593,7 @@ export default function RoleManagement() {
           <Col xs={24} md={12} lg={8}>
             <Input
               placeholder="搜索角色名称..."
-              prefix={<Search className="w-4 h-4 text-gray-400" />}
+              prefix={<Search className="w-4 h-4 text-muted" />}
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               allowClear
@@ -604,7 +605,11 @@ export default function RoleManagement() {
               value={statusFilter}
               onChange={setStatusFilter}
               style={{ width: '100%' }}
-              options={[{ value: 'all', label: '全部状态' }, { value: 'active', label: '启用' }, { value: 'inactive', label: '禁用' }]}
+              options={[
+                { value: 'all', label: '全部状态' },
+                { value: 'active', label: '启用' },
+                { value: 'inactive', label: '禁用' },
+              ]}
             />
           </Col>
           <Col xs={24} md={4} lg={10} className="text-right">

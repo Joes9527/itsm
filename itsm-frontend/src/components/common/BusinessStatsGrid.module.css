@@ -19,5 +19,5 @@
 }
 
 .label {
-  color: #4b5563 !important;
+  color: var(--color-text-secondary) !important;
 }

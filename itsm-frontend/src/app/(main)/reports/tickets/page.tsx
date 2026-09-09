@@ -36,8 +36,12 @@ const TicketsReportPage = () => {
       const tickets = response?.tickets ?? [];
 
       const total = tickets.length;
-      const open = tickets.filter((t: any) => t.status === 'open' || t.status === 'in_progress').length;
-      const closed = tickets.filter((t: any) => t.status === 'closed' || t.status === 'resolved').length;
+      const open = tickets.filter(
+        (t: any) => t.status === 'open' || t.status === 'in_progress'
+      ).length;
+      const closed = tickets.filter(
+        (t: any) => t.status === 'closed' || t.status === 'resolved'
+      ).length;
       const overdue = tickets.filter((t: any) => t.status === 'overdue').length;
       setStats({ total, open, closed, overdue });
 
@@ -70,7 +74,7 @@ const TicketsReportPage = () => {
   if (loading) {
     return (
       <div className="p-6 space-y-6">
-        <Title level={3}>工单报表</Title>
+        <Title level={2}>工单报表</Title>
         <Skeleton active />
       </div>
     );
@@ -78,7 +82,7 @@ const TicketsReportPage = () => {
 
   return (
     <div className="p-6 space-y-6">
-      <Title level={3}>
+      <Title level={2}>
         <FileText className="inline-block w-6 h-6 mr-2" />
         工单报表
       </Title>
@@ -86,22 +90,41 @@ const TicketsReportPage = () => {
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
           <Card>
-            <Statistic title="工单总数" value={stats.total} prefix={<FileText className="w-4 h-4" />} />
+            <Statistic
+              title="工单总数"
+              value={stats.total}
+              prefix={<FileText className="w-4 h-4" />}
+            />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card>
-            <Statistic title="进行中" value={stats.open} prefix={<Clock className="w-4 h-4" />} styles={{ content: { color: '#1890ff' } }} />
+            <Statistic
+              title="进行中"
+              value={stats.open}
+              prefix={<Clock className="w-4 h-4" />}
+              styles={{ content: { color: '#1890ff' } }}
+            />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card>
-            <Statistic title="已完成" value={stats.closed} prefix={<CheckCircle className="w-4 h-4" />} styles={{ content: { color: '#52c41a' } }} />
+            <Statistic
+              title="已完成"
+              value={stats.closed}
+              prefix={<CheckCircle className="w-4 h-4" />}
+              styles={{ content: { color: '#52c41a' } }}
+            />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
           <Card>
-            <Statistic title="超时" value={stats.overdue} prefix={<AlertTriangle className="w-4 h-4" />} styles={{ content: { color: '#ff4d4f' } }} />
+            <Statistic
+              title="超时"
+              value={stats.overdue}
+              prefix={<AlertTriangle className="w-4 h-4" />}
+              styles={{ content: { color: '#ff4d4f' } }}
+            />
           </Card>
         </Col>
       </Row>
@@ -117,8 +140,15 @@ const TicketsReportPage = () => {
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip />
-                  <Legend />
+                  <Tooltip
+                    contentStyle={{
+                      background: 'var(--color-bg-primary)',
+                      borderColor: 'var(--color-border)',
+                      borderRadius: 8,
+                    }}
+                    labelStyle={{ color: 'var(--color-text-primary)' }}
+                  />
+                  <Legend formatter={value => <span className="text-foreground">{value}</span>} />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
@@ -131,10 +161,24 @@ const TicketsReportPage = () => {
             {priorityData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={priorityData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
+                  <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
+                  <XAxis
+                    stroke="var(--color-text-secondary)"
+                    tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                    dataKey="name"
+                  />
+                  <YAxis
+                    stroke="var(--color-text-secondary)"
+                    tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: 'var(--color-bg-primary)',
+                      borderColor: 'var(--color-border)',
+                      borderRadius: 8,
+                    }}
+                    labelStyle={{ color: 'var(--color-text-primary)' }}
+                  />
                   <Bar dataKey="value" fill="#1890ff">
                     {priorityData.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />

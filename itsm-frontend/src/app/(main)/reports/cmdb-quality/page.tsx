@@ -105,13 +105,17 @@ const CMDBQualityReport = () => {
   }) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
-          <p className="font-semibold text-gray-800 mb-2">{`分类: ${label ?? ''}`}</p>
+        <div className="bg-surface p-3 rounded-[8px] shadow-lg border border-border">
+          <p className="font-semibold text-foreground mb-2">{`分类: ${label ?? ''}`}</p>
           {payload.map((entry, index) => (
             <p
               key={`${entry.name ?? 'item'}-${index}`}
-              className="text-sm"
-              style={{ color: entry.color }}
+              className="text-[13px]"
+              style={{
+                color: 'var(--color-text-primary)',
+                borderLeft: `3px solid ${entry.color}`,
+                paddingLeft: 8,
+              }}
             >
               {`${entry.name ?? ''}: ${entry.value ?? 0}%`}
             </p>
@@ -188,11 +192,19 @@ const CMDBQualityReport = () => {
         <Card title="各类别数据质量对比" className="mb-6">
           <ResponsiveContainer width="100%" height={350}>
             <BarChart data={qualityData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis domain={[0, 100]} />
+              <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
+              <XAxis
+                stroke="var(--color-text-secondary)"
+                tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                dataKey="name"
+              />
+              <YAxis
+                stroke="var(--color-text-secondary)"
+                tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                domain={[0, 100]}
+              />
               <Tooltip content={<CustomTooltip />} />
-              <Legend />
+              <Legend formatter={value => <span className="text-foreground">{value}</span>} />
               <Bar dataKey="completeness" name="完整度" fill={COLORS.completeness} />
               <Bar dataKey="accuracy" name="准确度" fill={COLORS.accuracy} />
               <Bar dataKey="consistency" name="一致度" fill={COLORS.consistency} />
@@ -204,11 +216,19 @@ const CMDBQualityReport = () => {
         <Card title="数据质量趋势">
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={qualityData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis domain={[0, 100]} />
+              <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
+              <XAxis
+                stroke="var(--color-text-secondary)"
+                tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                dataKey="name"
+              />
+              <YAxis
+                stroke="var(--color-text-secondary)"
+                tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                domain={[0, 100]}
+              />
               <Tooltip content={<CustomTooltip />} />
-              <Legend />
+              <Legend formatter={value => <span className="text-foreground">{value}</span>} />
               <Line
                 type="monotone"
                 dataKey="completeness"
@@ -238,17 +258,17 @@ const CMDBQualityReport = () => {
   };
 
   return (
-    <div className="p-6 bg-gray-50 min-h-full">
+    <div className="p-[24px] max-[1200px]:p-[16px] bg-page min-h-full">
       <header className="mb-6">
         <Title level={2}>CMDB数据质量报表</Title>
-        <p className="text-gray-500 mt-1">展示配置管理数据库的数据质量指标</p>
+        <p className="text-muted mt-1">展示配置管理数据库的数据质量指标</p>
       </header>
 
       {/* 控制栏 */}
       <Card className="mb-6">
         <Row justify="space-between" align="middle">
           <Col>
-            <Text className="text-gray-600">配置项数据质量监控</Text>
+            <Text className="text-muted">配置项数据质量监控</Text>
           </Col>
           <Col>
             <Button icon={<RotateCcw />} onClick={loadData} loading={loading}>

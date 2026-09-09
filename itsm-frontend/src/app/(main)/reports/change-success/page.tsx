@@ -108,11 +108,15 @@ const ChangeSuccessReport = () => {
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
-          <p className="font-semibold text-gray-800">{`${payload[0].name}`}</p>
+        <div className="bg-surface p-3 rounded-[8px] shadow-lg border border-border">
+          <p className="font-semibold text-foreground">{`${payload[0].name}`}</p>
           <p
-            className="text-sm"
-            style={{ color: payload[0].color }}
+            className="text-[13px]"
+            style={{
+              color: 'var(--color-text-primary)',
+              borderLeft: `3px solid ${payload[0].color}`,
+              paddingLeft: 8,
+            }}
           >{`数量: ${payload[0].value}`}</p>
         </div>
       );
@@ -129,17 +133,17 @@ const ChangeSuccessReport = () => {
   }
 
   return (
-    <div className="p-6 bg-gray-50 min-h-full">
+    <div className="p-[24px] max-[1200px]:p-[16px] bg-page min-h-full">
       <header className="mb-6">
         <Title level={2}>变更成功率报表</Title>
-        <p className="text-gray-500 mt-1">展示变更管理的状态分布和成功率统计</p>
+        <p className="text-muted mt-1">展示变更管理的状态分布和成功率统计</p>
       </header>
 
       {/* 控制栏 */}
       <Card className="mb-6">
         <Row justify="space-between" align="middle">
           <Col>
-            <Text className="text-gray-600">变更执行情况监控</Text>
+            <Text className="text-muted">变更执行情况监控</Text>
           </Col>
           <Col>
             <Button icon={<RotateCcw />} onClick={loadData}>
@@ -216,7 +220,7 @@ const ChangeSuccessReport = () => {
                       ))}
                     </Pie>
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend />
+                    <Legend formatter={value => <span className="text-foreground">{value}</span>} />
                   </PieChart>
                 </ResponsiveContainer>
               </Card>
@@ -226,11 +230,18 @@ const ChangeSuccessReport = () => {
               <Card title="变更类型分布">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={data.byType}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="type" />
-                    <YAxis />
+                    <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
+                    <XAxis
+                      stroke="var(--color-text-secondary)"
+                      tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                      dataKey="type"
+                    />
+                    <YAxis
+                      stroke="var(--color-text-secondary)"
+                      tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                    />
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend />
+                    <Legend formatter={value => <span className="text-foreground">{value}</span>} />
                     <Bar dataKey="count" name="变更数量" fill="#1890ff">
                       {data.byType.map((entry, index) => (
                         <Cell
@@ -254,7 +265,7 @@ const ChangeSuccessReport = () => {
                     <Tag color={status.color} className="m-0">
                       {status.name}
                     </Tag>
-                    <span className="text-lg font-semibold">{status.value}</span>
+                    <span className="text-[15px] font-semibold">{status.value}</span>
                   </div>
                 </Col>
               ))}

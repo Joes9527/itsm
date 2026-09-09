@@ -249,7 +249,7 @@ export default function MainLayout({
                 </div>
               </Content>
 
-              <footer className='text-center p-4 bg-transparent text-gray-400 text-xs'>
+              <footer className='text-center p-4 bg-transparent text-muted text-[12px]'>
                 AI-Native ITSM ©{new Date().getFullYear()} - AI驱动的IT服务管理系统
               </footer>
             </Layout>

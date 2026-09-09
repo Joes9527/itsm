@@ -98,11 +98,15 @@ const ServiceCatalogUsagePage = () => {
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white p-3 rounded-lg shadow-lg border border-gray-200">
-          <p className="font-semibold text-gray-800">{`${payload[0].name}`}</p>
+        <div className="bg-surface p-3 rounded-[8px] shadow-lg border border-border">
+          <p className="font-semibold text-foreground">{`${payload[0].name}`}</p>
           <p
-            className="text-sm"
-            style={{ color: payload[0].color }}
+            className="text-[13px]"
+            style={{
+              color: 'var(--color-text-primary)',
+              borderLeft: `3px solid ${payload[0].color}`,
+              paddingLeft: 8,
+            }}
           >{`数量: ${payload[0].value}`}</p>
         </div>
       );
@@ -111,10 +115,10 @@ const ServiceCatalogUsagePage = () => {
   };
 
   return (
-    <div className="p-6 bg-gray-50 min-h-full">
+    <div className="p-[24px] max-[1200px]:p-[16px] bg-page min-h-full">
       <header className="mb-6">
         <Title level={2}>服务目录使用报表</Title>
-        <p className="text-gray-500 mt-1">展示服务目录的使用情况和请求分布</p>
+        <p className="text-muted mt-1">展示服务目录的使用情况和请求分布</p>
       </header>
 
       {/* 控制栏 */}
@@ -122,11 +126,15 @@ const ServiceCatalogUsagePage = () => {
         <Row justify="space-between" align="middle">
           <Col>
             <Space>
-              <Select defaultValue="all" style={{ width: 120 }} options={[
-                { value: 'all', label: '全部服务' },
-                { value: 'published', label: '已发布' },
-                { value: 'draft', label: '草稿' },
-              ]} />
+              <Select
+                defaultValue="all"
+                style={{ width: 120 }}
+                options={[
+                  { value: 'all', label: '全部服务' },
+                  { value: 'published', label: '已发布' },
+                  { value: 'draft', label: '草稿' },
+                ]}
+              />
               <RangePicker />
             </Space>
           </Col>
@@ -134,7 +142,7 @@ const ServiceCatalogUsagePage = () => {
             <Space>
               <button
                 onClick={loadData}
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                className="h-[34px] px-[16px] text-[13px] bg-primary-500 text-white rounded-[6px] hover:bg-primary-600"
               >
                 刷新数据
               </button>
@@ -154,28 +162,30 @@ const ServiceCatalogUsagePage = () => {
             <Col xs={24} sm={8}>
               <Card>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-blue-600">{services.length || 6}</div>
-                  <div className="text-gray-500">服务总数</div>
+                  <div className="text-[26px] font-semibold text-foreground">
+                    {services.length || 6}
+                  </div>
+                  <div className="text-muted">服务总数</div>
                 </div>
               </Card>
             </Col>
             <Col xs={24} sm={8}>
               <Card>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-green-600">
+                  <div className="text-[26px] font-semibold text-green-600">
                     {requestsByService.reduce((sum, item) => sum + item.value, 0)}
                   </div>
-                  <div className="text-gray-500">请求总数</div>
+                  <div className="text-muted">请求总数</div>
                 </div>
               </Card>
             </Col>
             <Col xs={24} sm={8}>
               <Card>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-orange-600">
+                  <div className="text-[26px] font-semibold text-orange-600">
                     {requestsByStatus.find(s => s.name === '已完成')?.value || 0}
                   </div>
-                  <div className="text-gray-500">已完成请求</div>
+                  <div className="text-muted">已完成请求</div>
                 </div>
               </Card>
             </Col>
@@ -204,7 +214,7 @@ const ServiceCatalogUsagePage = () => {
                       ))}
                     </Pie>
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend />
+                    <Legend formatter={value => <span className="text-foreground">{value}</span>} />
                   </PieChart>
                 </ResponsiveContainer>
               </Card>
@@ -214,11 +224,18 @@ const ServiceCatalogUsagePage = () => {
               <Card title="按状态分布">
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={requestsByStatus}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
+                    <CartesianGrid stroke="var(--color-border)" strokeDasharray="3 3" />
+                    <XAxis
+                      stroke="var(--color-text-secondary)"
+                      tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                      dataKey="name"
+                    />
+                    <YAxis
+                      stroke="var(--color-text-secondary)"
+                      tick={{ fill: 'var(--color-text-secondary)', fontSize: 12 }}
+                    />
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend />
+                    <Legend formatter={value => <span className="text-foreground">{value}</span>} />
                     <Bar dataKey="value" name="请求数量" fill="#1890ff">
                       {requestsByStatus.map((entry, index) => (
                         <Cell

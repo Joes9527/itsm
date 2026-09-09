@@ -248,19 +248,19 @@ const CMDBTypesManagement = () => {
       render: (name: string, record: CIType) => (
         <div className='flex items-center'>
           <div
-            className='w-8 h-8 rounded flex items-center justify-center mr-3 text-white text-sm font-medium'
+            className='w-8 h-8 rounded flex items-center justify-center mr-3 text-white text-[13px] font-medium'
             style={{ backgroundColor: record.color || '#1890ff' }}
           >
             {record.icon ? (
-              <span className='text-xs'>{record.icon.charAt(0).toUpperCase()}</span>
+              <span className='text-[12px]'>{record.icon.charAt(0).toUpperCase()}</span>
             ) : (
               <Layers className='w-4 h-4' />
             )}
           </div>
           <div>
-            <div className='font-medium text-gray-900'>{name}</div>
+            <div className='font-medium text-foreground'>{name}</div>
             {record.description && (
-              <div className='text-sm text-gray-500 mt-1'>{record.description}</div>
+              <div className='text-[13px] text-muted mt-1'>{record.description}</div>
             )}
           </div>
         </div>
@@ -281,7 +281,7 @@ const CMDBTypesManagement = () => {
       render: (color: string) => (
         <div className='flex items-center'>
           <div className='w-4 h-4 rounded mr-2' style={{ backgroundColor: color || '#1890ff' }} />
-          <span className='text-sm'>{color || '-'}</span>
+          <span className='text-[13px]'>{color || '-'}</span>
         </div>
       ),
     },
@@ -317,7 +317,7 @@ const CMDBTypesManagement = () => {
       key: 'createdAt',
       width: 150,
       render: (date: string) => (
-        <span className='text-sm text-gray-600'>
+        <span className='text-[13px] text-muted'>
           {date ? new Date(date).toLocaleDateString('zh-CN') : '-'}
         </span>
       ),
@@ -418,7 +418,10 @@ const CMDBTypesManagement = () => {
               allowClear
               style={{ width: '100%' }}
               size='middle'
-              options={[{ value: 'active', label: '激活' }, { value: 'inactive', label: '停用' }]}
+              options={[
+                { value: 'active', label: '激活' },
+                { value: 'inactive', label: '停用' },
+              ]}
             />
           </Col>
           <Col xs={24} sm={24} md={12}>
@@ -700,7 +703,10 @@ const CMDBTypesManagement = () => {
             </Col>
             <Col span={12}>
               <Form.Item name='color' label='颜色'>
-                <Select placeholder='选择颜色' options={colorOptions.map(opt => ({ value: opt.value, label: opt.label }))} />
+                <Select
+                  placeholder='选择颜色'
+                  options={colorOptions.map(opt => ({ value: opt.value, label: opt.label }))}
+                />
               </Form.Item>
             </Col>
           </Row>
