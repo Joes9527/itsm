@@ -137,6 +137,8 @@ Full statement: [AGENTS.md § Domain Ownership](AGENTS.md), plus the Unified Wor
 
 ## Unified Work Item Domain Contract (Summary)
 
+> Design under review (draft): [WorkItem convergence](docs/superpowers/specs/2026-09-09-workitem-convergence-design.md). Supplements the existing contract; does not authorize parallel implementations.
+
 Full contract: [AGENTS.md § Unified Work Item Domain Contract](AGENTS.md). Core invariants to hold for any Ticket/Incident/Problem/Change/Service Request work:
 
 - **WorkItem** (currently the `tickets` table) is the shared identity/cross-cutting record for Ticket, Incident, Problem, Change Request, Requested Item, and Catalog Task. Ticket is WorkItem's product-facing name, not a separate lifecycle.

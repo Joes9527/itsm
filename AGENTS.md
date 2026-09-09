@@ -103,6 +103,8 @@ For new work, align with the roadmap rather than creating parallel mechanisms. I
 
 ## Unified Work Item Domain Contract
 
+> Design under review (draft): [WorkItem convergence](docs/superpowers/specs/2026-09-09-workitem-convergence-design.md). Supplements the existing contract; does not authorize parallel implementations.
+
 The unified Work Item model is the shared business language for Ticket, Service Catalog, Service Request, Incident, Problem, Known Error, Change, and fulfillment work. The detailed design is maintained in `docs/superpowers/specs/2026-08-26-unified-work-item-model-design.md`; this section is the implementation contract for all coding agents.
 
 ### Business Vocabulary
