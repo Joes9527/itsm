@@ -15,6 +15,18 @@ type Change struct {
 // Fields of the Change.
 func (Change) Fields() []ent.Field {
 	return []ent.Field{
+		field.String("outcome").Optional(),
+		field.Text("outcome_evidence").Optional(),
+		field.Text("assessment_evidence").Optional(),
+		field.String("assessment_digest").Optional(),
+		field.Int("assessed_by").Optional(),
+		field.Time("assessed_at").Optional(),
+		field.Int("reviewed_by").Optional(),
+		field.Time("reviewed_at").Optional(),
+		field.Text("review_evidence").Optional(),
+		field.String("review_digest").Optional(),
+		field.Int("standard_template_id").StorageKey("standard_change_changes").Optional().Immutable(),
+		field.JSON("standard_policy", map[string]any{}).Optional().Immutable(),
 		field.Text("justification").
 			Comment("变更理由").
 			Optional(),
@@ -56,6 +68,7 @@ func (Change) Fields() []ent.Field {
 // Edges of the Change.
 func (Change) Edges() []ent.Edge {
 	return []ent.Edge{
+		edge.From("standard_template", StandardChange.Type).Ref("changes").Field("standard_template_id").Unique().Immutable(),
 		edge.To("work_item", Ticket.Type).
 			Field("work_item_id").
 			Unique().

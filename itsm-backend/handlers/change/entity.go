@@ -6,19 +6,26 @@ import (
 
 // Change domain entity
 type Change struct {
-	ID            int
-	Title         string
-	Description   string
-	Justification string
-	Type          string
-	Status        string
-	Priority      string
-	ImpactScope   string
-	RiskLevel     string
-	AssigneeID    *int
-	Assignee      *User
-	CreatedBy     int
-	CreatedByUser *User
+	ID                 int
+	Title              string
+	Description        string
+	Justification      string
+	Type               string
+	Status             string
+	Version            int
+	Outcome            string
+	OutcomeEvidence    string
+	ReviewEvidence     string
+	ReviewedBy         int
+	ReviewedAt         time.Time
+	StandardTemplateID int
+	Priority           string
+	ImpactScope        string
+	RiskLevel          string
+	AssigneeID         *int
+	Assignee           *User
+	CreatedBy          int
+	CreatedByUser      *User
 	// WorkItemID 关联的 WorkItem（tickets.id）。统一 WorkItem 领域模型宪章 §3.2 要求
 	// 每条 Change 都在同一事务内建好对应的 tickets 行并回填这个字段；nil 表示开发数据
 	// 违反 WorkItem 创建不变量。与 dto.IncidentResponse.WorkItemID /

@@ -457,6 +457,7 @@ var RegisteredMigrations = []Migration{
 	{Version: "032_workitem_sla_cycle", Description: "Freeze applied SLA cycles and immutable action audit receipts"},
 	{Version: "033_incident_status_events", Description: "Authorize Incident status events from immutable command receipts"},
 	{Version: "034_problem_investigation_completion", Description: "Problem investigation schema and verified resolution evidence"},
+	{Version: "035_change_professional_evidence", Description: "Change outcome, review and standard policy evidence"},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -1111,6 +1112,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
 		return incidentStatusEventsSQL
 	case "034_problem_investigation_completion":
 		return migrations.ProblemInvestigationCompletionSQL
+	case "035_change_professional_evidence":
+		return migrations.ChangeProfessionalEvidenceSQL
 	case "032_workitem_sla_cycle":
 		return migrations.WorkItemSLACycleSQL
 	case "031_kaf_action_request_digest":

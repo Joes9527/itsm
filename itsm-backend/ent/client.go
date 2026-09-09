@@ -3720,6 +3720,22 @@ func (c *ChangeClient) GetX(ctx context.Context, id int) *Change {
 	return obj
 }
 
+// QueryStandardTemplate queries the standard_template edge of a Change.
+func (c *ChangeClient) QueryStandardTemplate(_m *Change) *StandardChangeQuery {
+	query := (&StandardChangeClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(change.Table, change.FieldID, id),
+			sqlgraph.To(standardchange.Table, standardchange.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, change.StandardTemplateTable, change.StandardTemplateColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryWorkItem queries the work_item edge of a Change.
 func (c *ChangeClient) QueryWorkItem(_m *Change) *TicketQuery {
 	query := (&TicketClient{config: c.config}).Query()

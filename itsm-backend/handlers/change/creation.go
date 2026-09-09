@@ -17,11 +17,13 @@ import (
 type changeCreation struct {
 	Input      creation.ChangeInput
 	Start, End *time.Time
+	Policy     map[string]any
 }
 
 func (*Service) RecordClass() string { return creation.RecordClassChangeRequest }
 func (s *Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedIntake) (*creation.CreationPlan, error) {
 	input := creation.ChangeInput{}
+	var policy map[string]any
 	if in.Command.Change != nil {
 		input = *in.Command.Change
 	}
@@ -33,6 +35,7 @@ func (s *Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedI
 		if err != nil {
 			return nil, creation.NewInfrastructureUnavailable("could not resolve standard change template", err)
 		}
+		policy = map[string]any{"templateId": template.ID, "tenantId": template.TenantID, "updatedAt": template.UpdatedAt.UTC().Format(time.RFC3339Nano), "active": template.IsActive, "approvalRequired": template.ApprovalRequired, "riskLevel": template.RiskLevel, "impactScope": template.ImpactScope, "implementationPlan": template.ImplementationPlan, "rollbackPlan": template.RollbackPlan, "prerequisites": template.Prerequisites, "affectedCis": append([]string(nil), template.AffectedCis...)}
 		if in.Command.Title == "" {
 			in.Command.Title = template.Title
 		}
@@ -162,7 +165,7 @@ func (s *Service) Prepare(ctx context.Context, tx *ent.Tx, in creation.ResolvedI
 		plan.WorkflowVariables[key] = value
 	}
 	plan.RoutingValues = map[string]any{"riskLevel": input.RiskLevel, "impactScope": input.ImpactScope}
-	plan.ProfessionalInput = changeCreation{Input: input, Start: start, End: end}
+	plan.ProfessionalInput = changeCreation{Input: input, Start: start, End: end, Policy: policy}
 	return plan, nil
 }
 func (*Service) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticket, plan *creation.CreationPlan) (*creation.ProfessionalReference, error) {
@@ -171,10 +174,14 @@ func (*Service) CreateExtension(ctx context.Context, tx *ent.Tx, item *ent.Ticke
 		return nil, creation.NewInternalFailure("change creation plan is invalid", nil)
 	}
 	input := prepared.Input
-	record, err := tx.Change.Create().SetWorkItemID(item.ID).SetJustification(input.Justification).SetType(input.Type).
+	builder := tx.Change.Create().SetWorkItemID(item.ID).SetJustification(input.Justification).SetType(input.Type).
 		SetImpactScope(input.ImpactScope).SetRiskLevel(input.RiskLevel).SetImplementationPlan(input.ImplementationPlan).
 		SetRollbackPlan(input.RollbackPlan).SetNillablePlannedStartDate(prepared.Start).SetNillablePlannedEndDate(prepared.End).
-		SetAffectedCis(input.AffectedCIs).Save(ctx)
+		SetAffectedCis(input.AffectedCIs)
+	if input.StandardTemplateID != nil {
+		builder.SetStandardTemplateID(*input.StandardTemplateID).SetStandardPolicy(prepared.Policy)
+	}
+	record, err := builder.Save(ctx)
 	if err != nil {
 		return nil, creation.NewInfrastructureUnavailable("could not create change extension", err)
 	}

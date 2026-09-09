@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"itsm-backend/common"
+	"itsm-backend/database"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
@@ -31,7 +32,10 @@ type Service struct {
 	pirService            *service.ChangePIRService
 	processTriggerService service.ProcessTriggerServiceInterface
 	processEngine         service.ProcessEngine
+	directory             database.DirectorySnapshot
 }
+
+func (s *Service) SetDirectorySnapshot(directory database.DirectorySnapshot) { s.directory = directory }
 
 func NewService(repo Repository, entClient *ent.Client, logger *zap.SugaredLogger) *Service {
 	svc := &Service{

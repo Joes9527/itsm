@@ -13,6 +13,7 @@ import (
 // Callback effects are durable in the same transaction and attempted only after
 // successful commit, using the original engine's nontransactional client.
 // The returned instance is transaction-bound until that commit succeeds.
+// The commit hook unwraps it automatically; callers must never call Unwrap.
 func (e *CustomProcessEngine) StartProcessTx(ctx context.Context, tx *ent.Tx, definitionKey, businessKey, businessType string, businessID int, variables map[string]interface{}) (*ent.ProcessInstance, error) {
 	if tx == nil || e.transactionBound {
 		return nil, errors.New("StartProcessTx requires a caller transaction and the root process engine")

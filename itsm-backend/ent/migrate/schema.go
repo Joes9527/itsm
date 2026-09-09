@@ -741,6 +741,17 @@ var (
 	// ChangesColumns holds the columns for the "changes" table.
 	ChangesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "outcome", Type: field.TypeString, Nullable: true},
+		{Name: "outcome_evidence", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "assessment_evidence", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "assessment_digest", Type: field.TypeString, Nullable: true},
+		{Name: "assessed_by", Type: field.TypeInt, Nullable: true},
+		{Name: "assessed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "reviewed_by", Type: field.TypeInt, Nullable: true},
+		{Name: "reviewed_at", Type: field.TypeTime, Nullable: true},
+		{Name: "review_evidence", Type: field.TypeString, Nullable: true, Size: 2147483647},
+		{Name: "review_digest", Type: field.TypeString, Nullable: true},
+		{Name: "standard_policy", Type: field.TypeJSON, Nullable: true},
 		{Name: "justification", Type: field.TypeString, Nullable: true, Size: 2147483647},
 		{Name: "type", Type: field.TypeString, Default: "normal"},
 		{Name: "impact_scope", Type: field.TypeString, Default: "medium"},
@@ -763,13 +774,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "changes_tickets_work_item",
-				Columns:    []*schema.Column{ChangesColumns[12]},
+				Columns:    []*schema.Column{ChangesColumns[23]},
 				RefColumns: []*schema.Column{TicketsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "changes_standard_changes_changes",
-				Columns:    []*schema.Column{ChangesColumns[13]},
+				Columns:    []*schema.Column{ChangesColumns[24]},
 				RefColumns: []*schema.Column{StandardChangesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -778,7 +789,7 @@ var (
 			{
 				Name:    "change_work_item_id",
 				Unique:  true,
-				Columns: []*schema.Column{ChangesColumns[12]},
+				Columns: []*schema.Column{ChangesColumns[23]},
 			},
 		},
 	}

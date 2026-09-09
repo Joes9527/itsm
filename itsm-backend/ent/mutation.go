@@ -20522,33 +20522,48 @@ func (m *CatalogAccessPolicyMutation) ResetEdge(name string) error {
 // ChangeMutation represents an operation that mutates the Change nodes in the graph.
 type ChangeMutation struct {
 	config
-	op                  Op
-	typ                 string
-	id                  *int
-	justification       *string
-	_type               *string
-	impact_scope        *string
-	risk_level          *string
-	planned_start_date  *time.Time
-	planned_end_date    *time.Time
-	actual_start_date   *time.Time
-	actual_end_date     *time.Time
-	implementation_plan *string
-	rollback_plan       *string
-	affected_cis        *[]string
-	appendaffected_cis  []string
-	clearedFields       map[string]struct{}
-	work_item           *int
-	clearedwork_item    bool
-	problems            map[int]struct{}
-	removedproblems     map[int]struct{}
-	clearedproblems     bool
-	pir                 map[int]struct{}
-	removedpir          map[int]struct{}
-	clearedpir          bool
-	done                bool
-	oldValue            func(context.Context) (*Change, error)
-	predicates          []predicate.Change
+	op                       Op
+	typ                      string
+	id                       *int
+	outcome                  *string
+	outcome_evidence         *string
+	assessment_evidence      *string
+	assessment_digest        *string
+	assessed_by              *int
+	addassessed_by           *int
+	assessed_at              *time.Time
+	reviewed_by              *int
+	addreviewed_by           *int
+	reviewed_at              *time.Time
+	review_evidence          *string
+	review_digest            *string
+	standard_policy          *map[string]interface{}
+	justification            *string
+	_type                    *string
+	impact_scope             *string
+	risk_level               *string
+	planned_start_date       *time.Time
+	planned_end_date         *time.Time
+	actual_start_date        *time.Time
+	actual_end_date          *time.Time
+	implementation_plan      *string
+	rollback_plan            *string
+	affected_cis             *[]string
+	appendaffected_cis       []string
+	clearedFields            map[string]struct{}
+	standard_template        *int
+	clearedstandard_template bool
+	work_item                *int
+	clearedwork_item         bool
+	problems                 map[int]struct{}
+	removedproblems          map[int]struct{}
+	clearedproblems          bool
+	pir                      map[int]struct{}
+	removedpir               map[int]struct{}
+	clearedpir               bool
+	done                     bool
+	oldValue                 func(context.Context) (*Change, error)
+	predicates               []predicate.Change
 }
 
 var _ ent.Mutation = (*ChangeMutation)(nil)
@@ -20647,6 +20662,636 @@ func (m *ChangeMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetOutcome sets the "outcome" field.
+func (m *ChangeMutation) SetOutcome(s string) {
+	m.outcome = &s
+}
+
+// Outcome returns the value of the "outcome" field in the mutation.
+func (m *ChangeMutation) Outcome() (r string, exists bool) {
+	v := m.outcome
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOutcome returns the old "outcome" field's value of the Change entity.
+// If the Change object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChangeMutation) OldOutcome(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOutcome is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOutcome requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOutcome: %w", err)
+	}
+	return oldValue.Outcome, nil
+}
+
+// ClearOutcome clears the value of the "outcome" field.
+func (m *ChangeMutation) ClearOutcome() {
+	m.outcome = nil
+	m.clearedFields[change.FieldOutcome] = struct{}{}
+}
+
+// OutcomeCleared returns if the "outcome" field was cleared in this mutation.
+func (m *ChangeMutation) OutcomeCleared() bool {
+	_, ok := m.clearedFields[change.FieldOutcome]
+	return ok
+}
+
+// ResetOutcome resets all changes to the "outcome" field.
+func (m *ChangeMutation) ResetOutcome() {
+	m.outcome = nil
+	delete(m.clearedFields, change.FieldOutcome)
+}
+
+// SetOutcomeEvidence sets the "outcome_evidence" field.
+func (m *ChangeMutation) SetOutcomeEvidence(s string) {
+	m.outcome_evidence = &s
+}
+
+// OutcomeEvidence returns the value of the "outcome_evidence" field in the mutation.
+func (m *ChangeMutation) OutcomeEvidence() (r string, exists bool) {
+	v := m.outcome_evidence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOutcomeEvidence returns the old "outcome_evidence" field's value of the Change entity.
+// If the Change object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChangeMutation) OldOutcomeEvidence(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOutcomeEvidence is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOutcomeEvidence requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOutcomeEvidence: %w", err)
+	}
+	return oldValue.OutcomeEvidence, nil
+}
+
+// ClearOutcomeEvidence clears the value of the "outcome_evidence" field.
+func (m *ChangeMutation) ClearOutcomeEvidence() {
+	m.outcome_evidence = nil
+	m.clearedFields[change.FieldOutcomeEvidence] = struct{}{}
+}
+
+// OutcomeEvidenceCleared returns if the "outcome_evidence" field was cleared in this mutation.
+func (m *ChangeMutation) OutcomeEvidenceCleared() bool {
+	_, ok := m.clearedFields[change.FieldOutcomeEvidence]
+	return ok
+}
+
+// ResetOutcomeEvidence resets all changes to the "outcome_evidence" field.
+func (m *ChangeMutation) ResetOutcomeEvidence() {
+	m.outcome_evidence = nil
+	delete(m.clearedFields, change.FieldOutcomeEvidence)
+}
+
+// SetAssessmentEvidence sets the "assessment_evidence" field.
+func (m *ChangeMutation) SetAssessmentEvidence(s string) {
+	m.assessment_evidence = &s
+}
+
+// AssessmentEvidence returns the value of the "assessment_evidence" field in the mutation.
+func (m *ChangeMutation) AssessmentEvidence() (r string, exists bool) {
+	v := m.assessment_evidence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAssessmentEvidence returns the old "assessment_evidence" field's value of the Change entity.
+// If the Change object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChangeMutation) OldAssessmentEvidence(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAssessmentEvidence is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAssessmentEvidence requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAssessmentEvidence: %w", err)
+	}
+	return oldValue.AssessmentEvidence, nil
+}
+
+// ClearAssessmentEvidence clears the value of the "assessment_evidence" field.
+func (m *ChangeMutation) ClearAssessmentEvidence() {
+	m.assessment_evidence = nil
+	m.clearedFields[change.FieldAssessmentEvidence] = struct{}{}
+}
+
+// AssessmentEvidenceCleared returns if the "assessment_evidence" field was cleared in this mutation.
+func (m *ChangeMutation) AssessmentEvidenceCleared() bool {
+	_, ok := m.clearedFields[change.FieldAssessmentEvidence]
+	return ok
+}
+
+// ResetAssessmentEvidence resets all changes to the "assessment_evidence" field.
+func (m *ChangeMutation) ResetAssessmentEvidence() {
+	m.assessment_evidence = nil
+	delete(m.clearedFields, change.FieldAssessmentEvidence)
+}
+
+// SetAssessmentDigest sets the "assessment_digest" field.
+func (m *ChangeMutation) SetAssessmentDigest(s string) {
+	m.assessment_digest = &s
+}
+
+// AssessmentDigest returns the value of the "assessment_digest" field in the mutation.
+func (m *ChangeMutation) AssessmentDigest() (r string, exists bool) {
+	v := m.assessment_digest
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAssessmentDigest returns the old "assessment_digest" field's value of the Change entity.
+// If the Change object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChangeMutation) OldAssessmentDigest(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAssessmentDigest is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAssessmentDigest requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAssessmentDigest: %w", err)
+	}
+	return oldValue.AssessmentDigest, nil
+}
+
+// ClearAssessmentDigest clears the value of the "assessment_digest" field.
+func (m *ChangeMutation) ClearAssessmentDigest() {
+	m.assessment_digest = nil
+	m.clearedFields[change.FieldAssessmentDigest] = struct{}{}
+}
+
+// AssessmentDigestCleared returns if the "assessment_digest" field was cleared in this mutation.
+func (m *ChangeMutation) AssessmentDigestCleared() bool {
+	_, ok := m.clearedFields[change.FieldAssessmentDigest]
+	return ok
+}
+
+// ResetAssessmentDigest resets all changes to the "assessment_digest" field.
+func (m *ChangeMutation) ResetAssessmentDigest() {
+	m.assessment_digest = nil
+	delete(m.clearedFields, change.FieldAssessmentDigest)
+}
+
+// SetAssessedBy sets the "assessed_by" field.
+func (m *ChangeMutation) SetAssessedBy(i int) {
+	m.assessed_by = &i
+	m.addassessed_by = nil
+}
+
+// AssessedBy returns the value of the "assessed_by" field in the mutation.
+func (m *ChangeMutation) AssessedBy() (r int, exists bool) {
+	v := m.assessed_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAssessedBy returns the old "assessed_by" field's value of the Change entity.
+// If the Change object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChangeMutation) OldAssessedBy(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAssessedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAssessedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAssessedBy: %w", err)
+	}
+	return oldValue.AssessedBy, nil
+}
+
+// AddAssessedBy adds i to the "assessed_by" field.
+func (m *ChangeMutation) AddAssessedBy(i int) {
+	if m.addassessed_by != nil {
+		*m.addassessed_by += i
+	} else {
+		m.addassessed_by = &i
+	}
+}
+
+// AddedAssessedBy returns the value that was added to the "assessed_by" field in this mutation.
+func (m *ChangeMutation) AddedAssessedBy() (r int, exists bool) {
+	v := m.addassessed_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearAssessedBy clears the value of the "assessed_by" field.
+func (m *ChangeMutation) ClearAssessedBy() {
+	m.assessed_by = nil
+	m.addassessed_by = nil
+	m.clearedFields[change.FieldAssessedBy] = struct{}{}
+}
+
+// AssessedByCleared returns if the "assessed_by" field was cleared in this mutation.
+func (m *ChangeMutation) AssessedByCleared() bool {
+	_, ok := m.clearedFields[change.FieldAssessedBy]
+	return ok
+}
+
+// ResetAssessedBy resets all changes to the "assessed_by" field.
+func (m *ChangeMutation) ResetAssessedBy() {
+	m.assessed_by = nil
+	m.addassessed_by = nil
+	delete(m.clearedFields, change.FieldAssessedBy)
+}
+
+// SetAssessedAt sets the "assessed_at" field.
+func (m *ChangeMutation) SetAssessedAt(t time.Time) {
+	m.assessed_at = &t
+}
+
+// AssessedAt returns the value of the "assessed_at" field in the mutation.
+func (m *ChangeMutation) AssessedAt() (r time.Time, exists bool) {
+	v := m.assessed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldAssessedAt returns the old "assessed_at" field's value of the Change entity.
+// If the Change object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChangeMutation) OldAssessedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldAssessedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldAssessedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldAssessedAt: %w", err)
+	}
+	return oldValue.AssessedAt, nil
+}
+
+// ClearAssessedAt clears the value of the "assessed_at" field.
+func (m *ChangeMutation) ClearAssessedAt() {
+	m.assessed_at = nil
+	m.clearedFields[change.FieldAssessedAt] = struct{}{}
+}
+
+// AssessedAtCleared returns if the "assessed_at" field was cleared in this mutation.
+func (m *ChangeMutation) AssessedAtCleared() bool {
+	_, ok := m.clearedFields[change.FieldAssessedAt]
+	return ok
+}
+
+// ResetAssessedAt resets all changes to the "assessed_at" field.
+func (m *ChangeMutation) ResetAssessedAt() {
+	m.assessed_at = nil
+	delete(m.clearedFields, change.FieldAssessedAt)
+}
+
+// SetReviewedBy sets the "reviewed_by" field.
+func (m *ChangeMutation) SetReviewedBy(i int) {
+	m.reviewed_by = &i
+	m.addreviewed_by = nil
+}
+
+// ReviewedBy returns the value of the "reviewed_by" field in the mutation.
+func (m *ChangeMutation) ReviewedBy() (r int, exists bool) {
+	v := m.reviewed_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReviewedBy returns the old "reviewed_by" field's value of the Change entity.
+// If the Change object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChangeMutation) OldReviewedBy(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReviewedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReviewedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReviewedBy: %w", err)
+	}
+	return oldValue.ReviewedBy, nil
+}
+
+// AddReviewedBy adds i to the "reviewed_by" field.
+func (m *ChangeMutation) AddReviewedBy(i int) {
+	if m.addreviewed_by != nil {
+		*m.addreviewed_by += i
+	} else {
+		m.addreviewed_by = &i
+	}
+}
+
+// AddedReviewedBy returns the value that was added to the "reviewed_by" field in this mutation.
+func (m *ChangeMutation) AddedReviewedBy() (r int, exists bool) {
+	v := m.addreviewed_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearReviewedBy clears the value of the "reviewed_by" field.
+func (m *ChangeMutation) ClearReviewedBy() {
+	m.reviewed_by = nil
+	m.addreviewed_by = nil
+	m.clearedFields[change.FieldReviewedBy] = struct{}{}
+}
+
+// ReviewedByCleared returns if the "reviewed_by" field was cleared in this mutation.
+func (m *ChangeMutation) ReviewedByCleared() bool {
+	_, ok := m.clearedFields[change.FieldReviewedBy]
+	return ok
+}
+
+// ResetReviewedBy resets all changes to the "reviewed_by" field.
+func (m *ChangeMutation) ResetReviewedBy() {
+	m.reviewed_by = nil
+	m.addreviewed_by = nil
+	delete(m.clearedFields, change.FieldReviewedBy)
+}
+
+// SetReviewedAt sets the "reviewed_at" field.
+func (m *ChangeMutation) SetReviewedAt(t time.Time) {
+	m.reviewed_at = &t
+}
+
+// ReviewedAt returns the value of the "reviewed_at" field in the mutation.
+func (m *ChangeMutation) ReviewedAt() (r time.Time, exists bool) {
+	v := m.reviewed_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReviewedAt returns the old "reviewed_at" field's value of the Change entity.
+// If the Change object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChangeMutation) OldReviewedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReviewedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReviewedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReviewedAt: %w", err)
+	}
+	return oldValue.ReviewedAt, nil
+}
+
+// ClearReviewedAt clears the value of the "reviewed_at" field.
+func (m *ChangeMutation) ClearReviewedAt() {
+	m.reviewed_at = nil
+	m.clearedFields[change.FieldReviewedAt] = struct{}{}
+}
+
+// ReviewedAtCleared returns if the "reviewed_at" field was cleared in this mutation.
+func (m *ChangeMutation) ReviewedAtCleared() bool {
+	_, ok := m.clearedFields[change.FieldReviewedAt]
+	return ok
+}
+
+// ResetReviewedAt resets all changes to the "reviewed_at" field.
+func (m *ChangeMutation) ResetReviewedAt() {
+	m.reviewed_at = nil
+	delete(m.clearedFields, change.FieldReviewedAt)
+}
+
+// SetReviewEvidence sets the "review_evidence" field.
+func (m *ChangeMutation) SetReviewEvidence(s string) {
+	m.review_evidence = &s
+}
+
+// ReviewEvidence returns the value of the "review_evidence" field in the mutation.
+func (m *ChangeMutation) ReviewEvidence() (r string, exists bool) {
+	v := m.review_evidence
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReviewEvidence returns the old "review_evidence" field's value of the Change entity.
+// If the Change object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChangeMutation) OldReviewEvidence(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReviewEvidence is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReviewEvidence requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReviewEvidence: %w", err)
+	}
+	return oldValue.ReviewEvidence, nil
+}
+
+// ClearReviewEvidence clears the value of the "review_evidence" field.
+func (m *ChangeMutation) ClearReviewEvidence() {
+	m.review_evidence = nil
+	m.clearedFields[change.FieldReviewEvidence] = struct{}{}
+}
+
+// ReviewEvidenceCleared returns if the "review_evidence" field was cleared in this mutation.
+func (m *ChangeMutation) ReviewEvidenceCleared() bool {
+	_, ok := m.clearedFields[change.FieldReviewEvidence]
+	return ok
+}
+
+// ResetReviewEvidence resets all changes to the "review_evidence" field.
+func (m *ChangeMutation) ResetReviewEvidence() {
+	m.review_evidence = nil
+	delete(m.clearedFields, change.FieldReviewEvidence)
+}
+
+// SetReviewDigest sets the "review_digest" field.
+func (m *ChangeMutation) SetReviewDigest(s string) {
+	m.review_digest = &s
+}
+
+// ReviewDigest returns the value of the "review_digest" field in the mutation.
+func (m *ChangeMutation) ReviewDigest() (r string, exists bool) {
+	v := m.review_digest
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReviewDigest returns the old "review_digest" field's value of the Change entity.
+// If the Change object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChangeMutation) OldReviewDigest(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReviewDigest is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReviewDigest requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReviewDigest: %w", err)
+	}
+	return oldValue.ReviewDigest, nil
+}
+
+// ClearReviewDigest clears the value of the "review_digest" field.
+func (m *ChangeMutation) ClearReviewDigest() {
+	m.review_digest = nil
+	m.clearedFields[change.FieldReviewDigest] = struct{}{}
+}
+
+// ReviewDigestCleared returns if the "review_digest" field was cleared in this mutation.
+func (m *ChangeMutation) ReviewDigestCleared() bool {
+	_, ok := m.clearedFields[change.FieldReviewDigest]
+	return ok
+}
+
+// ResetReviewDigest resets all changes to the "review_digest" field.
+func (m *ChangeMutation) ResetReviewDigest() {
+	m.review_digest = nil
+	delete(m.clearedFields, change.FieldReviewDigest)
+}
+
+// SetStandardTemplateID sets the "standard_template_id" field.
+func (m *ChangeMutation) SetStandardTemplateID(i int) {
+	m.standard_template = &i
+}
+
+// StandardTemplateID returns the value of the "standard_template_id" field in the mutation.
+func (m *ChangeMutation) StandardTemplateID() (r int, exists bool) {
+	v := m.standard_template
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStandardTemplateID returns the old "standard_template_id" field's value of the Change entity.
+// If the Change object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChangeMutation) OldStandardTemplateID(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStandardTemplateID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStandardTemplateID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStandardTemplateID: %w", err)
+	}
+	return oldValue.StandardTemplateID, nil
+}
+
+// ClearStandardTemplateID clears the value of the "standard_template_id" field.
+func (m *ChangeMutation) ClearStandardTemplateID() {
+	m.standard_template = nil
+	m.clearedFields[change.FieldStandardTemplateID] = struct{}{}
+}
+
+// StandardTemplateIDCleared returns if the "standard_template_id" field was cleared in this mutation.
+func (m *ChangeMutation) StandardTemplateIDCleared() bool {
+	_, ok := m.clearedFields[change.FieldStandardTemplateID]
+	return ok
+}
+
+// ResetStandardTemplateID resets all changes to the "standard_template_id" field.
+func (m *ChangeMutation) ResetStandardTemplateID() {
+	m.standard_template = nil
+	delete(m.clearedFields, change.FieldStandardTemplateID)
+}
+
+// SetStandardPolicy sets the "standard_policy" field.
+func (m *ChangeMutation) SetStandardPolicy(value map[string]interface{}) {
+	m.standard_policy = &value
+}
+
+// StandardPolicy returns the value of the "standard_policy" field in the mutation.
+func (m *ChangeMutation) StandardPolicy() (r map[string]interface{}, exists bool) {
+	v := m.standard_policy
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStandardPolicy returns the old "standard_policy" field's value of the Change entity.
+// If the Change object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ChangeMutation) OldStandardPolicy(ctx context.Context) (v map[string]interface{}, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStandardPolicy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStandardPolicy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStandardPolicy: %w", err)
+	}
+	return oldValue.StandardPolicy, nil
+}
+
+// ClearStandardPolicy clears the value of the "standard_policy" field.
+func (m *ChangeMutation) ClearStandardPolicy() {
+	m.standard_policy = nil
+	m.clearedFields[change.FieldStandardPolicy] = struct{}{}
+}
+
+// StandardPolicyCleared returns if the "standard_policy" field was cleared in this mutation.
+func (m *ChangeMutation) StandardPolicyCleared() bool {
+	_, ok := m.clearedFields[change.FieldStandardPolicy]
+	return ok
+}
+
+// ResetStandardPolicy resets all changes to the "standard_policy" field.
+func (m *ChangeMutation) ResetStandardPolicy() {
+	m.standard_policy = nil
+	delete(m.clearedFields, change.FieldStandardPolicy)
 }
 
 // SetJustification sets the "justification" field.
@@ -21201,6 +21846,33 @@ func (m *ChangeMutation) ResetAffectedCis() {
 	delete(m.clearedFields, change.FieldAffectedCis)
 }
 
+// ClearStandardTemplate clears the "standard_template" edge to the StandardChange entity.
+func (m *ChangeMutation) ClearStandardTemplate() {
+	m.clearedstandard_template = true
+	m.clearedFields[change.FieldStandardTemplateID] = struct{}{}
+}
+
+// StandardTemplateCleared reports if the "standard_template" edge to the StandardChange entity was cleared.
+func (m *ChangeMutation) StandardTemplateCleared() bool {
+	return m.StandardTemplateIDCleared() || m.clearedstandard_template
+}
+
+// StandardTemplateIDs returns the "standard_template" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// StandardTemplateID instead. It exists only for internal usage by the builders.
+func (m *ChangeMutation) StandardTemplateIDs() (ids []int) {
+	if id := m.standard_template; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetStandardTemplate resets all changes to the "standard_template" edge.
+func (m *ChangeMutation) ResetStandardTemplate() {
+	m.standard_template = nil
+	m.clearedstandard_template = false
+}
+
 // ClearWorkItem clears the "work_item" edge to the Ticket entity.
 func (m *ChangeMutation) ClearWorkItem() {
 	m.clearedwork_item = true
@@ -21370,7 +22042,43 @@ func (m *ChangeMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ChangeMutation) Fields() []string {
-	fields := make([]string, 0, 12)
+	fields := make([]string, 0, 24)
+	if m.outcome != nil {
+		fields = append(fields, change.FieldOutcome)
+	}
+	if m.outcome_evidence != nil {
+		fields = append(fields, change.FieldOutcomeEvidence)
+	}
+	if m.assessment_evidence != nil {
+		fields = append(fields, change.FieldAssessmentEvidence)
+	}
+	if m.assessment_digest != nil {
+		fields = append(fields, change.FieldAssessmentDigest)
+	}
+	if m.assessed_by != nil {
+		fields = append(fields, change.FieldAssessedBy)
+	}
+	if m.assessed_at != nil {
+		fields = append(fields, change.FieldAssessedAt)
+	}
+	if m.reviewed_by != nil {
+		fields = append(fields, change.FieldReviewedBy)
+	}
+	if m.reviewed_at != nil {
+		fields = append(fields, change.FieldReviewedAt)
+	}
+	if m.review_evidence != nil {
+		fields = append(fields, change.FieldReviewEvidence)
+	}
+	if m.review_digest != nil {
+		fields = append(fields, change.FieldReviewDigest)
+	}
+	if m.standard_template != nil {
+		fields = append(fields, change.FieldStandardTemplateID)
+	}
+	if m.standard_policy != nil {
+		fields = append(fields, change.FieldStandardPolicy)
+	}
 	if m.justification != nil {
 		fields = append(fields, change.FieldJustification)
 	}
@@ -21415,6 +22123,30 @@ func (m *ChangeMutation) Fields() []string {
 // schema.
 func (m *ChangeMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case change.FieldOutcome:
+		return m.Outcome()
+	case change.FieldOutcomeEvidence:
+		return m.OutcomeEvidence()
+	case change.FieldAssessmentEvidence:
+		return m.AssessmentEvidence()
+	case change.FieldAssessmentDigest:
+		return m.AssessmentDigest()
+	case change.FieldAssessedBy:
+		return m.AssessedBy()
+	case change.FieldAssessedAt:
+		return m.AssessedAt()
+	case change.FieldReviewedBy:
+		return m.ReviewedBy()
+	case change.FieldReviewedAt:
+		return m.ReviewedAt()
+	case change.FieldReviewEvidence:
+		return m.ReviewEvidence()
+	case change.FieldReviewDigest:
+		return m.ReviewDigest()
+	case change.FieldStandardTemplateID:
+		return m.StandardTemplateID()
+	case change.FieldStandardPolicy:
+		return m.StandardPolicy()
 	case change.FieldJustification:
 		return m.Justification()
 	case change.FieldType:
@@ -21448,6 +22180,30 @@ func (m *ChangeMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *ChangeMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case change.FieldOutcome:
+		return m.OldOutcome(ctx)
+	case change.FieldOutcomeEvidence:
+		return m.OldOutcomeEvidence(ctx)
+	case change.FieldAssessmentEvidence:
+		return m.OldAssessmentEvidence(ctx)
+	case change.FieldAssessmentDigest:
+		return m.OldAssessmentDigest(ctx)
+	case change.FieldAssessedBy:
+		return m.OldAssessedBy(ctx)
+	case change.FieldAssessedAt:
+		return m.OldAssessedAt(ctx)
+	case change.FieldReviewedBy:
+		return m.OldReviewedBy(ctx)
+	case change.FieldReviewedAt:
+		return m.OldReviewedAt(ctx)
+	case change.FieldReviewEvidence:
+		return m.OldReviewEvidence(ctx)
+	case change.FieldReviewDigest:
+		return m.OldReviewDigest(ctx)
+	case change.FieldStandardTemplateID:
+		return m.OldStandardTemplateID(ctx)
+	case change.FieldStandardPolicy:
+		return m.OldStandardPolicy(ctx)
 	case change.FieldJustification:
 		return m.OldJustification(ctx)
 	case change.FieldType:
@@ -21481,6 +22237,90 @@ func (m *ChangeMutation) OldField(ctx context.Context, name string) (ent.Value, 
 // type.
 func (m *ChangeMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case change.FieldOutcome:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOutcome(v)
+		return nil
+	case change.FieldOutcomeEvidence:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOutcomeEvidence(v)
+		return nil
+	case change.FieldAssessmentEvidence:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAssessmentEvidence(v)
+		return nil
+	case change.FieldAssessmentDigest:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAssessmentDigest(v)
+		return nil
+	case change.FieldAssessedBy:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAssessedBy(v)
+		return nil
+	case change.FieldAssessedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetAssessedAt(v)
+		return nil
+	case change.FieldReviewedBy:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReviewedBy(v)
+		return nil
+	case change.FieldReviewedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReviewedAt(v)
+		return nil
+	case change.FieldReviewEvidence:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReviewEvidence(v)
+		return nil
+	case change.FieldReviewDigest:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReviewDigest(v)
+		return nil
+	case change.FieldStandardTemplateID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStandardTemplateID(v)
+		return nil
+	case change.FieldStandardPolicy:
+		v, ok := value.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStandardPolicy(v)
+		return nil
 	case change.FieldJustification:
 		v, ok := value.(string)
 		if !ok {
@@ -21573,6 +22413,12 @@ func (m *ChangeMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *ChangeMutation) AddedFields() []string {
 	var fields []string
+	if m.addassessed_by != nil {
+		fields = append(fields, change.FieldAssessedBy)
+	}
+	if m.addreviewed_by != nil {
+		fields = append(fields, change.FieldReviewedBy)
+	}
 	return fields
 }
 
@@ -21581,6 +22427,10 @@ func (m *ChangeMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ChangeMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case change.FieldAssessedBy:
+		return m.AddedAssessedBy()
+	case change.FieldReviewedBy:
+		return m.AddedReviewedBy()
 	}
 	return nil, false
 }
@@ -21590,6 +22440,20 @@ func (m *ChangeMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ChangeMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case change.FieldAssessedBy:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddAssessedBy(v)
+		return nil
+	case change.FieldReviewedBy:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddReviewedBy(v)
+		return nil
 	}
 	return fmt.Errorf("unknown Change numeric field %s", name)
 }
@@ -21598,6 +22462,42 @@ func (m *ChangeMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *ChangeMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(change.FieldOutcome) {
+		fields = append(fields, change.FieldOutcome)
+	}
+	if m.FieldCleared(change.FieldOutcomeEvidence) {
+		fields = append(fields, change.FieldOutcomeEvidence)
+	}
+	if m.FieldCleared(change.FieldAssessmentEvidence) {
+		fields = append(fields, change.FieldAssessmentEvidence)
+	}
+	if m.FieldCleared(change.FieldAssessmentDigest) {
+		fields = append(fields, change.FieldAssessmentDigest)
+	}
+	if m.FieldCleared(change.FieldAssessedBy) {
+		fields = append(fields, change.FieldAssessedBy)
+	}
+	if m.FieldCleared(change.FieldAssessedAt) {
+		fields = append(fields, change.FieldAssessedAt)
+	}
+	if m.FieldCleared(change.FieldReviewedBy) {
+		fields = append(fields, change.FieldReviewedBy)
+	}
+	if m.FieldCleared(change.FieldReviewedAt) {
+		fields = append(fields, change.FieldReviewedAt)
+	}
+	if m.FieldCleared(change.FieldReviewEvidence) {
+		fields = append(fields, change.FieldReviewEvidence)
+	}
+	if m.FieldCleared(change.FieldReviewDigest) {
+		fields = append(fields, change.FieldReviewDigest)
+	}
+	if m.FieldCleared(change.FieldStandardTemplateID) {
+		fields = append(fields, change.FieldStandardTemplateID)
+	}
+	if m.FieldCleared(change.FieldStandardPolicy) {
+		fields = append(fields, change.FieldStandardPolicy)
+	}
 	if m.FieldCleared(change.FieldJustification) {
 		fields = append(fields, change.FieldJustification)
 	}
@@ -21636,6 +22536,42 @@ func (m *ChangeMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ChangeMutation) ClearField(name string) error {
 	switch name {
+	case change.FieldOutcome:
+		m.ClearOutcome()
+		return nil
+	case change.FieldOutcomeEvidence:
+		m.ClearOutcomeEvidence()
+		return nil
+	case change.FieldAssessmentEvidence:
+		m.ClearAssessmentEvidence()
+		return nil
+	case change.FieldAssessmentDigest:
+		m.ClearAssessmentDigest()
+		return nil
+	case change.FieldAssessedBy:
+		m.ClearAssessedBy()
+		return nil
+	case change.FieldAssessedAt:
+		m.ClearAssessedAt()
+		return nil
+	case change.FieldReviewedBy:
+		m.ClearReviewedBy()
+		return nil
+	case change.FieldReviewedAt:
+		m.ClearReviewedAt()
+		return nil
+	case change.FieldReviewEvidence:
+		m.ClearReviewEvidence()
+		return nil
+	case change.FieldReviewDigest:
+		m.ClearReviewDigest()
+		return nil
+	case change.FieldStandardTemplateID:
+		m.ClearStandardTemplateID()
+		return nil
+	case change.FieldStandardPolicy:
+		m.ClearStandardPolicy()
+		return nil
 	case change.FieldJustification:
 		m.ClearJustification()
 		return nil
@@ -21668,6 +22604,42 @@ func (m *ChangeMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *ChangeMutation) ResetField(name string) error {
 	switch name {
+	case change.FieldOutcome:
+		m.ResetOutcome()
+		return nil
+	case change.FieldOutcomeEvidence:
+		m.ResetOutcomeEvidence()
+		return nil
+	case change.FieldAssessmentEvidence:
+		m.ResetAssessmentEvidence()
+		return nil
+	case change.FieldAssessmentDigest:
+		m.ResetAssessmentDigest()
+		return nil
+	case change.FieldAssessedBy:
+		m.ResetAssessedBy()
+		return nil
+	case change.FieldAssessedAt:
+		m.ResetAssessedAt()
+		return nil
+	case change.FieldReviewedBy:
+		m.ResetReviewedBy()
+		return nil
+	case change.FieldReviewedAt:
+		m.ResetReviewedAt()
+		return nil
+	case change.FieldReviewEvidence:
+		m.ResetReviewEvidence()
+		return nil
+	case change.FieldReviewDigest:
+		m.ResetReviewDigest()
+		return nil
+	case change.FieldStandardTemplateID:
+		m.ResetStandardTemplateID()
+		return nil
+	case change.FieldStandardPolicy:
+		m.ResetStandardPolicy()
+		return nil
 	case change.FieldJustification:
 		m.ResetJustification()
 		return nil
@@ -21710,7 +22682,10 @@ func (m *ChangeMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *ChangeMutation) AddedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
+	if m.standard_template != nil {
+		edges = append(edges, change.EdgeStandardTemplate)
+	}
 	if m.work_item != nil {
 		edges = append(edges, change.EdgeWorkItem)
 	}
@@ -21727,6 +22702,10 @@ func (m *ChangeMutation) AddedEdges() []string {
 // name in this mutation.
 func (m *ChangeMutation) AddedIDs(name string) []ent.Value {
 	switch name {
+	case change.EdgeStandardTemplate:
+		if id := m.standard_template; id != nil {
+			return []ent.Value{*id}
+		}
 	case change.EdgeWorkItem:
 		if id := m.work_item; id != nil {
 			return []ent.Value{*id}
@@ -21749,7 +22728,7 @@ func (m *ChangeMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *ChangeMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
 	if m.removedproblems != nil {
 		edges = append(edges, change.EdgeProblems)
 	}
@@ -21781,7 +22760,10 @@ func (m *ChangeMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *ChangeMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 3)
+	edges := make([]string, 0, 4)
+	if m.clearedstandard_template {
+		edges = append(edges, change.EdgeStandardTemplate)
+	}
 	if m.clearedwork_item {
 		edges = append(edges, change.EdgeWorkItem)
 	}
@@ -21798,6 +22780,8 @@ func (m *ChangeMutation) ClearedEdges() []string {
 // was cleared in this mutation.
 func (m *ChangeMutation) EdgeCleared(name string) bool {
 	switch name {
+	case change.EdgeStandardTemplate:
+		return m.clearedstandard_template
 	case change.EdgeWorkItem:
 		return m.clearedwork_item
 	case change.EdgeProblems:
@@ -21812,6 +22796,9 @@ func (m *ChangeMutation) EdgeCleared(name string) bool {
 // if that edge is not defined in the schema.
 func (m *ChangeMutation) ClearEdge(name string) error {
 	switch name {
+	case change.EdgeStandardTemplate:
+		m.ClearStandardTemplate()
+		return nil
 	case change.EdgeWorkItem:
 		m.ClearWorkItem()
 		return nil
@@ -21823,6 +22810,9 @@ func (m *ChangeMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *ChangeMutation) ResetEdge(name string) error {
 	switch name {
+	case change.EdgeStandardTemplate:
+		m.ResetStandardTemplate()
+		return nil
 	case change.EdgeWorkItem:
 		m.ResetWorkItem()
 		return nil

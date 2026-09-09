@@ -6,6 +6,11 @@ func IsValidChangeStatusTransition(currentStatus, newStatus, changeType string) 
 	if currentStatus == "pending" {
 		currentStatus = ChangeStatusSubmitted
 	}
+	// Closing a recorded unsuccessful implementation preserves its professional
+	// outcome. The Change command owner additionally requires current PIR evidence.
+	if newStatus == ChangeStatusCompleted && (currentStatus == ChangeStatusFailed || currentStatus == "rolled_back") {
+		return true
+	}
 	terminal := map[string]struct{}{
 		ChangeStatusRejected: {}, ChangeStatusCompleted: {}, ChangeStatusCancelled: {}, "rolled_back": {},
 	}

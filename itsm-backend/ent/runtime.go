@@ -632,15 +632,15 @@ func init() {
 	changeFields := schema.Change{}.Fields()
 	_ = changeFields
 	// changeDescType is the schema descriptor for type field.
-	changeDescType := changeFields[1].Descriptor()
+	changeDescType := changeFields[13].Descriptor()
 	// change.DefaultType holds the default value on creation for the type field.
 	change.DefaultType = changeDescType.Default.(string)
 	// changeDescImpactScope is the schema descriptor for impact_scope field.
-	changeDescImpactScope := changeFields[2].Descriptor()
+	changeDescImpactScope := changeFields[14].Descriptor()
 	// change.DefaultImpactScope holds the default value on creation for the impact_scope field.
 	change.DefaultImpactScope = changeDescImpactScope.Default.(string)
 	// changeDescRiskLevel is the schema descriptor for risk_level field.
-	changeDescRiskLevel := changeFields[3].Descriptor()
+	changeDescRiskLevel := changeFields[15].Descriptor()
 	// change.DefaultRiskLevel holds the default value on creation for the risk_level field.
 	change.DefaultRiskLevel = changeDescRiskLevel.Default.(string)
 	changepirFields := schema.ChangePIR{}.Fields()

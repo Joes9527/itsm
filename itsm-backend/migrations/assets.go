@@ -10,3 +10,6 @@ var WorkItemSLACycleSQL string
 
 //go:embed 20260910_problem_investigation_completion.sql
 var ProblemInvestigationCompletionSQL string
+
+//go:embed 20260911_change_professional_evidence.sql
+var ChangeProfessionalEvidenceSQL string
