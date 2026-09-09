@@ -72,7 +72,7 @@ const CINode: React.FC<NodeProps<any>> = ({ data }) => {
     <div
       style={{
         padding: '12px 16px',
-        background: 'var(--color-bg-secondary)',
+        background: 'var(--color-bg-primary)',
         borderRadius: 8,
         border: `2px solid ${statusColor}`,
         boxShadow: '0 2px 8px rgba(0,0,0,0.1)',

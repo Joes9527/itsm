@@ -94,7 +94,7 @@ function HubCard({ title, description, accent, icon, metrics, actions, onAction 
         <Tag color="blue">分区</Tag>
       </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+      <div className="mt-5 grid gap-[14px] sm:grid-cols-3">
         {metrics.map(metric => (
           <div key={metric.label} className="rounded-[8px] bg-raised px-3 py-2">
             <div className="text-[12px] text-muted">{metric.label}</div>
@@ -503,7 +503,7 @@ export function CSDMHub() {
                 style={{ borderTop: index === 0 ? '3px solid #13c2c2' : '3px solid #1890ff' }}
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-[8px] bg-slate-900 text-white">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-[8px] bg-raised text-foreground">
                     {step.icon}
                   </div>
                   <div>
@@ -568,7 +568,7 @@ export function CSDMHub() {
       </Card>
 
       <Card title="日常巡检清单" loading={state.loading}>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-[14px] md:grid-cols-2 xl:grid-cols-4">
           <div className="rounded-[8px] border border-dashed border-border p-[16px]">
             <div className="font-medium">1. 新资源是否已入库</div>
             <div className="mt-1 text-[13px] text-muted">

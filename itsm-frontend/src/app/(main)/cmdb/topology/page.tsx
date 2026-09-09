@@ -80,7 +80,7 @@ const CINode = ({ data }: { data: TopologyNode & { selected?: boolean; dimmed?: 
   const icon = ciTypeIcons[data.type?.toLowerCase()] || ciTypeIcons.default;
   const color = ciTypeColors[data.type?.toLowerCase()] || ciTypeColors.default;
   return (
-    <div style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--color-bg-secondary)', border: data.selected ? '2px solid ' + color : '2px solid ' + color + '40', boxShadow: data.selected ? '0 4px 12px rgba(0,0,0,0.2)' : '0 2px 8px rgba(0,0,0,0.1)', minWidth: 140, textAlign: 'center', opacity: data.dimmed ? 0.3 : 1, transition: 'opacity 0.2s' }}>
+    <div style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--color-bg-primary)', border: data.selected ? '2px solid ' + color : '2px solid ' + color + '40', boxShadow: data.selected ? '0 4px 12px rgba(0,0,0,0.2)' : '0 2px 8px rgba(0,0,0,0.1)', minWidth: 140, textAlign: 'center', opacity: data.dimmed ? 0.3 : 1, transition: 'opacity 0.2s' }}>
       <Handle type="target" position={Position.Top} style={{ background: color }} />
       <div style={{ fontSize: 24 }}>{icon}</div>
       <div style={{ fontWeight: 600, marginTop: 4, color: 'var(--color-text-primary)' }}>{data.name}</div>
