@@ -63,10 +63,67 @@ func TestWorkItemChangeTaskCABEntryPermission(t *testing.T) {
 	xml, err := os.ReadFile("../../service/bpmn/change_normal_flow.bpmn")
 	require.NoError(t, err)
 	f.client.ProcessDefinition.Update().Where(processdefinition.Key("change_normal_flow")).SetBpmnXML(xml).ExecX(f.ctx)
-	f.apply(t, f.command("submit", "submit"))
+
+	for _, phase := range []string{"draft", "submitted"} {
+		if phase == "submitted" {
+			f.apply(t, f.command("submit", "submit"))
+		}
+		plan := phase + " reviewed deployment plan"
+		_, err := f.owner.ApplyMetadata(f.ctx, changedomain.MetadataCommand{Meta: f.command("metadata", "preassessment-"+phase).Meta, ChangeID: f.c.ID, Patch: dto.UpdateChangeRequest{ImplementationPlan: &plan}})
+		require.NoError(t, err, "unassessed facts remain editable")
+	}
+
+	f.client.Change.UpdateOneID(f.c.ID).SetAffectedCis([]string{"ci-z", "ci-a"}).ExecX(f.ctx)
 	task := f.client.ProcessTask.Query().Where(processtask.TaskDefinitionKey("Activity_Assessment")).OnlyX(f.ctx)
 	_, err = f.owner.CompleteChangeTask(f.ctx, changedomain.TaskCommand{Command: f.command("assess", "assess-http"), TaskID: task.TaskID})
 	require.NoError(t, err)
+
+	// The actual default assessment advances to CAB while the Change remains submitted.
+	assessed := f.client.Change.GetX(f.ctx, f.c.ID)
+	require.NotEmpty(t, assessed.AssessmentDigest)
+	require.False(t, assessed.AssessedAt.IsZero())
+	before := f.client.Ticket.GetX(f.ctx, f.c.WorkItemID)
+	audits := f.client.AuditLog.Query().CountX(f.ctx)
+	text := "changed assessed fact"
+	typ := dto.ChangeTypeEmergency
+	risk := dto.ChangeRiskHigh
+	impact := dto.ChangeImpactHigh
+	for name, patch := range map[string]dto.UpdateChangeRequest{
+		"type": {Type: &typ}, "justification": {Justification: &text},
+		"risk": {RiskLevel: &risk}, "impact": {ImpactScope: &impact},
+		"implementation": {ImplementationPlan: &text}, "rollback": {RollbackPlan: &text},
+		"cis": {AffectedCIs: []string{"changed-ci"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := f.owner.ApplyMetadata(f.ctx, changedomain.MetadataCommand{Meta: f.command("metadata", "assessed-edit-"+name).Meta, ChangeID: f.c.ID, Patch: patch})
+			require.Error(t, err)
+			after := f.client.Ticket.GetX(f.ctx, f.c.WorkItemID)
+			require.Equal(t, before.Version, after.Version)
+			require.Equal(t, before.UpdatedAt, after.UpdatedAt)
+			require.Equal(t, audits, f.client.AuditLog.Query().CountX(f.ctx))
+			current := f.client.Change.GetX(f.ctx, f.c.ID)
+			require.Equal(t, assessed.AssessmentDigest, current.AssessmentDigest)
+			require.Equal(t, assessed.ImplementationPlan, current.ImplementationPlan)
+			require.Equal(t, assessed.RollbackPlan, current.RollbackPlan)
+			require.Equal(t, assessed.Justification, current.Justification)
+			require.Equal(t, assessed.Type, current.Type)
+			require.Equal(t, assessed.RiskLevel, current.RiskLevel)
+			require.Equal(t, assessed.ImpactScope, current.ImpactScope)
+			require.Equal(t, assessed.AffectedCis, current.AffectedCis)
+		})
+	}
+	title := "  CAB title correction  "
+	metadata := changedomain.MetadataCommand{Meta: f.command("metadata", "cab-title").Meta, ChangeID: f.c.ID, Patch: dto.UpdateChangeRequest{Title: &title, ImplementationPlan: &assessed.ImplementationPlan, AffectedCIs: []string{"ci-a", "ci-z"}}}
+	edited, err := f.owner.ApplyMetadata(f.ctx, metadata)
+	require.NoError(t, err, "unchanged assessed facts may accompany a harmless title correction")
+	require.Equal(t, before.Version+1, edited.Version)
+	title = "CAB title correction"
+	replayed, err := f.owner.ApplyMetadata(f.ctx, metadata)
+	require.NoError(t, err)
+	require.True(t, replayed.Replayed)
+	require.Equal(t, edited.Version, replayed.Version)
+
+	metadataActor := f.actor
 	actor := f.client.User.Create().SetTenantID(f.tenant.ID).SetUsername("writer").SetName("writer").SetEmail("writer@example.test").SetPasswordHash("test").SetRole("agent").SetActive(true).SaveX(f.ctx)
 	role := f.client.Role.Create().SetTenantID(f.tenant.ID).SetCode("agent").SetName("Writer").SetIsActive(true).SaveX(f.ctx)
 	permission := f.client.Permission.Create().SetTenantID(f.tenant.ID).SetCode("change:write").SetName("Write").SetResource("change").SetAction("write").SaveX(f.ctx)
@@ -92,6 +149,10 @@ func TestWorkItemChangeTaskCABEntryPermission(t *testing.T) {
 	require.Equal(t, actor.ID, decision.ActorID)
 	require.Equal(t, task.ID, decision.ProcessTaskID)
 	require.Equal(t, 1, f.client.ProcessTask.Query().Where(processtask.TaskDefinitionKey("Activity_Schedule"), processtask.Status("created")).CountX(f.ctx))
+	metadataActor.Update().SetActive(false).ExecX(f.ctx)
+	_, err = f.owner.ApplyMetadata(f.ctx, metadata)
+	require.Error(t, err, "normalized immutable replay still requires current authorization")
+
 	role.Update().SetIsActive(false).ExecX(f.ctx)
 	_, err = f.owner.CompleteChangeTask(f.ctx, cmd)
 	require.Error(t, err)

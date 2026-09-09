@@ -112,6 +112,21 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 		return empty, common.NewValidationError("use governed schedule action for implementation window", nil)
 	}
 	domain := toDomain(current)
+	// Assessment advances to CAB without changing submitted status. Its
+	// persisted evidence freezes the covered facts; there is no reassessment task.
+	assessed := current.AssessmentDigest != "" || current.AssessmentEvidence != "" || current.AssessedBy > 0 || !current.AssessedAt.IsZero()
+	if assessed && metadataChanges(domain, dto.UpdateChangeRequest{
+		Type: p.Type, Justification: p.Justification, RiskLevel: p.RiskLevel,
+		ImpactScope: p.ImpactScope, ImplementationPlan: p.ImplementationPlan,
+		RollbackPlan: p.RollbackPlan, AffectedCIs: p.AffectedCIs,
+	}) {
+		return empty, common.NewValidationError("assessed change facts are locked", nil)
+	}
+	if assessed && p.AffectedCIs != nil {
+		// Equivalent normalized input must preserve the exact assessed ordering
+		// because the persisted assessment digest binds that array too.
+		p.AffectedCIs = current.AffectedCis
+	}
 	if cmd.Patch.RelatedTickets != nil {
 		repo := NewEntRepository(tx.Client(), nil)
 		if err = repo.hydrateRelatedTickets(ctx, []*Change{domain}, m.TenantID); err != nil {
