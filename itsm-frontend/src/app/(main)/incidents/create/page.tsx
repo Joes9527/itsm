@@ -175,7 +175,7 @@ export default function CreateIncidentPage() {
                 type: 'incident',
               }}
             >
-              <CreationRequester />
+              <CreationRequester resource="incident" />
               <Tabs
                 activeKey={activeTab}
                 onChange={setActiveTab}

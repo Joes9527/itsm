@@ -521,7 +521,7 @@ export default function StandardChangesPage() {
             </Descriptions>
 
             <Form form={instantiateForm} layout='vertical'>
-              <CreationRequester />
+              <CreationRequester resource="change" />
               <Form.Item name='title' label='变更标题' initialValue={selectedTemplate.title}>
                 <Input />
               </Form.Item>

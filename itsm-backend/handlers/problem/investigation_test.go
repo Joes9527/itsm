@@ -94,7 +94,6 @@ func createProblemInvestigationTables(t *testing.T, db *sql.DB) {
 		problem_id INTEGER NOT NULL,
 		analyst_id INTEGER NOT NULL,
 		analysis_method TEXT NOT NULL,
-		root_cause_description TEXT NOT NULL,
 		contributing_factors TEXT,
 		evidence TEXT,
 		confidence_level TEXT NOT NULL,
@@ -215,7 +214,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 		c.Set("user_id", user.ID)
 		c.Next()
 	})
-	r2_steps.GET("/api/v1/problem-investigation/investigations/:investigation_id/steps", invCtrl.GetInvestigationSteps)
+	r2_steps.GET("/api/v1/problem-investigation/investigations/:id/steps", invCtrl.GetInvestigationSteps)
 
 	// 2.1 Create Problem Investigation
 	createInvReq := dto.CreateProblemInvestigationRequest{
@@ -311,4 +310,72 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	req2_8 := httptest.NewRequest("GET", fmt.Sprintf("/api/v1/problem-investigation/problems/%d/summary", p.ID), nil)
 	r2.ServeHTTP(w2_8, req2_8)
 	require.Equal(t, http.StatusOK, w2_8.Code)
+}
+
+func TestRCAWritesProblemAuthorityAndKnownError(t *testing.T) {
+	dbName := fmt.Sprintf("file:rca-authority-%s?mode=memory&cache=shared&_fk=1", t.Name())
+	client := enttest.Open(t, "sqlite3", dbName)
+	defer client.Close()
+	db, err := sql.Open("sqlite3", dbName)
+	require.NoError(t, err)
+	defer db.Close()
+	createProblemInvestigationTables(t, db)
+	ctx := context.Background()
+	logger := zaptest.NewLogger(t).Sugar()
+	tenant := createProblemInvestigationTenant(t, ctx, client, "authority")
+	user := createProblemInvestigationUser(t, ctx, client, tenant.ID, "authority")
+	problemSvc := NewService(NewEntRepository(client), logger)
+	p, err := problemSvc.SubmitCreation(ctx, tenant.ID, &problem.Problem{Title: "RCA source", Description: "RCA source", Priority: "high", CreatedBy: user.ID})
+	require.NoError(t, err)
+	svc := service.NewProblemInvestigationService(db, logger)
+	created, err := svc.CreateRootCauseAnalysis(ctx, &dto.CreateRootCauseAnalysisRequest{ProblemID: p.ID, AnalystID: user.ID, AnalysisMethod: "5_whys", RootCauseDescription: "Connection pool leak", ConfidenceLevel: dto.ConfidenceHigh}, tenant.ID)
+	require.NoError(t, err)
+	stored, err := problemSvc.Get(ctx, p.ID, tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, created.RootCauseDescription, stored.RootCause)
+	root := "Unbounded retry exhausted the pool"
+	updated, err := svc.UpdateRootCauseAnalysis(ctx, created.ID, &dto.UpdateRootCauseAnalysisRequest{RootCauseDescription: &root}, tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, root, updated.RootCauseDescription)
+	stored, err = problemSvc.Get(ctx, p.ID, tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, root, stored.RootCause)
+	publisher := service.NewProblemService(client, logger)
+	publisher.SetKnownErrorService(service.NewKnownErrorService(client, logger))
+	published, err := publisher.CreateKnownErrorFromProblem(ctx, p.ID, user.ID, &dto.KEDBCreateRequest{Title: "Pool leak", Workaround: "Restart pool", Severity: "high"})
+	require.NoError(t, err)
+	require.Equal(t, root, published.RootCause)
+	// Changes through the professional Problem API must immediately project into RCA.
+	root = "Corrected after investigation"
+	_, err = problemSvc.UpdateRootCause(ctx, tenant.ID, p.ID, root)
+	require.NoError(t, err)
+	read, err := svc.GetRootCauseAnalysis(ctx, created.ID, tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, root, read.RootCauseDescription)
+	summary, err := svc.GetProblemInvestigationSummary(ctx, p.ID, tenant.ID)
+	require.NoError(t, err)
+	require.NotNil(t, summary.RootCauseAnalysis)
+	require.Equal(t, root, summary.RootCauseAnalysis.RootCauseDescription)
+	// Simulate an unrelated edit loading the old root immediately before RCA changes it.
+	staleRepo := &rcaChangeAfterGetRepository{Repository: NewEntRepository(client), change: func() {
+		revised := "RCA changed concurrently"
+		_, err := svc.UpdateRootCauseAnalysis(ctx, created.ID, &dto.UpdateRootCauseAnalysisRequest{RootCauseDescription: &revised}, tenant.ID)
+		require.NoError(t, err)
+	}}
+	edited, err := problem.NewService(staleRepo, logger).Update(ctx, tenant.ID, p.ID, &problem.Problem{Title: "Unrelated title edit"})
+	require.NoError(t, err)
+	require.Equal(t, "RCA changed concurrently", edited.RootCause)
+}
+
+type rcaChangeAfterGetRepository struct {
+	problem.Repository
+	change func()
+}
+
+func (r *rcaChangeAfterGetRepository) Get(ctx context.Context, id, tenantID int) (*problem.Problem, error) {
+	p, err := r.Repository.Get(ctx, id, tenantID)
+	if err == nil {
+		r.change()
+	}
+	return p, err
 }

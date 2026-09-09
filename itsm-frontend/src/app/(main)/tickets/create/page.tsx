@@ -562,7 +562,7 @@ export default function CreateTicketPage() {
 
               {/* 表单 */}
               <Form form={form} layout="vertical" requiredMark="optional">
-                <CreationRequester />
+                <CreationRequester resource="ticket" />
                 <Card title="工单信息" style={{ marginBottom: 16 }}>
                   <Alert
                     type="info" showIcon className="mb-4"

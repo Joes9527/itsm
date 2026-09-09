@@ -1102,7 +1102,7 @@ const IncidentFormModal: React.FC<{
     >
       <CreationAttempts creation={creation} />
       <Form form={form} layout="vertical" onFinish={handleSubmit}>
-        {!incident && <CreationRequester />}
+        {!incident && <CreationRequester resource="incident" />}
         <Form.Item
           name="title"
           label="事件标题"
