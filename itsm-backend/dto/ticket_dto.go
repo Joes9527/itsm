@@ -1,6 +1,7 @@
 package dto
 
 import (
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"time"
 )
 
@@ -16,6 +17,7 @@ type UserBasicInfo struct {
 
 // CreateTicketRequest 创建工单请求
 type CreateTicketRequest struct {
+	CTI                   *creation.CTIInput     `json:"cti,omitempty"`
 	Title                 string                 `json:"title" binding:"required,min=2,max=200"`
 	Description           string                 `json:"description" binding:"required,min=0,max=5000"`
 	Priority              string                 `json:"priority" binding:"required,oneof=low medium high critical urgent"`

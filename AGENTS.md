@@ -139,6 +139,7 @@ The unified Work Item model is the shared business language for Ticket, Service 
 - WorkItem provides shared operations such as assignment, comments, attachments, followers, SLA projection, workflow references, activity timeline, and audit.
 - `IncidentService` owns acknowledge, resolve, close, reopen, pending, cancellation, and major-incident rules.
 - `ProblemService` owns assessment, investigation, root cause, workaround, known-error, resolve, close, and reopen rules.
+- Problem root-cause text has one authoritative write location: `problems.root_cause`. RCA records own analysis metadata (method, evidence, confidence, reviewer), and expose the Problem root cause as a projection. RCA mutations update the Problem text and analysis metadata atomically; Known Error creation reads that same Problem text. Do not restore a second RCA root-cause text column or dual writes.
 - `ChangeService` owns assessment, authorization, scheduling, implementation, review, rollback, closure, risk, CAB, and implementation-window rules.
 - `ServiceRequestService` owns catalog validation, approval, fulfillment, delivery, and Requested Item lifecycle rules.
 - Do not create a giant service or `switch recordClass` that implements every professional state machine. Shared services coordinate common behavior; professional services validate professional transitions and side effects.

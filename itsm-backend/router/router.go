@@ -1382,10 +1382,11 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				// 调查步骤管理
 				problemInvestigation.POST("/steps", middleware.RequirePermission("step", "create"), config.ProblemInvestigationController.CreateInvestigationStep)
 				problemInvestigation.PUT("/steps/:id", middleware.RequirePermission("step", "update"), config.ProblemInvestigationController.UpdateInvestigationStep)
-				problemInvestigation.GET("/investigations/:investigation_id/steps", middleware.RequirePermission("investigation", "read"), config.ProblemInvestigationController.GetInvestigationSteps)
+				problemInvestigation.GET("/investigations/:id/steps", middleware.RequirePermission("investigation", "read"), config.ProblemInvestigationController.GetInvestigationSteps)
 
 				// 根本原因分析
 				problemInvestigation.POST("/root-cause-analysis", middleware.RequirePermission("root_cause", "create"), config.ProblemInvestigationController.CreateRootCauseAnalysis)
+				problemInvestigation.PUT("/root-cause-analysis/:id", middleware.RequirePermission("root_cause", "create"), config.ProblemInvestigationController.UpdateRootCauseAnalysis)
 
 				// 解决方案管理
 				problemInvestigation.POST("/solutions", middleware.RequirePermission("solution", "create"), config.ProblemInvestigationController.CreateProblemSolution)

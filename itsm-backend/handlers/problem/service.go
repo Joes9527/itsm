@@ -89,12 +89,10 @@ func (s *Service) Update(ctx context.Context, tenantID int, id int, p *Problem) 
 		}
 		existing.Priority = p.Priority
 	}
-	if p.Category != "" {
-		existing.Category = p.Category
-	}
-	if p.RootCause != "" {
-		existing.RootCause = p.RootCause
-	}
+	// Preserve omission so unrelated edits do not revalidate or rewrite classification.
+	existing.CategoryID = p.CategoryID
+	// Preserve root-cause omission; unrelated edits must not replay a stale RCA body.
+	existing.RootCause = p.RootCause
 	if p.Workaround != "" {
 		existing.Workaround = p.Workaround
 	}

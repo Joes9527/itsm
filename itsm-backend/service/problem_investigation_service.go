@@ -13,8 +13,10 @@ import (
 
 // ProblemInvestigationService 问题调查服务
 type ProblemInvestigationService struct {
-	db     *sql.DB
-	logger *zap.SugaredLogger
+	db           problemInvestigationDB
+	logger       *zap.SugaredLogger
+	tenantPool   *sql.DB
+	scopedTenant int
 }
 
 // NewProblemInvestigationService 创建问题调查服务
@@ -38,10 +40,24 @@ func (s *ProblemInvestigationService) requireTenantUser(ctx context.Context, use
 
 // GetRootCauseAnalysis 获取根本原因分析
 func (s *ProblemInvestigationService) GetRootCauseAnalysis(ctx context.Context, id int, tenantID int) (*dto.RootCauseAnalysisResponse, error) {
+	scoped, release, scopeErr := s.tenantScope(ctx, tenantID)
+	if scopeErr != nil {
+		return nil, scopeErr
+	}
+	defer release()
+	s = scoped
+
+	return getRootCauseAnalysis(ctx, s.db, id, tenantID)
+}
+
+// Both DB and transaction reads use the authoritative Problem root cause.
+func getRootCauseAnalysis(ctx context.Context, db interface {
+	QueryRowContext(context.Context, string, ...interface{}) *sql.Row
+}, id, tenantID int) (*dto.RootCauseAnalysisResponse, error) {
 	var analysis dto.RootCauseAnalysisResponse
-	err := s.db.QueryRowContext(ctx, `
+	err := db.QueryRowContext(ctx, `
 		SELECT prca.id, prca.problem_id, prca.analyst_id, u1.name, prca.analysis_method,
-		       prca.root_cause_description, prca.contributing_factors, prca.evidence, prca.confidence_level,
+		       COALESCE(p.root_cause, ''), prca.contributing_factors, prca.evidence, prca.confidence_level,
 		       prca.analysis_date, prca.reviewed_by, u2.name, prca.review_date,
 		       prca.created_at, prca.updated_at
 		FROM problem_root_cause_analyses prca
@@ -70,6 +86,13 @@ func (s *ProblemInvestigationService) GetRootCauseAnalysis(ctx context.Context, 
 
 // GetProblemSolution 获取解决方案
 func (s *ProblemInvestigationService) GetProblemSolution(ctx context.Context, id int, tenantID int) (*dto.ProblemSolutionResponse, error) {
+	scoped, release, scopeErr := s.tenantScope(ctx, tenantID)
+	if scopeErr != nil {
+		return nil, scopeErr
+	}
+	defer release()
+	s = scoped
+
 	var solution dto.ProblemSolutionResponse
 	err := s.db.QueryRowContext(ctx, `
 		SELECT ps.id, ps.problem_id, ps.solution_type, ps.solution_description, ps.proposed_by, u1.name,
@@ -102,6 +125,13 @@ func (s *ProblemInvestigationService) GetProblemSolution(ctx context.Context, id
 
 // CreateProblemInvestigation 创建问题调查
 func (s *ProblemInvestigationService) CreateProblemInvestigation(ctx context.Context, req *dto.CreateProblemInvestigationRequest, tenantID int) (*dto.ProblemInvestigationResponse, error) {
+	scoped, release, scopeErr := s.tenantScope(ctx, tenantID)
+	if scopeErr != nil {
+		return nil, scopeErr
+	}
+	defer release()
+	s = scoped
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("开始问题调查事务失败: %v", err)
@@ -173,6 +203,13 @@ func (s *ProblemInvestigationService) CreateProblemInvestigation(ctx context.Con
 
 // GetProblemInvestigation 获取问题调查详情
 func (s *ProblemInvestigationService) GetProblemInvestigation(ctx context.Context, investigationID, tenantID int) (*dto.ProblemInvestigationResponse, error) {
+	scoped, release, scopeErr := s.tenantScope(ctx, tenantID)
+	if scopeErr != nil {
+		return nil, scopeErr
+	}
+	defer release()
+	s = scoped
+
 	var investigation dto.ProblemInvestigationResponse
 	err := s.db.QueryRowContext(ctx, `
 		SELECT pi.id, pi.problem_id, pi.investigator_id, u.name, pi.status, pi.start_date, 
@@ -200,6 +237,13 @@ func (s *ProblemInvestigationService) GetProblemInvestigation(ctx context.Contex
 
 // UpdateProblemInvestigation 更新问题调查
 func (s *ProblemInvestigationService) UpdateProblemInvestigation(ctx context.Context, investigationID int, req *dto.UpdateProblemInvestigationRequest, tenantID int) (*dto.ProblemInvestigationResponse, error) {
+	scoped, release, scopeErr := s.tenantScope(ctx, tenantID)
+	if scopeErr != nil {
+		return nil, scopeErr
+	}
+	defer release()
+	s = scoped
+
 	// 检查调查记录是否存在
 	investigation, err := s.GetProblemInvestigation(ctx, investigationID, tenantID)
 	if err != nil {
@@ -259,6 +303,13 @@ func (s *ProblemInvestigationService) UpdateProblemInvestigation(ctx context.Con
 
 // CreateInvestigationStep 创建调查步骤
 func (s *ProblemInvestigationService) CreateInvestigationStep(ctx context.Context, req *dto.CreateInvestigationStepRequest, tenantID int) (*dto.InvestigationStepResponse, error) {
+	scoped, release, scopeErr := s.tenantScope(ctx, tenantID)
+	if scopeErr != nil {
+		return nil, scopeErr
+	}
+	defer release()
+	s = scoped
+
 	// 检查调查记录是否存在
 	var problemID int
 	err := s.db.QueryRowContext(ctx, `
@@ -320,6 +371,13 @@ func (s *ProblemInvestigationService) CreateInvestigationStep(ctx context.Contex
 
 // UpdateInvestigationStep 更新调查步骤
 func (s *ProblemInvestigationService) UpdateInvestigationStep(ctx context.Context, stepID int, req *dto.UpdateInvestigationStepRequest, tenantID int) (*dto.InvestigationStepResponse, error) {
+	scoped, release, scopeErr := s.tenantScope(ctx, tenantID)
+	if scopeErr != nil {
+		return nil, scopeErr
+	}
+	defer release()
+	s = scoped
+
 	if req.AssignedTo != nil {
 		if err := s.requireTenantUser(ctx, *req.AssignedTo, tenantID); err != nil {
 			return nil, err
@@ -419,70 +477,90 @@ func (s *ProblemInvestigationService) getInvestigationStep(ctx context.Context, 
 
 // CreateRootCauseAnalysis 创建根本原因分析
 func (s *ProblemInvestigationService) CreateRootCauseAnalysis(ctx context.Context, req *dto.CreateRootCauseAnalysisRequest, tenantID int) (*dto.RootCauseAnalysisResponse, error) {
-	// 检查问题是否存在
-	var problemTitle string
-	err := s.db.QueryRowContext(ctx, `SELECT t.title FROM problems p JOIN tickets t ON t.id = p.work_item_id WHERE p.id = $1 AND t.tenant_id = $2 AND t.deleted_at IS NULL`, req.ProblemID, tenantID).Scan(&problemTitle)
+	scoped, release, scopeErr := s.tenantScope(ctx, tenantID)
+	if scopeErr != nil {
+		return nil, scopeErr
+	}
+	defer release()
+	s = scoped
+
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("问题不存在")
-		}
-		return nil, fmt.Errorf("查询问题失败: %v", err)
+		return nil, fmt.Errorf("开始根因分析事务失败: %w", err)
 	}
-
-	// 检查是否已存在根本原因分析
-	var existingID int
-	err = s.db.QueryRowContext(ctx, "SELECT rca.id FROM problem_root_cause_analyses rca JOIN problems p ON rca.problem_id = p.id WHERE rca.problem_id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2 AND deleted_at IS NULL)", req.ProblemID, tenantID).Scan(&existingID)
-	if err == nil {
-		return nil, fmt.Errorf("该问题已存在根本原因分析")
+	defer func() { _ = tx.Rollback() }()
+	// Lock and version the shared identity first, matching the Problem repository lock order.
+	if err := touchRCAWorkItem(ctx, tx, req.ProblemID, tenantID); err != nil {
+		return nil, err
 	}
-
-	// 创建根本原因分析
+	// Updating the owning Problem serializes concurrent RCA creation for this Problem.
+	result, err := tx.ExecContext(ctx, `
+  UPDATE problems SET root_cause = $1
+  WHERE id = $2 AND work_item_id IN (
+   SELECT wi.id FROM tickets wi JOIN users analyst ON analyst.tenant_id = wi.tenant_id
+   WHERE wi.tenant_id = $3 AND wi.deleted_at IS NULL AND analyst.id = $4
+  ) AND NOT EXISTS (SELECT 1 FROM problem_root_cause_analyses rca WHERE rca.problem_id = problems.id)
+ `, req.RootCauseDescription, req.ProblemID, tenantID, req.AnalystID)
+	if err != nil {
+		return nil, fmt.Errorf("更新问题根因失败: %w", err)
+	}
+	if err := requireRCAMutation(result); err != nil {
+		return nil, err
+	}
 	var analysisID int
-	err = s.db.QueryRowContext(ctx, `
-		WITH input(problem_id, analyst_id, analysis_method, root_cause_description, contributing_factors, evidence, confidence_level, occurred_at, tenant_id) AS (
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		)
-		INSERT INTO problem_root_cause_analyses (problem_id, analyst_id, analysis_method, root_cause_description,
-		                                       contributing_factors, evidence, confidence_level, analysis_date, created_at, updated_at)
-		SELECT p.id, input.analyst_id, input.analysis_method, input.root_cause_description,
-		       input.contributing_factors, input.evidence, input.confidence_level, input.occurred_at, input.occurred_at, input.occurred_at
-		FROM input
-		JOIN problems p ON p.id = input.problem_id
-		JOIN tickets wi ON wi.id = p.work_item_id
-		JOIN users analyst ON analyst.id = input.analyst_id AND analyst.tenant_id = wi.tenant_id
-		WHERE wi.tenant_id = input.tenant_id AND wi.deleted_at IS NULL
-		RETURNING id
-	`, req.ProblemID, req.AnalystID, req.AnalysisMethod, req.RootCauseDescription,
-		req.ContributingFactors, req.Evidence, req.ConfidenceLevel, time.Now(), tenantID).Scan(&analysisID)
+	now := time.Now()
+	err = tx.QueryRowContext(ctx, `
+  INSERT INTO problem_root_cause_analyses (problem_id, analyst_id, analysis_method,
+   contributing_factors, evidence, confidence_level, analysis_date, created_at, updated_at)
+  SELECT $1, $2, $3, $4, $5, $6, $7, $7, $7
+  FROM problems p JOIN tickets wi ON wi.id = p.work_item_id
+  JOIN users analyst ON analyst.id = $2 AND analyst.tenant_id = wi.tenant_id
+  WHERE p.id = $1 AND wi.tenant_id = $8 AND wi.deleted_at IS NULL
+   AND NOT EXISTS (SELECT 1 FROM problem_root_cause_analyses rca WHERE rca.problem_id = p.id)
+  RETURNING id
+ `, req.ProblemID, req.AnalystID, req.AnalysisMethod, req.ContributingFactors, req.Evidence, req.ConfidenceLevel, now, tenantID).Scan(&analysisID)
 	if err != nil {
-		return nil, fmt.Errorf("创建根本原因分析失败: %v", err)
+		return nil, fmt.Errorf("创建根本原因分析失败: %w", err)
 	}
-
-	// 获取分析师姓名
-	var analystName string
-	err = s.db.QueryRowContext(ctx, "SELECT name FROM users WHERE id = $1 AND tenant_id = $2", req.AnalystID, tenantID).Scan(&analystName)
+	analysis, err := getRootCauseAnalysis(ctx, tx, analysisID, tenantID)
 	if err != nil {
-		analystName = "未知用户"
+		return nil, err
 	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("提交根因分析事务失败: %w", err)
+	}
+	return analysis, nil
+}
 
-	return &dto.RootCauseAnalysisResponse{
-		ID:                   analysisID,
-		ProblemID:            req.ProblemID,
-		AnalystID:            req.AnalystID,
-		AnalystName:          analystName,
-		AnalysisMethod:       req.AnalysisMethod,
-		RootCauseDescription: req.RootCauseDescription,
-		ContributingFactors:  &req.ContributingFactors,
-		Evidence:             &req.Evidence,
-		ConfidenceLevel:      req.ConfidenceLevel,
-		AnalysisDate:         time.Now(),
-		CreatedAt:            time.Now(),
-		UpdatedAt:            time.Now(),
-	}, nil
+func touchRCAWorkItem(ctx context.Context, tx *sql.Tx, problemID, tenantID int) error {
+	result, err := tx.ExecContext(ctx, `UPDATE tickets SET version = version + 1, updated_at = CURRENT_TIMESTAMP
+  WHERE id IN (SELECT work_item_id FROM problems WHERE id = $1)
+    AND tenant_id = $2 AND deleted_at IS NULL`, problemID, tenantID)
+	if err != nil {
+		return fmt.Errorf("更新问题工作项失败: %w", err)
+	}
+	return requireRCAMutation(result)
+}
+func requireRCAMutation(result sql.Result) error {
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("确认根因分析更新失败: %w", err)
+	}
+	if affected != 1 {
+		return fmt.Errorf("问题或根因分析不存在、已删除，或关联无效")
+	}
+	return nil
 }
 
 // CreateProblemSolution 创建问题解决方案
 func (s *ProblemInvestigationService) CreateProblemSolution(ctx context.Context, req *dto.CreateProblemSolutionRequest, tenantID int) (*dto.ProblemSolutionResponse, error) {
+	scoped, release, scopeErr := s.tenantScope(ctx, tenantID)
+	if scopeErr != nil {
+		return nil, scopeErr
+	}
+	defer release()
+	s = scoped
+
 	// 检查问题是否存在
 	var problemTitle string
 	err := s.db.QueryRowContext(ctx, `SELECT t.title FROM problems p JOIN tickets t ON t.id = p.work_item_id WHERE p.id = $1 AND t.tenant_id = $2 AND t.deleted_at IS NULL`, req.ProblemID, tenantID).Scan(&problemTitle)
@@ -548,6 +626,13 @@ func (s *ProblemInvestigationService) CreateProblemSolution(ctx context.Context,
 
 // GetProblemInvestigationSummary 获取问题调查摘要
 func (s *ProblemInvestigationService) GetProblemInvestigationSummary(ctx context.Context, problemID, tenantID int) (*dto.ProblemInvestigationSummaryResponse, error) {
+	scoped, release, scopeErr := s.tenantScope(ctx, tenantID)
+	if scopeErr != nil {
+		return nil, scopeErr
+	}
+	defer release()
+	s = scoped
+
 	// 检查问题是否存在
 	var problemTitle string
 	err := s.db.QueryRowContext(ctx, `SELECT t.title FROM problems p JOIN tickets t ON t.id = p.work_item_id WHERE p.id = $1 AND t.tenant_id = $2 AND t.deleted_at IS NULL`, problemID, tenantID).Scan(&problemTitle)
@@ -599,37 +684,16 @@ func (s *ProblemInvestigationService) GetProblemInvestigationSummary(ctx context
 		}
 	}
 
-	// 获取根本原因分析
+	// RCA正文仅投影 Problem；QueryRow 会在下一条查询前释放游标。
 	var analysisID int
 	err = s.db.QueryRowContext(ctx, "SELECT rca.id FROM problem_root_cause_analyses rca JOIN problems p ON rca.problem_id = p.id WHERE rca.problem_id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2 AND deleted_at IS NULL)", problemID, tenantID).Scan(&analysisID)
 	if err == nil {
-		rows, err := s.db.QueryContext(ctx, `
-			SELECT prca.id, prca.problem_id, prca.analyst_id, u1.name, prca.analysis_method,
-			       prca.root_cause_description, prca.contributing_factors, prca.evidence, prca.confidence_level,
-			       prca.analysis_date, prca.reviewed_by, u2.name, prca.review_date,
-			       prca.created_at, prca.updated_at
-			FROM problem_root_cause_analyses prca
-			JOIN problems p ON prca.problem_id = p.id
-			JOIN users u1 ON prca.analyst_id = u1.id AND u1.tenant_id = (SELECT tenant_id FROM tickets WHERE id = p.work_item_id AND deleted_at IS NULL)
-			LEFT JOIN users u2 ON prca.reviewed_by = u2.id AND (u2.id IS NULL OR u2.tenant_id = (SELECT tenant_id FROM tickets WHERE id = p.work_item_id AND deleted_at IS NULL))
-			WHERE prca.problem_id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2 AND deleted_at IS NULL)
-		`, problemID, tenantID)
-		if err == nil {
-			defer rows.Close()
-			if rows.Next() {
-				var analysis dto.RootCauseAnalysisResponse
-				err := rows.Scan(
-					&analysis.ID, &analysis.ProblemID, &analysis.AnalystID, &analysis.AnalystName,
-					&analysis.AnalysisMethod, &analysis.RootCauseDescription, &analysis.ContributingFactors,
-					&analysis.Evidence, &analysis.ConfidenceLevel, &analysis.AnalysisDate,
-					&analysis.ReviewedBy, &analysis.ReviewedByName, &analysis.ReviewDate,
-					&analysis.CreatedAt, &analysis.UpdatedAt,
-				)
-				if err == nil {
-					summary.RootCauseAnalysis = &analysis
-				}
-			}
+		summary.RootCauseAnalysis, err = getRootCauseAnalysis(ctx, s.db, analysisID, tenantID)
+		if err != nil {
+			return nil, err
 		}
+	} else if err != sql.ErrNoRows {
+		return nil, fmt.Errorf("查询根因分析失败: %w", err)
 	}
 
 	// 获取解决方案
@@ -667,37 +731,24 @@ func (s *ProblemInvestigationService) GetProblemInvestigationSummary(ctx context
 
 // UpdateRootCauseAnalysis 更新根本原因分析
 func (s *ProblemInvestigationService) UpdateRootCauseAnalysis(ctx context.Context, id int, req *dto.UpdateRootCauseAnalysisRequest, tenantID int) (*dto.RootCauseAnalysisResponse, error) {
-	s.logger.Infow("Updating root cause analysis", "id", id, "tenant_id", tenantID)
-	if req.ReviewedBy != nil {
-		if err := s.requireTenantUser(ctx, *req.ReviewedBy, tenantID); err != nil {
-			return nil, err
-		}
+	scoped, release, scopeErr := s.tenantScope(ctx, tenantID)
+	if scopeErr != nil {
+		return nil, scopeErr
 	}
+	defer release()
+	s = scoped
 
-	// 检查根因分析是否存在
-	var existingAnalysis dto.RootCauseAnalysisResponse
-	err := s.db.QueryRowContext(ctx, `
-		SELECT prca.id, prca.problem_id, prca.analyst_id, u1.name, prca.analysis_method,
-		       prca.root_cause_description, prca.contributing_factors, prca.evidence, prca.confidence_level,
-		       prca.analysis_date, prca.reviewed_by, u2.name, prca.review_date,
-		       prca.created_at, prca.updated_at
-		FROM problem_root_cause_analyses prca
-		JOIN users u1 ON prca.analyst_id = u1.id AND u1.tenant_id = $2
-		LEFT JOIN users u2 ON prca.reviewed_by = u2.id AND u2.tenant_id = $2
-		JOIN problems p ON prca.problem_id = p.id
-		WHERE prca.id = $1 AND p.work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $2 AND deleted_at IS NULL)
-	`, id, tenantID).Scan(
-		&existingAnalysis.ID, &existingAnalysis.ProblemID, &existingAnalysis.AnalystID, &existingAnalysis.AnalystName,
-		&existingAnalysis.AnalysisMethod, &existingAnalysis.RootCauseDescription, &existingAnalysis.ContributingFactors,
-		&existingAnalysis.Evidence, &existingAnalysis.ConfidenceLevel, &existingAnalysis.AnalysisDate,
-		&existingAnalysis.ReviewedBy, &existingAnalysis.ReviewedByName, &existingAnalysis.ReviewDate,
-		&existingAnalysis.CreatedAt, &existingAnalysis.UpdatedAt,
-	)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("根因分析不存在")
-		}
-		return nil, fmt.Errorf("查询根因分析失败: %v", err)
+		return nil, fmt.Errorf("开始根因分析事务失败: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	existingAnalysis, err := getRootCauseAnalysis(ctx, tx, id, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := touchRCAWorkItem(ctx, tx, existingAnalysis.ProblemID, tenantID); err != nil {
+		return nil, err
 	}
 
 	// 构建更新语句
@@ -708,11 +759,6 @@ func (s *ProblemInvestigationService) UpdateRootCauseAnalysis(ctx context.Contex
 	if req.AnalysisMethod != nil {
 		updateSQL += fmt.Sprintf(", analysis_method = $%d", paramIndex)
 		params = append(params, *req.AnalysisMethod)
-		paramIndex++
-	}
-	if req.RootCauseDescription != nil {
-		updateSQL += fmt.Sprintf(", root_cause_description = $%d", paramIndex)
-		params = append(params, *req.RootCauseDescription)
 		paramIndex++
 	}
 	if req.ContributingFactors != nil {
@@ -738,18 +784,47 @@ func (s *ProblemInvestigationService) UpdateRootCauseAnalysis(ctx context.Contex
 
 	updateSQL += fmt.Sprintf(" WHERE id = $%d AND problem_id IN (SELECT p.id FROM problems p JOIN tickets wi ON wi.id = p.work_item_id WHERE wi.tenant_id = $%d AND wi.deleted_at IS NULL)", paramIndex, paramIndex+1)
 	params = append(params, id, tenantID)
-
-	_, err = s.db.ExecContext(ctx, updateSQL, params...)
-	if err != nil {
-		return nil, fmt.Errorf("更新根因分析失败: %v", err)
+	if req.ReviewedBy != nil {
+		updateSQL += fmt.Sprintf(" AND EXISTS (SELECT 1 FROM users reviewer WHERE reviewer.id = $%d AND reviewer.tenant_id = $%d)", paramIndex+2, paramIndex+1)
+		params = append(params, *req.ReviewedBy)
 	}
-
-	// 获取更新后的数据
-	return s.GetRootCauseAnalysis(ctx, id, tenantID)
+	result, err := tx.ExecContext(ctx, updateSQL, params...)
+	if err != nil {
+		return nil, fmt.Errorf("更新根因分析失败: %w", err)
+	}
+	if err := requireRCAMutation(result); err != nil {
+		return nil, err
+	}
+	if req.RootCauseDescription != nil {
+		result, err = tx.ExecContext(ctx, `UPDATE problems SET root_cause = $1
+   WHERE id = $2 AND work_item_id IN (SELECT id FROM tickets WHERE tenant_id = $3 AND deleted_at IS NULL)`,
+			*req.RootCauseDescription, existingAnalysis.ProblemID, tenantID)
+		if err != nil {
+			return nil, fmt.Errorf("更新问题根因失败: %w", err)
+		}
+		if err := requireRCAMutation(result); err != nil {
+			return nil, err
+		}
+	}
+	analysis, err := getRootCauseAnalysis(ctx, tx, id, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("提交根因分析事务失败: %w", err)
+	}
+	return analysis, nil
 }
 
 // DeleteRootCauseAnalysis 删除根本原因分析
 func (s *ProblemInvestigationService) DeleteRootCauseAnalysis(ctx context.Context, id int, tenantID int) error {
+	scoped, release, scopeErr := s.tenantScope(ctx, tenantID)
+	if scopeErr != nil {
+		return scopeErr
+	}
+	defer release()
+	s = scoped
+
 	s.logger.Infow("Deleting root cause analysis", "id", id, "tenant_id", tenantID)
 
 	result, err := s.db.ExecContext(ctx, "DELETE FROM problem_root_cause_analyses WHERE id = $1 AND problem_id IN (SELECT p.id FROM problems p JOIN tickets wi ON wi.id = p.work_item_id WHERE wi.tenant_id = $2 AND wi.deleted_at IS NULL)", id, tenantID)
@@ -769,6 +844,13 @@ func (s *ProblemInvestigationService) DeleteRootCauseAnalysis(ctx context.Contex
 
 // UpdateProblemSolution 更新解决方案
 func (s *ProblemInvestigationService) UpdateProblemSolution(ctx context.Context, id int, req *dto.UpdateProblemSolutionRequest, tenantID int) (*dto.ProblemSolutionResponse, error) {
+	scoped, release, scopeErr := s.tenantScope(ctx, tenantID)
+	if scopeErr != nil {
+		return nil, scopeErr
+	}
+	defer release()
+	s = scoped
+
 	s.logger.Infow("Updating problem solution", "id", id, "tenant_id", tenantID)
 
 	// 检查解决方案是否存在
@@ -852,6 +934,13 @@ func (s *ProblemInvestigationService) UpdateProblemSolution(ctx context.Context,
 
 // DeleteProblemSolution 删除解决方案
 func (s *ProblemInvestigationService) DeleteProblemSolution(ctx context.Context, id int, tenantID int) error {
+	scoped, release, scopeErr := s.tenantScope(ctx, tenantID)
+	if scopeErr != nil {
+		return scopeErr
+	}
+	defer release()
+	s = scoped
+
 	s.logger.Infow("Deleting problem solution", "id", id, "tenant_id", tenantID)
 
 	result, err := s.db.ExecContext(ctx, "DELETE FROM problem_solutions WHERE id = $1 AND problem_id IN (SELECT p.id FROM problems p JOIN tickets wi ON wi.id = p.work_item_id WHERE wi.tenant_id = $2 AND wi.deleted_at IS NULL)", id, tenantID)
@@ -871,6 +960,13 @@ func (s *ProblemInvestigationService) DeleteProblemSolution(ctx context.Context,
 
 // ApproveSolution 审批解决方案
 func (s *ProblemInvestigationService) ApproveSolution(ctx context.Context, id int, approverID int, approved bool, comment string, tenantID int) (*dto.ProblemSolutionResponse, error) {
+	scoped, release, scopeErr := s.tenantScope(ctx, tenantID)
+	if scopeErr != nil {
+		return nil, scopeErr
+	}
+	defer release()
+	s = scoped
+
 	s.logger.Infow("Approving solution", "id", id, "approver_id", approverID, "approved", approved)
 
 	// 检查解决方案是否存在

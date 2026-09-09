@@ -209,6 +209,7 @@ type ResolvedCatalog struct {
 
 type ResolvedCTI struct {
 	CategoryName string
+	TypeName     string
 	CategoryID   *int
 	TypeID       *int
 	ItemID       *int
