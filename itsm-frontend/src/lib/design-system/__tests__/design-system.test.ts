@@ -328,3 +328,26 @@ describe('Theme token consumer consistency', () => {
     expect(generateCSSVariables(isDark)).toEqual(emitted);
   });
 });
+
+describe('Resolved Ant Design brand color', () => {
+  it.each([false, true])('preserves the configured brand after algorithm resolution for dark=%s', async isDark => {
+    const { theme } = await import('antd');
+    const { getAntdTheme } = await import('../theme');
+    const config = getAntdTheme(isDark);
+    const resolved = theme.getDesignToken(config);
+    expect(resolved.colorPrimary.toLowerCase()).toBe(config.token.colorPrimary.toLowerCase());
+  });
+
+  it.each([false, true])('retains semantic derivation for dark=%s', async isDark => {
+    const { theme } = await import('antd');
+    const { getAntdTheme } = await import('../theme');
+    const config = getAntdTheme(isDark);
+    const baseline = theme.getDesignToken({ ...config, algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm });
+    const resolved = theme.getDesignToken(config);
+    // Brand preservation must not replace professional success/warning/error palettes.
+    const semanticColors = (values: typeof resolved) => Object.fromEntries(
+      Object.entries(values).filter(([key]) => /^color(Success|Warning|Error|Info)/.test(key))
+    );
+    expect(semanticColors(resolved)).toEqual(semanticColors(baseline));
+  });
+});

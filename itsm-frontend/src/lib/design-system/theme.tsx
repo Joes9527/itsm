@@ -101,6 +101,13 @@ export const useTheme = (): ThemeContextType => {
 
 // Ant Design 主题配置
 export const getAntdTheme = (isDark: boolean) => {
+  const baseAlgorithm = isDark ? theme.darkAlgorithm : theme.defaultAlgorithm;
+  // Ant Design removes seed keys from final overrides. Preserve the brand after
+  // palette derivation while retaining every other token produced by the algorithm.
+  const algorithm: typeof theme.darkAlgorithm = (seed, mapToken) => ({
+    ...baseAlgorithm(seed, mapToken),
+    colorPrimary: seed.colorPrimary,
+  });
   const palette = tokens.themes[isDark ? 'dark' : 'light'];
   const primary = tokens.brand.palette[500];
   const foreground = tokens.common['--color-primary-foreground'];
@@ -116,7 +123,7 @@ export const getAntdTheme = (isDark: boolean) => {
     fontSize: parseInt(tokens.typography.fontSize.base, 10),
   };
   return {
-    algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+    algorithm,
     token: {
       ...control,
       colorPrimary: primary,
