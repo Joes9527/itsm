@@ -15,6 +15,7 @@ import (
 	"itsm-backend/ent/auditlog"
 	changedomain "itsm-backend/handlers/change"
 	"itsm-backend/middleware"
+	"itsm-backend/service"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -346,4 +347,54 @@ func TestWorkItemChangePIRTaskVersionRefresh(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result.Result)
 	require.Equal(t, created.Version+1, result.Result.Version)
+}
+
+func TestWorkItemChangePIRExistingRowConcurrentReplay(t *testing.T) {
+	for _, action := range []string{"update", "delete"} {
+		t.Run(action, func(t *testing.T) {
+			f := newChangeLifecycleFixture(t, "normal")
+			created, err := f.pirOwner.CreatePIR(f.ctx, &dto.CreateChangePIRRequest{ChangeID: f.c.ID, OverallResult: "successful"}, f.command("pir", "create").Meta)
+			require.NoError(t, err)
+			meta := f.command("pir", "contended-"+action).Meta
+			summary := "Concurrent review"
+			invoke := func(version int) (service.PIRMutationResult, error) {
+				copy := meta
+				copy.ExpectedVersion = version
+				if action == "update" {
+					return f.pirOwner.UpdatePIR(f.ctx, created.PIRID, &dto.UpdateChangePIRRequest{ChangeID: f.c.ID, SuccessSummary: &summary}, copy)
+				}
+				return f.pirOwner.DeletePIR(f.ctx, created.PIRID, &dto.DeleteChangePIRRequest{ChangeID: f.c.ID}, copy)
+			}
+			synchronizeChangeOwnerReads(t, f)
+			type attempt struct {
+				result service.PIRMutationResult
+				err    error
+			}
+			results := make(chan attempt, 2)
+			for range 2 {
+				go func() { result, err := invoke(meta.ExpectedVersion); results <- attempt{result, err} }()
+			}
+			a, b := <-results, <-results
+			require.NoError(t, a.err)
+			require.NoError(t, b.err)
+			require.Equal(t, created.PIRID, a.result.PIRID)
+			require.Equal(t, a.result.PIRID, b.result.PIRID)
+			require.Equal(t, meta.ExpectedVersion+1, a.result.Version)
+			require.Equal(t, a.result.Version, b.result.Version)
+			require.Equal(t, a.result.Status, b.result.Status)
+			require.NotEqual(t, a.result.Replayed, b.result.Replayed, "exactly the losing request replays")
+			require.Equal(t, meta.ExpectedVersion+1, f.client.Ticket.GetX(f.ctx, f.c.WorkItemID).Version)
+			require.Equal(t, 1, f.client.AuditLog.Query().Where(auditlog.Action("change.pir_"+action)).CountX(f.ctx))
+			if action == "delete" {
+				require.Zero(t, f.client.ChangePIR.Query().CountX(f.ctx))
+			} else {
+				require.Equal(t, summary, f.client.ChangePIR.GetX(f.ctx, created.PIRID).SuccessSummary)
+			}
+			_, err = invoke(meta.ExpectedVersion + 1)
+			require.ErrorContains(t, err, "operationId", "same key cannot describe a different expected version")
+			f.actor.Update().SetActive(false).ExecX(f.ctx)
+			_, err = invoke(meta.ExpectedVersion)
+			require.Error(t, err, "current authorization precedes immutable replay")
+		})
+	}
 }

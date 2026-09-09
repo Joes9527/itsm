@@ -191,6 +191,9 @@ func (s *ChangePIRService) mutatePIR(ctx context.Context, m workitemmutation.Met
 		}
 		return empty, err
 	}
+	// The existing-row lock can itself fail under RR contention. Include it
+	// in confirmed-rollback receipt recovery without retrying business effects.
+	attempted = true
 	var pir *ent.ChangePIR
 	if action != "create" {
 		// Match review/close: PIR row precedes the WorkItem CAS. RR detects a
@@ -228,7 +231,6 @@ func (s *ChangePIRService) mutatePIR(ctx context.Context, m workitemmutation.Met
 		return empty, common.NewValidationError("new PIR facts required", nil)
 	}
 	now := time.Now().UTC()
-	attempted = true
 	saved, err := tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantID(m.TenantID), ticket.DeletedAtIsNil(), ticket.Version(m.ExpectedVersion)).SetVersion(m.ExpectedVersion + 1).SetUpdatedAt(now).Save(ctx)
 	if err != nil {
 		return empty, err
