@@ -6,6 +6,7 @@
 @import '../components/ui/typography.css';
 @import "tailwindcss";
 @reference "tailwindcss";
+@config "../../tailwind.config.mjs";
 
 :root {
   color-scheme: light;
@@ -13,11 +14,11 @@
 
 html,
 body {
-  font-family: var(--font-family-sans, var(--font-family-base, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif));
+  font-family: var(--font-family-base);
   font-size: var(--font-size-base, 16px);
   line-height: var(--line-height-normal, 1.5);
   color: var(--color-text-primary, #111827);
-  background-color: var(--color-bg-primary, #ffffff);
+  background-color: var(--color-bg-secondary);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -46,11 +47,11 @@ h6,
 .ant-form-item-label > label,
 .ant-tag,
 .ant-descriptions-title {
-  font-family: var(--font-family-sans, var(--font-family-base, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif));
+  font-family: var(--font-family-base);
 }
 
 .ant-table-thead > tr > th {
-  font-size: var(--font-size-sm, 14px);
+  font-size: var(--font-size-helper);
   font-weight: var(--font-weight-semibold, 600);
   line-height: var(--line-height-normal, 1.5);
 }
@@ -70,567 +71,9 @@ h6,
 .ant-card-meta-title,
 .ant-descriptions-title,
 .ant-page-header-heading-title {
-  font-size: var(--font-size-lg, 18px);
+  font-size: var(--font-size-card-title);
   font-weight: var(--font-weight-semibold, 600);
   line-height: var(--line-height-snug, 1.35);
-}
-
-/* Tooltip 样式修复 - 修复白色透明背景问题 */
-.ant-tooltip {
-  opacity: 1 !important;
-  z-index: 9999 !important;
-}
-
-.ant-tooltip-wrapper {
-  z-index: 9999 !important;
-}
-
-.ant-tooltip-inner {
-  background-color: var(--color-bg-elevated) !important;
-  color: var(--color-text-inverse) !important;
-  border-radius: 4px !important;
-  padding: 8px 12px !important;
-}
-
-.ant-tooltip-arrow::before {
-  background-color: var(--color-bg-elevated) !important;
-}
-
-/* Popover 样式修复 - 同样的问题 */
-.ant-popover {
-  opacity: 1 !important;
-  z-index: 9999 !important;
-}
-
-.ant-popover-inner {
-  background-color: var(--color-bg-elevated) !important;
-  color: var(--color-text-inverse) !important;
-  border-radius: 4px !important;
-}
-
-.ant-popover-arrow::before {
-  background-color: var(--color-bg-elevated) !important;
-}
-
-/* Dropdown 样式修复 */
-.ant-dropdown {
-  opacity: 1 !important;
-  z-index: 9999 !important;
-}
-
-.ant-dropdown-menu {
-  background-color: var(--color-bg-elevated) !important;
-  color: var(--color-text-inverse) !important;
-  border-radius: 4px !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05) !important;
-}
-
-.ant-dropdown-menu-item,
-.ant-dropdown-menu-submenu-title {
-  color: var(--color-text-inverse) !important;
-}
-
-.ant-dropdown-menu-item:hover,
-.ant-dropdown-menu-submenu-title:hover {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-  color: var(--color-text-inverse) !important;
-}
-
-.ant-dropdown-menu-item-selected {
-  background-color: rgba(255, 255, 255, 0.15) !important;
-  color: var(--color-text-inverse) !important;
-}
-
-.ant-dropdown-menu-item.danger {
-  color: #ff4d4f !important;
-}
-
-.ant-dropdown-menu-item.danger:hover {
-  background-color: rgba(255, 77, 79, 0.1) !important;
-}
-
-/* Select 下拉框样式修复 - 亮色模式（默认） */
-/* 确保所有下拉框在亮色模式下使用一致的白色背景 */
-.ant-select-dropdown,
-:root .ant-select-dropdown {
-  background-color: #ffffff !important;
-  border-radius: 8px !important;
-  border: 1px solid #e5e5e5 !important;
-  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05) !important;
-}
-
-.ant-select-item,
-:root .ant-select-item {
-  color: #404040 !important;
-  background-color: transparent !important;
-}
-
-.ant-select-item-option-disabled,
-:root .ant-select-item-option-disabled {
-  color: #a3a3a3 !important;
-}
-
-.ant-select-item-option-active:not(.ant-select-item-option-disabled),
-:root .ant-select-item-option-active:not(.ant-select-item-option-disabled) {
-  background-color: #f5f5f5 !important;
-}
-
-.ant-select-item-option-selected,
-:root .ant-select-item-option-selected {
-  background-color: #e6f4ff !important;
-  color: #1890ff !important;
-  font-weight: 500 !important;
-}
-
-.ant-select-selection-item,
-:root .ant-select-selection-item,
-:root .ant-select-selection-search-input {
-  color: #404040 !important;
-}
-
-/* DatePicker/TimePicker 下拉面板样式 - 亮色模式（默认） */
-.ant-picker-dropdown,
-:root .ant-picker-dropdown,
-.ant-picker-dropdown.ant-picker-dropdown-placement-topLeft,
-:root .ant-picker-dropdown.ant-picker-dropdown-placement-topLeft,
-.ant-picker-dropdown.ant-picker-dropdown-placement-topRight,
-:root .ant-picker-dropdown.ant-picker-dropdown-placement-topRight,
-.ant-picker-dropdown.ant-picker-dropdown-placement-bottomLeft,
-:root .ant-picker-dropdown.ant-picker-dropdown-placement-bottomLeft,
-.ant-picker-dropdown.ant-picker-dropdown-placement-bottomRight,
-:root .ant-picker-dropdown.ant-picker-dropdown-placement-bottomRight {
-  background-color: #ffffff !important;
-  color: #404040 !important;
-  border-radius: 8px !important;
-  border: 1px solid #e5e5e5 !important;
-  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05) !important;
-}
-
-.ant-picker-panel,
-:root .ant-picker-panel {
-  background-color: #ffffff !important;
-  color: #404040 !important;
-}
-
-.ant-picker-header,
-:root .ant-picker-header,
-.ant-picker-body,
-:root .ant-picker-body,
-.ant-picker-footer,
-:root .ant-picker-footer {
-  background-color: transparent !important;
-  color: #404040 !important;
-}
-
-.ant-picker-cell-in-view.ant-picker-cell-today .ant-picker-cell-inner,
-:root .ant-picker-cell-in-view.ant-picker-cell-today .ant-picker-cell-inner,
-.ant-picker-cell:hover .ant-picker-cell-inner,
-:root .ant-picker-cell:hover .ant-picker-cell-inner {
-  background-color: #f5f5f5 !important;
-  color: #404040 !important;
-}
-
-.ant-picker-cell.ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-cell-inner,
-:root .ant-picker-cell.ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-cell-inner {
-  background-color: #e6f4ff !important;
-  color: #1890ff !important;
-}
-
-.ant-picker-time-panel-column,
-:root .ant-picker-time-panel-column {
-  background-color: transparent !important;
-}
-
-.ant-picker-time-panel-cell-inner,
-:root .ant-picker-time-panel-cell-inner {
-  color: #404040 !important;
-}
-
-.ant-picker-time-panel-cell-inner:hover,
-:root .ant-picker-time-panel-cell-inner:hover {
-  background-color: #f5f5f5 !important;
-}
-
-.ant-picker-time-panel-cell-selected .ant-picker-time-panel-cell-inner,
-:root .ant-picker-time-panel-cell-selected .ant-picker-time-panel-cell-inner {
-  background-color: #e6f4ff !important;
-  color: #1890ff !important;
-}
-
-/* ColorPicker 下拉样式 - 亮色模式（默认） */
-.ant-color-dropdown,
-:root .ant-color-dropdown {
-  background-color: #ffffff !important;
-  border-radius: 8px !important;
-  border: 1px solid #e5e5e5 !important;
-  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08) !important;
-}
-
-.ant-color-dropdown-link,
-:root .ant-color-dropdown-link,
-.ant-color-dropdown-button,
-:root .ant-color-dropdown-button {
-  color: #404040 !important;
-}
-
-.ant-color-dropdown-link:hover,
-:root .ant-color-dropdown-link:hover {
-  background-color: #f5f5f5 !important;
-}
-
-/* TreeSelect 下拉样式 - 亮色模式（默认） */
-.ant-select-tree-dropdown,
-:root .ant-select-tree-dropdown {
-  background-color: #ffffff !important;
-  color: #404040 !important;
-  border-radius: 8px !important;
-  border: 1px solid #e5e5e5 !important;
-  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08) !important;
-}
-
-.ant-select-tree-dropdown .ant-select-tree-node-content-wrapper,
-:root .ant-select-tree-dropdown .ant-select-tree-node-content-wrapper,
-.ant-select-tree-dropdown .ant-select-tree-title,
-:root .ant-select-tree-dropdown .ant-select-tree-title {
-  color: #404040 !important;
-}
-
-.ant-select-tree-dropdown .ant-select-tree-node-content-wrapper:hover,
-:root .ant-select-tree-dropdown .ant-select-tree-node-content-wrapper:hover {
-  background-color: #f5f5f5 !important;
-}
-
-.ant-select-tree-dropdown .ant-select-tree-node-selected .ant-select-tree-node-content-wrapper,
-:root .ant-select-tree-dropdown .ant-select-tree-node-selected .ant-select-tree-node-content-wrapper,
-.ant-select-tree-dropdown .ant-select-tree-node-selected .ant-select-tree-title,
-:root .ant-select-tree-dropdown .ant-select-tree-node-selected .ant-select-tree-title {
-  background-color: #e6f4ff !important;
-  color: #1890ff !important;
-}
-
-/* Cascader 下拉样式 - 亮色模式（默认） */
-.ant-cascader-dropdown,
-:root .ant-cascader-dropdown {
-  background-color: #ffffff !important;
-  color: #404040 !important;
-  border-radius: 8px !important;
-  border: 1px solid #e5e5e5 !important;
-  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08) !important;
-}
-
-.ant-cascader-menu-item,
-:root .ant-cascader-menu-item,
-.ant-cascader-menu-item-active,
-:root .ant-cascader-menu-item-active,
-.ant-cascader-menu-item-expand-selected,
-:root .ant-cascader-menu-item-expand-selected,
-.ant-cascader-menu-item-selected,
-:root .ant-cascader-menu-item-selected {
-  color: #404040 !important;
-  background-color: transparent !important;
-}
-
-.ant-cascader-menu-item-active:not(.ant-cascader-menu-item-disabled),
-:root .ant-cascader-menu-item-active:not(.ant-cascader-menu-item-disabled) {
-  background-color: #f5f5f5 !important;
-}
-
-.ant-cascader-menu-item-selected,
-:root .ant-cascader-menu-item-selected {
-  background-color: #e6f4ff !important;
-  color: #1890ff !important;
-}
-
-/* Mentions 下拉样式 - 亮色模式（默认） */
-.ant-mentions-dropdown,
-:root .ant-mentions-dropdown {
-  background-color: #ffffff !important;
-  color: #404040 !important;
-  border-radius: 8px !important;
-  border: 1px solid #e5e5e5 !important;
-  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08) !important;
-}
-
-.ant-mentions-dropdown .ant-select-item-option-active:not(.ant-select-item-option-disabled),
-:root .ant-mentions-dropdown .ant-select-item-option-active:not(.ant-select-item-option-disabled) {
-  background-color: #f5f5f5 !important;
-  color: #404040 !important;
-}
-
-.ant-mentions-dropdown .ant-select-item-option-selected,
-:root .ant-mentions-dropdown .ant-select-item-option-selected {
-  background-color: #e6f4ff !important;
-  color: #1890ff !important;
-}
-
-/* Select 下拉框样式修复 - 暗色模式 */
-.dark .ant-select-dropdown,
-:root.dark .ant-select-dropdown {
-  background-color: var(--color-bg-elevated) !important;
-  color: #fff !important;
-  border-radius: 8px !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05) !important;
-}
-
-.dark .ant-select-item,
-:root.dark .ant-select-item,
-.dark .ant-select-item-option-disabled,
-:root.dark .ant-select-item-option-disabled,
-.dark .ant-select-item-option-active,
-:root.dark .ant-select-item-option-active,
-.dark .ant-select-item-option-selected,
-:root.dark .ant-select-item-option-selected {
-  color: #fff !important;
-  background-color: transparent !important;
-}
-
-.dark .ant-select-item-option-active:not(.ant-select-item-option-disabled),
-:root.dark .ant-select-item-option-active:not(.ant-select-item-option-disabled) {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-}
-
-.dark .ant-select-item-option-selected,
-:root.dark .ant-select-item-option-selected {
-  background-color: rgba(255, 255, 255, 0.15) !important;
-}
-
-.dark .ant-select-selection-item,
-:root.dark .ant-select-selection-item,
-.dark .ant-select-selection-search-input,
-:root.dark .ant-select-selection-search-input {
-  color: #fff !important;
-}
-
-/* DatePicker/TimePicker 下拉面板样式暗色主题下修复 - 仅在生效 */
-.dark .ant-picker-dropdown,
-:root.dark .ant-picker-dropdown,
-.dark .ant-picker-dropdown.ant-picker-dropdown-placement-topLeft,
-:root.dark .ant-picker-dropdown.ant-picker-dropdown-placement-topLeft,
-.dark .ant-picker-dropdown.ant-picker-dropdown-placement-topRight,
-:root.dark .ant-picker-dropdown.ant-picker-dropdown-placement-topRight,
-.dark .ant-picker-dropdown.ant-picker-dropdown-placement-bottomLeft,
-:root.dark .ant-picker-dropdown.ant-picker-dropdown-placement-bottomLeft,
-.dark .ant-picker-dropdown.ant-picker-dropdown-placement-bottomRight,
-:root.dark .ant-picker-dropdown.ant-picker-dropdown-placement-bottomRight {
-  background-color: var(--color-bg-elevated) !important;
-  color: #fff !important;
-  border-radius: 4px !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05) !important;
-}
-
-.dark .ant-picker-panel,
-:root.dark .ant-picker-panel {
-  background-color: var(--color-bg-elevated) !important;
-  color: #fff !important;
-}
-
-.dark .ant-picker-header,
-:root.dark .ant-picker-header,
-.dark .ant-picker-body,
-:root.dark .ant-picker-body,
-.dark .ant-picker-footer,
-:root.dark .ant-picker-footer {
-  background-color: transparent !important;
-  color: #fff !important;
-}
-
-.dark .ant-picker-cell-in-view.ant-picker-cell-today .ant-picker-cell-inner,
-:root.dark .ant-picker-cell-in-view.ant-picker-cell-today .ant-picker-cell-inner,
-.dark .ant-picker-cell:hover .ant-picker-cell-inner,
-:root.dark .ant-picker-cell:hover .ant-picker-cell-inner {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-  color: #fff !important;
-}
-
-.dark .ant-picker-cell.ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-cell-inner,
-:root.dark .ant-picker-cell.ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-cell-inner {
-  background-color: rgba(255, 255, 255, 0.15) !important;
-  color: #fff !important;
-}
-
-.dark .ant-picker-time-panel-column,
-:root.dark .ant-picker-time-panel-column {
-  background-color: transparent !important;
-}
-
-.dark .ant-picker-time-panel-cell-inner,
-:root.dark .ant-picker-time-panel-cell-inner {
-  color: #fff !important;
-}
-
-.dark .ant-picker-time-panel-cell-inner:hover,
-:root.dark .ant-picker-time-panel-cell-inner:hover {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-}
-
-.dark .ant-picker-time-panel-cell-selected .ant-picker-time-panel-cell-inner,
-:root.dark .ant-picker-time-panel-cell-selected .ant-picker-time-panel-cell-inner {
-  background-color: rgba(255, 255, 255, 0.15) !important;
-  color: #fff !important;
-}
-
-/* ColorPicker 下拉样式修复 - 仅在暗色主题下生效 */
-.dark .ant-color-dropdown,
-:root.dark .ant-color-dropdown {
-  background-color: var(--color-bg-elevated) !important;
-  border-radius: 4px !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08) !important;
-}
-
-.dark .ant-color-dropdown-link,
-:root.dark .ant-color-dropdown-link,
-.dark .ant-color-dropdown-button,
-:root.dark .ant-color-dropdown-button {
-  color: #fff !important;
-}
-
-.dark .ant-color-dropdown-link:hover,
-:root.dark .ant-color-dropdown-link:hover {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-}
-
-/* TreeSelect 下拉样式修复 - 仅在暗色主题下生效 */
-.dark .ant-select-tree-dropdown,
-:root.dark .ant-select-tree-dropdown {
-  background-color: var(--color-bg-elevated) !important;
-  color: #fff !important;
-  border-radius: 4px !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08) !important;
-}
-
-.dark .ant-select-tree-dropdown .ant-select-tree-node-content-wrapper,
-:root.dark .ant-select-tree-dropdown .ant-select-tree-node-content-wrapper,
-.dark .ant-select-tree-dropdown .ant-select-tree-title,
-:root.dark .ant-select-tree-dropdown .ant-select-tree-title {
-  color: #fff !important;
-}
-
-.dark .ant-select-tree-dropdown .ant-select-tree-node-content-wrapper:hover,
-:root.dark .ant-select-tree-dropdown .ant-select-tree-node-content-wrapper:hover {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-}
-
-.dark .ant-select-tree-dropdown .ant-select-tree-node-selected .ant-select-tree-node-content-wrapper,
-:root.dark .ant-select-tree-dropdown .ant-select-tree-node-selected .ant-select-tree-node-content-wrapper,
-.dark .ant-select-tree-dropdown .ant-select-tree-node-selected .ant-select-tree-title,
-:root.dark .ant-select-tree-dropdown .ant-select-tree-node-selected .ant-select-tree-title {
-  background-color: rgba(255, 255, 255, 0.15) !important;
-  color: #fff !important;
-}
-
-/* Cascader 下拉样式修复 - 仅在暗色主题下生效 */
-.dark .ant-cascader-dropdown,
-:root.dark .ant-cascader-dropdown {
-  background-color: var(--color-bg-elevated) !important;
-  color: #fff !important;
-  border-radius: 4px !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08) !important;
-}
-
-.dark .ant-cascader-menu-item,
-:root.dark .ant-cascader-menu-item,
-.dark .ant-cascader-menu-item-active,
-:root.dark .ant-cascader-menu-item-active,
-.dark .ant-cascader-menu-item-expand-selected,
-:root.dark .ant-cascader-menu-item-expand-selected,
-.dark .ant-cascader-menu-item-selected,
-:root.dark .ant-cascader-menu-item-selected {
-  color: #fff !important;
-  background-color: transparent !important;
-}
-
-.dark .ant-cascader-menu-item-active:not(.ant-cascader-menu-item-disabled),
-:root.dark .ant-cascader-menu-item-active:not(.ant-cascader-menu-item-disabled) {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-}
-
-.dark .ant-cascader-menu-item-selected,
-:root.dark .ant-cascader-menu-item-selected {
-  background-color: rgba(255, 255, 255, 0.15) !important;
-  color: #fff !important;
-}
-
-/* Mentions 下拉样式修复 - 仅在暗色主题下生效 */
-.dark .ant-mentions-dropdown,
-:root.dark .ant-mentions-dropdown {
-  background-color: var(--color-bg-elevated) !important;
-  color: #fff !important;
-  border-radius: 4px !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08) !important;
-}
-
-.dark .ant-mentions-dropdown .ant-select-item-option-active:not(.ant-select-item-option-disabled),
-:root.dark .ant-mentions-dropdown .ant-select-item-option-active:not(.ant-select-item-option-disabled) {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-  color: #fff !important;
-}
-
-.dark .ant-mentions-dropdown .ant-select-item-option-selected,
-:root.dark .ant-mentions-dropdown .ant-select-item-option-selected {
-  background-color: rgba(255, 255, 255, 0.15) !important;
-  color: #fff !important;
-}
-
-/* AutoComplete 下拉样式修复 - 仅在暗色主题下生效 */
-.dark .ant-autocomplete-dropdown,
-:root.dark .ant-autocomplete-dropdown {
-  background-color: var(--color-bg-elevated) !important;
-  color: #fff !important;
-  border-radius: 4px !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08) !important;
-}
-
-.dark .ant-autocomplete-dropdown .ant-select-item-option-active:not(.ant-select-item-option-disabled),
-:root.dark .ant-autocomplete-dropdown .ant-select-item-option-active:not(.ant-select-item-option-disabled) {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-  color: #fff !important;
-}
-
-.dark .ant-autocomplete-dropdown .ant-select-item-option-selected,
-:root.dark .ant-autocomplete-dropdown .ant-select-item-option-selected {
-  background-color: rgba(255, 255, 255, 0.15) !important;
-  color: #fff !important;
-}
-
-/* Transfer 左右选择框样式修复 - 仅在暗色主题下生效 */
-.dark .ant-transfer-dropdown,
-:root.dark .ant-transfer-dropdown {
-  background-color: var(--color-bg-elevated) !important;
-  color: #fff !important;
-}
-
-.dark .ant-transfer-list,
-:root.dark .ant-transfer-list {
-  background-color: var(--color-bg-elevated) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
-  border-radius: 4px !important;
-}
-
-.dark .ant-transfer-list-header,
-:root.dark .ant-transfer-list-header {
-  background-color: rgba(255, 255, 255, 0.05) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
-  color: #fff !important;
-}
-
-.dark .ant-transfer-list-body-item:hover,
-:root.dark .ant-transfer-list-body-item:hover {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-  color: #fff !important;
-}
-
-.dark .ant-transfer-list-body-item-selected,
-:root.dark .ant-transfer-list-body-item-selected {
-  background-color: rgba(255, 255, 255, 0.15) !important;
-  color: #fff !important;
 }
 
 @layer utilities {
@@ -657,7 +100,7 @@ h6,
 
 .enterprise-dashboard-container {
   padding: 24px;
-  background-color: #f0f2f5;
+  background-color: var(--color-bg-secondary);
 }
 
 /* 主内容区域：移除页面内居中约束，贴合侧边栏与顶部布局 */
@@ -678,111 +121,6 @@ h6,
 }
 
 /* 设计系统 - 全局CSS变量 */
-:root {
-  /* 主色调 - 增强对比度 */
-  --color-primary-50: #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-200: #bfdbfe;
-  --color-primary-300: #93c5fd;
-  --color-primary-400: #60a5fa;
-  --color-primary-500: #D85E10;
-  /* 调整为更深色以提高对比度 */
-  --color-primary-600: #B84A08;
-  --color-primary-700: #933A06;
-  --color-primary-800: #1e3a8a;
-  --color-primary-900: #172554;
-  --color-primary-950: #0c1e3d;
-
-  /* 中性色 - 优化对比度 */
-  --color-neutral-50: #ffffff;
-  --color-neutral-100: #fafafa;
-  --color-neutral-200: #f4f4f5;
-  --color-neutral-300: #e4e4e7;
-  --color-neutral-400: #a1a1aa;
-  --color-neutral-500: #71717a;
-  --color-neutral-600: #52525b;
-  --color-neutral-700: #3f3f46;
-  --color-neutral-800: #27272a;
-  --color-neutral-900: #18181b;
-  --color-neutral-950: #000000;
-
-  /* 语义色 - 增强可访问性 */
-  --color-success-50: #f0fdf4;
-  --color-success-100: #dcfce7;
-  --color-success-200: #bbf7d0;
-  --color-success-300: #86efac;
-  --color-success-400: #4ade80;
-  --color-success-500: #16a34a;
-  /* 更深的绿色 */
-  --color-success-600: #15803d;
-  --color-success-700: #166534;
-  --color-success-800: #14532d;
-  --color-success-900: #052e16;
-
-  --color-warning-50: #fffbeb;
-  --color-warning-100: #fef3c7;
-  --color-warning-200: #fde68a;
-  --color-warning-300: #fcd34d;
-  --color-warning-400: #fbbf24;
-  --color-warning-500: #d97706;
-  /* 更深的橙色 */
-  --color-warning-600: #b45309;
-  --color-warning-700: #92400e;
-  --color-warning-800: #78350f;
-  --color-warning-900: #451a03;
-
-  --color-error-50: #fef2f2;
-  --color-error-100: #fee2e2;
-  --color-error-200: #fecaca;
-  --color-error-300: #fca5a5;
-  --color-error-400: #f87171;
-  --color-error-500: #dc2626;
-  /* 更深的红色 */
-  --color-error-600: #b91c1c;
-  --color-error-700: #991b1b;
-  --color-error-800: #7f1d1d;
-  --color-error-900: #450a0a;
-
-  /* 可访问性增强样式 */
-  --text-color: #18181b;
-  --bg-color: #ffffff;
-  --border-color: #e4e4e7;
-  --link-color: #D85E10;
-  /* 提升层背景色 - 用于 tooltip/popover/dropdown 等浮层 */
-  --color-bg-elevated: #333;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-
-  /* 动画和过渡 */
-  --transition-fast: 150ms ease-in-out;
-  --transition-normal: 200ms ease-in-out;
-  --transition-slow: 300ms ease-in-out;
-  --animation-duration: var(--transition-normal);
-
-  /* 间距系统 */
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
-  --spacing-xl: 2rem;
-  --spacing-2xl: 3rem;
-
-  /* 字体系统 */
-  --font-size-xs: 0.75rem;
-  --font-size-sm: 0.875rem;
-  --font-size-base: 1rem;
-  --font-size-lg: 1.125rem;
-  --font-size-xl: 1.25rem;
-  --font-size-2xl: 1.5rem;
-  --font-size-3xl: 1.875rem;
-  --font-size-4xl: 2.25rem;
-
-  /* 触摸区域 */
-  --touch-target-min: 44px;
-  --touch-target-comfortable: 48px;
-}
 
 /* 可访问性增强样式 */
 .accessibility-enhanced.high-contrast {
@@ -812,7 +150,6 @@ h6,
 
 .accessibility-enhanced.colorblind-friendly {
   /* 色盲友好的调色板 */
-  --color-primary-500: #0066cc;
   --color-success-500: #008800;
   --color-warning-500: #ff8800;
   --color-error-500: #cc0000;
@@ -852,11 +189,6 @@ h6,
 
 /* 高对比度模式支持 */
 @media (prefers-contrast: high) {
-  :root {
-    --text-color: #000000;
-    --bg-color: #ffffff;
-    --border-color: #000000;
-  }
 }
 
 /* 减少动画支持
@@ -878,9 +210,6 @@ h6,
 
 /* 大字体支持 */
 @media (min-resolution: 120dpi) {
-  :root {
-    --font-size-base: 1.125rem;
-  }
 }
 
 /* 触摸设备优化 */
@@ -964,23 +293,6 @@ h6,
 }
 
 /* 增强的按钮样式 */
-.ant-btn {
-  border-radius: 8px;
-  font-weight: 500;
-  transition: all var(--transition-normal);
-}
-
-.ant-btn-primary {
-  background-color: var(--color-primary-500);
-  border-color: var(--color-primary-500);
-}
-
-.ant-btn-primary:hover,
-.ant-btn-primary:focus {
-  background-color: var(--color-primary-600);
-  border-color: var(--color-primary-600);
-  box-shadow: 0 2px 4px rgba(37, 99, 235, 0.2);
-}
 
 /* 卡片增强样式 */
 .ant-card {
@@ -1010,115 +322,6 @@ h6,
   }
 }
 
-
-:root {
-  --color-info-50: #f0f9ff;
-  --color-info-100: #e0f2fe;
-  --color-info-200: #bae6fd;
-  --color-info-300: #7dd3fc;
-  --color-info-400: #38bdf8;
-  --color-info-500: #0ea5e9;
-  --color-info-600: #0284c7;
-  --color-info-700: #0369a1;
-  --color-info-800: #075985;
-  --color-info-900: #0c4a6e;
-
-  /* 功能色 */
-  --color-background-primary: #ffffff;
-  --color-background-secondary: #f8fafc;
-  --color-background-tertiary: #f1f5f9;
-  --color-surface-primary: #ffffff;
-  --color-surface-secondary: #f8fafc;
-  --color-surface-tertiary: #f1f5f9;
-  --color-border-primary: #e2e8f0;
-  --color-border-secondary: #cbd5e1;
-  --color-border-tertiary: #94a3b8;
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #475569;
-  --color-text-tertiary: #64748b;
-  --color-text-disabled: #94a3b8;
-  --color-text-inverse: #ffffff;
-
-  /* 提升层级背景色（tooltips, popovers, dropdowns） */
-  --color-bg-elevated: #ffffff;
-
-  /* 字体 */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', monospace;
-
-  /* 间距 - 优化后的紧凑间距系统 */
-  --spacing-xs: 4px;
-  --spacing-sm: 8px;
-  --spacing-md: 12px;
-  --spacing-lg: 16px;
-  --spacing-xl: 20px;
-  --spacing-2xl: 24px;
-  --spacing-3xl: 32px;
-
-  /* 圆角 */
-  --border-radius-sm: 2px;
-  --border-radius-md: 4px;
-  --border-radius-lg: 8px;
-  --border-radius-xl: 12px;
-  --border-radius-2xl: 16px;
-  --border-radius-3xl: 24px;
-  --border-radius-full: 9999px;
-
-  /* 阴影 */
-  --box-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --box-shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --box-shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --box-shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
-  --box-shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
-  --box-shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
-
-  /* 字体大小 */
-  --font-size-xs: 12px;
-  --font-size-sm: 14px;
-  --font-size-base: 16px;
-  --font-size-lg: 18px;
-  --font-size-xl: 20px;
-  --font-size-2xl: 24px;
-  --font-size-3xl: 30px;
-  --font-size-4xl: 36px;
-  --font-size-5xl: 48px;
-  --font-size-6xl: 60px;
-  --font-size-7xl: 72px;
-  --font-size-8xl: 96px;
-  --font-size-9xl: 128px;
-
-  /* 行高 */
-  --line-height-none: 1;
-  --line-height-tight: 1.25;
-  --line-height-snug: 1.375;
-  --line-height-normal: 1.5;
-  --line-height-relaxed: 1.625;
-  --line-height-loose: 2;
-
-  /* 字重 */
-  --font-weight-thin: 100;
-  --font-weight-extralight: 200;
-  --font-weight-light: 300;
-  --font-weight-normal: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-  --font-weight-extrabold: 800;
-  --font-weight-black: 900;
-
-  /* 动画 */
-  --duration-fast: 150ms;
-  --duration-normal: 300ms;
-  --duration-slow: 500ms;
-  --easing-linear: linear;
-  --easing-ease: ease;
-  --easing-ease-in: ease-in;
-  --easing-ease-out: ease-out;
-  --easing-ease-in-out: ease-in-out;
-  --easing-bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  --easing-elastic: cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
 /* 基础样式重置 */
 @layer base {
   * {
@@ -1141,10 +344,10 @@ h6,
 
   /* 标题层次 */
   h1 {
-    font-size: 2.25rem;
-    font-weight: 700;
+    font-size: var(--font-size-page-title);
+    font-weight: var(--font-weight-semibold);
     letter-spacing: -0.025em;
-    color: #171717;
+    color: var(--color-text-primary);
     line-height: 1.2;
   }
 
@@ -1152,7 +355,7 @@ h6,
     font-size: 1.875rem;
     font-weight: 700;
     letter-spacing: -0.025em;
-    color: #171717;
+    color: var(--color-text-primary);
     line-height: 1.3;
   }
 
@@ -1160,53 +363,53 @@ h6,
     font-size: 1.5rem;
     font-weight: 600;
     letter-spacing: -0.025em;
-    color: #171717;
+    color: var(--color-text-primary);
     line-height: 1.4;
   }
 
   h4 {
     font-size: 1.25rem;
     font-weight: 600;
-    color: #171717;
+    color: var(--color-text-primary);
     line-height: 1.5;
   }
 
   h5 {
     font-size: 1.125rem;
     font-weight: 500;
-    color: #171717;
+    color: var(--color-text-primary);
     line-height: 1.5;
   }
 
   h6 {
     font-size: 1rem;
     font-weight: 500;
-    color: #171717;
+    color: var(--color-text-primary);
     line-height: 1.5;
   }
 
   /* 段落和文本 */
   p {
-    color: #404040;
+    color: var(--color-text-primary);
     line-height: 1.625;
   }
 
   .text-muted {
-    color: #737373;
+    color: var(--color-text-secondary);
   }
 
   .text-subtle {
-    color: #a3a3a3;
+    color: var(--color-text-disabled);
   }
 
   /* 链接样式 */
   a {
-    color: #D85E10;
+    color: var(--color-selected-text);
     transition: color 200ms;
   }
 
   a:hover {
-    color: #B84A08;
+    color: var(--color-selected-text);
   }
 
   a:focus {
@@ -1229,7 +432,7 @@ h6,
   select:focus {
     outline: none;
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
-    border-color: #F06820;
+    border-color: var(--color-primary);
   }
 
   /* 按钮基础样式 */
@@ -1246,15 +449,15 @@ h6,
 
   /* 卡片组件 */
   .card {
-    background-color: white;
+    background-color: var(--color-bg-primary);
     border-radius: 0.5rem;
-    border: 1px solid #e5e5e5;
+    border: 1px solid var(--color-border);
     box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
   }
 
   .card-hover:hover {
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-    border-color: #d4d4d4;
+    border-color: var(--color-border-strong);
     transition: all 200ms;
   }
 
@@ -1270,12 +473,12 @@ h6,
   }
 
   .btn-primary {
-    background-color: #D85E10;
+    background-color: var(--color-primary);
     color: white;
   }
 
   .btn-primary:hover {
-    background-color: #B84A08;
+    background-color: var(--color-primary-hover);
   }
 
   .btn-primary:focus {
@@ -1283,30 +486,30 @@ h6,
   }
 
   .btn-secondary {
-    background-color: #f5f5f5;
-    color: #171717;
+    background-color: var(--color-bg-tertiary);
+    color: var(--color-text-primary);
   }
 
   .btn-secondary:hover {
-    background-color: #e5e5e5;
+    background-color: var(--color-selected-bg);
   }
 
   .btn-outline {
-    border: 1px solid #d4d4d4;
-    background-color: white;
-    color: #404040;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
   }
 
   .btn-outline:hover {
-    background-color: #fafafa;
+    background-color: var(--color-bg-tertiary);
   }
 
   .btn-ghost {
-    color: #404040;
+    color: var(--color-text-primary);
   }
 
   .btn-ghost:hover {
-    background-color: #f5f5f5;
+    background-color: var(--color-bg-tertiary);
   }
 
   .btn-sm {
@@ -1327,18 +530,18 @@ h6,
     height: 2.5rem;
     width: 100%;
     border-radius: 0.375rem;
-    border: 1px solid #d4d4d4;
-    background-color: white;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg-primary);
     padding: 0.5rem 0.75rem;
     font-size: 0.875rem;
   }
 
   .input::placeholder {
-    color: #a3a3a3;
+    color: var(--color-text-disabled);
   }
 
   .input:focus {
-    border-color: #F06820;
+    border-color: var(--color-primary);
     box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
   }
 
@@ -1416,7 +619,7 @@ h6,
     border-radius: 9999px;
     border-width: 2px;
     border-color: #e5e5e5;
-    border-top-color: #D85E10;
+    border-top-color: var(--color-selected-text);
   }
 
   /* 渐变背景 */
@@ -1560,11 +763,11 @@ h6,
   }
 
   .interactive-subtle:hover {
-    background-color: #fafafa;
+    background-color: var(--color-bg-tertiary);
   }
 
   .interactive-subtle:active {
-    background-color: #f5f5f5;
+    background-color: var(--color-bg-tertiary);
   }
 }
 
@@ -1631,185 +834,11 @@ h6,
 }
 
 /* 深色模式支持 */
-.dark {
-  /* 主色调（暗色主题） */
-  --color-primary-50: #172554;
-  --color-primary-100: #1e3a8a;
-  --color-primary-200: #933A06;
-  --color-primary-300: #B84A08;
-  --color-primary-400: #D85E10;
-  --color-primary-500: #F06820;
-  --color-primary-600: #60a5fa;
-  --color-primary-700: #93c5fd;
-  --color-primary-800: #bfdbfe;
-  --color-primary-900: #dbeafe;
-  --color-primary-950: #eff6ff;
-
-  /* 中性色（暗色主题） */
-  --color-neutral-50: #020617;
-  --color-neutral-100: #0f172a;
-  --color-neutral-200: #1e293b;
-  --color-neutral-300: #334155;
-  --color-neutral-400: #475569;
-  --color-neutral-500: #64748b;
-  --color-neutral-600: #94a3b8;
-  --color-neutral-700: #cbd5e1;
-  --color-neutral-800: #e2e8f0;
-  --color-neutral-900: #f1f5f9;
-  --color-neutral-950: #f8fafc;
-
-  /* 功能色（暗色主题） */
-  --color-info-50: #e0f2fe;
-  --color-info-100: #bae6fd;
-  --color-info-200: #7dd3fc;
-  --color-info-300: #38bdf8;
-  --color-info-400: #22d3ee;
-  --color-info-500: #06b6d4;
-  --color-info-600: #0891b2;
-  --color-info-700: #0e7490;
-  --color-info-800: #155e75;
-  --color-info-900: #164e63;
-  --color-success-50: #f0fdf4;
-  --color-success-100: #dcfce7;
-  --color-success-200: #bbf7d0;
-  --color-success-300: #86efac;
-  --color-success-400: #4ade80;
-  --color-success-500: #22c55e;
-  --color-success-600: #16a34a;
-  --color-success-700: #15803d;
-  --color-success-800: #166534;
-  --color-success-900: #14532d;
-  --color-warning-50: #fffbeb;
-  --color-warning-100: #fef3c7;
-  --color-warning-200: #fde68a;
-  --color-warning-300: #fcd34d;
-  --color-warning-400: #fbbf24;
-  --color-warning-500: #f59e0b;
-  --color-warning-600: #d97706;
-  --color-warning-700: #b45309;
-  --color-warning-800: #92400e;
-  --color-warning-900: #78350f;
-  --color-error-50: #fef2f2;
-  --color-error-100: #fee2e2;
-  --color-error-200: #fecaca;
-  --color-error-300: #fca5a5;
-  --color-error-400: #f87171;
-  --color-error-500: #ef4444;
-  --color-error-600: #dc2626;
-  --color-error-700: #b91c1c;
-  --color-error-800: #991b1b;
-  --color-error-900: #7f1d1d;
-  --color-bg-elevated: #1e293b;
-  --color-background-primary: #0f172a;
-  --color-background-secondary: #1e293b;
-  --color-background-tertiary: #334155;
-  --color-surface-primary: #1e293b;
-  --color-surface-secondary: #334155;
-  --color-surface-tertiary: #475569;
-  --color-border-primary: #334155;
-  --color-border-secondary: #475569;
-  --color-border-tertiary: #64748b;
-  --color-text-primary: #f8fafc;
-  --color-text-secondary: #cbd5e1;
-  --color-text-tertiary: #94a3b8;
-  --color-text-disabled: #64748b;
-  --color-text-inverse: #0f172a;
-}
 
 /* 系统主题偏好支持 */
-@media (prefers-color-scheme: dark) {
-  :root.dark {
-    /* 主色调（暗色主题） */
-    --color-primary-50: #172554;
-    --color-primary-100: #1e3a8a;
-    --color-primary-200: #933A06;
-    --color-primary-300: #B84A08;
-    --color-primary-400: #D85E10;
-    --color-primary-500: #F06820;
-    --color-primary-600: #60a5fa;
-    --color-primary-700: #93c5fd;
-    --color-primary-800: #bfdbfe;
-    --color-primary-900: #dbeafe;
-    --color-primary-950: #eff6ff;
-
-    /* 中性色（暗色主题） */
-    --color-neutral-50: #020617;
-    --color-neutral-100: #0f172a;
-    --color-neutral-200: #1e293b;
-    --color-neutral-300: #334155;
-    --color-neutral-400: #475569;
-    --color-neutral-500: #64748b;
-    --color-neutral-600: #94a3b8;
-    --color-neutral-700: #cbd5e1;
-    --color-neutral-800: #e2e8f0;
-    --color-neutral-900: #f1f5f9;
-    --color-neutral-950: #f8fafc;
-
-    /* 功能色（暗色主题） */
-    --color-info-50: #e0f2fe;
-    --color-info-100: #bae6fd;
-    --color-info-200: #7dd3fc;
-    --color-info-300: #38bdf8;
-    --color-info-400: #22d3ee;
-    --color-info-500: #06b6d4;
-    --color-info-600: #0891b2;
-    --color-info-700: #0e7490;
-    --color-info-800: #155e75;
-    --color-info-900: #164e63;
-    --color-success-50: #f0fdf4;
-    --color-success-100: #dcfce7;
-    --color-success-200: #bbf7d0;
-    --color-success-300: #86efac;
-    --color-success-400: #4ade80;
-    --color-success-500: #22c55e;
-    --color-success-600: #16a34a;
-    --color-success-700: #15803d;
-    --color-success-800: #166534;
-    --color-success-900: #14532d;
-    --color-warning-50: #fffbeb;
-    --color-warning-100: #fef3c7;
-    --color-warning-200: #fde68a;
-    --color-warning-300: #fcd34d;
-    --color-warning-400: #fbbf24;
-    --color-warning-500: #f59e0b;
-    --color-warning-600: #d97706;
-    --color-warning-700: #b45309;
-    --color-warning-800: #92400e;
-    --color-warning-900: #78350f;
-    --color-error-50: #fef2f2;
-    --color-error-100: #fee2e2;
-    --color-error-200: #fecaca;
-    --color-error-300: #fca5a5;
-    --color-error-400: #f87171;
-    --color-error-500: #ef4444;
-    --color-error-600: #dc2626;
-    --color-error-700: #b91c1c;
-    --color-error-800: #991b1b;
-    --color-error-900: #7f1d1d;
-    --color-bg-elevated: #1e293b;
-    --color-background-primary: #0f172a;
-    --color-background-secondary: #1e293b;
-    --color-background-tertiary: #334155;
-    --color-surface-primary: #1e293b;
-    --color-surface-secondary: #334155;
-    --color-surface-tertiary: #475569;
-    --color-border-primary: #334155;
-    --color-border-secondary: #475569;
-    --color-border-tertiary: #64748b;
-    --color-text-primary: #f8fafc;
-    --color-text-secondary: #cbd5e1;
-    --color-text-tertiary: #94a3b8;
-    --color-text-disabled: #64748b;
-    --color-text-inverse: #0f172a;
-  }
-}
 
 /* 高对比度模式支持 */
 @media (prefers-contrast: high) {
-  :root {
-    --color-primary-600: #B84A08;
-    --color-primary-700: #1e3a8a;
-  }
 
   .btn-primary {
     border: 2px solid #933A06;
@@ -1897,16 +926,6 @@ h6,
   min-height: auto !important;
 }
 
-.ant-btn {
-  font-size: 13px !important;
-}
-
-.ant-btn-sm {
-  font-size: 12px !important;
-  height: 28px !important;
-  padding: 0 12px !important;
-}
-
 /* 表格紧凑样式 */
 .ant-table-small .ant-table-thead>tr>th {
   padding: 8px !important;
@@ -1925,305 +944,4 @@ h6,
 
 .ant-form-item-label {
   padding-bottom: 4px !important;
-}
-
-/* 统一亮色模式下的 Ant Design 表单与下拉样式，避免被错误的暗色覆盖污染 */
-html:not(.dark) .ant-select-dropdown,
-html:not(.dark) .ant-picker-dropdown,
-html:not(.dark) .ant-color-dropdown,
-html:not(.dark) .ant-select-tree-dropdown,
-html:not(.dark) .ant-cascader-dropdown,
-html:not(.dark) .ant-mentions-dropdown,
-html:not(.dark) .ant-autocomplete-dropdown,
-html:not(.dark) .ant-transfer-dropdown,
-html:not(.dark) .ant-dropdown-menu {
-  background: #ffffff !important;
-  color: #1e293b !important;
-  border: 1px solid #dbe3ef !important;
-  border-radius: 12px !important;
-  box-shadow: 0 18px 38px -24px rgba(15, 23, 42, 0.35) !important;
-}
-
-html:not(.dark) .ant-select-item,
-html:not(.dark) .ant-select-item-option-content,
-html:not(.dark) .ant-picker-cell-inner,
-html:not(.dark) .ant-picker-header,
-html:not(.dark) .ant-picker-body,
-html:not(.dark) .ant-picker-time-panel-cell-inner,
-html:not(.dark) .ant-select-tree-title,
-html:not(.dark) .ant-cascader-menu-item,
-html:not(.dark) .ant-dropdown-menu-item,
-html:not(.dark) .ant-dropdown-menu-submenu-title {
-  color: #1e293b !important;
-}
-
-html:not(.dark) .ant-select-item-option-active:not(.ant-select-item-option-disabled),
-html:not(.dark) .ant-select-tree-node-content-wrapper:hover,
-html:not(.dark) .ant-cascader-menu-item-active:not(.ant-cascader-menu-item-disabled),
-html:not(.dark) .ant-dropdown-menu-item:hover,
-html:not(.dark) .ant-dropdown-menu-submenu-title:hover,
-html:not(.dark) .ant-picker-time-panel-cell-inner:hover {
-  background: #f8fbff !important;
-}
-
-html:not(.dark) .ant-select-item-option-selected,
-html:not(.dark) .ant-select-tree-node-selected .ant-select-tree-node-content-wrapper,
-html:not(.dark) .ant-cascader-menu-item-selected,
-html:not(.dark) .ant-picker-cell.ant-picker-cell-in-view.ant-picker-cell-selected .ant-picker-cell-inner,
-html:not(.dark) .ant-picker-time-panel-cell-selected .ant-picker-time-panel-cell-inner {
-  background: #dbeafe !important;
-  color: #B84A08 !important;
-  font-weight: 600 !important;
-}
-
-html:not(.dark) .ant-form-item-label > label,
-html:not(.dark) .ant-form-item-label > label.ant-form-item-required,
-html:not(.dark) .ant-form-item .ant-form-item-label > label {
-  color: #334155 !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.01em;
-}
-
-html:not(.dark) .ant-form-item-extra,
-html:not(.dark) .ant-form-item-explain,
-html:not(.dark) .ant-form-item-explain-error,
-html:not(.dark) .ant-form-item-explain-warning {
-  font-size: 12px !important;
-  line-height: 1.45 !important;
-}
-
-html:not(.dark) .ant-form-item-extra {
-  color: #64748b !important;
-  margin-top: 4px !important;
-}
-
-html:not(.dark) .ant-form-item-explain {
-  color: #475569 !important;
-  margin-top: 4px !important;
-}
-
-html:not(.dark) .ant-input,
-html:not(.dark) .ant-input-affix-wrapper,
-html:not(.dark) .ant-input-number,
-html:not(.dark) .ant-select-selector,
-html:not(.dark) .ant-picker,
-html:not(.dark) .ant-mentions {
-  border-color: #cbd5e1 !important;
-  border-radius: 10px !important;
-  box-shadow: none !important;
-  background: #ffffff !important;
-  color: #0f172a !important;
-}
-
-html:not(.dark) .ant-input-affix-wrapper {
-  display: inline-flex;
-  align-items: center;
-}
-
-html:not(.dark) .ant-input-affix-wrapper > .ant-input {
-  min-height: 0 !important;
-  height: auto !important;
-  line-height: 1.5715 !important;
-  background: transparent !important;
-}
-
-html:not(.dark) .ant-input-prefix,
-html:not(.dark) .ant-input-suffix {
-  display: inline-flex;
-  align-items: center;
-}
-
-html:not(.dark) .ant-select-multiple .ant-select-selection-item {
-  color: #334155 !important;
-  background: #f1f5f9 !important;
-  border-color: #cbd5e1 !important;
-}
-
-html:not(.dark) .ant-select-multiple .ant-select-selection-item-content {
-  color: #334155 !important;
-}
-
-html:not(.dark) .ant-select-multiple .ant-select-selection-item-remove {
-  color: #64748b !important;
-}
-
-html:not(.dark) .ant-select-multiple .ant-select-selection-item-remove:hover {
-  color: #1e293b !important;
-}
-
-html:not(.dark) .ant-tag:not(.ant-tag-blue):not(.ant-tag-green):not(.ant-tag-red):not(.ant-tag-orange):not(.ant-tag-gold):not(.ant-tag-purple):not(.ant-tag-cyan):not(.ant-tag-geekblue):not(.ant-tag-magenta):not(.ant-tag-volcano):not(.ant-tag-lime):not(.ant-tag-success):not(.ant-tag-processing):not(.ant-tag-error):not(.ant-tag-warning) {
-  color: #334155 !important;
-  background: #f1f5f9 !important;
-  border-color: #cbd5e1 !important;
-}
-
-html:not(.dark) .ant-input::placeholder,
-html:not(.dark) .ant-input-number-input::placeholder,
-html:not(.dark) .ant-select-selection-placeholder,
-html:not(.dark) .ant-picker-input > input::placeholder,
-html:not(.dark) .ant-mentions textarea::placeholder {
-  color: #94a3b8 !important;
-}
-
-html:not(.dark) .ant-input:hover,
-html:not(.dark) .ant-input-affix-wrapper:hover,
-html:not(.dark) .ant-input-number:hover,
-html:not(.dark) .ant-select:hover .ant-select-selector,
-html:not(.dark) .ant-picker:hover,
-html:not(.dark) .ant-mentions:hover {
-  border-color: #94a3b8 !important;
-}
-
-html:not(.dark) .ant-input:focus,
-html:not(.dark) .ant-input-focused,
-html:not(.dark) .ant-input-affix-wrapper-focused,
-html:not(.dark) .ant-input-number-focused,
-html:not(.dark) .ant-select-focused .ant-select-selector,
-html:not(.dark) .ant-picker-focused,
-html:not(.dark) .ant-mentions-focused {
-  border-color: #D85E10 !important;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
-}
-
-html:not(.dark) .ant-btn {
-  border-radius: 10px !important;
-  font-weight: 600 !important;
-}
-
-html:not(.dark) .ant-btn:not(.ant-btn-icon-only):not(.ant-btn-sm) {
-  min-height: 40px;
-}
-
-html:not(.dark) .ant-btn-text,
-html:not(.dark) .ant-btn-link {
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
-html:not(.dark) .ant-btn-text:not(:disabled),
-html:not(.dark) .ant-btn-link:not(:disabled) {
-  color: #64748b !important;
-}
-
-html:not(.dark) .ant-btn-text:not(:disabled):hover,
-html:not(.dark) .ant-btn-text:not(:disabled):focus {
-  color: #1e293b !important;
-  background: #f8fafc !important;
-}
-
-html:not(.dark) .ant-btn-icon-only {
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-}
-
-html:not(.dark) .ant-btn:not(.ant-btn-link):not(.ant-btn-text) {
-  box-shadow: none;
-}
-
-html:not(.dark) .ant-btn-primary:not(:disabled):not(.ant-btn-disabled) {
-  border-color: #D85E10 !important;
-  background: linear-gradient(135deg, #F06820 0%, #D85E10 100%) !important;
-  box-shadow: 0 10px 20px -12px rgba(37, 99, 235, 0.55) !important;
-  color: #ffffff !important;
-}
-
-html:not(.dark) .ant-btn-primary:not(:disabled):not(.ant-btn-disabled):hover,
-html:not(.dark) .ant-btn-primary:not(:disabled):not(.ant-btn-disabled):focus {
-  border-color: #B84A08 !important;
-  background: linear-gradient(135deg, #D85E10 0%, #B84A08 100%) !important;
-}
-
-html:not(.dark) .ant-btn-default {
-  border-color: #cbd5e1 !important;
-  color: #334155 !important;
-  background: #ffffff !important;
-}
-
-html:not(.dark) .ant-btn-default:hover,
-html:not(.dark) .ant-btn-default:focus {
-  border-color: #93c5fd !important;
-  color: #B84A08 !important;
-  background: #f8fbff !important;
-}
-
-/* Modal 紧凑样式 */
-.ant-modal-header {
-  padding: 14px 20px !important;
-}
-
-.ant-modal-body {
-  padding: 16px 20px !important;
-}
-
-.ant-modal-footer {
-  padding: 12px 20px !important;
-}
-
-/* 响应式布局优化 */
-@media (max-width: 768px) {
-  .responsive-content {
-    margin: 8px !important;
-    padding: 12px !important;
-  }
-
-  .ant-layout-header {
-    padding: 0 12px !important;
-  }
-
-  .ant-card-body {
-    padding: 12px !important;
-  }
-
-  .ant-card-head {
-    padding: 10px 12px !important;
-  }
-
-  /* 移动端隐藏面包屑 */
-  .ant-breadcrumb {
-    display: none !important;
-  }
-
-  /* 移动端搜索框样式 */
-  .ant-input-search {
-    max-width: 180px !important;
-  }
-}
-
-@media (max-width: 576px) {
-  .responsive-content {
-    margin: 4px !important;
-    padding: 8px !important;
-  }
-
-  .ant-card {
-    margin-bottom: 8px !important;
-  }
-
-  .ant-card-body {
-    padding: 10px !important;
-  }
-
-  /* 移动端按钮调整 */
-  .ant-btn:not(.ant-btn-icon-only):not(.ant-btn-sm) {
-    font-size: 12px !important;
-    padding: 0 10px !important;
-  }
-
-  /* 移动端表格 */
-  .ant-table {
-    font-size: 12px !important;
-  }
-}
-
-/* 平板优化 */
-@media (min-width: 768px) and (max-width: 1024px) {
-  .ant-layout-sider {
-    width: 220px !important;
-  }
-
-  .responsive-content {
-    margin: 12px !important;
-    padding: 14px !important;
-  }
 }

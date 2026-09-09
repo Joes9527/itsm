@@ -30,8 +30,8 @@ describe('Design System Colors', () => {
     });
 
     it('should have functional colors', () => {
-      expect(colors.functional.background.primary).toBe('#ffffff');
-      expect(colors.functional.text.primary).toBe('#0f172a');
+      expect(colors.functional.background.primary).toBe('#FFFFFF');
+      expect(colors.functional.text.primary).toBe('#354153');
       expect(colors.functional.border.focus).toBe('#F06820');
     });
   });
@@ -42,8 +42,8 @@ describe('Design System Colors', () => {
     });
 
     it('should have dark theme functional colors', () => {
-      expect(darkColors.functional.background.primary).toBe('#0f172a');
-      expect(darkColors.functional.text.primary).toBe('#f8fafc');
+      expect(darkColors.functional.background.primary).toBe('#252A30');
+      expect(darkColors.functional.text.primary).toBe('#D2D9E2');
     });
   });
 
@@ -157,12 +157,12 @@ describe('Design System Spacing', () => {
     });
 
     it('should have sidebar widths', () => {
-      expect(layout.sidebar.width.md).toBe('280px');
-      expect(layout.sidebar.collapsedWidth).toBe('64px');
+      expect(layout.sidebar.width.md).toBe('224px');
+      expect(layout.sidebar.collapsedWidth).toBe('0px');
     });
 
     it('should have header heights', () => {
-      expect(layout.header.height.md).toBe('64px');
+      expect(layout.header.height.md).toBe('60px');
     });
   });
 
@@ -183,8 +183,8 @@ describe('Design System Spacing', () => {
 
   describe('fontSize', () => {
     it('should have font size values', () => {
-      expect(fontSize.base).toBe('16px');
-      expect(fontSize.sm).toBe('14px');
+      expect(fontSize.base).toBe('13px');
+      expect(fontSize.sm).toBe('13px');
       expect(fontSize.xs).toBe('12px');
     });
   });
@@ -267,23 +267,23 @@ describe('Design System - Theme', () => {
     expect(themeConfig).toBeDefined();
     expect(themeConfig.token).toBeDefined();
     expect(themeConfig.token.colorPrimary).toBe('#F06820');
-    expect(themeConfig.token.colorBgContainer).toBe('#ffffff');
+    expect(themeConfig.token.colorBgContainer).toBe('#FFFFFF');
     expect(themeConfig.components).toBeDefined();
   });
 
   it('getAntdTheme returns dark theme config', async () => {
     const { getAntdTheme } = await import('../theme');
     const themeConfig = getAntdTheme(true);
-    expect(themeConfig.token.colorBgContainer).toBe('#0f172a');
-    expect(themeConfig.token.colorText).toBe('#f8fafc');
+    expect(themeConfig.token.colorBgContainer).toBe('#252A30');
+    expect(themeConfig.token.colorText).toBe('#D2D9E2');
   });
 
   it('generateCSSVariables returns light CSS variables', async () => {
     const { generateCSSVariables } = await import('../theme');
     const vars = generateCSSVariables(false);
     expect(vars['--color-primary-500']).toBe('#F06820');
-    expect(vars['--color-background-primary']).toBe('#ffffff');
-    expect(vars['--color-text-primary']).toBe('#0f172a');
+    expect(vars['--color-background-primary']).toBe('var(--color-bg-primary)');
+    expect(vars['--color-text-primary']).toBe('#354153');
     expect(vars['--spacing-md']).toBeDefined();
     expect(vars['--border-radius-lg']).toBeDefined();
     expect(vars['--font-size-base']).toBeDefined();
@@ -292,8 +292,8 @@ describe('Design System - Theme', () => {
   it('generateCSSVariables returns dark CSS variables', async () => {
     const { generateCSSVariables } = await import('../theme');
     const vars = generateCSSVariables(true);
-    expect(vars['--color-background-primary']).toBe('#0f172a');
-    expect(vars['--color-text-primary']).toBe('#f8fafc');
+    expect(vars['--color-background-primary']).toBe('var(--color-bg-primary)');
+    expect(vars['--color-text-primary']).toBe('#D2D9E2');
   });
 
   it('applyCSSVariables applies variables to document', async () => {
