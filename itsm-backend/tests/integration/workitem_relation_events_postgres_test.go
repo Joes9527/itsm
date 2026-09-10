@@ -219,9 +219,9 @@ func TestWorkItemRelationEventsConsumerBlocksWhenActorUnavailable(t *testing.T) 
 // B2 round-2 fix: an MSP provider actor's native tenant differs from the event
 // tenant. Resolving the actor inside the event tenant would permanently block every
 // MSP event, even though B1's own tests prove the MSP mutation path is supported.
-// Both endpoints are assigned to the provider actor because the existing row policy
-// (requester/assignee) is what admits the mutation; the delivery target is therefore
-// that same counterpart assignee.
+// The provider actor owns the incident it mutates and is the counterpart's requester,
+// which is what the requester/assignee row policy requires; the counterpart's assignee
+// is a customer-tenant handler, which is the actual delivery target.
 func TestWorkItemRelationEventsDeliversForMspProviderActor(t *testing.T) {
 	f := newRelationFixture(t)
 	f.client.Tenant.UpdateOneID(f.tenant.ID).SetType("msp_customer").ExecX(f.ctx)
