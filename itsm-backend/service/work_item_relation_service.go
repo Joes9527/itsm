@@ -348,6 +348,12 @@ func (s *WorkItemRelationService) mutateTx(ctx context.Context, tx *ent.Tx, cmd 
 	if err = workitemmutation.RecordTx(ctx, tx, m, result, action, digest, facts); err != nil {
 		return empty, err
 	}
+	// The delivery event shares this transaction with the relation row, the source
+	// version bump and the immutable receipt, so a delivery fault rolls back the
+	// whole mutation instead of publishing an event with no committed effect.
+	if err = emitRelationEventTx(ctx, tx, facts); err != nil {
+		return empty, err
+	}
 	return result, nil
 }
 
