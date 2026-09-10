@@ -629,6 +629,7 @@ func NewApplication() *Application {
 	srRepo := service_request.NewEntRepository(client)
 	chainResolver := service.NewApprovalChainResolver(client, sugar)
 	srService := service_request.NewService(srRepo, client, sugar, chainResolver)
+	srService.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 	srHandler := service_request.NewHandler(srService)
 	bpmnWorkflowController.SetApprovedAccessReader(srService)
 	concreteProcessEngine.SetAccessCompletionContributor(srService)

@@ -355,6 +355,9 @@ func TestServiceRequestHandler_PartialUpdatePreservesBooleanFields(t *testing.T)
 func TestServiceRequestHandler_Delete(t *testing.T) {
 	r, client, _, _, catID := srSetup(t)
 	id := srCreateOne(t, r, catID)
+	wi := client.ServiceRequest.GetX(context.Background(), id)
+	requester := client.Ticket.GetX(context.Background(), wi.TicketID).RequesterID
+	client.User.UpdateOneID(requester).SetRole("super_admin").ExecX(context.Background())
 	resp := srDoReq(t, r, "DELETE", "/api/v1/service-requests/"+strconv.Itoa(id), nil)
 	require.Equal(t, common.SuccessCode, resp.Code, "body=%s", srStr(resp))
 	// 删除后再查应 404

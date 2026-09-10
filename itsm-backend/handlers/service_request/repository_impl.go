@@ -145,7 +145,7 @@ func (r *EntRepository) Update(ctx context.Context, req *ServiceRequest) error {
 		return err
 	}
 	defer tx.Rollback()
-	if err := casRequestWorkItem(ctx, tx, req, false); err != nil {
+	if err := casRequestWorkItem(ctx, tx, req); err != nil {
 		return err
 	}
 	update := tx.ServiceRequest.UpdateOneID(req.ID).Where(requestScope(req.TenantID), servicerequest.TicketID(req.TicketID)).
@@ -159,27 +159,13 @@ func (r *EntRepository) Update(ctx context.Context, req *ServiceRequest) error {
 	}
 	return tx.Commit()
 }
-func casRequestWorkItem(ctx context.Context, tx *ent.Tx, req *ServiceRequest, deleted bool) error {
+func casRequestWorkItem(ctx context.Context, tx *ent.Tx, req *ServiceRequest) error {
 	// Verify extension identity before touching its owning WorkItem.
 	if _, err := tx.ServiceRequest.Query().Where(servicerequest.ID(req.ID), servicerequest.TicketID(req.TicketID), requestScope(req.TenantID)).Only(ctx); err != nil {
 		return err
 	}
 	update := tx.Ticket.UpdateOneID(req.TicketID).Where(ticket.TenantID(req.TenantID), ticket.RecordClassEQ("service_request_item"), ticket.DeletedAtIsNil(), ticket.VersionEQ(req.Version)).AddVersion(1).SetUpdatedAt(time.Now())
-	if deleted {
-		update.SetDeletedAt(time.Now())
-	}
 	return update.Exec(ctx)
-}
-func (r *EntRepository) Delete(ctx context.Context, req *ServiceRequest) error {
-	tx, err := r.client.Tx(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if err := casRequestWorkItem(ctx, tx, req, true); err != nil {
-		return err
-	}
-	return tx.Commit()
 }
 
 // GetUserContext returns User department (needed for filtering)

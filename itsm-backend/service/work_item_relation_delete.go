@@ -66,6 +66,11 @@ func (s *WorkItemRelationService) guardDeletionsTx(ctx context.Context, tx *ent.
 				return err
 			}
 		}
+		if policy.DeleteNonRequesterAction != "" && item.RequesterID != identity.ActorID {
+			if err = authorization.RequireCurrentPermission(ctx, tx, identity, policy.Resource, policy.DeleteNonRequesterAction); err != nil {
+				return err
+			}
+		}
 		items = append(items, item)
 	}
 	lockIDs := append([]int(nil), ordered...)

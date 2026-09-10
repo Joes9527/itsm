@@ -5,8 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"go.uber.org/zap"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/handlers/shared/workitemmutation"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
@@ -227,8 +229,11 @@ func TestEntRepository_WorkItemAuthority(t *testing.T) {
 	current, err := repo.Get(ctx, sr.ID, tenant.ID)
 	require.NoError(t, err)
 	require.Equal(t, 10, current.Version)
-	require.Error(t, repo.Delete(ctx, &stale))
-	require.NoError(t, repo.Delete(ctx, current))
+	// Deletion now uses current authority and the application guard; stale update CAS is asserted above.
+	client.User.UpdateOneID(requester.ID).SetRole("super_admin").SetActive(true).ExecX(ctx)
+	owner := NewService(repo, client, zap.NewNop().Sugar(), nil)
+	require.NoError(t, owner.Delete(ctx, current.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: requester.ID, Source: "http"}))
+	require.Equal(t, current.Version+1, client.Ticket.GetX(ctx, wi.ID).Version)
 	require.NotNil(t, client.Ticket.GetX(ctx, wi.ID).DeletedAt)
 	_, err = repo.Get(ctx, sr.ID, tenant.ID)
 	require.Error(t, err)

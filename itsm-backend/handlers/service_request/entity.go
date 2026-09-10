@@ -61,7 +61,6 @@ type Repository interface {
 	GetByTicketID(ctx context.Context, ticketID, tenantID int) (*ServiceRequest, error)
 	List(ctx context.Context, tenantID int, filters ListFilters) ([]*ServiceRequest, int, error)
 	Update(ctx context.Context, req *ServiceRequest) error
-	Delete(ctx context.Context, req *ServiceRequest) error
 	GetUserContext(ctx context.Context, userID, tenantID int) (department, name string, err error)
 }
 

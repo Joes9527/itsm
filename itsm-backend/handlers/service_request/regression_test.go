@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent/enttest"
 	"itsm-backend/ent/schema"
 	"itsm-backend/handlers/service_catalog"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/service"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -434,11 +435,11 @@ func TestService_Update_ForbiddenForNonOwnerWithoutPermission(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, common.ErrCodeForbidden, appErr.Code)
 
-	err = svc.Delete(ctx, created.ID, tenant.ID, otherUser.ID, "viewer")
+	err = svc.Delete(ctx, created.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: otherUser.ID, Source: "http"})
 	require.Error(t, err)
 	appErr, ok = common.AsAppError(err)
 	require.True(t, ok)
-	assert.Equal(t, common.ErrCodeForbidden, appErr.Code)
+	assert.Equal(t, common.ErrCodeNotFound, appErr.Code)
 }
 
 func TestService_Update_AllowedForNonOwnerWithSuperAdminRole(t *testing.T) {
@@ -479,7 +480,7 @@ func TestService_Update_AllowedForNonOwnerWithSuperAdminRole(t *testing.T) {
 	require.NoError(t, err, "super_admin 即使不是申请人也应该能编辑他人的服务请求")
 	assert.Equal(t, "CC-ADMIN-EDIT", updated.CostCenter)
 
-	err = svc.Delete(ctx, created.ID, tenant.ID, admin.ID, "super_admin")
+	err = svc.Delete(ctx, created.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: admin.ID, Source: "http"})
 	require.NoError(t, err, "super_admin 即使不是申请人也应该能删除他人的服务请求")
 }
 
@@ -552,7 +553,7 @@ func TestService_CrossTenantIsolation_GetUpdateDelete(t *testing.T) {
 	})
 
 	t.Run("Delete", func(t *testing.T) {
-		err := svc.Delete(ctx, created.ID, tenantB.ID, 0, "manager")
+		err := svc.Delete(ctx, created.ID, workitemmutation.Meta{TenantID: tenantB.ID, ActorID: 0, Source: "http"})
 		require.Error(t, err)
 		appErr, ok := common.AsAppError(err)
 		require.True(t, ok, "跨租户 Delete 必须返回结构化 AppError，got: %v", err)

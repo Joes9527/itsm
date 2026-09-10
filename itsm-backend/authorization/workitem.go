@@ -18,6 +18,8 @@ type WorkItemPolicy struct {
 	Resource             string
 	BusinessType         dto.BusinessType
 	UsesProfessionalVerb bool
+	// DeleteNonRequesterAction preserves an additional professional condition; it never grants deletion.
+	DeleteNonRequesterAction string
 }
 
 var workItemPolicies = map[string]WorkItemPolicy{
@@ -25,7 +27,7 @@ var workItemPolicies = map[string]WorkItemPolicy{
 	"incident":             {Resource: "incident", BusinessType: dto.BusinessTypeIncident, UsesProfessionalVerb: true},
 	"problem":              {Resource: "problem", BusinessType: dto.BusinessTypeProblem, UsesProfessionalVerb: true},
 	"change_request":       {Resource: "change", BusinessType: dto.BusinessTypeChange, UsesProfessionalVerb: true},
-	"service_request_item": {Resource: "service_request", BusinessType: dto.BusinessTypeServiceRequest},
+	"service_request_item": {Resource: "service_request", BusinessType: dto.BusinessTypeServiceRequest, DeleteNonRequesterAction: "write"},
 	"catalog_task":         {Resource: "service_request", BusinessType: dto.BusinessTypeServiceRequest},
 }
 
