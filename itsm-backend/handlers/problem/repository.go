@@ -13,7 +13,6 @@ type Repository interface {
 	GetWithAssociations(ctx context.Context, id int, tenantID int) (*Problem, error)
 	List(ctx context.Context, tenantID int, page, size int, filters map[string]interface{}) ([]*Problem, int, error)
 	Update(ctx context.Context, p *Problem) (*Problem, error)
-	Delete(ctx context.Context, id int, tenantID int) error
 	GetStats(ctx context.Context, tenantID int) (*ProblemStats, error)
 	// AddAssociations 建立 Problem 与其它记录的关联。relatedType="ticket" 时写入
 	// WorkItemRelation（relation_type="related_to"），需要知道操作人 actorUserID 用于

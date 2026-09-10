@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"itsm-backend/common"
+	"itsm-backend/handlers/shared/workitemmutation"
+	relationService "itsm-backend/service"
 	"strings"
 	"sync"
 	"testing"
@@ -267,7 +270,7 @@ func TestCreateFromIncidentRejectsIneligibleSourceWithoutWrites(t *testing.T) {
 	})
 }
 
-func TestDeleteConvertedProblemSoftDeletesInvestigationRelation(t *testing.T) {
+func TestDeleteConvertedProblemRequiresExplicitRelationRemoval(t *testing.T) {
 	f := newConversionFixture(t, "new", true)
 	created, err := f.service.SubmitIncidentConversion(
 		f.ctx, f.tenantID, f.incidentID, f.actorID,
@@ -276,7 +279,14 @@ func TestDeleteConvertedProblemSoftDeletesInvestigationRelation(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, created.WorkItemID)
 
-	require.NoError(t, f.service.Delete(f.ctx, created.ID, f.tenantID))
+	meta := workitemmutation.Meta{TenantID: f.tenantID, ActorID: f.actorID, Source: "http", OperationID: "explicit-unlink", ExpectedVersion: f.client.Ticket.GetX(f.ctx, f.incidentWorkItem).Version}
+	err = f.service.Delete(f.ctx, created.ID, meta)
+	app, ok := common.AsAppError(err)
+	require.True(t, ok)
+	require.Equal(t, common.ErrCodeConflict, app.Code)
+	_, err = relationService.NewWorkItemRelationService(f.client, sameTransactionDirectory{}).Apply(f.ctx, relationService.RelationCommand{Meta: meta, SourceID: f.incidentWorkItem, TargetID: *created.WorkItemID, Type: "investigated_by"}, true)
+	require.NoError(t, err)
+	require.NoError(t, f.service.Delete(f.ctx, created.ID, meta))
 	live, err := f.client.WorkItemRelation.Query().Where(
 		workitemrelation.TenantID(f.tenantID),
 		workitemrelation.SourceWorkItemID(f.incidentWorkItem),

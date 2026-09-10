@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -25,9 +26,10 @@ import (
 
 type relationFixture struct {
 	*incidentEffectsFixture
-	runtime *database.RuntimeClients
-	owner   *service.WorkItemRelationService
-	problem *ent.Ticket
+	runtime     *database.RuntimeClients
+	owner       *service.WorkItemRelationService
+	problem     *ent.Ticket
+	runtimeRole string
 }
 
 func newRelationFixture(t *testing.T) *relationFixture {
@@ -46,7 +48,7 @@ func newRelationFixture(t *testing.T) *relationFixture {
 		require.NoError(t, err)
 	}
 	f.ctx = tenantctx.WithTenantID(f.ctx, f.tenant.ID)
-	return &relationFixture{f, clients, service.NewWorkItemRelationService(clients.Tenant, clients.IntakeDirectorySnapshot()), item}
+	return &relationFixture{f, clients, service.NewWorkItemRelationService(clients.Tenant, clients.IntakeDirectorySnapshot()), item, cfg.User}
 }
 
 func (f *relationFixture) command(key string) service.RelationCommand {
@@ -114,16 +116,21 @@ func TestWorkItemRelationsConcurrencyReplayAndRelink(t *testing.T) {
 func TestWorkItemRelationsSameOperationRace(t *testing.T) {
 	f := newRelationFixture(t)
 	cmd := f.command("same-operation")
-	// Force both business snapshots to authorize before either attempts CAS.
+	// Hold the first two immutable-receipt reads, before endpoint locks. A
+	// barrier after the first row lock would deadlock the second contender.
 	ready := make(chan struct{}, 2)
 	release := make(chan struct{})
-	f.runtime.Tenant.Ticket.Use(func(next ent.Mutator) ent.Mutator {
-		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
-			ready <- struct{}{}
-			<-release
-			return next.Mutate(ctx, m)
+	var arrivals atomic.Int32
+	f.runtime.Tenant.AuditLog.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
+		return ent.QuerierFunc(func(ctx context.Context, query ent.Query) (ent.Value, error) {
+			value, err := next.Query(ctx, query)
+			if arrivals.Add(1) <= 2 {
+				ready <- struct{}{}
+				<-release
+			}
+			return value, err
 		})
-	})
+	}))
 	var wg sync.WaitGroup
 	errs := make([]error, 2)
 	results := make([]workitemmutation.Result, 2)
@@ -135,7 +142,7 @@ func TestWorkItemRelationsSameOperationRace(t *testing.T) {
 		select {
 		case <-ready:
 		case <-time.After(10 * time.Second):
-			t.Fatal("CAS barrier was not reached")
+			t.Fatal("pre-lock receipt barrier was not reached")
 		}
 	}
 	close(release)

@@ -181,10 +181,6 @@ func uniquePositiveIDs(ids []int) []int {
 	return result
 }
 
-func (s *Service) Delete(ctx context.Context, id int, tenantID int) error {
-	return s.repo.Delete(ctx, id, tenantID)
-}
-
 func (s *Service) GetStats(ctx context.Context, tenantID int) (*ProblemStats, error) {
 	return s.repo.GetStats(ctx, tenantID)
 }

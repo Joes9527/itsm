@@ -2,6 +2,7 @@ package change
 
 import (
 	"errors"
+	"itsm-backend/ent"
 	"strconv"
 	"strings"
 
@@ -285,8 +286,13 @@ func (h *Handler) DeleteChange(c *gin.Context) {
 		return
 	}
 
-	if err := h.svc.DeleteChange(c.Request.Context(), id, tenantID); err != nil {
-		common.InternalError(c, "删除变更失败: "+err.Error())
+	actorID := c.GetInt("user_id")
+	if actorID <= 0 {
+		common.Fail(c, common.AuthErrorCode, "authenticated actor required")
+		return
+	}
+	if err := h.svc.DeleteChange(c.Request.Context(), id, workitemmutation.Meta{TenantID: tenantID, ActorID: actorID, Source: "http"}); err != nil {
+		respondPIRMutationError(c, err)
 		return
 	}
 	common.Success(c, gin.H{"message": "deleted"})
@@ -446,6 +452,10 @@ func (h *Handler) DeletePIR(c *gin.Context) {
 }
 
 func respondPIRMutationError(c *gin.Context, err error) {
+	if ent.IsNotFound(err) {
+		common.NotFound(c, "Change not found")
+		return
+	}
 	var intake *creation.IntakeError
 	if errors.As(err, &intake) {
 		switch intake.HTTPStatus {

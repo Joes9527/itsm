@@ -578,7 +578,7 @@ func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 
 	t.Run("tenant scoped delete must fail closed", func(t *testing.T) {
 		svc := NewService(repo, entClient, logger)
-		err := svc.DeleteChange(ctx, changeB.ID, tenantA)
+		err := svc.DeleteChange(ctx, changeB.ID, workitemmutation.Meta{TenantID: tenantA, ActorID: actorA})
 		if err == nil {
 			stored, getErr := repo.Get(ctx, changeB.ID, tenantB)
 			require.NoError(t, getErr)

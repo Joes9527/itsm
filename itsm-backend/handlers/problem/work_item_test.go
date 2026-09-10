@@ -238,7 +238,7 @@ func TestProblemAddAssociationHTTP_MissingUserContext(t *testing.T) {
 		SetTitle("T1").SetTicketNumber("PRB-NOUSER-1").SetRequesterID(user.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
 
-	assocReq := dto.ProblemAssociationRequest{RelatedType: "ticket", RelatedIDs: []int{ticket1.ID}}
+	assocReq := dto.WorkItemRelationRequest{SourceWorkItemID: *p.WorkItemID, TargetWorkItemID: ticket1.ID, RelationType: "related_to", ExpectedVersion: p.Version, OperationID: "missing-actor"}
 	// performProblemRequest only sets X-User-ID when userID > 0; pass 0 to omit it.
 	w := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/associations", p.ID), assocReq, tenant.ID, 0)
 	require.Equal(t, http.StatusUnauthorized, w.Code)

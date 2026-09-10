@@ -564,48 +564,6 @@ func (r *EntRepository) Update(ctx context.Context, p *Problem) (*Problem, error
 	return r.toDomain(saved), nil
 }
 
-func (r *EntRepository) Delete(ctx context.Context, id int, tenantID int) error {
-	tx, err := r.client.Tx(ctx)
-	if err != nil {
-		return fmt.Errorf("start problem delete transaction: %w", err)
-	}
-	fail := func(cause error) error {
-		return rollbackProblemTx(tx, cause)
-	}
-
-	existing, err := tx.Problem.Query().Where(
-		problem.IDEQ(id),
-		problemTenantScope(tenantID),
-	).Only(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return fail(fmt.Errorf("problem not found"))
-		}
-		return fail(fmt.Errorf("load problem for delete: %w", err))
-	}
-
-	deletedAt := time.Now()
-	if existing.WorkItemID > 0 {
-		_, err = tx.WorkItemRelation.Update().Where(
-			workitemrelation.TenantIDEQ(tenantID),
-			workitemrelation.TargetWorkItemIDEQ(existing.WorkItemID),
-			workitemrelation.RelationTypeEQ(common.WorkItemRelationInvestigatedBy),
-			workitemrelation.DeletedAtIsNil(),
-		).SetDeletedAt(deletedAt).Save(ctx)
-		if err != nil {
-			return fail(fmt.Errorf("soft-delete incident problem relations: %w", err))
-		}
-	}
-
-	if _, err = tx.Ticket.UpdateOneID(existing.WorkItemID).Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).SetDeletedAt(deletedAt).SetUpdatedAt(deletedAt).AddVersion(1).Save(ctx); err != nil {
-		return fail(fmt.Errorf("soft-delete problem: %w", err))
-	}
-	if err = tx.Commit(); err != nil {
-		return rollbackProblemTx(tx, fmt.Errorf("commit problem delete transaction: %w", err))
-	}
-	return nil
-}
-
 func (r *EntRepository) GetStats(ctx context.Context, tenantID int) (*ProblemStats, error) {
 	query := r.client.Problem.Query().Where(problemTenantScope(tenantID))
 

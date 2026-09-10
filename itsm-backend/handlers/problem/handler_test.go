@@ -30,6 +30,22 @@ func strPtr(s string) *string {
 	return &s
 }
 
+func TestProblemAssociationRejectsVersionlessLegacyBody(t *testing.T) {
+	r, _, svc, client := setupProblemHTTPHandlerTest(t)
+	defer client.Close()
+	ctx := context.Background()
+	tenant := createProblemHandlerTenant(t, ctx, client, "legacy-body")
+	actor := createProblemHandlerUser(t, ctx, client, tenant.ID, "legacy-body")
+	p := createProblemHandlerProblem(t, ctx, svc, tenant.ID, actor.ID)
+	target, err := client.Ticket.Create().SetTitle("target").SetTicketNumber("LEGACY-BODY-TARGET").SetRequesterID(actor.ID).SetTenantID(tenant.ID).Save(ctx)
+	require.NoError(t, err)
+	w := performProblemRequest(r, http.MethodPost, fmt.Sprintf("/api/v1/problems/%d/associations", p.ID), map[string]any{"relatedType": "ticket", "relatedIDs": []int{target.ID}}, tenant.ID, actor.ID)
+	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
+	count, err := client.WorkItemRelation.Query().Count(ctx)
+	require.NoError(t, err)
+	require.Zero(t, count)
+}
+
 func setupProblemHTTPHandlerTest(t *testing.T) (*gin.Engine, *Handler, *Service, *ent.Client) {
 	gin.SetMode(gin.TestMode)
 	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:problem-http-%s?mode=memory&cache=shared&_fk=1", t.Name()))
@@ -391,10 +407,7 @@ func TestProblemHTTPHandlerAssociations(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add Association
-	assocReq := dto.ProblemAssociationRequest{
-		RelatedType: "ticket",
-		RelatedIDs:  []int{ticket1.ID},
-	}
+	assocReq := dto.WorkItemRelationRequest{SourceWorkItemID: *p.WorkItemID, TargetWorkItemID: ticket1.ID, RelationType: "related_to", ExpectedVersion: p.Version, OperationID: "add-related-ticket"}
 	w := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/associations", p.ID), assocReq, tenant.ID, user.ID)
 	require.Equal(t, http.StatusOK, w.Code)
 
@@ -403,10 +416,7 @@ func TestProblemHTTPHandlerAssociations(t *testing.T) {
 	require.Equal(t, http.StatusOK, wGet.Code)
 
 	// Remove Association
-	remReq := dto.ProblemRemoveAssociationRequest{
-		RelatedType: "ticket",
-		RelatedID:   ticket1.ID,
-	}
+	remReq := dto.WorkItemRelationRequest{SourceWorkItemID: *p.WorkItemID, TargetWorkItemID: ticket1.ID, RelationType: "related_to", ExpectedVersion: p.Version + 1, OperationID: "remove-related-ticket"}
 	wRem := performProblemRequest(r, "DELETE", fmt.Sprintf("/api/v1/problems/%d/associations", p.ID), remReq, tenant.ID, user.ID)
 	require.Equal(t, http.StatusOK, wRem.Code)
 }
@@ -447,10 +457,10 @@ func TestProblemHTTPHandlerCrossTenantIsolation(t *testing.T) {
 
 	// Tenant B attempts DELETE Tenant A problem
 	wDel := performProblemRequest(r, "DELETE", fmt.Sprintf("/api/v1/problems/%d", problemA.ID), nil, tenantB.ID, userB.ID)
-	require.Equal(t, http.StatusInternalServerError, wDel.Code)
+	require.Equal(t, http.StatusNotFound, wDel.Code)
 	var resDel common.Response
 	require.NoError(t, json.Unmarshal(wDel.Body.Bytes(), &resDel))
-	assert.Equal(t, common.InternalErrorCode, resDel.Code)
+	assert.Equal(t, common.NotFoundErrorCode, resDel.Code)
 }
 
 func TestProblemHTTPHandlerGetProjectsActionsAndFailsClosedWithoutActorIdentity(t *testing.T) {

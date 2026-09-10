@@ -80,7 +80,7 @@ func configureProblemIntakeFixture(ctx context.Context, client *ent.Client, tena
 	client.ProcessBinding.Create().SetTenantID(tenantID).SetBusinessType("problem").SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 	role := client.Role.Create().SetTenantID(tenantID).SetCode("agent").SetName("Agent").SaveX(ctx)
 	for _, resource := range []string{"problem", "incident", "ticket"} {
-		for _, action := range []string{"read", "write"} {
+		for _, action := range []string{"read", "write", "delete"} {
 			permission := client.Permission.Create().SetTenantID(tenantID).SetCode(resource + ":" + action).SetName(resource + action).SetResource(resource).SetAction(action).SaveX(ctx)
 			client.RolePermission.Create().SetTenantID(tenantID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(ctx)
 		}

@@ -279,6 +279,23 @@ func (s *WorkItemRelationService) mutateTx(ctx context.Context, tx *ent.Tx, cmd 
 	if source.Version != m.ExpectedVersion {
 		return empty, common.NewVersionConflictError("work item", source.ID, m.ExpectedVersion, source.Version)
 	}
+	if err = lockRelationEndpointsTx(ctx, tx, m.TenantID, cmd.SourceID, cmd.TargetID); err != nil {
+		return empty, err
+	}
+	// A row lock alone cannot invalidate a deletion owner's older RR snapshot:
+	// incoming references otherwise change only their source. This physical
+	// target tuple fence preserves every public field and bypasses Ent defaults.
+	fence, err := tx.ExecContext(ctx, "UPDATE tickets SET id=id WHERE id=$1 AND tenant_id=$2 AND deleted_at IS NULL", cmd.TargetID, m.TenantID)
+	if err != nil {
+		return empty, err
+	}
+	count, err := fence.RowsAffected()
+	if err != nil {
+		return empty, err
+	}
+	if count != 1 {
+		return empty, common.NewNotFoundError("work item")
+	}
 	if source.RecordClass == "change_request" {
 		if err = workitemmutation.RequireSettledChangeCallbacks(ctx, tx, m.TenantID, source.ID); err != nil {
 			return empty, err

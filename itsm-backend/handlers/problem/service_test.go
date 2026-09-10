@@ -3,6 +3,7 @@ package problem_test
 import (
 	"context"
 	"fmt"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"testing"
 	"time"
 
@@ -109,7 +110,7 @@ func TestProblemRepositorySoftDeleteExcludedEverywhere(t *testing.T) {
 	user := createProblemHandlerUser(t, ctx, client, tenant.ID, "delete")
 	p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
 
-	require.NoError(t, service.Delete(ctx, p.ID, tenant.ID))
+	require.NoError(t, service.Delete(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID}))
 	_, err := service.Get(ctx, p.ID, tenant.ID)
 	require.True(t, ent.IsNotFound(err))
 	list, total, err := service.List(ctx, tenant.ID, 1, 10, nil)
@@ -332,7 +333,7 @@ func TestProblemServiceCrossTenantIsolation(t *testing.T) {
 	require.True(t, ent.IsNotFound(err))
 
 	// Tenant B tries to DELETE Problem A
-	err = service.Delete(ctx, problemA.ID, tenantB.ID)
+	err = service.Delete(ctx, problemA.ID, workitemmutation.Meta{TenantID: tenantB.ID, ActorID: userB.ID})
 	require.ErrorContains(t, err, "problem not found")
 
 	// Tenant B tries to Investigate Problem A

@@ -9,7 +9,6 @@ type Repository interface {
 	// Change CRUD
 	Get(ctx context.Context, id int, tenantID int) (*Change, error)
 	List(ctx context.Context, tenantID int, page, size int, status, search, riskLevel string) ([]*Change, int, error)
-	Delete(ctx context.Context, id int, tenantID int) error
 	GetStats(ctx context.Context, tenantID int) (*Stats, error)
 
 	// Approvals

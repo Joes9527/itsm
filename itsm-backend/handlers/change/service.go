@@ -68,10 +68,6 @@ func (s *Service) ListChanges(ctx context.Context, tenantID int, page, size int,
 	return s.repo.List(ctx, tenantID, page, size, status, search, riskLevel)
 }
 
-func (s *Service) DeleteChange(ctx context.Context, id int, tenantID int) error {
-	return s.repo.Delete(ctx, id, tenantID)
-}
-
 func (s *Service) GetStats(ctx context.Context, tenantID int) (*Stats, error) {
 	return s.repo.GetStats(ctx, tenantID)
 }

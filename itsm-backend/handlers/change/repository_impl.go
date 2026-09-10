@@ -383,16 +383,6 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, page, size int, 
 
 // Update 在同一事务内更新专业字段、WorkItem 共享字段，并把 c.RelatedTickets 描述的期望
 // 集合收敛到 WorkItemRelation（见 reconcileRelatedTicketRelations）。
-func (r *EntRepository) Delete(ctx context.Context, id int, tenantID int) error {
-	entity, err := r.client.Change.Query().Where(change.ID(id), changeTenantScope(tenantID)).Only(ctx)
-	if err != nil {
-		return err
-	}
-	_, err = r.client.Ticket.UpdateOneID(entity.WorkItemID).
-		Where(entticket.TenantIDEQ(tenantID), entticket.DeletedAtIsNil()).
-		SetDeletedAt(time.Now()).SetUpdatedAt(time.Now()).AddVersion(1).Save(ctx)
-	return err
-}
 
 func (r *EntRepository) GetStats(ctx context.Context, tenantID int) (*Stats, error) {
 	stats := &Stats{}

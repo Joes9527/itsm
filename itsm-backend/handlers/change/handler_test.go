@@ -143,15 +143,6 @@ func (m *mockRepository) List(ctx context.Context, tenantID int, page, size int,
 	return result, len(result), nil
 }
 
-func (m *mockRepository) Delete(ctx context.Context, id int, tenantID int) error {
-	c, ok := m.changes[id]
-	if !ok || c.TenantID != tenantID {
-		return http.ErrMissingFile
-	}
-	delete(m.changes, id)
-	return nil
-}
-
 func (m *mockRepository) GetStats(ctx context.Context, tenantID int) (*Stats, error) {
 	stats := &Stats{}
 	for _, c := range m.changes {
@@ -479,54 +470,17 @@ func TestChangeController_UpdateChange(t *testing.T) {
 
 // TestChangeController_DeleteChange tests DELETE /api/v1/changes/:id
 func TestChangeController_DeleteChange(t *testing.T) {
-	r, _, repo := setupTestHandler(t)
-
-	// Create test data
-	change := createTestChange(repo, 1, 1)
-
-	tests := []struct {
-		name           string
-		changeID       string
-		expectedStatus int
-		expectedCode   int
-	}{
-		{
-			name:           "成功删除变更",
-			changeID:       strconv.Itoa(change.ID),
-			expectedStatus: http.StatusOK,
-			expectedCode:   common.SuccessCode,
-		},
-		{
-			name:           "删除不存在的变更应返回500",
-			changeID:       "999",
-			expectedStatus: http.StatusInternalServerError,
-			expectedCode:   common.InternalErrorCode,
-		},
-		{
-			name:           "无效ID应返回400",
-			changeID:       "invalid",
-			expectedStatus: http.StatusBadRequest,
-			expectedCode:   common.ParamErrorCode,
-		},
+	f, r := newGovernedHandlerFixture(t)
+	for _, tc := range []struct {
+		id     string
+		status int
+	}{{"invalid", 400}, {"99999", 404}, {fmt.Sprint(f.record.ID), 200}} {
+		w := governedHTTP(r, "DELETE", "/api/v1/changes/"+tc.id, "", nil)
+		require.Equal(t, tc.status, w.Code, w.Body.String())
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req, _ := http.NewRequest("DELETE", "/api/v1/changes/"+tt.changeID, nil)
-			w := httptest.NewRecorder()
-			r.ServeHTTP(w, req)
-
-			assert.Equal(t, tt.expectedStatus, w.Code)
-
-			var response common.Response
-			err := json.Unmarshal(w.Body.Bytes(), &response)
-			require.NoError(t, err)
-			assert.Equal(t, tt.expectedCode, response.Code)
-		})
-	}
+	require.NotNil(t, f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).DeletedAt)
 }
 
-// TestChangeController_GetStats tests GET /api/v1/changes/stats
 func TestChangeController_GetStats(t *testing.T) {
 	r, _, repo := setupTestHandler(t)
 

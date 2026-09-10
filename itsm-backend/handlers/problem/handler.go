@@ -214,45 +214,50 @@ func (h *Handler) GetAssociations(c *gin.Context) {
 	common.Success(c, resp)
 }
 
-// AddAssociation 添加关联
-func (h *Handler) AddAssociation(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		common.Fail(c, common.ParamErrorCode, "invalid id")
-		return
-	}
+// AddAssociation adds one explicit relation through the shared owner.
+func (h *Handler) AddAssociation(c *gin.Context) { h.applyRelation(c, false) }
 
-	var req dto.ProblemAssociationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, common.ParamErrorCode, err.Error())
-		return
-	}
-
-	tenantID, ok := resolveProblemTenantID(c)
+func (h *Handler) applyRelation(c *gin.Context, remove bool) {
+	id, tenantID, ok := problemRequestContext(c)
 	if !ok {
 		return
 	}
-	userID, userOK := problemActorUserID(c)
-	if !userOK {
+	var req dto.WorkItemRelationRequest
+	if !intakehttp.Bind(c, &req) {
 		return
 	}
-	// 验证问题存在
-	_, err = h.service.Get(c.Request.Context(), id, tenantID)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			common.Fail(c, common.NotFoundErrorCode, "Problem not found")
-		} else {
-			common.Fail(c, common.InternalErrorCode, err.Error())
+	// Bind has already rejected duplicate and unknown members. Relation commands
+	// additionally reject explicit nulls, including the typed metadata object.
+	value, _ := c.Get("intake.http.body")
+	fields, _ := value.(map[string]any)
+	for field, value := range fields {
+		if value == nil {
+			intakehttp.Fail(c, intakehttp.Invalid(field, "null is not supported"))
+			return
 		}
-		return
+	}
+	if metadata, ok := fields["metadata"].(map[string]any); ok {
+		for field, value := range metadata {
+			if value == nil {
+				intakehttp.Fail(c, intakehttp.Invalid("metadata."+field, "null is not supported"))
+				return
+			}
+		}
 	}
 
-	if err := h.service.AddAssociations(c.Request.Context(), tenantID, id, userID, req.RelatedType, req.RelatedIDs); err != nil {
-		common.Fail(c, common.InternalErrorCode, err.Error())
+	actorID, ok := problemActorUserID(c)
+	if !ok {
 		return
 	}
-
-	common.Success(c, nil)
+	result, err := h.service.ApplyRelation(c.Request.Context(), id, service.RelationCommand{
+		Meta:     workitemmutation.Meta{TenantID: tenantID, ActorID: actorID, ExpectedVersion: req.ExpectedVersion, OperationID: req.OperationID, Source: "http"},
+		SourceID: req.SourceWorkItemID, TargetID: req.TargetWorkItemID, Type: req.RelationType, Required: req.Metadata.Required,
+	}, remove)
+	if err != nil {
+		RespondCommandError(c, err)
+		return
+	}
+	common.Success(c, result)
 }
 
 // problemActorUserID 从请求上下文取出当前操作人 ID，用于 WorkItemRelation.created_by_id。
@@ -288,42 +293,8 @@ func (h *Handler) problemActionActor(c *gin.Context, tenantID int) (service.Acti
 	}, true
 }
 
-// RemoveAssociation 移除关联
-func (h *Handler) RemoveAssociation(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		common.Fail(c, common.ParamErrorCode, "invalid id")
-		return
-	}
-
-	var req dto.ProblemRemoveAssociationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, common.ParamErrorCode, err.Error())
-		return
-	}
-
-	tenantID, ok := resolveProblemTenantID(c)
-	if !ok {
-		return
-	}
-	// 验证问题存在
-	_, err = h.service.Get(c.Request.Context(), id, tenantID)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			common.Fail(c, common.NotFoundErrorCode, "Problem not found")
-		} else {
-			common.Fail(c, common.InternalErrorCode, err.Error())
-		}
-		return
-	}
-
-	if err := h.service.RemoveAssociation(c.Request.Context(), tenantID, id, req.RelatedType, req.RelatedID); err != nil {
-		common.Fail(c, common.InternalErrorCode, err.Error())
-		return
-	}
-
-	common.Success(c, nil)
-}
+// RemoveAssociation removes one relation with the original source identity.
+func (h *Handler) RemoveAssociation(c *gin.Context) { h.applyRelation(c, true) }
 
 func (h *Handler) List(c *gin.Context) {
 	var req dto.ListProblemsRequest
@@ -489,25 +460,37 @@ func (h *Handler) command(c *gin.Context, action string) {
 }
 
 func RespondCommandError(c *gin.Context, err error) {
+	var intake *creation.IntakeError
+	if errors.As(err, &intake) {
+		intakehttp.Fail(c, err)
+		return
+	}
 	var conflict *workitemmutation.OperationConflictError
-	if common.IsVersionConflictError(err) || errors.As(err, &conflict) {
-		common.Conflict(c, err.Error(), nil)
+	var state interface{ SQLState() string }
+	if common.IsVersionConflictError(err) || errors.As(err, &conflict) || (errors.As(err, &state) && (state.SQLState() == "40001" || state.SQLState() == "40P01")) {
+		common.Conflict(c, "Problem mutation conflicts with current state", nil)
+		return
+	}
+	if ent.IsNotFound(err) {
+		common.NotFound(c, "Problem not found")
 		return
 	}
 	if app, ok := common.AsAppError(err); ok {
 		switch app.Code {
 		case common.ErrCodeValidation, common.ErrCodeBadRequest:
-			common.Fail(c, common.ParamErrorCode, app.Message)
+			common.ParamError(c, app.Message)
 		case common.ErrCodeForbidden:
 			common.Forbidden(c, app.Message)
 		case common.ErrCodeNotFound:
 			common.NotFound(c, app.Message)
+		case common.ErrCodeConflict:
+			common.Conflict(c, app.Message, nil)
 		default:
-			common.Fail(c, common.InternalErrorCode, "problem mutation failed")
+			common.InternalError(c, "Problem mutation failed")
 		}
 		return
 	}
-	common.Fail(c, common.InternalErrorCode, "problem mutation failed")
+	common.InternalError(c, "Problem mutation failed")
 }
 
 func (h *Handler) UpdateRootCause(c *gin.Context) {
@@ -586,9 +569,13 @@ func (h *Handler) Delete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	err = h.service.Delete(c.Request.Context(), id, tenantID)
+	actorID, ok := problemActorUserID(c)
+	if !ok {
+		return
+	}
+	err = h.service.Delete(c.Request.Context(), id, workitemmutation.Meta{TenantID: tenantID, ActorID: actorID, Source: "http"})
 	if err != nil {
-		common.Fail(c, common.InternalErrorCode, err.Error())
+		RespondCommandError(c, err)
 		return
 	}
 
