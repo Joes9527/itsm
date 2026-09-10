@@ -232,7 +232,7 @@ func (h *Handler) ListChanges(c *gin.Context) {
 
 	list, total, err := h.svc.ListChanges(c.Request.Context(), workitemmutation.Meta{TenantID: tenantID, ActorID: c.GetInt("user_id"), Source: "http"}, page, pageSize, status, search, riskLevel)
 	if err != nil {
-		common.InternalError(c, "查询变更列表失败: "+err.Error())
+		respondPIRMutationError(c, err)
 		return
 	}
 

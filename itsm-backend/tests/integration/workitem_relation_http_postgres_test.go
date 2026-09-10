@@ -3,8 +3,13 @@
 package integration
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"itsm-backend/common"
+	"itsm-backend/ent"
+	changeDomain "itsm-backend/handlers/change"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -205,6 +210,88 @@ func TestWorkItemRelationHTTPExistingIncidentChangeAndRelatedTo(t *testing.T) {
 			// Removed professional alias is deliberately unavailable.
 			w = relationHTTP(r, "POST", "/api/v1/problems/1/associations", body)
 			require.Equal(t, 404, w.Code)
+		})
+	}
+}
+
+func TestChangeListHTTPProjectionFailureContract(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		status, code int
+	}{
+		{"missing_actor", 401, common.AuthFailedCode},
+		{"revoked_actor", 403, common.ForbiddenCode},
+		{"revoked_change_read", 403, common.ForbiddenCode},
+		{"revoked_endpoint_read", 403, common.ForbiddenCode},
+		{"hidden_endpoint", 404, common.NotFoundCode},
+		{"projection_storage", 500, common.InternalErrorCode},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newRelationFixture(t)
+			_, owner, change := projectionOwners(t, f)
+			cmd := f.command("list-error-link")
+			cmd.SourceID = f.problem.ID
+			cmd.TargetID = change.WorkItemID
+			cmd.Type = "resolved_by_change"
+			cmd.Required = true
+			_, err := f.owner.Apply(f.ctx, cmd, false)
+			require.NoError(t, err)
+			f.client.User.UpdateOneID(f.actor.ID).SetRole("list_reader").ExecX(f.ctx)
+			role := f.client.Role.Create().SetTenantID(f.tenant.ID).SetCode("list_reader").SetName("List reader").SetIsActive(true).SaveX(f.ctx)
+			grants := map[string]int{}
+			for _, resource := range []string{"change", "problem"} {
+				grant := f.client.Permission.Create().SetTenantID(f.tenant.ID).SetCode(resource + ":list-read").SetName("Read").SetResource(resource).SetAction("read").SaveX(f.ctx)
+				f.client.RolePermission.Create().SetTenantID(f.tenant.ID).SetRoleID(role.ID).SetPermissionID(grant.ID).ExecX(f.ctx)
+				grants[resource] = grant.ID
+			}
+			actorID := f.actor.ID
+			r := gin.New()
+			r.Use(func(c *gin.Context) {
+				c.Set("tenant_id", f.tenant.ID)
+				c.Set("user_id", actorID)
+				c.Set("role", "super_admin")
+				c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: f.tenant.ID})
+				c.Request = c.Request.WithContext(f.ctx)
+				c.Next()
+			})
+			r.GET("/api/v1/changes", changeDomain.NewHandler(owner).ListChanges)
+			w := relationHTTP(r, "GET", "/api/v1/changes", "")
+			require.Equal(t, 200, w.Code, w.Body.String())
+			marker := "private-list-projection-driver-detail"
+			reached := false
+			switch tc.name {
+			case "missing_actor":
+				actorID = 0
+			case "revoked_actor":
+				f.client.User.UpdateOneID(f.actor.ID).SetActive(false).ExecX(f.ctx)
+			case "revoked_change_read":
+				f.client.RolePermission.Delete().Where(rolepermission.PermissionID(grants["change"])).ExecX(f.ctx)
+			case "revoked_endpoint_read":
+				f.client.RolePermission.Delete().Where(rolepermission.PermissionID(grants["problem"])).ExecX(f.ctx)
+			case "hidden_endpoint":
+				other := f.client.User.Create().SetTenantID(f.tenant.ID).SetUsername("other-list-reader").SetName("Other").SetEmail("other-list@example.test").SetPasswordHash("test").SetRole("end_user").SetActive(true).SaveX(f.ctx)
+				f.client.Ticket.UpdateOneID(f.problem.ID).SetRequesterID(other.ID).ClearAssigneeID().ExecX(f.ctx)
+			case "projection_storage":
+				f.runtime.Tenant.WorkItemRelation.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
+					return ent.QuerierFunc(func(context.Context, ent.Query) (ent.Value, error) { reached = true; return nil, errors.New(marker) })
+				}))
+			}
+			w = relationHTTP(r, "GET", "/api/v1/changes", "")
+			// Nonfatal assertions expose both wrong statuses and raw error leakage in RED.
+			if w.Code != tc.status {
+				t.Errorf("HTTP status=%d want=%d body=%s", w.Code, tc.status, w.Body.String())
+			}
+			var response common.Response
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+			if response.Code != tc.code {
+				t.Errorf("envelope code=%d want=%d", response.Code, tc.code)
+			}
+			require.Nil(t, response.Data, "failure must not return authoritative empty page")
+			require.NotContains(t, w.Body.String(), marker)
+			if tc.name == "projection_storage" {
+				require.True(t, reached)
+			}
+			require.Equal(t, 1, f.client.Ticket.GetX(f.ctx, change.WorkItemID).Version)
 		})
 	}
 }
