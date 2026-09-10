@@ -297,8 +297,15 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, c
 	// the resolved_by_change verification path can never observe a half-committed
 	// outcome. Other actions emit nothing.
 	if cmd.Action == "record_outcome" {
+		// The delivering consumer resolves the actor in its native tenant, so the
+		// event must carry it: an MSP provider actor acts in a customer tenant.
+		actor, actorErr := authorization.ResolveLifecycleActor(ctx, tx, s.directory, m.ActorID, m.TenantID)
+		if actorErr != nil {
+			return empty, actorErr
+		}
 		if err = service.EmitChangeOutcomeEventTx(ctx, tx, service.ChangeOutcomeFacts{
 			TenantID:      m.TenantID,
+			ActorTenantID: actor.TenantID,
 			ActorID:       m.ActorID,
 			ChangeID:      c.ID,
 			WorkItemID:    item.ID,

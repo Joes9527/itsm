@@ -53,7 +53,11 @@ func IsDirectedRelation(relationType string) bool {
 // ChangeID is the professional Change identity; WorkItemID owns the version and
 // the immutable receipt path.
 type ChangeOutcomeFacts struct {
-	TenantID      int    `json:"tenantId"`
+	TenantID int `json:"tenantId"`
+	// ActorTenantID is the actor's native tenant. An MSP provider actor acts in a
+	// customer tenant, so the delivering consumer must resolve the actor in its
+	// native tenant rather than in TenantID.
+	ActorTenantID int    `json:"actorTenantId"`
 	ActorID       int    `json:"actorId"`
 	ChangeID      int    `json:"changeId"`
 	WorkItemID    int    `json:"workItemId"`
@@ -130,7 +134,9 @@ func EmitChangeOutcomeEventTx(ctx context.Context, tx *ent.Tx, facts ChangeOutco
 // resolver never changes Incident lifecycle state; the event only informs the
 // investigating Incident handlers.
 type ProblemResolvedFacts struct {
-	TenantID      int    `json:"tenantId"`
+	TenantID int `json:"tenantId"`
+	// ActorTenantID is the actor's native tenant; see ChangeOutcomeFacts.
+	ActorTenantID int    `json:"actorTenantId"`
 	ActorID       int    `json:"actorId"`
 	ProblemID     int    `json:"problemId"`
 	WorkItemID    int    `json:"workItemId"`

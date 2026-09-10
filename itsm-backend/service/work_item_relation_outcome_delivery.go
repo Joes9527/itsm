@@ -68,7 +68,8 @@ func (h *ChangeOutcomeDeliveryHandler) Deliver(ctx context.Context, event *ent.O
 		return h.recordVerificationDecision(ctx, facts, "no live resolved_by_change source")
 	}
 
-	actor, err := h.client.User.Query().Where(user.ID(facts.ActorID), user.TenantID(facts.TenantID), user.Active(true)).Only(ctx)
+	// Resolve the actor in its native tenant so an MSP provider actor is not blocked.
+	actor, err := h.client.User.Query().Where(user.ID(facts.ActorID), user.TenantID(facts.ActorTenantID), user.Active(true)).Only(ctx)
 	if err != nil {
 		return blockOutboxDelivery("change outcome actor unavailable in tenant")
 	}
@@ -176,7 +177,7 @@ func (h *ChangeOutcomeDeliveryHandler) validate(ctx context.Context, event *ent.
 	if err := decoder.Decode(&facts); err != nil {
 		return facts, blockOutboxDelivery("invalid change outcome payload")
 	}
-	if facts.TenantID <= 0 || facts.ActorID <= 0 || facts.ChangeID <= 0 || facts.WorkItemID <= 0 || facts.Version <= 1 ||
+	if facts.TenantID <= 0 || facts.ActorID <= 0 || facts.ActorTenantID <= 0 || facts.ChangeID <= 0 || facts.WorkItemID <= 0 || facts.Version <= 1 ||
 		strings.TrimSpace(facts.Outcome) == "" || strings.TrimSpace(facts.Source) == "" || strings.TrimSpace(facts.OperationID) == "" ||
 		event.TenantID != facts.TenantID || event.AggregateType != "work_item" ||
 		event.AggregateID != strconv.Itoa(facts.WorkItemID) ||

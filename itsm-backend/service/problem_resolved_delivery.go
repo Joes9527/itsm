@@ -62,7 +62,8 @@ func (h *ProblemResolvedDeliveryHandler) Deliver(ctx context.Context, event *ent
 		return h.recordNoIncidentDecision(ctx, facts)
 	}
 
-	actor, err := h.client.User.Query().Where(user.ID(facts.ActorID), user.TenantID(facts.TenantID), user.Active(true)).Only(ctx)
+	// Resolve the actor in its native tenant so an MSP provider actor is not blocked.
+	actor, err := h.client.User.Query().Where(user.ID(facts.ActorID), user.TenantID(facts.ActorTenantID), user.Active(true)).Only(ctx)
 	if err != nil {
 		return blockOutboxDelivery("problem resolved actor unavailable in tenant")
 	}
@@ -168,7 +169,7 @@ func (h *ProblemResolvedDeliveryHandler) validate(ctx context.Context, event *en
 	if err := decoder.Decode(&facts); err != nil {
 		return facts, blockOutboxDelivery("invalid problem resolved payload")
 	}
-	if facts.TenantID <= 0 || facts.ActorID <= 0 || facts.ProblemID <= 0 || facts.WorkItemID <= 0 || facts.Version <= 1 ||
+	if facts.TenantID <= 0 || facts.ActorID <= 0 || facts.ActorTenantID <= 0 || facts.ProblemID <= 0 || facts.WorkItemID <= 0 || facts.Version <= 1 ||
 		strings.TrimSpace(facts.Source) == "" || strings.TrimSpace(facts.OperationID) == "" ||
 		event.TenantID != facts.TenantID || event.AggregateType != "work_item" ||
 		event.AggregateID != strconv.Itoa(facts.WorkItemID) ||

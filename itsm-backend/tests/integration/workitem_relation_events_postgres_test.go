@@ -215,3 +215,55 @@ func TestWorkItemRelationEventsConsumerBlocksWhenActorUnavailable(t *testing.T) 
 	require.Zero(t, f.client.Notification.Query().Where(notification.TenantID(f.tenant.ID), notification.UserID(assignee.ID)).CountX(f.ctx))
 	require.Equal(t, "blocked", f.client.OutboxEvent.GetX(f.ctx, event.ID).Status, "unavailable actor must block visibly")
 }
+
+// B2 round-2 fix: an MSP provider actor's native tenant differs from the event
+// tenant. Resolving the actor inside the event tenant would permanently block every
+// MSP event, even though B1's own tests prove the MSP mutation path is supported.
+// Both endpoints are assigned to the provider actor because the existing row policy
+// (requester/assignee) is what admits the mutation; the delivery target is therefore
+// that same counterpart assignee.
+func TestWorkItemRelationEventsDeliversForMspProviderActor(t *testing.T) {
+	f := newRelationFixture(t)
+	f.client.Tenant.UpdateOneID(f.tenant.ID).SetType("msp_customer").ExecX(f.ctx)
+	provider := f.client.Tenant.Create().SetCode("events-provider").SetName("provider").SetType("msp_provider").SaveX(f.ctx)
+	actor := f.client.User.Create().SetTenantID(provider.ID).SetUsername("events-msp").SetName("operator").
+		SetEmail("events-msp@example.test").SetPasswordHash("test").SetRole("admin").SetMspRole("provider_agent").SetActive(true).SaveX(f.ctx)
+	f.client.MSPAllocation.Create().SetMspUserID(actor.ID).SetCustomerTenantID(f.tenant.ID).SetRole("primary").SaveX(f.ctx)
+	role := f.client.Role.Create().SetTenantID(f.tenant.ID).SetCode("msp_tech").SetName("MSP tech").SetIsActive(true).SaveX(f.ctx)
+	for _, grant := range []struct{ resource, action string }{{"incident", "read"}, {"incident", "write"}, {"problem", "read"}} {
+		permission := f.client.Permission.Create().SetTenantID(f.tenant.ID).SetCode(grant.resource + ":" + grant.action).
+			SetName(fmt.Sprint(grant)).SetResource(grant.resource).SetAction(grant.action).SaveX(f.ctx)
+		f.client.RolePermission.Create().SetTenantID(f.tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(f.ctx)
+	}
+	_, err := f.runtime.Tenant.User.Get(f.ctx, actor.ID)
+	require.True(t, ent.IsNotFound(err), "the provider actor is genuinely outside the customer tenant")
+
+	// The provider actor needs row visibility on both endpoints (requester or
+	// assignee): it owns the incident it mutates, and it is the counterpart's
+	// requester. The counterpart's assignee is a customer-tenant handler, which is
+	// the actual delivery target — a provider user cannot receive a customer-tenant
+	// notification, since the pipeline resolves recipients inside the event tenant.
+	handler := f.client.User.Create().SetTenantID(f.tenant.ID).SetUsername("msp-customer-handler").SetName("handler").
+		SetEmail("msp-handler@example.test").SetPasswordHash("test").SetRole("admin").SetActive(true).SaveX(f.ctx)
+	f.client.Ticket.UpdateOneID(f.inc.WorkItemID).SetAssigneeID(actor.ID).ExecX(f.ctx)
+	f.client.Ticket.UpdateOneID(f.problem.ID).SetRequesterID(actor.ID).SetAssigneeID(handler.ID).ExecX(f.ctx)
+
+	cmd := f.command("msp-delivery")
+	cmd.Meta.ActorID = actor.ID
+	_, err = f.owner.Apply(f.ctx, cmd, false)
+	require.NoError(t, err)
+
+	event := relationEventsOfType(f, service.RelationCreatedEventType)[0]
+	var facts service.RelationFacts
+	require.NoError(t, json.Unmarshal(event.Payload, &facts))
+	require.Equal(t, provider.ID, facts.ActorTenantID, "the event must carry the actor's native tenant")
+
+	worker := newRelationDeliveryWorker(t, f)
+	require.NoError(t, worker.DispatchOnce(f.ctx))
+
+	ev := f.client.OutboxEvent.GetX(f.ctx, event.ID)
+	require.NotEqual(t, "blocked", ev.Status,
+		"an MSP provider actor's event must not be terminally blocked: "+ev.LastError)
+	require.Len(t, f.client.Notification.Query().Where(notification.TenantID(f.tenant.ID), notification.UserID(handler.ID)).AllX(f.ctx), 1,
+		"the customer-tenant counterpart assignee must be notified for an MSP provider actor")
+}

@@ -82,7 +82,9 @@ func (h *WorkItemRelationDeliveryHandler) Deliver(ctx context.Context, event *en
 		return err
 	}
 
-	actor, err := h.client.User.Query().Where(user.ID(facts.ActorID), user.TenantID(facts.TenantID), user.Active(true)).Only(ctx)
+	// The actor is resolved in its native tenant: an MSP provider actor acts in a
+	// customer tenant, so filtering by the event tenant would block every MSP event.
+	actor, err := h.client.User.Query().Where(user.ID(facts.ActorID), user.TenantID(facts.ActorTenantID), user.Active(true)).Only(ctx)
 	if err != nil {
 		return blockOutboxDelivery("relation actor unavailable in tenant")
 	}
@@ -162,7 +164,7 @@ func (h *WorkItemRelationDeliveryHandler) validate(ctx context.Context, event *e
 	if err := decoder.Decode(&facts); err != nil {
 		return facts, blockOutboxDelivery("invalid relation delivery payload")
 	}
-	if facts.TenantID <= 0 || facts.ActorID <= 0 || facts.RelationID <= 0 || facts.MutationWorkItemID <= 0 ||
+	if facts.TenantID <= 0 || facts.ActorID <= 0 || facts.ActorTenantID <= 0 || facts.RelationID <= 0 || facts.MutationWorkItemID <= 0 ||
 		facts.SourceID <= 0 || facts.TargetID <= 0 || facts.Version <= 1 ||
 		strings.TrimSpace(facts.Source) == "" || strings.TrimSpace(facts.OperationID) == "" ||
 		!IsDirectedRelation(facts.Type) || facts.Removed != (h.eventType == RelationRemovedEventType) ||

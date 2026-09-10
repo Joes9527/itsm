@@ -277,8 +277,15 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, d
 	// investigating incident handlers can never observe a half-committed resolve.
 	// The event only notifies; it never transitions incident lifecycle state.
 	if cmd.Action == "resolve" {
+		// The delivering consumer resolves the actor in its native tenant, so the
+		// event must carry it: an MSP provider actor acts in a customer tenant.
+		actor, actorErr := authorization.ResolveLifecycleActor(ctx, tx, s.directory, m.ActorID, m.TenantID)
+		if actorErr != nil {
+			return empty, actorErr
+		}
 		if err = service.EmitProblemResolvedEventTx(ctx, tx, service.ProblemResolvedFacts{
 			TenantID:      m.TenantID,
+			ActorTenantID: actor.TenantID,
 			ActorID:       m.ActorID,
 			ProblemID:     p.ID,
 			WorkItemID:    item.ID,
