@@ -183,12 +183,13 @@ func dashboardWidgetByID(widgetID string) gin.H {
 
 // RouterConfig 路由配置
 type RouterConfig struct {
-	IntakeHandler         *intake.Handler
-	TenantDirectoryClient *ent.Client
-	JWTSecret             string
-	Logger                *zap.SugaredLogger
-	Client                *ent.Client
-	RawDB                 *sql.DB
+	WorkItemRelationController *controller.WorkItemRelationController
+	IntakeHandler              *intake.Handler
+	TenantDirectoryClient      *ent.Client
+	JWTSecret                  string
+	Logger                     *zap.SugaredLogger
+	Client                     *ent.Client
+	RawDB                      *sql.DB
 
 	// CSRF configuration
 	CSRFEnabled bool
@@ -505,6 +506,13 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 		tenant := auth.Use(middleware.TenantMiddleware(config.TenantDirectoryClient))
 		if config.IntakeHandler != nil {
 			config.IntakeHandler.RegisterMappingRoutes(tenant)
+		}
+
+		if config.WorkItemRelationController != nil {
+			relations := tenant.(*gin.RouterGroup).Group("/work-items/:id/relations")
+			relations.GET("", middleware.RequireWorkItemRecordClassPermission("read"), config.WorkItemRelationController.List)
+			relations.POST("", middleware.RequireWorkItemRecordClassPermission("update"), config.WorkItemRelationController.Add)
+			relations.DELETE("", middleware.RequireWorkItemRecordClassPermission("update"), config.WorkItemRelationController.Remove)
 		}
 
 		// ==================== Ticket Categories & Tags ====================
@@ -922,9 +930,6 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 					problems.POST("/:id/known-error", middleware.RequirePermission("problem", "write"), config.KnownErrorHandler.CreateFromProblem)
 				}
 				// 关联管理
-				problems.GET("/:id/associations", middleware.RequirePermission("problem", "read"), config.ProblemHandler.GetAssociations)
-				problems.POST("/:id/associations", middleware.RequirePermission("problem", "write"), config.ProblemHandler.AddAssociation)
-				problems.DELETE("/:id/associations", middleware.RequirePermission("problem", "write"), config.ProblemHandler.RemoveAssociation)
 			}
 		}
 

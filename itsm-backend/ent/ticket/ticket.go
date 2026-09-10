@@ -284,7 +284,6 @@ var Columns = []string{
 var ForeignKeys = []string{
 	"configuration_item_tickets",
 	"department_tickets",
-	"problem_tickets",
 	"sla_definition_tickets",
 	"ticket_tag_tickets",
 	"ticket_template_tickets",

@@ -16,7 +16,10 @@ import (
 
 func TestIntakeBPMNCreationReplaysAfterFailure(t *testing.T) {
 	for _, kind := range []string{"incident", "change"} {
-		for _, stage := range []string{"source_acknowledgement", "professional_persistence"} {
+		for _, stage := range []string{"source_acknowledgement", "professional_persistence", "relation_persistence", "stale_source"} {
+			if kind == "incident" && (stage == "relation_persistence" || stage == "stale_source") {
+				continue
+			}
 			t.Run(kind+"/"+stage, func(t *testing.T) {
 				f := newUnifiedIntakeFixture(t)
 				ctx := context.Background()
@@ -32,7 +35,7 @@ func TestIntakeBPMNCreationReplaysAfterFailure(t *testing.T) {
 				xml := []byte(fmt.Sprintf(`<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="test"><bpmn:process id="creation" isExecutable="true"><bpmn:startEvent id="start"/><bpmn:serviceTask id="create"><bpmn:extensionElements><bpmn:metaData name="service_task_type">%s_task</bpmn:metaData><bpmn:metaData name="action">create_%s</bpmn:metaData></bpmn:extensionElements></bpmn:serviceTask><bpmn:endEvent id="end"/><bpmn:sequenceFlow id="a" sourceRef="start" targetRef="create"/><bpmn:sequenceFlow id="b" sourceRef="create" targetRef="end"/></bpmn:process></bpmn:definitions>`, kind, kind))
 				definition := f.client.ProcessDefinition.Create().SetTenantID(f.identity.TenantID).SetDeploymentID(deployment.ID).SetKey("creation").SetName("Creation").SetBpmnXML(xml).SetIsActive(true).SaveX(ctx)
 				failed := false
-				if stage == "professional_persistence" {
+				if stage == "professional_persistence" || stage == "relation_persistence" {
 					hook := func(next ent.Mutator) ent.Mutator {
 						return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
 							if !failed && m.Op().Is(ent.OpCreate) {
@@ -42,7 +45,9 @@ func TestIntakeBPMNCreationReplaysAfterFailure(t *testing.T) {
 							return next.Mutate(ctx, m)
 						})
 					}
-					if kind == "incident" {
+					if stage == "relation_persistence" {
+						f.client.WorkItemRelation.Use(hook)
+					} else if kind == "incident" {
 						f.client.Incident.Use(hook)
 					} else {
 						f.client.Change.Use(hook)
@@ -63,17 +68,32 @@ func TestIntakeBPMNCreationReplaysAfterFailure(t *testing.T) {
 				ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.identity.ActorID)
 				variables := map[string]any{"title": "Created by process", "description": "Process requested work", "priority": "high"}
 				if kind == "change" {
+					variables["source_relations"] = []any{map[string]any{"sourceWorkItemId": source.WorkItemID, "expectedVersion": f.client.Ticket.GetX(ctx, source.WorkItemID).Version, "relationType": "related_to", "metadata": map[string]any{"required": false}}}
 					variables["justification"] = "Apply reviewed service configuration"
 					variables["impact_scope"] = "low"
 					variables["risk_level"] = "medium"
 					variables["implementation_plan"] = "Back up configuration, apply and verify"
 					variables["rollback_plan"] = "Restore previous configuration and verify"
 				}
+				if stage == "stale_source" {
+					variables["source_relations"].([]any)[0].(map[string]any)["expectedVersion"] = 99
+				}
 				instance, err := engine.StartProcessByDefinitionID(ctx, service.FreezeProcessDefinition(definition), fmt.Sprintf("ticket:%d", source.WorkItemID), "generic", source.WorkItemID, variables, "source-start")
 				require.NoError(t, err)
+				if stage == "stale_source" {
+					row := f.client.ProcessCallbackOutbox.Query().OnlyX(ctx)
+					require.Equal(t, "blocked", row.Status)
+					require.Equal(t, "create", f.client.ProcessInstance.GetX(ctx, instance.ID).CurrentActivityID)
+					require.Equal(t, 1, f.client.Ticket.Query().CountX(ctx))
+					require.Zero(t, f.client.Change.Query().CountX(ctx))
+					require.Zero(t, f.client.WorkItemRelation.Query().CountX(ctx))
+					require.Equal(t, 1, f.client.Ticket.GetX(ctx, source.WorkItemID).Version)
+					require.Equal(t, 1, f.client.IntakeRequest.Query().CountX(ctx))
+					return
+				}
 				require.True(t, failed, "actual child creation must reach the injected failure")
 				expected := 2
-				if stage == "professional_persistence" {
+				if stage == "professional_persistence" || stage == "relation_persistence" {
 					expected = 1
 					require.Zero(t, f.client.Incident.Query().CountX(ctx))
 					require.Zero(t, f.client.Change.Query().CountX(ctx))
@@ -110,6 +130,11 @@ func TestIntakeBPMNCreationReplaysAfterFailure(t *testing.T) {
 					require.Equal(t, target.ID, f.client.Incident.Query().OnlyX(ctx).WorkItemID)
 				} else {
 					require.Equal(t, target.ID, f.client.Change.Query().OnlyX(ctx).WorkItemID)
+					relation := f.client.WorkItemRelation.Query().OnlyX(ctx)
+					require.Equal(t, source.WorkItemID, relation.SourceWorkItemID)
+					require.Equal(t, target.ID, relation.TargetWorkItemID)
+					require.Equal(t, 2, f.client.Ticket.GetX(ctx, source.WorkItemID).Version)
+					require.Contains(t, row.Variables, "source_relations")
 				}
 				reloaded := f.client.ProcessInstance.GetX(ctx, instance.ID)
 				require.Equal(t, source.WorkItemID, reloaded.BusinessID)

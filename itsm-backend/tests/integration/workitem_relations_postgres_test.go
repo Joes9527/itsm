@@ -15,6 +15,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"itsm-backend/common/tenantctx"
+ relationmeta "itsm-backend/common/workitemrelation"
 	"itsm-backend/database"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
@@ -267,7 +268,7 @@ func TestWorkItemRelationsRequiredMetadataAndReadVisibility(t *testing.T) {
 	cmd.Meta.ExpectedVersion = f.problem.Version
 	_, err := f.owner.Apply(f.ctx, cmd, false)
 	require.NoError(t, err)
-	read := func() ([]service.RelationView, error) {
+	read := func() ([]relationmeta.View, error) {
 		tx, err := f.runtime.Tenant.BeginTx(f.ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 		require.NoError(t, err)
 		defer tx.Rollback()

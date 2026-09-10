@@ -902,6 +902,7 @@ func NewApplication() *Application {
 		CSRFEnabled:                     cfg.Security.CSRFEnabled,
 		RedisRateLimiter:                redisRateLimiter,
 		TicketController:                ticketController,
+		WorkItemRelationController:      controller.NewWorkItemRelationController(service.NewWorkItemRelationService(client, clients.IntakeDirectorySnapshot())),
 		TicketDependencyController:      ticketDependencyController,
 		TicketCommentController:         ticketCommentController,
 		TicketAttachmentController:      ticketAttachmentController,

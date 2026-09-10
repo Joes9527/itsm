@@ -207,19 +207,6 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 		if c.StandardTemplateID != nil && *c.StandardTemplateID <= 0 {
 			return n, "", invalid("change.standardTemplateId", "must be positive")
 		}
-		refs := map[string]bool{}
-		for _, number := range c.RelatedTicketNumbers {
-			number = strings.TrimSpace(number)
-			if number == "" {
-				return n, "", invalid("change.relatedTicketNumbers", "number is required")
-			}
-			refs[number] = true
-		}
-		c.RelatedTicketNumbers = nil
-		for number := range refs {
-			c.RelatedTicketNumbers = append(c.RelatedTicketNumbers, number)
-		}
-		sort.Strings(c.RelatedTicketNumbers)
 		c.Justification = strings.TrimSpace(c.Justification)
 		c.Type = strings.TrimSpace(c.Type)
 		c.ImpactScope = strings.TrimSpace(c.ImpactScope)
@@ -241,9 +228,7 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 		for _, id := range ci {
 			c.AffectedCIs = append(c.AffectedCIs, strconv.Itoa(id))
 		}
-		if c.RelatedTickets, err = normalizeCIIDs(c.RelatedTickets); err != nil {
-			return n, "", err
-		}
+
 	}
 	if n.ServiceRequest != nil {
 		s := n.ServiceRequest

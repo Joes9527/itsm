@@ -49,15 +49,9 @@ type Problem struct {
 type ProblemEdges struct {
 	// 共享字段的唯一权威 WorkItem
 	WorkItem *Ticket `json:"work_item,omitempty"`
-	// 关联的工单
-	Tickets []*Ticket `json:"tickets,omitempty"`
-	// 关联的事件
-	Incidents []*Incident `json:"incidents,omitempty"`
-	// 关联的变更
-	Changes []*Change `json:"changes,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [4]bool
+	loadedTypes [1]bool
 }
 
 // WorkItemOrErr returns the WorkItem value or an error if the edge
@@ -69,33 +63,6 @@ func (e ProblemEdges) WorkItemOrErr() (*Ticket, error) {
 		return nil, &NotFoundError{label: ticket.Label}
 	}
 	return nil, &NotLoadedError{edge: "work_item"}
-}
-
-// TicketsOrErr returns the Tickets value or an error if the edge
-// was not loaded in eager-loading.
-func (e ProblemEdges) TicketsOrErr() ([]*Ticket, error) {
-	if e.loadedTypes[1] {
-		return e.Tickets, nil
-	}
-	return nil, &NotLoadedError{edge: "tickets"}
-}
-
-// IncidentsOrErr returns the Incidents value or an error if the edge
-// was not loaded in eager-loading.
-func (e ProblemEdges) IncidentsOrErr() ([]*Incident, error) {
-	if e.loadedTypes[2] {
-		return e.Incidents, nil
-	}
-	return nil, &NotLoadedError{edge: "incidents"}
-}
-
-// ChangesOrErr returns the Changes value or an error if the edge
-// was not loaded in eager-loading.
-func (e ProblemEdges) ChangesOrErr() ([]*Change, error) {
-	if e.loadedTypes[3] {
-		return e.Changes, nil
-	}
-	return nil, &NotLoadedError{edge: "changes"}
 }
 
 // scanValues returns the types for scanning values from sql.Rows.
@@ -215,21 +182,6 @@ func (_m *Problem) Value(name string) (ent.Value, error) {
 // QueryWorkItem queries the "work_item" edge of the Problem entity.
 func (_m *Problem) QueryWorkItem() *TicketQuery {
 	return NewProblemClient(_m.config).QueryWorkItem(_m)
-}
-
-// QueryTickets queries the "tickets" edge of the Problem entity.
-func (_m *Problem) QueryTickets() *TicketQuery {
-	return NewProblemClient(_m.config).QueryTickets(_m)
-}
-
-// QueryIncidents queries the "incidents" edge of the Problem entity.
-func (_m *Problem) QueryIncidents() *IncidentQuery {
-	return NewProblemClient(_m.config).QueryIncidents(_m)
-}
-
-// QueryChanges queries the "changes" edge of the Problem entity.
-func (_m *Problem) QueryChanges() *ChangeQuery {
-	return NewProblemClient(_m.config).QueryChanges(_m)
 }
 
 // Update returns a builder for updating this Problem.

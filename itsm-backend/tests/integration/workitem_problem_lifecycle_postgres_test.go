@@ -76,6 +76,8 @@ func TestWorkItemProblemLifecycleAllocatedMSP(t *testing.T) {
 			var assigned int
 			require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT investigator_id FROM problem_investigations WHERE problem_id=$1", f.p.ID).Scan(&assigned))
 			require.Equal(t, nativeInvestigator.ID, assigned)
+			_, readErr := f.owner.Get(f.ctx, f.p.ID, workitemmutation.Meta{TenantID: f.tenant.ID, ActorID: f.actor.ID, Source: "http"})
+			require.Error(t, readErr, "MSP allocation alone does not grant current shared row visibility")
 			f.evidence(t)
 			f.apply(t, "verify_resolution", "allocated-verify")
 			require.Equal(t, actor.ID, f.client.Problem.GetX(f.ctx, f.p.ID).VerifiedBy)
@@ -194,9 +196,9 @@ func (f *problemLifecycleFixture) apply(t *testing.T, action, key string) workit
 }
 func (f *problemLifecycleFixture) evidence(t *testing.T) {
 	t.Helper()
-	p, err := f.owner.Get(f.ctx, f.p.ID, f.tenant.ID)
-	require.NoError(t, err)
-	_, err = f.owner.Update(f.ctx, f.tenant.ID, f.p.ID, &problem.Problem{Version: p.Version, RootCause: "Connection leak", Resolution: "Close connections on cancellation"})
+	// Persistence probe supplies the observed version for this metadata effect fixture; it is not a public relation read.
+	p := f.client.Ticket.GetX(f.ctx, f.p.WorkItemID)
+	_, err := f.owner.Update(f.ctx, f.tenant.ID, f.p.ID, &problem.Problem{Version: p.Version, RootCause: "Connection leak", Resolution: "Close connections on cancellation"})
 	require.NoError(t, err)
 }
 

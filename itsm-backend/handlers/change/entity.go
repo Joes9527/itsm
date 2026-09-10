@@ -1,6 +1,7 @@
 package change
 
 import (
+	relationmeta "itsm-backend/common/workitemrelation"
 	"time"
 )
 
@@ -43,7 +44,7 @@ type Change struct {
 	ImplementationPlan string
 	RollbackPlan       string
 	AffectedCIs        []string
-	RelatedTickets     []string
+	Relations          []relationmeta.View
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
 }

@@ -63,7 +63,7 @@ func (s *Service) GetChangeActionView(ctx context.Context, id int, m workitemmut
 	if err = repo.hydrateUsers(ctx, []*Change{result}, m.TenantID); err != nil {
 		return nil, nil, nil, err
 	}
-	if err = repo.hydrateRelatedTickets(ctx, []*Change{result}, m.TenantID); err != nil {
+	if err = s.projectRelationsTx(ctx, tx, m, result); err != nil {
 		return nil, nil, nil, err
 	}
 	actions := map[string]dto.ActionPermission{}

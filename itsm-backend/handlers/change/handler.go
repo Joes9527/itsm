@@ -69,7 +69,7 @@ func toDTO(c *Change) *dto.ChangeResponse {
 		ImplementationPlan: c.ImplementationPlan,
 		RollbackPlan:       c.RollbackPlan,
 		AffectedCIs:        c.AffectedCIs,
-		RelatedTickets:     c.RelatedTickets,
+		Relations:          c.Relations,
 		CreatedAt:          c.CreatedAt,
 		UpdatedAt:          c.UpdatedAt,
 		WorkItemID:         c.WorkItemID,
@@ -88,6 +88,17 @@ func toDTO(c *Change) *dto.ChangeResponse {
 
 // CreateChange handles POST /api/v1/changes
 func (h *Handler) SetCreationApplication(app creation.Application) { h.creationApplication = app }
+
+// CreateChange API contract.
+// @Summary CreateChange
+// @Description Source relations use observed WorkItem versions and typed metadata; target, extension, links, audit and receipt commit atomically. Idempotency-Key required; replay HTTP 200.
+// @Tags changes
+// @Accept json
+// @Produce json
+// @Param body body dto.CreateChangeRequest true "Request"
+// @Success 201 {object} common.Response{data=creation.CreateWorkItemResult}
+// @Success 200 {object} common.Response{data=creation.CreateWorkItemResult} "Replay"
+// @Router /api/v1/changes [post]
 func (h *Handler) CreateChange(c *gin.Context) {
 	var req dto.CreateChangeRequest
 	if !intakehttp.Bind(c, &req) {
@@ -108,10 +119,19 @@ func (h *Handler) CreateChange(c *gin.Context) {
 	if req.RequesterID != nil {
 		requesterID = *req.RequesterID
 	}
-	intakehttp.Execute(c, h.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassChangeRequest, IntakeKind: creation.IntakeKindChangeRequest, Title: req.Title, Description: req.Description, Priority: req.Priority, Change: &creation.ChangeInput{Justification: req.Justification, Type: req.Type, ImpactScope: req.ImpactScope, RiskLevel: req.RiskLevel, PlannedStartDate: start, PlannedEndDate: end, ImplementationPlan: req.ImplementationPlan, RollbackPlan: req.RollbackPlan, AffectedCIs: req.AffectedCIs, RelatedTicketNumbers: req.RelatedTickets}})
+	intakehttp.Execute(c, h.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassChangeRequest, IntakeKind: creation.IntakeKindChangeRequest, Title: req.Title, Description: req.Description, Priority: req.Priority, SourceRelations: req.SourceRelations, Change: &creation.ChangeInput{Justification: req.Justification, Type: req.Type, ImpactScope: req.ImpactScope, RiskLevel: req.RiskLevel, PlannedStartDate: start, PlannedEndDate: end, ImplementationPlan: req.ImplementationPlan, RollbackPlan: req.RollbackPlan, AffectedCIs: req.AffectedCIs}})
 }
 
 // GetChange handles GET /api/v1/changes/:id
+// GetChange API contract.
+// @Summary GetChange
+// @Description Current actor RR detail and relation endpoint projection.
+// @Tags changes
+// @Accept json
+// @Produce json
+// @Param id path int true "Professional extension ID"
+// @Success 200 {object} common.Response{data=dto.ChangeResponse}
+// @Router /api/v1/changes/{id} [get]
 func (h *Handler) GetChange(c *gin.Context) {
 	id, meta, ok := changeHTTPIdentity(c)
 	if !ok {
@@ -187,6 +207,14 @@ func (h *Handler) GetCMDBImpactSummary(c *gin.Context) {
 }
 
 // ListChanges handles GET /api/v1/changes
+// ListChanges API contract.
+// @Summary ListChanges
+// @Description Current base read scope before pagination/count; relations use current actor RR projection.
+// @Tags changes
+// @Accept json
+// @Produce json
+// @Success 200 {object} common.Response{data=dto.ChangeListResponse}
+// @Router /api/v1/changes [get]
 func (h *Handler) ListChanges(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "10"))
@@ -202,7 +230,7 @@ func (h *Handler) ListChanges(c *gin.Context) {
 		return
 	}
 
-	list, total, err := h.svc.ListChanges(c.Request.Context(), tenantID, page, pageSize, status, search, riskLevel)
+	list, total, err := h.svc.ListChanges(c.Request.Context(), workitemmutation.Meta{TenantID: tenantID, ActorID: c.GetInt("user_id"), Source: "http"}, page, pageSize, status, search, riskLevel)
 	if err != nil {
 		common.InternalError(c, "查询变更列表失败: "+err.Error())
 		return
@@ -485,6 +513,8 @@ func respondPIRMutationError(c *gin.Context, err error) {
 		switch app.Code {
 		case common.ErrCodeValidation, common.ErrCodeBadRequest:
 			common.ParamError(c, app.Message)
+		case common.ErrCodeUnauthorized:
+			common.Fail(c, common.AuthFailedCode, app.Message)
 		case common.ErrCodeForbidden:
 			common.Forbidden(c, app.Message)
 		case common.ErrCodeNotFound:

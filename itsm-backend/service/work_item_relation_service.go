@@ -57,28 +57,11 @@ type WorkItemRelationService struct {
 	directory database.DirectorySnapshot
 }
 
-type RelationEndpoint struct {
-	WorkItemID  int    `json:"workItemId"`
-	Number      string `json:"number"`
-	RecordClass string `json:"recordClass"`
-	Title       string `json:"title"`
-	Status      string `json:"status"`
-	Version     int    `json:"version"`
-}
-
-type RelationView struct {
-	ID       int              `json:"id"`
-	Type     string           `json:"relationType"`
-	Required bool             `json:"required"`
-	Source   RelationEndpoint `json:"source"`
-	Target   RelationEndpoint `json:"target"`
-}
-
 // ListTx reads only live structured relations, traversing either endpoint. It
 // authorizes every returned endpoint at the caller snapshot; unavailable or
 // unreadable endpoints fail closed rather than leaking IDs or claiming no link.
 // Callers supply an RR transaction, including B2 dependency verification owners.
-func (s *WorkItemRelationService) ListTx(ctx context.Context, tx *ent.Tx, meta workitemmutation.Meta, workItemID int) ([]RelationView, error) {
+func (s *WorkItemRelationService) ListTx(ctx context.Context, tx *ent.Tx, meta workitemmutation.Meta, workItemID int) ([]relationmeta.View, error) {
 	actor, err := authorization.ResolveLifecycleActor(ctx, tx, s.directory, meta.ActorID, meta.TenantID)
 	if err != nil {
 		return nil, err
@@ -101,9 +84,9 @@ func (s *WorkItemRelationService) ListTx(ctx context.Context, tx *ent.Tx, meta w
 	if err != nil {
 		return nil, err
 	}
-	result := make([]RelationView, 0, len(rows))
-	endpoint := func(item *ent.Ticket) RelationEndpoint {
-		return RelationEndpoint{WorkItemID: item.ID, Number: item.TicketNumber, RecordClass: item.RecordClass, Title: item.Title, Status: item.Status, Version: item.Version}
+	result := make([]relationmeta.View, 0, len(rows))
+	endpoint := func(item *ent.Ticket) relationmeta.Endpoint {
+		return relationmeta.Endpoint{WorkItemID: item.ID, Number: item.TicketNumber, RecordClass: item.RecordClass, Title: item.Title, Status: item.Status, Version: item.Version}
 	}
 	for _, row := range rows {
 		source, err := load(row.SourceWorkItemID)
@@ -120,13 +103,33 @@ func (s *WorkItemRelationService) ListTx(ctx context.Context, tx *ent.Tx, meta w
 		if row.Metadata.Required && row.RelationType != "resolved_by_change" {
 			return nil, common.NewValidationError("invalid required relation metadata", nil)
 		}
-		result = append(result, RelationView{ID: row.ID, Type: row.RelationType, Required: row.Metadata.Required, Source: endpoint(source), Target: endpoint(target)})
+		result = append(result, relationmeta.View{ID: row.ID, Type: row.RelationType, Required: row.Metadata.Required, Source: endpoint(source), Target: endpoint(target)})
 	}
 	return result, nil
 }
 
 func NewWorkItemRelationService(client *ent.Client, directory database.DirectorySnapshot) *WorkItemRelationService {
 	return &WorkItemRelationService{client: client, directory: directory}
+}
+
+// List owns the application RR snapshot for shared HTTP reads.
+func (s *WorkItemRelationService) List(ctx context.Context, meta workitemmutation.Meta, workItemID int) ([]relationmeta.View, error) {
+	if s.client == nil {
+		return nil, common.NewInternalError("relation application unavailable", nil)
+	}
+	if meta.ActorID <= 0 || meta.TenantID <= 0 {
+		return nil, common.NewUnauthorizedError("authenticated actor and tenant required")
+	}
+	if tenant, ok := tenantctx.TenantID(ctx); ok && tenant != meta.TenantID {
+		return nil, common.NewForbiddenError("tenant mismatch")
+	}
+	ctx = tenantctx.WithTenantID(ctx, meta.TenantID)
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	return s.ListTx(ctx, tx, meta, workItemID)
 }
 
 // ValidateRelationClasses implements the accepted domain contract's explicit

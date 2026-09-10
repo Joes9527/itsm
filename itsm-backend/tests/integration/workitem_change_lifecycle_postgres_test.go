@@ -162,7 +162,7 @@ func TestWorkItemChangeLifecycleEvidenceAndTypes(t *testing.T) {
 				closed := f.apply(t, close)
 				require.Equal(t, "completed", closed.Status)
 				require.Equal(t, outcome, f.client.Change.GetX(f.ctx, f.c.ID).Outcome)
-				projection, err := f.owner.GetChange(f.ctx, f.c.ID, f.tenant.ID)
+				projection, err := f.owner.GetChange(f.ctx, f.c.ID, f.command("read", "projection").Meta)
 				require.NoError(t, err)
 				require.Equal(t, closed.Version, projection.Version)
 				require.Equal(t, outcome, projection.Outcome)

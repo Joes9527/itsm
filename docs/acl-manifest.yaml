@@ -1187,24 +1187,6 @@ routes:
     description: 创建
     source: router.go:917
   - method: GET
-    path: /api/v1/problems/:id/associations
-    permission: problem.read
-    menu: v1
-    description: 列表
-    source: router.go:920
-  - method: POST
-    path: /api/v1/problems/:id/associations
-    permission: problem.write
-    menu: v1
-    description: 创建
-    source: router.go:921
-  - method: DELETE
-    path: /api/v1/problems/:id/associations
-    permission: problem.write
-    menu: v1
-    description: 删除
-    source: router.go:922
-  - method: GET
     path: /api/v1/changes/stats
     permission: change.read
     menu: v1
@@ -3220,3 +3202,21 @@ routes:
     menu: v1
     description: 部分更新
     source: identity_mapping_handler.go:17
+  - method: GET
+    path: /api/v1/work-items/:id/relations
+    permission: workitem.read
+    menu: v1
+    description: Shared current-authorized WorkItem relation read
+    source: router.go WorkItemRelationController
+  - method: POST
+    path: /api/v1/work-items/:id/relations
+    permission: workitem.update
+    menu: v1
+    description: Shared current-authorized WorkItem relation update
+    source: router.go WorkItemRelationController
+  - method: DELETE
+    path: /api/v1/work-items/:id/relations
+    permission: workitem.update
+    menu: v1
+    description: Shared current-authorized WorkItem relation update
+    source: router.go WorkItemRelationController

@@ -80,13 +80,11 @@ type ChangeEdges struct {
 	StandardTemplate *StandardChange `json:"standard_template,omitempty"`
 	// 共享字段的唯一权威 WorkItem
 	WorkItem *Ticket `json:"work_item,omitempty"`
-	// 关联的问题
-	Problems []*Problem `json:"problems,omitempty"`
 	// 实施后审查
 	Pir []*ChangePIR `json:"pir,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [4]bool
+	loadedTypes [3]bool
 }
 
 // StandardTemplateOrErr returns the StandardTemplate value or an error if the edge
@@ -111,19 +109,10 @@ func (e ChangeEdges) WorkItemOrErr() (*Ticket, error) {
 	return nil, &NotLoadedError{edge: "work_item"}
 }
 
-// ProblemsOrErr returns the Problems value or an error if the edge
-// was not loaded in eager-loading.
-func (e ChangeEdges) ProblemsOrErr() ([]*Problem, error) {
-	if e.loadedTypes[2] {
-		return e.Problems, nil
-	}
-	return nil, &NotLoadedError{edge: "problems"}
-}
-
 // PirOrErr returns the Pir value or an error if the edge
 // was not loaded in eager-loading.
 func (e ChangeEdges) PirOrErr() ([]*ChangePIR, error) {
-	if e.loadedTypes[3] {
+	if e.loadedTypes[2] {
 		return e.Pir, nil
 	}
 	return nil, &NotLoadedError{edge: "pir"}
@@ -332,11 +321,6 @@ func (_m *Change) QueryStandardTemplate() *StandardChangeQuery {
 // QueryWorkItem queries the "work_item" edge of the Change entity.
 func (_m *Change) QueryWorkItem() *TicketQuery {
 	return NewChangeClient(_m.config).QueryWorkItem(_m)
-}
-
-// QueryProblems queries the "problems" edge of the Change entity.
-func (_m *Change) QueryProblems() *ProblemQuery {
-	return NewChangeClient(_m.config).QueryProblems(_m)
 }
 
 // QueryPir queries the "pir" edge of the Change entity.

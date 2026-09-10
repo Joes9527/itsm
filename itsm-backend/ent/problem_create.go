@@ -6,8 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"itsm-backend/ent/change"
-	"itsm-backend/ent/incident"
 	"itsm-backend/ent/problem"
 	"itsm-backend/ent/ticket"
 	"time"
@@ -162,51 +160,6 @@ func (_c *ProblemCreate) SetWorkItem(v *Ticket) *ProblemCreate {
 	return _c.SetWorkItemID(v.ID)
 }
 
-// AddTicketIDs adds the "tickets" edge to the Ticket entity by IDs.
-func (_c *ProblemCreate) AddTicketIDs(ids ...int) *ProblemCreate {
-	_c.mutation.AddTicketIDs(ids...)
-	return _c
-}
-
-// AddTickets adds the "tickets" edges to the Ticket entity.
-func (_c *ProblemCreate) AddTickets(v ...*Ticket) *ProblemCreate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _c.AddTicketIDs(ids...)
-}
-
-// AddIncidentIDs adds the "incidents" edge to the Incident entity by IDs.
-func (_c *ProblemCreate) AddIncidentIDs(ids ...int) *ProblemCreate {
-	_c.mutation.AddIncidentIDs(ids...)
-	return _c
-}
-
-// AddIncidents adds the "incidents" edges to the Incident entity.
-func (_c *ProblemCreate) AddIncidents(v ...*Incident) *ProblemCreate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _c.AddIncidentIDs(ids...)
-}
-
-// AddChangeIDs adds the "changes" edge to the Change entity by IDs.
-func (_c *ProblemCreate) AddChangeIDs(ids ...int) *ProblemCreate {
-	_c.mutation.AddChangeIDs(ids...)
-	return _c
-}
-
-// AddChanges adds the "changes" edges to the Change entity.
-func (_c *ProblemCreate) AddChanges(v ...*Change) *ProblemCreate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _c.AddChangeIDs(ids...)
-}
-
 // Mutation returns the ProblemMutation object of the builder.
 func (_c *ProblemCreate) Mutation() *ProblemMutation {
 	return _c.mutation
@@ -325,54 +278,6 @@ func (_c *ProblemCreate) createSpec() (*Problem, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.WorkItemID = nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := _c.mutation.TicketsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.O2M,
-			Inverse: false,
-			Table:   problem.TicketsTable,
-			Columns: []string{problem.TicketsColumn},
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := _c.mutation.IncidentsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   problem.IncidentsTable,
-			Columns: problem.IncidentsPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(incident.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := _c.mutation.ChangesIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: false,
-			Table:   problem.ChangesTable,
-			Columns: problem.ChangesPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(change.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	return _node, _spec

@@ -111,9 +111,9 @@ func TestProblemRepositorySoftDeleteExcludedEverywhere(t *testing.T) {
 	p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
 
 	require.NoError(t, service.Delete(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID}))
-	_, err := service.Get(ctx, p.ID, tenant.ID)
+	_, err := service.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
 	require.True(t, ent.IsNotFound(err))
-	list, total, err := service.List(ctx, tenant.ID, 1, 10, nil)
+	list, total, err := service.List(ctx, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"}, 1, 10, nil)
 	require.NoError(t, err)
 	assert.Zero(t, total)
 	assert.Empty(t, list)
@@ -142,14 +142,14 @@ func TestProblemAssociationsEnforceTenantBoundary(t *testing.T) {
 		SetTitle("Foreign ticket").SetTicketNumber("PRB-FOREIGN").SetRequesterID(userB.ID).SetTenantID(tenantB.ID).Save(ctx)
 	require.NoError(t, err)
 
-	require.NoError(t, service.AddAssociations(ctx, tenantA.ID, p.ID, userA.ID, "ticket", []int{localTicket.ID, localTicket.ID}))
-	err = service.AddAssociations(ctx, tenantA.ID, p.ID, userA.ID, "ticket", []int{foreignTicket.ID})
-	require.ErrorContains(t, err, "current tenant")
+	require.NoError(t, applyProblemRelation(service, ctx, tenantA.ID, userA.ID, *p.WorkItemID, localTicket.ID, 1, "related_to", "local-link", false))
+	err = applyProblemRelation(service, ctx, tenantA.ID, userA.ID, *p.WorkItemID, foreignTicket.ID, 2, "related_to", "foreign-link", false)
+	require.Error(t, err)
 
-	withAssociations, err := service.GetWithAssociations(ctx, p.ID, tenantA.ID)
+	withAssociations, err := service.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenantA.ID, ActorID: userA.ID, Source: "http"})
 	require.NoError(t, err)
-	require.Len(t, withAssociations.Tickets, 1)
-	assert.Equal(t, localTicket.ID, withAssociations.Tickets[0].ID)
+	require.Len(t, withAssociations.Relations, 1)
+	assert.Equal(t, localTicket.ID, withAssociations.Relations[0].Target.WorkItemID)
 }
 
 func TestProblemServiceCreateValidation(t *testing.T) {
@@ -212,37 +212,37 @@ func TestProblemServiceListAndFilters(t *testing.T) {
 	require.NoError(t, err)
 
 	// List all
-	list, total, err := service.List(ctx, tenant.ID, 1, 10, nil)
+	list, total, err := service.List(ctx, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"}, 1, 10, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 2, total)
 	assert.Len(t, list, 2)
 
 	// Filter by status
-	list, total, err = service.List(ctx, tenant.ID, 1, 10, map[string]interface{}{"status": "resolved"})
+	list, total, err = service.List(ctx, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"}, 1, 10, map[string]interface{}{"status": "resolved"})
 	require.NoError(t, err)
 	assert.Equal(t, 1, total)
 	assert.Equal(t, p2.ID, list[0].ID)
 
 	// Filter by priority
-	list, total, err = service.List(ctx, tenant.ID, 1, 10, map[string]interface{}{"priority": "critical"})
+	list, total, err = service.List(ctx, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"}, 1, 10, map[string]interface{}{"priority": "critical"})
 	require.NoError(t, err)
 	assert.Equal(t, 1, total)
 	assert.Equal(t, p1.ID, list[0].ID)
 
 	// Filter by category
-	list, total, err = service.List(ctx, tenant.ID, 1, 10, map[string]interface{}{"category": "storage"})
+	list, total, err = service.List(ctx, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"}, 1, 10, map[string]interface{}{"category": "storage"})
 	require.NoError(t, err)
 	assert.Equal(t, 1, total)
 	assert.Equal(t, p2.ID, list[0].ID)
 
 	// Filter by keyword
-	list, total, err = service.List(ctx, tenant.ID, 1, 10, map[string]interface{}{"keyword": "Auth Service"})
+	list, total, err = service.List(ctx, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"}, 1, 10, map[string]interface{}{"keyword": "Auth Service"})
 	require.NoError(t, err)
 	assert.Equal(t, 1, total)
 	assert.Equal(t, p1.ID, list[0].ID)
 
 	// Pagination size limits
-	list, total, err = service.List(ctx, tenant.ID, 0, 0, nil) // normalized to page 1, size 10
+	list, total, err = service.List(ctx, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"}, 0, 0, nil) // normalized to page 1, size 10
 	require.NoError(t, err)
 	assert.Equal(t, 2, total)
 }
@@ -271,42 +271,30 @@ func TestProblemServiceAssociationsLifecycle(t *testing.T) {
 	change1, err := client.Change.Create().SetWorkItemID(changeWorkItem.ID).Save(ctx)
 	require.NoError(t, err)
 
-	// Add associations
-	require.NoError(t, service.AddAssociations(ctx, tenant.ID, p.ID, user.ID, "ticket", []int{ticket1.ID}))
-	require.NoError(t, service.AddAssociations(ctx, tenant.ID, p.ID, user.ID, "incident", []int{incident1.ID}))
-	require.NoError(t, service.AddAssociations(ctx, tenant.ID, p.ID, user.ID, "change", []int{change1.ID}))
-
-	// Invalid related type
-	err = service.AddAssociations(ctx, tenant.ID, p.ID, user.ID, "unknown", []int{1})
-	require.ErrorContains(t, err, "unsupported related type")
-
-	// Empty related IDs
-	err = service.AddAssociations(ctx, tenant.ID, p.ID, user.ID, "ticket", []int{})
-	require.ErrorContains(t, err, "at least one related id is required")
-
-	// Verify loaded associations
-	pWithAssoc, err := service.GetWithAssociations(ctx, p.ID, tenant.ID)
+	require.NoError(t, applyProblemRelation(service, ctx, tenant.ID, user.ID, *p.WorkItemID, ticket1.ID, 1, "related_to", "ticket-add", false))
+	require.NoError(t, applyProblemRelation(service, ctx, tenant.ID, user.ID, incident1.WorkItemID, *p.WorkItemID, 1, "investigated_by", "incident-add", false))
+	require.NoError(t, applyProblemRelation(service, ctx, tenant.ID, user.ID, *p.WorkItemID, change1.WorkItemID, 2, "resolved_by_change", "change-add", false))
+	err = applyProblemRelation(service, ctx, tenant.ID, user.ID, *p.WorkItemID, ticket1.ID, 3, "unknown", "unknown", false)
+	require.Error(t, err)
+	err = applyProblemRelation(service, ctx, tenant.ID, user.ID, *p.WorkItemID, 0, 3, "related_to", "empty", false)
+	require.Error(t, err)
+	pWithAssoc, err := service.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID})
 	require.NoError(t, err)
-	assert.Len(t, pWithAssoc.Tickets, 1)
-	assert.Len(t, pWithAssoc.Incidents, 1)
-	assert.Len(t, pWithAssoc.Changes, 1)
-
-	// Remove associations
-	require.NoError(t, service.RemoveAssociation(ctx, tenant.ID, p.ID, "ticket", ticket1.ID))
-	require.NoError(t, service.RemoveAssociation(ctx, tenant.ID, p.ID, "incident", incident1.ID))
-	require.NoError(t, service.RemoveAssociation(ctx, tenant.ID, p.ID, "change", change1.ID))
-
-	err = service.RemoveAssociation(ctx, tenant.ID, p.ID, "ticket", 0)
-	require.ErrorContains(t, err, "invalid related id")
-
-	err = service.RemoveAssociation(ctx, tenant.ID, p.ID, "unsupported", ticket1.ID)
-	require.ErrorContains(t, err, "unsupported related type")
-
-	pAfterRemove, err := service.GetWithAssociations(ctx, p.ID, tenant.ID)
+	require.Len(t, pWithAssoc.Relations, 3)
+	types := []string{}
+	for _, v := range pWithAssoc.Relations {
+		types = append(types, v.Type)
+	}
+	assert.ElementsMatch(t, []string{"related_to", "investigated_by", "resolved_by_change"}, types)
+	require.NoError(t, applyProblemRelation(service, ctx, tenant.ID, user.ID, *p.WorkItemID, ticket1.ID, 3, "related_to", "ticket-remove", true))
+	require.NoError(t, applyProblemRelation(service, ctx, tenant.ID, user.ID, incident1.WorkItemID, *p.WorkItemID, 2, "investigated_by", "incident-remove", true))
+	require.NoError(t, applyProblemRelation(service, ctx, tenant.ID, user.ID, *p.WorkItemID, change1.WorkItemID, 4, "resolved_by_change", "change-remove", true))
+	require.Error(t, applyProblemRelation(service, ctx, tenant.ID, user.ID, *p.WorkItemID, 0, 5, "related_to", "zero-remove", true))
+	require.Error(t, applyProblemRelation(service, ctx, tenant.ID, user.ID, *p.WorkItemID, ticket1.ID, 5, "unsupported", "bad-remove", true))
+	after, err := service.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID})
 	require.NoError(t, err)
-	assert.Empty(t, pAfterRemove.Tickets)
-	assert.Empty(t, pAfterRemove.Incidents)
-	assert.Empty(t, pAfterRemove.Changes)
+	assert.Empty(t, after.Relations)
+
 }
 
 func TestProblemServiceCrossTenantIsolation(t *testing.T) {
@@ -322,10 +310,10 @@ func TestProblemServiceCrossTenantIsolation(t *testing.T) {
 	problemB := createProblemHandlerProblem(t, ctx, service, tenantB.ID, userB.ID)
 
 	// Tenant B tries to GET Problem A
-	_, err := service.Get(ctx, problemA.ID, tenantB.ID)
+	_, err := service.Get(ctx, problemA.ID, workitemmutation.Meta{TenantID: tenantB.ID, ActorID: userB.ID, Source: "http"})
 	require.True(t, ent.IsNotFound(err))
 
-	_, err = service.GetWithAssociations(ctx, problemA.ID, tenantB.ID)
+	_, err = service.Get(ctx, problemA.ID, workitemmutation.Meta{TenantID: tenantB.ID, ActorID: userB.ID, Source: "http"})
 	require.True(t, ent.IsNotFound(err))
 
 	// Tenant B tries to UPDATE Problem A
@@ -337,15 +325,15 @@ func TestProblemServiceCrossTenantIsolation(t *testing.T) {
 	require.ErrorContains(t, err, "problem not found")
 
 	// Tenant B tries to Investigate Problem A
-	_, err = service.Get(ctx, problemA.ID, tenantB.ID)
+	_, err = service.Get(ctx, problemA.ID, workitemmutation.Meta{TenantID: tenantB.ID, ActorID: userB.ID, Source: "http"})
 	require.True(t, ent.IsNotFound(err))
 
 	// Tenant B tries to Close Problem A
-	_, err = service.Get(ctx, problemA.ID, tenantB.ID)
+	_, err = service.Get(ctx, problemA.ID, workitemmutation.Meta{TenantID: tenantB.ID, ActorID: userB.ID, Source: "http"})
 	require.True(t, ent.IsNotFound(err))
 
 	// Tenant B List should not include Problem A
-	listB, totalB, err := service.List(ctx, tenantB.ID, 1, 10, nil)
+	listB, totalB, err := service.List(ctx, workitemmutation.Meta{TenantID: tenantB.ID, ActorID: userB.ID, Source: "http"}, 1, 10, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, totalB)
 	assert.Equal(t, problemB.ID, listB[0].ID)

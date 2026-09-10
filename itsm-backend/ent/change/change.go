@@ -64,8 +64,6 @@ const (
 	EdgeStandardTemplate = "standard_template"
 	// EdgeWorkItem holds the string denoting the work_item edge name in mutations.
 	EdgeWorkItem = "work_item"
-	// EdgeProblems holds the string denoting the problems edge name in mutations.
-	EdgeProblems = "problems"
 	// EdgePir holds the string denoting the pir edge name in mutations.
 	EdgePir = "pir"
 	// Table holds the table name of the change in the database.
@@ -84,11 +82,6 @@ const (
 	WorkItemInverseTable = "tickets"
 	// WorkItemColumn is the table column denoting the work_item relation/edge.
 	WorkItemColumn = "work_item_id"
-	// ProblemsTable is the table that holds the problems relation/edge. The primary key declared below.
-	ProblemsTable = "problem_changes"
-	// ProblemsInverseTable is the table name for the Problem entity.
-	// It exists in this package in order to avoid circular dependency with the "problem" package.
-	ProblemsInverseTable = "problems"
 	// PirTable is the table that holds the pir relation/edge.
 	PirTable = "change_pi_rs"
 	// PirInverseTable is the table name for the ChangePIR entity.
@@ -126,12 +119,6 @@ var Columns = []string{
 	FieldRollbackPlan,
 	FieldAffectedCis,
 }
-
-var (
-	// ProblemsPrimaryKey and ProblemsColumn2 are the table columns denoting the
-	// primary key for the problems relation (M2M).
-	ProblemsPrimaryKey = []string{"problem_id", "change_id"}
-)
 
 // ValidColumn reports if the column name is valid (part of the table columns).
 func ValidColumn(column string) bool {
@@ -284,20 +271,6 @@ func ByWorkItemField(field string, opts ...sql.OrderTermOption) OrderOption {
 	}
 }
 
-// ByProblemsCount orders the results by problems count.
-func ByProblemsCount(opts ...sql.OrderTermOption) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborsCount(s, newProblemsStep(), opts...)
-	}
-}
-
-// ByProblems orders the results by problems terms.
-func ByProblems(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
-	return func(s *sql.Selector) {
-		sqlgraph.OrderByNeighborTerms(s, newProblemsStep(), append([]sql.OrderTerm{term}, terms...)...)
-	}
-}
-
 // ByPirCount orders the results by pir count.
 func ByPirCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -323,13 +296,6 @@ func newWorkItemStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(WorkItemInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.M2O, false, WorkItemTable, WorkItemColumn),
-	)
-}
-func newProblemsStep() *sqlgraph.Step {
-	return sqlgraph.NewStep(
-		sqlgraph.From(Table, FieldID),
-		sqlgraph.To(ProblemsInverseTable, FieldID),
-		sqlgraph.Edge(sqlgraph.M2M, true, ProblemsTable, ProblemsPrimaryKey...),
 	)
 }
 func newPirStep() *sqlgraph.Step {

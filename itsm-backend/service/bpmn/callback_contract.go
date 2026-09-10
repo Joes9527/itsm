@@ -26,7 +26,7 @@ func callbackActionContract(payload, required []string) CallbackActionContract {
 
 func (h *ChangeServiceTaskHandler) CallbackContract(action string) (CallbackActionContract, bool) {
 	payload := map[string][]string{
-		"create_change":       {"title", "description", "type", "priority", "created_by", "justification", "impact_scope", "risk_level", "planned_start_date", "planned_end_date", "implementation_plan", "rollback_plan", "affected_cis", "related_tickets", "related_ticket_numbers", "assignee_id", "ci_ids", "template_id", "parent_ticket_id", "tag_ids", "workflow_definition_key", "form_values"},
+		"create_change":       {"title", "description", "type", "priority", "created_by", "justification", "impact_scope", "risk_level", "planned_start_date", "planned_end_date", "implementation_plan", "rollback_plan", "affected_cis", "source_relations", "assignee_id", "ci_ids", "template_id", "parent_ticket_id", "tag_ids", "workflow_definition_key", "form_values"},
 		"update_change":       {"title", "description", "status", "version"},
 		"approve_change":      {"version", "evidence"},
 		"authorize_change":    {"version", "evidence"},

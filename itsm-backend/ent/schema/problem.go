@@ -45,15 +45,6 @@ func (Problem) Edges() []ent.Edge {
 			Unique().
 			Required().
 			Comment("共享字段的唯一权威 WorkItem"),
-		// 与工单的关联
-		edge.To("tickets", Ticket.Type).
-			Comment("关联的工单"),
-		// 与事件的关联
-		edge.To("incidents", Incident.Type).
-			Comment("关联的事件"),
-		// 与变更的关联
-		edge.To("changes", Change.Type).
-			Comment("关联的变更"),
 	}
 }
 

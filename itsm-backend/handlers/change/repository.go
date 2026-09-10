@@ -2,13 +2,14 @@ package change
 
 import (
 	"context"
+	"itsm-backend/ent/predicate"
 )
 
 // Repository interface for Change domain
 type Repository interface {
 	// Change CRUD
 	Get(ctx context.Context, id int, tenantID int) (*Change, error)
-	List(ctx context.Context, tenantID int, page, size int, status, search, riskLevel string) ([]*Change, int, error)
+	List(ctx context.Context, tenantID int, page, size int, status, search, riskLevel string, scope ...predicate.Ticket) ([]*Change, int, error)
 	GetStats(ctx context.Context, tenantID int) (*Stats, error)
 
 	// Approvals

@@ -150,19 +150,6 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 		// because the persisted assessment digest binds that array too.
 		p.AffectedCIs = current.AffectedCis
 	}
-	if cmd.Patch.RelatedTickets != nil {
-		repo := NewEntRepository(tx.Client(), nil)
-		if err = repo.hydrateRelatedTickets(ctx, []*Change{domain}, m.TenantID); err != nil {
-			return empty, err
-		}
-		_, unresolved, resolveErr := repo.resolveTicketNumbers(ctx, tx.Client(), m.TenantID, p.RelatedTickets)
-		if resolveErr != nil {
-			return empty, resolveErr
-		}
-		if len(unresolved) > 0 {
-			return empty, common.NewValidationError("related tickets must exist in this tenant", nil)
-		}
-	}
 	if !metadataChanges(domain, p) {
 		return empty, common.NewValidationError("new metadata facts required", nil)
 	}
@@ -227,12 +214,6 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 			return empty, err
 		}
 	}
-	if p.RelatedTickets != nil {
-		repo := NewEntRepository(tx.Client(), nil)
-		if err = repo.reconcileRelatedTicketRelations(ctx, tx.Client(), m.TenantID, item.ID, m.ActorID, p.RelatedTickets); err != nil {
-			return empty, err
-		}
-	}
 	result := workitemmutation.Result{WorkItemID: item.ID, Version: saved.Version, Status: saved.Status}
 	if err = workitemmutation.RecordTx(ctx, tx, m, result, "change.metadata", digest, map[string]any{"changeId": current.ID, "patch": p}); err != nil {
 		return empty, err
@@ -267,7 +248,6 @@ func normalizeMetadataPatch(p dto.UpdateChangeRequest) dto.UpdateChangeRequest {
 		return result
 	}
 	p.AffectedCIs = normalize(p.AffectedCIs)
-	p.RelatedTickets = normalize(p.RelatedTickets)
 	return p
 }
 
@@ -294,11 +274,11 @@ func metadataChanges(c *Change, p dto.UpdateChangeRequest) bool {
 			return true
 		}
 	}
-	normalized := normalizeMetadataPatch(dto.UpdateChangeRequest{AffectedCIs: c.AffectedCIs, RelatedTickets: c.RelatedTickets})
+	normalized := normalizeMetadataPatch(dto.UpdateChangeRequest{AffectedCIs: c.AffectedCIs})
 	if p.AffectedCIs != nil && !slices.Equal(p.AffectedCIs, normalized.AffectedCIs) {
 		return true
 	}
-	return p.RelatedTickets != nil && !slices.Equal(p.RelatedTickets, normalized.RelatedTickets)
+	return false
 }
 
 func validateMetadataPatch(p dto.UpdateChangeRequest) error {

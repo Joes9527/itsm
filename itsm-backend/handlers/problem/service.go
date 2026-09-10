@@ -31,36 +31,6 @@ func NewService(repo Repository, logger *zap.SugaredLogger) *Service {
 	return s
 }
 
-func (s *Service) Get(ctx context.Context, id int, tenantID int) (*Problem, error) {
-	return s.repo.Get(ctx, id, tenantID)
-}
-
-func (s *Service) GetWithAssociations(ctx context.Context, id int, tenantID int) (*Problem, error) {
-	return s.repo.GetWithAssociations(ctx, id, tenantID)
-}
-
-func (s *Service) AddAssociations(ctx context.Context, tenantID, problemID, actorUserID int, relatedType string, relatedIDs []int) error {
-	relatedIDs = uniquePositiveIDs(relatedIDs)
-	if len(relatedIDs) == 0 {
-		return fmt.Errorf("at least one related id is required")
-	}
-	if actorUserID <= 0 {
-		return fmt.Errorf("invalid actor user id")
-	}
-	return s.repo.AddAssociations(ctx, tenantID, problemID, actorUserID, relatedType, relatedIDs)
-}
-
-func (s *Service) RemoveAssociation(ctx context.Context, tenantID, problemID int, relatedType string, relatedID int) error {
-	if relatedID <= 0 {
-		return fmt.Errorf("invalid related id")
-	}
-	return s.repo.RemoveAssociation(ctx, tenantID, problemID, relatedType, relatedID)
-}
-
-func (s *Service) List(ctx context.Context, tenantID int, page, size int, filters map[string]interface{}) ([]*Problem, int, error) {
-	return s.repo.List(ctx, tenantID, page, size, filters)
-}
-
 func (s *Service) Update(ctx context.Context, tenantID int, id int, p *Problem) (*Problem, error) {
 	existing, err := s.repo.Get(ctx, id, tenantID)
 	if err != nil {

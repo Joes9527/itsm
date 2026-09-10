@@ -13,11 +13,13 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	"itsm-backend/common"
+	"itsm-backend/controller"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/middleware"
+	sharedService "itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -39,7 +41,7 @@ func TestProblemAssociationRejectsVersionlessLegacyBody(t *testing.T) {
 	p := createProblemHandlerProblem(t, ctx, svc, tenant.ID, actor.ID)
 	target, err := client.Ticket.Create().SetTitle("target").SetTicketNumber("LEGACY-BODY-TARGET").SetRequesterID(actor.ID).SetTenantID(tenant.ID).Save(ctx)
 	require.NoError(t, err)
-	w := performProblemRequest(r, http.MethodPost, fmt.Sprintf("/api/v1/problems/%d/associations", p.ID), map[string]any{"relatedType": "ticket", "relatedIDs": []int{target.ID}}, tenant.ID, actor.ID)
+	w := performProblemRequest(r, http.MethodPost, fmt.Sprintf("/api/v1/work-items/%d/relations", *p.WorkItemID), map[string]any{"relatedType": "ticket", "relatedIDs": []int{target.ID}}, tenant.ID, actor.ID)
 	require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 	count, err := client.WorkItemRelation.Query().Count(ctx)
 	require.NoError(t, err)
@@ -98,9 +100,6 @@ func setupProblemHTTPHandlerTest(t *testing.T) (*gin.Engine, *Handler, *Service,
 		api.GET("/:id", handler.Get)
 		api.PUT("/:id", handler.Update)
 		api.DELETE("/:id", handler.Delete)
-		api.GET("/:id/associations", handler.GetAssociations)
-		api.POST("/:id/associations", handler.AddAssociation)
-		api.DELETE("/:id/associations", handler.RemoveAssociation)
 		api.POST("/:id/investigate", handler.InvestigateProblem)
 		api.POST("/:id/root-cause", handler.UpdateRootCause)
 		api.POST("/:id/solution", handler.UpdateSolution)
@@ -109,6 +108,10 @@ func setupProblemHTTPHandlerTest(t *testing.T) (*gin.Engine, *Handler, *Service,
 		api.POST("/:id/resolve", handler.ResolveProblem)
 	}
 
+	relations := controller.NewWorkItemRelationController(sharedService.NewWorkItemRelationService(client, nil))
+	r.POST("/api/v1/work-items/:id/relations", relations.Add)
+	r.GET("/api/v1/work-items/:id/relations", relations.List)
+	r.DELETE("/api/v1/work-items/:id/relations", relations.Remove)
 	return r, handler, service, client
 }
 
@@ -201,6 +204,12 @@ func TestProblemHTTPHandlerCreateGetList(t *testing.T) {
 	var resGet common.Response
 	require.NoError(t, json.Unmarshal(wGet.Body.Bytes(), &resGet))
 	assert.Equal(t, 0, resGet.Code)
+	require.Contains(t, wGet.Body.String(), `"relations":[]`)
+	require.Equal(t, dataMap["number"], resGet.Data.(map[string]interface{})["number"])
+	update := performProblemRequestWithRole(r, "PUT", fmt.Sprintf("/api/v1/problems/%d", probID), dto.UpdateProblemRequest{Version: 1, Title: func() *string { v := "Updated metadata"; return &v }()}, tenant.ID, user.ID, "super_admin")
+	require.Equal(t, 200, update.Code, update.Body.String())
+	require.Contains(t, update.Body.String(), `"title":"Updated metadata"`)
+	require.NotContains(t, update.Body.String(), `"relations"`)
 
 	// 4. Get Problem - Invalid ID / Not Found
 	wNotFound := performProblemRequestWithRole(r, "GET", "/api/v1/problems/99999", nil, tenant.ID, user.ID, "super_admin")
@@ -243,7 +252,12 @@ func TestProblemHTTPHandlerGetUsesResolvedMSPTenant(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-	require.Equal(t, http.StatusOK, w.Code)
+	require.Equal(t, http.StatusForbidden, w.Code, "forged HTTP role cannot grant selected-tenant authority")
+	client.User.UpdateOneID(user.ID).SetRole("super_admin").ExecX(ctx)
+	req = req.Clone(ctx)
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
 	var res common.Response
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &res))
@@ -328,7 +342,7 @@ func TestProblemHTTPHandlerMutationsUseResolvedMSPTenant(t *testing.T) {
 	w = request(http.MethodPost, fmt.Sprintf("/api/v1/problems/%d/investigate", p.ID), map[string]any{"version": p.Version + 1, "operationId": "msp-investigate"})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
-	updated, err := service.Get(ctx, p.ID, customerTenant.ID)
+	updated, err := NewEntRepository(client).Get(ctx, p.ID, customerTenant.ID)
 	require.NoError(t, err)
 	require.Equal(t, "MSP updated problem", updated.Title)
 	require.Equal(t, "investigating", updated.Status)
@@ -408,16 +422,16 @@ func TestProblemHTTPHandlerAssociations(t *testing.T) {
 
 	// Add Association
 	assocReq := dto.WorkItemRelationRequest{SourceWorkItemID: *p.WorkItemID, TargetWorkItemID: ticket1.ID, RelationType: "related_to", ExpectedVersion: p.Version, OperationID: "add-related-ticket"}
-	w := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/associations", p.ID), assocReq, tenant.ID, user.ID)
+	w := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/work-items/%d/relations", *p.WorkItemID), assocReq, tenant.ID, user.ID)
 	require.Equal(t, http.StatusOK, w.Code)
 
 	// Get Associations
-	wGet := performProblemRequest(r, "GET", fmt.Sprintf("/api/v1/problems/%d/associations", p.ID), nil, tenant.ID, user.ID)
+	wGet := performProblemRequest(r, "GET", fmt.Sprintf("/api/v1/work-items/%d/relations", *p.WorkItemID), nil, tenant.ID, user.ID)
 	require.Equal(t, http.StatusOK, wGet.Code)
 
 	// Remove Association
 	remReq := dto.WorkItemRelationRequest{SourceWorkItemID: *p.WorkItemID, TargetWorkItemID: ticket1.ID, RelationType: "related_to", ExpectedVersion: p.Version + 1, OperationID: "remove-related-ticket"}
-	wRem := performProblemRequest(r, "DELETE", fmt.Sprintf("/api/v1/problems/%d/associations", p.ID), remReq, tenant.ID, user.ID)
+	wRem := performProblemRequest(r, "DELETE", fmt.Sprintf("/api/v1/work-items/%d/relations", *p.WorkItemID), remReq, tenant.ID, user.ID)
 	require.Equal(t, http.StatusOK, wRem.Code)
 }
 

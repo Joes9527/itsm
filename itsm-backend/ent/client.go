@@ -3752,22 +3752,6 @@ func (c *ChangeClient) QueryWorkItem(_m *Change) *TicketQuery {
 	return query
 }
 
-// QueryProblems queries the problems edge of a Change.
-func (c *ChangeClient) QueryProblems(_m *Change) *ProblemQuery {
-	query := (&ProblemClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(change.Table, change.FieldID, id),
-			sqlgraph.To(problem.Table, problem.FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, true, change.ProblemsTable, change.ProblemsPrimaryKey...),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
 // QueryPir queries the pir edge of a Change.
 func (c *ChangeClient) QueryPir(_m *Change) *ChangePIRQuery {
 	query := (&ChangePIRClient{config: c.config}).Query()
@@ -7359,22 +7343,6 @@ func (c *IncidentClient) QueryConfigurationItems(_m *Incident) *ConfigurationIte
 			sqlgraph.From(incident.Table, incident.FieldID, id),
 			sqlgraph.To(configurationitem.Table, configurationitem.FieldID),
 			sqlgraph.Edge(sqlgraph.M2M, true, incident.ConfigurationItemsTable, incident.ConfigurationItemsPrimaryKey...),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryProblems queries the problems edge of a Incident.
-func (c *IncidentClient) QueryProblems(_m *Incident) *ProblemQuery {
-	query := (&ProblemClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(incident.Table, incident.FieldID, id),
-			sqlgraph.To(problem.Table, problem.FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, true, incident.ProblemsTable, incident.ProblemsPrimaryKey...),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil
@@ -11973,54 +11941,6 @@ func (c *ProblemClient) QueryWorkItem(_m *Problem) *TicketQuery {
 			sqlgraph.From(problem.Table, problem.FieldID, id),
 			sqlgraph.To(ticket.Table, ticket.FieldID),
 			sqlgraph.Edge(sqlgraph.M2O, false, problem.WorkItemTable, problem.WorkItemColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryTickets queries the tickets edge of a Problem.
-func (c *ProblemClient) QueryTickets(_m *Problem) *TicketQuery {
-	query := (&TicketClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(problem.Table, problem.FieldID, id),
-			sqlgraph.To(ticket.Table, ticket.FieldID),
-			sqlgraph.Edge(sqlgraph.O2M, false, problem.TicketsTable, problem.TicketsColumn),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryIncidents queries the incidents edge of a Problem.
-func (c *ProblemClient) QueryIncidents(_m *Problem) *IncidentQuery {
-	query := (&IncidentClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(problem.Table, problem.FieldID, id),
-			sqlgraph.To(incident.Table, incident.FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, false, problem.IncidentsTable, problem.IncidentsPrimaryKey...),
-		)
-		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
-		return fromV, nil
-	}
-	return query
-}
-
-// QueryChanges queries the changes edge of a Problem.
-func (c *ProblemClient) QueryChanges(_m *Problem) *ChangeQuery {
-	query := (&ChangeClient{config: c.config}).Query()
-	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
-		id := _m.ID
-		step := sqlgraph.NewStep(
-			sqlgraph.From(problem.Table, problem.FieldID, id),
-			sqlgraph.To(change.Table, change.FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, false, problem.ChangesTable, problem.ChangesPrimaryKey...),
 		)
 		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
 		return fromV, nil

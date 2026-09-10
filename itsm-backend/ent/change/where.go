@@ -1551,29 +1551,6 @@ func HasWorkItemWith(preds ...predicate.Ticket) predicate.Change {
 	})
 }
 
-// HasProblems applies the HasEdge predicate on the "problems" edge.
-func HasProblems() predicate.Change {
-	return predicate.Change(func(s *sql.Selector) {
-		step := sqlgraph.NewStep(
-			sqlgraph.From(Table, FieldID),
-			sqlgraph.Edge(sqlgraph.M2M, true, ProblemsTable, ProblemsPrimaryKey...),
-		)
-		sqlgraph.HasNeighbors(s, step)
-	})
-}
-
-// HasProblemsWith applies the HasEdge predicate on the "problems" edge with a given conditions (other predicates).
-func HasProblemsWith(preds ...predicate.Problem) predicate.Change {
-	return predicate.Change(func(s *sql.Selector) {
-		step := newProblemsStep()
-		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
-			for _, p := range preds {
-				p(s)
-			}
-		})
-	})
-}
-
 // HasPir applies the HasEdge predicate on the "pir" edge.
 func HasPir() predicate.Change {
 	return predicate.Change(func(s *sql.Selector) {

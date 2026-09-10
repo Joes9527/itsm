@@ -4385,7 +4385,6 @@ var (
 		{Name: "custom_field_values", Type: field.TypeJSON, Nullable: true},
 		{Name: "configuration_item_tickets", Type: field.TypeInt, Nullable: true},
 		{Name: "department_tickets", Type: field.TypeInt, Nullable: true},
-		{Name: "problem_tickets", Type: field.TypeInt, Nullable: true},
 		{Name: "sla_definition_tickets", Type: field.TypeInt, Nullable: true},
 		{Name: "category_id", Type: field.TypeInt, Nullable: true},
 		{Name: "ticket_tag_tickets", Type: field.TypeInt, Nullable: true},
@@ -4412,44 +4411,38 @@ var (
 				OnDelete:   schema.SetNull,
 			},
 			{
-				Symbol:     "tickets_problems_tickets",
-				Columns:    []*schema.Column{TicketsColumns[45]},
-				RefColumns: []*schema.Column{ProblemsColumns[0]},
-				OnDelete:   schema.SetNull,
-			},
-			{
 				Symbol:     "tickets_sla_definitions_tickets",
-				Columns:    []*schema.Column{TicketsColumns[46]},
+				Columns:    []*schema.Column{TicketsColumns[45]},
 				RefColumns: []*schema.Column{SLADefinitionsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tickets_ticket_categories_tickets",
-				Columns:    []*schema.Column{TicketsColumns[47]},
+				Columns:    []*schema.Column{TicketsColumns[46]},
 				RefColumns: []*schema.Column{TicketCategoriesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tickets_ticket_tags_tickets",
-				Columns:    []*schema.Column{TicketsColumns[48]},
+				Columns:    []*schema.Column{TicketsColumns[47]},
 				RefColumns: []*schema.Column{TicketTagsColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tickets_ticket_templates_tickets",
-				Columns:    []*schema.Column{TicketsColumns[49]},
+				Columns:    []*schema.Column{TicketsColumns[48]},
 				RefColumns: []*schema.Column{TicketTemplatesColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
 			{
 				Symbol:     "tickets_users_tickets",
-				Columns:    []*schema.Column{TicketsColumns[50]},
+				Columns:    []*schema.Column{TicketsColumns[49]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "tickets_users_assigned_tickets",
-				Columns:    []*schema.Column{TicketsColumns[51]},
+				Columns:    []*schema.Column{TicketsColumns[50]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.SetNull,
 			},
@@ -4473,12 +4466,12 @@ var (
 			{
 				Name:    "ticket_requester_id",
 				Unique:  false,
-				Columns: []*schema.Column{TicketsColumns[50]},
+				Columns: []*schema.Column{TicketsColumns[49]},
 			},
 			{
 				Name:    "ticket_assignee_id",
 				Unique:  false,
-				Columns: []*schema.Column{TicketsColumns[51]},
+				Columns: []*schema.Column{TicketsColumns[50]},
 			},
 			{
 				Name:    "ticket_created_at",
@@ -4498,7 +4491,7 @@ var (
 			{
 				Name:    "ticket_tenant_id_requester_id",
 				Unique:  false,
-				Columns: []*schema.Column{TicketsColumns[14], TicketsColumns[50]},
+				Columns: []*schema.Column{TicketsColumns[14], TicketsColumns[49]},
 			},
 			{
 				Name:    "ticket_tenant_id_external_message_id",
@@ -4518,7 +4511,7 @@ var (
 			{
 				Name:    "ticket_requester_id_status",
 				Unique:  false,
-				Columns: []*schema.Column{TicketsColumns[50], TicketsColumns[3]},
+				Columns: []*schema.Column{TicketsColumns[49], TicketsColumns[3]},
 			},
 			{
 				Name:    "ticket_tenant_id_record_class",
@@ -5311,56 +5304,6 @@ var (
 			},
 		},
 	}
-	// ProblemIncidentsColumns holds the columns for the "problem_incidents" table.
-	ProblemIncidentsColumns = []*schema.Column{
-		{Name: "problem_id", Type: field.TypeInt},
-		{Name: "incident_id", Type: field.TypeInt},
-	}
-	// ProblemIncidentsTable holds the schema information for the "problem_incidents" table.
-	ProblemIncidentsTable = &schema.Table{
-		Name:       "problem_incidents",
-		Columns:    ProblemIncidentsColumns,
-		PrimaryKey: []*schema.Column{ProblemIncidentsColumns[0], ProblemIncidentsColumns[1]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "problem_incidents_problem_id",
-				Columns:    []*schema.Column{ProblemIncidentsColumns[0]},
-				RefColumns: []*schema.Column{ProblemsColumns[0]},
-				OnDelete:   schema.Cascade,
-			},
-			{
-				Symbol:     "problem_incidents_incident_id",
-				Columns:    []*schema.Column{ProblemIncidentsColumns[1]},
-				RefColumns: []*schema.Column{IncidentsColumns[0]},
-				OnDelete:   schema.Cascade,
-			},
-		},
-	}
-	// ProblemChangesColumns holds the columns for the "problem_changes" table.
-	ProblemChangesColumns = []*schema.Column{
-		{Name: "problem_id", Type: field.TypeInt},
-		{Name: "change_id", Type: field.TypeInt},
-	}
-	// ProblemChangesTable holds the schema information for the "problem_changes" table.
-	ProblemChangesTable = &schema.Table{
-		Name:       "problem_changes",
-		Columns:    ProblemChangesColumns,
-		PrimaryKey: []*schema.Column{ProblemChangesColumns[0], ProblemChangesColumns[1]},
-		ForeignKeys: []*schema.ForeignKey{
-			{
-				Symbol:     "problem_changes_problem_id",
-				Columns:    []*schema.Column{ProblemChangesColumns[0]},
-				RefColumns: []*schema.Column{ProblemsColumns[0]},
-				OnDelete:   schema.Cascade,
-			},
-			{
-				Symbol:     "problem_changes_change_id",
-				Columns:    []*schema.Column{ProblemChangesColumns[1]},
-				RefColumns: []*schema.Column{ChangesColumns[0]},
-				OnDelete:   schema.Cascade,
-			},
-		},
-	}
 	// ProjectTagsColumns holds the columns for the "project_tags" table.
 	ProjectTagsColumns = []*schema.Column{
 		{Name: "project_id", Type: field.TypeInt},
@@ -5643,8 +5586,6 @@ var (
 		IncidentRelatedIncidentsTable,
 		KnowledgeArticleSessionParticipantsTable,
 		MicroserviceTagsTable,
-		ProblemIncidentsTable,
-		ProblemChangesTable,
 		ProjectTagsTable,
 		TeamTagsTable,
 		TicketRelatedTicketsTable,
@@ -5734,13 +5675,12 @@ func init() {
 	TenantInstallationsTable.ForeignKeys[0].RefTable = MarketplaceItemsTable
 	TicketsTable.ForeignKeys[0].RefTable = ConfigurationItemsTable
 	TicketsTable.ForeignKeys[1].RefTable = DepartmentsTable
-	TicketsTable.ForeignKeys[2].RefTable = ProblemsTable
-	TicketsTable.ForeignKeys[3].RefTable = SLADefinitionsTable
-	TicketsTable.ForeignKeys[4].RefTable = TicketCategoriesTable
-	TicketsTable.ForeignKeys[5].RefTable = TicketTagsTable
-	TicketsTable.ForeignKeys[6].RefTable = TicketTemplatesTable
+	TicketsTable.ForeignKeys[2].RefTable = SLADefinitionsTable
+	TicketsTable.ForeignKeys[3].RefTable = TicketCategoriesTable
+	TicketsTable.ForeignKeys[4].RefTable = TicketTagsTable
+	TicketsTable.ForeignKeys[5].RefTable = TicketTemplatesTable
+	TicketsTable.ForeignKeys[6].RefTable = UsersTable
 	TicketsTable.ForeignKeys[7].RefTable = UsersTable
-	TicketsTable.ForeignKeys[8].RefTable = UsersTable
 	TicketAttachmentsTable.ForeignKeys[0].RefTable = TicketsTable
 	TicketAttachmentsTable.ForeignKeys[1].RefTable = UsersTable
 	TicketAutomationRulesTable.ForeignKeys[0].RefTable = UsersTable
@@ -5775,10 +5715,6 @@ func init() {
 	KnowledgeArticleSessionParticipantsTable.ForeignKeys[1].RefTable = KnowledgeArticleParticipantsTable
 	MicroserviceTagsTable.ForeignKeys[0].RefTable = MicroservicesTable
 	MicroserviceTagsTable.ForeignKeys[1].RefTable = TagsTable
-	ProblemIncidentsTable.ForeignKeys[0].RefTable = ProblemsTable
-	ProblemIncidentsTable.ForeignKeys[1].RefTable = IncidentsTable
-	ProblemChangesTable.ForeignKeys[0].RefTable = ProblemsTable
-	ProblemChangesTable.ForeignKeys[1].RefTable = ChangesTable
 	ProjectTagsTable.ForeignKeys[0].RefTable = ProjectsTable
 	ProjectTagsTable.ForeignKeys[1].RefTable = TagsTable
 	TeamTagsTable.ForeignKeys[0].RefTable = TeamsTable

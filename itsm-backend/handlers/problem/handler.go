@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"itsm-backend/common"
+	relationmeta "itsm-backend/common/workitemrelation"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/handlers/common/intakehttp"
@@ -35,61 +36,15 @@ func resolveProblemTenantID(c *gin.Context) (int, bool) {
 	return tenantID, true
 }
 
-func (h *Handler) toDTO(p *Problem) *dto.ProblemResponse {
-	resp := ToResponse(p)
-	if resp == nil {
-		return nil
-	}
-
-	// 映射关联数据
-	if p.Tickets != nil {
-		resp.AssociatedTickets = make([]*dto.AssociatedItemResponse, 0, len(p.Tickets))
-		for _, t := range p.Tickets {
-			resp.AssociatedTickets = append(resp.AssociatedTickets, &dto.AssociatedItemResponse{
-				ID:     t.ID,
-				Title:  t.Title,
-				Status: t.Status,
-				Number: t.Number,
-				Type:   t.Type,
-			})
-		}
-	}
-	if p.Incidents != nil {
-		resp.AssociatedIncidents = make([]*dto.AssociatedItemResponse, 0, len(p.Incidents))
-		for _, inc := range p.Incidents {
-			resp.AssociatedIncidents = append(resp.AssociatedIncidents, &dto.AssociatedItemResponse{
-				ID:     inc.ID,
-				Title:  inc.Title,
-				Status: inc.Status,
-				Number: inc.Number,
-				Type:   inc.Type,
-			})
-		}
-	}
-	if p.Changes != nil {
-		resp.AssociatedChanges = make([]*dto.AssociatedItemResponse, 0, len(p.Changes))
-		for _, ch := range p.Changes {
-			resp.AssociatedChanges = append(resp.AssociatedChanges, &dto.AssociatedItemResponse{
-				ID:     ch.ID,
-				Title:  ch.Title,
-				Status: ch.Status,
-				Number: ch.Number,
-				Type:   ch.Type,
-			})
-		}
-	}
-
-	return resp
-}
-
-// ToResponse maps the Problem base fields to the public API contract. Handlers
-// that load associations enrich this response in their own wrapper.
+// ToResponse maps the already-authorized projection, preserving omitted mutation relations.
 func ToResponse(p *Problem) *dto.ProblemResponse {
 	if p == nil {
 		return nil
 	}
 
 	resp := dto.ProblemResponse{
+		Number:           p.Number,
+		Relations:        relationProjection(p.Relations),
 		Version:          p.Version,
 		VerifiedVersion:  p.VerifiedVersion,
 		VerificationNote: p.VerificationNote,
@@ -118,6 +73,17 @@ func ToResponse(p *Problem) *dto.ProblemResponse {
 }
 
 func (h *Handler) SetCreationApplication(app creation.Application) { h.creationApplication = app }
+
+// Create API contract.
+// @Summary Create
+// @Description Creation returns immutable intake receipt; replay is HTTP 200.
+// @Tags problems
+// @Accept json
+// @Produce json
+// @Param body body dto.CreateProblemRequest true "Request"
+// @Success 201 {object} common.Response{data=creation.CreateWorkItemResult}
+// @Success 200 {object} common.Response{data=creation.CreateWorkItemResult} "Replay"
+// @Router /api/v1/problems [post]
 func (h *Handler) Create(c *gin.Context) {
 	var req dto.CreateProblemRequest
 	if !intakehttp.Bind(c, &req) {
@@ -138,6 +104,15 @@ func (h *Handler) Create(c *gin.Context) {
 	intakehttp.Execute(c, h.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassProblem, IntakeKind: creation.IntakeKindProblem, Title: req.Title, Description: req.Description, Priority: req.Priority, CTI: req.CTI, Problem: &creation.ProblemInput{RootCause: req.RootCause, Impact: req.Impact}})
 }
 
+// Get API contract.
+// @Summary Get
+// @Description Current actor RR read; relations is an authoritative array, including empty array.
+// @Tags problems
+// @Accept json
+// @Produce json
+// @Param id path int true "Professional extension ID"
+// @Success 200 {object} common.Response{data=dto.ProblemResponse}
+// @Router /api/v1/problems/{id} [get]
 func (h *Handler) Get(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -155,109 +130,14 @@ func (h *Handler) Get(c *gin.Context) {
 		return
 	}
 
-	p, err := h.service.GetWithAssociations(c.Request.Context(), id, actor.TenantID)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			common.Fail(c, common.NotFoundErrorCode, "Problem not found")
-		} else {
-			common.Fail(c, common.InternalErrorCode, err.Error())
-		}
-		return
-	}
-	response := h.toDTO(p)
-	response.Actions = BuildProblemActions(actor, p)
-	common.Success(c, response)
-}
-
-// GetAssociations 获取问题的关联项
-func (h *Handler) GetAssociations(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		common.Fail(c, common.ParamErrorCode, "invalid id")
-		return
-	}
-
-	tenantID, ok := resolveProblemTenantID(c)
-	if !ok {
-		return
-	}
-	p, err := h.service.GetWithAssociations(c.Request.Context(), id, tenantID)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			common.Fail(c, common.NotFoundErrorCode, "Problem not found")
-		} else {
-			common.Fail(c, common.InternalErrorCode, err.Error())
-		}
-		return
-	}
-
-	resp := &dto.ProblemAssociationResponse{
-		Tickets:   make([]*dto.AssociatedItemResponse, 0),
-		Incidents: make([]*dto.AssociatedItemResponse, 0),
-		Changes:   make([]*dto.AssociatedItemResponse, 0),
-	}
-	for _, t := range p.Tickets {
-		resp.Tickets = append(resp.Tickets, &dto.AssociatedItemResponse{
-			ID: t.ID, Title: t.Title, Status: t.Status, Number: t.Number, Type: t.Type,
-		})
-	}
-	for _, inc := range p.Incidents {
-		resp.Incidents = append(resp.Incidents, &dto.AssociatedItemResponse{
-			ID: inc.ID, Title: inc.Title, Status: inc.Status, Number: inc.Number, Type: inc.Type,
-		})
-	}
-	for _, ch := range p.Changes {
-		resp.Changes = append(resp.Changes, &dto.AssociatedItemResponse{
-			ID: ch.ID, Title: ch.Title, Status: ch.Status, Number: ch.Number, Type: ch.Type,
-		})
-	}
-	common.Success(c, resp)
-}
-
-// AddAssociation adds one explicit relation through the shared owner.
-func (h *Handler) AddAssociation(c *gin.Context) { h.applyRelation(c, false) }
-
-func (h *Handler) applyRelation(c *gin.Context, remove bool) {
-	id, tenantID, ok := problemRequestContext(c)
-	if !ok {
-		return
-	}
-	var req dto.WorkItemRelationRequest
-	if !intakehttp.Bind(c, &req) {
-		return
-	}
-	// Bind has already rejected duplicate and unknown members. Relation commands
-	// additionally reject explicit nulls, including the typed metadata object.
-	value, _ := c.Get("intake.http.body")
-	fields, _ := value.(map[string]any)
-	for field, value := range fields {
-		if value == nil {
-			intakehttp.Fail(c, intakehttp.Invalid(field, "null is not supported"))
-			return
-		}
-	}
-	if metadata, ok := fields["metadata"].(map[string]any); ok {
-		for field, value := range metadata {
-			if value == nil {
-				intakehttp.Fail(c, intakehttp.Invalid("metadata."+field, "null is not supported"))
-				return
-			}
-		}
-	}
-
-	actorID, ok := problemActorUserID(c)
-	if !ok {
-		return
-	}
-	result, err := h.service.ApplyRelation(c.Request.Context(), id, service.RelationCommand{
-		Meta:     workitemmutation.Meta{TenantID: tenantID, ActorID: actorID, ExpectedVersion: req.ExpectedVersion, OperationID: req.OperationID, Source: "http"},
-		SourceID: req.SourceWorkItemID, TargetID: req.TargetWorkItemID, Type: req.RelationType, Required: req.Metadata.Required,
-	}, remove)
+	p, err := h.service.Get(c.Request.Context(), id, workitemmutation.Meta{TenantID: actor.TenantID, ActorID: actor.UserID, Source: "http"})
 	if err != nil {
 		RespondCommandError(c, err)
 		return
 	}
-	common.Success(c, result)
+	response := ToResponse(p)
+	response.Actions = BuildProblemActions(actor, p)
+	common.Success(c, response)
 }
 
 // problemActorUserID 从请求上下文取出当前操作人 ID，用于 WorkItemRelation.created_by_id。
@@ -293,9 +173,14 @@ func (h *Handler) problemActionActor(c *gin.Context, tenantID int) (service.Acti
 	}, true
 }
 
-// RemoveAssociation removes one relation with the original source identity.
-func (h *Handler) RemoveAssociation(c *gin.Context) { h.applyRelation(c, true) }
-
+// List API contract.
+// @Summary List
+// @Description Current read scope applies before pagination and count; each relation endpoint is authorized.
+// @Tags problems
+// @Accept json
+// @Produce json
+// @Success 200 {object} common.Response{data=dto.ListProblemsResponse}
+// @Router /api/v1/problems [get]
 func (h *Handler) List(c *gin.Context) {
 	var req dto.ListProblemsRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
@@ -323,37 +208,16 @@ func (h *Handler) List(c *gin.Context) {
 		filters["keyword"] = req.Keyword
 	}
 
-	list, total, err := h.service.List(c.Request.Context(), tenantID, req.Page, req.PageSize, filters)
+	list, total, err := h.service.List(c.Request.Context(), workitemmutation.Meta{TenantID: tenantID, ActorID: c.GetInt("user_id"), Source: "http"}, req.Page, req.PageSize, filters)
 	if err != nil {
-		common.Fail(c, common.InternalErrorCode, err.Error())
+		RespondCommandError(c, err)
 		return
 	}
 
 	// Map to DTO response
 	dtoProblems := make([]*dto.ProblemResponse, 0, len(list))
 	for _, p := range list {
-		item := &dto.ProblemResponse{
-			Version:          p.Version,
-			VerifiedVersion:  p.VerifiedVersion,
-			VerificationNote: p.VerificationNote,
-			ID:               p.ID,
-			Title:            p.Title,
-			Description:      p.Description,
-			Status:           p.Status,
-			Priority:         p.Priority,
-			Category:         p.Category,
-			CategoryID:       categoryValue(p.CategoryID),
-			RootCause:        p.RootCause,
-			Impact:           p.Impact,
-			CreatedBy:        p.CreatedBy,
-			TenantID:         p.TenantID,
-			CreatedAt:        p.CreatedAt,
-			UpdatedAt:        p.UpdatedAt,
-			WorkItemID:       p.WorkItemID,
-		}
-		if p.AssigneeID != nil {
-			item.AssigneeID = p.AssigneeID
-		}
+		item := ToResponse(p)
 		dtoProblems = append(dtoProblems, item)
 	}
 
@@ -373,6 +237,16 @@ func (h *Handler) List(c *gin.Context) {
 	})
 }
 
+// Update API contract.
+// @Summary Update
+// @Description Committed metadata response omits relations. Refresh separately; denied refresh does not undo the committed update.
+// @Tags problems
+// @Accept json
+// @Produce json
+// @Param id path int true "Professional extension ID"
+// @Param body body dto.UpdateProblemRequest true "Request"
+// @Success 200 {object} common.Response{data=dto.ProblemResponse}
+// @Router /api/v1/problems/{id} [put]
 func (h *Handler) Update(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -423,7 +297,7 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, h.toDTO(updated))
+	common.Success(c, ToResponse(updated))
 }
 
 func (h *Handler) InvestigateProblem(c *gin.Context) { h.command(c, "investigate") }
@@ -479,6 +353,8 @@ func RespondCommandError(c *gin.Context, err error) {
 		switch app.Code {
 		case common.ErrCodeValidation, common.ErrCodeBadRequest:
 			common.ParamError(c, app.Message)
+		case common.ErrCodeUnauthorized:
+			common.Fail(c, common.AuthFailedCode, app.Message)
 		case common.ErrCodeForbidden:
 			common.Forbidden(c, app.Message)
 		case common.ErrCodeNotFound:
@@ -493,6 +369,16 @@ func RespondCommandError(c *gin.Context, err error) {
 	common.InternalError(c, "Problem mutation failed")
 }
 
+// UpdateRootCause API contract.
+// @Summary UpdateRootCause
+// @Description Committed metadata response omits relations; refresh separately.
+// @Tags problems
+// @Accept json
+// @Produce json
+// @Param id path int true "Professional extension ID"
+// @Param body body dto.UpdateProblemRootCauseRequest true "Request"
+// @Success 200 {object} common.Response{data=dto.ProblemResponse}
+// @Router /api/v1/problems/{id}/root-cause [put]
 func (h *Handler) UpdateRootCause(c *gin.Context) {
 	id, tenantID, ok := problemRequestContext(c)
 	if !ok {
@@ -507,6 +393,16 @@ func (h *Handler) UpdateRootCause(c *gin.Context) {
 	h.respondProblemMutation(c, updated, err)
 }
 
+// UpdateSolution API contract.
+// @Summary UpdateSolution
+// @Description Committed metadata response omits relations; refresh separately.
+// @Tags problems
+// @Accept json
+// @Produce json
+// @Param id path int true "Professional extension ID"
+// @Param body body dto.UpdateProblemResolutionRequest true "Request"
+// @Success 200 {object} common.Response{data=dto.ProblemResponse}
+// @Router /api/v1/problems/{id}/solution [put]
 func (h *Handler) UpdateSolution(c *gin.Context) {
 	id, tenantID, ok := problemRequestContext(c)
 	if !ok {
@@ -555,7 +451,7 @@ func (h *Handler) respondProblemMutation(c *gin.Context, updated *Problem, err e
 		}
 		return
 	}
-	common.Success(c, h.toDTO(updated))
+	common.Success(c, ToResponse(updated))
 }
 
 func (h *Handler) Delete(c *gin.Context) {
@@ -610,4 +506,12 @@ func categoryValue(id *int) int {
 		return 0
 	}
 	return *id
+}
+
+// Nil means no authorized relation projection was performed (metadata response).
+func relationProjection(v []relationmeta.View) *[]relationmeta.View {
+	if v == nil {
+		return nil
+	}
+	return &v
 }

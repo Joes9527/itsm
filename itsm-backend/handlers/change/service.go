@@ -60,14 +60,6 @@ func (s *Service) SetProcessEngine(engine service.ProcessEngine) {
 	}
 }
 
-func (s *Service) GetChange(ctx context.Context, id int, tenantID int) (*Change, error) {
-	return s.repo.Get(ctx, id, tenantID)
-}
-
-func (s *Service) ListChanges(ctx context.Context, tenantID int, page, size int, status, search, riskLevel string) ([]*Change, int, error) {
-	return s.repo.List(ctx, tenantID, page, size, status, search, riskLevel)
-}
-
 func (s *Service) GetStats(ctx context.Context, tenantID int) (*Stats, error) {
 	return s.repo.GetStats(ctx, tenantID)
 }

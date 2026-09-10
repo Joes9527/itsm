@@ -7,21 +7,13 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/ent"
-	"itsm-backend/ent/change"
-	"itsm-backend/ent/incident"
 	entpredicate "itsm-backend/ent/predicate"
 	"itsm-backend/ent/problem"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketcategory"
-	"itsm-backend/ent/workitemrelation"
 
 	entsql "entgo.io/ent/dialect/sql"
 )
-
-// problemTicketRelationType 是 Problem 关联普通工单（record_class 未收敛的一般关联，
-// 不是"调查根因"那条 investigated_by/caused_by 方向性关系）在 WorkItemRelation 里使用的
-// relation_type。见 docs/superpowers/specs/2026-08-26-unified-work-item-model-design.md §10。
-const problemTicketRelationType = "related_to"
 
 type EntRepository struct {
 	client *ent.Client
@@ -50,6 +42,7 @@ func (r *EntRepository) toDomain(e *ent.Problem) *Problem {
 		return nil
 	}
 	p := &Problem{
+		Number:           workItem.TicketNumber,
 		Version:          workItem.Version,
 		VerifiedVersion:  e.VerifiedVersion,
 		VerificationNote: e.VerificationNote,
@@ -95,200 +88,6 @@ func (r *EntRepository) toDomain(e *ent.Problem) *Problem {
 	return p
 }
 
-func (r *EntRepository) toDomainWithAssociations(e *ent.Problem) (*Problem, error) {
-	p := r.toDomain(e)
-
-	// 注意：Tickets 关联不在这里填充——历史上通过 ent 的 Problem<->Ticket 多对多 edge
-	// eager-load（e.Edges.Tickets），Wave 2 起改为从 WorkItemRelation 读取（见
-	// GetWithAssociations 里对 loadTicketAssociations 的调用），因为普通工单关联现在是
-	// WorkItem 层面的结构化关系，不再是 Problem 专业扩展表自己的 edge。
-	if e.Edges.Incidents != nil {
-		p.Incidents = make([]*AssociatedItem, 0, len(e.Edges.Incidents))
-		for _, inc := range e.Edges.Incidents {
-			if inc.Edges.WorkItem == nil {
-				return nil, fmt.Errorf("Incident %d required WorkItem missing", inc.ID)
-			}
-			p.Incidents = append(p.Incidents, &AssociatedItem{
-				ID:     inc.ID,
-				Title:  inc.Edges.WorkItem.Title,
-				Status: inc.Edges.WorkItem.Status,
-				Number: inc.Edges.WorkItem.TicketNumber,
-				Type:   "incident",
-			})
-		}
-	}
-	if e.Edges.Changes != nil {
-		p.Changes = make([]*AssociatedItem, 0, len(e.Edges.Changes))
-		for _, ch := range e.Edges.Changes {
-			if ch.Edges.WorkItem == nil {
-				continue
-			}
-			p.Changes = append(p.Changes, &AssociatedItem{
-				ID:     ch.ID,
-				Title:  ch.Edges.WorkItem.Title,
-				Status: ch.Edges.WorkItem.Status,
-				Type:   "change",
-			})
-		}
-	}
-
-	return p, nil
-}
-
-func (r *EntRepository) AddAssociations(ctx context.Context, tenantID, problemID, actorUserID int, relatedType string, relatedIDs []int) error {
-	prob, err := r.client.Problem.Query().
-		Where(problem.IDEQ(problemID), problemTenantScope(tenantID)).
-		Only(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return fmt.Errorf("problem not found")
-		}
-		return err
-	}
-
-	switch relatedType {
-	case "ticket":
-		count, err := r.client.Ticket.Query().
-			Where(ticket.IDIn(relatedIDs...), ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).
-			Count(ctx)
-		if err != nil {
-			return err
-		}
-		if count != len(relatedIDs) {
-			return fmt.Errorf("one or more tickets do not belong to the current tenant")
-		}
-		if prob.WorkItemID <= 0 {
-			return fmt.Errorf("problem %d violates WorkItem creation invariant: missing work_item_id", problemID)
-		}
-		return r.linkTicketsAsWorkItemRelations(ctx, tenantID, prob.WorkItemID, actorUserID, relatedIDs)
-	case "incident":
-		count, err := r.client.Incident.Query().
-			Where(incident.IDIn(relatedIDs...), incident.HasWorkItemWith(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil())).
-			Count(ctx)
-		if err != nil {
-			return err
-		}
-		if count != len(relatedIDs) {
-			return fmt.Errorf("one or more incidents do not belong to the current tenant")
-		}
-	case "change":
-		count, err := r.client.Change.Query().
-			Where(change.IDIn(relatedIDs...), change.HasWorkItemWith(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil())).
-			Count(ctx)
-		if err != nil {
-			return err
-		}
-		if count != len(relatedIDs) {
-			return fmt.Errorf("one or more changes do not belong to the current tenant")
-		}
-	default:
-		return fmt.Errorf("unsupported related type: %s", relatedType)
-	}
-
-	// incident/change 分支保持迁移前的写法不变：仍然写 Problem<->Incident /
-	// Problem<->Change 的 ent 多对多 edge。这两个方向本次任务范围内不迁移到
-	// WorkItemRelation（Change 域尚未迁移到 WorkItem；Incident 方向对应的是设计文档里
-	// investigated_by/caused_by 关系，跟这里"Problem 关联任意工单"的无方向性 related_to
-	// 语义不同，混用会产生错误的关系类型）。
-	update := r.client.Problem.Update().
-		Where(problem.IDEQ(problemID), problemTenantScope(tenantID))
-	switch relatedType {
-	case "incident":
-		update.AddIncidentIDs(relatedIDs...)
-	case "change":
-		update.AddChangeIDs(relatedIDs...)
-	}
-	updated, err := update.Save(ctx)
-	if err == nil && updated != 1 {
-		return fmt.Errorf("problem not found")
-	}
-	return err
-}
-
-// linkTicketsAsWorkItemRelations 把 Problem 对普通工单的关联写入 WorkItemRelation
-// （relation_type="related_to"），source 是 Problem 自己的 WorkItem（tickets.id），
-// target 是被关联的工单本身（工单表本来就是 WorkItem 物理表，工单 ID 就是它的 WorkItem
-// ID）。幂等：同一对 WorkItem 之间已存在未软删除的 related_to 关系时跳过，不报错——
-// 与旧的 ent AddTicketIDs（m2m，重复添加是 no-op）行为一致。
-func (r *EntRepository) linkTicketsAsWorkItemRelations(ctx context.Context, tenantID, sourceWorkItemID, actorUserID int, targetWorkItemIDs []int) error {
-	for _, targetID := range targetWorkItemIDs {
-		exists, err := r.client.WorkItemRelation.Query().
-			Where(
-				workitemrelation.TenantID(tenantID),
-				workitemrelation.SourceWorkItemID(sourceWorkItemID),
-				workitemrelation.TargetWorkItemID(targetID),
-				workitemrelation.RelationType(problemTicketRelationType),
-				workitemrelation.DeletedAtIsNil(),
-			).
-			Exist(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to check existing work item relation: %w", err)
-		}
-		if exists {
-			continue
-		}
-		_, err = r.client.WorkItemRelation.Create().
-			SetTenantID(tenantID).
-			SetSourceWorkItemID(sourceWorkItemID).
-			SetTargetWorkItemID(targetID).
-			SetRelationType(problemTicketRelationType).
-			SetCreatedByID(actorUserID).
-			Save(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to create work item relation: %w", err)
-		}
-	}
-	return nil
-}
-
-func (r *EntRepository) RemoveAssociation(ctx context.Context, tenantID, problemID int, relatedType string, relatedID int) error {
-	if relatedType == "ticket" {
-		prob, err := r.client.Problem.Query().
-			Where(problem.IDEQ(problemID), problemTenantScope(tenantID)).
-			Only(ctx)
-		if err != nil {
-			if ent.IsNotFound(err) {
-				return fmt.Errorf("problem not found")
-			}
-			return err
-		}
-		if prob.WorkItemID <= 0 {
-			// 没有 WorkItem 就不可能存在任何 WorkItemRelation 记录，视为已经是"未关联"
-			// 状态，幂等返回成功（与旧 RemoveTicketIDs 对不存在的 edge 静默 no-op 一致）。
-			return nil
-		}
-		_, err = r.client.WorkItemRelation.Update().
-			Where(
-				workitemrelation.TenantID(tenantID),
-				workitemrelation.SourceWorkItemID(prob.WorkItemID),
-				workitemrelation.TargetWorkItemID(relatedID),
-				workitemrelation.RelationType(problemTicketRelationType),
-				workitemrelation.DeletedAtIsNil(),
-			).
-			SetDeletedAt(time.Now()).
-			Save(ctx)
-		return err
-	}
-
-	update := r.client.Problem.Update().
-		Where(problem.IDEQ(problemID), problemTenantScope(tenantID))
-
-	switch relatedType {
-	case "incident":
-		update.RemoveIncidentIDs(relatedID)
-	case "change":
-		update.RemoveChangeIDs(relatedID)
-	default:
-		return fmt.Errorf("unsupported related type: %s", relatedType)
-	}
-
-	updated, err := update.Save(ctx)
-	if err == nil && updated != 1 {
-		return fmt.Errorf("problem not found")
-	}
-	return err
-}
-
 func rollbackProblemTx(tx *ent.Tx, cause error) error {
 	if rollbackErr := tx.Rollback(); rollbackErr != nil {
 		return fmt.Errorf("%w (rollback also failed: %v)", cause, rollbackErr)
@@ -307,152 +106,7 @@ func (r *EntRepository) Get(ctx context.Context, id int, tenantID int) (*Problem
 	return r.toDomain(e), nil
 }
 
-func (r *EntRepository) GetWithAssociations(ctx context.Context, id int, tenantID int) (*Problem, error) {
-	e, err := r.client.Problem.Query().
-		Where(problem.ID(id), problemTenantScope(tenantID)).
-		WithIncidents(func(q *ent.IncidentQuery) {
-			q.Where(incident.HasWorkItemWith(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil())).WithWorkItem()
-		}).
-		WithChanges(func(q *ent.ChangeQuery) {
-			q.Where(change.HasWorkItemWith(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil())).
-				WithWorkItem()
-		}).
-		WithWorkItem(withProblemWorkItemProjection).
-		Only(ctx)
-	if err != nil {
-		return nil, err
-	}
-	p, err := r.toDomainWithAssociations(e)
-	if err != nil {
-		return nil, err
-	}
-	incidents, err := r.loadIncidentAssociations(ctx, tenantID, e.WorkItemID)
-	if err != nil {
-		return nil, err
-	}
-	p.Incidents = mergeAssociatedItems(p.Incidents, incidents)
-	tickets, err := r.loadTicketAssociations(ctx, tenantID, e.WorkItemID)
-	if err != nil {
-		return nil, err
-	}
-	p.Tickets = tickets
-	return p, nil
-}
-
-// loadIncidentAssociations resolves Incident -> Problem investigated_by links.
-// The relation stores WorkItem IDs, while the public association contract uses
-// professional Incident IDs, so the join is completed at the repository boundary.
-func (r *EntRepository) loadIncidentAssociations(ctx context.Context, tenantID, problemWorkItemID int) ([]*AssociatedItem, error) {
-	if problemWorkItemID <= 0 {
-		return []*AssociatedItem{}, nil
-	}
-	relations, err := r.client.WorkItemRelation.Query().
-		Where(
-			workitemrelation.TenantID(tenantID),
-			workitemrelation.TargetWorkItemID(problemWorkItemID),
-			workitemrelation.RelationType(common.WorkItemRelationInvestigatedBy),
-			workitemrelation.DeletedAtIsNil(),
-		).
-		All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query incident problem relations: %w", err)
-	}
-	if len(relations) == 0 {
-		return []*AssociatedItem{}, nil
-	}
-
-	sourceWorkItemIDs := make([]int, 0, len(relations))
-	for _, relation := range relations {
-		sourceWorkItemIDs = append(sourceWorkItemIDs, relation.SourceWorkItemID)
-	}
-	incidents, err := r.client.Incident.Query().
-		Where(
-			incident.HasWorkItemWith(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()),
-			incident.WorkItemIDIn(sourceWorkItemIDs...),
-		).
-		WithWorkItem().
-		All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load linked incidents: %w", err)
-	}
-
-	items := make([]*AssociatedItem, 0, len(incidents))
-	for _, inc := range incidents {
-		if inc.Edges.WorkItem == nil {
-			return nil, fmt.Errorf("Incident %d required WorkItem missing", inc.ID)
-		}
-		items = append(items, &AssociatedItem{
-			ID: inc.ID, Title: inc.Edges.WorkItem.Title, Status: inc.Edges.WorkItem.Status,
-			Number: inc.Edges.WorkItem.TicketNumber, Type: "incident",
-		})
-	}
-	return items, nil
-}
-
-func mergeAssociatedItems(existing, additional []*AssociatedItem) []*AssociatedItem {
-	seen := make(map[int]struct{}, len(existing)+len(additional))
-	merged := make([]*AssociatedItem, 0, len(existing)+len(additional))
-	for _, items := range [][]*AssociatedItem{existing, additional} {
-		for _, item := range items {
-			if item == nil {
-				continue
-			}
-			if _, ok := seen[item.ID]; ok {
-				continue
-			}
-			seen[item.ID] = struct{}{}
-			merged = append(merged, item)
-		}
-	}
-	return merged
-}
-
-// loadTicketAssociations 通过 WorkItemRelation 读取 Problem 关联的普通工单（Wave 2 起
-// 不再走 ent 的 Problem<->Ticket 多对多 edge）。sourceWorkItemID<=0 表示开发数据违反
-// WorkItem 创建不变量；读取端没有可查询的 WorkItemRelation，返回空列表。
-func (r *EntRepository) loadTicketAssociations(ctx context.Context, tenantID, sourceWorkItemID int) ([]*AssociatedItem, error) {
-	if sourceWorkItemID <= 0 {
-		return []*AssociatedItem{}, nil
-	}
-	relations, err := r.client.WorkItemRelation.Query().
-		Where(
-			workitemrelation.TenantID(tenantID),
-			workitemrelation.SourceWorkItemID(sourceWorkItemID),
-			workitemrelation.RelationType(problemTicketRelationType),
-			workitemrelation.DeletedAtIsNil(),
-		).
-		All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query work item relations: %w", err)
-	}
-	if len(relations) == 0 {
-		return []*AssociatedItem{}, nil
-	}
-	targetIDs := make([]int, 0, len(relations))
-	for _, rel := range relations {
-		targetIDs = append(targetIDs, rel.TargetWorkItemID)
-	}
-	tickets, err := r.client.Ticket.Query().
-		Where(ticket.IDIn(targetIDs...), ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).
-		Select("id", "title", "status", "ticket_number").
-		All(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load linked tickets: %w", err)
-	}
-	items := make([]*AssociatedItem, 0, len(tickets))
-	for _, t := range tickets {
-		items = append(items, &AssociatedItem{
-			ID:     t.ID,
-			Title:  t.Title,
-			Status: t.Status,
-			Number: t.TicketNumber,
-			Type:   "ticket",
-		})
-	}
-	return items, nil
-}
-
-func (r *EntRepository) List(ctx context.Context, tenantID int, page, size int, filters map[string]interface{}) ([]*Problem, int, error) {
+func (r *EntRepository) List(ctx context.Context, tenantID int, page, size int, filters map[string]interface{}, scope ...entpredicate.Ticket) ([]*Problem, int, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -462,7 +116,7 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, page, size int, 
 	if size > 200 {
 		size = 200
 	}
-	query := r.client.Problem.Query().Where(problemTenantScope(tenantID))
+	query := r.client.Problem.Query().Where(problemTenantScope(tenantID, scope...))
 
 	if v, ok := filters["status"].(string); ok && v != "" {
 		query = query.Where(problem.HasWorkItemWith(ticket.StatusEQ(v)))

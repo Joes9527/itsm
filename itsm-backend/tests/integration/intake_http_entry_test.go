@@ -82,7 +82,7 @@ func TestIntakeHTTPChangeReferencesAndStandardTemplate(t *testing.T) {
 	require.NoError(t, err)
 	handler := changedomain.NewHandler(nil)
 	handler.SetCreationApplication(f.app)
-	body := `{"title":"Change service configuration","description":"Change description","justification":"service reliability","type":"normal","priority":"high","riskLevel":"low","impactScope":"medium","implementationPlan":"apply configuration","rollbackPlan":"restore configuration","plannedStartDate":"2026-09-06T08:00:00+08:00","plannedEndDate":"2026-09-06T09:00:00+08:00","relatedTickets":["` + source.Number + `"]}`
+	body := `{"title":"Change service configuration","description":"Change description","justification":"service reliability","type":"normal","priority":"high","riskLevel":"low","impactScope":"medium","implementationPlan":"apply configuration","rollbackPlan":"restore configuration","plannedStartDate":"2026-09-06T08:00:00+08:00","plannedEndDate":"2026-09-06T09:00:00+08:00","sourceRelations":[{"sourceWorkItemId":` + strconv.Itoa(source.WorkItemID) + `,"relationType":"related_to","expectedVersion":1,"metadata":{"required":false}}]}`
 	w, result := intakeHTTP(t, f, handler.CreateChange, body, "change-http", nil)
 	require.Equal(t, 201, w.Code, w.Body.String())
 	require.Equal(t, "change_request", result.RecordClass)

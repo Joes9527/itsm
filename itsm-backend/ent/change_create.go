@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/changepir"
-	"itsm-backend/ent/problem"
 	"itsm-backend/ent/standardchange"
 	"itsm-backend/ent/ticket"
 	"time"
@@ -348,21 +347,6 @@ func (_c *ChangeCreate) SetWorkItem(v *Ticket) *ChangeCreate {
 	return _c.SetWorkItemID(v.ID)
 }
 
-// AddProblemIDs adds the "problems" edge to the Problem entity by IDs.
-func (_c *ChangeCreate) AddProblemIDs(ids ...int) *ChangeCreate {
-	_c.mutation.AddProblemIDs(ids...)
-	return _c
-}
-
-// AddProblems adds the "problems" edges to the Problem entity.
-func (_c *ChangeCreate) AddProblems(v ...*Problem) *ChangeCreate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _c.AddProblemIDs(ids...)
-}
-
 // AddPirIDs adds the "pir" edge to the ChangePIR entity by IDs.
 func (_c *ChangeCreate) AddPirIDs(ids ...int) *ChangeCreate {
 	_c.mutation.AddPirIDs(ids...)
@@ -591,22 +575,6 @@ func (_c *ChangeCreate) createSpec() (*Change, *sqlgraph.CreateSpec) {
 			edge.Target.Nodes = append(edge.Target.Nodes, k)
 		}
 		_node.WorkItemID = nodes[0]
-		_spec.Edges = append(_spec.Edges, edge)
-	}
-	if nodes := _c.mutation.ProblemsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: true,
-			Table:   change.ProblemsTable,
-			Columns: change.ProblemsPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(problem.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
 		_spec.Edges = append(_spec.Edges, edge)
 	}
 	if nodes := _c.mutation.PirIDs(); len(nodes) > 0 {

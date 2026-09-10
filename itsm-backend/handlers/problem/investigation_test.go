@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -178,7 +179,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	require.Equal(t, http.StatusOK, w1.Code)
 
 	// Verify problem status changed to investigating
-	updatedP, err := probHandlerSvc.Get(ctx, p.ID, tenant.ID)
+	updatedP, err := probHandlerSvc.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
 	require.NoError(t, err)
 	assert.Equal(t, "investigating", updatedP.Status)
 
@@ -334,14 +335,14 @@ func TestRCAWritesProblemAuthorityAndKnownError(t *testing.T) {
 	svc := service.NewProblemInvestigationService(db, logger)
 	created, err := svc.CreateRootCauseAnalysis(ctx, &dto.CreateRootCauseAnalysisRequest{ProblemID: p.ID, AnalystID: user.ID, AnalysisMethod: "5_whys", RootCauseDescription: "Connection pool leak", ConfidenceLevel: dto.ConfidenceHigh}, tenant.ID)
 	require.NoError(t, err)
-	stored, err := problemSvc.Get(ctx, p.ID, tenant.ID)
+	stored, err := problemSvc.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
 	require.NoError(t, err)
 	require.Equal(t, created.RootCauseDescription, stored.RootCause)
 	root := "Unbounded retry exhausted the pool"
 	updated, err := svc.UpdateRootCauseAnalysis(ctx, created.ID, &dto.UpdateRootCauseAnalysisRequest{RootCauseDescription: &root}, tenant.ID)
 	require.NoError(t, err)
 	require.Equal(t, root, updated.RootCauseDescription)
-	stored, err = problemSvc.Get(ctx, p.ID, tenant.ID)
+	stored, err = problemSvc.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
 	require.NoError(t, err)
 	require.Equal(t, root, stored.RootCause)
 	publisher := service.NewProblemService(client, logger)
@@ -366,11 +367,11 @@ func TestRCAWritesProblemAuthorityAndKnownError(t *testing.T) {
 		_, err := svc.UpdateRootCauseAnalysis(ctx, created.ID, &dto.UpdateRootCauseAnalysisRequest{RootCauseDescription: &revised}, tenant.ID)
 		require.NoError(t, err)
 	}}
-	beforeEdit, err := problemSvc.Get(ctx, p.ID, tenant.ID)
+	beforeEdit, err := problemSvc.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
 	require.NoError(t, err)
 	_, err = problem.NewService(staleRepo, logger).Update(ctx, tenant.ID, p.ID, &problem.Problem{Version: beforeEdit.Version, Title: "Unrelated title edit"})
 	require.Error(t, err, "concurrent RCA must invalidate an edit based on the previous version")
-	edited, err := problemSvc.Get(ctx, p.ID, tenant.ID)
+	edited, err := problemSvc.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
 	require.NoError(t, err)
 	require.Equal(t, "RCA changed concurrently", edited.RootCause)
 }

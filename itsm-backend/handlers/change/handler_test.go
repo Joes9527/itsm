@@ -21,6 +21,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/predicate"
 	"itsm-backend/middleware"
 )
 
@@ -126,7 +127,7 @@ func (m *mockRepository) Get(ctx context.Context, id int, tenantID int) (*Change
 	return c, nil
 }
 
-func (m *mockRepository) List(ctx context.Context, tenantID int, page, size int, status, search, riskLevel string) ([]*Change, int, error) {
+func (m *mockRepository) List(ctx context.Context, tenantID int, page, size int, status, search, riskLevel string, scope ...predicate.Ticket) ([]*Change, int, error) {
 	var result []*Change
 	for _, c := range m.changes {
 		if c.TenantID != tenantID {
@@ -216,10 +217,7 @@ func createTestChange(repo *mockRepository, tenantID, userID int) *Change {
 
 // TestChangeController_ListChanges tests GET /api/v1/changes
 func TestChangeController_ListChanges(t *testing.T) {
-	r, _, repo := setupTestHandler(t)
-
-	// Create test data
-	createTestChange(repo, 1, 1)
+	_, r := newGovernedHandlerFixture(t)
 
 	tests := []struct {
 		name           string
@@ -408,6 +406,11 @@ func TestChangeController_GetChangeUsesResolvedMSPTenant(t *testing.T) {
 	f, r := newGovernedHandlerFixture(t)
 	headers := governedMSPHeaders(t, f)
 	w := governedHTTP(r, "GET", fmt.Sprintf("/api/v1/changes/%d", f.record.ID), "", headers)
+	require.Equal(t, 404, w.Code, w.Body.String(), "allocation does not grant row scope for an unassigned request")
+	actorID, parseErr := strconv.Atoi(headers["X-User-ID"])
+	require.NoError(t, parseErr)
+	f.client.User.UpdateOneID(actorID).SetRole("super_admin").ClearMspRole().ExecX(f.ctx)
+	w = governedHTTP(r, "GET", fmt.Sprintf("/api/v1/changes/%d", f.record.ID), "", headers)
 	require.Equal(t, 200, w.Code, w.Body.String())
 	var body struct {
 		Data dto.ChangeResponse `json:"data"`
@@ -477,6 +480,10 @@ func TestChangeController_DeleteChange(t *testing.T) {
 	}{{"invalid", 400}, {"99999", 404}, {fmt.Sprint(f.record.ID), 200}} {
 		w := governedHTTP(r, "DELETE", "/api/v1/changes/"+tc.id, "", nil)
 		require.Equal(t, tc.status, w.Code, w.Body.String())
+		var response common.Response
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+		expected := map[int]int{200: common.SuccessCode, 400: common.ParamErrorCode, 404: common.NotFoundErrorCode}
+		require.Equal(t, expected[tc.status], response.Code)
 	}
 	require.NotNil(t, f.client.Ticket.GetX(f.ctx, f.record.WorkItemID).DeletedAt)
 }

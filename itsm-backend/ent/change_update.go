@@ -9,7 +9,6 @@ import (
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/changepir"
 	"itsm-backend/ent/predicate"
-	"itsm-backend/ent/problem"
 	"itsm-backend/ent/ticket"
 	"time"
 
@@ -465,21 +464,6 @@ func (_u *ChangeUpdate) SetWorkItem(v *Ticket) *ChangeUpdate {
 	return _u.SetWorkItemID(v.ID)
 }
 
-// AddProblemIDs adds the "problems" edge to the Problem entity by IDs.
-func (_u *ChangeUpdate) AddProblemIDs(ids ...int) *ChangeUpdate {
-	_u.mutation.AddProblemIDs(ids...)
-	return _u
-}
-
-// AddProblems adds the "problems" edges to the Problem entity.
-func (_u *ChangeUpdate) AddProblems(v ...*Problem) *ChangeUpdate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddProblemIDs(ids...)
-}
-
 // AddPirIDs adds the "pir" edge to the ChangePIR entity by IDs.
 func (_u *ChangeUpdate) AddPirIDs(ids ...int) *ChangeUpdate {
 	_u.mutation.AddPirIDs(ids...)
@@ -504,27 +488,6 @@ func (_u *ChangeUpdate) Mutation() *ChangeMutation {
 func (_u *ChangeUpdate) ClearWorkItem() *ChangeUpdate {
 	_u.mutation.ClearWorkItem()
 	return _u
-}
-
-// ClearProblems clears all "problems" edges to the Problem entity.
-func (_u *ChangeUpdate) ClearProblems() *ChangeUpdate {
-	_u.mutation.ClearProblems()
-	return _u
-}
-
-// RemoveProblemIDs removes the "problems" edge to Problem entities by IDs.
-func (_u *ChangeUpdate) RemoveProblemIDs(ids ...int) *ChangeUpdate {
-	_u.mutation.RemoveProblemIDs(ids...)
-	return _u
-}
-
-// RemoveProblems removes "problems" edges to Problem entities.
-func (_u *ChangeUpdate) RemoveProblems(v ...*Problem) *ChangeUpdate {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveProblemIDs(ids...)
 }
 
 // ClearPir clears all "pir" edges to the ChangePIR entity.
@@ -748,51 +711,6 @@ func (_u *ChangeUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if _u.mutation.ProblemsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: true,
-			Table:   change.ProblemsTable,
-			Columns: change.ProblemsPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(problem.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedProblemsIDs(); len(nodes) > 0 && !_u.mutation.ProblemsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: true,
-			Table:   change.ProblemsTable,
-			Columns: change.ProblemsPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(problem.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.ProblemsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: true,
-			Table:   change.ProblemsTable,
-			Columns: change.ProblemsPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(problem.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {
@@ -1298,21 +1216,6 @@ func (_u *ChangeUpdateOne) SetWorkItem(v *Ticket) *ChangeUpdateOne {
 	return _u.SetWorkItemID(v.ID)
 }
 
-// AddProblemIDs adds the "problems" edge to the Problem entity by IDs.
-func (_u *ChangeUpdateOne) AddProblemIDs(ids ...int) *ChangeUpdateOne {
-	_u.mutation.AddProblemIDs(ids...)
-	return _u
-}
-
-// AddProblems adds the "problems" edges to the Problem entity.
-func (_u *ChangeUpdateOne) AddProblems(v ...*Problem) *ChangeUpdateOne {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.AddProblemIDs(ids...)
-}
-
 // AddPirIDs adds the "pir" edge to the ChangePIR entity by IDs.
 func (_u *ChangeUpdateOne) AddPirIDs(ids ...int) *ChangeUpdateOne {
 	_u.mutation.AddPirIDs(ids...)
@@ -1337,27 +1240,6 @@ func (_u *ChangeUpdateOne) Mutation() *ChangeMutation {
 func (_u *ChangeUpdateOne) ClearWorkItem() *ChangeUpdateOne {
 	_u.mutation.ClearWorkItem()
 	return _u
-}
-
-// ClearProblems clears all "problems" edges to the Problem entity.
-func (_u *ChangeUpdateOne) ClearProblems() *ChangeUpdateOne {
-	_u.mutation.ClearProblems()
-	return _u
-}
-
-// RemoveProblemIDs removes the "problems" edge to Problem entities by IDs.
-func (_u *ChangeUpdateOne) RemoveProblemIDs(ids ...int) *ChangeUpdateOne {
-	_u.mutation.RemoveProblemIDs(ids...)
-	return _u
-}
-
-// RemoveProblems removes "problems" edges to Problem entities.
-func (_u *ChangeUpdateOne) RemoveProblems(v ...*Problem) *ChangeUpdateOne {
-	ids := make([]int, len(v))
-	for i := range v {
-		ids[i] = v[i].ID
-	}
-	return _u.RemoveProblemIDs(ids...)
 }
 
 // ClearPir clears all "pir" edges to the ChangePIR entity.
@@ -1611,51 +1493,6 @@ func (_u *ChangeUpdateOne) sqlSave(ctx context.Context) (_node *Change, err erro
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(ticket.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Add = append(_spec.Edges.Add, edge)
-	}
-	if _u.mutation.ProblemsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: true,
-			Table:   change.ProblemsTable,
-			Columns: change.ProblemsPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(problem.FieldID, field.TypeInt),
-			},
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.RemovedProblemsIDs(); len(nodes) > 0 && !_u.mutation.ProblemsCleared() {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: true,
-			Table:   change.ProblemsTable,
-			Columns: change.ProblemsPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(problem.FieldID, field.TypeInt),
-			},
-		}
-		for _, k := range nodes {
-			edge.Target.Nodes = append(edge.Target.Nodes, k)
-		}
-		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
-	}
-	if nodes := _u.mutation.ProblemsIDs(); len(nodes) > 0 {
-		edge := &sqlgraph.EdgeSpec{
-			Rel:     sqlgraph.M2M,
-			Inverse: true,
-			Table:   change.ProblemsTable,
-			Columns: change.ProblemsPrimaryKey,
-			Bidi:    false,
-			Target: &sqlgraph.EdgeTarget{
-				IDSpec: sqlgraph.NewFieldSpec(problem.FieldID, field.TypeInt),
 			},
 		}
 		for _, k := range nodes {

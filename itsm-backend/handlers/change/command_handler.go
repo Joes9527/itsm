@@ -98,6 +98,17 @@ func changeHTTPIdentity(c *gin.Context) (int, workitemmutation.Meta, bool) {
 	}
 	return id, workitemmutation.Meta{TenantID: tenant, ActorID: actorID, Source: "http", CorrelationID: c.GetString("request_id")}, true
 }
+
+// UpdateChange API contract.
+// @Summary UpdateChange
+// @Description Immutable mutation receipt. RelatedTickets is unsupported; refresh separately.
+// @Tags changes
+// @Accept json
+// @Produce json
+// @Param id path int true "Professional extension ID"
+// @Param body body MetadataRequest true "Request"
+// @Success 200 {object} common.Response{data=workitemmutation.Result}
+// @Router /api/v1/changes/{id} [put]
 func (h *Handler) UpdateChange(c *gin.Context) {
 	id, meta, ok := changeHTTPIdentity(c)
 	if !ok {

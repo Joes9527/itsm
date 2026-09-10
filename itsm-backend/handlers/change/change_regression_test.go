@@ -11,11 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/middleware"
+	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -87,7 +88,7 @@ func TestChangeRepositoryAllocatesSequentialWorkItemNumbers(t *testing.T) {
 // Change 有关联的 WorkItem，这个夹具镜像 EntRepository.Create 的形状,供本文件不直接调用
 // 真实 repo.Create 的测试（走 handler HTTP 路径、直接查 DB 断言）复用。relatedTickets
 // 里的每个编号都会同步建一条真实的目标 Ticket 行 + WorkItemRelation
-// （relation_type="related_to"），这样 repo.Get/List 读回的 RelatedTickets 才能命中——
+// （relation_type="related_to"），这样 application Get/List 读回的 Relations 才能命中——
 // 该字段的唯一权威来源是 WorkItemRelation；changes 表不保存关系 JSON 副本。
 func createRegressionChange(t *testing.T, client *ent.Client, tenantID, actorID int, changeType, status string, relatedTickets []string) *ent.Change {
 	t.Helper()
@@ -107,7 +108,10 @@ func createRegressionChange(t *testing.T, client *ent.Client, tenantID, actorID 
 		Save(ctx)
 	require.NoError(t, err)
 
-	for _, number := range relatedTickets {
+	if len(relatedTickets) > 0 {
+		ConfigureChangeIntakeFixture(ctx, client, tenantID, "agent")
+	}
+	for i, number := range relatedTickets {
 		target, err := client.Ticket.Create().
 			SetTitle("回归测试关联工单 " + number).
 			SetTicketNumber(number).
@@ -115,13 +119,7 @@ func createRegressionChange(t *testing.T, client *ent.Client, tenantID, actorID 
 			SetTenantID(tenantID).
 			Save(ctx)
 		require.NoError(t, err)
-		_, err = client.WorkItemRelation.Create().
-			SetTenantID(tenantID).
-			SetSourceWorkItemID(workItem.ID).
-			SetTargetWorkItemID(target.ID).
-			SetRelationType(changeTicketRelationType).
-			SetCreatedByID(actorID).
-			Save(ctx)
+		_, err = service.NewWorkItemRelationService(client, nil).Apply(ctx, service.RelationCommand{Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: actorID, ExpectedVersion: workItem.Version + i, OperationID: fmt.Sprintf("fixture-%d-%d", workItem.ID, i), Source: "http"}, SourceID: workItem.ID, TargetID: target.ID, Type: "related_to"}, false)
 		require.NoError(t, err)
 	}
 	return changeEntity
@@ -225,144 +223,84 @@ func TestChangeController_TransitionStatus_StartGuardByType(t *testing.T) {
 // 缺口。重复编号会先在 Prepare 里去重再计数，不会被误判为部分不可解析。
 func TestEntRepository_RelatedTickets_WorkItemRelationBehavior(t *testing.T) {
 	ctx := context.Background()
-	entClient := newChangeBPMNEntClient(t, "change_related_tickets_regression")
-	repo := newTestChangeRepository(entClient, openChangeBPMNRawDB(t, "change_related_tickets_regression"))
-	tenantID, actorID := setupChangeBPMNActor(t, entClient, "related-tickets")
-	ConfigureChangeIntakeFixture(ctx, entClient, tenantID, "agent")
-	authorization.InvalidateAllPermissionCaches()
-	t.Cleanup(authorization.InvalidateAllPermissionCaches)
-	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
-	app := NewChangeIntakeApp(entClient, svc, zaptest.NewLogger(t).Sugar())
-
-	// createRelatedTicket 建一条真实的普通工单，供 RelatedTickets 引用——迁移后只有真实
-	// 存在的编号才能被 resolveTicketNumbers 解析成功。
-	createRelatedTicket := func(t *testing.T, number string) {
-		t.Helper()
-		_, err := entClient.Ticket.Create().
-			SetTitle("关联工单 " + number).
-			SetTicketNumber(number).
-			SetRequesterID(actorID).
-			SetTenantID(tenantID).
-			Save(ctx)
-		require.NoError(t, err)
+	client := newChangeBPMNEntClient(t, "change_related_tickets_regression")
+	repo := newTestChangeRepository(client, openChangeBPMNRawDB(t, "change_related_tickets_regression"))
+	tenant, actor := setupChangeBPMNActor(t, client, "related-tickets")
+	ConfigureChangeIntakeFixture(ctx, client, tenant, "agent")
+	owner := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+	app := NewChangeIntakeApp(client, owner, zaptest.NewLogger(t).Sugar())
+	meta := workitemmutation.Meta{TenantID: tenant, ActorID: actor, Source: "http"}
+	base := &Change{Title: "related items", Description: "relation persistence", Type: "normal", Priority: "medium", ImpactScope: "low", RiskLevel: "low", Justification: "repair", ImplementationPlan: "deploy", RollbackPlan: "restore"}
+	target := func(number string) *ent.Ticket {
+		return client.Ticket.Create().SetTenantID(tenant).SetRequesterID(actor).SetTicketNumber(number).SetTitle(number).SaveX(ctx)
 	}
-
-	t.Run("round trips ticket numbers across create get update and list when tickets exist", func(t *testing.T) {
-		createRelatedTicket(t, "INC-RT-1001")
-		createRelatedTicket(t, "SR-RT-2002")
-
-		created, err := CreateChangeViaIntake(ctx, entClient, svc, app, tenantID, actorID, &Change{
-			Title:              "related tickets round trip",
-			Description:        "验证 WorkItemRelation 持久化",
-			Justification:      "需要锁定 related_tickets 行为",
-			Type:               "normal",
-			Priority:           "medium",
-			ImpactScope:        "low",
-			RiskLevel:          "medium",
-			ImplementationPlan: "先备份再实施",
-			RollbackPlan:       "失败立即回滚",
-			CreatedBy:          actorID,
-			TenantID:           tenantID,
-			RelatedTickets:     []string{"INC-RT-1001", "SR-RT-2002"},
-		})
+	source := func(item *ent.Ticket) creation.SourceRelationInput {
+		return creation.SourceRelationInput{SourceWorkItemID: item.ID, ExpectedVersion: item.Version, RelationType: "related_to"}
+	}
+	t.Run("create get explicit remove add and list", func(t *testing.T) {
+		first, second := target("INC-RT-1001"), target("SR-RT-2002")
+		created, err := CreateChangeViaIntake(ctx, client, owner, app, tenant, actor, base, source(first), source(second))
 		require.NoError(t, err)
-		assert.ElementsMatch(t, []string{"INC-RT-1001", "SR-RT-2002"}, created.RelatedTickets)
-
-		stored, err := repo.Get(ctx, created.ID, tenantID)
+		assert.ElementsMatch(t, []string{"INC-RT-1001", "SR-RT-2002"}, changeRelationNumbers(created))
+		stored, err := owner.GetChange(ctx, created.ID, meta)
 		require.NoError(t, err)
-		assert.ElementsMatch(t, []string{"INC-RT-1001", "SR-RT-2002"}, stored.RelatedTickets)
-
-		createRelatedTicket(t, "CHG-RT-3300")
-		createRelatedTicket(t, "REQ-RT-4400")
-		stored.RelatedTickets = []string{"INC-RT-1001", "CHG-RT-3300", "REQ-RT-4400"}
-		_, err = svc.ApplyMetadata(ctx, MetadataCommand{Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: actorID, ExpectedVersion: stored.Version, OperationID: "related-edit", Source: "http"}, ChangeID: stored.ID, Patch: dto.UpdateChangeRequest{RelatedTickets: stored.RelatedTickets}})
+		assert.ElementsMatch(t, []string{"INC-RT-1001", "SR-RT-2002"}, changeRelationNumbers(stored))
+		mutation := meta
+		mutation.ExpectedVersion = 2
+		mutation.OperationID = "remove-second"
+		_, err = service.NewWorkItemRelationService(client, nil).Apply(ctx, service.RelationCommand{Meta: mutation, SourceID: second.ID, TargetID: *created.WorkItemID, Type: "related_to"}, true)
 		require.NoError(t, err)
-		updated, err := repo.Get(ctx, stored.ID, tenantID)
+		third, fourth := target("CHG-RT-3300"), target("REQ-RT-4400")
+		for _, item := range []*ent.Ticket{third, fourth} {
+			mutation.ExpectedVersion = 1
+			mutation.OperationID = fmt.Sprintf("add-%d", item.ID)
+			_, err = service.NewWorkItemRelationService(client, nil).Apply(ctx, service.RelationCommand{Meta: mutation, SourceID: item.ID, TargetID: *created.WorkItemID, Type: "related_to"}, false)
+			require.NoError(t, err)
+		}
+		updated, err := owner.GetChange(ctx, created.ID, meta)
 		require.NoError(t, err)
-		assert.ElementsMatch(t, []string{"INC-RT-1001", "CHG-RT-3300", "REQ-RT-4400"}, updated.RelatedTickets,
-			"PUT 语义是完整期望列表的全量替换：SR-RT-2002 不在新列表里，应该被移除")
-
-		afterUpdate, err := repo.Get(ctx, created.ID, tenantID)
-		require.NoError(t, err)
-		assert.ElementsMatch(t, []string{"INC-RT-1001", "CHG-RT-3300", "REQ-RT-4400"}, afterUpdate.RelatedTickets)
-
-		list, total, err := repo.List(ctx, tenantID, 1, 10, "", "", "")
+		assert.ElementsMatch(t, []string{"INC-RT-1001", "CHG-RT-3300", "REQ-RT-4400"}, changeRelationNumbers(updated))
+		rows, total, err := owner.ListChanges(ctx, meta, 1, 10, "", "", "")
 		require.NoError(t, err)
 		require.Equal(t, 1, total)
-		require.Len(t, list, 1)
-		assert.ElementsMatch(t, []string{"INC-RT-1001", "CHG-RT-3300", "REQ-RT-4400"}, list[0].RelatedTickets)
+		require.Len(t, rows, 1)
+		assert.ElementsMatch(t, changeRelationNumbers(updated), changeRelationNumbers(rows[0]))
 	})
-
-	t.Run("empty slice remains readable as empty list", func(t *testing.T) {
-		created, err := CreateChangeViaIntake(ctx, entClient, svc, app, tenantID, actorID, &Change{
-			Title:              "related tickets empty boundary",
-			Description:        "验证空数组边界",
-			Justification:      "边界值检查",
-			Type:               "normal",
-			Priority:           "medium",
-			ImpactScope:        "low",
-			RiskLevel:          "medium",
-			ImplementationPlan: "实施计划",
-			RollbackPlan:       "回滚计划",
-			CreatedBy:          actorID,
-			TenantID:           tenantID,
-			RelatedTickets:     []string{},
-		})
+	t.Run("empty relations remain readable", func(t *testing.T) {
+		created, err := CreateChangeViaIntake(ctx, client, owner, app, tenant, actor, base)
 		require.NoError(t, err)
-
-		stored, err := repo.Get(ctx, created.ID, tenantID)
+		stored, err := owner.GetChange(ctx, created.ID, meta)
 		require.NoError(t, err)
-		assert.Empty(t, stored.RelatedTickets)
+		require.NotNil(t, stored.Relations)
+		assert.Empty(t, stored.Relations)
 	})
-
-	t.Run("deduplicates duplicate ticket numbers", func(t *testing.T) {
-		createRelatedTicket(t, "INC-RT-DUP-1001")
-		createRelatedTicket(t, "SR-RT-DUP-2002")
-
-		created, err := CreateChangeViaIntake(ctx, entClient, svc, app, tenantID, actorID, &Change{
-			Title:              "related tickets duplicate boundary",
-			Description:        "验证重复工单号边界",
-			Justification:      "重复输入应去重",
-			Type:               "normal",
-			Priority:           "medium",
-			ImpactScope:        "low",
-			RiskLevel:          "medium",
-			ImplementationPlan: "实施计划",
-			RollbackPlan:       "回滚计划",
-			CreatedBy:          actorID,
-			TenantID:           tenantID,
-			RelatedTickets:     []string{"INC-RT-DUP-1001", "INC-RT-DUP-1001", "SR-RT-DUP-2002"},
-		})
-		require.NoError(t, err)
-
-		stored, err := repo.Get(ctx, created.ID, tenantID)
-		require.NoError(t, err)
-		// creation.go 的 Prepare 在按去重后的集合数量比对解析结果之前，先对
-		// relatedTicketNumbers 去重，因此重复编号不会被误判成部分不可解析而 fail closed；
-		// 唯一索引 (tenant_id, source_work_item_id, target_work_item_id, relation_type)
-		// 也会兜底拒绝重复关系行。
-		assert.ElementsMatch(t, []string{"INC-RT-DUP-1001", "SR-RT-DUP-2002"}, stored.RelatedTickets)
+	t.Run("duplicate source rejects whole creation", func(t *testing.T) {
+		item := target("INC-RT-DUP-1001")
+		before := client.Change.Query().CountX(ctx)
+		_, err := CreateChangeViaIntake(ctx, client, owner, app, tenant, actor, base, source(item), source(item))
+		require.Error(t, err)
+		assert.Equal(t, before, client.Change.Query().CountX(ctx))
+		assert.Equal(t, 1, client.Ticket.GetX(ctx, item.ID).Version)
 	})
-
-	t.Run("unresolvable ticket numbers fail the whole creation closed", func(t *testing.T) {
-		createRelatedTicket(t, "INC-RT-REAL-9001")
-
-		_, err := CreateChangeViaIntake(ctx, entClient, svc, app, tenantID, actorID, &Change{
-			Title:              "related tickets unresolved boundary",
-			Description:        "验证无法解析的工单编号会拒绝整个创建",
-			Justification:      "fail closed：不能让一个不存在/跨租户的编号被静默丢弃",
-			Type:               "normal",
-			Priority:           "medium",
-			ImpactScope:        "low",
-			RiskLevel:          "medium",
-			ImplementationPlan: "实施计划",
-			RollbackPlan:       "回滚计划",
-			CreatedBy:          actorID,
-			TenantID:           tenantID,
-			RelatedTickets:     []string{"INC-RT-REAL-9001", "TKT-DOES-NOT-EXIST-0001"},
-		})
-		require.Error(t, err, "一个工单编号解析不到应该让整个 Change 创建失败（fail closed）")
+	t.Run("missing source rejects whole creation", func(t *testing.T) {
+		item := target("INC-RT-REAL-9001")
+		before := client.Change.Query().CountX(ctx)
+		_, err := CreateChangeViaIntake(ctx, client, owner, app, tenant, actor, base, source(item), creation.SourceRelationInput{SourceWorkItemID: 999999, ExpectedVersion: 1, RelationType: "related_to"})
+		require.Error(t, err)
+		assert.Equal(t, before, client.Change.Query().CountX(ctx))
+		assert.Equal(t, 1, client.Ticket.GetX(ctx, item.ID).Version)
 	})
+}
+func changeRelationNumbers(c *Change) []string {
+	numbers := []string{}
+	for _, v := range c.Relations {
+		if v.Source.WorkItemID == *c.WorkItemID {
+			numbers = append(numbers, v.Target.Number)
+		} else {
+			numbers = append(numbers, v.Source.Number)
+		}
+	}
+	return numbers
 }
 
 func TestChangeController_CreateChange_RequiredFieldValidation(t *testing.T) {
@@ -564,7 +502,7 @@ func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 	t.Run("tenant scoped status transitions cannot mutate another tenants change", func(t *testing.T) {
 		svc := NewService(repo, entClient, logger)
 
-		_, err := svc.GetChange(ctx, changeB.ID, tenantA)
+		_, err := svc.GetChange(ctx, changeB.ID, workitemmutation.Meta{TenantID: tenantA, ActorID: actorA})
 		require.Error(t, err)
 
 		_, err = svc.ApplyCommand(ctx, Command{Meta: workitemmutation.Meta{TenantID: tenantA, ActorID: actorA, ExpectedVersion: 1, OperationID: "foreign-cancel", Source: "http"}, ChangeID: changeB.ID, Action: "cancel", Evidence: "越权取消"})
@@ -573,7 +511,9 @@ func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 		stored, err := repo.Get(ctx, changeB.ID, tenantB)
 		require.NoError(t, err)
 		assert.Equal(t, "draft", stored.Status)
-		assert.Equal(t, []string{"INC-B"}, stored.RelatedTickets)
+		projected, projectionErr := svc.GetChange(ctx, changeB.ID, workitemmutation.Meta{TenantID: tenantB, ActorID: actorB})
+		require.NoError(t, projectionErr)
+		assert.Equal(t, []string{"INC-B"}, changeRelationNumbers(projected))
 	})
 
 	t.Run("tenant scoped delete must fail closed", func(t *testing.T) {
@@ -608,7 +548,7 @@ func TestChangeWorkItemAndRelations_TenantIsolation(t *testing.T) {
 
 	// 租户 B 有一张真实工单，编号跟租户 A 后面要在 relatedTickets 里引用的字符串相同。
 	ticketNumber := "INC-CROSS-TENANT-0001"
-	_, err := entClient.Ticket.Create().
+	foreign, err := entClient.Ticket.Create().
 		SetTitle("租户B的工单").SetTicketNumber(ticketNumber).
 		SetRequesterID(actorB).SetTenantID(tenantB).
 		Save(ctx)
@@ -622,15 +562,14 @@ func TestChangeWorkItemAndRelations_TenantIsolation(t *testing.T) {
 	appA := NewChangeIntakeApp(entClient, svcA, logger)
 	_, err = CreateChangeViaIntake(ctx, entClient, svcA, appA, tenantA, actorA, &Change{
 		Justification: "Repair configuration associated with the referenced incident", ImplementationPlan: "Apply reviewed configuration and verify service", RollbackPlan: "Restore saved configuration",
-		Title:          "租户A引用了租户B工单编号的变更",
-		Type:           "normal",
-		Priority:       "medium",
-		ImpactScope:    "low",
-		RiskLevel:      "medium",
-		CreatedBy:      actorA,
-		TenantID:       tenantA,
-		RelatedTickets: []string{ticketNumber},
-	})
+		Title:       "租户A引用了租户B工单编号的变更",
+		Type:        "normal",
+		Priority:    "medium",
+		ImpactScope: "low",
+		RiskLevel:   "medium",
+		CreatedBy:   actorA,
+		TenantID:    tenantA,
+	}, creation.SourceRelationInput{SourceWorkItemID: foreign.ID, ExpectedVersion: foreign.Version, RelationType: "related_to"})
 	require.Error(t, err, "跨租户的工单编号必须解析失败并拒绝整个创建（fail closed），不能建立跨租户关联")
 	_, total, listErr := repo.List(ctx, tenantA, 1, 10, "", "", "")
 	require.NoError(t, listErr)
@@ -638,29 +577,28 @@ func TestChangeWorkItemAndRelations_TenantIsolation(t *testing.T) {
 
 	// 租户 A 自己名下的同编号工单则应该能正常关联——证明上面的拒绝是因为跨租户过滤，
 	// 不是因为查询逻辑整体坏掉了。
-	_, err = entClient.Ticket.Create().
+	local, err := entClient.Ticket.Create().
 		SetTitle("租户A的工单").SetTicketNumber(ticketNumber + "-A").
 		SetRequesterID(actorA).SetTenantID(tenantA).
 		Save(ctx)
 	require.NoError(t, err)
 	createdA2, err := CreateChangeViaIntake(ctx, entClient, svcA, appA, tenantA, actorA, &Change{
 		Justification: "Repair configuration associated with the referenced incident", ImplementationPlan: "Apply reviewed configuration and verify service", RollbackPlan: "Restore saved configuration",
-		Title:          "租户A引用了自己工单编号的变更",
-		Type:           "normal",
-		Priority:       "medium",
-		ImpactScope:    "low",
-		RiskLevel:      "medium",
-		CreatedBy:      actorA,
-		TenantID:       tenantA,
-		RelatedTickets: []string{ticketNumber + "-A"},
-	})
+		Title:       "租户A引用了自己工单编号的变更",
+		Type:        "normal",
+		Priority:    "medium",
+		ImpactScope: "low",
+		RiskLevel:   "medium",
+		CreatedBy:   actorA,
+		TenantID:    tenantA,
+	}, creation.SourceRelationInput{SourceWorkItemID: local.ID, ExpectedVersion: local.Version, RelationType: "related_to"})
 	require.NoError(t, err)
-	assert.Equal(t, []string{ticketNumber + "-A"}, createdA2.RelatedTickets)
+	assert.Equal(t, []string{ticketNumber + "-A"}, changeRelationNumbers(createdA2))
 
 	// businessKey/审批查询的租户隔离：租户 B 不能通过传入自己的 tenantID 读取或推进
 	// 租户 A 的变更审批流程，即使拿到了正确的 changeID。
 	svcB := NewService(repo, entClient, logger)
-	_, err = svcB.GetChange(ctx, createdA2.ID, tenantB)
+	_, err = svcB.GetChange(ctx, createdA2.ID, workitemmutation.Meta{TenantID: tenantB, ActorID: actorB})
 	require.Error(t, err, "租户 B 不能读取租户 A 的变更")
 
 	_, err = svcB.ApplyCommand(ctx, Command{Meta: workitemmutation.Meta{TenantID: tenantB, ActorID: actorB, ExpectedVersion: 1, OperationID: "foreign-cancel", Source: "http"}, ChangeID: createdA2.ID, Action: "cancel", Evidence: "越权取消"})

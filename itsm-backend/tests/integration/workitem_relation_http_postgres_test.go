@@ -13,6 +13,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	relationmeta "itsm-backend/common/workitemrelation"
+	"itsm-backend/controller"
 	"itsm-backend/ent/problem"
 	"itsm-backend/ent/rolepermission"
 	problemDomain "itsm-backend/handlers/problem"
@@ -25,7 +27,7 @@ func problemRelationHTTP(t *testing.T) (*relationFixture, *gin.Engine, string) {
 	f := newRelationFixture(t)
 	_, err := f.db.ExecContext(f.ctx, fmt.Sprintf("GRANT SELECT ON problems,ticket_categories TO %q", f.runtimeRole))
 	require.NoError(t, err)
-	p := f.client.Problem.Query().Where(problem.WorkItemID(f.problem.ID)).OnlyX(f.ctx)
+	_ = f.client.Problem.Query().Where(problem.WorkItemID(f.problem.ID)).OnlyX(f.ctx)
 	s := problemDomain.NewService(problemDomain.NewEntRepository(f.runtime.Tenant), zap.NewNop().Sugar())
 	s.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())
 	h := problemDomain.NewHandler(s, f.runtime.Tenant)
@@ -35,14 +37,18 @@ func problemRelationHTTP(t *testing.T) (*relationFixture, *gin.Engine, string) {
 		c.Set("tenant_id", f.tenant.ID)
 		c.Set("user_id", f.actor.ID)
 		c.Set("role", "super_admin")
+		c.Set("client", f.runtime.Tenant)
 		c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: f.tenant.ID})
 		c.Request = c.Request.WithContext(f.ctx)
 		c.Next()
 	})
-	r.POST("/api/v1/problems/:id/associations", h.AddAssociation)
-	r.DELETE("/api/v1/problems/:id/associations", h.RemoveAssociation)
+	shared := controller.NewWorkItemRelationController(f.owner)
+	r.POST("/api/v1/work-items/:id/relations", middleware.RequireWorkItemRecordClassPermission("update"), shared.Add)
+	r.DELETE("/api/v1/work-items/:id/relations", middleware.RequireWorkItemRecordClassPermission("update"), shared.Remove)
+	r.GET("/api/v1/work-items/:id/relations", middleware.RequireWorkItemRecordClassPermission("read"), shared.List)
+	r.GET("/api/v1/problems/:id", h.Get)
 	r.DELETE("/api/v1/problems/:id", h.Delete)
-	return f, r, fmt.Sprintf("/api/v1/problems/%d/associations", p.ID)
+	return f, r, fmt.Sprintf("/api/v1/work-items/%d/relations", f.inc.WorkItemID)
 }
 
 func relationHTTP(r http.Handler, method, path, body string) *httptest.ResponseRecorder {
@@ -95,7 +101,7 @@ func TestProblemRelationHTTPCommandsAndCurrentAuthority(t *testing.T) {
 	require.Equal(t, 200, w.Code, w.Body.String())
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
 	require.True(t, result.Data.Replayed)
-	w = relationHTTP(r, "DELETE", strings.TrimSuffix(path, "/associations"), "")
+	w = relationHTTP(r, "DELETE", fmt.Sprintf("/api/v1/problems/%d", f.client.Problem.Query().Where(problem.WorkItemID(f.problem.ID)).OnlyX(f.ctx).ID), "")
 	require.Equal(t, 409, w.Code, w.Body.String())
 	w = relationHTTP(r, "POST", path, strings.Replace(body, `"expectedVersion":1`, `"expectedVersion":2`, 1))
 	require.Equal(t, 409, w.Code, w.Body.String())
@@ -142,6 +148,7 @@ func TestProblemRelationHTTPCommandsAndCurrentAuthority(t *testing.T) {
 
 func TestProblemRelationHTTPRequiredChangeMetadataAndTenant(t *testing.T) {
 	f, r, path := problemRelationHTTP(t)
+	path = fmt.Sprintf("/api/v1/work-items/%d/relations", f.problem.ID)
 	item, _ := deletionOwner(t, f, "change")
 	body := fmt.Sprintf(`{"sourceWorkItemId":%d,"targetWorkItemId":%d,"relationType":"resolved_by_change","expectedVersion":1,"operationId":"required-change","metadata":{"required":true}}`, f.problem.ID, item.ID)
 	w := relationHTTP(r, "POST", path, body)
@@ -155,4 +162,49 @@ func TestProblemRelationHTTPRequiredChangeMetadataAndTenant(t *testing.T) {
 	w = relationHTTP(r, "POST", path, body)
 	require.Equal(t, 404, w.Code, w.Body.String())
 	require.Equal(t, 2, f.client.Ticket.GetX(f.ctx, f.problem.ID).Version)
+}
+
+func TestProblemRelationReadRequiresCurrentActor(t *testing.T) {
+	f, r, _ := problemRelationHTTP(t)
+	id := f.client.Problem.Query().Where(problem.WorkItemID(f.problem.ID)).OnlyX(f.ctx).ID
+	f.actor.ID = 0
+	w := relationHTTP(r, "GET", fmt.Sprintf("/api/v1/problems/%d", id), "")
+	require.Equal(t, 401, w.Code, w.Body.String())
+}
+
+func TestWorkItemRelationHTTPExistingIncidentChangeAndRelatedTo(t *testing.T) {
+	for _, kind := range []string{"resolved_by_change", "related_to"} {
+		t.Run(kind, func(t *testing.T) {
+			f, r, path := problemRelationHTTP(t)
+			target, _ := deletionOwner(t, f, "change")
+			body := fmt.Sprintf(`{"sourceWorkItemId":%d,"targetWorkItemId":%d,"relationType":"%s","expectedVersion":1,"operationId":"existing-target","metadata":{"required":%t}}`, f.inc.WorkItemID, target.ID, kind, kind == "resolved_by_change")
+			w := relationHTTP(r, "POST", fmt.Sprintf("/api/v1/work-items/%d/relations", target.ID), body)
+			require.Equal(t, 400, w.Code, w.Body.String())
+			w = relationHTTP(r, "POST", path, body)
+			require.Equal(t, 200, w.Code, w.Body.String())
+			w = relationHTTP(r, "GET", path, "")
+			require.Equal(t, 200, w.Code, w.Body.String())
+			var response struct {
+				Data []relationmeta.View `json:"data"`
+			}
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+			require.Len(t, response.Data, 1)
+			require.Equal(t, kind, response.Data[0].Type)
+			require.Equal(t, f.inc.WorkItemID, response.Data[0].Source.WorkItemID)
+			require.Equal(t, target.ID, response.Data[0].Target.WorkItemID)
+			require.NotEmpty(t, response.Data[0].Source.Number)
+			require.Equal(t, 2, response.Data[0].Source.Version)
+			remove := strings.Replace(strings.Replace(body, `"expectedVersion":1`, `"expectedVersion":2`, 1), "existing-target", "remove-target", 1)
+			w = relationHTTP(r, "DELETE", path, remove)
+			require.Equal(t, 200, w.Code, w.Body.String())
+			w = relationHTTP(r, "GET", path, "")
+			require.Equal(t, 200, w.Code, w.Body.String())
+			require.Contains(t, w.Body.String(), `"data":[]`)
+			require.Equal(t, 3, f.client.Ticket.GetX(f.ctx, f.inc.WorkItemID).Version)
+			require.Equal(t, 1, f.client.Ticket.GetX(f.ctx, target.ID).Version)
+			// Removed professional alias is deliberately unavailable.
+			w = relationHTTP(r, "POST", "/api/v1/problems/1/associations", body)
+			require.Equal(t, 404, w.Code)
+		})
+	}
 }

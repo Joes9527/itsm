@@ -1,11 +1,13 @@
 package problem
 
 import (
+	relationmeta "itsm-backend/common/workitemrelation"
 	"time"
 )
 
 // Problem domain entity
 type Problem struct {
+	Number           string
 	Version          int
 	VerifiedVersion  int
 	VerificationNote string
@@ -31,19 +33,7 @@ type Problem struct {
 	// Problem 创建时必须在同一事务内建好对应的 tickets 行并回填这个字段；nil 表示
 	// 开发数据违反 WorkItem 创建不变量，调用方必须 fail closed。
 	WorkItemID *int
-	// 关联数据 (eager-loaded)
-	Tickets   []*AssociatedItem
-	Incidents []*AssociatedItem
-	Changes   []*AssociatedItem
-}
-
-// AssociatedItem 关联项
-type AssociatedItem struct {
-	ID     int
-	Title  string
-	Status string
-	Number string
-	Type   string
+	Relations  []relationmeta.View
 }
 
 // ProblemStats domain entity
