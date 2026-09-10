@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -71,16 +72,25 @@ func (h *ProblemResolvedDeliveryHandler) Deliver(ctx context.Context, event *ent
 		return blockOutboxDelivery("problem resolved work item is unavailable")
 	}
 
-	var firstErr error
+	// A blocked target must not mask a retryable one, and a retry must not duplicate
+	// the Incidents that were already notified.
+	var blockedErr, retryableErr error
 	for _, source := range sources {
-		if err := h.notifyIncidentHandler(ctx, event, facts, source.SourceWorkItemID, problemItem, scope); err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-			h.logger.Warnw("problem resolution notification failed", "incident_work_item_id", source.SourceWorkItemID, "error_summary", err.Error())
+		err := h.notifyIncidentHandler(ctx, event, facts, source.SourceWorkItemID, problemItem, scope)
+		if err == nil {
+			continue
 		}
+		var blocked *outboxDeliveryBlockedError
+		if errors.As(err, &blocked) {
+			if blockedErr == nil {
+				blockedErr = err
+			}
+		} else if retryableErr == nil {
+			retryableErr = err
+		}
+		h.logger.Warnw("problem resolution notification failed", "incident_work_item_id", source.SourceWorkItemID, "error_summary", err.Error())
 	}
-	return firstErr
+	return preferRetryableError(blockedErr, retryableErr)
 }
 
 func (h *ProblemResolvedDeliveryHandler) notifyIncidentHandler(ctx context.Context, event *ent.OutboxEvent, facts ProblemResolvedFacts, incidentID int, problemItem *ent.Ticket, scope predicate.Ticket) error {

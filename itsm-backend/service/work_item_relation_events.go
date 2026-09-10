@@ -164,3 +164,13 @@ func EmitProblemResolvedEventTx(ctx context.Context, tx *ent.Tx, facts ProblemRe
 	}
 	return nil
 }
+
+// preferRetryableError returns a retryable error in preference to a blocked outcome.
+// The worker treats a blocked return as terminal, so a fan-out that reports a blocked
+// target first would permanently drop every other target that failed transiently.
+func preferRetryableError(blocked, retryable error) error {
+	if retryable != nil {
+		return retryable
+	}
+	return blocked
+}

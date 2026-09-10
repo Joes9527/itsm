@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -78,17 +79,25 @@ func (h *ChangeOutcomeDeliveryHandler) Deliver(ctx context.Context, event *ent.O
 	}
 
 	// Each source is an independent target: a failure on one must not silently drop
-	// the others, and a retry must not duplicate the ones that already succeeded.
-	var firstErr error
+	// the others, a retry must not duplicate the ones that already succeeded, and a
+	// terminally blocked target must not mask a retryable one.
+	var blockedErr, retryableErr error
 	for _, source := range sources {
-		if err := h.promptSource(ctx, event, facts, source.SourceWorkItemID, changeItem, scope); err != nil {
-			if firstErr == nil {
-				firstErr = err
-			}
-			h.logger.Warnw("change outcome verification prompt failed", "source_work_item_id", source.SourceWorkItemID, "error_summary", err.Error())
+		err := h.promptSource(ctx, event, facts, source.SourceWorkItemID, changeItem, scope)
+		if err == nil {
+			continue
 		}
+		var blocked *outboxDeliveryBlockedError
+		if errors.As(err, &blocked) {
+			if blockedErr == nil {
+				blockedErr = err
+			}
+		} else if retryableErr == nil {
+			retryableErr = err
+		}
+		h.logger.Warnw("change outcome verification prompt failed", "source_work_item_id", source.SourceWorkItemID, "error_summary", err.Error())
 	}
-	return firstErr
+	return preferRetryableError(blockedErr, retryableErr)
 }
 
 // promptSource asks one resolved_by_change source to verify the successful repair.

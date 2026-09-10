@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"testing"
@@ -91,7 +92,7 @@ func linkRequiredFix(t *testing.T, f *changeLifecycleFixture) (*ent.Ticket, *ent
 // resolved_by_change for, through the existing notification pipeline.
 func TestWorkItemChangeOutcomeConsumerRequestsProblemVerification(t *testing.T) {
 	f := newChangeLifecycleFixture(t, "normal")
-	problemItem, assignee := linkRequiredFix(t, f)
+	_, assignee := linkRequiredFix(t, f)
 	f.authorize(t)
 	finish := f.command("record_outcome", "b2-verify")
 	finish.Outcome = "successful"
@@ -107,10 +108,25 @@ func TestWorkItemChangeOutcomeConsumerRequestsProblemVerification(t *testing.T) 
 	require.Equal(t, service.ChangeOutcomeEventType, rows[0].Type)
 	require.NotNil(t, rows[0].DeliveryKey)
 
-	// Re-dispatch must not duplicate the prompt.
+	// A genuine re-delivery of the same durable event must not duplicate the prompt.
+	// The event is returned to pending first: claiming only selects pending rows, so
+	// dispatching a published event again would assert nothing.
+	reopenOutboxEvent(t, f.client, f.ctx, f.client.OutboxEvent.Query().Where(outboxevent.EventType(service.ChangeOutcomeEventType)).OnlyX(f.ctx).ID)
 	require.NoError(t, worker.DispatchOnce(f.ctx))
 	require.Len(t, f.client.Notification.Query().Where(notification.TenantID(f.tenant.ID), notification.UserID(assignee.ID)).AllX(f.ctx), 1)
-	require.Equal(t, problemItem.ID, problemItem.ID)
+}
+
+// reopenOutboxEvent returns a delivered event to the claimable pending state, which
+// is what a claim-expiry recovery produces, so a repeated DispatchOnce exercises the
+// consumer's idempotency instead of silently doing nothing.
+func reopenOutboxEvent(t *testing.T, client *ent.Client, ctx context.Context, eventID int) {
+	t.Helper()
+	client.OutboxEvent.UpdateOneID(eventID).
+		SetStatus("pending").
+		ClearClaimToken().
+		ClearClaimExpiresAt().
+		SetNextAttemptAt(time.Now().Add(-time.Minute)).
+		ExecX(ctx)
 }
 
 // A non-successful outcome is a declared "no verification required" case: it must
@@ -245,9 +261,10 @@ func TestWorkItemProblemResolvedNotifiesIncidentHandler(t *testing.T) {
 	require.Len(t, rows, 1, "the investigating incident handler must be notified once")
 	require.Equal(t, service.ProblemResolvedEventType, rows[0].Type)
 
+	reopenOutboxEvent(t, f.client, f.ctx, events[0].ID)
 	require.NoError(t, worker.DispatchOnce(f.ctx))
 	require.Len(t, f.client.Notification.Query().Where(notification.TenantID(f.tenant.ID), notification.UserID(handler.ID)).AllX(f.ctx), 1,
-		"repeated delivery must not duplicate the notification")
+		"a genuine re-delivery must not duplicate the notification")
 
 	require.Equal(t, "in_progress", f.client.Ticket.GetX(f.ctx, incidentItem.ID).Status,
 		"resolving the problem must not close the investigating incident")

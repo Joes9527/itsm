@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 )
@@ -43,5 +44,23 @@ func TestRelationAndOutcomeEventTypesAreRegistered(t *testing.T) {
 		if _, replaySafe := registry.Handler(eventType).(ReplaySafeOutboxDeliveryHandler); !replaySafe {
 			t.Fatalf("event type %s must declare durable replay safety", eventType)
 		}
+	}
+}
+
+// A fan-out that reports a terminally blocked target must still surface a retryable
+// target failure, because the worker treats a blocked return as terminal and would
+// otherwise never retry the target that could still succeed.
+func TestFanOutPrefersRetryableErrorOverBlocked(t *testing.T) {
+	blocked := blockOutboxDelivery("counterpart has no eligible recipient")
+	retryable := errors.New("notification transport unavailable")
+
+	if got := preferRetryableError(blocked, retryable); got != retryable {
+		t.Fatalf("retryable target failure must win over a blocked one, got %v", got)
+	}
+	if got := preferRetryableError(blocked, nil); got != blocked {
+		t.Fatalf("a blocked outcome must be reported when nothing is retryable, got %v", got)
+	}
+	if got := preferRetryableError(nil, nil); got != nil {
+		t.Fatalf("no target failure must stay nil, got %v", got)
 	}
 }

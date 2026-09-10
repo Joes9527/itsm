@@ -163,10 +163,12 @@ func TestWorkItemRelationEventsConsumerDeliversOnce(t *testing.T) {
 	require.Equal(t, event.EventID+":"+strconv.Itoa(f.problem.ID)+":created", *rows[0].DeliveryKey)
 	require.Equal(t, service.RelationCreatedEventType, rows[0].Type)
 
-	// Re-dispatch the same durable event: the DeliveryKey makes it idempotent.
+	// A genuine re-delivery of the same durable event must stay idempotent. The event
+	// is returned to pending first, because claiming only selects pending rows.
+	reopenOutboxEvent(t, f.client, f.ctx, event.ID)
 	require.NoError(t, worker.DispatchOnce(f.ctx))
 	require.Len(t, f.client.Notification.Query().Where(notification.TenantID(f.tenant.ID), notification.UserID(assignee.ID)).AllX(f.ctx), 1,
-		"repeated delivery must not duplicate the notification")
+		"a genuine re-delivery must not duplicate the notification")
 }
 
 // A payload that no longer matches the durable event is blocked, not delivered.
