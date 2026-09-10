@@ -178,6 +178,21 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, d
 			return empty, common.NewValidationError(err.Error(), err)
 		}
 	}
+	// A problem may only be resolved once every dependency explicitly marked as a
+	// required fix has an authoritative successful Change outcome. Optional
+	// associations never block, and a dependency whose outcome is unreadable fails
+	// closed rather than counting as satisfied.
+	if cmd.Action == "resolve" {
+		dependencies, err := service.NewWorkItemRelationService(s.client, s.directory).RequiredFixDependenciesTx(ctx, tx, m, item.ID)
+		if err != nil {
+			return empty, err
+		}
+		for _, dependency := range dependencies {
+			if !service.RequiresProblemVerification(dependency.Outcome) {
+				return empty, common.NewValidationError("required fix dependency has no successful change outcome", nil)
+			}
+		}
+	}
 	now := time.Now().UTC()
 	update := tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantID(m.TenantID), ticket.DeletedAtIsNil(), ticket.Version(m.ExpectedVersion)).SetVersion(m.ExpectedVersion + 1).SetUpdatedAt(now).SetStatus(target)
 	if cmd.Action == "resolve" {

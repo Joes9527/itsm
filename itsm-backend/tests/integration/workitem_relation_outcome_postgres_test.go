@@ -135,3 +135,65 @@ func TestWorkItemChangeOutcomeConsumerRecordsDeclaredSkip(t *testing.T) {
 	require.Len(t, decisions, 1, "the declared skip must be observable as an audit record")
 	require.Equal(t, fmt.Sprint(f.c.WorkItemID), decisions[0].Path)
 }
+
+// linkFixDependency attaches a resolved_by_change dependency from the fixture's
+// Problem WorkItem to a Change WorkItem whose authoritative outcome is `outcome`.
+func linkFixDependency(f *changeOutcomeDriver, t *testing.T, outcome string, required bool) *ent.Change {
+	t.Helper()
+	changeItem := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(f.actor.ID).SetOpenedByID(f.actor.ID).
+		SetTitle("fix dependency").SetTicketNumber("CHG-DEP").SetRecordClass("change_request").
+		SetStatus("in_progress").SetPriority("high").SaveX(f.ctx)
+	changeRecord := f.client.Change.Create().SetWorkItemID(changeItem.ID).SetOutcome(outcome).SaveX(f.ctx)
+	f.client.WorkItemRelation.Create().SetTenantID(f.tenant.ID).SetSourceWorkItemID(f.problemWorkItemID).
+		SetTargetWorkItemID(changeItem.ID).SetRelationType("resolved_by_change").SetCreatedByID(f.actor.ID).
+		SetMetadata(relationmeta.Metadata{Required: required}).SaveX(f.ctx)
+	return changeRecord
+}
+
+// changeOutcomeDriver adapts the problem lifecycle fixture for the outcome tests.
+type changeOutcomeDriver struct {
+	*problemLifecycleFixture
+	problemWorkItemID int
+}
+
+func newChangeOutcomeDriver(t *testing.T) *changeOutcomeDriver {
+	t.Helper()
+	f := newProblemLifecycleFixture(t)
+	return &changeOutcomeDriver{problemLifecycleFixture: f, problemWorkItemID: f.p.WorkItemID}
+}
+
+func (f *changeOutcomeDriver) readyToResolve(t *testing.T) {
+	t.Helper()
+	f.apply(t, "investigate", "investigate")
+	f.evidence(t)
+	f.apply(t, "verify_resolution", "verify")
+}
+
+// B2 step 4 (slice B): Problem resolve must be blocked while a REQUIRED
+// resolved_by_change dependency has no successful authoritative Change outcome, and
+// the block must lift only when the owning change domain reports success.
+func TestWorkItemProblemResolveRequiresSuccessfulFixDependency(t *testing.T) {
+	f := newChangeOutcomeDriver(t)
+	changeRecord := linkFixDependency(f, t, "failed", true)
+	f.readyToResolve(t)
+
+	_, err := f.owner.ApplyCommand(f.ctx, f.command("resolve", "blocked"))
+	require.ErrorContains(t, err, "required fix dependency")
+	require.Equal(t, "investigating", f.client.Ticket.GetX(f.ctx, f.p.WorkItemID).Status,
+		"a blocked resolve must not advance the problem")
+
+	changeRecord.Update().SetOutcome("successful").ExecX(f.ctx)
+	result := f.apply(t, "resolve", "allowed")
+	require.Equal(t, "resolved", result.Status)
+}
+
+// An optional (non-required) resolved_by_change dependency must never block resolve:
+// only dependencies explicitly marked as required fix dependencies do.
+func TestWorkItemProblemResolveIgnoresOptionalFixDependency(t *testing.T) {
+	f := newChangeOutcomeDriver(t)
+	linkFixDependency(f, t, "failed", false)
+	f.readyToResolve(t)
+
+	result := f.apply(t, "resolve", "optional-ok")
+	require.Equal(t, "resolved", result.Status)
+}

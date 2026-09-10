@@ -44,7 +44,7 @@ func TestWorkItemProblemLifecycleAllocatedMSP(t *testing.T) {
 			t.Cleanup(authorization.InvalidateAllPermissionCaches)
 			nativeInvestigator := f.actor
 			clients, cfg := runtimeClients(t, f.incidentEffectsFixture)
-			for _, table := range []string{"problems", "problem_investigations"} {
+			for _, table := range []string{"problems", "problem_investigations", "work_item_relations"} {
 				_, err := f.db.ExecContext(f.ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON "+table+" TO "+cfg.User)
 				require.NoError(t, err)
 				_, err = f.db.ExecContext(f.ctx, "GRANT USAGE ON SEQUENCE "+table+"_id_seq TO "+cfg.User)
