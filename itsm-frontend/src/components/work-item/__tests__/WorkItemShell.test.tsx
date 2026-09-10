@@ -21,7 +21,7 @@ jest.mock('@/lib/store/auth-store', () => ({
   useAuthStore: () => ({ user: { id: 1 } }),
 }));
 
-// Mock the API modules backing the newly-wired TicketHistoryList/TicketRelationCards
+// Mock the API modules backing the TicketHistoryList and shared WorkItemRelations
 // (Task 4) so their real network calls don't fire during render.
 jest.mock('@/lib/api/ticket-api', () => ({
   TicketApi: {
@@ -29,10 +29,8 @@ jest.mock('@/lib/api/ticket-api', () => ({
   },
 }));
 
-jest.mock('@/lib/api/ticket-relations-api', () => ({
-  TicketRelationsApi: {
-    getTicketRelations: jest.fn().mockResolvedValue([]),
-  },
+jest.mock('../WorkItemRelations', () => ({
+  WorkItemRelations: ({ workItemId }: { workItemId: number }) => <div data-testid="shared-relations" data-work-item-id={workItemId} />,
 }));
 
 // Defensive mocks: CommentPanel/AttachmentPanel are already mocked above (whole
@@ -105,6 +103,7 @@ describe('WorkItemShell', () => {
     );
     expect(screen.getByText(/INC-202608-000001/)).toBeInTheDocument();
     expect(screen.getByTestId('probe')).toHaveTextContent('测试事件');
+    expect(screen.getByTestId('shared-relations')).toHaveAttribute('data-work-item-id', '1');
   });
 
   // 锁定契约：Shell 收下的 actions 必须原样进入 context。Wave 2 的专业 Panel 靠它渲染

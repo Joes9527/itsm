@@ -1,4 +1,5 @@
 'use client';
+import { CreationSourceRelations, type CreationSourceRelationsHandle } from '@/components/work-item/CreationSourceRelations';
 
 import { professionalCreationPath } from '@/lib/api/work-item-creation';
 
@@ -8,7 +9,7 @@ import { CreationAttempts } from '@/components/work-item/CreationAttempts';
 import { CreationRequester } from '@/components/work-item/CreationRequester';
 
 
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   Table,
   Button,
@@ -67,6 +68,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 export default function StandardChangesPage() {
   const router = useRouter();
   const creation = useWorkItemCreation();
+  const sourceRelationsRef = useRef<CreationSourceRelationsHandle>(null);
   const { t } = useI18n();
   const [loading, setLoading] = useState(false);
   const [templates, setTemplates] = useState<StandardChange[]>([]);
@@ -170,6 +172,7 @@ export default function StandardChangesPage() {
     if (!selectedTemplate) return;
     try {
       const values = await instantiateForm.validateFields();
+      sourceRelationsRef.current?.validate();
       await creation.submit({ templateId: selectedTemplate.id, values },
         (snapshot, options) => StandardChangeApi.instantiate(snapshot.templateId, snapshot.values, options),
         receipt => { router.push(professionalCreationPath(receipt, 'change')); setInstantiateModalVisible(false); });
@@ -304,7 +307,7 @@ export default function StandardChangesPage() {
 
   return (
     <div className='p-6 bg-gray-50 min-h-full'>
-      <CreationAttempts creation={creation} />
+      <CreationAttempts creation={creation} beforeNewConfirmation={() => sourceRelationsRef.current?.refresh() ?? Promise.resolve(true)} />
       <div className='mb-6'>
         <div className='flex items-center justify-between mb-4'>
           <div>
@@ -522,6 +525,7 @@ export default function StandardChangesPage() {
 
             <Form form={instantiateForm} layout='vertical'>
               <CreationRequester resource="change" />
+              <Form.Item name="sourceRelations" label="创建关联变更（可选）"><CreationSourceRelations ref={sourceRelationsRef} /></Form.Item>
               <Form.Item name='title' label='变更标题' initialValue={selectedTemplate.title}>
                 <Input />
               </Form.Item>

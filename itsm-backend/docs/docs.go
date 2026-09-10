@@ -15,6 +15,47 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/v1/work-items/{id}/relation-context": {
+            "get": {
+                "description": "Read-only current-actor source context; target authorization and relation validity are checked on mutation.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "work-items"
+                ],
+                "summary": "Get WorkItem relation context",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Source WorkItem ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/common.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/service.RelationContext"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/api/knowledge/search": {
             "post": {
                 "description": "基于关键词搜索知识库文章",
@@ -11821,6 +11862,28 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "service.RelationContext": {
+            "type": "object",
+            "properties": {
+                "mutation": {
+                    "$ref": "#/definitions/service.RelationMutationAvailability"
+                },
+                "source": {
+                    "$ref": "#/definitions/relationmetadata.Endpoint"
+                }
+            }
+        },
+        "service.RelationMutationAvailability": {
+            "type": "object",
+            "properties": {
+                "allowed": {
+                    "type": "boolean"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
         "change.MetadataRequest": {
             "type": "object",
             "required": [

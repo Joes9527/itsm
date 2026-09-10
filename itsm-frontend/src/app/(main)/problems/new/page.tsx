@@ -7,10 +7,10 @@ import { useWorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
 import { CreationAttempts } from '@/components/work-item/CreationAttempts';
 import { CreationRequester } from '@/components/work-item/CreationRequester';
 
-import React, { useState, useEffect, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import React, { useState, Suspense } from 'react';
+import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
-import { Form, Input, Select, Button, Card, message, Alert, Spin } from 'antd';
+import { Form, Input, Select, Button, Card, message, Spin } from 'antd';
 import { ProblemApi } from '@/lib/api/problem-api';
 import { ProblemPriority } from '@/constants/problem';
 import { useI18n } from '@/lib/i18n';
@@ -21,24 +21,9 @@ const CreateProblemPageContent = () => {
   const router = useRouter();
   const creation = useWorkItemCreation();
   const { t } = useI18n();
-  const searchParams = useSearchParams();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const incidentId = searchParams.get('fromIncidentId');
-    const incidentTitle = searchParams.get('incidentTitle');
-    const incidentDescription = searchParams.get('incidentDescription');
-
-    if (incidentId) {
-      form.setFieldsValue({
-        title: `由事件 ${incidentId} 引起的问题: ${incidentTitle || ''}`,
-        description: `此问题由以下事件引发：\n事件ID: ${incidentId}\n事件标题: ${
-          incidentTitle || ''
-        }\n事件描述: ${incidentDescription || ''}\n\n请在此处填写问题的详细描述和根本原因分析...`,
-      });
-    }
-  }, [searchParams, form]);
 
   const handleSubmit = async (values: any) => {
     setLoading(true);
@@ -94,14 +79,7 @@ const CreateProblemPageContent = () => {
           }}
         >
           <CreationRequester resource="problem" />
-          {searchParams.get('fromIncidentId') && (
-            <Alert
-              message={`此问题由事件 ${searchParams.get('fromIncidentId')} 触发`}
-              type="info"
-              showIcon
-              className="mb-6"
-            />
-          )}
+
 
           <Form.Item
             label="问题标题"

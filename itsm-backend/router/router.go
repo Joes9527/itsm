@@ -509,6 +509,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 		}
 
 		if config.WorkItemRelationController != nil {
+			tenant.GET("/work-items/:id/relation-context", middleware.RequireWorkItemRecordClassPermission("read"), config.WorkItemRelationController.Context)
 			relations := tenant.(*gin.RouterGroup).Group("/work-items/:id/relations")
 			relations.GET("", middleware.RequireWorkItemRecordClassPermission("read"), config.WorkItemRelationController.List)
 			relations.POST("", middleware.RequireWorkItemRecordClassPermission("update"), config.WorkItemRelationController.Add)

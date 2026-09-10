@@ -10,6 +10,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/ent"
 	changeDomain "itsm-backend/handlers/change"
+	"itsm-backend/service"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -48,6 +49,7 @@ func problemRelationHTTP(t *testing.T) (*relationFixture, *gin.Engine, string) {
 		c.Next()
 	})
 	shared := controller.NewWorkItemRelationController(f.owner)
+	r.GET("/api/v1/work-items/:id/relation-context", middleware.RequireWorkItemRecordClassPermission("read"), shared.Context)
 	r.POST("/api/v1/work-items/:id/relations", middleware.RequireWorkItemRecordClassPermission("update"), shared.Add)
 	r.DELETE("/api/v1/work-items/:id/relations", middleware.RequireWorkItemRecordClassPermission("update"), shared.Remove)
 	r.GET("/api/v1/work-items/:id/relations", middleware.RequireWorkItemRecordClassPermission("read"), shared.List)
@@ -294,4 +296,125 @@ func TestChangeListHTTPProjectionFailureContract(t *testing.T) {
 			require.Equal(t, 1, f.client.Ticket.GetX(f.ctx, change.WorkItemID).Version)
 		})
 	}
+}
+
+func TestWorkItemRelationContextHTTP(t *testing.T) {
+	f, r, _ := problemRelationHTTP(t)
+	path := fmt.Sprintf("/api/v1/work-items/%d/relation-context", f.inc.WorkItemID)
+	w := relationHTTP(r, "GET", path, "")
+	require.Equal(t, 200, w.Code, w.Body.String())
+	var response struct {
+		Data struct {
+			Source   relationmeta.Endpoint `json:"source"`
+			Mutation struct {
+				Allowed bool   `json:"allowed"`
+				Reason  string `json:"reason"`
+			} `json:"mutation"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+	require.Equal(t, f.inc.WorkItemID, response.Data.Source.WorkItemID)
+	require.Equal(t, 1, response.Data.Source.Version)
+	require.True(t, response.Data.Mutation.Allowed)
+	require.Zero(t, f.client.WorkItemRelation.Query().CountX(f.ctx))
+	require.Equal(t, 1, f.client.Ticket.GetX(f.ctx, f.inc.WorkItemID).Version)
+}
+
+func TestWorkItemRelationContextCurrentAuthority(t *testing.T) {
+	for _, mode := range []string{"revoked_write", "revoked_read", "hidden", "inactive", "missing_actor", "foreign", "storage"} {
+		t.Run(mode, func(t *testing.T) {
+			f, r, _ := problemRelationHTTP(t)
+			path := fmt.Sprintf("/api/v1/work-items/%d/relation-context", f.inc.WorkItemID)
+			require.Equal(t, 200, relationHTTP(r, "GET", path, "").Code)
+			f.actor.Update().SetRole("context_reader").ExecX(f.ctx)
+			role := f.client.Role.Create().SetTenantID(f.tenant.ID).SetCode("context_reader").SetName("Reader").SetIsActive(true).SaveX(f.ctx)
+			grants := map[string]int{}
+			for _, action := range []string{"read", "write"} {
+				grant := f.client.Permission.Create().SetTenantID(f.tenant.ID).SetResource("incident").SetAction(action).SetCode("context_" + action).SetName(action).SaveX(f.ctx)
+				f.client.RolePermission.Create().SetTenantID(f.tenant.ID).SetRoleID(role.ID).SetPermissionID(grant.ID).ExecX(f.ctx)
+				grants[action] = grant.ID
+			}
+			require.Equal(t, 200, relationHTTP(r, "GET", path, "").Code)
+			want := 403
+			reached := false
+			switch mode {
+			case "revoked_write":
+				f.client.RolePermission.Delete().Where(rolepermission.PermissionID(grants["write"])).ExecX(f.ctx)
+				want = 200
+			case "revoked_read":
+				f.client.RolePermission.Delete().Where(rolepermission.PermissionID(grants["read"])).ExecX(f.ctx)
+			case "hidden":
+				other := f.client.User.Create().SetTenantID(f.tenant.ID).SetUsername("context-other").SetName("Other").SetEmail("context-other@example.test").SetRole("agent").SetPasswordHash("test").SetActive(true).SaveX(f.ctx)
+				f.client.Ticket.UpdateOneID(f.inc.WorkItemID).SetRequesterID(other.ID).ClearAssigneeID().ExecX(f.ctx)
+				want = 404
+			case "inactive":
+				f.actor.Update().SetActive(false).ExecX(f.ctx)
+			case "missing_actor":
+				f.actor.ID = 0
+				want = 401
+			case "foreign":
+				f.client.Ticket.UpdateOneID(f.inc.WorkItemID).SetTenantID(f.client.Tenant.Create().SetName("Foreign context").SetCode("foreign-context").SaveX(f.ctx).ID).ExecX(f.ctx)
+				want = 404
+			case "storage":
+				f.runtime.Tenant.Ticket.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
+					return ent.QuerierFunc(func(context.Context, ent.Query) (ent.Value, error) {
+						reached = true
+						return nil, errors.New("private-context-driver")
+					})
+				}))
+				want = 500
+			}
+			w := relationHTTP(r, "GET", path, "")
+			require.Equal(t, want, w.Code, w.Body.String())
+			require.NotContains(t, w.Body.String(), "private-context-driver")
+			var response common.Response
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
+			if want == 200 {
+				require.Contains(t, w.Body.String(), `"allowed":false`)
+				require.Contains(t, w.Body.String(), `"version":1`)
+			} else {
+				require.NotContains(t, w.Body.String(), `"source":`)
+			}
+			if mode == "storage" {
+				require.True(t, reached)
+			}
+			require.Zero(t, f.client.WorkItemRelation.Query().CountX(f.ctx))
+		})
+	}
+}
+
+func TestWorkItemRelationContextPendingChangeCallback(t *testing.T) {
+	f := newChangeLifecycleFixture(t, "normal")
+	f.apply(t, f.command("submit", "context-submit"))
+	instance := f.client.ProcessInstance.Query().OnlyX(f.ctx)
+	f.client.ProcessCallbackOutbox.Create().SetTenantID(f.tenant.ID).SetProcessInstanceID(instance.ID).SetExecutionKey("context-unresolved").SetCallbackKind("service_task").SetHandlerID("change_service_handler").SetTaskType("change_task").SetElementID("assess").SetAction("assess_risk").SetStatus("blocked").SaveX(f.ctx)
+	owner := service.NewWorkItemRelationService(f.runtime, nil)
+	h := controller.NewWorkItemRelationController(owner)
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("tenant_id", f.tenant.ID)
+		c.Set("user_id", f.actor.ID)
+		c.Set("role", "super_admin")
+		c.Set("client", f.runtime)
+		c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: f.tenant.ID})
+		c.Request = c.Request.WithContext(f.ctx)
+		c.Next()
+	})
+	r.GET("/api/v1/work-items/:id/relation-context", middleware.RequireWorkItemRecordClassPermission("read"), h.Context)
+	path := fmt.Sprintf("/api/v1/work-items/%d/relation-context", f.c.WorkItemID)
+	before := f.client.Ticket.GetX(f.ctx, f.c.WorkItemID).Version
+	w := relationHTTP(r, "GET", path, "")
+	require.Equal(t, 200, w.Code, w.Body.String())
+	require.Contains(t, w.Body.String(), `"allowed":false`)
+	require.Contains(t, w.Body.String(), "prior callback is unresolved")
+	f.runtime.ProcessInstance.Intercept(ent.InterceptFunc(func(next ent.Querier) ent.Querier {
+		return ent.QuerierFunc(func(context.Context, ent.Query) (ent.Value, error) {
+			return nil, errors.New("private-callback-context-storage")
+		})
+	}))
+	w = relationHTTP(r, "GET", path, "")
+	require.Equal(t, 500, w.Code, w.Body.String())
+	require.NotContains(t, w.Body.String(), "private-callback-context-storage")
+	require.NotContains(t, w.Body.String(), `"allowed":false`)
+	require.Equal(t, before, f.client.Ticket.GetX(f.ctx, f.c.WorkItemID).Version)
 }

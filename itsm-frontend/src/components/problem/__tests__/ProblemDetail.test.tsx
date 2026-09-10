@@ -93,6 +93,7 @@ function renderWithRefreshingProvider(initialActions: Record<string, WorkItemAct
     const [summaryProblem, setSummaryProblem] = React.useState<Problem>({
       ...problem,
       actions: initialActions,
+      number: 'PRB-101',
       workItemId: workItem.id,
     });
     const providerWorkItem: WorkItemCommon = {

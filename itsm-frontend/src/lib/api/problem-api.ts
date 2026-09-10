@@ -1,3 +1,4 @@
+import type { RelationView } from './workitem-relations';
 export interface CreateProblemRequest {
   requesterId?: number;
   title: string;
@@ -61,6 +62,8 @@ export interface ProblemHotspotsData {
 }
 
 export interface Problem {
+  number: string;
+  relations?: RelationView[];
   version: number;
   verifiedVersion?: number;
   verificationNote?: string;
@@ -83,8 +86,6 @@ export interface Problem {
   rootCause?: string;
   workaround?: string;
   resolution?: string;
-  affectedIncidents?: number[];
-  relatedChanges?: number[];
   createdAt: string;
   updatedAt: string;
   slaStatus?: 'ok' | 'warning' | 'breached';
@@ -102,35 +103,6 @@ export interface ProblemListResponse {
   total: number;
   page: number;
   pageSize: number;
-}
-
-// ==================== 问题关联 ====================
-
-export type RelatedType = 'ticket' | 'incident' | 'change';
-
-export interface AssociatedItem {
-  id: number;
-  type: RelatedType;
-  title: string;
-  status: string;
-  number?: string;
-  createdAt?: string;
-}
-
-export interface ProblemAssociations {
-  tickets: AssociatedItem[];
-  incidents: AssociatedItem[];
-  changes: AssociatedItem[];
-}
-
-export interface ProblemAssociationRequest {
-  relatedType: RelatedType;
-  relatedIds: number[];
-}
-
-export interface ProblemRemoveAssociationRequest {
-  relatedType: RelatedType;
-  relatedId: number;
 }
 
 export class ProblemApi {
@@ -195,33 +167,6 @@ export class ProblemApi {
    */
   static async getHotspots(params: ProblemTrendRequest): Promise<ProblemHotspotsData> {
     return httpClient.get<ProblemHotspotsData>('/api/v1/problems/hotspots', params);
-  }
-
-  // ==================== 关联管理（P0 修复暴露的 TS 错误） ====================
-
-  /**
-   * 获取问题关联（工单/事件/变更）
-   */
-  static async getAssociations(problemId: number): Promise<ProblemAssociations> {
-    return httpClient.get<ProblemAssociations>(`/api/v1/problems/${problemId}/associations`);
-  }
-
-  /**
-   * 添加问题关联
-   */
-  static async addAssociation(problemId: number, req: ProblemAssociationRequest): Promise<void> {
-    return httpClient.post(`/api/v1/problems/${problemId}/associations`, req);
-  }
-
-  /**
-   * 移除问题关联
-   */
-  static async removeAssociation(problemId: number, req: ProblemRemoveAssociationRequest): Promise<void> {
-    return httpClient.request({
-      method: 'DELETE',
-      url: `/api/v1/problems/${problemId}/associations`,
-      data: req,
-    });
   }
 
   // ==================== SLA（P0 修复暴露的 TS 错误） ====================

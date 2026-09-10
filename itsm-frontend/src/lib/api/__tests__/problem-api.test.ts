@@ -17,7 +17,6 @@ const mockGet = httpClient.get as jest.Mock;
 const mockPost = httpClient.post as jest.Mock;
 const mockPut = httpClient.put as jest.Mock;
 const mockDelete = httpClient.delete as jest.Mock;
-const mockRequest = (httpClient as any).request as jest.Mock;
 
 describe('ProblemApi', () => {
   beforeEach(() => { jest.clearAllMocks(); });
@@ -91,30 +90,6 @@ describe('ProblemApi', () => {
       mockGet.mockResolvedValue({ hotspots: ['network'] });
       const result = await ProblemApi.getHotspots(params);
       expect(mockGet).toHaveBeenCalledWith('/api/v1/problems/hotspots', params);
-    });
-  });
-
-  describe('getAssociations', () => {
-    it('should get associations', async () => {
-      mockGet.mockResolvedValue({ tickets: [], incidents: [], changes: [] });
-      const result = await ProblemApi.getAssociations(1);
-      expect(mockGet).toHaveBeenCalledWith('/api/v1/problems/1/associations');
-    });
-  });
-
-  describe('addAssociation', () => {
-    it('should add association', async () => {
-      mockPost.mockResolvedValue(undefined);
-      await ProblemApi.addAssociation(1, { relatedType: 'ticket', relatedIds: [2, 3] });
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/problems/1/associations', { relatedType: 'ticket', relatedIds: [2, 3] });
-    });
-  });
-
-  describe('removeAssociation', () => {
-    it('should remove association', async () => {
-      mockRequest.mockResolvedValue(undefined);
-      await ProblemApi.removeAssociation(1, { relatedType: 'ticket', relatedId: 2 });
-      expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({ method: 'DELETE', url: '/api/v1/problems/1/associations' }));
     });
   });
 

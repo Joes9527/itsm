@@ -9,7 +9,7 @@ import { WorkItemAttachments } from './WorkItemAttachments';
 import { WorkItemSLA } from './WorkItemSLA';
 import { WorkItemActionBar } from './WorkItemActionBar';
 import { TicketHistoryList } from '@/components/ticket/TicketHistoryList';
-import { TicketRelationCards } from '@/components/ticket/TicketRelationCards';
+import { WorkItemRelations } from './WorkItemRelations';
 
 // WorkItemShell 提供所有 recordClass 共用的公共区块骨架（编号/标题/状态/优先级/请求人/
 // 分派/SLA/评论/附件/历史/关联/操作栏），专业字段由调用方通过 professionalPanelSlot 传入。
@@ -55,7 +55,7 @@ export function WorkItemShell({
           <TicketHistoryList ticketId={workItem.id} />
         </Card>
         <Card size="small" title="关联">
-          <TicketRelationCards ticketId={workItem.id} />
+          <WorkItemRelations key={workItem.id} workItemId={workItem.id} />
         </Card>
       </Space>
     </WorkItemProvider>

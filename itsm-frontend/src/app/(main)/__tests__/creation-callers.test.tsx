@@ -115,7 +115,6 @@ it('Change page preserves the complete professional input and reports manual int
       rollbackPlan: '回退数据库并恢复备份',
       type: 'normal',
       affectedCis: [],
-      relatedTickets: [],
     }),
     expect.anything()
   );

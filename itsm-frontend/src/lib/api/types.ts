@@ -220,7 +220,7 @@ export interface Change {
   assigneeId?: number;
   assignee?: UserBasicInfo;
   affectedCis?: string[];
-  relatedTickets?: string[];
+  relations?: import("@/lib/api/workitem-relations").RelationView[];
   createdAt: string;
   updatedAt: string;
 }

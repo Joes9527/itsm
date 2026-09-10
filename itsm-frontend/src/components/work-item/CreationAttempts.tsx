@@ -3,7 +3,7 @@ import { Alert, Button, Space } from 'antd';
 import type { WorkItemCreation } from '@/lib/hooks/useWorkItemCreation';
 import { creationReceiptMessage } from '@/lib/api/work-item-creation';
 
-export function CreationAttempts({ creation }: { creation: WorkItemCreation }) {
+export function CreationAttempts({ creation, beforeNewConfirmation }: { creation: WorkItemCreation; beforeNewConfirmation?: () => Promise<boolean> }) {
   return (
     <Space orientation='vertical' style={{ width: '100%' }} className='mb-4'>
       {creation.attempts
@@ -32,7 +32,7 @@ export function CreationAttempts({ creation }: { creation: WorkItemCreation }) {
                         重试原申请
                       </Button>
                     )}
-                    <Button disabled={creation.submitting} onClick={creation.newConfirmation}>
+                    <Button disabled={creation.submitting} onClick={async () => { if (!beforeNewConfirmation || await beforeNewConfirmation()) creation.newConfirmation(); }}>
                       以当前表单重新确认新申请
                     </Button>
                   </Space>

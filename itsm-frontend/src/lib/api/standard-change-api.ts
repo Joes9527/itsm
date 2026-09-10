@@ -1,3 +1,4 @@
+import type { SourceRelation } from './workitem-relations';
 import { createWorkItem, type CreationRequestOptions, type CreateWorkItemResult } from './work-item-creation';
 /**
  * 标准变更模板 API
@@ -65,6 +66,7 @@ export interface UpdateStandardChangeRequest {
 
 // 实例化请求
 export interface InstantiateStandardChangeRequest {
+  sourceRelations?: SourceRelation[];
   requesterId?: number;
   title?: string;
   plannedStartDate?: string;

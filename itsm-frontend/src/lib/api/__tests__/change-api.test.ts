@@ -62,7 +62,7 @@ describe('ChangeApi', () => {
               implementationPlan: 'Step 1: Prepare\nStep 2: Execute',
               rollbackPlan: 'Rollback steps',
               affectedCis: ['server-db-01'],
-              relatedTickets: [],
+              relations: [],
               createdAt: '2024-01-01T10:00:00Z',
               updatedAt: '2024-01-01T10:00:00Z',
             },
@@ -172,7 +172,7 @@ describe('ChangeApi', () => {
           implementationPlan: 'Plan',
           rollbackPlan: 'Rollback',
           affectedCis: [],
-          relatedTickets: [],
+          relations: [],
           createdAt: '2024-01-01T10:00:00Z',
           updatedAt: '2024-01-01T10:00:00Z',
         },
@@ -246,7 +246,6 @@ describe('ChangeApi', () => {
         implementationPlan: 'Implementation steps',
         rollbackPlan: 'Rollback steps',
         affectedCis: ['server-01'],
-        relatedTickets: [],
       };
 
       const result = await ChangeApi.createChange(newChange, creationOptions);

@@ -1,3 +1,4 @@
+import type { RelationView, SourceRelation } from './workitem-relations';
 import {
   createWorkItem,
   type CreationRequestOptions,
@@ -51,7 +52,7 @@ export interface ChangeRequest {
   implementationPlan: string;
   rollbackPlan: string;
   affectedCis: string[];
-  relatedTickets: string[];
+  sourceRelations?: SourceRelation[];
 }
 
 // 变更响应接口
@@ -86,7 +87,7 @@ export interface Change {
   implementationPlan: string;
   rollbackPlan: string;
   affectedCis: string[];
-  relatedTickets: string[];
+  relations: RelationView[];
   createdAt: string;
   updatedAt: string;
   /**
@@ -460,7 +461,7 @@ export interface ChangeActionRequests {
 }
 export type ChangeAction = keyof ChangeActionRequests;
 export type ChangeMetadataRequest = ChangeMutationIdentity &
-  Partial<Omit<ChangeRequest, 'requesterId'>>;
+  Partial<Omit<ChangeRequest, 'requesterId' | 'sourceRelations'>>;
 
 function isResult(value: unknown): value is ChangeResult {
   const v = value as ChangeResult | undefined;

@@ -141,3 +141,24 @@ func relationHTTPError(c *gin.Context, err error) {
 	}
 	common.InternalError(c, "relation operation failed")
 }
+
+// Context returns current source identity/version and source-only relation eligibility.
+// @Summary Get WorkItem relation context
+// @Description Read-only current-actor source context; target authorization and relation validity are checked on mutation.
+// @Tags work-items
+// @Produce json
+// @Param id path int true "Source WorkItem ID"
+// @Success 200 {object} common.Response{data=service.RelationContext}
+// @Router /api/v1/work-items/{id}/relation-context [get]
+func (h *WorkItemRelationController) Context(c *gin.Context) {
+	id, meta, ok := relationRequestIdentity(c)
+	if !ok {
+		return
+	}
+	result, err := h.owner.Context(c.Request.Context(), meta, id)
+	if err != nil {
+		relationHTTPError(c, err)
+		return
+	}
+	common.Success(c, result)
+}

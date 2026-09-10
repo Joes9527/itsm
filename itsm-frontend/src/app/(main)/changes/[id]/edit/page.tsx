@@ -152,7 +152,6 @@ const EditChangePage: React.FC = () => {
         implementationPlan: values.implementationPlan.trim(),
         rollbackPlan: values.rollbackPlan.trim(),
         affectedCis,
-        relatedTickets: changeData?.relatedTickets || [],
       };
 
       const patch = Object.fromEntries(

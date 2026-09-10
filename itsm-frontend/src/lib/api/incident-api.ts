@@ -486,7 +486,7 @@ export class IncidentAPI {
    * 后端: POST /api/v1/incidents/:id/convert-to-problem
    * 返回: CreateWorkItemResult
    */
-  static async convertToProblem(id: number, data: { title?: string; description?: string; requesterId?: number }, options: CreationRequestOptions): Promise<CreateWorkItemResult> {
+  static async convertToProblem(id: number, data: { expectedVersion: number; title?: string; description?: string; requesterId?: number }, options: CreationRequestOptions): Promise<CreateWorkItemResult> {
     return createWorkItem(`/api/v1/incidents/${id}/convert-to-problem`, data, options);
   }
 

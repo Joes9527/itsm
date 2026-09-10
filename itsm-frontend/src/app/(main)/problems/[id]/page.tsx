@@ -1,29 +1,25 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Alert, App, Button, Card } from 'antd';
-import { ArrowLeft, Link2 } from 'lucide-react';
+import { Alert, App, Button } from 'antd';
+import { ArrowLeft } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import ProblemDetail from '@/components/problem/ProblemDetail';
-import ProblemAssociationsTab from '@/components/problem/ProblemAssociationsTab';
 import { ProblemApi, type Problem } from '@/lib/api/problem-api';
 import { TicketApi } from '@/lib/api/ticket-api';
 import { WorkItemShell } from '@/components/work-item/WorkItemShell';
 import type { WorkItemCommon, WorkItemSLAState } from '@/components/work-item/WorkItemTypes';
 
-// 把 Problem 响应映射成 WorkItemShell 的公共字段契约。同 Incident 迁移那次的模式
-// （itsm-frontend/src/app/(main)/incidents/[id]/page.tsx）：id 用 workItemId
-// （tickets.id，评论/附件/未来的 SLA 都挂在这个 ID 下），number 用 Problem 自己的展示
-// 编号（后端 dto.ProblemResponse 目前没有专属的 problemNumber 字段，用 #id 兜底）。
+// Shared identity is the authorized WorkItem ID and canonical number.
 function toWorkItemCommon(problem: Problem): WorkItemCommon | null {
-  if (!problem.workItemId) {
+  if (!problem.workItemId || !problem.number) {
     // 缺少 workItemId 表示开发数据违反 WorkItem 创建不变量。拒绝用专业记录 ID 猜测
     // WorkItem 身份，避免把评论或附件挂到错误记录。
     return null;
   }
   return {
     id: problem.workItemId,
-    number: `#${problem.id}`,
+    number: problem.number,
     recordClass: 'problem',
     title: problem.title,
     status: problem.status,
@@ -104,20 +100,7 @@ export default function ProblemDetailPage() {
           信息，不重新实现这些逻辑。 */}
       <ProblemDetail id={id} onProblemLoaded={syncProblemSummary} />
 
-      {/* 追加：关联（工单/事件/变更）。历史现在由 WorkItemShell 自己的区块渲染，不再
-          在这里重复一份——见 docs/superpowers/specs/2026-08-28-work-item-detail-page-parity-design.md
-          §5.2。这里仍然保留 ProblemAssociationsTab：它的数据走 ProblemApi 专属的关联接口，
-          跟 WorkItemShell 的 TicketRelationCards（走 /tickets/:id/relations）不是同一份数据，
-          删掉会丢功能，不是去重。 */}
-      {Number.isFinite(numericId) && numericId > 0 && (
-        <Card className="mt-4 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex items-center gap-1.5 mb-3 text-sm font-medium text-gray-700">
-            <Link2 size={14} />
-            关联（工单/事件/变更）
-          </div>
-          <ProblemAssociationsTab problemId={numericId} />
-        </Card>
-      )}
+
     </>
   );
   const fallbackDetail = (

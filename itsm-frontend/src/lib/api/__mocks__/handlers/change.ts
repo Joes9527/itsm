@@ -75,7 +75,7 @@ export function createMockChange(overrides: Partial<Change> = {}): Change {
     implementationPlan: 'Step 1: Prepare\nStep 2: Execute\nStep 3: Verify',
     rollbackPlan: 'Step 1: Stop service\nStep 2: Restore backup\nStep 3: Verify',
     affectedCis: [],
-    relatedTickets: [],
+    relations: [],
     createdAt: now,
     updatedAt: now,
     ...overrides,
@@ -111,7 +111,7 @@ function initializeSampleChanges(): void {
       plannedStartDate: '2024-02-15T10:00:00Z',
       plannedEndDate: '2024-02-15T14:00:00Z',
       affectedCis: ['server-db-01', 'server-db-02'],
-      relatedTickets: ['TICKET-101'],
+      relations: [],
     }),
     createMockChange({
       id: 2,
@@ -128,7 +128,7 @@ function initializeSampleChanges(): void {
       createdBy: 2,
       createdByName: 'Security Team',
       affectedCis: ['server-web-01', 'server-web-02', 'server-web-03'],
-      relatedTickets: [],
+      relations: [],
     }),
     createMockChange({
       id: 3,
@@ -147,7 +147,7 @@ function initializeSampleChanges(): void {
       actualStartDate: '2024-01-20T08:00:00Z',
       actualEndDate: '2024-01-20T12:00:00Z',
       affectedCis: ['switch-core-01'],
-      relatedTickets: [],
+      relations: [],
     }),
   ];
 
@@ -232,7 +232,7 @@ export const changeHandlers = {
       implementationPlan: data.implementationPlan,
       rollbackPlan: data.rollbackPlan,
       affectedCis: data.affectedCis,
-      relatedTickets: data.relatedTickets,
+      relations: [],
     });
 
     mockChanges.set(change.id, change);

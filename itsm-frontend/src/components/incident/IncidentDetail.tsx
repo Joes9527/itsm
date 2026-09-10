@@ -361,11 +361,11 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
     setConverting(true);
     try {
       const values = await conversionForm.validateFields();
-      await creation.submit({ incidentId: data.id, title: data.title, description: data.description, requesterId: values.requesterId },
+      await creation.submit({ incidentId: data.id, expectedVersion: data.version, title: data.title, description: data.description, requesterId: values.requesterId },
         ({ incidentId, ...body }, options) => IncidentAPI.convertToProblem(incidentId, body, options),
         receipt => { router.push(professionalCreationPath(receipt, 'problem')); setConversionOpen(false); });
     } catch (error) {
-      handleError(error, 'convertToProblem', '转为问题失败');
+      handleError(error, 'convertToProblem', '创建关联问题失败');
     } finally {
       setConverting(false);
     }
@@ -604,7 +604,10 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
 
   return (
     <>
-      <CreationAttempts creation={creation} />
+      <CreationAttempts creation={creation} beforeNewConfirmation={async () => {
+        try { const current = await IncidentAPI.getIncident(Number(id)); setData(current as IncidentDetailData); onIncidentLoaded?.(current as IncidentDetailData); return true; }
+        catch { message.error('刷新事件失败，保留原申请与表单'); return false; }
+      }} />
       <Modal open={closeModalVisible} title='关闭事件' okText='确认关闭' onCancel={() => setCloseModalVisible(false)} onOk={handleClose} confirmLoading={closing}>
         <label htmlFor='incident-close-reason'>关闭说明</label>
         <Input.TextArea id='incident-close-reason' value={closeReason} onChange={event => setCloseReason(event.target.value)} />
@@ -719,7 +722,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
                   disabled: actionMutationInFlight,
                 }}
               >
-                转为问题
+                创建关联问题
               </WorkItemActionButton>
               <WorkItemActionButton
                 action={actions.reopen}

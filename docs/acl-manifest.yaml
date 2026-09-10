@@ -3220,3 +3220,9 @@ routes:
     menu: v1
     description: Shared current-authorized WorkItem relation update
     source: router.go WorkItemRelationController
+  - method: GET
+    path: /api/v1/work-items/:id/relation-context
+    permission: workitem.read
+    menu: v1
+    description: Current authorized source identity/version and source-only relation mutation eligibility
+    source: router.go WorkItemRelationController

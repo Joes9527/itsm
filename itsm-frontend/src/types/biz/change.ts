@@ -62,7 +62,7 @@ export interface CreateChangeRequest {
   implementationPlan: string;
   rollbackPlan: string;
   affectedCis?: string[];
-  relatedTickets?: string[];
+  relations?: import("@/lib/api/workitem-relations").RelationView[];
 }
 
 // 列表查询参数

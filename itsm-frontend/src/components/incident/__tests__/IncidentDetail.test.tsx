@@ -81,7 +81,7 @@ const deniedActions = {
   escalate: { allowed: false, reason: '当前事件不能升级' },
   assign: { allowed: false, reason: '无权指派该事件' },
   markMajorIncident: { allowed: false, reason: '当前事件不能标记为重大事件' },
-  convertToProblem: { allowed: false, reason: '当前事件不能转为问题' },
+  convertToProblem: { allowed: false, reason: '当前事件不能创建关联问题' },
 } satisfies Record<string, WorkItemActionState>;
 
 function renderWithProvider(
@@ -171,7 +171,7 @@ describe('IncidentDetail action eligibility', () => {
     await expectDisabledAction('升级', deniedActions.escalate.reason);
     await expectDisabledAction('指派', deniedActions.assign.reason);
     await expectDisabledAction('升级为重大事件', deniedActions.markMajorIncident.reason);
-    await expectDisabledAction('转为问题', deniedActions.convertToProblem.reason);
+    await expectDisabledAction('创建关联问题', deniedActions.convertToProblem.reason);
   });
 
   it('prefers work item context actions over fallback actions when a provider is present', async () => {
@@ -263,10 +263,10 @@ it('conversion uses a confirmed payload and professional Problem reference witho
   mockGetIncident.mockResolvedValue({ ...incident, reporterId: 999, actions: { convertToProblem: { allowed: true } } });
   mockConvertToProblem.mockResolvedValue({ workItemId: 41, number: 'PRB-41', recordClass: 'problem', professionalReference: { type: 'problem', id: 88 }, workflowStartStatus: 'manual_intervention_required', replayed: true });
   renderWithoutProvider({ convertToProblem: { allowed: true } });
-  await userEvent.click(await screen.findByRole('button', { name: '转为问题' }));
+  await userEvent.click(await screen.findByRole('button', { name: '创建关联问题' }));
   const dialog = await screen.findByRole('dialog', { name: '创建关联问题' });
   fireEvent.click(within(dialog).getByRole('button', { name: /确|OK/ }));
   await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/problems/88'));
-  expect(mockConvertToProblem).toHaveBeenCalledWith(301, { title: incident.title, description: incident.description }, expect.objectContaining({ idempotencyKey: 'conversion-key' }));
+  expect(mockConvertToProblem).toHaveBeenCalledWith(301, { title: incident.title, description: incident.description, expectedVersion: incident.version }, expect.objectContaining({ idempotencyKey: 'conversion-key' }));
   expect(screen.getAllByText(/PRB-41.*已创建.*需要人工处理/).length).toBeGreaterThan(0);
 });

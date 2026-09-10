@@ -48,7 +48,7 @@ const change = {
   implementationPlan: 'deploy',
   rollbackPlan: 'restore',
   affectedCis: [],
-  relatedTickets: [],
+  relations: [],
   actions: { assess: { allowed: true }, approve: { allowed: false, reason: '等待评估' } },
   currentTasks: { assess: 'real-assessment' },
 } satisfies Change;
