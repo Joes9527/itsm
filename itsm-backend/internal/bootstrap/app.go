@@ -337,6 +337,7 @@ func NewApplication() *Application {
 
 	// V2 工单服务（构造函数注入）
 	ticketService := service.NewTicketService(&service.TicketServiceConfig{
+		Directory:             clients.IntakeDirectorySnapshot(),
 		ProcessTriggerService: processTriggerService,
 		Repository:            ticketRepoImpl,
 		Client:                client,

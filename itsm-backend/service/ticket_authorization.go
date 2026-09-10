@@ -4,7 +4,9 @@ import (
 	"context"
 
 	"itsm-backend/authorization"
+	"itsm-backend/common"
 	"itsm-backend/dto"
+	"itsm-backend/ent"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/repository/ticket"
 
@@ -39,26 +41,33 @@ func CanEdit(actor ActionActor, t *ticket.Ticket) dto.ActionPermission {
 
 // CanDelete：ticket:delete 权限 + 工单未结束 + 无运行中的 BPMN 流程实例。
 func CanDelete(ctx context.Context, actor ActionActor, t *ticket.Ticket) dto.ActionPermission {
-	if isFinalStatus(t.Status) {
-		return dto.ActionPermission{Allowed: false, Reason: "工单已结束，无法删除"}
-	}
 	if !authorization.HasResourcePermission(actor.Client, actor.Role, "ticket", "delete", actor.TenantID) {
 		return dto.ActionPermission{Allowed: false, Reason: "无删除权限"}
 	}
-	running, err := actor.Client.ProcessInstance.Query().
-		Where(
-			processinstance.BusinessKey(fmt.Sprintf("ticket:%d", t.ID)),
-			processinstance.Status("running"),
-			processinstance.TenantID(actor.TenantID),
-		).
-		Exist(ctx)
-	if err != nil {
+	if err := requireTicketDeletionPrecondition(ctx, actor.Client, t.ID, actor.TenantID, string(t.Status)); err != nil {
+		if app, ok := common.AsAppError(err); ok {
+			return dto.ActionPermission{Allowed: false, Reason: app.Message}
+		}
 		return dto.ActionPermission{Allowed: false, Reason: "校验流程状态失败"}
 	}
-	if running {
-		return dto.ActionPermission{Allowed: false, Reason: "工单流程流转中，不可删除"}
-	}
 	return dto.ActionPermission{Allowed: true}
+}
+
+// requireTicketDeletionPrecondition preserves the existing Ticket entry policy.
+// C1 will converge its legacy ticket:<id> workflow identity with the other owners.
+// Actual deletion calls this with the owning RR transaction after authorization.
+func requireTicketDeletionPrecondition(ctx context.Context, client *ent.Client, id, tenantID int, status string) error {
+	if isFinalStatus(ticket.Status(status)) {
+		return common.NewForbiddenError("工单已结束，无法删除")
+	}
+	running, err := client.ProcessInstance.Query().Where(processinstance.BusinessKey(fmt.Sprintf("ticket:%d", id)), processinstance.Status("running"), processinstance.TenantID(tenantID)).Exist(ctx)
+	if err != nil {
+		return common.NewInternalError("校验流程状态失败", err)
+	}
+	if running {
+		return common.NewForbiddenError("工单流程流转中，不可删除")
+	}
+	return nil
 }
 
 // CanCC：复用 TicketWorkflowService.EnsureCanCCTicket 的既有业务规则，不重新实现。

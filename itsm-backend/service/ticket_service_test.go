@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"fmt"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"testing"
 	"time"
 
@@ -1025,6 +1026,12 @@ func TestTicketService_DeleteTicket(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
+	deletionRole := client.Role.Create().SetTenantID(testTenant.ID).SetCode("end_user").SetName("delete fixture").SetIsActive(true).SaveX(ctx)
+	for _, verb := range []string{"read", "delete"} {
+		perm := client.Permission.Create().SetTenantID(testTenant.ID).SetCode("deletion_" + verb).SetName(verb).SetResource("ticket").SetAction(verb).SaveX(ctx)
+		client.RolePermission.Create().SetTenantID(testTenant.ID).SetRoleID(deletionRole.ID).SetPermissionID(perm.ID).ExecX(ctx)
+	}
+
 	tests := []struct {
 		name          string
 		ticketID      int
@@ -1047,7 +1054,7 @@ func TestTicketService_DeleteTicket(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ticketService.DeleteTicket(ctx, tt.ticketID, tt.tenantID)
+			err := ticketService.DeleteTicket(ctx, tt.ticketID, workitemmutation.Meta{TenantID: tt.tenantID, ActorID: testUser.ID})
 
 			if tt.expectedError {
 				assert.Error(t, err)
@@ -1140,7 +1147,7 @@ func TestTicketService_DeleteTicket_CascadeTenantIsolation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Tenant 2 tries to delete tenant 1's ticket.
-	err = ticketService.DeleteTicket(ctx, ticket1.ID, tenant2.ID)
+	err = ticketService.DeleteTicket(ctx, ticket1.ID, workitemmutation.Meta{TenantID: tenant2.ID, ActorID: user1.ID})
 	assert.Error(t, err)
 
 	// Verify ticket still exists (未被删除，跨租户隔离仍然有效)

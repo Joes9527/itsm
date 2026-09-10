@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"strconv"
 	"strings"
 	"time"
@@ -216,21 +217,9 @@ func (tc *TicketController) DeleteTicket(c *gin.Context) {
 
 	tenantID := c.GetInt("tenant_id")
 
-	current, err := tc.ticketService.GetTicket(c.Request.Context(), ticketID, tenantID)
+	err = tc.ticketService.DeleteTicket(c.Request.Context(), ticketID, workitemmutation.Meta{TenantID: tenantID, ActorID: c.GetInt("user_id"), Source: "http"})
 	if err != nil {
-		common.Fail(c, common.NotFoundCode, "工单不存在")
-		return
-	}
-	actor := service.ActionActor{Client: tc.client, TenantID: tenantID, UserID: c.GetInt("user_id"), Role: c.GetString("role")}
-	if perm := service.CanDelete(c.Request.Context(), actor, current); !perm.Allowed {
-		common.Fail(c, common.ForbiddenCode, perm.Reason)
-		return
-	}
-
-	err = tc.ticketService.DeleteTicket(c.Request.Context(), ticketID, tenantID)
-	if err != nil {
-		tc.logger.Errorw("Failed to delete ticket", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
+		respondWorkItemDeletionError(c, err)
 		return
 	}
 
@@ -274,17 +263,15 @@ func (tc *TicketController) UpdateTicketStatus(c *gin.Context) {
 // BatchDeleteTickets 批量删除工单
 func (tc *TicketController) BatchDeleteTickets(c *gin.Context) {
 	var req dto.BatchDeleteRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		common.Fail(c, common.ParamErrorCode, "请求参数错误: "+err.Error())
+	if !intakehttp.Bind(c, &req) {
 		return
 	}
 
 	tenantID := c.GetInt("tenant_id")
 
-	err := tc.ticketService.BatchDeleteTickets(c.Request.Context(), req.TicketIDs, tenantID)
+	err := tc.ticketService.BatchDeleteTickets(c.Request.Context(), req.TicketIDs, workitemmutation.Meta{TenantID: tenantID, ActorID: c.GetInt("user_id"), Source: "http"})
 	if err != nil {
-		tc.logger.Errorw("Failed to batch delete tickets", "error", err, "tenant_id", tenantID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
+		respondWorkItemDeletionError(c, err)
 		return
 	}
 
@@ -967,24 +954,9 @@ func (tc *TicketController) DeleteSubtask(c *gin.Context) {
 
 	tenantID := c.GetInt("tenant_id")
 
-	// 验证子任务是否属于指定的父工单
-	ticket, err := tc.ticketService.GetTicket(c.Request.Context(), subtaskID, tenantID)
+	err = tc.ticketService.DeleteSubtask(c.Request.Context(), parentID, subtaskID, workitemmutation.Meta{TenantID: tenantID, ActorID: c.GetInt("user_id"), Source: "http"})
 	if err != nil {
-		tc.logger.Errorw("Failed to get subtask", "error", err, "subtask_id", subtaskID, "tenant_id", tenantID)
-		common.Fail(c, common.NotFoundCode, "子任务不存在")
-		return
-	}
-
-	// 检查parent_ticket_id是否匹配（V2 是 *int）
-	if ticket.ParentTicketID == nil || *ticket.ParentTicketID != parentID {
-		common.Fail(c, common.ParamErrorCode, "子任务不属于指定的父工单")
-		return
-	}
-
-	err = tc.ticketService.DeleteTicket(c.Request.Context(), subtaskID, tenantID)
-	if err != nil {
-		tc.logger.Errorw("Failed to delete subtask", "error", err, "subtask_id", subtaskID, "tenant_id", tenantID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
+		respondWorkItemDeletionError(c, err)
 		return
 	}
 

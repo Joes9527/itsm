@@ -138,25 +138,6 @@ func (r *EntRepository) Update(ctx context.Context, id int, params *UpdateParams
 	return toDomainModel(entity), nil
 }
 
-// Delete 软删除工单，保留审计和关联记录。
-func (r *EntRepository) Delete(ctx context.Context, id int, tenantID int) error {
-	affected, err := r.Client().Ticket.Update().
-		Where(
-			ticket.ID(id),
-			ticket.TenantID(tenantID),
-			ticket.DeletedAtIsNil(),
-		).
-		SetDeletedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		return fmt.Errorf("delete ticket: %w", err)
-	}
-	if affected == 0 {
-		return fmt.Errorf("ticket not found")
-	}
-	return nil
-}
-
 // List 列表查询工单
 func (r *EntRepository) List(ctx context.Context, tenantID int, filters *FilterParams, pagination *base.QueryParams) (*base.ListResult[Ticket], error) {
 	query := r.Client().Ticket.Query().
@@ -253,25 +234,6 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, filters *FilterP
 	}
 
 	return result, nil
-}
-
-// BatchDelete 批量软删除工单。
-func (r *EntRepository) BatchDelete(ctx context.Context, ids []int, tenantID int) error {
-	if len(ids) == 0 {
-		return nil
-	}
-	_, err := r.Client().Ticket.Update().
-		Where(
-			ticket.IDIn(ids...),
-			ticket.TenantID(tenantID),
-			ticket.DeletedAtIsNil(),
-		).
-		SetDeletedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		return fmt.Errorf("batch delete tickets: %w", err)
-	}
-	return nil
 }
 
 // Exists 检查工单是否存在

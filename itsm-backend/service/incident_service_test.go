@@ -776,8 +776,14 @@ func TestIncidentService_DeleteIncident_Success(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
+	deletionRole := client.Role.Create().SetTenantID(testTenant.ID).SetCode("agent").SetName("delete fixture").SetIsActive(true).SaveX(ctx)
+	for _, verb := range []string{"read", "delete"} {
+		perm := client.Permission.Create().SetTenantID(testTenant.ID).SetCode("deletion_" + verb).SetName(verb).SetResource("incident").SetAction(verb).SaveX(ctx)
+		client.RolePermission.Create().SetTenantID(testTenant.ID).SetRoleID(deletionRole.ID).SetPermissionID(perm.ID).ExecX(ctx)
+	}
+
 	// 测试删除
-	err = service.DeleteIncident(ctx, testIncident.ID, testTenant.ID)
+	err = service.DeleteIncident(ctx, testIncident.ID, workitemmutation.Meta{TenantID: testTenant.ID, ActorID: testUser.ID})
 	require.NoError(t, err)
 
 	// 验证已软删除，标准查询不可见但审计数据仍保留
@@ -802,10 +808,12 @@ func TestIncidentService_DeleteIncident_NotFound(t *testing.T) {
 	testTenant, err := createIncidentTestTenant(ctx, client, "delnotfound")
 	require.NoError(t, err)
 
+	testUser, err := createIncidentTestUser(ctx, client, testTenant.ID, "delnotfound")
+	require.NoError(t, err)
 	// 测试删除不存在的事件
-	err = service.DeleteIncident(ctx, 99999, testTenant.ID)
+	err = service.DeleteIncident(ctx, 99999, workitemmutation.Meta{TenantID: testTenant.ID, ActorID: testUser.ID})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "incident not found")
+	assert.True(t, ent.IsNotFound(err))
 }
 
 // TestIncidentService_DeleteIncident_CascadeTenantIsolation verifies that
@@ -865,9 +873,9 @@ func TestIncidentService_DeleteIncident_CascadeTenantIsolation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Tenant 2 tries to delete Tenant 1's incident - should fail with cross-tenant error
-	err = service.DeleteIncident(ctx, testIncident.ID, testTenant2.ID)
+	err = service.DeleteIncident(ctx, testIncident.ID, workitemmutation.Meta{TenantID: testTenant2.ID, ActorID: testUser1.ID})
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "cross-tenant access denied", "Expected cross-tenant access denied error")
+	assert.True(t, ent.IsNotFound(err))
 
 	// Verify incident still exists (not deleted)
 	incident, err := client.Incident.Get(ctx, testIncident.ID)

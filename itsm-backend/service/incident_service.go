@@ -528,28 +528,6 @@ func (s *IncidentService) ensureActiveIncident(ctx context.Context, incidentID, 
 	return nil
 }
 
-// DeleteIncident 软删除事件，保留事件、活动、告警与指标用于审计。
-func (s *IncidentService) DeleteIncident(ctx context.Context, id int, tenantID int) error {
-	s.logger.Infow("Deleting incident", "id", id, "tenant_id", tenantID)
-
-	entity, err := s.client.Incident.Query().Where(incident.IDEQ(id), incidentTenantScope(tenantID)).Only(ctx)
-	if err != nil {
-		return fmt.Errorf("cross-tenant access denied: incident not found")
-	}
-	updated, err := s.client.Ticket.Update().
-		Where(ticket.IDEQ(entity.WorkItemID), ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).
-		SetDeletedAt(time.Now()).SetUpdatedAt(time.Now()).AddVersion(1).Save(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to delete incident: %w", err)
-	}
-	if updated != 1 {
-		return fmt.Errorf("cross-tenant access denied: incident not found")
-	}
-
-	s.logger.Infow("Incident deleted successfully", "id", id)
-	return nil
-}
-
 // CreateIncidentEvent 创建事件活动记录
 func (s *IncidentService) CreateIncidentEvent(ctx context.Context, req *dto.CreateIncidentEventRequest, tenantID int) (*dto.IncidentEventResponse, error) {
 	s.logger.Infow("Creating incident event", "incident_id", req.IncidentID, "type", req.EventType)

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"itsm-backend/handlers/shared/workitemmutation"
 	"strconv"
 	"strings"
 	"time"
@@ -306,14 +307,9 @@ func (c *IncidentController) DeleteIncident(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	err = c.incidentService.DeleteIncident(ctx.Request.Context(), id, tenantID)
+	err = c.incidentService.DeleteIncident(ctx.Request.Context(), id, workitemmutation.Meta{TenantID: tenantID, ActorID: ctx.GetInt("user_id"), Source: "http"})
 	if err != nil {
-		if err.Error() == "incident not found" {
-			common.Fail(ctx, common.ParamErrorCode, "事件不存在")
-			return
-		}
-		c.logger.Errorw("Failed to delete incident", "error", err, "id", id)
-		common.Fail(ctx, common.InternalErrorCode, "删除事件失败")
+		respondWorkItemDeletionError(ctx, err)
 		return
 	}
 

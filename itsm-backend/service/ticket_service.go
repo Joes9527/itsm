@@ -16,6 +16,7 @@ import (
 	"itsm-backend/connector"
 	feishuConnector "itsm-backend/connector/builtin/feishu"
 
+	"itsm-backend/database"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processinstance"
@@ -33,6 +34,7 @@ import (
 // TicketService 改进版的工单服务
 // 使用构造函数注入和 Repository 模式
 type TicketService struct {
+	directory              database.DirectorySnapshot
 	repo                   ticket.Repository
 	client                 *ent.Client // 用于 ProcessInstance 等系统级查询（不走 Repository）
 	logger                 *zap.SugaredLogger
@@ -49,6 +51,7 @@ type TicketService struct {
 // TicketServiceConfig 工单服务配置
 // 所有依赖都在配置中明确声明
 type TicketServiceConfig struct {
+	Directory             database.DirectorySnapshot
 	ProcessTriggerService ProcessTriggerServiceInterface
 	Repository            ticket.Repository
 	Client                *ent.Client // 可选；传入后可用作 ProcessInstance 等系统级查询
@@ -70,6 +73,7 @@ func NewTicketService(cfg *TicketServiceConfig) *TicketService {
 	}
 
 	s := &TicketService{
+		directory:         cfg.Directory,
 		processTriggerSvc: cfg.ProcessTriggerService,
 		repo:              cfg.Repository,
 		client:            cfg.Client,
@@ -612,11 +616,6 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 	}
 
 	return updated, nil
-}
-
-// DeleteTicket 删除工单
-func (s *TicketService) DeleteTicket(ctx context.Context, id int, tenantID int) error {
-	return s.repo.Delete(ctx, id, tenantID)
 }
 
 // ListTickets 列表查询工单。
@@ -1221,15 +1220,6 @@ func (s *TicketService) GetTicketSLAInfo(ctx context.Context, ticketID int, tena
 		info.SlaStatus = "at_risk"
 	}
 	return info, nil
-}
-
-// BatchDeleteTickets 批量删除工单
-func (s *TicketService) BatchDeleteTickets(ctx context.Context, ticketIDs []int, tenantID int) error {
-	s.logger.Infow("Batch deleting tickets", "ticket_ids", ticketIDs, "tenant_id", tenantID)
-	if len(ticketIDs) == 0 {
-		return nil
-	}
-	return s.repo.BatchDelete(ctx, ticketIDs, tenantID)
 }
 
 // EscalateTicket 升级工单

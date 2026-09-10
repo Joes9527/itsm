@@ -271,45 +271,6 @@ func TestRepository_Update_RejectsStaleVersion(t *testing.T) {
 // Delete
 // =====================================================================
 
-func TestRepository_Delete(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	created, _ := fx.createTicket(fx.ctx, &CreateParams{
-		Title:       "Delete Me",
-		Description: "",
-		Priority:    PriorityLow,
-		RecordClass: "incident",
-		RequesterID: fx.user.ID,
-	}, fx.tenant.ID)
-
-	err := fx.repo.Delete(fx.ctx, created.ID, fx.tenant.ID)
-	require.NoError(t, err)
-
-	_, err = fx.repo.GetByID(fx.ctx, created.ID, fx.tenant.ID)
-	assert.Error(t, err)
-}
-
-func TestRepository_Delete_WrongTenant(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	created, _ := fx.createTicket(fx.ctx, &CreateParams{
-		Title:       "Delete Isolated",
-		Description: "",
-		Priority:    PriorityMedium,
-		RecordClass: "incident",
-		RequesterID: fx.user.ID,
-	}, fx.tenant.ID)
-
-	// Wrong tenant delete: implementation may return nil (no rows matched) or error.
-	// The key invariant is the ticket still exists for the correct tenant.
-	_ = fx.repo.Delete(fx.ctx, created.ID, 99999)
-
-	_, err := fx.repo.GetByID(fx.ctx, created.ID, fx.tenant.ID)
-	require.NoError(t, err)
-}
-
 // =====================================================================
 // List
 // =====================================================================
@@ -405,57 +366,6 @@ func TestRepository_List_ParentTypeAndOverdueFilters(t *testing.T) {
 // =====================================================================
 // BatchDelete
 // =====================================================================
-
-func TestRepository_BatchDelete(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	ids := make([]int, 0, 3)
-	for i := 0; i < 3; i++ {
-		tkt, _ := fx.createTicket(fx.ctx, &CreateParams{
-			Title:       "Batch Delete",
-			Description: "",
-			Priority:    PriorityLow,
-			RecordClass: "incident",
-			RequesterID: fx.user.ID,
-		}, fx.tenant.ID)
-		ids = append(ids, tkt.ID)
-	}
-
-	err := fx.repo.BatchDelete(fx.ctx, ids, fx.tenant.ID)
-	require.NoError(t, err)
-
-	for _, id := range ids {
-		_, err := fx.repo.GetByID(fx.ctx, id, fx.tenant.ID)
-		assert.Error(t, err)
-	}
-}
-
-func TestRepository_BatchDelete_EmptyList(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	err := fx.repo.BatchDelete(fx.ctx, []int{}, fx.tenant.ID)
-	assert.NoError(t, err)
-}
-
-func TestRepository_BatchDelete_TenantIsolation(t *testing.T) {
-	fx := newRepoFixture(t)
-	defer fx.client.Close()
-
-	created, _ := fx.createTicket(fx.ctx, &CreateParams{
-		Title:       "Batch Tenant",
-		Description: "",
-		Priority:    PriorityMedium,
-		RecordClass: "incident",
-		RequesterID: fx.user.ID,
-	}, fx.tenant.ID)
-
-	_ = fx.repo.BatchDelete(fx.ctx, []int{created.ID}, 99999)
-
-	_, err := fx.repo.GetByID(fx.ctx, created.ID, fx.tenant.ID)
-	require.NoError(t, err)
-}
 
 // =====================================================================
 // Exists

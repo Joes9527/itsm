@@ -592,9 +592,12 @@ func TestTicketController_DeleteTicket(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	// 同 TestTicketController_UpdateTicket：默认角色 "admin" 需要先补上 ticket:delete，
-	// DeleteTicket 现在会用 service.CanDelete 二次校验。
-	seedTicketRolePermission(t, client, tenant.ID, "admin", "ticket", "delete")
+	// Deletion authorizes the persisted actor role inside its transaction.
+	deletionRole := client.Role.Create().SetTenantID(tenant.ID).SetCode(user.Role).SetName("delete fixture").SetIsActive(true).SaveX(context.Background())
+	for _, verb := range []string{"read", "delete"} {
+		perm := client.Permission.Create().SetTenantID(tenant.ID).SetCode("deletion_" + verb).SetName(verb).SetResource("ticket").SetAction(verb).SaveX(context.Background())
+		client.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(deletionRole.ID).SetPermissionID(perm.ID).ExecX(context.Background())
+	}
 
 	tests := []struct {
 		name         string
