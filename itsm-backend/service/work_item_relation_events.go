@@ -16,6 +16,9 @@ const (
 	// ChangeOutcomeEventType carries a professional Change outcome to the
 	// resolved_by_change sources that must verify the repair.
 	ChangeOutcomeEventType = "change.outcome_recorded"
+	// ProblemResolvedEventType informs the handlers of the Incidents that
+	// investigated a Problem. It never mutates Incident lifecycle state.
+	ProblemResolvedEventType = "problem.resolved"
 )
 
 // RequiresProblemVerification reports whether a Change professional outcome
@@ -119,6 +122,45 @@ func EmitChangeOutcomeEventTx(ctx context.Context, tx *ent.Tx, facts ChangeOutco
 		SetPayload(payload).
 		Save(ctx); err != nil {
 		return fmt.Errorf("persist change outcome event: %w", err)
+	}
+	return nil
+}
+
+// ProblemResolvedFacts is the immutable handover for a resolved Problem. The
+// resolver never changes Incident lifecycle state; the event only informs the
+// investigating Incident handlers.
+type ProblemResolvedFacts struct {
+	TenantID      int    `json:"tenantId"`
+	ActorID       int    `json:"actorId"`
+	ProblemID     int    `json:"problemId"`
+	WorkItemID    int    `json:"workItemId"`
+	Version       int    `json:"version"`
+	Source        string `json:"source"`
+	OperationID   string `json:"operationId"`
+	CorrelationID string `json:"correlationId"`
+}
+
+func problemResolvedEventID(workItemID, version int) string {
+	return fmt.Sprintf("problem-resolved:%d:%d", workItemID, version)
+}
+
+// EmitProblemResolvedEventTx persists the resolution event inside the owning Problem
+// command transaction, so the resolve write, its immutable receipt and the delivery
+// event commit or roll back together.
+func EmitProblemResolvedEventTx(ctx context.Context, tx *ent.Tx, facts ProblemResolvedFacts) error {
+	payload, err := json.Marshal(facts)
+	if err != nil {
+		return fmt.Errorf("marshal problem resolved facts: %w", err)
+	}
+	if _, err := tx.OutboxEvent.Create().
+		SetEventID(problemResolvedEventID(facts.WorkItemID, facts.Version)).
+		SetEventType(ProblemResolvedEventType).
+		SetTenantID(facts.TenantID).
+		SetAggregateType("work_item").
+		SetAggregateID(fmt.Sprintf("%d", facts.WorkItemID)).
+		SetPayload(payload).
+		Save(ctx); err != nil {
+		return fmt.Errorf("persist problem resolved event: %w", err)
 	}
 	return nil
 }

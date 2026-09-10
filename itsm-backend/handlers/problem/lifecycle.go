@@ -273,6 +273,23 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, d
 	if err = workitemmutation.RecordTx(ctx, tx, m, result, "problem."+cmd.Action, digest, facts); err != nil {
 		return empty, err
 	}
+	// A resolution owns a durable delivery event in this same transaction so the
+	// investigating incident handlers can never observe a half-committed resolve.
+	// The event only notifies; it never transitions incident lifecycle state.
+	if cmd.Action == "resolve" {
+		if err = service.EmitProblemResolvedEventTx(ctx, tx, service.ProblemResolvedFacts{
+			TenantID:      m.TenantID,
+			ActorID:       m.ActorID,
+			ProblemID:     p.ID,
+			WorkItemID:    item.ID,
+			Version:       updated.Version,
+			Source:        m.Source,
+			OperationID:   m.OperationID,
+			CorrelationID: m.CorrelationID,
+		}); err != nil {
+			return empty, err
+		}
+	}
 	return result, nil
 }
 

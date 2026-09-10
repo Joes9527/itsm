@@ -197,3 +197,58 @@ func TestWorkItemProblemResolveIgnoresOptionalFixDependency(t *testing.T) {
 	result := f.apply(t, "resolve", "optional-ok")
 	require.Equal(t, "resolved", result.Status)
 }
+
+// newProblemResolvedDeliveryWorker builds the real registered consumer path for the
+// problem-resolved event.
+func newProblemResolvedDeliveryWorker(t *testing.T, f *problemLifecycleFixture) *service.OutboxDeliveryWorker {
+	t.Helper()
+	logger := zap.NewNop().Sugar()
+	notifier := service.NewTicketNotificationService(f.client, logger)
+	notifier.SetNotificationPreferenceService(service.NewNotificationPreferenceService(f.client, logger))
+	registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{
+		service.NewProblemResolvedDeliveryHandler(f.client, notifier, logger),
+	})
+	require.NoError(t, err)
+	worker, err := service.NewOutboxDeliveryWorker(
+		service.NewOutboxEventRepository(f.client),
+		service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 20 * time.Second, MaxAttempts: 3},
+		logger,
+		registry,
+	)
+	require.NoError(t, err)
+	return worker
+}
+
+// B2 step 4 (slice C): resolving a Problem notifies the handler of every Incident
+// that investigated it, and must never close those Incidents as a side effect.
+func TestWorkItemProblemResolvedNotifiesIncidentHandler(t *testing.T) {
+	f := newChangeOutcomeDriver(t)
+	incidentItem := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(f.actor.ID).SetOpenedByID(f.actor.ID).
+		SetTitle("recurring outage").SetTicketNumber("INC-HANDLER").SetRecordClass("incident").
+		SetStatus("in_progress").SetPriority("high").SaveX(f.ctx)
+	f.client.Incident.Create().SetWorkItemID(incidentItem.ID).SetSeverity("high").SetDetectedAt(time.Now()).SaveX(f.ctx)
+	handler := f.client.User.Create().SetTenantID(f.tenant.ID).SetUsername("b2-incident-handler").SetName("b2 incident handler").
+		SetRole("agent").SetActive(true).SetEmail("b2-incident-handler@example.test").SetPasswordHash("test").SaveX(f.ctx)
+	incidentItem.Update().SetAssigneeID(handler.ID).ExecX(f.ctx)
+	f.client.WorkItemRelation.Create().SetTenantID(f.tenant.ID).SetSourceWorkItemID(incidentItem.ID).
+		SetTargetWorkItemID(f.p.WorkItemID).SetRelationType("investigated_by").SetCreatedByID(f.actor.ID).SaveX(f.ctx)
+
+	f.readyToResolve(t)
+	f.apply(t, "resolve", "solved")
+
+	events := f.client.OutboxEvent.Query().Where(outboxevent.EventType(service.ProblemResolvedEventType)).AllX(f.ctx)
+	require.Len(t, events, 1, "resolving a problem must emit exactly one resolution event")
+
+	worker := newProblemResolvedDeliveryWorker(t, f.problemLifecycleFixture)
+	require.NoError(t, worker.DispatchOnce(f.ctx))
+	rows := f.client.Notification.Query().Where(notification.TenantID(f.tenant.ID), notification.UserID(handler.ID)).AllX(f.ctx)
+	require.Len(t, rows, 1, "the investigating incident handler must be notified once")
+	require.Equal(t, service.ProblemResolvedEventType, rows[0].Type)
+
+	require.NoError(t, worker.DispatchOnce(f.ctx))
+	require.Len(t, f.client.Notification.Query().Where(notification.TenantID(f.tenant.ID), notification.UserID(handler.ID)).AllX(f.ctx), 1,
+		"repeated delivery must not duplicate the notification")
+
+	require.Equal(t, "in_progress", f.client.Ticket.GetX(f.ctx, incidentItem.ID).Status,
+		"resolving the problem must not close the investigating incident")
+}
