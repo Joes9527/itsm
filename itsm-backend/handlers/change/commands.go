@@ -293,6 +293,24 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, c
 	if err = workitemmutation.RecordTx(ctx, tx, m, result, "change."+cmd.Action, digest, facts); err != nil {
 		return empty, err
 	}
+	// A recorded outcome owns a durable delivery event in this same transaction, so
+	// the resolved_by_change verification path can never observe a half-committed
+	// outcome. Other actions emit nothing.
+	if cmd.Action == "record_outcome" {
+		if err = service.EmitChangeOutcomeEventTx(ctx, tx, service.ChangeOutcomeFacts{
+			TenantID:      m.TenantID,
+			ActorID:       m.ActorID,
+			ChangeID:      c.ID,
+			WorkItemID:    item.ID,
+			Outcome:       saved.Outcome,
+			Version:       updated.Version,
+			Source:        m.Source,
+			OperationID:   m.OperationID,
+			CorrelationID: m.CorrelationID,
+		}); err != nil {
+			return empty, err
+		}
+	}
 	if cmd.Action == "submit" {
 		key := "change_normal_flow"
 		if c.Type == "emergency" {

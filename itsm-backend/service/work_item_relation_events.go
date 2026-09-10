@@ -13,6 +13,9 @@ import (
 const (
 	RelationCreatedEventType = "work_item.relation_created"
 	RelationRemovedEventType = "work_item.relation_removed"
+	// ChangeOutcomeEventType carries a professional Change outcome to the
+	// resolved_by_change sources that must verify the repair.
+	ChangeOutcomeEventType = "change.outcome_recorded"
 )
 
 // RequiresProblemVerification reports whether a Change professional outcome
@@ -39,12 +42,35 @@ func IsDirectedRelation(relationType string) bool {
 	}
 }
 
+// RelationFacts is the immutable audit source for reliable delivery and outcome
+// dependency processing. It is declared in work_item_relation_service.go; the
+// delivery event carries it unchanged.
+
+// ChangeOutcomeFacts is the immutable handover for a recorded Change outcome.
+// ChangeID is the professional Change identity; WorkItemID owns the version and
+// the immutable receipt path.
+type ChangeOutcomeFacts struct {
+	TenantID      int    `json:"tenantId"`
+	ActorID       int    `json:"actorId"`
+	ChangeID      int    `json:"changeId"`
+	WorkItemID    int    `json:"workItemId"`
+	Outcome       string `json:"outcome"`
+	Version       int    `json:"version"`
+	Source        string `json:"source"`
+	OperationID   string `json:"operationId"`
+	CorrelationID string `json:"correlationId"`
+}
+
 func relationEventID(relationID, version int, removed bool) string {
 	outcome := "created"
 	if removed {
 		outcome = "removed"
 	}
 	return fmt.Sprintf("work-item-relation:%d:%d:%s", relationID, version, outcome)
+}
+
+func changeOutcomeEventID(workItemID, version int) string {
+	return fmt.Sprintf("change-outcome:%d:%d", workItemID, version)
 }
 
 // emitRelationEventTx persists the relation delivery event inside the caller's
@@ -72,6 +98,27 @@ func emitRelationEventTx(ctx context.Context, tx *ent.Tx, facts RelationFacts) e
 		SetPayload(payload).
 		Save(ctx); err != nil {
 		return fmt.Errorf("persist relation delivery event: %w", err)
+	}
+	return nil
+}
+
+// EmitChangeOutcomeEventTx persists the Change outcome delivery event inside the
+// owning Change command transaction, so the outcome write, its immutable receipt
+// and the delivery event commit or roll back together.
+func EmitChangeOutcomeEventTx(ctx context.Context, tx *ent.Tx, facts ChangeOutcomeFacts) error {
+	payload, err := json.Marshal(facts)
+	if err != nil {
+		return fmt.Errorf("marshal change outcome facts: %w", err)
+	}
+	if _, err := tx.OutboxEvent.Create().
+		SetEventID(changeOutcomeEventID(facts.WorkItemID, facts.Version)).
+		SetEventType(ChangeOutcomeEventType).
+		SetTenantID(facts.TenantID).
+		SetAggregateType("work_item").
+		SetAggregateID(fmt.Sprintf("%d", facts.WorkItemID)).
+		SetPayload(payload).
+		Save(ctx); err != nil {
+		return fmt.Errorf("persist change outcome event: %w", err)
 	}
 	return nil
 }

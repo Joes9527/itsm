@@ -691,7 +691,7 @@ func NewApplication() *Application {
 			}
 			tasks, ok := conn.(service.FeishuTaskCreator)
 			return tasks, ok
-		}), service.NewIncidentAlertDeliveryHandler(emailService), service.NewEmailAttachmentsDeliveryHandler(client, ticketAttachmentService, newTenantGraphInboundProvider(connectorManager)), service.NewEmailConfirmationDeliveryHandler(client, newTenantGraphInboundProvider(connectorManager)), service.NewWorkItemRelationCreatedDeliveryHandler(client, ticketNotificationService, sugar), service.NewWorkItemRelationRemovedDeliveryHandler(client, ticketNotificationService, sugar)},
+		}), service.NewIncidentAlertDeliveryHandler(emailService), service.NewEmailAttachmentsDeliveryHandler(client, ticketAttachmentService, newTenantGraphInboundProvider(connectorManager)), service.NewEmailConfirmationDeliveryHandler(client, newTenantGraphInboundProvider(connectorManager)), service.NewWorkItemRelationCreatedDeliveryHandler(client, ticketNotificationService, sugar), service.NewWorkItemRelationRemovedDeliveryHandler(client, ticketNotificationService, sugar), service.NewChangeOutcomeDeliveryHandler(client, ticketNotificationService, sugar)},
 		service.KafDelegateRequestedEventType,
 	)
 	if err != nil {
