@@ -5,13 +5,16 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
 	"itsm-backend/authorization"
+	"itsm-backend/common"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/database"
 	"itsm-backend/ent"
@@ -140,6 +143,9 @@ func (s *Service) Create(ctx context.Context, identity workitemcreation.Identity
 	for attempt := 0; attempt < 3; attempt++ {
 		result, retry, attemptErr := s.createAttempt(ctx, identity, normalized, digest)
 		if !retry && !retryableTransactionConflict(attemptErr) {
+			if len(normalized.SourceRelations) > 0 {
+				attemptErr = relationCreationError(attemptErr)
+			}
 			return result, attemptErr
 		}
 		lastErr = attemptErr
@@ -188,11 +194,27 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 	if err != nil {
 		return nil, errors.Is(err, errIdempotencyOwnerInProgress), err
 	}
+	relations := itsmservice.NewWorkItemRelationService(s.client, s.directory)
+	relationCommands := make([]itsmservice.RelationCommand, 0, len(command.SourceRelations))
+	for _, input := range command.SourceRelations {
+		relationCommands = append(relationCommands, itsmservice.RelationCommand{Meta: workitemmutation.Meta{TenantID: identity.TenantID, ActorID: identity.ActorID, ExpectedVersion: input.ExpectedVersion, Source: identity.Channel, OperationID: fmt.Sprintf("intake:%d:source:%d", receipt.ID, input.SourceWorkItemID), CorrelationID: auditRequestID(ctx, identity, digest)}, SourceID: input.SourceWorkItemID, Type: input.RelationType, Required: input.Metadata.Required})
+	}
 	if outcome == ClaimReplay {
+		for _, cmd := range relationCommands {
+			cmd.TargetID = *receipt.WorkItemID
+			if _, err := relations.ReplayTx(ctx, tx, cmd); err != nil {
+				return nil, false, err
+			}
+		}
 		result, loadErr := s.loadResult(ctx, tx, identity.TenantID, *receipt.WorkItemID, true)
 		return result, false, loadErr
 	}
 
+	for _, cmd := range relationCommands {
+		if err := relations.PrepareSourceTx(ctx, tx, cmd, command.RecordClass); err != nil {
+			return nil, false, err
+		}
+	}
 	resolved, err := s.resolver.Resolve(ctx, tx, identity, command)
 	if err != nil {
 		return nil, false, err
@@ -225,6 +247,12 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 	}
 	if err := validateProfessional(ctx, tx, workItem, professional); err != nil {
 		return nil, false, err
+	}
+	for _, cmd := range relationCommands {
+		cmd.TargetID = workItem.ID
+		if err := relations.AddTx(ctx, tx, cmd); err != nil {
+			return nil, false, err
+		}
 	}
 	if err := itsmservice.NewTicketSLAService(tx.Client(), nil).ApplyCreationSLA(ctx, tx, workItem, plan.WorkItem.SLADefinitionID); err != nil {
 		return nil, false, err
@@ -554,4 +582,38 @@ func retryableTransactionConflict(err error) bool {
 		return false
 	}
 	return state.SQLState() == "40001" || state.SQLState() == "40P01"
+}
+
+// Translate owning relation errors into the existing intake transport contract;
+// never expose database/operation details in a public creation error.
+func relationCreationError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var intakeErr *workitemcreation.IntakeError
+	if errors.As(err, &intakeErr) {
+		return err
+	}
+	var version *common.VersionConflictError
+	if errors.As(err, &version) {
+		return workitemcreation.NewIntakeError(workitemcreation.SourceVersionConflict, "source work item version changed", err)
+	}
+	var operation *workitemmutation.OperationConflictError
+	if errors.As(err, &operation) {
+		return workitemcreation.NewIdempotencyConflict("relation operation identity conflict", err)
+	}
+	var app *common.AppError
+	if errors.As(err, &app) {
+		switch app.Code {
+		case common.ErrCodeNotFound:
+			return workitemcreation.NewReferenceNotFound("source or target work item is unavailable", err)
+		case common.ErrCodeForbidden:
+			return workitemcreation.NewPermissionDenied("source relation permission denied", err)
+		case common.ErrCodeValidation:
+			return workitemcreation.NewDomainValidationFailed(app.Message, err)
+		case common.ErrCodeInternal:
+			return workitemcreation.NewInternalFailure("source relation operation failed", err)
+		}
+	}
+	return workitemcreation.NewInfrastructureUnavailable("could not apply intake operation", err)
 }

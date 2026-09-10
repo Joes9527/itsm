@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"path/filepath"
 	"strconv"
 	"testing"
 	"time"
@@ -71,11 +73,11 @@ type conversionControllerFixture struct {
 	provider  *ent.Tenant
 }
 
-func newConversionControllerFixture(t *testing.T, msp bool) *conversionControllerFixture {
+func newConversionControllerFixture(t *testing.T, msp bool, allScope ...bool) *conversionControllerFixture {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	ctx := context.Background()
-	client := enttest.Open(t, "sqlite3", fmt.Sprintf("file:conversion_%s?mode=memory&cache=shared&_fk=1", t.Name()))
+	client := enttest.Open(t, "sqlite3", (&url.URL{Scheme: "file", Path: filepath.Join(t.TempDir(), "conversion.db")}).String()+"?_fk=1")
 	t.Cleanup(func() { require.NoError(t, client.Close()) })
 	logger := zaptest.NewLogger(t).Sugar()
 	tenant := client.Tenant.Create().SetName("Conversion customer").SetCode("conversion-customer").SetStatus("active").SaveX(ctx)
@@ -86,8 +88,11 @@ func newConversionControllerFixture(t *testing.T, msp bool) *conversionControlle
 		actorTenant = client.Tenant.Create().SetName("Conversion provider").SetCode("conversion-provider").SetType("msp_provider").SetStatus("active").SaveX(ctx)
 		actorRole = "admin"
 	}
+	if len(allScope) > 0 && allScope[0] {
+		actorRole = "super_admin"
+	}
 	actorCreate := client.User.Create().SetTenantID(actorTenant.ID).SetUsername("conversion-actor").SetName("Conversion Actor").SetEmail("conversion-actor@example.test").SetPasswordHash("test").SetRole(actorRole).SetActive(true)
-	if msp {
+	if msp && actorRole != "super_admin" {
 		actorCreate.SetMspRole("provider_agent")
 	}
 	actor := actorCreate.SaveX(ctx)
@@ -99,6 +104,9 @@ func newConversionControllerFixture(t *testing.T, msp bool) *conversionControlle
 	effectiveRole := "agent"
 	if msp {
 		effectiveRole = "msp_tech"
+	}
+	if len(allScope) > 0 && allScope[0] {
+		effectiveRole = "super_admin"
 	}
 	role := client.Role.Create().SetTenantID(tenant.ID).SetCode(effectiveRole).SetName("Conversion role").SetIsActive(true).SaveX(ctx)
 	for _, permission := range []struct{ resource, action string }{{"problem", "read"}, {"problem", "write"}, {"incident", "read"}, {"incident", "write"}} {
@@ -116,7 +124,7 @@ func newConversionControllerFixture(t *testing.T, msp bool) *conversionControlle
 	require.NoError(t, registry.Register(problemDomain.NewService(problemDomain.NewEntRepository(client), logger)))
 	resolver := intake.NewResolver(service_catalog.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
 	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(&conversionTestAllocator{}), sameTransactionDirectory{})
-	controller := NewIncidentController(nil, nil, nil, nil, nil, logger)
+	controller := NewIncidentController(service.NewIncidentService(client, logger), nil, nil, nil, nil, logger)
 	controller.SetCreationApplication(app)
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
@@ -147,11 +155,11 @@ func executeConversion(t *testing.T, f *conversionControllerFixture, key, body s
 
 func TestConvertToProblemControllerCreatesAndReplaysSharedReceipt(t *testing.T) {
 	f := newConversionControllerFixture(t, false)
-	status, first := executeConversion(t, f, "local-conversion", `{"title":"Custom problem","description":"Custom description","rootCause":"Hypothesis"}`)
+	status, first := executeConversion(t, f, "local-conversion", `{"expectedVersion":1,"title":"Custom problem","description":"Custom description","rootCause":"Hypothesis"}`)
 	require.Equal(t, http.StatusCreated, status)
 	assert.Equal(t, "problem", first["recordClass"])
 	assert.Equal(t, false, first["replayed"])
-	status, replay := executeConversion(t, f, "local-conversion", `{"title":"Custom problem","description":"Custom description","rootCause":"Hypothesis"}`)
+	status, replay := executeConversion(t, f, "local-conversion", `{"expectedVersion":1,"title":"Custom problem","description":"Custom description","rootCause":"Hypothesis"}`)
 	require.Equal(t, http.StatusOK, status)
 	assert.Equal(t, true, replay["replayed"])
 	assert.Equal(t, first["workItemId"], replay["workItemId"])
@@ -161,13 +169,13 @@ func TestConvertToProblemControllerCreatesAndReplaysSharedReceipt(t *testing.T) 
 }
 
 func TestConvertToProblemControllerAllowsExplicitNativeOnBehalfRequester(t *testing.T) {
-	f := newConversionControllerFixture(t, false)
+	f := newConversionControllerFixture(t, false, true)
 	ctx := context.Background()
 	requester := f.client.User.Create().SetTenantID(f.tenant.ID).SetUsername("native-requester").SetName("Native Requester").SetEmail("native-requester@example.test").SetPasswordHash("test").SetRole("requester").SetActive(true).SaveX(ctx)
 	role := f.client.Role.Query().OnlyX(ctx)
 	permission := f.client.Permission.Create().SetTenantID(f.tenant.ID).SetCode("problem:create_on_behalf").SetName("problem:create_on_behalf").SetResource("problem").SetAction("create_on_behalf").SaveX(ctx)
 	f.client.RolePermission.Create().SetTenantID(f.tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(ctx)
-	body := fmt.Sprintf(`{"requesterId":%d,"title":"Native delegated problem"}`, requester.ID)
+	body := fmt.Sprintf(`{"expectedVersion":1,"requesterId":%d,"title":"Native delegated problem"}`, requester.ID)
 	status, result := executeConversion(t, f, "native-on-behalf", body)
 	require.Equal(t, http.StatusCreated, status)
 	created := f.client.Ticket.GetX(ctx, int(result["workItemId"].(float64)))
@@ -176,8 +184,8 @@ func TestConvertToProblemControllerAllowsExplicitNativeOnBehalfRequester(t *test
 }
 
 func TestConvertToProblemControllerUsesExplicitMSPCustomerRequesterAndReplays(t *testing.T) {
-	f := newConversionControllerFixture(t, true)
-	body := fmt.Sprintf(`{"requesterId":%d,"title":"Customer problem"}`, f.requester.ID)
+	f := newConversionControllerFixture(t, true, true)
+	body := fmt.Sprintf(`{"expectedVersion":1,"requesterId":%d,"title":"Customer problem"}`, f.requester.ID)
 	status, first := executeConversion(t, f, "msp-conversion", body)
 	require.Equal(t, http.StatusCreated, status)
 	status, replay := executeConversion(t, f, "msp-conversion", body)
@@ -340,4 +348,42 @@ func responseDataMap(t *testing.T, body []byte) map[string]any {
 	require.NoError(t, json.Unmarshal(body, &response))
 	require.NotNil(t, response.Data)
 	return response.Data
+}
+
+func TestConvertToProblemControllerStrictSourceVersion(t *testing.T) {
+	for _, tc := range []struct {
+		body, key string
+		status    int
+	}{
+		{`{"title":"missing version"}`, "missing", 400},
+		{`{"expectedVersion":0}`, "zero", 400},
+		{`{"expected_version":1}`, "unknown", 400},
+		{`{"expectedVersion":1,"expectedVersion":2}`, "duplicate", 400},
+		{`{"expectedVersion":2}`, "stale", 409},
+		{`{"expectedVersion":1}`, "", 400},
+	} {
+		t.Run(tc.key, func(t *testing.T) {
+			f := newConversionControllerFixture(t, false)
+			req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/incidents/%d/convert-to-problem", f.incident.ID), bytes.NewBufferString(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Idempotency-Key", tc.key)
+			w := httptest.NewRecorder()
+			f.router.ServeHTTP(w, req)
+			require.Equal(t, tc.status, w.Code, w.Body.String())
+			require.Zero(t, f.client.Problem.Query().CountX(context.Background()))
+			require.Equal(t, 1, f.client.Ticket.GetX(context.Background(), f.incident.WorkItemID).Version)
+		})
+	}
+}
+
+func TestConvertToProblemControllerRestrictedMSPVisibility(t *testing.T) {
+	f := newConversionControllerFixture(t, true)
+	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/v1/incidents/%d/convert-to-problem", f.incident.ID), bytes.NewBufferString(fmt.Sprintf(`{"expectedVersion":1,"requesterId":%d}`, f.requester.ID)))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Idempotency-Key", "restricted-msp")
+	w := httptest.NewRecorder()
+	f.router.ServeHTTP(w, req)
+	require.Equal(t, 404, w.Code, w.Body.String())
+	require.Zero(t, f.client.Problem.Query().CountX(context.Background()))
+	require.Zero(t, f.client.IntakeRequest.Query().CountX(context.Background()))
 }

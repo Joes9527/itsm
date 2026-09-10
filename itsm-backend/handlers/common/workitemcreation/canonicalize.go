@@ -29,6 +29,16 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 	if err = decoder.Decode(&n); err != nil {
 		return n, "", invalid("body", "must contain JSON-compatible values")
 	}
+	seenSources := map[int]bool{}
+	for _, relation := range n.SourceRelations {
+		if relation.SourceWorkItemID <= 0 || relation.ExpectedVersion <= 0 || strings.TrimSpace(relation.RelationType) == "" || seenSources[relation.SourceWorkItemID] {
+			return n, "", invalid("sourceRelations", "positive source/version and one relation per distinct source are required")
+		}
+		seenSources[relation.SourceWorkItemID] = true
+	}
+	sort.Slice(n.SourceRelations, func(i, j int) bool {
+		return n.SourceRelations[i].SourceWorkItemID < n.SourceRelations[j].SourceWorkItemID
+	})
 	n.IdempotencyKey = strings.TrimSpace(n.IdempotencyKey)
 	n.IntakeKind = strings.TrimSpace(n.IntakeKind)
 	n.RecordClass = strings.TrimSpace(n.RecordClass)
@@ -41,7 +51,7 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 	if n.IdempotencyKey == "" || utf8.RuneCountInString(n.IdempotencyKey) > 200 {
 		return n, "", invalid("idempotencyKey", "must contain 1 to 200 characters")
 	}
-	if (n.Title == "" && (n.Problem == nil || n.Problem.SourceIncidentID == nil) && (n.Change == nil || n.Change.StandardTemplateID == nil)) || utf8.RuneCountInString(n.Title) > 500 {
+	if (n.Title == "" && (n.RecordClass != RecordClassProblem || len(n.SourceRelations) != 1 || n.SourceRelations[0].RelationType != "investigated_by") && (n.Change == nil || n.Change.StandardTemplateID == nil)) || utf8.RuneCountInString(n.Title) > 500 {
 		return n, "", invalid("title", "must contain 1 to 500 characters")
 	}
 	if utf8.RuneCountInString(n.Description) > 20000 {
@@ -164,9 +174,6 @@ func CanonicalizeCommand(command CreateWorkItemCommand) (CreateWorkItemCommand, 
 		}
 	}
 	if n.Problem != nil {
-		if n.Problem.SourceIncidentID != nil && *n.Problem.SourceIncidentID <= 0 {
-			return n, "", invalid("problem.sourceIncidentId", "must be positive")
-		}
 		p := n.Problem
 		p.Category = strings.TrimSpace(p.Category)
 		p.RootCause = strings.TrimSpace(p.RootCause)

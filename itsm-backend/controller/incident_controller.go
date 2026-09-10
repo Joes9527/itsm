@@ -963,7 +963,20 @@ func (c *IncidentController) ConvertToProblem(ctx *gin.Context) {
 	if req.RequesterID != nil {
 		requesterID = *req.RequesterID
 	}
-	intakehttp.Execute(ctx, c.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassProblem, IntakeKind: creation.IntakeKindProblem, Title: req.Title, Description: req.Description, Problem: &creation.ProblemInput{SourceIncidentID: &incidentID, RootCause: req.RootCause}})
+	if c.incidentService == nil {
+		intakehttp.Fail(ctx, creation.NewInternalFailure("incident identity owner is unavailable", nil))
+		return
+	}
+	source, err := c.incidentService.ResolveCreationSource(ctx.Request.Context(), incidentID, tenantID)
+	if err != nil {
+		intakehttp.Fail(ctx, err)
+		return
+	}
+	if source <= 0 {
+		intakehttp.Fail(ctx, creation.NewReferenceNotFound("incident work item is unavailable", nil))
+		return
+	}
+	intakehttp.Execute(ctx, c.creationApplication, tenantID, requesterID, creation.CreateWorkItemCommand{RecordClass: creation.RecordClassProblem, IntakeKind: creation.IntakeKindProblem, Title: req.Title, Description: req.Description, Problem: &creation.ProblemInput{RootCause: req.RootCause}, SourceRelations: []creation.SourceRelationInput{{SourceWorkItemID: source, RelationType: "investigated_by", ExpectedVersion: req.ExpectedVersion}}})
 }
 
 // GetRootCause 获取根因分析

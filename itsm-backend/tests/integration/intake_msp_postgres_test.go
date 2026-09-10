@@ -347,206 +347,241 @@ func executeConversionHTTP(t *testing.T, router http.Handler, token string, inci
 }
 
 func TestPostgresIncidentConversionSignedMSPHTTPAuthorizationAndReplay(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	f := newIncidentEffectsFixture(t)
-	authorization.InvalidateAllPermissionCaches()
-	t.Cleanup(authorization.InvalidateAllPermissionCaches)
-	migrator := migration.NewMigrator(f.db, zap.NewNop().Sugar())
-	require.NoError(t, migrator.EnsureMigrationsTable(f.ctx))
-	_, err := migrator.RunMigrations(f.ctx, migration.PostSchemaMigrations())
-	require.NoError(t, err)
-	require.NoError(t, f.client.Schema.Create(f.ctx))
-
-	f.client.Tenant.UpdateOneID(f.tenant.ID).SetType("msp_customer").SetStatus("active").ExecX(f.ctx)
-	provider := f.client.Tenant.Create().SetCode("conversion-provider").SetName("Conversion Provider").SetType("msp_provider").SetStatus("active").SaveX(f.ctx)
-	actor := f.client.User.Create().SetTenantID(provider.ID).SetUsername("conversion-operator").SetName("Conversion Operator").SetEmail("conversion-operator@example.test").SetPasswordHash("test").SetRole("admin").SetMspRole("provider_agent").SetActive(true).SaveX(f.ctx)
-	allocation := f.client.MSPAllocation.Create().SetMspUserID(actor.ID).SetCustomerTenantID(f.tenant.ID).SetRole("primary").SaveX(f.ctx)
-	requester := f.actor
-	secondRequester := f.client.User.Create().SetTenantID(f.tenant.ID).SetUsername("second-requester").SetName("Second Requester").SetEmail("second-requester@example.test").SetPasswordHash("test").SetRole("requester").SetActive(true).SaveX(f.ctx)
-	role := f.client.Role.Create().SetTenantID(f.tenant.ID).SetCode("msp_tech").SetName("Customer conversion operator").SetIsActive(true).SaveX(f.ctx)
-	rolePermissions := make(map[string]*ent.RolePermission)
-	for _, grant := range []struct{ resource, action string }{
-		{"incident", "read"}, {"incident", "write"},
-		{"problem", "read"}, {"problem", "write"}, {"problem", "create_on_behalf"},
-	} {
-		permission := f.client.Permission.Create().SetTenantID(f.tenant.ID).SetCode(grant.resource + ":" + grant.action).SetName(grant.resource + ":" + grant.action).SetResource(grant.resource).SetAction(grant.action).SaveX(f.ctx)
-		rolePermissions[grant.resource+":"+grant.action] = f.client.RolePermission.Create().SetTenantID(f.tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(f.ctx)
-	}
-	f.client.ProcessBinding.Create().SetTenantID(f.tenant.ID).SetBusinessType("problem").SetIsDefault(true).SetIsActive(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(f.ctx)
-
-	clients, cfg := runtimeClients(t, f)
-	for _, table := range []string{"problems", "work_item_relations", "work_item_number_sequences", "intake_resolution_snapshots", "process_bindings", "sla_definitions", "field_definitions", "field_values", "service_catalogs", "configuration_items", "groups"} {
-		_, err = f.db.ExecContext(f.ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON "+table+" TO "+cfg.User)
-		require.NoError(t, err)
-		var sequence *string
-		require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT pg_get_serial_sequence($1,'id')", table).Scan(&sequence))
-		if sequence != nil {
-			_, err = f.db.ExecContext(f.ctx, "GRANT USAGE ON SEQUENCE "+*sequence+" TO "+cfg.User)
+	for _, allScope := range []bool{false, true} {
+		name := "restricted_msp_denied"
+		if allScope {
+			name = "selected_tenant_all_scope_replay"
+		}
+		t.Run(name, func(t *testing.T) {
+			gin.SetMode(gin.TestMode)
+			f := newIncidentEffectsFixture(t)
+			authorization.InvalidateAllPermissionCaches()
+			t.Cleanup(authorization.InvalidateAllPermissionCaches)
+			migrator := migration.NewMigrator(f.db, zap.NewNop().Sugar())
+			require.NoError(t, migrator.EnsureMigrationsTable(f.ctx))
+			_, err := migrator.RunMigrations(f.ctx, migration.PostSchemaMigrations())
 			require.NoError(t, err)
-		}
-	}
+			require.NoError(t, f.client.Schema.Create(f.ctx))
 
-	logger := zap.NewNop().Sugar()
-	registry := intake.NewCreatorRegistry()
-	require.NoError(t, registry.Register(problemdomain.NewService(problemdomain.NewEntRepository(clients.Tenant), logger)))
-	resolver := intake.NewResolver(catalogdomain.NewService(nil, clients.Tenant, logger, nil), service.NewProcessBindingService(clients.Tenant), service.NewConfigurationItemService(clients.Tenant, logger, nil, nil), service.NewTicketCategoryService(clients.Tenant))
-	app := intake.NewService(clients.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), clients.IntakeDirectorySnapshot())
-	incidentController := controller.NewIncidentController(nil, nil, nil, nil, nil, logger)
-	incidentController.SetCreationApplication(app)
-	const jwtSecret = "isolated-conversion-http-signing-key"
-	authService := service.NewAuthService(clients.Tenant, clients.System, jwtSecret, logger)
-	session, err := authService.SwitchTenant(f.ctx, actor.ID, f.tenant.ID)
-	require.NoError(t, err)
-	require.Equal(t, "msp_tech", session.User.Role)
-	router := conversionHTTPRouter(jwtSecret, clients, incidentController, clients.System)
-	body := fmt.Sprintf(`{"requesterId":%d,"title":"SSLVPN customer outage","description":"Customer cannot connect","rootCause":"Gateway instability"}`, requester.ID)
+			f.client.Tenant.UpdateOneID(f.tenant.ID).SetType("msp_customer").SetStatus("active").ExecX(f.ctx)
+			provider := f.client.Tenant.Create().SetCode("conversion-provider").SetName("Conversion Provider").SetType("msp_provider").SetStatus("active").SaveX(f.ctx)
+			actor := f.client.User.Create().SetTenantID(provider.ID).SetUsername("conversion-operator").SetName("Conversion Operator").SetEmail("conversion-operator@example.test").SetPasswordHash("test").SetRole("admin").SetMspRole("provider_agent").SetActive(true).SaveX(f.ctx)
+			if allScope {
+				actor = actor.Update().SetRole("super_admin").ClearMspRole().SaveX(f.ctx)
+			}
+			allocation := f.client.MSPAllocation.Create().SetMspUserID(actor.ID).SetCustomerTenantID(f.tenant.ID).SetRole("primary").SaveX(f.ctx)
+			requester := f.actor
+			secondRequester := f.client.User.Create().SetTenantID(f.tenant.ID).SetUsername("second-requester").SetName("Second Requester").SetEmail("second-requester@example.test").SetPasswordHash("test").SetRole("requester").SetActive(true).SaveX(f.ctx)
+			role := f.client.Role.Create().SetTenantID(f.tenant.ID).SetCode("msp_tech").SetName("Customer conversion operator").SetIsActive(true).SaveX(f.ctx)
+			rolePermissions := make(map[string]*ent.RolePermission)
+			for _, grant := range []struct{ resource, action string }{
+				{"incident", "read"}, {"incident", "write"},
+				{"problem", "read"}, {"problem", "write"}, {"problem", "create_on_behalf"},
+			} {
+				permission := f.client.Permission.Create().SetTenantID(f.tenant.ID).SetCode(grant.resource + ":" + grant.action).SetName(grant.resource + ":" + grant.action).SetResource(grant.resource).SetAction(grant.action).SaveX(f.ctx)
+				rolePermissions[grant.resource+":"+grant.action] = f.client.RolePermission.Create().SetTenantID(f.tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(f.ctx)
+			}
+			f.client.ProcessBinding.Create().SetTenantID(f.tenant.ID).SetBusinessType("problem").SetIsDefault(true).SetIsActive(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(f.ctx)
 
-	status, envelope := executeConversionHTTP(t, router, session.AccessToken, f.inc.ID, "signed-msp-conversion", body)
-	require.Equal(t, http.StatusCreated, status, envelope.Message)
-	require.Equal(t, 0, envelope.Code)
-	var first creation.CreateWorkItemResult
-	require.NoError(t, json.Unmarshal(envelope.Data, &first))
-	require.False(t, first.Replayed)
-	require.Equal(t, creation.RecordClassProblem, first.RecordClass)
-	status, envelope = executeConversionHTTP(t, router, session.AccessToken, f.inc.ID, "signed-msp-conversion", body)
-	require.Equal(t, http.StatusOK, status, envelope.Message)
-	var replay creation.CreateWorkItemResult
-	require.NoError(t, json.Unmarshal(envelope.Data, &replay))
-	require.True(t, replay.Replayed)
-	require.Equal(t, first.WorkItemID, replay.WorkItemID)
-	require.Equal(t, first.Number, replay.Number)
+			clients, cfg := runtimeClients(t, f)
+			for _, table := range []string{"problems", "work_item_relations", "work_item_number_sequences", "intake_resolution_snapshots", "process_bindings", "sla_definitions", "field_definitions", "field_values", "service_catalogs", "configuration_items", "groups"} {
+				_, err = f.db.ExecContext(f.ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON "+table+" TO "+cfg.User)
+				require.NoError(t, err)
+				var sequence *string
+				require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT pg_get_serial_sequence($1,'id')", table).Scan(&sequence))
+				if sequence != nil {
+					_, err = f.db.ExecContext(f.ctx, "GRANT USAGE ON SEQUENCE "+*sequence+" TO "+cfg.User)
+					require.NoError(t, err)
+				}
+			}
 
-	created := f.client.Ticket.Query().Where(ticket.IDEQ(first.WorkItemID)).OnlyX(f.ctx)
-	require.Equal(t, f.tenant.ID, created.TenantID)
-	require.Equal(t, requester.ID, created.RequesterID)
-	require.Equal(t, actor.ID, created.OpenedByID)
-	require.Equal(t, creation.RecordClassProblem, created.RecordClass)
-	require.Equal(t, 1, f.client.Problem.Query().CountX(f.ctx))
-	relation := f.client.WorkItemRelation.Query().OnlyX(f.ctx)
-	require.Equal(t, f.inc.WorkItemID, relation.SourceWorkItemID)
-	require.Equal(t, created.ID, relation.TargetWorkItemID)
-	require.Equal(t, "investigated_by", relation.RelationType)
-	require.Equal(t, actor.ID, relation.CreatedByID)
-	event := f.client.IncidentEvent.Query().OnlyX(f.ctx)
-	require.Equal(t, f.inc.ID, event.IncidentID)
-	require.Equal(t, actor.ID, event.UserID)
-	require.Equal(t, "convert_to_problem", event.EventName)
-	receipt := f.client.IntakeRequest.Query().Where(intakerequest.WorkItemID(first.WorkItemID)).OnlyX(f.ctx)
-	require.Equal(t, provider.ID, receipt.ActorTenantID)
-	require.Equal(t, actor.ID, receipt.ActorID)
-	require.Equal(t, requester.ID, receipt.RequesterID)
-	conversionAudit := f.client.AuditLog.Query().Where(auditlog.Action("convert_to_problem")).OnlyX(f.ctx)
-	var provenance creation.ActorProvenance
-	require.NoError(t, json.Unmarshal([]byte(*conversionAudit.RequestBody), &provenance))
-	require.Equal(t, actor.ID, provenance.ActorUserID)
-	require.Equal(t, provider.ID, provenance.ActorTenantID)
-	require.Equal(t, f.tenant.ID, provenance.TargetTenantID)
-	require.Equal(t, first.WorkItemID, provenance.WorkItemID)
-	source := f.client.Ticket.GetX(f.ctx, f.inc.WorkItemID)
-	require.Equal(t, requester.ID, source.RequesterID)
-	require.Equal(t, "new", source.Status)
+			logger := zap.NewNop().Sugar()
+			registry := intake.NewCreatorRegistry()
+			require.NoError(t, registry.Register(problemdomain.NewService(problemdomain.NewEntRepository(clients.Tenant), logger)))
+			resolver := intake.NewResolver(catalogdomain.NewService(nil, clients.Tenant, logger, nil), service.NewProcessBindingService(clients.Tenant), service.NewConfigurationItemService(clients.Tenant, logger, nil, nil), service.NewTicketCategoryService(clients.Tenant))
+			app := intake.NewService(clients.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), clients.IntakeDirectorySnapshot())
+			incidentController := controller.NewIncidentController(service.NewIncidentService(clients.Tenant, logger), nil, nil, nil, nil, logger)
+			incidentController.SetCreationApplication(app)
+			const jwtSecret = "isolated-conversion-http-signing-key"
+			authService := service.NewAuthService(clients.Tenant, clients.System, jwtSecret, logger)
+			session, err := authService.SwitchTenant(f.ctx, actor.ID, f.tenant.ID)
+			require.NoError(t, err)
+			if allScope {
+				require.Equal(t, "super_admin", session.User.Role)
+			} else {
+				require.Equal(t, "msp_tech", session.User.Role)
+			}
+			router := conversionHTTPRouter(jwtSecret, clients, incidentController, clients.System)
+			body := fmt.Sprintf(`{"expectedVersion":1,"requesterId":%d,"title":"SSLVPN customer outage","description":"Customer cannot connect","rootCause":"Gateway instability"}`, requester.ID)
 
-	stableGraph := readConversionHTTPGraph(t, f.client)
-	assertDeniedReplay := func(name string, wantStatus int, mutate func(), restore func()) {
-		t.Helper()
-		mutate()
-		status, denied := executeConversionHTTP(t, router, session.AccessToken, f.inc.ID, "signed-msp-conversion", body)
-		require.Equal(t, wantStatus, status, "%s: %s", name, denied.Message)
-		require.NotEqual(t, 0, denied.Code, name)
-		require.Equal(t, stableGraph, readConversionHTTPGraph(t, f.client), name)
-		require.Equal(t, provider.ID, f.client.IntakeRequest.GetX(f.ctx, receipt.ID).ActorTenantID, name)
-		restore()
-	}
+			status, envelope := executeConversionHTTP(t, router, session.AccessToken, f.inc.ID, "signed-msp-conversion", body)
+			var receipt *ent.IntakeRequest
+			if !allScope {
+				require.Equal(t, http.StatusNotFound, status, envelope.Message)
+				require.Zero(t, f.client.Problem.Query().CountX(f.ctx))
+				require.Zero(t, f.client.WorkItemRelation.Query().CountX(f.ctx))
+			} else {
+				require.Equal(t, http.StatusCreated, status, envelope.Message)
+				require.Equal(t, 0, envelope.Code)
+				var first creation.CreateWorkItemResult
+				require.NoError(t, json.Unmarshal(envelope.Data, &first))
+				require.False(t, first.Replayed)
+				require.Equal(t, creation.RecordClassProblem, first.RecordClass)
+				status, envelope = executeConversionHTTP(t, router, session.AccessToken, f.inc.ID, "signed-msp-conversion", body)
+				require.Equal(t, http.StatusOK, status, envelope.Message)
+				var replay creation.CreateWorkItemResult
+				require.NoError(t, json.Unmarshal(envelope.Data, &replay))
+				require.True(t, replay.Replayed)
+				require.Equal(t, first.WorkItemID, replay.WorkItemID)
+				require.Equal(t, first.Number, replay.Number)
 
-	assertDeniedReplay("deassigned allocation", http.StatusForbidden,
-		func() { f.client.MSPAllocation.UpdateOneID(allocation.ID).SetDeassignedAt(time.Now()).ExecX(f.ctx) },
-		func() { f.client.MSPAllocation.UpdateOneID(allocation.ID).ClearDeassignedAt().ExecX(f.ctx) })
-	assertDeniedReplay("removed allocation", http.StatusForbidden,
-		func() { f.client.MSPAllocation.DeleteOneID(allocation.ID).ExecX(f.ctx) },
-		func() {
-			allocation = f.client.MSPAllocation.Create().SetMspUserID(actor.ID).SetCustomerTenantID(f.tenant.ID).SetRole("primary").SaveX(f.ctx)
+				created := f.client.Ticket.Query().Where(ticket.IDEQ(first.WorkItemID)).OnlyX(f.ctx)
+				require.Equal(t, f.tenant.ID, created.TenantID)
+				require.Equal(t, requester.ID, created.RequesterID)
+				require.Equal(t, actor.ID, created.OpenedByID)
+				require.Equal(t, creation.RecordClassProblem, created.RecordClass)
+				require.Equal(t, 1, f.client.Problem.Query().CountX(f.ctx))
+				relation := f.client.WorkItemRelation.Query().OnlyX(f.ctx)
+				require.Equal(t, f.inc.WorkItemID, relation.SourceWorkItemID)
+				require.Equal(t, created.ID, relation.TargetWorkItemID)
+				require.Equal(t, "investigated_by", relation.RelationType)
+				require.Equal(t, actor.ID, relation.CreatedByID)
+				event := f.client.IncidentEvent.Query().OnlyX(f.ctx)
+				require.Equal(t, f.inc.ID, event.IncidentID)
+				require.Equal(t, actor.ID, event.UserID)
+				require.Equal(t, "convert_to_problem", event.EventName)
+				receipt = f.client.IntakeRequest.Query().Where(intakerequest.WorkItemID(first.WorkItemID)).OnlyX(f.ctx)
+				require.Equal(t, provider.ID, receipt.ActorTenantID)
+				require.Equal(t, actor.ID, receipt.ActorID)
+				require.Equal(t, requester.ID, receipt.RequesterID)
+				conversionAudit := f.client.AuditLog.Query().Where(auditlog.Action("convert_to_problem")).OnlyX(f.ctx)
+				var provenance creation.ActorProvenance
+				require.NoError(t, json.Unmarshal([]byte(*conversionAudit.RequestBody), &provenance))
+				require.Equal(t, actor.ID, provenance.ActorUserID)
+				require.Equal(t, provider.ID, provenance.ActorTenantID)
+				require.Equal(t, f.tenant.ID, provenance.TargetTenantID)
+				require.Equal(t, first.WorkItemID, provenance.WorkItemID)
+				source := f.client.Ticket.GetX(f.ctx, f.inc.WorkItemID)
+				require.Equal(t, requester.ID, source.RequesterID)
+				require.Equal(t, "new", source.Status)
+
+			}
+			stableGraph := readConversionHTTPGraph(t, f.client)
+			assertCurrentDenial := func(name string, wantStatus int, mutate func(), restore func()) {
+				t.Helper()
+				mutate()
+				status, denied := executeConversionHTTP(t, router, session.AccessToken, f.inc.ID, "signed-msp-conversion", body)
+				require.Equal(t, wantStatus, status, "%s: %s", name, denied.Message)
+				require.NotEqual(t, 0, denied.Code, name)
+				require.Equal(t, stableGraph, readConversionHTTPGraph(t, f.client), name)
+				if allScope {
+					require.Equal(t, provider.ID, f.client.IntakeRequest.GetX(f.ctx, receipt.ID).ActorTenantID, name)
+				}
+				restore()
+			}
+
+			if !allScope {
+				assertCurrentDenial("deassigned allocation", http.StatusForbidden,
+					func() { f.client.MSPAllocation.UpdateOneID(allocation.ID).SetDeassignedAt(time.Now()).ExecX(f.ctx) },
+					func() { f.client.MSPAllocation.UpdateOneID(allocation.ID).ClearDeassignedAt().ExecX(f.ctx) })
+				assertCurrentDenial("removed allocation", http.StatusForbidden,
+					func() { f.client.MSPAllocation.DeleteOneID(allocation.ID).ExecX(f.ctx) },
+					func() {
+						allocation = f.client.MSPAllocation.Create().SetMspUserID(actor.ID).SetCustomerTenantID(f.tenant.ID).SetRole("primary").SaveX(f.ctx)
+					})
+				problemWrite := rolePermissions["problem:write"]
+				assertCurrentDenial("professional permission removed", http.StatusForbidden,
+					func() { f.client.RolePermission.DeleteOneID(problemWrite.ID).ExecX(f.ctx) },
+					func() {
+						problemWrite = f.client.RolePermission.Create().SetTenantID(f.tenant.ID).SetRoleID(role.ID).SetPermissionID(problemWrite.PermissionID).SaveX(f.ctx)
+					})
+				assertCurrentDenial("target role inactive", http.StatusForbidden,
+					func() { f.client.Role.UpdateOneID(role.ID).SetIsActive(false).ExecX(f.ctx) },
+					func() { f.client.Role.UpdateOneID(role.ID).SetIsActive(true).ExecX(f.ctx) })
+				assertCurrentDenial("mapped role changed", http.StatusUnauthorized,
+					func() { f.client.User.UpdateOneID(actor.ID).SetMspRole("provider_admin").ExecX(f.ctx) },
+					func() { f.client.User.UpdateOneID(actor.ID).SetMspRole("provider_agent").ExecX(f.ctx) })
+			}
+			assertCurrentDenial("actor inactive", http.StatusUnauthorized,
+				func() { f.client.User.UpdateOneID(actor.ID).SetActive(false).ExecX(f.ctx) },
+				func() { f.client.User.UpdateOneID(actor.ID).SetActive(true).ExecX(f.ctx) })
+			assertCurrentDenial("requester inactive", http.StatusForbidden,
+				func() { f.client.User.UpdateOneID(requester.ID).SetActive(false).ExecX(f.ctx) },
+				func() { f.client.User.UpdateOneID(requester.ID).SetActive(true).ExecX(f.ctx) })
+			assertCurrentDenial("customer inactive", http.StatusForbidden,
+				func() { f.client.Tenant.UpdateOneID(f.tenant.ID).SetStatus("suspended").ExecX(f.ctx) },
+				func() { f.client.Tenant.UpdateOneID(f.tenant.ID).SetStatus("active").ExecX(f.ctx) })
+			assertCurrentDenial("customer expired", http.StatusForbidden,
+				func() { f.client.Tenant.UpdateOneID(f.tenant.ID).SetExpiresAt(time.Now().Add(-time.Hour)).ExecX(f.ctx) },
+				func() { f.client.Tenant.UpdateOneID(f.tenant.ID).ClearExpiresAt().ExecX(f.ctx) })
+
+			for _, invalid := range []struct {
+				name, key, body string
+				wantStatus      int
+			}{
+				{"missing cross-customer requester", "missing-requester", `{"expectedVersion":1}`, http.StatusBadRequest},
+				{"actor self requester", "self-requester", fmt.Sprintf(`{"expectedVersion":1,"requesterId":%d}`, actor.ID), http.StatusBadRequest},
+			} {
+				status, denied := executeConversionHTTP(t, router, session.AccessToken, f.inc.ID, invalid.key, invalid.body)
+				require.Equal(t, invalid.wantStatus, status, "%s: %s", invalid.name, denied.Message)
+				var detail struct {
+					ErrorCode   creation.ErrorCode    `json:"errorCode"`
+					FieldErrors []creation.FieldError `json:"fieldErrors"`
+				}
+				require.NoError(t, json.Unmarshal(denied.Data, &detail), invalid.name)
+				require.Equal(t, creation.InvalidCommand, detail.ErrorCode, invalid.name)
+				require.NotEmpty(t, detail.FieldErrors, invalid.name)
+				require.Equal(t, "requesterId", detail.FieldErrors[0].Field, invalid.name)
+				require.Equal(t, stableGraph, readConversionHTTPGraph(t, f.client), invalid.name)
+			}
+
+			changedBody := fmt.Sprintf(`{"expectedVersion":1,"requesterId":%d,"title":"SSLVPN customer outage","description":"Customer cannot connect","rootCause":"Gateway instability"}`, secondRequester.ID)
+			status, envelope = executeConversionHTTP(t, router, session.AccessToken, f.inc.ID, "signed-msp-conversion", changedBody)
+			if allScope {
+				require.Equal(t, http.StatusConflict, status, envelope.Message)
+			} else {
+				require.Equal(t, http.StatusNotFound, status, envelope.Message)
+			}
+			require.Equal(t, stableGraph, readConversionHTTPGraph(t, f.client))
+
+			missingDirectoryRouter := conversionHTTPRouter(jwtSecret, clients, incidentController, nil)
+			status, envelope = executeConversionHTTP(t, missingDirectoryRouter, session.AccessToken, f.inc.ID, "missing-directory", body)
+			require.Equal(t, http.StatusServiceUnavailable, status, envelope.Message)
+			require.Equal(t, stableGraph, readConversionHTTPGraph(t, f.client))
+
+			foreignTenant := f.client.Tenant.Create().SetCode("foreign-customer").SetName("Foreign Customer").SetType("msp_customer").SetStatus("active").SaveX(f.ctx)
+			foreignRequester := f.client.User.Create().SetTenantID(foreignTenant.ID).SetUsername("foreign-requester").SetName("Foreign Requester").SetEmail("foreign-requester@example.test").SetPasswordHash("test").SetRole("requester").SetActive(true).SaveX(f.ctx)
+			foreignItem := f.client.Ticket.Create().SetTenantID(foreignTenant.ID).SetRequesterID(foreignRequester.ID).SetOpenedByID(foreignRequester.ID).SetTitle("Foreign source").SetTicketNumber("INC-FOREIGN").SetRecordClass("incident").SetStatus("new").SetPriority("high").SaveX(f.ctx)
+			foreignIncident := f.client.Incident.Create().SetWorkItemID(foreignItem.ID).SetSeverity("high").SetDetectedAt(time.Now()).SaveX(f.ctx)
+			beforeForeign := readConversionHTTPGraph(t, f.client)
+			status, envelope = executeConversionHTTP(t, router, session.AccessToken, foreignIncident.ID, "foreign-source", body)
+			require.Equal(t, http.StatusNotFound, status, envelope.Message)
+			require.Equal(t, beforeForeign, readConversionHTTPGraph(t, f.client))
+
+			deletedItem := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(requester.ID).SetOpenedByID(requester.ID).SetTitle("Deleted source").SetTicketNumber("INC-DELETED").SetRecordClass("incident").SetStatus("new").SetPriority("high").SetDeletedAt(time.Now()).SaveX(f.ctx)
+			deletedIncident := f.client.Incident.Create().SetWorkItemID(deletedItem.ID).SetSeverity("high").SetDetectedAt(time.Now()).SaveX(f.ctx)
+			beforeDeleted := readConversionHTTPGraph(t, f.client)
+			status, envelope = executeConversionHTTP(t, router, session.AccessToken, deletedIncident.ID, "deleted-source", body)
+			require.Equal(t, http.StatusNotFound, status, envelope.Message)
+			require.Equal(t, beforeDeleted, readConversionHTTPGraph(t, f.client))
+
+			finalItem := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(requester.ID).SetOpenedByID(requester.ID).SetTitle("Closed source").SetTicketNumber("INC-CLOSED").SetRecordClass("incident").SetStatus("closed").SetPriority("high").SaveX(f.ctx)
+			finalIncident := f.client.Incident.Create().SetWorkItemID(finalItem.ID).SetSeverity("high").SetDetectedAt(time.Now()).SaveX(f.ctx)
+			beforeFinal := readConversionHTTPGraph(t, f.client)
+			status, envelope = executeConversionHTTP(t, router, session.AccessToken, finalIncident.ID, "closed-source", body)
+			if allScope {
+				require.Equal(t, http.StatusBadRequest, status, envelope.Message)
+			} else {
+				require.Equal(t, http.StatusNotFound, status, envelope.Message)
+			}
+			require.Equal(t, beforeFinal, readConversionHTTPGraph(t, f.client))
+
+			require.Zero(t, database.GetRawDB().Stats().InUse)
+			require.Zero(t, clients.SystemDB.Stats().InUse)
+			t.Log("signed selected-tenant transport verifies current auth; restricted MSP remains denied without writes, all-scope session proves conversion/replay persistence; current revocations preserve the original graph")
+
 		})
-	problemWrite := rolePermissions["problem:write"]
-	assertDeniedReplay("professional permission removed", http.StatusForbidden,
-		func() { f.client.RolePermission.DeleteOneID(problemWrite.ID).ExecX(f.ctx) },
-		func() {
-			problemWrite = f.client.RolePermission.Create().SetTenantID(f.tenant.ID).SetRoleID(role.ID).SetPermissionID(problemWrite.PermissionID).SaveX(f.ctx)
-		})
-	assertDeniedReplay("target role inactive", http.StatusForbidden,
-		func() { f.client.Role.UpdateOneID(role.ID).SetIsActive(false).ExecX(f.ctx) },
-		func() { f.client.Role.UpdateOneID(role.ID).SetIsActive(true).ExecX(f.ctx) })
-	assertDeniedReplay("mapped role changed", http.StatusUnauthorized,
-		func() { f.client.User.UpdateOneID(actor.ID).SetMspRole("provider_admin").ExecX(f.ctx) },
-		func() { f.client.User.UpdateOneID(actor.ID).SetMspRole("provider_agent").ExecX(f.ctx) })
-	assertDeniedReplay("actor inactive", http.StatusUnauthorized,
-		func() { f.client.User.UpdateOneID(actor.ID).SetActive(false).ExecX(f.ctx) },
-		func() { f.client.User.UpdateOneID(actor.ID).SetActive(true).ExecX(f.ctx) })
-	assertDeniedReplay("requester inactive", http.StatusForbidden,
-		func() { f.client.User.UpdateOneID(requester.ID).SetActive(false).ExecX(f.ctx) },
-		func() { f.client.User.UpdateOneID(requester.ID).SetActive(true).ExecX(f.ctx) })
-	assertDeniedReplay("customer inactive", http.StatusForbidden,
-		func() { f.client.Tenant.UpdateOneID(f.tenant.ID).SetStatus("suspended").ExecX(f.ctx) },
-		func() { f.client.Tenant.UpdateOneID(f.tenant.ID).SetStatus("active").ExecX(f.ctx) })
-	assertDeniedReplay("customer expired", http.StatusForbidden,
-		func() { f.client.Tenant.UpdateOneID(f.tenant.ID).SetExpiresAt(time.Now().Add(-time.Hour)).ExecX(f.ctx) },
-		func() { f.client.Tenant.UpdateOneID(f.tenant.ID).ClearExpiresAt().ExecX(f.ctx) })
-
-	for _, invalid := range []struct {
-		name, key, body string
-		wantStatus      int
-	}{
-		{"missing cross-customer requester", "missing-requester", `{}`, http.StatusBadRequest},
-		{"actor self requester", "self-requester", fmt.Sprintf(`{"requesterId":%d}`, actor.ID), http.StatusBadRequest},
-	} {
-		status, denied := executeConversionHTTP(t, router, session.AccessToken, f.inc.ID, invalid.key, invalid.body)
-		require.Equal(t, invalid.wantStatus, status, "%s: %s", invalid.name, denied.Message)
-		var detail struct {
-			ErrorCode   creation.ErrorCode    `json:"errorCode"`
-			FieldErrors []creation.FieldError `json:"fieldErrors"`
-		}
-		require.NoError(t, json.Unmarshal(denied.Data, &detail), invalid.name)
-		require.Equal(t, creation.InvalidCommand, detail.ErrorCode, invalid.name)
-		require.NotEmpty(t, detail.FieldErrors, invalid.name)
-		require.Equal(t, "requesterId", detail.FieldErrors[0].Field, invalid.name)
-		require.Equal(t, stableGraph, readConversionHTTPGraph(t, f.client), invalid.name)
 	}
-
-	changedBody := fmt.Sprintf(`{"requesterId":%d,"title":"SSLVPN customer outage","description":"Customer cannot connect","rootCause":"Gateway instability"}`, secondRequester.ID)
-	status, envelope = executeConversionHTTP(t, router, session.AccessToken, f.inc.ID, "signed-msp-conversion", changedBody)
-	require.Equal(t, http.StatusConflict, status, envelope.Message)
-	require.Equal(t, stableGraph, readConversionHTTPGraph(t, f.client))
-
-	missingDirectoryRouter := conversionHTTPRouter(jwtSecret, clients, incidentController, nil)
-	status, envelope = executeConversionHTTP(t, missingDirectoryRouter, session.AccessToken, f.inc.ID, "missing-directory", body)
-	require.Equal(t, http.StatusServiceUnavailable, status, envelope.Message)
-	require.Equal(t, stableGraph, readConversionHTTPGraph(t, f.client))
-
-	foreignTenant := f.client.Tenant.Create().SetCode("foreign-customer").SetName("Foreign Customer").SetType("msp_customer").SetStatus("active").SaveX(f.ctx)
-	foreignRequester := f.client.User.Create().SetTenantID(foreignTenant.ID).SetUsername("foreign-requester").SetName("Foreign Requester").SetEmail("foreign-requester@example.test").SetPasswordHash("test").SetRole("requester").SetActive(true).SaveX(f.ctx)
-	foreignItem := f.client.Ticket.Create().SetTenantID(foreignTenant.ID).SetRequesterID(foreignRequester.ID).SetOpenedByID(foreignRequester.ID).SetTitle("Foreign source").SetTicketNumber("INC-FOREIGN").SetRecordClass("incident").SetStatus("new").SetPriority("high").SaveX(f.ctx)
-	foreignIncident := f.client.Incident.Create().SetWorkItemID(foreignItem.ID).SetSeverity("high").SetDetectedAt(time.Now()).SaveX(f.ctx)
-	beforeForeign := readConversionHTTPGraph(t, f.client)
-	status, envelope = executeConversionHTTP(t, router, session.AccessToken, foreignIncident.ID, "foreign-source", body)
-	require.Equal(t, http.StatusNotFound, status, envelope.Message)
-	require.Equal(t, beforeForeign, readConversionHTTPGraph(t, f.client))
-
-	deletedItem := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(requester.ID).SetOpenedByID(requester.ID).SetTitle("Deleted source").SetTicketNumber("INC-DELETED").SetRecordClass("incident").SetStatus("new").SetPriority("high").SetDeletedAt(time.Now()).SaveX(f.ctx)
-	deletedIncident := f.client.Incident.Create().SetWorkItemID(deletedItem.ID).SetSeverity("high").SetDetectedAt(time.Now()).SaveX(f.ctx)
-	beforeDeleted := readConversionHTTPGraph(t, f.client)
-	status, envelope = executeConversionHTTP(t, router, session.AccessToken, deletedIncident.ID, "deleted-source", body)
-	require.Equal(t, http.StatusNotFound, status, envelope.Message)
-	require.Equal(t, beforeDeleted, readConversionHTTPGraph(t, f.client))
-
-	finalItem := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(requester.ID).SetOpenedByID(requester.ID).SetTitle("Closed source").SetTicketNumber("INC-CLOSED").SetRecordClass("incident").SetStatus("closed").SetPriority("high").SaveX(f.ctx)
-	finalIncident := f.client.Incident.Create().SetWorkItemID(finalItem.ID).SetSeverity("high").SetDetectedAt(time.Now()).SaveX(f.ctx)
-	beforeFinal := readConversionHTTPGraph(t, f.client)
-	status, envelope = executeConversionHTTP(t, router, session.AccessToken, finalIncident.ID, "closed-source", body)
-	require.Equal(t, http.StatusBadRequest, status, envelope.Message)
-	require.Equal(t, beforeFinal, readConversionHTTPGraph(t, f.client))
-
-	require.Zero(t, database.GetRawDB().Stats().InUse)
-	require.Zero(t, clients.SystemDB.Stats().InUse)
-	t.Log("actual signed SwitchTenant token passed Auth, current RBAC, Tenant, route permission and conversion; every current revocation denied replay and preserved the original graph")
 }
 
 func TestPostgresIntakeMSPEmptyDevelopmentReset(t *testing.T) {

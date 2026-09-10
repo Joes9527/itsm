@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	relationmeta "itsm-backend/common/workitemrelation"
 	"itsm-backend/handlers/common/accessgrant"
 	"reflect"
 	"strings"
@@ -81,10 +82,9 @@ type GenericInput struct {
 	Category string `json:"category,omitempty"`
 }
 type ProblemInput struct {
-	SourceIncidentID *int   `json:"sourceIncidentId,omitempty"`
-	Category         string `json:"category,omitempty"`
-	RootCause        string `json:"rootCause,omitempty"`
-	Impact           string `json:"impact,omitempty"`
+	Category  string `json:"category,omitempty"`
+	RootCause string `json:"rootCause,omitempty"`
+	Impact    string `json:"impact,omitempty"`
 }
 type ServiceRequestInput struct {
 	Amount             json.Number `json:"amount,omitempty"`
@@ -135,7 +135,18 @@ type AdHocFieldDefinition struct {
 	Name  string `json:"name"`
 	Label string `json:"label"`
 }
+
+// SourceRelationInput creates a link from an existing WorkItem to the new target.
+// Each source occurs once: its caller-observed version is never inferred.
+type SourceRelationInput struct {
+	SourceWorkItemID int                   `json:"sourceWorkItemId"`
+	RelationType     string                `json:"relationType"`
+	ExpectedVersion  int                   `json:"expectedVersion"`
+	Metadata         relationmeta.Metadata `json:"metadata"`
+}
+
 type CreateWorkItemCommand struct {
+	SourceRelations       []SourceRelationInput  `json:"sourceRelations,omitempty"`
 	TemplateID            *int                   `json:"templateId,omitempty"`
 	ParentTicketID        *int                   `json:"parentTicketId,omitempty"`
 	TagIDs                []int                  `json:"tagIds,omitempty"`

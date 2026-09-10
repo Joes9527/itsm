@@ -3,12 +3,10 @@ package authorization
 import (
 	"context"
 	"itsm-backend/ent"
-	"itsm-backend/ent/incident"
 	"itsm-backend/ent/permission"
 	"itsm-backend/ent/role"
 	"itsm-backend/ent/rolepermission"
 	"itsm-backend/ent/standardchange"
-	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"strings"
@@ -129,20 +127,6 @@ func authorizeWorkItemCreationForActor(ctx context.Context, tx *ent.Tx, actor *e
 		}
 		if !exists {
 			return nil, creation.NewReferenceNotFound("standard change template is unavailable", nil)
-		}
-	}
-	if command.Problem != nil && command.Problem.SourceIncidentID != nil {
-		for _, action := range []string{"read", "write"} {
-			if err := RequireCurrentPermission(ctx, tx, identity, "incident", action); err != nil {
-				return nil, err
-			}
-		}
-		exists, err := tx.Incident.Query().Where(incident.IDEQ(*command.Problem.SourceIncidentID), incident.HasWorkItemWith(ticket.TenantIDEQ(identity.TenantID), ticket.RecordClassEQ("incident"), ticket.DeletedAtIsNil())).Exist(ctx)
-		if err != nil {
-			return nil, creation.NewInfrastructureUnavailable("could not authorize conversion source", err)
-		}
-		if !exists {
-			return nil, creation.NewReferenceNotFound("source incident is unavailable", nil)
 		}
 	}
 	authorized := &CreationAuthorization{tx: tx, identity: identity}

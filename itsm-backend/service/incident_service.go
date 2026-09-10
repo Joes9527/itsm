@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"itsm-backend/database"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"strings"
 	"time"
 
@@ -1295,4 +1296,17 @@ func (s *IncidentService) mapProcessStatus(status string) dto.ProcessStatus {
 func (s *IncidentService) SetDirectorySnapshot(directory database.DirectorySnapshot) {
 	s.directory = directory
 	s.ruleEngine.SetDirectorySnapshot(directory)
+}
+
+// ResolveCreationSource identifies the professional public ID once. Intake
+// authorizes the resulting WorkItem inside its own RR transaction.
+func (s *IncidentService) ResolveCreationSource(ctx context.Context, id, tenantID int) (int, error) {
+	row, err := s.client.Incident.Query().Where(incident.ID(id), incidentTenantScope(tenantID)).Only(ctx)
+	if ent.IsNotFound(err) {
+		return 0, creation.NewReferenceNotFound("source incident is unavailable", err)
+	}
+	if err != nil {
+		return 0, creation.NewInfrastructureUnavailable("could not resolve source incident", err)
+	}
+	return row.WorkItemID, nil
 }

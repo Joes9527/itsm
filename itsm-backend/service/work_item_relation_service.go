@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -13,6 +14,7 @@ import (
 	relationmeta "itsm-backend/common/workitemrelation"
 	"itsm-backend/database"
 	"itsm-backend/ent"
+	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/workitemrelation"
@@ -218,27 +220,19 @@ func (s *WorkItemRelationService) authorize(ctx context.Context, tx *ent.Tx, cmd
 	if scoped, ok := tenantctx.TenantID(ctx); ok && scoped != m.TenantID {
 		return nil, nil, nil, common.NewForbiddenError("tenant context mismatch")
 	}
-	actor, err := authorization.ResolveLifecycleActor(ctx, tx, s.directory, m.ActorID, m.TenantID)
+	source, actor, err := s.authorizeSource(ctx, tx, m, cmd.SourceID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	target, policy, err := authorization.ResolveWorkItemIdentity(ctx, tx.Client(), cmd.TargetID, m.TenantID, authorization.WorkItemReadScope(actor.ID, authorization.EffectiveSessionRole(actor)))
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	identity := creation.Identity{TenantID: m.TenantID, ActorID: actor.ID, ActorTenantID: actor.TenantID, Role: authorization.EffectiveSessionRole(actor)}
-	items := make([]*ent.Ticket, 0, 2)
-	for index, id := range []int{cmd.SourceID, cmd.TargetID} {
-		item, policy, err := authorization.ResolveWorkItemIdentity(ctx, tx.Client(), id, m.TenantID, authorization.WorkItemReadScope(actor.ID, identity.Role))
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		if err = authorization.RequireCurrentPermission(ctx, tx, identity, policy.Resource, "read"); err != nil {
-			return nil, nil, nil, err
-		}
-		if index == 0 {
-			if err = authorization.RequireCurrentPermission(ctx, tx, identity, policy.Resource, policy.ResolveAction("update")); err != nil {
-				return nil, nil, nil, err
-			}
-		}
-		items = append(items, item)
+	if err = authorization.RequireCurrentPermission(ctx, tx, identity, policy.Resource, "read"); err != nil {
+		return nil, nil, nil, err
 	}
+	items := []*ent.Ticket{source, target}
 	if err = ValidateRelationClasses(cmd.Type, items[0].RecordClass, items[1].RecordClass); err != nil {
 		return nil, nil, nil, common.NewValidationError(err.Error(), err)
 	}
@@ -291,7 +285,11 @@ func (s *WorkItemRelationService) mutateTx(ctx context.Context, tx *ent.Tx, cmd 
 		}
 	}
 	if !remove {
-		exists, err := tx.WorkItemRelation.Query().Where(relationTuple(cmd)...).Exist(ctx)
+		scope := relationTuple(cmd)
+		if cmd.Type == "investigated_by" {
+			scope = []predicate.WorkItemRelation{workitemrelation.TenantID(m.TenantID), workitemrelation.SourceWorkItemID(cmd.SourceID), workitemrelation.RelationType(cmd.Type), workitemrelation.DeletedAtIsNil()}
+		}
+		exists, err := tx.WorkItemRelation.Query().Where(scope...).Exist(ctx)
 		if err != nil {
 			return empty, err
 		}
@@ -329,6 +327,85 @@ func (s *WorkItemRelationService) mutateTx(ctx context.Context, tx *ent.Tx, cmd 
 	}
 	if err = workitemmutation.RecordTx(ctx, tx, m, result, action, digest, facts); err != nil {
 		return empty, err
+	}
+	return result, nil
+}
+
+// PrepareSourceTx authorizes the existing source before target creation. The
+// relation owner retains the same source/read policy as AddTx, with no writes.
+func (s *WorkItemRelationService) PrepareSourceTx(ctx context.Context, tx *ent.Tx, cmd RelationCommand, targetClass string) error {
+	source, _, err := s.authorizeSource(ctx, tx, cmd.Meta, cmd.SourceID)
+	if err != nil {
+		return err
+	}
+	if err = ValidateRelationClasses(cmd.Type, source.RecordClass, targetClass); err != nil {
+		return common.NewValidationError(err.Error(), err)
+	}
+	if cmd.Required && cmd.Type != "resolved_by_change" {
+		return common.NewValidationError("required is only supported for resolved_by_change", nil)
+	}
+	if source.Version != cmd.Meta.ExpectedVersion {
+		return common.NewVersionConflictError("work item", source.ID, cmd.Meta.ExpectedVersion, source.Version)
+	}
+	return nil
+}
+
+func (s *WorkItemRelationService) authorizeSource(ctx context.Context, tx *ent.Tx, m workitemmutation.Meta, sourceID int) (*ent.Ticket, *ent.User, error) {
+	if tx == nil || m.TenantID <= 0 || m.ActorID <= 0 || m.ExpectedVersion <= 0 || strings.TrimSpace(m.Source) == "" || strings.TrimSpace(m.OperationID) == "" || sourceID <= 0 {
+		return nil, nil, common.NewValidationError("trusted relation identity, version and operationId required", nil)
+	}
+	if scoped, ok := tenantctx.TenantID(ctx); ok && scoped != m.TenantID {
+		return nil, nil, common.NewForbiddenError("tenant context mismatch")
+	}
+	actor, err := authorization.ResolveLifecycleActor(ctx, tx, s.directory, m.ActorID, m.TenantID)
+	if err != nil {
+		return nil, nil, err
+	}
+	identity := creation.Identity{TenantID: m.TenantID, ActorID: actor.ID, ActorTenantID: actor.TenantID, Role: authorization.EffectiveSessionRole(actor)}
+	item, policy, err := authorization.ResolveWorkItemIdentity(ctx, tx.Client(), sourceID, m.TenantID, authorization.WorkItemReadScope(actor.ID, identity.Role))
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, action := range []string{"read", policy.ResolveAction("update")} {
+		if err = authorization.RequireCurrentPermission(ctx, tx, identity, policy.Resource, action); err != nil {
+			return nil, nil, err
+		}
+	}
+	return item, actor, nil
+}
+
+// ReplayTx validates current access to both endpoints and reads an existing
+// immutable receipt only. Missing receipts never recreate a relation.
+func (s *WorkItemRelationService) ReplayTx(ctx context.Context, tx *ent.Tx, cmd RelationCommand) (workitemmutation.Result, error) {
+	_, _, actor, err := s.authorize(ctx, tx, cmd)
+	if err != nil {
+		return workitemmutation.Result{}, err
+	}
+	digest, err := relationDigest(cmd, false)
+	if err != nil {
+		return workitemmutation.Result{}, err
+	}
+	result, found, err := workitemmutation.Replay(ctx, tx.Client(), cmd.Meta, cmd.SourceID, digest)
+	if err != nil {
+		return result, err
+	}
+	if !found {
+		return result, common.NewInternalError("completed intake relation receipt is missing", nil)
+	}
+	row, err := tx.AuditLog.Query().Where(auditlog.TenantID(cmd.Meta.TenantID), auditlog.UserID(cmd.Meta.ActorID), auditlog.OperationID(cmd.Meta.OperationID)).Only(ctx)
+	if err != nil {
+		return result, err
+	}
+	var facts RelationFacts
+	if row.RequestBody == nil || json.Unmarshal([]byte(*row.RequestBody), &facts) != nil {
+		return result, common.NewInternalError("completed intake relation facts are missing", nil)
+	}
+	source, target := cmd.SourceID, cmd.TargetID
+	if cmd.Type == "related_to" && source > target {
+		source, target = target, source
+	}
+	if row.Action != "work_item.relation_added" || facts.RelationID <= 0 || facts.MutationWorkItemID != cmd.SourceID || facts.SourceID != source || facts.TargetID != target || facts.Type != cmd.Type || facts.Required != cmd.Required || facts.Removed || facts.TenantID != cmd.Meta.TenantID || facts.ActorID != cmd.Meta.ActorID || facts.ActorTenantID != actor.TenantID || result.Version != cmd.Meta.ExpectedVersion+1 || facts.OperationID != cmd.Meta.OperationID || facts.Source != cmd.Meta.Source || facts.Version != result.Version {
+		return result, common.NewInternalError("completed intake relation facts are inconsistent", nil)
 	}
 	return result, nil
 }

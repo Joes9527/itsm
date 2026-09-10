@@ -351,7 +351,7 @@ func TestCreateFromIncidentConcurrentRequestsCreateOneProblem(t *testing.T) {
 	assert.Equal(t, before.problems+1, after.problems)
 	assert.Equal(t, before.relations+1, after.relations)
 	assert.Equal(t, before.events+1, after.events)
-	assert.Equal(t, before.audits+2, after.audits, "one conversion audit plus one Intake creation audit")
+	assert.Equal(t, before.audits+3, after.audits, "conversion, source relation receipt and Intake creation audit")
 }
 
 func TestCreateFromIncidentRollsBackOnSideEffectFailure(t *testing.T) {

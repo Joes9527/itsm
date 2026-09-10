@@ -375,8 +375,9 @@ type IncidentStatsResponse struct {
 
 // ConvertIncidentToProblemRequest 将事件转换为问题的请求
 type ConvertIncidentToProblemRequest struct {
-	RequesterID *int   `json:"requesterId,omitempty" binding:"omitempty,gt=0"` // 可选目标租户申请人
-	Title       string `json:"title" binding:"omitempty"`                      // 可选自定义标题
-	Description string `json:"description" binding:"omitempty"`                // 可选自定义描述
-	RootCause   string `json:"rootCause" binding:"omitempty"`                  // 根因分析
+	ExpectedVersion int    `json:"expectedVersion" binding:"required,gt=0"`
+	RequesterID     *int   `json:"requesterId,omitempty" binding:"omitempty,gt=0"` // 可选目标租户申请人
+	Title           string `json:"title" binding:"omitempty"`                      // 可选自定义标题
+	Description     string `json:"description" binding:"omitempty"`                // 可选自定义描述
+	RootCause       string `json:"rootCause" binding:"omitempty"`                  // 根因分析
 }
