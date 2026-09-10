@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	relationmetadata "itsm-backend/common/workitemrelation"
 	"itsm-backend/ent/application"
 	"itsm-backend/ent/approvalchain"
 	"itsm-backend/ent/asset"
@@ -158485,7 +158486,7 @@ type WorkItemRelationMutation struct {
 	relation_type          *string
 	created_by_id          *int
 	addcreated_by_id       *int
-	metadata               *map[string]interface{}
+	metadata               *relationmetadata.Metadata
 	created_at             *time.Time
 	deleted_at             *time.Time
 	clearedFields          map[string]struct{}
@@ -158853,12 +158854,12 @@ func (m *WorkItemRelationMutation) ResetCreatedByID() {
 }
 
 // SetMetadata sets the "metadata" field.
-func (m *WorkItemRelationMutation) SetMetadata(value map[string]interface{}) {
-	m.metadata = &value
+func (m *WorkItemRelationMutation) SetMetadata(r relationmetadata.Metadata) {
+	m.metadata = &r
 }
 
 // Metadata returns the value of the "metadata" field in the mutation.
-func (m *WorkItemRelationMutation) Metadata() (r map[string]interface{}, exists bool) {
+func (m *WorkItemRelationMutation) Metadata() (r relationmetadata.Metadata, exists bool) {
 	v := m.metadata
 	if v == nil {
 		return
@@ -158869,7 +158870,7 @@ func (m *WorkItemRelationMutation) Metadata() (r map[string]interface{}, exists 
 // OldMetadata returns the old "metadata" field's value of the WorkItemRelation entity.
 // If the WorkItemRelation object wasn't provided to the builder, the object is fetched from the database.
 // An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *WorkItemRelationMutation) OldMetadata(ctx context.Context) (v map[string]interface{}, err error) {
+func (m *WorkItemRelationMutation) OldMetadata(ctx context.Context) (v relationmetadata.Metadata, err error) {
 	if !m.op.Is(OpUpdateOne) {
 		return v, errors.New("OldMetadata is only allowed on UpdateOne operations")
 	}
@@ -159139,7 +159140,7 @@ func (m *WorkItemRelationMutation) SetField(name string, value ent.Value) error 
 		m.SetCreatedByID(v)
 		return nil
 	case workitemrelation.FieldMetadata:
-		v, ok := value.(map[string]interface{})
+		v, ok := value.(relationmetadata.Metadata)
 		if !ok {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}

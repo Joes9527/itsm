@@ -7,6 +7,7 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/ticket"
 )
 
@@ -44,12 +45,13 @@ func (policy WorkItemPolicy) ResolveAction(action string) string {
 }
 
 // ResolveWorkItemIdentity loads the canonical WorkItem identity exactly once.
-func ResolveWorkItemIdentity(ctx context.Context, client *ent.Client, workItemID, tenantID int) (*ent.Ticket, WorkItemPolicy, error) {
+func ResolveWorkItemIdentity(ctx context.Context, client *ent.Client, workItemID, tenantID int, readScope ...predicate.Ticket) (*ent.Ticket, WorkItemPolicy, error) {
 	if client == nil {
 		return nil, WorkItemPolicy{}, common.NewInternalError("WorkItem authorization client is unavailable", nil)
 	}
 	workItem, err := client.Ticket.Query().
 		Where(ticket.ID(workItemID), ticket.TenantID(tenantID), ticket.DeletedAtIsNil()).
+		Where(readScope...).
 		Only(ctx)
 	if err != nil {
 		if ent.IsNotFound(err) {

@@ -5,6 +5,7 @@ package ent
 import (
 	"encoding/json"
 	"fmt"
+	relationmetadata "itsm-backend/common/workitemrelation"
 	"itsm-backend/ent/workitemrelation"
 	"strings"
 	"time"
@@ -29,7 +30,7 @@ type WorkItemRelation struct {
 	// 创建人ID
 	CreatedByID int `json:"created_by_id,omitempty"`
 	// 少量关系专属元数据，不存业务主体
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
+	Metadata relationmetadata.Metadata `json:"metadata,omitempty"`
 	// 创建时间
 	CreatedAt time.Time `json:"created_at,omitempty"`
 	// 软删除时间
