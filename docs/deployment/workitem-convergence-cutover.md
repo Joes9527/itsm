@@ -16,7 +16,7 @@
 
 控制 flag 与 up/down/reset/fresh/seed 等互斥，任何连接前拒绝多操作。fresh 仍只允许显式确认的空开发目标；本方案不以 fresh 绕过恢复。空环境第一次 bootstrap 停在 P 且不 seed；已存在目标不会 overlay Ent。P 后缺任一普通迁移仍未就绪，原 P 回执不删除。012/013/014/017/028/029 只有逐个确认没有实际删除目标后才可执行；013 也检查 field_values 行。现有父表在执行前加锁，外部直接 DDL 必须服从环境维护窗口和同一迁移互斥纪律。
 
-运行时结构准入的权限及与全局业务验证的区别，以[受控退役设计](../superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md)中的“运行时只读准入边界”为准。下文旧 C1/022/027 记录是历史验证范围，不是当前执行步骤。
+运行时另在双方持有的只读事务内，以两枚随机事务级 advisory lock 及 pg_locks 核验同一实际实例/数据库/backend；相同私网地址元组不足以准入。全部检查保持同一 inspection 事务，10 秒超时，成功/失败/取消均释放；不增加业务证据访问或角色权限。表级和列级 grant option（含适用 PUBLIC）均拒绝。\n\n运行时结构准入的权限及与全局业务验证的区别，以[受控退役设计](../superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md)中的“运行时只读准入边界”为准。下文旧 C1/022/027 记录是历史验证范围，不是当前执行步骤。
 
 
 ## 部署前未解决清单：独立 RCA 元数据 schema

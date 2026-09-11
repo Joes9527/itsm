@@ -495,6 +495,14 @@ func TestControlledEntryHistoricalDeletionTargetsBlockAdmission(t *testing.T) {
 func TestControlledEntryReadOnlyInspectorNeedsNoBusinessAccess(t *testing.T) {
 	roleDB, ctx := migrationEntryFixture(t)
 	role := fmt.Sprintf("v2_inspector_%d", time.Now().UnixNano())
+	businessRole := role + "_business"
+	_, roleErr := roleDB.ExecContext(ctx, "CREATE ROLE "+pq.QuoteIdentifier(businessRole)+" LOGIN PASSWORD 'owned-test-only'")
+	require.NoError(t, roleErr)
+	t.Cleanup(func() {
+		_, err := roleDB.Exec("DROP ROLE " + pq.QuoteIdentifier(businessRole))
+		require.NoError(t, err)
+	})
+
 	_, err := roleDB.ExecContext(ctx, "CREATE ROLE "+pq.QuoteIdentifier(role)+" LOGIN PASSWORD 'owned-test-only'")
 	require.NoError(t, err)
 	t.Cleanup(func() { _, err := roleDB.Exec("DROP ROLE " + pq.QuoteIdentifier(role)); require.NoError(t, err) })
@@ -515,6 +523,27 @@ func TestControlledEntryReadOnlyInspectorNeedsNoBusinessAccess(t *testing.T) {
 	query.Set("search_path", schema)
 	query.Set("default_transaction_read_only", "on")
 	target.RawQuery = query.Encode()
+	_, err = db.Exec("GRANT USAGE ON SCHEMA " + pq.QuoteIdentifier(schema) + " TO " + pq.QuoteIdentifier(businessRole))
+	require.NoError(t, err)
+	businessTarget := *target
+	businessTarget.User = url.UserPassword(businessRole, "owned-test-only")
+	businessDB, err := sql.Open("postgres", businessTarget.String())
+	require.NoError(t, err)
+	defer businessDB.Close()
+	businessDB.SetMaxOpenConns(1)
+	var businessPID int
+	require.NoError(t, businessDB.QueryRow("SELECT pg_backend_pid()").Scan(&businessPID))
+	assertProofReleased := func() {
+		var count, currentPID int
+		require.NoError(t, businessDB.QueryRow("SELECT pg_backend_pid()").Scan(&currentPID))
+		require.NoError(t, db.QueryRow("SELECT count(*) FROM pg_locks WHERE pid IN ($1,$2) AND locktype='advisory'", businessPID, currentPID).Scan(&count))
+		require.Zero(t, count, "no proof locks may survive success/failure/cancellation")
+	}
+	var businessEvidenceAccess, businessTableAccess bool
+	require.NoError(t, businessDB.QueryRow("SELECT has_table_privilege(current_user,'work_item_migration_evidence','SELECT'),has_table_privilege(current_user,'tickets','SELECT')").Scan(&businessEvidenceAccess, &businessTableAccess))
+	require.False(t, businessEvidenceAccess)
+	require.False(t, businessTableAccess)
+
 	inspector, err := sql.Open("postgres", target.String())
 	require.NoError(t, err)
 	defer inspector.Close()
@@ -524,13 +553,43 @@ func TestControlledEntryReadOnlyInspectorNeedsNoBusinessAccess(t *testing.T) {
 	m := migration.NewMigrator(inspector, zap.NewNop().Sugar(), control)
 	require.NoError(t, m.InspectRuntimeMigrations(ctx))
 	t.Setenv("ITSM_MIGRATION_INSPECTION_DSN", target.String())
-	require.NoError(t, migration.InspectRuntimeDatabase(ctx, db, control))
+	require.NoError(t, migration.InspectRuntimeDatabase(ctx, businessDB, control))
+	assertProofReleased()
+	// Hold the ledger so admission waits after its live instance proof. Cancel
+	// only after both business transaction locks are visible on real PostgreSQL.
+	blocker, err := db.BeginTx(ctx, nil)
+	require.NoError(t, err)
+	defer blocker.Rollback()
+	_, err = blocker.Exec("LOCK TABLE schema_migrations IN ACCESS EXCLUSIVE MODE")
+	require.NoError(t, err)
+	cancelCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	result := make(chan error, 1)
+	go func() { result <- migration.InspectRuntimeDatabase(cancelCtx, businessDB, control) }()
+	require.Eventually(t, func() bool {
+		var count int
+		err := db.QueryRow("SELECT count(*) FROM pg_locks WHERE pid=$1 AND locktype='advisory'", businessPID).Scan(&count)
+		return err == nil && count == 2
+	}, 3*time.Second, 10*time.Millisecond)
+	cancel()
+	select {
+	case err = <-result:
+		require.Error(t, err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("cancelled admission did not return")
+	}
+	require.NoError(t, blocker.Rollback())
+	assertProofReleased()
+	require.NoError(t, migration.InspectRuntimeDatabase(ctx, businessDB, control))
+	assertProofReleased()
+
 	wrong := *target
 	wq := wrong.Query()
 	wq.Set("search_path", "public")
 	wrong.RawQuery = wq.Encode()
 	t.Setenv("ITSM_MIGRATION_INSPECTION_DSN", wrong.String())
-	require.ErrorContains(t, migration.InspectRuntimeDatabase(ctx, db, control), "does not match")
+	require.ErrorContains(t, migration.InspectRuntimeDatabase(ctx, businessDB, control), "does not match")
+	assertProofReleased()
 	t.Setenv("ITSM_MIGRATION_INSPECTION_DSN", target.String())
 	_, err = db.Exec("GRANT UPDATE ON work_item_migration_evidence TO " + pq.QuoteIdentifier(role))
 	require.NoError(t, err)
@@ -548,6 +607,19 @@ func TestControlledEntryReadOnlyInspectorNeedsNoBusinessAccess(t *testing.T) {
 	require.ErrorContains(t, m.InspectRuntimeMigrations(ctx), "inspection role")
 	_, err = db.Exec("REVOKE UPDATE(description) ON schema_migrations FROM " + pq.QuoteIdentifier(role))
 	require.NoError(t, err)
+	var originalAttachment string
+	require.NoError(t, db.QueryRow("SELECT md5(content::text) FROM work_item_migration_evidence WHERE version=$1", migration.WorkItemPrepareVersion).Scan(&originalAttachment))
+	_, err = db.Exec("GRANT SELECT(description) ON schema_migrations TO " + pq.QuoteIdentifier(role) + " WITH GRANT OPTION")
+	require.NoError(t, err)
+	require.ErrorContains(t, migration.InspectRuntimeDatabase(ctx, businessDB, control), "inspection role")
+	assertProofReleased()
+	require.ErrorContains(t, m.InspectRuntimeMigrations(ctx), "inspection role")
+	_, err = db.Exec("REVOKE SELECT(description) ON schema_migrations FROM " + pq.QuoteIdentifier(role))
+	require.NoError(t, err)
+	require.NoError(t, m.InspectRuntimeMigrations(ctx))
+	var unchangedAttachment string
+	require.NoError(t, db.QueryRow("SELECT md5(content::text) FROM work_item_migration_evidence WHERE version=$1", migration.WorkItemPrepareVersion).Scan(&unchangedAttachment))
+	require.Equal(t, originalAttachment, unchangedAttachment)
 	_, err = db.Exec("DROP INDEX incident_work_item_id")
 	require.NoError(t, err)
 	require.ErrorContains(t, m.InspectRuntimeMigrations(ctx), "structure")

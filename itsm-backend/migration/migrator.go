@@ -583,7 +583,11 @@ func (m *Migrator) InspectRuntimeMigrations(ctx context.Context) error {
 		return err
 	}
 	defer tx.Rollback()
-	applied, err := inspectMigrationTargetMode(ctx, tx, m.controlConfig, true)
+	return inspectRuntimeMigrations(ctx, tx, m.controlConfig)
+}
+
+func inspectRuntimeMigrations(ctx context.Context, tx migrationQuery, config MigrationControlConfig) error {
+	applied, err := inspectMigrationTargetMode(ctx, tx, config, true)
 	if err != nil {
 		return err
 	}
