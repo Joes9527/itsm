@@ -1,0 +1,82 @@
+# WorkItem 收敛切换与恢复手册
+
+> 2026-09-11；状态：隔离验证中，禁止据此宣称实际部署、观察或旧结构删除完成。
+> 权威执行分支：`codex/refactor/workitem-next-stage`；原实现基线 `46606330`，接受设计基线 `3064ea5e`。
+> 本手册继承 [原 C3](../superpowers/plans/2026-09-09-workitem-convergence-runtime.md) 和 [本轮 V2](../superpowers/plans/2026-09-11-workitem-next-stage-experience-validation.md)。
+
+## 当前可执行边界
+
+当前应用迁移入口在同一事务执行 SQL 前检查 022/027 将删除的对象。存在任一旧表或旧列即失败，不删除、不补写历史、不写该迁移回执，也没有跳过开关。没有待退役对象的新规范 schema 可以继续既有 bootstrap；已有账本仍按原 checksum 校验，不重放已应用迁移。
+
+这一保护不是允许删除的操作入口，也不验证外部备份或观察报告。没有备份、恢复、消费者退出、旅程及观察证据时，不存在自动放行路径。授权删除仍未实现、未演练、未执行。
+
+发现的实际缺口：022 的历史 SQL 含五个 `DROP TABLE ... CASCADE`，并与正式 SQL 文件、迁移账本 checksum 对应。直接修改旧 SQL 会使已应用环境出现 checksum mismatch；直接运行它又不符合本轮无级联删除和先门禁要求。因此本轮首先在既有 Migrator 加不可绕过的自动退役拒绝，保留账本历史。历史 SQL 文件不得直接用于生产退役；运行统一入口以外的手工 SQL 不受应用保护。历史迁移的受控替换需要单独决策，不能重写已应用账本、复制另一套 schema 权威或增加跳过校验参数。
+
+## 环境记录与暂停范围
+
+每次环境变更先记录：环境名称、主机、数据库、schema、应用提交/镜像 digest、数据库版本、迁移账本版本和 checksum、操作者、变更单、维护窗口、备份位置及 SHA256、恢复验证记录。不要把分支 HEAD 视为部署版本，不把凭据放进报告或命令行日志。
+
+使用既有配置：`DB_SCHEMA` 固定精确 schema；`ITSM_AUTO_MIGRATE=false`、`ITSM_AUTO_SEED=false` 用于受控环境，不能依靠应用启动自动执行历史删除。数据库与双角色配置沿用 [开发指南](../DEVELOPMENT_GUIDE.md)。设置这些开关不代表新结构已经满足应用需要，启动前仍须核对完整 schema、约束及账本。
+
+暂停范围包括三域写 API、通用 WorkItem 写入口、BPMN 启动/用户任务提交/回调重试、规则/自动升级、SLA 监控与关系通知消费者、外部连接器和 AI 写调用。暂停由环境现有运维方式完成；只停网页不能建立一致快照。记录暂停前队列积压与在途任务，恢复后核对每个处理结果。
+
+## 精确退役对象与消费者盘点
+
+下列为现有 022/027 的删除清单，不是本手册的执行 SQL。操作必须带明确 schema，使用默认 RESTRICT；不得通配、CASCADE 或自动清洗冲突行。
+
+| 对象 | 待退役内容 | 当前权威及检查 |
+|---|---|---|
+| ticket_approvals | 整表 | BPMN ProcessTask / ProcessApprovalDecision；确认旧审批读写消费者退出 |
+| workflow_tasks、workflow_instances、workflow_versions、workflows | 四张旧运行表 | process_* BPMN 运行结构；保留旧实例证据和终结结果，不自动取消或迁移 |
+| releases | requires_approval | Release 保留独立域和既有规范流程身份，不因 WorkItem 改造重分类 |
+| ticket_categories | workflow_id | ProcessBindingService 为唯一绑定写入口；先查依赖再删除引用列 |
+| incidents | title、description、status、priority、reporter_id、assignee_id、category、subcategory、source、tenant_id、version、created_at、updated_at、resolved_at、closed_at、deleted_at | 关联 tickets 的公共事实；IncidentService 持有专业动作 |
+| problems | title、description、status、priority、category、assignee_id、created_by、tenant_id、created_at、updated_at、resolved_at、closed_at、deleted_at | tickets 公共事实；Problem metadata/lifecycle 同一专业事务 |
+| changes | title、description、status、priority、assignee_id、created_by、tenant_id、related_tickets、created_at、updated_at | tickets 公共事实、结构化关系、Change 专业命令 |
+| tickets | type | record_class 与专业 subtype，各自单一权威 |
+| incidents | incident_number | tickets.ticket_number，保留原编号，不重新编号 |
+
+需要精确验证的约束为三域 work_item_id 的 NOT NULL、唯一性、唯一且正确的 WorkItem 外键，以及基于 WorkItem tenant 与 soft-delete 条件的 RLS。022/027 的既有 verify SQL 保留检查定义；约束失败是阻塞，不能通过数据回填、删除冲突或扩大 DROP 来“修复”。
+
+消费者退出证据：B1 旧 AssignIncident 已删除；B2/B3 通用 Ticket 核心编辑/生命周期/分派与批量、策略、MSP、BPMN ticket 写路径拒绝专业类；Problem 普通编辑、RCA、调查、步骤和候选方案写入使用观察版本与回执；B4 旧 Department/ProcessRouting 直接绑定写入已移除。共享评论/附件/通知属于保留能力，不以全库旧词表零匹配作为完成标准。详细入口见 [后端执行记录](../superpowers/plans/2026-09-11-workitem-next-stage-backend.md)。
+
+## 只读预检
+
+构建并运行既有 `cmd/check_workitem_cutover` 二进制，不能用 `go run` 的外层退出码判断 2：
+
+- exit 0：当前观察快照无旧身份/依赖阻塞；仅表示身份切换预检通过。
+- exit 2：有活跃/挂起旧实例、待处理旧回调、旧绑定、身份不一致、缺扩展或扫描截断，必须停止。
+- exit 1：工具或数据库错误，不按成功处理。
+
+部署前检查所有租户，不能以一个租户通过代表全环境。保存 JSON 报告、配置目标、应用版本和检查时刻；比较检查前后行数与内容摘要。exit 0 不替代备份恢复、权限、旅程、观察和环境批准，也不允许直接调用历史删除 SQL。
+
+## 允许路径的准入顺序（尚未完成）
+
+1. 校验环境变更批准和维护窗口；完成备份，并在独立数据库恢复。比较 WorkItem/专业记录/关系/流程/回执/审计的数量、内容摘要、原始时间、关键约束和权限，不能以备份命令成功替代恢复验证。
+2. 在相关写入及消费者暂停后重新运行只读预检；保留旧依赖的人工处理记录，不自动迁移或取消。
+3. 根据环境账本和保留结构制定可审查的新结构安装步骤。当前自动退役阻断必须保留；在受控替换方案未批准前，不启动任何旧结构删除。
+4. 核对唯一新路径、所有专业 API 的权限/版本/回执和实际调用方；完成 V1 三域及 generic/Requested Item 的完整真实旅程。
+5. 恢复新路径写入并观察：三域真实操作、审批与回调、SLA 合法重开及旧周期保留、通知暂时错误重试、同键幂等均通过且无未解释错误。观察时长和样本量由环境变更记录确定，不能把一次隔离测试当生产观察。
+6. 再次核对有效备份、恢复记录、暂停范围、消费者清单、V1 和观察证据；在同一迁移权威下执行经批准的精确 RESTRICT 退役操作。当前仓库尚无该允许删除入口，不能用旧 SQL 绕过。
+7. 核对健康检查、账本、完整读写旅程、RLS 与审计，记录实际运行版本和恢复决定。
+
+## 恢复与新写入补偿
+
+删除前：优先恢复已确认的应用/消费者配置；若新 schema 已改变，先核对旧应用可用性，不能只回滚二进制。保留所有失败证据。
+
+删除后：协调恢复数据库、应用版本及连接器/消费者配置。恢复必须包含账本与业务事实，避免旧应用运行在新 schema 或新应用运行在旧 schema。先恢复隔离目标验证，再按环境批准切换。
+
+备份之后的新 WorkItem、专业扩展、关系、审批决定、回调、通知、附件对象及外部副作用必须逐项列入补偿清单。数据库恢复不会撤回已发送通知或外部动作；未捕获的新写入不得宣称零损失。确认补偿责任人和核验方式后才能恢复消费者。
+
+历史豁免持续有效：旧 Problem 不补验证证据、不自动重开；旧 SLA 不重算；旧关系不搬运；旧流程不取消；原 createdAt 和编号不改写。
+
+## 本轮证据与未完成项
+
+隔离 PG 为既有 disposable 容器的 127.0.0.1:36444/sslvpn_test，每个测试仅创建独立 schema/角色。V1 使用另一组专用临时容器，与共享运行环境分开。备份/恢复工具使用测试容器 PostgreSQL 17，避免宿主 16 客户端与服务端版本不匹配。
+
+真实测试分别验证自动退役拒绝与行摘要/账本不变、规范新 schema 登记、只读切换预检，以及独立数据库备份恢复和备份后新写入补偿缺口。具体结果由执行记录更新；测试产生的备份为临时验证材料，不是任何实际环境的可用恢复备份。
+
+仍未完成：历史迁移受控替换设计及允许删除操作、允许删除后的完整恢复演练、实际环境批准/部署/观察/退役。不得勾选原 C3 或 V2 全部完成。
+
+
+验证记录：真实 CLI 两场景通过（4.290s），exit2/0 与前后摘要不变；自动退役原行为三场景 RED 均为“期望拒绝但返回成功”，保护实现后全部 GREEN。含真实 dump/restore 的退役验证通过（29.651s），独立恢复数据库与 schema 清理 remaining=0。独立只读审阅确认正常 bootstrap/cmd migrate 均经过 ApplyMigration，检测集合覆盖 022/027 的全部待删表/列；手工直跑历史 SQL 与并发 DDL 仍由维护窗口和操作准入约束，不宣称应用可约束数据库管理员。

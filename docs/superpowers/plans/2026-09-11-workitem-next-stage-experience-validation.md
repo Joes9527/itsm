@@ -139,9 +139,16 @@ export type AssignmentProps = {
 **Interfaces**
 完整执行原 runtime 计划 C3，使用现有 `check_workitem_cutover` exit0/exit2 协议。原 C3 的备份、只读盘点、观察、恢复以及历史免迁移规则全部继承，不另造删除命令体系。
 
-- [ ] 在 disposable PostgreSQL 构造旧依赖；运行只读预检，断言 exit2 和前后记录摘要相同。缺少备份或观察证据时，门禁不得执行删除。
-- [ ] 编制明确表/列/约束及消费者清单，逐项验证已无运行读写；runbook 写入实际配置方式、版本、暂停范围和恢复步骤。不得用通配符或 CASCADE 扩大删除范围。
+- [x] 在 disposable PostgreSQL 构造旧依赖；运行只读预检，断言 exit2 和前后记录摘要相同。缺少备份或观察证据时，门禁不得执行删除。
+- [x] 编制明确表/列/约束及消费者清单，逐项验证已无运行读写；runbook 写入实际配置方式、版本、暂停范围和恢复步骤。不得用通配符或 CASCADE 扩大删除范围。
 - [ ] 演练允许路径：备份恢复验证→新结构→唯一新路径→V1旅程→观察场景完成→清单删除→健康检查；另演练失败恢复，发生新写入后协调 DB与应用版本并列明补偿数据。
 - [ ] Run `go test -tags=integration_postgres ./tests/integration -run '^TestWorkItem(Cutover|Retirement)' -count=1 -v`，并执行 V1；确认 PG连接为隔离目标，未向共享库执行迁移。
 - [ ] 提交 `test(workitem): prove cutover and retirement gates`。
 - [ ] 实际运行切换作为独立环境准入步骤记录；未经环境授权不执行。若仅代码/演练完成，明确保留实际部署与观察待办，不将整体状态标记 implemented。
+
+
+## V2 已验证部分与边界
+
+2026-09-11：既有迁移 runner 增加自动旧结构退役拒绝，022/027 历史 SQL/checksum 未修改。真实 CLI exit2/0 和只读摘要测试通过，自动门禁与新规范 schema 测试通过，真实备份恢复及备份后新增记录缺失的补偿反例通过；临时 schema/database 全部清理。详见 [运行手册](../../deployment/workitem-convergence-cutover.md)。
+
+允许删除路径因历史022含CASCADE且账本immutable尚待设计决策，未实现、未演练；实际环境部署/观察/删除不在本轮授权范围，V2 与原C3不标记整体完成。此记录不以“自动阻断通过”代替“允许退役路径通过”。

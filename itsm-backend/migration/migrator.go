@@ -131,6 +131,10 @@ func (m *Migrator) ApplyMigration(ctx context.Context, mig Migration) error {
 	}
 	defer tx.Rollback()
 
+	if err := blockAutomaticWorkItemRetirement(ctx, tx, mig.Version); err != nil {
+		return err
+	}
+
 	m.logger.Infow("Applying migration", "version", mig.Version, "description", mig.Description)
 
 	started := time.Now()

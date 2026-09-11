@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go/Gin、Ent/PostgreSQL、Next.js/TypeScript、Jest、Playwright。
 
-> 状态：accepted（执行中；B1 已验证，B2/B3 进行中，其余任务待执行）
+> 状态：accepted（执行中；B1–B5 已验证并提交；页面复核修正与 V1 进行中；V2 自动阻断及恢复验证完成，允许退役路径待决策）
 > 日期：2026-09-11
 > 设计：[accepted 后续设计](../specs/2026-09-11-workitem-convergence-next-stage-design.md)
 > 决策历史：[开发输入](../specs/2026-09-11-workitem-convergence-development-input.md)
@@ -29,7 +29,7 @@
 - [x] 在 WSL 核查原代码与 review 分支 HEAD、工作区修改和依赖状态；保留 .superpowers/sdd。按工程治理确认最新 origin/main 与原分支的关系，先比较路径，不直接 pull/reset 覆盖其他 agent 工作。
 - [x] 使用 using-git-worktrees 创建实施工作树，分支前缀 `codex/refactor/`；明确纳入的原实现提交及本轮设计提交。不同历史有冲突时记录已解决路径，不能凭提交数量判断成果是否存在。
 - [ ] 将入口清单作为本计划执行记录附表：域、操作、HTTP/BPMN/自动化/普通编辑调用点、领域方法、写入表、版本来源、回执、待删除路径、对应测试。用 `git grep` 逐项追踪实际引用。
-- [ ] 对受影响最小测试建立基线，保存环境与真实测试输出到已忽略证据目录。三个已知失败单独重现：
+- [x] 对受影响最小测试建立基线，保存环境与真实测试输出到已忽略证据目录。三个已知失败单独重现：
 
 ```bash
 go test ./internal/bootstrap -run '^TestRunPostSchemaMigrationsAppliesVersion007$' -count=1 -v
@@ -77,4 +77,18 @@ B1–B3 修改请求契约时必须在同一可审查变更中更新现有前端
 
 ## 5. 当前执行进度
 
-B1 的入口清单、验证证据与审查闭环见[后端计划执行记录](2026-09-11-workitem-next-stage-backend.md#b1-执行记录2026-09-11)。B2/B3 已开始；F3 保留 SLA 违规跨重开周期归属检查。迁移注册数量与 Intake category 旧测试已分别复现，正在按当前权威契约修正；不把这些已知失败掩盖为绿色基线。实际部署、运行观察与旧结构删除仍未执行。
+| 范围 | 本地提交/状态 | 已验证证据 |
+|---|---|---|
+| B1 | c14f7e69 | Incident 所有分派入口、真实并发/回滚、BPMN frozen callback |
+| 旧基线修复 | cc1aa1e1 | 注册迁移序列、Intake CTI 分类持久化；冻结流程 fixture 随 B1 修复 |
+| B2 与三域通用写边界 | 754d6126 | Change 转派及审批保留；repository/service/BPMN 旁路拒绝；真实 runtime PG |
+| B3 | e20ea2de | metadata/RCA/调查/步骤/候选方案统一事务；最新 PG 18.952s 通过；补充独立审阅通过 |
+| B4 | c6cc7a62 | 实际 seed 文件、保留变量、唯一绑定写入口；原 C1 PG 11 场景通过 |
+| B5 | 2d2344b6 | 当前授权、非特权 Tenant、临时错误重试、真实通知幂等，独立审阅通过 |
+| F1–F3 | 集成复核中 | 权威身份/版本、公共转派、SLA 周期已实现；页面 SLA 版本刷新及候选分页审阅问题修正中 |
+| V1 | 专用临时环境执行中 | 三域 API 转派和直接越权 4 测试通过；浏览器冲突及完整旅程继续执行 |
+| V2 | 部分验证 | 自动迁移在旧结构存在时阻断；CLI 实际 exit2/0 只读验证；隔离备份恢复及后写入补偿缺口已验证 |
+
+原始代码与文档工作树保持不动。实施代码已通过 go build ./...；最终相关包回归与跨任务 PG 合跑仍在收口。证据保存于实施工作树已忽略的 .superpowers/sdd/workitem-next-stage/。
+
+V2 发现历史 022 SQL 的 CASCADE 与 immutable checksum 冲突，本轮先阻断含旧结构的自动退役，未修改历史迁移账本，也没有自动放行参数。详见 [切换与恢复手册](../../deployment/workitem-convergence-cutover.md)。历史迁移受控替换及允许删除路径尚未完成；实际部署、观察及旧结构删除未授权、未执行，不勾选整体 implemented。

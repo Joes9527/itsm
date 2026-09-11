@@ -126,3 +126,10 @@ export function mapProblemToWorkItem(dto: { workItemId: number; number: string; 
 - [ ] 每批 PR 有独立审查、实际测试输出、历史豁免声明、旧路径删除清单和风险。
 - [ ] 执行记录包含实际 baseline、依赖合并顺序、运行镜像/二进制版本；不能用 main commit 冒充已部署版本。
 - [ ] 若只完成文档或代码未部署，报告对应状态，不宣称运行环境缺口全部消失。
+
+
+## 2026-09-11 后续执行记录
+
+原 C1 实现保留，后续 B4 修复真实 seed/保留变量边界，原 C1 11 项隔离 PG 回归通过。C2 由 F1–F3/V1 实施，真实三域 API 矩阵已验证，完整浏览器旅程仍在执行；不能将本记录当作 C2 全部完成。
+
+C3/V2 已建立自动迁移的旧结构拒绝及真实 CLI exit2/0 只读验证，并在独立数据库完成 schema 备份恢复、原 WorkItem 内容/时间一致和备份后新写入不在恢复结果中的补偿验证。022 的历史 CASCADE 不能直接当作准入删除方案；历史 checksum 保留，允许退役路径待单独决策。实际部署、观察和旧结构删除均未执行。具体范围、顺序和未完成项见 [切换与恢复手册](../../deployment/workitem-convergence-cutover.md)。
