@@ -45,7 +45,7 @@ func main() {
 	list := flag.Bool("list", false, "List all available migrations")
 	rollbackVersion := flag.String("rollback-to", "", "Rollback to a specific version")
 	dryRun := flag.Bool("dry-run", false, "Show SQL without executing")
-	fresh := flag.Bool("fresh", false, "Development-only: recreate the explicitly confirmed database, create Ent schema, apply post-schema migrations, and seed")
+	fresh := flag.Bool("fresh", false, "Development-only: bootstrap an explicitly confirmed empty target, apply post-schema migrations, and seed")
 	seed := flag.Bool("seed", false, "Seed database with initial data")
 	seedOnly := flag.Bool("seed-only", false, "Only seed data without running migrations")
 	version := flag.Bool("version", false, "Show current database version")
@@ -80,9 +80,8 @@ func main() {
 	defer db.Close()
 
 	migrator := migration.NewMigrator(db, sugar)
-	// Ensure migrations table exists
-	if err := migrator.EnsureMigrationsTable(ctx); err != nil {
-		log.Fatalf("Failed to ensure migrations table: %v", err)
+	if err := migrator.InspectMigrationTarget(ctx); err != nil {
+		log.Fatalf("Migration target admission failed: %v", err)
 	}
 
 	// Get available migrations
@@ -204,6 +203,9 @@ func showStatus(migrator *migration.Migrator, available []migration.Migration) {
 
 func runMigrations(migrator *migration.Migrator, available []migration.Migration) {
 	ctx := context.Background()
+	if err := migrator.EnsureMigrationsTable(ctx); err != nil {
+		log.Fatalf("Migration ledger admission failed: %v", err)
+	}
 	count, err := migrator.RunMigrations(ctx, available)
 	if err != nil {
 		log.Fatalf("Migration failed: %v", err)
@@ -256,15 +258,14 @@ func rollbackToVersion(migrator *migration.Migrator, available []migration.Migra
 		return
 	}
 
+	versions := make([]string, 0, len(toRollback))
 	for _, m := range toRollback {
-		if m.RollbackSQL == "" {
-			log.Fatalf("Migration %s has no rollback SQL defined", m.Version)
-		}
-		if err := migrator.RollbackMigration(ctx, m); err != nil {
-			log.Fatalf("Rollback failed at %s: %v", m.Version, err)
-		}
-		fmt.Printf("Rolled back migration: %s\n", m.Version)
+		versions = append(versions, m.Version)
 	}
+	if err := migrator.ReverseMigrations(ctx, migration.OpDown, versions); err != nil {
+		log.Fatalf("Rollback plan rejected: %v", err)
+	}
+	fmt.Printf("Rolled back %d migration(s)\n", len(versions))
 }
 
 func seedData(sugar *zap.SugaredLogger) {
@@ -279,9 +280,19 @@ func seedData(sugar *zap.SugaredLogger) {
 	}
 	defer client.Close()
 
-	seederInstance := seeder.NewSeeder(client, sugar, cfg)
-	if err := seederInstance.SeedAll(context.Background()); err != nil {
-		log.Fatalf("Seed failed: %v", err)
+	db, err := database.InitDB(&cfg.Database)
+	if err != nil {
+		log.Fatalf("Seed target connection failed: %v", err)
+	}
+	defer db.Close()
+	migrator := migration.NewMigrator(db, sugar)
+	if err := migrator.WithMigrationLock(context.Background(), func(ctx context.Context) error {
+		if err := migrator.InspectRuntimeMigrations(ctx); err != nil {
+			return err
+		}
+		return seeder.NewSeeder(client, sugar, cfg).SeedAll(ctx)
+	}); err != nil {
+		log.Fatalf("Seed admission or execution failed: %v", err)
 	}
 	fmt.Println("Seed completed successfully")
 }
@@ -384,7 +395,7 @@ func freshDatabase(cfg *config.Config, sugar *zap.SugaredLogger) {
 	normalized.Database.DBName = strings.TrimSpace(cfg.Database.DBName)
 	cfg = &normalized
 
-	// Connect to postgres to drop/create database
+	// Inspect existence through postgres; creation is allowed only for a missing target.
 	postgresDSN := fmt.Sprintf("host=%s port=%d user=%s dbname=postgres sslmode=%s password=%s",
 		cfg.Database.Host, cfg.Database.Port, cfg.Database.User, cfg.Database.SSLMode, cfg.Database.Password)
 
@@ -394,17 +405,16 @@ func freshDatabase(cfg *config.Config, sugar *zap.SugaredLogger) {
 	}
 	defer postgresDB.Close()
 
-	fmt.Printf("Dropping database %s...\n", cfg.Database.DBName)
-	target := pq.QuoteIdentifier(cfg.Database.DBName)
-	_, err = postgresDB.Exec(fmt.Sprintf("DROP DATABASE IF EXISTS %s", target))
-	if err != nil {
-		log.Fatalf("Failed to drop database: %v", err)
+	var exists bool
+	if err := postgresDB.QueryRow(`SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname=$1)`, cfg.Database.DBName).Scan(&exists); err != nil {
+		log.Fatalf("Fresh target inspection failed: %v", err)
 	}
-
-	fmt.Printf("Creating database %s...\n", cfg.Database.DBName)
-	_, err = postgresDB.Exec(fmt.Sprintf("CREATE DATABASE %s", target))
-	if err != nil {
-		log.Fatalf("Failed to create database: %v", err)
+	// Never DROP an existing target: that bypasses reverse dependencies and
+	// recovery evidence. A genuinely empty existing target needs no recreation.
+	if !exists {
+		if _, err := postgresDB.Exec("CREATE DATABASE " + pq.QuoteIdentifier(cfg.Database.DBName)); err != nil {
+			log.Fatalf("Failed to create fresh database: %v", err)
+		}
 	}
 
 	postgresDB.Close()
@@ -423,15 +433,20 @@ func freshDatabase(cfg *config.Config, sugar *zap.SugaredLogger) {
 	}
 	defer client.Close()
 	migrator := migration.NewMigrator(db, sugar)
-	if err := migration.RunCanonicalBootstrap(ctx, migration.CanonicalBootstrap{
-		Prepare: func(ctx context.Context) error {
-			return database.PrepareBootstrapInfrastructure(ctx, db)
-		},
-		CreateSchema: func(ctx context.Context) error { return client.Schema.Create(ctx) },
-		Migrator:     migrator,
-		Seed: func(ctx context.Context) error {
-			return seeder.NewSeeder(client, sugar, cfg).SeedProduction(ctx)
-		},
+	if err := migrator.WithMigrationLock(ctx, func(ctx context.Context) error {
+		if err := migrator.InspectEmptyMigrationTarget(ctx); err != nil {
+			return err
+		}
+		return migration.RunCanonicalBootstrap(ctx, migration.CanonicalBootstrap{
+			Prepare: func(ctx context.Context) error {
+				return database.PrepareBootstrapInfrastructure(ctx, db)
+			},
+			CreateSchema: func(ctx context.Context) error { return client.Schema.Create(ctx) },
+			Migrator:     migrator,
+			Seed: func(ctx context.Context) error {
+				return seeder.NewSeeder(client, sugar, cfg).SeedProduction(ctx)
+			},
+		})
 	}); err != nil {
 		log.Fatalf("Canonical fresh bootstrap failed: %v", err)
 	}
@@ -471,27 +486,8 @@ func showVersion(migrator *migration.Migrator, available []migration.Migration) 
 
 func resetMigrations(migrator *migration.Migrator, available []migration.Migration) {
 	ctx := context.Background()
-	applied, _, err := migrator.Status(ctx, available)
-	if err != nil {
-		log.Fatalf("Failed to get status: %v", err)
-	}
-
-	if len(applied) == 0 {
-		fmt.Println("No migrations to rollback")
-		return
-	}
-
-	fmt.Printf("Rolling back %d migration(s)...\n", len(applied))
-	for i := len(applied) - 1; i >= 0; i-- {
-		m := applied[i]
-		if m.RollbackSQL == "" {
-			fmt.Printf("  Skipping %s (no rollback SQL)\n", m.Version)
-			continue
-		}
-		if err := migrator.RollbackMigration(ctx, m); err != nil {
-			log.Fatalf("Rollback failed at %s: %v", m.Version, err)
-		}
-		fmt.Printf("  Rolled back: %s\n", m.Version)
+	if err := migrator.ReverseMigrations(ctx, migration.OpReset, nil); err != nil {
+		log.Fatalf("Reset plan rejected: %v", err)
 	}
 	fmt.Println("Reset completed successfully")
 }

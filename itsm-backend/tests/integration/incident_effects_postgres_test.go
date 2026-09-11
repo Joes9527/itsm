@@ -69,10 +69,12 @@ func newIncidentEffectsFixture(t *testing.T) *incidentEffectsFixture {
 	client, err := ent.Open("postgres", parsed.String())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, client.Close()) })
-	require.NoError(t, client.Schema.Create(ctx))
+
 	scopedDB, err := sql.Open("postgres", parsed.String())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, scopedDB.Close()) })
+	require.NoError(t, migration.NewMigrator(scopedDB, zap.NewNop().Sugar()).EnsureMigrationsTable(ctx))
+	require.NoError(t, client.Schema.Create(ctx))
 	_, err = scopedDB.ExecContext(ctx, migration.GetMigrationSQL("009_enable_rls_tenant_isolation"))
 	require.NoError(t, err)
 	_, err = scopedDB.ExecContext(ctx, migration.GetMigrationSQL("024_incident_rule_action_receipts"))

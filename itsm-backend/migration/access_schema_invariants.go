@@ -11,18 +11,23 @@ import (
 // Function and dependent CHECKs are installed atomically, before seeding.
 // Existing invalid data aborts initialization rather than weakening enforcement.
 func (m *Migrator) ReconcileSchemaInvariants(ctx context.Context) error {
-	tx, err := m.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, serviceRequestWorkItemAuthorityVerifySQL); err != nil {
-		return fmt.Errorf("ServiceRequest WorkItem invariants: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, accessSchemaInvariantsSQL); err != nil {
-		return fmt.Errorf("finite access invariants: %w", err)
-	}
-	return tx.Commit()
+	return m.WithMigrationLock(ctx, func(ctx context.Context) error {
+		tx, err := m.db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		if _, err := inspectMigrationTarget(ctx, tx); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, serviceRequestWorkItemAuthorityVerifySQL); err != nil {
+			return fmt.Errorf("ServiceRequest WorkItem invariants: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, accessSchemaInvariantsSQL); err != nil {
+			return fmt.Errorf("finite access invariants: %w", err)
+		}
+		return tx.Commit()
+	})
 }
 
 const accessSchemaInvariantsSQL = `-- Ent creates the typed tables/FKs before the registered migration stream.

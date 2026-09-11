@@ -14,8 +14,10 @@ import (
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 
+	"go.uber.org/zap"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/migration"
 	"itsm-backend/service/workitemcutover"
 )
 
@@ -64,10 +66,12 @@ func newCutoverFixture(t *testing.T) *cutoverFixture {
 	client, err := ent.Open("postgres", parsed.String())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, client.Close()) })
-	require.NoError(t, client.Schema.Create(ctx))
+
 	scopedDB, err := sql.Open("postgres", parsed.String())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, scopedDB.Close()) })
+	require.NoError(t, migration.NewMigrator(scopedDB, zap.NewNop().Sugar()).EnsureMigrationsTable(ctx))
+	require.NoError(t, client.Schema.Create(ctx))
 
 	tenant := client.Tenant.Create().SetCode("cutover").SetName("cutover").SaveX(ctx)
 	actor := client.User.Create().SetTenantID(tenant.ID).SetUsername("cutover-actor").SetName("actor").

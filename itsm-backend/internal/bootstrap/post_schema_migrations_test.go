@@ -81,3 +81,8 @@ func TestRunPostSchemaMigrationsFailsClosed(t *testing.T) {
 }
 
 func (m *recordingPostSchemaMigrator) ReconcileSchemaInvariants(context.Context) error { return nil }
+
+func (m *recordingPostSchemaMigrator) InspectMigrationTarget(context.Context) error { return nil }
+func (m *recordingPostSchemaMigrator) WithMigrationLock(ctx context.Context, fn func(context.Context) error) error {
+	return fn(ctx)
+}

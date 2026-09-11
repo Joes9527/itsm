@@ -66,11 +66,9 @@ func TestWorkItemRetirementFreshSchemaRetainsCanonicalBootstrap(t *testing.T) {
 	f.canonicalChange(t, "CHG-FRESH")
 	runner := migration.NewMigrator(f.scopedDB, zap.NewNop().Sugar())
 	require.NoError(t, runner.EnsureMigrationsTable(f.ctx))
-	for _, m := range migration.RegisteredMigrations {
-		if m.Version == "022_drop_professional_extension_shared_fields" || m.Version == "027_work_item_identity_field_retirement" {
-			require.NoError(t, runner.ApplyMigration(f.ctx, m))
-		}
-	}
+	_, err := runner.RunMigrations(f.ctx, migration.PostSchemaMigrations())
+	require.NoError(t, err)
+
 	require.True(t, f.inspect(t).Switchable)
 }
 
@@ -179,10 +177,10 @@ func TestWorkItemRetirementCannotFallThroughToAnotherSchema(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, wrong.Close()) })
 	runner := migration.NewMigrator(wrong, zap.NewNop().Sugar())
-	require.NoError(t, runner.EnsureMigrationsTable(f.ctx))
+	require.ErrorContains(t, runner.EnsureMigrationsTable(f.ctx), "single explicit schema")
 	for _, m := range migration.RegisteredMigrations {
 		if m.Version == "027_work_item_identity_field_retirement" {
-			require.ErrorContains(t, runner.ApplyMigration(f.ctx, m), "automatic WorkItem retirement is blocked")
+			require.ErrorContains(t, runner.ApplyMigration(f.ctx, m), "single explicit schema")
 		}
 	}
 	var preserved string
