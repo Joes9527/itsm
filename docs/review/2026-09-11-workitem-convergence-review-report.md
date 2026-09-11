@@ -4,6 +4,8 @@
 
 更新：按维护者要求重新以 **WorkItem 重构本身** 为基准复核，见第 9 节。第 9 节的主线排序取代第 6、7 节原先仅从 B/C1 缺陷出发的接手排序；R1–R6 仍然有效。
 
+总体开发输入：[WorkItem 重构后续开发输入与决策记录](../superpowers/specs/2026-09-11-workitem-convergence-development-input.md)。维护者明确继续覆盖 Change、Problem 与公共能力，Incident 分配仅为子决策。
+
 后续决策：R7 的业务语义已经维护者确认，见 [Incident 分配与处理动作设计](../superpowers/specs/2026-09-11-workitem-incident-assignment-convergence-design.md)。该设计记录讨论依据及 backlog；代码缺陷尚未修复。
 
 ## 1. 结论与评审边界

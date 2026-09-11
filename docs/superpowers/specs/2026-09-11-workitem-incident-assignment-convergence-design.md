@@ -8,6 +8,8 @@
 
 ## 1. 定位与权威来源
 
+> 本文件仅是已确认的 Incident 子决策。后续开发的总体输入及讨论范围见 [WorkItem 重构后续开发输入](2026-09-11-workitem-convergence-development-input.md)，覆盖 Change、Problem 与公共能力；不以本子决策完结代表总体设计已完成。
+
 本设计补充 [WorkItem 收敛设计](2026-09-09-workitem-convergence-design.md)，承接 [独立评审第 9 节及 R7](../../review/2026-09-11-workitem-convergence-review-report.md)。它仅明确已经讨论确认的 Incident 动作语义，不替代整个 A/B/C 计划，不表示其他剩余工作已完成或已设计确认。
 
 继续遵守 AGENTS.md：WorkItem 拥有基础身份和公共事实，Incident 域拥有专业动作；HTTP、BPMN、自动化共享专业规则。不得新增通用专业状态机、第二套审批引擎或兼容分配实现。旧计划、旧测试若与本文件已确认语义冲突，应依据本决策更新，不以旧实现反推需求。
@@ -87,5 +89,5 @@
 
 1. 先读本文件和评审 R7，再形成唯一 Incident 分配契约的实施计划；不要原样执行旧计划的动作假设。
 2. 实施计划明确所有实际入口及旧实现删除清单，并沿用现有事务/授权/回执能力。
-3. 书面设计经维护者复核后再进入 writing-plans；本轮记录不表示开始编码。
+3. 本子决策作为总体开发输入的一部分，继续讨论 Change、Problem 和跨域边界；在相应设计范围确认后再进入 writing-plans，不仅凭本子决策开始整个重构的实现。
 4. 完成实现及独立验证后才更新 implemented；发现需改变本节已确认语义时，记录新决定和取代关系，不静默改变。
