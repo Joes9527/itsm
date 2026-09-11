@@ -62,7 +62,9 @@ func validatePreparationEvidence(e MigrationEvidence, i PreparationInventory) er
 	if e.LedgerDigest != i.LedgerDigest || e.InventoryDigest != i.InventoryDigest {
 		return fmt.Errorf("migration evidence ledger or inventory digest changed")
 	}
-	for _, v := range []string{e.ApplicationDigest, e.BackupDigest, e.RestoreReportDigest, e.JourneyReportDigest, e.ObservationReportDigest, e.Operator, e.ChangeRecord, e.LedgerDigest, e.InventoryDigest} {
+	// P precedes current journeys and observation; those reports belong to the
+	// later retirement evidence gate and may truthfully be absent here.
+	for _, v := range []string{e.ApplicationDigest, e.BackupDigest, e.RestoreReportDigest, e.Operator, e.ChangeRecord, e.LedgerDigest, e.InventoryDigest} {
 		if strings.TrimSpace(v) == "" {
 			return fmt.Errorf("migration evidence contains an empty required field")
 		}

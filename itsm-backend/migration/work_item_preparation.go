@@ -108,7 +108,14 @@ func preparationStructure(ctx context.Context, q migrationQuery, schema string) 
 	if err != nil {
 		return "", err
 	}
-	return checksumSQL(result), nil
+	indexes, err := preparationIndexes(ctx, q, schema)
+	if err != nil {
+		return "", err
+	}
+	return evidenceDigest(struct {
+		Structure string
+		Indexes   []preparationIndex
+	}{result, indexes})
 }
 
 func (m *Migrator) InspectPreparation(ctx context.Context) (PreparationInventory, error) {
@@ -289,6 +296,14 @@ func verifyPreparationReceipt(ctx context.Context, q migrationQuery, schema, dig
 }
 
 func validatePreparationShape(ctx context.Context, q migrationQuery, schema string, prepared bool, grants []MigrationRoleGrant) error {
+	indexes, err := preparationIndexes(ctx, q, schema)
+	if err != nil {
+		return err
+	}
+	if err = validatePreparationIndexes(indexes); err != nil {
+		return err
+	}
+
 	if err := validatePreparationGrants(ctx, q, schema, grants); err != nil {
 		return err
 	}
@@ -555,6 +570,62 @@ func validatePreparationGrants(ctx context.Context, q migrationQuery, schema str
 	}
 	if columnGrant {
 		return fmt.Errorf("unreviewed column-level grant")
+	}
+	return nil
+}
+
+// preparationIndex records enforcing behavior independently of pg_constraint:
+// standalone unique indexes have no constraint row. Dependencies include both
+// index keys and expression/predicate references in pg_depend.
+type preparationIndex struct {
+	Table      string
+	Name       string
+	Definition string
+	Enforcing  bool
+	Valid      bool
+	Ready      bool
+}
+
+func preparationIndexes(ctx context.Context, q migrationQuery, schema string) ([]preparationIndex, error) {
+	var indexes []preparationIndex
+	for _, table := range preparationTables {
+		columns := append([]string{"work_item_id"}, preparationLegacyColumns[table]...)
+		rows, err := q.QueryContext(ctx, `SELECT idx.relname,pg_get_indexdef(i.indexrelid),i.indisunique OR i.indisexclusion,i.indisvalid,i.indisready
+ FROM pg_index i JOIN pg_class idx ON idx.oid=i.indexrelid
+ WHERE i.indrelid=$1::regclass AND (
+  EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid=i.indrelid AND a.attname=ANY($2) AND NOT a.attisdropped AND (
+   a.attnum=ANY(i.indkey::smallint[]) OR EXISTS(SELECT 1 FROM pg_depend d WHERE d.classid='pg_class'::regclass AND d.objid=i.indexrelid AND d.refclassid='pg_class'::regclass AND d.refobjid=i.indrelid AND d.refobjsubid=a.attnum)))
+  OR ((i.indisunique OR i.indisexclusion) AND (i.indexprs IS NOT NULL OR i.indpred IS NOT NULL))
+ ) ORDER BY idx.relname`, preparationRelation(schema, table), pq.Array(columns))
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			index := preparationIndex{Table: table}
+			if err = rows.Scan(&index.Name, &index.Definition, &index.Enforcing, &index.Valid, &index.Ready); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			indexes = append(indexes, index)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return indexes, nil
+}
+func validatePreparationIndexes(indexes []preparationIndex) error {
+	canonical := map[string]string{"incidents": "incident_work_item_id", "problems": "problem_work_item_id", "changes": "change_work_item_id"}
+	for _, index := range indexes {
+		// The existing exact canonical-index validator checks its definition. Every
+		// other enforcing index touching retained fields requires separate review.
+		// Expression/partial enforcement is conservative even for constant/whole-row
+		// expressions whose column dependencies cannot establish null-write safety.
+		if index.Enforcing && index.Name != canonical[index.Table] {
+			return fmt.Errorf("unreviewed enforcing index %s.%s", index.Table, index.Name)
+		}
 	}
 	return nil
 }

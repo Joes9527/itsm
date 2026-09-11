@@ -9,7 +9,9 @@ import (
 func TestPreparationEvidenceBindsTargetAndInputs(t *testing.T) {
 	inv := PreparationInventory{Target: MigrationTarget{"deployment", "database", "schema"}, LedgerDigest: "ledger", InventoryDigest: "inventory"}
 	e := MigrationEvidence{Target: inv.Target, CatalogRevision: ControlledCatalogRevision, LedgerDigest: inv.LedgerDigest, InventoryDigest: inv.InventoryDigest, ApplicationDigest: "app", BackupDigest: "backup", RestoreReportDigest: "restore", JourneyReportDigest: "journey", ObservationReportDigest: "observation", Operator: "operator", ChangeRecord: "change"}
-	require.NoError(t, validatePreparationEvidence(e, inv))
+	e.JourneyReportDigest = ""
+	e.ObservationReportDigest = ""
+	require.NoError(t, validatePreparationEvidence(e, inv), "P must not require future journey/observation reports")
 	for name, mutate := range map[string]func(*MigrationEvidence){
 		"deployment":  func(v *MigrationEvidence) { v.Target.DeploymentID = "other" },
 		"database":    func(v *MigrationEvidence) { v.Target.Database = "other" },
@@ -20,8 +22,6 @@ func TestPreparationEvidenceBindsTargetAndInputs(t *testing.T) {
 		"application": func(v *MigrationEvidence) { v.ApplicationDigest = "" },
 		"backup":      func(v *MigrationEvidence) { v.BackupDigest = "" },
 		"restore":     func(v *MigrationEvidence) { v.RestoreReportDigest = "" },
-		"journey":     func(v *MigrationEvidence) { v.JourneyReportDigest = "" },
-		"observation": func(v *MigrationEvidence) { v.ObservationReportDigest = "" },
 		"operator":    func(v *MigrationEvidence) { v.Operator = "" },
 		"change":      func(v *MigrationEvidence) { v.ChangeRecord = "" },
 	} {

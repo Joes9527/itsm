@@ -332,3 +332,49 @@ func TestWorkItemControlledPreparationRolesInsidePTransaction(t *testing.T) {
 	require.NoError(t, err)
 	t.Log("P transaction role probes passed; nested rollback removed grants, role switch and all probe records")
 }
+
+func TestWorkItemControlledPreparationWithoutLaterReports(t *testing.T) {
+	db, ctx := preparationFixture(t)
+	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2"})
+	e := preparationEvidence(t, m, ctx)
+	e.JourneyReportDigest = ""
+	e.ObservationReportDigest = ""
+	require.NoError(t, m.ApplyPreparation(ctx, e))
+	require.NoError(t, m.InspectMigrationTarget(ctx))
+}
+func TestWorkItemControlledPreparationUnreviewedEnforcingIndexes(t *testing.T) {
+	for name, indexSQL := range map[string]string{
+		"expression":        `CREATE UNIQUE INDEX unexpected_legacy_title ON incidents ((coalesce(title,'')))`,
+		"partial predicate": `CREATE UNIQUE INDEX unexpected_legacy_title ON incidents (id) WHERE title IS NOT NULL`,
+		"plain column":      `CREATE UNIQUE INDEX unexpected_legacy_title ON incidents (title)`,
+	} {
+		t.Run(name+" before P", func(t *testing.T) {
+			db, ctx := preparationFixture(t)
+			m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2"})
+			old := preparationEvidence(t, m, ctx)
+			_, err := db.ExecContext(ctx, indexSQL)
+			require.NoError(t, err)
+			e := preparationEvidence(t, m, ctx)
+			if old.InventoryDigest == e.InventoryDigest {
+				t.Error("enforcing index dependencies missing from inventory")
+			}
+			before := preparationLogicalDigest(t, db)
+			require.ErrorContains(t, m.ApplyPreparation(ctx, e), "unreviewed enforcing index")
+			require.Equal(t, before, preparationLogicalDigest(t, db))
+			var count int
+			require.NoError(t, db.QueryRow(`SELECT count(*) FROM schema_migrations WHERE version=$1`, migration.WorkItemPrepareVersion).Scan(&count))
+			require.Zero(t, count)
+			var attached bool
+			require.NoError(t, db.QueryRow(`SELECT to_regclass(current_schema()||'.work_item_migration_evidence') IS NOT NULL`).Scan(&attached))
+			require.False(t, attached)
+		})
+		t.Run(name+" after P", func(t *testing.T) {
+			db, ctx := preparationFixture(t)
+			m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2"})
+			require.NoError(t, m.ApplyPreparation(ctx, preparationEvidence(t, m, ctx)))
+			_, err := db.ExecContext(ctx, indexSQL)
+			require.NoError(t, err)
+			require.Error(t, m.InspectMigrationTarget(ctx), "new enforcing indexes must invalidate P receipt structure")
+		})
+	}
+}
