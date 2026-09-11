@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/lib/pq"
+	"sort"
 	"strings"
 	"time"
 )
@@ -24,6 +25,7 @@ var preparationHistoricalTables = []string{"ticket_approvals", "workflow_tasks",
 // PreparationBaseline contains immutable per-record evidence hashes; public values
 // are not duplicated. Subsequent authoritative updates must not rewrite it.
 type PreparationBaselineRow struct {
+	Columns    []string `json:",omitempty"`
 	Table      string
 	ID         string
 	Digest     string
@@ -42,8 +44,18 @@ func preparationRelation(schema, table string) string {
 }
 
 func preparationBaseline(ctx context.Context, q migrationQuery, schema string) ([]PreparationBaselineRow, error) {
+	return preparationBaselineWithScope(ctx, q, schema, nil)
+}
+func preparationBaselineWithScope(ctx context.Context, q migrationQuery, schema string, scopes map[string][]string) ([]PreparationBaselineRow, error) {
 	var result []PreparationBaselineRow
 	capture := func(table, expression string) error {
+		if cols := scopes[table]; len(cols) > 0 {
+			var keys []string
+			for _, c := range cols {
+				keys = append(keys, pq.QuoteLiteral(c))
+			}
+			expression = `(SELECT jsonb_object_agg(key,value) FROM jsonb_each(to_jsonb(r)) WHERE key IN (` + strings.Join(keys, ",") + `))`
+		}
 		identity := `coalesce(to_jsonb(r)->>'work_item_id','')`
 		tenant := `coalesce(to_jsonb(r)->>'tenant_id','')`
 		if table == "tickets" {
@@ -62,7 +74,16 @@ func preparationBaseline(ctx context.Context, q migrationQuery, schema string) (
 			if err = rows.Scan(&id, &data, &workItemID, &tenantID); err != nil {
 				return err
 			}
-			result = append(result, PreparationBaselineRow{table, id, checksumSQL(data), workItemID, tenantID})
+			var fields map[string]json.RawMessage
+			if err = json.Unmarshal([]byte(data), &fields); err != nil {
+				return err
+			}
+			var columns []string
+			for k := range fields {
+				columns = append(columns, k)
+			}
+			sort.Strings(columns)
+			result = append(result, PreparationBaselineRow{Table: table, ID: id, Digest: checksumSQL(data), WorkItemID: workItemID, TenantID: tenantID, Columns: columns})
 		}
 		return rows.Err()
 	}
@@ -98,7 +119,7 @@ func preparationBaseline(ctx context.Context, q migrationQuery, schema string) (
 func preparationStructure(ctx context.Context, q migrationQuery, schema string) (string, error) {
 	var result string
 	err := q.QueryRowContext(ctx, `SELECT jsonb_build_object(
- 'constraints',(SELECT coalesce(jsonb_agg(jsonb_build_array(c.relname,k.conname,pg_get_constraintdef(k.oid)) ORDER BY c.relname,k.conname),'[]'::jsonb) FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid WHERE c.relnamespace=$1::text::regnamespace AND c.relname IN ('incidents','problems','changes') AND k.contype IN ('f','u','p')),
+ 'constraints',(SELECT coalesce(jsonb_agg(jsonb_build_array(c.relname,k.conname,pg_get_constraintdef(k.oid)) ORDER BY c.relname,k.conname),'[]'::jsonb) FROM pg_constraint k JOIN pg_class c ON c.oid=k.conrelid WHERE c.relnamespace=$1::text::regnamespace AND c.relname IN ('incidents','problems','changes') AND k.contype IN ('f','u','p') AND (k.contype='p' OR EXISTS(SELECT 1 FROM pg_attribute a WHERE a.attrelid=k.conrelid AND a.attnum=ANY(k.conkey) AND a.attname IN ('work_item_id','title','description','status','priority','reporter_id','assignee_id','category','subcategory','source','tenant_id','version','created_at','updated_at','resolved_at','closed_at','deleted_at','incident_number','created_by','related_tickets')))),
  'indexes',(SELECT coalesce(jsonb_agg(jsonb_build_array(tablename,indexname,indexdef) ORDER BY indexname),'[]'::jsonb) FROM pg_indexes WHERE schemaname=$1::text AND indexname IN ('incident_work_item_id','problem_work_item_id','change_work_item_id')),
  'policies',(SELECT coalesce(jsonb_agg(jsonb_build_array(c.relname,p.polname,p.polcmd,p.polpermissive,p.polroles,pg_get_expr(p.polqual,p.polrelid),pg_get_expr(p.polwithcheck,p.polrelid)) ORDER BY c.relname,p.polname),'[]'::jsonb) FROM pg_policy p JOIN pg_class c ON c.oid=p.polrelid WHERE c.relnamespace=$1::text::regnamespace AND c.relname IN ('tickets','incidents','problems','changes')),
  'rls',(SELECT jsonb_agg(jsonb_build_array(relname,relrowsecurity,relforcerowsecurity) ORDER BY relname) FROM pg_class WHERE relnamespace=$1::text::regnamespace AND relname IN ('tickets','incidents','problems','changes')),
@@ -134,7 +155,7 @@ func (m *Migrator) preparationInventory(ctx context.Context, q migrationQuery) (
 		return inv, nil, err
 	}
 	inv.Target = target
-	applied, err := inspectMigrationTarget(ctx, q)
+	applied, err := inspectMigrationTarget(ctx, q, m.controlConfig)
 	if err != nil {
 		return inv, nil, err
 	}

@@ -58,7 +58,7 @@ func (m *Migrator) EnsureMigrationsTable(ctx context.Context) error {
 			return err
 		}
 		defer tx.Rollback()
-		if _, err = inspectMigrationTarget(ctx, tx); err != nil {
+		if _, err = inspectMigrationTarget(ctx, tx, m.controlConfig); err != nil {
 			return err
 		}
 		query := `
@@ -137,7 +137,7 @@ func (m *Migrator) ApplyMigration(ctx context.Context, mig Migration) error {
 			return fmt.Errorf("failed to begin transaction: %w", err)
 		}
 		defer tx.Rollback()
-		applied, err := inspectMigrationTarget(ctx, tx)
+		applied, err := inspectMigrationTarget(ctx, tx, m.controlConfig)
 		if err != nil {
 			return err
 		}
@@ -486,11 +486,11 @@ func (m *Migrator) InspectMigrationTarget(ctx context.Context) error {
 		return err
 	}
 	defer tx.Rollback()
-	_, err = inspectMigrationTarget(ctx, tx)
+	_, err = inspectMigrationTarget(ctx, tx, m.controlConfig)
 	return err
 }
 
-func inspectMigrationTarget(ctx context.Context, q migrationQuery) ([]Migration, error) {
+func inspectMigrationTarget(ctx context.Context, q migrationQuery, config MigrationControlConfig) ([]Migration, error) {
 	schema, err := migrationTargetSchema(ctx, q)
 	if err != nil {
 		return nil, err
@@ -516,14 +516,21 @@ func inspectMigrationTarget(ctx context.Context, q migrationQuery) ([]Migration,
 	if _, err = PlanMigrations(ControlledMigrationCatalog(), applied, OpUp, nil); err != nil {
 		return nil, err
 	}
+	// A real R receipt verifies both subordinate attachments and the authorized
+	// post-R catalog, which no longer contains retained P objects.
+	for _, a := range applied {
+		if a.Version == WorkItemRetireVersion {
+			if err := verifyRetirementReceipt(ctx, q, schema, *a.EvidenceDigest, config, *a.AppliedAt); err != nil {
+				return nil, err
+			}
+			return applied, nil
+		}
+	}
 	for _, a := range applied {
 		if a.Version == WorkItemPrepareVersion {
 			if err := verifyPreparationReceipt(ctx, q, schema, *a.EvidenceDigest); err != nil {
 				return nil, err
 			}
-		}
-		if a.Version == WorkItemRetireVersion {
-			return nil, fmt.Errorf("controlled stage %s has no executable structure verifier registered", a.Version)
 		}
 	}
 	return applied, nil
@@ -595,7 +602,7 @@ func (m *Migrator) InspectRuntimeMigrations(ctx context.Context) error {
 		return err
 	}
 	defer tx.Rollback()
-	applied, err := inspectMigrationTarget(ctx, tx)
+	applied, err := inspectMigrationTarget(ctx, tx, m.controlConfig)
 	if err != nil {
 		return err
 	}
@@ -630,7 +637,7 @@ func (m *Migrator) ReverseMigrations(ctx context.Context, operation MigrationOpe
 			return err
 		}
 		defer tx.Rollback()
-		applied, err := inspectMigrationTarget(ctx, tx)
+		applied, err := inspectMigrationTarget(ctx, tx, m.controlConfig)
 		if err != nil {
 			return err
 		}

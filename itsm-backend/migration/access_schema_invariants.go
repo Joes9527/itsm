@@ -17,7 +17,7 @@ func (m *Migrator) ReconcileSchemaInvariants(ctx context.Context) error {
 			return err
 		}
 		defer tx.Rollback()
-		if _, err := inspectMigrationTarget(ctx, tx); err != nil {
+		if _, err := inspectMigrationTarget(ctx, tx, m.controlConfig); err != nil {
 			return err
 		}
 		if _, err := tx.ExecContext(ctx, serviceRequestWorkItemAuthorityVerifySQL); err != nil {

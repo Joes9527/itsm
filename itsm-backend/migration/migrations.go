@@ -1127,6 +1127,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
 		return intakeFrozenWorkflowContextSQL
 	case "028_service_request_work_item_authority":
 		return serviceRequestWorkItemAuthoritySQL
+	case WorkItemRetireVersion:
+		return workItemRetirementSQL
 	case WorkItemPrepareVersion:
 		return workItemPreparationSQL
 	case "027_work_item_identity_field_retirement":
