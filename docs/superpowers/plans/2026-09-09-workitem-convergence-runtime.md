@@ -1,5 +1,6 @@
 # WorkItem Runtime Convergence Implementation Plan
 
+> 2026-09-11 后续任务入口：[后续实施总计划](2026-09-11-workitem-next-stage.md)。保留本文件原任务及证据；剩余工作按新计划与已确认设计执行，不重做已有成果。
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 > 状态：draft；依赖子计划 A、B；执行顺序 C1 → C2 → C3。

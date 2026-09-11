@@ -31,9 +31,11 @@
 
 ## 产品与架构
 
-- [WorkItem 后续收敛设计（draft，待审阅）](./superpowers/specs/2026-09-11-workitem-convergence-next-stage-design.md)：后端契约、页面操作、跨域验收与退役门禁三批设计；包含已确认的三域转派和 backlog 边界。
+- [WorkItem 后续实施计划（draft，未执行）](./superpowers/plans/2026-09-11-workitem-next-stage.md)：后端五项任务、公共页面三项任务和跨域验收/退役两项任务的依赖与证据入口。
 
-- [WorkItem 重构后续开发输入与决策记录（draft）](./superpowers/specs/2026-09-11-workitem-convergence-development-input.md)：本轮讨论总入口，覆盖 Incident、Problem、Change、Requested Item/generic 回归和公共能力；已确认与待讨论分列。
+- [WorkItem 后续收敛设计（accepted，未实施）](./superpowers/specs/2026-09-11-workitem-convergence-next-stage-design.md)：后端契约、页面操作、跨域验收与退役门禁三批设计；包含已确认的三域转派和 backlog 边界。
+
+- [WorkItem 重构后续开发输入与决策记录（accepted）](./superpowers/specs/2026-09-11-workitem-convergence-development-input.md)：本轮讨论总入口，覆盖 Incident、Problem、Change、Requested Item/generic 回归和公共能力；已确认与待讨论分列。
 
 - [Incident 分配与处理动作决策（accepted，未实施）](./superpowers/specs/2026-09-11-workitem-incident-assignment-convergence-design.md)：WorkItem 收敛的分配/转派、可选确认和首次响应 backlog 决策过程。
 
