@@ -135,7 +135,10 @@ All APIs return `{ code: number, message: string, data: any }`:
 
 Full statement: [AGENTS.md § Domain Ownership](AGENTS.md), plus the Unified Work Item Domain Contract below. Ticket/Incident/Problem/Change/Release/Service Request stay distinct professional domains — reuse shared helpers, don't collapse their lifecycle rules into one generic abstraction. BPMN is the orchestration layer for approvals/fulfillment/escalation. CMDB is not an asset table. Knowledge/RAG must keep source attribution, versioning, and tenant/permission filtering. MSP/tenant behavior applies to every new table, query, API, menu item, and background job. The Unified Work Item Domain Contract below governs how these domains relate at the data-model level — read it before adding fields, relations, or lifecycle logic to any of them.
 
-## Unified Work Item Domain Contract (Summary)
+## Unified Work Item Domain Contract
+
+> Accepted controlled retirement design (not implemented): [design](docs/superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md); [plan](docs/superpowers/plans/2026-09-11-workitem-controlled-retirement.md). Preserve historical SQL/checksums and truthful receipts. Separate transactional structure preparation from later full business acceptance and controlled retirement. All migration write paths, including rollback/reset, enforce stage dependencies; read-only classification precedes any bootstrap writes. Environment deployment and deletion require their own authorization.
+ (Summary)
 
 > Accepted convergence design: [WorkItem convergence](docs/superpowers/specs/2026-09-09-workitem-convergence-design.md); [implementation plan](docs/superpowers/plans/2026-09-09-workitem-convergence.md). Incident recovery is independent of Problem completion. Problem resolution requires a verified permanent fix. Authorized reopen starts a zeroed SLA cycle while preserving prior results and original creation time. For this convergence only, historical business data is not migrated; schema changes remain required. Retire old structures after sole-path cutover, validation and observation. No parallel lifecycle, relationship, SLA or approval implementation is permitted.
 

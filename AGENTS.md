@@ -103,6 +103,9 @@ For new work, align with the roadmap rather than creating parallel mechanisms. I
 
 ## Unified Work Item Domain Contract
 
+> Accepted controlled retirement design (not implemented): [design](docs/superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md); [plan](docs/superpowers/plans/2026-09-11-workitem-controlled-retirement.md). Preserve historical SQL/checksums and truthful receipts. Separate transactional structure preparation from later full business acceptance and controlled retirement. All migration write paths, including rollback/reset, enforce stage dependencies; read-only classification precedes any bootstrap writes. Environment deployment and deletion require their own authorization.
+
+
 > Accepted convergence design: [WorkItem convergence](docs/superpowers/specs/2026-09-09-workitem-convergence-design.md); [implementation plan](docs/superpowers/plans/2026-09-09-workitem-convergence.md). Incident recovery is independent of Problem completion. Problem resolution requires a verified permanent fix. Authorized reopen starts a zeroed SLA cycle while preserving prior results and original creation time. For this convergence only, historical business data is not migrated; schema changes remain required. Retire old structures after sole-path cutover, validation and observation. No parallel lifecycle, relationship, SLA or approval implementation is permitted.
 
 > Confirmed cross-domain development input: [WorkItem next development input](docs/superpowers/specs/2026-09-11-workitem-convergence-development-input.md). It covers Incident, Problem, Change and shared capabilities; the accepted Incident decision below is only one sub-decision. Open questions are not approved implementation requirements.

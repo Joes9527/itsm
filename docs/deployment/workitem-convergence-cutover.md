@@ -94,4 +94,4 @@ V1 暴露了 Change 创建后台启动与专业 submit 的重复启动。补充�
 
 036 隔离证据：原未限定表名的SQL在selected schema缺表时误改独立shadow诱饵表（RED0.041s）；改为捕获current_schema并对关系名使用标识符限定后，缺表拒绝、正常重复执行成功、历史两新字段NULL及诱饵表不变均通过（0.049s）。独立复核通过。NULL schema分支有代码保护，未单独演练该分支；未修改任何旧迁移checksum。
 
-后续设计入口：[受控退役设计草案](../superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md)。方向已获同意，具体契约待审阅；本手册现有阻断与未完成状态不变。
+后续设计入口：[受控退役设计](../superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md)。设计经审阅修订，维护者已授权进入[实施计划](../superpowers/plans/2026-09-11-workitem-controlled-retirement.md)。尚未实现，本手册现有阻断与未完成状态不变。
