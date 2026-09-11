@@ -151,9 +151,17 @@ func TestWorkItemProblemLifecycleAllocatedMSP(t *testing.T) {
 			var wrongActors int
 			require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT count(*) FROM audit_logs WHERE path=$1 AND resource='work_item' AND user_id NOT IN ($2,$3)", fmt.Sprint(f.p.WorkItemID), actor.ID, outsider.ID).Scan(&wrongActors))
 			require.Zero(t, wrongActors)
-			var providerReceipts int
-			require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT count(*) FROM audit_logs WHERE path=$1 AND resource='work_item' AND user_id=$2", fmt.Sprint(f.p.WorkItemID), actor.ID).Scan(&providerReceipts))
-			require.Equal(t, 5, providerReceipts)
+			rows, err := f.db.QueryContext(f.ctx, "SELECT action FROM audit_logs WHERE path=$1 AND resource='work_item' AND user_id=$2 ORDER BY id", fmt.Sprint(f.p.WorkItemID), actor.ID)
+			require.NoError(t, err)
+			var providerActions []string
+			for rows.Next() {
+				var action string
+				require.NoError(t, rows.Scan(&action))
+				providerActions = append(providerActions, action)
+			}
+			require.NoError(t, rows.Err())
+			require.NoError(t, rows.Close())
+			require.Equal(t, []string{"problem.investigate", "problem.metadata", "problem.verify_resolution", "problem.resolve", "problem.close", "problem.reopen"}, providerActions)
 		})
 	}
 }
@@ -198,7 +206,7 @@ func (f *problemLifecycleFixture) evidence(t *testing.T) {
 	t.Helper()
 	// Persistence probe supplies the observed version for this metadata effect fixture; it is not a public relation read.
 	p := f.client.Ticket.GetX(f.ctx, f.p.WorkItemID)
-	_, err := f.owner.Update(f.ctx, f.tenant.ID, f.p.ID, &problem.Problem{Version: p.Version, RootCause: "Connection leak", Resolution: "Close connections on cancellation"})
+	_, err := f.metadata(&problem.Problem{Version: p.Version, RootCause: "Connection leak", Resolution: "Close connections on cancellation"})
 	require.NoError(t, err)
 }
 
@@ -266,20 +274,20 @@ func TestWorkItemProblemLifecycleLegacyAndVersionChanges(t *testing.T) {
 	f.apply(t, "verify_resolution", "verify")
 	stale := f.command("resolve", "resolve-stale")
 	before := f.client.Ticket.GetX(f.ctx, f.p.WorkItemID)
-	_, err := f.owner.Update(f.ctx, f.tenant.ID, f.p.ID, &problem.Problem{Version: before.Version, RootCause: "Corrected cause"})
+	_, err := f.metadata(&problem.Problem{Version: before.Version, RootCause: "Corrected cause"})
 	require.NoError(t, err)
 	_, err = f.owner.ApplyCommand(f.ctx, stale)
 	require.True(t, common.IsVersionConflictError(err))
 	_, err = f.owner.ApplyCommand(f.ctx, f.command("resolve", "new-version-old-verification"))
 	require.Error(t, err)
-	_, err = f.owner.Update(f.ctx, f.tenant.ID, f.p.ID, &problem.Problem{Status: "resolved", Version: before.Version})
+	_, err = f.metadata(&problem.Problem{Status: "resolved", Version: before.Version})
 	require.ErrorContains(t, err, "lifecycle command")
-	_, err = f.owner.Update(f.ctx, f.tenant.ID, f.p.ID, &problem.Problem{Title: "missing version"})
+	_, err = f.metadata(&problem.Problem{Title: "missing version"})
 	require.ErrorContains(t, err, "version required")
 	f.apply(t, "verify_resolution", "reverify")
 	f.apply(t, "resolve", "resolve")
 	before = f.client.Ticket.GetX(f.ctx, f.p.WorkItemID)
-	_, err = f.owner.Update(f.ctx, f.tenant.ID, f.p.ID, &problem.Problem{Version: before.Version, Resolution: "Revised solution"})
+	_, err = f.metadata(&problem.Problem{Version: before.Version, Resolution: "Revised solution"})
 	require.NoError(t, err)
 	_, err = f.owner.ApplyCommand(f.ctx, f.command("close", "edited-after-resolve"))
 	require.Error(t, err)
@@ -293,26 +301,25 @@ func TestWorkItemProblemLifecycleInvestigationAtomicityAndCandidateAuthority(t *
 	require.NoError(t, err)
 	var investigationID int
 	require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT id FROM problem_investigations WHERE problem_id=$1", f.p.ID).Scan(&investigationID))
-	reader := service.NewProblemInvestigationService(f.db, zap.NewNop().Sugar())
 	complete := dto.InvestigationStatusCompleted
-	_, err = reader.UpdateProblemInvestigation(f.ctx, investigationID, &dto.UpdateProblemInvestigationRequest{Status: &complete}, f.tenant.ID)
+	_, err = f.mutateEvidence(&problem.EvidenceMetadata{ID: investigationID, Investigation: &dto.UpdateProblemInvestigationRequest{Status: &complete}})
 	require.NoError(t, err)
 	require.Equal(t, "investigating", f.client.Ticket.GetX(f.ctx, f.p.WorkItemID).Status)
-	candidate, err := reader.CreateProblemSolution(f.ctx, &dto.CreateProblemSolutionRequest{ProblemID: f.p.ID, SolutionType: dto.SolutionTypeWorkaround, SolutionDescription: "Restart process", ProposedBy: f.actor.ID, Priority: "high"}, f.tenant.ID)
+	candidate, err := f.createCandidate(&dto.CreateProblemSolutionRequest{ProblemID: f.p.ID, SolutionType: dto.SolutionTypeWorkaround, SolutionDescription: "Restart process", ProposedBy: f.actor.ID, Priority: "high"}, f.tenant.ID)
 	require.NoError(t, err)
 	selectCmd := f.command("select_resolution", "select-workaround")
 	selectCmd.SolutionID = candidate.ID
 	_, err = f.owner.ApplyCommand(f.ctx, selectCmd)
 	require.ErrorContains(t, err, "permanent solution")
 	require.Empty(t, f.client.Problem.GetX(f.ctx, f.p.ID).Resolution)
-	candidate, err = reader.CreateProblemSolution(f.ctx, &dto.CreateProblemSolutionRequest{ProblemID: f.p.ID, SolutionType: dto.SolutionTypeFix, SolutionDescription: "Fix pool release", ProposedBy: f.actor.ID, Priority: "high"}, f.tenant.ID)
+	candidate, err = f.createCandidate(&dto.CreateProblemSolutionRequest{ProblemID: f.p.ID, SolutionType: dto.SolutionTypeFix, SolutionDescription: "Fix pool release", ProposedBy: f.actor.ID, Priority: "high"}, f.tenant.ID)
 	require.NoError(t, err)
 	selectCmd = f.command("select_resolution", "select-fix")
 	selectCmd.SolutionID = candidate.ID
 	_, err = f.owner.ApplyCommand(f.ctx, selectCmd)
 	require.NoError(t, err)
 	edited := "Another candidate body"
-	_, err = reader.UpdateProblemSolution(f.ctx, candidate.ID, &dto.UpdateProblemSolutionRequest{SolutionDescription: &edited}, f.tenant.ID)
+	_, err = f.mutateEvidence(&problem.EvidenceMetadata{ID: candidate.ID, UpdateSolution: &dto.UpdateProblemSolutionRequest{SolutionDescription: &edited}})
 	require.NoError(t, err)
 	require.Equal(t, "Fix pool release", f.client.Problem.GetX(f.ctx, f.p.ID).Resolution, "selection is a final decision, not a synchronized copy")
 }
@@ -363,8 +370,7 @@ func TestWorkItemProblemLifecycleConcurrentRCAAndHTTP(t *testing.T) {
 	f := newProblemLifecycleFixture(t)
 	f.apply(t, "investigate", "start")
 	f.evidence(t)
-	reader := service.NewProblemInvestigationService(f.db, zap.NewNop().Sugar())
-	rca, err := reader.CreateRootCauseAnalysis(f.ctx, &dto.CreateRootCauseAnalysisRequest{ProblemID: f.p.ID, AnalystID: f.actor.ID, AnalysisMethod: "5_whys", RootCauseDescription: "Connection leak", ConfidenceLevel: dto.ConfidenceHigh}, f.tenant.ID)
+	rca, err := f.createRCA(&dto.CreateRootCauseAnalysisRequest{ProblemID: f.p.ID, AnalystID: f.actor.ID, AnalysisMethod: "5_whys", RootCauseDescription: "Connection leak", ConfidenceLevel: dto.ConfidenceHigh}, f.tenant.ID)
 	require.NoError(t, err)
 	f.apply(t, "verify_resolution", "verify")
 	cmd := f.command("resolve", "concurrent")
@@ -372,24 +378,30 @@ func TestWorkItemProblemLifecycleConcurrentRCAAndHTTP(t *testing.T) {
 	wg.Add(2)
 	start := make(chan struct{})
 	var commandErr, rcaErr error
+	body := "RCA corrected concurrently"
+	rcaCommand := problem.MetadataCommand{Meta: cmd.Meta, ProblemID: f.p.ID, RootCauseAnalysis: &problem.RootCauseMetadata{ID: rca.ID, Update: &dto.UpdateRootCauseAnalysisRequest{RootCauseDescription: &body}}}
+	rcaCommand.Meta.OperationID = "concurrent-rca"
 	go func() { defer wg.Done(); <-start; _, commandErr = f.owner.ApplyCommand(f.ctx, cmd) }()
 	go func() {
 		defer wg.Done()
 		<-start
-		body := "RCA corrected concurrently"
-		_, rcaErr = reader.UpdateRootCauseAnalysis(f.ctx, rca.ID, &dto.UpdateRootCauseAnalysisRequest{RootCauseDescription: &body}, f.tenant.ID)
+		_, rcaErr = f.owner.ApplyMetadata(f.ctx, rcaCommand)
 	}()
 	close(start)
 	wg.Wait()
-	require.NoError(t, rcaErr)
+	require.NotEqual(t, commandErr == nil, rcaErr == nil, "only one same-version mutation may commit")
 	item := f.client.Ticket.GetX(f.ctx, f.p.WorkItemID)
 	if commandErr == nil {
 		require.Equal(t, "resolved", item.Status)
 	} else {
 		require.Equal(t, "investigating", item.Status)
 	}
-	_, err = f.owner.ApplyCommand(f.ctx, f.command("close", "cannot-close-changed-evidence"))
-	require.Error(t, err)
+	_, err = f.owner.ApplyCommand(f.ctx, f.command("close", "close-current-evidence"))
+	if rcaErr == nil {
+		require.Error(t, err)
+	} else {
+		require.NoError(t, err)
+	}
 	// HTTP metadata is server-owned and version/operationId are mandatory.
 	h := problem.NewHandler(f.owner, f.client)
 	gin.SetMode(gin.TestMode)
@@ -417,14 +429,13 @@ func TestWorkItemProblemLifecycleRLSAndReviewerScope(t *testing.T) {
 	f := newProblemLifecycleFixture(t)
 	foreign := f.client.Tenant.Create().SetCode("rls-other").SetName("other").SaveX(f.ctx)
 	reviewer := f.client.User.Create().SetTenantID(foreign.ID).SetUsername("other-reviewer").SetEmail("other-reviewer@example.test").SetName("reviewer").SetPasswordHash("test").SetActive(true).SaveX(f.ctx)
-	reader := service.NewProblemInvestigationService(f.db, zap.NewNop().Sugar())
-	rca, err := reader.CreateRootCauseAnalysis(f.ctx, &dto.CreateRootCauseAnalysisRequest{ProblemID: f.p.ID, AnalystID: f.actor.ID, AnalysisMethod: "5_whys", RootCauseDescription: "pool", ConfidenceLevel: dto.ConfidenceHigh}, f.tenant.ID)
+	rca, err := f.createRCA(&dto.CreateRootCauseAnalysisRequest{ProblemID: f.p.ID, AnalystID: f.actor.ID, AnalysisMethod: "5_whys", RootCauseDescription: "pool", ConfidenceLevel: dto.ConfidenceHigh}, f.tenant.ID)
 	require.NoError(t, err)
 	before := f.client.Ticket.GetX(f.ctx, f.p.WorkItemID)
-	_, err = reader.UpdateRootCauseAnalysis(f.ctx, rca.ID, &dto.UpdateRootCauseAnalysisRequest{ReviewedBy: &reviewer.ID}, f.tenant.ID)
+	_, err = f.updateRCA(rca.ID, &dto.UpdateRootCauseAnalysisRequest{ReviewedBy: &reviewer.ID}, f.tenant.ID)
 	require.Error(t, err)
 	require.Equal(t, before.Version, f.client.Ticket.GetX(f.ctx, f.p.WorkItemID).Version)
-	_, err = reader.UpdateRootCauseAnalysis(f.ctx, rca.ID, &dto.UpdateRootCauseAnalysisRequest{ReviewedBy: &f.actor.ID}, f.tenant.ID)
+	_, err = f.updateRCA(rca.ID, &dto.UpdateRootCauseAnalysisRequest{ReviewedBy: &f.actor.ID}, f.tenant.ID)
 	require.NoError(t, err)
 	driver, db := runtimeRLSDriver(t, f.incidentEffectsFixture)
 	var role, schema string
@@ -444,10 +455,11 @@ func TestWorkItemProblemLifecycleRLSAndReviewerScope(t *testing.T) {
 	require.NoError(t, err)
 	var id int
 	require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT id FROM problem_investigations WHERE problem_id=$1", f.p.ID).Scan(&id))
-	step, err := reader.CreateInvestigationStep(f.ctx, &dto.CreateInvestigationStepRequest{InvestigationID: id, StepNumber: 1, StepTitle: "Inspect", StepDescription: "Inspect pool", AssignedTo: &f.actor.ID}, f.tenant.ID)
+	f.owner = owner // Step mutations exercise the non-owner RLS transaction as well.
+	step, err := f.createStep(&dto.CreateInvestigationStepRequest{InvestigationID: id, StepNumber: 1, StepTitle: "Inspect", StepDescription: "Inspect pool", AssignedTo: &f.actor.ID}, f.tenant.ID)
 	require.NoError(t, err)
 	require.Positive(t, step.ID)
-	_, err = reader.CreateInvestigationStep(f.ctx, &dto.CreateInvestigationStepRequest{InvestigationID: id, StepNumber: 2, StepTitle: "Denied", StepDescription: "Foreign assignee", AssignedTo: &reviewer.ID}, f.tenant.ID)
+	_, err = f.createStep(&dto.CreateInvestigationStepRequest{InvestigationID: id, StepNumber: 2, StepTitle: "Denied", StepDescription: "Foreign assignee", AssignedTo: &reviewer.ID}, f.tenant.ID)
 	require.Error(t, err)
 	tx, err := db.BeginTx(f.ctx, nil)
 	require.NoError(t, err)
@@ -471,4 +483,70 @@ func TestWorkItemProblemLifecycleRLSAndReviewerScope(t *testing.T) {
 	require.Zero(t, count)
 	_, err = tx.ExecContext(f.ctx, "INSERT INTO problem_investigations(problem_id,investigator_id) VALUES($1,$2)", f.p.ID, reviewer.ID)
 	require.Error(t, err)
+}
+
+func (f *problemLifecycleFixture) metadata(p *problem.Problem) (workitemmutation.Result, error) {
+	patch := dto.UpdateProblemRequest{}
+	if p.RootCause != "" {
+		patch.RootCause = &p.RootCause
+	}
+	if p.Resolution != "" {
+		patch.Resolution = &p.Resolution
+	}
+	if p.Title != "" {
+		patch.Title = &p.Title
+	}
+	if p.Status != "" {
+		patch.Status = &p.Status
+	}
+	return f.owner.ApplyMetadata(f.ctx, problem.MetadataCommand{Meta: workitemmutation.Meta{TenantID: f.tenant.ID, ActorID: f.actor.ID, ExpectedVersion: p.Version, Source: "test", OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano())}, ProblemID: f.p.ID, Patch: patch})
+}
+func (f *problemLifecycleFixture) createRCA(req *dto.CreateRootCauseAnalysisRequest, tenant int) (*dto.RootCauseAnalysisResponse, error) {
+	cmd := problem.MetadataCommand{Meta: f.command("metadata", fmt.Sprintf("rca-create-%d", time.Now().UnixNano())).Meta, ProblemID: req.ProblemID, RootCauseAnalysis: &problem.RootCauseMetadata{Create: req}}
+	cmd.Meta.TenantID = tenant
+	if _, err := f.owner.ApplyMetadata(f.ctx, cmd); err != nil {
+		return nil, err
+	}
+	var id int
+	if err := f.db.QueryRowContext(f.ctx, "SELECT id FROM problem_root_cause_analyses WHERE problem_id=$1", req.ProblemID).Scan(&id); err != nil {
+		return nil, err
+	}
+	return service.NewProblemInvestigationService(f.db, zap.NewNop().Sugar()).GetRootCauseAnalysis(f.ctx, id, tenant)
+}
+func (f *problemLifecycleFixture) updateRCA(id int, req *dto.UpdateRootCauseAnalysisRequest, tenant int) (*dto.RootCauseAnalysisResponse, error) {
+	cmd := problem.MetadataCommand{Meta: f.command("metadata", fmt.Sprintf("rca-update-%d", time.Now().UnixNano())).Meta, ProblemID: f.p.ID, RootCauseAnalysis: &problem.RootCauseMetadata{ID: id, Update: req}}
+	cmd.Meta.TenantID = tenant
+	if _, err := f.owner.ApplyMetadata(f.ctx, cmd); err != nil {
+		return nil, err
+	}
+	return service.NewProblemInvestigationService(f.db, zap.NewNop().Sugar()).GetRootCauseAnalysis(f.ctx, id, tenant)
+}
+
+func (f *problemLifecycleFixture) mutateEvidence(e *problem.EvidenceMetadata) (workitemmutation.Result, error) {
+	return f.owner.ApplyMetadata(f.ctx, problem.MetadataCommand{Meta: f.command("metadata", fmt.Sprintf("evidence-%d", time.Now().UnixNano())).Meta, ProblemID: f.p.ID, Evidence: e})
+}
+func (f *problemLifecycleFixture) createCandidate(req *dto.CreateProblemSolutionRequest, tenant int) (*dto.ProblemSolutionResponse, error) {
+	cmd := problem.MetadataCommand{Meta: f.command("metadata", fmt.Sprintf("candidate-%d", time.Now().UnixNano())).Meta, ProblemID: f.p.ID, Evidence: &problem.EvidenceMetadata{CreateSolution: req}}
+	cmd.Meta.TenantID = tenant
+	if _, err := f.owner.ApplyMetadata(f.ctx, cmd); err != nil {
+		return nil, err
+	}
+	var id int
+	if err := f.db.QueryRowContext(f.ctx, "SELECT id FROM problem_solutions WHERE problem_id=$1 ORDER BY id DESC LIMIT 1", f.p.ID).Scan(&id); err != nil {
+		return nil, err
+	}
+	return service.NewProblemInvestigationService(f.db, zap.NewNop().Sugar()).GetProblemSolution(f.ctx, id, tenant)
+}
+func (f *problemLifecycleFixture) createStep(req *dto.CreateInvestigationStepRequest, tenant int) (*dto.InvestigationStepResponse, error) {
+	req.ProblemID = f.p.ID
+	cmd := problem.MetadataCommand{Meta: f.command("metadata", fmt.Sprintf("step-%d", time.Now().UnixNano())).Meta, ProblemID: f.p.ID, Evidence: &problem.EvidenceMetadata{CreateStep: req}}
+	cmd.Meta.TenantID = tenant
+	if _, err := f.owner.ApplyMetadata(f.ctx, cmd); err != nil {
+		return nil, err
+	}
+	var id int
+	if err := f.db.QueryRowContext(f.ctx, "SELECT id FROM problem_investigation_steps WHERE investigation_id=$1 AND step_number=$2", req.InvestigationID, req.StepNumber).Scan(&id); err != nil {
+		return nil, err
+	}
+	return &dto.InvestigationStepResponse{ID: id}, nil
 }

@@ -3,9 +3,7 @@ package problem
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"itsm-backend/common"
 	"itsm-backend/ent"
 	entpredicate "itsm-backend/ent/predicate"
 	"itsm-backend/ent/problem"
@@ -42,8 +40,9 @@ func (r *EntRepository) toDomain(e *ent.Problem) *Problem {
 		return nil
 	}
 	p := &Problem{
-		Number:           workItem.TicketNumber,
-		Version:          workItem.Version,
+		Number:             workItem.TicketNumber,
+		Version:            workItem.Version,
+		VerificationDigest: e.VerificationDigest, VerifiedBy: e.VerifiedBy, VerifiedAt: e.VerifiedAt,
 		VerifiedVersion:  e.VerifiedVersion,
 		VerificationNote: e.VerificationNote,
 		ID:               e.ID,
@@ -151,71 +150,6 @@ func (r *EntRepository) List(ctx context.Context, tenantID int, page, size int, 
 		result = append(result, r.toDomain(item))
 	}
 	return result, total, nil
-}
-
-func (r *EntRepository) Update(ctx context.Context, p *Problem) (*Problem, error) {
-	tx, err := r.client.Tx(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("start problem update transaction: %w", err)
-	}
-	current, err := tx.Problem.Query().Where(problem.IDEQ(p.ID), problemTenantScope(p.TenantID)).WithWorkItem(withProblemWorkItemProjection).Only(ctx)
-	if err != nil {
-		return nil, rollbackProblemTx(tx, err)
-	}
-	if p.Version != current.Edges.WorkItem.Version {
-		return nil, rollbackProblemTx(tx, common.NewVersionConflictError("problem", p.ID, p.Version, current.Edges.WorkItem.Version))
-	}
-	now := time.Now()
-	var selected *ent.TicketCategory
-	if p.CategoryID != nil && *p.CategoryID != 0 {
-		selected, err = tx.TicketCategory.Query().Where(ticketcategory.IDEQ(*p.CategoryID), ticketcategory.TenantIDEQ(p.TenantID), ticketcategory.IsActiveEQ(true)).Only(ctx)
-		if err != nil {
-			return nil, rollbackProblemTx(tx, fmt.Errorf("active ticket category not found in tenant: %w", err))
-		}
-	}
-	workItemUpdate := tx.Ticket.UpdateOneID(current.WorkItemID).
-		Where(ticket.TenantIDEQ(p.TenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(p.Version)).
-		SetTitle(p.Title).SetDescription(p.Description).SetPriority(p.Priority).
-		SetUpdatedAt(now).AddVersion(1)
-	if p.AssigneeID == nil {
-		workItemUpdate.ClearAssigneeID()
-	} else {
-		workItemUpdate.SetAssigneeID(*p.AssigneeID)
-	}
-	if p.CategoryID != nil {
-		if *p.CategoryID == 0 {
-			workItemUpdate.ClearCategoryID()
-		} else {
-			workItemUpdate.SetCategoryID(*p.CategoryID)
-		}
-	}
-	workItem, err := workItemUpdate.Save(ctx)
-	if err != nil {
-		return nil, rollbackProblemTx(tx, fmt.Errorf("update problem work item: %w", err))
-	}
-	update := tx.Problem.UpdateOneID(p.ID).
-		Where(problemTenantScope(p.TenantID)).
-		SetWorkaround(p.Workaround).
-		SetResolution(p.Resolution).
-		SetImpact(p.Impact)
-	if p.RootCause != "" {
-		update.SetRootCause(p.RootCause)
-	}
-
-	saved, err := update.Save(ctx)
-	if err != nil {
-		return nil, rollbackProblemTx(tx, err)
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, rollbackProblemTx(tx, err)
-	}
-	saved.Edges.WorkItem = workItem
-	if p.CategoryID == nil {
-		saved.Edges.WorkItem.Edges.Category = current.Edges.WorkItem.Edges.Category
-	} else {
-		saved.Edges.WorkItem.Edges.Category = selected
-	}
-	return r.toDomain(saved), nil
 }
 
 func (r *EntRepository) GetStats(ctx context.Context, tenantID int) (*ProblemStats, error) {

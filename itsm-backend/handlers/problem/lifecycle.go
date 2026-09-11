@@ -43,6 +43,15 @@ type Command struct {
 	Investigation *dto.CreateProblemInvestigationRequest
 }
 
+// Verification records the version at which evidence was checked, not the current metadata version.
+func CurrentResolutionVerification(rootCause, resolution, digest, note string, verifiedBy, verifiedVersion int, verifiedAt time.Time) bool {
+	if verifiedBy <= 0 || verifiedVersion <= 0 || verifiedAt.IsZero() || strings.TrimSpace(note) == "" || strings.TrimSpace(rootCause) == "" || strings.TrimSpace(resolution) == "" {
+		return false
+	}
+	expected, err := resolutionDigest(&ent.Problem{RootCause: rootCause, Resolution: resolution})
+	return err == nil && digest == expected
+}
+
 func resolutionDigest(p *ent.Problem) (string, error) {
 	return workitemmutation.Digest(struct{ RootCause, Resolution string }{p.RootCause, p.Resolution})
 }
@@ -169,11 +178,7 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, d
 		}
 	}
 	if cmd.Action == "resolve" || cmd.Action == "close" {
-		expected := item.Version
-		if cmd.Action == "close" {
-			expected--
-		} // resolve is the sole permitted intervening mutation.
-		verified := p.VerifiedVersion == expected && p.VerificationDigest == evidenceDigest && p.VerifiedBy > 0 && !p.VerifiedAt.IsZero()
+		verified := CurrentResolutionVerification(p.RootCause, p.Resolution, p.VerificationDigest, p.VerificationNote, p.VerifiedBy, p.VerifiedVersion, p.VerifiedAt)
 		if err := ValidateResolution(ResolutionEvidence{p.RootCause, p.Resolution, verified, p.VerificationNote}); err != nil {
 			return empty, common.NewValidationError(err.Error(), err)
 		}
@@ -226,7 +231,7 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, d
 		if (kind != "fix" && kind != "prevention" && kind != "process") || strings.TrimSpace(body) == "" {
 			return empty, common.NewValidationError("permanent solution required", nil)
 		}
-		if _, err = tx.Problem.UpdateOneID(p.ID).SetResolution(body).Save(ctx); err != nil {
+		if _, err = tx.Problem.UpdateOneID(p.ID).SetResolution(body).ClearVerifiedVersion().ClearVerificationDigest().ClearVerifiedBy().ClearVerifiedAt().ClearVerificationNote().Save(ctx); err != nil {
 			return empty, err
 		}
 		p.Resolution = body

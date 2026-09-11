@@ -51,8 +51,8 @@ describe('ProblemApi', () => {
   describe('updateProblem', () => {
     it('should update a problem', async () => {
       mockPut.mockResolvedValue({ id: 1, title: 'Updated' });
-      const result = await ProblemApi.updateProblem(1, { title: 'Updated', version: 1 });
-      expect(mockPut).toHaveBeenCalledWith('/api/v1/problems/1', { title: 'Updated', version: 1 });
+      const result = await ProblemApi.updateProblem(1, { title: 'Updated', version: 1, operationId: 'edit-once' });
+      expect(mockPut).toHaveBeenCalledWith('/api/v1/problems/1', { title: 'Updated', version: 1, operationId: 'edit-once' });
       expect(result.title).toBe('Updated');
     });
   });

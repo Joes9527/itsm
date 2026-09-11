@@ -1406,6 +1406,8 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 
 				// 解决方案管理
 				problemInvestigation.POST("/solutions", middleware.RequirePermission("solution", "create"), config.ProblemInvestigationController.CreateProblemSolution)
+				problemInvestigation.PUT("/solutions/:id", middleware.RequirePermission("problem", "update"), config.ProblemInvestigationController.UpdateProblemSolution)
+				problemInvestigation.DELETE("/solutions/:id", middleware.RequirePermission("problem", "update"), config.ProblemInvestigationController.DeleteProblemSolution)
 				problemInvestigation.GET("/problems/:id/solutions", middleware.RequirePermission("problem", "read"), config.ProblemInvestigationController.GetProblemSolutions)
 
 				// 问题调查摘要

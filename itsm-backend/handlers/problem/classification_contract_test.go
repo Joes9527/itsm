@@ -12,6 +12,7 @@ import (
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"net/http"
 	"testing"
+	"time"
 )
 
 func TestProblemHTTPClassificationIDContract(t *testing.T) {
@@ -42,12 +43,12 @@ func TestProblemHTTPClassificationIDContract(t *testing.T) {
 		require.Zero(t, response.Code, w.Body.String())
 		require.Equal(t, float64(want), response.Data.(map[string]interface{})["categoryId"])
 	}
-	update(dto.UpdateProblemRequest{Title: strPtr("Edited without classification")}, original.ID)
-	update(dto.UpdateProblemRequest{CategoryID: &selected.ID}, selected.ID)
+	update(dto.UpdateProblemRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()), Title: strPtr("Edited without classification")}, original.ID)
+	update(dto.UpdateProblemRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()), CategoryID: &selected.ID}, selected.ID)
 	for _, id := range []int{inactive.ID, other.ID, -1, 999999} {
 		before, err := client.Ticket.Get(ctx, *p.WorkItemID)
 		require.NoError(t, err)
-		w := performProblemRequest(router, http.MethodPut, path, dto.UpdateProblemRequest{Version: before.Version, CategoryID: &id, Title: strPtr("Must not persist")}, tenant.ID, user.ID)
+		w := performProblemRequest(router, http.MethodPut, path, dto.UpdateProblemRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()), Version: before.Version, CategoryID: &id, Title: strPtr("Must not persist")}, tenant.ID, user.ID)
 		var response common.Response
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
 		require.NotZero(t, response.Code)
@@ -59,9 +60,9 @@ func TestProblemHTTPClassificationIDContract(t *testing.T) {
 	}
 	_, err = client.TicketCategory.UpdateOneID(selected.ID).SetIsActive(false).Save(ctx)
 	require.NoError(t, err)
-	update(dto.UpdateProblemRequest{Title: strPtr("Retain inactive existing classification")}, selected.ID)
+	update(dto.UpdateProblemRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()), Title: strPtr("Retain inactive existing classification")}, selected.ID)
 	zero := 0
-	update(dto.UpdateProblemRequest{CategoryID: &zero}, 0)
+	update(dto.UpdateProblemRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()), CategoryID: &zero}, 0)
 	client.Problem.Use(func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
 			if m.Op().Is(ent.OpUpdateOne) {
@@ -72,7 +73,7 @@ func TestProblemHTTPClassificationIDContract(t *testing.T) {
 	})
 	before, err := client.Ticket.Get(ctx, *p.WorkItemID)
 	require.NoError(t, err)
-	w := performProblemRequest(router, http.MethodPut, path, dto.UpdateProblemRequest{Version: before.Version, CategoryID: &original.ID}, tenant.ID, user.ID)
+	w := performProblemRequest(router, http.MethodPut, path, dto.UpdateProblemRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()), Version: before.Version, CategoryID: &original.ID}, tenant.ID, user.ID)
 	var response common.Response
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &response))
 	require.NotZero(t, response.Code)

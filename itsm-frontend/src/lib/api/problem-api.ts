@@ -130,7 +130,7 @@ export class ProblemApi {
   /**
    * 更新问题
    */
-  static async updateProblem(id: number, data: Omit<Partial<Problem>, "status"> & { version: number }): Promise<Problem> {
+  static async updateProblem(id: number, data: Omit<Partial<Problem>, "status"> & { version: number; operationId: string; assignmentReason?: string }): Promise<Problem> {
     return httpClient.put(`/api/v1/problems/${id}`, data);
   }
 

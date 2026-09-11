@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -273,7 +274,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	require.Equal(t, http.StatusOK, w2_4.Code)
 
 	// 2.5 Create Root Cause Analysis
-	rcaReq := dto.CreateRootCauseAnalysisRequest{
+	rcaReq := dto.CreateRootCauseAnalysisRequest{Version: client.Ticket.GetX(ctx, *p.WorkItemID).Version, OperationID: "create-rca",
 		ProblemID:            p.ID,
 		AnalystID:            user.ID,
 		AnalysisMethod:       "5_whys",
@@ -333,13 +334,13 @@ func TestRCAWritesProblemAuthorityAndKnownError(t *testing.T) {
 	p, err := problemSvc.SubmitCreation(ctx, tenant.ID, &problem.Problem{Title: "RCA source", Description: "RCA source", Priority: "high", CreatedBy: user.ID})
 	require.NoError(t, err)
 	svc := service.NewProblemInvestigationService(db, logger)
-	created, err := svc.CreateRootCauseAnalysis(ctx, &dto.CreateRootCauseAnalysisRequest{ProblemID: p.ID, AnalystID: user.ID, AnalysisMethod: "5_whys", RootCauseDescription: "Connection pool leak", ConfidenceLevel: dto.ConfidenceHigh}, tenant.ID)
+	created, err := createRCAFixture(t, problemSvc, svc, ctx, &dto.CreateRootCauseAnalysisRequest{ProblemID: p.ID, AnalystID: user.ID, AnalysisMethod: "5_whys", RootCauseDescription: "Connection pool leak", ConfidenceLevel: dto.ConfidenceHigh}, tenant.ID)
 	require.NoError(t, err)
 	stored, err := problemSvc.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
 	require.NoError(t, err)
 	require.Equal(t, created.RootCauseDescription, stored.RootCause)
 	root := "Unbounded retry exhausted the pool"
-	updated, err := svc.UpdateRootCauseAnalysis(ctx, created.ID, &dto.UpdateRootCauseAnalysisRequest{RootCauseDescription: &root}, tenant.ID)
+	updated, err := updateRCAFixture(t, problemSvc, svc, ctx, created.ID, &dto.UpdateRootCauseAnalysisRequest{RootCauseDescription: &root}, tenant.ID)
 	require.NoError(t, err)
 	require.Equal(t, root, updated.RootCauseDescription)
 	stored, err = problemSvc.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
@@ -352,7 +353,7 @@ func TestRCAWritesProblemAuthorityAndKnownError(t *testing.T) {
 	require.Equal(t, root, published.RootCause)
 	// Changes through the professional Problem API must immediately project into RCA.
 	root = "Corrected after investigation"
-	_, err = problemSvc.UpdateRootCause(ctx, tenant.ID, p.ID, stored.Version, root)
+	_, err = problemSvc.Update(ctx, tenant.ID, p.ID, &Problem{Version: stored.Version, RootCause: root})
 	require.NoError(t, err)
 	read, err := svc.GetRootCauseAnalysis(ctx, created.ID, tenant.ID)
 	require.NoError(t, err)
@@ -364,12 +365,13 @@ func TestRCAWritesProblemAuthorityAndKnownError(t *testing.T) {
 	// Simulate an unrelated edit loading the old root immediately before RCA changes it.
 	staleRepo := &rcaChangeAfterGetRepository{Repository: NewEntRepository(client), change: func() {
 		revised := "RCA changed concurrently"
-		_, err := svc.UpdateRootCauseAnalysis(ctx, created.ID, &dto.UpdateRootCauseAnalysisRequest{RootCauseDescription: &revised}, tenant.ID)
+		_, err := updateRCAFixture(t, problemSvc, svc, ctx, created.ID, &dto.UpdateRootCauseAnalysisRequest{RootCauseDescription: &revised}, tenant.ID)
 		require.NoError(t, err)
 	}}
 	beforeEdit, err := problemSvc.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
 	require.NoError(t, err)
-	_, err = problem.NewService(staleRepo, logger).Update(ctx, tenant.ID, p.ID, &problem.Problem{Version: beforeEdit.Version, Title: "Unrelated title edit"})
+	staleRepo.change()
+	_, err = problemSvc.Update(ctx, tenant.ID, p.ID, &Problem{Version: beforeEdit.Version, Title: "Unrelated title edit"})
 	require.Error(t, err, "concurrent RCA must invalidate an edit based on the previous version")
 	edited, err := problemSvc.Get(ctx, p.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: user.ID, Source: "http"})
 	require.NoError(t, err)
@@ -387,4 +389,35 @@ func (r *rcaChangeAfterGetRepository) Get(ctx context.Context, id, tenantID int)
 		r.change()
 	}
 	return p, err
+}
+
+func createRCAFixture(t *testing.T, owner *Service, reader *service.ProblemInvestigationService, ctx context.Context, req *dto.CreateRootCauseAnalysisRequest, tenantID int) (*dto.RootCauseAnalysisResponse, error) {
+	p, err := NewEntRepository(owner.client).Get(ctx, req.ProblemID, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	_, err = owner.ApplyMetadata(ctx, problem.MetadataCommand{Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: p.CreatedBy, ExpectedVersion: p.Version, Source: "http", OperationID: fmt.Sprintf("rca-%d", time.Now().UnixNano())}, ProblemID: p.ID, RootCauseAnalysis: &problem.RootCauseMetadata{Create: req}})
+	if err != nil {
+		return nil, err
+	}
+	summary, err := reader.GetProblemInvestigationSummary(ctx, p.ID, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	return summary.RootCauseAnalysis, nil
+}
+func updateRCAFixture(t *testing.T, owner *Service, reader *service.ProblemInvestigationService, ctx context.Context, id int, req *dto.UpdateRootCauseAnalysisRequest, tenantID int) (*dto.RootCauseAnalysisResponse, error) {
+	prior, err := reader.GetRootCauseAnalysis(ctx, id, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	p, err := NewEntRepository(owner.client).Get(ctx, prior.ProblemID, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	_, err = owner.ApplyMetadata(ctx, problem.MetadataCommand{Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: p.CreatedBy, ExpectedVersion: p.Version, Source: "http", OperationID: fmt.Sprintf("rca-%d", time.Now().UnixNano())}, ProblemID: p.ID, RootCauseAnalysis: &problem.RootCauseMetadata{ID: id, Update: req}})
+	if err != nil {
+		return nil, err
+	}
+	return reader.GetRootCauseAnalysis(ctx, id, tenantID)
 }

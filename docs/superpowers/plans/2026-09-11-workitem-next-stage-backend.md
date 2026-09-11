@@ -145,17 +145,17 @@ patch := dto.UpdateProblemRequest{
 
 HTTP断言覆盖仅workaround时永久方案保持、resolution显式空且solution非空时仍清空并使验证失效、resolution省略且solution非空时使用原solution输入，以及所有正文均省略时明确拒绝无业务变更。清空不允许绕过既有终态/专业约束。
 
-- [ ] 在既有 Problem fixture 建立有 RCA、永久方案与验证证据的记录；调用新 metadata 方法仅改 AssigneeID。测试比较状态、RCA/方案/验证人/验证时间/验证依据均保持；验证版本审计前进。另测空原因、越权、同键改目标和失败回滚。
-- [ ] Run `go test ./handlers/problem -run '^TestProblemMetadata' -count=1 -v`；新方法未实现时应编译失败，落地后不得移除断言。
-- [ ] 实现与 Change metadata 同一协议的 RR 事务：当前授权→回执→观察版本→字段/专业规则→CAS→审计回执→提交。负责人变化且已有负责人时要求原因；目标按既有域规则校验。根因/方案内容变化仍调用既有证据有效性规则，不把转派造成的 WorkItem 版本增长当作内容证据变化。
-- [ ] 将现有普通更新、RCA、方案编辑 HTTP/内部调用者携带 Meta 接入权威事务；根因/方案专用请求增加 operationId 并更新调用方，不保留无 actor 的可写服务签名。需要返回完整详情的 HTTP 路由在成功后走授权详情读取，不用返回值迫使第二次写入。
-- [ ] 同步修正证据有效性与动作投影：当前 lifecycle 与 authorization 分别使用 VerifiedVersion==Version 和 Version-1，单纯转派后会失效。新增领域内 `CurrentResolutionVerification(rootCause, resolution, digest, note string, verifiedBy, verifiedVersion int, verifiedAt time.Time) bool`，复用现有 resolutionDigest 的同一摘要算法，要求非空根因/方案/说明、有效验证人/时间、正验证版本和内容摘要相符；VerifiedVersion 保留验证当时的审计版本，不随转派伪造更新。它不替代状态、权限、必需 Change 结果校验。
-- [ ] `Problem` 查询投影增加 VerificationDigest、VerifiedBy、VerifiedAt，均读取现有扩展字段；执行命令与 BuildProblemActions 共用上述证据判断。根因/永久方案实际变化、重新选择方案、重开时在同一事务清除当前验证字段并保留历史审计；不能只删版本比较而让 A→B→A 内容回退恢复旧验证。调查证据变更入口沿用其专业失效规则并逐项纳入入口清单。
-- [ ] 新增串行验收：verify→合法转派→actions.resolve可用→resolve→actions.close可用→close；验证人员、时间与原验证版本不变。另测正文 A→B→A仍须重新验证、reopen后不得复用旧验证、workaround-only更新不覆盖永久方案、专用方案 HTTP 输入完整落库。
-- [ ] 为 Problem 增加明确的 `actions.assign` 投影与终态拒绝原因，在 metadata 写入时执行相同状态/资格前提；不能将 edit 权限直接当成允许转派。测试 current session撤权、终态、无可用目标时组件与直接 API 均拒绝。
-- [ ] 从 repository.Update 移除被替换公共写路径；禁止生命周期和 metadata 各自更新同一操作。盘点时发现的其他操作若违反版本/审计契约，归入本任务并增加对应真实调用测试，不用一层 wrapper 宣告完成。
-- [ ] Run `go test ./handlers/problem -count=1`、`go test -tags=integration_postgres ./tests/integration -run '^TestWorkItemAssignmentProblem' -count=1 -v`；验证原调查/方案流程回归。
-- [ ] 提交：`refactor(problem): converge metadata and preserve handover evidence`。
+- [x] 在既有 Problem fixture 建立有 RCA、永久方案与验证证据的记录；调用新 metadata 方法仅改 AssigneeID。测试比较状态、RCA/方案/验证人/验证时间/验证依据均保持；验证版本审计前进。另测空原因、越权、同键改目标和失败回滚。
+- [x] Run `go test ./handlers/problem -run '^TestProblemMetadata' -count=1 -v`；新方法未实现时应编译失败，落地后不得移除断言。
+- [x] 实现与 Change metadata 同一协议的 RR 事务：当前授权→回执→观察版本→字段/专业规则→CAS→审计回执→提交。负责人变化且已有负责人时要求原因；目标按既有域规则校验。根因/方案内容变化仍调用既有证据有效性规则，不把转派造成的 WorkItem 版本增长当作内容证据变化。
+- [x] 将现有普通更新、RCA、方案编辑 HTTP/内部调用者携带 Meta 接入权威事务；根因/方案专用请求增加 operationId 并更新调用方，不保留无 actor 的可写服务签名。需要返回完整详情的 HTTP 路由在成功后走授权详情读取，不用返回值迫使第二次写入。
+- [x] 同步修正证据有效性与动作投影：当前 lifecycle 与 authorization 分别使用 VerifiedVersion==Version 和 Version-1，单纯转派后会失效。新增领域内 `CurrentResolutionVerification(rootCause, resolution, digest, note string, verifiedBy, verifiedVersion int, verifiedAt time.Time) bool`，复用现有 resolutionDigest 的同一摘要算法，要求非空根因/方案/说明、有效验证人/时间、正验证版本和内容摘要相符；VerifiedVersion 保留验证当时的审计版本，不随转派伪造更新。它不替代状态、权限、必需 Change 结果校验。
+- [x] `Problem` 查询投影增加 VerificationDigest、VerifiedBy、VerifiedAt，均读取现有扩展字段；执行命令与 BuildProblemActions 共用上述证据判断。根因/永久方案实际变化、重新选择方案、重开时在同一事务清除当前验证字段并保留历史审计；不能只删版本比较而让 A→B→A 内容回退恢复旧验证。调查证据变更入口沿用其专业失效规则并逐项纳入入口清单。
+- [x] 新增串行验收：verify→合法转派→actions.resolve可用→resolve→actions.close可用→close；验证人员、时间与原验证版本不变。另测正文 A→B→A仍须重新验证、reopen后不得复用旧验证、workaround-only更新不覆盖永久方案、专用方案 HTTP 输入完整落库。
+- [x] 为 Problem 增加明确的 `actions.assign` 投影与终态拒绝原因，在 metadata 写入时执行相同状态/资格前提；不能将 edit 权限直接当成允许转派。测试 current session撤权、终态、无可用目标时组件与直接 API 均拒绝。
+- [x] 从 repository.Update 移除被替换公共写路径；禁止生命周期和 metadata 各自更新同一操作。盘点时发现的其他操作若违反版本/审计契约，归入本任务并增加对应真实调用测试，不用一层 wrapper 宣告完成。
+- [x] Run `go test ./handlers/problem -count=1`、`go test -tags=integration_postgres ./tests/integration -run '^TestWorkItemAssignmentProblem' -count=1 -v`；验证原调查/方案流程回归。
+- [x] 提交：`refactor(problem): converge metadata and preserve handover evidence`。
 
 ## B4：拒绝保留变量覆盖并修正实际配置入口
 
@@ -251,3 +251,14 @@ Change metadata/assign 共用 expectedVersion、operationId、assignmentReason�
 dto、BPMN、seeder 全包最终通过（0.078s、4.207s、7.890s），migrate CLI 使用其实际 migrate build tag 编译测试通过（0.029s）；一次组合命令因遗漏该 tag 失败，不是业务测试失败。保留变量定向回归通过（0.404s）。原 C1 隔离 PG 11 个测试通过（7.668s），包含活跃/挂起旧实例、待处理回调、旧绑定、身份矛盾、缺扩展、扫描截断拒绝和只读摘要一致；规范记录与 Release 边界保留，所有 schema 清理 remaining=0。
 
 独立审查无新增确定性 P1/P2。已有租户存在任意绑定时仍沿用原跳过默认配置的行为，本次没有历史绑定修复或数据迁移，必须通过切换预检处理现有配置。证据包含 workitem-b4-trigger-red.log、workitem-b4-catalog-red.log、workitem-b4-pg-green.log。
+
+
+## B3 执行记录（2026-09-11）
+
+Problem 普通编辑、责任调整、专用根因/方案及 RCA 记录使用同一 ApplyMetadata RR 事务：当前权限先于回执、观察版本 CAS、专业与公共事实/审计/回执共同提交。转派保持验证；权威正文、RCA、重选方案或重开清除当前验证，A→B→A 不恢复旧验证。专用方案指针字段遵循省略保持、显式空串清除与 nil-only Solution 回退。
+
+独立审查先发现专用 root-cause 空白可清除证据，以及调查更新/步骤/候选方案仍存在无 Meta SQL 写入口。补充 RED 后已全部迁移到 owning Problem evidence 命令：关联和人员校验、CAS、审计及重放共用事务；候选改动不隐式覆盖权威方案。已移除对应旧服务写签名和未调用的 ApproveSolution，保留既有 BPMN 审批和专业 select/verify。DELETE 保留 ProblemID 使删除后的重放仍能授权。新增候选 PUT/DELETE 沿用 problem:update ACL，前端 API/调查页面同步观察版本与稳定键。专用根因纯空白从旧 200 改为 400，公共事实和版本不变。
+
+handlers/problem、controller、service 的 Problem/RCA 定向测试通过；前端最终 18 个相关 API 测试和类型检查通过。最新无 overlay PostgreSQL AssignmentProblem/ProblemLifecycle/RCAAuthority 合跑通过（18.952s），含新增证据创建/删除重放与审计失败回滚、并发、已分配 MSP、当前租户 RLS；全部独立 schema/角色清理。旧 MSP 审计断言从不再成立的固定条数改为明确六个动作序列，新增 metadata 审计真实存在，没有删减断言。
+
+补充后的独立只读复查未发现确定性 P1/P2，确认 raw SQL 仅在所属 Problem 的已授权事务内执行，候选变更与权威方案分离。代码与数据库证据保存在 .superpowers/sdd/workitem-next-stage；实际环境未部署。

@@ -89,15 +89,46 @@ func configureProblemIntakeFixture(ctx context.Context, client *ent.Client, tena
 
 }
 
+// Existing tests submit explicit fixture identities through the production metadata command.
 func (s *Service) Update(ctx context.Context, tenantID, id int, p *Problem) (*Problem, error) {
+	current, err := NewEntRepository(s.client).Get(ctx, id, tenantID)
+	if err != nil {
+		return nil, err
+	}
 	if p.Version == 0 {
-		current, err := NewEntRepository(s.client).Get(ctx, id, tenantID)
-		if err != nil {
-			return nil, err
-		}
 		p.Version = current.Version
 	}
-	return s.Service.Update(ctx, tenantID, id, p)
+	patch := dto.UpdateProblemRequest{CategoryID: p.CategoryID, AssigneeID: p.AssigneeID, AssignmentReason: "fixture handover"}
+	if p.Title != "" {
+		patch.Title = &p.Title
+	}
+	if p.Description != "" {
+		patch.Description = &p.Description
+	}
+	if p.Priority != "" {
+		patch.Priority = &p.Priority
+	}
+	if p.RootCause != "" {
+		patch.RootCause = &p.RootCause
+	}
+	if p.Resolution != "" {
+		patch.Resolution = &p.Resolution
+	}
+	if p.Workaround != "" {
+		patch.Workaround = &p.Workaround
+	}
+	if p.Impact != "" {
+		patch.Impact = &p.Impact
+	}
+	if p.Status != "" {
+		patch.Status = &p.Status
+	}
+	meta := workitemmutation.Meta{TenantID: tenantID, ActorID: current.CreatedBy, ExpectedVersion: p.Version, Source: "http", OperationID: uuid.NewString()}
+	_, err = s.ApplyMetadata(ctx, problemDomain.MetadataCommand{Meta: meta, ProblemID: id, Patch: patch})
+	if err != nil {
+		return nil, err
+	}
+	return s.Get(ctx, id, meta)
 }
 
 func applyProblemRelation(s *Service, ctx context.Context, tenant, actor, source, target, version int, kind, key string, remove bool) error {

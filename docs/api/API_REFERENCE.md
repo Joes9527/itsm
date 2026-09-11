@@ -1334,3 +1334,28 @@ Query Parameters:
 ## 联系支持
 
 如有问题，请联系技术支持团队。
+
+
+### Problem metadata、责任调整与 RCA
+
+Problem 专业路由中的 `:id` 是 Problem ID；公共评论、附件、SLA 使用详情中的 `workItemId`，两者不能互换。以下写接口均要求调用者观察到的 `version` 和一次逻辑请求稳定的 `operationId`；操作人、租户和来源由认证上下文建立，客户端不指定 actor。
+
+| 接口 | 输入与行为 |
+|---|---|
+| `PUT /api/v1/problems/:id` | 可选 title、description、priority、categoryId、rootCause、workaround、resolution、impact、assigneeId、assignmentReason；状态必须通过专业生命周期动作改变。 |
+| `PUT /api/v1/problems/:id/root-cause` | 非空 rootCause；与普通编辑共用版本、授权、事务与回执。 |
+| `PUT /api/v1/problems/:id/solution` | 可选 workaround、resolution、历史输入字段 solution。只有 resolution 省略时才采用 solution；resolution 显式空字符串表示清空，不回退。全部正文省略或未改变事实时拒绝。 |
+| `POST /api/v1/problem-investigation/root-cause-analysis` | version、operationId、problemId、analysisMethod、rootCauseDescription、confidenceLevel 及现有 RCA 证据字段；analystId 省略时采用当前操作人，仍校验客户租户人员资格。 |
+| `PUT /api/v1/problem-investigation/root-cause-analysis/:id` | version、operationId 与变更的 RCA 字段；:id 是分析记录 ID，事务重新验证所属 Problem。 |
+
+指针正文输入省略保持原值，显式空字符串清空相应内容。`assigneeId` 必须为客户租户内有效人员；已有负责人实际变化时 `assignmentReason` 去除首尾空白后必填，已结束记录不可借转派重开。后端 `actions.assign` 提供允许状态和拒绝原因。
+
+纯转派保留阶段及原验证人员、时间、验证时版本；根因、永久方案实际变化、RCA 证据修改、重新选择方案或重开均清除当前验证，历史审计保留。内容 A→B→A 不恢复旧验证。解决与关闭依据当前内容摘要及完整验证证据，并继续执行专业状态和必需 Change 结果门禁。
+
+同键同内容重放仍检查当前权限；同键改内容或观察版本过期返回冲突。公共字段、专业字段、RCA 元数据、版本、必需审计和回执在同一事务提交，失败全部回滚。详情响应通过授权读取生成，客户端成功后使用后端权威 version。
+
+#### Problem 调查步骤与候选方案变更
+
+`PUT /problem-investigation/investigations/:id`、`POST /problem-investigation/steps`、`PUT /problem-investigation/steps/:id`、`POST /problem-investigation/solutions`、`PUT /problem-investigation/solutions/:id` 和 `DELETE /problem-investigation/solutions/:id` 的 JSON 均必须包含专业 `problemId`、当前 `version` 和稳定 `operationId`。路由 ID 为对应调查、步骤或方案 ID；后端在同一 Problem 事务内校验归属及实际操作者，不从请求推断授权。DELETE 也保留原 Problem 身份，以便删除成功后的同键重放。
+
+这些接口返回 `{workItemId, version, status, replayed}` 提交结果。调用方收到成功后重新读取授权摘要；调查步骤或候选方案变更递增 WorkItem 版本并记录审计，但不隐式替换已选权威方案，也不单纯因版本改变而使验证失效。专用 `PUT /problems/:id/root-cause` 拒绝纯空白正文；通用 metadata PATCH 的显式空串清空语义保持不变。

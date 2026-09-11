@@ -9,9 +9,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zaptest/observer"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
+	"itsm-backend/ent"
+	problem "itsm-backend/handlers/problem"
 	"itsm-backend/service"
-	"net/url"
 	"os"
 	"testing"
 )
@@ -19,80 +21,48 @@ import (
 // RCA_POSTGRES_TEST_DSN must point to a disposable, isolated PostgreSQL database.
 // This test owns only its transactionally-created fixture schema, never public tables.
 func TestRCAAuthorityPostgres(t *testing.T) {
-	dsn := os.Getenv("RCA_POSTGRES_TEST_DSN")
-	if dsn == "" {
-		t.Skip("requires isolated RCA_POSTGRES_TEST_DSN")
-	}
-	db, err := sql.Open("postgres", dsn)
+	f := newProblemLifecycleFixture(t)
+	driver, runtimeDB := runtimeRLSDriver(t, f.incidentEffectsFixture)
+	var role, schema string
+	require.NoError(t, runtimeDB.QueryRowContext(f.ctx, "SELECT current_user,current_schema()").Scan(&role, &schema))
+	_, err := f.db.ExecContext(f.ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA "+schema+" TO "+role)
 	require.NoError(t, err)
-	defer db.Close()
-	db.SetMaxOpenConns(1)
-	_, err = db.Exec(`CREATE SCHEMA rca_service_test; SET search_path TO rca_service_test;
- CREATE TABLE tickets(id bigint PRIMARY KEY,tenant_id bigint,title text,deleted_at timestamptz,version int DEFAULT 1,updated_at timestamptz);
- CREATE TABLE users(id bigint PRIMARY KEY,tenant_id bigint,name text);
- CREATE TABLE problems(id bigint PRIMARY KEY,work_item_id bigint,root_cause text);
- INSERT INTO tickets(id,tenant_id,title) VALUES(1,10,'source');
- INSERT INTO users VALUES(1,10,'analyst'); INSERT INTO problems VALUES(1,1,'old');`)
+	_, err = f.db.ExecContext(f.ctx, "GRANT USAGE ON ALL SEQUENCES IN SCHEMA "+schema+" TO "+role)
 	require.NoError(t, err)
-	defer db.Exec(`DROP SCHEMA rca_service_test CASCADE`)
-	migration, err := os.ReadFile("../../migrations/20260909_problem_rca_authority.sql")
-	require.NoError(t, err)
-	_, err = db.Exec(string(migration))
-	require.NoError(t, err)
-	_, err = db.Exec(`CREATE ROLE rca_runtime_test LOGIN; GRANT USAGE ON SCHEMA rca_service_test TO rca_runtime_test;
- GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA rca_service_test TO rca_runtime_test;
- GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA rca_service_test TO rca_runtime_test;
- ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
- CREATE POLICY tenant ON tickets USING(tenant_id=NULLIF(current_setting('app.current_tenant',true),'')::bigint);
- ALTER TABLE users ENABLE ROW LEVEL SECURITY;
- CREATE POLICY tenant ON users USING(tenant_id=NULLIF(current_setting('app.current_tenant',true),'')::bigint);
- ALTER TABLE problems ENABLE ROW LEVEL SECURITY;
- CREATE POLICY tenant ON problems USING(EXISTS(SELECT 1 FROM tickets wi WHERE wi.id=problems.work_item_id));`)
-	require.NoError(t, err)
-	defer db.Exec(`DROP OWNED BY rca_runtime_test; DROP ROLE rca_runtime_test`)
-	runtimeURL, err := url.Parse(dsn)
-	require.NoError(t, err)
-	runtimeURL.User = url.User("rca_runtime_test")
-	params := runtimeURL.Query()
-	params.Set("search_path", "rca_service_test")
-	runtimeURL.RawQuery = params.Encode()
-	runtimeDB, err := sql.Open("postgres", runtimeURL.String())
-	require.NoError(t, err)
-	defer runtimeDB.Close()
-	runtimeDB.SetMaxOpenConns(1)
+	scoped := ent.NewClient(ent.Driver(driver))
+	f.owner = problem.NewService(problem.NewEntRepository(scoped), zap.NewNop().Sugar())
+	f.ctx = tenantctx.WithTenantID(f.ctx, f.tenant.ID)
 	errorCore, errorLogs := observer.New(zap.ErrorLevel)
-	svc := service.NewTenantScopedProblemInvestigationService(runtimeDB, zap.New(errorCore).Sugar())
-	created, err := svc.CreateRootCauseAnalysis(context.Background(), &dto.CreateRootCauseAnalysisRequest{ProblemID: 1, AnalystID: 1, AnalysisMethod: "5_whys", RootCauseDescription: "postgres root", ConfidenceLevel: dto.ConfidenceHigh}, 10)
+	reader := service.NewTenantScopedProblemInvestigationService(runtimeDB, zap.New(errorCore).Sugar())
+	created, err := f.createRCA(&dto.CreateRootCauseAnalysisRequest{ProblemID: f.p.ID, AnalystID: f.actor.ID, AnalysisMethod: "5_whys", RootCauseDescription: "postgres root", ConfidenceLevel: dto.ConfidenceHigh}, f.tenant.ID)
 	require.NoError(t, err)
-	require.Equal(t, "postgres root", created.RootCauseDescription)
 	root := "updated postgres root"
-	updated, err := svc.UpdateRootCauseAnalysis(context.Background(), created.ID, &dto.UpdateRootCauseAnalysisRequest{RootCauseDescription: &root}, 10)
+	updated, err := f.updateRCA(created.ID, &dto.UpdateRootCauseAnalysisRequest{RootCauseDescription: &root}, f.tenant.ID)
 	require.NoError(t, err)
 	require.Equal(t, root, updated.RootCauseDescription)
-	var stored string
-	require.NoError(t, db.QueryRow(`SELECT root_cause FROM problems WHERE id=1`).Scan(&stored))
-	require.Equal(t, root, stored)
-	read, err := svc.GetRootCauseAnalysis(context.Background(), created.ID, 10)
+	read, err := reader.GetRootCauseAnalysis(f.ctx, created.ID, f.tenant.ID)
 	require.NoError(t, err)
 	require.Equal(t, root, read.RootCauseDescription)
-	_, err = svc.GetRootCauseAnalysis(context.Background(), created.ID, 20)
+	_, err = reader.GetRootCauseAnalysis(context.Background(), created.ID, f.tenant.ID+1000)
 	require.Error(t, err)
-	_, err = svc.UpdateRootCauseAnalysis(context.Background(), created.ID, &dto.UpdateRootCauseAnalysisRequest{RootCauseDescription: &root}, 20)
+	cmd := problem.MetadataCommand{Meta: f.command("metadata", "foreign-rca").Meta, ProblemID: f.p.ID, RootCauseAnalysis: &problem.RootCauseMetadata{ID: created.ID, Update: &dto.UpdateRootCauseAnalysisRequest{RootCauseDescription: &root}}}
+	cmd.Meta.TenantID += 1000
+	_, err = f.owner.ApplyMetadata(context.Background(), cmd)
 	require.Error(t, err)
-	summary, err := svc.GetProblemInvestigationSummary(context.Background(), 1, 10)
+	summary, err := reader.GetProblemInvestigationSummary(f.ctx, f.p.ID, f.tenant.ID)
 	require.NoError(t, err)
 	require.NotNil(t, summary.RootCauseAnalysis)
 	require.Equal(t, root, summary.RootCauseAnalysis.RootCauseDescription)
 	var leaked string
-	require.NoError(t, runtimeDB.QueryRow(`SELECT COALESCE(current_setting('app.current_tenant',true),'')`).Scan(&leaked))
-	require.Empty(t, leaked, "connection release must clear tenant state")
-	require.Empty(t, errorLogs.All(), "scoped reads must release a usable connection")
-	var unscopedRows int
-	require.NoError(t, runtimeDB.QueryRow(`SELECT count(*) FROM problem_root_cause_analyses`).Scan(&unscopedRows))
-	require.Zero(t, unscopedRows)
-	require.NoError(t, svc.DeleteRootCauseAnalysis(context.Background(), created.ID, 10))
-	require.NoError(t, db.QueryRow(`SELECT root_cause FROM problems WHERE id=1`).Scan(&stored))
-	require.Equal(t, root, stored)
+	require.NoError(t, runtimeDB.QueryRow("SELECT COALESCE(current_setting('app.current_tenant',true),'')").Scan(&leaked))
+	require.Empty(t, leaked)
+	require.Empty(t, errorLogs.All())
+	var unscoped int
+	require.NoError(t, runtimeDB.QueryRow("SELECT count(*) FROM problem_root_cause_analyses").Scan(&unscoped))
+	require.Zero(t, unscoped)
+	_, err = f.owner.ApplyMetadata(f.ctx, problem.MetadataCommand{Meta: f.command("metadata", "delete-rca").Meta, ProblemID: f.p.ID, RootCauseAnalysis: &problem.RootCauseMetadata{ID: created.ID, Delete: true}})
+	require.NoError(t, err)
+	require.Equal(t, root, f.client.Problem.GetX(f.ctx, f.p.ID).RootCause)
 }
 
 func TestRCAMigrationPostgres(t *testing.T) {

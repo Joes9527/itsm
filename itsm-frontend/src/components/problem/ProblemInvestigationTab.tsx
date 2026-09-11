@@ -166,7 +166,11 @@ const ProblemInvestigationTab: React.FC<ProblemInvestigationTabProps> = ({
     notes?: string;
   }) => {
     try {
+      const intent = JSON.stringify({action: 'Step', problemId, problemVersion, values});
+      const operationId = operations.current[intent] ??= crypto.randomUUID();
       const data: CreateStepRequest = {
+        version: problemVersion, operationId,
+        problemId,
         investigationId: summary?.investigation?.id!,
         stepNumber: (summary?.steps?.length || 0) + 1,
         stepTitle: values.stepTitle,
@@ -175,6 +179,8 @@ const ProblemInvestigationTab: React.FC<ProblemInvestigationTabProps> = ({
         notes: values.notes,
       };
       await ProblemInvestigationAPI.createStep(data);
+      delete operations.current[intent];
+      onProblemChanged?.();
       message.success('创建步骤成功');
       setStepModalOpen(false);
       stepForm.resetFields();
@@ -187,9 +193,13 @@ const ProblemInvestigationTab: React.FC<ProblemInvestigationTabProps> = ({
   // 更新步骤状态
   const handleUpdateStepStatus = async (stepId: number, status: string) => {
     try {
+      const intent = JSON.stringify({action:'step-status',stepId,status,problemId,problemVersion});
       await ProblemInvestigationAPI.updateStep(stepId, {
+        problemId, version: problemVersion, operationId: operations.current[intent] ??= crypto.randomUUID(),
         status: status as InvestigationStep['status'],
       });
+      delete operations.current[intent];
+      onProblemChanged?.();
       message.success('更新成功');
       loadSummary();
     } catch (error) {
@@ -206,7 +216,10 @@ const ProblemInvestigationTab: React.FC<ProblemInvestigationTabProps> = ({
     confidenceLevel: 'low' | 'medium' | 'high';
   }) => {
     try {
+      const intent = JSON.stringify({ problemId, problemVersion, values });
+      const operationId = operations.current[intent] ??= crypto.randomUUID();
       const data: CreateRootCauseRequest = {
+        version: problemVersion, operationId,
         problemId: Number(id) || problemId,
         analysisMethod: values.analysisMethod,
         rootCauseDescription: values.rootCauseDescription,
@@ -215,6 +228,7 @@ const ProblemInvestigationTab: React.FC<ProblemInvestigationTabProps> = ({
         confidenceLevel: values.confidenceLevel,
       };
       await ProblemInvestigationAPI.createRootCause(data);
+      delete operations.current[intent];
       onProblemChanged?.();
       message.success('创建成功');
       setRootCauseModalOpen(false);
@@ -235,7 +249,10 @@ const ProblemInvestigationTab: React.FC<ProblemInvestigationTabProps> = ({
     riskAssessment?: string;
   }) => {
     try {
+      const intent = JSON.stringify({action: 'Solution', problemId, problemVersion, values});
+      const operationId = operations.current[intent] ??= crypto.randomUUID();
       const data: CreateSolutionRequest = {
+        version: problemVersion, operationId,
         problemId: Number(id) || problemId,
         solutionType: values.solutionType,
         solutionDescription: values.solutionDescription,
@@ -245,6 +262,8 @@ const ProblemInvestigationTab: React.FC<ProblemInvestigationTabProps> = ({
         riskAssessment: values.riskAssessment,
       };
       await ProblemInvestigationAPI.createSolution(data);
+      delete operations.current[intent];
+      onProblemChanged?.();
       message.success('创建成功');
       setSolutionModalOpen(false);
       solutionForm.resetFields();

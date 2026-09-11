@@ -12,7 +12,6 @@ import (
 type Repository interface {
 	Get(ctx context.Context, id int, tenantID int) (*Problem, error)
 	List(ctx context.Context, tenantID int, page, size int, filters map[string]interface{}, scope ...predicate.Ticket) ([]*Problem, int, error)
-	Update(ctx context.Context, p *Problem) (*Problem, error)
 	GetStats(ctx context.Context, tenantID int) (*ProblemStats, error)
 }
 

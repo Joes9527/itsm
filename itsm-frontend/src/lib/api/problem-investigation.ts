@@ -231,6 +231,9 @@ export interface CreateInvestigationRequest {
 
 // 更新问题调查请求
 export interface UpdateInvestigationRequest {
+  version: number;
+  operationId: string;
+  problemId: number;
   status?: InvestigationStatus;
   estimatedCompletionDate?: string;
   actualCompletionDate?: string;
@@ -239,6 +242,9 @@ export interface UpdateInvestigationRequest {
 
 // 创建调查步骤请求
 export interface CreateStepRequest {
+  version: number;
+  operationId: string;
+  problemId: number;
   investigationId: number;
   stepNumber: number;
   stepTitle: string;
@@ -249,6 +255,9 @@ export interface CreateStepRequest {
 
 // 更新调查步骤请求
 export interface UpdateStepRequest {
+  version: number;
+  operationId: string;
+  problemId: number;
   stepTitle?: string;
   stepDescription?: string;
   status?: StepStatus;
@@ -260,6 +269,8 @@ export interface UpdateStepRequest {
 
 // 创建根本原因分析请求
 export interface CreateRootCauseRequest {
+ version: number;
+ operationId: string;
   problemId: number;
   analystId?: number;
   analysisMethod: string;
@@ -271,6 +282,8 @@ export interface CreateRootCauseRequest {
 
 // 更新根本原因分析请求
 export interface UpdateRootCauseRequest {
+ version: number;
+ operationId: string;
   analysisMethod?: string;
   rootCauseDescription?: string;
   contributingFactors?: string;
@@ -282,6 +295,8 @@ export interface UpdateRootCauseRequest {
 
 // 创建解决方案请求
 export interface CreateSolutionRequest {
+  version: number;
+  operationId: string;
   problemId: number;
   solutionType: SolutionType;
   solutionDescription: string;
@@ -294,6 +309,9 @@ export interface CreateSolutionRequest {
 
 // 更新解决方案请求
 export interface UpdateSolutionRequest {
+  version: number;
+  operationId: string;
+  problemId: number;
   solutionType?: SolutionType;
   solutionDescription?: string;
   priority?: string;
@@ -328,12 +346,11 @@ export const ProblemInvestigationAPI = {
   async updateInvestigation(
     id: number,
     data: UpdateInvestigationRequest
-  ): Promise<ProblemInvestigation> {
-    const response = await httpClient.put<InvestigationMutationResponse>(
+  ): Promise<ProblemCommandResult> {
+    return httpClient.put<ProblemCommandResult>(
       `/api/v1/problem-investigation/investigations/${id}`,
       data
     );
-    return response.investigation;
   },
 
   // 获取调查步骤列表
@@ -345,21 +362,19 @@ export const ProblemInvestigationAPI = {
   },
 
   // 创建调查步骤
-  async createStep(data: CreateStepRequest): Promise<InvestigationStep> {
-    const response = await httpClient.post<StepMutationResponse>(
+  async createStep(data: CreateStepRequest): Promise<ProblemCommandResult> {
+    return httpClient.post<ProblemCommandResult>(
       '/api/v1/problem-investigation/steps',
       data
     );
-    return response.step;
   },
 
   // 更新调查步骤
-  async updateStep(id: number, data: UpdateStepRequest): Promise<InvestigationStep> {
-    const response = await httpClient.put<StepMutationResponse>(
+  async updateStep(id: number, data: UpdateStepRequest): Promise<ProblemCommandResult> {
+    return httpClient.put<ProblemCommandResult>(
       `/api/v1/problem-investigation/steps/${id}`,
       data
     );
-    return response.step;
   },
 
   // 创建根本原因分析
@@ -389,21 +404,19 @@ export const ProblemInvestigationAPI = {
   },
 
   // 创建解决方案
-  async createSolution(data: CreateSolutionRequest): Promise<ProblemSolution> {
-    const response = await httpClient.post<SolutionMutationResponse>(
+  async createSolution(data: CreateSolutionRequest): Promise<ProblemCommandResult> {
+    return httpClient.post<ProblemCommandResult>(
       '/api/v1/problem-investigation/solutions',
       data
     );
-    return response.solution;
   },
 
   // 更新解决方案
-  async updateSolution(id: number, data: UpdateSolutionRequest): Promise<ProblemSolution> {
-    const response = await httpClient.put<SolutionMutationResponse>(
+  async updateSolution(id: number, data: UpdateSolutionRequest): Promise<ProblemCommandResult> {
+    return httpClient.put<ProblemCommandResult>(
       `/api/v1/problem-investigation/solutions/${id}`,
       data
     );
-    return response.solution;
   },
 
   // 获取关联列表

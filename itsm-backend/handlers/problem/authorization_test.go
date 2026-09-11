@@ -19,7 +19,7 @@ func TestBuildProblemActionsUsesCanonicalStatuses(t *testing.T) {
 	resolvedProblem := &Problem{Status: "resolved"}
 
 	openActions := BuildProblemActions(actor, openProblem)
-	require.Len(t, openActions, 6)
+	require.Len(t, openActions, 7)
 	require.True(t, openActions["edit"].Allowed)
 	require.True(t, openActions["startInvestigation"].Allowed)
 	require.False(t, openActions["resolve"].Allowed)

@@ -3,7 +3,7 @@ import { WorkItemClassificationSelect } from '@/components/work-item/WorkItemCla
 import { classificationInput, classificationUpdate } from '@/components/work-item/classification';
 
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { Button, Card, Form, Input, Select, App, Row, Col, Space, Divider } from 'antd';
 import { ArrowLeft, Save } from 'lucide-react';
@@ -20,6 +20,7 @@ export default function ProblemEditPage() {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const pendingOperation = useRef<{intent:string;key:string}|null>(null);
   const [problemData, setProblemData] = useState<any>(null);
 
   // Fetch problem data
@@ -62,7 +63,11 @@ export default function ProblemEditPage() {
     setLoading(true);
     try {
       const { classification, status: _status, ...payload } = values;
-      await ProblemApi.updateProblem(Number(id), { ...payload, version: problemData.version, ...classificationUpdate(classification, form.isFieldTouched('classification')) });
+      const request = { ...payload, version: problemData.version, ...classificationUpdate(classification, form.isFieldTouched('classification')) };
+      const intent = JSON.stringify(request);
+      if (pendingOperation.current?.intent !== intent) pendingOperation.current = { intent, key: crypto.randomUUID() };
+      await ProblemApi.updateProblem(Number(id), { ...request, operationId: pendingOperation.current.key });
+      pendingOperation.current = null;
       message.success(t('problems.updateSuccess'));
       router.push(`/problems/${id}`);
     } catch (error) {

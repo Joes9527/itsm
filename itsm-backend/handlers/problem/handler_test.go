@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 
@@ -101,8 +102,8 @@ func setupProblemHTTPHandlerTest(t *testing.T) (*gin.Engine, *Handler, *Service,
 		api.PUT("/:id", handler.Update)
 		api.DELETE("/:id", handler.Delete)
 		api.POST("/:id/investigate", handler.InvestigateProblem)
-		api.POST("/:id/root-cause", handler.UpdateRootCause)
-		api.POST("/:id/solution", handler.UpdateSolution)
+		api.PUT("/:id/root-cause", handler.UpdateRootCause)
+		api.PUT("/:id/solution", handler.UpdateSolution)
 		api.POST("/:id/close", handler.CloseProblem)
 		api.POST("/:id/verify-resolution", handler.VerifyResolution)
 		api.POST("/:id/resolve", handler.ResolveProblem)
@@ -206,10 +207,10 @@ func TestProblemHTTPHandlerCreateGetList(t *testing.T) {
 	assert.Equal(t, 0, resGet.Code)
 	require.Contains(t, wGet.Body.String(), `"relations":[]`)
 	require.Equal(t, dataMap["number"], resGet.Data.(map[string]interface{})["number"])
-	update := performProblemRequestWithRole(r, "PUT", fmt.Sprintf("/api/v1/problems/%d", probID), dto.UpdateProblemRequest{Version: 1, Title: func() *string { v := "Updated metadata"; return &v }()}, tenant.ID, user.ID, "super_admin")
+	update := performProblemRequestWithRole(r, "PUT", fmt.Sprintf("/api/v1/problems/%d", probID), dto.UpdateProblemRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()), Version: 1, Title: func() *string { v := "Updated metadata"; return &v }()}, tenant.ID, user.ID, "super_admin")
 	require.Equal(t, 200, update.Code, update.Body.String())
 	require.Contains(t, update.Body.String(), `"title":"Updated metadata"`)
-	require.NotContains(t, update.Body.String(), `"relations"`)
+	require.Contains(t, update.Body.String(), `"relations":[]`)
 
 	// 4. Get Problem - Invalid ID / Not Found
 	wNotFound := performProblemRequestWithRole(r, "GET", "/api/v1/problems/99999", nil, tenant.ID, user.ID, "super_admin")
@@ -314,6 +315,9 @@ func TestProblemHTTPHandlerMutationsUseResolvedMSPTenant(t *testing.T) {
 	role := client.Role.Create().SetTenantID(customerTenant.ID).SetCode("msp_tech").SetName("MSP technician").SetIsActive(true).SaveX(ctx)
 	permission := client.Permission.Create().SetTenantID(customerTenant.ID).SetCode("msp-problem-write").SetName("Problem write").SetResource("problem").SetAction("write").SaveX(ctx)
 	client.RolePermission.Create().SetTenantID(customerTenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(ctx)
+	readPermission := client.Permission.Create().SetTenantID(customerTenant.ID).SetCode("msp-problem-read").SetName("Problem read").SetResource("problem").SetAction("read").SaveX(ctx)
+	client.RolePermission.Create().SetTenantID(customerTenant.ID).SetRoleID(role.ID).SetPermissionID(readPermission.ID).SaveX(ctx)
+	client.Ticket.UpdateOneID(*p.WorkItemID).SetRequesterID(user.ID).ExecX(ctx)
 
 	request := func(method, path string, body interface{}) *httptest.ResponseRecorder {
 		var payload []byte
@@ -336,7 +340,7 @@ func TestProblemHTTPHandlerMutationsUseResolvedMSPTenant(t *testing.T) {
 		return w
 	}
 
-	w := request(http.MethodPut, fmt.Sprintf("/api/v1/problems/%d", p.ID), dto.UpdateProblemRequest{Version: p.Version, Title: strPtr("MSP updated problem")})
+	w := request(http.MethodPut, fmt.Sprintf("/api/v1/problems/%d", p.ID), dto.UpdateProblemRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()), Version: p.Version, Title: strPtr("MSP updated problem")})
 	require.Equal(t, http.StatusOK, w.Code, w.Body.String())
 
 	w = request(http.MethodPost, fmt.Sprintf("/api/v1/problems/%d/investigate", p.ID), map[string]any{"version": p.Version + 1, "operationId": "msp-investigate"})
@@ -358,7 +362,7 @@ func TestProblemHTTPHandlerUpdateAndLifecycle(t *testing.T) {
 	p := createProblemHandlerProblem(t, ctx, service, tenant.ID, user.ID)
 
 	// Update Problem
-	updateReq := dto.UpdateProblemRequest{
+	updateReq := dto.UpdateProblemRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()),
 		Version: p.Version,
 		Title:   strPtr("Updated Title HTTP"),
 	}
@@ -373,25 +377,25 @@ func TestProblemHTTPHandlerUpdateAndLifecycle(t *testing.T) {
 	assert.Equal(t, 0, resInv.Code)
 
 	// Update Root Cause
-	rcReq := dto.UpdateProblemRootCauseRequest{
+	rcReq := dto.UpdateProblemRootCauseRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()),
 		Version:   p.Version + 2,
 		RootCause: "Network driver deadlock",
 	}
-	wRC := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/root-cause", p.ID), rcReq, tenant.ID, user.ID)
+	wRC := performProblemRequest(r, "PUT", fmt.Sprintf("/api/v1/problems/%d/root-cause", p.ID), rcReq, tenant.ID, user.ID)
 	require.Equal(t, http.StatusOK, wRC.Code)
 
 	// Update Solution
-	solReq := dto.UpdateProblemResolutionRequest{
+	solReq := dto.UpdateProblemResolutionRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()),
 		Version:    p.Version + 3,
-		Workaround: "Restart driver service",
-		Resolution: "Patched kernel driver",
+		Workaround: stringPointer("Restart driver service"),
+		Resolution: stringPointer("Patched kernel driver"),
 	}
-	wSol := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/solution", p.ID), solReq, tenant.ID, user.ID)
+	wSol := performProblemRequest(r, "PUT", fmt.Sprintf("/api/v1/problems/%d/solution", p.ID), solReq, tenant.ID, user.ID)
 	require.Equal(t, http.StatusOK, wSol.Code)
 
 	// Generic status mutation is rejected even with a current version.
 	statusResolved := "resolved"
-	wRejected := performProblemRequest(r, "PUT", fmt.Sprintf("/api/v1/problems/%d", p.ID), dto.UpdateProblemRequest{Version: p.Version + 4, Status: &statusResolved}, tenant.ID, user.ID)
+	wRejected := performProblemRequest(r, "PUT", fmt.Sprintf("/api/v1/problems/%d", p.ID), dto.UpdateProblemRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()), Version: p.Version + 4, Status: &statusResolved}, tenant.ID, user.ID)
 	require.NotEqual(t, http.StatusOK, wRejected.Code)
 	for i, action := range []string{"verify-resolution", "resolve", "close"} {
 		w := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/%s", p.ID, action), map[string]any{"version": p.Version + 4 + i, "operationId": "http-" + action, "verificationNote": "Regression passed"}, tenant.ID, user.ID)
@@ -455,12 +459,12 @@ func TestProblemHTTPHandlerCrossTenantIsolation(t *testing.T) {
 	assert.Equal(t, common.NotFoundErrorCode, resGet.Code)
 
 	// Tenant B attempts PUT Tenant A problem
-	updateReq := dto.UpdateProblemRequest{Version: 1, Title: strPtr("Hacked")}
+	updateReq := dto.UpdateProblemRequest{OperationID: fmt.Sprintf("metadata-%d", time.Now().UnixNano()), Version: 1, Title: strPtr("Hacked")}
 	wPut := performProblemRequest(r, "PUT", fmt.Sprintf("/api/v1/problems/%d", problemA.ID), updateReq, tenantB.ID, userB.ID)
-	require.Equal(t, http.StatusInternalServerError, wPut.Code)
+	require.Equal(t, http.StatusNotFound, wPut.Code)
 	var resPut common.Response
 	require.NoError(t, json.Unmarshal(wPut.Body.Bytes(), &resPut))
-	assert.Equal(t, common.InternalErrorCode, resPut.Code)
+	assert.Equal(t, common.NotFoundErrorCode, resPut.Code)
 
 	// Tenant B attempts POST Investigate Tenant A problem
 	wInv := performProblemRequest(r, "POST", fmt.Sprintf("/api/v1/problems/%d/investigate", problemA.ID), map[string]any{"version": 1, "operationId": "cross-tenant"}, tenantB.ID, userB.ID)
@@ -556,3 +560,5 @@ func TestProblemHTTPHandlerGetProjectsActionsAndFailsClosedWithoutActorIdentity(
 		})
 	}
 }
+
+func stringPointer(s string) *string { return &s }

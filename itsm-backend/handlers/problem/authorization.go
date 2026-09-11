@@ -1,6 +1,9 @@
 package problem
 
 import (
+	"context"
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/ent/user"
 	"strings"
 
 	"itsm-backend/authorization"
@@ -32,7 +35,7 @@ func CanResolveProblem(actor service.ActionActor, p *Problem) dto.ActionPermissi
 	if status == "resolved" || !isValidProblemStatusTransition(status, "resolved") {
 		return dto.ActionPermission{Allowed: false, Reason: "当前状态的问题不能标记解决"}
 	}
-	if err := ValidateResolution(ResolutionEvidence{p.RootCause, p.Resolution, p.VerifiedVersion == p.Version, p.VerificationNote}); err != nil {
+	if err := ValidateResolution(ResolutionEvidence{p.RootCause, p.Resolution, CurrentResolutionVerification(p.RootCause, p.Resolution, p.VerificationDigest, p.VerificationNote, p.VerifiedBy, p.VerifiedVersion, p.VerifiedAt), p.VerificationNote}); err != nil {
 		return dto.ActionPermission{Allowed: false, Reason: "请先验证当前根因与永久解决方案"}
 	}
 	return CanEditProblem(actor)
@@ -42,7 +45,7 @@ func CanCloseProblem(actor service.ActionActor, p *Problem) dto.ActionPermission
 	if !canCloseProblemStatus(p.Status) {
 		return dto.ActionPermission{Allowed: false, Reason: "只有已解决的问题可以关闭"}
 	}
-	if err := ValidateResolution(ResolutionEvidence{p.RootCause, p.Resolution, p.VerifiedVersion == p.Version-1, p.VerificationNote}); err != nil {
+	if err := ValidateResolution(ResolutionEvidence{p.RootCause, p.Resolution, CurrentResolutionVerification(p.RootCause, p.Resolution, p.VerificationDigest, p.VerificationNote, p.VerifiedBy, p.VerifiedVersion, p.VerifiedAt), p.VerificationNote}); err != nil {
 		return dto.ActionPermission{Allowed: false, Reason: "缺少有效的永久方案验证，请重新打开后验证"}
 	}
 	return CanEditProblem(actor)
@@ -50,6 +53,7 @@ func CanCloseProblem(actor service.ActionActor, p *Problem) dto.ActionPermission
 
 func BuildProblemActions(actor service.ActionActor, p *Problem) map[string]dto.ActionPermission {
 	return map[string]dto.ActionPermission{
+		"assign":             CanAssignProblem(actor, p),
 		"verifyResolution":   CanVerifyProblem(actor, p),
 		"reopen":             CanReopenProblem(actor, p),
 		"edit":               CanEditProblem(actor),
@@ -73,4 +77,29 @@ func CanReopenProblem(actor service.ActionActor, p *Problem) dto.ActionPermissio
 		return dto.ActionPermission{Allowed: false, Reason: "仅已解决或关闭的问题可以重新打开"}
 	}
 	return CanEditProblem(actor)
+}
+
+func CanAssignProblem(actor service.ActionActor, p *Problem) dto.ActionPermission {
+	if !canAssignProblemStatus(p.Status) {
+		return dto.ActionPermission{Allowed: false, Reason: "当前状态不允许分派问题"}
+	}
+	permission := CanEditProblem(actor)
+	if !permission.Allowed {
+		return permission
+	}
+	if actor.Client == nil {
+		return dto.ActionPermission{Allowed: false, Reason: "负责人目录不可用"}
+	}
+	query := actor.Client.User.Query().Where(user.TenantID(actor.TenantID), user.Active(true))
+	if p.AssigneeID != nil {
+		query.Where(user.IDNEQ(*p.AssigneeID))
+	}
+	available, err := query.Exist(tenantctx.WithTenantID(context.Background(), actor.TenantID))
+	if err != nil {
+		return dto.ActionPermission{Allowed: false, Reason: "负责人目录不可用"}
+	}
+	if !available {
+		return dto.ActionPermission{Allowed: false, Reason: "没有可用的目标负责人"}
+	}
+	return permission
 }

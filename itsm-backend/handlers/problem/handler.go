@@ -265,39 +265,7 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 
-	// 将 DTO 指针字段转换为 domain entity
-	updates := &Problem{Version: req.Version}
-	if req.Title != nil {
-		updates.Title = *req.Title
-	}
-	if req.Description != nil {
-		updates.Description = *req.Description
-	}
-	if req.Status != nil {
-		updates.Status = *req.Status
-	}
-	if req.Priority != nil {
-		updates.Priority = *req.Priority
-	}
-	updates.CategoryID = req.CategoryID
-	if req.RootCause != nil {
-		updates.RootCause = *req.RootCause
-	}
-	if req.Impact != nil {
-		updates.Impact = *req.Impact
-	}
-
-	updated, err := h.service.Update(c.Request.Context(), tenantID, id, updates)
-	if err != nil {
-		if _, ok := common.AsAppError(err); ok || common.IsVersionConflictError(err) {
-			RespondCommandError(c, err)
-			return
-		}
-		common.Fail(c, common.InternalErrorCode, err.Error())
-		return
-	}
-
-	common.Success(c, ToResponse(updated))
+	h.applyMetadata(c, id, tenantID, req)
 }
 
 func (h *Handler) InvestigateProblem(c *gin.Context) { h.command(c, "investigate") }
@@ -389,8 +357,11 @@ func (h *Handler) UpdateRootCause(c *gin.Context) {
 		common.Fail(c, common.ParamErrorCode, err.Error())
 		return
 	}
-	updated, err := h.service.UpdateRootCause(c.Request.Context(), tenantID, id, req.Version, req.RootCause)
-	h.respondProblemMutation(c, updated, err)
+	if strings.TrimSpace(req.RootCause) == "" {
+		common.Fail(c, common.ParamErrorCode, "rootCause must not be blank")
+		return
+	}
+	h.applyMetadata(c, id, tenantID, dto.UpdateProblemRequest{Version: req.Version, OperationID: req.OperationID, RootCause: &req.RootCause})
 }
 
 // UpdateSolution API contract.
@@ -414,11 +385,10 @@ func (h *Handler) UpdateSolution(c *gin.Context) {
 		return
 	}
 	resolution := req.Resolution
-	if resolution == "" {
+	if resolution == nil {
 		resolution = req.Solution
 	}
-	updated, err := h.service.UpdateSolution(c.Request.Context(), tenantID, id, req.Version, req.Workaround, resolution)
-	h.respondProblemMutation(c, updated, err)
+	h.applyMetadata(c, id, tenantID, dto.UpdateProblemRequest{Version: req.Version, OperationID: req.OperationID, Workaround: req.Workaround, Resolution: resolution})
 }
 
 func (h *Handler) CloseProblem(c *gin.Context) { h.command(c, "close") }
@@ -514,4 +484,23 @@ func relationProjection(v []relationmeta.View) *[]relationmeta.View {
 		return nil
 	}
 	return &v
+}
+
+func (h *Handler) applyMetadata(c *gin.Context, id, tenantID int, req dto.UpdateProblemRequest) {
+	actor, ok := problemActorUserID(c)
+	if !ok {
+		return
+	}
+	meta := workitemmutation.Meta{TenantID: tenantID, ActorID: actor, ExpectedVersion: req.Version, OperationID: req.OperationID, Source: "http", CorrelationID: c.GetString("request_id")}
+	_, err := h.service.ApplyMetadata(c.Request.Context(), MetadataCommand{Meta: meta, ProblemID: id, Patch: req})
+	if err != nil {
+		RespondCommandError(c, err)
+		return
+	}
+	detail, err := h.service.Get(c.Request.Context(), id, meta)
+	if err != nil {
+		RespondCommandError(c, err)
+		return
+	}
+	common.Success(c, ToResponse(detail))
 }

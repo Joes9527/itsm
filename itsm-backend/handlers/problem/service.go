@@ -2,12 +2,10 @@ package problem
 
 import (
 	"context"
-	"fmt"
 	"itsm-backend/database"
 	"strings"
 
 	"go.uber.org/zap"
-	"itsm-backend/common"
 	"itsm-backend/ent"
 )
 
@@ -29,73 +27,6 @@ func NewService(repo Repository, logger *zap.SugaredLogger) *Service {
 		s.client = transactions.transactionClient()
 	}
 	return s
-}
-
-func (s *Service) Update(ctx context.Context, tenantID int, id int, p *Problem) (*Problem, error) {
-	existing, err := s.repo.Get(ctx, id, tenantID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Update fields if they are set (non-zero/non-empty check in Handler or here)
-	// Here assuming 'p' contains only fields to update usually, but domain entity isn't partial.
-	// We merge changes here.
-	if p.Title != "" {
-		existing.Title = p.Title
-	}
-	if p.Description != "" {
-		existing.Description = p.Description
-	}
-	if p.Status != "" {
-		return nil, common.NewValidationError("status changes require a problem lifecycle command", nil)
-	}
-	if p.Version <= 0 {
-		return nil, common.NewValidationError("version required", nil)
-	}
-	existing.Version = p.Version
-	if p.Priority != "" {
-		if !isValidProblemPriority(p.Priority) {
-			return nil, fmt.Errorf("invalid problem priority: %s", p.Priority)
-		}
-		existing.Priority = p.Priority
-	}
-	// Preserve omission so unrelated edits do not revalidate or rewrite classification.
-	existing.CategoryID = p.CategoryID
-	// Preserve root-cause omission; unrelated edits must not replay a stale RCA body.
-	existing.RootCause = p.RootCause
-	if p.Workaround != "" {
-		existing.Workaround = p.Workaround
-	}
-	if p.Resolution != "" {
-		existing.Resolution = p.Resolution
-	}
-	if p.Impact != "" {
-		existing.Impact = p.Impact
-	}
-	if p.AssigneeID != nil {
-		existing.AssigneeID = p.AssigneeID
-	}
-
-	return s.repo.Update(ctx, existing)
-}
-
-// UpdateRootCause records the confirmed root cause.
-func (s *Service) UpdateRootCause(ctx context.Context, tenantID, id, version int, rootCause string) (*Problem, error) {
-	rootCause = strings.TrimSpace(rootCause)
-	if rootCause == "" {
-		return nil, fmt.Errorf("rootCause is required")
-	}
-	return s.Update(ctx, tenantID, id, &Problem{Version: version, RootCause: rootCause})
-}
-
-// UpdateSolution records a workaround and/or final resolution.
-func (s *Service) UpdateSolution(ctx context.Context, tenantID, id, version int, workaround, resolution string) (*Problem, error) {
-	workaround = strings.TrimSpace(workaround)
-	resolution = strings.TrimSpace(resolution)
-	if workaround == "" && resolution == "" {
-		return nil, fmt.Errorf("solution, workaround or resolution is required")
-	}
-	return s.Update(ctx, tenantID, id, &Problem{Version: version, Workaround: workaround, Resolution: resolution})
 }
 
 func isValidProblemPriority(priority string) bool {
