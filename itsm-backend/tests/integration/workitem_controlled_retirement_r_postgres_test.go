@@ -10,12 +10,17 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
 	"errors"
 	"fmt"
 	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"itsm-backend/ent"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/migration"
+	"itsm-backend/service"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -443,4 +448,111 @@ func TestWorkItemControlledRetirementRechecksCommittedWriteAfterLockWait(t *test
 	var count int
 	require.NoError(t, db.QueryRow(`SELECT count(*) FROM schema_migrations WHERE version=$1`, migration.WorkItemRetireVersion).Scan(&count))
 	require.Zero(t, count)
+}
+
+// Current complete Ent schema plus explicitly retained legacy columns supports
+// the real deletion owner; this is a canonical-shaped fixture, not a deployed dump.
+func TestWorkItemControlledRetirementOwningSoftDeleteAndPostRetirementWrites(t *testing.T) {
+	db, ctx := migrationEntryFixture(t)
+	logger := zap.NewNop().Sugar()
+	require.NoError(t, migration.NewMigrator(db, logger).EnsureMigrationsTable(ctx))
+	client := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	require.NoError(t, client.Schema.Create(ctx))
+	tenant := client.Tenant.Create().SetName("retirement deletion").SetCode("r-delete").SetStatus("active").SaveX(ctx)
+	actor := client.User.Create().SetTenantID(tenant.ID).SetUsername("r-deleter").SetName("r deleter").SetPasswordHash("fixture").SetEmail("r-delete@example.test").SetRole("operator").SetActive(true).SaveX(ctx)
+	role := client.Role.Create().SetTenantID(tenant.ID).SetCode("operator").SetName("operator").SetIsActive(true).SaveX(ctx)
+	for _, verb := range []string{"read", "delete"} {
+		permission := client.Permission.Create().SetTenantID(tenant.ID).SetCode("r-" + verb).SetName(verb).SetResource("incident").SetAction(verb).SaveX(ctx)
+		client.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).ExecX(ctx)
+	}
+	item := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetOpenedByID(actor.ID).SetRecordClass("incident").SetTitle("retained deletion title").SetStatus("new").SetTicketNumber("R-DEL-1").SaveX(ctx)
+	incident := client.Incident.Create().SetWorkItemID(item.ID).SaveX(ctx)
+	_, err := db.Exec(`ALTER TABLE tickets ADD COLUMN type text;UPDATE tickets SET type=record_class;
+ ALTER TABLE incidents ADD COLUMN title text,ADD COLUMN tenant_id bigint;
+ UPDATE incidents i SET title=t.title,tenant_id=t.tenant_id FROM tickets t WHERE t.id=i.work_item_id;
+ CREATE TABLE workflows(id bigint PRIMARY KEY,content text);INSERT INTO workflows VALUES(1,'retained workflow');`)
+	require.NoError(t, err)
+	ordinary := migration.NewMigrator(db, logger)
+	for _, mig := range migration.RegisteredMigrations {
+		require.NoError(t, ordinary.ApplyMigration(ctx, mig))
+		if mig.Version == "021_add_callback_optional_declared" {
+			break
+		}
+	}
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	m := migration.NewMigrator(db, logger, migration.MigrationControlConfig{DeploymentID: "owned-v2", Operator: "fixture-operator", RetirementPublicKeys: map[string]ed25519.PublicKey{"fixture": pub}})
+	require.NoError(t, m.ApplyPreparation(ctx, preparationEvidence(t, m, ctx)))
+	later := false
+	for _, d := range migration.ControlledMigrationCatalog() {
+		if d.Migration.Version == migration.WorkItemPrepareVersion {
+			later = true
+			continue
+		}
+		if !later || d.Stage != migration.StageOrdinary {
+			continue
+		}
+		sqlText := migration.GetMigrationSQL(d.Migration.Version)
+		tx, err := db.BeginTx(ctx, nil)
+		require.NoError(t, err)
+		_, err = tx.ExecContext(ctx, sqlText)
+		if err != nil {
+			tx.Rollback()
+			t.Fatalf("%s: %v", d.Migration.Version, err)
+		}
+		_, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version,description,checksum,rollback_sql) VALUES($1,$2,$3,$4)`, d.Migration.Version, d.Migration.Description, fmt.Sprintf("%x", sha256.Sum256([]byte(sqlText))), d.Migration.RollbackSQL)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit())
+	}
+	var original string
+	require.NoError(t, db.QueryRow(`SELECT content::text FROM work_item_migration_evidence WHERE version=$1`, migration.WorkItemPrepareVersion).Scan(&original))
+	svc := service.NewIncidentService(client, logger)
+	require.NoError(t, svc.DeleteIncident(ctx, incident.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, Source: "http"}))
+	after := client.Ticket.GetX(ctx, item.ID)
+	require.NotNil(t, after.DeletedAt)
+	require.Equal(t, item.Version+1, after.Version)
+	var retained string
+	var rows int
+	require.NoError(t, db.QueryRow(`SELECT title FROM incidents WHERE id=$1`, incident.ID).Scan(&retained))
+	require.Equal(t, item.Title, retained)
+	require.NoError(t, db.QueryRow(`SELECT count(*) FROM incidents WHERE id=$1 AND work_item_id=$2`, incident.ID, item.ID).Scan(&rows))
+	require.Equal(t, 1, rows)
+	var attachment string
+	require.NoError(t, db.QueryRow(`SELECT content::text FROM work_item_migration_evidence WHERE version=$1`, migration.WorkItemPrepareVersion).Scan(&attachment))
+	require.Equal(t, original, attachment)
+	evidence := retirementEvidence(t, m, ctx, priv)
+	require.NoError(t, m.ApplyRetirement(ctx, evidence))
+	// Normal post-R business writes must not be compared to a frozen data snapshot.
+	newer := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetOpenedByID(actor.ID).SetRecordClass("generic").SetTitle("after retirement").SetStatus("new").SetTicketNumber("R-POST-1").SaveX(ctx)
+	client.Ticket.UpdateOneID(newer.ID).SetTitle("post-R update").ExecX(ctx)
+	require.NoError(t, m.InspectMigrationTarget(ctx))
+	require.NoError(t, m.ApplyRetirement(ctx, evidence))
+	require.Equal(t, "post-R update", client.Ticket.GetX(ctx, newer.ID).Title)
+	require.NotNil(t, client.Ticket.GetX(ctx, item.ID).DeletedAt)
+}
+
+func TestWorkItemControlledRetirementPhysicalDisappearanceNeverUsesHTTPAudit(t *testing.T) {
+	for _, audit := range []string{"none", "matching HTTP audit", "wrong identity", "cross tenant"} {
+		t.Run(audit, func(t *testing.T) {
+			db, ctx, m, priv := retirementFixture(t)
+			// Hostile fixture only: no application owner physically purges this row.
+			_, err := db.Exec(`DELETE FROM incidents WHERE id=1`)
+			require.NoError(t, err)
+			if audit != "none" {
+				tenant, id := 1, 1
+				if audit == "wrong identity" {
+					id = 4
+				}
+				if audit == "cross tenant" {
+					tenant = 2
+				}
+				_, err = db.Exec(`INSERT INTO audit_logs(id,tenant_id,user_id,action,created_at,path,method,resource,request_body) VALUES(99,$1,1,'delete',now(),$2,'DELETE','incidents','{}')`, tenant, fmt.Sprintf("/api/v1/incidents/%d", id))
+				require.NoError(t, err)
+			}
+			e := retirementEvidence(t, m, ctx, priv)
+			before := preparationLogicalDigest(t, db)
+			require.ErrorContains(t, m.ApplyRetirement(ctx, e), "original preparation row changed or is missing")
+			require.Equal(t, before, preparationLogicalDigest(t, db))
+		})
+	}
 }

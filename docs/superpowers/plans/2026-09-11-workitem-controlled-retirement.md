@@ -149,7 +149,7 @@ type MigrationEvidence struct {
 - [ ] 基线包含原记录范围、公共值及历史证据摘要。旧NOT NULL/default/CHECK只作明确登记的必要调整，使新代码不必填写旧公共列。禁止填充触发器、业务数据回填和Schema.Create补造历史。
 - [ ] 隔离测试在P事务内用受限SQL列集合验证真实非owner角色的三域读写/RLS，不调用依赖034的完整Ent查询。临时测试记录在独立事务/保存点回滚；实际目标不植入测试数据。
 - [ ] P DDL、证据摘要及回执同事务；失败不留成功回执。证据为空或目标/旧目录不符拒绝。结构已满足也须真实运行校验再写P回执；不补写022/027。
-- [ ] 验证P后新字段变化而旧值不变：R比较基线和审计连续性，不要求旧列等于当前WorkItem。业务合法删除需审计，新记录旧列可空。
+- [ ] 验证P后新字段变化而旧值不变：R比较基线和审计连续性，不要求旧列等于当前WorkItem。按2026-09-11复审已批准的软删除范围，所属领域软删除保留原始记录及扩展，WorkItem可更新deleted_at/updated_at/version；任何原始记录物理消失仍拒绝，新记录旧列可空。物理清理及可靠事务审计留作设计中的BL-WI-PURGE-AUDIT-01，不以HTTP审计放行。
 - [ ] GREEN及针对性单元回归，提交 `feat(migration): prepare WorkItem schema without retiring history`，独立审查。
 
 ## Task 4：R证据门禁与原子精确退役
@@ -175,6 +175,7 @@ func TestRetirementEvidenceRejectsEmpty(t *testing.T) {
 - [ ] 在同一互斥/事务内按运行手册精确清单及逐项批准的依赖删除，标识符安全引用并限定schema。禁止CASCADE、通配及自动扩大依赖。未登记依赖失败，明确lock/statement超时。
 - [ ] 删除和R回执同事务；首次缺对象但无已批准空清单拒绝，规范新环境可按明确空清单记录无删除结果。丢失提交响应后读取相同版本/证据/结构，返回已有结果；不同证据冲突。
 - [ ] 注入DDL失败、回执写失败、并发两执行者、锁超时、丢响应重试；失败前后对象与账本摘要保持不变。验证跨schema诱饵及依赖未改动。
+- [ ] 按已批准软删除范围，以真实所属领域删除入口验证保留行和P基线不变、R可执行；物理消失与保留值改动仍阻断，并覆盖R后正常写入、历史检查及同证据重试。
 - [ ] GREEN；提交 `feat(migration): execute evidence-bound WorkItem retirement`，独立审查。
 
 ## Task 5：激活唯一目录与控制CLI，完成完整业务准入
