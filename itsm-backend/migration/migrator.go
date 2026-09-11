@@ -392,23 +392,49 @@ func (m *Migrator) WithMigrationLock(ctx context.Context, fn func(context.Contex
 	if m.db.Stats().MaxOpenConnections == 1 {
 		return fmt.Errorf("migration session lock requires at least two database connections")
 	}
-	conn, err := m.db.Conn(ctx)
-	if err != nil {
-		return err
+	var conn *sql.Conn
+	var schema string
+	var lockKey int64
+	for {
+		var err error
+		conn, err = m.db.Conn(ctx)
+		if err != nil {
+			return err
+		}
+		schema, err = migrationTargetSchema(ctx, conn)
+		if err != nil {
+			conn.Close()
+			return err
+		}
+		if err = conn.QueryRowContext(ctx, `SELECT hashtextextended(current_database() || ':' || current_schema(), 0)`).Scan(&lockKey); err != nil {
+			conn.Close()
+			return err
+		}
+		var acquired bool
+		if err = conn.QueryRowContext(ctx, `SELECT pg_try_advisory_lock($1)`, lockKey).Scan(&acquired); err != nil {
+			_ = conn.Raw(func(any) error { return driver.ErrBadConn })
+			conn.Close()
+			return err
+		}
+		if acquired {
+			break
+		}
+		// A contender must not pin a callback-pool connection while waiting for
+		// another owner. Return it before a cancellable retry, including when a
+		// different Migrator instance or process holds the same schema lock.
+		if err = conn.Close(); err != nil {
+			return err
+		}
+		retry := time.NewTimer(25 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			retry.Stop()
+			return ctx.Err()
+		case <-retry.C:
+		}
 	}
 	defer conn.Close()
-	schema, err := migrationTargetSchema(ctx, conn)
-	if err != nil {
-		return err
-	}
-	var lockKey int64
-	if err = conn.QueryRowContext(ctx, `SELECT hashtextextended(current_database() || ':' || current_schema(), 0)`).Scan(&lockKey); err != nil {
-		return err
-	}
-	if _, err = conn.ExecContext(ctx, `SELECT pg_advisory_lock($1)`, lockKey); err != nil {
-		_ = conn.Raw(func(any) error { return driver.ErrBadConn })
-		return err
-	}
+
 	defer func() {
 		// A cancelled operation must still release its session lock before pooling.
 		unlockCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

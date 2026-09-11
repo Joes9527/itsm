@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"itsm-backend/config"
 	"itsm-backend/database"
@@ -25,10 +26,7 @@ import (
 
 func migrationEntryFixture(t *testing.T) (*sql.DB, context.Context) {
 	t.Helper()
-	parsed, err := url.Parse(os.Getenv("INTAKE_POSTGRES_TEST_DSN"))
-	require.NoError(t, err)
-	require.Equal(t, "127.0.0.1:36444", parsed.Host)
-	require.Equal(t, "/sslvpn_test", parsed.Path)
+	parsed := migrationEntryTarget(t)
 	admin, err := sql.Open("postgres", parsed.String())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, admin.Close()) })
@@ -310,4 +308,121 @@ func TestControlledEntryRejectsInsufficientLockPool(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	require.ErrorContains(t, migration.NewMigrator(db, zap.NewNop().Sugar()).EnsureMigrationsTable(ctx), "requires at least two")
+}
+
+// The contender must attempt the database lock before the owner requests its
+// callback connection. This forces the previous two-connection deadlock cycle.
+func TestControlledEntryTwoOwnersDoNotExhaustCallbackPool(t *testing.T) {
+	fixture, ctx := migrationEntryFixture(t)
+	var schema string
+	require.NoError(t, fixture.QueryRowContext(ctx, `SELECT current_schema()`).Scan(&schema))
+	parsed := migrationEntryTarget(t)
+	q := parsed.Query()
+	q.Set("search_path", schema)
+	q.Set("application_name", schema)
+	parsed.RawQuery = q.Encode()
+	pool, err := sql.Open("postgres", parsed.String())
+	require.NoError(t, err)
+	defer pool.Close()
+	pool.SetMaxOpenConns(2)
+	first := migration.NewMigrator(pool, zap.NewNop().Sugar())
+	second := migration.NewMigrator(pool, zap.NewNop().Sugar())
+	firstEntered := make(chan struct{})
+	allowCallback := make(chan struct{})
+	firstDone := make(chan error, 1)
+	secondDone := make(chan error, 1)
+	runCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		firstDone <- first.WithMigrationLock(runCtx, func(ctx context.Context) error {
+			close(firstEntered)
+			select {
+			case <-allowCallback:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+			return first.EnsureMigrationsTable(ctx)
+		})
+	}()
+	<-firstEntered
+	go func() {
+		secondDone <- second.WithMigrationLock(runCtx, func(ctx context.Context) error { return second.EnsureMigrationsTable(ctx) })
+	}()
+	// Observe both distinct server sessions having attempted an advisory lock.
+	// A try-lock implementation may already be idle here, which is intentional.
+	observed := false
+	observationDeadline := time.After(3 * time.Second)
+	tick := time.NewTicker(5 * time.Millisecond)
+	defer tick.Stop()
+observe:
+	for {
+		select {
+		case <-tick.C:
+			var attempts int
+			require.NoError(t, fixture.QueryRowContext(ctx, `SELECT count(*) FROM pg_stat_activity WHERE application_name=$1 AND query LIKE '%advisory_lock%'`, schema).Scan(&attempts))
+			if attempts == 2 {
+				observed = true
+				break observe
+			}
+		case <-observationDeadline:
+			break observe
+		}
+	}
+	close(allowCallback)
+	completed := true
+	for _, done := range []chan error{firstDone, secondDone} {
+		select {
+		case err := <-done:
+			if completed {
+				require.NoError(t, err)
+			}
+		case <-time.After(2 * time.Second):
+			completed = false
+			cancel()
+			require.Error(t, <-done)
+		}
+	}
+	require.True(t, observed, "both lock owners must attempt the database lock before owner callback")
+	require.True(t, completed, "lock waiters must not retain the only connection the owner callback needs")
+	require.NoError(t, first.InspectMigrationTarget(ctx))
+}
+
+// The optional V2 fixture is a separate, explicitly owned container. It does
+// not relax or change the original cutover fixture's exact endpoint guard.
+func migrationEntryTarget(t *testing.T) *url.URL {
+	t.Helper()
+	dedicated := os.Getenv("WORKITEM_V2_POSTGRES_TEST_DSN")
+	dsn := dedicated
+	if dsn == "" {
+		dsn = os.Getenv("INTAKE_POSTGRES_TEST_DSN")
+	}
+	parsed, err := url.Parse(dsn)
+	require.NoError(t, err)
+	if dedicated == "" {
+		require.Equal(t, "127.0.0.1:36444", parsed.Host)
+		require.Equal(t, "/sslvpn_test", parsed.Path)
+		return parsed
+	}
+	require.Equal(t, "127.0.0.1:36542", parsed.Host)
+	require.Equal(t, "/workitem_v2_task2_test", parsed.Path)
+	out, err := exec.Command("docker", "inspect", "--format", `{{json .Config.Labels}}
+{{json .NetworkSettings.Ports}}
+{{.State.Running}}`, "codex-workitem-v2-task2-fix1-pg").Output()
+	require.NoError(t, err)
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	require.Len(t, lines, 3)
+	var labels map[string]string
+	require.NoError(t, json.Unmarshal([]byte(lines[0]), &labels))
+	require.Equal(t, "task2-fix1", labels["com.itsm.test.owner"])
+	require.Equal(t, "true", labels["com.itsm.test.disposable"])
+	var ports map[string][]struct {
+		HostIP   string `json:"HostIp"`
+		HostPort string
+	}
+	require.NoError(t, json.Unmarshal([]byte(lines[1]), &ports))
+	require.Len(t, ports["5432/tcp"], 1)
+	require.Equal(t, "127.0.0.1", ports["5432/tcp"][0].HostIP)
+	require.Equal(t, "36542", ports["5432/tcp"][0].HostPort)
+	require.Equal(t, "true", lines[2])
+	return parsed
 }
