@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go/Gin、Ent、PostgreSQL、现有 BPMN 与 Go testing。
 
-> 状态：draft（可供实施评审；任务未执行）
+> 状态：accepted（已按独立审查修订；任务未执行）
 > 依据：[后续设计](../specs/2026-09-11-workitem-convergence-next-stage-design.md)；[总入口](2026-09-11-workitem-next-stage.md)。命令从 itsm-backend 执行，除非另有说明。
 
 ## Global Constraints
@@ -17,7 +17,7 @@
 - 每次转派原因必填；首次分配不因本轮决定额外强制原因。仅转派不清除审批或调查证据。
 - 不改响应考核，不新增多 WorkOrder、审批引擎或通用状态机。
 - 不迁移历史业务数据；真实 PostgreSQL 验证只使用隔离数据库/schema，不初始化共享数据库。
-- 本计划的 API 示例沿用当前 HTTP 字段 version；内部映射 Meta.ExpectedVersion，不新增 expectedVersion 别名。
+- 保留各专业 HTTP 契约：Incident/Problem 使用 version，Change 使用 expectedVersion；API 适配器映射同一个观察版本到 Meta.ExpectedVersion。不得新增双别名，也不为统一显示重命名现有 Change 请求字段。
 - 先复现失败再修改；每任务检查 diff、运行列明测试并单独提交；不得仅因测试返回 0 而忽略未匹配测试。
 
 ## B1：Incident 分派统一到现有命令
@@ -85,7 +85,7 @@ func TestIncidentReassignmentPreservesProgress(t *testing.T) {
 - Test: `handlers/change/metadata_test.go`、`handlers/change/change_bpmn_e2e_test.go`、`tests/integration/workitem_assignment_postgres_test.go`。
 
 **Interfaces**
-保留 `ApplyMetadata(context.Context, MetadataCommand) (workitemmutation.Result, error)`；为 `dto.UpdateChangeRequest` 增加 `AssignmentReason string`（JSON `assignmentReason`），由所有现有编辑/分派入口传递。它是动作输入，不新增 Change 扩展持久化字段。Meta 与现有 version/operationId 绑定保持一致。
+保留 `ApplyMetadata(context.Context, MetadataCommand) (workitemmutation.Result, error)`；为 `dto.UpdateChangeRequest` 增加 `AssignmentReason string`（JSON `assignmentReason`），由所有现有编辑/分派入口传递。它是动作输入，不新增 Change 扩展持久化字段。Change 请求继续使用 expectedVersion/operationId，与 MutationRequest 的严格绑定一致；公共组件的 version 由 API 适配器映射为 expectedVersion。
 
 - [ ] 在既有 metadata fixture 中新增名为 `TestChangeReassignmentPreservesApproval` 的测试：创建已评估且具有审批快照/流程任务的 Change；转派后比较状态、AssessmentDigest、审批 decision ID、任务执行人均未改变，只允许 WorkItem 负责人/版本/审计改变。为空原因测试断言错误及版本不变。
 - [ ] Run `go test ./handlers/change -run '^TestChangeReassignment' -count=1 -v`，先证明缺原因可成功的旧路径失败于新断言。
@@ -106,9 +106,9 @@ if p.AssigneeID != nil && item.AssigneeID > 0 && *p.AssigneeID != item.AssigneeI
 ## B3：Problem 责任调整与普通编辑权威路径
 
 **Files**
-- Modify: `handlers/problem/service.go`、`handlers/problem/repository.go`、`handlers/problem/repository_impl.go`、`handlers/problem/handler.go`、`handlers/problem/lifecycle.go`、`dto/problem_dto.go`。
+- Modify: `handlers/problem/service.go`、`handlers/problem/repository.go`、`handlers/problem/repository_impl.go`、`handlers/problem/handler.go`、`handlers/problem/lifecycle.go`、`handlers/problem/authorization.go`、`handlers/problem/entity.go`、`dto/problem_dto.go`。
 - Create: `handlers/problem/metadata.go`、`handlers/problem/metadata_test.go`。
-- Test: `handlers/problem/lifecycle_test.go`、`tests/integration/workitem_assignment_postgres_test.go`。
+- Test: `handlers/problem/lifecycle_test.go`、`handlers/problem/authorization_test.go`、`tests/integration/workitem_assignment_postgres_test.go`。
 
 **Interfaces**
 新文件承载真正的普通编辑事务，复用 `authorizeCommand` 和 workitemmutation，不以空转发层包旧 repository.Update。定义：
@@ -119,6 +119,8 @@ if p.AssigneeID != nil && item.AssigneeID > 0 && *p.AssigneeID != item.AssigneeI
 // OperationID string `json:"operationId" binding:"required,max=200"`
 // AssigneeID *int `json:"assigneeId,omitempty" binding:"omitempty,gt=0"`
 // AssignmentReason string `json:"assignmentReason"`
+// Workaround *string `json:"workaround"`
+// Resolution *string `json:"resolution"`
 type MetadataCommand struct {
     Meta workitemmutation.Meta
     ProblemID int
@@ -128,10 +130,29 @@ type MetadataCommand struct {
 // func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (workitemmutation.Result, error)
 ```
 
+输入省略保持原值，指针字段显式空字符串表示清空对应正文（专用根因接口仍保持原有非空校验）；清空/修改被验证内容必须使当前验证失效。专用 `UpdateProblemResolutionRequest` 的 Solution、Workaround、Resolution 同步改成 `*string` 保留字段是否出现；Version仍为int并增加OperationID。handler仅在Resolution==nil时使用Solution；Resolution显式空字符串优先表示清空，不回退到Solution。Workaround单独映射为Workaround。这里明确细化原string请求的空值语义，不能声称仍按空字符串自动fallback；不新增另一个持久化字段。映射代码如下：
+
+```go
+resolution := req.Resolution
+if resolution == nil {
+    resolution = req.Solution
+}
+patch := dto.UpdateProblemRequest{
+    Version: req.Version, OperationID: req.OperationID,
+    Workaround: req.Workaround, Resolution: resolution,
+}
+```
+
+HTTP断言覆盖仅workaround时永久方案保持、resolution显式空且solution非空时仍清空并使验证失效、resolution省略且solution非空时使用原solution输入，以及所有正文均省略时明确拒绝无业务变更。清空不允许绕过既有终态/专业约束。
+
 - [ ] 在既有 Problem fixture 建立有 RCA、永久方案与验证证据的记录；调用新 metadata 方法仅改 AssigneeID。测试比较状态、RCA/方案/验证人/验证时间/验证依据均保持；验证版本审计前进。另测空原因、越权、同键改目标和失败回滚。
 - [ ] Run `go test ./handlers/problem -run '^TestProblemMetadata' -count=1 -v`；新方法未实现时应编译失败，落地后不得移除断言。
 - [ ] 实现与 Change metadata 同一协议的 RR 事务：当前授权→回执→观察版本→字段/专业规则→CAS→审计回执→提交。负责人变化且已有负责人时要求原因；目标按既有域规则校验。根因/方案内容变化仍调用既有证据有效性规则，不把转派造成的 WorkItem 版本增长当作内容证据变化。
 - [ ] 将现有普通更新、RCA、方案编辑 HTTP/内部调用者携带 Meta 接入权威事务；根因/方案专用请求增加 operationId 并更新调用方，不保留无 actor 的可写服务签名。需要返回完整详情的 HTTP 路由在成功后走授权详情读取，不用返回值迫使第二次写入。
+- [ ] 同步修正证据有效性与动作投影：当前 lifecycle 与 authorization 分别使用 VerifiedVersion==Version 和 Version-1，单纯转派后会失效。新增领域内 `CurrentResolutionVerification(rootCause, resolution, digest, note string, verifiedBy, verifiedVersion int, verifiedAt time.Time) bool`，复用现有 resolutionDigest 的同一摘要算法，要求非空根因/方案/说明、有效验证人/时间、正验证版本和内容摘要相符；VerifiedVersion 保留验证当时的审计版本，不随转派伪造更新。它不替代状态、权限、必需 Change 结果校验。
+- [ ] `Problem` 查询投影增加 VerificationDigest、VerifiedBy、VerifiedAt，均读取现有扩展字段；执行命令与 BuildProblemActions 共用上述证据判断。根因/永久方案实际变化、重新选择方案、重开时在同一事务清除当前验证字段并保留历史审计；不能只删版本比较而让 A→B→A 内容回退恢复旧验证。调查证据变更入口沿用其专业失效规则并逐项纳入入口清单。
+- [ ] 新增串行验收：verify→合法转派→actions.resolve可用→resolve→actions.close可用→close；验证人员、时间与原验证版本不变。另测正文 A→B→A仍须重新验证、reopen后不得复用旧验证、workaround-only更新不覆盖永久方案、专用方案 HTTP 输入完整落库。
+- [ ] 为 Problem 增加明确的 `actions.assign` 投影与终态拒绝原因，在 metadata 写入时执行相同状态/资格前提；不能将 edit 权限直接当成允许转派。测试 current session撤权、终态、无可用目标时组件与直接 API 均拒绝。
 - [ ] 从 repository.Update 移除被替换公共写路径；禁止生命周期和 metadata 各自更新同一操作。盘点时发现的其他操作若违反版本/审计契约，归入本任务并增加对应真实调用测试，不用一层 wrapper 宣告完成。
 - [ ] Run `go test ./handlers/problem -count=1`、`go test -tags=integration_postgres ./tests/integration -run '^TestWorkItemAssignmentProblem' -count=1 -v`；验证原调查/方案流程回归。
 - [ ] 提交：`refactor(problem): converge metadata and preserve handover evidence`。

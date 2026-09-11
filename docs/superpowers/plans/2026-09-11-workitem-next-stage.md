@@ -8,10 +8,12 @@
 
 **Tech Stack:** Go/Gin、Ent/PostgreSQL、Next.js/TypeScript、Jest、Playwright。
 
-> 状态：draft（实施计划已编制，未执行）
+> 状态：accepted（独立审查五项问题已修订并复核，未执行）
 > 日期：2026-09-11
 > 设计：[accepted 后续设计](../specs/2026-09-11-workitem-convergence-next-stage-design.md)
 > 决策历史：[开发输入](../specs/2026-09-11-workitem-convergence-development-input.md)
+
+> 独立审查：[审查与修订记录](../../review/2026-09-11-workitem-next-stage-plan-review-report.md)。
 
 ## Global Constraints
 

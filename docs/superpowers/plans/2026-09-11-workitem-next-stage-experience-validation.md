@@ -8,12 +8,12 @@
 
 **Tech Stack:** Next.js、TypeScript、Jest、Playwright、Go、PostgreSQL。
 
-> 状态：draft（任务未执行）
+> 状态：accepted（已按独立审查修订；任务未执行）
 > 依据：[后续设计](../specs/2026-09-11-workitem-convergence-next-stage-design.md)；依赖[后端计划](2026-09-11-workitem-next-stage-backend.md)。前端命令从 itsm-frontend 执行。
 
 ## Global Constraints
 
-- 统一 version/operationId 协议；专业 ID 不作 WorkItem ID 或编号兜底。
+- 统一观察版本与 operationId 语义；Incident/Problem HTTP 使用 version，Change 使用 expectedVersion，由各 API 适配器转换，禁止双别名。专业 ID 不作 WorkItem ID 或编号兜底。
 - 转派原因必填，实际使用 B1–B3 的专业 API；后端决定可用动作与前提。
 - 保留输入并显式处理冲突，不静默刷新版本重试。
 - 不改响应考核，不新增多 WorkOrder；SLA 仍需当前周期和历史事实。
@@ -57,7 +57,7 @@ test('rejects missing identity instead of falling back', () => {
 
 - [ ] Run `npm test -- --runInBand --coverage=false --reporters=default --runTestsByPath src/components/work-item/__tests__/identity.test.ts`。
 - [ ] 实现上述函数；三个真实页面使用它，再组装其余公共字段。更新后端缺失的 number/workItemId/version 投影、前端 DTO 及 B1–B3 请求字段；删除被替代的编号/ID 兜底。
-- [ ] 在相邻页面测试中 mock 返回专业 ID=4、WorkItem ID=91，断言真实标题与评论/附件/动作调用使用91，不只测未使用的 helper。
+- [ ] 在相邻页面测试中 mock 返回专业 ID=4、WorkItem ID=91，断言真实编号 PRB-0091、公共评论/附件/SLA使用 WorkItem ID=91；专业动作路由仍使用专业 ID=4，观察版本为7，由后端解析至WorkItem91。另建专业记录91作为哨兵，断言动作不会误改它；不能要求专业动作 URL也使用91。
 - [ ] Run 定向测试及 `npm run type-check`；提交 `refactor(workitem): project authoritative identity and version`。
 
 ## F2：公共转派交互和冲突
@@ -87,11 +87,12 @@ export type AssignmentProps = {
 };
 ```
 
-候选人员沿用现有授权目录查询，不硬编码角色、不自行扩大 MSP 候选资格。Change/Problem 回调把 reason 映射为 assignmentReason；Incident 使用 reason。专业字段之外的请求格式差异只在 API 适配处处理。
+候选人员沿用现有授权目录查询，不硬编码角色、不自行扩大 MSP 候选资格。Change/Problem 回调把 reason 映射为 assignmentReason；Incident 使用 reason。Change 把组件 version 映射为 expectedVersion 并移除 version；Incident/Problem保留version。专业字段之外的请求格式差异只在 API 适配处处理。
 
 - [ ] 组件测试覆盖：已有负责人时空白原因禁用提交；选择新负责人并填写原因后只提交一次；disabledReason 可见；后端409后输入仍在且不自动再次 submit。模拟 submit Promise reject 后断言调用次数为1、原因文本仍存在。
 - [ ] Run `npm test -- --runInBand --coverage=false --reporters=default --runTestsByPath src/components/work-item/__tests__/WorkItemAssignment.test.tsx`，确认未实现行为失败。
 - [ ] 实现交互：打开时保留观察版本；一次逻辑提交生成一次 operationId，网络不确定重试使用原键。收到409后保留原因和目标，用户刷新确认后创建新请求。成功刷新权威详情和时间线，不本地推导新状态。
+- [ ] 用 API 请求测试冻结路由与载荷：Incident `/incidents/4/assign` 请求含 version=7，Change现有专业路由含 expectedVersion=7且不含version，Problem现有更新路由含version=7；三者均使用专业ID4而非WorkItem91，并传入本域原因字段。后端严格 binder 测试同时验证真实请求被接受。
 - [ ] 三域接入公共组件并删除原重复转派 modal/提交逻辑。保留专业动作与后端 action reason；原页面若缺少转派入口，由公共组件承接，不新增平行专业详情页面。
 - [ ] 核查 WorkItemComments/Attachments/History 的专业 Panel 重复入口，存在实际重复才移除；断言仍使用 WorkItem ID及原内部/公开可见规则。
 - [ ] Run 新组件与 Shell 测试、`npm run type-check`、`npm run lint:check`；提交 `refactor(workitem): unify reassignment and conflict experience`。
