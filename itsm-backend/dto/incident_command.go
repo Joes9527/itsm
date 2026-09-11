@@ -15,6 +15,7 @@ type IncidentCommand struct {
 }
 
 type IncidentCommandRequest struct {
+	AssigneeID  int    `json:"assigneeId"`
 	Version     int    `json:"version" binding:"required,gt=0"`
 	OperationID string `json:"operationId" binding:"required,max=200"`
 	Reason      string `json:"reason"`

@@ -8,7 +8,7 @@ import { CreationAttempts } from '@/components/work-item/CreationAttempts';
 import { CreationRequester } from '@/components/work-item/CreationRequester';
 
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { IncidentAPI, type Incident, type ListIncidentsRequest } from '@/lib/api/incident-api';
 import {
   Card,
@@ -1287,15 +1287,23 @@ const AssignIncidentModal: React.FC<{
 }> = ({ incident, visible, onClose, onAssigned }) => {
   const [assigning, setAssigning] = useState(false);
   const [assignUserIds, setAssignUserIds] = useState<number[]>([]);
+  const [assignReason, setAssignReason] = useState('');
+  const assignAttempts = useRef(new Map<string, string>());
 
   const handleAssign = async () => {
     const assignUserId = assignUserIds[0];
     if (!assignUserId || !incident) return;
     setAssigning(true);
     try {
-      await IncidentAPI.assignIncident(incident.id, assignUserId);
+      if (!incident.version) throw new Error('请刷新事件以获取当前版本');
+      if (incident.assigneeId && !assignReason.trim()) throw new Error('请填写转派原因');
+      const key = JSON.stringify([incident.id, incident.version, assignUserId, assignReason.trim()]);
+      let operationId = assignAttempts.current.get(key);
+      if (!operationId) { operationId = crypto.randomUUID(); assignAttempts.current.set(key, operationId); }
+      await IncidentAPI.assignIncident(incident.id, { assigneeId: assignUserId, version: incident.version, operationId, reason: assignReason.trim() });
       message.success('分配成功');
       setAssignUserIds([]);
+      setAssignReason('');
       onAssigned();
       onClose();
     } catch {
@@ -1309,7 +1317,7 @@ const AssignIncidentModal: React.FC<{
     <Modal
       title={`分配事件 ${incident?.incidentNumber || ''}`}
       open={visible}
-      onCancel={() => { onClose(); setAssignUserIds([]); }}
+      onCancel={() => { onClose(); setAssignUserIds([]); setAssignReason(''); }}
       onOk={handleAssign}
       confirmLoading={assigning}
       okText="确认分配"
@@ -1322,6 +1330,9 @@ const AssignIncidentModal: React.FC<{
             onChange={value => setAssignUserIds(value.slice(-1))}
             placeholder="请选择处理人"
           />
+        </Form.Item>
+        <Form.Item label="转派原因" required={!!incident?.assigneeId}>
+          <Input.TextArea value={assignReason} onChange={event => setAssignReason(event.target.value)} rows={3} />
         </Form.Item>
       </Form>
     </Modal>

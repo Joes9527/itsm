@@ -419,8 +419,8 @@ export class IncidentAPI {
   }
 
   // 分配事件
-  static async assignIncident(id: number, assigneeId: number): Promise<Incident> {
-    const response = await httpClient.post<Incident>(`/api/v1/incidents/${id}/assign`, { assigneeId });
+  static async assignIncident(id: number, data: IncidentCommandMeta & { assigneeId: number; reason?: string }): Promise<IncidentCommandResult> {
+    const response = await httpClient.post<IncidentCommandResult>(`/api/v1/incidents/${id}/assign`, data);
     return response;
   }
 

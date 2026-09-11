@@ -198,7 +198,7 @@ export default function IncidentsPage() {
   const [assignUserOptions, setAssignUserOptions] = useState<
     { label: string; value: number }[]
   >([]);
-  const [assignForm] = Form.useForm<{ assigneeId: number }>();
+  const [assignForm] = Form.useForm<{ assigneeId: number; reason?: string }>();
 
   // 逐条循环兜底：后端目前尚未提供 incident 批量端点，此处封装 Promise.allSettled，失败逐条汇总
   const runIncidentBatch = useCallback(
@@ -247,10 +247,18 @@ export default function IncidentsPage() {
     setAssignModalOpen(false);
     await runIncidentBatch(
       selectedRowKeys,
-      (id) => IncidentAPI.assignIncident(id, values.assigneeId),
+      (id) => {
+        const version = incidents.find(item => item.id === id)?.version;
+        if (!version) throw new Error('请刷新列表以获取事件版本');
+        const reason = values.reason?.trim() ?? '';
+        const key = JSON.stringify([id, version, 'assign', values.assigneeId, reason]);
+        let operationId = batchAttempts.current.get(key);
+        if (!operationId) { operationId = crypto.randomUUID(); batchAttempts.current.set(key, operationId); }
+        return IncidentAPI.assignIncident(id, { version, operationId, assigneeId: values.assigneeId, reason });
+      },
       '批量分派成功',
     );
-  }, [assignForm, selectedRowKeys, runIncidentBatch]);
+  }, [assignForm, selectedRowKeys, runIncidentBatch, incidents]);
 
   const handleBatchResolve = useCallback(async () => {
     let resolution = '';
@@ -533,6 +541,9 @@ export default function IncidentsPage() {
               optionFilterProp="label"
               options={assignUserOptions}
             />
+          </Form.Item>
+          <Form.Item name="reason" label="转派原因" rules={[{ required: selectedRowKeys.some(id => !!incidents.find(item => item.id === id)?.assigneeId), whitespace: true, message: '请填写转派原因' }]}>
+            <Input.TextArea rows={3} />
           </Form.Item>
         </Form>
       </Modal>

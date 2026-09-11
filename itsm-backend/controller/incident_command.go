@@ -27,7 +27,7 @@ func (c *IncidentController) applyIncidentCommand(ctx *gin.Context, action strin
 		common.Forbidden(ctx, "authenticated actor and tenant required")
 		return
 	}
-	result, err := c.incidentService.ApplyIncidentCommand(ctx.Request.Context(), dto.IncidentCommand{Meta: meta, IncidentID: id, Action: action, Reason: req.Reason, Resolution: req.Resolution})
+	result, err := c.incidentService.ApplyIncidentCommand(ctx.Request.Context(), dto.IncidentCommand{Meta: meta, IncidentID: id, Action: action, AssigneeID: req.AssigneeID, Reason: req.Reason, Resolution: req.Resolution})
 	if err != nil {
 		var operationConflict *workitemmutation.OperationConflictError
 		if common.IsVersionConflictError(err) || errors.As(err, &operationConflict) {

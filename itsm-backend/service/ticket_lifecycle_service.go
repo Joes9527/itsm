@@ -154,6 +154,9 @@ func (s *TicketLifecycleService) EscalateTicket(ctx context.Context, ticketID in
 		return nil, err
 	}
 
+	if err := rejectIncidentTicketAssignment(t.RecordClass); err != nil {
+		return nil, err
+	}
 	if t.Status == common.TicketStatusClosed || t.Status == common.TicketStatusCancelled {
 		return nil, ErrInvalidTicketStatus
 	}
@@ -168,7 +171,7 @@ func (s *TicketLifecycleService) EscalateTicket(ctx context.Context, ticketID in
 	newAssigneeID := s.getEscalationAssignee(newPriority, tenantID)
 
 	// 构建更新操作
-	update := s.client.Ticket.UpdateOneID(ticketID).
+	update := s.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNEQ("incident")).
 		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(t.Version)).
 		SetPriority(newPriority).
 		SetVersion(t.Version + 1)

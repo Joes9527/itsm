@@ -78,8 +78,8 @@ describe('IncidentAPI', () => {
   describe('assignIncident', () => {
     it('should assign an incident', async () => {
       mockPost.mockResolvedValue({ id: 1, assigneeId: 5 });
-      await IncidentAPI.assignIncident(1, 5);
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/1/assign', { assigneeId: 5 });
+      await IncidentAPI.assignIncident(4, { assigneeId: 5, version: 7, operationId: 'assign-key', reason: 'handover' });
+      expect(mockPost).toHaveBeenCalledWith('/api/v1/incidents/4/assign', { assigneeId: 5, version: 7, operationId: 'assign-key', reason: 'handover' });
     });
   });
 

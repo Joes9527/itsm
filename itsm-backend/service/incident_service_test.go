@@ -180,7 +180,7 @@ func TestIncidentService_AssignIncident_ValidatesAssigneeAndReturnsUpdatedIncide
 	_, err = client.Ticket.UpdateOneID(workItem.ID).SetDescription("desc").Save(ctx)
 	require.NoError(t, err)
 
-	response, err := incidentService.AssignIncident(ctx, incidentEntity.ID, assignee.ID, tenant.ID)
+	response, err := assignIncidentForTest(t, incidentService, ctx, incidentEntity.ID, assignee.ID, tenant.ID)
 	require.NoError(t, err)
 	require.NotNil(t, response.AssigneeID)
 	assert.Equal(t, assignee.ID, *response.AssigneeID)
@@ -190,14 +190,14 @@ func TestIncidentService_AssignIncident_ValidatesAssigneeAndReturnsUpdatedIncide
 	require.NoError(t, err)
 	otherUser, err := createIncidentTestUser(ctx, client, otherTenant.ID, "assign-other")
 	require.NoError(t, err)
-	_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, otherUser.ID, tenant.ID)
+	_, err = assignIncidentForTest(t, incidentService, ctx, incidentEntity.ID, otherUser.ID, tenant.ID)
 	require.ErrorContains(t, err, "assignee not found or inactive")
 
 	inactive, err := createIncidentTestUser(ctx, client, tenant.ID, "assign-inactive")
 	require.NoError(t, err)
 	_, err = inactive.Update().SetActive(false).Save(ctx)
 	require.NoError(t, err)
-	_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, inactive.ID, tenant.ID)
+	_, err = assignIncidentForTest(t, incidentService, ctx, incidentEntity.ID, inactive.ID, tenant.ID)
 	require.ErrorContains(t, err, "assignee not found or inactive")
 }
 
@@ -218,7 +218,7 @@ func TestAssignIncidentRejectsTerminalStatuses(t *testing.T) {
 				Save(ctx)
 			require.NoError(t, err)
 
-			_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, assignee.ID, tenant.ID)
+			_, err = assignIncidentForTest(t, incidentService, ctx, incidentEntity.ID, assignee.ID, tenant.ID)
 			require.ErrorContains(t, err, "cannot be reassigned")
 
 			persisted, err := client.Ticket.Get(ctx, workItem.ID)
@@ -228,7 +228,7 @@ func TestAssignIncidentRejectsTerminalStatuses(t *testing.T) {
 	}
 }
 
-func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
+func TestAssignIncidentRejectsStaleSnapshot(t *testing.T) {
 	for _, testCase := range []struct {
 		name       string
 		mutateRace func(context.Context, *ent.Client, int) error
@@ -244,7 +244,7 @@ func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
 				return racer.Ticket.UpdateOneID(entity.WorkItemID).SetStatus(common.IncidentStatusResolved).Exec(ctx)
 			},
 			assertErr: func(t *testing.T, err error) {
-				require.ErrorContains(t, err, "resolved or closed incidents cannot be reassigned")
+				require.ErrorContains(t, err, "cannot be reassigned")
 			},
 		},
 		{
@@ -282,22 +282,18 @@ func TestAssignIncidentRejectsConcurrentSnapshotChange(t *testing.T) {
 				Save(ctx)
 			require.NoError(t, err)
 
-			raced := false
-			client.Ticket.Use(func(next ent.Mutator) ent.Mutator {
-				return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
-					if !raced {
-						raced = true
-						require.NoError(t, testCase.mutateRace(ctx, racer, incidentEntity.ID))
-					}
-					return next.Mutate(ctx, mutation)
-				})
-			})
-
+			// The caller observed this version before another writer changed it.
+			// Actual overlapping transactions are verified by PostgreSQL tests.
+			reporter.Update().SetRole("super_admin").ExecX(ctx)
+			require.NoError(t, testCase.mutateRace(ctx, racer, incidentEntity.ID))
 			incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar())
-			_, err = incidentService.AssignIncident(ctx, incidentEntity.ID, assignee.ID, tenant.ID)
+			_, err = incidentService.ApplyIncidentCommand(ctx, dto.IncidentCommand{
+				IncidentID: incidentEntity.ID, Action: "assign", AssigneeID: assignee.ID,
+				Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: reporter.ID,
+					ExpectedVersion: workItem.Version, Source: "http", OperationID: "stale-assign"},
+			})
 			require.Error(t, err)
 			testCase.assertErr(t, err)
-			require.True(t, raced)
 
 			persisted, err := client.Ticket.Get(ctx, workItem.ID)
 			require.NoError(t, err)

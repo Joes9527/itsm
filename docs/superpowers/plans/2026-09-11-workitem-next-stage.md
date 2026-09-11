@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go/Gin、Ent/PostgreSQL、Next.js/TypeScript、Jest、Playwright。
 
-> 状态：accepted（独立审查五项问题已修订并复核，未执行）
+> 状态：accepted（执行中；B1 已验证，B2/B3 进行中，其余任务待执行）
 > 日期：2026-09-11
 > 设计：[accepted 后续设计](../specs/2026-09-11-workitem-convergence-next-stage-design.md)
 > 决策历史：[开发输入](../specs/2026-09-11-workitem-convergence-development-input.md)
@@ -26,8 +26,8 @@
 
 ## 1. 执行前准入
 
-- [ ] 在 WSL 核查原代码与 review 分支 HEAD、工作区修改和依赖状态；保留 .superpowers/sdd。按工程治理确认最新 origin/main 与原分支的关系，先比较路径，不直接 pull/reset 覆盖其他 agent 工作。
-- [ ] 使用 using-git-worktrees 创建实施工作树，分支前缀 `codex/refactor/`；明确纳入的原实现提交及本轮设计提交。不同历史有冲突时记录已解决路径，不能凭提交数量判断成果是否存在。
+- [x] 在 WSL 核查原代码与 review 分支 HEAD、工作区修改和依赖状态；保留 .superpowers/sdd。按工程治理确认最新 origin/main 与原分支的关系，先比较路径，不直接 pull/reset 覆盖其他 agent 工作。
+- [x] 使用 using-git-worktrees 创建实施工作树，分支前缀 `codex/refactor/`；明确纳入的原实现提交及本轮设计提交。不同历史有冲突时记录已解决路径，不能凭提交数量判断成果是否存在。
 - [ ] 将入口清单作为本计划执行记录附表：域、操作、HTTP/BPMN/自动化/普通编辑调用点、领域方法、写入表、版本来源、回执、待删除路径、对应测试。用 `git grep` 逐项追踪实际引用。
 - [ ] 对受影响最小测试建立基线，保存环境与真实测试输出到已忽略证据目录。三个已知失败单独重现：
 
@@ -74,3 +74,7 @@ B1–B3 修改请求契约时必须在同一可审查变更中更新现有前端
 | 5.2 切换、备份、历史、删除 | V2及原C3 |
 
 每项任务保存提交、检查命令、实际结果、失败归因和被替换旧路径。检查通过后进行独立审查或维护者复核。报告分别说明设计接受、代码完成、集成验证、隔离演练、实际部署/观察/删除；不能将前四项完成宣称为实际运行交付完成。
+
+## 5. 当前执行进度
+
+B1 的入口清单、验证证据与审查闭环见[后端计划执行记录](2026-09-11-workitem-next-stage-backend.md#b1-执行记录2026-09-11)。B2/B3 已开始；F3 保留 SLA 违规跨重开周期归属检查。迁移注册数量与 Intake category 旧测试已分别复现，正在按当前权威契约修正；不把这些已知失败掩盖为绿色基线。实际部署、运行观察与旧结构删除仍未执行。

@@ -113,19 +113,42 @@ func TestWorkflowStartNumericEvaluationErrorDoesNotSelectFallback(t *testing.T) 
 
 func TestDefinitionStartFrozenIncidentAssignment(t *testing.T) {
 	f := newBPMNAuthorizationFixture(t)
+	f.actor.Update().SetRole("super_admin").ExecX(context.Background())
 	ctx := startProcessContext(f)
 	xml := strings.Replace(string(startProcessServiceTaskXML("incident_task")), `</bpmn:extensionElements>`, `<bpmn:metaData name="action">assign_incident</bpmn:metaData></bpmn:extensionElements>`, 1)
 	definition := f.client.ProcessDefinition.UpdateOneID(f.definition.ID).SetBpmnXML([]byte(xml)).SaveX(ctx)
 	item := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(f.actor.ID).SetRecordClass("incident").SetTitle("Incident").SetTicketNumber("INC-work-item").SetStatus("new").SaveX(ctx)
 	f.client.Incident.Create().SetWorkItemID(item.ID).SaveX(ctx)
 	f.engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler).SetIncidentService(&IncidentService{client: f.client, logger: zap.NewNop().Sugar()})
-	vars := map[string]any{"assignee_id": json.Number(fmt.Sprint(f.outsider.ID))}
+	vars := map[string]any{"assignee_id": json.Number(fmt.Sprint(f.outsider.ID)), "version": item.Version}
 	first, err := f.engine.StartProcessByDefinitionID(ctx, FreezeProcessDefinition(definition), fmt.Sprintf("incident:%d", item.ID), "incident", item.ID, vars, "incident-assignment")
 	require.NoError(t, err)
 	require.Equal(t, bpmnCallbackStatusCompleted, f.client.ProcessCallbackOutbox.Query().OnlyX(ctx).Status)
 	assigned := f.client.Ticket.GetX(ctx, item.ID)
 	require.Equal(t, f.outsider.ID, assigned.AssigneeID)
 	require.Equal(t, "assigned", assigned.Status)
+	replay, err := f.engine.StartProcessByDefinitionID(ctx, FreezeProcessDefinition(definition), fmt.Sprintf("incident:%d", item.ID), "incident", item.ID, vars, "incident-assignment")
+	require.NoError(t, err)
+	require.Equal(t, first.ID, replay.ID)
+	require.Equal(t, assigned.Version, f.client.Ticket.GetX(ctx, item.ID).Version)
+}
+
+func TestDefinitionStartFrozenIncidentReassignment(t *testing.T) {
+	f := newBPMNAuthorizationFixture(t)
+	f.actor.Update().SetRole("super_admin").ExecX(context.Background())
+	ctx := startProcessContext(f)
+	xml := strings.Replace(string(startProcessServiceTaskXML("incident_task")), `</bpmn:extensionElements>`, `<bpmn:metaData name="action">assign_incident</bpmn:metaData></bpmn:extensionElements>`, 1)
+	definition := f.client.ProcessDefinition.UpdateOneID(f.definition.ID).SetBpmnXML([]byte(xml)).SaveX(ctx)
+	item := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(f.actor.ID).SetRecordClass("incident").SetTitle("Incident").SetTicketNumber("INC-work-item").SetStatus("in_progress").SetAssigneeID(f.actor.ID).SaveX(ctx)
+	f.client.Incident.Create().SetWorkItemID(item.ID).SaveX(ctx)
+	f.engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler).SetIncidentService(&IncidentService{client: f.client, logger: zap.NewNop().Sugar()})
+	vars := map[string]any{"assignee_id": json.Number(fmt.Sprint(f.outsider.ID)), "version": item.Version, "reason": "handover to support"}
+	first, err := f.engine.StartProcessByDefinitionID(ctx, FreezeProcessDefinition(definition), fmt.Sprintf("incident:%d", item.ID), "incident", item.ID, vars, "incident-assignment")
+	require.NoError(t, err)
+	require.Equal(t, bpmnCallbackStatusCompleted, f.client.ProcessCallbackOutbox.Query().OnlyX(ctx).Status)
+	assigned := f.client.Ticket.GetX(ctx, item.ID)
+	require.Equal(t, f.outsider.ID, assigned.AssigneeID)
+	require.Equal(t, "in_progress", assigned.Status)
 	replay, err := f.engine.StartProcessByDefinitionID(ctx, FreezeProcessDefinition(definition), fmt.Sprintf("incident:%d", item.ID), "incident", item.ID, vars, "incident-assignment")
 	require.NoError(t, err)
 	require.Equal(t, first.ID, replay.ID)

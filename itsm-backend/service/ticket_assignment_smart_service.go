@@ -48,12 +48,16 @@ func (s *TicketAssignmentSmartService) AutoAssign(
 	if err != nil {
 		return nil, err
 	}
+
+	if err := rejectIncidentTicketAssignment(item.RecordClass); err != nil {
+		return nil, err
+	}
 	target, err := s.prepareCreation(ctx, tx, item)
 	if err != nil {
 		return nil, err
 	}
 	if target != nil {
-		if err := tx.Ticket.UpdateOneID(item.ID).SetAssigneeID(*target).Exec(ctx); err != nil {
+		if err := tx.Ticket.UpdateOneID(item.ID).Where(ticket.RecordClassNEQ("incident")).SetAssigneeID(*target).Exec(ctx); err != nil {
 			return nil, err
 		}
 	}

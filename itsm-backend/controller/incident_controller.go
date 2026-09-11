@@ -716,31 +716,7 @@ func (c *IncidentController) EscalateMajorIncident(ctx *gin.Context) {
 // @Failure 500 {object} common.Response
 // @Router /api/v1/incidents/{id}/assign [post]
 func (c *IncidentController) AssignIncident(ctx *gin.Context) {
-	id, err := strconv.Atoi(ctx.Param("id"))
-	if err != nil {
-		common.Fail(ctx, common.ParamErrorCode, "无效的事件ID")
-		return
-	}
-
-	var req dto.AssignIncidentRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		common.Fail(ctx, common.ParamErrorCode, "请求参数错误: "+err.Error())
-		return
-	}
-	assigneeID := req.AssigneeID
-	if assigneeID <= 0 {
-		common.Fail(ctx, common.ParamErrorCode, "assigneeId 必填")
-		return
-	}
-
-	tenantID := ctx.GetInt("tenant_id")
-	incident, err := c.incidentService.AssignIncident(ctx.Request.Context(), id, assigneeID, tenantID)
-	if err != nil {
-		c.logger.Errorw("Failed to assign incident", "error", err, "id", id)
-		common.Fail(ctx, common.InternalErrorCode, err.Error())
-		return
-	}
-	common.Success(ctx, incident)
+	c.applyIncidentCommand(ctx, "assign")
 }
 
 // AcknowledgeAlert 确认告警

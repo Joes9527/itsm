@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go/Gin、Ent、PostgreSQL、现有 BPMN 与 Go testing。
 
-> 状态：accepted（已按独立审查修订；任务未执行）
+> 状态：accepted（执行中；B1 已实现并验证，B2/B3 进行中，其余未执行）
 > 依据：[后续设计](../specs/2026-09-11-workitem-convergence-next-stage-design.md)；[总入口](2026-09-11-workitem-next-stage.md)。命令从 itsm-backend 执行，除非另有说明。
 
 ## Global Constraints
@@ -34,7 +34,7 @@
 {"assigneeId":42,"version":7,"operationId":"assign-unique-attempt","reason":"交由应用支持继续排查"}
 ```
 
-- [ ] 在 `service/incident_commands_test.go` 加入以下真实 fixture 测试，再扩展为空原因、陈旧版本和同键改原因的拒绝测试：
+- [x] 在 `service/incident_commands_test.go` 加入以下真实 fixture 测试，再扩展为空原因、陈旧版本和同键改原因的拒绝测试：
 
 ```go
 func TestIncidentReassignmentPreservesProgress(t *testing.T) {
@@ -71,12 +71,12 @@ func TestIncidentReassignmentPreservesProgress(t *testing.T) {
 }
 ```
 
-- [ ] Run `go test ./service -run '^TestIncidentReassignmentPreservesProgress$' -count=1 -v`；记录旧行为失败。
-- [ ] 修改 assign 分支：new 首次分派取 assigned；合法后续转派使用当前状态。仅为有效负责人变更放行同状态动作；不能放宽 resolve/start 等同状态拒绝。校验目标资格、当前授权、非空原因；摘要包含目标与原因，回执/审计/事件同事务。直接 start 保留现有首次响应事实。
-- [ ] 搜索所有 `AssignIncident`、`assign_incident` 和 `AssigneeID` 写入，HTTP、BPMN、规则动作调用同一命令；更新调用方传入观察版本和稳定操作键。不能服务器读取新版本替代旧请求；不能保留旧 AssignIncident 独立逻辑作 fallback。
-- [ ] PostgreSQL 用例覆盖两请求同版本只有一个成功、同键重放仅一次审计、审计失败整体回滚、撤权后重放被拒绝；复用已有 WorkItem 集成 fixture 的隔离连接方式。
-- [ ] Run `go test ./service -run 'TestIncident.*(Command|Assign|Recovery|Start)' -count=1 -v`、`go test ./controller -run 'Test.*Incident' -count=1 -v`、`go test -tags=integration_postgres ./tests/integration -run '^TestWorkItemAssignmentIncident' -count=1 -v`。确认新增 PG 用例实际执行。
-- [ ] 提交：`refactor(incident): converge assignment on versioned commands`。
+- [x] Run `go test ./service -run '^TestIncidentReassignmentPreservesProgress$' -count=1 -v`；记录旧行为失败。
+- [x] 修改 assign 分支：new 首次分派取 assigned；合法后续转派使用当前状态。仅为有效负责人变更放行同状态动作；不能放宽 resolve/start 等同状态拒绝。校验目标资格、当前授权、非空原因；摘要包含目标与原因，回执/审计/事件同事务。直接 start 保留现有首次响应事实。
+- [x] 搜索所有 `AssignIncident`、`assign_incident` 和 `AssigneeID` 写入，HTTP、BPMN、规则动作调用同一命令；更新调用方传入观察版本和稳定操作键。不能服务器读取新版本替代旧请求；不能保留旧 AssignIncident 独立逻辑作 fallback。
+- [x] PostgreSQL 用例覆盖两请求同版本只有一个成功、同键重放仅一次审计、审计失败整体回滚、撤权后重放被拒绝；复用已有 WorkItem 集成 fixture 的隔离连接方式。
+- [x] Run `go test ./service -run 'TestIncident.*(Command|Assign|Recovery|Start)' -count=1 -v`、`go test ./controller -run 'Test.*Incident' -count=1 -v`、`go test -tags=integration_postgres ./tests/integration -run '^TestWorkItemAssignmentIncident' -count=1 -v`。确认新增 PG 用例实际执行。
+- [x] 提交：`refactor(incident): converge assignment on versioned commands`。
 
 ## B2：Change 转派原因及任务身份保护
 
@@ -198,3 +198,29 @@ HTTP断言覆盖仅workaround时永久方案保持、resolution显式空且solut
 - [ ] `go build ./...`；执行以上定向检查及总入口的已知失败归因。
 - [ ] `git diff --check`；独立审查或维护者复核权限、事务和旧路径删除清单。
 - [ ] 提供各任务提交、实际执行测试名称、环境与未通过项；本计划勾选不替代证据。
+
+## B1 执行记录（2026-09-11）
+
+实施基线 `3064ea5e` 包含原业务实现 `46606330` 与全部接受的设计；隔离分支 `codex/refactor/workitem-next-stage`。原工作树及证据未改动。实时远端 main 与本地 origin/main 均为 `a25e108d2a08a55469fa5ad547aac5a9adc251ff`，是实施基线祖先。
+
+| 入口 | 权威行为与被移除写路径 | 验证 |
+|---|---|---|
+| Incident HTTP assign | 专业 ID + version/operationId/reason → ApplyIncidentCommand；删除旧 AssignIncident 服务事务 | 非等值身份 HTTP、400 非法目标、409 陈旧/改原因、重放、撤权 |
+| BPMN assign_incident | 持久化白名单保留 reason，冻结观察版本，回调调用同一命令 | 实际启动/持久化回调首次分配与转派及重放 |
+| AssignmentAction | 可信 actor/source/operation identity + 观察版本，复用外层事务命令核心 | 进度保持、一次审计/事件 |
+| IncidentEscalationService | 显式 Meta，升级/必要转派/通知接收共用 RR 事务；无目标资格或通知接收失败回滚 | 合法状态、冻结候选、重放、撤权、通知失败重试、跨 WorkItem SLA 违规不触发 |
+| Incident 普通编辑 | 显式拒绝 AssigneeID；无旁路负责人写入 | 版本与审计不变 |
+| TicketService | assign/batch/update-owner/escalate/MSP assign 拒绝 Incident | 真实服务边界反例与修复 |
+| TicketAssignmentService / Smart | 策略、转派、批量、自动分配拒绝 Incident；混合批次先完整检查 | 其他类保留行为、混合批次零写入 |
+| TicketWorkflow/Lifecycle / BPMN ticket assign | 接单/所有权移交/升级和通用流程分派拒绝 Incident | 真实服务/持久化处理器边界测试 |
+| 三个 Incident 前端调用点 | API 同步观察版本、稳定操作键及转派原因，不取服务器新版本代替用户观察 | 类型检查、38 个 API 测试、改动文件 ESLint |
+
+行为 RED 记录包括：进度转派被拒、缺原因仍成功、普通编辑/规则/通用 Ticket/MSP 绕过、BPMN 丢失原因、未知状态分配、非法目标 HTTP 500、无可信升级 actor，以及其他 WorkItem SLA 违规触发升级。已分别修复；新增状态范围采用明确白名单，保留首次响应事实。
+
+验证：service 全包通过；controller 与 service/bpmn 全包通过；最终 Incident/Ticket assignment 定向回归通过；新增 SLA 范围及原升级事务测试通过。隔离 PostgreSQL `127.0.0.1:36444/sslvpn_test` 三个实际子场景验证并发竞争/同键重放/审计失败回滚及撤权，所有临时 schema 已清理（remaining=0）。这些 PG 结果不代替 B5 的生产权限角色 RLS 验证。前端类型检查、38 个 API 测试（定向 coverage=false）及改动文件 ESLint 通过。
+
+独立审查发现并关闭 BPMN reason、通用 Ticket 旁路及 MSP 旁路；第二次静态复核未发现其他确定性 P1/P2。原 SQLite 并发钩子在新 RR 事务内造成锁竞争，已改为保留旧观察版本的陈旧快照测试；真实并发由隔离 PostgreSQL 双请求测试承担。冻结流程旧 fixture 同步补 version 和合法 Incident 权限，没有放宽生产授权。
+
+证据保存在实施工作树已忽略的 `.superpowers/sdd/workitem-next-stage/`。测试期间的一次全 service 运行命中升级通知 fixture 配置中间态，修正后全包通过；定向 Jest 首次误用全仓库覆盖门槛，38 测试本身通过，随后以 coverage=false 重跑通过。未推送、合并或部署。
+
+F3 必须继续处理 SLA 违规的周期归属：SLAViolation 只有 ticket_id、违规时间和解决标记；现有重开周期不清理旧违规。本批只修正 WorkItem 归属，不能宣称周期隔离完成。B2/B3 尚须把同一通用写入口保护扩展至 Change/Problem。

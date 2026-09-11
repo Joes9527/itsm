@@ -121,7 +121,19 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 	target := ""
 	switch cmd.Action {
 	case "assign":
-		target = common.IncidentStatusAssigned
+		if !canAssignIncidentStatus(item.Status) {
+			return empty, common.NewValidationError("incidents in the current status cannot be reassigned", nil)
+		}
+		if item.AssigneeID == cmd.AssigneeID {
+			return empty, common.NewValidationError("assignment requires a different assignee", nil)
+		}
+		if item.AssigneeID > 0 && strings.TrimSpace(cmd.Reason) == "" {
+			return empty, common.NewValidationError("assignment reason required", nil)
+		}
+		target = item.Status
+		if item.Status == common.IncidentStatusNew && item.AssigneeID == 0 {
+			target = common.IncidentStatusAssigned
+		}
 		if err := NewIncidentService(tx.Client(), s.logger).validateIncidentAssignee(ctx, cmd.AssigneeID, m.TenantID); err != nil {
 			return empty, err
 		}
@@ -150,8 +162,11 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 		return empty, common.NewValidationError("unsupported incident action", nil)
 	}
 	valid := isValidIncidentStatusTransition(item.Status, target)
+	if cmd.Action == "assign" {
+		valid = canAssignIncidentStatus(item.Status)
+	}
 	statusChanged := item.Status != target
-	if !statusChanged && cmd.Action != "escalate" {
+	if !statusChanged && cmd.Action != "escalate" && cmd.Action != "assign" {
 		return empty, common.NewValidationError("Incident command requires a state change", nil)
 	}
 	if cmd.Action == "start" && (item.Status == common.IncidentStatusResolved || common.IsIncidentFinalStatus(item.Status)) {
@@ -218,6 +233,9 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 	facts["reason"] = cmd.Reason
 	facts["resolution"] = cmd.Resolution
 	facts["assigneeId"] = cmd.AssigneeID
+	if cmd.Action == "assign" {
+		facts["previousAssigneeId"] = item.AssigneeID
+	}
 	facts["escalationLevel"] = cmd.EscalationLevel
 	category := ""
 	if item.Edges.Category != nil {
@@ -231,7 +249,9 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 		return empty, err
 	}
 	eventType := "status_changed"
-	if !statusChanged {
+	if cmd.Action == "assign" {
+		eventType = "assignment"
+	} else if !statusChanged {
 		eventType = "escalation"
 	}
 	_, err = tx.IncidentEvent.Create().SetIncidentID(current.ID).SetTenantID(m.TenantID).SetUserID(m.ActorID).SetSource(m.Source).SetEventType(eventType).SetEventName(cmd.Action).SetDescription(cmd.Reason).SetStatus("active").SetSeverity("info").SetOccurredAt(now).SetMetadata(facts).Save(ctx)

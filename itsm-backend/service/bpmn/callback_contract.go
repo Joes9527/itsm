@@ -55,7 +55,7 @@ func (h *ChangeServiceTaskHandler) CallbackContract(action string) (CallbackActi
 func (h *IncidentServiceTaskHandler) CallbackContract(action string) (CallbackActionContract, bool) {
 	payload := map[string][]string{
 		"create_incident":      {"title", "description", "type", "priority", "severity", "reporter_id", "impact", "urgency", "category", "subcategory", "detected_at", "impact_analysis", "metadata", "source", "assignee_id", "ci_ids", "template_id", "parent_ticket_id", "tag_ids", "workflow_definition_key", "form_values"},
-		"assign_incident":      {"assignee_id", "version"},
+		"assign_incident":      {"assignee_id", "version", "reason"},
 		"escalate_incident":    {"escalation_level", "escalation_reason", "version"},
 		"resolve_incident":     {"resolution", "version"},
 		"start_incident":       {"version"},

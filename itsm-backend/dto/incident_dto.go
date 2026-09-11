@@ -89,7 +89,10 @@ type UpdateIncidentRequest struct {
 
 // AssignIncidentRequest 分配事件请求
 type AssignIncidentRequest struct {
-	AssigneeID int `json:"assigneeId" binding:"required"`
+	AssigneeID  int    `json:"assigneeId" binding:"required,gt=0"`
+	Version     int    `json:"version" binding:"required,gt=0"`
+	OperationID string `json:"operationId" binding:"required,max=200"`
+	Reason      string `json:"reason"`
 }
 
 // EscalateMajorIncidentRequest 升级为重大事件请求

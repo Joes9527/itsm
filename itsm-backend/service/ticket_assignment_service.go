@@ -80,7 +80,10 @@ func (s *TicketAssignmentService) AssignTicket(ctx context.Context, req *Assignm
 	if err != nil {
 		return nil, fmt.Errorf("获取工单失败: %w", err)
 	}
-	_ = ticketEntity
+
+	if err := rejectIncidentTicketAssignment(ticketEntity.RecordClass); err != nil {
+		return nil, err
+	}
 
 	// 2. 如果指定了首选用户，直接分配
 	if req.PreferredUser != nil {
@@ -102,7 +105,7 @@ func (s *TicketAssignmentService) autoAssignTicket(ctx context.Context, req *Ass
 	if err != nil || result.AssignedTo == nil {
 		return result, err
 	}
-	if err := s.client.Ticket.UpdateOneID(req.TicketID).SetAssigneeID(*result.AssignedTo).Exec(ctx); err != nil {
+	if err := s.client.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNEQ("incident")).SetAssigneeID(*result.AssignedTo).Exec(ctx); err != nil {
 		return nil, fmt.Errorf("分配工单失败: %w", err)
 	}
 	return result, nil
@@ -628,7 +631,7 @@ func (s *TicketAssignmentService) assignToSpecificUser(ctx context.Context, req 
 	}
 
 	// 执行分配
-	err = s.client.Ticket.UpdateOneID(req.TicketID).
+	err = s.client.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNEQ("incident")).
 		Where(ticket.TenantIDEQ(req.TenantID), ticket.DeletedAtIsNil()).
 		SetAssigneeID(userID).
 		Exec(ctx)
@@ -690,8 +693,15 @@ func (s *TicketAssignmentService) GetTeamWorkload(ctx context.Context, tenantID 
 
 // ReassignTicket 重新分配工单
 func (s *TicketAssignmentService) ReassignTicket(ctx context.Context, ticketID int, newAssigneeID int, reason string) error {
+	item, err := s.client.Ticket.Get(ctx, ticketID)
+	if err != nil {
+		return err
+	}
+	if err := rejectIncidentTicketAssignment(item.RecordClass); err != nil {
+		return err
+	}
 	// 更新工单分配人
-	err := s.client.Ticket.UpdateOneID(ticketID).
+	err = s.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNEQ("incident")).
 		SetAssigneeID(newAssigneeID).
 		Exec(ctx)
 	if err != nil {
@@ -781,8 +791,11 @@ func (s *TicketAssignmentService) AssignTickets(ctx context.Context, tenantID in
 	}
 
 	// 批量更新工单分配人
+	if err := validateTicketAssignmentClasses(ctx, s.client, tenantID, ticketIDs); err != nil {
+		return err
+	}
 	for _, ticketID := range ticketIDs {
-		err := s.client.Ticket.UpdateOneID(ticketID).
+		err := s.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNEQ("incident"), ticket.TenantID(tenantID)).
 			SetAssigneeID(assigneeID).
 			Exec(ctx)
 		if err != nil {

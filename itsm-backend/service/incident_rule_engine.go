@@ -235,6 +235,7 @@ func (a *NotificationAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident
 
 // AssignmentAction 分配动作
 type AssignmentAction struct {
+	directory  database.DirectorySnapshot
 	AssigneeID int
 	Reason     string
 	client     *ent.Client
@@ -245,14 +246,32 @@ func (a *AssignmentAction) Execute(ctx context.Context, incident *ent.Incident, 
 	return executeIncidentRuleAction(ctx, a.client, a, incident, tenantID)
 }
 
+func (a *AssignmentAction) SetDirectorySnapshot(directory database.DirectorySnapshot) {
+	a.directory = directory
+}
+
 func (a *AssignmentAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
-	incidentService := NewIncidentService(a.client, a.logger)
-
-	_, err := incidentService.UpdateIncidentTx(ctx, tx, incident.ID, &dto.UpdateIncidentRequest{
-		AssigneeID: &a.AssigneeID,
-		Version:    incident.Edges.WorkItem.Version,
-	}, tenantID)
-
+	if a.directory != nil {
+		if err := requireIncidentRuleSnapshot(ctx, tx); err != nil {
+			return err
+		}
+	}
+	actor, ok := ctx.Value(incidentAlertActorContextKey{}).(incidentAlertActor)
+	if !ok || actor.ID <= 0 || actor.Source == "" || actor.CorrelationID == "" || incident.Edges.WorkItem == nil {
+		return rejectIncidentAction("assignment rule requires trusted actor, stable action identity and WorkItem")
+	}
+	owner := NewIncidentService(a.client, a.logger)
+	owner.SetDirectorySnapshot(a.directory)
+	cmd := dto.IncidentCommand{IncidentID: incident.ID, Action: "assign", AssigneeID: a.AssigneeID, Reason: strings.TrimSpace(a.Reason),
+		Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: actor.ID, ExpectedVersion: incident.Edges.WorkItem.Version, Source: actor.Source, OperationID: actor.CorrelationID, CorrelationID: actor.CorrelationID}}
+	digest, err := incidentCommandDigest(cmd)
+	if err != nil {
+		return err
+	}
+	_, err = owner.applyIncidentCommandTx(ctx, tx, cmd, digest)
+	if appErr, ok := common.AsAppError(err); ok && (appErr.Code == common.ErrCodeValidation || appErr.Code == common.ErrCodeForbidden || appErr.Code == common.ErrCodeNotFound) {
+		return rejectIncidentAction("%s", appErr.Message)
+	}
 	return err
 }
 
@@ -789,6 +808,7 @@ func (e *IncidentRuleEngine) parseAssignmentAction(actionData map[string]interfa
 	reason, _ := actionData["reason"].(string)
 
 	return &AssignmentAction{
+		directory:  e.directory,
 		AssigneeID: assigneeID,
 		Reason:     reason,
 		client:     e.client,

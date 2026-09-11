@@ -162,7 +162,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [assigning, setAssigning] = useState(false);
-  const [assignForm] = Form.useForm<{ assigneeId: number }>();
+  const [assignForm] = Form.useForm<{ assigneeId: number; reason?: string }>();
 
   // ===== 升级为重大事件：弹窗状态 =====
   const [majorModalVisible, setMajorModalVisible] = useState(false);
@@ -401,11 +401,11 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
   };
 
   // 提交指派（使用专用 assign 端点）
-  const handleAssignSubmit = async (values: { assigneeId: number }) => {
+  const handleAssignSubmit = async (values: { assigneeId: number; reason?: string }) => {
     if (!data) return;
     setAssigning(true);
     try {
-      await IncidentAPI.assignIncident(data.id, values.assigneeId);
+      await IncidentAPI.assignIncident(data.id, { ...commandMeta('assign', JSON.stringify([values.assigneeId, values.reason?.trim() ?? ''])), assigneeId: values.assigneeId, reason: values.reason?.trim() });
       message.success('事件指派成功');
       setAssignModalVisible(false);
       assignForm.resetFields();
@@ -1097,6 +1097,9 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
                 label: `${user.name || user.username}${user.department ? ` (${user.department})` : ''}`,
               }))}
             />
+          </Form.Item>
+          <Form.Item name='reason' label='转派原因' rules={[{ required: !!data?.assigneeId, whitespace: true, message: '请填写转派原因' }]}>
+            <Input.TextArea rows={3} />
           </Form.Item>
         </Form>
       </Modal>

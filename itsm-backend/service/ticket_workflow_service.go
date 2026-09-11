@@ -50,6 +50,9 @@ func (s *TicketWorkflowService) AcceptTicket(ctx context.Context, req *dto.Accep
 		return err
 	}
 
+	if err := rejectIncidentTicketAssignment(tk.RecordClass); err != nil {
+		return err
+	}
 	if tk.Status != "new" && tk.Status != "open" {
 		return fmt.Errorf("工单当前状态不允许接单: %s", tk.Status)
 	}
@@ -71,7 +74,7 @@ func (s *TicketWorkflowService) AcceptTicket(ctx context.Context, req *dto.Accep
 	// 更新工单状态和分配人
 	// P1-07 修复：接单同时设置 first_response_at，供 SLA 计时使用
 	now := time.Now()
-	_, err = txClient.Ticket.UpdateOneID(req.TicketID).
+	_, err = txClient.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNEQ("incident")).
 		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(tk.Version), ticket.StatusIn("new", "open")).
 		SetAssigneeID(userID).
 		SetStatus("in_progress").
@@ -150,14 +153,18 @@ func (s *TicketWorkflowService) WithdrawTicket(ctx context.Context, req *dto.Wit
 func (s *TicketWorkflowService) ForwardTicket(ctx context.Context, req *dto.ForwardTicketRequest, userID, tenantID int) error {
 	s.logger.Infow("Forwarding ticket", "ticket_id", req.TicketID, "to_user_id", req.ToUserID, "user_id", userID)
 
-	_, err := s.getTicket(ctx, req.TicketID, tenantID)
+	tk, err := s.getTicket(ctx, req.TicketID, tenantID)
 	if err != nil {
 		return err
 	}
 
 	// 如果转移所有权，更新assignee
 	if req.TransferOwnership {
-		_, err = s.client.Ticket.UpdateOneID(req.TicketID).
+		if err := rejectIncidentTicketAssignment(tk.RecordClass); err != nil {
+			return err
+		}
+
+		_, err = s.client.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNEQ("incident")).
 			SetAssigneeID(req.ToUserID).
 			Save(ctx)
 		if err != nil {

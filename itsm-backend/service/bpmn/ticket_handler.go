@@ -359,6 +359,10 @@ func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID in
 		return nil, fmt.Errorf("工单不存在: %w", err)
 	}
 
+	if ticketEntity.RecordClass == "incident" {
+		return nil, fmt.Errorf("Incident assignment requires the Incident command")
+	}
+
 	if ticketEntity.AssigneeID == assigneeID && ticketEntity.Status == common.TicketStatusAssigned {
 		return IdempotentEffect(fmt.Sprintf("工单 %d 已分配给用户 %d", ticketID, assigneeID), nil), nil
 	}
@@ -381,7 +385,7 @@ func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID in
 		return effect, nil
 	}
 
-	_, err = h.client.Ticket.UpdateOneID(ticketID).Where(ticket.TenantID(tenantID)).
+	_, err = h.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNEQ("incident")).Where(ticket.TenantID(tenantID)).
 		SetAssigneeID(assigneeID).
 		SetStatus(common.TicketStatusAssigned).
 		SetUpdatedAt(time.Now()).

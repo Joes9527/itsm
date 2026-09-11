@@ -498,6 +498,9 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 		params.Priority = &priority
 	}
 	if req.AssigneeID != 0 {
+		if err := rejectIncidentTicketAssignment(current.RecordClass); err != nil {
+			return nil, err
+		}
 		if s.client != nil {
 			assigneeExists, err := s.client.User.Query().
 				Where(user.IDEQ(req.AssigneeID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).
@@ -712,6 +715,10 @@ func (s *TicketService) AssignTicket(ctx context.Context, ticketID int, assignee
 	s.logger.Infow("Assigning ticket", "ticket_id", ticketID, "assignee_id", assigneeID)
 	current, err := s.repo.GetByID(ctx, ticketID, tenantID)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := rejectIncidentTicketAssignment(current.RecordClass); err != nil {
 		return nil, err
 	}
 	if err := current.Assign(assigneeID); err != nil {
@@ -1238,6 +1245,10 @@ func (s *TicketService) EscalateTicket(ctx context.Context, ticketID int, reason
 		return nil, err
 	}
 
+	if err := rejectIncidentTicketAssignment(current.RecordClass); err != nil {
+		return nil, err
+	}
+
 	newPriority := s.getEscalatedPriority(string(current.Priority))
 	newAssignee := s.getEscalationAssignee(newPriority, tenantID)
 
@@ -1576,6 +1587,9 @@ func (s *TicketService) AssignTickets(ctx context.Context, tenantID int, ticketI
 	}
 	if _, err := s.client.User.Get(ctx, assigneeID); err != nil {
 		return fmt.Errorf("分配者不存在: %v", err)
+	}
+	if err := validateTicketAssignmentClasses(ctx, s.client, tenantID, ticketIDs); err != nil {
+		return err
 	}
 	for _, ticketID := range ticketIDs {
 		if _, err := s.repo.AssignTicket(ctx, ticketID, assigneeID, tenantID); err != nil {
@@ -2002,6 +2016,9 @@ func (s *TicketService) AssignMSPTechnician(ctx context.Context, ticketID, custo
 	}
 	if t.TenantID != customerTenantID {
 		return nil, fmt.Errorf("工单不属于指定客户租户")
+	}
+	if err := rejectIncidentTicketAssignment(t.RecordClass); err != nil {
+		return nil, err
 	}
 	// 分配给 MSP 技术员（这里 assignerID 作为目标处理人；可后续扩展为查表分配）
 	if _, err := s.repo.AssignTicket(ctx, ticketID, assignerID, customerTenantID); err != nil {

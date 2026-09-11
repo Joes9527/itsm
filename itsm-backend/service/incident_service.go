@@ -286,12 +286,7 @@ func (s *IncidentService) updateIncident(ctx context.Context, id int, req *dto.U
 	}
 
 	if req.AssigneeID != nil {
-		if !canAssignIncidentStatus(currentIncident.Edges.WorkItem.Status) {
-			return nil, rejectIncidentAction("resolved, closed, or cancelled incidents cannot be reassigned")
-		}
-		if err := s.validateIncidentAssignee(ctx, *req.AssigneeID, tenantID); err != nil {
-			return nil, err
-		}
+		return nil, common.NewValidationError("assignment requires an Incident assign command", nil)
 	}
 	if req.CategoryID != nil && *req.CategoryID != 0 {
 		_, err = s.client.TicketCategory.Query().Where(ticketcategory.IDEQ(*req.CategoryID), ticketcategory.TenantIDEQ(tenantID), ticketcategory.IsActiveEQ(true)).Only(ctx)
@@ -363,9 +358,6 @@ func (s *IncidentService) updateIncident(ctx context.Context, id int, req *dto.U
 	if priority != nil {
 		workItemUpdate.SetPriority(*priority)
 	}
-	if req.AssigneeID != nil {
-		workItemUpdate.SetAssigneeID(*req.AssigneeID)
-	}
 	if req.CategoryID != nil {
 		if *req.CategoryID == 0 {
 			workItemUpdate.ClearCategoryID()
@@ -413,95 +405,17 @@ func (s *IncidentService) updateIncident(ctx context.Context, id int, req *dto.U
 
 // AssignIncident 分配事件
 func canAssignIncidentStatus(status string) bool {
-	return status != common.IncidentStatusResolved && !common.IsIncidentFinalStatus(status)
-}
-
-func (s *IncidentService) AssignIncident(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentResponse, error) {
-	outcome, err := s.assignIncident(ctx, id, assigneeID, tenantID)
-	if err != nil {
-		return nil, err
+	switch status {
+	case common.IncidentStatusNew, common.IncidentStatusAssigned, common.IncidentStatusAcknowledged, common.IncidentStatusInProgress, common.IncidentStatusTriaged, common.IncidentStatusEscalated, common.IncidentStatusOnHold:
+		return true
+	default:
+		return false
 	}
-	return outcome.Incident, nil
-}
-
-func (s *IncidentService) assignIncident(ctx context.Context, id int, assigneeID int, tenantID int) (*dto.IncidentMutationOutcome, error) {
-	s.logger.Infow("Assigning incident", "id", id, "assignee_id", assigneeID, "tenant_id", tenantID)
-
-	// 获取当前事件
-	current, err := s.client.Incident.Query().
-		Where(incident.IDEQ(id), incidentTenantScope(tenantID)).
-		WithWorkItem(withIncidentWorkItemProjection).
-		Only(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			return nil, fmt.Errorf("incident not found")
-		}
-		return nil, fmt.Errorf("failed to get incident: %w", err)
-	}
-	if !canAssignIncidentStatus(current.Edges.WorkItem.Status) {
-		return nil, rejectIncidentAction("resolved, closed, or cancelled incidents cannot be reassigned")
-	}
-	if current.Edges.WorkItem.AssigneeID == assigneeID {
-		return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(current), Applied: false}, nil
-	}
-
-	if err := s.validateIncidentAssignee(ctx, assigneeID, tenantID); err != nil {
-		return nil, err
-	}
-
-	update := s.client.Ticket.UpdateOneID(current.WorkItemID).
-		Where(
-			ticket.TenantIDEQ(tenantID),
-			ticket.DeletedAtIsNil(),
-			ticket.VersionEQ(current.Edges.WorkItem.Version),
-			ticket.StatusNotIn(common.IncidentStatusResolved, common.IncidentStatusClosed, common.IncidentStatusCancelled),
-		).
-		SetAssigneeID(assigneeID).
-		SetUpdatedAt(time.Now()).
-		AddVersion(1)
-	_, err = update.Save(ctx)
-	if err != nil {
-		if ent.IsNotFound(err) {
-			latest, lookupErr := s.client.Incident.Query().
-				Where(incident.IDEQ(id), incidentTenantScope(tenantID)).
-				WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
-			if lookupErr == nil {
-				if !canAssignIncidentStatus(latest.Edges.WorkItem.Status) {
-					return nil, fmt.Errorf("resolved or closed incidents cannot be reassigned")
-				}
-				return nil, common.NewVersionConflictError("事件", id, current.Edges.WorkItem.Version, latest.Edges.WorkItem.Version)
-			}
-			if ent.IsNotFound(lookupErr) {
-				return nil, fmt.Errorf("incident not found")
-			}
-			return nil, fmt.Errorf("failed to verify incident assignment conflict: %w", lookupErr)
-		}
-		s.logger.Errorw("Failed to assign incident", "error", err, "id", id)
-		return nil, fmt.Errorf("failed to assign incident: %w", err)
-	}
-	updatedIncident, err := s.client.Incident.Query().Where(incident.IDEQ(id), incidentTenantScope(tenantID)).WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("reload assigned incident: %w", err)
-	}
-
-	// 记录分配活动
-	s.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
-		IncidentID:  id,
-		EventType:   "assignment",
-		EventName:   "事件分配",
-		Description: fmt.Sprintf("事件已分配给用户 %d", assigneeID),
-		Status:      "active",
-		Severity:    "info",
-		Source:      "user",
-	}, tenantID)
-
-	s.logger.Infow("Incident assigned successfully", "id", id, "assignee_id", assigneeID)
-	return &dto.IncidentMutationOutcome{Incident: s.toIncidentResponse(updatedIncident), Applied: true}, nil
 }
 
 func (s *IncidentService) validateIncidentAssignee(ctx context.Context, assigneeID, tenantID int) error {
 	if assigneeID <= 0 {
-		return rejectIncidentAction("invalid assignee id")
+		return common.NewValidationError("invalid assignee id", nil)
 	}
 	assigneeExists, err := s.client.User.Query().
 		Where(user.IDEQ(assigneeID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).
@@ -510,7 +424,7 @@ func (s *IncidentService) validateIncidentAssignee(ctx context.Context, assignee
 		return fmt.Errorf("failed to validate assignee: %w", err)
 	}
 	if !assigneeExists {
-		return rejectIncidentAction("assignee not found or inactive")
+		return common.NewValidationError("assignee not found or inactive", nil)
 	}
 	return nil
 }

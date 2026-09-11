@@ -17,6 +17,7 @@ import (
 	"itsm-backend/ent/incidentmetric"
 	"itsm-backend/ent/incidentruleexecution"
 	"itsm-backend/ent/outboxevent"
+	"itsm-backend/handlers/shared/workitemmutation"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -259,6 +260,7 @@ func TestIncidentEscalationPersistsTenantScopedNamedEvent(t *testing.T) {
 	_, err = incidentEntity.Update().SetDetectedAt(time.Now().Add(-10 * time.Minute)).Save(ctx)
 	require.NoError(t, err)
 
+	client.Ticket.UpdateOneID(incidentEntity.WorkItemID).SetStatus("in_progress").ExecX(ctx)
 	escalation := NewIncidentEscalationService(client)
 	_, err = escalation.CreateEscalationRule(ctx, dto.CreateIncidentEscalationRuleRequest{
 		Name: "L1 timeout", TriggerType: "time_based", TriggerMinutes: 1,
@@ -267,13 +269,14 @@ func TestIncidentEscalationPersistsTenantScopedNamedEvent(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = escalation.CheckAndEscalate(ctx, incidentEntity.ID)
+	reporter.Update().SetRole("super_admin").ExecX(ctx)
+	_, err = escalation.CheckAndEscalate(ctx, incidentEntity.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: reporter.ID, ExpectedVersion: client.Ticket.GetX(ctx, incidentEntity.WorkItemID).Version, Source: "scheduler", OperationID: "timeout-event"})
 	require.NoError(t, err)
 	event, err := client.IncidentEvent.Query().Where(incidentevent.IncidentIDEQ(incidentEntity.ID)).Only(ctx)
 	require.NoError(t, err)
 	require.Equal(t, tenant.ID, event.TenantID)
-	require.Equal(t, "事件升级", event.EventName)
-	require.Equal(t, "system", event.Source)
+	require.Equal(t, "escalate", event.EventName)
+	require.Equal(t, "scheduler", event.Source)
 }
 
 func TestPrometheusMetricCorrelationDoesNotFanOut(t *testing.T) {
