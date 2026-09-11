@@ -29,11 +29,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--base-port', type=int, default=19490)
     parser.add_argument('--grep', default='.')
+    parser.add_argument('--recovery', action='store_true', help='Actual retained/P, R, independent-restored V1 stages')
     args = parser.parse_args()
+    if args.recovery and args.grep != '.':
+        parser.error('Complete recovery requires all nine unchanged V1 tests')
     def interrupted(_signum,_frame):
         raise KeyboardInterrupt('Isolated validation interrupted')
     signal.signal(signal.SIGTERM,interrupted)
-    if not 1024 <= args.base_port <= 65530:
+    if not 1024 <= args.base_port <= 65524:
         parser.error('base-port must leave five unprivileged ports')
     repo = Path(__file__).resolve().parents[4]
     backend, frontend = repo/'itsm-backend', repo/'itsm-frontend'
@@ -42,16 +45,17 @@ def main():
     for program in ['docker','go','node','npx','rsync']:
         if not shutil.which(program):
             parser.error('Missing prerequisite: '+program)
-    ports = list(range(args.base_port,args.base_port+5))
+    ports = list(range(args.base_port,args.base_port+(11 if args.recovery else 5)))
     for port in ports:
         with socket.socket() as probe:
             probe.bind(('127.0.0.1',port))  # Refuse occupied ports before any creation.
     run_id = 'workitem-v1-'+uuid.uuid4().hex[:12]
     folder = Path(tempfile.mkdtemp(prefix=run_id+'-'))
     os.chmod(folder,0o700)
-    app_port, web_port, redis_port, minio_port, pg_port = ports
+    app_port, web_port, redis_port, minio_port, pg_port = ports[:5]
     pg, redis, minio = ['codex-'+run_id+'-'+name for name in ['pg','redis','minio']]
     containers, processes, secret_files = [], [], []
+    owned_ids={}
     password, app_password, system_password, minio_password, admin_password, inspection_password = [secrets.token_hex(24)+'aA!7' for _ in range(6)]
     log = (folder/'setup.log').open('w')
     source_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip()
@@ -93,6 +97,7 @@ def main():
         containers.append(name)
         run(['docker','run','-d','--name',name,'--label','codex.workitem.v1='+run_id,
              '-p','127.0.0.1:'+str(port)+':'+str(container_port),'--env-file',str(envfile),image,*command])
+        owned_ids[name]=json.loads(subprocess.check_output(['docker','inspect',name]))[0]['Id']
     try:
         container(pg,'pgvector/pgvector:pg17',pg_port,5432,{'POSTGRES_DB':'workitem_v1','POSTGRES_USER':'v1owner','POSTGRES_PASSWORD':password})
         container(redis,'redis:7-alpine',redis_port,6379,{})
@@ -105,6 +110,12 @@ def main():
         run(['go','build','-tags','migrate','-o',str(folder/'migrate'),'./cmd/migrate'],cwd=backend,env=base_env)
         control_file=folder/'migration-control.json'
         control={'DeploymentID':run_id,'InspectionRole':'v1inspect'}
+        key=None
+        if args.recovery:
+            run(['go','build','-o',str(folder/'sign-fixture'),'./tests/fixtures/workitem-retirement-sign'],cwd=backend,env=base_env)
+            key=json.loads(subprocess.check_output([str(folder/'sign-fixture'),'key'],env=base_env))
+            control['RetirementPublicKeys']={'isolated-task6':key['public']}
+
         control_file.write_text(json.dumps(control));os.chmod(control_file,0o600);secret_files.append(control_file)
         env['ITSM_MIGRATION_CONTROL_FILE']=str(control_file)
         # A new empty schema stops at the same explicit P boundary as old profiles.
@@ -139,6 +150,11 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO v1system;
         result=subprocess.run(['docker','exec','-i',pg,'psql','-U','v1owner','-d','workitem_v1','-v','ON_ERROR_STOP=1','-q'],input=inspector_sql,text=True,capture_output=True)
         if result.returncode:
             raise RuntimeError('Dedicated inspection role initialization failed')
+        if args.recovery:
+            # Explicit old structure fixture created before P; historical business bytes survive until actual R.
+            legacy="CREATE TABLE workflows(id bigint PRIMARY KEY, content text); INSERT INTO workflows VALUES(1,'task6 immutable historical workflow'); ALTER TABLE tickets ADD COLUMN type text; ALTER TABLE incidents ADD COLUMN title text; ALTER TABLE problems ADD COLUMN title text; ALTER TABLE changes ADD COLUMN title text;"
+            result=subprocess.run(['docker','exec','-i',pg,'psql','-U','v1owner','-d','workitem_v1','-v','ON_ERROR_STOP=1'],input=legacy,text=True,capture_output=True)
+            if result.returncode: raise RuntimeError('Explicit retained legacy fixture failed')
         control['ReviewedGrants']=[{'Role':'v1app','Table':table,'Privileges':['SELECT','INSERT','UPDATE','DELETE']} for table in ['tickets','incidents','problems','changes']]
         control_file.write_text(json.dumps(control))
         inventory_run=subprocess.run([str(folder/'migrate'),'-prepare-workitem','-dry-run'],cwd=folder,env=env,stdout=subprocess.PIPE,stderr=log,text=True,check=True)
@@ -168,7 +184,15 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO v1system;
             raise RuntimeError('Dedicated post-migration business grants failed')
         env['ITSM_MIGRATION_INSPECTION_DSN']='postgresql://v1inspect:'+urllib.parse.quote(inspection_password,safe='')+'@127.0.0.1:'+str(pg_port)+'/workitem_v1?sslmode=disable&search_path=public'
         env.update(DB_USER='v1app',DB_PASSWORD=app_password,DB_SYSTEM_ROLE_USER='v1system',DB_SYSTEM_ROLE_PASSWORD=system_password,RLS_MODE='enforce',ITSM_AUTO_MIGRATE='false',ITSM_AUTO_SEED='false')
-        launch([str(folder/'backend')],folder,env,'backend.log')
+        recovery=None
+        if args.recovery:
+            from workitem_recovery import Recovery, now, verify_recovery, sha
+            recovery=Recovery(locals())
+            early=recovery.snapshot(pg,env['MINIO_ENDPOINT'],env)
+            early_backup=recovery.archive(pg,minio,'observation-before')
+            recovery.started=now()
+        backend_process=launch([str(folder/'backend')],folder,env,'backend.log')
+        if recovery: recovery.c['backend_process']=backend_process
         def backend_ready():
             try:
                 urllib.request.urlopen('http://127.0.0.1:'+str(app_port)+'/api/v1/auth/me',timeout=2)
@@ -181,7 +205,8 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO v1system;
         front_env=dict(base_env,ITSM_BACKEND_URL='http://127.0.0.1:'+str(app_port),NEXT_PUBLIC_API_URL='')
         launch(['node',str(frontend/'node_modules/next/dist/bin/next'),'dev','--hostname','127.0.0.1','--port',str(web_port)],folder/'frontend',front_env,'frontend.log')
         wait_ready(lambda: urllib.request.urlopen('http://127.0.0.1:'+str(web_port)+'/login',timeout=30).status==200)
-        manifest={'runId':run_id,'baseURL':'http://127.0.0.1:'+str(web_port),'apiURL':'http://127.0.0.1:'+str(app_port),'postgresContainer':pg,'containers':containers,'ports':ports}
+        image_inventory=[{k:info[k] for k in ['Id','Image','Name']} for info in json.loads(subprocess.check_output(['docker','inspect',*containers]))]
+        manifest={'images':image_inventory,'runId':run_id,'baseURL':'http://127.0.0.1:'+str(web_port),'apiURL':'http://127.0.0.1:'+str(app_port),'postgresContainer':pg,'containers':containers,'ports':ports}
         (folder/'resources.json').write_text(json.dumps(manifest,indent=2))
         manifest.update(sourceCommit=source_commit,backendBuiltAtUTC=datetime.fromtimestamp((folder/'backend').stat().st_mtime,timezone.utc).isoformat(),backendBinarySHA256=hashlib.sha256((folder/'backend').read_bytes()).hexdigest(),
                         backendProductionGoSHA256=tree_hash(backend,lambda p:p.suffix=='.go' and not p.name.endswith('_test.go')),
@@ -190,13 +215,82 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO v1system;
         test_env=dict(base_env,PLAYWRIGHT_EXTERNAL_SERVER='1',PLAYWRIGHT_BASE_URL=manifest['baseURL'],NEXT_PUBLIC_API_URL=manifest['apiURL'],
                       PLAYWRIGHT_V1_ISOLATED=run_id,PLAYWRIGHT_V1_RESOURCE_MANIFEST=str(folder/'resources.json'),PLAYWRIGHT_V1_ADMIN_PASSWORD=admin_password,
                       PLAYWRIGHT_OUTPUT_DIR=str(folder/'test-results'),PLAYWRIGHT_HTML_OUTPUT_DIR=str(folder/'report'))
-        with (folder/'tests.log').open('w') as test_log:
-            test_process=subprocess.Popen(['npx','playwright','test','tests/e2e/business-flows/workitem-convergence.spec.ts','--project=business-flows','--workers=1','--grep',args.grep],cwd=frontend,env=test_env,stdout=test_log,stderr=subprocess.STDOUT,start_new_session=True)
-            processes.append(test_process)
-            test_process.wait()
-            result=test_process
-        print('\n'.join((folder/'tests.log').read_text().splitlines()[-20:]))
-        return result.returncode
+        def stage(name):
+            test_env['PLAYWRIGHT_OUTPUT_DIR']=str(folder/('test-results-'+name))
+            test_env['PLAYWRIGHT_HTML_OUTPUT_DIR']=str(folder/('report-'+name))
+            test_env['PLAYWRIGHT_JSON_OUTPUT_FILE']=str(folder/('results-'+name+'.json'))
+            with (folder/('tests-'+name+'.log')).open('w') as test_log:
+                proc=subprocess.Popen(['npx','playwright','test','tests/e2e/business-flows/workitem-convergence.spec.ts','--project=business-flows','--workers=1','--grep',args.grep,'--reporter=line,json'],cwd=frontend,env=test_env,stdout=test_log,stderr=subprocess.STDOUT,start_new_session=True)
+                processes.append(proc);proc.wait()
+            result=json.loads((folder/('results-'+name+'.json')).read_text())
+            stats=result['stats']
+            print(name+': '+json.dumps(stats),flush=True)
+            if proc.returncode or (args.recovery and (stats['expected']!=9 or stats['unexpected'] or stats['skipped'] or stats['flaky'])):
+                raise RuntimeError('V1 stage failed: '+name)
+            return {'stage':name,'stats':stats,'reportSHA256':hashlib.sha256((folder/('results-'+name+'.json')).read_bytes()).hexdigest(),'backendSHA256':manifest['backendBinarySHA256']}
+        first=stage('retained' if recovery else 'v1')
+        if not recovery: return 0
+        recovery.pause();recovery.ended=now();recovery.paused=now()
+        final=recovery.snapshot(pg,env['MINIO_ENDPOINT'],env)
+        try: verify_recovery(final,early)
+        except ValueError: recovery.negative.append('actual-observation-before-backup-loses-new-business-data')
+        else: raise RuntimeError('Observation produced no new data')
+        if not final['attachments']: raise RuntimeError('Full recovery requires real attachment bytes')
+        recovery.finalpoint=now()
+        archives=recovery.archive(pg,minio,'final-pre-r')
+        rehearsal_pg,rehearsal_minio,rehearsal_port=recovery.restore(archives,'rehearsal',5)
+        restored=recovery.snapshot(rehearsal_pg,'127.0.0.1:'+str(rehearsal_port+1),env,bundle=recovery.bundles[rehearsal_pg])
+        verify_recovery(final,restored)
+        recovery.negative_checks(final)
+        recovery.actual_fault_checks(final,rehearsal_pg,'127.0.0.1:'+str(rehearsal_port+1),env)
+        recovery.event('independent-rehearsal-verified',snapshot=restored,negativeCases=recovery.negative)
+        # An external compensation inventory is independent of database rollback.
+        observation={'before':early,'after':final,'newDataCaptured':True,'paused':recovery.paused,
+                     'externalEffects':{'realProviderCredentialsInherited':False,'notifications':'database queue retained; no real delivery provider configured','isolatedObjectWrites':final['attachments']}}
+        recovery.retire(final,archives,{'verified':True,'snapshot':restored,'target':rehearsal_pg},first,observation)
+        backend_process=launch([str(folder/'backend')],folder,env,'backend-r.log');recovery.c['backend_process']=backend_process
+        wait_ready(backend_ready)
+        second=stage('retired')
+        recovery.pause()
+        after_r=recovery.snapshot(pg,env['MINIO_ENDPOINT'],env)
+        post_r_archives=recovery.archive(pg,minio,'post-r-new-data')
+        # Actual after-backup V1 writes are captured separately, never injected into immutable pre-R backup.
+        compensation={'sourceFinalPreR':final,'postR':after_r,'capturedArtifacts':post_r_archives,
+                      'zeroLossAfterPointInTimeRestore':False,'reason':'Post-R journey writes and object effects require separately reviewed replay; this rehearsal restores the declared pre-R point.',
+                      'externalActions':[{'kind':'actual-isolated-object-write','attachmentID':key,'object':value,'status':'replay-or-cleanup-review-required','databaseRestoreReversesEffect':False} for key,value in after_r['attachments'].items() if key not in final['attachments']],
+                      'realProviderDeliveryExercised':False,'notificationCompensation':'Provider delivery is not configured; target operators must reconcile actual delivery receipts before claiming compensation.'}
+        recovery.save('compensation-inventory.json',compensation)
+        try: verify_recovery(after_r,final,uncaptured=['post-R delta absent from pre-R backup'])
+        except ValueError: recovery.negative.append('actual-post-backup-writes-not-in-recovery-point')
+        else: raise RuntimeError('Missing post-R delta falsely claims zero loss')
+        restore_pg,restore_minio,restore_port=recovery.restore(archives,'restored',7)
+        restored_again=recovery.snapshot(restore_pg,'127.0.0.1:'+str(restore_port+1),env,bundle=recovery.bundles[restore_pg])
+        verify_recovery(final,restored_again)
+        if recovery.sql(restore_pg,"SELECT count(*) FROM schema_migrations WHERE version='038_work_item_controlled_retirement'")!='0':
+            raise RuntimeError('Pre-R restore must not fabricate later R receipt')
+        if recovery.sql(restore_pg,"SELECT count(*) FROM schema_migrations WHERE version='037_work_item_structure_preparation'")!='1':
+            raise RuntimeError('Original P receipt missing after restore')
+        recovery.event('post-R-independent-full-restore-verified',snapshot=restored_again,sourceRRemainsInJournal=True)
+        # Keep logical identity and behavior; only physical transport changes.
+        env=json.loads((recovery.bundles[restore_pg]/'runtime-environment.json').read_bytes())
+        env['MINIO_ENDPOINT']='127.0.0.1:'+str(restore_port+1)
+        env['ITSM_MIGRATION_INSPECTION_DSN']=env['ITSM_MIGRATION_INSPECTION_DSN'].replace(':'+str(pg_port)+'/',':'+str(restore_port)+'/')
+        env['ITSM_MIGRATION_CONTROL_FILE']=str(recovery.bundles[restore_pg]/'migration-control.json')
+        restored_config=(recovery.bundles[restore_pg]/'config.yaml').read_text()
+        (folder/'config.yaml').write_text(restored_config.replace('port: '+str(pg_port),'port: '+str(restore_port),1))
+        manifest['postgresContainer']=restore_pg;manifest['ports'][4]=restore_port
+        info=json.loads(subprocess.check_output(['docker','inspect',restore_pg]))[0]
+        manifest['recoveryTarget']={'containerID':info['Id'],'stage':'restored'}
+        (folder/'resources.json').write_text(json.dumps(manifest,indent=2))
+        backend_process=launch([str(recovery.bundles[restore_pg]/'backend')],folder,env,'backend-restored.log');recovery.c['backend_process']=backend_process
+        wait_ready(backend_ready)
+        third=stage('restored')
+        recovery.pause()
+        recovery.event('three-stage-business-proof',stages=[first,second,third],negativeCases=recovery.negative)
+        recovery.save('three-stage-summary.json',{'stages':[first,second,third],'manifest':manifest,'negativeCases':recovery.negative,
+            'finalSnapshot':final,'compensationInventorySHA256':sha((folder/'compensation-inventory.json').read_bytes()),
+            'zeroLossAtDeclaredFinalPreRPoint':True,'zeroLossIncludingLaterWrites':False,'pending':'target environment admission/observation/R and external compensation separately authorized'})
+        return 0
     finally:
         cleanup_errors=[]
         for proc in reversed(processes):
@@ -216,10 +310,10 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO v1system;
                 info=subprocess.run(['docker','inspect',name],text=True,capture_output=True)
                 if info.returncode==0:
                     actual=json.loads(info.stdout)[0]
-                    if actual['Config'].get('Labels',{}).get('codex.workitem.v1')!=run_id:
+                    if actual['Config'].get('Labels',{}).get('codex.workitem.v1')!=run_id or (name in owned_ids and actual['Id']!=owned_ids[name]):
                         cleanup_errors.append('container ownership mismatch: '+name)
                         continue
-                    removed=subprocess.run(['docker','rm','-f',name],stdout=log,stderr=log)
+                    removed=subprocess.run(['docker','rm','-f','-v',name],stdout=log,stderr=log)
                     verified=subprocess.run(['docker','inspect',name],text=True,capture_output=True)
                     absent=verified.returncode!=0 and ('no such object:' in verified.stderr.lower() or 'no such container:' in verified.stderr.lower())
                     if removed.returncode or not absent:
@@ -236,6 +330,8 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO v1system;
         # Traces contain generated test credentials: preserve only in this 0700 directory.
         shutil.rmtree(folder/'frontend',ignore_errors=True)
         (folder/'backend').unlink(missing_ok=True)
+        (folder/'sign-fixture').unlink(missing_ok=True)
+        (folder/'migrate').unlink(missing_ok=True)
         print('Private evidence: '+str(folder))
         if cleanup_errors:
             print('Cleanup requires attention: '+ '; '.join(cleanup_errors))

@@ -20,7 +20,7 @@ export function isolatedEnvironment() {
       process.env.PLAYWRIGHT_V1_ISOLATED !== manifest.runId ||
       baseURL !== manifest.baseURL || apiURL !== manifest.apiURL ||
       !baseURL?.startsWith('http://127.0.0.1:') || !apiURL?.startsWith('http://127.0.0.1:') ||
-      manifest.postgresContainer !== 'codex-'+manifest.runId+'-pg' ||
+      !(manifest.postgresContainer === 'codex-'+manifest.runId+'-pg' || (manifest.postgresContainer === 'codex-'+manifest.runId+'-restored-pg' && manifest.recoveryTarget?.stage === 'restored' && /^[a-f0-9]{64}$/.test(manifest.recoveryTarget?.containerID))) ||
       process.env.PLAYWRIGHT_EXTERNAL_SERVER !== '1') {
     throw new Error('V1 requires its dedicated disposable environment; shared/default servers are forbidden.');
   }
@@ -114,7 +114,7 @@ export class Journey {
   private readIsolatedJSON(sql: string) {
     const {manifest}=isolatedEnvironment();
     const container=JSON.parse(execFileSync('docker',['inspect','--format','{{json .}}',manifest.postgresContainer],{encoding:'utf8'}));
-    if(container.Config.Labels?.['codex.workitem.v1']!==manifest.runId ||
+    if((manifest.recoveryTarget && container.Id !== manifest.recoveryTarget.containerID) || container.Config.Labels?.['codex.workitem.v1']!==manifest.runId ||
        container.State.Running!==true || container.NetworkSettings.Ports['5432/tcp']?.[0]?.HostIp!=='127.0.0.1' ||
        container.NetworkSettings.Ports['5432/tcp']?.[0]?.HostPort!==String(manifest.ports[4])) throw new Error('Disposable database identity mismatch');
     return JSON.parse(execFileSync('docker',['exec',manifest.postgresContainer,'psql','-U','v1owner','-d','workitem_v1','-Atc',sql],{encoding:'utf8'}));
