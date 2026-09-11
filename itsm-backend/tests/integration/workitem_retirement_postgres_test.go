@@ -155,3 +155,37 @@ func TestWorkItemRetirementBackupRestorePreservesEvidenceAndExposesNewWrites(t *
 	require.NotEqual(t, snapshot(f.scopedDB), snapshot(restored))
 	t.Logf("compensation inventory: WorkItem %d CHG-AFTER-BACKUP plus its Change extension were written after this backup; coordinated app/data recovery required", newID)
 }
+
+func TestWorkItemRetirementCannotFallThroughToAnotherSchema(t *testing.T) {
+	f := newCutoverFixture(t)
+	f.canonicalChange(t, "CHG-SCHEMA")
+	_, err := f.scopedDB.ExecContext(f.ctx, "ALTER TABLE tickets ADD COLUMN type text; UPDATE tickets SET type='change'")
+	require.NoError(t, err)
+	var schema string
+	require.NoError(t, f.scopedDB.QueryRowContext(f.ctx, "SELECT current_schema()").Scan(&schema))
+	emptySchema := schema + "_empty"
+	_, err = f.db.ExecContext(f.ctx, "CREATE SCHEMA "+emptySchema)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_, err := f.db.ExecContext(context.Background(), "DROP SCHEMA "+emptySchema+" CASCADE")
+		require.NoError(t, err)
+	})
+	dsn, err := url.Parse(os.Getenv("INTAKE_POSTGRES_TEST_DSN"))
+	require.NoError(t, err)
+	query := dsn.Query()
+	query.Set("search_path", emptySchema+","+schema)
+	dsn.RawQuery = query.Encode()
+	wrong, err := sql.Open("postgres", dsn.String())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, wrong.Close()) })
+	runner := migration.NewMigrator(wrong, zap.NewNop().Sugar())
+	require.NoError(t, runner.EnsureMigrationsTable(f.ctx))
+	for _, m := range migration.RegisteredMigrations {
+		if m.Version == "027_work_item_identity_field_retirement" {
+			require.ErrorContains(t, runner.ApplyMigration(f.ctx, m), "automatic WorkItem retirement is blocked")
+		}
+	}
+	var preserved string
+	require.NoError(t, f.scopedDB.QueryRowContext(f.ctx, "SELECT type FROM tickets").Scan(&preserved))
+	require.Equal(t, "change", preserved, "unqualified historical SQL must not reach a later schema")
+}

@@ -80,3 +80,6 @@
 
 
 验证记录：真实 CLI 两场景通过（4.290s），exit2/0 与前后摘要不变；自动退役原行为三场景 RED 均为“期望拒绝但返回成功”，保护实现后全部 GREEN。含真实 dump/restore 的退役验证通过（29.651s），独立恢复数据库与 schema 清理 remaining=0。独立只读审阅确认正常 bootstrap/cmd migrate 均经过 ApplyMigration，检测集合覆盖 022/027 的全部待删表/列；手工直跑历史 SQL 与并发 DDL 仍由维护窗口和操作准入约束，不宣称应用可约束数据库管理员。
+
+
+补充边界：历史027的表名未限定schema。隔离反例证明，若所选schema缺少规范表，原自动检查会漏掉search_path后续schema中的旧列并执行删除。现在022/027必须先在所选schema找到完整实体表，再检查旧对象；禁止任何search_path回落。反例RED后，规范新schema/旧对象拒绝/跨schema保护三组PG通过（4.351s），历史SQL及checksum保持不变，独立复核通过。
