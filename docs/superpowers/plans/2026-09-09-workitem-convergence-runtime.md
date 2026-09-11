@@ -133,3 +133,11 @@ export function mapProblemToWorkItem(dto: { workItemId: number; number: string; 
 原 C1 实现保留，后续 B4 修复真实 seed/保留变量边界，原 C1 11 项隔离 PG 回归通过。C2 由 F1–F3/V1 实施，真实三域 API 矩阵已验证，完整浏览器旅程仍在执行；不能将本记录当作 C2 全部完成。
 
 C3/V2 已建立自动迁移的旧结构拒绝及真实 CLI exit2/0 只读验证，并在独立数据库完成 schema 备份恢复、原 WorkItem 内容/时间一致和备份后新写入不在恢复结果中的补偿验证。022 的历史 CASCADE 不能直接当作准入删除方案；历史 checksum 保留，允许退役路径待单独决策。实际部署、观察和旧结构删除均未执行。具体范围、顺序和未完成项见 [切换与恢复手册](../../deployment/workitem-convergence-cutover.md)。
+
+### 2026-09-11 V1 最终集成发现
+
+此前三域 API 矩阵通过仅代表子集。最新冻结源码完整运行是 8 项通过、1 项失败：Change submit 返回 500，创建 outbox 与专业 submit 重复启动流程为高可信根因，确定性回归与修复正在执行。C2 未验收，先前一次 9 项通过不抵消此次失败；C3 的允许删除路径与目标环境证据仍未完成。详见[实施复核与交接](../../review/2026-09-11-workitem-next-stage-implementation-review.md)。
+
+### 2026-09-11 C2最终闭环 / C3仍部分完成
+
+Change双启动修复提交ed80f99b，独立审查问题及新增036 schema边界已关闭；最终V1 9/9通过（3.6m），测试提交dada445d，临时环境清理验证完成。C2本轮页面与真实旅程完成验收。上段8pass/1fail为修复前证据，不代表最终状态。C3仍缺受控允许删除方案、删除后恢复及目标环境运行证据，未执行实际部署/观察/退役。详见[最终实施复核](../../review/2026-09-11-workitem-next-stage-implementation-review.md)。

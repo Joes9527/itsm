@@ -543,11 +543,18 @@ POST /changes/{id}/submit
 POST /changes/{id}/assign
 POST /changes/{id}/approve
 POST /changes/{id}/reject
-POST /changes/{id}/start
-POST /changes/{id}/complete
-POST /changes/{id}/rollback
+POST /changes/{id}/assess
+POST /changes/{id}/schedule
+POST /changes/{id}/implement
+POST /changes/{id}/record-outcome
+POST /changes/{id}/review
+POST /changes/{id}/close
 POST /changes/{id}/cancel
 ```
+
+以上专业动作使用 `expectedVersion` 和 `operationId`；approve/reject 仍校验独立审批权限与任务身份。失败或回滚通过 record-outcome 保存真实结果，不使用已退出的 start/complete/rollback 路由。
+
+配置了流程的 Change 创建返回 `workflowStartStatus: awaiting_submit`，冻结所选定义与输入，草稿不自动启动。submit 在专业事务中启动该精确定义，并以实际提交人记录启动行为；转派不重建流程或变更审批人。提交时当前 Type 与冻结路由依据不一致、冻结证据缺失或定义已变更均明确拒绝，不按最新配置猜测重启。显式 no_process 创建仍返回 not_required，但不能满足 Change 提交所需的审批流程门禁。共享创建回执结构见 [Intake 契约](../contracts/intake.openapi.yaml)。
 
 ## 发布管理接口
 

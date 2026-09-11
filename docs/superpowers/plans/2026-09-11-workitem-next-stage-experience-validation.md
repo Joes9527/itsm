@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js、TypeScript、Jest、Playwright、Go、PostgreSQL。
 
-> 状态：accepted（F1–F3 已实现并验证；V1 执行中，V2 部分验证，实际部署未执行）
+> 状态：accepted（F1–F3、V1 已实现并验证；V2 部分验证，实际部署未执行）
 > 依据：[后续设计](../specs/2026-09-11-workitem-convergence-next-stage-design.md)；依赖[后端计划](2026-09-11-workitem-next-stage-backend.md)。前端命令从 itsm-frontend 执行。
 
 ## Global Constraints
@@ -123,12 +123,12 @@ export type AssignmentProps = {
 **Interfaces**
 使用现有 Playwright business-flows 登录 fixture；沿用权威 API 返回的专业 ID、WorkItem ID、version、operationId，不硬编码 fixture 数值相等。测试必须断言 API持久化结果。
 
-- [ ] 按原 runtime 计划 C2 的完整旅程建立 E2E：Incident workaround 恢复→关联 Problem→无永久验证拒绝解决→Change失败/回滚保持 Problem→Change成功仍需验证→验证后显式解决→合法重开与周期保留。
-- [ ] 增加 B1–B3 转派矩阵：原因缺失被后端拒绝、三域保留各自事实、两浏览器版本冲突保留输入、同键不重复变更。每次写入唯一前缀测试数据，仅通过测试自建ID清理。
-- [ ] 增加 generic/Requested Item 的创建、权限、分派、评论、附件和现有审批回归；直接 API 越权同样拒绝。
-- [ ] Run `npx playwright test tests/e2e/business-flows/workitem-convergence.spec.ts --project=business-flows`；同时运行受影响 Go集成及前端类型/构建检查。记录实际测试数，浏览器截图不是持久化证据的替代。
-- [ ] 归因修复三个已知后端失败，见总入口；核对入口清单每个被替换写路径已退出。保留历史检测器而非追求旧词表全库零匹配。
-- [ ] 提交 `test(workitem): verify reassignment and cross-domain journeys`。
+- [x] 按原 runtime 计划 C2 的完整旅程建立 E2E：Incident workaround 恢复→关联 Problem→无永久验证拒绝解决→Change失败/回滚保持 Problem→Change成功仍需验证→验证后显式解决→合法重开与周期保留。
+- [x] 增加 B1–B3 转派矩阵：原因缺失被后端拒绝、三域保留各自事实、两浏览器版本冲突保留输入、同键不重复变更。每次写入唯一前缀测试数据，仅通过测试自建ID清理。
+- [x] 增加 generic/Requested Item 的创建、权限、分派、评论、附件和现有审批回归；直接 API 越权同样拒绝。
+- [x] Run `npx playwright test tests/e2e/business-flows/workitem-convergence.spec.ts --project=business-flows`；同时运行受影响 Go集成及前端类型/构建检查。记录实际测试数，浏览器截图不是持久化证据的替代。
+- [x] 归因修复三个已知后端失败，见总入口；核对入口清单每个被替换写路径已退出。保留历史检测器而非追求旧词表全库零匹配。
+- [x] 提交 `test(workitem): verify reassignment and cross-domain journeys`。
 
 ## V2：隔离切换、恢复与运行门禁
 
@@ -140,9 +140,10 @@ export type AssignmentProps = {
 完整执行原 runtime 计划 C3，使用现有 `check_workitem_cutover` exit0/exit2 协议。原 C3 的备份、只读盘点、观察、恢复以及历史免迁移规则全部继承，不另造删除命令体系。
 
 - [x] 在 disposable PostgreSQL 构造旧依赖；运行只读预检，断言 exit2 和前后记录摘要相同。缺少备份或观察证据时，门禁不得执行删除。
-- [x] 编制明确表/列/约束及消费者清单，逐项验证已无运行读写；runbook 写入实际配置方式、版本、暂停范围和恢复步骤。不得用通配符或 CASCADE 扩大删除范围。
+- [x] 编制表/列及待核对约束、消费者清单；runbook 写入配置方式、版本、暂停范围和恢复步骤。不得用通配符或 CASCADE 扩大删除范围。
+- [ ] 在获准目标环境逐项证明清单中的旧读写和消费者已退出，核对实际约束及依赖；隔离测试和源码删除不替代该环境证据。
 - [ ] 演练允许路径：备份恢复验证→新结构→唯一新路径→V1旅程→观察场景完成→清单删除→健康检查；另演练失败恢复，发生新写入后协调 DB与应用版本并列明补偿数据。
-- [ ] Run `go test -tags=integration_postgres ./tests/integration -run '^TestWorkItem(Cutover|Retirement)' -count=1 -v`，并执行 V1；确认 PG连接为隔离目标，未向共享库执行迁移。
+- [x] Run `go test -tags=integration_postgres ./tests/integration -run '^TestWorkItem(Cutover|Retirement)' -count=1 -v`，并执行 V1；确认 PG连接为隔离目标，未向共享库执行迁移。
 - [ ] 提交 `test(workitem): prove cutover and retirement gates`。
 - [ ] 实际运行切换作为独立环境准入步骤记录；未经环境授权不执行。若仅代码/演练完成，明确保留实际部署与观察待办，不将整体状态标记 implemented。
 
@@ -165,3 +166,11 @@ SLA 后端保留已保存周期历史，区分 not_required/configuration_missin
 验证：初次 F1/F2 七套44项前端测试通过；修正后页面11、目录2、SLA7、UserApi15项通过；最终冻结源码 type-check、生产 build 通过；lint 0 errors、1项既有 BPMNDesigner 警告。Incident DTO 测试通过。独立复查确认观察版本、409确认、请求键、专业/WorkItem身份及两项P2修复；原始测试/实现日志保存于已忽略证据目录，junit.xml 已恢复不混入源码。
 
 F3 基础投影提交18856ba7；F1/F2 共享真实页面的整合统一提交，不保留中间双入口。浏览器真实冲突/旅程仍由 V1 单独记录，这些组件测试不替代端到端验收。
+
+## V1 最终执行记录
+
+ed80f99b 构建的专用环境9/9通过（3.6m），无skip或降断言；dada445d提交4个V1文件。三域HTTP与双浏览器冲突、直接越权、Incident/Problem/三种Change结果及真实审批、generic/Requested Item评论附件与BPMN通过。5个Change中2草稿无实例，3已提交各1实例且冻结快照不变，Change启动事件0/重复实例0；Requested Item真实worker事件published且错误已清。
+
+实际业务角色non-owner/non-super/non-bypass，RLS enforce；环境白名单检查通过。三个自建容器、所有自有进程、私有配置与原始报告/trace已清理，19490–19494释放。完整脱敏结果/指纹/cleanup保存在已忽略v1-reviewed-final。早期8pass/1fail的双启动、CSRF计数、限流及宿主LLM配置继承偏差均如实保留，见[实施报告](../../review/2026-09-11-workitem-next-stage-implementation-review.md)。
+
+前端ed80f99b生产构建通过，41项创建API/hook测试及type-check通过。V2的允许删除与目标环境证据仍不完成，不以V1成功替代实际运行切换。

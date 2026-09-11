@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go/Gin、Ent、PostgreSQL、现有 BPMN 与 Go testing。
 
-> 状态：accepted（执行中；B1 已实现并验证，B2/B3 进行中，其余未执行）
+> 状态：accepted（B1–B5 已实现、验证并提交；V1 发现的 Change 流程双启动补充修复已验证，见 ed80f99b）
 > 依据：[后续设计](../specs/2026-09-11-workitem-convergence-next-stage-design.md)；[总入口](2026-09-11-workitem-next-stage.md)。命令从 itsm-backend 执行，除非另有说明。
 
 ## Global Constraints
@@ -194,10 +194,10 @@ HTTP断言覆盖仅workaround时永久方案保持、resolution显式空且solut
 
 ## 后端交付检查
 
-- [ ] 更新受影响 API 文档与调用方；B1–B3 变更不能只落服务端而留下旧请求格式。
-- [ ] `go build ./...`；执行以上定向检查及总入口的已知失败归因。
-- [ ] `git diff --check`；独立审查或维护者复核权限、事务和旧路径删除清单。
-- [ ] 提供各任务提交、实际执行测试名称、环境与未通过项；本计划勾选不替代证据。
+- [x] 更新受影响 API 文档与调用方；B1–B3 变更不能只落服务端而留下旧请求格式。
+- [x] `go build ./...`；执行以上定向检查及总入口的已知失败归因。
+- [x] `git diff --check`；独立审查或维护者复核权限、事务和旧路径删除清单。
+- [x] 提供各任务提交、实际执行测试名称、环境与未通过项；本计划勾选不替代证据。
 
 ## B1 执行记录（2026-09-11）
 
@@ -224,6 +224,8 @@ HTTP断言覆盖仅workaround时永久方案保持、resolution显式空且solut
 证据保存在实施工作树已忽略的 `.superpowers/sdd/workitem-next-stage/`。测试期间的一次全 service 运行命中升级通知 fixture 配置中间态，修正后全包通过；定向 Jest 首次误用全仓库覆盖门槛，38 测试本身通过，随后以 coverage=false 重跑通过。未推送、合并或部署。
 
 F3 必须继续处理 SLA 违规的周期归属：SLAViolation 只有 ticket_id、违规时间和解决标记；现有重开周期不清理旧违规。本批只修正 WorkItem 归属，不能宣称周期隔离完成。B2/B3 尚须把同一通用写入口保护扩展至 Change/Problem。
+
+后续闭合：上述当时待办已由 754d6126（三域通用写保护）及 18856ba7（SLA 当前周期隔离）完成，见 B2 与 F3 执行记录；不再作为当前待办。
 
 
 ## B5 执行记录（2026-09-11）
@@ -280,3 +282,24 @@ handlers/problem、controller、service 的 Problem/RCA 定向测试通过；前
 
 
 最终后端集成检查：go build ./... 通过；authorization/dto/Change/service/BPMN/controller/bootstrap/migration/repository/integration 十个受影响包全通过。完整 Problem 包额外发现 TestDualInvestigationEntryPoints 的步骤和候选方案请求仍缺新必填字段（定向 TestProblem/TestRCA 未覆盖该名称）；保留原测试流程，补 problemId、当次观察 version 和独立 operationId 后，完整 handlers/problem 包通过（1.690s）。没有放宽 binder 或状态码要求。
+
+## V1 发现的 Change 流程启动归属补充（2026-09-11）
+
+真实端到端出现 Change submit 500。确定性 PostgreSQL RED 证明：创建 outbox 的 worker 先启动实例后，专业 submit 再次启动触发“已存在运行实例”；相反顺序会留下失败重试。公共 engine/trigger 及空业务身份 HTTP 入口另有绕过提交启动的路径。
+
+| 入口 | 最终职责与事实 | 验证 |
+|---|---|---|
+| Change intake 创建 | 同一创建事务冻结定义 ID/key/version/digest 与输入变量；领域 policy 声明 submit 启动，不创建提前启动事件；返回 awaiting_submit | 草稿无实例/启动事件，创建重放、冻结配置变化 |
+| Change submit | 当前权限与观察版本、专业前提、冻结 subtype 一致性校验后，同事务精确定义启动；保留原 requester，启动 actor 为实际提交人 | worker先/submit先/并发；定义改变、缺证据、不同提交人、显式no_process、普通/紧急与双向type漂移 |
+| 公共 engine/trigger | 规范 WorkItem 解析真实 tenant-scoped 身份；Change 只能经专业 submit。独立流程不得冒用规范业务键或保留 WorkItem 身份变量 | 3个原 engine/trigger 旁路 RED；实际 HTTP 8个拒绝场景及合法独立流程 |
+| WorkflowStartOutboxHandler | 旧 Change 创建事件按同 policy 明确 blocked，不publish；其余基础设施错误仍按原重试路径 | 真实 System queue repository / Tenant handler / System directory 组合；实际claim后拒绝，后续submit仍成功 |
+
+IntakeResolutionSnapshot 增加两项不可变冻结字段，变量标记 Sensitive；新增036，不修改既有checksum或回填历史。当前专业Type可编辑，但与创建时冻结 change_type 不一致时拒绝提交，不能运行错误模板或按最新配置回退。显式 no_process 创建继续返回 not_required；它不能满足 Change submit 所需的审批流程门禁，缺失冻结证据另行明确拒绝。默认紧急变更使用既有 BusinessSubtype 精确绑定能力。
+
+独立审查发现并关闭空业务身份 HTTP 抢占与 subtype 漂移两项 P2。真实 HTTP 9场景通过（16.476s）；最终专业提交7顶层/15场景通过（32.094s）；Change4.737s、Intake5.442s、Service40.096s全包通过。controller26.614s、service/bpmn2.944s、workitemcreation0.023s及最终构建通过。规范 WorkItem 不存在或RLS不可见仍failclosed；旧BPMN测试按需建立真实记录，保留原授权、审计、事务、幂等和回调断言。
+
+旧事件的初次测试使用Tenant repository轮询系统队列，未实际claim，其pending失败不能作为RED。最终按实际bootstrap角色组合重测，旧实现AttemptCount=1后仍pending为有效RED（1.939s）；修复后明确professional-submit原因blocked、未publish、零实例，随后submit成功。
+
+日志包含 workitem-change-start-delivery-red.log、workitem-change-start-engine-red.log、workitem-http-start-pg-red.log、workitem-http-start-pg-green.log、workitem-change-legacy-event-red.log、workitem-change-start-pg.log、workitem-change-start-final-unit.log。最终V1浏览器重跑及036 schema边界复核另记；这些测试不宣称历史事件已处置或共享环境已切换。
+
+最终补充：036 schema边界反例/修复通过（0.049s）且独立审阅完成；ed80f99b提交业务修复。最终V1 9/9通过（3.6m），端到端测试提交dada445d，见实施复核报告。此前“待V1/036”仅表示该段记录时的状态，现已闭环；实际环境仍未部署。

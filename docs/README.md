@@ -31,13 +31,13 @@
 
 ## 产品与架构
 
-- [WorkItem 后续实施计划（accepted，独立复核通过，未执行）](./superpowers/plans/2026-09-11-workitem-next-stage.md)：后端五项任务、公共页面三项任务和跨域验收/退役两项任务的依赖与证据入口。
+- [WorkItem 后续实施计划（代码与隔离旅程已验收，退役未完成）](./superpowers/plans/2026-09-11-workitem-next-stage.md)：后端五项任务、公共页面三项任务和跨域验收/退役两项任务的依赖与证据入口。
 
-- [WorkItem 后续收敛设计（accepted，未实施）](./superpowers/specs/2026-09-11-workitem-convergence-next-stage-design.md)：后端契约、页面操作、跨域验收与退役门禁三批设计；包含已确认的三域转派和 backlog 边界。
+- [WorkItem 后续收敛设计（accepted，执行中）](./superpowers/specs/2026-09-11-workitem-convergence-next-stage-design.md)：后端契约、页面操作、跨域验收与退役门禁三批设计；包含已确认的三域转派和 backlog 边界。
 
 - [WorkItem 重构后续开发输入与决策记录（accepted）](./superpowers/specs/2026-09-11-workitem-convergence-development-input.md)：本轮讨论总入口，覆盖 Incident、Problem、Change、Requested Item/generic 回归和公共能力；已确认与待讨论分列。
 
-- [Incident 分配与处理动作决策（accepted，未实施）](./superpowers/specs/2026-09-11-workitem-incident-assignment-convergence-design.md)：WorkItem 收敛的分配/转派、可选确认和首次响应 backlog 决策过程。
+- [Incident 分配与处理动作决策（accepted，B1 已验证）](./superpowers/specs/2026-09-11-workitem-incident-assignment-convergence-design.md)：WorkItem 收敛的分配/转派、可选确认和首次响应 backlog 决策过程。
 
 - [WorkItem 收敛实施总计划（draft）](./superpowers/plans/2026-09-09-workitem-convergence.md)：专业动作、关系联动、流程身份及切换门禁三个子计划。
 
@@ -52,6 +52,10 @@
 - [工作流控制台诊断与设计](./product/workflow-console-diagnosis-and-design.md)
 
 ## 测试与评审
+
+- [WorkItem 本轮实施复核与交接](./review/2026-09-11-workitem-next-stage-implementation-review.md)：已关闭问题、真实验证、代码提交与运行待办。
+
+- [WorkItem 切换与恢复手册](./deployment/workitem-convergence-cutover.md)：自动退役阻断、备份恢复证据与尚未完成的允许删除路径。
 
 - [WorkItem 后续计划独立审查](./review/2026-09-11-workitem-next-stage-plan-review-report.md)：五项重要契约问题、修订及最终复核结论。
 
