@@ -254,6 +254,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 
 	// 2.3 Create Investigation Step
 	stepReq := dto.CreateInvestigationStepRequest{
+		ProblemID: p.ID, Version: client.Ticket.GetX(ctx, *p.WorkItemID).Version, OperationID: "create-investigation-step",
 		InvestigationID: invID,
 		StepNumber:      1,
 		StepTitle:       "Check Envoy access logs",
@@ -265,7 +266,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	req2_3 := httptest.NewRequest("POST", "/api/v1/problem-investigation/steps", bytes.NewBuffer(bodyStep))
 	req2_3.Header.Set("Content-Type", "application/json")
 	r2.ServeHTTP(w2_3, req2_3)
-	require.Equal(t, http.StatusOK, w2_3.Code)
+	require.Equal(t, http.StatusOK, w2_3.Code, w2_3.Body.String())
 
 	// 2.4 Get Investigation Steps
 	w2_4 := httptest.NewRecorder()
@@ -292,6 +293,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 
 	// 2.6 Create Problem Solution
 	solReq := dto.CreateProblemSolutionRequest{
+		Version: client.Ticket.GetX(ctx, *p.WorkItemID).Version, OperationID: "create-candidate",
 		ProblemID:           p.ID,
 		SolutionType:        dto.SolutionTypeFix,
 		SolutionDescription: "Increase connection pool max size and fix lock contention",
@@ -303,7 +305,7 @@ func TestDualInvestigationEntryPoints(t *testing.T) {
 	req2_6 := httptest.NewRequest("POST", "/api/v1/problem-investigation/solutions", bytes.NewBuffer(bodySol))
 	req2_6.Header.Set("Content-Type", "application/json")
 	r2.ServeHTTP(w2_6, req2_6)
-	require.Equal(t, http.StatusOK, w2_6.Code)
+	require.Equal(t, http.StatusOK, w2_6.Code, w2_6.Body.String())
 
 	// 2.7 Get Problem Solutions
 	w2_7 := httptest.NewRecorder()

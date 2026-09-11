@@ -262,3 +262,21 @@ Problem 普通编辑、责任调整、专用根因/方案及 RCA 记录使用同
 handlers/problem、controller、service 的 Problem/RCA 定向测试通过；前端最终 18 个相关 API 测试和类型检查通过。最新无 overlay PostgreSQL AssignmentProblem/ProblemLifecycle/RCAAuthority 合跑通过（18.952s），含新增证据创建/删除重放与审计失败回滚、并发、已分配 MSP、当前租户 RLS；全部独立 schema/角色清理。旧 MSP 审计断言从不再成立的固定条数改为明确六个动作序列，新增 metadata 审计真实存在，没有删减断言。
 
 补充后的独立只读复查未发现确定性 P1/P2，确认 raw SQL 仅在所属 Problem 的已授权事务内执行，候选变更与权威方案分离。代码与数据库证据保存在 .superpowers/sdd/workitem-next-stage；实际环境未部署。
+
+
+## 跨域入口清单补充
+
+| 域/入口 | 权威命令及写入 | 观察版本/回执 | 退出与验证 |
+|---|---|---|---|
+| Change HTTP assign/普通编辑 | Change ApplyMetadata → tickets + change 证据约束 | expectedVersion/operationId，同事务审计 | 不改变专业阶段/审批/任务；Change handler 与非特权 PG |
+| Problem HTTP 普通编辑/root-cause/solution | ApplyMetadata → tickets + problems | version/operationId，正文摘要与回执 | 原 Update SQL 删除，空值/原因/并发/撤权测试 |
+| Problem RCA 新增/更新 | RootCauseMetadata → 同一 RR 中 root_cause_analyses + 权威正文 | 当前 actor、version/operationId | 老无 Meta RCA service 方法退出，HTTP/PG 原子性 |
+| Problem 调查/步骤/候选方案 | EvidenceMetadata → 所属 Problem 内 investigation/step/solution | 当前 actor、version/operationId；DELETE 仍保留 ProblemID | 无 Meta SQL 写方法及闲置 ApproveSolution 删除；候选不自动成为权威方案 |
+| 三域通用 Ticket 入口 | 核心编辑/状态/分派拒绝专业类，专业命令单一权威 | 不制造另一套公共专业命令 | batch 完整预检；repository 条件；保留 generic/requested-item/catalog-task |
+| 真实 seed/流程启动 | ProcessBindingService / 保留身份变量验证 | 正规配置与定义版本，错误返回调用者 | SeedAll/ProductionInitializers/CLI 均验证；旧直接绑定写入退出 |
+| 关系通知三个消费者 | Tenant 业务查询 + 窄 DirectorySnapshot 身份 | 原 delivery key、当前授权与重试状态 | 非特权 RLS、撤权blocked、暂时错误重试和真实通知数量 |
+
+此前 B1 表按当时观察保留；本表补充 B2/B3/B4/B5 已收口的范围，不重写原提交的测试历史。
+
+
+最终后端集成检查：go build ./... 通过；authorization/dto/Change/service/BPMN/controller/bootstrap/migration/repository/integration 十个受影响包全通过。完整 Problem 包额外发现 TestDualInvestigationEntryPoints 的步骤和候选方案请求仍缺新必填字段（定向 TestProblem/TestRCA 未覆盖该名称）；保留原测试流程，补 problemId、当次观察 version 和独立 operationId 后，完整 handlers/problem 包通过（1.690s）。没有放宽 binder 或状态码要求。
