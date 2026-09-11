@@ -527,3 +527,30 @@ func retirementColumnNames() []string {
 	sort.Strings(r)
 	return r
 }
+
+// Version-owned deletion inventory: 027 owns only the two identity columns;
+// every other exact retirement target is owned by immutable 022. Common admission
+// uses pg_catalog so an inspection role need not have business SELECT privileges.
+func verifyHistoricalRetirementInventory(ctx context.Context, q migrationQuery, schema string, applied []Migration) error {
+	versions := map[string]bool{}
+	for _, a := range applied {
+		versions[a.Version] = true
+	}
+	if !versions["022_drop_professional_extension_shared_fields"] && !versions["027_work_item_identity_field_retirement"] {
+		return nil
+	}
+	objects, err := retirementObjects(ctx, q, schema)
+	if err != nil {
+		return err
+	}
+	for _, object := range objects {
+		version := "022_drop_professional_extension_shared_fields"
+		if object.Kind == "column" && ((object.Table == "tickets" && object.Name == "type") || (object.Table == "incidents" && object.Name == "incident_number")) {
+			version = "027_work_item_identity_field_retirement"
+		}
+		if versions[version] {
+			return fmt.Errorf("historical retirement receipt %s contradicts retained structure: %s.%s", version, object.Table, object.Name)
+		}
+	}
+	return nil
+}

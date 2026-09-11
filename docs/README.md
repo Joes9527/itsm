@@ -55,7 +55,7 @@
 
 - [WorkItem 本轮实施复核与交接](./review/2026-09-11-workitem-next-stage-implementation-review.md)：已关闭问题、真实验证、代码提交与运行待办。
 
-- [WorkItem 受控退役设计（accepted）](./superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md)：保留历史账本、结构准备、受控删除和删除后恢复的详细契约；审阅修订已通过；代码及隔离验证已实施，Task 6 独立审阅与全计划最终审阅待完成。
+- [WorkItem 受控退役设计（accepted）](./superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md)：保留历史账本、结构准备、受控删除和删除后恢复的详细契约；审阅修订已通过；代码及隔离验证已实施，Tasks 1–6 分批审阅已通过；最终审阅 I1–I4 修复及限定复审待完成，目标环境执行仍未授权或实施。
 
 - [WorkItem 受控退役实施计划](./superpowers/plans/2026-09-11-workitem-controlled-retirement.md)：六批实施与验证任务；Tasks 1–5 已通过独立审阅，Task 6 验证及审阅状态见计划。
 - [WorkItem 受控退役审阅闭环](./review/2026-09-11-workitem-controlled-retirement-review-report.md)：验证顺序、回退依赖与写入前门禁的证据及修订结论。

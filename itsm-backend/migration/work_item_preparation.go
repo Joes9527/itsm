@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/lib/pq"
+	"itsm-backend/common/workitemidentity"
 	"sort"
 	"strings"
 	"time"
@@ -162,19 +163,6 @@ func (m *Migrator) preparationInventory(ctx context.Context, q migrationQuery) (
 	}
 	if _, err = PlanMigrations(ControlledMigrationCatalog(), applied, OpPrepare, nil); err != nil {
 		return inv, nil, err
-	}
-	for _, a := range applied {
-		if a.Version != "022_drop_professional_extension_shared_fields" && a.Version != "027_work_item_identity_field_retirement" {
-			continue
-		}
-		var contradictory bool
-		err = q.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema=$1 AND (($2='027_work_item_identity_field_retirement' AND ((table_name='tickets' AND column_name='type') OR (table_name='incidents' AND column_name='incident_number'))) OR ($2='022_drop_professional_extension_shared_fields' AND table_name IN ('incidents','problems','changes') AND column_name IN ('title','description','status','priority','tenant_id','created_at','updated_at'))))`, target.Schema, a.Version).Scan(&contradictory)
-		if err != nil {
-			return inv, nil, err
-		}
-		if contradictory {
-			return inv, nil, fmt.Errorf("historical retirement receipt %s contradicts retained structure", a.Version)
-		}
 	}
 	inv.LedgerDigest, err = evidenceDigest(applied)
 	if err != nil {
@@ -408,7 +396,7 @@ func validatePreparationShapeMode(ctx context.Context, q migrationQuery, schema 
 				return fmt.Errorf("unreviewed WorkItem base tenant policy")
 			}
 			if !prepared {
-				err := q.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM `+rel+` t WHERE to_jsonb(t)->>'type' IS NOT NULL AND to_jsonb(t)->>'type'<>'' AND NOT ((record_class='generic' AND to_jsonb(t)->>'type'=coalesce(generic_subtype,'')) OR (record_class IN ('incident','problem','catalog_task') AND to_jsonb(t)->>'type'=record_class) OR (record_class='change_request' AND to_jsonb(t)->>'type' IN ('change','change_request')) OR (record_class='service_request_item' AND to_jsonb(t)->>'type' IN ('service_request','service_request_item'))))`).Scan(&bad)
+				err := q.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM `+rel+` t WHERE to_jsonb(t)->>'type' IS NOT NULL AND to_jsonb(t)->>'type'<>'' AND NOT ((record_class='generic' AND to_jsonb(t)->>'type'=coalesce(generic_subtype,'') AND NOT (to_jsonb(t)->>'type'=ANY($1::text[]))) OR (record_class IN ('incident','problem','catalog_task') AND to_jsonb(t)->>'type'=record_class) OR (record_class='change_request' AND to_jsonb(t)->>'type' IN ('change','change_request')) OR (record_class='service_request_item' AND to_jsonb(t)->>'type' IN ('service_request','service_request_item'))))`, pq.Array(preparationReservedProfessionalIdentities())).Scan(&bad)
 				if err != nil {
 					return err
 				}
@@ -678,4 +666,15 @@ func validatePreparationIndexes(indexes []preparationIndex) error {
 		}
 	}
 	return nil
+}
+
+// Canonical classes plus only the two historical aliases asserted by immutable 027.
+func preparationReservedProfessionalIdentities() []string {
+	result := []string{"change", "service_request"}
+	for _, class := range workitemidentity.RecordClasses() {
+		if class != workitemidentity.RecordClassGeneric {
+			result = append(result, class)
+		}
+	}
+	return result
 }

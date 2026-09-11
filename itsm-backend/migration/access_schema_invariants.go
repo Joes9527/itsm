@@ -48,12 +48,26 @@ BEGIN
  END LOOP;
  RETURN true;
 END $$;
-DO $$ BEGIN
- ALTER TABLE catalog_access_policies DROP CONSTRAINT IF EXISTS catalog_access_policy_finite;
- ALTER TABLE catalog_access_policies ADD CONSTRAINT catalog_access_policy_finite CHECK(version>0 AND provider='graph' AND btrim(external_system)<>'' AND btrim(group_id)<>'' AND btrim(duration_field)<>'' AND itsm_finite_access_options(duration_options));
- ALTER TABLE service_request_access_snapshots DROP CONSTRAINT IF EXISTS access_snapshot_finite;
- ALTER TABLE service_request_access_snapshots ADD CONSTRAINT access_snapshot_finite CHECK(policy_version>0 AND provider='graph' AND btrim(external_system)<>'' AND btrim(subject_id)<>'' AND btrim(group_id)<>'' AND btrim(duration_key)<>'' AND duration_seconds>0 AND duration_seconds<=9223372036);
- ALTER TABLE service_request_access_results DROP CONSTRAINT IF EXISTS access_result_verified;
- ALTER TABLE service_request_access_results ADD CONSTRAINT access_result_verified CHECK(provider='graph' AND btrim(subject_id)<>'' AND btrim(group_id)<>'' AND btrim(evidence_ref)<>'' AND verified_at>'0001-01-01T00:00:00Z'::timestamptz AND ((outcome='granted' AND baseline='not_member' AND expires_at IS NOT NULL AND expires_at>verified_at) OR(outcome='already_present' AND baseline='member' AND expires_at IS NULL)));
+-- Parse the canonical expression against the actual column types in a private
+-- temporary relation. Compare the deparsed validated CHECK exactly, preserving
+-- existing identities. Never drop/repair an incompatible installed constraint.
+DO $$
+DECLARE target_table text; target_constraint text; expression text; expected text; actual text; target_schema text := current_schema();
+BEGIN
+ FOR target_table,target_constraint,expression IN SELECT * FROM (VALUES
+('catalog_access_policies','catalog_access_policy_finite',$check$version>0 AND provider='graph' AND btrim(external_system)<>'' AND btrim(group_id)<>'' AND btrim(duration_field)<>'' AND itsm_finite_access_options(duration_options)$check$),
+('service_request_access_snapshots','access_snapshot_finite',$check$policy_version>0 AND provider='graph' AND btrim(external_system)<>'' AND btrim(subject_id)<>'' AND btrim(group_id)<>'' AND btrim(duration_key)<>'' AND duration_seconds>0 AND duration_seconds<=9223372036$check$),
+('service_request_access_results','access_result_verified',$check$provider='graph' AND btrim(subject_id)<>'' AND btrim(group_id)<>'' AND btrim(evidence_ref)<>'' AND verified_at>'0001-01-01T00:00:00Z'::timestamptz AND ((outcome='granted' AND baseline='not_member' AND expires_at IS NOT NULL AND expires_at>verified_at) OR(outcome='already_present' AND baseline='member' AND expires_at IS NULL))$check$)) AS checks(table_name,constraint_name,expression) LOOP
+ EXECUTE format('CREATE TEMP TABLE itsm_access_invariant_shape (LIKE %I.%I) ON COMMIT DROP',target_schema,target_table);
+ EXECUTE format('ALTER TABLE pg_temp.itsm_access_invariant_shape ADD CONSTRAINT expected CHECK(%s)',expression);
+ SELECT pg_get_constraintdef(oid) INTO expected FROM pg_constraint WHERE conrelid='pg_temp.itsm_access_invariant_shape'::regclass AND conname='expected';
+ SELECT pg_get_constraintdef(oid) INTO actual FROM pg_constraint WHERE conrelid=format('%I.%I',target_schema,target_table)::regclass AND conname=target_constraint;
+ IF actual IS NULL THEN
+ EXECUTE format('ALTER TABLE %I.%I ADD CONSTRAINT %I CHECK(%s)',target_schema,target_table,target_constraint,expression);
+ ELSIF actual IS DISTINCT FROM expected THEN
+ RAISE EXCEPTION 'incompatible access constraint %.%',target_table,target_constraint;
+ END IF;
+ DROP TABLE pg_temp.itsm_access_invariant_shape;
+ END LOOP;
 END $$;
 `

@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go、database/sql、PostgreSQL、Ent、现有Go集成测试及Playwright。
 
-**Status:** accepted，Tasks 1–5 已实施并通过各批独立审阅；Task 6 的 6a 恢复运行器及 6b 夹具／文档已实施并通过隔离验证，Task 6 独立审阅和全计划最终审阅待完成。设计依据为[已修订设计](../specs/2026-09-11-workitem-controlled-retirement-design.md)。原审阅代码基线 fab60168；当前实施在既有 `codex/refactor/workitem-next-stage` 隔离 worktree，P/R 版本为 037/038。未执行共享或目标环境部署、观察、退役。
+**Status:** accepted，Tasks 1–6 已实施并通过各批独立审阅，其中 Task 6 包含隔离恢复运行器、夹具和恢复修订；最终审阅 I1–I4 修复及限定复审待完成，目标环境执行仍未授权或实施。设计依据为[已修订设计](../specs/2026-09-11-workitem-controlled-retirement-design.md)。原审阅代码基线 fab60168；当前实施在既有 `codex/refactor/workitem-next-stage` 隔离 worktree，P/R 版本为 037/038。未执行共享或目标环境部署、观察、退役。
 
 实施记录：Task 3 复核终点 `9882b5ff`；Task 4 复核终点 `32c196f3`；Task 5 复核终点 `d4fa72bb`；Task 6a 提交 `f50f53e9`。各步骤原始 RED 命令保留为测试来源，后续勾选仅表示该项已有证据，不替代整批及最终审阅。
 
@@ -211,7 +211,7 @@ func TestRetirementEvidenceRejectsEmpty(t *testing.T) {
 - [ ] 更新手册区分“代码/隔离验证完成”与“目标环境准入/部署/观察/退役待执行”，保留历史测试来源。执行git diff --check、独立审阅后提交 `test(migration): verify controlled retirement and complete recovery`。
 
 
-Task 6 隔离证据：6a 三时点 V1 各 9/9，共 27 PASS，8 个实际恢复故障全部拒绝；6b 规定 Go 组 40 个顶层／45 个子测试，额外实际入口组 24／34，回调及受影响 RLS／事件组 27／44，均零失败／SKIP。6b 独立重建的后端及迁移二进制与 6a SHA256 完全一致。完整运行方式与限制见[切换与恢复手册](../../deployment/workitem-convergence-cutover.md)。Task 6 独立审阅、全计划最终审阅和目标环境执行仍待完成。
+Task 6 隔离证据：6a 三时点 V1 各 9/9，共 27 PASS，8 个实际恢复故障全部拒绝；6b 规定 Go 组 40 个顶层／45 个子测试，额外实际入口组 24／34，回调及受影响 RLS／事件组 27／44，均零失败／SKIP。6b 独立重建的后端及迁移二进制与 6a SHA256 完全一致。完整运行方式与限制见[切换与恢复手册](../../deployment/workitem-convergence-cutover.md)。Tasks 1–6 分批审阅已通过；最终审阅 I1–I4 修复及限定复审待完成，目标环境执行仍未授权或实施。
 
 ## 设计覆盖与交付检查
 

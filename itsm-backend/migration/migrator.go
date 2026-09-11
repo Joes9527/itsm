@@ -486,6 +486,9 @@ func inspectMigrationTargetMode(ctx context.Context, q migrationQuery, config Mi
 	if _, err = PlanMigrations(ControlledMigrationCatalog(), applied, OpUp, nil); err != nil {
 		return nil, err
 	}
+	if err := verifyHistoricalRetirementInventory(ctx, q, schema, applied); err != nil {
+		return nil, err
+	}
 	seen := map[string]bool{}
 	for _, a := range applied {
 		seen[a.Version] = true
