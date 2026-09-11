@@ -34,6 +34,7 @@ jest.mock('../BasicInfoCard', () => ({
 }));
 
 const workItem: WorkItemCommon = {
+  version: 1,
   id: 401,
   number: 'PRB-202608-000401',
   recordClass: 'problem',

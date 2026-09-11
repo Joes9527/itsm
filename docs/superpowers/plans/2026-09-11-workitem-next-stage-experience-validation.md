@@ -8,7 +8,7 @@
 
 **Tech Stack:** Next.js、TypeScript、Jest、Playwright、Go、PostgreSQL。
 
-> 状态：accepted（已按独立审查修订；任务未执行）
+> 状态：accepted（F1–F3 已实现并验证；V1 执行中，V2 部分验证，实际部署未执行）
 > 依据：[后续设计](../specs/2026-09-11-workitem-convergence-next-stage-design.md)；依赖[后端计划](2026-09-11-workitem-next-stage-backend.md)。前端命令从 itsm-frontend 执行。
 
 ## Global Constraints
@@ -42,7 +42,7 @@ export function workItemIdentity(dto: { workItemId: number; number: string; vers
 
 仅统一新前端消费的权威 number 字段，后端明确从关联 TicketNumber 读取，不从专业 ID 拼装。现有项目响应包裹和错误格式不变。
 
-- [ ] 写入并运行失败测试：
+- [x] 写入并运行失败测试：
 
 ```ts
 import { workItemIdentity } from '../identity';
@@ -55,10 +55,10 @@ test('rejects missing identity instead of falling back', () => {
 });
 ```
 
-- [ ] Run `npm test -- --runInBand --coverage=false --reporters=default --runTestsByPath src/components/work-item/__tests__/identity.test.ts`。
-- [ ] 实现上述函数；三个真实页面使用它，再组装其余公共字段。更新后端缺失的 number/workItemId/version 投影、前端 DTO 及 B1–B3 请求字段；删除被替代的编号/ID 兜底。
-- [ ] 在相邻页面测试中 mock 返回专业 ID=4、WorkItem ID=91，断言真实编号 PRB-0091、公共评论/附件/SLA使用 WorkItem ID=91；专业动作路由仍使用专业 ID=4，观察版本为7，由后端解析至WorkItem91。另建专业记录91作为哨兵，断言动作不会误改它；不能要求专业动作 URL也使用91。
-- [ ] Run 定向测试及 `npm run type-check`；提交 `refactor(workitem): project authoritative identity and version`。
+- [x] Run `npm test -- --runInBand --coverage=false --reporters=default --runTestsByPath src/components/work-item/__tests__/identity.test.ts`。
+- [x] 实现上述函数；三个真实页面使用它，再组装其余公共字段。更新后端缺失的 number/workItemId/version 投影、前端 DTO 及 B1–B3 请求字段；删除被替代的编号/ID 兜底。
+- [x] 在相邻页面测试中 mock 返回专业 ID=4、WorkItem ID=91，断言真实编号 PRB-0091、公共评论/附件/SLA使用 WorkItem ID=91；专业动作路由仍使用专业 ID=4，观察版本为7，由后端解析至WorkItem91。另建专业记录91作为哨兵，断言动作不会误改它；不能要求专业动作 URL也使用91。
+- [x] Run 定向测试及 `npm run type-check`；提交 `refactor(workitem): project authoritative identity and version`。
 
 ## F2：公共转派交互和冲突
 
@@ -89,13 +89,13 @@ export type AssignmentProps = {
 
 候选人员沿用现有授权目录查询，不硬编码角色、不自行扩大 MSP 候选资格。Change/Problem 回调把 reason 映射为 assignmentReason；Incident 使用 reason。Change 把组件 version 映射为 expectedVersion 并移除 version；Incident/Problem保留version。专业字段之外的请求格式差异只在 API 适配处处理。
 
-- [ ] 组件测试覆盖：已有负责人时空白原因禁用提交；选择新负责人并填写原因后只提交一次；disabledReason 可见；后端409后输入仍在且不自动再次 submit。模拟 submit Promise reject 后断言调用次数为1、原因文本仍存在。
-- [ ] Run `npm test -- --runInBand --coverage=false --reporters=default --runTestsByPath src/components/work-item/__tests__/WorkItemAssignment.test.tsx`，确认未实现行为失败。
-- [ ] 实现交互：打开时保留观察版本；一次逻辑提交生成一次 operationId，网络不确定重试使用原键。收到409后保留原因和目标，用户刷新确认后创建新请求。成功刷新权威详情和时间线，不本地推导新状态。
-- [ ] 用 API 请求测试冻结路由与载荷：Incident `/incidents/4/assign` 请求含 version=7，Change现有专业路由含 expectedVersion=7且不含version，Problem现有更新路由含version=7；三者均使用专业ID4而非WorkItem91，并传入本域原因字段。后端严格 binder 测试同时验证真实请求被接受。
-- [ ] 三域接入公共组件并删除原重复转派 modal/提交逻辑。保留专业动作与后端 action reason；原页面若缺少转派入口，由公共组件承接，不新增平行专业详情页面。
-- [ ] 核查 WorkItemComments/Attachments/History 的专业 Panel 重复入口，存在实际重复才移除；断言仍使用 WorkItem ID及原内部/公开可见规则。
-- [ ] Run 新组件与 Shell 测试、`npm run type-check`、`npm run lint:check`；提交 `refactor(workitem): unify reassignment and conflict experience`。
+- [x] 组件测试覆盖：已有负责人时空白原因禁用提交；选择新负责人并填写原因后只提交一次；disabledReason 可见；后端409后输入仍在且不自动再次 submit。模拟 submit Promise reject 后断言调用次数为1、原因文本仍存在。
+- [x] Run `npm test -- --runInBand --coverage=false --reporters=default --runTestsByPath src/components/work-item/__tests__/WorkItemAssignment.test.tsx`，确认未实现行为失败。
+- [x] 实现交互：打开时保留观察版本；一次逻辑提交生成一次 operationId，网络不确定重试使用原键。收到409后保留原因和目标，用户刷新确认后创建新请求。成功刷新权威详情和时间线，不本地推导新状态。
+- [x] 用 API 请求测试冻结路由与载荷：Incident `/incidents/4/assign` 请求含 version=7，Change现有专业路由含 expectedVersion=7且不含version，Problem现有更新路由含version=7；三者均使用专业ID4而非WorkItem91，并传入本域原因字段。后端严格 binder 测试同时验证真实请求被接受。
+- [x] 三域接入公共组件并删除原重复转派 modal/提交逻辑。保留专业动作与后端 action reason；原页面若缺少转派入口，由公共组件承接，不新增平行专业详情页面。
+- [x] 核查 WorkItemComments/Attachments/History 的专业 Panel 重复入口，存在实际重复才移除；断言仍使用 WorkItem ID及原内部/公开可见规则。
+- [x] Run 新组件与 Shell 测试、`npm run type-check`、`npm run lint:check`；提交 `refactor(workitem): unify reassignment and conflict experience`。
 
 ## F3：SLA 当前周期与历史展示
 
@@ -107,11 +107,11 @@ export type AssignmentProps = {
 **Interfaces**
 复用已有 GET /tickets/:id/sla、TicketSLAInfoResult 与 dto.TicketSLAInfo：后端已经返回 cycleNumber、cycleStartedAt、pausedMinutes、appliedPolicy、history。WorkItemSLAState 同步这些字段，history 元素按 dto.SLACycleResult 映射 number、startedAt、endedAt、responseAt、resolvedAt、两个 deadline、pausedMinutes、两个 breached、policy、actorId、source、correlationId；时间为 ISO 字符串或对应 null。不得另建历史查询或存储。无需 SLA 与策略缺失错误要可区分。
 
-- [ ] 复用现有 cycle fixture，构造旧周期违约、合法重开后新周期未完成；断言详情同时返回旧结果和新周期，createdAt 未改变。再构造原日历版本不可用，断言重开失败且状态/周期/版本未改变。
-- [ ] Run 后端 cycle 定向测试及现有 PostgreSQL WorkItemSLACycle 套件，确认缺投影或语义回归的具体失败；已有正确计时逻辑不重写。
-- [ ] 将已保存周期事实投影到详情；页面展示历史周期及当前周期，已完成周期使用完成时间判断结果。保持查询只读，不查询时二次匹配策略，不给 start/assign 补 FirstResponseAt。
-- [ ] 修改 WorkItemSLA 组件测试，断言两个周期结果同时可见、无需 SLA 可见、配置缺失不显示正常达标；执行 `npm test -- --runInBand --coverage=false --reporters=default --runTestsByPath src/components/work-item/__tests__/WorkItemSLA.test.tsx`。
-- [ ] Run `npm run type-check`、`npm run build`；提交 `refactor(workitem): expose current and historical SLA cycles`。
+- [x] 复用现有 cycle fixture，构造旧周期违约、合法重开后新周期未完成；断言详情同时返回旧结果和新周期，createdAt 未改变。再构造原日历版本不可用，断言重开失败且状态/周期/版本未改变。
+- [x] Run 后端 cycle 定向测试及现有 PostgreSQL WorkItemSLACycle 套件，确认缺投影或语义回归的具体失败；已有正确计时逻辑不重写。
+- [x] 将已保存周期事实投影到详情；页面展示历史周期及当前周期，已完成周期使用完成时间判断结果。保持查询只读，不查询时二次匹配策略，不给 start/assign 补 FirstResponseAt。
+- [x] 修改 WorkItemSLA 组件测试，断言两个周期结果同时可见、无需 SLA 可见、配置缺失不显示正常达标；执行 `npm test -- --runInBand --coverage=false --reporters=default --runTestsByPath src/components/work-item/__tests__/WorkItemSLA.test.tsx`。
+- [x] Run `npm run type-check`、`npm run build`；提交 `refactor(workitem): expose current and historical SLA cycles`。
 
 ## V1：完整旅程与旧入口退出证据
 
@@ -152,3 +152,16 @@ export type AssignmentProps = {
 2026-09-11：既有迁移 runner 增加自动旧结构退役拒绝，022/027 历史 SQL/checksum 未修改。真实 CLI exit2/0 和只读摘要测试通过，自动门禁与新规范 schema 测试通过，真实备份恢复及备份后新增记录缺失的补偿反例通过；临时 schema/database 全部清理。详见 [运行手册](../../deployment/workitem-convergence-cutover.md)。
 
 允许删除路径因历史022含CASCADE且账本immutable尚待设计决策，未实现、未演练；实际环境部署/观察/删除不在本轮授权范围，V2 与原C3不标记整体完成。此记录不以“自动阻断通过”代替“允许退役路径通过”。
+
+
+## F1–F3 执行与独立审查闭环（2026-09-11）
+
+公共详情采用权威 workItemId/number/version，缺失身份明确失败；专业命令仍使用专业 ID。Incident DTO number 来自关联 TicketNumber。真实页面使用 ID4 与 WorkItem91，公共协作/SLA 指向91，专业命令使用4。转派公共组件冻结打开时观察版本、稳定逻辑请求键，409 保留输入并需用户刷新确认，网络不确定重试保留原键，内容变化使用新键；删除旧 Incident 重复 modal，保留专业动作。三域页面接完整 mapWorkItemSLA。
+
+SLA 后端保留已保存周期历史，区分 not_required/configuration_missing，关闭后停止未完成时钟。升级匹配当前周期实际违规类型、当前截止时间及两个历史违规时间字段，旧周期或延迟旧快照不能触发新周期升级。合法 resolve→reopen PG 先复现旧违规导致升级，再修复；9 个顶层周期测试通过（7.753s），schema 全清理。冻结策略/日历无效时重开完整回滚，未引入另一套日历机制。
+
+独立审查发现并修复两项 P2：前两域操作后未按 version 重读 SLA；目录只取前100人。新增真实页面同ID/新version测试和第101位人员/第二页失败测试均 RED→GREEN；目录按真实后端 totalPages 全部分页读取，部分失败不显示不完整名单，也不加旧 totalPage 别名。再核对发现前端 SLA 新类型和注释错误使用 on_track/at_risk，已统一为实际后端 ok/warning，未改变后端计时词汇。
+
+验证：初次 F1/F2 七套44项前端测试通过；修正后页面11、目录2、SLA7、UserApi15项通过；最终冻结源码 type-check、生产 build 通过；lint 0 errors、1项既有 BPMNDesigner 警告。Incident DTO 测试通过。独立复查确认观察版本、409确认、请求键、专业/WorkItem身份及两项P2修复；原始测试/实现日志保存于已忽略证据目录，junit.xml 已恢复不混入源码。
+
+F3 基础投影提交18856ba7；F1/F2 共享真实页面的整合统一提交，不保留中间双入口。浏览器真实冲突/旅程仍由 V1 单独记录，这些组件测试不替代端到端验收。

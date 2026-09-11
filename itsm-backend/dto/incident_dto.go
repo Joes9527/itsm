@@ -103,6 +103,7 @@ type EscalateMajorIncidentRequest struct {
 }
 
 type IncidentResponse struct {
+	Number              string                      `json:"number"`
 	CategoryID          int                         `json:"categoryId"`
 	ID                  int                         `json:"id" example:"1"`
 	Title               string                      `json:"title" example:"服务器CPU使用率过高"`

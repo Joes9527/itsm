@@ -12,6 +12,11 @@ import {
   type ApprovalStep,
   type ApprovalStepStatus,
 } from '@/components/business/detail-tabs';
+import { workItemIdentity } from '@/components/work-item/identity';
+import { assignChangeWorkItem } from '@/lib/api/workitem-assignment';
+import { useAssignmentCandidates } from '@/components/work-item/useAssignmentCandidates';
+import type { AssignmentInput } from '@/components/work-item/WorkItemAssignment';
+import { mapWorkItemSLA } from '@/components/work-item/mapWorkItemSLA';
 import { WorkItemShell } from '@/components/work-item/WorkItemShell';
 import type { WorkItemCommon, WorkItemSLAState } from '@/components/work-item/WorkItemTypes';
 import dayjs from 'dayjs';
@@ -35,16 +40,9 @@ function mapApprovalStatus(status: string): ApprovalStepStatus {
   }
 }
 
-// Shared identity and number are projected from the authorized WorkItem relation.
-function toWorkItemCommon(change: Change): WorkItemCommon | null {
-  if (!change.workItemId || !change.number) {
-    // 缺少 workItemId 表示开发数据违反 WorkItem 创建不变量。拒绝用专业记录 ID 猜测
-    // WorkItem 身份，避免把评论或附件挂到错误记录。
-    return null;
-  }
+function toWorkItemCommon(change: Change): WorkItemCommon {
   return {
-    id: change.workItemId,
-    number: change.number,
+    ...workItemIdentity(change),
     recordClass: 'change_request',
     title: change.title,
     status: change.status,
@@ -63,28 +61,46 @@ export default function ChangeDetailPage() {
 
   const [approvals, setApprovals] = useState<ApprovalStep[]>([]);
   const [approvalLoading, setApprovalLoading] = useState(false);
+  const [identityError, setIdentityError] = useState<string | null>(null);
   const [workItem, setWorkItem] = useState<WorkItemCommon | null>(null);
   const [change, setChange] = useState<Change | null>(null);
   const [sla, setSla] = useState<WorkItemSLAState | undefined>(undefined);
+  const [panelRevision, setPanelRevision] = useState(0);
+  const directory = useAssignmentCandidates(Boolean(change?.actions?.assign?.allowed));
 
   const syncChangeSummary = useCallback((nextChange: Change) => {
-    setChange(nextChange);
-    setWorkItem(toWorkItemCommon(nextChange));
+    try {
+      const common = toWorkItemCommon(nextChange);
+      setChange(nextChange);
+      setWorkItem(common);
+      setIdentityError(null);
+    } catch (error) {
+      setWorkItem(null);
+      setIdentityError(error instanceof Error ? error.message : 'WorkItem 身份或版本无效');
+    }
   }, []);
+
+  const refreshAssignment = useCallback(async () => {
+    const latest = await ChangeApi.getChange(numericId);
+    const identity = workItemIdentity(latest);
+    syncChangeSummary(latest);
+    setPanelRevision(value => value + 1);
+    return {
+      version: identity.version,
+      currentAssigneeId: latest.assigneeId,
+      allowed: latest.actions?.assign?.allowed === true,
+      disabledReason: latest.actions?.assign?.reason,
+    };
+  }, [numericId, syncChangeSummary]);
+  const submitAssignment = async (input: AssignmentInput) => {
+    await assignChangeWorkItem(numericId, input);
+    await refreshAssignment();
+  };
 
   const loadSLA = useCallback(async (workItemId: number) => {
     try {
       const data = await TicketApi.getTicketSLA(workItemId);
-      setSla({
-        slaName: data.slaName,
-        responseTime: data.responseTime,
-        resolutionTime: data.resolutionTime,
-        responseDeadline: data.responseDeadline,
-        resolutionDeadline: data.resolutionDeadline,
-        responseTimeRemaining: data.responseTimeRemaining,
-        resolutionTimeRemaining: data.resolutionTimeRemaining,
-        isBreached: data.isBreached,
-      });
+      setSla(mapWorkItemSLA(data));
     } catch (err) {
       console.warn('[ChangeDetailPage] Failed to load SLA', err);
       setSla(undefined);
@@ -117,19 +133,16 @@ export default function ChangeDetailPage() {
   }, [numericId]);
 
   const loadWorkItemSummary = useCallback(async () => {
-    if (!Number.isFinite(numericId) || numericId <= 0) {
+    if (!Number.isInteger(numericId) || numericId <= 0) {
+      setIdentityError('专业记录身份无效');
       return;
     }
     try {
       const change = await ChangeApi.getChange(numericId);
       syncChangeSummary(change);
     } catch (err) {
-      // WorkItemShell 只是这里的外层展示壳（风险等级/CAB/发布窗口/实施结果/PIR 等专业字段
-      // 仍然由下面完整功能的 ChangeDetail 负责渲染/编辑），summary 拉取失败时不阻塞整页——
-      // workItem 保持 null，下面直接退化为原有的纯 ChangeDetail 展示，而不是让整页报错。
-      // ChangeDetail 组件自己内部另有一次完整的变更详情拉取 + 错误处理，这里的失败不影响
-      // 那条路径。
-      console.warn('[ChangeDetailPage] Failed to load WorkItem summary', err);
+      setWorkItem(null);
+      setIdentityError('无法加载权威身份和版本，请刷新详情');
     }
   }, [numericId, syncChangeSummary]);
 
@@ -152,7 +165,7 @@ export default function ChangeDetailPage() {
       {/* 主详情组件保持不变——风险等级/CAB/发布窗口（计划开始结束时间）/实施结果/PIR 等
           Change 专业字段、以及所有编辑动作都在这个组件内部完成，WorkItemShell 只包一层
           公共身份信息，不重新实现这些逻辑。 */}
-      <ChangeDetail id={id} onChangeLoaded={syncChangeSummary} />
+      <ChangeDetail key={panelRevision} id={id} onChangeLoaded={syncChangeSummary} />
 
       {/* 追加：审批时间线。历史现在由 WorkItemShell 自己的区块渲染，不再在这里重复一份——
           见 docs/superpowers/specs/2026-08-28-work-item-detail-page-parity-design.md §5.2。 */}
@@ -184,8 +197,17 @@ export default function ChangeDetailPage() {
       {/* workItem 只有在变更摘要加载成功且满足 WorkItem 创建不变量时才非空。加载中、
           加载失败（见 loadWorkItemSummary 的 catch）或无效开发记录下 workItem 为 null，
           不用猜测的 ID 挂载 WorkItemShell。 */}
-      {workItem && change ? (
+      {workItem && change?.id === numericId ? (
         <WorkItemShell
+          assignment={{
+            currentAssigneeId: workItem.assigneeId,
+            version: workItem.version,
+            allowed: change.actions?.assign?.allowed === true && !directory.error,
+            disabledReason: directory.error || change.actions?.assign?.reason,
+            candidates: directory.candidates,
+            submit: submitAssignment,
+            refresh: refreshAssignment,
+          }}
           workItem={workItem}
           sla={sla}
           actions={change.actions ?? {}}
@@ -196,12 +218,11 @@ export default function ChangeDetailPage() {
       ) : (
         <>
           <Alert
-            type='info'
+            type={identityError ? 'error' : 'info'}
             showIcon
-            message='该变更尚未关联 WorkItem，评论/附件/历史/关联等协作能力暂不可用'
+            message={identityError ?? '正在加载权威身份和版本…'}
             style={{ marginBottom: 16 }}
           />
-          {renderDetailAndTabs()}
         </>
       )}
     </App>

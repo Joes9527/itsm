@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Card, Space, Tag, Descriptions } from 'antd';
+import { WorkItemAssignment } from './WorkItemAssignment';
 import { WorkItemProvider } from './WorkItemContext';
 import type { WorkItemShellProps } from './WorkItemTypes';
 import { WorkItemComments } from './WorkItemComments';
@@ -20,6 +21,7 @@ import { WorkItemRelations } from './WorkItemRelations';
 // 交给调用方处理；Incident、Problem 和 Change Panel 保留各自的专用 API 调用，因为
 // 它们的动作需要领域特有的 payload 和 modal。
 export function WorkItemShell({
+  assignment,
   workItem,
   actions,
   sla,
@@ -45,6 +47,7 @@ export function WorkItemShell({
             <Descriptions.Item label="优先级">{workItem.priority}</Descriptions.Item>
             <Descriptions.Item label="处理人">{workItem.assigneeId ?? '未分配'}</Descriptions.Item>
           </Descriptions>
+          {assignment && <WorkItemAssignment {...assignment} />}
           {showActionBar && <WorkItemActionBar />}
         </Card>
         <WorkItemSLA sla={sla} />
@@ -52,7 +55,7 @@ export function WorkItemShell({
         <WorkItemComments workItemId={workItem.id} />
         <WorkItemAttachments workItemId={workItem.id} />
         <Card size="small" title="历史">
-          <TicketHistoryList ticketId={workItem.id} />
+          <TicketHistoryList key={`${workItem.id}:${workItem.version}`} ticketId={workItem.id} />
         </Card>
         <Card size="small" title="关联">
           <WorkItemRelations key={workItem.id} workItemId={workItem.id} />

@@ -50,6 +50,7 @@ jest.mock('@/lib/api/ticket-attachment-api', () => ({
 }));
 
 const workItem: WorkItemCommon = {
+  version: 1,
   id: 1,
   number: 'INC-202608-000001',
   recordClass: 'incident',
@@ -173,3 +174,13 @@ describe('WorkItemShell', () => {
     expect(screen.queryByText(/SLA 时效与承诺/)).not.toBeInTheDocument();
   });
 });
+
+ it('routes shared collaboration to WorkItem 91 while retaining professional panel ID 4',()=>{
+ render(<WorkItemShell {...props} workItem={{...workItem,id:91,number:'TKT-0091',version:7}} professionalPanelSlot={<div>Professional 4</div>} assignment={{version:7,allowed:false,disabledReason:'server denied',candidates:[],submit:jest.fn(),refresh:jest.fn()}}/>);
+ expect(screen.getByTestId('mocked-comment-panel')).toHaveAttribute('data-target-id','91');
+ expect(screen.getByTestId('mocked-attachment-panel')).toHaveAttribute('data-target-id','91');
+ expect(screen.getByTestId('shared-relations')).toHaveAttribute('data-work-item-id','91');
+ expect(screen.getByText('Professional 4')).toBeInTheDocument();
+ expect(screen.getByTestId('workitem-assignment-open')).toBeDisabled();
+ expect(screen.getByText('server denied')).toBeInTheDocument();
+ });

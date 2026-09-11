@@ -47,7 +47,6 @@ import {
   CheckCircle,
   Plug,
   AreaChart,
-  UserCheck,
   Siren,
 } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
@@ -159,10 +158,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
 
   // ===== 指派：用户列表 + 指派弹窗状态 =====
   const [users, setUsers] = useState<User[]>([]);
-  const [loadingUsers, setLoadingUsers] = useState(false);
-  const [assignModalVisible, setAssignModalVisible] = useState(false);
-  const [assigning, setAssigning] = useState(false);
-  const [assignForm] = Form.useForm<{ assigneeId: number; reason?: string }>();
+  const [, setLoadingUsers] = useState(false);
 
   // ===== 升级为重大事件：弹窗状态 =====
   const [majorModalVisible, setMajorModalVisible] = useState(false);
@@ -193,7 +189,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
   const [categoryForm] = Form.useForm();
   const actions = workItemContext?.actions ?? fallbackActions ?? EMPTY_ACTIONS;
   const actionMutationInFlight =
-    escalating || assigning || escalatingMajor || resolving || closing || converting || reopening || starting;
+    escalating || escalatingMajor || resolving || closing || converting || reopening || starting;
 
   const loadData = useCallback(async () => {
     if (!id) return;
@@ -392,29 +388,6 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
     try { await IncidentAPI.startIncident(data.id, commandMeta('start')); await loadData(); }
     catch (error) { handleError(error, 'startIncident', '开始处理失败'); }
     finally { setStarting(false); }
-  };
-
-  // 打开指派弹窗
-  const handleAssignClick = () => {
-    assignForm.setFieldsValue({ assigneeId: data?.assigneeId ?? undefined });
-    setAssignModalVisible(true);
-  };
-
-  // 提交指派（使用专用 assign 端点）
-  const handleAssignSubmit = async (values: { assigneeId: number; reason?: string }) => {
-    if (!data) return;
-    setAssigning(true);
-    try {
-      await IncidentAPI.assignIncident(data.id, { ...commandMeta('assign', JSON.stringify([values.assigneeId, values.reason?.trim() ?? ''])), assigneeId: values.assigneeId, reason: values.reason?.trim() });
-      message.success('事件指派成功');
-      setAssignModalVisible(false);
-      assignForm.resetFields();
-      loadData();
-    } catch (error) {
-      handleError(error, 'assignIncident', '指派失败');
-    } finally {
-      setAssigning(false);
-    }
   };
 
   // 提交升级为重大事件（使用专用 major-incident 端点）
@@ -660,18 +633,7 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
               >
                 升级
               </WorkItemActionButton>
-              <WorkItemActionButton
-                action={actions.assign}
-                actionName='assign'
-                button={{
-                  icon: <UserCheck />,
-                  onClick: handleAssignClick,
-                  loading: loadingUsers,
-                  disabled: actionMutationInFlight,
-                }}
-              >
-                指派
-              </WorkItemActionButton>
+
               <WorkItemActionButton
                 action={actions.markMajorIncident}
                 actionName='mark-major-incident'
@@ -1061,48 +1023,6 @@ const IncidentDetail: React.FC<IncidentDetailProps> = ({
           </Form>
         </Modal>
       )}
-
-      {/* 指派弹窗 */}
-      <Modal
-        title={
-          <Space>
-            <UserCheck style={{ color: '#F06820' }} />
-            指派事件
-          </Space>
-        }
-        open={assignModalVisible}
-        onCancel={() => {
-          setAssignModalVisible(false);
-          assignForm.resetFields();
-        }}
-        confirmLoading={assigning}
-        onOk={() => assignForm.submit()}
-        okText='确认指派'
-        cancelText='取消'
-        width={480}
-      >
-        <Form form={assignForm} layout='vertical' onFinish={handleAssignSubmit}>
-          <Form.Item
-            name='assigneeId'
-            label='指派给'
-            rules={[{ required: true, message: '请选择处理人' }]}
-          >
-            <Select
-              placeholder='请选择处理人'
-              loading={loadingUsers}
-              showSearch
-              optionFilterProp='label'
-              options={users.map(user => ({
-                value: user.id,
-                label: `${user.name || user.username}${user.department ? ` (${user.department})` : ''}`,
-              }))}
-            />
-          </Form.Item>
-          <Form.Item name='reason' label='转派原因' rules={[{ required: !!data?.assigneeId, whitespace: true, message: '请填写转派原因' }]}>
-            <Input.TextArea rows={3} />
-          </Form.Item>
-        </Form>
-      </Modal>
 
       {/* 升级为重大事件弹窗（影响评估 + 危机沟通） */}
       <Modal

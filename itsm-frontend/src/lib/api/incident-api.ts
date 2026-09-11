@@ -20,6 +20,7 @@ export interface Incident {
   source: string;
   type: string;
   incidentNumber?: string;
+  number: string;
   /** 关联的 WorkItem（tickets.id）。后端 CreateIncident 在同一事务内建立；
    * 缺失表示开发数据违反 WorkItem 创建不变量。 */
   workItemId?: number;

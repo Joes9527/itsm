@@ -9,8 +9,15 @@ export interface WorkItemActionState {
 
 export interface WorkItemCommon {
   id: number;
+  version: number;
   number: string;
-  recordClass: 'generic' | 'service_request_item' | 'incident' | 'problem' | 'change_request' | 'catalog_task';
+  recordClass:
+    | 'generic'
+    | 'service_request_item'
+    | 'incident'
+    | 'problem'
+    | 'change_request'
+    | 'catalog_task';
   title: string;
   status: string;
   priority: string;
@@ -52,6 +59,7 @@ export interface WorkItemActionDispatch {
 }
 
 export interface WorkItemShellProps {
+  assignment?: import("./WorkItemAssignment").AssignmentProps;
   workItem: WorkItemCommon;
   actions: Record<string, WorkItemActionState>;
   sla?: WorkItemSLAState;

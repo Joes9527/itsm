@@ -47,6 +47,7 @@ jest.mock('@/lib/store/auth-store', () => {
 Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: () => 'conversion-key' });
 
 const workItem: WorkItemCommon = {
+  version: 1,
   id: 301,
   number: 'INC-202608-000301',
   recordClass: 'incident',
@@ -169,7 +170,7 @@ describe('IncidentDetail action eligibility', () => {
     await expectDisabledAction('关闭', deniedActions.close.reason);
     await expectDisabledAction('重新打开', deniedActions.reopen.reason);
     await expectDisabledAction('升级', deniedActions.escalate.reason);
-    await expectDisabledAction('指派', deniedActions.assign.reason);
+    expect(screen.queryByRole('button', { name: '指派' })).not.toBeInTheDocument(); // Shared Shell owns assignment.
     await expectDisabledAction('升级为重大事件', deniedActions.markMajorIncident.reason);
     await expectDisabledAction('创建关联问题', deniedActions.convertToProblem.reason);
   });
