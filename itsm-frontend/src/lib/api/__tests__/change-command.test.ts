@@ -139,9 +139,9 @@ test.each([
 
 test('metadata, risk, assignment and PIR creation require receipts and versioned exact bodies', async () => {
   (fetch as jest.Mock).mockResolvedValue(reply(200, result));
-  await ChangeApi.updateChange(1, { ...meta, title: 'corrected title' });
+  await ChangeApi.updateChange(1, { ...meta, title: 'corrected title', assigneeId: 23, assignmentReason: 'handover with metadata edit' });
   await ChangeApi.updateRisk(1, { ...meta, impactAnalysis: 'checked impact' });
-  await ChangeApi.assignChange(1, { ...meta, assigneeId: 23 });
+  await ChangeApi.assignChange(1, { ...meta, assigneeId: 23, assignmentReason: 'handover to application support' });
   (fetch as jest.Mock).mockResolvedValue(reply(200, { ...result, pirId: 4 }));
   await ChangeApi.createPIR(1, {
     ...meta,
@@ -150,9 +150,9 @@ test('metadata, risk, assignment and PIR creation require receipts and versioned
     rollbackPerformed: false,
   });
   expect((fetch as jest.Mock).mock.calls.map(([, init]) => JSON.parse(init.body))).toEqual([
-    { ...meta, title: 'corrected title' },
+    { ...meta, title: 'corrected title', assigneeId: 23, assignmentReason: 'handover with metadata edit' },
     { ...meta, impactAnalysis: 'checked impact' },
-    { ...meta, assigneeId: 23 },
+    { ...meta, assigneeId: 23, assignmentReason: 'handover to application support' },
     { ...meta, overallResult: 'failed', objectivesAchieved: false, rollbackPerformed: false },
   ]);
 });

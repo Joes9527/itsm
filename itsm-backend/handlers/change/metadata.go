@@ -107,6 +107,9 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 		return empty, err
 	}
 	p := cmd.Patch
+	if p.AssigneeID != nil && item.AssigneeID > 0 && *p.AssigneeID != item.AssigneeID && p.AssignmentReason == "" {
+		return empty, common.NewValidationError("assignment reason required", nil)
+	}
 	governedFacts := hasRiskDetails(p.ChangeRiskPatch) || p.Type != nil || p.Justification != nil || p.ImpactScope != nil || p.RiskLevel != nil || p.ImplementationPlan != nil || p.RollbackPlan != nil || p.AffectedCIs != nil
 	if governedFacts && item.Status != "draft" && !isChangeSubmitted(item.Status) {
 		return empty, common.NewValidationError("authorized change scope and assessment facts are locked", nil)
@@ -215,7 +218,7 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 		}
 	}
 	result := workitemmutation.Result{WorkItemID: item.ID, Version: saved.Version, Status: saved.Status}
-	if err = workitemmutation.RecordTx(ctx, tx, m, result, "change.metadata", digest, map[string]any{"changeId": current.ID, "patch": p}); err != nil {
+	if err = workitemmutation.RecordTx(ctx, tx, m, result, "change.metadata", digest, map[string]any{"changeId": current.ID, "patch": p, "previousAssigneeId": item.AssigneeID}); err != nil {
 		return empty, err
 	}
 	if err = tx.Commit(); err != nil {
@@ -225,6 +228,7 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 }
 
 func normalizeMetadataPatch(p dto.UpdateChangeRequest) dto.UpdateChangeRequest {
+	p.AssignmentReason = strings.TrimSpace(p.AssignmentReason)
 	for _, field := range []**string{&p.Title, &p.Description, &p.Justification, &p.ImplementationPlan, &p.RollbackPlan, &p.RiskDescription, &p.ImpactAnalysis, &p.MitigationMeasures, &p.ContingencyPlan, &p.RiskOwner} {
 		if *field != nil {
 			value := strings.TrimSpace(**field)

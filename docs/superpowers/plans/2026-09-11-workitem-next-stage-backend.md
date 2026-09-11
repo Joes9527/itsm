@@ -87,9 +87,9 @@ func TestIncidentReassignmentPreservesProgress(t *testing.T) {
 **Interfaces**
 保留 `ApplyMetadata(context.Context, MetadataCommand) (workitemmutation.Result, error)`；为 `dto.UpdateChangeRequest` 增加 `AssignmentReason string`（JSON `assignmentReason`），由所有现有编辑/分派入口传递。它是动作输入，不新增 Change 扩展持久化字段。Change 请求继续使用 expectedVersion/operationId，与 MutationRequest 的严格绑定一致；公共组件的 version 由 API 适配器映射为 expectedVersion。
 
-- [ ] 在既有 metadata fixture 中新增名为 `TestChangeReassignmentPreservesApproval` 的测试：创建已评估且具有审批快照/流程任务的 Change；转派后比较状态、AssessmentDigest、审批 decision ID、任务执行人均未改变，只允许 WorkItem 负责人/版本/审计改变。为空原因测试断言错误及版本不变。
-- [ ] Run `go test ./handlers/change -run '^TestChangeReassignment' -count=1 -v`，先证明缺原因可成功的旧路径失败于新断言。
-- [ ] 在 normalizeMetadataPatch 中清理原因，在已读取 item 后执行下述分支；审计与摘要保留原因，不改变既有受保护方案/窗口校验：
+- [x] 在既有 metadata fixture 中新增名为 `TestChangeReassignmentPreservesApproval` 的测试：创建已评估且具有审批快照/流程任务的 Change；转派后比较状态、AssessmentDigest、审批 decision ID、任务执行人均未改变，只允许 WorkItem 负责人/版本/审计改变。为空原因测试断言错误及版本不变。
+- [x] Run `go test ./handlers/change -run '^TestChangeReassignment' -count=1 -v`，先证明缺原因可成功的旧路径失败于新断言。
+- [x] 在 normalizeMetadataPatch 中清理原因，在已读取 item 后执行下述分支；审计与摘要保留原因，不改变既有受保护方案/窗口校验：
 
 ```go
 if p.AssigneeID != nil && item.AssigneeID > 0 && *p.AssigneeID != item.AssigneeID {
@@ -99,9 +99,9 @@ if p.AssigneeID != nil && item.AssigneeID > 0 && *p.AssigneeID != item.AssigneeI
 }
 ```
 
-- [ ] 更新全部 MetadataCommand/UpdateChangeRequest 构造点和工作流映射。测试同时修改受保护方案时仍拒绝；未决回调仍按现有 settled 约束处理；不创建自动审批转派或任务移交。
-- [ ] Run `go test ./handlers/change -count=1`、`go test -tags=integration_postgres ./tests/integration -run '^TestWorkItemAssignmentChange' -count=1 -v`。记录并修复新增字段导致的调用方测试变化。
-- [ ] 提交：`refactor(change): audit reassignment without changing approvals`。
+- [x] 更新全部 MetadataCommand/UpdateChangeRequest 构造点和工作流映射。测试同时修改受保护方案时仍拒绝；未决回调仍按现有 settled 约束处理；不创建自动审批转派或任务移交。
+- [x] Run `go test ./handlers/change -count=1`、`go test -tags=integration_postgres ./tests/integration -run '^TestWorkItemAssignmentChange' -count=1 -v`。记录并修复新增字段导致的调用方测试变化。
+- [x] 提交：`refactor(change): audit reassignment without changing approvals`。
 
 ## B3：Problem 责任调整与普通编辑权威路径
 
@@ -233,3 +233,12 @@ F3 必须继续处理 SLA 违规的周期归属：SLAViolation 只有 ticket_id�
 真实 runtime PostgreSQL 角色确认 super=false、bypass=false。旧关系事件、Change 结果、Problem 解决通知和新授权套件合跑通过（50.856s）；新增 15 个场景最终通过（21.689s），覆盖角色/读取权限/租户分配/接收者撤权、目录和端点暂时失败恢复、通知发送后回执失败重放仅一条。所有自建 schema 和角色清理 remaining=0。authorization 全包、关系/Delivery/Outbox 定向及三域授权回归通过，bootstrap 编译通过。
 
 独立审阅确认实际断言通知行、接收人、正文及重放数量，无新增确定性 P1/P2。授权快照与通知事务仍按现有设计分开；未扩大跨租户接收人资格。证据为 `.superpowers/sdd/workitem-next-stage/workitem-b5-pg-green.log`，实际共享环境未操作。
+
+
+## B2 与通用写边界执行记录（2026-09-11）
+
+Change metadata/assign 共用 expectedVersion、operationId、assignmentReason，负责人变化保留阶段、评估、审批决定及任务人员。HTTP 沿用专业 ID；已有负责人转派需原因，审计保存原负责人和原因。Change 全 handler 测试通过（2.551s），前端 18 个命令测试通过；独立复核无新增确定性 P1/P2。真实非特权 Tenant 角色 PG 通过（16.281s），覆盖并发竞争、同键请求、审计失败回滚、撤权重放及审批事实保持，测试 schema/角色全部清理。
+
+通用 Ticket 的核心编辑、状态变化、分派、智能/批量/MSP 分派、流程接单与所有权移交、BPMN ticket assign/escalate/status 均拒绝 Incident/Problem/Change，专业命令是唯一对应写入口。混合批次在第一条写入前检查完整集合；repository 直接更新也加类过滤。tags-only、纯转发通知及评论/附件等共享能力保留，generic/requested-item/catalog-task 保持原行为。记录类在当前 Ent 不可变，不把过滤条件宣称为已验证的分类竞争机制。
+
+真实旁路行为 RED 后，service 定向通过（5.816s），repository 全包（0.833s）及 BPMN 全包（2.236s）通过。API 文档和 Change 客户端同步，B3 普通编辑与证据写事务仍独立收口。证据目录包含 b23-ticket-* 与 workitem-b2-pg-green.log。

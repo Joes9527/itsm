@@ -222,7 +222,7 @@ func TestRepository_Update(t *testing.T) {
 		Title:       "Update Me",
 		Description: "Original",
 		Priority:    PriorityLow,
-		RecordClass: "incident",
+		RecordClass: "generic",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -256,7 +256,7 @@ func TestRepository_Update_RejectsStaleVersion(t *testing.T) {
 	fx := newRepoFixture(t)
 	defer fx.client.Close()
 	created, err := fx.createTicket(fx.ctx, &CreateParams{
-		Title: "Original", Priority: PriorityMedium, RecordClass: "incident", RequesterID: fx.user.ID,
+		Title: "Original", Priority: PriorityMedium, RecordClass: "generic", RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 	require.NoError(t, err)
 	title := "Must not overwrite"
@@ -421,7 +421,7 @@ func TestRepository_UpdateStatus(t *testing.T) {
 		Title:       "Status Update",
 		Description: "",
 		Priority:    PriorityMedium,
-		RecordClass: "incident",
+		RecordClass: "generic",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -450,7 +450,7 @@ func TestRepository_AssignTicket(t *testing.T) {
 		Title:       "Assign Test",
 		Description: "",
 		Priority:    PriorityMedium,
-		RecordClass: "incident",
+		RecordClass: "generic",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -481,7 +481,7 @@ func TestRepository_CountByStatus(t *testing.T) {
 			Title:       "Count Status",
 			Description: "",
 			Priority:    PriorityMedium,
-			RecordClass: "incident",
+			RecordClass: "generic",
 			RequesterID: fx.user.ID,
 		}, fx.tenant.ID)
 		fx.repo.UpdateStatus(fx.ctx, tkt.ID, StatusOpen, fx.tenant.ID)
@@ -491,7 +491,7 @@ func TestRepository_CountByStatus(t *testing.T) {
 		Title:       "Count Status New",
 		Description: "",
 		Priority:    PriorityLow,
-		RecordClass: "incident",
+		RecordClass: "generic",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 
@@ -530,7 +530,7 @@ func TestRepository_FindByAssignee(t *testing.T) {
 		Title:       "Assign Find",
 		Description: "",
 		Priority:    PriorityMedium,
-		RecordClass: "incident",
+		RecordClass: "generic",
 		RequesterID: fx.user.ID,
 	}, fx.tenant.ID)
 	fx.repo.AssignTicket(fx.ctx, tkt.ID, fx.user.ID, fx.tenant.ID)
@@ -644,5 +644,5 @@ func TestRepositoryCanonicalIdentityFilters(t *testing.T) {
 	}
 	subtype := "improvement"
 	_, err = fx.repo.Update(fx.ctx, incident.ID, &UpdateParams{GenericSubtype: &subtype, Version: incident.Version}, fx.tenant.ID)
-	require.ErrorContains(t, err, "cannot mutate professional")
+	require.ErrorContains(t, err, "owning domain command")
 }

@@ -134,13 +134,14 @@ func (h *Handler) AssignChange(c *gin.Context) {
 	}
 	var req struct {
 		MutationRequest
-		AssigneeID int `json:"assigneeId" binding:"required,gt=0"`
+		AssigneeID       int    `json:"assigneeId" binding:"required,gt=0"`
+		AssignmentReason string `json:"assignmentReason"`
 	}
 	if !bindChangeMutation(c, &req) {
 		return
 	}
 	meta.ExpectedVersion, meta.OperationID = req.ExpectedVersion, req.OperationID
-	result, err := h.svc.ApplyMetadata(c.Request.Context(), MetadataCommand{Meta: meta, ChangeID: id, Patch: dto.UpdateChangeRequest{AssigneeID: &req.AssigneeID}})
+	result, err := h.svc.ApplyMetadata(c.Request.Context(), MetadataCommand{Meta: meta, ChangeID: id, Patch: dto.UpdateChangeRequest{AssigneeID: &req.AssigneeID, AssignmentReason: req.AssignmentReason}})
 	if err != nil {
 		respondPIRMutationError(c, err)
 		return

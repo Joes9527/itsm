@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"itsm-backend/common"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/repository/base"
@@ -72,6 +74,14 @@ func (r *EntRepository) Update(ctx context.Context, id int, params *UpdateParams
 		return nil, err
 	}
 
+	coreMutation := params.Title != nil || params.Description != nil || params.Status != nil || params.GenericSubtype != nil || params.Priority != nil || params.AssigneeID != nil || params.CategoryID != nil || params.Resolution != nil
+	if coreMutation {
+		switch current.RecordClass {
+		case dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest:
+			return nil, common.NewValidationError(fmt.Sprintf("%s writes require the owning domain command", current.RecordClass), nil)
+		}
+	}
+
 	// 乐观锁检查
 	if current.Version != params.Version {
 		return nil, fmt.Errorf("version conflict: expected %d, got %d", current.Version, params.Version)
@@ -80,6 +90,10 @@ func (r *EntRepository) Update(ctx context.Context, id int, params *UpdateParams
 	builder := r.Client().Ticket.UpdateOneID(id).
 		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(params.Version)).
 		SetVersion(current.Version + 1) // 版本号递增
+
+	if coreMutation {
+		builder.Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest))
+	}
 
 	if params.Title != nil {
 		builder.SetTitle(*params.Title)

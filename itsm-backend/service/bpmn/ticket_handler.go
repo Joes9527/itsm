@@ -172,6 +172,9 @@ func (h *TicketServiceTaskHandler) updateTicketStatus(ctx context.Context, ticke
 	if err != nil {
 		return nil, fmt.Errorf("工单不存在: %w", err)
 	}
+	if err := rejectProfessionalTicketTaskMutation(current.RecordClass); err != nil {
+		return nil, err
+	}
 	if current.Status == newStatus {
 		return IdempotentEffect(fmt.Sprintf("工单 %d 已处于 %s", ticketID, newStatus), additionalData), nil
 	}
@@ -298,6 +301,9 @@ func (h *TicketServiceTaskHandler) escalateTicket(ctx context.Context, ticketID 
 	if err != nil {
 		return nil, fmt.Errorf("工单不存在: %w", err)
 	}
+	if err := rejectProfessionalTicketTaskMutation(ticketEntity.RecordClass); err != nil {
+		return nil, err
+	}
 
 	if ticketEntity.Priority == escalateTo && ticketEntity.Status == "escalated" {
 		return IdempotentEffect(fmt.Sprintf("工单 %d 已升级为 %s", ticketID, escalateTo), nil), nil
@@ -325,7 +331,7 @@ func (h *TicketServiceTaskHandler) escalateTicket(ctx context.Context, ticketID 
 
 	// Notify first. A stable delivery key deduplicates a retry if the state write
 	// fails after notification persistence.
-	_, err = h.client.Ticket.UpdateOneID(ticketID).Where(ticket.TenantID(tenantID)).
+	_, err = h.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).Where(ticket.TenantID(tenantID)).
 		SetPriority(escalateTo).
 		SetStatus("escalated").
 		SetUpdatedAt(time.Now()).
@@ -359,8 +365,8 @@ func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID in
 		return nil, fmt.Errorf("工单不存在: %w", err)
 	}
 
-	if ticketEntity.RecordClass == "incident" {
-		return nil, fmt.Errorf("Incident assignment requires the Incident command")
+	if err := rejectProfessionalTicketTaskMutation(ticketEntity.RecordClass); err != nil {
+		return nil, err
 	}
 
 	if ticketEntity.AssigneeID == assigneeID && ticketEntity.Status == common.TicketStatusAssigned {
@@ -385,7 +391,7 @@ func (h *TicketServiceTaskHandler) assignTicket(ctx context.Context, ticketID in
 		return effect, nil
 	}
 
-	_, err = h.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNEQ("incident")).Where(ticket.TenantID(tenantID)).
+	_, err = h.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).Where(ticket.TenantID(tenantID)).
 		SetAssigneeID(assigneeID).
 		SetStatus(common.TicketStatusAssigned).
 		SetUpdatedAt(time.Now()).
@@ -414,4 +420,12 @@ func mapBPMNNotificationType(notificationType string) string {
 	default:
 		return "ticket_updated"
 	}
+}
+
+func rejectProfessionalTicketTaskMutation(recordClass string) error {
+	switch recordClass {
+	case dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest:
+		return common.NewValidationError(fmt.Sprintf("%s writes require the owning domain command", recordClass), nil)
+	}
+	return nil
 }

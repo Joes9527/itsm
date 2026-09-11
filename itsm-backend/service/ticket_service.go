@@ -342,6 +342,13 @@ func (s *TicketService) CancelWorkflow(ctx context.Context, ticketID int, tenant
 
 // SyncTicketStatusWithWorkflow 同步工单状态与流程状态
 func (s *TicketService) SyncTicketStatusWithWorkflow(ctx context.Context, ticketID int, tenantID int) error {
+	current, err := s.repo.GetByID(ctx, ticketID, tenantID)
+	if err != nil {
+		return err
+	}
+	if err := rejectProfessionalTicketMutation(current.RecordClass); err != nil {
+		return err
+	}
 	workflowStatus, err := s.GetWorkflowStatus(ctx, ticketID, tenantID)
 	if err != nil {
 		s.logger.Warnw("Failed to get workflow status for sync", "error", err, "ticket_id", ticketID)
@@ -451,6 +458,12 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 		return nil, err
 	}
 
+	if req.Title != "" || req.Description != "" || req.Priority != "" || req.Status != "" || req.Type != "" || req.Category != "" || req.CategoryID != nil || req.AssigneeID != 0 || req.RequesterID != 0 || req.Resolution != "" || req.FormFields != nil {
+		if err := rejectProfessionalTicketMutation(current.RecordClass); err != nil {
+			return nil, err
+		}
+	}
+
 	// 状态转换验证
 	if req.Status != "" && ticket.Status(req.Status) != current.Status {
 		if !current.CanTransitionTo(ticket.Status(req.Status)) {
@@ -498,7 +511,7 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 		params.Priority = &priority
 	}
 	if req.AssigneeID != 0 {
-		if err := rejectIncidentTicketAssignment(current.RecordClass); err != nil {
+		if err := rejectProfessionalTicketMutation(current.RecordClass); err != nil {
 			return nil, err
 		}
 		if s.client != nil {
@@ -718,7 +731,7 @@ func (s *TicketService) AssignTicket(ctx context.Context, ticketID int, assignee
 		return nil, err
 	}
 
-	if err := rejectIncidentTicketAssignment(current.RecordClass); err != nil {
+	if err := rejectProfessionalTicketMutation(current.RecordClass); err != nil {
 		return nil, err
 	}
 	if err := current.Assign(assigneeID); err != nil {
@@ -808,6 +821,9 @@ func (s *TicketService) ResolveTicket(ctx context.Context, ticketID int, resolut
 	if err != nil {
 		return nil, err
 	}
+	if err := rejectProfessionalTicketMutation(tkt.RecordClass); err != nil {
+		return nil, err
+	}
 
 	// 状态转换验证
 	if !tkt.CanTransitionTo(ticket.StatusResolved) {
@@ -875,6 +891,9 @@ func (s *TicketService) CloseTicket(ctx context.Context, ticketID int, tenantID 
 	// 获取工单
 	tkt, err := s.repo.GetByID(ctx, ticketID, tenantID)
 	if err != nil {
+		return nil, err
+	}
+	if err := rejectProfessionalTicketMutation(tkt.RecordClass); err != nil {
 		return nil, err
 	}
 
@@ -1113,6 +1132,9 @@ func (s *TicketService) updateTicketStatus(ctx context.Context, ticketID int, st
 	if err != nil {
 		return nil, fmt.Errorf("ticket not found: %w", err)
 	}
+	if err := rejectProfessionalTicketMutation(current.RecordClass); err != nil {
+		return nil, err
+	}
 
 	if !IsValidTicketStatusTransition(string(current.Status), status) {
 		return nil, fmt.Errorf("invalid status transition: %s -> %s", current.Status, status)
@@ -1245,7 +1267,7 @@ func (s *TicketService) EscalateTicket(ctx context.Context, ticketID int, reason
 		return nil, err
 	}
 
-	if err := rejectIncidentTicketAssignment(current.RecordClass); err != nil {
+	if err := rejectProfessionalTicketMutation(current.RecordClass); err != nil {
 		return nil, err
 	}
 
@@ -1588,7 +1610,7 @@ func (s *TicketService) AssignTickets(ctx context.Context, tenantID int, ticketI
 	if _, err := s.client.User.Get(ctx, assigneeID); err != nil {
 		return fmt.Errorf("分配者不存在: %v", err)
 	}
-	if err := validateTicketAssignmentClasses(ctx, s.client, tenantID, ticketIDs); err != nil {
+	if err := validateTicketMutationClasses(ctx, s.client, tenantID, ticketIDs); err != nil {
 		return err
 	}
 	for _, ticketID := range ticketIDs {
@@ -1601,6 +1623,9 @@ func (s *TicketService) AssignTickets(ctx context.Context, tenantID int, ticketI
 
 // BatchCloseTickets 批量关闭工单
 func (s *TicketService) BatchCloseTickets(ctx context.Context, ticketIDs []int, tenantID int, closeReason string) error {
+	if err := validateTicketMutationClasses(ctx, s.client, tenantID, ticketIDs); err != nil {
+		return err
+	}
 	for _, ticketID := range ticketIDs {
 		if _, err := s.CloseTicket(ctx, ticketID, tenantID, closeReason); err != nil {
 			return fmt.Errorf("关闭工单 %d 失败: %v", ticketID, err)
@@ -1611,6 +1636,9 @@ func (s *TicketService) BatchCloseTickets(ctx context.Context, ticketIDs []int, 
 
 // BatchUpdatePriority 批量更新优先级
 func (s *TicketService) BatchUpdatePriority(ctx context.Context, ticketIDs []int, priority string, tenantID int) error {
+	if err := validateTicketMutationClasses(ctx, s.client, tenantID, ticketIDs); err != nil {
+		return err
+	}
 	for _, ticketID := range ticketIDs {
 		p := ticket.Priority(priority)
 		_, err := s.repo.Update(ctx, ticketID, &ticket.UpdateParams{Priority: &p}, tenantID)
@@ -2017,7 +2045,7 @@ func (s *TicketService) AssignMSPTechnician(ctx context.Context, ticketID, custo
 	if t.TenantID != customerTenantID {
 		return nil, fmt.Errorf("工单不属于指定客户租户")
 	}
-	if err := rejectIncidentTicketAssignment(t.RecordClass); err != nil {
+	if err := rejectProfessionalTicketMutation(t.RecordClass); err != nil {
 		return nil, err
 	}
 	// 分配给 MSP 技术员（这里 assignerID 作为目标处理人；可后续扩展为查表分配）

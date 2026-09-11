@@ -80,7 +80,8 @@ type CreateChangeRequest struct {
 
 // UpdateChangeRequest 更新变更请求
 type UpdateChangeRequest struct {
-	AssigneeID *int `json:"assigneeId"`
+	AssignmentReason string `json:"assignmentReason"`
+	AssigneeID       *int   `json:"assigneeId"`
 	ChangeRiskPatch
 	Title              *string         `json:"title"`              // 变更标题
 	Description        *string         `json:"description"`        // 变更描述

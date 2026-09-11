@@ -496,12 +496,38 @@ Cookie: access_token=<HttpOnly cookie>
 Content-Type: application/json
 
 {
+  "expectedVersion": 7,
+  "operationId": "change-edit-unique-attempt",
   "title": "更新后的标题",
-  "description": "更新后的描述",
-  "status": "approved",
-  "risk": "low"
+  "description": "更新后的描述"
 }
 ```
+
+普通编辑不接受专业状态变更。已评估的方案和风险事实、已授权范围及实施窗口继续受专业流程约束。
+
+### Change 分配与转派
+
+```http
+POST /changes/{id}/assign
+Cookie: access_token=<HttpOnly cookie>
+Content-Type: application/json
+
+{
+  "expectedVersion": 7,
+  "operationId": "change-assign-unique-attempt",
+  "assigneeId": 42,
+  "assignmentReason": "交由应用支持协调后续实施"
+}
+```
+
+`id` 为 Change 领域 ID。`expectedVersion` 为调用者已观察到的 WorkItem 版本，不能改用 `version`；
+`operationId` 标识同一次请求，重试保持原键。目标人员必须是当前租户的活跃用户。
+已有负责人且实际更换人员时，`assignmentReason` 去除首尾空白后必填；首次分配不额外要求原因。
+`PUT /changes/{id}` 同样支持 `assigneeId` 和 `assignmentReason`，执行同一 metadata 命令。
+
+成功响应 `data` 为 `{workItemId, version, status, replayed}`。转派只调整负责人及版本并保存审计，
+保留当前阶段、评估证据、审批决定和流程任务人员；终态或存在未决流程回调时仍拒绝修改。
+同键同内容返回已有回执，同键改变负责人或原因、陈旧版本产生冲突。重放也检查当前授权。
 
 ### 删除变更
 

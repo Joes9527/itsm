@@ -8,6 +8,7 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/common/workitemidentity"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/ticket"
@@ -65,6 +66,9 @@ func (s *TicketLifecycleService) ResolveTicket(ctx context.Context, ticketID int
 		s.logger.Errorw("Failed to find ticket", "ticketID", ticketID, "error", err)
 		return nil, err
 	}
+	if err := rejectProfessionalTicketMutation(t.RecordClass); err != nil {
+		return nil, err
+	}
 
 	// 只有处于开放状态的工单才能被解决
 	if t.Status != common.TicketStatusOpen && t.Status != common.TicketStatusInProgress && t.Status != common.TicketStatusPending {
@@ -72,7 +76,7 @@ func (s *TicketLifecycleService) ResolveTicket(ctx context.Context, ticketID int
 	}
 
 	// 更新工单状态为已解决
-	updatedTicket, err := s.client.Ticket.UpdateOneID(ticketID).
+	updatedTicket, err := s.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(t.Version)).
 		SetStatus(common.TicketStatusResolved).
 		SetResolution(resolution).
@@ -111,6 +115,9 @@ func (s *TicketLifecycleService) CloseTicket(ctx context.Context, ticketID int, 
 		s.logger.Errorw("Failed to find ticket", "ticketID", ticketID, "error", err)
 		return nil, err
 	}
+	if err := rejectProfessionalTicketMutation(t.RecordClass); err != nil {
+		return nil, err
+	}
 
 	// 关闭是从 resolved 到 closed 的单向转换；closed 是终态。
 	if t.Status != common.TicketStatusResolved {
@@ -118,7 +125,7 @@ func (s *TicketLifecycleService) CloseTicket(ctx context.Context, ticketID int, 
 	}
 
 	// 更新工单状态为已关闭
-	update := s.client.Ticket.UpdateOneID(ticketID).
+	update := s.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(t.Version)).
 		SetStatus(common.TicketStatusClosed).
 		SetClosedAt(time.Now()).
@@ -154,7 +161,7 @@ func (s *TicketLifecycleService) EscalateTicket(ctx context.Context, ticketID in
 		return nil, err
 	}
 
-	if err := rejectIncidentTicketAssignment(t.RecordClass); err != nil {
+	if err := rejectProfessionalTicketMutation(t.RecordClass); err != nil {
 		return nil, err
 	}
 	if t.Status == common.TicketStatusClosed || t.Status == common.TicketStatusCancelled {
@@ -171,7 +178,7 @@ func (s *TicketLifecycleService) EscalateTicket(ctx context.Context, ticketID in
 	newAssigneeID := s.getEscalationAssignee(newPriority, tenantID)
 
 	// 构建更新操作
-	update := s.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNEQ("incident")).
+	update := s.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(t.Version)).
 		SetPriority(newPriority).
 		SetVersion(t.Version + 1)
@@ -216,6 +223,9 @@ func (s *TicketLifecycleService) UpdateTicketStatus(ctx context.Context, ticketI
 		s.logger.Errorw("Failed to find ticket", "ticketID", ticketID, "error", err)
 		return nil, err
 	}
+	if err := rejectProfessionalTicketMutation(t.RecordClass); err != nil {
+		return nil, err
+	}
 
 	// 验证状态转换是否合法
 	if !s.isValidStatusTransition(t.Status, status) {
@@ -226,7 +236,7 @@ func (s *TicketLifecycleService) UpdateTicketStatus(ctx context.Context, ticketI
 	}
 
 	// 构建更新操作
-	update := s.client.Ticket.UpdateOneID(ticketID).
+	update := s.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(t.Version)).
 		SetStatus(status).
 		SetVersion(t.Version + 1)
@@ -306,6 +316,9 @@ func (s *TicketLifecycleService) SyncTicketStatusWithWorkflow(ctx context.Contex
 		s.logger.Errorw("Failed to find ticket", "ticketID", ticketID, "error", err)
 		return err
 	}
+	if err := rejectProfessionalTicketMutation(t.RecordClass); err != nil {
+		return err
+	}
 
 	// 使用 BusinessKey 查找流程实例
 	businessKey, identityErr := workitemidentity.BusinessKey(workitemidentity.RecordClassGeneric, ticketID)
@@ -334,7 +347,7 @@ func (s *TicketLifecycleService) SyncTicketStatusWithWorkflow(ctx context.Contex
 		if !IsValidTicketStatusTransition(t.Status, newStatus) {
 			return fmt.Errorf("workflow status would violate ticket lifecycle: %s -> %s", t.Status, newStatus)
 		}
-		update := s.client.Ticket.UpdateOneID(ticketID).
+		update := s.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 			Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(t.Version)).
 			SetStatus(newStatus).
 			SetVersion(t.Version + 1)

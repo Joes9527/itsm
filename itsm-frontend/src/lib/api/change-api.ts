@@ -310,7 +310,7 @@ export class ChangeApi {
 
   static async assignChange(
     id: number,
-    data: ChangeMutationIdentity & { assigneeId: number }
+    data: ChangeMutationIdentity & { assigneeId: number; assignmentReason?: string }
   ): Promise<ChangeResult> {
     return changeMutation(`/api/v1/changes/${id}/assign`, 'POST', data);
   }
@@ -461,7 +461,10 @@ export interface ChangeActionRequests {
 }
 export type ChangeAction = keyof ChangeActionRequests;
 export type ChangeMetadataRequest = ChangeMutationIdentity &
-  Partial<Omit<ChangeRequest, 'requesterId' | 'sourceRelations'>>;
+  Partial<Omit<ChangeRequest, 'requesterId' | 'sourceRelations'>> & {
+    assigneeId?: number;
+    assignmentReason?: string;
+  };
 
 function isResult(value: unknown): value is ChangeResult {
   const v = value as ChangeResult | undefined;

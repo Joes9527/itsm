@@ -50,7 +50,7 @@ func (s *TicketWorkflowService) AcceptTicket(ctx context.Context, req *dto.Accep
 		return err
 	}
 
-	if err := rejectIncidentTicketAssignment(tk.RecordClass); err != nil {
+	if err := rejectProfessionalTicketMutation(tk.RecordClass); err != nil {
 		return err
 	}
 	if tk.Status != "new" && tk.Status != "open" {
@@ -74,7 +74,7 @@ func (s *TicketWorkflowService) AcceptTicket(ctx context.Context, req *dto.Accep
 	// 更新工单状态和分配人
 	// P1-07 修复：接单同时设置 first_response_at，供 SLA 计时使用
 	now := time.Now()
-	_, err = txClient.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNEQ("incident")).
+	_, err = txClient.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(tk.Version), ticket.StatusIn("new", "open")).
 		SetAssigneeID(userID).
 		SetStatus("in_progress").
@@ -116,6 +116,9 @@ func (s *TicketWorkflowService) WithdrawTicket(ctx context.Context, req *dto.Wit
 	if err != nil {
 		return err
 	}
+	if err := rejectProfessionalTicketMutation(tk.RecordClass); err != nil {
+		return err
+	}
 
 	// 检查是否是工单创建者
 	if tk.RequesterID != userID {
@@ -127,7 +130,7 @@ func (s *TicketWorkflowService) WithdrawTicket(ctx context.Context, req *dto.Wit
 	}
 
 	// 更新工单状态
-	_, err = s.client.Ticket.UpdateOneID(req.TicketID).
+	_, err = s.client.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 		SetStatus("cancelled").
 		Save(ctx)
 	if err != nil {
@@ -160,11 +163,11 @@ func (s *TicketWorkflowService) ForwardTicket(ctx context.Context, req *dto.Forw
 
 	// 如果转移所有权，更新assignee
 	if req.TransferOwnership {
-		if err := rejectIncidentTicketAssignment(tk.RecordClass); err != nil {
+		if err := rejectProfessionalTicketMutation(tk.RecordClass); err != nil {
 			return err
 		}
 
-		_, err = s.client.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNEQ("incident")).
+		_, err = s.client.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 			SetAssigneeID(req.ToUserID).
 			Save(ctx)
 		if err != nil {
@@ -373,6 +376,9 @@ func (s *TicketWorkflowService) ResolveTicket(ctx context.Context, req *dto.Reso
 	if err != nil {
 		return err
 	}
+	if err := rejectProfessionalTicketMutation(tk.RecordClass); err != nil {
+		return err
+	}
 
 	// 开启事务，保证原子性
 	tx, err := s.client.Tx(ctx)
@@ -389,7 +395,7 @@ func (s *TicketWorkflowService) ResolveTicket(ctx context.Context, req *dto.Reso
 	txClient := tx.Client()
 
 	// 更新工单状态
-	_, err = txClient.Ticket.UpdateOneID(req.TicketID).
+	_, err = txClient.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 		SetStatus("resolved").
 		SetResolution(req.Resolution).
 		SetResolutionCategory(req.ResolutionCategory).
@@ -432,6 +438,9 @@ func (s *TicketWorkflowService) CloseTicket(ctx context.Context, req *dto.CloseT
 	if err != nil {
 		return err
 	}
+	if err := rejectProfessionalTicketMutation(tk.RecordClass); err != nil {
+		return err
+	}
 
 	if tk.Status != "resolved" {
 		return fmt.Errorf("只有已解决的工单才能关闭")
@@ -452,7 +461,7 @@ func (s *TicketWorkflowService) CloseTicket(ctx context.Context, req *dto.CloseT
 	txClient := tx.Client()
 
 	// 更新工单状态
-	_, err = txClient.Ticket.UpdateOneID(req.TicketID).
+	_, err = txClient.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 		SetStatus("closed").
 		SetClosedAt(time.Now()).
 		Save(ctx)
@@ -492,6 +501,9 @@ func (s *TicketWorkflowService) ReopenTicket(ctx context.Context, req *dto.Reope
 	if err != nil {
 		return err
 	}
+	if err := rejectProfessionalTicketMutation(tk.RecordClass); err != nil {
+		return err
+	}
 
 	if tk.Status != "closed" && tk.Status != "resolved" {
 		return fmt.Errorf("只有已关闭或已解决的工单才能重开")
@@ -512,7 +524,7 @@ func (s *TicketWorkflowService) ReopenTicket(ctx context.Context, req *dto.Reope
 	txClient := tx.Client()
 
 	// 更新工单状态
-	_, err = txClient.Ticket.UpdateOneID(req.TicketID).
+	_, err = txClient.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 		SetStatus("open").
 		Save(ctx)
 	if err != nil {

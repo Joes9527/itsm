@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
@@ -81,7 +82,7 @@ func (s *TicketAssignmentService) AssignTicket(ctx context.Context, req *Assignm
 		return nil, fmt.Errorf("获取工单失败: %w", err)
 	}
 
-	if err := rejectIncidentTicketAssignment(ticketEntity.RecordClass); err != nil {
+	if err := rejectProfessionalTicketMutation(ticketEntity.RecordClass); err != nil {
 		return nil, err
 	}
 
@@ -105,7 +106,7 @@ func (s *TicketAssignmentService) autoAssignTicket(ctx context.Context, req *Ass
 	if err != nil || result.AssignedTo == nil {
 		return result, err
 	}
-	if err := s.client.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNEQ("incident")).SetAssigneeID(*result.AssignedTo).Exec(ctx); err != nil {
+	if err := s.client.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).SetAssigneeID(*result.AssignedTo).Exec(ctx); err != nil {
 		return nil, fmt.Errorf("分配工单失败: %w", err)
 	}
 	return result, nil
@@ -631,7 +632,7 @@ func (s *TicketAssignmentService) assignToSpecificUser(ctx context.Context, req 
 	}
 
 	// 执行分配
-	err = s.client.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNEQ("incident")).
+	err = s.client.Ticket.UpdateOneID(req.TicketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 		Where(ticket.TenantIDEQ(req.TenantID), ticket.DeletedAtIsNil()).
 		SetAssigneeID(userID).
 		Exec(ctx)
@@ -697,11 +698,11 @@ func (s *TicketAssignmentService) ReassignTicket(ctx context.Context, ticketID i
 	if err != nil {
 		return err
 	}
-	if err := rejectIncidentTicketAssignment(item.RecordClass); err != nil {
+	if err := rejectProfessionalTicketMutation(item.RecordClass); err != nil {
 		return err
 	}
 	// 更新工单分配人
-	err = s.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNEQ("incident")).
+	err = s.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
 		SetAssigneeID(newAssigneeID).
 		Exec(ctx)
 	if err != nil {
@@ -791,11 +792,11 @@ func (s *TicketAssignmentService) AssignTickets(ctx context.Context, tenantID in
 	}
 
 	// 批量更新工单分配人
-	if err := validateTicketAssignmentClasses(ctx, s.client, tenantID, ticketIDs); err != nil {
+	if err := validateTicketMutationClasses(ctx, s.client, tenantID, ticketIDs); err != nil {
 		return err
 	}
 	for _, ticketID := range ticketIDs {
-		err := s.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNEQ("incident"), ticket.TenantID(tenantID)).
+		err := s.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest), ticket.TenantID(tenantID)).
 			SetAssigneeID(assigneeID).
 			Exec(ctx)
 		if err != nil {
