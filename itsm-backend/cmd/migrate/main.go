@@ -280,7 +280,9 @@ func seedData(sugar *zap.SugaredLogger) {
 	defer client.Close()
 
 	seederInstance := seeder.NewSeeder(client, sugar, cfg)
-	seederInstance.SeedAll(context.Background())
+	if err := seederInstance.SeedAll(context.Background()); err != nil {
+		log.Fatalf("Seed failed: %v", err)
+	}
 	fmt.Println("Seed completed successfully")
 }
 

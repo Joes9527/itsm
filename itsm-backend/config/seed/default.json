@@ -308,6 +308,7 @@
   ],
   "service_catalog": [
     {
+      "target_class": "service_request_item",
       "name": "账号申请",
       "description": "新员工或岗位变更账号开通",
       "category": "账号与权限",
@@ -316,6 +317,7 @@
       "delivery_time": 1
     },
     {
+      "target_class": "service_request_item",
       "name": "权限变更",
       "description": "业务系统、数据库或基础设施权限调整",
       "category": "账号与权限",
@@ -324,6 +326,7 @@
       "delivery_time": 2
     },
     {
+      "target_class": "service_request_item",
       "name": "软件安装",
       "description": "标准办公软件和开发工具安装",
       "category": "终端支持",
@@ -332,6 +335,7 @@
       "delivery_time": 1
     },
     {
+      "target_class": "service_request_item",
       "name": "网络接入",
       "description": "办公网络、VPN、无线网络接入申请",
       "category": "网络",
@@ -340,6 +344,7 @@
       "delivery_time": 2
     },
     {
+      "target_class": "service_request_item",
       "name": "云服务器申请",
       "description": "云主机、虚拟机或容器资源申请",
       "category": "云资源",
@@ -348,6 +353,7 @@
       "delivery_time": 2
     },
     {
+      "target_class": "service_request_item",
       "name": "数据库申请",
       "description": "数据库实例、账号或备份策略申请",
       "category": "数据库",
@@ -356,6 +362,7 @@
       "delivery_time": 3
     },
     {
+      "target_class": "service_request_item",
       "name": "安全扫描",
       "description": "漏洞扫描、基线检查或渗透测试申请",
       "category": "安全",
@@ -364,6 +371,7 @@
       "delivery_time": 5
     },
     {
+      "target_class": "service_request_item",
       "name": "代码仓库",
       "description": "代码仓库、CI/CD流水线与制品库申请",
       "category": "研发效能",
@@ -374,7 +382,7 @@
   ],
   "process_bindings": [
     {
-      "business_type": "ticket",
+      "business_type": "generic",
       "process_definition_key": "ticket_general_flow",
       "is_default": true
     },
@@ -389,13 +397,12 @@
       "is_default": true
     },
     {
-      "business_type": "change",
+      "business_type": "change_request",
       "process_definition_key": "change_normal_flow",
       "is_default": true
     },
     {
-      "business_type": "ticket",
-      "business_sub_type": "service_request",
+      "business_type": "service_request_item",
       "process_definition_key": "service_request_flow",
       "is_default": true
     },
@@ -403,21 +410,6 @@
       "business_type": "release",
       "process_definition_key": "release_approval_flow",
       "is_default": true
-    },
-    {
-      "business_type": "cloud_public_ops",
-      "process_definition_key": "cloud_public_ops_flow",
-      "is_default": false
-    },
-    {
-      "business_type": "cloud_private_ops",
-      "process_definition_key": "cloud_private_ops_flow",
-      "is_default": false
-    },
-    {
-      "business_type": "cloud_security_scan",
-      "process_definition_key": "cloud_security_scan_flow",
-      "is_default": false
     }
   ],
   "ticket_views": [

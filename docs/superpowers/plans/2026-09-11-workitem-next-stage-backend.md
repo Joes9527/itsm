@@ -166,12 +166,12 @@ HTTP断言覆盖仅workaround时永久方案保持、resolution显式空且solut
 **Interfaces**
 复用现有 ProcessTriggerRequest 和 canonical identity helper；不新增旧类型别名。原 C1 所有发布、绑定、回调校验继续生效。
 
-- [ ] 将评审归档中 trigger overlay 的真实启动反例转为相邻正式测试；对请求保留变量逐键覆盖，断言启动拒绝且未产生实例。普通非保留变量仍成功。
-- [ ] 为真正从 default.json 加载并覆盖嵌入 seed 的路径编写测试；断言所有 WorkItem binding 使用 canonical 类，历史检测器与显式 Release 值按现有规则处理。
-- [ ] Run `go test ./service -run 'Test.*Trigger.*Identity|Test.*Reserved' -count=1 -v`、`go test ./pkg/seeder -run 'Test.*WorkItem' -count=1 -v`；确认反例失败。
-- [ ] 在 req.Variables 合并之前使用现有保留变量集合逐键拒绝；修正维护的 JSON 和实际入库校验。不得修改历史实例或让非 API seed 绕过 validator；避免再维护一套保留键常量。
-- [ ] Run `go test ./dto ./common/workitemidentity ./service/bpmn ./pkg/seeder -count=1` 和上述服务测试；回归原 C1 PostgreSQL cutover 测试及 Release。
-- [ ] 提交：`fix(bpmn): reject identity overrides and validate loaded seed bindings`。
+- [x] 将评审归档中 trigger overlay 的真实启动反例转为相邻正式测试；对请求保留变量逐键覆盖，断言启动拒绝且未产生实例。普通非保留变量仍成功。
+- [x] 为真正从 default.json 加载并覆盖嵌入 seed 的路径编写测试；断言所有 WorkItem binding 使用 canonical 类，历史检测器与显式 Release 值按现有规则处理。
+- [x] Run `go test ./service -run 'Test.*Trigger.*Identity|Test.*Reserved' -count=1 -v`、`go test ./pkg/seeder -run 'Test.*WorkItem' -count=1 -v`；确认反例失败。
+- [x] 在 req.Variables 合并之前使用现有保留变量集合逐键拒绝；修正维护的 JSON 和实际入库校验。不得修改历史实例或让非 API seed 绕过 validator；避免再维护一套保留键常量。
+- [x] Run `go test ./dto ./common/workitemidentity ./service/bpmn ./pkg/seeder -count=1` 和上述服务测试；回归原 C1 PostgreSQL cutover 测试及 Release。
+- [x] 提交：`fix(bpmn): reject identity overrides and validate loaded seed bindings`。
 
 ## B5：当前授权、MSP RLS 与重试分类
 
@@ -242,3 +242,12 @@ Change metadata/assign 共用 expectedVersion、operationId、assignmentReason�
 通用 Ticket 的核心编辑、状态变化、分派、智能/批量/MSP 分派、流程接单与所有权移交、BPMN ticket assign/escalate/status 均拒绝 Incident/Problem/Change，专业命令是唯一对应写入口。混合批次在第一条写入前检查完整集合；repository 直接更新也加类过滤。tags-only、纯转发通知及评论/附件等共享能力保留，generic/requested-item/catalog-task 保持原行为。记录类在当前 Ent 不可变，不把过滤条件宣称为已验证的分类竞争机制。
 
 真实旁路行为 RED 后，service 定向通过（5.816s），repository 全包（0.833s）及 BPMN 全包（2.236s）通过。API 文档和 Change 客户端同步，B3 普通编辑与证据写事务仍独立收口。证据目录包含 b23-ticket-* 与 workitem-b2-pg-green.log。
+
+
+## B4 执行记录（2026-09-11）
+
+用户变量覆盖保留流程身份的行为已先复现再修复，复用原规范化保留变量集合拒绝大小写及空白别名。真实磁盘 seed 配置更新 canonical businessType，全部目录条目补显式 target_class；移除 3 条无规范目标类且无消费者的 cloud 绑定条目，保留其流程模板。实际 SeedAll/ProductionInitializers 先验证全部配置，再部署可执行定义并通过唯一 ProcessBindingService 建绑定，错误向 CLI/事务传递。删除无消费者的 DepartmentProcessService.InitDepartmentDefaults 和 ProcessRoutingService.CreateBinding 直接写入路径。
+
+dto、BPMN、seeder 全包最终通过（0.078s、4.207s、7.890s），migrate CLI 使用其实际 migrate build tag 编译测试通过（0.029s）；一次组合命令因遗漏该 tag 失败，不是业务测试失败。保留变量定向回归通过（0.404s）。原 C1 隔离 PG 11 个测试通过（7.668s），包含活跃/挂起旧实例、待处理回调、旧绑定、身份矛盾、缺扩展、扫描截断拒绝和只读摘要一致；规范记录与 Release 边界保留，所有 schema 清理 remaining=0。
+
+独立审查无新增确定性 P1/P2。已有租户存在任意绑定时仍沿用原跳过默认配置的行为，本次没有历史绑定修复或数据迁移，必须通过切换预检处理现有配置。证据包含 workitem-b4-trigger-red.log、workitem-b4-catalog-red.log、workitem-b4-pg-green.log。

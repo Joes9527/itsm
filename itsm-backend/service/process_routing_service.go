@@ -407,32 +407,6 @@ func validateRoutingConditions(conditions map[string]interface{}) error {
 	return nil
 }
 
-// CreateBinding creates a new process binding
-func (s *ProcessRoutingService) CreateBinding(ctx context.Context, binding *ent.ProcessBinding) (*ent.ProcessBinding, error) {
-	created, err := s.client.ProcessBinding.Create().
-		SetBusinessType(binding.BusinessType).
-		SetNillableBusinessSubType(&binding.BusinessSubType).
-		SetProcessDefinitionKey(binding.ProcessDefinitionKey).
-		SetProcessVersion(binding.ProcessVersion).
-		SetIsDefault(binding.IsDefault).
-		SetPriority(binding.Priority).
-		SetIsActive(binding.IsActive).
-		SetDepartmentID(binding.DepartmentID).
-		SetTeamID(binding.TeamID).
-		SetNillableScenario(&binding.Scenario).
-		SetNillableCategory(&binding.Category).
-		SetConditions(binding.Conditions).
-		SetNillableApprovalChainID(&binding.ApprovalChainID).
-		SetNillableSLAPolicyID(&binding.SLAPolicyID).
-		SetOverrides(binding.Overrides).
-		SetTenantID(binding.TenantID).
-		Save(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create process binding: %w", err)
-	}
-	return created, nil
-}
-
 // UpdateBinding updates an existing process binding
 func (s *ProcessRoutingService) UpdateBinding(ctx context.Context, id int, updates map[string]interface{}) (*ent.ProcessBinding, error) {
 	update := s.client.ProcessBinding.UpdateOneID(id)
