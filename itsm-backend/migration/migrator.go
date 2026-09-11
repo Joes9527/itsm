@@ -15,13 +15,15 @@ import (
 
 // Migration represents a single database migration
 type Migration struct {
-	Version        string
-	Description    string
-	AppliedAt      *time.Time
-	RollbackSQL    string
-	Checksum       string
-	ExecutionMS    int64
-	ReleaseVersion string
+	Version         string
+	Description     string
+	AppliedAt       *time.Time
+	RollbackSQL     string
+	Checksum        string
+	ExecutionMS     int64
+	ReleaseVersion  string
+	CatalogRevision *string
+	EvidenceDigest  *string
 }
 
 // Migrator handles database migrations

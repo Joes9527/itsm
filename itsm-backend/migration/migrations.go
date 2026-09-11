@@ -1143,3 +1143,45 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
 		return ""
 	}
 }
+
+// Reserved identities; Task 1 does not register or execute these stages.
+const (
+	ControlledCatalogRevision = "workitem-controlled-retirement-v1"
+	WorkItemPrepareVersion    = "037_work_item_structure_preparation"
+	WorkItemRetireVersion     = "038_work_item_controlled_retirement"
+)
+
+// frozenMigrationVersions preserves the exact pre-conversion active order.
+func frozenMigrationVersions() []string {
+	return []string{
+		"007_add_change_execution_tables",
+		"008_add_initialization_ledger",
+		"009_enable_rls_tenant_isolation",
+		"011_add_tool_invocation_tenant_id",
+		"012_drop_service_catalog_item",
+		"013_service_request_delegates_to_ticket",
+		"014_drop_legacy_approval_workflow",
+		"015_process_instance_running_unique_guard",
+		"016_add_service_request_contact_fields",
+		"017_drop_ticket_type_legacy_approval_fields",
+		"018_convert_legacy_serial_ids_to_identity",
+		"019_kaf_execution_integrity_rls",
+		"020_work_item_number_allocator",
+		"021_add_callback_optional_declared",
+		"022_drop_professional_extension_shared_fields",
+		"023_add_process_start_request_digest",
+		"024_incident_rule_action_receipts",
+		"025_email_attachment_source_identity",
+		"026_intake_actor_provenance",
+		"027_work_item_identity_field_retirement",
+		"028_service_request_work_item_authority",
+		"029_catalog_target_class_authority",
+		"030_catalog_access_policy_result",
+		"031_kaf_action_request_digest",
+		"032_workitem_sla_cycle",
+		"033_incident_status_events",
+		"034_problem_investigation_completion",
+		"035_change_professional_evidence",
+		"036_intake_frozen_workflow_context",
+	}
+}
