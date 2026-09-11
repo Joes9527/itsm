@@ -34,8 +34,7 @@ type MigrationPlan struct {
 	PendingManual []Migration
 }
 
-// ControlledMigrationCatalog describes the next catalog without activating it.
-// Task 5 switches the sole runtime catalog after stage execution is implemented.
+// ControlledMigrationCatalog defines the sole active migration stage order.
 // Requires describes a fixed chain, not a general-purpose workflow engine.
 func ControlledMigrationCatalog() []MigrationDefinition {
 	known := allKnownMigrations()

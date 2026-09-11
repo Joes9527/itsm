@@ -79,6 +79,7 @@ func validatePreparationEvidence(e MigrationEvidence, i PreparationInventory) er
 // MigrationControlConfig is trusted operator configuration, separate from submitted
 // evidence. Every nonowner table privilege must be explicitly reviewed.
 type MigrationControlConfig struct {
+	InspectionRole string
 	// Supplied independently by trusted deployment/operator configuration.
 	Operator                       string
 	RetirementPublicKeys           map[string]ed25519.PublicKey

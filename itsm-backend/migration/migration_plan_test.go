@@ -40,7 +40,7 @@ func TestControlledPlanUnknownStage(t *testing.T) {
 func TestControlledPlanOldHistoryCannotHideRetiredHoles(t *testing.T) {
 	for _, gap := range []string{"022_drop_professional_extension_shared_fields", "027_work_item_identity_field_retirement"} {
 		var applied []Migration
-		for _, m := range RegisteredMigrations {
+		for _, m := range frozenHistoricalMigrations() {
 			if m.Version != gap {
 				applied = append(applied, m)
 			}
@@ -63,7 +63,7 @@ func TestControlledPlanTransition(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []Migration{prepare}, p.Executable)
 	// A genuine old complete history still needs P, without fictitious 022/027 writes.
-	p, err = PlanMigrations(c, controlledReceipts(RegisteredMigrations), OpPrepare, nil)
+	p, err = PlanMigrations(c, controlledReceipts(frozenHistoricalMigrations()), OpPrepare, nil)
 	require.NoError(t, err)
 	require.Equal(t, []Migration{prepare}, p.Executable)
 	prefix = append(prefix, controlledReceipts([]Migration{prepare})...)
@@ -157,7 +157,7 @@ func TestControlledPlanDownPreflightsWholeRequest(t *testing.T) {
 }
 
 func TestControlledPlanRetirementRequiresPForCompleteOldHistory(t *testing.T) {
-	p, err := PlanMigrations(ControlledMigrationCatalog(), controlledReceipts(RegisteredMigrations), OpRetire, nil)
+	p, err := PlanMigrations(ControlledMigrationCatalog(), controlledReceipts(frozenHistoricalMigrations()), OpRetire, nil)
 	require.Error(t, err)
 	require.Empty(t, p.Executable)
 }
@@ -183,7 +183,7 @@ func TestControlledPlanStopsBeforePreparation(t *testing.T) {
 
 func TestControlledPlanOldPartialHistoryCannotContinuePastP(t *testing.T) {
 	// Old 023 receipt must not permit 024 until preparation is committed.
-	p, err := PlanMigrations(ControlledMigrationCatalog(), controlledReceipts(RegisteredMigrations[:16]), OpUp, nil)
+	p, err := PlanMigrations(ControlledMigrationCatalog(), controlledReceipts(frozenHistoricalMigrations()[:16]), OpUp, nil)
 	require.NoError(t, err)
 	require.Empty(t, p.Executable)
 	require.Len(t, p.PendingManual, 2)
@@ -191,8 +191,8 @@ func TestControlledPlanOldPartialHistoryCannotContinuePastP(t *testing.T) {
 
 func TestControlledPlanEveryLegalOldPrefixConvertsWithoutInventingReceipts(t *testing.T) {
 	c := ControlledMigrationCatalog()
-	for end := 14; end <= len(RegisteredMigrations); end++ {
-		applied := controlledReceipts(RegisteredMigrations[:end])
+	for end := 14; end <= len(frozenHistoricalMigrations()); end++ {
+		applied := controlledReceipts(frozenHistoricalMigrations()[:end])
 		before := append([]Migration(nil), applied...)
 		p, err := PlanMigrations(c, applied, OpPrepare, nil)
 		require.NoError(t, err)
@@ -207,4 +207,29 @@ func TestControlledPlanEveryLegalOldPrefixConvertsWithoutInventingReceipts(t *te
 		}
 		require.Equal(t, []Migration{controlledStage(c, StageRetire)}, p.PendingManual)
 	}
+}
+
+func TestControlledRuntimeCatalogActivated(t *testing.T) {
+	c := ControlledMigrationCatalog()
+	var want []Migration
+	for _, d := range c {
+		want = append(want, d.Migration)
+	}
+	require.Equal(t, want, PostSchemaMigrations())
+	for _, version := range []string{"022_drop_professional_extension_shared_fields", "027_work_item_identity_field_retirement"} {
+		found := false
+		for _, m := range LegacyMigrations {
+			found = found || m.Version == version
+		}
+		require.True(t, found, version)
+	}
+}
+
+func frozenHistoricalMigrations() []Migration {
+	var out []Migration
+	known := allKnownMigrations()
+	for _, v := range frozenMigrationVersions() {
+		out = append(out, known[v])
+	}
+	return out
 }

@@ -8,6 +8,8 @@ import (
 // PostSchemaMigrator records and applies the canonical post-schema migration stream.
 type PostSchemaMigrator interface {
 	InspectMigrationTarget(context.Context) error
+	InspectRuntimeMigrations(context.Context) error
+	NeedsSchemaBootstrap(context.Context) (bool, error)
 	WithMigrationLock(context.Context, func(context.Context) error) error
 	EnsureMigrationsTable(context.Context) error
 	RunMigrations(context.Context, []Migration) (int, error)
@@ -40,6 +42,9 @@ func RunPostSchemaMigrations(ctx context.Context, migrator PostSchemaMigrator) e
 		if _, err := migrator.RunMigrations(ctx, PostSchemaMigrations()); err != nil {
 			return fmt.Errorf("run post-schema migrations: %w", err)
 		}
+		if err := migrator.InspectRuntimeMigrations(ctx); err != nil {
+			return fmt.Errorf("runtime migration admission: %w", err)
+		}
 		if err := migrator.ReconcileSchemaInvariants(ctx); err != nil {
 			return fmt.Errorf("reconcile schema invariants: %w", err)
 		}
@@ -60,17 +65,23 @@ func RunCanonicalBootstrap(ctx context.Context, bootstrap CanonicalBootstrap) er
 		if err := bootstrap.Migrator.InspectMigrationTarget(ctx); err != nil {
 			return fmt.Errorf("inspect migration target: %w", err)
 		}
+		create, err := bootstrap.Migrator.NeedsSchemaBootstrap(ctx)
+		if err != nil {
+			return err
+		}
 		// Initialize only after admitting an empty target, before Ent makes it nonempty.
 		if err := bootstrap.Migrator.EnsureMigrationsTable(ctx); err != nil {
 			return fmt.Errorf("ensure migration ledger: %w", err)
 		}
-		if bootstrap.Prepare != nil {
+		if create && bootstrap.Prepare != nil {
 			if err := bootstrap.Prepare(ctx); err != nil {
 				return fmt.Errorf("prepare pre-schema bootstrap: %w", err)
 			}
 		}
-		if err := bootstrap.CreateSchema(ctx); err != nil {
-			return fmt.Errorf("create schema resources: %w", err)
+		if create {
+			if err := bootstrap.CreateSchema(ctx); err != nil {
+				return fmt.Errorf("create schema resources: %w", err)
+			}
 		}
 		if err := RunPostSchemaMigrations(ctx, bootstrap.Migrator); err != nil {
 			return err

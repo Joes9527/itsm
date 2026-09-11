@@ -1045,14 +1045,17 @@ func InitializeStorage(cfg *config.Config, client *ent.Client, sugar *zap.Sugare
 	ctx := tenantctx.SystemContext(context.Background(), "bootstrap:initialize_storage",
 		"schema migration and default seed at process boot")
 
-	migrator := migration.NewMigrator(database.GetRawDB(), sugar)
-	if err := migrator.InspectMigrationTarget(ctx); err != nil {
-		return fmt.Errorf("inspect storage migration target: %w", err)
+	control, err := migration.LoadControlConfiguration()
+	if err != nil {
+		return fmt.Errorf("migration control configuration: %w", err)
 	}
+	migrator := migration.NewMigrator(database.GetRawDB(), sugar, control)
 	if !cfg.Deployment.AutoMigrate {
-		if err := migrator.InspectRuntimeMigrations(ctx); err != nil {
+		if err := migration.InspectRuntimeDatabase(ctx, database.GetRawDB(), control); err != nil {
 			return fmt.Errorf("runtime migration admission: %w", err)
 		}
+	} else if err := migrator.InspectMigrationTarget(ctx); err != nil {
+		return fmt.Errorf("inspect storage migration target: %w", err)
 	}
 	if cfg.Deployment.AutoMigrate {
 		bootstrap := migration.CanonicalBootstrap{
@@ -1102,7 +1105,7 @@ func InitializeStorage(cfg *config.Config, client *ent.Client, sugar *zap.Sugare
 
 	if cfg.Deployment.AutoSeed && !cfg.Deployment.AutoMigrate {
 		if err := migrator.WithMigrationLock(ctx, func(ctx context.Context) error {
-			if err := migrator.InspectRuntimeMigrations(ctx); err != nil {
+			if err := migration.InspectRuntimeDatabase(ctx, database.GetRawDB(), control); err != nil {
 				return err
 			}
 			return runBootstrapSeed(ctx, cfg, client, sugar)

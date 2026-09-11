@@ -16,7 +16,7 @@ func TestIdentityRetirementOperationalSQLMatchesRegisteredMigration(t *testing.T
 	require.NoError(t, err)
 	require.Equal(t, strings.TrimSpace(workItemIdentityRetirementVerifySQL), strings.TrimSpace(string(verify)))
 	versions := []string{}
-	for _, m := range RegisteredMigrations {
+	for _, m := range LegacyMigrations {
 		versions = append(versions, m.Version)
 	}
 	require.Contains(t, versions, version)

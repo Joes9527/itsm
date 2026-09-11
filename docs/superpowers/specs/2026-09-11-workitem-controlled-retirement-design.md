@@ -141,3 +141,14 @@ P提交后的应用回滚先核验旧应用与当前schema/RLS是否兼容；不
 
 - 本阶段验证：真实所属领域软删除后，保留字段和P基线不变且可执行R；物理消失及保留值改动仍拒绝。R后正常业务写入不应使历史回执验证或同证据重试失败。
 - Backlog `BL-WI-PURGE-AUDIT-01`：物理清理与可靠事务审计。后续独立设计必须定义所属领域清理入口、原始记录/WorkItem/租户身份、保留值范围与摘要、动作/执行者/时间、唯一操作身份以及与清理同事务的不可变结果。获得单独批准前不实施，不允许用HTTP DELETE日志或自签声明代替。
+
+
+## 运行时只读准入边界（2026-09-11 Task 5 澄清）
+
+部署独立配置专用 inspection role/connection；业务连接不复用 owner 凭据，也不获得全局历史证据读取权限。inspection role 仅获得同一目标 schema 中 schema_migrations 与 work_item_migration_evidence 的 SELECT，不得获得业务表读取、写入、ownership、grant option、角色继承/授予或 BYPASSRLS。P 在原始附件中固定该身份；既有附件不追加或重写。只有独立配置与原始回执一致的该角色可读取附件；其余新增 ACL 仍拒绝。
+
+运行时连接以只读事务核验回执/附件摘要、受信任历史签名、当前结构及安全元数据；先比较业务与 inspection 连接的数据库、schema、服务器，再核对部署身份，完成后关闭 inspection 连接。运行时结构准入不执行受 RLS 过滤的全局业务行查询，不声称 FK 能证明所有 record_class 一致性。P/R 控制执行和锁内复核继续由受控运维身份执行完整归属、重复、类别、保留基线检查；完整业务验收另由三域及 Requested Item/V1 旅程证明。
+
+空环境也必须在普通迁移至 021 后停在手工 P；P 后才继续普通迁移并准入就绪。已有目标不再运行 Ent/Prepare overlay，避免隐式补出后续普通结构。缺 P 或任一普通结构/回执时不得 reconcile/seed 或宣称就绪。
+
+运行时当前必需结构采用生成的 Ent Tables/Columns/Type 作为模型来源，并对 active 007/008/034 所有 13 个非 Ent 表附加紧凑列/类型后置条件。只读 pg_catalog 查询不要求业务 SELECT；缺表、缺列或不兼容类型拒绝。允许有意保留的额外旧列，不声称所有索引、默认值、存储选项或任意 PostgreSQL 对象完全等价。P/R 原有精确结构/安全检查保留。

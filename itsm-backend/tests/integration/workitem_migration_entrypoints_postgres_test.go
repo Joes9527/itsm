@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"crypto/ed25519"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
@@ -15,10 +16,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/migration"
@@ -124,15 +127,12 @@ func TestControlledEntryResetRejectsBeforeAnyWrite(t *testing.T) {
 }
 
 func TestControlledEntryAdmitsCanonicalReverse(t *testing.T) {
-	f := newCutoverFixture(t)
-	db, ctx := f.scopedDB, f.ctx
+	db, ctx := preparationFixture(t)
 	m := migration.NewMigrator(db, zap.NewNop().Sugar())
 	var last migration.Migration
-	for _, registered := range migration.RegisteredMigrations {
-		require.NoError(t, m.ApplyMigration(ctx, registered))
-		last = registered
-		if registered.Version == "021_add_callback_optional_declared" {
-			break
+	for _, candidate := range migration.RegisteredMigrations {
+		if candidate.Version == "021_add_callback_optional_declared" {
+			last = candidate
 		}
 	}
 	require.NoError(t, m.RollbackMigration(ctx, last))
@@ -263,7 +263,7 @@ func TestControlledEntryCLIRejectsBeforeWrites(t *testing.T) {
 			before := entryDigest(t, db)
 			cmd := exec.CommandContext(ctx, binary, flag)
 			cmd.Dir = dir
-			cmd.Env = []string{"DB_HOST=" + parsed.Hostname(), "DB_PORT=" + parsed.Port(), "DB_USER=" + parsed.User.Username(), "DB_PASSWORD=" + password, "DB_NAME=sslvpn_test", "DB_SCHEMA=" + schema, "RLS_MODE=enforce"}
+			cmd.Env = []string{"DB_HOST=" + parsed.Hostname(), "DB_PORT=" + parsed.Port(), "DB_USER=" + parsed.User.Username(), "DB_PASSWORD=" + password, "DB_NAME=" + strings.TrimPrefix(parsed.Path, "/"), "DB_SCHEMA=" + schema, "RLS_MODE=enforce"}
 			out, err := cmd.CombinedOutput()
 			require.Error(t, err)
 			diagnostic := strings.ReplaceAll(string(out), password, "[REDACTED]")
@@ -281,14 +281,16 @@ func TestControlledEntryAutoMigrateDisabledStillRequiresRuntime(t *testing.T) {
 	parsed, err := url.Parse(os.Getenv("INTAKE_POSTGRES_TEST_DSN"))
 	require.NoError(t, err)
 	password, _ := parsed.User.Password()
-	cfg := &config.Config{Database: config.DatabaseConfig{Host: "127.0.0.1", Port: 36444, User: parsed.User.Username(), Password: password, DBName: "sslvpn_test", SSLMode: "disable", Schema: schema}, Deployment: config.DeploymentConfig{AutoMigrate: false, AutoSeed: true}}
+	port, err := strconv.Atoi(parsed.Port())
+	require.NoError(t, err)
+	cfg := &config.Config{Database: config.DatabaseConfig{Host: parsed.Hostname(), Port: port, User: parsed.User.Username(), Password: password, DBName: strings.TrimPrefix(parsed.Path, "/"), SSLMode: "disable", Schema: schema}, Deployment: config.DeploymentConfig{AutoMigrate: false, AutoSeed: true}}
 	client, err := database.InitDatabase(&cfg.Database)
 	require.NoError(t, err)
 	defer client.Close()
 	before := entryDigest(t, db)
 	err = appbootstrap.InitializeStorage(cfg, client, zap.NewNop().Sugar())
 	require.ErrorContains(t, err, "runtime migration admission")
-	require.ErrorContains(t, err, migration.WorkItemPrepareVersion)
+	require.ErrorContains(t, err, "explicit inspection identity")
 	require.Equal(t, before, entryDigest(t, db))
 }
 
@@ -425,4 +427,199 @@ func migrationEntryTarget(t *testing.T) *url.URL {
 	require.Equal(t, "36542", ports["5432/tcp"][0].HostPort)
 	require.Equal(t, "true", lines[2])
 	return parsed
+}
+
+func TestControlledEntryPreparationOperatorBinding(t *testing.T) {
+	db, ctx := preparationFixture(t)
+	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2", Operator: "trusted-operator"})
+	e := preparationEvidence(t, m, ctx)
+	before := entryDigest(t, db)
+	require.ErrorContains(t, m.ApplyPreparation(ctx, e), "operator")
+	require.Equal(t, before, entryDigest(t, db))
+	e.Operator = "trusted-operator"
+	require.NoError(t, m.ApplyPreparation(ctx, e))
+}
+
+func TestControlledEntryCLIRejectsConflictingControlsBeforeConfig(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	require.NoError(t, err)
+	binary := filepath.Join(t.TempDir(), "migrate")
+	cmd := exec.Command("go", "build", "-tags", "migrate", "-o", binary, "./cmd/migrate")
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+	for _, other := range []string{"-up", "-down", "-reset", "-fresh", "-seed", "-seed-only", "-retire-workitem"} {
+		t.Run(other, func(t *testing.T) {
+			cmd := exec.Command(binary, "-prepare-workitem", other)
+			cmd.Dir = t.TempDir()
+			cmd.Env = []string{}
+			out, err := cmd.CombinedOutput()
+			require.Error(t, err)
+			exit, ok := err.(*exec.ExitError)
+			require.True(t, ok)
+			require.Equal(t, 2, exit.ExitCode())
+			require.Contains(t, string(out), "mutually exclusive")
+		})
+	}
+}
+
+// Synthetic ledger profiles exercise read-only admission; actual migration
+// execution is separately covered by preparationFixture and the public P/up path.
+func TestControlledEntryHistoricalDeletionTargetsBlockAdmission(t *testing.T) {
+	cases := []struct{ version, ddl, object string }{
+		{"012", "CREATE TABLE service_catalog_items(id bigint)", "service_catalog_items"},
+		{"012", "CREATE TABLE service_catalogs(form_schema jsonb)", "service_catalogs.form_schema"},
+		{"013", "CREATE TABLE service_requests(title text)", "service_requests.title"},
+		{"013", "CREATE TABLE field_values(entity_type text); INSERT INTO field_values VALUES('service_request')", "field_values"},
+		{"014", "CREATE TABLE approval_records(id bigint)", "approval_records"},
+		{"017", "CREATE TABLE ticket_types(approval_chain jsonb)", "ticket_types.approval_chain"},
+		{"028", "CREATE TABLE service_requests(tenant_id bigint)", "service_requests.tenant_id"},
+		{"029", "CREATE TABLE service_catalogs(itsm_type text)", "service_catalogs.itsm_type"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.version+"/"+tc.object, func(t *testing.T) {
+			db, ctx := migrationEntryFixture(t)
+			seedEntryLedger(t, db, ctx, false)
+			_, err := db.ExecContext(ctx, "DELETE FROM schema_migrations WHERE version >= $1", tc.version)
+			require.NoError(t, err)
+			_, err = db.ExecContext(ctx, tc.ddl)
+			require.NoError(t, err)
+			before := entryDigest(t, db)
+			m := migration.NewMigrator(db, zap.NewNop().Sugar())
+			require.ErrorContains(t, m.InspectMigrationTarget(ctx), tc.object)
+			require.Equal(t, before, entryDigest(t, db))
+		})
+	}
+}
+
+func TestControlledEntryReadOnlyInspectorNeedsNoBusinessAccess(t *testing.T) {
+	roleDB, ctx := migrationEntryFixture(t)
+	role := fmt.Sprintf("v2_inspector_%d", time.Now().UnixNano())
+	_, err := roleDB.ExecContext(ctx, "CREATE ROLE "+pq.QuoteIdentifier(role)+" LOGIN PASSWORD 'owned-test-only'")
+	require.NoError(t, err)
+	t.Cleanup(func() { _, err := roleDB.Exec("DROP ROLE " + pq.QuoteIdentifier(role)); require.NoError(t, err) })
+	file := filepath.Join(t.TempDir(), "control.json")
+	content, _ := json.Marshal(map[string]any{"DeploymentID": "owned-v2", "InspectionRole": role})
+	require.NoError(t, os.WriteFile(file, content, 0600))
+	t.Setenv("ITSM_MIGRATION_CONTROL_FILE", file)
+	control, err := migration.LoadControlConfiguration()
+	require.NoError(t, err)
+	db, ctx, _ := currentRuntimeFixture(t, control)
+	var schema string
+	require.NoError(t, db.QueryRow("SELECT current_schema()").Scan(&schema))
+	_, err = db.Exec("GRANT USAGE ON SCHEMA " + pq.QuoteIdentifier(schema) + " TO " + pq.QuoteIdentifier(role) + "; GRANT SELECT ON schema_migrations TO " + pq.QuoteIdentifier(role))
+	require.NoError(t, err)
+	target := migrationEntryTarget(t)
+	target.User = url.UserPassword(role, "owned-test-only")
+	query := target.Query()
+	query.Set("search_path", schema)
+	query.Set("default_transaction_read_only", "on")
+	target.RawQuery = query.Encode()
+	inspector, err := sql.Open("postgres", target.String())
+	require.NoError(t, err)
+	defer inspector.Close()
+	var businessAccess bool
+	require.NoError(t, inspector.QueryRow("SELECT has_table_privilege(current_user,'tickets','SELECT')").Scan(&businessAccess))
+	require.False(t, businessAccess)
+	m := migration.NewMigrator(inspector, zap.NewNop().Sugar(), control)
+	require.NoError(t, m.InspectRuntimeMigrations(ctx))
+	t.Setenv("ITSM_MIGRATION_INSPECTION_DSN", target.String())
+	require.NoError(t, migration.InspectRuntimeDatabase(ctx, db, control))
+	wrong := *target
+	wq := wrong.Query()
+	wq.Set("search_path", "public")
+	wrong.RawQuery = wq.Encode()
+	t.Setenv("ITSM_MIGRATION_INSPECTION_DSN", wrong.String())
+	require.ErrorContains(t, migration.InspectRuntimeDatabase(ctx, db, control), "does not match")
+	t.Setenv("ITSM_MIGRATION_INSPECTION_DSN", target.String())
+	_, err = db.Exec("GRANT UPDATE ON work_item_migration_evidence TO " + pq.QuoteIdentifier(role))
+	require.NoError(t, err)
+	require.Error(t, m.InspectRuntimeMigrations(ctx))
+	_, err = db.Exec("REVOKE UPDATE ON work_item_migration_evidence FROM " + pq.QuoteIdentifier(role))
+	require.NoError(t, err)
+	_, err = db.Exec("GRANT SELECT(id) ON tickets TO " + pq.QuoteIdentifier(role))
+	require.NoError(t, err)
+	require.ErrorContains(t, m.InspectRuntimeMigrations(ctx), "inspection role")
+	_, err = db.Exec("REVOKE SELECT(id) ON tickets FROM " + pq.QuoteIdentifier(role))
+	require.NoError(t, err)
+	require.NoError(t, m.InspectRuntimeMigrations(ctx))
+	_, err = db.Exec("GRANT UPDATE(description) ON schema_migrations TO " + pq.QuoteIdentifier(role))
+	require.NoError(t, err)
+	require.ErrorContains(t, m.InspectRuntimeMigrations(ctx), "inspection role")
+	_, err = db.Exec("REVOKE UPDATE(description) ON schema_migrations FROM " + pq.QuoteIdentifier(role))
+	require.NoError(t, err)
+	_, err = db.Exec("DROP INDEX incident_work_item_id")
+	require.NoError(t, err)
+	require.ErrorContains(t, m.InspectRuntimeMigrations(ctx), "structure")
+}
+
+func TestControlledEntryExistingBootstrapNeverOverlaysEntBeforeP(t *testing.T) {
+	db, ctx := preparationFixture(t)
+	m := migration.NewMigrator(db, zap.NewNop().Sugar())
+	before := entryDigest(t, db)
+	writes := 0
+	err := migration.RunCanonicalBootstrap(ctx, migration.CanonicalBootstrap{
+		Migrator: m, Prepare: func(context.Context) error { writes++; return nil }, CreateSchema: func(context.Context) error { writes++; return nil },
+		Seed: func(context.Context) error { writes++; return nil },
+	})
+	require.Error(t, err)
+	require.Equal(t, before, entryDigest(t, db))
+	require.Zero(t, writes, "existing canonical migration targets cannot receive Ent overlay or seed before P")
+}
+
+func TestControlledEntryCompiledRetirementAuthorizationAndReplay(t *testing.T) {
+	root, err := filepath.Abs("../..")
+	require.NoError(t, err)
+	binary := filepath.Join(t.TempDir(), "migrate")
+	build := exec.Command("go", "build", "-tags", "migrate", "-o", binary, "./cmd/migrate")
+	build.Dir = root
+	out, err := build.CombinedOutput()
+	require.NoError(t, err, string(out))
+	folder := t.TempDir()
+	controlFile := filepath.Join(folder, "control.json")
+	require.NoError(t, os.WriteFile(controlFile, []byte("{\"DeploymentID\":\"owned-v2\"}"), 0600))
+	t.Setenv("ITSM_MIGRATION_CONTROL_FILE", controlFile)
+	control, err := migration.LoadControlConfiguration()
+	require.NoError(t, err)
+	db, ctx, m, priv := retirementFixtureConfigured(t, control)
+	control.RetirementPublicKeys = map[string]ed25519.PublicKey{"fixture": priv.Public().(ed25519.PublicKey)}
+	configBytes, err := json.Marshal(control)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(controlFile, configBytes, 0600))
+	evidence := retirementEvidence(t, m, ctx, priv)
+	evidence.Operator = control.Operator
+	signRetirement(t, &evidence, priv)
+	evidenceFile := filepath.Join(folder, "evidence.json")
+	require.NoError(t, os.WriteFile(filepath.Join(folder, "config.yaml"), []byte("database:\n  host: \"${DB_HOST}\"\n  port: \"${DB_PORT}\"\n  user: \"${DB_USER}\"\n  dbname: \"${DB_NAME}\"\n  sslmode: disable\n"), 0600))
+	target := migrationEntryTarget(t)
+	password, _ := target.User.Password()
+	var schema string
+	require.NoError(t, db.QueryRow("SELECT current_schema()").Scan(&schema))
+	run := func(e migration.MigrationEvidence) (string, error) {
+		data, err := json.Marshal(e)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(evidenceFile, data, 0600))
+		cmd := exec.CommandContext(ctx, binary, "-retire-workitem", "-evidence-file", evidenceFile)
+		cmd.Dir = folder
+		cmd.Env = []string{"DB_HOST=" + target.Hostname(), "DB_PORT=" + target.Port(), "DB_USER=" + target.User.Username(), "DB_PASSWORD=" + password, "DB_NAME=" + strings.TrimPrefix(target.Path, "/"), "DB_SCHEMA=" + schema, "ITSM_MIGRATION_CONTROL_FILE=" + controlFile}
+		out, err := cmd.CombinedOutput()
+		return strings.ReplaceAll(string(out), password, "[REDACTED]"), err
+	}
+	invalid := evidence
+	invalid.Operator = "different-operational-identity"
+	before := entryDigest(t, db)
+	diagnostic, err := run(invalid)
+	require.Error(t, err, diagnostic)
+	exit, ok := err.(*exec.ExitError)
+	require.True(t, ok)
+	require.Equal(t, 1, exit.ExitCode())
+	require.Equal(t, before, entryDigest(t, db))
+	diagnostic, err = run(evidence)
+	require.NoError(t, err, diagnostic)
+	require.Contains(t, diagnostic, "Controlled migration committed")
+	diagnostic, err = run(evidence)
+	require.NoError(t, err, diagnostic)
+	var receipts int
+	require.NoError(t, db.QueryRow("SELECT count(*) FROM schema_migrations WHERE version=$1", migration.WorkItemRetireVersion).Scan(&receipts))
+	require.Equal(t, 1, receipts)
 }

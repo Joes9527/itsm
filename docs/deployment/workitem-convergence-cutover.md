@@ -1,5 +1,32 @@
 # WorkItem 收敛切换与恢复手册
 
+## 当前控制入口：准备 P、普通迁移、退役 R
+
+历史 022/027 的 SQL 与 checksum 仅用于识别已执行历史，普通 up 不再执行它们。当前阶段顺序由唯一目录确定：普通至 021 → 手工 037 P → 普通 023–036（排除旧 027）→ 手工 038 R。最大版本号不是就绪证明；status/dry-run 分别显示 executable 与 pending_manual。down/rollback-to 使用阶段依赖顺序；reset/P/R 不提供重建空表式恢复。
+
+先由部署运维设置只读、不可被 group/world 写入的 JSON 文件，并通过 `ITSM_MIGRATION_CONTROL_FILE` 指向它。字段来自 `migration.MigrationControlConfig`：DeploymentID、InspectionRole、ReviewedGrants、RetirementPublicKeys、HistoricalRetirementPublicKeys。公钥为独立固定的 Ed25519 公钥，JSON byte slice 使用 base64；不得从提交的 evidence 中建立 trust root。CLI Operator 始终来自实际 OS 用户。业务运行另用 `ITSM_MIGRATION_INSPECTION_DSN`（PostgreSQL URL、显式 schema、专用 inspection 用户）；它不替代业务数据库配置，连接目标必须一致。
+
+编译后使用现有布尔 flag：
+
+- `migrate -prepare-workitem -dry-run` / `-retire-workitem -dry-run`：只读输出当前 inventory，供环境证据绑定。
+- `migrate -prepare-workitem -evidence-file /reviewed/preparation.json`：验证原始目标/摘要/真实运维身份，在同一事务提交 P 及附件。
+- `migrate -up`：只执行获准普通迁移，继续报告 pending_manual；不得把该退出 0 单独视为业务就绪。
+- `migrate -retire-workitem -evidence-file /reviewed/retirement.json`：验证独立公钥授权及完整 R 证据；同一已提交证据重试返回原结果。
+- `migrate -status` / `migrate -dry-run`：只读展示；参数冲突/不完整请求 exit 2，连接/准入/执行拒绝 exit 1，成功 exit 0。
+
+控制 flag 与 up/down/reset/fresh/seed 等互斥，任何连接前拒绝多操作。fresh 仍只允许显式确认的空开发目标；本方案不以 fresh 绕过恢复。空环境第一次 bootstrap 停在 P 且不 seed；已存在目标不会 overlay Ent。P 后缺任一普通迁移仍未就绪，原 P 回执不删除。012/013/014/017/028/029 只有逐个确认没有实际删除目标后才可执行；013 也检查 field_values 行。现有父表在执行前加锁，外部直接 DDL 必须服从环境维护窗口和同一迁移互斥纪律。
+
+运行时结构准入的权限及与全局业务验证的区别，以[受控退役设计](../superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md)中的“运行时只读准入边界”为准。下文旧 C1/022/027 记录是历史验证范围，不是当前执行步骤。
+
+
+## 部署前未解决清单：独立 RCA 元数据 schema
+
+当前活动 033 是 Incident status events；独立脚本 `itsm-backend/migrations/20260909_problem_rca_authority.sql` 未注册到普通目录。现有 `handlers/problem/root_cause_metadata.go` 与 `service/problem_investigation_service.go` 的 RCA 路径需要 `problem_root_cause_analyses`，但空 canonical bootstrap 不创建它。该脚本还回填旧 root_cause 并删除 root_cause_description，超出本轮“不回填、只受控替换 022/027”的授权；不得自动注册、运行或补造回执。此缺口需单独部署决策，不能据计划内 V1 核心旅程通过宣称所有独立功能就绪。恢复演练应保留环境原有 RCA 数据（如存在）。
+
+当前只读准入检查生成 Ent 模型全部必需表/列/类型，以及 active 007/008/034 的 13 个原生 SQL 表全部列/类型；缺失或不兼容均拒绝。它不证明任意索引、默认值、存储参数完全等价，也不把独立未注册脚本算作已完成普通迁移。原始 P 未固定 inspection role 的目标不能通过追加授权/改写附件静默适配：需另行评审访问变更，本轮无此类已部署目标。
+
+
+
 > 2026-09-11；状态：隔离验证中，禁止据此宣称实际部署、观察或旧结构删除完成。
 > 权威执行分支：`codex/refactor/workitem-next-stage`；原实现基线 `46606330`，接受设计基线 `3064ea5e`。
 > 本手册继承 [原 C3](../superpowers/plans/2026-09-09-workitem-convergence-runtime.md) 和 [本轮 V2](../superpowers/plans/2026-09-11-workitem-next-stage-experience-validation.md)。

@@ -96,6 +96,9 @@ func (m *Migrator) GetAppliedMigrations(ctx context.Context) ([]Migration, error
 
 // GetPendingMigrations returns migrations that haven't been applied yet
 func (m *Migrator) GetPendingMigrations(ctx context.Context, available []Migration) ([]Migration, error) {
+	if err := m.InspectMigrationTarget(ctx); err != nil {
+		return nil, err
+	}
 	if err := validateMigrationCatalog(RegisteredMigrations, LegacyMigrations, GetMigrationSQL); err != nil {
 		return nil, fmt.Errorf("validate migration catalog: %w", err)
 	}
@@ -107,21 +110,8 @@ func (m *Migrator) GetPendingMigrations(ctx context.Context, available []Migrati
 		return nil, err
 	}
 
-	if err := validateMigrationLedger(applied); err != nil {
-		return nil, err
-	}
-	appliedVersions := make(map[string]bool)
-	for _, mig := range applied {
-		appliedVersions[mig.Version] = true
-	}
-
-	var pending []Migration
-	for _, mig := range available {
-		if !appliedVersions[mig.Version] {
-			pending = append(pending, mig)
-		}
-	}
-	return pending, nil
+	plan, err := PlanMigrations(ControlledMigrationCatalog(), applied, OpUp, nil)
+	return plan.Executable, err
 }
 
 // ApplyMigration applies a single migration
@@ -137,6 +127,9 @@ func (m *Migrator) ApplyMigration(ctx context.Context, mig Migration) error {
 			return fmt.Errorf("failed to begin transaction: %w", err)
 		}
 		defer tx.Rollback()
+		if err := lockHistoricalDestructionParents(ctx, tx, mig.Version); err != nil {
+			return err
+		}
 		applied, err := inspectMigrationTarget(ctx, tx, m.controlConfig)
 		if err != nil {
 			return err
@@ -144,24 +137,16 @@ func (m *Migrator) ApplyMigration(ctx context.Context, mig Migration) error {
 		if err = validateMigrationLedger(applied); err != nil {
 			return err
 		}
-		if err := blockAutomaticWorkItemRetirement(ctx, tx, mig.Version); err != nil {
+		if err := blockHistoricalDestruction(ctx, tx, mig.Version); err != nil {
 			return err
 		}
 
-		seen := map[string]bool{}
-		for _, a := range applied {
-			seen[a.Version] = true
+		plan, err := PlanMigrations(ControlledMigrationCatalog(), applied, OpUp, nil)
+		if err != nil {
+			return err
 		}
-		for _, registered := range RegisteredMigrations {
-			if !seen[registered.Version] {
-				if registered.Version != mig.Version {
-					return fmt.Errorf("apply requires next registered migration %s", registered.Version)
-				}
-				break
-			}
-		}
-		if seen[mig.Version] {
-			return fmt.Errorf("migration %s is already applied", mig.Version)
+		if len(plan.Executable) == 0 || plan.Executable[0].Version != mig.Version {
+			return fmt.Errorf("migration %s is not executable by ordinary up; use the controlled stage entrypoint", mig.Version)
 		}
 
 		m.logger.Infow("Applying migration", "version", mig.Version, "description", mig.Description)
@@ -207,14 +192,18 @@ func validateMigrationCatalog(active, legacy []Migration, sqlForVersion func(str
 			if previousKind, exists := seen[migration.Version]; exists {
 				return fmt.Errorf("duplicate migration version %q in %s and %s catalogs", migration.Version, previousKind, kind)
 			}
-			if previous != "" && migration.Version <= previous {
+			orderVersion := migration.Version
+			if orderVersion == WorkItemPrepareVersion {
+				orderVersion = "022_drop_professional_extension_shared_fields"
+			}
+			if previous != "" && orderVersion <= previous {
 				return fmt.Errorf("%s migrations must be strictly ordered: %q follows %q", kind, migration.Version, previous)
 			}
 			if requireSQL && strings.TrimSpace(sqlForVersion(migration.Version)) == "" {
 				return fmt.Errorf("active migration %q has empty SQL", migration.Version)
 			}
 			seen[migration.Version] = kind
-			previous = migration.Version
+			previous = orderVersion
 		}
 		return nil
 	}
@@ -236,41 +225,8 @@ func allKnownMigrations() map[string]Migration {
 }
 
 func validateMigrationLedger(applied []Migration) error {
-	known := allKnownMigrations()
-	activeIndex := make(map[string]int, len(RegisteredMigrations))
-	for index, migration := range RegisteredMigrations {
-		activeIndex[migration.Version] = index
-	}
-	seen := make(map[string]struct{}, len(applied))
-	appliedActive := make(map[int]struct{}, len(RegisteredMigrations))
-	for _, migration := range applied {
-		knownMigration, ok := known[migration.Version]
-		if !ok {
-			return fmt.Errorf("migration ledger contains unknown version %q", migration.Version)
-		}
-		if _, duplicate := seen[migration.Version]; duplicate {
-			return fmt.Errorf("migration ledger contains duplicate version %q", migration.Version)
-		}
-		expected := checksumSQL(GetMigrationSQL(knownMigration.Version))
-		if migration.Checksum != expected {
-			return fmt.Errorf("migration checksum mismatch for %s: applied=%s current=%s", migration.Version, migration.Checksum, expected)
-		}
-		if index, active := activeIndex[migration.Version]; active {
-			appliedActive[index] = struct{}{}
-		}
-		seen[migration.Version] = struct{}{}
-	}
-	missingActive := false
-	for index, migration := range RegisteredMigrations {
-		if _, applied := appliedActive[index]; !applied {
-			missingActive = true
-			continue
-		}
-		if missingActive {
-			return fmt.Errorf("migration ledger active stream is not a continuous prefix: %q is applied after an earlier gap", migration.Version)
-		}
-	}
-	return nil
+	_, err := PlanMigrations(ControlledMigrationCatalog(), applied, OpUp, nil)
+	return err
 }
 
 func validateAvailableMigrations(available []Migration) error {
@@ -361,8 +317,19 @@ func (m *Migrator) RunMigrations(ctx context.Context, available []Migration) (in
 
 // DryRun returns the SQL that would be executed without actually running it
 func (m *Migrator) DryRun(ctx context.Context, mig Migration) (string, error) {
-	if mig.Version == "001_initial_schema" {
-		return "-- Initial schema handled by Ent", nil
+	if err := validateActiveMigration(mig); err != nil {
+		return "", err
+	}
+	plan, err := m.Plan(ctx, OpUp, nil)
+	if err != nil {
+		return "", err
+	}
+	executable := false
+	for _, candidate := range plan.Executable {
+		executable = executable || candidate.Version == mig.Version
+	}
+	if !executable {
+		return "", fmt.Errorf("migration %s is not executable by ordinary up", mig.Version)
 	}
 
 	sql := GetMigrationSQL(mig.Version)
@@ -491,6 +458,9 @@ func (m *Migrator) InspectMigrationTarget(ctx context.Context) error {
 }
 
 func inspectMigrationTarget(ctx context.Context, q migrationQuery, config MigrationControlConfig) ([]Migration, error) {
+	return inspectMigrationTargetMode(ctx, q, config, false)
+}
+func inspectMigrationTargetMode(ctx context.Context, q migrationQuery, config MigrationControlConfig, structuralOnly bool) ([]Migration, error) {
 	schema, err := migrationTargetSchema(ctx, q)
 	if err != nil {
 		return nil, err
@@ -516,6 +486,17 @@ func inspectMigrationTarget(ctx context.Context, q migrationQuery, config Migrat
 	if _, err = PlanMigrations(ControlledMigrationCatalog(), applied, OpUp, nil); err != nil {
 		return nil, err
 	}
+	seen := map[string]bool{}
+	for _, a := range applied {
+		seen[a.Version] = true
+	}
+	for _, d := range ControlledMigrationCatalog() {
+		if d.Stage == StageOrdinary && !seen[d.Migration.Version] {
+			if err := blockHistoricalDestruction(ctx, q, d.Migration.Version); err != nil {
+				return nil, err
+			}
+		}
+	}
 	// A real R receipt verifies both subordinate attachments and the authorized
 	// post-R catalog, which no longer contains retained P objects.
 	for _, a := range applied {
@@ -528,7 +509,7 @@ func inspectMigrationTarget(ctx context.Context, q migrationQuery, config Migrat
 	}
 	for _, a := range applied {
 		if a.Version == WorkItemPrepareVersion {
-			if err := verifyPreparationReceipt(ctx, q, schema, *a.EvidenceDigest); err != nil {
+			if err := verifyPreparationReceipt(ctx, q, schema, *a.EvidenceDigest, config, structuralOnly); err != nil {
 				return nil, err
 			}
 		}
@@ -537,7 +518,7 @@ func inspectMigrationTarget(ctx context.Context, q migrationQuery, config Migrat
 }
 
 func readMigrationLedger(ctx context.Context, q migrationQuery, schema string) ([]Migration, error) {
-	rows, err := q.QueryContext(ctx, `SELECT column_name,data_type FROM information_schema.columns WHERE table_schema=$1 AND table_name='schema_migrations'`, schema)
+	rows, err := q.QueryContext(ctx, `SELECT a.attname,CASE t.typname WHEN 'varchar' THEN 'character varying' WHEN 'timestamp' THEN 'timestamp without time zone' WHEN 'int8' THEN 'bigint' ELSE t.typname END FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid JOIN pg_type t ON t.oid=a.atttypid WHERE c.relnamespace=$1::regnamespace AND c.relname='schema_migrations' AND a.attnum>0 AND NOT a.attisdropped`, schema)
 	if err != nil {
 		return nil, err
 	}
@@ -602,7 +583,7 @@ func (m *Migrator) InspectRuntimeMigrations(ctx context.Context) error {
 		return err
 	}
 	defer tx.Rollback()
-	applied, err := inspectMigrationTarget(ctx, tx, m.controlConfig)
+	applied, err := inspectMigrationTargetMode(ctx, tx, m.controlConfig, true)
 	if err != nil {
 		return err
 	}
@@ -615,7 +596,7 @@ func (m *Migrator) InspectRuntimeMigrations(ctx context.Context) error {
 			return fmt.Errorf("runtime requires migration %s", d.Migration.Version)
 		}
 	}
-	return nil
+	return inspectCurrentRequiredStructure(ctx, tx)
 }
 
 // ReverseMigrations preflights the entire request before the first write and
@@ -677,4 +658,36 @@ func (m *Migrator) InspectEmptyMigrationTarget(ctx context.Context) error {
 		return fmt.Errorf("fresh requires an empty migration target; use controlled migration or recovery for existing history")
 	}
 	return nil
+}
+
+// Plan is the read-only public view used by CLI status and dry-run.
+func (m *Migrator) Plan(ctx context.Context, operation MigrationOperation, versions []string) (MigrationPlan, error) {
+	if err := m.InspectMigrationTarget(ctx); err != nil {
+		return MigrationPlan{}, err
+	}
+	applied, err := m.GetAppliedMigrations(ctx)
+	if err != nil {
+		return MigrationPlan{}, err
+	}
+	return PlanMigrations(ControlledMigrationCatalog(), applied, operation, versions)
+}
+
+// NeedsSchemaBootstrap allows Ent creation only on a genuinely empty target.
+// Existing profiles are advanced exclusively by the canonical migration stream.
+func (m *Migrator) NeedsSchemaBootstrap(ctx context.Context) (bool, error) {
+	tx, err := m.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	if _, err = inspectMigrationTarget(ctx, tx, m.controlConfig); err != nil {
+		return false, err
+	}
+	schema, err := migrationTargetSchema(ctx, tx)
+	if err != nil {
+		return false, err
+	}
+	var objects int
+	err = tx.QueryRowContext(ctx, "SELECT (SELECT count(*) FROM pg_class WHERE relnamespace=$1::regnamespace)+(SELECT count(*) FROM pg_proc WHERE pronamespace=$1::regnamespace)+(SELECT count(*) FROM pg_type WHERE typnamespace=$1::regnamespace)", schema).Scan(&objects)
+	return objects == 0, err
 }

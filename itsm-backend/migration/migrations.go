@@ -41,6 +41,12 @@ var LegacyMigrations = []Migration{
 		Description: "Retired: ticket_types is now owned by the Ent schema; retained only for checksum/history lookup",
 		RollbackSQL: "",
 	},
+	{
+		Version:     "022_drop_professional_extension_shared_fields",
+		Description: "Remove WorkItem-owned extension fields and retire legacy TicketApproval and Workflow runtimes",
+		RollbackSQL: "",
+	},
+	{Version: "027_work_item_identity_field_retirement", Description: "Retire duplicate Ticket type and Incident number identity fields"},
 }
 
 // RegisteredMigrations is the single canonical active migration stream used
@@ -440,16 +446,11 @@ var RegisteredMigrations = []Migration{
 		Description: "Snapshot definition-declared callback optionality in the callback outbox",
 		RollbackSQL: "ALTER TABLE process_callback_outboxes DROP COLUMN IF EXISTS optional_declared;",
 	},
-	{
-		Version:     "022_drop_professional_extension_shared_fields",
-		Description: "Remove WorkItem-owned extension fields and retire legacy TicketApproval and Workflow runtimes",
-		RollbackSQL: "",
-	},
+	{Version: WorkItemPrepareVersion, Description: "Prepare WorkItem structure with controlled evidence"},
 	{Version: "023_add_process_start_request_digest", Description: "Persist immutable original BPMN start context for durable replay conflicts", RollbackSQL: processStartRequestDigestDevelopmentResetSQL},
 	{Version: "024_incident_rule_action_receipts", Description: "Freeze creation rule decisions and commit action receipts with domain effects", RollbackSQL: incidentRuleActionReceiptsDevelopmentResetSQL},
 	{Version: "025_email_attachment_source_identity", Description: "Persist scoped inbound attachment identity for recoverable delivery", RollbackSQL: emailAttachmentSourceIdentityDevelopmentResetSQL},
 	{Version: "026_intake_actor_provenance", Description: "Preserve immutable native actor provenance for Intake and committed tenant policy effects", RollbackSQL: intakeActorProvenanceDevelopmentResetSQL},
-	{Version: "027_work_item_identity_field_retirement", Description: "Retire duplicate Ticket type and Incident number identity fields"},
 	{Version: "028_service_request_work_item_authority", Description: "Use WorkItem authority for ServiceRequest shared fields"},
 	{Version: "029_catalog_target_class_authority", Description: "Retire legacy Catalog class inference"},
 	{Version: "030_catalog_access_policy_result", Description: "Finite catalog access policy and immutable verified results"},
@@ -459,6 +460,7 @@ var RegisteredMigrations = []Migration{
 	{Version: "034_problem_investigation_completion", Description: "Problem investigation schema and verified resolution evidence"},
 	{Version: "035_change_professional_evidence", Description: "Change outcome, review and standard policy evidence"},
 	{Version: "036_intake_frozen_workflow_context", Description: "Freeze workflow definition content and prepared variables in intake snapshots"},
+	{Version: WorkItemRetireVersion, Description: "Retire WorkItem legacy structures with controlled evidence"},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.

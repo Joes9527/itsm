@@ -4,64 +4,102 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/lib/pq"
 )
 
-// Existing migration SQL is immutable ledger history. Automatic bootstrap may
-// reconcile an already-canonical schema, but cannot retire retained evidence.
-// A separately reviewed cutover is required; there is deliberately no bypass flag.
-func blockAutomaticWorkItemRetirement(ctx context.Context, tx *sql.Tx, version string) error {
-	var objects, requiredTables string
-	var requiredCount int
+// Every destructive historical operation is allowed only when its exact removal
+// targets are absent. SQL and checksums stay unchanged; no receipt is invented.
+func blockHistoricalDestruction(ctx context.Context, q migrationQuery, version string) error {
+	tables := []string{}
+	columns := map[string][]string{}
 	switch version {
-	case "022_drop_professional_extension_shared_fields":
-		requiredTables, requiredCount = "('tickets','incidents','problems','changes')", 4
-		objects = `
-SELECT object_name FROM (
-    SELECT c.relname::text AS object_name
-    FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-    WHERE n.nspname=current_schema()
-      AND c.relname IN ('ticket_approvals','workflow_tasks','workflow_instances','workflow_versions','workflows')
-    UNION ALL
-    SELECT c.relname || '.' || a.attname
-    FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid
-    JOIN pg_namespace n ON n.oid=c.relnamespace
-    WHERE n.nspname=current_schema() AND a.attnum>0 AND NOT a.attisdropped AND (
-      (c.relname='incidents' AND a.attname IN ('title','description','status','priority','reporter_id','assignee_id','category','subcategory','source','tenant_id','version','created_at','updated_at','resolved_at','closed_at','deleted_at')) OR
-      (c.relname='problems' AND a.attname IN ('title','description','status','priority','category','assignee_id','created_by','tenant_id','created_at','updated_at','resolved_at','closed_at','deleted_at')) OR
-      (c.relname='changes' AND a.attname IN ('title','description','status','priority','assignee_id','created_by','tenant_id','related_tickets','created_at','updated_at')) OR
-      (c.relname='releases' AND a.attname='requires_approval') OR
-      (c.relname='ticket_categories' AND a.attname='workflow_id')
-    )
-) retained ORDER BY object_name LIMIT 1`
-	case "027_work_item_identity_field_retirement":
-		requiredTables, requiredCount = "('tickets','incidents')", 2
-		objects = `
-SELECT c.relname || '.' || a.attname
-FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid
-JOIN pg_namespace n ON n.oid=c.relnamespace
-WHERE n.nspname=current_schema() AND a.attnum>0 AND NOT a.attisdropped AND (
-(c.relname='tickets' AND a.attname='type') OR
-(c.relname='incidents' AND a.attname='incident_number')
-) ORDER BY c.relname,a.attname LIMIT 1`
+	case "012_drop_service_catalog_item":
+		tables = []string{"service_catalog_items"}
+		columns["service_catalogs"] = []string{"form_schema"}
+	case "013_service_request_delegates_to_ticket":
+		tables = []string{"service_request_approvals"}
+		columns["service_requests"] = []string{"status", "title", "reason", "current_level", "total_levels", "current_approver", "approved_at", "approver_comment", "approval_history"}
+	case "014_drop_legacy_approval_workflow":
+		tables = []string{"approval_records", "approval_workflows"}
+	case "017_drop_ticket_type_legacy_approval_fields":
+		columns["ticket_types"] = []string{"approval_workflow_id", "approval_chain"}
+	case "028_service_request_work_item_authority":
+		columns["service_requests"] = []string{"tenant_id", "requester_id", "processor_id", "version", "created_at", "updated_at", "deleted_at"}
+	case "029_catalog_target_class_authority":
+		columns["service_catalogs"] = []string{"itsm_type"}
 	default:
 		return nil
 	}
-	// Historical 027 uses unqualified table references. Reject an incomplete
-	// selected schema before search_path can resolve them in another namespace.
-	var present int
-	if err := tx.QueryRowContext(ctx, "SELECT count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=current_schema() AND c.relkind IN ('r','p') AND c.relname IN "+requiredTables).Scan(&present); err != nil {
-		return fmt.Errorf("inspect canonical WorkItem schema: %w", err)
+	for _, table := range tables {
+		var found bool
+		if err := q.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_class WHERE relnamespace=current_schema()::regnamespace AND relname=$1)", table).Scan(&found); err != nil {
+			return err
+		}
+		if found {
+			return fmt.Errorf("historical destruction blocked: %s would remove %s", version, table)
+		}
 	}
-	if present != requiredCount {
-		return fmt.Errorf("automatic WorkItem retirement is blocked: migration %s requires all canonical tables in the selected schema; search_path fallback is forbidden", version)
+	for table, cols := range columns {
+		for _, col := range cols {
+			var found bool
+			if err := q.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_attribute a JOIN pg_class c ON c.oid=a.attrelid WHERE c.relnamespace=current_schema()::regnamespace AND c.relname=$1 AND a.attname=$2 AND a.attnum>0 AND NOT a.attisdropped)", table, col).Scan(&found); err != nil {
+				return err
+			}
+			if found {
+				return fmt.Errorf("historical destruction blocked: %s would remove %s.%s", version, table, col)
+			}
+		}
 	}
-	var object string
-	err := tx.QueryRowContext(ctx, objects).Scan(&object)
-	if err == sql.ErrNoRows {
-		return nil
+	if version == "013_service_request_delegates_to_ticket" {
+		var exists bool
+		if err := q.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_class WHERE relnamespace=current_schema()::regnamespace AND relname='field_values')").Scan(&exists); err != nil {
+			return err
+		}
+		if exists {
+			var rows bool
+			if err := q.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM field_values WHERE entity_type='service_request')").Scan(&rows); err != nil {
+				return err
+			}
+			if rows {
+				return fmt.Errorf("historical destruction blocked: 013 would delete service_request field_values")
+			}
+		}
 	}
+	return nil
+}
+
+// Lock existing parents before the final no-effect check. This prevents concurrent
+// business inserts or ALTER COLUMN from turning a no-op into a historical deletion.
+func lockHistoricalDestructionParents(ctx context.Context, tx *sql.Tx, version string) error {
+	var parents []string
+	switch version {
+	case "012_drop_service_catalog_item":
+		parents = []string{"service_catalogs", "service_catalog_items"}
+	case "013_service_request_delegates_to_ticket":
+		parents = []string{"service_requests", "service_request_approvals", "field_values"}
+	case "014_drop_legacy_approval_workflow":
+		parents = []string{"approval_records", "approval_workflows"}
+	case "017_drop_ticket_type_legacy_approval_fields":
+		parents = []string{"ticket_types"}
+	case "028_service_request_work_item_authority":
+		parents = []string{"service_requests"}
+	case "029_catalog_target_class_authority":
+		parents = []string{"service_catalogs"}
+	}
+	schema, err := migrationTargetSchema(ctx, tx)
 	if err != nil {
-		return fmt.Errorf("inspect retained WorkItem structure: %w", err)
+		return err
 	}
-	return fmt.Errorf("automatic WorkItem retirement is blocked: migration %s would remove %s; preserve the schema and follow docs/deployment/workitem-convergence-cutover.md", version, object)
+	for _, table := range parents {
+		var exists bool
+		if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM pg_class WHERE relnamespace=$1::regnamespace AND relname=$2 AND relkind IN ('r','p'))", schema, table).Scan(&exists); err != nil {
+			return err
+		}
+		if exists {
+			if _, err = tx.ExecContext(ctx, "LOCK TABLE "+pq.QuoteIdentifier(schema)+"."+pq.QuoteIdentifier(table)+" IN ACCESS EXCLUSIVE MODE"); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }

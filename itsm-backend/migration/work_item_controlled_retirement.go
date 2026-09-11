@@ -290,13 +290,17 @@ func verifyRetirementReceipt(ctx context.Context, q migrationQuery, schema, dige
 	if structure != a.PostStructureDigest {
 		return fmt.Errorf("post-retirement structure drift")
 	}
-	var unsafe bool
-	if err = q.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a WHERE c.oid=$1::regclass AND a.grantee<>c.relowner) OR EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=$1::regclass AND attacl IS NOT NULL)`, preparationRelation(schema, "work_item_migration_evidence")).Scan(&unsafe); err != nil {
+	if err := validateEvidenceACL(ctx, q, schema, config.InspectionRole); err != nil {
 		return err
 	}
-	if unsafe {
-		return fmt.Errorf("unreviewed evidence attachment access")
+	p, err := loadPreparationAttachment(ctx, q, schema, pdigest)
+	if err != nil {
+		return err
 	}
+	if p.InspectionRole != config.InspectionRole {
+		return fmt.Errorf("trusted inspection role differs from preparation receipt")
+	}
+
 	return nil
 }
 

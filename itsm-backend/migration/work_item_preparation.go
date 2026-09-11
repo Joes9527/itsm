@@ -37,6 +37,7 @@ type preparationAttachment struct {
 	Baseline        []PreparationBaselineRow
 	StructureDigest string
 	ReviewedGrants  []MigrationRoleGrant
+	InspectionRole  string `json:",omitempty"`
 }
 
 func preparationRelation(schema, table string) string {
@@ -197,6 +198,9 @@ func (m *Migrator) preparationInventory(ctx context.Context, q migrationQuery) (
 // ApplyPreparation executes only the canonical P definition under the existing
 // migration lock. No historical receipts or business rows are synthesized.
 func (m *Migrator) ApplyPreparation(ctx context.Context, e MigrationEvidence) error {
+	if strings.TrimSpace(m.controlConfig.Operator) == "" || e.Operator != m.controlConfig.Operator {
+		return fmt.Errorf("preparation operator does not match trusted operational identity")
+	}
 	return m.WithMigrationLock(ctx, func(ctx context.Context) error {
 		tx, err := m.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 		if err != nil {
@@ -254,7 +258,7 @@ func (m *Migrator) ApplyPreparation(ctx context.Context, e MigrationEvidence) er
 		if err != nil {
 			return err
 		}
-		attachment := preparationAttachment{e, baseline, structure, m.controlConfig.ReviewedGrants}
+		attachment := preparationAttachment{e, baseline, structure, m.controlConfig.ReviewedGrants, m.controlConfig.InspectionRole}
 		data, err := json.Marshal(attachment)
 		if err != nil {
 			return err
@@ -265,6 +269,15 @@ func (m *Migrator) ApplyPreparation(ctx context.Context, e MigrationEvidence) er
 		if err != nil {
 			return err
 		}
+		if m.controlConfig.InspectionRole != "" {
+			if err = validateInspectionRole(ctx, tx, inv.Target.Schema, m.controlConfig.InspectionRole); err != nil {
+				return err
+			}
+			role := pq.QuoteIdentifier(m.controlConfig.InspectionRole)
+			if _, err = tx.ExecContext(ctx, "GRANT USAGE ON SCHEMA "+pq.QuoteIdentifier(inv.Target.Schema)+" TO "+role+"; GRANT SELECT ON "+preparationRelation(inv.Target.Schema, "work_item_migration_evidence")+","+preparationRelation(inv.Target.Schema, "schema_migrations")+" TO "+role); err != nil {
+				return err
+			}
+		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version,description,checksum,execution_ms,release_version,catalog_revision,evidence_digest) VALUES($1,$2,$3,$4,$5,$6,$7)`, WorkItemPrepareVersion, "Prepare WorkItem structure with controlled evidence", checksumSQL(workItemPreparationSQL), time.Since(started).Milliseconds(), m.releaseVersion, ControlledCatalogRevision, digest)
 		if err != nil {
 			return err
@@ -273,20 +286,16 @@ func (m *Migrator) ApplyPreparation(ctx context.Context, e MigrationEvidence) er
 		if err != nil {
 			return err
 		}
-		if err = verifyPreparationReceipt(ctx, tx, inv.Target.Schema, digest); err != nil {
+		if err = verifyPreparationReceipt(ctx, tx, inv.Target.Schema, digest, m.controlConfig, false); err != nil {
 			return err
 		}
 		return tx.Commit()
 	})
 }
 
-func verifyPreparationReceipt(ctx context.Context, q migrationQuery, schema, digest string) error {
-	var unsafe bool
-	if err := q.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pg_class c CROSS JOIN LATERAL aclexplode(c.relacl) a WHERE c.oid=$1::regclass AND a.grantee<>c.relowner) OR EXISTS(SELECT 1 FROM pg_attribute WHERE attrelid=$1::regclass AND attacl IS NOT NULL)`, preparationRelation(schema, "work_item_migration_evidence")).Scan(&unsafe); err != nil {
+func verifyPreparationReceipt(ctx context.Context, q migrationQuery, schema, digest string, config MigrationControlConfig, structuralOnly bool) error {
+	if err := validateEvidenceACL(ctx, q, schema, config.InspectionRole); err != nil {
 		return err
-	}
-	if unsafe {
-		return fmt.Errorf("unreviewed access to preparation evidence attachment")
 	}
 	var data []byte
 	var stored string
@@ -306,6 +315,19 @@ func verifyPreparationReceipt(ctx context.Context, q migrationQuery, schema, dig
 	if stored != digest || checksumSQL(string(canonical)) != digest {
 		return fmt.Errorf("preparation evidence attachment digest mismatch")
 	}
+	if attachment.InspectionRole != config.InspectionRole {
+		return fmt.Errorf("trusted inspection role differs from original preparation receipt")
+	}
+	if config.DeploymentID != "" && attachment.Evidence.Target.DeploymentID != config.DeploymentID {
+		return fmt.Errorf("preparation deployment identity mismatch")
+	}
+	var database string
+	if err := q.QueryRowContext(ctx, "SELECT current_database()").Scan(&database); err != nil {
+		return err
+	}
+	if attachment.Evidence.Target.Database != database || attachment.Evidence.Target.Schema != schema {
+		return fmt.Errorf("preparation receipt target mismatch")
+	}
 	structure, err := preparationStructure(ctx, q, schema)
 	if err != nil {
 		return err
@@ -313,10 +335,15 @@ func verifyPreparationReceipt(ctx context.Context, q migrationQuery, schema, dig
 	if structure != attachment.StructureDigest {
 		return fmt.Errorf("preparation structure differs from verified receipt")
 	}
-	return validatePreparationShape(ctx, q, schema, true, attachment.ReviewedGrants)
+	return validatePreparationShapeMode(ctx, q, schema, true, attachment.ReviewedGrants, !structuralOnly)
 }
 
 func validatePreparationShape(ctx context.Context, q migrationQuery, schema string, prepared bool, grants []MigrationRoleGrant) error {
+	return validatePreparationShapeMode(ctx, q, schema, prepared, grants, true)
+}
+
+// Structural runtime admission intentionally performs no global business-row reads.
+func validatePreparationShapeMode(ctx context.Context, q migrationQuery, schema string, prepared bool, grants []MigrationRoleGrant, validateRows bool) error {
 	indexes, err := preparationIndexes(ctx, q, schema)
 	if err != nil {
 		return err
@@ -392,11 +419,13 @@ func validatePreparationShape(ctx context.Context, q migrationQuery, schema stri
 			continue
 		}
 		expectedClass := map[string]string{"incidents": "incident", "problems": "problem", "changes": "change_request"}[table]
-		if err := q.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM `+rel+` e LEFT JOIN `+preparationRelation(schema, "tickets")+` t ON t.id=e.work_item_id WHERE t.id IS NULL OR t.record_class<>$1) OR EXISTS(SELECT 1 FROM `+rel+` GROUP BY work_item_id HAVING count(*)>1)`, expectedClass).Scan(&bad); err != nil {
-			return err
-		}
-		if bad {
-			return fmt.Errorf("invalid, orphan, duplicate or wrong-class %s ownership", table)
+		if validateRows {
+			if err := q.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM `+rel+` e LEFT JOIN `+preparationRelation(schema, "tickets")+` t ON t.id=e.work_item_id WHERE t.id IS NULL OR t.record_class<>$1) OR EXISTS(SELECT 1 FROM `+rel+` GROUP BY work_item_id HAVING count(*)>1)`, expectedClass).Scan(&bad); err != nil {
+				return err
+			}
+			if bad {
+				return fmt.Errorf("invalid, orphan, duplicate or wrong-class %s ownership", table)
+			}
 		}
 		if !prepared {
 			// Compare only retained non-null fields with defined authoritative mappings.

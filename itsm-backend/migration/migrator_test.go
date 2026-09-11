@@ -310,7 +310,9 @@ func TestWorkItemNumberAllocatorVerificationBindsReadyValidIndexes(t *testing.T)
 func TestProfessionalExtensionsDropSharedFieldsIsVersioned(t *testing.T) {
 	const version = "022_drop_professional_extension_shared_fields"
 
-	require.Equal(t, version, RegisteredMigrations[14].Version)
+	require.Equal(t, WorkItemPrepareVersion, RegisteredMigrations[14].Version)
+	require.Equal(t, version, allKnownMigrations()[version].Version)
+	require.Contains(t, LegacyMigrations, allKnownMigrations()[version])
 	canonicalSQL := GetMigrationSQL(version)
 	require.NotEmpty(t, canonicalSQL)
 	for _, asset := range []string{

@@ -117,3 +117,8 @@ func TestControlledBootstrapRejectsBeforeEveryWrite(t *testing.T) {
 		})
 	}
 }
+
+func (m *recordingBootstrapMigrator) InspectRuntimeMigrations(context.Context) error { return nil }
+func (m *recordingBootstrapMigrator) NeedsSchemaBootstrap(context.Context) (bool, error) {
+	return true, nil
+}

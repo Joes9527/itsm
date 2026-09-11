@@ -59,7 +59,7 @@ func preparationFixture(t *testing.T) (*sql.DB, context.Context) {
 
 func TestWorkItemControlledPreparationPreservesHistory(t *testing.T) {
 	db, ctx := preparationFixture(t)
-	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2"})
+	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{Operator: "test", DeploymentID: "owned-v2"})
 	inventory, err := m.InspectPreparation(ctx)
 	require.NoError(t, err)
 	evidence := migration.MigrationEvidence{Target: inventory.Target, CatalogRevision: migration.ControlledCatalogRevision, LedgerDigest: inventory.LedgerDigest, InventoryDigest: inventory.InventoryDigest, ApplicationDigest: "app", BackupDigest: "backup", RestoreReportDigest: "restore", JourneyReportDigest: "journey", ObservationReportDigest: "observation", Operator: "test", ChangeRecord: "test-3"}
@@ -107,7 +107,7 @@ func TestWorkItemControlledPreparationRefusesInvalidShapes(t *testing.T) {
 			db, ctx := preparationFixture(t)
 			_, err := db.ExecContext(ctx, sqlText)
 			require.NoError(t, err)
-			m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2"})
+			m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{Operator: "test", DeploymentID: "owned-v2"})
 			e := preparationEvidence(t, m, ctx)
 			before := preparationLogicalDigest(t, db)
 			require.Error(t, m.ApplyPreparation(ctx, e))
@@ -120,7 +120,7 @@ func TestWorkItemControlledPreparationRefusesInvalidShapes(t *testing.T) {
 }
 func TestWorkItemControlledPreparationReceiptAndAttachmentAtomic(t *testing.T) {
 	db, ctx := preparationFixture(t)
-	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2"})
+	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{Operator: "test", DeploymentID: "owned-v2"})
 	e := preparationEvidence(t, m, ctx)
 	before := preparationLogicalDigest(t, db)
 	wrong := e
@@ -150,7 +150,7 @@ func TestWorkItemControlledPreparationReceiptAndAttachmentAtomic(t *testing.T) {
 }
 func TestWorkItemControlledPreparationRestrictedSQLRoles(t *testing.T) {
 	db, ctx := preparationFixture(t)
-	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2"})
+	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{Operator: "test", DeploymentID: "owned-v2"})
 	require.NoError(t, m.ApplyPreparation(ctx, preparationEvidence(t, m, ctx)))
 	// Role, grants and test records are confined to a rolled-back transaction.
 	tx, err := db.BeginTx(ctx, nil)
@@ -203,7 +203,7 @@ func TestWorkItemControlledPreparationAlreadyStructured(t *testing.T) {
 	db, ctx := preparationFixture(t)
 	_, err := db.ExecContext(ctx, migration.GetMigrationSQL(migration.WorkItemPrepareVersion))
 	require.NoError(t, err)
-	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2"})
+	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{Operator: "test", DeploymentID: "owned-v2"})
 	require.NoError(t, m.ApplyPreparation(ctx, preparationEvidence(t, m, ctx)))
 	require.NoError(t, m.InspectMigrationTarget(ctx))
 }
@@ -254,7 +254,7 @@ func TestWorkItemControlledPreparationReviewedGrants(t *testing.T) {
 	for _, table := range []string{"tickets", "incidents", "problems", "changes"} {
 		grants = append(grants, migration.MigrationRoleGrant{Role: role, Table: table, Privileges: []string{"SELECT", "INSERT", "UPDATE", "DELETE"}})
 	}
-	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2", ReviewedGrants: grants})
+	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{Operator: "test", DeploymentID: "owned-v2", ReviewedGrants: grants})
 	require.NoError(t, m.ApplyPreparation(ctx, preparationEvidence(t, m, ctx)))
 	require.NoError(t, m.InspectMigrationTarget(ctx))
 	_, err = db.ExecContext(ctx, `GRANT TRUNCATE ON incidents TO `+role)
@@ -322,7 +322,7 @@ func TestWorkItemControlledPreparationRolesInsidePTransaction(t *testing.T) {
  CREATE TRIGGER probe_preparation_transaction BEFORE INSERT ON schema_migrations FOR EACH ROW EXECUTE FUNCTION probe_preparation_transaction();`, schema, role)
 	_, err = db.ExecContext(ctx, probe)
 	require.NoError(t, err)
-	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2"})
+	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{Operator: "test", DeploymentID: "owned-v2"})
 	require.NoError(t, m.ApplyPreparation(ctx, preparationEvidence(t, m, ctx)))
 	require.NoError(t, m.InspectMigrationTarget(ctx))
 	var count int
@@ -335,7 +335,7 @@ func TestWorkItemControlledPreparationRolesInsidePTransaction(t *testing.T) {
 
 func TestWorkItemControlledPreparationWithoutLaterReports(t *testing.T) {
 	db, ctx := preparationFixture(t)
-	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2"})
+	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{Operator: "test", DeploymentID: "owned-v2"})
 	e := preparationEvidence(t, m, ctx)
 	e.JourneyReportDigest = ""
 	e.ObservationReportDigest = ""
@@ -350,7 +350,7 @@ func TestWorkItemControlledPreparationUnreviewedEnforcingIndexes(t *testing.T) {
 	} {
 		t.Run(name+" before P", func(t *testing.T) {
 			db, ctx := preparationFixture(t)
-			m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2"})
+			m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{Operator: "test", DeploymentID: "owned-v2"})
 			old := preparationEvidence(t, m, ctx)
 			_, err := db.ExecContext(ctx, indexSQL)
 			require.NoError(t, err)
@@ -370,7 +370,7 @@ func TestWorkItemControlledPreparationUnreviewedEnforcingIndexes(t *testing.T) {
 		})
 		t.Run(name+" after P", func(t *testing.T) {
 			db, ctx := preparationFixture(t)
-			m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2"})
+			m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{Operator: "test", DeploymentID: "owned-v2"})
 			require.NoError(t, m.ApplyPreparation(ctx, preparationEvidence(t, m, ctx)))
 			_, err := db.ExecContext(ctx, indexSQL)
 			require.NoError(t, err)

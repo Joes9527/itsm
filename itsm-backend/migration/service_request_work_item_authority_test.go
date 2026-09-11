@@ -24,7 +24,7 @@ func TestServiceRequestAuthorityOperationalSQLMatchesStream(t *testing.T) {
 
 func TestServiceRequestAuthorityAcceptsPreviouslyApplied028(t *testing.T) {
 	ledger := []Migration{}
-	for _, migration := range RegisteredMigrations {
+	for _, migration := range frozenHistoricalMigrations() {
 		migration.Checksum = checksumSQL(GetMigrationSQL(migration.Version))
 		if migration.Version == "028_service_request_work_item_authority" {
 			// Actual retained pre-C4 deployment ledger, written before verifier hardening.

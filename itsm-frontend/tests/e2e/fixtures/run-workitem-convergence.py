@@ -12,6 +12,8 @@ import hashlib
 from datetime import datetime, timezone
 import json
 import os
+import pwd
+import urllib.parse
 from pathlib import Path
 import secrets
 import shutil
@@ -50,7 +52,7 @@ def main():
     app_port, web_port, redis_port, minio_port, pg_port = ports
     pg, redis, minio = ['codex-'+run_id+'-'+name for name in ['pg','redis','minio']]
     containers, processes, secret_files = [], [], []
-    password, app_password, system_password, minio_password, admin_password = [secrets.token_hex(24)+'aA!7' for _ in range(5)]
+    password, app_password, system_password, minio_password, admin_password, inspection_password = [secrets.token_hex(24)+'aA!7' for _ in range(6)]
     log = (folder/'setup.log').open('w')
     source_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip()
     def tree_hash(root, predicate):
@@ -100,7 +102,16 @@ def main():
         config=config.replace('provider: openai        # openai, local','provider: local        # isolated validation')
         (folder/'config.yaml').write_text(config)
         run(['go','build','-o',str(folder/'backend'),'.'],cwd=backend,env=base_env)
-        run([str(folder/'backend')],cwd=folder,env=dict(env,ITSM_BOOTSTRAP_ONLY='true',ITSM_AUTO_MIGRATE='true',ITSM_AUTO_SEED='true'))
+        run(['go','build','-tags','migrate','-o',str(folder/'migrate'),'./cmd/migrate'],cwd=backend,env=base_env)
+        control_file=folder/'migration-control.json'
+        control={'DeploymentID':run_id,'InspectionRole':'v1inspect'}
+        control_file.write_text(json.dumps(control));os.chmod(control_file,0o600);secret_files.append(control_file)
+        env['ITSM_MIGRATION_CONTROL_FILE']=str(control_file)
+        # A new empty schema stops at the same explicit P boundary as old profiles.
+        initial=subprocess.run([str(folder/'backend')],cwd=folder,env=dict(env,ITSM_BOOTSTRAP_ONLY='true',ITSM_AUTO_MIGRATE='true',ITSM_AUTO_SEED='false'),stdout=log,stderr=log)
+        log.flush()
+        if initial.returncode==0 or 'runtime requires migration 037_work_item_structure_preparation' not in (folder/'setup.log').read_text():
+            raise RuntimeError('Empty bootstrap did not stop at the controlled preparation boundary')
         sql = """
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 REVOKE CREATE ON DATABASE workitem_v1 FROM PUBLIC;
@@ -124,6 +135,38 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO v1system;
         result=subprocess.run(['docker','exec','-i',pg,'psql','-U','v1owner','-d','workitem_v1','-v','ON_ERROR_STOP=1','-q'],input=sql,text=True,capture_output=True)
         if result.returncode:
             raise RuntimeError('Dedicated database role initialization failed (details withheld to protect credentials)')
+        inspector_sql="CREATE ROLE v1inspect LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB NOREPLICATION NOINHERIT PASSWORD '%s';" % inspection_password
+        result=subprocess.run(['docker','exec','-i',pg,'psql','-U','v1owner','-d','workitem_v1','-v','ON_ERROR_STOP=1','-q'],input=inspector_sql,text=True,capture_output=True)
+        if result.returncode:
+            raise RuntimeError('Dedicated inspection role initialization failed')
+        control['ReviewedGrants']=[{'Role':'v1app','Table':table,'Privileges':['SELECT','INSERT','UPDATE','DELETE']} for table in ['tickets','incidents','problems','changes']]
+        control_file.write_text(json.dumps(control))
+        inventory_run=subprocess.run([str(folder/'migrate'),'-prepare-workitem','-dry-run'],cwd=folder,env=env,stdout=subprocess.PIPE,stderr=log,text=True,check=True)
+        inventory=json.loads(inventory_run.stdout)
+        # Actual isolated pre-P backup and restore; this is not Task6 post-R recovery proof.
+        backup=subprocess.check_output(['docker','exec',pg,'pg_dump','-U','v1owner','-d','workitem_v1','-Fc'],stderr=log)
+        run(['docker','exec',pg,'createdb','-U','v1owner','workitem_v1_restore_p'])
+        restored=subprocess.run(['docker','exec','-i',pg,'pg_restore','-U','v1owner','-d','workitem_v1_restore_p','--exit-on-error'],input=backup,stdout=log,stderr=log)
+        if restored.returncode:
+            raise RuntimeError('Isolated pre-P backup restore failed')
+        restored_ledger=subprocess.check_output(['docker','exec',pg,'psql','-U','v1owner','-d','workitem_v1_restore_p','-Atc','SELECT version,checksum FROM schema_migrations ORDER BY version'],stderr=log)
+        source_ledger=subprocess.check_output(['docker','exec',pg,'psql','-U','v1owner','-d','workitem_v1','-Atc','SELECT version,checksum FROM schema_migrations ORDER BY version'],stderr=log)
+        if restored_ledger!=source_ledger:
+            raise RuntimeError('Isolated pre-P restore ledger differs')
+        evidence=dict(inventory,CatalogRevision='workitem-controlled-retirement-v1',
+                      ApplicationDigest=hashlib.sha256((folder/'backend').read_bytes()).hexdigest(),
+                      BackupDigest=hashlib.sha256(backup).hexdigest(),RestoreReportDigest=hashlib.sha256(restored_ledger).hexdigest(),
+                      Operator=pwd.getpwuid(os.getuid()).pw_name,ChangeRecord=run_id)
+        evidence_file=folder/'preparation-evidence.json';evidence_file.write_text(json.dumps(evidence));os.chmod(evidence_file,0o600)
+        run([str(folder/'migrate'),'-prepare-workitem','-evidence-file',str(evidence_file)],cwd=folder,env=env)
+        run([str(folder/'migrate'),'-up'],cwd=folder,env=env)
+        # Existing targets now use only the migration stream; Ent is not overlaid.
+        run([str(folder/'backend')],cwd=folder,env=dict(env,ITSM_BOOTSTRAP_ONLY='true',ITSM_AUTO_MIGRATE='true',ITSM_AUTO_SEED='true'))
+        grant_new="GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO v1app; GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO v1app; GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO v1app; REVOKE ALL ON work_item_migration_evidence FROM v1app; REVOKE INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER ON schema_migrations FROM v1app;"
+        result=subprocess.run(['docker','exec','-i',pg,'psql','-U','v1owner','-d','workitem_v1','-v','ON_ERROR_STOP=1','-q'],input=grant_new,text=True,capture_output=True)
+        if result.returncode:
+            raise RuntimeError('Dedicated post-migration business grants failed')
+        env['ITSM_MIGRATION_INSPECTION_DSN']='postgresql://v1inspect:'+urllib.parse.quote(inspection_password,safe='')+'@127.0.0.1:'+str(pg_port)+'/workitem_v1?sslmode=disable&search_path=public'
         env.update(DB_USER='v1app',DB_PASSWORD=app_password,DB_SYSTEM_ROLE_USER='v1system',DB_SYSTEM_ROLE_PASSWORD=system_password,RLS_MODE='enforce',ITSM_AUTO_MIGRATE='false',ITSM_AUTO_SEED='false')
         launch([str(folder/'backend')],folder,env,'backend.log')
         def backend_ready():

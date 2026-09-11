@@ -103,6 +103,9 @@ For new work, align with the roadmap rather than creating parallel mechanisms. I
 
 ## Unified Work Item Domain Contract
 
+Runtime controlled-migration admission uses an independently configured, read-only inspection identity bound to the same database/schema/deployment, with ledger/evidence SELECT only; the business identity receives no global evidence access. Runtime structural admission is distinct from full privileged P/R data verification and business acceptance. Existing targets advance through the canonical migration stream without Ent overlays.
+
+
 > Accepted controlled retirement design (not implemented): [design](docs/superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md); [plan](docs/superpowers/plans/2026-09-11-workitem-controlled-retirement.md). Preserve historical SQL/checksums and truthful receipts. Separate transactional structure preparation from later full business acceptance and controlled retirement. All migration write paths, including rollback/reset, enforce stage dependencies; read-only classification precedes any bootstrap writes. Environment deployment and deletion require their own authorization.
 
 

@@ -28,7 +28,7 @@ import (
 
 func TestWorkItemControlledRetirementRejectsEmpty(t *testing.T) {
 	db, ctx := preparationFixture(t)
-	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2"})
+	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2", Operator: "test"})
 	before := preparationLogicalDigest(t, db)
 	require.Error(t, m.ApplyRetirement(ctx, migration.MigrationEvidence{}))
 	require.Equal(t, before, preparationLogicalDigest(t, db))
@@ -37,6 +37,9 @@ func TestWorkItemControlledRetirementRejectsEmpty(t *testing.T) {
 // Empty support tables are exact prerequisites of registered023–036, not
 // evidence of real application journeys. Every ordinary SQL actually executes.
 func retirementFixture(t *testing.T, canonical ...bool) (*sql.DB, context.Context, *migration.Migrator, ed25519.PrivateKey) {
+	return retirementFixtureConfigured(t, migration.MigrationControlConfig{DeploymentID: "owned-v2", Operator: "fixture-operator"}, canonical...)
+}
+func retirementFixtureConfigured(t *testing.T, control migration.MigrationControlConfig, canonical ...bool) (*sql.DB, context.Context, *migration.Migrator, ed25519.PrivateKey) {
 	db, ctx := preparationFixture(t)
 	_, err := db.ExecContext(ctx, `
  ALTER TABLE users ADD COLUMN tenant_id bigint;
@@ -68,29 +71,13 @@ func retirementFixture(t *testing.T, canonical ...bool) (*sql.DB, context.Contex
 	}
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
-	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2", Operator: "fixture-operator", RetirementPublicKeys: map[string]ed25519.PublicKey{"fixture": pub}})
+	control.RetirementPublicKeys = map[string]ed25519.PublicKey{"fixture": pub}
+	m := migration.NewMigrator(db, zap.NewNop().Sugar(), control)
 	e := preparationEvidence(t, m, ctx)
+	e.Operator = control.Operator
 	require.NoError(t, m.ApplyPreparation(ctx, e))
-	later := false
-	for _, d := range migration.ControlledMigrationCatalog() {
-		if d.Migration.Version == migration.WorkItemPrepareVersion {
-			later = true
-			continue
-		}
-		if later && d.Stage == migration.StageOrdinary {
-			sqlText := migration.GetMigrationSQL(d.Migration.Version)
-			tx, err := db.BeginTx(ctx, nil)
-			require.NoError(t, err)
-			_, err = tx.ExecContext(ctx, sqlText)
-			if err != nil {
-				tx.Rollback()
-				t.Fatalf("%s: %v", d.Migration.Version, err)
-			}
-			_, err = tx.ExecContext(ctx, `INSERT INTO schema_migrations(version,description,checksum,rollback_sql) VALUES($1,$2,$3,$4)`, d.Migration.Version, d.Migration.Description, fmt.Sprintf("%x", sha256.Sum256([]byte(sqlText))), d.Migration.RollbackSQL)
-			require.NoError(t, err)
-			require.NoError(t, tx.Commit())
-		}
-	}
+	_, err = m.RunMigrations(ctx, migration.PostSchemaMigrations())
+	require.NoError(t, err)
 	require.NoError(t, m.InspectMigrationTarget(ctx))
 	return db, ctx, m, priv
 }
@@ -145,8 +132,10 @@ func TestWorkItemControlledRetirementPreparationAllows034(t *testing.T) {
 	db, ctx := preparationFixture(t)
 	_, err := db.ExecContext(ctx, `ALTER TABLE users ADD COLUMN tenant_id bigint`)
 	require.NoError(t, err)
-	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2"})
-	require.NoError(t, m.ApplyPreparation(ctx, preparationEvidence(t, m, ctx)))
+	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{DeploymentID: "owned-v2", Operator: "test"})
+	ePrep := preparationEvidence(t, m, ctx)
+	ePrep.Operator = "test"
+	require.NoError(t, m.ApplyPreparation(ctx, ePrep))
 	_, err = db.ExecContext(ctx, migration.GetMigrationSQL("034_problem_investigation_completion"))
 	require.NoError(t, err)
 	require.NoError(t, m.InspectMigrationTarget(ctx))
@@ -482,7 +471,9 @@ func TestWorkItemControlledRetirementOwningSoftDeleteAndPostRetirementWrites(t *
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	m := migration.NewMigrator(db, logger, migration.MigrationControlConfig{DeploymentID: "owned-v2", Operator: "fixture-operator", RetirementPublicKeys: map[string]ed25519.PublicKey{"fixture": pub}})
-	require.NoError(t, m.ApplyPreparation(ctx, preparationEvidence(t, m, ctx)))
+	ePrep := preparationEvidence(t, m, ctx)
+	ePrep.Operator = "fixture-operator"
+	require.NoError(t, m.ApplyPreparation(ctx, ePrep))
 	later := false
 	for _, d := range migration.ControlledMigrationCatalog() {
 		if d.Migration.Version == migration.WorkItemPrepareVersion {
@@ -555,4 +546,60 @@ func TestWorkItemControlledRetirementPhysicalDisappearanceNeverUsesHTTPAudit(t *
 			require.Equal(t, before, preparationLogicalDigest(t, db))
 		})
 	}
+}
+
+// currentRuntimeFixture creates the current generated base only on a new owned
+// empty schema, then executes the public prerequisite, controlled P and ordinary
+// paths. It is a structural fixture, not application journey evidence.
+func currentRuntimeFixture(t *testing.T, control migration.MigrationControlConfig) (*sql.DB, context.Context, *migration.Migrator) {
+	db, ctx := migrationEntryFixture(t)
+	m := migration.NewMigrator(db, zap.NewNop().Sugar(), control)
+	require.NoError(t, m.EnsureMigrationsTable(ctx))
+	client := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, db)))
+	require.NoError(t, client.Schema.Create(ctx))
+	_, err := m.RunMigrations(ctx, migration.PostSchemaMigrations())
+	require.NoError(t, err)
+	e := preparationEvidence(t, m, ctx)
+	e.Operator = control.Operator
+	require.NoError(t, m.ApplyPreparation(ctx, e))
+	_, err = m.RunMigrations(ctx, migration.PostSchemaMigrations())
+	require.NoError(t, err)
+	return db, ctx, m
+}
+
+func TestControlledEntryCurrentRequiredStructure(t *testing.T) {
+	for _, mutation := range []string{
+		"ALTER TABLE problems DROP COLUMN verified_at",
+		"DROP TABLE problem_investigation_steps; DROP TABLE problem_investigations",
+		"ALTER TABLE problems ALTER COLUMN verified_at TYPE text USING verified_at::text",
+		"ALTER TABLE problem_solutions ALTER COLUMN estimated_cost TYPE text USING estimated_cost::text",
+	} {
+		t.Run(mutation, func(t *testing.T) {
+			db, ctx, m := currentRuntimeFixture(t, migration.MigrationControlConfig{DeploymentID: "owned-v2", Operator: "fixture-operator"})
+			require.NoError(t, m.InspectRuntimeMigrations(ctx))
+			var receiptCount int
+			require.NoError(t, db.QueryRow("SELECT count(*) FROM schema_migrations WHERE version LIKE '034_%'").Scan(&receiptCount))
+			require.Equal(t, 1, receiptCount)
+			_, err := db.ExecContext(ctx, mutation)
+			require.NoError(t, err)
+			before := entryDigest(t, db)
+			require.Error(t, m.InspectRuntimeMigrations(ctx))
+			require.Equal(t, before, entryDigest(t, db))
+		})
+	}
+}
+
+func TestControlledEntryCurrentBootstrapDoesNotOverlayEnt(t *testing.T) {
+	db, ctx, m := currentRuntimeFixture(t, migration.MigrationControlConfig{DeploymentID: "owned-v2", Operator: "fixture-operator"})
+	before := entryDigest(t, db)
+	overlays, seeds := 0, 0
+	require.NoError(t, migration.RunCanonicalBootstrap(ctx, migration.CanonicalBootstrap{
+		Migrator:     m,
+		Prepare:      func(context.Context) error { overlays++; return nil },
+		CreateSchema: func(context.Context) error { overlays++; return nil },
+		Seed:         func(context.Context) error { seeds++; return nil },
+	}))
+	require.Zero(t, overlays)
+	require.Equal(t, 1, seeds)
+	require.Equal(t, before, entryDigest(t, db))
 }
