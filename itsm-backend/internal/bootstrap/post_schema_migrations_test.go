@@ -34,7 +34,11 @@ func TestRunPostSchemaMigrationsAppliesVersion007(t *testing.T) {
 
 	require.NoError(t, err)
 	require.True(t, runner.ensured)
-	require.Len(t, runner.migrations, 24)
+	expected := migration.PostSchemaMigrations()
+	require.Len(t, runner.migrations, len(expected))
+	for index, registered := range expected {
+		require.Equal(t, registered.Version, runner.migrations[index].Version)
+	}
 	require.Equal(t, "007_add_change_execution_tables", runner.migrations[0].Version)
 	require.Equal(t, "008_add_initialization_ledger", runner.migrations[1].Version)
 	require.Equal(t, "009_enable_rls_tenant_isolation", runner.migrations[2].Version)

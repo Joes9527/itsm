@@ -44,16 +44,17 @@ func intakeHTTP(t *testing.T, f *unifiedIntakeFixture, handle gin.HandlerFunc, b
 func TestIntakeHTTPProblemAndIncidentEntry(t *testing.T) {
 	f := newUnifiedIntakeFixture(t)
 	ctx := context.Background()
-	f.client.TicketCategory.Create().SetTenantID(f.identity.TenantID).SetName("network").SetCode("network").SaveX(ctx)
+	category := f.client.TicketCategory.Create().SetTenantID(f.identity.TenantID).SetName("network").SetCode("network").SaveX(ctx)
 	problem := problemdomain.NewHandler(nil, f.client)
 	problem.SetCreationApplication(f.app)
-	body := `{"title":"Root cause investigation","description":"Investigate service degradation","priority":"high","category":"network","rootCause":"packet loss","impact":"regional"}`
+	body := `{"title":"Root cause investigation","description":"Investigate service degradation","priority":"high","cti":{"categoryId":` + strconv.Itoa(category.ID) + `},"rootCause":"packet loss","impact":"regional"}`
 	w, result := intakeHTTP(t, f, problem.Create, body, "problem-http", nil)
 	require.Equal(t, 201, w.Code, w.Body.String())
 	require.Equal(t, "problem", result.RecordClass)
 	require.Positive(t, result.ProfessionalReference.ID)
 	p := f.client.Problem.GetX(ctx, result.ProfessionalReference.ID)
 	require.Equal(t, "packet loss", p.RootCause)
+	require.Equal(t, category.ID, f.client.Ticket.GetX(ctx, result.WorkItemID).CategoryID)
 	w, replay := intakeHTTP(t, f, problem.Create, body, "problem-http", nil)
 	require.Equal(t, 200, w.Code, w.Body.String())
 	require.True(t, replay.Replayed)
