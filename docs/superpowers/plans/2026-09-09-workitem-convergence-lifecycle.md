@@ -77,6 +77,8 @@ func TestResetSLACycle(t *testing.T) {
 
 ## A2：Incident 唯一动作、重开和入口 CAS
 
+> 2026-09-11 决策补充：[Incident 分配与处理动作收敛](../specs/2026-09-11-workitem-incident-assignment-convergence-design.md) 已确认首次分配、同状态转派和可选确认语义。后续实施以该文档为准更新入口与验收，不能机械复用旧 assign 的“必须状态变化”假设；本补充不表示 A2 缺口已修复。
+
 **Files**
 - Create: `itsm-backend/service/incident_commands.go`、`incident_commands_test.go`。
 - Modify: `service/incident_service.go`、`incident_work_item_authority.go`、`service/bpmn/incident_handler.go`；`dto/incident_dto.go`；`controller/incident_controller.go`；`authorization/workitem.go`。

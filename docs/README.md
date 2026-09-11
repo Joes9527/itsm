@@ -31,6 +31,8 @@
 
 ## 产品与架构
 
+- [Incident 分配与处理动作决策（accepted，未实施）](./superpowers/specs/2026-09-11-workitem-incident-assignment-convergence-design.md)：WorkItem 收敛的分配/转派、可选确认和首次响应 backlog 决策过程。
+
 - [WorkItem 收敛实施总计划（draft）](./superpowers/plans/2026-09-09-workitem-convergence.md)：专业动作、关系联动、流程身份及切换门禁三个子计划。
 
 - [WorkItem 现有实现收敛设计（accepted）](./superpowers/specs/2026-09-09-workitem-convergence-design.md)：Incident、Problem、Change 生命周期、关系、SLA 与 BPMN 的分批收敛。
@@ -44,6 +46,8 @@
 - [工作流控制台诊断与设计](./product/workflow-console-diagnosis-and-design.md)
 
 ## 测试与评审
+
+- [2026-09-11 WorkItem 收敛独立评审与接手记录](./review/2026-09-11-workitem-convergence-review-report.md)：B/C1 反例、全入口收敛缺口与剩余工作。
 
 - [2026-09-05 ITSM 架构、功能差距与迭代建议（待评审）](./review/2026-09-05-architecture-product-assessment-report.md)
 - [角色视角测试方案](./testing/role-based-product-test-plan.md)
