@@ -242,6 +242,9 @@ func TestControlledEntryExpiredLockContextCannotBypassLock(t *testing.T) {
 }
 
 func TestControlledEntryCLIRejectsBeforeWrites(t *testing.T) {
+	if os.Getenv("WORKITEM_V2_POSTGRES_TEST_DSN") != "" {
+		t.Setenv("INTAKE_POSTGRES_TEST_DSN", "postgres://probe:unused@127.0.0.1:1/decoy")
+	}
 	root, err := filepath.Abs("../..")
 	require.NoError(t, err)
 	binary := filepath.Join(t.TempDir(), "migrate")
@@ -255,8 +258,7 @@ func TestControlledEntryCLIRejectsBeforeWrites(t *testing.T) {
 			seedEntryLedger(t, db, ctx, true)
 			var schema string
 			require.NoError(t, db.QueryRowContext(ctx, `SELECT current_schema()`).Scan(&schema))
-			parsed, err := url.Parse(os.Getenv("INTAKE_POSTGRES_TEST_DSN"))
-			require.NoError(t, err)
+			parsed := migrationEntryTarget(t)
 			password, _ := parsed.User.Password()
 			dir := t.TempDir()
 			require.NoError(t, os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("database:\n  host: \"${DB_HOST}\"\n  port: \"${DB_PORT}\"\n  user: \"${DB_USER}\"\n  dbname: \"${DB_NAME}\"\n  sslmode: disable\n"), 0600))
@@ -274,12 +276,14 @@ func TestControlledEntryCLIRejectsBeforeWrites(t *testing.T) {
 }
 
 func TestControlledEntryAutoMigrateDisabledStillRequiresRuntime(t *testing.T) {
+	if os.Getenv("WORKITEM_V2_POSTGRES_TEST_DSN") != "" {
+		t.Setenv("INTAKE_POSTGRES_TEST_DSN", "postgres://probe:unused@127.0.0.1:1/decoy")
+	}
 	db, ctx := migrationEntryFixture(t)
 	seedEntryLedger(t, db, ctx, false)
 	var schema string
 	require.NoError(t, db.QueryRowContext(ctx, `SELECT current_schema()`).Scan(&schema))
-	parsed, err := url.Parse(os.Getenv("INTAKE_POSTGRES_TEST_DSN"))
-	require.NoError(t, err)
+	parsed := migrationEntryTarget(t)
 	password, _ := parsed.User.Password()
 	port, err := strconv.Atoi(parsed.Port())
 	require.NoError(t, err)
@@ -389,8 +393,8 @@ observe:
 	require.NoError(t, first.InspectMigrationTarget(ctx))
 }
 
-// The optional V2 fixture is a separate, explicitly owned container. It does
-// not relax or change the original cutover fixture's exact endpoint guard.
+// Shared fixture admission keeps the original exact 36444 mode; V2 requires
+// an explicit dedicated DSN and the separate owned container identity checks.
 func migrationEntryTarget(t *testing.T) *url.URL {
 	t.Helper()
 	dedicated := os.Getenv("WORKITEM_V2_POSTGRES_TEST_DSN")
@@ -694,4 +698,39 @@ func TestControlledEntryCompiledRetirementAuthorizationAndReplay(t *testing.T) {
 	var receipts int
 	require.NoError(t, db.QueryRow("SELECT count(*) FROM schema_migrations WHERE version=$1", migration.WorkItemRetireVersion).Scan(&receipts))
 	require.Equal(t, 1, receipts)
+}
+
+// Subprocesses exercise fatal admission without creating any schemas or roles.
+// Legacy-only V2 and conflicting legacy settings must never redirect a fixture.
+func TestControlledEntryTargetAdmission(t *testing.T) {
+	if os.Getenv("WORKITEM_TARGET_GUARD_PROBE") == "1" {
+		target := migrationEntryTarget(t)
+		require.Equal(t, os.Getenv("WORKITEM_TARGET_GUARD_HOST"), target.Host)
+		return
+	}
+	binary, err := os.Executable()
+	require.NoError(t, err)
+	for _, tc := range []struct {
+		name, legacy, dedicated, host string
+		allowed                       bool
+	}{
+		{"original_exact", "postgres://127.0.0.1:36444/sslvpn_test", "", "127.0.0.1:36444", true},
+		{"legacy_alone_cannot_select_v2", "postgres://127.0.0.1:36542/workitem_v2_task2_test", "", "", false},
+		{"original_wrong_database", "postgres://127.0.0.1:36444/other", "", "", false},
+		{"dedicated_wrong_host", "", "postgres://127.0.0.1:36444/workitem_v2_task2_test", "", false},
+		{"dedicated_wrong_database", "", "postgres://127.0.0.1:36542/other", "", false},
+		{"owned_v2_overrides_conflicting_legacy", "postgres://127.0.0.1:1/decoy", "postgres://127.0.0.1:36542/workitem_v2_task2_test", "127.0.0.1:36542", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := exec.Command(binary, "-test.run=^TestControlledEntryTargetAdmission$", "-test.v")
+			cmd.Env = []string{"HOME=" + os.Getenv("HOME"), "PATH=" + os.Getenv("PATH"), "WORKITEM_TARGET_GUARD_PROBE=1", "WORKITEM_TARGET_GUARD_HOST=" + tc.host, "INTAKE_POSTGRES_TEST_DSN=" + tc.legacy, "WORKITEM_V2_POSTGRES_TEST_DSN=" + tc.dedicated}
+			out, err := cmd.CombinedOutput()
+			if tc.allowed {
+				require.NoError(t, err, "%s", out)
+			} else {
+				require.Error(t, err)
+				require.Contains(t, string(out), "Not equal", "must fail admission, not subprocess setup")
+			}
+		})
+	}
 }

@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -41,15 +40,11 @@ type incidentEffectsFixture struct {
 
 func newIncidentEffectsFixture(t *testing.T) *incidentEffectsFixture {
 	t.Helper()
-	dsn := os.Getenv("INTAKE_POSTGRES_TEST_DSN")
-	require.NotEmpty(t, dsn, "explicit disposable DB required")
-	parsed, err := url.Parse(dsn)
-	require.NoError(t, err)
-	require.Equal(t, "/sslvpn_test", parsed.Path)
-	require.Equal(t, "127.0.0.1:36444", parsed.Host)
+	parsed := migrationEntryTarget(t)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	t.Cleanup(cancel)
-	db, err := sql.Open("postgres", dsn)
+	db, err := sql.Open("postgres", parsed.String())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	schema := fmt.Sprintf("a4_incident_effects_%d", time.Now().UnixNano())

@@ -55,12 +55,12 @@
 
 - [WorkItem 本轮实施复核与交接](./review/2026-09-11-workitem-next-stage-implementation-review.md)：已关闭问题、真实验证、代码提交与运行待办。
 
-- [WorkItem 受控退役设计（accepted）](./superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md)：保留历史账本、结构准备、受控删除和删除后恢复的详细契约；审阅修订已通过，未实现。
+- [WorkItem 受控退役设计（accepted）](./superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md)：保留历史账本、结构准备、受控删除和删除后恢复的详细契约；审阅修订已通过；代码及隔离验证已实施，Task 6 独立审阅与全计划最终审阅待完成。
 
-- [WorkItem 受控退役实施计划](./superpowers/plans/2026-09-11-workitem-controlled-retirement.md)：六批实施与验证任务，均未执行。
+- [WorkItem 受控退役实施计划](./superpowers/plans/2026-09-11-workitem-controlled-retirement.md)：六批实施与验证任务；Tasks 1–5 已通过独立审阅，Task 6 验证及审阅状态见计划。
 - [WorkItem 受控退役审阅闭环](./review/2026-09-11-workitem-controlled-retirement-review-report.md)：验证顺序、回退依赖与写入前门禁的证据及修订结论。
 
-- [WorkItem 切换与恢复手册](./deployment/workitem-convergence-cutover.md)：自动退役阻断、备份恢复证据与尚未完成的允许删除路径。
+- [WorkItem 切换与恢复手册](./deployment/workitem-convergence-cutover.md)：P／普通迁移／授权 R 的执行边界、三时点隔离恢复证据及目标环境待执行步骤。
 
 - [WorkItem 后续计划独立审查](./review/2026-09-11-workitem-next-stage-plan-review-report.md)：五项重要契约问题、修订及最终复核结论。
 

@@ -7,8 +7,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
-	"net/url"
-	"os"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,11 +26,14 @@ import (
 // The explicit DSN check and schema/migration owner are supplied by the fixture.
 func runtimeClients(t *testing.T, f *incidentEffectsFixture) (*database.RuntimeClients, config.DatabaseConfig) {
 	t.Helper()
+	target := migrationEntryTarget(t)
+	port, err := strconv.Atoi(target.Port())
+	require.NoError(t, err)
 	var schema string
 	require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT current_schema()").Scan(&schema))
 	suffix := fmt.Sprint(time.Now().UnixNano())
 	var secret [24]byte
-	_, err := rand.Read(secret[:])
+	_, err = rand.Read(secret[:])
 	require.NoError(t, err)
 	password := hex.EncodeToString(secret[:])
 	runtimeRole, systemRole := "entry_app_"+suffix, "entry_system_"+suffix
@@ -70,7 +73,7 @@ func runtimeClients(t *testing.T, f *incidentEffectsFixture) (*database.RuntimeC
 		_, err := f.db.ExecContext(f.ctx, "GRANT "+grant+" TO "+systemRole)
 		require.NoError(t, err)
 	}
-	cfg := config.DatabaseConfig{Host: "127.0.0.1", Port: 36444, DBName: "sslvpn_test", SSLMode: "disable", Schema: schema, User: runtimeRole, SystemRoleUser: systemRole, Password: password, SystemRolePassword: password}
+	cfg := config.DatabaseConfig{Host: target.Hostname(), Port: port, DBName: strings.TrimPrefix(target.Path, "/"), SSLMode: "disable", Schema: schema, User: runtimeRole, SystemRoleUser: systemRole, Password: password, SystemRolePassword: password}
 	clients, err := database.InitRuntimeDatabases(&cfg, &config.RLSConfig{Mode: "enforce"}, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, clients.Close()) })
@@ -119,8 +122,7 @@ func TestPostgresRLSSystemCapabilityConstruction(t *testing.T) {
 	_, err = database.InitRuntimeDatabases(&missing, &config.RLSConfig{Mode: "enforce"}, nil)
 	require.ErrorContains(t, err, "DB_SYSTEM_ROLE_USER")
 	broad := cfg
-	ownerDSN, parseErr := url.Parse(os.Getenv("INTAKE_POSTGRES_TEST_DSN"))
-	require.NoError(t, parseErr)
+	ownerDSN := migrationEntryTarget(t)
 	broad.SystemRoleUser = ownerDSN.User.Username()
 	broad.SystemRolePassword, _ = ownerDSN.User.Password()
 	_, err = database.InitRuntimeDatabases(&broad, &config.RLSConfig{Mode: "enforce"}, nil)

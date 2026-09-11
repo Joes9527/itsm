@@ -8,7 +8,9 @@
 
 **Tech Stack:** Go、database/sql、PostgreSQL、Ent、现有Go集成测试及Playwright。
 
-**Status:** draft，实施输入已编制；所有代码任务未开始。设计依据为[已修订设计](../specs/2026-09-11-workitem-controlled-retirement-design.md)。审阅代码基线fab60168；实施前记录实际HEAD，核查目录新增版本并选取两个未占用新版本。不得借本计划执行共享环境变更。
+**Status:** accepted，Tasks 1–5 已实施并通过各批独立审阅；Task 6 的 6a 恢复运行器及 6b 夹具／文档已实施并通过隔离验证，Task 6 独立审阅和全计划最终审阅待完成。设计依据为[已修订设计](../specs/2026-09-11-workitem-controlled-retirement-design.md)。原审阅代码基线 fab60168；当前实施在既有 `codex/refactor/workitem-next-stage` 隔离 worktree，P/R 版本为 037/038。未执行共享或目标环境部署、观察、退役。
+
+实施记录：Task 3 复核终点 `9882b5ff`；Task 4 复核终点 `32c196f3`；Task 5 复核终点 `d4fa72bb`；Task 6a 提交 `f50f53e9`。各步骤原始 RED 命令保留为测试来源，后续勾选仅表示该项已有证据，不替代整批及最终审阅。
 
 ## Global Constraints
 
@@ -199,14 +201,17 @@ func TestRetirementEvidenceRejectsEmpty(t *testing.T) {
 **Consumes:** 唯一目录和控制CLI；现有V1隔离运行方法。
 **Produces:** 删除后完整恢复证据、三时点业务结果、目标环境执行手册；不执行真实目标环境变更。
 
-- [ ] RED新增恢复反例：只有观察前备份缺观察中新数据、缺附件对象、漏流程/审计/回执、错误应用版本或消费者配置均不能标记恢复通过。
-- [ ] 只创建本任务拥有的独立数据库/容器和非owner角色，使用显式环境变量白名单；LLM/邮箱/连接器真实凭据不得从宿主自动继承。记录资源归属，不清理别人的环境。
-- [ ] 在P及普通迁移后保留旧结构运行V1；恢复写入形成新数据，暂停并生成最终备份，先在独立目标验证恢复。然后真执行R，再恢复R前最终备份到另一独立目标，核对记录/内容摘要/时间/编号/租户/关系/流程/回执/审计/附件。
-- [ ] 分别在“P+普通迁移后保留旧结构”“R后”“R后恢复完成”运行同一V1，验证三域专业行为及generic/Requested Item；RLS使用真实业务角色。
-- [ ] 备份后新增数据和外部副作用单独演练补偿清单：不宣称数据库恢复撤销了通知/外部动作；未捕获数据必须使零损失结论失败。
-- [ ] 执行 `go test -tags=integration_postgres ./tests/integration -run '^TestWorkItem(Controlled|MigrationEntrypoints|Retirement|Cutover)' -count=1 -v`。前端在每个阶段执行 `npx playwright test tests/e2e/business-flows/workitem-convergence.spec.ts --project=business-flows`。Go命令在itsm-backend，Playwright命令在itsm-frontend；按既有fixture要求提供隔离目标配置。
-- [ ] 保存脱敏结果、实际提交/镜像、测试数量及SKIP说明、备份及恢复摘要、清理资源清单；清理仅自建资源。任何SKIP不得计为成功演练。
+- [x] RED新增恢复反例：只有观察前备份缺观察中新数据、缺附件对象、漏流程/审计/回执、错误应用版本或消费者配置均不能标记恢复通过。
+- [x] 只创建本任务拥有的独立数据库/容器和非owner角色，使用显式环境变量白名单；LLM/邮箱/连接器真实凭据不得从宿主自动继承。记录资源归属，不清理别人的环境。
+- [x] 在P及普通迁移后保留旧结构运行V1；恢复写入形成新数据，暂停并生成最终备份，先在独立目标验证恢复。然后真执行R，再恢复R前最终备份到另一独立目标，核对记录/内容摘要/时间/编号/租户/关系/流程/回执/审计/附件。
+- [x] 分别在“P+普通迁移后保留旧结构”“R后”“R后恢复完成”运行同一V1，验证三域专业行为及generic/Requested Item；RLS使用真实业务角色。
+- [x] 备份后新增数据和外部副作用单独演练补偿清单：不宣称数据库恢复撤销了通知/外部动作；未捕获数据必须使零损失结论失败。
+- [x] 执行 `go test -tags=integration_postgres ./tests/integration -run '^TestWorkItem(Controlled|MigrationEntrypoints|Retirement|Cutover)' -count=1 -v`。前端在每个阶段执行 `npx playwright test tests/e2e/business-flows/workitem-convergence.spec.ts --project=business-flows`。Go命令在itsm-backend，Playwright命令在itsm-frontend；按既有fixture要求提供隔离目标配置。
+- [x] 保存脱敏结果、实际提交/镜像、测试数量及SKIP说明、备份及恢复摘要、清理资源清单；清理仅自建资源。任何SKIP不得计为成功演练。
 - [ ] 更新手册区分“代码/隔离验证完成”与“目标环境准入/部署/观察/退役待执行”，保留历史测试来源。执行git diff --check、独立审阅后提交 `test(migration): verify controlled retirement and complete recovery`。
+
+
+Task 6 隔离证据：6a 三时点 V1 各 9/9，共 27 PASS，8 个实际恢复故障全部拒绝；6b 规定 Go 组 40 个顶层／45 个子测试，额外实际入口组 24／34，回调及受影响 RLS／事件组 27／44，均零失败／SKIP。6b 独立重建的后端及迁移二进制与 6a SHA256 完全一致。完整运行方式与限制见[切换与恢复手册](../../deployment/workitem-convergence-cutover.md)。Task 6 独立审阅、全计划最终审阅和目标环境执行仍待完成。
 
 ## 设计覆盖与交付检查
 
@@ -224,5 +229,5 @@ func TestRetirementEvidenceRejectsEmpty(t *testing.T) {
 
 - [ ] 执行前再次检查AGENTS.md、治理文档、当前分支及并行目录改动；保留现有未提交工作。
 - [ ] 每批独立审查通过再进入下一批，不能用单元测试代替真实PG或完整业务验收。
-- [ ] 最终仅在实际证据支持时更新任务勾选；本稿所有任务均未执行。
+- [x] 本次仅按已取得证据更新 Task 6 已验证步骤及状态；Task 6 独立审阅和全计划最终审阅仍待完成。
 - [ ] 目标环境部署、观察和R操作仍须该环境单独准入；不推送、合并或部署。

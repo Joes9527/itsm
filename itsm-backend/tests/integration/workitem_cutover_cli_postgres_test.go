@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -50,10 +49,7 @@ func TestWorkItemCutoverCLIExitCodesAndReadOnly(t *testing.T) {
 			}
 			var schema string
 			require.NoError(t, f.scopedDB.QueryRowContext(f.ctx, "SELECT current_schema()").Scan(&schema))
-			dsn, err := url.Parse(os.Getenv("INTAKE_POSTGRES_TEST_DSN"))
-			require.NoError(t, err)
-			require.Equal(t, "127.0.0.1:36444", dsn.Host)
-			require.Equal(t, "/sslvpn_test", dsn.Path)
+			dsn := migrationEntryTarget(t)
 			password, _ := dsn.User.Password()
 			configDir := t.TempDir()
 			// LoadConfig reads config.yaml from cwd, resolves these variables and applies
@@ -63,7 +59,7 @@ func TestWorkItemCutoverCLIExitCodesAndReadOnly(t *testing.T) {
 			before := f.databaseDigest(t)
 			command := exec.CommandContext(f.ctx, binary, "-json", "-tenant-id="+strconv.Itoa(f.tenant.ID))
 			command.Dir = configDir
-			command.Env = []string{"DB_HOST=" + dsn.Hostname(), "DB_PORT=" + dsn.Port(), "DB_USER=" + dsn.User.Username(), "DB_PASSWORD=" + password, "DB_NAME=sslvpn_test", "DB_SCHEMA=" + schema, "RLS_MODE=enforce"}
+			command.Env = []string{"DB_HOST=" + dsn.Hostname(), "DB_PORT=" + dsn.Port(), "DB_USER=" + dsn.User.Username(), "DB_PASSWORD=" + password, "DB_NAME=" + strings.TrimPrefix(dsn.Path, "/"), "DB_SCHEMA=" + schema, "RLS_MODE=enforce"}
 			// Keep secrets exclusively in cmd.Env; redact even unexpected diagnostic output.
 			output, runErr := command.CombinedOutput()
 			diagnostic := string(output)

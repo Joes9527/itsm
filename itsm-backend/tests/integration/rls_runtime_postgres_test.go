@@ -6,8 +6,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net/url"
-	"os"
 	"testing"
 	"time"
 
@@ -71,6 +69,7 @@ func TestPostgresRLSRuntimeConsumer(t *testing.T) {
 
 func runtimeRLSDriver(t *testing.T, f *incidentEffectsFixture) (*rls.Driver, *sql.DB) {
 	t.Helper()
+	parsed := migrationEntryTarget(t)
 	var schema string
 	require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT current_schema()").Scan(&schema))
 	role := fmt.Sprintf("entry_rls_%d", time.Now().UnixNano())
@@ -104,10 +103,6 @@ func runtimeRLSDriver(t *testing.T, f *incidentEffectsFixture) (*rls.Driver, *sq
 		}
 	}
 
-	parsed, err := url.Parse(os.Getenv("INTAKE_POSTGRES_TEST_DSN"))
-	require.NoError(t, err)
-	require.Equal(t, "127.0.0.1:36444", parsed.Host)
-	require.Equal(t, "/sslvpn_test", parsed.Path)
 	params := parsed.Query()
 	params.Set("search_path", schema)
 	params.Set("role", role)

@@ -9,9 +9,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -43,13 +43,8 @@ func TestWorkItemRetirementAutomaticMigrationPreservesLegacyEvidence(t *testing.
 			var before string
 			require.NoError(t, f.scopedDB.QueryRowContext(f.ctx, tc.preserved).Scan(&before))
 			digest := f.databaseDigest(t)
-			for _, m := range migration.RegisteredMigrations {
-				if m.Version != tc.version {
-					continue
-				}
-				err = runner.ApplyMigration(f.ctx, m)
-				require.ErrorContains(t, err, "automatic WorkItem retirement is blocked")
-			}
+			err = runner.ApplyMigration(f.ctx, retirementLegacyMigration(t, tc.version))
+			require.ErrorContains(t, err, "not in the active catalog")
 			var after string
 			require.NoError(t, f.scopedDB.QueryRowContext(f.ctx, tc.preserved).Scan(&after))
 			require.Equal(t, before, after)
@@ -64,10 +59,7 @@ func TestWorkItemRetirementAutomaticMigrationPreservesLegacyEvidence(t *testing.
 func TestWorkItemRetirementFreshSchemaRetainsCanonicalBootstrap(t *testing.T) {
 	f := newCutoverFixture(t)
 	f.canonicalChange(t, "CHG-FRESH")
-	runner := migration.NewMigrator(f.scopedDB, zap.NewNop().Sugar())
-	require.NoError(t, runner.EnsureMigrationsTable(f.ctx))
-	_, err := runner.RunMigrations(f.ctx, migration.PostSchemaMigrations())
-	require.NoError(t, err)
+	prepareCurrentWorkItemFixture(t, f.scopedDB, f.ctx)
 
 	require.True(t, f.inspect(t).Switchable)
 }
@@ -79,11 +71,14 @@ func TestWorkItemRetirementBackupRestorePreservesEvidenceAndExposesNewWrites(t *
 	require.NoError(t, err)
 	var schema string
 	require.NoError(t, f.scopedDB.QueryRowContext(f.ctx, "SELECT current_schema()").Scan(&schema))
-	dsn, err := url.Parse(os.Getenv("INTAKE_POSTGRES_TEST_DSN"))
-	require.NoError(t, err)
-	// The fixture already enforces the one disposable host/database. Verify that
+	dsn := migrationEntryTarget(t)
+	container := "codex-workitem-convergence-pg-20260909"
+	if os.Getenv("WORKITEM_V2_POSTGRES_TEST_DSN") != "" {
+		container = "codex-workitem-v2-task2-fix1-pg"
+	}
+	// The fixture already enforces the selected disposable host/database. Verify that
 	// the Docker name still points to that endpoint before using its v17 tools.
-	inspect, err := exec.Command("docker", "inspect", "codex-workitem-convergence-pg-20260909").Output()
+	inspect, err := exec.Command("docker", "inspect", container).Output()
 	require.NoError(t, err)
 	var info []struct {
 		NetworkSettings struct {
@@ -97,13 +92,13 @@ func TestWorkItemRetirementBackupRestorePreservesEvidenceAndExposesNewWrites(t *
 	require.Len(t, info, 1)
 	matched := false
 	for _, port := range info[0].NetworkSettings.Ports["5432/tcp"] {
-		matched = matched || port.HostIP == "127.0.0.1" && port.HostPort == "36444"
+		matched = matched || port.HostIP == dsn.Hostname() && port.HostPort == dsn.Port()
 	}
 	require.True(t, matched, "refuse a Docker target that differs from the disposable DSN")
 	password, _ := dsn.User.Password()
 	pgTool := func(tool string, input []byte, args ...string) []byte {
 		t.Helper()
-		command := exec.Command("docker", append([]string{"exec", "-i", "-e", "PGPASSWORD", "codex-workitem-convergence-pg-20260909", tool, "--username", dsn.User.Username()}, args...)...)
+		command := exec.Command("docker", append([]string{"exec", "-i", "-e", "PGPASSWORD", container, tool, "--username", dsn.User.Username()}, args...)...)
 		command.Env = append(os.Environ(), "PGPASSWORD="+password)
 		command.Stdin = bytes.NewReader(input)
 		var stderr bytes.Buffer
@@ -113,7 +108,7 @@ func TestWorkItemRetirementBackupRestorePreservesEvidenceAndExposesNewWrites(t *
 		require.NoError(t, err, "isolated PostgreSQL backup/restore command failed")
 		return output
 	}
-	backup := pgTool("pg_dump", nil, "--dbname", "sslvpn_test", "--schema", schema, "--format=custom", "--no-owner", "--no-privileges")
+	backup := pgTool("pg_dump", nil, "--dbname", strings.TrimPrefix(dsn.Path, "/"), "--schema", schema, "--format=custom", "--no-owner", "--no-privileges")
 	require.NotEmpty(t, backup)
 	t.Logf("isolated schema backup SHA256=%x", sha256.Sum256(backup))
 	restoredDB := fmt.Sprintf("wi_restore_%d", time.Now().UnixNano())
@@ -168,8 +163,7 @@ func TestWorkItemRetirementCannotFallThroughToAnotherSchema(t *testing.T) {
 		_, err := f.db.ExecContext(context.Background(), "DROP SCHEMA "+emptySchema+" CASCADE")
 		require.NoError(t, err)
 	})
-	dsn, err := url.Parse(os.Getenv("INTAKE_POSTGRES_TEST_DSN"))
-	require.NoError(t, err)
+	dsn := migrationEntryTarget(t)
 	query := dsn.Query()
 	query.Set("search_path", emptySchema+","+schema)
 	dsn.RawQuery = query.Encode()
@@ -178,12 +172,50 @@ func TestWorkItemRetirementCannotFallThroughToAnotherSchema(t *testing.T) {
 	t.Cleanup(func() { require.NoError(t, wrong.Close()) })
 	runner := migration.NewMigrator(wrong, zap.NewNop().Sugar())
 	require.ErrorContains(t, runner.EnsureMigrationsTable(f.ctx), "single explicit schema")
-	for _, m := range migration.RegisteredMigrations {
-		if m.Version == "027_work_item_identity_field_retirement" {
-			require.ErrorContains(t, runner.ApplyMigration(f.ctx, m), "single explicit schema")
-		}
-	}
+	require.ErrorContains(t, runner.ApplyMigration(f.ctx, retirementLegacyMigration(t, "027_work_item_identity_field_retirement")), "single explicit schema")
+	// An active migration reaches the independent exact-schema gate.
+	require.NotEmpty(t, migration.RegisteredMigrations)
+	require.ErrorContains(t, runner.ApplyMigration(f.ctx, migration.RegisteredMigrations[0]), "single explicit schema")
 	var preserved string
 	require.NoError(t, f.scopedDB.QueryRowContext(f.ctx, "SELECT type FROM tickets").Scan(&preserved))
 	require.Equal(t, "change", preserved, "unqualified historical SQL must not reach a later schema")
+	var receipts, decoyTables int
+	require.NoError(t, f.scopedDB.QueryRowContext(f.ctx, "SELECT count(*) FROM schema_migrations").Scan(&receipts))
+	require.Zero(t, receipts)
+	require.NoError(t, f.db.QueryRowContext(f.ctx, "SELECT count(*) FROM pg_tables WHERE schemaname=$1", emptySchema).Scan(&decoyTables))
+	require.Zero(t, decoyTables, "refused migration must not create a decoy ledger")
+}
+
+// Require an actual historical target; catalog activation must never make a
+// fail-closed assertion vacuous by removing the target from the active list.
+func retirementLegacyMigration(t *testing.T, version string) migration.Migration {
+	t.Helper()
+	for _, m := range migration.LegacyMigrations {
+		if m.Version == version {
+			return m
+		}
+	}
+	t.Fatalf("required historical migration %s not found", version)
+	return migration.Migration{}
+}
+
+// Current Ent fixtures need actual prerequisite receipts and controlled P before
+// the complete ordinary stream. Evidence is isolated test admission, not a
+// deployment backup, restore, or business acceptance report.
+func prepareCurrentWorkItemFixture(t *testing.T, db *sql.DB, ctx context.Context) {
+	t.Helper()
+	m := migration.NewMigrator(db, zap.NewNop().Sugar(), migration.MigrationControlConfig{Operator: "test", DeploymentID: "owned-v2"})
+	require.NoError(t, m.EnsureMigrationsTable(ctx))
+	found := false
+	for _, mig := range migration.RegisteredMigrations {
+		if mig.Version == migration.WorkItemPrepareVersion {
+			found = true
+			break
+		}
+		require.NoError(t, m.ApplyMigration(ctx, mig), mig.Version)
+	}
+	require.True(t, found, "canonical preparation entry is required")
+	require.NoError(t, m.ApplyPreparation(ctx, preparationEvidence(t, m, ctx)))
+	_, err := m.RunMigrations(ctx, migration.PostSchemaMigrations())
+	require.NoError(t, err)
 }
