@@ -14,7 +14,7 @@ func TestPublicationWaitingInstanceRetainsDefinitionVersion(t *testing.T) {
 	xml := strings.Replace(string(startProcessUserTaskXML()), `name="Approval"`, `name="Approval" assignee="bpmn.actor"`, 1)
 	f.definition = f.definition.Update().SetBpmnXML([]byte(xml)).SetCategory("maintenance").SetProcessVariables(map[string]interface{}{"quota": "exact"}).SaveX(ctx)
 	original := FreezeProcessDefinition(f.definition)
-	instance, err := f.engine.StartProcessByDefinitionID(ctx, original, "generic:91", "ticket", 91, nil, "version-waiting")
+	instance, err := f.engine.StartProcessByDefinitionID(ctx, original, "generic:91", "generic", f.workItem(t, 91).ID, nil, "version-waiting")
 	require.NoError(t, err)
 	task := f.client.ProcessTask.Query().OnlyX(ctx)
 	changedXML := strings.ReplaceAll(xml, `id="end"`, `id="new_end"`)

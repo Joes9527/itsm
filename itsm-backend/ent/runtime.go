@@ -1718,23 +1718,23 @@ func init() {
 	// intakeresolutionsnapshot.WorkflowDefinitionIDValidator is a validator for the "workflow_definition_id" field. It is called by the builders before save.
 	intakeresolutionsnapshot.WorkflowDefinitionIDValidator = intakeresolutionsnapshotDescWorkflowDefinitionID.Validators[0].(func(int) error)
 	// intakeresolutionsnapshotDescNoProcess is the schema descriptor for no_process field.
-	intakeresolutionsnapshotDescNoProcess := intakeresolutionsnapshotFields[16].Descriptor()
+	intakeresolutionsnapshotDescNoProcess := intakeresolutionsnapshotFields[18].Descriptor()
 	// intakeresolutionsnapshot.DefaultNoProcess holds the default value on creation for the no_process field.
 	intakeresolutionsnapshot.DefaultNoProcess = intakeresolutionsnapshotDescNoProcess.Default.(bool)
 	// intakeresolutionsnapshotDescSLADefinitionID is the schema descriptor for sla_definition_id field.
-	intakeresolutionsnapshotDescSLADefinitionID := intakeresolutionsnapshotFields[17].Descriptor()
+	intakeresolutionsnapshotDescSLADefinitionID := intakeresolutionsnapshotFields[19].Descriptor()
 	// intakeresolutionsnapshot.SLADefinitionIDValidator is a validator for the "sla_definition_id" field. It is called by the builders before save.
 	intakeresolutionsnapshot.SLADefinitionIDValidator = intakeresolutionsnapshotDescSLADefinitionID.Validators[0].(func(int) error)
 	// intakeresolutionsnapshotDescResolverVersion is the schema descriptor for resolver_version field.
-	intakeresolutionsnapshotDescResolverVersion := intakeresolutionsnapshotFields[18].Descriptor()
+	intakeresolutionsnapshotDescResolverVersion := intakeresolutionsnapshotFields[20].Descriptor()
 	// intakeresolutionsnapshot.ResolverVersionValidator is a validator for the "resolver_version" field. It is called by the builders before save.
 	intakeresolutionsnapshot.ResolverVersionValidator = intakeresolutionsnapshotDescResolverVersion.Validators[0].(func(string) error)
 	// intakeresolutionsnapshotDescRequestDigest is the schema descriptor for request_digest field.
-	intakeresolutionsnapshotDescRequestDigest := intakeresolutionsnapshotFields[19].Descriptor()
+	intakeresolutionsnapshotDescRequestDigest := intakeresolutionsnapshotFields[21].Descriptor()
 	// intakeresolutionsnapshot.RequestDigestValidator is a validator for the "request_digest" field. It is called by the builders before save.
 	intakeresolutionsnapshot.RequestDigestValidator = intakeresolutionsnapshotDescRequestDigest.Validators[0].(func(string) error)
 	// intakeresolutionsnapshotDescCreatedAt is the schema descriptor for created_at field.
-	intakeresolutionsnapshotDescCreatedAt := intakeresolutionsnapshotFields[20].Descriptor()
+	intakeresolutionsnapshotDescCreatedAt := intakeresolutionsnapshotFields[22].Descriptor()
 	// intakeresolutionsnapshot.DefaultCreatedAt holds the default value on creation for the created_at field.
 	intakeresolutionsnapshot.DefaultCreatedAt = intakeresolutionsnapshotDescCreatedAt.Default.(func() time.Time)
 	itemversionFields := schema.ItemVersion{}.Fields()

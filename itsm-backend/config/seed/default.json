@@ -402,6 +402,12 @@
       "is_default": true
     },
     {
+      "business_type": "change_request",
+      "process_definition_key": "change_emergency_flow",
+      "is_default": false,
+      "business_sub_type": "emergency"
+    },
+    {
       "business_type": "service_request_item",
       "process_definition_key": "service_request_flow",
       "is_default": true

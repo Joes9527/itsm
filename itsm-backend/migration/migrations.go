@@ -458,6 +458,7 @@ var RegisteredMigrations = []Migration{
 	{Version: "033_incident_status_events", Description: "Authorize Incident status events from immutable command receipts"},
 	{Version: "034_problem_investigation_completion", Description: "Problem investigation schema and verified resolution evidence"},
 	{Version: "035_change_professional_evidence", Description: "Change outcome, review and standard policy evidence"},
+	{Version: "036_intake_frozen_workflow_context", Description: "Freeze workflow definition content and prepared variables in intake snapshots"},
 }
 
 // PostSchemaMigrations returns a defensive copy of the canonical active stream.
@@ -1122,6 +1123,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS ticket_tenant_id_ticket_number
 		return catalogAccessPolicyResultSQL
 	case "029_catalog_target_class_authority":
 		return catalogTargetClassAuthoritySQL
+	case "036_intake_frozen_workflow_context":
+		return intakeFrozenWorkflowContextSQL
 	case "028_service_request_work_item_authority":
 		return serviceRequestWorkItemAuthoritySQL
 	case "027_work_item_identity_field_retirement":

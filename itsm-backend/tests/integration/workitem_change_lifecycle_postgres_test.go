@@ -4,8 +4,11 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"itsm-backend/ent/intakeresolutionsnapshot"
+	"itsm-backend/ent/processdefinition"
 	"sync"
 	"testing"
 	"time"
@@ -14,6 +17,7 @@ import (
 	"go.uber.org/zap"
 	"itsm-backend/authorization"
 	"itsm-backend/common/tenantctx"
+	"itsm-backend/database"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	changedomain "itsm-backend/handlers/change"
@@ -24,6 +28,7 @@ import (
 )
 
 type changeLifecycleFixture struct {
+	clients *database.RuntimeClients
 	*incidentEffectsFixture
 	pirOwner *service.ChangePIRService
 	engine   *service.CustomProcessEngine
@@ -43,7 +48,7 @@ func newChangeLifecycleFixture(t *testing.T, kind string) *changeLifecycleFixtur
 	clients, cfg := runtimeClients(t, f)
 	_, err = f.db.ExecContext(f.ctx, "GRANT SELECT ON user_roles,work_item_relations TO "+cfg.User)
 	require.NoError(t, err)
-	for _, table := range []string{"changes", "change_pi_rs", "change_risk_assessments", "standard_changes", "process_definitions", "process_deployments", "process_instances", "process_tasks", "process_audit_logs", "process_callback_outboxes", "process_execution_histories", "process_approval_decisions", "groups", "departments"} {
+	for _, table := range []string{"changes", "change_pi_rs", "change_risk_assessments", "intake_resolution_snapshots", "standard_changes", "process_definitions", "process_deployments", "process_instances", "process_tasks", "process_audit_logs", "process_callback_outboxes", "process_execution_histories", "process_approval_decisions", "groups", "departments"} {
 		_, err = f.db.ExecContext(f.ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON "+table+" TO "+cfg.User)
 		require.NoError(t, err)
 		var sequence *string
@@ -72,10 +77,25 @@ func newChangeLifecycleFixture(t *testing.T, kind string) *changeLifecycleFixtur
 	f.ctx = ctx
 	pirOwner := service.NewChangePIRService(clients.Tenant, zap.NewNop().Sugar())
 	pirOwner.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
-	return &changeLifecycleFixture{f, pirOwner, engine, clients.Tenant, owner, record}
+	return &changeLifecycleFixture{clients, f, pirOwner, engine, clients.Tenant, owner, record}
 }
 
 func (f *changeLifecycleFixture) command(action, key string) changedomain.Command {
+	// Legacy lifecycle fixtures create their graph directly. Freeze the fixture
+	// definition before its first submit command; production Intake always does this at creation.
+	if action == "submit" && !f.client.IntakeResolutionSnapshot.Query().Where(intakeresolutionsnapshot.WorkItemID(f.c.WorkItemID)).ExistX(f.ctx) {
+		definitionKey := "change_normal_flow"
+		if f.c.Type == "emergency" {
+			definitionKey = "change_emergency_flow"
+		}
+		definition := f.client.ProcessDefinition.Query().Where(processdefinition.Key(definitionKey), processdefinition.TenantID(f.tenant.ID), processdefinition.IsActive(true)).FirstX(f.ctx)
+		frozen := service.FreezeProcessDefinition(definition)
+		item := f.client.Ticket.GetX(f.ctx, f.c.WorkItemID)
+		receipt := f.client.IntakeRequest.Create().SetTenantID(f.tenant.ID).SetActorTenantID(f.tenant.ID).SetActorID(item.OpenedByID).SetRequesterID(item.RequesterID).SetChannel("itsm_web").SetOperation("create_work_item").SetIdempotencyKey(fmt.Sprint("fixture:", item.ID)).SetRequestDigest("fixture-digest").SetDigestVersion("intake-v3").SetStatus("completed").SetWorkItemID(item.ID).SaveX(f.ctx)
+		variables, _ := json.Marshal(map[string]interface{}{"work_item_id": item.ID, "record_class": "change_request", "tenant_id": item.TenantID, "requester_id": item.RequesterID, "triggered_by": fmt.Sprint(item.OpenedByID), "change_id": f.c.ID, "change_type": f.c.Type})
+		f.client.IntakeResolutionSnapshot.Create().SetTenantID(item.TenantID).SetIntakeRequestID(receipt.ID).SetWorkItemID(item.ID).SetChannel("itsm_web").SetSourceProvider("itsm_web").SetRecordClass(item.RecordClass).SetWorkflowDefinitionID(frozen.ID).SetWorkflowDefinitionKey(frozen.Key).SetWorkflowDefinitionVersion(frozen.Version).SetWorkflowDefinitionDigest(frozen.Digest).SetWorkflowVariables(variables).SetResolverVersion("fixture").SetRequestDigest("fixture-digest").SaveX(f.ctx)
+	}
+
 	return changedomain.Command{Meta: workitemmutation.Meta{TenantID: f.tenant.ID, ActorID: f.actor.ID, ExpectedVersion: f.client.Ticket.GetX(f.ctx, f.c.WorkItemID).Version, Source: "http", OperationID: key}, ChangeID: f.c.ID, Action: action, Evidence: "observed evidence " + key}
 }
 func (f *changeLifecycleFixture) apply(t *testing.T, cmd changedomain.Command) workitemmutation.Result {

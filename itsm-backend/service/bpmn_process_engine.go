@@ -379,6 +379,9 @@ func (e *CustomProcessEngine) startProcessWithClient(ctx context.Context, proces
 
 // startResolvedProcess shares the atomic engine path for resolved and key-based starts.
 func (e *CustomProcessEngine) startResolvedProcess(ctx context.Context, definition *ent.ProcessDefinition, businessKey, businessType string, businessID int, variables map[string]interface{}, instanceIdentity, startDigest string) (*ent.ProcessInstance, error) {
+	if err := validateWorkItemStartTiming(ctx, e.client, businessKey, businessType, definition.TenantID, businessID, variables); err != nil {
+		return nil, err
+	}
 	bpmnDefinitions, err := e.parser.ParseXML(definition.BpmnXML)
 	if err != nil {
 		return nil, fmt.Errorf("解析BPMN失败: %w", err)

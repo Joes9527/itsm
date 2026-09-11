@@ -522,6 +522,7 @@ func getEmbeddedConfig() *SeedConfig {
 			{BusinessType: "incident", ProcessDefinitionKey: "incident_emergency_flow", IsDefault: true},
 			{BusinessType: "problem", ProcessDefinitionKey: "problem_management_flow", IsDefault: true},
 			{BusinessType: "change_request", ProcessDefinitionKey: "change_normal_flow", IsDefault: true},
+			{BusinessType: "change_request", BusinessSubType: "emergency", ProcessDefinitionKey: "change_emergency_flow", IsDefault: false},
 			{BusinessType: "service_request_item", ProcessDefinitionKey: "service_request_flow", IsDefault: true},
 			{BusinessType: "generic", BusinessSubType: "improvement", ProcessDefinitionKey: "ticket_general_flow", IsDefault: true},
 			{BusinessType: "generic", ProcessDefinitionKey: "ticket_general_flow", IsDefault: true},

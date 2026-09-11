@@ -3,7 +3,9 @@ package change
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"itsm-backend/ent/intakeresolutionsnapshot"
 	"strconv"
 	"strings"
 	"time"
@@ -145,6 +147,19 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, c
 	evidenceOnly := false
 	switch cmd.Action {
 	case "submit":
+		frozen, frozenErr := tx.IntakeResolutionSnapshot.Query().Where(intakeresolutionsnapshot.WorkItemID(item.ID), intakeresolutionsnapshot.TenantID(m.TenantID)).Only(ctx)
+		if ent.IsNotFound(frozenErr) {
+			return invalid("frozen workflow evidence is missing")
+		}
+		if frozenErr != nil {
+			return empty, frozenErr
+		}
+		if !frozen.NoProcess {
+			var variables map[string]interface{}
+			if json.Unmarshal(frozen.WorkflowVariables, &variables) != nil || variables["change_type"] != c.Type {
+				return invalid("frozen change type conflicts with current Change type; create a new request for a different workflow route")
+			}
+		}
 		target = common.ChangeStatusSubmitted
 		if item.Status != common.ChangeStatusDraft {
 			return invalid("only draft changes can be submitted")
@@ -323,17 +338,13 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, c
 		}
 	}
 	if cmd.Action == "submit" {
-		key := "change_normal_flow"
-		if c.Type == "emergency" {
-			key = "change_emergency_flow"
+		starter, ok := s.processEngine.(service.SubmittedWorkItemProcessStarter)
+		if !ok {
+			return empty, common.NewValidationError("professional workflow starter is unavailable", nil)
 		}
 		startCtx := service.WithTrustedBPMNTenantContext(ctx, m.TenantID)
 		startCtx = context.WithValue(startCtx, bpmn.BPMNUserIDContextKey, m.ActorID)
-		businessKey, keyErr := dto.WorkItemBusinessKey(dto.RecordClassChangeRequest, item.ID)
-		if keyErr != nil {
-			return empty, keyErr
-		}
-		_, err = s.processEngine.StartProcessTx(startCtx, tx, key, businessKey, string(dto.BusinessTypeChangeRequest), item.ID, map[string]interface{}{"approval_required": !qualifyingStandardPolicy(c, m.TenantID), "requester_id": float64(m.ActorID), "work_item_id": item.ID, "record_class": "change_request", "version": result.Version, "status": result.Status, "change_id": c.ID})
+		_, err = starter.StartSubmittedWorkItemProcessTx(startCtx, tx, item.ID, map[string]interface{}{"approval_required": !qualifyingStandardPolicy(c, m.TenantID), "change_id": c.ID})
 		if err != nil {
 			return empty, err
 		}

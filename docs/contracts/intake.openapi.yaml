@@ -767,7 +767,15 @@ components:
           $ref: '#/components/schemas/ProfessionalReference'
         workflowStartStatus:
           type: string
-          description: Authoritative workflow start state. Pending or blocked must
+          enum:
+          - active
+          - not_required
+          - pending
+          - awaiting_submit
+          - manual_intervention_required
+          description: Authoritative workflow start state. A Change with a frozen
+            workflow returns awaiting_submit until its professional submit command
+            starts that exact definition. Pending, awaiting_submit or blocked must
             not be presented as started.
         replayed:
           type: boolean

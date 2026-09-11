@@ -25,8 +25,8 @@ func TestStartProcessRejectsMissingTypedOrTrustedTenantScope(t *testing.T) {
 		context.Background(),
 		f.definition.Key,
 		"unscoped-start",
-		"ticket",
-		101,
+		"generic",
+		f.workItem(t, 101).ID,
 		map[string]interface{}{},
 	)
 
@@ -295,8 +295,8 @@ func TestCallbackOutboxDoesNotPersistArbitraryOrSensitiveProcessVariables(t *tes
 		startProcessContext(f),
 		f.definition.Key,
 		"allowlist-probe",
-		"ticket",
-		321,
+		"generic",
+		f.workItem(t, 321).ID,
 		map[string]interface{}{
 			"safe_form_value": "not declared by the handler",
 			"password":        "must-not-persist",

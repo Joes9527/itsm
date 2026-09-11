@@ -42,9 +42,9 @@ func TestTriggerProcess_PopulatesStructuredBusinessIdentity(t *testing.T) {
 		SetTenantID(tenant.ID).
 		SaveX(ctx)
 	workItem := client.Ticket.Create().
-		SetTitle("Canonical change WorkItem").
+		SetTitle("Canonical generic WorkItem").
 		SetTicketNumber("CHG-TRIGGER-IDENTITY").
-		SetRecordClass("change_request").
+		SetRecordClass("generic").
 		SetRequesterID(requester.ID).
 		SetTenantID(tenant.ID).
 		SaveX(ctx)
@@ -60,15 +60,15 @@ func TestTriggerProcess_PopulatesStructuredBusinessIdentity(t *testing.T) {
 
 	trigger := NewProcessTriggerService(client, engine)
 	resp, err := trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
-		BusinessType:         dto.BusinessTypeChangeRequest,
+		BusinessType:         dto.BusinessTypeGeneric,
 		BusinessID:           workItem.ID,
-		ProcessDefinitionKey: "change_normal_flow",
+		ProcessDefinitionKey: "ticket_general_flow",
 		Variables:            map[string]interface{}{"approval_required": false},
 		TriggeredBy:          "system",
 		TenantID:             tenant.ID,
 	})
 	require.NoError(t, err)
-	require.Equal(t, fmt.Sprintf("change_request:%d", workItem.ID), resp.BusinessKey)
+	require.Equal(t, fmt.Sprintf("generic:%d", workItem.ID), resp.BusinessKey)
 
 	// dto.ProcessTriggerResponse.ProcessInstanceID is the ent row's integer primary
 	// key (instance.ID), not the string BPMN engine id (instance.ProcessInstanceID) —
@@ -76,7 +76,7 @@ func TestTriggerProcess_PopulatesStructuredBusinessIdentity(t *testing.T) {
 	// (service/bpmn_process_trigger_service.go: "ProcessInstanceID: instance.ID").
 	instance, err := client.ProcessInstance.Get(ctx, resp.ProcessInstanceID)
 	require.NoError(t, err)
-	require.Equal(t, "change_request", instance.BusinessType)
+	require.Equal(t, "generic", instance.BusinessType)
 	require.Equal(t, workItem.ID, instance.BusinessID)
 }
 
@@ -167,9 +167,9 @@ func TestTriggerProcessScopeOverridesRequestTriggeredBy(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 	workItem := client.Ticket.Create().
-		SetTitle("Authenticated trigger change").
+		SetTitle("Authenticated trigger WorkItem").
 		SetTicketNumber("CHG-AUTHENTICATED-TRIGGER").
-		SetRecordClass("change_request").
+		SetRecordClass("generic").
 		SetRequesterID(actor.ID).
 		SetTenantID(tenant.ID).
 		SaveX(ctx)
@@ -180,9 +180,9 @@ func TestTriggerProcessScopeOverridesRequestTriggeredBy(t *testing.T) {
 	require.NoError(t, err)
 
 	resp, err := NewProcessTriggerService(client, NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar())).TriggerProcess(workflowCtx, &dto.ProcessTriggerRequest{
-		BusinessType:         dto.BusinessTypeChangeRequest,
+		BusinessType:         dto.BusinessTypeGeneric,
 		BusinessID:           workItem.ID,
-		ProcessDefinitionKey: "change_normal_flow",
+		ProcessDefinitionKey: "ticket_general_flow",
 		TriggeredBy:          "system",
 		TenantID:             tenant.ID,
 	})

@@ -60018,6 +60018,9 @@ type IntakeResolutionSnapshotMutation struct {
 	addworkflow_definition_id   *int
 	workflow_definition_key     *string
 	workflow_definition_version *string
+	workflow_definition_digest  *string
+	workflow_variables          *json.RawMessage
+	appendworkflow_variables    json.RawMessage
 	no_process                  *bool
 	sla_definition_id           *int
 	addsla_definition_id        *int
@@ -60918,6 +60921,120 @@ func (m *IntakeResolutionSnapshotMutation) ResetWorkflowDefinitionVersion() {
 	delete(m.clearedFields, intakeresolutionsnapshot.FieldWorkflowDefinitionVersion)
 }
 
+// SetWorkflowDefinitionDigest sets the "workflow_definition_digest" field.
+func (m *IntakeResolutionSnapshotMutation) SetWorkflowDefinitionDigest(s string) {
+	m.workflow_definition_digest = &s
+}
+
+// WorkflowDefinitionDigest returns the value of the "workflow_definition_digest" field in the mutation.
+func (m *IntakeResolutionSnapshotMutation) WorkflowDefinitionDigest() (r string, exists bool) {
+	v := m.workflow_definition_digest
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWorkflowDefinitionDigest returns the old "workflow_definition_digest" field's value of the IntakeResolutionSnapshot entity.
+// If the IntakeResolutionSnapshot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IntakeResolutionSnapshotMutation) OldWorkflowDefinitionDigest(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWorkflowDefinitionDigest is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWorkflowDefinitionDigest requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWorkflowDefinitionDigest: %w", err)
+	}
+	return oldValue.WorkflowDefinitionDigest, nil
+}
+
+// ClearWorkflowDefinitionDigest clears the value of the "workflow_definition_digest" field.
+func (m *IntakeResolutionSnapshotMutation) ClearWorkflowDefinitionDigest() {
+	m.workflow_definition_digest = nil
+	m.clearedFields[intakeresolutionsnapshot.FieldWorkflowDefinitionDigest] = struct{}{}
+}
+
+// WorkflowDefinitionDigestCleared returns if the "workflow_definition_digest" field was cleared in this mutation.
+func (m *IntakeResolutionSnapshotMutation) WorkflowDefinitionDigestCleared() bool {
+	_, ok := m.clearedFields[intakeresolutionsnapshot.FieldWorkflowDefinitionDigest]
+	return ok
+}
+
+// ResetWorkflowDefinitionDigest resets all changes to the "workflow_definition_digest" field.
+func (m *IntakeResolutionSnapshotMutation) ResetWorkflowDefinitionDigest() {
+	m.workflow_definition_digest = nil
+	delete(m.clearedFields, intakeresolutionsnapshot.FieldWorkflowDefinitionDigest)
+}
+
+// SetWorkflowVariables sets the "workflow_variables" field.
+func (m *IntakeResolutionSnapshotMutation) SetWorkflowVariables(jm json.RawMessage) {
+	m.workflow_variables = &jm
+	m.appendworkflow_variables = nil
+}
+
+// WorkflowVariables returns the value of the "workflow_variables" field in the mutation.
+func (m *IntakeResolutionSnapshotMutation) WorkflowVariables() (r json.RawMessage, exists bool) {
+	v := m.workflow_variables
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWorkflowVariables returns the old "workflow_variables" field's value of the IntakeResolutionSnapshot entity.
+// If the IntakeResolutionSnapshot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *IntakeResolutionSnapshotMutation) OldWorkflowVariables(ctx context.Context) (v json.RawMessage, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWorkflowVariables is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWorkflowVariables requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWorkflowVariables: %w", err)
+	}
+	return oldValue.WorkflowVariables, nil
+}
+
+// AppendWorkflowVariables adds jm to the "workflow_variables" field.
+func (m *IntakeResolutionSnapshotMutation) AppendWorkflowVariables(jm json.RawMessage) {
+	m.appendworkflow_variables = append(m.appendworkflow_variables, jm...)
+}
+
+// AppendedWorkflowVariables returns the list of values that were appended to the "workflow_variables" field in this mutation.
+func (m *IntakeResolutionSnapshotMutation) AppendedWorkflowVariables() (json.RawMessage, bool) {
+	if len(m.appendworkflow_variables) == 0 {
+		return nil, false
+	}
+	return m.appendworkflow_variables, true
+}
+
+// ClearWorkflowVariables clears the value of the "workflow_variables" field.
+func (m *IntakeResolutionSnapshotMutation) ClearWorkflowVariables() {
+	m.workflow_variables = nil
+	m.appendworkflow_variables = nil
+	m.clearedFields[intakeresolutionsnapshot.FieldWorkflowVariables] = struct{}{}
+}
+
+// WorkflowVariablesCleared returns if the "workflow_variables" field was cleared in this mutation.
+func (m *IntakeResolutionSnapshotMutation) WorkflowVariablesCleared() bool {
+	_, ok := m.clearedFields[intakeresolutionsnapshot.FieldWorkflowVariables]
+	return ok
+}
+
+// ResetWorkflowVariables resets all changes to the "workflow_variables" field.
+func (m *IntakeResolutionSnapshotMutation) ResetWorkflowVariables() {
+	m.workflow_variables = nil
+	m.appendworkflow_variables = nil
+	delete(m.clearedFields, intakeresolutionsnapshot.FieldWorkflowVariables)
+}
+
 // SetNoProcess sets the "no_process" field.
 func (m *IntakeResolutionSnapshotMutation) SetNoProcess(b bool) {
 	m.no_process = &b
@@ -61233,7 +61350,7 @@ func (m *IntakeResolutionSnapshotMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *IntakeResolutionSnapshotMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 23)
 	if m.tenant_id != nil {
 		fields = append(fields, intakeresolutionsnapshot.FieldTenantID)
 	}
@@ -61281,6 +61398,12 @@ func (m *IntakeResolutionSnapshotMutation) Fields() []string {
 	}
 	if m.workflow_definition_version != nil {
 		fields = append(fields, intakeresolutionsnapshot.FieldWorkflowDefinitionVersion)
+	}
+	if m.workflow_definition_digest != nil {
+		fields = append(fields, intakeresolutionsnapshot.FieldWorkflowDefinitionDigest)
+	}
+	if m.workflow_variables != nil {
+		fields = append(fields, intakeresolutionsnapshot.FieldWorkflowVariables)
 	}
 	if m.no_process != nil {
 		fields = append(fields, intakeresolutionsnapshot.FieldNoProcess)
@@ -61337,6 +61460,10 @@ func (m *IntakeResolutionSnapshotMutation) Field(name string) (ent.Value, bool) 
 		return m.WorkflowDefinitionKey()
 	case intakeresolutionsnapshot.FieldWorkflowDefinitionVersion:
 		return m.WorkflowDefinitionVersion()
+	case intakeresolutionsnapshot.FieldWorkflowDefinitionDigest:
+		return m.WorkflowDefinitionDigest()
+	case intakeresolutionsnapshot.FieldWorkflowVariables:
+		return m.WorkflowVariables()
 	case intakeresolutionsnapshot.FieldNoProcess:
 		return m.NoProcess()
 	case intakeresolutionsnapshot.FieldSLADefinitionID:
@@ -61388,6 +61515,10 @@ func (m *IntakeResolutionSnapshotMutation) OldField(ctx context.Context, name st
 		return m.OldWorkflowDefinitionKey(ctx)
 	case intakeresolutionsnapshot.FieldWorkflowDefinitionVersion:
 		return m.OldWorkflowDefinitionVersion(ctx)
+	case intakeresolutionsnapshot.FieldWorkflowDefinitionDigest:
+		return m.OldWorkflowDefinitionDigest(ctx)
+	case intakeresolutionsnapshot.FieldWorkflowVariables:
+		return m.OldWorkflowVariables(ctx)
 	case intakeresolutionsnapshot.FieldNoProcess:
 		return m.OldNoProcess(ctx)
 	case intakeresolutionsnapshot.FieldSLADefinitionID:
@@ -61518,6 +61649,20 @@ func (m *IntakeResolutionSnapshotMutation) SetField(name string, value ent.Value
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetWorkflowDefinitionVersion(v)
+		return nil
+	case intakeresolutionsnapshot.FieldWorkflowDefinitionDigest:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWorkflowDefinitionDigest(v)
+		return nil
+	case intakeresolutionsnapshot.FieldWorkflowVariables:
+		v, ok := value.(json.RawMessage)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWorkflowVariables(v)
 		return nil
 	case intakeresolutionsnapshot.FieldNoProcess:
 		v, ok := value.(bool)
@@ -61662,6 +61807,12 @@ func (m *IntakeResolutionSnapshotMutation) ClearedFields() []string {
 	if m.FieldCleared(intakeresolutionsnapshot.FieldWorkflowDefinitionVersion) {
 		fields = append(fields, intakeresolutionsnapshot.FieldWorkflowDefinitionVersion)
 	}
+	if m.FieldCleared(intakeresolutionsnapshot.FieldWorkflowDefinitionDigest) {
+		fields = append(fields, intakeresolutionsnapshot.FieldWorkflowDefinitionDigest)
+	}
+	if m.FieldCleared(intakeresolutionsnapshot.FieldWorkflowVariables) {
+		fields = append(fields, intakeresolutionsnapshot.FieldWorkflowVariables)
+	}
 	if m.FieldCleared(intakeresolutionsnapshot.FieldSLADefinitionID) {
 		fields = append(fields, intakeresolutionsnapshot.FieldSLADefinitionID)
 	}
@@ -61705,6 +61856,12 @@ func (m *IntakeResolutionSnapshotMutation) ClearField(name string) error {
 		return nil
 	case intakeresolutionsnapshot.FieldWorkflowDefinitionVersion:
 		m.ClearWorkflowDefinitionVersion()
+		return nil
+	case intakeresolutionsnapshot.FieldWorkflowDefinitionDigest:
+		m.ClearWorkflowDefinitionDigest()
+		return nil
+	case intakeresolutionsnapshot.FieldWorkflowVariables:
+		m.ClearWorkflowVariables()
 		return nil
 	case intakeresolutionsnapshot.FieldSLADefinitionID:
 		m.ClearSLADefinitionID()
@@ -61764,6 +61921,12 @@ func (m *IntakeResolutionSnapshotMutation) ResetField(name string) error {
 		return nil
 	case intakeresolutionsnapshot.FieldWorkflowDefinitionVersion:
 		m.ResetWorkflowDefinitionVersion()
+		return nil
+	case intakeresolutionsnapshot.FieldWorkflowDefinitionDigest:
+		m.ResetWorkflowDefinitionDigest()
+		return nil
+	case intakeresolutionsnapshot.FieldWorkflowVariables:
+		m.ResetWorkflowVariables()
 		return nil
 	case intakeresolutionsnapshot.FieldNoProcess:
 		m.ResetNoProcess()

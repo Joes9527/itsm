@@ -14,7 +14,13 @@ import (
 // WorkItemPolicy binds an immutable record class to both its professional ACL
 // resource and its canonical BPMN business type. BPMN business IDs are always
 // tickets.id (WorkItem ID).
+const (
+	WorkflowStartOnCreation = "creation"
+	WorkflowStartOnSubmit   = "submit"
+)
+
 type WorkItemPolicy struct {
+	WorkflowStartTiming  string
 	Resource             string
 	BusinessType         dto.BusinessType
 	UsesProfessionalVerb bool
@@ -23,12 +29,12 @@ type WorkItemPolicy struct {
 }
 
 var workItemPolicies = map[string]WorkItemPolicy{
-	"generic":              {Resource: "ticket", BusinessType: dto.BusinessTypeGeneric},
-	"incident":             {Resource: "incident", BusinessType: dto.BusinessTypeIncident, UsesProfessionalVerb: true},
-	"problem":              {Resource: "problem", BusinessType: dto.BusinessTypeProblem, UsesProfessionalVerb: true},
-	"change_request":       {Resource: "change", BusinessType: dto.BusinessTypeChangeRequest, UsesProfessionalVerb: true},
-	"service_request_item": {Resource: "service_request", BusinessType: dto.BusinessTypeServiceRequestItem, DeleteNonRequesterAction: "write"},
-	"catalog_task":         {Resource: "service_request", BusinessType: dto.BusinessTypeCatalogTask},
+	"generic":              {WorkflowStartTiming: WorkflowStartOnCreation, Resource: "ticket", BusinessType: dto.BusinessTypeGeneric},
+	"incident":             {WorkflowStartTiming: WorkflowStartOnCreation, Resource: "incident", BusinessType: dto.BusinessTypeIncident, UsesProfessionalVerb: true},
+	"problem":              {WorkflowStartTiming: WorkflowStartOnCreation, Resource: "problem", BusinessType: dto.BusinessTypeProblem, UsesProfessionalVerb: true},
+	"change_request":       {WorkflowStartTiming: WorkflowStartOnSubmit, Resource: "change", BusinessType: dto.BusinessTypeChangeRequest, UsesProfessionalVerb: true},
+	"service_request_item": {WorkflowStartTiming: WorkflowStartOnCreation, Resource: "service_request", BusinessType: dto.BusinessTypeServiceRequestItem, DeleteNonRequesterAction: "write"},
+	"catalog_task":         {WorkflowStartTiming: WorkflowStartOnCreation, Resource: "service_request", BusinessType: dto.BusinessTypeCatalogTask},
 }
 
 func ResolveWorkItemPolicy(recordClass string) (WorkItemPolicy, error) {

@@ -17,12 +17,14 @@ import (
 	"itsm-backend/common"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/database"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/intakeresolutionsnapshot"
 	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/problem"
+	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/ticket"
 	itsmservice "itsm-backend/service"
@@ -260,7 +262,13 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 	if err := s.writeFieldValues(ctx, tx, resolved, workItem.ID, professional); err != nil {
 		return nil, false, err
 	}
-	if _, err := s.snapshots.Create(ctx, tx, buildSnapshot(receipt.ID, workItem.ID, digest, resolved)); err != nil {
+	snapshotInput := buildSnapshot(receipt.ID, workItem.ID, digest, resolved)
+	snapshotInput.WorkflowDefinitionDigest = resolved.Workflow.DefinitionDigest
+	snapshotInput.WorkflowVariables, err = json.Marshal(workflowStartVariables(workItem, identity, plan))
+	if err != nil {
+		return nil, false, workitemcreation.NewInternalFailure("could not freeze workflow variables", err)
+	}
+	if _, err := s.snapshots.Create(ctx, tx, snapshotInput); err != nil {
 		return nil, false, err
 	}
 	if err := s.audits.RecordCreated(ctx, tx, CreatedAuditInput{
@@ -271,11 +279,22 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 		return nil, false, err
 	}
 	workflowStatus := "not_required"
+	policy, err := authorization.ResolveWorkItemPolicy(resolved.RecordClass)
+	if err != nil {
+		return nil, false, err
+	}
 	if !resolved.Workflow.NoProcess {
-		if err := s.enqueueWorkflowStart(ctx, tx, receipt.ID, workItem, identity, plan); err != nil {
-			return nil, false, err
+		switch policy.WorkflowStartTiming {
+		case authorization.WorkflowStartOnSubmit:
+			workflowStatus = "awaiting_submit"
+		case authorization.WorkflowStartOnCreation:
+			if err := s.enqueueWorkflowStart(ctx, tx, receipt.ID, workItem, identity, plan); err != nil {
+				return nil, false, err
+			}
+			workflowStatus = "pending"
+		default:
+			return nil, false, workitemcreation.NewInternalFailure("unsupported workflow start timing", nil)
 		}
-		workflowStatus = "pending"
 	}
 	if err := s.receipts.Complete(ctx, tx, identity.TenantID, receipt.ID, workItem.ID); err != nil {
 		return nil, false, err
@@ -375,12 +394,7 @@ func auditRequestID(ctx context.Context, identity workitemcreation.Identity, dig
 	return "intake-" + digest
 }
 
-func (s *Service) enqueueWorkflowStart(ctx context.Context, tx *ent.Tx, receiptID int, item *ent.Ticket, identity workitemcreation.Identity, plan *workitemcreation.CreationPlan) error {
-	resolved := &plan.Resolved
-	workItemID := item.ID
-	if resolved.Workflow.DefinitionID == nil {
-		return workitemcreation.NewWorkflowBindingRequired("workflow definition is required for process start", nil)
-	}
+func workflowStartVariables(item *ent.Ticket, identity workitemcreation.Identity, plan *workitemcreation.CreationPlan) map[string]any {
 	variables := make(map[string]any, len(plan.WorkflowVariables)+12)
 	for key, value := range plan.WorkflowVariables {
 		variables[key] = value
@@ -392,6 +406,16 @@ func (s *Service) enqueueWorkflowStart(ctx context.Context, tx *ent.Tx, receiptI
 	if item.AssigneeID > 0 {
 		variables["assignee_id"] = item.AssigneeID
 	}
+	return variables
+}
+
+func (s *Service) enqueueWorkflowStart(ctx context.Context, tx *ent.Tx, receiptID int, item *ent.Ticket, identity workitemcreation.Identity, plan *workitemcreation.CreationPlan) error {
+	resolved := &plan.Resolved
+	workItemID := item.ID
+	if resolved.Workflow.DefinitionID == nil {
+		return workitemcreation.NewWorkflowBindingRequired("workflow definition is required for process start", nil)
+	}
+	variables := workflowStartVariables(item, identity, plan)
 	eventID := workflowStartEventID(workItemID, *resolved.Workflow.DefinitionID)
 	payload, err := json.Marshal(map[string]any{
 		"tenantId": identity.TenantID, "workItemId": workItemID, "recordClass": resolved.RecordClass,
@@ -477,6 +501,29 @@ func (s *Service) loadResult(ctx context.Context, tx *ent.Tx, tenantID, workItem
 	if snapshot.NoProcess {
 		result.WorkflowStartStatus = "not_required"
 		return result, nil
+	}
+	policy, policyErr := authorization.ResolveWorkItemPolicy(workItem.RecordClass)
+	if policyErr != nil {
+		return nil, policyErr
+	}
+	switch policy.WorkflowStartTiming {
+	case authorization.WorkflowStartOnSubmit:
+		result.WorkflowStartStatus = "awaiting_submit"
+		businessKey, keyErr := dto.WorkItemBusinessKey(workItem.RecordClass, workItem.ID)
+		if keyErr != nil {
+			return nil, keyErr
+		}
+		started, startErr := tx.ProcessInstance.Query().Where(processinstance.TenantID(tenantID), processinstance.BusinessKey(businessKey)).Exist(ctx)
+		if startErr != nil {
+			return nil, workitemcreation.NewInfrastructureUnavailable("could not project professional workflow start", startErr)
+		}
+		if started {
+			result.WorkflowStartStatus = "active"
+		}
+		return result, nil
+	case authorization.WorkflowStartOnCreation:
+	default:
+		return nil, workitemcreation.NewInternalFailure("unsupported workflow start timing", nil)
 	}
 	if snapshot.WorkflowDefinitionID == nil {
 		return nil, workitemcreation.NewInternalFailure("intake snapshot is missing its workflow definition", nil)

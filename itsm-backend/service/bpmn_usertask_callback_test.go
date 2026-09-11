@@ -110,7 +110,7 @@ func TestUserTaskMetadataPersistsOnlyInImmutableDescriptor(t *testing.T) {
 		SetRequesterID(scope.UserID).SetTenantID(tenantID).SaveX(ctx)
 	client.ServiceRequest.Create().SetTicketID(requestWorkItem.ID).
 		SetCatalogID(1).SaveX(ctx)
-	srInstance, err := engine.StartProcess(ctx, "service_request_flow", "service_request:callback-3", "service_request", requestWorkItem.ID, map[string]interface{}{
+	srInstance, err := engine.StartProcess(ctx, "service_request_flow", "service_request_item:callback-3", "service_request_item", requestWorkItem.ID, map[string]interface{}{
 		"approval_required": true,
 	})
 	require.NoError(t, err)

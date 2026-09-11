@@ -52,6 +52,10 @@ type IntakeResolutionSnapshot struct {
 	WorkflowDefinitionKey string `json:"workflow_definition_key,omitempty"`
 	// WorkflowDefinitionVersion holds the value of the "workflow_definition_version" field.
 	WorkflowDefinitionVersion string `json:"workflow_definition_version,omitempty"`
+	// WorkflowDefinitionDigest holds the value of the "workflow_definition_digest" field.
+	WorkflowDefinitionDigest string `json:"workflow_definition_digest,omitempty"`
+	// WorkflowVariables holds the value of the "workflow_variables" field.
+	WorkflowVariables json.RawMessage `json:"-"`
 	// NoProcess holds the value of the "no_process" field.
 	NoProcess bool `json:"no_process,omitempty"`
 	// SLADefinitionID holds the value of the "sla_definition_id" field.
@@ -106,13 +110,13 @@ func (*IntakeResolutionSnapshot) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case intakeresolutionsnapshot.FieldCtiSnapshot, intakeresolutionsnapshot.FieldCiIds:
+		case intakeresolutionsnapshot.FieldCtiSnapshot, intakeresolutionsnapshot.FieldCiIds, intakeresolutionsnapshot.FieldWorkflowVariables:
 			values[i] = new([]byte)
 		case intakeresolutionsnapshot.FieldNoProcess:
 			values[i] = new(sql.NullBool)
 		case intakeresolutionsnapshot.FieldID, intakeresolutionsnapshot.FieldTenantID, intakeresolutionsnapshot.FieldIntakeRequestID, intakeresolutionsnapshot.FieldWorkItemID, intakeresolutionsnapshot.FieldCatalogItemID, intakeresolutionsnapshot.FieldWorkflowDefinitionID, intakeresolutionsnapshot.FieldSLADefinitionID:
 			values[i] = new(sql.NullInt64)
-		case intakeresolutionsnapshot.FieldChannel, intakeresolutionsnapshot.FieldSourceProvider, intakeresolutionsnapshot.FieldSourceEventID, intakeresolutionsnapshot.FieldSourceConversationID, intakeresolutionsnapshot.FieldCatalogVersion, intakeresolutionsnapshot.FieldRecordClass, intakeresolutionsnapshot.FieldFormSchemaVersion, intakeresolutionsnapshot.FieldWorkflowDefinitionKey, intakeresolutionsnapshot.FieldWorkflowDefinitionVersion, intakeresolutionsnapshot.FieldResolverVersion, intakeresolutionsnapshot.FieldRequestDigest:
+		case intakeresolutionsnapshot.FieldChannel, intakeresolutionsnapshot.FieldSourceProvider, intakeresolutionsnapshot.FieldSourceEventID, intakeresolutionsnapshot.FieldSourceConversationID, intakeresolutionsnapshot.FieldCatalogVersion, intakeresolutionsnapshot.FieldRecordClass, intakeresolutionsnapshot.FieldFormSchemaVersion, intakeresolutionsnapshot.FieldWorkflowDefinitionKey, intakeresolutionsnapshot.FieldWorkflowDefinitionVersion, intakeresolutionsnapshot.FieldWorkflowDefinitionDigest, intakeresolutionsnapshot.FieldResolverVersion, intakeresolutionsnapshot.FieldRequestDigest:
 			values[i] = new(sql.NullString)
 		case intakeresolutionsnapshot.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -238,6 +242,20 @@ func (_m *IntakeResolutionSnapshot) assignValues(columns []string, values []any)
 				return fmt.Errorf("unexpected type %T for field workflow_definition_version", values[i])
 			} else if value.Valid {
 				_m.WorkflowDefinitionVersion = value.String
+			}
+		case intakeresolutionsnapshot.FieldWorkflowDefinitionDigest:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field workflow_definition_digest", values[i])
+			} else if value.Valid {
+				_m.WorkflowDefinitionDigest = value.String
+			}
+		case intakeresolutionsnapshot.FieldWorkflowVariables:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field workflow_variables", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.WorkflowVariables); err != nil {
+					return fmt.Errorf("unmarshal field workflow_variables: %w", err)
+				}
 			}
 		case intakeresolutionsnapshot.FieldNoProcess:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -365,6 +383,11 @@ func (_m *IntakeResolutionSnapshot) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("workflow_definition_version=")
 	builder.WriteString(_m.WorkflowDefinitionVersion)
+	builder.WriteString(", ")
+	builder.WriteString("workflow_definition_digest=")
+	builder.WriteString(_m.WorkflowDefinitionDigest)
+	builder.WriteString(", ")
+	builder.WriteString("workflow_variables=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("no_process=")
 	builder.WriteString(fmt.Sprintf("%v", _m.NoProcess))

@@ -125,6 +125,11 @@ func WorkflowDefinitionVersion(v string) predicate.IntakeResolutionSnapshot {
 	return predicate.IntakeResolutionSnapshot(sql.FieldEQ(FieldWorkflowDefinitionVersion, v))
 }
 
+// WorkflowDefinitionDigest applies equality check predicate on the "workflow_definition_digest" field. It's identical to WorkflowDefinitionDigestEQ.
+func WorkflowDefinitionDigest(v string) predicate.IntakeResolutionSnapshot {
+	return predicate.IntakeResolutionSnapshot(sql.FieldEQ(FieldWorkflowDefinitionDigest, v))
+}
+
 // NoProcess applies equality check predicate on the "no_process" field. It's identical to NoProcessEQ.
 func NoProcess(v bool) predicate.IntakeResolutionSnapshot {
 	return predicate.IntakeResolutionSnapshot(sql.FieldEQ(FieldNoProcess, v))
@@ -983,6 +988,91 @@ func WorkflowDefinitionVersionEqualFold(v string) predicate.IntakeResolutionSnap
 // WorkflowDefinitionVersionContainsFold applies the ContainsFold predicate on the "workflow_definition_version" field.
 func WorkflowDefinitionVersionContainsFold(v string) predicate.IntakeResolutionSnapshot {
 	return predicate.IntakeResolutionSnapshot(sql.FieldContainsFold(FieldWorkflowDefinitionVersion, v))
+}
+
+// WorkflowDefinitionDigestEQ applies the EQ predicate on the "workflow_definition_digest" field.
+func WorkflowDefinitionDigestEQ(v string) predicate.IntakeResolutionSnapshot {
+	return predicate.IntakeResolutionSnapshot(sql.FieldEQ(FieldWorkflowDefinitionDigest, v))
+}
+
+// WorkflowDefinitionDigestNEQ applies the NEQ predicate on the "workflow_definition_digest" field.
+func WorkflowDefinitionDigestNEQ(v string) predicate.IntakeResolutionSnapshot {
+	return predicate.IntakeResolutionSnapshot(sql.FieldNEQ(FieldWorkflowDefinitionDigest, v))
+}
+
+// WorkflowDefinitionDigestIn applies the In predicate on the "workflow_definition_digest" field.
+func WorkflowDefinitionDigestIn(vs ...string) predicate.IntakeResolutionSnapshot {
+	return predicate.IntakeResolutionSnapshot(sql.FieldIn(FieldWorkflowDefinitionDigest, vs...))
+}
+
+// WorkflowDefinitionDigestNotIn applies the NotIn predicate on the "workflow_definition_digest" field.
+func WorkflowDefinitionDigestNotIn(vs ...string) predicate.IntakeResolutionSnapshot {
+	return predicate.IntakeResolutionSnapshot(sql.FieldNotIn(FieldWorkflowDefinitionDigest, vs...))
+}
+
+// WorkflowDefinitionDigestGT applies the GT predicate on the "workflow_definition_digest" field.
+func WorkflowDefinitionDigestGT(v string) predicate.IntakeResolutionSnapshot {
+	return predicate.IntakeResolutionSnapshot(sql.FieldGT(FieldWorkflowDefinitionDigest, v))
+}
+
+// WorkflowDefinitionDigestGTE applies the GTE predicate on the "workflow_definition_digest" field.
+func WorkflowDefinitionDigestGTE(v string) predicate.IntakeResolutionSnapshot {
+	return predicate.IntakeResolutionSnapshot(sql.FieldGTE(FieldWorkflowDefinitionDigest, v))
+}
+
+// WorkflowDefinitionDigestLT applies the LT predicate on the "workflow_definition_digest" field.
+func WorkflowDefinitionDigestLT(v string) predicate.IntakeResolutionSnapshot {
+	return predicate.IntakeResolutionSnapshot(sql.FieldLT(FieldWorkflowDefinitionDigest, v))
+}
+
+// WorkflowDefinitionDigestLTE applies the LTE predicate on the "workflow_definition_digest" field.
+func WorkflowDefinitionDigestLTE(v string) predicate.IntakeResolutionSnapshot {
+	return predicate.IntakeResolutionSnapshot(sql.FieldLTE(FieldWorkflowDefinitionDigest, v))
+}
+
+// WorkflowDefinitionDigestContains applies the Contains predicate on the "workflow_definition_digest" field.
+func WorkflowDefinitionDigestContains(v string) predicate.IntakeResolutionSnapshot {
+	return predicate.IntakeResolutionSnapshot(sql.FieldContains(FieldWorkflowDefinitionDigest, v))
+}
+
+// WorkflowDefinitionDigestHasPrefix applies the HasPrefix predicate on the "workflow_definition_digest" field.
+func WorkflowDefinitionDigestHasPrefix(v string) predicate.IntakeResolutionSnapshot {
+	return predicate.IntakeResolutionSnapshot(sql.FieldHasPrefix(FieldWorkflowDefinitionDigest, v))
+}
+
+// WorkflowDefinitionDigestHasSuffix applies the HasSuffix predicate on the "workflow_definition_digest" field.
+func WorkflowDefinitionDigestHasSuffix(v string) predicate.IntakeResolutionSnapshot {
+	return predicate.IntakeResolutionSnapshot(sql.FieldHasSuffix(FieldWorkflowDefinitionDigest, v))
+}
+
+// WorkflowDefinitionDigestIsNil applies the IsNil predicate on the "workflow_definition_digest" field.
+func WorkflowDefinitionDigestIsNil() predicate.IntakeResolutionSnapshot {
+	return predicate.IntakeResolutionSnapshot(sql.FieldIsNull(FieldWorkflowDefinitionDigest))
+}
+
+// WorkflowDefinitionDigestNotNil applies the NotNil predicate on the "workflow_definition_digest" field.
+func WorkflowDefinitionDigestNotNil() predicate.IntakeResolutionSnapshot {
+	return predicate.IntakeResolutionSnapshot(sql.FieldNotNull(FieldWorkflowDefinitionDigest))
+}
+
+// WorkflowDefinitionDigestEqualFold applies the EqualFold predicate on the "workflow_definition_digest" field.
+func WorkflowDefinitionDigestEqualFold(v string) predicate.IntakeResolutionSnapshot {
+	return predicate.IntakeResolutionSnapshot(sql.FieldEqualFold(FieldWorkflowDefinitionDigest, v))
+}
+
+// WorkflowDefinitionDigestContainsFold applies the ContainsFold predicate on the "workflow_definition_digest" field.
+func WorkflowDefinitionDigestContainsFold(v string) predicate.IntakeResolutionSnapshot {
+	return predicate.IntakeResolutionSnapshot(sql.FieldContainsFold(FieldWorkflowDefinitionDigest, v))
+}
+
+// WorkflowVariablesIsNil applies the IsNil predicate on the "workflow_variables" field.
+func WorkflowVariablesIsNil() predicate.IntakeResolutionSnapshot {
+	return predicate.IntakeResolutionSnapshot(sql.FieldIsNull(FieldWorkflowVariables))
+}
+
+// WorkflowVariablesNotNil applies the NotNil predicate on the "workflow_variables" field.
+func WorkflowVariablesNotNil() predicate.IntakeResolutionSnapshot {
+	return predicate.IntakeResolutionSnapshot(sql.FieldNotNull(FieldWorkflowVariables))
 }
 
 // NoProcessEQ applies the EQ predicate on the "no_process" field.

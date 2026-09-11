@@ -23,7 +23,7 @@ func TestStartProcessTxCallerOwnsCommit(t *testing.T) {
 			tx, err := f.client.Tx(ctx)
 			require.NoError(t, err)
 			defer tx.Rollback()
-			instance, err := f.engine.StartProcessTx(ctx, tx, f.definition.Key, "tx-start", "ticket", 104, map[string]interface{}{})
+			instance, err := f.engine.StartProcessTx(ctx, tx, f.definition.Key, "tx-start", "generic", f.workItem(t, 104).ID, map[string]interface{}{})
 			require.NoError(t, err)
 			require.Zero(t, handler.AttemptCount(), "effects must not run before owner commits")
 			require.Equal(t, 1, tx.ProcessCallbackOutbox.Query().CountX(ctx))

@@ -1954,6 +1954,8 @@ var (
 		{Name: "workflow_definition_id", Type: field.TypeInt, Nullable: true},
 		{Name: "workflow_definition_key", Type: field.TypeString, Nullable: true},
 		{Name: "workflow_definition_version", Type: field.TypeString, Nullable: true},
+		{Name: "workflow_definition_digest", Type: field.TypeString, Nullable: true},
+		{Name: "workflow_variables", Type: field.TypeJSON, Nullable: true},
 		{Name: "no_process", Type: field.TypeBool, Default: false},
 		{Name: "sla_definition_id", Type: field.TypeInt, Nullable: true},
 		{Name: "resolver_version", Type: field.TypeString},
@@ -1970,13 +1972,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "intake_resolution_snapshots_intake_requests_receipt",
-				Columns:    []*schema.Column{IntakeResolutionSnapshotsColumns[20]},
+				Columns:    []*schema.Column{IntakeResolutionSnapshotsColumns[22]},
 				RefColumns: []*schema.Column{IntakeRequestsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "intake_resolution_snapshots_tickets_work_item",
-				Columns:    []*schema.Column{IntakeResolutionSnapshotsColumns[21]},
+				Columns:    []*schema.Column{IntakeResolutionSnapshotsColumns[23]},
 				RefColumns: []*schema.Column{TicketsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -1985,17 +1987,17 @@ var (
 			{
 				Name:    "intakeresolutionsnapshot_intake_request_id",
 				Unique:  true,
-				Columns: []*schema.Column{IntakeResolutionSnapshotsColumns[20]},
+				Columns: []*schema.Column{IntakeResolutionSnapshotsColumns[22]},
 			},
 			{
 				Name:    "intakeresolutionsnapshot_work_item_id",
 				Unique:  true,
-				Columns: []*schema.Column{IntakeResolutionSnapshotsColumns[21]},
+				Columns: []*schema.Column{IntakeResolutionSnapshotsColumns[23]},
 			},
 			{
 				Name:    "intakeresolutionsnapshot_tenant_id_created_at",
 				Unique:  false,
-				Columns: []*schema.Column{IntakeResolutionSnapshotsColumns[1], IntakeResolutionSnapshotsColumns[19]},
+				Columns: []*schema.Column{IntakeResolutionSnapshotsColumns[1], IntakeResolutionSnapshotsColumns[21]},
 			},
 		},
 	}

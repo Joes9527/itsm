@@ -278,7 +278,7 @@ func TestChangeServiceTaskHandler_CreateChange_DelegatesToRealServiceAndCreatesW
 
 	engine := service.NewCustomProcessEngine(client, logger).(*service.CustomProcessEngine)
 	engine.CallbackRegistry().GetHandler("change_service_handler").(*bpmn.ChangeServiceTaskHandler).SetCreationApplication(app, client)
-	source := createChangeWorkItemFixture(t, client, tenantID, actorID, "BPMN 源工单")
+	source := client.Ticket.Create().SetTenantID(tenantID).SetRequesterID(actorID).SetOpenedByID(actorID).SetTitle("BPMN 源工单").SetTicketNumber("SOURCE-CREATE").SetRecordClass("generic").SetStatus("open").SetPriority("medium").SaveX(ctx)
 
 	deployment := client.ProcessDeployment.Create().SetTenantID(tenantID).SetDeploymentID("change-creation").SetDeploymentName("Change Creation").SaveX(ctx)
 	xml := []byte(`<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="test"><bpmn:process id="change-creation" isExecutable="true"><bpmn:startEvent id="start"/><bpmn:serviceTask id="create"><bpmn:extensionElements><bpmn:metaData name="service_task_type">change_task</bpmn:metaData><bpmn:metaData name="action">create_change</bpmn:metaData></bpmn:extensionElements></bpmn:serviceTask><bpmn:endEvent id="end"/><bpmn:sequenceFlow id="a" sourceRef="start" targetRef="create"/><bpmn:sequenceFlow id="b" sourceRef="create" targetRef="end"/></bpmn:process></bpmn:definitions>`)

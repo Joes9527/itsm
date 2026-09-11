@@ -2,11 +2,13 @@ package change
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent"
+	"itsm-backend/ent/processdefinition"
 	"itsm-backend/ent/processtask"
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/service"
@@ -48,6 +50,15 @@ func newGovernedChangeFixture(t *testing.T, kind string) *governedChangeFixture 
 	}
 	item := createChangeWorkItemFixture(t, client, tenant, requester, "Governed change")
 	record := client.Change.Create().SetWorkItemID(item.ID).SetType(kind).SetImplementationPlan("deploy").SetRollbackPlan("restore").SaveX(ctx)
+	definitionKey := "change_normal_flow"
+	if kind == "emergency" {
+		definitionKey = "change_emergency_flow"
+	}
+	definition := client.ProcessDefinition.Query().Where(processdefinition.Key(definitionKey)).OnlyX(ctx)
+	frozen := service.FreezeProcessDefinition(definition)
+	receipt := client.IntakeRequest.Create().SetTenantID(tenant).SetActorTenantID(tenant).SetActorID(requester).SetRequesterID(requester).SetChannel("itsm_web").SetOperation("create_work_item").SetIdempotencyKey("governed-create").SetRequestDigest("fixture-digest").SetDigestVersion("intake-v3").SetStatus("completed").SetWorkItemID(item.ID).SaveX(ctx)
+	variables, _ := json.Marshal(map[string]interface{}{"work_item_id": item.ID, "tenant_id": tenant, "record_class": "change_request", "requester_id": requester, "triggered_by": fmt.Sprint(requester), "change_id": record.ID, "change_type": kind})
+	client.IntakeResolutionSnapshot.Create().SetTenantID(tenant).SetIntakeRequestID(receipt.ID).SetWorkItemID(item.ID).SetChannel("itsm_web").SetSourceProvider("itsm_web").SetRecordClass("change_request").SetWorkflowDefinitionID(frozen.ID).SetWorkflowDefinitionKey(frozen.Key).SetWorkflowDefinitionVersion(frozen.Version).SetWorkflowDefinitionDigest(frozen.Digest).SetWorkflowVariables(variables).SetResolverVersion("fixture").SetRequestDigest("fixture-digest").SaveX(ctx)
 	return &governedChangeFixture{ctx: ctx, client: client, svc: svc, engine: engine, tenant: tenant, requester: requester, approver: approver.ID, record: record}
 }
 func (f *governedChangeFixture) command(action string, actor int) Command {
