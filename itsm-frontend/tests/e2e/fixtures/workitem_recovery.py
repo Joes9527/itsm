@@ -17,6 +17,7 @@ import io
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
+from workitem_recovery_redis import redis_call, redis_snapshot, compare_redis
 
 
 def sha(value):
@@ -34,10 +35,11 @@ def now():
 def verify_recovery(expected, actual, uncaptured=()):
     if uncaptured:
         raise ValueError('Uncaptured post-backup data prevents a zero-loss verdict')
-    required={'tables','sequences','roles_acl','attachments','application','consumers','configuration','control','config_yaml'}
+    required={'tables','sequences','roles_acl','attachments','application','consumers','configuration','control','config_yaml','redis','identity_provider_config'}
     if not required.issubset(expected) or not required.issubset(actual):
         raise ValueError('Complete recovery manifest required')
-    for surface in set(expected) | set(actual):
+    compare_redis(expected['redis'],actual['redis'])
+    for surface in (set(expected) | set(actual)) - {'redis'}:
         if surface not in expected or surface not in actual or expected[surface] != actual[surface]:
             raise ValueError('Recovery mismatch: '+surface)
     return True
@@ -49,6 +51,9 @@ class Recovery:
         self.folder = context['folder']
         self.journal = {'scope': 'isolated test authority only; no target-environment approval', 'events': []}
         self.negative = []
+        self.redis_targets={context['pg']:(context['redis'],context['redis_port'])}
+        infos=json.loads(self.command(['docker','inspect',context['pg'],context['minio'],context['redis']]))
+        self.images={info['Name'].lstrip('/'):info['Image'] for info in infos}
 
     def save(self, name, value):
         (self.folder/name).write_bytes(encode(value))
@@ -116,7 +121,8 @@ class Recovery:
                 'application':sha(((bundle or self.folder)/'backend').read_bytes()),
                 'consumers':sha(encode({k:v for k,v in cfg.items() if k.startswith(('REDIS','ITSM_AUTO','RLS','DB_SYSTEM','ENV','DEPLOYMENT'))})),
                 'configuration':sha(encode(cfg)), 'control':sha(((bundle/'migration-control.json') if bundle else self.c['control_file']).read_bytes()),
-                'config_yaml':sha(((bundle or self.folder)/'config.yaml').read_bytes())}
+                'config_yaml':sha(((bundle or self.folder)/'config.yaml').read_bytes()),
+                'redis':self.redis_inventory(pg),'identity_provider_config':sha(((bundle or self.folder)/'identity-empty.json').read_bytes())}
 
     def archive(self, pg, minio, label):
         # pg_basebackup includes every DB, role, ACL, sequence, WAL and immutable bytea receipt.
@@ -137,9 +143,19 @@ class Recovery:
                 self.c['wait_ready'](lambda: urllib.request.urlopen('http://'+self.c['env']['MINIO_ENDPOINT']+'/minio/health/live',timeout=2).status==200)
             os.chmod(destination,0o600);self.c['secret_files'].append(destination)
             archives[kind]={'file':str(destination),'sha256':sha(destination.read_bytes()),'bytes':destination.stat().st_size}
+        redis_name,redis_port=self.redis_targets[pg]
+        if redis_call(redis_port,'SAVE')!=b'OK':raise ValueError('Redis synchronous snapshot failed')
+        self.command(['docker','exec',redis_name,'redis-check-rdb','/data/dump.rdb'])
+        self.command(['docker','stop',redis_name])
+        redis_archive=self.folder/(label+'-redis.tar');self.c['secret_files'].append(redis_archive)
+        with redis_archive.open('wb') as out:
+            subprocess.run(['docker','cp',redis_name+':/data/.','-'],stdout=out,stderr=self.c['log'],check=True)
+        os.chmod(redis_archive,0o600)
+        archives['redis']={'file':str(redis_archive),'sha256':sha(redis_archive.read_bytes()),'bytes':redis_archive.stat().st_size,'rdbVerified':True}
+        self.command(['docker','start',redis_name]);self.c['wait_ready'](lambda: redis_call(redis_port,'PING')==b'PONG')
         config_archive=self.folder/(label+'-configuration.tar')
         with tarfile.open(config_archive,'w') as tar:
-            for name in ['backend','migrate','config.yaml','migration-control.json']:
+            for name in ['backend','migrate','config.yaml','migration-control.json','identity-empty.json']:
                 tar.add(self.folder/name,arcname=name)
             content=encode(self.c['env']);info=tarfile.TarInfo('runtime-environment.json');info.size=len(content);info.mode=0o600
             tar.addfile(info,io.BytesIO(content))
@@ -152,11 +168,19 @@ class Recovery:
         self.c['containers'].append(name)
         values=['--env-file',str(self.folder/('codex-'+self.c['run_id']+'-minio.env'))] if container_port==9000 else []
         self.command(['docker','create',*values,'--name',name,'--label','codex.workitem.v1='+self.c['run_id'],'-p','127.0.0.1:'+str(port)+':'+str(container_port),image,*command])
+        created=json.loads(self.command(['docker','inspect',name]))[0]
+        if created['Image']!=image:raise ValueError('Restored image differs from captured immutable source')
+        self.c['owned_ids'][name]=created['Id']
+        self.c['owned_resources'][name]={'id':created['Id'],'volumes':[m['Name'] for m in created['Mounts'] if m['Type']=='volume']}
+        self.save('resource-ownership.json',self.c['owned_resources'])
         with open(archive,'rb') as inp:
             subprocess.run(['docker','cp','-',name+':'+directory],stdin=inp,stdout=self.c['log'],stderr=self.c['log'],check=True)
         self.command(['docker','start',name])
         info=json.loads(self.command(['docker','inspect',name]))[0]
+        if info['Image']!=image:raise ValueError('Restored image differs from immutable source image')
         self.c['owned_ids'][name]=info['Id']
+        self.c['owned_resources'][name]={'id':info['Id'],'volumes':[m['Name'] for m in info['Mounts'] if m['Type']=='volume']}
+        self.save('resource-ownership.json',self.c['owned_resources'])
         self.event('owned-resource',name=name,containerID=info['Id'],imageID=info['Image'],image=info['Config']['Image'])
         if info['Config']['Labels'].get('codex.workitem.v1')!=self.c['run_id']:
             raise ValueError('Recovery resource ownership mismatch')
@@ -165,8 +189,12 @@ class Recovery:
     def restore(self, archives, suffix, offset):
         pg='codex-'+self.c['run_id']+'-'+suffix+'-pg';minio='codex-'+self.c['run_id']+'-'+suffix+'-minio'
         port=self.c['args'].base_port+offset
-        pgid=self.restore_container(pg,'pgvector/pgvector:pg17',port,5432,archives['postgres']['file'],'/var/lib/postgresql/data',['postgres'])
-        mid=self.restore_container(minio,'minio/minio:latest',port+1,9000,archives['objects']['file'],'/data',['server','/data'])
+        pgid=self.restore_container(pg,self.images[self.c['pg']],port,5432,archives['postgres']['file'],'/var/lib/postgresql/data',['postgres'])
+        mid=self.restore_container(minio,self.images[self.c['minio']],port+1,9000,archives['objects']['file'],'/data',['server','/data'])
+        redis_name='codex-'+self.c['run_id']+'-'+suffix+'-redis'
+        rid=self.restore_container(redis_name,self.images[self.c['redis']],port+2,6379,archives['redis']['file'],'/data',[])
+        self.redis_targets[pg]=(redis_name,port+2)
+        self.c['wait_ready'](lambda: redis_call(port+2,'PING')==b'PONG')
         self.c['wait_ready'](lambda: subprocess.run(['docker','exec',pg,'pg_isready','-U','v1owner','-d','workitem_v1'],stdout=self.c['log'],stderr=self.c['log']).returncode==0)
         # Restored MinIO credentials are persisted in its data, and env credentials are also explicit.
         self.c['wait_ready'](lambda: urllib.request.urlopen('http://127.0.0.1:'+str(port+1)+'/minio/health/live',timeout=2).status==200)
@@ -175,7 +203,7 @@ class Recovery:
             tar.extractall(bundle,filter='data')
         self.bundles=getattr(self,'bundles',{});self.bundles[pg]=bundle
         for path in bundle.iterdir(): self.c['secret_files'].append(path)
-        self.event('independent-restore', target=pg, containerID=pgid, objectContainerID=mid, logicalDatabase='workitem_v1', logicalDeployment=self.c['run_id'])
+        self.event('independent-restore', target=pg, containerID=pgid, objectContainerID=mid, redisContainerID=rid, logicalDatabase='workitem_v1', logicalDeployment=self.c['run_id'])
         return pg, minio, port
 
     def pause(self):
@@ -185,7 +213,7 @@ class Recovery:
         self.event('application-and-inprocess-consumers-stopped', pid=proc.pid)
 
     def negative_checks(self, expected):
-        for surface in ['tables','sequences','roles_acl','attachments','application','consumers','configuration','control','config_yaml']:
+        for surface in ['tables','sequences','roles_acl','attachments','application','consumers','configuration','control','config_yaml','identity_provider_config']:
             candidate=copy.deepcopy(expected)
             candidate[surface]={'missing':'actual recovery verifier must reject'}
             try: verify_recovery(expected,candidate)
@@ -200,6 +228,35 @@ class Recovery:
         try: verify_recovery(expected,expected,uncaptured=['post-backup-write'])
         except ValueError: self.negative.append('uncaptured-post-backup-write')
         else: raise AssertionError('Uncaptured write accepted')
+
+    def redis_inventory(self,pg):
+        name,port=self.redis_targets[pg]
+        info=json.loads(self.command(['docker','inspect',name]))[0]
+        if info['Id']!=self.c['owned_ids'][name] or not info['State']['Running'] or info['NetworkSettings']['Ports']['6379/tcp'][0]!={'HostIp':'127.0.0.1','HostPort':str(port)}:
+            raise ValueError('Independent Redis ownership/transport unavailable')
+        return redis_snapshot(port)
+
+    def seed_pending_redis(self):
+        port=self.c['redis_port'];key='task6.recovery.pending'
+        ids=[redis_call(port,'XADD',key,'*','body',v) for v in ['acked','pending','undelivered']]
+        redis_call(port,'XGROUP','CREATE',key,'task6-group','0')
+        redis_call(port,'XREADGROUP','GROUP','task6-group','task6-consumer','COUNT',2,'STREAMS',key,'>')
+        redis_call(port,'XACK',key,'task6-group',ids[0])
+        redis_call(port,'SET','task6:absolute-expiry','expires-with-wall-clock','PX',2000)
+        self.pending_id=ids[1]
+        self.event('actual-redis-pending-fixture',acked=1,pending=1,undelivered=1,absoluteExpiryProbe=True)
+
+    def redis_fault(self,expected,pg):
+        name,port=self.redis_targets[pg];key='task6.recovery.pending';value=redis_call(port,'DUMP',key)
+        if redis_call(port,'XPENDING',key,'task6-group')[0]!=1:raise ValueError('Actual pending consumer state required')
+        redis_call(port,'XDEL',key,self.pending_id)
+        try:
+            compare_redis(expected['redis'],self.redis_inventory(pg))
+        except ValueError:self.negative.append('actual-pending-stream-message-loss')
+        else:raise ValueError('Missing pending stream message falsely accepted')
+        finally:redis_call(port,'RESTORE',key,0,value,'REPLACE')
+        compare_redis(expected['redis'],self.redis_inventory(pg))
+        self.event('actual-redis-pending-loss-rejected',target=name,pending=1)
 
     def actual_fault_checks(self, expected, pg, endpoint, env):
         bundle=self.bundles[pg]
@@ -233,13 +290,14 @@ class Recovery:
         self.s3_get(endpoint,key,method='DELETE')
         try: reject('missing-attachment-object')
         finally: self.s3_get(endpoint,key,method='PUT',data=data)
-        for filename in ['backend','runtime-environment.json','config.yaml']:
+        for filename in ['backend','runtime-environment.json','config.yaml','identity-empty.json']:
             file=bundle/filename;original=file.read_bytes()
             if filename=='runtime-environment.json':
                 value=json.loads(original);value['ITSM_AUTO_SEED']='true';file.write_bytes(encode(value))
             else: file.write_bytes(original+b'\nwrong-recovered-version\n')
             try: reject('wrong-'+filename)
             finally: file.write_bytes(original)
+        self.redis_fault(expected,pg)
         verify_recovery(expected,self.snapshot(pg,endpoint,env,bundle=bundle))
         self.event('actual-fault-target-restored-and-reverified',target=pg)
 

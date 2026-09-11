@@ -60,7 +60,7 @@
 - [WorkItem 受控退役实施计划](./superpowers/plans/2026-09-11-workitem-controlled-retirement.md)：六批实施与验证任务；Tasks 1–5 已通过独立审阅，Task 6 验证及审阅状态见计划。
 - [WorkItem 受控退役审阅闭环](./review/2026-09-11-workitem-controlled-retirement-review-report.md)：验证顺序、回退依赖与写入前门禁的证据及修订结论。
 
-- [WorkItem 切换与恢复手册](./deployment/workitem-convergence-cutover.md)：P／普通迁移／授权 R 的执行边界、三时点隔离恢复证据及目标环境待执行步骤。
+- [WorkItem 切换与恢复手册](./deployment/workitem-convergence-cutover.md)：P／普通迁移／授权 R 的执行边界、三时点隔离恢复证据、独立 Redis 与受控令牌失效边界及目标环境待执行步骤。
 
 - [WorkItem 后续计划独立审查](./review/2026-09-11-workitem-next-stage-plan-review-report.md)：五项重要契约问题、修订及最终复核结论。
 

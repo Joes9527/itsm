@@ -56,6 +56,7 @@ def main():
     pg, redis, minio = ['codex-'+run_id+'-'+name for name in ['pg','redis','minio']]
     containers, processes, secret_files = [], [], []
     owned_ids={}
+    owned_resources={}
     password, app_password, system_password, minio_password, admin_password, inspection_password = [secrets.token_hex(24)+'aA!7' for _ in range(6)]
     log = (folder/'setup.log').open('w')
     source_commit=subprocess.check_output(['git','rev-parse','HEAD'],cwd=repo,text=True).strip()
@@ -95,9 +96,12 @@ def main():
         envfile.write_text('\n'.join(key+'='+value for key,value in values.items())+'\n')
         os.chmod(envfile,0o600);secret_files.append(envfile)
         containers.append(name)
-        run(['docker','run','-d','--name',name,'--label','codex.workitem.v1='+run_id,
+        run(['docker','create','--name',name,'--label','codex.workitem.v1='+run_id,
              '-p','127.0.0.1:'+str(port)+':'+str(container_port),'--env-file',str(envfile),image,*command])
-        owned_ids[name]=json.loads(subprocess.check_output(['docker','inspect',name]))[0]['Id']
+        info=json.loads(subprocess.check_output(['docker','inspect',name]))[0]
+        owned_ids[name]=info['Id'];owned_resources[name]={'id':info['Id'],'volumes':[m['Name'] for m in info['Mounts'] if m['Type']=='volume']}
+        (folder/'resource-ownership.json').write_text(json.dumps(owned_resources))
+        run(['docker','start',name])
     try:
         container(pg,'pgvector/pgvector:pg17',pg_port,5432,{'POSTGRES_DB':'workitem_v1','POSTGRES_USER':'v1owner','POSTGRES_PASSWORD':password})
         container(redis,'redis:7-alpine',redis_port,6379,{})
@@ -108,6 +112,8 @@ def main():
         (folder/'config.yaml').write_text(config)
         run(['go','build','-o',str(folder/'backend'),'.'],cwd=backend,env=base_env)
         run(['go','build','-tags','migrate','-o',str(folder/'migrate'),'./cmd/migrate'],cwd=backend,env=base_env)
+        identity_file=folder/'identity-empty.json';identity_file.write_text('{"providers":{}}');os.chmod(identity_file,0o600);secret_files.append(identity_file)
+        env['INTAKE_IDENTITY_CONFIG_FILE']=str(identity_file)
         control_file=folder/'migration-control.json'
         control={'DeploymentID':run_id,'InspectionRole':'v1inspect'}
         key=None
@@ -228,9 +234,20 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO v1system;
             if proc.returncode or (args.recovery and (stats['expected']!=9 or stats['unexpected'] or stats['skipped'] or stats['flaky'])):
                 raise RuntimeError('V1 stage failed: '+name)
             return {'stage':name,'stats':stats,'reportSHA256':hashlib.sha256((folder/('results-'+name+'.json')).read_bytes()).hexdigest(),'backendSHA256':manifest['backendBinarySHA256']}
+        if recovery:
+            from workitem_recovery_redis import AuthProbe
+            preflight=AuthProbe('http://127.0.0.1:'+str(app_port),admin_password)
+            preflight.freeze_before()
+            recovery.event('actual-auth-setup-preflight',proof=preflight.after_backup())
+            print('Actual auth setup preflight passed',flush=True)
         first=stage('retained' if recovery else 'v1')
+        if recovery:
+            from workitem_recovery_redis import AuthProbe,redis_call,compare_redis,validate_security_transition
+            auth_probe=AuthProbe('http://127.0.0.1:'+str(app_port),admin_password)
+            auth_probe.freeze_before()
         if not recovery: return 0
         recovery.pause();recovery.ended=now();recovery.paused=now()
+        recovery.seed_pending_redis()
         final=recovery.snapshot(pg,env['MINIO_ENDPOINT'],env)
         try: verify_recovery(final,early)
         except ValueError: recovery.negative.append('actual-observation-before-backup-loses-new-business-data')
@@ -250,6 +267,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO v1system;
         recovery.retire(final,archives,{'verified':True,'snapshot':restored,'target':rehearsal_pg},first,observation)
         backend_process=launch([str(folder/'backend')],folder,env,'backend-r.log');recovery.c['backend_process']=backend_process
         wait_ready(backend_ready)
+        recovery.event('actual-post-point-auth-decisions',proof=auth_probe.after_backup())
         second=stage('retired')
         recovery.pause()
         after_r=recovery.snapshot(pg,env['MINIO_ENDPOINT'],env)
@@ -263,7 +281,12 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO v1system;
         try: verify_recovery(after_r,final,uncaptured=['post-R delta absent from pre-R backup'])
         except ValueError: recovery.negative.append('actual-post-backup-writes-not-in-recovery-point')
         else: raise RuntimeError('Missing post-R delta falsely claims zero loss')
-        restore_pg,restore_minio,restore_port=recovery.restore(archives,'restored',7)
+        recovery.command(['docker','stop',redis])
+        try: recovery.redis_inventory(pg)
+        except (ValueError,OSError): recovery.negative.append('actual-original-redis-unavailable')
+        else: raise RuntimeError('Unavailable original Redis accepted')
+        recovery.event('original-redis-stopped-before-independent-recovery',container=redis)
+        restore_pg,restore_minio,restore_port=recovery.restore(archives,'restored',8)
         restored_again=recovery.snapshot(restore_pg,'127.0.0.1:'+str(restore_port+1),env,bundle=recovery.bundles[restore_pg])
         verify_recovery(final,restored_again)
         if recovery.sql(restore_pg,"SELECT count(*) FROM schema_migrations WHERE version='038_work_item_controlled_retirement'")!='0':
@@ -273,6 +296,15 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO v1system;
         recovery.event('post-R-independent-full-restore-verified',snapshot=restored_again,sourceRRemainsInJournal=True)
         # Keep logical identity and behavior; only physical transport changes.
         env=json.loads((recovery.bundles[restore_pg]/'runtime-environment.json').read_bytes())
+        original_env=dict(env)
+        env['REDIS_PORT']=str(restore_port+2)
+        env['JWT_SECRET']=secrets.token_hex(32)
+        policy={'scope':'coordinator-authorized isolated fixture only','strategy':'restore-all-redis-and-rotate-existing-JWT-secret','changedField':'JWT_SECRET',
+                'oldDigest':sha(original_env['JWT_SECRET'].encode()),'newDigest':sha(env['JWT_SECRET'].encode()),'identityProviders':'explicit-empty-and-HTTP-rejected','notCovered':'enabled HMAC provider recovery'}
+        validate_security_transition(original_env,env,policy)
+        recovery.event('controlled-recovery-security-policy',policy=policy)
+        env['INTAKE_IDENTITY_CONFIG_FILE']=str(recovery.bundles[restore_pg]/'identity-empty.json')
+        if json.loads((recovery.bundles[restore_pg]/'identity-empty.json').read_text())!={'providers':{}}:raise RuntimeError('Identity providers must remain explicitly disabled')
         env['MINIO_ENDPOINT']='127.0.0.1:'+str(restore_port+1)
         env['ITSM_MIGRATION_INSPECTION_DSN']=env['ITSM_MIGRATION_INSPECTION_DSN'].replace(':'+str(pg_port)+'/',':'+str(restore_port)+'/')
         env['ITSM_MIGRATION_CONTROL_FILE']=str(recovery.bundles[restore_pg]/'migration-control.json')
@@ -282,8 +314,11 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO v1system;
         info=json.loads(subprocess.check_output(['docker','inspect',restore_pg]))[0]
         manifest['recoveryTarget']={'containerID':info['Id'],'stage':'restored'}
         (folder/'resources.json').write_text(json.dumps(manifest,indent=2))
+        recovery.redis_inventory(restore_pg)
         backend_process=launch([str(recovery.bundles[restore_pg]/'backend')],folder,env,'backend-restored.log');recovery.c['backend_process']=backend_process
         wait_ready(backend_ready)
+        recovery.redis_inventory(restore_pg)
+        recovery.event('actual-recovered-auth-proof',proof=auth_probe.recovered())
         third=stage('restored')
         recovery.pause()
         recovery.event('three-stage-business-proof',stages=[first,second,third],negativeCases=recovery.negative)
@@ -313,9 +348,12 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO v1system;
                     if actual['Config'].get('Labels',{}).get('codex.workitem.v1')!=run_id or (name in owned_ids and actual['Id']!=owned_ids[name]):
                         cleanup_errors.append('container ownership mismatch: '+name)
                         continue
+                    volumes=owned_resources.get(name,{}).get('volumes',[])
                     removed=subprocess.run(['docker','rm','-f','-v',name],stdout=log,stderr=log)
                     verified=subprocess.run(['docker','inspect',name],text=True,capture_output=True)
                     absent=verified.returncode!=0 and ('no such object:' in verified.stderr.lower() or 'no such container:' in verified.stderr.lower())
+                    for volume in volumes:
+                        if subprocess.run(['docker','volume','inspect',volume],capture_output=True).returncode==0:cleanup_errors.append('owned volume remains: '+volume)
                     if removed.returncode or not absent:
                         cleanup_errors.append('container removal not verified: '+name)
                 elif 'no such object:' not in info.stderr.lower() and 'no such container:' not in info.stderr.lower():
