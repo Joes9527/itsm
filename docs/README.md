@@ -55,6 +55,8 @@
 
 - [WorkItem 本轮实施复核与交接](./review/2026-09-11-workitem-next-stage-implementation-review.md)：已关闭问题、真实验证、代码提交与运行待办。
 
+- [WorkItem 受控退役设计（draft）](./superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md)：保留历史账本、结构准备、受控删除和删除后恢复的详细契约；待审阅，未实现。
+
 - [WorkItem 切换与恢复手册](./deployment/workitem-convergence-cutover.md)：自动退役阻断、备份恢复证据与尚未完成的允许删除路径。
 
 - [WorkItem 后续计划独立审查](./review/2026-09-11-workitem-next-stage-plan-review-report.md)：五项重要契约问题、修订及最终复核结论。
