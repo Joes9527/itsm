@@ -358,6 +358,7 @@ type SLACycleResult struct {
 }
 
 type TicketSLAInfo struct {
+	ClosedAt                *time.Time          `json:"closedAt"`
 	CycleNumber             int                 `json:"cycleNumber"`
 	CycleStartedAt          *time.Time          `json:"cycleStartedAt"`
 	PausedMinutes           int                 `json:"pausedMinutes"`
@@ -374,7 +375,7 @@ type TicketSLAInfo struct {
 	ResponseDeadline        *time.Time          `json:"responseDeadline"`
 	ResolutionDeadline      *time.Time          `json:"resolutionDeadline"`
 	IsBreached              bool                `json:"isBreached"`
-	SlaStatus               string              `json:"slaStatus"` // on_track | at_risk | breached
+	SlaStatus               string              `json:"slaStatus"` // ok | warning | breached | not_required | configuration_missing
 	ResponseTimeRemaining   *int                `json:"responseTimeRemaining"`
 	ResolutionTimeRemaining *int                `json:"resolutionTimeRemaining"`
 	FirstResponseAt         *time.Time          `json:"firstResponseAt,omitempty"`

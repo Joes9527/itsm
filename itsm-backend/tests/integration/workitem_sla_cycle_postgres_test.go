@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/ticket"
@@ -244,4 +245,103 @@ func TestWorkItemSLACycleMigrationAndImmutableAudit(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, f.client.AuditLog.DeleteOneID(normal.ID).Exec(f.ctx))
 
+}
+
+func TestWorkItemSLACycleEscalationAfterRealReopen(t *testing.T) {
+	f := incidentLifecycleFixture(t)
+	item := f.client.Ticket.GetX(f.ctx, f.inc.WorkItemID)
+	at := time.Now().UTC().Truncate(time.Microsecond).Add(-2 * time.Hour)
+	policy := f.client.SLADefinition.Create().SetTenantID(f.tenant.ID).SetName("cycle escalation").SetResponseTime(30).SetResolutionTime(60).SaveX(f.ctx)
+	item = item.Update().SetCreatedAt(at).SaveX(f.ctx)
+	tx, err := f.client.Tx(f.ctx)
+	require.NoError(t, err)
+	require.NoError(t, service.NewTicketSLAService(f.client, zap.NewNop().Sugar()).ApplyCreationSLA(f.ctx, tx, item, &policy.ID))
+	require.NoError(t, tx.Commit())
+	old := f.client.SLAViolation.Create().SetTenantID(f.tenant.ID).SetTicketID(item.ID).SetSLADefinitionID(policy.ID).SetViolationType("resolution_time").SetViolationTime(at.Add(time.Hour)).SetViolationOccurredAt(at.Add(time.Hour)).SaveX(f.ctx)
+	old = f.client.SLAViolation.GetX(f.ctx, old.ID)
+	cmd := incidentPGCommand(f, "cycle-resolve")
+	_, err = f.svc.ApplyIncidentCommand(f.ctx, cmd)
+	require.NoError(t, err)
+	cmd = incidentPGCommand(f, "cycle-reopen")
+	cmd.Action = "reopen"
+	cmd.Reason = "service interrupted again"
+	_, err = f.svc.ApplyIncidentCommand(f.ctx, cmd)
+	require.NoError(t, err)
+	before := f.client.Ticket.GetX(f.ctx, item.ID)
+	svc := service.NewIncidentEscalationService(f.client)
+	_, err = svc.CreateEscalationRule(f.ctx, dto.CreateIncidentEscalationRuleRequest{Name: "cycle L1", TriggerType: "sla_breach", TriggerMinutes: 1, EscalationLevel: 1, TargetAssigneeType: "user", AutoEscalate: true, IsActive: true, TenantID: f.tenant.ID})
+	require.NoError(t, err)
+	check := func(key string) {
+		_, err := svc.CheckAndEscalate(f.ctx, f.inc.ID, workitemmutation.Meta{TenantID: f.tenant.ID, ActorID: f.actor.ID, ExpectedVersion: before.Version, Source: "scheduler", OperationID: key})
+		require.NoError(t, err)
+	}
+	check("old-cycle")
+	require.Equal(t, before.Version, f.client.Ticket.GetX(f.ctx, item.ID).Version, "old cycle cannot escalate reopened work")
+	// A stale monitor snapshot may be inserted after reopen; current breach facts must still gate it.
+	delayed := f.client.SLAViolation.Create().SetTenantID(f.tenant.ID).SetTicketID(item.ID).SetSLADefinitionID(policy.ID).SetViolationType("resolution_time").SetViolationTime(time.Now()).SetViolationOccurredAt(time.Now()).SaveX(f.ctx)
+	delayed = f.client.SLAViolation.GetX(f.ctx, delayed.ID)
+	check("delayed-old-cycle")
+	require.Equal(t, before.Version, f.client.Ticket.GetX(f.ctx, item.ID).Version)
+	// New response breach must not match a resolution-only old report.
+	f.client.Ticket.UpdateOneID(item.ID).SetSLAResponseDeadline(time.Now().Add(-time.Minute)).ExecX(f.ctx)
+	check("wrong-type")
+	require.Equal(t, before.Version, f.client.Ticket.GetX(f.ctx, item.ID).Version)
+	f.client.SLAViolation.Create().SetTenantID(f.tenant.ID).SetTicketID(item.ID).SetSLADefinitionID(policy.ID).SetViolationType("response_time").SetViolationTime(time.Now()).SetViolationOccurredAt(at.Add(30 * time.Minute)).SaveX(f.ctx)
+	check("old-occurrence")
+	require.Equal(t, before.Version, f.client.Ticket.GetX(f.ctx, item.ID).Version)
+
+	f.client.SLAViolation.Create().SetTenantID(f.tenant.ID).SetTicketID(item.ID).SetSLADefinitionID(policy.ID).SetViolationType("response_time").SetViolationTime(time.Now()).SetViolationOccurredAt(time.Now()).SaveX(f.ctx)
+	check("current-cycle")
+	require.Equal(t, "escalated", f.client.Ticket.GetX(f.ctx, item.ID).Status)
+	oldJSON, err := json.Marshal(old)
+	require.NoError(t, err)
+	oldAfterJSON, err := json.Marshal(f.client.SLAViolation.GetX(f.ctx, old.ID))
+	require.NoError(t, err)
+	require.JSONEq(t, string(oldJSON), string(oldAfterJSON))
+	delayedJSON, err := json.Marshal(delayed)
+	require.NoError(t, err)
+	delayedAfterJSON, err := json.Marshal(f.client.SLAViolation.GetX(f.ctx, delayed.ID))
+	require.NoError(t, err)
+	require.JSONEq(t, string(delayedJSON), string(delayedAfterJSON))
+	detail, err := service.NewTicketServiceForTest(f.client, zap.NewNop().Sugar()).GetTicketSLAInfo(f.ctx, item.ID, f.tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, 2, detail.CycleNumber)
+	require.Len(t, detail.History, 1)
+	require.True(t, detail.History[0].ResolutionBreached)
+	require.True(t, f.client.Ticket.GetX(f.ctx, item.ID).CreatedAt.Equal(at))
+}
+
+func TestWorkItemSLACycleRealReopenUnavailableFrozenContract(t *testing.T) {
+	for _, failure := range []string{"unsupported_snapshot", "invalid_calendar"} {
+		t.Run(failure, func(t *testing.T) {
+			f := incidentLifecycleFixture(t)
+			item := f.client.Ticket.GetX(f.ctx, f.inc.WorkItemID)
+			policy := f.client.SLADefinition.Create().SetTenantID(f.tenant.ID).SetName("frozen calendar").SetResponseTime(30).SetResolutionTime(60).SaveX(f.ctx)
+			tx, err := f.client.Tx(f.ctx)
+			require.NoError(t, err)
+			require.NoError(t, service.NewTicketSLAService(f.client, zap.NewNop().Sugar()).ApplyCreationSLA(f.ctx, tx, item, &policy.ID))
+			require.NoError(t, tx.Commit())
+			_, err = f.svc.ApplyIncidentCommand(f.ctx, incidentPGCommand(f, "calendar-resolve"))
+			require.NoError(t, err)
+			item = f.client.Ticket.GetX(f.ctx, item.ID)
+			snapshot := *item.AppliedSLAPolicy
+			if failure == "unsupported_snapshot" {
+				snapshot.SchemaVersion = 999
+			} else {
+				snapshot.BusinessHours = map[string]interface{}{"work_days": []interface{}{0}}
+			}
+			before := item.Update().SetAppliedSLAPolicy(&snapshot).SaveX(f.ctx)
+			cmd := incidentPGCommand(f, "calendar-reopen")
+			cmd.Action = "reopen"
+			cmd.Reason = "service interrupted again"
+			_, err = f.svc.ApplyIncidentCommand(f.ctx, cmd)
+			require.Error(t, err)
+			after := f.client.Ticket.GetX(f.ctx, item.ID)
+			require.Equal(t, before.Version, after.Version)
+			require.Equal(t, before.Status, after.Status)
+			require.Equal(t, before.SLACycleNumber, after.SLACycleNumber)
+			require.Equal(t, before.AppliedSLAPolicy, after.AppliedSLAPolicy)
+			require.Zero(t, f.client.AuditLog.Query().Where(auditlog.Action("sla.cycle.completed")).CountX(f.ctx))
+		})
+	}
 }

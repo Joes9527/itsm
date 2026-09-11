@@ -1233,7 +1233,7 @@ func (s *TicketService) GetTicketSLAInfo(ctx context.Context, ticketID int, tena
 	if err != nil {
 		return nil, err
 	}
-	info := &dto.TicketSLAInfo{TicketID: item.ID, TicketNumber: item.TicketNumber, Priority: item.Priority, SLADefinitionID: item.SLADefinitionID, ResponseDeadline: projection.ResponseDeadline, ResolutionDeadline: projection.ResolutionDeadline, FirstResponseAt: slaTime(item.FirstResponseAt), ResolvedAt: slaTime(item.ResolvedAt), CycleNumber: projection.CycleNumber, CycleStartedAt: projection.CycleStartedAt, PausedMinutes: projection.PausedMinutes, AppliedPolicy: item.AppliedSLAPolicy, History: history, IsBreached: projection.ResponseBreached || projection.ResolutionBreached, SlaStatus: projection.SLAStatus}
+	info := &dto.TicketSLAInfo{TicketID: item.ID, TicketNumber: item.TicketNumber, Priority: item.Priority, SLADefinitionID: item.SLADefinitionID, ResponseDeadline: projection.ResponseDeadline, ResolutionDeadline: projection.ResolutionDeadline, FirstResponseAt: slaTime(item.FirstResponseAt), ResolvedAt: slaTime(item.ResolvedAt), ClosedAt: item.ClosedAt, CycleNumber: projection.CycleNumber, CycleStartedAt: projection.CycleStartedAt, PausedMinutes: projection.PausedMinutes, AppliedPolicy: item.AppliedSLAPolicy, History: history, IsBreached: projection.ResponseBreached || projection.ResolutionBreached, SlaStatus: projection.SLAStatus}
 	if policy := item.AppliedSLAPolicy; policy != nil {
 		info.SlaName = policy.Name
 		info.ServiceType = policy.ServiceType
@@ -1241,6 +1241,9 @@ func (s *TicketService) GetTicketSLAInfo(ctx context.Context, ticketID int, tena
 		info.ResolutionTime = policy.ResolutionMinutes
 	}
 	now := time.Now()
+	if item.ClosedAt != nil && item.ClosedAt.Before(now) {
+		now = *item.ClosedAt
+	}
 	if info.ResponseDeadline != nil {
 		remaining := int(info.ResponseDeadline.Sub(slaMeasuredAt(item.FirstResponseAt, now)).Minutes())
 		info.ResponseTimeRemaining = &remaining

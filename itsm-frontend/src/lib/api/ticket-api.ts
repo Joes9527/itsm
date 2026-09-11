@@ -663,6 +663,9 @@ export const TicketAPI = TicketApi;
 export default TicketAPI;
 
 export interface SLACycleResult {
+  actorId: number;
+  source: string;
+  correlationId: string;
   number: number;
   startedAt: string | null;
   endedAt: string;
@@ -686,6 +689,8 @@ export interface AppliedSLAPolicy {
   businessHours: Record<string, unknown> | null;
 }
 export interface TicketSLAInfo {
+  slaStatus: "ok" | "warning" | "breached" | "not_required" | "configuration_missing";
+  closedAt: string | null;
 
     ticketId: number;
     slaDefinitionId: number;

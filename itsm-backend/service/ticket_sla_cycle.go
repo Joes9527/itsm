@@ -74,8 +74,10 @@ func projectSLACycle(item *ent.Ticket, now time.Time) TicketSLAInfoResult {
 	} else if (item.FirstResponseAt.IsZero() && !item.SLAResponseDeadline.IsZero() && item.SLAResponseDeadline.Sub(now) < 30*time.Minute) || (item.ResolvedAt.IsZero() && !item.SLAResolutionDeadline.IsZero() && item.SLAResolutionDeadline.Sub(now) < 30*time.Minute) {
 		result.SLAStatus = "warning"
 	}
-	if result.ResponseDeadline == nil && result.ResolutionDeadline == nil {
-		result.SLAStatus = "unknown"
+	if item.SLADefinitionID == 0 && item.AppliedSLAPolicy == nil && result.ResponseDeadline == nil && result.ResolutionDeadline == nil {
+		result.SLAStatus = "not_required"
+	} else if policy := item.AppliedSLAPolicy; policy == nil || policy.SchemaVersion != 1 || policy.DefinitionID != item.SLADefinitionID || policy.ResponseMinutes <= 0 || policy.ResolutionMinutes <= 0 || result.ResponseDeadline == nil || result.ResolutionDeadline == nil {
+		result.SLAStatus = "configuration_missing"
 	}
 	return result
 }

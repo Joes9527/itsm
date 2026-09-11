@@ -1,3 +1,4 @@
+import type { TicketSLAInfo } from '@/lib/api/ticket-api';
 // WorkItem 共享前端类型契约。Wave 2 的四个域迁移任务包直接消费这个文件里的类型，不允许
 // 各自重新定义形状——见 docs/superpowers/specs/2026-08-26-unified-work-item-multi-agent-execution-plan.md §4.4。
 
@@ -20,7 +21,20 @@ export interface WorkItemCommon {
   updatedAt: string;
 }
 
-export interface WorkItemSLAState {
+export interface WorkItemSLAState extends Partial<
+  Pick<
+    TicketSLAInfo,
+    | 'slaStatus'
+    | 'cycleNumber'
+    | 'cycleStartedAt'
+    | 'pausedMinutes'
+    | 'appliedPolicy'
+    | 'history'
+    | 'firstResponseAt'
+    | 'resolvedAt'
+    | 'closedAt'
+  >
+> {
   slaName: string;
   responseTime: number; // 目标响应时长，分钟
   resolutionTime: number; // 目标解决时长，分钟

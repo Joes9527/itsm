@@ -2,6 +2,7 @@ package service
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
@@ -27,7 +28,7 @@ func TestIncidentEscalationSLABreachScopesWorkItem(t *testing.T) {
 			actor.Update().SetRole("super_admin").ExecX(ctx)
 			other := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetTitle("other work item").SetTicketNumber("OTHER-SLA").SaveX(ctx)
 			inc := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "SLA-SCOPE")
-			before := client.Ticket.UpdateOneID(inc.WorkItemID).SetStatus("in_progress").SaveX(ctx)
+			before := client.Ticket.UpdateOneID(inc.WorkItemID).SetStatus("in_progress").SetSLAResponseDeadline(time.Now().Add(-time.Minute)).SaveX(ctx)
 			require.NotEqual(t, inc.ID, before.ID, "SLA violation uses WorkItem ID, not Incident ID")
 			definition, err := createSLATestDefinition(ctx, client, tenant.ID, "scope policy")
 			require.NoError(t, err)

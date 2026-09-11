@@ -15,6 +15,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/incident"
+	"itsm-backend/ent/predicate"
 	"itsm-backend/ent/slaviolation"
 	"itsm-backend/ent/ticket"
 
@@ -250,13 +251,41 @@ func (s *IncidentEscalationService) shouldEscalate(ctx context.Context, incident
 		if incidentEnt.Edges.WorkItem == nil || incidentEnt.WorkItemID <= 0 {
 			return false, fmt.Errorf("SLA escalation requires an Incident WorkItem")
 		}
-		exists, err := s.client.SLAViolation.Query().
-			Where(
-				slaviolation.TenantIDEQ(incidentEnt.Edges.WorkItem.TenantID),
-				slaviolation.TicketIDEQ(incidentEnt.WorkItemID),
-				slaviolation.IsResolved(false),
-			).
-			Exist(ctx)
+		item := incidentEnt.Edges.WorkItem
+		current := projectSLACycle(item, time.Now())
+		// A delayed monitor snapshot can be written after reopen. Require the
+		// corresponding current clock to be breached, not just a recent insert.
+		var breaches []predicate.SLAViolation
+		for _, clock := range []struct {
+			kind     string
+			breached bool
+			deadline time.Time
+		}{
+			{"response_time", current.ResponseBreached, item.SLAResponseDeadline},
+			{"resolution_time", current.ResolutionBreached, item.SLAResolutionDeadline},
+		} {
+			if !clock.breached {
+				continue
+			}
+			start := slaCycleStart(item)
+			if clock.deadline.After(start) {
+				start = clock.deadline
+			}
+			breaches = append(breaches, slaviolation.And(
+				slaviolation.ViolationTypeEQ(clock.kind),
+				slaviolation.ViolationTimeGTE(start),
+				slaviolation.ViolationOccurredAtGTE(start),
+			))
+		}
+		if len(breaches) == 0 {
+			return false, nil
+		}
+		exists, err := s.client.SLAViolation.Query().Where(
+			slaviolation.TenantIDEQ(item.TenantID),
+			slaviolation.TicketIDEQ(incidentEnt.WorkItemID),
+			slaviolation.IsResolved(false),
+			slaviolation.Or(breaches...),
+		).Exist(ctx)
 		if err != nil {
 			return false, fmt.Errorf("failed to query SLA violations: %w", err)
 		}

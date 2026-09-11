@@ -725,6 +725,14 @@ Content-Type: application/json
 
 ## SLA 管理接口
 
+### 获取 WorkItem 当前及历史 SLA 周期
+
+`GET /api/v1/tickets/:workItemId/sla` 使用公共 WorkItem ID。返回已保存的策略与截止时间，不在读取详情时重新匹配策略。
+
+- `slaStatus`：`ok`、`warning`、`breached`、`not_required`（未应用 SLA）或 `configuration_missing`（已有 SLA 痕迹但冻结策略/截止时间不完整）。配置缺失不能按正常达标展示。
+- 当前周期：`cycleNumber`、`cycleStartedAt`、`pausedMinutes`、`appliedPolicy`、`firstResponseAt`、`resolvedAt`、`closedAt` 及两种 deadline/remaining 字段。已完成时使用完成时间计算剩余值；关闭时停止尚未完成的时钟，前端显示完成/停止事实。
+- `history` 保留每次重开前的 `number`、`startedAt`、`endedAt`、`responseAt`、`resolvedAt`、两种 deadline/breached、`pausedMinutes`、`policy`、`actorId`、`source`、`correlationId`。时间为 ISO 字符串或 null，历史违规不因重开而删除。
+
 ### 获取 SLA 策略列表
 
 ```http
