@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"itsm-backend/common/workitemidentity"
 	relationmeta "itsm-backend/common/workitemrelation"
 	"itsm-backend/handlers/common/accessgrant"
 	"reflect"
@@ -19,12 +20,13 @@ const (
 	IntakeKindGeneric       = "generic"
 	IntakeKindProblem       = "problem"
 	IntakeKindChangeRequest = "change_request"
-	RecordClassGeneric      = "generic"
-	RecordClassProblem      = "problem"
+	// 词汇表的唯一权威是 common/workitemidentity；这里是别名，不再重复定义字面量。
+	RecordClassGeneric = workitemidentity.RecordClassGeneric
+	RecordClassProblem = workitemidentity.RecordClassProblem
 
-	RecordClassServiceRequestItem = "service_request_item"
-	RecordClassIncident           = "incident"
-	RecordClassChangeRequest      = "change_request"
+	RecordClassServiceRequestItem = workitemidentity.RecordClassServiceRequestItem
+	RecordClassIncident           = workitemidentity.RecordClassIncident
+	RecordClassChangeRequest      = workitemidentity.RecordClassChangeRequest
 )
 
 type CTIInput struct {

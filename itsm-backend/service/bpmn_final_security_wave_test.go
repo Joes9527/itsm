@@ -594,7 +594,7 @@ func TestCCCallbackAuthoritativeVariablesRequireValidInitiator(t *testing.T) {
 		SaveX(f.userCtx)
 	instance := f.createProcessInstance(t, f.tenant, "cc-callback-attribution")
 	instance = f.client.ProcessInstance.UpdateOne(instance).
-		SetBusinessType("ticket").
+		SetBusinessType("generic").
 		SetBusinessID(ticket.ID).
 		SetInitiator(strconv.Itoa(f.actor.ID)).
 		SaveX(f.userCtx)

@@ -86,7 +86,7 @@ func TestCCCallbackOutboxVariableRecipientsUseAuthoritativeInitiator(t *testing.
 		SetStatus("running").
 		SetCurrentActivityID("cc-callback").
 		SetCurrentActivityName("CC callback").
-		SetBusinessType("ticket").
+		SetBusinessType("generic").
 		SetBusinessID(ticket.ID).
 		SetInitiator(strconv.Itoa(f.actor.ID)).
 		SetVariables(map[string]interface{}{
@@ -298,7 +298,7 @@ func seedDurableCCUserCallbackTask(
 		SaveX(f.userCtx)
 	instance := f.client.ProcessInstance.GetX(f.userCtx, task.ProcessInstanceID)
 	instance, err = f.client.ProcessInstance.UpdateOne(instance).
-		SetBusinessType("ticket").
+		SetBusinessType("generic").
 		SetBusinessID(ticket.ID).
 		SetInitiator(strconv.Itoa(f.actor.ID)).
 		Save(f.userCtx)

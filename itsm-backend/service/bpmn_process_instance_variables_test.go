@@ -51,7 +51,7 @@ func setupInstanceVariablesFixture(t *testing.T) (*ent.Client, *bpmnProcessInsta
 
 	instance, err := client.ProcessInstance.Create().
 		SetProcessInstanceID("PI-piv-1").
-		SetBusinessKey("ticket:1").
+		SetBusinessKey("generic:1").
 		SetProcessDefinitionKey("piv-flow").
 		SetProcessDefinitionID(definition.ID).
 		SetStatus("running").

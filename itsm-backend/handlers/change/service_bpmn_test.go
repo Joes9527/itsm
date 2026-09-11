@@ -286,7 +286,7 @@ func TestChangeServiceTaskHandler_CreateChange_DelegatesToRealServiceAndCreatesW
 
 	runCtx := service.WithTrustedBPMNTenantContext(ctx, tenantID)
 	runCtx = context.WithValue(runCtx, bpmn.BPMNUserIDContextKey, actorID)
-	_, err := engine.StartProcessByDefinitionID(runCtx, service.FreezeProcessDefinition(definition), fmt.Sprintf("ticket:%d", source.ID), "generic", source.ID, map[string]any{
+	_, err := engine.StartProcessByDefinitionID(runCtx, service.FreezeProcessDefinition(definition), fmt.Sprintf("generic:%d", source.ID), "generic", source.ID, map[string]any{
 		"title":         "BPMN 自动创建的变更",
 		"description":   "验证委托到真实领域服务后同步建好 WorkItem",
 		"type":          "normal",

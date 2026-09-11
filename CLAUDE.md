@@ -147,6 +147,7 @@ Full contract: [AGENTS.md § Unified Work Item Domain Contract](AGENTS.md). Core
 - `recordClass` identifies the professional class and is immutable once an extension exists.
 - A relationship is not a lifecycle conversion — Incident does not become Problem by changing a type; create the target WorkItem and an explicit relation instead, preserving the source record and history.
 - Shared operations (assignment, comments, attachments, SLA projection, audit) live on WorkItem; `IncidentService`/`ProblemService`/`ChangeService`/`ServiceRequestService` own their own professional transitions — do not build a generic `switch recordClass` state machine.
+- Process identity is recordClass: at every BPMN boundary the business type is the WorkItem record class and the key is `{recordClass}:{workItemId}` with a WorkItem ID. The legacy vocabulary (`ticket`/`change`/`service_request`) is retired — never write it, never re-interpret it, and never add a second mapping that translates recordClass back to it (single authority: `common/workitemidentity`). Release keeps `release` and is not a WorkItem.
 
 ## Important Patterns
 

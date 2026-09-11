@@ -173,7 +173,7 @@ func configureEntryFixture(ctx context.Context, client *ent.Client, tenantID, ac
 			}
 		}
 	}
-	for _, business := range []string{"ticket", "incident"} {
+	for _, business := range []string{"generic", "incident"} {
 		if !client.ProcessBinding.Query().Where(processbinding.TenantIDEQ(tenantID), processbinding.BusinessTypeEQ(business)).ExistX(ctx) {
 			client.ProcessBinding.Create().SetTenantID(tenantID).SetBusinessType(business).SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 		}

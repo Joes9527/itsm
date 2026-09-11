@@ -27,7 +27,7 @@ func TestIdentityCatalogOptionPublishedRoundTripAndStableReplay(t *testing.T) {
 	logger := zap.NewNop().Sugar()
 	app.registry = NewCreatorRegistry()
 	require.NoError(t, app.registry.Register(service.NewTicketServiceForTest(client, logger)))
-	client.ProcessBinding.Create().SetTenantID(i.TenantID).SetBusinessType("ticket").SetProcessDefinitionKey("none").SetIsDefault(true).SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
+	client.ProcessBinding.Create().SetTenantID(i.TenantID).SetBusinessType("generic").SetProcessDefinitionKey("none").SetIsDefault(true).SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 	owner := catalog.NewService(catalog.NewEntRepository(client), client, logger, sameTransactionDirectory{})
 	owner.SetCreatorRegistry(app.registry)
 	options := []any{map[string]any{"label": "Text", "value": "east"}, map[string]any{"label": "Same spelling text", "value": "9007199254740993"}, map[string]any{"label": "Exact integer", "value": json.Number("9007199254740993")}, map[string]any{"label": "Adjacent integer", "value": json.Number("9007199254740992")}}

@@ -128,7 +128,7 @@ func TestGetApprovalHistory_ReadsFromProcessApprovalDecision(t *testing.T) {
 		SetProcessInstanceID(1).SetProcessTaskID(1).
 		SetProcessInstanceKey("PI-test-1").SetTaskID("TASK-test-1").
 		SetProcessDefinitionKey("change_normal_flow").SetNodeKey("Activity_CABApproval").
-		SetBusinessType("change").SetBusinessID(fmt.Sprintf("%d", workItem.ID)).
+		SetBusinessType("change_request").SetBusinessID(fmt.Sprintf("%d", workItem.ID)).
 		SetActorID(actor.ID).SetActorName(actor.Name).
 		SetAction("approve").SetDecision("approved").SetComment("looks good").
 		SetVariablesSnapshot(map[string]interface{}{}).SetTenantID(tenant.ID).
@@ -171,7 +171,7 @@ func TestGetApprovalHistoryUsesOnlyCanonicalWorkItemBusinessID(t *testing.T) {
 			SetTaskID(fmt.Sprintf("TASK-%d", taskID)).
 			SetProcessDefinitionKey("change_normal_flow").
 			SetNodeKey("Activity_CABApproval").
-			SetBusinessType("change").
+			SetBusinessType("change_request").
 			SetBusinessID(businessID).
 			SetActorID(actorID).
 			SetAction("approve").
@@ -207,7 +207,7 @@ func TestGetApprovalHistory_RejectedRecordHasNoApprovedAt(t *testing.T) {
 		SetProcessInstanceID(1).SetProcessTaskID(1).
 		SetProcessInstanceKey("PI-test-rejected").SetTaskID("TASK-test-rejected").
 		SetProcessDefinitionKey("change_normal_flow").SetNodeKey("Activity_CABApproval").
-		SetBusinessType("change").SetBusinessID(fmt.Sprintf("%d", workItem.ID)).
+		SetBusinessType("change_request").SetBusinessID(fmt.Sprintf("%d", workItem.ID)).
 		SetActorID(actor.ID).SetActorName(actor.Name).
 		SetAction("reject").SetDecision("rejected").SetComment("风险太高").
 		SetVariablesSnapshot(map[string]interface{}{}).SetTenantID(tenant.ID).
@@ -240,7 +240,7 @@ func TestGetApprovalHistory_TenantIsolation(t *testing.T) {
 		SetProcessInstanceID(1).SetProcessTaskID(1).
 		SetProcessInstanceKey("PI-iso-a").SetTaskID("TASK-iso-a").
 		SetProcessDefinitionKey("change_normal_flow").SetNodeKey("Activity_CABApproval").
-		SetBusinessType("change").SetBusinessID(fmt.Sprintf("%d", workItemA.ID)).
+		SetBusinessType("change_request").SetBusinessID(fmt.Sprintf("%d", workItemA.ID)).
 		SetActorID(actorA.ID).SetActorName(actorA.Name).
 		SetAction("approve").SetDecision("approved").SetComment("tenant a").
 		SetVariablesSnapshot(map[string]interface{}{}).SetTenantID(tenantA.ID).
@@ -250,7 +250,7 @@ func TestGetApprovalHistory_TenantIsolation(t *testing.T) {
 		SetProcessInstanceID(2).SetProcessTaskID(2).
 		SetProcessInstanceKey("PI-iso-b").SetTaskID("TASK-iso-b").
 		SetProcessDefinitionKey("change_normal_flow").SetNodeKey("Activity_CABApproval").
-		SetBusinessType("change").SetBusinessID(fmt.Sprintf("%d", workItemA.ID)).
+		SetBusinessType("change_request").SetBusinessID(fmt.Sprintf("%d", workItemA.ID)).
 		SetActorID(actorB.ID).SetActorName(actorB.Name).
 		SetAction("approve").SetDecision("approved").SetComment("tenant b").
 		SetVariablesSnapshot(map[string]interface{}{}).SetTenantID(tenantB.ID).

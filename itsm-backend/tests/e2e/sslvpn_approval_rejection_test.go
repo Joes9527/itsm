@@ -54,7 +54,7 @@ func startSSLVPNApprovalRequest(t *testing.T, h *sslvpnTestHarness) (creation.Cr
 	require.NoError(t, json.Unmarshal(result.Data, &created))
 	event := h.client.OutboxEvent.Query().Where(outboxevent.EventTypeEQ("workflow.start.requested"), outboxevent.AggregateIDEQ(fmt.Sprint(created.WorkItemID))).OnlyX(ctx)
 	require.NoError(t, service.NewWorkflowStartOutboxHandler(h.client, h.engine.(*service.CustomProcessEngine), h.client).Deliver(ctx, event))
-	instance := h.client.ProcessInstance.Query().Where(processinstance.TenantIDEQ(h.tenant.ID), processinstance.BusinessTypeEQ("service_request"), processinstance.BusinessIDEQ(created.WorkItemID)).OnlyX(ctx)
+	instance := h.client.ProcessInstance.Query().Where(processinstance.TenantIDEQ(h.tenant.ID), processinstance.BusinessTypeEQ("service_request_item"), processinstance.BusinessIDEQ(created.WorkItemID)).OnlyX(ctx)
 	require.NotEqual(t, h.fixture.Users.Supervisor.ID, h.fixture.Users.Lixin.ID)
 	require.Equal(t, "dept_manager", h.fixture.Users.Supervisor.Role)
 	require.Equal(t, "network_eng", h.fixture.Users.Lixin.Role)

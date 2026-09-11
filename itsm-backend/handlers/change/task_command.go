@@ -11,6 +11,7 @@ import (
 
 	"itsm-backend/common"
 	"itsm-backend/common/tenantctx"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/processcallbackoutbox"
@@ -143,7 +144,11 @@ func (s *Service) CompleteChangeTask(ctx context.Context, cmd TaskCommand) (out 
 	if err != nil {
 		return empty, common.NewNotFoundError("Change task")
 	}
-	instance, err := tx.ProcessInstance.Query().Where(processinstance.ID(task.ProcessInstanceID), processinstance.TenantID(m.TenantID), processinstance.BusinessID(current.WorkItemID), processinstance.BusinessType("change"), processinstance.BusinessKey(fmt.Sprintf("change:%d", current.WorkItemID)), processinstance.Status("running")).Only(ctx)
+	key, keyErr := dto.WorkItemBusinessKey(dto.RecordClassChangeRequest, current.WorkItemID)
+	if keyErr != nil {
+		return empty, keyErr
+	}
+	instance, err := tx.ProcessInstance.Query().Where(processinstance.ID(task.ProcessInstanceID), processinstance.TenantID(m.TenantID), processinstance.BusinessID(current.WorkItemID), processinstance.BusinessType(string(dto.BusinessTypeChangeRequest)), processinstance.BusinessKey(key), processinstance.Status("running")).Only(ctx)
 	if err != nil {
 		return empty, common.NewValidationError("task does not belong to this running Change", nil)
 	}
@@ -299,7 +304,11 @@ func (s *Service) acceptedTaskProgress(ctx context.Context, client *ent.Client, 
 	if err != nil {
 		return result, fmt.Errorf("callback completed task identity mismatch: %w", err)
 	}
-	owns, err := client.ProcessInstance.Query().Where(processinstance.ID(task.ProcessInstanceID), processinstance.TenantID(m.TenantID), processinstance.BusinessID(itemID), processinstance.BusinessType("change"), processinstance.BusinessKey(fmt.Sprintf("change:%d", itemID))).Exist(ctx)
+	key, keyErr := dto.WorkItemBusinessKey(dto.RecordClassChangeRequest, itemID)
+	if keyErr != nil {
+		return result, keyErr
+	}
+	owns, err := client.ProcessInstance.Query().Where(processinstance.ID(task.ProcessInstanceID), processinstance.TenantID(m.TenantID), processinstance.BusinessID(itemID), processinstance.BusinessType(string(dto.BusinessTypeChangeRequest)), processinstance.BusinessKey(key)).Exist(ctx)
 	if err != nil {
 		return result, err
 	}

@@ -35,7 +35,7 @@ func (s *TicketService) BatchDeleteTickets(ctx context.Context, ids []int, m wor
 	}
 	defer tx.Rollback()
 	if err = NewWorkItemRelationService(s.client, s.directory).GuardDeletionsTx(ctx, tx, m, ids, func(item *ent.Ticket) error {
-		return requireTicketDeletionPrecondition(ctx, tx.Client(), item.ID, m.TenantID, item.Status)
+		return requireTicketDeletionPrecondition(ctx, tx.Client(), item.ID, m.TenantID, item.Status, item.RecordClass)
 	}); err != nil {
 		return err
 	}
@@ -61,7 +61,7 @@ func (s *TicketService) DeleteSubtask(ctx context.Context, parentID, childID int
 	}
 	defer tx.Rollback()
 	if err = NewWorkItemRelationService(s.client, s.directory).GuardSubtaskDeletionTx(ctx, tx, m, parentID, childID, func(item *ent.Ticket) error {
-		return requireTicketDeletionPrecondition(ctx, tx.Client(), item.ID, m.TenantID, item.Status)
+		return requireTicketDeletionPrecondition(ctx, tx.Client(), item.ID, m.TenantID, item.Status, item.RecordClass)
 	}); err != nil {
 		return err
 	}

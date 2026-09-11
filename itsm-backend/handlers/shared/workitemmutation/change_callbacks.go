@@ -3,6 +3,7 @@ package workitemmutation
 import (
 	"context"
 	"fmt"
+	"itsm-backend/common/workitemidentity"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/ent/processinstance"
@@ -13,7 +14,11 @@ import (
 // Mutation owners pair this RR read with their Ticket write fence. A mere
 // snapshot read or row lock would miss a concurrently accepted callback.
 func RequireSettledChangeCallbacks(ctx context.Context, tx *ent.Tx, tenantID, itemID int, ownMetadataCallback ...Meta) error {
-	ids, err := tx.ProcessInstance.Query().Where(processinstance.TenantID(tenantID), processinstance.BusinessType("change"), processinstance.BusinessID(itemID), processinstance.BusinessKey(fmt.Sprintf("change:%d", itemID))).IDs(ctx)
+	key, keyErr := workitemidentity.BusinessKey(workitemidentity.RecordClassChangeRequest, itemID)
+	if keyErr != nil {
+		return keyErr
+	}
+	ids, err := tx.ProcessInstance.Query().Where(processinstance.TenantID(tenantID), processinstance.BusinessType(workitemidentity.RecordClassChangeRequest), processinstance.BusinessID(itemID), processinstance.BusinessKey(key)).IDs(ctx)
 	if err != nil {
 		return err
 	}

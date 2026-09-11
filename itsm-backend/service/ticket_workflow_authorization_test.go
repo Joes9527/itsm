@@ -67,7 +67,7 @@ func newTicketWorkflowAuthorizationFixture(t *testing.T) *ticketWorkflowAuthoriz
 	require.NoError(t, err)
 	instance, err := client.ProcessInstance.Create().
 		SetProcessInstanceID(fmt.Sprintf("ticket-workflow-instance-%d", time.Now().UnixNano())).
-		SetBusinessKey(fmt.Sprintf("ticket:%d", ticket.ID)).
+		SetBusinessKey(fmt.Sprintf("generic:%d", ticket.ID)).
 		SetProcessDefinitionKey(definition.Key).
 		SetProcessDefinitionID(definition.ID).
 		SetCurrentActivityID("approval").

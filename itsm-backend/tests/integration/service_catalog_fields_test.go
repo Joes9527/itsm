@@ -84,7 +84,7 @@ func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *e
 	const processKey = "service-catalog-fields-approval"
 	deployment := client.ProcessDeployment.Create().SetTenantID(tenant.ID).SetDeploymentID(processKey).SetDeploymentName(processKey).SaveX(ctx)
 	client.ProcessDefinition.Create().SetTenantID(tenant.ID).SetDeploymentID(deployment.ID).SetKey(processKey).SetName(processKey).SetVersion("1").SetIsActive(true).SetIsLatest(true).SetBpmnXML([]byte(fmt.Sprintf(`<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn" targetNamespace="test"><bpmn:process id="%s" isExecutable="true"><bpmn:startEvent id="start"/><bpmn:userTask id="approval" assignee="%d" taskPurpose="approval"/><bpmn:endEvent id="end"/><bpmn:sequenceFlow id="a" sourceRef="start" targetRef="approval"/><bpmn:sequenceFlow id="b" sourceRef="approval" targetRef="end"/></bpmn:process></bpmn:definitions>`, processKey, user.ID))).SaveX(ctx)
-	client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("service_request").SetIsDefault(true).SetProcessDefinitionKey(processKey).SaveX(ctx)
+	client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("service_request_item").SetIsDefault(true).SetProcessDefinitionKey(processKey).SaveX(ctx)
 	adminRole := client.Role.Create().SetTenantID(tenant.ID).SetCode("admin").SetName("admin").SetIsActive(true).SaveX(ctx)
 	for _, grant := range []struct{ resource, action string }{
 		{"service_catalog", "read"}, {"service_request", "read"}, {"service_request", "write"}, {"ticket", "read"}, {"ticket", "write"},

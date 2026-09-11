@@ -78,7 +78,7 @@ func TestIntakeBPMNCreationReplaysAfterFailure(t *testing.T) {
 				if stage == "stale_source" {
 					variables["source_relations"].([]any)[0].(map[string]any)["expectedVersion"] = 99
 				}
-				instance, err := engine.StartProcessByDefinitionID(ctx, service.FreezeProcessDefinition(definition), fmt.Sprintf("ticket:%d", source.WorkItemID), "generic", source.WorkItemID, variables, "source-start")
+				instance, err := engine.StartProcessByDefinitionID(ctx, service.FreezeProcessDefinition(definition), fmt.Sprintf("generic:%d", source.WorkItemID), "generic", source.WorkItemID, variables, "source-start")
 				require.NoError(t, err)
 				if stage == "stale_source" {
 					row := f.client.ProcessCallbackOutbox.Query().OnlyX(ctx)
@@ -169,7 +169,7 @@ func TestIntakeBPMNIncidentSourcePolicy(t *testing.T) {
 			if requested != "" {
 				variables["source"] = requested
 			}
-			instance, err := engine.StartProcessByDefinitionID(ctx, service.FreezeProcessDefinition(definition), fmt.Sprintf("ticket:%d", source.WorkItemID), "generic", source.WorkItemID, variables, "source-policy-start")
+			instance, err := engine.StartProcessByDefinitionID(ctx, service.FreezeProcessDefinition(definition), fmt.Sprintf("generic:%d", source.WorkItemID), "generic", source.WorkItemID, variables, "source-policy-start")
 			require.NoError(t, err)
 			callback := f.client.ProcessCallbackOutbox.Query().OnlyX(ctx)
 			if requested == "" || requested == "system" {

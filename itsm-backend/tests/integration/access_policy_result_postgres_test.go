@@ -36,7 +36,7 @@ func TestPostgresAccessPolicyResultContract(t *testing.T) {
 	require.ErrorContains(t, err, "immutable")
 	dep := c.ProcessDeployment.Create().SetTenantID(f.tenant.ID).SetDeploymentID("access-dep").SetDeploymentName("Access").SaveX(ctx)
 	def := c.ProcessDefinition.Create().SetTenantID(f.tenant.ID).SetDeploymentID(dep.ID).SetKey("access").SetName("Access").SetBpmnXML([]byte(`<definitions/>`)).SaveX(ctx)
-	inst := c.ProcessInstance.Create().SetTenantID(f.tenant.ID).SetProcessDefinitionID(def.ID).SetProcessDefinitionKey("access").SetProcessInstanceID("access-inst").SetBusinessType("service_request").SetBusinessID(item.ID).SaveX(ctx)
+	inst := c.ProcessInstance.Create().SetTenantID(f.tenant.ID).SetProcessDefinitionID(def.ID).SetProcessDefinitionKey("access").SetProcessInstanceID("access-inst").SetBusinessType("service_request_item").SetBusinessID(item.ID).SaveX(ctx)
 	task := c.ProcessTask.Create().SetTenantID(f.tenant.ID).SetProcessInstanceID(inst.ID).SetProcessDefinitionKey("access").SetTaskDefinitionKey("grant").SetTaskName("Grant").SetTaskID("access-task").SetTaskType("kaf_delegate").SetStatus("delegated").SetCallbackAction(accessgrant.Capability).SetCallbackConfigRef(fmt.Sprint(policy.ID)).SaveX(ctx)
 	verified := time.Date(2026, 9, 5, 8, 0, 0, 0, time.UTC)
 	makeResult := c.ServiceRequestAccessResult.Create().SetWorkItemID(item.ID).SetProcessTaskID(task.ID).SetOutcome("granted").SetProvider("graph").SetSubjectID("owned-subject").SetGroupID("owned-group").SetBaseline("not_member").SetVerifiedAt(verified).SetExpiresAt(verified.Add(time.Hour)).SetEvidenceRef("evidence")

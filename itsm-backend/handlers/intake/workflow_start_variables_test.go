@@ -28,7 +28,7 @@ func TestWorkflowStartFreezesPreparedVariables(t *testing.T) {
 	engine := service.NewCustomProcessEngine(f.client, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
 	require.NoError(t, service.NewWorkflowStartOutboxHandler(f.client, engine, f.client).Deliver(ctx, event))
 	instance := f.client.ProcessInstance.Query().OnlyX(ctx)
-	require.Equal(t, "service_request", instance.BusinessType)
+	require.Equal(t, "service_request_item", instance.BusinessType)
 	require.Equal(t, command.Title, instance.Variables["title"])
 	require.Equal(t, "medium", instance.Variables["priority"])
 	require.Equal(t, "Original requester", instance.Variables["contact_name"])

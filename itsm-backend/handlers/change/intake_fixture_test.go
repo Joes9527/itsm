@@ -42,8 +42,8 @@ func NewChangeIntakeApp(client *ent.Client, svc *Service, logger *zap.SugaredLog
 // read+write permission and provisions an unconditional no-process binding for
 // the "change" business type, idempotently so it can be called once per tenant.
 func ConfigureChangeIntakeFixture(ctx context.Context, client *ent.Client, tenantID int, actorRole string) {
-	if !client.ProcessBinding.Query().Where(processbinding.TenantIDEQ(tenantID), processbinding.BusinessTypeEQ("change")).ExistX(ctx) {
-		client.ProcessBinding.Create().SetTenantID(tenantID).SetBusinessType("change").SetIsDefault(true).
+	if !client.ProcessBinding.Query().Where(processbinding.TenantIDEQ(tenantID), processbinding.BusinessTypeEQ("change_request")).ExistX(ctx) {
+		client.ProcessBinding.Create().SetTenantID(tenantID).SetBusinessType("change_request").SetIsDefault(true).
 			SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 	}
 	r, err := client.Role.Query().Where(role.TenantIDEQ(tenantID), role.CodeEQ(actorRole)).Only(ctx)

@@ -5,12 +5,11 @@ import (
 
 	"itsm-backend/authorization"
 	"itsm-backend/common"
+	"itsm-backend/common/workitemidentity"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/repository/ticket"
-
-	"fmt"
 )
 
 func isRequester(t *ticket.Ticket, actorUserID int) bool {
@@ -44,7 +43,7 @@ func CanDelete(ctx context.Context, actor ActionActor, t *ticket.Ticket) dto.Act
 	if !authorization.HasResourcePermission(actor.Client, actor.Role, "ticket", "delete", actor.TenantID) {
 		return dto.ActionPermission{Allowed: false, Reason: "无删除权限"}
 	}
-	if err := requireTicketDeletionPrecondition(ctx, actor.Client, t.ID, actor.TenantID, string(t.Status)); err != nil {
+	if err := requireTicketDeletionPrecondition(ctx, actor.Client, t.ID, actor.TenantID, string(t.Status), t.RecordClass); err != nil {
 		if app, ok := common.AsAppError(err); ok {
 			return dto.ActionPermission{Allowed: false, Reason: app.Message}
 		}
@@ -54,13 +53,21 @@ func CanDelete(ctx context.Context, actor ActionActor, t *ticket.Ticket) dto.Act
 }
 
 // requireTicketDeletionPrecondition preserves the existing Ticket entry policy.
-// C1 will converge its legacy ticket:<id> workflow identity with the other owners.
+// C1 converged the legacy ticket:<id> workflow identity onto the canonical
 // Actual deletion calls this with the owning RR transaction after authorization.
-func requireTicketDeletionPrecondition(ctx context.Context, client *ent.Client, id, tenantID int, status string) error {
+func requireTicketDeletionPrecondition(ctx context.Context, client *ent.Client, id, tenantID int, status, recordClass string) error {
 	if isFinalStatus(ticket.Status(status)) {
 		return common.NewForbiddenError("工单已结束，无法删除")
 	}
-	running, err := client.ProcessInstance.Query().Where(processinstance.BusinessKey(fmt.Sprintf("ticket:%d", id)), processinstance.Status("running"), processinstance.TenantID(tenantID)).Exist(ctx)
+	// 按 WorkItem 的真实 recordClass 组装流程键：硬编码 generic 会漏掉
+	// incident/problem/change/service_request_item 上运行中的流程实例，让带活跃流程的
+	// 工单被删除。未知记录类在此失败关闭（删除是破坏性操作，不能靠猜）。
+	businessKey, identityErr := workitemidentity.BusinessKey(recordClass, id)
+	if identityErr != nil {
+		// Fail closed: an unidentifiable workflow state must not permit deletion.
+		return common.NewInternalError("工单流程身份无效", identityErr)
+	}
+	running, err := client.ProcessInstance.Query().Where(processinstance.BusinessKey(businessKey), processinstance.Status("running"), processinstance.TenantID(tenantID)).Exist(ctx)
 	if err != nil {
 		return common.NewInternalError("校验流程状态失败", err)
 	}

@@ -13,6 +13,7 @@ import (
 
 	"itsm-backend/authorization"
 	"itsm-backend/common"
+	"itsm-backend/common/workitemidentity"
 	"itsm-backend/connector"
 	feishuConnector "itsm-backend/connector/builtin/feishu"
 
@@ -266,7 +267,10 @@ func (s *TicketService) GetWorkflowStatus(ctx context.Context, ticketID int, ten
 	if s.client == nil {
 		return nil, fmt.Errorf("ent client not available for workflow status query")
 	}
-	businessKey := fmt.Sprintf("ticket:%d", ticketID)
+	businessKey, identityErr := workitemidentity.BusinessKey(workitemidentity.RecordClassGeneric, ticketID)
+	if identityErr != nil {
+		return nil, identityErr
+	}
 
 	processInstance, err := s.client.ProcessInstance.Query().
 		Where(
@@ -312,7 +316,10 @@ func (s *TicketService) CancelWorkflow(ctx context.Context, ticketID int, tenant
 	if s.client == nil {
 		return fmt.Errorf("ent client not available for workflow cancel")
 	}
-	businessKey := fmt.Sprintf("ticket:%d", ticketID)
+	businessKey, identityErr := workitemidentity.BusinessKey(workitemidentity.RecordClassGeneric, ticketID)
+	if identityErr != nil {
+		return identityErr
+	}
 
 	processInstance, err := s.client.ProcessInstance.Query().
 		Where(

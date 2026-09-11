@@ -138,9 +138,9 @@ func (s *Service) SubmitCatalog(ctx context.Context, tenantID, actorID, catalogI
 	return &response.Data, nil
 }
 func configureSRIntakeFixture(ctx context.Context, client *ent.Client, tenantID int) {
-	for _, business := range []string{"service_request", "incident"} {
+	for _, business := range []string{"service_request_item", "incident"} {
 		if !client.ProcessBinding.Query().Where(processbinding.TenantIDEQ(tenantID), processbinding.BusinessTypeEQ(business)).ExistX(ctx) {
-			if business == "service_request" {
+			if business == "service_request_item" {
 				deployment := client.ProcessDeployment.Create().SetTenantID(tenantID).SetDeploymentID(fmt.Sprintf("sr-fixture-%d", tenantID)).SetDeploymentName("Request approval fixture").SaveX(ctx)
 				client.ProcessDefinition.Create().SetTenantID(tenantID).SetDeploymentID(deployment.ID).SetKey("sr_fixture_approval").SetName("Request approval").SetVersion("1").SetIsActive(true).SetIsLatest(true).SetBpmnXML([]byte(`<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:camunda="http://camunda.org/schema/1.0/bpmn"><process id="sr_fixture_approval" isExecutable="true"><startEvent id="start"/><userTask id="approval" taskPurpose="approval" camunda:assignee="${requester_id}"/><endEvent id="end"/><sequenceFlow id="a" sourceRef="start" targetRef="approval"/><sequenceFlow id="b" sourceRef="approval" targetRef="end"/></process></definitions>`)).SaveX(ctx)
 				client.ProcessBinding.Create().SetTenantID(tenantID).SetBusinessType(business).SetIsDefault(true).SetProcessDefinitionKey("sr_fixture_approval").SaveX(ctx)

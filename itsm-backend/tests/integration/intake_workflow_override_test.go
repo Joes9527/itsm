@@ -148,7 +148,7 @@ func TestIntakeBPMNRuntimeWorkflowOverrideRequiresCurrentPermission(t *testing.T
 			engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler).SetCreationApplication(f.app, f.client)
 			ctx = service.WithTrustedBPMNTenantContext(ctx, f.identity.TenantID)
 			ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.identity.ActorID)
-			_, err = engine.StartProcessByDefinitionID(ctx, service.FreezeProcessDefinition(definition), fmt.Sprintf("ticket:%d", source.WorkItemID), "generic", source.WorkItemID, map[string]any{"title": "Callback incident", "workflow_definition_key": "child", "priority": "high"}, "source-start")
+			_, err = engine.StartProcessByDefinitionID(ctx, service.FreezeProcessDefinition(definition), fmt.Sprintf("generic:%d", source.WorkItemID), "generic", source.WorkItemID, map[string]any{"title": "Callback incident", "workflow_definition_key": "child", "priority": "high"}, "source-start")
 			require.NoError(t, err)
 			callback := f.client.ProcessCallbackOutbox.Query().OnlyX(ctx)
 			if mode == "revoked_on_replay" {

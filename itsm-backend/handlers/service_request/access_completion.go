@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/servicerequest"
@@ -26,7 +27,7 @@ func (s *Service) ContributeAccessCompletion(ctx context.Context, client *ent.Cl
 	if actorID <= 0 || tenantID != task.TenantID {
 		return fmt.Errorf("verified access actor scope missing")
 	}
-	instance, err := client.ProcessInstance.Query().Where(processinstance.IDEQ(task.ProcessInstanceID), processinstance.TenantIDEQ(tenantID), processinstance.BusinessTypeEQ("service_request")).Only(ctx)
+	instance, err := client.ProcessInstance.Query().Where(processinstance.IDEQ(task.ProcessInstanceID), processinstance.TenantIDEQ(tenantID), processinstance.BusinessTypeEQ(string(dto.BusinessTypeServiceRequestItem))).Only(ctx)
 	if err != nil {
 		return fmt.Errorf("load verified access process: %w", err)
 	}

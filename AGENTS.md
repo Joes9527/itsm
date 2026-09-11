@@ -133,6 +133,7 @@ The unified Work Item model is the shared business language for Ticket, Service 
 - A relationship is not a lifecycle conversion. Incident does not become Problem by changing a type, and Problem does not become Change. Create the target WorkItem and an explicit relation while preserving the source record and history.
 - Known Error and Catalog Item remain separate concepts: knowledge record and service definition respectively, not WorkItems.
 - One authoritative field has one write location. Do not maintain duplicate public fields, long-term dual writes, or JSON relationship fields alongside structured relations.
+- Process identity is recordClass. At every BPMN boundary the business type **is** the WorkItem record class and the business key is `{recordClass}:{workItemId}` carrying a WorkItem ID. The legacy wire vocabulary (`ticket`/`change`/`service_request`) is retired: it must neither be written nor re-interpreted. Keep one definition of that vocabulary and key format (currently `common/workitemidentity`) — a second mapping table that translates recordClass back to a legacy value is precisely the dual interpretation this contract forbids. Release keeps its explicit legacy identity `release` and is not a WorkItem.
 
 ### Professional Lifecycle Ownership
 

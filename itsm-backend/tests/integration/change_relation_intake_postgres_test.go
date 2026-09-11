@@ -35,7 +35,7 @@ func changeRelationIntakeHTTP(t *testing.T, standard bool) (*relationFixture, *g
 		_, err = f.db.ExecContext(f.ctx, fmt.Sprintf("GRANT USAGE ON SEQUENCE %s_id_seq TO %q", table, f.runtimeRole))
 		require.NoError(t, err)
 	}
-	f.client.ProcessBinding.Create().SetTenantID(f.tenant.ID).SetBusinessType("change").SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(f.ctx)
+	f.client.ProcessBinding.Create().SetTenantID(f.tenant.ID).SetBusinessType("change_request").SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(f.ctx)
 	logger := zap.NewNop().Sugar()
 	owner := changeDomain.NewService(changeDomain.NewEntRepository(f.runtime.Tenant, nil), f.runtime.Tenant, logger)
 	owner.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())

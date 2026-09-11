@@ -85,7 +85,9 @@ func TestWorkItemDeletionPreservesTicketPreconditionsAtomically(t *testing.T) {
 				if state == "running" {
 					deployment := c.ProcessDeployment.Create().SetTenantID(m.TenantID).SetDeploymentID("delete-test").SetDeploymentName("Delete test").SaveX(ctx)
 					definition := c.ProcessDefinition.Create().SetTenantID(m.TenantID).SetDeploymentID(deployment.ID).SetKey("ticket_test").SetName("test").SetBpmnXML([]byte("<bpmn/>")).SaveX(ctx)
-					c.ProcessInstance.Create().SetTenantID(m.TenantID).SetProcessInstanceID("delete-test").SetProcessDefinitionID(definition.ID).SetProcessDefinitionKey(definition.Key).SetBusinessKey(fmt.Sprintf("ticket:%d", ids[1])).SetStatus("running").SaveX(ctx)
+					c.ProcessInstance.Create().SetTenantID(m.TenantID).SetProcessInstanceID("delete-test").SetProcessDefinitionID(definition.ID).SetProcessDefinitionKey(definition.Key). // 夹具票据的 recordClass 是 incident，实例身份必须用同一个类，否则守卫找不到
+						// 运行中的流程实例，删除前置条件会被绕过。
+						SetBusinessKey(fmt.Sprintf("incident:%d", ids[1])).SetStatus("running").SaveX(ctx)
 				} else {
 					c.Ticket.UpdateOneID(ids[1]).SetStatus(state).ExecX(ctx)
 				}

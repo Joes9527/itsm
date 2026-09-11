@@ -63,7 +63,7 @@ func TestPostgresIntakeInsertFailureRollsBackAllocationAndReusesNumber(t *testin
 		permission := client.Permission.Create().SetTenantID(tenant.ID).SetCode("ticket:" + action).SetName("Ticket " + action).SetResource("ticket").SetAction(action).SaveX(ctx)
 		client.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(ctx)
 	}
-	client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("ticket").SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
+	client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType("generic").SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 	logger := zap.NewNop().Sugar()
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(&service.TicketService{}))

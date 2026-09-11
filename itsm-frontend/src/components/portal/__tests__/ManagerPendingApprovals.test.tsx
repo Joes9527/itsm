@@ -22,7 +22,7 @@ const pendingTask = {
   taskType: 'user_task',
   status: 'created',
   processInstanceId: 10,
-  businessType: 'ticket',
+  businessType: 'generic',
   businessId: 42,
   taskPurpose: 'approval',
   taskVariables: {

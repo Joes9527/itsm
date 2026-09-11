@@ -66,7 +66,7 @@ func TestPostgresWorkflowStartConcurrentReplay(t *testing.T) {
 		go func() {
 			ready.Done()
 			<-start
-			item, err := engine.StartProcessByDefinitionID(ctx, service.FreezeProcessDefinition(definition), "ticket:91", "ticket", 91, nil, "workflow-start:91:1")
+			item, err := engine.StartProcessByDefinitionID(ctx, service.FreezeProcessDefinition(definition), "generic:91", "ticket", 91, nil, "workflow-start:91:1")
 			outcomes <- outcome{item, err}
 		}()
 	}
@@ -85,7 +85,7 @@ func TestPostgresWorkflowStartConcurrentReplay(t *testing.T) {
 	require.Equal(t, 1, client.ProcessInstance.Query().CountX(ctx))
 	require.Equal(t, 1, client.ProcessAuditLog.Query().CountX(ctx))
 	// Restarted engine sees the committed identity after acknowledgement loss.
-	replay, err := service.NewCustomProcessEngine(client, zap.NewNop().Sugar()).(*service.CustomProcessEngine).StartProcessByDefinitionID(ctx, service.FreezeProcessDefinition(definition), "ticket:91", "ticket", 91, nil, "workflow-start:91:1")
+	replay, err := service.NewCustomProcessEngine(client, zap.NewNop().Sugar()).(*service.CustomProcessEngine).StartProcessByDefinitionID(ctx, service.FreezeProcessDefinition(definition), "generic:91", "ticket", 91, nil, "workflow-start:91:1")
 	require.NoError(t, err)
 	require.Equal(t, first, replay.ID)
 }

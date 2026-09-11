@@ -23,12 +23,12 @@ type WorkItemPolicy struct {
 }
 
 var workItemPolicies = map[string]WorkItemPolicy{
-	"generic":              {Resource: "ticket", BusinessType: dto.BusinessTypeTicket},
+	"generic":              {Resource: "ticket", BusinessType: dto.BusinessTypeGeneric},
 	"incident":             {Resource: "incident", BusinessType: dto.BusinessTypeIncident, UsesProfessionalVerb: true},
 	"problem":              {Resource: "problem", BusinessType: dto.BusinessTypeProblem, UsesProfessionalVerb: true},
-	"change_request":       {Resource: "change", BusinessType: dto.BusinessTypeChange, UsesProfessionalVerb: true},
-	"service_request_item": {Resource: "service_request", BusinessType: dto.BusinessTypeServiceRequest, DeleteNonRequesterAction: "write"},
-	"catalog_task":         {Resource: "service_request", BusinessType: dto.BusinessTypeServiceRequest},
+	"change_request":       {Resource: "change", BusinessType: dto.BusinessTypeChangeRequest, UsesProfessionalVerb: true},
+	"service_request_item": {Resource: "service_request", BusinessType: dto.BusinessTypeServiceRequestItem, DeleteNonRequesterAction: "write"},
+	"catalog_task":         {Resource: "service_request", BusinessType: dto.BusinessTypeCatalogTask},
 }
 
 func ResolveWorkItemPolicy(recordClass string) (WorkItemPolicy, error) {

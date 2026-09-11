@@ -40,7 +40,7 @@ func newUnifiedIntakeFixture(t *testing.T, ticketOwners ...func(*ent.Client, *za
 	role := client.Role.Create().SetTenantID(tenant.ID).SetCode("requester").SetName("Requester").SaveX(ctx)
 	permission := client.Permission.Create().SetTenantID(tenant.ID).SetCode("create-work").SetName("Create work").SetResource("*").SetAction("*").SaveX(ctx)
 	client.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(ctx)
-	for _, business := range []string{"ticket", "incident", "problem", "change", "service_request"} {
+	for _, business := range []string{"generic", "incident", "problem", "change_request", "service_request_item"} {
 		client.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType(business).SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 	}
 	allocator := workitemnumber.NewPostgreSQLAllocator()

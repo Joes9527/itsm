@@ -56,13 +56,18 @@ const taskStatusMap: Record<string, { text: string; color: string }> = {
   cancelled: { text: '已取消', color: 'default' },
 };
 
-// 业务类型 → 展示名 + 详情路由
+// 业务类型 → 展示名 + 详情路由。
+//
+// 键是规范 recordClass（设计 §15.2.2：businessType = WorkItem.recordClass）。
+// Wave-1 旧词表（ticket/change/service_request）不在此映射内：遇到旧值时不构造业务链接，
+// 退化为流程实例链接，避免把退役身份当成新身份。
 const businessTypeMap: Record<string, { label: string; url: (id: number) => string }> = {
-  ticket: { label: '工单', url: (id) => `/tickets/${id}` },
-  change: { label: '变更', url: (id) => `/changes/${id}` },
+  generic: { label: '工单', url: (id) => `/tickets/${id}` },
+  change_request: { label: '变更', url: (id) => `/changes/${id}` },
   incident: { label: '事件', url: (id) => `/incidents/${id}` },
   problem: { label: '问题', url: (id) => `/problems/${id}` },
-  service_request: { label: '服务请求', url: (id) => `/service-requests/${id}` },
+  service_request_item: { label: '服务请求', url: (id) => `/service-requests/${id}` },
+  catalog_task: { label: '服务请求任务', url: (id) => `/service-requests/${id}` },
   release: { label: '发布', url: (id) => `/releases/${id}` },
 };
 

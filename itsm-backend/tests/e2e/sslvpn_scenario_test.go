@@ -381,7 +381,7 @@ func TestSSLVPNScenarioE2E(t *testing.T) {
 	require.Len(t, startEvents, 1, "exactly one durable workflow start event must be recorded for the created work item")
 	require.NoError(t, service.NewWorkflowStartOutboxHandler(h.client, h.engine.(*service.CustomProcessEngine), h.client).Deliver(ctx, startEvents[0]))
 
-	businessKey := fmt.Sprintf("service_request:%d", ticketID)
+	businessKey := fmt.Sprintf("service_request_item:%d", ticketID)
 	var processInst *ent.ProcessInstance
 	require.Eventually(t, func() bool {
 		pi, qErr := h.client.ProcessInstance.Query().

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"itsm-backend/common"
+	"itsm-backend/common/workitemidentity"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/ent/ticket"
@@ -257,7 +258,10 @@ func (s *TicketLifecycleService) UpdateTicketStatus(ctx context.Context, ticketI
 // CancelWorkflow 取消工作流
 func (s *TicketLifecycleService) CancelWorkflow(ctx context.Context, ticketID int, tenantID int, reason string) error {
 	// 使用 BusinessKey 查找流程实例
-	businessKey := fmt.Sprintf("ticket:%d", ticketID)
+	businessKey, identityErr := workitemidentity.BusinessKey(workitemidentity.RecordClassGeneric, ticketID)
+	if identityErr != nil {
+		return identityErr
+	}
 	instance, err := s.client.ProcessInstance.Query().
 		Where(
 			processinstance.BusinessKey(businessKey),
@@ -301,7 +305,10 @@ func (s *TicketLifecycleService) SyncTicketStatusWithWorkflow(ctx context.Contex
 	}
 
 	// 使用 BusinessKey 查找流程实例
-	businessKey := fmt.Sprintf("ticket:%d", ticketID)
+	businessKey, identityErr := workitemidentity.BusinessKey(workitemidentity.RecordClassGeneric, ticketID)
+	if identityErr != nil {
+		return identityErr
+	}
 	instance, err := s.client.ProcessInstance.Query().
 		Where(
 			processinstance.BusinessKey(businessKey),

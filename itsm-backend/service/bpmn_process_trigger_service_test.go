@@ -60,7 +60,7 @@ func TestTriggerProcess_PopulatesStructuredBusinessIdentity(t *testing.T) {
 
 	trigger := NewProcessTriggerService(client, engine)
 	resp, err := trigger.TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
-		BusinessType:         dto.BusinessTypeChange,
+		BusinessType:         dto.BusinessTypeChangeRequest,
 		BusinessID:           workItem.ID,
 		ProcessDefinitionKey: "change_normal_flow",
 		Variables:            map[string]interface{}{"approval_required": false},
@@ -68,7 +68,7 @@ func TestTriggerProcess_PopulatesStructuredBusinessIdentity(t *testing.T) {
 		TenantID:             tenant.ID,
 	})
 	require.NoError(t, err)
-	require.Equal(t, fmt.Sprintf("change:%d", workItem.ID), resp.BusinessKey)
+	require.Equal(t, fmt.Sprintf("change_request:%d", workItem.ID), resp.BusinessKey)
 
 	// dto.ProcessTriggerResponse.ProcessInstanceID is the ent row's integer primary
 	// key (instance.ID), not the string BPMN engine id (instance.ProcessInstanceID) —
@@ -76,7 +76,7 @@ func TestTriggerProcess_PopulatesStructuredBusinessIdentity(t *testing.T) {
 	// (service/bpmn_process_trigger_service.go: "ProcessInstanceID: instance.ID").
 	instance, err := client.ProcessInstance.Get(ctx, resp.ProcessInstanceID)
 	require.NoError(t, err)
-	require.Equal(t, "change", instance.BusinessType)
+	require.Equal(t, "change_request", instance.BusinessType)
 	require.Equal(t, workItem.ID, instance.BusinessID)
 }
 
@@ -90,12 +90,12 @@ func TestTransactionalTriggerDefersInitialCallbackUntilCallerCommit(t *testing.T
 		SetTenantID(f.tenant.ID).
 		SaveX(f.userCtx)
 	handler := &startProcessCommitProbeHandler{
-		client: f.client, tenantID: f.tenant.ID, businessKey: fmt.Sprintf("ticket:%d", workItem.ID),
+		client: f.client, tenantID: f.tenant.ID, businessKey: fmt.Sprintf("generic:%d", workItem.ID),
 	}
 	f.engine.CallbackRegistry().RegisterHandler(handler)
 	configureStartProcessDefinition(t, f, startProcessServiceTaskXML(handler.GetTaskType()))
 	f.client.ProcessBinding.Create().
-		SetBusinessType(string(dto.BusinessTypeTicket)).
+		SetBusinessType(string(dto.BusinessTypeGeneric)).
 		SetProcessDefinitionKey(f.definition.Key).
 		SetIsDefault(true).
 		SetTenantID(f.tenant.ID).
@@ -107,7 +107,7 @@ func TestTransactionalTriggerDefersInitialCallbackUntilCallerCommit(t *testing.T
 	trigger := NewProcessTriggerService(f.client, f.engine)
 	start, err := trigger.TriggerByBusinessTypeWithClient(
 		WithTrustedBPMNTenantContext(f.userCtx, f.tenant.ID), tx.Client(),
-		dto.BusinessTypeTicket, workItem.ID, nil, strconv.Itoa(f.actor.ID), f.tenant.ID,
+		dto.BusinessTypeGeneric, workItem.ID, nil, strconv.Itoa(f.actor.ID), f.tenant.ID,
 	)
 	require.NoError(t, err)
 	require.NotNil(t, start)
@@ -134,7 +134,7 @@ func TestTriggerProcessRejectsBusinessTypeThatDisagreesWithWorkItemRecordClass(t
 	}())
 
 	_, err := NewProcessTriggerService(client, NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar())).TriggerProcess(tenantCtx, &dto.ProcessTriggerRequest{
-		BusinessType:         dto.BusinessTypeTicket,
+		BusinessType:         dto.BusinessTypeGeneric,
 		BusinessID:           workItem.ID,
 		ProcessDefinitionKey: "ticket_general_flow",
 		TriggeredBy:          "system",
@@ -180,7 +180,7 @@ func TestTriggerProcessScopeOverridesRequestTriggeredBy(t *testing.T) {
 	require.NoError(t, err)
 
 	resp, err := NewProcessTriggerService(client, NewCustomProcessEngine(client, zaptest.NewLogger(t).Sugar())).TriggerProcess(workflowCtx, &dto.ProcessTriggerRequest{
-		BusinessType:         dto.BusinessTypeChange,
+		BusinessType:         dto.BusinessTypeChangeRequest,
 		BusinessID:           workItem.ID,
 		ProcessDefinitionKey: "change_normal_flow",
 		TriggeredBy:          "system",

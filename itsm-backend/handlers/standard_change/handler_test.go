@@ -158,7 +158,7 @@ func createInstantiationIdentity(t *testing.T, client *ent.Client, suffix string
 }
 
 func configureInstantiationWorkflow(client *ent.Client, tenantID int) {
-	client.ProcessBinding.Create().SetTenantID(tenantID).SetBusinessType("change").SetIsDefault(true).
+	client.ProcessBinding.Create().SetTenantID(tenantID).SetBusinessType("change_request").SetIsDefault(true).
 		SetProcessDefinitionKey("none").SetConditions(map[string]interface{}{"no_process": true}).SaveX(context.Background())
 }
 

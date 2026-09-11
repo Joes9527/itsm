@@ -152,8 +152,8 @@ func createRequester(t *testing.T, client *ent.Client, ctx context.Context, tena
 func driveTicketFlowToHandleTask(t *testing.T, client *ent.Client, engine *CustomProcessEngine, ctx context.Context, ticketID int) (*ent.ProcessInstance, *ent.ProcessTask) {
 	t.Helper()
 
-	instance, err := engine.StartProcess(ctx, engineScopeFixtureProcessKey, fmt.Sprintf("ticket:%d", ticketID),
-		"ticket", ticketID, map[string]interface{}{
+	instance, err := engine.StartProcess(ctx, engineScopeFixtureProcessKey, fmt.Sprintf("generic:%d", ticketID),
+		"generic", ticketID, map[string]interface{}{
 			"business_id": ticketID,
 		})
 	require.NoError(t, err)

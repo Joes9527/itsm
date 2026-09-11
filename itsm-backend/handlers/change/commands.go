@@ -173,11 +173,15 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, c
 			if m.ActorID == item.OpenedByID {
 				return invalid("cannot approve own change")
 			}
-			decision, err := tx.ProcessApprovalDecision.Query().Where(processapprovaldecision.ID(cmd.ApprovalDecisionID), processapprovaldecision.TenantID(m.TenantID), processapprovaldecision.ActorID(m.ActorID), processapprovaldecision.BusinessType("change"), processapprovaldecision.BusinessID(strconv.Itoa(item.ID)), processapprovaldecision.DecisionIn("approved", "rejected")).Only(ctx)
+			decision, err := tx.ProcessApprovalDecision.Query().Where(processapprovaldecision.ID(cmd.ApprovalDecisionID), processapprovaldecision.TenantID(m.TenantID), processapprovaldecision.ActorID(m.ActorID), processapprovaldecision.BusinessType(string(dto.BusinessTypeChangeRequest)), processapprovaldecision.BusinessID(strconv.Itoa(item.ID)), processapprovaldecision.DecisionIn("approved", "rejected")).Only(ctx)
 			if err != nil {
 				return invalid("current CAB approval decision required")
 			}
-			instance, err := tx.ProcessInstance.Query().Where(processinstance.ID(decision.ProcessInstanceID), processinstance.TenantID(m.TenantID), processinstance.BusinessKey(fmt.Sprintf("change:%d", item.ID)), processinstance.BusinessID(item.ID)).Only(ctx)
+			decisionKey, identityErr := dto.WorkItemBusinessKey(dto.RecordClassChangeRequest, item.ID)
+			if identityErr != nil {
+				return empty, identityErr
+			}
+			instance, err := tx.ProcessInstance.Query().Where(processinstance.ID(decision.ProcessInstanceID), processinstance.TenantID(m.TenantID), processinstance.BusinessKey(decisionKey), processinstance.BusinessID(item.ID)).Only(ctx)
 			if err != nil || decision.CreatedAt.Before(c.AssessedAt) || instance.StartTime.Before(item.CreatedAt) {
 				return invalid("CAB decision does not match current assessment and change")
 			}
@@ -325,7 +329,11 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, c
 		}
 		startCtx := service.WithTrustedBPMNTenantContext(ctx, m.TenantID)
 		startCtx = context.WithValue(startCtx, bpmn.BPMNUserIDContextKey, m.ActorID)
-		_, err = s.processEngine.StartProcessTx(startCtx, tx, key, fmt.Sprintf("change:%d", item.ID), "change", item.ID, map[string]interface{}{"approval_required": !qualifyingStandardPolicy(c, m.TenantID), "requester_id": float64(m.ActorID), "work_item_id": item.ID, "record_class": "change_request", "version": result.Version, "status": result.Status, "change_id": c.ID})
+		businessKey, keyErr := dto.WorkItemBusinessKey(dto.RecordClassChangeRequest, item.ID)
+		if keyErr != nil {
+			return empty, keyErr
+		}
+		_, err = s.processEngine.StartProcessTx(startCtx, tx, key, businessKey, string(dto.BusinessTypeChangeRequest), item.ID, map[string]interface{}{"approval_required": !qualifyingStandardPolicy(c, m.TenantID), "requester_id": float64(m.ActorID), "work_item_id": item.ID, "record_class": "change_request", "version": result.Version, "status": result.Status, "change_id": c.ID})
 		if err != nil {
 			return empty, err
 		}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"itsm-backend/authorization"
 	"itsm-backend/common"
 	"itsm-backend/common/tenantctx"
@@ -98,7 +97,11 @@ func (s *Service) GetChangeActionView(ctx context.Context, id int, m workitemmut
 			actions["risk"] = dto.ActionPermission{Allowed: true}
 		}
 	}
-	instances, err := tx.ProcessInstance.Query().Where(processinstance.TenantID(m.TenantID), processinstance.BusinessID(current.WorkItemID), processinstance.BusinessType("change"), processinstance.BusinessKey(fmt.Sprintf("change:%d", current.WorkItemID)), processinstance.Status("running")).All(ctx)
+	key, keyErr := dto.WorkItemBusinessKey(dto.RecordClassChangeRequest, current.WorkItemID)
+	if keyErr != nil {
+		return nil, nil, nil, keyErr
+	}
+	instances, err := tx.ProcessInstance.Query().Where(processinstance.TenantID(m.TenantID), processinstance.BusinessID(current.WorkItemID), processinstance.BusinessType(string(dto.BusinessTypeChangeRequest)), processinstance.BusinessKey(key), processinstance.Status("running")).All(ctx)
 	if err != nil {
 		return nil, nil, nil, err
 	}

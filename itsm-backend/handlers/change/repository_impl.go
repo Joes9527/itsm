@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	entpredicate "itsm-backend/ent/predicate"
@@ -295,7 +296,7 @@ func (r *EntRepository) GetApprovalHistory(ctx context.Context, changeID int, te
 
 	decisions, err := r.client.ProcessApprovalDecision.Query().
 		Where(
-			processapprovaldecision.BusinessType("change"),
+			processapprovaldecision.BusinessType(string(dto.BusinessTypeChangeRequest)),
 			processapprovaldecision.BusinessID(fmt.Sprintf("%d", workItemID)),
 			processapprovaldecision.TenantID(tenantID),
 		).
@@ -351,7 +352,10 @@ func (r *EntRepository) pendingApprovalRecord(ctx context.Context, changeID, ten
 	if err != nil {
 		return nil
 	}
-	businessKey := fmt.Sprintf("change:%d", workItemID)
+	businessKey, identityErr := dto.WorkItemBusinessKey(dto.RecordClassChangeRequest, workItemID)
+	if identityErr != nil {
+		return nil
+	}
 	instance, err := r.client.ProcessInstance.Query().
 		Where(processinstance.BusinessKey(businessKey), processinstance.TenantID(tenantID), processinstance.Status("running")).
 		Only(ctx)

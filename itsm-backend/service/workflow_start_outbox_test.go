@@ -68,7 +68,7 @@ func TestWorkflowStartDeliveryReplaysAfterCommitBeforeAcknowledgement(t *testing
 	})
 	require.ErrorContains(t, worker.DispatchOnce(context.Background()), "injected receipt acknowledgement loss")
 	require.Equal(t, 1, f.client.ProcessInstance.Query().CountX(context.Background()))
-	require.Equal(t, "ticket", f.client.ProcessInstance.Query().OnlyX(context.Background()).BusinessType)
+	require.Equal(t, "generic", f.client.ProcessInstance.Query().OnlyX(context.Background()).BusinessType)
 	require.Equal(t, "publishing", f.client.OutboxEvent.GetX(context.Background(), event.ID).Status)
 	staleToken := f.client.OutboxEvent.GetX(context.Background(), event.ID).ClaimToken
 	now = now.Add(outboxEventClaimLeaseDuration + time.Second)
@@ -166,7 +166,7 @@ func TestWorkflowStartReplaysCommittedStartBeforeProvenanceUpgrade(t *testing.T)
 	ctx := WithTrustedBPMNTenantContext(context.Background(), f.tenant.ID)
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.actor.ID)
 	first, err := f.engine.StartProcessByDefinitionID(ctx, FreezeProcessDefinition(f.definition),
-		fmt.Sprintf("ticket:%d", payload.WorkItemID), "ticket", payload.WorkItemID,
+		fmt.Sprintf("generic:%d", payload.WorkItemID), "generic", payload.WorkItemID,
 		payload.Variables, payload.DedupeKey)
 	require.NoError(t, err)
 	audits := f.client.ProcessAuditLog.Query().CountX(ctx)

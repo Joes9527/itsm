@@ -37,7 +37,7 @@ func TestIntakeGenericCreationUsesConfiguredEffectsAtomically(t *testing.T) {
 	sla := f.client.SLADefinition.Create().SetTenantID(f.identity.TenantID).SetName("Critical SLA").SetResponseTime(15).SetResolutionTime(60).SaveX(ctx)
 	deployment := f.client.ProcessDeployment.Create().SetTenantID(f.identity.TenantID).SetDeploymentID("rule-workflow").SetDeploymentName("Rule workflow").SaveX(ctx)
 	definition := f.client.ProcessDefinition.Create().SetTenantID(f.identity.TenantID).SetDeploymentID(deployment.ID).SetKey("ruleflow").SetName("Rule flow").SetVersion("1").SetIsActive(true).SetIsLatest(true).SetBpmnXML([]byte("<definitions/>")).SaveX(ctx)
-	f.client.ProcessBinding.Create().SetTenantID(f.identity.TenantID).SetBusinessType("ticket").SetProcessDefinitionKey("ruleflow").SetPriority(100).SetConditions(map[string]interface{}{"priority": "critical", "status": "pending", "assignee_id": assignee.ID}).SetSLAPolicyID(strconv.Itoa(sla.ID)).SaveX(ctx)
+	f.client.ProcessBinding.Create().SetTenantID(f.identity.TenantID).SetBusinessType("generic").SetProcessDefinitionKey("ruleflow").SetPriority(100).SetConditions(map[string]interface{}{"priority": "critical", "status": "pending", "assignee_id": assignee.ID}).SetSLAPolicyID(strconv.Itoa(sla.ID)).SaveX(ctx)
 	first, err := f.app.Create(ctx, f.identity, f.command)
 	require.NoError(t, err)
 	item := f.client.Ticket.GetX(ctx, first.WorkItemID)

@@ -28,7 +28,7 @@ func TestAccessResultFulfillmentUsesProfessionalAndWorkflowOwners(t *testing.T) 
 			c.ServiceRequest.Create().SetTicketID(item.ID).SetCatalogID(cat.ID).SaveX(ctx)
 			dep := c.ProcessDeployment.Create().SetTenantID(tenant.ID).SetDeploymentID("dep").SetDeploymentName("D").SaveX(ctx)
 			def := c.ProcessDefinition.Create().SetTenantID(tenant.ID).SetDeploymentID(dep.ID).SetKey("access").SetName("Access").SetBpmnXML([]byte(`<definitions><process id="access"><userTask id="approval" taskPurpose="approval"/></process></definitions>`)).SaveX(ctx)
-			inst := c.ProcessInstance.Create().SetTenantID(tenant.ID).SetProcessDefinitionID(def.ID).SetProcessDefinitionKey("access").SetProcessInstanceID("inst").SetBusinessID(item.ID).SetBusinessType("service_request").SaveX(ctx)
+			inst := c.ProcessInstance.Create().SetTenantID(tenant.ID).SetProcessDefinitionID(def.ID).SetProcessDefinitionKey("access").SetProcessInstanceID("inst").SetBusinessID(item.ID).SetBusinessType("service_request_item").SaveX(ctx)
 			task := c.ProcessTask.Create().SetTenantID(tenant.ID).SetProcessInstanceID(inst.ID).SetProcessDefinitionKey("access").SetTaskDefinitionKey("approval").SetTaskName("Approval").SetTaskID("task").SetTaskVariables(map[string]any{"taskPurpose": "approval"}).SaveX(ctx)
 			expected := state
 			switch state {

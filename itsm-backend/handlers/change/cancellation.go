@@ -2,8 +2,8 @@ package change
 
 import (
 	"context"
-	"fmt"
 	"itsm-backend/common"
+	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/processinstance"
 	"itsm-backend/handlers/shared/workitemmutation"
@@ -19,13 +19,16 @@ func (s *Service) terminateChangeTx(ctx context.Context, tx *ent.Tx, c *ent.Chan
 		}
 		return err
 	}
-	key := fmt.Sprintf("change:%d", c.WorkItemID)
-	instances, err := tx.ProcessInstance.Query().Where(processinstance.TenantID(m.TenantID), processinstance.Or(processinstance.And(processinstance.BusinessType("change"), processinstance.BusinessID(c.WorkItemID)), processinstance.BusinessKey(key))).All(ctx)
+	key, keyErr := dto.WorkItemBusinessKey(dto.RecordClassChangeRequest, c.WorkItemID)
+	if keyErr != nil {
+		return keyErr
+	}
+	instances, err := tx.ProcessInstance.Query().Where(processinstance.TenantID(m.TenantID), processinstance.Or(processinstance.And(processinstance.BusinessType(string(dto.BusinessTypeChangeRequest)), processinstance.BusinessID(c.WorkItemID)), processinstance.BusinessKey(key))).All(ctx)
 	if err != nil {
 		return err
 	}
 	for _, instance := range instances {
-		if instance.BusinessType != "change" || instance.BusinessID != c.WorkItemID || instance.BusinessKey != key {
+		if instance.BusinessType != string(dto.BusinessTypeChangeRequest) || instance.BusinessID != c.WorkItemID || instance.BusinessKey != key {
 			return common.NewForbiddenError("Change process identity mismatch")
 		}
 		if instance.Status == "completed" || instance.Status == "terminated" {

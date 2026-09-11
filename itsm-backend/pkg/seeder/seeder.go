@@ -517,12 +517,12 @@ func getEmbeddedConfig() *SeedConfig {
 			{TargetClass: "service_request_item", Name: "API网关", Description: "API接口管理", Category: "开发", ServiceType: "custom", RequiresApproval: true, DeliveryTime: 3},
 		},
 		ProcessBindings: []ProcessBindingSeed{
-			{BusinessType: "ticket", BusinessSubType: "incident", ProcessDefinitionKey: "incident_emergency_flow", IsDefault: true},
-			{BusinessType: "ticket", BusinessSubType: "problem", ProcessDefinitionKey: "problem_management_flow", IsDefault: true},
-			{BusinessType: "ticket", BusinessSubType: "change", ProcessDefinitionKey: "change_normal_flow", IsDefault: true},
-			{BusinessType: "ticket", BusinessSubType: "service_request", ProcessDefinitionKey: "service_request_flow", IsDefault: true},
-			{BusinessType: "ticket", BusinessSubType: "improvement", ProcessDefinitionKey: "ticket_general_flow", IsDefault: true},
-			{BusinessType: "ticket", ProcessDefinitionKey: "ticket_general_flow", IsDefault: true},
+			{BusinessType: "incident", ProcessDefinitionKey: "incident_emergency_flow", IsDefault: true},
+			{BusinessType: "problem", ProcessDefinitionKey: "problem_management_flow", IsDefault: true},
+			{BusinessType: "change_request", ProcessDefinitionKey: "change_normal_flow", IsDefault: true},
+			{BusinessType: "service_request_item", ProcessDefinitionKey: "service_request_flow", IsDefault: true},
+			{BusinessType: "generic", BusinessSubType: "improvement", ProcessDefinitionKey: "ticket_general_flow", IsDefault: true},
+			{BusinessType: "generic", ProcessDefinitionKey: "ticket_general_flow", IsDefault: true},
 		},
 		TicketViews: []TicketViewSeed{
 			{Name: "我的待办工单", Desc: "分配给我的未关闭工单", IsShared: false, Columns: []string{"id", "title", "priority", "status", "assignee", "created_at"}},

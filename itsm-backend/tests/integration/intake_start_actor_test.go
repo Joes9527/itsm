@@ -46,7 +46,7 @@ func TestIntakeCreationDurableStartPreservesActorAndCanonicalIdentity(t *testing
 			requester := f.client.User.Create().SetTenantID(f.identity.TenantID).SetUsername("requested-for").SetName("Requested For").SetEmail("requested@example.test").SetPasswordHash("unused").SetRole("requester").SaveX(ctx)
 			actor := f.client.User.GetX(ctx, f.identity.ActorID)
 			f.identity.RequesterID = requester.ID
-			business := map[string]string{"generic": "ticket", "incident": "incident", "service_request_item": "service_request"}[class]
+			business := class // 绑定词表即 recordClass，与实例身份同源
 			entryDefinition(t, f, "configured", f.identity.TenantID, "")
 			command := f.command
 			command.RecordClass, command.IntakeKind, command.IdempotencyKey = class, class, "actor-creation"

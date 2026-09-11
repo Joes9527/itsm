@@ -837,7 +837,7 @@ func createProcessFixture(t *testing.T, engine *CustomProcessEngine, tenantID in
 		SetProcessDefinitionKey(def.Key).
 		SetProcessDefinitionID(def.ID).
 		SetStatus("running").
-		SetBusinessType("change").
+		SetBusinessType("change_request").
 		SetBusinessID(1).
 		SetTenantID(tenantID).
 		Save(ctx)
@@ -882,7 +882,7 @@ func TestRecordApprovalDecision_PersistsApproveReject(t *testing.T) {
 	assert.Equal(t, "approve", stored[0].Action)
 	assert.Equal(t, "approved", stored[0].Decision)
 	assert.Equal(t, "lgtm", stored[0].Comment)
-	assert.Equal(t, "change", stored[0].BusinessType)
+	assert.Equal(t, "change_request", stored[0].BusinessType)
 	assert.Equal(t, "1", stored[0].BusinessID)
 	assert.Equal(t, actorID, stored[0].ActorID)
 }
@@ -1019,8 +1019,8 @@ func TestHandleElement_ServiceTask_DispatchesByMetaDataOverAttributeGuessing(t *
 		SetProcessInstanceID("PI-svc-dispatch-test").
 		SetProcessDefinitionKey(def.Key).
 		SetProcessDefinitionID(def.ID).
-		SetBusinessKey(fmt.Sprintf("ticket:%d", tkt.ID)).
-		SetBusinessType("ticket").
+		SetBusinessKey(fmt.Sprintf("generic:%d", tkt.ID)).
+		SetBusinessType("generic").
 		SetBusinessID(tkt.ID).
 		SetStatus("running").SetTenantID(tenantID).
 		SetVariables(map[string]interface{}{}).

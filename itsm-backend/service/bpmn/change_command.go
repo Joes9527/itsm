@@ -5,6 +5,7 @@ import (
 
 	"fmt"
 	"itsm-backend/common"
+	"itsm-backend/common/workitemidentity"
 	"itsm-backend/ent"
 	"itsm-backend/ent/change"
 	"itsm-backend/ent/processapprovaldecision"
@@ -70,7 +71,11 @@ func (h *ChangeServiceTaskHandler) applyChangeLifecycle(ctx context.Context, act
 	if workItemID <= 0 {
 		return BlockedEffect(CallbackBlockHandlerContract, "Change callback WorkItem missing"), nil
 	}
-	if instance.BusinessType != "change" || instance.BusinessKey != fmt.Sprintf("change:%d", workItemID) {
+	expectedKey, identityErr := workitemidentity.BusinessKey(workitemidentity.RecordClassChangeRequest, workItemID)
+	if identityErr != nil {
+		return BlockedEffect(CallbackBlockHandlerContract, "Change callback WorkItem identity invalid"), nil
+	}
+	if instance.BusinessType != workitemidentity.RecordClassChangeRequest || instance.BusinessKey != expectedKey {
 		return BlockedEffect(CallbackBlockHandlerContract, "Change callback business type mismatch"), nil
 	}
 	current, err := h.client.Change.Query().Where(change.WorkItemID(workItemID), change.HasWorkItemWith(ticket.TenantID(tenantID), ticket.DeletedAtIsNil())).WithWorkItem().Only(ctx)

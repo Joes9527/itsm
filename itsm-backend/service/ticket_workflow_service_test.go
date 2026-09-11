@@ -936,7 +936,7 @@ func TestTicketWorkflowService_GetApprovalDecisions_ReturnsOrderedByCreatedAt(t 
 		SetProcessInstanceID("PI-ticket_general_flow-gad-1").
 		SetProcessDefinitionKey("ticket_general_flow").
 		SetProcessDefinitionID(def.ID).
-		SetBusinessKey(fmt.Sprintf("ticket:%d", tkt.ID)).
+		SetBusinessKey(fmt.Sprintf("generic:%d", tkt.ID)).
 		SetStatus("running").SetTenantID(tenant.ID).SetVariables(map[string]interface{}{}).
 		Save(ctx)
 	require.NoError(t, err)
@@ -971,7 +971,7 @@ func TestTicketWorkflowService_GetApprovalDecisions_ReturnsOrderedByCreatedAt(t 
 		SetProcessInstanceID(instance.ID).SetProcessTaskID(task.ID).
 		SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID(task.TaskID).
 		SetProcessDefinitionKey("ticket_general_flow").SetNodeKey("Activity_Approve").
-		SetBusinessType("ticket").SetBusinessID(strconv.Itoa(tkt.ID)).
+		SetBusinessType("generic").SetBusinessID(strconv.Itoa(tkt.ID)).
 		SetActorID(actor.ID).SetActorName(actor.Name).SetAction("approve").SetDecision("approved").
 		SetComment("同意").SetTenantID(tenant.ID).
 		SetCreatedAt(time.Now().Add(-time.Hour)).
@@ -982,7 +982,7 @@ func TestTicketWorkflowService_GetApprovalDecisions_ReturnsOrderedByCreatedAt(t 
 		SetProcessInstanceID(instance.ID).SetProcessTaskID(task2.ID).
 		SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID(task2.TaskID).
 		SetProcessDefinitionKey("ticket_general_flow").SetNodeKey("Activity_Approve2").
-		SetBusinessType("ticket").SetBusinessID(strconv.Itoa(tkt.ID)).
+		SetBusinessType("generic").SetBusinessID(strconv.Itoa(tkt.ID)).
 		SetActorID(actor.ID).SetActorName(actor.Name).SetAction("approve").SetDecision("approved").
 		SetComment("二级同意").SetTenantID(tenant.ID).
 		Save(ctx)
@@ -993,7 +993,7 @@ func TestTicketWorkflowService_GetApprovalDecisions_ReturnsOrderedByCreatedAt(t 
 		SetProcessInstanceID(instance.ID).SetProcessTaskID(taskOther.ID).
 		SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID(taskOther.TaskID).
 		SetProcessDefinitionKey("ticket_general_flow").SetNodeKey("Activity_Approve").
-		SetBusinessType("ticket").SetBusinessID(strconv.Itoa(tkt.ID + 999)).
+		SetBusinessType("generic").SetBusinessID(strconv.Itoa(tkt.ID + 999)).
 		SetActorID(actor.ID).SetAction("approve").SetDecision("approved").
 		SetTenantID(tenant.ID).
 		Save(ctx)
@@ -1033,7 +1033,7 @@ func TestTicketWorkflowService_GetApprovalDecisions_ReturnsOrderedByCreatedAt(t 
 		SetProcessInstanceID("PI-ticket_general_flow-gad-2").
 		SetProcessDefinitionKey("ticket_general_flow").
 		SetProcessDefinitionID(def2.ID).
-		SetBusinessKey(fmt.Sprintf("ticket:%d", tkt.ID)).
+		SetBusinessKey(fmt.Sprintf("generic:%d", tkt.ID)).
 		SetStatus("running").SetTenantID(tenant2.ID).SetVariables(map[string]interface{}{}).
 		Save(ctx)
 	require.NoError(t, err)
@@ -1050,7 +1050,7 @@ func TestTicketWorkflowService_GetApprovalDecisions_ReturnsOrderedByCreatedAt(t 
 		SetProcessInstanceID(instance2.ID).SetProcessTaskID(task2Tenant2.ID).
 		SetProcessInstanceKey(instance2.ProcessInstanceID).SetTaskID(task2Tenant2.TaskID).
 		SetProcessDefinitionKey("ticket_general_flow").SetNodeKey("Activity_Approve").
-		SetBusinessType("ticket").SetBusinessID(strconv.Itoa(tkt.ID)).
+		SetBusinessType("generic").SetBusinessID(strconv.Itoa(tkt.ID)).
 		SetActorID(actor2.ID).SetActorName(actor2.Name).SetAction("approve").SetDecision("approved").
 		SetComment("租户2的同名业务ID决策").SetTenantID(tenant2.ID).
 		Save(ctx)

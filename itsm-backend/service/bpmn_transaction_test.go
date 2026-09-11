@@ -82,3 +82,47 @@ func TestCompleteTaskTxCallerOwnsCommit(t *testing.T) {
 		})
 	}
 }
+
+// C1: 保留变量属于流程身份（设计 §15.2.2 规则 6），BPMN 表单/脚本不能覆盖。
+//
+// 两条边界行为不同且都是有意的：
+//   - 参与者表单路径（rejectReserved=false）会剥离保留键：提交能成功，但身份键绝不进入
+//     完成变量，因此覆盖不可能生效；
+//   - 实例变量端点（rejectReserved=true）显式报错，因为那不是普通表单提交。
+//
+// 内部完成管线（KAF/SSLVPN/任务完成）本身会携带 ticket_id/work_item_id/action 等键，
+// 所以参与者路径不能改成一律报错——实测那样会打断 22 条既有流程。
+func TestReservedIdentityVariablesCannotBeOverriddenByTaskForms(t *testing.T) {
+	reservedKeys := []string{"business_id", "business_type", "business_key", "tenant_id"}
+
+	stripped, err := validateAndCloneBPMNParticipantVariables(map[string]interface{}{
+		"approved":      true,
+		"business_id":   999,
+		"business_type": "tampered",
+		"business_key":  "generic:999",
+		"tenant_id":     4242,
+	}, false)
+	require.NoError(t, err)
+	require.Equal(t, true, stripped["approved"], "普通表单字段必须保留")
+	for _, reserved := range reservedKeys {
+		require.NotContains(t, stripped, reserved, "保留键 %q 不得进入流程完成变量", reserved)
+	}
+
+	for _, reserved := range reservedKeys {
+		_, err := validateAndCloneBPMNParticipantVariables(map[string]interface{}{reserved: "tampered"}, true)
+		require.Error(t, err, "实例变量端点必须拒绝保留键 %q", reserved)
+	}
+}
+
+// 普通表单变量在两条边界都按原样通过：拒绝逻辑只针对保留键，不能误伤业务字段。
+func TestOrdinaryFormVariablesSurviveValidation(t *testing.T) {
+	for _, rejectReserved := range []bool{false, true} {
+		participant, err := validateAndCloneBPMNParticipantVariables(map[string]interface{}{
+			"approved":         true,
+			"approved_comment": "looks fine",
+		}, rejectReserved)
+		require.NoError(t, err)
+		require.Equal(t, true, participant["approved"])
+		require.Equal(t, "looks fine", participant["approved_comment"])
+	}
+}

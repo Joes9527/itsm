@@ -70,7 +70,7 @@ func TestA5FixPublicationRejectsInvalidSLAConfiguration(t *testing.T) {
 				builder.SetEscalationRules(map[string]interface{}{"high": []interface{}{map[string]interface{}{"level": 1.5, "afterMinutes": 30}}})
 			}
 			sla := builder.SaveX(ctx)
-			client.ProcessBinding.Create().SetTenantID(1).SetBusinessType("ticket").SetProcessDefinitionKey("none").SetConditions(map[string]interface{}{"no_process": true}).SetSLAPolicyID(fmt.Sprint(sla.ID)).SaveX(ctx)
+			client.ProcessBinding.Create().SetTenantID(1).SetBusinessType("generic").SetProcessDefinitionKey("none").SetConditions(map[string]interface{}{"no_process": true}).SetSLAPolicyID(fmt.Sprint(sla.ID)).SaveX(ctx)
 			owner := newCatalogPublisher(NewEntRepository(client), client, zap.NewNop().Sugar(), nil)
 			draft, err := owner.Create(ctx, 1, dto.CreateServiceCatalogRequest{Name: "Calendar", Category: "IT", TargetClass: "generic"})
 			require.NoError(t, err)

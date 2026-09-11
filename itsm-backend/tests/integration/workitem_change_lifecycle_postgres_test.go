@@ -92,7 +92,7 @@ func (f *changeLifecycleFixture) authorize(t *testing.T) {
 	approver := f.client.User.Create().SetTenantID(f.tenant.ID).SetUsername("approver").SetName("approver").SetEmail("approver@example.test").SetPasswordHash("test").SetRole("super_admin").SetActive(true).SaveX(f.ctx)
 	f.actor = approver
 	instance := f.client.ProcessInstance.Query().OnlyX(f.ctx)
-	decision := f.client.ProcessApprovalDecision.Create().SetTenantID(f.tenant.ID).SetProcessInstanceID(instance.ID).SetProcessTaskID(100).SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID("cab").SetProcessDefinitionKey(instance.ProcessDefinitionKey).SetNodeKey("cab").SetBusinessType("change").SetBusinessID(fmt.Sprint(f.c.WorkItemID)).SetActorID(approver.ID).SetAction("approve").SetDecision("approved").SaveX(f.ctx)
+	decision := f.client.ProcessApprovalDecision.Create().SetTenantID(f.tenant.ID).SetProcessInstanceID(instance.ID).SetProcessTaskID(100).SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID("cab").SetProcessDefinitionKey(instance.ProcessDefinitionKey).SetNodeKey("cab").SetBusinessType("change_request").SetBusinessID(fmt.Sprint(f.c.WorkItemID)).SetActorID(approver.ID).SetAction("approve").SetDecision("approved").SaveX(f.ctx)
 	cmd := f.command("authorize", "authorize")
 	cmd.ApprovalDecisionID = decision.ID
 	f.apply(t, cmd)
@@ -327,7 +327,7 @@ func TestWorkItemChangeLifecycleAssessmentFreshness(t *testing.T) {
 	approver := f.client.User.Create().SetTenantID(f.tenant.ID).SetUsername("fresh-approver").SetName("Approver").SetEmail("fresh@example.test").SetPasswordHash("test").SetRole("super_admin").SetActive(true).SaveX(f.ctx)
 	f.actor = approver
 	instance := f.client.ProcessInstance.Query().OnlyX(f.ctx)
-	decision := f.client.ProcessApprovalDecision.Create().SetTenantID(f.tenant.ID).SetProcessInstanceID(instance.ID).SetProcessTaskID(101).SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID("fresh-cab").SetProcessDefinitionKey(instance.ProcessDefinitionKey).SetNodeKey("cab").SetBusinessType("change").SetBusinessID(fmt.Sprint(f.c.WorkItemID)).SetActorID(approver.ID).SetAction("approve").SetDecision("approved").SaveX(f.ctx)
+	decision := f.client.ProcessApprovalDecision.Create().SetTenantID(f.tenant.ID).SetProcessInstanceID(instance.ID).SetProcessTaskID(101).SetProcessInstanceKey(instance.ProcessInstanceID).SetTaskID("fresh-cab").SetProcessDefinitionKey(instance.ProcessDefinitionKey).SetNodeKey("cab").SetBusinessType("change_request").SetBusinessID(fmt.Sprint(f.c.WorkItemID)).SetActorID(approver.ID).SetAction("approve").SetDecision("approved").SaveX(f.ctx)
 	cmd := f.command("authorize", "fresh-authorization")
 	cmd.ApprovalDecisionID = decision.ID
 	f.apply(t, cmd)

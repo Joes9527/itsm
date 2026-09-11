@@ -25,7 +25,7 @@ func TestChangeLifecycleOutputUsesCanonicalClass(t *testing.T) {
 		require.Error(t, err)
 	}
 	effect.OutputVars = map[string]interface{}{"untrusted": true}
-	_, err := callbackContinuationOutputs(h, row, &ent.ProcessInstance{BusinessType: "change", BusinessID: 7}, effect)
+	_, err := callbackContinuationOutputs(h, row, &ent.ProcessInstance{BusinessType: "change_request", BusinessID: 7}, effect)
 	require.Error(t, err)
 }
 func TestLifecycleOutputRequiresActualTenantSourceClass(t *testing.T) {
@@ -42,7 +42,7 @@ func TestLifecycleOutputRequiresActualTenantSourceClass(t *testing.T) {
 
 				row.TenantID = f.tenant.ID + 999
 			}
-			instance := &ent.ProcessInstance{BusinessType: "change", BusinessID: item.ID, TenantID: row.TenantID}
+			instance := &ent.ProcessInstance{BusinessType: "change_request", BusinessID: item.ID, TenantID: row.TenantID}
 			effect := &bpmn.CallbackEffect{Status: bpmn.CallbackEffectApplied, LifecycleResult: &workitemmutation.Result{WorkItemID: item.ID, Version: 2, Status: "submitted"}}
 			row.ActorID = f.actor.ID
 			row.ExecutionKey = "class-guard"

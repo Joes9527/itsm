@@ -25,7 +25,7 @@ func verifiedAccessFixture(t *testing.T, supplied ...*ent.Client) (*sslvpnDelega
 	security := fx.client.User.Create().SetTenantID(fx.tenant.ID).SetUsername("security").SetEmail("security@example.test").SetName("Security").SetPasswordHash("unused").SetRole("security_approver").SaveX(fx.ctx)
 	deploySSLVPNDefinition(t, fx, "verified_access", fmt.Sprintf(sslvpnApprovalNodes, fx.approver.ID, security.ID), sslvpnApprovalFlows)
 	request := createSSLVPNServiceRequestForDefinition(t, fx, "verified_access")
-	instance := awaitSSLVPNInstance(t, fx, "service_request", request.TicketID)
+	instance := awaitSSLVPNInstance(t, fx, "service_request_item", request.TicketID)
 	// Real ordered BPMN decisions from different assigned actors.
 	require.NoError(t, completeSSLVPNApproval(t, fx, instance, "Approval_1"))
 	assertNoSSLVPNDelegation(t, fx, instance)

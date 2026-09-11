@@ -154,10 +154,10 @@ func seedTicketRolePermission(t *testing.T, client *ent.Client, tenantID int, ro
 func seedTicketNoProcessBinding(t *testing.T, client *ent.Client, tenantID int) {
 	t.Helper()
 	ctx := context.Background()
-	if client.ProcessBinding.Query().Where(entprocessbinding.TenantIDEQ(tenantID), entprocessbinding.BusinessTypeEQ("ticket")).ExistX(ctx) {
+	if client.ProcessBinding.Query().Where(entprocessbinding.TenantIDEQ(tenantID), entprocessbinding.BusinessTypeEQ("generic")).ExistX(ctx) {
 		return
 	}
-	client.ProcessBinding.Create().SetTenantID(tenantID).SetBusinessType("ticket").SetIsDefault(true).
+	client.ProcessBinding.Create().SetTenantID(tenantID).SetBusinessType("generic").SetIsDefault(true).
 		SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 }
 

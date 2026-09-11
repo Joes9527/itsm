@@ -100,7 +100,7 @@ func TestStartProcessPassesAuthenticatedActorScope(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodPost, "/api/v1/bpmn/process-instances", strings.NewReader(`{
-		"processDefinitionKey":"flow","businessKey":"ticket:1",
+		"processDefinitionKey":"flow","businessKey":"generic:1",
 		"variables":{"triggered_by":"999"}
 	}`))
 	ctx.Request.Header.Set("Content-Type", "application/json")
