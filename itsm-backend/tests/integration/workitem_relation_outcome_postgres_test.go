@@ -54,10 +54,14 @@ func TestWorkItemChangeOutcomeEventProducer(t *testing.T) {
 func newChangeOutcomeDeliveryWorker(t *testing.T, f *changeLifecycleFixture) *service.OutboxDeliveryWorker {
 	t.Helper()
 	logger := zap.NewNop().Sugar()
-	notifier := service.NewTicketNotificationService(f.client, logger)
-	notifier.SetNotificationPreferenceService(service.NewNotificationPreferenceService(f.client, logger))
+	grantWorkItemDeliveryPermission(t, f.client, f.ctx, f.tenant.ID, "agent", "problem")
+	clients, cfg := runtimeClients(t, f.incidentEffectsFixture)
+	_, grantErr := f.db.ExecContext(f.ctx, "GRANT SELECT ON work_item_relations,notification_preferences TO "+cfg.User)
+	require.NoError(t, grantErr)
+	notifier := service.NewTicketNotificationService(clients.Tenant, logger)
+	notifier.SetNotificationPreferenceService(service.NewNotificationPreferenceService(clients.Tenant, logger))
 	registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{
-		service.NewChangeOutcomeDeliveryHandler(f.client, notifier, logger),
+		service.NewChangeOutcomeDeliveryHandler(clients.Tenant, clients.IntakeDirectorySnapshot(), notifier, logger),
 	})
 	require.NoError(t, err)
 	worker, err := service.NewOutboxDeliveryWorker(
@@ -219,10 +223,14 @@ func TestWorkItemProblemResolveIgnoresOptionalFixDependency(t *testing.T) {
 func newProblemResolvedDeliveryWorker(t *testing.T, f *problemLifecycleFixture) *service.OutboxDeliveryWorker {
 	t.Helper()
 	logger := zap.NewNop().Sugar()
-	notifier := service.NewTicketNotificationService(f.client, logger)
-	notifier.SetNotificationPreferenceService(service.NewNotificationPreferenceService(f.client, logger))
+	grantWorkItemDeliveryPermission(t, f.client, f.ctx, f.tenant.ID, "agent", "incident")
+	clients, cfg := runtimeClients(t, f.incidentEffectsFixture)
+	_, grantErr := f.db.ExecContext(f.ctx, "GRANT SELECT ON work_item_relations,notification_preferences TO "+cfg.User)
+	require.NoError(t, grantErr)
+	notifier := service.NewTicketNotificationService(clients.Tenant, logger)
+	notifier.SetNotificationPreferenceService(service.NewNotificationPreferenceService(clients.Tenant, logger))
 	registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{
-		service.NewProblemResolvedDeliveryHandler(f.client, notifier, logger),
+		service.NewProblemResolvedDeliveryHandler(clients.Tenant, clients.IntakeDirectorySnapshot(), notifier, logger),
 	})
 	require.NoError(t, err)
 	worker, err := service.NewOutboxDeliveryWorker(

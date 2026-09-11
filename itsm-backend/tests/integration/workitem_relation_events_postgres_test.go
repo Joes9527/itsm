@@ -9,10 +9,8 @@ import (
 	"fmt"
 	"strconv"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"itsm-backend/ent"
 	"itsm-backend/ent/notification"
 	"itsm-backend/ent/outboxevent"
@@ -119,22 +117,11 @@ func TestWorkItemRelationEventsProducerRollsBackWithTransaction(t *testing.T) {
 // outbox worker dispatching through the production registry.
 func newRelationDeliveryWorker(t *testing.T, f *relationFixture) *service.OutboxDeliveryWorker {
 	t.Helper()
-	logger := zap.NewNop().Sugar()
-	notifier := service.NewTicketNotificationService(f.client, logger)
-	notifier.SetNotificationPreferenceService(service.NewNotificationPreferenceService(f.client, logger))
-	registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{
-		service.NewWorkItemRelationCreatedDeliveryHandler(f.client, notifier, logger),
-		service.NewWorkItemRelationRemovedDeliveryHandler(f.client, notifier, logger),
-	})
-	require.NoError(t, err)
-	worker, err := service.NewOutboxDeliveryWorker(
-		service.NewOutboxEventRepository(f.client),
-		service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 20 * time.Second, MaxAttempts: 3},
-		logger,
-		registry,
-	)
-	require.NoError(t, err)
-	return worker
+	// Existing delivery fixtures declare valid customer recipient roles explicitly.
+	for _, code := range []string{"agent", "admin"} {
+		grantWorkItemDeliveryPermission(t, f.client, f.ctx, f.tenant.ID, code, "problem")
+	}
+	return newRuntimeRelationDeliveryWorker(t, f)
 }
 
 func relationEventsOfType(f *relationFixture, eventType string) []*ent.OutboxEvent {

@@ -9,14 +9,11 @@ import (
 	"strconv"
 	"strings"
 
-	"itsm-backend/authorization"
+	"itsm-backend/database"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/outboxevent"
-	"itsm-backend/ent/predicate"
-	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/user"
 	"itsm-backend/ent/workitemrelation"
 
 	"go.uber.org/zap"
@@ -28,13 +25,14 @@ import (
 // observable. Both paths are idempotent through the notification DeliveryKey or the
 // decision audit key.
 type ChangeOutcomeDeliveryHandler struct {
-	client *ent.Client
-	sender ticketNotificationSender
-	logger *zap.SugaredLogger
+	client    *ent.Client
+	directory database.DirectorySnapshot
+	sender    ticketNotificationSender
+	logger    *zap.SugaredLogger
 }
 
-func NewChangeOutcomeDeliveryHandler(client *ent.Client, sender ticketNotificationSender, logger *zap.SugaredLogger) *ChangeOutcomeDeliveryHandler {
-	return &ChangeOutcomeDeliveryHandler{client: client, sender: sender, logger: logger}
+func NewChangeOutcomeDeliveryHandler(client *ent.Client, directory database.DirectorySnapshot, sender ticketNotificationSender, logger *zap.SugaredLogger) *ChangeOutcomeDeliveryHandler {
+	return &ChangeOutcomeDeliveryHandler{client: client, directory: directory, sender: sender, logger: logger}
 }
 
 func (*ChangeOutcomeDeliveryHandler) EventType() string { return ChangeOutcomeEventType }
@@ -49,6 +47,10 @@ func (h *ChangeOutcomeDeliveryHandler) Deliver(ctx context.Context, event *ent.O
 	if err != nil {
 		return err
 	}
+	if err := authorizeWorkItemDeliveryActor(ctx, h.client, h.directory, facts.ActorID, facts.TenantID, facts.WorkItemID); err != nil {
+		return err
+	}
+
 	if !RequiresProblemVerification(facts.Outcome) {
 		return h.recordVerificationDecision(ctx, facts, "outcome "+facts.Outcome+" is not a verified repair")
 	}
@@ -68,23 +70,12 @@ func (h *ChangeOutcomeDeliveryHandler) Deliver(ctx context.Context, event *ent.O
 		return h.recordVerificationDecision(ctx, facts, "no live resolved_by_change source")
 	}
 
-	// Resolve the actor in its native tenant so an MSP provider actor is not blocked.
-	actor, err := h.client.User.Query().Where(user.ID(facts.ActorID), user.TenantID(facts.ActorTenantID), user.Active(true)).Only(ctx)
-	if err != nil {
-		return blockOutboxDelivery("change outcome actor unavailable in tenant")
-	}
-	scope := authorization.WorkItemReadScope(actor.ID, authorization.EffectiveSessionRole(actor))
-	changeItem, err := h.client.Ticket.Query().Where(ticket.ID(facts.WorkItemID), ticket.TenantID(facts.TenantID), ticket.DeletedAtIsNil()).Only(ctx)
-	if err != nil {
-		return blockOutboxDelivery("change outcome work item is unavailable")
-	}
-
 	// Each source is an independent target: a failure on one must not silently drop
 	// the others, a retry must not duplicate the ones that already succeeded, and a
 	// terminally blocked target must not mask a retryable one.
 	var blockedErr, retryableErr error
 	for _, source := range sources {
-		err := h.promptSource(ctx, event, facts, source.SourceWorkItemID, changeItem, scope)
+		err := h.promptSource(ctx, event, facts, source.SourceWorkItemID)
 		if err == nil {
 			continue
 		}
@@ -102,22 +93,16 @@ func (h *ChangeOutcomeDeliveryHandler) Deliver(ctx context.Context, event *ent.O
 }
 
 // promptSource asks one resolved_by_change source to verify the successful repair.
-func (h *ChangeOutcomeDeliveryHandler) promptSource(ctx context.Context, event *ent.OutboxEvent, facts ChangeOutcomeFacts, sourceID int, changeItem *ent.Ticket, scope predicate.Ticket) error {
-	sourceItem, _, err := authorization.ResolveWorkItemIdentity(ctx, h.client, sourceID, facts.TenantID, scope)
+func (h *ChangeOutcomeDeliveryHandler) promptSource(ctx context.Context, event *ent.OutboxEvent, facts ChangeOutcomeFacts, sourceID int) error {
+	changeItem, sourceItem, recipient, err := loadWorkItemDeliveryTarget(ctx, h.client, h.directory, facts.ActorID, facts.TenantID, facts.WorkItemID, sourceID)
 	if err != nil {
-		return blockOutboxDelivery("resolved_by_change source is not readable")
+		return err
 	}
-	recipient := sourceItem.AssigneeID
-	if recipient <= 0 {
-		recipient = sourceItem.RequesterID
-	}
-	if recipient <= 0 {
-		return blockOutboxDelivery("resolved_by_change source has no eligible recipient")
-	}
+
 	result, err := h.sender.SendNotification(ctx, sourceID, &dto.SendTicketNotificationRequest{
 		UserIDs:     []int{recipient},
 		EventType:   ChangeOutcomeEventType,
-		Content:     fmt.Sprintf("变更 %s 已成功实施，请验证关联问题 %s 的修复结果。", changeItem.TicketNumber, sourceItem.TicketNumber),
+		Content:     changeOutcomeNotificationContent(changeItem, sourceItem),
 		DeliveryKey: fmt.Sprintf("%s:%d:verify", event.EventID, sourceID),
 		InAppOnly:   true,
 	}, facts.TenantID)
@@ -188,7 +173,7 @@ func (h *ChangeOutcomeDeliveryHandler) validate(ctx context.Context, event *ent.
 		Where(outboxevent.ID(event.ID), outboxevent.TenantID(facts.TenantID), outboxevent.EventID(event.EventID), outboxevent.EventType(event.EventType)).
 		Only(ctx)
 	if err != nil {
-		return facts, err
+		return facts, classifyWorkItemDeliveryError(err)
 	}
 	var durable ChangeOutcomeFacts
 	if json.Unmarshal(stored.Payload, &durable) != nil || durable != facts {
@@ -205,7 +190,7 @@ func (h *ChangeOutcomeDeliveryHandler) validate(ctx context.Context, event *ent.
 			auditlog.Path(strconv.Itoa(facts.WorkItemID)),
 		).Only(ctx)
 	if err != nil {
-		return facts, err
+		return facts, classifyWorkItemDeliveryError(err)
 	}
 	var receiptFacts struct {
 		ChangeID int    `json:"changeId"`
@@ -216,4 +201,8 @@ func (h *ChangeOutcomeDeliveryHandler) validate(ctx context.Context, event *ent.
 		return facts, blockOutboxDelivery("change outcome event lacks immutable command provenance")
 	}
 	return facts, nil
+}
+
+func changeOutcomeNotificationContent(changeItem, sourceItem *ent.Ticket) string {
+	return fmt.Sprintf("变更 %s 已成功实施，请验证关联问题 %s 的修复结果。", changeItem.TicketNumber, sourceItem.TicketNumber)
 }

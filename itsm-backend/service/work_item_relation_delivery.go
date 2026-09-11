@@ -8,13 +8,11 @@ import (
 	"strconv"
 	"strings"
 
-	"itsm-backend/authorization"
+	"itsm-backend/database"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/outboxevent"
-	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/user"
 
 	"go.uber.org/zap"
 )
@@ -35,16 +33,17 @@ type ticketNotificationSender interface {
 type WorkItemRelationDeliveryHandler struct {
 	eventType string
 	client    *ent.Client
+	directory database.DirectorySnapshot
 	sender    ticketNotificationSender
 	logger    *zap.SugaredLogger
 }
 
-func NewWorkItemRelationCreatedDeliveryHandler(client *ent.Client, sender ticketNotificationSender, logger *zap.SugaredLogger) *WorkItemRelationDeliveryHandler {
-	return &WorkItemRelationDeliveryHandler{eventType: RelationCreatedEventType, client: client, sender: sender, logger: logger}
+func NewWorkItemRelationCreatedDeliveryHandler(client *ent.Client, directory database.DirectorySnapshot, sender ticketNotificationSender, logger *zap.SugaredLogger) *WorkItemRelationDeliveryHandler {
+	return &WorkItemRelationDeliveryHandler{eventType: RelationCreatedEventType, client: client, directory: directory, sender: sender, logger: logger}
 }
 
-func NewWorkItemRelationRemovedDeliveryHandler(client *ent.Client, sender ticketNotificationSender, logger *zap.SugaredLogger) *WorkItemRelationDeliveryHandler {
-	return &WorkItemRelationDeliveryHandler{eventType: RelationRemovedEventType, client: client, sender: sender, logger: logger}
+func NewWorkItemRelationRemovedDeliveryHandler(client *ent.Client, directory database.DirectorySnapshot, sender ticketNotificationSender, logger *zap.SugaredLogger) *WorkItemRelationDeliveryHandler {
+	return &WorkItemRelationDeliveryHandler{eventType: RelationRemovedEventType, client: client, directory: directory, sender: sender, logger: logger}
 }
 
 func (h *WorkItemRelationDeliveryHandler) EventType() string { return h.eventType }
@@ -68,12 +67,12 @@ func relationAction(removed bool) string {
 	return "created"
 }
 
-func relationNotificationContent(facts RelationFacts, counterpart *ent.Ticket) string {
+func relationNotificationContent(facts RelationFacts, mutation *ent.Ticket) string {
 	verb := "建立"
 	if facts.Removed {
 		verb = "解除"
 	}
-	return fmt.Sprintf("工作项 %s 与当前记录的关联（%s）已%s。", counterpart.TicketNumber, facts.Type, verb)
+	return fmt.Sprintf("工作项 %s 与当前记录的关联（%s）已%s。", mutation.TicketNumber, facts.Type, verb)
 }
 
 func (h *WorkItemRelationDeliveryHandler) Deliver(ctx context.Context, event *ent.OutboxEvent) error {
@@ -82,46 +81,19 @@ func (h *WorkItemRelationDeliveryHandler) Deliver(ctx context.Context, event *en
 		return err
 	}
 
-	// The actor is resolved in its native tenant: an MSP provider actor acts in a
-	// customer tenant, so filtering by the event tenant would block every MSP event.
-	actor, err := h.client.User.Query().Where(user.ID(facts.ActorID), user.TenantID(facts.ActorTenantID), user.Active(true)).Only(ctx)
-	if err != nil {
-		return blockOutboxDelivery("relation actor unavailable in tenant")
-	}
-
 	counterpartID, err := relationCounterpart(facts)
 	if err != nil {
 		return err
 	}
-
-	// Both endpoints must still be readable by the current actor under the existing
-	// row scope; a revoked or hidden endpoint blocks visibly rather than notifying
-	// about a record the actor can no longer see.
-	scope := authorization.WorkItemReadScope(actor.ID, authorization.EffectiveSessionRole(actor))
-	for _, endpointID := range []int{facts.SourceID, facts.TargetID} {
-		if _, _, err := authorization.ResolveWorkItemIdentity(ctx, h.client, endpointID, facts.TenantID, scope); err != nil {
-			return blockOutboxDelivery("relation endpoint is no longer readable")
-		}
-	}
-
-	counterpart, err := h.client.Ticket.Query().
-		Where(ticket.ID(counterpartID), ticket.TenantID(facts.TenantID), ticket.DeletedAtIsNil()).
-		Only(ctx)
+	mutation, _, recipient, err := loadWorkItemDeliveryTarget(ctx, h.client, h.directory, facts.ActorID, facts.TenantID, facts.MutationWorkItemID, counterpartID)
 	if err != nil {
-		return blockOutboxDelivery("relation counterpart is unavailable")
-	}
-	recipient := counterpart.AssigneeID
-	if recipient <= 0 {
-		recipient = counterpart.RequesterID
-	}
-	if recipient <= 0 {
-		return blockOutboxDelivery("relation counterpart has no eligible recipient")
+		return err
 	}
 
 	result, err := h.sender.SendNotification(ctx, counterpartID, &dto.SendTicketNotificationRequest{
 		UserIDs:     []int{recipient},
 		EventType:   h.eventType,
-		Content:     relationNotificationContent(facts, counterpart),
+		Content:     relationNotificationContent(facts, mutation),
 		DeliveryKey: fmt.Sprintf("%s:%d:%s", event.EventID, counterpartID, relationAction(facts.Removed)),
 		InAppOnly:   true,
 	}, facts.TenantID)
@@ -178,7 +150,7 @@ func (h *WorkItemRelationDeliveryHandler) validate(ctx context.Context, event *e
 		Where(outboxevent.ID(event.ID), outboxevent.TenantID(facts.TenantID), outboxevent.EventID(event.EventID), outboxevent.EventType(event.EventType)).
 		Only(ctx)
 	if err != nil {
-		return facts, err
+		return facts, classifyWorkItemDeliveryError(err)
 	}
 	var durable RelationFacts
 	if json.Unmarshal(stored.Payload, &durable) != nil || durable != facts {
@@ -196,7 +168,7 @@ func (h *WorkItemRelationDeliveryHandler) validate(ctx context.Context, event *e
 			auditlog.Path(strconv.Itoa(facts.MutationWorkItemID)),
 		).Only(ctx)
 	if err != nil {
-		return facts, err
+		return facts, classifyWorkItemDeliveryError(err)
 	}
 	var receiptFacts RelationFacts
 	if receipt.RequestBody == nil || json.Unmarshal([]byte(*receipt.RequestBody), &receiptFacts) != nil || receiptFacts != facts {

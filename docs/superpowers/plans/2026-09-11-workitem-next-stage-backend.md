@@ -183,14 +183,14 @@ HTTP断言覆盖仅workaround时永久方案保持、resolution显式空且solut
 **Interfaces**
 消费者构造器显式接收已有 `database.DirectorySnapshot`；WorkItem 读写仍使用 Tenant client。新增共用函数 `authorizeWorkItemDelivery(ctx context.Context, tx *ent.Tx, directory database.DirectorySnapshot, actorID, tenantID int, endpointIDs []int) (*ent.User, error)`：查询并校验当前 actor 和所有端点，返回当前 actor 或保留 cause 的错误；接收人资格仍在发送前按现有通知授权规则检查。按 `ResolveLifecycleActor`、`RequireCurrentPermission`、`ResolveWorkItemIdentity` 的真实签名组合，不把管理员 client 作为业务 client 注入。
 
-- [ ] 将原 MSP 对照测试的 handler/notifier 换成实际 runtime.Tenant 注入，保留 fixture admin 仅做建数与独立断言；运行 `go test -tags=integration_postgres ./tests/integration -run '^TestWorkItemRelationEvents' -count=1 -v`，记录合法提供方人员被 blocked 的旧反例。
-- [ ] 给身份查询注入暂时错误/超时，证明不得被归类 forbidden/blocked。当前 ResolveLifecycleActor 最后会将查询错误统一映射 forbidden；修改为 NotFound、inactive、确定性 tenant denial 才拒绝，基础设施错误保留 cause。修改同时回归三域命令，防止权限放宽。
-- [ ] 三消费者在一致快照内使用窄 directory 身份查询，检查当前 tenant/MSP allocation、域读取权限、行可见性和目标接收资格；客户业务记录查询始终 tenant-scoped。receiver/actor 撤权的测试必须与临时错误测试分开。
-- [ ] 已证实不可见/无权限→blocked；基础设施失败→返回带 cause 的 error，由现有 worker MarkRetry；未知错误不伪造确定性拒绝。审计事件结构无效仍 blocked。
-- [ ] 正文取得 MutationWorkItemID 对应记录用于描述，发送目标仍是 counterpart。为纯正文函数新增直接断言：正文包含变化端编号，不把收件端编号当变化端；覆盖新增/解除关系及结果事件。
-- [ ] 对相同 DeliveryKey 重放验证通知数量不增；对发后回执失败验证既有通知幂等，不建立新去重表。
-- [ ] Run `go test ./authorization -count=1`、`go test ./service -run 'Test.*(Relation|Delivery|Outbox)' -count=1 -v`、上述实际 RLS 集成测试；运行三域受影响授权测试。
-- [ ] 提交：`fix(workitem): authorize relation delivery under runtime RLS`。
+- [x] 将原 MSP 对照测试的 handler/notifier 换成实际 runtime.Tenant 注入，保留 fixture admin 仅做建数与独立断言；运行 `go test -tags=integration_postgres ./tests/integration -run '^TestWorkItemRelationEvents' -count=1 -v`，记录合法提供方人员被 blocked 的旧反例。
+- [x] 给身份查询注入暂时错误/超时，证明不得被归类 forbidden/blocked。当前 ResolveLifecycleActor 最后会将查询错误统一映射 forbidden；修改为 NotFound、inactive、确定性 tenant denial 才拒绝，基础设施错误保留 cause。修改同时回归三域命令，防止权限放宽。
+- [x] 三消费者在一致快照内使用窄 directory 身份查询，检查当前 tenant/MSP allocation、域读取权限、行可见性和目标接收资格；客户业务记录查询始终 tenant-scoped。receiver/actor 撤权的测试必须与临时错误测试分开。
+- [x] 已证实不可见/无权限→blocked；基础设施失败→返回带 cause 的 error，由现有 worker MarkRetry；未知错误不伪造确定性拒绝。审计事件结构无效仍 blocked。
+- [x] 正文取得 MutationWorkItemID 对应记录用于描述，发送目标仍是 counterpart。为纯正文函数新增直接断言：正文包含变化端编号，不把收件端编号当变化端；覆盖新增/解除关系及结果事件。
+- [x] 对相同 DeliveryKey 重放验证通知数量不增；对发后回执失败验证既有通知幂等，不建立新去重表。
+- [x] Run `go test ./authorization -count=1`、`go test ./service -run 'Test.*(Relation|Delivery|Outbox)' -count=1 -v`、上述实际 RLS 集成测试；运行三域受影响授权测试。
+- [x] 提交：`fix(workitem): authorize relation delivery under runtime RLS`。
 
 ## 后端交付检查
 
@@ -224,3 +224,12 @@ HTTP断言覆盖仅workaround时永久方案保持、resolution显式空且solut
 证据保存在实施工作树已忽略的 `.superpowers/sdd/workitem-next-stage/`。测试期间的一次全 service 运行命中升级通知 fixture 配置中间态，修正后全包通过；定向 Jest 首次误用全仓库覆盖门槛，38 测试本身通过，随后以 coverage=false 重跑通过。未推送、合并或部署。
 
 F3 必须继续处理 SLA 违规的周期归属：SLAViolation 只有 ticket_id、违规时间和解决标记；现有重开周期不清理旧违规。本批只修正 WorkItem 归属，不能宣称周期隔离完成。B2/B3 尚须把同一通用写入口保护扩展至 Change/Problem。
+
+
+## B5 执行记录（2026-09-11）
+
+三个通知消费者复用窄 DirectorySnapshot 获取当前身份，业务记录、权限和通知继续使用 Tenant client。确定性撤权进入 blocked；数据库/超时保留错误原因，沿用现有 worker 重试。通知描述变化端编号，接收关联端；现有 DeliveryKey 保持唯一去重来源。
+
+真实 runtime PostgreSQL 角色确认 super=false、bypass=false。旧关系事件、Change 结果、Problem 解决通知和新授权套件合跑通过（50.856s）；新增 15 个场景最终通过（21.689s），覆盖角色/读取权限/租户分配/接收者撤权、目录和端点暂时失败恢复、通知发送后回执失败重放仅一条。所有自建 schema 和角色清理 remaining=0。authorization 全包、关系/Delivery/Outbox 定向及三域授权回归通过，bootstrap 编译通过。
+
+独立审阅确认实际断言通知行、接收人、正文及重放数量，无新增确定性 P1/P2。授权快照与通知事务仍按现有设计分开；未扩大跨租户接收人资格。证据为 `.superpowers/sdd/workitem-next-stage/workitem-b5-pg-green.log`，实际共享环境未操作。

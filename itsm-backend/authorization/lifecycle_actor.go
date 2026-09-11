@@ -48,7 +48,13 @@ func ResolveLifecycleActor(ctx context.Context, tx *ent.Tx, snapshots database.D
 		return nil, common.NewInternalError("close command directory snapshot", errors.Join(err, closeErr))
 	}
 	if err != nil {
-		return nil, common.NewForbiddenError("command actor is not authorized for selected tenant")
+		if ent.IsNotFound(err) || errors.Is(err, ErrTenantAccessDenied) || errors.Is(err, ErrTenantInactive) || errors.Is(err, ErrTenantExpired) {
+			return nil, common.NewForbiddenError("command actor is not authorized for selected tenant")
+		}
+		if app, ok := common.AsAppError(err); ok && app.Code == common.ErrCodeForbidden {
+			return nil, err
+		}
+		return nil, common.NewInternalError("command actor authorization unavailable", err)
 	}
 	return actor, nil
 }

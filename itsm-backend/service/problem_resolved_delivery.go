@@ -9,14 +9,11 @@ import (
 	"strconv"
 	"strings"
 
-	"itsm-backend/authorization"
+	"itsm-backend/database"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/outboxevent"
-	"itsm-backend/ent/predicate"
-	"itsm-backend/ent/ticket"
-	"itsm-backend/ent/user"
 	"itsm-backend/ent/workitemrelation"
 
 	"go.uber.org/zap"
@@ -27,13 +24,14 @@ import (
 // restoring or closing Incidents stays with the Incident domain, so a resolution
 // can only notify.
 type ProblemResolvedDeliveryHandler struct {
-	client *ent.Client
-	sender ticketNotificationSender
-	logger *zap.SugaredLogger
+	client    *ent.Client
+	directory database.DirectorySnapshot
+	sender    ticketNotificationSender
+	logger    *zap.SugaredLogger
 }
 
-func NewProblemResolvedDeliveryHandler(client *ent.Client, sender ticketNotificationSender, logger *zap.SugaredLogger) *ProblemResolvedDeliveryHandler {
-	return &ProblemResolvedDeliveryHandler{client: client, sender: sender, logger: logger}
+func NewProblemResolvedDeliveryHandler(client *ent.Client, directory database.DirectorySnapshot, sender ticketNotificationSender, logger *zap.SugaredLogger) *ProblemResolvedDeliveryHandler {
+	return &ProblemResolvedDeliveryHandler{client: client, directory: directory, sender: sender, logger: logger}
 }
 
 func (*ProblemResolvedDeliveryHandler) EventType() string { return ProblemResolvedEventType }
@@ -47,6 +45,10 @@ func (h *ProblemResolvedDeliveryHandler) Deliver(ctx context.Context, event *ent
 	if err != nil {
 		return err
 	}
+	if err := authorizeWorkItemDeliveryActor(ctx, h.client, h.directory, facts.ActorID, facts.TenantID, facts.WorkItemID); err != nil {
+		return err
+	}
+
 	sources, err := h.client.WorkItemRelation.Query().
 		Where(
 			workitemrelation.TenantID(facts.TenantID),
@@ -62,22 +64,11 @@ func (h *ProblemResolvedDeliveryHandler) Deliver(ctx context.Context, event *ent
 		return h.recordNoIncidentDecision(ctx, facts)
 	}
 
-	// Resolve the actor in its native tenant so an MSP provider actor is not blocked.
-	actor, err := h.client.User.Query().Where(user.ID(facts.ActorID), user.TenantID(facts.ActorTenantID), user.Active(true)).Only(ctx)
-	if err != nil {
-		return blockOutboxDelivery("problem resolved actor unavailable in tenant")
-	}
-	scope := authorization.WorkItemReadScope(actor.ID, authorization.EffectiveSessionRole(actor))
-	problemItem, err := h.client.Ticket.Query().Where(ticket.ID(facts.WorkItemID), ticket.TenantID(facts.TenantID), ticket.DeletedAtIsNil()).Only(ctx)
-	if err != nil {
-		return blockOutboxDelivery("problem resolved work item is unavailable")
-	}
-
 	// A blocked target must not mask a retryable one, and a retry must not duplicate
 	// the Incidents that were already notified.
 	var blockedErr, retryableErr error
 	for _, source := range sources {
-		err := h.notifyIncidentHandler(ctx, event, facts, source.SourceWorkItemID, problemItem, scope)
+		err := h.notifyIncidentHandler(ctx, event, facts, source.SourceWorkItemID)
 		if err == nil {
 			continue
 		}
@@ -94,22 +85,16 @@ func (h *ProblemResolvedDeliveryHandler) Deliver(ctx context.Context, event *ent
 	return preferRetryableError(blockedErr, retryableErr)
 }
 
-func (h *ProblemResolvedDeliveryHandler) notifyIncidentHandler(ctx context.Context, event *ent.OutboxEvent, facts ProblemResolvedFacts, incidentID int, problemItem *ent.Ticket, scope predicate.Ticket) error {
-	incidentItem, _, err := authorization.ResolveWorkItemIdentity(ctx, h.client, incidentID, facts.TenantID, scope)
+func (h *ProblemResolvedDeliveryHandler) notifyIncidentHandler(ctx context.Context, event *ent.OutboxEvent, facts ProblemResolvedFacts, incidentID int) error {
+	problemItem, incidentItem, recipient, err := loadWorkItemDeliveryTarget(ctx, h.client, h.directory, facts.ActorID, facts.TenantID, facts.WorkItemID, incidentID)
 	if err != nil {
-		return blockOutboxDelivery("investigating incident is not readable")
+		return err
 	}
-	recipient := incidentItem.AssigneeID
-	if recipient <= 0 {
-		recipient = incidentItem.RequesterID
-	}
-	if recipient <= 0 {
-		return blockOutboxDelivery("investigating incident has no eligible recipient")
-	}
+
 	result, err := h.sender.SendNotification(ctx, incidentID, &dto.SendTicketNotificationRequest{
 		UserIDs:     []int{recipient},
 		EventType:   ProblemResolvedEventType,
-		Content:     fmt.Sprintf("关联问题 %s 已解决，请确认事件 %s 的恢复结果。", problemItem.TicketNumber, incidentItem.TicketNumber),
+		Content:     problemResolvedNotificationContent(problemItem, incidentItem),
 		DeliveryKey: fmt.Sprintf("%s:%d:resolved", event.EventID, incidentID),
 		InAppOnly:   true,
 	}, facts.TenantID)
@@ -180,7 +165,7 @@ func (h *ProblemResolvedDeliveryHandler) validate(ctx context.Context, event *en
 		Where(outboxevent.ID(event.ID), outboxevent.TenantID(facts.TenantID), outboxevent.EventID(event.EventID), outboxevent.EventType(event.EventType)).
 		Only(ctx)
 	if err != nil {
-		return facts, err
+		return facts, classifyWorkItemDeliveryError(err)
 	}
 	var durable ProblemResolvedFacts
 	if json.Unmarshal(stored.Payload, &durable) != nil || durable != facts {
@@ -197,7 +182,7 @@ func (h *ProblemResolvedDeliveryHandler) validate(ctx context.Context, event *en
 			auditlog.Path(strconv.Itoa(facts.WorkItemID)),
 		).Only(ctx)
 	if err != nil {
-		return facts, err
+		return facts, classifyWorkItemDeliveryError(err)
 	}
 	var receiptFacts struct {
 		ProblemID int `json:"problemId"`
@@ -206,4 +191,8 @@ func (h *ProblemResolvedDeliveryHandler) validate(ctx context.Context, event *en
 		return facts, blockOutboxDelivery("problem resolved event lacks immutable command provenance")
 	}
 	return facts, nil
+}
+
+func problemResolvedNotificationContent(problemItem, incidentItem *ent.Ticket) string {
+	return fmt.Sprintf("关联问题 %s 已解决，请确认事件 %s 的恢复结果。", problemItem.TicketNumber, incidentItem.TicketNumber)
 }

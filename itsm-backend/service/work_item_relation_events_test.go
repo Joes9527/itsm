@@ -25,10 +25,10 @@ func TestChangeOutcomeRequestsVerification(t *testing.T) {
 // silently undelivered event.
 func TestRelationAndOutcomeEventTypesAreRegistered(t *testing.T) {
 	registry, err := NewOutboxEventTypeRegistry([]OutboxDeliveryHandler{
-		NewWorkItemRelationCreatedDeliveryHandler(nil, nil, nil),
-		NewWorkItemRelationRemovedDeliveryHandler(nil, nil, nil),
-		NewChangeOutcomeDeliveryHandler(nil, nil, nil),
-		NewProblemResolvedDeliveryHandler(nil, nil, nil),
+		NewWorkItemRelationCreatedDeliveryHandler(nil, nil, nil, nil),
+		NewWorkItemRelationRemovedDeliveryHandler(nil, nil, nil, nil),
+		NewChangeOutcomeDeliveryHandler(nil, nil, nil, nil),
+		NewProblemResolvedDeliveryHandler(nil, nil, nil, nil),
 	})
 	if err != nil {
 		t.Fatalf("register relation delivery handlers: %v", err)
