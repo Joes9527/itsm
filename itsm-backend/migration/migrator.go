@@ -34,15 +34,20 @@ type Migrator struct {
 	db             *sql.DB
 	logger         *zap.SugaredLogger
 	releaseVersion string
+	controlConfig  MigrationControlConfig
 }
 
 // NewMigrator creates a new Migrator instance
-func NewMigrator(db *sql.DB, logger *zap.SugaredLogger) *Migrator {
+func NewMigrator(db *sql.DB, logger *zap.SugaredLogger, controlConfig ...MigrationControlConfig) *Migrator {
 	releaseVersion := os.Getenv("ITSM_RELEASE_VERSION")
 	if releaseVersion == "" {
 		releaseVersion = "unversioned"
 	}
-	return &Migrator{db: db, logger: logger, releaseVersion: releaseVersion}
+	m := &Migrator{db: db, logger: logger, releaseVersion: releaseVersion}
+	if len(controlConfig) == 1 {
+		m.controlConfig = controlConfig[0]
+	}
+	return m
 }
 
 // EnsureMigrationsTable creates the migrations tracking table if it doesn't exist
@@ -512,7 +517,12 @@ func inspectMigrationTarget(ctx context.Context, q migrationQuery) ([]Migration,
 		return nil, err
 	}
 	for _, a := range applied {
-		if a.Version == WorkItemPrepareVersion || a.Version == WorkItemRetireVersion {
+		if a.Version == WorkItemPrepareVersion {
+			if err := verifyPreparationReceipt(ctx, q, schema, *a.EvidenceDigest); err != nil {
+				return nil, err
+			}
+		}
+		if a.Version == WorkItemRetireVersion {
 			return nil, fmt.Errorf("controlled stage %s has no executable structure verifier registered", a.Version)
 		}
 	}
