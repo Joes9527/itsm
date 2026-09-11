@@ -290,6 +290,8 @@ docker exec <container> wget -qO- http://localhost:8090/api/v1/health
 
 ### Intake identity exchange configuration
 
+Requester reference reads use `GET /api/v1/intake/work-item-references` under `intake:workitem:read`. Supply an exact `number` for one readable reference, or omit it for the current requester's unfinished page; pass only the returned `cursor` to continue. Numbers and cursors cannot be combined. `INTAKE_REFERENCE_PAGE_SIZE` (also supported with the `ITSM_` prefix) must be a positive integer and defaults to 50. Links use the configured `Server.FrontendURL` HTTP(S) origin. Unknown lifecycle owners or states fail closed.
+
 A6 routes use assertion v2 only. Set `INTAKE_IDENTITY_CONFIG_FILE` (or the existing `ITSM_` environment prefix) to an owner-only regular JSON file (mode 0600/0400). The file contains `providers` keyed by registered provider, each with a distinct `secret`, allowed `channels` and allowed `purposes` (`create`, `read`); optional `maxAge`, `futureSkew`, `tokenTTL` are whole-second durations. Defaults are 60s, 5s and 5m. Max age is 1s–5m, future skew 0–30s, token TTL 1s–15m. Secrets must differ from JWT/webhook/automation credentials and stay server-side. The application rejects reuse of its loaded JWT or KAF webhook secret. Missing configuration disables exchange; unavailable Redis rejects exchange instead of falling back to memory. Use the deployment's explicit Redis host/port/database.
 
 Create/read exchange share one atomic nonce namespace. Lost exchange responses require a fresh nonce and assertion; retain the business submission key. Only the corresponding Intake routes accept the resulting token. Every request checks current mapping version/active state and current session/target-tenant permissions. Mapping management uses native access-token tenant routes with `intake_identity_mapping:read`/`write`, and PATCH requires `version` plus `active`; immutable provider/workspace/subject/user identity is replaced through a new mapping rather than changed in place. Manage mappings with exact external subjects; email matching is unsupported.
@@ -312,3 +314,22 @@ Ticket and Problem creation also accept shared `cti` IDs. New frontend callers o
 Before deploying this contract, stop Problem/RCA writers, back up the affected database, and execute [`20260909_problem_rca_authority.sql`](../itsm-backend/migrations/20260909_problem_rca_authority.sql) as the schema owner with the explicit application `search_path` and `psql -v ON_ERROR_STOP=1`. The migration bootstraps missing RCA metadata, rejects conflicting nonempty bodies, duplicate analyses and invalid ownership, backfills an empty Problem root from the old RCA body, then removes the duplicate column. Review conflicts manually; do not choose a value automatically. Grant the configured runtime role ordinary CRUD rights on the new metadata table and usage/select on its sequence, retaining tenant RLS. Do not run global auto-migration or seeding. Deploy the matching API binary with the tenant-scoped investigation service. Rolling back an existing-table migration requires restoring the backup and previous API together.
 
 Creation requester controls use the actual target resource's `create_on_behalf` permission plus directory read permission. Reading users, an admin-like role name or an MSP role alone does not authorize delegation. Same-tenant users without delegation submit for themselves; a cross-tenant actor must have an authorized customer requester. A rejected confirmed attempt remains immutable: change the form and explicitly confirm a new attempt when correcting its requester.
+
+### Unified support handoff acceptance
+
+KAF reference inspection uses authenticated requester read identity for exact-number
+lookup and paginated unfinished lists. Display number, current status, and frontend link;
+selection does not grant task execution or authorize ticket mutation. ITSM lifecycle owners
+remain authoritative when a reference closes or access changes.
+
+The intake idempotency index is tenant + actor + channel + operation + key. The same
+mapped actor across KAF workspaces replays the same immutable command/key; different
+actors and tenants remain isolated, and a changed command conflicts. Workspace identity
+mapping remains mandatory and cannot be replaced with client-supplied requester identity.
+
+Use isolated runtime/database manifests for live acceptance. Verify read-purpose tokens
+cannot create, current role permissions apply to every receipt/replay, exact/list isolation,
+professional extension ownership, and configured process/manual task persistence. A manual
+Catalog fixture may have unknown provider fulfillment projection; do not report it as
+access granted or completed. Ordinary association is read-only; a delegated failure uses
+only the original task's allowed action and original run/idempotency identity.

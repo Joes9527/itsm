@@ -33,6 +33,7 @@ type Config struct {
 	KAFOutbox      KAFOutboxConfig
 	OutboxDelivery OutboxDeliveryConfig
 	IntakeIdentity IntakeIdentityConfig
+	IntakeRead     IntakeReadConfig
 }
 
 // KAFOutboxConfig controls reliable delivery of BPMN delegation events to KAF.
@@ -343,6 +344,11 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 	config.IntakeIdentity = identityConfig
+	intakeReadConfig, err := loadIntakeReadConfig(outboxEnv)
+	if err != nil {
+		return nil, err
+	}
+	config.IntakeRead = intakeReadConfig
 	outboxDeliveryConfig, err := loadOutboxDeliveryConfig(outboxEnv)
 	if err != nil {
 		return nil, err
