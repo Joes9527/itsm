@@ -460,6 +460,7 @@ var RegisteredMigrations = []Migration{
 	{Version: "034_problem_investigation_completion", Description: "Problem investigation schema and verified resolution evidence"},
 	{Version: "035_change_professional_evidence", Description: "Change outcome, review and standard policy evidence"},
 	{Version: "036_intake_frozen_workflow_context", Description: "Freeze workflow definition content and prepared variables in intake snapshots"},
+	{Version: CandidateExecutionScopeVersion, Description: "Register new candidate WorkItems in bounded deployment execution scopes"},
 	{Version: WorkItemRetireVersion, Description: "Retire WorkItem legacy structures with controlled evidence"},
 }
 
@@ -473,6 +474,8 @@ func PostSchemaMigrations() []Migration {
 // GetMigrationSQL returns the SQL for a specific migration
 func GetMigrationSQL(version string) string {
 	switch version {
+	case CandidateExecutionScopeVersion:
+		return candidateExecutionScopeSQL
 	case "002_add_notification_preferences":
 		return `
 CREATE TABLE IF NOT EXISTS user_notification_preferences (

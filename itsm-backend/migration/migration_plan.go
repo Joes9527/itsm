@@ -64,7 +64,14 @@ func ControlledMigrationCatalog() []MigrationDefinition {
 			add(Migration{Version: WorkItemPrepareVersion, Description: "Prepare WorkItem structure with controlled evidence"}, StagePrepare)
 		}
 	}
-	add(Migration{Version: WorkItemRetireVersion, Description: "Retire WorkItem legacy structures with controlled evidence"}, StageRetire)
+	add(known[CandidateExecutionScopeVersion], StageOrdinary)
+	// Candidate infrastructure does not change the immutable retirement contract:
+	// old valid R receipts must remain upgradeable without a future 039 receipt.
+	catalog = append(catalog, MigrationDefinition{
+		Migration: Migration{Version: WorkItemRetireVersion, Description: "Retire WorkItem legacy structures with controlled evidence"},
+		Stage:     StageRetire,
+		Requires:  []string{"036_intake_frozen_workflow_context", WorkItemPrepareVersion},
+	})
 	return catalog
 }
 
@@ -162,6 +169,9 @@ func validateControlledLedger(catalog []MigrationDefinition, applied []Migration
 		seen[m.Version] = true
 	}
 	if !seen[WorkItemPrepareVersion] {
+		if seen[CandidateExecutionScopeVersion] {
+			return nil, fmt.Errorf("candidate execution scope requires preparation")
+		}
 		// Never derive this order from the new active/legacy classification: removing
 		// 022/027 must not legalize an invalid historical ledger.
 		if err := requireMigrationPrefix(frozenMigrationVersions(), seen); err != nil {
