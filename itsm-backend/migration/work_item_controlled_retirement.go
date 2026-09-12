@@ -539,6 +539,19 @@ func verifyHistoricalRetirementInventory(ctx context.Context, q migrationQuery, 
 	if !versions["022_drop_professional_extension_shared_fields"] && !versions["027_work_item_identity_field_retirement"] {
 		return nil
 	}
+
+	// Historical deletion is a name/namespace assertion, not permission to
+	// reinterpret a reappeared relation of another kind as a new baseline.
+	if versions["022_drop_professional_extension_shared_fields"] {
+		var reappeared string
+		err := q.QueryRowContext(ctx, `SELECT coalesce(min(relname::text),) FROM pg_class WHERE relnamespace=$1::regnamespace AND relname=ANY($2::text[])`, schema, pq.Array(retirementTables)).Scan(&reappeared)
+		if err != nil {
+			return err
+		}
+		if reappeared != "" {
+			return fmt.Errorf("historical retirement receipt 022_drop_professional_extension_shared_fields contradicts retained structure: relation %s", reappeared)
+		}
+	}
 	objects, err := retirementObjects(ctx, q, schema)
 	if err != nil {
 		return err

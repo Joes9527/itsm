@@ -49,7 +49,7 @@ func TestFinalFixPostRetirementCanonicalReconciliation(t *testing.T) {
 }
 
 func TestFinalFixHistoricalRetirementInventory(t *testing.T) {
-	for _, mutation := range []string{"", "CREATE TABLE workflows(id bigint)", "CREATE TABLE workflow_tasks(id bigint)", "CREATE TABLE workflow_instances(id bigint)", "CREATE TABLE workflow_versions(id bigint)", "CREATE TABLE ticket_approvals(id bigint)", "ALTER TABLE releases ADD COLUMN requires_approval boolean", "ALTER TABLE ticket_categories ADD COLUMN workflow_id bigint", "ALTER TABLE incidents ADD COLUMN assignee_id bigint", "ALTER TABLE incidents ADD COLUMN reporter_id bigint", "ALTER TABLE incidents ADD COLUMN deleted_at timestamptz", "ALTER TABLE changes ADD COLUMN related_tickets jsonb"} {
+	for _, mutation := range []string{"", "CREATE TABLE workflows(id bigint)", "CREATE TABLE workflows(id bigint) PARTITION BY HASH(id)", "CREATE VIEW workflows AS SELECT 1 AS id", "CREATE TABLE workflow_tasks(id bigint)", "CREATE TABLE workflow_instances(id bigint)", "CREATE TABLE workflow_versions(id bigint)", "CREATE TABLE ticket_approvals(id bigint)", "ALTER TABLE releases ADD COLUMN requires_approval boolean", "ALTER TABLE ticket_categories ADD COLUMN workflow_id bigint", "ALTER TABLE incidents ADD COLUMN assignee_id bigint", "ALTER TABLE incidents ADD COLUMN reporter_id bigint", "ALTER TABLE incidents ADD COLUMN deleted_at timestamptz", "ALTER TABLE changes ADD COLUMN related_tickets jsonb"} {
 		t.Run(mutation, func(t *testing.T) {
 			db, ctx := preparationFixture(t)
 			_, err := db.Exec("CREATE TABLE releases(id bigint, requires_approval boolean); CREATE TABLE ticket_categories(id bigint,workflow_id bigint)")
