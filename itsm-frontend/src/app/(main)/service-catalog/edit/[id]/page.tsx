@@ -68,7 +68,7 @@ export default function EditServicePage() {
   }
 
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="p-[16px] md:p-[24px] max-w-2xl">
       <Card title={t('service.editService')}>
         <Form form={form} layout="vertical" onFinish={handleSubmit}>
           <Form.Item label={t('service.name')} name="name" rules={[{ required: true }]}>

@@ -55,7 +55,7 @@ export default function RelationshipsPage() {
   const selectedCi = cis.find(item => item.id === selectedCiId) || null;
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-[16px] md:p-[24px]">
       <ManagementPageHeader
         title="关系管理"
         description="围绕 CI 的依赖、托管、影响和包含关系进行建模，这是 Service Graph 的骨架。"

@@ -245,11 +245,11 @@ const AIChat: React.FC = () => {
                   description={
                     <div
                       style={{
-                        backgroundColor: item.role === 'user' ? '#f0f2f5' : '#f6ffed',
+                        backgroundColor: item.role === 'user' ? 'var(--color-selected-bg)' : 'var(--color-bg-tertiary)',
                         padding: '12px 14px',
                         borderRadius: 10,
-                        color: '#000',
-                        border: '1px solid #e6f4ff',
+                        color: 'var(--color-text-primary)',
+                        border: '1px solid var(--color-border)',
                       }}
                     >
                       {item.content ? (

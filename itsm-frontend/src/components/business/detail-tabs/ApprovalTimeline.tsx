@@ -244,7 +244,7 @@ export const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({
       >
         {currentAction === 'delegate' && (
           <div className="mb-3">
-            <div className="mb-1 text-sm text-gray-600">委派给：</div>
+            <div className="mb-1 text-sm text-muted">委派给：</div>
             <Select
               showSearch
               value={delegateToUserId}
@@ -261,7 +261,7 @@ export const ApprovalTimeline: React.FC<ApprovalTimelineProps> = ({
             />
           </div>
         )}
-        <div className="mb-1 text-sm text-gray-600">审批意见（必填）：</div>
+        <div className="mb-1 text-sm text-muted">审批意见（必填）：</div>
         <TextArea
           rows={4}
           value={comment}

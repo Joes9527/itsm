@@ -1,4 +1,8 @@
 import React from 'react';
+import { randomUUID } from 'node:crypto';
+
+// jsdom omits this browser API; preserve real operation IDs in the edit contract.
+Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: randomUUID });
 import { render, screen, fireEvent, waitFor } from '@/lib/test-utils';
 import userEvent from '@testing-library/user-event';
 import IncidentEdit from '../incidents/[id]/edit/page';
@@ -14,7 +18,7 @@ jest.mock('@/lib/i18n', () => ({useI18n:()=>({t:(key:string)=>key})}));
 jest.mock('@/lib/api/ticket-category-api', () => ({TicketCategoryApi:{getCategoryTree:jest.fn().mockResolvedValue([{id:81,name:'原分类',isActive:true,parentId:null},{id:82,name:'新分类',isActive:true,parentId:null}])}}));
 jest.mock('@/lib/api/incident-api', () => ({IncidentAPI:{getIncident:jest.fn(),updateIncident:jest.fn().mockResolvedValue({})}}));
 jest.mock('@/lib/api/problem-api', () => ({ProblemApi:{getProblem:jest.fn(),updateProblem:jest.fn().mockResolvedValue({})}}));
-const record={id:7,title:'现有记录标题',description:'现有记录的详细说明内容',categoryId:81,category:'重复显示名称',priority:'medium',severity:'medium',status:'new'};
+const record={id:7,version:5,title:'现有记录标题',description:'现有记录的详细说明内容',categoryId:81,category:'重复显示名称',priority:'medium',severity:'medium',status:'new'};
 beforeEach(()=>{
  jest.clearAllMocks(); mockId = '7';
  useAuthStore.setState({isAuthenticated:true,user:{id:1,tenantId:2} as never,currentTenant:{id:2} as never});
@@ -31,6 +35,9 @@ for(const [name,Page,save] of [['incident',IncidentEdit,IncidentAPI.updateIncide
   expect(payload).not.toHaveProperty('categoryId');
   expect(payload).not.toHaveProperty('category');
   expect(payload).not.toHaveProperty('classification');
+  if (name === 'problem') {
+    expect(payload).toMatchObject({ version: 5, operationId: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i) });
+  }
  });
  it(`${name} sends selected ID rather than display name`,async()=>{
   render(<Page/>);

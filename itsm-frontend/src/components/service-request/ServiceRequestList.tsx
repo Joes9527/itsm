@@ -64,7 +64,6 @@ const ServiceRequestList: React.FC = () => {
 
   useEffect(() => {
     loadData();
-
   }, [query]);
 
   // 表格列定义
@@ -81,8 +80,12 @@ const ServiceRequestList: React.FC = () => {
       dataIndex: 'ticketTitle',
       render: (text: string, record: ServiceRequest) => (
         <div className="flex flex-col">
-          <span className="font-medium text-gray-900">{text || `请求 #${record.id}`}</span>
-          <span className="text-xs text-gray-500">{record.catalog?.name || '未知服务'}</span>
+          <span className="font-medium text-foreground">
+            {text || `请求 #${record.id}`}
+          </span>
+          <span className="text-[12px] text-muted">
+            {record.catalog?.name || '未知服务'}
+          </span>
         </div>
       ),
     },
@@ -110,7 +113,7 @@ const ServiceRequestList: React.FC = () => {
             <Button
               type="text"
               icon={<Eye />}
-              className="text-blue-600 hover:text-blue-800 hover:bg-blue-50"
+              className="text-foreground hover:!text-foreground hover:!bg-raised"
               onClick={() => router.push(`/tickets/${record.ticketId}`)}
             />
           </Tooltip>
@@ -120,9 +123,9 @@ const ServiceRequestList: React.FC = () => {
   ];
 
   return (
-    <Card className="rounded-lg shadow-sm border border-gray-200">
+    <Card className="rounded-[8px] shadow-none border border-border">
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-base font-medium text-gray-900">我的请求</h3>
+        <h3 className="text-[15px] font-semibold text-foreground">我的请求</h3>
         <Button icon={<RefreshCw />} onClick={loadData}>
           刷新
         </Button>

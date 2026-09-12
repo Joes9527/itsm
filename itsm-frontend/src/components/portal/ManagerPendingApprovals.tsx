@@ -177,10 +177,10 @@ export const ManagerPendingApprovals: React.FC = () => {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <ShieldCheck size={18} className="text-amber-600" />
-          <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 m-0">
+          <h3 className="text-[15px] font-semibold text-foreground m-0">
             待我审批 ({approvals.length})
           </h3>
-          <span className="text-xs bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-semibold px-2 py-0.5 rounded-full">
+          <span className="text-[12px] bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-semibold px-2 py-0.5 rounded-full">
             部门负责人审批链
           </span>
         </div>
@@ -190,32 +190,32 @@ export const ManagerPendingApprovals: React.FC = () => {
         {approvals.map((item) => (
           <div
             key={item.id}
-            className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-amber-200/80 dark:border-amber-900/50 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+            className="p-5 rounded-[8px] bg-surface border border-amber-200/80 dark:border-amber-900/50 shadow-none transition-all flex flex-col justify-between"
           >
             <div>
               <div className="flex items-start justify-between gap-2">
-                <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                <span className="text-[13px] font-semibold text-foreground">
                   {item.title}
                 </span>
-                <span className="text-xs text-slate-400 whitespace-nowrap flex items-center gap-1">
+                <span className="text-[12px] text-muted whitespace-nowrap flex items-center gap-1">
                   <Clock size={12} /> {formatCreatedAt(item.createdAt)}
                 </span>
               </div>
-              <div className="flex items-center gap-2 mt-2 text-xs text-slate-500">
-                <span className="font-medium text-slate-700 dark:text-slate-300">申请人：{item.requesterName}</span>
+              <div className="flex items-center gap-2 mt-2 text-[12px] text-muted">
+                <span className="font-medium text-foreground">申请人：{item.requesterName}</span>
                 <span>•</span>
                 <span>{item.department}</span>
                 <span>•</span>
                 <Tag color="orange" className="mr-0 text-[10px]">{item.serviceType}</Tag>
               </div>
               {item.description && (
-                <div className="mt-3 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-xs text-slate-600 dark:text-slate-300">
+                <div className="mt-3 p-2.5 rounded-[8px] bg-raised text-[12px] text-muted">
                   {item.description}
                 </div>
               )}
             </div>
 
-            <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center justify-end gap-2 mt-4 pt-3 border-t border-border">
               <Button
                 size="small"
                 danger
@@ -233,7 +233,7 @@ export const ManagerPendingApprovals: React.FC = () => {
                 type="primary"
                 loading={actionLoading[item.id]}
                 onClick={() => handleDecision(item.id, 'approve')}
-                className="bg-emerald-600 hover:bg-emerald-500 border-none"
+                className=""
                 icon={<CheckCircle size={14} />}
               >
                 同意批准

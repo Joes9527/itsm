@@ -123,7 +123,9 @@ export default function TicketTemplateDetailPage() {
         </Button>
         <div className="mt-4 flex items-start justify-between">
           <div>
-            <Title level={3} style={{ marginBottom: 4 }}>{template.name}</Title>
+            <Title level={3} style={{ fontSize: 24, fontWeight: 600, marginBottom: 4 }}>
+              {template.name}
+            </Title>
             <Paragraph type="secondary" style={{ marginBottom: 0 }}>
               {template.description || '暂无描述'}
             </Paragraph>
@@ -152,11 +154,14 @@ export default function TicketTemplateDetailPage() {
         {formEntries.length > 0 ? (
           <Descriptions bordered column={1}>
             {formEntries.map(([key, value]) => (
-              <Descriptions.Item key={key} label={key}>{renderValue(value)}</Descriptions.Item>
+              <Descriptions.Item key={key} label={key}>
+                {renderValue(value)}
+              </Descriptions.Item>
             ))}
           </Descriptions>
         ) : template.fields?.length ? (
           <Table
+            scroll={{ x: 'max-content' }}
             rowKey={(_, index) => String(index)}
             pagination={false}
             dataSource={template.fields}

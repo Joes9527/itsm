@@ -86,7 +86,7 @@ export default function WorkflowVersionsPage() {
         title: '版本',
         dataIndex: 'version',
         key: 'version',
-        render: (value: string) => <span className="font-mono text-sm">v{value}</span>,
+        render: (value: string) => <span className="font-mono text-[13px]">v{value}</span>,
       },
       {
         title: '名称',
@@ -255,7 +255,7 @@ export default function WorkflowVersionsPage() {
         }
       />
 
-      <Card className="rounded-xl shadow-sm">
+      <Card className="rounded-[8px] shadow-none">
         <LoadingEmptyError
           state={loading ? 'loading' : versions.length === 0 ? 'empty' : 'success'}
           loadingText="正在加载工作流版本..."
@@ -303,7 +303,7 @@ export default function WorkflowVersionsPage() {
         width={760}
         destroyOnHidden
       >
-        <pre className="max-h-[420px] overflow-auto rounded bg-slate-950 p-4 text-xs text-slate-100">
+        <pre className="max-h-[420px] overflow-auto rounded bg-raised p-[16px] text-[12px] text-foreground">
           {comparisonText}
         </pre>
       </Modal>

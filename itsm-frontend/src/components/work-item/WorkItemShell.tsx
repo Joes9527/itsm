@@ -42,7 +42,7 @@ export function WorkItemShell({
     <WorkItemProvider value={{ workItem, actions, sla, onActionDispatch }}>
       <Space orientation="vertical" style={{ width: '100%' }} size="large">
         <Card>
-          <Descriptions column={3} title={`${workItem.number} · ${workItem.title}`}>
+          <Descriptions column={{ xs: 1, sm: 2, md: 3 }} styles={{ title: { fontSize: 24, fontWeight: 600, overflowWrap: 'anywhere' } }} title={`${workItem.number} · ${workItem.title}`}>
             <Descriptions.Item label="状态">{workItem.status}</Descriptions.Item>
             <Descriptions.Item label="优先级">{workItem.priority}</Descriptions.Item>
             <Descriptions.Item label="处理人">{workItem.assigneeId ?? '未分配'}</Descriptions.Item>

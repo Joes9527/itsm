@@ -29,7 +29,6 @@ import {
   Select,
   Alert,
 } from 'antd';
-import { antdTheme } from '@/lib/antd-theme';
 import { AuthService } from '@/lib/services/auth-service';
 import { logger } from '@/lib/env';
 
@@ -100,15 +99,15 @@ export default function RegisterPage() {
   const strengthLabels = ['非常弱', '弱', '一般', '中等', '强', '非常强'];
 
   return (
-    <ConfigProvider theme={antdTheme}>
-      <div className="min-h-screen flex items-center justify-center p-5 bg-gradient-to-br from-gray-50 to-blue-50">
+    <ConfigProvider>
+      <div className="min-h-screen flex items-center justify-center p-5 bg-page">
         <div className="w-full max-w-[480px]">
-          <Card className="rounded-xl shadow-xl border-none" styles={{ body: { padding: '40px' } }}>
+          <Card className="rounded-[8px] shadow-none border-none" styles={{ body: { padding: '24px' } }}>
             <div className="text-center mb-6">
-              <Title level={2} className="!mb-2 !text-gray-900 !text-2xl">
+              <Title level={2} className="!mb-2 !text-foreground !text-[24px]">
                 {t('auth.register.title')}
               </Title>
-              <Text className="!text-gray-500 !text-sm">{t('auth.register.subtitle')}</Text>
+              <Text className="!text-muted !text-[13px]">{t('auth.register.subtitle')}</Text>
             </div>
 
             {error && (
@@ -133,7 +132,7 @@ export default function RegisterPage() {
                     ]}
                   >
                     <Input
-                      prefix={<User size={14} className="text-gray-400" />}
+                      prefix={<User size={14} className="text-muted" />}
                       placeholder={t('auth.register.usernamePlaceholder')}
                       disabled={loading}
                     />
@@ -148,7 +147,7 @@ export default function RegisterPage() {
                     ]}
                   >
                     <Input
-                      prefix={<Mail size={14} className="text-gray-400" />}
+                      prefix={<Mail size={14} className="text-muted" />}
                       placeholder={t('auth.register.emailPlaceholder')}
                       disabled={loading}
                     />
@@ -163,7 +162,7 @@ export default function RegisterPage() {
                     ]}
                   >
                     <Input.Password
-                      prefix={<Lock size={14} className="text-gray-400" />}
+                      prefix={<Lock size={14} className="text-muted" />}
                       placeholder={t('auth.register.passwordPlaceholder')}
                       disabled={loading}
                     />
@@ -186,7 +185,7 @@ export default function RegisterPage() {
                     ]}
                   >
                     <Input.Password
-                      prefix={<Lock size={14} className="text-gray-400" />}
+                      prefix={<Lock size={14} className="text-muted" />}
                       placeholder={t('auth.register.confirmPasswordPlaceholder')}
                       disabled={loading}
                     />
@@ -205,15 +204,15 @@ export default function RegisterPage() {
                 </Form>
 
                 <Divider className="my-4">
-                  <Text className="text-gray-400 text-xs">{t('auth.login.or')}</Text>
+                  <Text className="text-muted text-[12px]">{t('auth.login.or')}</Text>
                 </Divider>
 
                 <div className="text-center">
-                  <Text className="text-gray-400 text-xs">
+                  <Text className="text-muted text-[12px]">
                     {t('auth.register.hasAccount')}{' '}
                     <Button
                       type="link"
-                      className="p-0 h-auto text-xs"
+                      className="p-0 h-auto text-[12px]"
                       onClick={() => router.push('/login')}
                     >
                       {t('auth.register.loginNow')}
@@ -232,7 +231,7 @@ export default function RegisterPage() {
                     rules={[{ required: true, message: t('auth.register.nameRequired') }]}
                   >
                     <Input
-                      prefix={<User size={14} className="text-gray-400" />}
+                      prefix={<User size={14} className="text-muted" />}
                       placeholder={t('auth.register.namePlaceholder')}
                       disabled={loading}
                     />
@@ -244,7 +243,7 @@ export default function RegisterPage() {
                     rules={[{ required: true, message: t('auth.register.phoneRequired') }]}
                   >
                     <Input
-                      prefix={<Phone size={14} className="text-gray-400" />}
+                      prefix={<Phone size={14} className="text-muted" />}
                       placeholder={t('auth.register.phonePlaceholder')}
                       disabled={loading}
                     />
@@ -252,7 +251,7 @@ export default function RegisterPage() {
 
                   <Form.Item name="company" label={t('auth.register.companyLabel')}>
                     <Input
-                      prefix={<Building2 size={14} className="text-gray-400" />}
+                      prefix={<Building2 size={14} className="text-muted" />}
                       placeholder={t('auth.register.companyPlaceholder')}
                       disabled={loading}
                     />

@@ -125,7 +125,7 @@ const CreateChangePage: React.FC = () => {
   };
 
   return (
-    <div className="p-6 md:p-10 bg-gray-50 min-h-full">
+    <div className="min-h-full bg-page p-[16px] text-[13px] text-foreground md:p-[24px]">
       <div className="mb-6">
         <Button
           type="link"

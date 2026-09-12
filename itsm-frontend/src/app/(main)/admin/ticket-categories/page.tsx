@@ -316,7 +316,7 @@ const TicketCategoryManagementPage = () => {
       render: (text: string, record: TicketCategory) => (
         <div>
           <div className="font-medium">{text}</div>
-          <div className="text-sm text-gray-500">{record.code}</div>
+          <div className="text-[13px] text-muted">{record.code}</div>
         </div>
       ),
     },
@@ -344,7 +344,7 @@ const TicketCategoryManagementPage = () => {
       width: 90,
       render: (order: number) => (
         <div className="flex items-center gap-1">
-          <GripVertical size={14} className="text-gray-400" />
+          <GripVertical size={14} className="text-muted" />
           <span>{order}</span>
         </div>
       ),
@@ -377,7 +377,11 @@ const TicketCategoryManagementPage = () => {
       render: (record: TicketCategory) => (
         <Space>
           <Tooltip title="查看详情">
-            <Button size="small" icon={<Eye size={14} />} onClick={() => handleViewCategory(record)} />
+            <Button
+              size="small"
+              icon={<Eye size={14} />}
+              onClick={() => handleViewCategory(record)}
+            />
           </Tooltip>
           <Tooltip title="编辑">
             <Button
@@ -413,7 +417,7 @@ const TicketCategoryManagementPage = () => {
       <div className="flex items-center justify-between w-full">
         <div className="flex items-center gap-2">
           <span className="font-medium">{category.name}</span>
-          <Text type="secondary" className="text-xs">
+          <Text type="secondary" className="text-[12px]">
             {category.code}
           </Text>
           {!category.isActive && <Tag color="default">已停用</Tag>}
@@ -450,7 +454,7 @@ const TicketCategoryManagementPage = () => {
       <Card>
         <div className="flex justify-between items-center">
           <div>
-            <Title level={4} className="mb-1">
+            <Title level={2} className="mb-1">
               工单分类管理
             </Title>
             <Text type="secondary">管理和配置工单分类体系，支持树形结构和工作流绑定</Text>
@@ -575,7 +579,13 @@ const TicketCategoryManagementPage = () => {
           </Form.Item>
 
           <Form.Item name="departmentId" label="所属部门">
-            <Select placeholder="请选择部门（可选）" allowClear showSearch optionFilterProp="children" options={departments.map(d => ({ value: d.id, label: d.name }))} />
+            <Select
+              placeholder="请选择部门（可选）"
+              allowClear
+              showSearch
+              optionFilterProp="children"
+              options={departments.map(d => ({ value: d.id, label: d.name }))}
+            />
           </Form.Item>
 
           <Row gutter={16}>

@@ -54,7 +54,7 @@ const CreateProblemPageContent = () => {
 
 
   return (
-    <div className="p-10 bg-gray-50 min-h-full">
+    <div className="min-h-full bg-page p-[16px] text-[13px] text-foreground md:p-[24px]">
       <header className="mb-8">
         <button
           onClick={() => router.back()}
@@ -64,8 +64,8 @@ const CreateProblemPageContent = () => {
           <ArrowLeft className="w-5 h-5 mr-2" />
           返回问题列表
         </button>
-        <h2 className="text-4xl font-bold text-gray-800">新建问题</h2>
-        <p className="text-gray-500 mt-1">识别、分析和解决IT服务的根本原因</p>
+        <h2 className="text-[24px] font-semibold text-foreground">新建问题</h2>
+        <p className="mt-1 text-[12px] text-muted">识别、分析和解决IT服务的根本原因</p>
       </header>
 
       <CreationAttempts creation={creation} />

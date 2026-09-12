@@ -105,7 +105,7 @@ export const LoadingSkeleton: React.FC<LoadingSkeletonProps> = ({
     <div className={className}>
       <div className="space-y-3">
         {Array.from({ length: rows }).map((_, index) => (
-          <div key={index} className="flex items-center space-x-3 p-3 border rounded-lg">
+          <div key={index} className="flex items-center space-x-3 p-3 border rounded-[8px]">
             <Skeleton.Avatar active size="large" />
             <div className="flex-1 space-y-2">
               <Skeleton.Input active size="small" style={{ width: '40%', height: 16 }} />
@@ -125,7 +125,7 @@ export const LoadingSkeleton: React.FC<LoadingSkeletonProps> = ({
         <Skeleton.Input active size="large" style={{ width: '50%', height: 24 }} />
 
         {/* 图表区域 */}
-        <div className="bg-gray-50 rounded-lg p-6">
+        <div className="bg-surface rounded-[8px] p-[16px]">
           <div className="flex items-end justify-between h-48">
             {Array.from({ length: 7 }).map((_, index) => (
               <div key={index} className="flex flex-col items-center space-y-2">

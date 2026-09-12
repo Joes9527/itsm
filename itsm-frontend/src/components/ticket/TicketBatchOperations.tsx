@@ -364,10 +364,10 @@ const TicketBatchOperations: React.FC<TicketBatchOperationsProps> = ({
   return (
     <div className="ticket-batch-operations">
       {/* 批量操作工具栏 */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <CheckCircle className="text-blue-600 text-lg" />
+      <div className="bg-selected border border-border rounded-[8px] p-4 mb-4">
+        <div className="flex flex-wrap gap-3 items-center justify-between">
+          <div className="flex flex-wrap gap-3 items-center">
+            <CheckCircle className="text-blue-600 text-[15px]" />
             <Text strong>已选择 {selectedTickets.length} 个工单</Text>
             <Button size="small" onClick={onSelectionClear}>
               清空选择

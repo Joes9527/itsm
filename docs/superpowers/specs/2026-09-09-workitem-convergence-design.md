@@ -1,6 +1,6 @@
 # WorkItem 现有实现收敛设计
 
-> 状态：accepted（维护者确认审查修订并要求进入 writing-plans；代码尚未实施）
+> 状态：accepted（实现与隔离验证已推进；当前进度见 2026-09-11 下一阶段实施计划及受控退役计划，目标环境交付未完成）
 > 日期：2026-09-09
 > 负责人：项目维护者；设计整理：Codex
 > 范围：Incident、Problem、Change，以及它们使用的 WorkItem、关系、SLA、BPMN 和审计能力

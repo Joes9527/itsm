@@ -130,11 +130,11 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       const { error, errorInfo } = this.state;
 
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="min-h-screen flex items-center justify-center bg-page p-[16px]">
           <Card className="max-w-2xl w-full">
             <Result
               status="error"
-              title="页面出现错误"
+              title={<span className="text-[24px] font-semibold">页面出现错误</span>}
               subTitle="抱歉，页面遇到了一个意外错误。我们已经记录了这个问题，请尝试刷新页面或联系技术支持。"
               extra={[
                 <Button
@@ -161,9 +161,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             />
 
             {this.props.showDetails && error && (
-              <div className="mt-6 p-4 bg-red-50 rounded-lg">
-                <h4 className="text-sm font-medium text-red-800 mb-2">错误详情</h4>
-                <div className="text-xs text-red-700 space-y-2">
+              <div className="mt-6 p-[16px] bg-raised rounded-[8px]">
+                <h4 className="text-[13px] font-medium text-error-500 mb-2">错误详情</h4>
+                <div className="text-[12px] text-foreground space-y-2">
                   <div>
                     <strong>错误信息:</strong> {error.message}
                   </div>
@@ -173,7 +173,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                   {error.stack && (
                     <div>
                       <strong>堆栈信息:</strong>
-                      <pre className="mt-1 p-2 bg-red-100 rounded text-xs overflow-auto max-h-32">
+                      <pre className="mt-1 p-2 bg-surface rounded text-[12px] overflow-auto max-h-32">
                         {error.stack}
                       </pre>
                     </div>
@@ -181,7 +181,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                   {errorInfo?.componentStack && (
                     <div>
                       <strong>组件堆栈:</strong>
-                      <pre className="mt-1 p-2 bg-red-100 rounded text-xs overflow-auto max-h-32">
+                      <pre className="mt-1 p-2 bg-surface rounded text-[12px] overflow-auto max-h-32">
                         {errorInfo.componentStack}
                       </pre>
                     </div>
@@ -198,7 +198,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 }
 
- 
 (ErrorBoundary as unknown as React.ComponentType<ErrorBoundaryProps>).displayName = 'ErrorBoundary';
 
 // 高阶组件版本

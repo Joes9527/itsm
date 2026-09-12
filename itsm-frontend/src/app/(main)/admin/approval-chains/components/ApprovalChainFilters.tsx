@@ -57,7 +57,6 @@ export function ApprovalChainFilters({
   );
 
   const handleDateRangeChange = useCallback(
-     
     (dates: any, dateStrings: [string, string]) => {
       const newFilters = {
         ...localFilters,
@@ -87,7 +86,7 @@ export function ApprovalChainFilters({
       <Row gutter={[16, 16]} align="middle">
         <Col xs={24} sm={12} md={8} lg={6}>
           <div className="mb-2">
-            <span className="text-sm font-medium text-gray-700">搜索名称</span>
+            <span className="text-[13px] font-medium text-foreground">搜索名称</span>
           </div>
           <Search
             placeholder="搜索审批链名称..."
@@ -100,7 +99,7 @@ export function ApprovalChainFilters({
 
         <Col xs={24} sm={12} md={8} lg={6}>
           <div className="mb-2">
-            <span className="text-sm font-medium text-gray-700">状态</span>
+            <span className="text-[13px] font-medium text-foreground">状态</span>
           </div>
           <Select
             mode="multiple"
@@ -118,7 +117,7 @@ export function ApprovalChainFilters({
 
         <Col xs={24} sm={12} md={8} lg={6}>
           <div className="mb-2">
-            <span className="text-sm font-medium text-gray-700">创建时间</span>
+            <span className="text-[13px] font-medium text-foreground">创建时间</span>
           </div>
           <RangePicker
             placeholder={['开始日期', '结束日期']}
@@ -134,7 +133,7 @@ export function ApprovalChainFilters({
 
         <Col xs={24} sm={12} md={8} lg={6}>
           <div className="mb-2">
-            <span className="text-sm font-medium text-gray-700">操作</span>
+            <span className="text-[13px] font-medium text-foreground">操作</span>
           </div>
           <Space>
             {onCreateChain && (

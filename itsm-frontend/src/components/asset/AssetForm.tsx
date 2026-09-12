@@ -23,7 +23,7 @@ import { ArrowLeft, Save } from 'lucide-react';
 
 import type { Asset, AssetRequest } from '@/lib/api/asset-api';
 import { AssetApi } from '@/lib/api/asset-api';
-import type { Dayjs } from 'dayjs';
+import dayjs, { type Dayjs } from 'dayjs';
 
 const { TextArea } = Input;
 
@@ -90,7 +90,12 @@ const AssetForm: React.FC = () => {
     try {
       const data = await AssetApi.getAsset(Number(id));
       setDetail(data);
-      form.setFieldsValue(data);
+      form.setFieldsValue({
+        ...data,
+        purchaseDate: data.purchaseDate ? dayjs(data.purchaseDate) : undefined,
+        warrantyExpiry: data.warrantyExpiry ? dayjs(data.warrantyExpiry) : undefined,
+        supportExpiry: data.supportExpiry ? dayjs(data.supportExpiry) : undefined,
+      });
     } catch (error) {
       message.error('加载资产详情失败');
     } finally {

@@ -387,7 +387,7 @@ export default function ChangesPage() {
                     );
                   })}
                   {dayChanges.length > 3 && (
-                    <span className="text-xs text-gray-500">另有 {dayChanges.length - 3} 项</span>
+                    <span className="text-xs text-muted">另有 {dayChanges.length - 3} 项</span>
                   )}
                 </div>
               );
@@ -409,13 +409,13 @@ export default function ChangesPage() {
                   <button
                     key={change.id}
                     type="button"
-                    className="flex w-full items-center gap-3 rounded-md border border-gray-200 px-3 py-2 text-left transition-colors hover:bg-gray-50"
+                    className="flex w-full items-center gap-3 rounded-md border border-border px-3 py-2 text-left transition-colors hover:bg-raised"
                     onClick={() => router.push(`/changes/${change.id}`)}
                   >
                     <Tag color={status.color}>{status.label}</Tag>
-                    <span className="shrink-0 text-sm text-gray-500">{change.changeNumber}</span>
+                    <span className="shrink-0 text-sm text-muted">{change.changeNumber}</span>
                     <span className="min-w-0 flex-1 truncate">{change.title}</span>
-                    <span className="shrink-0 text-sm text-gray-500">{change.assigneeName || '未分配'}</span>
+                    <span className="shrink-0 text-sm text-muted">{change.assigneeName || '未分配'}</span>
                   </button>
                 );
               })}

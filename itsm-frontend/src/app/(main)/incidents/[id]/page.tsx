@@ -130,7 +130,7 @@ export default function IncidentDetailPage() {
             type='link'
             icon={<ArrowLeft />}
             onClick={() => router.back()}
-            style={{ paddingLeft: 0, color: '#666' }}
+            style={{ paddingLeft: 0, color: 'var(--color-text-secondary)' }}
           >
             返回列表
           </Button>

@@ -60,7 +60,7 @@ export default function MenuManagementPage() {
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled' | 'hidden'>(
-    'all',
+    'all'
   );
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<MenuItem | null>(null);
@@ -252,9 +252,7 @@ export default function MenuManagementPage() {
       render: (v: string, r) => (
         <div>
           <div className="font-medium">{v}</div>
-          {r.description && (
-            <div className="text-xs text-gray-500 mt-0.5">{r.description}</div>
-          )}
+          {r.description && <div className="text-[12px] text-muted mt-0.5">{r.description}</div>}
         </div>
       ),
     },
@@ -262,7 +260,7 @@ export default function MenuManagementPage() {
       title: '路径',
       dataIndex: 'path',
       render: (v: string) => (
-        <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">{v || '-'}</code>
+        <code className="text-[12px] bg-raised px-1.5 py-0.5 rounded">{v || '-'}</code>
       ),
     },
     {
@@ -276,7 +274,7 @@ export default function MenuManagementPage() {
             <Tag>{v}</Tag>
           </Space>
         ) : (
-          <span className="text-gray-400">-</span>
+          <span className="text-muted">-</span>
         ),
     },
     {
@@ -284,7 +282,7 @@ export default function MenuManagementPage() {
       dataIndex: 'permissionCode',
       width: 160,
       render: (v?: string) =>
-        v ? <Tag color="purple">{v}</Tag> : <span className="text-gray-400">无</span>,
+        v ? <Tag color="purple">{v}</Tag> : <span className="text-muted">无</span>,
     },
     {
       title: '状态',
@@ -318,9 +316,9 @@ export default function MenuManagementPage() {
       dataIndex: 'parentId',
       width: 140,
       render: (v?: number | null) => {
-        if (!v) return <span className="text-gray-400">-</span>;
+        if (!v) return <span className="text-muted">-</span>;
         const parent = menus.find(m => m.id === v);
-        return parent ? parent.name : <span className="text-gray-400">#{v}</span>;
+        return parent ? parent.name : <span className="text-muted">#{v}</span>;
       },
     },
     {
@@ -331,7 +329,11 @@ export default function MenuManagementPage() {
       render: (_: unknown, record) => (
         <Space size="small">
           <Tooltip title="编辑">
-            <Button type="text" icon={<Edit className="w-4 h-4" />} onClick={() => openEdit(record)} />
+            <Button
+              type="text"
+              icon={<Edit className="w-4 h-4" />}
+              onClick={() => openEdit(record)}
+            />
           </Tooltip>
           <Popconfirm
             title="确认删除"
@@ -369,7 +371,9 @@ export default function MenuManagementPage() {
         message="提示"
         description={
           <div>
-            <div>• 权限码必须与 <code>permissions</code> 表中已存在的权限代码一致，菜单才会按角色过滤。</div>
+            <div>
+              • 权限码必须与 <code>permissions</code> 表中已存在的权限代码一致，菜单才会按角色过滤。
+            </div>
             <div>• sortOrder 越小越靠前；建议按 10/20/30… 或 100/110/120… 留出插入空间。</div>
             <div>• 隐藏(isVisible=false)仍占位；禁用(isEnabled=false)会被完全过滤。</div>
             <div>• 默认菜单请通过后端种子数据（seed）初始化，本页面不提供一键初始化。</div>
@@ -380,11 +384,7 @@ export default function MenuManagementPage() {
       <Row gutter={[16, 16]} className="mb-4">
         <Col xs={12} md={6}>
           <Card>
-            <Statistic
-              title="总菜单数"
-              value={stats.total}
-              prefix={<Hash className="w-5 h-5" />}
-            />
+            <Statistic title="总菜单数" value={stats.total} prefix={<Hash className="w-5 h-5" />} />
           </Card>
         </Col>
         <Col xs={12} md={6}>
@@ -424,7 +424,7 @@ export default function MenuManagementPage() {
           <Col xs={24} md={10} lg={8}>
             <Input
               placeholder="搜索 名称 / 路径 / 权限码 / 图标"
-              prefix={<Search className="w-4 h-4 text-gray-400" />}
+              prefix={<Search className="w-4 h-4 text-muted" />}
               value={searchText}
               onChange={e => setSearchText(e.target.value)}
               allowClear
@@ -445,7 +445,11 @@ export default function MenuManagementPage() {
           </Col>
           <Col xs={24} md={6} lg={10} className="text-right">
             <Space>
-              <Button icon={<RefreshCw className="w-4 h-4" />} onClick={loadMenus} loading={loading}>
+              <Button
+                icon={<RefreshCw className="w-4 h-4" />}
+                onClick={loadMenus}
+                loading={loading}
+              >
                 刷新
               </Button>
               <Button type="primary" icon={<Plus className="w-4 h-4" />} onClick={openCreate}>
@@ -476,7 +480,11 @@ export default function MenuManagementPage() {
       <Modal
         title={
           <span>
-            {editing ? <Edit className="w-4 h-4 mr-2 inline-block" /> : <Plus className="w-4 h-4 mr-2 inline-block" />}
+            {editing ? (
+              <Edit className="w-4 h-4 mr-2 inline-block" />
+            ) : (
+              <Plus className="w-4 h-4 mr-2 inline-block" />
+            )}
             {editing ? '编辑菜单' : '新建菜单'}
           </span>
         }
@@ -517,7 +525,7 @@ export default function MenuManagementPage() {
                 tooltip="前端路由地址，例如 /admin/sla-templates"
               >
                 <Input
-                  prefix={<LinkIcon className="w-4 h-4 text-gray-400" />}
+                  prefix={<LinkIcon className="w-4 h-4 text-muted" />}
                   placeholder="/admin/sla-templates"
                 />
               </Form.Item>
@@ -526,14 +534,12 @@ export default function MenuManagementPage() {
 
           <Row gutter={16}>
             <Col span={12}>
-              <Form.Item
-                label="图标"
-                name="icon"
-                tooltip="Lucide React 图标名，可手输或从列表选择"
-              >
+              <Form.Item label="图标" name="icon" tooltip="Lucide React 图标名，可手输或从列表选择">
                 <Input
                   placeholder="如：Layers / BarChart3"
-                  addonBefore={getIconByName(iconValue) ?? <MenuIcon className="w-4 h-4 text-gray-300" />}
+                  addonBefore={
+                    getIconByName(iconValue) ?? <MenuIcon className="w-4 h-4 text-muted" />
+                  }
                   addonAfter={
                     <Popover
                       title="选择图标"
@@ -606,9 +612,13 @@ export default function MenuManagementPage() {
             </Col>
             <Col span={12}>
               <Form.Item label="父菜单" name="parentId" tooltip="二级菜单需指定父菜单">
-                <Select allowClear placeholder="无（顶级菜单）" showSearch optionFilterProp="label"
-                options={parentOptions.map(p => ({ value: p.id, label: p.name }))}
-              />
+                <Select
+                  allowClear
+                  placeholder="无（顶级菜单）"
+                  showSearch
+                  optionFilterProp="label"
+                  options={parentOptions.map(p => ({ value: p.id, label: p.name }))}
+                />
               </Form.Item>
             </Col>
           </Row>
@@ -626,8 +636,18 @@ export default function MenuManagementPage() {
             <Col span={12}>
               <Form.Item label="可见" name="isVisible" valuePropName="checked">
                 <Switch
-                  checkedChildren={<><Eye className="w-3 h-3 mr-1 inline-block" />显示</>}
-                  unCheckedChildren={<><EyeOff className="w-3 h-3 mr-1 inline-block" />隐藏</>}
+                  checkedChildren={
+                    <>
+                      <Eye className="w-3 h-3 mr-1 inline-block" />
+                      显示
+                    </>
+                  }
+                  unCheckedChildren={
+                    <>
+                      <EyeOff className="w-3 h-3 mr-1 inline-block" />
+                      隐藏
+                    </>
+                  }
                 />
               </Form.Item>
             </Col>

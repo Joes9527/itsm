@@ -171,8 +171,8 @@ export default function ChangeDetailPage() {
           见 docs/superpowers/specs/2026-08-28-work-item-detail-page-parity-design.md §5.2。 */}
       {Number.isFinite(numericId) && numericId > 0 && (
         <div style={{ padding: '0 24px 24px' }}>
-          <Card className='mt-4 rounded-lg shadow-sm border border-gray-200'>
-            <div className='flex items-center gap-1.5 mb-3 text-sm font-medium text-gray-700'>
+          <Card className="mt-4 rounded-lg shadow-sm border border-border">
+            <div className="flex items-center gap-1.5 mb-3 text-sm font-medium text-foreground">
               <GitBranch size={14} />
               审批时间线
             </div>

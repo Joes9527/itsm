@@ -395,7 +395,7 @@ const ChangeRollbackPlan: React.FC<ChangeRollbackPlanProps> = ({
 
           {rollbackSteps.length === 0 ? (
             <div className="text-center py-8">
-              <RotateCcw className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+              <RotateCcw className="w-12 h-12 text-muted mx-auto mb-4" />
               <Text type="secondary">暂无回滚步骤，请添加详细的回滚步骤</Text>
             </div>
           ) : (

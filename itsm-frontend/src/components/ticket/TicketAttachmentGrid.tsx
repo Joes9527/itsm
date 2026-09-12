@@ -41,14 +41,16 @@ export const TicketAttachmentGrid: React.FC<TicketAttachmentGridProps> = ({ tick
   }, [fetchAttachments]);
 
   if (loading) {
-    return <div className="p-6 text-center text-xs text-slate-400">附件加载中...</div>;
+    return (
+      <div className="p-6 text-center text-[12px] text-muted">附件加载中...</div>
+    );
   }
 
   if (attachments.length === 0) {
     return (
-      <div className="text-center py-6 text-slate-400">
-        <Paperclip className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-        <span className="text-xs">暂无附件</span>
+      <div className="text-center py-6 text-muted">
+        <Paperclip className="w-8 h-8 mx-auto mb-2 text-muted" />
+        <span className="text-[12px]">暂无附件</span>
       </div>
     );
   }
@@ -67,22 +69,22 @@ export const TicketAttachmentGrid: React.FC<TicketAttachmentGridProps> = ({ tick
         return (
           <div
             key={att.id}
-            className="flex items-center gap-3 p-3 bg-slate-50 hover:bg-slate-100/80 rounded-xl border border-slate-200/70 transition-all group"
+            className="flex items-center gap-3 p-3 bg-raised hover:bg-raised rounded-[8px] border border-border transition-all group"
           >
             {isImage && previewUrl ? (
-              <div className="w-12 h-12 rounded-lg bg-slate-200 overflow-hidden shrink-0 border border-slate-200">
+              <div className="w-12 h-12 rounded-[8px] bg-border overflow-hidden shrink-0 border border-border">
                 <img src={previewUrl} alt={att.fileName} className="w-full h-full object-cover" />
               </div>
             ) : (
-              <div className="w-12 h-12 rounded-lg bg-slate-100 text-slate-600 flex items-center justify-center shrink-0 border border-slate-200">
+              <div className="w-12 h-12 rounded-[8px] bg-raised text-muted flex items-center justify-center shrink-0 border border-border">
                 <FileText size={22} />
               </div>
             )}
             <div className="min-w-0 flex-1 space-y-0.5">
-              <p className="text-xs font-medium text-slate-800 truncate m-0 group-hover:text-orange-600 transition-colors">
+              <p className="text-[12px] font-medium text-foreground truncate m-0 group-hover:text-orange-600 transition-colors">
                 {att.fileName}
               </p>
-              <span className="text-[11px] text-slate-400 font-mono block">
+              <span className="text-[11px] text-muted font-mono block">
                 {formatSize(att.fileSize)} ｜ 上传者: {uploader}
               </span>
             </div>
@@ -92,7 +94,7 @@ export const TicketAttachmentGrid: React.FC<TicketAttachmentGridProps> = ({ tick
                 download={att.fileName}
                 target="_blank"
                 rel="noreferrer"
-                className="w-7 h-7 rounded-lg bg-white text-slate-500 hover:text-orange-600 flex items-center justify-center border border-slate-200 shadow-2xs shrink-0"
+                className="w-7 h-7 rounded-[8px] bg-surface text-muted hover:text-orange-600 flex items-center justify-center border border-border shadow-none shrink-0"
                 title="下载附件"
               >
                 <Download size={12} />

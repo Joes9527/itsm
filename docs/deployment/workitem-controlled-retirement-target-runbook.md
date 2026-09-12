@@ -43,7 +43,7 @@ BEGIN; CREATE TEMP TABLE itsm_temp_probe(x int); ROLLBACK;
 - [ ] `migrate -prepare-workitem -evidence-file <signed>` 绑定证据；拒绝任何未授权签名。
 - [ ] `migrate -prepare-workitem` 执行 P；核对新回执、旧对象仍保留、无业务行/回执被改写。
 - [ ] 运行 `ReconcileSchemaInvariants`；确认访问 invariants 已存在且 identity 未变。
-- [ ] 业务验收：三域 + Requested Item V1；记录版本、任务、权限、SLA、流程回执。
+- [ ] 本阶段仅核验 P 所需结构、受限角色/RLS 与真实回执；完整三域 + Requested Item V1 在下一阶段普通迁移完成后执行。
 
 ## 4. 阶段 2：普通迁移与观察（P 之后，需独立授权）
 

@@ -160,13 +160,13 @@ const TicketAnalytics: React.FC = () => {
   const teamColumns = [
     {
       title: '处理人',
-      dataIndex:'assigneeName',
-      key:'assigneeName',
+      dataIndex: 'assigneeName',
+      key: 'assigneeName',
     },
     {
       title: '处理工单数',
-      dataIndex:'totalHandled',
-      key:'totalHandled',
+      dataIndex: 'totalHandled',
+      key: 'totalHandled',
       sorter: (a: any, b: any) => a.totalHandled - b.totalHandled,
     },
     {
@@ -176,14 +176,14 @@ const TicketAnalytics: React.FC = () => {
     },
     {
       title: '平均响应时间(小时)',
-      dataIndex:'avgResponseTime',
-      key:'avgResponseTime',
+      dataIndex: 'avgResponseTime',
+      key: 'avgResponseTime',
       render: (time: number) => time?.toFixed(1) || '-',
     },
     {
       title: '平均解决时间(小时)',
-      dataIndex:'avgResolutionTime',
-      key:'avgResolutionTime',
+      dataIndex: 'avgResolutionTime',
+      key: 'avgResolutionTime',
       render: (time: number) => time?.toFixed(1) || '-',
     },
   ];
@@ -215,18 +215,20 @@ const TicketAnalytics: React.FC = () => {
 
   if (!analyticsData) {
     return (
-      <div className="p-6 flex justify-center items-center min-h-[400px]">
+      <div className="p-[16px] md:p-[24px] flex justify-center items-center min-h-[400px]">
         <Spin size="large" />
       </div>
     );
   }
 
   return (
-    <div className="p-6">
+    <div className="p-[16px] md:p-[24px]">
       {/* 页面标题和工具栏 */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-4">
-          <Title level={2}>工单分析</Title>
+          <Title level={2} style={{ fontSize: 24, fontWeight: 600 }}>
+            工单分析
+          </Title>
           <Space>
             <RangePicker
               value={dateRange}
@@ -253,12 +255,7 @@ const TicketAnalytics: React.FC = () => {
       </div>
 
       <Spin spinning={loading}>
-        <Tabs
-          activeKey={activeTab} onChange={setActiveTab}
-          items={[
-
-          ]}
-        />
+        <Tabs activeKey={activeTab} onChange={setActiveTab} items={[]} />
       </Spin>
     </div>
   );

@@ -18,7 +18,7 @@ interface PageContainerProps {
 
 export const PageContainer: React.FC<PageContainerProps> = ({ header, extra, children }) => {
   return (
-    <div style={{ padding: '24px', background: '#fff', minHeight: '100%' }}>
+    <div style={{ padding: '24px', background: 'var(--color-bg-secondary)', minHeight: '100%' }}>
       {(header?.title || header?.breadcrumb?.items) && (
         <>
           <div
@@ -34,7 +34,7 @@ export const PageContainer: React.FC<PageContainerProps> = ({ header, extra, chi
                 <Breadcrumb items={header.breadcrumb.items} style={{ marginBottom: '8px' }} />
               )}
               {header?.title && (
-                <Title level={4} style={{ margin: 0 }}>
+                <Title level={2} style={{ margin: 0 }}>
                   {header.title}
                 </Title>
               )}

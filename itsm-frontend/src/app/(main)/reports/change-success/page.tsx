@@ -82,11 +82,15 @@ const ChangeSuccessReport = () => {
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className='bg-white p-3 rounded-lg shadow-lg border border-gray-200'>
-          <p className='font-semibold text-gray-800'>{`${payload[0].name}`}</p>
+        <div className="bg-surface p-3 rounded-[8px] shadow-lg border border-border">
+          <p className="font-semibold text-foreground">{`${payload[0].name}`}</p>
           <p
-            className='text-sm'
-            style={{ color: payload[0].color }}
+            className="text-[13px]"
+            style={{
+              color: 'var(--color-text-primary)',
+              borderLeft: `3px solid ${payload[0].color}`,
+              paddingLeft: 8,
+            }}
           >{`数量: ${payload[0].value}`}</p>
         </div>
       );
@@ -107,11 +111,11 @@ const ChangeSuccessReport = () => {
   }
 
   return (
-    <div className='p-6 bg-gray-50 min-h-full'>
+    <div className="p-[24px] max-[1200px]:p-[16px] bg-page min-h-full">
       {error && <Alert type='error' title={error} />}
       <header className='mb-6'>
         <Title level={2}>变更成功率报表</Title>
-        <p className='text-gray-500 mt-1'>
+        <p className='text-muted mt-1'>
           成功率 = 成功结果数 / 已记录结果数（成功、失败、已回滚）；关闭状态单独统计
         </p>
       </header>
@@ -120,7 +124,7 @@ const ChangeSuccessReport = () => {
       <Card className='mb-6'>
         <Row justify='space-between' align='middle'>
           <Col>
-            <Text className='text-gray-600'>变更执行情况监控</Text>
+            <Text className="text-muted">变更执行情况监控</Text>
           </Col>
           <Col>
             <Button icon={<RotateCcw />} onClick={loadData}>
@@ -137,7 +141,7 @@ const ChangeSuccessReport = () => {
       ) : (
         <>
           {/* 统计卡片 */}
-          <Row gutter={[16, 16]} className='mb-6'>
+          <Row gutter={[14, 14]} className="mb-6">
             <Col xs={24} sm={12} lg={6}>
               <Card>
                 <Statistic
@@ -180,7 +184,7 @@ const ChangeSuccessReport = () => {
           </Row>
 
           {/* 图表区域 */}
-          <Row gutter={[16, 16]}>
+          <Row gutter={[14, 14]}>
             <Col xs={24} lg={12}>
               <Card title='变更状态分布'>
                 <ResponsiveContainer width='100%' height={300}>
@@ -199,7 +203,7 @@ const ChangeSuccessReport = () => {
                       ))}
                     </Pie>
                     <Tooltip content={<CustomTooltip />} />
-                    <Legend />
+                    <Legend formatter={value => <span className="text-foreground">{value}</span>} />
                   </PieChart>
                 </ResponsiveContainer>
               </Card>
@@ -215,7 +219,7 @@ const ChangeSuccessReport = () => {
                     <Tag color={status.color} className='m-0'>
                       {status.name}
                     </Tag>
-                    <span className='text-lg font-semibold'>{status.value}</span>
+                    <span className="text-[15px] font-semibold">{status.value}</span>
                   </div>
                 </Col>
               ))}

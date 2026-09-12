@@ -16,7 +16,7 @@ export function WorkItemSLA({ sla }: { sla?: WorkItemSLAState }) {
       size='small'
       title={
         <span className='flex items-center gap-1.5'>
-          <Clock size={14} />
+          <Clock size={14} className="text-muted" />
           SLA 时效与承诺
         </span>
       }
@@ -51,7 +51,7 @@ export function WorkItemSLA({ sla }: { sla?: WorkItemSLAState }) {
           ].map(clock => (
             <div
               key={clock.name}
-              className='bg-slate-50 p-3 rounded-xl border border-slate-100 space-y-2'
+              className='bg-raised p-3 rounded-[8px] border border-border space-y-2'
             >
               {clock.deadline && (
                 <div>

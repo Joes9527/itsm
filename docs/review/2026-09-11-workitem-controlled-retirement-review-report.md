@@ -46,4 +46,4 @@
 
 独立原审阅者复核修订稿，确认两项Important和bootstrap澄清均已关闭，未发现新增Critical/Important矛盾，可进入实施计划。此结论仅针对设计，不代表实现或运行验证通过。
 
-[实施计划](../superpowers/plans/2026-09-11-workitem-controlled-retirement.md)已编制，六批代码任务均未执行；保留每批RED/GREEN、独立审阅和最终恢复验证要求。
+本次设计审阅当时，[实施计划](../superpowers/plans/2026-09-11-workitem-controlled-retirement.md)已编制，六批代码任务尚未执行。后续代码与隔离验证、复审和剩余门禁已记录在该计划；本段保留历史时点，不作为当前未完成清单。

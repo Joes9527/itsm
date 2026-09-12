@@ -23,7 +23,7 @@ export default function ReleaseDetailPage() {
         <div style={{ padding: '0 24px 24px' }}>
           <Card
             title="历史（审计日志）"
-            className="mt-4 rounded-lg shadow-sm border border-gray-200"
+            className="mt-4 rounded-lg shadow-sm border border-border"
           >
             <HistoryTimeline
               targetType="release"

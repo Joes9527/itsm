@@ -306,13 +306,13 @@ export default function StandardChangesPage() {
   ];
 
   return (
-    <div className='p-6 bg-gray-50 min-h-full'>
+    <div className='min-h-full bg-page p-[16px] text-[13px] text-foreground md:p-[24px]'>
       <CreationAttempts creation={creation} beforeNewConfirmation={() => sourceRelationsRef.current?.refresh() ?? Promise.resolve(true)} />
       <div className='mb-6'>
         <div className='flex items-center justify-between mb-4'>
           <div>
-            <h1 className='text-2xl font-bold text-gray-800'>标准变更库</h1>
-            <p className='text-gray-500 mt-1'>管理预批准的标准变更模板</p>
+            <h1 className='text-[24px] font-semibold text-foreground'>标准变更库</h1>
+            <p className='mt-1 text-[12px] text-muted'>管理预批准的标准变更模板</p>
           </div>
           <Button type='primary' icon={<Plus size={16} />} onClick={handleCreate}>
             新建模板

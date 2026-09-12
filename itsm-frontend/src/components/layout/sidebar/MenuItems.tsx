@@ -65,7 +65,7 @@ export function renderMenuItems(
               }
             }}
           >
-            <span className="truncate">{item.label}</span>
+            <span className='truncate'>{item.label}</span>
           </div>
         ),
         children: item.children.map((child: MenuItem, childIndex: number) => {
@@ -82,7 +82,7 @@ export function renderMenuItems(
             icon: child.icon,
             label: (
               <div className={styles.menuItemLabel}>
-                <span className="truncate">{child.label}</span>
+                <span className='truncate'>{child.label}</span>
               </div>
             ),
             onClick: () => onMenuClick(child.key),
@@ -113,8 +113,8 @@ export function renderMenuItems(
                 : undefined
           }
         >
-          <span className="truncate">{item.label}</span>
-          {item.badge && <Badge count={item.badge} size="small" className={styles.menuItemBadge} />}
+          <span className='truncate'>{item.label}</span>
+          {item.badge && <Badge count={item.badge} size='small' className={styles.menuItemBadge} />}
         </div>
       ),
       onClick: () => onMenuClick(item.key),
@@ -129,11 +129,10 @@ export function renderMenuItems(
 export const MenuItems: React.FC<MenuItemsProps> = ({ items, selectedKeys, onMenuClick }) => {
   return (
     <Menu
-      mode="inline"
+      mode='inline'
       inlineIndent={16}
       selectedKeys={selectedKeys}
       items={renderMenuItems(items, onMenuClick)}
-      theme="light"
       className={styles.customMenu}
     />
   );

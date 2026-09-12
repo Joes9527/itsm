@@ -52,14 +52,14 @@ const SLADetail: React.FC = () => {
 
   if (loading)
     return (
-      <Card className="rounded-lg shadow-sm border border-gray-200">
+      <Card className="rounded-lg shadow-sm border border-border">
         <Skeleton active />
       </Card>
     );
 
   if (!data) {
     return (
-      <Card className="rounded-lg shadow-sm border border-gray-200">
+      <Card className="rounded-lg shadow-sm border border-border">
         <Result
           status="404"
           title="404"
@@ -86,7 +86,7 @@ const SLADetail: React.FC = () => {
       </Breadcrumb>
 
       <Card
-        className="rounded-lg shadow-sm border border-gray-200"
+        className="rounded-lg shadow-sm border border-border"
        
         title={<span className="text-lg font-bold">{data.name}</span>}
         extra={
@@ -118,12 +118,12 @@ const SLADetail: React.FC = () => {
         </Descriptions>
 
         <Divider>适用条件</Divider>
-        <pre className="bg-gray-50 p-3 rounded text-sm overflow-auto mb-6">
+        <pre className="mb-6 overflow-auto rounded-[6px] bg-raised p-3 text-[13px]">
           {JSON.stringify(data.conditions, null, 2)}
         </pre>
 
         <Divider>升级规则</Divider>
-        <pre className="bg-gray-50 p-3 rounded text-sm overflow-auto">
+        <pre className="overflow-auto rounded-[6px] bg-raised p-3 text-[13px]">
           {JSON.stringify(data.escalationRules, null, 2)}
         </pre>
 
