@@ -66,6 +66,8 @@
 
 - [WorkItem 后续 backlog 就绪评估](./review/2026-09-12-workitem-backlog-readiness.md)：I2、物理清理审计、Change 多 WorkOrder、首响、RCA/HMAC/Redis/匿名卷的现状与未来验收条件。
 
+- [WorkItem 后续 backlog 设计草案（DRAFT）](./superpowers/specs/2026-09-12-backlog-design-drafts.md)：各项 backlog 的问题、方向、备选、验收与待决问题；未批准、未实现。
+
 - [WorkItem 后续计划独立审查](./review/2026-09-11-workitem-next-stage-plan-review-report.md)：五项重要契约问题、修订及最终复核结论。
 
 - [2026-09-11 WorkItem 收敛独立评审与接手记录](./review/2026-09-11-workitem-convergence-review-report.md)：B/C1 反例、全入口收敛缺口与剩余工作。
