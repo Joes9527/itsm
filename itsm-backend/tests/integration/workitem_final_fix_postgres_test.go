@@ -44,7 +44,7 @@ func TestFinalFixPostRetirementCanonicalReconciliation(t *testing.T) {
 	_, err = db.Exec("ALTER TABLE catalog_access_policies DROP CONSTRAINT catalog_access_policy_finite; ALTER TABLE catalog_access_policies ADD CONSTRAINT catalog_access_policy_finite CHECK(version>0)")
 	require.NoError(t, err)
 	changed := entryDigest(t, db)
-	require.Error(t, migration.RunPostSchemaMigrations(ctx, m))
+	require.ErrorContains(t, migration.RunPostSchemaMigrations(ctx, m), "post-retirement structure drift")
 	require.Equal(t, changed, entryDigest(t, db))
 }
 
@@ -70,10 +70,10 @@ func TestFinalFixHistoricalRetirementInventory(t *testing.T) {
 			_, err = db.Exec(mutation)
 			require.NoError(t, err)
 			before := entryDigest(t, db)
-			require.Error(t, m.InspectMigrationTarget(ctx))
+			require.ErrorContains(t, m.InspectMigrationTarget(ctx), "historical retirement receipt")
 			_, err = m.InspectPreparation(ctx)
-			require.Error(t, err)
-			require.Error(t, m.ApplyPreparation(ctx, migration.MigrationEvidence{Operator: "test"}))
+			require.ErrorContains(t, err, "historical retirement receipt")
+			require.ErrorContains(t, m.ApplyPreparation(ctx, migration.MigrationEvidence{Operator: "test"}), "historical retirement receipt")
 			require.Equal(t, before, entryDigest(t, db))
 		})
 	}
@@ -136,8 +136,8 @@ func TestFinalFixHistorical022And027Profiles(t *testing.T) {
 			before := entryDigest(t, db)
 			require.ErrorContains(t, m.InspectMigrationTarget(ctx), "historical retirement receipt")
 			_, err = m.InspectPreparation(ctx)
-			require.Error(t, err)
-			require.Error(t, m.ApplyPreparation(ctx, e))
+			require.ErrorContains(t, err, "historical retirement receipt")
+			require.ErrorContains(t, m.ApplyPreparation(ctx, e), "historical retirement receipt")
 			require.Equal(t, before, entryDigest(t, db))
 		})
 	}
