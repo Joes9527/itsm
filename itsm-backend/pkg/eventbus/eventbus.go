@@ -3,7 +3,9 @@ package eventbus
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"itsm-backend/config"
@@ -35,19 +37,72 @@ type Envelope struct {
 
 // WatermillEventBus implements shared.EventBus interface using Watermill with Redis Stream
 type WatermillEventBus struct {
-	publisher  message.Publisher
-	subscriber *redisstream.Subscriber
-	logger     *zap.SugaredLogger
+	publisher     message.Publisher
+	subscriber    streamSubscriber
+	logger        *zap.SugaredLogger
+	mu            sync.Mutex
+	started       bool
+	closed        bool
+	closeDone     chan struct{}
+	closeErr      error
+	ctx           context.Context
+	cancel        context.CancelFunc
+	consumers     sync.WaitGroup
+	subscriptions []subscription
+}
+
+type streamSubscriber interface {
+	Subscribe(context.Context, string) (<-chan *message.Message, error)
+	Close() error
+}
+type subscription struct {
+	topic   string
+	handler shared.EventHandler
+}
+
+// RegisterSubscription only describes runtime work; it does not touch Redis.
+func (eb *WatermillEventBus) RegisterSubscription(topic string, handler shared.EventHandler) error {
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
+	if eb.started || eb.closed || topic == "" || handler == nil {
+		return fmt.Errorf("cannot register event subscription")
+	}
+	eb.subscriptions = append(eb.subscriptions, subscription{topic, handler})
+	return nil
+}
+
+func (eb *WatermillEventBus) Start(ctx context.Context) error {
+	eb.mu.Lock()
+	if ctx == nil || eb.started || eb.closed {
+		eb.mu.Unlock()
+		return fmt.Errorf("event runtime cannot start")
+	}
+	if err := ctx.Err(); err != nil {
+		eb.mu.Unlock()
+		return err
+	}
+	eb.ctx, eb.cancel = context.WithCancel(ctx)
+	eb.started = true
+	subscriptions := append([]subscription(nil), eb.subscriptions...)
+	eb.mu.Unlock()
+	for _, sub := range subscriptions {
+		if err := eb.Subscribe(sub.topic, sub.handler); err != nil {
+			_ = eb.Close()
+			return err
+		}
+	}
+	return nil
 }
 
 // NewWatermillEventBus creates a new WatermillEventBus instance
 func NewWatermillEventBus(cfg *config.RedisConfig, logger *zap.SugaredLogger) (*WatermillEventBus, error) {
-	// Create Redis client
-	rdb := redis.NewClient(&redis.Options{
+	// Publisher and subscriber each own and close their Redis client.
+	options := &redis.Options{
 		Addr:     fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
 		Password: cfg.Password,
 		DB:       cfg.DB,
-	})
+	}
+	publisherClient := redis.NewClient(options)
 
 	// Watermill logger
 	watermillLogger := NewZapLoggerAdapter(logger)
@@ -55,23 +110,26 @@ func NewWatermillEventBus(cfg *config.RedisConfig, logger *zap.SugaredLogger) (*
 	// Create publisher
 	publisher, err := redisstream.NewPublisher(
 		redisstream.PublisherConfig{
-			Client: rdb,
+			Client: publisherClient,
 		},
 		watermillLogger,
 	)
 	if err != nil {
+		_ = publisherClient.Close()
 		return nil, fmt.Errorf("failed to create publisher: %w", err)
 	}
 
 	// Create subscriber
+	subscriberClient := redis.NewClient(options)
 	subscriber, err := redisstream.NewSubscriber(
 		redisstream.SubscriberConfig{
-			Client: rdb,
+			Client: subscriberClient,
 		},
 		watermillLogger,
 	)
 	if err != nil {
 		_ = publisher.Close()
+		_ = subscriberClient.Close()
 		return nil, fmt.Errorf("failed to create subscriber: %w", err)
 	}
 
@@ -146,14 +204,24 @@ func (eb *WatermillEventBus) Publish(event interface{}) error {
 // Subscribe subscribes to events of a specific type.
 // 订阅 topic 使用稳定事件类型名（如 "ticket.created"）。
 func (eb *WatermillEventBus) Subscribe(eventType string, handler shared.EventHandler) error {
+	eb.mu.Lock()
+	if !eb.started || eb.closed || handler == nil || eventType == "" {
+		eb.mu.Unlock()
+		return fmt.Errorf("event runtime is not accepting subscriptions")
+	}
+	ctx := eb.ctx
+	eb.consumers.Add(1)
+	eb.mu.Unlock()
 	// Subscribe to the topic
-	messages, err := eb.subscriber.Subscribe(context.Background(), eventType)
+	messages, err := eb.subscriber.Subscribe(ctx, eventType)
 	if err != nil {
+		eb.consumers.Done()
 		return fmt.Errorf("failed to subscribe to event type %s: %w", eventType, err)
 	}
 
 	// Start message processing goroutine
 	go func() {
+		defer eb.consumers.Done()
 		for msg := range messages {
 			// Unwrap envelope (if present) and pass the raw payload JSON to the handler
 			deliver, err := unwrapEnvelope(msg.Payload)
@@ -206,13 +274,27 @@ func unwrapEnvelope(raw []byte) (interface{}, error) {
 
 // Close closes the event bus
 func (eb *WatermillEventBus) Close() error {
-	if err := eb.publisher.Close(); err != nil {
-		return err
+	eb.mu.Lock()
+	if eb.closed {
+		done := eb.closeDone
+		eb.mu.Unlock()
+		<-done
+		return eb.closeErr
 	}
-	if err := eb.subscriber.Close(); err != nil {
-		return err
+	eb.closed = true
+	eb.closeDone = make(chan struct{})
+	if eb.cancel != nil {
+		eb.cancel()
 	}
-	return nil
+	eb.mu.Unlock()
+	err := eb.subscriber.Close()
+	eb.consumers.Wait()
+	err = errors.Join(err, eb.publisher.Close())
+	eb.mu.Lock()
+	eb.closeErr = err
+	close(eb.closeDone)
+	eb.mu.Unlock()
+	return err
 }
 
 // Global event bus instance

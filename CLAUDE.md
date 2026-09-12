@@ -543,6 +543,12 @@ src/
 
 ## 工程要求摘要
 
+### Runtime lifecycle and candidate execution
+
+- Service construction must not start consumers, deploy default workflows, create storage resources, or initialize schema. Runtime startup is explicit; cancellation and worker completion precede dependency shutdown.
+- Candidate execution scope is an additional deployment restriction, never a replacement for tenant/RBAC or professional lifecycle authorization. Only new WorkItems may be enrolled in their creation transaction; historical records must not be enrolled, claimed, acknowledged, or rewritten to enable acceptance.
+- Execution configuration and database role bindings must agree. Unknown capabilities fail closed; disabled required journeys remain unvalidated. A configured attachment backend must not silently fall back to another storage location.
+
 ### 必须遵守的规则
 
 1. **DTO 返回**：Controller 必须返回 DTO，禁止返回 Ent 模型

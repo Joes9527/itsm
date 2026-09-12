@@ -1,15 +1,87 @@
 package eventbus
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"net"
+	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"itsm-backend/config"
 )
+
+type blockingClosePublisher struct {
+	entered, release chan struct{}
+	err              error
+}
+
+func (*blockingClosePublisher) Publish(string, ...*message.Message) error { return nil }
+func (p *blockingClosePublisher) Close() error                            { close(p.entered); <-p.release; return p.err }
+
+func TestConcurrentCloseWaitsForCompleteShutdown(t *testing.T) {
+	failure := errors.New("publisher close failure")
+	p := &blockingClosePublisher{entered: make(chan struct{}), release: make(chan struct{}), err: failure}
+	eb := &WatermillEventBus{publisher: p, subscriber: &lifecycleSubscriber{}, logger: zap.NewNop().Sugar()}
+	first, second := make(chan error, 1), make(chan error, 1)
+	go func() { first <- eb.Close() }()
+	<-p.entered
+	go func() { second <- eb.Close() }()
+	select {
+	case <-second:
+		close(p.release)
+		t.Fatal("second close returned before resource closure")
+	case <-time.After(20 * time.Millisecond):
+	}
+	close(p.release)
+	require.ErrorIs(t, <-first, failure)
+	require.ErrorIs(t, <-second, failure)
+}
+
+func TestWatermillClientsCloseExactlyOnce(t *testing.T) {
+	r := miniredis.RunT(t)
+	host, portText, err := net.SplitHostPort(r.Addr())
+	require.NoError(t, err)
+	port, err := strconv.Atoi(portText)
+	require.NoError(t, err)
+	eb, err := NewWatermillEventBus(&config.RedisConfig{Host: host, Port: port}, zap.NewNop().Sugar())
+	require.NoError(t, err)
+	require.NoError(t, eb.Close())
+	require.NoError(t, eb.Close())
+}
+
+type lifecycleSubscriber struct{ calls atomic.Int32 }
+
+func (s *lifecycleSubscriber) Subscribe(ctx context.Context, _ string) (<-chan *message.Message, error) {
+	s.calls.Add(1)
+	out := make(chan *message.Message)
+	go func() { <-ctx.Done(); close(out) }()
+	return out, nil
+}
+func (*lifecycleSubscriber) Close() error { return nil }
+
+type lifecycleHandler struct{}
+
+func (lifecycleHandler) Handle(interface{}) error { return nil }
+
+func TestEventSubscriptionsRequireExplicitRuntimeStart(t *testing.T) {
+	sub := &lifecycleSubscriber{}
+	eb := &WatermillEventBus{publisher: &fakePublisher{}, subscriber: sub, logger: zap.NewNop().Sugar()}
+	require.NoError(t, eb.RegisterSubscription("ticket.created", lifecycleHandler{}))
+	require.Zero(t, sub.calls.Load())
+	require.Error(t, eb.Subscribe("ticket.created", lifecycleHandler{}))
+	require.NoError(t, eb.Start(context.Background()))
+	require.EqualValues(t, 1, sub.calls.Load())
+	require.Error(t, eb.Start(context.Background()))
+	require.NoError(t, eb.Close())
+}
 
 // fakePublisher 捕获发布的消息用于断言
 type fakePublisher struct {

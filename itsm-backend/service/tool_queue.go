@@ -31,26 +31,30 @@ var ErrToolQueueClosed = errors.New("tool queue is stopping or stopped")
 type toolQueueState uint8
 
 const (
-	toolQueueAccepting toolQueueState = iota
+	toolQueueCreated toolQueueState = iota
+	toolQueueAccepting
 	toolQueueStopping
 	toolQueueStopped
 )
 
 type ToolQueue struct {
-	mu        sync.Mutex
-	cond      *sync.Cond
-	jobs      []ToolJob
-	capacity  int
-	state     toolQueueState
-	stopping  chan struct{}
-	stopped   chan struct{}
-	closeOnce sync.Once
-	process   func(context.Context, ToolJob) error
-	client    *ent.Client
-	tools     *ToolRegistry
-	creation  creation.Application
-	tickets   *TicketService
-	logger    *zap.SugaredLogger
+	mu         sync.Mutex
+	cond       *sync.Cond
+	jobs       []ToolJob
+	capacity   int
+	state      toolQueueState
+	stopping   chan struct{}
+	stopped    chan struct{}
+	closeOnce  sync.Once
+	process    func(context.Context, ToolJob) error
+	client     *ent.Client
+	tools      *ToolRegistry
+	creation   creation.Application
+	tickets    *TicketService
+	logger     *zap.SugaredLogger
+	workerCtx  context.Context
+	cancel     context.CancelFunc
+	stopParent func() bool
 }
 
 func NewToolQueue(client *ent.Client, tools *ToolRegistry, app creation.Application, tickets *TicketService, capacity int, logger *zap.SugaredLogger) *ToolQueue {
@@ -58,11 +62,11 @@ func NewToolQueue(client *ent.Client, tools *ToolRegistry, app creation.Applicat
 		panic("tool queue requires the shared creation application and tenant client")
 	}
 	q := &ToolQueue{client: client, tools: tools, creation: app, tickets: tickets}
-	q.start(capacity, logger, q.ProcessJob)
+	q.initialize(capacity, logger, q.ProcessJob)
 	return q
 }
 
-func (q *ToolQueue) start(capacity int, logger *zap.SugaredLogger, process func(context.Context, ToolJob) error) {
+func (q *ToolQueue) initialize(capacity int, logger *zap.SugaredLogger, process func(context.Context, ToolJob) error) {
 	if capacity <= 0 {
 		capacity = 100
 	}
@@ -74,21 +78,48 @@ func (q *ToolQueue) start(capacity int, logger *zap.SugaredLogger, process func(
 	}
 	q.capacity = capacity
 	q.jobs = make([]ToolJob, 0, capacity)
-	q.state = toolQueueAccepting
+	q.state = toolQueueCreated
 	q.stopping = make(chan struct{})
 	q.stopped = make(chan struct{})
 	q.process = process
 	q.logger = logger
 	q.cond = sync.NewCond(&q.mu)
+}
+
+// Start explicitly starts the only worker. Construction never processes jobs.
+func (q *ToolQueue) Start(ctx context.Context) error {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.cond == nil || q.state != toolQueueCreated || ctx == nil {
+		return fmt.Errorf("tool queue cannot start in its current state")
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	q.workerCtx, q.cancel = context.WithCancel(ctx)
+	q.state = toolQueueAccepting
+	q.stopParent = context.AfterFunc(ctx, q.Close)
 	go q.worker()
+	return nil
 }
 
 func (q *ToolQueue) Close() {
 	q.closeOnce.Do(func() {
 		q.mu.Lock()
+		wasCreated := q.state == toolQueueCreated
 		q.state = toolQueueStopping
+		if q.stopParent != nil {
+			q.stopParent()
+		}
+		if q.cancel != nil {
+			q.cancel()
+		}
 		close(q.stopping)
 		q.cond.Broadcast()
+		if wasCreated {
+			q.state = toolQueueStopped
+			close(q.stopped)
+		}
 		q.mu.Unlock()
 	})
 	<-q.stopped
@@ -133,7 +164,7 @@ func (q *ToolQueue) worker() {
 		q.jobs = q.jobs[1:]
 		q.mu.Unlock()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(q.workerCtx, 30*time.Second)
 		if err := q.process(ctx, job); err != nil {
 			q.logger.Warnw("Approved tool job did not complete", "tenant_id", job.TenantID, "invocation_id", job.InvocationID)
 		}

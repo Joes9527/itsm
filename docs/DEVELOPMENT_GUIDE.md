@@ -4,6 +4,22 @@
 
 本文档汇集 ITSM 项目的日常开发命令、Docker 部署配置、历史分支复盘教训与通用规范。
 
+## 候选执行范围前置修复（开发中，不能据此启动候选）
+
+039 的范围登记及生命周期改造不等于全部业务和队列已经接入范围约束。所有 G2 生产者、领取/恢复、请求异步和历史对账未完成前，候选 API/Worker 保持不启动；固定 CandidateSHA 仍由 A 的交接发布。共享源、B 的配置、R(038) 和数据库操作授权不因本文变化而改变。
+
+新版本启动配置要求显式 `execution.mode`（standard/candidate）、`execution.deployment_id`、`execution.capabilities`；candidate 还要求 `execution.scopes` 中唯一的 tenant_id/scope_id。standard 能力值为 enabled/disabled，candidate 为 scoped/disabled；缺省能力禁用，未知名字/值和不支持的 scoped 能力报错。能力注册以[策略代码](../itsm-backend/common/executionscope/policy.go)为准。配置中的部署、角色和范围必须与数据库准备记录一致；不能用 HTTP header 或修改旧 WorkItem 建立范围。
+
+039 只新增范围表、角色绑定及 tickets INSERT 触发器，不补历史成员。迁移清理新对象的默认 ACL；受限运行角色仅可读取三个范围对象，不能直接登记/改成员、改模式或执行触发函数。显式角色绑定、范围准备和完整权限核验必须在获准的隔离环境完成；缺失时拒绝启动/创建，禁止临时授予 owner/BYPASSRLS 修复。已有 038 回执保持原依赖关系，039 不要求执行 038。
+
+构造不再部署默认 BPMN 模板/绑定或创建向量结构。它们由既有受控迁移及具名配置准备负责；不能为通过启动自动执行历史 RCA SQL、初始化或回填。配置 MinIO 时 bucket 必须已由环境所有者准备，检查失败停止启动，不自动建桶或回退本地 uploads。
+
+工具队列及事件订阅需要显式运行阶段启动；取消后等待已启动任务退出，再关闭数据库和连接器。禁止从业务构造器调用 Start。禁用的必需能力必须报告未验证，不能把 pending、外部阻断或未运行的 Worker 标为成功。
+
+本机范围测试使用专属 Unix socket PostgreSQL，`CANDIDATE_SCOPE_TEST_SOCKET` 必须指向带 `candidate-test-instance` 标记（内容为 `itsm-candidate-isolated-test` 加换行）的私有测试实例；端口为25439。测试只创建/删除随机命名的自有数据库及角色，不读取普通业务 DSN。运行 `go test -tags candidate_scope ./tests/integration -run '^TestCandidateScopeRegistration$' -count=1`。未设置变量产生 skip，不是通过；本机 PostgreSQL16 证据不能代替目标 PostgreSQL17 复核。
+
+完整构造保全测试另要求 `CANDIDATE_TEST_REDIS_BINARY` 和 `CANDIDATE_TEST_MINIO_BINARY` 为已核验二进制的绝对路径。运行 `go test -tags candidate_scope ./tests/integration -run '^TestCandidateConstructPreservesDatabaseAndStreams$' -count=1 -v`：测试启动独立 loopback Redis/MinIO，使用每轮随机凭据，写入前核对实例身份；子进程使用独立配置和清空的业务环境，只调用 NewApplication，不启动 API/Worker。对账覆盖合成历史 fixture 的各表内容、列/索引/约束/函数/触发器/权限/策略/sequence，以及 Redis 键/消息/消费组和附件桶/对象。该有限构造观察须与生命周期测试及审阅合用，不替代 S6 的真实执行、重启与完整历史保全，也不放行目标环境。
+
 ---
 
 ## 1. 常用开发命令

@@ -93,9 +93,14 @@ type Application struct {
 	outboxDeliveryWorker     kafOutboxRunner
 	toolQueue                toolQueueCloser
 	startBackgroundTasksFunc func(context.Context)
+	backgroundTasks          sync.WaitGroup
+	eventRuntime             *eventbus.WatermillEventBus
+	connectorRuntime         *controller.ConnectorController
+	connectorManager         *connector.Manager
 }
 
 type toolQueueCloser interface {
+	Start(context.Context) error
 	Close()
 }
 
@@ -239,6 +244,9 @@ func NewApplication() *Application {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+	if err := cfg.Execution.Validate(); err != nil {
+		log.Fatalf("Invalid execution configuration: %v", err)
+	}
 
 	// 2. 初始化日志系统
 	logger := initLogger(&cfg.Log)
@@ -263,6 +271,15 @@ func NewApplication() *Application {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	client, systemClient := clients.Tenant, clients.System
+	if cfg.Execution.Mode == "candidate" && cfg.RLS.Mode != "enforce" {
+		sugar.Fatal("candidate execution requires enforced tenant RLS")
+	}
+	admissionCtx, admissionCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	admissionErr := database.ValidateExecutionRuntime(admissionCtx, database.GetRawDB(), cfg.Execution)
+	admissionCancel()
+	if admissionErr != nil {
+		sugar.Fatalw("execution runtime admission failed", "error", admissionErr)
+	}
 	// 6. 初始化服务层 & 控制器
 	// 这部分代码量较大，为了简化，我们先在这里进行组装，后续可以进一步拆分为 wires / container
 
@@ -286,7 +303,10 @@ func NewApplication() *Application {
 	// 事件驱动审计订阅方：sla.breached / ai.triage.completed 写入 AuditLog
 	auditSubscriber := service.NewEventAuditSubscriber(client, sugar)
 	for _, topic := range service.AuditedEventTopics() {
-		if err := eventBus.Subscribe(topic, auditSubscriber); err != nil {
+		if !cfg.Execution.Enabled("event_audit") {
+			continue
+		}
+		if err := eventBus.RegisterSubscription(topic, auditSubscriber); err != nil {
 			sugar.Warnw("failed to subscribe audit subscriber", "error", err, "topic", topic)
 		}
 	}
@@ -311,7 +331,10 @@ func NewApplication() *Application {
 	// Webhook 事件推送订阅方：sla.breached 按租户推送到已配置的 webhook 端点
 	webhookSubscriber := service.NewWebhookEventSubscriber(connectorManager, sugar)
 	for _, topic := range service.WebhookEventTopics() {
-		if err := eventBus.Subscribe(topic, webhookSubscriber); err != nil {
+		if !cfg.Execution.Enabled("webhook") {
+			continue
+		}
+		if err := eventBus.RegisterSubscription(topic, webhookSubscriber); err != nil {
 			sugar.Warnw("failed to subscribe webhook subscriber", "error", err, "topic", topic)
 		}
 	}
@@ -413,16 +436,7 @@ func NewApplication() *Application {
 	ragService := service.NewRAGServiceWithAutoConfig(client, vectorStore, embedder, sugar)
 	aiTelemetryService := service.NewAITelemetryService(database.GetRawDB())
 
-	// 非阻塞初始化：向量扩展检测与 Embedding 管道预热
-	// 如果 pgvector 扩展未就绪，RAG 功能自动降级为关键字搜索
-	go func() {
-		ctx := context.Background()
-		if err := vectorStore.EnsureExtension(ctx); err != nil {
-			sugar.Warnw("pgvector 扩展未就绪，RAG功能降级为关键字搜索", "error", err)
-			return
-		}
-		sugar.Infow("pgvector 扩展初始化成功")
-	}()
+	// Vector schema provisioning belongs to explicit migration/resource preparation.
 
 	// 控制器依赖
 	incidentMonitoringService := service.NewIncidentMonitoringService(client, sugar)
@@ -444,22 +458,19 @@ func NewApplication() *Application {
 	guidanceClient := service.NewGuidanceClient(guidanceURL, sugar)
 	triageService := service.NewTriageServiceWithGuidanceAndSugaredLogger(llmGateway, guidanceClient, sugar)
 	ticketAttachmentService := service.NewTicketAttachmentService(client, sugar)
-	// 配置了 MinIO 则切换附件存储后端为对象存储；失败回退本地文件系统。
+	// Verify the configured backend; failure must not select a different filesystem.
 	if cfg.MinIO.Endpoint != "" {
 		if minioStorage, err := service.NewMinioAttachmentStorage(
 			cfg.MinIO.Endpoint, cfg.MinIO.AccessKey, cfg.MinIO.SecretKey, cfg.MinIO.Bucket, cfg.MinIO.UseSSL,
 		); err != nil {
-			sugar.Warnw("failed to init MinIO storage, falling back to local filesystem", "error", err)
+			sugar.Fatalw("configured attachment storage is unavailable", "error", err)
 		} else {
 			ticketAttachmentService.SetStorage(minioStorage)
 			sugar.Infow("attachment storage backend: minio", "endpoint", cfg.MinIO.Endpoint, "bucket", cfg.MinIO.Bucket)
 		}
 	}
 
-	// 从数据库恢复已配置的连接器（如 msgraph-email），避免进程重启后丢失
-	if err := connectorController.LoadAll(tenantctx.SystemContext(context.Background(), "bootstrap:connectors", "load configured tenant connector registrations")); err != nil {
-		sugar.Warnw("Failed to restore connectors from DB", "error", err)
-	}
+	// Connector activation belongs to the explicitly enabled runtime lifecycle.
 
 	rootCauseService := service.NewRootCauseService(client, sugar)
 	// LLM/Embedding/VectorStore
@@ -561,7 +572,6 @@ func NewApplication() *Application {
 	ticketTagController := controller.NewTicketTagController(ticketTagService, sugar.Desugar())
 
 	bpmnWorkflowController := controller.NewBPMNWorkflowController(processEngine, bpmnVersionService, client)
-	bpmnTemplateService := service.NewBPMNTemplateService(client)
 
 	// BPMN Process Trigger Controller (processBindingService/processTriggerService 已于 119-122 行预创建并注入 V2)
 	configInheritanceService := service.NewConfigInheritanceService(client, sugar)
@@ -597,17 +607,7 @@ func NewApplication() *Application {
 
 	// Set process trigger service for workflow integration (after processTriggerService is declared)
 
-	// 初始化模板并部署默认流程
-	go func() {
-		const defaultTenantID = 1
-		ctx := tenantctx.WithTenantID(context.Background(), defaultTenantID)
-		if _, err := bpmnTemplateService.LoadAndDeployTemplates(ctx, defaultTenantID); err != nil {
-			sugar.Warnw("Failed to deploy BPMN templates", "error", err)
-		}
-		if err := processBindingService.InitDefaultBindings(ctx, defaultTenantID); err != nil {
-			sugar.Warnw("Failed to init default process bindings", "error", err)
-		}
-	}()
+	// Startup never deploys defaults or modifies historical process configuration.
 
 	dashboardService := service.NewDashboardService(client, sugar)
 	dashboardHandler := handlers.NewDashboardHandler(dashboardService, ticketService, incidentService, sugar)
@@ -1015,6 +1015,9 @@ func NewApplication() *Application {
 		notificationWorker:   ticketNotificationService,
 		outboxDeliveryWorker: outboxDeliveryWorker,
 		toolQueue:            toolQueue,
+		eventRuntime:         eventBus,
+		connectorRuntime:     connectorController,
+		connectorManager:     connectorManager,
 	}
 }
 
@@ -1228,48 +1231,40 @@ func needsBootstrapAdmin(ctx context.Context, client *ent.Client) (bool, error) 
 	return !exists, nil
 }
 
-func (app *Application) Run() {
+func (app *Application) Run() error {
 	defer app.Logger.Sync()
+	defer func() {
+		if app.systemClient != nil {
+			_ = app.systemClient.Close()
+		}
+		if app.DBClient != nil {
+			_ = app.DBClient.Close()
+		}
+	}()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	stopAPIRuntime := app.startAPIRuntime(ctx)
-	defer stopAPIRuntimeBeforeDependencies(stopAPIRuntime, func() {
-		if app.systemClient != nil {
-			app.systemClient.Close()
-		}
-		app.DBClient.Close()
-	})
-
+	// Reserve the listening port before starting any background consumer.
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", app.Cfg.Server.Port))
 	if err != nil {
-		log.Fatalf("Failed to listen on server port: %v", err)
+		return fmt.Errorf("listen on server port: %w", err)
 	}
+	return app.runHTTPRuntime(ctx, listener)
+}
+
+func (app *Application) runHTTPRuntime(ctx context.Context, listener net.Listener) error {
+	defer listener.Close()
+	stopRuntime, err := app.startAPIRuntime(ctx)
+	if err != nil {
+		return fmt.Errorf("start application runtime: %w", err)
+	}
+	defer stopRuntime()
 	server := &http.Server{Handler: app.Router}
-	app.Logger.Infof("Server starting on port %d", app.Cfg.Server.Port)
-	if err := serveUntilContextCancelled(ctx, server, listener); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
-	}
+	return serveUntilContextCancelled(ctx, server, listener)
 }
 
 func stopAPIRuntimeBeforeDependencies(stopRuntime func(), closeDependencies func()) {
 	stopRuntime()
 	closeDependencies()
-}
-
-// startAPIRuntime starts the background responsibilities that remain owned by
-// the API process in this release. KAF delegation delivery is deliberately
-// excluded: it has a single owner in the dedicated Worker process.
-func (app *Application) startAPIRuntime(ctx context.Context) func() {
-	waitForOutboxDelivery := app.startOutboxDeliveryWorker(ctx)
-	backgroundCtx, cancelBackground := context.WithCancel(ctx)
-	app.startBackground(backgroundCtx)
-	return func() {
-		cancelBackground()
-		waitForOutboxDelivery()
-		if app.toolQueue != nil {
-			app.toolQueue.Close()
-		}
-	}
 }
 
 func (app *Application) startBackground(ctx context.Context) {
@@ -1321,48 +1316,63 @@ func serveUntilContextCancelled(ctx context.Context, server *http.Server, listen
 }
 
 func (app *Application) startBackgroundTasks(lifecycleCtx context.Context) {
-	app.startCallbackOutboxWorker(lifecycleCtx)
-	app.startNotificationDeliveryWorker(lifecycleCtx)
+	if app.Cfg.Execution.Enabled("callback") {
+		app.startCallbackOutboxWorker(lifecycleCtx)
+	}
+	if app.Cfg.Execution.Enabled("notification") {
+		app.startNotificationDeliveryWorker(lifecycleCtx)
+	}
 
-	go func() {
-		pipeline := service.NewEmbeddingPipeline(app.DBClient, app.Embedder, app.Logger, app.VectorStore)
-		ctx := context.Background()
-		// initial full-ish pass per tenant
-		tenants, err := app.DBClient.Tenant.Query().All(ctx)
-		if err == nil {
-			for _, t := range tenants {
-				if err := pipeline.RunOnce(ctx, t.ID, 200); err != nil {
-					app.Logger.Warnw("embedding pipeline failed", "error", err, "tenant_id", t.ID)
-				}
-			}
-		} else {
-			// fallback default tenant 1
-			if err := pipeline.RunOnce(ctx, 1, 200); err != nil {
-				app.Logger.Warnw("embedding pipeline failed", "error", err, "tenant_id", 1)
-			}
-		}
-		// periodic incremental per tenant
-		ticker := time.NewTicker(15 * time.Minute)
-		defer ticker.Stop()
-		for range ticker.C {
+	if app.Cfg.Execution.Enabled("embedding") {
+		app.backgroundTasks.Add(1)
+		go func() {
+			defer app.backgroundTasks.Done()
+			pipeline := service.NewEmbeddingPipeline(app.DBClient, app.Embedder, app.Logger, app.VectorStore)
+			ctx := lifecycleCtx
+			// initial full-ish pass per tenant
 			tenants, err := app.DBClient.Tenant.Query().All(ctx)
-			if err != nil {
-				continue
+			if err == nil {
+				for _, t := range tenants {
+					if err := pipeline.RunOnce(ctx, t.ID, 200); err != nil {
+						app.Logger.Warnw("embedding pipeline failed", "error", err, "tenant_id", t.ID)
+					}
+				}
+			} else {
+				app.Logger.Warnw("embedding tenant inventory unavailable", "error", err)
 			}
-			for _, t := range tenants {
-				if err := pipeline.RunOnce(ctx, t.ID, 50); err != nil {
-					app.Logger.Warnw("embedding pipeline failed", "error", err, "tenant_id", t.ID)
+			// periodic incremental per tenant
+			ticker := time.NewTicker(15 * time.Minute)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+				}
+				tenants, err := app.DBClient.Tenant.Query().All(ctx)
+				if err != nil {
+					continue
+				}
+				for _, t := range tenants {
+					if err := pipeline.RunOnce(ctx, t.ID, 50); err != nil {
+						app.Logger.Warnw("embedding pipeline failed", "error", err, "tenant_id", t.ID)
+					}
 				}
 			}
-		}
-	}()
+		}()
+	}
 
 	// SLA Monitoring and Escalation background tasks
+	if !app.Cfg.Execution.Enabled("sla") && !app.Cfg.Execution.Enabled("escalation") {
+		return
+	}
+	app.backgroundTasks.Add(1)
 	go func() {
+		defer app.backgroundTasks.Done()
 		slaMonitorService := service.NewSLAMonitorService(app.DBClient, app.Logger)
 		escalationService := service.NewEscalationService(app.DBClient, app.Logger)
 
-		ctx := context.Background()
+		ctx := lifecycleCtx
 		// Run SLA check every 5 minutes
 		slaTicker := time.NewTicker(5 * time.Minute)
 		defer slaTicker.Stop()
@@ -1373,7 +1383,12 @@ func (app *Application) startBackgroundTasks(lifecycleCtx context.Context) {
 
 		for {
 			select {
+			case <-ctx.Done():
+				return
 			case <-slaTicker.C:
+				if !app.Cfg.Execution.Enabled("sla") {
+					continue
+				}
 				tenants, err := app.DBClient.Tenant.Query().All(ctx)
 				if err != nil {
 					continue
@@ -1384,6 +1399,9 @@ func (app *Application) startBackgroundTasks(lifecycleCtx context.Context) {
 					}
 				}
 			case <-escalationTicker.C:
+				if !app.Cfg.Execution.Enabled("escalation") {
+					continue
+				}
 				tenants, err := app.DBClient.Tenant.Query().All(ctx)
 				if err != nil {
 					continue
@@ -1403,7 +1421,11 @@ func (app *Application) startCallbackOutboxWorker(ctx context.Context) {
 		return
 	}
 	workerID := "bpmn-callback-" + uuid.NewString()
-	go app.callbackWorker.RunCallbackOutboxWorker(ctx, workerID, 2*time.Second)
+	app.backgroundTasks.Add(1)
+	go func() {
+		defer app.backgroundTasks.Done()
+		app.callbackWorker.RunCallbackOutboxWorker(ctx, workerID, 2*time.Second)
+	}()
 }
 
 func (app *Application) startNotificationDeliveryWorker(ctx context.Context) {
@@ -1411,5 +1433,9 @@ func (app *Application) startNotificationDeliveryWorker(ctx context.Context) {
 		return
 	}
 	workerID := "ticket-notification-" + uuid.NewString()
-	go app.notificationWorker.RunDeliveryWorker(ctx, workerID, 2*time.Second)
+	app.backgroundTasks.Add(1)
+	go func() {
+		defer app.backgroundTasks.Done()
+		app.notificationWorker.RunDeliveryWorker(ctx, workerID, 2*time.Second)
+	}()
 }

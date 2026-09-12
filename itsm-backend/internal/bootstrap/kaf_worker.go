@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"itsm-backend/config"
 	"itsm-backend/database"
@@ -35,6 +36,12 @@ func NewKAFWorkerApplication() (*KAFWorkerApplication, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load worker configuration: %w", err)
 	}
+	if err := cfg.Execution.Validate(); err != nil {
+		return nil, err
+	}
+	if !cfg.Execution.Enabled("kaf_worker") {
+		return nil, fmt.Errorf("KAF worker execution is disabled")
+	}
 	if err := ValidateWebStartupConfig(cfg); err != nil {
 		return nil, fmt.Errorf("validate worker startup configuration: %w", err)
 	}
@@ -48,6 +55,17 @@ func NewKAFWorkerApplication() (*KAFWorkerApplication, error) {
 		return nil, fmt.Errorf("connect worker database: %w", err)
 	}
 	client := clients.Tenant
+	if cfg.Execution.Mode == "candidate" && cfg.RLS.Mode != "enforce" {
+		_ = clients.Close()
+		return nil, fmt.Errorf("candidate worker requires enforced tenant RLS")
+	}
+	admissionCtx, admissionCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	admissionErr := database.ValidateExecutionRuntime(admissionCtx, database.GetRawDB(), cfg.Execution)
+	admissionCancel()
+	if admissionErr != nil {
+		_ = clients.Close()
+		return nil, admissionErr
+	}
 	metrics := service.NewKafOutboxMetrics()
 	dispatcher, err := service.NewKafOutboxDispatcher(
 		service.NewOutboxEventRepository(clients.System),

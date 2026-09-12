@@ -60,6 +60,14 @@ When making architecture choices, prefer enterprise correctness, auditability, t
 
 ## Architecture Principles
 
+### Runtime lifecycle and candidate execution
+
+- Service construction must not start consumers, deploy default workflows, create storage resources, or initialize schema. Runtime startup is explicit; cancellation and worker completion precede dependency shutdown.
+- Candidate execution scope is an additional deployment restriction, never a replacement for tenant/RBAC or professional lifecycle authorization. Only new WorkItems may be enrolled in their creation transaction; historical records must not be enrolled, claimed, acknowledged, or rewritten to enable acceptance.
+- Execution configuration and database role bindings must agree. Unknown capabilities fail closed; disabled required journeys remain unvalidated. A configured attachment backend must not silently fall back to another storage location.
+
+### General design rules
+
 - Prefer architectural refactoring over compatibility layers, wrappers, bridge services, temporary fallbacks, or parallel implementations. When a new path replaces an old path, remove the old path in the same change unless backward compatibility is an explicit requirement.
 - Keep one authoritative source for each business concept and field. Do not maintain long-term dual reads, dual writes, duplicated queries, duplicated abstractions, or JSON fields alongside structured relations.
 - Prefer configuration-driven, registry-based, policy-based, and strategy-based behavior over hardcoded routing, tenant data, business vocabulary, thresholds, or keyword heuristics. Put variable product behavior in configuration or domain metadata.
@@ -158,4 +166,3 @@ The unified Work Item model is the shared business language for Ticket, Service 
 - Do not create a giant service or `switch recordClass` that implements every professional state machine. Shared services coordinate common behavior; professional services validate professional transitions and side effects.
 
 Operational commands, testing procedures, naming details, DTO examples, deployment operations, and troubleshooting belong in [docs/DEVELOPMENT_GUIDE.md](docs/DEVELOPMENT_GUIDE.md).
-

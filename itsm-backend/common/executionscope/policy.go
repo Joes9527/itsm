@@ -26,9 +26,16 @@ const (
 
 var deploymentPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 
+func ValidateDeploymentID(id string) error {
+	if !deploymentPattern.MatchString(id) {
+		return fmt.Errorf("%w: invalid deployment identity", ErrDenied)
+	}
+	return nil
+}
+
 func ValidateRef(ref Ref) error {
 	id, err := uuid.Parse(ref.ScopeID)
-	if err != nil || id == uuid.Nil || id.String() != ref.ScopeID || ref.TenantID <= 0 || !deploymentPattern.MatchString(ref.DeploymentID) {
+	if err != nil || id == uuid.Nil || id.String() != ref.ScopeID || ref.TenantID <= 0 || ValidateDeploymentID(ref.DeploymentID) != nil {
 		return fmt.Errorf("%w: invalid deployment, scope or tenant identity", ErrDenied)
 	}
 	return nil

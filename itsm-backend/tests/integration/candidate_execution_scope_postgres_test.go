@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
+	"itsm-backend/config"
 	"itsm-backend/database"
 	"itsm-backend/migration"
 )
@@ -78,6 +79,13 @@ GRANT SELECT ON execution_scopes,execution_scope_members,execution_runtime_bindi
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	ctx = tenantctx.WithTenantID(ctx, 1)
+	t.Run("runtime admission checks role and configured scopes", func(t *testing.T) {
+		cfg := config.ExecutionConfig{Mode: "candidate", DeploymentID: scope.DeploymentID, Scopes: []config.ExecutionScopeConfig{{TenantID: scope.TenantID, ScopeID: scope.ScopeID}}}
+		require.NoError(t, database.ValidateExecutionRuntime(ctx, run, cfg))
+		require.Error(t, database.ValidateExecutionRuntime(ctx, owner, cfg), "owner must not be admitted as runtime")
+		cfg.DeploymentID = "other"
+		require.Error(t, database.ValidateExecutionRuntime(ctx, run, cfg))
+	})
 	t.Run("custom default grants do not leak dangerous privileges", func(t *testing.T) {
 		var tableWrite, functionExecute bool
 		require.NoError(t, run.QueryRow(`SELECT has_table_privilege(current_user,'execution_scope_members','TRUNCATE'),

@@ -18,9 +18,38 @@ import (
 func newLifecycleTestQueue(t *testing.T, capacity int, processor func(context.Context, ToolJob) error, logger *zap.SugaredLogger) *ToolQueue {
 	t.Helper()
 	q := &ToolQueue{}
-	q.start(capacity, logger, processor)
+	q.initialize(capacity, logger, processor)
+	require.NoError(t, q.Start(context.Background()))
 	t.Cleanup(q.Close)
 	return q
+}
+
+func TestToolQueueRequiresExplicitStartAndHonorsCancellation(t *testing.T) {
+	q := &ToolQueue{}
+	started := make(chan struct{})
+	q.initialize(1, zap.NewNop().Sugar(), func(ctx context.Context, _ ToolJob) error {
+		close(started)
+		<-ctx.Done()
+		return ctx.Err()
+	})
+	t.Cleanup(q.Close)
+	require.Error(t, q.Enqueue(ToolJob{InvocationID: 1, TenantID: 1}))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	require.NoError(t, q.Start(ctx))
+	require.Error(t, q.Start(ctx), "duplicate start must not create another worker")
+	require.NoError(t, q.Enqueue(ToolJob{InvocationID: 1, TenantID: 1}))
+	<-started
+	cancel()
+	q.Close()
+	require.Error(t, q.Start(context.Background()))
+}
+
+func TestToolQueueCanCloseBeforeStart(t *testing.T) {
+	q := &ToolQueue{}
+	q.initialize(1, nil, func(context.Context, ToolJob) error { t.Fatal("unstarted processor ran"); return nil })
+	q.Close()
+	require.Error(t, q.Start(context.Background()))
 }
 
 func TestToolQueueCloseWaitsForActiveJobAndRejectsNewWork(t *testing.T) {

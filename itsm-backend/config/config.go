@@ -17,6 +17,7 @@ import (
 )
 
 type Config struct {
+	Execution      ExecutionConfig  `mapstructure:"execution"`
 	Database       DatabaseConfig   `mapstructure:"database"`
 	Server         ServerConfig     `mapstructure:"server"`
 	JWT            JWTConfig        `mapstructure:"jwt"`
@@ -279,6 +280,7 @@ func LoadConfig() (*Config, error) {
 	viper.Set("security", rawConfig["security"])
 	viper.Set("admin", rawConfig["admin"])
 	viper.Set("deployment", rawConfig["deployment"])
+	viper.Set("execution", rawConfig["execution"])
 
 	// 重新绑定到 Config 结构
 	var config Config

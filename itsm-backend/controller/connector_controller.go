@@ -26,7 +26,8 @@ import (
 // concrete type) purely so tests can substitute a fake without spinning up
 // real polling goroutines.
 type emailPollingCoordinator interface {
-	Start(ctx context.Context, tenantID int, conn *msgraphpkg.GraphConnector)
+	Start(ctx context.Context, tenantID int, conn *msgraphpkg.GraphConnector) error
+	Close()
 	Stop(tenantID int)
 }
 
@@ -182,7 +183,10 @@ func (c *ConnectorController) Provision(ctx *gin.Context) {
 				// context.WithoutCancel preserves any request-scoped values
 				// while detaching from the request's cancellation signal, so
 				// the poller isn't killed within microseconds of starting.
-				c.emailCoordinator.Start(context.WithoutCancel(ctx.Request.Context()), tenantID, gc)
+				if err := c.emailCoordinator.Start(context.WithoutCancel(ctx.Request.Context()), tenantID, gc); err != nil {
+					common.Fail(ctx, common.InternalErrorCode, "邮件轮询启动失败")
+					return
+				}
 			}
 		}
 	}
@@ -513,17 +517,25 @@ func (c *ConnectorController) LoadAll(ctx context.Context) error {
 			CreatedAt:   cfg.CreatedAt,
 			UpdatedAt:   cfg.UpdatedAt,
 		}); err != nil {
-			c.logger.Warnw("Failed to restore connector from DB", "error", err, "tenant", cfg.TenantID, "name", cfg.Name)
-			continue
+			return fmt.Errorf("restore connector %s for tenant %d: %w", cfg.Name, cfg.TenantID, err)
 		}
 		// 恢复 msgraph-email 的邮件轮询
 		if cfg.Name == "msgraph-email" && cfg.Enabled && c.emailCoordinator != nil {
 			if conn, ok := c.manager.Get(cfg.TenantID, "msgraph-email"); ok {
 				if gc, ok := conn.(*msgraphpkg.GraphConnector); ok {
-					c.emailCoordinator.Start(tenantCtx, cfg.TenantID, gc)
+					if err := c.emailCoordinator.Start(tenantCtx, cfg.TenantID, gc); err != nil {
+						return fmt.Errorf("start email polling: %w", err)
+					}
 				}
 			}
 		}
 	}
 	return nil
+}
+
+// ClosePolling waits before connector and database dependencies are closed.
+func (c *ConnectorController) ClosePolling() {
+	if c.emailCoordinator != nil {
+		c.emailCoordinator.Close()
+	}
 }

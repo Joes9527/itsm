@@ -211,10 +211,11 @@ type fakeEmailCoordinator struct {
 	stopped []int // tenantIDs Stop was called for
 }
 
-func (f *fakeEmailCoordinator) Start(_ context.Context, tenantID int, _ *msgraphpkg.GraphConnector) {
+func (f *fakeEmailCoordinator) Start(_ context.Context, tenantID int, _ *msgraphpkg.GraphConnector) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.started = append(f.started, tenantID)
+	return nil
 }
 
 func (f *fakeEmailCoordinator) Stop(tenantID int) {
@@ -272,10 +273,11 @@ type ctxCapturingEmailCoordinator struct {
 	ctx context.Context
 }
 
-func (f *ctxCapturingEmailCoordinator) Start(ctx context.Context, _ int, _ *msgraphpkg.GraphConnector) {
+func (f *ctxCapturingEmailCoordinator) Start(ctx context.Context, _ int, _ *msgraphpkg.GraphConnector) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.ctx = ctx
+	return nil
 }
 
 func (f *ctxCapturingEmailCoordinator) Stop(_ int) {}
@@ -435,3 +437,7 @@ func TestConnectorController_Test_Success(t *testing.T) {
 	data := resp.Data.(map[string]interface{})
 	assert.Equal(t, "ch-test", data["channel"])
 }
+
+func (f *fakeEmailCoordinator) Close() {}
+
+func (f *ctxCapturingEmailCoordinator) Close() {}
