@@ -34,6 +34,8 @@
 - [ITSM 双机双 Agent 候选交付总计划](./superpowers/plans/2026-09-12-itsm-candidate-two-agent-delivery.md)
 
 - [ITSM 候选版本集成、验收与 WSL 交付设计（accepted）](./superpowers/specs/2026-09-12-itsm-candidate-integration-delivery-design.md)
+- [候选执行范围与启动生命周期设计（draft）](./superpowers/specs/2026-09-12-itsm-candidate-execution-scope-design.md)
+- [PostgreSQL 鉴权状态权威设计（draft）](./superpowers/specs/2026-09-12-itsm-candidate-auth-state-design.md)
 
 - [SSLVPN：KAF 对话受理、统一创建与授权闭环设计](./superpowers/specs/2026-09-05-sslvpn-kaf-intake-end-to-end-design.md)
 - [SSLVPN 端到端实施总计划](./superpowers/plans/2026-09-05-sslvpn-end-to-end-implementation.md)

@@ -123,6 +123,8 @@ Redis 冷启动撤销必须验证撤销状态不丢失或鉴权明确失败。�
 
 维护者已确认双机分工，实施入口为[双 Agent 总计划](../plans/2026-09-12-itsm-candidate-two-agent-delivery.md)。先执行 T1/T2，补齐实际资源准入，再按任务门禁推进；真实源停写或企业外部动作仍需对应具体操作范围。
 
+T2 revision-2 后续：维护者已同意前置修复方向，详细设计分别见[执行范围与生命周期](2026-09-12-itsm-candidate-execution-scope-design.md)和[PostgreSQL 鉴权状态权威](2026-09-12-itsm-candidate-auth-state-design.md)。两份目前为 draft，不替代本设计门禁或放行 T3；实际代码完成状态以 A 的固定 SHA 交接为准。本文件早期“实施未开始”描述属于原设计提交时点，不用于覆盖后续 T1/T2 证据。
+
 
 ## 10. 独立设计审阅记录
 
