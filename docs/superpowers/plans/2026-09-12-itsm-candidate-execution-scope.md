@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use executing-plans to implement this plan task-by-task. Do not spawn extra implementation agents. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-状态：accepted（书面设计已确认；实施未开始）。
+状态：accepted（实施中；S1/S2 已提交并完成该阶段验证，S3–S6 未开始）。
 
 **Goal:** 关闭 T2 B2，证明真实候选新任务可以执行而历史记录和队列保持不变。
 
@@ -46,7 +46,7 @@ func RequireExecutionMember(ctx context.Context, tx *sql.Tx, ref executionscope.
 
 **Files:** 上述 policy/database/migration 新文件；`migration/migrations.go`、`migration/migration_plan.go`、`migration/migration_plan_test.go`；新增集成测试文件。
 
-- [ ] 写 `TestValidateRefRejectsIncompleteIdentity`，直接覆盖所有缺失项：
+- [x] 写 `TestValidateRefRejectsIncompleteIdentity`，直接覆盖所有缺失项：
 ```go
 func TestValidateRefRejectsIncompleteIdentity(t *testing.T) {
     for _, ref := range []Ref{{}, {DeploymentID: "candidate", TenantID: 1}, {ScopeID: "bad", TenantID: 1}} {
@@ -54,13 +54,15 @@ func TestValidateRefRejectsIncompleteIdentity(t *testing.T) {
     }
 }
 ```
-- [ ] 运行 `go test ./common/executionscope -count=1` 保存 RED；补齐 UUID、非空部署、正数 tenant 验证及有限能力名称/mode 检查，再运行 GREEN。
-- [ ] 写真实 PG 测试：owner 建源 fixture；runtime 尝试直接登记历史 ID 必须 permission denied；合法新 tickets INSERT 自动登记；专业扩展失败导致 tickets/member 全回滚；跨 tenant/关闭/跨部署范围拒绝。运行新测试名 `TestCandidateScopeRegistration`，确认 RED 后再写迁移。
-- [ ] 新表固定为 `execution_scopes`、`execution_scope_members`、`execution_runtime_bindings`。最后一表由维护者绑定 DB session_user、deployment、standard/candidate 模式；运行角色无写权限。成员 work_item_id 唯一，scope 外键，tenant 从 tickets/scope 比较，不复制业务状态。候选角色绑定缺失不能默认标准模式。
-- [ ] INSERT 触发器从可信 runtime binding 与事务局部设置核对 scope/tenant，使用窄 SECURITY DEFINER 固定 search_path、全限定对象及撤销 PUBLIC EXECUTE；runtime 禁止直接成员 DML。标准角色显式 binding 才不登记；任何普通请求无法从 candidate 切换成 standard。
-- [ ] `BindExecutionScope` 核对绑定/活动范围后使用参数化 `set_config('app.execution_scope_id',$1,true)`，只在当前事务生效。`RequireExecutionMember` 必须命中同 deployment/tenant 的 active scope 和成员，否则返回明确错误。关闭范围先停止全部执行实例再更新。
-- [ ] 注册 `039_candidate_execution_scope`：先确认版本未占用；不要修改 frozenMigrationVersions，新增普通定义放在冻结普通流之后、R 之前。测试旧24条账本仍合法、037/032–036前置保留、新版本可在无038时规划、未知/漂移账本拒绝。与后续040同时集成时顺序039→040→手动038，依赖不从版本数字推断。
-- [ ] 运行 `go test ./migration ./common/executionscope -count=1` 及真实角色用例 GREEN；核对 SQL 无历史 UPDATE/DELETE/DROP/backfill，再提交 `feat: add bounded candidate execution membership`。
+- [x] 运行 `go test ./common/executionscope -count=1` 保存 RED；补齐 UUID、非空部署、正数 tenant 验证及有限能力名称/mode 检查，再运行 GREEN。
+- [x] 写真实 PG 测试：owner 建源 fixture；runtime 尝试直接登记历史 ID 必须 permission denied；合法新 tickets INSERT 自动登记；专业扩展失败导致 tickets/member 全回滚；跨 tenant/关闭/跨部署范围拒绝。运行新测试名 `TestCandidateScopeRegistration`，确认 RED 后再写迁移。
+- [x] 新表固定为 `execution_scopes`、`execution_scope_members`、`execution_runtime_bindings`。最后一表由维护者绑定 DB session_user、deployment、standard/candidate 模式；运行角色无写权限。成员 work_item_id 唯一，scope 外键，tenant 从 tickets/scope 比较，不复制业务状态。候选角色绑定缺失不能默认标准模式。
+- [x] INSERT 触发器从可信 runtime binding 与事务局部设置核对 scope/tenant，使用窄 SECURITY DEFINER 固定 search_path、全限定对象及撤销 PUBLIC EXECUTE；runtime 禁止直接成员 DML。标准角色显式 binding 才不登记；任何普通请求无法从 candidate 切换成 standard。
+- [x] `BindExecutionScope` 核对绑定/活动范围后使用参数化 `set_config('app.execution_scope_id',$1,true)`，只在当前事务生效。`RequireExecutionMember` 必须命中同 deployment/tenant 的 active scope 和成员，否则返回明确错误。关闭范围先停止全部执行实例再更新。
+- [x] 注册 `039_candidate_execution_scope`：先确认版本未占用；不要修改 frozenMigrationVersions，新增普通定义放在冻结普通流之后、R 之前。测试旧24条账本仍合法、037/032–036前置保留、新版本可在无038时规划、未知/漂移账本拒绝。与后续040同时集成时顺序039→040→手动038，依赖不从版本数字推断。
+- [x] 运行 `go test ./migration ./common/executionscope -count=1` 及真实角色用例 GREEN；核对 SQL 无历史 UPDATE/DELETE/DROP/backfill，再提交 `feat: add bounded candidate execution membership`。
+
+S1 提交：`ae97fbfd2`。真实私有 PostgreSQL16 的受限角色、原子登记/回滚、跨租户/部署/关闭拒绝及默认 ACL 检查通过；独立审阅的历史 R 依赖与默认 ACL 问题已修复。该结果不替代目标 PostgreSQL17 验证。
 
 ## S2：无副作用构造与显式生命周期
 
@@ -68,11 +70,13 @@ func TestValidateRefRejectsIncompleteIdentity(t *testing.T) {
 
 **Interface:** 生命周期使用 `Start(context.Context) error` / `Stop(context.Context) error`；先停止/等待消费者再关闭依赖。能力清单只接受设计第4节列出的名字，默认未声明项 disabled，required G2 项 disabled 阻塞验收。
 
-- [ ] 写 `TestConstructDoesNotStartRuntime`、`TestRuntimeStopsBeforeDependencies`，以计数器证明构造零 Start，显式运行只启动一次；Stop 等待未结束任务。运行 `go test ./internal/bootstrap -run 'TestConstruct|TestRuntime' -count=1` 保存 RED。
-- [ ] 从 app.go 构造移除订阅、EnsureExtension、LoadAndDeployTemplates、InitDefaultBindings、LoadAll、内存队列 goroutine；分别交给迁移、具名资源准备或显式生命周期。流程配置只读验证。不要在 Run 中无条件复刻自动初始化。
-- [ ] 把 embedding/SLA/escalation 的 context.Background 改为生命周期 context，ticker select 包含 Done，加入 wait group。禁用能力不创建 goroutine、不查全量数据。minio 只检查已存在 bucket，失败返回错误；选定后端不能 fallback。
-- [ ] config 新增显式 standard/candidate 模式、deployment/scopes/capability 清单；启动核验数据库角色绑定与范围一致。旧生产配置如何补足只记录手册，不操作旧部署。
-- [ ] 运行定向生命周期与 attachment/tool queue 测试 GREEN，并用 `candidate_runtime_preservation_test.go` 在真实隔离依赖核对构造前后表、bucket、stream 无新增副作用；提交 `refactor: make application runtime startup explicit`。
+- [x] 写 `TestConstructDoesNotStartRuntime`、`TestRuntimeStopsBeforeDependencies`，以计数器证明构造零 Start，显式运行只启动一次；Stop 等待未结束任务。运行 `go test ./internal/bootstrap -run 'TestConstruct|TestRuntime' -count=1` 保存 RED。
+- [x] 从 app.go 构造移除订阅、EnsureExtension、LoadAndDeployTemplates、InitDefaultBindings、LoadAll、内存队列 goroutine；分别交给迁移、具名资源准备或显式生命周期。流程配置只读验证。不要在 Run 中无条件复刻自动初始化。
+- [x] 把 embedding/SLA/escalation 的 context.Background 改为生命周期 context，ticker select 包含 Done，加入 wait group。禁用能力不创建 goroutine、不查全量数据。minio 只检查已存在 bucket，失败返回错误；选定后端不能 fallback。
+- [x] config 新增显式 standard/candidate 模式、deployment/scopes/capability 清单；启动核验数据库角色绑定与范围一致。旧生产配置如何补足只记录手册，不操作旧部署。
+- [x] 运行定向生命周期与 attachment/tool queue 测试 GREEN，并用 `candidate_runtime_preservation_test.go` 在真实隔离依赖核对构造前后表、bucket、stream 无新增副作用；提交 `refactor: make application runtime startup explicit`。
+
+S2 提交：`fbd52c240e91124f12709486c946bf6d85768770`；A 的阶段交接提交 `b2cdeb62f`（实现 worktree）。实际测试使用现有生命周期测试命名并补充 `TestOccupiedPortDoesNotStartRuntime`、`TestServeFailureStopsRuntime`、`TestEnabledCapabilityRequiresRunnerBeforeStartingAnything` 及 `TestCandidateConstructPreservesDatabaseAndStreams`，未迁移既有测试。构建、定向并发检测、真实 PG 角色检查，以及 PG16/独立 Redis7.2.16/固定源码 MinIO 的完整构造前后保全均通过。独立审阅发现的关闭等待、重复关闭、错误退出和测试端口误连问题已关闭；证据及有限观察边界详见实现分支的 `docs/review/2026-09-12-candidate-t1-handoff.md` B2 检查点。S2 通过不放行候选，不替代 S3–S6 和鉴权计划。
 
 ## S3：业务创建、修改与结构化子任务归属
 
