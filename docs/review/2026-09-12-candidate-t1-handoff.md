@@ -7,7 +7,7 @@
 - Branch：`codex/feat/candidate-integration`
 - Worktree：`/Users/julian/.worktrees/itsm-candidate-integration`
 - SourceSHA：main `a25e108d2a08a55469fa5ad547aac5a9adc251ff`；WorkItem `8152ee668a6096c98f90349fd7e43ebcd4f1c587`；主题 `eb76c3bca6a4cee4809711477231f486d01d04c5`。
-- ConsumedHandoffs：设计/计划提交 `2a993f7159ed43afc471a6ae938c379a47149ec2`；尚未收到 T2/T3 交接。
+- ConsumedHandoffs：设计/计划提交 `2a993f7159ed43afc471a6ae938c379a47149ec2`；T2 提交 `dfe697073b289da89d410a405623482bfe0981a8`（后续复核见第 5 节）；尚未收到 T3 交接。
 - Resources：WSL not-created/not-modified；仅本机任务 worktree、依赖与私有验证日志。所有原 worktree 保留。
 
 ## 1. 集成与复核
@@ -75,7 +75,7 @@
 | base-workitem-unit | `61cb33ef34a59310cd8f17d2009d1a12416a1ecdc4be06ac9f1d5b4a87e86012` |
 | base-theme-unit | `30d9fcbfb3da7e2fbf78d527b1b799e7feb517f7e6f2aeede459ff048bce6015` |
 
-## 4. B 的下一步与未验证范围
+## 4. T1 首次交付时的下一步与未验证范围（后续状态见第 5 节）
 
 **NextAllowedAction：** B 完成 T2，基于 CandidateSHA 重核完整迁移语义、角色、后台写入者及目标资源。只有全部准入通过，才进入 T3；不能把 G1 当作应用启动许可。
 
@@ -84,3 +84,19 @@
 **NotValidated：** WSL/Linux 构建；真实源/副本恢复；P/普通迁移；全部后台写入隔离；真实 DB opt-in 测试；浏览器完整 G2；Redis 冷启动撤销目标验收；HMAC 恢复；60 分钟稳定运行；维护者旅程。R、真实企业外部写入和生产上线仍排除。
 
 A 在收到 T3 固定 EnvironmentRevision 后才执行 T4；此时不修改 B 配置、不启动其服务，也不自行执行共享数据库变更。未推送、未合并 main。
+
+## 5. T2 消费与源选择决定（2026-09-12）
+
+已验证 T2 bundle，本机与 WSL SHA256 均为 `3378b5b3bc80323a38171d85b7bb500b9b25327d3df1422ce63d46e5a241cf53`；仅导入独立 handoff 引用，不合并 B 分支、不修改其交接记录。T2 的 blocked 结论仍有效。
+
+维护者在本会话明确同意：使用 `itsm_config_baseline_20260908` / `public` 作为候选数据库备份源，由 B 继续核实关联 Redis DB11、对象与本地附件范围。该决定关闭 B1 的数据库/schema 选择项；不将配置观察提升为活动连接证明。B1 的关联存储范围与一致性时间边界仍待 B 提供证据；本次同意不单独放行源停写、复制、恢复、迁移或应用启动。
+
+CandidateSHA 仍为 `d7470a32dbb87acc9b5e4d9a895a146410723561`。与 B 检查的 `8152ee668a6096c98f90349fd7e43ebcd4f1c587` 比较，`itsm-backend/` 无差异，故 B 的后台写入与鉴权发现适用于该候选。B4 的固定版本输入现已补齐，但恢复、迁移结构与角色证据仍未关闭。
+
+下一步职责：
+
+- A：先设计 B2 的构造/启动副作用控制与候选执行范围，再设计 B3 的 Redis 冷启动及状态丢失拒绝策略。沿用已有任务、鉴权与租户边界；不增加第二套业务执行引擎。具体机制经设计审阅后实施，任何生产代码修复均须重新固定 CandidateSHA 并复核。
+- B：在上述已确认源上继续只读核实 Redis/对象/附件、其他写入者、备份窗口、网络与秘密装载边界，更新自己拥有的 T2 交接；保留历史数据和队列状态。
+- T3/T4/T5：继续遵循总计划前置门禁；本节不是启动或验收通过记录。
+
+本次修改仅更新 A 的交接文档，未改变源码、资源配置或数据库。
