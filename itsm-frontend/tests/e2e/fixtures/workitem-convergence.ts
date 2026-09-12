@@ -44,6 +44,25 @@ export class Journey {
   async write(method: 'POST' | 'PUT' | 'DELETE', path: string, body: unknown, status = 200) {
     return data(await this.raw(method, path, body), status);
   }
+  async writeAccepted(method: 'POST' | 'PUT' | 'DELETE', path: string, body: unknown, statuses: number[] = [200, 202]) {
+    const response = await this.raw(method, path, body);
+    const text = await response.text();
+    if (!statuses.includes(response.status())) throw new Error('HTTP ' + response.status() + ': ' + text);
+    const envelope = JSON.parse(text);
+    expect(envelope.code).toBe(0);
+    return envelope.data;
+  }
+  async changeTaskProgress(item: Item, action: string, operationId: string) {
+    if (item.domain !== 'changes') throw new Error('Change task progress requires a Change item');
+    const canonicalAction = action === 'record-outcome' ? 'record_outcome' : action;
+    const query = new URLSearchParams({ operationId, action: canonicalAction });
+    const response = await this.request.get(this.apiURL + '/api/v1/changes/' + item.id + '/task-progress?' + query, { timeout: 30000 });
+    const text = await response.text();
+    if (![200, 202, 409].includes(response.status())) throw new Error('HTTP ' + response.status() + ': ' + text);
+    const envelope = JSON.parse(text);
+    expect(envelope.data, 'task-progress data').toBeTruthy();
+    return envelope.data;
+  }
   async generic() {
     const key = operation();
     const receipt = await data(await this.raw('POST', '/tickets', {title:key, description:'Isolated generic collaboration record.', priority:'medium',type:'ticket'}, {'Idempotency-Key':key}),201);
@@ -98,17 +117,26 @@ export class Journey {
         expectedVersion: current.version, operationId: operation(), metadata: { required } });
   }
   async changeTask(item: Item, action: string, node: string, facts: Record<string, unknown> = {}) {
+    if (item.domain !== 'changes') throw new Error('Change task helper requires a Change item');
     let selected: any;
     await expect.poll(async () => {
       selected = (await this.tasks(item)).find((task: any) => task.taskDefinitionKey === node && ['created','pending','in_progress','assigned','active'].includes(task.status));
       return Boolean(selected);
     }, {timeout:30000, message:'Current persisted task for '+node}).toBe(true);
     const before = await this.detail(item);
-    const result = await this.action(item,action,{taskId:selected.taskId,...facts});
-    expect(['completed','accepted','idempotent']).toContain(result.progress);
-    if (result.progress === 'accepted') {
-      await expect.poll(async () => (await this.detail(item)).version,{timeout:30000}).toBeGreaterThan(before.version);
-    }
+    const operationId = operation();
+    let result = await this.writeAccepted('POST', '/changes/' + item.id + '/' + action, {
+      expectedVersion: before.version, operationId, taskId: selected.taskId, ...facts });
+    await expect.poll(async () => {
+      if (result.progress === 'blocked') throw new Error('Change task blocked: ' + (result.reason || 'unknown'));
+      if (result.progress === 'completed' || result.progress === 'effect_applied') return true;
+      if (result.progress !== 'pending' && result.progress !== 'processing') throw new Error('Unexpected Change task progress: ' + String(result.progress));
+      result = await this.changeTaskProgress(item, action, operationId);
+      return result.progress === 'completed' || result.progress === 'effect_applied';
+    }, {timeout:30000, message:'Change task '+action+' completion'}).toBe(true);
+    expect(['completed','effect_applied']).toContain(result.progress);
+    if (result.progress === 'completed') expect(result.result).toBeTruthy();
+    await expect.poll(async () => (await this.detail(item)).version,{timeout:30000}).toBeGreaterThan(before.version);
     return result;
   }
   private readIsolatedJSON(sql: string) {
