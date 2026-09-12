@@ -68,6 +68,8 @@
 
 - [WorkItem 后续 backlog 设计草案（DRAFT）](./superpowers/specs/2026-09-12-backlog-design-drafts.md)：各项 backlog 的问题、方向、备选、验收与待决问题；未批准、未实现。
 
+- [Shared-target 受控准备执行报告（admission + P + ordinary）](./review/2026-09-12-shared-target-controlled-preparation.md)：共享 dev 容器专属 DB 的真实 CLI 准入/P/普通迁移与清理证据；未执行 R/V1。
+
 - [WorkItem 后续计划独立审查](./review/2026-09-11-workitem-next-stage-plan-review-report.md)：五项重要契约问题、修订及最终复核结论。
 
 - [2026-09-11 WorkItem 收敛独立评审与接手记录](./review/2026-09-11-workitem-convergence-review-report.md)：B/C1 反例、全入口收敛缺口与剩余工作。
