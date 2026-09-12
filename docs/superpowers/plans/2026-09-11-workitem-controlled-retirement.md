@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go、database/sql、PostgreSQL、Ent、现有Go集成测试及Playwright。
 
-**Status:** accepted，Tasks 1–6 已实施并通过各批独立审阅，其中 Task 6 包含隔离恢复运行器、夹具和恢复修订；最终审阅 I1/I3/I4 已修复、限定复审已完成（接手方复审 PASS，非独立第三方）；I2 已按维护者决定列为 backlog，目标环境执行仍未授权或实施。设计依据为[已修订设计](../specs/2026-09-11-workitem-controlled-retirement-design.md)。原审阅代码基线 fab60168；当前实施在既有 `codex/refactor/workitem-next-stage` 隔离 worktree，P/R 版本为 037/038。未执行共享或目标环境部署、观察、退役。
+**Status:** accepted，Tasks 1–6 已实施并通过各批独立审阅，其中 Task 6 包含隔离恢复运行器、夹具和恢复修订；最终审阅 I1/I3/I4/M1 已修复、限定复审已完成（接手方复审 PASS，非独立第三方）；I2 已按维护者决定列为 backlog，一般 P 前活动流程退役仍未验收。当前 HEAD 隔离全流程重跑 `workitem-v1-e27375881582` 三时点各 9/9、共 27/27，覆盖 observation、R(038)、独立 Redis 恢复与业务 V1；共享 dev 容器 `itsm-postgres-dev` 专属 DB `workitem-target-20260912102644-8d3920` 已完成真实 CLI 准入（037 fail-closed）、P(037) 与普通迁移并精确清理。真实目标环境部署/退役仍未授权或实施；共享目标完整 P→观察→R→恢复与 focused real-PG 未执行。设计依据为[已修订设计](../specs/2026-09-11-workitem-controlled-retirement-design.md)。原审阅代码基线 fab60168；当前实施在既有 `codex/refactor/workitem-next-stage` 隔离 worktree，P/R 版本为 037/038。未执行真实目标环境部署、观察、退役；共享 dev 容器专属 DB 已执行真实 CLI 准入/P(037)/普通迁移并清理，完整观察、R、恢复与 focused real-PG 未执行。
 
 实施记录：Task 3 复核终点 `9882b5ff`；Task 4 复核终点 `32c196f3`；Task 5 复核终点 `d4fa72bb`；Task 6a 提交 `f50f53e9`。各步骤原始 RED 命令保留为测试来源，后续勾选仅表示该项已有证据，不替代整批及最终审阅。
 
@@ -211,7 +211,7 @@ func TestRetirementEvidenceRejectsEmpty(t *testing.T) {
 - [x] 更新手册区分“代码/隔离验证完成”与“目标环境准入/部署/观察/退役待执行”，保留历史测试来源。执行git diff --check、独立审阅后提交 `test(migration): verify controlled retirement and complete recovery`。
 
 
-Task 6 隔离证据：6a 三时点 V1 各 9/9，共 27 PASS，8 个实际恢复故障全部拒绝；6b 规定 Go 组 40 个顶层／45 个子测试，额外实际入口组 24／34，回调及受影响 RLS／事件组 27／44，均零失败／SKIP。6b 独立重建的后端及迁移二进制与 6a SHA256 完全一致。完整运行方式与限制见[切换与恢复手册](../../deployment/workitem-convergence-cutover.md)。Tasks 1–6 分批审阅已通过；最终审阅 I1/I3/I4 已修复、限定复审已完成（接手方复审 PASS，非独立第三方）；I2 已按维护者决定列为 backlog，目标环境执行仍未授权或实施。
+Task 6 隔离证据：6a 三时点 V1 各 9/9，共 27 PASS，8 个实际恢复故障全部拒绝；6b 规定 Go 组 40 个顶层／45 个子测试，额外实际入口组 24／34，回调及受影响 RLS／事件组 27／44，均零失败／SKIP。6b 独立重建的后端及迁移二进制与 6a SHA256 完全一致。完整运行方式与限制见[切换与恢复手册](../../deployment/workitem-convergence-cutover.md)。Tasks 1–6 分批审阅已通过；最终审阅 I1/I3/I4/M1 已修复、限定复审已完成（接手方复审 PASS，非独立第三方）；I2 已按维护者决定列为 backlog，一般 P 前活动流程退役仍未验收。当前 HEAD 隔离全流程重跑 `workitem-v1-e27375881582` 三时点各 9/9、共 27/27，覆盖 observation、R(038)、独立 Redis 恢复与业务 V1；共享 dev 容器 `itsm-postgres-dev` 专属 DB `workitem-target-20260912102644-8d3920` 已完成真实 CLI 准入（037 fail-closed）、P(037) 与普通迁移并精确清理。真实目标环境部署/退役仍未授权或实施；共享目标完整 P→观察→R→恢复与 focused real-PG 未执行。
 
 ## 设计覆盖与交付检查
 

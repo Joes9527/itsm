@@ -107,6 +107,7 @@ BEGIN; CREATE TEMP TABLE itsm_temp_probe(x int); ROLLBACK;
 - 清理：9/9 自有容器与 9/9 自有卷精确核验不存在；19930–19940 free。
 - 证据：W 下 `runbook-isolated-execution-report-finalhead.md`、`runbook-isolated-execution-summary-finalhead.json`。
 - 仍是隔离环境，不是真实生产部署/退役。
+- 共享目标：在 `itsm-postgres-dev` 专属 DB 上已完成真实 CLI 准入（037 fail-closed）、P(037) 与普通迁移；ledger 037 存在、038 `pending_manual`；执行后专属 DB/角色已删除，现有库与共享 Redis/MinIO 未被改动；完整 observation/R/恢复未执行。
 
 
 2026-09-12 在 WSL 新建一次性隔离环境，按本 runbook 顺序执行了 P(037) → 普通迁移 →
