@@ -111,3 +111,28 @@ CandidateSHA 仍为 `d7470a32dbb87acc9b5e4d9a895a146410723561`。与 B 检查的
 - B 提出的 2026-09-13 10:00–10:15 Asia/Shanghai 仅为未批准窗口。A 前置修复、写入者协调与其余门禁未闭合，不能承诺该时段开始；窗口失效后应重新协调。
 
 当前关键依赖仍为 A 的 B2/B3 设计与实现；B 保持只读准备。尚无 T3 EnvironmentRevision，T4 不执行。
+
+### B2 实施检查点：S1/S2（未放行 T3）
+
+A 的独立实现分支为 `codex/fix/candidate-execution-scope`；S1 提交 `ae97fbfd2`，S2 提交 `fbd52c240e91124f12709486c946bf6d85768770`。本节只记录这两个前置步骤，固定 CandidateSHA 仍为 `d7470a32dbb87acc9b5e4d9a895a146410723561`，未发布包含 B2/B3 的新候选。
+
+S1 完成受限角色绑定、新 WorkItem 同事务登记及历史成员不可补录。独立审阅发现的历史 R 依赖漂移、默认 ACL 泄漏已修复，并以真实私有 PostgreSQL 角色测试复核。
+
+S2 将事件订阅、工具队列、连接器与周期任务移到显式运行阶段；启动先核对模式、部署、范围和执行组件，先取得 HTTP 监听端口，再启动消费者。关闭时取消并等待任务，所有并发事件总线 Close 等待同一完整结果；Redis 发布与订阅各自拥有客户端。构造不再创建默认流程/绑定、向量结构或 MinIO bucket，已配置附件存储失败不能回退。架构摘要及开发手册已同步。
+
+已执行的验证（日志根目录：`/Users/julian/.local/state/itsm-candidate-delivery/b2/`）：
+
+| 验证 | 实际结果 | 证据 |
+| --- | --- | --- |
+| 后端 `go build ./...` | PASS | `s2-final-build.log` / `.json` |
+| bootstrap/config/executionscope/eventbus/msgraph 并发检测 | PASS | `s2-final-race.log` |
+| controller 全包及生命周期并发检测 | PASS | `s2-lifecycle-review-green.log` |
+| ToolQueue 与附件启动定向并发检测 | PASS | `s2-final-services.log` |
+| 真实 PG 角色准入、原子登记/回滚、越界拒绝 | PASS，非 skip | `s2-final-postgres.log` |
+| 完整 NewApplication 构造前后保全 | PASS，非 skip | `s2-constructor-three-dependencies.log` |
+
+构造保全使用标记的本机私有 PostgreSQL16、独立 Redis7.2.16 及从固定源码 `07c3a429bfed433e49018cb0f78a52145d4bedeb` 编译的 MinIO；依赖二进制指纹保存在 `s2-dependencies.json`。随机新建测试库和角色，仅放入合成历史 fixture；业务运行角色具备业务 DML，使意外构造写入可被观察，范围对象仍只读。子进程使用独立配置和清空的业务环境，仅构造、不启动 API/Worker；逐表内容及所列结构/权限/策略/sequence、Redis 键/消息/消费组、MinIO 桶/对象内容及元数据前后相同。测试进程和随机 fixture 由测试清理，专用依赖源码、二进制、日志及 PostgreSQL 测试实例保留。
+
+独立 reviewer 已复核 S2 生命周期修复、角色准入及构造测试隔离。测试夹具曾存在端口抢占误连风险，现已改为每次随机凭据，Redis 还比对启动 PID，MinIO 检查启动进程未退出；身份核对在写 fixture 前完成。最初 MinIO 官方预编译下载返回410、源码依赖下载 TLS 超时；固定源码重试构建成功后才取得上述三依赖 PASS。早先仅 PG/Redis 的构造日志不作为 MinIO 证据。
+
+尚未完成：S3 业务写入/结构化主体、S4 所有队列领取与恢复、S5 Stream/请求异步范围、S6 执行及重启后的历史保全，以及 B3 鉴权状态计划。有限构造观察必须与生命周期测试和审阅合看，不证明延迟周期、业务全流程或目标 PostgreSQL17 已验收。未修改 B 的配置、共享源或 main，未推送、迁移共享库或启动候选；T3/T4/T5 门禁不变。
