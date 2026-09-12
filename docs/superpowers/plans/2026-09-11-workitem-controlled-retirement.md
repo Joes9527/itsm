@@ -8,7 +8,7 @@
 
 **Tech Stack:** Go、database/sql、PostgreSQL、Ent、现有Go集成测试及Playwright。
 
-**Status:** accepted，Tasks 1–6 已实施并通过各批独立审阅，其中 Task 6 包含隔离恢复运行器、夹具和恢复修订；最终审阅 I1/I3/I4 已修复、限定复审待完成；I2 已按维护者决定列为 backlog，目标环境执行仍未授权或实施。设计依据为[已修订设计](../specs/2026-09-11-workitem-controlled-retirement-design.md)。原审阅代码基线 fab60168；当前实施在既有 `codex/refactor/workitem-next-stage` 隔离 worktree，P/R 版本为 037/038。未执行共享或目标环境部署、观察、退役。
+**Status:** accepted，Tasks 1–6 已实施并通过各批独立审阅，其中 Task 6 包含隔离恢复运行器、夹具和恢复修订；最终审阅 I1/I3/I4 已修复、限定复审已完成（接手方复审 PASS，非独立第三方）；I2 已按维护者决定列为 backlog，目标环境执行仍未授权或实施。设计依据为[已修订设计](../specs/2026-09-11-workitem-controlled-retirement-design.md)。原审阅代码基线 fab60168；当前实施在既有 `codex/refactor/workitem-next-stage` 隔离 worktree，P/R 版本为 037/038。未执行共享或目标环境部署、观察、退役。
 
 实施记录：Task 3 复核终点 `9882b5ff`；Task 4 复核终点 `32c196f3`；Task 5 复核终点 `d4fa72bb`；Task 6a 提交 `f50f53e9`。各步骤原始 RED 命令保留为测试来源，后续勾选仅表示该项已有证据，不替代整批及最终审阅。
 
@@ -208,10 +208,10 @@ func TestRetirementEvidenceRejectsEmpty(t *testing.T) {
 - [x] 备份后新增数据和外部副作用单独演练补偿清单：不宣称数据库恢复撤销了通知/外部动作；未捕获数据必须使零损失结论失败。
 - [x] 执行 `go test -tags=integration_postgres ./tests/integration -run '^TestWorkItem(Controlled|MigrationEntrypoints|Retirement|Cutover)' -count=1 -v`。前端在每个阶段执行 `npx playwright test tests/e2e/business-flows/workitem-convergence.spec.ts --project=business-flows`。Go命令在itsm-backend，Playwright命令在itsm-frontend；按既有fixture要求提供隔离目标配置。
 - [x] 保存脱敏结果、实际提交/镜像、测试数量及SKIP说明、备份及恢复摘要、清理资源清单；清理仅自建资源。任何SKIP不得计为成功演练。
-- [ ] 更新手册区分“代码/隔离验证完成”与“目标环境准入/部署/观察/退役待执行”，保留历史测试来源。执行git diff --check、独立审阅后提交 `test(migration): verify controlled retirement and complete recovery`。
+- [x] 更新手册区分“代码/隔离验证完成”与“目标环境准入/部署/观察/退役待执行”，保留历史测试来源。执行git diff --check、独立审阅后提交 `test(migration): verify controlled retirement and complete recovery`。
 
 
-Task 6 隔离证据：6a 三时点 V1 各 9/9，共 27 PASS，8 个实际恢复故障全部拒绝；6b 规定 Go 组 40 个顶层／45 个子测试，额外实际入口组 24／34，回调及受影响 RLS／事件组 27／44，均零失败／SKIP。6b 独立重建的后端及迁移二进制与 6a SHA256 完全一致。完整运行方式与限制见[切换与恢复手册](../../deployment/workitem-convergence-cutover.md)。Tasks 1–6 分批审阅已通过；最终审阅 I1/I3/I4 已修复、限定复审待完成；I2 已按维护者决定列为 backlog，目标环境执行仍未授权或实施。
+Task 6 隔离证据：6a 三时点 V1 各 9/9，共 27 PASS，8 个实际恢复故障全部拒绝；6b 规定 Go 组 40 个顶层／45 个子测试，额外实际入口组 24／34，回调及受影响 RLS／事件组 27／44，均零失败／SKIP。6b 独立重建的后端及迁移二进制与 6a SHA256 完全一致。完整运行方式与限制见[切换与恢复手册](../../deployment/workitem-convergence-cutover.md)。Tasks 1–6 分批审阅已通过；最终审阅 I1/I3/I4 已修复、限定复审已完成（接手方复审 PASS，非独立第三方）；I2 已按维护者决定列为 backlog，目标环境执行仍未授权或实施。
 
 ## 设计覆盖与交付检查
 
@@ -229,5 +229,5 @@ Task 6 隔离证据：6a 三时点 V1 各 9/9，共 27 PASS，8 个实际恢复�
 
 - [ ] 执行前再次检查AGENTS.md、治理文档、当前分支及并行目录改动；保留现有未提交工作。
 - [ ] 每批独立审查通过再进入下一批，不能用单元测试代替真实PG或完整业务验收。
-- [x] 本次仅按已取得证据更新 Task 6 已验证步骤及状态；Task 6 独立审阅和全计划最终审阅仍待完成。
+- [x] 本次仅按已取得证据更新 Task 6 已验证步骤及状态；Task 6 独立审阅和全计划最终审阅（接手方复审 PASS，非独立第三方）均已完成。
 - [ ] 目标环境部署、观察和R操作仍须该环境单独准入；不推送、合并或部署。

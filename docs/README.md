@@ -55,12 +55,16 @@
 
 - [WorkItem 本轮实施复核与交接](./review/2026-09-11-workitem-next-stage-implementation-review.md)：已关闭问题、真实验证、代码提交与运行待办。
 
-- [WorkItem 受控退役设计（accepted）](./superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md)：保留历史账本、结构准备、受控删除和删除后恢复的详细契约；审阅修订已通过；代码及隔离验证已实施，Tasks 1–6 分批审阅已通过；最终审阅 I1/I3/I4 已修复、限定复审待完成；I2 已按维护者决定列为 backlog，目标环境执行仍未授权或实施。
+- [WorkItem 受控退役设计（accepted）](./superpowers/specs/2026-09-11-workitem-controlled-retirement-design.md)：保留历史账本、结构准备、受控删除和删除后恢复的详细契约；审阅修订已通过；代码及隔离验证已实施，Tasks 1–6 分批审阅已通过；最终审阅 I1/I3/I4 已修复、限定复审已完成（接手方复审 PASS，非独立第三方）；I2 已按维护者决定列为 backlog，目标环境执行仍未授权或实施。
 
-- [WorkItem 受控退役实施计划](./superpowers/plans/2026-09-11-workitem-controlled-retirement.md)：六批实施与验证任务；Tasks 1–5 已通过独立审阅，Task 6 验证及审阅状态见计划。
+- [WorkItem 受控退役实施计划](./superpowers/plans/2026-09-11-workitem-controlled-retirement.md)：六批实施与验证任务；Tasks 1–6 已通过分批审阅，Task 6 验证及审阅状态见计划。
 - [WorkItem 受控退役审阅闭环](./review/2026-09-11-workitem-controlled-retirement-review-report.md)：验证顺序、回退依赖与写入前门禁的证据及修订结论。
 
 - [WorkItem 切换与恢复手册](./deployment/workitem-convergence-cutover.md)：P／普通迁移／授权 R 的执行边界、三时点隔离恢复证据、独立 Redis 与受控令牌失效边界及目标环境待执行步骤。
+
+- [WorkItem 受控退役目标环境执行 Runbook（待授权）](./deployment/workitem-controlled-retirement-target-runbook.md)：准入/权限核验/写入者盘点/P→观察→R→恢复步骤、失败决策树与证据模板。
+
+- [WorkItem 后续 backlog 就绪评估](./review/2026-09-12-workitem-backlog-readiness.md)：I2、物理清理审计、Change 多 WorkOrder、首响、RCA/HMAC/Redis/匿名卷的现状与未来验收条件。
 
 - [WorkItem 后续计划独立审查](./review/2026-09-11-workitem-next-stage-plan-review-report.md)：五项重要契约问题、修订及最终复核结论。
 
