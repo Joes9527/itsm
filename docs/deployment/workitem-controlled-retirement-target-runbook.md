@@ -96,3 +96,19 @@ BEGIN; CREATE TEMP TABLE itsm_temp_probe(x int); ROLLBACK;
 - 修改历史 SQL/checksum、伪造回执、把未执行旧迁移写成 applied。
 - CASCADE/通配符/猜测归属清理、把旧流程静默取消或清洗。
 - 用本 runbook 或隔离 V1 结果宣称目标环境已完成退役。
+
+
+## 10. 隔离执行证据（非真实目标环境）
+
+2026-09-12 在 WSL 新建一次性隔离环境，按本 runbook 顺序执行了 P(037) → 普通迁移 →
+观察期写入 → 最终恢复点/独立恢复演练 → R(038) → R 后验证，并完成精确清理：
+
+- Run：`workitem-v1-8d7e97c803f2`；source commit `b861db2f...`；端口 19910–19920；未连接 shared/default 服务。
+- V1：retained 9/9、retired 9/9、restored 9/9，合计 27/27，0 skip/flaky。
+- negativeCases 28 项；`zeroLossAtDeclaredFinalPreRPoint=true`、`zeroLossIncludingLaterWrites=false`。
+- 清理：9/9 自有容器与 9/9 自有卷按精确 ID 不存在；端口全部 free。
+- 证据：W 下 `runbook-isolated-execution-report.md`、`runbook-isolated-execution-summary.json`
+  （含 evidence SHA256 与阶段映射）。
+- **边界：** 这不是真实目标环境部署、观察或退役；后点补偿/外部投递未执行；
+  I2 `BL-WI-PROCESS-AUDIT-CONTINUITY` 仍是 backlog；真实目标仍需单独授权与
+  TEMP/inspection 权限核验。
