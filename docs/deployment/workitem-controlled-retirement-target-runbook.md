@@ -100,6 +100,15 @@ BEGIN; CREATE TEMP TABLE itsm_temp_probe(x int); ROLLBACK;
 
 ## 10. 隔离执行证据（非真实目标环境）
 
+### 2026-09-12 当前 HEAD 重跑（`workitem-v1-e27375881582`）
+
+- Source commit `a0c5b81a`；base port 19930；retained/retired/restored 各 9/9，共 **27/27**，0 skip/flaky。
+- 覆盖 observation、R(038)（6 个对象）、恢复演练与业务 V1；negativeCases 28。
+- 清理：9/9 自有容器与 9/9 自有卷精确核验不存在；19930–19940 free。
+- 证据：W 下 `runbook-isolated-execution-report-finalhead.md`、`runbook-isolated-execution-summary-finalhead.json`。
+- 仍是隔离环境，不是真实生产部署/退役。
+
+
 2026-09-12 在 WSL 新建一次性隔离环境，按本 runbook 顺序执行了 P(037) → 普通迁移 →
 观察期写入 → 最终恢复点/独立恢复演练 → R(038) → R 后验证，并完成精确清理：
 
