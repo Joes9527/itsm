@@ -15,13 +15,15 @@ type Manager struct {
 	registry *Registry
 	logger   *zap.SugaredLogger
 
-	mu        sync.RWMutex
-	instances map[string]*instance // key = tenantID + "/" + connectorName + "/" + instanceID
+	mu             sync.RWMutex
+	nextGeneration uint64
+	instances      map[string]*instance // key = tenantID + "/" + connectorName + "/" + instanceID
 }
 
 type instance struct {
-	cfg  Config
-	conn Connector
+	generation uint64
+	cfg        Config
+	conn       Connector
 }
 
 // NewManager 创建管理器
@@ -55,7 +57,8 @@ func (m *Manager) Provision(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("connector %q init failed: %w", cfg.Name, err)
 	}
 	m.mu.Lock()
-	m.instances[instanceKey(cfg)] = &instance{cfg: cfg, conn: c}
+	m.nextGeneration++
+	m.instances[instanceKey(cfg)] = &instance{cfg: cfg, conn: c, generation: m.nextGeneration}
 	m.mu.Unlock()
 	if m.logger != nil {
 		m.logger.Infow("connector provisioned",
@@ -90,6 +93,18 @@ func (m *Manager) Get(tenantID int, name string) (Connector, bool) {
 		}
 	}
 	return nil, false
+}
+
+// GetInstance resolves one exact instance. The returned connector is bound to
+// that provisioned object; callers must not look it up again after validation.
+func (m *Manager) GetInstance(tenantID int, name, provider string) (Connector, uint64, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	inst, ok := m.instances[instanceKey(Config{TenantID: tenantID, Name: name, Provider: provider})]
+	if !ok || !inst.cfg.Enabled {
+		return nil, 0, false
+	}
+	return inst.conn, inst.generation, true
 }
 
 // GetByCallbackInstanceID resolves a public webhook without exposing an enumerable tenant ID.

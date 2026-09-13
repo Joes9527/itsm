@@ -879,3 +879,17 @@ S5 仍未完成：Webhook candidate typed envelope 与其写入所有者、无�
 Worker尚未实现或注册，新type仍由既有未知分发机制明确阻断；不能启动候选或把入队当履约。下一步worker必须验证消费回执身份/来源摘要/意图成员，再用Audit字符串中的原始来源重验（不能直接将JSONB重排的Source喂入字节校验）；目标摘要校验须绑定实际发送实例，不能检查后再按可重绑key查找；claim/attempt/范围及调用后的结果回执、delivery_unknown沿用既有outbox协议。Redis与Webhook消费ACK间隙的联合恢复、配置重绑/并发撤权及实际投递端到端仍待完成。普通模式同步路径也是待迁移项：S5最终需统一持久来源及投递所有者、移除旧同步发送，不把两种模式各自一套长期路径视为完成。
 
 没有新增schema/迁移、共享数据操作或企业外呼。CandidateSHA仍为d7470a32dbb87acc9b5e4d9a895a146410723561，候选未启动、无push/main合并；S5及完整B2/B3/T3/T4/G2/G3均未完成。
+
+### B2 S5 Webhook 实际 Worker 与冻结目标投递（2026-09-13）
+
+在 `e2d29daef` 后接入唯一共享outbox Worker。`s5-webhook-worker-red.log` 真实PG已入队但0发送；新增WebhookDeliveryHandler核验publishing token/租约/attempt marker、tenant/WorkItem/aggregate/完整JSON摘要、消费Audit身份与意图成员，用Audit字符串保留的原始Source重验authority，解决JSONB重排与字节来源合同的衔接。发送后再次核验同一持久claim/来源及实例，再原事务写 `webhook_deliver:<eventID>` Audit；原Worker最终标记published，不增加平行轮询/重试器。
+
+Manager按tenant/name/provider返回精确已配置对象及锁内递增generation。producer从实际对象取得URL摘要；builtin Init冻结endpoint、签名secret及摘要，删除重复cfg来源，发送使用已核验的同一对象，不在发送时重新解析可重绑key。发送后当前generation变化转delivery_unknown；generation只标识本进程实例更换，不是持久配置版本或并发撤权栅栏。独立审阅P1指出默认HTTP重定向能绕过目标冻结，`s5-webhook-worker-redirect-red.log` 实际A307→B一次外呼复现；客户端禁止自动redirect，非2xx错误，GREEN后B零外呼且unknown不重投。
+
+`s5-webhook-worker-green.log` 验证两个原目标各投递一次、published后再次poll不发送；`s5-webhook-worker-faults.log` 覆盖redirect、投递前destination_changed（零外呼明确blocked）、发送中同key重绑（原目标一次、新目标零次、unknown）、实际Audit INSERT后故障回滚与HTTP503（一次外呼、unknown）；所有blocked再次poll不增加发送次数。预检明确JSON/回执/摘要拒绝使用typed blocked，数据库临时错误保留cause由原Worker处理；发送后错误统一未知结果，不以重试掩盖。HTTP测试均为任务内loopback端点，不是企业实发。
+
+bootstrap实际注册器按webhook capability决定handler或known reserved type；disabled时outbox仍可运行但Webhook意图不被领取、修改或转unknown。配置注册单测与真实PG reserved poll完整意图行保全/零外呼分别验证接线与Worker行为。直接新handler的内部调用仍需持久claim/attempt，不以payload或配置scope自报授权。
+
+回归异常单列：`s5-webhook-worker-final-race.log` 首轮完整测试在执行Webhook之前的KAF_access_completion回执重放出现一次 `verified access replay evidence unavailable`（line562），本轮Webhook场景全部通过、无race警告。`s5-webhook-kaf-recheck.log` 该子测试单独race连续3次PASS；原因尚未确定，不能将其称已修复或删除失败证据。service/connector/.../bootstrap/eventbus回归 `s5-webhook-worker-regression.log` PASS。最终补强后的完整私有PG/Redis/MinIO回归 `s5-webhook-worker-final-private.log` PASS，无skip或race；全后端 `s5-webhook-worker-build.log` exit0，git diff --check通过。独立review_execution_scope_s1最终复核配置注册与错误分类无新增阻断；这些通过不消除上述偶发KAF失败的根因缺口。
+
+本阶段仍不等于S5/G2完成：普通模式同步发送尚须迁入同一持久所有者并移除旧路径；Redis消费至出站的ACK间隙联合恢复、进程重启、完整权限撤销竞争、无效消息持久阻断及其它异步入口仍待验证。固定CandidateSHA不变、候选未启动；无schema迁移、共享环境改动、企业外呼、push或main合并。

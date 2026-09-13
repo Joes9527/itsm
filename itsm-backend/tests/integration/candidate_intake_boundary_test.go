@@ -2174,6 +2174,138 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(a)::text FROM audit_logs a WHERE operation_id=$1 AND tenant_id=$2`, "webhook_consume:"+envelope.EventID, tenant.ID).Scan(&receiptAfter))
 			require.JSONEq(t, receiptBefore, receiptAfter)
 			require.Zero(t, sent.Load())
+			reservedSet := map[string]bool{}
+			for _, event := range owner.OutboxEvent.Query().AllX(ctx) {
+				if event.EventType != service.WebhookDeliveryRequestedEventType {
+					reservedSet[event.EventType] = true
+				}
+			}
+			reserved := []string{}
+			for kind := range reservedSet {
+				reserved = append(reserved, kind)
+			}
+			disabledReserved := []string{service.WebhookDeliveryRequestedEventType}
+			for _, kind := range reserved {
+				if kind != "sla.breached" {
+					disabledReserved = append(disabledReserved, kind)
+				}
+			}
+			disabledRegistry, e := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{service.NewSLABreachDeliveryHandler()}, disabledReserved...)
+			require.NoError(t, e)
+			disabledWorker, e := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(clients.System, policy), service.OutboxDeliveryWorkerConfig{BatchSize: 1000, PollInterval: time.Second, HandlerTimeout: 5 * time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), disabledRegistry)
+			require.NoError(t, e)
+			var beforeDisabledPoll string
+			require.NoError(t, ownerDB.QueryRow(`SELECT coalesce(json_agg(e ORDER BY id),'[]')::text FROM outbox_events e WHERE event_type='webhook.event.delivery.requested'`).Scan(&beforeDisabledPoll))
+			require.NoError(t, disabledWorker.DispatchOnce(ctx))
+			var disabledIntents string
+			require.NoError(t, ownerDB.QueryRow(`SELECT coalesce(json_agg(e ORDER BY id),'[]')::text FROM outbox_events e WHERE event_type='webhook.event.delivery.requested'`).Scan(&disabledIntents))
+			require.JSONEq(t, beforeDisabledPoll, disabledIntents, "reserved webhook type must retain original pending intents")
+			require.Zero(t, sent.Load())
+			deliveryRegistry, e := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{service.NewWebhookDeliveryHandler(runtime, policy, manager)}, reserved...)
+			require.NoError(t, e)
+			worker, e := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(clients.System, policy), service.OutboxDeliveryWorkerConfig{BatchSize: 1000, PollInterval: time.Second, HandlerTimeout: 5 * time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), deliveryRegistry)
+			require.NoError(t, e)
+			require.NoError(t, worker.DispatchOnce(ctx))
+			require.EqualValues(t, 2, sent.Load(), "real worker must dispatch each persisted target")
+			for _, intent := range owner.OutboxEvent.Query().Where(outboxevent.EventTypeEQ(service.WebhookDeliveryRequestedEventType)).AllX(ctx) {
+				require.Equal(t, "published", intent.Status)
+			}
+			require.NoError(t, worker.DispatchOnce(ctx))
+			require.EqualValues(t, 2, sent.Load(), "published intents are not re-sent")
+			for _, scenario := range []string{"redirect", "destination_changed", "during_send_rebind", "receipt_fault", "server_error"} {
+				t.Run(scenario, func(t *testing.T) {
+					var redirected, attempted atomic.Int32
+					var onSend func()
+					otherEndpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { redirected.Add(1); w.WriteHeader(http.StatusOK) }))
+					defer otherEndpoint.Close()
+					redirectEndpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+						attempted.Add(1)
+						if onSend != nil {
+							onSend()
+						}
+						if scenario == "redirect" {
+							http.Redirect(w, r, otherEndpoint.URL, http.StatusTemporaryRedirect)
+						} else if scenario == "server_error" {
+							w.WriteHeader(http.StatusServiceUnavailable)
+						} else {
+							w.WriteHeader(http.StatusOK)
+						}
+					}))
+					defer redirectEndpoint.Close()
+					freshRedirect, e := app.Create(ctx, identity, command("webhook-"+scenario, "generic"))
+					require.NoError(t, e)
+					owner.Ticket.UpdateOneID(freshRedirect.WorkItemID).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(-time.Hour)).SetSLAResolutionDeadline(time.Now().Add(time.Hour)).SaveX(ctx)
+					_, e = monitor.CheckSLAViolations(ctx, tenant.ID)
+					require.NoError(t, e)
+					sourceRow := owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(freshRedirect.WorkItemID), outboxevent.EventTypeEQ("sla.breached")).OnlyX(ctx)
+					require.NoError(t, service.NewSLABreachDeliveryHandler().Deliver(ctx, sourceRow))
+					captured := capture.events[len(capture.events)-1]
+					raw, e := json.Marshal(captured)
+					require.NoError(t, e)
+					freshEnv := envelope
+					execID := *envelope.Execution
+					execID.WorkItemID = freshRedirect.WorkItemID
+					freshEnv.Execution = &execID
+					freshEnv.EventID = sourceRow.EventID
+					freshEnv.Payload = raw
+					freshEnv.OccurredAt = captured.(interface{ OccurredAt() time.Time }).OccurredAt()
+					targetManager := connector.NewManager(registry, zap.NewNop().Sugar())
+					defer targetManager.CloseAll()
+					require.NoError(t, targetManager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: "redirect", Enabled: true, Settings: map[string]interface{}{"url": redirectEndpoint.URL}}))
+					require.NoError(t, service.NewWebhookEventSubscriber(targetManager, zap.NewNop().Sugar(), runtime, policy).HandleContext(ctx, freshEnv))
+					if scenario == "destination_changed" {
+						require.NoError(t, targetManager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: "redirect", Enabled: true, Settings: map[string]interface{}{"url": otherEndpoint.URL}}))
+					}
+					if scenario == "during_send_rebind" {
+						onSend = func() {
+							e := targetManager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: "redirect", Enabled: true, Settings: map[string]interface{}{"url": otherEndpoint.URL}})
+							if e != nil {
+								panic(e)
+							}
+						}
+					}
+					receiptFaultActive := scenario == "receipt_fault"
+					defer func() { receiptFaultActive = false }()
+					runtime.AuditLog.Use(func(next ent.Mutator) ent.Mutator {
+						return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
+							value, e := next.Mutate(c, m)
+							if e != nil {
+								return value, e
+							}
+							if receiptFaultActive {
+								if typed, ok := m.(*ent.AuditLogMutation); ok {
+									action, _ := typed.Action()
+									if action == "webhook.delivered" {
+										return nil, errors.New("injected webhook delivery receipt failure")
+									}
+								}
+							}
+							return value, nil
+						})
+					})
+
+					targetRegistry, e := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{service.NewWebhookDeliveryHandler(runtime, policy, targetManager)}, reserved...)
+					require.NoError(t, e)
+					targetWorker, e := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(clients.System, policy), service.OutboxDeliveryWorkerConfig{BatchSize: 1000, PollInterval: time.Second, HandlerTimeout: 5 * time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), targetRegistry)
+					require.NoError(t, e)
+					require.NoError(t, targetWorker.DispatchOnce(ctx))
+					require.Zero(t, redirected.Load(), "frozen endpoint must not redirect the payload")
+					intent := owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(freshRedirect.WorkItemID), outboxevent.EventTypeEQ(service.WebhookDeliveryRequestedEventType)).OnlyX(ctx)
+					require.Equal(t, "blocked", intent.Status)
+					if scenario == "destination_changed" {
+						require.NotContains(t, intent.LastError, "delivery_unknown:")
+						require.Zero(t, attempted.Load())
+					} else {
+						require.Contains(t, intent.LastError, "delivery_unknown:")
+						require.EqualValues(t, 1, attempted.Load())
+					}
+					initialAttempts := attempted.Load()
+					require.NoError(t, targetWorker.DispatchOnce(ctx))
+					require.Equal(t, initialAttempts, attempted.Load(), "blocked delivery must not be sent again")
+					require.Zero(t, redirected.Load())
+				})
+
+			}
 		})
 		t.Run("stream consumer recovers committed audit before ack", func(t *testing.T) {
 			streamCtx, cancel := context.WithTimeout(ctx, 15*time.Second)

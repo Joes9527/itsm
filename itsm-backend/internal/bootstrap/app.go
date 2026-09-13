@@ -692,7 +692,7 @@ func NewApplication() *Application {
 	}
 	toolQueue := service.NewToolQueue(client, toolRegistry, intakeApplication, ticketService, 100, sugar)
 	feishuSyncService := service.NewFeishuSyncService(client, sugar, intakeApplication)
-	outboxRegistry, err := service.NewOutboxEventTypeRegistry(
+	outboxRegistry, err := newOutboxRegistry(cfg.Execution,
 		[]service.OutboxDeliveryHandler{service.NewFeishuUpdateDeliveryHandler(client, executionPolicy, clients.IntakeDirectorySnapshot(), func(tenantID int) (service.FeishuTaskUpdater, bool) {
 			conn, ok := connectorManager.Get(tenantID, "feishu")
 			if !ok {
@@ -708,7 +708,7 @@ func NewApplication() *Application {
 			tasks, ok := conn.(service.FeishuTaskCreator)
 			return tasks, ok
 		}), service.NewIncidentAlertDeliveryHandler(emailService), service.NewEmailAttachmentsDeliveryHandler(client, ticketAttachmentService, newTenantGraphInboundProvider(connectorManager)), service.NewEmailConfirmationDeliveryHandler(client, newTenantGraphInboundProvider(connectorManager)), service.NewWorkItemRelationCreatedDeliveryHandler(client, clients.IntakeDirectorySnapshot(), ticketNotificationService, sugar), service.NewWorkItemRelationRemovedDeliveryHandler(client, clients.IntakeDirectorySnapshot(), ticketNotificationService, sugar), service.NewChangeOutcomeDeliveryHandler(client, clients.IntakeDirectorySnapshot(), ticketNotificationService, sugar), service.NewProblemResolvedDeliveryHandler(client, clients.IntakeDirectorySnapshot(), ticketNotificationService, sugar)},
-		service.KafDelegateRequestedEventType,
+		service.NewWebhookDeliveryHandler(client, executionPolicy, connectorManager),
 	)
 	if err != nil {
 		log.Fatalf("Invalid outbox event type registry: %v", err)

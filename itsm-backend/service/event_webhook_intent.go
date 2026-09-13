@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"sort"
 	"strconv"
 
@@ -57,14 +56,16 @@ type webhookConsumptionReceipt struct {
 
 // Only the destination digest is persisted; URLs and connector secrets are not
 // copied into an event. A worker must compare the current destination before send.
-func webhookTargetFromConfig(cfg connector.Config) (webhookTarget, error) {
-	endpoint, ok := cfg.Settings["url"].(string)
-	parsed, err := url.Parse(endpoint)
-	if !ok || err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
-		return webhookTarget{}, fmt.Errorf("webhook destination unavailable")
+func (s *WebhookEventSubscriber) snapshotWebhookTarget(cfg connector.Config) (webhookTarget, error) {
+	conn, _, ok := s.manager.GetInstance(cfg.TenantID, cfg.Name, cfg.Provider)
+	if !ok {
+		return webhookTarget{}, fmt.Errorf("webhook target unavailable")
 	}
-	digest, err := workitemmutation.Digest(endpoint)
-	return webhookTarget{Provider: cfg.Provider, DestinationDigest: digest}, err
+	target, ok := conn.(webhookSender)
+	if !ok || target.WebhookDestinationIdentity() == "" {
+		return webhookTarget{}, fmt.Errorf("webhook destination identity unavailable")
+	}
+	return webhookTarget{Provider: cfg.Provider, DestinationDigest: target.WebhookDestinationIdentity()}, nil
 }
 
 func (s *WebhookEventSubscriber) consumeExecutionWebhook(ctx context.Context, event interface{}) error {
@@ -172,7 +173,7 @@ func (s *WebhookEventSubscriber) consumeExecutionWebhook(ctx context.Context, ev
 		if cfg.Name != "webhook" || !cfg.Enabled {
 			continue
 		}
-		target, e := webhookTargetFromConfig(cfg)
+		target, e := s.snapshotWebhookTarget(cfg)
 		if e != nil {
 			return e
 		}

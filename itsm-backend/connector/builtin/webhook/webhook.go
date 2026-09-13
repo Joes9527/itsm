@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -20,18 +21,22 @@ import (
 )
 
 type Webhook struct {
-	cfg     connector.Config
-	client  *http.Client
-	logger  *zap.SugaredLogger
-	mu      sync.Mutex
-	counter int
+	endpoint      string
+	signingSecret string
+	destination   string
+	client        *http.Client
+	logger        *zap.SugaredLogger
+	mu            sync.Mutex
+	counter       int
 }
 
 func init() {
 	connector.MustRegister(func() connector.Connector { return New() })
 }
 
-func New() *Webhook { return &Webhook{client: &http.Client{Timeout: 10 * time.Second}} }
+func New() *Webhook {
+	return &Webhook{client: &http.Client{Timeout: 10 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+}
 
 func (w *Webhook) Manifest() connector.Manifest {
 	return connector.Manifest{
@@ -49,10 +54,18 @@ func (w *Webhook) Manifest() connector.Manifest {
 }
 
 func (w *Webhook) Init(_ context.Context, cfg connector.Config) error {
-	w.cfg = cfg
 	if url, ok := cfg.Settings["url"].(string); !ok || url == "" {
 		return fmt.Errorf("webhook: settings.url is required")
 	}
+	w.endpoint, _ = cfg.Settings["url"].(string)
+	parsed, err := url.Parse(w.endpoint)
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return fmt.Errorf("webhook: valid HTTP destination required")
+	}
+	w.signingSecret = cfg.Credentials["secret"]
+	identity, _ := json.Marshal(w.endpoint)
+	digest := sha256.Sum256(identity)
+	w.destination = hex.EncodeToString(digest[:])
 	if w.logger == nil {
 		w.logger = zap.S().Named("connector.webhook")
 	}
@@ -60,7 +73,7 @@ func (w *Webhook) Init(_ context.Context, cfg connector.Config) error {
 }
 
 func (w *Webhook) Send(ctx context.Context, msg *connector.Message) error {
-	url, _ := w.cfg.Settings["url"].(string)
+	url := w.endpoint
 	body, err := json.Marshal(msg)
 	if err != nil {
 		return err
@@ -74,7 +87,7 @@ func (w *Webhook) Send(ctx context.Context, msg *connector.Message) error {
 	req.Header.Set("X-ITSM-Event", msg.Type)
 
 	// 签名：HMAC-SHA256(secret, body)
-	if secret, ok := w.cfg.Credentials["secret"]; ok && secret != "" {
+	if secret := w.signingSecret; secret != "" {
 		mac := hmac.New(sha256.New, []byte(secret))
 		mac.Write(body)
 		req.Header.Set("X-ITSM-Signature", "sha256="+hex.EncodeToString(mac.Sum(nil)))
@@ -88,14 +101,14 @@ func (w *Webhook) Send(ctx context.Context, msg *connector.Message) error {
 	w.mu.Lock()
 	w.counter++
 	w.mu.Unlock()
-	if resp.StatusCode >= 400 {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("webhook: target returned %d", resp.StatusCode)
 	}
 	return nil
 }
 
 func (w *Webhook) HealthCheck(ctx context.Context) connector.HealthStatus {
-	url, _ := w.cfg.Settings["url"].(string)
+	url := w.endpoint
 	if url == "" {
 		return connector.HealthStatus{OK: false, Message: "settings.url missing"}
 	}
@@ -114,3 +127,6 @@ func (w *Webhook) HealthCheck(ctx context.Context) connector.HealthStatus {
 }
 
 func (w *Webhook) Close() error { return nil }
+
+// WebhookDestinationIdentity identifies the immutable endpoint captured at Init.
+func (w *Webhook) WebhookDestinationIdentity() string { return w.destination }
