@@ -334,12 +334,12 @@ func (_q *TicketNotificationQuery) WithUser(opts ...func(*UserQuery)) *TicketNot
 // Example:
 //
 //	var v []struct {
-//		TicketID int `json:"ticket_id,omitempty"`
+//		SLAAlertHistoryID int `json:"sla_alert_history_id,omitempty"`
 //		Count int `json:"count,omitempty"`
 //	}
 //
 //	client.TicketNotification.Query().
-//		GroupBy(ticketnotification.FieldTicketID).
+//		GroupBy(ticketnotification.FieldSLAAlertHistoryID).
 //		Aggregate(ent.Count()).
 //		Scan(ctx, &v)
 func (_q *TicketNotificationQuery) GroupBy(field string, fields ...string) *TicketNotificationGroupBy {
@@ -357,11 +357,11 @@ func (_q *TicketNotificationQuery) GroupBy(field string, fields ...string) *Tick
 // Example:
 //
 //	var v []struct {
-//		TicketID int `json:"ticket_id,omitempty"`
+//		SLAAlertHistoryID int `json:"sla_alert_history_id,omitempty"`
 //	}
 //
 //	client.TicketNotification.Query().
-//		Select(ticketnotification.FieldTicketID).
+//		Select(ticketnotification.FieldSLAAlertHistoryID).
 //		Scan(ctx, &v)
 func (_q *TicketNotificationQuery) Select(fields ...string) *TicketNotificationSelect {
 	_q.ctx.Fields = append(_q.ctx.Fields, fields...)

@@ -55,6 +55,11 @@ func IDLTE(id int) predicate.TicketNotification {
 	return predicate.TicketNotification(sql.FieldLTE(FieldID, id))
 }
 
+// SLAAlertHistoryID applies equality check predicate on the "sla_alert_history_id" field. It's identical to SLAAlertHistoryIDEQ.
+func SLAAlertHistoryID(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldSLAAlertHistoryID, v))
+}
+
 // TicketID applies equality check predicate on the "ticket_id" field. It's identical to TicketIDEQ.
 func TicketID(v int) predicate.TicketNotification {
 	return predicate.TicketNotification(sql.FieldEQ(FieldTicketID, v))
@@ -133,6 +138,56 @@ func TenantID(v int) predicate.TicketNotification {
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.TicketNotification {
 	return predicate.TicketNotification(sql.FieldEQ(FieldCreatedAt, v))
+}
+
+// SLAAlertHistoryIDEQ applies the EQ predicate on the "sla_alert_history_id" field.
+func SLAAlertHistoryIDEQ(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldSLAAlertHistoryID, v))
+}
+
+// SLAAlertHistoryIDNEQ applies the NEQ predicate on the "sla_alert_history_id" field.
+func SLAAlertHistoryIDNEQ(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNEQ(FieldSLAAlertHistoryID, v))
+}
+
+// SLAAlertHistoryIDIn applies the In predicate on the "sla_alert_history_id" field.
+func SLAAlertHistoryIDIn(vs ...int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIn(FieldSLAAlertHistoryID, vs...))
+}
+
+// SLAAlertHistoryIDNotIn applies the NotIn predicate on the "sla_alert_history_id" field.
+func SLAAlertHistoryIDNotIn(vs ...int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotIn(FieldSLAAlertHistoryID, vs...))
+}
+
+// SLAAlertHistoryIDGT applies the GT predicate on the "sla_alert_history_id" field.
+func SLAAlertHistoryIDGT(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGT(FieldSLAAlertHistoryID, v))
+}
+
+// SLAAlertHistoryIDGTE applies the GTE predicate on the "sla_alert_history_id" field.
+func SLAAlertHistoryIDGTE(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGTE(FieldSLAAlertHistoryID, v))
+}
+
+// SLAAlertHistoryIDLT applies the LT predicate on the "sla_alert_history_id" field.
+func SLAAlertHistoryIDLT(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLT(FieldSLAAlertHistoryID, v))
+}
+
+// SLAAlertHistoryIDLTE applies the LTE predicate on the "sla_alert_history_id" field.
+func SLAAlertHistoryIDLTE(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLTE(FieldSLAAlertHistoryID, v))
+}
+
+// SLAAlertHistoryIDIsNil applies the IsNil predicate on the "sla_alert_history_id" field.
+func SLAAlertHistoryIDIsNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIsNull(FieldSLAAlertHistoryID))
+}
+
+// SLAAlertHistoryIDNotNil applies the NotNil predicate on the "sla_alert_history_id" field.
+func SLAAlertHistoryIDNotNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotNull(FieldSLAAlertHistoryID))
 }
 
 // TicketIDEQ applies the EQ predicate on the "ticket_id" field.

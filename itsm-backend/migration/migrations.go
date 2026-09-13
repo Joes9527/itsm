@@ -461,6 +461,7 @@ var RegisteredMigrations = []Migration{
 	{Version: "035_change_professional_evidence", Description: "Change outcome, review and standard policy evidence"},
 	{Version: "036_intake_frozen_workflow_context", Description: "Freeze workflow definition content and prepared variables in intake snapshots"},
 	{Version: CandidateExecutionScopeVersion, Description: "Register new candidate WorkItems in bounded deployment execution scopes"},
+	{Version: SLAAlertNotificationVersion, Description: "Link SLA alert delivery identities and preserve historical notification facts"},
 	{Version: WorkItemRetireVersion, Description: "Retire WorkItem legacy structures with controlled evidence"},
 }
 
@@ -474,6 +475,8 @@ func PostSchemaMigrations() []Migration {
 // GetMigrationSQL returns the SQL for a specific migration
 func GetMigrationSQL(version string) string {
 	switch version {
+	case SLAAlertNotificationVersion:
+		return slaAlertNotificationSQL
 	case CandidateExecutionScopeVersion:
 		return candidateExecutionScopeSQL
 	case "002_add_notification_preferences":

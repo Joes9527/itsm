@@ -293,9 +293,13 @@ func (s *SLAAlertService) GetAlertHistory(ctx context.Context, req *dto.GetSLAAl
 		return nil, 0, fmt.Errorf("failed to get SLA alert history: %w", err)
 	}
 
+	sent, err := s.projectAlertNotificationStatus(ctx, histories, tenantID)
+	if err != nil {
+		return nil, 0, err
+	}
 	responses := make([]*dto.SLAAlertHistoryResponse, len(histories))
 	for i, history := range histories {
-		responses[i] = s.toAlertHistoryResponse(history)
+		responses[i] = s.toAlertHistoryResponse(history, sent[history.ID])
 	}
 
 	return responses, total, nil
@@ -394,7 +398,7 @@ func (s *SLAAlertService) triggerAlerts(ctx context.Context, ticketID, tenantID 
 					return false, fmt.Errorf("SLA alert cycle changed during scan")
 				}
 			}
-			history, err := tx.SLAAlertHistory.Create().SetTicketID(ticketID).SetTicketNumber(item.TicketNumber).SetTicketTitle(item.Title).SetAlertRuleID(rule.ID).SetAlertRuleName(rule.Name).SetAlertLevel(rule.AlertLevel).SetThresholdPercentage(rule.ThresholdPercentage).SetActualPercentage(percentage).SetNotificationSent(false).SetEscalationLevel(0).SetTenantID(tenantID).SetCreatedAt(now).Save(ctx)
+			history, err := tx.SLAAlertHistory.Create().SetNotificationTrackingVersion(1).SetTicketID(ticketID).SetTicketNumber(item.TicketNumber).SetTicketTitle(item.Title).SetAlertRuleID(rule.ID).SetAlertRuleName(rule.Name).SetAlertLevel(rule.AlertLevel).SetThresholdPercentage(rule.ThresholdPercentage).SetActualPercentage(percentage).SetNotificationSent(false).SetEscalationLevel(0).SetTenantID(tenantID).SetCreatedAt(now).Save(ctx)
 			if err != nil {
 				return false, err
 			}
@@ -459,7 +463,7 @@ func (s *SLAAlertService) toAlertRuleResponse(rule *ent.SLAAlertRule) *dto.SLAAl
 	}
 }
 
-func (s *SLAAlertService) toAlertHistoryResponse(history *ent.SLAAlertHistory) *dto.SLAAlertHistoryResponse {
+func (s *SLAAlertService) toAlertHistoryResponse(history *ent.SLAAlertHistory, notificationSent bool) *dto.SLAAlertHistoryResponse {
 	response := &dto.SLAAlertHistoryResponse{
 		ID:                  history.ID,
 		TicketID:            history.TicketID,
@@ -470,7 +474,7 @@ func (s *SLAAlertService) toAlertHistoryResponse(history *ent.SLAAlertHistory) *
 		AlertLevel:          history.AlertLevel,
 		ThresholdPercentage: history.ThresholdPercentage,
 		ActualPercentage:    history.ActualPercentage,
-		NotificationSent:    history.NotificationSent,
+		NotificationSent:    notificationSent,
 		EscalationLevel:     history.EscalationLevel,
 		CreatedAt:           history.CreatedAt,
 	}

@@ -529,3 +529,19 @@ Outbox 并发/回滚测试提交 `56879f7c9`；独立 reviewer 确认限定结�
 `s4-sla-alert-verified-pg.log` 完整 TestCandidateIntakeCreationBoundary PASS，无 skip。历史 JSON 保全、两个直接入口新成员/history/email pending、重复与版本不变；history 与 unified notification 实际写后故障均使 history/两张通知表及版本回滚，解除后成功。空渠道、email-only 与用户禁 email、inapp交集通过；reopen/pause 是 owner 设定的前置状态，仅验证当前周期/暂停计算，不代表生命周期 E2E。`s4-sla-alert-final-regression.log` SLA/Notification/AlertChannel service/bootstrap 回归 PASS，`s4-sla-alert-final-build.json` 后端 build exit0，integration-compile 标签编译 PASS（未运行该标签集）。独立 reviewer review_execution_scope_s1 复审无新增阻断。
 
 下步按结构化 history→notification 关联和实际状态查询投影处理发送完成，禁止从 DeliveryKey 反推授权；还需完整告警周期、escalation、S5/S6/B3/T3/T4/G2/G3。固定 CandidateSHA 不变，候选保持停止；无共享数据库/WSL操作、企业发送、推送或 main 合并。
+
+### B2 S4 SLA 通知结构关联、投影及 monitor 接入（2026-09-13）
+
+在 `f579a866d` 后补齐上一增量的发送状态缺口。新增独立 ordinary migration `040_sla_alert_notification_provenance`，依赖039/037，不更改038退休合同。TicketNotification 增 nullable immutable sla_alert_history_id，history 增 nullable immutable notification_tracking_version；旧行维持NULL且不回填，新告警显式version1。复合FK绑定history/id+tenant+ticket，trigger禁止改指/清空/旧NULL补填，并要求新关联指向version1。version1不能写notification_sent=true；新函数剥离PUBLIC与角色默认ACL，不扩大既有表权限。Ent按原go generate入口生成，最终修改限定两个实体及共享生成文件。
+
+通知原事务显式携带结构关联并核对history tenant/ticket/version，重放也核对关联；DeliveryKey不用于推导业务身份或授权。GetAlertHistory按当前页history关联批量聚合：version1至少一通知且全部sent/read才为true；零通知、pending/processing/failed等均false。legacy NULL继续展示旧记录的sent事实。Worker仍只更新通知权威状态，不增加history查询/写权限。monitor现已接入已配置alert服务，两个入口各自重新准入；warning错误不再吞掉，日志改为recorded。原子性限定各领域事务，整轮扫描不因后续失败撤销先前已提交事务。
+
+本机 candidate-delivery/b2 证据：
+
+- `s4-sla-alert-projection-red.log`：真实站内通知已sent但history API仍false，in_app/paused_warning两例有效RED。
+- `s4-sla-projection-final-pg.log`：完整TestCandidateIntakeCreationBoundary PASS，无skip。迁移前删除两个新列及新复合唯一索引，040实际重建；旧行原始JSON去除新增字段后相等，新增字段全部NULL，默认函数ACL无执行权。验证关联改指/清空、NULL回填、unknown version插入、legacy关联拒绝。复合FK在私有事务临时禁用伴随user trigger后独立以23503拒绝错误ticket/tenant/ID，事务回滚恢复trigger。
+- 同一最终PG测试验证：真实inapp提交→API sent；新零渠道false；legacy true事实不变。新关联email由原Worker+原clients.System在无email provider时明确failed，无history权限扩大；随后owner设置pending/processing/sent/read/failed，仅验证混合状态投影，**不作为外部实际送达证据**。实际monitor包含alerts扫描，新成员创建告警，历史alert JSON不变。
+- `s4-sla-projection-migrations.log`整个migration包PASS；包括已039待040、缺039或037却有040拒绝，以及原retired ledger升级顺序。`s4-sla-projection-final-regression.log` service/bootstrap定向PASS；final-build.json后端build exit0；integration-compile.log标签仅编译PASS。
+- reviewer review_execution_scope_s1发现的Ent预建索引掩盖升级问题、DB legacy关联缺少约束已修复，最终只读复审无阻断。
+
+040仅在任务私有PG16数据库执行，未对WSL/共享源或候选实际环境执行。专门的039最小schema注册fixture仍限定039，不伪称覆盖040；040完整Ent升级与实际业务由上述fixture验证。下一步升级链仍需原事务/范围接入，并移除其notification_sent=true等旧写路径，之后继续剩余S3/S4、S5/S6、B3/T3/T4/G2/G3。固定CandidateSHA不变，候选保持停止，无推送/main合并或企业实发。

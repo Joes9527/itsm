@@ -111117,32 +111117,34 @@ func (m *RootCauseAnalysisMutation) ResetEdge(name string) error {
 // SLAAlertHistoryMutation represents an operation that mutates the SLAAlertHistory nodes in the graph.
 type SLAAlertHistoryMutation struct {
 	config
-	op                      Op
-	typ                     string
-	id                      *int
-	ticket_number           *string
-	ticket_title            *string
-	alert_rule_name         *string
-	alert_level             *string
-	threshold_percentage    *int
-	addthreshold_percentage *int
-	actual_percentage       *float64
-	addactual_percentage    *float64
-	notification_sent       *bool
-	escalation_level        *int
-	addescalation_level     *int
-	tenant_id               *int
-	addtenant_id            *int
-	created_at              *time.Time
-	resolved_at             *time.Time
-	clearedFields           map[string]struct{}
-	ticket                  *int
-	clearedticket           bool
-	alert_rule              *int
-	clearedalert_rule       bool
-	done                    bool
-	oldValue                func(context.Context) (*SLAAlertHistory, error)
-	predicates              []predicate.SLAAlertHistory
+	op                               Op
+	typ                              string
+	id                               *int
+	notification_tracking_version    *int
+	addnotification_tracking_version *int
+	ticket_number                    *string
+	ticket_title                     *string
+	alert_rule_name                  *string
+	alert_level                      *string
+	threshold_percentage             *int
+	addthreshold_percentage          *int
+	actual_percentage                *float64
+	addactual_percentage             *float64
+	notification_sent                *bool
+	escalation_level                 *int
+	addescalation_level              *int
+	tenant_id                        *int
+	addtenant_id                     *int
+	created_at                       *time.Time
+	resolved_at                      *time.Time
+	clearedFields                    map[string]struct{}
+	ticket                           *int
+	clearedticket                    bool
+	alert_rule                       *int
+	clearedalert_rule                bool
+	done                             bool
+	oldValue                         func(context.Context) (*SLAAlertHistory, error)
+	predicates                       []predicate.SLAAlertHistory
 }
 
 var _ ent.Mutation = (*SLAAlertHistoryMutation)(nil)
@@ -111241,6 +111243,76 @@ func (m *SLAAlertHistoryMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetNotificationTrackingVersion sets the "notification_tracking_version" field.
+func (m *SLAAlertHistoryMutation) SetNotificationTrackingVersion(i int) {
+	m.notification_tracking_version = &i
+	m.addnotification_tracking_version = nil
+}
+
+// NotificationTrackingVersion returns the value of the "notification_tracking_version" field in the mutation.
+func (m *SLAAlertHistoryMutation) NotificationTrackingVersion() (r int, exists bool) {
+	v := m.notification_tracking_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNotificationTrackingVersion returns the old "notification_tracking_version" field's value of the SLAAlertHistory entity.
+// If the SLAAlertHistory object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *SLAAlertHistoryMutation) OldNotificationTrackingVersion(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNotificationTrackingVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNotificationTrackingVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNotificationTrackingVersion: %w", err)
+	}
+	return oldValue.NotificationTrackingVersion, nil
+}
+
+// AddNotificationTrackingVersion adds i to the "notification_tracking_version" field.
+func (m *SLAAlertHistoryMutation) AddNotificationTrackingVersion(i int) {
+	if m.addnotification_tracking_version != nil {
+		*m.addnotification_tracking_version += i
+	} else {
+		m.addnotification_tracking_version = &i
+	}
+}
+
+// AddedNotificationTrackingVersion returns the value that was added to the "notification_tracking_version" field in this mutation.
+func (m *SLAAlertHistoryMutation) AddedNotificationTrackingVersion() (r int, exists bool) {
+	v := m.addnotification_tracking_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearNotificationTrackingVersion clears the value of the "notification_tracking_version" field.
+func (m *SLAAlertHistoryMutation) ClearNotificationTrackingVersion() {
+	m.notification_tracking_version = nil
+	m.addnotification_tracking_version = nil
+	m.clearedFields[slaalerthistory.FieldNotificationTrackingVersion] = struct{}{}
+}
+
+// NotificationTrackingVersionCleared returns if the "notification_tracking_version" field was cleared in this mutation.
+func (m *SLAAlertHistoryMutation) NotificationTrackingVersionCleared() bool {
+	_, ok := m.clearedFields[slaalerthistory.FieldNotificationTrackingVersion]
+	return ok
+}
+
+// ResetNotificationTrackingVersion resets all changes to the "notification_tracking_version" field.
+func (m *SLAAlertHistoryMutation) ResetNotificationTrackingVersion() {
+	m.notification_tracking_version = nil
+	m.addnotification_tracking_version = nil
+	delete(m.clearedFields, slaalerthistory.FieldNotificationTrackingVersion)
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -111892,7 +111964,10 @@ func (m *SLAAlertHistoryMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *SLAAlertHistoryMutation) Fields() []string {
-	fields := make([]string, 0, 13)
+	fields := make([]string, 0, 14)
+	if m.notification_tracking_version != nil {
+		fields = append(fields, slaalerthistory.FieldNotificationTrackingVersion)
+	}
 	if m.ticket != nil {
 		fields = append(fields, slaalerthistory.FieldTicketID)
 	}
@@ -111940,6 +112015,8 @@ func (m *SLAAlertHistoryMutation) Fields() []string {
 // schema.
 func (m *SLAAlertHistoryMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case slaalerthistory.FieldNotificationTrackingVersion:
+		return m.NotificationTrackingVersion()
 	case slaalerthistory.FieldTicketID:
 		return m.TicketID()
 	case slaalerthistory.FieldTicketNumber:
@@ -111975,6 +112052,8 @@ func (m *SLAAlertHistoryMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *SLAAlertHistoryMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case slaalerthistory.FieldNotificationTrackingVersion:
+		return m.OldNotificationTrackingVersion(ctx)
 	case slaalerthistory.FieldTicketID:
 		return m.OldTicketID(ctx)
 	case slaalerthistory.FieldTicketNumber:
@@ -112010,6 +112089,13 @@ func (m *SLAAlertHistoryMutation) OldField(ctx context.Context, name string) (en
 // type.
 func (m *SLAAlertHistoryMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case slaalerthistory.FieldNotificationTrackingVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNotificationTrackingVersion(v)
+		return nil
 	case slaalerthistory.FieldTicketID:
 		v, ok := value.(int)
 		if !ok {
@@ -112109,6 +112195,9 @@ func (m *SLAAlertHistoryMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *SLAAlertHistoryMutation) AddedFields() []string {
 	var fields []string
+	if m.addnotification_tracking_version != nil {
+		fields = append(fields, slaalerthistory.FieldNotificationTrackingVersion)
+	}
 	if m.addthreshold_percentage != nil {
 		fields = append(fields, slaalerthistory.FieldThresholdPercentage)
 	}
@@ -112129,6 +112218,8 @@ func (m *SLAAlertHistoryMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *SLAAlertHistoryMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case slaalerthistory.FieldNotificationTrackingVersion:
+		return m.AddedNotificationTrackingVersion()
 	case slaalerthistory.FieldThresholdPercentage:
 		return m.AddedThresholdPercentage()
 	case slaalerthistory.FieldActualPercentage:
@@ -112146,6 +112237,13 @@ func (m *SLAAlertHistoryMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *SLAAlertHistoryMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case slaalerthistory.FieldNotificationTrackingVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddNotificationTrackingVersion(v)
+		return nil
 	case slaalerthistory.FieldThresholdPercentage:
 		v, ok := value.(int)
 		if !ok {
@@ -112182,6 +112280,9 @@ func (m *SLAAlertHistoryMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *SLAAlertHistoryMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(slaalerthistory.FieldNotificationTrackingVersion) {
+		fields = append(fields, slaalerthistory.FieldNotificationTrackingVersion)
+	}
 	if m.FieldCleared(slaalerthistory.FieldResolvedAt) {
 		fields = append(fields, slaalerthistory.FieldResolvedAt)
 	}
@@ -112199,6 +112300,9 @@ func (m *SLAAlertHistoryMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *SLAAlertHistoryMutation) ClearField(name string) error {
 	switch name {
+	case slaalerthistory.FieldNotificationTrackingVersion:
+		m.ClearNotificationTrackingVersion()
+		return nil
 	case slaalerthistory.FieldResolvedAt:
 		m.ClearResolvedAt()
 		return nil
@@ -112210,6 +112314,9 @@ func (m *SLAAlertHistoryMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *SLAAlertHistoryMutation) ResetField(name string) error {
 	switch name {
+	case slaalerthistory.FieldNotificationTrackingVersion:
+		m.ResetNotificationTrackingVersion()
+		return nil
 	case slaalerthistory.FieldTicketID:
 		m.ResetTicketID()
 		return nil
@@ -144939,33 +145046,35 @@ func (m *TicketCommentMutation) ResetEdge(name string) error {
 // TicketNotificationMutation represents an operation that mutates the TicketNotification nodes in the graph.
 type TicketNotificationMutation struct {
 	config
-	op               Op
-	typ              string
-	id               *int
-	_type            *string
-	channel          *string
-	content          *string
-	sent_at          *time.Time
-	read_at          *time.Time
-	status           *string
-	delivery_key     *string
-	attempt_count    *int
-	addattempt_count *int
-	next_attempt_at  *time.Time
-	lease_owner      *string
-	lease_expires_at *time.Time
-	last_error_class *string
-	tenant_id        *int
-	addtenant_id     *int
-	created_at       *time.Time
-	clearedFields    map[string]struct{}
-	ticket           *int
-	clearedticket    bool
-	user             *int
-	cleareduser      bool
-	done             bool
-	oldValue         func(context.Context) (*TicketNotification, error)
-	predicates       []predicate.TicketNotification
+	op                      Op
+	typ                     string
+	id                      *int
+	sla_alert_history_id    *int
+	addsla_alert_history_id *int
+	_type                   *string
+	channel                 *string
+	content                 *string
+	sent_at                 *time.Time
+	read_at                 *time.Time
+	status                  *string
+	delivery_key            *string
+	attempt_count           *int
+	addattempt_count        *int
+	next_attempt_at         *time.Time
+	lease_owner             *string
+	lease_expires_at        *time.Time
+	last_error_class        *string
+	tenant_id               *int
+	addtenant_id            *int
+	created_at              *time.Time
+	clearedFields           map[string]struct{}
+	ticket                  *int
+	clearedticket           bool
+	user                    *int
+	cleareduser             bool
+	done                    bool
+	oldValue                func(context.Context) (*TicketNotification, error)
+	predicates              []predicate.TicketNotification
 }
 
 var _ ent.Mutation = (*TicketNotificationMutation)(nil)
@@ -145064,6 +145173,76 @@ func (m *TicketNotificationMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetSLAAlertHistoryID sets the "sla_alert_history_id" field.
+func (m *TicketNotificationMutation) SetSLAAlertHistoryID(i int) {
+	m.sla_alert_history_id = &i
+	m.addsla_alert_history_id = nil
+}
+
+// SLAAlertHistoryID returns the value of the "sla_alert_history_id" field in the mutation.
+func (m *TicketNotificationMutation) SLAAlertHistoryID() (r int, exists bool) {
+	v := m.sla_alert_history_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSLAAlertHistoryID returns the old "sla_alert_history_id" field's value of the TicketNotification entity.
+// If the TicketNotification object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketNotificationMutation) OldSLAAlertHistoryID(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSLAAlertHistoryID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSLAAlertHistoryID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSLAAlertHistoryID: %w", err)
+	}
+	return oldValue.SLAAlertHistoryID, nil
+}
+
+// AddSLAAlertHistoryID adds i to the "sla_alert_history_id" field.
+func (m *TicketNotificationMutation) AddSLAAlertHistoryID(i int) {
+	if m.addsla_alert_history_id != nil {
+		*m.addsla_alert_history_id += i
+	} else {
+		m.addsla_alert_history_id = &i
+	}
+}
+
+// AddedSLAAlertHistoryID returns the value that was added to the "sla_alert_history_id" field in this mutation.
+func (m *TicketNotificationMutation) AddedSLAAlertHistoryID() (r int, exists bool) {
+	v := m.addsla_alert_history_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearSLAAlertHistoryID clears the value of the "sla_alert_history_id" field.
+func (m *TicketNotificationMutation) ClearSLAAlertHistoryID() {
+	m.sla_alert_history_id = nil
+	m.addsla_alert_history_id = nil
+	m.clearedFields[ticketnotification.FieldSLAAlertHistoryID] = struct{}{}
+}
+
+// SLAAlertHistoryIDCleared returns if the "sla_alert_history_id" field was cleared in this mutation.
+func (m *TicketNotificationMutation) SLAAlertHistoryIDCleared() bool {
+	_, ok := m.clearedFields[ticketnotification.FieldSLAAlertHistoryID]
+	return ok
+}
+
+// ResetSLAAlertHistoryID resets all changes to the "sla_alert_history_id" field.
+func (m *TicketNotificationMutation) ResetSLAAlertHistoryID() {
+	m.sla_alert_history_id = nil
+	m.addsla_alert_history_id = nil
+	delete(m.clearedFields, ticketnotification.FieldSLAAlertHistoryID)
 }
 
 // SetTicketID sets the "ticket_id" field.
@@ -145848,7 +146027,10 @@ func (m *TicketNotificationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TicketNotificationMutation) Fields() []string {
-	fields := make([]string, 0, 16)
+	fields := make([]string, 0, 17)
+	if m.sla_alert_history_id != nil {
+		fields = append(fields, ticketnotification.FieldSLAAlertHistoryID)
+	}
 	if m.ticket != nil {
 		fields = append(fields, ticketnotification.FieldTicketID)
 	}
@@ -145905,6 +146087,8 @@ func (m *TicketNotificationMutation) Fields() []string {
 // schema.
 func (m *TicketNotificationMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case ticketnotification.FieldSLAAlertHistoryID:
+		return m.SLAAlertHistoryID()
 	case ticketnotification.FieldTicketID:
 		return m.TicketID()
 	case ticketnotification.FieldUserID:
@@ -145946,6 +146130,8 @@ func (m *TicketNotificationMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *TicketNotificationMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case ticketnotification.FieldSLAAlertHistoryID:
+		return m.OldSLAAlertHistoryID(ctx)
 	case ticketnotification.FieldTicketID:
 		return m.OldTicketID(ctx)
 	case ticketnotification.FieldUserID:
@@ -145987,6 +146173,13 @@ func (m *TicketNotificationMutation) OldField(ctx context.Context, name string) 
 // type.
 func (m *TicketNotificationMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case ticketnotification.FieldSLAAlertHistoryID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSLAAlertHistoryID(v)
+		return nil
 	case ticketnotification.FieldTicketID:
 		v, ok := value.(int)
 		if !ok {
@@ -146107,6 +146300,9 @@ func (m *TicketNotificationMutation) SetField(name string, value ent.Value) erro
 // this mutation.
 func (m *TicketNotificationMutation) AddedFields() []string {
 	var fields []string
+	if m.addsla_alert_history_id != nil {
+		fields = append(fields, ticketnotification.FieldSLAAlertHistoryID)
+	}
 	if m.addattempt_count != nil {
 		fields = append(fields, ticketnotification.FieldAttemptCount)
 	}
@@ -146121,6 +146317,8 @@ func (m *TicketNotificationMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *TicketNotificationMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case ticketnotification.FieldSLAAlertHistoryID:
+		return m.AddedSLAAlertHistoryID()
 	case ticketnotification.FieldAttemptCount:
 		return m.AddedAttemptCount()
 	case ticketnotification.FieldTenantID:
@@ -146134,6 +146332,13 @@ func (m *TicketNotificationMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *TicketNotificationMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case ticketnotification.FieldSLAAlertHistoryID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddSLAAlertHistoryID(v)
+		return nil
 	case ticketnotification.FieldAttemptCount:
 		v, ok := value.(int)
 		if !ok {
@@ -146156,6 +146361,9 @@ func (m *TicketNotificationMutation) AddField(name string, value ent.Value) erro
 // mutation.
 func (m *TicketNotificationMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(ticketnotification.FieldSLAAlertHistoryID) {
+		fields = append(fields, ticketnotification.FieldSLAAlertHistoryID)
+	}
 	if m.FieldCleared(ticketnotification.FieldSentAt) {
 		fields = append(fields, ticketnotification.FieldSentAt)
 	}
@@ -146188,6 +146396,9 @@ func (m *TicketNotificationMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *TicketNotificationMutation) ClearField(name string) error {
 	switch name {
+	case ticketnotification.FieldSLAAlertHistoryID:
+		m.ClearSLAAlertHistoryID()
+		return nil
 	case ticketnotification.FieldSentAt:
 		m.ClearSentAt()
 		return nil
@@ -146214,6 +146425,9 @@ func (m *TicketNotificationMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *TicketNotificationMutation) ResetField(name string) error {
 	switch name {
+	case ticketnotification.FieldSLAAlertHistoryID:
+		m.ResetSLAAlertHistoryID()
+		return nil
 	case ticketnotification.FieldTicketID:
 		m.ResetTicketID()
 		return nil

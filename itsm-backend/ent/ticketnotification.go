@@ -19,6 +19,8 @@ type TicketNotification struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
+	// Owning SLA alert; immutable structured delivery provenance
+	SLAAlertHistoryID *int `json:"sla_alert_history_id,omitempty"`
 	// 工单ID
 	TicketID int `json:"ticket_id,omitempty"`
 	// 接收人ID
@@ -95,7 +97,7 @@ func (*TicketNotification) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case ticketnotification.FieldID, ticketnotification.FieldTicketID, ticketnotification.FieldUserID, ticketnotification.FieldAttemptCount, ticketnotification.FieldTenantID:
+		case ticketnotification.FieldID, ticketnotification.FieldSLAAlertHistoryID, ticketnotification.FieldTicketID, ticketnotification.FieldUserID, ticketnotification.FieldAttemptCount, ticketnotification.FieldTenantID:
 			values[i] = new(sql.NullInt64)
 		case ticketnotification.FieldType, ticketnotification.FieldChannel, ticketnotification.FieldContent, ticketnotification.FieldStatus, ticketnotification.FieldDeliveryKey, ticketnotification.FieldLeaseOwner, ticketnotification.FieldLastErrorClass:
 			values[i] = new(sql.NullString)
@@ -122,6 +124,13 @@ func (_m *TicketNotification) assignValues(columns []string, values []any) error
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
+		case ticketnotification.FieldSLAAlertHistoryID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field sla_alert_history_id", values[i])
+			} else if value.Valid {
+				_m.SLAAlertHistoryID = new(int)
+				*_m.SLAAlertHistoryID = int(value.Int64)
+			}
 		case ticketnotification.FieldTicketID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field ticket_id", values[i])
@@ -265,6 +274,11 @@ func (_m *TicketNotification) String() string {
 	var builder strings.Builder
 	builder.WriteString("TicketNotification(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	if v := _m.SLAAlertHistoryID; v != nil {
+		builder.WriteString("sla_alert_history_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
 	builder.WriteString("ticket_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TicketID))
 	builder.WriteString(", ")

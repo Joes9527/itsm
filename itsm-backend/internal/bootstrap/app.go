@@ -835,6 +835,7 @@ func NewApplication() *Application {
 	// Wire up notification service
 	slaMonitorService.SetNotificationService(ticketNotificationService)
 	slaAlertService.SetNotificationService(ticketNotificationService)
+	slaMonitorService.SetAlertService(slaAlertService)
 	escalationService.SetNotificationService(ticketNotificationService)
 
 	// Survey Service & Controller

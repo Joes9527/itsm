@@ -65,11 +65,6 @@ type SLACheckStats struct {
 func (s *SLAMonitorService) CheckSLAViolations(ctx context.Context, tenantID int) (*SLACheckStats, error) {
 	s.logger.Infow("Starting SLA violation check", "tenant_id", tenantID)
 
-	// Alert history and its critical transport still require their own scope
-	// transaction integration. Do not run that path under candidate admission.
-	if s.execution != nil && s.execution.IsCandidate() && s.alertService != nil {
-		return nil, fmt.Errorf("candidate SLA alert execution is not yet admitted")
-	}
 	stats := &SLACheckStats{}
 	lastID := 0
 	for {
@@ -103,7 +98,11 @@ func (s *SLAMonitorService) CheckSLAViolations(ctx context.Context, tenantID int
 			stats.NewViolations += added
 			stats.ExistingViolations += existing
 			if s.alertService != nil {
-				if s.checkAndTriggerWarning(ctx, item, time.Now()) {
+				warned, err := s.checkAndTriggerWarning(ctx, item, time.Now())
+				if err != nil {
+					return stats, err
+				}
+				if warned {
 					stats.WarningsTriggered++
 				}
 				alerted, err := s.alertService.CheckAndTriggerAlerts(ctx, item.ID, tenantID)
@@ -236,9 +235,9 @@ func mapViolationTypeToBreachType(violationType string) string {
 
 // checkAndTriggerWarning 检查是否需要发送SLA预警（在截止时间前触发）
 // 返回是否发送了预警
-func (s *SLAMonitorService) checkAndTriggerWarning(ctx context.Context, t *ent.Ticket, now time.Time) bool {
+func (s *SLAMonitorService) checkAndTriggerWarning(ctx context.Context, t *ent.Ticket, now time.Time) (bool, error) {
 	if t.ClosedAt != nil {
-		return false
+		return false, nil
 	}
 	// SLA预警阈值：默认在截止时间前20%时预警
 	warningThreshold := 0.8
@@ -256,9 +255,13 @@ func (s *SLAMonitorService) checkAndTriggerWarning(ctx context.Context, t *ent.T
 
 		if totalDuration > 0 && progress >= warningThreshold && now.Before(t.SLAResponseDeadline) {
 			if s.alertService != nil {
-				if warned, _ := s.alertService.TriggerSLAWarning(ctx, t.ID, "response_time", t.TenantID); warned {
+				warned, err := s.alertService.TriggerSLAWarning(ctx, t.ID, "response_time", t.TenantID)
+				if err != nil {
+					return false, err
+				}
+				if warned {
 					sentWarning = true
-					s.logger.Infow("SLA response warning sent", "ticket_id", t.ID, "ticket_number", t.TicketNumber,
+					s.logger.Infow("SLA response warning recorded", "ticket_id", t.ID, "ticket_number", t.TicketNumber,
 						"deadline", t.SLAResponseDeadline)
 				}
 			}
@@ -273,16 +276,20 @@ func (s *SLAMonitorService) checkAndTriggerWarning(ctx context.Context, t *ent.T
 
 		if totalDuration > 0 && progress >= warningThreshold && now.Before(t.SLAResolutionDeadline) {
 			if s.alertService != nil {
-				if warned, _ := s.alertService.TriggerSLAWarning(ctx, t.ID, "resolution_time", t.TenantID); warned {
+				warned, err := s.alertService.TriggerSLAWarning(ctx, t.ID, "resolution_time", t.TenantID)
+				if err != nil {
+					return false, err
+				}
+				if warned {
 					sentWarning = true
-					s.logger.Infow("SLA resolution warning sent", "ticket_id", t.ID, "ticket_number", t.TicketNumber,
+					s.logger.Infow("SLA resolution warning recorded", "ticket_id", t.ID, "ticket_number", t.TicketNumber,
 						"deadline", t.SLAResolutionDeadline)
 				}
 			}
 		}
 	}
 
-	return sentWarning
+	return sentWarning, nil
 }
 
 // CalculateSLAMetrics 计算SLA指标

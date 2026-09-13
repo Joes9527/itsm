@@ -14,6 +14,8 @@ const (
 	Label = "ticket_notification"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldSLAAlertHistoryID holds the string denoting the sla_alert_history_id field in the database.
+	FieldSLAAlertHistoryID = "sla_alert_history_id"
 	// FieldTicketID holds the string denoting the ticket_id field in the database.
 	FieldTicketID = "ticket_id"
 	// FieldUserID holds the string denoting the user_id field in the database.
@@ -71,6 +73,7 @@ const (
 // Columns holds all SQL columns for ticketnotification fields.
 var Columns = []string{
 	FieldID,
+	FieldSLAAlertHistoryID,
 	FieldTicketID,
 	FieldUserID,
 	FieldType,
@@ -100,6 +103,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// SLAAlertHistoryIDValidator is a validator for the "sla_alert_history_id" field. It is called by the builders before save.
+	SLAAlertHistoryIDValidator func(int) error
 	// TicketIDValidator is a validator for the "ticket_id" field. It is called by the builders before save.
 	TicketIDValidator func(int) error
 	// UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
@@ -132,6 +137,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// BySLAAlertHistoryID orders the results by the sla_alert_history_id field.
+func BySLAAlertHistoryID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSLAAlertHistoryID, opts...).ToFunc()
 }
 
 // ByTicketID orders the results by the ticket_id field.

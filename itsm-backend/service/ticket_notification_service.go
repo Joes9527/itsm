@@ -712,6 +712,7 @@ func createInAppNotificationPair(
 	req *dto.SendTicketNotificationRequest, tenantID int, now time.Time,
 ) error {
 	create := client.TicketNotification.Create().
+		SetNillableSLAAlertHistoryID(req.SLAAlertHistoryID).
 		SetTicketID(ticketID).
 		SetUserID(userID).
 		SetType(req.EventType).
@@ -970,7 +971,7 @@ func (s *TicketNotificationService) EnqueueSLAAlertTx(ctx context.Context, tx *e
 		users = append(users, item.AssigneeID)
 	}
 	return s.enqueueNotificationTx(ctx, tx, item.ID, item.TenantID, &dto.SendTicketNotificationRequest{
-		UserIDs: users, EventType: "sla_violated", DeliveryKey: fmt.Sprintf("sla-alert:%d", history.ID),
+		UserIDs: users, EventType: "sla_violated", DeliveryKey: fmt.Sprintf("sla-alert:%d", history.ID), SLAAlertHistoryID: &history.ID,
 		Content: fmt.Sprintf("【SLA预警 %s】工单 #%s 剩余时间 %.1f%%，请及时处理！", history.AlertLevel, item.TicketNumber, history.ActualPercentage),
 	}, selected)
 }

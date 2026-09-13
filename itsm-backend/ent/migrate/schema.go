@@ -3730,6 +3730,7 @@ var (
 	// SLAAlertHistoriesColumns holds the columns for the "sla_alert_histories" table.
 	SLAAlertHistoriesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "notification_tracking_version", Type: field.TypeInt, Nullable: true},
 		{Name: "ticket_number", Type: field.TypeString},
 		{Name: "ticket_title", Type: field.TypeString},
 		{Name: "alert_rule_name", Type: field.TypeString},
@@ -3752,15 +3753,22 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "sla_alert_histories_sla_alert_rules_alert_history",
-				Columns:    []*schema.Column{SLAAlertHistoriesColumns[12]},
+				Columns:    []*schema.Column{SLAAlertHistoriesColumns[13]},
 				RefColumns: []*schema.Column{SLAAlertRulesColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "sla_alert_histories_tickets_sla_alert_history",
-				Columns:    []*schema.Column{SLAAlertHistoriesColumns[13]},
+				Columns:    []*schema.Column{SLAAlertHistoriesColumns[14]},
 				RefColumns: []*schema.Column{TicketsColumns[0]},
 				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "slaalerthistory_id_tenant_id_ticket_id",
+				Unique:  true,
+				Columns: []*schema.Column{SLAAlertHistoriesColumns[0], SLAAlertHistoriesColumns[10], SLAAlertHistoriesColumns[14]},
 			},
 		},
 	}
@@ -4733,6 +4741,7 @@ var (
 	// TicketNotificationsColumns holds the columns for the "ticket_notifications" table.
 	TicketNotificationsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "sla_alert_history_id", Type: field.TypeInt, Nullable: true},
 		{Name: "type", Type: field.TypeString},
 		{Name: "channel", Type: field.TypeString, Default: "in_app"},
 		{Name: "content", Type: field.TypeString, Size: 2147483647},
@@ -4758,32 +4767,37 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "ticket_notifications_tickets_notifications",
-				Columns:    []*schema.Column{TicketNotificationsColumns[15]},
+				Columns:    []*schema.Column{TicketNotificationsColumns[16]},
 				RefColumns: []*schema.Column{TicketsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "ticket_notifications_users_ticket_notifications",
-				Columns:    []*schema.Column{TicketNotificationsColumns[16]},
+				Columns:    []*schema.Column{TicketNotificationsColumns[17]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 		},
 		Indexes: []*schema.Index{
 			{
+				Name:    "ticketnotification_tenant_id_sla_alert_history_id",
+				Unique:  false,
+				Columns: []*schema.Column{TicketNotificationsColumns[14], TicketNotificationsColumns[1]},
+			},
+			{
 				Name:    "ticketnotification_tenant_id_delivery_key_ticket_id_user_id_channel",
 				Unique:  true,
-				Columns: []*schema.Column{TicketNotificationsColumns[13], TicketNotificationsColumns[7], TicketNotificationsColumns[15], TicketNotificationsColumns[16], TicketNotificationsColumns[2]},
+				Columns: []*schema.Column{TicketNotificationsColumns[14], TicketNotificationsColumns[8], TicketNotificationsColumns[16], TicketNotificationsColumns[17], TicketNotificationsColumns[3]},
 			},
 			{
 				Name:    "ticketnotification_tenant_id_status_next_attempt_at",
 				Unique:  false,
-				Columns: []*schema.Column{TicketNotificationsColumns[13], TicketNotificationsColumns[6], TicketNotificationsColumns[9]},
+				Columns: []*schema.Column{TicketNotificationsColumns[14], TicketNotificationsColumns[7], TicketNotificationsColumns[10]},
 			},
 			{
 				Name:    "ticketnotification_tenant_id_status_lease_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{TicketNotificationsColumns[13], TicketNotificationsColumns[6], TicketNotificationsColumns[11]},
+				Columns: []*schema.Column{TicketNotificationsColumns[14], TicketNotificationsColumns[7], TicketNotificationsColumns[12]},
 			},
 		},
 	}

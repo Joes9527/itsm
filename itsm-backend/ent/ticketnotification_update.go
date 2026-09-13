@@ -416,6 +416,9 @@ func (_u *TicketNotificationUpdate) sqlSave(ctx context.Context) (_node int, err
 			}
 		}
 	}
+	if _u.mutation.SLAAlertHistoryIDCleared() {
+		_spec.ClearField(ticketnotification.FieldSLAAlertHistoryID, field.TypeInt)
+	}
 	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(ticketnotification.FieldType, field.TypeString, value)
 	}
@@ -975,6 +978,9 @@ func (_u *TicketNotificationUpdateOne) sqlSave(ctx context.Context) (_node *Tick
 				ps[i](selector)
 			}
 		}
+	}
+	if _u.mutation.SLAAlertHistoryIDCleared() {
+		_spec.ClearField(ticketnotification.FieldSLAAlertHistoryID, field.TypeInt)
 	}
 	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(ticketnotification.FieldType, field.TypeString, value)

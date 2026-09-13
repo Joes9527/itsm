@@ -18,6 +18,7 @@ import (
 
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -203,7 +204,8 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 		item := owner.Ticket.Create().SetTitle("historical " + key).SetTicketNumber("OLD-" + key).SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetCreatedAt(time.Now().Add(-time.Hour)).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(5 * time.Minute)).SaveX(ctx)
 		historicalAlertItems = append(historicalAlertItems, item.ID)
 	}
-	owner.SLAAlertRule.Create().SetName("Critical SLA admission").SetTenantID(tenant.ID).SetSLADefinitionID(legacySLADefinition.ID).SetAlertLevel("critical").SetThresholdPercentage(20).SetNotificationChannels([]string{"in_app", "email"}).SaveX(ctx)
+	legacySLAAlertRule := owner.SLAAlertRule.Create().SetName("Critical SLA admission").SetTenantID(tenant.ID).SetSLADefinitionID(legacySLADefinition.ID).SetAlertLevel("critical").SetThresholdPercentage(20).SetNotificationChannels([]string{"in_app", "email"}).SaveX(ctx)
+	legacySLAHistory := owner.SLAAlertHistory.Create().SetTicketID(historicalAlertItems[0]).SetTicketNumber("OLD-alert-scan").SetTicketTitle("historical alert").SetAlertRuleID(legacySLAAlertRule.ID).SetAlertRuleName(legacySLAAlertRule.Name).SetTenantID(tenant.ID).SetNotificationSent(true).SaveX(ctx)
 	var historicalNotifications []*ent.TicketNotification
 	for _, state := range []string{"pending", "processing"} {
 		create := owner.TicketNotification.Create().SetTenantID(tenant.ID).SetTicketID(historical.WorkItemID).SetUserID(actor.ID).SetType("created").SetChannel("email").SetContent("Historical notification").SetDeliveryKey("legacy-notify-" + state).SetStatus(state).SetNextAttemptAt(time.Now().Add(-time.Minute))
@@ -227,6 +229,30 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	require.NoError(t, err)
 	_, err = ownerDB.ExecContext(ctx, migration.GetMigrationSQL("039_candidate_execution_scope"))
 	require.NoError(t, err)
+	// Exercise a real upgrade from absent provenance columns; Ent's generated
+	// schema must not hide missing ALTER statements in migration 040.
+	_, err = ownerDB.ExecContext(ctx, `ALTER TABLE ticket_notifications DROP COLUMN sla_alert_history_id; ALTER TABLE sla_alert_histories DROP COLUMN notification_tracking_version; DROP INDEX slaalerthistory_id_tenant_id_ticket_id`)
+	require.NoError(t, err)
+	var oldAlertsBefore, oldNotificationsBefore string
+	require.NoError(t, ownerDB.QueryRow(`SELECT COALESCE(jsonb_agg(to_jsonb(h) ORDER BY id)::text,'[]') FROM sla_alert_histories h`).Scan(&oldAlertsBefore))
+	require.NoError(t, ownerDB.QueryRow(`SELECT COALESCE(jsonb_agg(to_jsonb(n) ORDER BY id)::text,'[]') FROM ticket_notifications n`).Scan(&oldNotificationsBefore))
+	_, err = ownerDB.ExecContext(ctx, "ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON FUNCTIONS TO "+runtimeRole)
+	require.NoError(t, err)
+	_, err = ownerDB.ExecContext(ctx, migration.GetMigrationSQL(migration.SLAAlertNotificationVersion))
+	require.NoError(t, err)
+	var oldAlertsAfter, oldNotificationsAfter string
+	require.NoError(t, ownerDB.QueryRow(`SELECT COALESCE(jsonb_agg(to_jsonb(h)-'notification_tracking_version' ORDER BY id)::text,'[]') FROM sla_alert_histories h`).Scan(&oldAlertsAfter))
+	require.NoError(t, ownerDB.QueryRow(`SELECT COALESCE(jsonb_agg(to_jsonb(n)-'sla_alert_history_id' ORDER BY id)::text,'[]') FROM ticket_notifications n`).Scan(&oldNotificationsAfter))
+	require.JSONEq(t, oldAlertsBefore, oldAlertsAfter)
+	require.JSONEq(t, oldNotificationsBefore, oldNotificationsAfter)
+	var linked int
+	require.NoError(t, ownerDB.QueryRow(`SELECT (SELECT count(*) FROM sla_alert_histories WHERE notification_tracking_version IS NOT NULL)+(SELECT count(*) FROM ticket_notifications WHERE sla_alert_history_id IS NOT NULL)`).Scan(&linked))
+	require.Zero(t, linked, "040 must not backfill existing rows")
+	for _, fn := range []string{"preserve_sla_alert_delivery_reference", "preserve_sla_alert_tracking"} {
+		var executable bool
+		require.NoError(t, ownerDB.QueryRow(`SELECT has_function_privilege($1,$2,'EXECUTE')`, runtimeRole, "public."+fn+"()").Scan(&executable))
+		require.False(t, executable, "040 removes role-specific default function ACLs")
+	}
 	scopeID := uuid.NewString()
 	_, err = ownerDB.ExecContext(ctx, `INSERT INTO execution_scopes(id,deployment_id,tenant_id,status,created_by) VALUES($1,'intake-test',$2,'active',$3)`, scopeID, tenant.ID, actor.ID)
 	require.NoError(t, err)
@@ -2115,7 +2141,110 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				var n int
 				require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM ticket_notifications WHERE ticket_id=$1`, fresh.WorkItemID).Scan(&n))
 				require.Equal(t, tc.notifications, n)
+				if tc.want {
+					id := fresh.WorkItemID
+					rows, total, err := alerts.GetAlertHistory(ctx, &dto.GetSLAAlertHistoryRequest{TicketID: &id}, tenant.ID)
+					require.NoError(t, err)
+					require.Equal(t, 1, total)
+					require.Len(t, rows, 1)
+					require.Equal(t, tc.notifications > 0, rows[0].NotificationSent, "SLA status must reflect actual in-app delivery")
+				}
+
 			})
+		}
+	})
+	t.Run("real candidate SLA monitor includes alerts", func(t *testing.T) {
+		alerts := service.NewSLAAlertService(runtime, zap.NewNop().Sugar(), policy)
+		notifier := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)
+		alerts.SetNotificationService(notifier)
+		monitor := service.NewSLAMonitorService(runtime, zap.NewNop().Sugar(), policy)
+		monitor.SetNotificationService(notifier)
+		monitor.SetAlertService(alerts)
+		fresh, err := app.Create(ctx, identity, command("sla-complete-monitor", "generic"))
+		require.NoError(t, err)
+		owner.Ticket.UpdateOneID(fresh.WorkItemID).SetCreatedAt(time.Now().Add(-time.Hour)).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(5 * time.Minute)).SaveX(ctx)
+		var historyBefore string
+		require.NoError(t, ownerDB.QueryRow(`SELECT COALESCE(jsonb_agg(to_jsonb(h) ORDER BY id)::text,'[]') FROM sla_alert_histories h WHERE ticket_id IN ($1,$2)`, historicalAlertItems[0], historicalAlertItems[1]).Scan(&historyBefore))
+		stats, err := monitor.CheckSLAViolations(ctx, tenant.ID)
+		require.NoError(t, err)
+		require.Greater(t, stats.WarningsTriggered+stats.AlertsTriggered, 0)
+		rows, _, err := alerts.GetAlertHistory(ctx, &dto.GetSLAAlertHistoryRequest{TicketID: &fresh.WorkItemID}, tenant.ID)
+		require.NoError(t, err)
+		require.Len(t, rows, 1)
+		require.False(t, rows[0].NotificationSent)
+		var historyAfter string
+		require.NoError(t, ownerDB.QueryRow(`SELECT COALESCE(jsonb_agg(to_jsonb(h) ORDER BY id)::text,'[]') FROM sla_alert_histories h WHERE ticket_id IN ($1,$2)`, historicalAlertItems[0], historicalAlertItems[1]).Scan(&historyAfter))
+		require.JSONEq(t, historyBefore, historyAfter)
+	})
+	t.Run("SLA notification provenance and projection", func(t *testing.T) {
+		alerts := service.NewSLAAlertService(runtime, zap.NewNop().Sugar(), policy)
+		legacyRows, _, err := alerts.GetAlertHistory(ctx, &dto.GetSLAAlertHistoryRequest{TicketID: &legacySLAHistory.TicketID}, tenant.ID)
+		require.NoError(t, err)
+		require.Len(t, legacyRows, 1)
+		require.True(t, legacyRows[0].NotificationSent, "restored historical fact stays unchanged")
+		var notificationID, historyID, workItemID int
+		require.NoError(t, ownerDB.QueryRow(`SELECT id,sla_alert_history_id,ticket_id FROM ticket_notifications WHERE sla_alert_history_id IS NOT NULL AND channel='email' ORDER BY id LIMIT 1`).Scan(&notificationID, &historyID, &workItemID))
+		worker := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)
+		worker.SetDeliveryQueueClient(clients.System)
+		_, deliveryErr := worker.ProcessPendingDeliveries(context.Background(), "sla-linked-notification-worker", 1000)
+		require.Error(t, deliveryErr, "missing email provider is explicit")
+		require.Equal(t, "failed", owner.TicketNotification.GetX(ctx, notificationID).Status)
+		projected, _, err := alerts.GetAlertHistory(ctx, &dto.GetSLAAlertHistoryRequest{TicketID: &workItemID}, tenant.ID)
+		require.NoError(t, err)
+		require.False(t, projected[0].NotificationSent)
+		for _, state := range []string{"pending", "processing", "sent", "read", "failed"} {
+			_, err = ownerDB.ExecContext(ctx, `UPDATE ticket_notifications SET status=$1 WHERE id=$2`, state, notificationID)
+			require.NoError(t, err)
+			rows, _, err := alerts.GetAlertHistory(ctx, &dto.GetSLAAlertHistoryRequest{TicketID: &workItemID}, tenant.ID)
+			require.NoError(t, err)
+			require.Len(t, rows, 1)
+			require.Equal(t, state == "sent" || state == "read", rows[0].NotificationSent)
+			var raw bool
+			require.NoError(t, ownerDB.QueryRow(`SELECT notification_sent FROM sla_alert_histories WHERE id=$1`, historyID).Scan(&raw))
+			require.False(t, raw, "worker state is the only mutable authority")
+		}
+		for _, query := range []string{
+			`UPDATE ticket_notifications SET sla_alert_history_id=NULL WHERE id=$1`,
+			`UPDATE ticket_notifications SET sla_alert_history_id=sla_alert_history_id+1 WHERE id=$1`,
+			`UPDATE ticket_notifications SET ticket_id=ticket_id+1 WHERE id=$1`,
+			`UPDATE ticket_notifications SET tenant_id=tenant_id+1 WHERE id=$1`,
+		} {
+			_, err := ownerDB.ExecContext(ctx, query, notificationID)
+			require.Error(t, err)
+		}
+		_, err = ownerDB.ExecContext(ctx, `UPDATE ticket_notifications SET sla_alert_history_id=$1 WHERE id=$2`, historyID, historicalNotifications[0].ID)
+		require.Error(t, err)
+		for _, query := range []string{
+			`UPDATE sla_alert_histories SET notification_tracking_version=NULL WHERE id=$1`,
+			`UPDATE sla_alert_histories SET notification_tracking_version=2 WHERE id=$1`,
+			`UPDATE sla_alert_histories SET notification_sent=true WHERE id=$1`,
+		} {
+			_, err := ownerDB.ExecContext(ctx, query, historyID)
+			require.Error(t, err)
+		}
+		_, err = ownerDB.ExecContext(ctx, `UPDATE sla_alert_histories SET notification_tracking_version=1 WHERE id=$1`, legacySLAHistory.ID)
+		require.Error(t, err)
+		_, err = ownerDB.ExecContext(ctx, `INSERT INTO ticket_notifications(sla_alert_history_id,tenant_id,ticket_id,user_id,type,channel,content,status,created_at,attempt_count,next_attempt_at) VALUES($1,$2,$3,$4,'sla_violated','email','legacy invalid link','pending',NOW(),0,NOW())`, legacySLAHistory.ID, tenant.ID, legacySLAHistory.TicketID, actor.ID)
+		require.Error(t, err, "legacy history cannot own newly linked deliveries")
+		_, err = ownerDB.ExecContext(ctx, `INSERT INTO sla_alert_histories(notification_tracking_version,ticket_id,ticket_number,ticket_title,alert_rule_id,alert_rule_name,alert_level,threshold_percentage,actual_percentage,notification_sent,escalation_level,tenant_id,created_at) SELECT 2,ticket_id,ticket_number,ticket_title,alert_rule_id,alert_rule_name,alert_level,threshold_percentage,actual_percentage,false,escalation_level,tenant_id,NOW() FROM sla_alert_histories WHERE id=$1`, historyID)
+		var versionError *pq.Error
+		require.ErrorAs(t, err, &versionError)
+		require.Equal(t, "23514", string(versionError.Code))
+		for _, invalid := range []struct{ history, tenant, ticket int }{{historyID, tenant.ID, historical.WorkItemID}, {historyID, tenant.ID + 1, workItemID}, {historyID + 1000000, tenant.ID, workItemID}} {
+			_, err := ownerDB.ExecContext(ctx, `INSERT INTO ticket_notifications(sla_alert_history_id,tenant_id,ticket_id,user_id,type,channel,content,status,created_at,attempt_count,next_attempt_at) VALUES($1,$2,$3,$4,'sla_violated','email','invalid reference','pending',NOW(),0,NOW())`, invalid.history, invalid.tenant, invalid.ticket, actor.ID)
+			require.Error(t, err, "reference guard rejects invalid owner")
+			// Independently exercise the FK with only its companion user trigger
+			// disabled inside this private transaction; rollback restores it.
+			probe, err := ownerDB.BeginTx(ctx, nil)
+			require.NoError(t, err)
+			_, err = probe.ExecContext(ctx, `ALTER TABLE ticket_notifications DISABLE TRIGGER sla_alert_delivery_reference_immutable`)
+			require.NoError(t, err)
+			_, fkErr := probe.ExecContext(ctx, `INSERT INTO ticket_notifications(sla_alert_history_id,tenant_id,ticket_id,user_id,type,channel,content,status,created_at,attempt_count,next_attempt_at) VALUES($1,$2,$3,$4,'sla_violated','email','invalid reference','pending',NOW(),0,NOW())`, invalid.history, invalid.tenant, invalid.ticket, actor.ID)
+			require.NoError(t, probe.Rollback())
+			var foreignKeyError *pq.Error
+			require.ErrorAs(t, fkErr, &foreignKeyError)
+			require.Equal(t, "23503", string(foreignKeyError.Code))
+
 		}
 	})
 	require.Equal(t, oldRow.Title, owner.Ticket.GetX(ctx, historical.WorkItemID).Title)

@@ -7,6 +7,7 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/slaalerthistory"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/ticketnotification"
 	"itsm-backend/ent/user"
@@ -34,6 +35,11 @@ func (s *TicketNotificationService) enqueueNotificationTx(ctx context.Context, t
 	if _, err := tx.Ticket.Query().Where(ticket.IDEQ(ticketID), ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).Only(ctx); err != nil {
 		return fmt.Errorf("notification intent target: %w", err)
 	}
+	if req.SLAAlertHistoryID != nil {
+		if _, err := tx.SLAAlertHistory.Query().Where(slaalerthistory.IDEQ(*req.SLAAlertHistoryID), slaalerthistory.TenantIDEQ(tenantID), slaalerthistory.TicketIDEQ(ticketID), slaalerthistory.NotificationTrackingVersionEQ(1)).Only(ctx); err != nil {
+			return fmt.Errorf("notification SLA owner: %w", err)
+		}
+	}
 	// Preference reads share the caller's snapshot, including its uncommitted
 	// configuration edits; never mutate the service used by other goroutines.
 	reader := *s
@@ -56,7 +62,7 @@ func (s *TicketNotificationService) enqueueNotificationTx(ctx context.Context, t
 			return fmt.Errorf("notification intent replay lookup: %w", err)
 		}
 		for _, row := range persisted {
-			if row.Type != req.EventType || row.Content != req.Content {
+			if row.Type != req.EventType || row.Content != req.Content || (row.SLAAlertHistoryID == nil) != (req.SLAAlertHistoryID == nil) || (row.SLAAlertHistoryID != nil && req.SLAAlertHistoryID != nil && *row.SLAAlertHistoryID != *req.SLAAlertHistoryID) {
 				return fmt.Errorf("notification delivery identity conflicts with persisted intent")
 			}
 		}
@@ -85,7 +91,7 @@ func (s *TicketNotificationService) enqueueNotificationTx(ctx context.Context, t
 				}
 				continue
 			}
-			if _, err := tx.TicketNotification.Create().SetTenantID(tenantID).SetTicketID(ticketID).SetUserID(userID).SetType(req.EventType).SetChannel(channel.name).SetContent(req.Content).SetDeliveryKey(req.DeliveryKey).SetStatus(ticketNotificationStatusPending).SetNextAttemptAt(s.clock()).Save(ctx); err != nil {
+			if _, err := tx.TicketNotification.Create().SetNillableSLAAlertHistoryID(req.SLAAlertHistoryID).SetTenantID(tenantID).SetTicketID(ticketID).SetUserID(userID).SetType(req.EventType).SetChannel(channel.name).SetContent(req.Content).SetDeliveryKey(req.DeliveryKey).SetStatus(ticketNotificationStatusPending).SetNextAttemptAt(s.clock()).Save(ctx); err != nil {
 				return fmt.Errorf("notification intent write: %w", err)
 			}
 		}
