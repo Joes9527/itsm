@@ -447,3 +447,12 @@ database/connector/.../bootstrap全包race、既定私有PG16/Redis/MinIO suite�
 真实私有PG升级前后整行JSON保全、旧transport全NULL、合法旧email禁止完整补绑精确命中trigger、先grant后撤销函数EXECUTE、合法v2/残缺拒绝/身份不可变均通过；Ent生成、migration全包race、既定私有PG16/Redis/MinIO suite和全后端build通过，独立最终审阅无新增阻断。详见T1。
 
 该步只是结构，尚未接原producer/worker/Incident，NULL形状仍为历史保留，新意图缺目标必须由后续原事务拒绝；邮件重绑RED未关闭。下一步实现EmailTarget持久验证与写入、worker按原transport和精确目标执行，再同步Incident outbox。S5/S6/T3/T4/G3未完成，CandidateSHA/候选停止状态不变，未执行WSL迁移。
+
+
+### S5 固定邮件目标发送入口检查点（2026-09-14）
+
+实现9839ed101新增EmailTarget.Validate及EmailService.SendToTarget，按记录transport及身份执行，不查询当前默认通道或live GraphProvider。Graph前后核对Manager精确实例digest/generation，经连接器捕获mailbox发送；SMTP捕获实际配置、核对摘要、单次尝试，身份变化拒绝或归为unknown。独立审阅发现的CC/附件/HTML-only静默忽略和多收件人部分成功重试风险已以RED复现并修正，复审无剩余阻断。
+
+Graph/SMTP loopback、目标变化零调用、发送中换代unknown、v2形状及调用身份测试通过；密码轮换仅证明允许进入一次注入sender尝试，不代表实际认证通过，多收件人分类为单元证据。具名service/Graph race、connector/.../internal/bootstrap/database全包race、既定私有PG16/Redis/MinIO suite及全后端build通过；首次回归路径误写bootstrap的setup失败已保留记录并更正，详见T1交接。
+
+原producer/worker/Incident outbox尚未调用此入口，原队列重绑RED仍未关闭。下一步在原业务事务绑定并持久化v2目标，worker验证后调用SendToTarget，保留真实正常发送、重绑拒绝和领取/回执覆盖。S5/S6/T3/T4/G3仍未完成，CandidateSHA和候选停止状态不变，无WSL/共享数据库操作、企业外发、push/main合并。
