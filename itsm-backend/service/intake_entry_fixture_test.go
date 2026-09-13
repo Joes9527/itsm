@@ -48,7 +48,7 @@ type TicketService struct {
 }
 
 func NewTicketServiceForTest(client *ent.Client, logger *zap.SugaredLogger) *TicketService {
-	owner := domain.NewTicketServiceForTest(client, logger)
+	owner := domain.NewTicketService(&domain.TicketServiceConfig{Client: client, Repository: ticket.NewEntRepository(client, logger), Logger: logger, Execution: executionfixture.Standard()})
 	return &TicketService{owner, client, newEntryApplication(client, owner, domain.NewIncidentService(client, logger, executionfixture.Standard()))}
 }
 func (s *TicketService) SubmitCreation(ctx context.Context, req *dto.CreateTicketRequest, tenantID int) (*ticket.Ticket, error) {

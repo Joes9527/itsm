@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 
 	"itsm-backend/authorization"
 	"itsm-backend/common"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/common/workitemidentity"
 	"itsm-backend/connector"
 	feishuConnector "itsm-backend/connector/builtin/feishu"
@@ -409,13 +411,35 @@ func (s *TicketService) GetTicketByNumber(ctx context.Context, ticketNumber stri
 
 // UpdateTicket 更新工单
 func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.UpdateTicketRequest, tenantID int) (*ticket.Ticket, error) {
+	if s == nil || s.client == nil || s.repo == nil || s.execution == nil {
+		return nil, common.NewForbiddenError("ticket execution policy required")
+	}
+	if req == nil || id <= 0 || tenantID <= 0 {
+		return nil, common.NewValidationError("ticket update target and request required", nil)
+	}
+	if bound, ok := tenantctx.TenantID(ctx); ok && bound != tenantID {
+		return nil, common.NewForbiddenError("tenant context mismatch")
+	}
+	ctx = tenantctx.WithTenantID(ctx, tenantID)
+	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if err = s.execution.BindEnt(ctx, tx, tenantID); err != nil {
+		return nil, err
+	}
+	if err = s.execution.RequireEntMembers(ctx, tx, tenantID, id); err != nil {
+		return nil, err
+	}
+	client := tx.Client()
 	s.logger.Infow("Updating ticket", "ticket_id", id, "tenant_id", tenantID)
 	if req.Status == "approved" || req.Status == "rejected" {
 		return nil, fmt.Errorf("审批状态只能由 BPMN 任务命令推进")
 	}
 
 	// 获取当前工单
-	current, err := s.repo.GetByID(ctx, id, tenantID)
+	current, err := ticket.NewEntRepository(client, s.logger).GetByID(ctx, id, tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -447,6 +471,9 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 	if req.Version > 0 {
 		params.Version = req.Version
 	}
+	if params.Version != current.Version {
+		return nil, common.NewVersionConflictError("ticket", id, params.Version, current.Version)
+	}
 
 	if req.Title != "" {
 		params.Title = &req.Title
@@ -463,7 +490,7 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 		if class != "generic" || current.RecordClass != "generic" {
 			return nil, fmt.Errorf("legacy type cannot change professional class")
 		}
-		if err := s.validateGenericSubtype(ctx, tenantID, subtype); err != nil {
+		if err := validateGenericSubtype(ctx, client, tenantID, subtype); err != nil {
 			return nil, err
 		}
 		params.GenericSubtype = &subtype
@@ -477,7 +504,7 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 			return nil, err
 		}
 		if s.client != nil {
-			assigneeExists, err := s.client.User.Query().
+			assigneeExists, err := client.User.Query().
 				Where(user.IDEQ(req.AssigneeID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).
 				Exist(ctx)
 			if err != nil {
@@ -494,7 +521,7 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 		if s.client == nil {
 			return nil, fmt.Errorf("无法解析工单分类")
 		}
-		category, err := s.client.TicketCategory.Query().
+		category, err := client.TicketCategory.Query().
 			Where(ticketcategory.NameEQ(strings.TrimSpace(req.Category)), ticketcategory.TenantIDEQ(tenantID), ticketcategory.IsActiveEQ(true)).
 			Only(ctx)
 		if err != nil {
@@ -504,7 +531,7 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 	}
 	if categoryID != nil {
 		if *categoryID != 0 && s.client != nil {
-			exists, err := s.client.TicketCategory.Query().
+			exists, err := client.TicketCategory.Query().
 				Where(ticketcategory.IDEQ(*categoryID), ticketcategory.TenantIDEQ(tenantID), ticketcategory.IsActiveEQ(true)).
 				Exist(ctx)
 			if err != nil {
@@ -522,7 +549,7 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 			if s.client == nil {
 				return nil, fmt.Errorf("无法解析工单标签")
 			}
-			tagIDs, err := NewTicketTagService(s.client).ResolveTagIDsByNames(ctx, req.Tags, tenantID, true)
+			tagIDs, err := NewTicketTagService(client).ResolveTagIDsByNames(ctx, req.Tags, tenantID, true)
 			if err != nil {
 				return nil, fmt.Errorf("解析工单标签失败: %w", err)
 			}
@@ -534,12 +561,15 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 	}
 
 	// 更新工单
-	updated, err := s.repo.Update(ctx, id, params, tenantID)
+	updated, err := s.repo.UpdateTx(ctx, tx, id, params, tenantID)
 	if err != nil {
 		s.logger.Errorw("Failed to update ticket", "error", err)
 		return nil, err
 	}
 
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
 	s.logger.Infow("Ticket updated", "ticket_id", id)
 
 	// 状态变更时发送 ticket_updated 通知

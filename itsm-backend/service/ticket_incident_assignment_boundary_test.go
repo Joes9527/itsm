@@ -5,6 +5,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/handlers/shared/workitemmutation"
+	ticketrepo "itsm-backend/repository/ticket"
 	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 )
@@ -31,7 +32,7 @@ func TestTicketAssignmentRejectsProfessionalClasses(t *testing.T) {
 					case "change_request":
 						client.Change.Create().SetWorkItemID(before.ID).SaveX(ctx)
 					}
-					ticketSvc := NewTicketServiceForTest(client, owner.logger)
+					ticketSvc := NewTicketService(&TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, owner.logger), Logger: owner.logger, Execution: executionfixture.Standard()})
 					ticketSvc.execution = executionfixture.Standard()
 					assignment := NewTicketAssignmentService(client, owner.logger)
 					workflow := NewTicketWorkflowService(client, owner.logger)
@@ -104,7 +105,7 @@ func TestTicketAssignmentMixedBatchRejectsBeforeWrites(t *testing.T) {
 				professional := client.Ticket.Create().SetTitle("professional").SetTicketNumber("PRO-B").SetRequesterID(actor.ID).SetTenantID(tenant.ID).SetRecordClass(class).SetStatus("resolved").SaveX(ctx)
 				generic := client.Ticket.Create().SetTitle("generic").SetTicketNumber("GEN-B").SetRequesterID(actor.ID).SetTenantID(tenant.ID).SetRecordClass("generic").SetStatus("resolved").SetPriority("medium").SaveX(ctx)
 				ids := []int{generic.ID, professional.ID}
-				svc := NewTicketServiceForTest(client, owner.logger)
+				svc := NewTicketService(&TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, owner.logger), Logger: owner.logger, Execution: executionfixture.Standard()})
 				switch action {
 				case "assignment":
 					err = svc.AssignTickets(ctx, tenant.ID, ids, actor.ID)

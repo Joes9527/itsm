@@ -3,7 +3,9 @@ package controller
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"itsm-backend/common/executionscope"
 	"strconv"
 	"strings"
 	"time"
@@ -109,6 +111,10 @@ func (tc *TicketController) UpdateTicket(c *gin.Context) {
 
 	ticket, err := tc.ticketService.UpdateTicket(c.Request.Context(), ticketID, &req, tenantID)
 	if err != nil {
+		if errors.Is(err, executionscope.ErrDenied) {
+			common.Forbidden(c, "ticket execution scope denied")
+			return
+		}
 		// 处理版本冲突错误
 		if common.IsVersionConflictError(err) {
 			conflictErr := err.(*common.VersionConflictError)
@@ -935,6 +941,10 @@ func (tc *TicketController) UpdateSubtask(c *gin.Context) {
 
 	updatedTicket, err := tc.ticketService.UpdateTicket(c.Request.Context(), subtaskID, &req, tenantID)
 	if err != nil {
+		if errors.Is(err, executionscope.ErrDenied) {
+			common.Forbidden(c, "ticket execution scope denied")
+			return
+		}
 		tc.logger.Errorw("Failed to update subtask", "error", err, "subtask_id", subtaskID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, err.Error())
 		return

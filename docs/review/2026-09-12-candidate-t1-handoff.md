@@ -704,3 +704,14 @@ Callback contract新增version及generic typed lifecycle result，沿既有流�
 同时明确后端字段缺口：RequesterID权威是tickets.requester_id，当前编辑不持久化；FormFields权威是field_values，现有FieldValueService只有INSERT能力且忽略未知key，没有可直接调用的编辑方法。后续若支持，必须在现有所有者补原事务更新/未知或歧义字段拒绝/保留快照并审计；若暂不支持须显式拒绝，不能静默忽略或把CreateValuesTx当更新，也不能写第二份custom_field_values JSON。现有共享标签覆盖六类，核心拒绝只覆盖Incident/Problem/Change；service_request_item/catalog_task现有核心编辑语义需明确归属后迁移，不能把当前实现描述成所有专业状态受保护。
 
 本轮是完整编辑命令接入前置，不是后端业务GREEN。历史越界及孤立标签RED仍存在，后端mandatory expectedVersion、可信actor/source、operationId、子任务父范围、原事务通知/SLA/飞书意图和审计回执尚待完成。完整S3/S4/S5/S6/B3/T3/T4/G2/G3未完成，CandidateSHA保持固定原值、候选未启动；无WSL/共享数据库变更、企业调用、共享迁移、推送或main合并。
+
+
+### B2 S3 工单编辑数据库主体与标签原事务接入（2026-09-13）
+
+在 `4a69f1e29` 后迁移既有TicketService.UpdateTicket原入口：依赖缺失/tenantctx冲突显式拒绝，开启调用方RR事务，Bind/member后由tx.Client读取工单、校验目录/处理人/分类/subtype、预检传入版本，标签目录解析和创建与repo.UpdateTx共享原事务，成功后显式commit。唯一subtype解析函数改接收调用方client；不另建编辑服务、不使用生产Standard fallback。相关外部包与同包测试fixture显式注入Standard，controller普通/子任务scope拒绝映射403。
+
+`s3-ticket-edit-scope-green.log` 将此前有效RED转GREEN：历史工单编辑ErrDenied，完整JSON及标签数不变；新member正常成功；旧version在任何标签创建前拒绝。`s3-ticket-edit-tx-pg.log` 完整TestCandidateIntakeCreationBoundary PASS、无skip：新增服务测试在真实TicketTag INSERT及Ticket UPDATE（含新标签关联）成功后注入错误，整行/标签目录/关联回滚，解除故障后原请求成功且版本只增一次。这两条服务故障场景初始无标签；原标签替换回滚由先前仓储测试覆盖，不扩大为服务场景专项已证。
+
+`s3-ticket-edit-tx-regression.log` 服务/控制器/仓储受影响回归PASS，`s3-ticket-edit-tx-build.log` 全后端构建exit0。初次controller fixture未注入policy导致旧成功测试失败，已修正夹具并复跑；无生产绕过。git diff --check通过，独立review_execution_scope_s1限定审阅无新增阻断。测试是任务私有PG16及SQLite，非B的PG17候选运行验收。
+
+本检查点仅数据库主体与标签：旧optional version（缺失时取事务内当前version）、返回Ticket、事务外通知/SLA收尾/Feishu仍待整体命令接入。可信actor/source、子任务父范围、稳定operationId与历史receipt只读重放、所有副作用原子提交尚未完成；RequesterID/FormFields及专业核心编辑归属按上一检查点继续处理。不得把此次候选边界测试PASS等同完整S3/G2完成。固定CandidateSHA不变、候选未启动，无WSL/共享数据操作、共享迁移、企业实发、推送或main合并。

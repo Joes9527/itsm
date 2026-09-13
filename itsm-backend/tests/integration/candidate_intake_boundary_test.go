@@ -2746,6 +2746,53 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		}
 	})
 
+	t.Run("ticket edit rolls back directory and relations after actual writes", func(t *testing.T) {
+		svc := service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy})
+		for _, fault := range []string{"tag", "ticket"} {
+			func() {
+				fresh, err := app.Create(ctx, identity, command("edit-write-fault-"+fault, "generic"))
+				require.NoError(t, err)
+				before := owner.Ticket.GetX(ctx, fresh.WorkItemID)
+				var beforeJSON, afterJSON string
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, before.ID).Scan(&beforeJSON))
+				beforeTags := owner.TicketTag.Query().CountX(ctx)
+				beforeRelations := before.QueryTags().IDsX(ctx)
+				active, writes := true, 0
+				defer func() { active = false }()
+				injected := errors.New("edit actual " + fault + " write failure")
+				hook := func(next ent.Mutator) ent.Mutator {
+					return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+						value, err := next.Mutate(ctx, m)
+						if active && err == nil {
+							writes++
+							return nil, injected
+						}
+						return value, err
+					})
+				}
+				if fault == "tag" {
+					runtime.TicketTag.Use(hook)
+				} else {
+					runtime.Ticket.Use(hook)
+				}
+				req := &dto.UpdateTicketRequest{Title: "atomic edit " + fault, Tags: []string{"edit-fault-" + fault}, Version: before.Version, UserID: actor.ID}
+				_, err = svc.UpdateTicket(ctx, before.ID, req, tenant.ID)
+				active = false
+				require.ErrorIs(t, err, injected)
+				require.Equal(t, 1, writes)
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, before.ID).Scan(&afterJSON))
+				require.JSONEq(t, beforeJSON, afterJSON)
+				require.Equal(t, beforeTags, owner.TicketTag.Query().CountX(ctx))
+				require.Equal(t, beforeRelations, owner.Ticket.GetX(ctx, before.ID).QueryTags().IDsX(ctx))
+				updated, err := svc.UpdateTicket(ctx, before.ID, req, tenant.ID)
+				require.NoError(t, err)
+				require.Equal(t, before.Version+1, updated.Version)
+				require.Equal(t, beforeTags+1, owner.TicketTag.Query().CountX(ctx))
+				require.Len(t, owner.Ticket.GetX(ctx, before.ID).QueryTags().IDsX(ctx), 1)
+			}()
+		}
+	})
+
 	t.Run("manual escalation persists Feishu update intent", func(t *testing.T) {
 		receiver := &candidateFeishuUpdater{destination: "local-test-destination"}
 		registry := connector.NewRegistry()

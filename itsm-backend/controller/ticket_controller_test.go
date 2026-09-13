@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	ticketrepo "itsm-backend/repository/ticket"
 	executionfixture "itsm-backend/tests/fixtures/execution"
 	mathrand "math/rand"
 	"net/http"
@@ -56,7 +57,7 @@ func setupTestTicketController(t *testing.T) (*gin.Engine, *ent.Client, *TicketC
 
 	logger := zaptest.NewLogger(t).Sugar()
 
-	ticketService := service.NewTicketServiceForTest(client, logger)
+	ticketService := service.NewTicketService(&service.TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, logger), Logger: logger, Execution: executionfixture.Standard()})
 	var ticketDependencyService *service.TicketDependencyService
 
 	ticketController := NewTicketController(ticketService, ticketDependencyService, nil, client, logger)

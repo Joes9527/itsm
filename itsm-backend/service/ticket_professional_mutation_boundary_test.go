@@ -4,6 +4,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	ticketrepo "itsm-backend/repository/ticket"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 )
 
@@ -30,7 +31,7 @@ func TestTicketCoreMutationsRejectProfessionalClasses(t *testing.T) {
 				case "change_request":
 					client.Change.Create().SetWorkItemID(before.ID).SaveX(ctx)
 				}
-				svc := NewTicketServiceForTest(client, owner.logger)
+				svc := NewTicketService(&TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, owner.logger), Logger: owner.logger, Execution: executionfixture.Standard()})
 				lifecycle := NewTicketLifecycleService(client, owner.logger)
 				workflow := NewTicketWorkflowService(client, owner.logger)
 				patch := &dto.UpdateTicketRequest{Version: before.Version}
@@ -114,7 +115,7 @@ func TestTicketCoreBoundaryPreservesSharedOperations(t *testing.T) {
 			next, err := createIncidentTestUser(ctx, client, tenant.ID, "next")
 			require.NoError(t, err)
 			item := client.Ticket.Create().SetTitle("original title").SetDescription("description").SetTicketNumber("SHARED").SetRequesterID(actor.ID).SetTenantID(tenant.ID).SetRecordClass(class).SetStatus("new").SaveX(ctx)
-			svc := NewTicketServiceForTest(client, owner.logger)
+			svc := NewTicketService(&TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, owner.logger), Logger: owner.logger, Execution: executionfixture.Standard()})
 			_, err = svc.UpdateTicket(ctx, item.ID, &dto.UpdateTicketRequest{Tags: []string{}, Version: item.Version}, tenant.ID)
 			require.NoError(t, err)
 			err = NewTicketWorkflowService(client, owner.logger).ForwardTicket(ctx, &dto.ForwardTicketRequest{TicketID: item.ID, ToUserID: next.ID, TransferOwnership: false, Comment: "collaborate"}, actor.ID, tenant.ID)
