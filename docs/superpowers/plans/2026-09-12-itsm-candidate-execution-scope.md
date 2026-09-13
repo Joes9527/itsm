@@ -138,7 +138,7 @@ S3/S4/S5/S6及候选完整交付仍未完成，CandidateSHA不变、候选停止
 - [ ] 将编辑命令统一到现有WorkItem Meta/receipt，必需expectedVersion与稳定operationId；actor/tenant/source由HTTP、子任务边界及持久工具invocation构造，不能信任JSON userId或每次重试生成新身份。前端及工具输入版本契约同时迁移，保留明确冲突响应。工具expectedVersion在批准时持久化，operationId从invocation派生；done写失败重试复用原版本/回执，不读取新version冒充原命令。
 - [ ] 原服务事务读取当前WorkItem与现行actor/权限，合法历史receipt允许授权后只读重放；首次写入先Bind/member/版本检查，再允许任何标签创建或关系写。子任务父子归属及相关父成员在该事务确认。
 - [ ] category/subtype、专业字段/共享标签、处理人/请求人、状态/解决方案/表单字段契约逐项核对，不静默忽略客户端字段；标签目录创建及关系替换复用既有所有者/原事务，不另建平行resolver。
-- [ ] 仓储更新接收调用方事务并沿用唯一字段映射和CAS实现；不以普通client预检+之后autocommit代替，不增加长期包装或双写。
+- [x] 仓储更新接收调用方事务并沿用唯一字段映射和CAS实现；`81860d2e4` 提供显式UpdateTx，SQLite及真实私有PG验证提交/回滚/旧版本标签回滚、另一连接提交前不可见；定向回归/全后端构建及独立审阅通过。仅仓储前置完成，TicketService及各调用入口尚未迁移，原业务RED仍存在。
 - [ ] 同事务写编辑审计/稳定回执、状态通知意图、应有SLA违规收尾；所有失败传播回滚，applied SLA冻结不重套策略。保留通知偏好及原接收人语义，不把日志warning当副作用成功。
 - [ ] 飞书更新意图与原编辑提交原子绑定，使用与manual更新相同event_type和稳定aggregate键，避免跨类型越过前序；具名编辑来源的权限/回执/resultVersion/status与payload摘要须由consumer验证，不能伪造手动升级来源或删除原同步能力。
 - [ ] 真实PG覆盖历史整行/标签目录及关系保全、新member标题/分类/标签/状态、重放/冲突、标签/通知/SLA/审计/Outbox实际写后故障回滚、actor撤权与子任务父范围拒绝；相关前端/API/工具契约、构建/回归和独立审阅后才能标记完成。
