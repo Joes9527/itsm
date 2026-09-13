@@ -427,3 +427,10 @@ claim 的 ambiguous/expired recovery、pending SELECT 和 claim CAS，unknown-ty
 - `s4-outbox-worker-build.json`：后端全量构建 exit 0。`s4-outbox-worker-integration-compile.log`：integration 标签下 tests/integration、tests/e2e、service_request 编译 PASS；此项仅编译，不代表 E2E 运行。
 
 独立 reviewer `review_execution_scope_s1` 两次只读复审无阻断，确认构造、全部原 SQL 写分支、事务/audit 与新增负测支持上述限定结论；建议的 audit 排序已落实并由最终 PG 验证。此前 generic worker RED 已修复，**S4 整体仍未完成**：candidate 并发领取/恢复、审计实际写后故障回滚、其余 callback/周期执行仍需完成；共享业务能力、S5/S6/B3 和完整业务验收继续未完成。本机私有 PG16 synthetic 证据不替代 B 的 PG17 环境准入。固定 CandidateSHA 仍为 d7470a32dbb87acc9b5e4d9a895a146410723561，候选不启动，无推送/main 合并或 WSL/共享库操作。
+
+
+### B2 S4 Outbox 并发、过期恢复与审计回滚（2026-09-13）
+
+在 `065226f1e` 后扩展真实私有 PG 测试，不改生产逻辑。`s4-outbox-worker-recovery-pg.log` 完整 TestCandidateIntakeCreationBoundary PASS，无 skip。两个并发 repository claim 经同一开始信号竞争12条候选事件，合计12个唯一ID；选取一条未写attempt的事件使lease过期后，原claim恢复为新token，旧token无法完成，新token完成成功。另一条已写attempt的过期事件转blocked、attempt=1，且仅一条delivery_unknown审计。这里只模拟持久化lease过期，不声称完成进程kill/restart或调度周期测试。
+
+retry-with-audit、delivery-unknown、ambiguous recovery 和 unregistered阻断四分支在 System AuditLog 的真实 next.Mutate 成功后注入错误；计数证明到达真实audit写，错误后事件全字段及按ID排序的audit全表快照均回滚，解除故障后成功。测试未实发，仍用随机私有数据库/受限运行角色；固定CandidateSHA不变，未启动候选或修改WSL。S4其它callback/周期执行、S5/S6/B3和G2/G3仍未完成。

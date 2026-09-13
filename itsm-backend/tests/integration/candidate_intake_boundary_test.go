@@ -1473,6 +1473,139 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			})
 		}
 	})
+	t.Run("worker concurrent claims recover leases without redelivery", func(t *testing.T) {
+		fresh, err := app.Create(ctx, identity, command("worker-concurrency", "generic"))
+		require.NoError(t, err)
+		workerCtx := tenantctx.SystemContext(ctx, "outbox:poll", "candidate concurrency test")
+		repo := service.NewOutboxEventRepository(clients.System, policy)
+		const kind = "candidate-concurrent"
+		ids := map[int]bool{}
+		for i := 0; i < 12; i++ {
+			row := owner.OutboxEvent.Create().SetEventID(fmt.Sprintf("concurrent-%d", i)).SetEventType(kind).SetTenantID(tenant.ID).SetAggregateType("work_item").SetAggregateID(fmt.Sprint(fresh.WorkItemID)).SetExecutionWorkItemID(fresh.WorkItemID).SetPayload(json.RawMessage(`{}`)).SetNextAttemptAt(time.Now().Add(-time.Minute)).SaveX(ctx)
+			ids[row.ID] = true
+		}
+		type result struct {
+			rows []*ent.OutboxEvent
+			err  error
+		}
+		results := make(chan result, 2)
+		start := make(chan struct{})
+		for i := 0; i < 2; i++ {
+			go func() {
+				<-start
+				rows, e := repo.ClaimDueByEventType(workerCtx, time.Now(), 100, kind)
+				results <- result{rows, e}
+			}()
+		}
+		close(start)
+		claimed := map[int]*ent.OutboxEvent{}
+		for i := 0; i < 2; i++ {
+			r := <-results
+			require.NoError(t, r.err)
+			for _, row := range r.rows {
+				require.True(t, ids[row.ID])
+				require.NotContains(t, claimed, row.ID, "concurrent dispatchers returned same claim")
+				claimed[row.ID] = row
+			}
+		}
+		require.Len(t, claimed, len(ids))
+		var expired, ambiguous *ent.OutboxEvent
+		for _, row := range claimed {
+			if expired == nil {
+				expired = row
+			} else {
+				ambiguous = row
+				break
+			}
+		}
+		require.NoError(t, repo.MarkDeliveryAttemptStarted(workerCtx, ambiguous.ID, ambiguous.ClaimToken, "local-attempt"))
+		owner.OutboxEvent.UpdateOneID(expired.ID).SetClaimExpiresAt(time.Now().Add(-time.Minute)).SaveX(ctx)
+		owner.OutboxEvent.UpdateOneID(ambiguous.ID).SetClaimExpiresAt(time.Now().Add(-time.Minute)).SaveX(ctx)
+		recovered, err := repo.ClaimDueByEventType(workerCtx, time.Now(), 100, kind)
+		require.NoError(t, err)
+		require.Len(t, recovered, 1)
+		require.Equal(t, expired.ID, recovered[0].ID)
+		require.NotEqual(t, expired.ClaimToken, recovered[0].ClaimToken)
+		require.ErrorIs(t, repo.MarkPublished(workerCtx, expired.ID, expired.ClaimToken, time.Now()), service.ErrOutboxEventClaimLost)
+		require.NoError(t, repo.MarkPublished(workerCtx, recovered[0].ID, recovered[0].ClaimToken, time.Now()))
+		require.Equal(t, "blocked", owner.OutboxEvent.GetX(ctx, ambiguous.ID).Status)
+		require.Equal(t, 1, owner.OutboxEvent.GetX(ctx, ambiguous.ID).AttemptCount)
+		var audits int
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM audit_logs WHERE request_id=$1 AND action='outbox.delivery_unknown'`, ambiguous.EventID).Scan(&audits))
+		require.Equal(t, 1, audits)
+	})
+	t.Run("worker audit write faults roll back event transitions", func(t *testing.T) {
+		fresh, err := app.Create(ctx, identity, command("worker-audit-fault", "generic"))
+		require.NoError(t, err)
+		workerCtx := tenantctx.SystemContext(ctx, "outbox:poll", "candidate audit rollback test")
+		repo := service.NewOutboxEventRepository(clients.System, policy)
+		fault := errors.New("injected after actual worker audit write")
+		inject := false
+		writes := 0
+		clients.System.AuditLog.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+				v, e := next.Mutate(ctx, m)
+				if e == nil && inject {
+					writes++
+					return nil, fault
+				}
+				return v, e
+			})
+		})
+		for _, branch := range []string{"retry", "unknown", "recovery", "unregistered"} {
+			t.Run(branch, func(t *testing.T) {
+				kind := "audit-fault-" + branch
+				row := owner.OutboxEvent.Create().SetEventID(kind).SetEventType(kind).SetTenantID(tenant.ID).SetAggregateType("work_item").SetAggregateID(fmt.Sprint(fresh.WorkItemID)).SetExecutionWorkItemID(fresh.WorkItemID).SetPayload(json.RawMessage(`{}`)).SetNextAttemptAt(time.Now().Add(-time.Minute)).SaveX(ctx)
+				if branch != "unregistered" {
+					claimed, e := repo.ClaimDueByEventType(workerCtx, time.Now(), 10, kind)
+					require.NoError(t, e)
+					require.Len(t, claimed, 1)
+					row = claimed[0]
+				}
+				if branch == "recovery" {
+					require.NoError(t, repo.MarkDeliveryAttemptStarted(workerCtx, row.ID, row.ClaimToken, "local-test"))
+					owner.OutboxEvent.UpdateOneID(row.ID).SetClaimExpiresAt(time.Now().Add(-time.Minute)).SaveX(ctx)
+				}
+				before, e := json.Marshal(owner.OutboxEvent.GetX(ctx, row.ID))
+				require.NoError(t, e)
+				audits, e := json.Marshal(owner.AuditLog.Query().Order(ent.Asc("id")).AllX(ctx))
+				require.NoError(t, e)
+				run := func() error {
+					switch branch {
+					case "retry":
+						return repo.MarkRetryWithAudit(workerCtx, row.ID, row.ClaimToken, "test", time.Now(), service.OutboxRetryAudit{TenantID: tenant.ID, RequestID: row.EventID, Resource: "outbox_event", Action: "test.retry", Path: "outbox/events", Method: "WORKER", StatusCode: 503})
+					case "unknown":
+						return repo.MarkDeliveryUnknown(workerCtx, row, row.ClaimToken, "test")
+					case "recovery":
+						_, e := repo.ClaimDueByEventType(workerCtx, time.Now(), 10, kind)
+						return e
+					default:
+						known := []string{}
+						for _, ev := range owner.OutboxEvent.Query().AllX(ctx) {
+							if ev.EventType != kind {
+								known = append(known, ev.EventType)
+							}
+						}
+						_, e := repo.BlockUnknownPendingEventTypes(workerCtx, time.Now(), 1000, known)
+						return e
+					}
+				}
+				writesBefore := writes
+				inject = true
+				rejected := run()
+				inject = false
+				require.ErrorIs(t, rejected, fault)
+				require.Equal(t, writesBefore+1, writes)
+				after, e := json.Marshal(owner.OutboxEvent.GetX(ctx, row.ID))
+				require.NoError(t, e)
+				require.JSONEq(t, string(before), string(after))
+				auditAfter, e := json.Marshal(owner.AuditLog.Query().Order(ent.Asc("id")).AllX(ctx))
+				require.NoError(t, e)
+				require.JSONEq(t, string(audits), string(auditAfter))
+				require.NoError(t, run())
+			})
+		}
+	})
 	require.Equal(t, oldRow.Title, owner.Ticket.GetX(ctx, historical.WorkItemID).Title)
 }
 
