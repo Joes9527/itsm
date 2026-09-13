@@ -366,3 +366,6 @@ Creation requester controls use the actual target resource's `create_on_behalf` 
 候选环境的 Marketplace 安装、历史安装重新启用、卸载、配置替换及连接器配置合并均在首次查询/写入前要求同一 `RequireIntegrationManagement`。当前只有 standard、有效且匹配的显式租户上下文、无 SystemBypass 且请求未取消才允许继续；缺少策略一律拒绝。此部署限制不替代现有 RBAC 或业务授权，也不因商品类型为 skill/plugin 放开配置写入。HTTP handler 传递 Request.Context 保留租户与取消信息，禁止操作返回固定403；连接器依赖缺失不能报告激活成功，standard 已提交配置与后续激活并非原子事务。
 
 飞书 OAuth callback 在兑换令牌前通过同一部署检查，租户仅来自唯一匹配的回调实例；重复实例 ID 拒绝，query/state 不提供租户授权。配置合并 owner 自身仍再次检查，以覆盖直接调用。nil Marketplace 不跳过持久化并报告成功。本增量不补齐 OAuth state、发起人授权、防重放或兑换与持久化的原子性；普通环境完整 OAuth 安全验收仍需单独完成。候选拒绝在本机接收端验证为零兑换请求，standard 正向使用本机 provider 与 SQLite，私有 PG 配置保全另有真实测试，均不等于生产外部服务验收。
+
+
+连接器 HTTP 配置创建/更新/停用和删除入口现同样在解析、实例变更、持久化和邮件轮询操作之前调用 Manager 委托的 RequireIntegrationManagement；候选、缺策略/Manager、缺失或不匹配租户、SystemBypass 返回固定403，取消等非准入拒绝返回固定失败响应。名称级删除按既有 `(tenant,name)` 数据库范围逐个撤销完整 provider 实例。普通 Manager.Provision/Revoke 直接调用仍待接入，Send/Get 也未封闭；HTTP 门禁不能替代这些 owner 的自身检查。standard 持久化错误的旧处理、配置与实例的非原子性，以及并发新建与名称快照撤销竞争仍待处理。

@@ -1260,3 +1260,19 @@ s5-marketplace-management-red.log 真实私有 PG 复现 connector/skill/plugin 
 最后审阅指出所有 preflight 错误映射403不准确；s5-marketplace-oauth-canceled-red.log 真实取消请求复现后修为仅 ErrDenied 返回403，其余固定失败响应不输出 cause。最终具名回归、构建与审阅结果下方补记。本轮未修复启动前 Manager Provision、Revoke/删除和 Send/Get 裸实例边界，未更新固定 CandidateSHA，候选未启动，未进行共享环境、企业/云外呼、push或main合并。S5/S6和T3/T4/G3继续未完成。
 
 最终 s5-marketplace-final-review-unit.log 五包所选具名 race PASS（未匹配的包不视为全包测试），包括取消请求分类与 standard OAuth 正向；独立最终复核无新增阻断。s5-marketplace-build.log 全后端 build exit0，git diff --check通过。最后增量仅回调错误分类，已运行对应回归；上方完整私有 suite 不宣称在该增量后重跑，既有七项激活RED继续保留。
+
+### B2 S5 连接器 HTTP 配置入口与名称级撤销（2026-09-14）
+
+Manager 新增 RequireIntegrationManagement 委托既有冻结策略；HTTP Provision/Revoke 在请求解析、实例变更、持久化和邮件轮询操作之前检查，nilManager/nilgate/candidate/缺失或不匹配tenantctx/SystemBypass拒绝，取消等非ErrDenied固定500。既有配置HTTP单测显式使用standard策略与局部请求tenantctx，不修改其他领域共用认证fixture，也不把此夹具当生产RBAC验证。Manager.Provision/Revoke本身尚未调用该gate。
+
+s5-connector-delete-red.log 真实私有PG复现候选DELETE返回200且原配置行消失；修复后原行JSON保全。s5-connector-http-gate-private.log 中原507f62293 HTTP激活分支已PASS，直接Manager仍三项RED。标准正向初版空provider不符合Ent NotEmpty，在s5-connector-http-final-private.log暴露旧HTTP持久化错误被忽略，不能作为合法正向证据；改用合法local-test后，s5-connector-revoke-provider-red.log 进一步复现删除配置但运行实例残留。Revoke现按当前租户+name筛选所有实例，携带完整cfg（含provider）撤销，与原数据库名称级删除范围一致。
+
+s5-connector-http-verified-private.log完整私有PG16/Redis/MinIO回归中，HTTP激活负例、候选删除整行保全、standard真实HTTP更新/实际DB保存/实例激活/删除及实例移除PASS，初始化本机Webhook零请求。整套仅剩直接Manager Provision三项原有断言失败，无SKIP/DATA RACE，整体仍为FAIL。没有通过缩减测试或改换candidate策略消除其RED。标准PG正向仍使用同一私有受限runtime client，不代替目标standard角色准入。
+
+s5-connector-http-final-unit.log具名controller/connector/database race PASS。新增多provider名称级撤销测试验证同tenant两个provider分别Close一次并移除、外tenant同名实例保留且零Close；此单测不使用DB，持久化由上方PG正向单独验证。快照枚举与并发Provision竞争、Close错误和实例/DB原子性仍待后续生命周期修复，不将此循环表述为原子删除。
+
+下一步继续Manager.Provision（含Enabled=false）、contextful Revoke的owner门禁及Send/Get直接投递边界。审阅确认LoadAll的WithTenantID已清除SystemBypass，可在独立启动准入后保留普通租户管理检查，不能放宽gate。candidate通知/飞书/Webhook初始目标fixture改可信声明启动；目标变化/发送中重绑防御测试保留为显式standard可变实例场景，不能只改成拒绝重绑便宣称原generation防线通过。新目标重放测试用新启动配置/Manager验证既存receipt不扩展目标；此前GET读取测试中刻意预置的非候选实例须明确负测前置。保留已完成ACK可信启动旅程，不重新执行或改写其业务协议。
+
+CandidateSHA、候选停止及共享环境边界不变，完整目标与S5/S6/T3/T4/G3未完成。无共享数据库变更、真实企业/云调用、push或main合并。最终构建及审阅下方补记。
+
+最终 s5-connector-http-build.log 全后端build exit0，git diff --check通过，独立最终审阅无新增阻断。当前完整私有suite仍为上述三项直接激活RED，未放行候选。

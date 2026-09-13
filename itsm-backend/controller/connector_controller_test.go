@@ -13,9 +13,12 @@ import (
 	"time"
 
 	"itsm-backend/common"
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/config"
 	"itsm-backend/connector"
 	msgraphpkg "itsm-backend/connector/builtin/msgraph"
 	"itsm-backend/connector/marketplace"
+	"itsm-backend/database"
 	"itsm-backend/dto"
 
 	"github.com/gin-gonic/gin"
@@ -32,13 +35,13 @@ func setupConnectorController(t *testing.T) *gin.Engine {
 	logger := zaptest.NewLogger(t).Sugar()
 
 	reg := connector.NewRegistry()
-	mgr := connector.NewManager(reg, logger, nil)
+	mgr := connector.NewManager(reg, logger, standardConnectorManagementPolicy(t))
 	mkt := marketplace.New()
 	ctrl := NewConnectorController(mgr, reg, mkt, logger, nil, nil)
 
 	r := gin.New()
 	r.Use(gin.Recovery())
-	r.Use(withTestAuth(1, 1))
+	r.Use(withTestAuth(1, 1), connectorTenantRequestContext)
 	r.GET("/api/v1/connectors", ctrl.ListMarket)
 	r.GET("/api/v1/connectors/configs", ctrl.ListConfigs)
 	r.GET("/api/v1/connectors/health", ctrl.Health)
@@ -102,13 +105,13 @@ func setupConnectorControllerWithProvision(t *testing.T) *gin.Engine {
 	logger := zaptest.NewLogger(t).Sugar()
 	reg := connector.NewRegistry()
 	reg.Register(func() connector.Connector { return &provisionFake{} })
-	mgr := connector.NewManager(reg, logger, nil)
+	mgr := connector.NewManager(reg, logger, standardConnectorManagementPolicy(t))
 	mkt := marketplace.New()
 	ctrl := NewConnectorController(mgr, reg, mkt, logger, nil, nil)
 
 	r := gin.New()
 	r.Use(gin.Recovery())
-	r.Use(withTestAuth(1, 1))
+	r.Use(withTestAuth(1, 1), connectorTenantRequestContext)
 	r.POST("/api/v1/connectors/configs", ctrl.Provision)
 	r.DELETE("/api/v1/connectors/configs/:name", ctrl.Revoke)
 	r.POST("/api/v1/connectors/:name/test", ctrl.Test)
@@ -233,7 +236,7 @@ func TestConnectorController_Provision_StartsEmailCoordinatorForMsgraphEmail(t *
 	// file's existing pattern of not depending on global registration
 	// order), so it must register the factory explicitly.
 	reg.Register(func() connector.Connector { return msgraphpkg.New() })
-	mgr := connector.NewManager(reg, logger, nil)
+	mgr := connector.NewManager(reg, logger, standardConnectorManagementPolicy(t))
 	mkt := marketplace.New()
 	ctrl := NewConnectorController(mgr, reg, mkt, logger, nil, nil)
 	fake := &fakeEmailCoordinator{}
@@ -241,7 +244,7 @@ func TestConnectorController_Provision_StartsEmailCoordinatorForMsgraphEmail(t *
 
 	r := gin.New()
 	r.Use(gin.Recovery())
-	r.Use(withTestAuth(9, 1))
+	r.Use(withTestAuth(9, 1), connectorTenantRequestContext)
 	r.POST("/api/v1/connectors/configs", ctrl.Provision)
 
 	body := dto.ProvisionConnectorRequest{
@@ -309,7 +312,7 @@ func TestConnectorController_Provision_CoordinatorContextSurvivesRequestReturn(t
 	logger := zaptest.NewLogger(t).Sugar()
 	reg := connector.NewRegistry()
 	reg.Register(func() connector.Connector { return msgraphpkg.New() })
-	mgr := connector.NewManager(reg, logger, nil)
+	mgr := connector.NewManager(reg, logger, standardConnectorManagementPolicy(t))
 	mkt := marketplace.New()
 	ctrl := NewConnectorController(mgr, reg, mkt, logger, nil, nil)
 	fake := &ctxCapturingEmailCoordinator{}
@@ -317,7 +320,7 @@ func TestConnectorController_Provision_CoordinatorContextSurvivesRequestReturn(t
 
 	r := gin.New()
 	r.Use(gin.Recovery())
-	r.Use(withTestAuth(9, 1))
+	r.Use(withTestAuth(9, 1), connectorTenantRequestContext)
 	r.POST("/api/v1/connectors/configs", ctrl.Provision)
 
 	srv := httptest.NewServer(r)
@@ -373,7 +376,7 @@ func TestConnectorController_Provision_IgnoresOtherConnectors(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	logger := zaptest.NewLogger(t).Sugar()
 	reg := connector.NewRegistry()
-	mgr := connector.NewManager(reg, logger, nil)
+	mgr := connector.NewManager(reg, logger, standardConnectorManagementPolicy(t))
 	mkt := marketplace.New()
 	ctrl := NewConnectorController(mgr, reg, mkt, logger, nil, nil)
 	fake := &fakeEmailCoordinator{}
@@ -381,7 +384,7 @@ func TestConnectorController_Provision_IgnoresOtherConnectors(t *testing.T) {
 
 	r := gin.New()
 	r.Use(gin.Recovery())
-	r.Use(withTestAuth(9, 1))
+	r.Use(withTestAuth(9, 1), connectorTenantRequestContext)
 	r.POST("/api/v1/connectors/configs", ctrl.Provision)
 
 	// This registry has nothing registered at all, so provisioning any name
@@ -402,7 +405,7 @@ func TestConnectorController_Revoke_StopsEmailCoordinator(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	logger := zaptest.NewLogger(t).Sugar()
 	reg := connector.NewRegistry()
-	mgr := connector.NewManager(reg, logger, nil)
+	mgr := connector.NewManager(reg, logger, standardConnectorManagementPolicy(t))
 	mkt := marketplace.New()
 	ctrl := NewConnectorController(mgr, reg, mkt, logger, nil, nil)
 	fake := &fakeEmailCoordinator{}
@@ -410,7 +413,7 @@ func TestConnectorController_Revoke_StopsEmailCoordinator(t *testing.T) {
 
 	r := gin.New()
 	r.Use(gin.Recovery())
-	r.Use(withTestAuth(9, 1))
+	r.Use(withTestAuth(9, 1), connectorTenantRequestContext)
 	r.DELETE("/api/v1/connectors/configs/:name", ctrl.Revoke)
 
 	resp := doReq(t, r, "DELETE", "/api/v1/connectors/configs/msgraph-email", nil, false)
@@ -441,3 +444,18 @@ func TestConnectorController_Test_Success(t *testing.T) {
 func (f *fakeEmailCoordinator) Close() {}
 
 func (f *ctxCapturingEmailCoordinator) Close() {}
+
+func standardConnectorManagementPolicy(t *testing.T) *database.ExecutionPolicy {
+	t.Helper()
+	p, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "connector-http-test"})
+	require.NoError(t, err)
+	return p
+}
+
+// Local fixture only; production tenant/auth middleware is not exercised here.
+func connectorTenantRequestContext(c *gin.Context) {
+	if tenantID := c.GetInt("tenant_id"); tenantID > 0 {
+		c.Request = c.Request.WithContext(tenantctx.WithTenantID(c.Request.Context(), tenantID))
+	}
+	c.Next()
+}

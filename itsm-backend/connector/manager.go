@@ -16,6 +16,7 @@ import (
 // Manager 负责"已注册连接器" + "已配置实例" 的生命周期管理
 // 多个租户、每个租户可挂多个同名连接器实例（例如：飞书A区机器人 + 飞书B区机器人）
 type CapabilityGate interface {
+	RequireIntegrationManagement(context.Context, int) error
 	RequireCapability(context.Context, int, string) error
 	RequireStartupCapability(context.Context, string) error
 	ConnectorStartupTargets(context.Context) ([]config.ConnectorTargetConfig, error)
@@ -57,6 +58,15 @@ func NewManager(registry *Registry, logger *zap.SugaredLogger, gate CapabilityGa
 
 func instanceKey(c Config) string {
 	return fmt.Sprintf("%d/%s/%s", c.TenantID, c.Name, c.Provider)
+}
+
+// RequireIntegrationManagement checks the deployment policy before request-side
+// configuration changes. It does not replace endpoint RBAC.
+func (m *Manager) RequireIntegrationManagement(ctx context.Context, tenantID int) error {
+	if m == nil || m.gate == nil {
+		return executionscope.ErrDenied
+	}
+	return m.gate.RequireIntegrationManagement(ctx, tenantID)
 }
 
 // Provision 根据配置创建/更新一个连接器实例

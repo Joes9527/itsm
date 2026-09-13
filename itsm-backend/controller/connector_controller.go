@@ -134,6 +134,9 @@ func (c *ConnectorController) ListConfigs(ctx *gin.Context) {
 
 // Provision 创建/更新一个连接器实例
 func (c *ConnectorController) Provision(ctx *gin.Context) {
+	if !c.requireIntegrationManagement(ctx) {
+		return
+	}
 	var req dto.ProvisionConnectorRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		common.Fail(ctx, common.ParamErrorCode, err.Error())
@@ -205,11 +208,31 @@ func (c *ConnectorController) Provision(ctx *gin.Context) {
 	common.Success(ctx, maskConfig(cfg, health))
 }
 
+func (c *ConnectorController) requireIntegrationManagement(ctx *gin.Context) bool {
+	if err := c.manager.RequireIntegrationManagement(ctx.Request.Context(), ctx.GetInt("tenant_id")); err != nil {
+		if errors.Is(err, executionscope.ErrDenied) {
+			common.Forbidden(ctx, "当前执行环境不允许修改集成配置")
+		} else {
+			common.Fail(ctx, common.InternalErrorCode, "连接器配置准入检查未完成")
+		}
+		return false
+	}
+	return true
+}
+
 // Revoke 停用并移除一个连接器实例
 func (c *ConnectorController) Revoke(ctx *gin.Context) {
+	if !c.requireIntegrationManagement(ctx) {
+		return
+	}
 	name := ctx.Param("name")
 	tenantID := ctx.GetInt("tenant_id")
-	c.manager.Revoke(connector.Config{TenantID: tenantID, Name: name})
+	// The name-scoped endpoint removes the same tenant/name set as deleteConfig.
+	for _, cfg := range c.manager.ListByTenant(tenantID) {
+		if cfg.Name == name {
+			c.manager.Revoke(cfg)
+		}
+	}
 	// 从数据库删除配置
 	if err := c.deleteConfig(ctx.Request.Context(), tenantID, name); err != nil {
 		c.logger.Warnw("Failed to delete connector config", "error", err, "tenant", tenantID, "name", name)

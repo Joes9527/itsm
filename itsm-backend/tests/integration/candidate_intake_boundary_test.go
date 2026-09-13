@@ -49,6 +49,7 @@ import (
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/connectorconfig"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/intakerequest"
 	"itsm-backend/ent/kaftaskcompletionreceipt"
@@ -457,6 +458,58 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				assert.Equal(t, countBefore, countAfter, "rejected activation must not insert another configuration")
 			})
 		}
+	})
+	t.Run("candidate connector delete preserves stored configuration", func(t *testing.T) {
+		saved := owner.ConnectorConfig.Create().SetTenantID(tenant.ID).SetName("webhook").SetProvider("protected-delete").SetEnabled(true).SetCredentials("{}").SetSettings("{}").SetLabels("{}").SaveX(ctx)
+		defer owner.ConnectorConfig.DeleteOneID(saved.ID).Exec(ctx)
+		var before, after string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(c)::text FROM connector_configs c WHERE id=$1`, saved.ID).Scan(&before))
+		manager := connector.NewManager(nil, zap.NewNop().Sugar(), policy)
+		defer manager.CloseAll()
+		ctrl := controller.NewConnectorController(manager, nil, marketplace.New(), zap.NewNop().Sugar(), runtime, clients.System)
+		router := gin.New()
+		router.Use(func(c *gin.Context) { c.Set("tenant_id", tenant.ID); c.Next() })
+		router.DELETE("/connectors/configs/:name", ctrl.Revoke)
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodDelete, "/connectors/configs/webhook", nil).WithContext(ctx))
+		assert.Equal(t, http.StatusForbidden, response.Code)
+		err := ownerDB.QueryRow(`SELECT row_to_json(c)::text FROM connector_configs c WHERE id=$1`, saved.ID).Scan(&after)
+		assert.NoError(t, err, "denied configuration deletion must retain the original row")
+		if err == nil {
+			assert.JSONEq(t, before, after)
+		}
+
+		standard, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "connector-management-standard"})
+		require.NoError(t, err)
+		registry := connector.NewRegistry()
+		registry.Register(func() connector.Connector { return webhookconnector.New() })
+		standardManager := connector.NewManager(registry, zap.NewNop().Sugar(), standard)
+		defer standardManager.CloseAll()
+		standardCtrl := controller.NewConnectorController(standardManager, registry, marketplace.New(), zap.NewNop().Sugar(), runtime, clients.System)
+		standardRouter := gin.New()
+		standardRouter.Use(func(c *gin.Context) { c.Set("tenant_id", tenant.ID); c.Next() })
+		standardRouter.POST("/configs", standardCtrl.Provision)
+		standardRouter.DELETE("/configs/:name", standardCtrl.Revoke)
+		var requests atomic.Int32
+		receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { requests.Add(1); w.WriteHeader(http.StatusNoContent) }))
+		defer receiver.Close()
+		body, err := json.Marshal(dto.ProvisionConnectorRequest{Name: "webhook", Provider: "local-test", Enabled: true, Settings: map[string]interface{}{"url": receiver.URL}})
+		require.NoError(t, err)
+		request := httptest.NewRequest(http.MethodPost, "/configs", strings.NewReader(string(body))).WithContext(ctx)
+		request.Header.Set("Content-Type", "application/json")
+		response = httptest.NewRecorder()
+		standardRouter.ServeHTTP(response, request)
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Len(t, standardManager.ListByTenant(tenant.ID), 1)
+		updated := owner.ConnectorConfig.GetX(ctx, saved.ID)
+		require.True(t, updated.Enabled)
+		require.Contains(t, updated.Settings, receiver.URL)
+		require.Zero(t, requests.Load(), "configuration Init must not send a webhook")
+		response = httptest.NewRecorder()
+		standardRouter.ServeHTTP(response, httptest.NewRequest(http.MethodDelete, "/configs/webhook", nil).WithContext(ctx))
+		require.Equal(t, http.StatusOK, response.Code)
+		require.Empty(t, standardManager.ListByTenant(tenant.ID))
+		require.False(t, owner.ConnectorConfig.Query().Where(connectorconfig.IDEQ(saved.ID)).ExistX(ctx))
 	})
 	t.Run("candidate marketplace management preserves existing configuration", func(t *testing.T) {
 		for _, kind := range []marketplaceitem.Type{marketplaceitem.TypeConnector, marketplaceitem.TypeSkill, marketplaceitem.TypePlugin} {
