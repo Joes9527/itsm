@@ -266,3 +266,17 @@ S3、其他业务域/共享写入口、生产者成员准入和 S4–S6 仍未�
 `s3-incident-supplemental-action-pg.log` 在上述完整真实 PG 套件上补充实际规则解析的 collect_metric 成功提交及指标已 INSERT 后注入错误，证明 MetricAction 调用方事务回滚、不遗留指标；PASS、未 skip。`s3-incident-supplemental-build.json` 后端全量构建 exit 0。
 
 独立 reviewer `review_execution_scope_s1` 确认生产内部 Tx 传递及新增边界无阻断。scope 不替代原 actor/RBAC 校验；本增量未改变其权限契约。CI、NotificationAction、其他 Incident monitoring/alert 直接写入口和其他业务域仍待盘点/接入；完整 S3、后台周期与队列隔离、鉴权修复和 G2/G3 尚未完成。未启动候选、操作共享环境或推送/合并 main，固定 CandidateSHA 保持不变。
+
+
+### B2 S3 Incident CI、告警与通知动作（2026-09-13）
+
+在 `fab50eb3f` 上将 LinkIncidentCIs 的读取、CI 租户校验和关联写入放入同一事务，写入前验证成员。IncidentAlertingService 必需传入可信 policy，bootstrap 复用已冻结实例；同域原事务检查函数用于 alert owner 和 NotificationAction，既有 actor/输入/租户校验保留。CreateAlert 的 alert、in-app notification、outbox 和 audit 仍在原事务中。Acknowledge/Resolve 的 actor 校验、所属 Incident/member 检查、条件状态更新和 timeline 现在同事务，timeline 错误明确返回，避免状态已更新却无活动记录。NotificationAction 在委托事务告警 creator 前也核验成员，规则解析器传入同一策略；测试 constructor 显式 standard，无生产默认值。
+
+B2 私有证据：
+
+- `s3-incident-ci-alert-red.log` 为 CI fixture Ent setter 拼写编译错误，已修正；`s3-incident-ci-alert-boundary-red.log` 为有效历史 CI 关联被接受的行为 RED。
+- `s3-incident-ci-alert-verified-pg.log`：完整真实 PostgreSQL TestCandidateIntakeCreationBoundary PASS、未 skip。历史 CI/create alert 拒绝；迁移039前由 standard owner 创建的历史 alert 在候选下 ack/resolve 拒绝且完整字段/timeline 不变；新成员 CI、alert 创建与状态转换通过。ack 与 resolve 分别注入 timeline 已写后的错误，验证状态和记录全回滚；真实通知规则 parser/delegate 成功，outbox INSERT 后失败时 alert、notification、outbox、audit 全回滚。
+- `s3-incident-ci-alert-regression.log`：service/intake/controller/integration 的 Incident、NotificationRule、assignment、status action、intake 定向回归 PASS。
+- `s3-incident-ci-alert-build.json`：后端构建 exit 0。`s3-incident-ci-alert-tagged-compile.log`：integration_postgres 标签下 service/integration 编译通过，只编译不代表目标 E2E。
+
+独立 reviewer `review_execution_scope_s1` 对构造传递、原事务和原业务校验限定审阅无阻断；按建议补齐 NotificationAction 实际路径及 Resolve 故障测试。未执行通知消费者或发送邮件。monitoring 的直接指标写入、全周期扫描、其他域/共享能力及 S4–S6/B3 仍未完成，不能据此放行 G2/G3 或 T3/T4；固定 CandidateSHA 不变。无共享环境写入、候选启动、推送或 main 合并。

@@ -86,7 +86,7 @@ func newIncidentEffectsFixture(t *testing.T) *incidentEffectsFixture {
 	event := client.OutboxEvent.Create().SetTenantID(tenant.ID).SetEventID(fmt.Sprintf("incident-created:%d", item.ID)).SetEventType("incident.created").SetAggregateType("work_item").SetAggregateID(fmt.Sprint(item.ID)).SetPayload(payload).SaveX(ctx)
 	svc := service.NewIncidentService(client, zap.NewNop().Sugar(), executionfixture.Standard())
 	svc.RuleEngine().SetActorDirectory(client)
-	svc.SetAlertCreator(service.NewIncidentAlertingService(client, zap.NewNop().Sugar()))
+	svc.SetAlertCreator(service.NewIncidentAlertingService(client, zap.NewNop().Sugar(), executionfixture.Standard()))
 	return &incidentEffectsFixture{scopedDB, client, ctx, svc.RuleEngine(), svc, event, inc, actor, tenant}
 }
 func (f *incidentEffectsFixture) rule(actions ...map[string]interface{}) *ent.IncidentRule {

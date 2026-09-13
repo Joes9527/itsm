@@ -57,7 +57,7 @@ func TestIncidentAlertingLifecycleIsTenantScopedAndAudited(t *testing.T) {
 	foreignActor, err := createIncidentTestUser(ctx, client, otherTenant.ID, "alert-foreign")
 	require.NoError(t, err)
 	incidentEntity := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "INC-ALERT-LIFECYCLE")
-	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar())
+	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	triggeredAt := time.Now().Add(-5 * time.Minute).Truncate(time.Second)
 
 	alert, err := alerting.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
@@ -100,7 +100,7 @@ func TestIncidentAlertCreationRejectsCrossTenantAndThresholdRequiresIncident(t *
 	userA, err := createIncidentTestUser(ctx, client, tenantA.ID, "alert-boundary-a")
 	require.NoError(t, err)
 	foreignIncident := createAutomationIncident(t, ctx, client, tenantB.ID, userA.ID, "INC-ALERT-FOREIGN")
-	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar())
+	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 
 	_, err = alerting.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
 		IncidentID: foreignIncident.ID, AlertType: "monitoring", AlertName: "Foreign", Message: "Foreign",
@@ -121,7 +121,7 @@ func TestIncidentAlertCreationDurablyAcceptsEmailDelivery(t *testing.T) {
 	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "alert-durable")
 	require.NoError(t, err)
 	incidentEntity := createAutomationIncident(t, ctx, client, tenant.ID, reporter.ID, "INC-ALERT-DURABLE")
-	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar())
+	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 
 	requestCtx := WithIncidentAlertActor(ctx, reporter.ID, "user", "request-alert-42")
 	alert, err := alerting.CreateIncidentAlert(requestCtx, &dto.CreateIncidentAlertRequest{
@@ -166,7 +166,7 @@ func TestIncidentAlertCreationRejectsUnsupportedDeliveryBeforePersisting(t *test
 	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "alert-unsupported")
 	require.NoError(t, err)
 	incidentEntity := createAutomationIncident(t, ctx, client, tenant.ID, reporter.ID, "INC-ALERT-UNSUPPORTED")
-	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar())
+	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 
 	_, err = alerting.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
 		IncidentID: incidentEntity.ID,
@@ -193,7 +193,7 @@ func TestIncidentAlertCreationCreatesOneDeliveryPerEmailRecipient(t *testing.T) 
 	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "alert-recipient-destinations")
 	require.NoError(t, err)
 	incidentEntity := createAutomationIncident(t, ctx, client, tenant.ID, reporter.ID, "INC-ALERT-DESTINATIONS")
-	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar())
+	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 
 	_, err = alerting.CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{
 		IncidentID: incidentEntity.ID,
@@ -228,7 +228,7 @@ func TestIncidentAlertCreationRollsBackWhenDeliveryEnqueueFails(t *testing.T) {
 	reporter, err := createIncidentTestUser(ctx, client, tenant.ID, "alert-enqueue-rollback")
 	require.NoError(t, err)
 	incidentEntity := createAutomationIncident(t, ctx, client, tenant.ID, reporter.ID, "INC-ALERT-ROLLBACK")
-	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar())
+	alerting := NewIncidentAlertingService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 
 	client.OutboxEvent.Use(func(next ent.Mutator) ent.Mutator {
 		return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {

@@ -444,7 +444,7 @@ func NewApplication() *Application {
 
 	// 控制器依赖
 	incidentMonitoringService := service.NewIncidentMonitoringService(client, sugar)
-	incidentAlertingService := service.NewIncidentAlertingService(client, sugar)
+	incidentAlertingService := service.NewIncidentAlertingService(client, sugar, executionPolicy)
 	incidentService.SetAlertCreator(incidentAlertingService)
 	ticketDependencyService := service.NewTicketDependencyService(client, sugar)
 	analyticsService := service.NewAnalyticsService(client, sugar)

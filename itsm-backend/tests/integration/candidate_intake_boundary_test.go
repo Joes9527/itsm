@@ -122,6 +122,8 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	legacyOwner.SetDirectorySnapshot(sameTransactionDirectory{})
 	legacyResult, err := legacyOwner.ApplyIncidentCommand(ctx, legacyCommand)
 	require.NoError(t, err)
+	legacyAlert, err := service.NewIncidentAlertingService(owner, zap.NewNop().Sugar(), executionfixture.Standard()).CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{IncidentID: historical.ProfessionalReference.ID, AlertType: "legacy", AlertName: "legacy alert", Message: "historical fixture", Channels: []string{"in_app"}, Recipients: []string{actor.Email}}, tenant.ID)
+	require.NoError(t, err)
 	_, err = ownerDB.ExecContext(ctx, "UPDATE outbox_events SET execution_work_item_id=NULL")
 	require.NoError(t, err) // pre-039 historical fixture only
 	oldRow := owner.Ticket.GetX(ctx, historical.WorkItemID)
@@ -201,6 +203,95 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		relationEvent := owner.OutboxEvent.Query().Where(outboxevent.EventTypeEQ(service.RelationCreatedEventType)).OnlyX(ctx)
 		require.NotNil(t, relationEvent.ExecutionWorkItemID)
 		require.Equal(t, created.WorkItemID, *relationEvent.ExecutionWorkItemID)
+	})
+
+	t.Run("Incident CI and alert writes require membership", func(t *testing.T) {
+		svc := service.NewIncidentService(runtime, zap.NewNop().Sugar(), policy)
+		alerts := service.NewIncidentAlertingService(runtime, zap.NewNop().Sugar(), policy)
+		fresh, err := app.Create(ctx, identity, command("incident-ci-alert", "incident"))
+		require.NoError(t, err)
+		ciType := owner.CIType.Create().SetName("candidate CI type").SetTenantID(tenant.ID).SaveX(ctx)
+		ci := owner.ConfigurationItem.Create().SetName("candidate CI").SetCiTypeID(ciType.ID).SetTenantID(tenant.ID).SaveX(ctx)
+		err = svc.LinkIncidentCIs(ctx, historical.ProfessionalReference.ID, []int{ci.ID}, tenant.ID)
+		require.ErrorContains(t, err, "execution scope denied")
+		require.Zero(t, owner.Incident.Query().Where(incident.IDEQ(historical.ProfessionalReference.ID)).QueryConfigurationItems().CountX(ctx))
+		require.NoError(t, svc.LinkIncidentCIs(ctx, fresh.ProfessionalReference.ID, []int{ci.ID}, tenant.ID))
+		require.Equal(t, 1, owner.Incident.Query().Where(incident.IDEQ(fresh.ProfessionalReference.ID)).QueryConfigurationItems().CountX(ctx))
+		request := func(id int) *dto.CreateIncidentAlertRequest {
+			return &dto.CreateIncidentAlertRequest{IncidentID: id, AlertType: "scope", AlertName: "candidate alert", Message: "scope test", Severity: "high", Channels: []string{"email", "in_app"}, Recipients: []string{actor.Email}}
+		}
+		count, outboxes, notifications := owner.IncidentAlert.Query().CountX(ctx), owner.OutboxEvent.Query().CountX(ctx), owner.Notification.Query().CountX(ctx)
+		_, err = alerts.CreateIncidentAlert(ctx, request(historical.ProfessionalReference.ID), tenant.ID)
+		require.ErrorContains(t, err, "execution scope denied")
+		require.Equal(t, count, owner.IncidentAlert.Query().CountX(ctx))
+		require.Equal(t, outboxes, owner.OutboxEvent.Query().CountX(ctx))
+		require.Equal(t, notifications, owner.Notification.Query().CountX(ctx))
+		created, err := alerts.CreateIncidentAlert(ctx, request(fresh.ProfessionalReference.ID), tenant.ID)
+		require.NoError(t, err)
+		require.Equal(t, count+1, owner.IncidentAlert.Query().CountX(ctx))
+		require.Equal(t, outboxes+1, owner.OutboxEvent.Query().CountX(ctx))
+		require.NoError(t, alerts.AcknowledgeAlert(ctx, created.ID, actor.ID, tenant.ID))
+		require.NoError(t, alerts.ResolveAlert(ctx, created.ID, actor.ID, tenant.ID))
+		beforeLegacy, _ := json.Marshal(owner.IncidentAlert.GetX(ctx, legacyAlert.ID))
+		events := owner.IncidentEvent.Query().CountX(ctx)
+		require.ErrorContains(t, alerts.AcknowledgeAlert(ctx, legacyAlert.ID, actor.ID, tenant.ID), "execution scope denied")
+		require.ErrorContains(t, alerts.ResolveAlert(ctx, legacyAlert.ID, actor.ID, tenant.ID), "execution scope denied")
+		afterLegacy, _ := json.Marshal(owner.IncidentAlert.GetX(ctx, legacyAlert.ID))
+		require.JSONEq(t, string(beforeLegacy), string(afterLegacy))
+		require.Equal(t, events, owner.IncidentEvent.Query().CountX(ctx))
+		faultAlert, err := alerts.CreateIncidentAlert(ctx, request(fresh.ProfessionalReference.ID), tenant.ID)
+		require.NoError(t, err)
+		beforeAlert, _ := json.Marshal(owner.IncidentAlert.GetX(ctx, faultAlert.ID))
+		injected := errors.New("injected alert timeline failure")
+		failEvent := true
+		runtime.IncidentEvent.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+				value, err := next.Mutate(ctx, mutation)
+				if err == nil && failEvent {
+					failEvent = false
+					return nil, injected
+				}
+				return value, err
+			})
+		})
+		require.ErrorIs(t, alerts.AcknowledgeAlert(ctx, faultAlert.ID, actor.ID, tenant.ID), injected)
+		require.False(t, failEvent)
+		afterAlert, _ := json.Marshal(owner.IncidentAlert.GetX(ctx, faultAlert.ID))
+		require.JSONEq(t, string(beforeAlert), string(afterAlert))
+		require.Equal(t, events, owner.IncidentEvent.Query().CountX(ctx))
+
+		failEvent = true
+		require.ErrorIs(t, alerts.ResolveAlert(ctx, faultAlert.ID, actor.ID, tenant.ID), injected)
+		require.False(t, failEvent)
+		afterAlert, _ = json.Marshal(owner.IncidentAlert.GetX(ctx, faultAlert.ID))
+		require.JSONEq(t, string(beforeAlert), string(afterAlert))
+		require.Equal(t, events, owner.IncidentEvent.Query().CountX(ctx))
+
+		svc.SetAlertCreator(alerts)
+		rule := owner.IncidentRule.Create().SetName("notify candidate").SetRuleType("notification").SetTenantID(tenant.ID).SetIsActive(true).
+			SetConditions(map[string]interface{}{}).SetActions([]map[string]interface{}{{"type": "notify", "channels": []string{"email", "in_app"}, "recipients": []string{actor.Email}, "message": "candidate notification"}}).SaveX(ctx)
+		current := owner.Incident.Query().Where(incident.IDEQ(fresh.ProfessionalReference.ID)).WithWorkItem().OnlyX(ctx)
+		require.NoError(t, svc.RuleEngine().ExecuteRule(ctx, rule, current, tenant.ID))
+		count, outboxes, notifications = owner.IncidentAlert.Query().CountX(ctx), owner.OutboxEvent.Query().CountX(ctx), owner.Notification.Query().CountX(ctx)
+		audits := owner.AuditLog.Query().CountX(ctx)
+		failOutbox := true
+		runtime.OutboxEvent.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+				value, err := next.Mutate(ctx, mutation)
+				if err == nil && failOutbox {
+					failOutbox = false
+					return nil, injected
+				}
+				return value, err
+			})
+		})
+		require.ErrorIs(t, svc.RuleEngine().ExecuteRule(ctx, rule, current, tenant.ID), injected)
+		require.False(t, failOutbox)
+		require.Equal(t, count, owner.IncidentAlert.Query().CountX(ctx))
+		require.Equal(t, outboxes, owner.OutboxEvent.Query().CountX(ctx))
+		require.Equal(t, notifications, owner.Notification.Query().CountX(ctx))
+		require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx))
+
 	})
 
 	t.Run("Incident event metric and major escalation reject history", func(t *testing.T) {

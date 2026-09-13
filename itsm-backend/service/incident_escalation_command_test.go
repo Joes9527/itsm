@@ -77,7 +77,7 @@ func TestIncidentEscalationAlertAcceptanceRollsBackAndReplays(t *testing.T) {
 	require.Equal(t, before.Version, client.Ticket.GetX(ctx, before.ID).Version)
 	require.Zero(t, client.AuditLog.Query().CountX(ctx))
 	require.Zero(t, client.OutboxEvent.Query().CountX(ctx))
-	svc.SetAlertCreator(NewIncidentAlertingService(client, owner.logger))
+	svc.SetAlertCreator(NewIncidentAlertingService(client, owner.logger, executionfixture.Standard()))
 	_, err = svc.CheckAndEscalate(ctx, inc.ID, meta)
 	require.NoError(t, err)
 	require.Equal(t, 1, client.IncidentAlert.Query().CountX(ctx))

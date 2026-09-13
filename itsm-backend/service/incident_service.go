@@ -178,7 +178,15 @@ func (s *IncidentService) ListIncidents(ctx context.Context, tenantID int, page,
 
 // LinkIncidentCIs links configuration items to an incident.
 func (s *IncidentService) LinkIncidentCIs(ctx context.Context, incidentID int, ciIDs []int, tenantID int) error {
-	incidentEntity, err := s.client.Incident.Query().
+	if s == nil || s.client == nil || s.execution == nil {
+		return common.NewForbiddenError("incident execution policy required")
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	incidentEntity, err := tx.Incident.Query().
 		Where(incident.IDEQ(incidentID), incidentTenantScope(tenantID)).
 		WithWorkItem().
 		Only(ctx)
@@ -192,7 +200,7 @@ func (s *IncidentService) LinkIncidentCIs(ctx context.Context, incidentID int, c
 		return nil
 	}
 
-	count, err := s.client.ConfigurationItem.Query().
+	count, err := tx.ConfigurationItem.Query().
 		Where(configurationitem.IDIn(ciIDs...), configurationitem.TenantIDEQ(incidentEntity.Edges.WorkItem.TenantID)).
 		Count(ctx)
 	if err != nil {
@@ -202,13 +210,16 @@ func (s *IncidentService) LinkIncidentCIs(ctx context.Context, incidentID int, c
 		return fmt.Errorf("one or more configuration items not found")
 	}
 
-	if _, err := s.client.Incident.UpdateOneID(incidentID).
+	if err := requireIncidentExecutionTx(ctx, tx, s.execution, incidentID, tenantID); err != nil {
+		return err
+	}
+	if _, err := tx.Incident.UpdateOneID(incidentID).
 		Where(incidentTenantScope(incidentEntity.Edges.WorkItem.TenantID)).
 		AddConfigurationItemIDs(ciIDs...).
 		Save(ctx); err != nil {
 		return fmt.Errorf("failed to link configuration items: %w", err)
 	}
-	return nil
+	return tx.Commit()
 }
 
 // GetIncidentCIs returns the configuration items linked to an incident.
@@ -441,18 +452,18 @@ func (s *IncidentService) validateIncidentAssignee(ctx context.Context, assignee
 }
 
 // requireIncidentExecutionTx resolves the owning WorkItem in the caller's write transaction.
-func (s *IncidentService) requireIncidentExecutionTx(ctx context.Context, tx *ent.Tx, incidentID, tenantID int) error {
-	if s == nil || tx == nil || s.execution == nil {
+func requireIncidentExecutionTx(ctx context.Context, tx *ent.Tx, policy *database.ExecutionPolicy, incidentID, tenantID int) error {
+	if tx == nil || policy == nil {
 		return common.NewForbiddenError("incident execution policy and transaction required")
 	}
 	current, err := tx.Incident.Query().Where(incident.IDEQ(incidentID), incidentTenantScope(tenantID)).Only(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to validate incident: %w", err)
 	}
-	if err := s.execution.BindEnt(ctx, tx, tenantID); err != nil {
+	if err := policy.BindEnt(ctx, tx, tenantID); err != nil {
 		return incidentExecutionFailure(err)
 	}
-	if err := s.execution.RequireEntMembers(ctx, tx, tenantID, current.WorkItemID); err != nil {
+	if err := policy.RequireEntMembers(ctx, tx, tenantID, current.WorkItemID); err != nil {
 		return incidentExecutionFailure(err)
 	}
 	return nil
@@ -480,10 +491,13 @@ func (s *IncidentService) CreateIncidentEvent(ctx context.Context, req *dto.Crea
 
 // CreateIncidentEventTx preserves the caller's transaction for the child record.
 func (s *IncidentService) CreateIncidentEventTx(ctx context.Context, tx *ent.Tx, req *dto.CreateIncidentEventRequest, tenantID int) (*dto.IncidentEventResponse, error) {
+	if s == nil {
+		return nil, common.NewForbiddenError("incident execution policy required")
+	}
 	if req == nil {
 		return nil, common.NewValidationError("incident event request required", nil)
 	}
-	if err := s.requireIncidentExecutionTx(ctx, tx, req.IncidentID, tenantID); err != nil {
+	if err := requireIncidentExecutionTx(ctx, tx, s.execution, req.IncidentID, tenantID); err != nil {
 		return nil, err
 	}
 
@@ -553,10 +567,13 @@ func (s *IncidentService) CreateIncidentMetric(ctx context.Context, req *dto.Cre
 
 // CreateIncidentMetricTx preserves the caller's transaction for the child record.
 func (s *IncidentService) CreateIncidentMetricTx(ctx context.Context, tx *ent.Tx, req *dto.CreateIncidentMetricRequest, tenantID int) (*dto.IncidentMetricResponse, error) {
+	if s == nil {
+		return nil, common.NewForbiddenError("incident execution policy required")
+	}
 	if req == nil {
 		return nil, common.NewValidationError("incident metric request required", nil)
 	}
-	if err := s.requireIncidentExecutionTx(ctx, tx, req.IncidentID, tenantID); err != nil {
+	if err := requireIncidentExecutionTx(ctx, tx, s.execution, req.IncidentID, tenantID); err != nil {
 		return nil, err
 	}
 
@@ -957,7 +974,7 @@ func (s *IncidentService) EscalateToMajorIncident(ctx context.Context, id, userI
 		"escalatedAt":       now,
 	}
 
-	if err := s.requireIncidentExecutionTx(ctx, tx, id, tenantID); err != nil {
+	if err := requireIncidentExecutionTx(ctx, tx, s.execution, id, tenantID); err != nil {
 		return err
 	}
 	_, err = tx.Ticket.UpdateOneID(incidentEntity.WorkItemID).Where(ticket.TenantID(tenantID), ticket.Version(incidentEntity.Edges.WorkItem.Version), ticket.DeletedAtIsNil()).AddVersion(1).SetUpdatedAt(now).Save(ctx)

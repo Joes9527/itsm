@@ -64,8 +64,8 @@ func TestNotificationRuleActionUsesAuthoritativeAlertCreator(t *testing.T) {
 	actor, err := createIncidentTestUser(ctx, client, tenant.ID, "notification-action")
 	require.NoError(t, err)
 	incident := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "notification-action")
-	creator := NewIncidentAlertingService(client, zap.NewNop().Sugar())
-	action := &NotificationAction{Channels: []string{"email"}, Recipients: []string{actor.Email}, Message: "act", Severity: "high", alertCreator: creator, client: client}
+	creator := NewIncidentAlertingService(client, zap.NewNop().Sugar(), executionfixture.Standard())
+	action := &NotificationAction{execution: executionfixture.Standard(), Channels: []string{"email"}, Recipients: []string{actor.Email}, Message: "act", Severity: "high", alertCreator: creator, client: client}
 	require.NoError(t, action.Execute(ctx, incident, tenant.ID))
 	require.Equal(t, incident.ID, client.IncidentAlert.Query().OnlyX(ctx).IncidentID)
 	require.Equal(t, "pending", client.OutboxEvent.Query().OnlyX(ctx).Status)
@@ -73,7 +73,7 @@ func TestNotificationRuleActionUsesAuthoritativeAlertCreator(t *testing.T) {
 func TestNotificationRuleActionRejectsIndependentAlertCreator(t *testing.T) {
 	client, _, ctx := setupIncidentTest(t)
 	defer client.Close()
-	action := &NotificationAction{client: client, alertCreator: &recordingIncidentAlertCreator{}}
+	action := &NotificationAction{execution: executionfixture.Standard(), client: client, alertCreator: &recordingIncidentAlertCreator{}}
 	require.ErrorContains(t, action.Execute(ctx, &ent.Incident{ID: 42}, 7), "not configured")
 	require.Zero(t, client.IncidentAlert.Query().CountX(ctx))
 }
@@ -89,7 +89,7 @@ func TestIncidentAlertExecutionReferenceUsesWorkItemNotAlertOrIncidentID(t *test
 		createIncidentTestWorkItem(t, ctx, client, tenant.ID, actor.ID, "offset", "new", "high")
 	}
 	incident := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "reference")
-	creator := NewIncidentAlertingService(client, zap.NewNop().Sugar())
+	creator := NewIncidentAlertingService(client, zap.NewNop().Sugar(), executionfixture.Standard())
 	req := &dto.CreateIncidentAlertRequest{IncidentID: incident.ID, AlertType: "monitoring", AlertName: "reference", Message: "reference", Severity: "high"}
 	_, err = creator.CreateIncidentAlert(ctx, req, tenant.ID)
 	require.NoError(t, err)

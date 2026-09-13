@@ -201,6 +201,7 @@ func (a *EscalationAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *
 
 // NotificationAction 通知动作
 type NotificationAction struct {
+	execution      *database.ExecutionPolicy
 	Channels       []string
 	Recipients     []string
 	Message        string
@@ -221,6 +222,12 @@ func (a *NotificationAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident
 		return fmt.Errorf("incident alerting service is not configured")
 	}
 	if err := validateIncidentRuleRecipients(ctx, tx.Client(), a.Recipients, tenantID); err != nil {
+		return err
+	}
+	if incident == nil {
+		return common.NewValidationError("incident required", nil)
+	}
+	if err := requireIncidentExecutionTx(ctx, tx, a.execution, incident.ID, tenantID); err != nil {
 		return err
 	}
 	_, err := creator.CreateIncidentAlertTx(ctx, tx, &dto.CreateIncidentAlertRequest{
@@ -798,6 +805,7 @@ func (e *IncidentRuleEngine) parseNotificationAction(actionData map[string]inter
 	}
 
 	return &NotificationAction{
+		execution:    e.execution,
 		Channels:     channels,
 		Recipients:   recipients,
 		Message:      message,

@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common"
+	"itsm-backend/database"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/incident"
@@ -21,6 +23,7 @@ import (
 )
 
 type IncidentAlertingService struct {
+	execution        *database.ExecutionPolicy
 	client           *ent.Client
 	outboxRepository *OutboxEventRepository
 	logger           *zap.SugaredLogger
@@ -28,8 +31,9 @@ type IncidentAlertingService struct {
 
 const incidentAlertDeliveryEventType = "incident_alert_delivery"
 
-func NewIncidentAlertingService(client *ent.Client, logger *zap.SugaredLogger) *IncidentAlertingService {
+func NewIncidentAlertingService(client *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *IncidentAlertingService {
 	return &IncidentAlertingService{
+		execution:        execution,
 		client:           client,
 		outboxRepository: NewOutboxEventRepository(client),
 		logger:           logger,
@@ -91,6 +95,12 @@ func (s *IncidentAlertingService) CreateIncidentAlert(ctx context.Context, req *
 }
 
 func (s *IncidentAlertingService) CreateIncidentAlertTx(ctx context.Context, tx *ent.Tx, req *dto.CreateIncidentAlertRequest, tenantID int) (*dto.IncidentAlertResponse, error) {
+	if s == nil || tx == nil || s.execution == nil {
+		return nil, common.NewForbiddenError("incident alert execution policy and transaction required")
+	}
+	if req == nil {
+		return nil, common.NewValidationError("incident alert request required", nil)
+	}
 	owner := *s
 	owner.client = tx.Client()
 	return owner.createIncidentAlertTx(ctx, tx, req, tenantID)
@@ -99,6 +109,9 @@ func (s *IncidentAlertingService) CreateIncidentAlertTx(ctx context.Context, tx 
 func (s *IncidentAlertingService) createIncidentAlertTx(ctx context.Context, tx *ent.Tx, req *dto.CreateIncidentAlertRequest, tenantID int) (*dto.IncidentAlertResponse, error) {
 	s.logger.Infow("Creating incident alert", "incident_id", req.IncidentID, "type", req.AlertType)
 	if err := s.validateAlertRequest(ctx, req, tenantID); err != nil {
+		return nil, err
+	}
+	if err := requireIncidentExecutionTx(ctx, tx, s.execution, req.IncidentID, tenantID); err != nil {
 		return nil, err
 	}
 	triggeredAt := time.Now()
@@ -289,13 +302,31 @@ func (s *IncidentAlertingService) createSystemNotification(ctx context.Context, 
 
 // AcknowledgeAlert 确认告警
 func (s *IncidentAlertingService) AcknowledgeAlert(ctx context.Context, alertID int, userID int, tenantID int) error {
+	if s == nil || s.client == nil || s.execution == nil {
+		return common.NewForbiddenError("incident alert execution policy required")
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	owner := *s
+	owner.client = tx.Client()
+
 	s.logger.Infow("Acknowledging alert", "alert_id", alertID, "user_id", userID)
-	if err := s.validateAlertActor(ctx, userID, tenantID); err != nil {
+	if err := owner.validateAlertActor(ctx, userID, tenantID); err != nil {
 		return err
 	}
 
+	current, err := tx.IncidentAlert.Query().Where(incidentalert.IDEQ(alertID), incidentalert.TenantIDEQ(tenantID)).Only(ctx)
+	if err != nil {
+		return err
+	}
+	if err := requireIncidentExecutionTx(ctx, tx, s.execution, current.IncidentID, tenantID); err != nil {
+		return err
+	}
 	now := time.Now()
-	alert, err := s.client.IncidentAlert.UpdateOneID(alertID).
+	alert, err := tx.IncidentAlert.UpdateOneID(alertID).
 		Where(incidentalert.TenantIDEQ(tenantID), incidentalert.StatusEQ("active")).
 		SetStatus("acknowledged").
 		SetAcknowledgedAt(now).
@@ -311,21 +342,41 @@ func (s *IncidentAlertingService) AcknowledgeAlert(ctx context.Context, alertID 
 	}
 
 	// 记录确认活动
-	s.createAlertEvent(ctx, alert, "acknowledged", fmt.Sprintf("告警已被用户 %d 确认", userID), userID, tenantID)
+	if err := owner.createAlertEvent(ctx, alert, "acknowledged", fmt.Sprintf("告警已被用户 %d 确认", userID), userID, tenantID); err != nil {
+		return err
+	}
 
 	s.logger.Infow("Alert acknowledged successfully", "alert_id", alertID)
-	return nil
+	return tx.Commit()
 }
 
 // ResolveAlert 解决告警
 func (s *IncidentAlertingService) ResolveAlert(ctx context.Context, alertID int, userID int, tenantID int) error {
+	if s == nil || s.client == nil || s.execution == nil {
+		return common.NewForbiddenError("incident alert execution policy required")
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	owner := *s
+	owner.client = tx.Client()
+
 	s.logger.Infow("Resolving alert", "alert_id", alertID, "user_id", userID)
-	if err := s.validateAlertActor(ctx, userID, tenantID); err != nil {
+	if err := owner.validateAlertActor(ctx, userID, tenantID); err != nil {
 		return err
 	}
 
+	current, err := tx.IncidentAlert.Query().Where(incidentalert.IDEQ(alertID), incidentalert.TenantIDEQ(tenantID)).Only(ctx)
+	if err != nil {
+		return err
+	}
+	if err := requireIncidentExecutionTx(ctx, tx, s.execution, current.IncidentID, tenantID); err != nil {
+		return err
+	}
 	now := time.Now()
-	alert, err := s.client.IncidentAlert.UpdateOneID(alertID).
+	alert, err := tx.IncidentAlert.UpdateOneID(alertID).
 		Where(incidentalert.TenantIDEQ(tenantID), incidentalert.StatusIn("active", "acknowledged")).
 		SetStatus("resolved").
 		SetResolvedAt(now).
@@ -340,14 +391,16 @@ func (s *IncidentAlertingService) ResolveAlert(ctx context.Context, alertID int,
 	}
 
 	// 记录解决活动
-	s.createAlertEvent(ctx, alert, "resolved", fmt.Sprintf("告警已被用户 %d 解决", userID), userID, tenantID)
+	if err := owner.createAlertEvent(ctx, alert, "resolved", fmt.Sprintf("告警已被用户 %d 解决", userID), userID, tenantID); err != nil {
+		return err
+	}
 
 	s.logger.Infow("Alert resolved successfully", "alert_id", alertID)
-	return nil
+	return tx.Commit()
 }
 
 // createAlertEvent 创建告警活动记录
-func (s *IncidentAlertingService) createAlertEvent(ctx context.Context, alert *ent.IncidentAlert, eventType, description string, userID, tenantID int) {
+func (s *IncidentAlertingService) createAlertEvent(ctx context.Context, alert *ent.IncidentAlert, eventType, description string, userID, tenantID int) error {
 	_, err := s.client.IncidentEvent.Create().
 		SetIncidentID(alert.IncidentID).
 		SetEventType("alert_" + eventType).
@@ -362,8 +415,9 @@ func (s *IncidentAlertingService) createAlertEvent(ctx context.Context, alert *e
 		SetData(map[string]interface{}{"alertId": alert.ID}).
 		Save(ctx)
 	if err != nil {
-		s.logger.Errorw("Failed to create alert audit event", "error", err, "alert_id", alert.ID)
+		return fmt.Errorf("create alert audit event: %w", err)
 	}
+	return nil
 }
 
 func (s *IncidentAlertingService) validateAlertActor(ctx context.Context, userID, tenantID int) error {
