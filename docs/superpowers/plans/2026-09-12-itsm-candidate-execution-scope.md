@@ -203,13 +203,16 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
-同步通知外发收敛合同（2026-09-14，RED提交dced3d585，S5既有入口，待实现）：实际SendNotification先提交站内行，再直接email/SMS/push，纯外部调用没有持久意图，重复内部DeliveryKey仍重复Send且返回applied。必须复用原通知队列和enqueue实现，不新增通知服务或平行队列。
+同步通知外发收敛合同（2026-09-14，RED提交dced3d585，S5既有入口，已实现0dac5b1fa）：原SendNotification直接外发且错误返回applied的问题已关闭。必须复用原通知队列和enqueue实现，不新增通知服务或平行队列。
 
-- [ ] `service/ticket_notification_transaction.go`唯一enqueue实现同时产生准确的新建/重放、站内/外部计数，原只需error的业务调用方仍共用同一写入实现；禁止SendNotification再算一套偏好/目标/业务规则。保留已有InAppOnly限制（当前email/sms/push均有!req.InAppOnly），站内双表及全部外部意图和结果依据在同一事务；任何绑定/写入/提交错误不返回成功。
-- [ ] `service/ticket_notification_service.go`的SendNotification成为事务owner，原请求验证/全部recipient检查/tenant与WorkItem范围保持；删除同步email/SMS/push分支，调用唯一enqueue。内部稳定DeliveryKey按原协议去重和拒绝内容冲突；缺key仅生成本次调用意图ID，不能声称HTTP网络重试幂等，不暴露隐藏callback key、按内容hash去重或新增请求操作ID产品契约。原持久渠道集合不随偏好变化扩展；全禁用无行时保持blocked，不虚构抑制receipt。
-- [ ] `dto/ticket_notification_dto.go`明确queued效果与数量，外部pending不能计为delivered/applied；混合站内/外部分别表达，区分新建排队计数与原请求重放，避免把failed/sent的旧队列行误说成新排队。`controller/ticket_notification_controller.go`外部排队用202与既有common.Response形状，成功依据只在commit之后。`ticketNotificationDeliveryError`等调用方只能认可“请求已持久接受”，不等同外部已送达。BPMN `ticket_handler.go`仅durable key时设置InAppOnly；不得把非durable调用的新queued结果翻译成“已投递”，需真实路径明确处理/拒绝其效果合同。
-- [ ] 前端`src/lib/api/ticket-notification-api.ts`同步结果类型，`src/components/business/TicketNotificationSection.tsx`按明确效果提示，queued显示“已加入发送队列”，不再无条件“已投递deliveryCount次”。保留既有主题/权限/API封装；更新对应api和组件测试，必要类型检查。
-- [ ] 验证真实PG明确queued效果/准确计数（不能仅NotEqual applied）、外部仅生成pending且零provider、内部key重放不重复且结果准确、混合渠道事务失败全部保全、同key内容冲突、InAppOnly零外部意图；真实controller202/响应与前端文案、BPMN站内既有applied/idempotent断言。旧同步Graph spy正向必须改为先queue后真实worker投递，不删真实投递覆盖。独立审阅后运行相关回归及构建。此收敛不替代email/push专业准入、飞书或S6/T3/G2/G3。
+- [x] `service/ticket_notification_transaction.go`唯一enqueue实现同时产生准确的新建/重放、站内/外部计数，原只需error的业务调用方仍共用同一写入实现；禁止SendNotification再算一套偏好/目标/业务规则。保留已有InAppOnly限制（当前email/sms/push均有!req.InAppOnly），站内双表及全部外部意图和结果依据在同一事务；任何绑定/写入/提交错误不返回成功。
+- [x] `service/ticket_notification_service.go`的SendNotification成为事务owner，原请求验证/全部recipient检查/tenant与WorkItem范围保持；删除同步email/SMS/push分支，调用唯一enqueue。内部稳定DeliveryKey按原协议去重和拒绝内容冲突；缺key仅生成本次调用意图ID，不能声称HTTP网络重试幂等，不暴露隐藏callback key、按内容hash去重或新增请求操作ID产品契约。原持久渠道集合不随偏好变化扩展；全禁用无行时保持blocked，不虚构抑制receipt。
+- [x] `dto/ticket_notification_dto.go`明确queued效果与数量，外部pending不能计为delivered/applied；混合站内/外部分别表达，区分新建排队计数与原请求重放，避免把failed/sent的旧队列行误说成新排队。`controller/ticket_notification_controller.go`外部排队用202与既有common.Response形状，成功依据只在commit之后。`ticketNotificationDeliveryError`等调用方只能认可“请求已持久接受”，不等同外部已送达。BPMN `ticket_handler.go`仅durable key时设置InAppOnly；不得把非durable调用的新queued结果翻译成“已投递”，需真实路径明确处理/拒绝其效果合同。
+- [x] 前端`src/lib/api/ticket-notification-api.ts`同步结果类型，`src/components/business/TicketNotificationSection.tsx`按明确效果提示，queued显示“已加入发送队列”，不再无条件“已投递deliveryCount次”。保留既有主题/权限/API封装；更新对应api和组件测试，必要类型检查。
+- [x] 验证真实PG明确queued效果/准确计数（不能仅NotEqual applied）、外部仅生成pending且零provider、内部key重放不重复且结果准确、混合渠道事务失败全部保全、同key内容冲突、InAppOnly零外部意图；真实controller202/响应与前端文案、BPMN站内既有applied/idempotent断言。旧同步Graph spy正向必须改为先queue后真实worker投递，不删真实投递覆盖。独立审阅后运行相关回归及构建。此收敛不替代email/push专业准入、飞书或S6/T3/G2/G3。
+
+
+GREEN检查点 `0dac5b1fa`：唯一enqueue生成站内/外部/重放计数；请求只提交事务；HTTP202和UI排队提示同步。BPMN表示持久受理，混合重放不冒称已送达，InAppOnly与已有外部身份冲突拒绝。真实PG直接通知测试明确queued/计数/pending/零provider及准确重放；SQLite定向测试覆盖混合回滚、内容冲突、InAppOnly和真实worker进程内Graph发送。完整私有PG16/Redis/MinIO race、四包具名race回归、前端22测试、type-check、后端build及独立审阅通过。证据范围详见T1最新交接；不声称所有故障组合均在PG验证，不将本项推广为email/push专业准入或整个S5完成。下一步为email/push真实owner目标身份、飞书/裸实例及目标变化/重启矩阵。CandidateSHA不变，候选未启动，无共享环境操作。
 
 CC目标owner检查点 `f02bb4197`（2026-09-14）：TicketWorkflowService与BPMN CCTaskHandler均在原CC事务builder调用唯一BindNotificationConnectorTarget，bootstrap注入既有通知owner，缺连接器依赖/错scope回滚。原7项相关回归关闭；标准fixture由真实owner先冻结精确目标后模拟Worker不可用/恢复，不手填目标字段。真实PG两入口缺Manager/错scope拒绝时五类相关表整行JSON保全、成功目标完整、移除Manager重放不增意图且零Send。BPMN为handler直接调用，不冒充callback worker/lease全链。
 
