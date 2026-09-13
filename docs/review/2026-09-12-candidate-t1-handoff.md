@@ -1148,3 +1148,14 @@ s5-tool-authorization-migration.log迁移/database包PASS；s5-tool-authorizatio
 独立review_execution_scope_s1复核授权锁、快照与替换无新增阻断，要求补强错误类型已落实。此矩阵是创建路径证据，不外推为编辑、审批、结果写回各自完整矩阵。结果胜负竞争、其它S5边界、目标PG17/T3和真实T4/G3仍待完成；CandidateSHA保持d7470a32dbb87acc9b5e4d9a895a146410723561，候选未启动，无共享环境操作、企业外呼、push/main合并。
 
 最终s5-tool-authorization-verified-private.log完整私有PG16/Redis/MinIO候选ScopeRegistration、Intake、构造保全及Stream/Webhook/审计恢复race PASS，无skip/race；包括补强错误类型的18项矩阵和原SLA断言。s5-tool-authorization-build.log全后端build exit0，git diff --check通过。
+
+
+### B2 S5 工具成功与失败结果竞争（2026-09-13）
+
+新增两种真实ProcessJob结果竞争顺序：done先持锁、failed先持锁。两次业务调用使用实际intake；失败通过Ticket INSERT后注入故障回滚，成功提交。测试wrapper只延迟实际业务返回，保留原始结果/错误，不伪造业务执行。两次业务事务有意先后完成，随后两结果写回事务真正并发；不将其描述为并发业务INSERT验收。
+
+先行结果在真实ToolInvocation UPDATE前读取自身事务PID；后行结果必须在pg_blocking_pids中等待该PID，先行提交后后行必须保留40001，失败业务的cause也保留。整次ProcessJob重试后，failed可恢复done，已done不能被后到失败替换。解析完成Result校验唯一实际WorkItemID、编号、recordClass且Error清空；工单整行JSON在业务提交后与结果重试后保持一致（包括状态/版本），最终一工单一IntakeRequest，后续完成重放保留调用整行。
+
+s5-tool-outcome-competition.log定向真实PG race PASS。独立review_execution_scope_s1确认竞争顺序及有界取消/等待清理无阻断，提出首次结果内容断言已补强；完整私有套件结果在下方补记。本轮只增测试，无生产修改，不重复上一检查点的全后端构建。创建/编辑/审批各自剩余矩阵、其它S5副作用入口、S6、鉴权及目标T3/T4/G3仍须逐项验证；不因该结果关闭整个工具复合项。CandidateSHA和未启动状态不变，无共享环境操作、企业外呼或push/main合并。
+
+最终s5-tool-outcome-competition-full-private.log完整私有PG16/Redis/MinIO候选边界、构造保全及Stream/Webhook/审计恢复race PASS，无skip/race；包含完成Result与工单整行的补强断言。git diff --check通过。

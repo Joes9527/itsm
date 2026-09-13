@@ -920,6 +920,180 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.Equal(t, beforeMembers+1, memberCount())
 		require.JSONEq(t, before, snapshot())
 
+		for _, first := range []string{"done", "failed"} {
+			t.Run("concurrent tool outcomes first="+first, func(t *testing.T) {
+				tx, err := runtime.Tx(ctx)
+				require.NoError(t, err)
+				require.NoError(t, policy.BindEnt(ctx, tx, tenant.ID))
+				call, err := tx.ToolInvocation.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetToolName("create_ticket").SetArguments(`{"title":"Concurrent tool result"}`).SetNeedsApproval(true).SetApprovalState("approved").SetApprovedBy(actor.ID).SetApprovedAt(time.Now()).SetStatus("pending").Save(ctx)
+				require.NoError(t, err)
+				require.NoError(t, tx.Commit())
+				items, receipts := owner.Ticket.Query().CountX(ctx), owner.IntakeRequest.Query().CountX(ctx)
+				operationCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+				defer cancel()
+				type attemptKey struct{}
+				injected := errors.New("competing tool creation failed after INSERT")
+				var faultArmed atomic.Bool
+				faultArmed.Store(true)
+				defer faultArmed.Store(false)
+				runtime.Ticket.Use(func(next ent.Mutator) ent.Mutator {
+					return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
+						value, err := next.Mutate(c, m)
+						if err == nil && m.Op() == ent.OpCreate && c.Value(attemptKey{}) == "failed" && faultArmed.CompareAndSwap(true, false) {
+							return nil, injected
+						}
+						return value, err
+					})
+				})
+				businessDone := make(chan string, 2)
+				release := map[string]chan struct{}{"done": make(chan struct{}), "failed": make(chan struct{})}
+				wrapped := candidateCreationFunc(func(c context.Context, who creation.Identity, input creation.CreateWorkItemCommand) (*creation.CreateWorkItemResult, error) {
+					result, err := app.Create(c, who, input)
+					name := c.Value(attemptKey{}).(string)
+					businessDone <- name
+					select {
+					case <-release[name]:
+						return result, err
+					case <-c.Done():
+						return result, errors.Join(err, c.Err())
+					}
+				})
+				competing := service.NewToolQueue(runtime, nil, wrapped, nil, 10, zap.NewNop().Sugar(), policy)
+				job := service.ToolJob{InvocationID: call.ID, TenantID: tenant.ID}
+				results := map[string]chan error{"done": make(chan error, 1), "failed": make(chan error, 1)}
+				var workers sync.WaitGroup
+				defer func() { cancel(); workers.Wait() }()
+				launch := func(name string) {
+					workers.Add(1)
+					go func() {
+						defer workers.Done()
+						results[name] <- competing.ProcessJob(context.WithValue(operationCtx, attemptKey{}, name), job)
+					}()
+					select {
+					case actual := <-businessDone:
+						require.Equal(t, name, actual)
+					case <-operationCtx.Done():
+						t.Fatal(operationCtx.Err())
+					}
+				}
+				// Both real business attempts finish before either outcome may commit.
+				launch("failed")
+				require.False(t, faultArmed.Load())
+				require.Equal(t, items, owner.Ticket.Query().CountX(ctx))
+				require.Equal(t, receipts, owner.IntakeRequest.Query().CountX(ctx))
+				launch("done")
+				require.Equal(t, items+1, owner.Ticket.Query().CountX(ctx))
+				require.Equal(t, receipts+1, owner.IntakeRequest.Query().CountX(ctx))
+				committedReceipt := owner.IntakeRequest.Query().Where(intakerequest.TenantIDEQ(tenant.ID), intakerequest.IdempotencyKeyEQ(fmt.Sprintf("tool-invocation:%d", call.ID))).OnlyX(ctx)
+				require.NotNil(t, committedReceipt.WorkItemID)
+				work := owner.Ticket.GetX(ctx, *committedReceipt.WorkItemID)
+				var businessBefore string
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, work.ID).Scan(&businessBefore))
+				outcomeEntered := make(chan int, 1)
+				releaseUpdate := make(chan struct{})
+				var gateArmed atomic.Bool
+				gateArmed.Store(true)
+				defer gateArmed.Store(false)
+				runtime.ToolInvocation.Use(func(next ent.Mutator) ent.Mutator {
+					return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
+						if m.Op().Is(ent.OpUpdate|ent.OpUpdateOne) && c.Value(attemptKey{}) == first && gateArmed.CompareAndSwap(true, false) {
+							mutationTx, err := m.(*ent.ToolInvocationMutation).Tx()
+							if err != nil {
+								return nil, err
+							}
+							rows, err := mutationTx.Client().QueryContext(c, `SELECT pg_backend_pid()`)
+							if err != nil {
+								return nil, err
+							}
+							var pid int
+							if !rows.Next() {
+								rows.Close()
+								return nil, errors.New("outcome backend missing")
+							}
+							err = rows.Scan(&pid)
+							rows.Close()
+							if err != nil {
+								return nil, err
+							}
+							outcomeEntered <- pid
+							select {
+							case <-releaseUpdate:
+							case <-c.Done():
+								return nil, c.Err()
+							}
+						}
+						return next.Mutate(c, m)
+					})
+				})
+				close(release[first])
+				var firstPID int
+				select {
+				case firstPID = <-outcomeEntered:
+				case <-operationCtx.Done():
+					t.Fatal(operationCtx.Err())
+				}
+				second := "done"
+				if first == "done" {
+					second = "failed"
+				}
+				close(release[second])
+				require.Eventually(t, func() bool {
+					var waiting bool
+					err := ownerDB.QueryRowContext(operationCtx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE usename=$1 AND $2::integer=ANY(pg_blocking_pids(pid)))`, runtimeRole, firstPID).Scan(&waiting)
+					return err == nil && waiting
+				}, 5*time.Second, 10*time.Millisecond, "second outcome must wait on the first outcome transaction")
+				close(releaseUpdate)
+				var firstErr, secondErr error
+				select {
+				case firstErr = <-results[first]:
+				case <-operationCtx.Done():
+					t.Fatal(operationCtx.Err())
+				}
+				select {
+				case secondErr = <-results[second]:
+				case <-operationCtx.Done():
+					t.Fatal(operationCtx.Err())
+				}
+				if first == "done" {
+					require.NoError(t, firstErr)
+				} else {
+					require.ErrorIs(t, firstErr, injected)
+				}
+				var pgError *pq.Error
+				require.ErrorAs(t, secondErr, &pgError)
+				require.Equal(t, pq.ErrorCode("40001"), pgError.Code)
+				if second == "failed" {
+					require.ErrorIs(t, secondErr, injected)
+				}
+				var beforeRetry, afterRetry string
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, call.ID).Scan(&beforeRetry))
+				require.Equal(t, first, owner.ToolInvocation.GetX(ctx, call.ID).Status)
+				require.NoError(t, queue.ProcessJob(ctx, job))
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, call.ID).Scan(&afterRetry))
+				if first == "done" {
+					require.JSONEq(t, beforeRetry, afterRetry, "late failure and retry cannot replace first completion")
+				}
+				require.Equal(t, "done", owner.ToolInvocation.GetX(ctx, call.ID).Status)
+				require.NoError(t, queue.ProcessJob(ctx, job))
+				var replay string
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, call.ID).Scan(&replay))
+				require.JSONEq(t, afterRetry, replay)
+				completed := owner.ToolInvocation.GetX(ctx, call.ID)
+				require.Nil(t, completed.Error, "successful recovery clears the failed receipt error")
+				require.NotNil(t, completed.Result)
+				var result creation.CreateWorkItemResult
+				require.NoError(t, json.Unmarshal([]byte(*completed.Result), &result))
+				require.Equal(t, work.ID, result.WorkItemID)
+				require.Equal(t, work.TicketNumber, result.Number)
+				require.Equal(t, work.RecordClass, result.RecordClass)
+				var businessAfter string
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, work.ID).Scan(&businessAfter))
+				require.JSONEq(t, businessBefore, businessAfter, "outcome retries preserve business row including version and status")
+				require.Equal(t, items+1, owner.Ticket.Query().CountX(ctx))
+				require.Equal(t, receipts+1, owner.IntakeRequest.Query().CountX(ctx))
+			})
+		}
+
 		for _, toolName := range []string{"create_ticket", "missing-tool"} {
 			t.Run("outcome rollback and retry "+toolName, func(t *testing.T) {
 				tx, err := runtime.Tx(ctx)
@@ -5614,3 +5788,11 @@ type standardExecutionObserver struct{ candidateStreamObserver }
 func (standardExecutionObserver) ExecutionEnvelopeRequired() {}
 
 func (*candidateCommitBeforeAck) ExecutionEnvelopeRequired() {}
+
+// candidateCreationFunc schedules around the actual application; callers must
+// retain its real result/error and use Ent hooks for transaction fault injection.
+type candidateCreationFunc func(context.Context, creation.Identity, creation.CreateWorkItemCommand) (*creation.CreateWorkItemResult, error)
+
+func (f candidateCreationFunc) Create(ctx context.Context, who creation.Identity, command creation.CreateWorkItemCommand) (*creation.CreateWorkItemResult, error) {
+	return f(ctx, who, command)
+}
