@@ -79,7 +79,9 @@ type SecurityConfig struct {
 type EventStreamConfig struct {
 	ClaimIdle     time.Duration `mapstructure:"claim_idle"`
 	ClaimInterval time.Duration `mapstructure:"claim_interval"`
-	NackDelay     time.Duration `mapstructure:"nack_delay"`
+	// NackDelay backs off Redis operation failures. Rejected entries remain in
+	// the PEL and retry according to ClaimIdle and ClaimInterval.
+	NackDelay time.Duration `mapstructure:"nack_delay"`
 }
 
 type RedisConfig struct {

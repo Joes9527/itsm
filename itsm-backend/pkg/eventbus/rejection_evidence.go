@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/ThreeDotsLabs/watermill/message"
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
 
 // rejectionEvidence is an immutable observation, not a receipt authorizing ACK
@@ -28,14 +30,18 @@ func eventDigest(value []byte) string {
 }
 
 func (eb *WatermillEventBus) recordRejection(ctx context.Context, consumer string, route streamRoute, msg *message.Message, reason string) {
+	recordStreamRejection(ctx, eb.rejectionClient, eb.logger, consumer, route, msg, reason)
+}
+
+func recordStreamRejection(ctx context.Context, client redis.Cmdable, logger *zap.SugaredLogger, consumer string, route streamRoute, msg *message.Message, reason string) {
 	// Consumer and physical route come from the frozen subscription, never from
 	// the untrusted envelope's tenant, deployment, or scope fields.
-	if eb.rejectionClient == nil || !consumerIDPattern.MatchString(consumer) {
-		eb.logger.Errorw("Persistent event rejection evidence unavailable", "reason", "recorder_unavailable")
+	if client == nil || !consumerIDPattern.MatchString(consumer) {
+		logger.Errorw("Persistent event rejection evidence unavailable", "reason", "recorder_unavailable")
 		return
 	}
 	switch reason {
-	case "envelope_invalid", "identity_mismatch", "source_rejected", "handler_rejected":
+	case "wire_invalid", "envelope_invalid", "identity_mismatch", "source_rejected", "handler_rejected":
 	default:
 		reason = "handler_rejected"
 	}
@@ -44,18 +50,18 @@ func (eb *WatermillEventBus) recordRejection(ctx context.Context, consumer strin
 	fingerprint := eventDigest([]byte(record.PayloadDigest + record.MessageDigest + record.MetadataDigest))
 	body, err := json.Marshal(record)
 	if err != nil {
-		eb.logger.Errorw("Persistent event rejection evidence unavailable", "reason", "encoding_failed")
+		logger.Errorw("Persistent event rejection evidence unavailable", "reason", "encoding_failed")
 		return
 	}
 	key := route.topic + ":rejections:" + consumer
 	writeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	created, err := eb.rejectionClient.HSetNX(writeCtx, key, fingerprint, string(body)).Result()
+	created, err := client.HSetNX(writeCtx, key, fingerprint, string(body)).Result()
 	if err != nil {
-		eb.logger.Errorw("Persistent event rejection evidence unavailable", "reason", "storage_failed", "consumer", consumer)
+		logger.Errorw("Persistent event rejection evidence unavailable", "reason", "storage_failed", "consumer", consumer)
 		return
 	}
 	if created {
-		eb.logger.Errorw("Persistent event rejected", "reason", reason, "consumer", consumer, "evidence_key", key, "fingerprint", fingerprint)
+		logger.Errorw("Persistent event rejected", "reason", reason, "consumer", consumer, "evidence_key", key, "fingerprint", fingerprint)
 	}
 }

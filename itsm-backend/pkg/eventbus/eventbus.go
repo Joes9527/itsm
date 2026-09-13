@@ -170,14 +170,15 @@ func NewWatermillEventBus(cfg *config.RedisConfig, execution config.ExecutionCon
 
 	makeSubscriber := func(group string) (streamSubscriber, error) {
 		client := redis.NewClient(options)
-		settings := redisstream.SubscriberConfig{Client: client, DisableIndefiniteInitialBlock: true}
 		if group != "" {
-			settings.ConsumerGroup = group
-			settings.OldestId = "0"
-			settings.ClaimInterval = stream.ClaimInterval
-			settings.MaxIdleTime = stream.ClaimIdle
-			settings.NackResendSleep = stream.NackDelay
+			subscriber, err := newRedisDurableSubscriber(client, group, stream, logger)
+			if err != nil {
+				_ = client.Close()
+				return nil, err
+			}
+			return subscriber, nil
 		}
+		settings := redisstream.SubscriberConfig{Client: client, DisableIndefiniteInitialBlock: true}
 		subscriber, err := redisstream.NewSubscriber(settings, watermillLogger)
 		if err != nil {
 			_ = client.Close()

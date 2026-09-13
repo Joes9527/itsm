@@ -955,3 +955,16 @@ bootstrap实际注册器按webhook capability决定handler或known reserved type
 `s5-stream-rejection-regression.log` eventbus/service/bootstrap回归PASS；`s5-stream-rejection-full-private.log`完整候选边界、普通/候选来源与Webhook恢复、PG/Redis/MinIO构造保全及新增拒绝测试race PASS，无skip/race。全后端 `s5-stream-rejection-build.log` exit0，git diff --check通过。独立review_execution_scope_s1复核记录边界、故障和同消息恢复无新增阻断，结论限定为首次拒绝诊断及可重验；开发指南已明确队头阻塞与证据读取方式。
 
 S5不可处理消息的完整处置、进程重启及其它异步入口继续未完成，不以该诊断检查点放行B2/B3/T3/T4/G2/G3。CandidateSHA及未启动状态不变，无共享环境变更、企业外呼、push或main合并。
+
+
+### B2 S5 拒绝消息保全与后续消费推进（2026-09-13）
+
+在 `d541ed9f3` 后恢复“拒绝原消息后，后续合法消息仍可交付”的真实Redis断言，`s5-stream-progress-red.log` 在普通及候选模式稳定失败。根因为原watermill-redisstream订阅器同步NACK循环阻塞后续读取。本轮只替换唯一WatermillEventBus中持久组的底层订阅器；普通非持久fanout保留既有合同，没有新增业务总线或第二个消费所有者。
+
+新持久订阅交替执行有界XREADGROUP及带游标XAUTOCLAIM，NACK保留原PEL并继续读取，只有业务ACK后执行XACK；XACK失败原消息仍待恢复。空扫描页保留非零游标；显式订阅的首次真实claim既验证命令权限，又把领取结果交给正常处理。构造仍无网络副作用，不重设或删除旧组。Redis最低要求6.2及XAUTOCLAIM权限，NackDelay改为Redis操作故障退避，拒绝重领由ClaimIdle/ClaimInterval控制。底层损坏帧在解码前校验类型，记录固定wire_invalid摘要诊断，保留原PEL、不调用业务、不伪造有效载荷；诊断失败也不ACK。并发Close共享退出结果并关闭自有连接。
+
+`s5-stream-progress-green.log` 首次使用不存在的CommandInfo方法导致编译失败，不计业务RED；修正后 `s5-stream-progress-recovery.log` 两模式坏消息保全/诊断存储失败/消费者重建/后续好消息和来源恢复race PASS。`s5-stream-progress-faults.log` 实际ACL禁止XACK后原PEL保留，恢复权限重领同源并清PEL；持续新消息期间旧pending恢复PASS。独立P2指出命令存在探针不证明ACL许可，`s5-stream-progress-acl-red.log` 实际禁用XAUTOCLAIM复现错误放行Start；改成首次实际claim后 `s5-stream-progress-acl-green.log` PASS。首次领取结果不丢弃，`s5-stream-progress-cursor-wire.log` 覆盖1条初始可领消息、21条pending中连续空页后的老消息、同组两活消费者及损坏帧后的正常推进，race PASS。
+
+独立review_execution_scope_s1复核生产逻辑无新增阻断；两项测试建议已关闭：并发Close后Ping严格要求redis.ErrClosed，两活消费者在PEL0后显式关闭并检查尾部缓冲无重复。`s5-stream-progress-final-regression.log` eventbus/config/bootstrap race PASS；最终 `s5-stream-progress-full-private.log` 完整intake、真实PG审计与普通/候选Webhook ACK缺口恢复、离线与历史Stream保全、所有PersistentStream测试及PG/Redis/MinIO构造保全race PASS，无skip/race。全后端 `s5-stream-progress-build.log` exit0，git diff --check通过。
+
+证据仅为本机私有PG16/Redis7.2/MinIO及loopback；目标PG17和B环境准入未验证。消费者重建不等于应用强杀或Redis服务重启，传输不是恰好一次，慢处理并发重领仍依赖业务持久幂等；永久拒绝消息人工处置及其它异步入口仍待完成。修正开发指南中普通Webhook仍同步发送的过时段落。S5/T3/T4/G2/G3保持未完成，固定CandidateSHA不变、候选未启动，无共享数据库或B配置改动、企业外呼、push或main合并。

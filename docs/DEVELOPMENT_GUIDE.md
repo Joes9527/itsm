@@ -16,11 +16,11 @@
 
 工具队列及事件订阅需要显式运行阶段启动；取消后等待已启动任务退出，再关闭数据库和连接器。禁止从业务构造器调用 Start。禁用的必需能力必须报告未验证，不能把 pending、外部阻断或未运行的 Worker 标为成功。
 
-候选 Stream 消费者及普通模式的完整信封消费者必须通过 `EventConsumerID()` 声明稳定逻辑所有者；登记时固定身份，同一 owner/topic 重复登记拒绝。完整信封订阅登记及动态Subscribe必须已注入来源校验器，缺失时在分配持久subscriber前拒绝。审计使用 `event_audit`，Webhook 使用 `webhook`，分别持有 `itsm:<owner>` 消费组；副本共享组但由传输库生成不同消费者实例名。组只在显式 Start/Subscribe 时建立，首次从 `0` 读取对应 topic 内的离线消息，已有组保留进度；不得用重建组、SETID、删除历史或订阅旧裸 topic 恢复消费。Close 先取消订阅并等待订阅建立结束，再关闭每个拥有的 subscriber 并等待处理退出。候选多租户订阅在部分建立后失败时停止整个事件运行实例，保留组及进度，不留下部分租户继续处理；恢复需重新构造并显式启动。
+候选 Stream 消费者及普通模式的完整信封消费者必须通过 `EventConsumerID()` 声明稳定逻辑所有者；登记时固定身份，同一 owner/topic 重复登记拒绝。完整信封订阅登记及动态Subscribe必须已注入来源校验器，缺失时在分配持久subscriber前拒绝。审计使用 `event_audit`，Webhook 使用 `webhook`，分别持有 `itsm:<owner>` 消费组；副本共享组但由持久订阅器生成不同消费者实例名。组只在显式 Start/Subscribe 时建立，首次从 `0` 读取对应 topic 内的离线消息，已有组保留进度；不得用重建组、SETID、删除历史或订阅旧裸 topic 恢复消费。Close 先取消订阅并等待订阅建立结束，再关闭每个拥有的 subscriber 并等待处理退出。持久订阅复用唯一事件总线，采用有界XREADGROUP与带游标XAUTOCLAIM交替领取；NACK保留原PEL并让出本次处理，只有业务成功ACK才执行XACK，确认失败仍待重领。显式Subscribe执行首次真实XAUTOCLAIM核验恢复命令和权限，首次领取结果交给正常处理，不丢弃；需要Redis 6.2或以上及对应命令权限，失败不放行启动。候选多租户订阅在部分建立后失败时停止整个事件运行实例，保留组及进度，不留下部分租户继续处理；恢复需重新构造并显式启动。
 
-`redis.event_stream.claim_idle`、`claim_interval`、`nack_delay` 使用时长格式（如 `60s`、`5s`、`1s`）；负数拒绝，零或未配置分别使用当前传输库的60秒、5秒及应用的1秒默认值。配置由构造器复制，持久消费者使用这些值；standard 的非完整信封订阅保留原 fanout 消费语义。领取超时不是排他锁：慢处理可能被其他实例重领，写入所有者必须重验授权并提供持久幂等回执。当前审计已具备该回执，语义是至少一次投递加审计幂等，不是传输恰好一次。Webhook 的候选 typed envelope 已接入下述消费事务，但完整投递恢复、不可处理事件的持久阻断及其它异步入口仍未完成，不能据此启动候选。
+`redis.event_stream.claim_idle`、`claim_interval`、`nack_delay` 使用时长格式（如 `60s`、`5s`、`1s`）；负数拒绝，零或未配置分别使用应用的60秒、5秒及1秒默认值。配置由构造器复制；`claim_idle`和`claim_interval`决定持久拒绝消息的重领节奏，`nack_delay`现在用于Redis操作故障退避，不再控制单条消息的原地重投。持久消费者使用这些值；standard 的非完整信封订阅保留原 fanout 消费语义。领取超时不是排他锁：慢处理可能被其他实例重领，写入所有者必须重验授权并提供持久幂等回执。当前审计已具备该回执，语义是至少一次投递加审计幂等，不是传输恰好一次。Webhook 在普通与候选模式均接入下述消费事务；消费者重建及拒绝消息保全已验证，完整进程重启、人工处置和其它异步入口仍未完成，不能据此启动候选。
 
-Webhook 事件订阅只接受 `WebhookEventTopics()` 注册的类型及完整持久信封，普通与候选模式共用下述意图事务和Worker。原同步外发分支已删除；配置目标或传入原始map均不能触发直接外发。Webhook声明稳定逻辑所有者`webhook`，其消费组按既有生命周期建立/关闭，错误或旧非持久消息拒绝并NACK。持久首次拒绝诊断保存在 `<physical-topic>:rejections:<owner>` Redis hash，字段为消息/载荷/事件类型摘要的组合指纹，值只包含固定原因、摘要与首次时间；HSETNX保证重试/消费者重建不改写首次事实，不复制原始UUID、载荷或错误文本。记录是历史观察，不是ACK许可或永久禁止重验；存储失败仍NACK。键无自动TTL，操作员可只读HGETALL并结合原PEL核查，不应将记录存在解释为业务已完成。当前传输库会在同一NACK消息上循环重试，永久坏消息可阻住该消费者后续消息；持久隔离/人工处置及服务重启持久性仍待完成，不能以本诊断门禁放行S5。
+Webhook 事件订阅只接受 `WebhookEventTopics()` 注册的类型及完整持久信封，普通与候选模式共用下述意图事务和Worker。原同步外发分支已删除；配置目标或传入原始map均不能触发直接外发。Webhook声明稳定逻辑所有者`webhook`，其消费组按既有生命周期建立/关闭，错误或旧非持久消息拒绝并NACK。持久首次拒绝诊断保存在 `<physical-topic>:rejections:<owner>` Redis hash，字段为消息/载荷/事件类型摘要的组合指纹，值只包含固定原因、摘要与首次时间；HSETNX保证重试/消费者重建不改写首次事实，不复制原始UUID、载荷或错误文本。记录是历史观察，不是ACK许可或永久禁止重验；存储失败仍NACK。键无自动TTL，操作员可只读HGETALL并结合原PEL核查，不应将记录存在解释为业务已完成。持久订阅不再在同一NACK消息上循环；坏消息保留待确认，后续合法消息可处理，待确认恢复也不会因持续新消息而饥饿。底层损坏帧先校验类型并保存wire_invalid摘要事实，不能panic、修复为有效消息或ACK。人工处置及Redis服务重启持久性仍待完成，不能据此放行整个S5。
 
 持久事件来源校验使用冻结部署身份：`ExecutionPolicy.EventRef` 在standard模式返回部署与租户、空scope，在candidate模式返回原准入ref；`CandidateRef`仍只适用于candidate。EventRef本身不赋予业务权限。共享authority在原事务核验持久Outbox主体、事件ID、载荷及发生时间，candidate另保留scope/角色绑定/成员门禁。普通模式发布ExecutionEvent时同样强制稳定事件类型/租户、持久来源校验与原eventID；声明ExecutionEnvelopeHandler的订阅者仅在严格信封、冻结部署/模式、transport ID及来源验证后收到完整Envelope。没有持久主体的既有事件不伪造WorkItem。普通Webhook已接入同一持久意图/Worker及稳定消费组；这不代表运行角色准入、全部重启场景或目标环境上线证明。
 
@@ -30,7 +30,7 @@ Webhook handler 在两模式均接入共享outbox Worker，按当前 publishing 
 
 发送捕获精确实例对象及进程内generation，校验对象在Init冻结的URL摘要后使用同一对象发送，发送后核对当前generation。builtin同时冻结endpoint和签名secret，不从可变Config map重新取出站目标；禁止HTTP自动重定向，3xx不视为成功。URL摘要不证明完整配置版本，generation只识别当前进程内实例重绑，不是跨进程的持久版本或并发撤权栅栏。实例在发送后变化可能意味着原目标已接收，须保留unknown；不得改投新目标。
 
-仅loopback接收端的真实Worker正负测试不放行候选；完整重启、Redis消费到出站联合恢复和所有S5/G2入口仍待验证。standard目前仍走上述同步精确实例发送，尚不能声称多目标重试幂等；最终S5需把普通与候选事件接入同一持久投递所有者，删除被替换的同步路径，不能长期保留两套发送模型。
+私有PG/Redis及loopback接收端已验证普通与候选共用持久所有者，以及消费提交后ACK缺口的消费者重建恢复；原同步路径已删除。这不证明整个应用或Redis服务重启、任意外发窗口恰好一次或目标环境准入，所有S5/G2入口尚未验收，不能据此启动候选。
 
 离线与 ACK 间隙恢复测试分别为 `TestCandidateStreamDeliversOfflineMessages` 和 `TestCandidateIntakeCreationBoundary/stream_source_requires_current_persistent_authority/stream_consumer_recovers_committed_audit_before_ack`，后者同时需要下述私有 PostgreSQL socket 和 Redis 二进制变量。它验证真实审计提交后停止 ACK、关闭旧 bus、新 bus 领取原 pending 消息，原审计不变且旧 Stream 保全；不替代整个应用/操作系统重启或完整 outbox Worker 投递验证。
 
