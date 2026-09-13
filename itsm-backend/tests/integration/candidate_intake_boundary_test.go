@@ -3498,6 +3498,64 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				return candidateDeclaredManager(t, ctx, tenant.ID, scopeID, registry, targets...)
 			}
 			manager := newManager("first", "second")
+
+			t.Run("webhook producer rejects unrelated declared authority", func(t *testing.T) {
+				for _, mismatch := range []string{"scope", "notification-only", "outbox-only", "deployment"} {
+					t.Run(mismatch, func(t *testing.T) {
+						fresh, err := app.Create(ctx, identity, command("webhook-target-authority-"+mismatch, "generic"))
+						require.NoError(t, err)
+						owner.Ticket.UpdateOneID(fresh.WorkItemID).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(-time.Hour)).SetSLAResolutionDeadline(time.Now().Add(time.Hour)).SaveX(ctx)
+						_, err = monitor.CheckSLAViolations(ctx, tenant.ID)
+						require.NoError(t, err)
+						source := owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(fresh.WorkItemID), outboxevent.EventTypeEQ("sla.breached")).OnlyX(ctx)
+						require.NoError(t, service.NewSLABreachDeliveryHandler().Deliver(ctx, source))
+						captured := capture.events[len(capture.events)-1]
+						wire, err := json.Marshal(captured)
+						require.NoError(t, err)
+						sourceEnvelope := envelope
+						sourceIdentity := *envelope.Execution
+						sourceIdentity.WorkItemID = fresh.WorkItemID
+						sourceEnvelope.Execution = &sourceIdentity
+						sourceEnvelope.EventID = source.EventID
+						sourceEnvelope.Payload = wire
+						sourceEnvelope.OccurredAt = captured.(interface{ OccurredAt() time.Time }).OccurredAt()
+						targetScope, targetDeployment, capability := scopeID, "intake-test", "webhook"
+						switch mismatch {
+						case "scope":
+							targetScope = "149ff1af-a27c-47c7-827f-103271130bb9"
+						case "deployment":
+							targetDeployment = "other-deployment"
+						case "notification-only":
+							capability = "notification"
+						case "outbox-only":
+							capability = "outbox"
+						}
+						declared := candidateWebhookTarget("authority-test", endpoint.URL)
+						declared.TenantID, declared.ScopeID = tenant.ID, targetScope
+						declared.Capabilities = []string{capability}
+						targetPolicy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: targetDeployment, Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: targetScope}}, Capabilities: map[string]string{capability: "scoped"}, ConnectorTargets: []config.ConnectorTargetConfig{declared}})
+						require.NoError(t, err)
+						wrongManager := connector.NewManager(registry, zap.NewNop().Sugar(), targetPolicy)
+						defer wrongManager.CloseAll()
+						require.NoError(t, wrongManager.ActivateStartupTargets(tenantctx.SystemContext(ctx, "test:unrelated-target", "declare a local target without authority for this source")))
+						operationID := "webhook_consume:" + source.EventID
+						// Cleanup only this fresh negative fixture's generated intents/receipt,
+						// after asserting its writes; keep the source and historical records.
+						defer owner.OutboxEvent.Delete().Where(outboxevent.ExecutionWorkItemIDEQ(fresh.WorkItemID), outboxevent.EventTypeEQ(service.WebhookDeliveryRequestedEventType)).ExecX(ctx)
+						defer owner.AuditLog.Delete().Where(auditlog.TenantID(tenant.ID), auditlog.OperationID(operationID)).ExecX(ctx)
+						beforeSends := sent.Load()
+						var sourceBefore, sourceAfter string
+						require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(e)::text FROM outbox_events e WHERE id=$1`, source.ID).Scan(&sourceBefore))
+						err = service.NewWebhookEventSubscriber(wrongManager, zap.NewNop().Sugar(), runtime, policy).HandleContext(ctx, sourceEnvelope)
+						assert.ErrorIs(t, err, executionscope.ErrDenied)
+						assert.Zero(t, owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(fresh.WorkItemID), outboxevent.EventTypeEQ(service.WebhookDeliveryRequestedEventType)).CountX(ctx), "unrelated target must not acquire a durable delivery intent")
+						assert.Zero(t, owner.AuditLog.Query().Where(auditlog.TenantID(tenant.ID), auditlog.OperationID(operationID)).CountX(ctx), "rejection must not commit a successful consumption receipt")
+						assert.Equal(t, beforeSends, sent.Load())
+						require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(e)::text FROM outbox_events e WHERE id=$1`, source.ID).Scan(&sourceAfter))
+						assert.JSONEq(t, sourceBefore, sourceAfter, "rejected target must preserve original source row")
+					})
+				}
+			})
 			subscriber := service.NewWebhookEventSubscriber(manager, zap.NewNop().Sugar(), runtime, policy)
 			outboxBefore, auditBefore := owner.OutboxEvent.Query().CountX(ctx), owner.AuditLog.Query().CountX(ctx)
 			require.Error(t, subscriber.HandleContext(ctx, map[string]interface{}{"eventType": "sla.breached", "tenantId": fmt.Sprint(tenant.ID)}))
@@ -3675,7 +3733,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			}
 			require.NoError(t, worker.DispatchOnce(ctx))
 			require.EqualValues(t, 2, sent.Load(), "published intents are not re-sent")
-			for _, scenario := range []string{"redirect", "destination_changed", "during_send_rebind", "receipt_fault", "server_error"} {
+			for _, scenario := range []string{"redirect", "destination_changed", "during_send_rebind", "receipt_fault", "server_error", "authority_scope", "authority_notification", "authority_outbox", "authority_deployment"} {
 				t.Run(scenario, func(t *testing.T) {
 					var redirected, attempted atomic.Int32
 					var onSend func()
@@ -3722,6 +3780,30 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 						targetManager = candidateDeclaredManager(t, ctx, tenant.ID, scopeID, registry, candidateWebhookTarget("redirect", redirectEndpoint.URL))
 					}
 					require.NoError(t, service.NewWebhookEventSubscriber(targetManager, zap.NewNop().Sugar(), runtime, policy).HandleContext(ctx, freshEnv))
+					if strings.HasPrefix(scenario, "authority_") {
+						// The producer committed an authorized intent. Independently replace
+						// only the runtime target used by the real delivery worker.
+						targetScope, targetDeployment, capability := scopeID, "intake-test", "webhook"
+						switch scenario {
+						case "authority_scope":
+							targetScope = "149ff1af-a27c-47c7-827f-103271130bb9"
+						case "authority_notification":
+							capability = "notification"
+						case "authority_outbox":
+							capability = "outbox"
+						case "authority_deployment":
+							targetDeployment = "other-deployment"
+						}
+						declaration := candidateWebhookTarget("redirect", redirectEndpoint.URL)
+						declaration.TenantID, declaration.ScopeID = tenant.ID, targetScope
+						declaration.Capabilities = []string{capability}
+						unrelatedPolicy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: targetDeployment, Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: targetScope}}, Capabilities: map[string]string{capability: "scoped"}, ConnectorTargets: []config.ConnectorTargetConfig{declaration}})
+						require.NoError(t, err)
+						targetManager = connector.NewManager(registry, zap.NewNop().Sugar(), unrelatedPolicy)
+						defer targetManager.CloseAll()
+						require.NoError(t, targetManager.ActivateStartupTargets(tenantctx.SystemContext(ctx, "test:unrelated-worker-target", "activate only a loopback target without this intent authority")))
+					}
+
 					if scenario == "destination_changed" {
 						require.NoError(t, targetManager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: "redirect", Enabled: true, Settings: map[string]interface{}{"url": otherEndpoint.URL}}))
 					}
@@ -3760,6 +3842,16 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 					require.NoError(t, targetWorker.DispatchOnce(ctx))
 					require.Zero(t, redirected.Load(), "frozen endpoint must not redirect the payload")
 					intent := owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(freshRedirect.WorkItemID), outboxevent.EventTypeEQ(service.WebhookDeliveryRequestedEventType)).OnlyX(ctx)
+					if strings.HasPrefix(scenario, "authority_") {
+						assert.Equal(t, "blocked", intent.Status, "an unrelated declaration must not authorize a persisted intent")
+						assert.Zero(t, attempted.Load(), "worker must reject before the local HTTP request")
+						assert.Zero(t, owner.AuditLog.Query().Where(auditlog.TenantID(tenant.ID), auditlog.OperationID("webhook_deliver:"+intent.EventID)).CountX(ctx), "wrong target authority must not acquire a delivered receipt")
+						attemptsBeforeReplay := attempted.Load()
+						require.NoError(t, targetWorker.DispatchOnce(ctx))
+						assert.Equal(t, attemptsBeforeReplay, attempted.Load(), "terminal delivery state must not cause another attempt")
+						assert.Zero(t, owner.AuditLog.Query().Where(auditlog.TenantID(tenant.ID), auditlog.OperationID("webhook_deliver:"+intent.EventID)).CountX(ctx), "repeated rejected poll must not create a delivered receipt")
+						return
+					}
 					require.Equal(t, "blocked", intent.Status)
 					if scenario == "destination_changed" {
 						require.NotContains(t, intent.LastError, "delivery_unknown:")

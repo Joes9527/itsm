@@ -1292,3 +1292,15 @@ s5-manager-gate-full-private.log完整私有PG16/Redis/MinIO候选注册、intak
 独立最终复核无新增阻断。声明的targetAuthority scope/能力尚未由全部投递owner消费，Send/Get/GetInstance裸实例权限仍需封闭；目标存在不等于投递授权。当前完整目标、S5/S6及T3/T4/G3仍未完成，CandidateSHA保持不变，候选未启动；无共享环境操作、真实企业/云外呼、push/main合并。兼容编译及最终构建下方补记。
 
 最终 s5-manager-legacy-compile.log 的integration_postgres标签编译通过（no tests to run，未执行该标签数据库测试）；s5-manager-build.log 全后端build exit0，git diff --check通过。无进行中的Go进程，后续可安全继续编辑。
+
+### B2 S5 Webhook 声明归属与投递能力消费 RED（2026-09-14）
+
+实际owner调查确认producer snapshotWebhookTarget与worker h.target仅比较GetInstance/目的地摘要，不消费Manager私有targetAuthority的scope/capabilities，也不验证Manager deployment与source Ref一致。新增四种声明不匹配：另一scope、另一deployment、notification-only、outbox-only；均保持真实来源、同tenant、相同精确provider和同一loopback URL。
+
+s5-webhook-target-authority-red.log真实PG producer分别返回nil、创建未准入intent与消费成功receipt。断言在清理前执行；清理只覆盖本次fresh WorkItem的Webhook意图及对应操作receipt，原source与历史记录不删除。s5-webhook-worker-authority-red.log独立由合法Manager先创建合法意图，随后只替换worker运行Manager；实际OutboxWorker DispatchOnce在四场景各产生一次本机HTTP、published状态与交付receipt，证明worker自身也缺检查，不能仅修producer。
+
+s5-webhook-target-full-red.log完整私有PG16/Redis/MinIO race仅新增8个场景失败，其余所选回归通过，无SKIP/DATA RACE，整体为FAIL；上一轮15374aa47绿色证据不能覆盖新增要求。最终s5-webhook-authority-final-red.log补验producer原source整行不变及worker重复轮询：source保全通过，终态不再次发送，但原不当交付receipt仍存在，新增断言保持RED。替代scope仅作为Manager冻结声明，没有建立第二个真实active数据库scope，不宣称完成跨有效scope生命周期测试。
+
+独立只读审阅确认两侧RED有效且清理范围正确。后续沿唯一Manager/ExecutionPolicy建立精确目标解析：真实owner已验证Ref、代码固定capability、tenant/name/provider与冻结mode/deployment/scope完全一致；candidate私有目标scope/能力/摘要匹配，standard空scope、实际deployment一致且显式启用投递能力。producer提交新意图前检查，worker已有意图发送前及回执复核独立检查，保留同对象/generation及原DB source/member/claim/lease/receipt合同。原standard Manager与candidate worker混合的重绑防御fixture必须改完整standard链，不放宽一致性迁就旧测试。完整合同已补原S5计划。
+
+本轮仅新增真实RED与实施合同，未修复生产路径；未进行不相关构建或将编译成功当验收。Send/Get/GetInstance裸入口及通知/Feishu目标消费仍未完成，完整目标、CandidateSHA、候选停止及共享环境边界不变，无企业/云外呼、共享数据库修改、push/main合并。
