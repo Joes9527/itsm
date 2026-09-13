@@ -203,6 +203,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+AI创建事务检查点 `47b40a726`：真实仓库INSERT缺scope/42501的RED→GREEN；EntRepository显式冻结policy，CreateToolInvocation统一自有事务BindEnt/INSERT/Commit，提交才返回，trigger同事务登记。pending/auto记录形状、实际post-INSERT故障双回滚、nil/异tenant/closed拒绝、明确standard绑定零候选登记均真实PG race验证；AI/bootstrap全包race、完整私有回归、build及独立复核通过，无skip/race，见T1。两记录形状不证明完整ExecuteTool/recordToolAudit/RBAC，standard不证明角色准入；审批更新、审计失败传播、首次业务原事务、结果写回和新表运行权限仍待完成。自有事务方法不用于嵌套调用。CandidateSHA与候选未启动状态不变，不放行交付门禁。
+
 工具入队检查点 `ed4f8c360`：真实Enqueue历史返回nil的RED已转GREEN；入队与执行共用同事务来源/审批/当前actor和approver/ai:write权限预检，执行仍重新检查。锁外30秒生命周期context校验、锁内前后状态核验及in-flight登记，Close取消并等待所有准入退出。pending/rejected/dryrun/inactive actor入队拒绝且原行不变，新调用经实际queue完成并重放一工单；取消后阻塞检查的Close等待、返回取消或忽略取消返回nil两分支均拒绝迟到入队。定向工具/生命周期race、完整私有回归、build及独立增量审阅通过，无skip/race，详见T1。默认隔离事务不是一致快照/审批锁；AI创建审批写、首次业务原事务、结果条件写回、新表角色准入仍待完成，不放行S5/T3/T4/G2/G3。CandidateSHA与未启动状态不变。
 
 工具来源预检 `677fdd6b2`：ToolQueue显式冻结policy，ProcessJob先拒绝上下文冲突/bypass，并在任何invocation写入前独立事务核验041关联、真实调用、tenant、active scope/角色绑定。历史调用直接执行RED已转GREEN，旧行/工单/成员保全；新登记approved调用两次只建一工单并重放。独立P2“SQL故障伪装ErrDenied”已关闭，只有无记录分类拒绝，实际撤销SELECT保留pq42501且非ErrDenied；原事务未提交登记正向和历史负向均验证。定向工具/生命周期回归、完整私有环境race、build及独立复核通过，无skip/race，详见T1。此项仅为预检，未完成首次业务原事务授权、审批/enqueue/结果回写及运行角色新表准入，不关闭S5与全部交付门禁。CandidateSHA及候选未启动状态不变。
