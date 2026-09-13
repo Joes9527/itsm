@@ -203,6 +203,17 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+工具来源RED检查点 `674fc9885`：真实私有PG测试确认候选ToolQueue.ProcessJob可执行scope建立前的approved create_ticket。使用受限tenant client与真实candidate intake，返回nil、历史invocation pending→done并写result、WorkItem与member各新增1，四项保全断言FAIL；独立审阅确认缺陷。当前新增测试未GREEN，不能引用此前full PASS称当前范围通过。生产调用链为handlers/ai.Service.ExecuteTool→EntRepository.CreateToolInvocation、ApproveTool→UpdateToolInvocation→Enqueue、ToolQueue.ProcessJob→intake/edit/registry→完成/失败写回；均需贯通来源范围，不能仅靠Start开关。T1保留完整RED证据，CandidateSHA及未启动状态不变。
+
+工具来源事务链实施细化（落实原S5工具入队/执行双边界，不增加独立业务引擎）：
+
+- [ ] 在唯一迁移注册体系追加结构化invocation执行归属及必要同tenant约束/RLS；版本依据当前注册表确定，不修改039/040等历史checksum，不回填历史invocation。创建工具尚无WorkItem，scope关联以真实invocation为来源，不能伪造未来工单身份。
+- [ ] 在invocation首次INSERT原事务由冻结policy绑定active scope/角色，写不可变归属；覆盖待审批调用和recordToolAudit，历史调用不能在审批/执行时补登记。明确支持工具合同，未知或未接入写工具拒绝，不能经registry default绕行。
+- [ ] 在既有审批所有者的原事务核对来源、当前审批者权限及允许原状态，条件更新处理并发，提交后入队。enqueue读取持久许可，ProcessJob再次核验；内存ToolJob仍只携带InvocationID/TenantID，不自报scope授权。
+- [ ] 执行许可须进入创建/编辑所有者首次写入原事务，复用服务器建立的来源身份、稳定invocation operation ID及既有幂等回执；编辑同时验证目标成员。拒绝历史/撤销来源发生在副作用前，不把预检事务结束后的窗口当已关闭。
+- [ ] 完成及失败回写绑定当前范围/来源并条件更新，拒绝历史调用保留整行；业务提交后回写故障须用原命令回执恢复。真实新建→审批→入队→执行→回执正向、历史负测、跨租户、关闭scope、撤权/并发及ACK缺口恢复全部验证后才关闭该项。
+
+
 消费者进程恢复检查点 `2626cd59c`：真实私有Redis与两个独立测试子进程，首进程交付完整信封后不ACK，父进程核验身份/原PEL后强制Kill，原待确认身份保留；第二PID从同组新consumer恢复同一完整信封，PEL归零、Stream整行不变。独立审阅指出Stat先于完整文件写入的同步竞态，已改为等待完整JSON和预期主体并保存快照，复审关闭。完整私有环境race通过，补强后定向race连续3次通过，无skip/race；仅测试/说明变更，详见T1。本项不是完整API/Worker或Redis服务重启，不以fixture收据代替业务事务回执，不放行G3；完整业务旅程、鉴权冷启动、其它异步入口及T3等仍待完成。CandidateSHA和未启动状态不变。
 
 消费推进检查点 `aab8dfcc2`：恢复坏消息之后合法消息必须可交付的原断言，两模式真实RED复现旧Watermill同步NACK阻塞；唯一bus的持久组底层改为有界新消息读取与带游标XAUTOCLAIM交替，NACK保留原PEL，业务ACK才XACK，确认失败可重领。首次真实claim核验Redis6.2+/实际ACL并保留领取结果，修复独立P2的命令存在不代表权限；空页非零游标持续扫描，损坏wire保留诊断且不panic/调用业务/ACK。真实Redis覆盖诊断WRONGTYPE、消费者重建、后续好消息、来源恢复、XACK禁用恢复、持续流量下pending推进、1/21条初始/跨页claim及双活消费者尾部无重复。eventbus/config/bootstrap race、最终完整私有PG/Redis/MinIO回归（含真实审计与两模式Webhook ACK缺口）、后端build和独立复核通过，无skip/race，详见T1最新记录。此检查点关闭下方历史记录中的队头阻塞缺陷，不把诊断当永久隔离；人工处置、实际进程/Redis服务重启、其它异步入口及全部后续门禁仍待完成。CandidateSHA和未启动状态不变，无共享环境操作或push/main合并。
