@@ -481,3 +481,12 @@ Graph/SMTP loopback、目标变化零调用、发送中换代unknown、v2形状�
 测试提交ff9ffe323以真实repo领取/attempt建立前置，增加合法SMTP正例及token/lease/marker/event/tenant/status/row/type负例，追加Alert删除与Alert→Incident→WorkItem/tenant关联更换拒绝。PG原始outbox完整行与全部audit内容快照避免Ent隐藏字段造成假保全；不宣称全部source表不变。全部29协议场景race PASS、独立复核无新增阻断，详细日志与首次FK保护失败见T1记录。生产代码未改，本轮未重复无关全构建/全suite。
 
 仅关闭这批发送前claim/source预检证据缺口；candidate受限角色实际发送、并发撤权、Graph候选准入及完整S5/S6/G2/T3/T4/G3继续未完成。CandidateSHA不变，候选保持停止，未操作WSL/共享数据或企业发送。
+
+
+### S5 候选Incident邮件职责链与Outbox禁用检查点（2026-09-14）
+
+19227dbb7在真实受限角色用例中修复禁用Outbox仍领取并blocked的RED：共享DispatchOnce在所有scan/recovery/claim/unknown-block前要求同repository冻结outbox能力。原业务事务仍可写完整意图；原scope/role/member与handler owner能力保留。nil/cancelled入口拒绝；Standard() fixture默认仍禁用，成功worker用例显式启用。
+
+新helper复用真实Intake、tenant runtime、独立system queue、runtime handler及本机SMTP，证明disabled全outbox/audit不变、enabled仅一次真实接受/receipt/published及其他所有outbox行不变。实际底层池确认runtime非super/non-bypass；system非super但BYPASSRLS、无tickets UPDATE，不能说所有连接都无绕过能力，其队列隔离依赖WorkerPredicate。standard/candidate pending/unknown/expired禁用矩阵及policy边界通过。
+
+完整私有PG16/Redis/MinIO suite含29协议与新候选用例race、相关具名回归、database/bootstrap默认标签全包race、全后端build及独立复审通过，详见T1。只关闭该职责链与运行级禁用证据，不代表全部角色准入、并发撤权或所有执行旁路。后续Graph候选local_only及完整S5/S6/G2/T3/T4/G3仍未完成；CandidateSHA不变、候选停止、未操作WSL/共享数据或企业发送。
