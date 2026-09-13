@@ -11,9 +11,10 @@ import (
 // GraphConnector is the connector.Connector implementation backed by the
 // MS Graph client in client.go.
 type GraphConnector struct {
-	client  *Client
-	mailbox string
-	cfg     connector.Config
+	client      *Client
+	mailbox     string
+	destination string
+	cfg         connector.Config
 }
 
 func init() {
@@ -43,17 +44,20 @@ func (g *GraphConnector) Manifest() connector.Manifest {
 }
 
 func (g *GraphConnector) Init(_ context.Context, cfg connector.Config) error {
-	tenantID, _ := cfg.Settings["azure_tenant_id"].(string)
-	mailbox, _ := cfg.Settings["mailbox"].(string)
-	clientID := cfg.Credentials["azure_client_id"]
-	clientSecret := cfg.Credentials["azure_client_secret"]
-	if tenantID == "" || mailbox == "" || clientID == "" || clientSecret == "" {
-		return fmt.Errorf("msgraph: settings.azure_tenant_id, settings.mailbox, credentials.azure_client_id and credentials.azure_client_secret are required")
+	if g.client != nil {
+		return fmt.Errorf("msgraph: connector already initialized")
 	}
-	aadBaseURL, _ := cfg.Settings["aad_base_url"].(string)
-	graphBaseURL, _ := cfg.Settings["graph_base_url"].(string)
-	g.client = NewClient(tenantID, clientID, clientSecret, aadBaseURL, graphBaseURL)
-	g.mailbox = mailbox
+	destination, err := parseGraphDestination(cfg)
+	if err != nil {
+		return err
+	}
+	clientSecret := cfg.Credentials["azure_client_secret"]
+	if clientSecret == "" {
+		return fmt.Errorf("msgraph: client secret is required")
+	}
+	g.client = NewClient(destination.AzureTenantID, destination.ClientID, clientSecret, destination.AADBaseURL, destination.GraphBaseURL)
+	g.mailbox = destination.Mailbox
+	g.destination = destination.digest()
 	g.cfg = cfg
 	return nil
 }

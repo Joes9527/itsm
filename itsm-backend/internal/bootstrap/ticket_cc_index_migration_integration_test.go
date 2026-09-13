@@ -137,7 +137,7 @@ func TestPrepareTicketNotificationMigrationPostgresUpgradesPopulatedLegacyRows(t
 		client := ent.NewClient(ent.Driver(entsql.OpenDB(dialect.Postgres, db)))
 		require.NoError(t, client.Schema.Create(ctx, migrate.WithForeignKeys(false)))
 		assertLegacyTicketNotificationUpgrade(t, ctx, db, "$1")
-		assertMigratedTicketNotificationsArePickedUp(t, ctx, db, client, [3]string{"$1", "$2", "$3"})
+		assertMigratedTicketNotificationsRequireTarget(t, ctx, db, client, [3]string{"$1", "$2", "$3"})
 	})
 }
 

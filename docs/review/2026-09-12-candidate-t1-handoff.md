@@ -1453,3 +1453,17 @@ s5-email-target-change-regression-red.log覆盖EmailService/EmailAndCC/WebSocket
 需先解决disabled依赖：分离“只读可信配置并冻结身份”与“允许运行/外发”。禁用notification可以完整绑定目标后queued，但取配置不能Init、联网或临时开能力。目前Manager实例枚举只看到已激活对象；candidate声明有受保护Settings/Credentials与摘要，standard配置来源仍需沿既有配置owner核查。缺此能力时不能以新增NULL队列行、当前默认邮箱或全局SMTP掩盖。下一步在既有S5合同补齐该只读描述入口，再实施版本化持久协议和原worker复核。
 
 固定CandidateSHA/候选停止状态不变，无WSL/共享数据库操作、企业外发、push/main合并。S5/S6/T3/T4/G3和总交付均未完成，当前已知RED保留等待实现，Go进程均已结束。
+
+### B2 S5 Graph 纯配置目标描述与重定向拒绝（2026-09-14）
+
+沿已接受邮件目标合同实现 DescribeDeliveryDestination：固定协议摘要覆盖 AAD tenant、公开 client ID、mailbox 与实际默认/显式 AAD、Graph 端点，排除 client secret；缺失 secret 仍可描述，Init 另行校验。纯解析与 Init 共享，初始化捕获发送身份，调用方随后修改 map 不改发送身份，顺序重复 Init 拒绝。未声称并发 Init 安全或整个配置不可变（PollInterval 仍读取原配置）。s5-graph-destination-red.log 先复现缺少描述方法；s5-graph-destination-green.log 验证纯描述零网络、字段变化、secret 轮换及默认端点一致。
+
+s5-graph-redirect-red.log 用本机两个 HTTP 端点复现 token/send 跟随307、第二端点被调用且返回成功。Graph HTTP client 现拒绝重定向，token 与 GET/POST/附件只接受2xx；token重定向即使携带合法形状 token body 也拒绝。测试证明第二端点调用0，不代表 nextLink/任意绝对URL或远端错误文本已完成安全收敛。
+
+扩大 bootstrap 全包发现旧迁移 fixture 仍期待无 target 历史行发送。保留原迁移数据保全断言，fixture 显式 standard notification 策略与 tenant；后续 worker 期望 ErrDenied、完成0、发送0、failed/delivery_target_invalid，四目标字段仍 NULL。integration 标签的同一 helper 调用同步更名，未修改历史迁移或回填目标。
+
+s5-graph-destination-final.log：msgraph/connector/bootstrap 三包全量 race PASS。s5-graph-destination-full-private.log：既定私有 PG16/Redis/MinIO suite race PASS；均无 FAIL/SKIP/DATA RACE。s5-graph-destination-build.log 全后端 build exit0。s5-graph-destination-legacy-compile.log 仅 integration 标签 bootstrap 编译通过（-run ^$），未运行其数据库测试。Go进程均退出。
+
+本步未接入 Manager 可信配置描述入口、未声明 Graph local_only、未新增045或修改通知/Incident outbox持久协议。2f119ebdb 邮件排队后重绑 RED 仍未关闭，不将上述绿色回归视为整体绿色。固定 CandidateSHA 与候选停止状态不变，无 WSL/共享数据库操作、企业外发、push/main合并；S5/S6/T3/T4/G3仍未完成。
+
+独立最终只读审阅无新增阻断。历史fixture证明迁移保全后 standard worker 明确拒绝无目标投递，不证明该标准模式旧行全过程不变（worker会写failed）。审阅未另跑测试；integration仅编译边界保留。git diff --check通过。
