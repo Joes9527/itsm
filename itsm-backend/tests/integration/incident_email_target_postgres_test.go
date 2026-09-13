@@ -118,7 +118,7 @@ func startIncidentMailReceiver(t *testing.T) (service.EmailConfig, *atomic.Int32
 // Standard-owner PostgreSQL protocol evidence; this does not claim candidate
 // restricted-role/RLS or Graph activation admission.
 func TestCandidateIncidentEmailTargetProtocol(t *testing.T) {
-	for _, scenario := range []string{"stable", "legacy v1", "recipient changed", "target changed", "missing acceptance", "unknown field", "unsupported channel", "duplicate manifest", "matching delivery receipt", "conflicting delivery receipt", "receipt failure", "publication failure"} {
+	for _, scenario := range []string{"stable", "legacy v1", "recipient changed", "target changed", "missing acceptance", "unknown field", "unsupported channel", "duplicate manifest", "matching delivery receipt", "conflicting delivery receipt", "receipt failure", "publication failure", "claim valid", "claim wrong token", "claim replaced token", "claim expired", "claim missing attempt", "claim wrong attempt", "claim wrong event", "claim wrong tenant", "claim missing tenant", "source alert missing", "source alert incident changed", "source workitem changed", "source tenant changed", "claim wrong status", "claim wrong row", "claim wrong type", "claim forged tenant"} {
 		t.Run(scenario, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -209,6 +209,76 @@ func TestCandidateIncidentEmailTargetProtocol(t *testing.T) {
 					})
 				})
 			}
+
+			if strings.HasPrefix(scenario, "claim ") || strings.HasPrefix(scenario, "source ") {
+				repo := service.NewOutboxEventRepository(client, policy)
+				claimed, err := repo.ClaimDueByEventType(ctx, time.Now().UTC(), 10, "incident_alert_delivery", false)
+				require.NoError(t, err)
+				require.Len(t, claimed, 1)
+				invocation := *claimed[0]
+				if scenario != "claim missing attempt" {
+					require.NoError(t, repo.MarkDeliveryAttemptStarted(ctx, invocation.ID, invocation.ClaimToken, invocation.EventID))
+				}
+				callCtx := ctx
+				switch scenario {
+				case "source alert missing":
+					client.IncidentAlert.DeleteOneID(int(payload["alertId"].(float64))).ExecX(ctx)
+				case "source alert incident changed":
+					replacement := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetOpenedByID(actor.ID).SetTitle("other incident").SetTicketNumber("INC-OTHER").SetRecordClass("incident").SetStatus("new").SaveX(ctx)
+					other := client.Incident.Create().SetWorkItemID(replacement.ID).SetSeverity("high").SetDetectedAt(time.Now()).SaveX(ctx)
+					client.IncidentAlert.UpdateOneID(int(payload["alertId"].(float64))).SetIncidentID(other.ID).ExecX(ctx)
+				case "source workitem changed":
+					replacement := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetOpenedByID(actor.ID).SetTitle("replacement incident").SetTicketNumber("INC-REPLACEMENT").SetRecordClass("incident").SetStatus("new").SaveX(ctx)
+					inc.Update().SetWorkItemID(replacement.ID).ExecX(ctx)
+				case "source tenant changed":
+					foreign := client.Tenant.Create().SetCode("foreign-mail").SetName("Foreign mail").SaveX(ctx)
+					item.Update().SetTenantID(foreign.ID).ExecX(ctx)
+				case "claim wrong status":
+					client.OutboxEvent.UpdateOneID(event.ID).SetStatus("pending").ExecX(ctx)
+				case "claim wrong row":
+					invocation.ID += 10000
+				case "claim wrong type":
+					invocation.EventType = "another-type"
+				case "claim forged tenant":
+					invocation.TenantID = tenant.ID + 1
+				case "claim wrong token":
+					invocation.ClaimToken = "not-the-current-token"
+				case "claim replaced token":
+					client.OutboxEvent.UpdateOneID(event.ID).SetClaimToken("replacement-token").ExecX(ctx)
+				case "claim expired":
+					client.OutboxEvent.UpdateOneID(event.ID).SetClaimExpiresAt(time.Now().UTC().Add(-time.Minute)).ExecX(ctx)
+				case "claim wrong attempt":
+					client.OutboxEvent.UpdateOneID(event.ID).SetLastError("delivery_attempt_started:another-event").ExecX(ctx)
+				case "claim wrong event":
+					invocation.EventID = "another-event"
+				case "claim wrong tenant":
+					callCtx = tenantctx.WithTenantID(ctx, tenant.ID+1)
+				case "claim missing tenant":
+					callCtx = context.Background()
+				}
+				before, auditBefore := incidentMailPersistenceSnapshot(t, ctx, client, event.ID)
+				auditCount := client.AuditLog.Query().CountX(ctx)
+				handler := service.NewIncidentAlertDeliveryHandler(client, policy, mailer)
+				err = handler.Deliver(callCtx, &invocation)
+				if scenario == "claim valid" {
+					require.NoError(t, err)
+					require.Equal(t, int32(1), accepted.Load())
+					proof := <-received
+					require.Equal(t, "RCPT TO:<"+actor.Email+">", proof.Recipient)
+					require.Contains(t, proof.Data, base64.StdEncoding.EncodeToString([]byte("private body")))
+					require.Equal(t, auditCount+1, client.AuditLog.Query().CountX(ctx))
+				} else {
+					require.Error(t, err)
+					require.Zero(t, connections.Load())
+					require.Equal(t, auditCount, client.AuditLog.Query().CountX(ctx))
+				}
+				after, auditAfter := incidentMailPersistenceSnapshot(t, ctx, client, event.ID)
+				require.JSONEq(t, before, after, "handler must not modify the persisted claim")
+				if scenario != "claim valid" {
+					require.JSONEq(t, auditBefore, auditAfter, "rejection must preserve existing audit contents")
+				}
+				return
+			}
 			registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{service.NewIncidentAlertDeliveryHandler(client, policy, mailer)})
 			require.NoError(t, err)
 			worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(client, policy), service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 2 * time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), registry)
@@ -278,4 +348,19 @@ func TestCandidateIncidentEmailTargetProtocol(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Read PostgreSQL rows directly: Ent JSON intentionally omits claim_token,
+// last_error and payload, so it cannot prove complete claim preservation.
+func incidentMailPersistenceSnapshot(t *testing.T, ctx context.Context, client *ent.Client, eventID int) (string, string) {
+	t.Helper()
+	rows, err := client.QueryContext(ctx, `SELECT row_to_json(o)::text, (SELECT coalesce(json_agg(a ORDER BY id), '[]'::json)::text FROM audit_logs a) FROM outbox_events o WHERE o.id=$1`, eventID)
+	require.NoError(t, err)
+	defer rows.Close()
+	require.True(t, rows.Next())
+	var event, audits string
+	require.NoError(t, rows.Scan(&event, &audits))
+	require.False(t, rows.Next())
+	require.NoError(t, rows.Err())
+	return event, audits
 }

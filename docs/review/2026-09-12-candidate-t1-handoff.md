@@ -1604,3 +1604,14 @@ actor/source仍需逐调用入口核对：HTTP WithIncidentAlertActor(user)、in
 仍须补claim专项负例、candidate受限角色发送、Graph候选local_only准入、consumer现行RBAC/并发撤权，再推进其余S5/S6/G2/T3/T4/G3。CandidateSHA仍为d7470a32dbb87acc9b5e4d9a895a146410723561，候选未启动，无WSL/共享数据库操作、企业外发、push或main合并。
 
 最终s5-incident-final-private.log既定私有PG16/Redis/MinIO完整suite（含新12例）race PASS；s5-incident-final-build-unwrapped.log全后端build exit0。最终具名回归/私有suite无FAIL/SKIP/DATA RACE，git diff --check通过，所有本轮Go进程已退出。
+
+
+### B2 S5 Incident领取与来源预检证据（2026-09-14）
+
+在9c555b5b3之上只扩充真实私有PG协议测试，未修改生产代码。原repo ClaimDueByEventType与MarkDeliveryAttemptStarted建立真实领取后调用handler：合法领取实际SMTP RCPT/正文与稳定审计；错误token、持久token替换、过期lease、无/错attempt marker、错eventID、错/缺tenant、错status/row/EventType、正确ctx下伪造event.TenantID均拒绝且零SMTP连接。另验证Alert删除、Alert→Incident关联改变、Incident→WorkItem关联改变及WorkItem租户改变拒绝。
+
+复审发现Ent JSON隐藏claim_token/last_error/payload，现用PG row_to_json快照比较完整outbox行，并以json_agg比较完整审计内容；基线在测试有意变造之后取得。未快照全部source对象，不能宣称所有业务表保全。首次删除仍被Alert引用的Incident被FK拒绝，失败日志s5-incident-claim-source-private.log保留；未禁用约束，改测可发生的关联更换。
+
+最终s5-incident-claims-source-snapshot.log全部29协议场景race PASS，无FAIL/SKIP/DATA RACE；git diff --check通过，独立最终只读复审无本测试增量阻断。本轮仅测试改动，未重复不受影响的全后端构建或全私有suite；其前次生产检查点证据仍见上一节。没有活跃Go进程。
+
+本证据是standard owner下真实领取后的直接handler发送前预检，原12例继续覆盖完整worker；不等同并发撤权、candidate受限角色发送或新的完整worker恢复证明。下一步仍为candidate角色发送/Graph准入及完整S5/S6/G2/T3/T4/G3。固定CandidateSHA与候选停止状态不变，无WSL/共享数据库操作、企业外发、push/main合并。
