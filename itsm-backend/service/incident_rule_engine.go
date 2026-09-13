@@ -350,7 +350,7 @@ func (a *MetricCollectionAction) Execute(ctx context.Context, incident *ent.Inci
 func (a *MetricCollectionAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
 	incidentService := NewIncidentService(tx.Client(), a.logger, a.execution)
 
-	_, err := incidentService.CreateIncidentMetric(ctx, &dto.CreateIncidentMetricRequest{
+	_, err := incidentService.CreateIncidentMetricTx(ctx, tx, &dto.CreateIncidentMetricRequest{
 		IncidentID:  incident.ID,
 		MetricType:  a.MetricType,
 		MetricName:  a.MetricName,

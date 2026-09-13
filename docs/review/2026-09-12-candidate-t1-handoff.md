@@ -255,3 +255,14 @@ S3、其他业务域/共享写入口、生产者成员准入和 S4–S6 仍未�
 - `s3-rule-bookkeeping-build.json`：后端全量构建 exit 0。
 
 独立 reviewer `review_execution_scope_s1` 限定审阅未发现阻断问题；按其建议补充成功/条件不匹配/结果失败及 hook 命中断言。此检查点保护规则记录和统计，不替代 notification/metric 动作本身、独立事件/指标/CI/重大升级和其他域的写入准入；全量扫描起始查询成员过滤仍属 S4 未完成项。S3–S6、B3、T3/T4 和 G2/G3 不因此通过。固定 CandidateSHA 不变，无候选启动、共享数据库操作、B 配置修改、推送或 main 合并。
+
+
+### B2 S3 Incident 时间线、指标和重大升级（2026-09-13）
+
+在 `bebd1f726` 上接入 CreateIncidentEvent/Metric 的独立事务入口和显式 Tx 入口。原活动记录主体存在性校验改为同事务按租户解析 WorkItem，并在 INSERT 前 Bind/Require；UpdateIncident、EscalateIncident、重大升级和规则 MetricAction 内部调用显式传入原 tx，不从 transaction client 再开事务。重大升级的权威读取进入同一写事务，原状态校验和 WorkItem version CAS 保留，首次写入前核验成员。
+
+私有证据位于 B2 本地目录：`s3-incident-supplemental-red.log` 是修复前历史活动记录被接受的 RED；`s3-incident-supplemental-final-pg.log` 是完整真实 PostgreSQL TestCandidateIntakeCreationBoundary PASS、未 skip，新增历史 Event/Metric/Major 拒绝及完整 WorkItem/扩展字段、记录数不变；新成员提交成功；显式 EventTx/MetricTx 原事务内可见、其他连接不可见且调用方回滚；重大升级在 timeline 已写后注入错误，主记录、扩展和活动记录全部回滚。`s3-incident-supplemental-regression.log` 的四包定向 Incident/intake 回归 PASS。
+
+`s3-incident-supplemental-action-pg.log` 在上述完整真实 PG 套件上补充实际规则解析的 collect_metric 成功提交及指标已 INSERT 后注入错误，证明 MetricAction 调用方事务回滚、不遗留指标；PASS、未 skip。`s3-incident-supplemental-build.json` 后端全量构建 exit 0。
+
+独立 reviewer `review_execution_scope_s1` 确认生产内部 Tx 传递及新增边界无阻断。scope 不替代原 actor/RBAC 校验；本增量未改变其权限契约。CI、NotificationAction、其他 Incident monitoring/alert 直接写入口和其他业务域仍待盘点/接入；完整 S3、后台周期与队列隔离、鉴权修复和 G2/G3 尚未完成。未启动候选、操作共享环境或推送/合并 main，固定 CandidateSHA 保持不变。

@@ -203,6 +203,115 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.Equal(t, created.WorkItemID, *relationEvent.ExecutionWorkItemID)
 	})
 
+	t.Run("Incident event metric and major escalation reject history", func(t *testing.T) {
+		svc := service.NewIncidentService(runtime, zap.NewNop().Sugar(), policy)
+		fresh, err := app.Create(ctx, identity, command("incident-supplemental", "incident"))
+		require.NoError(t, err)
+		for _, kind := range []string{"event", "metric", "major"} {
+			for _, id := range []int{historical.ProfessionalReference.ID, fresh.ProfessionalReference.ID} {
+				extension := owner.Incident.GetX(ctx, id)
+				before, _ := json.Marshal(owner.Ticket.GetX(ctx, extension.WorkItemID))
+				beforeExtension, _ := json.Marshal(extension)
+				events, metrics := owner.IncidentEvent.Query().CountX(ctx), owner.IncidentMetric.Query().CountX(ctx)
+				switch kind {
+				case "event":
+					_, err = svc.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{IncidentID: id, EventType: "note", EventName: "scope note", Status: "active", Severity: "info", Source: "test"}, tenant.ID)
+				case "metric":
+					_, err = svc.CreateIncidentMetric(ctx, &dto.CreateIncidentMetricRequest{IncidentID: id, MetricType: "scope", MetricName: "scope metric", MetricValue: 1}, tenant.ID)
+				case "major":
+					err = svc.EscalateToMajorIncident(ctx, id, actor.ID, tenant.ID, &dto.EscalateMajorIncidentRequest{ImpactScope: "high", BusinessImpact: "candidate test"})
+				}
+				if id == historical.ProfessionalReference.ID {
+					require.ErrorContains(t, err, "execution scope denied")
+					after, _ := json.Marshal(owner.Ticket.GetX(ctx, extension.WorkItemID))
+					afterExtension, _ := json.Marshal(owner.Incident.GetX(ctx, id))
+					require.JSONEq(t, string(before), string(after))
+					require.JSONEq(t, string(beforeExtension), string(afterExtension))
+					require.Equal(t, events, owner.IncidentEvent.Query().CountX(ctx))
+					require.Equal(t, metrics, owner.IncidentMetric.Query().CountX(ctx))
+				} else {
+					require.NoError(t, err)
+					if kind == "metric" {
+						require.Equal(t, metrics+1, owner.IncidentMetric.Query().CountX(ctx))
+					} else {
+						require.Equal(t, events+1, owner.IncidentEvent.Query().CountX(ctx))
+					}
+				}
+			}
+		}
+		require.True(t, owner.Incident.GetX(ctx, fresh.ProfessionalReference.ID).IsMajorIncident)
+		for _, kind := range []string{"event", "metric"} {
+			tx, err := runtime.Tx(ctx)
+			require.NoError(t, err)
+			func() {
+				defer tx.Rollback()
+				events, metrics := owner.IncidentEvent.Query().CountX(ctx), owner.IncidentMetric.Query().CountX(ctx)
+				if kind == "event" {
+					_, err = svc.CreateIncidentEventTx(ctx, tx, &dto.CreateIncidentEventRequest{IncidentID: fresh.ProfessionalReference.ID, EventType: "note", EventName: "rollback", Status: "active", Severity: "info", Source: "test"}, tenant.ID)
+					require.NoError(t, err)
+					require.Equal(t, events+1, tx.IncidentEvent.Query().CountX(ctx))
+				} else {
+					_, err = svc.CreateIncidentMetricTx(ctx, tx, &dto.CreateIncidentMetricRequest{IncidentID: fresh.ProfessionalReference.ID, MetricType: "scope", MetricName: "rollback", MetricValue: 1}, tenant.ID)
+					require.NoError(t, err)
+					require.Equal(t, metrics+1, tx.IncidentMetric.Query().CountX(ctx))
+				}
+				require.Equal(t, events, owner.IncidentEvent.Query().CountX(ctx))
+				require.Equal(t, metrics, owner.IncidentMetric.Query().CountX(ctx))
+				require.NoError(t, tx.Rollback())
+				require.Equal(t, events, owner.IncidentEvent.Query().CountX(ctx))
+				require.Equal(t, metrics, owner.IncidentMetric.Query().CountX(ctx))
+			}()
+		}
+		faultTarget, err := app.Create(ctx, identity, command("major-rollback", "incident"))
+		require.NoError(t, err)
+		before, _ := json.Marshal(owner.Ticket.GetX(ctx, faultTarget.WorkItemID))
+		beforeExtension, _ := json.Marshal(owner.Incident.GetX(ctx, faultTarget.ProfessionalReference.ID))
+		events := owner.IncidentEvent.Query().CountX(ctx)
+		injected := errors.New("injected major escalation timeline failure")
+		failEvent := true
+		runtime.IncidentEvent.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+				value, err := next.Mutate(ctx, mutation)
+				if err == nil && failEvent {
+					failEvent = false
+					return nil, injected
+				}
+				return value, err
+			})
+		})
+		err = svc.EscalateToMajorIncident(ctx, faultTarget.ProfessionalReference.ID, actor.ID, tenant.ID, &dto.EscalateMajorIncidentRequest{ImpactScope: "high", BusinessImpact: "rollback"})
+		require.ErrorIs(t, err, injected)
+		require.False(t, failEvent)
+		after, _ := json.Marshal(owner.Ticket.GetX(ctx, faultTarget.WorkItemID))
+		afterExtension, _ := json.Marshal(owner.Incident.GetX(ctx, faultTarget.ProfessionalReference.ID))
+		require.JSONEq(t, string(before), string(after))
+		require.JSONEq(t, string(beforeExtension), string(afterExtension))
+		require.Equal(t, events, owner.IncidentEvent.Query().CountX(ctx))
+
+		engine := service.NewIncidentRuleEngine(runtime, zap.NewNop().Sugar(), policy)
+		rule := owner.IncidentRule.Create().SetName("metric transaction").SetRuleType("monitoring").SetTenantID(tenant.ID).SetIsActive(true).
+			SetConditions(map[string]interface{}{}).SetActions([]map[string]interface{}{{"type": "collect_metric", "metric_type": "scope", "metric_name": "rule metric", "metric_value": float64(1)}}).SaveX(ctx)
+		current := owner.Incident.Query().Where(incident.IDEQ(fresh.ProfessionalReference.ID)).WithWorkItem().OnlyX(ctx)
+		metrics := owner.IncidentMetric.Query().CountX(ctx)
+		require.NoError(t, engine.ExecuteRule(ctx, rule, current, tenant.ID))
+		require.Equal(t, metrics+1, owner.IncidentMetric.Query().CountX(ctx))
+		failMetric := true
+		runtime.IncidentMetric.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+				value, err := next.Mutate(ctx, mutation)
+				if err == nil && failMetric {
+					failMetric = false
+					return nil, injected
+				}
+				return value, err
+			})
+		})
+		require.ErrorIs(t, engine.ExecuteRule(ctx, rule, current, tenant.ID), injected)
+		require.False(t, failMetric)
+		require.Equal(t, metrics+1, owner.IncidentMetric.Query().CountX(ctx), "metric action must roll back its caller transaction")
+
+	})
+
 	t.Run("rule execution bookkeeping preserves historical incidents", func(t *testing.T) {
 		engine := service.NewIncidentRuleEngine(runtime, zap.NewNop().Sugar(), policy)
 		fresh, err := app.Create(ctx, identity, command("rule-bookkeeping", "incident"))

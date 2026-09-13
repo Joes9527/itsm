@@ -393,7 +393,7 @@ func (s *IncidentService) updateIncident(ctx context.Context, tx *ent.Tx, id int
 	incidentEntity.Edges.WorkItem = workItem
 
 	// 记录事件更新活动
-	_, err = s.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
+	_, err = s.CreateIncidentEventTx(ctx, tx, &dto.CreateIncidentEventRequest{
 		IncidentID:  id,
 		EventType:   "update",
 		EventName:   "事件更新",
@@ -440,32 +440,61 @@ func (s *IncidentService) validateIncidentAssignee(ctx context.Context, assignee
 	return nil
 }
 
-func (s *IncidentService) ensureActiveIncident(ctx context.Context, incidentID, tenantID int) error {
-	exists, err := s.client.Incident.Query().
-		Where(incident.IDEQ(incidentID), incidentTenantScope(tenantID)).
-		Exist(ctx)
+// requireIncidentExecutionTx resolves the owning WorkItem in the caller's write transaction.
+func (s *IncidentService) requireIncidentExecutionTx(ctx context.Context, tx *ent.Tx, incidentID, tenantID int) error {
+	if s == nil || tx == nil || s.execution == nil {
+		return common.NewForbiddenError("incident execution policy and transaction required")
+	}
+	current, err := tx.Incident.Query().Where(incident.IDEQ(incidentID), incidentTenantScope(tenantID)).Only(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to validate incident: %w", err)
 	}
-	if !exists {
-		return fmt.Errorf("incident not found")
+	if err := s.execution.BindEnt(ctx, tx, tenantID); err != nil {
+		return incidentExecutionFailure(err)
+	}
+	if err := s.execution.RequireEntMembers(ctx, tx, tenantID, current.WorkItemID); err != nil {
+		return incidentExecutionFailure(err)
 	}
 	return nil
 }
 
 // CreateIncidentEvent 创建事件活动记录
 func (s *IncidentService) CreateIncidentEvent(ctx context.Context, req *dto.CreateIncidentEventRequest, tenantID int) (*dto.IncidentEventResponse, error) {
-	s.logger.Infow("Creating incident event", "incident_id", req.IncidentID, "type", req.EventType)
-	if err := s.ensureActiveIncident(ctx, req.IncidentID, tenantID); err != nil {
+	if s == nil || s.client == nil || s.execution == nil {
+		return nil, common.NewForbiddenError("incident execution policy required")
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
 		return nil, err
 	}
+	defer tx.Rollback()
+	result, err := s.CreateIncidentEventTx(ctx, tx, req, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// CreateIncidentEventTx preserves the caller's transaction for the child record.
+func (s *IncidentService) CreateIncidentEventTx(ctx context.Context, tx *ent.Tx, req *dto.CreateIncidentEventRequest, tenantID int) (*dto.IncidentEventResponse, error) {
+	if req == nil {
+		return nil, common.NewValidationError("incident event request required", nil)
+	}
+	if err := s.requireIncidentExecutionTx(ctx, tx, req.IncidentID, tenantID); err != nil {
+		return nil, err
+	}
+
+	s.logger.Infow("Creating incident event", "incident_id", req.IncidentID, "type", req.EventType)
 
 	occurredAt := time.Now()
 	if req.OccurredAt != nil {
 		occurredAt = *req.OccurredAt
 	}
 
-	eventBuilder := s.client.IncidentEvent.Create().
+	eventBuilder := tx.IncidentEvent.Create().
 		SetIncidentID(req.IncidentID).
 		SetEventType(req.EventType).
 		SetEventName(req.EventName).
@@ -504,17 +533,41 @@ func (s *IncidentService) CreateIncidentEvent(ctx context.Context, req *dto.Crea
 
 // CreateIncidentMetric 创建事件指标
 func (s *IncidentService) CreateIncidentMetric(ctx context.Context, req *dto.CreateIncidentMetricRequest, tenantID int) (*dto.IncidentMetricResponse, error) {
-	s.logger.Infow("Creating incident metric", "incident_id", req.IncidentID, "type", req.MetricType)
-	if err := s.ensureActiveIncident(ctx, req.IncidentID, tenantID); err != nil {
+	if s == nil || s.client == nil || s.execution == nil {
+		return nil, common.NewForbiddenError("incident execution policy required")
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
 		return nil, err
 	}
+	defer tx.Rollback()
+	result, err := s.CreateIncidentMetricTx(ctx, tx, req, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// CreateIncidentMetricTx preserves the caller's transaction for the child record.
+func (s *IncidentService) CreateIncidentMetricTx(ctx context.Context, tx *ent.Tx, req *dto.CreateIncidentMetricRequest, tenantID int) (*dto.IncidentMetricResponse, error) {
+	if req == nil {
+		return nil, common.NewValidationError("incident metric request required", nil)
+	}
+	if err := s.requireIncidentExecutionTx(ctx, tx, req.IncidentID, tenantID); err != nil {
+		return nil, err
+	}
+
+	s.logger.Infow("Creating incident metric", "incident_id", req.IncidentID, "type", req.MetricType)
 
 	measuredAt := time.Now()
 	if req.MeasuredAt != nil {
 		measuredAt = *req.MeasuredAt
 	}
 
-	metric, err := s.client.IncidentMetric.Create().
+	metric, err := tx.IncidentMetric.Create().
 		SetIncidentID(req.IncidentID).
 		SetMetricType(req.MetricType).
 		SetMetricName(req.MetricName).
@@ -743,7 +796,7 @@ func (s *IncidentService) escalateIncident(ctx context.Context, tx *ent.Tx, req 
 	incidentEntity.Edges.WorkItem = workItem
 
 	// 记录升级活动
-	_, err = s.CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
+	_, err = s.CreateIncidentEventTx(ctx, tx, &dto.CreateIncidentEventRequest{
 		IncidentID:  req.IncidentID,
 		EventType:   "escalation",
 		EventName:   "事件升级",
@@ -865,7 +918,19 @@ func (s *IncidentService) toIncidentMetricResponse(metric *ent.IncidentMetric) *
 // EscalateToMajorIncident 将事件升级为重大事件（Major Incident）
 // 写入影响评估信息，提升严重程度，并记录审计事件
 func (s *IncidentService) EscalateToMajorIncident(ctx context.Context, id, userID, tenantID int, req *dto.EscalateMajorIncidentRequest) error {
-	incidentEntity, err := s.client.Incident.Query().
+	if s == nil || s.client == nil || s.execution == nil {
+		return common.NewForbiddenError("incident execution policy required")
+	}
+	if req == nil {
+		return common.NewValidationError("major incident request required", nil)
+	}
+	tx, err := s.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	incidentEntity, err := tx.Incident.Query().
 		Where(incident.IDEQ(id), incidentTenantScope(tenantID)).
 		WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
 	if err != nil {
@@ -892,11 +957,9 @@ func (s *IncidentService) EscalateToMajorIncident(ctx context.Context, id, userI
 		"escalatedAt":       now,
 	}
 
-	tx, err := s.client.Tx(ctx)
-	if err != nil {
+	if err := s.requireIncidentExecutionTx(ctx, tx, id, tenantID); err != nil {
 		return err
 	}
-	defer tx.Rollback()
 	_, err = tx.Ticket.UpdateOneID(incidentEntity.WorkItemID).Where(ticket.TenantID(tenantID), ticket.Version(incidentEntity.Edges.WorkItem.Version), ticket.DeletedAtIsNil()).AddVersion(1).SetUpdatedAt(now).Save(ctx)
 	if err != nil {
 		return err
@@ -910,7 +973,7 @@ func (s *IncidentService) EscalateToMajorIncident(ctx context.Context, id, userI
 	if err != nil {
 		return err
 	}
-	_, eventErr := NewIncidentService(tx.Client(), s.logger, s.execution).CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
+	_, eventErr := s.CreateIncidentEventTx(ctx, tx, &dto.CreateIncidentEventRequest{
 		IncidentID: id, EventType: "major_incident_escalation", EventName: "升级为重大事件",
 		Description: strings.TrimSpace(req.BusinessImpact), Status: "active", Severity: "critical",
 		Data: map[string]interface{}{
