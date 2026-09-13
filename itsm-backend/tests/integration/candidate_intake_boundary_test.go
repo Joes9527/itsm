@@ -2531,6 +2531,51 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.JSONEq(t, before, after)
 	})
 
+	t.Run("BPMN escalation rechecks scope at mutation", func(t *testing.T) {
+		for _, closeBeforeWrite := range []bool{false, true} {
+			key := fmt.Sprintf("bpmn-escalation-scope-%t", closeBeforeWrite)
+			fresh, err := app.Create(ctx, identity, command(key, "generic"))
+			require.NoError(t, err)
+			dep := owner.ProcessDeployment.Create().SetDeploymentID(key).SetDeploymentName(key).SetTenantID(tenant.ID).SaveX(ctx)
+			xml := `<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="https://example.invalid"><bpmn:process id="escalation" isExecutable="true"><bpmn:startEvent id="Start"/><bpmn:serviceTask id="Current"/><bpmn:endEvent id="End"/><bpmn:sequenceFlow id="S1" sourceRef="Start" targetRef="Current"/><bpmn:sequenceFlow id="S2" sourceRef="Current" targetRef="End"/></bpmn:process></bpmn:definitions>`
+			def := owner.ProcessDefinition.Create().SetKey(key).SetName(key).SetVersion("1").SetIsLatest(true).SetBpmnXML([]byte(xml)).SetDeploymentID(dep.ID).SetTenantID(tenant.ID).SaveX(ctx)
+			instance := owner.ProcessInstance.Create().SetProcessInstanceID(key).SetProcessDefinitionKey(def.Key).SetProcessDefinitionID(def.ID).SetBusinessKey(fmt.Sprintf("generic:%d", fresh.WorkItemID)).SetBusinessType("generic").SetBusinessID(fresh.WorkItemID).SetExecutionWorkItemID(fresh.WorkItemID).SetInitiator(fmt.Sprint(actor.ID)).SetStatus("running").SetCurrentActivityID("Current").SetTenantID(tenant.ID).SaveX(ctx)
+			callback := owner.ProcessCallbackOutbox.Create().SetExecutionKey(key).SetTenantID(tenant.ID).SetProcessInstanceID(instance.ID).SetCallbackKind("service_task").SetHandlerID("ticket_service_handler").SetTaskType("ticket_task").SetAction("escalate").SetElementID("Current").SetVariables(map[string]interface{}{"escalate_to": "critical", "escalation_reason": "candidate workflow"}).SetNextAttemptAt(time.Now().Add(-time.Hour)).SaveX(ctx)
+			t.Cleanup(func() {
+				_, e := ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+				assert.NoError(t, e)
+				// Quarantine the deliberately failed fixture so later sweeps cannot reuse it.
+				_, e = ownerDB.ExecContext(ctx, "UPDATE process_callback_outboxes SET status='blocked' WHERE id=$1 AND status<>'completed'", callback.ID)
+				assert.NoError(t, e)
+			})
+			var before, after string
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, fresh.WorkItemID).Scan(&before))
+			handler := &candidateEscalationHandler{TicketServiceTaskHandler: bpmn.NewTicketServiceTaskHandler(runtime, zap.NewNop().Sugar())}
+			if closeBeforeWrite {
+				handler.before = func() {
+					_, e := ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='closed' WHERE id=$1", scopeID)
+					require.NoError(t, e)
+				}
+			}
+			engine := service.NewCustomProcessEngine(runtime, zap.NewNop().Sugar(), policy).(*service.CustomProcessEngine)
+			engine.SetCallbackCandidateClient(clients.System)
+			engine.CallbackRegistry().RegisterHandler(handler)
+			_, sweepErr := engine.ProcessPendingCallbacks(context.Background(), key, 1)
+			_, restoreErr := ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+			require.NoError(t, restoreErr)
+			require.Equal(t, 1, handler.calls, "real engine must reach the owning handler after claim")
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, fresh.WorkItemID).Scan(&after))
+			if closeBeforeWrite {
+				require.Error(t, sweepErr)
+				require.JSONEq(t, before, after, "claim-time admission does not authorize a later closed-scope write")
+			} else {
+				require.NoError(t, sweepErr)
+				require.Equal(t, "critical", owner.Ticket.GetX(ctx, fresh.WorkItemID).Priority)
+				require.Equal(t, "escalated", owner.Ticket.GetX(ctx, fresh.WorkItemID).Status)
+			}
+		}
+	})
+
 	t.Run("manual escalation persists Feishu update intent", func(t *testing.T) {
 		receiver := &candidateFeishuUpdater{destination: "local-test-destination"}
 		registry := connector.NewRegistry()
@@ -2940,4 +2985,19 @@ func (r *candidateFeishuUpdater) UpdateTask(_ context.Context, guid string, task
 		result.GUID = r.responseGUID
 	}
 	return &result, nil
+}
+
+// Delegates to the real handler after a deterministic post-claim invalidation.
+type candidateEscalationHandler struct {
+	*bpmn.TicketServiceTaskHandler
+	before func()
+	calls  int
+}
+
+func (h *candidateEscalationHandler) Execute(ctx context.Context, task *ent.ProcessTask, variables map[string]interface{}) (*bpmn.CallbackEffect, error) {
+	h.calls++
+	if h.before != nil {
+		h.before()
+	}
+	return h.TicketServiceTaskHandler.Execute(ctx, task, variables)
 }

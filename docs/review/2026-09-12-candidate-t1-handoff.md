@@ -631,3 +631,14 @@ Outbox 并发/回滚测试提交 `56879f7c9`；独立 reviewer 确认限定结�
 证据位于candidate-delivery/b2：s3-manual-owner-baseline.log修改前受影响测试PASS；s3-manual-owner-tests.log先将旧测试转为新所有者后PASS；s3-manual-owner-final-regression.log service/controller/bootstrap相关生命周期/升级/专业边界/Outbox/Feishu定向PASS；s3-manual-owner-pg.log完整TestCandidateIntakeCreationBoundary PASS，无skip；build.json全后端exit0。中间编译发现遗漏旧helper表格调用，已补齐；helper fixture依赖Repository缺失亦修正。这些不是业务RED，本增量移除重复代码而不新增业务行为。独立review_execution_scope_s1复审无阻断。
 
 Standard/super_admin测试不替代普通角色授权和候选真实路径；候选边界证据来自上述私有PG16全套。BPMN、Feishu旧直发/历史GET副作用、其它共享写入口及S3/S4/S5/S6/B3/T3/T4/G2/G3仍待完成。CandidateSHA不变、候选保持停止，无WSL/共享环境变更、企业实发、推送或main合并。
+
+
+### B2 S3 BPMN升级原事务缺口有效RED（2026-09-13）
+
+在 `5ff8d1dcf` 后检索真实引擎：executeClaimedServiceTaskCallback先执行Ticket handler，再开启引擎推进事务。原escalateTicket依自己的client先通知再写Ticket，未重新核验执行范围、当前callback租约或操作回执；execution key仅幂等标签。不能用引擎领取准入替代业务原写事务准入，也不能直接套用HTTP升级命令改变流程escalate_to/notify_admin_ids/escalated语义。
+
+新增真实私有PG测试 `BPMN escalation rechecks scope at mutation`：构造新candidate member及持久service_task callback，实际ProcessPendingCallbacks领取/恢复权威变量，再通过嵌入真实handler的测试wrapper在调用前确定性关闭私有scope。未关闭的独立正向先成功升级至critical/escalated。关闭路径sweep返回错误，但原Ticket整行JSON仍priority medium→critical、status new→escalated、updated_at改变而version仍1，保全断言明确FAIL。证据 `s3-bpmn-escalation-scope-red.log` exit1，无skip；scope在sweep返回后恢复，另有cleanup兜底恢复并将故意失败callback隔离为blocked，避免后续扫描重用；fixture数据库结束删除。只有新成员/该原业务写的证据，process/instance/callback为owner前置夹具，不是完整BPMN启动/入队链、历史目标或真实UI/provider验收。独立review_execution_scope_s1确认RED有效；cleanup表名初次拼写错误已按Ent实际表名修复，最终重跑仅保全断言失败。
+
+此检查点只有失败回归，生产实现尚未修复，当前候选边界测试不全绿，不沿用前轮PASS。独立只读设计审阅确认：引擎传播当前callback id/tenant/execution key/lease owner/attempt可信身份，独立workflow command在原事务锁定重读持久callback及instance/完成task，核验结构WorkItem/actor/current权限/接收人/范围与version；输入取持久动作参数，原事务CAS/审计receipt/站内通知意图共同提交，重复仅凭合法receipt。领域提交后的引擎推进失败靠receipt重放，仍明确是两个事务。scope撤销、租约丢失、通知/审计写后回滚及推进失败后重放均须实际验证。
+
+目标仍为设计规定的完整候选交付；S3/S4/S5/S6/B3/T3/T4/G2/G3未完成，CandidateSHA保持原值，候选未启动，无共享环境/WSL变更、企业实发、推送或main合并。
