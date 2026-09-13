@@ -544,6 +544,63 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			require.Zero(t, n)
 		})
 	})
+	t.Run("AI readonly tool requires durable audit", func(t *testing.T) {
+		var installed bool
+		require.NoError(t, ownerDB.QueryRow(`SELECT to_regclass('public.execution_tool_invocations') IS NOT NULL`).Scan(&installed))
+		if !installed {
+			_, err := ownerDB.ExecContext(ctx, migration.GetMigrationSQL(migration.ToolInvocationExecutionScopeVersion))
+			require.NoError(t, err)
+		}
+		_, err := ownerDB.ExecContext(ctx, "GRANT SELECT ON execution_tool_invocations TO "+runtimeRole)
+		require.NoError(t, err)
+		repository := aidomain.NewEntRepository(runtime, policy)
+		tools := service.NewToolRegistry(nil, service.NewIncidentService(runtime, zap.NewNop().Sugar(), policy), nil, runtime)
+		svc := aidomain.NewService(repository, zap.NewNop().Sugar(), nil, tools, nil, nil, nil, nil, nil, nil, nil)
+		result, _, err := svc.ExecuteTool(ctx, actor.ID, tenant.ID, actor.Role, "get_incident_stats", map[string]interface{}{})
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		beforeCalls := owner.ToolInvocation.Query().CountX(ctx)
+		var beforeOrigins int
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_tool_invocations`).Scan(&beforeOrigins))
+		var armed atomic.Bool
+		armed.Store(true)
+		injected := errors.New("private audit post-insert failure")
+		runtime.ToolInvocation.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
+				value, err := next.Mutate(c, m)
+				if err == nil && m.Op() == ent.OpCreate && armed.CompareAndSwap(true, false) {
+					return nil, injected
+				}
+				return value, err
+			})
+		})
+		result, _, err = svc.ExecuteTool(ctx, actor.ID, tenant.ID, actor.Role, "get_incident_stats", map[string]interface{}{})
+		require.ErrorIs(t, err, aidomain.ErrToolAuditUnavailable)
+		require.ErrorIs(t, err, injected)
+		require.Nil(t, result)
+		require.False(t, armed.Load())
+		require.Equal(t, beforeCalls, owner.ToolInvocation.Query().CountX(ctx))
+		var afterOrigins int
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_tool_invocations`).Scan(&afterOrigins))
+		require.Equal(t, beforeOrigins, afterOrigins)
+		// A failed business read must still commit its failed audit record.
+		_, err = ownerDB.ExecContext(ctx, "REVOKE SELECT ON incidents FROM "+runtimeRole)
+		require.NoError(t, err)
+		defer func() {
+			_, err := ownerDB.ExecContext(ctx, "GRANT SELECT ON incidents TO "+runtimeRole)
+			require.NoError(t, err)
+		}()
+		result, _, err = svc.ExecuteTool(ctx, actor.ID, tenant.ID, actor.Role, "get_incident_stats", map[string]interface{}{})
+		require.Error(t, err)
+		require.NotErrorIs(t, err, aidomain.ErrToolAuditUnavailable)
+		require.Nil(t, result)
+		require.Equal(t, beforeCalls+1, owner.ToolInvocation.Query().CountX(ctx))
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_tool_invocations`).Scan(&afterOrigins))
+		require.Equal(t, beforeOrigins+1, afterOrigins)
+		var auditStatus string
+		require.NoError(t, ownerDB.QueryRow(`SELECT status FROM tool_invocations ORDER BY id DESC LIMIT 1`).Scan(&auditStatus))
+		require.Equal(t, "failed", auditStatus)
+	})
 	t.Run("AI approval preserves historical invocation", func(t *testing.T) {
 		var installed bool
 		require.NoError(t, ownerDB.QueryRow(`SELECT to_regclass('public.execution_tool_invocations') IS NOT NULL`).Scan(&installed))

@@ -69,11 +69,7 @@ func (h *Handler) ExecuteTool(c *gin.Context) {
 
 	// P2-6: 写工具（!ReadOnly）目前仍走审批流，agent v1 直接拒绝执行
 	toolDef := h.svc.tools.GetTool(req.Name)
-	if toolDef == nil {
-		common.Fail(c, common.UnknownToolCode, "unknown tool: "+req.Name)
-		return
-	}
-	if !toolDef.ReadOnly {
+	if toolDef != nil && !toolDef.ReadOnly {
 		common.Fail(c, common.ForbiddenCode, "tool requires approval; write tools are not enabled in agent v1")
 		return
 	}
@@ -87,16 +83,20 @@ func (h *Handler) ExecuteTool(c *gin.Context) {
 
 	res, _, err := h.svc.ExecuteTool(c.Request.Context(), userID, tenantID, role, req.Name, req.Args)
 	if err != nil {
+		if errors.Is(err, ErrToolAuditUnavailable) {
+			common.Fail(c, common.ServiceUnavailableCode, "工具审计暂不可用")
+			return
+		}
 		// P2-6: 区分权限拒绝与未知工具的错误码
 		if errors.Is(err, ErrToolPermissionDenied) {
-			common.Fail(c, common.ToolPermissionDeniedCode, err.Error())
+			common.Fail(c, common.ToolPermissionDeniedCode, "tool permission denied")
 			return
 		}
 		if errors.Is(err, ErrUnknownTool) {
-			common.Fail(c, common.UnknownToolCode, err.Error())
+			common.Fail(c, common.UnknownToolCode, "unknown tool")
 			return
 		}
-		common.Fail(c, common.InternalErrorCode, err.Error())
+		common.Fail(c, common.InternalErrorCode, "tool execution failed")
 		return
 	}
 

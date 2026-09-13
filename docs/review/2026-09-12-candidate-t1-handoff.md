@@ -1043,3 +1043,11 @@ S5不可处理消息的完整处置、进程重启及其它异步入口继续未
 `s5-tool-approval-green.log` 原历史改写RED→范围拒绝/整行保全；`s5-tool-approval-atomic.log` 真实PG新审批提交后queue缺失、原决定重试首次整行不变、相反决定冲突、当前role撤权后重放拒绝、拒绝actor/time记录、实际UPDATE后注入故障整行回滚均PASS。`s5-tool-approval-concurrent.log` 补同/反决定的双UPDATE barrier，两请求均到原pending更新前，一成功一冲突，随后获胜原请求重放整行不变，race PASS。相同决定并发loser允许409后再重试，不声称两请求立即都成功；此记录是审批决定保全，不是完整不可变执行结果回执。
 
 `s5-tool-approval-regression.log` handlers/ai与bootstrap全包race PASS，独立review_execution_scope_s1最终只读复核无新增阻断。`s5-tool-approval-full-private.log` 完整私有PG/Redis/MinIO候选边界与恢复回归race PASS，无skip/race；`s5-tool-approval-build.log` 全后端build exit0，git diff --check通过。首次业务写原事务、执行结果回写、审计失败传播和041角色准入仍未完成；候选未启动、固定CandidateSHA不变，所有交付门禁未据此放行，无共享环境修改、企业外呼、push/main合并。
+
+### B2 S5 工具审计失败传播（2026-09-13）
+
+原未知工具路径忽略审计写入错误，`s5-tool-audit-red.log` 证明底层cause丢失。现ExecuteTool在执行前校验参数序列化；未知工具、权限拒绝、只读成功及失败均等待审计持久化，使用固定结果标签，errors.Join保留执行与审计cause。审计失败返回ErrToolAuditUnavailable且不返回工具结果；HTTP不再提前跳过未知工具审计，固定503隐藏底层原因，其余失败也不返回原错误。直接写工具仍走既有拒绝入口。
+
+真实PG回归使用真实registry/IncidentService/AI仓库：成功读取后审计INSERT故障使调用与scope登记共同回滚；撤销本测试角色的incidents SELECT使实际工具读取失败，但成功新增一条failed审计和登记，未误报审计不可用。权限在测试结束恢复。HTTP实际handler测试确认503及cause隐藏。`s5-tool-audit-packages.log` AI/bootstrap全包race PASS；`s5-tool-audit-full-private.log` 完整私有PG/Redis/MinIO候选边界、Webhook/审计与Stream恢复回归race PASS，无skip/race；`s5-tool-audit-build.log` 全后端build exit0。独立review_execution_scope_s1复核无新增阻断，git diff --check通过。
+
+证据仅为本机私有PG16等依赖。查询与审计不在同一事务，未实现请求重试去重；直接测试身份/可选缓存RBAC不代表完整HTTP权限验收。首次业务写原事务来源复核、结果条件回写、041运行角色准入等仍未完成。CandidateSHA与候选未启动状态不变，S5/T3/T4/G2/G3未放行，无B环境/共享数据库变更、企业外呼、push/main合并。

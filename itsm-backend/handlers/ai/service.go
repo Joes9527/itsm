@@ -104,6 +104,11 @@ func (s *Service) ExecuteTool(ctx context.Context, userID, tenantID int, role, n
 		return nil, 0, fmt.Errorf("tool registry not initialized")
 	}
 
+	argsBytes, encodeErr := json.Marshal(args)
+	if encodeErr != nil {
+		return nil, 0, fmt.Errorf("encode tool arguments: %w", encodeErr)
+	}
+	argsStr := string(argsBytes)
 	// === P2-6 Gate 2: 工具级 RBAC 校验 ===
 	permCheck := "skipped"
 	permReason := ""
@@ -112,8 +117,8 @@ func (s *Service) ExecuteTool(ctx context.Context, userID, tenantID int, role, n
 	toolDef := s.tools.GetTool(name)
 	if toolDef == nil {
 		// 未知工具：记录 denied 审计，返回错误
-		s.recordToolAudit(ctx, tenantID, userID, role, name, args, "denied", "unknown tool", "", nil, false)
-		return nil, 0, ErrUnknownTool
+		auditErr := s.recordToolAudit(ctx, tenantID, userID, role, name, argsStr, "denied", "unknown tool", "denied")
+		return nil, 0, errors.Join(ErrUnknownTool, auditErr)
 	}
 
 	if IsToolRBACEnabled() && s.entClient != nil && role != "" && role != "super_admin" {
@@ -132,8 +137,8 @@ func (s *Service) ExecuteTool(ctx context.Context, userID, tenantID int, role, n
 
 	// 影子模式：只记录日志，不拦截；执行模式：拒绝请求
 	if !allowed && IsToolRBACEnforce() {
-		s.recordToolAudit(ctx, tenantID, userID, role, name, args, permCheck, permReason, "", nil, false)
-		return nil, 0, fmt.Errorf("%w: %s", ErrToolPermissionDenied, permReason)
+		auditErr := s.recordToolAudit(ctx, tenantID, userID, role, name, argsStr, permCheck, permReason, "denied")
+		return nil, 0, errors.Join(fmt.Errorf("%w: %s", ErrToolPermissionDenied, permReason), auditErr)
 	}
 
 	// Check if needs approval
@@ -141,20 +146,22 @@ func (s *Service) ExecuteTool(ctx context.Context, userID, tenantID int, role, n
 
 	if !needsApproval {
 		res, err := s.tools.Execute(ctx, tenantID, name, args)
-		// 只读工具执行也记录审计（AGENTS.md: AI tool invocation must produce audit logs）
-		// P2-6: 同步写入 RBAC 校验结果字段
-		if err == nil {
-			s.recordToolAudit(ctx, tenantID, userID, role, name, args, permCheck, permReason, "executed", nil, false)
+		status := "executed"
+		if err != nil {
+			status = "failed"
 		}
-		return res, 0, err
+		auditErr := s.recordToolAudit(ctx, tenantID, userID, role, name, argsStr, permCheck, permReason, status)
+		if err != nil || auditErr != nil {
+			return nil, 0, errors.Join(err, auditErr)
+		}
+		return res, 0, nil
 	}
 
 	// 写工具：创建 pending invocation，等待审批
-	argsStr, _ := json.Marshal(args)
 	inv, err := s.repo.CreateToolInvocation(ctx, &ToolInvocation{
 		TenantID:         tenantID,
 		ToolName:         name,
-		Arguments:        string(argsStr),
+		Arguments:        argsStr,
 		Status:           "pending",
 		NeedsApproval:    true,
 		ApprovalState:    "pending",
@@ -170,21 +177,18 @@ func (s *Service) ExecuteTool(ctx context.Context, userID, tenantID int, role, n
 	return nil, inv.ID, nil
 }
 
-// recordToolAudit 统一记录只读工具执行审计，包含 P2-6 RBAC 校验结果
-func (s *Service) recordToolAudit(ctx context.Context, tenantID, userID int, role, toolName string, args map[string]interface{}, permCheck, permReason, status string, result *string, needsApproval bool) {
-	argsStr, _ := json.Marshal(args)
-	_, _ = s.repo.CreateToolInvocation(ctx, &ToolInvocation{
-		TenantID:         tenantID,
-		ToolName:         toolName,
-		Arguments:        string(argsStr),
-		Status:           status,
-		NeedsApproval:    needsApproval,
-		ApprovalState:    "auto",
-		UserID:           userID,
-		PermissionCheck:  permCheck,
-		PermissionReason: permReason,
-		RoleSnapshot:     role,
-	})
+var ErrToolAuditUnavailable = errors.New("tool audit is unavailable")
+
+// recordToolAudit persists only fixed outcome labels, never raw execution errors.
+func (s *Service) recordToolAudit(ctx context.Context, tenantID, userID int, role, toolName, args, permCheck, permReason, status string) error {
+	if s.repo == nil {
+		return ErrToolAuditUnavailable
+	}
+	_, err := s.repo.CreateToolInvocation(ctx, &ToolInvocation{TenantID: tenantID, ToolName: toolName, Arguments: args, Status: status, NeedsApproval: false, ApprovalState: "auto", UserID: userID, PermissionCheck: permCheck, PermissionReason: permReason, RoleSnapshot: role})
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrToolAuditUnavailable, err)
+	}
+	return nil
 }
 
 var ErrToolExecutionPending = errors.New("tool approval committed; execution remains pending")
