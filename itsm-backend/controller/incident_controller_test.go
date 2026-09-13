@@ -388,3 +388,47 @@ func TestConvertToProblemControllerRestrictedMSPVisibility(t *testing.T) {
 	require.Zero(t, f.client.Problem.Query().CountX(context.Background()))
 	require.Zero(t, f.client.IntakeRequest.Query().CountX(context.Background()))
 }
+
+func TestIncidentAlertHTTPRejectsInactiveActorWithForbidden(t *testing.T) {
+	for _, endpoint := range []string{"alert", "escalate"} {
+		t.Run(endpoint, func(t *testing.T) {
+			f := newConversionControllerFixture(t, false)
+			ctx := context.Background()
+			logger := zaptest.NewLogger(t).Sugar()
+			policy := executionfixture.Standard()
+			owner := service.NewIncidentService(f.client, logger, policy)
+			alerts := service.NewIncidentAlertingService(f.client, logger, policy)
+			owner.SetAlertCreator(alerts)
+			controller := NewIncidentController(owner, nil, nil, alerts, nil, logger)
+			recipient := f.client.User.Create().SetTenantID(f.tenant.ID).SetUsername("active-recipient").SetName("Recipient").SetEmail("recipient@example.invalid").SetPasswordHash("test").SetRole("agent").SetActive(true).SaveX(ctx)
+			f.client.User.UpdateOne(f.actor).SetActive(false).ExecX(ctx)
+			router := gin.New()
+			router.Use(func(c *gin.Context) {
+				c.Set("tenant_id", f.tenant.ID)
+				c.Set("user_id", f.actor.ID)
+				c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: f.tenant.ID, Tenant: f.tenant})
+				c.Next()
+			})
+			router.POST("/alert", controller.CreateIncidentAlert)
+			router.POST("/escalate", controller.EscalateIncident)
+			body := fmt.Sprintf(`{"incidentId":%d,"alertType":"monitoring","alertName":"actor check","message":"actor check","channels":["in_app"],"recipients":["recipient@example.invalid"]}`, f.incident.ID)
+			if endpoint == "escalate" {
+				body = fmt.Sprintf(`{"incidentId":%d,"escalationLevel":1,"reason":"actor check","notifyUsers":[%d]}`, f.incident.ID, recipient.ID)
+			}
+			before, err := json.Marshal(f.client.Ticket.GetX(ctx, f.incident.WorkItemID))
+			require.NoError(t, err)
+			audits := f.client.AuditLog.Query().CountX(ctx)
+			req := httptest.NewRequest(http.MethodPost, "/"+endpoint, bytes.NewBufferString(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+			require.Equal(t, http.StatusForbidden, w.Code, w.Body.String())
+			require.Zero(t, f.client.IncidentAlert.Query().CountX(ctx))
+			require.Zero(t, f.client.OutboxEvent.Query().CountX(ctx))
+			require.Equal(t, audits, f.client.AuditLog.Query().CountX(ctx))
+			after, err := json.Marshal(f.client.Ticket.GetX(ctx, f.incident.WorkItemID))
+			require.NoError(t, err)
+			require.JSONEq(t, string(before), string(after))
+		})
+	}
+}

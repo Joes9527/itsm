@@ -15,7 +15,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -86,20 +85,10 @@ import (
 // owners, enforced tenant driver and restricted production directory snapshot.
 // No application runtime or external delivery is started.
 func TestCandidateIntakeCreationBoundary(t *testing.T) {
-	socket := os.Getenv("CANDIDATE_SCOPE_TEST_SOCKET")
-	if socket == "" {
-		t.Skip("requires an explicitly isolated PostgreSQL socket")
-	}
-	require.True(t, filepath.IsAbs(socket))
-	marker, err := os.ReadFile(filepath.Join(socket, "candidate-test-instance"))
-	require.NoError(t, err)
-	require.Equal(t, "itsm-candidate-isolated-test\n", string(marker))
+	socket, dsn := candidatePrivatePostgresDSN(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	name := "intake_scope_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	dsn := func(db, role string) string {
-		return fmt.Sprintf("host=%s port=25439 dbname=%s user=%s sslmode=disable", socket, db, role)
-	}
 	admin, err := sql.Open("postgres", dsn("postgres", "candidate_test_owner"))
 	require.NoError(t, err)
 	defer admin.Close()
@@ -212,7 +201,7 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	legacyOwner.SetDirectorySnapshot(sameTransactionDirectory{})
 	legacyResult, err := legacyOwner.ApplyIncidentCommand(ctx, legacyCommand)
 	require.NoError(t, err)
-	legacyAlert, err := service.NewIncidentAlertingService(owner, zap.NewNop().Sugar(), executionfixture.Standard()).CreateIncidentAlert(ctx, &dto.CreateIncidentAlertRequest{IncidentID: historical.ProfessionalReference.ID, AlertType: "legacy", AlertName: "legacy alert", Message: "historical fixture", Channels: []string{"in_app"}, Recipients: []string{actor.Email}}, tenant.ID)
+	legacyAlert, err := service.NewIncidentAlertingService(owner, zap.NewNop().Sugar(), executionfixture.Standard()).CreateIncidentAlert(service.WithIncidentAlertActor(ctx, actor.ID, "user", "legacy-alert-fixture"), &dto.CreateIncidentAlertRequest{IncidentID: historical.ProfessionalReference.ID, AlertType: "legacy", AlertName: "legacy alert", Message: "historical fixture", Channels: []string{"in_app"}, Recipients: []string{actor.Email}}, tenant.ID)
 	require.NoError(t, err)
 	_, err = ownerDB.ExecContext(ctx, "UPDATE outbox_events SET execution_work_item_id=NULL")
 	require.NoError(t, err) // pre-039 historical fixture only
@@ -2328,8 +2317,12 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 	})
 
 	t.Run("Incident CI and alert writes require membership", func(t *testing.T) {
+		ctx := service.WithIncidentAlertActor(ctx, actor.ID, "user", "candidate-alert-fixture")
 		svc := service.NewIncidentService(runtime, zap.NewNop().Sugar(), policy)
 		alerts := service.NewIncidentAlertingService(runtime, zap.NewNop().Sugar(), policy)
+		alertMailer := service.NewEmailService(candidateNotificationEmailConfig(t), zap.NewNop().Sugar())
+		alertMailer.SetDeliveryTargetDependencies(nil, policy)
+		alerts.SetEmailService(alertMailer)
 		fresh, err := app.Create(ctx, identity, command("incident-ci-alert", "incident"))
 		require.NoError(t, err)
 		ciType := owner.CIType.Create().SetName("candidate CI type").SetTenantID(tenant.ID).SaveX(ctx)

@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"itsm-backend/handlers/shared/workitemmutation"
 	"strconv"
 	"strings"
@@ -340,10 +341,21 @@ func (c *IncidentController) EscalateIncident(ctx *gin.Context) {
 	if !ok {
 		return
 	}
-	response, err := c.incidentService.EscalateIncident(ctx.Request.Context(), &req, tenantID)
+	userID, err := middleware.GetUserID(ctx)
+	if err != nil {
+		common.Fail(ctx, common.AuthFailedCode, "获取用户ID失败")
+		return
+	}
+	deliveryCtx := service.WithIncidentAlertActor(ctx.Request.Context(), userID, "user", ctx.GetString("request_id"))
+	response, err := c.incidentService.EscalateIncident(deliveryCtx, &req, tenantID)
 	if err != nil {
 		if err.Error() == "incident not found" {
 			common.Fail(ctx, common.ParamErrorCode, "事件不存在")
+			return
+		}
+		var appErr *common.AppError
+		if errors.As(err, &appErr) && appErr.Code == common.ErrCodeForbidden {
+			common.Forbidden(ctx, appErr.Message)
 			return
 		}
 		c.logger.Errorw("Failed to escalate incident", "error", err)
@@ -614,6 +626,11 @@ func (c *IncidentController) CreateIncidentAlert(ctx *gin.Context) {
 	deliveryCtx := service.WithIncidentAlertActor(ctx.Request.Context(), userID, "user", ctx.GetString("request_id"))
 	response, err := c.alertingService.CreateIncidentAlert(deliveryCtx, &req, tenantID)
 	if err != nil {
+		var appErr *common.AppError
+		if errors.As(err, &appErr) && appErr.Code == common.ErrCodeForbidden {
+			common.Forbidden(ctx, appErr.Message)
+			return
+		}
 		c.logger.Errorw("Failed to create incident alert", "error", err)
 		common.Fail(ctx, common.InternalErrorCode, "创建事件告警失败")
 		return

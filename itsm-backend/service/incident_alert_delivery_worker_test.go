@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"itsm-backend/ent"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/outboxevent"
 
@@ -23,7 +24,7 @@ type recordingIncidentAlertEmailSender struct {
 
 type blockingIncidentAlertEmailSender struct{}
 
-func (blockingIncidentAlertEmailSender) SendForTenant(ctx context.Context, _ int, _ *EmailMessage) error {
+func (blockingIncidentAlertEmailSender) SendToTarget(ctx context.Context, _ int, _ string, _ EmailTarget, _ *EmailMessage) error {
 	<-ctx.Done()
 	return newEmailTransportError("smtp", "before_send", emailNotAccepted, ctx.Err())
 }
@@ -35,12 +36,41 @@ type incidentAlertEmailDelivery struct {
 
 func testOutboxRegistry(t *testing.T, sender incidentAlertEmailSender) *OutboxEventTypeRegistry {
 	t.Helper()
-	registry, err := NewOutboxEventTypeRegistry([]OutboxDeliveryHandler{NewIncidentAlertDeliveryHandler(sender)}, KafDelegateRequestedEventType)
+	registry, err := NewOutboxEventTypeRegistry([]OutboxDeliveryHandler{outboxWorkerEmailDomainDouble{sender: sender}}, KafDelegateRequestedEventType)
 	require.NoError(t, err)
 	return registry
 }
 
-func (s *recordingIncidentAlertEmailSender) SendForTenant(_ context.Context, tenantID int, message *EmailMessage) error {
+// These SQLite tests exercise the shared worker's retry/terminal/recovery
+// policy through an explicit domain double. Real Incident source, row locks,
+// target binding and receipts are tested in incident_email_target_postgres_test.go.
+type outboxWorkerEmailDomainDouble struct{ sender incidentAlertEmailSender }
+
+func (outboxWorkerEmailDomainDouble) EventType() string { return incidentAlertDeliveryEventType }
+func (h outboxWorkerEmailDomainDouble) Deliver(ctx context.Context, event *ent.OutboxEvent) error {
+	var fixture incidentAlertDeliveryPayload
+	if err := json.Unmarshal(event.Payload, &fixture); err != nil {
+		return blockOutboxDelivery("invalid worker fixture")
+	}
+	if fixture.Channel != "email" {
+		return blockOutboxDelivery("unsupported incident alert delivery channel")
+	}
+	message := &EmailMessage{To: fixture.Recipients, Subject: "[ITSM Alert] " + fixture.Subject, BodyText: fixture.Message, DeliveryID: event.EventID, DisableProviderFallback: true}
+	var err error
+	if transport, ok := h.sender.(*EmailService); ok {
+		// A transport-only worker test has no domain source fixture. Target/source
+		// validation is covered by the separate real PostgreSQL owner/worker tests.
+		err = transport.SendForTenant(ctx, fixture.TenantID, message)
+	} else {
+		err = h.sender.SendToTarget(ctx, fixture.TenantID, "outbox", fixture.Target, message)
+	}
+	if err != nil && emailTransportOutcomeOf(err) == emailAcceptanceUnknown {
+		return blockOutboxDelivery("delivery_unknown: email transport result is ambiguous")
+	}
+	return err
+}
+
+func (s *recordingIncidentAlertEmailSender) SendToTarget(_ context.Context, tenantID int, _ string, _ EmailTarget, message *EmailMessage) error {
 	if s.failuresRemaining > 0 {
 		s.failuresRemaining--
 		return newEmailTransportError("smtp", "dial", emailNotAccepted, errors.New("temporary email route failure"))

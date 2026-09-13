@@ -1574,3 +1574,33 @@ s5-email-queue-binding-red.log先复现新邮件无target、缺owner仍提交以
 最终s5-email-queue-service-final.log相关service/BPMN/引导具名race PASS（非service全量），s5-email-queue-disabled-producer.log禁用下原生产与保全race PASS；s5-email-queue-full-private-final.log既定私有PG16/Redis/MinIO suite race PASS，均无FAIL/SKIP/DATA RACE；s5-email-queue-build.log全后端build exit0。初始失败记录保留：fixture-regression前旧夹具失败、full-private-initial历史入口失败、private-history后续缺配置失败；均由最终验证覆盖。独立最终只读审阅无本增量提交阻断，git diff --check通过，所有本轮Go进程已退出。
 
 原邮件队列目标重绑RED现由真实队列分别邮箱/端点/应用身份零外呼、稳定发送与in-flight未知不重发关闭；仅关闭notification v2 producer/worker这项，不关闭完整邮件专业目标扩展合同。仍需Incident原outbox typed目标/版本/摘要/receipt/旧载荷策略，Graph候选local_only实际准入及其余S5/S6/G2/T3/T4/G3。固定CandidateSHA不变，候选停止，无WSL/共享数据库操作、企业外发、push/main合并。
+
+
+### B2 S5 Incident邮件原outbox接入进行中（2026-09-14，未提交）
+
+已在58af40837之上新增Incident v2 payload（WorkItem/Incident/Alert/tenant/event/channel/单recipient/content/actor/source/correlation/EmailTarget），原tx按outbox owner描述目标；缺owner拒绝并要求整个原事务回滚。bootstrap将既有EmailService注入IncidentAlertingService；接受审计沿原incident_alert.delivery_accepted扩展为manifest，绑定精确tenant/actor/operation及每event完整typed payload digest，不新增队列。消费端改SendToTarget，v1拒绝补绑。
+
+handler构造显式client/policy；实现持久publishing claim/token/lease/attempt marker FOR UPDATE预检、strict unknown/trailing JSON、Alert→Incident→WorkItem tenant/member检查、原接受manifest身份和摘要、发送后重验及stable投递审计，写回失败unknown且未声明ReplaySafe。复审指出两项并已编码收紧：manifest先按eventID要求唯一且digest匹配；既有投递receipt读取并精确比对resource/action/path/method/status/correlation/digest/resultStatus/resultVersion，冲突拒绝，匹配保守unknown不重发。上述新分支尚未完成真实PG验证。
+
+RED：s5-incident-email-target-red-corrected.log证明v1能借当前sender外发与缺目标仍创建告警；initial-green仅早期两项。新source-tests/diagnostic发现producer默认本地时区与SQLite日期比较令intent未领取，新增Incident NextAttemptAt与lease比较UTC后source-utc.log实际进入claim，但SQLite明确不支持FOR UPDATE，测试仍FAIL。不得通过去掉生产锁或假装缺依赖拒绝来造绿。现有testOutboxRegistry临时nil deps仅为WIP编译，必须更新，不能算真实consumer证据。
+
+下一步：将本轮新加尚未提交的跨域/发送回执测试放到tests/integration独立candidate_scope私有PG文件，从现有intake测试提取共享的纯私有socket/marker/随机DB/有界清理helper，不复制环境识别逻辑、不扩大巨大journey。真实原producer→outbox/worker→Incident handler→本机SMTP验证stable、tampered recipient/target、缺接受审计、extra JSON、重复manifest、既有receipt匹配/冲突、发送后receipt/MarkPublished失败及恢复不重发。旧worker单测用明确domain double保留worker策略断言，不冒称Incident真实发送。owner PG证据不替代候选受限角色/成员准入；随后更新旧Incident规则/告警fixture并跑全私有suite。
+
+actor/source仍需逐调用入口核对：HTTP WithIncidentAlertActor(user)、incident rule原event actor、escalation command/scheduler；当前默认actor0/system是来源元数据，不是现行授权证明。至少拒绝负actor和不合法actor/source组合，不能宣称actor/RBAC授权已完成。Incident此增量未提交，完整S5/S6/G2/T3/T4/G3继续未完成，CandidateSHA/候选停止不变，无WSL/共享数据库或企业外发。
+
+
+### B2 S5 Incident邮件协议与显式操作者检查点（2026-09-14）
+
+本检查点取代上一节未验证状态：新加且尚未提交的跨域测试已放入tests/integration/incident_email_target_postgres_test.go，提取candidate_private_postgres_test.go共用原私有socket/marker校验，不读应用DSN；每例随机owner数据库，关闭client后有界DROP。原intake用例仅复用环境识别逻辑。保留生产FOR UPDATE，不以SQLite绕过。旧worker测试现使用明确domain double验证worker策略；缺target真实producer负例独立保留。
+
+真实原producer→PG outbox→worker→Incident handler→本机SMTP覆盖12例：stable、v1拒绝、recipient/target篡改、缺接受审计、未知JSON字段/渠道、重复事件manifest、匹配/冲突旧投递回执、投递审计写后故障、MarkPublished写后故障。正例核验SMTP RCPT与实际正文；两个故障均在next.Mutate成功后注入，验证原写入回滚及恢复不重发。稳定receipt不被恢复覆盖。摘要经UseNumber解析后规范化map JSON生成，不依赖Go结构体字段顺序；不宣称拒绝重复JSON key。
+
+审阅进一步收紧actor：原创建tx首次INSERT前要求显式正actor/非空source，复用同tx的tenant/active查询，不再补0/system。旧HTTP升级入口传播middleware登录身份。s5-incident-actor-red.log六类拒绝先复现全部错误接受；green验证missing/negative/zero-system/blank-source/foreign/inactive拒绝且alert/notification/outbox/audit零残留，valid通过。HTTP真实handler先复现两个500，改为Forbidden及errors.As识别包装cause；两个接口403且原WorkItem和队列/审计保全。第一轮common.AsAppError无法识别包装错误的失败记录保留，最终测试覆盖。
+
+旧正向告警/规则/升级夹具补显式目标与actor，producer-only SMTP调用会导致测试失败；原缺依赖、历史与成员拒绝负例保留。候选成员journey仅补任务私有目标及调用身份，不替换受限runtime角色。独立最终只读复核无本有界增量提交阻断。
+
+验证日志位于任务b2目录：s5-incident-email-private-pg-channel.log，s5-incident-final-regression-unwrapped.log（service/controller具名race；bootstrap无匹配用例，不冒称其全量测试），最终私有suite与build结果见下。非service全量；标准owner SMTP协议证据不替代candidate受限角色实际发送、Graph激活或当前RBAC。
+
+仍须补claim专项负例、candidate受限角色发送、Graph候选local_only准入、consumer现行RBAC/并发撤权，再推进其余S5/S6/G2/T3/T4/G3。CandidateSHA仍为d7470a32dbb87acc9b5e4d9a895a146410723561，候选未启动，无WSL/共享数据库操作、企业外发、push或main合并。
+
+最终s5-incident-final-private.log既定私有PG16/Redis/MinIO完整suite（含新12例）race PASS；s5-incident-final-build-unwrapped.log全后端build exit0。最终具名回归/私有suite无FAIL/SKIP/DATA RACE，git diff --check通过，所有本轮Go进程已退出。

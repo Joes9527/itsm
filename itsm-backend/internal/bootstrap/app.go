@@ -451,6 +451,7 @@ func NewApplication() *Application {
 	// 控制器依赖
 	incidentMonitoringService := service.NewIncidentMonitoringService(client, sugar)
 	incidentAlertingService := service.NewIncidentAlertingService(client, sugar, executionPolicy)
+	incidentAlertingService.SetEmailService(emailService)
 	incidentService.SetAlertCreator(incidentAlertingService)
 	ticketDependencyService := service.NewTicketDependencyService(client, sugar)
 	analyticsService := service.NewAnalyticsService(client, sugar)
@@ -713,7 +714,7 @@ func NewApplication() *Application {
 			}
 			tasks, ok := conn.(service.FeishuTaskCreator)
 			return tasks, ok
-		}), service.NewIncidentAlertDeliveryHandler(emailService), service.NewEmailAttachmentsDeliveryHandler(client, ticketAttachmentService, newTenantGraphInboundProvider(connectorManager)), service.NewEmailConfirmationDeliveryHandler(client, newTenantGraphInboundProvider(connectorManager)), service.NewWorkItemRelationCreatedDeliveryHandler(client, clients.IntakeDirectorySnapshot(), ticketNotificationService, sugar), service.NewWorkItemRelationRemovedDeliveryHandler(client, clients.IntakeDirectorySnapshot(), ticketNotificationService, sugar), service.NewChangeOutcomeDeliveryHandler(client, clients.IntakeDirectorySnapshot(), ticketNotificationService, sugar), service.NewProblemResolvedDeliveryHandler(client, clients.IntakeDirectorySnapshot(), ticketNotificationService, sugar)},
+		}), service.NewIncidentAlertDeliveryHandler(client, executionPolicy, emailService), service.NewEmailAttachmentsDeliveryHandler(client, ticketAttachmentService, newTenantGraphInboundProvider(connectorManager)), service.NewEmailConfirmationDeliveryHandler(client, newTenantGraphInboundProvider(connectorManager)), service.NewWorkItemRelationCreatedDeliveryHandler(client, clients.IntakeDirectorySnapshot(), ticketNotificationService, sugar), service.NewWorkItemRelationRemovedDeliveryHandler(client, clients.IntakeDirectorySnapshot(), ticketNotificationService, sugar), service.NewChangeOutcomeDeliveryHandler(client, clients.IntakeDirectorySnapshot(), ticketNotificationService, sugar), service.NewProblemResolvedDeliveryHandler(client, clients.IntakeDirectorySnapshot(), ticketNotificationService, sugar)},
 		service.NewWebhookDeliveryHandler(client, executionPolicy, connectorManager),
 	)
 	if err != nil {

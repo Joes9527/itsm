@@ -65,6 +65,8 @@ func TestNotificationRuleActionUsesAuthoritativeAlertCreator(t *testing.T) {
 	require.NoError(t, err)
 	incident := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "notification-action")
 	creator := NewIncidentAlertingService(client, zap.NewNop().Sugar(), executionfixture.Standard())
+	ctx = configureIncidentAlertProducerTarget(t, ctx, creator, tenant.ID)
+	ctx = WithIncidentAlertActor(ctx, actor.ID, "user", "producer-fixture")
 	action := &NotificationAction{execution: executionfixture.Standard(), Channels: []string{"email"}, Recipients: []string{actor.Email}, Message: "act", Severity: "high", alertCreator: creator, client: client}
 	require.NoError(t, action.Execute(ctx, incident, tenant.ID))
 	require.Equal(t, incident.ID, client.IncidentAlert.Query().OnlyX(ctx).IncidentID)
@@ -90,6 +92,8 @@ func TestIncidentAlertExecutionReferenceUsesWorkItemNotAlertOrIncidentID(t *test
 	}
 	incident := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "reference")
 	creator := NewIncidentAlertingService(client, zap.NewNop().Sugar(), executionfixture.Standard())
+	ctx = configureIncidentAlertProducerTarget(t, ctx, creator, tenant.ID)
+	ctx = WithIncidentAlertActor(ctx, actor.ID, "user", "producer-fixture")
 	req := &dto.CreateIncidentAlertRequest{IncidentID: incident.ID, AlertType: "monitoring", AlertName: "reference", Message: "reference", Severity: "high"}
 	_, err = creator.CreateIncidentAlert(ctx, req, tenant.ID)
 	require.NoError(t, err)
