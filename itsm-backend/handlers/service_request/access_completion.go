@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	"itsm-backend/dto"
@@ -116,14 +117,24 @@ func (s *Service) ValidateAccessCompletionReplay(ctx context.Context, client *en
 		return unavailable
 	}
 	result, expiry, err := ValidateAccessResult(raw, *snapshot)
+	// PostgreSQL stores timestamps at microsecond precision. Compare the immutable
+	// receipt at that precision; the action digest still owns exact request replay.
 	if err != nil || result.EvidenceRef != ledger.IdempotencyKey || saved.EvidenceRef != result.EvidenceRef ||
 		string(saved.Outcome) != result.Outcome || string(saved.Baseline) != result.Baseline ||
 		string(saved.Provider) != string(result.Provider) || saved.SubjectID != result.SubjectID || saved.GroupID != result.GroupID ||
-		!saved.VerifiedAt.Equal(result.VerifiedAt) {
+		!accessReceiptTimestamp(saved.VerifiedAt).Equal(accessReceiptTimestamp(result.VerifiedAt)) {
 		return unavailable
 	}
-	if (expiry == nil) != (saved.ExpiresAt == nil) || (expiry != nil && !expiry.Equal(*saved.ExpiresAt)) {
+	if (expiry == nil) != (saved.ExpiresAt == nil) || (expiry != nil && !accessReceiptTimestamp(*expiry).Equal(accessReceiptTimestamp(*saved.ExpiresAt))) {
 		return unavailable
 	}
 	return nil
+}
+
+// PostgreSQL timestamp parsing rounds fractional seconds to microseconds, with
+// ties to even. Round only the fractional second, avoiding UnixNano overflow for
+// valid RFC3339 dates outside its narrower range.
+func accessReceiptTimestamp(value time.Time) time.Time {
+	micros := time.Duration(math.RoundToEven(float64(value.Nanosecond()) / 1000))
+	return value.Truncate(time.Second).Add(micros * time.Microsecond)
 }

@@ -327,3 +327,22 @@ B2 私有证据（均位于本机 candidate-delivery/b2）：
 - `s3-request-build.json`：后端全量构建 exit 0。`s3-request-tagged-compile.log`：integration_postgres 标签下六包编译通过，仅编译，不代表目标环境 E2E。
 
 独立 reviewer `review_execution_scope_s1` 复核生产原事务、构造迁移和新增故障断言无阻断，并确认回归/最终 PG PASS。仍未验证真实 BPMN/KAF AccessCompletion 的双租户上下文传递和完整 task/ledger 回滚；直接域 callback 测试不能替代真实入口验收。update/provision 的初始读取仍在原有事务外，保留版本 CAS，本次没有声称全部读取均在事务内。共享能力、其他生产者/消费者、S4–S6/B3 仍未完成，S3 不勾选，候选不启动，T3/T4/G2/G3 不放行。固定 CandidateSHA 不变，无共享环境操作、推送或 main 合并。
+
+
+### B2 S3 KAF access completion 与持久化时间精度（2026-09-13）
+
+在 `42795a901` 后继续真实完成入口验收。新增私有 PG 子测试使用生产 enforce tenant client、candidate policy、CustomProcessEngine.CompleteKafDelegatedTask 和 Requested Item contributor。迁移039前历史 Requested Item 无成员拒绝且原数据不变；新成员在最终 ledger fence 实际 UPDATE 后注入错误，Ticket/ServiceRequest/ProcessTask/ProcessInstance/ledger 完整字段和 receipt/access result/audit/outbox 数量整体回滚；成功完成后 WorkItem resolved、task/instance completed，同一 completion 重放保持上述快照不变。
+
+本次发现并修复真实精度缺陷：合法 RFC3339Nano verifiedAt 持久化至 PostgreSQL 微秒时间列后，原精确 Equal 误拒原凭据重放。仅在 receipt 校验时按微秒精度比较 verifiedAt/expiry，秒内采用 ties-to-even，匹配 PG 的半微秒行为；不改原请求、持久化原值、主体/目标/证据校验或外层 exact action digest。helper 不使用 UnixNano，避免其较窄日期范围溢出。
+
+证据均在本机 candidate-delivery/b2：
+
+- `s3-kaf-integration-compile.log`：实际 `integration` 标签下 service/service_request 编译 PASS。之前 `integration_postgres` 标签编译未覆盖 bpmn_kaf_completion_integration_test.go，本条补齐编译证据，仍不是运行该目标环境套件。
+- `s3-kaf-access-pg.log`：新完成分支通过，但 fixture policy 因 snapshot FK 清理失败污染后续测试；现按 snapshot→policy 显式检查清理错误，使用独立历史 Requested Item。
+- `s3-kaf-access-final-pg.log`：前置 ledger 缺少 RequestDigest，重放如约拒绝；补齐显式 fixture preclaimed digest，未放宽校验，未声称实际生成/领取验证。
+- `s3-kaf-access-verified-pg.log` / `s3-kaf-access-nanosecond-red.log`：普通时钟样本 PASS；Mac time.Now 并不能确保亚微秒样本，后者文件名含 red 但实际为 PASS，不作为失败证据。
+- `s3-kaf-access-submicrosecond-red.log`：明确添加123ns后原精确比较失败，证明真实重放缺陷。初版 Go Round 修复通过123/789ns，但 `s3-kaf-access-half-micro-pg.log` 在500ns中点失败；独立 reviewer 指出的边界已修复为取偶舍入。
+- `s3-kaf-access-final-precision-pg.log`：最终完整真实私有 PG TestCandidateIntakeCreationBoundary PASS、未 skip，覆盖123/789/500/1500ns与上述拒绝/回滚/完成/重放。
+- `s3-kaf-access-final-regression.log`：service_request/service/controller 的 KAF/Access/SSLVPN 定向回归 PASS；`s3-kaf-access-final-build.json`：后端全量构建 exit 0。
+
+独立 reviewer `review_execution_scope_s1` 复核原事务、hook 顺序、fixture 保全、时间精度实现与最终 PG PASS 无阻断。普通 tenantctx 与 BPMN tenant/user 上下文一同进入真实引擎已验证；HTTP认证到入口的传递仅代码核查。审批决策、snapshot 和 executing ledger 是测试前置状态，未验证 HTTP、ExecuteAction 初始 claim/digest 生成/最终记账、实际审批或 provider；本轮不代表整个 KAF 周期已准入，相关 S3/S4 待办保留。共享能力及 S4–S6/B3 尚未完成，固定 CandidateSHA 不变，未操作共享环境、启动候选、推送或合并 main。
