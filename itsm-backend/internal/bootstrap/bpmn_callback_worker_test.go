@@ -102,7 +102,7 @@ func TestApplicationStartsOneNotificationDeliveryWorkerAndStopsOnCancellation(t 
 func TestBootstrapEmailGraphProviderLookupUsesRequestedTenant(t *testing.T) {
 	registry := connector.NewRegistry()
 	registry.Register(func() connector.Connector { return msgraph.New() })
-	manager := connector.NewManager(registry, zaptest.NewLogger(t).Sugar())
+	manager := connector.NewManager(registry, zaptest.NewLogger(t).Sugar(), nil)
 	t.Cleanup(manager.CloseAll)
 	for _, fixture := range []struct {
 		tenantID int

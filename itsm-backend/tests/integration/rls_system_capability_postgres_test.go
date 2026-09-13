@@ -174,7 +174,7 @@ func TestPostgresRLSRuntimeConnectorRestore(t *testing.T) {
 	clients, _ := runtimeClients(t, f)
 	registry := connector.NewRegistry()
 	registry.Register(func() connector.Connector { return webhook.New() })
-	manager := connector.NewManager(registry, zap.NewNop().Sugar())
+	manager := connector.NewManager(registry, zap.NewNop().Sugar(), nil)
 	owner := controller.NewConnectorController(manager, registry, nil, zap.NewNop().Sugar(), clients.Tenant, clients.System)
 	require.NoError(t, owner.LoadAll(tenantctx.SystemContext(f.ctx, "test:restore", "restore persisted connectors")))
 	for _, id := range []int{f.tenant.ID, other.ID} {

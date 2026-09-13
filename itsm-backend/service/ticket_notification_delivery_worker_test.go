@@ -171,7 +171,7 @@ func configureDurableNotificationConnector(t *testing.T, service *TicketNotifica
 	t.Helper()
 	registry := connector.NewRegistry()
 	registry.Register(func() connector.Connector { return fake })
-	manager := connector.NewManager(registry, zaptest.NewLogger(t).Sugar())
+	manager := connector.NewManager(registry, zaptest.NewLogger(t).Sugar(), nil)
 	connectorName := fake.name
 	if connectorName == "" {
 		connectorName = "webhook"
@@ -247,7 +247,7 @@ func TestTicketNotificationWorkerRoutesLogicalEmailThroughBootstrapEmailWiring(t
 	// logical email delivery channel. The durable worker must use EmailService.
 	_, registered := connector.Default().Get("msgraph-email")
 	require.True(t, registered)
-	fixture.notifications.SetConnectorManager(connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar()))
+	fixture.notifications.SetConnectorManager(connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), nil))
 	graph := &durableNotificationGraphSender{}
 	emailService := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
 	requestedTenantIDs := make([]int, 0, 1)
@@ -270,7 +270,7 @@ func TestTicketNotificationWorkerRoutesLogicalEmailThroughBootstrapEmailWiring(t
 func TestTicketNotificationWorkerRetriesEmailServiceFailure(t *testing.T) {
 	fixture := newDurableNotificationFixture(t, "notification-email-retry")
 	row := fixture.enqueueExternalCCWithChannel(t, "email")
-	fixture.notifications.SetConnectorManager(connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar()))
+	fixture.notifications.SetConnectorManager(connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), nil))
 	graph := &durableNotificationGraphSender{sendErr: newEmailTransportError("graph", "connect", emailNotAccepted, errors.New("graph temporarily unavailable"))}
 	emailService := NewEmailService(EmailConfig{}, zaptest.NewLogger(t).Sugar())
 	emailService.SetGraphProvider(func(_ int) (GraphMailSender, string, bool) {
@@ -344,7 +344,7 @@ func TestTicketNotificationWorkerMarksPermanentTargetFailureTerminal(t *testing.
 	fixture := newDurableNotificationFixture(t, "notification-terminal-target")
 	row := fixture.enqueueExternalCC(t)
 	row = fixture.client.TicketNotification.UpdateOneID(row.ID).SetChannel("sms").SaveX(fixture.ctx)
-	fixture.notifications.SetConnectorManager(connector.NewManager(connector.NewRegistry(), zaptest.NewLogger(t).Sugar()))
+	fixture.notifications.SetConnectorManager(connector.NewManager(connector.NewRegistry(), zaptest.NewLogger(t).Sugar(), nil))
 
 	now := time.Now().Add(time.Hour)
 	fixture.notifications.now = func() time.Time { return now }

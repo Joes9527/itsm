@@ -379,7 +379,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		defer receiver.Close()
 		reg := connector.NewRegistry()
 		reg.Register(func() connector.Connector { return &candidateHealthProbe{target: receiver.URL} })
-		manager := connector.NewManager(reg, zap.NewNop().Sugar())
+		manager := connector.NewManager(reg, zap.NewNop().Sugar(), policy)
 		defer manager.CloseAll()
 		// Existing runtime instances have no candidate enrollment or WorkItem authority.
 		for _, id := range []int{tenant.ID, tenant.ID + 1} {
@@ -391,6 +391,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		router.GET("/connectors", ctrl.ListMarket)
 		router.GET("/connectors/configs", ctrl.ListConfigs)
 		router.GET("/connectors/health", ctrl.Health)
+		router.POST("/connectors/health", ctrl.RefreshHealth)
 		router.GET("/connectors/lifecycle", ctrl.Lifecycle)
 		for _, route := range []string{"/connectors", "/connectors/configs", "/connectors/health", "/connectors/lifecycle"} {
 			t.Run(route, func(t *testing.T) {
@@ -405,6 +406,11 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				assert.Equal(t, beforeForeign, foreignCalls.Load(), "tenant GET must never probe another tenant")
 			})
 		}
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/connectors/health", nil).WithContext(ctx))
+		require.Equal(t, http.StatusForbidden, response.Code)
+		require.Zero(t, calls.Load())
+		require.Zero(t, foreignCalls.Load())
 	})
 	memberCount := func() int {
 		var n int
@@ -2920,7 +2926,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		receiver := &candidateNotificationConnector{}
 		registry := connector.NewRegistry()
 		registry.Register(func() connector.Connector { return receiver })
-		manager := connector.NewManager(registry, zap.NewNop().Sugar())
+		manager := connector.NewManager(registry, zap.NewNop().Sugar(), nil)
 		defer manager.CloseAll()
 		require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Type: connector.TypeEmail, Provider: "local-candidate-test", Enabled: true}))
 		notifications.SetConnectorManager(manager)
@@ -3235,7 +3241,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			defer endpoint.Close()
 			registry := connector.NewRegistry()
 			registry.Register(func() connector.Connector { return webhookconnector.New() })
-			manager := connector.NewManager(registry, zap.NewNop().Sugar())
+			manager := connector.NewManager(registry, zap.NewNop().Sugar(), nil)
 			defer manager.CloseAll()
 			provision := func(provider string) {
 				require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: provider, Enabled: true, Settings: map[string]interface{}{"url": endpoint.URL}}))
@@ -3245,7 +3251,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			subscriber := service.NewWebhookEventSubscriber(manager, zap.NewNop().Sugar(), runtime, policy)
 			outboxBefore, auditBefore := owner.OutboxEvent.Query().CountX(ctx), owner.AuditLog.Query().CountX(ctx)
 			require.Error(t, subscriber.HandleContext(ctx, map[string]interface{}{"eventType": "sla.breached", "tenantId": fmt.Sprint(tenant.ID)}))
-			empty := connector.NewManager(registry, zap.NewNop().Sugar())
+			empty := connector.NewManager(registry, zap.NewNop().Sugar(), nil)
 			require.Error(t, service.NewWebhookEventSubscriber(empty, zap.NewNop().Sugar(), runtime, policy).HandleContext(ctx, envelope))
 			injected := errors.New("webhook actual insert rollback")
 			faultStage := ""
@@ -3453,7 +3459,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 					freshEnv.EventID = sourceRow.EventID
 					freshEnv.Payload = raw
 					freshEnv.OccurredAt = captured.(interface{ OccurredAt() time.Time }).OccurredAt()
-					targetManager := connector.NewManager(registry, zap.NewNop().Sugar())
+					targetManager := connector.NewManager(registry, zap.NewNop().Sugar(), nil)
 					defer targetManager.CloseAll()
 					require.NoError(t, targetManager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: "redirect", Enabled: true, Settings: map[string]interface{}{"url": redirectEndpoint.URL}}))
 					require.NoError(t, service.NewWebhookEventSubscriber(targetManager, zap.NewNop().Sugar(), runtime, policy).HandleContext(ctx, freshEnv))
@@ -3611,7 +3617,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			defer secondEndpoint.Close()
 			registry := connector.NewRegistry()
 			registry.Register(func() connector.Connector { return webhookconnector.New() })
-			manager := connector.NewManager(registry, zap.NewNop().Sugar())
+			manager := connector.NewManager(registry, zap.NewNop().Sugar(), nil)
 			defer manager.CloseAll()
 			for provider, endpoint := range map[string]string{"ack-first": firstEndpoint.URL, "ack-second": secondEndpoint.URL} {
 				require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: provider, Enabled: true, Settings: map[string]interface{}{"url": endpoint}}))
@@ -3733,7 +3739,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			defer secondEndpoint.Close()
 			registry := connector.NewRegistry()
 			registry.Register(func() connector.Connector { return webhookconnector.New() })
-			manager := connector.NewManager(registry, zap.NewNop().Sugar())
+			manager := connector.NewManager(registry, zap.NewNop().Sugar(), nil)
 			defer manager.CloseAll()
 			for provider, endpoint := range map[string]string{"ack-first": firstEndpoint.URL, "ack-second": secondEndpoint.URL} {
 				require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: provider, Enabled: true, Settings: map[string]interface{}{"url": endpoint}}))
@@ -5220,7 +5226,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		receiver := &candidateFeishuUpdater{destination: "local-test-destination"}
 		registry := connector.NewRegistry()
 		registry.Register(func() connector.Connector { return receiver })
-		manager := connector.NewManager(registry, zap.NewNop().Sugar())
+		manager := connector.NewManager(registry, zap.NewNop().Sugar(), nil)
 		require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "feishu", Provider: "local-test", Enabled: true}))
 		fresh, err := app.Create(ctx, identity, command("manual-feishu-update", "generic"))
 		require.NoError(t, err)
@@ -5521,7 +5527,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				receiver := &candidateFeishuUpdater{destination: "edit-local-" + fault}
 				registry := connector.NewRegistry()
 				registry.Register(func() connector.Connector { return receiver })
-				manager := connector.NewManager(registry, zap.NewNop().Sugar())
+				manager := connector.NewManager(registry, zap.NewNop().Sugar(), nil)
 				require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "feishu", Provider: "local-test", Enabled: true}))
 				created, err := app.Create(ctx, identity, command("edit-atomic-"+fault, "generic"))
 				require.NoError(t, err)

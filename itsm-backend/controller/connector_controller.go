@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"itsm-backend/common/executionscope"
 	"time"
 
 	"itsm-backend/common"
@@ -79,7 +81,10 @@ func (c *ConnectorController) ListMarket(ctx *gin.Context) {
 		installed[cfg.Name] = true
 		enabled[cfg.Name] = cfg.Enabled
 	}
-	health := c.manager.HealthCheckAll(ctx.Request.Context())
+	health, ok := c.healthSnapshot(ctx)
+	if !ok {
+		return
+	}
 	out := make([]dto.ConnectorManifestDTO, 0, len(mfs))
 	for _, m := range mfs {
 		healthy, checkedAt, lastErr := healthForManifest(health, tenantID, m.Name)
@@ -116,7 +121,10 @@ func (c *ConnectorController) ListMarket(ctx *gin.Context) {
 func (c *ConnectorController) ListConfigs(ctx *gin.Context) {
 	tenantID := ctx.GetInt("tenant_id")
 	cfgs := c.manager.ListByTenant(tenantID)
-	health := c.manager.HealthCheckAll(ctx.Request.Context())
+	health, ok := c.healthSnapshot(ctx)
+	if !ok {
+		return
+	}
 	out := make([]dto.ConnectorConfigDTO, 0, len(cfgs))
 	for _, cfg := range cfgs {
 		out = append(out, maskConfig(cfg, health))
@@ -190,7 +198,11 @@ func (c *ConnectorController) Provision(ctx *gin.Context) {
 			}
 		}
 	}
-	common.Success(ctx, maskConfig(cfg, c.manager.HealthCheckAll(ctx.Request.Context())))
+	health, ok := c.healthSnapshot(ctx)
+	if !ok {
+		return
+	}
+	common.Success(ctx, maskConfig(cfg, health))
 }
 
 // Revoke 停用并移除一个连接器实例
@@ -265,9 +277,12 @@ func (c *ConnectorController) Test(ctx *gin.Context) {
 	common.Success(ctx, gin.H{"name": name, "channel": channel, "sent": true})
 }
 
-// Health 所有运行实例健康检查
+// Health reads the current tenant's observed health snapshots without probing.
 func (c *ConnectorController) Health(ctx *gin.Context) {
-	res := c.manager.HealthCheckAll(context.Background())
+	res, ok := c.healthSnapshot(ctx)
+	if !ok {
+		return
+	}
 	out := make(map[string]dto.ConnectorHealthDTO, len(res))
 	for k, v := range res {
 		out[k] = dto.ConnectorHealthDTO{
@@ -279,6 +294,28 @@ func (c *ConnectorController) Health(ctx *gin.Context) {
 		}
 	}
 	common.Success(ctx, out)
+}
+
+func (c *ConnectorController) healthSnapshot(ctx *gin.Context) (map[string]connector.HealthStatus, bool) {
+	health, err := c.manager.HealthSnapshot(ctx.GetInt("tenant_id"))
+	if err != nil {
+		common.Fail(ctx, common.InternalErrorCode, "无法读取连接器健康状态")
+		return nil, false
+	}
+	return health, true
+}
+
+// RefreshHealth explicitly requests tenant-scoped diagnostics.
+func (c *ConnectorController) RefreshHealth(ctx *gin.Context) {
+	if err := c.manager.RefreshHealth(ctx.Request.Context(), ctx.GetInt("tenant_id")); err != nil {
+		if errors.Is(err, executionscope.ErrDenied) {
+			common.Forbidden(ctx, "当前执行环境不允许连接器诊断")
+		} else {
+			common.Fail(ctx, common.InternalErrorCode, "连接器诊断未完成")
+		}
+		return
+	}
+	c.Health(ctx)
 }
 
 // Lifecycle returns a tenant-scoped connector lifecycle view for GA readiness checks.
@@ -293,7 +330,10 @@ func (c *ConnectorController) Lifecycle(ctx *gin.Context) {
 	for _, cfg := range configs {
 		configByName[cfg.Name] = cfg
 	}
-	health := c.manager.HealthCheckAll(ctx.Request.Context())
+	health, ok := c.healthSnapshot(ctx)
+	if !ok {
+		return
+	}
 	manifests := reg.List()
 	out := make([]dto.ConnectorLifecycleDTO, 0, len(manifests))
 	for _, m := range manifests {

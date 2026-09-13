@@ -50,7 +50,7 @@ func ValidateCapability(name string, mode CapabilityMode) error {
 	switch name {
 	case "outbox", "callback", "notification", "kaf_worker", "sla", "escalation", "event_audit", "webhook", "tool_queue", "request_async":
 		return nil
-	case "embedding", "connector_poll", "cloud_discovery", "cmdb_import_export":
+	case "embedding", "connector_poll", "cloud_discovery", "cmdb_import_export", "connector_diagnostics":
 		if mode == Disabled {
 			return nil
 		}

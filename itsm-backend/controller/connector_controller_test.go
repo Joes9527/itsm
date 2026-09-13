@@ -32,7 +32,7 @@ func setupConnectorController(t *testing.T) *gin.Engine {
 	logger := zaptest.NewLogger(t).Sugar()
 
 	reg := connector.NewRegistry()
-	mgr := connector.NewManager(reg, logger)
+	mgr := connector.NewManager(reg, logger, nil)
 	mkt := marketplace.New()
 	ctrl := NewConnectorController(mgr, reg, mkt, logger, nil, nil)
 
@@ -102,7 +102,7 @@ func setupConnectorControllerWithProvision(t *testing.T) *gin.Engine {
 	logger := zaptest.NewLogger(t).Sugar()
 	reg := connector.NewRegistry()
 	reg.Register(func() connector.Connector { return &provisionFake{} })
-	mgr := connector.NewManager(reg, logger)
+	mgr := connector.NewManager(reg, logger, nil)
 	mkt := marketplace.New()
 	ctrl := NewConnectorController(mgr, reg, mkt, logger, nil, nil)
 
@@ -233,7 +233,7 @@ func TestConnectorController_Provision_StartsEmailCoordinatorForMsgraphEmail(t *
 	// file's existing pattern of not depending on global registration
 	// order), so it must register the factory explicitly.
 	reg.Register(func() connector.Connector { return msgraphpkg.New() })
-	mgr := connector.NewManager(reg, logger)
+	mgr := connector.NewManager(reg, logger, nil)
 	mkt := marketplace.New()
 	ctrl := NewConnectorController(mgr, reg, mkt, logger, nil, nil)
 	fake := &fakeEmailCoordinator{}
@@ -309,7 +309,7 @@ func TestConnectorController_Provision_CoordinatorContextSurvivesRequestReturn(t
 	logger := zaptest.NewLogger(t).Sugar()
 	reg := connector.NewRegistry()
 	reg.Register(func() connector.Connector { return msgraphpkg.New() })
-	mgr := connector.NewManager(reg, logger)
+	mgr := connector.NewManager(reg, logger, nil)
 	mkt := marketplace.New()
 	ctrl := NewConnectorController(mgr, reg, mkt, logger, nil, nil)
 	fake := &ctxCapturingEmailCoordinator{}
@@ -373,7 +373,7 @@ func TestConnectorController_Provision_IgnoresOtherConnectors(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	logger := zaptest.NewLogger(t).Sugar()
 	reg := connector.NewRegistry()
-	mgr := connector.NewManager(reg, logger)
+	mgr := connector.NewManager(reg, logger, nil)
 	mkt := marketplace.New()
 	ctrl := NewConnectorController(mgr, reg, mkt, logger, nil, nil)
 	fake := &fakeEmailCoordinator{}
@@ -402,7 +402,7 @@ func TestConnectorController_Revoke_StopsEmailCoordinator(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	logger := zaptest.NewLogger(t).Sugar()
 	reg := connector.NewRegistry()
-	mgr := connector.NewManager(reg, logger)
+	mgr := connector.NewManager(reg, logger, nil)
 	mkt := marketplace.New()
 	ctrl := NewConnectorController(mgr, reg, mkt, logger, nil, nil)
 	fake := &fakeEmailCoordinator{}

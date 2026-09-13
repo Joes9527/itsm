@@ -331,7 +331,7 @@ func NewApplication() *Application {
 	ticketRepoImpl := repository_ticket.NewEntRepository(client, sugar)
 
 	// Connector Manager / Registry / Market —— 连接器/插件/技能市场基础设施
-	connectorManager := connector.NewManager(connector.Default(), sugar)
+	connectorManager := connector.NewManager(connector.Default(), sugar, executionPolicy)
 	connectorMarket := marketplace.New()
 	connectorController := controller.NewConnectorController(connectorManager, connector.Default(), connectorMarket, sugar, client, systemClient)
 

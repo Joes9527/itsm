@@ -1476,6 +1476,7 @@ func SetupRoutes(r *gin.Engine, config *RouterConfig) {
 				conns.POST("/:name/send", middleware.RequirePermission("connector", "write"), config.ConnectorController.Send)
 				conns.POST("/:name/test", middleware.RequirePermission("connector", "write"), config.ConnectorController.Test)
 				conns.GET("/health", middleware.RequirePermission("connector", "read"), config.ConnectorController.Health)
+				conns.POST("/health", middleware.RequirePermission("connector", "write"), config.ConnectorController.RefreshHealth)
 			}
 		}
 

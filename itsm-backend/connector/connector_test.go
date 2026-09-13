@@ -69,7 +69,7 @@ func TestRegistry_DuplicatePanics(t *testing.T) {
 func TestManager_SendError(t *testing.T) {
 	r := NewRegistry()
 	r.Register(func() Connector { return &errorConnector{} })
-	mgr := NewManager(r, nil)
+	mgr := NewManager(r, nil, nil)
 	cfg := Config{TenantID: 9, Name: "error-c", Enabled: true}
 	if err := mgr.Provision(context.Background(), cfg); err != nil {
 		t.Fatalf("Provision: %v", err)
@@ -82,7 +82,7 @@ func TestManager_SendError(t *testing.T) {
 func TestManager_ProvisionAndSend(t *testing.T) {
 	r := NewRegistry()
 	r.Register(func() Connector { return &fakeConnector{} })
-	mgr := NewManager(r, nil)
+	mgr := NewManager(r, nil, nil)
 	cfg := Config{TenantID: 7, Name: "fake", Enabled: true, Credentials: map[string]string{}}
 	if err := mgr.Provision(context.Background(), cfg); err != nil {
 		t.Fatalf("Provision: %v", err)
@@ -99,7 +99,7 @@ func TestManager_ProvisionAndSend(t *testing.T) {
 func TestManager_Revoke(t *testing.T) {
 	r := NewRegistry()
 	r.Register(func() Connector { return &fakeConnector{} })
-	mgr := NewManager(r, nil)
+	mgr := NewManager(r, nil, nil)
 	cfg := Config{TenantID: 1, Name: "fake", Enabled: true}
 	_ = mgr.Provision(context.Background(), cfg)
 	mgr.Revoke(cfg)

@@ -37,7 +37,7 @@ func TestWebhookEventSubscriber_PushesToConfiguredWebhook(t *testing.T) {
 	var received atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { received.Add(1); w.WriteHeader(http.StatusOK) }))
 	defer server.Close()
-	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar())
+	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), nil)
 	defer manager.CloseAll()
 	provisionTestWebhook(t, manager, 7, server.URL)
 	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
@@ -49,7 +49,7 @@ func TestWebhookEventSubscriber_PushesToConfiguredWebhook(t *testing.T) {
 }
 
 func TestWebhookEventSubscriber_RejectsTenantWithoutWebhook(t *testing.T) {
-	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar())
+	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), nil)
 	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
 
 	// Required dispatch without a target must not be acknowledged as success.
@@ -61,7 +61,7 @@ func TestWebhookEventSubscriber_RejectsTenantWithoutWebhook(t *testing.T) {
 }
 
 func TestWebhookEventSubscriber_RejectsMissingTenant(t *testing.T) {
-	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar())
+	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), nil)
 	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
 
 	err := sub.Handle(map[string]interface{}{"eventType": "sla.breached"})
@@ -76,7 +76,7 @@ func TestWebhookEventSubscriber_RejectsUnknownEventBeforeSend(t *testing.T) {
 	var count atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { count.Add(1); w.WriteHeader(http.StatusOK) }))
 	defer server.Close()
-	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar())
+	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), nil)
 	defer manager.CloseAll()
 	provisionTestWebhook(t, manager, 7, server.URL)
 	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
@@ -85,7 +85,7 @@ func TestWebhookEventSubscriber_RejectsUnknownEventBeforeSend(t *testing.T) {
 }
 
 func TestWebhookEventSubscriber_SendsToEachDeclaredInstance(t *testing.T) {
-	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar())
+	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), nil)
 	defer manager.CloseAll()
 	counts := make([]atomic.Int32, 3)
 	for i := range counts {
@@ -103,7 +103,7 @@ func TestWebhookEventSubscriber_SendsToEachDeclaredInstance(t *testing.T) {
 }
 
 func TestWebhookEventSubscriber_UsesDeliveryContext(t *testing.T) {
-	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar())
+	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), nil)
 	defer manager.CloseAll()
 	var count atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { count.Add(1); w.WriteHeader(http.StatusOK) }))
@@ -124,7 +124,7 @@ func TestWebhookEventSubscriber_UsesDeliveryContext(t *testing.T) {
 }
 
 func TestWebhookExactInstanceDispatchDoesNotFallback(t *testing.T) {
-	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar())
+	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), nil)
 	defer manager.CloseAll()
 	var count atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { count.Add(1); w.WriteHeader(http.StatusOK) }))

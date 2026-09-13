@@ -201,7 +201,7 @@ func TestWireEmailMsgraphConnector_RegistersCoordinator(t *testing.T) {
 	triageService := service.NewTriageServiceWithSugaredLogger(nil, logger)
 
 	reg := connector.NewRegistry()
-	mgr := connector.NewManager(reg, logger)
+	mgr := connector.NewManager(reg, logger, nil)
 	mkt := connectorMarketplace.New()
 	connCtrl := controller.NewConnectorController(mgr, reg, mkt, logger, nil, nil)
 

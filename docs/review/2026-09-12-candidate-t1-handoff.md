@@ -1185,3 +1185,16 @@ ExecutionPolicy复制能力开关，未知、缺失或禁用能力失败；检�
 CandidateSHA、候选停止状态与共享环境边界不变。S5/S6、鉴权与目标T3/T4/G3仍未完成，无共享数据库操作、真实企业外呼、push/main合并。
 
 独立复核确认RED有效；显式Health移除强制200断言，为未来明确权限拒绝保留空间，其他读取仍要求成功且不得外调。最终s5-connector-read-effects-final-red.log仍为八项预期失败，无race；不把负测失败描述为通过。git diff --check通过。
+
+
+### B2 S5 连接器读取与主动诊断分离（2026-09-14）
+
+修复4a92cc3a8真实GET外调RED：删除Manager.HealthCheckAll，四GET及Provision响应统一读取本租户HealthSnapshot；新实例未知，不伪造健康成功。Manager新增唯一RefreshHealth主动诊断owner，构造必需CapabilityGate，生产注入冻结ExecutionPolicy；独立connector_diagnostics能力candidate只disabled、standard显式enabled，nil gate/租户或上下文不匹配拒绝。POST /connectors/health在真实路由注册connector:write权限，controller保留请求上下文，执行未获准为403而非成功健康报告。
+
+Refresh仅抓取目标租户实例，单次5秒上下文，取消返回错误不记录当次成功；真实HealthStatus.OK=false与执行拒绝分开。JSON保存/返回快照提供嵌套Extra副本，generation匹配才写入缓存；替换/撤销清除旧实例快照。缓存只存已完成观测，非持久健康账本。测试覆盖本/外租户计数、nil/candidate拒绝、标准显式允许、深副本、替换进行中实例丢弃旧结果及取消不伪造成功。所有既有测试构造显式nil仅表示无主动诊断许可，不影响尚未在本轮改造的投递入口；没有隐式standard fallback。
+
+s5-connector-health-unit.log具名connector/config/controller race PASS；s5-connector-health-full-private.log完整私有PG16/Redis/MinIO候选边界、构造保全及Stream/Webhook/审计恢复race PASS，包括四GET零本/外租户探测及candidate POST403。独立审阅无新增阻断。真实POST的完整认证/RBAC中间件尚未单独端到端验证，不把静态路由权限注册和owner测试当作完整认证验收。后续回归/构建结果在下方补记。
+
+本轮只关闭读取外调与主动诊断边界。Provision/LoadAll的实例激活来源、Send/Get/GetInstance裸Connector旁路及受控scope目标声明仍需继续实现；既有通知/Webhook私有测试通过不等于生产可信目标启动准入。CandidateSHA与停止状态不变，S5/S6/鉴权及目标T3/T4/G3未完成，无共享操作、企业外呼、push/main合并。
+
+最终s5-connector-health-regression.log具名bootstrap/service Webhook/Notification/Connector/Graph/Callback race PASS（非两包全测试）；s5-connector-health-build.log全后端build exit0；完整私有suite无skip/race，git diff --check通过。新POST沿真实auth组已有CSRF中间件，健康路径不在其跳过清单；这是代码核查，非浏览器认证验收。

@@ -2,7 +2,9 @@ package connector
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"itsm-backend/common/executionscope"
 	"sync"
 	"time"
 
@@ -11,7 +13,12 @@ import (
 
 // Manager 负责"已注册连接器" + "已配置实例" 的生命周期管理
 // 多个租户、每个租户可挂多个同名连接器实例（例如：飞书A区机器人 + 飞书B区机器人）
+type CapabilityGate interface {
+	RequireCapability(context.Context, int, string) error
+}
+
 type Manager struct {
+	gate     CapabilityGate
 	registry *Registry
 	logger   *zap.SugaredLogger
 
@@ -24,15 +31,17 @@ type instance struct {
 	generation uint64
 	cfg        Config
 	conn       Connector
+	health     json.RawMessage
 }
 
 // NewManager 创建管理器
-func NewManager(registry *Registry, logger *zap.SugaredLogger) *Manager {
+func NewManager(registry *Registry, logger *zap.SugaredLogger, gate CapabilityGate) *Manager {
 	if registry == nil {
 		registry = Default()
 	}
 	return &Manager{
 		registry:  registry,
+		gate:      gate,
 		logger:    logger,
 		instances: make(map[string]*instance),
 	}
@@ -145,23 +154,69 @@ func (m *Manager) Send(ctx context.Context, tenantID int, name string, msg *Mess
 	return c.Send(ctx, msg)
 }
 
-// HealthCheckAll 对所有运行中的连接器做健康检查
-func (m *Manager) HealthCheckAll(ctx context.Context) map[string]HealthStatus {
+// HealthSnapshot reads only observed results for one tenant. A newly provisioned
+// instance has no result; replacing an instance discards the previous generation.
+func (m *Manager) HealthSnapshot(tenantID int) (map[string]HealthStatus, error) {
+	out := make(map[string]HealthStatus)
+	if tenantID <= 0 {
+		return nil, executionscope.ErrDenied
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for key, ins := range m.instances {
+		if ins.cfg.TenantID != tenantID || len(ins.health) == 0 {
+			continue
+		}
+		var status HealthStatus
+		if err := json.Unmarshal(ins.health, &status); err != nil {
+			return nil, fmt.Errorf("invalid cached connector health: %w", err)
+		}
+		out[key] = status
+	}
+	return out, nil
+}
+
+// RefreshHealth is the only Manager diagnostic operation. Deployment permission
+// never substitutes for the HTTP/application owner's connector write permission.
+func (m *Manager) RefreshHealth(ctx context.Context, tenantID int) error {
+	if m.gate == nil {
+		return executionscope.ErrDenied
+	}
+	if err := m.gate.RequireCapability(ctx, tenantID, "connector_diagnostics"); err != nil {
+		return err
+	}
 	m.mu.RLock()
 	insts := make([]*instance, 0, len(m.instances))
-	for _, v := range m.instances {
-		insts = append(insts, v)
+	for _, ins := range m.instances {
+		if ins.cfg.TenantID == tenantID {
+			insts = append(insts, ins)
+		}
 	}
 	m.mu.RUnlock()
-
-	out := make(map[string]HealthStatus, len(insts))
 	for _, ins := range insts {
-		key := fmt.Sprintf("%d/%s/%s", ins.cfg.TenantID, ins.cfg.Name, ins.cfg.Provider)
-		cctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		out[key] = ins.conn.HealthCheck(cctx)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		status := ins.conn.HealthCheck(checkCtx)
+		checkErr := checkCtx.Err()
 		cancel()
+		if checkErr != nil {
+			return checkErr
+		}
+		status.CheckedAt = time.Now().UTC()
+		raw, err := json.Marshal(status)
+		if err != nil {
+			return fmt.Errorf("invalid connector health result: %w", err)
+		}
+		m.mu.Lock()
+		current, ok := m.instances[instanceKey(ins.cfg)]
+		if ok && current.generation == ins.generation {
+			current.health = raw
+		}
+		m.mu.Unlock()
 	}
-	return out
+	return ctx.Err()
 }
 
 // CloseAll 关闭所有连接器（用于优雅停机）

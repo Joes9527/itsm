@@ -58,7 +58,7 @@ func TestIntakeGenericFeishuIntentFreezesAndDeliversOwningMapping(t *testing.T) 
 	fixture := newUnifiedIntakeFixture(t, func(client *ent.Client, logger *zap.SugaredLogger) *service.TicketService {
 		registry := connector.NewRegistry()
 		registry.Register(func() connector.Connector { return fake })
-		manager := connector.NewManager(registry, logger)
+		manager := connector.NewManager(registry, logger, nil)
 		t.Cleanup(manager.CloseAll)
 		tenant := client.Tenant.Query().OnlyX(context.Background())
 		require.NoError(t, manager.Provision(context.Background(), connector.Config{TenantID: tenant.ID, Name: "feishu", Type: connector.TypeIM, Enabled: true}))
@@ -128,7 +128,7 @@ func TestFeishuManualSyncKeepsGovernedIntentAndCurrentAuthority(t *testing.T) {
 	f := newUnifiedIntakeFixture(t, func(client *ent.Client, logger *zap.SugaredLogger) *service.TicketService {
 		registry := connector.NewRegistry()
 		registry.Register(func() connector.Connector { return fake })
-		manager := connector.NewManager(registry, logger)
+		manager := connector.NewManager(registry, logger, nil)
 		t.Cleanup(manager.CloseAll)
 		tenant := client.Tenant.Query().OnlyX(context.Background())
 		require.NoError(t, manager.Provision(context.Background(), connector.Config{TenantID: tenant.ID, Name: "feishu", Type: connector.TypeIM, Enabled: true}))
@@ -230,7 +230,7 @@ func TestTicketReadDoesNotUpdateFeishuTask(t *testing.T) {
 	fixture := newUnifiedIntakeFixture(t, func(client *ent.Client, logger *zap.SugaredLogger) *service.TicketService {
 		registry := connector.NewRegistry()
 		registry.Register(func() connector.Connector { fc = feishu.New(); return fc })
-		manager := connector.NewManager(registry, logger)
+		manager := connector.NewManager(registry, logger, nil)
 		t.Cleanup(manager.CloseAll)
 		tenant := client.Tenant.Query().OnlyX(ctx)
 		require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "feishu", Enabled: true, Credentials: map[string]string{"app_id": "local-app", "app_secret": "local-only"}, Settings: map[string]any{"base_url": server.URL}}))

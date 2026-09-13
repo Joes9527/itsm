@@ -20,6 +20,9 @@
 
 云发现执行入口使用冻结的ExecutionPolicy能力开关：CloudDiscoveryService.DiscoverAll、DiscoverAccount及底层cloud.Runner.RunAll在账号查询或provider调用前要求cloud_discovery启用。candidate配置只接受该能力disabled，不能借直接服务调用绕过；standard也必须显式enabled。构造器必须传入策略，缺策略、未知/缺失能力、无效租户、冲突上下文、SystemBypass或取消上下文均失败关闭。能力表从启动配置复制，后续修改配置对象不会临时授权。该检查只限制部署执行能力，不替代领域权限、账号租户归属或外部出站控制；标准模式的区域发现/持久化可靠性不因本检查获得验收。
 
+连接器 GET 列表、配置、生命周期和健康端点均只读取本租户最近一次实际诊断快照，不触发外呼；新实例或替换实例尚未探测时保持未知。主动诊断使用POST /api/v1/connectors/health，要求connector:write，并由Manager核验冻结的connector_diagnostics能力与请求租户/取消上下文。candidate该能力只允许disabled；standard需显式enabled，未配置或缺策略均拒绝。诊断只遍历本租户实例、按请求上下文设置单次5秒上限；取消或序列化失败返回错误，真实健康失败可保留为OK=false结果。缓存绑定实例generation，替换/撤销后旧结果不能写入新实例，返回快照为独立副本；该缓存不持久化，重启后未知。Manager构造必须显式传CapabilityGate，生产使用ExecutionPolicy，不能默认standard。此门禁不覆盖Provision/LoadAll/Send及裸Connector获取后的直接执行，受控目标激活仍为候选交付前置，不因GET副作用修复而放行G2。
+
+
 
 
 工具队列及事件订阅需要显式运行阶段启动；取消后等待已启动任务退出，再关闭数据库和连接器。禁止从业务构造器调用 Start。禁用的必需能力必须报告未验证，不能把 pending、外部阻断或未运行的 Worker 标为成功。

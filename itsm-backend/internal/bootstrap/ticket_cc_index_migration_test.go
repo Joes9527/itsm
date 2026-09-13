@@ -324,7 +324,7 @@ func assertMigratedTicketNotificationsArePickedUp(
 			}
 		})
 	}
-	manager := connector.NewManager(registry, zap.NewNop().Sugar())
+	manager := connector.NewManager(registry, zap.NewNop().Sugar(), nil)
 	t.Cleanup(manager.CloseAll)
 	for _, channel := range []string{"webhook", "sms"} {
 		require.NoError(t, manager.Provision(ctx, connector.Config{
