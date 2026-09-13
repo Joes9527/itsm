@@ -1172,3 +1172,16 @@ ExecutionPolicy复制能力开关，未知、缺失或禁用能力失败；检�
 审阅P2以s5-cloud-context-red.log实际复现：standard enabled与context.Background返回nil。改为必须有匹配租户上下文后，s5-cloud-capability-verified-unit.log数据库/cloud两包race PASS；独立复核确认P2关闭、无新增阻断。修正前完整私有suite也通过，但最终结果仍以下方修正后验证为准。
 
 最终s5-cloud-capability-verified-private.log完整私有PG16/Redis/MinIO候选边界、构造保全及Stream/Webhook/审计恢复race PASS，无skip/race；s5-cloud-capability-build.log全后端build exit0。git diff --check通过。独立最终复核无新增阻断。
+
+
+### B2 S5 连接器读取接口隐式外调RED（2026-09-14）
+
+实际Gin ListMarket/ListConfigs/Health/Lifecycle四个GET调用Manager.HealthCheckAll；Health还使用context.Background丢失请求取消。新增仅连接httptest本机接收端的HealthProbe，预置当前及另一租户的两个运行实例，不附candidate结构归属。s5-connector-read-effects-red.log每个GET实际发出两请求；补独立租户计数时s5-connector-read-effects-verified-red.log曾编译失败，修正后s5-connector-read-effects-tenant-red.log八项断言真实RED：每路由本租户与另一租户均+1，共8次本机请求，无race报告。Manager.CloseAll、HTTP接收端及私有数据库均按fixture生命周期清理；未连接企业端点。
+
+本测试在候选DB fixture内直接构造既有Controller/Manager，证明这些入口没有接收候选策略并会探测无归属与其他租户的运行实例；没有执行LoadAll，不声称已复现数据库历史实例恢复。当前生产尚未修复，包含新增用例的完整套件为RED；之前完整GREEN不能放行当前版本。没有生产变更，未重复全后端build。
+
+独立只读调查确认修复应保留唯一Manager并区分实例激活许可与业务投递授权：读取接口只读实际健康快照，主动诊断需要有租户/取消上下文的owner入口；候选LoadAll在读取历史配置前拒绝。新scope投递目标由启动时可信声明绑定tenant/scope、精确实例、目标摘要和允许能力，不凭cfg.Enabled/请求自报scope/创建时间，Init副作用也要纳入现有manifest合同。不把connector_poll偷换成notification/webhook或诊断许可；既有worker仍核验持久意图、成员、租约、目标摘要/generation，Manager.Get/GetInstance及取得完整Connector后的直接调用必须一并检查。不能通过全关Manager破坏已要求的受控通知/Webhook旅程后声称G2完成。下一批先落实该边界及RED→GREEN。
+
+CandidateSHA、候选停止状态与共享环境边界不变。S5/S6、鉴权与目标T3/T4/G3仍未完成，无共享数据库操作、真实企业外呼、push/main合并。
+
+独立复核确认RED有效；显式Health移除强制200断言，为未来明确权限拒绝保留空间，其他读取仍要求成功且不得外调。最终s5-connector-read-effects-final-red.log仍为八项预期失败，无race；不把负测失败描述为通过。git diff --check通过。

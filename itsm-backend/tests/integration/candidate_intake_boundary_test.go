@@ -22,6 +22,7 @@ import (
 	"time"
 
 	entsql "entgo.io/ent/dialect/sql"
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
@@ -34,6 +35,8 @@ import (
 	"itsm-backend/config"
 	"itsm-backend/connector"
 	feishu "itsm-backend/connector/builtin/feishu"
+	"itsm-backend/connector/marketplace"
+	"itsm-backend/controller"
 	"itsm-backend/database"
 	"itsm-backend/ent/auditlog"
 	aidomain "itsm-backend/handlers/ai"
@@ -362,6 +365,46 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		disabled, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "cloud-standard-test"})
 		require.NoError(t, err)
 		require.ErrorIs(t, service.NewCloudDiscoveryService(nil, zap.NewNop().Sugar(), disabled).DiscoverAll(ctx, tenant.ID), executionscope.ErrDenied)
+	})
+	t.Run("candidate connector read routes do not probe unscoped instances", func(t *testing.T) {
+		var calls, foreignCalls atomic.Int32
+		receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == fmt.Sprintf("/%d", tenant.ID+1) {
+				foreignCalls.Add(1)
+			} else {
+				calls.Add(1)
+			}
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		defer receiver.Close()
+		reg := connector.NewRegistry()
+		reg.Register(func() connector.Connector { return &candidateHealthProbe{target: receiver.URL} })
+		manager := connector.NewManager(reg, zap.NewNop().Sugar())
+		defer manager.CloseAll()
+		// Existing runtime instances have no candidate enrollment or WorkItem authority.
+		for _, id := range []int{tenant.ID, tenant.ID + 1} {
+			require.NoError(t, manager.Provision(tenantctx.WithTenantID(ctx, id), connector.Config{TenantID: id, Name: "webhook", Provider: "local-health-probe", Enabled: true}))
+		}
+		ctrl := controller.NewConnectorController(manager, reg, marketplace.New(), zap.NewNop().Sugar(), runtime, owner)
+		router := gin.New()
+		router.Use(func(c *gin.Context) { c.Set("tenant_id", tenant.ID); c.Next() })
+		router.GET("/connectors", ctrl.ListMarket)
+		router.GET("/connectors/configs", ctrl.ListConfigs)
+		router.GET("/connectors/health", ctrl.Health)
+		router.GET("/connectors/lifecycle", ctrl.Lifecycle)
+		for _, route := range []string{"/connectors", "/connectors/configs", "/connectors/health", "/connectors/lifecycle"} {
+			t.Run(route, func(t *testing.T) {
+				before, beforeForeign := calls.Load(), foreignCalls.Load()
+				response := httptest.NewRecorder()
+				router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, route, nil).WithContext(ctx))
+				if route != "/connectors/health" {
+					require.Equal(t, http.StatusOK, response.Code)
+				}
+				// Explicit health may deny diagnostics; it must never probe either instance.
+				assert.Equal(t, before, calls.Load(), "candidate GET must not execute unscoped health probes")
+				assert.Equal(t, beforeForeign, foreignCalls.Load(), "tenant GET must never probe another tenant")
+			})
+		}
 	})
 	memberCount := func() int {
 		var n int
@@ -5822,4 +5865,29 @@ type candidateCreationFunc func(context.Context, creation.Identity, creation.Cre
 
 func (f candidateCreationFunc) Create(ctx context.Context, who creation.Identity, command creation.CreateWorkItemCommand) (*creation.CreateWorkItemResult, error) {
 	return f(ctx, who, command)
+}
+
+// candidateHealthProbe performs only a request to the test-owned loopback receiver.
+type candidateHealthProbe struct {
+	candidateNotificationConnector
+	target   string
+	tenantID int
+}
+
+func (p *candidateHealthProbe) Init(_ context.Context, cfg connector.Config) error {
+	p.tenantID = cfg.TenantID
+	return nil
+}
+
+func (p *candidateHealthProbe) HealthCheck(ctx context.Context) connector.HealthStatus {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/%d", p.target, p.tenantID), nil)
+	if err != nil {
+		return connector.HealthStatus{OK: false}
+	}
+	response, err := (&http.Client{Timeout: time.Second}).Do(request)
+	if err != nil {
+		return connector.HealthStatus{OK: false}
+	}
+	response.Body.Close()
+	return connector.HealthStatus{OK: response.StatusCode == http.StatusNoContent}
 }
