@@ -203,6 +203,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+消费者进程恢复检查点 `2626cd59c`：真实私有Redis与两个独立测试子进程，首进程交付完整信封后不ACK，父进程核验身份/原PEL后强制Kill，原待确认身份保留；第二PID从同组新consumer恢复同一完整信封，PEL归零、Stream整行不变。独立审阅指出Stat先于完整文件写入的同步竞态，已改为等待完整JSON和预期主体并保存快照，复审关闭。完整私有环境race通过，补强后定向race连续3次通过，无skip/race；仅测试/说明变更，详见T1。本项不是完整API/Worker或Redis服务重启，不以fixture收据代替业务事务回执，不放行G3；完整业务旅程、鉴权冷启动、其它异步入口及T3等仍待完成。CandidateSHA和未启动状态不变。
+
 消费推进检查点 `aab8dfcc2`：恢复坏消息之后合法消息必须可交付的原断言，两模式真实RED复现旧Watermill同步NACK阻塞；唯一bus的持久组底层改为有界新消息读取与带游标XAUTOCLAIM交替，NACK保留原PEL，业务ACK才XACK，确认失败可重领。首次真实claim核验Redis6.2+/实际ACL并保留领取结果，修复独立P2的命令存在不代表权限；空页非零游标持续扫描，损坏wire保留诊断且不panic/调用业务/ACK。真实Redis覆盖诊断WRONGTYPE、消费者重建、后续好消息、来源恢复、XACK禁用恢复、持续流量下pending推进、1/21条初始/跨页claim及双活消费者尾部无重复。eventbus/config/bootstrap race、最终完整私有PG/Redis/MinIO回归（含真实审计与两模式Webhook ACK缺口）、后端build和独立复核通过，无skip/race，详见T1最新记录。此检查点关闭下方历史记录中的队头阻塞缺陷，不把诊断当永久隔离；人工处置、实际进程/Redis服务重启、其它异步入口及全部后续门禁仍待完成。CandidateSHA和未启动状态不变，无共享环境操作或push/main合并。
 
 首次拒绝诊断 `d541ed9f3`：两模式typed/candidate拒绝在冻结物理topic/owner独立Redis hash以HSETNX保存固定原因/摘要/首次时间，零原载荷/UUID/error复制，仍NACK；首次事实不阻止重新授权。真实Redis两模式缺记录RED→持久记录/同PEL跨consumer保留/整行不变，WRONGTYPE故障保全且不ACK，fixture同消息授权恢复后ACK/PEL0且首记录不变。相关回归、完整私有环境race、build和独立限定复核通过，无skip/race。重要未完成项：首轮实现测试实际证明watermill同步ResendLoop会让坏消息阻住后续；该失败保留T1，当前没有实现永久隔离或人工处置，不能把删除本轮额外可用性断言当作修复。真实PG撤权联合恢复、Redis服务/应用进程重启及其它异步入口也未完成。此项仅为首次拒绝诊断，不放行S5/B2/B3/T3/T4/G2/G3；CandidateSHA及未启动状态不变。
