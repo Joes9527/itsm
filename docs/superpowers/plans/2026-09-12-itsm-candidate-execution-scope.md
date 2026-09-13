@@ -133,6 +133,8 @@ S3/S4/S5/S6及候选完整交付仍未完成，CandidateSHA不变、候选停止
 
 ### S3 工单编辑原事务接入检查点
 
+前端接入前置 `4a69f1e29` 已修正调用清单：除Detail普通编辑/AI建议，TicketBatchOperations已挂载的批量status/priority也调用编辑；Kanban的handleStatusChange只有声明未绑定，不能计作真实拖动验收。三个既有transport入口已统一拒绝缺失/非正安全整数version，Detail/Batch与未绑定回调透传已有Ticket.version，useTickets参数有类型约束。四套Jest123 PASS、全前端类型检查/独立审阅通过；未验证真实组件交互，尚未冻结打开表单时的version或稳定operationId。此项不替代后端Meta/receipt/原事务，以下业务待办不勾选。RequesterID当前编辑未保存；FormFields只有创建INSERT能力，后续必须显式完善原所有者编辑或拒绝输入，不允许静默忽略/重复INSERT/第二份JSON。共享标签六类及service_request_item/catalog_task原核心写语义需单独保全或按专业所有者迁移。
+
 当前真实调用是普通UpdateTicket、UpdateSubtask和tool_queue.update_ticket。s3-ticket-edit-scope-red.log私有PG有效RED：历史generic被编辑及新增标签，新member编辑正向通过，随后过期version拒绝Ticket却遗留新标签。测试目前失败，尚未修改生产实现；该证据只覆盖服务/真实仓储，不等于HTTP/工具验收。
 
 - [ ] 将编辑命令统一到现有WorkItem Meta/receipt，必需expectedVersion与稳定operationId；actor/tenant/source由HTTP、子任务边界及持久工具invocation构造，不能信任JSON userId或每次重试生成新身份。前端及工具输入版本契约同时迁移，保留明确冲突响应。工具expectedVersion在批准时持久化，operationId从invocation派生；done写失败重试复用原版本/回执，不读取新version冒充原命令。
