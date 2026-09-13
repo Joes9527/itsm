@@ -28,13 +28,13 @@
 
 当前仅generic手动命令使用此路径，专业类型由专业所有者处理。优先级最高critical保持不变，未知优先级拒绝；升级保留现有assignee，不猜用户ID。现行授权后允许历史已提交回执只读重放；首次写入必须通过原事务执行范围，并原子提交版本、审计和通知意图。
 
-**当前临时门禁：** 已配置Feishu同步时，命令在写入前明确失败。可靠update intent/消费者及远端更新顺序尚未实现，不能据此启动候选或宣称同步能力已交付。旧TicketLifecycleService/EscalationService手动方法与BPMN升级仍待整理/接入。
+已配置Feishu时，手动命令在原事务新增 `feishu.task.update.requested`，冻结目标、映射、操作身份和发送快照，审计回执绑定其摘要。必须已有非空且TaskID=GUID的映射；缺失或不一致会回滚整条命令，不自动创建远端任务。既有Worker按目标顺序发送，投递前和结果写回核验持久claim/attempt、范围、当前权限和操作回执；完成事务锁住事件行。远端GUID不一致、调用后错误或回执失败均转入delivery_unknown并阻挡后序，不自动重试。该协议只覆盖新的手动更新事件；旧TicketLifecycleService/EscalationService手动方法、BPMN升级及其他Feishu直发入口仍待整理/接入，候选尚未放行。
 
 ### Outbox 按目标串行投递
 
 需要顺序的handler实现 `OrderedOutboxDeliveryHandler.SerialByAggregate()`，注册表在构造时冻结声明，通用worker据此领取。`ClaimDueByEventType`现在显式接受排序布尔值；独立KAF dispatcher仍只领取自身类型并传false。事件payload不能声明或撤销排序。只有同tenant/event_type/aggregate_type/aggregate_id的所有较小ID前序均为published时，后序才可领取；历史NULL执行引用、blocked/dead_letter/未知状态及未来到期pending都保持阻挡，不能自动跳过。后序保持pending，操作员应先核对该目标的前序终态。
 
-该能力要求生产者先取得同目标事务锁/CAS再INSERT并持有至提交；数据库序列本身不保证提交顺序。同一远端目标的所有更新必须共用相同类型与稳定aggregate键，handler仍需核验真实mapping/目的地/actor/执行范围。已有在途旧协议调用、其他类型或直接provider调用不自动获得顺序保证。当前Feishu update尚未接入，手动升级的Feishu门禁继续保留。
+该能力要求生产者先取得同目标事务锁/CAS再INSERT并持有至提交；数据库序列本身不保证提交顺序。同一远端目标的所有更新必须共用相同类型与稳定aggregate键，handler仍需核验真实mapping/目的地/actor/执行范围。已有在途旧协议调用、其他类型或直接provider调用不自动获得顺序保证。手动Feishu update已声明有序投递；事件目标键绑定destination/GUID，同目标WorkItem原事务CAS在插入前持有至提交。TaskID=GUID前置条件利用现有tenant/taskID唯一约束，只约束参与新协议的映射，不证明所有旧GUID全局唯一。
 
 ## 1. 常用开发命令
 

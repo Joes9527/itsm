@@ -26,6 +26,7 @@ import (
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/config"
 	"itsm-backend/connector"
+	feishu "itsm-backend/connector/builtin/feishu"
 	"itsm-backend/database"
 	changedomain "itsm-backend/handlers/change"
 	srdomain "itsm-backend/handlers/service_request"
@@ -2529,6 +2530,220 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(e)::text FROM outbox_events e WHERE id=$1`, legacyOrdered.ID).Scan(&after))
 		require.JSONEq(t, before, after)
 	})
+
+	t.Run("manual escalation persists Feishu update intent", func(t *testing.T) {
+		receiver := &candidateFeishuUpdater{destination: "local-test-destination"}
+		registry := connector.NewRegistry()
+		registry.Register(func() connector.Connector { return receiver })
+		manager := connector.NewManager(registry, zap.NewNop().Sugar())
+		require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "feishu", Provider: "local-test", Enabled: true}))
+		fresh, err := app.Create(ctx, identity, command("manual-feishu-update", "generic"))
+		require.NoError(t, err)
+		owner.FeishuTicketSync.Create().SetTenantID(tenant.ID).SetTicketID(fresh.WorkItemID).SetFeishuTaskID("local-task").SetFeishuTaskGUID("local-task").SetSyncStatus("synced").SaveX(ctx)
+		svc := service.NewTicketService(&service.TicketServiceConfig{Execution: policy, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Client: runtime, Logger: zap.NewNop().Sugar(), ConnectorManager: manager, NotificationService: service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)})
+		item := owner.Ticket.GetX(ctx, fresh.WorkItemID)
+		cmd := dto.TicketEscalationCommand{WorkItemID: item.ID, Reason: "bounded Feishu update", Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: item.Version, OperationID: "manual-feishu-update", Source: "http"}}
+		_, err = svc.EscalateTicket(ctx, cmd)
+		require.NoError(t, err)
+		var pending int
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM outbox_events WHERE execution_work_item_id=$1 AND event_type='feishu.task.update.requested' AND status='pending'`, item.ID).Scan(&pending))
+		require.Equal(t, 1, pending)
+		require.Empty(t, receiver.guids, "producer must not call the provider")
+		second := cmd
+		second.Meta.OperationID += "-second"
+		second.Meta.ExpectedVersion = owner.Ticket.GetX(ctx, item.ID).Version
+		_, err = svc.EscalateTicket(ctx, second)
+		require.NoError(t, err)
+		replay, err := svc.EscalateTicket(ctx, cmd)
+		require.NoError(t, err)
+		require.True(t, replay.Replayed)
+		handler := service.NewFeishuUpdateDeliveryHandler(runtime, policy, clients.IntakeDirectorySnapshot(), func(id int) (service.FeishuTaskUpdater, bool) {
+			return receiver, id == tenant.ID
+		})
+		reserved := []string{}
+		seen := map[string]bool{}
+		for _, row := range owner.OutboxEvent.Query().AllX(ctx) {
+			if row.EventType != handler.EventType() && !seen[row.EventType] {
+				reserved = append(reserved, row.EventType)
+				seen[row.EventType] = true
+			}
+		}
+		deliveryRegistry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{handler}, reserved...)
+		require.NoError(t, err)
+		worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(clients.System, policy), service.OutboxDeliveryWorkerConfig{BatchSize: 100, PollInterval: time.Second, HandlerTimeout: 10 * time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), deliveryRegistry)
+		require.NoError(t, err)
+		events := owner.OutboxEvent.Query().Where(outboxevent.EventTypeEQ(handler.EventType())).Order(ent.Asc(outboxevent.FieldID)).AllX(ctx)
+		require.Len(t, events, 2)
+		require.Error(t, handler.Deliver(ctx, events[0]), "unclaimed delivery must fail closed")
+		require.Empty(t, receiver.guids)
+		require.NoError(t, worker.DispatchOnce(ctx))
+		require.Equal(t, "published", owner.OutboxEvent.GetX(ctx, events[0].ID).Status)
+		require.Equal(t, "pending", owner.OutboxEvent.GetX(ctx, events[1].ID).Status)
+		require.Len(t, receiver.guids, 1)
+		require.NoError(t, worker.DispatchOnce(ctx))
+		require.Equal(t, "published", owner.OutboxEvent.GetX(ctx, events[1].ID).Status)
+		require.Equal(t, []string{"local-task", "local-task"}, receiver.guids)
+		require.NotEqual(t, receiver.tasks[0].Priority, receiver.tasks[1].Priority, "queued snapshots must preserve each command's priority")
+		require.NoError(t, worker.DispatchOnce(ctx))
+		require.Len(t, receiver.guids, 2)
+		// An ambiguous provider response must block the target's successor.
+		third := second
+		third.Meta.OperationID += "-third"
+		third.Meta.ExpectedVersion = owner.Ticket.GetX(ctx, item.ID).Version
+		_, err = svc.EscalateTicket(ctx, third)
+		require.NoError(t, err)
+		fourth := third
+		fourth.Meta.OperationID += "-fourth"
+		fourth.Meta.ExpectedVersion = owner.Ticket.GetX(ctx, item.ID).Version
+		_, err = svc.EscalateTicket(ctx, fourth)
+		require.NoError(t, err)
+		receiver.responseGUID = "unexpected-remote-task"
+		require.NoError(t, worker.DispatchOnce(ctx))
+		events = owner.OutboxEvent.Query().Where(outboxevent.EventTypeEQ(handler.EventType())).Order(ent.Asc(outboxevent.FieldID)).AllX(ctx)
+		require.Len(t, events, 4)
+		require.Equal(t, "blocked", events[2].Status)
+		require.Contains(t, events[2].LastError, "delivery_unknown")
+		require.Equal(t, "pending", events[3].Status)
+		require.NoError(t, worker.DispatchOnce(ctx))
+		require.Len(t, receiver.guids, 3, "ambiguous delivery and successor must not be retried")
+		for _, fault := range []string{"destination", "mapping", "actor", "payload", "provider-error", "post-call-mapping", "mapping-receipt", "claim-lock"} {
+			t.Run(fault, func(t *testing.T) {
+				receiver.responseGUID = ""
+				receiver.destination = "local-test-destination"
+				receiver.afterUpdate = nil
+				receiver.updateError = nil
+				target, err := app.Create(ctx, identity, command("feishu-fault-"+fault, "generic"))
+				require.NoError(t, err)
+				guid := "local-task-" + fault
+				mapping := owner.FeishuTicketSync.Create().SetTenantID(tenant.ID).SetTicketID(target.WorkItemID).SetFeishuTaskID(guid).SetFeishuTaskGUID(guid).SetSyncStatus("pending").SaveX(ctx)
+				c := cmd
+				c.WorkItemID = target.WorkItemID
+				c.Meta.OperationID = "feishu-fault-" + fault
+				c.Meta.ExpectedVersion = owner.Ticket.GetX(ctx, target.WorkItemID).Version
+				_, err = svc.EscalateTicket(ctx, c)
+				require.NoError(t, err)
+				event := owner.OutboxEvent.Query().Where(outboxevent.EventTypeEQ(handler.EventType()), outboxevent.ExecutionWorkItemIDEQ(target.WorkItemID)).OnlyX(ctx)
+				calls := len(receiver.guids)
+				activeHook := false
+				var claimRaceErr error
+				switch fault {
+				case "destination":
+					receiver.destination = "changed-destination"
+				case "mapping":
+					owner.FeishuTicketSync.UpdateOneID(mapping.ID).SetFeishuTaskGUID("changed-guid").SaveX(ctx)
+				case "actor":
+					owner.User.UpdateOneID(actor.ID).SetActive(false).SaveX(ctx)
+				case "payload":
+					var payload map[string]any
+					require.NoError(t, json.Unmarshal(event.Payload, &payload))
+					payload["task"].(map[string]any)["summary"] = "tampered"
+					data, err := json.Marshal(payload)
+					require.NoError(t, err)
+					owner.OutboxEvent.UpdateOneID(event.ID).SetPayload(data).SaveX(ctx)
+				case "provider-error":
+					receiver.updateError = errors.New("local ambiguous provider error")
+				case "post-call-mapping":
+					receiver.afterUpdate = func() {
+						owner.FeishuTicketSync.UpdateOneID(mapping.ID).SetFeishuTaskGUID("changed-after-send").SaveX(ctx)
+					}
+				case "claim-lock":
+					activeHook = true
+					runtime.FeishuTicketSync.Use(func(next ent.Mutator) ent.Mutator {
+						return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+							if activeHook {
+								other, e := ownerDB.BeginTx(ctx, nil)
+								if e != nil {
+									return nil, e
+								}
+								defer other.Rollback()
+								if _, e = other.ExecContext(ctx, "SET LOCAL lock_timeout = '100ms'"); e != nil {
+									return nil, e
+								}
+								_, claimRaceErr = other.ExecContext(ctx, "UPDATE outbox_events SET status='blocked' WHERE id=$1", event.ID)
+							}
+							return next.Mutate(ctx, m)
+						})
+					})
+				case "mapping-receipt":
+					activeHook = true
+					runtime.FeishuTicketSync.Use(func(next ent.Mutator) ent.Mutator {
+						return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+							v, err := next.Mutate(ctx, m)
+							if activeHook && err == nil {
+								return nil, errors.New("local mapping receipt failure")
+							}
+							return v, err
+						})
+					})
+				}
+				dispatchErr := worker.DispatchOnce(ctx)
+				activeHook = false
+				owner.User.UpdateOneID(actor.ID).SetActive(true).SaveX(ctx)
+				receiver.destination = "local-test-destination"
+				receiver.afterUpdate = nil
+				receiver.updateError = nil
+				require.NoError(t, dispatchErr)
+				result := owner.OutboxEvent.GetX(ctx, event.ID)
+				if fault == "claim-lock" {
+					require.Error(t, claimRaceErr, "the completion transaction must exclude concurrent claim recovery")
+					require.Contains(t, claimRaceErr.Error(), "lock timeout")
+					require.Equal(t, "published", result.Status)
+					require.Equal(t, "synced", owner.FeishuTicketSync.GetX(ctx, mapping.ID).SyncStatus)
+					return
+				}
+				require.Equal(t, "blocked", result.Status)
+				if fault == "provider-error" || fault == "post-call-mapping" || fault == "mapping-receipt" {
+					require.Len(t, receiver.guids, calls+1)
+					require.Contains(t, result.LastError, "delivery_unknown")
+				} else {
+					require.Len(t, receiver.guids, calls)
+				}
+				require.Equal(t, "pending", owner.FeishuTicketSync.GetX(ctx, mapping.ID).SyncStatus, "failed delivery must not persist a successful mapping receipt")
+			})
+		}
+		for _, fault := range []string{"outbox", "audit"} {
+			target, err := app.Create(ctx, identity, command("feishu-producer-"+fault, "generic"))
+			require.NoError(t, err)
+			guid := "producer-task-" + fault
+			owner.FeishuTicketSync.Create().SetTenantID(tenant.ID).SetTicketID(target.WorkItemID).SetFeishuTaskID(guid).SetFeishuTaskGUID(guid).SaveX(ctx)
+			c := cmd
+			c.WorkItemID = target.WorkItemID
+			c.Meta.OperationID = "feishu-producer-" + fault
+			c.Meta.ExpectedVersion = owner.Ticket.GetX(ctx, target.WorkItemID).Version
+			beforeNotifications := owner.Notification.Query().CountX(ctx)
+			beforeEvents := owner.OutboxEvent.Query().CountX(ctx)
+			beforeAudits := owner.AuditLog.Query().CountX(ctx)
+			active := true
+			writes := 0
+			injected := errors.New("Feishu producer " + fault + " write failure")
+			hook := func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+					v, e := next.Mutate(ctx, m)
+					if active && e == nil {
+						writes++
+						return nil, injected
+					}
+					return v, e
+				})
+			}
+			if fault == "outbox" {
+				runtime.OutboxEvent.Use(hook)
+			} else {
+				runtime.AuditLog.Use(hook)
+			}
+			_, err = svc.EscalateTicket(ctx, c)
+			active = false
+			require.ErrorIs(t, err, injected)
+			require.Equal(t, 1, writes)
+			require.Equal(t, c.Meta.ExpectedVersion, owner.Ticket.GetX(ctx, target.WorkItemID).Version)
+			require.Equal(t, beforeNotifications, owner.Notification.Query().CountX(ctx))
+			require.Equal(t, beforeEvents, owner.OutboxEvent.Query().CountX(ctx))
+			require.Equal(t, beforeAudits, owner.AuditLog.Query().CountX(ctx))
+			_, err = svc.EscalateTicket(ctx, c)
+			require.NoError(t, err)
+			require.Equal(t, 1, owner.OutboxEvent.Query().Where(outboxevent.EventTypeEQ(handler.EventType()), outboxevent.ExecutionWorkItemIDEQ(target.WorkItemID)).CountX(ctx))
+		}
+	})
 	t.Run("manual escalation preserves historical WorkItems", func(t *testing.T) {
 		svc := service.NewTicketService(&service.TicketServiceConfig{Execution: policy, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Client: runtime, Logger: zap.NewNop().Sugar(), NotificationService: service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)})
 
@@ -2693,4 +2908,36 @@ func (r *candidateOrderedReceiver) Deliver(ctx context.Context, event *ent.Outbo
 		}
 	}
 	return nil
+}
+
+// Explicit local Feishu test receiver; no network or enterprise credentials.
+type candidateFeishuUpdater struct {
+	candidateNotificationConnector
+	destination  string
+	guids        []string
+	tasks        []feishu.FeishuTask
+	afterUpdate  func()
+	updateError  error
+	responseGUID string
+}
+
+func (*candidateFeishuUpdater) Manifest() connector.Manifest {
+	return connector.Manifest{Name: "feishu", Version: "1", Title: "Local Feishu receiver", Type: connector.TypeIM, Capabilities: []connector.Capability{connector.CapUpdateTicket}, RequiredPermissions: []string{"connector:write"}}
+}
+func (r *candidateFeishuUpdater) TaskDestinationIdentity() string { return r.destination }
+func (r *candidateFeishuUpdater) UpdateTask(_ context.Context, guid string, task *feishu.FeishuTask) (*feishu.FeishuTask, error) {
+	r.guids = append(r.guids, guid)
+	r.tasks = append(r.tasks, *task)
+	if r.afterUpdate != nil {
+		r.afterUpdate()
+	}
+	if r.updateError != nil {
+		return nil, r.updateError
+	}
+	result := *task
+	result.GUID = guid
+	if r.responseGUID != "" {
+		result.GUID = r.responseGUID
+	}
+	return &result, nil
 }

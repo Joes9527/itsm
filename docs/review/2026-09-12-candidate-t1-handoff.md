@@ -605,3 +605,18 @@ Outbox 并发/回滚测试提交 `56879f7c9`；独立 reviewer 确认限定结�
 - 独立review_execution_scope_s1复审SQL别名/原CAS/历史前序/冻结声明与最终故障证据，无新问题。
 
 边界：只证明新协议领取和恢复的顺序前置。生产者必须先在同目标取得事务CAS/锁再插入，序列本身不证明commit顺序；真实远端目标必须共用类型/稳定aggregate键。Feishu producer/handler、mapping/目的地/操作回执绑定、外部不确定性验证和旧在途/直发路径未接入，因此手动升级Feishu门禁不解除。未做生产规模查询性能验收；没有新增索引/迁移。S3/S4/S5/S6/B3/T3/T4/G2/G3及固定CandidateSHA交付仍未完成，候选未启动，无共享环境/WSL变更、企业实发、推送或main合并。
+
+
+### B2 S3 手动升级 Feishu 持久更新（2026-09-13）
+
+在 `d200b864f` 后接入原事务update intent与既有Worker具名handler，解除配置Feishu一律拒绝的临时门禁。已有映射必须TaskID=GUID且非空，利用现有tenant/taskID唯一约束限定参与目标；不修改旧映射、不自动创建远端任务。Ticket CAS后冻结mapping ID/GUID、destination、actor/operation/request digest/result version、Task快照及结构WorkItem引用，审计回执绑定eventID/payload digest。原事务通知/审计/事件共同提交。handler不声明ReplaySafe，持久claim/attempt/前序、tenant/member、当前actor与ticket:escalate、真实操作回执/摘要和mapping均验证；允许current version大于已提交快照版本。成功仅接受原GUID，完成事务重新核验并锁住当前Outbox行直到mapping完成写提交，防恢复穿透；调用后错误/身份变化/回执失败进入delivery_unknown并阻挡后序。
+
+本机candidate-delivery/b2证据：
+
+- `s3-feishu-update-intent-red.log` 有效RED：合法已配置Feishu命令被旧临时门禁拒绝。初轮green编译发现RequestBody为nullable指针，已补nil拒绝与解引用，不把编译失败作为业务RED。
+- `s3-feishu-update-final-pg.log` 完整TestCandidateIntakeCreationBoundary PASS，无skip，任务私有PG16。两次真实命令先排队再由原Worker按快照顺序published，第二次版本已提交时第一条仍正常；重放不新增事件，未领取直调拒绝。错GUID导致unknown，后序保持pending且不再调用本地接收端。
+- 同一最终PG覆盖destination/映射/actor变更及payload篡改在调用前blocked；provider error、发送后mapping变化、mapping实际写后注入故障均unknown且不写synced。producer Outbox/AuditLog实际写后失败，WorkItem版本、通知/事件/审计数量全部回滚，解除后同命令只生成一个更新事件。
+- 独立审阅发现post-call检查后claim可被恢复修改的间隙；`s3-feishu-claim-lock-red.log` 在mapping mutation前另一数据库连接实际UPDATE成功，明确RED。加外层SELECT FOR UPDATE后同场景竞争写锁超时，原完成事务published/synced；证明两连接锁互斥，不等于完整worker过期恢复E2E。预检事务在provider调用前释放锁，不持锁跨网络。
+- `s3-feishu-update-regression.log` service/bootstrap Outbox/Feishu/手动升级定向PASS，build.json全后端exit0，integration-compile.log仅integration_postgres标签编译PASS。最终只读review_execution_scope_s1确认修复，无新增阻断。
+
+边界：仅声明本地接收端，没有企业实发。新协议不覆盖SyncTicketToFeishu/UpdateExistingTicketTask旧直发、旧在途creation或其他类型事件，不据此宣称全局远端顺序。缺mapping拒绝是显式前置条件；未验证真实Feishu配置恢复、SSO/HTTP全链、scope关闭后的此handler专项、完整生产规模与多生产者并发。旧两个仅测试调用手动方法/BPMN及其它共享写入口仍待整理；S3/S4/S5/S6/B3/T3/T4/G2/G3未完成。固定CandidateSHA仍为 `d7470a32dbb87acc9b5e4d9a895a146410723561`，候选未启动，无WSL/共享数据变更、共享迁移、推送或main合并。

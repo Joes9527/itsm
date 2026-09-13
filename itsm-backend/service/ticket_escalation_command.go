@@ -87,13 +87,6 @@ func (s *TicketService) EscalateTicket(ctx context.Context, cmd dto.TicketEscala
 	if s.notificationSvc == nil {
 		return empty, fmt.Errorf("manual escalation notification service required")
 	}
-	// Until ordered, durable updates have a registered consumer, configured Feishu
-	// synchronization is an explicit precondition failure, never a discarded effect.
-	if s.connectorManager != nil {
-		if _, configured := s.connectorManager.Get(m.TenantID, "feishu"); configured {
-			return empty, fmt.Errorf("manual escalation requires durable Feishu update delivery")
-		}
-	}
 	member, err := s.execution.TenantPredicate(ctx, tx, m.TenantID, ticket.FieldTenantID, ticket.FieldID)
 	if err != nil {
 		return empty, err
@@ -112,8 +105,12 @@ func (s *TicketService) EscalateTicket(ctx context.Context, cmd dto.TicketEscala
 	if err = s.notificationSvc.EnqueueNotificationTx(ctx, tx, item.ID, m.TenantID, &dto.SendTicketNotificationRequest{UserIDs: recipients, EventType: "ticket_updated", Content: fmt.Sprintf("【工单升级】#%s (%s)：%s → %s。原因：%s", item.TicketNumber, item.Title, item.Priority, priority, cmd.Reason), DeliveryKey: fmt.Sprintf("escalation:manual:%d:%s", m.ActorID, m.OperationID)}); err != nil {
 		return empty, err
 	}
+	feishuUpdate, err := s.enqueueManualFeishuUpdate(ctx, tx, item.ID, m, digest)
+	if err != nil {
+		return empty, err
+	}
 	result := workitemmutation.Result{WorkItemID: item.ID, Version: item.Version + 1, Status: "in_progress"}
-	if err = workitemmutation.RecordTx(ctx, tx, m, result, "work_item.escalation.manual", digest, map[string]interface{}{"reason": cmd.Reason, "previousPriority": item.Priority, "priority": priority, "previousStatus": item.Status, "assigneeId": item.AssigneeID}); err != nil {
+	if err = workitemmutation.RecordTx(ctx, tx, m, result, "work_item.escalation.manual", digest, map[string]interface{}{"reason": cmd.Reason, "previousPriority": item.Priority, "priority": priority, "previousStatus": item.Status, "assigneeId": item.AssigneeID, "feishuUpdate": feishuUpdate}); err != nil {
 		return empty, err
 	}
 	if err = tx.Commit(); err != nil {
