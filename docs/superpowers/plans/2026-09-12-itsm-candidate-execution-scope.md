@@ -147,6 +147,10 @@ S3/S4/S5/S6及候选完整交付仍未完成，CandidateSHA不变、候选停止
 - [ ] 飞书更新意图与原编辑提交原子绑定，使用与manual更新相同event_type和稳定aggregate键，避免跨类型越过前序；具名编辑来源的权限/回执/resultVersion/status与payload摘要须由consumer验证，不能伪造手动升级来源或删除原同步能力。
 - [ ] 真实PG覆盖历史整行/标签目录及关系保全、新member标题/分类/标签/状态、重放/冲突、标签/通知/SLA/审计/Outbox实际写后故障回滚、actor撤权与子任务父范围拒绝；相关前端/API/工具契约、构建/回归和独立审阅后才能标记完成。
 
+接续实施顺序（2026-09-13）：原UpdateTicket一次迁移为可信typed command与现有workitemmutation.Result，不保留旧接口或以当前Ticket冒充历史结果。digest包含明确edit操作名、目标、预期父ID、expectedVersion及规范化业务输入，保留tags未提交/清空区别，不按现行目录解析结果重算历史请求身份。当前授权之后查receipt；首次写入才进行scope/member、父级、终态、版本和目录校验。普通HTTP移除GetTicket+CanEdit预拦截，否则关闭后的合法重放会被挡住；两HTTP入口构造Meta并直接返回Result，操作身份冲突映射409。工具registry补齐参数/结果schema，queue仅使用已批准并持久化的expectedVersion及invocation派生operationId，done失败恢复不能重读当前版本。
+
+前端三个transport及实际调用者必须随契约迁移：TicketDetail AI采纳不再读取updated.id或合并结果到Ticket；useTicketsQuery不再setQueryData(Result)，应使详情失效并重新读取。详情编辑/AI与批量操作保存同一意图的payload/version/operationId，结果不确定重试复用，用户改变内容才生成新意图。返回数据只表示已提交命令结果，不证明当前工单快照。飞书沿用同type/aggregate并校验明确edit audit/action/status/digest，删除该编辑入口commit后独立同步。最终需验证终态后replay、同op不同payload冲突、审计/outbox写后原子回滚、并发同命令、工具done失败恢复及前端Result不污染详情缓存。
+
 独立review_execution_scope_s1确认RED及计划方向，强调UpdateSubtask缺少CanEdit且parent在事务外、工具done晚于业务提交、仓储须显式UpdateTx、飞书必须相同类型/目标排序。该批是原执行范围缺口修复，不扩展历史回填或共享迁移；固定CandidateSHA不变，候选停止，S3及后续门禁仍未完成。
 
 ## S4：队列原子领取、恢复及周期执行
