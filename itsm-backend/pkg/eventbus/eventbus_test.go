@@ -51,7 +51,7 @@ func TestWatermillClientsCloseExactlyOnce(t *testing.T) {
 	require.NoError(t, err)
 	port, err := strconv.Atoi(portText)
 	require.NoError(t, err)
-	eb, err := NewWatermillEventBus(&config.RedisConfig{Host: host, Port: port}, config.ExecutionConfig{Mode: "standard", DeploymentID: "eventbus-test"}, zap.NewNop().Sugar())
+	eb, err := NewWatermillEventBus(&config.RedisConfig{Host: host, Port: port}, config.ExecutionConfig{Mode: "standard", DeploymentID: "eventbus-test"}, nil, zap.NewNop().Sugar())
 	require.NoError(t, err)
 	require.NoError(t, eb.Close())
 	require.NoError(t, eb.Close())

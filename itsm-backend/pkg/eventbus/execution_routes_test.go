@@ -59,3 +59,25 @@ func TestStreamRoutesRequireValidExplicitConfiguration(t *testing.T) {
 	_, err = newStreamRoutes(config.ExecutionConfig{Mode: "candidate", DeploymentID: "duplicate", Scopes: []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: scope}, {TenantID: 2, ScopeID: scope}}})
 	require.Error(t, err, "one physical scope cannot route two tenants")
 }
+
+// Source identity belongs to a persisted producer, not to arbitrary JSON fields.
+type persistentEventStub struct {
+	*stableEventStub
+	item int
+	id   string
+}
+
+func (e *persistentEventStub) ExecutionWorkItemID() int  { return e.item }
+func (e *persistentEventStub) PersistentEventID() string { return e.id }
+
+func TestCandidatePublishRequiresPersistentSubject(t *testing.T) {
+	routes, err := newStreamRoutes(config.ExecutionConfig{Mode: "candidate", DeploymentID: "source-test", Scopes: []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: uuid.NewString()}}})
+	require.NoError(t, err)
+	stable := &stableEventStub{typ: "sla.breached", tenant: "1", at: time.Now()}
+	for _, value := range []interface{}{stable, &persistentEventStub{stable, 0, "existing-event"}, &persistentEventStub{stable, 1, ""}} {
+		publisher := &fakePublisher{}
+		bus := &WatermillEventBus{routes: routes, publisher: publisher, logger: zap.NewNop().Sugar()}
+		require.Error(t, bus.Publish(value))
+		require.Empty(t, publisher.messages)
+	}
+}

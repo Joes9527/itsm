@@ -20,6 +20,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"itsm-backend/common/executionscope"
 	"itsm-backend/config"
 	"itsm-backend/pkg/eventbus"
 )
@@ -76,7 +77,7 @@ func TestCandidateStreamPreservesLegacyTopicOnPublish(t *testing.T) {
 		return e == nil && strings.Contains(info, fmt.Sprintf("process_id:%d\r\n", command.Process.Pid))
 	}, 5*time.Second, 20*time.Millisecond, "verify test Redis PID before writing fixtures")
 	cfg := &config.RedisConfig{Host: "127.0.0.1", Port: port, Password: password}
-	legacyPublisher, err := eventbus.NewWatermillEventBus(cfg, config.ExecutionConfig{Mode: "standard", DeploymentID: "legacy-test"}, zap.NewNop().Sugar())
+	legacyPublisher, err := eventbus.NewWatermillEventBus(cfg, config.ExecutionConfig{Mode: "standard", DeploymentID: "legacy-test"}, nil, zap.NewNop().Sugar())
 	require.NoError(t, err)
 	require.NoError(t, legacyPublisher.Publish(candidateStreamEvent{tenantID: 1, WorkItemID: 100}))
 	require.NoError(t, legacyPublisher.Close())
@@ -102,7 +103,7 @@ func TestCandidateStreamPreservesLegacyTopicOnPublish(t *testing.T) {
 	require.Len(t, beforePendingEntries, 1)
 
 	scope, secondScope := uuid.NewString(), uuid.NewString()
-	bus, err := eventbus.NewWatermillEventBus(cfg, config.ExecutionConfig{Mode: "candidate", DeploymentID: "stream-test", Scopes: []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: scope}, {TenantID: 2, ScopeID: secondScope}}}, zap.NewNop().Sugar())
+	bus, err := eventbus.NewWatermillEventBus(cfg, config.ExecutionConfig{Mode: "candidate", DeploymentID: "stream-test", Scopes: []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: scope}, {TenantID: 2, ScopeID: secondScope}}}, candidateStreamFixtureAuthority{}, zap.NewNop().Sugar())
 	require.NoError(t, err)
 	defer bus.Close()
 	observed := make(chan interface{}, 4)
@@ -160,4 +161,19 @@ func TestCandidateStreamPreservesLegacyTopicOnPublish(t *testing.T) {
 	require.NoError(t, json.Unmarshal(envelope.Payload, &payload))
 	require.Equal(t, 200, payload.WorkItemID)
 	require.Equal(t, "payload-cannot-route", payload.DeploymentID, "business payload cannot change transport namespace")
+}
+
+// Transport-only authority fixture. Real PostgreSQL source checks are covered
+// by TestCandidateIntakeCreationBoundary, not by this deterministic test port.
+type candidateStreamFixtureAuthority struct{}
+
+func (candidateStreamFixtureAuthority) ValidateEvent(_ context.Context, ref executionscope.Ref, env eventbus.Envelope) error {
+	if env.Execution == nil || env.Execution.WorkItemID != (ref.TenantID+1)*100 {
+		return fmt.Errorf("unknown fixture source")
+	}
+	return nil
+}
+func (e candidateStreamEvent) ExecutionWorkItemID() int { return e.WorkItemID }
+func (e candidateStreamEvent) PersistentEventID() string {
+	return fmt.Sprintf("fixture-%d", e.WorkItemID)
 }

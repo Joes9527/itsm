@@ -29,14 +29,17 @@ type stableEvent interface {
 // Envelope 事件信封：解决 BaseEvent 未导出字段被 JSON 序列化丢失的问题。
 // 字段按 API 契约使用 camelCase。
 type Envelope struct {
-	EventType  string          `json:"eventType"`
-	TenantID   string          `json:"tenantId"`
-	OccurredAt time.Time       `json:"occurredAt"`
-	Payload    json.RawMessage `json:"payload"`
+	EventID    string             `json:"eventId,omitempty"`
+	Execution  *ExecutionIdentity `json:"execution,omitempty"`
+	EventType  string             `json:"eventType"`
+	TenantID   string             `json:"tenantId"`
+	OccurredAt time.Time          `json:"occurredAt"`
+	Payload    json.RawMessage    `json:"payload"`
 }
 
 // WatermillEventBus implements shared.EventBus interface using Watermill with Redis Stream
 type WatermillEventBus struct {
+	authority     EventAuthority
 	routes        *streamRoutes
 	publisher     message.Publisher
 	subscriber    streamSubscriber
@@ -96,10 +99,13 @@ func (eb *WatermillEventBus) Start(ctx context.Context) error {
 }
 
 // NewWatermillEventBus creates a new WatermillEventBus instance
-func NewWatermillEventBus(cfg *config.RedisConfig, execution config.ExecutionConfig, logger *zap.SugaredLogger) (*WatermillEventBus, error) {
+func NewWatermillEventBus(cfg *config.RedisConfig, execution config.ExecutionConfig, authority EventAuthority, logger *zap.SugaredLogger) (*WatermillEventBus, error) {
 	routes, err := newStreamRoutes(execution)
 	if err != nil {
 		return nil, fmt.Errorf("invalid event execution configuration: %w", err)
+	}
+	if routes.candidate && authority == nil {
+		return nil, fmt.Errorf("candidate event authority required")
 	}
 	if cfg == nil || logger == nil {
 		return nil, fmt.Errorf("event Redis configuration and logger required")
@@ -142,6 +148,7 @@ func NewWatermillEventBus(cfg *config.RedisConfig, execution config.ExecutionCon
 	}
 
 	return &WatermillEventBus{
+		authority:  authority,
 		routes:     routes,
 		publisher:  publisher,
 		subscriber: subscriber,
@@ -199,6 +206,34 @@ func (eb *WatermillEventBus) Publish(event interface{}) error {
 			OccurredAt: se.OccurredAt(),
 			Payload:    raw,
 		}
+		if eb.routes.candidate {
+			source, ok := event.(ExecutionEvent)
+			if !ok {
+				return fmt.Errorf("candidate event requires a persistent source")
+			}
+			ref, routeErr := eb.routes.refFor(tenant)
+			if routeErr != nil {
+				return routeErr
+			}
+			env.EventID = source.PersistentEventID()
+			env.Execution = &ExecutionIdentity{DeploymentID: ref.DeploymentID, ScopeID: ref.ScopeID, WorkItemID: source.ExecutionWorkItemID()}
+			wire, encodeErr := json.Marshal(env)
+			if encodeErr != nil {
+				return encodeErr
+			}
+			if _, decodeErr := DecodeExecutionEnvelope(wire); decodeErr != nil {
+				return decodeErr
+			}
+			if eb.authority == nil {
+				return fmt.Errorf("candidate event authority required")
+			}
+			checkCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			checkErr := eb.authority.ValidateEvent(checkCtx, ref, env)
+			cancel()
+			if checkErr != nil {
+				return fmt.Errorf("event source rejected: %w", checkErr)
+			}
+		}
 		payload, err = json.Marshal(env)
 		if err != nil {
 			return fmt.Errorf("failed to marshal envelope: %w", err)
@@ -211,7 +246,11 @@ func (eb *WatermillEventBus) Publish(event interface{}) error {
 	}
 
 	// Create message
-	msg := message.NewMessage(watermill.NewUUID(), payload)
+	messageID := watermill.NewUUID()
+	if eb.routes.candidate {
+		messageID = event.(ExecutionEvent).PersistentEventID()
+	}
+	msg := message.NewMessage(messageID, payload)
 	msg.Metadata.Set("event_type", topic)
 
 	// Publish to Redis Stream
@@ -258,6 +297,29 @@ func (eb *WatermillEventBus) subscribeRoute(eventType string, route streamRoute,
 	go func() {
 		defer eb.consumers.Done()
 		for msg := range messages {
+			// Candidate identity is checked before unwrapping or invoking a writer.
+			if eb.routes.candidate {
+				env, decodeErr := DecodeExecutionEnvelope(msg.Payload)
+				ref, refErr := eb.routes.refFor(fmt.Sprint(route.tenantID))
+				if decodeErr == nil && refErr == nil {
+					decodeErr = validateEnvelopeRoute(env, ref, eventType)
+				}
+				if decodeErr == nil && refErr == nil && (msg.UUID != env.EventID || msg.Metadata.Get("event_type") != eventType) {
+					decodeErr = fmt.Errorf("event transport identity mismatch")
+				}
+				if decodeErr == nil && refErr == nil {
+					if eb.authority == nil {
+						decodeErr = fmt.Errorf("candidate event authority required")
+					} else {
+						decodeErr = eb.authority.ValidateEvent(ctx, ref, env)
+					}
+				}
+				if decodeErr != nil || refErr != nil {
+					eb.logger.Errorw("Candidate event rejected", "event_type", eventType, "error", errors.Join(decodeErr, refErr))
+					msg.Nack()
+					continue
+				}
+			}
 			// Unwrap envelope (if present) and pass the raw payload JSON to the handler
 			deliver, err := unwrapEnvelope(msg.Payload)
 			if err != nil {
@@ -301,6 +363,10 @@ func unwrapEnvelope(raw []byte) (interface{}, error) {
 			merged["eventType"] = probe["eventType"]
 			merged["tenantId"] = probe["tenantId"]
 			merged["occurredAt"] = probe["occurredAt"]
+			if execution, ok := probe["execution"]; ok {
+				merged["execution"] = execution
+				merged["eventId"] = probe["eventId"]
+			}
 			return merged, nil
 		}
 	}

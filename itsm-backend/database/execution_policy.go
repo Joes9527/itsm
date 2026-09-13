@@ -100,3 +100,15 @@ func (p *ExecutionPolicy) CandidateTenantIDs() []int {
 	sort.Ints(ids)
 	return ids
 }
+
+// CandidateRef returns a copy of the frozen identity, never execution permission.
+func (p *ExecutionPolicy) CandidateRef(tenantID int) (executionscope.Ref, error) {
+	ref, scoped, err := p.scopeFor(tenantID)
+	if err != nil {
+		return executionscope.Ref{}, err
+	}
+	if !scoped {
+		return executionscope.Ref{}, executionscope.ErrDenied
+	}
+	return ref, nil
+}

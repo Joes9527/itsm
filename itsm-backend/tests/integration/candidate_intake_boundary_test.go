@@ -48,8 +48,10 @@ import (
 	"itsm-backend/handlers/intake"
 	problemdomain "itsm-backend/handlers/problem"
 	catalogdomain "itsm-backend/handlers/service_catalog"
+	"itsm-backend/handlers/shared"
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/migration"
+	"itsm-backend/pkg/eventbus"
 	ticketrepo "itsm-backend/repository/ticket"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
@@ -1945,6 +1947,80 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.Equal(t, []int{before[0] + 2, before[1] + 1}, counts())
 
 	})
+	t.Run("stream source requires current persistent authority", func(t *testing.T) {
+		fresh, err := app.Create(ctx, identity, command("stream-source-member", "generic"))
+		require.NoError(t, err)
+		other, err := app.Create(ctx, identity, command("stream-other-member", "generic"))
+		require.NoError(t, err)
+		owner.Ticket.UpdateOneID(fresh.WorkItemID).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(-time.Hour)).SetSLAResolutionDeadline(time.Now().Add(time.Hour)).SaveX(ctx)
+		monitor := service.NewSLAMonitorService(runtime, zap.NewNop().Sugar(), policy)
+		monitor.SetNotificationService(service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy))
+		_, err = monitor.CheckSLAViolations(ctx, tenant.ID)
+		require.NoError(t, err)
+		row := owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(fresh.WorkItemID), outboxevent.EventTypeEQ("sla.breached")).OnlyX(ctx)
+		capture := &candidateSourceCaptureBus{}
+		previous := eventbus.GetGlobalEventBus()
+		eventbus.SetGlobalEventBus(capture)
+		defer eventbus.SetGlobalEventBus(previous)
+		require.NoError(t, service.NewSLABreachDeliveryHandler().Deliver(ctx, row))
+		require.Len(t, capture.events, 1)
+		source := capture.events[0].(interface {
+			EventType() string
+			TenantID() string
+			OccurredAt() time.Time
+			ExecutionWorkItemID() int
+			PersistentEventID() string
+		})
+		payload, err := json.Marshal(source)
+		require.NoError(t, err)
+		envelope := eventbus.Envelope{EventType: source.EventType(), TenantID: source.TenantID(), OccurredAt: source.OccurredAt(), EventID: source.PersistentEventID(), Payload: payload, Execution: &eventbus.ExecutionIdentity{DeploymentID: "intake-test", ScopeID: scopeID, WorkItemID: source.ExecutionWorkItemID()}}
+		ref := executionscope.Ref{DeploymentID: "intake-test", ScopeID: scopeID, TenantID: tenant.ID}
+		authority := service.NewExecutionEventAuthority(runtime, policy)
+		var before string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(e)::text FROM outbox_events e WHERE id=$1`, row.ID).Scan(&before))
+		audits := owner.AuditLog.Query().CountX(ctx)
+		require.NoError(t, authority.ValidateEvent(ctx, ref, envelope))
+		for _, mutate := range []func(*eventbus.Envelope){
+			func(e *eventbus.Envelope) { e.EventID = "unknown-persistent-event" },
+			func(e *eventbus.Envelope) { e.Execution.WorkItemID = other.WorkItemID },
+			func(e *eventbus.Envelope) { e.Execution.WorkItemID = historical.WorkItemID },
+			func(e *eventbus.Envelope) { e.Execution.ScopeID = uuid.NewString() },
+			func(e *eventbus.Envelope) { e.TenantID = fmt.Sprint(tenant.ID + 1) },
+			func(e *eventbus.Envelope) { e.EventType = "unregistered.event" },
+			func(e *eventbus.Envelope) {
+				e.Payload = json.RawMessage(strings.Replace(string(e.Payload), "response", "resolve", 1))
+			},
+			func(e *eventbus.Envelope) { e.OccurredAt = e.OccurredAt.Add(time.Second) },
+		} {
+			changed := envelope
+			execution := *envelope.Execution
+			changed.Execution = &execution
+			mutate(&changed)
+			require.Error(t, authority.ValidateEvent(ctx, ref, changed))
+		}
+		t.Cleanup(func() {
+			_, e := ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+			require.NoError(t, e)
+			_, e = ownerDB.ExecContext(ctx, "UPDATE execution_runtime_bindings SET deployment_id='intake-test' WHERE runtime_role=$1", runtimeRole)
+			require.NoError(t, e)
+		})
+		_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='closed' WHERE id=$1", scopeID)
+		require.NoError(t, err)
+		require.Error(t, authority.ValidateEvent(ctx, ref, envelope))
+		_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+		require.NoError(t, err)
+		_, err = ownerDB.ExecContext(ctx, "UPDATE execution_runtime_bindings SET deployment_id='other-stream-test' WHERE runtime_role=$1", runtimeRole)
+		require.NoError(t, err)
+		require.Error(t, authority.ValidateEvent(ctx, ref, envelope))
+		_, err = ownerDB.ExecContext(ctx, "UPDATE execution_runtime_bindings SET deployment_id='intake-test' WHERE runtime_role=$1", runtimeRole)
+		require.NoError(t, err)
+		require.NoError(t, authority.ValidateEvent(ctx, ref, envelope))
+		var after string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(e)::text FROM outbox_events e WHERE id=$1`, row.ID).Scan(&after))
+		require.JSONEq(t, before, after)
+		require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx), "source validation must not write audit")
+	})
+
 	t.Run("real SLA scan preserves historical violations", func(t *testing.T) {
 		fresh, err := app.Create(ctx, identity, command("sla-scan-member", "generic"))
 		require.NoError(t, err)
@@ -3751,3 +3827,11 @@ func editCommandForTest(id int, input *dto.TicketEditCommand, tenantID int) dto.
 	}
 	return cmd
 }
+
+type candidateSourceCaptureBus struct{ events []interface{} }
+
+func (b *candidateSourceCaptureBus) Publish(event interface{}) error {
+	b.events = append(b.events, event)
+	return nil
+}
+func (*candidateSourceCaptureBus) Subscribe(string, shared.EventHandler) error { return nil }

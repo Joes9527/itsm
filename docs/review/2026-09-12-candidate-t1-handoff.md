@@ -815,3 +815,17 @@ Callback contract新增version及generic typed lifecycle result，沿既有流�
 `s5-stream-routing-regression.log` eventbus及bootstrap完整包回归PASS；`s5-stream-routing-build.log` 全后端build exit0。独立review_execution_scope_s1限定审阅无新增阻断，建议的双租户真实路由补强已采纳；git diff --check通过。未改前端，不重复前端验证。
 
 下一阶段仍需贯通窄authority与同一冻结数据库ExecutionPolicy，校验active scope、role binding、tenant/member，并用持久outbox eventID及结构主体验证生产来源；合法member本身不证明Redis payload是业务事实。消费信封须严格校验并保留可信身份，原审计写事务再次准入/幂等并在成功后ACK。当前fanout没有持久消费组恢复保证，namespace不能解决离线遗漏或重复审计；无效消息可观察阻断、建单前无主体AI事件处理、订阅取消/恢复及真实Redis+PG联测均待完成。本阶段不构成candidate启动许可，S5、完整B2/B3/T3/T4/G2/G3仍未完成；固定CandidateSHA不变，候选未启动，无WSL或共享数据操作、企业实发、推送或main合并。
+
+### B2 S5 持久事件来源与严格信封校验（2026-09-13）
+
+在 `ea8c2494a` 后接入候选Stream来源校验。`s5-stream-source-red.log` 实际复现无持久主体的stable event被发布；随后唯一Watermill构造器增加必需的candidate EventAuthority，bootstrap注入原runtime client及原冻结ExecutionPolicy。candidate Publish要求ExecutionEvent提供持久eventID/WorkItemID，outer execution由冻结route生成，经authority验证后才写Redis；消息UUID复用持久eventID，不在重试生成新操作身份。标准发布合同保留，建单前无主体AI事件在候选中明确返回发布错误，原调用者记录告警，未捏造WorkItem或把payload scope当授权。
+
+新ExecutionEventAuthority通过复制的CandidateRef核对两边冻结清单，在明确tenant事务中执行原BindEnt/RequireEntMembers，检查active scope和session_user binding，再按tenant/结构WorkItem/eventID查询持久Outbox来源。SLABreachDeliveryHandler提取唯一persistedSLABreach factory，producer及authority复用其契约，按原SLA事实重建payload/occurredAt并比对；当前仅SLA具有该持久来源，未知事件显式拒绝。source检查是只读事务，不声明与Redis原子，也不表示持有发送claim；审计写事务仍必须再次准入。对JSON载荷采用生产者规范编码进行比对，仅允许空白差异，未提供多种等价编码兼容入口。
+
+candidate消费循环在调用handler前核对消息UUID、metadata、物理route和完整信封，再执行同authority。信封有大小/深度上限，拒绝未知字段、重复字段、缺失持久身份和payload覆盖outer身份；保持outer execution/eventId传递给原handler。审阅发现encoding/json大小写别名仍可覆盖struct字段P2，增加outer/execution两层精确key白名单并补EventId/WorkItemId/重复大小写负测，复审关闭。失败消息NACK并记录错误，不ACK成功；当前fanout的无效消息重投行为及持久消费恢复仍待下一阶段处理。
+
+`s5-stream-source-pg.log` 真实私有PG专项PASS：真实SLA monitor创建持久outbox，真实SLA handler经capture bus给出来源，authority拒绝未知ID、另一个合法member、历史member、变造payload/时间/tenant/scope及未知type；scope关闭或rolebinding变化后拒绝，恢复后原消息再次通过。原Outbox整行及audit数保持。此测试capture bus不代表Redis+PG联合消费。受控channel+fake authority单测通过真实bus消费循环验证合法ACK、非法UUID/tenant/scope/eventID/大小写字段NACK和零handler调用；不宣称Redis服务端PEL验收。
+
+最终 `s5-stream-source-final-pg.log` 完整TestCandidateIntakeCreationBoundary、真实Redis双租户路由及完整应用构造PG/Redis/MinIO保全PASS无skip；Redis路由用明确fixture authority，不代替上述数据库权威测试。`s5-stream-source-regression.log` eventbus/bootstrap/database/service相关定向回归PASS，`s5-stream-source-build.log` 全后端build exit0，git diff --check通过。独立review_execution_scope_s1复审无新增阻断。前端未改，不重复前端测试。
+
+后续必须完成审计原事务当前准入/持久幂等回执、真实Redis消费组身份和起始/恢复语义、无效消息可观察阻断且避免热循环、退出等待及真实Redis+PG联合重启验证；直接调用审计/webhook所有者不能绕过边界。当前消息来源校验不替代这些要求，S5和完整B2/B3/T3/T4/G2/G3仍未完成，固定CandidateSHA保持d7470a32dbb87acc9b5e4d9a895a146410723561，候选未启动。无WSL或共享数据库变更、企业实发、推送或main合并。
