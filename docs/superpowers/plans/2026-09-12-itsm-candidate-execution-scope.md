@@ -127,6 +127,9 @@ S3 阶段记录（2026-09-13；基础提交 `6261941b4`，统一创建接入 `04
 
 S3/S4/S5/S6及候选完整交付仍未完成，CandidateSHA不变、候选停止。
 
+
+读取副作用修复 `9654afcab`：GetTicket仅保留repo.GetByID，删除读后Feishu goroutine/事务/映射更新。s3-ticket-read-feishu-red.log实际本地connector在Get后PATCH由1→2；green.log正向connector仍可用但Get不增加PATCH、mapping JSON不变，原两项创建意图回归亦PASS。service/controller读取定向与全后端build通过，独立复审无阻断。SQLite/httptest一秒有界观察加源码删除佐证，不作为完整候选PG或真实企业证据。六处业务写直接同步及手动同步API仍待接入，S3复合项保持未完成；完整范围验收及固定CandidateSHA/停止状态不变，见T1最新交接。
+
 ## S4：队列原子领取、恢复及周期执行
 
 历史 claim RED（`s4-kaf-historical-claim-red.log`）已由 `de22553c2` 修复：两条冻结 policy 构造链贯通，claim INSERT/独立 lease CAS、finalize/non-completing、completion receipt/callback recovery 原事务准入；异步恢复复用首次完成变量校验，修复误要求同步合同。真实 PG 验证历史0写、新成员claim/重复冲突、closed scope过期lease拒绝、completion及恢复保全与active恢复，最终定向回归/构建/独立审阅通过。CreateDelegatedTask 两条入口现已补齐原事务准入，joined入口改显式*ent.Tx；真实 PG 历史拒绝、新成员生成/引用、joined主动回滚及两入口outbox写后故障回滚通过，构建/回归/限定独立复审通过，见T1最新检查点。仍是分段测试，不代表完整ExecuteAction或真实BPMN节点推进；通用worker、历史applied回放及全部finalize分支等专项未完成。详见T1最新交接，S4继续未勾选。
