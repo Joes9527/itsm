@@ -26,11 +26,7 @@ func NewExecutionEventAuthority(client *ent.Client, policy *database.ExecutionPo
 	return &ExecutionEventAuthority{client: client, policy: policy}
 }
 func (a *ExecutionEventAuthority) ValidateEvent(ctx context.Context, ref executionscope.Ref, env eventbus.Envelope) error {
-	if a == nil || a.client == nil || a.policy == nil || ctx == nil || env.Execution == nil {
-		return executionscope.ErrDenied
-	}
-	frozen, err := a.policy.CandidateRef(ref.TenantID)
-	if err != nil || frozen != ref || env.TenantID != strconv.Itoa(ref.TenantID) || env.Execution.ScopeID != ref.ScopeID || env.Execution.DeploymentID != ref.DeploymentID {
+	if a == nil || a.client == nil || ctx == nil {
 		return executionscope.ErrDenied
 	}
 	if tenant, ok := tenantctx.TenantID(ctx); ok && tenant != ref.TenantID {
@@ -45,6 +41,31 @@ func (a *ExecutionEventAuthority) ValidateEvent(ctx context.Context, ref executi
 		return err
 	}
 	defer tx.Rollback()
+	return a.ValidateEventTx(ctx, tx, ref, env)
+}
+
+// ValidateEventTx uses only the caller's transaction. The consuming owner must
+// use this again in the same transaction as its durable write and receipt.
+func (a *ExecutionEventAuthority) ValidateEventTx(ctx context.Context, tx *ent.Tx, ref executionscope.Ref, env eventbus.Envelope) error {
+	if a == nil || a.client == nil || a.policy == nil || ctx == nil || env.Execution == nil {
+		return executionscope.ErrDenied
+	}
+	frozen, err := a.policy.CandidateRef(ref.TenantID)
+	if err != nil || frozen != ref || env.TenantID != strconv.Itoa(ref.TenantID) || env.Execution.ScopeID != ref.ScopeID || env.Execution.DeploymentID != ref.DeploymentID {
+		return executionscope.ErrDenied
+	}
+	if tenant, ok := tenantctx.TenantID(ctx); ok && tenant != ref.TenantID {
+		return executionscope.ErrDenied
+	}
+	if tenantctx.IsSystemBypass(ctx) {
+		return executionscope.ErrDenied
+	}
+	if tx == nil {
+		return executionscope.ErrDenied
+	}
+	if tenant, ok := tenantctx.TenantID(ctx); !ok || tenant != ref.TenantID {
+		return executionscope.ErrDenied
+	}
 	if err := a.policy.BindEnt(ctx, tx, ref.TenantID); err != nil {
 		return err
 	}

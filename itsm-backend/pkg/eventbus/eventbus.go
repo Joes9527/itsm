@@ -55,6 +55,10 @@ type WatermillEventBus struct {
 	subscriptions []subscription
 }
 
+type ContextEventHandler interface {
+	HandleContext(context.Context, interface{}) error
+}
+
 type streamSubscriber interface {
 	Subscribe(context.Context, string) (<-chan *message.Message, error)
 	Close() error
@@ -297,6 +301,7 @@ func (eb *WatermillEventBus) subscribeRoute(eventType string, route streamRoute,
 	go func() {
 		defer eb.consumers.Done()
 		for msg := range messages {
+			var deliver interface{}
 			// Candidate identity is checked before unwrapping or invoking a writer.
 			if eb.routes.candidate {
 				env, decodeErr := DecodeExecutionEnvelope(msg.Payload)
@@ -319,17 +324,24 @@ func (eb *WatermillEventBus) subscribeRoute(eventType string, route streamRoute,
 					msg.Nack()
 					continue
 				}
-			}
-			// Unwrap envelope (if present) and pass the raw payload JSON to the handler
-			deliver, err := unwrapEnvelope(msg.Payload)
-			if err != nil {
-				eb.logger.Errorw("Failed to unwrap event payload", "event_type", eventType, "error", err)
-				msg.Nack()
-				continue
+				deliver = env
+			} else {
+				var err error
+				deliver, err = unwrapEnvelope(msg.Payload)
+				if err != nil {
+					eb.logger.Errorw("Failed to unwrap event payload", "event_type", eventType, "error", err)
+					msg.Nack()
+					continue
+				}
 			}
 
-			// Call handler
-			if err := handler.Handle(deliver); err != nil {
+			var handleErr error
+			if contextual, ok := handler.(ContextEventHandler); ok {
+				handleErr = contextual.HandleContext(ctx, deliver)
+			} else {
+				handleErr = handler.Handle(deliver)
+			}
+			if err := handleErr; err != nil {
 				eb.logger.Errorw("Failed to handle event", "event_type", eventType, "error", err)
 				msg.Nack()
 				continue

@@ -829,3 +829,19 @@ candidate消费循环在调用handler前核对消息UUID、metadata、物理rout
 最终 `s5-stream-source-final-pg.log` 完整TestCandidateIntakeCreationBoundary、真实Redis双租户路由及完整应用构造PG/Redis/MinIO保全PASS无skip；Redis路由用明确fixture authority，不代替上述数据库权威测试。`s5-stream-source-regression.log` eventbus/bootstrap/database/service相关定向回归PASS，`s5-stream-source-build.log` 全后端build exit0，git diff --check通过。独立review_execution_scope_s1复审无新增阻断。前端未改，不重复前端测试。
 
 后续必须完成审计原事务当前准入/持久幂等回执、真实Redis消费组身份和起始/恢复语义、无效消息可观察阻断且避免热循环、退出等待及真实Redis+PG联合重启验证；直接调用审计/webhook所有者不能绕过边界。当前消息来源校验不替代这些要求，S5和完整B2/B3/T3/T4/G2/G3仍未完成，固定CandidateSHA保持d7470a32dbb87acc9b5e4d9a895a146410723561，候选未启动。无WSL或共享数据库变更、企业实发、推送或main合并。
+
+### B2 S5 审计原事务、唯一回执与消费上下文（2026-09-13）
+
+在 `d8e3d0420` 后接入原EventAuditSubscriber。真实PG首轮 `s5-event-audit-red.log` 在首次写前触发RLS缺tenant：原Handle使用context.Background()，不能作为候选写入入口。先补显式tenant后，`s5-event-audit-persistent-duplicate-red.log` 再现同一持久事件两次调用新增两条审计（期望18，实际19）。另一次SQLite试验未用于定义standard无事件ID消息的幂等合同，原standard单次审计测试保留。
+
+唯一构造器现在必需原ExecutionPolicy；candidate HandleContext只接受完整typed Envelope并自行严格解析，拒绝直接raw map。以明确tenant开始RR事务，调用抽出的ValidateEventTx在该事务检查当前scope/binding/member及持久来源，随后查询或写入原AuditLog。系统actor0+event_audit:<持久eventID>复用现有唯一operation receipt索引；完整身份/内容digest、规范化body、resource/action/path/method/status及recorded结果共同匹配才只读重放，保留原CreatedAt，不填造WorkItem version。唯一冲突直接返回并回滚，下一次投递另开事务重放。无新表、额外回执状态机或历史回填。
+
+candidate bus不再flatten信封，保留typed Envelope交给owner；ContextEventHandler实际收到订阅context，关闭bus后同一context取消。standard仍用原map入口，同时拒绝未知审计type/无效tenant/外tenant上下文，不为无持久事件ID的standard消息宣称新增幂等保证。Webhook当前不能接受typed Envelope而明确返回错误，未暗中转换回map，不能将本轮说成所有subscriber可用。
+
+`s5-event-audit-atomic-pg.log` 真实PG验证AuditLog实际INSERT后注入失败整事务回滚，计数回到原值；移除故障后两个调用均在Audit INSERT前barrier会合，一次提交、另一次PQ23505，唯一回执。失败方原消息重试成功，完整receipt行保全；变造事实、关闭scope后的原消息重放均拒绝，恢复scope后原回执可读。测试中的scope/binding控制变更有cleanup恢复，仅位于任务私有库。此处直接调用owner，不声称Redis ACK丢失E2E。
+
+`s5-event-audit-final-pg.log` 完整候选intake边界、真实Redis双租户路由、完整应用构造PG/Redis/MinIO保全PASS无skip；`s5-event-audit-build.log` 全后端build exit0。`s5-event-audit-regression.log` eventbus/bootstrap/service相关回归PASS；初次测试fixture误传Standard(t)只造成编译失败，改为实际Standard()后通过，不计业务RED。受控channel消费测试验证ContextEventHandler收到真实订阅context并随Close取消，仍不是Redis服务端ACK/PEL证据。独立review_execution_scope_s1无新增阻断，旧map注释已纠正；git diff --check通过。
+
+`s5-event-audit-race.log` 上述真实PG来源及审计故障/确定性竞争专项通过Go race检测。
+
+S5仍需真实Redis消费组配置、无效消息持久阻断/避免热循环、已提交未ACK恢复及Redis+PG联合消费验证，Webhook直接owner准入和其余请求异步边界也未完成。固定CandidateSHA不变、候选未启动，完整B2/B3/T3/T4/G2/G3未完成；无WSL或共享数据操作、企业实发、推送或main合并。

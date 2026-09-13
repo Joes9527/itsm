@@ -308,7 +308,7 @@ func NewApplication() *Application {
 	sugar.Infow("Event bus initialized successfully")
 
 	// 事件驱动审计订阅方：sla.breached / ai.triage.completed 写入 AuditLog
-	auditSubscriber := service.NewEventAuditSubscriber(client, sugar)
+	auditSubscriber := service.NewEventAuditSubscriber(client, sugar, executionPolicy)
 	for _, topic := range service.AuditedEventTopics() {
 		if !cfg.Execution.Enabled("event_audit") {
 			continue

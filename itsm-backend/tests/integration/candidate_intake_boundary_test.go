@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -2019,6 +2020,100 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(e)::text FROM outbox_events e WHERE id=$1`, row.ID).Scan(&after))
 		require.JSONEq(t, before, after)
 		require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx), "source validation must not write audit")
+		t.Run("event audit deduplicates persistent delivery", func(t *testing.T) {
+			wire, err := json.Marshal(envelope)
+			require.NoError(t, err)
+			var delivered map[string]interface{}
+			require.NoError(t, json.Unmarshal(wire, &delivered))
+			audit := service.NewEventAuditSubscriber(runtime, zap.NewNop().Sugar(), policy)
+			before := owner.AuditLog.Query().CountX(ctx)
+			require.Error(t, audit.Handle(delivered), "raw map cannot bypass candidate envelope validation")
+			fault := true
+			insertedBeforeFault := false
+			racing := false
+			arrived := make(chan struct{}, 2)
+			release := make(chan struct{})
+			var releaseOnce sync.Once
+			defer releaseOnce.Do(func() { close(release) })
+			runtime.AuditLog.Use(func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(hookCtx context.Context, mutation ent.Mutation) (ent.Value, error) {
+					m, ok := mutation.(*ent.AuditLogMutation)
+					operation, has := "", false
+					if ok {
+						operation, has = m.OperationID()
+					}
+					matches := has && operation == "event_audit:"+envelope.EventID
+					if matches && racing {
+						arrived <- struct{}{}
+						select {
+						case <-release:
+						case <-hookCtx.Done():
+							return nil, hookCtx.Err()
+						}
+					}
+					value, err := next.Mutate(hookCtx, mutation)
+					if err == nil && matches && fault {
+						insertedBeforeFault = true
+						return nil, errors.New("audit receipt post-insert fault")
+					}
+					return value, err
+				})
+			})
+			require.ErrorContains(t, audit.Handle(envelope), "post-insert fault")
+			require.True(t, insertedBeforeFault)
+			require.Equal(t, before, owner.AuditLog.Query().CountX(ctx), "failed insert transaction must leave no receipt")
+			fault = false
+			racing = true
+			results := make(chan error, 2)
+			for i := 0; i < 2; i++ {
+				go func() { results <- audit.HandleContext(ctx, envelope) }()
+			}
+			for i := 0; i < 2; i++ {
+				select {
+				case <-arrived:
+				case <-time.After(5 * time.Second):
+					t.Fatal("both deliveries must reach INSERT without a receipt")
+				}
+			}
+			releaseOnce.Do(func() { close(release) })
+			successes, conflicts := 0, 0
+			for i := 0; i < 2; i++ {
+				select {
+				case err := <-results:
+					if err == nil {
+						successes++
+					} else {
+						var pg *pq.Error
+						require.ErrorAs(t, err, &pg)
+						require.Equal(t, pq.ErrorCode("23505"), pg.Code)
+						conflicts++
+					}
+				case <-time.After(5 * time.Second):
+					t.Fatal("audit delivery did not complete")
+				}
+			}
+			racing = false
+			require.Equal(t, 1, successes)
+			require.Equal(t, 1, conflicts)
+			require.Equal(t, before+1, owner.AuditLog.Query().CountX(ctx))
+			var receiptBefore string
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(a)::text FROM audit_logs a WHERE tenant_id=$1 AND user_id=0 AND operation_id=$2`, tenant.ID, "event_audit:"+envelope.EventID).Scan(&receiptBefore))
+			require.NoError(t, audit.Handle(envelope))
+			require.Equal(t, before+1, owner.AuditLog.Query().CountX(ctx), "duplicate event must reuse the original audit receipt")
+			changed := envelope
+			changed.Payload = json.RawMessage(strings.Replace(string(changed.Payload), "response", "resolve", 1))
+			require.Error(t, audit.Handle(changed), "receipt cannot authorize changed event facts")
+			_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='closed' WHERE id=$1", scopeID)
+			require.NoError(t, err)
+			require.Error(t, audit.Handle(envelope), "current scope is checked even for replay")
+			_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+			require.NoError(t, err)
+			require.NoError(t, audit.Handle(envelope))
+			var receiptAfter string
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(a)::text FROM audit_logs a WHERE tenant_id=$1 AND user_id=0 AND operation_id=$2`, tenant.ID, "event_audit:"+envelope.EventID).Scan(&receiptAfter))
+			require.JSONEq(t, receiptBefore, receiptAfter)
+			require.Equal(t, before+1, owner.AuditLog.Query().CountX(ctx))
+		})
 	})
 
 	t.Run("real SLA scan preserves historical violations", func(t *testing.T) {

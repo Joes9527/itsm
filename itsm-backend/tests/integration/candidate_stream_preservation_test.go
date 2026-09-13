@@ -117,15 +117,15 @@ func TestCandidateStreamPreservesLegacyTopicOnPublish(t *testing.T) {
 	require.NoError(t, bus.Publish(candidateStreamEvent{tenantID: 1, WorkItemID: 200, DeploymentID: "payload-cannot-route", ScopeID: uuid.NewString()}))
 	select {
 	case event := <-observed:
-		require.EqualValues(t, 200, event.(map[string]interface{})["workItemId"], "new event positive control")
+		require.EqualValues(t, 200, event.(eventbus.Envelope).Execution.WorkItemID, "new event positive control")
 	case <-ctx.Done():
 		t.Fatal("subscriber did not process new event")
 	}
 	require.NoError(t, bus.Publish(candidateStreamEvent{tenantID: 2, WorkItemID: 300}))
 	select {
 	case event := <-observed:
-		require.EqualValues(t, 300, event.(map[string]interface{})["workItemId"])
-		require.Equal(t, "2", event.(map[string]interface{})["tenantId"])
+		require.EqualValues(t, 300, event.(eventbus.Envelope).Execution.WorkItemID)
+		require.Equal(t, "2", event.(eventbus.Envelope).TenantID)
 	case <-ctx.Done():
 		t.Fatal("second tenant subscriber did not process its new event")
 	}

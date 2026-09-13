@@ -88,8 +88,15 @@ func (s *controlledStreamSubscriber) Subscribe(ctx context.Context, _ string) (<
 }
 func (*controlledStreamSubscriber) Close() error { return nil }
 
-type observedStreamHandler struct{ received chan interface{} }
+type observedStreamHandler struct {
+	received chan interface{}
+	contexts chan context.Context
+}
 
+func (h observedStreamHandler) HandleContext(ctx context.Context, event interface{}) error {
+	h.contexts <- ctx
+	return h.Handle(event)
+}
 func (h observedStreamHandler) Handle(event interface{}) error { h.received <- event; return nil }
 
 func TestCandidateSubscriberNacksUntrustedMessagesBeforeHandler(t *testing.T) {
@@ -98,13 +105,14 @@ func TestCandidateSubscriberNacksUntrustedMessagesBeforeHandler(t *testing.T) {
 	require.NoError(t, err)
 	subscription := &controlledStreamSubscriber{messages: make(chan *message.Message, 1)}
 	received := make(chan interface{}, 1)
+	contexts := make(chan context.Context, 1)
 	bus := &WatermillEventBus{routes: routes, publisher: &fakePublisher{}, subscriber: subscription, logger: zap.NewNop().Sugar(), authority: eventAuthorityFunc(func(_ context.Context, _ executionscope.Ref, env Envelope) error {
 		if env.EventID != "persisted-41" {
 			return errors.New("source missing")
 		}
 		return nil
 	})}
-	require.NoError(t, bus.RegisterSubscription("sla.breached", observedStreamHandler{received}))
+	require.NoError(t, bus.RegisterSubscription("sla.breached", observedStreamHandler{received, contexts}))
 	require.NoError(t, bus.Start(context.Background()))
 	defer bus.Close()
 	env := Envelope{EventID: "persisted-41", Execution: &ExecutionIdentity{DeploymentID: "source-test", ScopeID: scope, WorkItemID: 41}, EventType: "sla.breached", TenantID: "1", OccurredAt: time.Now().UTC(), Payload: json.RawMessage(`{"ticket_id":"41"}`)}
@@ -122,7 +130,9 @@ func TestCandidateSubscriberNacksUntrustedMessagesBeforeHandler(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("valid source was not acknowledged")
 	}
-	require.Equal(t, "persisted-41", (<-received).(map[string]interface{})["eventId"])
+	require.Equal(t, "persisted-41", (<-received).(Envelope).EventID)
+	deliveryContext := <-contexts
+	require.NoError(t, deliveryContext.Err())
 	for _, bad := range []*message.Message{
 		makeMessage("different-id", wire),
 		makeMessage(env.EventID, []byte(strings.Replace(string(wire), `"tenantId":"1"`, `"tenantId":"2"`, 1))),
@@ -147,4 +157,6 @@ func TestCandidateSubscriberNacksUntrustedMessagesBeforeHandler(t *testing.T) {
 		default:
 		}
 	}
+	require.NoError(t, bus.Close())
+	require.ErrorIs(t, deliveryContext.Err(), context.Canceled)
 }
