@@ -230,10 +230,15 @@ func (s *EmailService) sendViaGraph(ctx context.Context, sender GraphMailSender,
 	if body == "" {
 		body = msg.Body
 	}
-	for _, to := range msg.To {
+	for index, to := range msg.To {
 		if err := sender.SendMail(ctx, mailbox, to, msg.Subject, body, msg.DeliveryID); err != nil {
 			s.logger.Errorw("email Graph delivery failed", "error_class", emailErrorClassGraphSend)
-			return newEmailTransportError("graph", emailTransportStageOf(err, "send_mail"), emailTransportOutcomeOf(err), err)
+			outcome := emailTransportOutcomeOf(err)
+			if index > 0 {
+				// Earlier recipients were accepted; retrying the whole intent could duplicate delivery.
+				outcome = emailAcceptanceUnknown
+			}
+			return newEmailTransportError("graph", emailTransportStageOf(err, "send_mail"), outcome, err)
 		}
 	}
 	s.logger.Infow("email delivered via Graph")

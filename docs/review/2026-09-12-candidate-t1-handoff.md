@@ -1539,3 +1539,16 @@ Ent生成只涉及ticketnotification模型/元数据/相关runtime与mutation，
 本步仅结构前置，producer/worker和Incident outbox尚未接v2；CHECK为保留历史允许全NULL，新意图缺目标仍须后续原事务拒绝，原邮件重绑RED未关闭。CandidateSHA与候选停止状态不变，无WSL/共享数据库操作、企业外发、push/main合并，S5/S6/T3/T4/G3未完成。
 
 最终验证：s5-email-target-ent-generate.log Ent生成exit0；s5-email-target-migration-unit.log migration全包race PASS；s5-email-target-migration-final-pg.log最终私有PG定向045用例PASS；s5-email-target-migration-full-private.log既定私有PG16/Redis/MinIO完整suite race PASS，均无FAIL/SKIP/DATA RACE；s5-email-target-migration-build.log全后端build exit0。原044文件diff为空，git diff --check通过，本轮Go进程已退出。
+
+
+### B2 S5 固定EmailTarget发送入口（2026-09-14）
+
+s5-email-bound-send-red.log先复现缺SendToTarget。新增EmailTarget.Validate与EmailService.SendToTarget，按记录transport执行，核验调用租户与冻结能力，不读取当前默认通道、持久配置或live GraphProvider。Graph从原Manager精确解析绑定实例，发送前核对digest，发送后复核generation/digest；GraphConnector经捕获的mailbox调用原client，拒绝调用者替换mailbox。SMTP捕获实际配置并核对摘要，强制单次尝试；发送后目标改变归为acceptance_unknown。
+
+独立审阅指出部分成功及不支持字段必须收紧。s5-email-bound-fields-red.log精确复现CC静默忽略及多收件人部分成功误判not_accepted；固定Graph入口现于外呼前拒绝CC/附件/HTML-only，多收件人前面已有接受后发生错误一律unknown，避免整条意图重发。原sendViaGraph的多收件人分类同步修正。最终独立只读复审未发现本发送前置范围剩余阻断。
+
+真实Graph loopback证明稳定目标发送、发送前mailbox重绑零HTTP、发送中相同配置实例换代返回unknown、不支持字段零HTTP。SMTP loopback证明原目标实际DATA接受且不查询Graph selector；host/port/username/from变化拒绝且零sender调用，密码轮换允许一次注入失败sender尝试、不等于新密码实际认证成功。另验证无tenant/错tenant拒绝、v2形状负例。部分多收件人结果分类为sender单元测试，不冒称真实多封邮件验收。
+
+最终验证：s5-email-bound-send-final.log service/Graph具名race PASS，非service全量；首次regression命令误写./bootstrap导致setup失败，正确路径./internal/bootstrap的s5-email-bound-send-regression-corrected.log connector/.../bootstrap/database全包race PASS；s5-email-bound-send-full-private.log既定私有PG16/Redis/MinIO suite race PASS，均无FAIL/SKIP/DATA RACE；s5-email-bound-send-build.log全后端build exit0。git diff --check通过，所有本轮Go进程退出。
+
+此步仅发送前置，原producer/worker/Incident outbox仍未接v2；原队列邮件重绑RED未关闭。下一步把EmailTarget写入原通知事务，并在worker按持久目标调用新入口，更新原真实正例以验证领取/回执，而不是以生产失败代替重绑验收。固定CandidateSHA不变，候选停止；无WSL/共享数据库操作、企业外发、push/main合并，S5/S6/T3/T4/G3未完成。

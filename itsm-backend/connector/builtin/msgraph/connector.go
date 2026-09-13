@@ -71,6 +71,15 @@ func (g *GraphConnector) Send(ctx context.Context, msg *connector.Message) error
 	return g.client.SendMail(ctx, g.mailbox, msg.Channel, msg.Title, msg.Content, "")
 }
 
+// SendMail exposes the original mail client through its captured connector
+// identity. A caller cannot substitute another mailbox on this bound sender.
+func (g *GraphConnector) SendMail(ctx context.Context, mailbox, to, subject, body, deliveryID string) error {
+	if g.client == nil || mailbox != g.mailbox {
+		return &deliveryOutcomeError{stage: "target", outcome: "not_accepted", err: fmt.Errorf("msgraph: delivery identity mismatch")}
+	}
+	return g.client.SendMail(ctx, g.mailbox, to, subject, body, deliveryID)
+}
+
 func (g *GraphConnector) HealthCheck(ctx context.Context) connector.HealthStatus {
 	if g.client == nil {
 		return connector.HealthStatus{OK: false, Message: "not initialized", CheckedAt: time.Now()}

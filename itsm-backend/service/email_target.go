@@ -26,6 +26,27 @@ type EmailTarget struct {
 	DestinationDigest string `json:"destinationDigest"`
 }
 
+// Validate rejects legacy, incomplete and cross-transport target identities.
+func (target EmailTarget) Validate() error {
+	if target.ProtocolVersion != 2 || len(target.DestinationDigest) != 64 || strings.ToLower(target.DestinationDigest) != target.DestinationDigest {
+		return executionscope.ErrDenied
+	}
+	if _, err := hex.DecodeString(target.DestinationDigest); err != nil {
+		return executionscope.ErrDenied
+	}
+	switch target.Transport {
+	case "graph":
+		if target.ConnectorName == "msgraph-email" && target.ConnectorProvider == "microsoft" {
+			return nil
+		}
+	case "smtp":
+		if target.ConnectorName == "" && target.ConnectorProvider == "" {
+			return nil
+		}
+	}
+	return executionscope.ErrDenied
+}
+
 // SetDeliveryTargetDependencies is trusted construction-time wiring, before
 // serving concurrent requests. It does not activate any provider.
 func (s *EmailService) SetDeliveryTargetDependencies(manager *connector.Manager, policy *database.ExecutionPolicy) {
