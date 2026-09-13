@@ -2651,6 +2651,47 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		}
 	})
 
+	t.Run("ticket edits preserve historical records and reject orphan tag writes", func(t *testing.T) {
+		svc := service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy, NotificationService: service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)})
+		fresh, err := app.Create(ctx, identity, command("ticket-edit-member", "generic"))
+		require.NoError(t, err)
+		for _, target := range []struct {
+			name   string
+			id     int
+			denied bool
+			stale  bool
+		}{
+			{"historical", historicalAlertItems[1], true, false},
+			{"member", fresh.WorkItemID, false, false},
+			{"stale", fresh.WorkItemID, false, true},
+		} {
+			before := owner.Ticket.GetX(ctx, target.id)
+			var beforeJSON, afterJSON string
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, target.id).Scan(&beforeJSON))
+			tagsBefore := owner.TicketTag.Query().CountX(ctx)
+			version := before.Version
+			if target.stale {
+				version--
+			}
+			updated, editErr := svc.UpdateTicket(ctx, target.id, &dto.UpdateTicketRequest{Title: "scoped edit " + target.name, Tags: []string{"edit-" + target.name}, Version: version, UserID: actor.ID}, tenant.ID)
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, target.id).Scan(&afterJSON))
+			if target.denied || target.stale {
+				if target.denied {
+					assert.ErrorIs(t, editErr, executionscope.ErrDenied)
+				} else {
+					assert.Error(t, editErr)
+				}
+				assert.JSONEq(t, beforeJSON, afterJSON, target.name)
+				assert.Equal(t, tagsBefore, owner.TicketTag.Query().CountX(ctx), "rejected edit must not create tags: %s", target.name)
+			} else {
+				require.NoError(t, editErr)
+				require.Equal(t, "scoped edit member", updated.Title)
+				require.Equal(t, before.Version+1, updated.Version)
+				require.Equal(t, tagsBefore+1, owner.TicketTag.Query().CountX(ctx))
+			}
+		}
+	})
+
 	t.Run("manual escalation persists Feishu update intent", func(t *testing.T) {
 		receiver := &candidateFeishuUpdater{destination: "local-test-destination"}
 		registry := connector.NewRegistry()

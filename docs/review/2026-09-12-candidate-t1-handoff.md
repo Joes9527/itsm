@@ -667,3 +667,16 @@ Callback contract新增version及generic typed lifecycle result，沿既有流�
 `TestTicketReadDoesNotUpdateFeishuTask`保存在现有integration/feishu_creation_delivery_test.go：真实SQLite映射、实际Feishu connector指向httptest本地接收端；先直接UpdateTask正向控制PATCH=1，再GetTicket。s3-ticket-read-feishu-red.log有效RED实际PATCH=2。移除后s3-ticket-read-feishu-green.log读取PATCH仍1、映射JSON原样，另两项原创建意图/手动自动共用创建意图测试PASS。观察窗口1秒为有界动态证据，源码中完整删除读后goroutine提供直接佐证，不声称任意延迟任务的形式化证明。s3-ticket-read-regression.log service/controller读取/Feishu定向PASS，build.json全后端exit0；本轮未重跑完整候选PG，未将SQLite测试写成候选环境验收。独立review_execution_scope_s1只读审阅无阻断。
 
 本轮仅修复GetTicket。剩余六处TicketService业务写调用UpdateExistingTicketTask及FeishuSyncService手动同步API仍绕过新update队列，需继续接入原事务/范围与可靠投递；不删除合法写入应产生的同步功能。S3/S4/S5/S6/B3/T3/T4/G2/G3仍未完成。固定CandidateSHA不变、候选保持停止，未执行企业调用、WSL/共享环境变更、共享迁移、推送或main合并。
+
+
+### B2 S3 工单编辑范围及标签事务有效RED（2026-09-13）
+
+在 `9654afcab` 后核验TicketService.UpdateTicket三个生产调用：TicketController普通编辑、UpdateSubtask、tool_queue.update_ticket。前两者覆盖req.UserID，普通编辑还有controller CanEdit；工具使用持久invocation actor但未传expectedVersion。服务当前不使用actor进行原事务授权，也无稳定operationId；repo.Update自读后CAS，标签ResolveTagIDsByNames(createMissing=true)在CAS前独立写入；状态通知、SLA违规关闭和Feishu goroutine在Ticket提交后执行，不能据此声称一个编辑命令原子完成。
+
+新增 `ticket edits preserve historical records and reject orphan tag writes`，`s3-ticket-edit-scope-red.log` 为真实私有PG16有效RED，无skip：039前generic historicalAlertItems[1]编辑未ErrDenied，title/updated_at改变、version1→2，并新增标签；新candidate member正常编辑标题/标签、version+1独立正向成功；随后传真实旧version1（当前2）被拒绝，Ticket整行保持，却留下另一个新标签。后者证明检查版本之前的标签写不在原事务，不能仅给最终UPDATE加member条件解决。当前仅新增失败测试，生产实现未修复，测试集不全绿，不沿用此前PASS。未运行HTTP/工具真实调用或企业发送。
+
+下一接入需统一trusted actor/source/operationId/expectedVersion并贯通普通编辑/子任务/工具与前端；原事务当前授权、历史合法receipt只读重放、scope/member及版本检查在任何tag写前完成，保留category/subtype/状态/专业共享字段边界。原仓储提供caller-tx更新而不另建并行实现，标签创建/关联、Ticket CAS、操作审计、必要状态通知/SLA收尾与Feishu update intent一起提交；飞书现有consumer仅验证manual escalation action/status，必须通过有界且审阅的命令来源契约扩展，不能伪造manual回执或删除合法同步。已有applied SLA冻结规则保持，不能借编辑重套策略。
+
+独立review_execution_scope_s1确认RED有效及计划方向无明显错误，并补充：子任务入口当前没有CanEdit且parent核验在事务外；工具approved expectedVersion必须持久化，operationId从invocation派生，不能重试时读取新version，业务成功后done记录失败靠receipt恢复。编辑Feishu事件必须继续使用相同event_type与稳定aggregate排序键，显式校验编辑receipt，不能另起类型越过手动升级前序或接受任意audit/action/status。
+
+完整S3/S4/S5/S6/B3/T3/T4/G2/G3仍未完成。CandidateSHA保持原值、候选未启动，无WSL/共享环境变更、企业实发、共享迁移、推送或main合并。
