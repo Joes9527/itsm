@@ -203,6 +203,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+消费推进检查点 `aab8dfcc2`：恢复坏消息之后合法消息必须可交付的原断言，两模式真实RED复现旧Watermill同步NACK阻塞；唯一bus的持久组底层改为有界新消息读取与带游标XAUTOCLAIM交替，NACK保留原PEL，业务ACK才XACK，确认失败可重领。首次真实claim核验Redis6.2+/实际ACL并保留领取结果，修复独立P2的命令存在不代表权限；空页非零游标持续扫描，损坏wire保留诊断且不panic/调用业务/ACK。真实Redis覆盖诊断WRONGTYPE、消费者重建、后续好消息、来源恢复、XACK禁用恢复、持续流量下pending推进、1/21条初始/跨页claim及双活消费者尾部无重复。eventbus/config/bootstrap race、最终完整私有PG/Redis/MinIO回归（含真实审计与两模式Webhook ACK缺口）、后端build和独立复核通过，无skip/race，详见T1最新记录。此检查点关闭下方历史记录中的队头阻塞缺陷，不把诊断当永久隔离；人工处置、实际进程/Redis服务重启、其它异步入口及全部后续门禁仍待完成。CandidateSHA和未启动状态不变，无共享环境操作或push/main合并。
+
 首次拒绝诊断 `d541ed9f3`：两模式typed/candidate拒绝在冻结物理topic/owner独立Redis hash以HSETNX保存固定原因/摘要/首次时间，零原载荷/UUID/error复制，仍NACK；首次事实不阻止重新授权。真实Redis两模式缺记录RED→持久记录/同PEL跨consumer保留/整行不变，WRONGTYPE故障保全且不ACK，fixture同消息授权恢复后ACK/PEL0且首记录不变。相关回归、完整私有环境race、build和独立限定复核通过，无skip/race。重要未完成项：首轮实现测试实际证明watermill同步ResendLoop会让坏消息阻住后续；该失败保留T1，当前没有实现永久隔离或人工处置，不能把删除本轮额外可用性断言当作修复。真实PG撤权联合恢复、Redis服务/应用进程重启及其它异步入口也未完成。此项仅为首次拒绝诊断，不放行S5/B2/B3/T3/T4/G2/G3；CandidateSHA及未启动状态不变。
 
 Webhook两模式统一 `4b7db1035`：普通同步外发分支及无生产调用SendToInstance已删除，普通/候选使用唯一typed消费事务、意图/Audit及原Webhook Worker。普通typed订阅采用稳定owner组并冻结登记身份，复用既有factory/Close；缺authority的登记/动态订阅P2经RED复现后在分配前拒绝，复审关闭。真实PG/Redis普通消费缺Audit RED→同组ACK缺口恢复、完整意图/回执保全、真实Worker两目标各一次published GREEN；完整私有环境race、相关包最终回归、build及独立审阅通过，无skip/race。测试source来自候选新成员的真实SLA事实，standard owner连接证明共享合同而非standard运行role准入，详见T1。代码统一项完成，未知/旧非持久消息持久阻断、进程重启、撤权竞争及其它异步入口未完成，S5和后续门禁未通过；CandidateSHA及未启动状态不变。
