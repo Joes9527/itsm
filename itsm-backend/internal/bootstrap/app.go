@@ -519,6 +519,7 @@ func NewApplication() *Application {
 
 	// Ticket Workflow Service & Controller
 	ticketWorkflowService := service.NewTicketWorkflowService(client, sugar)
+	ticketWorkflowService.SetNotificationService(ticketNotificationService)
 	ticketWorkflowController := controller.NewTicketWorkflowController(ticketWorkflowService, database.GetRawDB(), sugar)
 
 	// Ticket Automation Rule Controller (service 已于 131 行预创建并注入 V2)
@@ -535,6 +536,9 @@ func NewApplication() *Application {
 	// 该方法只加在具体实现 *service.CustomProcessEngine 上，避免影响接口的其他实现/测试假实现），
 	// 所以这里先做一次类型断言。
 	if cpe, ok := processEngine.(*service.CustomProcessEngine); ok {
+		if h, ok := cpe.CallbackRegistry().GetHandler("cc_handler").(*bpmn.CCTaskHandler); ok {
+			h.SetNotificationTargetBinder(ticketNotificationService)
+		}
 		if h, ok := cpe.CallbackRegistry().GetHandler("ticket_service_handler").(*bpmn.TicketServiceTaskHandler); ok {
 			h.SetTicketService(ticketService)
 			h.SetEscalationService(ticketService)

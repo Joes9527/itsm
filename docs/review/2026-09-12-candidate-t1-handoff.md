@@ -1364,3 +1364,16 @@ s5-notification-target-protocol-full-private.log完整私有PG16/Redis/MinIO rac
 当前不是通知完整交付通过：上述7项回归、剩余producer、目标变化/重启完整矩阵、飞书及裸Get/Send仍待处理。S5/S6/T3/T4/G3与总目标未完成，CandidateSHA不变、候选未启动，无共享环境/WSL变更、企业外呼、push/main合并。最终构建结果下方补记。
 
 最终s5-notification-protocol-build.log全后端build exit0，git diff --check通过。相关单测仍为上述7项回归，构建成功不替代业务验收；后续继续沿原入口修复。
+
+
+### B2 S5 工单及BPMN抄送目标owner接入（2026-09-14）
+
+唯一目标binder导出为BindNotificationConnectorTarget（无旧别名）。TicketWorkflowService注入同一TicketNotificationService，withClient保留依赖，原createCCNotifications事务builder写目标；BPMN CCTaskHandler通过窄NotificationTargetBinder端口调用同一owner，避免service/bpmn循环依赖或复制选择逻辑。bootstrap将已配置的通知服务注入API workflow实例和实际callback registry的cc_handler。连接器渠道缺binder拒绝，原email/in_app/push仍沿各自传输，不把此项当它们已准入。原渠道解析、CC关系/幂等/事务语义不变。
+
+s5-notification-cc-owner-unit.log原7项相关回归全部关闭。标准夹具显式启用notification、保持相同deployment/provider/摘要；通过真实CC生产者先冻结目标，再模拟Worker Manager不可用/恢复，没有手填044字段。原稳定投递key、重试、未知结果、租约竞争/恢复及读取状态断言均保留。初始目标和Worker恢复实例是同一受控目的地身份，不能推广为任意目的地重绑定许可。
+
+s5-notification-cc-owner-private.log真实PG两个owner正向/拒绝通过；s5-notification-cc-full-private.log完整私有PG16/Redis/MinIO race PASS，无FAIL/SKIP/DATA RACE。最终拒绝测试覆盖缺Manager、错scope且明确ErrDenied，ticket_ccs/ticket_notifications/notifications/audit_logs/ticket_workflow_records五表整行JSON与调用前一致，证明已写CC关系随目标绑定失败回滚。成功意图四字段完整；移除Manager后重放不增意图且producer零Send。此BPMN测试是直接handler调用，不是callback Worker/租约全链；重放本次只断言数量与零Send，未另比成功行整行摘要。测试清理仅删除新通知，不当作实际外发完成。
+
+s5-notification-cc-owner-regression.log service、service/bpmn、internal/bootstrap三包具名race回归PASS；不声称三包所有测试均执行。独立最终复核无新增阻断。同步SendNotification直接外发、email/push专业准入、目标变更/重启矩阵、飞书与裸Get/Send尚待完成，不勾选整个S5/S6/G2。固定CandidateSHA与停止状态不变，无共享数据库/WSL操作、企业外呼、push/main合并。最终构建下方补记。
+
+最终s5-notification-cc-build.log全后端build exit0，git diff --check通过。当前无进行中的Go进程，后续可继续同步通知入口工作。

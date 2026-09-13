@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"itsm-backend/common"
+	"itsm-backend/common/executionscope"
 	"strconv"
 	"strings"
 	"time"
@@ -23,8 +24,9 @@ import (
 )
 
 type TicketWorkflowService struct {
-	client *ent.Client
-	logger *zap.SugaredLogger
+	notifications *TicketNotificationService
+	client        *ent.Client
+	logger        *zap.SugaredLogger
 }
 
 func NewTicketWorkflowService(client *ent.Client, logger *zap.SugaredLogger) *TicketWorkflowService {
@@ -32,6 +34,10 @@ func NewTicketWorkflowService(client *ent.Client, logger *zap.SugaredLogger) *Ti
 		client: client,
 		logger: logger,
 	}
+}
+
+func (s *TicketWorkflowService) SetNotificationService(notifications *TicketNotificationService) {
+	s.notifications = notifications
 }
 
 func (s *TicketWorkflowService) withClient(client *ent.Client) *TicketWorkflowService {
@@ -824,6 +830,14 @@ func (s *TicketWorkflowService) createCCNotifications(ctx context.Context, tk *e
 				create.SetStatus("sent").SetSentAt(now)
 			} else {
 				create.SetDeliveryKey("ticket-notification-" + uuid.NewString()).SetNextAttemptAt(now)
+			}
+			if notificationConnectorChannel(channel) {
+				if s.notifications == nil {
+					return executionscope.ErrDenied
+				}
+				if err := s.notifications.BindNotificationConnectorTarget(ctx, tenantID, channel, create); err != nil {
+					return err
+				}
 			}
 			_, err := create.Save(ctx)
 			if err != nil {

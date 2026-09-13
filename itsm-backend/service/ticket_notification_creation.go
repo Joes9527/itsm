@@ -84,7 +84,7 @@ func (s *TicketNotificationService) EnqueueCreationTx(ctx context.Context, tx *e
 		}
 		for _, channel := range channels {
 			create := tx.TicketNotification.Create().SetTenantID(item.TenantID).SetTicketID(item.ID).SetUserID(recipient.ID).SetType(eventType).SetChannel(channel).SetContent(content).SetDeliveryKey(deliveryKey).SetStatus(ticketNotificationStatusPending).SetNextAttemptAt(s.clock())
-			if err := s.bindNotificationConnectorTarget(ctx, item.TenantID, channel, create); err != nil {
+			if err := s.BindNotificationConnectorTarget(ctx, item.TenantID, channel, create); err != nil {
 				if errors.Is(err, executionscope.ErrDenied) {
 					return creation.NewPermissionDenied("notification target is not permitted", err)
 				}

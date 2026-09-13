@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"itsm-backend/common/executionscope"
 	"itsm-backend/ent"
 	"itsm-backend/ent/group"
 	"itsm-backend/ent/role"
@@ -19,8 +20,15 @@ import (
 	"go.uber.org/zap"
 )
 
+// NotificationTargetBinder is supplied by the existing notification owner.
+// It binds only transport identity; the CC owner retains its transaction.
+type NotificationTargetBinder interface {
+	BindNotificationConnectorTarget(context.Context, int, string, *ent.TicketNotificationCreate) error
+}
+
 // CCTaskHandler 抄送服务任务处理器
 type CCTaskHandler struct {
+	notificationTargets NotificationTargetBinder
 	HandlerBase
 	client *ent.Client
 	logger *zap.SugaredLogger
@@ -32,6 +40,10 @@ func NewCCTaskHandler(client *ent.Client, logger *zap.SugaredLogger) *CCTaskHand
 		client: client,
 		logger: logger,
 	}
+}
+
+func (h *CCTaskHandler) SetNotificationTargetBinder(binder NotificationTargetBinder) {
+	h.notificationTargets = binder
 }
 
 // GetTaskType 返回任务类型
@@ -503,6 +515,14 @@ func (h *CCTaskHandler) createCCNotifications(ctx context.Context, client *ent.C
 			}
 			if hasExecutionKey {
 				create.SetDeliveryKey(ccNotificationDeliveryKey(executionKey, ticketID, userID, channel))
+			}
+			if channel != "in_app" && channel != "email" && channel != "push" {
+				if h.notificationTargets == nil {
+					return executionscope.ErrDenied
+				}
+				if err := h.notificationTargets.BindNotificationConnectorTarget(ctx, tenantID, channel, create); err != nil {
+					return err
+				}
 			}
 			if _, err := create.Save(ctx); err != nil {
 				return fmt.Errorf("创建抄送通知失败")

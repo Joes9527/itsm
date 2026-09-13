@@ -61,6 +61,7 @@ import (
 	"itsm-backend/ent/servicerequestaccesssnapshot"
 	"itsm-backend/ent/tenantinstallation"
 	"itsm-backend/ent/ticket"
+	"itsm-backend/ent/ticketcc"
 	"itsm-backend/ent/ticketnotification"
 	"itsm-backend/handlers/common/accessgrant"
 	creation "itsm-backend/handlers/common/workitemcreation"
@@ -3237,6 +3238,75 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			assert.JSONEq(t, string(before[row.ID]), string(after), "historical callback %s changed", row.ExecutionKey)
 		}
 	})
+
+	for _, entry := range []string{"workflow", "bpmn"} {
+		t.Run("CC_target_owner_"+entry, func(t *testing.T) {
+			fresh, e := app.Create(ctx, identity, command("cc-target-"+entry, "generic"))
+			require.NoError(t, e)
+			p, e := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: scopeID}}, Capabilities: map[string]string{"notification": "scoped"}})
+			require.NoError(t, e)
+			notifications := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), p)
+			workflow := service.NewTicketWorkflowService(runtime, zap.NewNop().Sugar())
+			workflow.SetNotificationService(notifications)
+			handler := bpmn.NewCCTaskHandler(runtime, zap.NewNop().Sugar())
+			handler.SetNotificationTargetBinder(notifications)
+			call := func() error {
+				if entry == "workflow" {
+					return workflow.CCTicket(ctx, &dto.CCTicketRequest{TicketID: fresh.WorkItemID, CCUsers: []int{actor.ID}, NotifyChannels: []string{"sms"}}, actor.ID, tenant.ID)
+				}
+				callbackCtx := bpmn.WithBPMNCallbackExecutionKey(context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID), "cc-target-"+entry)
+				_, e := handler.Execute(callbackCtx, nil, map[string]interface{}{"ticket_id": fresh.WorkItemID, "ccType": "variable", "ccResolvedUserIds": []int{actor.ID}, "ccNotify": true, "notifyChannels": "sms", "addedBy": actor.ID})
+				return e
+			}
+			snapshotCC := func() map[string]string {
+				result := map[string]string{}
+				for _, table := range []string{"ticket_ccs", "ticket_notifications", "notifications", "audit_logs", "ticket_workflow_records"} {
+					var raw string
+					require.NoError(t, ownerDB.QueryRow("SELECT COALESCE(jsonb_agg(to_jsonb(r) ORDER BY id)::text,'[]') FROM "+table+" r").Scan(&raw))
+					result[table] = raw
+				}
+				return result
+			}
+			beforeCC := snapshotCC()
+			unchanged := func() {
+				for table, raw := range snapshotCC() {
+					require.JSONEq(t, beforeCC[table], raw, table)
+				}
+			}
+			require.ErrorIs(t, call(), executionscope.ErrDenied)
+			unchanged()
+			require.Zero(t, owner.TicketCC.Query().Where(ticketcc.TicketIDEQ(fresh.WorkItemID)).CountX(ctx))
+			require.Zero(t, owner.TicketNotification.Query().Where(ticketnotification.TicketIDEQ(fresh.WorkItemID)).CountX(ctx))
+			probe := &candidateSMSConnector{}
+			reg := connector.NewRegistry()
+			reg.Register(func() connector.Connector { return probe })
+			target := config.ConnectorTargetConfig{Name: "sms", Provider: "cc-local", DestinationDigest: probe.DeliveryDestinationIdentity(), Capabilities: []string{"notification"}}
+			wrong := candidateDeclaredManager(t, ctx, tenant.ID, "149ff1af-a27c-47c7-827f-103271130bb9", reg, target)
+			notifications.SetConnectorManager(wrong)
+			require.ErrorIs(t, call(), executionscope.ErrDenied)
+			unchanged()
+			require.Zero(t, owner.TicketCC.Query().Where(ticketcc.TicketIDEQ(fresh.WorkItemID)).CountX(ctx))
+			require.Zero(t, owner.TicketNotification.Query().Where(ticketnotification.TicketIDEQ(fresh.WorkItemID)).CountX(ctx))
+			manager := candidateDeclaredManager(t, ctx, tenant.ID, scopeID, reg, target)
+			notifications.SetConnectorManager(manager)
+			require.NoError(t, call())
+			row := owner.TicketNotification.Query().Where(ticketnotification.TicketIDEQ(fresh.WorkItemID)).OnlyX(ctx)
+			require.NotNil(t, row.TargetProtocolVersion)
+			require.Equal(t, 1, *row.TargetProtocolVersion)
+			require.NotNil(t, row.TargetConnectorName)
+			require.Equal(t, "sms", *row.TargetConnectorName)
+			require.NotNil(t, row.TargetConnectorProvider)
+			require.Equal(t, "cc-local", *row.TargetConnectorProvider)
+			require.NotNil(t, row.TargetDestinationDigest)
+			require.Equal(t, probe.DeliveryDestinationIdentity(), *row.TargetDestinationDigest)
+			notifications.SetConnectorManager(nil)
+			require.NoError(t, call(), "existing CC must not rediscover or expand a target")
+			require.Equal(t, 1, owner.TicketNotification.Query().Where(ticketnotification.TicketIDEQ(fresh.WorkItemID)).CountX(ctx))
+			require.Empty(t, probe.ids)
+			// Queue cleanup after producer assertions, so unrelated worker tests do not consume this intent.
+			require.NoError(t, owner.TicketNotification.DeleteOne(row).Exec(ctx))
+		})
+	}
 
 	t.Run("notification producer freezes connector target", func(t *testing.T) {
 		policy, e := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: scopeID}}, Capabilities: map[string]string{"notification": "scoped"}})

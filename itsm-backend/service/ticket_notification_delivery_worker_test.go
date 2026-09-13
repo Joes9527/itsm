@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"itsm-backend/common/tenantctx"
-	executionfixture "itsm-backend/tests/fixtures/execution"
+	"itsm-backend/config"
+	"itsm-backend/database"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -104,6 +106,9 @@ func (c *durableNotificationConnector) HealthCheck(context.Context) connector.He
 }
 
 func (c *durableNotificationConnector) Close() error { return nil }
+func (c *durableNotificationConnector) DeliveryDestinationIdentity() string {
+	return strings.Repeat("a", 64)
+}
 
 func (c *durableNotificationConnector) sentMessages() []*connector.Message {
 	c.mu.Lock()
@@ -140,8 +145,12 @@ func newDurableNotificationFixture(t *testing.T, suffix string) *durableNotifica
 	require.NoError(t, err)
 	tk, err := createTicketWorkflowTestTicket(ctx, client, tenant.ID, operator.ID, "open")
 	require.NoError(t, err)
-	notifications := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
+	notifications := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), standardNotificationPolicy(t))
 	notifications.SetDeliveryQueueClient(client)
+	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
+	producer := NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), standardNotificationPolicy(t))
+	configureDurableNotificationConnector(t, producer, tenant.ID, &durableNotificationConnector{})
+	workflow.SetNotificationService(producer)
 	return &durableNotificationFixture{
 		workflow:      workflow,
 		notifications: notifications,
@@ -172,7 +181,7 @@ func configureDurableNotificationConnector(t *testing.T, service *TicketNotifica
 	t.Helper()
 	registry := connector.NewRegistry()
 	registry.Register(func() connector.Connector { return fake })
-	manager := connector.NewManager(registry, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
+	manager := connector.NewManager(registry, zaptest.NewLogger(t).Sugar(), standardNotificationPolicy(t))
 	connectorName := fake.name
 	if connectorName == "" {
 		connectorName = "webhook"
@@ -379,6 +388,7 @@ func TestBPMNCCFanoutUsesDistinctStableConnectorDeliveryKeys(t *testing.T) {
 	)
 	require.NoError(t, err)
 	handler := bpmn.NewCCTaskHandler(fixture.client, zaptest.NewLogger(t).Sugar())
+	handler.SetNotificationTargetBinder(fixture.workflow.notifications)
 	callbackCtx := context.WithValue(fixture.ctx, bpmn.BPMNTenantIDContextKey, fixture.tenant.ID)
 	callbackCtx = bpmn.WithBPMNCallbackExecutionKey(callbackCtx, "callback-fanout-key")
 	_, err = handler.Execute(callbackCtx, nil, map[string]interface{}{
@@ -470,7 +480,7 @@ func TestTicketNotificationWorkerCASPreventsCompetingLiveLeaseDispatch(t *testin
 	release := make(chan struct{})
 	fake := &durableNotificationConnector{entered: make(chan struct{}, 1), release: release}
 	configureDurableNotificationConnector(t, fixture.notifications, fixture.tenant.ID, fake)
-	otherWorker := NewTicketNotificationService(fixture.client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
+	otherWorker := NewTicketNotificationService(fixture.client, zaptest.NewLogger(t).Sugar(), standardNotificationPolicy(t))
 	otherWorker.SetDeliveryQueueClient(fixture.client)
 	configureDurableNotificationConnector(t, otherWorker, fixture.tenant.ID, fake)
 	now := time.Now().Add(time.Hour)
@@ -547,4 +557,11 @@ func TestTicketNotificationWorkerRunsImmediateSweepAndStopsOnCancellation(t *tes
 	case <-time.After(5 * time.Second):
 		t.Fatal("notification worker did not stop after cancellation")
 	}
+}
+
+func standardNotificationPolicy(t *testing.T) *database.ExecutionPolicy {
+	t.Helper()
+	p, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "test-standard", Capabilities: map[string]string{"notification": "enabled"}})
+	require.NoError(t, err)
+	return p
 }

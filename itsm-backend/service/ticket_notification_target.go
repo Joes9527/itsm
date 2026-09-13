@@ -19,7 +19,7 @@ func notificationConnectorChannel(channel string) bool {
 
 // Select only while producing a new intent. Delivery and replay never select
 // from current configuration again. Multiple enabled providers are ambiguous.
-func (s *TicketNotificationService) bindNotificationConnectorTarget(ctx context.Context, tenantID int, channel string, create *ent.TicketNotificationCreate) error {
+func (s *TicketNotificationService) BindNotificationConnectorTarget(ctx context.Context, tenantID int, channel string, create *ent.TicketNotificationCreate) error {
 	if !notificationConnectorChannel(channel) {
 		if channel == "in_app" || channel == "email" || channel == "push" {
 			return nil
