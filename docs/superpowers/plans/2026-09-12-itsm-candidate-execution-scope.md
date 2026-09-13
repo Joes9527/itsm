@@ -203,6 +203,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+工具编辑原事务检查点 `b107922c1`：真实UpdateTicket以不存在调用ID修改版本RED→GREEN；在业务Replay前复用当前审批/来源/042锁，绑定ai_tool与tool:update_ticket操作身份及完整获批编辑DTO摘要（含OperationID）。无调用、title/version/source/operation变造与pending拒绝；合法queue一次版本更新，业务回执重放整行保全，批准失效后重放拒绝。实际Ticket UPDATE后故障回滚且不提交审计回执，原调用重试一次修改；不是审计INSERT后故障。完整私有race、具名工具及普通编辑race、build和独立复核通过，无skip/race，见T1。target/actor/parent逐项及审批/身份并发专项不计入本项，目标T3/T4/G2/G3仍未放行，CandidateSHA与未启动状态不变。
+
 工具创建原事务检查点 `e9db9de9a`：直接intake绕过queue以历史approved来源创建业务RED→GREEN；createAttempt在Bind后/Claim前复用工具领域审批来源核验，绑定来源元组、真实ID、actor/requester、批准参数重建摘要及显式相同IdempotencyKey，042锁保持到业务事务结束。新增operation负测发现摘要不含key的P1已修；真实users SELECT故障RED关闭P2，actor/approver非NotFound错误保留基础设施cause。旧源、篡改title/key、缺source/EXECUTE、pending/rejected/dryrun/inactive拒绝不新增业务/receipt；合法queue创建重试一工单。最终完整私有race、intake/bootstrap全包race、具名工具race、build和独立复核通过，无skip/race，详见T1。工具编辑原事务与审批/身份变化竞争仍待完成，不把创建检查点扩大为完整授权链；CandidateSHA与未启动状态不变，目标T3/T4/G2/G3未放行。
 
 候选工具授权锁检查点 `63e0c08cd`：042普通迁移提供窄SECURITY DEFINER候选来源锁函数，按session_user binding→active scope→登记FOR SHARE保持至调用者提交/回滚，冻结deployment/tenant/事务设置并检查真实调用；唯一来源查询接入，运行身份保持只读，PUBLIC/default EXECUTE剥离，候选准入需显式EXECUTE，system不扩权。原撤权RED转为有界独立连接测试：pg_blocking_pids证明scope关闭等待写回commit/rollback，随后关闭完成并拒绝下一调用；失败清理先cancel/等待revoker再恢复scope。最终完整私有race、migration/database/bootstrap全包race、build及独立复核通过，无skip/race，详见T1。新迁移依赖与旧退役兼容验证通过；standard非此候选函数保护，binding撤销专项/结果审批竞争/业务首次写仍待完成。B需目标PG17迁移与授权后才可准入，CandidateSHA和未启动状态不变，未放行T3/T4/G2/G3。
