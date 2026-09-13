@@ -153,6 +153,7 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 		return intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), directory, policy)
 	}
 	historicalApp := application(owner, executionfixture.Standard(), sameTransactionDirectory{})
+	historicalTool := owner.ToolInvocation.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetToolName("create_ticket").SetArguments(`{"title":"Historical approved tool"}`).SetNeedsApproval(true).SetApprovalState("approved").SetApprovedBy(actor.ID).SetApprovedAt(time.Now().Add(-time.Hour)).SetStatus("pending").SaveX(ctx)
 	oldCommand := command("historical", "incident")
 	historical, err := historicalApp.Create(ctx, identity, oldCommand)
 	require.NoError(t, err)
@@ -339,6 +340,23 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_scope_members`).Scan(&n))
 		return n
 	}
+	t.Run("historical approved tool cannot authorize candidate execution", func(t *testing.T) {
+		snapshot := func() string {
+			var raw string
+			require.NoError(t, ownerDB.QueryRowContext(ctx, `SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, historicalTool.ID).Scan(&raw))
+			return raw
+		}
+		before := snapshot()
+		beforeItems := owner.Ticket.Query().CountX(ctx)
+		beforeMembers := memberCount()
+		queue := service.NewToolQueue(runtime, nil, app, nil, 1, zap.NewNop().Sugar())
+		defer queue.Close()
+		err := queue.ProcessJob(ctx, service.ToolJob{InvocationID: historicalTool.ID, TenantID: tenant.ID})
+		assert.Error(t, err, "copied approval must not authorize new candidate work")
+		assert.JSONEq(t, before, snapshot(), "historical invocation must remain unchanged")
+		assert.Equal(t, beforeItems, owner.Ticket.Query().CountX(ctx), "historical approval must not create a WorkItem")
+		assert.Equal(t, beforeMembers, memberCount(), "historical approval must not enroll a candidate member")
+	})
 	t.Run("new base extension and member commit together", func(t *testing.T) {
 		created, err := app.Create(ctx, identity, command("new", "incident"))
 		require.NoError(t, err)

@@ -977,3 +977,14 @@ S5不可处理消息的完整处置、进程重启及其它异步入口继续未
 独立review_execution_scope_s1发现首轮仅Stat收据可能在文件创建但尚未写完时Kill，导致测试偶发失败；现等待ReadFile+完整JSON及预期主体再保存首快照，最终比较该快照，复审已关闭。本项只增加测试，无生产修复，不虚构业务RED。`s5-stream-process-kill.log` 首次定向race PASS；`s5-stream-process-full-private.log` 完整候选intake、真实审计/Webhook恢复、所有PersistentStream及私有PG/Redis/MinIO构造保全race PASS。仅同步断言补强后 `s5-stream-process-final.log` 定向race连续3次PASS，无skip/race；git diff --check通过。仅测试和说明变更，以真实测试编译/执行验证，不重复上轮已通过且生产代码未变的全后端build。
 
 结论只覆盖消费者独立进程强制终止的至少一次传输恢复：测试authority及本地信封收据不是PG业务提交回执，也不证明完整应用/Worker或Redis服务重启、WSL角色/目标PG17准入及G3的60分钟观察。后续仍需真实环境和完整业务路径验证。CandidateSHA及候选未启动状态不变，S5/T3/T4/G2/G3未完成，无共享数据、B配置、企业外呼或push/main合并。
+
+
+### B2 S5 历史工具审批触发候选执行的真实 RED（2026-09-13）
+
+在 `2626cd59c` 后按总设计§5与S5检查工具队列：bootstrap只控制Start，ToolQueue没有冻结policy；Enqueue只检查整数身份/队列状态，ProcessJob可被直接调用。ToolInvocation没有结构化scope关联；现有审批更新及完成/失败写回也未绑定候选执行事务。WorkItem写入者的成员保护不能证明其来源工具调用获准执行。
+
+新增 `TestCandidateIntakeCreationBoundary/historical approved tool cannot authorize candidate execution`：在私有PG的候选scope准备前创建历史approved create_ticket，随后使用真实受限tenant runtime client、candidate intake及原ToolQueue直接ProcessJob；未启动候选应用、未使用owner执行业务。owner连接只用于测试准备及整行对账。`s5-tool-history-red.log` 实际FAIL：ProcessJob返回nil，历史调用由pending改为done并新增result，WorkItem从10增至11，scope成员从0增至1。四项断言分别检查错误、调用整行、WorkItem数、成员数；此项不声称覆盖全部历史业务行或整个HTTP审批链。
+
+独立review_execution_scope_s1确认根因与RED有效。修复必须从invocation首次INSERT原事务建立可信结构归属，历史行保持未登记；create_ticket尚无WorkItem，不能拿未来工单或Arguments/时间戳作来源许可。审批更新本身、enqueue、执行预检、业务首次写入原事务及完成/失败回写均需重新守卫。仅增加启动开关或执行前一次检查不能关闭缺陷，拒绝历史调用不得将其改写failed。现有稳定invocation operation ID和业务回执继续负责ACK缺口恢复，不能另建业务状态机。
+
+本轮仅新增真实回归测试，生产缺陷尚未修复，当前该测试及包含它的完整套件不能报告GREEN；此前通过结果属于之前代码/断言范围。没有运行与本项无关的重复构建，git diff --check通过。下一步按执行计划中的工具来源事务链补齐迁移与角色、创建/审批/队列/业务/回执共同边界后将该RED转GREEN，保留新工具正向与重放能力，不把永久disabled当作G2完成。CandidateSHA保持不变、候选未启动、S5/B2/B3/T3/T4/G2/G3仍未通过，无共享环境改动、企业外呼或push/main合并。
