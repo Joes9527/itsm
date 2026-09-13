@@ -203,7 +203,10 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
-连接器读取外调RED `4a92cc3a8`（2026-09-14）：实际Gin四GET对预置当前及另一租户无candidate来源准入实例同步HealthCheck，loopback接收端每路由本/外租户各+1，八项预期失败，无race；显式Health不强制200以容许后续明确拒绝。未走LoadAll或生产认证，不外推历史恢复验收。独立复核有效，当前含新测试的全套为RED，不能以先前GREEN放行。下一实现保留唯一Manager：读取只读健康快照，主动诊断/历史恢复由实际owner拒绝candidate；受控新scope投递目标以启动可信声明绑定tenant/scope/精确实例/目标摘要/能力，Init副作用纳入manifest，继续由原worker验证意图/成员/租约/摘要/generation。检查Get/GetInstance裸Connector旁路，不用connector_poll代替通知/Webhook/诊断授权，也不全关Manager后宣称G2完成。详情见T1。CandidateSHA及停止状态不变，S5及后续门禁未放行。
+连接器读取/诊断修复检查点 `20c99482e`（2026-09-14）：下方4a92cc3a8 GET外调RED已GREEN。四GET及Provision响应只读本租户观测快照，删除HealthCheckAll；POST /health要求connector:write与Manager冻结connector_diagnostics能力，candidate只能disabled，standard显式enabled，未探测不伪造健康。快照深副本、实例generation替换保护、取消返回error及本/外租户探测边界均验证；完整私有PG16/Redis/MinIO race、具名回归、全后端build和独立审阅通过，无skip/race，见T1。POST完整认证/RBAC浏览器路径尚未E2E；实例激活/LoadAll/Send/Get旁路及可信scope目标声明仍待实现，不能把此修复等同整个Manager或G2完成。CandidateSHA、停止及共享环境边界不变。
+
+
+连接器读取外调RED `4a92cc3a8`（2026-09-14）：实际Gin四GET对预置当前及另一租户无candidate来源准入实例同步HealthCheck，loopback接收端每路由本/外租户各+1，八项预期失败，无race；显式Health不强制200以容许后续明确拒绝。未走LoadAll或生产认证，不外推历史恢复验收。独立复核有效，该提交时含新测试的全套为RED；现读取/诊断部分由上方20c99482e修复，其余门禁仍未放行。下一实现保留唯一Manager：读取只读健康快照，主动诊断/历史恢复由实际owner拒绝candidate；受控新scope投递目标以启动可信声明绑定tenant/scope/精确实例/目标摘要/能力，Init副作用纳入manifest，继续由原worker验证意图/成员/租约/摘要/generation。检查Get/GetInstance裸Connector旁路，不用connector_poll代替通知/Webhook/诊断授权，也不全关Manager后宣称G2完成。详情见T1。CandidateSHA及停止状态不变，S5及后续门禁未放行。
 
 
 云发现门禁检查点 `664251d94`（2026-09-14）：真实PG空账号扫描复现候选DiscoverAll/RunAll返回nil的RED；两个构造器现必需冻结ExecutionPolicy，DiscoverAll/DiscoverAccount/RunAll在I/O前要求cloud_discovery显式启用。candidate保持disabled，standard也不默认启用，能力配置复制防运行中对象修改授权。独立审阅提出缺租户上下文P2，经RED后改为必须匹配tenant context；nil策略/取消/bypass/未知能力/单账号绕过负测通过。standard owner空账号扫描正向不代表provider可靠性。最终完整私有PG16/Redis/MinIO race、database/cloud包race、全后端build及独立复核通过，无skip/race，见T1。连接器、embedding、导入导出直接入口和剩余S5/S6、鉴权及目标T3/T4/G3仍未完成；CandidateSHA、停止状态和共享环境边界不变。
