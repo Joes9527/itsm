@@ -855,6 +855,48 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			})
 		}
 
+		t.Run("scope closed after outcome precheck preserves invocation", func(t *testing.T) {
+			tx, err := runtime.Tx(ctx)
+			require.NoError(t, err)
+			require.NoError(t, policy.BindEnt(ctx, tx, tenant.ID))
+			call, err := tx.ToolInvocation.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetToolName("create_ticket").SetArguments(`{"title":"Outcome scope revocation"}`).SetNeedsApproval(true).SetApprovalState("approved").SetApprovedBy(actor.ID).SetApprovedAt(time.Now()).SetStatus("pending").Save(ctx)
+			require.NoError(t, err)
+			require.NoError(t, tx.Commit())
+			var before, after string
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, call.ID).Scan(&before))
+			items := owner.Ticket.Query().CountX(ctx)
+			var armed atomic.Bool
+			var revoked atomic.Bool
+			armed.Store(true)
+			defer func() {
+				armed.Store(false)
+				_, err := ownerDB.ExecContext(ctx, `UPDATE execution_scopes SET status='active' WHERE id=$1`, scopeID)
+				require.NoError(t, err)
+			}()
+			runtime.ToolInvocation.Use(func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
+					if m.Op().Is(ent.OpUpdate|ent.OpUpdateOne) && armed.CompareAndSwap(true, false) {
+						// Commit revocation after outcome authority reads, before the real UPDATE.
+						revokeCtx, cancel := context.WithTimeout(c, 5*time.Second)
+						defer cancel()
+						_, err := ownerDB.ExecContext(revokeCtx, `UPDATE execution_scopes SET status='closed' WHERE id=$1`, scopeID)
+						if err != nil {
+							return nil, err
+						}
+						revoked.Store(true)
+					}
+					return next.Mutate(c, m)
+				})
+			})
+			err = queue.ProcessJob(ctx, service.ToolJob{InvocationID: call.ID, TenantID: tenant.ID})
+			assert.Error(t, err, "committed scope revocation must block outcome UPDATE")
+			require.False(t, armed.Load())
+			require.True(t, revoked.Load(), "revocation must actually commit before the outcome UPDATE")
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, call.ID).Scan(&after))
+			assert.JSONEq(t, before, after, "invocation must remain unchanged after committed revocation")
+			assert.Equal(t, items+1, owner.Ticket.Query().CountX(ctx), "business committed before this revocation")
+		})
+
 	})
 	t.Run("new base extension and member commit together", func(t *testing.T) {
 		created, err := app.Create(ctx, identity, command("new", "incident"))

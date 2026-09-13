@@ -1071,3 +1071,13 @@ S5不可处理消息的完整处置、进程重启及其它异步入口继续未
 剩余：成功/失败并发写回及执行中审批/参数变更竞争尚待真实验证，scope撤权竞争栅栏与业务首次写原事务仍未完成。目标PG17/T3环境准入、真实业务/主题T4及G3未通过；固定CandidateSHA不变、候选未启动，无共享环境修改、企业外呼、push/main合并。
 
 最终验证：s5-tool-receipt-final-private.log完整私有PG16/Redis/MinIO的ScopeRegistration、Intake、构造保全及Stream/Webhook/审计恢复race PASS，无skip/race；s5-tool-receipt-build.log全后端build exit0，git diff --check通过。上述均不替代目标环境或完整业务并发验收。
+
+### B2 S5 结果写回撤权窗口的真实RED（2026-09-13）
+
+在da9a5783c结果事务复核之后继续验证并发撤权。真实ToolQueue创建业务提交后，Ent UPDATE hook在实际结果UPDATE前通过独立owner连接关闭scope并提交；随后ProcessJob仍返回nil，调用从pending变done且写入结果。s5-tool-revocation-red.log证明单次事务内查询与条件UPDATE并不封闭scope状态的竞争窗口。测试保留调用整行快照、已提交业务数、撤权实际提交标记，并将撤权连接等待限定5秒；结束时恢复私有scope。此改动仅测试，不修改生产行为。
+
+独立review_execution_scope_s1确认RED有效。后续需在可信数据库边界锁住session_user binding与active scope，锁持有到结果原事务提交/回滚，锁后核验mode/deployment/tenant/scope/登记及事务设置。不可通过授予业务身份范围表UPDATE来获取锁；standard也须明确真实binding。窄SECURITY DEFINER入口须固定search_path、全限定名称、剥离PUBLIC/default ACL，并与现有INSERT/审批统一锁顺序。不能只用FOR KEY SHARE，因为状态更新也必须串行化。
+
+实施验证须区分“撤权先提交→写入拒绝”与“写事务先持锁→独立撤权等待提交/回滚后生效”。若在当前预检位置加锁，现有同步hook会等待自身持有的锁；需改成独立goroutine并以数据库等待证据验证顺序，不能把超时/错误当成撤权已提交。业务首次写、审批参数及结果并发竞争继续待完成。新增RED使当前具名测试及包含它的全套不能报告通过；此前GREEN只属于此前范围。CandidateSHA及候选未启动状态不变，未放行S5/T3/T4/G2/G3，无共享环境操作、企业外呼或push/main合并。
+
+最终具名race复验s5-tool-revocation-final-red.log仍为预期RED：撤权提交标记通过，失败仅为应拒绝却返回nil及调用整行被改写。没有运行不相关构建来掩盖失败；git diff --check通过。生产修复尚未完成。
