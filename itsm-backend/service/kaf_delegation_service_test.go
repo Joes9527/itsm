@@ -963,3 +963,31 @@ func TestKafAccessResultParticipatesInActionDigest(t *testing.T) {
 	_, _, err = svc.ClaimKafAction(ctx, task, second)
 	require.ErrorIs(t, err, ErrKafActionConflict)
 }
+
+func TestDelegationInheritsStructuredExecutionReferenceInBothPaths(t *testing.T) {
+	for _, direct := range []bool{false, true} {
+		t.Run(fmt.Sprint(direct), func(t *testing.T) {
+			_, svc, ctx, old := newDelegationFixture(t)
+			current := svc.client.ProcessInstance.Create().SetProcessInstanceID("new-scoped").SetProcessDefinitionKey(old.ProcessDefinitionKey).SetProcessDefinitionID(old.ProcessDefinitionID).SetBusinessKey(old.BusinessKey).SetBusinessType(old.BusinessType).SetBusinessID(old.BusinessID).SetTenantID(old.TenantID).SetExecutionWorkItemID(old.BusinessID).SaveX(ctx)
+			var task *ent.ProcessTask
+			var err error
+			if direct {
+				tx, e := svc.client.Tx(ctx)
+				require.NoError(t, e)
+				defer tx.Rollback()
+				task, err = svc.CreateDelegatedTaskWithClient(ctx, tx.Client(), current.ID, kafDelegateTask("complete_bpmn_task"))
+				require.NoError(t, err)
+				require.NoError(t, tx.Commit())
+			} else {
+				task, err = svc.CreateDelegatedTask(ctx, current.ID, kafDelegateTask("complete_bpmn_task"))
+				require.NoError(t, err)
+			}
+			event := svc.client.OutboxEvent.Query().Where(outboxevent.AggregateIDEQ(task.TaskID)).OnlyX(ctx)
+			require.NotNil(t, event.ExecutionWorkItemID)
+			require.Equal(t, current.BusinessID, *event.ExecutionWorkItemID)
+			legacy, err := svc.CreateDelegatedTask(ctx, old.ID, kafDelegateTask("complete_bpmn_task"))
+			require.NoError(t, err)
+			require.Nil(t, svc.client.OutboxEvent.Query().Where(outboxevent.AggregateIDEQ(legacy.TaskID)).OnlyX(ctx).ExecutionWorkItemID)
+		})
+	}
+}

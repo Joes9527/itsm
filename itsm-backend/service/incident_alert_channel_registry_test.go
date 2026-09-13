@@ -76,3 +76,30 @@ func TestNotificationRuleActionRejectsIndependentAlertCreator(t *testing.T) {
 	require.ErrorContains(t, action.Execute(ctx, &ent.Incident{ID: 42}, 7), "not configured")
 	require.Zero(t, client.IncidentAlert.Query().CountX(ctx))
 }
+
+func TestIncidentAlertExecutionReferenceUsesWorkItemNotAlertOrIncidentID(t *testing.T) {
+	client, _, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "alert-reference")
+	require.NoError(t, err)
+	actor, err := createIncidentTestUser(ctx, client, tenant.ID, "alert-reference")
+	require.NoError(t, err)
+	for range 2 {
+		createIncidentTestWorkItem(t, ctx, client, tenant.ID, actor.ID, "offset", "new", "high")
+	}
+	incident := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "reference")
+	creator := NewIncidentAlertingService(client, zap.NewNop().Sugar())
+	req := &dto.CreateIncidentAlertRequest{IncidentID: incident.ID, AlertType: "monitoring", AlertName: "reference", Message: "reference", Severity: "high"}
+	_, err = creator.CreateIncidentAlert(ctx, req, tenant.ID)
+	require.NoError(t, err)
+	req.Channels = []string{"email"}
+	req.Recipients = []string{actor.Email}
+	alert, err := creator.CreateIncidentAlert(ctx, req, tenant.ID)
+	require.NoError(t, err)
+	require.NotEqual(t, incident.ID, alert.ID)
+	require.NotEqual(t, incident.WorkItemID, alert.ID)
+	require.NotEqual(t, incident.WorkItemID, incident.ID)
+	event := client.OutboxEvent.Query().OnlyX(ctx)
+	require.NotNil(t, event.ExecutionWorkItemID)
+	require.Equal(t, incident.WorkItemID, *event.ExecutionWorkItemID)
+}

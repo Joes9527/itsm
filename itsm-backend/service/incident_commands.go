@@ -265,7 +265,7 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 	if err != nil {
 		return empty, err
 	}
-	_, err = tx.OutboxEvent.Create().SetEventID(fmt.Sprintf("incident-status:%d:%d", item.ID, updated.Version)).SetEventType("incident.status_changed").SetTenantID(m.TenantID).SetAggregateType("work_item").SetAggregateID(strconv.Itoa(item.ID)).SetPayload(payload).Save(ctx)
+	_, err = tx.OutboxEvent.Create().SetExecutionWorkItemID(item.ID).SetEventID(fmt.Sprintf("incident-status:%d:%d", item.ID, updated.Version)).SetEventType("incident.status_changed").SetTenantID(m.TenantID).SetAggregateType("work_item").SetAggregateID(strconv.Itoa(item.ID)).SetPayload(payload).Save(ctx)
 	if err != nil {
 		return empty, err
 	}

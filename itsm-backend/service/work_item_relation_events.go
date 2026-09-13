@@ -97,6 +97,7 @@ func emitRelationEventTx(ctx context.Context, tx *ent.Tx, facts RelationFacts) e
 		return fmt.Errorf("marshal relation delivery facts: %w", err)
 	}
 	if _, err := tx.OutboxEvent.Create().
+		SetExecutionWorkItemID(facts.MutationWorkItemID).
 		SetEventID(relationEventID(facts.RelationID, facts.Version, facts.Removed)).
 		SetEventType(eventType).
 		SetTenantID(facts.TenantID).
@@ -118,6 +119,7 @@ func EmitChangeOutcomeEventTx(ctx context.Context, tx *ent.Tx, facts ChangeOutco
 		return fmt.Errorf("marshal change outcome facts: %w", err)
 	}
 	if _, err := tx.OutboxEvent.Create().
+		SetExecutionWorkItemID(facts.WorkItemID).
 		SetEventID(changeOutcomeEventID(facts.WorkItemID, facts.Version)).
 		SetEventType(ChangeOutcomeEventType).
 		SetTenantID(facts.TenantID).
@@ -159,6 +161,7 @@ func EmitProblemResolvedEventTx(ctx context.Context, tx *ent.Tx, facts ProblemRe
 		return fmt.Errorf("marshal problem resolved facts: %w", err)
 	}
 	if _, err := tx.OutboxEvent.Create().
+		SetExecutionWorkItemID(facts.WorkItemID).
 		SetEventID(problemResolvedEventID(facts.WorkItemID, facts.Version)).
 		SetEventType(ProblemResolvedEventType).
 		SetTenantID(facts.TenantID).

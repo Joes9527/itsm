@@ -13,6 +13,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/incidentalert"
+	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
 
 	"github.com/google/uuid"
@@ -155,6 +156,10 @@ func (s *IncidentAlertingService) createIncidentAlertTx(ctx context.Context, tx 
 }
 
 func (s *IncidentAlertingService) enqueueAlertDelivery(ctx context.Context, tx *ent.Tx, alert *ent.IncidentAlert, channel, recipient string, actor incidentAlertActor) error {
+	incidentRecord, err := tx.Incident.Query().Where(incident.IDEQ(alert.IncidentID), incident.HasWorkItemWith(ticket.TenantIDEQ(alert.TenantID))).Only(ctx)
+	if err != nil {
+		return fmt.Errorf("resolve alert execution WorkItem: %w", err)
+	}
 	eventID := uuid.NewString()
 	if actor.CorrelationID == "" {
 		actor.CorrelationID = eventID
@@ -175,7 +180,7 @@ func (s *IncidentAlertingService) enqueueAlertDelivery(ctx context.Context, tx *
 	if err != nil {
 		return fmt.Errorf("encode incident alert delivery: %w", err)
 	}
-	_, err = s.outboxRepository.Enqueue(ctx, tx, NewOutboxEvent{
+	_, err = s.outboxRepository.Enqueue(ctx, tx, NewOutboxEvent{ExecutionWorkItemID: incidentRecord.WorkItemID,
 		EventID:       eventID,
 		EventType:     incidentAlertDeliveryEventType,
 		TenantID:      alert.TenantID,

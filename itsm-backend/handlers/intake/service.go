@@ -442,7 +442,7 @@ func (s *Service) enqueueWorkflowStart(ctx context.Context, tx *ent.Tx, receiptI
 	if err != nil {
 		return workitemcreation.NewInternalFailure("could not encode workflow start event", err)
 	}
-	_, err = s.outbox.Enqueue(ctx, tx, itsmservice.NewOutboxEvent{
+	_, err = s.outbox.Enqueue(ctx, tx, itsmservice.NewOutboxEvent{ExecutionWorkItemID: workItemID,
 		EventID: eventID, EventType: workflowStartEventType, TenantID: identity.TenantID,
 		AggregateType: "work_item", AggregateID: strconv.Itoa(workItemID), Payload: payload,
 	})

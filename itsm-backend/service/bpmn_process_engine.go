@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"itsm-backend/common"
+	"itsm-backend/common/workitemidentity"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/permission"
@@ -417,6 +418,11 @@ func (e *CustomProcessEngine) startResolvedProcess(ctx context.Context, definiti
 	}
 	if businessID > 0 {
 		createInstance = createInstance.SetBusinessID(businessID)
+	}
+	// validateWorkItemStartTiming has resolved this canonical class and ID in
+	// the current tenant transaction. Release/independent identities stay NULL.
+	if workitemidentity.IsRecordClass(businessType) {
+		createInstance.SetExecutionWorkItemID(businessID)
 	}
 	instance, err := createInstance.Save(ctx)
 	if err != nil {

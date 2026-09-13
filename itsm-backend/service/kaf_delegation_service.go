@@ -1102,6 +1102,9 @@ func (s *KafDelegationService) CreateDelegatedTaskWithClient(ctx context.Context
 		SetAggregateType(event.AggregateType).
 		SetAggregateID(event.AggregateID).
 		SetPayload(event.Payload)
+	if event.ExecutionWorkItemID > 0 {
+		create.SetExecutionWorkItemID(event.ExecutionWorkItemID)
+	}
 	if !event.NextAttemptAt.IsZero() {
 		create.SetNextAttemptAt(event.NextAttemptAt)
 	}
@@ -1232,13 +1235,18 @@ func newKafDelegateOutboxEvent(ctx context.Context, client *ent.Client, task *en
 	if err != nil {
 		return NewOutboxEvent{}, fmt.Errorf("marshal KAF delegation outbox event: %w", err)
 	}
+	executionWorkItemID := 0
+	if instance.ExecutionWorkItemID != nil {
+		executionWorkItemID = *instance.ExecutionWorkItemID
+	}
 	return NewOutboxEvent{
-		EventID:       event.EventID,
-		EventType:     event.EventType,
-		TenantID:      instance.TenantID,
-		AggregateType: "process_task",
-		AggregateID:   task.TaskID,
-		Payload:       payload,
+		ExecutionWorkItemID: executionWorkItemID,
+		EventID:             event.EventID,
+		EventType:           event.EventType,
+		TenantID:            instance.TenantID,
+		AggregateType:       "process_task",
+		AggregateID:         task.TaskID,
+		Payload:             payload,
 	}, nil
 }
 

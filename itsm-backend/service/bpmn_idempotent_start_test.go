@@ -22,6 +22,8 @@ func TestDefinitionStartReplaysCommittedInstanceAndPinsVersion(t *testing.T) {
 	vars := map[string]interface{}{"requester_id": f.actor.ID}
 	first, err := starter.StartProcessByDefinitionID(ctx, FreezeProcessDefinition(f.definition), "generic:91", "generic", f.workItem(t, 91).ID, vars, "workflow-start:91:1")
 	require.NoError(t, err)
+	require.NotNil(t, first.ExecutionWorkItemID)
+	require.Equal(t, first.BusinessID, *first.ExecutionWorkItemID)
 	// A lost receipt acknowledgement must replay even after the process finishes.
 	f.client.ProcessInstance.UpdateOneID(first.ID).SetStatus("completed").ExecX(ctx)
 	second, err := starter.StartProcessByDefinitionID(ctx, FreezeProcessDefinition(f.definition), "generic:91", "generic", f.workItem(t, 91).ID, vars, "workflow-start:91:1")
@@ -155,4 +157,20 @@ func TestDefinitionStartRejectsChangedActorDefinitionAndMissingScope(t *testing.
 	_, err = f.engine.StartProcessByDefinitionID(context.Background(), frozen, "generic:91", "generic", f.workItem(t, 91).ID, nil, "start:identity")
 	require.Error(t, err)
 	require.Equal(t, 1, f.client.ProcessInstance.Query().CountX(ctx))
+}
+
+func TestProcessExecutionReferenceExcludesIndependentAndRelease(t *testing.T) {
+	for _, business := range []string{"", "release"} {
+		t.Run(business, func(t *testing.T) {
+			f := newBPMNAuthorizationFixture(t)
+			ctx := f.scopedCtx(false, false, false, false)
+			id := 0
+			if business == "release" {
+				id = f.workItem(t, 91).ID
+			}
+			instance, err := f.engine.StartProcess(ctx, f.definition.Key, "independent-or-release", business, id, nil)
+			require.NoError(t, err)
+			require.Nil(t, instance.ExecutionWorkItemID)
+		})
+	}
 }

@@ -49,7 +49,7 @@ func enqueueFeishuCreation(ctx context.Context, tx *ent.Tx, item *ent.Ticket, ac
 	if err != nil {
 		return creation.NewInternalFailure("could not encode Feishu creation", err)
 	}
-	_, err = NewOutboxEventRepository(tx.Client()).Enqueue(ctx, tx, NewOutboxEvent{TenantID: item.TenantID, EventID: fmt.Sprintf("feishu-create:%d", item.ID), EventType: FeishuCreationRequestedEventType, AggregateType: "work_item", AggregateID: fmt.Sprint(item.ID), Payload: payload})
+	_, err = NewOutboxEventRepository(tx.Client()).Enqueue(ctx, tx, NewOutboxEvent{ExecutionWorkItemID: item.ID, TenantID: item.TenantID, EventID: fmt.Sprintf("feishu-create:%d", item.ID), EventType: FeishuCreationRequestedEventType, AggregateType: "work_item", AggregateID: fmt.Sprint(item.ID), Payload: payload})
 	if err != nil {
 		return creation.NewInfrastructureUnavailable("could not persist Feishu creation intent", err)
 	}

@@ -26,6 +26,7 @@ import (
 
 	"itsm-backend/ent"
 	"itsm-backend/ent/intakerequest"
+	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/ticket"
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/intake"
@@ -113,6 +114,8 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	oldCommand := command("historical", "incident")
 	historical, err := historicalApp.Create(ctx, identity, oldCommand)
 	require.NoError(t, err)
+	_, err = ownerDB.ExecContext(ctx, "UPDATE outbox_events SET execution_work_item_id=NULL")
+	require.NoError(t, err) // pre-039 historical fixture only
 	oldRow := owner.Ticket.GetX(ctx, historical.WorkItemID)
 	oldReceipt := owner.IntakeRequest.Query().Where(intakerequest.WorkItemIDEQ(historical.WorkItemID)).OnlyX(ctx)
 	_, err = ownerDB.ExecContext(ctx, fmt.Sprintf("GRANT USAGE ON SCHEMA public TO %s; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO %s; GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO %s", runtimeRole, runtimeRole, runtimeRole))
@@ -171,6 +174,9 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		created, err := app.Create(ctx, identity, command("new", "incident"))
 		require.NoError(t, err)
 		require.Positive(t, created.ProfessionalReference.ID)
+		event := owner.OutboxEvent.Query().Where(outboxevent.EventIDEQ(fmt.Sprintf("incident-created:%d", created.WorkItemID))).OnlyX(ctx)
+		require.NotNil(t, event.ExecutionWorkItemID)
+		require.Equal(t, created.WorkItemID, *event.ExecutionWorkItemID)
 		require.Equal(t, created.WorkItemID, owner.Incident.GetX(ctx, created.ProfessionalReference.ID).WorkItemID)
 		var scope string
 		require.NoError(t, ownerDB.QueryRow(`SELECT scope_id::text FROM execution_scope_members WHERE work_item_id=$1`, created.WorkItemID).Scan(&scope))
@@ -184,6 +190,9 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		problem, err := app.Create(ctx, identity, related)
 		require.NoError(t, err)
 		require.Equal(t, problem.WorkItemID, owner.Problem.GetX(ctx, problem.ProfessionalReference.ID).WorkItemID)
+		relationEvent := owner.OutboxEvent.Query().Where(outboxevent.EventTypeEQ(service.RelationCreatedEventType)).OnlyX(ctx)
+		require.NotNil(t, relationEvent.ExecutionWorkItemID)
+		require.Equal(t, created.WorkItemID, *relationEvent.ExecutionWorkItemID)
 	})
 	t.Run("historical parent and relation reject without writes", func(t *testing.T) {
 		tickets, receipts, members := owner.Ticket.Query().CountX(ctx), owner.IntakeRequest.Query().CountX(ctx), memberCount()
@@ -221,6 +230,19 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		var n int
 		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_scope_members WHERE work_item_id=$1`, historical.WorkItemID).Scan(&n))
 		require.Zero(t, n)
+	})
+	t.Run("outbox foreign key failure is not a duplicate", func(t *testing.T) {
+		repo := service.NewOutboxEventRepository(runtime)
+		existing := owner.OutboxEvent.Query().FirstX(ctx)
+		input := service.NewOutboxEvent{EventID: "invalid-ref", EventType: "test", TenantID: tenant.ID, AggregateType: "work_item", AggregateID: "invalid", ExecutionWorkItemID: 999999, Payload: json.RawMessage(`{}`)}
+		_, err := repo.Enqueue(ctx, nil, input)
+		require.Error(t, err)
+		require.NotErrorIs(t, err, service.ErrDuplicateOutboxEvent)
+		input.EventID = existing.EventID
+		input.ExecutionWorkItemID = 0
+		_, err = repo.Enqueue(ctx, nil, input)
+		require.ErrorIs(t, err, service.ErrDuplicateOutboxEvent)
+		require.Nil(t, owner.OutboxEvent.GetX(ctx, existing.ID).ExecutionWorkItemID, "historical event reference must remain NULL")
 	})
 	t.Run("unadmitted tenant and missing policy reject", func(t *testing.T) {
 		otherPolicy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID + 1, ScopeID: uuid.NewString()}}})

@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/ent/outboxevent"
 
+	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/google/uuid"
 )
 
@@ -48,13 +49,15 @@ var (
 // NewOutboxEvent contains the immutable delivery data captured with the
 // owning domain transaction.
 type NewOutboxEvent struct {
-	EventID       string
-	EventType     string
-	TenantID      int
-	AggregateType string
-	AggregateID   string
-	Payload       json.RawMessage
-	NextAttemptAt time.Time
+	// ExecutionWorkItemID is supplied by the owning domain transaction, never inferred from payload or aggregate ID. Zero preserves an unresolved historical/independent reference.
+	ExecutionWorkItemID int
+	EventID             string
+	EventType           string
+	TenantID            int
+	AggregateType       string
+	AggregateID         string
+	Payload             json.RawMessage
+	NextAttemptAt       time.Time
 }
 
 // OutboxRetryAudit is the payload-free audit evidence recorded with a failed
@@ -87,6 +90,12 @@ func (r *OutboxEventRepository) Enqueue(ctx context.Context, tx *ent.Tx, event N
 		creator = tx.OutboxEvent.Create()
 	}
 
+	if event.ExecutionWorkItemID < 0 {
+		return nil, fmt.Errorf("invalid execution WorkItem reference")
+	}
+	if event.ExecutionWorkItemID > 0 {
+		creator.SetExecutionWorkItemID(event.ExecutionWorkItemID)
+	}
 	creator.SetEventID(event.EventID).
 		SetEventType(event.EventType).
 		SetTenantID(event.TenantID).
@@ -99,8 +108,8 @@ func (r *OutboxEventRepository) Enqueue(ctx context.Context, tx *ent.Tx, event N
 
 	persisted, err := creator.Save(ctx)
 	if err != nil {
-		if ent.IsConstraintError(err) {
-			return nil, fmt.Errorf("%w: %v", ErrDuplicateOutboxEvent, err)
+		if sqlgraph.IsUniqueConstraintError(err) {
+			return nil, fmt.Errorf("%w: %w", ErrDuplicateOutboxEvent, err)
 		}
 		return nil, err
 	}

@@ -188,3 +188,20 @@ S2 将事件订阅、工具队列、连接器与周期任务移到显式运行�
 - `s3-intake-final-build.json`：后端全量构建 exit 0；`s3-intake-tagged-compile.log` 仅证明带 integration_postgres 标签的已改调用方可编译（integration/e2e/intake/service），没有运行目标环境 E2E。
 
 独立 reviewer `review_execution_scope_s1` 对本次限定的可信策略、统一创建事务、回放和测试隔离完成审阅，错误分类问题修复后无剩余发现。其结论不覆盖尚未接入的其他业务写入口或生产者。
+
+
+### B2 S3 生产者结构化引用（2026-09-13，执行准入仍待完成）
+
+在统一创建接入 `04f07a13e` 上补齐已核实的 outbox/process INSERT 来源：Intake workflow start、Incident 创建/status、Email/Feishu 创建、relation/Change outcome/Problem resolved 均从拥有原事务的 Ticket 或领域事实设置 `execution_work_item_id`；Alert 在同一事务按租户查 Incident 扩展，再取 WorkItemID，保留原 alert aggregate 语义。BPMN 在唯一 `startResolvedProcess` 保存点、executeStep 之前，依据已验证 canonical WorkItem 身份设置引用；独立及 release 流程保持 NULL。
+
+KAF 的 repository 和 transaction-client 两条写入路径均继承 ProcessInstance 的结构引用，历史 instance 为 NULL 时不从 BusinessID 或 payload 补造。`NewOutboxEvent` 增加显式执行主体字段；Enqueue 仅将唯一约束错误分类为 duplicate，FK 等其他约束失败保留原始错误链，避免伪装幂等成功。本增量不修改迁移039、不回填历史引用；测试中的历史 NULL 仅在新建私有夹具、安装039之前准备。
+
+证据仍位于 `/Users/julian/.local/state/itsm-candidate-delivery/b2/`：
+
+- `s3-producer-red.log`：缺少结构字段的编译 RED。首轮 BPMN 断言误用了 business key 中的数字，已改为真实 WorkItem/BusinessID；这也防止将字符串 key 误作执行身份。
+- `s3-producer-fk-red.log`：撤回错误分类修复后，真实 PostgreSQL FK 23503 被错误包装为 duplicate；随后恢复实现并运行 GREEN。
+- `s3-producer-final-tests.log`：service/intake/integration 的 outbox、BPMN start、delegation、Incident、relation、email/Feishu 和 workflow-start 定向回归 PASS。新增断言覆盖 KAF 双路径和历史 NULL、独立/release 与 Ticket ID 碰撞、Alert 三种 ID 不同、Requested Item workflow event→ProcessInstance 引用一致。
+- `s3-producer-final-pg.log`：真实私有 PostgreSQL 范围登记与 intake 创建/回滚/历史拒绝 PASS，并核验 Incident/relation 事件引用，以及不存在的引用触发 FK 而非 duplicate、真实 event-ID 重复仍识别为 duplicate。未 skip。
+- `s3-producer-build.json`：后端全量构建 exit 0。
+
+独立 reviewer `review_execution_scope_s1` 对引用来源、传递路径和错误分类未发现阻断问题。以上只证明结构引用，不证明候选发布许可：Enqueue 的原事务/成员准入、未解析主体在 candidate 下拒绝、专业/共享业务修改和历史副作用仍待接入；队列 claim/recovery 和 Stream 隔离也未完成。零引用不能视为获准执行，当前不能启动候选。S3 保持未完成，CandidateSHA 仍为 `d7470a32dbb87acc9b5e4d9a895a146410723561`；未推送、合并 main、修改 B 配置或操作共享数据库。
