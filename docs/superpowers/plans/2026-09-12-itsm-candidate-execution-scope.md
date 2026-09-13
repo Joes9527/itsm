@@ -465,3 +465,12 @@ Graph/SMTP loopback、目标变化零调用、发送中换代unknown、v2形状�
 旧service/CC夹具已更新可信配置与租户，不删正常发送/重试/日志/回滚断言。历史manual/edit仅在构造期间采用显式站内偏好生成真实回执，独立旧email NULL协议夹具和044→045保全断言不变。候选PG producer用任务私有SMTP目标且监听器cleanup断言零连接；缺依赖负例保留，不把配置存在或owner double当作发送证据。最终相关具名race、既定私有PG16/Redis/MinIO suite、全后端build及独立复审通过，详见T1。
 
 下一步Incident原outbox邮件typed目标、版本/完整payload摘要与receipt、旧载荷策略；不得造新队列或consumer补绑。Graph candidate local_only实际激活合同及完整S5/S6/G2/T3/T4/G3仍未完成。固定CandidateSHA和候选停止状态不变，未操作WSL/共享数据库、未企业外发、未push/main合并。
+
+
+### S5 Incident原outbox邮件v2检查点（2026-09-14）
+
+实现9c555b5b3ee1d8f7864bf43d88fc4e9e21628218接入原producer/worker：原tx冻结typed目标、单收件人、来源身份和完整载荷摘要，接受审计含唯一事件manifest；消费验证原claim/source/member/receipt后调用SendToTarget，拒绝v1与补绑，发送后审计或发布故障unknown不重发。显式正actor/非空source及同租户active在首次写入前校验；HTTP升级传播登录身份，创建/升级身份拒绝返回403并正确识别包装cause。无新队列或数据库迁移。
+
+真实任务私有PG/SMTP12场景（包含实际RCPT/正文、篡改、旧版本、未知字段/渠道、manifest/receipt冲突、写后故障及恢复），actor六负一正、两个HTTP负例、相关service/controller具名race、既定PG16/Redis/MinIO完整suite和全后端build通过；独立最终只读复审无本增量提交阻断。原worker SQLite仅明确domain double策略证据，真实consumer保留FOR UPDATE并以PG验证。详见T1最新交接记录；未冒称service全量或bootstrap无匹配用例为其完整测试。
+
+后续仍须claim专项负例、candidate受限角色发送、Graph候选local_only准入、consumer现行RBAC/并发撤权及其余S5/S6/G2/T3/T4/G3。完整S5不勾选完成。CandidateSHA仍d7470a32dbb87acc9b5e4d9a895a146410723561，候选停止，无WSL/共享数据库操作、企业外发、push/main合并。
