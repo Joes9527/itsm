@@ -165,7 +165,7 @@ func (s *KafDelegationService) SetApprovedAccessReader(owner ApprovedAccessReade
 func NewKafDelegationService(client *ent.Client, execution *database.ExecutionPolicy) *KafDelegationService {
 	return &KafDelegationService{execution: execution,
 		client: client,
-		outbox: NewOutboxEventRepository(client),
+		outbox: NewOutboxEventRepository(client, execution),
 		now:    time.Now,
 	}
 }

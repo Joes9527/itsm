@@ -410,3 +410,20 @@ B2 私有证据（均位于本机 candidate-delivery/b2）：
 下一步实现约束：SystemContext 使用独立跨租户角色，不能直接调用拒绝 system bypass 的单租户 BindEnt，也不能放宽该 API。需由冻结 policy 在 worker 原事务核对实际 session_user 的 candidate runtime binding、deployment/tenant/scope 清单和只读权限，再生成原 SQL 的成员 EXISTS 限制；绑定撤销、scope关闭和数据库错误明确失败，不伪装空队列。当前 systemTablePrivileges 不含执行范围表，role 准入白名单与 candidate 测试授权须同步审阅；不得授予成员写权限或改变共享/B环境配置。NewOutboxEventRepository 还被生产者使用，不能为适配worker静默改变enqueue/原事务语义或引入默认standard旁路。
 
 后续真实负测还需外租户有真实成员而不在本manifest的场景（本次外租户为NULL-ref，只证明违规处理，不能单独证明tenant predicate）、claim后关闭scope逐入口attempt/retry/finalize保全、audit完整记录和并发恢复。S4/全交付仍未完成，固定CandidateSHA不变，未启动候选、操作WSL/共享库或推送/合并main。
+
+
+### B2 S4 通用 Outbox Worker 原事务范围隔离（2026-09-13）
+
+在 `801150912` 的真实混排 RED 后，通用 repository 已接入冻结 ExecutionPolicy。新增 WorkerPredicate 在原事务核验实际 session_user 的 candidate binding 和全部 manifest scope，再将 event tenant、结构化 execution_work_item_id、member、active scope 与 binding 的 EXISTS 限制附加到原 SELECT/权威 UPDATE。单租户 BindEnt 保持拒绝 system bypass。system role 准入仅允许三张 scope 表可选 SELECT，不放开写权限或所有权；standard 部署不强制新增授权。这里的授权仅在本机随机测试数据库内执行，未修改 B/共享环境。
+
+claim 的 ambiguous/expired recovery、pending SELECT 和 claim CAS，unknown-type 阻断，以及 attempt/retry/retry-audit/published/delivery-unknown/blocked/dead-letter 均受保护；原自动提交转换改为明确事务，原 claim token/expiry/status 条件保留。审计跟随成功 UPDATE 在同事务写入。两处 bootstrap 及调用方显式传 policy；三个纯 producer helper 与 repository.Enqueue 共用唯一 enqueueOutboxEvent 实现，保持原业务事务，不引入默认 standard 或第二套入队实现。
+
+本机 candidate-delivery/b2 验证：
+
+- `s4-worker-predicate-update-pg.log`：真实 SELECT 和 UPDATE 检验成员过滤；closed scope、撤销 binding 拒绝，数据库权限错误保留基础设施错误分类。
+- `s4-outbox-worker-verified-pg.log`：最终完整 TestCandidateIntakeCreationBoundary PASS、无 skip。真实 DispatchOnce 仅交付候选事件；四条历史 unknown/pending/expired/ambiguous 与外租户 NULL-ref 及真实成员事件，status/attempt/claim/时间等完整字段不变，audit 完整快照不变。外租户成员由其独立 policy 与原 INSERT 触发器登记，未补录历史成员。
+- 同一最终 PG 测试覆盖七个真实领取后的 attempt/retry/retry-audit/published/unknown/blocked/dead-letter 转换：分别关闭 scope、撤销 system binding，拒绝时事件和 audit 完整字段不变，恢复后正常转换。audit 快照按 ID 排序。
+- `s4-outbox-worker-regression.log`：service、intake、service_request、database 四包 Outbox/Delivery/Kaf/Creation/Runtime/Execution 定向回归 PASS。
+- `s4-outbox-worker-build.json`：后端全量构建 exit 0。`s4-outbox-worker-integration-compile.log`：integration 标签下 tests/integration、tests/e2e、service_request 编译 PASS；此项仅编译，不代表 E2E 运行。
+
+独立 reviewer `review_execution_scope_s1` 两次只读复审无阻断，确认构造、全部原 SQL 写分支、事务/audit 与新增负测支持上述限定结论；建议的 audit 排序已落实并由最终 PG 验证。此前 generic worker RED 已修复，**S4 整体仍未完成**：candidate 并发领取/恢复、审计实际写后故障回滚、其余 callback/周期执行仍需完成；共享业务能力、S5/S6/B3 和完整业务验收继续未完成。本机私有 PG16 synthetic 证据不替代 B 的 PG17 环境准入。固定 CandidateSHA 仍为 d7470a32dbb87acc9b5e4d9a895a146410723561，候选不启动，无推送/main 合并或 WSL/共享库操作。

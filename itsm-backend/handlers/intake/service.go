@@ -94,7 +94,7 @@ func NewService(client *ent.Client, resolver referenceResolver, registry *Creato
 	return &Service{
 		client: client, directory: directory, resolver: resolver, receipts: NewIdempotencyRepository(), registry: registry, workItems: workItems,
 		fieldValues: itsmservice.NewFieldValueService(client), snapshots: NewSnapshotRepository(),
-		audits: NewAuditRepository(), outbox: itsmservice.NewOutboxEventRepository(client),
+		audits: NewAuditRepository(), outbox: itsmservice.NewOutboxEventRepository(client, execution),
 		metrics: defaultMetrics, execution: execution,
 	}
 }

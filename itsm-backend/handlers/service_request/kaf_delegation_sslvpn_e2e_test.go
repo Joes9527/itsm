@@ -383,7 +383,7 @@ func dispatchSSLVPNDelegate(t *testing.T, fx *sslvpnDelegationFixture, task *ent
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	_, err = fx.client.OutboxEvent.UpdateOneID(pending.ID).SetNextAttemptAt(now.Add(-time.Second)).Save(fx.ctx)
 	require.NoError(t, err)
-	dispatcher, err := itsmservice.NewKafOutboxDispatcher(itsmservice.NewOutboxEventRepository(fx.client), itsmservice.KafOutboxConfig{WebhookURL: server.URL, WebhookSecret: "sslvpn-test-secret", BatchSize: 1, PollInterval: time.Second})
+	dispatcher, err := itsmservice.NewKafOutboxDispatcher(itsmservice.NewOutboxEventRepository(fx.client, executionfixture.Standard()), itsmservice.KafOutboxConfig{WebhookURL: server.URL, WebhookSecret: "sslvpn-test-secret", BatchSize: 1, PollInterval: time.Second})
 	require.NoError(t, err)
 	require.NoError(t, dispatcher.DispatchOnce(fx.ctx))
 	var event itsmservice.KafDelegateRequested

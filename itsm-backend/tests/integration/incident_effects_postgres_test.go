@@ -193,7 +193,7 @@ func TestPostgresIncidentEffectsWorkerAcknowledgmentLossAndFencing(t *testing.T)
 	f.rule(metricAction("once"), map[string]interface{}{"type": "escalate", "level": 1, "reason": "threshold", "notify_users": []int{f.actor.ID}})
 	registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{f.engine}, "incident_alert_delivery")
 	require.NoError(t, err)
-	repo := service.NewOutboxEventRepository(f.client)
+	repo := service.NewOutboxEventRepository(f.client, executionfixture.Standard())
 	worker, err := service.NewOutboxDeliveryWorker(repo, service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 10 * time.Second, MaxAttempts: 5}, zap.NewNop().Sugar(), registry)
 	require.NoError(t, err)
 	var loseAck atomic.Bool
@@ -531,7 +531,7 @@ func TestPostgresIncidentEffectsWorkerClassifiesActionFailures(t *testing.T) {
 			}
 			registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{f.engine})
 			require.NoError(t, err)
-			worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(f.client), service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 10 * time.Second, MaxAttempts: 5}, zap.NewNop().Sugar(), registry)
+			worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(f.client, executionfixture.Standard()), service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 10 * time.Second, MaxAttempts: 5}, zap.NewNop().Sugar(), registry)
 			require.NoError(t, err)
 			require.NoError(t, worker.DispatchOnce(f.ctx))
 			event := f.client.OutboxEvent.GetX(f.ctx, f.event.ID)

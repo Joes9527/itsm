@@ -702,7 +702,7 @@ func NewApplication() *Application {
 		log.Fatalf("Invalid outbox event type registry: %v", err)
 	}
 	outboxDeliveryWorker, err := service.NewOutboxDeliveryWorker(
-		service.NewOutboxEventRepository(systemClient),
+		service.NewOutboxEventRepository(systemClient, executionPolicy),
 		service.OutboxDeliveryWorkerConfig{
 			BatchSize:      cfg.OutboxDelivery.BatchSize,
 			PollInterval:   cfg.OutboxDelivery.PollInterval,

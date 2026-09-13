@@ -118,9 +118,13 @@ func validateSystemPrivileges(ctx context.Context, db *sql.DB) error {
 			_ = rows.Close()
 			return err
 		}
-		allowed := ns == schema && strings.Contains(","+systemTablePrivileges[table]+",", ","+priv+",")
+		required := ns == schema && strings.Contains(","+systemTablePrivileges[table]+",", ","+priv+",")
+		// Candidate transport may read admission metadata. Standard deployments do
+		// not require these grants; write privileges remain forbidden in both modes.
+		optionalScopeRead := ns == schema && priv == "SELECT" && (table == "execution_scopes" || table == "execution_scope_members" || table == "execution_runtime_bindings")
+		allowed := required || optionalScopeRead
 		auditID := ns == schema && table == "audit_logs" && priv == "SELECT" && !tableAccess
-		if owner || (allowed && !tableAccess) || (!allowed && (tableAccess || columnAccess) && !auditID) {
+		if owner || (required && !tableAccess) || (!allowed && (tableAccess || columnAccess) && !auditID) {
 			mismatch = fmt.Sprintf("%s.%s %s", ns, table, priv)
 			break
 		}

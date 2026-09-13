@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 
@@ -65,7 +66,7 @@ func newChangeOutcomeDeliveryWorker(t *testing.T, f *changeLifecycleFixture) *se
 	})
 	require.NoError(t, err)
 	worker, err := service.NewOutboxDeliveryWorker(
-		service.NewOutboxEventRepository(f.client),
+		service.NewOutboxEventRepository(f.client, executionfixture.Standard()),
 		service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 20 * time.Second, MaxAttempts: 3},
 		logger,
 		registry,
@@ -234,7 +235,7 @@ func newProblemResolvedDeliveryWorker(t *testing.T, f *problemLifecycleFixture) 
 	})
 	require.NoError(t, err)
 	worker, err := service.NewOutboxDeliveryWorker(
-		service.NewOutboxEventRepository(f.client),
+		service.NewOutboxEventRepository(f.client, executionfixture.Standard()),
 		service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 20 * time.Second, MaxAttempts: 3},
 		logger,
 		registry,

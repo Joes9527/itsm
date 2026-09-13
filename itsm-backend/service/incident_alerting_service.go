@@ -35,7 +35,7 @@ func NewIncidentAlertingService(client *ent.Client, logger *zap.SugaredLogger, e
 	return &IncidentAlertingService{
 		execution:        execution,
 		client:           client,
-		outboxRepository: NewOutboxEventRepository(client),
+		outboxRepository: NewOutboxEventRepository(client, execution),
 		logger:           logger,
 	}
 }

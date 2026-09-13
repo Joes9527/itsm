@@ -210,6 +210,10 @@ GRANT SELECT,UPDATE ON outbox_events,ticket_notifications TO %s;
 GRANT INSERT,SELECT(id) ON audit_logs TO %s;
 GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, systemRole, systemRole, systemRole))
 	require.NoError(t, err)
+	_, err = ownerDB.ExecContext(ctx, "GRANT SELECT ON execution_scopes,execution_scope_members,execution_runtime_bindings TO "+systemRole)
+	require.NoError(t, err)
+	_, err = ownerDB.ExecContext(ctx, `INSERT INTO execution_runtime_bindings VALUES($1,'intake-test','candidate')`, systemRole)
+	require.NoError(t, err)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	defer listener.Close()
@@ -1243,7 +1247,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.Zero(t, n)
 	})
 	t.Run("outbox foreign key failure is not a duplicate", func(t *testing.T) {
-		repo := service.NewOutboxEventRepository(runtime)
+		repo := service.NewOutboxEventRepository(runtime, policy)
 		existing := owner.OutboxEvent.Query().FirstX(ctx)
 		input := service.NewOutboxEvent{EventID: "invalid-ref", EventType: "test", TenantID: tenant.ID, AggregateType: "work_item", AggregateID: "invalid", ExecutionWorkItemID: 999999, Payload: json.RawMessage(`{}`)}
 		_, err := repo.Enqueue(ctx, nil, input)
@@ -1284,6 +1288,62 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.Equal(t, members, memberCount())
 		require.False(t, owner.Ticket.Query().Where(ticket.TitleEQ("scope fail-extension")).ExistX(ctx))
 	})
+	t.Run("worker manifest validates before SQL membership filtering", func(t *testing.T) {
+		fresh, err := app.Create(ctx, identity, command("predicate-member", "generic"))
+		require.NoError(t, err)
+		event := owner.OutboxEvent.Create().SetEventID("predicate-member-event").SetEventType("predicate-only").SetTenantID(tenant.ID).SetAggregateType("work_item").SetAggregateID(fmt.Sprint(fresh.WorkItemID)).SetExecutionWorkItemID(fresh.WorkItemID).SetPayload(json.RawMessage(`{}`)).SaveX(ctx)
+		workerCtx := tenantctx.SystemContext(ctx, "outbox:poll", "candidate test")
+		selectMembers := func() ([]int, error) {
+			tx, e := clients.System.Tx(workerCtx)
+			if e != nil {
+				return nil, e
+			}
+			defer tx.Rollback()
+			predicate, e := policy.WorkerPredicate(workerCtx, tx, outboxevent.FieldTenantID, outboxevent.FieldExecutionWorkItemID)
+			if e != nil {
+				return nil, e
+			}
+			ids, e := tx.OutboxEvent.Query().Where(predicate).IDs(workerCtx)
+			if e != nil {
+				return nil, e
+			}
+			updated, e := tx.OutboxEvent.Update().Where(predicate).SetLastError("predicate transaction probe").Save(workerCtx)
+			if e != nil {
+				return nil, e
+			}
+			require.Equal(t, len(ids), updated)
+			for _, old := range historicalOutbox {
+				require.NotEqual(t, "predicate transaction probe", tx.OutboxEvent.GetX(workerCtx, old.ID).LastError)
+			}
+			return ids, nil
+		}
+		ids, err := selectMembers()
+		require.NoError(t, err)
+		require.Contains(t, ids, event.ID)
+		for _, old := range historicalOutbox {
+			require.NotContains(t, ids, old.ID)
+		}
+		_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='closed' WHERE id=$1", scopeID)
+		require.NoError(t, err)
+		_, scopeErr := selectMembers()
+		_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+		require.NoError(t, err)
+		require.ErrorIs(t, scopeErr, executionscope.ErrDenied)
+		_, err = ownerDB.ExecContext(ctx, "DELETE FROM execution_runtime_bindings WHERE runtime_role=$1", systemRole)
+		require.NoError(t, err)
+		_, bindingErr := selectMembers()
+		_, err = ownerDB.ExecContext(ctx, `INSERT INTO execution_runtime_bindings VALUES($1,'intake-test','candidate')`, systemRole)
+		require.NoError(t, err)
+		require.ErrorIs(t, bindingErr, executionscope.ErrDenied)
+		_, err = ownerDB.ExecContext(ctx, "REVOKE SELECT ON execution_scopes FROM "+systemRole)
+		require.NoError(t, err)
+		_, permissionErr := selectMembers()
+		_, err = ownerDB.ExecContext(ctx, "GRANT SELECT ON execution_scopes TO "+systemRole)
+		require.NoError(t, err)
+		require.Error(t, permissionErr)
+		require.NotErrorIs(t, permissionErr, executionscope.ErrDenied)
+
+	})
 	t.Run("real outbox worker preserves historical states", func(t *testing.T) {
 		fresh, err := app.Create(ctx, identity, command("worker-member", "generic"))
 		require.NoError(t, err)
@@ -1291,6 +1351,29 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		foreign := owner.Tenant.Create().SetName("Unadmitted queue tenant").SetCode("unadmitted-queue").SaveX(ctx)
 		foreignEvent := owner.OutboxEvent.Create().SetEventID("foreign-queue-event").SetEventType("candidate-test-delivery").SetTenantID(foreign.ID).SetAggregateType("work_item").SetAggregateID("unresolved").SetPayload(json.RawMessage(`{}`)).SetNextAttemptAt(time.Now().Add(-time.Minute)).SaveX(ctx)
 		historicalOutbox = append(historicalOutbox, foreignEvent)
+		foreignActor := owner.User.Create().SetTenantID(foreign.ID).SetUsername("foreign-worker").SetName("Foreign worker").SetEmail("foreign@example.invalid").SetPasswordHash("test-only").SetRole("requester").SaveX(ctx)
+		foreignScope := uuid.NewString()
+		_, err = ownerDB.ExecContext(ctx, `INSERT INTO execution_scopes(id,deployment_id,tenant_id,status,created_by) VALUES($1,'intake-test',$2,'active',$3)`, foreignScope, foreign.ID, foreignActor.ID)
+		require.NoError(t, err)
+		foreignPolicy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: foreign.ID, ScopeID: foreignScope}}})
+		require.NoError(t, err)
+		foreignCtx := tenantctx.WithTenantID(ctx, foreign.ID)
+		foreignTx, err := runtime.Tx(foreignCtx)
+		require.NoError(t, err)
+		defer foreignTx.Rollback()
+		err = foreignPolicy.BindEnt(foreignCtx, foreignTx, foreign.ID)
+		require.NoError(t, err)
+		foreignItem, err := foreignTx.Ticket.Create().SetTenantID(foreign.ID).SetRequesterID(foreignActor.ID).SetTicketNumber("FOREIGN-WORKER-1").SetTitle("Foreign member").Save(foreignCtx)
+		require.NoError(t, err)
+		require.NoError(t, foreignTx.Commit())
+		var foreignMembers int
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_scope_members WHERE scope_id=$1 AND work_item_id=$2`, foreignScope, foreignItem.ID).Scan(&foreignMembers))
+		require.Equal(t, 1, foreignMembers)
+		foreignMemberEvent := owner.OutboxEvent.Create().SetEventID("foreign-member-event").SetEventType("candidate-test-delivery").SetTenantID(foreign.ID).SetAggregateType("work_item").SetAggregateID(fmt.Sprint(foreignItem.ID)).SetExecutionWorkItemID(foreignItem.ID).SetPayload(json.RawMessage(`{}`)).SetNextAttemptAt(time.Now().Add(-time.Minute)).SaveX(ctx)
+		historicalOutbox = append(historicalOutbox, foreignMemberEvent)
+		auditsBefore, err := json.Marshal(owner.AuditLog.Query().Order(ent.Asc("id")).AllX(ctx))
+		require.NoError(t, err)
+
 		before := make(map[int][]byte)
 		for _, row := range historicalOutbox {
 			before[row.ID], err = json.Marshal(owner.OutboxEvent.GetX(ctx, row.ID))
@@ -1308,7 +1391,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		receiver := &candidateOutboxTestReceiver{}
 		registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{receiver}, reserved...)
 		require.NoError(t, err)
-		worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(clients.System), service.OutboxDeliveryWorkerConfig{BatchSize: 1000, PollInterval: time.Second, HandlerTimeout: time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), registry)
+		worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(clients.System, policy), service.OutboxDeliveryWorkerConfig{BatchSize: 1000, PollInterval: time.Second, HandlerTimeout: time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), registry)
 		require.NoError(t, err)
 		require.NoError(t, worker.DispatchOnce(ctx))
 		for _, row := range historicalOutbox {
@@ -1317,8 +1400,78 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			t.Logf("queue row %s: status=%s attempts=%d", row.EventID, owner.OutboxEvent.GetX(ctx, row.ID).Status, owner.OutboxEvent.GetX(ctx, row.ID).AttemptCount)
 			assert.JSONEq(t, string(before[row.ID]), string(after), "historical row %s changed", row.EventID)
 		}
+		auditsAfter, err := json.Marshal(owner.AuditLog.Query().Order(ent.Asc("id")).AllX(ctx))
+		require.NoError(t, err)
+		require.JSONEq(t, string(auditsBefore), string(auditsAfter), "filtered historical events must not create audits")
 		require.Equal(t, []int{current.ID}, receiver.delivered)
 		require.Equal(t, "published", owner.OutboxEvent.GetX(ctx, current.ID).Status)
+	})
+
+	t.Run("worker transitions revalidate scope and binding after claim", func(t *testing.T) {
+		fresh, err := app.Create(ctx, identity, command("worker-transitions", "generic"))
+		require.NoError(t, err)
+		workerCtx := tenantctx.SystemContext(ctx, "outbox:poll", "candidate transition test")
+		repo := service.NewOutboxEventRepository(clients.System, policy)
+		actions := []struct {
+			name, status string
+			run          func(*ent.OutboxEvent) error
+		}{
+			{"attempt", "publishing", func(e *ent.OutboxEvent) error {
+				return repo.MarkDeliveryAttemptStarted(workerCtx, e.ID, e.ClaimToken, "local-test")
+			}},
+			{"retry", "pending", func(e *ent.OutboxEvent) error {
+				return repo.MarkRetry(workerCtx, e.ID, e.ClaimToken, "local-test", time.Now())
+			}},
+			{"retry-audit", "pending", func(e *ent.OutboxEvent) error {
+				return repo.MarkRetryWithAudit(workerCtx, e.ID, e.ClaimToken, "local-test", time.Now(), service.OutboxRetryAudit{TenantID: tenant.ID, RequestID: e.EventID, Resource: "outbox_event", Action: "test.retry", Path: "outbox/events", Method: "WORKER", StatusCode: 503})
+			}},
+			{"published", "published", func(e *ent.OutboxEvent) error { return repo.MarkPublished(workerCtx, e.ID, e.ClaimToken, time.Now()) }},
+			{"unknown", "blocked", func(e *ent.OutboxEvent) error {
+				return repo.MarkDeliveryUnknown(workerCtx, e, e.ClaimToken, "local-test")
+			}},
+			{"blocked", "blocked", func(e *ent.OutboxEvent) error { return repo.MarkBlocked(workerCtx, e.ID, e.ClaimToken, "local-test") }},
+			{"dead-letter", "dead_letter", func(e *ent.OutboxEvent) error {
+				return repo.MarkDeadLetter(workerCtx, e.ID, e.ClaimToken, "local-test")
+			}},
+		}
+		for _, action := range actions {
+			t.Run(action.name, func(t *testing.T) {
+				eventType := "transition-" + action.name
+				row := owner.OutboxEvent.Create().SetEventID(eventType).SetEventType(eventType).SetTenantID(tenant.ID).SetAggregateType("work_item").SetAggregateID(fmt.Sprint(fresh.WorkItemID)).SetExecutionWorkItemID(fresh.WorkItemID).SetPayload(json.RawMessage(`{}`)).SetNextAttemptAt(time.Now().Add(-time.Minute)).SaveX(ctx)
+				claimed, err := repo.ClaimDueByEventType(workerCtx, time.Now(), 10, eventType)
+				require.NoError(t, err)
+				require.Len(t, claimed, 1)
+				require.Equal(t, row.ID, claimed[0].ID)
+				before, err := json.Marshal(owner.OutboxEvent.GetX(ctx, row.ID))
+				require.NoError(t, err)
+				audits, err := json.Marshal(owner.AuditLog.Query().Order(ent.Asc("id")).AllX(ctx))
+				require.NoError(t, err)
+				for _, invalidation := range []string{"scope", "binding"} {
+					if invalidation == "scope" {
+						_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='closed' WHERE id=$1", scopeID)
+					} else {
+						_, err = ownerDB.ExecContext(ctx, "DELETE FROM execution_runtime_bindings WHERE runtime_role=$1", systemRole)
+					}
+					require.NoError(t, err)
+					rejected := action.run(claimed[0])
+					if invalidation == "scope" {
+						_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+					} else {
+						_, err = ownerDB.ExecContext(ctx, `INSERT INTO execution_runtime_bindings VALUES($1,'intake-test','candidate')`, systemRole)
+					}
+					require.NoError(t, err)
+					require.ErrorIs(t, rejected, executionscope.ErrDenied, invalidation)
+					after, err := json.Marshal(owner.OutboxEvent.GetX(ctx, row.ID))
+					require.NoError(t, err)
+					require.JSONEq(t, string(before), string(after))
+					auditAfter, err := json.Marshal(owner.AuditLog.Query().Order(ent.Asc("id")).AllX(ctx))
+					require.NoError(t, err)
+					require.JSONEq(t, string(audits), string(auditAfter))
+				}
+				require.NoError(t, action.run(claimed[0]))
+				require.Equal(t, action.status, owner.OutboxEvent.GetX(ctx, row.ID).Status)
+			})
+		}
 	})
 	require.Equal(t, oldRow.Title, owner.Ticket.GetX(ctx, historical.WorkItemID).Title)
 }

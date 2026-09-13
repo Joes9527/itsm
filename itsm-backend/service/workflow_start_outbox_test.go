@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"itsm-backend/service/bpmn"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strings"
 	"testing"
 	"time"
@@ -38,7 +39,7 @@ func workflowStartFixtureForActor(t *testing.T, nativeMSP bool, xml ...[]byte) (
 	key := fmt.Sprintf("workflow-start:%d:%d", item.ID, f.definition.ID)
 	payload, err := json.Marshal(map[string]any{"tenantId": f.tenant.ID, "workItemId": item.ID, "recordClass": "generic", "workflowDefinitionId": f.definition.ID, "workflowDefinitionKey": f.definition.Key, "workflowDefinitionVersion": f.definition.Version, "workflowDefinitionDigest": FreezeProcessDefinition(f.definition).Digest, "actorId": f.actor.ID, "channel": "itsm_web", "intakeRequestId": receipt.ID, "dedupeKey": key, "variables": map[string]any{"work_item_id": item.ID, "tenant_id": item.TenantID, "record_class": item.RecordClass, "requester_id": f.outsider.ID, "triggered_by": fmt.Sprint(f.actor.ID), "channel": "itsm_web"}})
 	require.NoError(t, err)
-	event, err := NewOutboxEventRepository(f.client).Enqueue(ctx, nil, NewOutboxEvent{EventID: key, EventType: "workflow.start.requested", TenantID: f.tenant.ID, AggregateType: "work_item", AggregateID: fmt.Sprint(item.ID), Payload: payload, NextAttemptAt: time.Now().UTC().Add(-time.Second)})
+	event, err := NewOutboxEventRepository(f.client, executionfixture.Standard()).Enqueue(ctx, nil, NewOutboxEvent{EventID: key, EventType: "workflow.start.requested", TenantID: f.tenant.ID, AggregateType: "work_item", AggregateID: fmt.Sprint(item.ID), Payload: payload, NextAttemptAt: time.Now().UTC().Add(-time.Second)})
 	require.NoError(t, err)
 	return f, event
 }
@@ -48,7 +49,7 @@ func TestWorkflowStartDeliveryReplaysAfterCommitBeforeAcknowledgement(t *testing
 	handler := NewWorkflowStartOutboxHandler(f.client, f.engine, f.client)
 	registry, err := NewOutboxEventTypeRegistry([]OutboxDeliveryHandler{handler})
 	require.NoError(t, err)
-	repo := NewOutboxEventRepository(f.client)
+	repo := NewOutboxEventRepository(f.client, executionfixture.Standard())
 	worker, err := NewOutboxDeliveryWorker(repo, OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), registry)
 	require.NoError(t, err)
 	now := time.Now().UTC()
@@ -102,12 +103,12 @@ func TestWorkflowStartDeliveryBlocksMalformedOrConflictingEvidence(t *testing.T)
 			}
 			// Payload is immutable; recreate only the fixture event.
 			f.client.OutboxEvent.DeleteOneID(event.ID).ExecX(context.Background())
-			_, err = NewOutboxEventRepository(f.client).Enqueue(context.Background(), nil, NewOutboxEvent{EventID: event.EventID, EventType: event.EventType, TenantID: event.TenantID, AggregateType: event.AggregateType, AggregateID: event.AggregateID, Payload: raw, NextAttemptAt: time.Now().UTC().Add(-time.Second)})
+			_, err = NewOutboxEventRepository(f.client, executionfixture.Standard()).Enqueue(context.Background(), nil, NewOutboxEvent{EventID: event.EventID, EventType: event.EventType, TenantID: event.TenantID, AggregateType: event.AggregateType, AggregateID: event.AggregateID, Payload: raw, NextAttemptAt: time.Now().UTC().Add(-time.Second)})
 			require.NoError(t, err)
 			handler := NewWorkflowStartOutboxHandler(f.client, f.engine, f.client)
 			registry, err := NewOutboxEventTypeRegistry([]OutboxDeliveryHandler{handler})
 			require.NoError(t, err)
-			worker, err := NewOutboxDeliveryWorker(NewOutboxEventRepository(f.client), OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), registry)
+			worker, err := NewOutboxDeliveryWorker(NewOutboxEventRepository(f.client, executionfixture.Standard()), OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), registry)
 			require.NoError(t, err)
 			require.NoError(t, worker.DispatchOnce(context.Background()))
 			require.Equal(t, "blocked", f.client.OutboxEvent.Query().Where(outboxevent.EventID(event.EventID)).OnlyX(context.Background()).Status)

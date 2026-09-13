@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"reflect"
 	"strings"
 	"sync"
@@ -412,7 +413,7 @@ func newOutboxRepositoryWithDriver(t *testing.T, driverName string) (*OutboxEven
 	db.SetMaxIdleConns(4)
 	client := enttest.NewClient(t, enttest.WithOptions(ent.Driver(entsql.OpenDB(dialect.SQLite, db))))
 	t.Cleanup(func() { _ = client.Close() })
-	return NewOutboxEventRepository(client), client, db
+	return NewOutboxEventRepository(client, executionfixture.Standard()), client, db
 }
 
 type sqliteOutboxUpdateTracker struct {

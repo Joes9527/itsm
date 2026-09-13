@@ -83,7 +83,7 @@ func TestChangeSubmitOwnsFrozenWorkflowStart(t *testing.T) {
 			// Later routing changes must not select a different definition at submit.
 			f.client.ProcessBinding.Update().Where(processbinding.BusinessType("change_request")).SetProcessDefinitionKey("change_emergency_flow").ExecX(f.ctx)
 			worker := func() error {
-				due, err := service.NewOutboxEventRepository(f.runtime).ClaimDueByEventType(f.ctx, time.Now().Add(time.Second), 100, "workflow.start.requested")
+				due, err := service.NewOutboxEventRepository(f.runtime, executionfixture.Standard()).ClaimDueByEventType(f.ctx, time.Now().Add(time.Second), 100, "workflow.start.requested")
 				if err != nil {
 					return err
 				}
@@ -242,12 +242,12 @@ func TestChangeSubmitLegacyCreationEventIsBlocked(t *testing.T) {
 	require.NoError(t, json.Unmarshal(snapshot.WorkflowVariables, &variables))
 	payload, err := json.Marshal(map[string]interface{}{"tenantId": f.tenant.ID, "workItemId": f.c.WorkItemID, "recordClass": "change_request", "workflowDefinitionId": *snapshot.WorkflowDefinitionID, "workflowDefinitionKey": snapshot.WorkflowDefinitionKey, "workflowDefinitionVersion": snapshot.WorkflowDefinitionVersion, "workflowDefinitionDigest": snapshot.WorkflowDefinitionDigest, "actorId": f.actor.ID, "channel": "itsm_web", "intakeRequestId": snapshot.IntakeRequestID, "dedupeKey": eventID, "variables": variables})
 	require.NoError(t, err)
-	repo := service.NewOutboxEventRepository(f.runtime)
+	repo := service.NewOutboxEventRepository(f.runtime, executionfixture.Standard())
 	event, err := repo.Enqueue(f.ctx, nil, service.NewOutboxEvent{EventID: eventID, EventType: "workflow.start.requested", TenantID: f.tenant.ID, AggregateType: "work_item", AggregateID: fmt.Sprint(f.c.WorkItemID), Payload: payload, NextAttemptAt: time.Now().Add(-time.Second)})
 	require.NoError(t, err)
 	registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{service.NewWorkflowStartOutboxHandler(f.runtime, f.engine, f.clients.System)})
 	require.NoError(t, err)
-	worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(f.clients.System), service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), registry)
+	worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(f.clients.System, executionfixture.Standard()), service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), registry)
 	require.NoError(t, err)
 	require.NoError(t, worker.DispatchOnce(f.ctx))
 	recorded := f.client.OutboxEvent.GetX(f.ctx, event.ID)

@@ -66,9 +66,14 @@ func NewKAFWorkerApplication() (*KAFWorkerApplication, error) {
 		_ = clients.Close()
 		return nil, admissionErr
 	}
+	executionPolicy, err := database.NewExecutionPolicy(cfg.Execution)
+	if err != nil {
+		_ = clients.Close()
+		return nil, err
+	}
 	metrics := service.NewKafOutboxMetrics()
 	dispatcher, err := service.NewKafOutboxDispatcher(
-		service.NewOutboxEventRepository(clients.System),
+		service.NewOutboxEventRepository(clients.System, executionPolicy),
 		service.KafOutboxConfig{
 			WebhookURL:    cfg.KAFOutbox.WebhookURL,
 			WebhookSecret: cfg.KAFOutbox.WebhookSecret,

@@ -16,6 +16,7 @@ import (
 	"itsm-backend/ent/rolepermission"
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 )
@@ -33,7 +34,7 @@ func newRuntimeRelationDeliveryWorker(t *testing.T, f *relationFixture) *service
 	})
 	require.NoError(t, err)
 	worker, err := service.NewOutboxDeliveryWorker(
-		service.NewOutboxEventRepository(f.client),
+		service.NewOutboxEventRepository(f.client, executionfixture.Standard()),
 		service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 20 * time.Second, MaxAttempts: 3},
 		logger,
 		registry,
@@ -250,7 +251,7 @@ func TestWorkItemDeliveryRuntimeOutcomes(t *testing.T) {
 				}
 				registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{handler})
 				require.NoError(t, err)
-				worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(f.client), service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 20 * time.Second, MaxAttempts: 3}, logger, registry)
+				worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(f.client, executionfixture.Standard()), service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 20 * time.Second, MaxAttempts: 3}, logger, registry)
 				require.NoError(t, err)
 				require.NoError(t, worker.DispatchOnce(f.ctx))
 				stored := f.client.OutboxEvent.GetX(f.ctx, event.ID)

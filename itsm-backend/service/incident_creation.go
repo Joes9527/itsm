@@ -113,7 +113,7 @@ func (*IncidentService) CreateExtension(ctx context.Context, tx *ent.Tx, item *e
 	if err != nil {
 		return nil, creation.NewInternalFailure("could not encode incident creation event", err)
 	}
-	_, err = NewOutboxEventRepository(tx.Client()).Enqueue(ctx, tx, NewOutboxEvent{ExecutionWorkItemID: item.ID,
+	_, err = enqueueOutboxEvent(ctx, tx.Client(), tx, NewOutboxEvent{ExecutionWorkItemID: item.ID,
 		EventID: "incident-created:" + strconv.Itoa(item.ID), EventType: "incident.created", TenantID: item.TenantID, AggregateType: "work_item", AggregateID: strconv.Itoa(item.ID), Payload: payload,
 	})
 	if err != nil {

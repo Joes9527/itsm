@@ -75,7 +75,7 @@ func assertSSLVPNDispatchCount(t *testing.T, h *sslvpnTestHarness, expected int3
 	var calls atomic.Int32
 	receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); w.WriteHeader(http.StatusAccepted) }))
 	defer receiver.Close()
-	dispatcher, err := service.NewKafOutboxDispatcher(service.NewOutboxEventRepository(h.client), service.KafOutboxConfig{WebhookURL: receiver.URL, WebhookSecret: "isolated-rejection-test", BatchSize: 10, PollInterval: time.Second})
+	dispatcher, err := service.NewKafOutboxDispatcher(service.NewOutboxEventRepository(h.client, executionfixture.Standard()), service.KafOutboxConfig{WebhookURL: receiver.URL, WebhookSecret: "isolated-rejection-test", BatchSize: 10, PollInterval: time.Second})
 	require.NoError(t, err)
 	require.NoError(t, dispatcher.DispatchOnce(context.Background()))
 	assert.Equal(t, expected, calls.Load(), "mock KAF HTTP dispatches; no real KAF or provider is connected")

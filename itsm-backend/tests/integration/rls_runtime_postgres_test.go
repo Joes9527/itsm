@@ -45,7 +45,7 @@ func TestPostgresRLSRuntimeConsumer(t *testing.T) {
 	owner.SetAlertCreator(service.NewIncidentAlertingService(client, zap.NewNop().Sugar(), executionfixture.Standard()))
 	registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{owner.RuleEngine()}, "incident_alert_delivery")
 	require.NoError(t, err)
-	worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(clients.System), service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 10 * time.Second, MaxAttempts: 5}, zap.NewNop().Sugar(), registry)
+	worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(clients.System, executionfixture.Standard()), service.OutboxDeliveryWorkerConfig{BatchSize: 10, PollInterval: time.Second, HandlerTimeout: 10 * time.Second, MaxAttempts: 5}, zap.NewNop().Sugar(), registry)
 	require.NoError(t, err)
 	require.NoError(t, worker.DispatchOnce(f.ctx))
 	require.Equal(t, "published", f.client.OutboxEvent.GetX(f.ctx, f.event.ID).Status, f.client.OutboxEvent.GetX(f.ctx, f.event.ID).LastError)
@@ -329,7 +329,7 @@ func TestPostgresRLSRuntimeKAFTransport(t *testing.T) {
 	var sent atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { sent.Add(1); w.WriteHeader(200) }))
 	defer server.Close()
-	dispatcher, err := service.NewKafOutboxDispatcher(service.NewOutboxEventRepository(queue), service.KafOutboxConfig{WebhookURL: server.URL, WebhookSecret: "runtime-test", BatchSize: 10, PollInterval: time.Second, MaxAttempts: 5})
+	dispatcher, err := service.NewKafOutboxDispatcher(service.NewOutboxEventRepository(queue, executionfixture.Standard()), service.KafOutboxConfig{WebhookURL: server.URL, WebhookSecret: "runtime-test", BatchSize: 10, PollInterval: time.Second, MaxAttempts: 5})
 	require.NoError(t, err)
 	require.NoError(t, dispatcher.DispatchOnce(f.ctx))
 	require.NoError(t, dispatcher.DispatchOnce(f.ctx))
