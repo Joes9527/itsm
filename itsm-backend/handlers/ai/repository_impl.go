@@ -2,6 +2,9 @@ package ai
 
 import (
 	"context"
+	"fmt"
+	"itsm-backend/common/tenantctx"
+	"itsm-backend/database"
 	"time"
 
 	"itsm-backend/ent"
@@ -12,11 +15,15 @@ import (
 )
 
 type EntRepository struct {
-	client *ent.Client
+	execution *database.ExecutionPolicy
+	client    *ent.Client
 }
 
-func NewEntRepository(client *ent.Client) *EntRepository {
-	return &EntRepository{client: client}
+func NewEntRepository(client *ent.Client, execution *database.ExecutionPolicy) *EntRepository {
+	if client == nil || execution == nil {
+		panic("AI repository requires tenant client and execution policy")
+	}
+	return &EntRepository{client: client, execution: execution}
 }
 
 // Conversations
@@ -150,7 +157,22 @@ func toToolInvocationDomain(e *ent.ToolInvocation) *ToolInvocation {
 }
 
 func (r *EntRepository) CreateToolInvocation(ctx context.Context, i *ToolInvocation) (*ToolInvocation, error) {
-	e, err := r.client.ToolInvocation.Create().
+	if i == nil || i.TenantID <= 0 || ctx == nil || tenantctx.IsSystemBypass(ctx) {
+		return nil, fmt.Errorf("explicit tool invocation tenant required")
+	}
+	if tenantID, ok := tenantctx.TenantID(ctx); ok && tenantID != i.TenantID {
+		return nil, fmt.Errorf("tool invocation tenant mismatch")
+	}
+	ctx = tenantctx.WithTenantID(ctx, i.TenantID)
+	tx, err := r.client.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if err := r.execution.BindEnt(ctx, tx, i.TenantID); err != nil {
+		return nil, err
+	}
+	e, err := tx.ToolInvocation.Create().
 		SetTenantID(i.TenantID).
 		SetToolName(i.ToolName).
 		SetArguments(i.Arguments).
@@ -164,6 +186,9 @@ func (r *EntRepository) CreateToolInvocation(ctx context.Context, i *ToolInvocat
 		SetRoleSnapshot(i.RoleSnapshot).
 		Save(ctx)
 	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return toToolInvocationDomain(e), nil

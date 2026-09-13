@@ -1021,3 +1021,14 @@ S5不可处理消息的完整处置、进程重启及其它异步入口继续未
 `s5-tool-enqueue-green.log` 原入队RED→GREEN；补强后 `s5-tool-enqueue-lifecycle.log` 工具/生命周期及既有工具集成的具名定向race PASS。`s5-tool-enqueue-full-private.log` 完整候选边界/PG/Redis/MinIO构造保全、审计/Webhook恢复及Stream/子进程恢复race PASS，无skip/race；包含pending、rejected、dry_run、inactive actor入队拒绝且调用整行不变/无工单新增。独立review_execution_scope_s1复核限定入队增量无新增阻断。`s5-tool-enqueue-build.log` 全后端build exit0，git diff --check通过。审阅后的测试补强覆盖忽略取消仍返回nil时最终ErrClosed拒绝，及各等待点5秒超时；`s5-tool-enqueue-late-success.log` 两种取消行为race PASS，生产代码未再变更。
 
 尚未完成：AI创建/审批写入原事务、业务首次写事务复核、结果条件回写、新表运行角色准入。当前actor/approver查询沿用既有PermissionDenied包装并保留cause，不把它说成全部基础设施错误分类已统一。CandidateSHA及候选未启动状态不变，S5和后续G2/G3未放行；没有共享环境、B配置、企业外呼、push/main合并。
+
+
+### B2 S5 AI 工具调用创建事务接入（2026-09-13）
+
+在 `ed4f8c360` 后真实AI仓库创建测试 `s5-tool-create-red.log` 复现原autocommit INSERT被041触发器以execution scope required/42501拒绝。EntRepository构造现在显式要求冻结ExecutionPolicy和tenant client，bootstrap统一注入。CreateToolInvocation拒绝nil/非法tenant/异tenant上下文/SystemBypass，在自有事务BindEnt→INSERT→Commit，触发器在相同事务登记；只有提交成功才返回，不增加历史补登记或fallback。该方法自行拥有事务，未来其它原子写必须提供显式原事务入口，不能嵌套调用。
+
+`s5-tool-create-green.log` 创建RED→GREEN；`s5-tool-create-atomic.log` 私有PG真实受限tenant client覆盖pending与auto两种记录形状均登记、实际INSERT成功后Ent hook注入故障时invocation及登记同时回滚、nil/异tenant/closed scope拒绝无新增、临时明确standard绑定时正常创建且零候选登记，race PASS。auto/pending仅证明持久记录形状，不代替Service.ExecuteTool/RBAC/recordToolAudit完整流程；standard仅证明模式合同，不代替角色启动准入。测试owner只作任务私有准备和对账，无共享操作。
+
+`s5-tool-create-regression.log` handlers/ai与bootstrap全包race PASS；独立review_execution_scope_s1只读审阅本创建前置无阻断。`s5-tool-create-full-private.log` 完整私有PG/Redis/MinIO候选边界及恢复回归race PASS，无skip/race；`s5-tool-create-build.log` 全后端build exit0，git diff --check通过。
+
+仍须完成审批更新事务、审计写失败传播、业务首次写事务来源再校验、结果回写及041表角色准入；S5和T3/T4/G2/G3保持未完成。固定CandidateSHA与候选未启动状态不变，无企业外呼、B环境修改、push或main合并。

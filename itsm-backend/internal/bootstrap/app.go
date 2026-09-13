@@ -749,7 +749,7 @@ func NewApplication() *Application {
 	slaTemplateController := controller.NewSLATemplateController(slaTemplateService)
 
 	// AI Domain
-	aiRepo := ai.NewEntRepository(client)
+	aiRepo := ai.NewEntRepository(client, executionPolicy)
 	aiServiceDomain := ai.NewService(aiRepo, sugar, ragService, toolRegistry, toolQueue, analyticsService, predictionService, slaForecastSkill, triageService, rootCauseService, aiTelemetryService)
 	aiServiceDomain.SetLLMGateway(llmGateway)
 	// P2-6: 注入 ent client 供 AI 工具 RBAC 校验复用 hasResourcePermission

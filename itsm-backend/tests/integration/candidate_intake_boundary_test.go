@@ -36,6 +36,7 @@ import (
 	feishu "itsm-backend/connector/builtin/feishu"
 	"itsm-backend/database"
 	"itsm-backend/ent/auditlog"
+	aidomain "itsm-backend/handlers/ai"
 	changedomain "itsm-backend/handlers/change"
 	srdomain "itsm-backend/handlers/service_request"
 	"itsm-backend/handlers/shared/workflowcallback"
@@ -461,6 +462,87 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.Error(t, err)
 		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, historicalTool.ID).Scan(&after))
 		require.JSONEq(t, before, after)
+	})
+	t.Run("AI repository creates scoped invocation atomically", func(t *testing.T) {
+		var installed bool
+		require.NoError(t, ownerDB.QueryRow(`SELECT to_regclass('public.execution_tool_invocations') IS NOT NULL`).Scan(&installed))
+		if !installed {
+			_, err := ownerDB.ExecContext(ctx, migration.GetMigrationSQL(migration.ToolInvocationExecutionScopeVersion))
+			require.NoError(t, err)
+		}
+		_, err := ownerDB.ExecContext(ctx, "GRANT SELECT ON execution_tool_invocations TO "+runtimeRole)
+		require.NoError(t, err)
+		repository := aidomain.NewEntRepository(runtime, policy)
+		for _, approval := range []bool{true, false} {
+			state := "auto"
+			if approval {
+				state = "pending"
+			}
+			created, err := repository.CreateToolInvocation(ctx, &aidomain.ToolInvocation{TenantID: tenant.ID, UserID: actor.ID, ToolName: "create_ticket", Arguments: `{"title":"Repository scoped source"}`, Status: "pending", NeedsApproval: approval, ApprovalState: state})
+			require.NoError(t, err)
+			var assigned string
+			require.NoError(t, ownerDB.QueryRow(`SELECT scope_id::text FROM execution_tool_invocations WHERE invocation_id=$1`, created.ID).Scan(&assigned))
+			require.Equal(t, scopeID, assigned)
+		}
+		input := func() *aidomain.ToolInvocation {
+			return &aidomain.ToolInvocation{TenantID: tenant.ID, UserID: actor.ID, ToolName: "create_ticket", Arguments: `{"title":"Atomic source"}`, Status: "pending", NeedsApproval: true, ApprovalState: "pending"}
+		}
+		counts := func() (int, int) {
+			n := owner.ToolInvocation.Query().CountX(ctx)
+			var m int
+			require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_tool_invocations`).Scan(&m))
+			return n, m
+		}
+		var armed atomic.Bool
+		injected := errors.New("injected invocation post-insert failure")
+		runtime.ToolInvocation.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
+				value, err := next.Mutate(c, m)
+				if err == nil && m.Op() == ent.OpCreate && armed.CompareAndSwap(true, false) {
+					return nil, injected
+				}
+				return value, err
+			})
+		})
+		beforeCalls, beforeOrigins := counts()
+		armed.Store(true)
+		_, err = repository.CreateToolInvocation(ctx, input())
+		require.ErrorIs(t, err, injected)
+		require.False(t, armed.Load())
+		afterCalls, afterOrigins := counts()
+		require.Equal(t, beforeCalls, afterCalls)
+		require.Equal(t, beforeOrigins, afterOrigins)
+		for _, invalidCtx := range []context.Context{nil, tenantctx.WithTenantID(ctx, tenant.ID+100000)} {
+			_, err := repository.CreateToolInvocation(invalidCtx, input())
+			require.Error(t, err)
+		}
+		_, err = ownerDB.ExecContext(ctx, `UPDATE execution_scopes SET status='closed' WHERE id=$1`, scopeID)
+		require.NoError(t, err)
+		defer func() {
+			_, err := ownerDB.ExecContext(ctx, `UPDATE execution_scopes SET status='active' WHERE id=$1`, scopeID)
+			require.NoError(t, err)
+		}()
+		_, err = repository.CreateToolInvocation(ctx, input())
+		require.ErrorIs(t, err, executionscope.ErrDenied)
+		afterCalls, afterOrigins = counts()
+		require.Equal(t, beforeCalls, afterCalls)
+		require.Equal(t, beforeOrigins, afterOrigins)
+		_, err = ownerDB.ExecContext(ctx, `UPDATE execution_scopes SET status='active' WHERE id=$1`, scopeID)
+		require.NoError(t, err)
+		t.Run("standard insert preserves mode contract", func(t *testing.T) {
+			_, err := ownerDB.ExecContext(ctx, `UPDATE execution_runtime_bindings SET mode='standard' WHERE runtime_role=$1`, runtimeRole)
+			require.NoError(t, err)
+			defer func() {
+				_, err := ownerDB.ExecContext(ctx, `UPDATE execution_runtime_bindings SET mode='candidate' WHERE runtime_role=$1`, runtimeRole)
+				require.NoError(t, err)
+			}()
+			standard := aidomain.NewEntRepository(runtime, executionfixture.Standard())
+			created, err := standard.CreateToolInvocation(ctx, input())
+			require.NoError(t, err)
+			var n int
+			require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_tool_invocations WHERE invocation_id=$1`, created.ID).Scan(&n))
+			require.Zero(t, n)
+		})
 	})
 	t.Run("historical approved tool cannot authorize candidate execution", func(t *testing.T) {
 		var installed bool
