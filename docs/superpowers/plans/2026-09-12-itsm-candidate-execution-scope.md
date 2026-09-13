@@ -203,6 +203,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+工具来源数据库前置 `762bd4f61`：新增041唯一注册迁移，039→040→041依赖及037准备、038旧退休契约保留；新invocation INSERT触发器在原事务登记结构scope/tenant关联，复合FK、绑定/active/tenant校验、固定search_path及触发位置，历史不回填，运行角色只能显式只读。真实私有PG注册缺失RED→历史整行保全/新登记同提交同回滚/未绑定拒绝/直接补登记删除拒绝GREEN，默认角色表和函数ACL剥离、外租户/closed/撤销binding无残留负测race PASS。migration全包及build通过，独立复核无迁移前置阻断。完整私有回归仍FAIL于历史ProcessJob子测试，其余具名项通过，无skip/race，不能报告全通过。角色准入名单与AI/队列/业务事务尚未接入，041不能单独用于启动应用；后续必须关闭来源RED并保留新工具旅程。T1记录全部证据，CandidateSHA及未启动状态不变。
+
 工具来源RED检查点 `674fc9885`：真实私有PG测试确认候选ToolQueue.ProcessJob可执行scope建立前的approved create_ticket。使用受限tenant client与真实candidate intake，返回nil、历史invocation pending→done并写result、WorkItem与member各新增1，四项保全断言FAIL；独立审阅确认缺陷。当前新增测试未GREEN，不能引用此前full PASS称当前范围通过。生产调用链为handlers/ai.Service.ExecuteTool→EntRepository.CreateToolInvocation、ApproveTool→UpdateToolInvocation→Enqueue、ToolQueue.ProcessJob→intake/edit/registry→完成/失败写回；均需贯通来源范围，不能仅靠Start开关。T1保留完整RED证据，CandidateSHA及未启动状态不变。
 
 工具来源事务链实施细化（落实原S5工具入队/执行双边界，不增加独立业务引擎）：
