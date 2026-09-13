@@ -1439,3 +1439,17 @@ s5-notification-disabled-final-pg.log原SendNotification→真实候选受限cli
 s5-notification-disabled-final-unit.log四包具名race回归PASS；局部通知fixture显式开启standard notification，不修改通用executionfixture.Standard或生产默认。SLA provenance的worker显式开启原candidate deployment/scope能力，保留原失败投递与projection断言。s5-notification-disabled-build.log全后端build exit0；独立最终复核无新增阻断，清理建议已处理；git diff --check通过，Go进程均已退出。
 
 只关闭通知Worker冻结能力旁路。email精确持久目标、专业邮件/裸实例入口、push完整部署准入及剩余S5/S6/T3/T4/G3未完成。固定CandidateSHA与候选停止状态不变，无WSL/共享数据库操作、企业外发、push/main合并。下一步继续专业邮件目标身份及实际Graph provider边界。
+
+### B2 S5 邮件排队后目标重绑 RED 与协议依赖（2026-09-14）
+
+新增TestTicketNotificationEmailRejectsTargetChangeAfterEnqueue：真实SQLite通知producer在Graph sender/mailbox A时提交queued，随后将现有EmailService的GraphProvider换为sender/mailbox B，真实ProcessPendingDeliveries调用B并标sent。s5-email-target-change-red.log明确复现错误成功、B一次调用及SentAt非零；全程进程内探针，无企业邮件。该测试同时改变sender与mailbox，不声称已分别覆盖每种目标字段变化。
+
+s5-email-target-change-regression-red.log覆盖EmailService/EmailAndCC/WebSocketDelivery/TicketNotification/SendNotification具名race，仅新增目标重绑用例FAIL，无SKIP/DATA RACE。本轮只新增测试，无生产修复/迁移，也未重复无关build冒充GREEN。94e733300的原绿色证据不覆盖新邮件目标要求。
+
+源码依赖：GraphProvider只有func(tenant)->sender/mailbox/bool，bootstrap newTenantGraphProvider使用Manager.Get(tenant, msgraph-email)，没有持久目标/执行Ref/generation。044四目标字段约束明确排除email，不能直接塞入email或修改044历史SQL。SMTP仍为EmailService原专业路径，不能把它伪装为connector；另一个builtin/email使用不同协议与直接SMTP，不能为了消除RED替换为该并行实现。GraphConnector当前也没有纯目的地身份或local_only声明，不能假定候选已具备可激活Graph目标。
+
+独立审阅接受有界扩展方向：原通知行version2邮件目标，新增可空不可变target_transport，Graph精确connector name/provider及覆盖实际mailbox/身份/端点的摘要，SMTP无connector身份、摘要绑定host/port/user/from及传输模式；新注册迁移045扩展现行约束/触发器，保留044和历史NULL，不回填。Incident原outbox应共享typed EmailTarget且更新其版本/摘要/receipt及旧payload策略，不能在consumer临时补身份。新行缺目标须原事务失败，不能返回queued后永远无法履约。
+
+需先解决disabled依赖：分离“只读可信配置并冻结身份”与“允许运行/外发”。禁用notification可以完整绑定目标后queued，但取配置不能Init、联网或临时开能力。目前Manager实例枚举只看到已激活对象；candidate声明有受保护Settings/Credentials与摘要，standard配置来源仍需沿既有配置owner核查。缺此能力时不能以新增NULL队列行、当前默认邮箱或全局SMTP掩盖。下一步在既有S5合同补齐该只读描述入口，再实施版本化持久协议和原worker复核。
+
+固定CandidateSHA/候选停止状态不变，无WSL/共享数据库操作、企业外发、push/main合并。S5/S6/T3/T4/G3和总交付均未完成，当前已知RED保留等待实现，Go进程均已结束。

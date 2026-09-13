@@ -653,3 +653,30 @@ func TestTicketNotificationDisabledCapabilityPreservesQueuedIntent(t *testing.T)
 		}
 	}
 }
+
+func TestTicketNotificationEmailRejectsTargetChangeAfterEnqueue(t *testing.T) {
+	client, svc, ctx := setupTicketNotificationTest(t)
+	defer client.Close()
+	tenant, recipient, item := createNotifTestData(t, client, ctx)
+	logger := zaptest.NewLogger(t).Sugar()
+	svc.SetNotificationPreferenceService(NewNotificationPreferenceService(client, logger))
+	client.NotificationPreference.Create().SetTenantID(tenant.ID).SetUserID(recipient.ID).SetEventType("ticket_updated").SetInAppEnabled(false).SetEmailEnabled(true).SetSmsEnabled(false).SetPushEnabled(false).SaveX(ctx)
+	original, replacement := &durableNotificationGraphSender{}, &durableNotificationGraphSender{}
+	mail := NewEmailService(EmailConfig{}, logger)
+	mail.SetGraphProvider(func(int) (GraphMailSender, string, bool) { return original, "original@example.invalid", true })
+	svc.SetEmailService(mail)
+	svc.SetDeliveryQueueClient(client)
+	result, err := svc.SendNotification(ctx, item.ID, &dto.SendTicketNotificationRequest{UserIDs: []int{recipient.ID}, EventType: "ticket_updated", Content: "frozen mail target", DeliveryKey: "mail-target-change"}, tenant.ID)
+	require.NoError(t, err)
+	require.Equal(t, dto.TicketNotificationEffectQueued, result.Effect)
+	// Reconfigure the existing provider after the durable request was accepted.
+	mail.SetGraphProvider(func(int) (GraphMailSender, string, bool) { return replacement, "replacement@example.invalid", true })
+	n, err := svc.ProcessPendingDeliveries(ctx, "mail-target-change", 10)
+	assert.Error(t, err, "a different mailbox/provider must not inherit an existing intent")
+	assert.Zero(t, n)
+	assert.Empty(t, original.sentCalls())
+	assert.Empty(t, replacement.sentCalls())
+	row := client.TicketNotification.Query().OnlyX(ctx)
+	assert.NotEqual(t, ticketNotificationStatusSent, row.Status)
+	assert.True(t, row.SentAt.IsZero())
+}
