@@ -142,6 +142,7 @@ S3/S4/S5/S6及候选完整交付仍未完成，CandidateSHA不变、候选停止
 - [ ] category/subtype、专业字段/共享标签、处理人/请求人、状态/解决方案/表单字段契约逐项核对，不静默忽略客户端字段；标签目录创建及关系替换复用既有所有者/原事务，不另建平行resolver。
 - [x] 仓储更新接收调用方事务并沿用唯一字段映射和CAS实现；`81860d2e4` 提供显式UpdateTx，SQLite及真实私有PG验证提交/回滚/旧版本标签回滚、另一连接提交前不可见；定向回归/全后端构建及独立审阅通过。仅仓储前置完成，TicketService及各调用入口尚未迁移，原业务RED仍存在。
 - [ ] 同事务写编辑审计/稳定回执、状态通知意图、应有SLA违规收尾；所有失败传播回滚，applied SLA冻结不重套策略。保留通知偏好及原接收人语义，不把日志warning当副作用成功。
+  当前 `49293729d` 已将状态通知意图及SLA收尾加入原事务：Notification/TicketNotification/第二条SLAViolation实际写后失败全回滚，重试精确一组；email仅pending/偏好全禁用/相同接收人去重/缺依赖拒绝通过。完整私有PG及定向回归/构建/独立审阅通过。此条仍不勾选：编辑审计及稳定命令receipt未接入，Feishu旧路径及Meta/actor/parent/必需version待迁移。
 - [ ] 飞书更新意图与原编辑提交原子绑定，使用与manual更新相同event_type和稳定aggregate键，避免跨类型越过前序；具名编辑来源的权限/回执/resultVersion/status与payload摘要须由consumer验证，不能伪造手动升级来源或删除原同步能力。
 - [ ] 真实PG覆盖历史整行/标签目录及关系保全、新member标题/分类/标签/状态、重放/冲突、标签/通知/SLA/审计/Outbox实际写后故障回滚、actor撤权与子任务父范围拒绝；相关前端/API/工具契约、构建/回归和独立审阅后才能标记完成。
 
