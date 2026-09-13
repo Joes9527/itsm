@@ -455,7 +455,7 @@ func NewApplication() *Application {
 	predictionService := service.NewPredictionService(client, sugar)
 	slaForecastSkill := service.NewSLAForecastSkill(client, llmGateway, sugar)
 	// 市场服务
-	marketplaceSvc := marketplaceService.NewService(client, sugar)
+	marketplaceSvc := marketplaceService.NewService(client, sugar, executionPolicy)
 	marketplaceCtrl := marketplaceController.NewController(marketplaceSvc, connectorManager)
 
 	// Guidance sidecar for constrained JSON generation

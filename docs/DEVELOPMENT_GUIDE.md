@@ -360,4 +360,9 @@ Creation requester controls use the actual target resource's `create_on_behalf` 
 
 候选API在消费者前调用唯一Manager.ActivateStartupTargets，只消费冻结声明，先整批核验注册manifest的initialization_behavior=local_only，再复用普通Provision的内部初始化函数。Init之后按通用DeliveryDestinationIdentity核对真实目标摘要，全部成功才统一发布实例和generation；Webhook生产者和worker沿用同一身份接口，旧专用接口已移除，摘要含义未变。初始化行为纳入manifest checksum；未知行为拒绝，声明字符串不能替代实现的无外呼/无后台任务证明。目前只有经过检查的builtin Webhook声明local_only，其Init不发网络请求。
 
-初始化失败时关闭当前及已准备对象，并保留清理错误；同一Manager只尝试一次可信启动，失败需新建实例。CloseAll先禁止新增初始化，再等待在途初始化和清理，防止关闭后发布；关闭本身不主动取消Init，生命周期调用方必须先取消上下文，Init须遵守该上下文。普通Provision与可信启动共用此关闭等待。后续消费者启动失败和正常停止由API生命周期清理已激活目标，工具队列Start失败也先Close再关闭目标依赖。可信启动后普通Provision拒绝变更，但启动前直接Provision、Marketplace持久化和裸Send/Get权限仍需单独接入，不把目标存在视为业务投递许可。
+初始化失败时关闭当前及已准备对象，并保留清理错误；同一Manager只尝试一次可信启动，失败需新建实例。CloseAll先禁止新增初始化，再等待在途初始化和清理，防止关闭后发布；关闭本身不主动取消Init，生命周期调用方必须先取消上下文，Init须遵守该上下文。普通Provision与可信启动共用此关闭等待。后续消费者启动失败和正常停止由API生命周期清理已激活目标，工具队列Start失败也先Close再关闭目标依赖。可信启动后普通Provision拒绝变更，但启动前直接Provision和裸Send/Get权限仍需单独接入，不把目标存在视为业务投递许可。
+
+
+候选环境的 Marketplace 安装、历史安装重新启用、卸载、配置替换及连接器配置合并均在首次查询/写入前要求同一 `RequireIntegrationManagement`。当前只有 standard、有效且匹配的显式租户上下文、无 SystemBypass 且请求未取消才允许继续；缺少策略一律拒绝。此部署限制不替代现有 RBAC 或业务授权，也不因商品类型为 skill/plugin 放开配置写入。HTTP handler 传递 Request.Context 保留租户与取消信息，禁止操作返回固定403；连接器依赖缺失不能报告激活成功，standard 已提交配置与后续激活并非原子事务。
+
+飞书 OAuth callback 在兑换令牌前通过同一部署检查，租户仅来自唯一匹配的回调实例；重复实例 ID 拒绝，query/state 不提供租户授权。配置合并 owner 自身仍再次检查，以覆盖直接调用。nil Marketplace 不跳过持久化并报告成功。本增量不补齐 OAuth state、发起人授权、防重放或兑换与持久化的原子性；普通环境完整 OAuth 安全验收仍需单独完成。候选拒绝在本机接收端验证为零兑换请求，standard 正向使用本机 provider 与 SQLite，私有 PG 配置保全另有真实测试，均不等于生产外部服务验收。

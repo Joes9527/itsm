@@ -39,6 +39,7 @@ import (
 	feishu "itsm-backend/connector/builtin/feishu"
 	"itsm-backend/connector/marketplace"
 	"itsm-backend/controller"
+	marketplacecontroller "itsm-backend/controller/marketplace"
 	"itsm-backend/database"
 	"itsm-backend/ent/auditlog"
 	aidomain "itsm-backend/handlers/ai"
@@ -51,10 +52,12 @@ import (
 	"itsm-backend/ent/incident"
 	"itsm-backend/ent/intakerequest"
 	"itsm-backend/ent/kaftaskcompletionreceipt"
+	"itsm-backend/ent/marketplaceitem"
 	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/ent/servicerequest"
 	"itsm-backend/ent/servicerequestaccesssnapshot"
+	"itsm-backend/ent/tenantinstallation"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/handlers/common/accessgrant"
 	creation "itsm-backend/handlers/common/workitemcreation"
@@ -63,6 +66,7 @@ import (
 	catalogdomain "itsm-backend/handlers/service_catalog"
 	"itsm-backend/handlers/shared"
 	"itsm-backend/handlers/shared/workitemmutation"
+	"itsm-backend/middleware"
 	"itsm-backend/migration"
 	"itsm-backend/pkg/eventbus"
 	ticketrepo "itsm-backend/repository/ticket"
@@ -70,6 +74,7 @@ import (
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
 	cloudrunner "itsm-backend/service/cloud"
+	marketplaceservice "itsm-backend/service/marketplace"
 	executionfixture "itsm-backend/tests/fixtures/execution"
 )
 
@@ -452,6 +457,111 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				assert.Equal(t, countBefore, countAfter, "rejected activation must not insert another configuration")
 			})
 		}
+	})
+	t.Run("candidate marketplace management preserves existing configuration", func(t *testing.T) {
+		for _, kind := range []marketplaceitem.Type{marketplaceitem.TypeConnector, marketplaceitem.TypeSkill, marketplaceitem.TypePlugin} {
+			for _, action := range []string{"install", "reactivate", "update", "uninstall", "merge"} {
+				if action == "merge" && kind != marketplaceitem.TypeConnector {
+					continue
+				}
+				t.Run(string(kind)+"/"+action, func(t *testing.T) {
+					item := owner.MarketplaceItem.Create().SetName("candidate-" + string(kind) + "-" + action).SetType(kind).SetTitle("Private fixture").SetProvider("local-test").SetLatestVersion("1").SetStatus(marketplaceitem.StatusPublished).SaveX(ctx)
+					defer owner.MarketplaceItem.DeleteOneID(item.ID).ExecX(ctx)
+					defer owner.TenantInstallation.Delete().Where(tenantinstallation.ItemIDEQ(item.ID)).ExecX(ctx)
+					if action != "install" {
+						state := tenantinstallation.StatusActive
+						if action == "reactivate" {
+							state = tenantinstallation.StatusUninstalled
+						}
+						owner.TenantInstallation.Create().SetTenantID(tenant.ID).SetItemID(item.ID).SetInstalledVersion("0").SetStatus(state).SetInstalledBy("fixture").SetConfig(map[string]interface{}{"history": "preserved"}).SaveX(ctx)
+						if state == tenantinstallation.StatusActive {
+							owner.MarketplaceItem.UpdateOneID(item.ID).SetInstallCount(1).SaveX(ctx)
+						}
+					}
+					snapshot := func() string {
+						var raw string
+						require.NoError(t, ownerDB.QueryRow(`SELECT json_build_object('item',(SELECT row_to_json(i) FROM marketplace_items i WHERE id=$1),'installations',(SELECT coalesce(json_agg(n ORDER BY id),'[]') FROM tenant_installations n WHERE item_id=$1))::text`, item.ID).Scan(&raw))
+						return raw
+					}
+					before := snapshot()
+					market := marketplaceservice.NewService(runtime, zap.NewNop().Sugar(), policy)
+					var err error
+					switch action {
+					case "install", "reactivate":
+						_, err = market.InstallItem(ctx, tenant.ID, item.ID, fmt.Sprint(actor.ID))
+					case "update":
+						_, err = market.UpdateInstallationConfig(ctx, tenant.ID, item.ID, map[string]interface{}{"history": "overwritten"})
+					case "merge":
+						_, err = market.MergeConnectorInstallationConfig(ctx, tenant.ID, item.Name, map[string]interface{}{"oauth": "unadmitted"})
+					case "uninstall":
+						err = market.UninstallItem(ctx, tenant.ID, item.ID)
+					}
+					assert.ErrorIs(t, err, executionscope.ErrDenied)
+					assert.JSONEq(t, before, snapshot(), "unadmitted marketplace mutation must preserve rows and counts")
+					standardPolicy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "marketplace-standard-test"})
+					require.NoError(t, err)
+					standardMarket := marketplaceservice.NewService(runtime, zap.NewNop().Sugar(), standardPolicy)
+					switch action {
+					case "install", "reactivate":
+						installed, err := standardMarket.InstallItem(ctx, tenant.ID, item.ID, fmt.Sprint(actor.ID))
+						require.NoError(t, err)
+						require.Equal(t, tenantinstallation.StatusActive, installed.Status)
+						require.Equal(t, "1", installed.InstalledVersion)
+					case "update":
+						updated, err := standardMarket.UpdateInstallationConfig(ctx, tenant.ID, item.ID, map[string]interface{}{"history": "standard-update"})
+						require.NoError(t, err)
+						require.Equal(t, "standard-update", updated.Config["history"])
+					case "merge":
+						updated, err := standardMarket.MergeConnectorInstallationConfig(ctx, tenant.ID, item.Name, map[string]interface{}{"oauth": "standard-merge"})
+						require.NoError(t, err)
+						require.Equal(t, "preserved", updated.Config["history"])
+						require.Equal(t, "standard-merge", updated.Config["oauth"])
+					case "uninstall":
+						require.NoError(t, standardMarket.UninstallItem(ctx, tenant.ID, item.ID))
+						require.Equal(t, tenantinstallation.StatusUninstalled, owner.TenantInstallation.Query().Where(tenantinstallation.ItemIDEQ(item.ID)).OnlyX(ctx).Status)
+					}
+					wantCount := 1
+					if action == "uninstall" {
+						wantCount = 0
+					}
+					require.Equal(t, wantCount, owner.MarketplaceItem.GetX(ctx, item.ID).InstallCount)
+					require.Equal(t, 1, owner.TenantInstallation.Query().Where(tenantinstallation.ItemIDEQ(item.ID)).CountX(ctx))
+				})
+			}
+		}
+	})
+	t.Run("standard marketplace HTTP retains request tenant context", func(t *testing.T) {
+		item := owner.MarketplaceItem.Create().SetName("standard-http-plugin").SetType(marketplaceitem.TypePlugin).SetTitle("Private HTTP fixture").SetProvider("local-test").SetLatestVersion("1").SetStatus(marketplaceitem.StatusPublished).SaveX(ctx)
+		defer owner.MarketplaceItem.DeleteOneID(item.ID).ExecX(ctx)
+		defer owner.TenantInstallation.Delete().Where(tenantinstallation.ItemIDEQ(item.ID)).ExecX(ctx)
+		standard, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "marketplace-http-test"})
+		require.NoError(t, err)
+		ctrl := marketplacecontroller.NewController(marketplaceservice.NewService(runtime, zap.NewNop().Sugar(), standard))
+		router := gin.New()
+		router.Use(func(c *gin.Context) {
+			c.Set(middleware.TenantContextKey, &middleware.TenantContext{TenantID: tenant.ID})
+			c.Set("user_id", actor.ID)
+			c.Next()
+		})
+		router.POST("/items/:id/install", ctrl.InstallItem)
+		router.POST("/items/:id/uninstall", ctrl.UninstallItem)
+		router.PUT("/installations/:id/config", ctrl.UpdateInstallationConfig)
+		call := func(method, route string) {
+			req := httptest.NewRequest(method, fmt.Sprintf(route, item.ID), strings.NewReader(`{"configured":"standard-http"}`)).WithContext(ctx)
+			req.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, req)
+			require.Equal(t, http.StatusOK, response.Code)
+		}
+		call(http.MethodPost, "/items/%d/install")
+		installed := owner.TenantInstallation.Query().Where(tenantinstallation.ItemIDEQ(item.ID)).OnlyX(ctx)
+		require.Equal(t, tenant.ID, installed.TenantID)
+		require.Equal(t, tenantinstallation.StatusActive, installed.Status)
+		call(http.MethodPut, "/installations/%d/config")
+		require.Equal(t, "standard-http", owner.TenantInstallation.GetX(ctx, installed.ID).Config["configured"])
+		call(http.MethodPost, "/items/%d/uninstall")
+		require.Equal(t, tenantinstallation.StatusUninstalled, owner.TenantInstallation.GetX(ctx, installed.ID).Status)
+		require.Zero(t, owner.MarketplaceItem.GetX(ctx, item.ID).InstallCount)
 	})
 	t.Run("candidate connector read routes do not probe unscoped instances", func(t *testing.T) {
 		var calls, foreignCalls atomic.Int32

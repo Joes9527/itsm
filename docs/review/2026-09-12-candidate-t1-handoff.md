@@ -1245,3 +1245,18 @@ s5-connector-startup-full-private.log将候选Webhook stream ack恢复旅程从�
 本轮完成可信目标启动路径，不关闭启动前DirectProvision、Marketplace首次持久化、Send/Get裸实例旁路，也未证明完整通知/所有provider或候选整进程重启。CandidateSHA与停止状态不变，S5/S6及T3/T4/G3未完成，无共享环境变更、真实企业外呼或push/main合并。最终构建结果下方补记。
 
 最终s5-connector-startup-build.log全后端build exit0，git diff --check通过。尚未关闭的七项RED继续阻止当前版本放行。
+
+
+### B2 S5 Marketplace 配置写入与 OAuth 前置检查（2026-09-14）
+
+新增唯一 ExecutionPolicy.RequireIntegrationManagement：仅 standard、正租户、显式匹配租户上下文、无 SystemBypass、未取消请求可继续；candidate/nil gate 拒绝。Marketplace Install（包括历史重新启用）、Uninstall、UpdateConfig 和 MergeConnectorInstallationConfig 四个公开写 owner 均在首次查询/持久化前检查，不按商品类型放开 skill/plugin。该限制不替代既有 RBAC。生产 bootstrap 必需传入冻结策略；HTTP handler 改用 Request.Context 保留类型化租户和取消，ErrDenied 固定403；连接器 runtime 缺失不再静默激活成功，standard 已提交配置不因此自动回滚。
+
+s5-marketplace-management-red.log 真实私有 PG 复现 connector/skill/plugin × install/reactivate/update/uninstall 共12操作写入与配置整行/计数改变。s5-marketplace-http-denial-verified-red.log 校正真实 middleware tenant context fixture 后复现三 handler 未返回403；此前未提供 middleware tenant context 的日志不是有效产品 RED。s5-marketplace-http-context-red.log 复现 standard 合法 HTTP 因传递 GinContext 丢失 tenantctx 返回403；s5-marketplace-runtime-missing-red.log 复现 nilManager 返回nil。以上均已修复。不得把 handler fixture 等同完整认证/RBAC E2E。
+
+独立审阅发现 Merge 公共写入口遗漏；s5-marketplace-merge-red.log 真实 PG 复现其写入未准入 oauth 配置并修改时间戳，现同 gate 首行拒绝。完整 s5-marketplace-full-private.log 新13配置操作（含 connector merge）候选零变更、standard 对应真实写入和 standard HTTP 安装/更新/卸载均 PASS。标准策略正向使用同一私有受限 runtime client，不替代 standard 整进程角色准入。完整私有 PG16/Redis/MinIO suite 仍只有507f62293普通 Manager/Controller 请求激活七项原有失败，无SKIP/DATA RACE；整体明确为FAIL，未关闭该门禁。
+
+飞书 OAuth callback 原先先兑换再 Merge，nil Marketplace 还跳过保存；现只从已解析实例派生 tenantctx，并在兑换前调用同一 gate，Merge 内再次检查覆盖直接调用。s5-marketplace-oauth-red.log 候选/缺策略/缺服务三个场景各触发一次真实 loopback 请求，现零请求并403。审阅指出重复 callback ID 不保证唯一；s5-marketplace-oauth-ambiguous-red.log 复现任意首项命中，Manager 现多匹配 fail closed。s5-marketplace-oauth-final.log 飞书测试 PASS，含 standard 本机 provider + SQLite 实际两次兑换请求、租户17保存、保留旧字段、query/state 中租户18不影响目标、响应不含令牌。此证据不代表 OAuth state/发起人授权/防重放已实现，也不保证兑换与持久化原子性。
+
+最后审阅指出所有 preflight 错误映射403不准确；s5-marketplace-oauth-canceled-red.log 真实取消请求复现后修为仅 ErrDenied 返回403，其余固定失败响应不输出 cause。最终具名回归、构建与审阅结果下方补记。本轮未修复启动前 Manager Provision、Revoke/删除和 Send/Get 裸实例边界，未更新固定 CandidateSHA，候选未启动，未进行共享环境、企业/云外呼、push或main合并。S5/S6和T3/T4/G3继续未完成。
+
+最终 s5-marketplace-final-review-unit.log 五包所选具名 race PASS（未匹配的包不视为全包测试），包括取消请求分类与 standard OAuth 正向；独立最终复核无新增阻断。s5-marketplace-build.log 全后端 build exit0，git diff --check通过。最后增量仅回调错误分类，已运行对应回归；上方完整私有 suite 不宣称在该增量后重跑，既有七项激活RED继续保留。

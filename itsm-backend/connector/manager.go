@@ -140,13 +140,19 @@ func (m *Manager) GetByCallbackInstanceID(name, callbackInstanceID string) (Conn
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+	var found Connector
+	var tenantID int
+	matched := false
 	for _, inst := range m.instances {
 		id, _ := inst.cfg.Settings["callbackInstanceId"].(string)
 		if inst.cfg.Name == name && inst.cfg.Enabled && id == callbackInstanceID {
-			return inst.conn, inst.cfg.TenantID, true
+			if matched {
+				return nil, 0, false
+			}
+			found, tenantID, matched = inst.conn, inst.cfg.TenantID, true
 		}
 	}
-	return nil, 0, false
+	return found, tenantID, matched
 }
 
 // ListByTenant 列出某租户所有运行中的连接器
