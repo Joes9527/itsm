@@ -434,3 +434,14 @@ claim 的 ambiguous/expired recovery、pending SELECT 和 claim CAS，unknown-ty
 在 `065226f1e` 后扩展真实私有 PG 测试，不改生产逻辑。`s4-outbox-worker-recovery-pg.log` 完整 TestCandidateIntakeCreationBoundary PASS，无 skip。两个并发 repository claim 经同一开始信号竞争12条候选事件，合计12个唯一ID；选取一条未写attempt的事件使lease过期后，原claim恢复为新token，旧token无法完成，新token完成成功。另一条已写attempt的过期事件转blocked、attempt=1，且仅一条delivery_unknown审计。这里只模拟持久化lease过期，不声称完成进程kill/restart或调度周期测试。
 
 retry-with-audit、delivery-unknown、ambiguous recovery 和 unregistered阻断四分支在 System AuditLog 的真实 next.Mutate 成功后注入错误；计数证明到达真实audit写，错误后事件全字段及按ID排序的audit全表快照均回滚，解除故障后成功。测试未实发，仍用随机私有数据库/受限运行角色；固定CandidateSHA不变，未启动候选或修改WSL。S4其它callback/周期执行、S5/S6/B3和G2/G3仍未完成。
+
+
+### B2 S4 BPMN callback 历史保全 RED（2026-09-13）
+
+Outbox 并发/回滚测试提交 `56879f7c9`；独立 reviewer 确认限定结论，但起跑屏障不保证数据库语句确定性重叠，不能声称覆盖所有竞态。按审阅补齐解除audit故障后的目标状态及新增恰一条audit断言，并在本轮完整PG运行中PASS。
+
+转入下一未覆盖入口：039前建立NULL execution ref的ProcessInstance和两条historical callback（pending与lease过期processing），通过真实 CustomProcessEngine.ProcessPendingCallbacks(context.Background) 与 SetCallbackCandidateClient(clients.System) 执行一次扫描。未知handler和简化definition只触发原claim/retry，不调用企业provider。`s4-callback-worker-historical-red.log` **FAIL，未修复**：历史pending attempt0→1，next_attempt_at/last_error_class/updated_at改变；历史processing→pending、attempt2→3、lease被清除。真实扫结果completed=0及error不掩盖其已经改写历史。其它原有scope/Outbox测试通过，新callback RED不能计为整体PASS。
+
+下一实现必须覆盖processPending与processExecutionKeys两扫描、claim/retry/completeWithClient/persistCallbackOutcome、enqueue/enqueueBlocked及executor内token/task/instance原事务推进。结构归属沿callback.process_instance_id→process_instances.execution_work_item_id→member，禁止payload推断。System只读扫描与Tenant写事务分别核验真实绑定，不能仅过滤扫描或将单租户Bind改成system bypass。原lease/CAS及audit事务必须保留。固定CandidateSHA不变，未启动候选、修改B/WSL或共享数据库；S4/S5/S6/B3及G2/G3未完成。
+
+独立 reviewer review_execution_scope_s1 确认 callback RED 为真实claim→失败→retry改写历史。转GREEN必须补充可处理的新成员和结果断言，避免“全部报错/全部不执行”伪通过；scope/binding失效另有明确错误断言。当前红测不单凭scanErr判断成功。

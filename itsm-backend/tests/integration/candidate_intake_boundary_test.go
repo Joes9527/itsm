@@ -193,6 +193,18 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 		}
 		historicalOutbox = append(historicalOutbox, create.SaveX(ctx))
 	}
+
+	legacyDeployment := owner.ProcessDeployment.Create().SetDeploymentID("legacy-callback").SetDeploymentName("Legacy callback").SetTenantID(tenant.ID).SaveX(ctx)
+	legacyDefinition := owner.ProcessDefinition.Create().SetKey("legacy-callback").SetName("Legacy callback").SetVersion("1").SetIsLatest(true).SetBpmnXML([]byte(`<definitions/>`)).SetDeploymentID(legacyDeployment.ID).SetTenantID(tenant.ID).SaveX(ctx)
+	legacyInstance := owner.ProcessInstance.Create().SetProcessInstanceID("legacy-callback").SetProcessDefinitionKey("legacy-callback").SetProcessDefinitionID(legacyDefinition.ID).SetBusinessKey(fmt.Sprintf("incident:%d", historical.WorkItemID)).SetBusinessType("incident").SetBusinessID(historical.WorkItemID).SetStatus("running").SetTenantID(tenant.ID).SaveX(ctx)
+	var historicalCallbacks []*ent.ProcessCallbackOutbox
+	for _, state := range []string{"pending", "processing"} {
+		create := owner.ProcessCallbackOutbox.Create().SetExecutionKey("legacy-callback-" + state).SetTenantID(tenant.ID).SetProcessInstanceID(legacyInstance.ID).SetCallbackKind("service_task").SetHandlerID("unregistered-historical-handler").SetTaskType("historical-task").SetElementID("Historical").SetStatus(state).SetNextAttemptAt(time.Now().Add(-time.Minute))
+		if state == "processing" {
+			create.SetLeaseOwner("historical-worker").SetLeaseExpiresAt(time.Now().Add(-time.Minute)).SetAttemptCount(2)
+		}
+		historicalCallbacks = append(historicalCallbacks, create.SaveX(ctx))
+	}
 	_, err = ownerDB.ExecContext(ctx, fmt.Sprintf("GRANT USAGE ON SCHEMA public TO %s; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO %s; GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO %s", runtimeRole, runtimeRole, runtimeRole))
 	require.NoError(t, err)
 	_, err = ownerDB.ExecContext(ctx, migration.GetMigrationSQL("039_candidate_execution_scope"))
@@ -1602,8 +1614,32 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				auditAfter, e := json.Marshal(owner.AuditLog.Query().Order(ent.Asc("id")).AllX(ctx))
 				require.NoError(t, e)
 				require.JSONEq(t, string(audits), string(auditAfter))
+				auditCount := owner.AuditLog.Query().CountX(ctx)
 				require.NoError(t, run())
+				expectedStatus := "blocked"
+				if branch == "retry" {
+					expectedStatus = "pending"
+				}
+				require.Equal(t, expectedStatus, owner.OutboxEvent.GetX(ctx, row.ID).Status)
+				require.Equal(t, auditCount+1, owner.AuditLog.Query().CountX(ctx))
 			})
+		}
+	})
+
+	t.Run("real callback worker preserves historical states", func(t *testing.T) {
+		before := map[int][]byte{}
+		for _, row := range historicalCallbacks {
+			before[row.ID], err = json.Marshal(owner.ProcessCallbackOutbox.GetX(ctx, row.ID))
+			require.NoError(t, err)
+		}
+		engine := service.NewCustomProcessEngine(runtime, zap.NewNop().Sugar(), policy).(*service.CustomProcessEngine)
+		engine.SetCallbackCandidateClient(clients.System)
+		completed, scanErr := engine.ProcessPendingCallbacks(context.Background(), "candidate-callback-worker", 1000)
+		t.Logf("real callback sweep completed=%d error=%v", completed, scanErr)
+		for _, row := range historicalCallbacks {
+			after, e := json.Marshal(owner.ProcessCallbackOutbox.GetX(ctx, row.ID))
+			require.NoError(t, e)
+			assert.JSONEq(t, string(before[row.ID]), string(after), "historical callback %s changed", row.ExecutionKey)
 		}
 	})
 	require.Equal(t, oldRow.Title, owner.Ticket.GetX(ctx, historical.WorkItemID).Title)
