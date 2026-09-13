@@ -93,7 +93,7 @@ S3 阶段记录（2026-09-13；基础提交 `6261941b4`，统一创建接入 `04
 
 ## S4：队列原子领取、恢复及周期执行
 
-历史 claim RED（`s4-kaf-historical-claim-red.log`）已由 `de22553c2` 修复：两条冻结 policy 构造链贯通，claim INSERT/独立 lease CAS、finalize/non-completing、completion receipt/callback recovery 原事务准入；异步恢复复用首次完成变量校验，修复误要求同步合同。真实 PG 验证历史0写、新成员claim/重复冲突、closed scope过期lease拒绝、completion及恢复保全与active恢复，最终定向回归/构建/独立审阅通过。仍是分段测试，不代表完整ExecuteAction；CreateDelegatedTask、通用worker、历史applied回放及全部finalize分支等专项未完成。详见T1最新交接，S4继续未勾选。
+历史 claim RED（`s4-kaf-historical-claim-red.log`）已由 `de22553c2` 修复：两条冻结 policy 构造链贯通，claim INSERT/独立 lease CAS、finalize/non-completing、completion receipt/callback recovery 原事务准入；异步恢复复用首次完成变量校验，修复误要求同步合同。真实 PG 验证历史0写、新成员claim/重复冲突、closed scope过期lease拒绝、completion及恢复保全与active恢复，最终定向回归/构建/独立审阅通过。CreateDelegatedTask 两条入口现已补齐原事务准入，joined入口改显式*ent.Tx；真实 PG 历史拒绝、新成员生成/引用、joined主动回滚及两入口outbox写后故障回滚通过，构建/回归/限定独立复审通过，见T1最新检查点。仍是分段测试，不代表完整ExecuteAction或真实BPMN节点推进；通用worker、历史applied回放及全部finalize分支等专项未完成。详见T1最新交接，S4继续未勾选。
 
 **Files:** `service/{outbox_event_repository.go,outbox_delivery_worker.go,kaf_outbox_dispatcher.go,bpmn_callback_outbox.go,ticket_notification_service.go,sla_monitor_service.go,escalation_service.go}`、bootstrap 注入点及对应现有测试。
 
