@@ -134,7 +134,7 @@ func (p *ExecutionPolicy) EventRef(tenantID int) (executionscope.Ref, error) {
 
 // RequireEntToolInvocation checks structural origin in the caller's transaction.
 // It is not approval or actor authorization and never enrolls an existing source.
-func (p *ExecutionPolicy) RequireEntToolInvocation(ctx context.Context, tx *ent.Tx, tenantID, invocationID int) error {
+func (p *ExecutionPolicy) RequireEntToolInvocation(ctx context.Context, tx *ent.Tx, tenantID, invocationID int, subjects ...int) error {
 	if ctx == nil || tx == nil || invocationID <= 0 {
 		return executionscope.ErrDenied
 	}
@@ -148,8 +148,15 @@ func (p *ExecutionPolicy) RequireEntToolInvocation(ctx context.Context, tx *ent.
 	if err := validateExecutionContext(ctx, ref); err != nil {
 		return err
 	}
+	if len(subjects) > 1 || (len(subjects) == 1 && subjects[0] <= 0) {
+		return executionscope.ErrDenied
+	}
+	subject := 0
+	if len(subjects) == 1 {
+		subject = subjects[0]
+	}
 	var id int
-	err = scanExecutionRow(ctx, tx.Client(), &id, `SELECT * FROM public.lock_candidate_tool_authority($1::uuid,$2::text,$3::bigint,$4::bigint)`, ref.ScopeID, ref.DeploymentID, ref.TenantID, invocationID)
+	err = scanExecutionRow(ctx, tx.Client(), &id, `SELECT * FROM public.lock_candidate_tool_authorization($1::uuid,$2::text,$3::bigint,$4::bigint,$5::bigint)`, ref.ScopeID, ref.DeploymentID, ref.TenantID, invocationID, subject)
 	if err == sql.ErrNoRows {
 		return executionscope.ErrDenied
 	}

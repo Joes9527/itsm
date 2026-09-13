@@ -213,7 +213,7 @@ func (q *ToolQueue) loadApprovedTool(ctx context.Context, job ToolJob) (inv *ent
 	if q.execution == nil || q.client == nil {
 		return nil, nil, fmt.Errorf("tool execution dependencies required")
 	}
-	tx, err := q.client.Tx(ctx)
+	tx, err := q.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -227,11 +227,11 @@ func (q *ToolQueue) loadApprovedTool(ctx context.Context, job ToolJob) (inv *ent
 	return loadApprovedToolTx(ctx, tx, job, q.execution)
 }
 
-func loadApprovedToolTx(ctx context.Context, tx *ent.Tx, job ToolJob, execution *database.ExecutionPolicy) (inv *ent.ToolInvocation, actor *ent.User, err error) {
+func loadApprovedToolTx(ctx context.Context, tx *ent.Tx, job ToolJob, execution *database.ExecutionPolicy, subjects ...int) (inv *ent.ToolInvocation, actor *ent.User, err error) {
 	if err = execution.BindEnt(ctx, tx, job.TenantID); err != nil {
 		return nil, nil, err
 	}
-	if err = execution.RequireEntToolInvocation(ctx, tx, job.TenantID, job.InvocationID); err != nil {
+	if err = execution.RequireEntToolInvocation(ctx, tx, job.TenantID, job.InvocationID, subjects...); err != nil {
 		return nil, nil, err
 	}
 	inv, err = tx.ToolInvocation.Query().Where(toolinvocation.IDEQ(job.InvocationID), toolinvocation.TenantIDEQ(job.TenantID)).Only(ctx)
@@ -315,7 +315,7 @@ func (q *ToolQueue) ProcessJob(ctx context.Context, job ToolJob) error {
 
 // Persist against current authority and never replace the first completed receipt.
 func (q *ToolQueue) persistToolOutcome(ctx context.Context, job ToolJob, expected *ent.ToolInvocation, status, result string) (err error) {
-	tx, err := q.client.Tx(ctx)
+	tx, err := q.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return err
 	}

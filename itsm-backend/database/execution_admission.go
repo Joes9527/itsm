@@ -53,7 +53,7 @@ OR has_any_column_privilege($1,'INSERT,UPDATE,REFERENCES')`, table).Scan(&readab
 	}
 	if cfg.Mode == "candidate" {
 		var available bool
-		if err = db.QueryRowContext(ctx, `SELECT has_function_privilege('public.lock_candidate_tool_authority(uuid,text,bigint,bigint)','EXECUTE')`).Scan(&available); err != nil {
+		if err = db.QueryRowContext(ctx, `SELECT has_function_privilege('public.lock_candidate_tool_authorization(uuid,text,bigint,bigint,bigint)','EXECUTE')`).Scan(&available); err != nil {
 			return fmt.Errorf("inspect tool authority lock capability: %w", err)
 		}
 		if !available {

@@ -1135,3 +1135,16 @@ s5-tool-actor-revocation-red.log真实PG证明：已登记approved工具经intak
 修复验证须区分撤权先提交拒绝、业务事务先锁定则撤权等待其提交/回滚，两种顺序都需真实数据库证据。新锁引入后不能沿用同步hook等待自身锁或把超时当撤权成功。审批参数变更、不同actor/approver/requester、RBAC关系撤回仍须分别验证。本轮仅增加真实RED与记录，无生产修复；当前具名及包含本项的完整套件不能报告通过，之前GREEN只代表之前验证范围。未重复不相关构建，git diff --check通过。CandidateSHA和候选未启动状态不变，全部后续交付门禁未放行，无共享环境操作、企业外呼、push/main合并。
 
 独立review_execution_scope_s1确认RED有效：后续用户锁须去重并按ID排序，保护真实role（含super_admin分支），Role/RolePermission/Permission应按现有授权查询依赖锁定；如路径实际支持委派，还需保护会话/分配记录，不扩大现行不支持路径。数据库边界只负责锁定与来源一致性，权限匹配继续复用领域授权代码，避免第二套规则。
+
+
+### B2 S5 工具业务事务授权锁（2026-09-13）
+
+针对e12a7d297已提交的身份撤回RED，新增普通迁移043，保持042历史SQL不变。新五参lock_candidate_tool_authorization替换并删除旧入口，候选准入/调用/fixture同步切换。固定binding→scope→登记→原调用→按ID用户/Role/RolePermission/Permission锁序；原调用FOR UPDATE，其余FOR SHARE。actor/approver取自原调用，创建额外锁requester，审批额外锁当前决策者；不赋予IAM配置DML，权限解释继续由既有Go逻辑完成。Queue前检/结果与审批采用RR，创建/编辑沿用原RR，目录导入业务快照；序列化错误保留cause，创建既有完整事务重试，审批/队列不在旧快照继续执行。
+
+真实审批竞争现在证明第二事务等待原调用锁，失败保留40001；整次重试仍按原决定/actor/原因核验并保留首次字段。创建撤权矩阵使用不同actor/approver/requester，覆盖三个身份停用、actor角色改变、角色停用、权限关系删除、权限内容修改、审批撤回、批准参数变化，共9×提交/实际INSERT后回滚=18个序列。每项精确匹配业务Tx backend PID与pg_blocking_pids；事务结束后独立撤权真正提交，再次创建/回执重放必须明确AuthenticationRequired或PermissionDenied，不能以基础设施错误充当拒绝。工单和IntakeRequest数量验证commit只新增各一条、rollback不新增；这不是所有既有行的整行保全断言。
+
+s5-tool-authorization-migration.log迁移/database包PASS；s5-tool-authorization-private.log矩阵扩充前完整私有套件PASS；s5-tool-authorization-matrix.log18项定向race PASS。首次具名回归误用不存在的bootstrap目录导致setup失败，改为internal/bootstrap后s5-tool-authorization-regression-verified.log四包具名Tool/CreateTicket/TicketService_UpdateTicket/Intake race PASS，非四包全测试。补强错误类型后的s5-tool-authorization-final-private.log发现新增36个身份影响后续SLA角色收件人，预期1实际37；现各用例结束停用新身份并保留其业务引用，原SLA断言不变。最终完整回归与build结果在下方补记。
+
+独立review_execution_scope_s1复核授权锁、快照与替换无新增阻断，要求补强错误类型已落实。此矩阵是创建路径证据，不外推为编辑、审批、结果写回各自完整矩阵。结果胜负竞争、其它S5边界、目标PG17/T3和真实T4/G3仍待完成；CandidateSHA保持d7470a32dbb87acc9b5e4d9a895a146410723561，候选未启动，无共享环境操作、企业外呼、push/main合并。
+
+最终s5-tool-authorization-verified-private.log完整私有PG16/Redis/MinIO候选ScopeRegistration、Intake、构造保全及Stream/Webhook/审计恢复race PASS，无skip/race；包括补强错误类型的18项矩阵和原SLA断言。s5-tool-authorization-build.log全后端build exit0，git diff --check通过。

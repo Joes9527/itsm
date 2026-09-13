@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"itsm-backend/authorization"
@@ -219,7 +220,7 @@ func (r *EntRepository) DecideToolInvocation(ctx context.Context, id, tenantID, 
 		return nil, fmt.Errorf("tool approval tenant mismatch")
 	}
 	ctx = tenantctx.WithTenantID(ctx, tenantID)
-	tx, err := r.client.Tx(ctx)
+	tx, err := r.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +228,7 @@ func (r *EntRepository) DecideToolInvocation(ctx context.Context, id, tenantID, 
 	if err = r.execution.BindEnt(ctx, tx, tenantID); err != nil {
 		return nil, err
 	}
-	if err = r.execution.RequireEntToolInvocation(ctx, tx, tenantID, id); err != nil {
+	if err = r.execution.RequireEntToolInvocation(ctx, tx, tenantID, id, actorID); err != nil {
 		return nil, err
 	}
 	actor, err := tx.User.Query().Where(user.IDEQ(actorID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).Only(ctx)

@@ -16,7 +16,7 @@ func TestToolInvocationScopeMigrationRequiresPriorPreparation(t *testing.T) {
 	}
 	plan, err := PlanMigrations(catalog, controlledReceipts(prefix), OpUp, nil)
 	require.NoError(t, err)
-	require.Len(t, plan.Executable, 2)
+	require.Len(t, plan.Executable, 3)
 	require.Equal(t, ToolInvocationExecutionScopeVersion, plan.Executable[0].Version)
 	require.NotEmpty(t, GetMigrationSQL(ToolInvocationExecutionScopeVersion))
 	require.Equal(t, ToolExecutionAuthorityLockVersion, plan.Executable[1].Version)

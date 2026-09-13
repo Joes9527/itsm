@@ -25,7 +25,7 @@ func RequireToolCreationAuthority(ctx context.Context, tx *ent.Tx, execution *da
 	if err != nil || id <= 0 || strconv.Itoa(id) != source.EventID {
 		return denied()
 	}
-	inv, _, err := loadApprovedToolTx(ctx, tx, ToolJob{TenantID: identity.TenantID, InvocationID: id}, execution)
+	inv, _, err := loadApprovedToolTx(ctx, tx, ToolJob{TenantID: identity.TenantID, InvocationID: id}, execution, identity.RequesterID)
 	if err != nil {
 		return err
 	}

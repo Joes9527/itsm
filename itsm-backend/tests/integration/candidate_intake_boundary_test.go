@@ -121,7 +121,7 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	actor := owner.User.Create().SetTenantID(tenant.ID).SetUsername("candidate").SetName("Candidate").SetEmail("candidate@example.invalid").SetPasswordHash("test-only").SetRole("requester").SaveX(ctx)
 	role := owner.Role.Create().SetTenantID(tenant.ID).SetName("Requester").SetCode("requester").SaveX(ctx)
 	permission := owner.Permission.Create().SetTenantID(tenant.ID).SetCode("create-work").SetName("Create work").SetResource("*").SetAction("*").SaveX(ctx)
-	owner.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(ctx)
+	roleLink := owner.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(ctx)
 	for _, class := range []string{"generic", "incident", "problem", "change_request", "service_request_item"} {
 		owner.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType(class).SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 	}
@@ -343,17 +343,17 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 	}
 	ensureToolAuthorityLock := func() {
 		var exists bool
-		require.NoError(t, ownerDB.QueryRow(`SELECT to_regprocedure('public.lock_candidate_tool_authority(uuid,text,bigint,bigint)') IS NOT NULL`).Scan(&exists))
+		require.NoError(t, ownerDB.QueryRow(`SELECT to_regprocedure('public.lock_candidate_tool_authorization(uuid,text,bigint,bigint,bigint)') IS NOT NULL`).Scan(&exists))
 		if !exists {
 			_, err := ownerDB.ExecContext(ctx, "ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON FUNCTIONS TO "+runtimeRole)
 			require.NoError(t, err)
-			_, err = ownerDB.ExecContext(ctx, migration.GetMigrationSQL(migration.ToolExecutionAuthorityLockVersion))
+			_, err = ownerDB.ExecContext(ctx, migration.GetMigrationSQL(migration.ToolExecutionAuthorityLockVersion)+migration.GetMigrationSQL(migration.ToolExecutionAuthorizationLockVersion))
 			require.NoError(t, err)
 			var allowed bool
-			require.NoError(t, ownerDB.QueryRow(`SELECT has_function_privilege($1,'public.lock_candidate_tool_authority(uuid,text,bigint,bigint)','EXECUTE')`, runtimeRole).Scan(&allowed))
+			require.NoError(t, ownerDB.QueryRow(`SELECT has_function_privilege($1,'public.lock_candidate_tool_authorization(uuid,text,bigint,bigint,bigint)','EXECUTE')`, runtimeRole).Scan(&allowed))
 			require.False(t, allowed, "default EXECUTE must be stripped")
 		}
-		_, err := ownerDB.ExecContext(ctx, "GRANT EXECUTE ON FUNCTION public.lock_candidate_tool_authority(uuid,text,bigint,bigint) TO "+runtimeRole)
+		_, err := ownerDB.ExecContext(ctx, "GRANT EXECUTE ON FUNCTION public.lock_candidate_tool_authorization(uuid,text,bigint,bigint,bigint) TO "+runtimeRole)
 		require.NoError(t, err)
 	}
 	t.Run("tool invocation enrollment is atomic and history preserving", func(t *testing.T) {
@@ -672,14 +672,32 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.False(t, recorded.ApprovedAt.IsZero())
 		var failUpdate atomic.Bool
 		var gateUpdate atomic.Bool
-		entered := make(chan struct{}, 2)
+		entered := make(chan int, 2)
 		release := make(chan struct{})
 		var releaseOnce sync.Once
 		injected := errors.New("injected approval after UPDATE")
 		runtime.ToolInvocation.Use(func(next ent.Mutator) ent.Mutator {
 			return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
 				if m.Op() == ent.OpUpdate && gateUpdate.Load() {
-					entered <- struct{}{}
+					mutationTx, err := m.(*ent.ToolInvocationMutation).Tx()
+					if err != nil {
+						return nil, err
+					}
+					rows, err := mutationTx.Client().QueryContext(c, `SELECT pg_backend_pid()`)
+					if err != nil {
+						return nil, err
+					}
+					var pid int
+					if !rows.Next() {
+						rows.Close()
+						return nil, errors.New("approval backend missing")
+					}
+					err = rows.Scan(&pid)
+					rows.Close()
+					if err != nil {
+						return nil, err
+					}
+					entered <- pid
 					select {
 					case <-release:
 					case <-c.Done():
@@ -702,7 +720,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.JSONEq(t, failedBefore, snapshot(failed.ID))
 		for _, sameDecision := range []bool{false, true} {
 			concurrent := newPending()
-			entered = make(chan struct{}, 2)
+			entered = make(chan int, 2)
 			release = make(chan struct{})
 			releaseOnce = sync.Once{}
 			type outcome struct {
@@ -722,13 +740,17 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 					results <- outcome{approve, err}
 				}(approve)
 			}
-			for n := 0; n < 2; n++ {
-				select {
-				case <-entered:
-				case <-time.After(5 * time.Second):
-					t.Fatal("approval UPDATE barrier timed out")
-				}
+			var approvalPID int
+			select {
+			case approvalPID = <-entered:
+			case <-time.After(5 * time.Second):
+				t.Fatal("approval UPDATE barrier timed out")
 			}
+			require.Eventually(t, func() bool {
+				var waiting bool
+				err := ownerDB.QueryRow(`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE usename=$1 AND $2::integer=ANY(pg_blocking_pids(pid)))`, runtimeRole, approvalPID).Scan(&waiting)
+				return err == nil && waiting
+			}, 5*time.Second, 10*time.Millisecond, "second approval must wait on first invocation lock")
 			releaseOnce.Do(func() { close(release) })
 			var winner bool
 			successes := 0
@@ -739,7 +761,9 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 						successes++
 						winner = result.approve
 					} else {
-						require.ErrorIs(t, result.err, aidomain.ErrToolApprovalConflict)
+						var pgError *pq.Error
+						require.ErrorAs(t, result.err, &pgError)
+						require.Equal(t, pq.ErrorCode("40001"), pgError.Code, "concurrent approval must retry with a fresh transaction")
 					}
 				case <-time.After(5 * time.Second):
 					t.Fatal("approval did not finish")
@@ -832,10 +856,10 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				case "missing source":
 					input.SourceReference = nil
 				case "missing capability":
-					_, err := ownerDB.ExecContext(ctx, "REVOKE EXECUTE ON FUNCTION public.lock_candidate_tool_authority(uuid,text,bigint,bigint) FROM "+runtimeRole)
+					_, err := ownerDB.ExecContext(ctx, "REVOKE EXECUTE ON FUNCTION public.lock_candidate_tool_authorization(uuid,text,bigint,bigint,bigint) FROM "+runtimeRole)
 					require.NoError(t, err)
 					defer func() {
-						_, err := ownerDB.ExecContext(ctx, "GRANT EXECUTE ON FUNCTION public.lock_candidate_tool_authority(uuid,text,bigint,bigint) TO "+runtimeRole)
+						_, err := ownerDB.ExecContext(ctx, "GRANT EXECUTE ON FUNCTION public.lock_candidate_tool_authorization(uuid,text,bigint,bigint,bigint) TO "+runtimeRole)
 						require.NoError(t, err)
 					}()
 				}
@@ -1052,46 +1076,148 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			}
 
 		}
-		t.Run("actor revocation before tool business insert blocks creation", func(t *testing.T) {
-			tx, err := runtime.Tx(ctx)
-			require.NoError(t, err)
-			require.NoError(t, policy.BindEnt(ctx, tx, tenant.ID))
-			call, err := tx.ToolInvocation.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetToolName("create_ticket").SetArguments(`{"title":"Actor revocation"}`).SetNeedsApproval(true).SetApprovalState("approved").SetApprovedBy(actor.ID).SetApprovedAt(time.Now()).SetStatus("pending").Save(ctx)
-			require.NoError(t, err)
-			require.NoError(t, tx.Commit())
-			input := creation.CreateWorkItemCommand{RecordClass: "generic", IntakeKind: "generic", Confirmation: "confirmed", Title: "Actor revocation", IdempotencyKey: fmt.Sprintf("tool-invocation:%d", call.ID), Generic: &creation.GenericInput{Source: "ai"}, SourceReference: &creation.SourceReference{Provider: "tool_queue", EventID: fmt.Sprint(call.ID)}}
-			who := identity
-			who.Channel, who.Provider = "ai_tool", "tool_queue"
-			items, requests := owner.Ticket.Query().CountX(ctx), owner.IntakeRequest.Query().CountX(ctx)
-			var armed, revoked atomic.Bool
-			armed.Store(true)
-			defer func() {
-				armed.Store(false)
-				restoreCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-				defer cancel()
-				_, err := ownerDB.ExecContext(restoreCtx, `UPDATE users SET active=true WHERE id=$1`, actor.ID)
-				require.NoError(t, err)
-			}()
-			runtime.Ticket.Use(func(next ent.Mutator) ent.Mutator {
-				return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
-					if m.Op() == ent.OpCreate && armed.CompareAndSwap(true, false) {
-						revokeCtx, cancel := context.WithTimeout(c, 5*time.Second)
-						defer cancel()
-						_, err := ownerDB.ExecContext(revokeCtx, `UPDATE users SET active=false WHERE id=$1`, actor.ID)
-						if err != nil {
-							return nil, err
+		for _, kind := range []string{"actor", "approver", "requester", "actor_role", "role_active", "role_permission", "permission", "approval", "arguments"} {
+			for _, rollback := range []bool{false, true} {
+				t.Run(fmt.Sprintf("tool authorization revocation %s rollback=%t", kind, rollback), func(t *testing.T) {
+					suffix := strings.ReplaceAll(uuid.NewString(), "-", "")
+					approver := owner.User.Create().SetTenantID(tenant.ID).SetUsername("approver-" + suffix).SetName("Approver").SetEmail("approver-" + suffix + "@example.invalid").SetPasswordHash("fixture").SetRole("requester").SaveX(ctx)
+					requester := owner.User.Create().SetTenantID(tenant.ID).SetUsername("requester-" + suffix).SetName("Requester").SetEmail("requester-" + suffix + "@example.invalid").SetPasswordHash("fixture").SetRole("requester").SaveX(ctx)
+					// Preserve referenced identities without adding recipients to later SLA fixtures.
+					defer func() {
+						cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+						defer cleanupCancel()
+						_, err := ownerDB.ExecContext(cleanupCtx, `UPDATE users SET active=false WHERE id IN ($1,$2)`, approver.ID, requester.ID)
+						require.NoError(t, err)
+					}()
+					tx, err := runtime.Tx(ctx)
+					require.NoError(t, err)
+					require.NoError(t, policy.BindEnt(ctx, tx, tenant.ID))
+					call, err := tx.ToolInvocation.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetToolName("create_ticket").SetArguments(fmt.Sprintf(`{"title":"Actor revocation","requester_id":%d}`, requester.ID)).SetNeedsApproval(true).SetApprovalState("approved").SetApprovedBy(approver.ID).SetApprovedAt(time.Now()).SetStatus("pending").Save(ctx)
+					require.NoError(t, err)
+					require.NoError(t, tx.Commit())
+					input := creation.CreateWorkItemCommand{RecordClass: "generic", IntakeKind: "generic", Confirmation: "confirmed", Title: "Actor revocation", IdempotencyKey: fmt.Sprintf("tool-invocation:%d", call.ID), Generic: &creation.GenericInput{Source: "ai"}, SourceReference: &creation.SourceReference{Provider: "tool_queue", EventID: fmt.Sprint(call.ID)}}
+					who := identity
+					who.Channel, who.Provider = "ai_tool", "tool_queue"
+					who.RequesterID = requester.ID
+					var revokeSQL, restoreSQL string
+					var key int
+					switch kind {
+					case "actor", "approver", "requester":
+						key = actor.ID
+						if kind == "approver" {
+							key = approver.ID
 						}
-						revoked.Store(true)
+						if kind == "requester" {
+							key = requester.ID
+						}
+						revokeSQL, restoreSQL = `UPDATE users SET active=false WHERE id=$1`, `UPDATE users SET active=true WHERE id=$1`
+					case "actor_role":
+						key = actor.ID
+						revokeSQL, restoreSQL = `UPDATE users SET role='no_tool_permission' WHERE id=$1`, `UPDATE users SET role='requester' WHERE id=$1`
+					case "role_active":
+						key = role.ID
+						revokeSQL, restoreSQL = `UPDATE roles SET is_active=false WHERE id=$1`, `UPDATE roles SET is_active=true WHERE id=$1`
+					case "role_permission":
+						key = roleLink.ID
+						revokeSQL = `DELETE FROM role_permissions WHERE id=$1`
+						restoreSQL = fmt.Sprintf(`INSERT INTO role_permissions(id,role_id,permission_id,tenant_id) VALUES ($1,%d,%d,%d) ON CONFLICT(id) DO NOTHING`, role.ID, permission.ID, tenant.ID)
+					case "permission":
+						key = permission.ID
+						revokeSQL, restoreSQL = `UPDATE permissions SET action='no_tool_permission' WHERE id=$1`, `UPDATE permissions SET action='*' WHERE id=$1`
+					case "approval":
+						key = call.ID
+						revokeSQL, restoreSQL = `UPDATE tool_invocations SET approval_state='rejected' WHERE id=$1`, `UPDATE tool_invocations SET approval_state='approved' WHERE id=$1`
+					case "arguments":
+						key = call.ID
+						revokeSQL = `UPDATE tool_invocations SET arguments='{"title":"Changed approval"}' WHERE id=$1`
+						restoreSQL = fmt.Sprintf(`UPDATE tool_invocations SET arguments='{"title":"Actor revocation","requester_id":%d}' WHERE id=$1`, requester.ID)
 					}
-					return next.Mutate(c, m)
+					injected := errors.New("tool business rollback after INSERT")
+					items, requests := owner.Ticket.Query().CountX(ctx), owner.IntakeRequest.Query().CountX(ctx)
+					var armed, started atomic.Bool
+					revoked, finished := make(chan error, 1), make(chan struct{})
+					operationCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+					defer cancel()
+					connection, err := ownerDB.Conn(operationCtx)
+					require.NoError(t, err)
+					defer connection.Close()
+					var revokerPID int
+					require.NoError(t, connection.QueryRowContext(operationCtx, `SELECT pg_backend_pid()`).Scan(&revokerPID))
+					armed.Store(true)
+					defer func() {
+						armed.Store(false)
+						cancel()
+						if started.Load() {
+							select {
+							case <-finished:
+							case <-time.After(5 * time.Second):
+								t.Fatal("actor revoker did not stop")
+							}
+						}
+						restoreCtx, restoreCancel := context.WithTimeout(context.Background(), 5*time.Second)
+						defer restoreCancel()
+						_, err := ownerDB.ExecContext(restoreCtx, restoreSQL, key)
+						require.NoError(t, err)
+					}()
+					runtime.Ticket.Use(func(next ent.Mutator) ent.Mutator {
+						return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
+							fired := m.Op() == ent.OpCreate && armed.CompareAndSwap(true, false)
+							if fired {
+								mutationTx, err := m.(*ent.TicketMutation).Tx()
+								require.NoError(t, err)
+								rows, err := mutationTx.Client().QueryContext(c, `SELECT pg_backend_pid()`)
+								require.NoError(t, err)
+								require.True(t, rows.Next())
+								var businessPID int
+								require.NoError(t, rows.Scan(&businessPID))
+								require.NoError(t, rows.Close())
+								started.Store(true)
+								go func() {
+									defer close(finished)
+									_, err := connection.ExecContext(operationCtx, revokeSQL, key)
+									revoked <- err
+								}()
+								require.Eventually(t, func() bool {
+									var waiting bool
+									err := ownerDB.QueryRowContext(operationCtx, `SELECT $1::integer=ANY(pg_blocking_pids($2))`, businessPID, revokerPID).Scan(&waiting)
+									return err == nil && waiting
+								}, 5*time.Second, 10*time.Millisecond, "authorization revocation must wait on the actual business transaction")
+							}
+							value, err := next.Mutate(c, m)
+							if err == nil && fired && rollback {
+								return nil, injected
+							}
+							return value, err
+						})
+					})
+					_, err = app.Create(operationCtx, who, input)
+					delta := 1
+					if rollback {
+						require.ErrorIs(t, err, injected)
+						delta = 0
+					} else {
+						require.NoError(t, err)
+					}
+					require.True(t, started.Load())
+					select {
+					case err := <-revoked:
+						require.NoError(t, err)
+					case <-operationCtx.Done():
+						t.Fatal(operationCtx.Err())
+					}
+					assert.Equal(t, items+delta, owner.Ticket.Query().CountX(ctx))
+					assert.Equal(t, requests+delta, owner.IntakeRequest.Query().CountX(ctx))
+					_, err = app.Create(ctx, who, input)
+					expectedError := creation.ErrPermissionDenied
+					if kind == "actor" || kind == "actor_role" {
+						expectedError = creation.ErrAuthenticationRequired
+					}
+					require.ErrorIs(t, err, expectedError, "committed authorization revocation must deny creation or receipt replay")
+					assert.Equal(t, items+delta, owner.Ticket.Query().CountX(ctx))
+					assert.Equal(t, requests+delta, owner.IntakeRequest.Query().CountX(ctx))
 				})
-			})
-			_, err = app.Create(ctx, who, input)
-			require.True(t, revoked.Load(), "actor revocation must commit before actual business INSERT")
-			assert.Error(t, err, "revoked actor must not create new tool work")
-			assert.Equal(t, items, owner.Ticket.Query().CountX(ctx))
-			assert.Equal(t, requests, owner.IntakeRequest.Query().CountX(ctx))
-		})
+			}
+		}
 
 	})
 	t.Run("new base extension and member commit together", func(t *testing.T) {

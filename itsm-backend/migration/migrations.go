@@ -464,6 +464,7 @@ var RegisteredMigrations = []Migration{
 	{Version: SLAAlertNotificationVersion, Description: "Link SLA alert delivery identities and preserve historical notification facts"},
 	{Version: ToolInvocationExecutionScopeVersion, Description: "Register new tool invocation execution provenance without enrolling history"},
 	{Version: ToolExecutionAuthorityLockVersion, Description: "Lock candidate tool authority within the caller transaction"},
+	{Version: ToolExecutionAuthorizationLockVersion, Description: "Hold candidate tool approval and current authorization through transaction completion"},
 	{Version: WorkItemRetireVersion, Description: "Retire WorkItem legacy structures with controlled evidence"},
 }
 
@@ -477,6 +478,8 @@ func PostSchemaMigrations() []Migration {
 // GetMigrationSQL returns the SQL for a specific migration
 func GetMigrationSQL(version string) string {
 	switch version {
+	case ToolExecutionAuthorizationLockVersion:
+		return toolExecutionAuthorizationLockSQL
 	case ToolExecutionAuthorityLockVersion:
 		return toolExecutionAuthorityLockSQL
 	case ToolInvocationExecutionScopeVersion:
