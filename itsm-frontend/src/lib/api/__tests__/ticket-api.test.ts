@@ -115,17 +115,15 @@ describe('TicketApi', () => {
   });
 
   describe('escalateTicket', () => {
-    it('should escalate with string reason', async () => {
-      mockPost.mockResolvedValue({ id: 1 });
-      await TicketApi.escalateTicket(1, 'urgent');
-      expect(mockPost).toHaveBeenCalledWith('/api/v1/tickets/1/escalate', { reason: 'urgent' });
-    });
-
-    it('should escalate with object', async () => {
-      const data = { level: 'L2', reason: 'complex' };
-      mockPost.mockResolvedValue({ id: 1 });
-      await TicketApi.escalateTicket(1, data);
+    it('preserves command identity and returns the immutable receipt', async () => {
+      const data = { reason: 'complex', version: 4, operationId: 'escalate-once' };
+      const receipt = { workItemId: 1, version: 5, status: 'in_progress', replayed: false };
+      mockPost.mockResolvedValue(receipt);
+      expect(await TicketApi.escalateTicket(1, data)).toEqual(receipt);
       expect(mockPost).toHaveBeenCalledWith('/api/v1/tickets/1/escalate', data);
+      mockPost.mockResolvedValue({ ...receipt, replayed: true });
+      expect(await TicketApi.escalateTicket(1, data)).toEqual({ ...receipt, replayed: true });
+      expect(mockPost).toHaveBeenLastCalledWith('/api/v1/tickets/1/escalate', data);
     });
   });
 

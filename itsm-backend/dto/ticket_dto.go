@@ -3,6 +3,7 @@ package dto
 import (
 	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/handlers/shared/slacontract"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"time"
 )
 
@@ -279,7 +280,16 @@ type AssignTicketRequest struct {
 
 // EscalateTicketRequest 升级工单请求
 type EscalateTicketRequest struct {
-	Reason string `json:"reason" binding:"required"`
+	Reason      string `json:"reason" binding:"required,max=4000"`
+	Version     int    `json:"version" binding:"required,gt=0"`
+	OperationID string `json:"operationId" binding:"required,max=200"`
+}
+
+// Trusted command metadata is constructed by the authenticated boundary.
+type TicketEscalationCommand struct {
+	Meta       workitemmutation.Meta
+	WorkItemID int
+	Reason     string
 }
 
 // ResolveTicketRequest 解决工单请求

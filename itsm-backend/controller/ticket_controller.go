@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"itsm-backend/handlers/shared/workitemmutation"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/handlers/common/intakehttp"
 	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/middleware"
 	"itsm-backend/repository/ticket"
 	"itsm-backend/service"
@@ -341,7 +341,7 @@ func (tc *TicketController) AssignTicket(c *gin.Context) {
 // EscalateTicket 升级工单
 func (tc *TicketController) EscalateTicket(c *gin.Context) {
 	ticketID, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	if err != nil || ticketID <= 0 {
 		common.Fail(c, common.ParamErrorCode, "无效的工单ID")
 		return
 	}
@@ -355,14 +355,19 @@ func (tc *TicketController) EscalateTicket(c *gin.Context) {
 	tenantID := c.GetInt("tenant_id")
 	escalatedBy := c.GetInt("user_id")
 
-	ticket, err := tc.ticketService.EscalateTicket(c.Request.Context(), ticketID, req.Reason, tenantID, escalatedBy)
-	if err != nil {
-		tc.logger.Errorw("Failed to escalate ticket", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
-		common.Fail(c, common.InternalErrorCode, err.Error())
+	if tenantID <= 0 || escalatedBy <= 0 {
+		common.Forbidden(c, "authenticated actor and tenant required")
 		return
 	}
 
-	common.Success(c, tc.ticketToResponse(c, ticket))
+	result, err := tc.ticketService.EscalateTicket(c.Request.Context(), dto.TicketEscalationCommand{WorkItemID: ticketID, Reason: req.Reason, Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: escalatedBy, ExpectedVersion: req.Version, OperationID: req.OperationID, CorrelationID: c.GetString("request_id"), Source: "http"}})
+	if err != nil {
+		tc.logger.Errorw("Failed to escalate ticket", "error", err, "ticket_id", ticketID, "tenant_id", tenantID)
+		respondTicketEscalationError(c, err)
+		return
+	}
+
+	common.Success(c, result)
 }
 
 // ResolveTicket 解决工单

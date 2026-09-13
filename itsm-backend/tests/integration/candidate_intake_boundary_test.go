@@ -206,6 +206,13 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 		historicalAlertItems = append(historicalAlertItems, item.ID)
 	}
 	legacySLAAlertRule := owner.SLAAlertRule.Create().SetName("Critical SLA admission").SetTenantID(tenant.ID).SetSLADefinitionID(legacySLADefinition.ID).SetAlertLevel("critical").SetThresholdPercentage(20).SetNotificationChannels([]string{"in_app", "email"}).SaveX(ctx)
+
+	legacyManualItem, err := historicalApp.Create(ctx, identity, command("legacy-manual-receipt", "generic"))
+	require.NoError(t, err)
+	legacyManualCommand := dto.TicketEscalationCommand{WorkItemID: legacyManualItem.WorkItemID, Reason: "legacy confirmed upgrade", Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: 1, Source: "http", OperationID: "legacy-manual-command"}}
+	legacyManualOwner := service.NewTicketService(&service.TicketServiceConfig{Execution: executionfixture.Standard(), Client: owner, Repository: ticketrepo.NewEntRepository(owner, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), NotificationService: service.NewTicketNotificationService(owner, zap.NewNop().Sugar(), executionfixture.Standard())})
+	legacyManualResult, err := legacyManualOwner.EscalateTicket(ctx, legacyManualCommand)
+	require.NoError(t, err)
 	legacySLAHistory := owner.SLAAlertHistory.Create().SetTicketID(historicalAlertItems[0]).SetTicketNumber("OLD-alert-scan").SetTicketTitle("historical alert").SetAlertRuleID(legacySLAAlertRule.ID).SetAlertRuleName(legacySLAAlertRule.Name).SetTenantID(tenant.ID).SetNotificationSent(true).SaveX(ctx)
 	var historicalNotifications []*ent.TicketNotification
 	for _, state := range []string{"pending", "processing"} {
@@ -2376,28 +2383,102 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 	})
 
 	t.Run("manual escalation preserves historical WorkItems", func(t *testing.T) {
-		svc := service.NewTicketService(&service.TicketServiceConfig{Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Client: runtime, Logger: zap.NewNop().Sugar()})
-		owner.Ticket.UpdateOneID(historicalAlertItems[1]).SetPriority("high").SaveX(ctx)
+		svc := service.NewTicketService(&service.TicketServiceConfig{Execution: policy, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Client: runtime, Logger: zap.NewNop().Sugar(), NotificationService: service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)})
+
+		var legacyBefore, legacyAfter string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, legacyManualItem.WorkItemID).Scan(&legacyBefore))
+		legacyReplay, err := svc.EscalateTicket(ctx, legacyManualCommand)
+		require.NoError(t, err)
+		require.True(t, legacyReplay.Replayed)
+		require.Equal(t, legacyManualResult.Version, legacyReplay.Version)
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, legacyManualItem.WorkItemID).Scan(&legacyAfter))
+		require.JSONEq(t, legacyBefore, legacyAfter)
+		makeCommand := func(id, version int, key string) dto.TicketEscalationCommand {
+			return dto.TicketEscalationCommand{WorkItemID: id, Reason: "bounded manual escalation", Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: version, OperationID: key, Source: "http"}}
+		}
+		old := owner.Ticket.UpdateOneID(historicalAlertItems[1]).SetPriority("high").SaveX(ctx)
 		var before, after string
-		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, historicalAlertItems[1]).Scan(&before))
-		_, err := svc.EscalateTicket(ctx, historicalAlertItems[1], "bounded manual escalation", tenant.ID, actor.ID)
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, old.ID).Scan(&before))
+		_, err = svc.EscalateTicket(ctx, makeCommand(old.ID, old.Version, "historical-escalate"))
 		assert.ErrorIs(t, err, executionscope.ErrDenied)
-		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, historicalAlertItems[1]).Scan(&after))
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, old.ID).Scan(&after))
 		assert.JSONEq(t, before, after)
 		fresh, err := app.Create(ctx, identity, command("manual-escalation-member", "generic"))
 		require.NoError(t, err)
-		owner.Ticket.UpdateOneID(fresh.WorkItemID).SetPriority("high").SaveX(ctx)
-		updated, err := svc.EscalateTicket(ctx, fresh.WorkItemID, "bounded manual escalation", tenant.ID, actor.ID)
+		current := owner.Ticket.UpdateOneID(fresh.WorkItemID).SetPriority("high").SaveX(ctx)
+		cmd := makeCommand(current.ID, current.Version, "manual-escalate-once")
+		updated, err := svc.EscalateTicket(ctx, cmd)
 		require.NoError(t, err)
-		require.Equal(t, "critical", string(updated.Priority))
-		assert.Nil(t, updated.AssigneeID, "escalation must not invent an assignee from hardcoded IDs")
+		row := owner.Ticket.GetX(ctx, current.ID)
+		require.Equal(t, "critical", row.Priority)
+		require.Zero(t, row.AssigneeID, "no invented assignee")
+		require.Equal(t, current.Version+1, updated.Version)
 		var receipts int
-		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM audit_logs WHERE path=$1 AND action='work_item.escalation.manual'`, fmt.Sprint(fresh.WorkItemID)).Scan(&receipts))
-		assert.Equal(t, 1, receipts, "manual change requires a durable actor/reason receipt")
-		highest, err := svc.EscalateTicket(ctx, fresh.WorkItemID, "highest priority remains highest", tenant.ID, actor.ID)
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM audit_logs WHERE path=$1 AND action='work_item.escalation.manual'`, fmt.Sprint(current.ID)).Scan(&receipts))
+		require.Equal(t, 1, receipts)
+		replay, err := svc.EscalateTicket(ctx, cmd)
 		require.NoError(t, err)
-		assert.Equal(t, "critical", string(highest.Priority), "escalation must never downgrade critical")
+		require.True(t, replay.Replayed)
+		require.Equal(t, updated.Version, replay.Version)
+		require.Equal(t, updated.Version, owner.Ticket.GetX(ctx, current.ID).Version)
+		changed := cmd
+		changed.Reason = "different intent"
+		_, err = svc.EscalateTicket(ctx, changed)
+		var conflict *workitemmutation.OperationConflictError
+		require.ErrorAs(t, err, &conflict)
+		_, err = svc.EscalateTicket(ctx, makeCommand(current.ID, updated.Version, "manual-escalate-highest"))
+		require.NoError(t, err)
+		require.Equal(t, "critical", owner.Ticket.GetX(ctx, current.ID).Priority)
+		owner.User.UpdateOneID(actor.ID).SetActive(false).SaveX(ctx)
+		_, err = svc.EscalateTicket(ctx, cmd)
+		owner.User.UpdateOneID(actor.ID).SetActive(true).SaveX(ctx)
+		require.Error(t, err, "replay still checks current actor")
+		current = owner.Ticket.GetX(ctx, current.ID)
+		_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='closed' WHERE id=$1", scopeID)
+		require.NoError(t, err)
+		_, denied := svc.EscalateTicket(ctx, makeCommand(current.ID, current.Version, "closed-manual"))
+		_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+		require.NoError(t, err)
+		require.ErrorIs(t, denied, executionscope.ErrDenied)
+		for _, fault := range []string{"notification", "audit"} {
+			target, err := app.Create(ctx, identity, command("manual-fault-"+fault, "generic"))
+			require.NoError(t, err)
+			item := owner.Ticket.GetX(ctx, target.WorkItemID)
+			beforeUnified := owner.Notification.Query().CountX(ctx)
+			active := true
+			injected := errors.New("manual " + fault + " write failure")
+			writes := 0
+			hook := func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+					v, e := next.Mutate(ctx, m)
+					if active && e == nil {
+						writes++
+						return nil, injected
+					}
+					return v, e
+				})
+			}
+			if fault == "notification" {
+				runtime.Notification.Use(hook)
+			} else {
+				runtime.AuditLog.Use(hook)
+			}
+			command := makeCommand(item.ID, item.Version, "manual-fault-"+fault)
+			_, err = svc.EscalateTicket(ctx, command)
+			active = false
+			require.ErrorIs(t, err, injected)
+			require.Equal(t, 1, writes)
+			require.Equal(t, item.Version, owner.Ticket.GetX(ctx, item.ID).Version)
+			require.Equal(t, beforeUnified, owner.Notification.Query().CountX(ctx))
+			var count int
+			require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM ticket_notifications WHERE ticket_id=$1`, item.ID).Scan(&count))
+			require.Zero(t, count)
+			_, err = svc.EscalateTicket(ctx, command)
+			require.NoError(t, err)
+		}
+
 	})
+
 	require.Equal(t, oldRow.Title, owner.Ticket.GetX(ctx, historical.WorkItemID).Title)
 }
 

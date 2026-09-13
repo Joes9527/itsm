@@ -573,3 +573,19 @@ Outbox 并发/回滚测试提交 `56879f7c9`；独立 reviewer 确认限定结�
 原方法的另一个必要依赖是事务外goroutine飞书更新。修复不能只删掉这项既有功能：需要原事务冻结update intent（existing mapping ID/GUID、tenant/WorkItem结构引用、actor、稳定操作回执、目标identity、WorkItem version、payload），注册独立update handler并复用现有scoped Outbox Worker，不能冒用creation事件或新增worker。consumer核验真实手动操作回执、当前权限/member、mapping/目标一致，成功回执不能改写GUID；外部调用后不确定错误/成功后落盘失败明确delivery_unknown，不声明ReplaySafe。必须处理同一远端任务跨worker更新顺序，禁止仅凭发送前version检查或进程内锁宣称不会旧快照覆盖新状态。映射尚未创建不能偷偷创建远端任务或假成功。
 
 独立review_execution_scope_s1只读确认调用归属和必要依赖。下一实施顺序已补入原执行计划：稳定手动命令元数据与唯一路径；飞书更新持久化/串行及不确定性；原事务scope/授权/version/审计/通知/事件；真实回滚/重放/权限与并发验证。当前手动升级仍未修复，新RED使当前测试集不再全绿，不将上一轮PASS套用到本HEAD。整个S3/S4和后续门禁仍未完成，CandidateSHA未更新，未启动候选，无共享环境变更、企业发送、推送或main合并。
+
+
+### B2 S3 手动命令事务核心（2026-09-13）
+
+在 `1554a4030` 的RED后接入真实TicketService HTTP手动命令。TicketServiceConfig显式注入frozen ExecutionPolicy，bootstrap/Container两条生产构造链贯通，缺policy写入拒绝。EscalateTicket改为typed command，HTTP/前端要求reason/version/operationId，可信actor/tenant/source来自认证边界，返回immutable WorkItem receipt。原事务RepeatableRead读取当前generic、actor/当前权限，先查询合法历史回执；只有新写入才Bind/member/version/status检查、更新CAS、通知意图与审计共同提交。重放不修改字段/版本，冲突operationId返回409；权限和scope拒绝403，基础设施错误不暴露原始详情。priority high→critical且critical饱和，未知值拒绝；保留assignee，移除原硬编码1/2/3。
+
+**仅事务核心完成，手动升级全链尚未完成。** 原事务外通知/Feishu goroutine已移除；通知由原队列承接。配置Feishu时在任何业务写入前明确拒绝，直到update intent/consumer/跨worker顺序与不确定性处理完成；该门禁是临时未实现条件，不是最终同步方案或功能交付。旧TicketLifecycleService/EscalationService仅测试调用手动方法和BPMN独立升级尚未移除/接入。新命令仅generic，专业状态禁止经此改写。
+
+本机candidate-delivery/b2证据：
+
+- `s3-manual-command-full-pg.log` 完整TestCandidateIntakeCreationBoundary PASS，无skip。039前原owner以Standard模式运行本次新命令生成receipt，迁移后候选只读重放成功且原始WorkItem JSON不变；**不代表旧发布版本已有此receipt**。历史generic新命令ErrDenied且原始JSON保全。新member真实升级/critical不降级/无虚构assignee/审计1条，重放保持版本，operationId冲突拒绝；actor失效后重放拒绝、closed scope新命令拒绝。Notification与AuditLog实际写后故障使版本/通知回滚，解除后同命令成功。
+- `s3-manual-command-final-regression.log` service/controller/bootstrap/container定向回归PASS；新增HTTP错误分类验证permission403、scope403、version409、infrastructure500隐藏细节及缺命令元数据400。它们不等于实际JWT/SSO全HTTP验收。`s3-manual-command-build.json`后端全量build exit0。
+- `s3-manual-command-frontend.log` Ticket API Jest 55/55 PASS；契约测试保留同一command身份重试。package-lock与integration worktree逐字一致，当前worktree链接其已有node_modules，仅运行本地测试；任务生成的tracked junit.xml已还原，不改变原报告。未运行浏览器/前端全type-check。
+- 初轮编译重复import、外部测试包装类型不匹配已修正；这些编译失败不作为业务RED。独立review_execution_scope_s1指出权限sentinel映射及历史重放时序问题，均修复并复审无新事务/权限阻断。
+
+并发同key冲突后的自动回执恢复、真实HTTP当前角色撤销、Feishu配置门禁/持久更新、旧平行入口及BPMN仍待验证/实现；S3/S4/S5/S6/B3/T3/T4/G2/G3未完成。CandidateSHA未更新，候选未启动；无WSL/共享环境、企业发送、推送或main合并。

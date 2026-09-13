@@ -17,9 +17,10 @@ import (
 // Container 依赖容器
 // 集中管理所有服务的创建和依赖注入
 type Container struct {
-	cfg    *config.Config
-	client *ent.Client
-	logger *zap.SugaredLogger
+	execution *database.ExecutionPolicy
+	cfg       *config.Config
+	client    *ent.Client
+	logger    *zap.SugaredLogger
 
 	// Repositories
 	ticketRepository ticketRepo.Repository
@@ -60,6 +61,7 @@ func (c *Container) Initialize() error {
 	if err != nil {
 		return err
 	}
+	c.execution = policy
 	c.initCoreServices(policy)
 
 	// 3. 初始化业务服务（依赖核心服务）
@@ -103,6 +105,7 @@ func (c *Container) initCoreServices(policy *database.ExecutionPolicy) {
 func (c *Container) initBusinessServices() {
 	// Ticket Service V2（使用构造函数注入）
 	c.ticketService = service.NewTicketService(&service.TicketServiceConfig{
+		Execution:             c.execution,
 		Repository:            c.ticketRepository,
 		Client:                c.client,
 		Logger:                c.logger,
@@ -163,7 +166,9 @@ func (c *Container) NewTicketServiceWithDeps(
 	slaSvc *service.TicketSLAService,
 ) *service.TicketService {
 	return service.NewTicketService(&service.TicketServiceConfig{
+		Execution:             c.execution,
 		Repository:            c.ticketRepository,
+		Client:                c.client,
 		Logger:                c.logger,
 		NotificationService:   notificationSvc,
 		AutomationRuleService: automationSvc,

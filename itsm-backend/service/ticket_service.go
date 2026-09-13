@@ -35,6 +35,7 @@ import (
 // TicketService 改进版的工单服务
 // 使用构造函数注入和 Repository 模式
 type TicketService struct {
+	execution              *database.ExecutionPolicy
 	directory              database.DirectorySnapshot
 	repo                   ticket.Repository
 	client                 *ent.Client // 用于 ProcessInstance 等系统级查询（不走 Repository）
@@ -52,6 +53,7 @@ type TicketService struct {
 // TicketServiceConfig 工单服务配置
 // 所有依赖都在配置中明确声明
 type TicketServiceConfig struct {
+	Execution             *database.ExecutionPolicy
 	Directory             database.DirectorySnapshot
 	ProcessTriggerService ProcessTriggerServiceInterface
 	Repository            ticket.Repository
@@ -74,6 +76,7 @@ func NewTicketService(cfg *TicketServiceConfig) *TicketService {
 	}
 
 	s := &TicketService{
+		execution:         cfg.Execution,
 		directory:         cfg.Directory,
 		processTriggerSvc: cfg.ProcessTriggerService,
 		repo:              cfg.Repository,
@@ -1261,90 +1264,6 @@ func (s *TicketService) GetTicketSLAInfo(ctx context.Context, ticketID int, tena
 	return info, nil
 }
 
-// EscalateTicket 升级工单
-func (s *TicketService) EscalateTicket(ctx context.Context, ticketID int, reason string, tenantID int, escalatedBy int) (*ticket.Ticket, error) {
-	s.logger.Infow("Escalating ticket", "ticket_id", ticketID, "reason", reason, "tenant_id", tenantID)
-
-	current, err := s.repo.GetByID(ctx, ticketID, tenantID)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := rejectProfessionalTicketMutation(current.RecordClass); err != nil {
-		return nil, err
-	}
-
-	newPriority := s.getEscalatedPriority(string(current.Priority))
-	newAssignee := s.getEscalationAssignee(newPriority, tenantID)
-
-	params := &ticket.UpdateParams{
-		Version: current.Version,
-		Priority: func() *ticket.Priority {
-			p := ticket.Priority(newPriority)
-			return &p
-		}(),
-		AssigneeID: &newAssignee,
-		Status: func() *ticket.Status {
-			st := ticket.StatusInProgress
-			return &st
-		}(),
-	}
-
-	updated, err := s.repo.Update(ctx, ticketID, params, tenantID)
-	if err != nil {
-		s.logger.Errorw("Failed to escalate ticket", "error", err, "ticket_id", ticketID)
-		return nil, fmt.Errorf("failed to escalate ticket: %w", err)
-	}
-
-	if s.notificationSvc != nil {
-		go func() {
-			ctx2, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			_ = s.notificationSvc.NotifyTicketAssigned(ctx2, ticketID, newAssignee, tenantID)
-		}()
-	}
-
-	s.logger.Infow("Ticket escalated", "ticket_id", ticketID, "new_priority", newPriority, "new_assignee", newAssignee)
-
-	// 异步同步工单到飞书
-	if s.connectorManager != nil {
-		go func() {
-			ctx2, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			// 获取Feishu连接器
-			conn, ok := s.connectorManager.Get(tenantID, "feishu")
-			if !ok {
-				// 飞书连接器未配置，忽略
-				return
-			}
-			feishuConn, ok := conn.(*feishuConnector.Feishu)
-			if !ok {
-				return
-			}
-			// 开启事务
-			tx, err := s.client.Tx(ctx2)
-			if err != nil {
-				s.logger.Warnw("Failed to start transaction for feishu sync", "error", err, "ticket_id", updated.ID)
-				return
-			}
-			defer tx.Rollback()
-			// 同步工单到飞书
-			_, err = feishuConn.UpdateExistingTicketTask(ctx2, tx, s.toEntTicket(updated))
-			if err != nil {
-				s.logger.Warnw("Failed to sync ticket to feishu", "error", err, "ticket_id", updated.ID)
-				return
-			}
-			// 提交事务
-			if err := tx.Commit(); err != nil {
-				s.logger.Warnw("Failed to commit transaction for feishu sync", "error", err, "ticket_id", updated.ID)
-				return
-			}
-		}()
-	}
-
-	return updated, nil
-}
-
 // SearchTickets 高级搜索工单
 func (s *TicketService) SearchTickets(ctx context.Context, searchTerm string, tenantID int) ([]*ticket.Ticket, error) {
 	s.logger.Infow("Searching tickets", "search_term", searchTerm, "tenant_id", tenantID)
@@ -1492,32 +1411,6 @@ func (s *TicketService) GetTicketActivity(ctx context.Context, ticketID int, ten
 }
 
 // ==================== 辅助函数 ====================
-
-// getEscalatedPriority 获取升级后的优先级
-func (s *TicketService) getEscalatedPriority(currentPriority string) string {
-	switch currentPriority {
-	case "low":
-		return "medium"
-	case "medium":
-		return "high"
-	case "high":
-		return "critical"
-	default:
-		return "high"
-	}
-}
-
-// getEscalationAssignee 获取升级后的处理人
-func (s *TicketService) getEscalationAssignee(priority string, tenantID int) int {
-	switch priority {
-	case "critical":
-		return 1
-	case "high":
-		return 2
-	default:
-		return 3
-	}
-}
 
 // entToDomain 将 ent.Ticket 转为领域模型（用于 SearchTickets / GetOverdueTickets 等结果适配）
 func (s *TicketService) entToDomain(e *ent.Ticket) *ticket.Ticket {

@@ -2,14 +2,16 @@ package service_test
 
 import (
 	"context"
-	"itsm-backend/handlers/shared/workitemmutation"
 	"testing"
 	"time"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/repository/ticket"
+	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -555,7 +557,8 @@ func TestTicketService_EscalateTicket_TicketNotFound(t *testing.T) {
 	tenantID := fx.tenantID()
 	userID := fx.userID()
 
-	_, err := fx.svc.EscalateTicket(fx.ctx, 99999, "reason", tenantID, userID)
+	manualOwner := service.NewTicketService(&service.TicketServiceConfig{Execution: executionfixture.Standard(), Client: fx.client, Repository: ticket.NewEntRepository(fx.client, zaptest.NewLogger(t).Sugar()), Logger: zaptest.NewLogger(t).Sugar()})
+	_, err := manualOwner.EscalateTicket(fx.ctx, dto.TicketEscalationCommand{WorkItemID: 99999, Reason: "reason", Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: userID, ExpectedVersion: 1, Source: "http", OperationID: "not-found"}})
 	assert.Error(t, err, "不存在的 ticket 应该失败")
 }
 

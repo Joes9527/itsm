@@ -22,6 +22,14 @@
 
 ---
 
+### 手动升级命令（候选修复分支，尚未完整放行）
+
+`POST /api/v1/tickets/:id/escalate` 请求现在必须携带 `reason`、正整数 `version` 和稳定 `operationId`（最多200字符）。actor/tenant/source由认证边界构造；客户端重试复用原version和operationId，不生成新编号。返回 `{workItemId, version, status, replayed}` 操作回执，不再返回完整Ticket；刷新详情应走已有读取接口。不同输入复用同operationId或过期version返回409，缺权限/执行范围拒绝返回403。
+
+当前仅generic手动命令使用此路径，专业类型由专业所有者处理。优先级最高critical保持不变，未知优先级拒绝；升级保留现有assignee，不猜用户ID。现行授权后允许历史已提交回执只读重放；首次写入必须通过原事务执行范围，并原子提交版本、审计和通知意图。
+
+**当前临时门禁：** 已配置Feishu同步时，命令在写入前明确失败。可靠update intent/消费者及远端更新顺序尚未实现，不能据此启动候选或宣称同步能力已交付。旧TicketLifecycleService/EscalationService手动方法与BPMN升级仍待整理/接入。
+
 ## 1. 常用开发命令
 
 ### 前端 (itsm-frontend)

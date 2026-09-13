@@ -87,13 +87,12 @@ export class TicketApi {
     return httpClient.post<Ticket>(`/api/v1/tickets/${id}/assign`, payload);
   }
 
-  // Escalate ticket
+  // A retry reuses the original operationId and version.
   static async escalateTicket(
     id: number,
-    reasonOrData: string | { level: string; reason: string; assigneeId?: number }
-  ): Promise<Ticket> {
-    const payload = typeof reasonOrData === 'string' ? { reason: reasonOrData } : reasonOrData;
-    return httpClient.post<Ticket>(`/api/v1/tickets/${id}/escalate`, payload);
+    data: { reason: string; version: number; operationId: string }
+  ): Promise<{ workItemId: number; version: number; status: string; replayed: boolean }> {
+    return httpClient.post(`/api/v1/tickets/${id}/escalate`, data);
   }
 
   // Resolve ticket

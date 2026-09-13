@@ -4,6 +4,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/handlers/shared/workitemmutation"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 )
 
@@ -30,6 +32,7 @@ func TestTicketAssignmentRejectsProfessionalClasses(t *testing.T) {
 						client.Change.Create().SetWorkItemID(before.ID).SaveX(ctx)
 					}
 					ticketSvc := NewTicketServiceForTest(client, owner.logger)
+					ticketSvc.execution = executionfixture.Standard()
 					assignment := NewTicketAssignmentService(client, owner.logger)
 					workflow := NewTicketWorkflowService(client, owner.logger)
 					switch action {
@@ -38,7 +41,7 @@ func TestTicketAssignmentRejectsProfessionalClasses(t *testing.T) {
 					case "edit":
 						_, err = ticketSvc.UpdateTicket(ctx, before.ID, &dto.UpdateTicketRequest{AssigneeID: next.ID, Version: before.Version}, tenant.ID)
 					case "service_escalate":
-						_, err = ticketSvc.EscalateTicket(ctx, before.ID, "handover", tenant.ID, actor.ID)
+						_, err = ticketSvc.EscalateTicket(ctx, dto.TicketEscalationCommand{WorkItemID: before.ID, Reason: "handover", Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: before.Version, Source: "http", OperationID: "test"}})
 					case "assign":
 						_, err = ticketSvc.AssignTicket(ctx, before.ID, next.ID, tenant.ID)
 					case "batch":
