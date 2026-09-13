@@ -203,6 +203,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+工具完成记录检查点 `da9a5783c`：真实PG重放覆盖首次replayed结果RED→GREEN，done经当前来源/审批身份预检后不再执行；完成/失败写回自有事务复核并按身份/参数/审批和非done条件更新，错误固定。实际post-UPDATE故障回滚调用整行，创建业务已提交，重试一工单恢复done；nil registry失败路径重试固定failed，非未知工具查找验收。回归另发现关闭竞态取消错误遗漏ErrClosed及测试清理挂死，现统一锁内分类保留双cause并保证释放；具名工具race三次、最终完整私有race、build和独立复核通过，无skip/race，证据详见T1。并发成功/失败与审批参数变化竞争、scope撤权栅栏及业务首次写授权仍待完成。CandidateSHA和未启动状态不变，未放行后续门禁。
+
 041业务身份准入检查点 `ace4236d2`：真实PG复现缺SELECT、表/列UPDATE、登记函数EXECUTE均被旧检查放行的四项RED，现要求工具登记表只读并拒绝登记函数直接执行；有效身份与撤回危险授权后均通过。运输身份未放宽，工具来源读取属tenant路径。ScopeRegistration、完整私有恢复/构造回归、database/bootstrap race及build通过，无skip/race，独立复核无阻断，详见T1。fixture不是完整迁移目录顺序验收；目标PG17迁移和显式角色授权仍待B交接。业务原事务与结果写回继续待完成，CandidateSHA与未启动状态不变，交付门禁未放行。
 
 工具审计失败传播检查点 `dcde9bdc3`：未知工具审计错误被吞RED→GREEN；执行前验证参数序列化，未知/拒绝/只读成功和失败均等待审计，保留双cause，审计不可用固定HTTP503且无结果/原错误泄露。真实工具读取后审计INSERT故障双回滚；真实撤销业务SELECT后读取失败但failed审计及登记提交。HTTP、AI/bootstrap race、完整私有回归、全后端build及独立复核通过，无skip/race，证据见T1。查询与审计非同一事务，无重试去重；可选缓存RBAC、首次业务原事务、结果条件回写、041运行角色准入仍待完成。CandidateSHA与未启动状态不变，不放行S5或后续交付门禁。
