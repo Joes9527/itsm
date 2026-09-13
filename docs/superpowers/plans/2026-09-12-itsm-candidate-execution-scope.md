@@ -203,6 +203,11 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+Marketplace 配置写入检查点 `860222303`（2026-09-14）：唯一冻结策略 RequireIntegrationManagement 仅 standard+匹配显式tenantctx+无SystemBypass+未取消允许配置管理；四个公开写owner（Install含重新启用、Uninstall、Update、Merge）首次查询/持久化前拒绝candidate/nil策略，不按商品类型放行。HTTP保留Request.Context并正确403，nil连接器runtime不静默成功。独立审阅发现Merge旁路，经真实PG RED后关闭；飞书回调复用同gate在兑换前检查，nil服务拒绝、重复callback ID fail closed，非ErrDenied固定500。standard本机provider+SQLite真实回调保存及query不能改租户通过，但OAuth state/actor/防重放与跨兑换持久化原子性未补齐。
+
+s5-marketplace-full-private.log 私有PG16/Redis/MinIO中新13配置保全/标准真实写入及standard HTTP正向PASS；整套仍有507f62293普通Manager/Controller请求激活七项既有RED，无SKIP/race，明确不是全绿。最终错误分类增量经s5-marketplace-final-review-unit.log具名race复核，未重新宣称完整suite；全后端build通过，独立最终审阅无新增阻断。详见实现分支T1现有交接。下一步仍须关闭启动前Provision、Revoke/配置删除、Send/Get裸实例入口；不勾选普通请求整体门禁，不关闭S5/S6或G2。固定CandidateSHA与候选停止状态不变，无共享环境操作、企业/云外呼、push/main合并。
+
+
 连接器可信目标激活实施范围（2026-09-14，accepted，尚未实现）：
 
 可信启动增量`5ebf4a7df`：API消费者前由唯一Manager预检整批local_only manifest、统一初始化、核对通用目的地身份并原子发布；失败清理当前及prepared对象，Close等待在途初始化，后续工具队列启动失败先Close再清理目标。真实bootstrap RED→GREEN、独立P2关闭竞争RED→GREEN、具名race与最终后端build通过；候选Webhook ack恢复旅程已改为声明激活，真实worker发送/去重通过。完整私有suite仍有507f62293七项已知失败，整体FAIL。启动前普通配置和Marketplace持久化、裸Send/Get及全部provider边界未关闭，因此下方复合项继续未完成，CandidateSHA与停止状态不变。详细证据与100ms关闭观察窗口、非所有消费者故障穷举等限制见T1。
