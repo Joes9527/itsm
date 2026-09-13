@@ -665,7 +665,11 @@ func NewApplication() *Application {
 		}
 	}
 	scService.SetCreatorRegistry(creationRegistry)
-	intakeApplication := intake.NewService(client, intake.NewResolver(scService, processBindingService, configurationItemService, ticketCategoryService), creationRegistry, intake.NewWorkItemCreator(numberAllocator), clients.IntakeDirectorySnapshot())
+	executionPolicy, err := database.NewExecutionPolicy(cfg.Execution)
+	if err != nil {
+		sugar.Fatalw("execution manifest cannot be frozen", "error", err)
+	}
+	intakeApplication := intake.NewService(client, intake.NewResolver(scService, processBindingService, configurationItemService, ticketCategoryService), creationRegistry, intake.NewWorkItemCreator(numberAllocator), clients.IntakeDirectorySnapshot(), executionPolicy)
 	ticketController.SetCreationApplication(intakeApplication)
 	incidentController.SetCreationApplication(intakeApplication)
 	problemHandler.SetCreationApplication(intakeApplication)

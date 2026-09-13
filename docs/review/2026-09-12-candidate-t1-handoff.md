@@ -157,3 +157,34 @@ S2 将事件订阅、工具队列、连接器与周期任务移到显式运行�
 已定位的下一步事务所有者包括 intake `createAttempt`、Incident command/rule-action transaction、Problem/Change 各 handler command、Requested Item repository/callback、共享 assignment/deletion/tag/comment/attachment/relation。原计划列出的 common creator/mutation 文件只是接口，不能作为全局拦截点。关系修改必须检查两端；附件外部存储副作用必须纳入授权时序；`ticket_service` 历史 GET 的 Feishu 异步调用必须在服务层阻断。此处是定位结果，尚未完成逐路由→服务→写主体→事务清单，不计作 S3 第一项完成。
 
 剩余：可信启动清单向业务服务传递、所有原写事务接入、outbox/process 各权威生产者设置引用、真实 API/service 边界测试；随后 S4–S6 和鉴权计划。CandidateSHA 保持 `d7470a32dbb87acc9b5e4d9a895a146410723561`；没有启动候选、推送或合并 main，也没有更改 B 环境或执行共享数据库变更，T3/T4 保持阻塞。
+
+
+### B2 S3 统一创建入口接入（2026-09-13，其他写入口待接入）
+
+在基础提交 `6261941b4` 上推进：可信启动配置经 `database.NewExecutionPolicy` 校验并复制为私有映射，统一创建服务的构造参数必须显式提供策略；未提供或未准入租户拒绝，不能从数据库自动发现清单以外的范围，也不从请求字段赋权。bootstrap 在运行身份准入后注入；已有测试夹具显式选择 standard，没有给生产路径增加默认降级。
+
+已核实入口与事务：
+
+| 入口 | 所有者 / 写主体 | 原事务和执行检查 |
+| --- | --- | --- |
+| `/intake/work-items`；Ticket/Incident/Problem/Change/Service Request 创建；Incident convert-to-problem | intake application；receipt、base、专业扩展、来源关联、SLA、字段、快照、审计和创建事件 | `createAttempt` 的 RepeatableRead 事务。原授权通过后、receipt 前绑定；每次重试重新绑定；来源关联修改前检查 source；base 前检查 parent；扩展前检查新 base 成员。 |
+| standard change、BPMN、ToolQueue、Feishu/邮件创建适配 | bootstrap 注入同一个 intake application | 同上，仅指调用统一创建路径的部分；不等于这些组件其他动作已受保护。 |
+| 已完成 intake receipt 的重复请求 | 原授权及结果/关联回放读取 | 保持历史只读结果，不登记历史成员、不重写 receipt；新增写范围检查不置于此回放分支中。 |
+
+独立核查同时确认后续生产者不只使用 `OutboxEventRepository.Enqueue`：Incident status、relation/outcome 事件、KAF `CreateDelegatedTaskWithClient` 直接 INSERT。引用应分别来自已授权 Ticket、`MutationWorkItemID`/领域 facts、新 ProcessInstance 结构化引用。Alert aggregate 是 alert ID，必须解析 Incident→WorkItem；不能直接当执行主体。ProcessInstance 的唯一 INSERT 在 `startResolvedProcess`，引用应在 Save 和 executeStep 前确定。这些生产者尚未在本增量接入。
+
+本节不构成完整 G2 写入口清单或 S3 完成证明。共享修改、assignment/deletion/tag、评论/附件/关系独立入口、专业命令及生产者/消费链仍待逐项接入；没有发布新 CandidateSHA、启动候选或操作 B/共享环境。
+
+
+本增量验证证据位于既有 B2 本地证据目录：
+
+- `s3-policy-red-actual.log` → `s3-policy-green.log`：可信清单冻结、未准入租户及零值拒绝。最初 `s3-policy-red.log` 因测试文件路径错误未运行任何匹配测试，不作为证据。
+- `s3-intake-policy-red.log` / `s3-intake-policy-green.log`：缺少策略拒绝及原 intake/bootstrap 测试。
+- `s3-intake-guards-red.log` / `s3-intake-source-red.log`：临时撤销检查后，历史 parent 与 source 分别被错误接受；对照结束后恢复原实现，`s3-intake-restored-green.log` 再次运行完整真实创建边界用例 PASS。
+- `s3-intake-error-red.log` → `s3-intake-error-green.log`：数据库查询失败曾被误报权限错误；修复后完整 intake 测试 PASS。独立 reviewer 已确认只有范围 ErrDenied 返回权限拒绝，其余基础设施不可用并保留 cause。
+- `s3-intake-regression-green.log`：database、intake、Change、Problem、Service Request、standard change、controller、默认 integration 共8包测试 PASS。早先 fixture 参数迁移中的未定义 t 编译错误已修复，未将失败日志记为通过。
+- `s3-intake-race.log`：database/intake/bootstrap 并发检测 PASS；后续错误分类修复另由完整 intake 测试覆盖。
+- `s3-intake-final-postgres.log`：真实 PG scope/创建边界，以及 PG/Redis/MinIO 构造保全 PASS，三个顶层用例均未 skip。生产 tenant enforce 驱动与受限目录快照参与创建验证；先前同事务身份夹具失败不计为准入证据。
+- `s3-intake-final-build.json`：后端全量构建 exit 0；`s3-intake-tagged-compile.log` 仅证明带 integration_postgres 标签的已改调用方可编译（integration/e2e/intake/service），没有运行目标环境 E2E。
+
+独立 reviewer `review_execution_scope_s1` 对本次限定的可信策略、统一创建事务、回放和测试隔离完成审阅，错误分类问题修复后无剩余发现。其结论不覆盖尚未接入的其他业务写入口或生产者。

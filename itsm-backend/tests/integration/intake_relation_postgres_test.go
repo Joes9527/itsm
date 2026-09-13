@@ -18,6 +18,7 @@ import (
 	catalogdomain "itsm-backend/handlers/service_catalog"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"sync"
 	"testing"
 )
@@ -50,7 +51,7 @@ func newIntakeRelationFixture(t *testing.T) (*relationFixture, *intake.Service, 
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(problemdomain.NewService(problemdomain.NewEntRepository(f.runtime.Tenant), logger)))
 	resolver := intake.NewResolver(catalogdomain.NewService(nil, f.runtime.Tenant, logger, nil), service.NewProcessBindingService(f.runtime.Tenant), service.NewConfigurationItemService(f.runtime.Tenant, logger, nil, nil), service.NewTicketCategoryService(f.runtime.Tenant))
-	app := intake.NewService(f.runtime.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), f.runtime.IntakeDirectorySnapshot())
+	app := intake.NewService(f.runtime.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), f.runtime.IntakeDirectorySnapshot(), executionfixture.Standard())
 	identity := creation.Identity{TenantID: f.tenant.ID, ActorID: f.actor.ID, RequesterID: f.actor.ID, Role: f.actor.Role, Channel: "http"}
 	command := creation.CreateWorkItemCommand{RecordClass: "problem", IntakeKind: "problem", Confirmation: "confirmed", Title: "new investigation", IdempotencyKey: "intake-relations", SourceRelations: []creation.SourceRelationInput{{SourceWorkItemID: f.inc.WorkItemID, ExpectedVersion: 1, RelationType: "investigated_by"}}}
 	return f, app, identity, command

@@ -13,6 +13,7 @@ import (
 	srhandler "itsm-backend/handlers/service_request"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"testing"
 
@@ -46,7 +47,7 @@ func resolverFixtureWithClient(t *testing.T, client *ent.Client, identity creati
 	registry := NewCreatorRegistry()
 	domain := srhandler.NewService(nil, client, logger, service.NewApprovalChainResolver(client, logger))
 	require.NoError(t, registry.Register(domain))
-	return &resolverFixture{client: client, actor: identity, catalog: catalog, app: NewService(client, resolver, registry, NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})}
+	return &resolverFixture{client: client, actor: identity, catalog: catalog, app: NewService(client, resolver, registry, NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard())}
 }
 func (f *resolverFixture) catalogCommand(t *testing.T) creation.CreateWorkItemCommand {
 	t.Helper()

@@ -15,6 +15,7 @@ import (
 
 	"itsm-backend/authorization"
 	"itsm-backend/common"
+	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/database"
 	"itsm-backend/dto"
@@ -86,14 +87,15 @@ type Service struct {
 	audits      auditWriter
 	outbox      outboxWriter
 	metrics     *Metrics
+	execution   *database.ExecutionPolicy
 }
 
-func NewService(client *ent.Client, resolver referenceResolver, registry *CreatorRegistry, workItems workItemWriter, directory database.DirectorySnapshot) *Service {
+func NewService(client *ent.Client, resolver referenceResolver, registry *CreatorRegistry, workItems workItemWriter, directory database.DirectorySnapshot, execution *database.ExecutionPolicy) *Service {
 	return &Service{
 		client: client, directory: directory, resolver: resolver, receipts: NewIdempotencyRepository(), registry: registry, workItems: workItems,
 		fieldValues: itsmservice.NewFieldValueService(client), snapshots: NewSnapshotRepository(),
 		audits: NewAuditRepository(), outbox: itsmservice.NewOutboxEventRepository(client),
-		metrics: defaultMetrics,
+		metrics: defaultMetrics, execution: execution,
 	}
 }
 
@@ -109,7 +111,7 @@ func (s *Service) Create(ctx context.Context, identity workitemcreation.Identity
 			s.metrics.ObserveWorkflowStart(identity.Channel, result.RecordClass, "pending")
 		}
 	}()
-	if s == nil || s.client == nil || missingDependency(s.resolver) || missingDependency(s.receipts) || s.registry == nil || missingDependency(s.workItems) || missingDependency(s.fieldValues) || missingDependency(s.snapshots) || missingDependency(s.audits) || missingDependency(s.outbox) {
+	if s == nil || s.client == nil || s.execution == nil || missingDependency(s.resolver) || missingDependency(s.receipts) || s.registry == nil || missingDependency(s.workItems) || missingDependency(s.fieldValues) || missingDependency(s.snapshots) || missingDependency(s.audits) || missingDependency(s.outbox) {
 		return nil, workitemcreation.NewInternalFailure("intake service is not fully configured", nil)
 	}
 	if scope, ok := tenantctx.TenantID(ctx); tenantctx.IsSystemBypass(ctx) || (ok && scope != identity.TenantID) {
@@ -191,6 +193,9 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 		return nil, false, authErr
 	}
 	identity = authorized.Identity()
+	if err := s.execution.BindEnt(ctx, tx, identity.TenantID); err != nil {
+		return nil, false, executionScopeFailure("creation execution scope denied", err)
+	}
 
 	receipt, outcome, err := s.receipts.Claim(ctx, tx, identity, command.IdempotencyKey, digest, workitemcreation.CanonicalDigestVersion)
 	if err != nil {
@@ -213,6 +218,9 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 	}
 
 	for _, cmd := range relationCommands {
+		if err := s.execution.RequireEntMembers(ctx, tx, identity.TenantID, cmd.SourceID); err != nil {
+			return nil, false, executionScopeFailure("source relation execution scope denied", err)
+		}
 		if err := relations.PrepareSourceTx(ctx, tx, cmd, command.RecordClass); err != nil {
 			return nil, false, err
 		}
@@ -239,9 +247,17 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 		return nil, false, err
 	}
 	resolved = &plan.Resolved
+	if parentID := plan.WorkItem.ParentTicketID; parentID != nil {
+		if err := s.execution.RequireEntMembers(ctx, tx, identity.TenantID, *parentID); err != nil {
+			return nil, false, executionScopeFailure("parent execution scope denied", err)
+		}
+	}
 	workItem, err := s.workItems.CreateBase(ctx, tx, plan, authorized)
 	if err != nil {
 		return nil, false, err
+	}
+	if err := s.execution.RequireEntMembers(ctx, tx, identity.TenantID, workItem.ID); err != nil {
+		return nil, false, executionScopeFailure("new work item execution membership missing", err)
 	}
 	professional, err := creator.CreateExtension(ctx, tx, workItem, plan)
 	if err != nil {
@@ -663,4 +679,13 @@ func relationCreationError(err error) error {
 		}
 	}
 	return workitemcreation.NewInfrastructureUnavailable("could not apply intake operation", err)
+}
+
+// Deployment denial and infrastructure failure retain distinct transport and
+// retry semantics. Preserve the cause so serialization/deadlock retries survive.
+func executionScopeFailure(message string, err error) error {
+	if errors.Is(err, executionscope.ErrDenied) {
+		return workitemcreation.NewPermissionDenied(message, err)
+	}
+	return workitemcreation.NewInfrastructureUnavailable("could not verify creation execution scope", err)
 }

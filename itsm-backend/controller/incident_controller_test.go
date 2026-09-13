@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -123,7 +124,7 @@ func newConversionControllerFixture(t *testing.T, msp bool, allScope ...bool) *c
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(problemDomain.NewService(problemDomain.NewEntRepository(client), logger)))
 	resolver := intake.NewResolver(service_catalog.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
-	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(&conversionTestAllocator{}), sameTransactionDirectory{})
+	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(&conversionTestAllocator{}), sameTransactionDirectory{}, executionfixture.Standard())
 	controller := NewIncidentController(service.NewIncidentService(client, logger), nil, nil, nil, nil, logger)
 	controller.SetCreationApplication(app)
 	router := gin.New()

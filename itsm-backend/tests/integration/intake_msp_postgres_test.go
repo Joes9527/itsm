@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -190,7 +191,7 @@ func TestPostgresIntakeMSPSharedSnapshotAndDurableEffects(t *testing.T) {
 	resolver := intake.NewResolver(catalogdomain.NewService(nil, clients.Tenant, logger, nil), service.NewProcessBindingService(clients.Tenant), service.NewConfigurationItemService(clients.Tenant, logger, nil, nil), service.NewTicketCategoryService(clients.Tenant))
 	snapshots := &mutateDirectorySnapshot{directory: clients.IntakeDirectorySnapshot()}
 
-	app := intake.NewService(clients.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), snapshots)
+	app := intake.NewService(clients.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), snapshots, executionfixture.Standard())
 	identity := creation.Identity{TenantID: f.tenant.ID, ActorID: actor.ID, RequesterID: f.actor.ID, Role: "msp_tech", Channel: "http"}
 	command := creation.CreateWorkItemCommand{RecordClass: "incident", IntakeKind: "incident", Confirmation: "confirmed", Title: "Native MSP incident", IdempotencyKey: "msp"}
 	for _, stage := range []string{"export", "close", "serialize"} {
@@ -399,7 +400,7 @@ func TestPostgresIncidentConversionSignedMSPHTTPAuthorizationAndReplay(t *testin
 			registry := intake.NewCreatorRegistry()
 			require.NoError(t, registry.Register(problemdomain.NewService(problemdomain.NewEntRepository(clients.Tenant), logger)))
 			resolver := intake.NewResolver(catalogdomain.NewService(nil, clients.Tenant, logger, nil), service.NewProcessBindingService(clients.Tenant), service.NewConfigurationItemService(clients.Tenant, logger, nil, nil), service.NewTicketCategoryService(clients.Tenant))
-			app := intake.NewService(clients.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), clients.IntakeDirectorySnapshot())
+			app := intake.NewService(clients.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), clients.IntakeDirectorySnapshot(), executionfixture.Standard())
 			incidentController := controller.NewIncidentController(service.NewIncidentService(clients.Tenant, logger), nil, nil, nil, nil, logger)
 			incidentController.SetCreationApplication(app)
 			const jwtSecret = "isolated-conversion-http-signing-key"

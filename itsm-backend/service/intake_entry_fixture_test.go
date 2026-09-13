@@ -21,6 +21,7 @@ import (
 	"itsm-backend/repository/ticket"
 	"itsm-backend/repository/workitemnumber"
 	domain "itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http/httptest"
 	"testing"
 
@@ -113,7 +114,7 @@ func newEntryApplication(client *ent.Client, tickets *domain.TicketService, inci
 	}
 	logger := zap.NewNop().Sugar()
 	resolver := intake.NewResolver(service_catalog.NewService(nil, client, logger, nil), domain.NewProcessBindingService(client), domain.NewConfigurationItemService(client, logger, nil, nil), domain.NewTicketCategoryService(client))
-	return intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
+	return intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard())
 }
 func submitEntryFixture(ctx context.Context, h gin.HandlerFunc, tenantID int, actor *ent.User, body any) (*creation.CreateWorkItemResult, error) {
 	raw, err := json.Marshal(body)

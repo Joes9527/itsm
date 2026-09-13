@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -164,7 +165,7 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 		require.NoError(t, registry.Register(owner))
 	}
 	resolver := intake.NewResolver(scService, service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
-	creationApp := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(numberAllocator), sameTransactionDirectory{})
+	creationApp := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(numberAllocator), sameTransactionDirectory{}, executionfixture.Standard())
 	ticketController.SetCreationApplication(creationApp)
 	srHandler.SetCreationApplication(creationApp)
 

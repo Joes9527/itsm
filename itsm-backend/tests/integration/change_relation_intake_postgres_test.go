@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"itsm-backend/authorization"
 	"itsm-backend/ent"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -42,7 +43,7 @@ func changeRelationIntakeHTTP(t *testing.T, standard bool) (*relationFixture, *g
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(owner))
 	resolver := intake.NewResolver(catalogDomain.NewService(nil, f.runtime.Tenant, logger, nil), service.NewProcessBindingService(f.runtime.Tenant), service.NewConfigurationItemService(f.runtime.Tenant, logger, nil, nil), service.NewTicketCategoryService(f.runtime.Tenant))
-	app := intake.NewService(f.runtime.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), f.runtime.IntakeDirectorySnapshot())
+	app := intake.NewService(f.runtime.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), f.runtime.IntakeDirectorySnapshot(), executionfixture.Standard())
 	r := gin.New()
 	r.Use(func(c *gin.Context) {
 		c.Set("tenant_id", f.tenant.ID)

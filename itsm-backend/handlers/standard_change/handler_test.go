@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -66,7 +67,7 @@ func setupInstantiationRouter(t *testing.T, client *ent.Client, userID, tenantID
 		service.NewTicketCategoryService(client),
 	)
 	h := NewHandler(client, logger)
-	h.SetCreationApplication(intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}))
+	h.SetCreationApplication(intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard()))
 	return setupRouterForHandler(t, h, userID, tenantID)
 }
 

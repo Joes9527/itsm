@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -73,7 +74,7 @@ func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *e
 	scService.SetCreatorRegistry(registry)
 	scService.SetPublicationEngine(service.NewCustomProcessEngine(client, logger).(*service.CustomProcessEngine))
 	resolver := intake.NewResolver(scService, service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
-	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
+	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard())
 	srHandler.SetCreationApplication(app)
 
 	// handlers/service_catalog default Create leaves RequiresApproval at the

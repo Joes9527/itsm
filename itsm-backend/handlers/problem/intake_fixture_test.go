@@ -17,6 +17,7 @@ import (
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 )
 
 type Problem = problemDomain.Problem
@@ -46,7 +47,7 @@ func NewService(repo *EntRepository, logger *zap.SugaredLogger) *Service {
 		panic(err)
 	}
 	resolver := intake.NewResolver(service_catalog.NewService(nil, repo.client, logger, nil), service.NewProcessBindingService(repo.client), service.NewConfigurationItemService(repo.client, logger, nil, nil), service.NewTicketCategoryService(repo.client))
-	app := intake.NewService(repo.client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
+	app := intake.NewService(repo.client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard())
 	return &Service{owner, app, repo.client}
 }
 func NewHandler(owner *Service, client *ent.Client) *Handler {

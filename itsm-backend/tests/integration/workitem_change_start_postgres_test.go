@@ -21,6 +21,7 @@ import (
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"sync"
 	"testing"
 	"time"
@@ -60,7 +61,7 @@ func newSubmittedChangeIntake(t *testing.T, kind string) (*changeLifecycleFixtur
 	require.NoError(t, registry.Register(f.owner))
 	logger := zap.NewNop().Sugar()
 	resolver := intake.NewResolver(catalog.NewService(nil, f.runtime, logger, nil), service.NewProcessBindingService(f.runtime), service.NewConfigurationItemService(f.runtime, logger, nil, nil), service.NewTicketCategoryService(f.runtime))
-	app := intake.NewService(f.runtime, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), f.clients.IntakeDirectorySnapshot())
+	app := intake.NewService(f.runtime, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), f.clients.IntakeDirectorySnapshot(), executionfixture.Standard())
 	actor := creation.Identity{TenantID: f.tenant.ID, ActorTenantID: f.tenant.ID, ActorID: f.actor.ID, RequesterID: f.actor.ID, Channel: "itsm_web", Role: "super_admin"}
 	command := creation.CreateWorkItemCommand{RecordClass: "change_request", IntakeKind: "change_request", Confirmation: "confirmed", IdempotencyKey: "frozen-change", Title: "Frozen change", Change: &creation.ChangeInput{Type: kind, Justification: "controlled update", ImplementationPlan: "deploy", RollbackPlan: "restore", RiskLevel: "low", ImpactScope: "low"}}
 	created, err := app.Create(f.ctx, actor, command)

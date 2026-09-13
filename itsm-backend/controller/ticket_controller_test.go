@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	mathrand "math/rand"
 	"net/http"
 	"net/http/httptest"
@@ -66,7 +67,7 @@ func setupTestTicketController(t *testing.T) (*gin.Engine, *ent.Client, *TicketC
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(ticketService))
 	resolver := intake.NewResolver(service_catalog.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
-	ticketController.SetCreationApplication(intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}))
+	ticketController.SetCreationApplication(intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard()))
 
 	r := gin.New()
 	r.Use(gin.Recovery())

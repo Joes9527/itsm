@@ -2,6 +2,7 @@ package change
 
 import (
 	"context"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -35,7 +36,7 @@ func NewChangeIntakeApp(client *ent.Client, svc *Service, logger *zap.SugaredLog
 		service.NewConfigurationItemService(client, logger, nil, nil),
 		service.NewTicketCategoryService(client),
 	)
-	return intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{})
+	return intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), sameTransactionDirectory{}, executionfixture.Standard())
 }
 
 // ConfigureChangeIntakeFixture grants the given actor role current change/ticket
