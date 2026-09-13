@@ -10,6 +10,8 @@ import (
 	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/connector"
+	"itsm-backend/database"
+	"itsm-backend/ent"
 
 	"go.uber.org/zap"
 )
@@ -20,13 +22,15 @@ import (
 // 将事件信封 JSON 以 HTTP POST 推送（复用 connector 的 HMAC 签名与重试语义）。
 // 推送失败返回错误触发 Watermill Nack 重投。
 type WebhookEventSubscriber struct {
+	client  *ent.Client
+	policy  *database.ExecutionPolicy
 	manager *connector.Manager
 	logger  *zap.SugaredLogger
 }
 
 // NewWebhookEventSubscriber 创建 Webhook 事件推送订阅方
-func NewWebhookEventSubscriber(manager *connector.Manager, logger *zap.SugaredLogger) *WebhookEventSubscriber {
-	return &WebhookEventSubscriber{manager: manager, logger: logger}
+func NewWebhookEventSubscriber(manager *connector.Manager, logger *zap.SugaredLogger, client *ent.Client, policy *database.ExecutionPolicy) *WebhookEventSubscriber {
+	return &WebhookEventSubscriber{manager: manager, logger: logger, client: client, policy: policy}
 }
 
 // Handle implements shared.EventHandler。
@@ -35,11 +39,14 @@ func (s *WebhookEventSubscriber) Handle(event interface{}) error {
 }
 
 func (s *WebhookEventSubscriber) HandleContext(ctx context.Context, event interface{}) error {
-	if s == nil || s.manager == nil || ctx == nil {
+	if s == nil || s.manager == nil || s.policy == nil || ctx == nil {
 		return executionscope.ErrDenied
 	}
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+	if s.policy.IsCandidate() {
+		return s.consumeExecutionWebhook(ctx, event)
 	}
 	raw, ok := event.(map[string]interface{})
 	if !ok {

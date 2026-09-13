@@ -9,11 +9,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	webhookconnector "itsm-backend/connector/builtin/webhook"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -2021,6 +2025,156 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(e)::text FROM outbox_events e WHERE id=$1`, row.ID).Scan(&after))
 		require.JSONEq(t, before, after)
 		require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx), "source validation must not write audit")
+		t.Run("webhook consumption freezes durable target intents", func(t *testing.T) {
+			var sent atomic.Int32
+			endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { sent.Add(1); w.WriteHeader(http.StatusOK) }))
+			defer endpoint.Close()
+			registry := connector.NewRegistry()
+			registry.Register(func() connector.Connector { return webhookconnector.New() })
+			manager := connector.NewManager(registry, zap.NewNop().Sugar())
+			defer manager.CloseAll()
+			provision := func(provider string) {
+				require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: provider, Enabled: true, Settings: map[string]interface{}{"url": endpoint.URL}}))
+			}
+			provision("first")
+			provision("second")
+			subscriber := service.NewWebhookEventSubscriber(manager, zap.NewNop().Sugar(), runtime, policy)
+			outboxBefore, auditBefore := owner.OutboxEvent.Query().CountX(ctx), owner.AuditLog.Query().CountX(ctx)
+			require.Error(t, subscriber.HandleContext(ctx, map[string]interface{}{"eventType": "sla.breached", "tenantId": fmt.Sprint(tenant.ID)}))
+			empty := connector.NewManager(registry, zap.NewNop().Sugar())
+			require.Error(t, service.NewWebhookEventSubscriber(empty, zap.NewNop().Sugar(), runtime, policy).HandleContext(ctx, envelope))
+			injected := errors.New("webhook actual insert rollback")
+			faultStage := ""
+			writes := 0
+			defer func() { faultStage = "" }()
+			runtime.OutboxEvent.Use(func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
+					value, e := next.Mutate(c, m)
+					if e != nil {
+						return value, e
+					}
+					if typed, ok := m.(*ent.OutboxEventMutation); ok {
+						kind, _ := typed.EventType()
+						if faultStage == "outbox" && kind == service.WebhookDeliveryRequestedEventType {
+							writes++
+							return nil, injected
+						}
+					}
+					return value, nil
+				})
+			})
+			runtime.AuditLog.Use(func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
+					value, e := next.Mutate(c, m)
+					if e != nil {
+						return value, e
+					}
+					if typed, ok := m.(*ent.AuditLogMutation); ok {
+						op, _ := typed.OperationID()
+						if faultStage == "audit" && op == "webhook_consume:"+envelope.EventID {
+							writes++
+							return nil, injected
+						}
+					}
+					return value, nil
+				})
+			})
+			for _, stage := range []string{"outbox", "audit"} {
+				faultStage = stage
+				require.ErrorIs(t, subscriber.HandleContext(ctx, envelope), injected)
+				faultStage = ""
+				require.Equal(t, outboxBefore, owner.OutboxEvent.Query().CountX(ctx))
+				require.Equal(t, auditBefore, owner.AuditLog.Query().CountX(ctx))
+			}
+			require.Equal(t, 2, writes)
+			racing := true
+			arrived, release := make(chan struct{}, 2), make(chan struct{})
+			var releaseOnce sync.Once
+			defer releaseOnce.Do(func() { close(release) })
+			runtime.OutboxEvent.Use(func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
+					if typed, ok := m.(*ent.OutboxEventMutation); ok && racing {
+						kind, _ := typed.EventType()
+						if kind == service.WebhookDeliveryRequestedEventType {
+							arrived <- struct{}{}
+							select {
+							case <-release:
+							case <-c.Done():
+								return nil, c.Err()
+							}
+						}
+					}
+					return next.Mutate(c, m)
+				})
+			})
+			results := make(chan error, 2)
+			for i := 0; i < 2; i++ {
+				go func() { results <- subscriber.HandleContext(ctx, envelope) }()
+			}
+			for i := 0; i < 2; i++ {
+				select {
+				case <-arrived:
+				case <-time.After(5 * time.Second):
+					t.Fatal("concurrent webhook transactions did not reach the insert")
+				}
+			}
+			releaseOnce.Do(func() { close(release) })
+			errs := []error{<-results, <-results}
+			racing = false
+			succeeded, conflicts := 0, 0
+			for _, e := range errs {
+				if e == nil {
+					succeeded++
+					continue
+				}
+				var pg *pq.Error
+				require.ErrorAs(t, e, &pg)
+				require.Equal(t, pq.ErrorCode("23505"), pg.Code)
+				conflicts++
+			}
+			require.Equal(t, 1, succeeded)
+			require.Equal(t, 1, conflicts)
+			require.NoError(t, subscriber.HandleContext(ctx, envelope))
+			require.Zero(t, sent.Load(), "Redis consumer must commit intent without sending")
+			require.Equal(t, outboxBefore+2, owner.OutboxEvent.Query().CountX(ctx))
+			require.Equal(t, auditBefore+1, owner.AuditLog.Query().CountX(ctx))
+			var intentsBefore string
+			require.NoError(t, ownerDB.QueryRow(`SELECT coalesce(json_agg(e ORDER BY id),'[]')::text FROM outbox_events e WHERE event_type='webhook.event.delivery.requested'`).Scan(&intentsBefore))
+			provision("third")
+			require.NoError(t, subscriber.HandleContext(ctx, envelope))
+			require.Equal(t, outboxBefore+2, owner.OutboxEvent.Query().CountX(ctx), "replay cannot discover new targets")
+			require.Equal(t, auditBefore+1, owner.AuditLog.Query().CountX(ctx))
+			var intentsAfter string
+			require.NoError(t, ownerDB.QueryRow(`SELECT coalesce(json_agg(e ORDER BY id),'[]')::text FROM outbox_events e WHERE event_type='webhook.event.delivery.requested'`).Scan(&intentsAfter))
+			require.JSONEq(t, intentsBefore, intentsAfter)
+			var receiptBefore, receiptAfter string
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(a)::text FROM audit_logs a WHERE operation_id=$1 AND tenant_id=$2`, "webhook_consume:"+envelope.EventID, tenant.ID).Scan(&receiptBefore))
+			defer func() {
+				_, e := ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+				require.NoError(t, e)
+			}()
+			_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='closed' WHERE id=$1", scopeID)
+			require.NoError(t, err)
+			require.Error(t, subscriber.HandleContext(ctx, envelope))
+			_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+			require.NoError(t, err)
+			persisted := owner.OutboxEvent.Query().Where(outboxevent.EventTypeEQ(service.WebhookDeliveryRequestedEventType)).FirstX(ctx)
+			defer func() {
+				_, e := owner.OutboxEvent.UpdateOneID(persisted.ID).SetPayload(persisted.Payload).Save(ctx)
+				require.NoError(t, e)
+			}()
+			owner.OutboxEvent.UpdateOneID(persisted.ID).SetPayload(json.RawMessage(`{}`)).SaveX(ctx)
+			require.Error(t, subscriber.HandleContext(ctx, envelope))
+			owner.OutboxEvent.UpdateOneID(persisted.ID).SetPayload(persisted.Payload).SaveX(ctx)
+			_, err = ownerDB.ExecContext(ctx, `UPDATE outbox_events SET payload=jsonb_set(payload,'{unexpected}', 'true'::jsonb) WHERE id=$1`, persisted.ID)
+			require.NoError(t, err)
+			require.Error(t, subscriber.HandleContext(ctx, envelope), "unknown persisted fields must not be ignored in digest verification")
+			owner.OutboxEvent.UpdateOneID(persisted.ID).SetPayload(persisted.Payload).SaveX(ctx)
+			require.NoError(t, subscriber.HandleContext(ctx, envelope))
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(a)::text FROM audit_logs a WHERE operation_id=$1 AND tenant_id=$2`, "webhook_consume:"+envelope.EventID, tenant.ID).Scan(&receiptAfter))
+			require.JSONEq(t, receiptBefore, receiptAfter)
+			require.Zero(t, sent.Load())
+		})
 		t.Run("stream consumer recovers committed audit before ack", func(t *testing.T) {
 			streamCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 			defer cancel()

@@ -867,3 +867,15 @@ S5 仍未完成：Webhook candidate typed envelope 与其写入所有者、无�
 当前仍是同步多目标发送：前目标成功后其它失败会导致Redis重投重复前目标。实例查找释放锁后仍可能与撤销/同key配置重绑竞争，不能把精确key当成配置版本或撤权栅栏。下一候选接入须在typed来源/成员核验原事务中，按source eventID与冻结目标建立既有outbox意图及消费回执；持久化目标/配置摘要与载荷摘要，worker重新核验当前目标一致、claim/attempt/范围，未知投递结果进入delivery_unknown，重放不重新枚举增添目标。本轮不把同步发送包装成候选幂等：typed Envelope仍拒绝，候选不放行。
 
 未修改数据库schema、执行共享操作或使用企业目标；候选SHA不变、候选未启动，无推送/main合并。S5、完整B2/B3及T3/T4/G2/G3仍未完成。
+
+### B2 S5 Webhook 候选消费与逐目标持久意图（2026-09-13）
+
+在 `1d391a42b` 后接入原消费所有者。NewWebhookEventSubscriber 显式注入client与冻结ExecutionPolicy，bootstrap/单元调用同步迁移；candidate拒绝原始map，完整typed Envelope在同一RR事务校验active scope、runtime binding、成员和持久来源。逐个明确Webhook目标建立既有outbox意图（`webhook.event.delivery.requested`），与唯一 `webhook_consume:<eventID>` Audit回执原子提交。消费不外呼，回执202/enqueued仅表示入队；原始来源保留于Audit字符串。目标记录provider及URL摘要，不复制URL或凭据、不声称完整配置版本。standard保留精确实例同步路径。
+
+真实PG `s5-webhook-intent-red.log` 先复现typed入口拒绝；首次实现可入队但JSONB重排导致重复消费摘要冲突，`s5-webhook-intent-green.log`为该真实失败，不是通过证据。摘要改为UseNumber的JSON键规范化，来源准入仍使用原字节契约。独立审阅指出结构体摘要会忽略未知字段，`s5-webhook-intent-extra-field-red.log` 通过实际jsonb_set unexpected字段复现原返回nil；修复为完整持久row.Payload参与摘要，并核对eventID/type/aggregate/WorkItem及来源摘要。
+
+原事务验证：Outbox实际INSERT后故障与Audit实际INSERT后故障均整笔回滚；两个消费者在首次INSERT前会合，确定性一次成功/一次PQ23505，败方原env重试复用两条意图和单回执。增加第三目标不扩展既有消费目标集合，重放不重新枚举配置；无目标、raw map、closed scope和篡改意图拒绝，恢复后可重放且原审计完整行不变，测试端点接收计数始终0。scope/payload故障探针增加即时defer恢复。`s5-webhook-intent-canonical-green.log`、`s5-webhook-intent-atomic.log`通过；完整私有候选intake、Redis离线/历史保全及应用PG/Redis/MinIO构造保全的 `s5-webhook-intent-final-race.log` PASS，无skip或race。独立review_execution_scope_s1复核完整摘要修复及事务测试，无本检查点新增生产阻断。完整受影响包 `s5-webhook-intent-regression.log`、清理补强复测 `s5-webhook-intent-cleanup-pg.log` 及全后端构建 `s5-webhook-intent-build.log` exit0；git diff --check通过。
+
+Worker尚未实现或注册，新type仍由既有未知分发机制明确阻断；不能启动候选或把入队当履约。下一步worker必须验证消费回执身份/来源摘要/意图成员，再用Audit字符串中的原始来源重验（不能直接将JSONB重排的Source喂入字节校验）；目标摘要校验须绑定实际发送实例，不能检查后再按可重绑key查找；claim/attempt/范围及调用后的结果回执、delivery_unknown沿用既有outbox协议。Redis与Webhook消费ACK间隙的联合恢复、配置重绑/并发撤权及实际投递端到端仍待完成。普通模式同步路径也是待迁移项：S5最终需统一持久来源及投递所有者、移除旧同步发送，不把两种模式各自一套长期路径视为完成。
+
+没有新增schema/迁移、共享数据操作或企业外呼。CandidateSHA仍为d7470a32dbb87acc9b5e4d9a895a146410723561，候选未启动、无push/main合并；S5及完整B2/B3/T3/T4/G2/G3均未完成。

@@ -18,9 +18,13 @@
 
 候选 Stream 消费者必须通过 `EventConsumerID()` 声明稳定逻辑所有者；登记时固定身份，同一 owner/topic 重复登记拒绝。审计使用 `event_audit`，Webhook 使用 `webhook`，分别持有 `itsm:<owner>` 消费组；副本共享组但由传输库生成不同消费者实例名。组只在显式 Start/Subscribe 时建立，首次从 `0` 读取该候选 namespace 内的离线消息，已有组保留进度；不得用重建组、SETID、删除历史或订阅旧裸 topic 恢复消费。Close 先取消订阅并等待订阅建立结束，再关闭每个拥有的 subscriber 并等待处理退出。候选多租户订阅在部分建立后失败时停止整个事件运行实例，保留组及进度，不留下部分租户继续处理；恢复需重新构造并显式启动。
 
-`redis.event_stream.claim_idle`、`claim_interval`、`nack_delay` 使用时长格式（如 `60s`、`5s`、`1s`）；负数拒绝，零或未配置分别使用当前传输库的60秒、5秒及应用的1秒默认值。配置由构造器复制，候选消费者使用这些值；standard 保留原 fanout 消费语义。领取超时不是排他锁：慢处理可能被其他实例重领，写入所有者必须重验授权并提供持久幂等回执。当前审计已具备该回执，语义是至少一次投递加审计幂等，不是传输恰好一次。Webhook 的候选 typed envelope 接入、不可处理事件的持久阻断及其它异步入口仍未完成，不能据此启动候选。
+`redis.event_stream.claim_idle`、`claim_interval`、`nack_delay` 使用时长格式（如 `60s`、`5s`、`1s`）；负数拒绝，零或未配置分别使用当前传输库的60秒、5秒及应用的1秒默认值。配置由构造器复制，候选消费者使用这些值；standard 保留原 fanout 消费语义。领取超时不是排他锁：慢处理可能被其他实例重领，写入所有者必须重验授权并提供持久幂等回执。当前审计已具备该回执，语义是至少一次投递加审计幂等，不是传输恰好一次。Webhook 的候选 typed envelope 已接入下述消费事务，但实际投递 Worker、不可处理事件的持久阻断及其它异步入口仍未完成，不能据此启动候选。
 
 Webhook 事件订阅只接受 `WebhookEventTopics()` 注册的类型；未配置目标返回错误，不再静默成功。同步发送按既有 tenant/name/provider 实例身份精确投递，缺失或已撤销目标不回退到同名其它实例；传输 context 的取消和租户限制传入发送超时。此查找只验证调用时的实例表，不构成并发撤销/同 key 配置变更栅栏。多目标部分成功后重投仍可能重复成功目标；候选持久投递尚须逐目标 outbox 意图、冻结目标及回执，不得因本修复宣称外部幂等或启用候选 Webhook。
+
+候选 Webhook subscriber 必须注入数据库 client 与冻结 ExecutionPolicy，拒绝原始 map；完整 typed Envelope 的 active scope、角色绑定、成员及持久来源在同一 RR 事务核验，按当前明确目标建立 `webhook.event.delivery.requested` outbox 意图与唯一 `webhook_consume:<sourceEventID>` 审计回执。回执状态 `enqueued` / 202 仅表示意图已提交，不表示外部投递成功。重放再次校验来源，核对原回执及完整持久意图摘要，复用原目标集合；配置新增实例不扩大旧事件的投递范围。摘要使用保留数字精度的JSON对象键规范化，容纳JSONB重排但不忽略未知字段。目标只保存provider和URL摘要，不保存URL/凭据；该摘要不等于完整配置版本。原始来源保存在审计字符串中，未来Worker不能将JSONB重排后的Source直接当成已通过原字节契约的来源。
+
+本检查点只实现候选消费/入队事务，未注册该新类型的投递handler；共享Worker对未知类型仍按既有机制明确阻断。Worker接入及真实发送/回执/重启验证完成前，候选保持不启动；不得将入队成功列为Webhook履约通过。standard目前仍走上述同步精确实例发送，尚不能声称多目标重试幂等；最终S5需把普通与候选事件接入同一持久投递所有者，删除被替换的同步路径，不能长期保留两套发送模型。
 
 离线与 ACK 间隙恢复测试分别为 `TestCandidateStreamDeliversOfflineMessages` 和 `TestCandidateIntakeCreationBoundary/stream_source_requires_current_persistent_authority/stream_consumer_recovers_committed_audit_before_ack`，后者同时需要下述私有 PostgreSQL socket 和 Redis 二进制变量。它验证真实审计提交后停止 ACK、关闭旧 bus、新 bus 领取原 pending 消息，原审计不变且旧 Stream 保全；不替代整个应用/操作系统重启或完整 outbox Worker 投递验证。
 

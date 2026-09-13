@@ -336,7 +336,7 @@ func NewApplication() *Application {
 	connectorController := controller.NewConnectorController(connectorManager, connector.Default(), connectorMarket, sugar, client, systemClient)
 
 	// Webhook 事件推送订阅方：sla.breached 按租户推送到已配置的 webhook 端点
-	webhookSubscriber := service.NewWebhookEventSubscriber(connectorManager, sugar)
+	webhookSubscriber := service.NewWebhookEventSubscriber(connectorManager, sugar, client, executionPolicy)
 	for _, topic := range service.WebhookEventTopics() {
 		if !cfg.Execution.Enabled("webhook") {
 			continue

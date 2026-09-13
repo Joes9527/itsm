@@ -14,6 +14,7 @@ import (
 
 	"itsm-backend/connector"
 	_ "itsm-backend/connector/builtin/webhook" // 触发 webhook 连接器 init 注册
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,7 +46,7 @@ func TestWebhookEventSubscriber_PushesToConfiguredWebhook(t *testing.T) {
 	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar())
 	provisionTestWebhook(t, manager, 7, server.URL)
 
-	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar())
+	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
 
 	event := map[string]interface{}{
 		"eventType":  "sla.breached",
@@ -65,7 +66,7 @@ func TestWebhookEventSubscriber_PushesToConfiguredWebhook(t *testing.T) {
 
 func TestWebhookEventSubscriber_RejectsTenantWithoutWebhook(t *testing.T) {
 	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar())
-	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar())
+	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
 
 	// Required dispatch without a target must not be acknowledged as success.
 	event := map[string]interface{}{
@@ -77,7 +78,7 @@ func TestWebhookEventSubscriber_RejectsTenantWithoutWebhook(t *testing.T) {
 
 func TestWebhookEventSubscriber_RejectsMissingTenant(t *testing.T) {
 	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar())
-	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar())
+	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
 
 	err := sub.Handle(map[string]interface{}{"eventType": "sla.breached"})
 	require.Error(t, err)
@@ -94,7 +95,7 @@ func TestWebhookEventSubscriber_RejectsUnknownEventBeforeSend(t *testing.T) {
 	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar())
 	defer manager.CloseAll()
 	provisionTestWebhook(t, manager, 7, server.URL)
-	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar())
+	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
 	require.Error(t, sub.Handle(map[string]interface{}{"eventType": "unknown.action", "tenantId": "7"}))
 	require.Zero(t, count.Load())
 }
@@ -108,7 +109,7 @@ func TestWebhookEventSubscriber_SendsToEachDeclaredInstance(t *testing.T) {
 		defer server.Close()
 		require.NoError(t, manager.Provision(t.Context(), connector.Config{Name: "webhook", Provider: fmt.Sprint(i), TenantID: 7, Enabled: true, Settings: map[string]interface{}{"url": server.URL}}))
 	}
-	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar())
+	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
 	for attempt := int32(1); attempt <= 10; attempt++ {
 		require.NoError(t, sub.Handle(map[string]interface{}{"eventType": "sla.breached", "tenantId": "7"}))
 		for i := range counts {
@@ -124,7 +125,7 @@ func TestWebhookEventSubscriber_UsesDeliveryContext(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { count.Add(1); w.WriteHeader(http.StatusOK) }))
 	defer server.Close()
 	provisionTestWebhook(t, manager, 7, server.URL)
-	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar())
+	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
 	handler, ok := interface{}(sub).(eventbus.ContextEventHandler)
 	require.True(t, ok, "subscriber must accept transport cancellation and tenant context")
 	event := map[string]interface{}{"eventType": "sla.breached", "tenantId": "7"}
