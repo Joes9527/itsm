@@ -460,6 +460,9 @@ func (s *TicketService) UpdateTicket(ctx context.Context, cmd dto.TicketEditComm
 	if err != nil {
 		return empty, err
 	}
+	if err := requireToolEditAuthority(ctx, tx, s.execution, cmd); err != nil {
+		return empty, err
+	}
 	if result, replayed, err := workitemmutation.Replay(ctx, client, m, id, digest); err != nil || replayed {
 		return result, err
 	}

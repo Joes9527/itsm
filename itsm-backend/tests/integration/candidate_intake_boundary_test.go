@@ -5003,6 +5003,92 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			require.Equal(t, 1, owner.OutboxEvent.Query().Where(outboxevent.EventTypeEQ(handler.EventType()), outboxevent.ExecutionWorkItemIDEQ(target.WorkItemID)).CountX(ctx))
 		}
 	})
+	t.Run("tool edit requires approved source in business transaction", func(t *testing.T) {
+		var installed bool
+		require.NoError(t, ownerDB.QueryRow(`SELECT to_regclass('public.execution_tool_invocations') IS NOT NULL`).Scan(&installed))
+		if !installed {
+			_, err := ownerDB.ExecContext(ctx, migration.GetMigrationSQL(migration.ToolInvocationExecutionScopeVersion))
+			require.NoError(t, err)
+		}
+		_, err := ownerDB.ExecContext(ctx, "GRANT SELECT ON execution_tool_invocations TO "+runtimeRole)
+		require.NoError(t, err)
+		ensureToolAuthorityLock()
+		created, err := app.Create(ctx, identity, command("tool-edit-source", "generic"))
+		require.NoError(t, err)
+		item := owner.Ticket.GetX(ctx, created.WorkItemID)
+		svc := service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy})
+		cmd := dto.TicketEditCommand{WorkItemID: item.ID, Fields: dto.TicketEditFields{AssigneeID: actor.ID}, Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: item.Version, OperationID: "tool:update_ticket:999999", Source: "ai_tool"}}
+		var before, after string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, item.ID).Scan(&before))
+		_, err = svc.UpdateTicket(ctx, cmd)
+		assert.ErrorIs(t, err, executionscope.ErrDenied, "unknown invocation must not authorize tool edit")
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, item.ID).Scan(&after))
+		assert.JSONEq(t, before, after)
+		tx, err := runtime.Tx(ctx)
+		require.NoError(t, err)
+		require.NoError(t, policy.BindEnt(ctx, tx, tenant.ID))
+		call, err := tx.ToolInvocation.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetToolName("update_ticket").SetArguments(fmt.Sprintf(`{"ticket_id":%d,"expectedVersion":%d,"assignee_id":%d}`, item.ID, item.Version, actor.ID)).SetNeedsApproval(true).SetApprovalState("approved").SetApprovedBy(actor.ID).SetApprovedAt(time.Now()).SetStatus("pending").Save(ctx)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit())
+		cmd.Meta.OperationID = fmt.Sprintf("tool:update_ticket:%d", call.ID)
+		for _, field := range []string{"title", "version", "source", "operation", "pending"} {
+			t.Run("reject "+field, func(t *testing.T) {
+				changed := cmd
+				switch field {
+				case "title":
+					changed.Fields.Title = "Not approved"
+				case "version":
+					changed.Meta.ExpectedVersion++
+				case "source":
+					changed.Meta.Source = "http"
+				case "operation":
+					changed.Meta.OperationID += "0"
+				case "pending":
+					owner.ToolInvocation.UpdateOneID(call.ID).SetApprovalState("pending").ExecX(ctx)
+					defer owner.ToolInvocation.UpdateOneID(call.ID).SetApprovalState("approved").ExecX(ctx)
+				}
+				_, err := svc.UpdateTicket(ctx, changed)
+				require.Error(t, err)
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, item.ID).Scan(&after))
+				require.JSONEq(t, before, after)
+			})
+		}
+		queue := service.NewToolQueue(runtime, nil, app, svc, 1, zap.NewNop().Sugar(), policy)
+		defer queue.Close()
+		var armed atomic.Bool
+		armed.Store(true)
+		injected := errors.New("private tool edit post-update failure")
+		runtime.Ticket.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
+				value, err := next.Mutate(c, m)
+				if err == nil && m.Op().Is(ent.OpUpdate|ent.OpUpdateOne) && armed.CompareAndSwap(true, false) {
+					return nil, injected
+				}
+				return value, err
+			})
+		})
+		audits := owner.AuditLog.Query().CountX(ctx)
+		err = queue.ProcessJob(ctx, service.ToolJob{InvocationID: call.ID, TenantID: tenant.ID})
+		require.ErrorIs(t, err, injected)
+		require.False(t, armed.Load())
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, item.ID).Scan(&after))
+		require.JSONEq(t, before, after)
+		require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx), "failed edit must not commit its receipt")
+		require.NoError(t, queue.ProcessJob(ctx, service.ToolJob{InvocationID: call.ID, TenantID: tenant.ID}))
+		require.Equal(t, item.Version+1, owner.Ticket.GetX(ctx, item.ID).Version)
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, item.ID).Scan(&after))
+		_, err = svc.UpdateTicket(ctx, cmd)
+		require.NoError(t, err, "legitimate business receipt replay remains available")
+		var replayed string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, item.ID).Scan(&replayed))
+		require.JSONEq(t, after, replayed)
+		owner.ToolInvocation.UpdateOneID(call.ID).SetApprovalState("rejected").ExecX(ctx)
+		_, err = svc.UpdateTicket(ctx, cmd)
+		require.ErrorIs(t, err, creation.ErrPermissionDenied, "revoked approval must block receipt replay")
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, item.ID).Scan(&replayed))
+		require.JSONEq(t, after, replayed)
+
+	})
 	t.Run("ticket edit receipt and Feishu intent commit together", func(t *testing.T) {
 		for _, fault := range []string{"audit", "outbox"} {
 			t.Run(fault, func(t *testing.T) {

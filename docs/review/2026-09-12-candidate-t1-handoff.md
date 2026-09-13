@@ -1105,3 +1105,15 @@ s5-tool-intake-source-red.log真实PG复现：直接app.Create使用历史approv
 范围仅工具创建路径。工具编辑原事务、审批/身份并发改变、binding撤销专项及成功/失败结果竞争尚待验证；不声称完整业务授权链已完成。目标PG17/T3交接及真实T4/G3未通过，CandidateSHA与未启动状态不变，无共享环境变更、企业外呼、push/main合并。
 
 最终s5-tool-intake-source-verified-private.log完整私有PG16/Redis/MinIO候选ScopeRegistration、Intake、构造保全及Stream/Webhook/审计恢复race PASS，无skip/race；s5-tool-intake-source-build.log全后端build exit0，git diff --check通过。
+
+### B2 S5 工具编辑原事务来源核验（2026-09-13）
+
+s5-tool-edit-source-red.log真实PG复现不存在的999999调用ID仍可经TicketService.UpdateTicket修改工单、版本从1变2。现工具编辑在业务回执Replay之前调用requireToolEditAuthority，原事务复用当前审批/来源/042授权锁；要求ai_tool与tool:update_ticket操作命名空间一致、规范正整数ID、update_ticket类型与原actor匹配，并用已有toolEditCommand从批准参数重建完整命令。workitemmutation.Digest覆盖整个DTO（目标、ExpectedParentID、版本、Fields和Meta含OperationID），不使用创建命令那个排除IdempotencyKey的摘要。非工具入口维持原行为。
+
+s5-tool-edit-source-green.log定向race RED→GREEN；真实负向覆盖无调用、额外title、改version/source/operation及pending拒绝且原工单整行不变。合法queue执行版本仅+1，直接业务回执重放保留整行，随后fixture owner改rejected，直接重放必须重新核验并拒绝。追加实际Ticket UPDATE后故障，工单整行回滚且没有提交审计回执，保留底层cause，重试只执行一次业务修改。目标/actor/parent独立变造专项未逐一运行，不扩大上述测试结论。
+
+s5-tool-edit-source-full-private.log完整私有PG16/Redis/MinIO候选ScopeRegistration、Intake、构造保全及Stream/Webhook/审计恢复race PASS，无skip/race。s5-tool-edit-source-regression.log具名工具、CreateTicketTool及普通TicketService_UpdateTicket相关race PASS，无skip/race，非整个service包。独立review_execution_scope_s1限定增量复核无阻断。
+
+剩余审批/身份并发变化、binding撤销专项及结果竞争需继续验证；创建/编辑原事务接入不等于完整并发授权链验收。目标PG17/T3和真实T4/G3仍未通过，CandidateSHA与未启动状态不变，无共享环境操作、企业外呼或push/main合并。
+
+最终s5-tool-edit-source-build.log全后端build exit0，git diff --check通过；独立最终审阅确认UPDATE后故障与重试断言有效，不把它说成审计INSERT后的故障。
