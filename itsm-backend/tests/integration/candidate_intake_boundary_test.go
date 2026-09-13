@@ -3010,6 +3010,69 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		}
 	})
 
+	t.Run("ticket edit retries preserve immutable operation result", func(t *testing.T) {
+		svc := service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy})
+		fresh, err := app.Create(ctx, identity, command("edit-receipt-fixture", "generic"))
+		require.NoError(t, err)
+		before := owner.Ticket.GetX(ctx, fresh.WorkItemID)
+		// Exercise the existing wire DTO. The missing operationId contract is part
+		// of this RED; a later typed command must preserve this same client intent.
+		var request dto.UpdateTicketRequest
+		require.NoError(t, json.Unmarshal([]byte(fmt.Sprintf(`{"title":"first receipt edit","tags":["edit-receipt-tag"],"version":%d,"operationId":"edit-receipt-original"}`, before.Version)), &request))
+		request.UserID = actor.ID
+		first, err := svc.UpdateTicket(ctx, before.ID, &request, tenant.ID)
+		require.NoError(t, err)
+		require.Equal(t, before.Version+1, first.Version)
+		var receipts int
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM audit_logs WHERE tenant_id=$1 AND user_id=$2 AND operation_id=$3`, tenant.ID, actor.ID, "edit-receipt-original").Scan(&receipts))
+		assert.Equal(t, 1, receipts, "first edit must persist its immutable operation receipt")
+		for _, phase := range []string{"immediate", "after later edit"} {
+			if phase == "after later edit" {
+				var later dto.UpdateTicketRequest
+				require.NoError(t, json.Unmarshal([]byte(fmt.Sprintf(`{"title":"later independent edit","version":%d,"operationId":"edit-receipt-later"}`, first.Version)), &later))
+				later.UserID = actor.ID
+				_, err := svc.UpdateTicket(ctx, before.ID, &later, tenant.ID)
+				require.NoError(t, err)
+			}
+			var original, after string
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, before.ID).Scan(&original))
+			tags := owner.TicketTag.Query().CountX(ctx)
+			links := owner.Ticket.GetX(ctx, before.ID).QueryTags().IDsX(ctx)
+			audits := owner.AuditLog.Query().CountX(ctx)
+			replayed, retryErr := svc.UpdateTicket(ctx, before.ID, &request, tenant.ID)
+			assert.NoError(t, retryErr, phase+": same operation and original expectedVersion must replay")
+			if retryErr == nil {
+				require.NotNil(t, replayed)
+				assert.Equal(t, first.Version, replayed.Version, phase+": replay returns original result version")
+				assert.Equal(t, first.Status, replayed.Status)
+			}
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, before.ID).Scan(&after))
+			assert.JSONEq(t, original, after, phase)
+			assert.Equal(t, tags, owner.TicketTag.Query().CountX(ctx), phase)
+			assert.ElementsMatch(t, links, owner.Ticket.GetX(ctx, before.ID).QueryTags().IDsX(ctx), phase)
+			assert.Equal(t, audits, owner.AuditLog.Query().CountX(ctx), phase)
+		}
+		// A caller cannot recycle a successful operationId with a new payload and
+		// current version to turn a retry into a different write.
+		current := owner.Ticket.GetX(ctx, before.ID)
+		var changed dto.UpdateTicketRequest
+		require.NoError(t, json.Unmarshal([]byte(fmt.Sprintf(`{"title":"operation identity collision","version":%d,"tags":["receipt-collision-tag"],"operationId":"edit-receipt-original"}`, current.Version)), &changed))
+		changed.UserID = actor.ID
+		var original, after string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, before.ID).Scan(&original))
+		tags := owner.TicketTag.Query().CountX(ctx)
+		links := owner.Ticket.GetX(ctx, before.ID).QueryTags().IDsX(ctx)
+		audits := owner.AuditLog.Query().CountX(ctx)
+		_, conflictErr := svc.UpdateTicket(ctx, before.ID, &changed, tenant.ID)
+		var conflict *workitemmutation.OperationConflictError
+		assert.ErrorAs(t, conflictErr, &conflict)
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, before.ID).Scan(&after))
+		assert.JSONEq(t, original, after)
+		assert.Equal(t, tags, owner.TicketTag.Query().CountX(ctx))
+		assert.ElementsMatch(t, links, owner.Ticket.GetX(ctx, before.ID).QueryTags().IDsX(ctx))
+		assert.Equal(t, audits, owner.AuditLog.Query().CountX(ctx))
+	})
+
 	t.Run("manual escalation persists Feishu update intent", func(t *testing.T) {
 		receiver := &candidateFeishuUpdater{destination: "local-test-destination"}
 		registry := connector.NewRegistry()

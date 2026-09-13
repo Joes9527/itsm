@@ -749,3 +749,13 @@ Callback contract新增version及generic typed lifecycle result，沿既有流�
 `s3-ticket-edit-parent-http.log` controller 测试 PASS：错误/非正路由父 ID 拒绝且子整行/标签保全；JSON expectedParentId 不能覆盖路由，正确 PATCH 成功且版本只加一。沿用停用 actor 的 PUT/PATCH 测试也通过。`s3-ticket-edit-parent-regression.log` 服务/控制器/仓储定向回归 PASS，`s3-ticket-edit-parent-build.log` 全后端构建 exit0。独立 review_execution_scope_s1 限定审阅无新增阻断；未删除/同租户父记录的独立负测、非法子 ID 专项及并发父删除未覆盖，未声称生产认证全链或 WSL PG17 验收。git diff --check 通过。
 
 完整命令仍待 Meta/source、必需 expectedVersion、稳定 operationId、当前授权后历史 receipt 只读重放及 Feishu 同事务意图；当前成员检查在 receipt 前的顺序须随回执接入调整。字段归属及专业核心编辑缺口仍按前述处理。S3/S4/S5/S6/B3/T3/T4/G2/G3 未完成，固定 CandidateSHA 不变、候选未启动；无 WSL/共享数据库变更、企业实发、共享迁移、推送或 main 合并。
+
+### B2 S3 编辑回执与重复提交真实 RED（2026-09-13）
+
+在 `157e2ea30` 后建立 `ticket edit retries preserve immutable operation result` 私有 PG 测试。通过当前 DTO 解析带固定 operationId/version 的请求，测试边界提供真实 UserID，调用原服务。当前 DTO 不接受 operationId，正是待迁移的契约缺失，不是通过测试伪造可信 Meta。首次标题/标签编辑成功为正向控制；期待同事务一条操作回执，原请求立即重试及另一独立编辑后重试均返回首次版本/状态且保全 Ticket 整行、标签目录/关联、审计数量。另用原 operationId 携带新 payload 和当前 version，要求 OperationConflict 且不写入。
+
+最终 `s3-ticket-edit-receipt-red.log` 是预期业务失败：首次 receipt 数为0，两次重试分别发生客户端1/服务端2或3的版本冲突，复用原操作ID的新内容却成功修改标题/版本并新增、替换标签。无编译错误或 skip。这个新增测试尚未 GREEN，因此当前候选测试集不能沿用上一检查点的全绿结论；本次没有更改生产代码，也没有重跑完整候选测试或构建。独立 review_execution_scope_s1 确认 RED 有效，建议的标签关联与冲突分支审计保全断言已补入并复跑。
+
+后续同一 UpdateTicket 接口整体迁移 typed command/可信 Meta/immutable Result，不添加兼容双入口。保留原请求 version/operationId/payload，不以重新读取当前 Ticket 冒充回执。digest 包括 edit action/目标/预期父/version/规范化业务输入（保留 tags nil 与 empty 区别），现行权限在 Replay 前，首次写入才校验 scope/member/父关系/终态/版本/目录并执行原子写入。普通HTTP的 GetTicket+CanEdit预检须移除，避免终态挡住合法重放；两入口返回 Result 并将 OperationConflict 映射409。tool_queue使用已批准版本和invocation派生操作ID，registry补明确schema，done失败复用回执。
+
+三个前端transport及TicketDetail普通/AI、批量操作、useTickets/useTicketsQuery须同时迁移；不能把Result合并成Ticket或写入详情缓存，成功后重新读取，结果不确定时保留同意图payload/version/op。飞书沿用现有update event_type/aggregate及严格receipt来源检查，原提交后直接同步在完整接入时删除。详细顺序已同步设计worktree执行计划。当前RED后续编辑只改标题，因此独立证明原版本回放而非状态漂移；typed Result接入后补 WorkItemID/Replayed、receipt action/digest/version/status、终态及状态漂移、审计/outbox写后回滚、并发、工具done恢复和真实前端契约测试。完整S3及后续门禁未完成，固定CandidateSHA与候选停止状态不变；无WSL/共享数据变更、企业调用、推送或main合并。
