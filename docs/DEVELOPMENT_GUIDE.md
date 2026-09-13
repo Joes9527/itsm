@@ -399,3 +399,5 @@ Webhook 新意图生产者与投递 Worker 通过唯一 Manager.ResolveDeliveryT
 Graph 的 DescribeDeliveryDestination 只解析发送身份（AAD tenant、公开 app ID、mailbox、有效 AAD/Graph 端点），不读取 client secret、不初始化或取令牌；Init 共用解析结果并捕获摘要。客户端拒绝 HTTP 重定向及非 2xx 成功判定。此能力尚未接入可信配置读取、持久邮件目标或候选 local_only 准入；不代表凭据有效、远程授权成立或 nextLink/绝对 URL 已受完整目标约束。旧无目标通知不得绑定当前连接器，标准模式 worker 将其标记 delivery_target_invalid，候选历史范围保全规则保持。
 
 Registry.DescribeDeliveryDestination 对注册的纯描述器执行精确 name/provider 与摘要格式校验，不创建或激活连接器。输入必须由可信配置owner提供，返回摘要不代表发送授权；候选完整声明允许disabled或省略执行能力，ConnectorStartupTargets返回独立的完整快照，ConnectorActivationTargets只返回冻结策略已启用的目标与能力；Manager和bootstrap使用后者进行激活与依赖检查。声明本身不启动实例，混合目标不授权禁用owner。可信配置描述owner与持久邮件队列接入尚未完成。
+
+候选生产者可通过 Manager.DescribeDeclaredDeliveryTarget 按精确Ref、owner、name/provider读取冻结声明并核对纯描述摘要；返回只含摘要，不返回凭据，不实例化连接器。策略校验租户上下文、部署/作用域和声明owner，拒绝system bypass；禁用能力只允许描述，实际投递仍走RequireConnectorDelivery。此入口拒绝standard模式；standard仍需沿持久ConnectorConfig配置owner接入，邮件队列持久身份也尚未完成。

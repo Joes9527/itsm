@@ -22,6 +22,7 @@ type CapabilityGate interface {
 	RequireStartupCapability(context.Context, string) error
 	ConnectorStartupTargets(context.Context) ([]config.ConnectorTargetConfig, error)
 	ConnectorActivationTargets(context.Context) ([]config.ConnectorTargetConfig, error)
+	DeclaredConnectorTarget(context.Context, executionscope.Ref, string, string, string) (config.ConnectorTargetConfig, error)
 }
 
 type Manager struct {

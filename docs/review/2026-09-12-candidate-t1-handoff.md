@@ -1489,3 +1489,15 @@ ConnectorStartupTargets继续返回独立完整快照，新增ConnectorActivatio
 s5-target-activation-selection-final.log：config/database/connector/.../bootstrap全包race PASS。s5-target-activation-selection-full-private.log既定私有PG16/Redis/MinIO suite race PASS，无FAIL/SKIP/DATA RACE；s5-target-activation-selection-build.log全后端build exit0。独立最终只读审阅无新增阻断，git diff --check通过，所有本轮Go进程退出。
 
 已关闭配置声明必须启用的依赖；可信配置读取/描述owner、邮件目标045及EmailTarget/Incident outbox仍未接入，原邮件重绑RED仍未关闭。下一步从完整可信声明（candidate）与ConnectorConfig权威来源（standard）生成邮件目标，不从活跃实例反推，不允许缺目标的新外发意图入队。固定CandidateSHA不变，候选停止；无WSL/共享数据库操作、企业外发、push/main合并，S5/S6/T3/T4/G3未完成。
+
+### B2 S5 候选冻结声明的精确描述入口（2026-09-14）
+
+s5-declared-description-red.log先复现Manager缺可信声明描述方法。ExecutionPolicy.DeclaredConnectorTarget只在candidate模式按精确tenant/deployment/scope/owner/name/provider返回owned声明；共用requireConnectorIdentity与实际投递的身份校验，RequireConnectorDelivery另核验冻结执行开关。拒绝无tenant/system bypass/错误Ref/未声明owner，描述不临时启用能力。
+
+Manager.DescribeDeclaredDeliveryTarget不从活跃实例选择，读取上述声明后通过Registry纯解析并核对声明摘要；返回只有digest，不暴露凭据。关闭前后检查及取消cause保持。标准模式拒绝此入口，其持久ConnectorConfig来源尚待接入。
+
+真实Graph loopback用例覆盖有效禁用声明、摘要不匹配、tenant/scope/deployment/owner/provider/name错误、无tenant/system上下文、取消及Manager关闭；注册prototype后无新增factory、无实例、无HTTP。负例精确ErrDenied或context.Canceled。直接policy测试验证原cfg/返回副本修改不影响冻结配置，描述后实际投递仍拒绝、standard不得借用候选声明。独立只读审阅未发现授权弱化或新增阻断，建议的精确错误断言及取消/关闭/standard用例已补。
+
+本步不关闭邮件重绑RED、045/EmailTarget/Incident outbox或S5/S6/T3/T4/G3。下一步standard持久配置读取及typed邮件目标生产/执行接入；禁止consumer临时绑定当前身份。CandidateSHA不变，候选停止，无WSL/共享数据库操作、企业外发、push/main合并。
+
+最终验证：s5-declared-description-final.log database/connector/.../bootstrap全包race PASS；s5-declared-description-full-private.log既定私有PG16/Redis/MinIO suite race PASS，均无FAIL/SKIP/DATA RACE；s5-declared-description-build.log全后端build exit0。git diff --check通过，本轮Go进程均已退出。

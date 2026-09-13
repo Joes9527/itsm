@@ -51,3 +51,30 @@ func (p *ExecutionPolicy) ConnectorActivationTargets(ctx context.Context) ([]con
 	}
 	return active, nil
 }
+
+// DeclaredConnectorTarget reads one exact candidate declaration for an owning
+// tenant. It does not require execution to be enabled and does not authorize a
+// business action. Never expose the returned protected configuration over HTTP.
+func (p *ExecutionPolicy) DeclaredConnectorTarget(ctx context.Context, ref executionscope.Ref, capability, name, provider string) (config.ConnectorTargetConfig, error) {
+	if err := p.requireConnectorIdentity(ctx, ref, capability); err != nil {
+		return config.ConnectorTargetConfig{}, err
+	}
+	if p.mode != "candidate" {
+		return config.ConnectorTargetConfig{}, executionscope.ErrDenied
+	}
+	var targets []config.ConnectorTargetConfig
+	if err := json.Unmarshal(p.connectorTargets, &targets); err != nil {
+		return config.ConnectorTargetConfig{}, fmt.Errorf("connector declarations unavailable")
+	}
+	for _, target := range targets {
+		if target.TenantID != ref.TenantID || target.ScopeID != ref.ScopeID || target.Name != name || target.Provider != provider {
+			continue
+		}
+		for _, declared := range target.Capabilities {
+			if declared == capability {
+				return target, nil
+			}
+		}
+	}
+	return config.ConnectorTargetConfig{}, executionscope.ErrDenied
+}

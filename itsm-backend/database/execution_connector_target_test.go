@@ -91,3 +91,36 @@ func TestConnectorActivationTargetsUseFrozenCapabilities(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 	require.Empty(t, active)
 }
+
+func TestDeclaredConnectorTargetReturnsOwnedConfiguration(t *testing.T) {
+	scope := "149ff1af-a27c-47c7-827f-103271130bb9"
+	cfg := config.ExecutionConfig{Mode: "candidate", DeploymentID: "declared-read", Scopes: []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: scope}}, ConnectorTargets: []config.ConnectorTargetConfig{{TenantID: 1, ScopeID: scope, Name: "msgraph-email", Provider: "microsoft", DestinationDigest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", Capabilities: []string{"notification"}, Credentials: map[string]string{"azure_client_id": "original"}, Settings: map[string]interface{}{"mailbox": "original@example.invalid"}}}}
+	policy, err := NewExecutionPolicy(cfg)
+	require.NoError(t, err)
+	cfg.ConnectorTargets[0].Settings["mailbox"] = "changed@example.invalid"
+	ctx := tenantctx.WithTenantID(context.Background(), 1)
+	ref, err := policy.EventRef(1)
+	require.NoError(t, err)
+	for i := 0; i < 2; i++ {
+		target, err := policy.DeclaredConnectorTarget(ctx, ref, "notification", "msgraph-email", "microsoft")
+		require.NoError(t, err)
+		require.Equal(t, "original@example.invalid", target.Settings["mailbox"])
+		require.Equal(t, "original", target.Credentials["azure_client_id"])
+		target.Settings["mailbox"] = "returned-change"
+		target.Credentials["azure_client_id"] = "returned-change"
+		target.Capabilities[0] = "outbox"
+	}
+	require.ErrorIs(t, policy.RequireConnectorDelivery(ctx, ref, "notification"), executionscope.ErrDenied, "describing must not enable execution")
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	target, err := policy.DeclaredConnectorTarget(canceled, ref, "notification", "msgraph-email", "microsoft")
+	require.ErrorIs(t, err, context.Canceled)
+	require.Empty(t, target)
+	standard, err := NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "standard"})
+	require.NoError(t, err)
+	standardRef, err := standard.EventRef(1)
+	require.NoError(t, err)
+	target, err = standard.DeclaredConnectorTarget(ctx, standardRef, "notification", "msgraph-email", "microsoft")
+	require.ErrorIs(t, err, executionscope.ErrDenied)
+	require.Empty(t, target)
+}
