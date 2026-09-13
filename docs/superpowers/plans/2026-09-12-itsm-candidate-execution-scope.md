@@ -403,3 +403,9 @@ Webhook前置检查点 `1d391a42b`：真实loopback HTTP复现多实例按名称
 ## 自审覆盖
 
 设计§1/2→S1/S3；§3→S2；§4→S3/S4/S5；§5→S4/S6；§6/7→S6及鉴权计划A5。成员不回填、构造无副作用、全部领取更新受限、旧Stream不消费、API服务双边界、完整周期保全均有独立断言。未有结构化归属的能力保持禁用，若为G2必需则交付阻塞，不把范围缩减为验收通过。
+
+### S5 Graph 邮件目标基础检查点（2026-09-14）
+
+实现分支 f4b8947c5：Graph 纯配置目标描述与 Init 共用解析，摘要覆盖实际身份/邮箱/端点且排除 secret；拒绝自动重定向和非2xx成功。三包全量 race、全后端 build、既定私有PG16/Redis/MinIO suite通过。旧迁移fixture保留保全断言，standard worker对无目标历史通知零发送并标 delivery_target_invalid；integration标签仅编译未跑DB。独立只读审阅无新增阻断，详细RED/GREEN日志见实现分支T1交接记录。
+
+此项仅为邮件目标协议前置，不勾选S5完成：Manager可信配置描述入口、045/typed EmailTarget/Incident outbox、原邮件重绑RED仍待实施；Graph没有local_only声明，nextLink/绝对URL未取得完整目标约束证明。CandidateSHA不变，候选停止，无WSL/共享环境变更、企业外发或push/main合并。
