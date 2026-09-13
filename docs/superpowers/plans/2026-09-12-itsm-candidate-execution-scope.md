@@ -203,6 +203,10 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+CC目标owner检查点 `f02bb4197`（2026-09-14）：TicketWorkflowService与BPMN CCTaskHandler均在原CC事务builder调用唯一BindNotificationConnectorTarget，bootstrap注入既有通知owner，缺连接器依赖/错scope回滚。原7项相关回归关闭；标准fixture由真实owner先冻结精确目标后模拟Worker不可用/恢复，不手填目标字段。真实PG两入口缺Manager/错scope拒绝时五类相关表整行JSON保全、成功目标完整、移除Manager重放不增意图且零Send。BPMN为handler直接调用，不冒充callback worker/lease全链。
+
+完整私有PG16/Redis/MinIO race、三包具名CC/notification/bootstrap回归、后端build及独立审阅通过，详见T1对应段。下一步仍为同步SendNotification直接外发、email/push准入、目标变化/重启矩阵与飞书/裸实例入口；不勾选S5或G2，CandidateSHA不变、候选未启动，无共享环境操作。下方4aecebdf8的7项FAIL为此前检查点历史状态，现已关闭。
+
 通知事务/Worker接入检查点 `4aecebdf8`（2026-09-14）：EnqueueNotificationTx/EnqueueCreationTx共用精确目标binder，Worker消费持久字段并前后核验同对象/generation；真实SMS producer先生成完整意图后四项错声明拒绝及合法接收PASS。补未知渠道、resolver cause与pending/failed/sent写回cause的RED→GREEN；真实事务rollback、原目标重放、冲突和多provider拒绝PASS。完整私有suite在最后cause包装前PASS，随后具名PG增量PASS，全后端build与独立复核通过，详情见T1。
 
 更广相关单测仍有7项回归（s5-notification-protocol-unit.log）。实际TicketWorkflowService.createCCNotifications与bpmn.CCTaskHandler.createCCNotifications尚直接写无目标外发队列，下一步注入唯一binder并接入原事务/bootstrap，保留真实CC和BPMN测试，不手填协议字段消除失败。同步SendNotification直接外发同样待迁移。不能勾选通知整段：标准恢复、目标变化/重启矩阵与其余owner尚未完成，S5/S6/T3/T4/G3与固定CandidateSHA/停止状态不变，无共享环境操作。
