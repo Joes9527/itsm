@@ -1117,3 +1117,11 @@ s5-tool-edit-source-full-private.log完整私有PG16/Redis/MinIO候选ScopeRegis
 剩余审批/身份并发变化、binding撤销专项及结果竞争需继续验证；创建/编辑原事务接入不等于完整并发授权链验收。目标PG17/T3和真实T4/G3仍未通过，CandidateSHA与未启动状态不变，无共享环境操作、企业外呼或push/main合并。
 
 最终s5-tool-edit-source-build.log全后端build exit0，git diff --check通过；独立最终审阅确认UPDATE后故障与重试断言有效，不把它说成审计INSERT后的故障。
+
+### B2 S5 运行绑定撤销并发验证（2026-09-13）
+
+在既有scope关闭commit/rollback测试上，增加binding部署标识变化、mode改standard、删除绑定三种真实撤权，各自验证提交和回滚共六种序列。实际ToolInvocationMutation.Tx()中查询结果写回事务backend PID，断言该PID出现在独立撤权连接pg_blocking_pids；结果事务结束后撤权成功提交，下一调用拒绝且调用整行不变，已提交业务保持一条。此为候选模式绑定撤权，不是standard执行路径认证。
+
+清理保留cancel→等已启动revoker→恢复fixture原值顺序，删除绑定以upsert恢复，覆盖撤销已完成和取消后尚未删除两种清理情况。独立review_execution_scope_s1确认锁证据、实际事务PID读取与清理无新增阻断。首次测试表初始化笔误导致编译失败，修正后s5-tool-binding-revocation-green.log定向race PASS；不将编译失败称为业务RED。最终s5-tool-binding-revocation-full-private.log完整私有PG16/Redis/MinIO候选边界及恢复race PASS，无skip/race，git diff --check通过。本轮仅增加测试与文档，未修改生产代码，故不重复此前已通过的全后端build。
+
+该项关闭本机候选结果事务的binding撤销专项证据缺口；审批/身份并发改变及结果竞争仍待完成，目标PG17、T3交接和真实T4/G3未验收。CandidateSHA与候选未启动状态不变，无共享环境操作、企业外呼、push/main合并。

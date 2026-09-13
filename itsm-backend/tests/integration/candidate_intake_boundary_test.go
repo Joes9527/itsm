@@ -946,97 +946,112 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			})
 		}
 
-		for _, finish := range []string{"commit", "rollback"} {
-			t.Run("scope revocation waits for outcome "+finish, func(t *testing.T) {
-				tx, err := runtime.Tx(ctx)
-				require.NoError(t, err)
-				require.NoError(t, policy.BindEnt(ctx, tx, tenant.ID))
-				call, err := tx.ToolInvocation.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetToolName("create_ticket").SetArguments(`{"title":"Outcome scope revocation"}`).SetNeedsApproval(true).SetApprovalState("approved").SetApprovedBy(actor.ID).SetApprovedAt(time.Now()).SetStatus("pending").Save(ctx)
-				require.NoError(t, err)
-				require.NoError(t, tx.Commit())
-				var before, after string
-				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, call.ID).Scan(&before))
-				items := owner.Ticket.Query().CountX(ctx)
-				var armed atomic.Bool
-				revoked := make(chan error, 1)
-				finished := make(chan struct{})
-				var started atomic.Bool
-				operationCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-				defer cancel()
-				connection, err := ownerDB.Conn(operationCtx)
-				require.NoError(t, err)
-				defer connection.Close()
-				var pid int
-				require.NoError(t, connection.QueryRowContext(operationCtx, `SELECT pg_backend_pid()`).Scan(&pid))
-				injected := errors.New("rollback locked outcome")
-				armed.Store(true)
-				defer func() {
-					armed.Store(false)
-					cancel()
-					if started.Load() {
-						select {
-						case <-finished:
-						case <-time.After(5 * time.Second):
-							t.Fatal("revoker cleanup did not finish")
-						}
-					}
-					restoreCtx, restoreCancel := context.WithTimeout(context.Background(), 5*time.Second)
-					defer restoreCancel()
-					_, err := ownerDB.ExecContext(restoreCtx, `UPDATE execution_scopes SET status='active' WHERE id=$1`, scopeID)
+		for _, revocation := range []struct{ name, revoke, restore, key string }{
+			{"scope", `UPDATE execution_scopes SET status='closed' WHERE id=$1`, `UPDATE execution_scopes SET status='active' WHERE id=$1`, scopeID},
+			{"binding deployment", `UPDATE execution_runtime_bindings SET deployment_id='revoked-deployment' WHERE runtime_role=$1`, `UPDATE execution_runtime_bindings SET deployment_id='intake-test' WHERE runtime_role=$1`, runtimeRole},
+			{"binding mode", `UPDATE execution_runtime_bindings SET mode='standard' WHERE runtime_role=$1`, `UPDATE execution_runtime_bindings SET mode='candidate' WHERE runtime_role=$1`, runtimeRole},
+			{"binding deletion", `DELETE FROM execution_runtime_bindings WHERE runtime_role=$1`, `INSERT INTO execution_runtime_bindings(runtime_role,deployment_id,mode) VALUES($1,'intake-test','candidate') ON CONFLICT(runtime_role) DO UPDATE SET deployment_id='intake-test',mode='candidate'`, runtimeRole},
+		} {
+			for _, finish := range []string{"commit", "rollback"} {
+				t.Run(revocation.name+" revocation waits for outcome "+finish, func(t *testing.T) {
+					tx, err := runtime.Tx(ctx)
 					require.NoError(t, err)
-				}()
-				runtime.ToolInvocation.Use(func(next ent.Mutator) ent.Mutator {
-					return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
-						fired := m.Op().Is(ent.OpUpdate|ent.OpUpdateOne) && armed.CompareAndSwap(true, false)
-						if fired {
-							started.Store(true)
-							go func() {
-								defer close(finished)
-								_, err := connection.ExecContext(operationCtx, `UPDATE execution_scopes SET status='closed' WHERE id=$1`, scopeID)
-								revoked <- err
-							}()
-							require.Eventually(t, func() bool {
-								var waiting bool
-								err := ownerDB.QueryRowContext(operationCtx, `SELECT cardinality(pg_blocking_pids($1))>0`, pid).Scan(&waiting)
-								return err == nil && waiting
-							}, 5*time.Second, 10*time.Millisecond, "revocation must wait on the outcome transaction")
+					require.NoError(t, policy.BindEnt(ctx, tx, tenant.ID))
+					call, err := tx.ToolInvocation.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetToolName("create_ticket").SetArguments(`{"title":"Outcome scope revocation"}`).SetNeedsApproval(true).SetApprovalState("approved").SetApprovedBy(actor.ID).SetApprovedAt(time.Now()).SetStatus("pending").Save(ctx)
+					require.NoError(t, err)
+					require.NoError(t, tx.Commit())
+					var before, after string
+					require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, call.ID).Scan(&before))
+					items := owner.Ticket.Query().CountX(ctx)
+					var armed atomic.Bool
+					revoked := make(chan error, 1)
+					finished := make(chan struct{})
+					var started atomic.Bool
+					operationCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+					defer cancel()
+					connection, err := ownerDB.Conn(operationCtx)
+					require.NoError(t, err)
+					defer connection.Close()
+					var pid int
+					require.NoError(t, connection.QueryRowContext(operationCtx, `SELECT pg_backend_pid()`).Scan(&pid))
+					injected := errors.New("rollback locked outcome")
+					armed.Store(true)
+					defer func() {
+						armed.Store(false)
+						cancel()
+						if started.Load() {
+							select {
+							case <-finished:
+							case <-time.After(5 * time.Second):
+								t.Fatal("revoker cleanup did not finish")
+							}
 						}
-						value, err := next.Mutate(c, m)
-						if err == nil && fired && finish == "rollback" {
-							return nil, injected
-						}
-						return value, err
+						restoreCtx, restoreCancel := context.WithTimeout(context.Background(), 5*time.Second)
+						defer restoreCancel()
+						_, err := ownerDB.ExecContext(restoreCtx, revocation.restore, revocation.key)
+						require.NoError(t, err)
+					}()
+					runtime.ToolInvocation.Use(func(next ent.Mutator) ent.Mutator {
+						return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
+							fired := m.Op().Is(ent.OpUpdate|ent.OpUpdateOne) && armed.CompareAndSwap(true, false)
+							if fired {
+								mutationTx, err := m.(*ent.ToolInvocationMutation).Tx()
+								require.NoError(t, err)
+								rows, err := mutationTx.Client().QueryContext(c, `SELECT pg_backend_pid()`)
+								require.NoError(t, err)
+								require.True(t, rows.Next())
+								var outcomePID int
+								require.NoError(t, rows.Scan(&outcomePID))
+								require.NoError(t, rows.Close())
+								started.Store(true)
+								go func() {
+									defer close(finished)
+									_, err := connection.ExecContext(operationCtx, revocation.revoke, revocation.key)
+									revoked <- err
+								}()
+								require.Eventually(t, func() bool {
+									var waiting bool
+									err := ownerDB.QueryRowContext(operationCtx, `SELECT $1::integer=ANY(pg_blocking_pids($2))`, outcomePID, pid).Scan(&waiting)
+									return err == nil && waiting
+								}, 5*time.Second, 10*time.Millisecond, "revocation must wait on the outcome transaction")
+							}
+							value, err := next.Mutate(c, m)
+							if err == nil && fired && finish == "rollback" {
+								return nil, injected
+							}
+							return value, err
+						})
 					})
+					err = queue.ProcessJob(ctx, service.ToolJob{InvocationID: call.ID, TenantID: tenant.ID})
+					if finish == "commit" {
+						require.NoError(t, err)
+					} else {
+						require.ErrorIs(t, err, injected)
+					}
+					require.False(t, armed.Load())
+					select {
+					case err := <-revoked:
+						require.NoError(t, err)
+					case <-operationCtx.Done():
+						t.Fatal("revocation did not finish after outcome transaction")
+					}
+					require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, call.ID).Scan(&after))
+					if finish == "rollback" {
+						require.JSONEq(t, before, after)
+					} else {
+						require.Equal(t, "done", owner.ToolInvocation.GetX(ctx, call.ID).Status)
+					}
+					err = queue.ProcessJob(ctx, service.ToolJob{InvocationID: call.ID, TenantID: tenant.ID})
+					require.ErrorIs(t, err, executionscope.ErrDenied, "committed revocation blocks the next write")
+					var afterRetry string
+					require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, call.ID).Scan(&afterRetry))
+					require.JSONEq(t, after, afterRetry)
+					assert.Equal(t, items+1, owner.Ticket.Query().CountX(ctx), "business committed before this revocation")
 				})
-				err = queue.ProcessJob(ctx, service.ToolJob{InvocationID: call.ID, TenantID: tenant.ID})
-				if finish == "commit" {
-					require.NoError(t, err)
-				} else {
-					require.ErrorIs(t, err, injected)
-				}
-				require.False(t, armed.Load())
-				select {
-				case err := <-revoked:
-					require.NoError(t, err)
-				case <-operationCtx.Done():
-					t.Fatal("revocation did not finish after outcome transaction")
-				}
-				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, call.ID).Scan(&after))
-				if finish == "rollback" {
-					require.JSONEq(t, before, after)
-				} else {
-					require.Equal(t, "done", owner.ToolInvocation.GetX(ctx, call.ID).Status)
-				}
-				err = queue.ProcessJob(ctx, service.ToolJob{InvocationID: call.ID, TenantID: tenant.ID})
-				require.ErrorIs(t, err, executionscope.ErrDenied, "committed revocation blocks the next write")
-				var afterRetry string
-				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, call.ID).Scan(&afterRetry))
-				require.JSONEq(t, after, afterRetry)
-				assert.Equal(t, items+1, owner.Ticket.Query().CountX(ctx), "business committed before this revocation")
-			})
+
+			}
 
 		}
-
 	})
 	t.Run("new base extension and member commit together", func(t *testing.T) {
 		created, err := app.Create(ctx, identity, command("new", "incident"))
