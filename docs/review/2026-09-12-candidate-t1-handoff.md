@@ -923,3 +923,13 @@ bootstrap实际注册器按webhook capability决定handler或known reserved type
 `s5-standard-source-regression.log` database/service/eventbus/bootstrap回归PASS，`s5-standard-source-full-private.log` 完整候选边界、来源负测、Webhook Worker与Redis ACK恢复、PG/Redis/MinIO构造保全race PASS，无skip/race。全后端 `s5-standard-source-build.log` exit0，git diff --check通过；独立review_execution_scope_s1只读复核无阻断。开发指南已说明EventRef不是执行许可。
 
 普通传输仍须保留持久身份并使用明确typed订阅合同，随后将普通Webhook接入同一意图/Worker并删除旧同步发送；本前置不算S5统一完成。全应用重启、其它异步入口及B2/B3/T3/T4/G2/G3仍未完成，CandidateSHA和未启动状态不变。没有共享环境修改、企业外呼、push或main合并。
+
+### B2 S5 普通模式持久事件传输前置（2026-09-13）
+
+在 `536b48e3d` 后接入普通传输的持久身份。`s5-standard-transport-red.log` 复现普通发布生成随机UUID且订阅者收到flattened map；现在ExecutionEvent在两模式均验证稳定类型/tenant、完整信封与真实authority，使用原persistentID。streamRoutes冻结standard部署，空scope仅由standard配置产生；candidate仍使用准入scope和独立namespace。新增ExecutionEnvelopeHandler显式订阅合同，两模式在严格JSON、部署/scope/tenant、消息UUID/metadata及持久来源验证后才调用该owner；没有持久主体的旧事件不伪造WorkItem，既有非typed普通订阅仍按其原合同接收。
+
+独立审阅发现P2：仅实现ExecutionEvent而不实现稳定事件接口时仍能落入raw发布；`s5-standard-transport-contract-red.log` 复现返回nil。现于序列化/路由前拒绝该形状，负测同时要求publisher零写，复审关闭。`s5-standard-transport-green.log` 初步eventbus race PASS；补强后 `s5-standard-transport-regression.log` eventbus/service/bootstrap race全包PASS。
+
+`s5-standard-transport-pg-redis.log` 使用真实SLA持久来源、明确私有owner校验连接及真实Redis，普通bus发布两次均以原eventID交付typed Envelope，冻结部署、空scope、WorkItem与payload保持，源Outbox整行和Audit保全。该连接不代表standard应用角色准入；传输重复交付不是外部副作用恰好一次。首次完整 `s5-standard-transport-full-private.log` 因旧历史fixture误用实现ExecutionEvent的类型且无authority而拒绝；改用明确不声明持久合同的historicalStreamEvent定义类型，保留原JSON字段/稳定元数据和原历史Stream/组/PEL断言，未放宽生产校验。最终 `s5-standard-transport-final-private.log` 完整候选边界、普通来源传输、Webhook Worker/ACK恢复及PG/Redis/MinIO构造保全race PASS，无skip/race；全后端 `s5-standard-transport-build.log` exit0，git diff --check通过。独立review_execution_scope_s1复核P2及fixture修订无新增阻断。
+
+普通Webhook尚未声明typed合同，仍须迁入原意图/Worker并删除同步分支；普通durable consumer组、进程重启和其它异步入口继续待完成。本前置不等于S5或候选交付完成，CandidateSHA及候选停止状态不变，无共享环境修改、企业外呼、push或main合并。

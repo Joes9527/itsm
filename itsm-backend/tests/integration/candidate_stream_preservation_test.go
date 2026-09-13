@@ -37,6 +37,14 @@ func (candidateStreamEvent) EventType() string     { return "sla.breached" }
 func (e candidateStreamEvent) TenantID() string    { return strconv.Itoa(e.tenantID) }
 func (candidateStreamEvent) OccurredAt() time.Time { return time.Unix(1700000000, 0).UTC() }
 
+// Historical wire fixture predates persistent producer identity. A distinct
+// defined type retains the old payload without claiming ExecutionEvent.
+type historicalStreamEvent candidateStreamEvent
+
+func (historicalStreamEvent) EventType() string     { return "sla.breached" }
+func (e historicalStreamEvent) TenantID() string    { return strconv.Itoa(e.tenantID) }
+func (historicalStreamEvent) OccurredAt() time.Time { return time.Unix(1700000000, 0).UTC() }
+
 type candidateStreamObserver struct{ received chan interface{} }
 
 func (h candidateStreamObserver) Handle(event interface{}) error {
@@ -54,7 +62,7 @@ func TestCandidateStreamPreservesLegacyTopicOnPublish(t *testing.T) {
 	cfg, client := startCandidateStreamRedis(t, ctx)
 	legacyPublisher, err := eventbus.NewWatermillEventBus(cfg, config.ExecutionConfig{Mode: "standard", DeploymentID: "legacy-test"}, nil, zap.NewNop().Sugar())
 	require.NoError(t, err)
-	require.NoError(t, legacyPublisher.Publish(candidateStreamEvent{tenantID: 1, WorkItemID: 100}))
+	require.NoError(t, legacyPublisher.Publish(historicalStreamEvent{tenantID: 1, WorkItemID: 100}))
 	require.NoError(t, legacyPublisher.Close())
 	const topic = "sla.breached"
 	require.NoError(t, client.XGroupCreate(ctx, topic, "protected-history-group", "0").Err())

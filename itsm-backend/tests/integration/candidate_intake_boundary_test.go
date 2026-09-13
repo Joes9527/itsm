@@ -2066,6 +2066,44 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			require.JSONEq(t, before, preserved)
 			require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx))
 		})
+		t.Run("standard stream preserves verified persistent source", func(t *testing.T) {
+			streamCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+			defer cancel()
+			redisCfg, redisClient := startCandidateStreamRedis(t, streamCtx)
+			cfg := config.ExecutionConfig{Mode: "standard", DeploymentID: "standard-stream-test"}
+			standard, err := database.NewExecutionPolicy(cfg)
+			require.NoError(t, err)
+			validator := service.NewExecutionEventAuthority(owner, standard)
+			bus, err := eventbus.NewWatermillEventBus(redisCfg, cfg, validator, zap.NewNop().Sugar())
+			require.NoError(t, err)
+			defer bus.Close()
+			received := make(chan interface{}, 2)
+			require.NoError(t, bus.RegisterSubscription("sla.breached", standardExecutionObserver{candidateStreamObserver{received}}))
+			require.NoError(t, bus.Start(streamCtx))
+			cfg.DeploymentID = "changed-after-construction"
+			for i := 0; i < 2; i++ {
+				require.NoError(t, bus.Publish(source))
+				select {
+				case value := <-received:
+					delivered, ok := value.(eventbus.Envelope)
+					require.True(t, ok)
+					require.Equal(t, source.PersistentEventID(), delivered.EventID)
+					require.Equal(t, source.ExecutionWorkItemID(), delivered.Execution.WorkItemID)
+					require.Equal(t, "standard-stream-test", delivered.Execution.DeploymentID)
+					require.Empty(t, delivered.Execution.ScopeID)
+					require.Equal(t, envelope.Payload, delivered.Payload)
+				case <-streamCtx.Done():
+					t.Fatal("standard persistent source did not reach typed subscriber")
+				}
+			}
+			entries, err := redisClient.XRange(streamCtx, "sla.breached", "-", "+").Result()
+			require.NoError(t, err)
+			require.Len(t, entries, 2)
+			var preserved string
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(e)::text FROM outbox_events e WHERE id=$1`, row.ID).Scan(&preserved))
+			require.JSONEq(t, before, preserved)
+			require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx))
+		})
 		t.Run("webhook consumption freezes durable target intents", func(t *testing.T) {
 			var sent atomic.Int32
 			endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { sent.Add(1); w.WriteHeader(http.StatusOK) }))
@@ -4478,3 +4516,7 @@ func (h *candidateCommitBeforeAck) HandleContext(ctx context.Context, event inte
 	<-ctx.Done()
 	return ctx.Err()
 }
+
+type standardExecutionObserver struct{ candidateStreamObserver }
+
+func (standardExecutionObserver) ExecutionEnvelopeRequired() {}

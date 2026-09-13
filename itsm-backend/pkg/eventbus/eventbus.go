@@ -59,6 +59,13 @@ type WatermillEventBus struct {
 	subscriptions       []subscription
 }
 
+// ExecutionEnvelopeHandler requires persistent identity and source validation
+// before invocation in every execution mode. It never accepts flattened payloads.
+type ExecutionEnvelopeHandler interface {
+	shared.EventHandler
+	ExecutionEnvelopeRequired()
+}
+
 type ContextEventHandler interface {
 	HandleContext(context.Context, interface{}) error
 }
@@ -125,7 +132,7 @@ func NewWatermillEventBus(cfg *config.RedisConfig, execution config.ExecutionCon
 		return nil, fmt.Errorf("invalid event execution configuration: %w", err)
 	}
 	if routes.candidate && authority == nil {
-		return nil, fmt.Errorf("candidate event authority required")
+		return nil, fmt.Errorf("persistent event authority required")
 	}
 	if cfg == nil || logger == nil {
 		return nil, fmt.Errorf("event Redis configuration and logger required")
@@ -211,6 +218,9 @@ func (eb *WatermillEventBus) Publish(event interface{}) error {
 	}
 
 	se, isStable := event.(stableEvent)
+	if _, persistent := event.(ExecutionEvent); persistent && !isStable {
+		return fmt.Errorf("persistent event must declare stable topic and tenant")
+	}
 	if eb.routes == nil {
 		return fmt.Errorf("event transport execution configuration required")
 	}
@@ -240,8 +250,9 @@ func (eb *WatermillEventBus) Publish(event interface{}) error {
 			OccurredAt: se.OccurredAt(),
 			Payload:    raw,
 		}
-		if eb.routes.candidate {
-			source, ok := event.(ExecutionEvent)
+		source, persistent := event.(ExecutionEvent)
+		if eb.routes.candidate || persistent {
+			ok := persistent
 			if !ok {
 				return fmt.Errorf("candidate event requires a persistent source")
 			}
@@ -259,7 +270,7 @@ func (eb *WatermillEventBus) Publish(event interface{}) error {
 				return decodeErr
 			}
 			if eb.authority == nil {
-				return fmt.Errorf("candidate event authority required")
+				return fmt.Errorf("persistent event authority required")
 			}
 			checkCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			checkErr := eb.authority.ValidateEvent(checkCtx, ref, env)
@@ -281,8 +292,8 @@ func (eb *WatermillEventBus) Publish(event interface{}) error {
 
 	// Create message
 	messageID := watermill.NewUUID()
-	if eb.routes.candidate {
-		messageID = event.(ExecutionEvent).PersistentEventID()
+	if source, persistent := event.(ExecutionEvent); isStable && persistent {
+		messageID = source.PersistentEventID()
 	}
 	msg := message.NewMessage(messageID, payload)
 	msg.Metadata.Set("event_type", topic)
@@ -368,10 +379,15 @@ func (eb *WatermillEventBus) subscribeRoute(eventType, consumer string, route st
 		defer eb.consumers.Done()
 		for msg := range messages {
 			var deliver interface{}
-			// Candidate identity is checked before unwrapping or invoking a writer.
-			if eb.routes.candidate {
+			// Required persistent identity is checked before invoking its owner.
+			_, typed := handler.(ExecutionEnvelopeHandler)
+			if eb.routes.candidate || typed {
 				env, decodeErr := DecodeExecutionEnvelope(msg.Payload)
-				ref, refErr := eb.routes.refFor(fmt.Sprint(route.tenantID))
+				tenant := env.TenantID
+				if eb.routes.candidate {
+					tenant = fmt.Sprint(route.tenantID)
+				}
+				ref, refErr := eb.routes.refFor(tenant)
 				if decodeErr == nil && refErr == nil {
 					decodeErr = validateEnvelopeRoute(env, ref, eventType)
 				}
@@ -380,13 +396,13 @@ func (eb *WatermillEventBus) subscribeRoute(eventType, consumer string, route st
 				}
 				if decodeErr == nil && refErr == nil {
 					if eb.authority == nil {
-						decodeErr = fmt.Errorf("candidate event authority required")
+						decodeErr = fmt.Errorf("persistent event authority required")
 					} else {
 						decodeErr = eb.authority.ValidateEvent(ctx, ref, env)
 					}
 				}
 				if decodeErr != nil || refErr != nil {
-					eb.logger.Errorw("Candidate event rejected", "event_type", eventType, "error", errors.Join(decodeErr, refErr))
+					eb.logger.Errorw("Persistent event rejected", "event_type", eventType, "error", errors.Join(decodeErr, refErr))
 					msg.Nack()
 					continue
 				}

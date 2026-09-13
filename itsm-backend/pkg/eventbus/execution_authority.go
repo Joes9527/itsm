@@ -36,6 +36,12 @@ func (r *streamRoutes) refFor(tenant string) (executionscope.Ref, error) {
 	if err != nil || id <= 0 || strconv.Itoa(id) != tenant {
 		return executionscope.Ref{}, executionscope.ErrDenied
 	}
+	if !r.candidate {
+		if err := executionscope.ValidateDeploymentID(r.deploymentID); err != nil {
+			return executionscope.Ref{}, err
+		}
+		return executionscope.Ref{DeploymentID: r.deploymentID, TenantID: id}, nil
+	}
 	for _, ref := range r.refs {
 		if ref.TenantID == id {
 			return ref, nil
@@ -149,6 +155,12 @@ func uniqueJSONValue(dec *json.Decoder, depth int) error {
 func validateEnvelopeRoute(env Envelope, ref executionscope.Ref, eventType string) error {
 	if env.Execution == nil || env.EventType != eventType || env.TenantID != strconv.Itoa(ref.TenantID) || env.Execution.DeploymentID != ref.DeploymentID || env.Execution.ScopeID != ref.ScopeID {
 		return fmt.Errorf("event envelope does not match frozen transport route")
+	}
+	if ref.ScopeID == "" {
+		if ref.TenantID <= 0 {
+			return executionscope.ErrDenied
+		}
+		return executionscope.ValidateDeploymentID(ref.DeploymentID)
 	}
 	return executionscope.ValidateRef(ref)
 }

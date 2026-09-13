@@ -20,15 +20,16 @@ type streamRoute struct {
 // It does not grant permission to publish, consume, or write a business record.
 // Database membership and receipt checks remain the owning services' responsibility.
 type streamRoutes struct {
-	candidate bool
-	refs      []executionscope.Ref
+	candidate    bool
+	deploymentID string
+	refs         []executionscope.Ref
 }
 
 func newStreamRoutes(cfg config.ExecutionConfig) (*streamRoutes, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	routes := &streamRoutes{candidate: cfg.Mode == "candidate"}
+	routes := &streamRoutes{candidate: cfg.Mode == "candidate", deploymentID: cfg.DeploymentID}
 	seen := make(map[string]bool, len(cfg.Scopes))
 	for _, scope := range cfg.Scopes {
 		if seen[scope.ScopeID] {
