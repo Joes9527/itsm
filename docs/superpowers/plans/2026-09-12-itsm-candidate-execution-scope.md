@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use executing-plans to implement this plan task-by-task. Do not spawn extra implementation agents. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-状态：accepted（实施中；S1/S2 已提交并完成该阶段验证，S3–S6 未开始）。
+状态：accepted（实施中；S1/S2 已提交并完成该阶段验证，S3 基础增量已实现并验证，业务接入进行中；S4–S6 未开始）。
 
 **Goal:** 关闭 T2 B2，证明真实候选新任务可以执行而历史记录和队列保持不变。
 
@@ -88,6 +88,8 @@ S2 提交：`fbd52c240e91124f12709486c946bf6d85768770`；A 的阶段交接提交
 - [ ] 为 outbox/process instance 新增 nullable、不可变、具有 tickets FK 的 `execution_work_item_id`，只由权威创建事务写新行，历史保持 NULL。这是执行主体引用，原 aggregate/business_key 保留各自业务语义，不用 JSON 字符串推断执行权限。callback 经 process_instance_id 关联；notification 用既有 ticket_id。任何不明确的新生产者拒绝 scoped 发布。
 - [ ] 把新增引用纳入039；Ent schema 与唯一 SQL 同步生成，核对生成差异只限这两模型及新字段。逐个生产者从已解析 WorkItem 身份设置引用，不能仅在消费者补值。
 - [ ] 运行真实 API/service 创建修改用例及现有 WorkItem 专业测试；历史摘要与关系不变，提交 `feat: constrain candidate business writes to new work items`。
+
+S3 阶段记录（2026-09-13）：SQL/Ent 原事务适配及两个结构化字段已实现，私有真实 PG 的 RLS enforce/回滚/不可变外键和三依赖构造回归通过。独立基础审阅无阻断。业务事务、可信配置传递和所有生产者尚未接入，上述复合验收项继续保持未完成。实际事务所有者还包括 Incident commands、Problem/Change handlers、Requested Item repository/callback、共享 assignment/deletion/tag/comment/attachment/relation；common creator/mutation 只是接口，不能视为全局写拦截点。详见实现 worktree 的 T1 交接 S3 基础检查点。
 
 ## S4：队列原子领取、恢复及周期执行
 
