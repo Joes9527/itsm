@@ -199,15 +199,18 @@ func TestTicketLifecycleService_GetEscalatedPriority_TableDriven(t *testing.T) {
 		{"medium escalates to high", "medium", "high"},
 		{"high escalates to critical", "high", "critical"},
 		{"critical stays critical", "critical", "critical"},
-		{"unknown stays unknown", "unknown", "unknown"},
+		{"unknown is rejected", "unknown", ""},
 	}
 
-	client := enttest.Open(t, "sqlite3", testDSN())
-	defer client.Close()
-	service := NewTicketLifecycleService(client, zaptest.NewLogger(t).Sugar())
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, service.getEscalatedPriority(tt.currentPriority))
+			priority, err := escalatedTicketPriority(tt.currentPriority)
+			if tt.currentPriority == "unknown" {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tt.want, priority)
 		})
 	}
 }

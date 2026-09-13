@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"itsm-backend/dto"
+	"itsm-backend/handlers/shared/workitemmutation"
 	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
@@ -151,16 +153,13 @@ func TestEscalationService_ProcessUnassignedTickets(t *testing.T) {
 // ==================== 工单升级测试 ====================
 
 func TestEscalationService_EscalateTicket(t *testing.T) {
-	client, service, ctx := setupEscalationTest(t)
+	client, _, ctx := setupEscalationTest(t)
 	defer client.Close()
 
 	testTenant, err := createEscalationTestTenant(ctx, client, "escalate")
 	require.NoError(t, err)
 
 	testUser, err := createEscalationTestUser(ctx, client, testTenant.ID, "escalate")
-	require.NoError(t, err)
-
-	notifyUser, err := createEscalationTestUser(ctx, client, testTenant.ID, "notify")
 	require.NoError(t, err)
 
 	// 创建工单
@@ -175,9 +174,14 @@ func TestEscalationService_EscalateTicket(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
-	// 执行升级 - 这个方法可能在内部需要额外的数据，仅验证不会panic
-	// 由于方法内部可能需要创建 SLAAlertHistory，跳过详细验证
-	_ = service.EscalateTicket(ctx, ticket.ID, "SLA违规需要升级", []int{notifyUser.ID}, testTenant.ID)
+	client.User.UpdateOneID(testUser.ID).SetRole("super_admin").SaveX(ctx)
+	owner := newManualEscalationTestOwner(client, zaptest.NewLogger(t).Sugar())
+	result, err := owner.EscalateTicket(ctx, dto.TicketEscalationCommand{WorkItemID: ticket.ID, Reason: "SLA违规需要升级", Meta: workitemmutation.Meta{TenantID: testTenant.ID, ActorID: testUser.ID, ExpectedVersion: ticket.Version, OperationID: "manual-sla", Source: "test"}})
+	require.NoError(t, err)
+	require.Equal(t, ticket.Version+1, result.Version)
+	require.Equal(t, "critical", client.Ticket.GetX(ctx, ticket.ID).Priority)
+	require.Zero(t, client.SLAAlertHistory.Query().CountX(ctx), "manual commands must not fabricate SLA rule histories")
+	require.Equal(t, 1, client.AuditLog.Query().CountX(ctx))
 }
 
 // ==================== SLA升级处理测试 ====================

@@ -620,3 +620,14 @@ Outbox 并发/回滚测试提交 `56879f7c9`；独立 reviewer 确认限定结�
 - `s3-feishu-update-regression.log` service/bootstrap Outbox/Feishu/手动升级定向PASS，build.json全后端exit0，integration-compile.log仅integration_postgres标签编译PASS。最终只读review_execution_scope_s1确认修复，无新增阻断。
 
 边界：仅声明本地接收端，没有企业实发。新协议不覆盖SyncTicketToFeishu/UpdateExistingTicketTask旧直发、旧在途creation或其他类型事件，不据此宣称全局远端顺序。缺mapping拒绝是显式前置条件；未验证真实Feishu配置恢复、SSO/HTTP全链、scope关闭后的此handler专项、完整生产规模与多生产者并发。旧两个仅测试调用手动方法/BPMN及其它共享写入口仍待整理；S3/S4/S5/S6/B3/T3/T4/G2/G3未完成。固定CandidateSHA仍为 `d7470a32dbb87acc9b5e4d9a895a146410723561`，候选未启动，无WSL/共享数据变更、共享迁移、推送或main合并。
+
+
+### B2 S3 手动升级唯一所有者（2026-09-13）
+
+在 `98de8076b` 后重新检索实际Go调用，移除无生产调用的TicketLifecycleService.EscalateTicket及interface声明、其独用优先级/占位分配helper，以及EscalationService.EscalateTicket。后者原先创建AlertRuleID=0且notification_sent=true的伪SLA记录，删除后不保留兼容包装。当前生产EscalateTicket调用仅controller→TicketService typed command；BPMN独立escalate分支不是该方法，仍待接入。
+
+保留既有测试文件、位置和函数名，生命周期四档priority/critical场景转向真实TicketService命令，显式Standard policy/notifier/repository和当前super_admin fixture；验证版本增加、处理人保全和既定in_progress状态。原EscalationService测试从仅“不panic”改为成功/critical/version/一个audit且无伪SLA history。专业边界保留service_escalate覆盖，移除不存在方法的重复分支。纯优先级表格改为现存纯函数，unknown按新契约明确错误，不再静默保留。没有迁移或删除测试文件/历史目录。
+
+证据位于candidate-delivery/b2：s3-manual-owner-baseline.log修改前受影响测试PASS；s3-manual-owner-tests.log先将旧测试转为新所有者后PASS；s3-manual-owner-final-regression.log service/controller/bootstrap相关生命周期/升级/专业边界/Outbox/Feishu定向PASS；s3-manual-owner-pg.log完整TestCandidateIntakeCreationBoundary PASS，无skip；build.json全后端exit0。中间编译发现遗漏旧helper表格调用，已补齐；helper fixture依赖Repository缺失亦修正。这些不是业务RED，本增量移除重复代码而不新增业务行为。独立review_execution_scope_s1复审无阻断。
+
+Standard/super_admin测试不替代普通角色授权和候选真实路径；候选边界证据来自上述私有PG16全套。BPMN、Feishu旧直发/历史GET副作用、其它共享写入口及S3/S4/S5/S6/B3/T3/T4/G2/G3仍待完成。CandidateSHA不变、候选保持停止，无WSL/共享环境变更、企业实发、推送或main合并。

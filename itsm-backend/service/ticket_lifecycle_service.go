@@ -22,8 +22,6 @@ type TicketLifecycleServiceInterface interface {
 	ResolveTicket(ctx context.Context, ticketID int, resolution string, tenantID int, resolvedBy int) (*ent.Ticket, error)
 	// CloseTicket 关闭工单
 	CloseTicket(ctx context.Context, ticketID int, feedback string, tenantID int, closedBy int) (*ent.Ticket, error)
-	// EscalateTicket 升级工单
-	EscalateTicket(ctx context.Context, ticketID int, reason string, tenantID int, escalatedBy int) (*ent.Ticket, error)
 	// UpdateTicketStatus 更新工单状态
 	UpdateTicketStatus(ctx context.Context, ticketID int, status string, tenantID int, operatorID int) (*ent.Ticket, error)
 	// CancelWorkflow 取消工作流
@@ -147,69 +145,6 @@ func (s *TicketLifecycleService) CloseTicket(ctx context.Context, ticketID int, 
 	})
 
 	s.logger.Infow("Ticket closed", "ticketID", ticketID, "closedBy", closedBy)
-	return updatedTicket, nil
-}
-
-// EscalateTicket 升级工单
-func (s *TicketLifecycleService) EscalateTicket(ctx context.Context, ticketID int, reason string, tenantID int, escalatedBy int) (*ent.Ticket, error) {
-	// 验证工单存在
-	t, err := s.client.Ticket.Query().
-		Where(ticket.IDEQ(ticketID), ticket.TenantID(tenantID), ticket.DeletedAtIsNil()).
-		Only(ctx)
-	if err != nil {
-		s.logger.Errorw("Failed to find ticket", "ticketID", ticketID, "error", err)
-		return nil, err
-	}
-
-	if err := rejectProfessionalTicketMutation(t.RecordClass); err != nil {
-		return nil, err
-	}
-	if t.Status == common.TicketStatusClosed || t.Status == common.TicketStatusCancelled {
-		return nil, ErrInvalidTicketStatus
-	}
-	if strings.TrimSpace(reason) == "" {
-		return nil, fmt.Errorf("升级原因不能为空")
-	}
-
-	// 计算升级后的优先级
-	newPriority := s.getEscalatedPriority(t.Priority)
-
-	// 获取升级后的处理人
-	newAssigneeID := s.getEscalationAssignee(newPriority, tenantID)
-
-	// 构建更新操作
-	update := s.client.Ticket.UpdateOneID(ticketID).Where(ticket.RecordClassNotIn(dto.RecordClassIncident, dto.RecordClassProblem, dto.RecordClassChangeRequest)).
-		Where(ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil(), ticket.VersionEQ(t.Version)).
-		SetPriority(newPriority).
-		SetVersion(t.Version + 1)
-
-	// 如果获取到了新的处理人，则分配给他
-	if newAssigneeID > 0 {
-		update = update.SetAssigneeID(newAssigneeID)
-	}
-
-	// 更新工单
-	updatedTicket, err := update.Save(ctx)
-	if err != nil {
-		s.logger.Errorw("Failed to escalate ticket", "ticketID", ticketID, "error", err)
-		return nil, err
-	}
-
-	// 记录审计日志
-	s.logAuditEvent(ctx, "ticket_escalated", ticketID, tenantID, map[string]interface{}{
-		"escalatedBy":      escalatedBy,
-		"reason":           reason,
-		"previousPriority": t.Priority,
-		"newPriority":      newPriority,
-		"newAssignee":      newAssigneeID,
-	})
-
-	// 发送升级通知
-	if s.notificationService != nil && newAssigneeID > 0 {
-		s.notificationService.SendEscalationNotification(ticketID, newAssigneeID, escalatedBy, reason)
-	}
-
-	s.logger.Infow("Ticket escalated", "ticketID", ticketID, "newPriority", newPriority, "newAssignee", newAssigneeID)
 	return updatedTicket, nil
 }
 
@@ -415,39 +350,6 @@ func IsValidTicketStatusTransition(currentStatus, newStatus string) bool {
 // isValidStatusTransition 检查状态转换是否合法 (内部调用)
 func (s *TicketLifecycleService) isValidStatusTransition(currentStatus, newStatus string) bool {
 	return IsValidTicketStatusTransition(currentStatus, newStatus)
-}
-
-// getEscalatedPriority 获取升级后的优先级
-func (s *TicketLifecycleService) getEscalatedPriority(currentPriority string) string {
-	priorityLevels := map[string]int{
-		"low":      1,
-		"medium":   2,
-		"high":     3,
-		"critical": 4,
-	}
-
-	currentLevel, ok := priorityLevels[currentPriority]
-	if !ok {
-		return currentPriority
-	}
-
-	// 升级到更高优先级，最多到 critical
-	if currentLevel < 4 {
-		for p, level := range priorityLevels {
-			if level == currentLevel+1 {
-				return p
-			}
-		}
-	}
-
-	return currentPriority
-}
-
-// getEscalationAssignee 获取升级后的处理人
-func (s *TicketLifecycleService) getEscalationAssignee(priority string, tenantID int) int {
-	// 这里应该查询升级规则配置，返回对应的处理人
-	// 暂时返回0，表示不自动分配处理人
-	return 0
 }
 
 // logAuditEvent 记录审计日志

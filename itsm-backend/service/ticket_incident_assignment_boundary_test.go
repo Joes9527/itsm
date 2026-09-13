@@ -12,7 +12,7 @@ import (
 func TestTicketAssignmentRejectsProfessionalClasses(t *testing.T) {
 	for _, class := range []string{"incident", "problem", "change_request"} {
 		t.Run(class, func(t *testing.T) {
-			for _, action := range []string{"msp", "edit", "service_escalate", "assign", "batch", "policy", "smart", "reassign", "policy_batch", "accept", "forward", "escalate"} {
+			for _, action := range []string{"msp", "edit", "service_escalate", "assign", "batch", "policy", "smart", "reassign", "policy_batch", "accept", "forward"} {
 				t.Run(action, func(t *testing.T) {
 					client, owner, ctx := setupIncidentTest(t)
 					defer client.Close()
@@ -58,8 +58,6 @@ func TestTicketAssignmentRejectsProfessionalClasses(t *testing.T) {
 						err = workflow.AcceptTicket(ctx, &dto.AcceptTicketRequest{TicketID: before.ID}, next.ID, tenant.ID)
 					case "forward":
 						err = workflow.ForwardTicket(ctx, &dto.ForwardTicketRequest{TicketID: before.ID, ToUserID: next.ID, TransferOwnership: true}, actor.ID, tenant.ID)
-					case "escalate":
-						_, err = NewTicketLifecycleService(client, owner.logger).EscalateTicket(ctx, before.ID, "handover", tenant.ID, actor.ID)
 					}
 					require.ErrorContains(t, err, "owning domain command")
 					after := client.Ticket.GetX(ctx, before.ID)
