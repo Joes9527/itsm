@@ -207,7 +207,7 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 前置RED `507f62293`：真实Manager/Gin Provision handler允许未声明candidate目标，测试随后通过builtin Webhook各向loopback发送一次；HTTP还改写私有fixture既存配置。s5-connector-request-activation-final-red.log七项预期失败，无skip/race，独立复核有效。配置行数保全断言已补；不覆盖Marketplace、生产认证或迁移前遗留数据。当前含新用例的测试为RED，生产未修复，不能引用此前绿色结果放行。
 
-- [ ] 在现有ExecutionConfig中声明精确tenant/scope、connector name/provider、允许的既有投递能力和不可变配置身份；验证scope归属、能力开启、重复实例键，构造时深复制。声明来自可信启动配置，凭证沿既有安全配置来源解析，不写日志或提交秘密。
+- [x] 在现有ExecutionConfig中声明精确tenant/scope、connector name/provider、允许的既有投递能力和不可变配置身份；验证scope归属、能力开启、重复实例键，构造时深复制。声明来自可信启动配置，凭证沿既有安全配置来源解析，不写日志或提交秘密。前置提交`0347fdc78`：具名config/database race、完整config包及最终后端build通过，独立审阅无阻断；修复既有环境解析不递归列表对象的问题。实际目标身份核验和Manager消费仍属于下项，未实现。目的地摘要不等于业务投递授权；outbox不能授权所有handler。配置数值有损JSON往返拒绝，不恢复加载前精度。完整私有suite仍仅含507f62293七项已知失败，整体为FAIL，详细证据见T1。
 - [ ] 唯一Manager复用内部构造流程：candidate启动只激活声明目标，不枚举历史数据库；普通Provision请求即使提交相同scope/配置也不能取得启动权。初始化前核验可信来源及manifest初始化行为声明，初始化后核验真实目的地身份；未知初始化行为拒绝，失败关闭新对象，成功才发布generation，部分启动失败清理。
 - [ ] Connector管理及Marketplace安装/启用/配置更新入口在首次持久化之前检查准入；拒绝时零factory/Init、历史配置整行不变。Marketplace当前先UpdateInstallationConfig后Provision，不能只修Manager而保留前置写入。
 - [ ] 现有通知/Webhook投递owner继续验证持久意图、成员、租约、精确目标与generation；清点Get/GetInstance/完整Connector直接调用，启动目标资格不能授权Test、诊断、polling或绕开业务投递。不得把connector_poll当投递许可。
