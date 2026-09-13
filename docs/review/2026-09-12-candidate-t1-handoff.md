@@ -968,3 +968,12 @@ S5不可处理消息的完整处置、进程重启及其它异步入口继续未
 独立review_execution_scope_s1复核生产逻辑无新增阻断；两项测试建议已关闭：并发Close后Ping严格要求redis.ErrClosed，两活消费者在PEL0后显式关闭并检查尾部缓冲无重复。`s5-stream-progress-final-regression.log` eventbus/config/bootstrap race PASS；最终 `s5-stream-progress-full-private.log` 完整intake、真实PG审计与普通/候选Webhook ACK缺口恢复、离线与历史Stream保全、所有PersistentStream测试及PG/Redis/MinIO构造保全race PASS，无skip/race。全后端 `s5-stream-progress-build.log` exit0，git diff --check通过。
 
 证据仅为本机私有PG16/Redis7.2/MinIO及loopback；目标PG17和B环境准入未验证。消费者重建不等于应用强杀或Redis服务重启，传输不是恰好一次，慢处理并发重领仍依赖业务持久幂等；永久拒绝消息人工处置及其它异步入口仍待完成。修正开发指南中普通Webhook仍同步发送的过时段落。S5/T3/T4/G2/G3保持未完成，固定CandidateSHA不变、候选未启动，无共享数据库或B配置改动、企业外呼、push或main合并。
+
+
+### B2 S5 独立消费者进程强制终止恢复（2026-09-13）
+
+在 `aab8dfcc2` 后增加 `TestPersistentStreamRecoversAfterConsumerProcessKill`，复用真实WatermillEventBus和私有Redis，使用当前测试二进制启动两个不同PID的消费者子进程。父进程创建私有随机口令/PID核验Redis，连接配置通过stdin传递；子进程连接后先核验同一Redis PID，再显式订阅，不接触共享环境。首进程收到原完整信封后写测试收据并等待，不返回ACK；父进程核验完整可解析收据的EventID/WorkItemID以及原PEL entryID后调用Process.Kill，确认非正常退出和原PEL/consumer仍在。第二进程从同组恢复，核验完整信封等价、PEL归零、Stream原行完整不变和不同消费者身份。
+
+独立review_execution_scope_s1发现首轮仅Stat收据可能在文件创建但尚未写完时Kill，导致测试偶发失败；现等待ReadFile+完整JSON及预期主体再保存首快照，最终比较该快照，复审已关闭。本项只增加测试，无生产修复，不虚构业务RED。`s5-stream-process-kill.log` 首次定向race PASS；`s5-stream-process-full-private.log` 完整候选intake、真实审计/Webhook恢复、所有PersistentStream及私有PG/Redis/MinIO构造保全race PASS。仅同步断言补强后 `s5-stream-process-final.log` 定向race连续3次PASS，无skip/race；git diff --check通过。仅测试和说明变更，以真实测试编译/执行验证，不重复上轮已通过且生产代码未变的全后端build。
+
+结论只覆盖消费者独立进程强制终止的至少一次传输恢复：测试authority及本地信封收据不是PG业务提交回执，也不证明完整应用/Worker或Redis服务重启、WSL角色/目标PG17准入及G3的60分钟观察。后续仍需真实环境和完整业务路径验证。CandidateSHA及候选未启动状态不变，S5/T3/T4/G2/G3未完成，无共享数据、B配置、企业外呼或push/main合并。

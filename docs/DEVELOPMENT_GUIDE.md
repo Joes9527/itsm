@@ -32,6 +32,8 @@ Webhook handler 在两模式均接入共享outbox Worker，按当前 publishing 
 
 私有PG/Redis及loopback接收端已验证普通与候选共用持久所有者，以及消费提交后ACK缺口的消费者重建恢复；原同步路径已删除。这不证明整个应用或Redis服务重启、任意外发窗口恰好一次或目标环境准入，所有S5/G2入口尚未验收，不能据此启动候选。
 
+`TestPersistentStreamRecoversAfterConsumerProcessKill` 使用同一测试二进制的两个独立消费者子进程：父进程核验任务私有Redis的PID，配置仅从stdin传入；首进程交付完整信封后等待、不ACK，父进程核验原PEL再强制终止，新进程以同组新消费者恢复原消息，核对完整信封、PEL归零和Stream原行不变。这是传输fixture的进程终止恢复，不是业务事务回执、完整API/Worker应用重启或Redis服务重启验收；不得作为G3替代证据。
+
 离线与 ACK 间隙恢复测试分别为 `TestCandidateStreamDeliversOfflineMessages` 和 `TestCandidateIntakeCreationBoundary/stream_source_requires_current_persistent_authority/stream_consumer_recovers_committed_audit_before_ack`，后者同时需要下述私有 PostgreSQL socket 和 Redis 二进制变量。它验证真实审计提交后停止 ACK、关闭旧 bus、新 bus 领取原 pending 消息，原审计不变且旧 Stream 保全；不替代整个应用/操作系统重启或完整 outbox Worker 投递验证。
 
 本机范围测试使用专属 Unix socket PostgreSQL，`CANDIDATE_SCOPE_TEST_SOCKET` 必须指向带 `candidate-test-instance` 标记（内容为 `itsm-candidate-isolated-test` 加换行）的私有测试实例；端口为25439。测试只创建/删除随机命名的自有数据库及角色，不读取普通业务 DSN。运行 `go test -tags candidate_scope ./tests/integration -run '^TestCandidateScopeRegistration$' -count=1`。未设置变量产生 skip，不是通过；本机 PostgreSQL16 证据不能代替目标 PostgreSQL17 复核。
