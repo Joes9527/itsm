@@ -139,7 +139,7 @@ S3/S4/S5/S6及候选完整交付仍未完成，CandidateSHA不变、候选停止
 
 - [ ] 将编辑命令统一到现有WorkItem Meta/receipt，必需expectedVersion与稳定operationId；actor/tenant/source由HTTP、子任务边界及持久工具invocation构造，不能信任JSON userId或每次重试生成新身份。前端及工具输入版本契约同时迁移，保留明确冲突响应。工具expectedVersion在批准时持久化，operationId从invocation派生；done写失败重试复用原版本/回执，不读取新version冒充原命令。
 - [ ] 原服务事务读取当前WorkItem与现行actor/权限，合法历史receipt允许授权后只读重放；首次写入先Bind/member/版本检查，再允许任何标签创建或关系写。子任务父子归属及相关父成员在该事务确认。
-  `64ab11f0f` 已接入原事务当前actor/tenant会话、ticket:update及专业WorkItemPolicy权限，UserID禁止JSON输入，两HTTP入口授权拒绝403。缺失/停用/预热缓存后撤权/外租户actor保全、普通editor正向、Incident标签专业权限补齐通过；完整私有PG/回归/构建及独立审阅通过，PUT/PATCH controller身份测试通过。仍未完成Meta/source/op、历史receipt顺序及父子/父范围，因此不勾选。
+  `64ab11f0f` 已接入原事务当前actor/tenant会话、ticket:update及专业WorkItemPolicy权限，UserID禁止JSON输入，两HTTP入口授权拒绝403。缺失/停用/预热缓存后撤权/外租户actor保全、普通editor正向、Incident标签专业权限补齐通过；完整私有PG/回归/构建及独立审阅通过，PUT/PATCH controller身份测试通过。后续 `157e2ea30` 已把实际父成员/同租户未删除记录及PATCH预期父ID比对接入原RR事务，JSON不能提供预期父ID，普通编辑也检查实际父级；历史父拒绝及成员父正向、父整行保全、HTTP路由错误和正文不能覆盖通过，完整私有PG/回归/构建及独立审阅通过。校验基于RR快照，不阻止并发父删除；父删除/外租户专项负测尚未覆盖。仍未完成Meta/source/op及历史receipt顺序，因此不勾选。
 - [ ] category/subtype、专业字段/共享标签、处理人/请求人、状态/解决方案/表单字段契约逐项核对，不静默忽略客户端字段；标签目录创建及关系替换复用既有所有者/原事务，不另建平行resolver。
 - [x] 仓储更新接收调用方事务并沿用唯一字段映射和CAS实现；`81860d2e4` 提供显式UpdateTx，SQLite及真实私有PG验证提交/回滚/旧版本标签回滚、另一连接提交前不可见；定向回归/全后端构建及独立审阅通过。仅仓储前置完成，TicketService及各调用入口尚未迁移，原业务RED仍存在。
 - [ ] 同事务写编辑审计/稳定回执、状态通知意图、应有SLA违规收尾；所有失败传播回滚，applied SLA冻结不重套策略。保留通知偏好及原接收人语义，不把日志warning当副作用成功。
