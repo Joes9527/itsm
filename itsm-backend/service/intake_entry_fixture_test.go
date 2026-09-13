@@ -51,6 +51,28 @@ func NewTicketServiceForTest(client *ent.Client, logger *zap.SugaredLogger) *Tic
 	owner := domain.NewTicketService(&domain.TicketServiceConfig{Client: client, Repository: ticket.NewEntRepository(client, logger), Logger: logger, Execution: executionfixture.Standard()})
 	return &TicketService{owner, client, newEntryApplication(client, owner, domain.NewIncidentService(client, logger, executionfixture.Standard()))}
 }
+
+// Editing tests opt into an explicit current permission; creation fixtures do
+// not silently inherit update access.
+func configureEntryTicketEdit(ctx context.Context, client *ent.Client, tenantID, actorID int) error {
+	if err := configureEntryFixture(ctx, client, tenantID, actorID); err != nil {
+		return err
+	}
+	actor, err := client.User.Get(ctx, actorID)
+	if err != nil {
+		return err
+	}
+	currentRole, err := client.Role.Query().Where(role.TenantIDEQ(tenantID), role.CodeEQ(actor.Role)).Only(ctx)
+	if err != nil {
+		return err
+	}
+	p, err := client.Permission.Create().SetTenantID(tenantID).SetCode("ticket:edit-test").SetName("Edit fixture").SetResource("ticket").SetAction("update").Save(ctx)
+	if err != nil {
+		return err
+	}
+	return client.RolePermission.Create().SetTenantID(tenantID).SetRoleID(currentRole.ID).SetPermissionID(p.ID).Exec(ctx)
+}
+
 func (s *TicketService) SubmitCreation(ctx context.Context, req *dto.CreateTicketRequest, tenantID int) (*ticket.Ticket, error) {
 	return s.SubmitCreationAsActor(ctx, req, tenantID, req.RequesterID)
 }

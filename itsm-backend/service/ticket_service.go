@@ -28,6 +28,7 @@ import (
 	"itsm-backend/ent/ticketcategory"
 	entTicketComment "itsm-backend/ent/ticketcomment"
 	"itsm-backend/ent/user"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/repository/base"
 	"itsm-backend/repository/ticket"
 
@@ -442,6 +443,27 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 		if err := rejectProfessionalTicketMutation(current.RecordClass); err != nil {
 			return nil, err
 		}
+	}
+
+	actor, err := authorization.ResolveLifecycleActor(ctx, tx, s.directory, req.UserID, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	identity := creation.Identity{TenantID: tenantID, ActorID: actor.ID, Role: authorization.EffectiveSessionRole(actor)}
+	if err = authorization.RequireCurrentPermission(ctx, tx, identity, "ticket", "update"); err != nil {
+		return nil, err
+	}
+	policy, err := authorization.ResolveWorkItemPolicy(current.RecordClass)
+	if err != nil {
+		return nil, common.NewForbiddenError("unsupported WorkItem record class")
+	}
+	if policy.Resource != "ticket" || policy.ResolveAction("update") != "update" {
+		if err = authorization.RequireCurrentPermission(ctx, tx, identity, policy.Resource, policy.ResolveAction("update")); err != nil {
+			return nil, err
+		}
+	}
+	if isFinalStatus(current.Status) {
+		return nil, common.NewForbiddenError("工单已结束，无法编辑")
 	}
 
 	// 状态转换验证

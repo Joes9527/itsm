@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -517,6 +518,7 @@ func TestTicketController_UpdateTicket(t *testing.T) {
 	// 请求没有带 X-Test-Role，中间件默认用 "admin"——UpdateTicket 现在会用
 	// service.CanEdit 二次校验 ticket:update，测试库是全新的，要先补上这条权限。
 	seedTicketRolePermission(t, client, tenant.ID, "admin", "ticket", "update")
+	seedTicketRolePermission(t, client, tenant.ID, user.Role, "ticket", "update")
 
 	tests := []struct {
 		name         string
@@ -632,4 +634,36 @@ func TestTicketController_DeleteTicket(t *testing.T) {
 			assert.Equal(t, common.NotFoundCode, verifyResp.Code, "deleted ticket should 404")
 		})
 	}
+}
+
+func TestTicketController_UpdateTicketRechecksInactiveActor(t *testing.T) {
+	r, client, controller := setupTestTicketController(t)
+	defer client.Close()
+	r.PATCH("/api/v1/tickets/:id/subtasks/:subtask_id", controller.UpdateSubtask)
+	tenant, actor := createTestTenantAndUserForTicket(t, client)
+	ctx := context.Background()
+	seedTicketRolePermission(t, client, tenant.ID, "admin", "ticket", "update")
+	seedTicketRolePermission(t, client, tenant.ID, actor.Role, "ticket", "update")
+	impersonated := client.User.Create().SetTenantID(tenant.ID).SetUsername("edit-body-actor").SetName("Body actor").SetEmail("body@example.invalid").SetPasswordHash("fixture").SetRole("super_admin").SetActive(true).SaveX(ctx)
+	parent := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetTicketNumber("EDIT-PARENT").SetTitle("Parent").SetRecordClass("generic").SetStatus("open").SaveX(ctx)
+	child := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetTicketNumber("EDIT-CHILD").SetTitle("Child").SetRecordClass("generic").SetStatus("open").SetParentTicketID(parent.ID).SaveX(ctx)
+	client.User.UpdateOneID(actor.ID).SetActive(false).ExecX(ctx)
+	for _, endpoint := range []struct{ method, url string }{{http.MethodPut, fmt.Sprintf("/api/v1/tickets/%d", child.ID)}, {http.MethodPatch, fmt.Sprintf("/api/v1/tickets/%d/subtasks/%d", parent.ID, child.ID)}} {
+		before, err := json.Marshal(client.Ticket.GetX(ctx, child.ID))
+		require.NoError(t, err)
+		body := fmt.Sprintf(`{"title":"must reject actor","userId":%d,"version":%d,"tags":["unauthorized"]}`, impersonated.ID, child.Version)
+		request := httptest.NewRequest(endpoint.method, endpoint.url, strings.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("X-Test-Tenant", strconv.Itoa(tenant.ID))
+		request.Header.Set("X-Test-User", strconv.Itoa(actor.ID))
+		response, _ := doJSONRequest(t, r, request)
+		require.Equal(t, common.ForbiddenCode, response.Code, response.Message)
+		after, err := json.Marshal(client.Ticket.GetX(ctx, child.ID))
+		require.NoError(t, err)
+		require.JSONEq(t, string(before), string(after))
+		require.Zero(t, client.TicketTag.Query().CountX(ctx))
+	}
+	var bound dto.UpdateTicketRequest
+	require.NoError(t, json.Unmarshal([]byte(`{"userId":123,"title":"input"}`), &bound))
+	require.Zero(t, bound.UserID, "JSON cannot provide the command actor")
 }

@@ -111,8 +111,12 @@ func (tc *TicketController) UpdateTicket(c *gin.Context) {
 
 	ticket, err := tc.ticketService.UpdateTicket(c.Request.Context(), ticketID, &req, tenantID)
 	if err != nil {
-		if errors.Is(err, executionscope.ErrDenied) {
-			common.Forbidden(c, "ticket execution scope denied")
+		if errors.Is(err, executionscope.ErrDenied) || errors.Is(err, creation.ErrPermissionDenied) {
+			common.Forbidden(c, "ticket edit permission or execution scope denied")
+			return
+		}
+		if app, ok := common.AsAppError(err); ok && app.Code == common.ErrCodeForbidden {
+			common.Forbidden(c, app.Message)
 			return
 		}
 		// 处理版本冲突错误
@@ -941,8 +945,12 @@ func (tc *TicketController) UpdateSubtask(c *gin.Context) {
 
 	updatedTicket, err := tc.ticketService.UpdateTicket(c.Request.Context(), subtaskID, &req, tenantID)
 	if err != nil {
-		if errors.Is(err, executionscope.ErrDenied) {
-			common.Forbidden(c, "ticket execution scope denied")
+		if errors.Is(err, executionscope.ErrDenied) || errors.Is(err, creation.ErrPermissionDenied) {
+			common.Forbidden(c, "ticket edit permission or execution scope denied")
+			return
+		}
+		if app, ok := common.AsAppError(err); ok && app.Code == common.ErrCodeForbidden {
+			common.Forbidden(c, app.Message)
 			return
 		}
 		tc.logger.Errorw("Failed to update subtask", "error", err, "subtask_id", subtaskID, "tenant_id", tenantID)

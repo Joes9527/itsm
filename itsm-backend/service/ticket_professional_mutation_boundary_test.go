@@ -112,11 +112,15 @@ func TestTicketCoreBoundaryPreservesSharedOperations(t *testing.T) {
 			require.NoError(t, err)
 			actor, err := createIncidentTestUser(ctx, client, tenant.ID, "owner")
 			require.NoError(t, err)
+			role := client.Role.Create().SetTenantID(tenant.ID).SetCode(actor.Role).SetName("Shared edit fixture").SetIsActive(true).SaveX(ctx)
+			permission := client.Permission.Create().SetTenantID(tenant.ID).SetCode("shared-edit").SetName("Shared edit").SetResource("*").SetAction("*").SaveX(ctx)
+			client.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).ExecX(ctx)
+
 			next, err := createIncidentTestUser(ctx, client, tenant.ID, "next")
 			require.NoError(t, err)
 			item := client.Ticket.Create().SetTitle("original title").SetDescription("description").SetTicketNumber("SHARED").SetRequesterID(actor.ID).SetTenantID(tenant.ID).SetRecordClass(class).SetStatus("new").SaveX(ctx)
 			svc := NewTicketService(&TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, owner.logger), Logger: owner.logger, Execution: executionfixture.Standard()})
-			_, err = svc.UpdateTicket(ctx, item.ID, &dto.UpdateTicketRequest{Tags: []string{}, Version: item.Version}, tenant.ID)
+			_, err = svc.UpdateTicket(ctx, item.ID, &dto.UpdateTicketRequest{UserID: actor.ID, Tags: []string{}, Version: item.Version}, tenant.ID)
 			require.NoError(t, err)
 			err = NewTicketWorkflowService(client, owner.logger).ForwardTicket(ctx, &dto.ForwardTicketRequest{TicketID: item.ID, ToUserID: next.ID, TransferOwnership: false, Comment: "collaborate"}, actor.ID, tenant.ID)
 			require.NoError(t, err)
@@ -124,7 +128,7 @@ func TestTicketCoreBoundaryPreservesSharedOperations(t *testing.T) {
 			require.Equal(t, item.AssigneeID, after.AssigneeID)
 			require.Equal(t, item.Status, after.Status)
 			if class == "generic" || class == "service_request_item" || class == "catalog_task" {
-				_, err = svc.UpdateTicket(ctx, item.ID, &dto.UpdateTicketRequest{Title: "updated title", Version: after.Version}, tenant.ID)
+				_, err = svc.UpdateTicket(ctx, item.ID, &dto.UpdateTicketRequest{UserID: actor.ID, Title: "updated title", Version: after.Version}, tenant.ID)
 				require.NoError(t, err)
 				require.Equal(t, "updated title", client.Ticket.GetX(ctx, item.ID).Title)
 			}

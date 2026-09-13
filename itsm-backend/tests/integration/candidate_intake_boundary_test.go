@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"itsm-backend/authorization"
 	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/config"
@@ -2907,6 +2908,68 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		after := owner.Ticket.GetX(ctx, before.ID)
 		require.Equal(t, before.Status, after.Status)
 		require.Equal(t, before.Version, after.Version)
+
+	})
+
+	t.Run("ticket edits recheck current actor and permissions", func(t *testing.T) {
+		svc := service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy})
+		code := "editor-" + uuid.NewString()
+		otherTenant := owner.Tenant.Create().SetName("Foreign editor").SetCode(code).SaveX(ctx)
+		editorRole := owner.Role.Create().SetTenantID(tenant.ID).SetName("Editor").SetCode(code).SetIsActive(true).SaveX(ctx)
+		editPermission := owner.Permission.Create().SetTenantID(tenant.ID).SetCode(code).SetName("Edit").SetResource("ticket").SetAction("update").SaveX(ctx)
+		link := owner.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(editorRole.ID).SetPermissionID(editPermission.ID).SaveX(ctx)
+		editor := owner.User.Create().SetTenantID(tenant.ID).SetUsername(code).SetEmail(code + "@example.invalid").SetName("Editor").SetPasswordHash("fixture").SetRole(code).SetActive(true).SaveX(ctx)
+		fresh, err := app.Create(ctx, identity, command("edit-actor-positive", "generic"))
+		require.NoError(t, err)
+		before := owner.Ticket.GetX(ctx, fresh.WorkItemID)
+		_, err = svc.UpdateTicket(ctx, before.ID, &dto.UpdateTicketRequest{Title: "authorized editor", Version: before.Version, UserID: editor.ID}, tenant.ID)
+		require.NoError(t, err)
+		require.True(t, authorization.HasResourcePermission(owner, code, "ticket", "update", tenant.ID))
+		defer authorization.InvalidateRolePermissionCache(code, tenant.ID)
+		for _, state := range []string{"missing", "inactive", "revoked", "foreign"} {
+			actorID := editor.ID
+			switch state {
+			case "missing":
+				actorID = 0
+			case "inactive":
+				owner.User.UpdateOneID(editor.ID).SetActive(false).ExecX(ctx)
+			case "revoked":
+				owner.RolePermission.DeleteOneID(link.ID).ExecX(ctx)
+			case "foreign":
+				actorID = editor.ID
+				owner.User.UpdateOneID(editor.ID).SetTenantID(otherTenant.ID).ExecX(ctx)
+			}
+			current := owner.Ticket.GetX(ctx, fresh.WorkItemID)
+			var original, after string
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, current.ID).Scan(&original))
+			tags := owner.TicketTag.Query().CountX(ctx)
+			_, editErr := svc.UpdateTicket(ctx, current.ID, &dto.UpdateTicketRequest{Title: "must reject " + state, Tags: []string{"edit-actor-" + state}, Version: current.Version, UserID: actorID}, tenant.ID)
+			assert.Error(t, editErr, state)
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, current.ID).Scan(&after))
+			assert.JSONEq(t, original, after, state)
+			assert.Equal(t, tags, owner.TicketTag.Query().CountX(ctx), state)
+			if state == "inactive" {
+				owner.User.UpdateOneID(editor.ID).SetActive(true).ExecX(ctx)
+			}
+			if state == "revoked" {
+				link = owner.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(editorRole.ID).SetPermissionID(editPermission.ID).SaveX(ctx)
+			}
+			if state == "foreign" {
+				owner.User.UpdateOneID(editor.ID).SetTenantID(tenant.ID).ExecX(ctx)
+			}
+		}
+		incident, err := app.Create(ctx, identity, command("edit-professional-permission", "incident"))
+		require.NoError(t, err)
+		item := owner.Ticket.GetX(ctx, incident.WorkItemID)
+		req := &dto.UpdateTicketRequest{Tags: []string{"shared-edit-permission"}, Version: item.Version, UserID: editor.ID}
+		_, err = svc.UpdateTicket(ctx, item.ID, req, tenant.ID)
+		require.Error(t, err, "ticket:update alone cannot edit Incident shared metadata")
+		require.Equal(t, item.Version, owner.Ticket.GetX(ctx, item.ID).Version)
+		professional := owner.Permission.Create().SetTenantID(tenant.ID).SetCode(code + "-incident").SetName("Incident write").SetResource("incident").SetAction("write").SaveX(ctx)
+		owner.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(editorRole.ID).SetPermissionID(professional.ID).ExecX(ctx)
+		_, err = svc.UpdateTicket(ctx, item.ID, req, tenant.ID)
+		require.NoError(t, err)
+		require.Equal(t, item.Version+1, owner.Ticket.GetX(ctx, item.ID).Version)
 
 	})
 

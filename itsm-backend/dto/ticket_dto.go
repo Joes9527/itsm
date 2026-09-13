@@ -57,9 +57,9 @@ type UpdateTicketRequest struct {
 	Tags        []string               `json:"tags"`
 	Resolution  string                 `json:"resolution" binding:"omitempty"`
 	FormFields  map[string]interface{} `json:"formFields"`
-	UserID      int                    `json:"userId" binding:"omitempty"` // 操作用户ID (后端自动填充)
-	Version     int                    `json:"version"`                    // 版本号（乐观锁）
-	Force       bool                   `json:"-"`                          // 仅限内部受信调用，禁止客户端绕过乐观锁
+	UserID      int                    `json:"-"`       // 仅由已认证HTTP/工具边界填充，禁止JSON指定
+	Version     int                    `json:"version"` // 版本号（乐观锁）
+	Force       bool                   `json:"-"`       // 仅限内部受信调用，禁止客户端绕过乐观锁
 }
 
 // ListTicketsRequest 获取工单列表请求

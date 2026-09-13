@@ -728,3 +728,14 @@ Callback contract新增version及generic typed lifecycle result，沿既有流�
 `s3-ticket-edit-status-regression.log` 服务/控制器/仓储/通知相关回归PASS，`s3-ticket-edit-status-build.log` 全后端构建exit0。回归初轮全局测试fixture过早注入notifier改变创建依赖，已撤回该改动，仅两个实际编辑成功测试局部注入；生产无fallback。git diff --check通过；独立review_execution_scope_s1两次限定复核无新增阻断，并按建议收紧通知精确数量与cleanup断言。未运行企业发送或候选WSL验收。
 
 完整编辑命令仍未完成：Feishu仍在commit后旧独立路径，可信Meta/actor/parent、必需expectedVersion、稳定operationId及回执重放尚待贯通HTTP/工具/前端；业务输入字段与专业类归属缺口仍按前述处理。数据库通知意图原子提交不等于外部投递已完成，不等于整个S3/S4/S5/S6/B3/T3/T4/G2/G3通过。固定CandidateSHA不变，候选未启动，无WSL/共享数据库变更、共享迁移、企业实发、推送或main合并。
+
+
+### B2 S3 编辑操作者与现行权限原事务核验（2026-09-13）
+
+在 `49293729d` 后UpdateTicket原RR事务内新增ResolveLifecycleActor，核验actor活跃/所选tenant会话；RequireCurrentPermission读取当前角色与权限，要求ticket:update，专业共享编辑额外使用既有WorkItemPolicy的领域resource/action（例如Incident为incident:write），不以缓存权限代替原事务查询。既有CanEdit“终态不可编辑”条件进入服务，直接工具/子任务调用也不能绕过。原专业核心字段拒绝仍保留。UpdateTicketRequest.UserID改json:-，只由HTTP或持久工具边界设置；普通编辑/子任务把授权失败映射403。尚未将该输入重构为完整Meta命令。
+
+`s3-ticket-edit-actor-red.log` 有效私有PG RED：普通授权editor对照成功，然后缺失/停用/撤权（预热旧缓存）/外租户actor均返回nil并改Ticket完整行及新增标签。首轮缺少foreign tenant变量仅编译失败，已补明确夹具后重跑，不计作业务RED。`s3-ticket-edit-actor-green.log` 定向GREEN；最终`s3-ticket-edit-actor-pg.log` 完整TestCandidateIntakeCreationBoundary PASS无skip，四种拒绝完整行/标签保全，Incident共享标签在仅ticket:update时拒绝、增加incident:write后同请求成功。普通角色证据不依赖super_admin正向。
+
+`s3-ticket-edit-actor-regression.log` 服务/控制器/仓储定向PASS，`s3-ticket-edit-actor-build.log` 全后端构建exit0。测试fixture仅编辑场景显式授予当前权限及填入真实actor，没有生产fallback；初次HTTP成功fixture只有中间件admin权限而实际user是end_user，已明确为其真实角色授权并复跑。`s3-ticket-edit-actor-http.log` 最终真实controller函数的普通PUT/子任务PATCH均拒绝停用actor，JSON写入活动super_admin userId不能冒充，完整Ticket/标签保全；另验证DTO不会反序列化userId。测试使用身份中间件与局部路由注册，未覆盖生产认证/ACL中间件全链或真实SSO。
+
+独立review_execution_scope_s1限定复核无新增阻断，指出终态条件进入service会收紧此前绕过controller的直接调用，符合当前目标；按其提醒将子任务测试方法与router.go的PATCH一致后复验。git diff --check通过。完整命令仍待：Meta/source、必需expectedVersion、稳定operationId、父子归属/父成员原事务、当前授权后的历史receipt只读重放及Feishu同事务意图。当前Bind/member在回执前的顺序必须随receipt接入调整；不宣称已经有历史重放。专业核心归属与RequesterID/FormFields仍按前述处理。CandidateSHA不变，S3/S4/S5/S6/B3/T3/T4/G2/G3未完成，候选停止，无WSL/共享数据库变更、企业调用、共享迁移、推送或main合并。

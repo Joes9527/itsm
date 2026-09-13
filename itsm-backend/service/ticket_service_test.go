@@ -863,6 +863,8 @@ func TestTicketService_UpdateTicket(t *testing.T) {
 		Save(ctx)
 	require.NoError(t, err)
 
+	require.NoError(t, configureEntryTicketEdit(ctx, client, testTenant.ID, testUser.ID))
+
 	testTicket, err := client.Ticket.Create().
 		SetTitle("原始标题").
 		SetDescription("原始描述").
@@ -961,13 +963,15 @@ func TestTicketService_UpdateTicketPersistsTypeCategoryAndTags(t *testing.T) {
 	}, tenant.ID)
 	require.NoError(t, err)
 
-	updated, err := service.UpdateTicket(ctx, created.ID, &dto.UpdateTicketRequest{
+	require.NoError(t, configureEntryTicketEdit(ctx, client, tenant.ID, user.ID))
+
+	updated, err := service.UpdateTicket(ctx, created.ID, &dto.UpdateTicketRequest{UserID: user.ID,
 		Type: "improvement", CategoryID: &category.ID, Tags: []string{"backend", "backend", "customer"}, Version: created.Version,
 	}, tenant.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "improvement", updated.GenericSubtype)
 	require.Equal(t, "generic", updated.RecordClass)
-	_, mutationErr := service.UpdateTicket(ctx, created.ID, &dto.UpdateTicketRequest{Type: "incident", Version: updated.Version}, tenant.ID)
+	_, mutationErr := service.UpdateTicket(ctx, created.ID, &dto.UpdateTicketRequest{UserID: user.ID, Type: "incident", Version: updated.Version}, tenant.ID)
 	require.ErrorContains(t, mutationErr, "cannot change professional class")
 	entity, err := client.Ticket.Query().Where(entTicket.IDEQ(created.ID)).WithTags().Only(ctx)
 	require.NoError(t, err)
@@ -975,7 +979,7 @@ func TestTicketService_UpdateTicketPersistsTypeCategoryAndTags(t *testing.T) {
 	require.Len(t, entity.Edges.Tags, 2)
 
 	zero := 0
-	cleared, err := service.UpdateTicket(ctx, created.ID, &dto.UpdateTicketRequest{
+	cleared, err := service.UpdateTicket(ctx, created.ID, &dto.UpdateTicketRequest{UserID: user.ID,
 		CategoryID: &zero, Tags: []string{}, Version: updated.Version,
 	}, tenant.ID)
 	require.NoError(t, err)
@@ -984,7 +988,7 @@ func TestTicketService_UpdateTicketPersistsTypeCategoryAndTags(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, entity.Edges.Tags)
 
-	_, err = service.UpdateTicket(ctx, created.ID, &dto.UpdateTicketRequest{
+	_, err = service.UpdateTicket(ctx, created.ID, &dto.UpdateTicketRequest{UserID: user.ID,
 		CategoryID: &foreignCategory.ID, Version: cleared.Version,
 	}, tenant.ID)
 	require.ErrorContains(t, err, "工单分类不存在")
