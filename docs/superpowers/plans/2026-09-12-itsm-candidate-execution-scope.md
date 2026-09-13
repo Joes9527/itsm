@@ -203,6 +203,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+push结果检查点 `84ce62a2b`（2026-09-14）：offline/full/同user错tenant三项真实worker RED关闭。原Hub单一队列加入可选写入回执，统一tenant+user目标；worker至少一个socket消息Write及writer.Close成功才sent，零入队可重试，入队后无确认/断线/超时unknown。真实loopback成功/失败、超时、另一停滞连接、socket成功后数据库完成失败及lease恢复不重发通过；新push故障测试为SQLite，本次完整私有PG suite另用于回归。四包具名race、私有PG16/Redis/MinIO race、build与独立审阅通过，见T1。仅证明socket传输接受，不证明浏览器确认或全连接送达。下一步email/push能力与部署目标准入、邮件持久身份、飞书/裸实例仍未完成；S5/S6/T3/T4/G3不关闭，CandidateSHA与停止状态不变，无共享环境操作。
+
 邮件不可用回退检查点 `2ba6189ea`（2026-09-14）：DisableProviderFallback此前漏掉Graph解析不可用/nil sender，进程内SMTP探针两例RED后修复为route_unavailable/not_accepted，不改用SMTP。无GraphProvider的显式SMTP正向保留。邮件/通知与IncidentAlert具名race、完整私有PG16/Redis/MinIO race、全后端build及独立审阅通过，详见T1交接。该项不替代持久目标绑定：bootstrap仍用Manager.Get解析Graph，push原Hub按用户发送但无送达结果。继续沿专业owner核验目标/结果合同；S5/S6和候选运行门禁仍未完成，CandidateSHA不变，无共享环境操作。
 
 同步通知外发收敛合同（2026-09-14，RED提交dced3d585，S5既有入口，已实现0dac5b1fa）：原SendNotification直接外发且错误返回applied的问题已关闭。必须复用原通知队列和enqueue实现，不新增通知服务或平行队列。
