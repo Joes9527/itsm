@@ -130,6 +130,21 @@ S3/S4/S5/S6及候选完整交付仍未完成，CandidateSHA不变、候选停止
 
 读取副作用修复 `9654afcab`：GetTicket仅保留repo.GetByID，删除读后Feishu goroutine/事务/映射更新。s3-ticket-read-feishu-red.log实际本地connector在Get后PATCH由1→2；green.log正向connector仍可用但Get不增加PATCH、mapping JSON不变，原两项创建意图回归亦PASS。service/controller读取定向与全后端build通过，独立复审无阻断。SQLite/httptest一秒有界观察加源码删除佐证，不作为完整候选PG或真实企业证据。六处业务写直接同步及手动同步API仍待接入，S3复合项保持未完成；完整范围验收及固定CandidateSHA/停止状态不变，见T1最新交接。
 
+
+### S3 工单编辑原事务接入检查点
+
+当前真实调用是普通UpdateTicket、UpdateSubtask和tool_queue.update_ticket。s3-ticket-edit-scope-red.log私有PG有效RED：历史generic被编辑及新增标签，新member编辑正向通过，随后过期version拒绝Ticket却遗留新标签。测试目前失败，尚未修改生产实现；该证据只覆盖服务/真实仓储，不等于HTTP/工具验收。
+
+- [ ] 将编辑命令统一到现有WorkItem Meta/receipt，必需expectedVersion与稳定operationId；actor/tenant/source由HTTP、子任务边界及持久工具invocation构造，不能信任JSON userId或每次重试生成新身份。前端及工具输入版本契约同时迁移，保留明确冲突响应。工具expectedVersion在批准时持久化，operationId从invocation派生；done写失败重试复用原版本/回执，不读取新version冒充原命令。
+- [ ] 原服务事务读取当前WorkItem与现行actor/权限，合法历史receipt允许授权后只读重放；首次写入先Bind/member/版本检查，再允许任何标签创建或关系写。子任务父子归属及相关父成员在该事务确认。
+- [ ] category/subtype、专业字段/共享标签、处理人/请求人、状态/解决方案/表单字段契约逐项核对，不静默忽略客户端字段；标签目录创建及关系替换复用既有所有者/原事务，不另建平行resolver。
+- [ ] 仓储更新接收调用方事务并沿用唯一字段映射和CAS实现；不以普通client预检+之后autocommit代替，不增加长期包装或双写。
+- [ ] 同事务写编辑审计/稳定回执、状态通知意图、应有SLA违规收尾；所有失败传播回滚，applied SLA冻结不重套策略。保留通知偏好及原接收人语义，不把日志warning当副作用成功。
+- [ ] 飞书更新意图与原编辑提交原子绑定，使用与manual更新相同event_type和稳定aggregate键，避免跨类型越过前序；具名编辑来源的权限/回执/resultVersion/status与payload摘要须由consumer验证，不能伪造手动升级来源或删除原同步能力。
+- [ ] 真实PG覆盖历史整行/标签目录及关系保全、新member标题/分类/标签/状态、重放/冲突、标签/通知/SLA/审计/Outbox实际写后故障回滚、actor撤权与子任务父范围拒绝；相关前端/API/工具契约、构建/回归和独立审阅后才能标记完成。
+
+独立review_execution_scope_s1确认RED及计划方向，强调UpdateSubtask缺少CanEdit且parent在事务外、工具done晚于业务提交、仓储须显式UpdateTx、飞书必须相同类型/目标排序。该批是原执行范围缺口修复，不扩展历史回填或共享迁移；固定CandidateSHA不变，候选停止，S3及后续门禁仍未完成。
+
 ## S4：队列原子领取、恢复及周期执行
 
 历史 claim RED（`s4-kaf-historical-claim-red.log`）已由 `de22553c2` 修复：两条冻结 policy 构造链贯通，claim INSERT/独立 lease CAS、finalize/non-completing、completion receipt/callback recovery 原事务准入；异步恢复复用首次完成变量校验，修复误要求同步合同。真实 PG 验证历史0写、新成员claim/重复冲突、closed scope过期lease拒绝、completion及恢复保全与active恢复，最终定向回归/构建/独立审阅通过。CreateDelegatedTask 两条入口现已补齐原事务准入，joined入口改显式*ent.Tx；真实 PG 历史拒绝、新成员生成/引用、joined主动回滚及两入口outbox写后故障回滚通过，构建/回归/限定独立复审通过，见T1最新检查点。仍是分段测试，不代表完整ExecuteAction或真实BPMN节点推进；通用worker、历史applied回放及全部finalize分支等专项未完成。详见T1最新交接，S4继续未勾选。
