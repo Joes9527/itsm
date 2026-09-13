@@ -205,13 +205,15 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 邮件目标重绑RED `2f119ebdb`（2026-09-14）：SQLite原producer在Graph A/mailbox A时queued，运行前替换为B/mailbox B，实际worker仍向B一次发送并sent。相关邮件/通知/push具名race仅此新增用例FAIL，无SKIP/RACE，无生产修复，详见T1。旧GREEN不覆盖该目标要求；本项在原S5继续，不新增开发波次。
 
-邮件专业目标扩展合同（独立审阅已完成，待实现）：
-- [ ] 先核对既有配置owner，分离只读可信配置身份与激活/外发：notification disabled仍能冻结完整目标，不调用Init、不联网、不临时开能力。candidate使用冻结声明，standard沿现有配置owner；不得只枚举已激活Manager再以NULL掩盖缺目标。
-- [ ] 原通知行version2邮件目标新增nullable immutable target_transport，Graph要求精确connector name/provider与覆盖mailbox、AAD/Graph端点及实际发信身份的摘要；SMTP不伪装成connector，要求无connector字段，摘要覆盖规范化host/port/user/from与实际TLS/端点模式，不含密码。当前SMTP是opportunistic STARTTLS，不得在未改变实现时描述为强制TLS。
-- [ ] 用新注册045扩展完整性约束和不可变trigger，不改044历史SQL；原target字段/transport及绑定后业务身份均不可变。历史NULL保全且禁止consumer补绑，新意图缺目标在原事务拒绝。仍未执行任何目标WSL迁移。
-- [ ] 原EmailService和Graph provider改为typed目标描述/解析；producer与worker共享同一目标契约，worker按原transport解析、复核固定身份及generation，禁止fallback或重选。仅声明local_only不足以证明路由正确；Graph Init实际目的地须与纯描述一致并覆盖mailbox。
-- [ ] Incident原outbox生产者/consumer同步typed EmailTarget、版本、完整payload摘要/receipt及旧载荷策略，不在消费时补当前目标，不造新队列或改接另一builtin/email平行实现。
-- [ ] 验证disabled下完整目标入队、开启后按原目标执行、缺目标整事务回滚；Graph邮箱/端点/身份、SMTP主机/发信身份分别变化时零发送；稳定目标真实loopback正向，发送中变化/完成失败归unknown。现RED同时换sender+mailbox，不能当分别覆盖。真实PG新旧约束/历史整行保全、相关race/build/独立审阅完成后才关闭本段；S5/S6/T3/T4/G3与固定CandidateSHA仍保持原门禁。
+邮件专业目标扩展合同（六项已完成，2026-09-14独立完成审计；不等同完整S5）：
+- [x] 先核对既有配置owner，分离只读可信配置身份与激活/外发：notification disabled仍能冻结完整目标，不调用Init、不联网、不临时开能力。candidate使用冻结声明，standard沿现有配置owner；不得只枚举已激活Manager再以NULL掩盖缺目标。
+- [x] 原通知行version2邮件目标新增nullable immutable target_transport，Graph要求精确connector name/provider与覆盖mailbox、AAD/Graph端点及实际发信身份的摘要；SMTP不伪装成connector，要求无connector字段，摘要覆盖规范化host/port/user/from与实际TLS/端点模式，不含密码。当前SMTP是opportunistic STARTTLS，不得在未改变实现时描述为强制TLS。
+- [x] 用新注册045扩展完整性约束和不可变trigger，不改044历史SQL；原target字段/transport及绑定后业务身份均不可变。历史NULL保全且禁止consumer补绑，新意图缺目标在原事务拒绝。仍未执行任何目标WSL迁移。
+- [x] 原EmailService和Graph provider改为typed目标描述/解析；producer与worker共享同一目标契约，worker按原transport解析、复核固定身份及generation，禁止fallback或重选。仅声明local_only不足以证明路由正确；Graph Init实际目的地须与纯描述一致并覆盖mailbox。
+- [x] Incident原outbox生产者/consumer同步typed EmailTarget、版本、完整payload摘要/receipt及旧载荷策略，不在消费时补当前目标，不造新队列或改接另一builtin/email平行实现。
+- [x] 验证disabled下完整目标入队、开启后按原目标执行、缺目标整事务回滚；Graph邮箱/端点/身份、SMTP主机/发信身份分别变化时零发送；稳定目标真实loopback正向，发送中变化/完成失败归unknown。现RED同时换sender+mailbox，不能当分别覆盖。真实PG新旧约束/历史整行保全、相关race/build/独立审阅完成后才关闭本段；S5/S6/T3/T4/G3与固定CandidateSHA仍保持原门禁。
+
+当前汇总：2d7b7373b/9839ed101/58af40837/9c555b5b3/ff9ffe323/19227dbb7/3098f9718及本计划后续具名检查点已关闭上述邮件目标重绑RED与六项合同。前文RED为历史失败证据，继续保留；最终证据和实际覆盖限制见T1最新Graph检查点。
 
 通知执行能力检查点 `94e733300`（2026-09-14）：Worker在每行的recovery和claim之前，以tenant context核验冻结notification能力；禁用不改attempt/lease/终态，保留ErrDenied。email/push×pending/expired四项RED关闭，真实PG原producer/System队列raw row保全与邮件零调用通过；push未使用活跃socket。允许业务请求记录queued，不把关闭的执行能力报告为已投递；空队列0,nil不是能力准入证明。四包具名race、完整私有PG16/Redis/MinIO race、后端build及独立审阅通过，清理断言补齐，见T1。邮件精确持久目标与专业provider边界、其余S5/S6/T3/T4/G3仍未完成，CandidateSHA与候选停止状态不变，无共享环境操作。
 
@@ -490,3 +492,12 @@ Graph/SMTP loopback、目标变化零调用、发送中换代unknown、v2形状�
 新helper复用真实Intake、tenant runtime、独立system queue、runtime handler及本机SMTP，证明disabled全outbox/audit不变、enabled仅一次真实接受/receipt/published及其他所有outbox行不变。实际底层池确认runtime非super/non-bypass；system非super但BYPASSRLS、无tickets UPDATE，不能说所有连接都无绕过能力，其队列隔离依赖WorkerPredicate。standard/candidate pending/unknown/expired禁用矩阵及policy边界通过。
 
 完整私有PG16/Redis/MinIO suite含29协议与新候选用例race、相关具名回归、database/bootstrap默认标签全包race、全后端build及独立复审通过，详见T1。只关闭该职责链与运行级禁用证据，不代表全部角色准入、并发撤权或所有执行旁路。后续Graph候选local_only及完整S5/S6/G2/T3/T4/G3仍未完成；CandidateSHA不变、候选停止、未操作WSL/共享数据或企业发送。
+
+
+### S5 Graph候选初始化与邮件六项完成审计（2026-09-14）
+
+3098f9718为现有纯本地Init声明InitializationLocalOnly，经真实Manager先RED后GREEN证明候选冻结配置激活零HTTP、缺secret/摘要不符/取消拒绝、不激活禁用目标。该标记不代表目标必须loopback，不授予发送权限。新候选SMTP/Graph真实Intake→runtime producer→system queue→runtime handler→EmailService→实际本机协议接收路径通过，包含完整目标禁用保全、启用发送、精确receipt、二次扫描零新增HTTP和原始outbox/全部audit不变。
+
+connector/...、database、bootstrap默认标签全包race、corrected完整私有PG16/Redis/MinIO suite和全后端build通过，独立完成审计与最终复核确认邮件扩展六项可勾选。详细失败与修正日志留T1：CloseAll void使用错误、OperationID指针比较错误均为测试问题，最终corrected证据覆盖。SMTP变更零调用为入口probe、实际接收另由loopback覆盖；发送中变化主要Graph，不扩张到所有运输并发矩阵。
+
+完整S5继续未完成：consumer当前RBAC/并发撤权、飞书/裸实例及其余S5/S6/G2/T3/T4/G3仍需推进。CandidateSHA不变，候选停止，无WSL/共享数据库操作、企业外发、push/main合并。
