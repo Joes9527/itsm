@@ -20,6 +20,8 @@ type ProcessInstance struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
+	// Immutable execution WorkItem reference; historical rows remain NULL; FK managed by migration 039
+	ExecutionWorkItemID *int `json:"execution_work_item_id,omitempty"`
 	// 流程实例ID，BPMN标准
 	ProcessInstanceID string `json:"process_instance_id,omitempty"`
 	// Immutable digest of a durable start request; NULL for legacy non-idempotent starts
@@ -132,7 +134,7 @@ func (*ProcessInstance) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case processinstance.FieldVariables, processinstance.FieldStateSnapshot:
 			values[i] = new([]byte)
-		case processinstance.FieldID, processinstance.FieldBusinessID, processinstance.FieldProcessDefinitionID, processinstance.FieldTenantID, processinstance.FieldVersion:
+		case processinstance.FieldID, processinstance.FieldExecutionWorkItemID, processinstance.FieldBusinessID, processinstance.FieldProcessDefinitionID, processinstance.FieldTenantID, processinstance.FieldVersion:
 			values[i] = new(sql.NullInt64)
 		case processinstance.FieldProcessInstanceID, processinstance.FieldStartRequestDigest, processinstance.FieldBusinessKey, processinstance.FieldBusinessType, processinstance.FieldProcessDefinitionKey, processinstance.FieldStatus, processinstance.FieldCurrentActivityID, processinstance.FieldCurrentActivityName, processinstance.FieldSuspendedReason, processinstance.FieldInitiator, processinstance.FieldParentProcessInstanceID, processinstance.FieldRootProcessInstanceID:
 			values[i] = new(sql.NullString)
@@ -159,6 +161,13 @@ func (_m *ProcessInstance) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
+		case processinstance.FieldExecutionWorkItemID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field execution_work_item_id", values[i])
+			} else if value.Valid {
+				_m.ExecutionWorkItemID = new(int)
+				*_m.ExecutionWorkItemID = int(value.Int64)
+			}
 		case processinstance.FieldProcessInstanceID:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field process_instance_id", values[i])
@@ -357,6 +366,11 @@ func (_m *ProcessInstance) String() string {
 	var builder strings.Builder
 	builder.WriteString("ProcessInstance(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	if v := _m.ExecutionWorkItemID; v != nil {
+		builder.WriteString("execution_work_item_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
 	builder.WriteString("process_instance_id=")
 	builder.WriteString(_m.ProcessInstanceID)
 	builder.WriteString(", ")

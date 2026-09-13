@@ -2197,44 +2197,48 @@ func init() {
 	notificationpreference.UpdateDefaultUpdatedAt = notificationpreferenceDescUpdatedAt.UpdateDefault.(func() time.Time)
 	outboxeventFields := schema.OutboxEvent{}.Fields()
 	_ = outboxeventFields
+	// outboxeventDescExecutionWorkItemID is the schema descriptor for execution_work_item_id field.
+	outboxeventDescExecutionWorkItemID := outboxeventFields[0].Descriptor()
+	// outboxevent.ExecutionWorkItemIDValidator is a validator for the "execution_work_item_id" field. It is called by the builders before save.
+	outboxevent.ExecutionWorkItemIDValidator = outboxeventDescExecutionWorkItemID.Validators[0].(func(int) error)
 	// outboxeventDescEventID is the schema descriptor for event_id field.
-	outboxeventDescEventID := outboxeventFields[0].Descriptor()
+	outboxeventDescEventID := outboxeventFields[1].Descriptor()
 	// outboxevent.EventIDValidator is a validator for the "event_id" field. It is called by the builders before save.
 	outboxevent.EventIDValidator = outboxeventDescEventID.Validators[0].(func(string) error)
 	// outboxeventDescEventType is the schema descriptor for event_type field.
-	outboxeventDescEventType := outboxeventFields[1].Descriptor()
+	outboxeventDescEventType := outboxeventFields[2].Descriptor()
 	// outboxevent.EventTypeValidator is a validator for the "event_type" field. It is called by the builders before save.
 	outboxevent.EventTypeValidator = outboxeventDescEventType.Validators[0].(func(string) error)
 	// outboxeventDescTenantID is the schema descriptor for tenant_id field.
-	outboxeventDescTenantID := outboxeventFields[2].Descriptor()
+	outboxeventDescTenantID := outboxeventFields[3].Descriptor()
 	// outboxevent.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	outboxevent.TenantIDValidator = outboxeventDescTenantID.Validators[0].(func(int) error)
 	// outboxeventDescAggregateType is the schema descriptor for aggregate_type field.
-	outboxeventDescAggregateType := outboxeventFields[3].Descriptor()
+	outboxeventDescAggregateType := outboxeventFields[4].Descriptor()
 	// outboxevent.AggregateTypeValidator is a validator for the "aggregate_type" field. It is called by the builders before save.
 	outboxevent.AggregateTypeValidator = outboxeventDescAggregateType.Validators[0].(func(string) error)
 	// outboxeventDescAggregateID is the schema descriptor for aggregate_id field.
-	outboxeventDescAggregateID := outboxeventFields[4].Descriptor()
+	outboxeventDescAggregateID := outboxeventFields[5].Descriptor()
 	// outboxevent.AggregateIDValidator is a validator for the "aggregate_id" field. It is called by the builders before save.
 	outboxevent.AggregateIDValidator = outboxeventDescAggregateID.Validators[0].(func(string) error)
 	// outboxeventDescStatus is the schema descriptor for status field.
-	outboxeventDescStatus := outboxeventFields[6].Descriptor()
+	outboxeventDescStatus := outboxeventFields[7].Descriptor()
 	// outboxevent.DefaultStatus holds the default value on creation for the status field.
 	outboxevent.DefaultStatus = outboxeventDescStatus.Default.(string)
 	// outboxeventDescAttemptCount is the schema descriptor for attempt_count field.
-	outboxeventDescAttemptCount := outboxeventFields[7].Descriptor()
+	outboxeventDescAttemptCount := outboxeventFields[8].Descriptor()
 	// outboxevent.DefaultAttemptCount holds the default value on creation for the attempt_count field.
 	outboxevent.DefaultAttemptCount = outboxeventDescAttemptCount.Default.(int)
 	// outboxeventDescNextAttemptAt is the schema descriptor for next_attempt_at field.
-	outboxeventDescNextAttemptAt := outboxeventFields[8].Descriptor()
+	outboxeventDescNextAttemptAt := outboxeventFields[9].Descriptor()
 	// outboxevent.DefaultNextAttemptAt holds the default value on creation for the next_attempt_at field.
 	outboxevent.DefaultNextAttemptAt = outboxeventDescNextAttemptAt.Default.(func() time.Time)
 	// outboxeventDescCreatedAt is the schema descriptor for created_at field.
-	outboxeventDescCreatedAt := outboxeventFields[13].Descriptor()
+	outboxeventDescCreatedAt := outboxeventFields[14].Descriptor()
 	// outboxevent.DefaultCreatedAt holds the default value on creation for the created_at field.
 	outboxevent.DefaultCreatedAt = outboxeventDescCreatedAt.Default.(func() time.Time)
 	// outboxeventDescUpdatedAt is the schema descriptor for updated_at field.
-	outboxeventDescUpdatedAt := outboxeventFields[14].Descriptor()
+	outboxeventDescUpdatedAt := outboxeventFields[15].Descriptor()
 	// outboxevent.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	outboxevent.DefaultUpdatedAt = outboxeventDescUpdatedAt.Default.(func() time.Time)
 	// outboxevent.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
@@ -2633,40 +2637,44 @@ func init() {
 	processexecutionhistory.DefaultCreatedAt = processexecutionhistoryDescCreatedAt.Default.(func() time.Time)
 	processinstanceFields := schema.ProcessInstance{}.Fields()
 	_ = processinstanceFields
+	// processinstanceDescExecutionWorkItemID is the schema descriptor for execution_work_item_id field.
+	processinstanceDescExecutionWorkItemID := processinstanceFields[0].Descriptor()
+	// processinstance.ExecutionWorkItemIDValidator is a validator for the "execution_work_item_id" field. It is called by the builders before save.
+	processinstance.ExecutionWorkItemIDValidator = processinstanceDescExecutionWorkItemID.Validators[0].(func(int) error)
 	// processinstanceDescProcessInstanceID is the schema descriptor for process_instance_id field.
-	processinstanceDescProcessInstanceID := processinstanceFields[0].Descriptor()
+	processinstanceDescProcessInstanceID := processinstanceFields[1].Descriptor()
 	// processinstance.ProcessInstanceIDValidator is a validator for the "process_instance_id" field. It is called by the builders before save.
 	processinstance.ProcessInstanceIDValidator = processinstanceDescProcessInstanceID.Validators[0].(func(string) error)
 	// processinstanceDescProcessDefinitionKey is the schema descriptor for process_definition_key field.
-	processinstanceDescProcessDefinitionKey := processinstanceFields[5].Descriptor()
+	processinstanceDescProcessDefinitionKey := processinstanceFields[6].Descriptor()
 	// processinstance.ProcessDefinitionKeyValidator is a validator for the "process_definition_key" field. It is called by the builders before save.
 	processinstance.ProcessDefinitionKeyValidator = processinstanceDescProcessDefinitionKey.Validators[0].(func(string) error)
 	// processinstanceDescProcessDefinitionID is the schema descriptor for process_definition_id field.
-	processinstanceDescProcessDefinitionID := processinstanceFields[6].Descriptor()
+	processinstanceDescProcessDefinitionID := processinstanceFields[7].Descriptor()
 	// processinstance.ProcessDefinitionIDValidator is a validator for the "process_definition_id" field. It is called by the builders before save.
 	processinstance.ProcessDefinitionIDValidator = processinstanceDescProcessDefinitionID.Validators[0].(func(int) error)
 	// processinstanceDescStatus is the schema descriptor for status field.
-	processinstanceDescStatus := processinstanceFields[7].Descriptor()
+	processinstanceDescStatus := processinstanceFields[8].Descriptor()
 	// processinstance.DefaultStatus holds the default value on creation for the status field.
 	processinstance.DefaultStatus = processinstanceDescStatus.Default.(string)
 	// processinstanceDescStartTime is the schema descriptor for start_time field.
-	processinstanceDescStartTime := processinstanceFields[11].Descriptor()
+	processinstanceDescStartTime := processinstanceFields[12].Descriptor()
 	// processinstance.DefaultStartTime holds the default value on creation for the start_time field.
 	processinstance.DefaultStartTime = processinstanceDescStartTime.Default.(func() time.Time)
 	// processinstanceDescTenantID is the schema descriptor for tenant_id field.
-	processinstanceDescTenantID := processinstanceFields[15].Descriptor()
+	processinstanceDescTenantID := processinstanceFields[16].Descriptor()
 	// processinstance.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	processinstance.TenantIDValidator = processinstanceDescTenantID.Validators[0].(func(int) error)
 	// processinstanceDescVersion is the schema descriptor for version field.
-	processinstanceDescVersion := processinstanceFields[16].Descriptor()
+	processinstanceDescVersion := processinstanceFields[17].Descriptor()
 	// processinstance.DefaultVersion holds the default value on creation for the version field.
 	processinstance.DefaultVersion = processinstanceDescVersion.Default.(int)
 	// processinstanceDescCreatedAt is the schema descriptor for created_at field.
-	processinstanceDescCreatedAt := processinstanceFields[21].Descriptor()
+	processinstanceDescCreatedAt := processinstanceFields[22].Descriptor()
 	// processinstance.DefaultCreatedAt holds the default value on creation for the created_at field.
 	processinstance.DefaultCreatedAt = processinstanceDescCreatedAt.Default.(func() time.Time)
 	// processinstanceDescUpdatedAt is the schema descriptor for updated_at field.
-	processinstanceDescUpdatedAt := processinstanceFields[22].Descriptor()
+	processinstanceDescUpdatedAt := processinstanceFields[23].Descriptor()
 	// processinstance.DefaultUpdatedAt holds the default value on creation for the updated_at field.
 	processinstance.DefaultUpdatedAt = processinstanceDescUpdatedAt.Default.(func() time.Time)
 	// processinstance.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.

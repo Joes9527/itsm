@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	entsql "entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/require"
@@ -19,6 +20,8 @@ import (
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/config"
 	"itsm-backend/database"
+	"itsm-backend/database/rls"
+	"itsm-backend/ent"
 	"itsm-backend/migration"
 )
 
@@ -56,7 +59,9 @@ func TestCandidateScopeRegistration(t *testing.T) {
 CREATE TABLE users(id bigint PRIMARY KEY); INSERT INTO users VALUES (1);
 CREATE TABLE tickets(id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, tenant_id bigint NOT NULL REFERENCES tenants, title text NOT NULL);
 INSERT INTO tickets(tenant_id,title) VALUES(1,'protected history');
-CREATE TABLE professional_extensions(work_item_id bigint PRIMARY KEY REFERENCES tickets, valid boolean CHECK(valid));`)
+CREATE TABLE professional_extensions(work_item_id bigint PRIMARY KEY REFERENCES tickets, valid boolean CHECK(valid));
+CREATE TABLE outbox_events(id bigint PRIMARY KEY); INSERT INTO outbox_events VALUES(1);
+CREATE TABLE process_instances(id bigint PRIMARY KEY); INSERT INTO process_instances VALUES(1);`)
 	require.NoError(t, err)
 	_, err = owner.Exec(fmt.Sprintf(`ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO %s;
 ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON FUNCTIONS TO %s`, runtimeRole, runtimeRole))
@@ -79,6 +84,55 @@ GRANT SELECT ON execution_scopes,execution_scope_members,execution_runtime_bindi
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	ctx = tenantctx.WithTenantID(ctx, 1)
+	t.Run("structured execution references are nullable foreign keys and immutable", func(t *testing.T) {
+		for _, table := range []string{"outbox_events", "process_instances"} {
+			var reference sql.NullInt64
+			require.NoError(t, owner.QueryRow("SELECT execution_work_item_id FROM "+table+" WHERE id=1").Scan(&reference))
+			require.False(t, reference.Valid)
+			_, err := owner.Exec("INSERT INTO " + table + "(id,execution_work_item_id) VALUES(2,1)")
+			require.NoError(t, err)
+			_, err = owner.Exec("INSERT INTO " + table + "(id,execution_work_item_id) VALUES(3,999999)")
+			require.Error(t, err)
+			_, err = owner.Exec("UPDATE " + table + " SET execution_work_item_id=NULL WHERE id=2")
+			require.ErrorContains(t, err, "immutable")
+			_, err = owner.Exec("UPDATE " + table + " SET execution_work_item_id=1 WHERE id=1")
+			require.ErrorContains(t, err, "immutable")
+		}
+	})
+	for _, mode := range []rls.Mode{rls.ModeOff, rls.ModeEnforce} {
+		t.Run("Ent scope original transaction and rollback/"+string(mode), func(t *testing.T) {
+			client := ent.NewClient(ent.Driver(rls.NewDriver(entsql.OpenDB("postgres", run), mode, nil)))
+			tx, err := client.Tx(ctx)
+			require.NoError(t, err)
+			defer tx.Rollback()
+			require.ErrorIs(t, database.BindEntExecutionScope(nil, tx, scope), executionscope.ErrDenied)
+			require.NoError(t, database.BindEntExecutionScope(ctx, tx, scope))
+			rows, err := tx.Client().QueryContext(ctx, `INSERT INTO tickets(tenant_id,title) VALUES(1,'Ent atomic scope') RETURNING id`)
+			require.NoError(t, err)
+			require.True(t, rows.Next())
+			var workID int
+			require.NoError(t, rows.Scan(&workID))
+			require.NoError(t, rows.Close())
+			require.NoError(t, database.RequireEntExecutionMember(ctx, tx, scope, workID))
+			if mode == rls.ModeEnforce {
+				otherCtx := tenantctx.WithTenantID(ctx, 2)
+				otherScope := scope
+				otherScope.TenantID = 2
+				require.ErrorContains(t, database.BindEntExecutionScope(otherCtx, tx, otherScope), "transaction scope cannot change")
+				require.ErrorContains(t, database.RequireEntExecutionMember(otherCtx, tx, otherScope, workID), "transaction scope cannot change")
+				require.NoError(t, database.RequireEntExecutionMember(ctx, tx, scope, workID), "rejected context switch must retain original transaction")
+			}
+			require.ErrorIs(t, database.RequireEntExecutionMember(ctx, tx, scope, 1), executionscope.ErrDenied)
+			var visible int
+			require.NoError(t, owner.QueryRow(`SELECT count(*) FROM tickets WHERE id=$1`, workID).Scan(&visible))
+			require.Zero(t, visible)
+			require.NoError(t, tx.Rollback())
+			require.NoError(t, owner.QueryRow(`SELECT count(*) FROM execution_scope_members WHERE work_item_id=$1`, workID).Scan(&visible))
+			require.Zero(t, visible)
+			require.Error(t, database.BindEntExecutionScope(ctx, tx, scope), "closed transaction must not open another transaction")
+			require.Error(t, database.BindEntExecutionScope(ctx, nil, scope))
+		})
+	}
 	t.Run("runtime admission checks role and configured scopes", func(t *testing.T) {
 		cfg := config.ExecutionConfig{Mode: "candidate", DeploymentID: scope.DeploymentID, Scopes: []config.ExecutionScopeConfig{{TenantID: scope.TenantID, ScopeID: scope.ScopeID}}}
 		require.NoError(t, database.ValidateExecutionRuntime(ctx, run, cfg))
@@ -91,6 +145,8 @@ GRANT SELECT ON execution_scopes,execution_scope_members,execution_runtime_bindi
 		require.NoError(t, run.QueryRow(`SELECT has_table_privilege(current_user,'execution_scope_members','TRUNCATE'),
 has_function_privilege(current_user,'public.register_new_execution_member()','EXECUTE')`).Scan(&tableWrite, &functionExecute))
 		require.False(t, tableWrite)
+		require.False(t, functionExecute)
+		require.NoError(t, run.QueryRow(`SELECT has_function_privilege(current_user,'public.preserve_execution_work_item_reference()','EXECUTE')`).Scan(&functionExecute))
 		require.False(t, functionExecute)
 	})
 	t.Run("direct historical enrollment denied", func(t *testing.T) {

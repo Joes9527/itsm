@@ -136,3 +136,24 @@ S2 将事件订阅、工具队列、连接器与周期任务移到显式运行�
 独立 reviewer 已复核 S2 生命周期修复、角色准入及构造测试隔离。测试夹具曾存在端口抢占误连风险，现已改为每次随机凭据，Redis 还比对启动 PID，MinIO 检查启动进程未退出；身份核对在写 fixture 前完成。最初 MinIO 官方预编译下载返回410、源码依赖下载 TLS 超时；固定源码重试构建成功后才取得上述三依赖 PASS。早先仅 PG/Redis 的构造日志不作为 MinIO 证据。
 
 尚未完成：S3 业务写入/结构化主体、S4 所有队列领取与恢复、S5 Stream/请求异步范围、S6 执行及重启后的历史保全，以及 B3 鉴权状态计划。有限构造观察必须与生命周期测试和审阅合看，不证明延迟周期、业务全流程或目标 PostgreSQL17 已验收。未修改 B 的配置、共享源或 main，未推送、迁移共享库或启动候选；T3/T4/T5 门禁不变。
+
+
+### B2 S3 基础检查点（2026-09-13，业务接入未完成）
+
+本增量只交付原事务适配及结构化字段，S3 不标记完成。`BindEntExecutionScope` / `RequireEntExecutionMember` 使用调用者的 `tx.Client()`，与 SQL Tx 共用同一校验和查询，不另开事务或连接。空上下文、空事务和已关闭事务拒绝执行。
+
+`outbox_events`、`process_instances` 新增 nullable、immutable 的 `execution_work_item_id`；Ent 生成文件同步，tickets 外键及禁止改指/清空/历史补录的数据库触发器属于唯一迁移039。历史行保持 NULL。默认 ACL 剥离覆盖新触发函数。本次修改的是尚未发布的039，不能拿旧039执行收据宣称新SQL已应用；没有操作目标或共享库。外键仅保证目标存在，不证明租户、scope 或生产者归属。
+
+本地证据目录仍为 `/Users/julian/.local/state/itsm-candidate-delivery/b2/`：
+
+- `s3-ent-red.log`、`s3-reference-red.log` 分别保留缺失事务适配及结构字段的失败证据。
+- `s3-ent-generate.log`：Ent 生成成功；变化限于两个模型与相关公共生成文件，无依赖清单变化。
+- `s3-foundation-build.json`：后端全量构建 exit 0。
+- `s3-foundation-final.log`：真实私有 PostgreSQL 的范围登记、结构引用约束，以及 PostgreSQL/Redis/MinIO 完整构造保全回归 PASS，真实依赖用例未 skip。
+- `s3-ent-rls.log`：追加生产 RLS enforce 驱动与 off 模式的同事务测试 PASS；覆盖事务内新成员可见、其他连接不可见、历史成员拒绝、租户上下文切换拒绝且原事务仍有效、回滚无残留和关闭后拒绝。
+
+独立 reviewer `review_execution_scope_s1` 对基础增量未发现阻断问题，建议补 RLS enforce 测试，现已补齐；其审阅不代表业务接入或消费边界通过。PostgreSQL16 合成夹具仍不替代 B 的 PostgreSQL17 目标验证。
+
+已定位的下一步事务所有者包括 intake `createAttempt`、Incident command/rule-action transaction、Problem/Change 各 handler command、Requested Item repository/callback、共享 assignment/deletion/tag/comment/attachment/relation。原计划列出的 common creator/mutation 文件只是接口，不能作为全局拦截点。关系修改必须检查两端；附件外部存储副作用必须纳入授权时序；`ticket_service` 历史 GET 的 Feishu 异步调用必须在服务层阻断。此处是定位结果，尚未完成逐路由→服务→写主体→事务清单，不计作 S3 第一项完成。
+
+剩余：可信启动清单向业务服务传递、所有原写事务接入、outbox/process 各权威生产者设置引用、真实 API/service 边界测试；随后 S4–S6 和鉴权计划。CandidateSHA 保持 `d7470a32dbb87acc9b5e4d9a895a146410723561`；没有启动候选、推送或合并 main，也没有更改 B 环境或执行共享数据库变更，T3/T4 保持阻塞。

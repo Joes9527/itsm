@@ -80174,31 +80174,33 @@ func (m *NotificationPreferenceMutation) ResetEdge(name string) error {
 // OutboxEventMutation represents an operation that mutates the OutboxEvent nodes in the graph.
 type OutboxEventMutation struct {
 	config
-	op               Op
-	typ              string
-	id               *int
-	event_id         *string
-	event_type       *string
-	tenant_id        *int
-	addtenant_id     *int
-	aggregate_type   *string
-	aggregate_id     *string
-	payload          *json.RawMessage
-	appendpayload    json.RawMessage
-	status           *string
-	attempt_count    *int
-	addattempt_count *int
-	next_attempt_at  *time.Time
-	claim_token      *string
-	claim_expires_at *time.Time
-	published_at     *time.Time
-	last_error       *string
-	created_at       *time.Time
-	updated_at       *time.Time
-	clearedFields    map[string]struct{}
-	done             bool
-	oldValue         func(context.Context) (*OutboxEvent, error)
-	predicates       []predicate.OutboxEvent
+	op                        Op
+	typ                       string
+	id                        *int
+	execution_work_item_id    *int
+	addexecution_work_item_id *int
+	event_id                  *string
+	event_type                *string
+	tenant_id                 *int
+	addtenant_id              *int
+	aggregate_type            *string
+	aggregate_id              *string
+	payload                   *json.RawMessage
+	appendpayload             json.RawMessage
+	status                    *string
+	attempt_count             *int
+	addattempt_count          *int
+	next_attempt_at           *time.Time
+	claim_token               *string
+	claim_expires_at          *time.Time
+	published_at              *time.Time
+	last_error                *string
+	created_at                *time.Time
+	updated_at                *time.Time
+	clearedFields             map[string]struct{}
+	done                      bool
+	oldValue                  func(context.Context) (*OutboxEvent, error)
+	predicates                []predicate.OutboxEvent
 }
 
 var _ ent.Mutation = (*OutboxEventMutation)(nil)
@@ -80297,6 +80299,76 @@ func (m *OutboxEventMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetExecutionWorkItemID sets the "execution_work_item_id" field.
+func (m *OutboxEventMutation) SetExecutionWorkItemID(i int) {
+	m.execution_work_item_id = &i
+	m.addexecution_work_item_id = nil
+}
+
+// ExecutionWorkItemID returns the value of the "execution_work_item_id" field in the mutation.
+func (m *OutboxEventMutation) ExecutionWorkItemID() (r int, exists bool) {
+	v := m.execution_work_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExecutionWorkItemID returns the old "execution_work_item_id" field's value of the OutboxEvent entity.
+// If the OutboxEvent object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *OutboxEventMutation) OldExecutionWorkItemID(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExecutionWorkItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExecutionWorkItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExecutionWorkItemID: %w", err)
+	}
+	return oldValue.ExecutionWorkItemID, nil
+}
+
+// AddExecutionWorkItemID adds i to the "execution_work_item_id" field.
+func (m *OutboxEventMutation) AddExecutionWorkItemID(i int) {
+	if m.addexecution_work_item_id != nil {
+		*m.addexecution_work_item_id += i
+	} else {
+		m.addexecution_work_item_id = &i
+	}
+}
+
+// AddedExecutionWorkItemID returns the value that was added to the "execution_work_item_id" field in this mutation.
+func (m *OutboxEventMutation) AddedExecutionWorkItemID() (r int, exists bool) {
+	v := m.addexecution_work_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearExecutionWorkItemID clears the value of the "execution_work_item_id" field.
+func (m *OutboxEventMutation) ClearExecutionWorkItemID() {
+	m.execution_work_item_id = nil
+	m.addexecution_work_item_id = nil
+	m.clearedFields[outboxevent.FieldExecutionWorkItemID] = struct{}{}
+}
+
+// ExecutionWorkItemIDCleared returns if the "execution_work_item_id" field was cleared in this mutation.
+func (m *OutboxEventMutation) ExecutionWorkItemIDCleared() bool {
+	_, ok := m.clearedFields[outboxevent.FieldExecutionWorkItemID]
+	return ok
+}
+
+// ResetExecutionWorkItemID resets all changes to the "execution_work_item_id" field.
+func (m *OutboxEventMutation) ResetExecutionWorkItemID() {
+	m.execution_work_item_id = nil
+	m.addexecution_work_item_id = nil
+	delete(m.clearedFields, outboxevent.FieldExecutionWorkItemID)
 }
 
 // SetEventID sets the "event_id" field.
@@ -80980,7 +81052,10 @@ func (m *OutboxEventMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *OutboxEventMutation) Fields() []string {
-	fields := make([]string, 0, 15)
+	fields := make([]string, 0, 16)
+	if m.execution_work_item_id != nil {
+		fields = append(fields, outboxevent.FieldExecutionWorkItemID)
+	}
 	if m.event_id != nil {
 		fields = append(fields, outboxevent.FieldEventID)
 	}
@@ -81034,6 +81109,8 @@ func (m *OutboxEventMutation) Fields() []string {
 // schema.
 func (m *OutboxEventMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case outboxevent.FieldExecutionWorkItemID:
+		return m.ExecutionWorkItemID()
 	case outboxevent.FieldEventID:
 		return m.EventID()
 	case outboxevent.FieldEventType:
@@ -81073,6 +81150,8 @@ func (m *OutboxEventMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *OutboxEventMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case outboxevent.FieldExecutionWorkItemID:
+		return m.OldExecutionWorkItemID(ctx)
 	case outboxevent.FieldEventID:
 		return m.OldEventID(ctx)
 	case outboxevent.FieldEventType:
@@ -81112,6 +81191,13 @@ func (m *OutboxEventMutation) OldField(ctx context.Context, name string) (ent.Va
 // type.
 func (m *OutboxEventMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case outboxevent.FieldExecutionWorkItemID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExecutionWorkItemID(v)
+		return nil
 	case outboxevent.FieldEventID:
 		v, ok := value.(string)
 		if !ok {
@@ -81225,6 +81311,9 @@ func (m *OutboxEventMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *OutboxEventMutation) AddedFields() []string {
 	var fields []string
+	if m.addexecution_work_item_id != nil {
+		fields = append(fields, outboxevent.FieldExecutionWorkItemID)
+	}
 	if m.addtenant_id != nil {
 		fields = append(fields, outboxevent.FieldTenantID)
 	}
@@ -81239,6 +81328,8 @@ func (m *OutboxEventMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *OutboxEventMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case outboxevent.FieldExecutionWorkItemID:
+		return m.AddedExecutionWorkItemID()
 	case outboxevent.FieldTenantID:
 		return m.AddedTenantID()
 	case outboxevent.FieldAttemptCount:
@@ -81252,6 +81343,13 @@ func (m *OutboxEventMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *OutboxEventMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case outboxevent.FieldExecutionWorkItemID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddExecutionWorkItemID(v)
+		return nil
 	case outboxevent.FieldTenantID:
 		v, ok := value.(int)
 		if !ok {
@@ -81274,6 +81372,9 @@ func (m *OutboxEventMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *OutboxEventMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(outboxevent.FieldExecutionWorkItemID) {
+		fields = append(fields, outboxevent.FieldExecutionWorkItemID)
+	}
 	if m.FieldCleared(outboxevent.FieldClaimToken) {
 		fields = append(fields, outboxevent.FieldClaimToken)
 	}
@@ -81300,6 +81401,9 @@ func (m *OutboxEventMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *OutboxEventMutation) ClearField(name string) error {
 	switch name {
+	case outboxevent.FieldExecutionWorkItemID:
+		m.ClearExecutionWorkItemID()
+		return nil
 	case outboxevent.FieldClaimToken:
 		m.ClearClaimToken()
 		return nil
@@ -81320,6 +81424,9 @@ func (m *OutboxEventMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *OutboxEventMutation) ResetField(name string) error {
 	switch name {
+	case outboxevent.FieldExecutionWorkItemID:
+		m.ResetExecutionWorkItemID()
+		return nil
 	case outboxevent.FieldEventID:
 		m.ResetEventID()
 		return nil
@@ -96116,6 +96223,8 @@ type ProcessInstanceMutation struct {
 	op                         Op
 	typ                        string
 	id                         *int
+	execution_work_item_id     *int
+	addexecution_work_item_id  *int
 	process_instance_id        *string
 	start_request_digest       *string
 	business_key               *string
@@ -96255,6 +96364,76 @@ func (m *ProcessInstanceMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetExecutionWorkItemID sets the "execution_work_item_id" field.
+func (m *ProcessInstanceMutation) SetExecutionWorkItemID(i int) {
+	m.execution_work_item_id = &i
+	m.addexecution_work_item_id = nil
+}
+
+// ExecutionWorkItemID returns the value of the "execution_work_item_id" field in the mutation.
+func (m *ProcessInstanceMutation) ExecutionWorkItemID() (r int, exists bool) {
+	v := m.execution_work_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExecutionWorkItemID returns the old "execution_work_item_id" field's value of the ProcessInstance entity.
+// If the ProcessInstance object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProcessInstanceMutation) OldExecutionWorkItemID(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExecutionWorkItemID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExecutionWorkItemID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExecutionWorkItemID: %w", err)
+	}
+	return oldValue.ExecutionWorkItemID, nil
+}
+
+// AddExecutionWorkItemID adds i to the "execution_work_item_id" field.
+func (m *ProcessInstanceMutation) AddExecutionWorkItemID(i int) {
+	if m.addexecution_work_item_id != nil {
+		*m.addexecution_work_item_id += i
+	} else {
+		m.addexecution_work_item_id = &i
+	}
+}
+
+// AddedExecutionWorkItemID returns the value that was added to the "execution_work_item_id" field in this mutation.
+func (m *ProcessInstanceMutation) AddedExecutionWorkItemID() (r int, exists bool) {
+	v := m.addexecution_work_item_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearExecutionWorkItemID clears the value of the "execution_work_item_id" field.
+func (m *ProcessInstanceMutation) ClearExecutionWorkItemID() {
+	m.execution_work_item_id = nil
+	m.addexecution_work_item_id = nil
+	m.clearedFields[processinstance.FieldExecutionWorkItemID] = struct{}{}
+}
+
+// ExecutionWorkItemIDCleared returns if the "execution_work_item_id" field was cleared in this mutation.
+func (m *ProcessInstanceMutation) ExecutionWorkItemIDCleared() bool {
+	_, ok := m.clearedFields[processinstance.FieldExecutionWorkItemID]
+	return ok
+}
+
+// ResetExecutionWorkItemID resets all changes to the "execution_work_item_id" field.
+func (m *ProcessInstanceMutation) ResetExecutionWorkItemID() {
+	m.execution_work_item_id = nil
+	m.addexecution_work_item_id = nil
+	delete(m.clearedFields, processinstance.FieldExecutionWorkItemID)
 }
 
 // SetProcessInstanceID sets the "process_instance_id" field.
@@ -97580,7 +97759,10 @@ func (m *ProcessInstanceMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProcessInstanceMutation) Fields() []string {
-	fields := make([]string, 0, 23)
+	fields := make([]string, 0, 24)
+	if m.execution_work_item_id != nil {
+		fields = append(fields, processinstance.FieldExecutionWorkItemID)
+	}
 	if m.process_instance_id != nil {
 		fields = append(fields, processinstance.FieldProcessInstanceID)
 	}
@@ -97658,6 +97840,8 @@ func (m *ProcessInstanceMutation) Fields() []string {
 // schema.
 func (m *ProcessInstanceMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case processinstance.FieldExecutionWorkItemID:
+		return m.ExecutionWorkItemID()
 	case processinstance.FieldProcessInstanceID:
 		return m.ProcessInstanceID()
 	case processinstance.FieldStartRequestDigest:
@@ -97713,6 +97897,8 @@ func (m *ProcessInstanceMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *ProcessInstanceMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case processinstance.FieldExecutionWorkItemID:
+		return m.OldExecutionWorkItemID(ctx)
 	case processinstance.FieldProcessInstanceID:
 		return m.OldProcessInstanceID(ctx)
 	case processinstance.FieldStartRequestDigest:
@@ -97768,6 +97954,13 @@ func (m *ProcessInstanceMutation) OldField(ctx context.Context, name string) (en
 // type.
 func (m *ProcessInstanceMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case processinstance.FieldExecutionWorkItemID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExecutionWorkItemID(v)
+		return nil
 	case processinstance.FieldProcessInstanceID:
 		v, ok := value.(string)
 		if !ok {
@@ -97937,6 +98130,9 @@ func (m *ProcessInstanceMutation) SetField(name string, value ent.Value) error {
 // this mutation.
 func (m *ProcessInstanceMutation) AddedFields() []string {
 	var fields []string
+	if m.addexecution_work_item_id != nil {
+		fields = append(fields, processinstance.FieldExecutionWorkItemID)
+	}
 	if m.addbusiness_id != nil {
 		fields = append(fields, processinstance.FieldBusinessID)
 	}
@@ -97954,6 +98150,8 @@ func (m *ProcessInstanceMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *ProcessInstanceMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case processinstance.FieldExecutionWorkItemID:
+		return m.AddedExecutionWorkItemID()
 	case processinstance.FieldBusinessID:
 		return m.AddedBusinessID()
 	case processinstance.FieldTenantID:
@@ -97969,6 +98167,13 @@ func (m *ProcessInstanceMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *ProcessInstanceMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case processinstance.FieldExecutionWorkItemID:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddExecutionWorkItemID(v)
+		return nil
 	case processinstance.FieldBusinessID:
 		v, ok := value.(int)
 		if !ok {
@@ -97998,6 +98203,9 @@ func (m *ProcessInstanceMutation) AddField(name string, value ent.Value) error {
 // mutation.
 func (m *ProcessInstanceMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(processinstance.FieldExecutionWorkItemID) {
+		fields = append(fields, processinstance.FieldExecutionWorkItemID)
+	}
 	if m.FieldCleared(processinstance.FieldStartRequestDigest) {
 		fields = append(fields, processinstance.FieldStartRequestDigest)
 	}
@@ -98054,6 +98262,9 @@ func (m *ProcessInstanceMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *ProcessInstanceMutation) ClearField(name string) error {
 	switch name {
+	case processinstance.FieldExecutionWorkItemID:
+		m.ClearExecutionWorkItemID()
+		return nil
 	case processinstance.FieldStartRequestDigest:
 		m.ClearStartRequestDigest()
 		return nil
@@ -98104,6 +98315,9 @@ func (m *ProcessInstanceMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *ProcessInstanceMutation) ResetField(name string) error {
 	switch name {
+	case processinstance.FieldExecutionWorkItemID:
+		m.ResetExecutionWorkItemID()
+		return nil
 	case processinstance.FieldProcessInstanceID:
 		m.ResetProcessInstanceID()
 		return nil

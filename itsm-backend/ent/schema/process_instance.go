@@ -18,6 +18,7 @@ type ProcessInstance struct {
 // Fields of the ProcessInstance.
 func (ProcessInstance) Fields() []ent.Field {
 	return []ent.Field{
+		field.Int("execution_work_item_id").Optional().Nillable().Immutable().Positive().Comment("Immutable execution WorkItem reference; historical rows remain NULL; FK managed by migration 039"),
 		field.String("process_instance_id").
 			Comment("流程实例ID，BPMN标准").
 			Unique().

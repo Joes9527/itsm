@@ -72,6 +72,29 @@ REVOKE ALL ON FUNCTION public.register_new_execution_member() FROM PUBLIC;
 CREATE TRIGGER register_new_execution_member AFTER INSERT ON public.tickets
 FOR EACH ROW EXECUTE FUNCTION public.register_new_execution_member();
 
+-- Execution provenance is structural and immutable. Existing rows remain NULL.
+ALTER TABLE public.outbox_events ADD COLUMN IF NOT EXISTS execution_work_item_id bigint;
+ALTER TABLE public.process_instances ADD COLUMN IF NOT EXISTS execution_work_item_id bigint;
+ALTER TABLE public.outbox_events ADD CONSTRAINT outbox_execution_work_item_fk FOREIGN KEY(execution_work_item_id) REFERENCES public.tickets(id);
+ALTER TABLE public.process_instances ADD CONSTRAINT process_execution_work_item_fk FOREIGN KEY(execution_work_item_id) REFERENCES public.tickets(id);
+CREATE FUNCTION public.preserve_execution_work_item_reference() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+BEGIN
+    IF TG_RELID NOT IN ('public.outbox_events'::regclass,'public.process_instances'::regclass)
+       OR TG_OP <> 'UPDATE' OR TG_WHEN <> 'BEFORE' OR TG_LEVEL <> 'ROW' THEN
+        RAISE EXCEPTION 'invalid execution reference trigger context';
+    END IF;
+    IF NEW.execution_work_item_id IS DISTINCT FROM OLD.execution_work_item_id THEN
+        RAISE EXCEPTION 'execution WorkItem reference is immutable';
+    END IF;
+    RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION public.preserve_execution_work_item_reference() FROM PUBLIC;
+CREATE TRIGGER outbox_execution_reference_immutable BEFORE UPDATE OF execution_work_item_id ON public.outbox_events
+FOR EACH ROW EXECUTE FUNCTION public.preserve_execution_work_item_reference();
+CREATE TRIGGER process_execution_reference_immutable BEFORE UPDATE OF execution_work_item_id ON public.process_instances
+FOR EACH ROW EXECUTE FUNCTION public.preserve_execution_work_item_reference();
+
 -- Default ACLs can grant roles privileges beyond PUBLIC. Strip those grants from
 -- these new objects; deployment preparation later grants only the reviewed reads.
 DO $$
@@ -87,12 +110,13 @@ BEGIN
         EXECUTE format('REVOKE ALL ON TABLE %s FROM %I',permission.object_name,pg_catalog.pg_get_userbyid(permission.grantee));
     END LOOP;
     FOR permission IN
-        SELECT DISTINCT a.grantee
+        SELECT DISTINCT p.oid::regprocedure AS object_name, a.grantee
         FROM pg_catalog.pg_proc p
         CROSS JOIN LATERAL pg_catalog.aclexplode(COALESCE(p.proacl,pg_catalog.acldefault('f',p.proowner))) a
-        WHERE p.oid='public.register_new_execution_member()'::regprocedure AND a.grantee<>0 AND a.grantee<>p.proowner
+        WHERE p.oid IN ('public.register_new_execution_member()'::regprocedure,'public.preserve_execution_work_item_reference()'::regprocedure) AND a.grantee<>0 AND a.grantee<>p.proowner
     LOOP
-        EXECUTE format('REVOKE ALL ON FUNCTION public.register_new_execution_member() FROM %I',pg_catalog.pg_get_userbyid(permission.grantee));
+        EXECUTE format('REVOKE ALL ON FUNCTION %s FROM %I',permission.object_name,pg_catalog.pg_get_userbyid(permission.grantee));
     END LOOP;
 END $$;
+
 `

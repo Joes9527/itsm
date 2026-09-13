@@ -55,6 +55,11 @@ func IDLTE(id int) predicate.ProcessInstance {
 	return predicate.ProcessInstance(sql.FieldLTE(FieldID, id))
 }
 
+// ExecutionWorkItemID applies equality check predicate on the "execution_work_item_id" field. It's identical to ExecutionWorkItemIDEQ.
+func ExecutionWorkItemID(v int) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldEQ(FieldExecutionWorkItemID, v))
+}
+
 // ProcessInstanceID applies equality check predicate on the "process_instance_id" field. It's identical to ProcessInstanceIDEQ.
 func ProcessInstanceID(v string) predicate.ProcessInstance {
 	return predicate.ProcessInstance(sql.FieldEQ(FieldProcessInstanceID, v))
@@ -158,6 +163,56 @@ func CreatedAt(v time.Time) predicate.ProcessInstance {
 // UpdatedAt applies equality check predicate on the "updated_at" field. It's identical to UpdatedAtEQ.
 func UpdatedAt(v time.Time) predicate.ProcessInstance {
 	return predicate.ProcessInstance(sql.FieldEQ(FieldUpdatedAt, v))
+}
+
+// ExecutionWorkItemIDEQ applies the EQ predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDEQ(v int) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldEQ(FieldExecutionWorkItemID, v))
+}
+
+// ExecutionWorkItemIDNEQ applies the NEQ predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDNEQ(v int) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldNEQ(FieldExecutionWorkItemID, v))
+}
+
+// ExecutionWorkItemIDIn applies the In predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDIn(vs ...int) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldIn(FieldExecutionWorkItemID, vs...))
+}
+
+// ExecutionWorkItemIDNotIn applies the NotIn predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDNotIn(vs ...int) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldNotIn(FieldExecutionWorkItemID, vs...))
+}
+
+// ExecutionWorkItemIDGT applies the GT predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDGT(v int) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldGT(FieldExecutionWorkItemID, v))
+}
+
+// ExecutionWorkItemIDGTE applies the GTE predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDGTE(v int) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldGTE(FieldExecutionWorkItemID, v))
+}
+
+// ExecutionWorkItemIDLT applies the LT predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDLT(v int) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldLT(FieldExecutionWorkItemID, v))
+}
+
+// ExecutionWorkItemIDLTE applies the LTE predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDLTE(v int) predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldLTE(FieldExecutionWorkItemID, v))
+}
+
+// ExecutionWorkItemIDIsNil applies the IsNil predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDIsNil() predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldIsNull(FieldExecutionWorkItemID))
+}
+
+// ExecutionWorkItemIDNotNil applies the NotNil predicate on the "execution_work_item_id" field.
+func ExecutionWorkItemIDNotNil() predicate.ProcessInstance {
+	return predicate.ProcessInstance(sql.FieldNotNull(FieldExecutionWorkItemID))
 }
 
 // ProcessInstanceIDEQ applies the EQ predicate on the "process_instance_id" field.

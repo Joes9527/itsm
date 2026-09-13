@@ -14,6 +14,8 @@ const (
 	Label = "process_instance"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldExecutionWorkItemID holds the string denoting the execution_work_item_id field in the database.
+	FieldExecutionWorkItemID = "execution_work_item_id"
 	// FieldProcessInstanceID holds the string denoting the process_instance_id field in the database.
 	FieldProcessInstanceID = "process_instance_id"
 	// FieldStartRequestDigest holds the string denoting the start_request_digest field in the database.
@@ -103,6 +105,7 @@ const (
 // Columns holds all SQL columns for processinstance fields.
 var Columns = []string{
 	FieldID,
+	FieldExecutionWorkItemID,
 	FieldProcessInstanceID,
 	FieldStartRequestDigest,
 	FieldBusinessKey,
@@ -139,6 +142,8 @@ func ValidColumn(column string) bool {
 }
 
 var (
+	// ExecutionWorkItemIDValidator is a validator for the "execution_work_item_id" field. It is called by the builders before save.
+	ExecutionWorkItemIDValidator func(int) error
 	// ProcessInstanceIDValidator is a validator for the "process_instance_id" field. It is called by the builders before save.
 	ProcessInstanceIDValidator func(string) error
 	// ProcessDefinitionKeyValidator is a validator for the "process_definition_key" field. It is called by the builders before save.
@@ -167,6 +172,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByExecutionWorkItemID orders the results by the execution_work_item_id field.
+func ByExecutionWorkItemID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldExecutionWorkItemID, opts...).ToFunc()
 }
 
 // ByProcessInstanceID orders the results by the process_instance_id field.
