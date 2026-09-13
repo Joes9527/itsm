@@ -203,6 +203,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+首次拒绝诊断 `d541ed9f3`：两模式typed/candidate拒绝在冻结物理topic/owner独立Redis hash以HSETNX保存固定原因/摘要/首次时间，零原载荷/UUID/error复制，仍NACK；首次事实不阻止重新授权。真实Redis两模式缺记录RED→持久记录/同PEL跨consumer保留/整行不变，WRONGTYPE故障保全且不ACK，fixture同消息授权恢复后ACK/PEL0且首记录不变。相关回归、完整私有环境race、build和独立限定复核通过，无skip/race。重要未完成项：首轮实现测试实际证明watermill同步ResendLoop会让坏消息阻住后续；该失败保留T1，当前没有实现永久隔离或人工处置，不能把删除本轮额外可用性断言当作修复。真实PG撤权联合恢复、Redis服务/应用进程重启及其它异步入口也未完成。此项仅为首次拒绝诊断，不放行S5/B2/B3/T3/T4/G2/G3；CandidateSHA及未启动状态不变。
+
 Webhook两模式统一 `4b7db1035`：普通同步外发分支及无生产调用SendToInstance已删除，普通/候选使用唯一typed消费事务、意图/Audit及原Webhook Worker。普通typed订阅采用稳定owner组并冻结登记身份，复用既有factory/Close；缺authority的登记/动态订阅P2经RED复现后在分配前拒绝，复审关闭。真实PG/Redis普通消费缺Audit RED→同组ACK缺口恢复、完整意图/回执保全、真实Worker两目标各一次published GREEN；完整私有环境race、相关包最终回归、build及独立审阅通过，无skip/race。测试source来自候选新成员的真实SLA事实，standard owner连接证明共享合同而非standard运行role准入，详见T1。代码统一项完成，未知/旧非持久消息持久阻断、进程重启、撤权竞争及其它异步入口未完成，S5和后续门禁未通过；CandidateSHA及未启动状态不变。
 
 普通持久传输前置 `83a9591a3`：普通ExecutionEvent不再丢失身份或生成随机UUID，复用候选的严格信封/authority并固定原eventID。显式ExecutionEnvelopeHandler订阅在两模式校验部署/scope/tenant、UUID/metadata和来源后取得完整信封；candidate准入不放宽。独立P2的缺失稳定合同raw发布经RED复现后在最前拒绝，复审关闭。真实PG源+Redis标准typed传输及源行/Audit保全通过；历史fixture改为明确迁移前非持久类型，旧Stream/组/PEL断言不变。相关三包race、最终完整私有PG/Redis/MinIO race、build及独立审阅通过，无skip/race，初次fixture失败证据保留T1。普通Webhook尚待typed持久接线/删除同步分支及durable组，不能把传输前置视为全链路；S5和后续门禁、CandidateSHA及未启动状态不变。
