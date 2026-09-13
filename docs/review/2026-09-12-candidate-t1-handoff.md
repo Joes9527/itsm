@@ -795,3 +795,13 @@ Callback contract新增version及generic typed lifecycle result，沿既有流�
 最终 `s3-ticket-edit-component-full.log` 两套完整组件测试23 PASS、无skip；定向运行关闭全仓coverage门槛。`s3-ticket-edit-component-typecheck.log` 主题校验与全前端type-check exit0；git diff --check通过。独立review_execution_scope_s1只读审阅无新增阻断。未改后端，因此未重复Go构建/PG测试。PointerEventsCheckLevel.Never沿用组件测试环境约定，不能证明浏览器遮罩、布局与点击可达性；mock刷新及冲突也不能替代实际HTTP、后端提交或候选业务E2E。
 
 本轮仅补齐普通详情/批量编辑的组件证据，AI建议实际交互、跨页面重载恢复、浏览器和候选业务周期仍未验证；S3/S4/S5/S6及B3/T3/T4/G2/G3保持未完成。固定CandidateSHA仍为d7470a32dbb87acc9b5e4d9a895a146410723561，候选未启动；无WSL或共享数据库变更、企业实发、推送或main合并。
+
+### B2 S5 Stream 传输隔离真实 RED（2026-09-13）
+
+在 `d27c57d68` 后转入候选启动前必需的S5，不将前端组件检查点视为整个交付完成。新建 `tests/integration/candidate_stream_preservation_test.go`，使用已有受保护目录Redis 7.2.16二进制启动临时loopback实例，随机密码和实际PID核验后才写fixture；不连接共享Redis。先向旧sla.breached写入历史事件并建立单条pending，再启动现有Watermill订阅、确认真实XREAD等待并发布新事件；handler收到新WorkItem是正向控制。
+
+`s5-stream-isolation-red.log` 预期业务失败：旧Stream新增消息，原group lag由0变1，预期candidate:deployment:scope:stable-topic长度为0。原group的pending摘要及逐条ID/consumer/delivery count保持（自然增长idle不纳入比较）；这不是历史pending被领取或ACK的复现。现有subscriber默认fanout，测试不声称生产候选启动或完整消费组恢复验证。fixture里的scope/deployment只是输入，当前构造器没有冻结策略入口，不能把这些字段当成授权证据。未改生产实现，当前新测试仍RED，不能沿用之前完整测试全绿结论。
+
+只读调用盘点：此Watermill Publish业务调用仅有SLABreachDeliveryHandler和handlers/ai.Service.TriageTicket。前者来源为已持久outbox；后者为建单前分诊，TicketID为空，不能捏造WorkItem归属。下一步同一构造器贯通冻结ExecutionPolicy及订阅合同，候选publisher在Redis写前验证结构化主体，subscriber只订阅可信namespace并核对envelope/tenant/member；审计所有者仍须在自身写事务核验并保留幂等回执，不能仅改topic字符串。无主体建单前AI事件不得进入受限执行空间，按既有明确禁用/失败边界处理，保留分诊业务含义。不增加第二套candidate bus、不双发旧topic，不从payload自报scope赋权。
+
+独立review_execution_scope_s1确认传输RED有效并建议补充逐条PEL保全，已采纳；真实Audit持久化、成员撤销、非法envelope/未知事件、subscriber退出及新namespace唯一载荷校验仍待GREEN阶段。S5及完整B2/B3/T3/T4/G2/G3未完成，CandidateSHA不变且候选未启动；无WSL、共享数据、企业实发、推送或main合并。
