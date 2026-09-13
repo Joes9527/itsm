@@ -125,6 +125,8 @@ SLA violation 增量 `73cc9a3e1` 已修复历史违规 RED：冻结清单/原事
 
 SLA alert 直接入口增量 `f579a866d`：CheckAndTriggerAlerts/TriggerSLAWarning 原事务 tenant/member/deleted、deadline/cycle/rules/duplicate/cooldown 与首次 version CAS；history/通知意图原子提交，规则渠道与用户偏好取交集，空渠道零通知，有渠道缺notifier拒绝。critical同步邮件与虚报NotificationSent=true已移除。s4-sla-alert-verified-pg.log完整candidate边界PASS，含两历史入口保全、新成员、写后故障（history及两通知表）回滚、渠道交集、owner设置的reopen/pause计算；回归/build/标签编译及限定复审通过。完整发送关联/状态投影尚未完成，候选monitor的alert拒绝仍保留，bootstrap尚不启用告警周期。下一步独立040 ordinary migration：TicketNotification nullable immutable history结构关联与history nullable tracking version，旧行不回填，复合tenant/ticket FK和不可改指约束；worker继续只维护通知权威状态，history查询按结构关联投影，不解析DeliveryKey授权，不改变038退休依赖。S4仍未完成，CandidateSHA及停止状态不变。
 
+SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：独立040 ordinary、nullable immutable history引用与tracking version、同tenant/ticket复合FK、legacy目标拒绝/不可改指/禁止新sent双写、默认函数ACL剥离，038合同未变。旧行NULL不回填，新告警version1原事务关联；history API仅由关联通知聚合新状态，legacy保留原事实；worker未新增history权限。monitor已接回alert并传播warning错误。s4-sla-projection-final-pg.log完整候选边界PASS，含删除Ent预建列/新索引后真实040升级、原始旧行保全、独立FK/不可变约束、旧事实/零通知/混合状态投影、原worker缺provider失败及真实monitor告警历史保全；migration全包、定向回归、build/标签编译、最终独立审阅通过。手动状态夹具不等于外部送达，单领域事务原子不等于整轮扫描原子。升级链尚有旧notification_sent写路径，仍待接入；S4及剩余门禁未完成，040未在WSL/共享环境执行，固定CandidateSHA/停止状态不变。
+
 ## S5：Stream 与请求异步边界
 
 **Files:** `pkg/eventbus/{eventbus.go,eventbus_test.go}`、`service/{tool_queue.go,ticket_service.go}`、`controller/connector_controller.go`、bootstrap；事件发布者由 `rg -n 'Publish\('` 生成调用清单逐项接入。
