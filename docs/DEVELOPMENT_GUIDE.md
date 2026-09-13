@@ -389,3 +389,6 @@ Webhook 新意图生产者与投递 Worker 通过唯一 Manager.ResolveDeliveryT
 
 
 持久邮件设置`DisableProviderFallback`时，已配置GraphProvider但当前解析不可用（含nil sender）须返回`email_route_unavailable`，不得改用SMTP；这是零发送的`not_accepted`，不是结果未知。未配置GraphProvider的显式SMTP仍可发送。普通允许fallback调用保持原行为。该规则只限制一次调用的跨provider回退，不证明重启后的目标绑定：bootstrap的Graph解析仍需迁移精确目标合同，不能据此放行候选企业邮件。
+
+
+持久push现复用原WebSocket Hub单一发送队列，frame可携带非阻塞写入回执；所有按用户投递入口均同时匹配tenant/user，普通实时通知仍best-effort且不得作持久完成依据。Notification Worker等待至少一个匹配连接的消息Write及writer.Close成功，才提交原sent/SentAt；这表示socket传输接受，不表示浏览器消费或用户已读。无匹配连接/全部缓冲满属于确定未入队，可重试；曾入队但无成功回执、断线或超时属于delivery_unknown，不自动重发。一个连接成功后不保证其余在线连接均收到。成功写入后数据库完成失败继续由原processing lease恢复为unknown，不宣称exactly-once。此结果协议不替代notification capability、执行范围与候选目标准入；相关门禁仍须分别核验。

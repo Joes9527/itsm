@@ -381,7 +381,12 @@ func (s *TicketNotificationService) dispatchClaimedDelivery(ctx context.Context,
 		if s.wsService == nil {
 			return "connector_unavailable", nil
 		}
-		s.wsService.GetHub().SendToUser(row.UserID, WebSocketMessage{Type: row.Type, Payload: map[string]interface{}{"ticket_id": row.TicketID, "content": row.Content}})
+		if err := s.wsService.GetHub().DeliverToUser(ctx, row.TenantID, row.UserID, WebSocketMessage{Type: row.Type, Payload: map[string]interface{}{"ticket_id": row.TicketID, "content": row.Content}}); err != nil {
+			if errors.Is(err, errPushNotAccepted) {
+				return "connector_unavailable", err
+			}
+			return "delivery_unknown", err
+		}
 		return "", nil
 	}
 	if s.connectorManager == nil {

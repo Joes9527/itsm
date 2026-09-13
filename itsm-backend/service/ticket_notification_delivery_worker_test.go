@@ -18,6 +18,7 @@ import (
 	"itsm-backend/ent"
 	"itsm-backend/service/bpmn"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 )
@@ -564,4 +565,45 @@ func standardNotificationPolicy(t *testing.T) *database.ExecutionPolicy {
 	p, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "test-standard", Capabilities: map[string]string{"notification": "enabled"}})
 	require.NoError(t, err)
 	return p
+}
+
+// No socket or Hub goroutine is needed: each case has no eligible writable
+// recipient. A durable worker must not manufacture delivery evidence.
+func TestTicketNotificationPushWithoutEligibleRecipientIsNotDelivered(t *testing.T) {
+	for _, scenario := range []string{"offline", "full", "other tenant"} {
+		t.Run(scenario, func(t *testing.T) {
+			client, svc, ctx := setupTicketNotificationTest(t)
+			defer client.Close()
+			tenant, recipient, item := createNotifTestData(t, client, ctx)
+			logger := zaptest.NewLogger(t).Sugar()
+			svc.SetNotificationPreferenceService(NewNotificationPreferenceService(client, logger))
+			client.NotificationPreference.Create().SetTenantID(tenant.ID).SetUserID(recipient.ID).SetEventType("ticket_updated").SetInAppEnabled(false).SetEmailEnabled(false).SetSmsEnabled(false).SetPushEnabled(true).SaveX(ctx)
+			hub := NewWebSocketHub(logger)
+			var connection *WebSocketClient
+			if scenario != "offline" {
+				connection = &WebSocketClient{UserID: recipient.ID, TenantID: tenant.ID, Send: make(chan websocketFrame, 1)}
+				if scenario == "full" {
+					connection.Send <- websocketFrame{payload: []byte("existing message")}
+				}
+				if scenario == "other tenant" {
+					connection.TenantID = tenant.ID + 1
+				}
+				hub.clients[connection] = true
+			}
+			svc.SetWebSocketService(&WebSocketService{hub: hub, logger: logger})
+			svc.SetDeliveryQueueClient(client)
+			result, err := svc.SendNotification(ctx, item.ID, &dto.SendTicketNotificationRequest{UserIDs: []int{recipient.ID}, EventType: "ticket_updated", Content: "private push", DeliveryKey: "push-no-recipient"}, tenant.ID)
+			require.NoError(t, err)
+			require.Equal(t, dto.TicketNotificationEffectQueued, result.Effect)
+			n, err := svc.ProcessPendingDeliveries(ctx, "push-no-recipient", 10)
+			assert.Error(t, err)
+			assert.Zero(t, n)
+			row := client.TicketNotification.Query().OnlyX(ctx)
+			assert.NotEqual(t, ticketNotificationStatusSent, row.Status)
+			assert.True(t, row.SentAt.IsZero())
+			if scenario == "other tenant" {
+				assert.Empty(t, connection.Send, "another tenant cannot receive the queued notification")
+			}
+		})
+	}
 }

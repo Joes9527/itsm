@@ -1415,3 +1415,15 @@ s5-email-unavailable-fallback-green.log：EmailService/EmailAndCC/TicketNotifica
 影响边界：bootstrap始终注入GraphProvider，因此持久邮件在该解析器无可用Graph目标时保持未发送，不再以全局SMTP代替；本次没有启用候选邮件。此项只关闭单次调用跨provider回退，不证明跨重启目标绑定。实际newTenantGraphProvider仍用Manager.Get(tenant, msgraph-email)，专业邮件身份/准入未完成；Incident告警和通知共用此owner。push SendToUser按user ID投递且不返回接收事实，Notification Worker仍无从证明已送达，须在原Hub/队列协议内解决，不能以void返回当投递证据。后续继续真实owner目标/结果合同，S5/S6/T3/T4/G3与总目标保持未完成。
 
 固定CandidateSHA与候选停止状态不变，无WSL/共享数据库操作，无push/main合并。源码与测试当前均无运行进程。
+
+### B2 S5 push真实传输结果与租户目标（2026-09-14）
+
+s5-push-no-recipient-red.log真实SQLite生产者→原Notification Worker→原Hub复现三项：离线、缓冲满均被错误标sent，同user ID的其它tenant连接收到内容且同样sent。没有运行候选应用。原SendToUser只有void且仅过滤user，不能作为持久完成证据。
+
+按已有S5通知正确性范围和独立审阅的最小协议，复用原单一Send队列的typed frame与可选有界回执，不建第二队列；唯一enqueueUser统一tenant+user选择，既有实时SendToUser调用也传入tenant。WritePump逐消息检查Write和writer.Close结果，至少一个匹配连接成功才表示socket传输接受；原worker据此提交sent/SentAt。零入队返回not_accepted并走原重试；入队后断线/超时/无成功回执走delivery_unknown。等待有界、迟到回执不阻塞pump，退出时在Hub锁内摘除连接并释放待回执；pong入队也与关闭共用锁。
+
+s5-push-socket-green.log与s5-push-final-unit.log覆盖离线/满/错tenant、真实loopback WebSocket成功和已关闭socket写失败、入队超时、一个真实成功加另一个停滞连接、真实worker完成sent。真实socket成功后注入数据库完成失败，保留processing/SentAt空，过期lease恢复为failed/delivery_unknown、attempt仍1且接收端无第二次消息。上述新push用例使用SQLite+本机真实socket，不冒称PG故障矩阵；多连接一失败一成功及多连接全部失败尚未单独构造。成功表示传输接受，非用户已读/浏览器应用确认；至少一个成功后取消其余待写frame，不保证所有连接都收到。
+
+最终四包具名race回归s5-push-final-unit.log PASS，完整私有PG16/Redis/MinIO suite s5-push-full-private.log PASS，无FAIL/SKIP/DATA RACE；s5-push-build.log全后端build exit0；独立复审无新增阻断，git diff --check通过。Go进程均已退出。
+
+本增量不关闭email/push notification capability与部署目标准入、邮件持久身份、飞书/裸实例、S5/S6/T3/T4/G3。下一步继续原通知owner与冻结ExecutionPolicy的email/push能力核验，禁止仅凭本次socket测试放行候选。CandidateSHA保持d7470a32dbb87acc9b5e4d9a895a146410723561且候选停止，无WSL/共享数据库操作、企业外发、push/main合并。
