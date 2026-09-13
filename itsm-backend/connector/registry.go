@@ -15,9 +15,10 @@ type Factory func() Connector
 // Registry 全局注册表：保存"连接器类型 -> 工厂"
 // 内置连接器在 init() 中注册；第三方插件/技能也可通过 import 触发
 type Registry struct {
-	mu        sync.RWMutex
-	factories map[string]Factory
-	manifests map[string]Manifest
+	mu           sync.RWMutex
+	factories    map[string]Factory
+	manifests    map[string]Manifest
+	descriptions map[string]DeliveryDestinationDescriber
 }
 
 var defaultRegistry = NewRegistry()
@@ -25,8 +26,9 @@ var defaultRegistry = NewRegistry()
 // NewRegistry 创建注册表
 func NewRegistry() *Registry {
 	return &Registry{
-		factories: make(map[string]Factory),
-		manifests: make(map[string]Manifest),
+		factories:    make(map[string]Factory),
+		manifests:    make(map[string]Manifest),
+		descriptions: make(map[string]DeliveryDestinationDescriber),
 	}
 }
 
@@ -50,6 +52,9 @@ func (r *Registry) Register(f Factory) {
 	m.Checksum = m.ComputeChecksum()
 	r.factories[m.Name] = f
 	r.manifests[m.Name] = m
+	if description, ok := c.(DeliveryDestinationDescriber); ok {
+		r.descriptions[m.Name] = description
+	}
 }
 
 // MustRegister 在包 init() 中使用：失败即 panic

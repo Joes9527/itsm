@@ -101,3 +101,29 @@ func TestGraphDestinationRejectsMalformedIdentity(t *testing.T) {
 		require.NotContains(t, err.Error(), endpoint)
 	}
 }
+
+func TestGraphRegistryDescriptionWithoutActivation(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { requests.Add(1) }))
+	defer server.Close()
+	cfg := graphDestinationConfig()
+	cfg.Name, cfg.Provider = "msgraph-email", "microsoft"
+	cfg.Settings["aad_base_url"], cfg.Settings["graph_base_url"] = server.URL, server.URL+"/graph"
+	delete(cfg.Credentials, "azure_client_secret")
+	expected, err := New().DescribeDeliveryDestination(cfg)
+	require.NoError(t, err)
+	type result struct {
+		digest string
+		err    error
+	}
+	results := make(chan result, 16)
+	for i := 0; i < 16; i++ {
+		go func() { d, e := connector.Default().DescribeDeliveryDestination(cfg); results <- result{d, e} }()
+	}
+	for i := 0; i < 16; i++ {
+		r := <-results
+		require.NoError(t, r.err)
+		require.Equal(t, expected, r.digest)
+	}
+	require.Zero(t, requests.Load())
+}

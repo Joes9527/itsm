@@ -1467,3 +1467,13 @@ s5-graph-destination-final.log：msgraph/connector/bootstrap 三包全量 race P
 本步未接入 Manager 可信配置描述入口、未声明 Graph local_only、未新增045或修改通知/Incident outbox持久协议。2f119ebdb 邮件排队后重绑 RED 仍未关闭，不将上述绿色回归视为整体绿色。固定 CandidateSHA 与候选停止状态不变，无 WSL/共享数据库操作、企业外发、push/main合并；S5/S6/T3/T4/G3仍未完成。
 
 独立最终只读审阅无新增阻断。历史fixture证明迁移保全后 standard worker 明确拒绝无目标投递，不证明该标准模式旧行全过程不变（worker会写failed）。审阅未另跑测试；integration仅编译边界保留。git diff --check通过。
+
+### B2 S5 Registry 纯目的地描述入口（2026-09-14）
+
+沿已接受邮件目标协议，在原 Registry 注册 prototype 时捕获 DeliveryDestinationDescriber；请求描述不重新调用 factory/Init/HealthCheck/Send/Close，禁用配置仍可描述。接口要求纯、并发安全、不保留或修改Config、不读secret；Registry核验精确name/provider和64位小写摘要，拒绝未知/不支持/无效摘要，固定错误避免提供方细节泄漏。此接口只计算身份，不授予配置来源、业务或执行权限。
+
+s5-registry-description-red.log 明确复现原Registry缺方法；s5-registry-description-green.log connector/Graph race通过。s5-registry-description-final.log connector/...与bootstrap全包race通过，包含真实Graph经默认Registry的16个并发描述、缺secret/禁用配置/本机HTTP零请求；s5-registry-description-build.log全后端build exit0。此次未重复私有PG suite，不将前次证据作为本次执行。独立只读审阅无阻断，所建议Graph组合/并发覆盖已补；git diff --check通过，Go进程均退出。
+
+新增依赖证据：config/execution_connector_target.go 当前以 !c.Enabled(capability) 拒绝disabled notification的目标声明；因此仅有Registry描述接口仍不能完成禁用时完整入队。下一步须在同一既有配置/生命周期合同中分离描述资格和激活资格，不能仅删除校验却让 ActivateStartupTargets 激活禁用目标。standard配置仍沿持久ConnectorConfig owner读取，不从已激活实例反推。Manager接入、045/EmailTarget/Incident outbox和原邮件目标重绑RED均未完成。
+
+固定CandidateSHA不变，候选停止；无WSL/共享数据库操作、企业外发、push/main合并；S5/S6/T3/T4/G3未完成。

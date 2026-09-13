@@ -397,3 +397,5 @@ Webhook 新意图生产者与投递 Worker 通过唯一 Manager.ResolveDeliveryT
 通知Worker对已按执行范围筛选的每行，先派生所属tenant上下文并核验冻结`notification`能力，再进入pending claim或processing租约恢复。禁用时不写attempt、lease、retry或终态，返回保留ErrDenied原因的汇总错误；空队列的0,nil仅表示没有处理，不能证明能力已启用。email/push已授权业务请求仍可持久为queued，不承诺关闭能力时会自动发送；连接器producer依照原目标binder要求保持不变。标准/候选正常通知Worker必须显式启用对应能力，不能依赖测试或部署默认值。该执行开关不替代邮件精确目标/提供方身份核验。
 
 Graph 的 DescribeDeliveryDestination 只解析发送身份（AAD tenant、公开 app ID、mailbox、有效 AAD/Graph 端点），不读取 client secret、不初始化或取令牌；Init 共用解析结果并捕获摘要。客户端拒绝 HTTP 重定向及非 2xx 成功判定。此能力尚未接入可信配置读取、持久邮件目标或候选 local_only 准入；不代表凭据有效、远程授权成立或 nextLink/绝对 URL 已受完整目标约束。旧无目标通知不得绑定当前连接器，标准模式 worker 将其标记 delivery_target_invalid，候选历史范围保全规则保持。
+
+Registry.DescribeDeliveryDestination 对注册的纯描述器执行精确 name/provider 与摘要格式校验，不创建或激活连接器。输入必须由可信配置owner提供，返回摘要不代表发送授权；当前候选声明仍拒绝disabled capability，描述与激活资格分离及持久队列接入尚未完成。
