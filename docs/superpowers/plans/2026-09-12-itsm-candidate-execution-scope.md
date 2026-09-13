@@ -203,6 +203,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+审计检查点 `7507ca616`：原owner显式ExecutionPolicy与typed Envelope，RR原事务ValidateEventTx准入/持久来源、唯一AuditLog事件回执、完整digest/body/元数据校验后重放；不虚构WorkItem版本。修复原空白上下文RLS错误及真实重复审计RED。真实PG插入后故障回滚、双INSERT barrier一次提交/一次PQ23505、原消息重放整行保全、变造和closed scope拒绝通过；完整候选边界/Redis路由/应用构造保全、定向回归、build及race通过，独立审阅无阻断，证据见T1。bus透传消费context与完整typed Envelope；standard保持map，Webhook尚未适配而明确拒绝。Redis durable group、ACK丢失恢复、无效消息持久阻断和联合消费尚未完成，S5及启动门禁保持未勾选。
+
 来源检查点 `d8e3d0420`：candidate bus必需narrow authority，typed持久eventID/WorkItem生成outer execution，复用eventID为消息UUID；数据库authority核对冻结ref、active/binding/member及同tenant/结构主体/ID的持久Outbox，复用唯一SLA factory验证内容/发生时间。subscriber在handler前验证严格信封、物理route、UUID/metadata及来源；未知/无主体事件明确拒绝。大小写JSON别名P2已修并复审关闭。真实PG来源负测与scope/binding变化恢复通过，Outbox整行/audit数保全；受控channel验证ACK/NACK及拒绝零handler。完整私有候选边界/真实Redis路由/应用构造保全、定向回归和build通过，无skip，证据见T1。PG用capture bus、Redis用fixture authority，尚非联合消费；审计自身事务幂等、持久group/无效消息阻断/重启恢复及直接owner边界仍待完成。S5及candidate启动门禁不因此放行。
 
 路由检查点 `ea8c2494a`：唯一Watermill构造器必需显式ExecutionConfig并冻结复制refs；candidate Publish/Subscribe统一可信配置namespace，拒绝非法topic/非规范或清单外tenant、无稳定事件和重复scope，不从payload自报scope取路由。原传输RED已GREEN：真实Redis双租户各有独立订阅/唯一消息，载荷核验及旧Stream/组/逐条PEL保全通过；完整应用构造在私有PG/Redis/MinIO保全通过，无skip。eventbus/bootstrap包回归、全后端build和独立审阅通过，详情见T1最新交接。仅传输路由完成，尚无authority/持久eventID/严格信封/审计原事务幂等或可靠消费组恢复，不构成candidate启动许可，下面复合项保持未勾选。
