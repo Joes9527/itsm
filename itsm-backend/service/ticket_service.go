@@ -462,6 +462,28 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 			return nil, err
 		}
 	}
+	// Both the generic edit route and the subtask route must respect the actual
+	// persisted parent. A route hint cannot substitute a different admitted parent.
+	if req.ExpectedParentID < 0 || (req.ExpectedParentID > 0 && (current.ParentTicketID == nil || *current.ParentTicketID != req.ExpectedParentID)) {
+		return nil, common.NewValidationError("子任务不属于指定的父工单", nil)
+	}
+	if current.ParentTicketID != nil {
+		parentID := *current.ParentTicketID
+		if parentID <= 0 || parentID == id {
+			return nil, common.NewValidationError("工单父级关系无效", nil)
+		}
+		if err = s.execution.RequireEntMembers(ctx, tx, tenantID, parentID); err != nil {
+			return nil, err
+		}
+		exists, err := client.Ticket.Query().Where(entticket.IDEQ(parentID), entticket.TenantIDEQ(tenantID), entticket.DeletedAtIsNil()).Exist(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			return nil, common.NewNotFoundError("parent work item")
+		}
+	}
+
 	if isFinalStatus(current.Status) {
 		return nil, common.NewForbiddenError("工单已结束，无法编辑")
 	}

@@ -667,3 +667,43 @@ func TestTicketController_UpdateTicketRechecksInactiveActor(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(`{"userId":123,"title":"input"}`), &bound))
 	require.Zero(t, bound.UserID, "JSON cannot provide the command actor")
 }
+
+func TestTicketController_UpdateSubtaskChecksParentInTransaction(t *testing.T) {
+	r, client, controller := setupTestTicketController(t)
+	defer client.Close()
+	r.PATCH("/api/v1/tickets/:id/subtasks/:subtask_id", controller.UpdateSubtask)
+	tenant, actor := createTestTenantAndUserForTicket(t, client)
+	ctx := context.Background()
+	seedTicketRolePermission(t, client, tenant.ID, actor.Role, "ticket", "update")
+	parent := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetTicketNumber("PARENT-ROUTE").SetTitle("Parent").SetRecordClass("generic").SetStatus("open").SaveX(ctx)
+	child := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(actor.ID).SetTicketNumber("CHILD-ROUTE").SetTitle("Child").SetRecordClass("generic").SetStatus("open").SetParentTicketID(parent.ID).SaveX(ctx)
+	for _, parentID := range []int{parent.ID + 10000, 0, -1} {
+		before, err := json.Marshal(client.Ticket.GetX(ctx, child.ID))
+		require.NoError(t, err)
+		body := fmt.Sprintf(`{"title":"wrong route","expectedParentId":%d,"version":%d,"tags":["wrong-route"]}`, parent.ID, child.Version)
+		req := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/v1/tickets/%d/subtasks/%d", parentID, child.ID), strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-Test-Tenant", strconv.Itoa(tenant.ID))
+		req.Header.Set("X-Test-User", strconv.Itoa(actor.ID))
+		resp, _ := doJSONRequest(t, r, req)
+		require.Equal(t, common.ParamErrorCode, resp.Code, resp.Message)
+		after, err := json.Marshal(client.Ticket.GetX(ctx, child.ID))
+		require.NoError(t, err)
+		require.JSONEq(t, string(before), string(after))
+		require.Zero(t, client.TicketTag.Query().CountX(ctx))
+	}
+	body := fmt.Sprintf(`{"title":"correct route","expectedParentId":-1,"version":%d}`, child.Version)
+	req := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/v1/tickets/%d/subtasks/%d", parent.ID, child.ID), strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Test-Tenant", strconv.Itoa(tenant.ID))
+	req.Header.Set("X-Test-User", strconv.Itoa(actor.ID))
+	resp, _ := doJSONRequest(t, r, req)
+	require.Equal(t, common.SuccessCode, resp.Code, resp.Message)
+	updated := client.Ticket.GetX(ctx, child.ID)
+	require.Equal(t, "correct route", updated.Title)
+	require.Equal(t, child.Version+1, updated.Version)
+	require.Equal(t, parent.Version, client.Ticket.GetX(ctx, parent.ID).Version)
+	var bound dto.UpdateTicketRequest
+	require.NoError(t, json.Unmarshal([]byte(`{"expectedParentId":123}`), &bound))
+	require.Zero(t, bound.ExpectedParentID)
+}

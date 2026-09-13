@@ -909,13 +909,13 @@ func (tc *TicketController) CreateSubtask(c *gin.Context) {
 // UpdateSubtask 更新子任务
 func (tc *TicketController) UpdateSubtask(c *gin.Context) {
 	parentID, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
+	if err != nil || parentID <= 0 {
 		common.Fail(c, common.ParamErrorCode, "无效的父工单ID")
 		return
 	}
 
 	subtaskID, err := strconv.Atoi(c.Param("subtask_id"))
-	if err != nil {
+	if err != nil || subtaskID <= 0 {
 		common.Fail(c, common.ParamErrorCode, "无效的子任务ID")
 		return
 	}
@@ -929,19 +929,7 @@ func (tc *TicketController) UpdateSubtask(c *gin.Context) {
 	tenantID := c.GetInt("tenant_id")
 	req.UserID = c.GetInt("user_id")
 
-	// 验证子任务是否属于指定的父工单
-	ticket, err := tc.ticketService.GetTicket(c.Request.Context(), subtaskID, tenantID)
-	if err != nil {
-		tc.logger.Errorw("Failed to get subtask", "error", err, "subtask_id", subtaskID, "tenant_id", tenantID)
-		common.Fail(c, common.NotFoundCode, "子任务不存在")
-		return
-	}
-
-	// 检查parent_ticket_id是否匹配（V2 是 *int）
-	if ticket.ParentTicketID == nil || *ticket.ParentTicketID != parentID {
-		common.Fail(c, common.ParamErrorCode, "子任务不属于指定的父工单")
-		return
-	}
+	req.ExpectedParentID = parentID
 
 	updatedTicket, err := tc.ticketService.UpdateTicket(c.Request.Context(), subtaskID, &req, tenantID)
 	if err != nil {
@@ -949,9 +937,26 @@ func (tc *TicketController) UpdateSubtask(c *gin.Context) {
 			common.Forbidden(c, "ticket edit permission or execution scope denied")
 			return
 		}
-		if app, ok := common.AsAppError(err); ok && app.Code == common.ErrCodeForbidden {
-			common.Forbidden(c, app.Message)
+		if ent.IsNotFound(err) {
+			common.NotFound(c, "子任务不存在")
 			return
+		}
+		if common.IsVersionConflictError(err) {
+			common.Conflict(c, err.Error(), nil)
+			return
+		}
+		if app, ok := common.AsAppError(err); ok {
+			switch app.Code {
+			case common.ErrCodeForbidden:
+				common.Forbidden(c, app.Message)
+				return
+			case common.ErrCodeValidation, common.ErrCodeBadRequest:
+				common.Fail(c, common.ParamErrorCode, app.Message)
+				return
+			case common.ErrCodeNotFound:
+				common.NotFound(c, app.Message)
+				return
+			}
 		}
 		tc.logger.Errorw("Failed to update subtask", "error", err, "subtask_id", subtaskID, "tenant_id", tenantID)
 		common.Fail(c, common.InternalErrorCode, err.Error())

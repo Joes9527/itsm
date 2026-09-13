@@ -45,21 +45,22 @@ type CreateTicketRequest struct {
 
 // UpdateTicketRequest 更新工单请求
 type UpdateTicketRequest struct {
-	Title       string                 `json:"title" binding:"omitempty,min=2,max=200"`
-	Description string                 `json:"description" binding:"omitempty,min=10,max=5000"`
-	Priority    string                 `json:"priority" binding:"omitempty,oneof=low medium high critical"`
-	Status      string                 `json:"status" binding:"omitempty,oneof=new open assigned in_progress pending resolved closed cancelled approved rejected"`
-	Type        string                 `json:"type" binding:"omitempty,oneof=incident service_request change ticket problem improvement"`
-	Category    string                 `json:"category" binding:"omitempty"`
-	CategoryID  *int                   `json:"categoryId,omitempty"`
-	AssigneeID  int                    `json:"assigneeId"`
-	RequesterID int                    `json:"requesterId"` // 创建人ID
-	Tags        []string               `json:"tags"`
-	Resolution  string                 `json:"resolution" binding:"omitempty"`
-	FormFields  map[string]interface{} `json:"formFields"`
-	UserID      int                    `json:"-"`       // 仅由已认证HTTP/工具边界填充，禁止JSON指定
-	Version     int                    `json:"version"` // 版本号（乐观锁）
-	Force       bool                   `json:"-"`       // 仅限内部受信调用，禁止客户端绕过乐观锁
+	Title            string                 `json:"title" binding:"omitempty,min=2,max=200"`
+	Description      string                 `json:"description" binding:"omitempty,min=10,max=5000"`
+	Priority         string                 `json:"priority" binding:"omitempty,oneof=low medium high critical"`
+	Status           string                 `json:"status" binding:"omitempty,oneof=new open assigned in_progress pending resolved closed cancelled approved rejected"`
+	Type             string                 `json:"type" binding:"omitempty,oneof=incident service_request change ticket problem improvement"`
+	Category         string                 `json:"category" binding:"omitempty"`
+	CategoryID       *int                   `json:"categoryId,omitempty"`
+	AssigneeID       int                    `json:"assigneeId"`
+	RequesterID      int                    `json:"requesterId"` // 创建人ID
+	Tags             []string               `json:"tags"`
+	Resolution       string                 `json:"resolution" binding:"omitempty"`
+	FormFields       map[string]interface{} `json:"formFields"`
+	ExpectedParentID int                    `json:"-"`       // 子任务路由提供的预期父工单，不能由JSON指定
+	UserID           int                    `json:"-"`       // 仅由已认证HTTP/工具边界填充，禁止JSON指定
+	Version          int                    `json:"version"` // 版本号（乐观锁）
+	Force            bool                   `json:"-"`       // 仅限内部受信调用，禁止客户端绕过乐观锁
 }
 
 // ListTicketsRequest 获取工单列表请求

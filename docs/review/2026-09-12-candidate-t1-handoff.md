@@ -739,3 +739,13 @@ Callback contract新增version及generic typed lifecycle result，沿既有流�
 `s3-ticket-edit-actor-regression.log` 服务/控制器/仓储定向PASS，`s3-ticket-edit-actor-build.log` 全后端构建exit0。测试fixture仅编辑场景显式授予当前权限及填入真实actor，没有生产fallback；初次HTTP成功fixture只有中间件admin权限而实际user是end_user，已明确为其真实角色授权并复跑。`s3-ticket-edit-actor-http.log` 最终真实controller函数的普通PUT/子任务PATCH均拒绝停用actor，JSON写入活动super_admin userId不能冒充，完整Ticket/标签保全；另验证DTO不会反序列化userId。测试使用身份中间件与局部路由注册，未覆盖生产认证/ACL中间件全链或真实SSO。
 
 独立review_execution_scope_s1限定复核无新增阻断，指出终态条件进入service会收紧此前绕过controller的直接调用，符合当前目标；按其提醒将子任务测试方法与router.go的PATCH一致后复验。git diff --check通过。完整命令仍待：Meta/source、必需expectedVersion、稳定operationId、父子归属/父成员原事务、当前授权后的历史receipt只读重放及Feishu同事务意图。当前Bind/member在回执前的顺序必须随receipt接入调整；不宣称已经有历史重放。专业核心归属与RequesterID/FormFields仍按前述处理。CandidateSHA不变，S3/S4/S5/S6/B3/T3/T4/G2/G3未完成，候选停止，无WSL/共享数据库变更、企业调用、共享迁移、推送或main合并。
+
+### B2 S3 编辑父工单范围与子任务路由同事务核验（2026-09-13）
+
+在 `64ab11f0f` 后，UpdateTicket 在原 RR 事务内按实际 ParentTicketID 核验父成员、同租户及未删除记录，普通编辑入口同样受限；非法自指/非正父关系拒绝。PATCH 子任务仅从路由设置 ExpectedParentID（json:-），服务比对事务内真实父关系，移除控制器事务外 GetTicket 预读；输入/未找到/版本冲突采用对应错误映射。检查在标签和工单写入前完成，不修改父记录或递归操作祖先。这是 RR 快照内校验，没有锁住父记录阻止并发删除。
+
+`s3-ticket-edit-parent-red.log` 有效私有 PG RED：新成员子工单预存关联历史父工单时，普通服务编辑返回成功并改动整行/标签；对照父子均为成员可编辑。`s3-ticket-edit-parent-green.log` 定向通过，`s3-ticket-edit-parent-pg.log` 完整 TestCandidateIntakeCreationBoundary PASS 无 skip：历史父关系拒绝且子整行/标签保全，成员父关系允许一次更新，两种父记录整行均不变。预存关系由 owner fixture 设置，不代表验证了历史父下创建许可。
+
+`s3-ticket-edit-parent-http.log` controller 测试 PASS：错误/非正路由父 ID 拒绝且子整行/标签保全；JSON expectedParentId 不能覆盖路由，正确 PATCH 成功且版本只加一。沿用停用 actor 的 PUT/PATCH 测试也通过。`s3-ticket-edit-parent-regression.log` 服务/控制器/仓储定向回归 PASS，`s3-ticket-edit-parent-build.log` 全后端构建 exit0。独立 review_execution_scope_s1 限定审阅无新增阻断；未删除/同租户父记录的独立负测、非法子 ID 专项及并发父删除未覆盖，未声称生产认证全链或 WSL PG17 验收。git diff --check 通过。
+
+完整命令仍待 Meta/source、必需 expectedVersion、稳定 operationId、当前授权后历史 receipt 只读重放及 Feishu 同事务意图；当前成员检查在 receipt 前的顺序须随回执接入调整。字段归属及专业核心编辑缺口仍按前述处理。S3/S4/S5/S6/B3/T3/T4/G2/G3 未完成，固定 CandidateSHA 不变、候选未启动；无 WSL/共享数据库变更、企业实发、共享迁移、推送或 main 合并。

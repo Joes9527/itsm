@@ -2973,6 +2973,43 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 
 	})
 
+	t.Run("ticket edit checks actual parent execution membership", func(t *testing.T) {
+		svc := service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy})
+		parent, err := app.Create(ctx, identity, command("edit-parent-member", "generic"))
+		require.NoError(t, err)
+		for _, target := range []struct {
+			name   string
+			parent int
+			denied bool
+		}{
+			{"historical", historicalAlertItems[0], true}, {"member", parent.WorkItemID, false},
+		} {
+			child, err := app.Create(ctx, identity, command("edit-parent-child-"+target.name, "generic"))
+			require.NoError(t, err)
+			// Owner fixture sets pre-existing linkage; this does not exercise or grant
+			// permission to create a new child under a protected historical parent.
+			owner.Ticket.UpdateOneID(child.WorkItemID).SetParentTicketID(target.parent).ExecX(ctx)
+			before := owner.Ticket.GetX(ctx, child.WorkItemID)
+			var original, after, parentBefore, parentAfter string
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, before.ID).Scan(&original))
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, target.parent).Scan(&parentBefore))
+			tags := owner.TicketTag.Query().CountX(ctx)
+			_, editErr := svc.UpdateTicket(ctx, before.ID, &dto.UpdateTicketRequest{Title: "parent scoped edit", Tags: []string{"edit-parent-" + target.name}, Version: before.Version, UserID: actor.ID}, tenant.ID)
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, before.ID).Scan(&after))
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, target.parent).Scan(&parentAfter))
+			require.JSONEq(t, parentBefore, parentAfter)
+			if target.denied {
+				assert.ErrorIs(t, editErr, executionscope.ErrDenied)
+				assert.JSONEq(t, original, after)
+				assert.Equal(t, tags, owner.TicketTag.Query().CountX(ctx))
+			} else {
+				require.NoError(t, editErr)
+				require.Equal(t, before.Version+1, owner.Ticket.GetX(ctx, before.ID).Version)
+				require.Equal(t, tags+1, owner.TicketTag.Query().CountX(ctx))
+			}
+		}
+	})
+
 	t.Run("manual escalation persists Feishu update intent", func(t *testing.T) {
 		receiver := &candidateFeishuUpdater{destination: "local-test-destination"}
 		registry := connector.NewRegistry()
