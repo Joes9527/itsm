@@ -1477,3 +1477,15 @@ s5-registry-description-red.log 明确复现原Registry缺方法；s5-registry-d
 新增依赖证据：config/execution_connector_target.go 当前以 !c.Enabled(capability) 拒绝disabled notification的目标声明；因此仅有Registry描述接口仍不能完成禁用时完整入队。下一步须在同一既有配置/生命周期合同中分离描述资格和激活资格，不能仅删除校验却让 ActivateStartupTargets 激活禁用目标。standard配置仍沿持久ConnectorConfig owner读取，不从已激活实例反推。Manager接入、045/EmailTarget/Incident outbox和原邮件目标重绑RED均未完成。
 
 固定CandidateSHA不变，候选停止；无WSL/共享数据库操作、企业外发、push/main合并；S5/S6/T3/T4/G3未完成。
+
+### B2 S5 完整声明与实际激活资格分离（2026-09-14）
+
+s5-target-activation-selection-red.log真实ExecutionPolicy→Manager测试先复现disabled/omitted/mixed通知目标声明被拒绝。沿已接受禁用时完整绑定合同，配置允许合法目标声明独立于执行开关存在，原scope/name/provider/digest/合法cap及重复/格式检查保持；不赋予运行权限。
+
+ConnectorStartupTargets继续返回独立完整快照，新增ConnectorActivationTargets基于同一冻结policy选择已启用目标并只保留其已启用capabilities。Manager.ActivateStartupTargets和bootstrap缺Manager依赖检查均改用该结果。禁用声明不进入manifest激活检查或factory/Init；多owner共用目标仍由原Ref/能力/目标授权拒绝禁用owner，不靠过滤结果替代投递门禁。
+
+补强覆盖配置与返回副本修改不改变原冻结策略/完整声明；mixed目标webhook允许而notification拒绝；真实Graph缺secret且无local_only声明，notification省略时注册prototype一次、激活无新增factory/HTTP、Registry仍可描述；禁用声明无Manager的bootstrap路径可启动。本步不证明Graph候选激活已获准。
+
+s5-target-activation-selection-final.log：config/database/connector/.../bootstrap全包race PASS。s5-target-activation-selection-full-private.log既定私有PG16/Redis/MinIO suite race PASS，无FAIL/SKIP/DATA RACE；s5-target-activation-selection-build.log全后端build exit0。独立最终只读审阅无新增阻断，git diff --check通过，所有本轮Go进程退出。
+
+已关闭配置声明必须启用的依赖；可信配置读取/描述owner、邮件目标045及EmailTarget/Incident outbox仍未接入，原邮件重绑RED仍未关闭。下一步从完整可信声明（candidate）与ConnectorConfig权威来源（standard）生成邮件目标，不从活跃实例反推，不允许缺目标的新外发意图入队。固定CandidateSHA不变，候选停止；无WSL/共享数据库操作、企业外发、push/main合并，S5/S6/T3/T4/G3未完成。

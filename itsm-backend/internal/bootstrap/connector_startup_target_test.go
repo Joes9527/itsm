@@ -129,3 +129,14 @@ func (c *unclassifiedStartupConnector) Init(ctx context.Context, cfg connector.C
 	c.inits.Add(1)
 	return c.Webhook.Init(ctx, cfg)
 }
+
+func TestDisabledDeclarationsDoNotRequireActivationManager(t *testing.T) {
+	cfg := connectorStartupExecution(t, "http://127.0.0.1:12345")
+	cfg.Capabilities["notification"] = "disabled"
+	policy, err := database.NewExecutionPolicy(cfg)
+	require.NoError(t, err)
+	app := &Application{Cfg: &config.Config{Execution: cfg}, executionPolicy: policy, startBackgroundTasksFunc: func(context.Context) {}}
+	stop, err := app.startAPIRuntime(context.Background())
+	require.NoError(t, err)
+	defer stop()
+}

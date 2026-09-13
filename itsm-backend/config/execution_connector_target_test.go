@@ -87,7 +87,7 @@ func TestExecutionConnectorTargetsRejectUntrustedDeclarations(t *testing.T) {
 			v.Set("connector_targets", targets)
 			var cfg ExecutionConfig
 			require.NoError(t, v.Unmarshal(&cfg))
-			if scenario == "valid" || scenario == "notification" || scenario == "outbox" {
+			if scenario == "valid" || scenario == "notification" || scenario == "outbox" || scenario == "disabled delivery" || scenario == "missing delivery" {
 				require.NoError(t, cfg.Validate())
 			} else {
 				cfg.ConnectorTargets[0].Credentials = map[string]string{"secret": "synthetic-private-value"}

@@ -22,7 +22,7 @@ func (m *Manager) ActivateStartupTargets(ctx context.Context) error {
 	if m == nil || m.gate == nil {
 		return executionscope.ErrDenied
 	}
-	targets, err := m.gate.ConnectorStartupTargets(ctx)
+	targets, err := m.gate.ConnectorActivationTargets(ctx)
 	if err != nil {
 		return err
 	}

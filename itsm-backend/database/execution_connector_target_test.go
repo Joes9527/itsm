@@ -59,3 +59,35 @@ func TestConnectorStartupTargetsRetainFrozenAuthority(t *testing.T) {
 	require.ErrorIs(t, err, executionscope.ErrDenied)
 	require.Empty(t, targets)
 }
+
+func TestConnectorActivationTargetsUseFrozenCapabilities(t *testing.T) {
+	cfg := config.ExecutionConfig{Mode: "candidate", DeploymentID: "activation-test", Scopes: []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: "149ff1af-a27c-47c7-827f-103271130bb9"}}, Capabilities: map[string]string{"notification": "disabled", "webhook": "scoped"}, ConnectorTargets: []config.ConnectorTargetConfig{{TenantID: 1, ScopeID: "149ff1af-a27c-47c7-827f-103271130bb9", Name: "webhook", Provider: "test", DestinationDigest: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", Capabilities: []string{"notification", "webhook"}, Settings: map[string]interface{}{"url": "http://127.0.0.1:12345"}}}}
+	policy, err := NewExecutionPolicy(cfg)
+	require.NoError(t, err)
+	cfg.Capabilities["notification"] = "scoped"
+	cfg.Capabilities["webhook"] = "disabled"
+	ctx := tenantctx.SystemContext(context.Background(), "test:selection", "select frozen active declarations")
+	for i := 0; i < 2; i++ {
+		active, err := policy.ConnectorActivationTargets(ctx)
+		require.NoError(t, err)
+		require.Len(t, active, 1)
+		require.Equal(t, []string{"webhook"}, active[0].Capabilities)
+		require.Equal(t, "http://127.0.0.1:12345", active[0].Settings["url"])
+		active[0].Capabilities[0] = "notification"
+		active[0].Settings["url"] = "changed"
+		all, err := policy.ConnectorStartupTargets(ctx)
+		require.NoError(t, err)
+		require.Len(t, all, 1)
+		require.Equal(t, []string{"notification", "webhook"}, all[0].Capabilities)
+	}
+	for _, denied := range []context.Context{nil, context.Background(), tenantctx.WithTenantID(ctx, 1)} {
+		active, err := policy.ConnectorActivationTargets(denied)
+		require.ErrorIs(t, err, executionscope.ErrDenied)
+		require.Empty(t, active)
+	}
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	active, err := policy.ConnectorActivationTargets(canceled)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Empty(t, active)
+}

@@ -11,7 +11,8 @@ import (
 
 // ConnectorTargetConfig is trusted startup input, never request enrollment.
 // Credentials are resolved by the existing protected configuration loader.
-// A declaration permits target activation only, not a business delivery.
+// A declaration describes an eligible target. Activation additionally requires
+// an enabled delivery capability; neither authorizes a business delivery.
 type ConnectorTargetConfig struct {
 	TenantID          int                    `mapstructure:"tenant_id"`
 	ScopeID           string                 `mapstructure:"scope_id"`
@@ -66,7 +67,7 @@ func (c ExecutionConfig) validateConnectorTargets() error {
 			default:
 				return invalid()
 			}
-			if capabilities[capability] || !c.Enabled(capability) {
+			if capabilities[capability] {
 				return invalid()
 			}
 			capabilities[capability] = true

@@ -55,7 +55,7 @@ func (app *Application) startAPIRuntime(ctx context.Context) (stop func(), err e
 	if app.executionPolicy != nil && app.executionPolicy.IsCandidate() {
 		startupCtx := tenantctx.SystemContext(runtimeCtx, "runtime:connector-targets", "activate frozen candidate targets")
 		if app.connectorManager == nil {
-			targets, targetErr := app.executionPolicy.ConnectorStartupTargets(startupCtx)
+			targets, targetErr := app.executionPolicy.ConnectorActivationTargets(startupCtx)
 			if targetErr != nil {
 				return nil, targetErr
 			}
