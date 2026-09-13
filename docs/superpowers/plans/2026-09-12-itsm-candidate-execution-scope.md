@@ -104,6 +104,8 @@ S3 阶段记录（2026-09-13；基础提交 `6261941b4`，统一创建接入 `04
 
 SLA Monitor 的有效RED提交 `f8b7043cb`：s4-sla-monitor-confirmed-red.log确认历史违规集合[]→响应/解决两条，同时新成员精确2条违规独立断言通过。首次无有效definition的fixture失败已排除，不计证据。尚未修复；下一步必须同时覆盖scan/单项原事务、alert两个直接入口/重复与cooldown、通知意图及eventbus提交后边界，修复当前吞错/虚报NotificationSent路径；不能只过滤scan。该RED仅violation，warning/critical/通知/eventbus仍未验证。详见T1最新交接。
 
+SLA事务前置能力 `af1106661`：新增EnqueueNotificationTx，调用方tx内范围/tenant/recipient校验，复用站内双表写入与现有外部pending队列，不发送/commit；偏好同事务快照，跨channel内容冲突检查及已materialized recipient渠道冻结。focused notification_intents PG、Notification回归、build通过；真实写后故障回滚与偏好切换重放测试通过，审阅P2已修复。仅前置能力，尚无monitor/alert生产调用，SLA confirmed-red仍未修复；未将focused PASS计为全套PASS。详见T1最新交接。
+
 - [ ] 写 `TestCandidateWorkerPreservesHistoricalStates`，混排历史 unknown/pending/expired claim、候选 pending、跨租户 pending；捕获每条 status/attempt/claim/updated_at，运行一次真实 Dispatch/Claim，要求历史逐字段不变。当前全量 claim/BlockUnknown 应 RED。
 - [ ] 所有未知事件标记、expired claim 回收、claim、mark attempt、retry、published/dead-letter 语句在原事务内加入同一个成员 EXISTS 条件，不能仅过滤返回的 slice。查询形状：
 ```sql
