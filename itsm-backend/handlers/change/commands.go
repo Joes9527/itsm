@@ -132,6 +132,9 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, c
 	if item.Version != m.ExpectedVersion {
 		return empty, common.NewVersionConflictError("change", c.ID, m.ExpectedVersion, item.Version)
 	}
+	if err := s.requireExecutionTx(ctx, tx, m.TenantID, item.ID); err != nil {
+		return empty, err
+	}
 	now := time.Now().UTC()
 	var assessment string
 	var err error

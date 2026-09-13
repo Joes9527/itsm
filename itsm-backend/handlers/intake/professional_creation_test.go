@@ -56,7 +56,7 @@ func TestAuthoritativeProfessionalGraph(t *testing.T) {
 				command.IntakeKind = "catalog_item"
 				command.ServiceRequest = &workitemcreation.ServiceRequestInput{CostCenter: "IT", ContactEmail: "user@example.test", Amount: json.Number("9007199254740993.125")}
 			case "change_request":
-				domain = changehandler.NewService(nil, client, zap.NewNop().Sugar())
+				domain = changehandler.NewService(nil, client, zap.NewNop().Sugar(), executionfixture.Standard())
 				command.Change = &workitemcreation.ChangeInput{Type: "normal", ImpactScope: "low", RiskLevel: "medium", Justification: "security patch", ImplementationPlan: "deploy", RollbackPlan: "restore", PlannedStartDate: "2026-09-07T01:00:00Z", PlannedEndDate: "2026-09-07T02:00:00Z"}
 			}
 			// 绑定匹配词表就是 recordClass（与实例身份同源）。
@@ -208,7 +208,7 @@ func TestRoutingConsumesDomainEffectiveValues(t *testing.T) {
 				business, subtype, priority = "incident", "incident", "critical"
 				conditions = map[string]any{"no_process": true, "priority": "critical", "severity": "medium", "impact": "critical", "urgency": "high"}
 			case "change_request":
-				require.NoError(t, app.registry.Register(changehandler.NewService(nil, client, logger)))
+				require.NoError(t, app.registry.Register(changehandler.NewService(nil, client, logger, executionfixture.Standard())))
 				business, subtype = "change_request", "normal"
 				conditions["riskLevel"] = "medium"
 			case "generic":

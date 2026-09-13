@@ -641,7 +641,7 @@ func NewApplication() *Application {
 
 	// Domain: Change (DDD)
 	changeRepo := change.NewEntRepository(client, database.GetRawDB())
-	changeServiceDomain := change.NewService(changeRepo, client, sugar)
+	changeServiceDomain := change.NewService(changeRepo, client, sugar, executionPolicy)
 	changeServiceDomain.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 	// The Change owner starts and completes its governed workflow in the owning transaction.
 	changeServiceDomain.SetProcessEngine(processEngine)

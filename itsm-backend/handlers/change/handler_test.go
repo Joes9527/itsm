@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -31,7 +32,7 @@ func setupTestHandler(t *testing.T) (*gin.Engine, *Handler, *mockRepository) {
 
 	logger := zaptest.NewLogger(t).Sugar()
 	repo := newMockRepository()
-	svc := NewService(repo, nil, logger)
+	svc := NewService(repo, nil, logger, executionfixture.Standard())
 	handler := NewHandler(svc)
 
 	r := gin.New()
@@ -284,7 +285,7 @@ func TestChangeService_GetCMDBImpactSummary_WithoutEntClient(t *testing.T) {
 	repo := newMockRepository()
 	createTestChange(repo, 1, 1)
 
-	svc := NewService(repo, nil, logger)
+	svc := NewService(repo, nil, logger, executionfixture.Standard())
 	_, err := svc.GetCMDBImpactSummary(context.Background(), 1, 1)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "CMDB impact summary unavailable")

@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/intakeresolutionsnapshot"
 	"itsm-backend/ent/processdefinition"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"sync"
 	"testing"
 	"time"
@@ -59,7 +60,7 @@ func newChangeLifecycleFixture(t *testing.T, kind string) *changeLifecycleFixtur
 		}
 	}
 	ctx := tenantctx.WithTenantID(f.ctx, f.tenant.ID)
-	owner := changedomain.NewService(changedomain.NewEntRepository(clients.Tenant, nil), clients.Tenant, zap.NewNop().Sugar())
+	owner := changedomain.NewService(changedomain.NewEntRepository(clients.Tenant, nil), clients.Tenant, zap.NewNop().Sugar(), executionfixture.Standard())
 	owner.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 	engine := service.NewCustomProcessEngine(clients.Tenant, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
 	engine.SetCallbackCandidateClient(clients.System)
@@ -75,7 +76,7 @@ func newChangeLifecycleFixture(t *testing.T, kind string) *changeLifecycleFixtur
 	item := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(f.actor.ID).SetOpenedByID(f.actor.ID).SetTitle("Change core").SetTicketNumber("CHG-CORE").SetRecordClass("change_request").SetStatus("draft").SetPriority("high").SaveX(f.ctx)
 	record := f.client.Change.Create().SetWorkItemID(item.ID).SetType(kind).SetImplementationPlan("deploy package").SetRollbackPlan("restore previous package").SaveX(f.ctx)
 	f.ctx = ctx
-	pirOwner := service.NewChangePIRService(clients.Tenant, zap.NewNop().Sugar())
+	pirOwner := service.NewChangePIRService(clients.Tenant, zap.NewNop().Sugar(), executionfixture.Standard())
 	pirOwner.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 	return &changeLifecycleFixture{clients, f, pirOwner, engine, clients.Tenant, owner, record}
 }

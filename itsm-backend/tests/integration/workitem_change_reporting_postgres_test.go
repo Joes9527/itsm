@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	changedomain "itsm-backend/handlers/change"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 )
@@ -15,7 +16,7 @@ import (
 func TestWorkItemChangeHTTPIdentityAndOutcomeStats(t *testing.T) {
 	f := newChangeLifecycleFixture(t, "normal")
 	r, h := changeHTTPFixture(f)
-	statsHandler := changedomain.NewHandler(changedomain.NewService(changedomain.NewEntRepository(f.runtime, f.db), f.runtime, zap.NewNop().Sugar()))
+	statsHandler := changedomain.NewHandler(changedomain.NewService(changedomain.NewEntRepository(f.runtime, f.db), f.runtime, zap.NewNop().Sugar(), executionfixture.Standard()))
 	r.GET("/changes/stats", statsHandler.GetStats)
 	r.GET("/changes/:id", h.GetChange)
 	r.POST("/changes/:id/submit", h.ExecuteAction)

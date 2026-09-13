@@ -29,7 +29,7 @@ func projectionOwners(t *testing.T, f *relationFixture) (*problemDomain.Service,
 	c := f.client.Change.Create().SetWorkItemID(item.ID).SaveX(f.ctx)
 	pOwner := problemDomain.NewService(problemDomain.NewEntRepository(f.runtime.Tenant), zap.NewNop().Sugar(), executionfixture.Standard())
 	pOwner.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())
-	cOwner := changeDomain.NewService(changeDomain.NewEntRepository(f.runtime.Tenant, nil), f.runtime.Tenant, zap.NewNop().Sugar())
+	cOwner := changeDomain.NewService(changeDomain.NewEntRepository(f.runtime.Tenant, nil), f.runtime.Tenant, zap.NewNop().Sugar(), executionfixture.Standard())
 	cOwner.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())
 	return pOwner, cOwner, c
 }

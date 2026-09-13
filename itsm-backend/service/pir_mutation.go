@@ -4,8 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"itsm-backend/authorization"
 	"itsm-backend/common"
+	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/database"
 	"itsm-backend/dto"
@@ -191,6 +194,12 @@ func (s *ChangePIRService) mutatePIR(ctx context.Context, m workitemmutation.Met
 		}
 		return empty, err
 	}
+	if err := s.execution.BindEnt(ctx, tx, m.TenantID); err != nil {
+		return empty, pirExecutionFailure(err)
+	}
+	if err := s.execution.RequireEntMembers(ctx, tx, m.TenantID, item.ID); err != nil {
+		return empty, pirExecutionFailure(err)
+	}
 	// The existing-row lock can itself fail under RR contention. Include it
 	// in confirmed-rollback receipt recovery without retrying business effects.
 	attempted = true
@@ -313,4 +322,11 @@ func pirPatchChanges(p *ent.ChangePIR, u *dto.UpdateChangePIRRequest) bool {
 		}
 	}
 	return u.ObjectivesAchieved != nil && *u.ObjectivesAchieved != p.ObjectivesAchieved
+}
+
+func pirExecutionFailure(err error) error {
+	if errors.Is(err, executionscope.ErrDenied) {
+		return common.NewForbiddenError("PIR execution scope denied")
+	}
+	return fmt.Errorf("PIR execution scope: %w", err)
 }

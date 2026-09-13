@@ -16,16 +16,18 @@ import (
 
 // ChangePIRService 变更实施后审查服务
 type ChangePIRService struct {
+	execution *database.ExecutionPolicy
 	client    *ent.Client
 	directory database.DirectorySnapshot
 	logger    *zap.SugaredLogger
 }
 
 // NewChangePIRService 创建PIR服务
-func NewChangePIRService(client *ent.Client, logger *zap.SugaredLogger) *ChangePIRService {
+func NewChangePIRService(client *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *ChangePIRService {
 	return &ChangePIRService{
-		client: client,
-		logger: logger,
+		execution: execution,
+		client:    client,
+		logger:    logger,
 	}
 }
 

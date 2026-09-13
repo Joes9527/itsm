@@ -12,6 +12,7 @@ import (
 	"itsm-backend/ent/processtask"
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"os"
 	"strings"
 	"testing"
@@ -40,7 +41,7 @@ func newGovernedChangeFixture(t *testing.T, kind string) *governedChangeFixture 
 	role := client.Role.Create().SetTenantID(tenant).SetCode("change_manager").SetName("CAB").SaveX(ctx)
 	approver.Update().AddRoleIDs(role.ID).ExecX(ctx)
 	engine := service.NewCustomProcessEngine(client, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
-	svc := NewService(NewEntRepository(client, nil), client, zap.NewNop().Sugar())
+	svc := NewService(NewEntRepository(client, nil), client, zap.NewNop().Sugar(), executionfixture.Standard())
 	svc.SetProcessEngine(engine)
 	deployment := client.ProcessDeployment.Create().SetTenantID(tenant).SetDeploymentID("governed").SetDeploymentName("Governed").SaveX(ctx)
 	for _, key := range []string{"change_normal_flow", "change_emergency_flow"} {

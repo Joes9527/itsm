@@ -23,6 +23,7 @@ import (
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/config"
 	"itsm-backend/database"
+	changedomain "itsm-backend/handlers/change"
 
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -96,18 +97,22 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	role := owner.Role.Create().SetTenantID(tenant.ID).SetName("Requester").SetCode("requester").SaveX(ctx)
 	permission := owner.Permission.Create().SetTenantID(tenant.ID).SetCode("create-work").SetName("Create work").SetResource("*").SetAction("*").SaveX(ctx)
 	owner.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).SaveX(ctx)
-	for _, class := range []string{"generic", "incident", "problem"} {
+	for _, class := range []string{"generic", "incident", "problem", "change_request"} {
 		owner.ProcessBinding.Create().SetTenantID(tenant.ID).SetBusinessType(class).SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(ctx)
 	}
 	identity := creation.Identity{TenantID: tenant.ID, ActorID: actor.ID, RequesterID: actor.ID, Role: actor.Role, Channel: "http"}
 	ctx = tenantctx.WithTenantID(ctx, tenant.ID)
 	command := func(key, class string) creation.CreateWorkItemCommand {
-		return creation.CreateWorkItemCommand{RecordClass: class, IntakeKind: class, Confirmation: "confirmed", Title: "scope " + key, IdempotencyKey: key}
+		cmd := creation.CreateWorkItemCommand{RecordClass: class, IntakeKind: class, Confirmation: "confirmed", Title: "scope " + key, IdempotencyKey: key}
+		if class == "change_request" {
+			cmd.Change = &creation.ChangeInput{Type: "normal", Justification: "candidate", ImpactScope: "low", RiskLevel: "low", ImplementationPlan: "candidate implementation", RollbackPlan: "candidate rollback"}
+		}
+		return cmd
 	}
 	application := func(client *ent.Client, policy *database.ExecutionPolicy, directory database.DirectorySnapshot) *intake.Service {
 		logger := zap.NewNop().Sugar()
 		registry := intake.NewCreatorRegistry()
-		for _, creator := range []creation.ProfessionalCreator{&service.TicketService{}, service.NewIncidentService(client, logger, policy), problemdomain.NewService(nil, logger, policy)} {
+		for _, creator := range []creation.ProfessionalCreator{&service.TicketService{}, service.NewIncidentService(client, logger, policy), problemdomain.NewService(nil, logger, policy), changedomain.NewService(nil, client, logger, policy)} {
 			require.NoError(t, registry.Register(creator))
 		}
 		resolver := intake.NewResolver(catalogdomain.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
@@ -129,6 +134,13 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	require.NoError(t, err)
 	legacyProblemLifecycle := problemdomain.Command{Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: 1, Source: "http", OperationID: "legacy-problem-investigate"}, ProblemID: legacyCommandProblem.ProfessionalReference.ID, Action: "investigate"}
 	legacyProblemLifecycleResult, err := legacyProblemOwner.ApplyCommand(ctx, legacyProblemLifecycle)
+	require.NoError(t, err)
+	historicalChange, err := historicalApp.Create(ctx, identity, command("historical-change", "change_request"))
+	require.NoError(t, err)
+	legacyPIRService := service.NewChangePIRService(owner, zap.NewNop().Sugar(), executionfixture.Standard())
+	legacyPIRService.SetDirectorySnapshot(sameTransactionDirectory{})
+	legacyPIRMeta := workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: 1, Source: "http", OperationID: "legacy-pir"}
+	legacyPIR, err := legacyPIRService.CreatePIR(ctx, &dto.CreateChangePIRRequest{ChangeID: historicalChange.ProfessionalReference.ID, OverallResult: "successful"}, legacyPIRMeta)
 	require.NoError(t, err)
 	legacyCommand := dto.IncidentCommand{IncidentID: historical.ProfessionalReference.ID, Action: "acknowledge", Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: 1, Source: "http", OperationID: "legacy-command"}}
 	legacyOwner := service.NewIncidentService(owner, zap.NewNop().Sugar(), executionfixture.Standard())
@@ -216,6 +228,105 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		relationEvent := owner.OutboxEvent.Query().Where(outboxevent.EventTypeEQ(service.RelationCreatedEventType)).OnlyX(ctx)
 		require.NotNil(t, relationEvent.ExecutionWorkItemID)
 		require.Equal(t, created.WorkItemID, *relationEvent.ExecutionWorkItemID)
+	})
+
+	t.Run("Change and PIR writes preserve history", func(t *testing.T) {
+		svc := changedomain.NewService(changedomain.NewEntRepository(runtime, nil), runtime, zap.NewNop().Sugar(), policy)
+		svc.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
+		pir := service.NewChangePIRService(runtime, zap.NewNop().Sugar(), policy)
+		pir.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
+		for _, kind := range []string{"metadata", "cancel", "delete", "pir"} {
+			fresh, err := app.Create(ctx, identity, command("change-"+kind, "change_request"))
+			require.NoError(t, err)
+			for _, target := range []struct{ id, workID int }{{historicalChange.ProfessionalReference.ID, historicalChange.WorkItemID}, {fresh.ProfessionalReference.ID, fresh.WorkItemID}} {
+				before := owner.Ticket.GetX(ctx, target.workID)
+				extensionBefore, _ := json.Marshal(owner.Change.GetX(ctx, target.id))
+				audits, pirs := owner.AuditLog.Query().CountX(ctx), owner.ChangePIR.Query().CountX(ctx)
+				meta := workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: before.Version, Source: "http", OperationID: fmt.Sprintf("change-%s-%d", kind, target.id)}
+				switch kind {
+				case "metadata":
+					title := "candidate Change"
+					_, err = svc.ApplyMetadata(ctx, changedomain.MetadataCommand{Meta: meta, ChangeID: target.id, Patch: dto.UpdateChangeRequest{Title: &title}})
+				case "cancel":
+					_, err = svc.ApplyCommand(ctx, changedomain.Command{Meta: meta, ChangeID: target.id, Action: "cancel", Evidence: "candidate test"})
+				case "delete":
+					err = svc.DeleteChange(ctx, target.id, meta)
+				case "pir":
+					_, err = pir.CreatePIR(ctx, &dto.CreateChangePIRRequest{ChangeID: target.id, OverallResult: "successful"}, meta)
+				}
+				if target.workID == historicalChange.WorkItemID {
+					require.ErrorContains(t, err, "execution scope denied")
+					beforeJSON, _ := json.Marshal(before)
+					afterJSON, _ := json.Marshal(owner.Ticket.GetX(ctx, target.workID))
+					require.JSONEq(t, string(beforeJSON), string(afterJSON))
+					extensionAfter, _ := json.Marshal(owner.Change.GetX(ctx, target.id))
+					require.JSONEq(t, string(extensionBefore), string(extensionAfter))
+					require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx))
+					require.Equal(t, pirs, owner.ChangePIR.Query().CountX(ctx))
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, before.Version+1, owner.Ticket.GetX(ctx, target.workID).Version)
+				}
+			}
+		}
+		audits := owner.AuditLog.Query().CountX(ctx)
+		replay, err := pir.CreatePIR(ctx, &dto.CreateChangePIRRequest{ChangeID: historicalChange.ProfessionalReference.ID, OverallResult: "successful"}, legacyPIRMeta)
+		require.NoError(t, err)
+		require.Equal(t, legacyPIR.PIRID, replay.PIRID)
+		require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx))
+		for _, target := range []struct{ changeID, workID, pirID int }{{historicalChange.ProfessionalReference.ID, historicalChange.WorkItemID, legacyPIR.PIRID}} {
+			meta := workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: owner.Ticket.GetX(ctx, target.workID).Version, Source: "http", OperationID: "historical-pir-update"}
+			summary := "new facts"
+			_, err = pir.UpdatePIR(ctx, target.pirID, &dto.UpdateChangePIRRequest{ChangeID: target.changeID, SuccessSummary: &summary}, meta)
+			require.ErrorContains(t, err, "execution scope denied")
+			meta.OperationID = "historical-pir-delete"
+			_, err = pir.DeletePIR(ctx, target.pirID, &dto.DeleteChangePIRRequest{ChangeID: target.changeID}, meta)
+			require.ErrorContains(t, err, "execution scope denied")
+		}
+		fresh, err := app.Create(ctx, identity, command("pir-edit", "change_request"))
+		require.NoError(t, err)
+		meta := func(key string) workitemmutation.Meta {
+			return workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: owner.Ticket.GetX(ctx, fresh.WorkItemID).Version, Source: "http", OperationID: key}
+		}
+		created, err := pir.CreatePIR(ctx, &dto.CreateChangePIRRequest{ChangeID: fresh.ProfessionalReference.ID, OverallResult: "successful"}, meta("pir-new"))
+		require.NoError(t, err)
+		summary := "candidate revised PIR"
+		_, err = pir.UpdatePIR(ctx, created.PIRID, &dto.UpdateChangePIRRequest{ChangeID: fresh.ProfessionalReference.ID, SuccessSummary: &summary}, meta("pir-edit"))
+		require.NoError(t, err)
+		_, err = pir.DeletePIR(ctx, created.PIRID, &dto.DeleteChangePIRRequest{ChangeID: fresh.ProfessionalReference.ID}, meta("pir-delete"))
+		require.NoError(t, err)
+		injected := errors.New("injected Change audit failure")
+		failAudit := false
+		runtime.AuditLog.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+				value, err := next.Mutate(ctx, mutation)
+				if err == nil && failAudit {
+					failAudit = false
+					return nil, injected
+				}
+				return value, err
+			})
+		})
+		for _, kind := range []string{"metadata", "pir"} {
+			before, _ := json.Marshal(owner.Ticket.GetX(ctx, fresh.WorkItemID))
+			extensionBefore, _ := json.Marshal(owner.Change.GetX(ctx, fresh.ProfessionalReference.ID))
+			audits, pirs := owner.AuditLog.Query().CountX(ctx), owner.ChangePIR.Query().CountX(ctx)
+			failAudit = true
+			if kind == "metadata" {
+				title := "rollback change title"
+				_, err = svc.ApplyMetadata(ctx, changedomain.MetadataCommand{Meta: meta("fault-change-metadata"), ChangeID: fresh.ProfessionalReference.ID, Patch: dto.UpdateChangeRequest{Title: &title}})
+			} else {
+				_, err = pir.CreatePIR(ctx, &dto.CreateChangePIRRequest{ChangeID: fresh.ProfessionalReference.ID, OverallResult: "successful"}, meta("fault-pir"))
+			}
+			require.ErrorIs(t, err, injected)
+			require.False(t, failAudit)
+			after, _ := json.Marshal(owner.Ticket.GetX(ctx, fresh.WorkItemID))
+			extensionAfter, _ := json.Marshal(owner.Change.GetX(ctx, fresh.ProfessionalReference.ID))
+			require.JSONEq(t, string(before), string(after))
+			require.JSONEq(t, string(extensionBefore), string(extensionAfter))
+			require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx))
+			require.Equal(t, pirs, owner.ChangePIR.Query().CountX(ctx))
+		}
 	})
 
 	t.Run("Problem writes preserve historical work", func(t *testing.T) {

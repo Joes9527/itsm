@@ -54,7 +54,7 @@ func deletionOwner(t *testing.T, f *relationFixture, class string) (*ent.Ticket,
 	}
 	item := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(f.actor.ID).SetOpenedByID(f.actor.ID).SetTicketNumber("CHG-DELETE").SetTitle("change deletion").SetRecordClass("change_request").SetStatus("draft").SaveX(f.ctx)
 	c := f.client.Change.Create().SetWorkItemID(item.ID).SaveX(f.ctx)
-	s := changeDomain.NewService(changeDomain.NewEntRepository(f.runtime.Tenant, nil), f.runtime.Tenant, zap.NewNop().Sugar())
+	s := changeDomain.NewService(changeDomain.NewEntRepository(f.runtime.Tenant, nil), f.runtime.Tenant, zap.NewNop().Sugar(), executionfixture.Standard())
 	s.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())
 	return item, func(m workitemmutation.Meta) error { return s.DeleteChange(f.ctx, c.ID, m) }
 }

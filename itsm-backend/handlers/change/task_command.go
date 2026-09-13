@@ -155,6 +155,9 @@ func (s *Service) CompleteChangeTask(ctx context.Context, cmd TaskCommand) (out 
 	if task.CallbackHandlerID != "change_service_handler" || task.CallbackAction != action || instance.CurrentActivityID != task.TaskDefinitionKey {
 		return empty, common.NewValidationError("task does not own requested Change action", nil)
 	}
+	if err := s.requireExecutionTx(ctx, tx, m.TenantID, current.WorkItemID); err != nil {
+		return empty, err
+	}
 	if err = workitemmutation.RequireSettledChangeCallbacks(ctx, tx, m.TenantID, current.WorkItemID); err != nil {
 		if _, unresolved := err.(*workitemmutation.UnresolvedChangeCallbackError); unresolved {
 			err = common.NewConflictError("Change workflow", err.Error())

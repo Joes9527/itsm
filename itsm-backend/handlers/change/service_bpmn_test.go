@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"sync/atomic"
 	"testing"
@@ -272,7 +273,7 @@ func TestChangeServiceTaskHandler_CreateChange_DelegatesToRealServiceAndCreatesW
 	tenantID, actorID := setupChangeBPMNActor(t, client, "bpmn-handler-create")
 
 	repo := newTestChangeRepository(client, openChangeBPMNRawDB(t, "change_bpmn_handler_create_real"))
-	svc := NewService(repo, client, logger)
+	svc := NewService(repo, client, logger, executionfixture.Standard())
 	ConfigureChangeIntakeFixture(ctx, client, tenantID, "agent")
 	app := NewChangeIntakeApp(client, svc, logger)
 

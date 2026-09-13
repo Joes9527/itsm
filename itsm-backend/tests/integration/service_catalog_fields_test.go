@@ -66,7 +66,7 @@ func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *e
 		ticketSvc,
 		service.NewIncidentService(client, logger, executionfixture.Standard()),
 		problemdomain.NewService(nil, logger, executionfixture.Standard()),
-		changedomain.NewService(nil, client, logger),
+		changedomain.NewService(nil, client, logger, executionfixture.Standard()),
 		srService,
 	} {
 		require.NoError(t, registry.Register(owner))

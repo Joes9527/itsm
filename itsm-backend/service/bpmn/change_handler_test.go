@@ -2,6 +2,7 @@ package bpmn_test
 
 import (
 	"context"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 
 	"testing"
 
@@ -43,7 +44,7 @@ func setupChangeHandlerFixture(t *testing.T) (*ent.Client, *ChangeServiceTaskHan
 
 	logger := zaptest.NewLogger(t).Sugar()
 	handler := NewChangeServiceTaskHandler(client, logger)
-	handler.SetChangeService(changehandler.NewService(nil, client, logger))
+	handler.SetChangeService(changehandler.NewService(nil, client, logger, executionfixture.Standard()))
 	return client, handler, tenant.ID, changeEntity
 }
 

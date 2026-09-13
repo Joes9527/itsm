@@ -3,7 +3,10 @@ package change
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"itsm-backend/common"
+	"itsm-backend/common/executionscope"
 	"strconv"
 
 	"time"
@@ -24,6 +27,7 @@ import (
 )
 
 type Service struct {
+	execution     *database.ExecutionPolicy
 	repo          Repository
 	logger        *zap.SugaredLogger
 	entClient     *ent.Client
@@ -39,14 +43,15 @@ func (s *Service) SetDirectorySnapshot(directory database.DirectorySnapshot) {
 	}
 }
 
-func NewService(repo Repository, entClient *ent.Client, logger *zap.SugaredLogger) *Service {
+func NewService(repo Repository, entClient *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *Service {
 	svc := &Service{
+		execution: execution,
 		repo:      repo,
 		entClient: entClient,
 		logger:    logger,
 	}
 	// Initialize PIR service
-	svc.pirService = service.NewChangePIRService(entClient, logger)
+	svc.pirService = service.NewChangePIRService(entClient, logger, execution)
 	return svc
 }
 
@@ -311,4 +316,20 @@ func (s *Service) UpdatePIR(ctx context.Context, id int, req *dto.UpdateChangePI
 }
 func (s *Service) DeletePIR(ctx context.Context, id int, req *dto.DeleteChangePIRRequest, meta workitemmutation.Meta) (service.PIRMutationResult, error) {
 	return s.pirService.DeletePIR(ctx, id, req, meta)
+}
+
+func (s *Service) requireExecutionTx(ctx context.Context, tx *ent.Tx, tenantID, workItemID int) error {
+	failure := func(err error) error {
+		if err == nil {
+			return nil
+		}
+		if errors.Is(err, executionscope.ErrDenied) {
+			return common.NewForbiddenError("change execution scope denied")
+		}
+		return fmt.Errorf("change execution scope: %w", err)
+	}
+	if err := s.execution.BindEnt(ctx, tx, tenantID); err != nil {
+		return failure(err)
+	}
+	return failure(s.execution.RequireEntMembers(ctx, tx, tenantID, workItemID))
 }

@@ -156,6 +156,9 @@ func (s *Service) ApplyMetadata(ctx context.Context, cmd MetadataCommand) (out w
 	if !metadataChanges(domain, p) {
 		return empty, common.NewValidationError("new metadata facts required", nil)
 	}
+	if err := s.requireExecutionTx(ctx, tx, m.TenantID, item.ID); err != nil {
+		return empty, err
+	}
 	update := tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantID(m.TenantID), ticket.DeletedAtIsNil(), ticket.Version(m.ExpectedVersion)).SetVersion(m.ExpectedVersion + 1).SetUpdatedAt(time.Now())
 	professional := tx.Change.UpdateOneID(current.ID)
 	if p.AssigneeID != nil {

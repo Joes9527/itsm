@@ -297,3 +297,18 @@ B2 本地证据：
 - `s3-problem-build.json`：后端全量构建 exit 0；`s3-problem-tagged-compile.log`：integration_postgres 标签下六个受影响包编译通过，未运行目标环境 E2E。
 
 独立 reviewer `review_execution_scope_s1` 对原事务/写入顺序、构造传递、回执和错误处理限定审阅无阻断。RCA/Evidence 子表分支处于 metadata guard 后，但本次尚未逐分支做真实专项运行验收；ProblemResolved 消费者及关联 Incident 副作用仍须单独接入。Change、Requested Item、共享能力、其他生产者和 S4–S6/B3 仍未完成，不放行候选或 T3/T4。固定 CandidateSHA 不变，未操作共享环境或推送/合并 main。
+
+
+### B2 S3 Change 与 PIR 原事务范围（2026-09-13）
+
+在 `fc71e6266` 上为 Change NewService 和独立 NewChangePIRService 增加必需 policy；bootstrap 复用冻结实例，Change 将同一实例交给其 PIR owner。Change command 在原授权/版本后、专业写入及流程终止前准入；metadata 在首写前准入；CompleteChangeTask 在原任务/实例归属核验后、CompleteTaskTx 前准入；Delete 在 GuardDeletionTx 前准入。PIR 在原授权/replay/version/terminal/callback-settled 检查后、行锁及写入前在同一事务准入。授权函数和只读进度/receipt 恢复未混入写范围检查，基础设施失败保留 cause。
+
+B2 私有证据：
+
+- `s3-change-red.log`：有效历史 Change metadata 被错误接受，新增测试如期 RED。
+- `s3-change-regression.log`：constructor 批量迁移误改 Change intake fixture 中不相关 catalog/intake 构造参数，编译失败；独立 reviewer 同时指出，已完整撤回该文件误改，未弱化测试。
+- `s3-change-final-pg.log`：完整真实私有 PostgreSQL TestCandidateIntakeCreationBoundary PASS、未 skip。历史 metadata/cancel/delete/PIR create 拒绝，主记录/扩展/审计/PIR 数量不变；新成员各入口成功；迁移039前的 PIR create receipt 只读重放；历史 PIR update/delete 拒绝，新 PIR CRUD 成功。metadata 和 PIR create 在 audit 已写后注入错误，Ticket、Change、PIR、audit 全回滚。
+- `s3-change-regression-final.log`：Change/intake/service/controller/integration 五包定向回归 PASS。
+- `s3-change-build.json`：后端全量构建 exit 0。`s3-change-tagged-compile.log`：integration_postgres 标签下受影响六包编译通过，未运行目标环境 E2E。
+
+独立 reviewer `review_execution_scope_s1` 确认生产事务、callback 委托和构造传递无其他阻断，复审确认 fixture 编译阻断关闭并读取回归/PG PASS。**本次未完成的验收**：真实候选 task completion/callback、完整 Change 审批/实施/评审生命周期和其并发重试，Change command/metadata 的迁移前回执专项验证；不能用已通过的 draft metadata/cancel 或标签编译代替。Requested Item、共享能力、生产者/消费者完整范围与 S4–S6/B3 仍未完成，候选不启动，T3/T4/G2/G3 不放行。固定 CandidateSHA 不变，无共享环境操作、推送或 main 合并。

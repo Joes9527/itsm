@@ -67,7 +67,7 @@ func TestPostgresRequesterAdaptersSignedMSPHTTP(t *testing.T) {
 		}
 	}
 	registry := intake.NewCreatorRegistry()
-	for _, owner := range []creation.ProfessionalCreator{service.NewIncidentService(clients.Tenant, logger, executionfixture.Standard()), problemdomain.NewService(problemdomain.NewEntRepository(clients.Tenant), logger, executionfixture.Standard()), changedomain.NewService(nil, clients.Tenant, logger)} {
+	for _, owner := range []creation.ProfessionalCreator{service.NewIncidentService(clients.Tenant, logger, executionfixture.Standard()), problemdomain.NewService(problemdomain.NewEntRepository(clients.Tenant), logger, executionfixture.Standard()), changedomain.NewService(nil, clients.Tenant, logger, executionfixture.Standard())} {
 		require.NoError(t, registry.Register(owner))
 	}
 	resolver := intake.NewResolver(catalogdomain.NewService(nil, clients.Tenant, logger, nil), service.NewProcessBindingService(clients.Tenant), service.NewConfigurationItemService(clients.Tenant, logger, nil, nil), service.NewTicketCategoryService(clients.Tenant))

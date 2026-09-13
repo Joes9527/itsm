@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"itsm-backend/handlers/shared/workitemmutation"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -32,7 +33,7 @@ func setupChangeRegressionHandler(t *testing.T, dbName, actorCode string) (*gin.
 	entClient := newChangeBPMNEntClient(t, dbName)
 	tenantID, actorID := setupChangeBPMNActor(t, entClient, actorCode)
 	repo := NewEntRepository(entClient, openChangeBPMNRawDB(t, dbName))
-	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar())
+	svc := NewService(repo, entClient, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	handler := NewHandler(svc)
 	ConfigureChangeIntakeFixture(context.Background(), entClient, tenantID, "agent")
 	handler.SetCreationApplication(NewChangeIntakeApp(entClient, svc, zaptest.NewLogger(t).Sugar()))
@@ -59,7 +60,7 @@ func TestChangeRepositoryAllocatesSequentialWorkItemNumbers(t *testing.T) {
 	defer client.Close()
 	ctx := context.Background()
 	ConfigureChangeIntakeFixture(ctx, client, tenantID, "agent")
-	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+	svc := NewService(repo, client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	app := NewChangeIntakeApp(client, svc, zaptest.NewLogger(t).Sugar())
 
 	first, err := CreateChangeViaIntake(ctx, client, svc, app, tenantID, actorID, &Change{
@@ -227,7 +228,7 @@ func TestEntRepository_RelatedTickets_WorkItemRelationBehavior(t *testing.T) {
 	repo := newTestChangeRepository(client, openChangeBPMNRawDB(t, "change_related_tickets_regression"))
 	tenant, actor := setupChangeBPMNActor(t, client, "related-tickets")
 	ConfigureChangeIntakeFixture(ctx, client, tenant, "agent")
-	owner := NewService(repo, client, zaptest.NewLogger(t).Sugar())
+	owner := NewService(repo, client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	app := NewChangeIntakeApp(client, owner, zaptest.NewLogger(t).Sugar())
 	meta := workitemmutation.Meta{TenantID: tenant, ActorID: actor, Source: "http"}
 	base := &Change{Title: "related items", Description: "relation persistence", Type: "normal", Priority: "medium", ImpactScope: "low", RiskLevel: "low", Justification: "repair", ImplementationPlan: "deploy", RollbackPlan: "restore"}
@@ -462,7 +463,7 @@ func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 		}
 		assert.Contains(t, inRangeIDs, changeA.ID)
 
-		calendar, err := NewService(repo, entClient, logger).GetCalendarView(ctx, tenantA, "2026-09-01", "2026-09-02", "")
+		calendar, err := NewService(repo, entClient, logger, executionfixture.Standard()).GetCalendarView(ctx, tenantA, "2026-09-01", "2026-09-02", "")
 		require.NoError(t, err)
 		require.Len(t, calendar.Items, 1)
 		foundCalendarItem := false
@@ -476,7 +477,7 @@ func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 		assert.True(t, foundCalendarItem)
 
 		gin.SetMode(gin.TestMode)
-		handler := NewHandler(NewService(repo, entClient, logger))
+		handler := NewHandler(NewService(repo, entClient, logger, executionfixture.Standard()))
 		router := gin.New()
 		router.Use(func(c *gin.Context) {
 			c.Set("tenant_id", tenantA)
@@ -500,7 +501,7 @@ func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 	})
 
 	t.Run("tenant scoped status transitions cannot mutate another tenants change", func(t *testing.T) {
-		svc := NewService(repo, entClient, logger)
+		svc := NewService(repo, entClient, logger, executionfixture.Standard())
 
 		_, err := svc.GetChange(ctx, changeB.ID, workitemmutation.Meta{TenantID: tenantA, ActorID: actorA})
 		require.Error(t, err)
@@ -517,7 +518,7 @@ func TestChangeTenantIsolation_ReadAndModify(t *testing.T) {
 	})
 
 	t.Run("tenant scoped delete must fail closed", func(t *testing.T) {
-		svc := NewService(repo, entClient, logger)
+		svc := NewService(repo, entClient, logger, executionfixture.Standard())
 		err := svc.DeleteChange(ctx, changeB.ID, workitemmutation.Meta{TenantID: tenantA, ActorID: actorA})
 		if err == nil {
 			stored, getErr := repo.Get(ctx, changeB.ID, tenantB)
@@ -558,7 +559,7 @@ func TestChangeWorkItemAndRelations_TenantIsolation(t *testing.T) {
 	// 真实 Intake 创建路径对 relatedTicketNumbers 是 fail closed 的：租户 B
 	// 的工单编号在租户 A 下解析不到，整个创建都必须被拒绝，不能静默建立跨租户关联，
 	// 也不能留下一个 related_tickets 为空的孤儿 Change。
-	svcA := NewService(repo, entClient, logger)
+	svcA := NewService(repo, entClient, logger, executionfixture.Standard())
 	appA := NewChangeIntakeApp(entClient, svcA, logger)
 	_, err = CreateChangeViaIntake(ctx, entClient, svcA, appA, tenantA, actorA, &Change{
 		Justification: "Repair configuration associated with the referenced incident", ImplementationPlan: "Apply reviewed configuration and verify service", RollbackPlan: "Restore saved configuration",
@@ -597,7 +598,7 @@ func TestChangeWorkItemAndRelations_TenantIsolation(t *testing.T) {
 
 	// businessKey/审批查询的租户隔离：租户 B 不能通过传入自己的 tenantID 读取或推进
 	// 租户 A 的变更审批流程，即使拿到了正确的 changeID。
-	svcB := NewService(repo, entClient, logger)
+	svcB := NewService(repo, entClient, logger, executionfixture.Standard())
 	_, err = svcB.GetChange(ctx, createdA2.ID, workitemmutation.Meta{TenantID: tenantB, ActorID: actorB})
 	require.Error(t, err, "租户 B 不能读取租户 A 的变更")
 

@@ -38,7 +38,7 @@ func changeRelationIntakeHTTP(t *testing.T, standard bool) (*relationFixture, *g
 	}
 	f.client.ProcessBinding.Create().SetTenantID(f.tenant.ID).SetBusinessType("change_request").SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(f.ctx)
 	logger := zap.NewNop().Sugar()
-	owner := changeDomain.NewService(changeDomain.NewEntRepository(f.runtime.Tenant, nil), f.runtime.Tenant, logger)
+	owner := changeDomain.NewService(changeDomain.NewEntRepository(f.runtime.Tenant, nil), f.runtime.Tenant, logger, executionfixture.Standard())
 	owner.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(owner))

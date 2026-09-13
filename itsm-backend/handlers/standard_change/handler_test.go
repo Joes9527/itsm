@@ -57,7 +57,7 @@ func setupInstantiationRouter(t *testing.T, client *ent.Client, userID, tenantID
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	logger := zaptest.NewLogger(t).Sugar()
-	changeService := changedomain.NewService(nil, client, logger)
+	changeService := changedomain.NewService(nil, client, logger, executionfixture.Standard())
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(changeService))
 	resolver := intake.NewResolver(
