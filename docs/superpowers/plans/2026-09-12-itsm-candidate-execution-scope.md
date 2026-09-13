@@ -203,6 +203,18 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+连接器可信目标激活实施范围（2026-09-14，accepted，尚未实现）：
+
+前置RED `507f62293`：真实Manager/Gin Provision handler允许未声明candidate目标，测试随后通过builtin Webhook各向loopback发送一次；HTTP还改写私有fixture既存配置。s5-connector-request-activation-final-red.log七项预期失败，无skip/race，独立复核有效。配置行数保全断言已补；不覆盖Marketplace、生产认证或迁移前遗留数据。当前含新用例的测试为RED，生产未修复，不能引用此前绿色结果放行。
+
+- [ ] 在现有ExecutionConfig中声明精确tenant/scope、connector name/provider、允许的既有投递能力和不可变配置身份；验证scope归属、能力开启、重复实例键，构造时深复制。声明来自可信启动配置，凭证沿既有安全配置来源解析，不写日志或提交秘密。
+- [ ] 唯一Manager复用内部构造流程：candidate启动只激活声明目标，不枚举历史数据库；普通Provision请求即使提交相同scope/配置也不能取得启动权。初始化前核验可信来源及manifest初始化行为声明，初始化后核验真实目的地身份；未知初始化行为拒绝，失败关闭新对象，成功才发布generation，部分启动失败清理。
+- [ ] Connector管理及Marketplace安装/启用/配置更新入口在首次持久化之前检查准入；拒绝时零factory/Init、历史配置整行不变。Marketplace当前先UpdateInstallationConfig后Provision，不能只修Manager而保留前置写入。
+- [ ] 现有通知/Webhook投递owner继续验证持久意图、成员、租约、精确目标与generation；清点Get/GetInstance/完整Connector直接调用，启动目标资格不能授权Test、诊断、polling或绕开业务投递。不得把connector_poll当投递许可。
+- [ ] 真实测试同时证明未声明目标拒绝、声明目标经生产启动接入和既有worker投递成功、错误scope/配置/目的地拒绝、重复无新增效果，以及初始化失败/部分启动清理。现有手动Provision夹具需转换为可信启动路径后重跑，不能保留测试专用生产后门。全关Manager不满足G2。
+
+独立只读审阅确认当前ExecutionConfig没有目标清单，既有fixture注入不构成生产可信来源。以上为既有交付隔离设计的实施细化，不新增共享环境操作授权。
+
 历史连接器恢复入口检查点 `bae2c0cfd`（2026-09-14）：LoadAll在客户端检查、配置读取、解析与Init之前核验冻结启动能力，只允许standard显式connector_poll enabled和内部SystemContext；candidate、nil gate和普通租户请求均拒绝。真实私有PG测试验证候选零Init/无实例、同条配置standard正常恢复一次且配置整行保全；内部上下文标记不替代数据库角色准入。具名race、完整私有PG16/Redis/MinIO候选边界与Stream回归、全后端build通过，独立审阅无新增阻断。integration_postgres标签仅编译通过，未执行其数据库测试；未验证目标PG17。详见T1交接记录。可信scope新目标激活、Provision/Send/Get旁路和实际poll/provider仍待完成；CandidateSHA与停止状态不变，S5/S6及T3/T4/G3未放行。
 
 连接器读取/诊断修复检查点 `20c99482e`（2026-09-14）：下方4a92cc3a8 GET外调RED已GREEN。四GET及Provision响应只读本租户观测快照，删除HealthCheckAll；POST /health要求connector:write与Manager冻结connector_diagnostics能力，candidate只能disabled，standard显式enabled，未探测不伪造健康。快照深副本、实例generation替换保护、取消返回error及本/外租户探测边界均验证；完整私有PG16/Redis/MinIO race、具名回归、全后端build和独立审阅通过，无skip/race，见T1。POST完整认证/RBAC浏览器路径尚未E2E；实例激活/LoadAll/Send/Get旁路及可信scope目标声明仍待实现，不能把此修复等同整个Manager或G2完成。CandidateSHA、停止及共享环境边界不变。
