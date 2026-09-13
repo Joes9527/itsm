@@ -203,6 +203,11 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+连接器 HTTP 管理准入检查点 `5e57b761f`（2026-09-14）：Provision/Revoke 入口在解析、实例操作、持久化和轮询之前委托同一RequireIntegrationManagement，拒绝candidate/nil策略/无或错tenant/SystemBypass，取消固定失败。私有PG DELETE先RED复现原行被删，现保全；合法standard provider正向又复现原Revoke丢失provider导致实例残留，现按tenant/name携完整cfg逐一撤销，与原数据库删除范围一致。具名race、多provider关闭及外租户保全、后端build和独立复核通过。s5-connector-http-verified-private.log完整私有PG16/Redis/MinIO套件HTTP创建负例及删除保全/standard真实DB操作通过，原七项激活失败降至直接Manager三项，整套仍FAIL，无skip/race，不放行候选。
+
+后续仍须接入Manager.Provision（含disabled）与contextful Revoke owner门禁、Send/Get权限；快照撤销并发竞争与旧持久化错误语义未关闭。LoadAll WithTenantID已撤销继承SystemBypass，无需放宽gate。candidate通知/飞书/Webhook正向fixture应迁移可信声明，standard可变目标防御用例须保留原重绑/generation验证，详见实现T1交接，不以统一改standard消除candidate RED。固定CandidateSHA、候选停止及共享环境边界不变，完整T1–T5/G1–G3目标保持未完成。
+
+
 Marketplace 配置写入检查点 `860222303`（2026-09-14）：唯一冻结策略 RequireIntegrationManagement 仅 standard+匹配显式tenantctx+无SystemBypass+未取消允许配置管理；四个公开写owner（Install含重新启用、Uninstall、Update、Merge）首次查询/持久化前拒绝candidate/nil策略，不按商品类型放行。HTTP保留Request.Context并正确403，nil连接器runtime不静默成功。独立审阅发现Merge旁路，经真实PG RED后关闭；飞书回调复用同gate在兑换前检查，nil服务拒绝、重复callback ID fail closed，非ErrDenied固定500。standard本机provider+SQLite真实回调保存及query不能改租户通过，但OAuth state/actor/防重放与跨兑换持久化原子性未补齐。
 
 s5-marketplace-full-private.log 私有PG16/Redis/MinIO中新13配置保全/标准真实写入及standard HTTP正向PASS；整套仍有507f62293普通Manager/Controller请求激活七项既有RED，无SKIP/race，明确不是全绿。最终错误分类增量经s5-marketplace-final-review-unit.log具名race复核，未重新宣称完整suite；全后端build通过，独立最终审阅无新增阻断。详见实现分支T1现有交接。下一步仍须关闭启动前Provision、Revoke/配置删除、Send/Get裸实例入口；不勾选普通请求整体门禁，不关闭S5/S6或G2。固定CandidateSHA与候选停止状态不变，无共享环境操作、企业/云外呼、push/main合并。
