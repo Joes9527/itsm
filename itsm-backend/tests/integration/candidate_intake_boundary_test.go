@@ -295,6 +295,17 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			task := owner.ProcessTask.Create().SetTaskID(key).SetProcessInstanceID(instance.ID).SetProcessDefinitionKey(key).SetTaskDefinitionKey("Current").SetTaskName(key).SetCreatedTime(time.Now().Add(-time.Second)).SetTaskType(bpmn.KafDelegateTaskType).SetStatus("delegated").SetTaskVariables(map[string]interface{}{"allowed_actions": "complete_bpmn_task"}).SetCallbackHandlerID("kaf_delegate_handler").SetCallbackTaskType(bpmn.KafDelegateTaskType).SetCallbackAction(accessgrant.Capability).SetCallbackConfigRef(fmt.Sprint(accessPolicy.ID)).SetTenantID(tenant.ID).SaveX(ctx)
 			owner.ProcessApprovalDecision.Create().SetProcessInstanceID(instance.ID).SetProcessTaskID(task.ID).SetProcessInstanceKey(key).SetTaskID(key + "-approval").SetProcessDefinitionKey(key).SetNodeKey("Approval").SetActorID(actor.ID).SetAction("approve").SetDecision("approved").SetTenantID(tenant.ID).SaveX(ctx)
 			owner.ServiceRequestAccessSnapshot.Create().SetWorkItemID(itemID).SetPolicyID(accessPolicy.ID).SetPolicyVersion(1).SetProvider("graph").SetExternalSystem("directory").SetSubjectID("approved-subject").SetGroupID("approved-group").SetDurationKey("month").SetDurationSeconds(2592000).SaveX(ctx)
+			if kind == "historical" {
+				claim := service.KafActionRequest{Action: "complete_bpmn_task", ExpectedVersion: instance.Version,
+					Execution: service.KafActionExecution{RunID: "historical-claim", StepID: "finish", CorrelationID: key, ProcedureRef: "access", ProcedureVersion: "1"}}
+				claim.Execution.IdempotencyKey = fmt.Sprintf("%d:%s:%s:%s", tenant.ID, task.TaskID, claim.Execution.RunID, claim.Execution.StepID)
+				beforeClaims := owner.KafTaskActionLedger.Query().CountX(ctx)
+				_, claimed, claimErr := service.NewKafDelegationService(runtime).ClaimKafAction(ctx, task, claim)
+				t.Logf("historical claim: claimed=%t, ledger count before=%d after=%d", claimed, beforeClaims, owner.KafTaskActionLedger.Query().CountX(ctx))
+				require.Error(t, claimErr, "historical task must be rejected before ledger INSERT or lease UPDATE")
+				require.False(t, claimed)
+				require.Equal(t, beforeClaims, owner.KafTaskActionLedger.Query().CountX(ctx))
+			}
 			ledger := owner.KafTaskActionLedger.Create().SetTenantID(tenant.ID).SetTaskID(key).SetRunID(key).SetStepID("finish").SetAction("complete_bpmn_task").SetIdempotencyKey(key).SetRequestDigest("fixture-preclaimed-digest").SetCorrelationID(key).SetProcedureRef("access").SetProcedureVersion("1").SetResultStatus("executing").SetLeaseOwner(key).SetLeaseExpiresAt(time.Now().Add(time.Minute)).SaveX(ctx)
 			actionCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
 			actionCtx = context.WithValue(actionCtx, bpmn.BPMNUserIDContextKey, automation.ID)

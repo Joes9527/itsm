@@ -346,3 +346,20 @@ B2 私有证据（均位于本机 candidate-delivery/b2）：
 - `s3-kaf-access-final-regression.log`：service_request/service/controller 的 KAF/Access/SSLVPN 定向回归 PASS；`s3-kaf-access-final-build.json`：后端全量构建 exit 0。
 
 独立 reviewer `review_execution_scope_s1` 复核原事务、hook 顺序、fixture 保全、时间精度实现与最终 PG PASS 无阻断。普通 tenantctx 与 BPMN tenant/user 上下文一同进入真实引擎已验证；HTTP认证到入口的传递仅代码核查。审批决策、snapshot 和 executing ledger 是测试前置状态，未验证 HTTP、ExecuteAction 初始 claim/digest 生成/最终记账、实际审批或 provider；本轮不代表整个 KAF 周期已准入，相关 S3/S4 待办保留。共享能力及 S4–S6/B3 尚未完成，固定 CandidateSHA 不变，未操作共享环境、启动候选、推送或合并 main。
+
+
+### B2 S3/S4 KAF 外层领取缺口：有效 RED（2026-09-13）
+
+在 `6b2b50756` 完成事务检查点后，继续外层 ClaimKafAction。新增真实 PG 历史入口断言当前 **FAIL，未修复**：`s4-kaf-historical-claim-red.log` 显示 `claimed=true, ledger count before=0 after=1`，调用错误为 nil。运行使用同一生产 enforce runtime role、candidate manifest 的私有测试数据库；旧 Requested Item 在039前创建，未加入 scope。故障发生在后续 completion guard 之前，不能用上轮完成事务 PASS 放行外层动作。此提交是 TDD RED 检查点，不是可交付 GREEN。
+
+当前代码证据和后续必须覆盖的修复范围：
+
+- KafDelegationService.claimKafActionOnce 原事务 INSERT ledger 后 commit，再用独立自动提交语句做 pending/failed_retryable/expired-executing lease CAS，两处均无成员检查。重试必须重新检查，不能只在 HTTP 入口或第一次读取检查。
+- finalizeKafAction 为独立 ledger UPDATE；finalizeAppliedKafAction 的 lease CAS 与 audit 同事务；persistNonCompletingAction 在原事务先更新 process instance，再产生 action/审计结果。每个事务必须独立准入，原 token/expiry/version fencing 保留。
+- Completed receipt/recovery 及 process dispatch 属于相邻独立事务，不能把 ClaimKafAction 的修复视为整个 KAF 保护完成。历史 applied 原回执应走只读回放，不能为了探测唯一键而先 INSERT 历史台账。
+- 可信 policy 需从 bootstrap 和 internal/container 现有冻结实例传入 CustomProcessEngine/KafDelegationService；HTTP 独立构造链为 BPMNWorkflowController→KafDelegationController→KafDelegationService，也须显式依赖，不能偷偷默认 standard 或新增可变 setter。独立测试按场景显式 standard/candidate。
+- 候选归属应从原事务内的 task→process instance 结构化 execution_work_item_id 解析并校验成员，不从业务字符串推断/回填历史引用。缺少结构化归属要拒绝；新成员必须验证真实 claim、竞争、租约恢复、scope 关闭后再次写拒绝和原事务失败回滚。
+
+当前 tagged candidate test 明确处于 RED，待后续修复后重新运行并审阅。未操作 WSL/共享库或启动候选，固定 CandidateSHA 不变，未推送/合并 main；S3/S4 及全交付继续未完成。
+
+独立 reviewer `review_execution_scope_s1` 确认上述真实 RED 有效；补充必须覆盖 ensureKafCompletionReceipt/updateKafCompletionReceipt/makeKafCallbacksDue/enqueueRecoveredKafCallback/runKafFencedWrite 的独立恢复写事务，forClient 克隆需保留 policy 和原 tx。当前新 process instance fixture 仍无结构引用，正向修复测试需在新建时显式设置，不能回填历史。建议增加 claim 后关闭 scope 的 finalize/recover 完整字段保全断言。
