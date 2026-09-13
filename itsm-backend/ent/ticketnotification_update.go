@@ -416,6 +416,18 @@ func (_u *TicketNotificationUpdate) sqlSave(ctx context.Context) (_node int, err
 			}
 		}
 	}
+	if _u.mutation.TargetProtocolVersionCleared() {
+		_spec.ClearField(ticketnotification.FieldTargetProtocolVersion, field.TypeInt)
+	}
+	if _u.mutation.TargetConnectorNameCleared() {
+		_spec.ClearField(ticketnotification.FieldTargetConnectorName, field.TypeString)
+	}
+	if _u.mutation.TargetConnectorProviderCleared() {
+		_spec.ClearField(ticketnotification.FieldTargetConnectorProvider, field.TypeString)
+	}
+	if _u.mutation.TargetDestinationDigestCleared() {
+		_spec.ClearField(ticketnotification.FieldTargetDestinationDigest, field.TypeString)
+	}
 	if _u.mutation.SLAAlertHistoryIDCleared() {
 		_spec.ClearField(ticketnotification.FieldSLAAlertHistoryID, field.TypeInt)
 	}
@@ -978,6 +990,18 @@ func (_u *TicketNotificationUpdateOne) sqlSave(ctx context.Context) (_node *Tick
 				ps[i](selector)
 			}
 		}
+	}
+	if _u.mutation.TargetProtocolVersionCleared() {
+		_spec.ClearField(ticketnotification.FieldTargetProtocolVersion, field.TypeInt)
+	}
+	if _u.mutation.TargetConnectorNameCleared() {
+		_spec.ClearField(ticketnotification.FieldTargetConnectorName, field.TypeString)
+	}
+	if _u.mutation.TargetConnectorProviderCleared() {
+		_spec.ClearField(ticketnotification.FieldTargetConnectorProvider, field.TypeString)
+	}
+	if _u.mutation.TargetDestinationDigestCleared() {
+		_spec.ClearField(ticketnotification.FieldTargetDestinationDigest, field.TypeString)
 	}
 	if _u.mutation.SLAAlertHistoryIDCleared() {
 		_spec.ClearField(ticketnotification.FieldSLAAlertHistoryID, field.TypeInt)

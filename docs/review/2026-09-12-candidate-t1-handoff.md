@@ -1332,3 +1332,18 @@ s5-webhook-target-full-green.log 完整私有 PG16/Redis/MinIO 所选注册、in
 CandidateSHA、候选停止与共享环境边界不变；完整S5/S6/T3/T4/G3未完成，无WSL操作、共享数据库修改、企业外呼、push或main合并。本轮仅测试与计划合同，未运行无关生产构建。最终独立复核下方补记。
 
 独立最终复核确认失败仅新增四项且RED有效、实施合同无阻断。GREEN阶段必须改为合法producer生成完整目标意图后只替换Manager，并断言安全错误分类，排除缺协议字段或数据库故障造成假绿；重复poll不代表恢复成功。email/push仍需独立准入。git diff --check通过。
+
+
+### B2 S5 通知目标协议044结构准备（2026-09-14）
+
+新增注册 `044_notification_connector_target`，沿受控顺序依赖043及P准备，保持R依赖和历史SQL/checksum不变。四个可空字段保存目标协议版本、connector name/provider及目的地摘要；全NULL保留历史，版本1全字段非NULL、渠道匹配、规范摘要。UPDATE触发器阻止NULL补绑定、目标改指/清空，以及绑定后业务身份和内容修改；状态/attempt/lease仍可由原worker更新。函数权限从PUBLIC及继承角色默认ACL撤销。Ent按既有go generate流程生成，字段不可变且JSON隐藏；没有Ent overlay或共享数据库操作。
+
+s5-notification-target-migration-red.log先复现未注册SQL；s5-notification-target-migration-private.log初版真实PG通过。审阅指出邮件历史行会因渠道CHECK而假绿，现另建合法sms旧NULL夹具，绑定明确要求23514且不可变trigger消息；非法INSERT/UPDATE均要求23514，清理断言成功。迁移前显式授予runtime默认EXECUTE，后验证已剥离。s5-notification-target-migration-final-private.log强化后的真实私有PG race PASS：从缺列表执行真实DDL、旧字段逐行聚合JSON一致、新列全NULL、禁止改绑、合法新目标行可更新状态。该测试使用任务私有owner验证DDL，不代替受限应用角色准入。
+
+s5-notification-target-ent-generate.log生成exit0，最终差异仅通知相关与必要共享生成代码；s5-notification-target-migration-unit.log完整migration包PASS，新增依赖缺失拒绝测试，原后继数量断言随新增044更新，未削弱依赖。独立最终增量复核无新增阻断。
+
+本次仅结构准备，producer/worker未接入，原四项通知目标权限RED不得因缺目标字段而假绿；后续必须合法producer创建完整意图再换Manager。完整目标/S5/S6/T3/T4/G3未完成，固定CandidateSHA不变、候选未启动。B的真实迁移语义清单后续必须纳入044，未授权/执行WSL迁移、企业外呼、push/main合并。完整私有回归及构建结果下方补记。
+
+完整s5-notification-target-structure-full-private.log仅原四项通知权限RED及其父用例失败，其余所选PASS，无SKIP/DATA RACE；整套仍FAIL。下一producer正向应使用真实偏好支持的sms渠道及本地sms探针，不为复用webhook队列fixture新增产品渠道；现有SendNotification中的直接外发路径也必须随原事务入口盘点，不因EnqueueNotificationTx通过而遗漏。
+
+最终s5-notification-target-structure-build.log全后端build exit0，git diff --check通过。无进行中的Go进程；本轮结构准备具备上述独立审阅与验证证据，投递权限修复仍待执行。

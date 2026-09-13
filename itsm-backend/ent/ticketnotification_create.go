@@ -24,6 +24,62 @@ type TicketNotificationCreate struct {
 	conflict []sql.ConflictOption
 }
 
+// SetTargetProtocolVersion sets the "target_protocol_version" field.
+func (_c *TicketNotificationCreate) SetTargetProtocolVersion(v int) *TicketNotificationCreate {
+	_c.mutation.SetTargetProtocolVersion(v)
+	return _c
+}
+
+// SetNillableTargetProtocolVersion sets the "target_protocol_version" field if the given value is not nil.
+func (_c *TicketNotificationCreate) SetNillableTargetProtocolVersion(v *int) *TicketNotificationCreate {
+	if v != nil {
+		_c.SetTargetProtocolVersion(*v)
+	}
+	return _c
+}
+
+// SetTargetConnectorName sets the "target_connector_name" field.
+func (_c *TicketNotificationCreate) SetTargetConnectorName(v string) *TicketNotificationCreate {
+	_c.mutation.SetTargetConnectorName(v)
+	return _c
+}
+
+// SetNillableTargetConnectorName sets the "target_connector_name" field if the given value is not nil.
+func (_c *TicketNotificationCreate) SetNillableTargetConnectorName(v *string) *TicketNotificationCreate {
+	if v != nil {
+		_c.SetTargetConnectorName(*v)
+	}
+	return _c
+}
+
+// SetTargetConnectorProvider sets the "target_connector_provider" field.
+func (_c *TicketNotificationCreate) SetTargetConnectorProvider(v string) *TicketNotificationCreate {
+	_c.mutation.SetTargetConnectorProvider(v)
+	return _c
+}
+
+// SetNillableTargetConnectorProvider sets the "target_connector_provider" field if the given value is not nil.
+func (_c *TicketNotificationCreate) SetNillableTargetConnectorProvider(v *string) *TicketNotificationCreate {
+	if v != nil {
+		_c.SetTargetConnectorProvider(*v)
+	}
+	return _c
+}
+
+// SetTargetDestinationDigest sets the "target_destination_digest" field.
+func (_c *TicketNotificationCreate) SetTargetDestinationDigest(v string) *TicketNotificationCreate {
+	_c.mutation.SetTargetDestinationDigest(v)
+	return _c
+}
+
+// SetNillableTargetDestinationDigest sets the "target_destination_digest" field if the given value is not nil.
+func (_c *TicketNotificationCreate) SetNillableTargetDestinationDigest(v *string) *TicketNotificationCreate {
+	if v != nil {
+		_c.SetTargetDestinationDigest(*v)
+	}
+	return _c
+}
+
 // SetSLAAlertHistoryID sets the "sla_alert_history_id" field.
 func (_c *TicketNotificationCreate) SetSLAAlertHistoryID(v int) *TicketNotificationCreate {
 	_c.mutation.SetSLAAlertHistoryID(v)
@@ -394,6 +450,22 @@ func (_c *TicketNotificationCreate) createSpec() (*TicketNotification, *sqlgraph
 		_spec = sqlgraph.NewCreateSpec(ticketnotification.Table, sqlgraph.NewFieldSpec(ticketnotification.FieldID, field.TypeInt))
 	)
 	_spec.OnConflict = _c.conflict
+	if value, ok := _c.mutation.TargetProtocolVersion(); ok {
+		_spec.SetField(ticketnotification.FieldTargetProtocolVersion, field.TypeInt, value)
+		_node.TargetProtocolVersion = &value
+	}
+	if value, ok := _c.mutation.TargetConnectorName(); ok {
+		_spec.SetField(ticketnotification.FieldTargetConnectorName, field.TypeString, value)
+		_node.TargetConnectorName = &value
+	}
+	if value, ok := _c.mutation.TargetConnectorProvider(); ok {
+		_spec.SetField(ticketnotification.FieldTargetConnectorProvider, field.TypeString, value)
+		_node.TargetConnectorProvider = &value
+	}
+	if value, ok := _c.mutation.TargetDestinationDigest(); ok {
+		_spec.SetField(ticketnotification.FieldTargetDestinationDigest, field.TypeString, value)
+		_node.TargetDestinationDigest = &value
+	}
 	if value, ok := _c.mutation.SLAAlertHistoryID(); ok {
 		_spec.SetField(ticketnotification.FieldSLAAlertHistoryID, field.TypeInt, value)
 		_node.SLAAlertHistoryID = &value
@@ -495,7 +567,7 @@ func (_c *TicketNotificationCreate) createSpec() (*TicketNotification, *sqlgraph
 // of the `INSERT` statement. For example:
 //
 //	client.TicketNotification.Create().
-//		SetSLAAlertHistoryID(v).
+//		SetTargetProtocolVersion(v).
 //		OnConflict(
 //			// Update the row with the new values
 //			// the was proposed for insertion.
@@ -504,7 +576,7 @@ func (_c *TicketNotificationCreate) createSpec() (*TicketNotification, *sqlgraph
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.TicketNotificationUpsert) {
-//			SetSLAAlertHistoryID(v+v).
+//			SetTargetProtocolVersion(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *TicketNotificationCreate) OnConflict(opts ...sql.ConflictOption) *TicketNotificationUpsertOne {
@@ -791,6 +863,18 @@ func (u *TicketNotificationUpsert) UpdateCreatedAt() *TicketNotificationUpsert {
 func (u *TicketNotificationUpsertOne) UpdateNewValues() *TicketNotificationUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.TargetProtocolVersion(); exists {
+			s.SetIgnore(ticketnotification.FieldTargetProtocolVersion)
+		}
+		if _, exists := u.create.mutation.TargetConnectorName(); exists {
+			s.SetIgnore(ticketnotification.FieldTargetConnectorName)
+		}
+		if _, exists := u.create.mutation.TargetConnectorProvider(); exists {
+			s.SetIgnore(ticketnotification.FieldTargetConnectorProvider)
+		}
+		if _, exists := u.create.mutation.TargetDestinationDigest(); exists {
+			s.SetIgnore(ticketnotification.FieldTargetDestinationDigest)
+		}
 		if _, exists := u.create.mutation.SLAAlertHistoryID(); exists {
 			s.SetIgnore(ticketnotification.FieldSLAAlertHistoryID)
 		}
@@ -1240,7 +1324,7 @@ func (_c *TicketNotificationCreateBulk) ExecX(ctx context.Context) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.TicketNotificationUpsert) {
-//			SetSLAAlertHistoryID(v+v).
+//			SetTargetProtocolVersion(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *TicketNotificationCreateBulk) OnConflict(opts ...sql.ConflictOption) *TicketNotificationUpsertBulk {
@@ -1281,6 +1365,18 @@ func (u *TicketNotificationUpsertBulk) UpdateNewValues() *TicketNotificationUpse
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
 		for _, b := range u.create.builders {
+			if _, exists := b.mutation.TargetProtocolVersion(); exists {
+				s.SetIgnore(ticketnotification.FieldTargetProtocolVersion)
+			}
+			if _, exists := b.mutation.TargetConnectorName(); exists {
+				s.SetIgnore(ticketnotification.FieldTargetConnectorName)
+			}
+			if _, exists := b.mutation.TargetConnectorProvider(); exists {
+				s.SetIgnore(ticketnotification.FieldTargetConnectorProvider)
+			}
+			if _, exists := b.mutation.TargetDestinationDigest(); exists {
+				s.SetIgnore(ticketnotification.FieldTargetDestinationDigest)
+			}
 			if _, exists := b.mutation.SLAAlertHistoryID(); exists {
 				s.SetIgnore(ticketnotification.FieldSLAAlertHistoryID)
 			}

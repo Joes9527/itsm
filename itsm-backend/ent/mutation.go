@@ -145046,35 +145046,40 @@ func (m *TicketCommentMutation) ResetEdge(name string) error {
 // TicketNotificationMutation represents an operation that mutates the TicketNotification nodes in the graph.
 type TicketNotificationMutation struct {
 	config
-	op                      Op
-	typ                     string
-	id                      *int
-	sla_alert_history_id    *int
-	addsla_alert_history_id *int
-	_type                   *string
-	channel                 *string
-	content                 *string
-	sent_at                 *time.Time
-	read_at                 *time.Time
-	status                  *string
-	delivery_key            *string
-	attempt_count           *int
-	addattempt_count        *int
-	next_attempt_at         *time.Time
-	lease_owner             *string
-	lease_expires_at        *time.Time
-	last_error_class        *string
-	tenant_id               *int
-	addtenant_id            *int
-	created_at              *time.Time
-	clearedFields           map[string]struct{}
-	ticket                  *int
-	clearedticket           bool
-	user                    *int
-	cleareduser             bool
-	done                    bool
-	oldValue                func(context.Context) (*TicketNotification, error)
-	predicates              []predicate.TicketNotification
+	op                         Op
+	typ                        string
+	id                         *int
+	target_protocol_version    *int
+	addtarget_protocol_version *int
+	target_connector_name      *string
+	target_connector_provider  *string
+	target_destination_digest  *string
+	sla_alert_history_id       *int
+	addsla_alert_history_id    *int
+	_type                      *string
+	channel                    *string
+	content                    *string
+	sent_at                    *time.Time
+	read_at                    *time.Time
+	status                     *string
+	delivery_key               *string
+	attempt_count              *int
+	addattempt_count           *int
+	next_attempt_at            *time.Time
+	lease_owner                *string
+	lease_expires_at           *time.Time
+	last_error_class           *string
+	tenant_id                  *int
+	addtenant_id               *int
+	created_at                 *time.Time
+	clearedFields              map[string]struct{}
+	ticket                     *int
+	clearedticket              bool
+	user                       *int
+	cleareduser                bool
+	done                       bool
+	oldValue                   func(context.Context) (*TicketNotification, error)
+	predicates                 []predicate.TicketNotification
 }
 
 var _ ent.Mutation = (*TicketNotificationMutation)(nil)
@@ -145173,6 +145178,223 @@ func (m *TicketNotificationMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetTargetProtocolVersion sets the "target_protocol_version" field.
+func (m *TicketNotificationMutation) SetTargetProtocolVersion(i int) {
+	m.target_protocol_version = &i
+	m.addtarget_protocol_version = nil
+}
+
+// TargetProtocolVersion returns the value of the "target_protocol_version" field in the mutation.
+func (m *TicketNotificationMutation) TargetProtocolVersion() (r int, exists bool) {
+	v := m.target_protocol_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTargetProtocolVersion returns the old "target_protocol_version" field's value of the TicketNotification entity.
+// If the TicketNotification object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketNotificationMutation) OldTargetProtocolVersion(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTargetProtocolVersion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTargetProtocolVersion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTargetProtocolVersion: %w", err)
+	}
+	return oldValue.TargetProtocolVersion, nil
+}
+
+// AddTargetProtocolVersion adds i to the "target_protocol_version" field.
+func (m *TicketNotificationMutation) AddTargetProtocolVersion(i int) {
+	if m.addtarget_protocol_version != nil {
+		*m.addtarget_protocol_version += i
+	} else {
+		m.addtarget_protocol_version = &i
+	}
+}
+
+// AddedTargetProtocolVersion returns the value that was added to the "target_protocol_version" field in this mutation.
+func (m *TicketNotificationMutation) AddedTargetProtocolVersion() (r int, exists bool) {
+	v := m.addtarget_protocol_version
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearTargetProtocolVersion clears the value of the "target_protocol_version" field.
+func (m *TicketNotificationMutation) ClearTargetProtocolVersion() {
+	m.target_protocol_version = nil
+	m.addtarget_protocol_version = nil
+	m.clearedFields[ticketnotification.FieldTargetProtocolVersion] = struct{}{}
+}
+
+// TargetProtocolVersionCleared returns if the "target_protocol_version" field was cleared in this mutation.
+func (m *TicketNotificationMutation) TargetProtocolVersionCleared() bool {
+	_, ok := m.clearedFields[ticketnotification.FieldTargetProtocolVersion]
+	return ok
+}
+
+// ResetTargetProtocolVersion resets all changes to the "target_protocol_version" field.
+func (m *TicketNotificationMutation) ResetTargetProtocolVersion() {
+	m.target_protocol_version = nil
+	m.addtarget_protocol_version = nil
+	delete(m.clearedFields, ticketnotification.FieldTargetProtocolVersion)
+}
+
+// SetTargetConnectorName sets the "target_connector_name" field.
+func (m *TicketNotificationMutation) SetTargetConnectorName(s string) {
+	m.target_connector_name = &s
+}
+
+// TargetConnectorName returns the value of the "target_connector_name" field in the mutation.
+func (m *TicketNotificationMutation) TargetConnectorName() (r string, exists bool) {
+	v := m.target_connector_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTargetConnectorName returns the old "target_connector_name" field's value of the TicketNotification entity.
+// If the TicketNotification object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketNotificationMutation) OldTargetConnectorName(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTargetConnectorName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTargetConnectorName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTargetConnectorName: %w", err)
+	}
+	return oldValue.TargetConnectorName, nil
+}
+
+// ClearTargetConnectorName clears the value of the "target_connector_name" field.
+func (m *TicketNotificationMutation) ClearTargetConnectorName() {
+	m.target_connector_name = nil
+	m.clearedFields[ticketnotification.FieldTargetConnectorName] = struct{}{}
+}
+
+// TargetConnectorNameCleared returns if the "target_connector_name" field was cleared in this mutation.
+func (m *TicketNotificationMutation) TargetConnectorNameCleared() bool {
+	_, ok := m.clearedFields[ticketnotification.FieldTargetConnectorName]
+	return ok
+}
+
+// ResetTargetConnectorName resets all changes to the "target_connector_name" field.
+func (m *TicketNotificationMutation) ResetTargetConnectorName() {
+	m.target_connector_name = nil
+	delete(m.clearedFields, ticketnotification.FieldTargetConnectorName)
+}
+
+// SetTargetConnectorProvider sets the "target_connector_provider" field.
+func (m *TicketNotificationMutation) SetTargetConnectorProvider(s string) {
+	m.target_connector_provider = &s
+}
+
+// TargetConnectorProvider returns the value of the "target_connector_provider" field in the mutation.
+func (m *TicketNotificationMutation) TargetConnectorProvider() (r string, exists bool) {
+	v := m.target_connector_provider
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTargetConnectorProvider returns the old "target_connector_provider" field's value of the TicketNotification entity.
+// If the TicketNotification object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketNotificationMutation) OldTargetConnectorProvider(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTargetConnectorProvider is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTargetConnectorProvider requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTargetConnectorProvider: %w", err)
+	}
+	return oldValue.TargetConnectorProvider, nil
+}
+
+// ClearTargetConnectorProvider clears the value of the "target_connector_provider" field.
+func (m *TicketNotificationMutation) ClearTargetConnectorProvider() {
+	m.target_connector_provider = nil
+	m.clearedFields[ticketnotification.FieldTargetConnectorProvider] = struct{}{}
+}
+
+// TargetConnectorProviderCleared returns if the "target_connector_provider" field was cleared in this mutation.
+func (m *TicketNotificationMutation) TargetConnectorProviderCleared() bool {
+	_, ok := m.clearedFields[ticketnotification.FieldTargetConnectorProvider]
+	return ok
+}
+
+// ResetTargetConnectorProvider resets all changes to the "target_connector_provider" field.
+func (m *TicketNotificationMutation) ResetTargetConnectorProvider() {
+	m.target_connector_provider = nil
+	delete(m.clearedFields, ticketnotification.FieldTargetConnectorProvider)
+}
+
+// SetTargetDestinationDigest sets the "target_destination_digest" field.
+func (m *TicketNotificationMutation) SetTargetDestinationDigest(s string) {
+	m.target_destination_digest = &s
+}
+
+// TargetDestinationDigest returns the value of the "target_destination_digest" field in the mutation.
+func (m *TicketNotificationMutation) TargetDestinationDigest() (r string, exists bool) {
+	v := m.target_destination_digest
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTargetDestinationDigest returns the old "target_destination_digest" field's value of the TicketNotification entity.
+// If the TicketNotification object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketNotificationMutation) OldTargetDestinationDigest(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTargetDestinationDigest is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTargetDestinationDigest requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTargetDestinationDigest: %w", err)
+	}
+	return oldValue.TargetDestinationDigest, nil
+}
+
+// ClearTargetDestinationDigest clears the value of the "target_destination_digest" field.
+func (m *TicketNotificationMutation) ClearTargetDestinationDigest() {
+	m.target_destination_digest = nil
+	m.clearedFields[ticketnotification.FieldTargetDestinationDigest] = struct{}{}
+}
+
+// TargetDestinationDigestCleared returns if the "target_destination_digest" field was cleared in this mutation.
+func (m *TicketNotificationMutation) TargetDestinationDigestCleared() bool {
+	_, ok := m.clearedFields[ticketnotification.FieldTargetDestinationDigest]
+	return ok
+}
+
+// ResetTargetDestinationDigest resets all changes to the "target_destination_digest" field.
+func (m *TicketNotificationMutation) ResetTargetDestinationDigest() {
+	m.target_destination_digest = nil
+	delete(m.clearedFields, ticketnotification.FieldTargetDestinationDigest)
 }
 
 // SetSLAAlertHistoryID sets the "sla_alert_history_id" field.
@@ -146027,7 +146249,19 @@ func (m *TicketNotificationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TicketNotificationMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 21)
+	if m.target_protocol_version != nil {
+		fields = append(fields, ticketnotification.FieldTargetProtocolVersion)
+	}
+	if m.target_connector_name != nil {
+		fields = append(fields, ticketnotification.FieldTargetConnectorName)
+	}
+	if m.target_connector_provider != nil {
+		fields = append(fields, ticketnotification.FieldTargetConnectorProvider)
+	}
+	if m.target_destination_digest != nil {
+		fields = append(fields, ticketnotification.FieldTargetDestinationDigest)
+	}
 	if m.sla_alert_history_id != nil {
 		fields = append(fields, ticketnotification.FieldSLAAlertHistoryID)
 	}
@@ -146087,6 +146321,14 @@ func (m *TicketNotificationMutation) Fields() []string {
 // schema.
 func (m *TicketNotificationMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case ticketnotification.FieldTargetProtocolVersion:
+		return m.TargetProtocolVersion()
+	case ticketnotification.FieldTargetConnectorName:
+		return m.TargetConnectorName()
+	case ticketnotification.FieldTargetConnectorProvider:
+		return m.TargetConnectorProvider()
+	case ticketnotification.FieldTargetDestinationDigest:
+		return m.TargetDestinationDigest()
 	case ticketnotification.FieldSLAAlertHistoryID:
 		return m.SLAAlertHistoryID()
 	case ticketnotification.FieldTicketID:
@@ -146130,6 +146372,14 @@ func (m *TicketNotificationMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *TicketNotificationMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case ticketnotification.FieldTargetProtocolVersion:
+		return m.OldTargetProtocolVersion(ctx)
+	case ticketnotification.FieldTargetConnectorName:
+		return m.OldTargetConnectorName(ctx)
+	case ticketnotification.FieldTargetConnectorProvider:
+		return m.OldTargetConnectorProvider(ctx)
+	case ticketnotification.FieldTargetDestinationDigest:
+		return m.OldTargetDestinationDigest(ctx)
 	case ticketnotification.FieldSLAAlertHistoryID:
 		return m.OldSLAAlertHistoryID(ctx)
 	case ticketnotification.FieldTicketID:
@@ -146173,6 +146423,34 @@ func (m *TicketNotificationMutation) OldField(ctx context.Context, name string) 
 // type.
 func (m *TicketNotificationMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case ticketnotification.FieldTargetProtocolVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTargetProtocolVersion(v)
+		return nil
+	case ticketnotification.FieldTargetConnectorName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTargetConnectorName(v)
+		return nil
+	case ticketnotification.FieldTargetConnectorProvider:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTargetConnectorProvider(v)
+		return nil
+	case ticketnotification.FieldTargetDestinationDigest:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTargetDestinationDigest(v)
+		return nil
 	case ticketnotification.FieldSLAAlertHistoryID:
 		v, ok := value.(int)
 		if !ok {
@@ -146300,6 +146578,9 @@ func (m *TicketNotificationMutation) SetField(name string, value ent.Value) erro
 // this mutation.
 func (m *TicketNotificationMutation) AddedFields() []string {
 	var fields []string
+	if m.addtarget_protocol_version != nil {
+		fields = append(fields, ticketnotification.FieldTargetProtocolVersion)
+	}
 	if m.addsla_alert_history_id != nil {
 		fields = append(fields, ticketnotification.FieldSLAAlertHistoryID)
 	}
@@ -146317,6 +146598,8 @@ func (m *TicketNotificationMutation) AddedFields() []string {
 // was not set, or was not defined in the schema.
 func (m *TicketNotificationMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
+	case ticketnotification.FieldTargetProtocolVersion:
+		return m.AddedTargetProtocolVersion()
 	case ticketnotification.FieldSLAAlertHistoryID:
 		return m.AddedSLAAlertHistoryID()
 	case ticketnotification.FieldAttemptCount:
@@ -146332,6 +146615,13 @@ func (m *TicketNotificationMutation) AddedField(name string) (ent.Value, bool) {
 // type.
 func (m *TicketNotificationMutation) AddField(name string, value ent.Value) error {
 	switch name {
+	case ticketnotification.FieldTargetProtocolVersion:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddTargetProtocolVersion(v)
+		return nil
 	case ticketnotification.FieldSLAAlertHistoryID:
 		v, ok := value.(int)
 		if !ok {
@@ -146361,6 +146651,18 @@ func (m *TicketNotificationMutation) AddField(name string, value ent.Value) erro
 // mutation.
 func (m *TicketNotificationMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(ticketnotification.FieldTargetProtocolVersion) {
+		fields = append(fields, ticketnotification.FieldTargetProtocolVersion)
+	}
+	if m.FieldCleared(ticketnotification.FieldTargetConnectorName) {
+		fields = append(fields, ticketnotification.FieldTargetConnectorName)
+	}
+	if m.FieldCleared(ticketnotification.FieldTargetConnectorProvider) {
+		fields = append(fields, ticketnotification.FieldTargetConnectorProvider)
+	}
+	if m.FieldCleared(ticketnotification.FieldTargetDestinationDigest) {
+		fields = append(fields, ticketnotification.FieldTargetDestinationDigest)
+	}
 	if m.FieldCleared(ticketnotification.FieldSLAAlertHistoryID) {
 		fields = append(fields, ticketnotification.FieldSLAAlertHistoryID)
 	}
@@ -146396,6 +146698,18 @@ func (m *TicketNotificationMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *TicketNotificationMutation) ClearField(name string) error {
 	switch name {
+	case ticketnotification.FieldTargetProtocolVersion:
+		m.ClearTargetProtocolVersion()
+		return nil
+	case ticketnotification.FieldTargetConnectorName:
+		m.ClearTargetConnectorName()
+		return nil
+	case ticketnotification.FieldTargetConnectorProvider:
+		m.ClearTargetConnectorProvider()
+		return nil
+	case ticketnotification.FieldTargetDestinationDigest:
+		m.ClearTargetDestinationDigest()
+		return nil
 	case ticketnotification.FieldSLAAlertHistoryID:
 		m.ClearSLAAlertHistoryID()
 		return nil
@@ -146425,6 +146739,18 @@ func (m *TicketNotificationMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *TicketNotificationMutation) ResetField(name string) error {
 	switch name {
+	case ticketnotification.FieldTargetProtocolVersion:
+		m.ResetTargetProtocolVersion()
+		return nil
+	case ticketnotification.FieldTargetConnectorName:
+		m.ResetTargetConnectorName()
+		return nil
+	case ticketnotification.FieldTargetConnectorProvider:
+		m.ResetTargetConnectorProvider()
+		return nil
+	case ticketnotification.FieldTargetDestinationDigest:
+		m.ResetTargetDestinationDigest()
+		return nil
 	case ticketnotification.FieldSLAAlertHistoryID:
 		m.ResetSLAAlertHistoryID()
 		return nil

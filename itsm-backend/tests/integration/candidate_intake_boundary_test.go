@@ -379,6 +379,63 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		return standardFixtureClient
 	}
 
+	t.Run("notification target migration preserves legacy intents", func(t *testing.T) {
+		migrationSQL := migration.GetMigrationSQL("044_notification_connector_target")
+		require.NotEmpty(t, migrationSQL, "target protocol requires a registered migration")
+		// Simulate a real pre-upgrade table, even after Ent gains the new fields.
+		_, err := ownerDB.ExecContext(ctx, `ALTER TABLE ticket_notifications DROP COLUMN IF EXISTS target_protocol_version, DROP COLUMN IF EXISTS target_connector_name, DROP COLUMN IF EXISTS target_connector_provider, DROP COLUMN IF EXISTS target_destination_digest`)
+		require.NoError(t, err)
+		var legacyConnectorID int
+		require.NoError(t, ownerDB.QueryRow(`INSERT INTO ticket_notifications(tenant_id,ticket_id,user_id,type,channel,content,status,created_at,next_attempt_at,attempt_count) VALUES($1,$2,$3,'created','sms','legacy unbound connector','pending',now(),now(),0) RETURNING id`, tenant.ID, historicalNotifications[0].TicketID, actor.ID).Scan(&legacyConnectorID))
+		defer func() {
+			_, e := ownerDB.ExecContext(ctx, `DELETE FROM ticket_notifications WHERE id=$1`, legacyConnectorID)
+			require.NoError(t, e)
+		}()
+		_, err = ownerDB.ExecContext(ctx, "ALTER DEFAULT PRIVILEGES GRANT EXECUTE ON FUNCTIONS TO "+runtimeRole)
+		require.NoError(t, err)
+		constraintError := func(err error) *pq.Error {
+			t.Helper()
+			var pg *pq.Error
+			require.ErrorAs(t, err, &pg)
+			require.Equal(t, pq.ErrorCode("23514"), pg.Code)
+			return pg
+		}
+		var before, after string
+		require.NoError(t, ownerDB.QueryRow(`SELECT jsonb_agg(to_jsonb(n) ORDER BY id)::text FROM ticket_notifications n`).Scan(&before))
+		_, err = ownerDB.ExecContext(ctx, migrationSQL)
+		require.NoError(t, err)
+		require.NoError(t, ownerDB.QueryRow(`SELECT jsonb_agg(to_jsonb(n)-'target_protocol_version'-'target_connector_name'-'target_connector_provider'-'target_destination_digest' ORDER BY id)::text FROM ticket_notifications n`).Scan(&after))
+		require.JSONEq(t, before, after)
+		var bound int
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM ticket_notifications WHERE target_protocol_version IS NOT NULL OR target_connector_name IS NOT NULL OR target_connector_provider IS NOT NULL OR target_destination_digest IS NOT NULL`).Scan(&bound))
+		require.Zero(t, bound)
+		_, err = ownerDB.ExecContext(ctx, `UPDATE ticket_notifications SET target_protocol_version=1,target_connector_name=channel,target_connector_provider='local',target_destination_digest=repeat('a',64) WHERE id=$1`, legacyConnectorID)
+		require.Equal(t, "notification target and delivery identity are immutable", constraintError(err).Message)
+		var canExecute bool
+		require.NoError(t, ownerDB.QueryRow(`SELECT has_function_privilege($1,'public.preserve_notification_connector_target()','EXECUTE')`, runtimeRole).Scan(&canExecute))
+		require.False(t, canExecute)
+		insert := `INSERT INTO ticket_notifications(tenant_id,ticket_id,user_id,type,channel,content,status,created_at,next_attempt_at,attempt_count,target_protocol_version,target_connector_name,target_connector_provider,target_destination_digest) VALUES($1,$2,$3,'created','sms','private target migration','pending',now(),now(),0,$4,$5,$6,$7) RETURNING id`
+		for _, invalid := range []struct {
+			version                any
+			name, provider, digest any
+		}{{1, "sms", nil, nil}, {2, "sms", "local", strings.Repeat("a", 64)}, {1, "webhook", "local", strings.Repeat("a", 64)}, {1, "sms", " ", strings.Repeat("a", 64)}, {1, "sms", "local", "invalid"}, {nil, "sms", "local", strings.Repeat("a", 64)}} {
+			_, err = ownerDB.ExecContext(ctx, insert, tenant.ID, historicalNotifications[0].TicketID, actor.ID, invalid.version, invalid.name, invalid.provider, invalid.digest)
+			constraintError(err)
+		}
+		var id int
+		require.NoError(t, ownerDB.QueryRow(insert, tenant.ID, historicalNotifications[0].TicketID, actor.ID, 1, "sms", "local", strings.Repeat("a", 64)).Scan(&id))
+		defer func() {
+			_, e := ownerDB.ExecContext(ctx, `DELETE FROM ticket_notifications WHERE id=$1`, id)
+			require.NoError(t, e)
+		}()
+		for _, assignment := range []string{"target_connector_provider='changed'", "target_destination_digest=repeat('b',64)", "channel='webhook'", "content='changed'", "target_protocol_version=NULL", "user_id=user_id+1"} {
+			_, err = ownerDB.ExecContext(ctx, "UPDATE ticket_notifications SET "+assignment+" WHERE id=$1", id)
+			constraintError(err)
+		}
+		_, err = ownerDB.ExecContext(ctx, `UPDATE ticket_notifications SET status='processing',attempt_count=1 WHERE id=$1`, id)
+		require.NoError(t, err)
+	})
+
 	t.Run("candidate cloud discovery direct entry is disabled", func(t *testing.T) {
 		discovery := service.NewCloudDiscoveryService(runtime, zap.NewNop().Sugar(), policy)
 		require.ErrorIs(t, discovery.DiscoverAll(ctx, tenant.ID), executionscope.ErrDenied)

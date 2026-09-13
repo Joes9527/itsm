@@ -19,6 +19,14 @@ type TicketNotification struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
+	// Frozen connector delivery protocol; NULL preserves unbound historical intents
+	TargetProtocolVersion *int `json:"-"`
+	// TargetConnectorName holds the value of the "target_connector_name" field.
+	TargetConnectorName *string `json:"-"`
+	// TargetConnectorProvider holds the value of the "target_connector_provider" field.
+	TargetConnectorProvider *string `json:"-"`
+	// TargetDestinationDigest holds the value of the "target_destination_digest" field.
+	TargetDestinationDigest *string `json:"-"`
 	// Owning SLA alert; immutable structured delivery provenance
 	SLAAlertHistoryID *int `json:"sla_alert_history_id,omitempty"`
 	// 工单ID
@@ -97,9 +105,9 @@ func (*TicketNotification) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case ticketnotification.FieldID, ticketnotification.FieldSLAAlertHistoryID, ticketnotification.FieldTicketID, ticketnotification.FieldUserID, ticketnotification.FieldAttemptCount, ticketnotification.FieldTenantID:
+		case ticketnotification.FieldID, ticketnotification.FieldTargetProtocolVersion, ticketnotification.FieldSLAAlertHistoryID, ticketnotification.FieldTicketID, ticketnotification.FieldUserID, ticketnotification.FieldAttemptCount, ticketnotification.FieldTenantID:
 			values[i] = new(sql.NullInt64)
-		case ticketnotification.FieldType, ticketnotification.FieldChannel, ticketnotification.FieldContent, ticketnotification.FieldStatus, ticketnotification.FieldDeliveryKey, ticketnotification.FieldLeaseOwner, ticketnotification.FieldLastErrorClass:
+		case ticketnotification.FieldTargetConnectorName, ticketnotification.FieldTargetConnectorProvider, ticketnotification.FieldTargetDestinationDigest, ticketnotification.FieldType, ticketnotification.FieldChannel, ticketnotification.FieldContent, ticketnotification.FieldStatus, ticketnotification.FieldDeliveryKey, ticketnotification.FieldLeaseOwner, ticketnotification.FieldLastErrorClass:
 			values[i] = new(sql.NullString)
 		case ticketnotification.FieldSentAt, ticketnotification.FieldReadAt, ticketnotification.FieldNextAttemptAt, ticketnotification.FieldLeaseExpiresAt, ticketnotification.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -124,6 +132,34 @@ func (_m *TicketNotification) assignValues(columns []string, values []any) error
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
+		case ticketnotification.FieldTargetProtocolVersion:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field target_protocol_version", values[i])
+			} else if value.Valid {
+				_m.TargetProtocolVersion = new(int)
+				*_m.TargetProtocolVersion = int(value.Int64)
+			}
+		case ticketnotification.FieldTargetConnectorName:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field target_connector_name", values[i])
+			} else if value.Valid {
+				_m.TargetConnectorName = new(string)
+				*_m.TargetConnectorName = value.String
+			}
+		case ticketnotification.FieldTargetConnectorProvider:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field target_connector_provider", values[i])
+			} else if value.Valid {
+				_m.TargetConnectorProvider = new(string)
+				*_m.TargetConnectorProvider = value.String
+			}
+		case ticketnotification.FieldTargetDestinationDigest:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field target_destination_digest", values[i])
+			} else if value.Valid {
+				_m.TargetDestinationDigest = new(string)
+				*_m.TargetDestinationDigest = value.String
+			}
 		case ticketnotification.FieldSLAAlertHistoryID:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field sla_alert_history_id", values[i])
@@ -274,6 +310,26 @@ func (_m *TicketNotification) String() string {
 	var builder strings.Builder
 	builder.WriteString("TicketNotification(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	if v := _m.TargetProtocolVersion; v != nil {
+		builder.WriteString("target_protocol_version=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.TargetConnectorName; v != nil {
+		builder.WriteString("target_connector_name=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.TargetConnectorProvider; v != nil {
+		builder.WriteString("target_connector_provider=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.TargetDestinationDigest; v != nil {
+		builder.WriteString("target_destination_digest=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
 	if v := _m.SLAAlertHistoryID; v != nil {
 		builder.WriteString("sla_alert_history_id=")
 		builder.WriteString(fmt.Sprintf("%v", *v))

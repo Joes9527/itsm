@@ -55,6 +55,26 @@ func IDLTE(id int) predicate.TicketNotification {
 	return predicate.TicketNotification(sql.FieldLTE(FieldID, id))
 }
 
+// TargetProtocolVersion applies equality check predicate on the "target_protocol_version" field. It's identical to TargetProtocolVersionEQ.
+func TargetProtocolVersion(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldTargetProtocolVersion, v))
+}
+
+// TargetConnectorName applies equality check predicate on the "target_connector_name" field. It's identical to TargetConnectorNameEQ.
+func TargetConnectorName(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldTargetConnectorName, v))
+}
+
+// TargetConnectorProvider applies equality check predicate on the "target_connector_provider" field. It's identical to TargetConnectorProviderEQ.
+func TargetConnectorProvider(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldTargetConnectorProvider, v))
+}
+
+// TargetDestinationDigest applies equality check predicate on the "target_destination_digest" field. It's identical to TargetDestinationDigestEQ.
+func TargetDestinationDigest(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldTargetDestinationDigest, v))
+}
+
 // SLAAlertHistoryID applies equality check predicate on the "sla_alert_history_id" field. It's identical to SLAAlertHistoryIDEQ.
 func SLAAlertHistoryID(v int) predicate.TicketNotification {
 	return predicate.TicketNotification(sql.FieldEQ(FieldSLAAlertHistoryID, v))
@@ -138,6 +158,281 @@ func TenantID(v int) predicate.TicketNotification {
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.TicketNotification {
 	return predicate.TicketNotification(sql.FieldEQ(FieldCreatedAt, v))
+}
+
+// TargetProtocolVersionEQ applies the EQ predicate on the "target_protocol_version" field.
+func TargetProtocolVersionEQ(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldTargetProtocolVersion, v))
+}
+
+// TargetProtocolVersionNEQ applies the NEQ predicate on the "target_protocol_version" field.
+func TargetProtocolVersionNEQ(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNEQ(FieldTargetProtocolVersion, v))
+}
+
+// TargetProtocolVersionIn applies the In predicate on the "target_protocol_version" field.
+func TargetProtocolVersionIn(vs ...int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIn(FieldTargetProtocolVersion, vs...))
+}
+
+// TargetProtocolVersionNotIn applies the NotIn predicate on the "target_protocol_version" field.
+func TargetProtocolVersionNotIn(vs ...int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotIn(FieldTargetProtocolVersion, vs...))
+}
+
+// TargetProtocolVersionGT applies the GT predicate on the "target_protocol_version" field.
+func TargetProtocolVersionGT(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGT(FieldTargetProtocolVersion, v))
+}
+
+// TargetProtocolVersionGTE applies the GTE predicate on the "target_protocol_version" field.
+func TargetProtocolVersionGTE(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGTE(FieldTargetProtocolVersion, v))
+}
+
+// TargetProtocolVersionLT applies the LT predicate on the "target_protocol_version" field.
+func TargetProtocolVersionLT(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLT(FieldTargetProtocolVersion, v))
+}
+
+// TargetProtocolVersionLTE applies the LTE predicate on the "target_protocol_version" field.
+func TargetProtocolVersionLTE(v int) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLTE(FieldTargetProtocolVersion, v))
+}
+
+// TargetProtocolVersionIsNil applies the IsNil predicate on the "target_protocol_version" field.
+func TargetProtocolVersionIsNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIsNull(FieldTargetProtocolVersion))
+}
+
+// TargetProtocolVersionNotNil applies the NotNil predicate on the "target_protocol_version" field.
+func TargetProtocolVersionNotNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotNull(FieldTargetProtocolVersion))
+}
+
+// TargetConnectorNameEQ applies the EQ predicate on the "target_connector_name" field.
+func TargetConnectorNameEQ(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldTargetConnectorName, v))
+}
+
+// TargetConnectorNameNEQ applies the NEQ predicate on the "target_connector_name" field.
+func TargetConnectorNameNEQ(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNEQ(FieldTargetConnectorName, v))
+}
+
+// TargetConnectorNameIn applies the In predicate on the "target_connector_name" field.
+func TargetConnectorNameIn(vs ...string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIn(FieldTargetConnectorName, vs...))
+}
+
+// TargetConnectorNameNotIn applies the NotIn predicate on the "target_connector_name" field.
+func TargetConnectorNameNotIn(vs ...string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotIn(FieldTargetConnectorName, vs...))
+}
+
+// TargetConnectorNameGT applies the GT predicate on the "target_connector_name" field.
+func TargetConnectorNameGT(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGT(FieldTargetConnectorName, v))
+}
+
+// TargetConnectorNameGTE applies the GTE predicate on the "target_connector_name" field.
+func TargetConnectorNameGTE(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGTE(FieldTargetConnectorName, v))
+}
+
+// TargetConnectorNameLT applies the LT predicate on the "target_connector_name" field.
+func TargetConnectorNameLT(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLT(FieldTargetConnectorName, v))
+}
+
+// TargetConnectorNameLTE applies the LTE predicate on the "target_connector_name" field.
+func TargetConnectorNameLTE(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLTE(FieldTargetConnectorName, v))
+}
+
+// TargetConnectorNameContains applies the Contains predicate on the "target_connector_name" field.
+func TargetConnectorNameContains(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldContains(FieldTargetConnectorName, v))
+}
+
+// TargetConnectorNameHasPrefix applies the HasPrefix predicate on the "target_connector_name" field.
+func TargetConnectorNameHasPrefix(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldHasPrefix(FieldTargetConnectorName, v))
+}
+
+// TargetConnectorNameHasSuffix applies the HasSuffix predicate on the "target_connector_name" field.
+func TargetConnectorNameHasSuffix(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldHasSuffix(FieldTargetConnectorName, v))
+}
+
+// TargetConnectorNameIsNil applies the IsNil predicate on the "target_connector_name" field.
+func TargetConnectorNameIsNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIsNull(FieldTargetConnectorName))
+}
+
+// TargetConnectorNameNotNil applies the NotNil predicate on the "target_connector_name" field.
+func TargetConnectorNameNotNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotNull(FieldTargetConnectorName))
+}
+
+// TargetConnectorNameEqualFold applies the EqualFold predicate on the "target_connector_name" field.
+func TargetConnectorNameEqualFold(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEqualFold(FieldTargetConnectorName, v))
+}
+
+// TargetConnectorNameContainsFold applies the ContainsFold predicate on the "target_connector_name" field.
+func TargetConnectorNameContainsFold(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldContainsFold(FieldTargetConnectorName, v))
+}
+
+// TargetConnectorProviderEQ applies the EQ predicate on the "target_connector_provider" field.
+func TargetConnectorProviderEQ(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldTargetConnectorProvider, v))
+}
+
+// TargetConnectorProviderNEQ applies the NEQ predicate on the "target_connector_provider" field.
+func TargetConnectorProviderNEQ(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNEQ(FieldTargetConnectorProvider, v))
+}
+
+// TargetConnectorProviderIn applies the In predicate on the "target_connector_provider" field.
+func TargetConnectorProviderIn(vs ...string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIn(FieldTargetConnectorProvider, vs...))
+}
+
+// TargetConnectorProviderNotIn applies the NotIn predicate on the "target_connector_provider" field.
+func TargetConnectorProviderNotIn(vs ...string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotIn(FieldTargetConnectorProvider, vs...))
+}
+
+// TargetConnectorProviderGT applies the GT predicate on the "target_connector_provider" field.
+func TargetConnectorProviderGT(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGT(FieldTargetConnectorProvider, v))
+}
+
+// TargetConnectorProviderGTE applies the GTE predicate on the "target_connector_provider" field.
+func TargetConnectorProviderGTE(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGTE(FieldTargetConnectorProvider, v))
+}
+
+// TargetConnectorProviderLT applies the LT predicate on the "target_connector_provider" field.
+func TargetConnectorProviderLT(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLT(FieldTargetConnectorProvider, v))
+}
+
+// TargetConnectorProviderLTE applies the LTE predicate on the "target_connector_provider" field.
+func TargetConnectorProviderLTE(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLTE(FieldTargetConnectorProvider, v))
+}
+
+// TargetConnectorProviderContains applies the Contains predicate on the "target_connector_provider" field.
+func TargetConnectorProviderContains(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldContains(FieldTargetConnectorProvider, v))
+}
+
+// TargetConnectorProviderHasPrefix applies the HasPrefix predicate on the "target_connector_provider" field.
+func TargetConnectorProviderHasPrefix(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldHasPrefix(FieldTargetConnectorProvider, v))
+}
+
+// TargetConnectorProviderHasSuffix applies the HasSuffix predicate on the "target_connector_provider" field.
+func TargetConnectorProviderHasSuffix(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldHasSuffix(FieldTargetConnectorProvider, v))
+}
+
+// TargetConnectorProviderIsNil applies the IsNil predicate on the "target_connector_provider" field.
+func TargetConnectorProviderIsNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIsNull(FieldTargetConnectorProvider))
+}
+
+// TargetConnectorProviderNotNil applies the NotNil predicate on the "target_connector_provider" field.
+func TargetConnectorProviderNotNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotNull(FieldTargetConnectorProvider))
+}
+
+// TargetConnectorProviderEqualFold applies the EqualFold predicate on the "target_connector_provider" field.
+func TargetConnectorProviderEqualFold(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEqualFold(FieldTargetConnectorProvider, v))
+}
+
+// TargetConnectorProviderContainsFold applies the ContainsFold predicate on the "target_connector_provider" field.
+func TargetConnectorProviderContainsFold(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldContainsFold(FieldTargetConnectorProvider, v))
+}
+
+// TargetDestinationDigestEQ applies the EQ predicate on the "target_destination_digest" field.
+func TargetDestinationDigestEQ(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldTargetDestinationDigest, v))
+}
+
+// TargetDestinationDigestNEQ applies the NEQ predicate on the "target_destination_digest" field.
+func TargetDestinationDigestNEQ(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNEQ(FieldTargetDestinationDigest, v))
+}
+
+// TargetDestinationDigestIn applies the In predicate on the "target_destination_digest" field.
+func TargetDestinationDigestIn(vs ...string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIn(FieldTargetDestinationDigest, vs...))
+}
+
+// TargetDestinationDigestNotIn applies the NotIn predicate on the "target_destination_digest" field.
+func TargetDestinationDigestNotIn(vs ...string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotIn(FieldTargetDestinationDigest, vs...))
+}
+
+// TargetDestinationDigestGT applies the GT predicate on the "target_destination_digest" field.
+func TargetDestinationDigestGT(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGT(FieldTargetDestinationDigest, v))
+}
+
+// TargetDestinationDigestGTE applies the GTE predicate on the "target_destination_digest" field.
+func TargetDestinationDigestGTE(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGTE(FieldTargetDestinationDigest, v))
+}
+
+// TargetDestinationDigestLT applies the LT predicate on the "target_destination_digest" field.
+func TargetDestinationDigestLT(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLT(FieldTargetDestinationDigest, v))
+}
+
+// TargetDestinationDigestLTE applies the LTE predicate on the "target_destination_digest" field.
+func TargetDestinationDigestLTE(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLTE(FieldTargetDestinationDigest, v))
+}
+
+// TargetDestinationDigestContains applies the Contains predicate on the "target_destination_digest" field.
+func TargetDestinationDigestContains(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldContains(FieldTargetDestinationDigest, v))
+}
+
+// TargetDestinationDigestHasPrefix applies the HasPrefix predicate on the "target_destination_digest" field.
+func TargetDestinationDigestHasPrefix(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldHasPrefix(FieldTargetDestinationDigest, v))
+}
+
+// TargetDestinationDigestHasSuffix applies the HasSuffix predicate on the "target_destination_digest" field.
+func TargetDestinationDigestHasSuffix(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldHasSuffix(FieldTargetDestinationDigest, v))
+}
+
+// TargetDestinationDigestIsNil applies the IsNil predicate on the "target_destination_digest" field.
+func TargetDestinationDigestIsNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIsNull(FieldTargetDestinationDigest))
+}
+
+// TargetDestinationDigestNotNil applies the NotNil predicate on the "target_destination_digest" field.
+func TargetDestinationDigestNotNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotNull(FieldTargetDestinationDigest))
+}
+
+// TargetDestinationDigestEqualFold applies the EqualFold predicate on the "target_destination_digest" field.
+func TargetDestinationDigestEqualFold(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEqualFold(FieldTargetDestinationDigest, v))
+}
+
+// TargetDestinationDigestContainsFold applies the ContainsFold predicate on the "target_destination_digest" field.
+func TargetDestinationDigestContainsFold(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldContainsFold(FieldTargetDestinationDigest, v))
 }
 
 // SLAAlertHistoryIDEQ applies the EQ predicate on the "sla_alert_history_id" field.

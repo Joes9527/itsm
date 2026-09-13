@@ -377,3 +377,6 @@ Manager 配置操作不再允许缺失部署策略或租户上下文。standard 
 
 
 Webhook 新意图生产者与投递 Worker 通过唯一 Manager.ResolveDeliveryTarget 解析精确 tenant/name/provider 目标。冻结 ExecutionPolicy 要求来源 Ref 的 deployment/tenant/scope 完全匹配，投递能力仅限 webhook/notification/outbox；standard 必须显式启用能力且 scope 为空，candidate 还检查实例私有声明的 scope、能力与当前目的地摘要。Webhook owner 固定使用 webhook，不由载荷选择能力。目标检查不能替代已有 source、成员、claim、租约与回执事务检查；发送使用已捕获的同一对象，发送后再次核验目标及 generation。发送前非 ErrDenied 的取消、超时和基础设施错误保留 cause；发送后不确定性仍要求核对。该接入目前只覆盖 Webhook owner，裸 Get/Send 及通知/飞书目标授权仍待处理。
+
+
+通知目标协议结构准备新增注册迁移 `044_notification_connector_target`，依赖原受控迁移序列至043与P准备，保持R退役合同独立。它仅为原ticket_notifications增加可空的目标协议版本、精确connector name/provider及目的地摘要；无历史行回填或当前实例自动绑定。四字段全NULL保留原数据，绑定版本1必须完整且与渠道匹配；绑定后的目标、业务身份与内容不可变，状态/租约由原worker维护。Ent字段不公开到JSON且不可变，但数据库保护来自该注册迁移，不得用Ent overlay替代。结构准备不代表producer/worker已接入，旧无目标外发意图的拒绝行为仍需后续实现。实际候选执行前，B须在真实待执行迁移语义清单纳入044，核对历史保全/权限与运行结构；本地私有PG验证不授权WSL迁移。

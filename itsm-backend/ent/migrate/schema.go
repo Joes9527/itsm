@@ -4741,6 +4741,10 @@ var (
 	// TicketNotificationsColumns holds the columns for the "ticket_notifications" table.
 	TicketNotificationsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt, Increment: true},
+		{Name: "target_protocol_version", Type: field.TypeInt, Nullable: true},
+		{Name: "target_connector_name", Type: field.TypeString, Nullable: true},
+		{Name: "target_connector_provider", Type: field.TypeString, Nullable: true},
+		{Name: "target_destination_digest", Type: field.TypeString, Nullable: true},
 		{Name: "sla_alert_history_id", Type: field.TypeInt, Nullable: true},
 		{Name: "type", Type: field.TypeString},
 		{Name: "channel", Type: field.TypeString, Default: "in_app"},
@@ -4767,13 +4771,13 @@ var (
 		ForeignKeys: []*schema.ForeignKey{
 			{
 				Symbol:     "ticket_notifications_tickets_notifications",
-				Columns:    []*schema.Column{TicketNotificationsColumns[16]},
+				Columns:    []*schema.Column{TicketNotificationsColumns[20]},
 				RefColumns: []*schema.Column{TicketsColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
 			{
 				Symbol:     "ticket_notifications_users_ticket_notifications",
-				Columns:    []*schema.Column{TicketNotificationsColumns[17]},
+				Columns:    []*schema.Column{TicketNotificationsColumns[21]},
 				RefColumns: []*schema.Column{UsersColumns[0]},
 				OnDelete:   schema.NoAction,
 			},
@@ -4782,22 +4786,22 @@ var (
 			{
 				Name:    "ticketnotification_tenant_id_sla_alert_history_id",
 				Unique:  false,
-				Columns: []*schema.Column{TicketNotificationsColumns[14], TicketNotificationsColumns[1]},
+				Columns: []*schema.Column{TicketNotificationsColumns[18], TicketNotificationsColumns[5]},
 			},
 			{
 				Name:    "ticketnotification_tenant_id_delivery_key_ticket_id_user_id_channel",
 				Unique:  true,
-				Columns: []*schema.Column{TicketNotificationsColumns[14], TicketNotificationsColumns[8], TicketNotificationsColumns[16], TicketNotificationsColumns[17], TicketNotificationsColumns[3]},
+				Columns: []*schema.Column{TicketNotificationsColumns[18], TicketNotificationsColumns[12], TicketNotificationsColumns[20], TicketNotificationsColumns[21], TicketNotificationsColumns[7]},
 			},
 			{
 				Name:    "ticketnotification_tenant_id_status_next_attempt_at",
 				Unique:  false,
-				Columns: []*schema.Column{TicketNotificationsColumns[14], TicketNotificationsColumns[7], TicketNotificationsColumns[10]},
+				Columns: []*schema.Column{TicketNotificationsColumns[18], TicketNotificationsColumns[11], TicketNotificationsColumns[14]},
 			},
 			{
 				Name:    "ticketnotification_tenant_id_status_lease_expires_at",
 				Unique:  false,
-				Columns: []*schema.Column{TicketNotificationsColumns[14], TicketNotificationsColumns[7], TicketNotificationsColumns[12]},
+				Columns: []*schema.Column{TicketNotificationsColumns[18], TicketNotificationsColumns[11], TicketNotificationsColumns[16]},
 			},
 		},
 	}

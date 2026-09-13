@@ -3924,53 +3924,53 @@ func init() {
 	ticketnotificationFields := schema.TicketNotification{}.Fields()
 	_ = ticketnotificationFields
 	// ticketnotificationDescSLAAlertHistoryID is the schema descriptor for sla_alert_history_id field.
-	ticketnotificationDescSLAAlertHistoryID := ticketnotificationFields[0].Descriptor()
+	ticketnotificationDescSLAAlertHistoryID := ticketnotificationFields[4].Descriptor()
 	// ticketnotification.SLAAlertHistoryIDValidator is a validator for the "sla_alert_history_id" field. It is called by the builders before save.
 	ticketnotification.SLAAlertHistoryIDValidator = ticketnotificationDescSLAAlertHistoryID.Validators[0].(func(int) error)
 	// ticketnotificationDescTicketID is the schema descriptor for ticket_id field.
-	ticketnotificationDescTicketID := ticketnotificationFields[1].Descriptor()
+	ticketnotificationDescTicketID := ticketnotificationFields[5].Descriptor()
 	// ticketnotification.TicketIDValidator is a validator for the "ticket_id" field. It is called by the builders before save.
 	ticketnotification.TicketIDValidator = ticketnotificationDescTicketID.Validators[0].(func(int) error)
 	// ticketnotificationDescUserID is the schema descriptor for user_id field.
-	ticketnotificationDescUserID := ticketnotificationFields[2].Descriptor()
+	ticketnotificationDescUserID := ticketnotificationFields[6].Descriptor()
 	// ticketnotification.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
 	ticketnotification.UserIDValidator = ticketnotificationDescUserID.Validators[0].(func(int) error)
 	// ticketnotificationDescType is the schema descriptor for type field.
-	ticketnotificationDescType := ticketnotificationFields[3].Descriptor()
+	ticketnotificationDescType := ticketnotificationFields[7].Descriptor()
 	// ticketnotification.TypeValidator is a validator for the "type" field. It is called by the builders before save.
 	ticketnotification.TypeValidator = ticketnotificationDescType.Validators[0].(func(string) error)
 	// ticketnotificationDescChannel is the schema descriptor for channel field.
-	ticketnotificationDescChannel := ticketnotificationFields[4].Descriptor()
+	ticketnotificationDescChannel := ticketnotificationFields[8].Descriptor()
 	// ticketnotification.DefaultChannel holds the default value on creation for the channel field.
 	ticketnotification.DefaultChannel = ticketnotificationDescChannel.Default.(string)
 	// ticketnotificationDescContent is the schema descriptor for content field.
-	ticketnotificationDescContent := ticketnotificationFields[5].Descriptor()
+	ticketnotificationDescContent := ticketnotificationFields[9].Descriptor()
 	// ticketnotification.ContentValidator is a validator for the "content" field. It is called by the builders before save.
 	ticketnotification.ContentValidator = ticketnotificationDescContent.Validators[0].(func(string) error)
 	// ticketnotificationDescStatus is the schema descriptor for status field.
-	ticketnotificationDescStatus := ticketnotificationFields[8].Descriptor()
+	ticketnotificationDescStatus := ticketnotificationFields[12].Descriptor()
 	// ticketnotification.DefaultStatus holds the default value on creation for the status field.
 	ticketnotification.DefaultStatus = ticketnotificationDescStatus.Default.(string)
 	// ticketnotificationDescAttemptCount is the schema descriptor for attempt_count field.
-	ticketnotificationDescAttemptCount := ticketnotificationFields[10].Descriptor()
+	ticketnotificationDescAttemptCount := ticketnotificationFields[14].Descriptor()
 	// ticketnotification.DefaultAttemptCount holds the default value on creation for the attempt_count field.
 	ticketnotification.DefaultAttemptCount = ticketnotificationDescAttemptCount.Default.(int)
 	// ticketnotification.AttemptCountValidator is a validator for the "attempt_count" field. It is called by the builders before save.
 	ticketnotification.AttemptCountValidator = ticketnotificationDescAttemptCount.Validators[0].(func(int) error)
 	// ticketnotificationDescNextAttemptAt is the schema descriptor for next_attempt_at field.
-	ticketnotificationDescNextAttemptAt := ticketnotificationFields[11].Descriptor()
+	ticketnotificationDescNextAttemptAt := ticketnotificationFields[15].Descriptor()
 	// ticketnotification.DefaultNextAttemptAt holds the default value on creation for the next_attempt_at field.
 	ticketnotification.DefaultNextAttemptAt = ticketnotificationDescNextAttemptAt.Default.(func() time.Time)
 	// ticketnotificationDescLastErrorClass is the schema descriptor for last_error_class field.
-	ticketnotificationDescLastErrorClass := ticketnotificationFields[14].Descriptor()
+	ticketnotificationDescLastErrorClass := ticketnotificationFields[18].Descriptor()
 	// ticketnotification.LastErrorClassValidator is a validator for the "last_error_class" field. It is called by the builders before save.
 	ticketnotification.LastErrorClassValidator = ticketnotificationDescLastErrorClass.Validators[0].(func(string) error)
 	// ticketnotificationDescTenantID is the schema descriptor for tenant_id field.
-	ticketnotificationDescTenantID := ticketnotificationFields[15].Descriptor()
+	ticketnotificationDescTenantID := ticketnotificationFields[19].Descriptor()
 	// ticketnotification.TenantIDValidator is a validator for the "tenant_id" field. It is called by the builders before save.
 	ticketnotification.TenantIDValidator = ticketnotificationDescTenantID.Validators[0].(func(int) error)
 	// ticketnotificationDescCreatedAt is the schema descriptor for created_at field.
-	ticketnotificationDescCreatedAt := ticketnotificationFields[16].Descriptor()
+	ticketnotificationDescCreatedAt := ticketnotificationFields[20].Descriptor()
 	// ticketnotification.DefaultCreatedAt holds the default value on creation for the created_at field.
 	ticketnotification.DefaultCreatedAt = ticketnotificationDescCreatedAt.Default.(func() time.Time)
 	tickettagFields := schema.TicketTag{}.Fields()

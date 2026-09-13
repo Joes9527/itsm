@@ -17,6 +17,10 @@ type TicketNotification struct {
 // Fields of the TicketNotification.
 func (TicketNotification) Fields() []ent.Field {
 	return []ent.Field{
+		field.Int("target_protocol_version").Optional().Nillable().Immutable().StructTag(`json:"-"`).Comment("Frozen connector delivery protocol; NULL preserves unbound historical intents"),
+		field.String("target_connector_name").Optional().Nillable().Immutable().StructTag(`json:"-"`),
+		field.String("target_connector_provider").Optional().Nillable().Immutable().StructTag(`json:"-"`),
+		field.String("target_destination_digest").Optional().Nillable().Immutable().StructTag(`json:"-"`),
 		field.Int("sla_alert_history_id").Optional().Nillable().Immutable().Positive().Comment("Owning SLA alert; immutable structured delivery provenance"),
 		field.Int("ticket_id").
 			Comment("工单ID").
