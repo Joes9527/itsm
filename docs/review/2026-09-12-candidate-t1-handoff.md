@@ -1319,3 +1319,16 @@ s5-webhook-target-full-green.log 完整私有 PG16/Redis/MinIO 所选注册、in
 裸 Get/Send/GetInstance、通知/飞书目标消费与剩余请求异步入口仍待接入。完整目标、S5/S6/T3/T4/G3 未完成；固定 CandidateSHA 不变，候选未启动，无共享环境操作、企业/云外呼、push 或 main 合并。
 
 最终 s5-webhook-target-build.log 全后端 build exit0；git diff --check通过。独立最终增量复核无新增阻断，未运行额外外部测试。新增单测在完整私有suite之后，仅修改测试与文档，无生产增量。
+
+
+### B2 S5 通知目标权限 RED 与持久协议依赖（2026-09-14）
+
+实际通知worker dispatchClaimedDelivery仍通过Manager.Send→Get按tenant/channel取首项，未消费冻结targetAuthority。s5-notification-target-authority-red.log 四例在合法WorkItem和真实queue claim下分别换成错scope、错deployment、webhook-only、outbox-only声明；同一类型本地进程内connector探针实际各收到一次Send，ProcessPendingDeliveries报告1项完成且队列sent/SentAt。没有企业或HTTP外呼。来源scope未变，替代scope仅是Manager声明，不是第二个有效DB scope。
+
+最终s5-notification-target-full-red.log完整私有PG16/Redis/MinIO race只有新增4例失败，其余所选用例通过，无SKIP/DATA RACE。重复poll比较原接收列表，未增加第二次Send；原历史通知整行JSON保全。该终态不重复不能抵消首次不当发送。当前整套状态为FAIL，上一检查点3e4e0e257绿色证据不能覆盖这4项新增要求；本轮尚未修复生产路径。
+
+独立owner调查确认TicketNotification没有精确provider/目的地持久字段，飞书bootstrap仅注入func(tenant)取实例。不能用当前目标合格检查替代意图身份冻结。原S5新增后续合同：原通知行结构化不可变目标与协议版本、无历史回填的注册迁移、原事务唯一目标选择与幂等重放、Worker同对象/generation前后核验；飞书保留原专业Destination/GUID及有序outbox而补精确实例身份。不能新增同渠道多目标路由、临时选择首项或另建队列。现4例为worker直接queue夹具，真实producer、迁移、重放与重启须另外验证。
+
+CandidateSHA、候选停止与共享环境边界不变；完整S5/S6/T3/T4/G3未完成，无WSL操作、共享数据库修改、企业外呼、push或main合并。本轮仅测试与计划合同，未运行无关生产构建。最终独立复核下方补记。
+
+独立最终复核确认失败仅新增四项且RED有效、实施合同无阻断。GREEN阶段必须改为合法producer生成完整目标意图后只替换Manager，并断言安全错误分类，排除缺协议字段或数据库故障造成假绿；重复poll不代表恢复成功。email/push仍需独立准入。git diff --check通过。

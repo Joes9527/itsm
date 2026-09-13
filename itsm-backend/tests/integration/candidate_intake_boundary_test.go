@@ -3257,6 +3257,47 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			require.JSONEq(t, before[row.ID], snapshot(row.ID))
 		}
 
+		for _, scenario := range []string{"scope", "deployment", "webhook-only", "outbox-only"} {
+			t.Run("target_authority_"+scenario, func(t *testing.T) {
+				probe := &candidateNotificationConnector{}
+				reg := connector.NewRegistry()
+				reg.Register(func() connector.Connector { return probe })
+				targetScope, deployment, capability := scopeID, "intake-test", "notification"
+				switch scenario {
+				case "scope":
+					targetScope = "149ff1af-a27c-47c7-827f-103271130bb9"
+				case "deployment":
+					deployment = "other-deployment"
+				case "webhook-only":
+					capability = "webhook"
+				case "outbox-only":
+					capability = "outbox"
+				}
+				wrongPolicy, e := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: deployment, Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: targetScope}}, Capabilities: map[string]string{capability: "scoped"}, ConnectorTargets: []config.ConnectorTargetConfig{{TenantID: tenant.ID, ScopeID: targetScope, Name: "webhook", Provider: "local-candidate-test", DestinationDigest: probe.DeliveryDestinationIdentity(), Capabilities: []string{capability}}}})
+				require.NoError(t, e)
+				wrongManager := connector.NewManager(reg, zap.NewNop().Sugar(), wrongPolicy)
+				defer wrongManager.CloseAll()
+				require.NoError(t, wrongManager.ActivateStartupTargets(tenantctx.SystemContext(ctx, "test:notification-target", "activate local probe with unrelated delivery authority")))
+				notifications.SetConnectorManager(wrongManager)
+				defer notifications.SetConnectorManager(manager)
+				row := makeDelivery("notification-wrong-target-" + scenario)
+				n, e := notifications.ProcessPendingDeliveries(context.Background(), "notification-target-"+scenario, 1000)
+				assert.Error(t, e, "unrelated declaration must reject before Send")
+				assert.Zero(t, n)
+				assert.Empty(t, probe.ids, "local transport must not receive an unauthorized notification")
+				stored := owner.TicketNotification.GetX(ctx, row.ID)
+				assert.Equal(t, "failed", stored.Status)
+				assert.True(t, stored.SentAt.IsZero(), "rejection must not record successful delivery")
+				assert.Equal(t, 1, stored.AttemptCount)
+				sentBeforeReplay := append([]string(nil), probe.ids...)
+				_, _ = notifications.ProcessPendingDeliveries(context.Background(), "notification-target-replay-"+scenario, 1000)
+				assert.Equal(t, sentBeforeReplay, probe.ids, "repeated poll must not add another external effect")
+				for _, historical := range historicalNotifications {
+					assert.JSONEq(t, before[historical.ID], snapshot(historical.ID))
+				}
+			})
+		}
+
 	})
 
 	t.Run("notification intents share the owning transaction", func(t *testing.T) {
