@@ -3,6 +3,7 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -186,33 +187,22 @@ func (s *Service) recordToolAudit(ctx context.Context, tenantID, userID int, rol
 	})
 }
 
+var ErrToolExecutionPending = errors.New("tool approval committed; execution remains pending")
+
 func (s *Service) ApproveTool(ctx context.Context, id int, tenantID, userID int, approve bool, reason string) (string, error) {
-	inv, err := s.repo.GetToolInvocation(ctx, id, tenantID)
+	inv, err := s.repo.DecideToolInvocation(ctx, id, tenantID, userID, approve, reason)
 	if err != nil {
 		return "", err
 	}
-
 	if !approve {
-		inv.ApprovalState = "rejected"
-		inv.ApprovalReason = reason
-		_, err = s.repo.UpdateToolInvocation(ctx, inv)
-		return "rejected", err
-	}
-
-	inv.ApprovalState = "approved"
-	inv.ApprovedBy = userID
-	now := time.Now()
-	inv.ApprovedAt = &now
-	_, err = s.repo.UpdateToolInvocation(ctx, inv)
-	if err != nil {
-		return "", err
+		return "rejected", nil
 	}
 
 	if s.queue == nil {
-		return "", fmt.Errorf("approved tool queue is unavailable")
+		return "approved", fmt.Errorf("%w: queue unavailable", ErrToolExecutionPending)
 	}
 	if err := s.queue.Enqueue(service.ToolJob{InvocationID: inv.ID, TenantID: tenantID}); err != nil {
-		return "", err
+		return "approved", fmt.Errorf("%w: %w", ErrToolExecutionPending, err)
 	}
 
 	return "approved", nil

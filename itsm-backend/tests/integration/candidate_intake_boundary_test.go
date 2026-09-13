@@ -544,6 +544,139 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			require.Zero(t, n)
 		})
 	})
+	t.Run("AI approval preserves historical invocation", func(t *testing.T) {
+		var installed bool
+		require.NoError(t, ownerDB.QueryRow(`SELECT to_regclass('public.execution_tool_invocations') IS NOT NULL`).Scan(&installed))
+		if !installed {
+			_, err := ownerDB.ExecContext(ctx, migration.GetMigrationSQL(migration.ToolInvocationExecutionScopeVersion))
+			require.NoError(t, err)
+		}
+		_, err := ownerDB.ExecContext(ctx, "GRANT SELECT ON execution_tool_invocations TO "+runtimeRole)
+		require.NoError(t, err)
+
+		repository := aidomain.NewEntRepository(runtime, policy)
+		svc := aidomain.NewService(repository, zap.NewNop().Sugar(), nil, nil, nil, nil, nil, nil, nil, nil, nil)
+		var before, after string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, historicalTool.ID).Scan(&before))
+		_, err = svc.ApproveTool(ctx, historicalTool.ID, tenant.ID, actor.ID, false, "candidate rejection")
+		assert.ErrorIs(t, err, executionscope.ErrDenied)
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, historicalTool.ID).Scan(&after))
+		assert.JSONEq(t, before, after)
+		newPending := func() *aidomain.ToolInvocation {
+			item, err := repository.CreateToolInvocation(ctx, &aidomain.ToolInvocation{TenantID: tenant.ID, UserID: actor.ID, ToolName: "create_ticket", Arguments: `{"title":"Approval candidate"}`, Status: "pending", NeedsApproval: true, ApprovalState: "pending"})
+			require.NoError(t, err)
+			return item
+		}
+		snapshot := func(id int) string {
+			var raw string
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, id).Scan(&raw))
+			return raw
+		}
+		fresh := newPending()
+		_, err = svc.ApproveTool(ctx, fresh.ID, tenant.ID, actor.ID, true, "reviewed")
+		require.ErrorIs(t, err, aidomain.ErrToolExecutionPending)
+		first := snapshot(fresh.ID)
+		_, err = svc.ApproveTool(ctx, fresh.ID, tenant.ID, actor.ID, true, "reviewed")
+		require.ErrorIs(t, err, aidomain.ErrToolExecutionPending)
+		require.JSONEq(t, first, snapshot(fresh.ID))
+		_, err = svc.ApproveTool(ctx, fresh.ID, tenant.ID, actor.ID, false, "opposite")
+		require.ErrorIs(t, err, aidomain.ErrToolApprovalConflict)
+		require.JSONEq(t, first, snapshot(fresh.ID))
+		owner.User.UpdateOneID(actor.ID).SetRole("no_tool_permission").ExecX(ctx)
+		_, err = svc.ApproveTool(ctx, fresh.ID, tenant.ID, actor.ID, true, "reviewed")
+		owner.User.UpdateOneID(actor.ID).SetRole(actor.Role).ExecX(ctx)
+		require.Error(t, err)
+		require.JSONEq(t, first, snapshot(fresh.ID))
+		rejected := newPending()
+		state, err := svc.ApproveTool(ctx, rejected.ID, tenant.ID, actor.ID, false, "declined")
+		require.NoError(t, err)
+		require.Equal(t, "rejected", state)
+		recorded := owner.ToolInvocation.GetX(ctx, rejected.ID)
+		require.Equal(t, actor.ID, recorded.ApprovedBy)
+		require.False(t, recorded.ApprovedAt.IsZero())
+		var failUpdate atomic.Bool
+		var gateUpdate atomic.Bool
+		entered := make(chan struct{}, 2)
+		release := make(chan struct{})
+		var releaseOnce sync.Once
+		injected := errors.New("injected approval after UPDATE")
+		runtime.ToolInvocation.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(c context.Context, m ent.Mutation) (ent.Value, error) {
+				if m.Op() == ent.OpUpdate && gateUpdate.Load() {
+					entered <- struct{}{}
+					select {
+					case <-release:
+					case <-c.Done():
+						return nil, c.Err()
+					}
+				}
+				value, err := next.Mutate(c, m)
+				if err == nil && m.Op() == ent.OpUpdate && failUpdate.CompareAndSwap(true, false) {
+					return nil, injected
+				}
+				return value, err
+			})
+		})
+		failed := newPending()
+		failedBefore := snapshot(failed.ID)
+		failUpdate.Store(true)
+		_, err = repository.DecideToolInvocation(ctx, failed.ID, tenant.ID, actor.ID, true, "fault")
+		require.ErrorIs(t, err, injected)
+		require.False(t, failUpdate.Load())
+		require.JSONEq(t, failedBefore, snapshot(failed.ID))
+		for _, sameDecision := range []bool{false, true} {
+			concurrent := newPending()
+			entered = make(chan struct{}, 2)
+			release = make(chan struct{})
+			releaseOnce = sync.Once{}
+			type outcome struct {
+				approve bool
+				err     error
+			}
+			results := make(chan outcome, 2)
+			gateUpdate.Store(true)
+			defer func() { gateUpdate.Store(false); releaseOnce.Do(func() { close(release) }) }()
+			secondDecision := false
+			if sameDecision {
+				secondDecision = true
+			}
+			for _, approve := range []bool{true, secondDecision} {
+				go func(approve bool) {
+					_, err := repository.DecideToolInvocation(ctx, concurrent.ID, tenant.ID, actor.ID, approve, "concurrent")
+					results <- outcome{approve, err}
+				}(approve)
+			}
+			for n := 0; n < 2; n++ {
+				select {
+				case <-entered:
+				case <-time.After(5 * time.Second):
+					t.Fatal("approval UPDATE barrier timed out")
+				}
+			}
+			releaseOnce.Do(func() { close(release) })
+			var winner bool
+			successes := 0
+			for n := 0; n < 2; n++ {
+				select {
+				case result := <-results:
+					if result.err == nil {
+						successes++
+						winner = result.approve
+					} else {
+						require.ErrorIs(t, result.err, aidomain.ErrToolApprovalConflict)
+					}
+				case <-time.After(5 * time.Second):
+					t.Fatal("approval did not finish")
+				}
+			}
+			gateUpdate.Store(false)
+			require.Equal(t, 1, successes)
+			won := snapshot(concurrent.ID)
+			_, err = repository.DecideToolInvocation(ctx, concurrent.ID, tenant.ID, actor.ID, winner, "concurrent")
+			require.NoError(t, err)
+			require.JSONEq(t, won, snapshot(concurrent.ID))
+		}
+	})
 	t.Run("historical approved tool cannot authorize candidate execution", func(t *testing.T) {
 		var installed bool
 		require.NoError(t, ownerDB.QueryRow(`SELECT to_regclass('public.execution_tool_invocations') IS NOT NULL`).Scan(&installed))

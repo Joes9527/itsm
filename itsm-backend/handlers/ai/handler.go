@@ -10,7 +10,10 @@ import (
 
 	"itsm-backend/authorization"
 	"itsm-backend/common"
+	"itsm-backend/common/executionscope"
 	"itsm-backend/dto"
+	"itsm-backend/ent"
+	creation "itsm-backend/handlers/common/workitemcreation"
 	"itsm-backend/service"
 
 	"github.com/gin-gonic/gin"
@@ -564,10 +567,10 @@ func (h *Handler) ApproveTool(c *gin.Context) {
 		return
 	}
 	var req struct {
-		Approve bool   `json:"approve"`
+		Approve *bool  `json:"approve"`
 		Reason  string `json:"reason"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBindJSON(&req); err != nil || req.Approve == nil {
 		common.Fail(c, common.ParamErrorCode, "请求参数错误")
 		return
 	}
@@ -577,10 +580,25 @@ func (h *Handler) ApproveTool(c *gin.Context) {
 		return
 	}
 	userID := c.GetInt("user_id")
+	if userID <= 0 {
+		common.Fail(c, common.AuthFailedCode, "用户信息缺失")
+		return
+	}
 
-	state, err := h.svc.ApproveTool(c.Request.Context(), id, tenantID, userID, req.Approve, req.Reason)
+	state, err := h.svc.ApproveTool(c.Request.Context(), id, tenantID, userID, *req.Approve, req.Reason)
 	if err != nil {
-		common.Fail(c, common.NotFoundCode, "invocation not found or operation failed")
+		switch {
+		case errors.Is(err, ErrToolExecutionPending):
+			common.Fail(c, common.ServiceUnavailableCode, "审批已记录，执行仍待入队")
+		case errors.Is(err, ErrToolApprovalConflict):
+			common.Fail(c, common.ConflictCode, "审批决定与当前状态冲突")
+		case errors.Is(err, executionscope.ErrDenied), errors.Is(err, creation.ErrPermissionDenied):
+			common.Fail(c, common.ForbiddenCode, "审批权限或执行范围不允许")
+		case ent.IsNotFound(err):
+			common.Fail(c, common.NotFoundCode, "调用记录不存在")
+		default:
+			common.Fail(c, common.InternalErrorCode, "审批处理失败")
+		}
 		return
 	}
 	common.Success(c, gin.H{"invocationId": id, "approvalState": state})

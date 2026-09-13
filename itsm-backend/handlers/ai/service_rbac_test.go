@@ -77,8 +77,8 @@ func (m *rbacMockRepo) GetToolInvocation(_ context.Context, _ int, _ int) (*ai.T
 	return nil, nil
 }
 
-func (m *rbacMockRepo) UpdateToolInvocation(_ context.Context, i *ai.ToolInvocation) (*ai.ToolInvocation, error) {
-	return i, nil
+func (m *rbacMockRepo) DecideToolInvocation(_ context.Context, id, tenantID, actorID int, approve bool, reason string) (*ai.ToolInvocation, error) {
+	return &ai.ToolInvocation{ID: id, TenantID: tenantID, ApprovedBy: actorID}, nil
 }
 
 func (m *rbacMockRepo) CreateRCA(_ context.Context, r *ai.RootCauseAnalysis) (*ai.RootCauseAnalysis, error) {

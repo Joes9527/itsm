@@ -1032,3 +1032,14 @@ S5不可处理消息的完整处置、进程重启及其它异步入口继续未
 `s5-tool-create-regression.log` handlers/ai与bootstrap全包race PASS；独立review_execution_scope_s1只读审阅本创建前置无阻断。`s5-tool-create-full-private.log` 完整私有PG/Redis/MinIO候选边界及恢复回归race PASS，无skip/race；`s5-tool-create-build.log` 全后端build exit0，git diff --check通过。
 
 仍须完成审批更新事务、审计写失败传播、业务首次写事务来源再校验、结果回写及041表角色准入；S5和T3/T4/G2/G3保持未完成。固定CandidateSHA与候选未启动状态不变，无企业外呼、B环境修改、push或main合并。
+
+
+### B2 S5 工具审批决定事务与接口分类（2026-09-13）
+
+在 `47b40a726` 后真实Service.ApproveTool拒绝历史调用测试 `s5-tool-approval-red.log` 复现返回成功并改写旧调用。删除仓库通用UpdateToolInvocation，收窄为唯一DecideToolInvocation(id/tenant/actor/approve/reason)事务：BindEnt、041来源、当前有效审批者及ai:write权限，读取原调用，仅needsApproval且非dry_run的pending/pending行CAS更新决定/原因/actor/服务器时间，不回写陈旧Result/Status等其它字段。相同actor/决定/原因且已有决定时间时重放保持原字段；不同最终决定冲突。批准与拒绝都保存actor/time；Service仅在事务提交后enqueue。
+
+独立P2发现HTTP仍把全部错误映射404；已改冲突409、范围/权限403、实际NotFound404、内部故障500，固定文本不泄rawcause。新增ErrToolExecutionPending标识审批已提交而enqueue失败，优先返回503并明确执行仍待入队；调用方不能把该情况当未审批。approve必须显式bool，缺用户身份401。`s5-tool-approval-http.log` AI全包race及具名HTTP分类/敏感文本不泄漏测试PASS，最终独立复核关闭P2。
+
+`s5-tool-approval-green.log` 原历史改写RED→范围拒绝/整行保全；`s5-tool-approval-atomic.log` 真实PG新审批提交后queue缺失、原决定重试首次整行不变、相反决定冲突、当前role撤权后重放拒绝、拒绝actor/time记录、实际UPDATE后注入故障整行回滚均PASS。`s5-tool-approval-concurrent.log` 补同/反决定的双UPDATE barrier，两请求均到原pending更新前，一成功一冲突，随后获胜原请求重放整行不变，race PASS。相同决定并发loser允许409后再重试，不声称两请求立即都成功；此记录是审批决定保全，不是完整不可变执行结果回执。
+
+`s5-tool-approval-regression.log` handlers/ai与bootstrap全包race PASS，独立review_execution_scope_s1最终只读复核无新增阻断。`s5-tool-approval-full-private.log` 完整私有PG/Redis/MinIO候选边界与恢复回归race PASS，无skip/race；`s5-tool-approval-build.log` 全后端build exit0，git diff --check通过。首次业务写原事务、执行结果回写、审计失败传播和041角色准入仍未完成；候选未启动、固定CandidateSHA不变，所有交付门禁未据此放行，无共享环境修改、企业外呼、push/main合并。
