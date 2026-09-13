@@ -203,6 +203,14 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+Webhook声明不匹配RED `9343ac41f`（2026-09-14）：真实producer和OutboxWorker分别复现错scope、错deployment、notification-only/outbox-only声明被忽略。producer写入intent/消费receipt；worker使用先前合法intent、仅替换运行Manager后仍实际loopback发送、published并记录delivered。完整私有suite仅这8场景失败，无skip/race，其余PASS；最终补验source整行保全及终态重轮询，错误交付receipt仍触发RED。独立复核有效，尚无生产修复；另一scope仅Manager声明，不是另一个已建立active DB scope。完整日志及限制见T1；下方合同为下一实施步骤，当前G2仍未放行，CandidateSHA与停止状态不变。
+
+
+Webhook目标声明消费的后续实现合同（2026-09-14，基于实际producer/worker旁路RED）：沿唯一Manager与冻结ExecutionPolicy提供精确目标解析，输入为已由owner验证的执行Ref、代码固定owner能力及tenant/name/provider。拒绝nil/取消/SystemBypass、上下文错租户、未知能力；冻结deployment/mode/tenant scope与Ref完全一致。candidate还须比对私有targetAuthority的scope、能力、摘要和实例身份，standard须空scope、相同实际deployment及显式启用投递能力。返回捕获对象/generation/目的地身份；Worker用同对象发送，后置复核保留该规则。此为部署限制，不另建业务授权引擎，不替代原source/member/claim/lease/receipt校验。
+
+Producer在新intent提交前接入；重放原receipt不得重新发现目标。Worker独立在既存合法intent发送前及回执复核接入，不能仅依靠producer gate。必须分别证明错scope、错deployment、notification-only及outbox-only声明拒绝Webhook，并保留合法声明真实投递与重启正向。现standard Manager/candidate worker混合的可变目标防御夹具须拆为完整standard source/authority/worker/Manager链，不放宽Ref一致性迁就旧测试；原generation及发送中重绑防御断言必须保留。Send/Get/GetInstance裸入口及其余通知/Feishu owner仍须后续迁移，不能因新解析方法存在而声称整体权限边界完成。
+
+
 Manager配置owner检查点 `15374aa47`（2026-09-14）：Provision（含disabled）和contextful Revoke自身调用唯一RequireIntegrationManagement，candidate/nil/错租户/SystemBypass拒绝，standard恢复保留启动gate后WithTenantID。直接Revoke可信实例RED→GREEN；关闭失败保留对象并返回，HTTP不继续DBdelete。审阅P2取消Init后发布经确定性RED修复：发布锁内取消检查，关闭新对象并保留两个cause。candidate通知/Feishu/Webhook正向迁移真实声明启动，third新Manager重放不扩展原receipt；standard目标重绑防御保留原generation断言，未把candidate RED统一换成standard。
 
 s5-manager-gate-full-private.log完整私有PG16/Redis/MinIO候选边界/构造保全/Stream恢复race PASS，507f62293剩余三项直接激活RED已关闭，无skip/race。随后取消补丁和7场景×3操作owner矩阵经具名race PASS；standard Feishu/BPMN CC/消费者清理补验通过，integration_postgres仅编译通过未执行DB测试，全后端build和独立最终复核通过。详情见实现T1。此为配置owner门禁完成，Send/Get/GetInstance裸实例及targetAuthority在投递owner中的权限消费仍待关闭，不勾选整个S5/G2；WSL目标恢复、T3/T4/G3仍未完成，CandidateSHA及停止状态不变，无共享环境操作或push/main合并。
