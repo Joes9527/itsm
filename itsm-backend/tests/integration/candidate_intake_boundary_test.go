@@ -18,6 +18,7 @@ import (
 
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"itsm-backend/common/executionscope"
@@ -176,6 +177,22 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	require.NoError(t, err) // pre-039 historical fixture only
 	oldRow := owner.Ticket.GetX(ctx, historical.WorkItemID)
 	oldReceipt := owner.IntakeRequest.Query().Where(intakerequest.WorkItemIDEQ(historical.WorkItemID)).OnlyX(ctx)
+	// Restored queue fixtures predate execution scope migration and keep NULL refs.
+	var historicalOutbox []*ent.OutboxEvent
+	for _, state := range []string{"pending", "unknown", "expired", "ambiguous"} {
+		kind := "candidate-test-delivery"
+		if state == "unknown" {
+			kind = "candidate-test-unregistered"
+		}
+		create := owner.OutboxEvent.Create().SetEventID("historical-queue-" + state).SetEventType(kind).SetTenantID(tenant.ID).SetAggregateType("work_item").SetAggregateID(fmt.Sprint(historical.WorkItemID)).SetPayload(json.RawMessage(`{}`)).SetNextAttemptAt(time.Now().Add(-time.Hour))
+		if state == "expired" || state == "ambiguous" {
+			create.SetStatus("publishing").SetClaimToken("old-" + state).SetClaimExpiresAt(time.Now().Add(-time.Minute))
+		}
+		if state == "ambiguous" {
+			create.SetLastError("delivery_attempt_started:old-attempt")
+		}
+		historicalOutbox = append(historicalOutbox, create.SaveX(ctx))
+	}
 	_, err = ownerDB.ExecContext(ctx, fmt.Sprintf("GRANT USAGE ON SCHEMA public TO %s; GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO %s; GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO %s", runtimeRole, runtimeRole, runtimeRole))
 	require.NoError(t, err)
 	_, err = ownerDB.ExecContext(ctx, migration.GetMigrationSQL("039_candidate_execution_scope"))
@@ -1267,5 +1284,51 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.Equal(t, members, memberCount())
 		require.False(t, owner.Ticket.Query().Where(ticket.TitleEQ("scope fail-extension")).ExistX(ctx))
 	})
+	t.Run("real outbox worker preserves historical states", func(t *testing.T) {
+		fresh, err := app.Create(ctx, identity, command("worker-member", "generic"))
+		require.NoError(t, err)
+		current := owner.OutboxEvent.Create().SetEventID("candidate-queue-event").SetEventType("candidate-test-delivery").SetTenantID(tenant.ID).SetAggregateType("work_item").SetAggregateID(fmt.Sprint(fresh.WorkItemID)).SetExecutionWorkItemID(fresh.WorkItemID).SetPayload(json.RawMessage(`{}`)).SetNextAttemptAt(time.Now().Add(-time.Minute)).SaveX(ctx)
+		foreign := owner.Tenant.Create().SetName("Unadmitted queue tenant").SetCode("unadmitted-queue").SaveX(ctx)
+		foreignEvent := owner.OutboxEvent.Create().SetEventID("foreign-queue-event").SetEventType("candidate-test-delivery").SetTenantID(foreign.ID).SetAggregateType("work_item").SetAggregateID("unresolved").SetPayload(json.RawMessage(`{}`)).SetNextAttemptAt(time.Now().Add(-time.Minute)).SaveX(ctx)
+		historicalOutbox = append(historicalOutbox, foreignEvent)
+		before := make(map[int][]byte)
+		for _, row := range historicalOutbox {
+			before[row.ID], err = json.Marshal(owner.OutboxEvent.GetX(ctx, row.ID))
+			require.NoError(t, err)
+		}
+		// Reserve unrelated fixture event types; the test receiver makes no external calls.
+		reserved := []string{}
+		seen := map[string]bool{}
+		for _, row := range owner.OutboxEvent.Query().AllX(ctx) {
+			if row.EventType != "candidate-test-delivery" && row.EventType != "candidate-test-unregistered" && !seen[row.EventType] {
+				reserved = append(reserved, row.EventType)
+				seen[row.EventType] = true
+			}
+		}
+		receiver := &candidateOutboxTestReceiver{}
+		registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{receiver}, reserved...)
+		require.NoError(t, err)
+		worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(clients.System), service.OutboxDeliveryWorkerConfig{BatchSize: 1000, PollInterval: time.Second, HandlerTimeout: time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), registry)
+		require.NoError(t, err)
+		require.NoError(t, worker.DispatchOnce(ctx))
+		for _, row := range historicalOutbox {
+			after, err := json.Marshal(owner.OutboxEvent.GetX(ctx, row.ID))
+			require.NoError(t, err)
+			t.Logf("queue row %s: status=%s attempts=%d", row.EventID, owner.OutboxEvent.GetX(ctx, row.ID).Status, owner.OutboxEvent.GetX(ctx, row.ID).AttemptCount)
+			assert.JSONEq(t, string(before[row.ID]), string(after), "historical row %s changed", row.EventID)
+		}
+		require.Equal(t, []int{current.ID}, receiver.delivered)
+		require.Equal(t, "published", owner.OutboxEvent.GetX(ctx, current.ID).Status)
+	})
 	require.Equal(t, oldRow.Title, owner.Ticket.GetX(ctx, historical.WorkItemID).Title)
+}
+
+// candidateOutboxTestReceiver is a declared local test sink for the real worker.
+// It does not send mail, call providers or replace claim/recovery logic.
+type candidateOutboxTestReceiver struct{ delivered []int }
+
+func (*candidateOutboxTestReceiver) EventType() string { return "candidate-test-delivery" }
+func (r *candidateOutboxTestReceiver) Deliver(_ context.Context, event *ent.OutboxEvent) error {
+	r.delivered = append(r.delivered, event.ID)
+	return nil
 }

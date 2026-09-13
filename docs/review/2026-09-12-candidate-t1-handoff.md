@@ -397,3 +397,16 @@ B2 私有证据（均位于本机 candidate-delivery/b2）：
 - `s4-kaf-generation-build.json`：后端全量构建 exit 0。
 
 独立 reviewer `review_execution_scope_s1` 对两条入口、forClient owningTx 传递、原事务顺序及真实 PG 基础/owned fault 验证限定审阅无阻断；其指出的 joined fault 验证缺口随后补齐并实际 PASS。仍未运行真实候选 BPMN 节点推进到生成入口；本次为真实生成服务边界测试。完整 ExecuteAction、HTTP/审批/provider、通用 callback/outbox worker、共享能力、S4其余/S5/S6/B3 继续未完成，不能以本检查点放行候选或G2/G3。固定 CandidateSHA 不变，无 WSL/共享环境操作、候选启动、推送或 main 合并。
+
+
+### B2 S4 通用 Outbox Worker：真实混排 RED（2026-09-13）
+
+在 `9fbb96b5d` 后转向通用 worker。新增测试调用真实 OutboxDeliveryWorker.DispatchOnce 和 bootstrap 同种 clients.System 受限跨租户连接，不替代领取/恢复实现；测试 receiver 仅记录本地 ID，不外发。四条旧 outbox 在039前建立并保持 NULL execution reference，新成员事件持有真实 intake 生成的结构引用，另混入未准入租户 NULL-ref 待办。其他已有 fixture 类型被 reserved，不引入无关处理。
+
+`candidate-delivery/b2/s4-outbox-worker-mixed-red.log` 当前 **FAIL，尚未修复**。全部历史完整行断言持续检查，实际结果：旧 pending→published，旧 unknown→blocked/attempt=1，旧 expired publishing→published，旧 ambiguous publishing→blocked/attempt=1，未准入租户待办→published。receiver 也收到了历史/外租户事件。首次 `s4-outbox-worker-red.log` 只在第一条 require 失败中止；最终 mixed 日志才是全部分支证据。新测试保持 RED，不是交付成功。
+
+独立 reviewer `review_execution_scope_s1` 确认真实 worker 红测有效，并核对必须覆盖的原 SQL：claimDue 的 ambiguous query/update/audit、expired recovery、pending SELECT 与最终 claim CAS；BlockUnknownPendingEventTypes 的 query/update/audit；markDeliveryAttemptStarted、MarkRetry/WithAudit、MarkPublished、MarkDeliveryUnknown、markTerminal(blocked/dead_letter)。每个权威 UPDATE 都须含 manifest、event tenant、结构引用、member、active scope 条件，不能只筛查询结果；audit 仅随成功更新在同事务提交。
+
+下一步实现约束：SystemContext 使用独立跨租户角色，不能直接调用拒绝 system bypass 的单租户 BindEnt，也不能放宽该 API。需由冻结 policy 在 worker 原事务核对实际 session_user 的 candidate runtime binding、deployment/tenant/scope 清单和只读权限，再生成原 SQL 的成员 EXISTS 限制；绑定撤销、scope关闭和数据库错误明确失败，不伪装空队列。当前 systemTablePrivileges 不含执行范围表，role 准入白名单与 candidate 测试授权须同步审阅；不得授予成员写权限或改变共享/B环境配置。NewOutboxEventRepository 还被生产者使用，不能为适配worker静默改变enqueue/原事务语义或引入默认standard旁路。
+
+后续真实负测还需外租户有真实成员而不在本manifest的场景（本次外租户为NULL-ref，只证明违规处理，不能单独证明tenant predicate）、claim后关闭scope逐入口attempt/retry/finalize保全、audit完整记录和并发恢复。S4/全交付仍未完成，固定CandidateSHA不变，未启动候选、操作WSL/共享库或推送/合并main。
