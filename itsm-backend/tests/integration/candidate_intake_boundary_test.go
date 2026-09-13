@@ -772,6 +772,18 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		before := snapshot()
 		beforeItems := owner.Ticket.Query().CountX(ctx)
 		beforeMembers := memberCount()
+		t.Run("direct intake rejects historical tool source", func(t *testing.T) {
+			identity := identity
+			identity.Channel, identity.Provider = "ai_tool", "tool_queue"
+			input := creation.CreateWorkItemCommand{RecordClass: "generic", IntakeKind: "generic", Confirmation: "confirmed", Title: "Historical approved tool", IdempotencyKey: fmt.Sprintf("tool-invocation:%d", historicalTool.ID), Generic: &creation.GenericInput{Source: "ai"}, SourceReference: &creation.SourceReference{Provider: "tool_queue", EventID: fmt.Sprint(historicalTool.ID)}}
+			receipts := owner.IntakeRequest.Query().CountX(ctx)
+			_, err := app.Create(ctx, identity, input)
+			assert.ErrorIs(t, err, creation.ErrPermissionDenied, "business transaction must independently reject unregistered historical tool source")
+			assert.Equal(t, beforeItems, owner.Ticket.Query().CountX(ctx))
+			assert.Equal(t, beforeMembers, memberCount())
+			assert.Equal(t, receipts, owner.IntakeRequest.Query().CountX(ctx))
+			assert.JSONEq(t, before, snapshot())
+		})
 		queue := service.NewToolQueue(runtime, nil, app, nil, 1, zap.NewNop().Sugar(), policy)
 		defer queue.Close()
 		require.NoError(t, queue.Start(ctx))
@@ -789,6 +801,57 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, err)
 		require.NoError(t, tx.Commit())
 		freshJob := service.ToolJob{InvocationID: fresh.ID, TenantID: tenant.ID}
+		t.Run("tool actor SQL fault retains infrastructure cause", func(t *testing.T) {
+			_, err := ownerDB.ExecContext(ctx, "REVOKE SELECT ON users FROM "+runtimeRole)
+			require.NoError(t, err)
+			defer func() {
+				_, err := ownerDB.ExecContext(ctx, "GRANT SELECT ON users TO "+runtimeRole)
+				require.NoError(t, err)
+			}()
+			err = queue.ProcessJob(ctx, freshJob)
+			require.Error(t, err)
+			require.NotErrorIs(t, err, creation.ErrPermissionDenied)
+			var pgError *pq.Error
+			require.ErrorAs(t, err, &pgError)
+			require.Equal(t, "42501", string(pgError.Code))
+			require.Equal(t, beforeItems, owner.Ticket.Query().CountX(ctx))
+		})
+		toolIdentity := identity
+		toolIdentity.Channel, toolIdentity.Provider = "ai_tool", "tool_queue"
+		toolInput := func() creation.CreateWorkItemCommand {
+			return creation.CreateWorkItemCommand{RecordClass: "generic", IntakeKind: "generic", Confirmation: "confirmed", Title: "Fresh scoped tool", IdempotencyKey: fmt.Sprintf("tool-invocation:%d", fresh.ID), Generic: &creation.GenericInput{Source: "ai"}, SourceReference: &creation.SourceReference{Provider: "tool_queue", EventID: fmt.Sprint(fresh.ID)}}
+		}
+		for _, mutation := range []string{"title", "operation", "missing source", "missing capability"} {
+			t.Run("direct creation rejects "+mutation, func(t *testing.T) {
+				input := toolInput()
+				switch mutation {
+				case "title":
+					input.Title = "Unapproved title"
+				case "operation":
+					input.IdempotencyKey = "unapproved-operation"
+				case "missing source":
+					input.SourceReference = nil
+				case "missing capability":
+					_, err := ownerDB.ExecContext(ctx, "REVOKE EXECUTE ON FUNCTION public.lock_candidate_tool_authority(uuid,text,bigint,bigint) FROM "+runtimeRole)
+					require.NoError(t, err)
+					defer func() {
+						_, err := ownerDB.ExecContext(ctx, "GRANT EXECUTE ON FUNCTION public.lock_candidate_tool_authority(uuid,text,bigint,bigint) TO "+runtimeRole)
+						require.NoError(t, err)
+					}()
+				}
+				requests := owner.IntakeRequest.Query().CountX(ctx)
+				_, err := app.Create(ctx, toolIdentity, input)
+				if mutation == "missing capability" {
+					require.ErrorIs(t, err, creation.ErrInfrastructureUnavailable)
+					require.NotErrorIs(t, err, creation.ErrPermissionDenied)
+				} else {
+					require.ErrorIs(t, err, creation.ErrPermissionDenied)
+				}
+				require.Equal(t, beforeItems, owner.Ticket.Query().CountX(ctx))
+				require.Equal(t, requests, owner.IntakeRequest.Query().CountX(ctx))
+			})
+		}
+
 		for _, state := range []string{"pending", "rejected", "dry_run", "inactive_actor"} {
 			t.Run("enqueue rejects "+state, func(t *testing.T) {
 				if state == "inactive_actor" {
@@ -805,6 +868,14 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				var beforeCall, afterCall string
 				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, fresh.ID).Scan(&beforeCall))
 				require.Error(t, queue.Enqueue(freshJob))
+				requests := owner.IntakeRequest.Query().CountX(ctx)
+				_, err := app.Create(ctx, toolIdentity, toolInput())
+				if state == "inactive_actor" {
+					require.ErrorIs(t, err, creation.ErrAuthenticationRequired)
+				} else {
+					require.ErrorIs(t, err, creation.ErrPermissionDenied)
+				}
+				require.Equal(t, requests, owner.IntakeRequest.Query().CountX(ctx))
 				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, fresh.ID).Scan(&afterCall))
 				require.JSONEq(t, beforeCall, afterCall)
 				require.Equal(t, beforeItems, owner.Ticket.Query().CountX(ctx))

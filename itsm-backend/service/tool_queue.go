@@ -224,14 +224,14 @@ func (q *ToolQueue) loadApprovedTool(ctx context.Context, job ToolJob) (inv *ent
 			err = errors.Join(err, closeErr)
 		}
 	}()
-	return q.approvedToolInTx(ctx, tx, job)
+	return loadApprovedToolTx(ctx, tx, job, q.execution)
 }
 
-func (q *ToolQueue) approvedToolInTx(ctx context.Context, tx *ent.Tx, job ToolJob) (inv *ent.ToolInvocation, actor *ent.User, err error) {
-	if err = q.execution.BindEnt(ctx, tx, job.TenantID); err != nil {
+func loadApprovedToolTx(ctx context.Context, tx *ent.Tx, job ToolJob, execution *database.ExecutionPolicy) (inv *ent.ToolInvocation, actor *ent.User, err error) {
+	if err = execution.BindEnt(ctx, tx, job.TenantID); err != nil {
 		return nil, nil, err
 	}
-	if err = q.execution.RequireEntToolInvocation(ctx, tx, job.TenantID, job.InvocationID); err != nil {
+	if err = execution.RequireEntToolInvocation(ctx, tx, job.TenantID, job.InvocationID); err != nil {
 		return nil, nil, err
 	}
 	inv, err = tx.ToolInvocation.Query().Where(toolinvocation.IDEQ(job.InvocationID), toolinvocation.TenantIDEQ(job.TenantID)).Only(ctx)
@@ -243,11 +243,17 @@ func (q *ToolQueue) approvedToolInTx(ctx context.Context, tx *ent.Tx, job ToolJo
 	}
 	actor, err = tx.User.Query().Where(user.IDEQ(inv.UserID), user.TenantIDEQ(inv.TenantID), user.ActiveEQ(true)).Only(ctx)
 	if err != nil {
-		return nil, nil, creation.NewPermissionDenied("tool actor is unavailable", err)
+		if ent.IsNotFound(err) {
+			return nil, nil, creation.NewPermissionDenied("tool actor is unavailable", err)
+		}
+		return nil, nil, fmt.Errorf("query tool actor: %w", err)
 	}
 	approver, err := tx.User.Query().Where(user.IDEQ(inv.ApprovedBy), user.TenantIDEQ(inv.TenantID), user.ActiveEQ(true)).Only(ctx)
 	if err != nil {
-		return nil, nil, creation.NewPermissionDenied("tool approver is unavailable", err)
+		if ent.IsNotFound(err) {
+			return nil, nil, creation.NewPermissionDenied("tool approver is unavailable", err)
+		}
+		return nil, nil, fmt.Errorf("query tool approver: %w", err)
 	}
 	if err = authorization.RequireCurrentPermission(ctx, tx, creation.Identity{TenantID: inv.TenantID, ActorID: approver.ID, RequesterID: approver.ID, Role: approver.Role}, "ai", "write"); err != nil {
 		return nil, nil, err
@@ -318,7 +324,7 @@ func (q *ToolQueue) persistToolOutcome(ctx context.Context, job ToolJob, expecte
 			err = errors.Join(err, e)
 		}
 	}()
-	current, _, err := q.approvedToolInTx(ctx, tx, job)
+	current, _, err := loadApprovedToolTx(ctx, tx, job, q.execution)
 	if err != nil {
 		return err
 	}

@@ -1093,3 +1093,15 @@ S5不可处理消息的完整处置、进程重启及其它异步入口继续未
 界限：该项验证候选scope撤权与工具来源原事务；binding并发撤销专项、成功/失败和审批参数变化竞争、业务首次写入来源授权仍待完成。B的目标PG17迁移/角色与T3、真实业务主题T4/G3未通过。目标启动前须按完整清单安装042及显式EXECUTE，不能仅复制代码启动。CandidateSHA与候选未启动状态不变，无共享环境操作、企业外呼、push/main合并。
 
 最终s5-tool-authority-lock-build.log全后端build exit0，git diff --check通过。日志及私有数据库测试结果不替代目标环境验收。
+
+### B2 S5 工具首次创建事务来源核验（2026-09-13）
+
+s5-tool-intake-source-red.log真实PG复现：直接app.Create使用历史approved工具来源（绕过queue）仍创建工单/成员/幂等记录。现intake createAttempt在scope绑定后、receipt Claim前调用同一工具领域来源核验，原事务复用loadApprovedToolTx核验042来源锁、审批和当前身份；验证ai_tool/tool_queue/source元组、规范调用ID、原actor/requester、create_ticket类型，并使用已有toolCreationCommand从批准参数重建命令。与提交命令比较规范摘要及显式IdempotencyKey；不复制第二套参数解析规则。042锁延续至业务原事务结束，旧队列预检保持入队/执行边界用途。
+
+新增负测发现摘要故意不包含IdempotencyKey（s5-tool-intake-source-full-private.log），已显式绑定操作key，关闭独立P1；未通过放宽断言绕过重复创建。另一真实REVOKE users SELECT的s5-tool-intake-actor-sql-red.log暴露SQL故障误包PermissionDenied，现actor/approver仅NotFound作权限拒绝，其他原因%w保留，由intake映射基础设施失败，关闭P2。inactive actor在更早认证层返回AuthenticationRequired，测试遵守现有分类。
+
+真实PG覆盖历史source/篡改标题与operation/缺source/缺042执行权限/pending/rejected/dryrun/inactive拒绝且不新增业务/receipt，合法queue创建与重复调用保留一工单和完成回执。缺EXECUTE为InfrastructureUnavailable而非权限拒绝。s5-tool-intake-source-packages.log intake/bootstrap全包race PASS；s5-tool-intake-source-tools.log具名Tool/CreateTicketTool race PASS，非service全包。独立review_execution_scope_s1最终复核P1/P2关闭、无新增阻断。
+
+范围仅工具创建路径。工具编辑原事务、审批/身份并发改变、binding撤销专项及成功/失败结果竞争尚待验证；不声称完整业务授权链已完成。目标PG17/T3交接及真实T4/G3未通过，CandidateSHA与未启动状态不变，无共享环境变更、企业外呼、push/main合并。
+
+最终s5-tool-intake-source-verified-private.log完整私有PG16/Redis/MinIO候选ScopeRegistration、Intake、构造保全及Stream/Webhook/审计恢复race PASS，无skip/race；s5-tool-intake-source-build.log全后端build exit0，git diff --check通过。

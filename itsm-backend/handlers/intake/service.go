@@ -197,6 +197,14 @@ func (s *Service) createAttempt(ctx context.Context, identity workitemcreation.I
 		return nil, false, executionScopeFailure("creation execution scope denied", err)
 	}
 
+	if err := itsmservice.RequireToolCreationAuthority(ctx, tx, s.execution, identity, command); err != nil {
+		var typed *workitemcreation.IntakeError
+		if errors.As(err, &typed) {
+			return nil, false, err
+		}
+		return nil, false, executionScopeFailure("tool creation source denied", err)
+	}
+
 	receipt, outcome, err := s.receipts.Claim(ctx, tx, identity, command.IdempotencyKey, digest, workitemcreation.CanonicalDigestVersion)
 	if err != nil {
 		return nil, errors.Is(err, errIdempotencyOwnerInProgress), err
