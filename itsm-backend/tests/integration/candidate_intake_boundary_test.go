@@ -217,6 +217,17 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	legacyManualOwner := service.NewTicketService(&service.TicketServiceConfig{Execution: executionfixture.Standard(), Client: owner, Repository: ticketrepo.NewEntRepository(owner, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), NotificationService: service.NewTicketNotificationService(owner, zap.NewNop().Sugar(), executionfixture.Standard())})
 	legacyManualResult, err := legacyManualOwner.EscalateTicket(ctx, legacyManualCommand)
 	require.NoError(t, err)
+	legacyEditItem, err := historicalApp.Create(ctx, identity, command("legacy-edit-receipt", "generic"))
+	require.NoError(t, err)
+	legacyEditCommand := dto.TicketEditCommand{WorkItemID: legacyEditItem.WorkItemID, Fields: dto.TicketEditFields{Title: "Historical confirmed edit", Status: "open"}, Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: 1, Source: "http", OperationID: "legacy-edit-command"}}
+	legacyEditResult, err := legacyManualOwner.UpdateTicket(ctx, legacyEditCommand)
+	require.NoError(t, err)
+	laterLegacyEdit := legacyEditCommand
+	laterLegacyEdit.Meta.ExpectedVersion = legacyEditResult.Version
+	laterLegacyEdit.Meta.OperationID = "legacy-edit-later"
+	laterLegacyEdit.Fields.Status = "in_progress"
+	_, err = legacyManualOwner.UpdateTicket(ctx, laterLegacyEdit)
+	require.NoError(t, err)
 	legacySLAHistory := owner.SLAAlertHistory.Create().SetTicketID(historicalAlertItems[0]).SetTicketNumber("OLD-alert-scan").SetTicketTitle("historical alert").SetAlertRuleID(legacySLAAlertRule.ID).SetAlertRuleName(legacySLAAlertRule.Name).SetTenantID(tenant.ID).SetNotificationSent(true).SaveX(ctx)
 	var historicalNotifications []*ent.TicketNotification
 	for _, state := range []string{"pending", "processing"} {
@@ -3010,13 +3021,145 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		}
 	})
 
+	t.Run("historical edit receipt preserves original status and membership", func(t *testing.T) {
+		svc := service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy})
+		id := legacyEditItem.WorkItemID
+		var members int
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_scope_members WHERE work_item_id=$1`, id).Scan(&members))
+		require.Zero(t, members)
+		current := owner.Ticket.GetX(ctx, id)
+		require.Equal(t, "in_progress", current.Status)
+		require.Greater(t, current.Version, legacyEditResult.Version)
+		var before, after, receiptBefore, receiptAfter string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, id).Scan(&before))
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(a)::text FROM audit_logs a WHERE tenant_id=$1 AND user_id=$2 AND operation_id=$3`, tenant.ID, actor.ID, legacyEditCommand.Meta.OperationID).Scan(&receiptBefore))
+		var action, digest, status, method, path string
+		var resultVersion int
+		require.NoError(t, ownerDB.QueryRow(`SELECT action, request_digest, result_status, result_version, method, path FROM audit_logs WHERE tenant_id=$1 AND user_id=$2 AND operation_id=$3`, tenant.ID, actor.ID, legacyEditCommand.Meta.OperationID).Scan(&action, &digest, &status, &resultVersion, &method, &path))
+		require.Equal(t, "work_item.edit", action)
+		require.Len(t, digest, 64)
+		require.Equal(t, "http", method)
+		require.Equal(t, fmt.Sprint(id), path)
+		require.Equal(t, legacyEditResult.Version, resultVersion)
+		require.Equal(t, "open", status)
+		audits, notifications, deliveries, events := owner.AuditLog.Query().CountX(ctx), owner.Notification.Query().CountX(ctx), owner.TicketNotification.Query().CountX(ctx), owner.OutboxEvent.Query().CountX(ctx)
+		replay, err := svc.UpdateTicket(ctx, legacyEditCommand)
+		require.NoError(t, err)
+		expected := legacyEditResult
+		expected.Replayed = true
+		require.Equal(t, expected, replay)
+		fresh := legacyEditCommand
+		fresh.Meta.OperationID = "historical-edit-new-attempt"
+		fresh.Meta.ExpectedVersion = current.Version
+		_, err = svc.UpdateTicket(ctx, fresh)
+		require.ErrorIs(t, err, executionscope.ErrDenied)
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, id).Scan(&after))
+		require.JSONEq(t, before, after)
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(a)::text FROM audit_logs a WHERE tenant_id=$1 AND user_id=$2 AND operation_id=$3`, tenant.ID, actor.ID, legacyEditCommand.Meta.OperationID).Scan(&receiptAfter))
+		require.JSONEq(t, receiptBefore, receiptAfter)
+		require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx))
+		require.Equal(t, notifications, owner.Notification.Query().CountX(ctx))
+		require.Equal(t, deliveries, owner.TicketNotification.Query().CountX(ctx))
+		require.Equal(t, events, owner.OutboxEvent.Query().CountX(ctx))
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_scope_members WHERE work_item_id=$1`, id).Scan(&members))
+		require.Zero(t, members)
+	})
+
+	t.Run("concurrent ticket edits recover the original receipt", func(t *testing.T) {
+		svc := service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy})
+		created, err := app.Create(ctx, identity, command("edit-concurrent-fixture", "generic"))
+		require.NoError(t, err)
+		item := owner.Ticket.GetX(ctx, created.WorkItemID)
+		cmd := dto.TicketEditCommand{WorkItemID: item.ID, Fields: dto.TicketEditFields{Title: "Concurrent receipt edit"}, Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: item.Version, OperationID: "edit-concurrent", Source: "http"}}
+		ready := make(chan struct{}, 2)
+		release := make(chan struct{})
+		active := true
+		defer func() { active = false }()
+		runtime.Ticket.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+				if typed, ok := m.(*ent.TicketMutation); ok && active {
+					if title, ok := typed.Title(); ok && title == cmd.Fields.Title {
+						// Both transactions have passed receipt lookup and read the old version.
+						// Hold them immediately before their real Ticket UPDATE, not merely before
+						// goroutine startup, so the second writer has a stale RR snapshot.
+						ready <- struct{}{}
+						select {
+						case <-release:
+						case <-ctx.Done():
+							return nil, ctx.Err()
+						}
+					}
+				}
+				return next.Mutate(ctx, m)
+			})
+		})
+		runCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+		type outcome struct {
+			result workitemmutation.Result
+			err    error
+		}
+		outcomes := make(chan outcome, 2)
+		for i := 0; i < 2; i++ {
+			go func() { result, err := svc.UpdateTicket(runCtx, cmd); outcomes <- outcome{result, err} }()
+		}
+		arrived := 0
+	wait:
+		for arrived < 2 {
+			select {
+			case <-ready:
+				arrived++
+			case <-runCtx.Done():
+				break wait
+			}
+		}
+		close(release)
+		results := []outcome{<-outcomes, <-outcomes}
+		active = false
+		require.Equal(t, 2, arrived, "both commands must reach the pre-UPDATE barrier")
+		successes, serializations := 0, 0
+		var winner workitemmutation.Result
+		for _, out := range results {
+			if out.err == nil {
+				successes++
+				winner = out.result
+				require.False(t, out.result.Replayed)
+				require.Equal(t, item.Version+1, out.result.Version)
+			} else {
+				var pg *pq.Error
+				require.ErrorAs(t, out.err, &pg)
+				require.Equal(t, pq.ErrorCode("40001"), pg.Code)
+				serializations++
+			}
+		}
+		require.Equal(t, 1, successes)
+		require.Equal(t, 1, serializations)
+		require.Equal(t, cmd.Fields.Title, owner.Ticket.GetX(ctx, item.ID).Title)
+		var receipts int
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM audit_logs WHERE tenant_id=$1 AND user_id=$2 AND operation_id=$3`, tenant.ID, actor.ID, cmd.Meta.OperationID).Scan(&receipts))
+		require.Equal(t, 1, receipts)
+		require.Equal(t, item.Version+1, owner.Ticket.GetX(ctx, item.ID).Version)
+		var before, after string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, item.ID).Scan(&before))
+		replay, err := svc.UpdateTicket(ctx, cmd)
+		require.NoError(t, err)
+		require.True(t, replay.Replayed)
+		winner.Replayed = true
+		require.Equal(t, winner, replay)
+		require.Equal(t, item.ID, replay.WorkItemID)
+		require.Equal(t, item.Version+1, replay.Version)
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, item.ID).Scan(&after))
+		require.JSONEq(t, before, after)
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM audit_logs WHERE tenant_id=$1 AND user_id=$2 AND operation_id=$3`, tenant.ID, actor.ID, cmd.Meta.OperationID).Scan(&receipts))
+		require.Equal(t, 1, receipts)
+	})
+
 	t.Run("ticket edit retries preserve immutable operation result", func(t *testing.T) {
 		svc := service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy})
 		fresh, err := app.Create(ctx, identity, command("edit-receipt-fixture", "generic"))
 		require.NoError(t, err)
 		before := owner.Ticket.GetX(ctx, fresh.WorkItemID)
-		// Exercise the existing wire DTO. The missing operationId contract is part
-		// of this RED; a later typed command must preserve this same client intent.
+		// Preserve the original wire intent when constructing the trusted command.
 		var request dto.UpdateTicketRequest
 		require.NoError(t, json.Unmarshal([]byte(fmt.Sprintf(`{"title":"first receipt edit","tags":["edit-receipt-tag"],"version":%d,"operationId":"edit-receipt-original"}`, before.Version)), &request))
 

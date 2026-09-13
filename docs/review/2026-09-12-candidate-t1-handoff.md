@@ -775,3 +775,13 @@ Callback contract新增version及generic typed lifecycle result，沿既有流�
 `s3-ticket-edit-command-recovery.log` SQLite真实ProcessJob模拟done写失败：首次业务已提交，重试不变更Ticket整行/审计数，保存原版本的Replayed Result，停用actor后再拒绝；controller真实PUT/PATCH首次cancelled后同payload原version重放，通知两表与audit各仅一条。`s3-ticket-edit-command-regression.log` 服务/控制器/仓储/专业边界及Tool定向回归PASS；tool-green.log另覆盖原TestCreateTicketTool契约。`s3-ticket-edit-command-final-build.log` 全后端build exit0，final-typecheck.log主题校验/全前端tsc exit0，final-client.log四套Jest127 PASS（定向运行关闭全仓覆盖率门槛），包括操作ID缺失零请求、深拷贝和版本/op重试复用、明确冲突识别、Result不污染详情缓存。初次客户端RED实际缺operation仍发送；同时全仓覆盖率不足非业务RED，后续定向运行明确关闭coverage。旧测试按新命令/Result迁移，领域负例明确提供当前actor/权限及观测版本；未使用生产fallback。
 
 独立review_execution_scope_s1发现并关闭两处前端作用域/初次渲染P1及确定冲突旧意图不释放P2，最终限定复审无新增阻断。git diff --check通过。当前未完成：确定性并发同命令、历史无成员编辑receipt专项、状态漂移/回执字段专项、真实组件交互/跨刷新持久恢复与浏览器验收、专业核心编辑归属及Requester/FormFields所有者；这些不可由helper测试或本地provider代替。S3/S4/S5/S6/B3/T3/T4/G2/G3仍未完成，固定CandidateSHA不变、候选未启动；无WSL/共享数据库变更、企业实发、推送或main合并。
+
+### B2 S3 编辑并发与历史回执专项（2026-09-13）
+
+在 `57cd25088` 后仅补验证，不改变生产代码。`concurrent ticket edits recover the original receipt` 在两个真实Ticket UPDATE之前设置测试barrier，两调用必须均完成原版本读取及无receipt查询才释放，不以同时启动goroutine代替确定性竞争。结果要求一次成功提交、另一方PQ 40001，唯一receipt、版本仅+1及目标title落库；失败方随后原cmd重试返回胜方完整Result（仅Replayed变true），Ticket整行及唯一receipt保全。该测试没有并发标签/通知/Feishu输入，不声称这些副作用的确定性交付竞争已验收，也不声称服务或HTTP自动重试。
+
+新增历史fixture在039作用域迁移前，由真实Standard编辑所有者先new→open生成回执，再独立edit→in_progress。`historical edit receipt preserves original status and membership` 在候选runtime核实该目标成员数为0；重放返回原open/原version的完整Result，原Audit的action/digest非空长度/source/path/result字段与回执对应。换新operationId并使用当前version仍ErrDenied。Ticket与原Audit整行、Audit/Notification/TicketNotification/Outbox数量及零成员均保持。证明迁移前生成的当前编辑契约回执可只读重放，不泛化为任意旧版本回执兼容；没有回填或删除历史成员。
+
+证据：`s3-ticket-edit-concurrent-pg.log` 初始并发定向PASS；`s3-ticket-edit-history-pg.log` 补强胜方完整Result/title和历史用例后PASS；最终 `s3-ticket-edit-concurrent-final-pg.log` 完整TestCandidateIntakeCreationBoundary PASS无skip，`s3-ticket-edit-concurrent-race.log` 两个新增场景的真实私有PG及Go race检测PASS。新用例直接通过，属于补强已有实现验证，未描述为新的业务RED。独立review_execution_scope_s1只读审阅及补强后复审均无阻断；git diff --check通过。生产代码/前端未变，未重复构建或前端测试。
+
+同时设计worktree纠正原设计顶部“实施未开始”的过期状态，保留accepted并明确进行中、候选未启动、G2/G3未通过，链接当前实施入口。完整S3/S4/S5/S6及B3/T3/T4/G2/G3仍未完成，真实组件/浏览器、完整业务周期与候选运行不能由这些测试替代。固定CandidateSHA不变，无WSL/共享数据库操作、企业实发、推送或main合并。
