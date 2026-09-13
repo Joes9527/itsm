@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"itsm-backend/controller"
+	"itsm-backend/database"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/enttest"
@@ -48,7 +49,7 @@ type TicketService struct {
 
 func NewTicketServiceForTest(client *ent.Client, logger *zap.SugaredLogger) *TicketService {
 	owner := domain.NewTicketServiceForTest(client, logger)
-	return &TicketService{owner, client, newEntryApplication(client, owner, domain.NewIncidentService(client, logger))}
+	return &TicketService{owner, client, newEntryApplication(client, owner, domain.NewIncidentService(client, logger, executionfixture.Standard()))}
 }
 func (s *TicketService) SubmitCreation(ctx context.Context, req *dto.CreateTicketRequest, tenantID int) (*ticket.Ticket, error) {
 	return s.SubmitCreationAsActor(ctx, req, tenantID, req.RequesterID)
@@ -82,8 +83,8 @@ type IncidentService struct {
 	app    *intake.Service
 }
 
-func NewIncidentService(client *ent.Client, logger *zap.SugaredLogger) *IncidentService {
-	owner := domain.NewIncidentService(client, logger)
+func NewIncidentService(client *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *IncidentService {
+	owner := domain.NewIncidentService(client, logger, execution)
 	return &IncidentService{owner, client, newEntryApplication(client, domain.NewTicketServiceForTest(client, logger), owner)}
 }
 func (s *IncidentService) SubmitCreation(ctx context.Context, req *dto.CreateIncidentRequest, tenantID, actorID int) (*dto.IncidentResponse, error) {
@@ -185,7 +186,7 @@ func testDSN() string { return "file:entry_" + uuid.NewString() + "?mode=memory&
 func setupIncidentTest(t *testing.T) (*ent.Client, *IncidentService, context.Context) {
 	t.Helper()
 	client := enttest.Open(t, "sqlite3", testDSN())
-	svc := NewIncidentService(client, zap.NewNop().Sugar())
+	svc := NewIncidentService(client, zap.NewNop().Sugar(), executionfixture.Standard())
 	svc.RuleEngine().SetActorDirectory(client)
 	return client, svc, context.Background()
 }

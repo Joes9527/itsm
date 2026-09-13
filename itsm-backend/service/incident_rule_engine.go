@@ -21,6 +21,7 @@ import (
 )
 
 type IncidentRuleEngine struct {
+	execution      *database.ExecutionPolicy
 	directory      database.DirectorySnapshot
 	client         *ent.Client
 	actorDirectory *ent.Client
@@ -28,8 +29,8 @@ type IncidentRuleEngine struct {
 	alertCreator   IncidentAlertCreator
 }
 
-func NewIncidentRuleEngine(client *ent.Client, logger *zap.SugaredLogger) *IncidentRuleEngine {
-	return &IncidentRuleEngine{
+func NewIncidentRuleEngine(client *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *IncidentRuleEngine {
+	return &IncidentRuleEngine{execution: execution,
 		client: client,
 		logger: logger,
 	}
@@ -167,6 +168,7 @@ func (c *CategoryCondition) Evaluate(ctx context.Context, incident *ent.Incident
 
 // EscalationAction 升级动作
 type EscalationAction struct {
+	execution      *database.ExecutionPolicy
 	Level          int
 	Reason         string
 	NotifyUsers    []int
@@ -182,7 +184,7 @@ func (a *EscalationAction) Execute(ctx context.Context, incident *ent.Incident, 
 }
 
 func (a *EscalationAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
-	incidentService := NewIncidentService(a.client, a.logger)
+	incidentService := NewIncidentService(a.client, a.logger, a.execution)
 	incidentService.SetAlertCreator(a.alertCreator)
 
 	_, err := incidentService.EscalateIncidentTx(ctx, tx, &dto.IncidentEscalationRequest{
@@ -235,6 +237,7 @@ func (a *NotificationAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident
 
 // AssignmentAction 分配动作
 type AssignmentAction struct {
+	execution  *database.ExecutionPolicy
 	directory  database.DirectorySnapshot
 	AssigneeID int
 	Reason     string
@@ -260,7 +263,7 @@ func (a *AssignmentAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *
 	if !ok || actor.ID <= 0 || actor.Source == "" || actor.CorrelationID == "" || incident.Edges.WorkItem == nil {
 		return rejectIncidentAction("assignment rule requires trusted actor, stable action identity and WorkItem")
 	}
-	owner := NewIncidentService(a.client, a.logger)
+	owner := NewIncidentService(a.client, a.logger, a.execution)
 	owner.SetDirectorySnapshot(a.directory)
 	cmd := dto.IncidentCommand{IncidentID: incident.ID, Action: "assign", AssigneeID: a.AssigneeID, Reason: strings.TrimSpace(a.Reason),
 		Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: actor.ID, ExpectedVersion: incident.Edges.WorkItem.Version, Source: actor.Source, OperationID: actor.CorrelationID, CorrelationID: actor.CorrelationID}}
@@ -277,6 +280,7 @@ func (a *AssignmentAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *
 
 // StatusChangeAction 状态变更动作
 type StatusChangeAction struct {
+	execution  *database.ExecutionPolicy
 	directory  database.DirectorySnapshot
 	Status     string
 	Reason     string
@@ -300,7 +304,7 @@ func (a *StatusChangeAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident
 			return err
 		}
 	}
-	incidentService := NewIncidentService(a.client, a.logger)
+	incidentService := NewIncidentService(a.client, a.logger, a.execution)
 	incidentService.SetDirectorySnapshot(a.directory)
 	actor, ok := ctx.Value(incidentAlertActorContextKey{}).(incidentAlertActor)
 	if !ok || actor.ID <= 0 || actor.Source == "" || actor.CorrelationID == "" || incident.Edges.WorkItem == nil {
@@ -328,6 +332,7 @@ func (a *StatusChangeAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident
 
 // MetricCollectionAction 指标收集动作
 type MetricCollectionAction struct {
+	execution   *database.ExecutionPolicy
 	MetricType  string
 	MetricName  string
 	MetricValue float64
@@ -342,7 +347,7 @@ func (a *MetricCollectionAction) Execute(ctx context.Context, incident *ent.Inci
 }
 
 func (a *MetricCollectionAction) ExecuteTx(ctx context.Context, tx *ent.Tx, incident *ent.Incident, tenantID int) error {
-	incidentService := NewIncidentService(tx.Client(), a.logger)
+	incidentService := NewIncidentService(tx.Client(), a.logger, a.execution)
 
 	_, err := incidentService.CreateIncidentMetric(ctx, &dto.CreateIncidentMetricRequest{
 		IncidentID:  incident.ID,
@@ -747,7 +752,7 @@ func (e *IncidentRuleEngine) parseEscalationAction(actionData map[string]interfa
 		return nil, fmt.Errorf("automatic escalation assignment is unsupported; configure an explicit assign action")
 	}
 
-	return &EscalationAction{
+	return &EscalationAction{execution: e.execution,
 		Level:        level,
 		Reason:       reason,
 		NotifyUsers:  notifyUsers,
@@ -807,7 +812,7 @@ func (e *IncidentRuleEngine) parseAssignmentAction(actionData map[string]interfa
 
 	reason, _ := actionData["reason"].(string)
 
-	return &AssignmentAction{
+	return &AssignmentAction{execution: e.execution,
 		directory:  e.directory,
 		AssigneeID: assigneeID,
 		Reason:     reason,
@@ -825,7 +830,7 @@ func (e *IncidentRuleEngine) parseStatusChangeAction(actionData map[string]inter
 
 	reason, _ := actionData["reason"].(string)
 	resolution, _ := actionData["resolution"].(string)
-	return &StatusChangeAction{
+	return &StatusChangeAction{execution: e.execution,
 		directory:  e.directory,
 		Status:     status,
 		Reason:     reason,
@@ -855,7 +860,7 @@ func (e *IncidentRuleEngine) parseMetricCollectionAction(actionData map[string]i
 	unit, _ := actionData["unit"].(string)
 	tags := toStringMap(actionData["tags"])
 
-	return &MetricCollectionAction{
+	return &MetricCollectionAction{execution: e.execution,
 		MetricType:  metricType,
 		MetricName:  metricName,
 		MetricValue: metricValue,
@@ -944,4 +949,12 @@ func (e *IncidentRuleEngine) updateExecutionStatus(ctx context.Context, executio
 
 	_, err := updateQuery.Save(ctx)
 	return err
+}
+
+// SetExecutionPolicy wires a trusted startup dependency, never request data.
+func (a *AssignmentAction) SetExecutionPolicy(policy *database.ExecutionPolicy) { a.execution = policy }
+
+// SetExecutionPolicy wires a trusted startup dependency, never request data.
+func (a *StatusChangeAction) SetExecutionPolicy(policy *database.ExecutionPolicy) {
+	a.execution = policy
 }

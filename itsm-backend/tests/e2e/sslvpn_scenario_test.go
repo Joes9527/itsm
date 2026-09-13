@@ -157,7 +157,7 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 	registry := intake.NewCreatorRegistry()
 	for _, owner := range []creation.ProfessionalCreator{
 		ticketSvc,
-		service.NewIncidentService(client, logger),
+		service.NewIncidentService(client, logger, executionfixture.Standard()),
 		problemdomain.NewService(nil, logger),
 		changedomain.NewService(nil, client, logger),
 		srService,

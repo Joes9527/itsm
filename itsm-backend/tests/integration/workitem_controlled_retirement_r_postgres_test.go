@@ -21,6 +21,7 @@ import (
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/migration"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -497,7 +498,7 @@ func TestWorkItemControlledRetirementOwningSoftDeleteAndPostRetirementWrites(t *
 	}
 	var original string
 	require.NoError(t, db.QueryRow(`SELECT content::text FROM work_item_migration_evidence WHERE version=$1`, migration.WorkItemPrepareVersion).Scan(&original))
-	svc := service.NewIncidentService(client, logger)
+	svc := service.NewIncidentService(client, logger, executionfixture.Standard())
 	require.NoError(t, svc.DeleteIncident(ctx, incident.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, Source: "http"}))
 	after := client.Ticket.GetX(ctx, item.ID)
 	require.NotNil(t, after.DeletedAt)

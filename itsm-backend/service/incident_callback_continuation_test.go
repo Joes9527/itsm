@@ -10,6 +10,7 @@ import (
 	"itsm-backend/ent/processcallbackoutbox"
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/service/bpmn"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"testing"
 	"time"
@@ -46,7 +47,7 @@ func testIncidentCallbackWorkerContinuation(t *testing.T, newFixture func(*testi
 				f.client.ProcessDefinition.UpdateOneID(instance.ProcessDefinitionID).SetBpmnXML([]byte(xml)).ExecX(f.userCtx)
 				instance = instance.Update().SetBusinessType("incident").SetBusinessID(item.ID).SetInitiator(strconv.Itoa(f.actor.ID)).SetCurrentActivityID(first).SetVariables(map[string]interface{}{"incident_id": inc.ID, "version": item.Version, "resolution": "observed service restoration", "keep": "source"}).SaveX(f.userCtx)
 				h := bpmn.NewIncidentServiceTaskHandler(f.client, zap.NewNop().Sugar())
-				h.SetIncidentService(NewIncidentService(f.client, zap.NewNop().Sugar()))
+				h.SetIncidentService(NewIncidentService(f.client, zap.NewNop().Sugar(), executionfixture.Standard()))
 				f.engine.CallbackRegistry().RegisterHandler(h)
 				if retry {
 					failNextCallbackTokenAdvance(f.client, "next", errors.New("continuation fault"))

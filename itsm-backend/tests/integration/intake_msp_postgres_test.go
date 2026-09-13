@@ -184,7 +184,7 @@ func TestPostgresIntakeMSPSharedSnapshotAndDurableEffects(t *testing.T) {
 	_, err = clients.System.Ticket.Query().Count(f.ctx)
 	require.Error(t, err)
 	logger := zap.NewNop().Sugar()
-	owner := service.NewIncidentService(clients.Tenant, logger)
+	owner := service.NewIncidentService(clients.Tenant, logger, executionfixture.Standard())
 	owner.RuleEngine().SetActorDirectory(clients.System)
 	registry := intake.NewCreatorRegistry()
 	require.NoError(t, registry.Register(owner))
@@ -401,7 +401,7 @@ func TestPostgresIncidentConversionSignedMSPHTTPAuthorizationAndReplay(t *testin
 			require.NoError(t, registry.Register(problemdomain.NewService(problemdomain.NewEntRepository(clients.Tenant), logger)))
 			resolver := intake.NewResolver(catalogdomain.NewService(nil, clients.Tenant, logger, nil), service.NewProcessBindingService(clients.Tenant), service.NewConfigurationItemService(clients.Tenant, logger, nil, nil), service.NewTicketCategoryService(clients.Tenant))
 			app := intake.NewService(clients.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), clients.IntakeDirectorySnapshot(), executionfixture.Standard())
-			incidentController := controller.NewIncidentController(service.NewIncidentService(clients.Tenant, logger), nil, nil, nil, nil, logger)
+			incidentController := controller.NewIncidentController(service.NewIncidentService(clients.Tenant, logger, executionfixture.Standard()), nil, nil, nil, nil, logger)
 			incidentController.SetCreationApplication(app)
 			const jwtSecret = "isolated-conversion-http-signing-key"
 			authService := service.NewAuthService(clients.Tenant, clients.System, jwtSecret, logger)

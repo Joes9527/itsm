@@ -7,6 +7,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/handlers/shared/workitemmutation"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 )
 
@@ -55,7 +56,7 @@ func TestIncidentRuleStatusActionUsesCommand(t *testing.T) {
 	inc := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "rule-command")
 	inc.Edges.WorkItem = client.Ticket.GetX(ctx, inc.WorkItemID)
 	ctx = WithIncidentAlertActor(ctx, actor.ID, "incident_rule", "rule-action")
-	action := &StatusChangeAction{Status: "in_progress", client: client, logger: svc.logger}
+	action := &StatusChangeAction{execution: executionfixture.Standard(), Status: "in_progress", client: client, logger: svc.logger}
 	require.NoError(t, action.Execute(ctx, inc, tenant.ID))
 	require.Equal(t, "in_progress", client.Ticket.GetX(ctx, inc.WorkItemID).Status)
 	require.Equal(t, 1, client.AuditLog.Query().CountX(ctx))
@@ -196,4 +197,22 @@ func TestIncidentCommandCloseReopenAuthorizationAndTenant(t *testing.T) {
 	actor.Update().SetActive(false).ExecX(ctx)
 	_, err = svc.ApplyIncidentCommand(ctx, cmd)
 	require.Error(t, err, "replay must reauthorize revoked actor")
+}
+
+func TestIncidentCommandMissingExecutionPolicyDoesNotWrite(t *testing.T) {
+	client, svc, ctx := setupIncidentTest(t)
+	defer client.Close()
+	tenant, err := createIncidentTestTenant(ctx, client, "missing-execution")
+	require.NoError(t, err)
+	actor, err := createIncidentTestUser(ctx, client, tenant.ID, "missing-execution")
+	require.NoError(t, err)
+	actor.Update().SetRole("super_admin").ExecX(ctx)
+	inc := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "missing-execution")
+	before := client.Ticket.GetX(ctx, inc.WorkItemID)
+	svc.execution = nil
+	_, err = svc.ApplyIncidentCommand(ctx, dto.IncidentCommand{IncidentID: inc.ID, Action: "acknowledge", Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: before.Version, OperationID: "missing-execution", Source: "http"}})
+	require.Error(t, err)
+	require.Equal(t, before.Version, client.Ticket.GetX(ctx, inc.WorkItemID).Version)
+	require.Zero(t, client.AuditLog.Query().CountX(ctx))
+	require.Zero(t, client.OutboxEvent.Query().CountX(ctx))
 }

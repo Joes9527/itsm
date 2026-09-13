@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 
@@ -261,7 +262,7 @@ func TestIncidentEscalationPersistsTenantScopedNamedEvent(t *testing.T) {
 	require.NoError(t, err)
 
 	client.Ticket.UpdateOneID(incidentEntity.WorkItemID).SetStatus("in_progress").ExecX(ctx)
-	escalation := NewIncidentEscalationService(client)
+	escalation := NewIncidentEscalationService(client, executionfixture.Standard())
 	_, err = escalation.CreateEscalationRule(ctx, dto.CreateIncidentEscalationRuleRequest{
 		Name: "L1 timeout", TriggerType: "time_based", TriggerMinutes: 1,
 		EscalationLevel: 1, TargetAssigneeType: "user", AutoEscalate: true,
@@ -328,7 +329,7 @@ func TestIncidentRuleActionFailureMarksExecutionFailed(t *testing.T) {
 	require.NoError(t, err)
 	incidentEntity, err = client.Incident.Query().Where(incident.IDEQ(incidentEntity.ID)).WithWorkItem().Only(ctx)
 	require.NoError(t, err)
-	engine := NewIncidentRuleEngine(client, zaptest.NewLogger(t).Sugar())
+	engine := NewIncidentRuleEngine(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 
 	err = engine.ExecuteRule(ctx, rule, incidentEntity, tenant.ID)
 	require.ErrorContains(t, err, "rule action failed")

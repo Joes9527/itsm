@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 
 	"itsm-backend/dto"
@@ -31,7 +32,7 @@ func TestIncidentRuleEngineRejectsUnregisteredNotificationChannelAtParse(t *test
 }
 
 func TestIncidentEscalationRuleRejectsUnsupportedChannelEvenWhenDisabled(t *testing.T) {
-	service := NewIncidentEscalationService(nil)
+	service := NewIncidentEscalationService(nil, executionfixture.Standard())
 	_, err := service.CreateEscalationRule(context.Background(), dto.CreateIncidentEscalationRuleRequest{
 		NotificationConfig: map[string]interface{}{"webhook": false},
 	})
@@ -40,7 +41,7 @@ func TestIncidentEscalationRuleRejectsUnsupportedChannelEvenWhenDisabled(t *test
 }
 
 func TestIncidentEscalationRuleRequiresEmailRecipientsAtSave(t *testing.T) {
-	service := NewIncidentEscalationService(nil)
+	service := NewIncidentEscalationService(nil, executionfixture.Standard())
 	_, err := service.CreateEscalationRule(context.Background(), dto.CreateIncidentEscalationRuleRequest{
 		NotificationConfig: map[string]interface{}{"email": true},
 	})

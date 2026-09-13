@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	"itsm-backend/handlers/shared/workitemmutation"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 )
 
@@ -106,7 +107,7 @@ func TestIncidentAssignmentRuleUsesCommand(t *testing.T) {
 	inc := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "rule-assign")
 	inc.Edges.WorkItem = client.Ticket.UpdateOneID(inc.WorkItemID).SetStatus("in_progress").SetAssigneeID(actor.ID).SaveX(ctx)
 	ctx = WithIncidentAlertActor(ctx, actor.ID, "incident_rule", "assign-rule-attempt")
-	action := &AssignmentAction{AssigneeID: next.ID, Reason: "route to support", client: client, logger: svc.logger}
+	action := &AssignmentAction{execution: executionfixture.Standard(), AssigneeID: next.ID, Reason: "route to support", client: client, logger: svc.logger}
 	require.NoError(t, action.Execute(ctx, inc, tenant.ID))
 	require.NoError(t, action.Execute(ctx, inc, tenant.ID))
 	after := client.Ticket.GetX(ctx, inc.WorkItemID)
@@ -127,7 +128,7 @@ func TestIncidentEscalationAssignmentRequiresTrustedActor(t *testing.T) {
 	inc := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "escalation-actor")
 	inc.Edges.WorkItem = client.Ticket.GetX(ctx, inc.WorkItemID)
 	before := inc.Edges.WorkItem
-	owner := NewIncidentEscalationService(client)
+	owner := NewIncidentEscalationService(client, executionfixture.Standard())
 	rule := client.IncidentEscalationRule.Create().SetTenantID(tenant.ID).SetName("handover after escalation").SetTriggerType("time_based").SetTriggerMinutes(1).SetTargetAssigneeType("user").SetEscalationLevel(1).SetTargetAssigneeID(actor.ID).SaveX(ctx)
 	_, err = owner.escalateIncident(ctx, inc, rule)
 	require.Error(t, err)

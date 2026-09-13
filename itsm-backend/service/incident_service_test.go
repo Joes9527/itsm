@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strings"
 	"testing"
 	"time"
@@ -28,7 +29,7 @@ import (
 func setupIncidentTest(t *testing.T) (*ent.Client, *IncidentService, context.Context) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	logger := zaptest.NewLogger(t).Sugar()
-	service := NewIncidentService(client, logger)
+	service := NewIncidentService(client, logger, executionfixture.Standard())
 	service.RuleEngine().SetActorDirectory(client)
 	ctx := context.Background()
 	return client, service, ctx
@@ -286,7 +287,7 @@ func TestAssignIncidentRejectsStaleSnapshot(t *testing.T) {
 			// Actual overlapping transactions are verified by PostgreSQL tests.
 			reporter.Update().SetRole("super_admin").ExecX(ctx)
 			require.NoError(t, testCase.mutateRace(ctx, racer, incidentEntity.ID))
-			incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar())
+			incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 			_, err = incidentService.ApplyIncidentCommand(ctx, dto.IncidentCommand{
 				IncidentID: incidentEntity.ID, Action: "assign", AssigneeID: assignee.ID,
 				Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: reporter.ID,
@@ -338,7 +339,7 @@ func TestGetIncidentWithActionsUsesOneEntitySnapshot(t *testing.T) {
 	require.NoError(t, err)
 
 	incidentSelects = 0
-	incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar())
+	incidentService := NewIncidentService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	response, err := incidentService.GetIncidentWithActions(ctx, incidentEntity.ID, ActionActor{
 		Client: client, TenantID: tenant.ID, UserID: reporter.ID, Role: "super_admin",
 	})

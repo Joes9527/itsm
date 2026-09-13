@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"itsm-backend/ent/intakeresolutionsnapshot"
 	"itsm-backend/ent/ticket"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strconv"
 	"testing"
 	"time"
@@ -39,7 +40,7 @@ func TestAuthoritativeProfessionalGraph(t *testing.T) {
 				command.Problem = &workitemcreation.ProblemInput{RootCause: "route failure", Impact: "employees"}
 			case "incident":
 				identity.Channel = "http"
-				domain = service.NewIncidentService(client, zap.NewNop().Sugar())
+				domain = service.NewIncidentService(client, zap.NewNop().Sugar(), executionfixture.Standard())
 				command.Incident = &workitemcreation.IncidentInput{Type: "security", Impact: "critical", Urgency: "high", Severity: "critical", DetectedAt: "2026-09-04T01:00:00Z", ImpactAnalysis: &workitemcreation.ImpactAnalysis{BusinessImpact: &workitemcreation.BusinessImpact{RevenueImpact: json.Number("9007199254740993.125")}, TechnicalImpact: "vpn gateway"}}
 				parent := client.TicketCategory.Create().SetTenantID(identity.TenantID).SetCode("network").SetName("Network").SaveX(context.Background())
 				client.TicketCategory.Create().SetTenantID(identity.TenantID).SetCode("vpn").SetName("VPN").SetParentID(parent.ID).SaveX(context.Background())
@@ -133,7 +134,7 @@ func TestIncidentNumbersAreScopedByWorkItemTenant(t *testing.T) {
 	identity.Channel = "http"
 	ctx := context.Background()
 	app.registry = NewCreatorRegistry()
-	require.NoError(t, app.registry.Register(service.NewIncidentService(client, zap.NewNop().Sugar())))
+	require.NoError(t, app.registry.Register(service.NewIncidentService(client, zap.NewNop().Sugar(), executionfixture.Standard())))
 	app.workItems = NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator())
 	command.RecordClass = "incident"
 	command.IntakeKind = "incident"
@@ -201,7 +202,7 @@ func TestRoutingConsumesDomainEffectiveValues(t *testing.T) {
 			switch class {
 			case "incident":
 				identity.Channel = "http"
-				owner := service.NewIncidentService(client, logger)
+				owner := service.NewIncidentService(client, logger, executionfixture.Standard())
 				owner.SetPriorityMatrixService(service.NewPriorityMatrixService(logger))
 				require.NoError(t, app.registry.Register(owner))
 				business, subtype, priority = "incident", "incident", "critical"

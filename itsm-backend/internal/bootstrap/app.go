@@ -280,6 +280,10 @@ func NewApplication() *Application {
 	if admissionErr != nil {
 		sugar.Fatalw("execution runtime admission failed", "error", admissionErr)
 	}
+	executionPolicy, err := database.NewExecutionPolicy(cfg.Execution)
+	if err != nil {
+		sugar.Fatalw("execution manifest cannot be frozen", "error", err)
+	}
 	// 6. 初始化服务层 & 控制器
 	// 这部分代码量较大，为了简化，我们先在这里进行组装，后续可以进一步拆分为 wires / container
 
@@ -288,7 +292,7 @@ func NewApplication() *Application {
 	numberAllocator := workitemnumber.NewPostgreSQLAllocator()
 
 	// 初始化业务服务层
-	incidentService := service.NewIncidentService(client, sugar)
+	incidentService := service.NewIncidentService(client, sugar, executionPolicy)
 	incidentService.RuleEngine().SetActorDirectory(systemClient)
 	incidentService.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 
@@ -665,10 +669,6 @@ func NewApplication() *Application {
 		}
 	}
 	scService.SetCreatorRegistry(creationRegistry)
-	executionPolicy, err := database.NewExecutionPolicy(cfg.Execution)
-	if err != nil {
-		sugar.Fatalw("execution manifest cannot be frozen", "error", err)
-	}
 	intakeApplication := intake.NewService(client, intake.NewResolver(scService, processBindingService, configurationItemService, ticketCategoryService), creationRegistry, intake.NewWorkItemCreator(numberAllocator), clients.IntakeDirectorySnapshot(), executionPolicy)
 	ticketController.SetCreationApplication(intakeApplication)
 	incidentController.SetCreationApplication(intakeApplication)

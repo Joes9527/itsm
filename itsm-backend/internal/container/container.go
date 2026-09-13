@@ -4,6 +4,7 @@ package container
 
 import (
 	"itsm-backend/config"
+	"itsm-backend/database"
 	"itsm-backend/ent"
 	"itsm-backend/repository/base"
 	ticketRepo "itsm-backend/repository/ticket"
@@ -55,7 +56,11 @@ func (c *Container) Initialize() error {
 	c.initRepositories()
 
 	// 2. 初始化核心服务（无依赖或依赖已初始化）
-	c.initCoreServices()
+	policy, err := database.NewExecutionPolicy(c.cfg.Execution)
+	if err != nil {
+		return err
+	}
+	c.initCoreServices(policy)
 
 	// 3. 初始化业务服务（依赖核心服务）
 	c.initBusinessServices()
@@ -72,12 +77,12 @@ func (c *Container) initRepositories() {
 }
 
 // initCoreServices 初始化核心服务
-func (c *Container) initCoreServices() {
+func (c *Container) initCoreServices(policy *database.ExecutionPolicy) {
 	// Notification Service
 	c.notificationService = service.NewNotificationService(c.client)
 
 	// Incident Service
-	c.incidentService = service.NewIncidentService(c.client, c.logger)
+	c.incidentService = service.NewIncidentService(c.client, c.logger, policy)
 
 	// Ticket Notification Service
 	c.ticketNotificationService = service.NewTicketNotificationService(c.client, c.logger)

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -83,7 +84,7 @@ func newIncidentEffectsFixture(t *testing.T) *incidentEffectsFixture {
 	payload, err := json.Marshal(map[string]interface{}{"tenantId": tenant.ID, "incidentId": inc.ID, "workItemId": item.ID, "actorId": actor.ID, "channel": "api"})
 	require.NoError(t, err)
 	event := client.OutboxEvent.Create().SetTenantID(tenant.ID).SetEventID(fmt.Sprintf("incident-created:%d", item.ID)).SetEventType("incident.created").SetAggregateType("work_item").SetAggregateID(fmt.Sprint(item.ID)).SetPayload(payload).SaveX(ctx)
-	svc := service.NewIncidentService(client, zap.NewNop().Sugar())
+	svc := service.NewIncidentService(client, zap.NewNop().Sugar(), executionfixture.Standard())
 	svc.RuleEngine().SetActorDirectory(client)
 	svc.SetAlertCreator(service.NewIncidentAlertingService(client, zap.NewNop().Sugar()))
 	return &incidentEffectsFixture{scopedDB, client, ctx, svc.RuleEngine(), svc, event, inc, actor, tenant}
@@ -153,7 +154,7 @@ func TestPostgresIncidentEffectsResumeFrozenActionsAndCandidateSet(t *testing.T)
 	rule.Update().SetConditions(map[string]interface{}{"priority": []string{"low"}}).SetActions([]map[string]interface{}{metricAction("edited")}).SetIsActive(false).SaveX(f.ctx)
 	f.rule(metricAction("new-policy"))
 	fail.Store(false)
-	restarted := service.NewIncidentRuleEngine(f.client, zap.NewNop().Sugar())
+	restarted := service.NewIncidentRuleEngine(f.client, zap.NewNop().Sugar(), executionfixture.Standard())
 	restarted.SetActorDirectory(f.client)
 	require.NoError(t, restarted.Deliver(f.ctx, f.event))
 	require.NoError(t, restarted.Deliver(f.ctx, f.event))

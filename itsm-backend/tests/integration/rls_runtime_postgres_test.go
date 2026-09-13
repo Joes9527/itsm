@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 
@@ -39,7 +40,7 @@ func TestPostgresRLSRuntimeConsumer(t *testing.T) {
 	clients, _ := runtimeClients(t, f)
 	client := clients.Tenant
 	db := database.GetRawDB()
-	owner := service.NewIncidentService(client, zap.NewNop().Sugar())
+	owner := service.NewIncidentService(client, zap.NewNop().Sugar(), executionfixture.Standard())
 	owner.RuleEngine().SetActorDirectory(clients.System)
 	owner.SetAlertCreator(service.NewIncidentAlertingService(client, zap.NewNop().Sugar()))
 	registry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{owner.RuleEngine()}, "incident_alert_delivery")

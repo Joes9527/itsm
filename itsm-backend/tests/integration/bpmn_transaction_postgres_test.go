@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 
@@ -50,7 +51,7 @@ func transactionBPMNFixture(t *testing.T, userTask bool) (*incidentEffectsFixtur
 	ctx = context.WithValue(ctx, bpmn.BPMNUserIDContextKey, f.actor.ID)
 	engine := service.NewCustomProcessEngine(clients.Tenant, zap.NewNop().Sugar()).(*service.CustomProcessEngine)
 	engine.SetCallbackCandidateClient(clients.System)
-	domain := service.NewIncidentService(clients.Tenant, zap.NewNop().Sugar())
+	domain := service.NewIncidentService(clients.Tenant, zap.NewNop().Sugar(), executionfixture.Standard())
 	domain.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 	engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler).SetIncidentService(domain)
 	kind := "serviceTask"

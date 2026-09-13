@@ -4,6 +4,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
 	"itsm-backend/handlers/shared/workitemmutation"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 )
@@ -27,7 +28,7 @@ func TestIncidentEscalationCommandsAtomicReplay(t *testing.T) {
 			if invalid {
 				targetID = 999999
 			}
-			svc := NewIncidentEscalationService(client)
+			svc := NewIncidentEscalationService(client, executionfixture.Standard())
 			_, err = svc.CreateEscalationRule(ctx, dto.CreateIncidentEscalationRuleRequest{Name: "timeout L1", TriggerType: "time_based", TriggerMinutes: 1, EscalationLevel: 1, TargetAssigneeType: "user", TargetAssigneeID: &targetID, AutoEscalate: true, IsActive: true, TenantID: tenant.ID})
 			require.NoError(t, err)
 			meta := workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: before.Version, Source: "scheduler", OperationID: "escalation-attempt"}
@@ -67,7 +68,7 @@ func TestIncidentEscalationAlertAcceptanceRollsBackAndReplays(t *testing.T) {
 	inc := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "INC-ESC-ALERT")
 	inc.Update().SetDetectedAt(time.Now().Add(-time.Hour)).ExecX(ctx)
 	before := client.Ticket.UpdateOneID(inc.WorkItemID).SetStatus("in_progress").SaveX(ctx)
-	svc := NewIncidentEscalationService(client)
+	svc := NewIncidentEscalationService(client, executionfixture.Standard())
 	_, err = svc.CreateEscalationRule(ctx, dto.CreateIncidentEscalationRuleRequest{Name: "timeout L1", TriggerType: "time_based", TriggerMinutes: 1, EscalationLevel: 1, TargetAssigneeType: "user", AutoEscalate: true, IsActive: true, TenantID: tenant.ID, NotificationConfig: map[string]interface{}{"email": true, "recipients": []string{"operator@example.com"}}})
 	require.NoError(t, err)
 	meta := workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: before.Version, Source: "scheduler", OperationID: "escalation-alert"}
@@ -102,7 +103,7 @@ func TestIncidentEscalationBatchUsesCanonicalCandidates(t *testing.T) {
 	inc := createAutomationIncident(t, ctx, client, tenant.ID, actor.ID, "INC-BATCH")
 	inc.Update().SetDetectedAt(time.Now().Add(-time.Hour)).ExecX(ctx)
 	item := client.Ticket.UpdateOneID(inc.WorkItemID).SetStatus("in_progress").SaveX(ctx)
-	svc := NewIncidentEscalationService(client)
+	svc := NewIncidentEscalationService(client, executionfixture.Standard())
 	_, err = svc.CreateEscalationRule(ctx, dto.CreateIncidentEscalationRuleRequest{Name: "batch L1", TriggerType: "time_based", TriggerMinutes: 1, EscalationLevel: 1, TargetAssigneeType: "user", AutoEscalate: true, IsActive: true, TenantID: tenant.ID})
 	require.NoError(t, err)
 	require.Error(t, svc.ProcessEscalations(ctx, tenant.ID))

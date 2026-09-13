@@ -24,7 +24,9 @@ import (
 	"itsm-backend/config"
 	"itsm-backend/database"
 
+	"itsm-backend/dto"
 	"itsm-backend/ent"
+	"itsm-backend/ent/incident"
 	"itsm-backend/ent/intakerequest"
 	"itsm-backend/ent/outboxevent"
 	"itsm-backend/ent/ticket"
@@ -32,6 +34,7 @@ import (
 	"itsm-backend/handlers/intake"
 	problemdomain "itsm-backend/handlers/problem"
 	catalogdomain "itsm-backend/handlers/service_catalog"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/migration"
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
@@ -104,7 +107,7 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	application := func(client *ent.Client, policy *database.ExecutionPolicy, directory database.DirectorySnapshot) *intake.Service {
 		logger := zap.NewNop().Sugar()
 		registry := intake.NewCreatorRegistry()
-		for _, creator := range []creation.ProfessionalCreator{&service.TicketService{}, service.NewIncidentService(client, logger), problemdomain.NewService(nil, logger)} {
+		for _, creator := range []creation.ProfessionalCreator{&service.TicketService{}, service.NewIncidentService(client, logger, policy), problemdomain.NewService(nil, logger)} {
 			require.NoError(t, registry.Register(creator))
 		}
 		resolver := intake.NewResolver(catalogdomain.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
@@ -113,6 +116,11 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	historicalApp := application(owner, executionfixture.Standard(), sameTransactionDirectory{})
 	oldCommand := command("historical", "incident")
 	historical, err := historicalApp.Create(ctx, identity, oldCommand)
+	require.NoError(t, err)
+	legacyCommand := dto.IncidentCommand{IncidentID: historical.ProfessionalReference.ID, Action: "acknowledge", Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: 1, Source: "http", OperationID: "legacy-command"}}
+	legacyOwner := service.NewIncidentService(owner, zap.NewNop().Sugar(), executionfixture.Standard())
+	legacyOwner.SetDirectorySnapshot(sameTransactionDirectory{})
+	legacyResult, err := legacyOwner.ApplyIncidentCommand(ctx, legacyCommand)
 	require.NoError(t, err)
 	_, err = ownerDB.ExecContext(ctx, "UPDATE outbox_events SET execution_work_item_id=NULL")
 	require.NoError(t, err) // pre-039 historical fixture only
@@ -193,6 +201,106 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		relationEvent := owner.OutboxEvent.Query().Where(outboxevent.EventTypeEQ(service.RelationCreatedEventType)).OnlyX(ctx)
 		require.NotNil(t, relationEvent.ExecutionWorkItemID)
 		require.Equal(t, created.WorkItemID, *relationEvent.ExecutionWorkItemID)
+	})
+
+	t.Run("Incident commands and rule core preserve history", func(t *testing.T) {
+		svc := service.NewIncidentService(runtime, zap.NewNop().Sugar(), policy)
+		svc.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
+		fresh, err := app.Create(ctx, identity, command("command-incident", "incident"))
+		require.NoError(t, err)
+		makeCommand := func(id, version int, key string) dto.IncidentCommand {
+			return dto.IncidentCommand{IncidentID: id, Action: "acknowledge", Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: version, Source: "http", OperationID: key}}
+		}
+		beforeEvents, beforeAudits := owner.OutboxEvent.Query().CountX(ctx), owner.AuditLog.Query().CountX(ctx)
+		historicalWrite := makeCommand(historical.ProfessionalReference.ID, oldRow.Version, "history-command")
+		historicalWrite.Action = "start"
+		_, err = svc.ApplyIncidentCommand(ctx, historicalWrite)
+		require.ErrorContains(t, err, "execution scope denied")
+		require.Equal(t, oldRow.Version, owner.Ticket.GetX(ctx, oldRow.ID).Version)
+		require.Equal(t, beforeEvents, owner.OutboxEvent.Query().CountX(ctx))
+		require.Equal(t, beforeAudits, owner.AuditLog.Query().CountX(ctx))
+		legacyReplay, err := svc.ApplyIncidentCommand(ctx, legacyCommand)
+		require.NoError(t, err)
+		require.Equal(t, legacyResult.Version, legacyReplay.Version)
+		require.Equal(t, beforeEvents, owner.OutboxEvent.Query().CountX(ctx))
+		require.Equal(t, beforeAudits, owner.AuditLog.Query().CountX(ctx))
+		current := owner.Ticket.GetX(ctx, fresh.WorkItemID)
+		cmd := makeCommand(fresh.ProfessionalReference.ID, current.Version, "new-command")
+		result, err := svc.ApplyIncidentCommand(ctx, cmd)
+		require.NoError(t, err)
+		require.Equal(t, current.Version+1, result.Version)
+		afterEvents := owner.OutboxEvent.Query().CountX(ctx)
+		replay, err := svc.ApplyIncidentCommand(ctx, cmd)
+		require.NoError(t, err)
+		require.Equal(t, result.Version, replay.Version)
+		require.Equal(t, afterEvents, owner.OutboxEvent.Query().CountX(ctx))
+		beforeRule := owner.Ticket.GetX(ctx, fresh.WorkItemID)
+		beforeRuleEvents, beforeRuleAudits := owner.OutboxEvent.Query().CountX(ctx), owner.AuditLog.Query().CountX(ctx)
+		for _, actionKind := range []string{"status", "assignment"} {
+			for _, id := range []int{historical.ProfessionalReference.ID, fresh.ProfessionalReference.ID} {
+				tx, err := runtime.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
+				require.NoError(t, err)
+				func() {
+					defer tx.Rollback()
+					incident := tx.Incident.Query().Where(incident.IDEQ(id)).WithWorkItem().OnlyX(ctx)
+					var action interface {
+						SetExecutionPolicy(*database.ExecutionPolicy)
+						SetDirectorySnapshot(database.DirectorySnapshot)
+						ExecuteTx(context.Context, *ent.Tx, *ent.Incident, int) error
+					}
+					if actionKind == "status" {
+						action = &service.StatusChangeAction{Status: "in_progress"}
+					} else {
+						action = &service.AssignmentAction{AssigneeID: actor.ID, Reason: "candidate assignment"}
+					}
+					action.SetExecutionPolicy(policy)
+					action.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
+					err = action.ExecuteTx(service.WithIncidentAlertActor(ctx, actor.ID, "incident_rule", fmt.Sprintf("scope-rule-%s-%d", actionKind, id)), tx, incident, tenant.ID)
+					if id == historical.ProfessionalReference.ID {
+						require.ErrorContains(t, err, "execution scope denied")
+					} else {
+						require.NoError(t, err)
+						if actionKind == "status" {
+							require.Equal(t, "in_progress", tx.Ticket.GetX(ctx, fresh.WorkItemID).Status)
+						} else {
+							require.Equal(t, actor.ID, tx.Ticket.GetX(ctx, fresh.WorkItemID).AssigneeID)
+						}
+						require.Equal(t, beforeRule.Status, owner.Ticket.GetX(ctx, fresh.WorkItemID).Status, "rule action must not commit caller transaction")
+					}
+					require.NoError(t, tx.Rollback())
+				}()
+			}
+		}
+
+		require.Equal(t, beforeRule.Version, owner.Ticket.GetX(ctx, fresh.WorkItemID).Version)
+		require.Equal(t, beforeRuleEvents, owner.OutboxEvent.Query().CountX(ctx))
+		require.Equal(t, beforeRuleAudits, owner.AuditLog.Query().CountX(ctx))
+		beforeTimeline := owner.IncidentEvent.Query().CountX(ctx)
+		injected := errors.New("injected command outbox failure")
+		failNext := true
+		runtime.OutboxEvent.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+				value, err := next.Mutate(ctx, m)
+				if err == nil && failNext {
+					failNext = false
+					return nil, injected
+				}
+				return value, err
+			})
+		})
+		failing := makeCommand(fresh.ProfessionalReference.ID, beforeRule.Version, "rollback-command")
+		failing.Action = "start"
+		_, err = svc.ApplyIncidentCommand(ctx, failing)
+		require.ErrorIs(t, err, injected)
+		require.False(t, failNext)
+		beforeJSON, err := json.Marshal(beforeRule)
+		require.NoError(t, err)
+		afterJSON, err := json.Marshal(owner.Ticket.GetX(ctx, fresh.WorkItemID))
+		require.NoError(t, err)
+		require.JSONEq(t, string(beforeJSON), string(afterJSON))
+		require.Equal(t, beforeRuleEvents, owner.OutboxEvent.Query().CountX(ctx))
+		require.Equal(t, beforeRuleAudits, owner.AuditLog.Query().CountX(ctx))
+		require.Equal(t, beforeTimeline, owner.IncidentEvent.Query().CountX(ctx))
 	})
 	t.Run("historical parent and relation reject without writes", func(t *testing.T) {
 		tickets, receipts, members := owner.Ticket.Query().CountX(ctx), owner.IntakeRequest.Query().CountX(ctx), memberCount()

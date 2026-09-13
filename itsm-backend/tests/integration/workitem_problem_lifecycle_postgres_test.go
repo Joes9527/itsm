@@ -19,6 +19,7 @@ import (
 	"itsm-backend/middleware"
 	"itsm-backend/migration"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http/httptest"
 	"os"
 	"strings"
@@ -91,7 +92,7 @@ func TestWorkItemProblemLifecycleAllocatedMSP(t *testing.T) {
 			_, err = f.owner.ApplyCommand(f.ctx, f.command("verify_resolution", "revoked"))
 			require.Error(t, err)
 			allocation.Update().ClearDeassignedAt().ExecX(f.ctx)
-			incOwner := service.NewIncidentService(clients.Tenant, zap.NewNop().Sugar())
+			incOwner := service.NewIncidentService(clients.Tenant, zap.NewNop().Sugar(), executionfixture.Standard())
 			incOwner.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 			incidentCommand := func(action, key string) dto.IncidentCommand {
 				return dto.IncidentCommand{Meta: workitemmutation.Meta{TenantID: f.tenant.ID, ActorID: f.actor.ID, ExpectedVersion: f.client.Ticket.GetX(f.ctx, f.inc.WorkItemID).Version, OperationID: key, Source: "http"}, IncidentID: f.inc.ID, Action: action, Resolution: "service restored", Reason: "confirmed"}

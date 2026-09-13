@@ -16,6 +16,7 @@ import (
 	"itsm-backend/handlers/shared/workitemmutation"
 	"itsm-backend/middleware"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
@@ -146,7 +147,7 @@ func TestWorkItemRelationsIncidentAndSubtaskDeletion(t *testing.T) {
 			}
 			before := f.client.Ticket.GetX(f.ctx, childID).Version
 			if strings.HasPrefix(scenario, "incident") {
-				owner := service.NewIncidentService(f.runtime.Tenant, zap.NewNop().Sugar())
+				owner := service.NewIncidentService(f.runtime.Tenant, zap.NewNop().Sugar(), executionfixture.Standard())
 				owner.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())
 				err = owner.DeleteIncident(f.ctx, f.inc.ID, f.command("delete").Meta)
 			} else {
@@ -273,7 +274,7 @@ func TestWorkItemDeletionHTTPStrictBatchAndCounts(t *testing.T) {
 		c.Request = c.Request.WithContext(f.ctx)
 		c.Next()
 	})
-	incOwner := service.NewIncidentService(f.runtime.Tenant, zap.NewNop().Sugar())
+	incOwner := service.NewIncidentService(f.runtime.Tenant, zap.NewNop().Sugar(), executionfixture.Standard())
 	incOwner.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())
 	incHandler := controller.NewIncidentController(incOwner, nil, nil, nil, nil, zap.NewNop().Sugar())
 	r.DELETE("/api/v1/incidents/:id", incHandler.DeleteIncident)

@@ -17,6 +17,7 @@ import (
 	"itsm-backend/migration"
 	ticketrepo "itsm-backend/repository/ticket"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 )
@@ -268,7 +269,7 @@ func TestWorkItemSLACycleEscalationAfterRealReopen(t *testing.T) {
 	_, err = f.svc.ApplyIncidentCommand(f.ctx, cmd)
 	require.NoError(t, err)
 	before := f.client.Ticket.GetX(f.ctx, item.ID)
-	svc := service.NewIncidentEscalationService(f.client)
+	svc := service.NewIncidentEscalationService(f.client, executionfixture.Standard())
 	_, err = svc.CreateEscalationRule(f.ctx, dto.CreateIncidentEscalationRuleRequest{Name: "cycle L1", TriggerType: "sla_breach", TriggerMinutes: 1, EscalationLevel: 1, TargetAssigneeType: "user", AutoEscalate: true, IsActive: true, TenantID: f.tenant.ID})
 	require.NoError(t, err)
 	check := func(key string) {

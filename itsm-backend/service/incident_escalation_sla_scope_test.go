@@ -1,6 +1,7 @@
 package service
 
 import (
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 
@@ -37,7 +38,7 @@ func TestIncidentEscalationSLABreachScopesWorkItem(t *testing.T) {
 				targetID = other.ID
 			}
 			client.SLAViolation.Create().SetTenantID(tenant.ID).SetTicketID(targetID).SetSLADefinitionID(definition.ID).SetViolationType("response_time").SetIsResolved(tc.resolved).SaveX(ctx)
-			svc := NewIncidentEscalationService(client)
+			svc := NewIncidentEscalationService(client, executionfixture.Standard())
 			_, err = svc.CreateEscalationRule(ctx, dto.CreateIncidentEscalationRuleRequest{Name: "SLA L1", TriggerType: "sla_breach", TriggerMinutes: 1, EscalationLevel: 1, TargetAssigneeType: "user", AutoEscalate: true, IsActive: true, TenantID: tenant.ID})
 			require.NoError(t, err)
 			_, err = svc.CheckAndEscalate(ctx, inc.ID, workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: before.Version, Source: "scheduler", OperationID: "sla-scope-attempt"})

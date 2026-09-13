@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -23,7 +24,7 @@ func TestIncidentAssignmentHTTPUsesProfessionalIDAndObservedVersion(t *testing.T
 	require.NotEqual(t, item.ID, inc.ID)
 	next := f.client.User.Create().SetTenantID(f.tenant.ID).SetUsername("next-owner").SetName("Next").SetEmail("next@example.test").SetPasswordHash("test").SetRole("service_agent").SetActive(true).SaveX(ctx)
 	logger := zap.NewNop().Sugar()
-	handler := NewIncidentController(service.NewIncidentService(f.client, logger), nil, nil, nil, nil, logger)
+	handler := NewIncidentController(service.NewIncidentService(f.client, logger, executionfixture.Standard()), nil, nil, nil, nil, logger)
 	f.router.POST("/api/v1/incidents/:id/assign", handler.AssignIncident)
 	send := func(id int, key, reason string) *httptest.ResponseRecorder {
 		body := fmt.Sprintf(`{"assigneeId":%d,"version":%d,"operationId":%q,"reason":%q}`, next.ID, item.Version, key, reason)

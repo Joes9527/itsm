@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"strings"
 	"testing"
 
@@ -119,7 +120,7 @@ func TestDefinitionStartFrozenIncidentAssignment(t *testing.T) {
 	definition := f.client.ProcessDefinition.UpdateOneID(f.definition.ID).SetBpmnXML([]byte(xml)).SaveX(ctx)
 	item := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(f.actor.ID).SetRecordClass("incident").SetTitle("Incident").SetTicketNumber("INC-work-item").SetStatus("new").SaveX(ctx)
 	f.client.Incident.Create().SetWorkItemID(item.ID).SaveX(ctx)
-	f.engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler).SetIncidentService(&IncidentService{client: f.client, logger: zap.NewNop().Sugar()})
+	f.engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler).SetIncidentService(NewIncidentService(f.client, zap.NewNop().Sugar(), executionfixture.Standard()))
 	vars := map[string]any{"assignee_id": json.Number(fmt.Sprint(f.outsider.ID)), "version": item.Version}
 	first, err := f.engine.StartProcessByDefinitionID(ctx, FreezeProcessDefinition(definition), fmt.Sprintf("incident:%d", item.ID), "incident", item.ID, vars, "incident-assignment")
 	require.NoError(t, err)
@@ -141,7 +142,7 @@ func TestDefinitionStartFrozenIncidentReassignment(t *testing.T) {
 	definition := f.client.ProcessDefinition.UpdateOneID(f.definition.ID).SetBpmnXML([]byte(xml)).SaveX(ctx)
 	item := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(f.actor.ID).SetRecordClass("incident").SetTitle("Incident").SetTicketNumber("INC-work-item").SetStatus("in_progress").SetAssigneeID(f.actor.ID).SaveX(ctx)
 	f.client.Incident.Create().SetWorkItemID(item.ID).SaveX(ctx)
-	f.engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler).SetIncidentService(&IncidentService{client: f.client, logger: zap.NewNop().Sugar()})
+	f.engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler).SetIncidentService(NewIncidentService(f.client, zap.NewNop().Sugar(), executionfixture.Standard()))
 	vars := map[string]any{"assignee_id": json.Number(fmt.Sprint(f.outsider.ID)), "version": item.Version, "reason": "handover to support"}
 	first, err := f.engine.StartProcessByDefinitionID(ctx, FreezeProcessDefinition(definition), fmt.Sprintf("incident:%d", item.ID), "incident", item.ID, vars, "incident-assignment")
 	require.NoError(t, err)

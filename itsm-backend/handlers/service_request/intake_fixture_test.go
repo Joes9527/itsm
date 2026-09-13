@@ -50,7 +50,7 @@ func NewService(repo sr.Repository, client *ent.Client, logger *zap.SugaredLogge
 	if err := registry.Register(owner); err != nil {
 		panic(err)
 	}
-	incident := service.NewIncidentService(client, logger)
+	incident := service.NewIncidentService(client, logger, executionfixture.Standard())
 	incident.SetPriorityMatrixService(service.NewPriorityMatrixService(logger))
 	if err := registry.Register(incident); err != nil {
 		panic(err)

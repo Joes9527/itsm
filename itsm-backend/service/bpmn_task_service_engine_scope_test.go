@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 
 	"itsm-backend/ent"
@@ -256,7 +257,7 @@ func TestTaskService_ReusesEngineInstanceAndRegistry(t *testing.T) {
 	// 注入发生在拿到 TaskService 之后也必须可见（bootstrap 就是这个顺序）。
 	incidentHandler, ok := engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler)
 	require.True(t, ok, "incident_service_handler 必须已注册")
-	incidentHandler.SetIncidentService(NewIncidentService(client, zap.NewNop().Sugar()))
+	incidentHandler.SetIncidentService(NewIncidentService(client, zap.NewNop().Sugar(), executionfixture.Standard()))
 
 	reachable, ok := internal.engine.CallbackRegistry().GetHandler("incident_service_handler").(*bpmn.IncidentServiceTaskHandler)
 	require.True(t, ok)

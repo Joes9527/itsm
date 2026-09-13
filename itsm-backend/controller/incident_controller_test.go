@@ -49,7 +49,7 @@ func setupTestIncidentController(t *testing.T) (*gin.Engine, *IncidentController
 	logger := zaptest.NewLogger(t).Sugar()
 
 	// 创建服务
-	incidentService := service.NewIncidentService(client, logger)
+	incidentService := service.NewIncidentService(client, logger, executionfixture.Standard())
 
 	// 创建控制器
 	incidentController := NewIncidentController(incidentService, nil, nil, nil, nil, logger)
@@ -125,7 +125,7 @@ func newConversionControllerFixture(t *testing.T, msp bool, allScope ...bool) *c
 	require.NoError(t, registry.Register(problemDomain.NewService(problemDomain.NewEntRepository(client), logger)))
 	resolver := intake.NewResolver(service_catalog.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
 	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(&conversionTestAllocator{}), sameTransactionDirectory{}, executionfixture.Standard())
-	controller := NewIncidentController(service.NewIncidentService(client, logger), nil, nil, nil, nil, logger)
+	controller := NewIncidentController(service.NewIncidentService(client, logger, executionfixture.Standard()), nil, nil, nil, nil, logger)
 	controller.SetCreationApplication(app)
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
@@ -278,7 +278,7 @@ func TestIncidentDetailHasActionsButListDoesNot(t *testing.T) {
 		SetWorkItemID(workItem.ID).Save(ctx)
 	require.NoError(t, err)
 
-	controller := NewIncidentController(service.NewIncidentService(client, zaptest.NewLogger(t).Sugar()), nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
+	controller := NewIncidentController(service.NewIncidentService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard()), nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
 	router := gin.New()
 	router.Use(func(c *gin.Context) {
 		c.Set("user_id", user.ID)
@@ -312,7 +312,7 @@ func TestGetIncidentRequiresAuthenticatedActionActor(t *testing.T) {
 	defer client.Close()
 	tenant, err := client.Tenant.Create().SetName("actor").SetCode("actor").SetDomain("actor.test").SetStatus("active").Save(context.Background())
 	require.NoError(t, err)
-	controller := NewIncidentController(service.NewIncidentService(client, zaptest.NewLogger(t).Sugar()), nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
+	controller := NewIncidentController(service.NewIncidentService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard()), nil, nil, nil, nil, zaptest.NewLogger(t).Sugar())
 
 	for _, testCase := range []struct {
 		name   string

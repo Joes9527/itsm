@@ -205,3 +205,23 @@ KAF 的 repository 和 transaction-client 两条写入路径均继承 ProcessIns
 - `s3-producer-build.json`：后端全量构建 exit 0。
 
 独立 reviewer `review_execution_scope_s1` 对引用来源、传递路径和错误分类未发现阻断问题。以上只证明结构引用，不证明候选发布许可：Enqueue 的原事务/成员准入、未解析主体在 candidate 下拒绝、专业/共享业务修改和历史副作用仍待接入；队列 claim/recovery 和 Stream 隔离也未完成。零引用不能视为获准执行，当前不能启动候选。S3 保持未完成，CandidateSHA 仍为 `d7470a32dbb87acc9b5e4d9a895a146410723561`；未推送、合并 main、修改 B 配置或操作共享数据库。
+
+
+### B2 S3 Incident command 事务范围（2026-09-13，Incident 全入口未完成）
+
+在生产者提交 `ff3fbcd71` 上接入 `ApplyIncidentCommand` / `applyIncidentCommandTx`：原 actor/tenant 权限、幂等回执、version 和生命周期转换检查保留；首次 Ticket UPDATE 前，在调用方原事务绑定可信 scope 并核验 WorkItem 成员。范围拒绝与数据库失败分开处理，后者保留原始错误链。独立命令与 AssignmentAction、StatusChangeAction 共用此核心，不另开业务事务或补录历史成员。
+
+IncidentService、IncidentRuleEngine、IncidentEscalationService 的构造参数显式携带 policy；bootstrap 在运行身份准入后冻结同一 policy，供 Intake 与 Incident 使用。规则解析器向动作传递该依赖；独立 container 验证执行配置后注入，但运行角色准入仍属于其调用方的启动职责。已有测试和内部 owner 构造同步，没有新增生产 standard 默认值。
+
+本次证据仍位于 B2 本地目录：
+
+- `s3-incident-policy-red.log`：缺少策略字段的 RED；新增测试覆盖未配置策略时无命令写入。
+- `s3-incident-guard-red.log`：临时撤销原事务检查后，历史 Incident 的有效 start 命令被接受，测试如期失败；随后恢复实现。
+- `s3-incident-regression-final.log`：service/intake/controller/integration 中 Incident、assignment、status action 和 intake 定向回归 PASS。前期 fixture wrapper 签名与两处 BPMN callback fixture 未显式注入造成的失败已修正。
+- `s3-incident-final-pg.log`：真实私有 PG + enforce tenant driver + 受限目录快照验证 PASS。新命令成功、历史命令拒绝且事件/审计不增；迁移前由 standard service 生成的真实 command receipt 在候选中只读 replay；Assignment/StatusChange 的调用方 RR 事务内新成员可修改、历史成员拒绝，回滚后版本/状态/审计/outbox 不变。另注入 start 命令 outbox 已写入后的失败，核验 Ticket 完整字段及 audit/outbox/timeline 回滚。此用例不证明 resolve 扩展字段或 reopen SLA 归档已完成候选验收。
+- 同一 final PG 日志还包含范围登记及 PG/Redis/MinIO 完整应用构造保全，三个顶层真实用例均 PASS、未 skip。
+- `s3-incident-build.json`：后端构建 exit 0；`s3-incident-tagged-compile.log` 是 integration_postgres 标签下受影响调用方的编译检查，未运行目标环境 E2E。
+
+独立 reviewer `review_execution_scope_s1` 对上述限定事务边界、构造传递、replay 与测试设计复审无阻断问题。**仍未完成的 Incident 边界**：ExecuteRule 会先写 execution 并更新规则统计，不能以受保护 action 宣称整次规则调用无历史写入；直接 EscalateIncidentTx/EscalateToMajorIncident、UpdateIncidentTx、LinkIncidentCIs、CreateIncidentEvent/Metric、NotificationAction/MetricCollectionAction 仍待接入。给这些 owner 传入 policy 本身不等于其所有方法已受保护。
+
+S3、其他业务域/共享写入口、生产者成员准入和 S4–S6 仍未完成。未启动候选、修改 B 配置、执行共享数据库变更、推送或合并 main；固定 CandidateSHA 和 T3/T4 门禁不变。

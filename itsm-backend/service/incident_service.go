@@ -26,6 +26,7 @@ import (
 )
 
 type IncidentService struct {
+	execution             *database.ExecutionPolicy
 	directory             database.DirectorySnapshot
 	priorityMatrixService *PriorityMatrixService
 	client                *ent.Client
@@ -39,13 +40,13 @@ type IncidentAlertCreator interface {
 	CreateIncidentAlert(context.Context, *dto.CreateIncidentAlertRequest, int) (*dto.IncidentAlertResponse, error)
 }
 
-func NewIncidentService(client *ent.Client, logger *zap.SugaredLogger) *IncidentService {
-	incidentService := &IncidentService{
+func NewIncidentService(client *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *IncidentService {
+	incidentService := &IncidentService{execution: execution,
 		client:                client,
 		logger:                logger,
 		priorityMatrixService: NewPriorityMatrixService(logger),
 	}
-	incidentService.ruleEngine = NewIncidentRuleEngine(client, logger)
+	incidentService.ruleEngine = NewIncidentRuleEngine(client, logger, execution)
 	return incidentService
 }
 
@@ -886,7 +887,7 @@ func (s *IncidentService) EscalateToMajorIncident(ctx context.Context, id, userI
 	if err != nil {
 		return err
 	}
-	_, eventErr := NewIncidentService(tx.Client(), s.logger).CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
+	_, eventErr := NewIncidentService(tx.Client(), s.logger, s.execution).CreateIncidentEvent(ctx, &dto.CreateIncidentEventRequest{
 		IncidentID: id, EventType: "major_incident_escalation", EventName: "升级为重大事件",
 		Description: strings.TrimSpace(req.BusinessImpact), Status: "active", Severity: "critical",
 		Data: map[string]interface{}{

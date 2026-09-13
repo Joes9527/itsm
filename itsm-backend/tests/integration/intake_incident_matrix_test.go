@@ -20,7 +20,7 @@ func TestIntakeIncidentConfiguredMatrixAndReplay(t *testing.T) {
 	restrictEntryPermissions(t, f)
 	ctx := context.Background()
 	logger := zap.NewNop().Sugar()
-	owner := service.NewIncidentService(f.client, logger)
+	owner := service.NewIncidentService(f.client, logger, executionfixture.Standard())
 	matrix := service.NewPriorityMatrixService(logger)
 	require.NoError(t, matrix.SetMatrix(f.identity.TenantID, service.PriorityMatrix{"medium": {"medium": "critical"}}))
 	owner.SetPriorityMatrixService(matrix)

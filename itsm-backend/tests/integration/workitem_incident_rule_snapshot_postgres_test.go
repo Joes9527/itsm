@@ -14,6 +14,7 @@ import (
 	"itsm-backend/database"
 	"itsm-backend/ent"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"sync"
 	"testing"
 	"time"
@@ -73,7 +74,7 @@ func TestWorkItemIncidentRuleAuthorizationSnapshot(t *testing.T) {
 		}
 		return err
 	}}
-	svc := service.NewIncidentService(clients.Tenant, zap.NewNop().Sugar())
+	svc := service.NewIncidentService(clients.Tenant, zap.NewNop().Sugar(), executionfixture.Standard())
 	svc.SetDirectorySnapshot(barrier)
 	rule := f.client.IncidentRule.Create().SetTenantID(f.tenant.ID).SetName("Snapshot status action").SetRuleType("automation").SetIsActive(true).SetConditions(map[string]interface{}{}).SetActions([]map[string]interface{}{{"type": "change_status", "status": "in_progress"}}).SaveX(f.ctx)
 	before := f.client.Ticket.GetX(f.ctx, f.inc.WorkItemID)
@@ -109,6 +110,7 @@ func TestWorkItemIncidentRuleCallerTransactionSnapshot(t *testing.T) {
 			_, err = tx.IncidentRuleActionReceipt.Create().SetTenantID(f.tenant.ID).SetExecutionID(execution.ID).SetActionIndex(0).Save(f.ctx)
 			require.NoError(t, err)
 			action := &service.StatusChangeAction{Status: "in_progress"}
+			action.SetExecutionPolicy(executionfixture.Standard())
 			action.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 			err = action.ExecuteTx(service.WithIncidentAlertActor(f.ctx, f.actor.ID, "incident_rule", "caller-"+isolation.String()), tx, f.inc, f.tenant.ID)
 			if isolation == sql.LevelReadCommitted {

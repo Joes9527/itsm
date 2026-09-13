@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"itsm-backend/authorization"
 	"itsm-backend/common"
+	"itsm-backend/common/executionscope"
 	"itsm-backend/common/tenantctx"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
@@ -31,6 +32,9 @@ func ValidateIncidentRecovery(resolution string) error {
 
 func (s *IncidentService) ApplyIncidentCommand(ctx context.Context, cmd dto.IncidentCommand) (workitemmutation.Result, error) {
 	var empty workitemmutation.Result
+	if s == nil || s.client == nil || s.execution == nil {
+		return empty, common.NewForbiddenError("incident execution policy required")
+	}
 	cmd.Action = strings.TrimSpace(cmd.Action)
 	cmd.Reason = strings.TrimSpace(cmd.Reason)
 	cmd.Resolution = strings.TrimSpace(cmd.Resolution)
@@ -134,7 +138,7 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 		if item.Status == common.IncidentStatusNew && item.AssigneeID == 0 {
 			target = common.IncidentStatusAssigned
 		}
-		if err := NewIncidentService(tx.Client(), s.logger).validateIncidentAssignee(ctx, cmd.AssigneeID, m.TenantID); err != nil {
+		if err := NewIncidentService(tx.Client(), s.logger, s.execution).validateIncidentAssignee(ctx, cmd.AssigneeID, m.TenantID); err != nil {
 			return empty, err
 		}
 	case "escalate":
@@ -177,6 +181,12 @@ func (s *IncidentService) applyIncidentCommandTx(ctx context.Context, tx *ent.Tx
 	}
 	if !valid {
 		return empty, common.NewValidationError(fmt.Sprintf("invalid incident action %s from %s", cmd.Action, item.Status), nil)
+	}
+	if err := s.execution.BindEnt(ctx, tx, m.TenantID); err != nil {
+		return empty, incidentExecutionFailure(err)
+	}
+	if err := s.execution.RequireEntMembers(ctx, tx, m.TenantID, item.ID); err != nil {
+		return empty, incidentExecutionFailure(err)
 	}
 	now := time.Now().UTC()
 	update := tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantID(m.TenantID), ticket.DeletedAtIsNil(), ticket.Version(m.ExpectedVersion)).SetVersion(m.ExpectedVersion + 1).SetUpdatedAt(now)
@@ -284,4 +294,11 @@ func (s *IncidentService) authorizeIncidentCommandActor(ctx context.Context, tx 
 		return common.NewForbiddenError("insufficient current Incident permission")
 	}
 	return nil
+}
+
+func incidentExecutionFailure(err error) error {
+	if errors.Is(err, executionscope.ErrDenied) {
+		return common.NewForbiddenError("incident execution scope denied")
+	}
+	return fmt.Errorf("verify incident execution scope: %w", err)
 }

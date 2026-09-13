@@ -24,6 +24,7 @@ import (
 
 // IncidentEscalationService 事件升级服务
 type IncidentEscalationService struct {
+	execution    *database.ExecutionPolicy
 	directory    database.DirectorySnapshot
 	client       *ent.Client
 	logger       *zap.SugaredLogger
@@ -39,8 +40,8 @@ func (s *IncidentEscalationService) SetAlertCreator(creator IncidentAlertCreator
 }
 
 // NewIncidentEscalationService 创建事件升级服务
-func NewIncidentEscalationService(client *ent.Client) *IncidentEscalationService {
-	return &IncidentEscalationService{
+func NewIncidentEscalationService(client *ent.Client, execution *database.ExecutionPolicy) *IncidentEscalationService {
+	return &IncidentEscalationService{execution: execution,
 		client: client,
 		logger: zap.L().Sugar(),
 	}
@@ -319,7 +320,7 @@ func (s *IncidentEscalationService) escalateIncident(ctx context.Context, incide
 		return nil, err
 	}
 	defer tx.Rollback()
-	owner := NewIncidentService(s.client, s.logger)
+	owner := NewIncidentService(s.client, s.logger, s.execution)
 	owner.SetDirectorySnapshot(s.directory)
 	reason := fmt.Sprintf("escalation rule %d (%s), trigger %s after %d minutes, level %d", rule.ID, rule.Name, rule.TriggerType, rule.TriggerMinutes, rule.EscalationLevel)
 	cmd := dto.IncidentCommand{IncidentID: incidentEnt.ID, Action: "escalate", EscalationLevel: rule.EscalationLevel, AssigneeID: rule.TargetAssigneeID, Reason: reason, Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: actor.ID, ExpectedVersion: item.Version, Source: actor.Source, OperationID: actor.CorrelationID + ":escalate", CorrelationID: actor.CorrelationID}}
