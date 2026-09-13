@@ -203,6 +203,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+首次业务写身份撤销RED `e12a7d297`：真实intake已核验工具后、Ticket INSERT前提交用户停用，仍创建工单/receipt各一条；撤权实际提交标记通过，5秒有界，独立复核确认，见T1和s5-tool-actor-revocation-red.log。actor/approver/requester同一fixture，非三者专项。当前生产未修，新增具名及全套为RED，不能以先前GREEN放行。下一步在窄权限边界保护原invocation、去重排序的相关用户及现有授权读取的Role/RolePermission/Permission，再复用领域规则重验（含真实super_admin role）；实际支持委派时覆盖会话/分配依赖，不另建权限规则或扩大业务配置写权。统一锁序并验证撤权先提交拒绝、业务先锁则撤权等待commit/rollback，保留RR冲突重试；替换同步hook防止自等锁/超时假通过。CandidateSHA与未启动状态不变，后续门禁未放行。
+
 运行绑定撤销验证 `32d374953`：扩展真实PG结果事务锁验证，binding deployment变化、mode改standard、删除绑定分别等待结果commit/rollback；从实际mutation事务取得PID并与撤权连接pg_blocking_pids精确匹配，撤权完成后下一调用拒绝、回执保全。取消等待后再恢复fixture，独立复核无阻断；定向及最终完整私有race通过，无skip/race，见T1。仅测试/文档，无生产变更或重复build；不证明standard保护或目标PG17。审批/身份变化及结果竞争仍待完成，CandidateSHA与未启动状态不变，T3/T4/G2/G3未放行。
 
 工具编辑原事务检查点 `b107922c1`：真实UpdateTicket以不存在调用ID修改版本RED→GREEN；在业务Replay前复用当前审批/来源/042锁，绑定ai_tool与tool:update_ticket操作身份及完整获批编辑DTO摘要（含OperationID）。无调用、title/version/source/operation变造与pending拒绝；合法queue一次版本更新，业务回执重放整行保全，批准失效后重放拒绝。实际Ticket UPDATE后故障回滚且不提交审计回执，原调用重试一次修改；不是审计INSERT后故障。完整私有race、具名工具及普通编辑race、build和独立复核通过，无skip/race，见T1。target/actor/parent逐项及审批/身份并发专项不计入本项，目标T3/T4/G2/G3仍未放行，CandidateSHA与未启动状态不变。
