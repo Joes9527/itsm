@@ -1276,3 +1276,19 @@ s5-connector-http-final-unit.log具名controller/connector/database race PASS。
 CandidateSHA、候选停止及共享环境边界不变，完整目标与S5/S6/T3/T4/G3未完成。无共享数据库变更、真实企业/云调用、push或main合并。最终构建及审阅下方补记。
 
 最终 s5-connector-http-build.log 全后端build exit0，git diff --check通过，独立最终审阅无新增阻断。当前完整私有suite仍为上述三项直接激活RED，未放行候选。
+
+### B2 S5 Manager 配置 owner 准入与可信投递夹具迁移（2026-09-14）
+
+Manager.Provision第一行调用同一RequireIntegrationManagement，Enabled=false不再通过早返回绕过准入；Revoke改为带context并返回error，在自身owner检查策略、租户、取消及生命周期状态。普通入口只允许standard显式匹配租户；candidate必须走既有ActivateStartupTargets，不因现存配置/HTTP已检查而放行。LoadAll保留先connector_poll启动准入、再WithTenantID清除SystemBypass的链路，真实私有standard恢复正向保留。
+
+s5-manager-revoke-red.log通过真实声明启动builtin Webhook，复现旧直接Revoke移除已声明实例；修复后拒绝且对象/generation不变。关闭错误返回而不移除实例，HTTP停止后续DB删除；Enabled=false同样传播关闭错误。多实例撤销仍可能部分完成，未解决实例/数据库跨步骤事务及快照并发。CloseAll仍负责停机清理，不使用请求gate。
+
+candidate正向夹具逐项迁移：本地通知和Feishu探针声明local_only及稳定通用目的地摘要，保留原TaskDestinationIdentity、通知/专业投递协议；Webhook初始目标走冻结声明，third目标用新启动配置和新Manager验证旧receipt目标集不扩展；ACK可信启动旅程未改回普通Provision。destination_changed/during_send_rebind保留显式standard可变实例以验证原摘要/generation防御；读取既存实例同样明确standard负测前置，不能当candidate激活证据。其余普通connector/controller/service/Feishu夹具显式standard策略与tenantctx，未把原candidate请求RED换成standard。
+
+s5-manager-gate-full-private.log完整私有PG16/Redis/MinIO候选注册、intake边界、构造保全及Stream恢复race PASS，无FAIL/SKIP/DATA RACE；507f62293原直接激活三项RED现关闭，候选请求零实例/零外呼/配置保全。此证据在下述取消补丁之前，后续针对变化补验，不能声称目标WSL PG17/完整应用G2通过。
+
+独立审阅P2指出Init期间取消仍可能发布实例，s5-manager-cancel-red.log用阻塞Init、cancel后释放且Init返回nil真实复现旧Provision成功。现发布锁内重新ctx.Err，关闭新对象，errors.Join保留取消及关闭失败cause；实例不发布。s5-manager-final-unit.log四包具名race PASS；s5-manager-gate-matrix.log Manager矩阵PASS，覆盖nilManager/nilgate/缺tenant/外tenant/SystemBypass/canceled/candidate，分别激活/disabled/直接Revoke均在Init之前拒绝；关闭失败保留对象/generation。s5-manager-standard-fixtures.log补齐飞书手动/自动/并发/读取、BPMN CC及消费者启动失败清理具名race PASS。未将未匹配测试当全包验证。
+
+独立最终复核无新增阻断。声明的targetAuthority scope/能力尚未由全部投递owner消费，Send/Get/GetInstance裸实例权限仍需封闭；目标存在不等于投递授权。当前完整目标、S5/S6及T3/T4/G3仍未完成，CandidateSHA保持不变，候选未启动；无共享环境操作、真实企业/云外呼、push/main合并。兼容编译及最终构建下方补记。
+
+最终 s5-manager-legacy-compile.log 的integration_postgres标签编译通过（no tests to run，未执行该标签数据库测试）；s5-manager-build.log 全后端build exit0，git diff --check通过。无进行中的Go进程，后续可安全继续编辑。

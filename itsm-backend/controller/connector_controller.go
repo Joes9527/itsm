@@ -230,7 +230,10 @@ func (c *ConnectorController) Revoke(ctx *gin.Context) {
 	// The name-scoped endpoint removes the same tenant/name set as deleteConfig.
 	for _, cfg := range c.manager.ListByTenant(tenantID) {
 		if cfg.Name == name {
-			c.manager.Revoke(cfg)
+			if err := c.manager.Revoke(ctx.Request.Context(), cfg); err != nil {
+				common.Fail(ctx, common.InternalErrorCode, "连接器停用未完成")
+				return
+			}
 		}
 	}
 	// 从数据库删除配置

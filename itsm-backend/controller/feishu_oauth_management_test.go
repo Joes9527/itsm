@@ -31,9 +31,9 @@ func TestFeishuOAuthManagementDenialPrecedesExchange(t *testing.T) {
 				_, _ = w.Write([]byte(`{"code":1,"msg":"local denied probe"}`))
 			}))
 			defer receiver.Close()
-			manager := connector.NewManager(nil, zap.NewNop().Sugar(), nil)
+			manager := connector.NewManager(nil, zap.NewNop().Sugar(), standardConnectorManagementPolicy(t))
 			defer manager.CloseAll()
-			require.NoError(t, manager.Provision(context.Background(), connector.Config{Name: "feishu", TenantID: 17, Enabled: true, Credentials: map[string]string{"app_id": "local-app", "app_secret": "synthetic-secret"}, Settings: map[string]interface{}{"base_url": receiver.URL, "callbackInstanceId": "c83503e86cc5468aaab482cd204f30fa"}}))
+			require.NoError(t, manager.Provision(tenantctx.WithTenantID(context.Background(), 17), connector.Config{Name: "feishu", TenantID: 17, Enabled: true, Credentials: map[string]string{"app_id": "local-app", "app_secret": "synthetic-secret"}, Settings: map[string]interface{}{"base_url": receiver.URL, "callbackInstanceId": "c83503e86cc5468aaab482cd204f30fa"}}))
 			var service *market.Service
 			if mode == "candidate" {
 				policy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "oauth-test", Scopes: []config.ExecutionScopeConfig{{TenantID: 17, ScopeID: "149ff1af-a27c-47c7-827f-103271130bb9"}}})
@@ -67,10 +67,10 @@ func TestFeishuOAuthManagementDenialPrecedesExchange(t *testing.T) {
 }
 
 func TestFeishuOAuthAmbiguousInstanceFailsClosed(t *testing.T) {
-	manager := connector.NewManager(nil, zap.NewNop().Sugar(), nil)
+	manager := connector.NewManager(nil, zap.NewNop().Sugar(), standardConnectorManagementPolicy(t))
 	defer manager.CloseAll()
 	for _, tenantID := range []int{17, 18} {
-		require.NoError(t, manager.Provision(context.Background(), connector.Config{Name: "feishu", TenantID: tenantID, Enabled: true, Credentials: map[string]string{"app_id": "local-app", "app_secret": "synthetic-secret"}, Settings: map[string]interface{}{"callbackInstanceId": "duplicate-instance"}}))
+		require.NoError(t, manager.Provision(tenantctx.WithTenantID(context.Background(), tenantID), connector.Config{Name: "feishu", TenantID: tenantID, Enabled: true, Credentials: map[string]string{"app_id": "local-app", "app_secret": "synthetic-secret"}, Settings: map[string]interface{}{"callbackInstanceId": "duplicate-instance"}}))
 	}
 	found, tenantID, ok := manager.GetByCallbackInstanceID("feishu", "duplicate-instance")
 	assert.False(t, ok)

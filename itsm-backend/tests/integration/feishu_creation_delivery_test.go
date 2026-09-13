@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/ent/auditlog"
 	"itsm-backend/ent/outboxevent"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -58,10 +60,10 @@ func TestIntakeGenericFeishuIntentFreezesAndDeliversOwningMapping(t *testing.T) 
 	fixture := newUnifiedIntakeFixture(t, func(client *ent.Client, logger *zap.SugaredLogger) *service.TicketService {
 		registry := connector.NewRegistry()
 		registry.Register(func() connector.Connector { return fake })
-		manager := connector.NewManager(registry, logger, nil)
+		manager := connector.NewManager(registry, logger, executionfixture.Standard())
 		t.Cleanup(manager.CloseAll)
 		tenant := client.Tenant.Query().OnlyX(context.Background())
-		require.NoError(t, manager.Provision(context.Background(), connector.Config{TenantID: tenant.ID, Name: "feishu", Type: connector.TypeIM, Enabled: true}))
+		require.NoError(t, manager.Provision(tenantctx.WithTenantID(context.Background(), tenant.ID), connector.Config{TenantID: tenant.ID, Name: "feishu", Type: connector.TypeIM, Enabled: true}))
 		return configuredCreationTicketOwnerWithConnector(client, logger, manager)
 	})
 	ctx := context.Background()
@@ -128,10 +130,10 @@ func TestFeishuManualSyncKeepsGovernedIntentAndCurrentAuthority(t *testing.T) {
 	f := newUnifiedIntakeFixture(t, func(client *ent.Client, logger *zap.SugaredLogger) *service.TicketService {
 		registry := connector.NewRegistry()
 		registry.Register(func() connector.Connector { return fake })
-		manager := connector.NewManager(registry, logger, nil)
+		manager := connector.NewManager(registry, logger, executionfixture.Standard())
 		t.Cleanup(manager.CloseAll)
 		tenant := client.Tenant.Query().OnlyX(context.Background())
-		require.NoError(t, manager.Provision(context.Background(), connector.Config{TenantID: tenant.ID, Name: "feishu", Type: connector.TypeIM, Enabled: true}))
+		require.NoError(t, manager.Provision(tenantctx.WithTenantID(context.Background(), tenant.ID), connector.Config{TenantID: tenant.ID, Name: "feishu", Type: connector.TypeIM, Enabled: true}))
 		return configuredCreationTicketOwnerWithConnector(client, logger, manager)
 	})
 	ctx := context.Background()
@@ -230,10 +232,10 @@ func TestTicketReadDoesNotUpdateFeishuTask(t *testing.T) {
 	fixture := newUnifiedIntakeFixture(t, func(client *ent.Client, logger *zap.SugaredLogger) *service.TicketService {
 		registry := connector.NewRegistry()
 		registry.Register(func() connector.Connector { fc = feishu.New(); return fc })
-		manager := connector.NewManager(registry, logger, nil)
+		manager := connector.NewManager(registry, logger, executionfixture.Standard())
 		t.Cleanup(manager.CloseAll)
 		tenant := client.Tenant.Query().OnlyX(ctx)
-		require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "feishu", Enabled: true, Credentials: map[string]string{"app_id": "local-app", "app_secret": "local-only"}, Settings: map[string]any{"base_url": server.URL}}))
+		require.NoError(t, manager.Provision(tenantctx.WithTenantID(ctx, tenant.ID), connector.Config{TenantID: tenant.ID, Name: "feishu", Enabled: true, Credentials: map[string]string{"app_id": "local-app", "app_secret": "local-only"}, Settings: map[string]any{"base_url": server.URL}}))
 		owner = configuredCreationTicketOwnerWithConnector(client, logger, manager)
 		return owner
 	})

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"itsm-backend/common/tenantctx"
 	executionfixture "itsm-backend/tests/fixtures/execution"
 	"sync"
 	"sync/atomic"
@@ -171,12 +172,12 @@ func configureDurableNotificationConnector(t *testing.T, service *TicketNotifica
 	t.Helper()
 	registry := connector.NewRegistry()
 	registry.Register(func() connector.Connector { return fake })
-	manager := connector.NewManager(registry, zaptest.NewLogger(t).Sugar(), nil)
+	manager := connector.NewManager(registry, zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	connectorName := fake.name
 	if connectorName == "" {
 		connectorName = "webhook"
 	}
-	require.NoError(t, manager.Provision(context.Background(), connector.Config{
+	require.NoError(t, manager.Provision(tenantctx.WithTenantID(context.Background(), tenantID), connector.Config{
 		TenantID: tenantID,
 		Name:     connectorName,
 		Type:     connector.TypeEmail,

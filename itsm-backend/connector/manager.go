@@ -71,6 +71,9 @@ func (m *Manager) RequireIntegrationManagement(ctx context.Context, tenantID int
 
 // Provision 根据配置创建/更新一个连接器实例
 func (m *Manager) Provision(ctx context.Context, cfg Config) error {
+	if err := m.RequireIntegrationManagement(ctx, cfg.TenantID); err != nil {
+		return err
+	}
 	m.mu.Lock()
 	unavailable := m.closed || m.startupAttempted
 	if unavailable {
@@ -81,14 +84,17 @@ func (m *Manager) Provision(ctx context.Context, cfg Config) error {
 	m.mu.Unlock()
 	defer m.initializing.Done()
 	if !cfg.Enabled {
-		m.Revoke(cfg)
-		return nil
+		return m.Revoke(ctx, cfg)
 	}
 	c, err := m.initializeConnector(ctx, cfg, nil, "")
 	if err != nil {
 		return err
 	}
 	m.mu.Lock()
+	if err := ctx.Err(); err != nil {
+		m.mu.Unlock()
+		return errors.Join(err, c.Close())
+	}
 	if m.closed || m.startupAttempted {
 		m.mu.Unlock()
 		return errors.Join(executionscope.ErrDenied, c.Close())
@@ -104,19 +110,31 @@ func (m *Manager) Provision(ctx context.Context, cfg Config) error {
 }
 
 // Revoke 关闭并移除一个实例
-func (m *Manager) Revoke(cfg Config) {
+func (m *Manager) Revoke(ctx context.Context, cfg Config) error {
+	if err := m.RequireIntegrationManagement(ctx, cfg.TenantID); err != nil {
+		return err
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.closed || m.startupAttempted {
+		return executionscope.ErrDenied
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	k := instanceKey(cfg)
 	inst, ok := m.instances[k]
 	if !ok {
-		return
+		return nil
 	}
-	_ = inst.conn.Close()
+	if err := inst.conn.Close(); err != nil {
+		return fmt.Errorf("connector close failed: %w", err)
+	}
 	delete(m.instances, k)
 	if m.logger != nil {
 		m.logger.Infow("connector revoked", "tenant", cfg.TenantID, "name", cfg.Name)
 	}
+	return nil
 }
 
 // Get 根据租户+名称取出连接器

@@ -30,14 +30,14 @@ func provisionTestWebhook(t *testing.T, manager *connector.Manager, tenantID int
 			"url": url,
 		},
 	}
-	require.NoError(t, manager.Provision(t.Context(), cfg))
+	require.NoError(t, manager.Provision(tenantctx.WithTenantID(t.Context(), cfg.TenantID), cfg))
 }
 
 func TestWebhookEventSubscriber_PushesToConfiguredWebhook(t *testing.T) {
 	var received atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { received.Add(1); w.WriteHeader(http.StatusOK) }))
 	defer server.Close()
-	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), nil)
+	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	defer manager.CloseAll()
 	provisionTestWebhook(t, manager, 7, server.URL)
 	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
@@ -49,7 +49,7 @@ func TestWebhookEventSubscriber_PushesToConfiguredWebhook(t *testing.T) {
 }
 
 func TestWebhookEventSubscriber_RejectsTenantWithoutWebhook(t *testing.T) {
-	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), nil)
+	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
 
 	// Required dispatch without a target must not be acknowledged as success.
@@ -61,7 +61,7 @@ func TestWebhookEventSubscriber_RejectsTenantWithoutWebhook(t *testing.T) {
 }
 
 func TestWebhookEventSubscriber_RejectsMissingTenant(t *testing.T) {
-	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), nil)
+	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
 
 	err := sub.Handle(map[string]interface{}{"eventType": "sla.breached"})
@@ -76,7 +76,7 @@ func TestWebhookEventSubscriber_RejectsUnknownEventBeforeSend(t *testing.T) {
 	var count atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { count.Add(1); w.WriteHeader(http.StatusOK) }))
 	defer server.Close()
-	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), nil)
+	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	defer manager.CloseAll()
 	provisionTestWebhook(t, manager, 7, server.URL)
 	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
@@ -85,13 +85,13 @@ func TestWebhookEventSubscriber_RejectsUnknownEventBeforeSend(t *testing.T) {
 }
 
 func TestWebhookEventSubscriber_SendsToEachDeclaredInstance(t *testing.T) {
-	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), nil)
+	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	defer manager.CloseAll()
 	counts := make([]atomic.Int32, 3)
 	for i := range counts {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { counts[i].Add(1); w.WriteHeader(http.StatusOK) }))
 		defer server.Close()
-		require.NoError(t, manager.Provision(t.Context(), connector.Config{Name: "webhook", Provider: fmt.Sprint(i), TenantID: 7, Enabled: true, Settings: map[string]interface{}{"url": server.URL}}))
+		require.NoError(t, manager.Provision(tenantctx.WithTenantID(t.Context(), 7), connector.Config{Name: "webhook", Provider: fmt.Sprint(i), TenantID: 7, Enabled: true, Settings: map[string]interface{}{"url": server.URL}}))
 	}
 	sub := NewWebhookEventSubscriber(manager, zaptest.NewLogger(t).Sugar(), nil, executionfixture.Standard())
 	for attempt := int32(1); attempt <= 10; attempt++ {
@@ -103,7 +103,7 @@ func TestWebhookEventSubscriber_SendsToEachDeclaredInstance(t *testing.T) {
 }
 
 func TestWebhookEventSubscriber_UsesDeliveryContext(t *testing.T) {
-	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), nil)
+	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	defer manager.CloseAll()
 	var count atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { count.Add(1); w.WriteHeader(http.StatusOK) }))
@@ -124,13 +124,13 @@ func TestWebhookEventSubscriber_UsesDeliveryContext(t *testing.T) {
 }
 
 func TestWebhookExactInstanceDispatchDoesNotFallback(t *testing.T) {
-	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), nil)
+	manager := connector.NewManager(connector.Default(), zaptest.NewLogger(t).Sugar(), executionfixture.Standard())
 	defer manager.CloseAll()
 	var count atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { count.Add(1); w.WriteHeader(http.StatusOK) }))
 	defer server.Close()
 	cfg := connector.Config{Name: "webhook", Provider: "chosen", TenantID: 7, Enabled: true, Settings: map[string]interface{}{"url": server.URL}}
-	require.NoError(t, manager.Provision(t.Context(), cfg))
+	require.NoError(t, manager.Provision(tenantctx.WithTenantID(t.Context(), cfg.TenantID), cfg))
 	msg := &connector.Message{Type: "text", Content: "test"}
 	_, _, ok := manager.GetInstance(8, "webhook", "chosen")
 	require.False(t, ok)
@@ -140,7 +140,7 @@ func TestWebhookExactInstanceDispatchDoesNotFallback(t *testing.T) {
 	chosen, _, ok := manager.GetInstance(7, "webhook", "chosen")
 	require.True(t, ok)
 	require.NoError(t, chosen.Send(t.Context(), msg))
-	manager.Revoke(cfg)
+	require.NoError(t, manager.Revoke(tenantctx.WithTenantID(t.Context(), cfg.TenantID), cfg))
 	provisionTestWebhook(t, manager, 7, server.URL)
 	_, _, ok = manager.GetInstance(7, "webhook", "chosen")
 	require.False(t, ok)

@@ -629,8 +629,9 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		defer receiver.Close()
 		reg := connector.NewRegistry()
 		reg.Register(func() connector.Connector { return &candidateHealthProbe{target: receiver.URL} })
-		manager := connector.NewManager(reg, zap.NewNop().Sugar(), policy)
+		manager := connector.NewManager(reg, zap.NewNop().Sugar(), candidateTestStandardManagement(t))
 		defer manager.CloseAll()
+		// Read-only defense fixture built using standard management, not candidate activation.
 		// Existing runtime instances have no candidate enrollment or WorkItem authority.
 		for _, id := range []int{tenant.ID, tenant.ID + 1} {
 			require.NoError(t, manager.Provision(tenantctx.WithTenantID(ctx, id), connector.Config{TenantID: id, Name: "webhook", Provider: "local-health-probe", Enabled: true}))
@@ -3176,9 +3177,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		receiver := &candidateNotificationConnector{}
 		registry := connector.NewRegistry()
 		registry.Register(func() connector.Connector { return receiver })
-		manager := connector.NewManager(registry, zap.NewNop().Sugar(), nil)
-		defer manager.CloseAll()
-		require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Type: connector.TypeEmail, Provider: "local-candidate-test", Enabled: true}))
+		manager := candidateDeclaredManager(t, ctx, tenant.ID, scopeID, registry, config.ConnectorTargetConfig{Name: "webhook", Provider: "local-candidate-test", DestinationDigest: receiver.DeliveryDestinationIdentity(), Capabilities: []string{"notification"}})
 		notifications.SetConnectorManager(manager)
 		makeDelivery := func(key string) *ent.TicketNotification {
 			return owner.TicketNotification.Create().SetTenantID(tenant.ID).SetTicketID(fresh.WorkItemID).SetUserID(actor.ID).SetType("created").SetChannel("webhook").SetContent("Local notification").SetDeliveryKey(key).SetNextAttemptAt(time.Now().Add(-time.Minute)).SaveX(ctx)
@@ -3491,13 +3490,14 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			defer endpoint.Close()
 			registry := connector.NewRegistry()
 			registry.Register(func() connector.Connector { return webhookconnector.New() })
-			manager := connector.NewManager(registry, zap.NewNop().Sugar(), nil)
-			defer manager.CloseAll()
-			provision := func(provider string) {
-				require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: provider, Enabled: true, Settings: map[string]interface{}{"url": endpoint.URL}}))
+			newManager := func(providers ...string) *connector.Manager {
+				targets := make([]config.ConnectorTargetConfig, 0, len(providers))
+				for _, provider := range providers {
+					targets = append(targets, candidateWebhookTarget(provider, endpoint.URL))
+				}
+				return candidateDeclaredManager(t, ctx, tenant.ID, scopeID, registry, targets...)
 			}
-			provision("first")
-			provision("second")
+			manager := newManager("first", "second")
 			subscriber := service.NewWebhookEventSubscriber(manager, zap.NewNop().Sugar(), runtime, policy)
 			outboxBefore, auditBefore := owner.OutboxEvent.Query().CountX(ctx), owner.AuditLog.Query().CountX(ctx)
 			require.Error(t, subscriber.HandleContext(ctx, map[string]interface{}{"eventType": "sla.breached", "tenantId": fmt.Sprint(tenant.ID)}))
@@ -3600,7 +3600,10 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			require.Equal(t, auditBefore+1, owner.AuditLog.Query().CountX(ctx))
 			var intentsBefore string
 			require.NoError(t, ownerDB.QueryRow(`SELECT coalesce(json_agg(e ORDER BY id),'[]')::text FROM outbox_events e WHERE event_type='webhook.event.delivery.requested'`).Scan(&intentsBefore))
-			provision("third")
+			// A new startup configuration adds a target; replay retains the committed target set.
+			manager.CloseAll()
+			manager = newManager("first", "second", "third")
+			subscriber = service.NewWebhookEventSubscriber(manager, zap.NewNop().Sugar(), runtime, policy)
 			require.NoError(t, subscriber.HandleContext(ctx, envelope))
 			require.Equal(t, outboxBefore+2, owner.OutboxEvent.Query().CountX(ctx), "replay cannot discover new targets")
 			require.Equal(t, auditBefore+1, owner.AuditLog.Query().CountX(ctx))
@@ -3709,9 +3712,15 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 					freshEnv.EventID = sourceRow.EventID
 					freshEnv.Payload = raw
 					freshEnv.OccurredAt = captured.(interface{ OccurredAt() time.Time }).OccurredAt()
-					targetManager := connector.NewManager(registry, zap.NewNop().Sugar(), nil)
-					defer targetManager.CloseAll()
-					require.NoError(t, targetManager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: "redirect", Enabled: true, Settings: map[string]interface{}{"url": redirectEndpoint.URL}}))
+					var targetManager *connector.Manager
+					if scenario == "destination_changed" || scenario == "during_send_rebind" {
+						// Standard mutable-instance fixture preserves the original digest/generation defense tests.
+						targetManager = connector.NewManager(registry, zap.NewNop().Sugar(), candidateTestStandardManagement(t))
+						require.NoError(t, targetManager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: "redirect", Enabled: true, Settings: map[string]interface{}{"url": redirectEndpoint.URL}}))
+						t.Cleanup(targetManager.CloseAll)
+					} else {
+						targetManager = candidateDeclaredManager(t, ctx, tenant.ID, scopeID, registry, candidateWebhookTarget("redirect", redirectEndpoint.URL))
+					}
 					require.NoError(t, service.NewWebhookEventSubscriber(targetManager, zap.NewNop().Sugar(), runtime, policy).HandleContext(ctx, freshEnv))
 					if scenario == "destination_changed" {
 						require.NoError(t, targetManager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: "redirect", Enabled: true, Settings: map[string]interface{}{"url": otherEndpoint.URL}}))
@@ -3997,7 +4006,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			defer secondEndpoint.Close()
 			registry := connector.NewRegistry()
 			registry.Register(func() connector.Connector { return webhookconnector.New() })
-			manager := connector.NewManager(registry, zap.NewNop().Sugar(), nil)
+			manager := connector.NewManager(registry, zap.NewNop().Sugar(), candidateTestStandardManagement(t))
 			defer manager.CloseAll()
 			for provider, endpoint := range map[string]string{"ack-first": firstEndpoint.URL, "ack-second": secondEndpoint.URL} {
 				require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "webhook", Provider: provider, Enabled: true, Settings: map[string]interface{}{"url": endpoint}}))
@@ -5484,8 +5493,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		receiver := &candidateFeishuUpdater{destination: "local-test-destination"}
 		registry := connector.NewRegistry()
 		registry.Register(func() connector.Connector { return receiver })
-		manager := connector.NewManager(registry, zap.NewNop().Sugar(), nil)
-		require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "feishu", Provider: "local-test", Enabled: true}))
+		manager := candidateDeclaredManager(t, ctx, tenant.ID, scopeID, registry, config.ConnectorTargetConfig{Name: "feishu", Provider: "local-test", DestinationDigest: receiver.DeliveryDestinationIdentity(), Capabilities: []string{"outbox"}})
 		fresh, err := app.Create(ctx, identity, command("manual-feishu-update", "generic"))
 		require.NoError(t, err)
 		owner.FeishuTicketSync.Create().SetTenantID(tenant.ID).SetTicketID(fresh.WorkItemID).SetFeishuTaskID("local-task").SetFeishuTaskGUID("local-task").SetSyncStatus("synced").SaveX(ctx)
@@ -5785,8 +5793,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				receiver := &candidateFeishuUpdater{destination: "edit-local-" + fault}
 				registry := connector.NewRegistry()
 				registry.Register(func() connector.Connector { return receiver })
-				manager := connector.NewManager(registry, zap.NewNop().Sugar(), nil)
-				require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "feishu", Provider: "local-test", Enabled: true}))
+				manager := candidateDeclaredManager(t, ctx, tenant.ID, scopeID, registry, config.ConnectorTargetConfig{Name: "feishu", Provider: "local-test", DestinationDigest: receiver.DeliveryDestinationIdentity(), Capabilities: []string{"outbox"}})
 				created, err := app.Create(ctx, identity, command("edit-atomic-"+fault, "generic"))
 				require.NoError(t, err)
 				item := owner.Ticket.GetX(ctx, created.WorkItemID)
@@ -5988,7 +5995,10 @@ type candidateNotificationConnector struct {
 }
 
 func (*candidateNotificationConnector) Manifest() connector.Manifest {
-	return connector.Manifest{Name: "webhook", Version: "1.0.0", Title: "Candidate local receiver", Type: connector.TypeEmail, Capabilities: []connector.Capability{connector.CapSendMessage}, RequiredPermissions: []string{"connector:write"}}
+	return connector.Manifest{InitializationBehavior: connector.InitializationLocalOnly, Name: "webhook", Version: "1.0.0", Title: "Candidate local receiver", Type: connector.TypeEmail, Capabilities: []connector.Capability{connector.CapSendMessage}, RequiredPermissions: []string{"connector:write"}}
+}
+func (*candidateNotificationConnector) DeliveryDestinationIdentity() string {
+	return candidateTargetDigest("local-notification-receiver")
 }
 func (*candidateNotificationConnector) Init(context.Context, connector.Config) error { return nil }
 func (c *candidateNotificationConnector) Send(_ context.Context, m *connector.Message) error {
@@ -6036,7 +6046,10 @@ type candidateFeishuUpdater struct {
 }
 
 func (*candidateFeishuUpdater) Manifest() connector.Manifest {
-	return connector.Manifest{Name: "feishu", Version: "1", Title: "Local Feishu receiver", Type: connector.TypeIM, Capabilities: []connector.Capability{connector.CapUpdateTicket}, RequiredPermissions: []string{"connector:write"}}
+	return connector.Manifest{InitializationBehavior: connector.InitializationLocalOnly, Name: "feishu", Version: "1", Title: "Local Feishu receiver", Type: connector.TypeIM, Capabilities: []connector.Capability{connector.CapUpdateTicket}, RequiredPermissions: []string{"connector:write"}}
+}
+func (r *candidateFeishuUpdater) DeliveryDestinationIdentity() string {
+	return candidateTargetDigest(r.destination)
 }
 func (r *candidateFeishuUpdater) TaskDestinationIdentity() string { return r.destination }
 func (r *candidateFeishuUpdater) UpdateTask(_ context.Context, guid string, task *feishu.FeishuTask) (*feishu.FeishuTask, error) {
@@ -6164,4 +6177,37 @@ type candidateRestoreProbe struct {
 func (p *candidateRestoreProbe) Init(context.Context, connector.Config) error {
 	p.inits.Add(1)
 	return nil
+}
+
+// Real deployment policy helpers: candidate positive journeys activate frozen declarations.
+func candidateTestStandardManagement(t *testing.T) *database.ExecutionPolicy {
+	t.Helper()
+	p, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "standard-manager-fixture"})
+	require.NoError(t, err)
+	return p
+}
+func candidateTargetDigest(value string) string {
+	encoded, _ := json.Marshal(value)
+	digest := sha256.Sum256(encoded)
+	return hex.EncodeToString(digest[:])
+}
+func candidateWebhookTarget(provider, endpoint string) config.ConnectorTargetConfig {
+	return config.ConnectorTargetConfig{Name: "webhook", Provider: provider, DestinationDigest: candidateTargetDigest(endpoint), Capabilities: []string{"webhook"}, Settings: map[string]interface{}{"url": endpoint}}
+}
+func candidateDeclaredManager(t *testing.T, ctx context.Context, tenantID int, scopeID string, registry *connector.Registry, targets ...config.ConnectorTargetConfig) *connector.Manager {
+	t.Helper()
+	execution := config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenantID, ScopeID: scopeID}}, Capabilities: map[string]string{}}
+	for i := range targets {
+		targets[i].TenantID, targets[i].ScopeID = tenantID, scopeID
+		for _, capability := range targets[i].Capabilities {
+			execution.Capabilities[capability] = "scoped"
+		}
+	}
+	execution.ConnectorTargets = targets
+	policy, err := database.NewExecutionPolicy(execution)
+	require.NoError(t, err)
+	manager := connector.NewManager(registry, zap.NewNop().Sugar(), policy)
+	t.Cleanup(manager.CloseAll)
+	require.NoError(t, manager.ActivateStartupTargets(tenantctx.SystemContext(ctx, "test:declared-delivery", "activate local declared fixture targets")))
+	return manager
 }

@@ -360,7 +360,7 @@ Creation requester controls use the actual target resource's `create_on_behalf` 
 
 候选API在消费者前调用唯一Manager.ActivateStartupTargets，只消费冻结声明，先整批核验注册manifest的initialization_behavior=local_only，再复用普通Provision的内部初始化函数。Init之后按通用DeliveryDestinationIdentity核对真实目标摘要，全部成功才统一发布实例和generation；Webhook生产者和worker沿用同一身份接口，旧专用接口已移除，摘要含义未变。初始化行为纳入manifest checksum；未知行为拒绝，声明字符串不能替代实现的无外呼/无后台任务证明。目前只有经过检查的builtin Webhook声明local_only，其Init不发网络请求。
 
-初始化失败时关闭当前及已准备对象，并保留清理错误；同一Manager只尝试一次可信启动，失败需新建实例。CloseAll先禁止新增初始化，再等待在途初始化和清理，防止关闭后发布；关闭本身不主动取消Init，生命周期调用方必须先取消上下文，Init须遵守该上下文。普通Provision与可信启动共用此关闭等待。后续消费者启动失败和正常停止由API生命周期清理已激活目标，工具队列Start失败也先Close再关闭目标依赖。可信启动后普通Provision拒绝变更，但启动前直接Provision和裸Send/Get权限仍需单独接入，不把目标存在视为业务投递许可。
+初始化失败时关闭当前及已准备对象，并保留清理错误；同一Manager只尝试一次可信启动，失败需新建实例。CloseAll先禁止新增初始化，再等待在途初始化和清理，防止关闭后发布；关闭本身不主动取消Init，生命周期调用方必须先取消上下文，Init须遵守该上下文。普通Provision与可信启动共用此关闭等待。后续消费者启动失败和正常停止由API生命周期清理已激活目标，工具队列Start失败也先Close再关闭目标依赖。可信启动后普通Provision拒绝变更，但裸Send/Get权限仍需单独接入，不把目标存在视为业务投递许可。
 
 
 候选环境的 Marketplace 安装、历史安装重新启用、卸载、配置替换及连接器配置合并均在首次查询/写入前要求同一 `RequireIntegrationManagement`。当前只有 standard、有效且匹配的显式租户上下文、无 SystemBypass 且请求未取消才允许继续；缺少策略一律拒绝。此部署限制不替代现有 RBAC 或业务授权，也不因商品类型为 skill/plugin 放开配置写入。HTTP handler 传递 Request.Context 保留租户与取消信息，禁止操作返回固定403；连接器依赖缺失不能报告激活成功，standard 已提交配置与后续激活并非原子事务。
@@ -368,4 +368,9 @@ Creation requester controls use the actual target resource's `create_on_behalf` 
 飞书 OAuth callback 在兑换令牌前通过同一部署检查，租户仅来自唯一匹配的回调实例；重复实例 ID 拒绝，query/state 不提供租户授权。配置合并 owner 自身仍再次检查，以覆盖直接调用。nil Marketplace 不跳过持久化并报告成功。本增量不补齐 OAuth state、发起人授权、防重放或兑换与持久化的原子性；普通环境完整 OAuth 安全验收仍需单独完成。候选拒绝在本机接收端验证为零兑换请求，standard 正向使用本机 provider 与 SQLite，私有 PG 配置保全另有真实测试，均不等于生产外部服务验收。
 
 
-连接器 HTTP 配置创建/更新/停用和删除入口现同样在解析、实例变更、持久化和邮件轮询操作之前调用 Manager 委托的 RequireIntegrationManagement；候选、缺策略/Manager、缺失或不匹配租户、SystemBypass 返回固定403，取消等非准入拒绝返回固定失败响应。名称级删除按既有 `(tenant,name)` 数据库范围逐个撤销完整 provider 实例。普通 Manager.Provision/Revoke 直接调用仍待接入，Send/Get 也未封闭；HTTP 门禁不能替代这些 owner 的自身检查。standard 持久化错误的旧处理、配置与实例的非原子性，以及并发新建与名称快照撤销竞争仍待处理。
+连接器 HTTP 配置创建/更新/停用和删除入口现同样在解析、实例变更、持久化和邮件轮询操作之前调用 Manager 委托的 RequireIntegrationManagement；候选、缺策略/Manager、缺失或不匹配租户、SystemBypass 返回固定403，取消等非准入拒绝返回固定失败响应。名称级删除按既有 `(tenant,name)` 数据库范围逐个撤销完整 provider 实例。Manager.Provision（含Enabled=false）及带上下文的Revoke已接入相同owner检查，Send/Get仍未封闭。standard 持久化错误的旧处理、配置与实例的非原子性，以及并发新建与名称快照撤销竞争仍待处理。
+
+
+Manager 配置操作不再允许缺失部署策略或租户上下文。standard 恢复仍先检查 connector_poll 启动权限，LoadAll 按条派生 WithTenantID（清除 SystemBypass）再走普通 Provision，不为恢复放宽请求准入。candidate 只通过声明启动建立目标，普通激活、停用与撤销均拒绝。Revoke 返回关闭错误并保留实例，不把失败当作成功移除；HTTP 收到该错误后停止后续配置删除。多实例撤销仍可能部分完成，并非整组事务。普通 Provision 在初始化后、发布锁内重新检查取消；取消时关闭新对象并保留取消与清理错误。CloseAll 保持停机清理职责，不要求请求管理准入。
+
+对应candidate测试使用真实声明启动；notification/Feishu的本地探针声明local_only和稳定通用目的地摘要，原专业投递身份与断言保留。新增目标的重放测试创建新的启动配置与Manager，检查原receipt不扩展；目标变化和发送中重绑的generation防御保留为显式standard可变实例场景。测试配置不构成目标WSL部署授权，声明目标自身也不替代投递owner对scope、意图与权限的核验。

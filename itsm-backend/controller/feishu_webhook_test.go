@@ -11,10 +11,12 @@ import (
 	"go.uber.org/zap"
 	"io"
 	"itsm-backend/common"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/connector"
 	feishu "itsm-backend/connector/builtin/feishu"
 	"itsm-backend/dto"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -26,8 +28,8 @@ import (
 func webhookFixture(t *testing.T) (*FeishuController, *gin.Engine) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
-	manager := connector.NewManager(nil, zap.NewNop().Sugar(), nil)
-	require.NoError(t, manager.Provision(context.Background(), connector.Config{Name: "feishu", TenantID: 17, Enabled: true, Credentials: map[string]string{"app_id": "test-app", "app_secret": "test-secret", "encrypt_key": "test-key", "verification_token": "test-token"}, Settings: map[string]interface{}{"callbackInstanceId": "c83503e86cc5468aaab482cd204f30fa"}}))
+	manager := connector.NewManager(nil, zap.NewNop().Sugar(), executionfixture.Standard())
+	require.NoError(t, manager.Provision(tenantctx.WithTenantID(context.Background(), 17), connector.Config{Name: "feishu", TenantID: 17, Enabled: true, Credentials: map[string]string{"app_id": "test-app", "app_secret": "test-secret", "encrypt_key": "test-key", "verification_token": "test-token"}, Settings: map[string]interface{}{"callbackInstanceId": "c83503e86cc5468aaab482cd204f30fa"}}))
 	c := NewFeishuController(manager, nil, nil, zap.NewNop().Sugar())
 	r := gin.New()
 	r.POST("/api/v1/feishu/webhook/:instance_id", c.Webhook)
