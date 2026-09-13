@@ -18,6 +18,9 @@
 
 迁移 `043_tool_execution_authorization_lock` 保留042历史校验和，安装五参 `lock_candidate_tool_authorization(uuid,text,bigint,bigint,bigint)` 并删除旧四参函数。新函数依次锁binding、scope、来源登记、原调用，再按ID锁原actor/approver及同租户额外subject用户、Role、RolePermission、Permission，直到调用事务提交或回滚；额外subject仅由创建入口传requester、审批入口传当前决策者，函数不授予代办或审批权限。原调用使用FOR UPDATE以串行化审批/参数/结果变化，其余授权记录FOR SHARE；运行身份不新增IAM配置写权限。权限匹配继续由既有Go授权代码执行，函数锁成功不等于业务授权。PUBLIC及默认角色EXECUTE被剥离，候选准入检查新函数；041/042/043必须按清单顺序应用，旧应用与新迁移不可混跑。ToolQueue前检/结果事务及审批事务使用RepeatableRead；创建/编辑沿用原有RepeatableRead，创建目录导入业务快照。并发快照失效保留底层40001，创建入口已有完整事务重试，审批/队列不吞错继续执行。仅candidate路径获得这些锁，standard不据此声明保护。真实私有PG覆盖三个不同身份及角色、权限关系、权限内容、审批状态/参数撤回等待创建commit/rollback，撤回提交后创建与回执重放拒绝。完整结果胜负竞争、目标PG17与候选真实运行验收仍需后续完成。
 
+云发现执行入口使用冻结的ExecutionPolicy能力开关：CloudDiscoveryService.DiscoverAll、DiscoverAccount及底层cloud.Runner.RunAll在账号查询或provider调用前要求cloud_discovery启用。candidate配置只接受该能力disabled，不能借直接服务调用绕过；standard也必须显式enabled。构造器必须传入策略，缺策略、未知/缺失能力、无效租户、冲突上下文、SystemBypass或取消上下文均失败关闭。能力表从启动配置复制，后续修改配置对象不会临时授权。该检查只限制部署执行能力，不替代领域权限、账号租户归属或外部出站控制；标准模式的区域发现/持久化可靠性不因本检查获得验收。
+
+
 
 工具队列及事件订阅需要显式运行阶段启动；取消后等待已启动任务退出，再关闭数据库和连接器。禁止从业务构造器调用 Start。禁用的必需能力必须报告未验证，不能把 pending、外部阻断或未运行的 Worker 标为成功。
 

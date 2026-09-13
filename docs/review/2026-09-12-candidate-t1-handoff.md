@@ -1159,3 +1159,16 @@ s5-tool-authorization-migration.log迁移/database包PASS；s5-tool-authorizatio
 s5-tool-outcome-competition.log定向真实PG race PASS。独立review_execution_scope_s1确认竞争顺序及有界取消/等待清理无阻断，提出首次结果内容断言已补强；完整私有套件结果在下方补记。本轮只增测试，无生产修改，不重复上一检查点的全后端构建。创建/编辑/审批各自剩余矩阵、其它S5副作用入口、S6、鉴权及目标T3/T4/G3仍须逐项验证；不因该结果关闭整个工具复合项。CandidateSHA和未启动状态不变，无共享环境操作、企业外呼或push/main合并。
 
 最终s5-tool-outcome-competition-full-private.log完整私有PG16/Redis/MinIO候选边界、构造保全及Stream/Webhook/审计恢复race PASS，无skip/race；包含完成Result与工单整行的补强断言。git diff --check通过。
+
+
+### B2 S5 云发现直接执行入口禁用（2026-09-14）
+
+s5-cloud-discovery-red.log真实私有PG证明CloudDiscoveryService.DiscoverAll与cloud.Runner.RunAll在候选fixture空账号扫描均返回nil，没有要求cloud_discovery能力许可；这证明入口缺少拒绝，不证明已调用真实provider。现两个构造器必需显式ExecutionPolicy，DiscoverAll、DiscoverAccount与RunAll在查询/账号解引用日志/provider调用之前检查冻结能力；candidate原配置只允许cloud_discovery=disabled，未新增scoped支持。缺策略不降级为standard，无旧构造fallback。
+
+ExecutionPolicy复制能力开关，未知、缺失或禁用能力失败；检查上下文、取消、SystemBypass和租户一致性。部署能力不是业务授权，不能替代账号归属/RBAC或出站隔离。s5-cloud-capability-unit.log数据库/cloud包race通过；独立审阅指出无租户上下文也应拒绝，修正及最终验证结果在下方补记。直接单账号使用nil client证明拒绝先于I/O；standard显式enabled使用owner空账号扫描作为正向，仅证明入口可达，不证明普通运行角色、provider或reconcile可靠性。既有区域/持久化错误处理未在本轮重构。
+
+本轮只处理cloud_discovery，连接器、embedding和导入导出直接入口仍需逐项核验；S5/S6及鉴权、目标T3/T4/G3未完成。CandidateSHA和候选停止状态不变，无共享环境操作、真实云调用、企业外呼或push/main合并。
+
+审阅P2以s5-cloud-context-red.log实际复现：standard enabled与context.Background返回nil。改为必须有匹配租户上下文后，s5-cloud-capability-verified-unit.log数据库/cloud两包race PASS；独立复核确认P2关闭、无新增阻断。修正前完整私有suite也通过，但最终结果仍以下方修正后验证为准。
+
+最终s5-cloud-capability-verified-private.log完整私有PG16/Redis/MinIO候选边界、构造保全及Stream/Webhook/审计恢复race PASS，无skip/race；s5-cloud-capability-build.log全后端build exit0。git diff --check通过。独立最终复核无新增阻断。

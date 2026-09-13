@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"itsm-backend/common/executionscope"
+	"itsm-backend/common/tenantctx"
 	"itsm-backend/config"
 	"itsm-backend/ent"
 )
@@ -18,6 +19,7 @@ type ExecutionPolicy struct {
 	mode         string
 	deploymentID string
 	scopes       map[int]executionscope.Ref
+	capabilities map[string]bool
 }
 
 func NewExecutionPolicy(cfg config.ExecutionConfig) (*ExecutionPolicy, error) {
@@ -25,6 +27,10 @@ func NewExecutionPolicy(cfg config.ExecutionConfig) (*ExecutionPolicy, error) {
 		return nil, err
 	}
 	p := &ExecutionPolicy{mode: cfg.Mode, deploymentID: cfg.DeploymentID, scopes: make(map[int]executionscope.Ref, len(cfg.Scopes))}
+	p.capabilities = make(map[string]bool, len(cfg.Capabilities))
+	for name := range cfg.Capabilities {
+		p.capabilities[name] = cfg.Enabled(name)
+	}
 	for _, s := range cfg.Scopes {
 		p.scopes[s.TenantID] = executionscope.Ref{DeploymentID: cfg.DeploymentID, ScopeID: s.ScopeID, TenantID: s.TenantID}
 	}
@@ -162,6 +168,27 @@ func (p *ExecutionPolicy) RequireEntToolInvocation(ctx context.Context, tx *ent.
 	}
 	if err != nil {
 		return fmt.Errorf("verify tool invocation origin: %w", err)
+	}
+	return nil
+}
+
+// RequireCapability checks the frozen deployment capability switch. It is not
+// domain authorization or scoped WorkItem membership; owners must enforce both.
+func (p *ExecutionPolicy) RequireCapability(ctx context.Context, tenantID int, name string) error {
+	if ctx == nil || tenantctx.IsSystemBypass(ctx) {
+		return executionscope.ErrDenied
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if current, ok := tenantctx.TenantID(ctx); !ok || current != tenantID {
+		return executionscope.ErrDenied
+	}
+	if _, _, err := p.scopeFor(tenantID); err != nil {
+		return err
+	}
+	if !p.capabilities[name] {
+		return fmt.Errorf("%w: capability %s is disabled", executionscope.ErrDenied, name)
 	}
 	return nil
 }

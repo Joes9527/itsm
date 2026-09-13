@@ -64,6 +64,7 @@ import (
 	"itsm-backend/repository/workitemnumber"
 	"itsm-backend/service"
 	"itsm-backend/service/bpmn"
+	cloudrunner "itsm-backend/service/cloud"
 	executionfixture "itsm-backend/tests/fixtures/execution"
 )
 
@@ -336,6 +337,32 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 	policy, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: scopeID}}})
 	require.NoError(t, err)
 	app := application(runtime, policy, clients.IntakeDirectorySnapshot())
+	t.Run("candidate cloud discovery direct entry is disabled", func(t *testing.T) {
+		discovery := service.NewCloudDiscoveryService(runtime, zap.NewNop().Sugar(), policy)
+		require.ErrorIs(t, discovery.DiscoverAll(ctx, tenant.ID), executionscope.ErrDenied)
+	})
+	t.Run("candidate cloud runner direct entry is disabled", func(t *testing.T) {
+		runner := cloudrunner.NewRunner(runtime, zap.NewNop().Sugar(), policy)
+		require.ErrorIs(t, runner.RunAll(ctx, tenant.ID), executionscope.ErrDenied)
+	})
+	t.Run("candidate cloud account and missing policy reject before IO", func(t *testing.T) {
+		discovery := service.NewCloudDiscoveryService(nil, zap.NewNop().Sugar(), policy)
+		require.ErrorIs(t, discovery.DiscoverAccount(ctx, &ent.CloudAccount{ID: 1, TenantID: tenant.ID, Provider: "aws"}), executionscope.ErrDenied)
+		require.ErrorIs(t, discovery.DiscoverAccount(ctx, nil), executionscope.ErrDenied)
+		absent := service.NewCloudDiscoveryService(nil, zap.NewNop().Sugar(), nil)
+		require.ErrorIs(t, absent.DiscoverAll(ctx, tenant.ID), executionscope.ErrDenied)
+		require.ErrorIs(t, absent.DiscoverAccount(ctx, &ent.CloudAccount{ID: 1, TenantID: tenant.ID, Provider: "aws"}), executionscope.ErrDenied)
+		require.ErrorIs(t, cloudrunner.NewRunner(nil, zap.NewNop().Sugar(), nil).RunAll(ctx, tenant.ID), executionscope.ErrDenied)
+	})
+	t.Run("standard explicit cloud capability permits empty account scan", func(t *testing.T) {
+		standard, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "cloud-standard-test", Capabilities: map[string]string{"cloud_discovery": "enabled"}})
+		require.NoError(t, err)
+		require.NoError(t, service.NewCloudDiscoveryService(owner, zap.NewNop().Sugar(), standard).DiscoverAll(ctx, tenant.ID))
+		require.NoError(t, cloudrunner.NewRunner(owner, zap.NewNop().Sugar(), standard).RunAll(ctx, tenant.ID))
+		disabled, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "cloud-standard-test"})
+		require.NoError(t, err)
+		require.ErrorIs(t, service.NewCloudDiscoveryService(nil, zap.NewNop().Sugar(), disabled).DiscoverAll(ctx, tenant.ID), executionscope.ErrDenied)
+	})
 	memberCount := func() int {
 		var n int
 		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_scope_members`).Scan(&n))
