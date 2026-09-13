@@ -203,6 +203,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+候选Webhook消费检查点 `e2d29daef`：原subscriber强制policy/client，typed来源在同一RR事务核验active/binding/member/持久来源，逐provider与URL摘要建立既有outbox意图并写唯一消费Audit回执；202/enqueued仅表示入队，零外呼。重放重新授权并核对原意图集合，不随新配置扩展目标。真实PG的typed RED、JSONB重排摘要RED、未知持久字段被忽略RED均已修复；完整JSON规范摘要保留数字精度。实际Outbox/Audit写后故障回滚、首INSERT前确定性双消费者一次成功/一次23505及原请求重试、closed scope/篡改拒绝恢复、整行回执不变通过。完整私有PG/Redis/MinIO回归race无skip，定向回归、全后端build及独立审阅通过，证据见T1。Worker及registry尚未接入，新type仍按未知分发阻断；不能把入队当履约或启动候选。下一worker须验证回执身份、来源摘要及意图成员，并使用Audit保存的原始来源重验，绑定摘要匹配的实际发送实例，贯通claim/attempt/结果回执与delivery_unknown。普通模式同步发送也须迁入同一持久所有者并删除旧路径，不能长期分叉。S5与全部后续门禁未完成，CandidateSHA和停止状态不变。
+
 Webhook前置检查点 `1d391a42b`：真实loopback HTTP复现多实例按名称串投/无目标静默成功/未知事件出站，修复为tenant/name/provider精确实例发送，缺失/撤销不fallback，未知类型和无目标error；新增ContextEventHandler从传输ctx派生超时，拒绝取消/异tenant/SystemBypass。RED→GREEN、精确路由与上下文race、service/connector/.../bootstrap/eventbus回归及全后端build通过，独立复核无新增阻断。仅调用时实例选择与发送前取消保证，尚非并发撤权/配置重绑栅栏，多目标部分成功仍可能被Redis重投；typed candidate owner尚未接入，不能放行。下一步显式注入原冻结policy并在来源/成员核验事务按source eventID＋冻结目标持久化原outbox意图及消费回执；worker复核目标配置摘要/载荷/claim/attempt/范围，未知出站结果保留delivery_unknown，重放不重新枚举目标。完整证据见T1，CandidateSHA及候选停止状态不变。
 
 持久消费者检查点 `5b3ad10c0`：真实Redis离线消息RED后，candidate唯一bus采用冻结logical owner、独立稳定group和随机实例consumer；新组从0读取，已有组保留进度。Close取消并等待建立完成，部分多租户订阅失败统一关闭runtime。该失败经独立审阅发现、双租户RED复现和修复后复审关闭。真实PG/Redis联合验证审计提交后阻断ACK、关闭旧bus仍保留原PEL、新bus领取同entry后清空PEL且完整审计回执/原entry不变，旧裸Stream/组保全。完整候选intake、构造PG/Redis/MinIO保全及新增生命周期race、六包回归与全后端build通过，无skip；配置默认及限制见实现分支开发指南，完整证据见T1最新交接。只证明至少一次传输加审计幂等，不证明整个应用/OS重启或outbox Worker当前claim。Webhook typed owner、无效消息持久阻断和其它请求异步仍待接入；下面复合项及S5/G2/G3保持未勾选。固定CandidateSHA与未启动状态不变，无共享环境变更。
