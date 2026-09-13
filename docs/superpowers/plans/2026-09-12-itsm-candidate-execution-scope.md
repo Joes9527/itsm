@@ -415,3 +415,9 @@ Webhook前置检查点 `1d391a42b`：真实loopback HTTP复现多实例按名称
 实现5b8a5d468：原Registry从注册prototype捕获纯并发安全描述器，精确name/provider与小写摘要校验，无新增factory/Init或执行授权。connector/...、bootstrap全包race及全后端build通过；真实Graph经Registry并发描述零HTTP，独立审阅无阻断。详见实现T1交接记录。
 
 下一依赖已由源码确认：validateConnectorTargets拒绝未启用capability的声明，与已接受disabled notification仍可完整绑定后queued合同冲突。必须同时分离配置描述资格和ActivateStartupTargets的实际激活资格，保留禁用目标零初始化/零外发验证；禁止单独放松校验导致禁用目标被激活。standard读取仍沿ConnectorConfig权威来源，不能以已激活实例充当配置。此项与可信配置owner、045/EmailTarget/Incident及邮件重绑RED未关闭，不勾选S5完成，不改变CandidateSHA或环境授权。
+
+### S5 声明与激活资格分离检查点（2026-09-14）
+
+实现06937d4e5关闭上项配置依赖：合法目标声明可随disabled/omitted能力保留，ConnectorStartupTargets全量独立快照不变；ConnectorActivationTargets从冻结policy筛选启用目标及capabilities，Manager与bootstrap依赖检查统一使用。完整身份/作用域/能力合法性检查与实际投递授权保持，混合目标不得借其它owner激活而获得禁用owner权限。
+
+config/database/connector/.../bootstrap全包race、既定私有PG16/Redis/MinIO suite和全后端build通过；副本隔离、混合owner拒绝、真实Graph禁用零新增factory/零HTTP、bootstrap禁用无Manager路径均有直接测试；独立最终审阅无阻断。详见实现T1交接记录。尚未完成可信配置描述owner、邮件045/EmailTarget/Incident outbox及原重绑RED；下一步沿candidate完整声明/standard持久ConnectorConfig生成目标，不从活跃实例反推。S5/S6/T3/T4/G3未完成，CandidateSHA不变且候选停止。
