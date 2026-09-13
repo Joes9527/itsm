@@ -25,7 +25,17 @@ func requireKafExecutionTx(ctx context.Context, tx *ent.Tx, policy *database.Exe
 	if err != nil {
 		return err
 	}
-	instance, err := tx.ProcessInstance.Query().Where(processinstance.IDEQ(task.ProcessInstanceID), processinstance.TenantIDEQ(tenantID)).Only(ctx)
+	return requireKafInstanceExecutionTx(ctx, tx, policy, tenantID, task.ProcessInstanceID)
+}
+
+func requireKafInstanceExecutionTx(ctx context.Context, tx *ent.Tx, policy *database.ExecutionPolicy, tenantID, instanceID int) error {
+	if err := policy.BindEnt(ctx, tx, tenantID); err != nil {
+		return kafExecutionFailure(err)
+	}
+	if !policy.IsCandidate() {
+		return nil
+	}
+	instance, err := tx.ProcessInstance.Query().Where(processinstance.IDEQ(instanceID), processinstance.TenantIDEQ(tenantID)).Only(ctx)
 	if err != nil {
 		return err
 	}

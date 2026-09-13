@@ -253,6 +253,76 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.Equal(t, created.WorkItemID, *relationEvent.ExecutionWorkItemID)
 	})
 
+	t.Run("KAF delegation generation preserves historical work", func(t *testing.T) {
+		creator := service.NewKafDelegationService(runtime, policy)
+		actionCtx := context.WithValue(ctx, bpmn.BPMNTenantIDContextKey, tenant.ID)
+		actionCtx = context.WithValue(actionCtx, bpmn.BPMNUserIDContextKey, actor.ID)
+		node := &service.BPMNServiceTask{ID: "CandidateDelegate", Name: "Candidate delegation", ExtensionElements: &service.BPMNExtensionElements{MetaData: []service.BPMNMetaData{{Name: "service_task_type", Value: bpmn.KafDelegateTaskType}, {Name: "allowed_actions", Value: "complete_bpmn_task"}}}}
+		fail := false
+		injected := errors.New("injected delegation outbox post-write failure")
+		runtime.OutboxEvent.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+				value, err := next.Mutate(ctx, m)
+				if err == nil && fail {
+					return nil, injected
+				}
+				return value, err
+			})
+		})
+		defer func() { fail = false }()
+		for _, entry := range []string{"owned", "joined", "fault", "joined_fault"} {
+			fresh, err := app.Create(ctx, identity, command("generation-"+entry, "incident"))
+			require.NoError(t, err)
+			for _, itemID := range []int{historical.WorkItemID, fresh.WorkItemID} {
+				key := fmt.Sprintf("generation-%s-%d", entry, itemID)
+				deployment := owner.ProcessDeployment.Create().SetDeploymentID(key).SetDeploymentName(key).SetTenantID(tenant.ID).SaveX(ctx)
+				definition := owner.ProcessDefinition.Create().SetKey(key).SetName(key).SetVersion("1").SetDeploymentID(deployment.ID).SetBpmnXML([]byte("fixture-not-executed")).SetTenantID(tenant.ID).SaveX(ctx)
+				var reference *int
+				if itemID == fresh.WorkItemID {
+					reference = &itemID
+				}
+				instance := owner.ProcessInstance.Create().SetProcessInstanceID(key).SetProcessDefinitionID(definition.ID).SetProcessDefinitionKey(key).SetBusinessKey(fmt.Sprintf("incident:%d", itemID)).SetBusinessType("incident").SetBusinessID(itemID).SetNillableExecutionWorkItemID(reference).SetTenantID(tenant.ID).SetStatus("running").SaveX(ctx)
+				snapshot := func() []byte {
+					v, err := json.Marshal([]interface{}{owner.ProcessInstance.GetX(ctx, instance.ID), owner.ProcessTask.Query().CountX(ctx), owner.AuditLog.Query().CountX(ctx), owner.OutboxEvent.Query().CountX(ctx)})
+					require.NoError(t, err)
+					return v
+				}
+				before := snapshot()
+				var task *ent.ProcessTask
+				fail = strings.Contains(entry, "fault")
+				if !strings.HasPrefix(entry, "joined") {
+					task, err = creator.CreateDelegatedTask(actionCtx, instance.ID, node)
+				} else {
+					tx, beginErr := runtime.Tx(actionCtx)
+					require.NoError(t, beginErr)
+					task, err = creator.CreateDelegatedTaskTx(actionCtx, tx, instance.ID, node)
+					if err == nil {
+						require.Positive(t, task.ID)
+						require.Equal(t, "CandidateDelegate", tx.ProcessInstance.GetX(actionCtx, instance.ID).CurrentActivityID)
+					}
+					require.NoError(t, tx.Rollback())
+				}
+				fail = false
+				if itemID == historical.WorkItemID {
+					require.ErrorIs(t, err, executionscope.ErrDenied)
+					require.JSONEq(t, string(before), string(snapshot()))
+				} else if strings.Contains(entry, "fault") {
+					require.ErrorIs(t, err, injected)
+					require.JSONEq(t, string(before), string(snapshot()))
+				} else {
+					require.NoError(t, err)
+					if entry == "joined" {
+						require.JSONEq(t, string(before), string(snapshot()))
+					} else {
+						event := owner.OutboxEvent.Query().Where(outboxevent.AggregateIDEQ(task.TaskID)).OnlyX(ctx)
+						require.NotNil(t, event.ExecutionWorkItemID)
+						require.Equal(t, itemID, *event.ExecutionWorkItemID)
+					}
+				}
+			}
+		}
+	})
+
 	t.Run("KAF access completion uses candidate transaction", func(t *testing.T) {
 		automation := owner.User.Create().SetTenantID(tenant.ID).SetUsername("scope-kaf").SetEmail("scope-kaf@example.invalid").SetName("Candidate automation").SetPasswordHash("test-only").SetRole("kaf_automation").SaveX(ctx)
 		owner.ExternalIdentity.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetProvider("graph").SetWorkspace("directory").SetSubject("approved-subject").SaveX(ctx)

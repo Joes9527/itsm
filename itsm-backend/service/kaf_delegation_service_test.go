@@ -976,7 +976,7 @@ func TestDelegationInheritsStructuredExecutionReferenceInBothPaths(t *testing.T)
 				tx, e := svc.client.Tx(ctx)
 				require.NoError(t, e)
 				defer tx.Rollback()
-				task, err = svc.CreateDelegatedTaskWithClient(ctx, tx.Client(), current.ID, kafDelegateTask("complete_bpmn_task"))
+				task, err = svc.CreateDelegatedTaskTx(ctx, tx, current.ID, kafDelegateTask("complete_bpmn_task"))
 				require.NoError(t, err)
 				require.NoError(t, tx.Commit())
 			} else {

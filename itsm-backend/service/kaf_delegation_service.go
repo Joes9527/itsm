@@ -1100,7 +1100,7 @@ func (s *KafDelegationService) CreateDelegatedTask(ctx context.Context, instance
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	task, err := s.createDelegatedTaskWithClient(ctx, tx.Client(), instanceID, serviceTask)
+	task, err := s.createDelegatedTaskTx(ctx, tx, instanceID, serviceTask)
 	if err != nil {
 		return nil, err
 	}
@@ -1124,13 +1124,14 @@ func (s *KafDelegationService) CreateDelegatedTask(ctx context.Context, instance
 	return task, nil
 }
 
-// CreateDelegatedTaskWithClient joins an existing BPMN transaction. Callers
+// CreateDelegatedTaskTx joins an existing BPMN transaction. Callers
 // own commit and lease fencing; no nested Ent transaction is opened here.
-func (s *KafDelegationService) CreateDelegatedTaskWithClient(ctx context.Context, client *ent.Client, instanceID int, serviceTask *BPMNServiceTask) (*ent.ProcessTask, error) {
-	if client == nil || serviceTask == nil {
-		return nil, fmt.Errorf("KAF delegation transaction client and service task are required")
+func (s *KafDelegationService) CreateDelegatedTaskTx(ctx context.Context, tx *ent.Tx, instanceID int, serviceTask *BPMNServiceTask) (*ent.ProcessTask, error) {
+	if tx == nil || serviceTask == nil {
+		return nil, fmt.Errorf("KAF delegation owning transaction and service task are required")
 	}
-	task, err := s.createDelegatedTaskWithClient(ctx, client, instanceID, serviceTask)
+	client := tx.Client()
+	task, err := s.createDelegatedTaskTx(ctx, tx, instanceID, serviceTask)
 	if err != nil {
 		return nil, err
 	}
@@ -1157,7 +1158,8 @@ func (s *KafDelegationService) CreateDelegatedTaskWithClient(ctx context.Context
 	return task, nil
 }
 
-func (s *KafDelegationService) createDelegatedTaskWithClient(ctx context.Context, client *ent.Client, instanceID int, serviceTask *BPMNServiceTask) (*ent.ProcessTask, error) {
+func (s *KafDelegationService) createDelegatedTaskTx(ctx context.Context, tx *ent.Tx, instanceID int, serviceTask *BPMNServiceTask) (*ent.ProcessTask, error) {
+	client := tx.Client()
 	tenantID, _ := ctx.Value(bpmn.BPMNTenantIDContextKey).(int)
 	if tenantID <= 0 {
 		return nil, fmt.Errorf("KAF delegation tenant context is required")
@@ -1180,6 +1182,10 @@ func (s *KafDelegationService) createDelegatedTaskWithClient(ctx context.Context
 		if !actorExists {
 			return nil, fmt.Errorf("KAF delegation audit actor %d does not belong to tenant %d", actorID, instance.TenantID)
 		}
+	}
+
+	if err := requireKafInstanceExecutionTx(ctx, tx, s.execution, tenantID, instance.ID); err != nil {
+		return nil, err
 	}
 
 	if _, err := client.ProcessInstance.UpdateOne(instance).

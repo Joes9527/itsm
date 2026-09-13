@@ -1907,7 +1907,7 @@ func (e *CustomProcessEngine) createDelegatedTask(ctx context.Context, instance 
 		}
 		var err error
 		if e.transactionBound {
-			_, err = e.kafDelegationService.CreateDelegatedTaskWithClient(ctx, e.client, instance.ID, serviceTask)
+			_, err = e.kafDelegationService.CreateDelegatedTaskTx(ctx, e.owningTx, instance.ID, serviceTask)
 		} else {
 			_, err = e.kafDelegationService.CreateDelegatedTask(ctx, instance.ID, serviceTask)
 		}

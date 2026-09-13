@@ -383,3 +383,17 @@ B2 私有证据（均位于本机 candidate-delivery/b2）：
 - `s4-kaf-integration-compile.log`：integration 标签下五包编译 PASS（其后仅恢复实现与新增测试改动，由最终构建、定向回归和真实 PG 验证）。编译不代表目标环境测试运行。
 
 独立 reviewer `review_execution_scope_s1` 最终确认错误分类、构造传递、原事务、异步变量边界与最终 PG PASS 无阻断。**仍属分段验证**：claim 与 completion 使用不同 fixture ledger，并未证明完整 ExecuteAction；初始审批/provider 仍为前置 fixture。历史 applied claim 专项、active scope 下过期 lease 成功重取、scope 关闭后全部 finalize/non-completing 分支及 HTTP 入口还需真实专项测试。CreateDelegatedTask 两条生产路径、非 KAF 通用 callback/outbox worker、共享能力、S4其余/S5/S6/B3 尚未完成。固定 CandidateSHA 不变，候选不启动，未操作 WSL/共享库、推送或合并 main。
+
+
+### B2 S3/S4 KAF 委派任务生成事务（2026-09-13）
+
+在 `de22553c2` 后补齐 CreateDelegatedTask 两条生产写入口的成员准入。原 CreateDelegatedTaskWithClient 已移除，改为显式 CreateDelegatedTaskTx(*ent.Tx)；engine 传 owningTx，不新增并行实现。两条路径统一在原 tenant/actor 读取核验之后、首次 ProcessInstance 更新之前，使用该事务和冻结 policy 检查 ProcessInstance.ExecutionWorkItemID 与 scope 成员。task、audit、outbox 沿用原事务及结构化引用；调用方保持 commit/rollback 和 lease fence 所有权。
+
+本机 candidate-delivery/b2 证据：
+
+- `s4-kaf-generation-red.log`：真实历史 WorkItem 仍可生成委派任务，ErrDenied 断言失败，构成有效 RED。
+- `s4-kaf-generation-verified-pg.log`：最终完整真实私有 PG TestCandidateIntakeCreationBoundary PASS、未 skip。独立事务和加入原事务两入口均拒绝历史对象；新成员生成任务并传递 outbox 结构引用。joined 主动回滚，以及 owned/joined 两路径 outbox 实际写入后故障，均保持流程完整字段与 task/audit/outbox 数量不变。
+- `s4-kaf-generation-regression.log`：service/service-bpmn/controller/service_request 的 KAF/BPMN/Access/SSLVPN/Delegation 定向回归 PASS；其后只补 joined_fault 测试，由最终真实 PG 验证。
+- `s4-kaf-generation-build.json`：后端全量构建 exit 0。
+
+独立 reviewer `review_execution_scope_s1` 对两条入口、forClient owningTx 传递、原事务顺序及真实 PG 基础/owned fault 验证限定审阅无阻断；其指出的 joined fault 验证缺口随后补齐并实际 PASS。仍未运行真实候选 BPMN 节点推进到生成入口；本次为真实生成服务边界测试。完整 ExecuteAction、HTTP/审批/provider、通用 callback/outbox worker、共享能力、S4其余/S5/S6/B3 继续未完成，不能以本检查点放行候选或G2/G3。固定 CandidateSHA 不变，无 WSL/共享环境操作、候选启动、推送或 main 合并。
