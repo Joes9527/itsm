@@ -153,6 +153,8 @@ S3/S4/S5/S6及候选完整交付仍未完成，CandidateSHA不变、候选停止
 
 后续验证 `12c38eda4`：两个请求在真实Ticket UPDATE前barrier会合，确定性复现一次提交/一次PQ40001；失败方原cmd重试返回胜方完整Result，单receipt及version+1保全。迁移前真实Standard owner生成edit回执，再独立编辑改变status；候选无member目标仍只读返回原Result，新op/当前version仍拒绝，Ticket/Audit整行及通知/outbox/成员保全。完整私有PG及新增两场景race检测通过，独立审阅无阻断；不代表自动重试、并发HTTP成功或通知/飞书确定性交付竞争。此复合项继续未勾选：真实组件重试/跨刷新持久恢复与浏览器、专业核心编辑归属及请求人/表单所有者仍待完成。S3/S4/S5/S6与后续交接门禁不因该检查点自动通过，固定CandidateSHA和候选停止状态不变。
 
+组件检查点 `d27c57d68`：普通详情实际表单覆盖打开版本冻结、未知结果原请求重试及明确冲突后重新打开确认；批量实际菜单发现三个key与既有表单/执行分支不一致，真实空表单RED后统一key。状态/优先级经实际选择和确认验证未知结果复用完整请求、刷新后明确冲突新操作；标签只验证字段入口。两套完整Jest组件测试23 PASS、全前端type-check及独立审阅通过，详情与证据见T1最新交接。此为mock API边界组件测试，不能证明真实浏览器点击、HTTP/后端提交、AI建议交互或跨页面重载恢复。上述复合项保持未完成，固定CandidateSHA及候选未启动状态不变。
+
 接续实施顺序（2026-09-13）：原UpdateTicket一次迁移为可信typed command与现有workitemmutation.Result，不保留旧接口或以当前Ticket冒充历史结果。digest包含明确edit操作名、目标、预期父ID、expectedVersion及规范化业务输入，保留tags未提交/清空区别，不按现行目录解析结果重算历史请求身份。当前授权之后查receipt；首次写入才进行scope/member、父级、终态、版本和目录校验。普通HTTP移除GetTicket+CanEdit预拦截，否则关闭后的合法重放会被挡住；两HTTP入口构造Meta并直接返回Result，操作身份冲突映射409。工具registry补齐参数/结果schema，queue仅使用已批准并持久化的expectedVersion及invocation派生operationId，done失败恢复不能重读当前版本。
 
 前端三个transport及实际调用者必须随契约迁移：TicketDetail AI采纳不再读取updated.id或合并结果到Ticket；useTicketsQuery不再setQueryData(Result)，应使详情失效并重新读取。详情编辑/AI与批量操作保存同一意图的payload/version/operationId，结果不确定重试复用，用户改变内容才生成新意图。返回数据只表示已提交命令结果，不证明当前工单快照。飞书沿用同type/aggregate并校验明确edit audit/action/status/digest，删除该编辑入口commit后独立同步。最终需验证终态后replay、同op不同payload冲突、审计/outbox写后原子回滚、并发同命令、工具done失败恢复及前端Result不污染详情缓存。
