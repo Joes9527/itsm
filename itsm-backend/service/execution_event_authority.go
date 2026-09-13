@@ -50,7 +50,7 @@ func (a *ExecutionEventAuthority) ValidateEventTx(ctx context.Context, tx *ent.T
 	if a == nil || a.client == nil || a.policy == nil || ctx == nil || env.Execution == nil {
 		return executionscope.ErrDenied
 	}
-	frozen, err := a.policy.CandidateRef(ref.TenantID)
+	frozen, err := a.policy.EventRef(ref.TenantID)
 	if err != nil || frozen != ref || env.TenantID != strconv.Itoa(ref.TenantID) || env.Execution.ScopeID != ref.ScopeID || env.Execution.DeploymentID != ref.DeploymentID {
 		return executionscope.ErrDenied
 	}

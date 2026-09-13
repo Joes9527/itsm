@@ -913,3 +913,13 @@ bootstrap实际注册器按webhook capability决定handler或known reserved type
 仅增加集成测试并将既有ACK包装器的具体审计类型改成共享窄接口，原审计恢复测试仍调用真实owner；没有生产代码、schema、配置改动。新增覆盖首次运行即PASS，不虚构RED或声称本轮修复生产缺陷。`s5-webhook-ack-recovery.log` 定向race PASS；`s5-webhook-ack-full-private.log` 完整候选intake、旧审计恢复、Webhook负测和新联合恢复、Redis离线/历史保全、PG/Redis/MinIO构造保全race PASS，无skip/race。git diff --check通过，独立review_execution_scope_s1只读复核无阻断。本轮仅测试/文档变化，以真实集成编译及运行验证，不重复既有生产构建。
 
 该测试证明消费者关闭后重建的同组恢复，不证明整个应用强杀、Redis服务重启持久性、任意出站窗口exactly-once或并发撤权。HTTP端点断言调用次数，本项未逐字段核验收到的业务body。普通模式同步路径统一、进程重启、未知消息与其它异步入口仍未完成，S5/T3/T4/G2/G3未放行。固定CandidateSHA不变、候选未启动，无共享环境变更、企业外呼、push或main合并。
+
+### B2 S5 普通/候选持久来源共用校验前置（2026-09-13）
+
+在 `15e6e2c01` 后推进普通模式Webhook统一，发现ExecutionPolicy丢弃standard部署身份，ExecutionEventAuthority只接受CandidateRef。新增真实PG `standard persistent authority retains source boundaries`，原生产代码在可信standard身份正向调用处稳定拒绝，见 `s5-standard-source-red.log`。policy现在冻结deploymentID，EventRef返回standard的可信部署/tenant与空scope或candidate原ref；CandidateRef仍拒绝standard，nil/无效tenant/未知模式/清单外candidate仍拒绝。authority改用EventRef，复用原BindEnt/RequireEntMembers、持久Outbox结构主体和eventID、原载荷字节及发生时间比较，不新增平行校验器。
+
+`s5-standard-source-green.log` 真实PG正向与伪造部署、额外scope、错误主体、零主体、缺失来源、跨tenant、未知类型、载荷/时间篡改负测race PASS；同时伪造ref与env不能替换冻结身份，两种模式不能通过互换ref降级。该测试显式使用私有owner连接读取真实SLA持久源，证明来源校验及源行/审计保全，不证明standard应用角色准入；standard不同主体负测证明持久来源不匹配，不声称standard需要候选成员登记。
+
+`s5-standard-source-regression.log` database/service/eventbus/bootstrap回归PASS，`s5-standard-source-full-private.log` 完整候选边界、来源负测、Webhook Worker与Redis ACK恢复、PG/Redis/MinIO构造保全race PASS，无skip/race。全后端 `s5-standard-source-build.log` exit0，git diff --check通过；独立review_execution_scope_s1只读复核无阻断。开发指南已说明EventRef不是执行许可。
+
+普通传输仍须保留持久身份并使用明确typed订阅合同，随后将普通Webhook接入同一意图/Worker并删除旧同步发送；本前置不算S5统一完成。全应用重启、其它异步入口及B2/B3/T3/T4/G2/G3仍未完成，CandidateSHA和未启动状态不变。没有共享环境修改、企业外呼、push或main合并。

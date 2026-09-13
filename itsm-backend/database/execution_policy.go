@@ -14,15 +14,16 @@ import (
 // business action or discover additional scopes from request data or the database.
 // Bootstrap must admit the configured database role before injecting this policy.
 type ExecutionPolicy struct {
-	mode   string
-	scopes map[int]executionscope.Ref
+	mode         string
+	deploymentID string
+	scopes       map[int]executionscope.Ref
 }
 
 func NewExecutionPolicy(cfg config.ExecutionConfig) (*ExecutionPolicy, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	p := &ExecutionPolicy{mode: cfg.Mode, scopes: make(map[int]executionscope.Ref, len(cfg.Scopes))}
+	p := &ExecutionPolicy{mode: cfg.Mode, deploymentID: cfg.DeploymentID, scopes: make(map[int]executionscope.Ref, len(cfg.Scopes))}
 	for _, s := range cfg.Scopes {
 		p.scopes[s.TenantID] = executionscope.Ref{DeploymentID: cfg.DeploymentID, ScopeID: s.ScopeID, TenantID: s.TenantID}
 	}
@@ -111,4 +112,21 @@ func (p *ExecutionPolicy) CandidateRef(tenantID int) (executionscope.Ref, error)
 		return executionscope.Ref{}, executionscope.ErrDenied
 	}
 	return ref, nil
+}
+
+// EventRef returns the frozen deployment identity for a persistent event. An
+// empty scope is valid only in standard mode; it never grants database access.
+// Candidate membership remains mandatory in the original owner transaction.
+func (p *ExecutionPolicy) EventRef(tenantID int) (executionscope.Ref, error) {
+	ref, scoped, err := p.scopeFor(tenantID)
+	if err != nil {
+		return executionscope.Ref{}, err
+	}
+	if scoped {
+		return ref, nil
+	}
+	if err := executionscope.ValidateDeploymentID(p.deploymentID); err != nil {
+		return executionscope.Ref{}, executionscope.ErrDenied
+	}
+	return executionscope.Ref{DeploymentID: p.deploymentID, TenantID: tenantID}, nil
 }

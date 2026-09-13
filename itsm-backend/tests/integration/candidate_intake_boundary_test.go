@@ -2026,6 +2026,46 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(e)::text FROM outbox_events e WHERE id=$1`, row.ID).Scan(&after))
 		require.JSONEq(t, before, after)
 		require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx), "source validation must not write audit")
+		t.Run("standard persistent authority retains source boundaries", func(t *testing.T) {
+			// Owner connection is an explicit private source-validation fixture, not
+			// evidence that a standard application role passed startup admission.
+			standard, err := database.NewExecutionPolicy(config.ExecutionConfig{Mode: "standard", DeploymentID: "standard-source-test"})
+			require.NoError(t, err)
+			validator := service.NewExecutionEventAuthority(owner, standard)
+			standardRef := executionscope.Ref{DeploymentID: "standard-source-test", TenantID: tenant.ID}
+			standardEnv := envelope
+			standardEnv.Execution = &eventbus.ExecutionIdentity{DeploymentID: standardRef.DeploymentID, WorkItemID: fresh.WorkItemID}
+			require.NoError(t, validator.ValidateEvent(ctx, standardRef, standardEnv))
+			for _, mutate := range []func(*eventbus.Envelope){
+				func(e *eventbus.Envelope) { e.Execution.DeploymentID = "forged-deployment" },
+				func(e *eventbus.Envelope) { e.Execution.ScopeID = scopeID },
+				func(e *eventbus.Envelope) { e.Execution.WorkItemID = other.WorkItemID },
+				func(e *eventbus.Envelope) { e.Execution.WorkItemID = 0 },
+				func(e *eventbus.Envelope) { e.EventID = "missing-source" },
+				func(e *eventbus.Envelope) { e.TenantID = fmt.Sprint(tenant.ID + 1) },
+				func(e *eventbus.Envelope) { e.EventType = "unknown.event" },
+				func(e *eventbus.Envelope) { e.Payload = json.RawMessage(`{}`) },
+				func(e *eventbus.Envelope) { e.OccurredAt = e.OccurredAt.Add(time.Second) },
+			} {
+				changed := standardEnv
+				execution := *standardEnv.Execution
+				changed.Execution = &execution
+				mutate(&changed)
+				require.Error(t, validator.ValidateEvent(ctx, standardRef, changed))
+			}
+			forgedRef := standardRef
+			forgedRef.DeploymentID = "forged-deployment"
+			forgedEnv := standardEnv
+			forgedEnv.Execution = &eventbus.ExecutionIdentity{DeploymentID: forgedRef.DeploymentID, WorkItemID: fresh.WorkItemID}
+			require.Error(t, validator.ValidateEvent(ctx, forgedRef, forgedEnv), "matching caller identities cannot replace the frozen deployment")
+			require.Error(t, validator.ValidateEvent(tenantctx.WithTenantID(ctx, tenant.ID+1), standardRef, standardEnv))
+			require.Error(t, validator.ValidateEvent(ctx, ref, envelope), "standard mode must not accept a candidate scope")
+			require.Error(t, authority.ValidateEvent(ctx, standardRef, standardEnv), "candidate mode must not downgrade into standard mode")
+			var preserved string
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(e)::text FROM outbox_events e WHERE id=$1`, row.ID).Scan(&preserved))
+			require.JSONEq(t, before, preserved)
+			require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx))
+		})
 		t.Run("webhook consumption freezes durable target intents", func(t *testing.T) {
 			var sent atomic.Int32
 			endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { sent.Add(1); w.WriteHeader(http.StatusOK) }))

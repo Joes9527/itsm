@@ -22,6 +22,8 @@
 
 Webhook 事件订阅只接受 `WebhookEventTopics()` 注册的类型；未配置目标返回错误，不再静默成功。同步发送按既有 tenant/name/provider 实例身份精确投递，缺失或已撤销目标不回退到同名其它实例；传输 context 的取消和租户限制传入发送超时。此查找只验证调用时的实例表，不构成并发撤销/同 key 配置变更栅栏。多目标部分成功后重投仍可能重复成功目标；候选持久投递采用下述意图与回执协议，不得因同步路由修复宣称外部幂等或启用候选 Webhook。
 
+持久事件来源校验使用冻结部署身份：`ExecutionPolicy.EventRef` 在standard模式返回部署与租户、空scope，在candidate模式返回原准入ref；`CandidateRef`仍只适用于candidate。EventRef本身不赋予业务权限。共享authority在原事务核验持久Outbox主体、事件ID、载荷及发生时间，candidate另保留scope/角色绑定/成员门禁。普通模式传输及Webhook接线尚未完成统一，不可将来源校验支持当作全链路上线证明。
+
 候选 Webhook subscriber 必须注入数据库 client 与冻结 ExecutionPolicy，拒绝原始 map；完整 typed Envelope 的 active scope、角色绑定、成员及持久来源在同一 RR 事务核验，按当前明确目标建立 `webhook.event.delivery.requested` outbox 意图与唯一 `webhook_consume:<sourceEventID>` 审计回执。回执状态 `enqueued` / 202 仅表示意图已提交，不表示外部投递成功。重放再次校验来源，核对原回执及完整持久意图摘要，复用原目标集合；配置新增实例不扩大旧事件的投递范围。摘要使用保留数字精度的JSON对象键规范化，容纳JSONB重排但不忽略未知字段。目标只保存provider和URL摘要，不保存URL/凭据；该摘要不等于完整配置版本。原始来源保存在审计字符串中，Worker使用回执原文重验来源，并以完整意图摘要校对JSONB副本。
 
 候选 Webhook handler 已接入共享outbox Worker，按当前 publishing claim/token/租约/attempt marker、WorkItem、完整意图摘要、消费回执身份及意图成员核验；发送后重验并写 `webhook_deliver:<eventID>` 交付审计，再由原Worker标记published。`webhook`能力关闭时，注册器把该type保留为known reserved，outbox可运行但不领取这些意图。前置明确拒绝记blocked，基础设施错误保留原cause由已有Worker处理；发出请求后的错误、非2xx或回执不确定记delivery_unknown，不自动重发。

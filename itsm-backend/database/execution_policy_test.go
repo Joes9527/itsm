@@ -40,3 +40,33 @@ func TestExecutionPolicyRequiresExplicitMode(t *testing.T) {
 	_, _, err = policy.scopeFor(0)
 	require.Error(t, err)
 }
+
+func TestExecutionPolicyEventRefFreezesModeAndDeployment(t *testing.T) {
+	cfg := config.ExecutionConfig{Mode: "standard", DeploymentID: "standard-events"}
+	policy, err := NewExecutionPolicy(cfg)
+	require.NoError(t, err)
+	cfg.DeploymentID = "changed"
+	ref, err := policy.EventRef(17)
+	require.NoError(t, err)
+	require.Equal(t, "standard-events", ref.DeploymentID)
+	require.Equal(t, 17, ref.TenantID)
+	require.Empty(t, ref.ScopeID)
+	_, err = policy.CandidateRef(17)
+	require.Error(t, err)
+	_, err = policy.EventRef(0)
+	require.Error(t, err)
+	var absent *ExecutionPolicy
+	_, err = absent.EventRef(17)
+	require.Error(t, err)
+	_, err = (&ExecutionPolicy{mode: "standard"}).EventRef(17)
+	require.Error(t, err)
+	candidate, err := NewExecutionPolicy(config.ExecutionConfig{Mode: "candidate", DeploymentID: "candidate-events", Scopes: []config.ExecutionScopeConfig{{TenantID: 17, ScopeID: "11111111-1111-4111-8111-111111111111"}}})
+	require.NoError(t, err)
+	ref, err = candidate.EventRef(17)
+	require.NoError(t, err)
+	expected, err := candidate.CandidateRef(17)
+	require.NoError(t, err)
+	require.Equal(t, expected, ref)
+	_, err = candidate.EventRef(18)
+	require.Error(t, err)
+}
