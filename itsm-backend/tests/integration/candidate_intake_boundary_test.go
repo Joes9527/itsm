@@ -203,6 +203,113 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.Equal(t, created.WorkItemID, *relationEvent.ExecutionWorkItemID)
 	})
 
+	t.Run("rule execution bookkeeping preserves historical incidents", func(t *testing.T) {
+		engine := service.NewIncidentRuleEngine(runtime, zap.NewNop().Sugar(), policy)
+		fresh, err := app.Create(ctx, identity, command("rule-bookkeeping", "incident"))
+		require.NoError(t, err)
+		rule := owner.IncidentRule.Create().SetName("candidate rule").SetRuleType("assignment").
+			SetConditions(map[string]interface{}{}).
+			SetActions([]map[string]interface{}{{"type": "unsupported-candidate-test"}}).
+			SetIsActive(true).SetTenantID(tenant.ID).SaveX(ctx)
+		beforeRule, _ := json.Marshal(rule)
+		beforeExecutions := owner.IncidentRuleExecution.Query().CountX(ctx)
+		history := owner.Incident.Query().Where(incident.IDEQ(historical.ProfessionalReference.ID)).WithWorkItem().OnlyX(ctx)
+		err = engine.ExecuteRule(ctx, rule, history, tenant.ID)
+		require.ErrorContains(t, err, "execution scope denied")
+		require.Equal(t, beforeExecutions, owner.IncidentRuleExecution.Query().CountX(ctx))
+		afterRule, _ := json.Marshal(owner.IncidentRule.GetX(ctx, rule.ID))
+		require.JSONEq(t, string(beforeRule), string(afterRule))
+		current := owner.Incident.Query().Where(incident.IDEQ(fresh.ProfessionalReference.ID)).WithWorkItem().OnlyX(ctx)
+		err = engine.ExecuteRule(ctx, rule, current, tenant.ID)
+		require.Error(t, err, "unknown dispatch must fail closed")
+		require.Equal(t, beforeExecutions+1, owner.IncidentRuleExecution.Query().CountX(ctx))
+		// The failed record is persisted for the new member only.
+		executions := owner.IncidentRuleExecution.Query().AllX(ctx)
+		for _, execution := range executions {
+			if execution.RuleID == rule.ID {
+				require.Equal(t, fresh.ProfessionalReference.ID, execution.IncidentID)
+				require.Equal(t, "failed", execution.Status)
+			}
+		}
+		// A recognized action failure persists its result and statistics atomically.
+		rule = owner.IncidentRule.UpdateOneID(rule.ID).SetActions([]map[string]interface{}{{"type": "assign", "assignee_id": actor.ID}}).SaveX(ctx)
+		err = engine.ExecuteRule(ctx, rule, current, tenant.ID)
+		require.ErrorContains(t, err, "rule action failed") // no trusted action actor
+		require.Equal(t, 1, owner.IncidentRule.GetX(ctx, rule.ID).ExecutionCount)
+		injected := errors.New("injected rule statistics failure")
+		failStatistics := true
+		runtime.IncidentRule.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+				value, err := next.Mutate(ctx, mutation)
+				if err == nil && failStatistics {
+					failStatistics = false
+					return nil, injected
+				}
+				return value, err
+			})
+		})
+		err = engine.ExecuteRule(ctx, rule, current, tenant.ID)
+		require.ErrorIs(t, err, injected)
+		require.False(t, failStatistics)
+		require.Equal(t, 1, owner.IncidentRule.GetX(ctx, rule.ID).ExecutionCount)
+		latest := owner.IncidentRuleExecution.Query().Order(ent.Desc("id")).FirstX(ctx)
+		require.Equal(t, "running", latest.Status, "completion must roll back with failed statistics")
+
+		// Skipped conditions persist a result, but do not count an action execution.
+		rule = owner.IncidentRule.UpdateOneID(rule.ID).SetConditions(map[string]interface{}{"priority": []string{"no-match"}}).SaveX(ctx)
+		require.NoError(t, engine.ExecuteRule(ctx, rule, current, tenant.ID))
+		latest = owner.IncidentRuleExecution.Query().Order(ent.Desc("id")).FirstX(ctx)
+		require.Equal(t, "skipped", latest.Status)
+		require.Equal(t, 1, owner.IncidentRule.GetX(ctx, rule.ID).ExecutionCount)
+		failResult := true
+		runtime.IncidentRuleExecution.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+				value, err := next.Mutate(ctx, mutation)
+				if err == nil && failResult && mutation.Op().Is(ent.OpUpdateOne) {
+					failResult = false
+					return nil, injected
+				}
+				return value, err
+			})
+		})
+		require.ErrorIs(t, engine.ExecuteRule(ctx, rule, current, tenant.ID), injected)
+		require.False(t, failResult)
+		latest = owner.IncidentRuleExecution.Query().Order(ent.Desc("id")).FirstX(ctx)
+		require.Equal(t, "running", latest.Status)
+		// A real escalation action commits before the completed result and count.
+		rule = owner.IncidentRule.UpdateOneID(rule.ID).SetConditions(map[string]interface{}{}).
+			SetActions([]map[string]interface{}{{"type": "escalate", "level": 1, "reason": "candidate rule"}}).SaveX(ctx)
+		require.NoError(t, engine.ExecuteRule(ctx, rule, current, tenant.ID))
+		latest = owner.IncidentRuleExecution.Query().Order(ent.Desc("id")).FirstX(ctx)
+		require.Equal(t, "completed", latest.Status)
+		require.Equal(t, 1, owner.Incident.GetX(ctx, current.ID).EscalationLevel)
+		require.Equal(t, 2, owner.IncidentRule.GetX(ctx, rule.ID).ExecutionCount)
+
+		// Closing the private fixture scope after start must prevent result writes.
+		closeScope := true
+		runtime.IncidentRuleExecution.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+				value, err := next.Mutate(ctx, mutation)
+				if err == nil && closeScope && mutation.Op().Is(ent.OpCreate) {
+					closeScope = false
+					_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='closed' WHERE id=$1", scopeID)
+				}
+				return value, err
+			})
+		})
+		defer func() {
+			_, err := ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+			require.NoError(t, err)
+		}()
+		rule = owner.IncidentRule.UpdateOneID(rule.ID).SetActions([]map[string]interface{}{{"type": "unsupported-candidate-test"}}).SaveX(ctx)
+		err = engine.ExecuteRule(ctx, rule, current, tenant.ID)
+		require.ErrorContains(t, err, "execution scope denied")
+		latest = owner.IncidentRuleExecution.Query().Order(ent.Desc("id")).FirstX(ctx)
+		require.Equal(t, "running", latest.Status)
+		require.Equal(t, 2, owner.IncidentRule.GetX(ctx, rule.ID).ExecutionCount)
+
+	})
+
 	t.Run("Incident metadata and direct escalation require original transaction membership", func(t *testing.T) {
 		svc := service.NewIncidentService(runtime, zap.NewNop().Sugar(), policy)
 		fresh, err := app.Create(ctx, identity, command("metadata-incident", "incident"))

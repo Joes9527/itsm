@@ -241,3 +241,17 @@ S3、其他业务域/共享写入口、生产者成员准入和 S4–S6 仍未�
 独立 reviewer `review_execution_scope_s1` 对上述限定增量审阅未发现阻断问题。测试使用空 NotifyUsers，未验证升级 alert/outbox 分支，也未注入后续写失败；主动回滚证据不能替代这些场景。
 
 本检查点只关闭上述两入口的成员准入缺口。ExecuteRule 执行记录/统计、重大事件升级、CI、独立 event/metric、notification、其他业务域和生产者成员准入，以及 S4–S6 仍未完成。未启动候选、操作共享数据库、修改 B 环境、推送或合并 main；CandidateSHA 仍为 `d7470a32dbb87acc9b5e4d9a895a146410723561`，T3/T4 门禁不变。
+
+
+### B2 S3 Incident 规则执行记录和统计（2026-09-13）
+
+在 `ae1731978` 上接入 ExecuteRule 的执行记录边界：起始记录在查询权威 Incident 的同一事务内绑定 policy、核验 member，再 INSERT；结果更新从 execution.IncidentID 重新查权威 WorkItem，在自己的原写事务再次准入。结果与规则统计同事务提交，后者失败不再留下已完成结果；持久化错误明确返回并保留原因。各动作仍保留独立事务，不宣称整次规则调用原子化；条件不匹配、解析失败不计次数，已识别动作失败计次数的原语义保留。
+
+私有证据仍位于 B2 本地目录：
+
+- `s3-rule-bookkeeping-red.log`：历史 Incident 在修复前进入规则解析而非成员拒绝，新增断言如期失败。
+- `s3-rule-bookkeeping-final-pg.log`：完整真实 PostgreSQL TestCandidateIntakeCreationBoundary PASS、未 skip。历史 Incident 不产生 execution 或统计修改；未知动作明确失败且新成员保留 failed 记录；已识别动作失败记录和次数持久化；统计已写后注入错误，结果与次数一起回滚；条件未命中为 skipped 且不计数，其结果写后失败明确返回；真实升级动作成功为 completed 并计数。仅在私有夹具起始 INSERT 后、提交前关闭 scope，证明后续结果事务重新准入失败、running 记录和次数保持原状，结束恢复夹具状态。
+- `s3-rule-bookkeeping-regression.log`：service/intake/controller/integration 定向 Incident/assignment/status action/intake 回归 PASS。
+- `s3-rule-bookkeeping-build.json`：后端全量构建 exit 0。
+
+独立 reviewer `review_execution_scope_s1` 限定审阅未发现阻断问题；按其建议补充成功/条件不匹配/结果失败及 hook 命中断言。此检查点保护规则记录和统计，不替代 notification/metric 动作本身、独立事件/指标/CI/重大升级和其他域的写入准入；全量扫描起始查询成员过滤仍属 S4 未完成项。S3–S6、B3、T3/T4 和 G2/G3 不因此通过。固定 CandidateSHA 不变，无候选启动、共享数据库操作、B 配置修改、推送或 main 合并。

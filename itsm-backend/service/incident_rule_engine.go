@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"itsm-backend/common"
 	"itsm-backend/handlers/shared/workitemmutation"
@@ -363,6 +364,9 @@ func (a *MetricCollectionAction) ExecuteTx(ctx context.Context, tx *ent.Tx, inci
 
 // ExecuteRule 执行规则
 func (e *IncidentRuleEngine) ExecuteRule(ctx context.Context, rule *ent.IncidentRule, incident *ent.Incident, tenantID int) error {
+	if e == nil || e.client == nil || e.execution == nil || rule == nil || incident == nil {
+		return common.NewForbiddenError("incident execution policy and rule required")
+	}
 	e.logger.Infow("Executing incident rule", "rule_id", rule.ID, "incident_id", incident.ID)
 	if incident.Edges.WorkItem == nil || rule.TenantID != tenantID || incident.Edges.WorkItem.TenantID != tenantID {
 		return fmt.Errorf("rule or incident does not belong to current tenant")
@@ -370,7 +374,12 @@ func (e *IncidentRuleEngine) ExecuteRule(ctx context.Context, rule *ent.Incident
 	if !rule.IsActive {
 		return fmt.Errorf("incident rule is disabled")
 	}
-	authoritativeIncident, err := e.client.Incident.Query().
+	tx, err := e.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	authoritativeIncident, err := tx.Incident.Query().
 		Where(incidentpkg.IDEQ(incident.ID), incidentTenantScope(tenantID)).
 		WithWorkItem(withIncidentWorkItemProjection).Only(ctx)
 	if err != nil {
@@ -380,9 +389,15 @@ func (e *IncidentRuleEngine) ExecuteRule(ctx context.Context, rule *ent.Incident
 		return fmt.Errorf("failed to validate incident: %w", err)
 	}
 	incident = authoritativeIncident
+	if err := e.execution.BindEnt(ctx, tx, tenantID); err != nil {
+		return incidentExecutionFailure(err)
+	}
+	if err := e.execution.RequireEntMembers(ctx, tx, tenantID, incident.WorkItemID); err != nil {
+		return incidentExecutionFailure(err)
+	}
 
 	// 记录规则执行开始
-	execution, err := e.client.IncidentRuleExecution.Create().
+	execution, err := tx.IncidentRuleExecution.Create().
 		SetRuleID(rule.ID).
 		SetIncidentID(incident.ID).
 		SetStatus("running").
@@ -400,12 +415,15 @@ func (e *IncidentRuleEngine) ExecuteRule(ctx context.Context, rule *ent.Incident
 		return err
 	}
 
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
 	// 评估条件
 	conditions, err := e.parseConditions(rule.Conditions)
 	if err != nil {
 		e.logger.Errorw("Failed to parse rule conditions", "error", err)
-		e.updateExecutionStatus(ctx, execution.ID, tenantID, "failed", fmt.Sprintf("Failed to parse conditions: %v", err))
-		return err
+		return errors.Join(err, e.updateExecutionStatus(ctx, execution.ID, tenantID, false, "failed", fmt.Sprintf("Failed to parse conditions: %v", err)))
 	}
 
 	// 检查所有条件是否满足
@@ -414,8 +432,7 @@ func (e *IncidentRuleEngine) ExecuteRule(ctx context.Context, rule *ent.Incident
 		met, err := condition.Evaluate(ctx, incident)
 		if err != nil {
 			e.logger.Errorw("Failed to evaluate condition", "error", err)
-			e.updateExecutionStatus(ctx, execution.ID, tenantID, "failed", fmt.Sprintf("Failed to evaluate condition: %v", err))
-			return err
+			return errors.Join(err, e.updateExecutionStatus(ctx, execution.ID, tenantID, false, "failed", fmt.Sprintf("Failed to evaluate condition: %v", err)))
 		}
 		if !met {
 			allConditionsMet = false
@@ -425,16 +442,14 @@ func (e *IncidentRuleEngine) ExecuteRule(ctx context.Context, rule *ent.Incident
 
 	if !allConditionsMet {
 		e.logger.Infow("Rule conditions not met", "rule_id", rule.ID, "incident_id", incident.ID)
-		e.updateExecutionStatus(ctx, execution.ID, tenantID, "skipped", "Rule conditions not met")
-		return nil
+		return e.updateExecutionStatus(ctx, execution.ID, tenantID, false, "skipped", "Rule conditions not met")
 	}
 
 	// 执行动作
 	actions, err := e.parseActions(rule.Actions)
 	if err != nil {
 		e.logger.Errorw("Failed to parse rule actions", "error", err)
-		e.updateExecutionStatus(ctx, execution.ID, tenantID, "failed", fmt.Sprintf("Failed to parse actions: %v", err))
-		return err
+		return errors.Join(err, e.updateExecutionStatus(ctx, execution.ID, tenantID, false, "failed", fmt.Sprintf("Failed to parse actions: %v", err)))
 	}
 
 	var executionResults []map[string]interface{}
@@ -473,19 +488,9 @@ func (e *IncidentRuleEngine) ExecuteRule(ctx context.Context, rule *ent.Incident
 		executionStatus = "failed"
 		executionResult = "One or more rule actions failed"
 	}
-	err = e.updateExecutionStatus(ctx, execution.ID, tenantID, executionStatus, executionResult, outputData)
+	err = e.updateExecutionStatus(ctx, execution.ID, tenantID, true, executionStatus, executionResult, outputData)
 	if err != nil {
-		e.logger.Errorw("Failed to update execution status", "error", err)
-	}
-
-	// 更新规则统计
-	_, err = e.client.IncidentRule.Update().
-		Where(incidentrule.IDEQ(rule.ID), incidentrule.TenantIDEQ(tenantID)).
-		AddExecutionCount(1).
-		SetLastExecutedAt(time.Now()).
-		Save(ctx)
-	if err != nil {
-		e.logger.Errorw("Failed to update rule statistics", "error", err)
+		return errors.Join(firstActionErr, fmt.Errorf("persist incident rule result: %w", err))
 	}
 
 	if firstActionErr != nil {
@@ -935,8 +940,27 @@ func toStringMap(value interface{}) map[string]string {
 }
 
 // updateExecutionStatus 更新执行状态
-func (e *IncidentRuleEngine) updateExecutionStatus(ctx context.Context, executionID, tenantID int, status, result string, outputData ...map[string]interface{}) error {
-	updateQuery := e.client.IncidentRuleExecution.UpdateOneID(executionID).
+func (e *IncidentRuleEngine) updateExecutionStatus(ctx context.Context, executionID, tenantID int, recordStatistics bool, status, result string, outputData ...map[string]interface{}) error {
+	tx, err := e.client.Tx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	execution, err := tx.IncidentRuleExecution.Query().Where(incidentruleexecution.IDEQ(executionID), incidentruleexecution.TenantIDEQ(tenantID)).Only(ctx)
+	if err != nil {
+		return err
+	}
+	incident, err := tx.Incident.Query().Where(incidentpkg.IDEQ(execution.IncidentID), incidentTenantScope(tenantID)).Only(ctx)
+	if err != nil {
+		return err
+	}
+	if err := e.execution.BindEnt(ctx, tx, tenantID); err != nil {
+		return incidentExecutionFailure(err)
+	}
+	if err := e.execution.RequireEntMembers(ctx, tx, tenantID, incident.WorkItemID); err != nil {
+		return incidentExecutionFailure(err)
+	}
+	updateQuery := tx.IncidentRuleExecution.UpdateOneID(executionID).
 		Where(incidentruleexecution.TenantIDEQ(tenantID), incidentruleexecution.StatusEQ("running")).
 		SetStatus(status).
 		SetResult(result).
@@ -947,8 +971,17 @@ func (e *IncidentRuleEngine) updateExecutionStatus(ctx context.Context, executio
 		updateQuery.SetOutputData(outputData[0])
 	}
 
-	_, err := updateQuery.Save(ctx)
-	return err
+	if _, err := updateQuery.Save(ctx); err != nil {
+		return err
+	}
+	if recordStatistics {
+		if _, err := tx.IncidentRule.UpdateOneID(execution.RuleID).
+			Where(incidentrule.TenantIDEQ(tenantID)).AddExecutionCount(1).
+			SetLastExecutedAt(time.Now()).Save(ctx); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // SetExecutionPolicy wires a trusted startup dependency, never request data.
