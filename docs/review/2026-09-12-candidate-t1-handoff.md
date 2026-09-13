@@ -280,3 +280,6 @@ B2 私有证据：
 - `s3-incident-ci-alert-build.json`：后端构建 exit 0。`s3-incident-ci-alert-tagged-compile.log`：integration_postgres 标签下 service/integration 编译通过，只编译不代表目标 E2E。
 
 独立 reviewer `review_execution_scope_s1` 对构造传递、原事务和原业务校验限定审阅无阻断；按建议补齐 NotificationAction 实际路径及 Resolve 故障测试。未执行通知消费者或发送邮件。monitoring 的直接指标写入、全周期扫描、其他域/共享能力及 S4–S6/B3 仍未完成，不能据此放行 G2/G3 或 T3/T4；固定 CandidateSHA 不变。无共享环境写入、候选启动、推送或 main 合并。
+
+
+下一批 G2 专业事务定位（独立只读审计 `review_candidate_prerequisites`，2026-09-13，非完成证据）：Problem 的 `handlers/problem/lifecycle.go` ApplyCommand/applyCommandTx、`metadata.go` ApplyMetadata 及其 root_cause/evidence applyTx、`deletion.go` Delete 是原事务 owner；Change 的 `handlers/change/commands.go` ApplyCommand/applyCommandTx、`metadata.go` ApplyMetadata、`task_command.go` CompleteChangeTask、`deletion.go` DeleteChange 和 `service/pir_mutation.go` mutatePIR 分别持有写事务。必须向 Problem/Change NewService 及独立 NewChangePIRService 显式注入现有 policy，并在原业务授权后、首次写入前核验所属 WorkItem。Change authorizeCommand 还被 GetTaskProgress 只读查询复用，不能把写范围检查塞入该授权函数；竞争回执恢复保持只读。Problem creation 的 source Incident timeline 仍需保持来源与新 Problem 双端准入。ProblemResolved/ChangeOutcome 消费者的关联 Incident 通知和诊断审计属于后续独立事务边界，不能因专业命令接入而计为完成。
