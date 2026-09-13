@@ -41,7 +41,7 @@ type Service struct {
 }
 
 func NewService(repo *EntRepository, logger *zap.SugaredLogger) *Service {
-	owner := problemDomain.NewService(repo.EntRepository, logger)
+	owner := problemDomain.NewService(repo.EntRepository, logger, executionfixture.Standard())
 	registry := intake.NewCreatorRegistry()
 	if err := registry.Register(owner); err != nil {
 		panic(err)

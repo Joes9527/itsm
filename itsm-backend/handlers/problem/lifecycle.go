@@ -198,6 +198,9 @@ func (s *Service) applyCommandTx(ctx context.Context, tx *ent.Tx, cmd Command, d
 			}
 		}
 	}
+	if err := s.requireExecutionTx(ctx, tx, m.TenantID, item.ID); err != nil {
+		return empty, err
+	}
 	now := time.Now().UTC()
 	update := tx.Ticket.UpdateOneID(item.ID).Where(ticket.TenantID(m.TenantID), ticket.DeletedAtIsNil(), ticket.Version(m.ExpectedVersion)).SetVersion(m.ExpectedVersion + 1).SetUpdatedAt(now).SetStatus(target)
 	if cmd.Action == "resolve" {

@@ -49,7 +49,7 @@ func newIntakeRelationFixture(t *testing.T) (*relationFixture, *intake.Service, 
 	f.client.ProcessBinding.Create().SetTenantID(f.tenant.ID).SetBusinessType("problem").SetIsDefault(true).SetProcessDefinitionKey("none").SetConditions(map[string]any{"no_process": true}).SaveX(f.ctx)
 	logger := zap.NewNop().Sugar()
 	registry := intake.NewCreatorRegistry()
-	require.NoError(t, registry.Register(problemdomain.NewService(problemdomain.NewEntRepository(f.runtime.Tenant), logger)))
+	require.NoError(t, registry.Register(problemdomain.NewService(problemdomain.NewEntRepository(f.runtime.Tenant), logger, executionfixture.Standard())))
 	resolver := intake.NewResolver(catalogdomain.NewService(nil, f.runtime.Tenant, logger, nil), service.NewProcessBindingService(f.runtime.Tenant), service.NewConfigurationItemService(f.runtime.Tenant, logger, nil, nil), service.NewTicketCategoryService(f.runtime.Tenant))
 	app := intake.NewService(f.runtime.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), f.runtime.IntakeDirectorySnapshot(), executionfixture.Standard())
 	identity := creation.Identity{TenantID: f.tenant.ID, ActorID: f.actor.ID, RequesterID: f.actor.ID, Role: f.actor.Role, Channel: "http"}

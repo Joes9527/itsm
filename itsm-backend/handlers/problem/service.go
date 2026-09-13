@@ -2,6 +2,10 @@ package problem
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"itsm-backend/common"
+	"itsm-backend/common/executionscope"
 	"itsm-backend/database"
 	"strings"
 
@@ -10,6 +14,7 @@ import (
 )
 
 type Service struct {
+	execution      *database.ExecutionPolicy
 	directory      database.DirectorySnapshot
 	client         *ent.Client
 	investigations investigationTransactions
@@ -17,10 +22,11 @@ type Service struct {
 	logger         *zap.SugaredLogger
 }
 
-func NewService(repo Repository, logger *zap.SugaredLogger) *Service {
+func NewService(repo Repository, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *Service {
 	s := &Service{
-		repo:   repo,
-		logger: logger,
+		execution: execution,
+		repo:      repo,
+		logger:    logger,
 	}
 	if transactions, ok := repo.(investigationTransactions); ok {
 		s.investigations = transactions
@@ -87,3 +93,21 @@ func (s *Service) GetStats(ctx context.Context, tenantID int) (*ProblemStats, er
 }
 
 func (s *Service) SetDirectorySnapshot(directory database.DirectorySnapshot) { s.directory = directory }
+
+// requireExecutionTx is an additional write boundary, not business authorization.
+func (s *Service) requireExecutionTx(ctx context.Context, tx *ent.Tx, tenantID, workItemID int) error {
+	if err := s.execution.BindEnt(ctx, tx, tenantID); err != nil {
+		return executionFailure(err)
+	}
+	return executionFailure(s.execution.RequireEntMembers(ctx, tx, tenantID, workItemID))
+}
+
+func executionFailure(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, executionscope.ErrDenied) {
+		return common.NewForbiddenError("problem execution scope denied")
+	}
+	return fmt.Errorf("problem execution scope: %w", err)
+}

@@ -107,7 +107,7 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	application := func(client *ent.Client, policy *database.ExecutionPolicy, directory database.DirectorySnapshot) *intake.Service {
 		logger := zap.NewNop().Sugar()
 		registry := intake.NewCreatorRegistry()
-		for _, creator := range []creation.ProfessionalCreator{&service.TicketService{}, service.NewIncidentService(client, logger, policy), problemdomain.NewService(nil, logger)} {
+		for _, creator := range []creation.ProfessionalCreator{&service.TicketService{}, service.NewIncidentService(client, logger, policy), problemdomain.NewService(nil, logger, policy)} {
 			require.NoError(t, registry.Register(creator))
 		}
 		resolver := intake.NewResolver(catalogdomain.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
@@ -116,6 +116,19 @@ func TestCandidateIntakeCreationBoundary(t *testing.T) {
 	historicalApp := application(owner, executionfixture.Standard(), sameTransactionDirectory{})
 	oldCommand := command("historical", "incident")
 	historical, err := historicalApp.Create(ctx, identity, oldCommand)
+	require.NoError(t, err)
+	historicalProblem, err := historicalApp.Create(ctx, identity, command("historical-problem", "problem"))
+	require.NoError(t, err)
+	legacyProblemOwner := problemdomain.NewService(problemdomain.NewEntRepository(owner), zap.NewNop().Sugar(), executionfixture.Standard())
+	legacyProblemOwner.SetDirectorySnapshot(sameTransactionDirectory{})
+	legacyProblemTitle := "historical problem title"
+	legacyProblemCommand := problemdomain.MetadataCommand{Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: 1, Source: "http", OperationID: "legacy-problem-metadata"}, ProblemID: historicalProblem.ProfessionalReference.ID, Patch: dto.UpdateProblemRequest{Title: &legacyProblemTitle}}
+	legacyProblemResult, err := legacyProblemOwner.ApplyMetadata(ctx, legacyProblemCommand)
+	require.NoError(t, err)
+	legacyCommandProblem, err := historicalApp.Create(ctx, identity, command("historical-command-problem", "problem"))
+	require.NoError(t, err)
+	legacyProblemLifecycle := problemdomain.Command{Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: 1, Source: "http", OperationID: "legacy-problem-investigate"}, ProblemID: legacyCommandProblem.ProfessionalReference.ID, Action: "investigate"}
+	legacyProblemLifecycleResult, err := legacyProblemOwner.ApplyCommand(ctx, legacyProblemLifecycle)
 	require.NoError(t, err)
 	legacyCommand := dto.IncidentCommand{IncidentID: historical.ProfessionalReference.ID, Action: "acknowledge", Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: 1, Source: "http", OperationID: "legacy-command"}}
 	legacyOwner := service.NewIncidentService(owner, zap.NewNop().Sugar(), executionfixture.Standard())
@@ -203,6 +216,100 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		relationEvent := owner.OutboxEvent.Query().Where(outboxevent.EventTypeEQ(service.RelationCreatedEventType)).OnlyX(ctx)
 		require.NotNil(t, relationEvent.ExecutionWorkItemID)
 		require.Equal(t, created.WorkItemID, *relationEvent.ExecutionWorkItemID)
+	})
+
+	t.Run("Problem writes preserve historical work", func(t *testing.T) {
+		svc := problemdomain.NewService(problemdomain.NewEntRepository(runtime), zap.NewNop().Sugar(), policy)
+		svc.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
+		for _, kind := range []string{"command", "metadata", "delete"} {
+			fresh, err := app.Create(ctx, identity, command("problem-"+kind, "problem"))
+			require.NoError(t, err)
+			for _, target := range []struct{ id, workID int }{{historicalProblem.ProfessionalReference.ID, historicalProblem.WorkItemID}, {fresh.ProfessionalReference.ID, fresh.WorkItemID}} {
+				before := owner.Ticket.GetX(ctx, target.workID)
+				beforeExtension, _ := json.Marshal(owner.Problem.GetX(ctx, target.id))
+				audits, outboxes := owner.AuditLog.Query().CountX(ctx), owner.OutboxEvent.Query().CountX(ctx)
+				meta := workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: before.Version, Source: "http", OperationID: fmt.Sprintf("problem-%s-%d", kind, target.id)}
+				switch kind {
+				case "command":
+					_, err = svc.ApplyCommand(ctx, problemdomain.Command{Meta: meta, ProblemID: target.id, Action: "investigate"})
+				case "metadata":
+					title := "candidate problem metadata"
+					_, err = svc.ApplyMetadata(ctx, problemdomain.MetadataCommand{Meta: meta, ProblemID: target.id, Patch: dto.UpdateProblemRequest{Title: &title}})
+				case "delete":
+					err = svc.Delete(ctx, target.id, meta)
+				}
+				if target.workID == historicalProblem.WorkItemID {
+					require.ErrorContains(t, err, "execution scope denied")
+					beforeJSON, _ := json.Marshal(before)
+					afterJSON, _ := json.Marshal(owner.Ticket.GetX(ctx, target.workID))
+					require.JSONEq(t, string(beforeJSON), string(afterJSON))
+					afterExtension, _ := json.Marshal(owner.Problem.GetX(ctx, target.id))
+					require.JSONEq(t, string(beforeExtension), string(afterExtension))
+					require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx))
+					require.Equal(t, outboxes, owner.OutboxEvent.Query().CountX(ctx))
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, before.Version+1, owner.Ticket.GetX(ctx, target.workID).Version)
+				}
+			}
+		}
+		audits := owner.AuditLog.Query().CountX(ctx)
+		replayed, err := svc.ApplyMetadata(ctx, legacyProblemCommand)
+		require.NoError(t, err)
+		require.Equal(t, legacyProblemResult.Version, replayed.Version)
+		require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx))
+		replayed, err = svc.ApplyCommand(ctx, legacyProblemLifecycle)
+		require.NoError(t, err)
+		require.Equal(t, legacyProblemLifecycleResult.Version, replayed.Version)
+		require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx))
+		fresh, err := app.Create(ctx, identity, command("problem-lifecycle", "problem"))
+		require.NoError(t, err)
+		meta := func(key string) workitemmutation.Meta {
+			return workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: owner.Ticket.GetX(ctx, fresh.WorkItemID).Version, Source: "http", OperationID: key}
+		}
+		cause, resolution := "verified candidate root cause", "permanent candidate fix"
+		_, err = svc.ApplyMetadata(ctx, problemdomain.MetadataCommand{Meta: meta("problem-evidence"), ProblemID: fresh.ProfessionalReference.ID, Patch: dto.UpdateProblemRequest{RootCause: &cause, Resolution: &resolution}})
+		require.NoError(t, err)
+		for _, action := range []string{"investigate", "verify_resolution"} {
+			_, err = svc.ApplyCommand(ctx, problemdomain.Command{Meta: meta("problem-" + action), ProblemID: fresh.ProfessionalReference.ID, Action: action, VerificationNote: "candidate verification"})
+			require.NoError(t, err)
+		}
+		before, _ := json.Marshal(owner.Ticket.GetX(ctx, fresh.WorkItemID))
+		beforeExtension, _ := json.Marshal(owner.Problem.GetX(ctx, fresh.ProfessionalReference.ID))
+		audits, outboxes := owner.AuditLog.Query().CountX(ctx), owner.OutboxEvent.Query().CountX(ctx)
+		injected := errors.New("injected problem resolve outbox failure")
+		failOutbox := true
+		runtime.OutboxEvent.Use(func(next ent.Mutator) ent.Mutator {
+			return ent.MutateFunc(func(ctx context.Context, mutation ent.Mutation) (ent.Value, error) {
+				value, err := next.Mutate(ctx, mutation)
+				if err == nil && failOutbox {
+					failOutbox = false
+					return nil, injected
+				}
+				return value, err
+			})
+		})
+		resolve := problemdomain.Command{Meta: meta("problem-resolve"), ProblemID: fresh.ProfessionalReference.ID, Action: "resolve"}
+		_, err = svc.ApplyCommand(ctx, resolve)
+		require.ErrorIs(t, err, injected)
+		require.False(t, failOutbox)
+		after, _ := json.Marshal(owner.Ticket.GetX(ctx, fresh.WorkItemID))
+		afterExtension, _ := json.Marshal(owner.Problem.GetX(ctx, fresh.ProfessionalReference.ID))
+		require.JSONEq(t, string(before), string(after))
+		require.JSONEq(t, string(beforeExtension), string(afterExtension))
+		require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx))
+		require.Equal(t, outboxes, owner.OutboxEvent.Query().CountX(ctx))
+		resolved, err := svc.ApplyCommand(ctx, resolve)
+		require.NoError(t, err)
+		replayed, err = svc.ApplyCommand(ctx, resolve)
+		require.NoError(t, err)
+		require.Equal(t, resolved.Version, replayed.Version)
+		for _, action := range []string{"close", "reopen"} {
+			_, err = svc.ApplyCommand(ctx, problemdomain.Command{Meta: meta("problem-" + action), ProblemID: fresh.ProfessionalReference.ID, Action: action, Reason: "candidate regression"})
+			require.NoError(t, err)
+		}
+		require.Equal(t, "investigating", owner.Ticket.GetX(ctx, fresh.WorkItemID).Status)
+
 	})
 
 	t.Run("Incident CI and alert writes require membership", func(t *testing.T) {

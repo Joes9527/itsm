@@ -11,6 +11,7 @@ import (
 	"itsm-backend/ent"
 	changeDomain "itsm-backend/handlers/change"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -34,7 +35,7 @@ func problemRelationHTTP(t *testing.T) (*relationFixture, *gin.Engine, string) {
 	_, err := f.db.ExecContext(f.ctx, fmt.Sprintf("GRANT SELECT ON problems,ticket_categories TO %q", f.runtimeRole))
 	require.NoError(t, err)
 	_ = f.client.Problem.Query().Where(problem.WorkItemID(f.problem.ID)).OnlyX(f.ctx)
-	s := problemDomain.NewService(problemDomain.NewEntRepository(f.runtime.Tenant), zap.NewNop().Sugar())
+	s := problemDomain.NewService(problemDomain.NewEntRepository(f.runtime.Tenant), zap.NewNop().Sugar(), executionfixture.Standard())
 	s.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())
 	h := problemDomain.NewHandler(s, f.runtime.Tenant)
 	gin.SetMode(gin.TestMode)

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -26,7 +27,7 @@ func projectionOwners(t *testing.T, f *relationFixture) (*problemDomain.Service,
 	require.NoError(t, err)
 	item := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(f.actor.ID).SetOpenedByID(f.actor.ID).SetTicketNumber("CHG-PROJECT").SetTitle("change projection").SetRecordClass("change_request").SetStatus("draft").SaveX(f.ctx)
 	c := f.client.Change.Create().SetWorkItemID(item.ID).SaveX(f.ctx)
-	pOwner := problemDomain.NewService(problemDomain.NewEntRepository(f.runtime.Tenant), zap.NewNop().Sugar())
+	pOwner := problemDomain.NewService(problemDomain.NewEntRepository(f.runtime.Tenant), zap.NewNop().Sugar(), executionfixture.Standard())
 	pOwner.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())
 	cOwner := changeDomain.NewService(changeDomain.NewEntRepository(f.runtime.Tenant, nil), f.runtime.Tenant, zap.NewNop().Sugar())
 	cOwner.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())

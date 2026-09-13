@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 
 	"github.com/google/uuid"
@@ -54,7 +55,7 @@ func rcaAuthorityFixture(t *testing.T) (*sql.DB, *rcaCommandFixture) {
 
 	_, err = db.Exec(`CREATE TABLE problem_root_cause_analyses (id INTEGER PRIMARY KEY,problem_id INTEGER NOT NULL UNIQUE,analyst_id INTEGER NOT NULL,analysis_method TEXT,contributing_factors TEXT,evidence TEXT,confidence_level TEXT,analysis_date DATETIME,reviewed_by INTEGER,review_date DATETIME,created_at DATETIME,updated_at DATETIME)`)
 	require.NoError(t, err)
-	return db, &rcaCommandFixture{ProblemInvestigationService: service.NewProblemInvestigationService(db, zaptest.NewLogger(t).Sugar()), owner: problemDomain.NewService(problemDomain.NewEntRepository(client), zaptest.NewLogger(t).Sugar()), client: client, db: db, tenant: tenant.ID, foreignTenant: foreign.ID, actor: actor.ID, foreignActor: outsider.ID, pid: records[0].ID, foreignPID: records[1].ID, deletedPID: records[2].ID, itemID: records[0].WorkItemID}
+	return db, &rcaCommandFixture{ProblemInvestigationService: service.NewProblemInvestigationService(db, zaptest.NewLogger(t).Sugar()), owner: problemDomain.NewService(problemDomain.NewEntRepository(client), zaptest.NewLogger(t).Sugar(), executionfixture.Standard()), client: client, db: db, tenant: tenant.ID, foreignTenant: foreign.ID, actor: actor.ID, foreignActor: outsider.ID, pid: records[0].ID, foreignPID: records[1].ID, deletedPID: records[2].ID, itemID: records[0].WorkItemID}
 }
 func (s *rcaCommandFixture) mutate(ctx context.Context, pid, tenant int, rca *problemDomain.RootCauseMetadata) error {
 	p, err := s.client.Problem.Get(ctx, pid)

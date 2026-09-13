@@ -398,7 +398,7 @@ func TestPostgresIncidentConversionSignedMSPHTTPAuthorizationAndReplay(t *testin
 
 			logger := zap.NewNop().Sugar()
 			registry := intake.NewCreatorRegistry()
-			require.NoError(t, registry.Register(problemdomain.NewService(problemdomain.NewEntRepository(clients.Tenant), logger)))
+			require.NoError(t, registry.Register(problemdomain.NewService(problemdomain.NewEntRepository(clients.Tenant), logger, executionfixture.Standard())))
 			resolver := intake.NewResolver(catalogdomain.NewService(nil, clients.Tenant, logger, nil), service.NewProcessBindingService(clients.Tenant), service.NewConfigurationItemService(clients.Tenant, logger, nil, nil), service.NewTicketCategoryService(clients.Tenant))
 			app := intake.NewService(clients.Tenant, resolver, registry, intake.NewWorkItemCreator(workitemnumber.NewPostgreSQLAllocator()), clients.IntakeDirectorySnapshot(), executionfixture.Standard())
 			incidentController := controller.NewIncidentController(service.NewIncidentService(clients.Tenant, logger, executionfixture.Standard()), nil, nil, nil, nil, logger)

@@ -14,6 +14,7 @@ import (
 	"itsm-backend/ent"
 	problem "itsm-backend/handlers/problem"
 	"itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"os"
 	"testing"
 )
@@ -30,7 +31,7 @@ func TestRCAAuthorityPostgres(t *testing.T) {
 	_, err = f.db.ExecContext(f.ctx, "GRANT USAGE ON ALL SEQUENCES IN SCHEMA "+schema+" TO "+role)
 	require.NoError(t, err)
 	scoped := ent.NewClient(ent.Driver(driver))
-	f.owner = problem.NewService(problem.NewEntRepository(scoped), zap.NewNop().Sugar())
+	f.owner = problem.NewService(problem.NewEntRepository(scoped), zap.NewNop().Sugar(), executionfixture.Standard())
 	f.ctx = tenantctx.WithTenantID(f.ctx, f.tenant.ID)
 	errorCore, errorLogs := observer.New(zap.ErrorLevel)
 	reader := service.NewTenantScopedProblemInvestigationService(runtimeDB, zap.New(errorCore).Sugar())

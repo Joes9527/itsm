@@ -52,7 +52,7 @@ func TestWorkItemProblemLifecycleAllocatedMSP(t *testing.T) {
 				require.NoError(t, err)
 			}
 			f.ctx = tenantctx.WithTenantID(f.ctx, f.tenant.ID)
-			f.owner = problem.NewService(problem.NewEntRepository(clients.Tenant), zap.NewNop().Sugar())
+			f.owner = problem.NewService(problem.NewEntRepository(clients.Tenant), zap.NewNop().Sugar(), executionfixture.Standard())
 			f.owner.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 			_, err := clients.Tenant.User.Get(f.ctx, actor.ID)
 			require.True(t, ent.IsNotFound(err), "provider must be hidden in customer RLS")
@@ -189,7 +189,7 @@ func newProblemLifecycleFixture(t *testing.T) *problemLifecycleFixture {
 	f.actor.Update().SetRole("super_admin").ExecX(f.ctx)
 	item := f.client.Ticket.Create().SetTenantID(f.tenant.ID).SetRequesterID(f.actor.ID).SetOpenedByID(f.actor.ID).SetTitle("Recurring pool leak").SetTicketNumber("PRB-LIFECYCLE").SetRecordClass("problem").SetStatus("open").SetPriority("high").SaveX(f.ctx)
 	p := f.client.Problem.Create().SetWorkItemID(item.ID).SaveX(f.ctx)
-	return &problemLifecycleFixture{f, problem.NewService(problem.NewEntRepository(f.client), zap.NewNop().Sugar()), p}
+	return &problemLifecycleFixture{f, problem.NewService(problem.NewEntRepository(f.client), zap.NewNop().Sugar(), executionfixture.Standard()), p}
 }
 func (f *problemLifecycleFixture) command(action, key string) problem.Command {
 	item := f.client.Ticket.GetX(f.ctx, f.p.WorkItemID)
@@ -448,7 +448,7 @@ func TestWorkItemProblemLifecycleRLSAndReviewerScope(t *testing.T) {
 	_, err = f.db.ExecContext(f.ctx, "GRANT USAGE ON ALL SEQUENCES IN SCHEMA "+schema+" TO "+role)
 	require.NoError(t, err)
 	scoped := ent.NewClient(ent.Driver(driver))
-	owner := problem.NewService(problem.NewEntRepository(scoped), zap.NewNop().Sugar())
+	owner := problem.NewService(problem.NewEntRepository(scoped), zap.NewNop().Sugar(), executionfixture.Standard())
 	ctx := tenantctx.WithTenantID(f.ctx, f.tenant.ID)
 	cmd := f.command("investigate", "rls-create")
 	cmd.Investigation = &dto.CreateProblemInvestigationRequest{ProblemID: f.p.ID, InvestigatorID: f.actor.ID}

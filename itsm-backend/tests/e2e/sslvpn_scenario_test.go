@@ -158,7 +158,7 @@ func setupSSLVPNTestHarness(t *testing.T) *sslvpnTestHarness {
 	for _, owner := range []creation.ProfessionalCreator{
 		ticketSvc,
 		service.NewIncidentService(client, logger, executionfixture.Standard()),
-		problemdomain.NewService(nil, logger),
+		problemdomain.NewService(nil, logger, executionfixture.Standard()),
 		changedomain.NewService(nil, client, logger),
 		srService,
 	} {

@@ -283,3 +283,17 @@ B2 私有证据：
 
 
 下一批 G2 专业事务定位（独立只读审计 `review_candidate_prerequisites`，2026-09-13，非完成证据）：Problem 的 `handlers/problem/lifecycle.go` ApplyCommand/applyCommandTx、`metadata.go` ApplyMetadata 及其 root_cause/evidence applyTx、`deletion.go` Delete 是原事务 owner；Change 的 `handlers/change/commands.go` ApplyCommand/applyCommandTx、`metadata.go` ApplyMetadata、`task_command.go` CompleteChangeTask、`deletion.go` DeleteChange 和 `service/pir_mutation.go` mutatePIR 分别持有写事务。必须向 Problem/Change NewService 及独立 NewChangePIRService 显式注入现有 policy，并在原业务授权后、首次写入前核验所属 WorkItem。Change authorizeCommand 还被 GetTaskProgress 只读查询复用，不能把写范围检查塞入该授权函数；竞争回执恢复保持只读。Problem creation 的 source Incident timeline 仍需保持来源与新 Problem 双端准入。ProblemResolved/ChangeOutcome 消费者的关联 Incident 通知和诊断审计属于后续独立事务边界，不能因专业命令接入而计为完成。
+
+
+### B2 S3 Problem 专业事务（2026-09-13）
+
+在 `f1c61b724` 上向 Problem domain NewService 显式注入可信 policy，bootstrap 复用已有冻结实例，测试构造按上下文传 candidate 或显式 standard。ApplyCommand/applyCommandTx、ApplyMetadata、Delete 在各自原事务首写前 Bind/Require；生命周期/metadata 的原授权、版本、字段与依赖检查保持原顺序，历史回执恢复仍只读；Delete 在 GuardDeletionTx 的内部并发锁写入前准入。范围拒绝映射 Forbidden，数据库失败保留 cause；没有将写范围检查混入只读复用的授权函数。
+
+B2 本地证据：
+
+- `s3-problem-red.log` 为 fixture 错用 repository 构造名称的编译错误；修正后 `s3-problem-boundary-red.log` 验证历史 investigate 被错误接受。首次 PG GREEN 尝试仅因 Forbidden 文案与断言不一致失败，已统一领域错误文案。
+- `s3-problem-final-pg.log`：完整真实私有 PG TestCandidateIntakeCreationBoundary PASS、未 skip。历史 investigate/metadata/delete 拒绝，Ticket 和 Problem 完整字段、audit/outbox 不变；迁移039前真实 command/metadata receipt 在候选下只读回放。新候选 metadata、删除及根因/永久解决方案→investigate→verify_resolution→resolve→close→reopen 通过；resolve outbox 已 INSERT 后注入故障，主记录、扩展、审计/outbox 全回滚，同一请求重试与 replay 成功。
+- `s3-problem-regression.log`：Problem/intake/service/controller/integration 五包定向回归 PASS；之后仅统一 Forbidden 文案，最终真实 PG 再次验证。
+- `s3-problem-build.json`：后端全量构建 exit 0；`s3-problem-tagged-compile.log`：integration_postgres 标签下六个受影响包编译通过，未运行目标环境 E2E。
+
+独立 reviewer `review_execution_scope_s1` 对原事务/写入顺序、构造传递、回执和错误处理限定审阅无阻断。RCA/Evidence 子表分支处于 metadata guard 后，但本次尚未逐分支做真实专项运行验收；ProblemResolved 消费者及关联 Incident 副作用仍须单独接入。Change、Requested Item、共享能力、其他生产者和 S4–S6/B3 仍未完成，不放行候选或 T3/T4。固定 CandidateSHA 不变，未操作共享环境或推送/合并 main。

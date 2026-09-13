@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -30,7 +31,7 @@ func TestWorkItemRelationsProblemDeletionRejectsActiveReference(t *testing.T) {
 	_, err = f.owner.Apply(f.ctx, cmd, false)
 	require.NoError(t, err)
 	p := f.client.Problem.Query().Where(problem.WorkItemID(f.problem.ID)).OnlyX(f.ctx)
-	owner := problemDomain.NewService(problemDomain.NewEntRepository(f.runtime.Tenant), zap.NewNop().Sugar())
+	owner := problemDomain.NewService(problemDomain.NewEntRepository(f.runtime.Tenant), zap.NewNop().Sugar(), executionfixture.Standard())
 	owner.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())
 	err = owner.Delete(f.ctx, p.ID, cmd.Meta)
 	require.Error(t, err, "an active reference must reject deletion rather than silently remove the relation")
@@ -47,7 +48,7 @@ func deletionOwner(t *testing.T, f *relationFixture, class string) (*ent.Ticket,
 	require.NoError(t, err)
 	if class == "problem" {
 		p := f.client.Problem.Query().Where(problem.WorkItemID(f.problem.ID)).OnlyX(f.ctx)
-		s := problemDomain.NewService(problemDomain.NewEntRepository(f.runtime.Tenant), zap.NewNop().Sugar())
+		s := problemDomain.NewService(problemDomain.NewEntRepository(f.runtime.Tenant), zap.NewNop().Sugar(), executionfixture.Standard())
 		s.SetDirectorySnapshot(f.runtime.IntakeDirectorySnapshot())
 		return f.problem, func(m workitemmutation.Meta) error { return s.Delete(f.ctx, p.ID, m) }
 	}

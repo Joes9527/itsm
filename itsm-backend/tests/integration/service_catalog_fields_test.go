@@ -65,7 +65,7 @@ func setupServiceCatalogFieldsRouter(t *testing.T) (*gin.Engine, *ent.Tenant, *e
 	for _, owner := range []creation.ProfessionalCreator{
 		ticketSvc,
 		service.NewIncidentService(client, logger, executionfixture.Standard()),
-		problemdomain.NewService(nil, logger),
+		problemdomain.NewService(nil, logger, executionfixture.Standard()),
 		changedomain.NewService(nil, client, logger),
 		srService,
 	} {

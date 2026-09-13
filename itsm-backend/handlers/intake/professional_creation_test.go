@@ -36,7 +36,7 @@ func TestAuthoritativeProfessionalGraph(t *testing.T) {
 			case "generic":
 				domain = &service.TicketService{}
 			case "problem":
-				domain = problemhandler.NewService(nil, zap.NewNop().Sugar())
+				domain = problemhandler.NewService(nil, zap.NewNop().Sugar(), executionfixture.Standard())
 				command.Problem = &workitemcreation.ProblemInput{RootCause: "route failure", Impact: "employees"}
 			case "incident":
 				identity.Channel = "http"

@@ -11,6 +11,7 @@ import (
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	problem "itsm-backend/handlers/problem"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"sync"
 	"testing"
 )
@@ -67,7 +68,7 @@ func TestWorkItemAssignmentProblemRuntimeRLS(t *testing.T) {
 		_, err := f.db.ExecContext(f.ctx, "GRANT SELECT,INSERT,UPDATE,DELETE ON "+table+" TO "+cfg.User)
 		require.NoError(t, err)
 	}
-	owner := problem.NewService(problem.NewEntRepository(clients.Tenant), zap.NewNop().Sugar())
+	owner := problem.NewService(problem.NewEntRepository(clients.Tenant), zap.NewNop().Sugar(), executionfixture.Standard())
 	owner.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 	ctx := tenantctx.WithTenantID(f.ctx, f.tenant.ID)
 	cmd := problem.MetadataCommand{Meta: f.command("metadata", "runtime-assignment").Meta, ProblemID: f.p.ID, Patch: dto.UpdateProblemRequest{AssigneeID: &target.ID}}

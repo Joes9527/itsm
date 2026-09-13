@@ -547,7 +547,7 @@ func NewApplication() *Application {
 
 	rootCauseAnalysisService := service.NewRootCauseAnalysisService(client)
 	problemRepo := problem.NewEntRepository(client)
-	problemServiceDomain := problem.NewService(problemRepo, sugar)
+	problemServiceDomain := problem.NewService(problemRepo, sugar, executionPolicy)
 	problemServiceDomain.SetDirectorySnapshot(clients.IntakeDirectorySnapshot())
 	problemHandler := problem.NewHandler(problemServiceDomain, client)
 	problemInvestigationService := service.NewTenantScopedProblemInvestigationService(database.GetRawDB(), sugar)

@@ -122,7 +122,7 @@ func newConversionControllerFixture(t *testing.T, msp bool, allScope ...bool) *c
 	sourceItem := client.Ticket.Create().SetTenantID(tenant.ID).SetRequesterID(requester.ID).SetOpenedByID(requester.ID).SetTitle("VPN incident").SetDescription("VPN unavailable").SetTicketNumber("INC-CONVERSION").SetRecordClass("incident").SetStatus("new").SetPriority("high").SaveX(ctx)
 	incident := client.Incident.Create().SetWorkItemID(sourceItem.ID).SetSeverity("high").SetImpact("high").SetDetectedAt(time.Now()).SaveX(ctx)
 	registry := intake.NewCreatorRegistry()
-	require.NoError(t, registry.Register(problemDomain.NewService(problemDomain.NewEntRepository(client), logger)))
+	require.NoError(t, registry.Register(problemDomain.NewService(problemDomain.NewEntRepository(client), logger, executionfixture.Standard())))
 	resolver := intake.NewResolver(service_catalog.NewService(nil, client, logger, nil), service.NewProcessBindingService(client), service.NewConfigurationItemService(client, logger, nil, nil), service.NewTicketCategoryService(client))
 	app := intake.NewService(client, resolver, registry, intake.NewWorkItemCreator(&conversionTestAllocator{}), sameTransactionDirectory{}, executionfixture.Standard())
 	controller := NewIncidentController(service.NewIncidentService(client, logger, executionfixture.Standard()), nil, nil, nil, nil, logger)
