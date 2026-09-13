@@ -433,3 +433,9 @@ database/connector/.../bootstrap全包race、既定私有PG16/Redis/MinIO suite�
 实现d12349502：Manager.DescribePersistedDeliveryTarget在standard精确Ref/tenant/owner门禁下，从原ConnectorConfig的调用方client读取唯一enabled tenant/name配置并核对provider，经Registry纯描述返回摘要，不初始化、不读运行实例。candidate拒绝此源。SQLite原事务未提交配置描述、外租户同名坏数据隔离、回滚0记录、无效/重复/禁用拒绝、查询cause和关闭后零查询均验证；database/connector/.../bootstrap全包race与全后端build通过，独立最终审阅无新增阻断。
 
 生产接入必须传原tx.Client()，接口不能强制这一点；JSON仅语法/类型检查，Graph字符串身份有纯解析验证，不宣称通用重复key/数值无损处理或PG角色验证。该入口及候选声明入口尚未接邮件生产者/worker：下一步typed EmailTarget/045/Incident outbox与目标重绑RED；S5/S6/T3/T4/G3仍未完成，CandidateSHA与停止状态不变。详见实现T1交接记录。
+
+### S5 EmailTarget统一描述与传输配置检查点（2026-09-14）
+
+实现7d6d34d90：原EmailService.DescribeDeliveryTarget(ctx,*ent.Tx,tenant,owner)统一v2 EmailTarget；Graph从candidate冻结声明或standard原tx.Client()读取，SMTP从原服务复制的配置描述，均不查询live provider/发送。独立审阅指出GraphProvider恒存在会令SMTP不可达，已以可信email_delivery.transport / ITSM_EMAIL_DELIVERY_TRANSPORT解决：空默认graph，仅graph/smtp，bootstrap复制选择；Graph失败不转SMTP。SMTP摘要绑定精确实际Host/Port/Username/From、机会式STARTTLS/TLS1.2验证/PlainAuth，不含密码、不伪装connector，Host保留实际文本作保守身份。
+
+四包具名race、config/database/bootstrap全量race、既定私有PG16/Redis/MinIO suite及全后端build通过，独立最终审阅无新增阻断；详见T1。当前只接描述与构造，新transport配置尚不改变SendForTenant/实际队列路由。下一步原通知行045/持久v2与EmailTarget验证、worker精确解析/前后身份及generation复核，再同步Incident outbox；原目标重绑RED及S5/S6/T3/T4/G3仍未关闭。CandidateSHA与候选停止状态不变，无目标环境操作。
