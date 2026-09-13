@@ -239,19 +239,22 @@ func resolveEnvVars(input string) string {
 // resolveMapEnvVars 递归解析 map 中的环境变量
 func resolveMapEnvVars(m map[string]interface{}) {
 	for k, v := range m {
-		switch val := v.(type) {
-		case string:
-			m[k] = resolveEnvVars(val)
-		case map[string]interface{}:
-			resolveMapEnvVars(val)
-		case []interface{}:
-			for i, item := range val {
-				if s, ok := item.(string); ok {
-					val[i] = resolveEnvVars(s)
-				}
-			}
+		m[k] = resolveConfigEnvValue(v)
+	}
+}
+
+func resolveConfigEnvValue(value interface{}) interface{} {
+	switch val := value.(type) {
+	case string:
+		return resolveEnvVars(val)
+	case map[string]interface{}:
+		resolveMapEnvVars(val)
+	case []interface{}:
+		for i, item := range val {
+			val[i] = resolveConfigEnvValue(item)
 		}
 	}
+	return value
 }
 
 func LoadConfig() (*Config, error) {

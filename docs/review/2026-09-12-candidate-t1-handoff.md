@@ -1217,3 +1217,17 @@ s5-connector-restore-unit.log四包具名Capability/Health/Connector/Runtime/API
 s5-connector-request-activation-red.log与补充行数断言后的s5-connector-request-activation-final-red.log均为七项预期断言失败，无SKIP/DATA RACE。独立审阅确认RED有效且正确拒绝不会因发送探针被误判（无实例时不发送）。本轮只有测试和计划细化，未修复生产入口，不重复生产构建，也不将此前绿色套件当作当前版本放行依据。尚未测试Marketplace或生产认证中间件。
 
 独立只读调查还发现Marketplace先提交UpdateInstallationConfig后Provision；下一修复必须在首次持久化前拒绝，并在既有ExecutionConfig增加冻结的可信精确目标声明、复用唯一Manager和manifest初始化行为约束。既有通知/Webhook worker仍拥有业务投递权限，不因声明目标存在而开放Test/诊断/polling；详见设计worktree现有S5实施范围。CandidateSHA和停止状态保持不变，完整目标未完成，无共享数据库操作、真实企业外呼、push或main合并。
+
+### B2 S5 可信连接器目标声明与冻结前置（2026-09-14）
+
+ExecutionConfig新增connector_targets，校验精确tenant/scope、不可歧义name/provider、重复实例键、规范目的地摘要与非空无重复的既有notification/webhook/outbox能力，能力须显式scoped。standard不能携带候选目标。s5-connector-target-config-red.log通过真实Viper配置解码复现旧配置忽略无效声明；校验实现后正向与各非法分支通过。outbox仅为既有投递owner的基础能力，不授权所有handler或直接Send。
+
+ExecutionPolicy在构造时序列化拥有全部嵌套声明；ConnectorStartupTargets仅candidate内部SystemContext返回独立副本，拒绝nil/standard/普通tenant context和取消。s5-connector-target-policy-red.log记录缺失读取合同；实现后输入配置变更、返回值变更均不能修改原目标、嵌套settings、凭据或能力。内部标记仍不是角色或业务授权。s5-connector-target-number-red.log复现大整数settings可被JSON复制舍入；现拒绝校验时可见的有损往返，不宣称能够恢复加载器此前丢失的原文精度。
+
+s5-connector-target-final-unit.log具名config/database race PASS，包含notification/outbox正向、缺失能力、错误消息不含合成秘密。独立最终审阅无新增阻断。此为冻结声明前置，尚无Manager启动调用；507f62293请求激活RED保留，初始化manifest合同、真实目标核验、首次配置写入前拒绝和业务投递旁路仍需完成。完整目标及原CandidateSHA/停止边界不变；未操作共享环境或企业端点。完整回归与构建结果在下方补记。
+
+实际配置链补查发现既有resolveMapEnvVars不进入列表内对象，s5-connector-target-env-red.log真实Viper YAML路径复现凭证环境引用保持原文；改为同一解析器递归map/列表，嵌套列表也覆盖。s5-connector-target-env-verified.log具名config/database race PASS，s5-connector-target-full-config.log完整config包race PASS；独立复核无阻断。缺失环境变量仍沿原默认值/空字符串语义，本轮没有新增凭证完整性校验或真实凭证解析验收。
+
+s5-connector-target-full-private.log在环境解析增量之前执行完整私有PG16/Redis/MinIO候选边界与Stream回归，只有507f62293具名请求激活的七项已知断言失败，其余所选子测试通过，无SKIP/DATA RACE；整套结果明确为FAIL，非验收通过。后续环境解析改动通过上方真实配置链测试，未重复不读取配置加载器的私有fixture套件。s5-connector-target-build.log为环境解析增量前全后端构建通过，最终构建另记。
+
+最终s5-connector-target-final-build.log全后端build exit0，git diff --check通过。当前只完成声明配置/冻结前置，不能据此关闭507f62293或S5/G2。

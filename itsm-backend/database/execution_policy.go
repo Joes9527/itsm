@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"sort"
 
@@ -16,10 +17,11 @@ import (
 // business action or discover additional scopes from request data or the database.
 // Bootstrap must admit the configured database role before injecting this policy.
 type ExecutionPolicy struct {
-	mode         string
-	deploymentID string
-	scopes       map[int]executionscope.Ref
-	capabilities map[string]bool
+	mode             string
+	deploymentID     string
+	scopes           map[int]executionscope.Ref
+	capabilities     map[string]bool
+	connectorTargets json.RawMessage
 }
 
 func NewExecutionPolicy(cfg config.ExecutionConfig) (*ExecutionPolicy, error) {
@@ -34,6 +36,13 @@ func NewExecutionPolicy(cfg config.ExecutionConfig) (*ExecutionPolicy, error) {
 	for _, s := range cfg.Scopes {
 		p.scopes[s.TenantID] = executionscope.Ref{DeploymentID: cfg.DeploymentID, ScopeID: s.ScopeID, TenantID: s.TenantID}
 	}
+	// Own the entire nested declaration, including credentials, before any
+	// runtime component can mutate the caller's config or a returned target.
+	targets, err := json.Marshal(cfg.ConnectorTargets)
+	if err != nil {
+		return nil, fmt.Errorf("connector startup declarations cannot be frozen")
+	}
+	p.connectorTargets = targets
 	return p, nil
 }
 

@@ -354,3 +354,5 @@ Creation requester controls use the actual target resource's `create_on_behalf` 
 
 
 历史连接器恢复 `ConnectorController.LoadAll` 在读取恢复客户端或解析配置前，由同一Manager要求connector_poll启动能力。仅standard、冻结配置显式enabled且带内部SystemContext标记的未取消上下文可以进入；candidate即使带系统标记也拒绝，普通HTTP/tenant context不能代替启动许可。该入口使用既有只读system客户端读取配置，逐个派生tenant context再初始化实例/启动原轮询。SystemBypass只是内部代码标记，不是数据库角色认证；仍须先完成真实运行角色准入。此规则只管历史恢复，不授权新的candidate投递目标，也不解决直接Provision/Send/Get调用的其它前置。
+
+候选连接器目标声明配置位于`execution.connector_targets`：每项包括`tenant_id`、`scope_id`、`name`、`provider`、规范64位小写十六进制`destination_digest`、`capabilities`及受保护的`credentials`/`settings`。目标必须属于已有scope、实例键唯一；能力仅限已显式scoped的notification/webhook/outbox投递owner。outbox不代表全部handler都可使用该目标，业务owner仍须验证具体持久意图和权限。配置构造时冻结完整嵌套内容，仅内部启动上下文获得独立副本；错误不输出秘密内容。settings使用JSON值，拒绝校验时可见的有损数值往返；不能恢复加载器此前已经丢失的原文精度。目前该声明的Manager启动接入和直接请求阻断尚未完成，填写声明不意味着目标已激活或候选已获准启动。

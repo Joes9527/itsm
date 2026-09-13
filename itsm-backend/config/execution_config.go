@@ -10,10 +10,11 @@ type ExecutionScopeConfig struct {
 	ScopeID  string `mapstructure:"scope_id"`
 }
 type ExecutionConfig struct {
-	Mode         string                 `mapstructure:"mode"`
-	DeploymentID string                 `mapstructure:"deployment_id"`
-	Scopes       []ExecutionScopeConfig `mapstructure:"scopes"`
-	Capabilities map[string]string      `mapstructure:"capabilities"`
+	Mode             string                  `mapstructure:"mode"`
+	DeploymentID     string                  `mapstructure:"deployment_id"`
+	Scopes           []ExecutionScopeConfig  `mapstructure:"scopes"`
+	Capabilities     map[string]string       `mapstructure:"capabilities"`
+	ConnectorTargets []ConnectorTargetConfig `mapstructure:"connector_targets"`
 }
 
 func (c ExecutionConfig) Validate() error {
@@ -53,7 +54,7 @@ func (c ExecutionConfig) Validate() error {
 			}
 		}
 	}
-	return nil
+	return c.validateConnectorTargets()
 }
 
 // Enabled is only valid after Validate and runtime role/scope admission.
