@@ -162,7 +162,7 @@ func NewCustomProcessEngine(client *ent.Client, logger *zap.SugaredLogger, execu
 	}
 	engine.auditService = NewBPMNAuditService(client, logger)
 	engine.auditService.instanceAccessPolicy = instanceAccessPolicy
-	engine.callbackOutbox = &bpmnCallbackOutbox{client: client, executor: engine}
+	engine.callbackOutbox = &bpmnCallbackOutbox{client: client, executor: engine, execution: execution}
 	engine.processDefinitionService = &bpmnProcessDefinitionService{client: client, logger: logger}
 	engine.processInstanceService = &bpmnProcessInstanceService{client: client, logger: logger, instanceAccessPolicy: instanceAccessPolicy, auditService: engine.auditService}
 	// taskService 持有 engine 自身的引用（而不是每次调用再 NewCustomProcessEngine 造一个新的）：
@@ -766,9 +766,9 @@ func (e *CustomProcessEngine) enqueueUserTaskCallback(ctx context.Context, task 
 	var row *ent.ProcessCallbackOutbox
 	var err error
 	if plan.BlockCode != "" {
-		row, err = e.callbackOutbox.enqueueBlocked(ctx, e.client, request, plan.BlockCode)
+		row, err = e.callbackOutbox.enqueueBlocked(ctx, e.client, request, plan.BlockCode, e.owningTx)
 	} else {
-		row, err = e.callbackOutbox.enqueue(ctx, e.client, request)
+		row, err = e.callbackOutbox.enqueue(ctx, e.client, request, e.owningTx)
 	}
 	if err != nil {
 		return fmt.Errorf("enqueue user task callback failed")
@@ -1263,9 +1263,9 @@ func (e *CustomProcessEngine) enqueueServiceTaskCallback(
 	}
 	var row *ent.ProcessCallbackOutbox
 	if plan.BlockCode != "" {
-		row, err = e.callbackOutbox.enqueueBlocked(ctx, e.client, request, plan.BlockCode)
+		row, err = e.callbackOutbox.enqueueBlocked(ctx, e.client, request, plan.BlockCode, e.owningTx)
 	} else {
-		row, err = e.callbackOutbox.enqueue(ctx, e.client, request)
+		row, err = e.callbackOutbox.enqueue(ctx, e.client, request, e.owningTx)
 	}
 	if err != nil {
 		return fmt.Errorf("enqueue service task callback failed")
@@ -1430,7 +1430,16 @@ func (e *CustomProcessEngine) loadClaimedCallback(ctx context.Context, workerID 
 	if row == nil || row.ID <= 0 || row.TenantID <= 0 {
 		return nil, errors.New("callback identity is incomplete")
 	}
-	return e.client.ProcessCallbackOutbox.Query().Where(
+	tx, err := e.client.Tx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	scope, err := e.execution.CallbackPredicate(ctx, tx, row.TenantID)
+	if err != nil {
+		return nil, err
+	}
+	return tx.ProcessCallbackOutbox.Query().Where(scope).Where(
 		processcallbackoutbox.ID(row.ID),
 		processcallbackoutbox.TenantID(row.TenantID),
 		processcallbackoutbox.StatusEQ(bpmnCallbackStatusProcessing),
@@ -1457,7 +1466,11 @@ func (e *CustomProcessEngine) executeClaimedServiceTaskCallback(
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	txRow, err := tx.Client().ProcessCallbackOutbox.Query().Where(
+	scope, scopeErr := e.execution.CallbackPredicate(ctx, tx, row.TenantID)
+	if scopeErr != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(scopeErr)
+	}
+	txRow, err := tx.Client().ProcessCallbackOutbox.Query().Where(scope).Where(
 		processcallbackoutbox.ID(row.ID),
 		processcallbackoutbox.TenantID(row.TenantID),
 		processcallbackoutbox.StatusEQ(bpmnCallbackStatusProcessing),
@@ -1495,7 +1508,7 @@ func (e *CustomProcessEngine) executeClaimedServiceTaskCallback(
 	if err := txEngine.executeStep(ctx, instance, definitions.Processes[0], txRow.ElementID, instance.Variables); err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
-	completed, err := e.callbackOutbox.completeWithClient(ctx, tx.Client(), workerID, txRow)
+	completed, err := e.callbackOutbox.completeTx(ctx, tx, workerID, txRow)
 	if err != nil || !completed {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
@@ -1542,7 +1555,7 @@ func (e *CustomProcessEngine) executeClaimedUserTaskCallback(
 			return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 		}
 		defer func() { _ = tx.Rollback() }()
-		completed, err := e.callbackOutbox.completeWithClient(ctx, tx.Client(), workerID, row)
+		completed, err := e.callbackOutbox.completeTx(ctx, tx, workerID, row)
 		if err != nil || !completed {
 			return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 		}
@@ -1558,7 +1571,11 @@ func (e *CustomProcessEngine) executeClaimedUserTaskCallback(
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
 	defer func() { _ = tx.Rollback() }()
-	txRow, err := tx.Client().ProcessCallbackOutbox.Query().Where(
+	scope, scopeErr := e.execution.CallbackPredicate(ctx, tx, row.TenantID)
+	if scopeErr != nil {
+		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(scopeErr)
+	}
+	txRow, err := tx.Client().ProcessCallbackOutbox.Query().Where(scope).Where(
 		processcallbackoutbox.ID(row.ID),
 		processcallbackoutbox.TenantID(row.TenantID),
 		processcallbackoutbox.StatusEQ(bpmnCallbackStatusProcessing),
@@ -1594,7 +1611,7 @@ func (e *CustomProcessEngine) executeClaimedUserTaskCallback(
 	if err := txEngine.executeStep(ctx, instance, definitions.Processes[0], txRow.ElementID, instance.Variables); err != nil {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}
-	completed, err := e.callbackOutbox.completeWithClient(ctx, tx.Client(), workerID, txRow)
+	completed, err := e.callbackOutbox.completeTx(ctx, tx, workerID, txRow)
 	if err != nil || !completed {
 		return bpmnCallbackExecutionResult{}, newBPMNCallbackAdvanceError(err)
 	}

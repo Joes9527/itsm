@@ -445,3 +445,19 @@ Outbox 并发/回滚测试提交 `56879f7c9`；独立 reviewer 确认限定结�
 下一实现必须覆盖processPending与processExecutionKeys两扫描、claim/retry/completeWithClient/persistCallbackOutcome、enqueue/enqueueBlocked及executor内token/task/instance原事务推进。结构归属沿callback.process_instance_id→process_instances.execution_work_item_id→member，禁止payload推断。System只读扫描与Tenant写事务分别核验真实绑定，不能仅过滤扫描或将单租户Bind改成system bypass。原lease/CAS及audit事务必须保留。固定CandidateSHA不变，未启动候选、修改B/WSL或共享数据库；S4/S5/S6/B3及G2/G3未完成。
 
 独立 reviewer review_execution_scope_s1 确认 callback RED 为真实claim→失败→retry改写历史。转GREEN必须补充可处理的新成员和结果断言，避免“全部报错/全部不执行”伪通过；scope/binding失效另有明确错误断言。当前红测不单凭scanErr判断成功。
+
+
+### B2 S4 BPMN callback 范围隔离及新成员真实推进（2026-09-13）
+
+在 `8a942e4b1` 的历史 RED 后，callback 两扫描 processPending/processExecutionKeys 使用原扫描事务的结构化 predicate；跨租户 discovery 使用 SystemContext，处理前结束只读事务。claim/retry、completeTx、persistCallbackOutcome 的权威 UPDATE 均附带同范围条件。engine 领取后读取及两类推进事务按 callback 行核验范围，原token/lease条件不改。原 completeWithClient 已改为明确 completeTx，enqueue/enqueueBlocked 传原 owningTx；candidate 入队要求instance成员，blocked UPDATE也附带predicate，audit仍在调用方原事务。
+
+共用原 executionMemberPredicate：TenantPredicate保持单租户绑定、CallbackPredicate沿process_instance_id→instance.execution_work_item_id→member关联，同时核验tenant。System角色仅允许额外可选SELECT(id,tenant_id,execution_work_item_id)三列，不授予process_instances整表读取、业务变量读取或任何写权限；额外列会被角色准入拒绝。授权仅在任务随机私有数据库fixture内发生，没有改B环境。
+
+本机 candidate-delivery/b2 证据：
+
+- `s4-callback-worker-final-pg.log`：最终完整 TestCandidateIntakeCreationBoundary PASS，无skip；两条历史callback完整字段不变，新成员经声明的本地handler和真实CustomProcessEngine从Current推进End，callback与instance均completed、handler仅调用一次。
+- scope关闭、system binding撤销、tenant binding撤销三个场景，真实扫描明确失败、completed=0、handler未调用，callback全表完整快照不变；恢复配置后上述新成员正常推进。
+- `s4-callback-worker-final-regression.log`：service、database、service_request、controller四包Callback/Outbox/Execution/Runtime/Kaf/BPMN回归PASS。此前一次因standard测试未适配enqueue签名编译失败，已修复且原actor断言保留。
+- `s4-callback-worker-final-build.json`：后端全量构建exit0。`s4-callback-worker-integration-compile.log`：integration标签service与tests/integration编译PASS，仅编译不代表目标环境运行。
+
+独立 reviewer review_execution_scope_s1 分两次只读复审无明确阻断，核对原事务、结构引用、精确身份列读取及blocked UPDATE补强。仍有明确验证缺口：candidate按executionKeys内联入口、入队正负与故障回滚、user-task callback、claim后撤销、retry/blocked/optional audit及推进故障；标准回归不替代这些candidate PG专项。既有handler执行与token推进是分段边界，不声称整条外部效果与callback状态单事务；scope错误经既有sanitized advance error后不可按cause细分。通知/SLA/escalation、S5/S6/B3与完整G2/G3未完成，S4不勾选。固定CandidateSHA不变，无候选启动、WSL/共享变更、推送/main合并。

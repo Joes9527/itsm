@@ -224,6 +224,8 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 	require.NoError(t, err)
 	_, err = ownerDB.ExecContext(ctx, "GRANT SELECT ON execution_scopes,execution_scope_members,execution_runtime_bindings TO "+systemRole)
 	require.NoError(t, err)
+	_, err = ownerDB.ExecContext(ctx, "GRANT SELECT(id,tenant_id,execution_work_item_id) ON process_instances TO "+systemRole)
+	require.NoError(t, err)
 	_, err = ownerDB.ExecContext(ctx, `INSERT INTO execution_runtime_bindings VALUES($1,'intake-test','candidate')`, systemRole)
 	require.NoError(t, err)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
@@ -1634,8 +1636,52 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		}
 		engine := service.NewCustomProcessEngine(runtime, zap.NewNop().Sugar(), policy).(*service.CustomProcessEngine)
 		engine.SetCallbackCandidateClient(clients.System)
+
+		fresh, err := app.Create(ctx, identity, command("callback-member", "generic"))
+		require.NoError(t, err)
+		dep := owner.ProcessDeployment.Create().SetDeploymentID("candidate-callback").SetDeploymentName("Candidate callback").SetTenantID(tenant.ID).SaveX(ctx)
+		xml := `<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" targetNamespace="https://example.invalid"><bpmn:process id="candidate-callback" isExecutable="true"><bpmn:startEvent id="Start"/><bpmn:serviceTask id="Current"/><bpmn:endEvent id="End"/><bpmn:sequenceFlow id="S1" sourceRef="Start" targetRef="Current"/><bpmn:sequenceFlow id="S2" sourceRef="Current" targetRef="End"/></bpmn:process></bpmn:definitions>`
+		def := owner.ProcessDefinition.Create().SetKey("candidate-callback").SetName("Candidate callback").SetVersion("1").SetIsLatest(true).SetBpmnXML([]byte(xml)).SetDeploymentID(dep.ID).SetTenantID(tenant.ID).SaveX(ctx)
+		instance := owner.ProcessInstance.Create().SetProcessInstanceID("candidate-callback").SetProcessDefinitionKey(def.Key).SetProcessDefinitionID(def.ID).SetBusinessKey(fmt.Sprintf("generic:%d", fresh.WorkItemID)).SetBusinessType("generic").SetBusinessID(fresh.WorkItemID).SetExecutionWorkItemID(fresh.WorkItemID).SetStatus("running").SetCurrentActivityID("Current").SetTenantID(tenant.ID).SaveX(ctx)
+		current := owner.ProcessCallbackOutbox.Create().SetExecutionKey("candidate-callback-key").SetTenantID(tenant.ID).SetProcessInstanceID(instance.ID).SetCallbackKind("service_task").SetHandlerID("candidate-local-callback").SetTaskType("candidate-local-task").SetElementID("Current").SetNextAttemptAt(time.Now().Add(-time.Minute)).SaveX(ctx)
+		handler := &candidateCallbackHandler{}
+		engine.CallbackRegistry().RegisterHandler(handler)
+
+		callbacksBefore, err := json.Marshal(owner.ProcessCallbackOutbox.Query().Order(ent.Asc("id")).AllX(ctx))
+		require.NoError(t, err)
+		for _, invalidation := range []string{"scope", "system-binding", "tenant-binding"} {
+			revokedRole := systemRole
+			if invalidation == "tenant-binding" {
+				revokedRole = runtimeRole
+			}
+			if invalidation == "scope" {
+				_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='closed' WHERE id=$1", scopeID)
+			} else {
+				_, err = ownerDB.ExecContext(ctx, "DELETE FROM execution_runtime_bindings WHERE runtime_role=$1", revokedRole)
+			}
+			require.NoError(t, err)
+			n, rejected := engine.ProcessPendingCallbacks(context.Background(), "candidate-callback-denied", 1000)
+			if invalidation == "scope" {
+				_, err = ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+			} else {
+				_, err = ownerDB.ExecContext(ctx, `INSERT INTO execution_runtime_bindings VALUES($1,'intake-test','candidate')`, revokedRole)
+			}
+			require.NoError(t, err)
+			require.Error(t, rejected, invalidation)
+			require.Zero(t, n)
+			require.Zero(t, handler.calls)
+			after, err := json.Marshal(owner.ProcessCallbackOutbox.Query().Order(ent.Asc("id")).AllX(ctx))
+			require.NoError(t, err)
+			require.JSONEq(t, string(callbacksBefore), string(after))
+		}
 		completed, scanErr := engine.ProcessPendingCallbacks(context.Background(), "candidate-callback-worker", 1000)
 		t.Logf("real callback sweep completed=%d error=%v", completed, scanErr)
+		require.NoError(t, scanErr)
+		require.Equal(t, 1, completed)
+		require.Equal(t, 1, handler.calls)
+		require.Equal(t, "completed", owner.ProcessCallbackOutbox.GetX(ctx, current.ID).Status)
+		require.Equal(t, "completed", owner.ProcessInstance.GetX(ctx, instance.ID).Status)
+
 		for _, row := range historicalCallbacks {
 			after, e := json.Marshal(owner.ProcessCallbackOutbox.GetX(ctx, row.ID))
 			require.NoError(t, e)
@@ -1653,4 +1699,17 @@ func (*candidateOutboxTestReceiver) EventType() string { return "candidate-test-
 func (r *candidateOutboxTestReceiver) Deliver(_ context.Context, event *ent.OutboxEvent) error {
 	r.delivered = append(r.delivered, event.ID)
 	return nil
+}
+
+// Local declared callback exercises the real engine without enterprise effects.
+type candidateCallbackHandler struct{ calls int }
+
+func (*candidateCallbackHandler) GetTaskType() string  { return "candidate-local-task" }
+func (*candidateCallbackHandler) GetHandlerID() string { return "candidate-local-callback" }
+func (*candidateCallbackHandler) CallbackContract(string) (bpmn.CallbackActionContract, bool) {
+	return bpmn.CallbackActionContract{}, true
+}
+func (h *candidateCallbackHandler) Execute(context.Context, *ent.ProcessTask, map[string]interface{}) (*bpmn.CallbackEffect, error) {
+	h.calls++
+	return bpmn.AppliedEffect("local candidate callback", nil), nil
 }

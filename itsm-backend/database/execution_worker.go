@@ -45,6 +45,10 @@ func (p *ExecutionPolicy) WorkerPredicate(ctx context.Context, tx *ent.Tx, tenan
 		}
 		refs = append(refs, ref)
 	}
+	return executionMemberPredicate(refs, tenantColumn, workItemColumn), nil
+}
+
+func executionMemberPredicate(refs []executionscope.Ref, tenantColumn, workItemColumn string) func(*entsql.Selector) {
 	return func(outer *entsql.Selector) {
 		members := entsql.Table("execution_scope_members").Schema("public").As("candidate_members")
 		scopes := entsql.Table("execution_scopes").Schema("public").As("candidate_scopes")
@@ -58,6 +62,46 @@ func (p *ExecutionPolicy) WorkerPredicate(ctx context.Context, tx *ent.Tx, tenan
 			entsql.P(func(b *entsql.Builder) { b.Ident(bindings.C("runtime_role")).WriteString(" = session_user") }),
 			entsql.ColumnsEQ(scopes.C("tenant_id"), outer.C(tenantColumn)), entsql.ColumnsEQ(members.C("work_item_id"), outer.C(workItemColumn)),
 		))
+		outer.Where(entsql.Exists(query))
+	}
+}
+
+// TenantPredicate binds only the tenant already authorized by the caller. It
+// uses the same membership SQL as transport, without accepting system bypass.
+func (p *ExecutionPolicy) TenantPredicate(ctx context.Context, tx *ent.Tx, tenantID int, tenantColumn, workItemColumn string) (func(*entsql.Selector), error) {
+	if err := p.BindEnt(ctx, tx, tenantID); err != nil {
+		return nil, err
+	}
+	ref, scoped, err := p.scopeFor(tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if !scoped {
+		return func(*entsql.Selector) {}, nil
+	}
+	return executionMemberPredicate([]executionscope.Ref{ref}, tenantColumn, workItemColumn), nil
+}
+
+// CallbackPredicate follows the immutable process instance execution reference.
+// tenantID zero is reserved for the separate system discovery transaction.
+func (p *ExecutionPolicy) CallbackPredicate(ctx context.Context, tx *ent.Tx, tenantID int) (func(*entsql.Selector), error) {
+	var member func(*entsql.Selector)
+	var err error
+	if tenantID == 0 {
+		member, err = p.WorkerPredicate(ctx, tx, "tenant_id", "execution_work_item_id")
+	} else {
+		member, err = p.TenantPredicate(ctx, tx, tenantID, "tenant_id", "execution_work_item_id")
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !p.IsCandidate() {
+		return member, nil
+	}
+	return func(outer *entsql.Selector) {
+		instance := entsql.Table("process_instances").Schema("public").As("candidate_instance")
+		query := entsql.Select(instance.C("id")).From(instance).Where(entsql.And(entsql.ColumnsEQ(instance.C("id"), outer.C("process_instance_id")), entsql.ColumnsEQ(instance.C("tenant_id"), outer.C("tenant_id"))))
+		member(query)
 		outer.Where(entsql.Exists(query))
 	}, nil
 }

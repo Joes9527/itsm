@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"os"
 	"strings"
 	"sync"
@@ -538,8 +539,8 @@ func TestBPMNCallbackOutboxLeaseRecoveryPostgres(t *testing.T) {
 	receiver := &postgresIdempotentCallbackReceiver{effects: make(map[string]int)}
 	workerIDs := [2]string{"outbox-worker-a-" + namespace, "outbox-worker-b-" + namespace}
 	workers := [2]*bpmnCallbackOutbox{
-		{client: clientA, executor: receiver, now: func() time.Time { return now }},
-		{client: clientB, executor: receiver, now: func() time.Time { return now }},
+		{client: clientA, execution: executionfixture.Standard(), executor: receiver, now: func() time.Time { return now }},
+		{client: clientB, execution: executionfixture.Standard(), executor: receiver, now: func() time.Time { return now }},
 	}
 	barrier := &postgresOutboxLoadBarrier{
 		rowID: row.ID, arrived: make(chan postgresOutboxLoad, 2), release: make(chan struct{}),
