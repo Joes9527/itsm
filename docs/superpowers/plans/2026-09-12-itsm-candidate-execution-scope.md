@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use executing-plans to implement this plan task-by-task. Do not spawn extra implementation agents. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-状态：accepted（实施中；S1/S2 已提交并完成该阶段验证，S3 基础增量已实现并验证，业务接入进行中；S4–S6 未开始）。
+状态：accepted（实施中；S1/S2 已提交并完成该阶段验证，S3 基础增量已实现并验证，业务接入进行中；S4 已有分段实现与验证，S5/S6 未完成）。
 
 **Goal:** 关闭 T2 B2，证明真实候选新任务可以执行而历史记录和队列保持不变。
 
@@ -97,7 +97,7 @@ S3 阶段记录（2026-09-13；基础提交 `6261941b4`，统一创建接入 `04
 
 **Files:** `service/{outbox_event_repository.go,outbox_delivery_worker.go,kaf_outbox_dispatcher.go,bpmn_callback_outbox.go,ticket_notification_service.go,sla_monitor_service.go,escalation_service.go}`、bootstrap 注入点及对应现有测试。
 
-当前通用Worker新增有效RED：`s4-outbox-worker-mixed-red.log` 调用真实DispatchOnce/System连接，历史pending与expired被published、unknown/ambiguous被blocked且attempt递增、外租户待办也被published。独立复审确认，尚未修复，候选测试处于RED。下一步同时处理独立system-role范围准入和全部原SQL更新的manifest/member EXISTS，不能把单租户Bind放宽为SystemContext。详见T1最新交接中的权限及测试边界。
+通用 Worker 原混排 RED 已由 `065226f1e` 修复：冻结 WorkerPredicate 在原事务核对实际 system role binding/manifest，并将 scope/member/结构引用/tenant 限制加入全部领取、恢复、unknown、attempt/retry/finalize SQL。system角色仅允许scope三表可选SELECT，单租户Bind不放宽；两bootstrap显式policy，无默认standard。最终 `s4-outbox-worker-verified-pg.log` 完整私有PG测试PASS：历史四类/外租户NULL与真实成员完整行及audit不变，新候选正常投递；7个真实claim后转换分别scope关闭/binding撤销拒绝保全，恢复后成功。四包回归、全构建、integration标签编译及独立只读复审通过。candidate并发领取/恢复、audit实际写后故障、其余callback与周期执行尚未验证，S4继续未勾选，详见T1最新交接。固定CandidateSHA和候选停止状态不变。
 
 - [ ] 写 `TestCandidateWorkerPreservesHistoricalStates`，混排历史 unknown/pending/expired claim、候选 pending、跨租户 pending；捕获每条 status/attempt/claim/updated_at，运行一次真实 Dispatch/Claim，要求历史逐字段不变。当前全量 claim/BlockUnknown 应 RED。
 - [ ] 所有未知事件标记、expired claim 回收、claim、mark attempt、retry、published/dead-letter 语句在原事务内加入同一个成员 EXISTS 条件，不能仅过滤返回的 slice。查询形状：
