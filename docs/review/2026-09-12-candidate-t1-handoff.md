@@ -715,3 +715,16 @@ Callback contract新增version及generic typed lifecycle result，沿既有流�
 `s3-ticket-edit-tx-regression.log` 服务/控制器/仓储受影响回归PASS，`s3-ticket-edit-tx-build.log` 全后端构建exit0。初次controller fixture未注入policy导致旧成功测试失败，已修正夹具并复跑；无生产绕过。git diff --check通过，独立review_execution_scope_s1限定审阅无新增阻断。测试是任务私有PG16及SQLite，非B的PG17候选运行验收。
 
 本检查点仅数据库主体与标签：旧optional version（缺失时取事务内当前version）、返回Ticket、事务外通知/SLA收尾/Feishu仍待整体命令接入。可信actor/source、子任务父范围、稳定operationId与历史receipt只读重放、所有副作用原子提交尚未完成；RequesterID/FormFields及专业核心编辑归属按上一检查点继续处理。不得把此次候选边界测试PASS等同完整S3/G2完成。固定CandidateSHA不变、候选未启动，无WSL/共享数据操作、共享迁移、企业实发、推送或main合并。
+
+
+### B2 S3 编辑通知与 SLA 收尾同事务（2026-09-13）
+
+在 `226ffd46f` 后继续迁移UpdateTicket：状态变化的通知改为commit前EnqueueNotificationTx，按最终requester/assignee去重并保留原ticket_updated内容与渠道偏好，delivery key绑定工单ID及提交后version。邮件等外部渠道仅生成pending意图，由既有通知worker处理，编辑不调用provider。autoCloseSLAViolations唯一调用改接原*ent.Tx、tenant/ticket/未解决条件，按ID逐条更新并传播任何错误，保留原resolved_at/is_resolved/resolution_notes语义；第一条已更新而第二条失败时同事务回滚。applied SLA冻结不变。
+
+`s3-ticket-edit-status-red.log` 是修正测试依赖后的有效私有PG RED：测试专属ticket_updated偏好只启用站内，实际Notification/TicketNotification/第二条SLAViolation写后故障都命中，原服务仍返回nil、工单/标签已提交并存在SLA部分写。首轮未配置偏好时默认email缺provider导致通知hook未命中，未把该首轮作为实际通知写后故障证据。
+
+`s3-ticket-edit-status-green.log` 定向GREEN；最终`s3-ticket-edit-status-pg.log` 完整TestCandidateIntakeCreationBoundary PASS无skip：三个写后故障都保全Ticket整行/标签目录/通知两表及两条SLA整行；解除故障后原请求成功、version仅+1、通知两表各精确+1，核对目标ticket/recipient/delivery key。另验证相同requester/assignee去重、仅email偏好生成一条pending且未挂provider、全部禁用产生零意图、缺notifier拒绝并回滚status/version。专属偏好cleanup断言成功，后续测试不继承配置。
+
+`s3-ticket-edit-status-regression.log` 服务/控制器/仓储/通知相关回归PASS，`s3-ticket-edit-status-build.log` 全后端构建exit0。回归初轮全局测试fixture过早注入notifier改变创建依赖，已撤回该改动，仅两个实际编辑成功测试局部注入；生产无fallback。git diff --check通过；独立review_execution_scope_s1两次限定复核无新增阻断，并按建议收紧通知精确数量与cleanup断言。未运行企业发送或候选WSL验收。
+
+完整编辑命令仍未完成：Feishu仍在commit后旧独立路径，可信Meta/actor/parent、必需expectedVersion、稳定operationId及回执重放尚待贯通HTTP/工具/前端；业务输入字段与专业类归属缺口仍按前述处理。数据库通知意图原子提交不等于外部投递已完成，不等于整个S3/S4/S5/S6/B3/T3/T4/G2/G3通过。固定CandidateSHA不变，候选未启动，无WSL/共享数据库变更、共享迁移、企业实发、推送或main合并。

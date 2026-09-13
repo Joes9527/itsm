@@ -2793,6 +2793,123 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		}
 	})
 
+	t.Run("ticket edit status side effects share original transaction", func(t *testing.T) {
+		notifications := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)
+		notifications.SetNotificationPreferenceService(service.NewNotificationPreferenceService(runtime, zap.NewNop().Sugar()))
+		preference := owner.NotificationPreference.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetEventType("ticket_updated").SetEmailEnabled(false).SetInAppEnabled(true).SetSmsEnabled(false).SetPushEnabled(false).SaveX(ctx)
+		defer func() { require.NoError(t, owner.NotificationPreference.DeleteOneID(preference.ID).Exec(ctx)) }()
+		svc := service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy, NotificationService: notifications})
+		for _, fault := range []string{"notification", "ticket_notification", "second_sla"} {
+			func() {
+				fresh, err := app.Create(ctx, identity, command("edit-status-fault-"+fault, "generic"))
+				require.NoError(t, err)
+				owner.Ticket.UpdateOneID(fresh.WorkItemID).SetStatus("in_progress").ExecX(ctx)
+				before := owner.Ticket.GetX(ctx, fresh.WorkItemID)
+				violations := []*ent.SLAViolation{}
+				for _, kind := range []string{"response", "resolution"} {
+					violations = append(violations, owner.SLAViolation.Create().SetTicketID(before.ID).SetTenantID(tenant.ID).SetSLADefinitionID(legacySLADefinition.ID).SetViolationType(kind).SaveX(ctx))
+				}
+				var beforeJSON, afterJSON string
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, before.ID).Scan(&beforeJSON))
+				beforeNotifications := owner.Notification.Query().CountX(ctx)
+				beforeDeliveries := owner.TicketNotification.Query().CountX(ctx)
+				beforeTags := owner.TicketTag.Query().CountX(ctx)
+				beforeSLA := make([]string, len(violations))
+				for j, v := range violations {
+					require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(v)::text FROM sla_violations v WHERE id=$1`, v.ID).Scan(&beforeSLA[j]))
+				}
+				active, writes := true, 0
+				defer func() { active = false }()
+				injected := errors.New("edit status " + fault + " after write")
+				hook := func(next ent.Mutator) ent.Mutator {
+					return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+						value, err := next.Mutate(ctx, m)
+						if active && err == nil {
+							writes++
+							if fault != "second_sla" || writes == 2 {
+								return nil, injected
+							}
+						}
+						return value, err
+					})
+				}
+				switch fault {
+				case "notification":
+					runtime.Notification.Use(hook)
+				case "ticket_notification":
+					runtime.TicketNotification.Use(hook)
+				case "second_sla":
+					runtime.SLAViolation.Use(hook)
+				}
+				req := &dto.UpdateTicketRequest{Status: "resolved", Resolution: "verified resolution", Tags: []string{"status-" + fault}, Version: before.Version, UserID: actor.ID}
+				_, editErr := svc.UpdateTicket(ctx, before.ID, req, tenant.ID)
+				active = false
+				assert.ErrorIs(t, editErr, injected)
+				if fault == "second_sla" {
+					assert.Equal(t, 2, writes)
+				} else {
+					assert.GreaterOrEqual(t, writes, 1)
+				}
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, before.ID).Scan(&afterJSON))
+				assert.JSONEq(t, beforeJSON, afterJSON)
+				assert.Equal(t, beforeNotifications, owner.Notification.Query().CountX(ctx))
+				assert.Equal(t, beforeDeliveries, owner.TicketNotification.Query().CountX(ctx))
+				assert.Equal(t, beforeTags, owner.TicketTag.Query().CountX(ctx))
+				for j, v := range violations {
+					var after string
+					require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(v)::text FROM sla_violations v WHERE id=$1`, v.ID).Scan(&after))
+					assert.JSONEq(t, beforeSLA[j], after)
+				}
+				if errors.Is(editErr, injected) {
+					updated, err := svc.UpdateTicket(ctx, before.ID, req, tenant.ID)
+					require.NoError(t, err)
+					require.Equal(t, before.Version+1, updated.Version)
+					require.Equal(t, "resolved", string(updated.Status))
+					require.Equal(t, beforeNotifications+1, owner.Notification.Query().CountX(ctx))
+					require.Equal(t, beforeDeliveries+1, owner.TicketNotification.Query().CountX(ctx))
+					var recipient int
+					var deliveryKey string
+					require.NoError(t, ownerDB.QueryRow(`SELECT user_id,delivery_key FROM ticket_notifications WHERE ticket_id=$1`, before.ID).Scan(&recipient, &deliveryKey))
+					require.Equal(t, actor.ID, recipient)
+					require.Equal(t, fmt.Sprintf("ticket:edit:%d:version:%d", before.ID, before.Version+1), deliveryKey)
+					for _, v := range violations {
+						require.True(t, owner.SLAViolation.GetX(ctx, v.ID).IsResolved)
+					}
+				}
+			}()
+		}
+		for _, channel := range []string{"email", "disabled"} {
+			owner.NotificationPreference.UpdateOneID(preference.ID).SetInAppEnabled(false).SetEmailEnabled(channel == "email").ExecX(ctx)
+			fresh, err := app.Create(ctx, identity, command("edit-status-channel-"+channel, "generic"))
+			require.NoError(t, err)
+			before := owner.Ticket.GetX(ctx, fresh.WorkItemID)
+			_, err = svc.UpdateTicket(ctx, before.ID, &dto.UpdateTicketRequest{Status: "in_progress", AssigneeID: actor.ID, Version: before.Version, UserID: actor.ID}, tenant.ID)
+			require.NoError(t, err)
+			var count int
+			require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM ticket_notifications WHERE ticket_id=$1`, before.ID).Scan(&count))
+			if channel == "disabled" {
+				require.Zero(t, count)
+			} else {
+				require.Equal(t, 1, count, "requester and identical assignee must be deduplicated")
+				var persistedChannel, status, key string
+				require.NoError(t, ownerDB.QueryRow(`SELECT channel,status,delivery_key FROM ticket_notifications WHERE ticket_id=$1`, before.ID).Scan(&persistedChannel, &status, &key))
+				require.Equal(t, "email", persistedChannel)
+				require.Equal(t, "pending", status, "producer must only enqueue; no provider attached")
+				require.Equal(t, fmt.Sprintf("ticket:edit:%d:version:%d", before.ID, before.Version+1), key)
+			}
+		}
+		fresh, err := app.Create(ctx, identity, command("edit-status-no-notifier", "generic"))
+		require.NoError(t, err)
+		before := owner.Ticket.GetX(ctx, fresh.WorkItemID)
+		withoutNotifier := service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy})
+		_, err = withoutNotifier.UpdateTicket(ctx, before.ID, &dto.UpdateTicketRequest{Status: "in_progress", Version: before.Version, UserID: actor.ID}, tenant.ID)
+		require.ErrorContains(t, err, "notification service required")
+		after := owner.Ticket.GetX(ctx, before.ID)
+		require.Equal(t, before.Status, after.Status)
+		require.Equal(t, before.Version, after.Version)
+
+	})
+
 	t.Run("manual escalation persists Feishu update intent", func(t *testing.T) {
 		receiver := &candidateFeishuUpdater{destination: "local-test-destination"}
 		registry := connector.NewRegistry()

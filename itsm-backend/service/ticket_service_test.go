@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"itsm-backend/handlers/shared/workitemmutation"
+	domain "itsm-backend/service"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 
@@ -836,6 +838,8 @@ func TestTicketService_UpdateTicket(t *testing.T) {
 
 	logger := zaptest.NewLogger(t).Sugar()
 	ticketService := NewTicketServiceForTest(client, logger)
+
+	ticketService.SetNotificationService(domain.NewTicketNotificationService(client, logger, executionfixture.Standard()))
 
 	ctx := context.Background()
 

@@ -188,29 +188,23 @@ func getCategoryIDValue(categoryID *int) int {
 	return *categoryID
 }
 
-// autoCloseSLAViolations 关闭工单的未解决 SLA 违规记录，返回关闭数量。
-func (s *TicketService) autoCloseSLAViolations(ctx context.Context, ticketID int) (int, error) {
-	now := time.Now()
-	violations, err := s.client.SLAViolation.Query().
-		Where(slaviolation.TicketIDEQ(ticketID), slaviolation.ResolvedAtIsNil()).
-		All(ctx)
+// autoCloseSLAViolations joins the editing transaction; any failure aborts the
+// entire edit, including earlier violations and notification intents.
+func (s *TicketService) autoCloseSLAViolations(ctx context.Context, tx *ent.Tx, ticketID, tenantID int) (int, error) {
+	if tx == nil {
+		return 0, fmt.Errorf("SLA closure requires the ticket transaction")
+	}
+	violations, err := tx.SLAViolation.Query().Where(slaviolation.TicketIDEQ(ticketID), slaviolation.TenantIDEQ(tenantID), slaviolation.ResolvedAtIsNil()).Order(ent.Asc(slaviolation.FieldID)).All(ctx)
 	if err != nil {
 		return 0, err
 	}
-	closed := 0
+	now := time.Now()
 	for _, v := range violations {
-		_, err := v.Update().
-			SetResolvedAt(now).
-			SetIsResolved(true).
-			SetResolutionNotes("工单已关闭，系统自动解决违规").
-			Save(ctx)
-		if err != nil {
-			s.logger.Warnw("Failed to auto-close SLA violation", "error", err, "violation_id", v.ID)
-			continue
+		if err := tx.SLAViolation.UpdateOneID(v.ID).Where(slaviolation.TenantIDEQ(tenantID), slaviolation.TicketIDEQ(ticketID), slaviolation.ResolvedAtIsNil()).SetResolvedAt(now).SetIsResolved(true).SetResolutionNotes("工单已关闭，系统自动解决违规").Exec(ctx); err != nil {
+			return 0, err
 		}
-		closed++
 	}
-	return closed, nil
+	return len(violations), nil
 }
 
 func extractAdHocFieldValues(formFields map[string]interface{}) []AdHocFieldValue {
@@ -567,30 +561,33 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 		return nil, err
 	}
 
+	// Status notifications retain the final requester/assignee and channel
+	// preferences. Transport delivery is owned by the existing notification worker.
+	if req.Status != "" && ticket.Status(req.Status) != current.Status {
+		if s.notificationSvc == nil {
+			return nil, fmt.Errorf("ticket edit notification service required")
+		}
+		recipients := []int{updated.RequesterID}
+		if updated.AssigneeID != nil && *updated.AssigneeID > 0 && *updated.AssigneeID != updated.RequesterID {
+			recipients = append(recipients, *updated.AssigneeID)
+		}
+		if err := s.notificationSvc.EnqueueNotificationTx(ctx, tx, id, tenantID, &dto.SendTicketNotificationRequest{
+			UserIDs: recipients, EventType: "ticket_updated",
+			Content:     fmt.Sprintf("工单 #%s 状态已从 %s 变更为 %s", updated.TicketNumber, current.Status, req.Status),
+			DeliveryKey: fmt.Sprintf("ticket:edit:%d:version:%d", id, updated.Version),
+		}); err != nil {
+			return nil, err
+		}
+	}
+	if req.Status != "" && isFinalStatus(ticket.Status(req.Status)) {
+		if _, err := s.autoCloseSLAViolations(ctx, tx, id, tenantID); err != nil {
+			return nil, err
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	s.logger.Infow("Ticket updated", "ticket_id", id)
-
-	// 状态变更时发送 ticket_updated 通知
-	if req.Status != "" && ticket.Status(req.Status) != current.Status {
-		if s.notificationSvc != nil {
-			if err := s.notificationSvc.NotifyTicketStatusChanged(ctx, id, string(current.Status), req.Status, tenantID); err != nil {
-				s.logger.Warnw("Failed to send status change notification", "error", err, "ticket_id", id)
-			}
-		}
-	}
-
-	// 工单进入终态时自动关闭 SLA 违规
-	if req.Status != "" {
-		if isFinalStatus(ticket.Status(req.Status)) && s.client != nil {
-			if count, err := s.autoCloseSLAViolations(ctx, id); err != nil {
-				s.logger.Warnw("Failed to auto-close SLA violations", "error", err, "ticket_id", id)
-			} else if count > 0 {
-				s.logger.Infow("Auto-closed SLA violations", "ticket_id", id, "count", count)
-			}
-		}
-	}
 
 	// Applied SLA is a frozen contract. Priority/category edits do not reapply policy.
 

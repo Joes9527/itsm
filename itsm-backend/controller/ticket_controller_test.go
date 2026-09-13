@@ -496,7 +496,8 @@ func TestTicketController_ListTickets(t *testing.T) {
 }
 
 func TestTicketController_UpdateTicket(t *testing.T) {
-	r, client, _ := setupTestTicketController(t)
+	r, client, controller := setupTestTicketController(t)
+	controller.ticketService.SetNotificationService(service.NewTicketNotificationService(client, zaptest.NewLogger(t).Sugar(), executionfixture.Standard()))
 	defer client.Close()
 
 	tenant, user := createTestTenantAndUserForTicket(t, client)
