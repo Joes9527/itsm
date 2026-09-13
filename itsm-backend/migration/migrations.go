@@ -462,6 +462,7 @@ var RegisteredMigrations = []Migration{
 	{Version: "036_intake_frozen_workflow_context", Description: "Freeze workflow definition content and prepared variables in intake snapshots"},
 	{Version: CandidateExecutionScopeVersion, Description: "Register new candidate WorkItems in bounded deployment execution scopes"},
 	{Version: SLAAlertNotificationVersion, Description: "Link SLA alert delivery identities and preserve historical notification facts"},
+	{Version: ToolInvocationExecutionScopeVersion, Description: "Register new tool invocation execution provenance without enrolling history"},
 	{Version: WorkItemRetireVersion, Description: "Retire WorkItem legacy structures with controlled evidence"},
 }
 
@@ -475,6 +476,8 @@ func PostSchemaMigrations() []Migration {
 // GetMigrationSQL returns the SQL for a specific migration
 func GetMigrationSQL(version string) string {
 	switch version {
+	case ToolInvocationExecutionScopeVersion:
+		return toolInvocationExecutionScopeSQL
 	case SLAAlertNotificationVersion:
 		return slaAlertNotificationSQL
 	case CandidateExecutionScopeVersion:

@@ -988,3 +988,14 @@ S5不可处理消息的完整处置、进程重启及其它异步入口继续未
 独立review_execution_scope_s1确认根因与RED有效。修复必须从invocation首次INSERT原事务建立可信结构归属，历史行保持未登记；create_ticket尚无WorkItem，不能拿未来工单或Arguments/时间戳作来源许可。审批更新本身、enqueue、执行预检、业务首次写入原事务及完成/失败回写均需重新守卫。仅增加启动开关或执行前一次检查不能关闭缺陷，拒绝历史调用不得将其改写failed。现有稳定invocation operation ID和业务回执继续负责ACK缺口恢复，不能另建业务状态机。
 
 本轮仅新增真实回归测试，生产缺陷尚未修复，当前该测试及包含它的完整套件不能报告GREEN；此前通过结果属于之前代码/断言范围。没有运行与本项无关的重复构建，git diff --check通过。下一步按执行计划中的工具来源事务链补齐迁移与角色、创建/审批/队列/业务/回执共同边界后将该RED转GREEN，保留新工具正向与重放能力，不把永久disabled当作G2完成。CandidateSHA保持不变、候选未启动、S5/B2/B3/T3/T4/G2/G3仍未通过，无共享环境改动、企业外呼或push/main合并。
+
+
+### B2 S5 工具来源041结构登记前置（2026-09-13）
+
+在 `674fc9885` 后新增唯一注册迁移 `041_tool_invocation_execution_scope`，目录按039→040→041，要求040与既有037准备链，不改038退休契约及历史SQL/checksum。新execution_tool_invocations以invocation_id为主键，复合外键约束invocation/tenant及scope/tenant。只有tool_invocations首次INSERT的SECURITY DEFINER触发器登记；固定search_path并验证触发位置，锁定session_user绑定及active scope，核对部署/tenant/session tenant；standard绑定直接返回不登记。候选原INSERT失败则登记回滚，历史调用没有登记更新路径。新表RLS只读、PUBLIC和角色默认表/函数授权均剥离，不授予运行角色直接写入。
+
+`s5-tool-enrollment-red.log` 真实私有PG测试先在未注册迁移处FAIL；`s5-tool-enrollment-green.log` 新结构初步race PASS。审阅建议后补充默认ALL TABLES授权剥离、外租户/closed scope/撤销binding的INSERT拒绝及原表/登记表计数无残留，显式事务立即登记rollback清理。`s5-tool-enrollment-final.log` 真实受限tenant角色race PASS：历史invocation整行JSON不变、无历史登记、新INSERT与登记同事务可见/回滚/提交、未绑定插入失败、直接补登记及删除拒绝。外租户拒绝可能由既有RLS先执行，因此仅证明整体隔离，不单独声称命中新触发器。测试owner仅作准备和对账，数据库为任务私有PG16，不是B的目标PG17。
+
+`s5-tool-enrollment-migration.log` migration全包PASS，新增合法040账本仅待041及缺037/039/040的非法041账本拒绝，既有退休账本升级测试仍通过。独立review_execution_scope_s1最终只读复核无新增迁移前置阻断。`s5-tool-enrollment-full-private.log` 完整私有回归实际FAIL，仅历史工具执行子测试及其父测试失败，其余具名子项通过，无skip/race；不能称完整GREEN。新增登记不阻止ProcessJob读取旧approval，故该RED按预期保留。全后端 `s5-tool-enrollment-build.log` exit0，git diff --check通过。
+
+下一步必须贯通运行时新表只读权限准入（runtime_clients及execution admission）、AI首次INSERT/审批原事务、队列及业务首次写入来源复核、结果条件写回；尚未接入的新调用路径会因未绑定范围而拒绝，不能单独迁移后启动应用。此项只完成数据库前置，不以它关闭S5/B2/B3/T3/T4/G2/G3。CandidateSHA与未启动状态不变，未改B配置/共享数据库、未企业外呼、未push/main合并。

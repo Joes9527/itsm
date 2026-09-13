@@ -340,6 +340,108 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_scope_members`).Scan(&n))
 		return n
 	}
+	t.Run("tool invocation enrollment is atomic and history preserving", func(t *testing.T) {
+		var before string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, historicalTool.ID).Scan(&before))
+		_, err := ownerDB.ExecContext(ctx, "ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO "+runtimeRole)
+		require.NoError(t, err)
+		sqlText := migration.GetMigrationSQL("041_tool_invocation_execution_scope")
+		require.NotEmpty(t, sqlText, "tool provenance must use a registered migration")
+		_, err = ownerDB.ExecContext(ctx, sqlText)
+		require.NoError(t, err)
+		var after string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, historicalTool.ID).Scan(&after))
+		require.JSONEq(t, before, after)
+		var count int
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_tool_invocations`).Scan(&count))
+		require.Zero(t, count, "migration must not enroll historical invocations")
+		var allowed bool
+		require.NoError(t, ownerDB.QueryRow(`SELECT has_function_privilege($1,'public.register_new_execution_tool_invocation()','EXECUTE')`, runtimeRole).Scan(&allowed))
+		require.False(t, allowed, "default function grants must be removed")
+		require.NoError(t, ownerDB.QueryRow(`SELECT has_table_privilege($1,'execution_tool_invocations','SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER')`, runtimeRole).Scan(&allowed))
+		require.False(t, allowed, "default table grants must be removed")
+		_, err = ownerDB.ExecContext(ctx, "GRANT SELECT ON execution_tool_invocations TO "+runtimeRole)
+		require.NoError(t, err)
+		create := func(c *ent.Client) *ent.ToolInvocationCreate {
+			return c.ToolInvocation.Create().SetTenantID(tenant.ID).SetUserID(actor.ID).SetToolName("create_ticket").SetArguments(`{"title":"New scoped source"}`).SetStatus("pending")
+		}
+		_, err = create(runtime).Save(ctx)
+		require.Error(t, err, "unbound insert must fail")
+		tx, err := runtime.Tx(ctx)
+		require.NoError(t, err)
+		defer tx.Rollback()
+		require.NoError(t, policy.BindEnt(ctx, tx, tenant.ID))
+		added, err := create(tx.Client()).Save(ctx)
+		require.NoError(t, err)
+		var enrolled string
+		rows, err := tx.Client().QueryContext(ctx, `SELECT scope_id::text FROM execution_tool_invocations WHERE invocation_id=$1`, added.ID)
+		require.NoError(t, err)
+		require.True(t, rows.Next())
+		require.NoError(t, rows.Scan(&enrolled))
+		require.NoError(t, rows.Close())
+		require.Equal(t, scopeID, enrolled)
+		require.NoError(t, tx.Rollback())
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM tool_invocations WHERE id=$1`, added.ID).Scan(&count))
+		require.Zero(t, count)
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_tool_invocations`).Scan(&count))
+		require.Zero(t, count)
+		tx, err = runtime.Tx(ctx)
+		require.NoError(t, err)
+		defer tx.Rollback()
+		require.NoError(t, policy.BindEnt(ctx, tx, tenant.ID))
+		added, err = create(tx.Client()).Save(ctx)
+		require.NoError(t, err)
+		require.NoError(t, tx.Commit())
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_tool_invocations WHERE invocation_id=$1 AND scope_id=$2`, added.ID, scopeID).Scan(&count))
+		require.Equal(t, 1, count)
+		foreignTenant := owner.Tenant.Create().SetName("Tool scope foreign").SetCode("tool-scope-foreign").SaveX(ctx)
+		for _, kind := range []string{"foreign tenant", "closed scope", "revoked binding"} {
+			t.Run(kind, func(t *testing.T) {
+				if kind == "closed scope" {
+					_, e := ownerDB.ExecContext(ctx, `UPDATE execution_scopes SET status='closed' WHERE id=$1`, scopeID)
+					require.NoError(t, e)
+					defer func() {
+						_, e := ownerDB.ExecContext(ctx, `UPDATE execution_scopes SET status='active' WHERE id=$1`, scopeID)
+						require.NoError(t, e)
+					}()
+				}
+				if kind == "revoked binding" {
+					_, e := ownerDB.ExecContext(ctx, `DELETE FROM execution_runtime_bindings WHERE runtime_role=$1`, runtimeRole)
+					require.NoError(t, e)
+					defer func() {
+						_, e := ownerDB.ExecContext(ctx, `INSERT INTO execution_runtime_bindings VALUES($1,'intake-test','candidate')`, runtimeRole)
+						require.NoError(t, e)
+					}()
+				}
+				beforeCount := owner.ToolInvocation.Query().CountX(ctx)
+				var beforeEnroll int
+				require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_tool_invocations`).Scan(&beforeEnroll))
+				attempt, e := runtime.Tx(ctx)
+				require.NoError(t, e)
+				defer attempt.Rollback()
+				// Exercise the trigger independently of the application's BindEnt precheck.
+				_, e = attempt.Client().ExecContext(ctx, `SELECT set_config('app.execution_scope_id',$1,true)`, scopeID)
+				require.NoError(t, e)
+				statement := create(attempt.Client())
+				if kind == "foreign tenant" {
+					statement.SetTenantID(foreignTenant.ID)
+				}
+				_, e = statement.Save(ctx)
+				require.Error(t, e)
+				require.NoError(t, attempt.Rollback())
+				require.Equal(t, beforeCount, owner.ToolInvocation.Query().CountX(ctx))
+				var afterEnroll int
+				require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM execution_tool_invocations`).Scan(&afterEnroll))
+				require.Equal(t, beforeEnroll, afterEnroll)
+			})
+		}
+		_, err = runtime.ExecContext(ctx, `INSERT INTO execution_tool_invocations(scope_id,tenant_id,invocation_id) VALUES($1,$2,$3)`, scopeID, tenant.ID, historicalTool.ID)
+		require.Error(t, err, "runtime cannot enroll history directly")
+		_, err = runtime.ExecContext(ctx, `DELETE FROM execution_tool_invocations WHERE invocation_id=$1`, added.ID)
+		require.Error(t, err)
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tool_invocations t WHERE id=$1`, historicalTool.ID).Scan(&after))
+		require.JSONEq(t, before, after)
+	})
 	t.Run("historical approved tool cannot authorize candidate execution", func(t *testing.T) {
 		snapshot := func() string {
 			var raw string

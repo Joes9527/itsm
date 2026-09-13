@@ -14,6 +14,8 @@
 
 构造不再部署默认 BPMN 模板/绑定或创建向量结构。它们由既有受控迁移及具名配置准备负责；不能为通过启动自动执行历史 RCA SQL、初始化或回填。配置 MinIO 时 bucket 必须已由环境所有者准备，检查失败停止启动，不自动建桶或回退本地 uploads。
 
+迁移 `041_tool_invocation_execution_scope` 为新工具调用建立 `execution_tool_invocations` 结构归属，依赖040及既有候选准备链；不改历史SQL或补登记历史调用。只有 `tool_invocations` 首次INSERT的触发器可在相同事务登记候选scope，校验冻结部署对应的session_user绑定、active scope及tenant；standard绑定不登记。运行角色只能获得明确审阅后的SELECT，不能直接增删改登记；迁移剥离PUBLIC和角色默认授权。表/函数所有者及其继承角色不是候选业务身份。该迁移目前仅完成数据库前置验证：运行时新表权限审计、AI创建/审批事务、队列与业务来源检查尚未接入，不能单独应用后启动候选或将历史审批重新入队。真实源/候选迁移仍由B按完整清单准入。
+
 工具队列及事件订阅需要显式运行阶段启动；取消后等待已启动任务退出，再关闭数据库和连接器。禁止从业务构造器调用 Start。禁用的必需能力必须报告未验证，不能把 pending、外部阻断或未运行的 Worker 标为成功。
 
 候选 Stream 消费者及普通模式的完整信封消费者必须通过 `EventConsumerID()` 声明稳定逻辑所有者；登记时固定身份，同一 owner/topic 重复登记拒绝。完整信封订阅登记及动态Subscribe必须已注入来源校验器，缺失时在分配持久subscriber前拒绝。审计使用 `event_audit`，Webhook 使用 `webhook`，分别持有 `itsm:<owner>` 消费组；副本共享组但由持久订阅器生成不同消费者实例名。组只在显式 Start/Subscribe 时建立，首次从 `0` 读取对应 topic 内的离线消息，已有组保留进度；不得用重建组、SETID、删除历史或订阅旧裸 topic 恢复消费。Close 先取消订阅并等待订阅建立结束，再关闭每个拥有的 subscriber 并等待处理退出。持久订阅复用唯一事件总线，采用有界XREADGROUP与带游标XAUTOCLAIM交替领取；NACK保留原PEL并让出本次处理，只有业务成功ACK才执行XACK，确认失败仍待重领。显式Subscribe执行首次真实XAUTOCLAIM核验恢复命令和权限，首次领取结果交给正常处理，不丢弃；需要Redis 6.2或以上及对应命令权限，失败不放行启动。候选多租户订阅在部分建立后失败时停止整个事件运行实例，保留组及进度，不留下部分租户继续处理；恢复需重新构造并显式启动。
