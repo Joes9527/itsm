@@ -86,6 +86,7 @@ type Application struct {
 	DBClient                 *ent.Client
 	systemClient             *ent.Client
 	slaMonitor               slaViolationMonitor
+	escalationService        escalationProcessor
 	executionPolicy          *database.ExecutionPolicy
 	Router                   *gin.Engine
 	Embedder                 service.Embedder
@@ -828,7 +829,7 @@ func NewApplication() *Application {
 	// SLA Monitor & Alert Services (legacy, for background tasks)
 	slaMonitorService := service.NewSLAMonitorService(client, sugar, executionPolicy)
 	slaAlertService := service.NewSLAAlertService(client, sugar, executionPolicy)
-	escalationService := service.NewEscalationService(client, sugar)
+	escalationService := service.NewEscalationService(client, sugar, executionPolicy)
 	escalationMatrixService := service.NewEscalationMatrixService(sugar)
 	escalationMatrixController := controller.NewEscalationMatrixController(sugar, escalationMatrixService)
 
@@ -1015,6 +1016,7 @@ func NewApplication() *Application {
 		Logger:               sugar,
 		DBClient:             client,
 		slaMonitor:           slaMonitorService,
+		escalationService:    escalationService,
 		executionPolicy:      executionPolicy,
 		systemClient:         systemClient,
 		Router:               r,
@@ -1378,7 +1380,6 @@ func (app *Application) startBackgroundTasks(lifecycleCtx context.Context) {
 	app.backgroundTasks.Add(1)
 	go func() {
 		defer app.backgroundTasks.Done()
-		escalationService := service.NewEscalationService(app.DBClient, app.Logger)
 
 		ctx := lifecycleCtx
 		// Run SLA check every 5 minutes
@@ -1404,14 +1405,8 @@ func (app *Application) startBackgroundTasks(lifecycleCtx context.Context) {
 				if !app.Cfg.Execution.Enabled("escalation") {
 					continue
 				}
-				tenants, err := app.DBClient.Tenant.Query().All(ctx)
-				if err != nil {
-					continue
-				}
-				for _, t := range tenants {
-					if err := escalationService.ProcessEscalations(ctx, t.ID); err != nil {
-						app.Logger.Warnw("escalation processing failed", "error", err, "tenant_id", t.ID)
-					}
+				if err := app.runEscalationCycle(ctx); err != nil {
+					app.Logger.Warnw("escalation cycle failed", "error", err)
 				}
 			}
 		}

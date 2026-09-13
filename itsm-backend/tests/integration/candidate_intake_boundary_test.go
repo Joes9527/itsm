@@ -2247,6 +2247,132 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 
 		}
 	})
+	t.Run("matrix escalation preserves historical alerts", func(t *testing.T) {
+		owner.SLADefinition.UpdateOneID(legacySLADefinition.ID).SetEscalationRules(map[string]interface{}{"medium": []interface{}{map[string]interface{}{"level": 1, "afterMinutes": 0, "notifyRoles": []interface{}{"requester"}, "description": "candidate escalation"}}}).SaveX(ctx)
+		owner.SLAAlertRule.UpdateOneID(legacySLAAlertRule.ID).SetEscalationEnabled(true).SaveX(ctx)
+		notifier := service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)
+		alerts := service.NewSLAAlertService(runtime, zap.NewNop().Sugar(), policy)
+		alerts.SetNotificationService(notifier)
+		fresh, err := app.Create(ctx, identity, command("sla-matrix-member", "generic"))
+		require.NoError(t, err)
+		owner.Ticket.UpdateOneID(fresh.WorkItemID).SetCreatedAt(time.Now().Add(-time.Hour)).SetSLADefinitionID(legacySLADefinition.ID).SetSLAResponseDeadline(time.Now().Add(5 * time.Minute)).SaveX(ctx)
+		triggered, err := alerts.TriggerSLAWarning(ctx, fresh.WorkItemID, "response_time", tenant.ID)
+		require.NoError(t, err)
+		require.True(t, triggered)
+		var before, after string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(h)::text FROM sla_alert_histories h WHERE id=$1`, legacySLAHistory.ID).Scan(&before))
+		escalation := service.NewEscalationService(runtime, zap.NewNop().Sugar(), policy)
+		escalation.SetNotificationService(notifier)
+		require.NoError(t, escalation.ProcessEscalations(ctx, tenant.ID))
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(h)::text FROM sla_alert_histories h WHERE id=$1`, legacySLAHistory.ID).Scan(&after))
+		assert.JSONEq(t, before, after, "matrix scan must not advance historical alert levels")
+		var level int
+		require.NoError(t, ownerDB.QueryRow(`SELECT escalation_level FROM sla_alert_histories WHERE ticket_id=$1`, fresh.WorkItemID).Scan(&level))
+		require.Equal(t, 1, level, "new member must actually advance")
+		var pending int
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM ticket_notifications WHERE ticket_id=$1 AND channel='email' AND delivery_key LIKE 'escalation:matrix:%' AND status='pending'`, fresh.WorkItemID).Scan(&pending))
+		assert.Equal(t, 1, pending, "matrix progression must commit a durable escalation notice")
+		// An unresolved old alert must not advance after the WorkItem reopens.
+		owner.Ticket.UpdateOneID(fresh.WorkItemID).SetSLACycleNumber(2).SetSLACycleStartedAt(time.Now().Add(time.Second)).SaveX(ctx)
+		owner.SLADefinition.UpdateOneID(legacySLADefinition.ID).SetEscalationRules(map[string]interface{}{"medium": []interface{}{map[string]interface{}{"level": 1, "afterMinutes": 0, "notifyRoles": []interface{}{"requester"}}, map[string]interface{}{"level": 2, "afterMinutes": 0, "notifyRoles": []interface{}{"requester"}}}}).SaveX(ctx)
+		require.NoError(t, escalation.ProcessEscalations(ctx, tenant.ID))
+		require.NoError(t, ownerDB.QueryRow(`SELECT escalation_level FROM sla_alert_histories WHERE ticket_id=$1`, fresh.WorkItemID).Scan(&level))
+		require.Equal(t, 1, level, "old-cycle alert must not escalate again")
+
+	})
+
+	t.Run("automatic reminders preserve historical WorkItems", func(t *testing.T) {
+		old := time.Now().Add(-48 * time.Hour)
+		owner.Ticket.UpdateOneID(historical.WorkItemID).SetCreatedAt(old).SetSLACycleStartedAt(old).ClearAssigneeID().SaveX(ctx)
+		var before, after string
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, historical.WorkItemID).Scan(&before))
+		var notificationsBefore, notificationsAfter int
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM ticket_notifications WHERE ticket_id=$1`, historical.WorkItemID).Scan(&notificationsBefore))
+		escalation := service.NewEscalationService(runtime, zap.NewNop().Sugar(), policy)
+		escalation.SetNotificationService(service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy))
+		require.NoError(t, escalation.ProcessEscalations(ctx, tenant.ID))
+		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, historical.WorkItemID).Scan(&after))
+		require.JSONEq(t, before, after)
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM ticket_notifications WHERE ticket_id=$1`, historical.WorkItemID).Scan(&notificationsAfter))
+		require.Equal(t, notificationsBefore, notificationsAfter)
+		var receipts int
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM audit_logs WHERE path=$1 AND action IN ('work_item.escalation.long_pending','work_item.escalation.unassigned')`, fmt.Sprint(historical.WorkItemID)).Scan(&receipts))
+		require.Zero(t, receipts)
+	})
+	t.Run("automatic reminders replay within each SLA cycle", func(t *testing.T) {
+		fresh, err := app.Create(ctx, identity, command("automatic-reminder-member", "generic"))
+		require.NoError(t, err)
+		escalation := service.NewEscalationService(runtime, zap.NewNop().Sugar(), policy)
+		escalation.SetNotificationService(service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy))
+		old := time.Now().Add(-48 * time.Hour)
+		owner.Ticket.UpdateOneID(fresh.WorkItemID).SetCreatedAt(old).SetSLACycleStartedAt(old).SetSLACycleNumber(1).SaveX(ctx)
+		count := func() int {
+			var n int
+			require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM audit_logs WHERE path=$1 AND action IN ('work_item.escalation.long_pending','work_item.escalation.unassigned')`, fmt.Sprint(fresh.WorkItemID)).Scan(&n))
+			return n
+		}
+		require.NoError(t, escalation.ProcessEscalations(ctx, tenant.ID))
+		require.Equal(t, 2, count())
+		version := owner.Ticket.GetX(ctx, fresh.WorkItemID).Version
+		require.NoError(t, escalation.ProcessEscalations(ctx, tenant.ID))
+		require.Equal(t, 2, count())
+		require.Equal(t, version, owner.Ticket.GetX(ctx, fresh.WorkItemID).Version)
+		owner.Ticket.UpdateOneID(fresh.WorkItemID).SetSLACycleNumber(2).SetSLACycleStartedAt(time.Now()).SaveX(ctx)
+		require.NoError(t, escalation.ProcessEscalations(ctx, tenant.ID))
+		require.Equal(t, 2, count(), "new cycle starts its own age threshold")
+		owner.Ticket.UpdateOneID(fresh.WorkItemID).SetSLACycleStartedAt(old).SaveX(ctx)
+		require.NoError(t, escalation.ProcessEscalations(ctx, tenant.ID))
+		require.Equal(t, 4, count())
+		var histories int
+		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM sla_alert_histories WHERE ticket_id=$1`, fresh.WorkItemID).Scan(&histories))
+		require.Zero(t, histories, "non-rule reminders must not create invalid SLA history")
+	})
+
+	t.Run("automatic reminder notification and audit rollback", func(t *testing.T) {
+		escalation := service.NewEscalationService(runtime, zap.NewNop().Sugar(), policy)
+		escalation.SetNotificationService(service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy))
+		// Drain prior valid work before arming faults for the next isolated target.
+		require.NoError(t, escalation.ProcessEscalations(ctx, tenant.ID))
+		for _, fault := range []string{"notification", "audit"} {
+			fresh, err := app.Create(ctx, identity, command("automatic-reminder-fault-"+fault, "generic"))
+			require.NoError(t, err)
+			old := time.Now().Add(-48 * time.Hour)
+			before := owner.Ticket.UpdateOneID(fresh.WorkItemID).SetCreatedAt(old).SetSLACycleStartedAt(old).SetAssigneeID(actor.ID).SaveX(ctx)
+			active := true
+			writes := 0
+			injected := errors.New("injected reminder " + fault)
+			hook := func(next ent.Mutator) ent.Mutator {
+				return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+					v, err := next.Mutate(ctx, m)
+					if active && err == nil {
+						writes++
+						return nil, injected
+					}
+					return v, err
+				})
+			}
+			if fault == "notification" {
+				runtime.Notification.Use(hook)
+			} else {
+				runtime.AuditLog.Use(hook)
+			}
+			unifiedBefore := owner.Notification.Query().CountX(ctx)
+			err = escalation.ProcessEscalations(ctx, tenant.ID)
+			active = false
+			require.ErrorIs(t, err, injected)
+			require.Equal(t, 1, writes)
+			require.Equal(t, before.Version, owner.Ticket.GetX(ctx, fresh.WorkItemID).Version)
+			require.Equal(t, unifiedBefore, owner.Notification.Query().CountX(ctx))
+			var notifications, receipts int
+			require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM ticket_notifications WHERE ticket_id=$1`, fresh.WorkItemID).Scan(&notifications))
+			require.Zero(t, notifications)
+			require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM audit_logs WHERE path=$1 AND action='work_item.escalation.long_pending'`, fmt.Sprint(fresh.WorkItemID)).Scan(&receipts))
+			require.Zero(t, receipts)
+			require.NoError(t, escalation.ProcessEscalations(ctx, tenant.ID))
+			require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM audit_logs WHERE path=$1 AND action='work_item.escalation.long_pending'`, fmt.Sprint(fresh.WorkItemID)).Scan(&receipts))
+			require.Equal(t, 1, receipts)
+		}
+	})
 	require.Equal(t, oldRow.Title, owner.Ticket.GetX(ctx, historical.WorkItemID).Title)
 }
 

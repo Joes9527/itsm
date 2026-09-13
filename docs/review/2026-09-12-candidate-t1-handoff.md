@@ -545,3 +545,20 @@ Outbox 并发/回滚测试提交 `56879f7c9`；独立 reviewer 确认限定结�
 - reviewer review_execution_scope_s1发现的Ent预建索引掩盖升级问题、DB legacy关联缺少约束已修复，最终只读复审无阻断。
 
 040仅在任务私有PG16数据库执行，未对WSL/共享源或候选实际环境执行。专门的039最小schema注册fixture仍限定039，不伪称覆盖040；040完整Ent升级与实际业务由上述fixture验证。下一步升级链仍需原事务/范围接入，并移除其notification_sent=true等旧写路径，之后继续剩余S3/S4、S5/S6、B3/T3/T4/G2/G3。固定CandidateSHA不变，候选保持停止，无推送/main合并或企业实发。
+
+
+### B2 S4 自动升级原事务与提醒回执（2026-09-13）
+
+在 `5fa4ae3e6` 后接入自动 matrix/long_pending/unassigned 三条链。EscalationService 构造显式 frozen policy；扫描按 tenant/member 在事务内分页，单项原事务重新准入、读取当前 WorkItem/规则/级别。matrix 以 Ticket version CAS + history level CAS 同事务推进所有到期级别、写审计及 durable 通知意图；managed history 复用040结构引用，不对旧history补填。已解决/关闭及早于当前 SLA cycle 的旧告警跳过，显式用户必须同tenant且active，声明角色无接收者报错。移除不再参与执行的 matrixSvc 注入接口，SLA配置在原事务读取；新增 notifyUserIDs JSON整数校验。没有同步企业投递。
+
+非规则 long_pending/unassigned 不再创建 AlertRuleID=0 的无效SLA history，复用 WorkItem operation receipt：每 WorkItem/SLA cycle/提醒类型一次，当前cycle起点满足原24h/2h阈值后，version fence、通知意图、审计共同提交。重复不增加版本；所有偏好禁用时仍记录本周期已处理回执，同周期再次取消分配不会再次提醒。沿用原角色筛选和阈值，本增量未重新设计接收人策略。bootstrap复用已配置notifier的实例，SLA/升级共享冻结候选租户发现，standard仅用system client发现IDs，各租户执行上下文不带SystemBypass，启动前核对依赖。
+
+证据位于本机 `candidate-delivery/b2`：
+
+- `s4-escalation-matrix-red.log` 有效RED：历史alert level 0→1，候选新成员独立推进但无升级专属pending通知。
+- `s4-escalation-final-pg.log` 完整 TestCandidateIntakeCreationBoundary PASS，无skip：历史alert原始JSON不变；新成员真实matrix推进+email pending；owner设置重开周期后旧alert不再推进。历史非成员设为48h未分配后，WorkItem原始JSON/通知数量不变且无提醒回执。新成员两类提醒各一次、重复无版本变化、新周期年龄不足不提醒、年龄满足后各新增一次，无伪SLA history。
+- 同一PG测试注入long_pending的unified Notification/AuditLog实际写后故障，版本、通知双表及提醒回执回滚；解除后准确生成一次回执。仅任务私有PG16，不替代WSL PG17环境准入。
+- `s4-escalation-final-regression.log` service/bootstrap 的 Escalation/SLA/Notification/EnabledCapability 定向回归PASS；`s4-escalation-final-build.json` 全后端build exit0。第一次回归发现旧测试引用已移除helper，已改为验证未知角色/用户拒绝；第二次回归发现旧fixture告警早于工单创建，修正时间前置条件，仍保留非法配置拒绝与有效配置30分钟推进断言。
+- 独立 reviewer `review_execution_scope_s1` 提出的无效配置接口已移除、旧周期缺口已修复，复审无新增阻断。
+
+边界：重开为owner设置前置状态，不是真实生命周期E2E；unassigned故障回滚尚未单独验证，matrix多级整体回滚及确定性并发CAS仍待补证。真实HTTP TicketService.EscalateTicket及TicketLifecycleService、EscalationService旧无调用手动方法尚未接入；尤其后者仍含无效AlertRuleID=0/notification_sent=true，不将其计为本轮完成。下一步先统一真实手动升级所有者和原事务审计/通知，再处理其它共享写入口、S4剩余专项、S5/S6/B3/T3/T4/G2/G3。固定CandidateSHA仍为 `d7470a32dbb87acc9b5e4d9a895a146410723561`，未启动候选、未修改WSL/共享环境或执行共享迁移，无推送/main合并或企业实发。

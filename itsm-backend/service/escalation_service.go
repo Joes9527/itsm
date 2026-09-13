@@ -6,48 +6,36 @@ import (
 	"fmt"
 	"time"
 
+	"itsm-backend/database"
 	"itsm-backend/dto"
 	"itsm-backend/ent"
 	"itsm-backend/ent/slaalerthistory"
 	"itsm-backend/ent/slaalertrule"
 	"itsm-backend/ent/ticket"
 	"itsm-backend/ent/user"
+	"itsm-backend/handlers/shared/workitemmutation"
 
 	"go.uber.org/zap"
 )
 
 type EscalationService struct {
 	client          *ent.Client
+	execution       *database.ExecutionPolicy
 	logger          *zap.SugaredLogger
 	notificationSvc *TicketNotificationService
-	matrixSvc       *EscalationMatrixService
 }
 
-func NewEscalationService(client *ent.Client, logger *zap.SugaredLogger) *EscalationService {
-	matrix := NewEscalationMatrixService(logger)
-	matrix.SetClient(client)
+func NewEscalationService(client *ent.Client, logger *zap.SugaredLogger, execution *database.ExecutionPolicy) *EscalationService {
 	return &EscalationService{
 		client:    client,
+		execution: execution,
 		logger:    logger,
-		matrixSvc: matrix,
 	}
 }
 
 // SetNotificationService 设置通知服务
 func (e *EscalationService) SetNotificationService(notificationSvc *TicketNotificationService) {
 	e.notificationSvc = notificationSvc
-}
-
-// SetMatrixService 设置升级矩阵服务（供注入自定义矩阵/测试）
-func (e *EscalationService) SetMatrixService(matrixSvc *EscalationMatrixService) {
-	if matrixSvc != nil {
-		e.matrixSvc = matrixSvc
-	}
-}
-
-// MatrixService 返回内部升级矩阵服务（用于测试与调用方访问）
-func (e *EscalationService) MatrixService() *EscalationMatrixService {
-	return e.matrixSvc
 }
 
 // ProcessEscalations 处理所有升级任务
@@ -77,404 +65,291 @@ func (e *EscalationService) ProcessEscalations(ctx context.Context, tenantID int
 	return errors.Join(failures...)
 }
 
-// processSLAEscalations 处理SLA预警规则中的升级
-//
-// 升级策略：
-//  1. 取工单的 Priority 字段
-//  2. 调用 EscalationMatrixService.FindNextEscalationLevel 获取下一个应触发的升级级别
-//  3. 若存在则升级（多级连续升级：若 elapsed 同时跨多级，每级都会记录一次）
+// processSLAEscalations discovers only admitted WorkItems; each alert then owns
+// its write transaction, including all levels currently due for that alert.
 func (e *EscalationService) processSLAEscalations(ctx context.Context, tenantID int) error {
-	// 获取所有启用升级的预警规则
-	alertRules, err := e.client.SLAAlertRule.Query().
-		Where(
-			slaalertrule.TenantIDEQ(tenantID),
-			slaalertrule.IsActiveEQ(true),
-			slaalertrule.EscalationEnabledEQ(true),
-		).
-		All(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to query alert rules: %w", err)
-	}
-
-	for _, rule := range alertRules {
-		// 检查是否有未处理的预警
-		pendingAlerts, err := e.client.SLAAlertHistory.Query().
-			Where(
-				slaalerthistory.AlertRuleIDEQ(rule.ID),
-				slaalerthistory.ResolvedAtIsNil(),
-			).
-			All(ctx)
+	lastID := 0
+	for {
+		tx, err := e.client.Tx(ctx)
 		if err != nil {
-			continue
+			return err
 		}
-
-		for _, alert := range pendingAlerts {
-			// 计算已过去的时间（分钟）
-			elapsedMinutes := int(time.Since(alert.CreatedAt).Minutes())
-
-			// 取工单优先级
-			priority := e.resolveTicketPriority(ctx, alert.TicketID)
-			if priority == "" {
-				priority = "medium" // 默认值
-			}
-
-			// 使用升级矩阵查下一个升级级别
-			// 多级连续升级：while 循环，逐级推进
-			currentMax := alert.EscalationLevel
-			for {
-				slaDefID := e.resolveSLADefinitionID(ctx, alert.TicketID)
-				nextLevel, err := e.matrixSvc.FindNextEscalationLevel(ctx, tenantID, priority, elapsedMinutes, currentMax, slaDefID)
-				if err != nil {
-					return fmt.Errorf("SLA escalation configuration: %w", err)
-				}
-				if nextLevel == nil {
-					break
-				}
-				if err := e.escalateToLevelByMatrix(ctx, alert, rule, nextLevel, tenantID, priority); err != nil {
-					e.logger.Errorw("Failed to escalate alert",
-						"alert_id", alert.ID,
-						"level", nextLevel.Level,
-						"error", err)
-					break
-				}
-				currentMax = nextLevel.Level
-				e.logger.Infow(
-					"Alert escalated via matrix",
-					"alert_id", alert.ID,
-					"ticket_number", alert.TicketNumber,
-					"priority", priority,
-					"level", nextLevel.Level,
-					"elapsed_minutes", elapsedMinutes,
-					"notify_roles", nextLevel.NotifyRoles,
-				)
+		member, err := e.execution.TenantPredicate(ctx, tx, tenantID, slaalerthistory.FieldTenantID, slaalerthistory.FieldTicketID)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		ids, err := tx.SLAAlertHistory.Query().Where(slaalerthistory.TenantIDEQ(tenantID), slaalerthistory.IDGT(lastID), slaalerthistory.ResolvedAtIsNil(), member, slaalerthistory.HasAlertRuleWith(slaalertrule.TenantIDEQ(tenantID), slaalertrule.IsActiveEQ(true), slaalertrule.EscalationEnabledEQ(true))).Order(ent.Asc(slaalerthistory.FieldID)).Limit(100).IDs(ctx)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		if err = tx.Commit(); err != nil {
+			return err
+		}
+		if len(ids) == 0 {
+			return nil
+		}
+		for _, id := range ids {
+			lastID = id
+			if err := e.escalateAlert(ctx, id, tenantID); err != nil {
+				return err
 			}
 		}
 	}
-
-	return nil
 }
 
-// resolveTicketPriority 从工单查询优先级
-func (e *EscalationService) resolveTicketPriority(ctx context.Context, ticketID int) string {
-	if ticketID <= 0 || e.client == nil {
-		return ""
-	}
-	t, err := e.client.Ticket.Get(ctx, ticketID)
-	if err != nil || t == nil {
-		return ""
-	}
-	return string(t.Priority)
-}
-
-func (e *EscalationService) resolveSLADefinitionID(ctx context.Context, ticketID int) int {
-	if ticketID <= 0 || e.client == nil {
-		return 0
-	}
-	t, err := e.client.Ticket.Get(ctx, ticketID)
-	if err != nil || t == nil {
-		return 0
-	}
-	return t.SLADefinitionID
-}
-
-// escalateToLevelByMatrix 按矩阵级别升级
-func (e *EscalationService) escalateToLevelByMatrix(
-	ctx context.Context,
-	alert *ent.SLAAlertHistory,
-	rule *ent.SLAAlertRule,
-	level *EscalationLevel,
-	tenantID int,
-	priority string,
-) error {
-	// 1. 更新告警的 escalation level
-	_, err := e.client.SLAAlertHistory.UpdateOneID(alert.ID).
-		SetEscalationLevel(level.Level).
-		Save(ctx)
+func (e *EscalationService) escalateAlert(ctx context.Context, alertID, tenantID int) error {
+	tx, err := e.client.Tx(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to update escalation level: %w", err)
+		return err
 	}
-
-	// 2. 解析 notify_user_ids（按角色名→具体用户）
-	notifyUsers := e.resolveNotifyUsers(ctx, level, tenantID)
-
-	// 3. 发送通知
-	if e.notificationSvc != nil && len(notifyUsers) > 0 {
-		content := fmt.Sprintf("【SLA矩阵升级】工单 #%s (%s) [优先级 %s] 已升级至 L%d：%s",
-			alert.TicketNumber, alert.TicketTitle, priority, level.Level, level.Description)
-		for _, userID := range notifyUsers {
-			result, sendErr := e.notificationSvc.SendNotification(ctx, alert.TicketID, &dto.SendTicketNotificationRequest{
-				UserIDs:   []int{userID},
-				EventType: "sla_violated",
-				Content:   content,
-			}, tenantID)
-			if err := ticketNotificationDeliveryError(result, sendErr); err != nil {
-				e.logger.Errorw("Failed to send SLA escalation notification",
-					"user_id", userID, "error", err)
+	defer tx.Rollback()
+	if err = e.execution.BindEnt(ctx, tx, tenantID); err != nil {
+		return err
+	}
+	alert, err := tx.SLAAlertHistory.Query().Where(slaalerthistory.IDEQ(alertID), slaalerthistory.TenantIDEQ(tenantID)).Only(ctx)
+	if err != nil {
+		return err
+	}
+	if err = e.execution.RequireEntMembers(ctx, tx, tenantID, alert.TicketID); err != nil {
+		return err
+	}
+	item, err := tx.Ticket.Query().Where(ticket.IDEQ(alert.TicketID), ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).Only(ctx)
+	if err != nil {
+		return err
+	}
+	if !alert.ResolvedAt.IsZero() || item.ClosedAt != nil || !item.ResolvedAt.IsZero() || alert.CreatedAt.Before(slaCycleStart(item)) {
+		return tx.Commit()
+	}
+	rule, err := tx.SLAAlertRule.Query().Where(slaalertrule.IDEQ(alert.AlertRuleID), slaalertrule.TenantIDEQ(tenantID)).Only(ctx)
+	if err != nil {
+		return err
+	}
+	if !rule.IsActive || !rule.EscalationEnabled {
+		return tx.Commit()
+	}
+	if rule.SLADefinitionID != item.SLADefinitionID {
+		return fmt.Errorf("SLA escalation rule no longer matches WorkItem")
+	}
+	matrix, err := loadSLAEscalationMatrix(ctx, tx.Client(), tenantID, item.SLADefinitionID)
+	if err != nil {
+		return err
+	}
+	elapsed := int(time.Since(alert.CreatedAt).Minutes())
+	current := alert.EscalationLevel
+	fenced := false
+	for {
+		next, err := nextEscalationLevel(matrix, string(item.Priority), elapsed, current)
+		if err != nil {
+			return err
+		}
+		if next == nil {
+			break
+		}
+		recipients, err := e.resolveNotifyUsersTx(ctx, tx, next, tenantID)
+		if err != nil {
+			return err
+		}
+		if len(recipients) > 0 && e.notificationSvc == nil {
+			return fmt.Errorf("SLA escalation notification service is required")
+		}
+		if !fenced {
+			if err = e.fenceWorkItem(ctx, tx, item); err != nil {
+				return err
+			}
+			fenced = true
+		}
+		member, err := e.execution.TenantPredicate(ctx, tx, tenantID, slaalerthistory.FieldTenantID, slaalerthistory.FieldTicketID)
+		if err != nil {
+			return err
+		}
+		count, err := tx.SLAAlertHistory.Update().Where(slaalerthistory.IDEQ(alert.ID), slaalerthistory.TenantIDEQ(tenantID), slaalerthistory.EscalationLevelEQ(current), slaalerthistory.ResolvedAtIsNil(), member).SetEscalationLevel(next.Level).Save(ctx)
+		if err != nil {
+			return err
+		}
+		if count != 1 {
+			return fmt.Errorf("SLA escalation level changed concurrently")
+		}
+		operation := fmt.Sprintf("escalation:matrix:%d:level:%d", alert.ID, next.Level)
+		if len(recipients) > 0 {
+			request := &dto.SendTicketNotificationRequest{UserIDs: recipients, EventType: "sla_violated", DeliveryKey: operation, Content: fmt.Sprintf("【SLA矩阵升级】工单 #%s (%s) [优先级 %s] 已升级至 L%d：%s", item.TicketNumber, item.Title, item.Priority, next.Level, next.Description)}
+			if alert.NotificationTrackingVersion != nil && *alert.NotificationTrackingVersion == 1 {
+				request.SLAAlertHistoryID = &alert.ID
+			}
+			if err = e.notificationSvc.EnqueueNotificationTx(ctx, tx, item.ID, tenantID, request); err != nil {
+				return err
 			}
 		}
+		digest, err := workitemmutation.Digest(struct{ AlertID, Level int }{alert.ID, next.Level})
+		if err != nil {
+			return err
+		}
+		meta := workitemmutation.Meta{TenantID: tenantID, ActorID: 0, Source: "scheduler", OperationID: operation, CorrelationID: operation}
+		if err = workitemmutation.RecordTx(ctx, tx, meta, workitemmutation.Result{WorkItemID: item.ID, Version: item.Version + 1, Status: item.Status}, "work_item.escalation.matrix", digest, map[string]interface{}{"alertId": alert.ID, "previousLevel": current, "level": next.Level, "recipientIds": recipients}); err != nil {
+			return err
+		}
+		current = next.Level
 	}
+	return tx.Commit()
+}
 
-	e.logger.Infow(
-		"Matrix-based escalation completed",
-		"alert_id", alert.ID,
-		"level", level.Level,
-		"notify_users_count", len(notifyUsers),
-	)
+func (e *EscalationService) fenceWorkItem(ctx context.Context, tx *ent.Tx, item *ent.Ticket) error {
+	member, err := e.execution.TenantPredicate(ctx, tx, item.TenantID, ticket.FieldTenantID, ticket.FieldID)
+	if err != nil {
+		return err
+	}
+	n, err := tx.Ticket.Update().Where(ticket.IDEQ(item.ID), ticket.TenantIDEQ(item.TenantID), ticket.VersionEQ(item.Version), ticket.DeletedAtIsNil(), member).AddVersion(1).Save(ctx)
+	if err != nil {
+		return err
+	}
+	if n != 1 {
+		return fmt.Errorf("escalation WorkItem changed concurrently")
+	}
 	return nil
 }
 
-// resolveNotifyUsers 解析升级级别的通知用户
-//
-// 输入：
-//   - level: 矩阵级别配置（含 NotifyRoles 和 NotifyUserIDs）
-//   - tenantID: 租户 ID
-//
-// 输出：合并后的 userIDs（先去 NotifyUserIDs，再按 NotifyRoles 查询）
-func (e *EscalationService) resolveNotifyUsers(ctx context.Context, level *EscalationLevel, tenantID int) []int {
-	if level == nil {
-		return nil
-	}
-	seen := make(map[int]bool)
-	var out []int
-	for _, uid := range level.NotifyUserIDs {
-		if !seen[uid] {
-			out = append(out, uid)
-			seen[uid] = true
+func (e *EscalationService) resolveNotifyUsersTx(ctx context.Context, tx *ent.Tx, level *EscalationLevel, tenantID int) ([]int, error) {
+	seen := map[int]bool{}
+	var ids []int
+	for _, id := range level.NotifyUserIDs {
+		if _, err := tx.User.Query().Where(user.IDEQ(id), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).Only(ctx); err != nil {
+			return nil, fmt.Errorf("escalation recipient: %w", err)
+		}
+		if !seen[id] {
+			ids = append(ids, id)
+			seen[id] = true
 		}
 	}
-	// 按角色名查 user（简化：以 role 字段精确匹配角色名）
-	if e.client != nil {
-		for _, role := range level.NotifyRoles {
-			ids, _ := e.client.User.Query().
-				Where(user.TenantIDEQ(tenantID)).
-				Where(user.RoleEQ(role)).
-				IDs(ctx)
-			for _, uid := range ids {
-				if !seen[uid] {
-					out = append(out, uid)
-					seen[uid] = true
-				}
+	for _, role := range level.NotifyRoles {
+		matches, err := tx.User.Query().Where(user.TenantIDEQ(tenantID), user.ActiveEQ(true), user.RoleEQ(role)).Order(ent.Asc(user.FieldID)).IDs(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if len(matches) == 0 {
+			return nil, fmt.Errorf("escalation role has no active recipient: %s", role)
+		}
+		for _, id := range matches {
+			if !seen[id] {
+				ids = append(ids, id)
+				seen[id] = true
 			}
 		}
 	}
-	return out
+	return ids, nil
 }
 
-// getEscalationNotifyUsers 获取指定升级级别的通知用户
-func (e *EscalationService) getEscalationNotifyUsers(ctx context.Context, level int, rule *ent.SLAAlertRule) []int {
-	var userIDs []int
-
-	// 从预警规则获取通知用户
-	if len(rule.EscalationLevels) > 0 {
-		for _, levelConfig := range rule.EscalationLevels {
-			if lvl, ok := levelConfig["level"].(float64); ok && int(lvl) == level {
-				if users, ok := levelConfig["notify_users"].([]interface{}); ok {
-					for _, u := range users {
-						if uid, ok := u.(float64); ok {
-							userIDs = append(userIDs, int(uid))
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// 如果没有配置，查找该SLA定义的管理员
-	if len(userIDs) == 0 {
-		// 获取所有管理员用户
-		admins, _ := e.client.User.Query().
-			Where(user.RoleNEQ("end_user"), user.RoleNEQ("guest")).
-			IDs(ctx)
-		userIDs = append(userIDs, admins...)
-	}
-
-	return userIDs
-}
-
-// processLongPendingTickets 处理长时间未解决的工单
 func (e *EscalationService) processLongPendingTickets(ctx context.Context, tenantID int) error {
-	// 查找超过24小时未解决的工单
-	threshold := time.Now().Add(-24 * time.Hour)
-
-	tickets, err := e.client.Ticket.Query().
-		Where(
-			ticket.TenantIDEQ(tenantID),
-			ticket.ResolvedAtIsNil(),
-			ticket.CreatedAtLTE(threshold),
-		).
-		All(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to query long pending tickets: %w", err)
-	}
-
-	if len(tickets) == 0 {
-		return nil
-	}
-
-	// 批量加载已有的长等待预警记录，避免N+1查询
-	ticketIDs := make([]int, len(tickets))
-	for i, t := range tickets {
-		ticketIDs[i] = t.ID
-	}
-	existingAlerts, _ := e.client.SLAAlertHistory.Query().
-		Where(
-			slaalerthistory.TicketIDIn(ticketIDs...),
-			slaalerthistory.AlertLevelEQ("long_pending"),
-			slaalerthistory.ResolvedAtIsNil(),
-		).
-		All(ctx)
-
-	// 构建已发送预警的工单集合
-	alertedTickets := make(map[int]bool)
-	for _, alert := range existingAlerts {
-		alertedTickets[alert.TicketID] = true
-	}
-
-	for _, t := range tickets {
-		// 检查是否已发送过长时间未解决通知
-		if alertedTickets[t.ID] {
-			continue
-		}
-
-		if e.notificationSvc != nil {
-			// 获取该工单的处理人或创建人
-			userIDs := []int{t.RequesterID}
-			if t.AssigneeID > 0 {
-				userIDs = append(userIDs, t.AssigneeID)
-			}
-
-			content := fmt.Sprintf("【超时提醒】工单 #%s (%s) 已超过24小时未解决，请及时处理！",
-				t.TicketNumber, t.Title)
-
-			for _, userID := range userIDs {
-				result, sendErr := e.notificationSvc.SendNotification(ctx, t.ID, &dto.SendTicketNotificationRequest{
-					UserIDs:   []int{userID},
-					EventType: "ticket_updated",
-					Content:   content,
-				}, tenantID)
-				if err := ticketNotificationDeliveryError(result, sendErr); err != nil {
-					e.logger.Errorw("Failed to send long pending notification", "ticket_id", t.ID, "user_id", userID, "error", err)
-				}
-			}
-
-			// 通知管理员
-			admins, _ := e.client.User.Query().
-				Where(user.RoleNEQ("end_user"), user.RoleNEQ("guest")).
-				IDs(ctx)
-
-			for _, adminID := range admins {
-				result, sendErr := e.notificationSvc.SendNotification(ctx, t.ID, &dto.SendTicketNotificationRequest{
-					UserIDs:   []int{adminID},
-					EventType: "ticket_updated",
-					Content:   content,
-				}, tenantID)
-				if err := ticketNotificationDeliveryError(result, sendErr); err != nil {
-					e.logger.Errorw("Failed to send long pending admin notification", "ticket_id", t.ID, "admin_id", adminID, "error", err)
-				}
-			}
-
-			e.logger.Infow("Long pending ticket notification sent", "ticket_id", t.ID, "ticket_number", t.TicketNumber)
-
-			// H3 修复：发送通知后创建alert history记录，避免重复发送
-			if _, err := e.client.SLAAlertHistory.Create().
-				SetTicketID(t.ID).
-				SetTicketNumber(t.TicketNumber).
-				SetTicketTitle(t.Title).
-				SetAlertLevel("long_pending").
-				SetTenantID(tenantID).
-				SetAlertRuleName(fmt.Sprintf("工单 #%s 已超过24小时未解决", t.TicketNumber)).
-				Save(ctx); err != nil {
-				e.logger.Errorw("Failed to create alert history", "ticket_id", t.ID, "error", err)
-			}
-		}
-	}
-
-	return nil
+	return e.processReminders(ctx, tenantID, "long_pending", 24*time.Hour)
+}
+func (e *EscalationService) processUnassignedTickets(ctx context.Context, tenantID int) error {
+	return e.processReminders(ctx, tenantID, "unassigned", 2*time.Hour)
 }
 
-// processUnassignedTickets 处理未分配的工单
-func (e *EscalationService) processUnassignedTickets(ctx context.Context, tenantID int) error {
-	// 查找超过2小时未分配的工单
-	threshold := time.Now().Add(-2 * time.Hour)
+// A reminder is WorkItem activity, not an SLA rule result. Its existing operation
+// receipt records one occurrence per WorkItem SLA cycle, including notification intent.
+func (e *EscalationService) processReminders(ctx context.Context, tenantID int, kind string, age time.Duration) error {
+	if kind != "long_pending" && kind != "unassigned" {
+		return fmt.Errorf("unsupported escalation reminder kind")
+	}
+	lastID := 0
+	for {
+		tx, err := e.client.Tx(ctx)
+		if err != nil {
+			return err
+		}
+		member, err := e.execution.TenantPredicate(ctx, tx, tenantID, ticket.FieldTenantID, ticket.FieldID)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		query := tx.Ticket.Query().Where(ticket.TenantIDEQ(tenantID), ticket.IDGT(lastID), ticket.DeletedAtIsNil(), ticket.ClosedAtIsNil(), ticket.ResolvedAtIsNil(), ticket.CreatedAtLTE(time.Now().Add(-age)), member)
+		if kind == "unassigned" {
+			query.Where(ticket.AssigneeIDIsNil())
+		}
+		ids, err := query.Order(ent.Asc(ticket.FieldID)).Limit(100).IDs(ctx)
+		if err != nil {
+			_ = tx.Rollback()
+			return err
+		}
+		if err = tx.Commit(); err != nil {
+			return err
+		}
+		if len(ids) == 0 {
+			return nil
+		}
+		for _, id := range ids {
+			lastID = id
+			if err := e.recordReminder(ctx, id, tenantID, kind, age); err != nil {
+				return err
+			}
+		}
+	}
+}
 
-	tickets, err := e.client.Ticket.Query().
-		Where(
-			ticket.TenantIDEQ(tenantID),
-			ticket.AssigneeIDIsNil(),
-			ticket.StatusNEQ("closed"),
-			ticket.CreatedAtLTE(threshold),
-		).
-		All(ctx)
+func (e *EscalationService) recordReminder(ctx context.Context, id, tenantID int, kind string, age time.Duration) error {
+	tx, err := e.client.Tx(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to query unassigned tickets: %w", err)
+		return err
 	}
-
-	if len(tickets) == 0 {
-		return nil
+	defer tx.Rollback()
+	if err = e.execution.BindEnt(ctx, tx, tenantID); err != nil {
+		return err
 	}
-
-	// 批量加载已有的未分配预警记录，避免N+1查询
-	ticketIDs := make([]int, len(tickets))
-	for i, t := range tickets {
-		ticketIDs[i] = t.ID
+	if err = e.execution.RequireEntMembers(ctx, tx, tenantID, id); err != nil {
+		return err
 	}
-	existingAlerts, _ := e.client.SLAAlertHistory.Query().
-		Where(
-			slaalerthistory.TicketIDIn(ticketIDs...),
-			slaalerthistory.AlertLevelEQ("unassigned"),
-			slaalerthistory.ResolvedAtIsNil(),
-		).
-		All(ctx)
-
-	// 构建已发送预警的工单集合
-	alertedTickets := make(map[int]bool)
-	for _, alert := range existingAlerts {
-		alertedTickets[alert.TicketID] = true
+	item, err := tx.Ticket.Query().Where(ticket.IDEQ(id), ticket.TenantIDEQ(tenantID), ticket.DeletedAtIsNil()).Only(ctx)
+	if err != nil {
+		return err
 	}
-
-	// 通知管理员
-	admins, _ := e.client.User.Query().
-		Where(user.RoleNEQ("end_user"), user.RoleNEQ("guest")).
-		IDs(ctx)
-
-	for _, t := range tickets {
-		// 检查是否已发送过未分配通知
-		if alertedTickets[t.ID] {
-			continue
-		}
-
-		if e.notificationSvc != nil && len(admins) > 0 {
-			content := fmt.Sprintf("【未分配提醒】工单 #%s (%s) 已超过2小时未分配，请及时处理！",
-				t.TicketNumber, t.Title)
-
-			for _, adminID := range admins {
-				result, sendErr := e.notificationSvc.SendNotification(ctx, t.ID, &dto.SendTicketNotificationRequest{
-					UserIDs:   []int{adminID},
-					EventType: "ticket_updated",
-					Content:   content,
-				}, tenantID)
-				if err := ticketNotificationDeliveryError(result, sendErr); err != nil {
-					e.logger.Errorw("Failed to send unassigned notification", "ticket_id", t.ID, "admin_id", adminID, "error", err)
-				}
-			}
-
-			e.logger.Infow("Unassigned ticket notification sent", "ticket_id", t.ID, "ticket_number", t.TicketNumber)
-
-			// H3 修复：发送通知后创建alert history记录，避免重复发送
-			if _, err := e.client.SLAAlertHistory.Create().
-				SetTicketID(t.ID).
-				SetTicketNumber(t.TicketNumber).
-				SetTicketTitle(t.Title).
-				SetAlertLevel("unassigned").
-				SetTenantID(tenantID).
-				SetAlertRuleName(fmt.Sprintf("工单 #%s 已超过2小时未分配", t.TicketNumber)).
-				Save(ctx); err != nil {
-				e.logger.Errorw("Failed to create alert history for unassigned", "ticket_id", t.ID, "error", err)
-			}
+	if item.ClosedAt != nil || !item.ResolvedAt.IsZero() || time.Since(slaCycleStart(item)) < age || kind == "unassigned" && item.AssigneeID > 0 {
+		return tx.Commit()
+	}
+	operation := fmt.Sprintf("escalation:%s:%d:cycle:%d", kind, id, item.SLACycleNumber)
+	meta := workitemmutation.Meta{TenantID: tenantID, ActorID: 0, Source: "scheduler", OperationID: operation, CorrelationID: operation}
+	digest, err := workitemmutation.Digest(struct {
+		Kind              string
+		WorkItemID, Cycle int
+	}{kind, id, item.SLACycleNumber})
+	if err != nil {
+		return err
+	}
+	if _, replayed, err := workitemmutation.Replay(ctx, tx.Client(), meta, id, digest); err != nil {
+		return err
+	} else if replayed {
+		return tx.Commit()
+	}
+	if e.notificationSvc == nil {
+		return fmt.Errorf("escalation reminder notification service is required")
+	}
+	recipients, err := tx.User.Query().Where(user.TenantIDEQ(tenantID), user.ActiveEQ(true), user.RoleNEQ("end_user"), user.RoleNEQ("guest")).Order(ent.Asc(user.FieldID)).IDs(ctx)
+	if err != nil {
+		return err
+	}
+	if kind == "long_pending" {
+		recipients = append(recipients, item.RequesterID)
+		if item.AssigneeID > 0 {
+			recipients = append(recipients, item.AssigneeID)
 		}
 	}
-
-	return nil
+	if len(recipients) == 0 {
+		return fmt.Errorf("escalation reminder has no active recipients")
+	}
+	if err = e.fenceWorkItem(ctx, tx, item); err != nil {
+		return err
+	}
+	message := fmt.Sprintf("【超时提醒】工单 #%s (%s) 已超过24小时未解决，请及时处理！", item.TicketNumber, item.Title)
+	if kind == "unassigned" {
+		message = fmt.Sprintf("【未分配提醒】工单 #%s (%s) 已超过2小时未分配，请及时处理！", item.TicketNumber, item.Title)
+	}
+	if err = e.notificationSvc.EnqueueNotificationTx(ctx, tx, id, tenantID, &dto.SendTicketNotificationRequest{UserIDs: recipients, EventType: "ticket_updated", Content: message, DeliveryKey: operation}); err != nil {
+		return err
+	}
+	if err = workitemmutation.RecordTx(ctx, tx, meta, workitemmutation.Result{WorkItemID: id, Version: item.Version + 1, Status: item.Status}, "work_item.escalation."+kind, digest, map[string]interface{}{"kind": kind, "cycle": item.SLACycleNumber, "recipientIds": recipients}); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // EscalateTicket 手动升级工单

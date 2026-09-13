@@ -71,3 +71,48 @@ func TestSLACycleStandardDiscovery(t *testing.T) {
 	require.NoError(t, app.runSLACycle(ctx))
 	require.ElementsMatch(t, []int{first.ID, second.ID}, monitor.ids)
 }
+
+type scopeRecordingEscalation struct {
+	t   *testing.T
+	ids []int
+}
+
+func (m *scopeRecordingEscalation) ProcessEscalations(ctx context.Context, id int) error {
+	require.False(m.t, tenantctx.IsSystemBypass(ctx))
+	actual, ok := tenantctx.TenantID(ctx)
+	require.True(m.t, ok)
+	require.Equal(m.t, id, actual)
+	m.ids = append(m.ids, id)
+	return nil
+}
+func TestEscalationCycleUsesFrozenTenantContexts(t *testing.T) {
+	cfg := config.ExecutionConfig{Mode: "candidate", DeploymentID: "escalation-test", Scopes: []config.ExecutionScopeConfig{{TenantID: 7, ScopeID: "11111111-1111-4111-8111-111111111111"}}}
+	policy, err := database.NewExecutionPolicy(cfg)
+	require.NoError(t, err)
+	processor := &scopeRecordingEscalation{t: t}
+	app := &Application{executionPolicy: policy, escalationService: processor}
+	cfg.Scopes[0].TenantID = 99
+	require.NoError(t, app.runEscalationCycle(context.Background()))
+	require.Equal(t, []int{7}, processor.ids)
+}
+func TestEscalationStartupRequiresConfiguredProcessor(t *testing.T) {
+	for _, missing := range []string{"processor", "policy", "discovery"} {
+		t.Run(missing, func(t *testing.T) {
+			cfg := config.ExecutionConfig{Mode: "standard", DeploymentID: "escalation-test", Capabilities: map[string]string{"escalation": "enabled"}}
+			policy, err := database.NewExecutionPolicy(cfg)
+			require.NoError(t, err)
+			app := &Application{Cfg: &config.Config{Execution: cfg}, DBClient: &ent.Client{}, systemClient: &ent.Client{}, executionPolicy: policy, escalationService: &scopeRecordingEscalation{t: t}, startBackgroundTasksFunc: func(context.Context) { t.Error("started without required dependency") }}
+			switch missing {
+			case "processor":
+				app.escalationService = nil
+			case "policy":
+				app.executionPolicy = nil
+			case "discovery":
+				app.systemClient = nil
+			}
+			stop, err := app.startAPIRuntime(context.Background())
+			require.Nil(t, stop)
+			require.ErrorContains(t, err, "enabled capability escalation")
+		})
+	}
+}

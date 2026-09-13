@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
 	"time"
 
@@ -19,7 +20,8 @@ import (
 func setupEscalationTest(t *testing.T) (*ent.Client, *EscalationService, context.Context) {
 	client := enttest.Open(t, "sqlite3", testDSN())
 	logger := zaptest.NewLogger(t).Sugar()
-	service := NewEscalationService(client, logger)
+	service := NewEscalationService(client, logger, executionfixture.Standard())
+	service.SetNotificationService(NewTicketNotificationService(client, logger, executionfixture.Standard()))
 	ctx := context.Background()
 	return client, service, ctx
 }
@@ -235,30 +237,11 @@ func TestEscalationService_GetEscalationNotifyUsers(t *testing.T) {
 	testTenant, err := createEscalationTestTenant(ctx, client, "notify")
 	require.NoError(t, err)
 
-	// 创建SLA定义
-	slaDef, err := client.SLADefinition.Create().
-		SetName("Test SLA for Notify").
-		SetPriority("medium").
-		SetResponseTime(60).
-		SetResolutionTime(240).
-		SetTenantID(testTenant.ID).
-		Save(ctx)
+	tx, err := client.Tx(ctx)
 	require.NoError(t, err)
-
-	// 创建SLA预警规则
-	rule, err := client.SLAAlertRule.Create().
-		SetName("Test Notify Rule").
-		SetSLADefinitionID(slaDef.ID).
-		SetAlertLevel("warning").
-		SetThresholdPercentage(70).
-		SetIsActive(true).
-		SetEscalationEnabled(true).
-		SetTenantID(testTenant.ID).
-		Save(ctx)
-	require.NoError(t, err)
-
-	// 获取升级通知用户 - 可能返回空列表
-	users := service.getEscalationNotifyUsers(ctx, 1, rule)
-	// 验证方法执行不报错，返回值可以是 nil 或空列表
-	_ = users
+	defer tx.Rollback()
+	_, err = service.resolveNotifyUsersTx(ctx, tx, &EscalationLevel{NotifyRoles: []string{"unregistered-role"}}, testTenant.ID)
+	require.ErrorContains(t, err, "no active recipient")
+	_, err = service.resolveNotifyUsersTx(ctx, tx, &EscalationLevel{NotifyUserIDs: []int{999999}}, testTenant.ID)
+	require.ErrorContains(t, err, "escalation recipient")
 }
