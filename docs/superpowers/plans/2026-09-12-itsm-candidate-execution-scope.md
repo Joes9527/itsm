@@ -203,6 +203,16 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+邮件目标重绑RED `2f119ebdb`（2026-09-14）：SQLite原producer在Graph A/mailbox A时queued，运行前替换为B/mailbox B，实际worker仍向B一次发送并sent。相关邮件/通知/push具名race仅此新增用例FAIL，无SKIP/RACE，无生产修复，详见T1。旧GREEN不覆盖该目标要求；本项在原S5继续，不新增开发波次。
+
+邮件专业目标扩展合同（独立审阅已完成，待实现）：
+- [ ] 先核对既有配置owner，分离只读可信配置身份与激活/外发：notification disabled仍能冻结完整目标，不调用Init、不联网、不临时开能力。candidate使用冻结声明，standard沿现有配置owner；不得只枚举已激活Manager再以NULL掩盖缺目标。
+- [ ] 原通知行version2邮件目标新增nullable immutable target_transport，Graph要求精确connector name/provider与覆盖mailbox、AAD/Graph端点及实际发信身份的摘要；SMTP不伪装成connector，要求无connector字段，摘要覆盖规范化host/port/user/from与实际TLS/端点模式，不含密码。当前SMTP是opportunistic STARTTLS，不得在未改变实现时描述为强制TLS。
+- [ ] 用新注册045扩展完整性约束和不可变trigger，不改044历史SQL；原target字段/transport及绑定后业务身份均不可变。历史NULL保全且禁止consumer补绑，新意图缺目标在原事务拒绝。仍未执行任何目标WSL迁移。
+- [ ] 原EmailService和Graph provider改为typed目标描述/解析；producer与worker共享同一目标契约，worker按原transport解析、复核固定身份及generation，禁止fallback或重选。仅声明local_only不足以证明路由正确；Graph Init实际目的地须与纯描述一致并覆盖mailbox。
+- [ ] Incident原outbox生产者/consumer同步typed EmailTarget、版本、完整payload摘要/receipt及旧载荷策略，不在消费时补当前目标，不造新队列或改接另一builtin/email平行实现。
+- [ ] 验证disabled下完整目标入队、开启后按原目标执行、缺目标整事务回滚；Graph邮箱/端点/身份、SMTP主机/发信身份分别变化时零发送；稳定目标真实loopback正向，发送中变化/完成失败归unknown。现RED同时换sender+mailbox，不能当分别覆盖。真实PG新旧约束/历史整行保全、相关race/build/独立审阅完成后才关闭本段；S5/S6/T3/T4/G3与固定CandidateSHA仍保持原门禁。
+
 通知执行能力检查点 `94e733300`（2026-09-14）：Worker在每行的recovery和claim之前，以tenant context核验冻结notification能力；禁用不改attempt/lease/终态，保留ErrDenied。email/push×pending/expired四项RED关闭，真实PG原producer/System队列raw row保全与邮件零调用通过；push未使用活跃socket。允许业务请求记录queued，不把关闭的执行能力报告为已投递；空队列0,nil不是能力准入证明。四包具名race、完整私有PG16/Redis/MinIO race、后端build及独立审阅通过，清理断言补齐，见T1。邮件精确持久目标与专业provider边界、其余S5/S6/T3/T4/G3仍未完成，CandidateSHA与候选停止状态不变，无共享环境操作。
 
 push结果检查点 `84ce62a2b`（2026-09-14）：offline/full/同user错tenant三项真实worker RED关闭。原Hub单一队列加入可选写入回执，统一tenant+user目标；worker至少一个socket消息Write及writer.Close成功才sent，零入队可重试，入队后无确认/断线/超时unknown。真实loopback成功/失败、超时、另一停滞连接、socket成功后数据库完成失败及lease恢复不重发通过；新push故障测试为SQLite，本次完整私有PG suite另用于回归。四包具名race、私有PG16/Redis/MinIO race、build与独立审阅通过，见T1。仅证明socket传输接受，不证明浏览器确认或全连接送达。下一步email/push能力与部署目标准入、邮件持久身份、飞书/裸实例仍未完成；S5/S6/T3/T4/G3不关闭，CandidateSHA与停止状态不变，无共享环境操作。
