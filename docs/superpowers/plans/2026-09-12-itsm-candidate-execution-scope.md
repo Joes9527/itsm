@@ -439,3 +439,11 @@ database/connector/.../bootstrap全包race、既定私有PG16/Redis/MinIO suite�
 实现7d6d34d90：原EmailService.DescribeDeliveryTarget(ctx,*ent.Tx,tenant,owner)统一v2 EmailTarget；Graph从candidate冻结声明或standard原tx.Client()读取，SMTP从原服务复制的配置描述，均不查询live provider/发送。独立审阅指出GraphProvider恒存在会令SMTP不可达，已以可信email_delivery.transport / ITSM_EMAIL_DELIVERY_TRANSPORT解决：空默认graph，仅graph/smtp，bootstrap复制选择；Graph失败不转SMTP。SMTP摘要绑定精确实际Host/Port/Username/From、机会式STARTTLS/TLS1.2验证/PlainAuth，不含密码、不伪装connector，Host保留实际文本作保守身份。
 
 四包具名race、config/database/bootstrap全量race、既定私有PG16/Redis/MinIO suite及全后端build通过，独立最终审阅无新增阻断；详见T1。当前只接描述与构造，新transport配置尚不改变SendForTenant/实际队列路由。下一步原通知行045/持久v2与EmailTarget验证、worker精确解析/前后身份及generation复核，再同步Incident outbox；原目标重绑RED及S5/S6/T3/T4/G3仍未关闭。CandidateSHA与候选停止状态不变，无目标环境操作。
+
+### S5 045邮件目标结构检查点（2026-09-14）
+
+实现2d7b7373b新增045_notification_email_target及Ent nullable immutable隐藏target_transport；044 SQL和旧退休依赖不变。CHECK保留NULL历史/v1非邮件，允许完整v2 email Graph或SMTP；原trigger追加transport与绑定后SLA来源保护，状态/attempt仍可更新。无历史DML或回填。旧迁移测试保留原断言并增加待执行项计数，新045依赖测试拒绝缺037及039–044。
+
+真实私有PG升级前后整行JSON保全、旧transport全NULL、合法旧email禁止完整补绑精确命中trigger、先grant后撤销函数EXECUTE、合法v2/残缺拒绝/身份不可变均通过；Ent生成、migration全包race、既定私有PG16/Redis/MinIO suite和全后端build通过，独立最终审阅无新增阻断。详见T1。
+
+该步只是结构，尚未接原producer/worker/Incident，NULL形状仍为历史保留，新意图缺目标必须由后续原事务拒绝；邮件重绑RED未关闭。下一步实现EmailTarget持久验证与写入、worker按原transport和精确目标执行，再同步Incident outbox。S5/S6/T3/T4/G3未完成，CandidateSHA/候选停止状态不变，未执行WSL迁移。
