@@ -145,6 +145,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 自动升级增量 `0266df8b0`：matrix/long_pending/unassigned 原扫描与单项事务接入frozen policy/成员；Ticket version及history level CAS、审计和durable通知共同提交，managed history复用040引用。旧周期告警不推进；非规则提醒复用每WorkItem/cycle/type操作回执，不再创建无效SLA history。bootstrap复用已配置实例，冻结租户发现及逐租户上下文/依赖检查。s4-escalation-final-pg.log完整候选边界PASS：历史alert/提醒WorkItem原始JSON保全、新成员matrix+pending、周期回执重放、long_pending通知/审计写后故障回滚恢复；定向回归、build、独立复审通过。owner设置周期不等于重开E2E，unassigned单独故障、matrix多级回滚及确定性并发仍未验证。真实手动升级和旧零AlertRuleID方法尚未接入，下一步核对真实HTTP所有者并统一原事务；S3/S4/S5/S6及后续门禁仍未完成。CandidateSHA不变、候选未启动、无共享环境变更。完整证据与限制见实现分支T1最新交接。
 
+有序Outbox前置 `d200b864f`：handler声明按aggregate串行、registry冻结、原query及claim CAS检查同tenant/type/aggregate较小ID前序均published；历史NULL-ref、blocked/dead_letter/unknown/future-due前序不跳过，外层scope保持。s4-outbox-ordering-red.log两个真实worker确定性复现同目标越序；final-pg.log完整候选边界PASS，覆盖并行独立目标、历史前序原始行保全、未决前序阻挡、已尝试过期unknown、接收端成功后published写后故障回滚及后序零调用。回归/build/标签编译、冻结声明测试及独立复审通过。该能力不证明生产者commit顺序或Feishu投递；生产者必须同目标先CAS/锁再enqueue，所有更新共用稳定目标键。Feishu producer/handler尚未接入，临时门禁保留，S3/S4及其余门禁仍未完成。无新表/迁移或共享环境操作，固定CandidateSHA不变。
+
 ## S5：Stream 与请求异步边界
 
 **Files:** `pkg/eventbus/{eventbus.go,eventbus_test.go}`、`service/{tool_queue.go,ticket_service.go}`、`controller/connector_controller.go`、bootstrap；事件发布者由 `rg -n 'Publish\('` 生成调用清单逐项接入。
