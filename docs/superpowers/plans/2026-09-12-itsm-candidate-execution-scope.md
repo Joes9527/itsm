@@ -203,6 +203,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+Webhook ACK恢复检查点 `15e6e2c01`：真实PG/Redis联合验证消费意图与Audit提交后阻断ACK、关闭旧bus保留同entry/owner，新bus同itsm:webhook组领取后PEL清空；原Stream entry、完整意图集合及消费Audit不变。后续真实共享Worker向两个loopback目标各一次，published及交付Audit成立，再poll不增加调用，旧Stream/组/pending保全。定向与完整私有PG/Redis/MinIO回归race通过，无skip/race，独立审阅无阻断。仅测试增量，首次即PASS，不虚构生产RED。详细证据见T1；不等于应用强杀/Redis服务重启、所有出站窗口exactly-once或HTTP业务body逐字段验收。普通模式统一、进程重启及其它异步入口仍待完成，S5及后续门禁保持未完成，CandidateSHA与未启动状态不变。
+
 KAF重放修复检查点 `565769236`：已定位并确定性修复下述Webhook阶段记录的偶发失败。私有PG16实际解析`.0010005`为1001μs，旧helper直接从整数纳秒除1000后取偶得到1000μs；改为与PG一致的先解析小数秒、再缩放取整顺序。固定输入在原业务重放处RED，修复后真实KAF完成/重放race及完整私有PG/Redis/MinIO回归PASS，无skip/race；七个PG参考值覆盖半值、普通纳秒与跨秒，并验证1800/2026/2500年。未放宽比较容差、改动请求摘要或修改持久时间。领域/service回归、全后端构建和独立审阅通过，原失败及编译修正记录完整保留于T1。此检查点关闭该已知精度缺口，目标PG17仍待B环境复核；S5其它项与T3/T4/G2/G3不因此通过，CandidateSHA及候选停止状态不变。
 
 Webhook Worker检查点 `be81ef8b4`：已注册共享outbox handler，真实claim/attempt/租约/完整意图摘要/消费Audit身份和意图成员核验，使用Audit原Source重新过authority；捕获精确实例对象和generation，同对象发送，后置重验并写交付Audit，再由原Worker标published。producer从真实对象取得Init冻结URL摘要；builtin冻结endpoint/secret，拒绝自动redirect及非2xx。真实PG+loopback从0发送RED→两个目标published且再poll不发送；独立P1的307→B一次RED已修，redirect/503/发送中重绑/实际回执INSERT故障均unknown不重投，预先换目标零外呼明确blocked。webhook disabled在实际bootstrap保留known reserved类型，配置分支与真实PG pending整行保全均已验证。定向回归、最终完整私有PG/Redis/MinIO race无skip、build及独立审阅通过。首次完整race在Webhook之前KAF replay一次不明失败，随后定向count3及最终full均PASS；根因未确定，完整证据保留T1，不称已修复。S5仍需普通模式统一/移除同步路径、Redis至投递ACK联合恢复、进程重启、未知消息与其它异步入口；generation不是持久配置版本或并发撤权栅栏。CandidateSHA与停止状态不变，全部交付门禁未因本检查点放行。
