@@ -102,6 +102,8 @@ S3 阶段记录（2026-09-13；基础提交 `6261941b4`，统一创建接入 `04
 
 通知Worker范围增量 `e479b8d3d`：构造显式policy，原scan/claim/expired/complete/retry/fail均在事务附加tenant_id/ticket_id成员SQL。s4-notification-worker-delivery-pg.log全PASS：旧pending/expired原始PG全字段保全；新成员缺传输显式failed；本地声明connector成功sent；发送后scope关闭导致完成写回拒绝、后续过期转delivery_unknown且不重复发送。四包回归/container编译、全build、integration编译、独立复审通过。仅任务私有PG与本地接收端；binding/并发/写后故障及生产者/mark-read尚未验证，SLA/escalation和其余门禁未完成，详见T1最新交接。
 
+SLA Monitor 的有效RED提交 `f8b7043cb`：s4-sla-monitor-confirmed-red.log确认历史违规集合[]→响应/解决两条，同时新成员精确2条违规独立断言通过。首次无有效definition的fixture失败已排除，不计证据。尚未修复；下一步必须同时覆盖scan/单项原事务、alert两个直接入口/重复与cooldown、通知意图及eventbus提交后边界，修复当前吞错/虚报NotificationSent路径；不能只过滤scan。该RED仅violation，warning/critical/通知/eventbus仍未验证。详见T1最新交接。
+
 - [ ] 写 `TestCandidateWorkerPreservesHistoricalStates`，混排历史 unknown/pending/expired claim、候选 pending、跨租户 pending；捕获每条 status/attempt/claim/updated_at，运行一次真实 Dispatch/Claim，要求历史逐字段不变。当前全量 claim/BlockUnknown 应 RED。
 - [ ] 所有未知事件标记、expired claim 回收、claim、mark attempt、retry、published/dead-letter 语句在原事务内加入同一个成员 EXISTS 条件，不能仅过滤返回的 slice。查询形状：
 ```sql
