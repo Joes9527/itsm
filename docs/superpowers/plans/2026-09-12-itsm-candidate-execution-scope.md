@@ -203,6 +203,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+普通持久传输前置 `83a9591a3`：普通ExecutionEvent不再丢失身份或生成随机UUID，复用候选的严格信封/authority并固定原eventID。显式ExecutionEnvelopeHandler订阅在两模式校验部署/scope/tenant、UUID/metadata和来源后取得完整信封；candidate准入不放宽。独立P2的缺失稳定合同raw发布经RED复现后在最前拒绝，复审关闭。真实PG源+Redis标准typed传输及源行/Audit保全通过；历史fixture改为明确迁移前非持久类型，旧Stream/组/PEL断言不变。相关三包race、最终完整私有PG/Redis/MinIO race、build及独立审阅通过，无skip/race，初次fixture失败证据保留T1。普通Webhook尚待typed持久接线/删除同步分支及durable组，不能把传输前置视为全链路；S5和后续门禁、CandidateSHA及未启动状态不变。
+
 普通持久来源前置 `536b48e3d`：ExecutionPolicy冻结deploymentID，EventRef按明确模式提供standard空scope或candidate原准入ref；CandidateRef不放宽。原authority共用该身份并保留原事务/持久来源/字节载荷/发生时间核验。真实PG standard正向RED→GREEN，伪造ref与env部署、scope、主体、tenant、缺失来源、未知类型及载荷/时间篡改拒绝，两模式不可互换降级；源行及审计保全。相关四包回归、完整私有PG/Redis/MinIO race、build和独立审阅通过，无skip/race，详见T1。owner测试连接仅证明来源合同，不代表standard应用role准入或候选成员登记适用于standard。普通传输typed身份和Webhook持久接线/删除同步分支尚待完成，不将此检查点算S5完成；固定CandidateSHA、未启动状态及后续门禁不变。
 
 Webhook ACK恢复检查点 `15e6e2c01`：真实PG/Redis联合验证消费意图与Audit提交后阻断ACK、关闭旧bus保留同entry/owner，新bus同itsm:webhook组领取后PEL清空；原Stream entry、完整意图集合及消费Audit不变。后续真实共享Worker向两个loopback目标各一次，published及交付Audit成立，再poll不增加调用，旧Stream/组/pending保全。定向与完整私有PG/Redis/MinIO回归race通过，无skip/race，独立审阅无阻断。仅测试增量，首次即PASS，不虚构生产RED。详细证据见T1；不等于应用强杀/Redis服务重启、所有出站窗口exactly-once或HTTP业务body逐字段验收。普通模式统一、进程重启及其它异步入口仍待完成，S5及后续门禁保持未完成，CandidateSHA与未启动状态不变。
