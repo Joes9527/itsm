@@ -436,6 +436,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		}
 		_, err = ownerDB.ExecContext(ctx, `UPDATE ticket_notifications SET status='processing',attempt_count=1 WHERE id=$1`, id)
 		require.NoError(t, err)
+		verifyNotificationEmailTargetMigration(t, ctx, ownerDB, tenant.ID, historicalNotifications[0].TicketID, actor.ID, runtimeRole)
 	})
 
 	t.Run("candidate cloud discovery direct entry is disabled", func(t *testing.T) {

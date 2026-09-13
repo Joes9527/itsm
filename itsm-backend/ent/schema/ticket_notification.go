@@ -17,6 +17,7 @@ type TicketNotification struct {
 // Fields of the TicketNotification.
 func (TicketNotification) Fields() []ent.Field {
 	return []ent.Field{
+		field.String("target_transport").Optional().Nillable().Immutable().StructTag(`json:"-"`).Comment("Frozen email transport; NULL for legacy and non-email protocols"),
 		field.Int("target_protocol_version").Optional().Nillable().Immutable().StructTag(`json:"-"`).Comment("Frozen connector delivery protocol; NULL preserves unbound historical intents"),
 		field.String("target_connector_name").Optional().Nillable().Immutable().StructTag(`json:"-"`),
 		field.String("target_connector_provider").Optional().Nillable().Immutable().StructTag(`json:"-"`),

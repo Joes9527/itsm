@@ -24,6 +24,20 @@ type TicketNotificationCreate struct {
 	conflict []sql.ConflictOption
 }
 
+// SetTargetTransport sets the "target_transport" field.
+func (_c *TicketNotificationCreate) SetTargetTransport(v string) *TicketNotificationCreate {
+	_c.mutation.SetTargetTransport(v)
+	return _c
+}
+
+// SetNillableTargetTransport sets the "target_transport" field if the given value is not nil.
+func (_c *TicketNotificationCreate) SetNillableTargetTransport(v *string) *TicketNotificationCreate {
+	if v != nil {
+		_c.SetTargetTransport(*v)
+	}
+	return _c
+}
+
 // SetTargetProtocolVersion sets the "target_protocol_version" field.
 func (_c *TicketNotificationCreate) SetTargetProtocolVersion(v int) *TicketNotificationCreate {
 	_c.mutation.SetTargetProtocolVersion(v)
@@ -450,6 +464,10 @@ func (_c *TicketNotificationCreate) createSpec() (*TicketNotification, *sqlgraph
 		_spec = sqlgraph.NewCreateSpec(ticketnotification.Table, sqlgraph.NewFieldSpec(ticketnotification.FieldID, field.TypeInt))
 	)
 	_spec.OnConflict = _c.conflict
+	if value, ok := _c.mutation.TargetTransport(); ok {
+		_spec.SetField(ticketnotification.FieldTargetTransport, field.TypeString, value)
+		_node.TargetTransport = &value
+	}
 	if value, ok := _c.mutation.TargetProtocolVersion(); ok {
 		_spec.SetField(ticketnotification.FieldTargetProtocolVersion, field.TypeInt, value)
 		_node.TargetProtocolVersion = &value
@@ -567,7 +585,7 @@ func (_c *TicketNotificationCreate) createSpec() (*TicketNotification, *sqlgraph
 // of the `INSERT` statement. For example:
 //
 //	client.TicketNotification.Create().
-//		SetTargetProtocolVersion(v).
+//		SetTargetTransport(v).
 //		OnConflict(
 //			// Update the row with the new values
 //			// the was proposed for insertion.
@@ -576,7 +594,7 @@ func (_c *TicketNotificationCreate) createSpec() (*TicketNotification, *sqlgraph
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.TicketNotificationUpsert) {
-//			SetTargetProtocolVersion(v+v).
+//			SetTargetTransport(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *TicketNotificationCreate) OnConflict(opts ...sql.ConflictOption) *TicketNotificationUpsertOne {
@@ -863,6 +881,9 @@ func (u *TicketNotificationUpsert) UpdateCreatedAt() *TicketNotificationUpsert {
 func (u *TicketNotificationUpsertOne) UpdateNewValues() *TicketNotificationUpsertOne {
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
+		if _, exists := u.create.mutation.TargetTransport(); exists {
+			s.SetIgnore(ticketnotification.FieldTargetTransport)
+		}
 		if _, exists := u.create.mutation.TargetProtocolVersion(); exists {
 			s.SetIgnore(ticketnotification.FieldTargetProtocolVersion)
 		}
@@ -1324,7 +1345,7 @@ func (_c *TicketNotificationCreateBulk) ExecX(ctx context.Context) {
 //		// Override some of the fields with custom
 //		// update values.
 //		Update(func(u *ent.TicketNotificationUpsert) {
-//			SetTargetProtocolVersion(v+v).
+//			SetTargetTransport(v+v).
 //		}).
 //		Exec(ctx)
 func (_c *TicketNotificationCreateBulk) OnConflict(opts ...sql.ConflictOption) *TicketNotificationUpsertBulk {
@@ -1365,6 +1386,9 @@ func (u *TicketNotificationUpsertBulk) UpdateNewValues() *TicketNotificationUpse
 	u.create.conflict = append(u.create.conflict, sql.ResolveWithNewValues())
 	u.create.conflict = append(u.create.conflict, sql.ResolveWith(func(s *sql.UpdateSet) {
 		for _, b := range u.create.builders {
+			if _, exists := b.mutation.TargetTransport(); exists {
+				s.SetIgnore(ticketnotification.FieldTargetTransport)
+			}
 			if _, exists := b.mutation.TargetProtocolVersion(); exists {
 				s.SetIgnore(ticketnotification.FieldTargetProtocolVersion)
 			}

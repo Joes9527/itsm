@@ -416,6 +416,9 @@ func (_u *TicketNotificationUpdate) sqlSave(ctx context.Context) (_node int, err
 			}
 		}
 	}
+	if _u.mutation.TargetTransportCleared() {
+		_spec.ClearField(ticketnotification.FieldTargetTransport, field.TypeString)
+	}
 	if _u.mutation.TargetProtocolVersionCleared() {
 		_spec.ClearField(ticketnotification.FieldTargetProtocolVersion, field.TypeInt)
 	}
@@ -990,6 +993,9 @@ func (_u *TicketNotificationUpdateOne) sqlSave(ctx context.Context) (_node *Tick
 				ps[i](selector)
 			}
 		}
+	}
+	if _u.mutation.TargetTransportCleared() {
+		_spec.ClearField(ticketnotification.FieldTargetTransport, field.TypeString)
 	}
 	if _u.mutation.TargetProtocolVersionCleared() {
 		_spec.ClearField(ticketnotification.FieldTargetProtocolVersion, field.TypeInt)

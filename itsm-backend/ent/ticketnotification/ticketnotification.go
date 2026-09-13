@@ -14,6 +14,8 @@ const (
 	Label = "ticket_notification"
 	// FieldID holds the string denoting the id field in the database.
 	FieldID = "id"
+	// FieldTargetTransport holds the string denoting the target_transport field in the database.
+	FieldTargetTransport = "target_transport"
 	// FieldTargetProtocolVersion holds the string denoting the target_protocol_version field in the database.
 	FieldTargetProtocolVersion = "target_protocol_version"
 	// FieldTargetConnectorName holds the string denoting the target_connector_name field in the database.
@@ -81,6 +83,7 @@ const (
 // Columns holds all SQL columns for ticketnotification fields.
 var Columns = []string{
 	FieldID,
+	FieldTargetTransport,
 	FieldTargetProtocolVersion,
 	FieldTargetConnectorName,
 	FieldTargetConnectorProvider,
@@ -149,6 +152,11 @@ type OrderOption func(*sql.Selector)
 // ByID orders the results by the id field.
 func ByID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldID, opts...).ToFunc()
+}
+
+// ByTargetTransport orders the results by the target_transport field.
+func ByTargetTransport(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldTargetTransport, opts...).ToFunc()
 }
 
 // ByTargetProtocolVersion orders the results by the target_protocol_version field.

@@ -55,6 +55,11 @@ func IDLTE(id int) predicate.TicketNotification {
 	return predicate.TicketNotification(sql.FieldLTE(FieldID, id))
 }
 
+// TargetTransport applies equality check predicate on the "target_transport" field. It's identical to TargetTransportEQ.
+func TargetTransport(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldTargetTransport, v))
+}
+
 // TargetProtocolVersion applies equality check predicate on the "target_protocol_version" field. It's identical to TargetProtocolVersionEQ.
 func TargetProtocolVersion(v int) predicate.TicketNotification {
 	return predicate.TicketNotification(sql.FieldEQ(FieldTargetProtocolVersion, v))
@@ -158,6 +163,81 @@ func TenantID(v int) predicate.TicketNotification {
 // CreatedAt applies equality check predicate on the "created_at" field. It's identical to CreatedAtEQ.
 func CreatedAt(v time.Time) predicate.TicketNotification {
 	return predicate.TicketNotification(sql.FieldEQ(FieldCreatedAt, v))
+}
+
+// TargetTransportEQ applies the EQ predicate on the "target_transport" field.
+func TargetTransportEQ(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEQ(FieldTargetTransport, v))
+}
+
+// TargetTransportNEQ applies the NEQ predicate on the "target_transport" field.
+func TargetTransportNEQ(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNEQ(FieldTargetTransport, v))
+}
+
+// TargetTransportIn applies the In predicate on the "target_transport" field.
+func TargetTransportIn(vs ...string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIn(FieldTargetTransport, vs...))
+}
+
+// TargetTransportNotIn applies the NotIn predicate on the "target_transport" field.
+func TargetTransportNotIn(vs ...string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotIn(FieldTargetTransport, vs...))
+}
+
+// TargetTransportGT applies the GT predicate on the "target_transport" field.
+func TargetTransportGT(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGT(FieldTargetTransport, v))
+}
+
+// TargetTransportGTE applies the GTE predicate on the "target_transport" field.
+func TargetTransportGTE(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldGTE(FieldTargetTransport, v))
+}
+
+// TargetTransportLT applies the LT predicate on the "target_transport" field.
+func TargetTransportLT(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLT(FieldTargetTransport, v))
+}
+
+// TargetTransportLTE applies the LTE predicate on the "target_transport" field.
+func TargetTransportLTE(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldLTE(FieldTargetTransport, v))
+}
+
+// TargetTransportContains applies the Contains predicate on the "target_transport" field.
+func TargetTransportContains(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldContains(FieldTargetTransport, v))
+}
+
+// TargetTransportHasPrefix applies the HasPrefix predicate on the "target_transport" field.
+func TargetTransportHasPrefix(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldHasPrefix(FieldTargetTransport, v))
+}
+
+// TargetTransportHasSuffix applies the HasSuffix predicate on the "target_transport" field.
+func TargetTransportHasSuffix(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldHasSuffix(FieldTargetTransport, v))
+}
+
+// TargetTransportIsNil applies the IsNil predicate on the "target_transport" field.
+func TargetTransportIsNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldIsNull(FieldTargetTransport))
+}
+
+// TargetTransportNotNil applies the NotNil predicate on the "target_transport" field.
+func TargetTransportNotNil() predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldNotNull(FieldTargetTransport))
+}
+
+// TargetTransportEqualFold applies the EqualFold predicate on the "target_transport" field.
+func TargetTransportEqualFold(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldEqualFold(FieldTargetTransport, v))
+}
+
+// TargetTransportContainsFold applies the ContainsFold predicate on the "target_transport" field.
+func TargetTransportContainsFold(v string) predicate.TicketNotification {
+	return predicate.TicketNotification(sql.FieldContainsFold(FieldTargetTransport, v))
 }
 
 // TargetProtocolVersionEQ applies the EQ predicate on the "target_protocol_version" field.

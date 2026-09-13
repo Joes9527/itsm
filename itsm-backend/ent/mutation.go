@@ -145049,6 +145049,7 @@ type TicketNotificationMutation struct {
 	op                         Op
 	typ                        string
 	id                         *int
+	target_transport           *string
 	target_protocol_version    *int
 	addtarget_protocol_version *int
 	target_connector_name      *string
@@ -145178,6 +145179,55 @@ func (m *TicketNotificationMutation) IDs(ctx context.Context) ([]int, error) {
 	default:
 		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
 	}
+}
+
+// SetTargetTransport sets the "target_transport" field.
+func (m *TicketNotificationMutation) SetTargetTransport(s string) {
+	m.target_transport = &s
+}
+
+// TargetTransport returns the value of the "target_transport" field in the mutation.
+func (m *TicketNotificationMutation) TargetTransport() (r string, exists bool) {
+	v := m.target_transport
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTargetTransport returns the old "target_transport" field's value of the TicketNotification entity.
+// If the TicketNotification object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *TicketNotificationMutation) OldTargetTransport(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTargetTransport is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTargetTransport requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTargetTransport: %w", err)
+	}
+	return oldValue.TargetTransport, nil
+}
+
+// ClearTargetTransport clears the value of the "target_transport" field.
+func (m *TicketNotificationMutation) ClearTargetTransport() {
+	m.target_transport = nil
+	m.clearedFields[ticketnotification.FieldTargetTransport] = struct{}{}
+}
+
+// TargetTransportCleared returns if the "target_transport" field was cleared in this mutation.
+func (m *TicketNotificationMutation) TargetTransportCleared() bool {
+	_, ok := m.clearedFields[ticketnotification.FieldTargetTransport]
+	return ok
+}
+
+// ResetTargetTransport resets all changes to the "target_transport" field.
+func (m *TicketNotificationMutation) ResetTargetTransport() {
+	m.target_transport = nil
+	delete(m.clearedFields, ticketnotification.FieldTargetTransport)
 }
 
 // SetTargetProtocolVersion sets the "target_protocol_version" field.
@@ -146249,7 +146299,10 @@ func (m *TicketNotificationMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *TicketNotificationMutation) Fields() []string {
-	fields := make([]string, 0, 21)
+	fields := make([]string, 0, 22)
+	if m.target_transport != nil {
+		fields = append(fields, ticketnotification.FieldTargetTransport)
+	}
 	if m.target_protocol_version != nil {
 		fields = append(fields, ticketnotification.FieldTargetProtocolVersion)
 	}
@@ -146321,6 +146374,8 @@ func (m *TicketNotificationMutation) Fields() []string {
 // schema.
 func (m *TicketNotificationMutation) Field(name string) (ent.Value, bool) {
 	switch name {
+	case ticketnotification.FieldTargetTransport:
+		return m.TargetTransport()
 	case ticketnotification.FieldTargetProtocolVersion:
 		return m.TargetProtocolVersion()
 	case ticketnotification.FieldTargetConnectorName:
@@ -146372,6 +146427,8 @@ func (m *TicketNotificationMutation) Field(name string) (ent.Value, bool) {
 // database failed.
 func (m *TicketNotificationMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
 	switch name {
+	case ticketnotification.FieldTargetTransport:
+		return m.OldTargetTransport(ctx)
 	case ticketnotification.FieldTargetProtocolVersion:
 		return m.OldTargetProtocolVersion(ctx)
 	case ticketnotification.FieldTargetConnectorName:
@@ -146423,6 +146480,13 @@ func (m *TicketNotificationMutation) OldField(ctx context.Context, name string) 
 // type.
 func (m *TicketNotificationMutation) SetField(name string, value ent.Value) error {
 	switch name {
+	case ticketnotification.FieldTargetTransport:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTargetTransport(v)
+		return nil
 	case ticketnotification.FieldTargetProtocolVersion:
 		v, ok := value.(int)
 		if !ok {
@@ -146651,6 +146715,9 @@ func (m *TicketNotificationMutation) AddField(name string, value ent.Value) erro
 // mutation.
 func (m *TicketNotificationMutation) ClearedFields() []string {
 	var fields []string
+	if m.FieldCleared(ticketnotification.FieldTargetTransport) {
+		fields = append(fields, ticketnotification.FieldTargetTransport)
+	}
 	if m.FieldCleared(ticketnotification.FieldTargetProtocolVersion) {
 		fields = append(fields, ticketnotification.FieldTargetProtocolVersion)
 	}
@@ -146698,6 +146765,9 @@ func (m *TicketNotificationMutation) FieldCleared(name string) bool {
 // error if the field is not defined in the schema.
 func (m *TicketNotificationMutation) ClearField(name string) error {
 	switch name {
+	case ticketnotification.FieldTargetTransport:
+		m.ClearTargetTransport()
+		return nil
 	case ticketnotification.FieldTargetProtocolVersion:
 		m.ClearTargetProtocolVersion()
 		return nil
@@ -146739,6 +146809,9 @@ func (m *TicketNotificationMutation) ClearField(name string) error {
 // It returns an error if the field is not defined in the schema.
 func (m *TicketNotificationMutation) ResetField(name string) error {
 	switch name {
+	case ticketnotification.FieldTargetTransport:
+		m.ResetTargetTransport()
+		return nil
 	case ticketnotification.FieldTargetProtocolVersion:
 		m.ResetTargetProtocolVersion()
 		return nil

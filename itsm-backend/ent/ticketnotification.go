@@ -19,6 +19,8 @@ type TicketNotification struct {
 	config `json:"-"`
 	// ID of the ent.
 	ID int `json:"id,omitempty"`
+	// Frozen email transport; NULL for legacy and non-email protocols
+	TargetTransport *string `json:"-"`
 	// Frozen connector delivery protocol; NULL preserves unbound historical intents
 	TargetProtocolVersion *int `json:"-"`
 	// TargetConnectorName holds the value of the "target_connector_name" field.
@@ -107,7 +109,7 @@ func (*TicketNotification) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case ticketnotification.FieldID, ticketnotification.FieldTargetProtocolVersion, ticketnotification.FieldSLAAlertHistoryID, ticketnotification.FieldTicketID, ticketnotification.FieldUserID, ticketnotification.FieldAttemptCount, ticketnotification.FieldTenantID:
 			values[i] = new(sql.NullInt64)
-		case ticketnotification.FieldTargetConnectorName, ticketnotification.FieldTargetConnectorProvider, ticketnotification.FieldTargetDestinationDigest, ticketnotification.FieldType, ticketnotification.FieldChannel, ticketnotification.FieldContent, ticketnotification.FieldStatus, ticketnotification.FieldDeliveryKey, ticketnotification.FieldLeaseOwner, ticketnotification.FieldLastErrorClass:
+		case ticketnotification.FieldTargetTransport, ticketnotification.FieldTargetConnectorName, ticketnotification.FieldTargetConnectorProvider, ticketnotification.FieldTargetDestinationDigest, ticketnotification.FieldType, ticketnotification.FieldChannel, ticketnotification.FieldContent, ticketnotification.FieldStatus, ticketnotification.FieldDeliveryKey, ticketnotification.FieldLeaseOwner, ticketnotification.FieldLastErrorClass:
 			values[i] = new(sql.NullString)
 		case ticketnotification.FieldSentAt, ticketnotification.FieldReadAt, ticketnotification.FieldNextAttemptAt, ticketnotification.FieldLeaseExpiresAt, ticketnotification.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -132,6 +134,13 @@ func (_m *TicketNotification) assignValues(columns []string, values []any) error
 				return fmt.Errorf("unexpected type %T for field id", value)
 			}
 			_m.ID = int(value.Int64)
+		case ticketnotification.FieldTargetTransport:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field target_transport", values[i])
+			} else if value.Valid {
+				_m.TargetTransport = new(string)
+				*_m.TargetTransport = value.String
+			}
 		case ticketnotification.FieldTargetProtocolVersion:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
 				return fmt.Errorf("unexpected type %T for field target_protocol_version", values[i])
@@ -310,6 +319,11 @@ func (_m *TicketNotification) String() string {
 	var builder strings.Builder
 	builder.WriteString("TicketNotification(")
 	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	if v := _m.TargetTransport; v != nil {
+		builder.WriteString("target_transport=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
 	if v := _m.TargetProtocolVersion; v != nil {
 		builder.WriteString("target_protocol_version=")
 		builder.WriteString(fmt.Sprintf("%v", *v))

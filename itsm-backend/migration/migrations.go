@@ -466,6 +466,7 @@ var RegisteredMigrations = []Migration{
 	{Version: ToolExecutionAuthorityLockVersion, Description: "Lock candidate tool authority within the caller transaction"},
 	{Version: ToolExecutionAuthorizationLockVersion, Description: "Hold candidate tool approval and current authorization through transaction completion"},
 	{Version: NotificationConnectorTargetVersion, Description: "Freeze connector notification target identity without binding historical intents"},
+	{Version: NotificationEmailTargetVersion, Description: "Freeze email notification transport and identity without rebinding history"},
 	{Version: WorkItemRetireVersion, Description: "Retire WorkItem legacy structures with controlled evidence"},
 }
 
@@ -479,6 +480,8 @@ func PostSchemaMigrations() []Migration {
 // GetMigrationSQL returns the SQL for a specific migration
 func GetMigrationSQL(version string) string {
 	switch version {
+	case NotificationEmailTargetVersion:
+		return notificationEmailTargetSQL
 	case NotificationConnectorTargetVersion:
 		return notificationConnectorTargetSQL
 	case ToolExecutionAuthorizationLockVersion:

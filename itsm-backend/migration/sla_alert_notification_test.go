@@ -16,7 +16,7 @@ func TestSLANotificationMigrationRequiresCandidatePreparation(t *testing.T) {
 	}
 	plan, err := PlanMigrations(catalog, controlledReceipts(prefix), OpUp, nil)
 	require.NoError(t, err)
-	require.Len(t, plan.Executable, 5)
+	require.Len(t, plan.Executable, 6)
 	require.Equal(t, SLAAlertNotificationVersion, plan.Executable[0].Version)
 	require.NotEmpty(t, GetMigrationSQL(SLAAlertNotificationVersion))
 	for _, removed := range []string{CandidateExecutionScopeVersion, WorkItemPrepareVersion} {

@@ -1527,3 +1527,15 @@ s5-email-smtp-target-red.log复现原描述入口拒绝显式SMTP，随后沿原
 CandidateSHA不变、候选停止，无WSL/共享数据库操作、企业外发、push/main合并；S5/S6/T3/T4/G3未完成。
 
 最终证据：s5-email-typed-target-final.log四包具名race PASS（非service全量），s5-email-typed-target-regression.log config/database/bootstrap全包race PASS；s5-email-typed-target-full-private.log既定私有PG16/Redis/MinIO suite race PASS，均无FAIL/SKIP/DATA RACE；s5-email-typed-target-build.log全后端build exit0。git diff --check通过，本轮Go进程已退出。
+
+### B2 S5 045邮件目标结构与历史保全（2026-09-14）
+
+s5-email-target-migration-red.log真实任务私有PG先复现缺注册045。新增045_notification_email_target，顺序044→045→受控R，沿原普通迁移前置链；保留044历史SQL和旧R依赖。新增nullable immutable target_transport；CHECK保持全NULL历史与原v1非邮件形状，新增v2 email Graph精确msgraph-email/microsoft或SMTP无connector身份，摘要小写64位。原触发器替换实现追加transport与绑定后SLA来源不可变，不改变状态/租约正常更新能力；再次撤销函数PUBLIC及非owner显式权限。无历史DML或补绑。
+
+Ent生成只涉及ticketnotification模型/元数据/相关runtime与mutation，字段隐藏JSON、不可变；旧迁移测试只将新增待执行项计数增1，保留原首项及缺前置拒绝断言，新045测试验证缺037及039–044拒绝。迁移目录全包race已通过。
+
+独立审阅指出并关闭两项PG假通过风险：明确新建旧email空目标行，补绑完整合法SMTP形状必须命中immutable trigger消息；045前显式授予runtime函数EXECUTE并确认true，之后验证false。新增全旧行transport非NULL计数0；升级前后排除此新字段的完整JSON一致，原v1及旧意图数据保全。新v2合法Graph/SMTP可插入、残缺/错误transport/provider/digest拒绝，目标/业务身份改写拒绝、status/attempt正常更新。独立最终只读复审无新增阻断。
+
+本步仅结构前置，producer/worker和Incident outbox尚未接v2；CHECK为保留历史允许全NULL，新意图缺目标仍须后续原事务拒绝，原邮件重绑RED未关闭。CandidateSHA与候选停止状态不变，无WSL/共享数据库操作、企业外发、push/main合并，S5/S6/T3/T4/G3未完成。
+
+最终验证：s5-email-target-ent-generate.log Ent生成exit0；s5-email-target-migration-unit.log migration全包race PASS；s5-email-target-migration-final-pg.log最终私有PG定向045用例PASS；s5-email-target-migration-full-private.log既定私有PG16/Redis/MinIO完整suite race PASS，均无FAIL/SKIP/DATA RACE；s5-email-target-migration-build.log全后端build exit0。原044文件diff为空，git diff --check通过，本轮Go进程已退出。
