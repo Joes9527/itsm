@@ -203,6 +203,8 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
+路由检查点 `ea8c2494a`：唯一Watermill构造器必需显式ExecutionConfig并冻结复制refs；candidate Publish/Subscribe统一可信配置namespace，拒绝非法topic/非规范或清单外tenant、无稳定事件和重复scope，不从payload自报scope取路由。原传输RED已GREEN：真实Redis双租户各有独立订阅/唯一消息，载荷核验及旧Stream/组/逐条PEL保全通过；完整应用构造在私有PG/Redis/MinIO保全通过，无skip。eventbus/bootstrap包回归、全后端build和独立审阅通过，详情见T1最新交接。仅传输路由完成，尚无authority/持久eventID/严格信封/审计原事务幂等或可靠消费组恢复，不构成candidate启动许可，下面复合项保持未勾选。
+
 传输RED检查点 `c94cdfba2`：新真实Redis测试TestCandidateStreamPreservesLegacyTopicOnPublish经过现有Watermill构造/订阅/发布，新事件handler正向控制成功，但旧Stream新增、旧group lag增加、预期candidate namespace为空；历史pending逐条ID/consumer/delivery count保持，不声称旧pending消费。测试私有随机密码/PID核验的Redis7.2.16，无共享操作。独立审阅确认RED有效，补强PEL后复跑仍预期FAIL、无skip；当前该测试未GREEN。完整证据见T1最新交接。
 
 下一实现沿用唯一Watermill bus：bootstrap注入冻结策略及明确订阅合同，所有Publish/Subscribe共用可信namespace解析；服务提供已验证WorkItem主体，subscriber验证namespace/envelope/tenant/member后交给原审计所有者，审计在自身事务重新验证并幂等。已盘点两个业务发布者：SLA durable outbox与建单前AI分诊；后者空TicketID不能伪造主体或从payload自报scope获授权。不得双发旧topic或创建平行candidate bus。新namespace载荷唯一性、真实审计、成员撤销、未知事件和退出验证仍需完成；S5及后续门禁保持未勾选，CandidateSHA及未启动状态不变。
