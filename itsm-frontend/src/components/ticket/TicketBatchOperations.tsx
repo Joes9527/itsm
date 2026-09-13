@@ -1,5 +1,7 @@
 'use client';
 
+import { ticketEditVersion } from '@/lib/api/ticket-edit';
+
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   Button,
@@ -165,6 +167,7 @@ const TicketBatchOperations: React.FC<TicketBatchOperationsProps> = ({
               case 'update_status':
                 const statusParams = values as { status: string };
                 await TicketAPI.updateTicket(ticket.id, {
+                  version: ticketEditVersion(ticket.version),
                   status: statusParams.status as TicketStatus,
                 });
                 break;
@@ -175,6 +178,7 @@ const TicketBatchOperations: React.FC<TicketBatchOperationsProps> = ({
               case 'set_priority':
                 const priorityParams = values as { priority: string };
                 await TicketAPI.updateTicket(ticket.id, {
+                  version: ticketEditVersion(ticket.version),
                   priority: priorityParams.priority as TicketPriority,
                 });
                 break;

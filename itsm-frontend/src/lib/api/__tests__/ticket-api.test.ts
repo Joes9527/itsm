@@ -73,8 +73,13 @@ describe('TicketApi', () => {
   });
 
   describe('updateTicket', () => {
+    it.each([undefined, 0, -1, 1.5, NaN])('rejects missing or invalid edit version %s before HTTP', async version => {
+      await expect(TicketApi.updateTicket(1, { title: 'Updated', version } as any)).rejects.toThrow('工单版本');
+      expect(mockPut).not.toHaveBeenCalled();
+    });
+
     it('should update ticket', async () => {
-      const data = { title: 'Updated' };
+      const data = { title: 'Updated', version: 4 };
       const expected = { id: 1, title: 'Updated' };
       mockPut.mockResolvedValue(expected);
       const result = await TicketApi.updateTicket(1, data as any);

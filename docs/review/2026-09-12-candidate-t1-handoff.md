@@ -691,3 +691,16 @@ Callback contract新增version及generic typed lifecycle result，沿既有流�
 `s3-ticket-edit-repository-regression.log` 仓储/工单服务/controller定向回归PASS；`s3-ticket-edit-repository-build.log` 全后端构建exit0。git diff --check通过，独立review_execution_scope_s1只读复审无阻断。未重跑完整候选PG；已知 `ticket edits preserve historical records and reject orphan tag writes` 仍未修复，当前测试集不全绿。
 
 下一步必须把TicketService原编辑及HTTP/子任务/工具/前端统一接入trusted Meta/receipt，并在原事务内完成当前授权、成员/版本、标签、审计、通知/SLA及飞书更新意图；本次仅完成仓储前置，不能以仓储测试替代上述业务验收。S3/S4/S5/S6/B3/T3/T4/G2/G3仍未完成，固定CandidateSHA不变，候选未启动，无WSL/共享环境变更、企业实发、共享迁移、推送或main合并。
+
+
+### B2 S3 工单编辑前端版本准入及调用清单修正（2026-09-13）
+
+在 `81860d2e4` 后准备收紧后端命令时，独立审阅发现旧“前端两处”清单遗漏TicketBatchOperations实际挂载的批量status/priority编辑，原先均不带version。TicketKanban虽然挂载，但handleStatusChange只有声明，没有调用/拖拽绑定；本轮只同步其未绑定回调类型/参数，不能声称拖动可用或验收通过。useTickets将该请求原样透传legacy ticketService；TicketApi、legacy service、v2 service是三个现有transport方法。
+
+新增唯一ticketEditVersion输入检查，三个transport均在网络调用前拒绝缺失/非正/非安全整数version，类型要求version并移除TicketApi的force输入提示；useTickets编辑参数去除any/unknown。详情普通编辑和AI建议、批量状态/优先级提交组件已有Ticket.version，没有新增重读最新版本逻辑。这里尚未冻结“打开编辑框时”的快照，不能描述为完整编辑会话版本保证；stable operationId与网络不确定重放仍待后端Meta/receipt和组件操作状态一起接入。
+
+`s3-ticket-edit-client-version-red.log` 5项缺失/无效版本测试在原API实际resolve且未拒绝，明确RED；green.log修复后PASS。`s3-ticket-edit-client-version-regression.log` 四套Jest共123 PASS：API/两个service非法版本零请求、合法version原样PUT且无GET，hook冲突只调用一次、错误透传且不刷新列表；既有测试位置保留。`s3-ticket-edit-client-version-typecheck.log` 最终theme校验/全前端tsc exit0；初次类型检查发现旧测试缺version及原any掩盖看板status类型，已修复后复跑。Junit输出在私有目录，未改跟踪产物。git diff --check通过；独立review_execution_scope_s1确认无本轮阻断，指出组件快照和真实交互仍未验证。未运行浏览器/构建部署或新PG测试，后端未改。
+
+同时明确后端字段缺口：RequesterID权威是tickets.requester_id，当前编辑不持久化；FormFields权威是field_values，现有FieldValueService只有INSERT能力且忽略未知key，没有可直接调用的编辑方法。后续若支持，必须在现有所有者补原事务更新/未知或歧义字段拒绝/保留快照并审计；若暂不支持须显式拒绝，不能静默忽略或把CreateValuesTx当更新，也不能写第二份custom_field_values JSON。现有共享标签覆盖六类，核心拒绝只覆盖Incident/Problem/Change；service_request_item/catalog_task现有核心编辑语义需明确归属后迁移，不能把当前实现描述成所有专业状态受保护。
+
+本轮是完整编辑命令接入前置，不是后端业务GREEN。历史越界及孤立标签RED仍存在，后端mandatory expectedVersion、可信actor/source、operationId、子任务父范围、原事务通知/SLA/飞书意图和审计回执尚待完成。完整S3/S4/S5/S6/B3/T3/T4/G2/G3未完成，CandidateSHA保持固定原值、候选未启动；无WSL/共享数据库变更、企业调用、共享迁移、推送或main合并。

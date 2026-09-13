@@ -244,10 +244,10 @@ describe('useTicketsQuery hooks', () => {
         wrapper: createWrapper(),
       });
 
-      result.current.mutate({ id: 1, data: { title: 'Updated' } as any });
+      result.current.mutate({ id: 1, data: { title: 'Updated', version: 4 } });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(mockService.updateTicket).toHaveBeenCalledWith(1, { title: 'Updated' });
+      expect(mockService.updateTicket).toHaveBeenCalledWith(1, { title: 'Updated', version: 4 });
     });
 
     it('should handle update error', async () => {

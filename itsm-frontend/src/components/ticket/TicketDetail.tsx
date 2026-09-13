@@ -1,5 +1,7 @@
 'use client';
 
+import { ticketEditVersion } from '@/lib/api/ticket-edit';
+
 /**
  * 工单详情组件
  * 从 tickets/[ticketId]/page.tsx 抽取，与 IncidentDetail/ProblemDetail/ChangeDetail 域组件模式对齐
@@ -332,7 +334,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
       // 添加版本号用于乐观锁
       const updatePayload = {
         ...values,
-        version: ticket?.version,
+        version: ticketEditVersion(ticket?.version),
       };
 
       await TicketApi.updateTicket(ticketId, updatePayload);
@@ -688,7 +690,7 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                 const updated = await TicketApi.updateTicket(ticketId, {
                   category: suggestion.category,
                   priority: toTicketPriority(suggestion.priority),
-                  version: ticket.version,
+                  version: ticketEditVersion(ticket.version),
                 });
                 antMessage.success(
                   `已采纳AI建议：分类 ${suggestion.category}，优先级 ${suggestion.priority}`

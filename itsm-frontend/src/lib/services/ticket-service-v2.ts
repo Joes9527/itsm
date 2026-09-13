@@ -1,3 +1,4 @@
+import { ticketEditVersion } from '../api/ticket-edit';
 /**
  * TicketService - 工单服务
  *
@@ -35,7 +36,7 @@ export interface UpdateTicketParams {
   tags?: string[];
   assigneeId?: number;
   resolution?: string;
-  version?: number; // 乐观锁
+  version: number; // 用户看到的版本，不在执行时重读
 }
 
 /** 工单查询参数 */
@@ -150,6 +151,7 @@ export class TicketService extends BaseService<Ticket, CreateTicketParams, Updat
    * 更新工单
    */
   async updateTicket(id: number, data: UpdateTicketParams): Promise<Ticket> {
+    ticketEditVersion(data.version);
     return this.update(id, data);
   }
 

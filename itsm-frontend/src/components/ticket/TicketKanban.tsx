@@ -1,5 +1,7 @@
 'use client';
 
+import { ticketEditVersion } from '@/lib/api/ticket-edit';
+
 import React, { useState, useCallback, useMemo } from 'react';
 import {
   Card,
@@ -37,6 +39,7 @@ import 'dayjs/locale/zh-cn';
 
 import { useRouter } from 'next/navigation';
 import type { Ticket } from '@/lib/api/types';
+import type { TicketStatus } from '@/lib/services/ticket-service';
 import { useTickets } from '@/lib/hooks/useTickets';
 import { useDebounce } from '@/lib/component-utils';
 
@@ -199,9 +202,9 @@ const TicketKanban: React.FC<TicketKanbanProps> = ({ onTicketSelect }) => {
 
   // 拖拽状态更新
   const handleStatusChange = useCallback(
-    async (ticket: Ticket, newStatus: string) => {
+    async (ticket: Ticket, newStatus: TicketStatus) => {
       try {
-        await updateTicket(ticket.id, { status: newStatus });
+        await updateTicket(ticket.id, { status: newStatus, version: ticketEditVersion(ticket.version) });
         message.success('状态更新成功');
       } catch (error) {
         message.error('状态更新失败');
