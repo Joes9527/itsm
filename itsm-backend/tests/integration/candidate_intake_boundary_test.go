@@ -2728,7 +2728,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			if target.stale {
 				version--
 			}
-			updated, editErr := svc.UpdateTicket(ctx, target.id, &dto.UpdateTicketRequest{Title: "scoped edit " + target.name, Tags: []string{"edit-" + target.name}, Version: version, UserID: actor.ID}, tenant.ID)
+			updated, editErr := svc.UpdateTicket(ctx, editCommandForTest(target.id, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Title: "scoped edit " + target.name, Tags: []string{"edit-" + target.name}}, Meta: workitemmutation.Meta{ExpectedVersion: version, ActorID: actor.ID}}, tenant.ID))
 			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, target.id).Scan(&afterJSON))
 			if target.denied || target.stale {
 				if target.denied {
@@ -2740,7 +2740,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				assert.Equal(t, tagsBefore, owner.TicketTag.Query().CountX(ctx), "rejected edit must not create tags: %s", target.name)
 			} else {
 				require.NoError(t, editErr)
-				require.Equal(t, "scoped edit member", updated.Title)
+				require.Equal(t, "scoped edit member", owner.Ticket.GetX(ctx, updated.WorkItemID).Title)
 				require.Equal(t, before.Version+1, updated.Version)
 				require.Equal(t, tagsBefore+1, owner.TicketTag.Query().CountX(ctx))
 			}
@@ -2776,8 +2776,8 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				} else {
 					runtime.Ticket.Use(hook)
 				}
-				req := &dto.UpdateTicketRequest{Title: "atomic edit " + fault, Tags: []string{"edit-fault-" + fault}, Version: before.Version, UserID: actor.ID}
-				_, err = svc.UpdateTicket(ctx, before.ID, req, tenant.ID)
+				req := &dto.TicketEditCommand{Fields: dto.TicketEditFields{Title: "atomic edit " + fault, Tags: []string{"edit-fault-" + fault}}, Meta: workitemmutation.Meta{ExpectedVersion: before.Version, ActorID: actor.ID}}
+				_, err = svc.UpdateTicket(ctx, editCommandForTest(before.ID, req, tenant.ID))
 				active = false
 				require.ErrorIs(t, err, injected)
 				require.Equal(t, 1, writes)
@@ -2785,7 +2785,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				require.JSONEq(t, beforeJSON, afterJSON)
 				require.Equal(t, beforeTags, owner.TicketTag.Query().CountX(ctx))
 				require.Equal(t, beforeRelations, owner.Ticket.GetX(ctx, before.ID).QueryTags().IDsX(ctx))
-				updated, err := svc.UpdateTicket(ctx, before.ID, req, tenant.ID)
+				updated, err := svc.UpdateTicket(ctx, editCommandForTest(before.ID, req, tenant.ID))
 				require.NoError(t, err)
 				require.Equal(t, before.Version+1, updated.Version)
 				require.Equal(t, beforeTags+1, owner.TicketTag.Query().CountX(ctx))
@@ -2842,8 +2842,8 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 				case "second_sla":
 					runtime.SLAViolation.Use(hook)
 				}
-				req := &dto.UpdateTicketRequest{Status: "resolved", Resolution: "verified resolution", Tags: []string{"status-" + fault}, Version: before.Version, UserID: actor.ID}
-				_, editErr := svc.UpdateTicket(ctx, before.ID, req, tenant.ID)
+				req := &dto.TicketEditCommand{Fields: dto.TicketEditFields{Status: "resolved", Resolution: "verified resolution", Tags: []string{"status-" + fault}}, Meta: workitemmutation.Meta{ExpectedVersion: before.Version, ActorID: actor.ID}}
+				_, editErr := svc.UpdateTicket(ctx, editCommandForTest(before.ID, req, tenant.ID))
 				active = false
 				assert.ErrorIs(t, editErr, injected)
 				if fault == "second_sla" {
@@ -2862,7 +2862,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 					assert.JSONEq(t, beforeSLA[j], after)
 				}
 				if errors.Is(editErr, injected) {
-					updated, err := svc.UpdateTicket(ctx, before.ID, req, tenant.ID)
+					updated, err := svc.UpdateTicket(ctx, editCommandForTest(before.ID, req, tenant.ID))
 					require.NoError(t, err)
 					require.Equal(t, before.Version+1, updated.Version)
 					require.Equal(t, "resolved", string(updated.Status))
@@ -2884,7 +2884,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			fresh, err := app.Create(ctx, identity, command("edit-status-channel-"+channel, "generic"))
 			require.NoError(t, err)
 			before := owner.Ticket.GetX(ctx, fresh.WorkItemID)
-			_, err = svc.UpdateTicket(ctx, before.ID, &dto.UpdateTicketRequest{Status: "in_progress", AssigneeID: actor.ID, Version: before.Version, UserID: actor.ID}, tenant.ID)
+			_, err = svc.UpdateTicket(ctx, editCommandForTest(before.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Status: "in_progress", AssigneeID: actor.ID}, Meta: workitemmutation.Meta{ExpectedVersion: before.Version, ActorID: actor.ID}}, tenant.ID))
 			require.NoError(t, err)
 			var count int
 			require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM ticket_notifications WHERE ticket_id=$1`, before.ID).Scan(&count))
@@ -2903,7 +2903,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, err)
 		before := owner.Ticket.GetX(ctx, fresh.WorkItemID)
 		withoutNotifier := service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy})
-		_, err = withoutNotifier.UpdateTicket(ctx, before.ID, &dto.UpdateTicketRequest{Status: "in_progress", Version: before.Version, UserID: actor.ID}, tenant.ID)
+		_, err = withoutNotifier.UpdateTicket(ctx, editCommandForTest(before.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Status: "in_progress"}, Meta: workitemmutation.Meta{ExpectedVersion: before.Version, ActorID: actor.ID}}, tenant.ID))
 		require.ErrorContains(t, err, "notification service required")
 		after := owner.Ticket.GetX(ctx, before.ID)
 		require.Equal(t, before.Status, after.Status)
@@ -2922,7 +2922,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		fresh, err := app.Create(ctx, identity, command("edit-actor-positive", "generic"))
 		require.NoError(t, err)
 		before := owner.Ticket.GetX(ctx, fresh.WorkItemID)
-		_, err = svc.UpdateTicket(ctx, before.ID, &dto.UpdateTicketRequest{Title: "authorized editor", Version: before.Version, UserID: editor.ID}, tenant.ID)
+		_, err = svc.UpdateTicket(ctx, editCommandForTest(before.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Title: "authorized editor"}, Meta: workitemmutation.Meta{ExpectedVersion: before.Version, ActorID: editor.ID}}, tenant.ID))
 		require.NoError(t, err)
 		require.True(t, authorization.HasResourcePermission(owner, code, "ticket", "update", tenant.ID))
 		defer authorization.InvalidateRolePermissionCache(code, tenant.ID)
@@ -2943,7 +2943,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			var original, after string
 			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, current.ID).Scan(&original))
 			tags := owner.TicketTag.Query().CountX(ctx)
-			_, editErr := svc.UpdateTicket(ctx, current.ID, &dto.UpdateTicketRequest{Title: "must reject " + state, Tags: []string{"edit-actor-" + state}, Version: current.Version, UserID: actorID}, tenant.ID)
+			_, editErr := svc.UpdateTicket(ctx, editCommandForTest(current.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Title: "must reject " + state, Tags: []string{"edit-actor-" + state}}, Meta: workitemmutation.Meta{ExpectedVersion: current.Version, ActorID: actorID}}, tenant.ID))
 			assert.Error(t, editErr, state)
 			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, current.ID).Scan(&after))
 			assert.JSONEq(t, original, after, state)
@@ -2961,13 +2961,13 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		incident, err := app.Create(ctx, identity, command("edit-professional-permission", "incident"))
 		require.NoError(t, err)
 		item := owner.Ticket.GetX(ctx, incident.WorkItemID)
-		req := &dto.UpdateTicketRequest{Tags: []string{"shared-edit-permission"}, Version: item.Version, UserID: editor.ID}
-		_, err = svc.UpdateTicket(ctx, item.ID, req, tenant.ID)
+		req := &dto.TicketEditCommand{Fields: dto.TicketEditFields{Tags: []string{"shared-edit-permission"}}, Meta: workitemmutation.Meta{ExpectedVersion: item.Version, ActorID: editor.ID}}
+		_, err = svc.UpdateTicket(ctx, editCommandForTest(item.ID, req, tenant.ID))
 		require.Error(t, err, "ticket:update alone cannot edit Incident shared metadata")
 		require.Equal(t, item.Version, owner.Ticket.GetX(ctx, item.ID).Version)
 		professional := owner.Permission.Create().SetTenantID(tenant.ID).SetCode(code + "-incident").SetName("Incident write").SetResource("incident").SetAction("write").SaveX(ctx)
 		owner.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(editorRole.ID).SetPermissionID(professional.ID).ExecX(ctx)
-		_, err = svc.UpdateTicket(ctx, item.ID, req, tenant.ID)
+		_, err = svc.UpdateTicket(ctx, editCommandForTest(item.ID, req, tenant.ID))
 		require.NoError(t, err)
 		require.Equal(t, item.Version+1, owner.Ticket.GetX(ctx, item.ID).Version)
 
@@ -2994,7 +2994,7 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, before.ID).Scan(&original))
 			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, target.parent).Scan(&parentBefore))
 			tags := owner.TicketTag.Query().CountX(ctx)
-			_, editErr := svc.UpdateTicket(ctx, before.ID, &dto.UpdateTicketRequest{Title: "parent scoped edit", Tags: []string{"edit-parent-" + target.name}, Version: before.Version, UserID: actor.ID}, tenant.ID)
+			_, editErr := svc.UpdateTicket(ctx, editCommandForTest(before.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Title: "parent scoped edit", Tags: []string{"edit-parent-" + target.name}}, Meta: workitemmutation.Meta{ExpectedVersion: before.Version, ActorID: actor.ID}}, tenant.ID))
 			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, before.ID).Scan(&after))
 			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, target.parent).Scan(&parentAfter))
 			require.JSONEq(t, parentBefore, parentAfter)
@@ -3019,30 +3019,41 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		// of this RED; a later typed command must preserve this same client intent.
 		var request dto.UpdateTicketRequest
 		require.NoError(t, json.Unmarshal([]byte(fmt.Sprintf(`{"title":"first receipt edit","tags":["edit-receipt-tag"],"version":%d,"operationId":"edit-receipt-original"}`, before.Version)), &request))
-		request.UserID = actor.ID
-		first, err := svc.UpdateTicket(ctx, before.ID, &request, tenant.ID)
+
+		first, err := svc.UpdateTicket(ctx, dto.TicketEditCommand{WorkItemID: before.ID, Fields: request.TicketEditFields, Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: request.Version, OperationID: request.OperationID, Source: "http"}})
 		require.NoError(t, err)
 		require.Equal(t, before.Version+1, first.Version)
+		require.False(t, first.Replayed)
+		require.Equal(t, before.ID, first.WorkItemID)
 		var receipts int
 		require.NoError(t, ownerDB.QueryRow(`SELECT count(*) FROM audit_logs WHERE tenant_id=$1 AND user_id=$2 AND operation_id=$3`, tenant.ID, actor.ID, "edit-receipt-original").Scan(&receipts))
 		assert.Equal(t, 1, receipts, "first edit must persist its immutable operation receipt")
-		for _, phase := range []string{"immediate", "after later edit"} {
+		for _, phase := range []string{"immediate", "after later edit", "closed scope"} {
 			if phase == "after later edit" {
 				var later dto.UpdateTicketRequest
 				require.NoError(t, json.Unmarshal([]byte(fmt.Sprintf(`{"title":"later independent edit","version":%d,"operationId":"edit-receipt-later"}`, first.Version)), &later))
-				later.UserID = actor.ID
-				_, err := svc.UpdateTicket(ctx, before.ID, &later, tenant.ID)
+
+				_, err := svc.UpdateTicket(ctx, dto.TicketEditCommand{WorkItemID: before.ID, Fields: later.TicketEditFields, Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: later.Version, OperationID: later.OperationID, Source: "http"}})
 				require.NoError(t, err)
+			}
+			if phase == "closed scope" {
+				_, err := ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='closed' WHERE id=$1", scopeID)
+				require.NoError(t, err)
+				defer func() {
+					_, err := ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+					require.NoError(t, err)
+				}()
 			}
 			var original, after string
 			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, before.ID).Scan(&original))
 			tags := owner.TicketTag.Query().CountX(ctx)
 			links := owner.Ticket.GetX(ctx, before.ID).QueryTags().IDsX(ctx)
 			audits := owner.AuditLog.Query().CountX(ctx)
-			replayed, retryErr := svc.UpdateTicket(ctx, before.ID, &request, tenant.ID)
+			replayed, retryErr := svc.UpdateTicket(ctx, dto.TicketEditCommand{WorkItemID: before.ID, Fields: request.TicketEditFields, Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: request.Version, OperationID: request.OperationID, Source: "http"}})
 			assert.NoError(t, retryErr, phase+": same operation and original expectedVersion must replay")
 			if retryErr == nil {
-				require.NotNil(t, replayed)
+				assert.Equal(t, before.ID, replayed.WorkItemID)
+				assert.True(t, replayed.Replayed)
 				assert.Equal(t, first.Version, replayed.Version, phase+": replay returns original result version")
 				assert.Equal(t, first.Status, replayed.Status)
 			}
@@ -3051,19 +3062,24 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			assert.Equal(t, tags, owner.TicketTag.Query().CountX(ctx), phase)
 			assert.ElementsMatch(t, links, owner.Ticket.GetX(ctx, before.ID).QueryTags().IDsX(ctx), phase)
 			assert.Equal(t, audits, owner.AuditLog.Query().CountX(ctx), phase)
+			if phase == "closed scope" {
+				_, err := ownerDB.ExecContext(ctx, "UPDATE execution_scopes SET status='active' WHERE id=$1", scopeID)
+				require.NoError(t, err)
+			}
+
 		}
 		// A caller cannot recycle a successful operationId with a new payload and
 		// current version to turn a retry into a different write.
 		current := owner.Ticket.GetX(ctx, before.ID)
 		var changed dto.UpdateTicketRequest
 		require.NoError(t, json.Unmarshal([]byte(fmt.Sprintf(`{"title":"operation identity collision","version":%d,"tags":["receipt-collision-tag"],"operationId":"edit-receipt-original"}`, current.Version)), &changed))
-		changed.UserID = actor.ID
+
 		var original, after string
 		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, before.ID).Scan(&original))
 		tags := owner.TicketTag.Query().CountX(ctx)
 		links := owner.Ticket.GetX(ctx, before.ID).QueryTags().IDsX(ctx)
 		audits := owner.AuditLog.Query().CountX(ctx)
-		_, conflictErr := svc.UpdateTicket(ctx, before.ID, &changed, tenant.ID)
+		_, conflictErr := svc.UpdateTicket(ctx, dto.TicketEditCommand{WorkItemID: before.ID, Fields: changed.TicketEditFields, Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: changed.Version, OperationID: changed.OperationID, Source: "http"}})
 		var conflict *workitemmutation.OperationConflictError
 		assert.ErrorAs(t, conflictErr, &conflict)
 		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, before.ID).Scan(&after))
@@ -3286,6 +3302,85 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 			require.Equal(t, 1, owner.OutboxEvent.Query().Where(outboxevent.EventTypeEQ(handler.EventType()), outboxevent.ExecutionWorkItemIDEQ(target.WorkItemID)).CountX(ctx))
 		}
 	})
+	t.Run("ticket edit receipt and Feishu intent commit together", func(t *testing.T) {
+		for _, fault := range []string{"audit", "outbox"} {
+			t.Run(fault, func(t *testing.T) {
+				receiver := &candidateFeishuUpdater{destination: "edit-local-" + fault}
+				registry := connector.NewRegistry()
+				registry.Register(func() connector.Connector { return receiver })
+				manager := connector.NewManager(registry, zap.NewNop().Sugar())
+				require.NoError(t, manager.Provision(ctx, connector.Config{TenantID: tenant.ID, Name: "feishu", Provider: "local-test", Enabled: true}))
+				created, err := app.Create(ctx, identity, command("edit-atomic-"+fault, "generic"))
+				require.NoError(t, err)
+				item := owner.Ticket.GetX(ctx, created.WorkItemID)
+				mapping := owner.FeishuTicketSync.Create().SetTenantID(tenant.ID).SetTicketID(item.ID).SetFeishuTaskID("edit-task-" + fault).SetFeishuTaskGUID("edit-task-" + fault).SetSyncStatus("synced").SaveX(ctx)
+				svc := service.NewTicketService(&service.TicketServiceConfig{Client: runtime, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Logger: zap.NewNop().Sugar(), Execution: policy, ConnectorManager: manager})
+				cmd := dto.TicketEditCommand{WorkItemID: item.ID, Fields: dto.TicketEditFields{Title: "Atomic edit " + fault, Tags: []string{"atomic-edit-" + fault}}, Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: item.Version, OperationID: "edit-atomic-" + fault, Source: "http"}}
+				var before, after string
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, item.ID).Scan(&before))
+				tags, audits, events := owner.TicketTag.Query().CountX(ctx), owner.AuditLog.Query().CountX(ctx), owner.OutboxEvent.Query().CountX(ctx)
+				active, writes := true, 0
+				defer func() { active = false }()
+				injected := errors.New("edit " + fault + " write failure")
+				hook := func(next ent.Mutator) ent.Mutator {
+					return ent.MutateFunc(func(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+						v, e := next.Mutate(ctx, m)
+						if active && e == nil {
+							writes++
+							return nil, injected
+						}
+						return v, e
+					})
+				}
+				if fault == "audit" {
+					runtime.AuditLog.Use(hook)
+				} else {
+					runtime.OutboxEvent.Use(hook)
+				}
+				_, err = svc.UpdateTicket(ctx, cmd)
+				active = false
+				require.ErrorIs(t, err, injected)
+				require.Equal(t, 1, writes)
+				require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(t)::text FROM tickets t WHERE id=$1`, item.ID).Scan(&after))
+				require.JSONEq(t, before, after)
+				require.Equal(t, tags, owner.TicketTag.Query().CountX(ctx))
+				require.Empty(t, owner.Ticket.GetX(ctx, item.ID).QueryTags().IDsX(ctx))
+				require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx))
+				require.Equal(t, events, owner.OutboxEvent.Query().CountX(ctx))
+				require.Empty(t, receiver.guids)
+				result, err := svc.UpdateTicket(ctx, cmd)
+				require.NoError(t, err)
+				require.Equal(t, item.Version+1, result.Version)
+				require.Equal(t, audits+1, owner.AuditLog.Query().CountX(ctx))
+				require.Equal(t, events+1, owner.OutboxEvent.Query().CountX(ctx))
+				require.Empty(t, receiver.guids)
+				replay, err := svc.UpdateTicket(ctx, cmd)
+				require.NoError(t, err)
+				require.True(t, replay.Replayed)
+				require.Equal(t, result.Version, replay.Version)
+				require.Equal(t, events+1, owner.OutboxEvent.Query().CountX(ctx))
+				event := owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(item.ID), outboxevent.EventTypeEQ(service.FeishuUpdateRequestedEventType)).OnlyX(ctx)
+				handler := service.NewFeishuUpdateDeliveryHandler(runtime, policy, clients.IntakeDirectorySnapshot(), func(id int) (service.FeishuTaskUpdater, bool) { return receiver, id == tenant.ID })
+				reserved := []string{}
+				seen := map[string]bool{}
+				for _, row := range owner.OutboxEvent.Query().AllX(ctx) {
+					if row.EventType != handler.EventType() && !seen[row.EventType] {
+						reserved = append(reserved, row.EventType)
+						seen[row.EventType] = true
+					}
+				}
+				deliveryRegistry, err := service.NewOutboxEventTypeRegistry([]service.OutboxDeliveryHandler{handler}, reserved...)
+				require.NoError(t, err)
+				worker, err := service.NewOutboxDeliveryWorker(service.NewOutboxEventRepository(clients.System, policy), service.OutboxDeliveryWorkerConfig{BatchSize: 100, PollInterval: time.Second, HandlerTimeout: 10 * time.Second, MaxAttempts: 3}, zap.NewNop().Sugar(), deliveryRegistry)
+				require.NoError(t, err)
+				require.NoError(t, worker.DispatchOnce(ctx))
+				require.Equal(t, "published", owner.OutboxEvent.GetX(ctx, event.ID).Status)
+				require.Equal(t, []string{mapping.FeishuTaskGUID}, receiver.guids)
+				require.Equal(t, item.TicketNumber+" "+cmd.Fields.Title, receiver.tasks[0].Name)
+			})
+		}
+	})
+
 	t.Run("manual escalation preserves historical WorkItems", func(t *testing.T) {
 		svc := service.NewTicketService(&service.TicketServiceConfig{Execution: policy, Repository: ticketrepo.NewEntRepository(runtime, zap.NewNop().Sugar()), Client: runtime, Logger: zap.NewNop().Sugar(), NotificationService: service.NewTicketNotificationService(runtime, zap.NewNop().Sugar(), policy)})
 
@@ -3500,4 +3595,16 @@ func (h *candidateEscalationHandler) Execute(ctx context.Context, task *ent.Proc
 	effect, err := h.TicketServiceTaskHandler.Execute(ctx, task, variables)
 	h.lastError = err
 	return effect, err
+}
+
+// editCommandForTest assembles a trusted fixture boundary without replacing the observed version.
+func editCommandForTest(id int, input *dto.TicketEditCommand, tenantID int) dto.TicketEditCommand {
+	cmd := *input
+	cmd.WorkItemID = id
+	cmd.Meta.TenantID = tenantID
+	cmd.Meta.Source = "test"
+	if cmd.Meta.OperationID == "" {
+		cmd.Meta.OperationID = fmt.Sprintf("test-edit:%d:%d", id, cmd.Meta.ExpectedVersion)
+	}
+	return cmd
 }

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	entticket "itsm-backend/ent/ticket"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"strconv"
 	"strings"
 	"time"
@@ -405,93 +406,111 @@ func (s *TicketService) GetTicketByNumber(ctx context.Context, ticketNumber stri
 }
 
 // UpdateTicket 更新工单
-func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.UpdateTicketRequest, tenantID int) (*ticket.Ticket, error) {
+func (s *TicketService) UpdateTicket(ctx context.Context, cmd dto.TicketEditCommand) (workitemmutation.Result, error) {
+	var empty workitemmutation.Result
+	m := cmd.Meta
+	id, tenantID := cmd.WorkItemID, m.TenantID
+	req := &cmd.Fields
 	if s == nil || s.client == nil || s.repo == nil || s.execution == nil {
-		return nil, common.NewForbiddenError("ticket execution policy required")
+		return empty, common.NewForbiddenError("ticket execution policy required")
 	}
-	if req == nil || id <= 0 || tenantID <= 0 {
-		return nil, common.NewValidationError("ticket update target and request required", nil)
+	if id <= 0 || tenantID <= 0 || m.ActorID <= 0 || m.ExpectedVersion <= 0 || strings.TrimSpace(m.Source) == "" || strings.TrimSpace(m.OperationID) == "" || len(m.OperationID) > 200 {
+		return empty, common.NewValidationError("ticket edit target, actor, tenant, version, source and operationId required", nil)
 	}
 	if bound, ok := tenantctx.TenantID(ctx); ok && bound != tenantID {
-		return nil, common.NewForbiddenError("tenant context mismatch")
+		return empty, common.NewForbiddenError("tenant context mismatch")
 	}
 	ctx = tenantctx.WithTenantID(ctx, tenantID)
 	tx, err := s.client.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead})
 	if err != nil {
-		return nil, err
+		return empty, err
 	}
 	defer tx.Rollback()
-	if err = s.execution.BindEnt(ctx, tx, tenantID); err != nil {
-		return nil, err
-	}
-	if err = s.execution.RequireEntMembers(ctx, tx, tenantID, id); err != nil {
-		return nil, err
-	}
 	client := tx.Client()
 	s.logger.Infow("Updating ticket", "ticket_id", id, "tenant_id", tenantID)
-	if req.Status == "approved" || req.Status == "rejected" {
-		return nil, fmt.Errorf("审批状态只能由 BPMN 任务命令推进")
-	}
 
 	// 获取当前工单
 	current, err := ticket.NewEntRepository(client, s.logger).GetByID(ctx, id, tenantID)
 	if err != nil {
-		return nil, err
+		return empty, err
 	}
 
-	if req.Title != "" || req.Description != "" || req.Priority != "" || req.Status != "" || req.Type != "" || req.Category != "" || req.CategoryID != nil || req.AssigneeID != 0 || req.RequesterID != 0 || req.Resolution != "" || req.FormFields != nil {
-		if err := rejectProfessionalTicketMutation(current.RecordClass); err != nil {
-			return nil, err
-		}
-	}
-
-	actor, err := authorization.ResolveLifecycleActor(ctx, tx, s.directory, req.UserID, tenantID)
+	actor, err := authorization.ResolveLifecycleActor(ctx, tx, s.directory, m.ActorID, tenantID)
 	if err != nil {
-		return nil, err
+		return empty, err
 	}
 	identity := creation.Identity{TenantID: tenantID, ActorID: actor.ID, Role: authorization.EffectiveSessionRole(actor)}
 	if err = authorization.RequireCurrentPermission(ctx, tx, identity, "ticket", "update"); err != nil {
-		return nil, err
+		return empty, err
 	}
 	policy, err := authorization.ResolveWorkItemPolicy(current.RecordClass)
 	if err != nil {
-		return nil, common.NewForbiddenError("unsupported WorkItem record class")
+		return empty, common.NewForbiddenError("unsupported WorkItem record class")
 	}
 	if policy.Resource != "ticket" || policy.ResolveAction("update") != "update" {
 		if err = authorization.RequireCurrentPermission(ctx, tx, identity, policy.Resource, policy.ResolveAction("update")); err != nil {
-			return nil, err
+			return empty, err
 		}
+	}
+	digest, err := workitemmutation.Digest(struct {
+		Action                                        string
+		WorkItemID, ExpectedParentID, ExpectedVersion int
+		Fields                                        dto.TicketEditFields
+	}{"work_item.edit", id, cmd.ExpectedParentID, m.ExpectedVersion, cmd.Fields})
+	if err != nil {
+		return empty, err
+	}
+	if result, replayed, err := workitemmutation.Replay(ctx, client, m, id, digest); err != nil || replayed {
+		return result, err
+	}
+	if err = s.execution.BindEnt(ctx, tx, tenantID); err != nil {
+		return empty, err
+	}
+	if err = s.execution.RequireEntMembers(ctx, tx, tenantID, id); err != nil {
+		return empty, err
+	}
+	if req.Status == "approved" || req.Status == "rejected" {
+		return empty, fmt.Errorf("审批状态只能由 BPMN 任务命令推进")
+	}
+	if req.Title != "" || req.Description != "" || req.Priority != "" || req.Status != "" || req.Type != "" || req.Category != "" || req.CategoryID != nil || req.AssigneeID != 0 || req.RequesterID != 0 || req.Resolution != "" || req.FormFields != nil {
+		if err := rejectProfessionalTicketMutation(current.RecordClass); err != nil {
+			return empty, err
+		}
+	}
+
+	if req.RequesterID != 0 || req.FormFields != nil {
+		return empty, common.NewValidationError("requester and form field edits require their owning command", nil)
 	}
 	// Both the generic edit route and the subtask route must respect the actual
 	// persisted parent. A route hint cannot substitute a different admitted parent.
-	if req.ExpectedParentID < 0 || (req.ExpectedParentID > 0 && (current.ParentTicketID == nil || *current.ParentTicketID != req.ExpectedParentID)) {
-		return nil, common.NewValidationError("子任务不属于指定的父工单", nil)
+	if cmd.ExpectedParentID < 0 || (cmd.ExpectedParentID > 0 && (current.ParentTicketID == nil || *current.ParentTicketID != cmd.ExpectedParentID)) {
+		return empty, common.NewValidationError("子任务不属于指定的父工单", nil)
 	}
 	if current.ParentTicketID != nil {
 		parentID := *current.ParentTicketID
 		if parentID <= 0 || parentID == id {
-			return nil, common.NewValidationError("工单父级关系无效", nil)
+			return empty, common.NewValidationError("工单父级关系无效", nil)
 		}
 		if err = s.execution.RequireEntMembers(ctx, tx, tenantID, parentID); err != nil {
-			return nil, err
+			return empty, err
 		}
 		exists, err := client.Ticket.Query().Where(entticket.IDEQ(parentID), entticket.TenantIDEQ(tenantID), entticket.DeletedAtIsNil()).Exist(ctx)
 		if err != nil {
-			return nil, err
+			return empty, err
 		}
 		if !exists {
-			return nil, common.NewNotFoundError("parent work item")
+			return empty, common.NewNotFoundError("parent work item")
 		}
 	}
 
 	if isFinalStatus(current.Status) {
-		return nil, common.NewForbiddenError("工单已结束，无法编辑")
+		return empty, common.NewForbiddenError("工单已结束，无法编辑")
 	}
 
 	// 状态转换验证
 	if req.Status != "" && ticket.Status(req.Status) != current.Status {
 		if !current.CanTransitionTo(ticket.Status(req.Status)) {
-			return nil, &ticket.StateError{
+			return empty, &ticket.StateError{
 				CurrentStatus: current.Status,
 				Message:       "invalid state transition",
 			}
@@ -499,18 +518,15 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 	}
 	if req.Status == string(ticket.StatusResolved) && strings.TrimSpace(req.Resolution) == "" &&
 		(current.Resolution == nil || strings.TrimSpace(*current.Resolution) == "") {
-		return nil, fmt.Errorf("解决工单时必须填写解决方案")
+		return empty, fmt.Errorf("解决工单时必须填写解决方案")
 	}
 
 	// 转换更新参数
 	params := &ticket.UpdateParams{
-		Version: current.Version,
-	}
-	if req.Version > 0 {
-		params.Version = req.Version
+		Version: m.ExpectedVersion,
 	}
 	if params.Version != current.Version {
-		return nil, common.NewVersionConflictError("ticket", id, params.Version, current.Version)
+		return empty, common.NewVersionConflictError("ticket", id, params.Version, current.Version)
 	}
 
 	if req.Title != "" {
@@ -526,10 +542,10 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 	if req.Type != "" {
 		class, subtype := common.WorkItemIdentityFilter(req.Type)
 		if class != "generic" || current.RecordClass != "generic" {
-			return nil, fmt.Errorf("legacy type cannot change professional class")
+			return empty, fmt.Errorf("legacy type cannot change professional class")
 		}
 		if err := validateGenericSubtype(ctx, client, tenantID, subtype); err != nil {
-			return nil, err
+			return empty, err
 		}
 		params.GenericSubtype = &subtype
 	}
@@ -539,17 +555,17 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 	}
 	if req.AssigneeID != 0 {
 		if err := rejectProfessionalTicketMutation(current.RecordClass); err != nil {
-			return nil, err
+			return empty, err
 		}
 		if s.client != nil {
 			assigneeExists, err := client.User.Query().
 				Where(user.IDEQ(req.AssigneeID), user.TenantIDEQ(tenantID), user.ActiveEQ(true)).
 				Exist(ctx)
 			if err != nil {
-				return nil, fmt.Errorf("验证处理人失败: %w", err)
+				return empty, fmt.Errorf("验证处理人失败: %w", err)
 			}
 			if !assigneeExists {
-				return nil, fmt.Errorf("处理人不存在或不可用")
+				return empty, fmt.Errorf("处理人不存在或不可用")
 			}
 		}
 		params.AssigneeID = &req.AssigneeID
@@ -557,13 +573,13 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 	categoryID := req.CategoryID
 	if categoryID == nil && strings.TrimSpace(req.Category) != "" {
 		if s.client == nil {
-			return nil, fmt.Errorf("无法解析工单分类")
+			return empty, fmt.Errorf("无法解析工单分类")
 		}
 		category, err := client.TicketCategory.Query().
 			Where(ticketcategory.NameEQ(strings.TrimSpace(req.Category)), ticketcategory.TenantIDEQ(tenantID), ticketcategory.IsActiveEQ(true)).
 			Only(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("工单分类不存在或不可用")
+			return empty, fmt.Errorf("工单分类不存在或不可用")
 		}
 		categoryID = &category.ID
 	}
@@ -573,10 +589,10 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 				Where(ticketcategory.IDEQ(*categoryID), ticketcategory.TenantIDEQ(tenantID), ticketcategory.IsActiveEQ(true)).
 				Exist(ctx)
 			if err != nil {
-				return nil, fmt.Errorf("验证工单分类失败: %w", err)
+				return empty, fmt.Errorf("验证工单分类失败: %w", err)
 			}
 			if !exists {
-				return nil, fmt.Errorf("工单分类不存在或不可用")
+				return empty, fmt.Errorf("工单分类不存在或不可用")
 			}
 		}
 		params.CategoryID = categoryID
@@ -585,11 +601,11 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 		params.ReplaceTags = true
 		if len(req.Tags) > 0 {
 			if s.client == nil {
-				return nil, fmt.Errorf("无法解析工单标签")
+				return empty, fmt.Errorf("无法解析工单标签")
 			}
 			tagIDs, err := NewTicketTagService(client).ResolveTagIDsByNames(ctx, req.Tags, tenantID, true)
 			if err != nil {
-				return nil, fmt.Errorf("解析工单标签失败: %w", err)
+				return empty, fmt.Errorf("解析工单标签失败: %w", err)
 			}
 			params.TagIDs = tagIDs
 		}
@@ -602,14 +618,14 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 	updated, err := s.repo.UpdateTx(ctx, tx, id, params, tenantID)
 	if err != nil {
 		s.logger.Errorw("Failed to update ticket", "error", err)
-		return nil, err
+		return empty, err
 	}
 
 	// Status notifications retain the final requester/assignee and channel
 	// preferences. Transport delivery is owned by the existing notification worker.
 	if req.Status != "" && ticket.Status(req.Status) != current.Status {
 		if s.notificationSvc == nil {
-			return nil, fmt.Errorf("ticket edit notification service required")
+			return empty, fmt.Errorf("ticket edit notification service required")
 		}
 		recipients := []int{updated.RequesterID}
 		if updated.AssigneeID != nil && *updated.AssigneeID > 0 && *updated.AssigneeID != updated.RequesterID {
@@ -620,58 +636,28 @@ func (s *TicketService) UpdateTicket(ctx context.Context, id int, req *dto.Updat
 			Content:     fmt.Sprintf("工单 #%s 状态已从 %s 变更为 %s", updated.TicketNumber, current.Status, req.Status),
 			DeliveryKey: fmt.Sprintf("ticket:edit:%d:version:%d", id, updated.Version),
 		}); err != nil {
-			return nil, err
+			return empty, err
 		}
 	}
 	if req.Status != "" && isFinalStatus(ticket.Status(req.Status)) {
 		if _, err := s.autoCloseSLAViolations(ctx, tx, id, tenantID); err != nil {
-			return nil, err
+			return empty, err
 		}
 	}
-	if err := tx.Commit(); err != nil {
-		return nil, err
+	feishuUpdate, err := s.enqueueFeishuUpdate(ctx, tx, id, m, digest, "work_item.edit")
+	if err != nil {
+		return empty, err
+	}
+	result := workitemmutation.Result{WorkItemID: id, Version: updated.Version, Status: string(updated.Status)}
+	if err = workitemmutation.RecordTx(ctx, tx, m, result, "work_item.edit", digest, map[string]interface{}{"previousVersion": current.Version, "previousStatus": current.Status, "expectedParentId": cmd.ExpectedParentID, "feishuUpdate": feishuUpdate}); err != nil {
+		return empty, err
+	}
+	if err = tx.Commit(); err != nil {
+		return empty, err
 	}
 	s.logger.Infow("Ticket updated", "ticket_id", id)
-
-	// Applied SLA is a frozen contract. Priority/category edits do not reapply policy.
-
-	// 异步同步工单到飞书
-	if s.connectorManager != nil {
-		go func() {
-			ctx2, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-			defer cancel()
-			// 获取Feishu连接器
-			conn, ok := s.connectorManager.Get(tenantID, "feishu")
-			if !ok {
-				// 飞书连接器未配置，忽略
-				return
-			}
-			feishuConn, ok := conn.(*feishuConnector.Feishu)
-			if !ok {
-				return
-			}
-			// 开启事务
-			tx, err := s.client.Tx(ctx2)
-			if err != nil {
-				s.logger.Warnw("Failed to start transaction for feishu sync", "error", err, "ticket_id", updated.ID)
-				return
-			}
-			defer tx.Rollback()
-			// 同步工单到飞书
-			_, err = feishuConn.UpdateExistingTicketTask(ctx2, tx, s.toEntTicket(updated))
-			if err != nil {
-				s.logger.Warnw("Failed to sync ticket to feishu", "error", err, "ticket_id", updated.ID)
-				return
-			}
-			// 提交事务
-			if err := tx.Commit(); err != nil {
-				s.logger.Warnw("Failed to commit transaction for feishu sync", "error", err, "ticket_id", updated.ID)
-				return
-			}
-		}()
-	}
-
-	return updated, nil
+	// Applied SLA remains frozen. External delivery is owned by the outbox worker.
+	return result, nil
 }
 
 // ListTickets 列表查询工单。

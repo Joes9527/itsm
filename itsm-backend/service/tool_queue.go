@@ -15,6 +15,7 @@ import (
 	"itsm-backend/ent/toolinvocation"
 	"itsm-backend/ent/user"
 	creation "itsm-backend/handlers/common/workitemcreation"
+	"itsm-backend/handlers/shared/workitemmutation"
 	"strconv"
 	"sync"
 	"time"
@@ -217,27 +218,12 @@ func (q *ToolQueue) ProcessJob(ctx context.Context, job ToolJob) error {
 			err = creation.NewInternalFailure("ticket owner is unavailable", nil)
 			break
 		}
-		var args map[string]any
-		d := json.NewDecoder(bytes.NewBufferString(inv.Arguments))
-		d.UseNumber()
-		err = d.Decode(&args)
-		if err != nil {
-			break
+		var command dto.TicketEditCommand
+		command, err = toolEditCommand(inv.Arguments, inv.ID, actor.ID, inv.TenantID)
+		if err == nil {
+			result, err = q.tickets.UpdateTicket(ctx, command)
 		}
-		id, idErr := positiveToolInteger(args["ticket_id"])
-		if idErr != nil {
-			err = idErr
-			break
-		}
-		assignee := 0
-		if raw, ok := args["assignee_id"]; ok {
-			assignee, err = positiveToolInteger(raw)
-			if err != nil {
-				break
-			}
-		}
-		status, _ := args["status"].(string)
-		result, err = q.tickets.UpdateTicket(ctx, id, &dto.UpdateTicketRequest{Status: status, AssigneeID: assignee, UserID: actor.ID}, inv.TenantID)
+
 	default:
 		if q.tools == nil {
 			err = fmt.Errorf("tool registry is unavailable")
@@ -340,4 +326,68 @@ func toolCreationCommand(raw string, invocationID, actorID int) (creation.Create
 		return invalid()
 	}
 	return command, requester, nil
+}
+
+// toolEditCommand decodes exactly the persisted, approved edit arguments. It
+// never substitutes a newly read version or a new operation identity on retry.
+func toolEditCommand(raw string, invocationID, actorID, tenantID int) (dto.TicketEditCommand, error) {
+	cmd := dto.TicketEditCommand{Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: actorID, Source: "ai_tool", OperationID: fmt.Sprintf("tool:update_ticket:%d", invocationID)}}
+	invalid := func() (dto.TicketEditCommand, error) {
+		return dto.TicketEditCommand{}, creation.NewInvalidCommand("invalid update_ticket arguments", creation.FieldError{Field: "arguments", Message: "ticket_id, expectedVersion and status or assignee_id are required; unknown or duplicate fields are rejected"}, nil)
+	}
+	d := json.NewDecoder(bytes.NewBufferString(raw))
+	d.UseNumber()
+	token, err := d.Token()
+	if err != nil || token != json.Delim('{') {
+		return invalid()
+	}
+	seen := map[string]bool{}
+	for d.More() {
+		token, err := d.Token()
+		if err != nil {
+			return invalid()
+		}
+		key, ok := token.(string)
+		if !ok || seen[key] {
+			return invalid()
+		}
+		seen[key] = true
+		var value any
+		if err = d.Decode(&value); err != nil {
+			return invalid()
+		}
+		switch key {
+		case "ticket_id", "expectedVersion", "assignee_id":
+			n, err := positiveToolInteger(value)
+			if err != nil {
+				return invalid()
+			}
+			switch key {
+			case "ticket_id":
+				cmd.WorkItemID = n
+			case "expectedVersion":
+				cmd.Meta.ExpectedVersion = n
+			case "assignee_id":
+				cmd.Fields.AssigneeID = n
+			}
+		case "status":
+			status, ok := value.(string)
+			if !ok || status == "" {
+				return invalid()
+			}
+			cmd.Fields.Status = status
+		default:
+			return invalid()
+		}
+	}
+	if token, err = d.Token(); err != nil || token != json.Delim('}') {
+		return invalid()
+	}
+	if _, err = d.Token(); err != io.EOF {
+		return invalid()
+	}
+	if invocationID <= 0 || actorID <= 0 || tenantID <= 0 || cmd.WorkItemID <= 0 || cmd.Meta.ExpectedVersion <= 0 || (!seen["status"] && !seen["assignee_id"]) {
+		return invalid()
+	}
+	return cmd, nil
 }

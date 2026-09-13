@@ -1,3 +1,4 @@
+import { prepareTicketEdit, isTicketEditConflict } from '../ticket-edit';
 import { creationReceipt, creationOptions, creationHttpOptions } from '../creation.test-utils';
 import { TicketApi } from '../ticket-api';
 import { httpClient } from '../http-client';
@@ -79,7 +80,7 @@ describe('TicketApi', () => {
     });
 
     it('should update ticket', async () => {
-      const data = { title: 'Updated', version: 4 };
+      const data = { title: 'Updated', version: 4, operationId: 'edit-test' };
       const expected = { id: 1, title: 'Updated' };
       mockPut.mockResolvedValue(expected);
       const result = await TicketApi.updateTicket(1, data as any);
@@ -482,4 +483,41 @@ describe('TicketApi', () => {
     });
   });
 
+});
+
+describe('ticket edit operation identity', () => {
+  beforeEach(() => jest.clearAllMocks());
+  it('rejects a missing operation identity before sending an edit', async () => {
+    await expect(TicketApi.updateTicket(1, { title: 'changed', version: 2 } as never)).rejects.toThrow();
+    expect(mockPut).not.toHaveBeenCalled();
+  });
+});
+
+describe('confirmed ticket edit intent', () => {
+  it('preserves the original version, operation and deep payload on an uncertain retry', () => {
+    const original = crypto.randomUUID;
+    Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: jest.fn().mockReturnValueOnce('edit-first').mockReturnValueOnce('edit-changed') });
+    try {
+      const fields = { title: 'Original', tags: ['one'] };
+      const first = prepareTicketEdit(undefined, fields, 4);
+      fields.tags.push('not confirmed');
+      const retry = prepareTicketEdit(first, { title: 'Original', tags: ['one'] }, 9);
+      expect(retry).toBe(first);
+      expect(retry.payload).toEqual({ title: 'Original', tags: ['one'], version: 4, operationId: 'edit-first' });
+      const changed = prepareTicketEdit(first, { title: 'Changed', tags: ['one'] }, 9);
+      expect(changed.payload).toEqual({ title: 'Changed', tags: ['one'], version: 9, operationId: 'edit-changed' });
+    } finally {
+      Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: original });
+    }
+  });
+});
+
+
+describe('explicit edit conflict versus unknown result', () => {
+  it('only releases an intent for the structured backend conflict response', () => {
+    expect(isTicketEditConflict(Object.assign(new Error('version conflict'), { status: 409, code: 4090 }))).toBe(true);
+    expect(isTicketEditConflict(new Error('network timeout'))).toBe(false);
+    expect(isTicketEditConflict(Object.assign(new Error('server error'), { status: 500, code: 5000 }))).toBe(false);
+    expect(isTicketEditConflict(Object.assign(new Error('proxy conflict'), { status: 409 }))).toBe(false);
+  });
 });

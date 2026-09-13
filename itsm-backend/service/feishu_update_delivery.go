@@ -40,6 +40,8 @@ type feishuUpdatePayload struct {
 	ActorID       int               `json:"actorId"`
 	OperationID   string            `json:"operationId"`
 	RequestDigest string            `json:"requestDigest"`
+	Action        string            `json:"action"`
+	ResultStatus  string            `json:"resultStatus"`
 	ResultVersion int               `json:"resultVersion"`
 	MappingID     int               `json:"mappingId"`
 	GUID          string            `json:"guid"`
@@ -65,7 +67,7 @@ func feishuUpdateAggregate(p feishuUpdatePayload) string {
 
 // Called after the owning Ticket CAS, while that row lock remains held. This is
 // the insertion-order guarantee required by the shared ordered claim protocol.
-func (s *TicketService) enqueueManualFeishuUpdate(ctx context.Context, tx *ent.Tx, itemID int, m workitemmutation.Meta, requestDigest string) (*feishuUpdateReceipt, error) {
+func (s *TicketService) enqueueFeishuUpdate(ctx context.Context, tx *ent.Tx, itemID int, m workitemmutation.Meta, requestDigest, action string) (*feishuUpdateReceipt, error) {
 	if s.connectorManager == nil {
 		return nil, nil
 	}
@@ -94,7 +96,7 @@ func (s *TicketService) enqueueManualFeishuUpdate(ctx context.Context, tx *ent.T
 	if err != nil {
 		return nil, err
 	}
-	payload := feishuUpdatePayload{TenantID: m.TenantID, WorkItemID: itemID, ActorID: m.ActorID, OperationID: m.OperationID, RequestDigest: requestDigest, ResultVersion: item.Version, MappingID: mapping.ID, GUID: mapping.FeishuTaskGUID, Destination: target.TaskDestinationIdentity(), Task: *task}
+	payload := feishuUpdatePayload{TenantID: m.TenantID, WorkItemID: itemID, ActorID: m.ActorID, OperationID: m.OperationID, RequestDigest: requestDigest, Action: action, ResultStatus: item.Status, ResultVersion: item.Version, MappingID: mapping.ID, GUID: mapping.FeishuTaskGUID, Destination: target.TaskDestinationIdentity(), Task: *task}
 	data, err := json.Marshal(payload)
 	if err != nil {
 		return nil, err
@@ -212,7 +214,7 @@ func (h *FeishuUpdateDeliveryHandler) validateUpdateTx(ctx context.Context, tx *
 	if err != nil {
 		return empty, err
 	}
-	if item.RecordClass != "generic" || item.Version < payload.ResultVersion {
+	if item.Version < payload.ResultVersion {
 		return empty, blockOutboxDelivery("Feishu update WorkItem version or class mismatch")
 	}
 	actor, err := authorization.ResolveLifecycleActor(ctx, tx, h.directory, payload.ActorID, payload.TenantID)
@@ -222,14 +224,37 @@ func (h *FeishuUpdateDeliveryHandler) validateUpdateTx(ctx context.Context, tx *
 	if _, _, err = authorization.AuthorizeWorkItem(ctx, tx.Client(), item.ID, payload.TenantID, authorization.EffectiveSessionRole(actor), "update"); err != nil {
 		return empty, err
 	}
-	if err = authorization.RequireCurrentPermission(ctx, tx, creation.Identity{TenantID: payload.TenantID, ActorID: actor.ID, Role: authorization.EffectiveSessionRole(actor)}, "ticket", "escalate"); err != nil {
-		return empty, err
+	identity := creation.Identity{TenantID: payload.TenantID, ActorID: actor.ID, Role: authorization.EffectiveSessionRole(actor)}
+	switch payload.Action {
+	case "work_item.escalation.manual":
+		if item.RecordClass != "generic" || payload.ResultStatus != "in_progress" {
+			return empty, blockOutboxDelivery("invalid manual escalation update contract")
+		}
+		if err = authorization.RequireCurrentPermission(ctx, tx, identity, "ticket", "escalate"); err != nil {
+			return empty, err
+		}
+	case "work_item.edit":
+		if payload.ResultStatus == "" {
+			return empty, blockOutboxDelivery("missing edit result status")
+		}
+		if err = authorization.RequireCurrentPermission(ctx, tx, identity, "ticket", "update"); err != nil {
+			return empty, err
+		}
+		policy, policyErr := authorization.ResolveWorkItemPolicy(item.RecordClass)
+		if policyErr != nil {
+			return empty, blockOutboxDelivery("unsupported edit WorkItem class")
+		}
+		if err = authorization.RequireCurrentPermission(ctx, tx, identity, policy.Resource, policy.ResolveAction("update")); err != nil {
+			return empty, err
+		}
+	default:
+		return empty, blockOutboxDelivery("unsupported Feishu update command")
 	}
-	receipt, err := tx.AuditLog.Query().Where(auditlog.TenantIDEQ(payload.TenantID), auditlog.UserIDEQ(payload.ActorID), auditlog.OperationIDEQ(payload.OperationID), auditlog.ResourceEQ("work_item"), auditlog.ActionEQ("work_item.escalation.manual"), auditlog.PathEQ(strconv.Itoa(item.ID))).Only(ctx)
+	receipt, err := tx.AuditLog.Query().Where(auditlog.TenantIDEQ(payload.TenantID), auditlog.UserIDEQ(payload.ActorID), auditlog.OperationIDEQ(payload.OperationID), auditlog.ResourceEQ("work_item"), auditlog.ActionEQ(payload.Action), auditlog.PathEQ(strconv.Itoa(item.ID))).Only(ctx)
 	if err != nil {
 		return empty, err
 	}
-	if receipt.RequestDigest == nil || *receipt.RequestDigest != payload.RequestDigest || receipt.ResultVersion == nil || *receipt.ResultVersion != payload.ResultVersion || receipt.ResultStatus == nil || *receipt.ResultStatus != "in_progress" {
+	if receipt.RequestDigest == nil || *receipt.RequestDigest != payload.RequestDigest || receipt.ResultVersion == nil || *receipt.ResultVersion != payload.ResultVersion || receipt.ResultStatus == nil || *receipt.ResultStatus != payload.ResultStatus {
 		return empty, blockOutboxDelivery("Feishu update operation receipt mismatch")
 	}
 	var facts struct {

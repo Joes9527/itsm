@@ -204,7 +204,7 @@ const TicketKanban: React.FC<TicketKanbanProps> = ({ onTicketSelect }) => {
   const handleStatusChange = useCallback(
     async (ticket: Ticket, newStatus: TicketStatus) => {
       try {
-        await updateTicket(ticket.id, { status: newStatus, version: ticketEditVersion(ticket.version) });
+        await updateTicket(ticket.id, { status: newStatus, version: ticketEditVersion(ticket.version), operationId: crypto.randomUUID() });
         message.success('状态更新成功');
       } catch (error) {
         message.error('状态更新失败');

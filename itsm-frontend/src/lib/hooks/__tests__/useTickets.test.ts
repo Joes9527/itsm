@@ -128,7 +128,7 @@ describe('useTickets', () => {
     const { result } = renderHook(() => useTickets());
     await waitFor(() => expect(result.current.loading).toBe(false));
     mockTicketService.listTickets.mockClear();
-    const input = { title: 'Observed edit', version: 4 };
+    const input = { title: 'Observed edit', version: 4, operationId: 'edit-test' };
     await act(async () => {
       await expect(result.current.updateTicket(1, input)).rejects.toBe(conflict);
     });

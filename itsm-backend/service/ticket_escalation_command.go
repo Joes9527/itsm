@@ -105,7 +105,7 @@ func (s *TicketService) EscalateTicket(ctx context.Context, cmd dto.TicketEscala
 	if err = s.notificationSvc.EnqueueNotificationTx(ctx, tx, item.ID, m.TenantID, &dto.SendTicketNotificationRequest{UserIDs: recipients, EventType: "ticket_updated", Content: fmt.Sprintf("【工单升级】#%s (%s)：%s → %s。原因：%s", item.TicketNumber, item.Title, item.Priority, priority, cmd.Reason), DeliveryKey: fmt.Sprintf("escalation:manual:%d:%s", m.ActorID, m.OperationID)}); err != nil {
 		return empty, err
 	}
-	feishuUpdate, err := s.enqueueManualFeishuUpdate(ctx, tx, item.ID, m, digest)
+	feishuUpdate, err := s.enqueueFeishuUpdate(ctx, tx, item.ID, m, digest, "work_item.escalation.manual")
 	if err != nil {
 		return empty, err
 	}

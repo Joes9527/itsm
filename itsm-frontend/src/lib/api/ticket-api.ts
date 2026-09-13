@@ -1,4 +1,4 @@
-import { ticketEditVersion } from './ticket-edit';
+import { ticketEditVersion, ticketEditOperation, type TicketEditResult } from './ticket-edit';
 import { createWorkItem, type CreationRequestOptions, type CreateWorkItemResult } from './work-item-creation';
 import { httpClient } from './http-client';
 import { handleApiRequest } from './base-api-handler';
@@ -43,10 +43,11 @@ export class TicketApi {
   // Update ticket information
   static async updateTicket(
     id: number,
-    data: Partial<Ticket> & { version: number }
-  ): Promise<Ticket> {
+    data: Partial<Ticket> & { version: number; operationId: string }
+  ): Promise<TicketEditResult> {
     ticketEditVersion(data.version);
-    return handleApiRequest(httpClient.put<Ticket>(`/api/v1/tickets/${id}`, data), {
+    ticketEditOperation(data.operationId);
+    return handleApiRequest(httpClient.put<TicketEditResult>(`/api/v1/tickets/${id}`, data), {
       errorMessage: 'Failed to update ticket',
       showSuccess: true,
     });

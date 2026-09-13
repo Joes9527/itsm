@@ -1,4 +1,4 @@
-import { ticketEditVersion } from '../api/ticket-edit';
+import { ticketEditVersion, ticketEditOperation, type TicketEditResult } from '../api/ticket-edit';
 /**
  * TicketService - 工单服务
  *
@@ -28,6 +28,7 @@ export interface CreateTicketParams {
 
 /** 更新工单参数 */
 export interface UpdateTicketParams {
+  operationId: string;
   title?: string;
   description?: string;
   priority?: TicketPriority;
@@ -150,9 +151,10 @@ export class TicketService extends BaseService<Ticket, CreateTicketParams, Updat
   /**
    * 更新工单
    */
-  async updateTicket(id: number, data: UpdateTicketParams): Promise<Ticket> {
+  async updateTicket(id: number, data: UpdateTicketParams): Promise<TicketEditResult> {
     ticketEditVersion(data.version);
-    return this.update(id, data);
+    ticketEditOperation(data.operationId);
+    return this.put<TicketEditResult>(`/${id}`, data);
   }
 
   /**

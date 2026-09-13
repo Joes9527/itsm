@@ -143,13 +143,31 @@ func (t *ToolRegistry) ListTools() []ToolDefinition {
 			},
 		},
 		{
-			Name:         "update_ticket",
-			Description:  "更新工单（需审批）",
-			ReadOnly:     false,
-			Resource:     "ticket",
-			Action:       "write",
-			ArgsSchema:   nil,
-			ResultSchema: nil,
+			Name:        "update_ticket",
+			Description: "更新工单（需审批）",
+			ReadOnly:    false,
+			Resource:    "ticket",
+			Action:      "write",
+			ArgsSchema: map[string]interface{}{
+				"type": "object", "additionalProperties": false,
+				"properties": map[string]interface{}{
+					"ticket_id":       map[string]interface{}{"type": "integer", "minimum": 1},
+					"expectedVersion": map[string]interface{}{"type": "integer", "minimum": 1},
+					"assignee_id":     map[string]interface{}{"type": "integer", "minimum": 1},
+					"status":          map[string]interface{}{"type": "string", "enum": []string{"new", "open", "assigned", "in_progress", "pending", "resolved", "closed", "cancelled"}},
+				},
+				"required": []string{"ticket_id", "expectedVersion"},
+				"anyOf":    []interface{}{map[string]interface{}{"required": []string{"assignee_id"}}, map[string]interface{}{"required": []string{"status"}}},
+			},
+			ResultSchema: map[string]interface{}{
+				"type": "object", "additionalProperties": false,
+				"properties": map[string]interface{}{
+					"workItemId": map[string]interface{}{"type": "integer", "minimum": 1},
+					"version":    map[string]interface{}{"type": "integer", "minimum": 1},
+					"status":     map[string]interface{}{"type": "string"},
+					"replayed":   map[string]interface{}{"type": "boolean"},
+				}, "required": []string{"workItemId", "version", "status", "replayed"},
+			},
 		},
 	}
 }

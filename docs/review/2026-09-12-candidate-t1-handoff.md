@@ -759,3 +759,19 @@ Callback contract新增version及generic typed lifecycle result，沿既有流�
 后续同一 UpdateTicket 接口整体迁移 typed command/可信 Meta/immutable Result，不添加兼容双入口。保留原请求 version/operationId/payload，不以重新读取当前 Ticket 冒充回执。digest 包括 edit action/目标/预期父/version/规范化业务输入（保留 tags nil 与 empty 区别），现行权限在 Replay 前，首次写入才校验 scope/member/父关系/终态/版本/目录并执行原子写入。普通HTTP的 GetTicket+CanEdit预检须移除，避免终态挡住合法重放；两入口返回 Result 并将 OperationConflict 映射409。tool_queue使用已批准版本和invocation派生操作ID，registry补明确schema，done失败复用回执。
 
 三个前端transport及TicketDetail普通/AI、批量操作、useTickets/useTicketsQuery须同时迁移；不能把Result合并成Ticket或写入详情缓存，成功后重新读取，结果不确定时保留同意图payload/version/op。飞书沿用现有update event_type/aggregate及严格receipt来源检查，原提交后直接同步在完整接入时删除。详细顺序已同步设计worktree执行计划。当前RED后续编辑只改标题，因此独立证明原版本回放而非状态漂移；typed Result接入后补 WorkItemID/Replayed、receipt action/digest/version/status、终态及状态漂移、审计/outbox写后回滚、并发、工具done恢复和真实前端契约测试。完整S3及后续门禁未完成，固定CandidateSHA与候选停止状态不变；无WSL/共享数据变更、企业调用、推送或main合并。
+
+### B2 S3 编辑可信命令、不可变回执与飞书意图贯通（2026-09-13）
+
+在 `dd0ebffee` 的真实回执 RED 后迁移唯一 UpdateTicket 原接口为 TicketEditCommand 与 workitemmutation.Result，删除旧参数签名和请求中的 UserID/Force/预期父元数据。HTTP payload只携带业务字段、必需 version/operationId；边界构造可信 Meta及路由父ID。原RR事务读取当前工单及现行actor/领域权限后，按明确edit action、目标、父ID、expectedVersion和业务字段生成摘要并查历史receipt；首次写入才Bind/member、父关系、终态/专业归属、版本和目录校验，再执行标签/工单CAS、通知/SLA、Feishu intent和AuditLog唯一回执，最后commit。不以当前Ticket冒充历史结果，不保留兼容双入口。RequesterID非零/FormFields非nil现在显式拒绝，未实现其编辑所有者；专业核心归属仍按此前边界处理。
+
+普通PUT移除事务外GetTicket+CanEdit，子任务PATCH沿用可信父ID；两者直接返回不可变Result，operation/version冲突映射409。tool_queue只从已批准持久参数解析expectedVersion，operationId固定由invocation ID派生，业务完成后done记账失败可复用原回执。update_ticket registry发布输入/结果schema，唯一toolEditCommand严格拒绝未知/重复字段、错误类型、缺少版本/编辑字段及尾随JSON，不读取新版本替换批准版本。`s3-ticket-edit-tool-red.log`通过真实ProcessJob复现未知/null状态/重复版本/尾随JSON被接受；green.log修复后PASS，包含create工具既有契约回归。此处授权审批来自fixture，未声称真实人工审批全链完成。
+
+原enqueueManualFeishuUpdate改为唯一enqueueFeishuUpdate供手动升级及编辑复用，保持同event_type、稳定目标aggregate和原CAS锁后的入队顺序。payload明确action/resultStatus；consumer分别核验manual的generic/in_progress/escalate权限，或edit的当前ticket:update/领域权限，并匹配对应AuditLog action、摘要、结果版本/状态和payload事实。原编辑commit后直接网络同步已删除。配置飞书时仍要求现有且身份一致的映射；无映射不会静默跳过。旧payload缺action/resultStatus会明确阻断，未宣称旧持久事件升级兼容或已执行任何环境迁移。
+
+前端三个transport必需version/operationId并返回TicketEditResult。TicketDetail普通编辑冻结打开表单时的version/status；普通/AI及已挂载批量状态/优先级保持单次意图的深拷贝payload/version/op，结果不确定时复用；成功后读取详情，useTicketsQuery只失效详情缓存，不把Result当Ticket写入。仅结构化后端409/4090被视为明确拒绝：详情关闭旧表单并刷新供重新确认，AI释放旧意图并刷新，批量释放该目标意图供刷新后重新确认；网络/5xx/无业务码代理409保留原请求。切换ticketId清理旧refs，批量失败保留表单及未决操作，全部成功才清理；Kanban回调仅同步契约，仍未绑定，不计真实拖动。
+
+最终证据在candidate-delivery/b2：`s3-ticket-edit-command-final-pg.log` 完整 TestCandidateIntakeCreationBoundary PASS无skip，原dd0ebffee回执RED已GREEN：首个receipt精确一条，立即/后续独立编辑/closed scope重放均返回原版本/状态且Ticket整行、标签目录/关联和audit保全；同op新payload/当前version冲突无写。新增audit及outbox实际写后故障整次回滚、解除故障原cmd成功且版本仅+1/各一条receipt与事件、再重放无新事件；edit consumer经真实worker投递到本地假provider并核验冻结任务名称/GUID。初轮该新增测试误用FeishuTask.Summary字段仅编译失败，改用实际Name后复跑，不计作业务RED。该测试故障前无原标签，原标签替换回滚由既有仓储证据覆盖。
+
+`s3-ticket-edit-command-recovery.log` SQLite真实ProcessJob模拟done写失败：首次业务已提交，重试不变更Ticket整行/审计数，保存原版本的Replayed Result，停用actor后再拒绝；controller真实PUT/PATCH首次cancelled后同payload原version重放，通知两表与audit各仅一条。`s3-ticket-edit-command-regression.log` 服务/控制器/仓储/专业边界及Tool定向回归PASS；tool-green.log另覆盖原TestCreateTicketTool契约。`s3-ticket-edit-command-final-build.log` 全后端build exit0，final-typecheck.log主题校验/全前端tsc exit0，final-client.log四套Jest127 PASS（定向运行关闭全仓覆盖率门槛），包括操作ID缺失零请求、深拷贝和版本/op重试复用、明确冲突识别、Result不污染详情缓存。初次客户端RED实际缺operation仍发送；同时全仓覆盖率不足非业务RED，后续定向运行明确关闭coverage。旧测试按新命令/Result迁移，领域负例明确提供当前actor/权限及观测版本；未使用生产fallback。
+
+独立review_execution_scope_s1发现并关闭两处前端作用域/初次渲染P1及确定冲突旧意图不释放P2，最终限定复审无新增阻断。git diff --check通过。当前未完成：确定性并发同命令、历史无成员编辑receipt专项、状态漂移/回执字段专项、真实组件交互/跨刷新持久恢复与浏览器验收、专业核心编辑归属及Requester/FormFields所有者；这些不可由helper测试或本地provider代替。S3/S4/S5/S6/B3/T3/T4/G2/G3仍未完成，固定CandidateSHA不变、候选未启动；无WSL/共享数据库变更、企业实发、推送或main合并。

@@ -217,10 +217,11 @@ func TestTicketService_UpdateTicketStatus(t *testing.T) {
 
 	t.Run("approval decisions must use BPMN task command", func(t *testing.T) {
 		id := fx.makeTicket(t, "u-approval", ticket.StatusOpen)
+		require.NoError(t, configureEntryTicketEdit(fx.ctx, fx.client, fx.tenantID(), fx.userID()))
 		for _, status := range []string{"approved", "rejected"} {
 			_, err := fx.svc.UpdateTicketStatus(fx.ctx, id, status, fx.tenantID(), fx.userID())
 			require.ErrorContains(t, err, "只能由 BPMN")
-			_, err = fx.svc.UpdateTicket(fx.ctx, id, &dto.UpdateTicketRequest{Status: status}, fx.tenantID())
+			_, err = fx.svc.UpdateTicket(fx.ctx, editCommandForTest(id, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Status: status}, Meta: workitemmutation.Meta{ActorID: fx.userID(), ExpectedVersion: fx.client.Ticket.GetX(fx.ctx, id).Version}}, fx.tenantID()))
 			require.ErrorContains(t, err, "只能由 BPMN")
 		}
 	})

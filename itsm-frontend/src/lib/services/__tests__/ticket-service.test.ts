@@ -85,12 +85,12 @@ describe('ticketService', () => {
 
     it('updateTicket calls PUT /api/v1/tickets/:id with the body', async () => {
       mockSuccess({ id: 1 });
-      await ticketService.updateTicket(1, { title: 'Updated', version: 4 });
+      await ticketService.updateTicket(1, { title: 'Updated', version: 4, operationId: 'edit-test' });
 
       const [url, init] = fetchMock.mock.calls[0];
       expect(url).toContain('/api/v1/tickets/1');
       expect(init.method).toBe('PUT');
-      expect(JSON.parse(init.body as string)).toEqual({ title: 'Updated', version: 4 });
+      expect(JSON.parse(init.body as string)).toEqual({ title: 'Updated', version: 4, operationId: 'edit-test' });
     });
 
     it('deleteTicket calls DELETE /api/v1/tickets/:id', async () => {
@@ -276,10 +276,10 @@ describe('ticketService', () => {
     });
     it('sends the observed version without fetching a newer one', async () => {
       mockSuccess({ id: 1 });
-      await client.updateTicket(1, { title: 'Updated', version: 4 });
+      await client.updateTicket(1, { title: 'Updated', version: 4, operationId: 'edit-test' });
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(fetchMock.mock.calls[0][1].method).toBe('PUT');
-      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ title: 'Updated', version: 4 });
+      expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ title: 'Updated', version: 4, operationId: 'edit-test' });
     });
   });
 
@@ -290,7 +290,7 @@ describe('ticketService', () => {
       );
 
       await expect(
-        ticketService.updateTicket(1, { title: '', version: 4 })
+        ticketService.updateTicket(1, { title: '', version: 4, operationId: 'edit-test' })
       ).rejects.toThrow('标题不能为空');
     });
 

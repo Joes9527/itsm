@@ -96,20 +96,7 @@ func (tc *TicketController) UpdateTicket(c *gin.Context) {
 	}
 
 	tenantID := c.GetInt("tenant_id")
-	req.UserID = c.GetInt("user_id")
-
-	current, err := tc.ticketService.GetTicket(c.Request.Context(), ticketID, tenantID)
-	if err != nil {
-		common.Fail(c, common.NotFoundCode, "工单不存在")
-		return
-	}
-	actor := service.ActionActor{Client: tc.client, TenantID: tenantID, UserID: req.UserID, Role: c.GetString("role")}
-	if perm := service.CanEdit(actor, current); !perm.Allowed {
-		common.Fail(c, common.ForbiddenCode, perm.Reason)
-		return
-	}
-
-	ticket, err := tc.ticketService.UpdateTicket(c.Request.Context(), ticketID, &req, tenantID)
+	result, err := tc.ticketService.UpdateTicket(c.Request.Context(), dto.TicketEditCommand{WorkItemID: ticketID, Fields: req.TicketEditFields, Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: c.GetInt("user_id"), ExpectedVersion: req.Version, OperationID: req.OperationID, CorrelationID: c.GetString("request_id"), Source: "http"}})
 	if err != nil {
 		if errors.Is(err, executionscope.ErrDenied) || errors.Is(err, creation.ErrPermissionDenied) {
 			common.Forbidden(c, "ticket edit permission or execution scope denied")
@@ -117,6 +104,19 @@ func (tc *TicketController) UpdateTicket(c *gin.Context) {
 		}
 		if app, ok := common.AsAppError(err); ok && app.Code == common.ErrCodeForbidden {
 			common.Forbidden(c, app.Message)
+			return
+		}
+		var operationConflict *workitemmutation.OperationConflictError
+		if errors.As(err, &operationConflict) {
+			common.Conflict(c, err.Error(), nil)
+			return
+		}
+		if app, ok := common.AsAppError(err); ok && (app.Code == common.ErrCodeValidation || app.Code == common.ErrCodeBadRequest) {
+			common.Fail(c, common.ParamErrorCode, app.Message)
+			return
+		}
+		if ent.IsNotFound(err) {
+			common.NotFound(c, "工单不存在")
 			return
 		}
 		// 处理版本冲突错误
@@ -147,7 +147,7 @@ func (tc *TicketController) UpdateTicket(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, tc.ticketToResponse(c, ticket))
+	common.Success(c, result)
 }
 
 // GetTicket 获取工单详情
@@ -927,11 +927,7 @@ func (tc *TicketController) UpdateSubtask(c *gin.Context) {
 	}
 
 	tenantID := c.GetInt("tenant_id")
-	req.UserID = c.GetInt("user_id")
-
-	req.ExpectedParentID = parentID
-
-	updatedTicket, err := tc.ticketService.UpdateTicket(c.Request.Context(), subtaskID, &req, tenantID)
+	result, err := tc.ticketService.UpdateTicket(c.Request.Context(), dto.TicketEditCommand{WorkItemID: subtaskID, ExpectedParentID: parentID, Fields: req.TicketEditFields, Meta: workitemmutation.Meta{TenantID: tenantID, ActorID: c.GetInt("user_id"), ExpectedVersion: req.Version, OperationID: req.OperationID, CorrelationID: c.GetString("request_id"), Source: "http"}})
 	if err != nil {
 		if errors.Is(err, executionscope.ErrDenied) || errors.Is(err, creation.ErrPermissionDenied) {
 			common.Forbidden(c, "ticket edit permission or execution scope denied")
@@ -939,6 +935,11 @@ func (tc *TicketController) UpdateSubtask(c *gin.Context) {
 		}
 		if ent.IsNotFound(err) {
 			common.NotFound(c, "子任务不存在")
+			return
+		}
+		var operationConflict *workitemmutation.OperationConflictError
+		if errors.As(err, &operationConflict) {
+			common.Conflict(c, err.Error(), nil)
 			return
 		}
 		if common.IsVersionConflictError(err) {
@@ -963,7 +964,7 @@ func (tc *TicketController) UpdateSubtask(c *gin.Context) {
 		return
 	}
 
-	common.Success(c, tc.ticketToResponse(c, updatedTicket))
+	common.Success(c, result)
 }
 
 // DeleteSubtask 删除子任务

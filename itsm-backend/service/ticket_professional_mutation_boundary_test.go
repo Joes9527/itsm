@@ -1,8 +1,10 @@
 package service
 
 import (
+	"fmt"
 	"github.com/stretchr/testify/require"
 	"itsm-backend/dto"
+	"itsm-backend/handlers/shared/workitemmutation"
 	ticketrepo "itsm-backend/repository/ticket"
 	executionfixture "itsm-backend/tests/fixtures/execution"
 	"testing"
@@ -34,7 +36,7 @@ func TestTicketCoreMutationsRejectProfessionalClasses(t *testing.T) {
 				svc := NewTicketService(&TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, owner.logger), Logger: owner.logger, Execution: executionfixture.Standard()})
 				lifecycle := NewTicketLifecycleService(client, owner.logger)
 				workflow := NewTicketWorkflowService(client, owner.logger)
-				patch := &dto.UpdateTicketRequest{Version: before.Version}
+				patch := &dto.TicketEditCommand{Fields: dto.TicketEditFields{}, Meta: workitemmutation.Meta{ActorID: actor.ID, ExpectedVersion: before.Version}}
 				switch action {
 				case "repo_update":
 					title := "repository bypass"
@@ -48,18 +50,18 @@ func TestTicketCoreMutationsRejectProfessionalClasses(t *testing.T) {
 				case "lifecycle_sync":
 					err = lifecycle.SyncTicketStatusWithWorkflow(ctx, before.ID, tenant.ID)
 				case "title":
-					patch.Title = "bypassed title"
+					patch.Fields.Title = "bypassed title"
 				case "description":
-					patch.Description = "bypassed description"
+					patch.Fields.Description = "bypassed description"
 				case "priority":
-					patch.Priority = "high"
+					patch.Fields.Priority = "high"
 				case "category":
 					zero := 0
-					patch.CategoryID = &zero
+					patch.Fields.CategoryID = &zero
 				case "resolution":
-					patch.Resolution = "bypassed evidence"
+					patch.Fields.Resolution = "bypassed evidence"
 				case "status":
-					patch.Status = "pending"
+					patch.Fields.Status = "pending"
 				case "service_status":
 					_, err = svc.UpdateTicketStatus(ctx, before.ID, "pending", tenant.ID, actor.ID)
 				case "workflow_status":
@@ -85,7 +87,10 @@ func TestTicketCoreMutationsRejectProfessionalClasses(t *testing.T) {
 				}
 				switch action {
 				case "title", "description", "priority", "category", "resolution", "status":
-					_, err = svc.UpdateTicket(ctx, before.ID, patch, tenant.ID)
+					role := client.Role.Create().SetTenantID(tenant.ID).SetCode(actor.Role).SetName("Edit boundary fixture").SetIsActive(true).SaveX(ctx)
+					permission := client.Permission.Create().SetTenantID(tenant.ID).SetCode("edit-boundary").SetName("Edit boundary").SetResource("*").SetAction("*").SaveX(ctx)
+					client.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).ExecX(ctx)
+					_, err = svc.UpdateTicket(ctx, editCommandForTest(before.ID, patch, tenant.ID))
 				}
 				require.ErrorContains(t, err, "owning domain command")
 				after := client.Ticket.GetX(ctx, before.ID)
@@ -120,7 +125,7 @@ func TestTicketCoreBoundaryPreservesSharedOperations(t *testing.T) {
 			require.NoError(t, err)
 			item := client.Ticket.Create().SetTitle("original title").SetDescription("description").SetTicketNumber("SHARED").SetRequesterID(actor.ID).SetTenantID(tenant.ID).SetRecordClass(class).SetStatus("new").SaveX(ctx)
 			svc := NewTicketService(&TicketServiceConfig{Client: client, Repository: ticketrepo.NewEntRepository(client, owner.logger), Logger: owner.logger, Execution: executionfixture.Standard()})
-			_, err = svc.UpdateTicket(ctx, item.ID, &dto.UpdateTicketRequest{UserID: actor.ID, Tags: []string{}, Version: item.Version}, tenant.ID)
+			_, err = svc.UpdateTicket(ctx, editCommandForTest(item.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Tags: []string{}}, Meta: workitemmutation.Meta{ActorID: actor.ID, ExpectedVersion: item.Version}}, tenant.ID))
 			require.NoError(t, err)
 			err = NewTicketWorkflowService(client, owner.logger).ForwardTicket(ctx, &dto.ForwardTicketRequest{TicketID: item.ID, ToUserID: next.ID, TransferOwnership: false, Comment: "collaborate"}, actor.ID, tenant.ID)
 			require.NoError(t, err)
@@ -128,10 +133,22 @@ func TestTicketCoreBoundaryPreservesSharedOperations(t *testing.T) {
 			require.Equal(t, item.AssigneeID, after.AssigneeID)
 			require.Equal(t, item.Status, after.Status)
 			if class == "generic" || class == "service_request_item" || class == "catalog_task" {
-				_, err = svc.UpdateTicket(ctx, item.ID, &dto.UpdateTicketRequest{UserID: actor.ID, Title: "updated title", Version: after.Version}, tenant.ID)
+				_, err = svc.UpdateTicket(ctx, editCommandForTest(item.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{Title: "updated title"}, Meta: workitemmutation.Meta{ActorID: actor.ID, ExpectedVersion: after.Version}}, tenant.ID))
 				require.NoError(t, err)
 				require.Equal(t, "updated title", client.Ticket.GetX(ctx, item.ID).Title)
 			}
 		})
 	}
+}
+
+// editCommandForTest assembles a trusted fixture boundary without replacing the observed version.
+func editCommandForTest(id int, input *dto.TicketEditCommand, tenantID int) dto.TicketEditCommand {
+	cmd := *input
+	cmd.WorkItemID = id
+	cmd.Meta.TenantID = tenantID
+	cmd.Meta.Source = "test"
+	if cmd.Meta.OperationID == "" {
+		cmd.Meta.OperationID = fmt.Sprintf("test-edit:%d:%d", id, cmd.Meta.ExpectedVersion)
+	}
+	return cmd
 }

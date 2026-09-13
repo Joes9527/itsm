@@ -40,7 +40,10 @@ func TestTicketAssignmentRejectsProfessionalClasses(t *testing.T) {
 					case "msp":
 						_, err = ticketSvc.AssignMSPTechnician(ctx, before.ID, tenant.ID, next.ID)
 					case "edit":
-						_, err = ticketSvc.UpdateTicket(ctx, before.ID, &dto.UpdateTicketRequest{AssigneeID: next.ID, Version: before.Version}, tenant.ID)
+						role := client.Role.Create().SetTenantID(tenant.ID).SetCode(actor.Role).SetName("Edit boundary fixture").SetIsActive(true).SaveX(ctx)
+						permission := client.Permission.Create().SetTenantID(tenant.ID).SetCode("edit-boundary").SetName("Edit boundary").SetResource("*").SetAction("*").SaveX(ctx)
+						client.RolePermission.Create().SetTenantID(tenant.ID).SetRoleID(role.ID).SetPermissionID(permission.ID).ExecX(ctx)
+						_, err = ticketSvc.UpdateTicket(ctx, editCommandForTest(before.ID, &dto.TicketEditCommand{Fields: dto.TicketEditFields{AssigneeID: next.ID}, Meta: workitemmutation.Meta{ActorID: actor.ID, ExpectedVersion: before.Version}}, tenant.ID))
 					case "service_escalate":
 						_, err = ticketSvc.EscalateTicket(ctx, dto.TicketEscalationCommand{WorkItemID: before.ID, Reason: "handover", Meta: workitemmutation.Meta{TenantID: tenant.ID, ActorID: actor.ID, ExpectedVersion: before.Version, Source: "http", OperationID: "test"}})
 					case "assign":

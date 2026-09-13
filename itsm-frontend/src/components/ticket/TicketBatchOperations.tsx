@@ -1,8 +1,8 @@
 'use client';
 
-import { ticketEditVersion } from '@/lib/api/ticket-edit';
+import { prepareTicketEdit, isTicketEditConflict, type TicketEditIntent } from '@/lib/api/ticket-edit';
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   Button,
   Dropdown,
@@ -130,6 +130,8 @@ const TicketBatchOperations: React.FC<TicketBatchOperationsProps> = ({
     | { priority: string }
     | {};
 
+  const editIntents = useRef(new Map<string, TicketEditIntent<Partial<Ticket>>>());
+
   // 执行批量操作
   const executeBatchOperation = useCallback(
     async (operation: string, values: BatchOperationParams) => {
@@ -166,10 +168,12 @@ const TicketBatchOperations: React.FC<TicketBatchOperationsProps> = ({
                 break;
               case 'update_status':
                 const statusParams = values as { status: string };
-                await TicketAPI.updateTicket(ticket.id, {
-                  version: ticketEditVersion(ticket.version),
-                  status: statusParams.status as TicketStatus,
-                });
+                {
+                  const key = `${operation}:${ticket.id}`;
+                  const intent = prepareTicketEdit(editIntents.current.get(key), { status: statusParams.status as TicketStatus }, ticket.version);
+                  editIntents.current.set(key, intent);
+                  await TicketAPI.updateTicket(ticket.id, intent.payload);
+                }
                 break;
               case 'add_tags':
                 const tagParams = values as { tags: string[] };
@@ -177,10 +181,12 @@ const TicketBatchOperations: React.FC<TicketBatchOperationsProps> = ({
                 break;
               case 'set_priority':
                 const priorityParams = values as { priority: string };
-                await TicketAPI.updateTicket(ticket.id, {
-                  version: ticketEditVersion(ticket.version),
-                  priority: priorityParams.priority as TicketPriority,
-                });
+                {
+                  const key = `${operation}:${ticket.id}`;
+                  const intent = prepareTicketEdit(editIntents.current.get(key), { priority: priorityParams.priority as TicketPriority }, ticket.version);
+                  editIntents.current.set(key, intent);
+                  await TicketAPI.updateTicket(ticket.id, intent.payload);
+                }
                 break;
               case 'delete':
                 await TicketAPI.deleteTicket(ticket.id);
@@ -190,6 +196,7 @@ const TicketBatchOperations: React.FC<TicketBatchOperationsProps> = ({
             }
             successCount++;
           } catch (error) {
+            if (isTicketEditConflict(error)) editIntents.current.delete(`${operation}:${ticket.id}`);
             failCount++;
             errors.push(
               `${ticket.ticketNumber}: ${error instanceof Error ? error.message : '操作失败'}`
@@ -208,14 +215,17 @@ const TicketBatchOperations: React.FC<TicketBatchOperationsProps> = ({
         // 显示操作结果
         if (failCount === 0) {
           message.success(`批量操作成功！共处理 ${successCount} 个工单`);
+          editIntents.current.clear();
         } else {
           message.warning(`操作完成！成功 ${successCount} 个，失败 ${failCount} 个`);
         }
 
         setTimeout(() => {
           setOperationProgress({ visible: false, current: 0, total: 0, status: '' });
-          setOperationModal({ visible: false, type: '', title: '' });
-          form.resetFields();
+          if (failCount === 0) {
+            setOperationModal({ visible: false, type: '', title: '' });
+            form.resetFields();
+          }
           onOperationComplete?.();
         }, 1500);
       } catch (error) {

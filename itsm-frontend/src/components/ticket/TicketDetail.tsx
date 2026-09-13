@@ -1,6 +1,6 @@
 'use client';
 
-import { ticketEditVersion } from '@/lib/api/ticket-edit';
+import { ticketEditVersion, prepareTicketEdit, isTicketEditConflict, type TicketEditIntent } from '@/lib/api/ticket-edit';
 
 /**
  * 工单详情组件
@@ -8,7 +8,7 @@ import { ticketEditVersion } from '@/lib/api/ticket-edit';
  * 包含：基本信息、SLA、分配/编辑/抄送/删除操作、详情 Tabs（评论/附件/BPMN 审批历史/历史/关联/通知）
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { TicketApi, type TicketSLAInfo } from '@/lib/api/ticket-api';
 import { BPMNWorkflowApi } from '@/lib/api/bpmn-workflow-api';
@@ -121,6 +121,14 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
   const [error, setError] = useState<string | null>(null);
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const editIntent = useRef<TicketEditIntent<Partial<Ticket>> | undefined>(undefined);
+  const aiEditIntent = useRef<TicketEditIntent<Partial<Ticket>> | undefined>(undefined);
+  const editSnapshot = useRef<{ version: number; status: string } | undefined>(undefined);
+  useEffect(() => {
+    editIntent.current = undefined;
+    aiEditIntent.current = undefined;
+    editSnapshot.current = undefined;
+  }, [ticketId]);
   const [ccModalVisible, setCCModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
@@ -313,6 +321,8 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
         priority: ticket.priority,
         status: ticket.status,
       });
+      editSnapshot.current = { version: ticketEditVersion(ticket.version), status: ticket.status };
+      editIntent.current = undefined;
       setEditModalVisible(true);
     }
   };
@@ -322,26 +332,28 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
     try {
       setUpdating(true);
       // 状态转换验证
-      if (values.status && ticket?.status && values.status !== ticket.status) {
-        if (!isValidTransition(ticket.status as TicketStatus, values.status as TicketStatus)) {
+      if (values.status && editSnapshot.current?.status && values.status !== editSnapshot.current.status) {
+        if (!isValidTransition(editSnapshot.current.status as TicketStatus, values.status as TicketStatus)) {
           antMessage.error(
-            `不允许从 "${ticket.recordClass === 'service_request_item' ? '服务请求' : getTicketStatusLabel(ticket.status)}" 转换到 "${getTicketStatusLabel(values.status)}"`
+            `不允许从 "${ticket?.recordClass === 'service_request_item' ? '服务请求' : getTicketStatusLabel(editSnapshot.current.status)}" 转换到 "${getTicketStatusLabel(values.status)}"`
           );
           return;
         }
       }
 
-      // 添加版本号用于乐观锁
-      const updatePayload = {
-        ...values,
-        version: ticketEditVersion(ticket?.version),
-      };
-
-      await TicketApi.updateTicket(ticketId, updatePayload);
+      editIntent.current = prepareTicketEdit(editIntent.current, values, editSnapshot.current?.version);
+      await TicketApi.updateTicket(ticketId, editIntent.current.payload);
+      editIntent.current = undefined;
       antMessage.success('工单更新成功');
       setEditModalVisible(false);
       fetchTicket();
     } catch (error) {
+      if (isTicketEditConflict(error)) {
+        editIntent.current = undefined;
+        editSnapshot.current = undefined;
+        setEditModalVisible(false);
+        await fetchTicket();
+      }
       handleError(error, 'updateTicket', '更新失败');
     } finally {
       setUpdating(false);
@@ -394,7 +406,9 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
           priority: ticket.priority,
           status: ticket.status,
         });
-        setEditModalVisible(true);
+        editSnapshot.current = { version: ticketEditVersion(ticket.version), status: ticket.status };
+      editIntent.current = undefined;
+      setEditModalVisible(true);
       }
     };
 
@@ -687,19 +701,19 @@ export const TicketDetail: React.FC<{ id?: string }> = ({ id: propId }) => {
                 return;
               }
               try {
-                const updated = await TicketApi.updateTicket(ticketId, {
+                aiEditIntent.current = prepareTicketEdit(aiEditIntent.current, {
                   category: suggestion.category,
                   priority: toTicketPriority(suggestion.priority),
-                  version: ticketEditVersion(ticket.version),
-                });
-                antMessage.success(
-                  `已采纳AI建议：分类 ${suggestion.category}，优先级 ${suggestion.priority}`
-                );
-                if (updated?.id) {
-                  setTicket(prev => (prev ? { ...prev, ...updated } : prev));
-                }
+                }, ticket.version);
+                await TicketApi.updateTicket(ticketId, aiEditIntent.current.payload);
+                aiEditIntent.current = undefined;
+                antMessage.success(`已采纳AI建议：分类 ${suggestion.category}，优先级 ${suggestion.priority}`);
                 await fetchTicket();
               } catch (err) {
+                if (isTicketEditConflict(err)) {
+                  aiEditIntent.current = undefined;
+                  await fetchTicket();
+                }
                 handleError(err, 'applyAISuggestion', '采纳建议失败');
               }
             }}
