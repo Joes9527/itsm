@@ -103,6 +103,10 @@ S3 阶段记录（2026-09-13；基础提交 `6261941b4`，统一创建接入 `04
 - [ ] 手动原事务包含version CAS、actor/reason审计、通知意图和Feishu更新意图，移除事务外goroutine直接发送；保留已配置同步能力，不通过删除副作用或静默忽略声明完成。
 - [ ] 真实PG验证历史整行/关联无变化、新member、同操作重放、权限/版本/scope撤销、通知/审计/outbox实际写后回滚、并发及多版本更新顺序；本地声明provider验证映射/目标变化及不确定投递。核验HTTP当前权限/DTO契约、构建/回归/独立审阅，全部证据具名记录后才将本检查点计为完成。
 
+手动事务核心 `a5a9d4f92`：真实TicketService/HTTP/前端改typed命令reason/version/operationId，构造显式policy；原事务现行actor/权限→immutable Replay→首次写前scope/member/version/status→CAS/审计/通知共同提交。generic专属，critical不降级且保留assignee。s3-manual-command-full-pg.log完整边界PASS，包括新实现以Standard在039前生成receipt再迁移后只读重放、历史generic保全、新member正向/重复/conflict、actor失效/closed scope拒绝、通知/审计写后回滚恢复；定向回归/build、前端API55项、独立复审通过。历史fixture不证明旧发布版本已有receipt，未有JWT/浏览器全HTTP验收；并发恢复专项待补。
+
+配置Feishu时命令暂在写入前明确拒绝，原goroutine已移除但update intent/handler/串行与不确定性仍未实现，因此手动升级全链不勾选。下一步必须完成飞书更新并解除此临时门禁，不能把禁用同步当最终实现；旧两个手动平行方法/BPMN也待接入。S3/S4及后续门禁未完成，CandidateSHA/停止状态不变。详见实现分支T1最新交接和开发指南新接口契约。
+
 ## S4：队列原子领取、恢复及周期执行
 
 历史 claim RED（`s4-kaf-historical-claim-red.log`）已由 `de22553c2` 修复：两条冻结 policy 构造链贯通，claim INSERT/独立 lease CAS、finalize/non-completing、completion receipt/callback recovery 原事务准入；异步恢复复用首次完成变量校验，修复误要求同步合同。真实 PG 验证历史0写、新成员claim/重复冲突、closed scope过期lease拒绝、completion及恢复保全与active恢复，最终定向回归/构建/独立审阅通过。CreateDelegatedTask 两条入口现已补齐原事务准入，joined入口改显式*ent.Tx；真实 PG 历史拒绝、新成员生成/引用、joined主动回滚及两入口outbox写后故障回滚通过，构建/回归/限定独立复审通过，见T1最新检查点。仍是分段测试，不代表完整ExecuteAction或真实BPMN节点推进；通用worker、历史applied回放及全部finalize分支等专项未完成。详见T1最新交接，S4继续未勾选。
