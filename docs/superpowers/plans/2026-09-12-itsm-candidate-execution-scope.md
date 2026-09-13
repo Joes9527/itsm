@@ -427,3 +427,9 @@ config/database/connector/.../bootstrap全包race、既定私有PG16/Redis/MinIO
 实现6a9677694：ExecutionPolicy.DeclaredConnectorTarget按精确tenant/deployment/scope/owner/name/provider读取独立冻结声明；Manager.DescribeDeclaredDeliveryTarget核对Registry纯描述与声明摘要，只返回digest，不Init/激活/返回凭据。身份校验共用，实际投递继续单独核验执行能力。取消/关闭/错误Ref与身份/摘要、副本隔离及standard拒绝已有直接用例。
 
 database/connector/.../bootstrap全包race、既定私有PG16/Redis/MinIO suite及全后端build通过，独立审阅无新增阻断。此项只关闭candidate精确声明读取与描述前置：standard ConnectorConfig读取、typed EmailTarget/045/Incident outbox与原邮件重绑RED仍未完成，下一步接入这些原持久owner，不在consumer补当前身份。S5/S6/T3/T4/G3及完整交付目标保持未完成，CandidateSHA与候选停止状态不变。
+
+### S5 标准持久配置描述检查点（2026-09-14）
+
+实现d12349502：Manager.DescribePersistedDeliveryTarget在standard精确Ref/tenant/owner门禁下，从原ConnectorConfig的调用方client读取唯一enabled tenant/name配置并核对provider，经Registry纯描述返回摘要，不初始化、不读运行实例。candidate拒绝此源。SQLite原事务未提交配置描述、外租户同名坏数据隔离、回滚0记录、无效/重复/禁用拒绝、查询cause和关闭后零查询均验证；database/connector/.../bootstrap全包race与全后端build通过，独立最终审阅无新增阻断。
+
+生产接入必须传原tx.Client()，接口不能强制这一点；JSON仅语法/类型检查，Graph字符串身份有纯解析验证，不宣称通用重复key/数值无损处理或PG角色验证。该入口及候选声明入口尚未接邮件生产者/worker：下一步typed EmailTarget/045/Incident outbox与目标重绑RED；S5/S6/T3/T4/G3仍未完成，CandidateSHA与停止状态不变。详见实现T1交接记录。
