@@ -203,7 +203,10 @@ SLA发送投影及monitor接入 `5fa4ae3e6` 已完成上述结构关联增量：
 
 ## S5：Stream 与请求异步边界
 
-首次业务写身份撤销RED `e12a7d297`：真实intake已核验工具后、Ticket INSERT前提交用户停用，仍创建工单/receipt各一条；撤权实际提交标记通过，5秒有界，独立复核确认，见T1和s5-tool-actor-revocation-red.log。actor/approver/requester同一fixture，非三者专项。当前生产未修，新增具名及全套为RED，不能以先前GREEN放行。下一步在窄权限边界保护原invocation、去重排序的相关用户及现有授权读取的Role/RolePermission/Permission，再复用领域规则重验（含真实super_admin role）；实际支持委派时覆盖会话/分配依赖，不另建权限规则或扩大业务配置写权。统一锁序并验证撤权先提交拒绝、业务先锁则撤权等待commit/rollback，保留RR冲突重试；替换同步hook防止自等锁/超时假通过。CandidateSHA与未启动状态不变，后续门禁未放行。
+工具授权事务修复检查点 `eedec3389`：下述e12a7d297身份撤权RED已修复。新增043替换旧042函数入口，候选来源锁扩展至原调用、不同actor/approver/requester及当前Role/RolePermission/Permission，权限规则仍复用既有Go逻辑；Queue与审批使用RR，原业务RR与目录共享快照不变，40001保留并要求完整事务重试。9类撤权×业务提交/实际INSERT后回滚共18项真实PG验证等待精确业务PID，撤权提交后必须明确身份/权限拒绝；原审批竞争验证等待及冲突后整次重试。新增用户fixture曾影响后续SLA收件人数，已按生命周期停用且保留引用，原断言未放宽。最终完整私有PG16/Redis/MinIO race、具名回归、迁移/database测试、全后端build及独立审阅通过，详情与失败记录见T1。该矩阵仅证明创建路径，不外推编辑/审批/结果各自完整矩阵；结果竞争与剩余S5/S6、目标PG17/T3、真实T4/G3仍未完成。固定CandidateSHA及候选未启动状态不变，无共享环境操作或push/main合并。
+
+
+首次业务写身份撤销RED `e12a7d297`：真实intake已核验工具后、Ticket INSERT前提交用户停用，仍创建工单/receipt各一条；撤权实际提交标记通过，5秒有界，独立复核确认，见T1和s5-tool-actor-revocation-red.log。actor/approver/requester同一fixture，非三者专项。该RED提交时生产未修、包含新用例的全套为RED；现已由上方eedec3389修复，不以此历史状态代替最新证据。下一步在窄权限边界保护原invocation、去重排序的相关用户及现有授权读取的Role/RolePermission/Permission，再复用领域规则重验（含真实super_admin role）；实际支持委派时覆盖会话/分配依赖，不另建权限规则或扩大业务配置写权。统一锁序并验证撤权先提交拒绝、业务先锁则撤权等待commit/rollback，保留RR冲突重试；替换同步hook防止自等锁/超时假通过。CandidateSHA与未启动状态不变，后续门禁未放行。
 
 运行绑定撤销验证 `32d374953`：扩展真实PG结果事务锁验证，binding deployment变化、mode改standard、删除绑定分别等待结果commit/rollback；从实际mutation事务取得PID并与撤权连接pg_blocking_pids精确匹配，撤权完成后下一调用拒绝、回执保全。取消等待后再恢复fixture，独立复核无阻断；定向及最终完整私有race通过，无skip/race，见T1。仅测试/文档，无生产变更或重复build；不证明standard保护或目标PG17。审批/身份变化及结果竞争仍待完成，CandidateSHA与未启动状态不变，T3/T4/G2/G3未放行。
 
