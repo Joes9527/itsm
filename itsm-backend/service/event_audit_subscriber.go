@@ -186,3 +186,5 @@ func (s *EventAuditSubscriber) handleExecutionEvent(ctx context.Context, event i
 	} // A unique conflict aborts; only a fresh delivery may replay.
 	return tx.Commit()
 }
+
+func (*EventAuditSubscriber) EventConsumerID() string { return "event_audit" }

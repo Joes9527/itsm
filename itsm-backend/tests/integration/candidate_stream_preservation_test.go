@@ -27,6 +27,7 @@ import (
 
 type candidateStreamEvent struct {
 	tenantID     int
+	eventID      string
 	WorkItemID   int    `json:"workItemId"`
 	DeploymentID string `json:"deploymentId"`
 	ScopeID      string `json:"scopeId"`
@@ -48,35 +49,9 @@ func (h candidateStreamObserver) Handle(event interface{}) error {
 // Payload scope fields are fixture data, never evidence of authorization.
 // Membership validation and real audit persistence remain separate requirements.
 func TestCandidateStreamPreservesLegacyTopicOnPublish(t *testing.T) {
-	binary := os.Getenv("CANDIDATE_TEST_REDIS_BINARY")
-	if binary == "" {
-		t.Skip("requires explicit private Redis binary")
-	}
-	require.True(t, filepath.IsAbs(binary))
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	reservation, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	port := reservation.Addr().(*net.TCPAddr).Port
-	require.NoError(t, reservation.Close())
-	directory := t.TempDir()
-	password := uuid.NewString()
-	command := exec.CommandContext(ctx, binary, "--requirepass", password, "--bind", "127.0.0.1", "--port", fmt.Sprint(port), "--save", "", "--appendonly", "no", "--dir", directory)
-	log, err := os.Create(filepath.Join(directory, "redis.log"))
-	require.NoError(t, err)
-	defer log.Close()
-	command.Stdout, command.Stderr = log, log
-	require.NoError(t, command.Start())
-	exited := make(chan struct{})
-	go func() { _ = command.Wait(); close(exited) }()
-	defer func() { _ = command.Process.Kill(); <-exited }()
-	client := redis.NewClient(&redis.Options{Addr: fmt.Sprintf("127.0.0.1:%d", port), Password: password})
-	defer client.Close()
-	require.Eventually(t, func() bool {
-		info, e := client.Info(ctx, "server").Result()
-		return e == nil && strings.Contains(info, fmt.Sprintf("process_id:%d\r\n", command.Process.Pid))
-	}, 5*time.Second, 20*time.Millisecond, "verify test Redis PID before writing fixtures")
-	cfg := &config.RedisConfig{Host: "127.0.0.1", Port: port, Password: password}
+	cfg, client := startCandidateStreamRedis(t, ctx)
 	legacyPublisher, err := eventbus.NewWatermillEventBus(cfg, config.ExecutionConfig{Mode: "standard", DeploymentID: "legacy-test"}, nil, zap.NewNop().Sugar())
 	require.NoError(t, err)
 	require.NoError(t, legacyPublisher.Publish(candidateStreamEvent{tenantID: 1, WorkItemID: 100}))
@@ -175,5 +150,78 @@ func (candidateStreamFixtureAuthority) ValidateEvent(_ context.Context, ref exec
 }
 func (e candidateStreamEvent) ExecutionWorkItemID() int { return e.WorkItemID }
 func (e candidateStreamEvent) PersistentEventID() string {
+	if e.eventID != "" {
+		return e.eventID
+	}
 	return fmt.Sprintf("fixture-%d", e.WorkItemID)
 }
+
+func startCandidateStreamRedis(t *testing.T, ctx context.Context) (*config.RedisConfig, *redis.Client) {
+	t.Helper()
+	binary := os.Getenv("CANDIDATE_TEST_REDIS_BINARY")
+	if binary == "" {
+		t.Skip("requires explicit private Redis binary")
+	}
+	require.True(t, filepath.IsAbs(binary))
+	reservation, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	port := reservation.Addr().(*net.TCPAddr).Port
+	require.NoError(t, reservation.Close())
+	directory := t.TempDir()
+	password := uuid.NewString()
+	command := exec.CommandContext(ctx, binary, "--requirepass", password, "--bind", "127.0.0.1", "--port", fmt.Sprint(port), "--save", "", "--appendonly", "no", "--dir", directory)
+	log, err := os.Create(filepath.Join(directory, "redis.log"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = log.Close() })
+	command.Stdout, command.Stderr = log, log
+	require.NoError(t, command.Start())
+	exited := make(chan struct{})
+	go func() { _ = command.Wait(); close(exited) }()
+	t.Cleanup(func() { _ = command.Process.Kill(); <-exited })
+	client := redis.NewClient(&redis.Options{Addr: fmt.Sprintf("127.0.0.1:%d", port), Password: password})
+	t.Cleanup(func() { _ = client.Close() })
+	require.Eventually(t, func() bool {
+		info, e := client.Info(ctx, "server").Result()
+		return e == nil && strings.Contains(info, fmt.Sprintf("process_id:%d\r\n", command.Process.Pid))
+	}, 5*time.Second, 20*time.Millisecond, "verify test Redis PID before writing fixtures")
+	cfg := &config.RedisConfig{Host: "127.0.0.1", Port: port, Password: password}
+	return cfg, client
+}
+
+func TestCandidateStreamDeliversOfflineMessages(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cfg, client := startCandidateStreamRedis(t, ctx)
+	scope := uuid.NewString()
+	execution := config.ExecutionConfig{Mode: "candidate", DeploymentID: "offline-test", Scopes: []config.ExecutionScopeConfig{{TenantID: 1, ScopeID: scope}}}
+	publisher, err := eventbus.NewWatermillEventBus(cfg, execution, candidateStreamFixtureAuthority{}, zap.NewNop().Sugar())
+	require.NoError(t, err)
+	require.NoError(t, publisher.Publish(candidateStreamEvent{tenantID: 1, WorkItemID: 200, eventID: "offline-event"}))
+	require.NoError(t, publisher.Close())
+	consumer, err := eventbus.NewWatermillEventBus(cfg, execution, candidateStreamFixtureAuthority{}, zap.NewNop().Sugar())
+	require.NoError(t, err)
+	defer consumer.Close()
+	received := make(chan interface{}, 4)
+	require.NoError(t, consumer.RegisterSubscription("sla.breached", candidateStreamObserver{received}))
+	require.NoError(t, consumer.Start(ctx))
+	require.Eventually(t, func() bool {
+		list, e := client.ClientList(ctx).Result()
+		return e == nil && strings.Contains(list, "cmd=xread")
+	}, 3*time.Second, 10*time.Millisecond)
+	require.NoError(t, consumer.Publish(candidateStreamEvent{tenantID: 1, WorkItemID: 200, eventID: "online-marker"}))
+	counts := map[string]int{}
+	for counts["online-marker"] == 0 {
+		select {
+		case event := <-received:
+			counts[event.(eventbus.Envelope).EventID]++
+		case <-ctx.Done():
+			t.Fatal("online positive control was not delivered")
+		}
+	}
+	assert.Equal(t, 1, counts["offline-event"], "an event committed before consumer startup must not be lost")
+	groups, err := client.XInfoGroups(ctx, "candidate:offline-test:"+scope+":sla.breached").Result()
+	require.NoError(t, err)
+	assert.Len(t, groups, 1, "candidate consumption must have durable progress")
+}
+
+func (candidateStreamObserver) EventConsumerID() string { return "event_audit" }

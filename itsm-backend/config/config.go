@@ -76,11 +76,18 @@ type SecurityConfig struct {
 	CSRFEnabled bool `mapstructure:"csrf_enabled"` // 是否启用 CSRF 保护
 }
 
+type EventStreamConfig struct {
+	ClaimIdle     time.Duration `mapstructure:"claim_idle"`
+	ClaimInterval time.Duration `mapstructure:"claim_interval"`
+	NackDelay     time.Duration `mapstructure:"nack_delay"`
+}
+
 type RedisConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	Password string `mapstructure:"password"`
-	DB       int    `mapstructure:"db"`
+	EventStream EventStreamConfig `mapstructure:"event_stream"`
+	Host        string            `mapstructure:"host"`
+	Port        int               `mapstructure:"port"`
+	Password    string            `mapstructure:"password"`
+	DB          int               `mapstructure:"db"`
 }
 
 type TicketConfig struct {

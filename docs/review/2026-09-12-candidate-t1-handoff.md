@@ -845,3 +845,15 @@ candidate bus不再flatten信封，保留typed Envelope交给owner；ContextEven
 `s5-event-audit-race.log` 上述真实PG来源及审计故障/确定性竞争专项通过Go race检测。
 
 S5仍需真实Redis消费组配置、无效消息持久阻断/避免热循环、已提交未ACK恢复及Redis+PG联合消费验证，Webhook直接owner准入和其余请求异步边界也未完成。固定CandidateSHA不变、候选未启动，完整B2/B3/T3/T4/G2/G3未完成；无WSL或共享数据操作、企业实发、推送或main合并。
+
+### B2 S5 持久消费组与审计 ACK 间隙恢复（2026-09-13）
+
+在 `7507ca616` 后继续 S5。真实 Redis `s5-stream-offline-red.log` 复现 fanout 从 `$` 启动漏收离线事件，在线 marker 可收到但离线计数为0、无消费组。唯一 Watermill bus 改为候选 logical owner 消费组：登记时冻结 `EventConsumerID`，拒绝无身份/非法身份及重复 owner/topic；同 owner 跨 topic 复用 subscriber，不同副作用使用不同组，库生成随机实例 consumer。首次建组从0开始，已有组不重置；构造/登记不建立组。standard 保持原 fanout。配置及恢复合同见开发指南的候选执行范围章节，未修改 B 的环境配置。
+
+Close 禁止新订阅并取消 context，等待正在建立的 Subscribe 退出后关闭所有持有的 subscriber，再等待处理循环退出。只读 reviewer 发现公开动态 Subscribe 第二租户失败会留下第一租户，新增双租户测试 `s5-durable-partial-red.log` 复现 expected close1/actual0；修复为部分建立失败时关闭整个事件 runtime，保留原错误及关闭错误，不重置组。登记失败在 bootstrap 显式终止。冻结身份、独立 owner、nil factory、重复订阅、取消建立及部分启动失败均有测试。
+
+联合恢复用真实 SLA monitor/outbox 来源、数据库 authority 和 Audit owner：在实际审计事务提交后故意阻止 handler 返回，从而不 ACK；确认原 entry 已 pending，关闭旧 bus 后再次断言同 entry/owner 仍 pending，再构造新 bus 使用原组领取该 entry。最终 PEL 清空、两个不同消费者实例可见，原 Stream entry 及审计完整行不变、审计仅增加一次，旧裸 Stream 键与组快照保持。此为至少一次传输加审计幂等；测试使用实际 SLA delivery handler 生成事件后调用 bus.Publish，不声称已覆盖整个 outbox Worker 当前 claim 或完整应用/OS 重启。离线测试使用 transport fixture authority，不单独充当数据库权限证据。
+
+验证：`s5-stream-offline-green.log`、`s5-stream-ack-recovery-pg.log`、`s5-durable-full-private.log` PASS；最终修复后 `s5-durable-regression.log` 六个受影响包 PASS，`s5-durable-final-race.log` 同时覆盖全部新增 lifecycle、完整候选 intake、真实 Redis 离线/历史保全及 PG/Redis/MinIO 应用构造保全 PASS，无skip、无race。独立 review_execution_scope_s1 复核关闭上述P2，未发现本检查点新增阻断。全后端 `s5-durable-build.log` exit0，git diff --check通过。日志保存在任务私有 b2 目录，未提交测试产物。
+
+S5 仍未完成：Webhook candidate typed envelope 与其写入所有者、无效消息的持久可见阻断、其它请求异步/工具入口仍待接入；外部效果不能仅靠消费组认定幂等。S3/S4/S6及B3/T3/T4/G2/G3不因本检查点放行。固定 CandidateSHA 仍为 `d7470a32dbb87acc9b5e4d9a895a146410723561`，候选未启动；未操作WSL/共享数据库，未企业实发、推送或合并main。

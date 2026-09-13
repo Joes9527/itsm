@@ -16,6 +16,12 @@
 
 工具队列及事件订阅需要显式运行阶段启动；取消后等待已启动任务退出，再关闭数据库和连接器。禁止从业务构造器调用 Start。禁用的必需能力必须报告未验证，不能把 pending、外部阻断或未运行的 Worker 标为成功。
 
+候选 Stream 消费者必须通过 `EventConsumerID()` 声明稳定逻辑所有者；登记时固定身份，同一 owner/topic 重复登记拒绝。审计使用 `event_audit`，Webhook 使用 `webhook`，分别持有 `itsm:<owner>` 消费组；副本共享组但由传输库生成不同消费者实例名。组只在显式 Start/Subscribe 时建立，首次从 `0` 读取该候选 namespace 内的离线消息，已有组保留进度；不得用重建组、SETID、删除历史或订阅旧裸 topic 恢复消费。Close 先取消订阅并等待订阅建立结束，再关闭每个拥有的 subscriber 并等待处理退出。候选多租户订阅在部分建立后失败时停止整个事件运行实例，保留组及进度，不留下部分租户继续处理；恢复需重新构造并显式启动。
+
+`redis.event_stream.claim_idle`、`claim_interval`、`nack_delay` 使用时长格式（如 `60s`、`5s`、`1s`）；负数拒绝，零或未配置分别使用当前传输库的60秒、5秒及应用的1秒默认值。配置由构造器复制，候选消费者使用这些值；standard 保留原 fanout 消费语义。领取超时不是排他锁：慢处理可能被其他实例重领，写入所有者必须重验授权并提供持久幂等回执。当前审计已具备该回执，语义是至少一次投递加审计幂等，不是传输恰好一次。Webhook 的候选 typed envelope 接入、不可处理事件的持久阻断及其它异步入口仍未完成，不能据此启动候选。
+
+离线与 ACK 间隙恢复测试分别为 `TestCandidateStreamDeliversOfflineMessages` 和 `TestCandidateIntakeCreationBoundary/stream_source_requires_current_persistent_authority/stream_consumer_recovers_committed_audit_before_ack`，后者同时需要下述私有 PostgreSQL socket 和 Redis 二进制变量。它验证真实审计提交后停止 ACK、关闭旧 bus、新 bus 领取原 pending 消息，原审计不变且旧 Stream 保全；不替代整个应用/操作系统重启或完整 outbox Worker 投递验证。
+
 本机范围测试使用专属 Unix socket PostgreSQL，`CANDIDATE_SCOPE_TEST_SOCKET` 必须指向带 `candidate-test-instance` 标记（内容为 `itsm-candidate-isolated-test` 加换行）的私有测试实例；端口为25439。测试只创建/删除随机命名的自有数据库及角色，不读取普通业务 DSN。运行 `go test -tags candidate_scope ./tests/integration -run '^TestCandidateScopeRegistration$' -count=1`。未设置变量产生 skip，不是通过；本机 PostgreSQL16 证据不能代替目标 PostgreSQL17 复核。
 
 完整构造保全测试另要求 `CANDIDATE_TEST_REDIS_BINARY` 和 `CANDIDATE_TEST_MINIO_BINARY` 为已核验二进制的绝对路径。运行 `go test -tags candidate_scope ./tests/integration -run '^TestCandidateConstructPreservesDatabaseAndStreams$' -count=1 -v`：测试启动独立 loopback Redis/MinIO，使用每轮随机凭据，写入前核对实例身份；子进程使用独立配置和清空的业务环境，只调用 NewApplication，不启动 API/Worker。对账覆盖合成历史 fixture 的各表内容、列/索引/约束/函数/触发器/权限/策略/sequence，以及 Redis 键/消息/消费组和附件桶/对象。该有限构造观察须与生命周期测试及审阅合用，不替代 S6 的真实执行、重启与完整历史保全，也不放行目标环境。

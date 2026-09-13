@@ -20,6 +20,7 @@ import (
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -2020,6 +2021,81 @@ GRANT USAGE ON SEQUENCE audit_logs_id_seq TO %s`, systemRole, systemRole, system
 		require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(e)::text FROM outbox_events e WHERE id=$1`, row.ID).Scan(&after))
 		require.JSONEq(t, before, after)
 		require.Equal(t, audits, owner.AuditLog.Query().CountX(ctx), "source validation must not write audit")
+		t.Run("stream consumer recovers committed audit before ack", func(t *testing.T) {
+			streamCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+			defer cancel()
+			redisCfg, redisClient := startCandidateStreamRedis(t, streamCtx)
+			redisCfg.EventStream = config.EventStreamConfig{ClaimIdle: 500 * time.Millisecond, ClaimInterval: 50 * time.Millisecond, NackDelay: 10 * time.Millisecond}
+			_, err := redisClient.XAdd(streamCtx, &redis.XAddArgs{Stream: "sla.breached", Values: map[string]interface{}{"payload": "protected-history"}}).Result()
+			require.NoError(t, err)
+			require.NoError(t, redisClient.XGroupCreate(streamCtx, "sla.breached", "history", "0").Err())
+			_, err = redisClient.XReadGroup(streamCtx, &redis.XReadGroupArgs{Group: "history", Consumer: "original", Streams: []string{"sla.breached", ">"}, Count: 1}).Result()
+			require.NoError(t, err)
+			protected := snapshotCandidateRedis(t, streamCtx, redisClient)
+			owner.Ticket.UpdateOneID(fresh.WorkItemID).SetSLAResolutionDeadline(time.Now().Add(-time.Hour)).SaveX(ctx)
+			_, err = monitor.CheckSLAViolations(ctx, tenant.ID)
+			require.NoError(t, err)
+			resolution := owner.OutboxEvent.Query().Where(outboxevent.ExecutionWorkItemIDEQ(fresh.WorkItemID), outboxevent.EventTypeEQ("sla.breached"), outboxevent.IDNEQ(row.ID)).OnlyX(ctx)
+			require.NoError(t, service.NewSLABreachDeliveryHandler().Deliver(ctx, resolution))
+			resolutionSource := capture.events[len(capture.events)-1]
+			execution := config.ExecutionConfig{Mode: "candidate", DeploymentID: "intake-test", Scopes: []config.ExecutionScopeConfig{{TenantID: tenant.ID, ScopeID: scopeID}}}
+			consumer, err := eventbus.NewWatermillEventBus(redisCfg, execution, authority, zap.NewNop().Sugar())
+			require.NoError(t, err)
+			defer consumer.Close()
+			audit := service.NewEventAuditSubscriber(runtime, zap.NewNop().Sugar(), policy)
+			committed := make(chan struct{}, 1)
+			require.NoError(t, consumer.RegisterSubscription("sla.breached", &candidateCommitBeforeAck{audit: audit, committed: committed}))
+			require.NoError(t, consumer.Start(streamCtx))
+			before := owner.AuditLog.Query().CountX(ctx)
+			require.NoError(t, consumer.Publish(resolutionSource))
+			select {
+			case <-committed:
+			case <-streamCtx.Done():
+				t.Fatal("audit did not commit before shutdown")
+			}
+			require.Equal(t, before+1, owner.AuditLog.Query().CountX(ctx))
+			key := "candidate:intake-test:" + scopeID + ":sla.breached"
+			pending, err := redisClient.XPendingExt(streamCtx, &redis.XPendingExtArgs{Stream: key, Group: "itsm:event_audit", Start: "-", End: "+", Count: 10}).Result()
+			require.NoError(t, err)
+			require.Len(t, pending, 1, "database commit has not acknowledged Redis")
+			rows, err := redisClient.XRange(streamCtx, key, "-", "+").Result()
+			require.NoError(t, err)
+			require.Len(t, rows, 1)
+			require.Equal(t, rows[0].ID, pending[0].ID)
+			var receiptBefore string
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(a)::text FROM audit_logs a WHERE tenant_id=$1 AND user_id=0 AND operation_id=$2`, tenant.ID, "event_audit:"+resolution.EventID).Scan(&receiptBefore))
+			require.NoError(t, consumer.Close())
+			afterClose, err := redisClient.XPendingExt(streamCtx, &redis.XPendingExtArgs{Stream: key, Group: "itsm:event_audit", Start: "-", End: "+", Count: 10}).Result()
+			require.NoError(t, err)
+			require.Len(t, afterClose, 1, "closing the old consumer must leave the original entry unacknowledged")
+			require.Equal(t, pending[0].ID, afterClose[0].ID)
+			require.Equal(t, pending[0].Consumer, afterClose[0].Consumer)
+			restarted, err := eventbus.NewWatermillEventBus(redisCfg, execution, authority, zap.NewNop().Sugar())
+			require.NoError(t, err)
+			defer restarted.Close()
+			require.NoError(t, restarted.RegisterSubscription("sla.breached", audit))
+			require.NoError(t, restarted.Start(streamCtx))
+			require.Eventually(t, func() bool {
+				p, e := redisClient.XPending(streamCtx, key, "itsm:event_audit").Result()
+				return e == nil && p.Count == 0
+			}, 5*time.Second, 20*time.Millisecond, "new consumer must claim and acknowledge the original entry")
+			consumers, err := redisClient.XInfoConsumers(streamCtx, key, "itsm:event_audit").Result()
+			require.NoError(t, err)
+			require.Len(t, consumers, 2)
+			require.NotEqual(t, consumers[0].Name, consumers[1].Name)
+			var receiptAfter string
+			require.NoError(t, ownerDB.QueryRow(`SELECT row_to_json(a)::text FROM audit_logs a WHERE tenant_id=$1 AND user_id=0 AND operation_id=$2`, tenant.ID, "event_audit:"+resolution.EventID).Scan(&receiptAfter))
+			require.JSONEq(t, receiptBefore, receiptAfter)
+			require.Equal(t, before+1, owner.AuditLog.Query().CountX(ctx))
+			afterRows, err := redisClient.XRange(streamCtx, key, "-", "+").Result()
+			require.NoError(t, err)
+			require.Equal(t, rows, afterRows, "restart must not republish or replace the original entry")
+			afterRedis := snapshotCandidateRedis(t, streamCtx, redisClient)
+			for key, value := range protected {
+				require.Equal(t, value, afterRedis[key], "historical Redis key changed: %s", key)
+			}
+		})
+
 		t.Run("event audit deduplicates persistent delivery", func(t *testing.T) {
 			wire, err := json.Marshal(envelope)
 			require.NoError(t, err)
@@ -3930,3 +4006,23 @@ func (b *candidateSourceCaptureBus) Publish(event interface{}) error {
 	return nil
 }
 func (*candidateSourceCaptureBus) Subscribe(string, shared.EventHandler) error { return nil }
+
+// Test-only ACK gap: the real audit commits before this handler waits for the
+// old subscriber's context to close. Returning its cancellation leaves the PEL.
+type candidateCommitBeforeAck struct {
+	audit     *service.EventAuditSubscriber
+	committed chan struct{}
+}
+
+func (h *candidateCommitBeforeAck) EventConsumerID() string { return h.audit.EventConsumerID() }
+func (*candidateCommitBeforeAck) Handle(interface{}) error {
+	return errors.New("consumption context required")
+}
+func (h *candidateCommitBeforeAck) HandleContext(ctx context.Context, event interface{}) error {
+	if err := h.audit.HandleContext(ctx, event); err != nil {
+		return err
+	}
+	h.committed <- struct{}{}
+	<-ctx.Done()
+	return ctx.Err()
+}

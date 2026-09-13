@@ -106,7 +106,7 @@ func TestCandidateSubscriberNacksUntrustedMessagesBeforeHandler(t *testing.T) {
 	subscription := &controlledStreamSubscriber{messages: make(chan *message.Message, 1)}
 	received := make(chan interface{}, 1)
 	contexts := make(chan context.Context, 1)
-	bus := &WatermillEventBus{routes: routes, publisher: &fakePublisher{}, subscriber: subscription, logger: zap.NewNop().Sugar(), authority: eventAuthorityFunc(func(_ context.Context, _ executionscope.Ref, env Envelope) error {
+	bus := &WatermillEventBus{routes: routes, publisher: &fakePublisher{}, newSubscriber: func(string) (streamSubscriber, error) { return subscription, nil }, logger: zap.NewNop().Sugar(), authority: eventAuthorityFunc(func(_ context.Context, _ executionscope.Ref, env Envelope) error {
 		if env.EventID != "persisted-41" {
 			return errors.New("source missing")
 		}
@@ -160,3 +160,5 @@ func TestCandidateSubscriberNacksUntrustedMessagesBeforeHandler(t *testing.T) {
 	require.NoError(t, bus.Close())
 	require.ErrorIs(t, deliveryContext.Err(), context.Canceled)
 }
+
+func (observedStreamHandler) EventConsumerID() string { return "event_audit" }

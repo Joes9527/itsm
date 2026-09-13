@@ -314,7 +314,7 @@ func NewApplication() *Application {
 			continue
 		}
 		if err := eventBus.RegisterSubscription(topic, auditSubscriber); err != nil {
-			sugar.Warnw("failed to subscribe audit subscriber", "error", err, "topic", topic)
+			sugar.Fatalw("failed to subscribe audit subscriber", "error", err, "topic", topic)
 		}
 	}
 
@@ -342,7 +342,7 @@ func NewApplication() *Application {
 			continue
 		}
 		if err := eventBus.RegisterSubscription(topic, webhookSubscriber); err != nil {
-			sugar.Warnw("failed to subscribe webhook subscriber", "error", err, "topic", topic)
+			sugar.Fatalw("failed to subscribe webhook subscriber", "error", err, "topic", topic)
 		}
 	}
 

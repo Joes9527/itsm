@@ -39,20 +39,24 @@ type Envelope struct {
 
 // WatermillEventBus implements shared.EventBus interface using Watermill with Redis Stream
 type WatermillEventBus struct {
-	authority     EventAuthority
-	routes        *streamRoutes
-	publisher     message.Publisher
-	subscriber    streamSubscriber
-	logger        *zap.SugaredLogger
-	mu            sync.Mutex
-	started       bool
-	closed        bool
-	closeDone     chan struct{}
-	closeErr      error
-	ctx           context.Context
-	cancel        context.CancelFunc
-	consumers     sync.WaitGroup
-	subscriptions []subscription
+	authority           EventAuthority
+	routes              *streamRoutes
+	publisher           message.Publisher
+	subscriber          streamSubscriber
+	newSubscriber       func(string) (streamSubscriber, error)
+	ownedSubscribers    map[string]streamSubscriber
+	establishing        sync.WaitGroup
+	activeSubscriptions map[string]bool
+	logger              *zap.SugaredLogger
+	mu                  sync.Mutex
+	started             bool
+	closed              bool
+	closeDone           chan struct{}
+	closeErr            error
+	ctx                 context.Context
+	cancel              context.CancelFunc
+	consumers           sync.WaitGroup
+	subscriptions       []subscription
 }
 
 type ContextEventHandler interface {
@@ -64,8 +68,9 @@ type streamSubscriber interface {
 	Close() error
 }
 type subscription struct {
-	topic   string
-	handler shared.EventHandler
+	consumer string
+	topic    string
+	handler  shared.EventHandler
 }
 
 // RegisterSubscription only describes runtime work; it does not touch Redis.
@@ -75,7 +80,18 @@ func (eb *WatermillEventBus) RegisterSubscription(topic string, handler shared.E
 	if eb.started || eb.closed || topic == "" || handler == nil {
 		return fmt.Errorf("cannot register event subscription")
 	}
-	eb.subscriptions = append(eb.subscriptions, subscription{topic, handler})
+	consumer, err := eb.consumerIdentity(handler)
+	if err != nil {
+		return err
+	}
+	if eb.routes.candidate {
+		for _, existing := range eb.subscriptions {
+			if existing.topic == topic && existing.consumer == consumer {
+				return fmt.Errorf("duplicate durable event subscription")
+			}
+		}
+	}
+	eb.subscriptions = append(eb.subscriptions, subscription{consumer: consumer, topic: topic, handler: handler})
 	return nil
 }
 
@@ -94,7 +110,7 @@ func (eb *WatermillEventBus) Start(ctx context.Context) error {
 	subscriptions := append([]subscription(nil), eb.subscriptions...)
 	eb.mu.Unlock()
 	for _, sub := range subscriptions {
-		if err := eb.Subscribe(sub.topic, sub.handler); err != nil {
+		if err := eb.subscribe(sub.topic, sub.consumer, sub.handler); err != nil {
 			_ = eb.Close()
 			return err
 		}
@@ -114,7 +130,14 @@ func NewWatermillEventBus(cfg *config.RedisConfig, execution config.ExecutionCon
 	if cfg == nil || logger == nil {
 		return nil, fmt.Errorf("event Redis configuration and logger required")
 	}
-	// Publisher and subscriber each own and close their Redis client.
+	stream := cfg.EventStream
+	if stream.ClaimIdle < 0 || stream.ClaimInterval < 0 || stream.NackDelay < 0 {
+		return nil, fmt.Errorf("event stream durations cannot be negative")
+	}
+	if stream.NackDelay == 0 {
+		stream.NackDelay = time.Second
+	}
+	// Publisher and each logical subscriber own and close their Redis client.
 	options := &redis.Options{
 		Addr:     fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
 		Password: cfg.Password,
@@ -137,27 +160,34 @@ func NewWatermillEventBus(cfg *config.RedisConfig, execution config.ExecutionCon
 		return nil, fmt.Errorf("failed to create publisher: %w", err)
 	}
 
-	// Create subscriber
-	subscriberClient := redis.NewClient(options)
-	subscriber, err := redisstream.NewSubscriber(
-		redisstream.SubscriberConfig{
-			Client: subscriberClient,
-		},
-		watermillLogger,
-	)
-	if err != nil {
-		_ = publisher.Close()
-		_ = subscriberClient.Close()
-		return nil, fmt.Errorf("failed to create subscriber: %w", err)
+	makeSubscriber := func(group string) (streamSubscriber, error) {
+		client := redis.NewClient(options)
+		settings := redisstream.SubscriberConfig{Client: client, DisableIndefiniteInitialBlock: true}
+		if group != "" {
+			settings.ConsumerGroup = group
+			settings.OldestId = "0"
+			settings.ClaimInterval = stream.ClaimInterval
+			settings.MaxIdleTime = stream.ClaimIdle
+			settings.NackResendSleep = stream.NackDelay
+		}
+		subscriber, err := redisstream.NewSubscriber(settings, watermillLogger)
+		if err != nil {
+			_ = client.Close()
+			return nil, err
+		}
+		return subscriber, nil
 	}
-
-	return &WatermillEventBus{
-		authority:  authority,
-		routes:     routes,
-		publisher:  publisher,
-		subscriber: subscriber,
-		logger:     logger,
-	}, nil
+	bus := &WatermillEventBus{authority: authority, routes: routes, publisher: publisher, logger: logger}
+	if routes.candidate {
+		bus.newSubscriber = makeSubscriber
+	} else {
+		bus.subscriber, err = makeSubscriber("")
+		if err != nil {
+			_ = publisher.Close()
+			return nil, fmt.Errorf("failed to create subscriber: %w", err)
+		}
+	}
+	return bus, nil
 }
 
 // resolveTopic 解析事件 topic：
@@ -269,30 +299,66 @@ func (eb *WatermillEventBus) Publish(event interface{}) error {
 // Subscribe subscribes to events of a specific type.
 // 订阅 topic 使用稳定事件类型名（如 "ticket.created"）。
 func (eb *WatermillEventBus) Subscribe(eventType string, handler shared.EventHandler) error {
+	consumer, err := eb.consumerIdentity(handler)
+	if err != nil {
+		return err
+	}
+	return eb.subscribe(eventType, consumer, handler)
+}
+
+func (eb *WatermillEventBus) subscribe(eventType, consumer string, handler shared.EventHandler) error {
 	routes, err := eb.routes.subscriptionRoutes(eventType)
 	if err != nil {
 		return err
 	}
-	for _, route := range routes {
-		if err := eb.subscribeRoute(eventType, route, handler); err != nil {
+	for index, route := range routes {
+		if err := eb.subscribeRoute(eventType, consumer, route, handler); err != nil {
+			// A partially established candidate subscription cannot remain live
+			// after reporting failure. Stop the runtime without resetting groups.
+			if eb.routes.candidate && index > 0 {
+				return errors.Join(err, eb.Close())
+			}
 			return err
 		}
 	}
 	return nil
 }
 
-func (eb *WatermillEventBus) subscribeRoute(eventType string, route streamRoute, handler shared.EventHandler) error {
+func (eb *WatermillEventBus) subscribeRoute(eventType, consumer string, route streamRoute, handler shared.EventHandler) error {
 	eb.mu.Lock()
 	if !eb.started || eb.closed || handler == nil || eventType == "" {
 		eb.mu.Unlock()
 		return fmt.Errorf("event runtime is not accepting subscriptions")
 	}
+	key := consumer + ":" + route.topic
+	if eb.routes.candidate && eb.activeSubscriptions[key] {
+		eb.mu.Unlock()
+		return fmt.Errorf("durable event subscription already started")
+	}
+	subscriber, err := eb.subscriberForLocked(consumer)
+	if err != nil {
+		eb.mu.Unlock()
+		return fmt.Errorf("event subscriber unavailable: %w", err)
+	}
+	if subscriber == nil {
+		eb.mu.Unlock()
+		return fmt.Errorf("event subscriber unavailable")
+	}
+	if eb.activeSubscriptions == nil {
+		eb.activeSubscriptions = map[string]bool{}
+	}
+	eb.activeSubscriptions[key] = true
 	ctx := eb.ctx
 	eb.consumers.Add(1)
+	eb.establishing.Add(1)
 	eb.mu.Unlock()
-	// Subscribe to the topic
-	messages, err := eb.subscriber.Subscribe(ctx, route.topic)
+	defer eb.establishing.Done()
+	// Subscribe may create only a group in the frozen candidate namespace.
+	messages, err := subscriber.Subscribe(ctx, route.topic)
 	if err != nil {
+		eb.mu.Lock()
+		delete(eb.activeSubscriptions, key)
+		eb.mu.Unlock()
 		eb.consumers.Done()
 		return fmt.Errorf("failed to subscribe to event type %s: %w", eventType, err)
 	}
@@ -400,7 +466,14 @@ func (eb *WatermillEventBus) Close() error {
 		eb.cancel()
 	}
 	eb.mu.Unlock()
-	err := eb.subscriber.Close()
+	eb.establishing.Wait()
+	var err error
+	if eb.subscriber != nil {
+		err = eb.subscriber.Close()
+	}
+	for _, subscriber := range eb.ownedSubscribers {
+		err = errors.Join(err, subscriber.Close())
+	}
 	eb.consumers.Wait()
 	err = errors.Join(err, eb.publisher.Close())
 	eb.mu.Lock()

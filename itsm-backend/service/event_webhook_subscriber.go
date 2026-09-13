@@ -90,3 +90,5 @@ func WebhookEventTopics() []string {
 		"sla.breached",
 	}
 }
+
+func (*WebhookEventSubscriber) EventConsumerID() string { return "webhook" }
